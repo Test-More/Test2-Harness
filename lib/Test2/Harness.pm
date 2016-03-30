@@ -2,173 +2,171 @@ package Test2::Harness;
 use strict;
 use warnings;
 
-use File::Temp qw/tempdir/;
+use Carp qw/croak/;
 use Time::HiRes qw/sleep/;
-use 5.10.0;
+use Scalar::Util qw/blessed/;
+
+use Test2::Harness::Runner;
+use Test2::Harness::Parser;
 
 use Test2::Util::HashBase qw{
-    renderers formatter parser verbose parallel libs switches files procs
-    proc_class tmpdir results _environment
+    parser_class
+    runner
+    listeners
+    switches libs env_vars
+    jobs slots queue
 };
 
-my $SINGLETON;
-sub singleton { $SINGLETON ||= __PACKAGE__->new };
-
-sub loop { $_->loop for @{$_[0]->{+RENDERERS}} }
+sub STEP_DELAY() { '0.05' }
 
 sub init {
     my $self = shift;
 
-    $self->{+TMPDIR} ||= tempdir('test2harness-XXXXXX');
-
-    $self->{+RESULTS}   ||= {};
-    $self->{+RENDERERS} ||= [];
+    $self->{+ENV_VARS}  ||= {};
     $self->{+LIBS}      ||= [];
     $self->{+SWITCHES}  ||= [];
-    $self->{+FILES}     ||= [];
-    $self->{+PROCS}     ||= [];
+    $self->{+LISTENERS} ||= [];
 
-    $self->{+_ENVIRONMENT} ||= {};
-}
+    $self->{+PARSER_CLASS} ||= 'Test2::Harness::Parser';
 
-sub run {
-    my $self = shift;
+    $self->{+RUNNER} ||= Test2::Harness::Runner->new();
+    $self->{+JOBS}   ||= 1;
 
-    my $files = $self->{+FILES} or die "No files specified\n";
-    my $max = $self->{+PARALLEL} ||= 1;
-
-    unless(@{$self->{+RENDERERS}}) {
-        if ($max > 1) {
-            require Test2::Harness::Renderer::Parallel;
-            push @{$self->{+RENDERERS}} => Test2::Harness::Renderer::Parallel->new(
-                tmpdir => $self->tmpdir,
-            );
-        }
-        elsif($self->{+VERBOSE}) {
-            require Test2::Harness::Renderer::Verbose;
-            push @{$self->{+RENDERERS}} => Test2::Harness::Renderer::Verbose->new(
-                tmpdir => $self->tmpdir,
-            );
-        }
-        else {
-            require Test2::Harness::Renderer::Simple;
-            push @{$self->{+RENDERERS}} => Test2::Harness::Renderer::Simple->new(
-                tmpdir => $self->tmpdir,
-            );
-        }
-    }
-
-    unless($self->{+PARSER}) {
-        require Test2::Harness::Parser::TAP;
-        $self->{+PARSER} = Test2::Harness::Parser::TAP->new;
-    }
-
-    unless($self->{+PROC_CLASS}) {
-        require Test2::Harness::Proc;
-        $self->{+PROC_CLASS} = 'Test2::Harness::Proc';
-    }
-
-    my $procs       = $self->{+PROCS};
-    my $tmpdir      = $self->{+TMPDIR};
-    my $class       = $self->{+PROC_CLASS};
-    my $libs        = $self->{+LIBS};
-    my $switches    = $self->{+SWITCHES};
-    my $environment = $self->environment;
-
-    my $id = 0;
-    for my $file (@$files) {
-        $id++;
-        my $slot = $self->slot;
-        mkdir("$tmpdir/$id") or die "$!";
-        my $proc = $class->new(
-            id          => $id,
-            file        => $file,
-            tmpdir      => "$tmpdir/$id",
-            switches    => $switches,
-            libs        => $libs,  
-            environment => $environment,
-        );
-        $proc->start;
-        $procs->[$slot] = $proc;
-    }
-
-    $self->wait;
-    $self->finish;
+    $self->{+SLOTS} = [];
+    $self->{+QUEUE} = [];
 }
 
 sub environment {
     my $self = shift;
 
+    my $class = blessed($self);
+
     my %out = (
+        'HARNESS_CLASS' => $class,
+
         'HARNESS_ACTIVE'  => '1',
         'HARNESS_VERSION' => $Test2::Harness::VERSION,
 
         'T2_HARNESS_ACTIVE'  => '1',
         'T2_HARNESS_VERSION' => $Test2::Harness::VERSION,
+
+        %{$self->{+ENV_VARS}},
     );
 
-    $out{T2_FORMATTER} = $self->{+FORMATTER} if $self->{+FORMATTER};
-    $out{HARNESS_IS_VERBOSE}  = $self->{+VERBOSE}      ? 1 : 0;
-    $out{HARNESS_IS_PARALLEL} = $self->{+PARALLEL} > 1 ? 1 : 0;
+    $out{T2_FORMATTER} = 'EventStream';
+    $out{HARNESS_JOBS} = $self->{+JOBS} || 1;
 
     return \%out;
 }
 
-sub wait {
+sub run {
     my $self = shift;
-    my $max = $self->{+PARALLEL};
-    my $procs = $self->{+PROCS};
+    my (@files) = @_;
 
-    while (@$procs) {
-        $self->loop;
+    croak "No files to run" unless @files;
 
-        for my $s (1 .. $max) {
-            next unless $procs->[$s];
-            next unless $procs->[$s]->is_done;
-            $self->process($procs->[$s]);
-            $procs->[$s] = undef;
+    my $pclass = $self->{+PARSER_CLASS};
+    my $listen = $self->{+LISTENERS};
+    my $runner = $self->{+RUNNER};
+    my $slots  = $self->{+SLOTS};
+    my $jobs   = $self->{+JOBS} || 1;
+    my $env    = $self->environment;
+
+    my (@queue, @results);
+
+    my $counter = 1;
+    my $start_file = sub {
+        my $file = shift;
+
+        my $proc = $runner->start(
+            $file,
+
+            env      => $self->environment,
+            libs     => $self->{+LIBS},
+            switches => $self->{+SWITCHES},
+        );
+
+        return $pclass->new(
+            job       => $counter++,
+            proc      => $proc,
+            listeners => $listen,
+        );
+    };
+
+    my $wait = sub {
+        my $slot;
+        until($slot) {
+            for my $s (1 .. $jobs) {
+                my $parser = $slots->[$s];
+
+                if ($parser) {
+                    $parser->step;
+                    next unless $parser->is_done;
+                    push @results => $parser->result;
+                    $slots->[$s] = undef;
+                }
+
+                next if $slots->[$s];
+
+                $slot = $s;
+                last;
+            }
+
+            last if $slot;
+            sleep STEP_DELAY();
+        }
+        return $slot;
+    };
+
+    for my $file (@files) {
+        if ($self->{+JOBS} > 1) {
+            my $header = $runner->header($file);
+            my $concurrent = $header->{features}->{concurrency};
+            $concurrent = 1 unless defined($concurrent);
+
+            unless ($concurrent) {
+                push @queue => $file;
+                next;
+            }
         }
 
-        @$procs = grep { $_ } @$procs;
+        my $slot = $wait->();
+        $slots->[$slot] = $start_file->($file); 
     }
-}
 
-sub slot {
-    my $self = shift;
-    my $max = $self->{+PARALLEL};
-    my $procs = $self->{+PROCS};
+    while (@$slots) {
+        my $no_sleep = 0;
 
-    while (1) {
-        $self->loop;
+        my @keep;
+        for my $p (@$slots) {
+            next unless $p;
 
-        for my $s (1 .. $max) {
-            return $s unless $procs->[$s];
-            next unless $procs->[$s]->is_done;
-            $self->process($procs->[$s]);
-            $procs->[$s] = undef;
-            return $s;
+            $no_sleep = 1 if $p->step > 0;
+
+            if($p->is_done) {
+                push @results => $p->result;
+            }
+            else {
+                push @keep => $p;
+            }
         }
+
+        @$slots = @keep;
+
+        sleep STEP_DELAY() unless $no_sleep;
     }
-}
 
-sub process {
-    my $self = shift;
-    my ($proc) = @_;
-    my $results = $self->{+PARSER}->parse($proc);
-    $self->{+RESULTS}->{$proc->file} = $results;
+    for my $file (@queue) {
+        my $parser = $start_file->($file);
 
-    warn "todo";
-    # append errors to log_file
-    # write then copy into place.
-    # Open results file (format? YAML, JSON, STORABLE, ...?) 
-    # print result fields to it
-    #   - count, failed, exit, pass, @errors
-}
+        while(!$parser->is_done) {
+            sleep STEP_DELAY() unless $parser->step;
+        }
 
-sub finish {
-    my $self = shift;
-    $_->finish for @{$_[0]->{+RENDERERS}};
-    warn "todo";
+        push @results => $parser->result;
+    }
+
+    return \@results;
 }
 
 1;

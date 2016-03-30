@@ -1,0 +1,23 @@
+#!/usr/bin/env perl
+package yath;
+use strict;
+use warnings;
+
+use App::Yath;
+
+T2_DO_FILE: {
+    my $yath = App::Yath->new(args => \@ARGV);
+    my $exit = $yath->run();
+    exit($exit);
+}
+
+my $file = $Test2::Harness::Runner::DO_FILE
+    or die "No file to run!";
+
+# Test files do not always return a true value, so we cannot use require. We
+# also cannot trust $!
+package main;
+$@ = '';
+do $file;
+die $@ if $@;
+exit 0;

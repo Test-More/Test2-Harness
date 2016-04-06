@@ -4,7 +4,7 @@ use warnings;
 
 use Test2::Util::HashBase qw/handles/;
 use base 'Test2::Formatter';
-use Test2::Harness::Event;
+use Test2::Harness::Fact;
 
 BEGIN {
     # We will cherry-pcik some things from it
@@ -41,7 +41,7 @@ if ($^C) {
 sub write {
     my ($self, $e, $num) = @_;
 
-    my $json = Test2::Harness::Event->from_event($e, number => $num)->to_json;
+    my $json = Test2::Harness::Fact->from_event($e, number => $num)->to_json;
     my $fh = $self->{+HANDLES}->[+OUT_STD];
     print $fh "T2_EVENT: $json\n";
 }

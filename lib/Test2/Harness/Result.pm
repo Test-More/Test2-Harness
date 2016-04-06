@@ -6,34 +6,20 @@ use Carp qw/croak/;
 use Time::HiRes qw/time/;
 
 use Test2::Util::HashBase qw{
-    file job nested
+    file name job nested
+
+    is_subtest in_subtest
 
     total      failed
     start_time stop_time
     exit
 
-    fail_events
-    fail_subtests
-
     plans
     planning
     plan_errors
 
-    events
-    out_lines err_lines
-    subtests
-    parse_errors
-    muxed
+    facts
 };
-
-our @EXPORT_OK = qw{
-    EVENTS
-    OUT_LINES
-    ERR_LINES
-    SUBTESTS
-    PARSE_ERRORS
-};
-use base 'Exporter';
 
 sub init {
     my $self = shift;
@@ -43,6 +29,9 @@ sub init {
 
     croak "'job' is a required attribute"
         unless $self->{+JOB};
+
+    croak "'name' is a required attribute"
+        unless $self->{+NAME};
 
     $self->{+NESTED} ||= 0;
 
@@ -56,22 +45,7 @@ sub init {
     $self->{+PLANNING}    = [];
     $self->{+PLAN_ERRORS} = [];
 
-    # Just the failures
-    $self->{+FAIL_EVENTS}   = [];
-    $self->{+FAIL_SUBTESTS} = [];
-
-    # Muxed things
-    $self->{+EVENTS}       = [];
-    $self->{+OUT_LINES}    = [];
-    $self->{+ERR_LINES}    = [];
-    $self->{+SUBTESTS}     = [];
-    $self->{+PARSE_ERRORS} = [];
-    $self->{+MUXED}        = [];
-}
-
-sub duration {
-    my $self = shift;
-    return $self->{+STOP_TIME} - $self->{+START_TIME};
+    $self->{+FACTS} = [];
 }
 
 sub stop {
@@ -82,80 +56,48 @@ sub stop {
     $self->{+EXIT}      = $exit;
 
     $self->_check_plan;
+    $self->add_facts(
+        Test2::Harness::Fact->new(
+            parse_error => $_,
+            causes_fail => 1,
+            diagnostics => 1,
+            nested => $self->nested,
+        ),
+    ) for @{$self->{+PLAN_ERRORS}};
 }
 
 sub passed {
     my $self = shift;
     return unless defined $self->{+STOP_TIME};
 
-    return 0 if $self->failed;
+    return 0 if $self->{+EXIT};
+    return 0 if $self->{+FAILED};
     return 0 if @{$self->{+PLAN_ERRORS}};
     return 1;
 }
 
 sub bump_failed { $_[0]->{+FAILED} += $_[1] || 1 }
 
-sub add {
-    my $self = shift;
-    my ($type, @stuff) = @_;
-
-    my $meth = "add_$type";
-    croak ref($self) . " does not know how to add items to '$type'"
-        unless $self->can($meth);
-
-    $self->$meth(@stuff);
+{
+    no warnings 'once';
+    *add_fact = \&add_facts;
 }
-
-BEGIN {
-    my @MUX = (
-        OUT_LINES(),
-        ERR_LINES(),
-        PARSE_ERRORS(),
-    );
-    
-    for my $mux (@MUX) {
-        my $code = sub {
-            my $self = shift;
-            push @{$self->{$mux}} => @_;
-            push @{$self->{+MUXED}} => [$mux => @_];
-        };
-        no strict 'refs';
-        *{"add_$mux"} = $code;
-    }
-}
-
-sub add_subtests {
+sub add_facts {
     my $self = shift;
-    push @{$self->{+SUBTESTS}} => @_;
-    push @{$self->{+MUXED}}    => @_;
+    push @{$self->{+FACTS}} => @_;
 
-    for my $st (@_) {
-        next if $st->passed;
-        push @{$self->{+FAIL_SUBTESTS}} => $st;
-        $self->{+FAILED}++;
-    }
-}
-
-sub add_events {
-    my $self = shift;
-    push @{$self->{+EVENTS}} => @_;
-    push @{$self->{+MUXED}}  => @_;
-
-    for my $e (@_) {
-        if ($e->increments_count) {
+    for my $f (@_) {
+        if ($f->increments_count) {
             $self->{+TOTAL}++;
-            push @{$self->{+PLANNING}} => $e;
-            push @{$self->{+PLANS}} => $e if $e->sets_plan;
+            push @{$self->{+PLANNING}} => $f;
+            push @{$self->{+PLANS}} => $f if $f->sets_plan;
         }
-        elsif ($e->sets_plan) {
-            push @{$self->{+PLANNING}} => $e;
-            push @{$self->{+PLANS}} => $e;
+        elsif ($f->sets_plan) {
+            push @{$self->{+PLANNING}} => $f;
+            push @{$self->{+PLANS}} => $f;
         }
 
-        if ($e->causes_fail || $e->terminate) {
-            push @{$self->{+FAIL_EVENTS}} => $e;
-            $self->{+FAILED}++;
-        }
+        $self->{+FAILED}++ if $f->causes_fail || $f->terminate;
     }
 }
 

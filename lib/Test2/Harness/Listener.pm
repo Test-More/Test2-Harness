@@ -2,7 +2,7 @@ package Test2::Harness::Listener;
 use strict;
 use warnings;
 
-use Test2::Util::HashBase qw/color verbose jobs order counter parallel gidx clear/;
+use Test2::Util::HashBase qw/color verbose jobs order parallel gidx clear/;
 use Term::ANSIColor();
 use List::Util qw/first shuffle/;
 use Scalar::Util qw/blessed/;
@@ -36,7 +36,6 @@ sub init {
     $self->{+ORDER}  = [];
 
     $self->{+GIDX}    = 0;
-    $self->{+COUNTER} = 0;
 
     $| = 1;
 }
@@ -50,18 +49,28 @@ sub find_color {
 sub listen {
     my $self = shift;
 
-    my $jobs = $self->{+JOBS};
-
-    sub {
-        my ($j, $dest, $thing) = @_;
-
-        my $job = $jobs->{$j} || $self->init_job($j);
-
-        $self->render($j, $dest, $thing);
-
-        $self->end_job($j) if $dest eq 'subtests' && !$thing->nested;
-    }
+    sub { $self->process(@_) }
 };
+
+sub process {
+    my $self = shift;
+    my ($j, $fact, $no_buf, $last) = @_;
+
+    my $jobs = $self->{+JOBS};
+    my $job = $jobs->{$j} || $self->init_job($j);
+
+    $no_buf ||= $fact->nested == 1 if $fact->result;
+
+    $self->render($j, $fact, $no_buf, $last);
+
+    if ($fact->result && $no_buf) {
+        for my $f (@{$fact->result->facts}) {
+            $self->process($j, $f, 1, $f == $fact->result->facts->[-1]);
+        }
+    }
+
+    $self->end_job($j) if $fact->result && !$fact->nested;
+}
 
 sub init_job {
     my $self = shift;
@@ -105,68 +114,13 @@ sub end_job {
     delete $self->{+JOBS}->{$j};
 }
 
-sub highlight {
-    my $self = shift;
-    my ($dest, $thing) = @_;
-
-    return (" FILE ", $FILE) if $dest eq 'START';
-
-    if ($dest eq 'events') {
-        return ("NOT OK", $FAIL) if $thing->causes_fail;
-        return (" DIAG ", $DIAG) if $thing->diagnostics;
-
-        return unless $self->{+VERBOSE};
-        return ("  OK  ", $PASS) if $thing->increments_count;
-        return (" PLAN ", $PLAN) if $thing->sets_plan;
-        return (" NOTE ", $NOTE);
-    }
-
-    return ("STDERR", $DIAG) if $dest eq 'err_lines';
-
-    if ($dest eq 'out_lines') {
-        return unless $self->{+VERBOSE};
-        return ("STDOUT", $NOTE);
-    }
-
-    if ($dest eq 'subtests') {
-        return ("FAILED", $FAILED) unless $thing->passed;
-        return unless $self->{+VERBOSE} || !$thing->nested;
-        return ("PASSED", $PASSED);
-    }
-
-    return unless $self->{+VERBOSE};
-    return ("PARSER", $PARSER) if $dest eq 'parse_errors';
-
-    return (sprintf("[%-6.6s]", $dest), '');
-}
-
-sub summary {
-    my $self = shift;
-    my ($dest, $thing) = @_;
-
-    return "$thing" if $dest eq 'START';
-
-    return $thing->summary || ""
-        if $dest eq 'events';
-
-    return $thing if $dest eq 'err_lines';
-    return $thing if $dest eq 'out_lines';
-
-    if ($dest eq 'subtests') {
-        return $thing->file unless $thing->nested;
-        return '';
-    }
-
-    return $thing;
-}
-
 sub render {
     my $self = shift;
-    my ($j, $dest, $thing) = @_;
+    my ($j, $fact, $no_buf, $last) = @_;
 
     my $jobs = $self->{+JOBS};
 
-    my ($prefix, $color) = $self->highlight($dest, $thing);
+    my ($prefix, $color) = $self->highlight($fact);
     return unless $prefix;
 
     if ($self->{+CLEAR}) {
@@ -175,7 +129,7 @@ sub render {
     }
 
     my $reset = $RESET;
-    my $bold = $BOLD;
+    my $bold  = $BOLD;
 
     if($self->{+COLOR}) {
         my $allow = $COLORS[$self->{+COLOR} || 0];
@@ -187,47 +141,55 @@ sub render {
         $bold  = '';
     }
 
-    my ($tidx, @tree) = $self->tree($j, $dest, $thing);
+    my ($tidx, @tree) = $self->tree($j, $fact);
 
-    chomp(my $summary = $self->summary($dest, $thing));
+    my $summary = $fact->summary;
     $summary =~ s/^[\n\r]+//g;
 
     my $end = "\n";
-    my $nested = blessed($thing) && $thing->can('nested') ? $thing->nested : 0;
     my $nest = '';
-    if ($nested) {
-        my $is_res = $thing->isa('Test2::Harness::Result');
-        unless($is_res) {
+
+    if(my $nested = $fact->nested) {
+        if ($no_buf) {
+            if ($fact->result) {
+                if ($nested > 1) {
+                    $nest = '| ' x ($nested - 2);
+                    $nest .= "+-";
+                }
+            }
+            elsif ($last) {
+                $nest = '| ' x ($nested - 1);
+                $nest .= "^ ";
+            }
+            else {
+                $nest = '| ' x $nested;
+            }
+        }
+        else {
+            return unless -t STDOUT;
             $nest = '>' x $nested;
             $nest .= " ";
             $end = "\r";
             $self->{+CLEAR} = 1;
         }
     }
+
     for my $ti (0 .. $#tree) {
         if ($ti == $tidx) {
-            my @lines = split /\n/, $summary;
+            my $jcolor = $jobs->{$j}->{color};
+            my @lines = grep {$_} split /[\n\r]+/, $summary;
             @lines = ('') unless @lines;
-            print " ${bold}[${reset}${color}${prefix}${reset}${bold}]${reset}  $tree[$ti]  ${nest}${color}$_${reset}$end" for @lines;
+            print " ${bold}[${reset}${color}${prefix}${reset}${bold}]${reset}  $tree[$ti]  ${jcolor}${nest}${reset}${color}$_${reset}$end" for @lines;
         }
         else {
             print "           $tree[$ti]\n";
         }
     }
-
-    #my $last = $jobs->{$j}->{last};
-    #if ($last == $self->{+COUNTER}) {
-    #    $jobs->{$j}->{seq}++;
-    #}
-    #else {
-    #    $jobs->{$j}->{seq} = 0; # :-(
-    #}
-    #$jobs->{$j}->{last} = $self->{+COUNTER} += 1;
 }
 
 sub tree {
     my $self = shift;
-    my ($j, $dest, $thing) = @_;
+    my ($j, $fact) = @_;
 
     my $reset = $self->find_color('reset');
     my $bold  = $self->find_color('bold bright_white');
@@ -236,10 +198,10 @@ sub tree {
 
     my (@before, $it, @after);
 
-    if ($dest eq 'START') {
+    if ($fact->start) {
         push @before => join(' ' => map {$_ eq $j ? () : "$jobs->{$_}->{color}|$reset"} @$order);
     }
-    elsif($dest eq 'subtests' && !$thing->nested) {
+    elsif($fact->result && !$fact->nested) {
         my $tree = '';
         my $seen = 0;
         for my $o (@$order) {
@@ -260,6 +222,46 @@ sub tree {
 
     my $idx = @before;
     return ($idx, @before, $it, @after);
+}
+
+sub highlight {
+    my $self = shift;
+    my ($fact) = @_;
+
+    return (" FILE ", $FILE) if $fact->start;
+
+    if ($fact->event) {
+        return ("NOT OK", $FAIL) if $fact->causes_fail;
+        return (" DIAG ", $DIAG) if $fact->diagnostics;
+
+        return unless $self->{+VERBOSE};
+        return ("  OK  ", $PASS) if $fact->increments_count;
+        return (" PLAN ", $PLAN) if $fact->sets_plan;
+        return (" NOTE ", $NOTE);
+    }
+
+    if (defined $fact->output) {
+        my $handle = $fact->parsed_from_handle || "";
+
+        return ("STDERR", $DIAG)
+            if $handle eq 'STDERR';
+
+        return (" DIAG ", $DIAG) if $fact->diagnostics;
+
+        return unless $self->{+VERBOSE};
+        return ("STDOUT", $NOTE);
+    }
+
+    if ($fact->result) {
+        return ("FAILED", $FAILED) if $fact->causes_fail;
+        return unless $self->{+VERBOSE} || !$fact->nested;
+        return ("PASSED", $PASSED);
+    }
+
+    return unless $self->{+VERBOSE};
+    return ("PARSER", $PARSER) if $fact->parse_error;
+
+    return ("UNKNWN", '');
 }
 
 1;

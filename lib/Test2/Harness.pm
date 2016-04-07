@@ -2,10 +2,13 @@ package Test2::Harness;
 use strict;
 use warnings;
 
+our $VERSION = "0.000001";
+
 use Carp qw/croak/;
 use Time::HiRes qw/sleep/;
 use Scalar::Util qw/blessed/;
 
+use Test2::Harness::Job;
 use Test2::Harness::Runner;
 use Test2::Harness::Parser;
 
@@ -14,7 +17,8 @@ use Test2::Util::HashBase qw{
     runner
     listeners
     switches libs env_vars
-    jobs slots queue
+    jobs
+    verbose
 };
 
 sub STEP_DELAY() { '0.05' }
@@ -31,9 +35,6 @@ sub init {
 
     $self->{+RUNNER} ||= Test2::Harness::Runner->new();
     $self->{+JOBS}   ||= 1;
-
-    $self->{+SLOTS} = [];
-    $self->{+QUEUE} = [];
 }
 
 sub environment {
@@ -47,14 +48,17 @@ sub environment {
         'HARNESS_ACTIVE'  => '1',
         'HARNESS_VERSION' => $Test2::Harness::VERSION,
 
+        'HARNESS_IS_VERBOSE' => $self->verbose ? 1 : 0,
+
         'T2_HARNESS_ACTIVE'  => '1',
         'T2_HARNESS_VERSION' => $Test2::Harness::VERSION,
 
-        %{$self->{+ENV_VARS}},
-    );
+        'T2_FORMATTER' => 'T2Harness',
 
-    $out{T2_FORMATTER} = 'EventStream';
-    $out{HARNESS_JOBS} = $self->{+JOBS} || 1;
+        %{$self->{+ENV_VARS}},
+
+        'HARNESS_JOBS' => $self->{+JOBS} || 1,
+    );
 
     return \%out;
 }
@@ -68,41 +72,47 @@ sub run {
     my $pclass = $self->{+PARSER_CLASS};
     my $listen = $self->{+LISTENERS};
     my $runner = $self->{+RUNNER};
-    my $slots  = $self->{+SLOTS};
     my $jobs   = $self->{+JOBS} || 1;
     my $env    = $self->environment;
 
+    my $slots  = [];
     my (@queue, @results);
 
     my $counter = 1;
     my $start_file = sub {
         my $file = shift;
+        my $job_id = $counter++;
 
-        my $proc = $runner->start(
-            $file,
-
-            env      => $self->environment,
-            libs     => $self->{+LIBS},
-            switches => $self->{+SWITCHES},
-        );
-
-        return $pclass->new(
-            job       => $counter++,
-            proc      => $proc,
+        my $job = Test2::Harness::Job->new(
+            id        => $job_id,
+            file      => $file,
             listeners => $listen,
         );
+
+        $job->start(
+            runner => $runner,
+            start_args => {
+                env       => $self->environment,
+                libs      => $self->{+LIBS},
+                switches  => $self->{+SWITCHES},
+            },
+            parser_class => $pclass,
+        );
+
+        return $job;
     };
 
     my $wait = sub {
         my $slot;
         until($slot) {
+            my $no_sleep = 0;
             for my $s (1 .. $jobs) {
-                my $parser = $slots->[$s];
+                my $job = $slots->[$s];
 
-                if ($parser) {
-                    $parser->step;
-                    next unless $parser->is_done;
-                    push @results => $parser->result;
+                if ($job) {
+                    $no_sleep = 1 if $job->step;
+                    next unless $job->is_done;
+                    push @results => $job->result;
                     $slots->[$s] = undef;
                 }
 
@@ -113,6 +123,7 @@ sub run {
             }
 
             last if $slot;
+            next if $no_sleep;
             sleep STEP_DELAY();
         }
         return $slot;
@@ -138,16 +149,16 @@ sub run {
         my $no_sleep = 0;
 
         my @keep;
-        for my $p (@$slots) {
-            next unless $p;
+        for my $j (@$slots) {
+            next unless $j;
 
-            $no_sleep = 1 if $p->step > 0;
+            $no_sleep = 1 if $j->step;
 
-            if($p->is_done) {
-                push @results => $p->result;
+            if($j->is_done) {
+                push @results => $j->result;
             }
             else {
-                push @keep => $p;
+                push @keep => $j;
             }
         }
 
@@ -157,16 +168,71 @@ sub run {
     }
 
     for my $file (@queue) {
-        my $parser = $start_file->($file);
+        my $job = $start_file->($file);
 
-        while(!$parser->is_done) {
-            sleep STEP_DELAY() unless $parser->step;
+        while(!$job->is_done) {
+            sleep STEP_DELAY() unless $job->step;
         }
 
-        push @results => $parser->result;
+        push @results => $job->result;
     }
 
     return \@results;
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Harness - Test2 based test harness.
+
+=head1 DESCRIPTION
+
+This is an alternative to L<Test::Harness>. See the L<App::Yath> module for
+more details.
+
+Try running the C<yath> command inside a perl repository.
+
+    $ yath
+
+For help:
+
+    $ yath --help
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2016 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

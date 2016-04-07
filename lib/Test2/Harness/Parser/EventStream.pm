@@ -2,140 +2,142 @@ package Test2::Harness::Parser::EventStream;
 use strict;
 use warnings;
 
+our $VERSION = "0.000001";
+
 use Test2::Harness::Result;
 use Test2::Harness::Fact;
 
 use base 'Test2::Harness::Parser';
-use Test2::Util::HashBase qw/results/;
+use Test2::Util::HashBase;
 
-sub morph {
+sub morph { }
+
+sub step {
     my $self = shift;
 
-    my $file = $self->{+PROC}->file;
+    my @facts;
+    push @facts => $self->parse_stderr;
+    push @facts => $self->parse_stdout;
 
-    $self->{+RESULTS} = {
-        $file => Test2::Harness::Result->new(
-            file => $file,
-            name => $file,
-            job  => $self->{+JOB},
-        ),
-    };
-}
-
-sub finish {
-    my $self = shift;
-    my ($exit) = @_;
-
-    my $file = $self->{+PROC}->file;
-
-    my $r = delete $self->{+RESULTS}->{$file};
-
-    # Close any remaining subtests, badly
-    $self->_end_subtest($_) for keys %{$self->{+RESULTS}};
-
-    $r->stop($exit);
-
-    $self->{+RESULT} = $r;
+    return @facts;
 }
 
 sub parse_stderr {
     my $self = shift;
 
-    my $line = $self->proc->get_err_line or return 0;
+    my $line = $self->proc->get_err_line or return;
+    chomp(my $out = $line);
 
-    chomp($line);
-
-    my $fact = Test2::Harness::Fact->new(
-        output             => $line,
+    return Test2::Harness::Fact->new(
+        output             => $out,
         parsed_from_handle => 'STDERR',
         parsed_from_string => $line,
         diagnostics        => 1,
     );
-
-    $self->notify($fact);
-
-    return 1;
 }
 
-sub parse_line {
+sub parse_stdout {
     my $self = shift;
-    my ($io, $line) = @_;
 
-    chomp($line);
+    my $line = $self->proc->get_out_line or return;
+    chomp(my $out = $line);
+    $out =~ s/[\r\s]+$//g;
 
-    my (@facts) = Test2::Harness::Fact->from_string($line, parsed_from_handle => $io);
+    if ($out =~ m/^T2_ENCODING: (.+)$/) {
+        my $enc = $1;
+
+        $self->proc->encoding($enc);
+
+        return Test2::Harness::Fact->new(
+            encoding           => $enc,
+            parsed_from_handle => 'STDOUT',
+            parsed_from_string => $line,
+        );
+    }
+
+    my @facts = Test2::Harness::Fact->from_string($out, parsed_from_handle => 'STDOUT');
 
     return Test2::Harness::Fact->new(
-        output             => $line,
-        parsed_from_handle => $io,
+        output             => $out,
+        parsed_from_handle => 'STDOUT',
         parsed_from_string => $line,
         diagnostics        => 0,
     ) unless @facts;
 
-    my $file = $self->{+PROC}->file;
-    my $results = $self->{+RESULTS};
-
-    # Anything after the first is a parsing error
-    # No non-parse-error, must be a problem.
-    $results->{$file}->bump_failed(1)
-        if $facts[0]->parse_error;
-
-    for my $f (@facts) {
-        $f = $self->end_subtest($f->is_subtest, $f) if $f->is_subtest;
-
-        my $st = $f->in_subtest || $file;
-        my $r = $results->{$st} ||= Test2::Harness::Result->new(
-            file   => $file,
-            job    => $self->{+JOB},
-            name   => "UNKNOWN SUBTEST",
-            nested => $f->nested,
-        );
-        $r->add_fact($f);
-    }
-
     return @facts;
 }
 
-sub end_subtest {
-    my $self = shift;
-    my ($st, $f) = @_;
-
-    my $results = $self->{+RESULTS};
-
-    # If we are not tracking the subtest we assume the produce hid the events
-    # from us. Just give the event back
-    my $r = delete $results->{$st} or return $f;
-
-    unless ($f) {
-        $r->add_fact(
-            Test2::Harness::Fact->new(
-                causes_fail => 1,
-                diagnostics => 1,
-                parse_error => "Subtest was tracked, but we never saw a Subtest event!",
-            ),
-        );
-        $r->stop(0);
-        return Test2::Harness::Fact->from_result($r);
-    }
-
-    $r->set_name($f->summary);
-    $r->add_fact(
-        Test2::Harness::Fact->new(
-            causes_fail => 1,
-            diagnostics => 1,
-            summary     => "Subtest event reports failure",
-        ),
-    ) if $f->causes_fail;
-    $r->stop(0);
-
-    return Test2::Harness::Fact->from_result(
-        $r,
-
-        name             => $f->summary          || 'Unnamed subtest',
-        in_subtest       => $f->in_subtest       || undef,
-        is_subtest       => $f->is_subtest       || undef,
-        increments_count => $f->increments_count || 0,
-    );
-}
-
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Harness::Parser::EventStream - EventStream parser
+
+=head1 DESCRIPTION
+
+This is the parser counterpart to L<Test2::Formatter::EventStream>. This will
+read a stream of output from the test which should include L<Test2::Event>
+objects serialized into JSON format.
+
+=head1 STREAM COMPOSITION
+
+=over 4
+
+=item STDERR
+
+Anything sent to STDERR will be turned into a basic diagnostics
+L<Test2::Harness::Fact> object.
+
+=item STDOUT
+
+Anything sent to STDOUT without a prefix, or with an unknown prefix will be
+turned into a basic L<Test2::Harness::Fact> object.
+
+=item T2_ENCODING: ...
+
+A line of STDOUT with this prefix will be used to set the encoding.
+
+=item T2_EVENT: ...JSON...
+
+A line of STDOUT with this prefix will be consumed as JSON and used to
+construct an L<Test2::Event::Fact> object.
+
+=back
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2016 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

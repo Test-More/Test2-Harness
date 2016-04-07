@@ -2,15 +2,19 @@ package Test2::Harness::Runner;
 use strict;
 use warnings;
 
-use Test2::Harness::Proc;
+our $VERSION = "0.000001";
 
-use Test2::Util::HashBase qw/headers merge via/;
+use Test2::Harness::Proc;
+use Test2::Harness::Fact;
+
+use Test2::Util::HashBase qw/headers merge via _preload_list/;
 use Test2::Util qw/CAN_REALLY_FORK/;
 
-use IO::Handle;
 use Carp qw/croak/;
 use Symbol qw/gensym/;
 use IPC::Open3 qw/open3/;
+use File::Temp qw/tempfile/;
+use Scalar::Util 'openhandle';
 
 our $DO_FILE;
 
@@ -41,7 +45,6 @@ $msg
     CORE::exit(255);
 }
 
-my %WARNED;
 sub start {
     my $self = shift;
     my ($file, %params) = @_;
@@ -51,26 +54,48 @@ sub start {
 
     my $header = $self->header($file);
 
+    local %ENV = %ENV;
+    if (exists $header->{features}->{formatter} && !$header->{features}->{formatter}) {
+        delete $ENV{T2_FORMATTER};
+
+        my $env = $params{env};
+        delete $env->{T2_FORMATTER}
+            if $env;
+    }
+
     my $via = $self->{+VIA};
 
     return $self->via_open3(@_) unless $via;
     return $self->via_open3(@_) if $via eq 'open3';
 
     unless (CAN_REALLY_FORK) {
-        warn "This system is not capable of forking, falling back to IPC::Open3.\nThis message will not be shown again.\n"
-            unless $WARNED{FORK}++;
+        my $fact = Test2::Harness::Fact->new(
+            output => "This system is not capable of forking, falling back to IPC::Open3.",
+            diagnostics => 1,
+        );
 
-        return $self->via_open3(@_);
+        my $proc = $self->via_open3(@_);
+        return ($proc, $fact);
     }
 
     if ($header->{switches}) {
-        warn "Test file '$file' uses switches in the #! line, Falling back to IPC::Open3.";
-        return $self->via_open3(@_);
+        my $fact = Test2::Harness::Fact->new(
+            output => "Test file '$file' uses switches in the #! line, Falling back to IPC::Open3.",
+            diagnostics => 1,
+        );
+
+        my $proc = $self->via_open3(@_);
+        return ($proc, $fact);
     }
 
     if (exists($header->{features}->{preload}) && !$header->{features}->{preload}) {
-        warn "Test file '$file' uses has turned off preloading, Falling back to IPC::Open3.";
-        return $self->via_open3(@_);
+        my $fact = Test2::Harness::Fact->new(
+            output => "Test file '$file' uses has turned off preloading, Falling back to IPC::Open3.",
+            diagnostics => 1,
+        );
+
+        my $proc = $self->via_open3(@_);
+        return ($proc, $fact);
     }
 
     $self->fatal_error("You cannot use switches with preloading, aborting...")
@@ -104,13 +129,17 @@ sub header {
         chomp($line);
         next if $line =~ m/^\s*$/;
 
-        if ($ln == 1 && $line =~ m/#!.*perl\S*(\s.*)?$/) {
-            my @switches = split /\s+/, $1;
+        if ($ln == 1 && $line =~ m/#!.*perl\b(.+)$/) {
+            my @switches = grep { m/\S/ } split /\s+/, $1;
             $header{switches} = \@switches;
             $header{shbang} = $line;
+            next;
         }
 
-        last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
+        next if $line =~ m/^(use|require|BEGIN)/;
+        last unless $line =~ m/^\s*#/;
+
+        next unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
         my ($dir, @args) = split /-/, lc($1);
         if($dir eq 'no') {
             my ($feature) = @args;
@@ -133,6 +162,9 @@ sub via_open3 {
     my $self = shift;
     my ($file, %params) = @_;
 
+    return $self->via_win32(@_)
+        if $^O eq 'MSWin32';
+
     my $env      = $params{env};
     my $libs     = $params{libs};
     my $switches = $params{switches};
@@ -144,6 +176,7 @@ sub via_open3 {
 
     my @switches;
     push @switches => map { ('-I', $_) } @$libs if $libs;
+    push @switches => map { ('-I', $_) } split /:/, ($ENV{PERL5LIB} || "");
     push @switches => @$switches             if $switches;
     push @switches => @{$header->{switches}} if $header->{switches};
 
@@ -154,11 +187,6 @@ sub via_open3 {
         $^X, @switches, $file
     );
     die "Failed to execute '" . join(' ' => $^X, @switches, $file) . "'" unless $pid;
-
-    for my $fh ($in, $out, $err) {
-        next unless $fh;
-        $fh->blocking(0);
-    }
 
     my $proc = Test2::Harness::Proc->new(
         file   => $file,
@@ -184,21 +212,19 @@ sub via_do {
     pipe($in_read, $in_write) or die "Could not open pipe!";
     pipe($out_read, $out_write) or die "Could not open pipe!";
     if ($self->{+MERGE}) {
-        ($out_read, $out_write) = ($in_read, $in_write);
+        ($err_read, $err_write) = ($out_read, $out_write);
     }
     else {
         pipe($err_read, $err_write) or die "Could not open pipe!";
     }
 
+    # Generate the preload list
+    $self->preload_list;
+
     my $pid = fork;
     die "Could not fork!" unless defined $pid;
 
     if ($pid) {
-        for my $fh ($in_write, $out_read, $err_read) {
-            next unless $fh;
-            $fh->blocking(0);
-        }
-    
         return Test2::Harness::Proc->new(
             file   => $file,
             pid    => $pid,
@@ -217,9 +243,44 @@ sub via_do {
     close(STDERR);
     open(STDERR, '>&', $err_write) || die "Could not open new STDERR: $!";
 
+    unshift @INC => @$libs if $libs;
+    @ARGV = ();
     %ENV = (%ENV, %$env) if $env;
 
     $DO_FILE = $file;
+    $0 = $file;
+
+    $self->reset_DATA($file);
+
+    # Stuff copied shamelessly from forkprove
+    ####################
+    # if FindBin is preloaded, reset it with the new $0
+    FindBin::init() if defined &FindBin::init;
+
+    # restore defaults
+    Getopt::Long::ConfigDefaults();
+
+    # reset the state of empty pattern matches, so that they have the same
+    # behavior as running in a clean process.
+    # see "The empty pattern //" in perlop.
+    # note that this has to be dynamically scoped and can't go to other subs
+    "" =~ /^/;
+
+    # Test::Builder is loaded? Reset the $Test object to make it unaware
+    # that it's a forked off proecess so that subtests won't run
+    if ($INC{'Test/Builder.pm'}) {
+        if (defined $Test::Builder::Test) {
+            $Test::Builder::Test->reset;
+        }
+        else {
+            Test::Builder->new;
+        }
+    }
+
+    # avoid child processes sharing the same seed value as the parent
+    srand();
+    ####################
+    # End stuff copied from forkprove
 
     my $ok = eval {
         no warnings 'exiting';
@@ -239,4 +300,187 @@ sub via_do {
     exit 0;
 }
 
+{
+    no warnings 'once';
+    *via_win32 = \&via_files;
+}
+sub via_files {
+    my $self = shift;
+    my ($file, %params) = @_;
+
+    my $env      = $params{env};
+    my $libs     = $params{libs};
+    my $switches = $params{switches};
+    my $header   = $self->header($file);
+
+    my ($in_write, $in)   = tempfile(CLEANUP => 1) or die "XXX";
+    my ($out_write, $out) = tempfile(CLEANUP => 1) or die "XXX";
+    my ($err_write, $err) = tempfile(CLEANUP => 1) or die "XXX";
+    open(my $in_read,  '<', $in)  or die "$!";
+    open(my $out_read, '<', $out) or die "$!";
+    open(my $err_read, '<', $err) or die "$!";
+
+    my @switches;
+    push @switches => map { ('-I', $_) } @$libs if $libs;
+    push @switches => map { ('-I', $_) } split /:/, ($ENV{PERL5LIB} || "");
+    push @switches => @$switches             if $switches;
+    push @switches => @{$header->{switches}} if $header->{switches};
+
+    local %ENV = (%ENV, %$env) if $env;
+
+    my $pid = open3(
+        "<&" . fileno($in_read), ">&" . fileno($out_write), ">&" . fileno($err_write),
+        $^X, @switches, $file
+    );
+    die "Failed to execute '" . join(' ' => $^X, @switches, $file) . "'" unless $pid;
+
+    my $proc = Test2::Harness::Proc->new(
+        file   => $file,
+        pid    => $pid,
+        in_fh  => $in_write,
+        out_fh => $out_read,
+        err_fh => $err_read,
+    );
+
+    return $proc;
+}
+
+# Heavily modified from forkprove
+sub preload_list {
+    my $self = shift;
+
+    return @{$self->{+_PRELOAD_LIST}} if $self->{+_PRELOAD_LIST};
+
+    my $list = $self->{+_PRELOAD_LIST} = [];
+
+    for my $loaded (keys %INC) {
+        next unless $loaded =~ /\.pm$/;
+
+        my $mod = $loaded;
+        $mod =~ s{/}{::}g;
+        $mod =~ s{\.pm$}{};
+
+        my $fh = do {
+            no strict 'refs';
+            *{ $mod . '::DATA' }
+        };
+
+        next unless openhandle($fh);
+        push @$list => [ $mod, $INC{$loaded}, tell($fh) ];
+    }
+
+    return @$list;
+}
+
+# Heavily modified from forkprove
+sub reset_DATA {
+    my $self = shift;
+    my ($file) = @_;
+
+    # open DATA from test script
+    if (openhandle(\*main::DATA)) {
+        close ::DATA;
+        if (open my $fh, $file) {
+            my $code = do { local $/; <$fh> };
+            if(my($data) = $code =~ /^__(?:END|DATA)__$(.*)/ms){
+                open ::DATA, '<', \$data
+                  or die "Can't open string as DATA. $!";
+            }
+        }
+    }
+
+    for my $set ($self->preload_list) {
+        my ($mod, $file, $pos) = @$set;
+
+        my $fh = do {
+            no strict 'refs';
+            *{ $mod . '::DATA' }
+        };
+
+        # note that we need to ensure that each forked copy is using a
+        # different file handle, or else concurrent processes will interfere
+        # with each other
+
+        close $fh if openhandle($fh);
+
+        if (open $fh, '<', $file) {
+            seek($fh, $pos, 0);
+        }
+        else {
+            warn "Couldn't reopen DATA for $mod ($file): $!";
+        }
+    }
+}
+
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Harness::Runner - Responsible for spawning test processes.
+
+=head1 DESCRIPTION
+
+This is used to spawn each test file and return an L<Test2::Harness::Proc>
+handle for it.
+
+=head1 SPAWN METHODS
+
+Depending on platform and command line arguments one of these will be used:
+
+=over 4
+
+=item via_open3
+
+This is the default, it uses C<open3> to spawn a new process that runs the test
+file.
+
+=item via_do
+
+This is used in preload mode to fork for each new process.
+
+=item via_files
+
+=item via_win32
+
+This uses temporary files and open3 together. 'via_win32' is an alias to
+'via_files'.
+
+=back
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2016 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

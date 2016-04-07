@@ -3,6 +3,8 @@ package yath;
 use strict;
 use warnings;
 
+our $VERSION = "0.000001";
+
 use App::Yath;
 
 T2_DO_FILE: {

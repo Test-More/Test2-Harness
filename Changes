@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Die if given unknown command line flags. Patch by Dave Rolsky. GitHub
+      #1.
+
+
 0.000001  2016-05-24 17:04:13-07:00 America/Los_Angeles
 
     - Initial Release

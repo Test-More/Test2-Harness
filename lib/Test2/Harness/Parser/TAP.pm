@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '0.000003';
 
 use Test2::Harness::Fact;
+use Time::HiRes qw/sleep/;
 
 use base 'Test2::Harness::Parser';
 use Test2::Util::HashBase qw/subtests sid last_nest/;
@@ -57,8 +58,14 @@ sub parse_tap_buffered_subtest {
     $st_ok->set_summary($summary);
 
     my @subevents;
+    my $count = 0;
     while (1) {
-        my $line = $self->proc->get_out_line() or die "Abrupt end to buffered subtest?";
+        my $line = $self->proc->get_out_line();
+        unless (defined $line) {
+            sleep 0.1;
+            die "Abrupt end to buffered subtest?" if $count++ > 10;
+            next;
+        }
 
         last if $line =~ m/^\s*\}\s*$/;
         push @subevents => $self->parse_tap_line($line);

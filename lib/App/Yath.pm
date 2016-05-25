@@ -48,6 +48,12 @@ sub init {
 
     Getopt::Long::Configure("bundling");
     GetOptionsFromArray \@args => (
+        'l|lib'         => sub {
+            push @libs, 'lib';
+        },
+        'b|blib'        => sub {
+            push @libs, 'blib/lib', 'blib/arch';
+        },
         'I|include=s@'  => \@libs,
         'R|renderer=s@' => \@render,
         'L|preload=s@'  => \@preload,
@@ -153,6 +159,8 @@ sub help {
 Usage: $0 [OPTIONS] File1 File2 Directory ...
 
  Common Options:
+  -l          --lib               Add lib/ to \@INC.
+  -b          --blib              Add blib/lib and blib/arch to \@INC.
   -I[dir]     --include="dir"     Add directories to \@INC.
   -L[Module]  --preload="Module"  Add a module to preload. (Prefork)
   -R[name]    --renderer="name"   Add a renderer. (See [name] section)
@@ -254,6 +262,14 @@ script will be able to run with minimal stack trace noise.
 =head2 COMMON
 
 =over 4
+
+=item -l --lib
+
+Add F<lib/> to C<@INC>.
+
+=item -b --blib
+
+Add F<blib/lib> and F<blib/arch> to C<@INC>.
 
 =item -I[dir] --include="dir"
 

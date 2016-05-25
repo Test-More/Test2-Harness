@@ -172,4 +172,16 @@ subtest run => sub {
     );
 };
 
+subtest libs => sub {
+	like(
+		$CLASS->new(args => [qw/-l -b -I foo/]),
+		object {
+			call harness => object {
+				call libs => [qw{lib blib/lib blib/arch foo}];
+			};
+		},
+		"Got expected libs with -l, -b, and -I (-l and -b before -I)"
+	);
+};
+
 done_testing;

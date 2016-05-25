@@ -3,6 +3,9 @@
     - Die if given unknown command line flags. Patch by Dave Rolsky. GitHub
       #1.
 
+    - Added -l (--lib) and -b (--blib) flags that work just like prove. Patch
+      by Dave Rolsky. GitHub #2.
+
 
 0.000001  2016-05-24 17:04:13-07:00 America/Los_Angeles
 

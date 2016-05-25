@@ -6,6 +6,7 @@ our $VERSION = '0.000003';
 
 use Test2::Harness::Proc;
 use Test2::Harness::Fact;
+use Config;
 
 use Test2::Util::HashBase qw/headers merge via _preload_list/;
 use Test2::Util qw/CAN_REALLY_FORK/;
@@ -176,7 +177,7 @@ sub via_open3 {
 
     my @switches;
     push @switches => map { ('-I', $_) } @$libs if $libs;
-    push @switches => map { ('-I', $_) } split /:/, ($ENV{PERL5LIB} || "");
+    push @switches => map { ('-I', $_) } split $Config{path_sep}, ($ENV{PERL5LIB} || "");
     push @switches => @$switches             if $switches;
     push @switches => @{$header->{switches}} if $header->{switches};
 
@@ -322,7 +323,7 @@ sub via_files {
 
     my @switches;
     push @switches => map { ('-I', $_) } @$libs if $libs;
-    push @switches => map { ('-I', $_) } split /:/, ($ENV{PERL5LIB} || "");
+    push @switches => map { ('-I', $_) } split $Config{path_sep}, ($ENV{PERL5LIB} || "");
     push @switches => @$switches             if $switches;
     push @switches => @{$header->{switches}} if $header->{switches};
 

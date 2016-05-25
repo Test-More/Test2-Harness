@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - Get path separator from config
     - Better windows prereq specification
 
 0.000002  2016-05-25 09:22:22-07:00 America/Los_Angeles

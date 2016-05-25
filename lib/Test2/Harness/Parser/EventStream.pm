@@ -2,7 +2,7 @@ package Test2::Harness::Parser::EventStream;
 use strict;
 use warnings;
 
-our $VERSION = '0.000002';
+our $VERSION = '0.000003';
 
 use Test2::Harness::Result;
 use Test2::Harness::Fact;

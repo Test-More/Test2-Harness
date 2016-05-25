@@ -94,8 +94,8 @@ sub init {
 
     my $graph_colors = $self->{+COLOR} ? [@DEFAULT_GRAPH_COLORS] : [];
 
-    $self->{+COLORS}       ||= {map { $_ => Term::ANSIColor::color($colors->{$_}) } grep {$colors->{$_}} keys %$colors, 'reset'};
-    $self->{+GRAPH_COLORS} ||= [map { Term::ANSIColor::color($_)                  } grep {$_} @$graph_colors];
+    $self->{+COLORS}       ||= {map { $_ => eval { Term::ANSIColor::color($colors->{$_}) } || '' } grep {$colors->{$_}} keys %$colors, 'reset'};
+    $self->{+GRAPH_COLORS} ||= [map { eval { Term::ANSIColor::color($_) } || ''                  } grep {$_} @$graph_colors];
 }
 
 sub paint {

@@ -115,7 +115,7 @@ sub _get_line_for {
 
     my $h = $self->{$io_name} or return;
 
-    $h->seek(0,1);
+    seek($h,0,1);
     my $line = <$h>;
     return unless defined $line;
 

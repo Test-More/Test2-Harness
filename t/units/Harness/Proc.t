@@ -1,6 +1,7 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Proc';
 use Time::HiRes qw/sleep/;
 use PerlIO;
+use IO::Handle;
 
 skip_all "This test cannot run on windows"
     if $^O eq 'MSWin32';

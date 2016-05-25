@@ -7,6 +7,7 @@ our $VERSION = '0.000002';
 use Test2::Util::HashBase qw/fh no_numbers/;
 use base 'Test2::Formatter';
 use Test2::Harness::Fact;
+use IO::Handle;
 require Test2::Formatter::TAP;
 
 sub init {

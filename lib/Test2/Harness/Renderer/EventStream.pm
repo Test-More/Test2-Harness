@@ -42,6 +42,26 @@ my %EXTENDED_COLORS = (
     stdout => 'blue',
 );
 
+BEGIN {
+    for my $sig (qw/INT TERM QUIT/) {
+        my $old = $SIG{$sig} || sub {
+            $SIG{$sig} = 'DEFAULT';
+            kill $sig, $$;
+        };
+
+        $SIG{$sig} = sub {
+            print STDOUT Term::ANSIColor::color('reset') if -t STDOUT;
+            print STDERR Term::ANSIColor::color('reset') if -t STDERR;
+            $old->();
+        };
+    }
+}
+
+END {
+    print STDOUT Term::ANSIColor::color('reset') if -t STDOUT;
+    print STDERR Term::ANSIColor::color('reset') if -t STDERR;
+}
+
 sub init {
     my $self = shift;
     $self->{+JOBS}  = {};

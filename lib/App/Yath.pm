@@ -66,7 +66,7 @@ sub init {
         'S|switch=s@' => sub {
             push @switches => split '=', $_[1];
         },
-    );
+    ) or die "Could not parse the command line options given.\n";
 
     die "You cannot combine preload (-L) with switches (-S).\n"
         if @preload && @switches;

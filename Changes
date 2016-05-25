@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.000002  2016-05-25 09:22:22-07:00 America/Los_Angeles
+
     - Die if given unknown command line flags. Patch by Dave Rolsky. GitHub
       #1.
     - Added -l (--lib) and -b (--blib) flags that work just like prove. Patch

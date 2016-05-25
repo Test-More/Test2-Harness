@@ -2,7 +2,7 @@ package Test2::Harness::Parser::TAP;
 use strict;
 use warnings;
 
-our $VERSION = '0.000003';
+our $VERSION = '0.000004';
 
 use Test2::Harness::Fact;
 use Time::HiRes qw/sleep/;

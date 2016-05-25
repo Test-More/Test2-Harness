@@ -2,7 +2,7 @@ package Test2::Harness::Renderer::EventStream;
 use strict;
 use warnings;
 
-our $VERSION = '0.000003';
+our $VERSION = '0.000004';
 
 use Test2::Util::HashBase qw/color verbose jobs slots parallel clear out_std watch colors graph_colors counter/;
 use Term::ANSIColor();
@@ -43,7 +43,7 @@ my %EXTENDED_COLORS = (
 );
 
 BEGIN {
-    for my $sig (qw/INT TERM QUIT/) {
+    for my $sig (qw/INT TERM/) {
         my $old = $SIG{$sig} || sub {
             $SIG{$sig} = 'DEFAULT';
             kill $sig, $$;

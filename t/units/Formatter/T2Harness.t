@@ -36,6 +36,9 @@ subtest 'use Test::Builder::Formatter if Test::Builder is loaded' => sub {
 };
 
 SKIP: {
+    skip "These tests run only in AUTHOR_TESTING"
+        unless $ENV{AUTHOR_TESTING};
+
     my $pty = eval { require IO::Pty; IO::Pty->new };
 
     skip "These tests require IO::Pty"

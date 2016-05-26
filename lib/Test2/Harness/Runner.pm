@@ -176,8 +176,8 @@ sub via_open3 {
     my $err = $self->{+MERGE} ? $out : gensym;
 
     my @switches;
-    push @switches => map { ('-I', $_) } @$libs if $libs;
-    push @switches => map { ('-I', $_) } split $Config{path_sep}, ($ENV{PERL5LIB} || "");
+    push @switches => map { ("-I$_") } @$libs if $libs;
+    push @switches => map { ("-I$_") } split $Config{path_sep}, ($ENV{PERL5LIB} || "");
     push @switches => @$switches             if $switches;
     push @switches => @{$header->{switches}} if $header->{switches};
 
@@ -322,8 +322,8 @@ sub via_files {
     open(my $err_read, '<', $err) or die "$!";
 
     my @switches;
-    push @switches => map { ('-I', $_) } @$libs if $libs;
-    push @switches => map { ('-I', $_) } split $Config{path_sep}, ($ENV{PERL5LIB} || "");
+    push @switches => map { ("-I$_") } @$libs if $libs;
+    push @switches => map { ("-I$_") } split $Config{path_sep}, ($ENV{PERL5LIB} || "");
     push @switches => @$switches             if $switches;
     push @switches => @{$header->{switches}} if $header->{switches};
 

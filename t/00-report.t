@@ -1,5 +1,6 @@
 use Test2::Tools::Basic;
 use Test2::Util::Table qw/table/;
+use Test2::Harness::Fact;
 
 use Test2::Util qw/CAN_FORK CAN_REALLY_FORK CAN_THREAD/;
 
@@ -18,13 +19,24 @@ diag(
     )
 );
 
+diag(
+    join "\n",
+    table(
+        header => ['USE JSON', 'VERSION'],
+        rows   => [
+            [ Test2::Harness::Fact->JSON, Test2::Harness::Fact->JSON->VERSION ],
+        ],
+    )
+);
+
+
 {
     my @depends = qw{
         Test2 Test2::Suite Test2::AsyncSubtest B Carp File::Spec File::Temp
         List::Util PerlIO Scalar::Util Storable Test::Harness overload utf8
         IO::Handle File::Find Getopt::Long IPC::Open3 POSIX Symbol
         Term::ANSIColor Time::HiRes JSON::MaybeXS Win32::Console::ANSI JSON::PP
-        JSON::XS Cpanel::JSON::XS
+        JSON::XS Cpanel::JSON::XS IO::Tty IO::Pty
     };
 
     my @rows;

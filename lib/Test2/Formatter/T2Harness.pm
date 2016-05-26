@@ -2,7 +2,7 @@ package Test2::Formatter::T2Harness;
 use strict;
 use warnings;
 
-our $VERSION = '0.000004';
+our $VERSION = '0.000005';
 
 sub new {
     my $class = shift;

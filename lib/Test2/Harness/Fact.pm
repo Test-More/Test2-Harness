@@ -18,7 +18,7 @@ BEGIN {
 
     unless($ok) {
         require JSON::PP;
-        *JSON = sub { 'JSON::PP' };
+        *JSON = sub() { 'JSON::PP' };
     }
 }
 
@@ -83,7 +83,12 @@ sub to_json {
 #    $J->canonical(1);
     $J->convert_blessed(1);
 
-    return $J->encode($self);
+    my $json = eval { $J->encode($self) };
+    my $error = $@;
+    return $json if $json;
+
+    require Data::Dumper;
+    die "JSON encoding error: $error\n" . Dumper($self->TO_JSON);
 }
 
 sub from_string {

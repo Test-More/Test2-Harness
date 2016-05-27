@@ -88,7 +88,7 @@ sub to_json {
     return $json if $json;
 
     require Data::Dumper;
-    die "JSON encoding error: $error\n" . Dumper($self->TO_JSON);
+    die "JSON encoding error: $error\n" . Data::Dumper::Dumper($self->TO_JSON);
 }
 
 sub from_string {

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix Data::Dumper typo >:-|
+
 0.000005  2016-05-26 08:48:12-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Add missing JSON prototype in Fact.pm

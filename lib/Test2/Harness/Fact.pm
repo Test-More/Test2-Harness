@@ -80,8 +80,8 @@ sub to_json {
 
     my $J = JSON->new;
     $J->indent(0);
-#    $J->canonical(1);
     $J->convert_blessed(1);
+    $J->allow_blessed(1);
 
     my $json = eval { $J->encode($self) };
     my $error = $@;
@@ -139,6 +139,8 @@ sub from_event {
 
         $trace ? (trace => {%{$trace}, __PACKAGE__ => blessed($trace)}) : (),
     };
+
+    delete $event_data->{subevents};
 
     my %attrs = (
         EVENT() => $event_data,

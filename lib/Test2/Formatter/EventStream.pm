@@ -2,7 +2,7 @@ package Test2::Formatter::EventStream;
 use strict;
 use warnings;
 
-our $VERSION = '0.000006';
+our $VERSION = '0.000007';
 
 use Test2::Util::HashBase qw/fh no_numbers/;
 use base 'Test2::Formatter';

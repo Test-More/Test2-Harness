@@ -2,7 +2,7 @@ package Test2::Harness::Parser;
 use strict;
 use warnings;
 
-our $VERSION = '0.000007';
+our $VERSION = '0.000008';
 
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;

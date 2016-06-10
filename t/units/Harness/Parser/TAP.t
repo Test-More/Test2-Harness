@@ -1423,4 +1423,54 @@ ok 10 - outer buffered subtest {
     );
 };
 
+subtest todo_subtest => sub {
+    my $one = $CLASS->new(proc => 'My::Proc', job => 1);
+
+    @stdout = map { "$_\n" } split /\n/, <<'    EOT';
+not ok 1 - todo # TODO test todo {
+    not ok 1 - fail
+    # Failed test 'fail'
+    # at test.pl line 9.
+    1..1
+}
+    EOT
+
+    like(
+        [$one->parse_stdout],
+        array {
+            item object {
+                prop blessed          => 'Test2::Harness::Fact';
+                call event            => T();
+                call summary          => 'fail';
+                call causes_fail      => T();
+                call increments_count => T();
+                call number           => 1;
+                call nested           => 1;
+                call in_subtest       => 'A';
+            };
+            item object {
+                prop blessed          => 'Test2::Harness::Fact';
+                call event            => T();
+                call summary          => 'Plan is 1 assertions';
+                call causes_fail      => F();
+                call increments_count => F();
+                call nested           => 1;
+                call in_subtest       => 'A';
+            };
+            item object {
+                prop blessed          => 'Test2::Harness::Fact';
+                call event            => T();
+                call summary          => 'todo (TODO: test todo)';
+                call causes_fail      => F();
+                call increments_count => T();
+                call nested           => 0;
+                call is_subtest       => 'A';
+            };
+        },
+        "Buffered subtest with todo before opening curly"
+    );
+};
+
 done_testing;
+
+__END__

@@ -54,7 +54,7 @@ sub parse_tap_buffered_subtest {
 
     my ($st_ok, @errors) = $self->parse_tap_ok($line) or return;
     my $summary = $st_ok->summary;
-    return ($st_ok, @errors) unless $summary =~ s/\s*\{\s*$//;
+    return ($st_ok, @errors) unless $summary =~ s/\s*\{\s*(\)?)\s*$/$1/;
     $st_ok->set_summary($summary);
 
     my @subevents;

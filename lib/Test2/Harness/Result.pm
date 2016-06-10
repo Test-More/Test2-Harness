@@ -102,6 +102,17 @@ sub add_fact {
     $self->{+FAILED}++ if $f->causes_fail || $f->terminate;
 }
 
+sub override_fail {
+    my $self = shift;
+
+    for my $f (@{$self->{+FACTS}}) {
+        next unless $f->increments_count;
+        $f->set_override_fail(1);
+        next unless $f->result;
+        $f->result->override_fail(1);
+    }
+}
+
 sub update_nest {
     my $self = shift;
     my ($nest) = @_;

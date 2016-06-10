@@ -304,11 +304,13 @@ sub _tag {
     }
 
     if (my $e = $fact->event) {
-        return ("NOT OK", 'fail') if $fact->causes_fail;
+        return ("NOT OK", 'fail') if $fact->causes_fail && !$fact->override_fail;
 
         return unless $self->{+VERBOSE} || $fact->diagnostics;
 
         if ($fact->increments_count) {
+            return ("NOT OK", 'todo') if $fact->override_fail;
+
             if (ref($e)) {
                 return ("NOT OK", 'todo') if defined $e->{todo};
                 return ("  OK  ", 'skip') if defined $e->{reason};
@@ -325,10 +327,12 @@ sub _tag {
     }
 
     if ($fact->result) {
-        return ("FAILED", 'failed') if $fact->causes_fail;
+        return ("FAILED", 'failed') if $fact->causes_fail && !$fact->override_fail;
 
         my $n = $fact->nested || 0;
         return unless $self->{+VERBOSE} || $n < 0;
+
+        return ("FAILED", 'todo') if $fact->override_fail;
 
         my ($plan) = @{$fact->result->plans};
         if ($plan && !$plan->sets_plan->[0]) {

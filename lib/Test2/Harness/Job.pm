@@ -112,7 +112,7 @@ sub end_subtest {
         ),
     ) if $f->causes_fail && $r->passed;
 
-    return Test2::Harness::Fact->from_result(
+    my $new_f = Test2::Harness::Fact->from_result(
         $r,
 
         number           => $f->number           || undef,
@@ -120,8 +120,14 @@ sub end_subtest {
         in_subtest       => $f->in_subtest       || undef,
         is_subtest       => $f->is_subtest       || undef,
         increments_count => $f->increments_count || 0,
-        causes_fail      => $f->causes_fail      || 0,
     );
+
+    if ($new_f->causes_fail && !$f->causes_fail) {
+        $new_f->set_causes_fail(0);
+        $r->override_fail;
+    }
+
+    return $new_f;
 }
 
 sub step {

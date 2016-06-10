@@ -29,6 +29,7 @@ use Test2::Util::HashBase qw{
 
     diagnostics
     causes_fail
+    override_fail
     increments_count
     sets_plan
     in_subtest

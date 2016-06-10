@@ -2,7 +2,7 @@ package Test2::Harness::Job;
 use strict;
 use warnings;
 
-our $VERSION = '0.000009';
+our $VERSION = '0.000010';
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
@@ -120,6 +120,7 @@ sub end_subtest {
         in_subtest       => $f->in_subtest       || undef,
         is_subtest       => $f->is_subtest       || undef,
         increments_count => $f->increments_count || 0,
+        causes_fail      => $f->causes_fail      || 0,
     );
 }
 

@@ -2,7 +2,7 @@ package Test2::Harness::Runner;
 use strict;
 use warnings;
 
-our $VERSION = '0.000008';
+our $VERSION = '0.000009';
 
 use Test2::Harness::Proc;
 use Test2::Harness::Fact;

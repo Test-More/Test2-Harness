@@ -111,6 +111,31 @@ sub start {
     return $self->via_do(@_);
 }
 
+sub _parse_shbang {
+    my $self = shift;
+    my $line = shift;
+
+    return {} if !defined $line;
+    
+    my %shbang;
+
+    my $shbang_re = qr{
+        ^
+          \#!.*\bperl.*?        # the perl path
+          (?: \s (-.+) )?       # the switches, maybe
+          \s*
+        $
+    }xi;
+    
+    if ( $line =~ $shbang_re ) {
+        my @switches = grep { m/\S/ } split /\s+/, $1 if defined $1;
+        $shbang{switches} = \@switches;
+        $shbang{shbang} = $line;
+    }
+
+    return \%shbang;
+}
+
 sub header {
     my $self = shift;
     my ($file) = @_;
@@ -124,23 +149,24 @@ sub header {
     );
 
     open(my $fh, '<', $file) or die "Could not open file $file: $!";
-    my $ln = 0;
-    while (my $line = <$fh>) {
-        $ln++;
+    
+    for(my $ln = 0; my $line = <$fh>; $ln++) {
         chomp($line);
         next if $line =~ m/^\s*$/;
 
-        if ($ln == 1 && $line =~ m/#!.*perl\b(.+)$/) {
-            my @switches = grep { m/\S/ } split /\s+/, $1;
-            $header{switches} = \@switches;
-            $header{shbang} = $line;
-            next;
+        if( $ln == 0 ) {
+            my $shbang = $self->_parse_shbang($line);
+            for my $key (keys %$shbang) {
+                $header{$key} = $shbang->{$key} if defined $shbang->{$key};
+            }
+            next if $shbang->{shbang};
         }
-
+        
         next if $line =~ m/^(use|require|BEGIN)/;
         last unless $line =~ m/^\s*#/;
 
         next unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
+
         my ($dir, @args) = split /-/, lc($1);
         if($dir eq 'no') {
             my ($feature) = @args;

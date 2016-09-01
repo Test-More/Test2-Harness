@@ -1,6 +1,7 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Renderer::EventStream';
 use PerlIO;
 use Test2::Harness::Fact;
+use Test2::Harness::Job;
 use Test2::Harness::Result;
 
 can_ok $CLASS => qw{
@@ -1020,7 +1021,10 @@ subtest process => sub {
     my $one = $CLASS->new();
     $one->init_job(3);
 
-    $one->process(3, mock {});
+    my $j = mock {
+        id => 3,
+    };
+    $one->process($j, mock {});
     is(
         \%process,
         {
@@ -1034,7 +1038,7 @@ subtest process => sub {
 
     $counter = 1;
     %process = ();
-    $one->process(3, mock {start => 1});
+    $one->process($j, mock {start => 1});
     is(
         \%process,
         {
@@ -1049,7 +1053,7 @@ subtest process => sub {
     $one->set_verbose(1);
     $counter = 1;
     %process = ();
-    $one->process(3, mock {start => 1});
+    $one->process($j, mock {start => 1});
     is(
         \%process,
         {
@@ -1064,7 +1068,7 @@ subtest process => sub {
 
     $counter = 1;
     %process = ();
-    $one->process(3, mock {result => 1, nested => -1});
+    $one->process($j, mock {result => 1, nested => -1});
     is(
         \%process,
         {

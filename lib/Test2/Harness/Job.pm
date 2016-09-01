@@ -74,7 +74,7 @@ sub notify {
         my $r = $self->subtest_result($f);
 
         $r->add_facts($f);
-        $_->($self->{+ID}, $f) for @{$self->{+LISTENERS}};
+        $_->($self, $f) for @{$self->{+LISTENERS}};
     }
 }
 

@@ -101,9 +101,14 @@ subtest start => sub {
 subtest notify => sub {
     my @facts;
     my $one = $CLASS->new(
-        id   => 1,
-        file => 'fake.t',
-        listeners => [ sub { push @facts => @_ } ],
+        id        => 1,
+        file      => 'fake.t',
+        listeners => [
+            sub {
+                my $j = shift;
+                push @facts => ($j->id, @_);
+            }
+        ],
     );
 
     my $fact = Test2::Harness::Fact->new(

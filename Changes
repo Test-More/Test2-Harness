@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Job listeners now receive the Test2::Harness::Job object as the first
+      argument, rather than just the job id.
+
 0.000011  2016-06-10 14:11:01-07:00 America/Los_Angeles
 
     - Fix rendering todo subtests...

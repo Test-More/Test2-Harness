@@ -234,8 +234,10 @@ sub process {
     my $self = shift;
     my ($j, $fact) = @_;
 
-    $self->update_state(@_);
-    my $job = $self->{+JOBS}->{$j};
+    my $job_id = $j->id;
+    $self->update_state($job_id, $fact);
+
+    my $job = $self->{+JOBS}->{$job_id};
 
     my $is_end = $fact->result && $fact->nested < 0;
 
@@ -243,13 +245,13 @@ sub process {
         $job->{start} = $fact;
     }
     else {
-        my @to_print = $self->_process($j, $fact, $is_end);
+        my @to_print = $self->_process($job_id, $fact, $is_end);
         $self->paint(@to_print) if @to_print;
     }
 
     $self->do_watch;
 
-    $self->end_job($j) if $is_end;
+    $self->end_job($job_id) if $is_end;
 }
 
 sub _process {

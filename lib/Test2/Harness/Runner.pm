@@ -92,7 +92,7 @@ sub start {
 
     if (exists($header->{features}->{preload}) && !$header->{features}->{preload}) {
         my $event = Test2::Event::Diag->new(
-            message     => "Test file '$file' uses has turned off preloading, Falling back to IPC::Open3.",
+            message     => "Test file '$file' has turned off preloading, Falling back to IPC::Open3.",
             diagnostics => 1,
         );
 

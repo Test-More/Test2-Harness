@@ -580,13 +580,13 @@ subtest strip_comment => sub {
 
     is(
         [strip_comment("        #    foo\n")],
-        [2, "foo"],
+        [2, "   foo"],
         "Stripped comment, got message and nesting"
     );
 
     is(
         [strip_comment("        #    \n")],
-        [2, ""],
+        [2, "   "],
         "Stripped comment, got empty message and nesting"
     );
 
@@ -822,7 +822,9 @@ subtest parse_stdout => sub {
 
     @stdout = map { "$_\n" } split /\n/, <<'    EOT';
 ok 1 - pass
+# this note has no leading whitespace
 not ok 2 - fail
+#     this note has significant leading whitespace
 not ok 3 - todo # TODO because
 ok 4 - skip # SKIP because
     ok 1 - subtest result a
@@ -892,6 +894,19 @@ ok 10 - outer buffered subtest {
             object {
                 prop blessed          => 'Test2::Harness::Fact';
                 call event            => T();
+                call summary          => 'this note has no leading whitespace';
+                call nested           => 0;
+            }
+        ],
+        "Got a note with no leading whitespace"
+    );
+
+    like(
+        [$one->parse_stdout],
+        [
+            object {
+                prop blessed          => 'Test2::Harness::Fact';
+                call event            => T();
                 call summary          => 'fail';
                 call causes_fail      => 1;
                 call increments_count => 1;
@@ -899,6 +914,19 @@ ok 10 - outer buffered subtest {
             }
         ],
         "Fail event"
+    );
+
+    like(
+        [$one->parse_stdout],
+        [
+            object {
+                prop blessed          => 'Test2::Harness::Fact';
+                call event            => T();
+                call summary          => '    this note has significant leading whitespace';
+                call nested           => 0;
+            }
+        ],
+        "Got a note with significant leading whitespace"
     );
 
     like(

@@ -292,8 +292,11 @@ sub strip_comment {
     return unless $msg || $hash || $space;
 
     $nest = length($nest) / 4;
-
-    return ($nest, $msg);
+    # We want to preserve any space in the comment _after_ the first space,
+    # since proper TAP is formatted as "# $msg". So the first space is part of
+    # the comment marker, while subsequent space is significant.
+    $space =~ s/^ //;
+    return ($nest, $space . $msg);
 }
 
 sub slurp_comments {

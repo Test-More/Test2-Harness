@@ -30,9 +30,10 @@ sub init {
 
     my (%env, @libs, @switches);
     my %harness_args = (
-        env_vars => \%env,
-        libs     => \@libs,
-        switches => \@switches,
+        env_vars  => \%env,
+        libs      => \@libs,
+        switches  => \@switches,
+        test_args => [],
 
         parser_class => '+Test2::Harness::Parser',
     );
@@ -48,6 +49,7 @@ sub init {
     my $runner_class = '+Test2::Harness::Runner';
 
     Getopt::Long::Configure("bundling");
+    Getopt::Long::Configure("pass_through");
     GetOptionsFromArray \@args => (
         'l|lib'         => sub {
             push @libs, 'lib';
@@ -107,8 +109,17 @@ sub init {
     $harness_args{listeners} = [ map { $_->listen } @renderers ];
 
     $self->{+RENDERERS} = \@renderers;
-    $self->{+HARNESS}   = Test2::Harness->new(%harness_args, verbose => $verbose);
 
+    my @test_args;
+    for my $i (0 .. $#args) {
+        if (defined $args[$i] && $args[$i] eq '--') {
+            my @test_args = splice @args, $i;
+            shift @test_args;    # get rid of the '--'
+            $harness_args{test_args} = \@test_args;
+        }
+    }
+
+    $self->{+HARNESS} = Test2::Harness->new(%harness_args, verbose => $verbose);
     $self->{+EXCLUDE} = \@exclude;
     $self->{+FILES} = $self->expand_files(@args);
 }
@@ -337,6 +348,16 @@ Override the default runner. C<"Test2::Harness::Runner::$NAME"> is implied.
 Prefix with '+' to give an absolute module name.
 
 =back
+
+=head2 ARGUMENTS TO TESTS
+
+It is possible to supply arguments to tests. To do so separate them from
+C<yath>'s own arguments with C<-->. For example
+
+    $> yath -lv t/mytest.t -- --url http://example.com
+
+This will run C<t/mytest.t> with the options C<--url http://example.com>. When
+running multiple tests they will each receive the same arguments.
 
 =head1 METHODS
 

@@ -213,8 +213,9 @@ sub via_open3 {
     $ENV{$_} = $env->{$_} for keys %$env;
 
     my $pid = open3(
-        $in, $out, $err,
-        $^X, @switches, $file
+        $in, $out,      $err,
+        $^X, @switches, $file,
+        @{$params{test_args}},
     );
 
     $ENV{$_} = $old->{$_} || '' for keys %$env;
@@ -277,7 +278,7 @@ sub via_do {
     open(STDERR, '>&', $err_write) || die "Could not open new STDERR: $!";
 
     unshift @INC => @$libs if $libs;
-    @ARGV = ();
+    @ARGV = @{$params{test_args}};
 
     $SET_ENV = sub { $ENV{$_} = $env->{$_} || '' for keys %$env };
 

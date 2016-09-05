@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Added support for passing arguments to test files after a double dash
+      (--). For example, "yath -lv t/integration.t -- --quick" will pass the
+      "--quick" flag to "integration.t".
+
 0.000013  2017-01-03 21:18:19-08:00 America/Los_Angeles
 
     - Add event timeout option

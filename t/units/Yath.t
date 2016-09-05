@@ -184,4 +184,16 @@ subtest libs => sub {
 	);
 };
 
+subtest 'double dash' => sub {
+    like(
+        $CLASS->new(args => [qw/-l -- --test-arg --more/]),
+        object {
+            call harness => object {
+                call test_args => [qw{--test-arg --more}];
+            };
+        },
+        "Arguments after the double dash (--) are parsed as args for the test files"
+    );
+};
+
 done_testing;

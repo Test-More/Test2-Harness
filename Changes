@@ -2,6 +2,9 @@
 
     - Job listeners now receive the Test2::Harness::Job object as the first
       argument, rather than just the job id.
+    - Fixed the TAP parser to handle comments with leading
+      whitespace. Previously it would strip all the leading whitespace out,
+      causing both "# foo" and "# foo" to be output the same way.
 
 0.000011  2016-06-10 14:11:01-07:00 America/Los_Angeles
 

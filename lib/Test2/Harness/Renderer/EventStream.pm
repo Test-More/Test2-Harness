@@ -170,7 +170,7 @@ sub summary {
 sub listen {
     my $self = shift;
     sub { $self->process(@_) }
-};
+}
 
 sub init_job {
     my $self = shift;

@@ -297,7 +297,7 @@ error.
 
 =item $text = $f->output
 
-This will be set if the fact was produced directyl from a line of STDERR or
+This will be set if the fact was produced directly from a line of STDERR or
 STDOUT.
 
 =item $enc = $f->encoding

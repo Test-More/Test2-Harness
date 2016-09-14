@@ -323,6 +323,12 @@ fact was not produced from a line of output.
 
 =over 4
 
+=item $result = $f->result
+
+Returns the L<Test2::Harness::Result> object for this fact, if it has
+one. This will only be true for the final event of a subtest or the entire
+job.
+
 =item $json = $f->to_json
 
 Convert the fact to JSON.

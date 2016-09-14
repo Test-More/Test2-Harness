@@ -283,7 +283,7 @@ This is true if the fact represents the test file being started.
 
 =item $e = $f->event
 
-This is true if the fact was I<likely> created because of an L<Test2::Event>
+This is true if the fact was I<likely> created because of a L<Test2::Event>
 object. Depending on the parser this could be a simple boolean, or it could be
 a fully reconstructed L<Test2::Event> object, or a hash of fields from the
 event object.
@@ -339,11 +339,11 @@ Construct an event from JSON data.
 
 =item $f = Test2::Harness::Fact->from_event($event, %overrides)
 
-Construct a fact from an L<Test2::Event> object.
+Construct a fact from a L<Test2::Event> object.
 
 =item $f = Test2::Harness::Fact->from_result($result, %overrides)
 
-Construct a fact from an L<Test2::Harness::Result> object.
+Construct a fact from a L<Test2::Harness::Result> object.
 
 =back
 

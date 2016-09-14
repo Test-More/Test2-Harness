@@ -6,6 +6,7 @@ our $VERSION = '0.000012';
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
+use Scalar::Util qw/blessed/;
 
 use Test2::Util::HashBase qw{
     file name job nested

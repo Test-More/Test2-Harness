@@ -7,6 +7,10 @@
       causing both "# foo" and "# foo" to be output the same way.
     - Add example for using the harness as a preload test file
     - Document using Test2::Harness as a preload test runner
+    - Added a new DataDumper renderer. This renderer takes the stream of facts
+      from each test file and dumps the stream one file per test file. This is
+      useful for understanding how Test2::Harness works if you want to write
+      your own renderer.
 
 0.000011  2016-06-10 14:11:01-07:00 America/Los_Angeles
 

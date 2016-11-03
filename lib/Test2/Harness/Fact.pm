@@ -242,7 +242,7 @@ True if the fact results in a failure. (Example: 'not ok')
 
 True if the fact adds to the test count.
 
-=item $plan_ref = $f->sets_plan()
+=item $plan_ref = $f->sets_plan
 
 This will be undefined unless the fact sets the plan. The plan is returned as a 3 element array:
 
@@ -251,39 +251,39 @@ This will be undefined unless the fact sets the plan. The plan is returned as a 
 C<$directive> and C<$reason> are typically undefined, but will be present in
 cases such as skip-all.
 
-=item $id = $f->in_subtest()
+=item $id = $f->in_subtest
 
 If the fact is inside a subtest then this will have a unique identifier for
 the subtest. The unique identifier is arbitrary and parser specific.
 
-=item $id = $f->is_subtest()
+=item $id = $f->is_subtest
 
 If the fact is a final subtest result this will contain a unqiue identifier for
 it. The unique identifier is arbitrary and parser specific.
 
-=item $code = $f->terminate()
+=item $code = $f->terminate
 
 If the fact resulted in the test file terminating then this will be populated
 with an integer exit value.
 
-=item $int = $f->number()
+=item $int = $f->number
 
 If the fact incremented the test count this will have the test number. For
 other facts this will either contain the last test number seen, or it will be
 undefined.
 
-=item $bool = $f->hide()
+=item $bool = $f->hide
 
 True if the renderers should hide the event. (This is for IPC events not
 intended for humans to see).
 
-=item $bool = $f->start()
+=item $bool = $f->start
 
 This is true if the fact represents the test file being started.
 
 =item $e = $f->event
 
-This is true if the fact was I<likely> created because of an L<Test2::Event>
+This is true if the fact was I<likely> created because of a L<Test2::Event>
 object. Depending on the parser this could be a simple boolean, or it could be
 a fully reconstructed L<Test2::Event> object, or a hash of fields from the
 event object.
@@ -323,6 +323,12 @@ fact was not produced from a line of output.
 
 =over 4
 
+=item $result = $f->result
+
+Returns the L<Test2::Harness::Result> object for this fact, if it has
+one. This will only be true for the final event of a subtest or the entire
+job.
+
 =item $json = $f->to_json
 
 Convert the fact to JSON.
@@ -339,11 +345,11 @@ Construct an event from JSON data.
 
 =item $f = Test2::Harness::Fact->from_event($event, %overrides)
 
-Construct a fact from an L<Test2::Event> object.
+Construct a fact from a L<Test2::Event> object.
 
 =item $f = Test2::Harness::Fact->from_result($result, %overrides)
 
-Construct a fact from an L<Test2::Harness::Result> object.
+Construct a fact from a L<Test2::Harness::Result> object.
 
 =back
 

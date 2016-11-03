@@ -207,7 +207,7 @@ For help:
 
 =head1 USING THE HARNESS IN YOUR DISTRIBUTION
 
-If you want to hav your tests run via Test2::Harness instead of
+If you want to have your tests run via Test2::Harness instead of
 L<Test::Harness> you need to do two things:
 
 =over 4

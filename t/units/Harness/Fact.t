@@ -160,6 +160,7 @@ subtest from_event => sub {
             field is_subtest       => 43;
 
             field sets_plan => [42];
+            etc;
         },
         "Got fact, no trace"
     );
@@ -196,6 +197,7 @@ subtest from_event => sub {
             field is_subtest       => 43;
 
             field sets_plan => [42];
+            etc;
         },
         "Got fact, with trace"
     );
@@ -216,6 +218,7 @@ subtest from_result => sub {
             in_subtest  => 'foo',
             is_subtest  => 'bar',
             causes_fail => 0,
+            etc;
         },
         "Created fact from result"
     );
@@ -233,6 +236,7 @@ subtest from_result => sub {
             in_subtest  => undef,
             is_subtest  => undef,
             causes_fail => 1,
+            etc;
         },
         "Created fact from bad result"
     );

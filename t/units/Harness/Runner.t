@@ -33,6 +33,7 @@ subtest "_parse_shbang good" => sub {
         my $want = hash {
             field switches => $switches;
             field shbang   => $line;
+            etc;
         };
         
         is $runner->_parse_shbang($line), $want, "_parse_shbang()";
@@ -69,6 +70,7 @@ subtest "header" => sub {
             want => hash {
                 field shbang   => '';
                 field features => {};
+                etc;
             },
             file => "",
         },
@@ -77,6 +79,7 @@ subtest "header" => sub {
             want => hash {
                 field shbang   => '';
                 field features => {};
+                etc;
             },
             file => "   \n  \t\n  \n  ",
         },
@@ -86,6 +89,7 @@ subtest "header" => sub {
                 field shbang   => "#!/usr/bin/perl -w";
                 field switches => ["-w"];
                 field features => {};
+                etc;
             },
             file => <<'END',
 #!/usr/bin/perl -w
@@ -98,6 +102,7 @@ END
             want => hash {
                 field shbang   => "#!/usr/bin/perl";
                 field features => { foo => 1, bar => 0 };
+                etc;
             },
             file => <<'END',
 #!/usr/bin/perl
@@ -110,6 +115,7 @@ END
             want => hash {
                 field shbang   => '';
                 field features => { foo => 1 };
+                etc;
             },
             file => <<'END',
 # HARNESS-YES-FOO

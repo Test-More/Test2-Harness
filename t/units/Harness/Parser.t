@@ -1,6 +1,7 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Parser';
+use Test2::Event::Generic;
 
-can_ok($CLASS, qw/proc job morph step init parse_line parse_stderr parse_stdout/);
+can_ok($CLASS, qw/proc job morph step init/);
 
 subtest init => sub {
     like(
@@ -21,92 +22,53 @@ subtest init => sub {
     is($morph, 1, "init calls morph");
 };
 
-subtest parse_line => sub {
-    my $one = $CLASS->new(job => 1, proc => 1);
-
-    like(
-        $one->parse_line(STDOUT => "foo bar baz\n"),
-        object {
-            prop blessed => 'Test2::Harness::Fact';
-
-            call output             => "foo bar baz";
-            call parsed_from_handle => 'STDOUT';
-            call parsed_from_string => "foo bar baz\n";
-            call diagnostics        => 0,
-        },
-        "Got a fact from STDOUT"
-    );
-
-    like(
-        $one->parse_line(STDERR => "foo\nbar baz\n"),
-        object {
-            prop blessed => 'Test2::Harness::Fact';
-
-            call output             => "foo\nbar baz";
-            call parsed_from_handle => 'STDERR';
-            call parsed_from_string => "foo\nbar baz\n";
-            call diagnostics        => 1,
-        },
-        "Got a fact from STDERR"
-    );
-};
-
-for my $io (qw/out err/) {
-    my $m = "parse_std$io";
-    subtest $m => sub {
-        my @out = ( "hi\n", 'bye' );
-        my $proc = mock {} => ( add => [ "get_${io}_line" => sub { shift @out } ] );
-        my $parser = $CLASS->new(job => 1, proc => $proc);
-
-        is(
-            $parser->$m,
-            object {
-                output => 'hi',
-                parsed_from_handle => uc("STD$io"),
-            },
-            "Got first fact"
-        );
-
-        is(
-            $parser->$m,
-            object {
-                output => 'bye',
-                parsed_from_handle => uc("STD$io"),
-            },
-            "Got second fact"
-        );
-    };
-}
-
 subtest step => sub {
-    my @out = ( "hi\n" );
-    my @err = ( "oops\n" );
+    my @out;
+    my @err;
     my $proc = mock {} => (
         add => [
-            "get_out_line" => sub { shift; my %params = @_; $params{peek} ? $out[-1] : shift @out },
-            "get_err_line" => sub { shift; my %params = @_; $params{peek} ? $err[-1] : shift @err },
+            "get_out_line" => sub { shift; my %params = @_; $params{peek} ? $out[0] : shift @out },
+            "get_err_line" => sub { shift; my %params = @_; $params{peek} ? $err[0] : shift @err },
         ]
     );
+
     my $parser = $CLASS->new(job => 1, proc => $proc);
-
-    like([$parser->step], [{output => 'hi'}], "got 'hi'");
-    like([$parser->step], [], "nothing");
-
-    $proc->is_done(1);
-    like([$parser->step], [{output => 'oops'}], "stderr");
-
-    $proc->is_done(0);
-    $parser = $CLASS->new(job => 1, proc => $proc);
     push @out => "ok 1 - foo\n";
-    like([$parser->step], [{parser_select => 'Test2::Harness::Parser::TAP'}], "selected TAP");
+    is(
+        [$parser->step],
+        array {
+            item 0 => object {
+                call parser_class => 'Test2::Harness::Parser::TAP';
+            };
+            end;
+        },
+        'selected TAP'
+    );
     isa_ok($parser, 'Test2::Harness::Parser::TAP');
-    is($proc->get_out_line, "ok 1 - foo\n", "kept TAP line to parse later");
+    is($proc->get_out_line, "ok 1 - foo\n", 'kept TAP line to parse later');
 
     $parser = $CLASS->new(job => 1, proc => $proc);
     push @out => "T2_FORMATTER: EventStream\n";
-    like([$parser->step], [{parser_select => 'Test2::Harness::Parser::EventStream'}], "selected EventStream");
+    is(
+        [$parser->step],
+        array {
+            item 0 => object {
+                call parser_class => 'Test2::Harness::Parser::EventStream';
+            };
+            end;
+        },
+        'selected EventStream'
+    );
     isa_ok($parser, 'Test2::Harness::Parser::EventStream');
-    is($proc->get_out_line, undef, "output line was stripped");
+    is($proc->get_out_line, undef, 'output line was stripped');
+
+    $parser = $CLASS->new(job => 1, proc => $proc);
+    push @out => 'will not morph';
+    like(
+        dies { $parser->step },
+        qr/You cannot use Test2::Harness::Parser itself, it must be subclassed/,
+        'parser dies when step method cannot morph into a subclass'
+    );
 };
 
 done_testing;

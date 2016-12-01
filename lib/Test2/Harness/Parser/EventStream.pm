@@ -4,67 +4,81 @@ use warnings;
 
 our $VERSION = '0.000012';
 
-use Test2::Harness::Result;
-use Test2::Harness::Fact;
-
 use base 'Test2::Harness::Parser';
 use Test2::Util::HashBase;
+
+use Test2::Event 1.302068;
+use Test2::Event::Bail;
+use Test2::Event::Diag;
+use Test2::Event::Encoding;
+use Test2::Event::Exception;
+use Test2::Event::Note;
+use Test2::Event::Ok;
+use Test2::Event::ParseError;
+use Test2::Event::Plan;
+use Test2::Event::Skip;
+use Test2::Event::Subtest;
+use Test2::Event::UnknownStderr;
+use Test2::Event::UnknownStdout;
+use Test2::Event::Waiting;
+use Test2::Harness::JSON;
 
 sub morph { }
 
 sub step {
     my $self = shift;
 
-    my @facts;
-    push @facts => $self->parse_stderr;
-    push @facts => $self->parse_stdout;
-
-    return @facts;
+    return ($self->parse_stderr, $self->parse_stdout);
 }
 
 sub parse_stderr {
     my $self = shift;
 
     my $line = $self->proc->get_err_line or return;
-    chomp(my $out = $line);
+    chomp $line;
 
-    return Test2::Harness::Fact->new(
-        output             => $out,
-        parsed_from_handle => 'STDERR',
-        parsed_from_string => $line,
-        diagnostics        => 1,
-    );
+    return Test2::Event::UnknownStderr->new(output => $line);
 }
 
 sub parse_stdout {
     my $self = shift;
 
     my $line = $self->proc->get_out_line or return;
-    chomp(my $out = $line);
-    $out =~ s/[\r\s]+$//g;
+    $line =~ s/\s+\z//s;
 
-    if ($out =~ m/^T2_ENCODING: (.+)$/) {
+    if ($line =~ m/^T2_ENCODING: (.+)$/) {
         my $enc = $1;
 
         $self->proc->encoding($enc);
 
-        return Test2::Harness::Fact->new(
-            encoding           => $enc,
-            parsed_from_handle => 'STDOUT',
-            parsed_from_string => $line,
+        return Test2::Event::Encoding->new(
+            encoding => $enc,
         );
     }
 
-    my @facts = Test2::Harness::Fact->from_string($out, parsed_from_handle => 'STDOUT');
+    if ( my $event  = $self->_event_from_stdout($line) ) {
+        return $event;
+    }
 
-    return Test2::Harness::Fact->new(
-        output             => $out,
-        parsed_from_handle => 'STDOUT',
-        parsed_from_string => $line,
-        diagnostics        => 0,
-    ) unless @facts;
+    return Test2::Event::UnknownStdout->new(output => $line);
+}
 
-    return @facts;
+sub _event_from_stdout {
+    my $self = shift;
+    my $out = shift;
+
+    return unless $out =~ s/^T2_EVENT:\s//;
+
+    local $@ = undef;
+    my $data = eval { JSON->new->decode($out) };
+    my $err = $@;
+
+    if ($data) {
+        return Test2::Event->from_json(%$data);
+    }
+
+    chomp($err);
+    return Test2::Event::ParseError->new(parse_error => $err);
 }
 
 1;
@@ -91,13 +105,13 @@ objects serialized into JSON format.
 
 =item STDERR
 
-Anything sent to STDERR will be turned into a basic diagnostics
-L<Test2::Harness::Fact> object.
+Anything sent to STDERR will be turned into a L<Test2::Event::UnknownStderr>
+object.
 
 =item STDOUT
 
 Anything sent to STDOUT without a prefix, or with an unknown prefix will be
-turned into a basic L<Test2::Harness::Fact> object.
+turned into a L<Test2::Event::UnknownStdout> object.
 
 =item T2_ENCODING: ...
 
@@ -106,7 +120,7 @@ A line of STDOUT with this prefix will be used to set the encoding.
 =item T2_EVENT: ...JSON...
 
 A line of STDOUT with this prefix will be consumed as JSON and used to
-construct an L<Test2::Event::Fact> object.
+construct an L<Test2::Event> object.
 
 =back
 

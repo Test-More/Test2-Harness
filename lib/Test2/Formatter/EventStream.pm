@@ -4,11 +4,12 @@ use warnings;
 
 our $VERSION = '0.000012';
 
-use Test2::Util::HashBase qw/fh no_numbers/;
+use Test2::Util::HashBase qw/fh/;
 use base 'Test2::Formatter';
-use Test2::Harness::Fact;
 use IO::Handle;
+
 require Test2::Formatter::TAP;
+use Test2::Harness::JSON;
 
 sub init {
     my $self = shift;
@@ -35,14 +36,31 @@ sub init {
 }
 
 sub write {
-    my ($self, $e, $num) = @_;
+    my ($self, $e) = @_;
 
-    $num = undef if $self->{+NO_NUMBERS};
+    my $json = $self->_event_to_json($e);
 
-    my $json = Test2::Harness::Fact->from_event($e, number => $num)->to_json;
     my $fh = $self->{+FH};
     print $fh "T2_EVENT: $json\n";
     $fh->flush;
+}
+
+{
+    my $J = JSON->new;
+    $J->indent(0);
+    $J->convert_blessed(1);
+    $J->allow_blessed(1);
+
+    sub _event_to_json {
+        my ($self, $e) = @_;
+
+        my $json = eval { $J->encode($e) };
+        my $error = $@;
+        return $json if $json;
+
+        require Data::Dumper;
+        die "JSON encoding error: $error\n" . Data::Dumper::Dumper($e);
+    }
 }
 
 sub hide_buffered { 0 }

@@ -4,17 +4,73 @@ use warnings;
 
 our $VERSION = '0.000012';
 
-use Test2::Harness::Fact;
+use Test2::Event::Bail;
+use Test2::Event::Diag;
+use Test2::Event::Encoding;
+use Test2::Event::Exception;
+use Test2::Event::Note;
+use Test2::Event::Ok;
+use Test2::Event::ParseError;
+use Test2::Event::Plan;
+use Test2::Event::Skip;
+use Test2::Event::Subtest;
+use Test2::Event::TAP::Version;
+use Test2::Event::UnknownStderr;
+use Test2::Event::UnknownStdout;
+use Test2::Event::Waiting;
+use Test2::Harness::Parser::TAP::SubtestState;
+
 use Time::HiRes qw/sleep/;
 
 use base 'Test2::Harness::Parser';
-use Test2::Util::HashBase qw/subtests sid last_nest/;
+use Test2::Util::HashBase qw/_subtest_state/;
 
-sub morph {
+sub init  { $_[0]->_init }
+sub morph { $_[0]->_init }
+
+sub _init {
     my $self = shift;
-    $self->{+SUBTESTS} = [];
-    $self->{+SID} = 'A';
-    $self->{+LAST_NEST} = 0;
+    $self->{+_SUBTEST_STATE} = Test2::Harness::Parser::TAP::SubtestState->new;
+}
+
+sub step {
+    my $self = shift;
+
+    my @events = ($self->parse_stdout, $self->parse_stderr);
+    # If in_subtest is defined then the object is part of a buffered subtest
+    # and therefore cannot be starting a streaming subtest.
+    return map { defined $_->in_subtest ? $_ : $self->{+_SUBTEST_STATE}->maybe_start_streaming_subtest($_) } @events;
+}
+
+sub parse_stderr {
+    my $self = shift;
+
+    my $line = $self->proc->get_err_line(peek => 1) or return;
+
+    return $self->slurp_comments('STDERR')
+        if $line =~ m/^\s*#/;
+
+    $line = $self->proc->get_err_line();
+    chomp(my $out = $line);
+    return unless length($out);
+    return Test2::Event::UnknownStderr->new(output => $out);
+}
+
+sub parse_stdout {
+    my $self = shift;
+
+    my $line = $self->proc->get_out_line(peek => 1) or return;
+
+    return $self->slurp_comments('STDOUT')
+        if $line =~ m/^\s*#/;
+
+    $line = $self->proc->get_out_line();
+    my @events = $self->parse_tap_line($line);
+    return @events if @events;
+
+    chomp(my $out = $line);
+    return unless length($out);
+    return Test2::Event::UnknownStdout->new(output => $out);
 }
 
 sub parse_tap_line {
@@ -22,41 +78,34 @@ sub parse_tap_line {
     my ($line) = @_;
 
     chomp($line);
-    my ($nest, $str) = ($line =~ m/^(\s+)(.+)$/) ? ($1, $2) : ('', $line);
-    $nest =~ s/\t/    /g;
-    $nest = length($nest) / 4;
+    my ($lead, $str) = ($line =~ m/^(\s+)(.+)$/) ? ($1, $2) : ('', $line);
+    $lead =~ s/\t/    /g;
+    my $nest = length($lead) / 4;
 
-    my @types = qw/buffered_subtest ok plan bail version/;
-
-    my @facts;
+    my @events;
+    # The buffered_subtest parsing always starts by trying to parse an "ok"
+    # line, so we don't need to try parsing that _again_.
+    my @types = qw/buffered_subtest plan bail version/;
     for my $type (@types) {
         my $sub = "parse_tap_$type";
-        @facts = $self->$sub($str);
-        last if @facts;
+        if (@events = $self->$sub($str, $nest)) {
+            last;
+        }
     }
 
-    return unless @facts;
-
-    for my $f (@facts) {
-        $f->set_parsed_from_string($line)    unless defined $f->parsed_from_string;
-        $f->set_parsed_from_handle('STDOUT') unless defined $f->parsed_from_handle;
-        $f->set_nested($nest)                unless defined $f->nested;
-
-        $self->adjust_subtests($f);
-    }
-
-    return @facts;
+    return @events;
 }
 
 sub parse_tap_buffered_subtest {
     my $self = shift;
-    my ($line) = @_;
+    my ($line, $nest) = @_;
 
-    my ($st_ok, @errors) = $self->parse_tap_ok($line) or return;
-    my $summary = $st_ok->summary;
-    return ($st_ok, @errors) unless $summary =~ s/\s*\{\s*(\)?)\s*$/$1/;
-    $st_ok->set_summary($summary);
+    my ($st_ok, @errors) = $self->parse_tap_ok($line, $nest) or return;
+    return ($st_ok, @errors) unless $line =~ /\s*\{\s*\)?\s*$/;
 
+    my $id = $self->{+_SUBTEST_STATE}->next_id;
+
+    my @events;
     my @subevents;
     my $count = 0;
     while (1) {
@@ -68,96 +117,51 @@ sub parse_tap_buffered_subtest {
         }
 
         last if $line =~ m/^\s*\}\s*$/;
-        push @subevents => $self->parse_tap_line($line);
+        my @e = $self->parse_tap_line($line);
+        push @events => @e;
+        # We might have events where in_subtest is already set in the case of
+        # nested buffered subtests. In that case, we want those nested
+        # subevents to _not_ be part of this particular subtest. Instead, they
+        # are part of the child subtest contained in the parent. However, we
+        # still want to emit _all_ the events as we see them, so we need to do
+        # some filtering here.
+        push @subevents => grep { !defined $_->in_subtest } @e;
     }
 
-    return (@subevents, $st_ok, @errors);
-}
+    $_->set_in_subtest($id) for @subevents;
 
-sub parse_tap_version {
-    my $self = shift;
-    my ($line) = @_;
+    # If this is a buffered subtest marked as todo, then the "{" marking the
+    # subtest ends up in the todo field instead of the name;
+    my $todo = $st_ok->todo;
+    $todo =~ s/\s*\{\s*$// if defined $todo;
 
-    return unless $line =~ s/^TAP version\s*//;
+    my $name = $st_ok->name;
+    $name =~ s/\s*\{\s*$// if defined $name;
 
-    return Test2::Harness::Fact->new(
-        event   => 1,
-        output  => $line,
-        summary => "Producer is using TAP version $line.",
-    );
-}
-
-sub parse_tap_plan {
-    my $self = shift;
-    my ($line) = @_;
-
-    return unless $line =~ s/^1\.\.(\d+)//;
-    my $max = $1;
-
-    my ($directive, $reason);
-
-    if ($max == 0) {
-        if ($line =~ s/^\s*#\s*//) {
-            if ($line =~ s/^(skip)\S*\s*//i) {
-                $directive = uc($1);
-                $reason = $line;
-                $line = "";
-            }
-        }
-
-        $directive ||= "SKIP";
-        $reason    ||= "no reason given";
-    }
-
-    my $summary;
-    if ($max || !$directive) {
-        $summary = "Plan is $max assertions";
-    }
-    elsif($reason) {
-        $summary = "Plan is '$directive', $reason";
-    }
-    else {
-        $summary = "Plan is '$directive'";
-    }
-
-    my $fact = Test2::Harness::Fact->new(
-        event     => 1,
-        summary   => $summary,
-        sets_plan => [$max, $directive, $reason],
+    my %st = (
+        subtest_id => $id,
+        name       => $name,
+        pass       => $st_ok->pass,
+        todo       => $todo,
+        nested     => $nest,
+        subevents  => \@subevents,
     );
 
-    return $fact unless $line =~ m/\S/;
+    my $st = Test2::Event::Subtest->new(%st);
 
-    return(
-        $fact,
-        Test2::Harness::Fact->new(parse_error => "Extra characters after plan."),
-    );
-}
-
-sub parse_tap_bail {
-    my $self = shift;
-    my ($line) = @_;
-
-    return unless $line =~ m/^Bail out!/;
-
-    return Test2::Harness::Fact->new(
-        event       => 1,
-        summary     => $line,
-        terminate   => 255,
-        causes_fail => 1,
-    );
+    return (@events, $st, @errors);
 }
 
 sub parse_tap_ok {
     my $self = shift;
-    my ($line) = @_;
+    my ($line, $nest) = @_;
 
     my ($pass, $todo, $skip, $num, @errors);
 
     return unless $line =~ s/^(not )?ok\b//;
     $pass = !$1;
 
-    push @errors => "'ok' is not immedietly followed by a space."
+    push @errors => "'ok' is not immediately followed by a space."
         if $line && !($line =~ m/^ /);
 
     if ($line =~ s/^(\s*)(\d+)\b//) {
@@ -190,113 +194,95 @@ sub parse_tap_ok {
 
     $line =~ s/^\s+//;
     $line =~ s/\s+$//;
-    my $summary = $line || "Nameless Assertion";
-    my $effective_pass = $pass || 0;
 
-    if ($todo) {
-        $summary .= " (TODO: $todo)";
-        $effective_pass = 1;
+    my $event;
+    if ($line =~ /^Subtest: (.+)$/) {
+        $event = Test2::Event::Subtest->new($self->{+_SUBTEST_STATE}->finish_streaming_subtest($pass, $line, $nest));
     }
-    elsif(defined $todo) {
-        $summary .= " (TODO)";
-        $effective_pass = 1;
+    elsif (defined $skip) {
+        $event = Test2::Event::Skip->new(
+            reason => $skip,
+            pass   => $pass,
+            name   => $line,
+            nested => $nest,
+        );
     }
-
-    if ($skip) {
-        $summary .= " (SKIP: $skip)";
+    else {
+        $event = Test2::Event::Ok->new(
+            defined($todo) ? (todo => $todo) : (),
+            pass   => $pass,
+            name   => $line,
+            nested => $nest,
+        );
     }
-    elsif(defined $skip) {
-        $summary .= " (SKIP)";
-    }
-
-    my $fact = Test2::Harness::Fact->new(
-        event => {
-            defined($skip) ? (reason => $skip) : (),
-            defined($todo) ? (todo   => $todo) : (),
-            pass           => $pass,
-            effective_pass => $effective_pass,
-        },
-
-        summary          => $summary,
-        number           => $num,
-        increments_count => 1,
-        causes_fail      => ($effective_pass) ? 0 : 1,
-    );
-
-    return $fact unless @errors;
 
     return (
-        $fact,
-        map { Test2::Harness::Fact->new(parse_error => $_) } @errors,
+        $event,
+        map { Test2::Event::ParseError->new(parse_error => $_) } @errors,
     );
 }
 
-sub step {
+sub parse_tap_version {
     my $self = shift;
+    my ($line, $nest) = @_;
 
-    my @facts;
-    push @facts => $self->parse_stdout;
-    push @facts => $self->parse_stderr;
-    return @facts;
-}
+    return unless $line =~ s/^TAP version\s*//;
 
-sub parse_stderr {
-    my ($self) = @_;
-
-    my $line = $self->proc->get_err_line(peek => 1) or return;
-
-    return $self->slurp_comments('STDERR')
-        if $line =~ m/^\s*#/;
-
-    $line = $self->proc->get_err_line();
-    chomp(my $out = $line);
-    return unless length($out);
-    return Test2::Harness::Fact->new(
-        nested             => 0,
-        output             => $out,
-        parsed_from_handle => 'STDERR',
-        parsed_from_string => $line,
-        diagnostics        => 1,
+    return Test2::Event::TAP::Version->new(
+        version => $line,
+        nested  => $nest,
     );
 }
 
-sub parse_stdout {
-    my ($self) = @_;
+sub parse_tap_plan {
+    my $self = shift;
+    my ($line, $nest) = @_;
 
-    my $line = $self->proc->get_out_line(peek => 1) or return;
+    return unless $line =~ s/^1\.\.(\d+)//;
+    my $max = $1;
 
-    if ($line =~ m/^\s*#/) {
-        my $f = $self->slurp_comments('STDOUT');
-        $self->adjust_subtests($f);
-        return $f;
+    my ($directive, $reason);
+
+    if ($max == 0) {
+        if ($line =~ s/^\s*#\s*//) {
+            if ($line =~ s/^(skip)\S*\s*//i) {
+                $directive = uc($1);
+                $reason = $line;
+                $line = "";
+            }
+        }
+
+        $directive ||= "SKIP";
+        $reason    ||= "no reason given";
     }
 
-    $line = $self->proc->get_out_line();
-    my @facts = $self->parse_tap_line($line);
-    return @facts if @facts;
+    my $event = Test2::Event::Plan->new(
+        max       => $max,
+        directive => $directive,
+        reason    => $reason,
+        nested    => $nest,
+    );
 
-    chomp(my $out = $line);
-    return unless length($out);
-    return Test2::Harness::Fact->new(
-        output             => $out,
-        parsed_from_handle => 'STDOUT',
-        parsed_from_string => $line,
-        diagnostics        => 0,
+    return $event unless $line =~ m/\S/;
+
+    return (
+        $event,
+        Test2::Event::ParseError->new(
+            parse_error => 'Extra characters after plan.',
+        ),
     );
 }
 
-sub strip_comment {
-    my $line = shift;
-    chomp($line);
-    my ($nest, $hash, $space, $msg) = split /(#)(\s*)/, $line, 2;
-    return unless $msg || $hash || $space;
+sub parse_tap_bail {
+    my $self = shift;
+    my ($line, $nest) = @_;
 
-    $nest = length($nest) / 4;
-    # We want to preserve any space in the comment _after_ the first space,
-    # since proper TAP is formatted as "# $msg". So the first space is part of
-    # the comment marker, while subsequent space is significant.
-    $space =~ s/^ //;
-    return ($nest, $space . $msg);
+    return unless $line =~ s/^Bail out! *//;
+
+    return Test2::Event::Bail->new(
+        reason => $line,
+        nested => $nest,
+    );
 }
 
 sub slurp_comments {
@@ -327,36 +313,25 @@ sub slurp_comments {
         last if $failed;
     }
 
-    return Test2::Harness::Fact->new(
-        event              => 1,
-        nested             => $nest,
-        summary            => $diag,
-        parsed_from_string => $raw,
-        parsed_from_handle => $io,
-        diagnostics        => $io eq 'STDERR' ? 1 : 0,
-        hide               => $diag ? 0 : 1,
+    my $class = $io eq 'STDERR' ? 'Test2::Event::Diag' : 'Test2::Event::Note';
+    return $class->new(
+        message => $diag,
+        nested  => $nest,
     );
 }
 
-sub adjust_subtests {
-    my $self = shift;
-    my ($f) = @_;
+sub strip_comment {
+    my $line = shift;
+    chomp($line);
+    my ($nest, $hash, $space, $msg) = split /(#)(\s*)/, $line, 2;
+    return unless $msg || $hash || $space;
 
-    my $n        = $f->nested;
-    my $last     = $self->{+LAST_NEST} || 0;
-    my $subtests = $self->{+SUBTESTS};
-
-    if ($n < $last) {
-        $f->set_is_subtest($subtests->[$last]);
-        $subtests->[$last] = undef;
-    }
-
-    if ($n) {
-        my $stid = $subtests->[$n] ||= $self->{+SID}++;
-        $f->set_in_subtest($stid);
-    }
-
-    $self->{+LAST_NEST} = $n;
+    $nest = length($nest) / 4;
+    # We want to preserve any space in the comment _after_ the first space,
+    # since proper TAP is formatted as "# $msg". So the first space is part of
+    # the comment marker, while subsequent space is significant.
+    $space =~ s/^ //;
+    return ($nest, $space . $msg);
 }
 
 1;
@@ -373,16 +348,16 @@ Test2::Harness::Parser::TAP - The TAP stream parser.
 
 =head1 DESCRIPTION
 
-This parser reads a TAP stream and converts it into L<Test2::Harness::Fact>
+This parser reads a TAP stream and converts it into L<Test2::Event>
 objects. This parser can parse regular subtests as well as the new style
 buffered subtests.
 
-=head1 IMPORTANT NOTE ON SUBTEST PARSING
+=head1 IMPORTANT NOTE ON PARSING OF STREAMING SUBTESTS
 
-This will parse subtests and turn them into facts, however it may not report
-the proper nesting of the subtests. Subtest nesting is reconstructed by the
-L<Test2::Harness::Job> object. This is important because the parser cannot be
-sure of nesting until the outer-most subtest has completed. Example:
+This will parse streaming subtests and turn them into events, however it may
+not report the proper nesting of the subtests. Streaming subtest nesting is
+reconstructed once the subtest finishes. This is important because the parser
+cannot be sure of nesting until the outer-most subtest has completed. Example:
 
             ok 1 - I am nested, but how deep?
                 ok 1 - I am nested, but how deep?
@@ -392,14 +367,14 @@ sure of nesting until the outer-most subtest has completed. Example:
     ok 1 - Outer subtest ended
 
 Looking at this a human can say "Oh, each subtest has a 4 space indentation"
-but the parser has to read it 1 line at a time, and sends each line as a fact
-before processing the next line. The fact is first sent to the renderer as an
-orphan, the render can choose to displayit, erase it or ignore it. Once the
+but the parser has to read it 1 line at a time, and sends each line as a event
+before processing the next line. The event is first sent to the renderer as an
+orphan, the render can choose to display it, erase it or ignore it. Once the
 outer-most subtest ends the job is able to determine the correct nesting and
-sends a fact containing an L<Test2::Harness::Result> object with the full
-nested subtest structure reconstructed. This allows a render to display a
-progress indicator that updates for all facts generated inside the subtest,
-which it can then replace with the full subtest rendered at the end.
+sends a L<Test2::Event::Subtest> containing the full nested subtest structure
+reconstructed. This allows a render to display a progress indicator that
+updates for all events generated inside the subtest, which it can then replace
+with the full subtest rendered at the end.
 
 =head1 SOURCE
 

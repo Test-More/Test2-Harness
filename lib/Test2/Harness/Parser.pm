@@ -9,8 +9,7 @@ use Scalar::Util qw/blessed/;
 
 use Test2::Util qw/pkg_to_file/;
 
-use Test2::Harness::Fact;
-use Test2::Harness::Result;
+use Test2::Event::ParserSelect;
 
 use Test2::Util::HashBase qw/proc job/;
 
@@ -31,9 +30,13 @@ sub init {
 sub step {
     my $self = shift;
 
+    my $class = blessed($self);
     my $line = $self->proc->get_out_line(peek => 1);
-    if (blessed($self) eq __PACKAGE__ && $line) {
-        if($line =~ m/^T2_FORMATTER: (.+)$/) {
+    chomp $line if defined $line;
+    return unless defined $line && length $line;
+
+    if ($class eq __PACKAGE__ && $line) {
+        if ($line =~ m/^T2_FORMATTER: (.+)$/) {
             chomp(my $fmt = $1);
             $fmt =~ s/[\r\s]+$//g;
             my $class = "Test2::Harness::Parser::$fmt";
@@ -44,59 +47,29 @@ sub step {
             # Strip off the line, it has been processed
             $self->proc->get_out_line;
 
-            return Test2::Harness::Fact->new(
-                parsed_from_handle => 'STDOUT',
-                parsed_from_string => $line,
-                parser_select      => $class,
+            return Test2::Event::ParserSelect->new(
+                parser_class => $class,
             );
         }
 
-        if ($line =~ m/^\s*(ok\b|not ok\b|1\.\.\d+|Bail out!|TAP version)/) {
+        if ($line =~ m/^\s*(ok\b|not ok\b|1\.\.\d+|Bail out!|TAP version|^\#.+)/) {
             require Test2::Harness::Parser::TAP;
             bless($self, 'Test2::Harness::Parser::TAP');
             $self->morph;
 
             # Do not strip off the line, we need the TAP parser to eat it.
-
-            return Test2::Harness::Fact->new(
-                parsed_from_handle => 'STDOUT',
-                parsed_from_string => $line,
-                parser_select      => 'Test2::Harness::Parser::TAP',
+            return Test2::Event::ParserSelect->new(
+                parser_class => 'Test2::Harness::Parser::TAP',
             );
         }
-
-        my @facts = $self->parse_stdout;
-        return @facts if @facts;
     }
 
-    return unless $self->{+PROC}->is_done;
-
-    return $self->parse_stderr;
-}
-
-sub parse_stderr {
-    my $self = shift;
-    my $line = $self->proc->get_err_line or return;
-    return $self->parse_line(STDERR => $line);
-}
-
-sub parse_stdout {
-    my $self = shift;
-    my $line = $self->proc->get_out_line or return;
-    return $self->parse_line(STDOUT => $line);
-}
-
-sub parse_line {
-    my $self = shift;
-    my ($io, $line) = @_;
-    chomp(my $out = $line);
-
-    return Test2::Harness::Fact->new(
-        output             => $out,
-        parsed_from_handle => $io,
-        parsed_from_string => $line,
-        diagnostics        => $io eq 'STDERR' ? 1 : 0,
-    );
+    if ($class eq __PACKAGE__) {
+        die 'You cannot use Test2::Harness::Parser itself, it must be subclassed';
+    }
+    else {
+        die "The $class class must implement the step method";
+    }
 }
 
 1;
@@ -115,7 +88,7 @@ class.
 =head1 DESCRIPTION
 
 The parser is responsible for consuming lines of output from the running test,
-and turning the output into L<Test2::Harness::Fact> objects.
+and turning the output into L<Test2::Event> objects.
 
 This is the default parser. This parser inspects the output stream from the
 unit test and looks for the correct parser to handle it. If the output contains
@@ -148,38 +121,20 @@ When the parser decides a different parser is the correct one to use, it will
 re-bless itself to the new parser class and call this method. This method is
 your chance to make any additional changes to the parser object.
 
-=item @facts = $p->step()
+=item @events = $p->step()
 
 This is called regularly by the harness. This should consume any lines of
-output that are available and return the L<Test2::Harness::Fact> objects
+output that are available and return the L<Test2::Event> objects
 produced. If there was no output to consume this should return an empty list.
 This should never block as it is called in an event loop.
 
 The default version of this method will read lines of STDERR/STDOUT and attempt
 to find the correct subclass to use. Any lines output that do not help identify
-the parser are turned into simple noise/diagnostics L<Test2::Harness::Fact>
+the parser are turned into simple noise/diagnostics L<Test2::Event>
 objects.
 
 If the parser is identified from the output stream the parser object will
 re-bless itself and call C<morph()>.
-
-=item $fact = $p->parse_stderr()
-
-This parses a single line of STDERR output and turns it into an
-L<Test2::Harness::Fact> object. This assumes the message was diagnistic in
-nature, and not part of a format such as TAP.
-
-=item $fact = $p->parse_stdout()
-
-This parses a single line of STDERR output and turns it into an
-L<Test2::Harness::Fact> object. This assumes the message was noise and not part
-of a format such as TAP.
-
-=item $fact = $p->parse_line($handle_name => $line)
-
-This takes a line of output, as well as the name of the handle it came from
-(STDERR or STDOUT) and produces a fact. This is used by both C<parse_stderr()>
-and C<parse_stdout()>.
 
 =back
 

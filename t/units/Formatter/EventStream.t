@@ -20,7 +20,6 @@ my $ok = Test2::Event::Ok->new(
     trace => Test2::Util::Trace->new(frame => [__PACKAGE__, __FILE__, __LINE__])
 );
 $one->write($ok, 5);
-$one->set_no_numbers(1);
 $one->write($ok, 6);
 
 is(
@@ -29,10 +28,10 @@ is(
         "T2_FORMATTER: EventStream", # Announcement
         "T2_ENCODING: utf8", # Initially set
         "T2_ENCODING: utf8", # Manually set again
-        match qr/^T2_EVENT: \{.*number['"]:5/,
-        match qr/^T2_EVENT: \{.*number['"]:null/,
+        match qr/^T2_EVENT: \{.*"__PACKAGE__":"Test2::Event::Ok".*\}/,
+        match qr/^T2_EVENT: \{.*"__PACKAGE__":"Test2::Event::Ok".*\}/,
     ],
-    "Got events and facts",
+    "Got events",
 ) or diag $stdout;
 
 done_testing;

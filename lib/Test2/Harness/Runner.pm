@@ -4,8 +4,8 @@ use warnings;
 
 our $VERSION = '0.000012';
 
+use Test2::Event::Diag;
 use Test2::Harness::Proc;
-use Test2::Harness::Fact;
 use Config;
 
 use Test2::Util::HashBase qw/headers merge via _preload_list/;
@@ -70,33 +70,33 @@ sub start {
     return $self->via_open3(@_) if $via eq 'open3';
 
     unless (CAN_REALLY_FORK) {
-        my $fact = Test2::Harness::Fact->new(
+        my $event = Test2::Event::Diag->new(
             output => "This system is not capable of forking, falling back to IPC::Open3.",
             diagnostics => 1,
         );
 
         my $proc = $self->via_open3(@_);
-        return ($proc, $fact);
+        return ($proc, $event);
     }
 
     if ($header->{switches}) {
-        my $fact = Test2::Harness::Fact->new(
+        my $event = Test2::Event::Diag->new(
             output => "Test file '$file' uses switches in the #! line, Falling back to IPC::Open3.",
             diagnostics => 1,
         );
 
         my $proc = $self->via_open3(@_);
-        return ($proc, $fact);
+        return ($proc, $event);
     }
 
     if (exists($header->{features}->{preload}) && !$header->{features}->{preload}) {
-        my $fact = Test2::Harness::Fact->new(
+        my $event = Test2::Event::Diag->new(
             output => "Test file '$file' uses has turned off preloading, Falling back to IPC::Open3.",
             diagnostics => 1,
         );
 
         my $proc = $self->via_open3(@_);
-        return ($proc, $fact);
+        return ($proc, $event);
     }
 
     $self->fatal_error("You cannot use switches with preloading, aborting...")

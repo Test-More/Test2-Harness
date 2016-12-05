@@ -9,7 +9,7 @@ use Term::ANSIColor();
 use List::Util qw/first shuffle/;
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/sleep/;
-use Test2::Util::Table qw/term_size/;
+use Test2::Util::Term qw/term_size/;
 
 my @DEFAULT_GRAPH_COLORS = qw{
            blue        yellow        cyan        magenta

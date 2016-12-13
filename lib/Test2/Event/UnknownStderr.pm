@@ -14,8 +14,6 @@ sub init {
 
 sub diagnostics { 1 }
 
-sub from_handle { 'STDERR' }
-
 sub summary { $_[0]->{+OUTPUT} }
 
 1;

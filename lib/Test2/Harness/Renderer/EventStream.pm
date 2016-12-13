@@ -337,9 +337,7 @@ sub _tag {
     if ($event->isa('Test2::Event::UnknownStdout') || $event->isa('Test2::Event::UnknownStderr')) {
         return unless defined $event->output;
 
-        my $handle = $event->from_handle;
-
-        return ("STDERR", 'stderr') if $handle && $handle eq 'STDERR';
+        return ("STDERR", 'stderr') if $event->isa('Test2::Event::UnknownStderr');
         return (" DIAG ", 'diag')   if $event->diagnostics;
 
         return unless $self->{+VERBOSE};

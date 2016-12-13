@@ -12,10 +12,6 @@ sub init {
     defined $self->{+OUTPUT} or $self->trace->throw("'output' is a required attribute");
 }
 
-sub diagnostics { 0 }
-
-sub from_handle { 'STDOUT' }
-
 sub summary { $_[0]->{+OUTPUT} }
 
 1;

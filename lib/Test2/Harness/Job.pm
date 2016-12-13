@@ -86,7 +86,7 @@ sub step {
     $self->notify(@events);
     if (@events && $self->{+_TIMEOUT}) {
         delete $self->{+_TIMEOUT};
-        $self->notify(Test2::Event::TimeoutReset->new)
+        $self->notify(Test2::Event::TimeoutReset->new(file => $self->{+FILE}))
             if $self->{+_TIMEOUT_NOTIFIED};
     }
     return @events ? 1 : 0;
@@ -133,6 +133,7 @@ sub is_done {
             $self->notify(
                 Test2::Event::UnexpectedProcessExit->new(
                     error => "Process has exited but the event stream does not appear complete. Waiting $timeout seconds...",
+                    file  => $self->{+FILE},
                 ),
             ) if $timeout >= 1 && !$self->{+_TIMEOUT_NOTIFIED}++;
 

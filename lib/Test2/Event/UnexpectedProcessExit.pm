@@ -13,7 +13,6 @@ sub init {
     defined $self->{+FILE} or $self->trace->throw("'file' is a required attribute");
 }
 
-sub causes_fail { 0 }
 sub diagnostics { 1 }
 
 sub summary { $_[0]->{+ERROR} }

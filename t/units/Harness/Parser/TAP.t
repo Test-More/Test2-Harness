@@ -21,13 +21,13 @@ subtest parse_tap_version => sub {
 
     like(
         $one->parse_tap_version('TAP version 13', 0),
-        object { call summary => 'Producer is using TAP version 13.' },
+        object { call summary => 'TAP version 13' },
         'Parsed version'
     );
 
     like(
         $one->parse_tap_version('TAP version 55.5', 0),
-        object { call summary => 'Producer is using TAP version 55.5.' },
+        object { call summary => 'TAP version 55.5' },
         'Parsed version'
     );
 };

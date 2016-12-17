@@ -9,7 +9,7 @@ use Term::ANSIColor();
 use List::Util qw/first shuffle/;
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/sleep/;
-use Test2::Util::Table qw/term_size/;
+use Test2::Util::Term qw/term_size/;
 
 my @DEFAULT_GRAPH_COLORS = qw{
            blue        yellow        cyan        magenta
@@ -200,31 +200,31 @@ sub end_job {
 
 sub update_state {
     my $self = shift;
-    my ($j, $fact) = @_;
+    my ($j, $event) = @_;
 
-    $self->{+COUNTER}++ if $fact->event;
+    $self->{+COUNTER}++;
 
     my $jobs = $self->{+JOBS};
     my $job = $jobs->{$j} ||= $self->init_job($j);
     $job->{counter}++;
 
-    $self->encoding($fact->encoding) if $fact->encoding;
+    $self->encoding($event->encoding) if $event->isa('Test2::Event::Encoding');
 }
 
 sub pick_renderer {
     my $self = shift;
-    my ($fact) = @_;
+    my ($event) = @_;
 
-    my $n = $fact->nested || 0;
+    my $n = $event->nested || 0;
 
     return 'render' if $n < 0;
 
     if ($n == 0) {
-        return 'render'         unless $fact->is_subtest;
-        return 'render_subtest' unless $fact->in_subtest;
+        return 'render'         unless $event->subtest_id;
+        return 'render_subtest' unless $event->in_subtest;
     }
 
-    return 'render_orphan' unless $fact->in_subtest;
+    return 'render_orphan' unless $event->in_subtest;
     return 'preview'       if $self->{+WATCH};
 
     return;
@@ -232,20 +232,20 @@ sub pick_renderer {
 
 sub process {
     my $self = shift;
-    my ($j, $fact) = @_;
+    my ($j, $event) = @_;
 
     my $job_id = $j->id;
-    $self->update_state($job_id, $fact);
+    $self->update_state($job_id, $event);
 
     my $job = $self->{+JOBS}->{$job_id};
 
-    my $is_end = $fact->result && $fact->nested < 0;
+    my $is_end = $event->isa('Test2::Event::ProcessFinish');
 
-    if ($fact->start && !$self->{+VERBOSE}) {
-        $job->{start} = $fact;
+    if ($event->isa('Test2::Event::ProcessStart') && !$self->{+VERBOSE}) {
+        $job->{start} = $event;
     }
     else {
-        my @to_print = $self->_process($job_id, $fact, $is_end);
+        my @to_print = $self->_process($job_id, $event, $is_end);
         $self->paint(@to_print) if @to_print;
     }
 
@@ -256,17 +256,17 @@ sub process {
 
 sub _process {
     my $self = shift;
-    my ($j, $fact, $is_end) = @_;
+    my ($j, $event, $is_end) = @_;
     my $job = $self->{+JOBS}->{$j};
 
-    my $meth     = $self->pick_renderer($fact) or return;
-    my @to_print = $self->$meth($j, $fact)     or return;
+    my $meth     = $self->pick_renderer($event) or return;
+    my @to_print = $self->$meth($j, $event)     or return;
     my @start = $job->{start} ? $self->render($j, delete $job->{start}) : ();
 
     return (@start, @to_print) unless $is_end;
 
-    my @errors = @{$fact->result->plan_errors} or return @to_print;
-    my @tree = $self->tree($j, $fact);
+    my @errors = $self->_plan_errors($event->result->events, 0) or return @to_print;
+    my @tree = $self->tree($j, $event);
 
     @errors = map {(
         ['tag', '['], ['fail',' PLAN '], ['tag', ']'],
@@ -293,83 +293,94 @@ sub do_watch {
 
 sub _tag {
     my $self = shift;
-    my ($fact) = @_;
+    my ($event) = @_;
 
-    return if $fact->hide;
+    return if $event->no_display;
 
     return ("LAUNCH", 'file')
-        if $fact->start;
+        if $event->isa('Test2::Event::ProcessStart');
 
-    if ($fact->parser_select) {
+    if ($event->isa('Test2::Event::ParserSelect')) {
         return unless $self->{+VERBOSE};
         return ('PARSER', 'parser_select');
     }
 
-    if (my $e = $fact->event) {
-        return ("NOT OK", 'fail') if $fact->causes_fail && !$fact->override_fail;
+    if ($event->isa('Test2::Event::Subtest')) {
+        return ("FAILED", 'failed') if $event->causes_fail;
 
-        return unless $self->{+VERBOSE} || $fact->diagnostics;
-
-        if ($fact->increments_count) {
-            return ("NOT OK", 'todo') if $fact->override_fail;
-
-            if (ref($e)) {
-                return ("NOT OK", 'todo') if defined $e->{todo};
-                return ("  OK  ", 'skip') if defined $e->{reason};
-            }
-
-            return ("  OK  ", 'pass') if $fact->increments_count;
-        }
-
-        return (" PLAN ", 'plan') if $fact->sets_plan;
-
-        return unless $fact->summary =~ m/\S/;
-        return (" DIAG ", 'diag') if $fact->diagnostics;
-        return (" NOTE ", 'note');
-    }
-
-    if ($fact->result) {
-        return ("FAILED", 'failed') if $fact->causes_fail && !$fact->override_fail;
-
-        my $n = $fact->nested || 0;
+        my $n = $event->nested || 0;
         return unless $self->{+VERBOSE} || $n < 0;
 
-        return ("FAILED", 'todo') if $fact->override_fail;
-
-        my ($plan) = @{$fact->result->plans};
-        if ($plan && !$plan->sets_plan->[0]) {
+        my ($plan) = (grep { $_->isa('Test2::Event::Plan') } @{$event->subevents})[0];
+        if ($plan && $plan->directive && $plan->directive eq 'SKIP') {
             return ("SKIP!!", 'skipall');
         }
 
         return ("PASSED", 'passed');
     }
 
-    if ($fact->encoding) {
+    if ($event->isa('Test2::Event::ProcessFinish')) {
+        return ("PASSED", 'passed') if $event->result->passed;
+        return ("FAILED", 'failed');
+    }
+
+    if ($event->isa('Test2::Event::Plan')) {
+        return unless $self->{+VERBOSE};
+        return (" PLAN ", 'plan');
+    }
+
+    if ($event->isa('Test2::Event::Encoding')) {
         return unless $self->{+VERBOSE};
         return ('ENCODE', 'encoding');
     }
 
-    if (defined $fact->output) {
-        my $handle = $fact->parsed_from_handle || "";
+    if ($event->isa('Test2::Event::UnknownStdout') || $event->isa('Test2::Event::UnknownStderr')) {
+        return unless defined $event->output;
 
-        return ("STDERR", 'stderr') if $handle eq 'STDERR';
-        return (" DIAG ", 'diag')   if $fact->diagnostics;
+        return ("STDERR", 'stderr') if $event->isa('Test2::Event::UnknownStderr');
+        return (" DIAG ", 'diag')   if $event->diagnostics;
 
         return unless $self->{+VERBOSE};
         return ("STDOUT", 'stdout');
     }
 
-    return unless $self->{+VERBOSE} || $fact->diagnostics;
-    return ("PARSER", 'parser') if $fact->parse_error;
+    if ($event->isa('Test2::Event::UnexpectedProcessExit') || $event->isa('Test2::Event::TimeoutReset')) {
+        return ("PARSER", 'parser');
+    }
+
+    if ($event->increments_count) {
+        if ($self->{+VERBOSE}) {
+            return ("  OK  ", 'skip') if $event->can('reason') && defined $event->reason;
+            return ("NOT OK", 'todo') if $event->can('todo') && defined $event->todo;
+            # The event is a failure but something overrode that - this would
+            # be a failure inside a subtest marked as todo.
+            return ("NOT OK", 'todo') if !$event->pass         && $event->effective_pass;
+            return ("  OK  ", 'pass') unless $event->causes_fail;
+        }
+
+        return ("NOT OK", 'fail') if $event->causes_fail;
+        return;
+    }
+
+    if ($event->can('message')) {
+        return (" DIAG ", 'diag') if $event->diagnostics;
+        return unless $self->{+VERBOSE};
+        return (" NOTE ", 'note');
+    }
+
+    return unless $self->{+VERBOSE} || $event->diagnostics;
+    return ("PARSER", 'parser') if $event->isa('Test2::Event::ParseError');
+
+    return unless defined $event->summary && $event->summary =~ /\S/;
 
     return (" ???? ", 'unknown');
 }
 
 sub tag {
     my $self = shift;
-    my ($fact) = @_;
+    my ($event) = @_;
 
-    my ($val, $color) = $self->_tag($fact);
+    my ($val, $color) = $self->_tag($event);
 
     return unless $val;
     return (
@@ -381,17 +392,18 @@ sub tag {
 
 sub tree {
     my $self = shift;
-    my ($j, $fact) = @_;
+    my ($j, $event) = @_;
 
     # Get mark
     my $mark = '+';
-    if (!$fact) {
+    if (!$event) {
         $mark = '|';
     }
     else {
-        my $n = $fact->nested || 0;
-        $mark = '_' if $fact->start;
-        $mark = '=' if $fact->result && $n < 0;
+        my $n = $event->nested || 0;
+        $mark = '_' if $event->isa('Test2::Event::ProcessStart');
+        $mark = '=' if $event->isa('Test2::Event::Subtest') && $n < 0;
+        $mark = '=' if $event->isa('Test2::Event::ProcessFinish');
     }
 
     my $jobs   = $self->{+JOBS};
@@ -426,16 +438,16 @@ sub painted_length {
     return length($str);
 }
 
-sub fact_summary {
+sub event_summary {
     my $self = shift;
-    my ($fact, $start) = @_;
+    my ($event, $start) = @_;
 
-    my ($val, $color) = $self->_tag($fact);
+    my ($val, $color) = $self->_tag($event);
 
-    my $summary = $fact->summary;
+    my $summary = $event->summary;
 
     $summary =~ s/^[\n\r]+//g;
-    my @lines = grep {$_} split /[\n\r]+/, $summary;
+    my @lines = grep {defined $_ && length $_} split /[\n\r]+/, $summary;
     @lines = ('') unless @lines;
 
     my $len = $self->painted_length(@$start) + 1;
@@ -461,14 +473,14 @@ sub fact_summary {
 
 sub render {
     my $self = shift;
-    my ($j, $fact, @nest) = @_;
+    my ($j, $event, @nest) = @_;
 
     # If there is no tag then we do not render it.
-    my @tag = $self->tag($fact) or return;
-    my @tree = $self->tree($j, $fact);
+    my @tag = $self->tag($event) or return;
+    my @tree = $self->tree($j, $event);
     my @start = (@tag, '  ', @tree, '  ', @nest);
 
-    my ($summary, $blob) = $self->fact_summary($fact, \@start);
+    my ($summary, $blob) = $self->event_summary($event, \@start);
 
     my @out;
     push @out => (@start, $_, "\n") for @$summary;
@@ -479,14 +491,14 @@ sub render {
 
 sub render_orphan {
     my $self = shift;
-    my ($j, $fact) = @_;
+    my ($j, $event) = @_;
 
     # If there is no tag then we do not render it.
-    my @tag = $self->tag($fact) or return;
-    my @tree = $self->tree($j, $fact);
-    my @start = (@tag, '  ', @tree, '  ', [$j, ("> " x $fact->nested)]);
+    my @tag = $self->tag($event) or return;
+    my @tree = $self->tree($j, $event);
+    my @start = (@tag, '  ', @tree, '  ', [$j, ("> " x $event->nested)]);
 
-    my ($summary, $blob) = $self->fact_summary($fact, \@start);
+    my ($summary, $blob) = $self->event_summary($event, \@start);
 
     my @out;
     push @out => (@start, $_, "\n") for @$summary;
@@ -497,14 +509,14 @@ sub render_orphan {
 
 sub preview {
     my $self = shift;
-    my ($j, $fact) = @_;
+    my ($j, $event) = @_;
 
     # If there is no tag then we do not render it.
-    my @tag = $self->tag($fact) or return;
-    my @tree = $self->tree($j, $fact);
-    my @start = (@tag, '  ', @tree, '  ', [$j, ("> " x $fact->nested)]);
+    my @tag = $self->tag($event) or return;
+    my @tree = $self->tree($j, $event);
+    my @start = (@tag, '  ', @tree, '  ', [$j, ("> " x $event->nested)]);
 
-    my ($summary) = $self->fact_summary($fact, \@start);
+    my ($summary) = $self->event_summary($event, \@start);
 
     $self->{+CLEAR} = 2;
     return (@start, $summary->[-1], "\r");
@@ -512,44 +524,44 @@ sub preview {
 
 sub render_subtest {
     my $self = shift;
-    my ($j, $fact) = @_;
+    my ($j, $event) = @_;
 
-    my @out = $self->render($j, $fact);
+    my @out = $self->render($j, $event);
 
-    my @todo = @{$fact->result->facts};
-    my @stack = ($fact);
+    my @todo = @{$event->subevents};
+    my @stack = ($event);
 
-    while (my $f = shift @todo) {
+    while (my $e = shift @todo) {
         my $nest = "";
 
-        if ($f->result) {
-            unshift @todo => @{$f->result->facts};
-            push @stack => $f;
+        if ($e->subtest_id) {
+            unshift @todo => @{$e->subevents};
+            push @stack => $e;
 
-            $nest = '| ' x ($f->nested - 1);
+            $nest = '| ' x ($e->nested - 1);
             $nest .= "+-";
         }
         else {
-            $nest = '| ' x $f->nested;
+            $nest = '| ' x $e->nested;
         }
 
-        if (!@todo || (($todo[0]->in_subtest || '') ne ($f->in_subtest || '') && !$f->result)) {
-            push @out => $self->render($j, $f, [$j, $nest]);
+        if (!@todo || (($todo[0]->in_subtest || '') ne ($e->in_subtest || '') && !$e->subtest_id)) {
+            push @out => $self->render($j, $e, [$j, $nest]);
 
-            my @tree = $self->tree($j, $f);
+            my @tree = $self->tree($j, $e);
 
-            if(my $st = pop @stack) {
+            if (my $st = pop @stack) {
                 push @out => (
                     ['tag', '['], ['fail', ' PLAN '], ['tag', ']'],
                     '  ', @tree, '  ',
-                    [$j, $nest],
+                    [$j,     $nest],
                     ['fail', $_],
                     "\n",
-                ) for @{$st->result->plan_errors};
+                ) for $self->_plan_errors($st->subevents, ($st->nested || 0) + 1);
             }
 
             if (@out && $self->{+VERBOSE}) {
-                my $n2 = '| ' x ($f->nested - 1);
+                my $n2 = '| ' x ($e->nested - 1);
                 push @out => (
                     "          ", @tree, "  ",
                     [$j, "$n2^"],
@@ -558,11 +570,45 @@ sub render_subtest {
             }
         }
         else {
-            push @out => $self->render($j, $f, [$j, $nest]);
+            push @out => $self->render($j, $e, [$j, $nest]);
         }
     }
 
     return @out;
+}
+
+sub _plan_errors {
+    my $self   = shift;
+    my $events = shift;
+    my $nested = shift;
+
+    my @errors;
+
+    unless ($nested || grep { $_->isa('Test2::Event::ProcessStart') } @{$events}) {
+        push @errors => 'No process start event was seen!';
+        return;
+    }
+
+    my @plans = grep { ($_->nested || 0) == $nested && $_->isa('Test2::Event::Plan') } @{$events};
+
+    unless (@plans) {
+        push @errors => 'No plan was ever set.';
+        return;
+    }
+
+    push @errors => 'Multiple plans were set.'
+        if @plans > 1;
+
+    push @errors => 'Plan must come before or after all testing, not in the middle.'
+        unless $plans[0] == $events->[0] || $plans[0] == $events->[-1];
+
+    my $max = ($plans[0]->sets_plan)[0];
+
+    my $total = grep { ($_->nested || 0) == $nested && $_->increments_count } @{$events};
+    return if $max == $total;
+    push @errors => "Planned to run $max test(s) but ran $total.";
+
+    return @errors;
 }
 
 1;
@@ -613,9 +659,9 @@ The output looks like this:
     
     === ALL TESTS SUCCEEDED ===
 
-The first column is a brief tag for each fact. The second column is job
+The first column is a brief tag for each event. The second column is job
 information, this is more useful when running multiple tests in parallel. The
-right hand side is the summary of each fact as it is handled. Subtests are
+right hand side is the summary of each event as it is handled. Subtests are
 rendered as a tree.
 
 =head1 SOURCE

@@ -1,4 +1,5 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Parser::EventStream';
+use Test2::Event::Ok;
 
 isa_ok($CLASS, 'Test2::Harness::Parser');
 can_ok($CLASS, qw/morph step parse_stderr parse_stdout/);
@@ -29,7 +30,7 @@ my (@stderr, @stdout, $done, $encoding);
     sub encoding { $encoding = pop }
 
     sub get_err_line {
-        my $self = shift;
+        my $self   = shift;
         my %params = @_;
 
         return shift @stderr unless $params{peek};
@@ -37,7 +38,7 @@ my (@stderr, @stdout, $done, $encoding);
     }
 
     sub get_out_line {
-        my $self = shift;
+        my $self   = shift;
         my %params = @_;
 
         return shift @stdout unless $params{peek};
@@ -59,113 +60,97 @@ subtest parse_stderr => sub {
     is(
         $one->parse_stderr,
         object {
-            call summary            => "random stderr";
-            call parsed_from_string => "random stderr\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
+            call summary     => 'random stderr';
+            call diagnostics => T();
         },
-        "First stderr"
+        'First stderr'
     );
 
     is(
         $one->parse_stderr,
         object {
-            call summary            => "# TAP diag for some reason";
-            call parsed_from_string => "# TAP diag for some reason\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
+            call summary     => '# TAP diag for some reason';
+            call diagnostics => T();
         },
-        "TAP diag that should not be here"
+        'TAP diag that should not be here'
     );
 
     is(
         $one->parse_stderr,
         object {
-            call summary            => "# More TAP diag for some reason";
-            call parsed_from_string => "# More TAP diag for some reason\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
+            call summary     => '# More TAP diag for some reason';
+            call diagnostics => T();
         },
-        "TAP diag that should not be here (more)"
+        'TAP diag that should not be here (more)'
     );
 
     is(
         $one->parse_stderr,
         object {
-            call summary            => "random stderr again";
-            call parsed_from_string => "random stderr again\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
+            call summary     => 'random stderr again';
+            call diagnostics => T();
         },
-        "First stderr"
+        'First stderr'
     );
 
     is(
         $one->parse_stderr,
         object {
-            call summary            => "random stderr and again";
-            call parsed_from_string => "random stderr and again\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
+            call summary     => 'random stderr and again';
+            call diagnostics => T();
         },
-        "First stderr"
+        'First stderr'
     );
 
-    is([$one->parse_stderr], [], "No more stderr");
+    is([$one->parse_stderr], [], 'No more stderr');
 };
 
 subtest parse_stdout => sub {
     my $one = $CLASS->new(proc => 'My::Proc', job => 1);
 
-    @stdout = ( "random stdout\n" );
+    @stdout = ("random stdout\n");
 
     is(
         $one->parse_stdout,
         object {
-            call summary            => "random stdout";
-            call parsed_from_string => "random stdout\n";
-            call parsed_from_handle => 'STDOUT';
-            call diagnostics        => 0;
+            call summary     => 'random stdout';
+            call diagnostics => F();
         },
-        "First stdout"
+        'First stdout'
     );
 
-    is([$one->parse_stdout], [], "No more stdout");
+    is([$one->parse_stdout], [], 'No more stdout');
 
-    @stdout = ( "T2_ENCODING: foo\r\n" );
+    @stdout = ("T2_ENCODING: foo\r\n");
     is(
         $one->parse_stdout,
         object {
             call encoding => 'foo';
-            call parsed_from_string => "T2_ENCODING: foo\r\n";
-            call parsed_from_handle => 'STDOUT';
         },
-        "Encoding"
+        'Encoding'
     );
 
-    my $fact = Test2::Harness::Fact->new(
-        output           => 'hello',
-        diagnostics      => 1,
-        event            => {a => 1},
-        causes_fail      => 0,
-        increments_count => 1,
+    my $event = Test2::Event::Ok->new(
+        pass => 1,
+        name => 'hello',
     );
-    my $str = "T2_EVENT: " . $fact->to_json . "\r\n";
-    @stdout = ( $str );
+
+    # If we load this early it gets used as the formatter for this .t file.
+    require Test2::Formatter::EventStream;
+    my $str = 'T2_EVENT: ' . Test2::Formatter::EventStream->_event_to_json($event) . "\r\n";
+    @stdout = ($str);
 
     is(
         [$one->parse_stdout],
         [
             object {
-                call output             => 'hello';
-                call parsed_from_handle => 'STDOUT';
-                call diagnostics        => 1;
-                call event              => {a => 1};
-                call causes_fail        => 0;
-                call increments_count   => 1;
+                call name             => 'hello';
+                call diagnostics      => F();
+                call causes_fail      => F();
+                call increments_count => T();
             }
         ],
-        "Parsed event"
+        'Parsed event'
     );
 };
 

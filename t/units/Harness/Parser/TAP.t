@@ -1,15 +1,15 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Parser::TAP';
 
 isa_ok($CLASS, 'Test2::Harness::Parser');
-can_ok($CLASS, qw/subtests sid last_nest/);
+can_ok($CLASS, qw/_subtest_state/);
 
 subtest morph => sub {
     my $one = bless {}, $CLASS;
     $one->morph;
 
-    like(
-        $one,
-        {subtests => [], sid => 'A', last_nest => 0},
+    isa_ok(
+        $one->_subtest_state,
+        ['Test2::Harness::Parser::TAP::SubtestState'],
         "Morph set some defaults"
     );
 };
@@ -17,16 +17,16 @@ subtest morph => sub {
 subtest parse_tap_version => sub {
     my $one = bless {}, $CLASS;
 
-    ok(!$one->parse_tap_version("ok"), "Not a version");
+    ok(!$one->parse_tap_version("ok", 0), "Not a version");
 
     like(
-        $one->parse_tap_version('TAP version 13'),
+        $one->parse_tap_version('TAP version 13', 0),
         object { call summary => 'Producer is using TAP version 13.' },
         'Parsed version'
     );
 
     like(
-        $one->parse_tap_version('TAP version 55.5'),
+        $one->parse_tap_version('TAP version 55.5', 0),
         object { call summary => 'Producer is using TAP version 55.5.' },
         'Parsed version'
     );
@@ -35,42 +35,42 @@ subtest parse_tap_version => sub {
 subtest parse_tap_plan => sub {
     my $one = bless {}, $CLASS;
 
-    ok(!$one->parse_tap_plan('0..1'), "not a plan 0..1");
-    ok(!$one->parse_tap_plan('foo'), "not a plan foo");
+    ok(!$one->parse_tap_plan('0..1', 0), "not a plan 0..1");
+    ok(!$one->parse_tap_plan('foo',  0), "not a plan foo");
 
     like(
-        $one->parse_tap_plan('1..5'),
+        $one->parse_tap_plan('1..5', 0),
         object {
             call summary => 'Plan is 5 assertions';
-            call sets_plan => [5, undef, undef];
+            call_list sets_plan => [5, '', undef];
         },
         "Got simple plan"
     );
 
     like(
-        $one->parse_tap_plan('1..0'),
+        $one->parse_tap_plan('1..0', 0),
         object {
             call summary => "Plan is 'SKIP', no reason given";
-            call sets_plan => [0, 'SKIP', 'no reason given'];
+            call_list sets_plan => [0, 'SKIP', 'no reason given'];
         },
         "Got simple skip"
     );
 
     like(
-        $one->parse_tap_plan('1..0 # SkIp foo'),
+        $one->parse_tap_plan('1..0 # SkIp foo', 0),
         object {
             call summary => "Plan is 'SKIP', foo";
-            call sets_plan => [0, 'SKIP', 'foo'];
+            call_list sets_plan => [0, 'SKIP', 'foo'];
         },
         "Got skip with reason"
     );
 
     like(
-        [$one->parse_tap_plan('1..0 xxx')],
+        [$one->parse_tap_plan('1..0 xxx', 0)],
         [
             object {
                 call summary => "Plan is 'SKIP', no reason given";
-                call sets_plan => [0, 'SKIP', 'no reason given'];
+                call_list sets_plan => [0, 'SKIP', 'no reason given'];
             },
             object {
                 call parse_error => "Extra characters after plan.";
@@ -82,13 +82,12 @@ subtest parse_tap_plan => sub {
 
 subtest parse_tap_bail => sub {
     my $one = bless {}, $CLASS;
-    ok(!$one->parse_tap_bail('ok'), "not a bailout");
+    ok(!$one->parse_tap_bail('ok', 0), "not a bailout");
 
     like(
-        $one->parse_tap_bail('Bail out!'),
+        $one->parse_tap_bail('Bail out!', 0),
         object {
             call summary     => 'Bail out!';
-            call event       => T();
             call terminate   => 255;
             call causes_fail => 1;
         },
@@ -96,10 +95,9 @@ subtest parse_tap_bail => sub {
     );
 
     like(
-        $one->parse_tap_bail('Bail out! xxx'),
+        $one->parse_tap_bail('Bail out! xxx', 0),
         object {
-            call summary     => 'Bail out! xxx';
-            call event       => T();
+            call summary     => 'Bail out!  xxx';
             call terminate   => 255;
             call causes_fail => 1;
         },
@@ -111,381 +109,331 @@ subtest parse_tap_ok => sub {
     my $one = bless {}, $CLASS;
 
     like(
-        $one->parse_tap_ok('ok'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok', 0)],
+        array {
+            item object {
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "Simple ok"
     );
 
     like(
-        $one->parse_tap_ok('not ok'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => F();
-                field effective_pass => F();
-            };
-
-            call summary          => "Nameless Assertion";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => T();
+        [$one->parse_tap_ok('not ok', 0)],
+        array {
+            item object {
+                call pass             => F();
+                call effective_pass   => F();
+                call summary          => "Nameless Assertion";
+                call increments_count => T();
+                call causes_fail      => T();
+                end;
+            }
         },
         "Simple not ok"
     );
 
     like(
-        $one->parse_tap_ok('ok 1'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion";
-            call number           => 1;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok 1', 0)],
+        array {
+            item object {
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "simple ok with number"
     );
 
     like(
-        $one->parse_tap_ok('not ok 1'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => F();
-                field effective_pass => F();
-            };
-
-            call summary          => "Nameless Assertion";
-            call number           => 1;
-            call increments_count => 1;
-            call causes_fail      => T();
+        [$one->parse_tap_ok('not ok 1', 0)],
+        array {
+            item object {
+                call pass             => F();
+                call effective_pass   => F();
+                call summary          => "Nameless Assertion";
+                call increments_count => T();
+                call causes_fail      => T();
+                end;
+            }
         },
         "simple not ok with number"
     );
 
     like(
-        $one->parse_tap_ok('ok foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "foo";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok foo', 0)],
+        array {
+            item object {
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "foo";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "Simple ok with name"
     );
 
     like(
-        $one->parse_tap_ok('not ok foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => F();
-                field effective_pass => F();
-            };
-
-            call summary          => "foo";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => T();
+        [$one->parse_tap_ok('not ok foo', 0)],
+        array {
+            item object {
+                call pass             => F();
+                call effective_pass   => F();
+                call summary          => "foo";
+                call increments_count => T();
+                call causes_fail      => T();
+                end;
+            }
         },
         "Simple named not ok"
     );
 
     like(
-        $one->parse_tap_ok('ok 1 foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "foo";
-            call number           => 1;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok 1 foo', 0)],
+        array {
+            item object {
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "foo";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "named ok with number"
     );
 
     like(
-        $one->parse_tap_ok('not ok 1 foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => F();
-                field effective_pass => F();
-            };
-
-            call summary          => "foo";
-            call number           => 1;
-            call increments_count => 1;
-            call causes_fail      => T();
+        [$one->parse_tap_ok('not ok 1 foo', 0)],
+        array {
+            item object {
+                call pass             => F();
+                call effective_pass   => F();
+                call summary          => "foo";
+                call increments_count => T();
+                call causes_fail      => T();
+                end;
+            }
         },
         "named not ok with number"
     );
 
     like(
-        $one->parse_tap_ok('ok 1 - foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "foo";
-            call number           => 1;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok 1 - foo', 0)],
+        array {
+            item object {
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "foo";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "named ok with number and dash"
     );
 
     like(
-        $one->parse_tap_ok('not ok 1 - foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => DNE();
-                field pass => F();
-                field effective_pass => F();
-            };
-
-            call summary          => "foo";
-            call number           => 1;
-            call increments_count => 1;
-            call causes_fail      => T();
+        [$one->parse_tap_ok('not ok 1 - foo', 0)],
+        array {
+            item object {
+                call pass             => F();
+                call effective_pass   => F();
+                call summary          => "foo";
+                call increments_count => T();
+                call causes_fail      => T();
+                end;
+            }
         },
         "named ok with number and dash"
     );
 
     like(
-        $one->parse_tap_ok('ok #tOdO'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => D();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (TODO)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok #tOdO', 0)],
+        array {
+            item object {
+                call reason           => DNE();
+                call todo             => D();
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (TODO)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "Simple todo"
     );
 
     like(
-        $one->parse_tap_ok('not ok #todo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => D();
-                field pass => F();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (TODO)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('not ok #todo', 0)],
+        array {
+            item object {
+                call reason           => DNE();
+                call todo             => D();
+                call pass             => F();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (TODO)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "simple not ok todo"
     );
 
     like(
-        $one->parse_tap_ok('ok # todo foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => D();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (TODO: foo)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok # todo foo', 0)],
+        array {
+            item object {
+                call reason           => DNE();
+                call todo             => D();
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (TODO: foo)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "todo ok with reason"
     );
 
     like(
-        $one->parse_tap_ok('not ok # todo foo'),
-        object {
-            call event => hash {
-                field reason => DNE();
-                field todo => D();
-                field pass => F();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (TODO: foo)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('not ok # todo foo', 0)],
+        array {
+            item object {
+                call reason           => DNE();
+                call todo             => D();
+                call pass             => F();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (TODO: foo)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "todo not ok with reason"
     );
 
     like(
-        $one->parse_tap_ok('ok #skip'),
-        object {
-            call event => hash {
-                field reason => D();
-                field todo => DNE();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (SKIP)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok #skip', 0)],
+        array {
+            item object {
+                call reason           => D();
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (SKIP)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "Simple skip"
     );
 
     like(
-        $one->parse_tap_ok('not ok #sKiP'),
-        object {
-            call event => hash {
-                field reason => D();
-                field todo => DNE();
-                field pass => F();
-                field effective_pass => F();
-            };
-
-            call summary          => "Nameless Assertion (SKIP)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => T();
+        [$one->parse_tap_ok('not ok #sKiP', 0)],
+        array {
+            item object {
+                call reason           => D();
+                call pass             => F();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (SKIP)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "not ok skip"
     );
 
     like(
-        $one->parse_tap_ok('ok # skip foo'),
-        object {
-            call event => hash {
-                field reason => 'foo';
-                field todo => DNE();
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (SKIP: foo)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok # skip foo', 0)],
+        array {
+            item object {
+                call reason           => 'foo';
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (SKIP: foo)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "ok skip with reason"
     );
 
     like(
-        $one->parse_tap_ok('not ok # skip foo'),
-        object {
-            call event => hash {
-                field reason => 'foo';
-                field todo => DNE();
-                field pass => F();
-                field effective_pass => F();
-            };
-
-            call summary          => "Nameless Assertion (SKIP: foo)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => T();
+        [$one->parse_tap_ok('not ok # skip foo', 0)],
+        array {
+            item object {
+                call reason           => 'foo';
+                call pass             => F();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (SKIP: foo)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "not ok skip with reason"
     );
 
     like(
-        $one->parse_tap_ok('ok # todo & skip foo'),
-        object {
-            call event => hash {
-                field reason => 'foo';
-                field todo => 'foo';
-                field pass => T();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (TODO: foo) (SKIP: foo)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('ok # todo & skip foo', 0)],
+        array {
+            item object {
+                call reason           => 'foo';
+                call pass             => T();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (SKIP: foo)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "todo and skip"
     );
 
     like(
-        $one->parse_tap_ok('not ok # todo & skip foo'),
-        object {
-            call event => hash {
-                field reason => 'foo';
-                field todo => 'foo';
-                field pass => F();
-                field effective_pass => T();
-            };
-
-            call summary          => "Nameless Assertion (TODO: foo) (SKIP: foo)";
-            call number           => undef;
-            call increments_count => 1;
-            call causes_fail      => F();
+        [$one->parse_tap_ok('not ok # todo & skip foo', 0)],
+        array {
+            item object {
+                call reason           => 'foo';
+                call pass             => F();
+                call effective_pass   => T();
+                call summary          => "Nameless Assertion (SKIP: foo)";
+                call increments_count => T();
+                call causes_fail      => F();
+                end;
+            }
         },
         "not ok todo and skip"
     );
 
     like(
-        [$one->parse_tap_ok('ok-foo')],
+        [$one->parse_tap_ok('ok-foo', 0)],
         array {
             item object {
-                call event => hash {
-                    field pass           => T();
-                    field effective_pass => T();
-                };
-
+                call pass             => T();
+                call effective_pass   => T();
                 call summary          => "foo";
-                call number           => undef;
-                call increments_count => 1;
+                call increments_count => T();
                 call causes_fail      => F();
             };
             item object {
-                call parse_error => "'ok' is not immedietly followed by a space.";
+                call parse_error => "'ok' is not immediately followed by a space.";
             };
             end;
         },
@@ -493,17 +441,13 @@ subtest parse_tap_ok => sub {
     );
 
     like(
-        [$one->parse_tap_ok('ok  1 - foo')],
+        [$one->parse_tap_ok('ok  1 - foo', 0)],
         array {
             item object {
-                call event => hash {
-                    field pass           => T();
-                    field effective_pass => T();
-                };
-
+                call pass             => T();
+                call effective_pass   => T();
                 call summary          => "foo";
-                call number           => 1;
-                call increments_count => 1;
+                call increments_count => T();
                 call causes_fail      => F();
             };
             item object {
@@ -515,17 +459,13 @@ subtest parse_tap_ok => sub {
     );
 
     like(
-        [$one->parse_tap_ok('ok foo# todo')],
+        [$one->parse_tap_ok('ok foo# todo', 0)],
         array {
             item object {
-                call event => hash {
-                    field pass           => T();
-                    field effective_pass => T();
-                };
-
+                call pass             => T();
+                call effective_pass   => T();
                 call summary          => "foo (TODO)";
-                call number           => undef;
-                call increments_count => 1;
+                call increments_count => T();
                 call causes_fail      => F();
             };
             item object {
@@ -537,17 +477,13 @@ subtest parse_tap_ok => sub {
     );
 
     like(
-        [$one->parse_tap_ok('ok foo # todo-xxx')],
+        [$one->parse_tap_ok('ok foo # todo-xxx', 0)],
         array {
             item object {
-                call event => hash {
-                    field pass           => T();
-                    field effective_pass => T();
-                };
-
+                call pass             => T();
+                call effective_pass   => T();
                 call summary          => "foo (TODO: -xxx)";
-                call number           => undef;
-                call increments_count => 1;
+                call increments_count => T();
                 call causes_fail      => F();
             };
             item object {
@@ -559,18 +495,54 @@ subtest parse_tap_ok => sub {
     );
 };
 
-subtest step => sub {
-    my $m = mock $CLASS => (
-        override => [
-            parse_stdout => sub { 'stdout1', 'stdout2' },
-            parse_stderr => sub { 'stderr1', 'stderr2' },
-        ],
-    );
-    my $one = bless {}, $CLASS;
+my (@stderr, @stdout, $done);
+{
 
-    is(
+    package My::Proc;
+
+    sub is_done { $done }
+
+    sub get_err_line {
+        my $self   = shift;
+        my %params = @_;
+
+        return shift @stderr unless $params{peek};
+        return $stderr[0];
+    }
+
+    sub get_out_line {
+        my $self   = shift;
+        my %params = @_;
+
+        return shift @stdout unless $params{peek};
+        return $stdout[0];
+    }
+}
+
+subtest step => sub {
+    my $one = $CLASS->new(proc => 'My::Proc', job => 1);
+    @stdout = (
+        "ok 1 foo\n",
+        "ok 2 bar\n",
+    );
+    @stderr = (
+        "# foo\n",
+        "# bar\n",
+    );
+
+    like(
         [$one->step],
-        [qw/stdout1 stdout2 stderr1 stderr2/],
+        array {
+            item object {
+                prop blessed => 'Test2::Event::Ok';
+                call name    => 'foo';
+            };
+            item object {
+                prop blessed => 'Test2::Event::Diag';
+                call message => "foo\nbar";
+            };
+            end;
+        },
         "Got facts from STDOUT and STDERR"
     );
 };
@@ -603,29 +575,6 @@ subtest strip_comment => sub {
     );
 };
 
-my (@stderr, @stdout, $done);
-{
-    package My::Proc;
-
-    sub is_done { $done }
-
-    sub get_err_line {
-        my $self = shift;
-        my %params = @_;
-
-        return shift @stderr unless $params{peek};
-        return $stderr[0];
-    }
-
-    sub get_out_line {
-        my $self = shift;
-        my %params = @_;
-
-        return shift @stdout unless $params{peek};
-        return $stdout[0];
-    }
-}
-
 subtest slurp_comments => sub {
     my $one = $CLASS->new(proc => 'My::Proc', job => 1);
 
@@ -641,13 +590,9 @@ subtest slurp_comments => sub {
     is(
         $one->slurp_comments('STDOUT'),
         object {
-            call event              => 1;
-            call nested             => 1;
-            call summary            => "first\nsecond\nthird";
-            call parsed_from_string => "    # first\n    # second\n    # third\n";
-            call parsed_from_handle => 'STDOUT';
-            call diagnostics        => 0;
-            call hide               => 0;
+            call nested      => 1;
+            call summary     => "first\nsecond\nthird";
+            call diagnostics => F();
         },
         "Got multi-line comment"
     );
@@ -655,13 +600,9 @@ subtest slurp_comments => sub {
     is(
         $one->slurp_comments('STDOUT'),
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "first\nsecond\nthird";
-            call parsed_from_string => "# first\n# second\n# third\n";
-            call parsed_from_handle => 'STDOUT';
-            call diagnostics        => 0;
-            call hide               => 0;
+            call nested      => 0;
+            call summary     => "first\nsecond\nthird";
+            call diagnostics => F();
         },
         "Got multi-line comment"
     );
@@ -678,13 +619,9 @@ subtest slurp_comments => sub {
     is(
         $one->slurp_comments('STDERR'),
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "Failed test xxx\nat line 123.";
-            call parsed_from_string => "# Failed test xxx\n# at line 123.\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
-            call hide               => 0;
+            call nested      => 0;
+            call summary     => "Failed test xxx\nat line 123.";
+            call diagnostics => 1;
         },
         "Grouped failure output"
     );
@@ -692,43 +629,29 @@ subtest slurp_comments => sub {
     is(
         $one->slurp_comments('STDERR'),
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "more diag for xxx";
-            call parsed_from_string => "# more diag for xxx\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
-            call hide               => 0;
+            call nested      => 0;
+            call summary     => "more diag for xxx";
+            call diagnostics => 1;
         },
         "Extra diag"
     );
 
-
     is(
         $one->slurp_comments('STDERR'),
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "Failed test yyy at line 321.";
-            call parsed_from_string => "# Failed test yyy at line 321.\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
-            call hide               => 0;
+            call nested      => 0;
+            call summary     => "Failed test yyy at line 321.";
+            call diagnostics => 1;
         },
         "Isolated failure output"
     );
 
-
     is(
         $one->slurp_comments('STDERR'),
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "more diag for yyy";
-            call parsed_from_string => "# more diag for yyy\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
-            call hide               => 0;
+            call nested      => 0;
+            call summary     => "more diag for yyy";
+            call diagnostics => 1;
         },
         "final diag"
     );
@@ -737,13 +660,9 @@ subtest slurp_comments => sub {
     is(
         $one->slurp_comments('STDERR'),
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "no summary";
-            call parsed_from_string => "#\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
-            call hide               => 1;
+            call nested      => 0;
+            call summary     => '';
+            call diagnostics => 1;
         },
         "Invisible diag"
     );
@@ -765,11 +684,9 @@ subtest parse_stderr => sub {
     is(
         $one->parse_stderr,
         object {
-            call nested             => 0;
-            call summary            => "random stderr";
-            call parsed_from_string => "random stderr\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
+            prop blessed     => 'Test2::Event::UnknownStderr';
+            call summary     => "random stderr";
+            call diagnostics => 1;
         },
         "First stderr"
     );
@@ -777,13 +694,9 @@ subtest parse_stderr => sub {
     is(
         $one->parse_stderr,
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "Failed test xxx\nat line 123.";
-            call parsed_from_string => "# Failed test xxx\n# at line 123.\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
-            call hide               => 0;
+            call nested      => 0;
+            call summary     => "Failed test xxx\nat line 123.";
+            call diagnostics => 1;
         },
         "Failure stderr"
     );
@@ -791,13 +704,9 @@ subtest parse_stderr => sub {
     is(
         $one->parse_stderr,
         object {
-            call event              => 1;
-            call nested             => 0;
-            call summary            => "more diag for xxx";
-            call parsed_from_string => "# more diag for xxx\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
-            call hide               => 0;
+            call nested      => 0;
+            call summary     => "more diag for xxx";
+            call diagnostics => 1;
         },
         "diag stderr"
     );
@@ -805,11 +714,9 @@ subtest parse_stderr => sub {
     is(
         $one->parse_stderr,
         object {
-            call nested             => 0;
-            call summary            => "random stderr";
-            call parsed_from_string => "random stderr\n";
-            call parsed_from_handle => 'STDERR';
-            call diagnostics        => 1;
+            prop blessed     => 'Test2::Event::UnknownStderr';
+            call summary     => "random stderr";
+            call diagnostics => 1;
         },
         "More stderr"
     );
@@ -827,22 +734,22 @@ not ok 2 - fail
 #     this note has significant leading whitespace
 not ok 3 - todo # TODO because
 ok 4 - skip # SKIP because
-    ok 1 - subtest result a
-    not ok 2 - subtest result b
+    ok 1 - subtest result 1.1
+    not ok 2 - subtest result 1.2
     1..2
-not ok 5 - subtest a ended
-    ok 1 - subtest result a
-    ok 2 - subtest result b
+not ok 5 - Subtest: subtest a ended
+    ok 1 - subtest result 2.1
+    ok 2 - subtest result 2.2
     1..2
-ok 6 - subtest b ended
-    ok 1 - subtest result a
-        ok 1 - subtest result a
-        ok 2 - subtest result b
+ok 6 - Subtest: subtest b ended
+    ok 1 - subtest result 3.1
+        ok 1 - subtest result 3.2.1
+        ok 2 - subtest result 3.2.2
         1..2
-    ok 2 - inner subtest ended
-    ok 3 - subtest result b
+    ok 2 - Subtest: inner subtest ended
+    ok 3 - subtest result 3.3
     1..3
-ok 7 - outer subtest ended
+ok 7 - Subtest: outer subtest ended
 
 # this is a note that
 # spans a couple of
@@ -850,125 +757,113 @@ ok 7 - outer subtest ended
 # note though to preserve rendering
 
 not ok 8 - failing buffered subtest {
-    ok 1 - subtest result a
-    not ok 2 - subtest result b
+    ok 1 - subtest result 4.1
+    not ok 2 - subtest result 4.2
     1..2
 }
 
 ok 9 - passing buffered subtest {
-    ok 1 - subtest result a
-    ok 2 - subtest result b
+    ok 1 - subtest result 5.1
+    ok 2 - subtest result 5.2
     1..2
 }
 ok 10 - outer buffered subtest {
-    ok 1 - subtest result a
+    ok 1 - subtest result 6.1
     ok 2 - nested buffered subtest {
-        ok 1 - subtest result a
-        ok 2 - subtest result b
+        ok 1 - subtest result 6.2.1
+        ok 2 - subtest result 6.2.2
         1..2
     }
-    ok 3 - subtest result b
+    ok 3 - subtest result 6.3
     1..3
 }
 1..10
     EOT
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Ok';
                 call summary          => 'pass';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                call causes_fail      => F();
+                call increments_count => T();
             }
         ],
         "Pass event"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'this note has no leading whitespace';
-                call nested           => 0;
+                prop blessed => 'Test2::Event::Note';
+                call summary => 'this note has no leading whitespace';
+                call nested  => 0;
             }
         ],
         "Got a note with no leading whitespace"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Ok';
                 call summary          => 'fail';
                 call causes_fail      => 1;
-                call increments_count => 1;
-                call number           => 2;
+                call increments_count => T();
             }
         ],
         "Fail event"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => '    this note has significant leading whitespace';
-                call nested           => 0;
+                prop blessed => 'Test2::Event::Note';
+                call summary => '    this note has significant leading whitespace';
+                call nested  => 0;
             }
         ],
         "Got a note with significant leading whitespace"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Ok';
                 call summary          => 'todo (TODO: because)';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 3;
+                call causes_fail      => F();
+                call increments_count => T();
             }
         ],
         "TODO event"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Skip';
                 call summary          => 'skip (SKIP: because)';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 4;
+                call causes_fail      => F();
+                call increments_count => T();
             }
         ],
         "SKIP event"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 1.1';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'A';
             }
         ],
@@ -976,15 +871,13 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 1.2';
                 call causes_fail      => 1;
-                call increments_count => 1;
-                call number           => 2;
+                call increments_count => T();
                 call in_subtest       => 'A';
             }
         ],
@@ -992,15 +885,14 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 2 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 2, undef, undef ];
+                call_list sets_plan   => [2, '', undef];
                 call in_subtest       => 'A';
             }
         ],
@@ -1008,31 +900,27 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest a ended';
+                prop blessed          => 'Test2::Event::Subtest';
+                call summary          => 'Subtest: subtest a ended';
                 call causes_fail      => 1;
-                call increments_count => 1;
-                call number           => 5;
-                call is_subtest       => 'A';
+                call increments_count => T();
+                call subtest_id       => 'A';
             }
         ],
         "Failing subtest"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 2.1';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'B';
             }
         ],
@@ -1040,15 +928,13 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 2;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 2.2';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'B';
             }
         ],
@@ -1056,15 +942,14 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 2 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 2, undef, undef ];
+                call_list sets_plan   => [2, '', undef];
                 call in_subtest       => 'B';
             }
         ],
@@ -1072,37 +957,27 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest b ended';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 6;
-                call is_subtest       => 'B';
+                prop blessed          => 'Test2::Event::Subtest';
+                call summary          => 'Subtest: subtest b ended';
+                call causes_fail      => F();
+                call increments_count => T();
+                call subtest_id       => 'B';
             }
         ],
         "Passing subtest"
     );
 
-
-
-
-
-
-
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 3.1';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'C';
                 call nested           => 1;
             }
@@ -1111,15 +986,13 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 3.2.1';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'D';
                 call nested           => 2;
             }
@@ -1128,15 +1001,13 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 2;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 3.2.2';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'D';
                 call nested           => 2;
             }
@@ -1145,15 +1016,14 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 2 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 2, undef, undef ];
+                call_list sets_plan   => [2, '', undef];
                 call in_subtest       => 'D';
                 call nested           => 2;
             }
@@ -1162,16 +1032,14 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'inner subtest ended';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 2;
-                call is_subtest       => 'D';
+                prop blessed          => 'Test2::Event::Subtest';
+                call summary          => 'Subtest: inner subtest ended';
+                call causes_fail      => F();
+                call increments_count => T();
+                call subtest_id       => 'D';
                 call in_subtest       => 'C';
                 call nested           => 1;
             }
@@ -1180,15 +1048,13 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 3;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 3.3';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'C';
                 call nested           => 1;
             }
@@ -1197,15 +1063,14 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 3 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 3, undef, undef ];
+                call_list sets_plan   => [3, '', undef];
                 call in_subtest       => 'C';
                 call nested           => 1;
             }
@@ -1214,16 +1079,14 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'outer subtest ended';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 7;
-                call is_subtest       => 'C';
+                prop blessed          => 'Test2::Event::Subtest';
+                call summary          => 'Subtest: outer subtest ended';
+                call causes_fail      => F();
+                call increments_count => T();
+                call subtest_id       => 'C';
                 call nested           => 0;
             }
         ],
@@ -1231,204 +1094,175 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [],
         "Empty space",
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => "this is a note that\nspans a couple of\nlines. we want it to be a single\nnote though to preserve rendering";
-                call nested           => 0;
+                prop blessed => 'Test2::Event::Note';
+                call summary => "this is a note that\nspans a couple of\nlines. we want it to be a single\nnote though to preserve rendering";
+                call nested  => 0;
             }
         ],
         "Got a multi-line note"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [],
         "Empty space",
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 4.1';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'E';
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 4.2';
                 call causes_fail      => 1;
-                call increments_count => 1;
-                call number           => 2;
+                call increments_count => T();
                 call in_subtest       => 'E';
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 2 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 2, undef, undef ];
+                call_list sets_plan   => [2, '', undef];
                 call in_subtest       => 'E';
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Subtest';
                 call summary          => 'failing buffered subtest';
                 call causes_fail      => 1;
-                call increments_count => 1;
-                call number           => 8;
-                call is_subtest       => 'E';
+                call increments_count => T();
+                call subtest_id       => 'E';
             },
         ],
         "Failing buffered subtest"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [],
         "Empty space",
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 5.1';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'F';
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 2;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 5.2';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'F';
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 2 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 2, undef, undef ];
+                call_list sets_plan   => [2, '', undef];
                 call in_subtest       => 'F';
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Subtest';
                 call summary          => 'passing buffered subtest';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 9;
-                call is_subtest       => 'F';
+                call causes_fail      => F();
+                call increments_count => T();
+                call subtest_id       => 'F';
             },
         ],
         "Passing buffered subtest"
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 6.1';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'G';
                 call nested           => 1;
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result a';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 1;
-                call in_subtest       => 'I';
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 6.2.1';
+                call causes_fail      => F();
+                call increments_count => T();
+                call in_subtest       => 'H';
                 call nested           => 2;
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 2;
-                call in_subtest       => 'I';
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 6.2.2';
+                call causes_fail      => F();
+                call increments_count => T();
+                call in_subtest       => 'H';
                 call nested           => 2;
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 2 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 2, undef, undef ];
-                call in_subtest       => 'I';
+                call_list sets_plan   => [2, '', undef];
+                call in_subtest       => 'H';
                 call nested           => 2;
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Subtest';
                 call summary          => 'nested buffered subtest';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 2;
-                call is_subtest       => 'I';
+                call causes_fail      => F();
+                call increments_count => T();
+                call subtest_id       => 'H';
                 call in_subtest       => 'G';
                 call nested           => 1;
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'subtest result b';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 3;
+                prop blessed          => 'Test2::Event::Ok';
+                call summary          => 'subtest result 6.3';
+                call causes_fail      => F();
+                call increments_count => T();
                 call in_subtest       => 'G';
                 call nested           => 1;
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 3 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 3, undef, undef ];
+                call_list sets_plan   => [3, '', undef];
                 call in_subtest       => 'G';
                 call nested           => 1;
             },
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Subtest';
                 call summary          => 'outer buffered subtest';
-                call causes_fail      => 0;
-                call increments_count => 1;
-                call number           => 10;
-                call is_subtest       => 'G';
+                call causes_fail      => F();
+                call increments_count => T();
+                call subtest_id       => 'G';
                 call nested           => 0;
             },
         ],
@@ -1436,15 +1270,14 @@ ok 10 - outer buffered subtest {
     );
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         [
             object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 10 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
-                call sets_plan        => [ 10, undef, undef ];
+                call_list sets_plan   => [10, '', undef];
             }
         ],
         "Final Plan"
@@ -1455,7 +1288,7 @@ subtest todo_subtest => sub {
     my $one = $CLASS->new(proc => 'My::Proc', job => 1);
 
     @stdout = map { "$_\n" } split /\n/, <<'    EOT';
-not ok 1 - todo # TODO test todo {
+not ok 1 - st-todo # TODO test todo {
     not ok 1 - fail
     # Failed test 'fail'
     # at test.pl line 9.
@@ -1464,21 +1297,18 @@ not ok 1 - todo # TODO test todo {
     EOT
 
     like(
-        [$one->parse_stdout],
+        [$one->step],
         array {
             item object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Ok';
                 call summary          => 'fail';
-                call causes_fail      => T();
+                call causes_fail      => F();
                 call increments_count => T();
-                call number           => 1;
                 call nested           => 1;
                 call in_subtest       => 'A';
             };
             item object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
+                prop blessed          => 'Test2::Event::Plan';
                 call summary          => 'Plan is 1 assertions';
                 call causes_fail      => F();
                 call increments_count => F();
@@ -1486,13 +1316,12 @@ not ok 1 - todo # TODO test todo {
                 call in_subtest       => 'A';
             };
             item object {
-                prop blessed          => 'Test2::Harness::Fact';
-                call event            => T();
-                call summary          => 'todo (TODO: test todo)';
+                prop blessed          => 'Test2::Event::Subtest';
+                call summary          => 'st-todo (TODO: test todo)';
                 call causes_fail      => F();
                 call increments_count => T();
                 call nested           => 0;
-                call is_subtest       => 'A';
+                call subtest_id       => 'A';
             };
         },
         "Buffered subtest with todo before opening curly"

@@ -8,19 +8,15 @@ use Carp qw/croak/;
 use Time::HiRes qw/time/;
 
 use Test2::Util::HashBase qw{
-    file name job nested
-
-    is_subtest in_subtest
+    file name job
 
     total      failed
     start_time stop_time
     exit
 
     plans
-    planning
-    plan_errors
 
-    facts
+    events
 };
 
 sub init {
@@ -35,19 +31,15 @@ sub init {
     croak "'name' is a required attribute"
         unless $self->{+NAME};
 
-    $self->{+NESTED} ||= 0;
-
     # Overall stuff
     $self->{+START_TIME} ||= time;
     $self->{+TOTAL}      ||= 0;
     $self->{+FAILED}     ||= 0;
 
     # Plan related
-    $self->{+PLANS}       ||= [];
-    $self->{+PLANNING}    ||= [];
-    $self->{+PLAN_ERRORS} ||= [];
+    $self->{+PLANS} ||= [];
 
-    $self->{+FACTS} ||= [];
+    $self->{+EVENTS} ||= [];
 }
 
 sub stop {
@@ -56,8 +48,6 @@ sub stop {
 
     $self->{+STOP_TIME} = time;
     $self->{+EXIT}      = $exit;
-
-    $self->_check_plan;
 }
 
 sub passed {
@@ -66,129 +56,31 @@ sub passed {
 
     return 0 if $self->{+EXIT};
     return 0 if $self->{+FAILED};
-    return 0 if @{$self->{+PLAN_ERRORS}};
     return 1;
 }
 
 sub bump_failed { $_[0]->{+FAILED} += $_[1] || 1 }
 
-sub add_facts {
+sub add_events {
     my $self = shift;
-    $self->add_fact($_) for @_;
+    $self->add_event($_) for @_;
 }
 
-sub add_fact {
+sub add_event {
     my $self = shift;
-    my ($f) = @_;
+    my ($e) = @_;
 
-    push @{$self->{+FACTS}} => $f;
+    push @{$self->{+EVENTS}} => $e;
 
-    if ($f->is_subtest) {
-        $f->set_nested($self->{+NESTED});
-        $f->result->update_nest($self->{+NESTED} + 1)
+    return unless ($e->nested || 0) <= 0;
+
+    $self->{+TOTAL}++ if $e->increments_count;
+    if ($e->isa('Test2::Event::Plan')) {
+        my @set = $e->sets_plan;
+        push @{$self->{+PLANS}}, $e unless $set[1] && $set[1] eq 'NO PLAN';
     }
 
-    if ($f->increments_count) {
-        $self->{+TOTAL}++;
-        push @{$self->{+PLANNING}} => $f;
-    }
-
-    if (my $plan = $f->sets_plan) {
-        push @{$self->{+PLANNING}} => $f;
-        push @{$self->{+PLANS}} => $f
-            unless $plan->[1] && $plan->[1] eq 'NO PLAN';
-    }
-
-    $self->{+FAILED}++ if $f->causes_fail || $f->terminate;
-}
-
-sub override_fail {
-    my $self = shift;
-
-    for my $f (@{$self->{+FACTS}}) {
-        next unless $f->increments_count;
-        $f->set_override_fail(1);
-        next unless $f->result;
-        $f->result->override_fail(1);
-    }
-}
-
-sub update_nest {
-    my $self = shift;
-    my ($nest) = @_;
-
-    $self->{+NESTED} = $nest;
-
-    for my $f (@{$self->{+FACTS}}) {
-        $f->set_nested($nest);
-        next unless $f->result;
-        $f->result->update_nest($nest + 1);
-    }
-}
-
-sub _check_numbers {
-    my ($self) = @_;
-
-    my $count = 0;
-    my %seen;
-    my %out_of_order;
-    for my $fact (@{$self->{+FACTS}}) {
-        next unless $fact->increments_count;
-        $count++;
-
-        my $num = $fact->number or next;
-        $seen{$num}++;
-
-        next if $count == $num;
-        $out_of_order{$num}++;
-    }
-
-    my $errors = $self->{+PLAN_ERRORS};
-
-    my @dups = grep { $seen{$_} > 1 } sort { $a <=> $b } keys %seen;
-    push @$errors => "Some test numbers were seen more than once: " . join(', ', @dups)
-        if @dups;
-
-    my @ooo = sort { $a <=> $b } keys %out_of_order;
-    push @$errors => "Some test numbers were seen out of order: " . join(', ', @ooo)
-        if @ooo;
-}
-
-sub _check_plan {
-    my $self = shift;
-
-    my $plans  = $self->{+PLANS};
-    my $events = $self->{+PLANNING};
-    my $errors = $self->{+PLAN_ERRORS};
-
-    # Already ran and found errors.
-    return if @$errors;
-
-    $self->_check_numbers;
-
-    unless (grep {!$_->start} @{$self->{+FACTS}}) {
-        push @$errors => 'No events were ever seen!';
-        return;
-    }
-
-    unless (@$plans) {
-        return if $self->is_subtest && !$self->{+TOTAL};
-        push @$errors => 'No plan was ever set.';
-        return;
-    }
-
-    push @$errors => 'Multiple plans were set.'
-        if @$plans > 1;
-
-    my ($plan) = @$plans;
-
-    push @$errors => 'Plan must come before or after all testing, not in the middle.'
-        unless $plan == $events->[0] || $plan == $events->[-1];
-
-    my ($max) = @{$plan->sets_plan};
-
-    return if $max == $self->{+TOTAL};
-    push @$errors => "Planned to run $max test(s) but ran $self->{+TOTAL}."
+    $self->{+FAILED}++ if $e->causes_fail || $e->terminate;
 }
 
 1;
@@ -201,11 +93,11 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Result - Representation of a complete test or subtest.
+Test2::Harness::Result - Representation of a complete test
 
 =head1 DESCRIPTION
 
-This object is used to represent a complete test or subtest.
+This object is used to represent a complete test.
 
 =head1 METHODS
 
@@ -217,30 +109,15 @@ Get the filename of the running test.
 
 =item $name = $r->name
 
-Get the name of the file or subtest.
+Get the name of the file.
 
 =item $job_id = $r->job
 
 Get the job id.
 
-=item $int = $r->nested
-
-This will be 0 on the main result for a file. This will be 1 for a top-level
-subtest, 2 for nested, etc.
-
-=item $id = $r->is_subtest
-
-Subtest id if this result represents a subtest. The ID is arbitrary and
-parser-specific.
-
-=item $id = $r->in_subtest
-
-Subtest id if this result is inside a subtest. The ID is arbitrary and
-parser-specific.
-
 =item $int = $r->total
 
-Number of facts that have incremented the test count.
+Number of events that have incremented the test count.
 
 =item $int = $r->failed
 
@@ -264,18 +141,18 @@ the test is running.
 Get a list of all plans encountered. If this has more than 1 plan an error will
 be rendered and the test will be considered a failure.
 
-=item $facts_ref = $r->planning
+=item $events_ref = $r->planning
 
-Get a list of all facts that are involved in planning. This includes all plan
-facts, and all facts that increment the test count.
+Get a list of all events that are involved in planning. This includes all plan
+events, and all events that increment the test count.
 
 =item $errors_ref = $r->plan_errors
 
 Get a list of plan errors (IE Plan and test count do not match).
 
-=item $facts_ref = $r->facts
+=item $events_ref = $r->events
 
-Get a list of all the facts that were seen.
+Get a list of all the events that were seen.
 
 =item $r->stop($exit)
 
@@ -289,11 +166,11 @@ Check if the result is a pass.
 
 Add to the number of failures.
 
-=item $r->add_facts(@facts)
+=item $r->add_events(@events)
 
-=item $r->add_fact($fact)
+=item $r->add_event($event)
 
-Used to add+process facts.
+Used to add and process one or more events.
 
 =back
 

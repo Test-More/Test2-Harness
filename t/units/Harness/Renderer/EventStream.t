@@ -1,6 +1,19 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Renderer::EventStream';
 use PerlIO;
-use Test2::Harness::Fact;
+use Test2::Event::Diag;
+use Test2::Event::Encoding;
+use Test2::Event::UnknownStderr;
+use Test2::Event::UnknownStdout;
+use Test2::Event::Generic;
+use Test2::Event::Note;
+use Test2::Event::Ok;
+use Test2::Event::ParseError;
+use Test2::Event::ParserSelect;
+use Test2::Event::Plan;
+use Test2::Event::ProcessFinish;
+use Test2::Event::ProcessStart;
+use Test2::Event::Skip;
+use Test2::Event::Subtest;
 use Test2::Harness::Job;
 use Test2::Harness::Result;
 
@@ -19,7 +32,7 @@ subtest init => sub {
 
     ok($one->out_std, "Populated out_std");
 
-    ok($one->colors, "Got colors");
+    ok($one->colors,       "Got colors");
     ok($one->graph_colors, "Got graph colors");
 
     my $foo = '';
@@ -43,25 +56,27 @@ subtest paint => sub {
     my $foo = '';
     open(my $fh, '>', \$foo) or die "$!";
     my $one = $CLASS->new(
-        out_std => $fh,
-        colors => {foo => 'color_foo', bar => 'color_bar', reset => 'color_reset'},
+        out_std      => $fh,
+        colors       => {foo => 'color_foo', bar => 'color_bar', reset => 'color_reset'},
         graph_colors => [qw/color_a color_b color_c/],
     );
-    $one->set_jobs({
-        0 => { slot => 0 },
-        1 => { slot => 1 },
-        2 => { slot => 2 },
-        3 => { slot => 0 },
-    });
+    $one->set_jobs(
+        {
+            0 => {slot => 0},
+            1 => {slot => 1},
+            2 => {slot => 2},
+            3 => {slot => 0},
+        }
+    );
 
     $one->paint(
         'foo bar ',
-        [ '0', 'a' ], ' ',
-        [ '1', 'b' ], ' ',
-        [ '2', 'c' ], ' ',
-        [ '3', 'd' ], ' ',
-        [ 'foo', 'foo ', 0 ],
-        [ 'xxx', 'xxx' ],
+        ['0',   'a'],   ' ',
+        ['1',   'b'],   ' ',
+        ['2',   'c'],   ' ',
+        ['3',   'd'],   ' ',
+        ['foo', 'foo ', 0],
+        ['xxx', 'xxx'],
         "\n",
     );
 
@@ -74,21 +89,19 @@ subtest paint => sub {
     $one->set_clear(1);
     $one->paint(
         'foo bar ',
-        [ '0', 'a' ], ' ',
-        [ '1', 'b' ], ' ',
-        [ '2', 'c' ], ' ',
-        [ '3', 'd' ], ' ',
-        [ 'foo', 'foo ', 0 ],
-        [ 'xxx', 'xxx' ],
+        ['0',   'a'],   ' ',
+        ['1',   'b'],   ' ',
+        ['2',   'c'],   ' ',
+        ['3',   'd'],   ' ',
+        ['foo', 'foo ', 0],
+        ['xxx', 'xxx'],
         "\n",
     );
     ok(!$one->clear, "unset clear");
 
     is(
         $foo,
-        "foo bar color_aacolor_reset color_bbcolor_reset color_cccolor_reset color_adcolor_reset color_foofoo xxxcolor_reset\n" .
-        "\e[K" .
-        "foo bar color_aacolor_reset color_bbcolor_reset color_cccolor_reset color_adcolor_reset color_foofoo xxxcolor_reset\n",
+        "foo bar color_aacolor_reset color_bbcolor_reset color_cccolor_reset color_adcolor_reset color_foofoo xxxcolor_reset\n" . "\e[K" . "foo bar color_aacolor_reset color_bbcolor_reset color_cccolor_reset color_adcolor_reset color_foofoo xxxcolor_reset\n",
         "Painted string with clear"
     );
 };
@@ -97,13 +110,13 @@ subtest encoding => sub {
     my $foo = '';
     open(my $fh, '>', \$foo) or die "$!";
 
-    my $layers = { map {$_ => 1} PerlIO::get_layers($fh) };
+    my $layers = {map { $_ => 1 } PerlIO::get_layers($fh)};
     ok(!$layers->{utf8}, "utf8 is off");
 
     my $one = $CLASS->new(out_std => $fh);
     $one->encoding('utf8');
 
-    $layers = { map {$_ => 1} PerlIO::get_layers($fh) };
+    $layers = {map { $_ => 1 } PerlIO::get_layers($fh)};
     ok($layers->{utf8}, "utf8 is on now");
 };
 
@@ -112,7 +125,7 @@ subtest summary => sub {
     open(my $fh, '>', \$foo) or die "$!";
     my $one = $CLASS->new(
         out_std => $fh,
-        colors => {failed => '[failed]', passed => '[passed]', reset => '[reset]'},
+        colors  => {failed => '[failed]', passed => '[passed]', reset => '[reset]'},
     );
 
     my $pass = mock {passed => 1, name => 'a passing result'};
@@ -125,7 +138,7 @@ subtest summary => sub {
     open($fh, '>', \$foo) or die "$!";
     $one = $CLASS->new(
         out_std => $fh,
-        colors => {failed => '[failed]', passed => '[passed]', reset => '[reset]'},
+        colors  => {failed => '[failed]', passed => '[passed]', reset => '[reset]'},
     );
     $one->summary([$pass, $fail, $pass, $fail, $pass]);
     is($foo, "\n[failed]=== FAILURE SUMMARY ===\n * a failing result\n * a failing result\n[reset]\n", "List failures");
@@ -139,7 +152,7 @@ subtest listen => sub {
     };
 
     my $one = $CLASS->new();
-    my $l = $one->listen;
+    my $l   = $one->listen;
     ref_ok($l, 'CODE', "Got a coderef");
     my @out = $l->('foo', 'bar');
     is(
@@ -156,7 +169,7 @@ subtest job_management => sub {
     like(
         $one,
         object {
-            call jobs  => {5 => { slot => 0 }};
+            call jobs => {5 => {slot => 0}};
             call slots => [5];
         },
         "Added job"
@@ -166,8 +179,8 @@ subtest job_management => sub {
     like(
         $one,
         object {
-            call jobs  => {5 => { slot => 0 }, 3 => { slot => 1 }};
-            call slots => [5,3];
+            call jobs => {5 => {slot => 0}, 3 => {slot => 1}};
+            call slots => [5, 3];
         },
         "Added another job"
     );
@@ -176,8 +189,8 @@ subtest job_management => sub {
     like(
         $one,
         object {
-            call jobs  => {5 => { slot => 0 }};
-            call slots => [5, undef]; # Undef is intentional, preserve ordering
+            call jobs => {5 => {slot => 0}};
+            call slots => [5, undef];    # Undef is intentional, preserve ordering
         },
         "Ended job"
     );
@@ -186,8 +199,8 @@ subtest job_management => sub {
     like(
         $one,
         object {
-            call jobs  => {};
-            call slots => [undef, undef]; # The undef's are intentional
+            call jobs => {};
+            call slots => [undef, undef];    # The undef's are intentional
         },
         "removed another job"
     );
@@ -197,127 +210,145 @@ subtest verbose_tag => sub {
     my $one = $CLASS->new(verbose => 1);
 
     is(
-        [$one->_tag(mock {hide => 1})],
+        [$one->_tag(Test2::Event::Generic->new(no_display => 1))],
         [],
-        "Do not show hidden facts"
+        "Do not show hidden events"
     );
 
     is(
-        [$one->_tag(mock {start => 1})],
+        [$one->_tag(Test2::Event::ProcessStart->new(file => 'foo.t'))],
         [qw/LAUNCH file/],
-        "start fact"
+        "start event"
     );
 
     is(
-        [$one->_tag(mock {parser_select => 1})],
+        [$one->_tag(Test2::Event::ParserSelect->new(parser_class => 'Foo'))],
         [qw/PARSER parser_select/],
         "parser selection"
     );
 
     is(
-        [$one->_tag(mock {event => 1, causes_fail => 1})],
+        [$one->_tag(Test2::Event::Ok->new(pass => 0))],
         ['NOT OK', 'fail'],
         "failure (not ok)"
     );
 
     is(
-        [$one->_tag(mock {event => 1, increments_count => 1})],
+        [$one->_tag(Test2::Event::Ok->new(pass => 1))],
         ['  OK  ', 'pass'],
         "pass (ok)"
     );
 
     is(
-        [$one->_tag(mock {event => {reason => 'xxx'}, increments_count => 1})],
+        [$one->_tag(Test2::Event::Skip->new(reason => 'xxx'))],
         ['  OK  ', 'skip'],
         "pass (skip)"
     );
 
     is(
-        [$one->_tag(mock {event => {todo => 'xxx'}, increments_count => 1})],
+        [$one->_tag(Test2::Event::Ok->new(todo => 'xxx'))],
         ['NOT OK', 'todo'],
         "effective pass (todo)"
     );
 
     is(
-        [$one->_tag(mock {event => 1, sets_plan => 1})],
+        [$one->_tag(Test2::Event::Plan->new(max => 1))],
         [' PLAN ', 'plan'],
         "set plan"
     );
 
     is(
-        [$one->_tag(mock {event => 1, summary => " "})],
+        [$one->_tag(Test2::Event::Generic->new(summary => " "))],
         [],
         "Nothing to display"
     );
 
     is(
-        [$one->_tag(mock {event => 1, summary => "xxx"})],
+        [$one->_tag(Test2::Event::Note->new(message => "xxx"))],
         [' NOTE ', 'note'],
         "Note"
     );
 
     is(
-        [$one->_tag(mock {event => 1, summary => "xxx", diagnostics => 1})],
+        [$one->_tag(Test2::Event::Diag->new(message => "xxx"))],
         [' DIAG ', 'diag'],
         "Diag"
     );
 
     is(
-        [$one->_tag(mock {result => 1, causes_fail => 1})],
+        [$one->_tag(Test2::Event::Subtest->new(causes_fail => 1))],
         ['FAILED', 'failed'],
         "Subtest failure"
     );
 
     is(
-        [$one->_tag(mock {nested => -1, result => mock {plans => [mock {sets_plan => [0, 'skip', 'foo']}]}})],
+        [
+            $one->_tag(
+                Test2::Event::Subtest->new(
+                    pass      => 1,
+                    nested    => -1,
+                    subevents => [Test2::Event::Plan->new(directive => 'SKIP', reason => 'because')],
+                )
+            )
+        ],
         ['SKIP!!', 'skipall'],
         "Skipall"
     );
 
     is(
-        [$one->_tag(mock {nested => 1, result => mock { plans => [] }})],
+        [
+            $one->_tag(
+                Test2::Event::Subtest->new(
+                    pass      => 1,
+                    nested    => -1,
+                    subevents => [Test2::Event::Plan->new(max => 1)],
+                )
+            )
+        ],
         ['PASSED', 'passed'],
         "Subtest Success"
     );
 
     is(
-        [$one->_tag(mock {encoding => 'utf8'})],
+        [
+            $one->_tag(
+                Test2::Event::Subtest->new(
+                    pass      => 1,
+                    nested    => 0,
+                    subevents => [Test2::Event::Plan->new(max => 1)],
+                )
+            )
+        ],
+        ['PASSED', 'passed'],
+        "Subtest Success nested"
+    );
+
+    is(
+        [$one->_tag(Test2::Event::Encoding->new(encoding => 'utf8'))],
         ['ENCODE', 'encoding'],
         "Encoding event"
     );
 
     is(
-        [$one->_tag(mock {output => "xyz", parsed_from_handle => 'STDERR'})],
+        [$one->_tag(Test2::Event::UnknownStderr->new(output => "xyz"))],
         ['STDERR', 'stderr'],
         "random stderr"
     );
 
     is(
-        [$one->_tag(mock {output => "xyz", diagnostics => 1})],
-        [' DIAG ', 'diag'],
-        "random stderr diag"
-    );
-
-    is(
-        [$one->_tag(mock {output => "xyz"})],
+        [$one->_tag(Test2::Event::UnknownStdout->new(output => "xyz"))],
         ['STDOUT', 'stdout'],
         "random stdout message"
     );
 
     is(
-        [$one->_tag(mock {parse_error => "xyz"})],
+        [$one->_tag(Test2::Event::ParseError->new(parse_error => 'foo'))],
         ['PARSER', 'parser'],
         "Parse error"
     );
 
     is(
-        [$one->_tag(mock {parse_error => "xyz", diagnostics => 1})],
-        ['PARSER', 'parser'],
-        "Parse error + diag"
-    );
-
-    is(
-        [$one->_tag(mock {})],
+        [$one->_tag(Test2::Event::Generic->new(summary => 'bar'))],
         [' ???? ', 'unknown'],
         "unknown"
     );
@@ -327,139 +358,146 @@ subtest quiet_tag => sub {
     my $one = $CLASS->new(verbose => 0);
 
     is(
-        [$one->_tag(mock {hide => 1})],
+        [$one->_tag(Test2::Event::Generic->new(no_display => 1))],
         [],
-        "Do not show hidden facts"
+        "Do not show hidden events"
     );
 
     is(
-        [$one->_tag(mock {start => 1})],
+        [$one->_tag(Test2::Event::ProcessStart->new(file => 'foo.t'))],
         [qw/LAUNCH file/],
-        "start fact"
+        "start event"
     );
 
     is(
-        [$one->_tag(mock {parser_select => 1})],
+        [$one->_tag(Test2::Event::ParserSelect->new(parser_class => 'Foo'))],
         [],
         "parser selection"
     );
 
     is(
-        [$one->_tag(mock {event => 1, causes_fail => 1})],
+        [$one->_tag(Test2::Event::Ok->new(pass => 0))],
         ['NOT OK', 'fail'],
         "failure (not ok)"
     );
 
     is(
-        [$one->_tag(mock {event => 1, increments_count => 1})],
+        [$one->_tag(Test2::Event::Ok->new(pass => 1))],
         [],
         "pass (ok)"
     );
 
     is(
-        [$one->_tag(mock {event => {reason => 'xxx'}, increments_count => 1})],
+        [$one->_tag(Test2::Event::Skip->new(reason => 'xxx'))],
         [],
         "pass (skip)"
     );
 
     is(
-        [$one->_tag(mock {event => {todo => 'xxx'}, increments_count => 1})],
+        [$one->_tag(Test2::Event::Ok->new(todo => 'xxx'))],
         [],
         "effective pass (todo)"
     );
 
     is(
-        [$one->_tag(mock {event => 1, sets_plan => 1})],
+        [$one->_tag(Test2::Event::Plan->new(max => 1))],
         [],
         "set plan"
     );
 
     is(
-        [$one->_tag(mock {event => 1, summary => " "})],
+        [$one->_tag(Test2::Event::Generic->new(summary => " "))],
         [],
         "Nothing to display"
     );
 
     is(
-        [$one->_tag(mock {event => 1, summary => "xxx"})],
+        [$one->_tag(Test2::Event::Note->new(message => "xxx"))],
         [],
         "Note"
     );
 
     is(
-        [$one->_tag(mock {event => 1, summary => "xxx", diagnostics => 1})],
+        [$one->_tag(Test2::Event::Diag->new(message => "xxx"))],
         [' DIAG ', 'diag'],
         "Diag"
     );
 
     is(
-        [$one->_tag(mock {result => 1, causes_fail => 1})],
+        [$one->_tag(Test2::Event::Subtest->new(causes_fail => 1))],
         ['FAILED', 'failed'],
         "Subtest failure"
     );
 
     is(
-        [$one->_tag(mock {nested => -1, result => mock {plans => [mock {sets_plan => [0, 'skip', 'foo']}]}})],
+        [
+            $one->_tag(
+                Test2::Event::Subtest->new(
+                    pass      => 1,
+                    nested    => -1,
+                    subevents => [Test2::Event::Plan->new(directive => 'SKIP', reason => 'because')],
+                )
+            )
+        ],
         ["SKIP!!", 'skipall'],
         "Skipall"
     );
 
     is(
-        [$one->_tag(mock {nested => -1, result => mock { plans => [] }})],
+        [
+            $one->_tag(
+                Test2::Event::Subtest->new(
+                    pass      => 1,
+                    nested    => -1,
+                    subevents => [Test2::Event::Plan->new(max => 1)],
+                )
+            )
+        ],
         ['PASSED', 'passed'],
         "Subtest Success"
     );
 
     is(
-        [$one->_tag(mock {nested => 0, result => mock { plans => [] }})],
+        [
+            $one->_tag(
+                Test2::Event::Subtest->new(
+                    pass      => 1,
+                    nested    => 0,
+                    subevents => [Test2::Event::Plan->new(max => 1)],
+                )
+            )
+        ],
+        [$one->_tag(mock {nested => 0, result => mock {plans => []}})],
         [],
         "Subtest Success nested"
     );
 
     is(
-        [$one->_tag(mock {nested => 1, result => mock { plans => [] }})],
-        [],
-        "Subtest Success nested"
-    );
-
-    is(
-        [$one->_tag(mock {encoding => 'utf8'})],
+        [$one->_tag(Test2::Event::Encoding->new(encoding => 'utf8'))],
         [],
         "Encoding event"
     );
 
     is(
-        [$one->_tag(mock {output => "xyz", parsed_from_handle => 'STDERR'})],
+        [$one->_tag(Test2::Event::UnknownStderr->new(output => "xyz"))],
         ['STDERR', 'stderr'],
         "random stderr"
     );
 
     is(
-        [$one->_tag(mock {output => "xyz", diagnostics => 1})],
-        [' DIAG ', 'diag'],
-        "random stderr diag"
-    );
-
-    is(
-        [$one->_tag(mock {output => "xyz"})],
+        [$one->_tag(Test2::Event::UnknownStdout->new(output => "xyz"))],
         [],
         "random stdout message"
     );
 
     is(
-        [$one->_tag(mock {parse_error => "xyz"})],
-        [],
+        [$one->_tag(Test2::Event::ParseError->new(parse_error => 'foo'))],
+        ['PARSER', 'parser'],
         "Parse error"
     );
 
     is(
-        [$one->_tag(mock {parse_error => "xyz", diagnostics => 1})],
-        ['PARSER', 'parser'],
-        "Parse error + diag"
-    );
-
-    is(
-        [$one->_tag(mock {})],
+        [$one->_tag(Test2::Event::Generic->new(summary => 'bar'))],
         [],
         "unknown"
     );
@@ -469,13 +507,13 @@ subtest tag => sub {
     my $one = $CLASS->new(verbose => 1);
 
     is(
-        [$one->tag(mock {event => 1, causes_fail => 1})],
+        [$one->tag(mock {increments_count => 1, causes_fail => 1})],
         [['tag', '['], ['fail', 'NOT OK'], ['tag', ']']],
         "failure (not ok)"
     );
 
     is(
-        [$one->tag(mock {event => 1, increments_count => 1})],
+        [$one->tag(mock {increments_count => 1})],
         [['tag', '['], ['pass', '  OK  '], ['tag', ']']],
         "pass (ok)"
     );
@@ -483,13 +521,13 @@ subtest tag => sub {
     $one = $CLASS->new(verbose => 0);
 
     is(
-        [$one->tag(mock {event => 1, causes_fail => 1})],
+        [$one->tag(mock {increments_count => 1, causes_fail => 1})],
         [['tag', '['], ['fail', 'NOT OK'], ['tag', ']']],
         "failure (not ok)"
     );
 
     is(
-        [$one->tag(mock {event => 1, increments_count => 1})],
+        [$one->tag(mock {increments_count => 1})],
         [],
         "pass (ok) (non-verbose)"
     );
@@ -543,31 +581,47 @@ subtest tree => sub {
     );
 
     is(
-        [$one->tree(2, mock {})],
+        [$one->tree(2, Test2::Event::Ok->new(pass => 1))],
         [[2, '+'], ' ', ' ', ' ', [5, ':'], ' ', [3, '|']],
         "Got tree with mark"
     );
 
     is(
-        [$one->tree(2, mock {start => 1})],
+        [$one->tree(2, Test2::Event::ProcessStart->new(file => 'foo.t'))],
         [['mark', '_'], ' ', ' ', ' ', [5, ':'], ' ', [3, '|']],
         "Got tree with start mark"
     );
 
     is(
-        [$one->tree(2, mock {result => 1, nested => -1})],
+        [
+            $one->tree(
+                2,
+                Test2::Event::Subtest->new(
+                    pass   => 1,
+                    nested => -1,
+                )
+            )
+        ],
         [['mark', '='], ' ', ' ', ' ', [5, ':'], ' ', [3, '|']],
         "Got tree with result mark"
     );
 
     is(
-        [$one->tree(2, mock {result => 1, nested => 1})],
+        [
+            $one->tree(
+                2,
+                Test2::Event::Subtest->new(
+                    pass   => 1,
+                    nested => 1,
+                )
+            )
+        ],
         [[2, '+'], ' ', ' ', ' ', [5, ':'], ' ', [3, '|']],
-        "nested result"
+        "Got tree with result mark for nested subtest"
     );
 
     is(
-        [$one->tree(5, mock {})],
+        [$one->tree(5, Test2::Event::Ok->new(pass => 1))],
         [['2', '|'], ' ', ' ', ' ', [5, '+'], ' ', [3, '|']],
         "Mark for counter < 1"
     );
@@ -581,23 +635,23 @@ subtest painted_length => sub {
     );
 };
 
-subtest fact_summary => sub {
-    my $one = $CLASS->new();
+subtest event_summary => sub {
+    my $one = $CLASS->new(verbose => 1);
     local $ENV{T2_TERM_SIZE} = 80;
 
     is(
-        [$one->fact_summary(mock({summary => 'xyz', start => 1}), ["abc"])],
-        [[['file', 'xyz']], []],
+        [$one->event_summary(Test2::Event::Generic->new(summary => 'xyz'), ["abc"])],
+        [[['unknown', 'xyz']], []],
         "Got summary"
     );
 
     is(
-        [$one->fact_summary(mock({summary => "abc\ndef\nghi", start => 1}), ["abc"])],
+        [$one->event_summary(Test2::Event::Generic->new(summary => "abc\ndef\nghi"), ["abc"])],
         [
             [
-                ['file', "abc"],
-                ['file', "def"],
-                ['file', "ghi"],
+                ['unknown', "abc"],
+                ['unknown', "def"],
+                ['unknown', "ghi"],
             ],
             []
         ],
@@ -605,13 +659,13 @@ subtest fact_summary => sub {
     );
 
     is(
-        [$one->fact_summary(mock({summary => ("aaa" x 100), start => 1}), ["abc"])],
+        [$one->event_summary(Test2::Event::Generic->new(summary => "aaa" x 100), ["abc"])],
         [
             [
                 ['blob', '----- START -----'],
             ],
             [
-                ['file', "aaa" x 100],
+                ['unknown', "aaa" x 100],
                 "\n",
                 "abc",
                 ['blob', '------ END ------'],
@@ -620,7 +674,6 @@ subtest fact_summary => sub {
         ],
         "long summary"
     );
-
 };
 
 subtest render => sub {
@@ -629,21 +682,21 @@ subtest render => sub {
 
     my (@tag, @tree, @summary);
     my $m = mock $CLASS => sub {
-        mock override => (tag          => sub { @tag });
-        mock override => (tree         => sub { @tree });
-        mock override => (fact_summary => sub { @summary });
+        mock override => (tag           => sub { @tag });
+        mock override => (tree          => sub { @tree });
+        mock override => (event_summary => sub { @summary });
     };
 
     @tree = 'tree';
     @summary = (['summary'], []);
-    my $fact = mock {start => 1};
+    my $event = mock {start => 1};
 
-    is([$one->render(1, $fact, 'nest')], [], "no tag, no render");
+    is([$one->render(1, $event, 'nest')], [], "no tag, no render");
 
     @tag = '[ atag ]';
 
     is(
-        [$one->render(1, $fact, 'nest')],
+        [$one->render(1, $event, 'nest')],
         [
             '[ atag ]',
             '  ',
@@ -658,7 +711,7 @@ subtest render => sub {
 
     @summary = (['summary'], ['blob']);
     is(
-        [$one->render(1, $fact, 'nest')],
+        [$one->render(1, $event, 'nest')],
         [
             '[ atag ]',
             '  ',
@@ -679,21 +732,21 @@ subtest render_orphan => sub {
 
     my (@tag, @tree, @summary);
     my $m = mock $CLASS => sub {
-        mock override => (tag          => sub { @tag });
-        mock override => (tree         => sub { @tree });
-        mock override => (fact_summary => sub { @summary });
+        mock override => (tag           => sub { @tag });
+        mock override => (tree          => sub { @tree });
+        mock override => (event_summary => sub { @summary });
     };
 
     @tree = 'tree';
     @summary = (['summary'], []);
-    my $fact = mock {start => 1, nested => 2};
+    my $event = mock {start => 1, nested => 2};
 
-    is([$one->render_orphan(1, $fact)], [], "no tag, no render");
+    is([$one->render_orphan(1, $event)], [], "no tag, no render");
 
     @tag = '[ atag ]';
 
     is(
-        [$one->render_orphan(1, $fact)],
+        [$one->render_orphan(1, $event)],
         [
             '[ atag ]',
             '  ',
@@ -708,7 +761,7 @@ subtest render_orphan => sub {
 
     @summary = (['summary'], ['blob']);
     is(
-        [$one->render_orphan(1, $fact)],
+        [$one->render_orphan(1, $event)],
         [
             '[ atag ]',
             '  ',
@@ -729,21 +782,21 @@ subtest preview => sub {
 
     my (@tag, @tree, @summary);
     my $m = mock $CLASS => sub {
-        mock override => (tag          => sub { @tag });
-        mock override => (tree         => sub { @tree });
-        mock override => (fact_summary => sub { @summary });
+        mock override => (tag           => sub { @tag });
+        mock override => (tree          => sub { @tree });
+        mock override => (event_summary => sub { @summary });
     };
 
     @tree = 'tree';
     @summary = (['summary1', 'summary2'], []);
-    my $fact = mock {start => 1, nested => 2};
+    my $event = mock {start => 1, nested => 2};
 
-    is([$one->preview(1, $fact)], [], "no tag, no render");
+    is([$one->preview(1, $event)], [], "no tag, no render");
 
     @tag = '[ atag ]';
 
     is(
-        [$one->preview(1, $fact)],
+        [$one->preview(1, $event)],
         [
             '[ atag ]',
             '  ',
@@ -758,7 +811,7 @@ subtest preview => sub {
 
     @summary = (['summary1', 'summary2'], ['blob']);
     is(
-        [$one->preview(1, $fact)],
+        [$one->preview(1, $event)],
         [
             '[ atag ]',
             '  ',
@@ -778,126 +831,105 @@ subtest render_subtest => sub {
     my $one = $CLASS->new(verbose => 1, out_std => $fh);
     local $ENV{T2_TERM_SIZE} = 80;
 
-    my $fact = Test2::Harness::Fact->new(
-        nested           => 0,
-        name             => 'foo',
-        number           => 4,
-        is_subtest       => 'foo',
-        event            => 1,
-        increments_count => 1,
+    my $event = Test2::Event::Subtest->new(
+        nested     => 0,
+        name       => 'foo',
+        number     => 4,
+        subtest_id => 'foo',
+        pass       => 1,
 
-        result => Test2::Harness::Result->new(
-            file             => 'foo.pl',
-            name             => 'foo',
-            job              => 2,
-            nested           => 1,
-            increments_count => 1,
-            is_subtest       => 'foo',
+        subevents => [
+            Test2::Event::Ok->new(
+                nested     => 1,
+                name       => 'a',
+                in_subtest => 'foo',
+                pass       => 1,
+            ),
 
-            facts => [
-                Test2::Harness::Fact->new(
-                    nested           => 1,
-                    name             => 'a',
-                    number           => 1,
-                    in_subtest       => 'foo',
-                    increments_count => 1,
-                    event            => 1,
-                ),
+            Test2::Event::Subtest->new(
+                file       => 'foo.pl',
+                name       => 'bar',
+                nested     => 1,
+                in_subtest => 'foo',
+                subtest_id => 'bar',
+                pass       => 1,
 
-                Test2::Harness::Fact->new(
-                    nested           => 1,
-                    name             => 'bar',
-                    number           => 2,
-                    is_subtest       => 'bar',
-                    in_subtest       => 'foo',
-                    event            => 1,
-                    increments_count => 1,
-
-                    result => Test2::Harness::Result->new(
-                        file             => 'foo.pl',
-                        name             => 'bar',
-                        job              => 2,
-                        nested           => 1,
-                        increments_count => 1,
-                        in_subtest       => 'foo',
-                        is_subtest       => 'bar',
-
-                        facts => [
-                            Test2::Harness::Fact->new(
-                                nested           => 2,
-                                name             => 'aa',
-                                number           => 1,
-                                in_subtest       => 'bar',
-                                increments_count => 1,
-                                event            => 1,
-                            ),
-                            Test2::Harness::Fact->new(
-                                nested           => 2,
-                                name             => 'bb',
-                                number           => 1,
-                                in_subtest       => 'bar',
-                                increments_count => 1,
-                                event            => 1,
-                            ),
-                        ],
+                subevents => [
+                    Test2::Event::Ok->new(
+                        nested     => 2,
+                        name       => 'aa',
+                        in_subtest => 'bar',
+                        pass       => 1,
                     ),
-                ),
 
-                Test2::Harness::Fact->new(
-                    nested           => 1,
-                    name             => 'b',
-                    number           => 3,
-                    in_subtest       => 'foo',
-                    increments_count => 1,
-                    event            => 1,
-                ),
-            ],
-        ),
+                    Test2::Event::Ok->new(
+                        nested     => 2,
+                        name       => 'bb',
+                        in_subtest => 'bar',
+                        pass       => 1,
+                    ),
+
+                    Test2::Event::Plan->new(
+                        nested     => 2,
+                        in_subtest => 'bar',
+                        max        => 2,
+                    ),
+                ],
+            ),
+
+            Test2::Event::Plan->new(
+                nested     => 1,
+                in_subtest => 'foo',
+                max        => 2,
+            ),
+        ],
     );
 
-    my @out = $one->render_subtest(2, $fact);
+    my @out = $one->render_subtest(2, $event);
     is(
         \@out,
         [
-            ['tag', '['], ['pass', '  OK  '], ['tag', ']'], '  ', '  ',                ['pass', 'foo'], "\n",
-            ['tag', '['], ['pass', '  OK  '], ['tag', ']'], '  ', '  ', [2, '| '  ],   ['pass', 'no summary'], "\n",
-            ['tag', '['], ['pass', '  OK  '], ['tag', ']'], '  ', '  ', [2, '+-'  ],   ['pass', 'bar'],        "\n",
-            ['tag', '['], ['pass', '  OK  '], ['tag', ']'], '  ', '  ', [2, '| | '],   ['pass', 'no summary'], "\n",
-            ['tag', '['], ['pass', '  OK  '], ['tag', ']'], '  ', '  ', [2, '| | '],   ['pass', 'no summary'], "\n",
-            '          ',                                         '  ', [2, '| ^' ],                           "\n",
-            ['tag', '['], ['pass', '  OK  '], ['tag', ']'], '  ', '  ', [2, '| '  ],   ['pass', 'no summary'], "\n",
-            '          ',                                         '  ', [2, '^'   ],                           "\n",
+            ['tag', '['], ['passed', 'PASSED'], ['tag', ']'], '  ', '  ', ['passed', 'foo'], "\n",
+            ['tag', '['], ['pass',   '  OK  '], ['tag', ']'], '  ', '  ', [2, '| '],   ['pass',   'a'],                    "\n",
+            ['tag', '['], ['passed', 'PASSED'], ['tag', ']'], '  ', '  ', [2, '+-'],   ['passed', 'bar'],                  "\n",
+            ['tag', '['], ['pass',   '  OK  '], ['tag', ']'], '  ', '  ', [2, '| | '], ['pass',   'aa'],                   "\n",
+            ['tag', '['], ['pass',   '  OK  '], ['tag', ']'], '  ', '  ', [2, '| | '], ['pass',   'bb'],                   "\n",
+            ['tag', '['], ['plan',   ' PLAN '], ['tag', ']'], '  ', '  ', [2, '| | '], ['plan',   'Plan is 2 assertions'], "\n",
+            '          ', '  ', [2, '| ^'], "\n",
+            ['tag', '['], ['plan', ' PLAN '], ['tag', ']'], '  ', '  ', [2, '| '], ['plan', 'Plan is 2 assertions'], "\n",
+            '          ', '  ', [2, '^'], "\n",
         ],
         "Got subtest output"
     );
 
     $one->paint(@out);
     is($foo, <<"    EOT", "Rendered properly");
-[  OK  ]    foo
-[  OK  ]    | no summary
-[  OK  ]    +-bar
-[  OK  ]    | | no summary
-[  OK  ]    | | no summary
+[PASSED]    foo
+[  OK  ]    | a
+[PASSED]    +-bar
+[  OK  ]    | | aa
+[  OK  ]    | | bb
+[ PLAN ]    | | Plan is 2 assertions
             | ^
-[  OK  ]    | no summary
+[ PLAN ]    | Plan is 2 assertions
             ^
     EOT
 };
 
 subtest update_state => sub {
     my $encoding_set = 0;
-    my $m = mock $CLASS => (override => [encoding => sub { $encoding_set++ }]);
-    my $one = $CLASS->new();
+    my $m            = mock $CLASS => (override => [encoding => sub { $encoding_set++ }]);
+    my $one          = $CLASS->new();
 
-    $one->update_state(4, mock {event => 0, encoding => 0});
-    is($one->counter, 0, "did not bump event counter");
+    $one->update_state(4, Test2::Event::Generic->new(summary => 'foo'));
+    is($one->counter, 1, "bumped event counter");
     ok($one->jobs->{4}, "added job 4");
-    is($one->jobs->{4}->{counter}, 1, "fact counter bumped for job 4");
+    is($one->jobs->{4}->{counter}, 1, "event counter bumped for job 4");
     ok(!$encoding_set, "did not set encoding");
 
-    $one->update_state(4, mock {event => 1, encoding => 1});
-    is($one->counter, 1, "did bump event counter");
-    is($one->jobs->{4}->{counter}, 2, "fact counter bumped for job 4");
+    $one->update_state(4, Test2::Event::Encoding->new(encoding => 'foo'));
+    is($one->counter,              2, "bumped event counter");
+    is($one->jobs->{4}->{counter}, 2, "event counter bumped for job 4");
     ok($encoding_set, "did set encoding");
 };
 
@@ -905,102 +937,106 @@ subtest pick_renderer => sub {
     my $one = $CLASS->new();
 
     my @no_watch = (
-        [1,  [nested => -1,    is_subtest => 0, in_subtest => 0], 'render'],
-        [2,  [nested => -1,    is_subtest => 0, in_subtest => 1], 'render'],
-        [3,  [nested => -1,    is_subtest => 1, in_subtest => 0], 'render'],
-        [4,  [nested => -1,    is_subtest => 1, in_subtest => 1], 'render'],
-        [5,  [nested => 0,     is_subtest => 0, in_subtest => 0], 'render'],
-        [6,  [nested => 0,     is_subtest => 0, in_subtest => 1], 'render'],
-        [7,  [nested => 0,     is_subtest => 1, in_subtest => 0], 'render_subtest'],
-        [8,  [nested => 0,     is_subtest => 1, in_subtest => 1], undef],
-        [9,  [nested => undef, is_subtest => 0, in_subtest => 0], 'render'],
-        [10, [nested => undef, is_subtest => 0, in_subtest => 1], 'render'],
-        [11, [nested => undef, is_subtest => 1, in_subtest => 0], 'render_subtest'],
-        [12, [nested => undef, is_subtest => 1, in_subtest => 1], undef],
-        [13, [nested => 1,     is_subtest => 0, in_subtest => 0], 'render_orphan'],
-        [14, [nested => 1,     is_subtest => 0, in_subtest => 1], undef],
-        [15, [nested => 1,     is_subtest => 1, in_subtest => 0], 'render_orphan'],
-        [16, [nested => 1,     is_subtest => 1, in_subtest => 1], undef],
+        [1, [nested => -1, in_subtest => 0], 'render'],
+        [2, [nested => -1, in_subtest => 1], 'render'],
+        [3, [nested => -1, subtest_id => 1, in_subtest => 0], 'render'],
+        [4, [nested => -1, subtest_id => 1, in_subtest => 1], 'render'],
+        [5, [nested => 0, in_subtest => 0], 'render'],
+        [6, [nested => 0, in_subtest => 1], 'render'],
+        [7, [nested => 0, subtest_id => 1, in_subtest => 0], 'render_subtest'],
+        [8, [nested => 0, subtest_id => 1, in_subtest => 1], undef],
+        [9,  [nested => undef, in_subtest => 0], 'render'],
+        [10, [nested => undef, in_subtest => 1], 'render'],
+        [11, [nested => undef, subtest_id => 1, in_subtest => 0], 'render_subtest'],
+        [12, [nested => undef, subtest_id => 1, in_subtest => 1], undef],
+        [13, [nested => 1, in_subtest => 0], 'render_orphan'],
+        [14, [nested => 1, in_subtest => 1], undef],
+        [15, [nested => 1, subtest_id => 1, in_subtest => 0], 'render_orphan'],
+        [16, [nested => 1, subtest_id => 1, in_subtest => 1], undef],
     );
-    is($one->pick_renderer(mock {@{$_->[1]}}), $_->[2], "no-watch test $_->[0]") for @no_watch;
+    is($one->pick_renderer(mock { @{$_->[1]} }), $_->[2], "no-watch test $_->[0]") for @no_watch;
 
     $one->set_watch(1);
     my @watch = (
-        [1,  [nested => -1,    is_subtest => 0, in_subtest => 0], 'render'],
-        [2,  [nested => -1,    is_subtest => 0, in_subtest => 1], 'render'],
-        [3,  [nested => -1,    is_subtest => 1, in_subtest => 0], 'render'],
-        [4,  [nested => -1,    is_subtest => 1, in_subtest => 1], 'render'],
-        [5,  [nested => 0,     is_subtest => 0, in_subtest => 0], 'render'],
-        [6,  [nested => 0,     is_subtest => 0, in_subtest => 1], 'render'],
-        [7,  [nested => 0,     is_subtest => 1, in_subtest => 0], 'render_subtest'],
-        [8,  [nested => 0,     is_subtest => 1, in_subtest => 1], 'preview'],
-        [9,  [nested => undef, is_subtest => 0, in_subtest => 0], 'render'],
-        [10, [nested => undef, is_subtest => 0, in_subtest => 1], 'render'],
-        [11, [nested => undef, is_subtest => 1, in_subtest => 0], 'render_subtest'],
-        [12, [nested => undef, is_subtest => 1, in_subtest => 1], 'preview'],
-        [13, [nested => 1,     is_subtest => 0, in_subtest => 0], 'render_orphan'],
-        [14, [nested => 1,     is_subtest => 0, in_subtest => 1], 'preview'],
-        [15, [nested => 1,     is_subtest => 1, in_subtest => 0], 'render_orphan'],
-        [16, [nested => 1,     is_subtest => 1, in_subtest => 1], 'preview'],
+        [1, [nested => -1, in_subtest => 0], 'render'],
+        [2, [nested => -1, in_subtest => 1], 'render'],
+        [3, [nested => -1, subtest_id => 1, in_subtest => 0], 'render'],
+        [4, [nested => -1, subtest_id => 1, in_subtest => 1], 'render'],
+        [5, [nested => 0, in_subtest => 0], 'render'],
+        [6, [nested => 0, in_subtest => 1], 'render'],
+        [7, [nested => 0, subtest_id => 1, in_subtest => 0], 'render_subtest'],
+        [8, [nested => 0, subtest_id => 1, in_subtest => 1], 'preview'],
+        [9,  [nested => undef, in_subtest => 0], 'render'],
+        [10, [nested => undef, in_subtest => 1], 'render'],
+        [11, [nested => undef, subtest_id => 1, in_subtest => 0], 'render_subtest'],
+        [12, [nested => undef, subtest_id => 1, in_subtest => 1], 'preview'],
+        [13, [nested => 1, in_subtest => 0], 'render_orphan'],
+        [14, [nested => 1, in_subtest => 1], 'preview'],
+        [15, [nested => 1, subtest_id => 1, in_subtest => 0], 'render_orphan'],
+        [16, [nested => 1, subtest_id => 1, in_subtest => 1], 'preview'],
     );
-    is($one->pick_renderer(mock {@{$_->[1]}}), $_->[2], "watch test $_->[0]") for @watch;
+    is($one->pick_renderer(mock { @{$_->[1]} }), $_->[2], "watch test $_->[0]") for @watch;
 
 };
 
 subtest _process => sub {
-    my (@fact, @start);
+    my (@event, @plan_errors, @start);
     my $m = mock $CLASS => (
         override => [
-            pick_renderer => sub { 'test_render_fact' },
-            render => sub { @start },
-            tree => sub { 'tree' },
+            pick_renderer => sub { 'test_render_event' },
+            render        => sub { @start },
+            tree          => sub { 'tree' },
+            _plan_errors  => sub { @plan_errors },
         ],
         add => [
-            test_render_fact => sub { @fact },
+            test_render_event => sub { @event },
         ],
     );
 
     my $one = $CLASS->new();
     $one->init_job(3)->{start} = 1;
 
-    @fact  = ('fact',  'fact');
+    @event  = ('event',  'event');
     @start = ('start', 'start');
 
     is(
         [$one->_process(3, mock({}), 0)],
-        ['start', 'start', 'fact', 'fact'],
+        ['start', 'start', 'event', 'event'],
         "Rendered + start"
     );
     is(
         [$one->_process(3, mock({}), 0)],
-        ['fact', 'fact'],
+        ['event', 'event'],
         "Do not repeat start"
     );
 
     $one->jobs->{3}->{start} = 1;
+
+    @plan_errors = ('error1', 'error2');
     is(
-        [$one->_process(3, mock({result => mock({plan_errors => ['error1', 'error2']})}), 1)],
+        [$one->_process(3, mock({result => mock({events => []})}), 1)],
         [
             'start', 'start',
 
-            ['tag', '['], ['fail',' PLAN '], ['tag', ']'],
+            ['tag', '['], ['fail', ' PLAN '], ['tag', ']'],
             '  ', 'tree', '  ',
             ['fail', 'error1'],
             "\n",
 
-            ['tag', '['], ['fail',' PLAN '], ['tag', ']'],
+            ['tag', '['], ['fail', ' PLAN '], ['tag', ']'],
             '  ', 'tree', '  ',
             ['fail', 'error2'],
             "\n",
 
-            'fact', 'fact',
+            'event', 'event',
         ],
         "Rendered + errors + start"
     );
 
+    @plan_errors = ();
     is(
-        [$one->_process(3, mock({result => mock({plan_errors => []})}), 1)],
-        ['fact', 'fact'],
+        [$one->_process(3, mock({result => mock({events => []})}), 1)],
+        ['event', 'event'],
         "No errors, no start"
     );
 };
@@ -1038,7 +1074,7 @@ subtest process => sub {
 
     $counter = 1;
     %process = ();
-    $one->process($j, mock {start => 1});
+    $one->process($j, Test2::Event::ProcessStart->new(file => 'foo.t'));
     is(
         \%process,
         {
@@ -1053,7 +1089,7 @@ subtest process => sub {
     $one->set_verbose(1);
     $counter = 1;
     %process = ();
-    $one->process($j, mock {start => 1});
+    $one->process($j, Test2::Event::ProcessStart->new(file => 'foo.t'));
     is(
         \%process,
         {
@@ -1068,7 +1104,16 @@ subtest process => sub {
 
     $counter = 1;
     %process = ();
-    $one->process($j, mock {result => 1, nested => -1});
+    $one->process(
+        $j,
+        Test2::Event::ProcessFinish->new(
+            result => Test2::Harness::Result->new(
+                job  => 3,
+                file => 'foo.t',
+                name => 'foo.t',
+            )
+        )
+    );
     is(
         \%process,
         {

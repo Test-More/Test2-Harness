@@ -7,12 +7,17 @@ our $VERSION = '0.000012';
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Test2::Util::HashBase qw{
-    id file listeners parser proc result _done subtests _timeout
+    id file listeners parser proc result _done _timeout
     _timeout_notified
 };
 
+use Test2::Event::ParseError;
+use Test2::Event::ProcessStart;
+use Test2::Event::ProcessFinish;
+use Test2::Event::Subtest;
+use Test2::Event::TimeoutReset;
+use Test2::Event::UnexpectedProcessExit;
 use Test2::Harness::Result;
-use Test2::Harness::Fact;
 
 sub init {
     my $self = shift;
@@ -24,8 +29,6 @@ sub init {
         unless $self->{+FILE};
 
     $self->{+LISTENERS} ||= [];
-
-    $self->{+SUBTESTS} = {};
 
     $self->{+RESULT} ||= Test2::Harness::Result->new(
         file => $self->{+FILE},
@@ -41,7 +44,7 @@ sub start {
     my $id = $self->{+ID};
     my ($runner, $start_args, $parser_class) = @params{qw/runner start_args parser_class/};
 
-    my ($proc, @facts) = $runner->start(
+    my ($proc, @events) = $runner->start(
         $self->{+FILE},
         %$start_args,
         job => $id,
@@ -59,82 +62,34 @@ sub start {
     $self->{+PROC}   = $proc;
     $self->{+PARSER} = $parser;
 
-    my $start = Test2::Harness::Fact->new(start => $self->{+FILE});
-    $self->notify($start, @facts);
+    my $start = Test2::Event::ProcessStart->new(file => $self->{+FILE});
+    $self->notify($start, @events);
 }
 
 sub notify {
     my $self = shift;
-    my (@facts) = @_;
+    my (@events) = @_;
 
-    return unless @facts;
+    return unless @events;
 
-    for my $f (@facts) {
-        $f = $self->end_subtest($f) if $f->is_subtest;
-        my $r = $self->subtest_result($f);
-
-        $r->add_facts($f);
-        $_->($self, $f) for @{$self->{+LISTENERS}};
+    for my $e (@events) {
+        $_->($self, $e) for @{$self->{+LISTENERS}};
     }
-}
-
-sub subtest_result {
-    my $self = shift;
-    my ($f) = @_;
-
-    my $st = $f->in_subtest;
-    my $r = $st
-        ? $self->{+SUBTESTS}->{$st} ||= Test2::Harness::Result->new(job => $self->{+ID}, file => $self->{+FILE}, name => $st)
-        : $self->{+RESULT};
-
-    return $r;
-}
-
-sub end_subtest {
-    my $self = shift;
-    my ($f) = @_;
-
-    my $st = $f->is_subtest or return $f;
-
-    my $r = delete $self->{+SUBTESTS}->{$st} || Test2::Harness::Result->new(
-        file => $self->{+FILE},
-        name => "Unknown subtest",
-        job  => $self->{+ID},
-    );
-
-    $r->set_name($f->summary);
-    $r->stop(0);
-    $r->add_fact(
-        Test2::Harness::Fact->new(
-            causes_fail => 1,
-            diagnostics => 1,
-            parse_error => "Subtest event reports failure",
-        ),
-    ) if $f->causes_fail && $r->passed;
-
-    my $new_f = Test2::Harness::Fact->from_result(
-        $r,
-
-        number           => $f->number           || undef,
-        name             => $f->summary          || 'Unnamed subtest',
-        in_subtest       => $f->in_subtest       || undef,
-        is_subtest       => $f->is_subtest       || undef,
-        increments_count => $f->increments_count || 0,
-    );
-
-    if ($new_f->causes_fail && !$f->causes_fail) {
-        $new_f->set_causes_fail(0);
-        $r->override_fail;
-    }
-
-    return $new_f;
+    # The ProcessFinish event contains a reference to the result, so if we add
+    # that event to the result we end up with a circular ref.
+    $self->{+RESULT}->add_events(grep { !$_->isa('Test2::Event::ProcessFinish') } @events);
 }
 
 sub step {
-    my $self = shift;
-    my @facts = $self->{+PARSER}->step;
-    $self->notify(@facts);
-    return @facts ? 1 : 0;
+    my $self   = shift;
+    my @events = $self->{+PARSER}->step;
+    $self->notify(@events);
+    if (@events && $self->{+_TIMEOUT}) {
+        delete $self->{+_TIMEOUT};
+        $self->notify(Test2::Event::TimeoutReset->new(file => $self->{+FILE}))
+            if $self->{+_TIMEOUT_NOTIFIED};
+    }
+    return @events ? 1 : 0;
 }
 
 sub timeout {
@@ -147,8 +102,8 @@ sub timeout {
     my $plans = $r->plans;
 
     if ($plans && @$plans) {
-        my ($plan) = @$plans;
-        my ($max) = @{$plan->sets_plan};
+        my $plan = $plans->[0];
+        my $max  = ($plan->sets_plan)[0];
 
         return 0 unless $max;
         return 0 if $max == $r->total;
@@ -166,29 +121,19 @@ sub is_done {
     my $proc = $self->{+PROC};
     return 0 unless $proc->is_done;
 
-    if($self->step) {
-        delete $self->{+_TIMEOUT} or return 0;
-
-        $self->notify(
-            Test2::Harness::Fact->new(
-                summary     => "Event received, timeout reset.\n",
-                parse_error => 1,
-                diagnostics => 1,
-            ),
-        ) if $self->{+_TIMEOUT_NOTIFIED};
-
-        return 0;
-    }
+    # If the process finished but forked a subprocess that is still producing
+    # output, then we might see something when we call ->step. This is fairly
+    # pathological, but we try to handle it.
+    return 0 if $self->step;
 
     if (my $timeout = $self->timeout) {
         unless ($self->{+_TIMEOUT}) {
             $self->{+_TIMEOUT} = time;
 
             $self->notify(
-                Test2::Harness::Fact->new(
-                    summary     => "Process has exited but the event stream does not appear complete. Waiting $timeout seconds...\n",
-                    parse_error => 1,
-                    diagnostics => 1,
+                Test2::Event::UnexpectedProcessExit->new(
+                    error => "Process has exited but the event stream does not appear complete. Waiting $timeout seconds...",
+                    file  => $self->{+FILE},
                 ),
             ) if $timeout >= 1 && !$self->{+_TIMEOUT_NOTIFIED}++;
 
@@ -202,7 +147,7 @@ sub is_done {
 
     $self->{+RESULT}->stop($proc->exit);
 
-    $self->notify(Test2::Harness::Fact->from_result($self->{+RESULT}));
+    $self->notify(Test2::Event::ProcessFinish->new(file => $proc->file, result => $self->{+RESULT}));
 
     return 1;
 }
@@ -227,9 +172,9 @@ the process with an L<Test2::Harness::Proc> object, and delegating work to an
 L<Test2::Harness::Parser>. The L<Test2::Harness> object interacts directly with
 the Job object.
 
-The job object is also responsible for assembling L<Test2::Harness::Result>
-objects based on the L<Test2::Harness::Fact> objects that pass through it. This
-includes subtest results.
+The job object is also responsible for sending L<Test2::Event::ProcessStart>
+and L<Test2::Event::ProcessFinish> events, as well as a few other events in
+the case of errors.
 
 =head1 PUBLIC METHODS
 
@@ -251,9 +196,9 @@ Get the job's ID as used/assigned by the harness.
 
 Check if the job is done yet.
 
-=item $j->notify(@facts)
+=item $j->notify(@events)
 
-This sends the facts to all listeners, it also records them for the final
+This sends the events to all listeners, it also records them for the final
 result object and all subtest result objects.
 
 =item $parser = $j->parser()
@@ -276,7 +221,7 @@ Start the job.
 
 =item $bool = $j->step()
 
-Run an iteration. This will return true if any facts were generated, false
+Run an iteration. This will return true if any events were generated, false
 otherwise. This is called in an event loop by the L<Test2::Harness> object.
 
 =back

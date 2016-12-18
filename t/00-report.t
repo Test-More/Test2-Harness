@@ -1,6 +1,6 @@
 use Test2::Tools::Basic;
 use Test2::Util::Table qw/table/;
-use Test2::Harness::Fact;
+use Test2::Harness::Parser::EventStream;
 
 use Test2::Util qw/CAN_FORK CAN_REALLY_FORK CAN_THREAD/;
 
@@ -24,7 +24,7 @@ diag(
     table(
         header => ['USE JSON', 'VERSION'],
         rows   => [
-            [ Test2::Harness::Fact->JSON, Test2::Harness::Fact->JSON->VERSION ],
+            [ Test2::Harness::Parser::EventStream->JSON, Test2::Harness::Parser::EventStream->JSON->VERSION ],
         ],
     )
 );

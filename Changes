@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - Fixed #9, environment now set properly in preload mode
     - Job listeners now receive the Test2::Harness::Job object as the first
       argument, rather than just the job id.
     - Fixed the TAP parser to handle comments with leading

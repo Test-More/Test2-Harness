@@ -16,9 +16,13 @@ T2_DO_FILE: {
 my $file = $Test2::Harness::Runner::DO_FILE
     or die "No file to run!";
 
+my $set_env = $Test2::Harness::Runner::SET_ENV
+    or die "No set-env sub!";
+
 # Test files do not always return a true value, so we cannot use require. We
 # also cannot trust $!
 package main;
+$set_env->();
 $@ = '';
 do $file;
 die $@ if $@;

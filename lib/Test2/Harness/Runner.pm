@@ -17,7 +17,7 @@ use IPC::Open3 qw/open3/;
 use File::Temp qw/tempfile/;
 use Scalar::Util 'openhandle';
 
-our $DO_FILE;
+our ($DO_FILE, $SET_ENV);
 
 sub init {
     my $self = shift;
@@ -272,7 +272,8 @@ sub via_do {
 
     unshift @INC => @$libs if $libs;
     @ARGV = ();
-    %ENV = (%ENV, %$env) if $env;
+
+    $SET_ENV = sub { %ENV = (%ENV, %$env) if $env };
 
     $DO_FILE = $file;
     $0 = $file;
@@ -321,6 +322,7 @@ sub via_do {
     # Test files do not always return a true value, so we cannot use require. We
     # also cannot trust $!
     package main;
+    $Test2::Harness::Runner::SET_ENV->();
     $@ = '';
     do $file;
     die $@ if $@;

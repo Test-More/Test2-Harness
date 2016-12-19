@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.000012  2016-12-19 11:46:41-08:00 America/Los_Angeles (TRIAL RELEASE)
+
     - Fixed #9, environment now set properly in preload mode
     - Job listeners now receive the Test2::Harness::Job object as the first
       argument, rather than just the job id.

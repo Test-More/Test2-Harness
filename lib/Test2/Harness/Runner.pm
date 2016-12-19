@@ -55,7 +55,8 @@ sub start {
 
     my $header = $self->header($file);
 
-    local %ENV = %ENV;
+    # Localize+copy
+    local $ENV{T2_FORMATTER} = $ENV{T2_FORMATTER};
     if (exists $header->{features}->{formatter} && !$header->{features}->{formatter}) {
         delete $ENV{T2_FORMATTER};
 
@@ -116,7 +117,7 @@ sub _parse_shbang {
     my $line = shift;
 
     return {} if !defined $line;
-    
+
     my %shbang;
 
     my $shbang_re = qr{
@@ -126,7 +127,7 @@ sub _parse_shbang {
           \s*
         $
     }xi;
-    
+
     if ( $line =~ $shbang_re ) {
         my @switches = grep { m/\S/ } split /\s+/, $1 if defined $1;
         $shbang{switches} = \@switches;
@@ -149,7 +150,7 @@ sub header {
     );
 
     open(my $fh, '<', $file) or die "Could not open file $file: $!";
-    
+
     for(my $ln = 0; my $line = <$fh>; $ln++) {
         chomp($line);
         next if $line =~ m/^\s*$/;
@@ -161,7 +162,7 @@ sub header {
             }
             next if $shbang->{shbang};
         }
-        
+
         next if $line =~ m/^(use|require|BEGIN)/;
         last unless $line =~ m/^\s*#/;
 
@@ -192,7 +193,7 @@ sub via_open3 {
     return $self->via_win32(@_)
         if $^O eq 'MSWin32';
 
-    my $env      = $params{env};
+    my $env      = $params{env} || {};
     my $libs     = $params{libs};
     my $switches = $params{switches};
     my $header   = $self->header($file);
@@ -207,12 +208,17 @@ sub via_open3 {
     push @switches => @$switches             if $switches;
     push @switches => @{$header->{switches}} if $header->{switches};
 
-    local %ENV = (%ENV, %$env) if $env;
+    # local $ENV{$_} = $env->{$_} for keys %$env;  does not work...
+    my $old = {%ENV};
+    $ENV{$_} = $env->{$_} for keys %$env;
 
     my $pid = open3(
         $in, $out, $err,
         $^X, @switches, $file
     );
+
+    $ENV{$_} = $old->{$_} for keys %$env;
+
     die "Failed to execute '" . join(' ' => $^X, @switches, $file) . "'" unless $pid;
 
     my $proc = Test2::Harness::Proc->new(
@@ -230,7 +236,7 @@ sub via_do {
     my $self = shift;
     my ($file, %params) = @_;
 
-    my $env      = $params{env};
+    my $env      = $params{env} || {};
     my $libs     = $params{libs};
     my $header   = $self->header($file);
 
@@ -273,7 +279,7 @@ sub via_do {
     unshift @INC => @$libs if $libs;
     @ARGV = ();
 
-    $SET_ENV = sub { %ENV = (%ENV, %$env) if $env };
+    $SET_ENV = sub { $ENV{$_} = $env->{$_} for keys %$env };
 
     $DO_FILE = $file;
     $0 = $file;
@@ -337,7 +343,7 @@ sub via_files {
     my $self = shift;
     my ($file, %params) = @_;
 
-    my $env      = $params{env};
+    my $env      = $params{env} || {};
     my $libs     = $params{libs};
     my $switches = $params{switches};
     my $header   = $self->header($file);
@@ -355,12 +361,17 @@ sub via_files {
     push @switches => @$switches             if $switches;
     push @switches => @{$header->{switches}} if $header->{switches};
 
-    local %ENV = (%ENV, %$env) if $env;
+    # local $ENV{$_} = $env->{$_} for keys %$env;  does not work...
+    my $old = {%ENV};
+    $ENV{$_} = $env->{$_} for keys %$env;
 
     my $pid = open3(
         "<&" . fileno($in_read), ">&" . fileno($out_write), ">&" . fileno($err_write),
         $^X, @switches, $file
     );
+
+    $ENV{$_} = $old->{$_} for keys %$env;
+
     die "Failed to execute '" . join(' ' => $^X, @switches, $file) . "'" unless $pid;
 
     my $proc = Test2::Harness::Proc->new(

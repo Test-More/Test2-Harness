@@ -72,7 +72,7 @@ sub start {
 
     unless (CAN_REALLY_FORK) {
         my $event = Test2::Event::Diag->new(
-            output => "This system is not capable of forking, falling back to IPC::Open3.",
+            message     => "This system is not capable of forking, falling back to IPC::Open3.",
             diagnostics => 1,
         );
 
@@ -82,7 +82,7 @@ sub start {
 
     if ($header->{switches}) {
         my $event = Test2::Event::Diag->new(
-            output => "Test file '$file' uses switches in the #! line, Falling back to IPC::Open3.",
+            message     => "Test file '$file' uses switches in the #! line, Falling back to IPC::Open3.",
             diagnostics => 1,
         );
 
@@ -92,7 +92,7 @@ sub start {
 
     if (exists($header->{features}->{preload}) && !$header->{features}->{preload}) {
         my $event = Test2::Event::Diag->new(
-            output => "Test file '$file' uses has turned off preloading, Falling back to IPC::Open3.",
+            message     => "Test file '$file' uses has turned off preloading, Falling back to IPC::Open3.",
             diagnostics => 1,
         );
 

@@ -1,7 +1,12 @@
 {{$NEXT}}
 
     - Fixed handling of a "plan skip_all" issued in the main test (as opposed
-      to a subtest). Patch by Dave Rolsky. GitHub #22.
+      to a subtest). Partially fixes GitHub
+      #21, reported by rjbs.
+    - When a test file doesn't run any tests but exits successfully, this was
+      treated as a pass. This is now detected and generates different output
+      indicating that the process did not run any tests. Fixes the rest of
+      GitHub #21, reported by rjbs.
 
 0.000012  2016-12-19 11:46:41-08:00 America/Los_Angeles (TRIAL RELEASE)
 

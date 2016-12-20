@@ -13,8 +13,14 @@ sub init {
 }
 
 sub summary {
-    my $self = shift;
-    return $self->{+FILE} . ' ' . ($self->{+RESULT}->passed ? 'passed' : 'failed');
+    my $self    = shift;
+    my $summary = $self->{+FILE} . ' ';
+    if ($self->{+RESULT}->ran_tests) {
+        return $summary . $self->{+RESULT}->passed ? 'passed' : 'failed';
+    }
+    else {
+        return $summary . 'did not run any tests';
+    }
 }
 
 1;

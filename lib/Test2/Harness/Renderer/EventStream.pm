@@ -320,6 +320,7 @@ sub _tag {
     }
 
     if ($event->isa('Test2::Event::ProcessFinish')) {
+        return ("NOTEST", "skipall") unless $event->result->ran_tests;
         return ("PASSED", 'passed') if $event->result->passed;
         return ("FAILED", 'failed');
     }

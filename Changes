@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fixed handling of a "plan skip_all" issued in the main test (as opposed
+      to a subtest). Patch by Dave Rolsky. GitHub #22.
+
 0.000012  2016-12-19 11:46:41-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Fixed #9, environment now set properly in preload mode

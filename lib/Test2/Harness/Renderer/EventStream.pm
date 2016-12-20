@@ -325,6 +325,9 @@ sub _tag {
     }
 
     if ($event->isa('Test2::Event::Plan')) {
+        if ($event->directive eq 'SKIP') {
+            return ("SKIP!!", 'skipall');
+        }
         return unless $self->{+VERBOSE};
         return (" PLAN ", 'plan');
     }

@@ -59,6 +59,15 @@ sub passed {
     return 1;
 }
 
+sub ran_tests {
+    my $self = shift;
+
+    my $plans = $self->{+PLANS};
+    return 0 if $plans && $plans->[0]->directive eq 'SKIP';
+    return 0 unless grep { $_->increments_count } @{$self->{+EVENTS}};
+    return 1;
+}
+
 sub bump_failed { $_[0]->{+FAILED} += $_[1] || 1 }
 
 sub add_events {
@@ -161,6 +170,10 @@ End the test, and provide the exit code.
 =item $bool = $r->passed
 
 Check if the result is a pass.
+
+=item $bool = $r->ran_tests
+
+Check if the result is for a process that ran any tests at all.
 
 =item $r->bump_failed
 

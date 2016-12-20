@@ -320,11 +320,15 @@ sub _tag {
     }
 
     if ($event->isa('Test2::Event::ProcessFinish')) {
+        return ("NOTEST", "skipall") unless $event->result->ran_tests;
         return ("PASSED", 'passed') if $event->result->passed;
         return ("FAILED", 'failed');
     }
 
     if ($event->isa('Test2::Event::Plan')) {
+        if ($event->directive eq 'SKIP') {
+            return ("SKIP!!", 'skipall');
+        }
         return unless $self->{+VERBOSE};
         return (" PLAN ", 'plan');
     }

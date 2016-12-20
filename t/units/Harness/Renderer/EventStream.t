@@ -282,6 +282,12 @@ subtest verbose_tag => sub {
     );
 
     is(
+        [$one->_tag(Test2::Event::Plan->new(directive => 'SKIP', reason => 'because'))],
+        ['SKIP!!', 'skipall'],
+        "Skipall for entire process"
+    );
+
+    is(
         [
             $one->_tag(
                 Test2::Event::Subtest->new(
@@ -292,7 +298,7 @@ subtest verbose_tag => sub {
             )
         ],
         ['SKIP!!', 'skipall'],
-        "Skipall"
+        "Skipall in subtest"
     );
 
     is(
@@ -430,6 +436,12 @@ subtest quiet_tag => sub {
     );
 
     is(
+        [$one->_tag(Test2::Event::Plan->new(directive => 'SKIP', reason => 'because'))],
+        ['SKIP!!', 'skipall'],
+        "Skipall for entire process"
+    );
+
+    is(
         [
             $one->_tag(
                 Test2::Event::Subtest->new(
@@ -440,7 +452,7 @@ subtest quiet_tag => sub {
             )
         ],
         ["SKIP!!", 'skipall'],
-        "Skipall"
+        "Skipall in subtest"
     );
 
     is(

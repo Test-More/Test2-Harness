@@ -2,7 +2,7 @@ package Test2::Harness::Parser::EventStream;
 use strict;
 use warnings;
 
-our $VERSION = '0.000012';
+our $VERSION = '0.000013';
 
 use base 'Test2::Harness::Parser';
 use Test2::Util::HashBase;

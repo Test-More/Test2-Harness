@@ -2,7 +2,7 @@ package Test2::Harness::Parser::TAP::SubtestState;
 use strict;
 use warnings;
 
-our $VERSION = '0.000012';
+our $VERSION = '0.000013';
 
 use Carp qw/confess/;
 use Test2::Util::HashBase qw/_subtest_id _last_id _state/;

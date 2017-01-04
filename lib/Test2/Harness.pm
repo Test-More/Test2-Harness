@@ -19,6 +19,7 @@ use Test2::Util::HashBase qw{
     switches libs env_vars
     jobs
     verbose
+    timeout
 };
 
 sub STEP_DELAY() { '0.05' }
@@ -69,11 +70,12 @@ sub run {
 
     croak "No files to run" unless @files;
 
-    my $pclass = $self->{+PARSER_CLASS};
-    my $listen = $self->{+LISTENERS};
-    my $runner = $self->{+RUNNER};
-    my $jobs   = $self->{+JOBS} || 1;
-    my $env    = $self->environment;
+    my $pclass  = $self->{+PARSER_CLASS};
+    my $listen  = $self->{+LISTENERS};
+    my $runner  = $self->{+RUNNER};
+    my $jobs    = $self->{+JOBS} || 1;
+    my $timeout = $self->{+TIMEOUT};
+    my $env     = $self->environment;
 
     my $slots  = [];
     my (@queue, @results);
@@ -84,9 +86,10 @@ sub run {
         my $job_id = $counter++;
 
         my $job = Test2::Harness::Job->new(
-            id        => $job_id,
-            file      => $file,
-            listeners => $listen,
+            id            => $job_id,
+            file          => $file,
+            listeners     => $listen,
+            event_timeout => $timeout,
         );
 
         $job->start(

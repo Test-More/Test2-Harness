@@ -7,8 +7,9 @@ our $VERSION = '0.000013';
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Test2::Util::HashBase qw{
-    id file listeners parser proc result _done _timeout
-    _timeout_notified
+    id file listeners parser proc result
+    event_timeout
+    _done _timeout _timeout_notified
 };
 
 use Test2::Event::ParseError;
@@ -110,7 +111,7 @@ sub timeout {
     }
 
     # 60 seconds if all else fails.
-    return 60;
+    return $self->{+EVENT_TIMEOUT} || 60;
 }
 
 sub is_done {
@@ -118,13 +119,45 @@ sub is_done {
 
     return 1 if $self->{+_DONE};
 
-    my $proc = $self->{+PROC};
-    return 0 unless $proc->is_done;
+    return $self->_incomplete_timeout
+        if $self->proc->is_done;
+
+    return $self->_event_timeout;
+}
+
+sub _event_timeout {
+    my $self = shift;
+
+    my $timeout = $self->{+EVENT_TIMEOUT}
+        or return 0;
+
+    return 0 if $self->step;
+    $self->{+_TIMEOUT} ||= time;
+
+    return 0 if $timeout > (time - $self->{+_TIMEOUT});
+
+    # We timed out!
+    $self->notify(
+        Test2::Event::UnexpectedProcessExit->new(
+            error => "Process timed out after $timeout seconds with no events...",
+            file  => $self->{+FILE},
+        ),
+    );
+
+    $self->{+PROC}->force_kill;
+
+    return $self->finish;
+}
+
+sub _incomplete_timeout {
+    my $self = shift;
 
     # If the process finished but forked a subprocess that is still producing
     # output, then we might see something when we call ->step. This is fairly
     # pathological, but we try to handle it.
     return 0 if $self->step;
+
+    my $proc = $self->{+PROC};
 
     if (my $timeout = $self->timeout) {
         unless ($self->{+_TIMEOUT}) {
@@ -143,8 +176,15 @@ sub is_done {
         return 0 if $timeout > (time - $self->{+_TIMEOUT});
     }
 
+    return $self->finish;
+}
+
+sub finish {
+    my $self = shift;
+
     $self->{+_DONE} = 1;
 
+    my $proc = $self->{+PROC};
     $self->{+RESULT}->stop($proc->exit);
 
     $self->notify(Test2::Event::ProcessFinish->new(file => $proc->file, result => $self->{+RESULT}));

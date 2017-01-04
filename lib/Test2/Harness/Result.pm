@@ -63,7 +63,7 @@ sub ran_tests {
     my $self = shift;
 
     my $plans = $self->{+PLANS};
-    return 0 if $plans && $plans->[0]->directive eq 'SKIP';
+    return 0 if $plans && @$plans && $plans->[0]->directive eq 'SKIP';
     return 0 unless grep { $_->increments_count } @{$self->{+EVENTS}};
     return 1;
 }

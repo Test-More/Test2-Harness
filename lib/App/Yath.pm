@@ -43,6 +43,7 @@ sub init {
     my $merge   = 0;
     my $verbose = 0;
     my $quiet   = 0;
+    my $timeout = 0;
 
     my $runner_class = '+Test2::Harness::Runner';
 
@@ -65,6 +66,7 @@ sub init {
         'q|quiet'       => \$quiet,
         'v|verbose'     => \$verbose,
         'x|exclude=s@'  => \@exclude,
+        't|timeout=i'   => \$timeout,
 
         'parser|parser_class=s' => \$harness_args{parser_class},
         'runner|runner_class=s' => \$runner_class,
@@ -89,8 +91,9 @@ sub init {
         load_module('Test2::Harness::Renderer::', $_) for @render;
     }
 
-    $harness_args{jobs}   = $jobs;
-    $harness_args{runner} = $runner_class->new(merge => $merge, via => @preload ? 'do' : 'open3');
+    $harness_args{timeout} = $timeout;
+    $harness_args{jobs}    = $jobs;
+    $harness_args{runner}  = $runner_class->new(merge => $merge, via => @preload ? 'do' : 'open3');
 
     my @renderers;
     for my $r (@render) {
@@ -171,6 +174,7 @@ Usage: $0 [OPTIONS] File1 File2 Directory ...
   -m          --merge             Merge STDERR and STDOUT from test files.
   -q          --quiet             Do not use the default renderer.
   -v          --verbose           Show every event, not just failures and diag.
+  -t          --timeout=n         Event timeout, kill tests that stall too long.
   -x[pattern] --exclude=[pattern] Exclude any files that match the pattern.
 
  Other Options:

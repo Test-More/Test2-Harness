@@ -73,6 +73,18 @@ sub wait {
     return;
 }
 
+sub force_kill {
+    my $self = shift;
+
+    my $pid = $self->{+PID} or die "No PID";
+    kill('INT', $pid) or die "Could not signal process";
+    $self->{+EXIT} = -1;
+    for (1 .. 5) {
+        $self->wait(WNOHANG) and last;
+        sleep 1 unless $_ >= 5;
+    }
+}
+
 sub write {
     my $self = shift;
     my $fh = $self->{+IN_FH};

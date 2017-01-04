@@ -2,7 +2,7 @@ package Test2::Harness::Parser::TAP;
 use strict;
 use warnings;
 
-our $VERSION = '0.000013';
+our $VERSION = '0.000014';
 
 use Test2::Event::Bail;
 use Test2::Event::Diag;

@@ -2,7 +2,7 @@ package Test2::Harness::Renderer::EventStream;
 use strict;
 use warnings;
 
-our $VERSION = '0.000013';
+our $VERSION = '0.000014';
 
 use Test2::Util::HashBase qw/color verbose jobs slots parallel clear out_std watch colors graph_colors counter/;
 use Term::ANSIColor();

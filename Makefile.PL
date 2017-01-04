@@ -37,7 +37,7 @@ my %WriteMakefileArgs = (
     "Test2::Bundle::Extended" => "0.000063",
     "Time::HiRes" => 0
   },
-  "VERSION" => "0.000013",
+  "VERSION" => "0.000014",
   "test" => {
     "TESTS" => "t/*.t t/units/*.t t/units/Formatter/*.t t/units/Harness/*.t t/units/Harness/Parser/*.t t/units/Harness/Renderer/*.t"
   }

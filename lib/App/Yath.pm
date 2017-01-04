@@ -2,7 +2,7 @@ package App::Yath;
 use strict;
 use warnings;
 
-our $VERSION = '0.000013';
+our $VERSION = '0.000014';
 
 use Test2::Util::HashBase qw/args harness files exclude renderers/;
 use Test2::Util qw/pkg_to_file/;

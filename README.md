@@ -1,162 +1,86 @@
 # NAME
 
-App::Yath - Yet Another Test Harness, alternative to prove
+Test2::Harness - Test2 based test harness.
 
 # DESCRIPTION
 
-This package implements the `yath` command line tool.
+This is an alternative to [Test::Harness](https://metacpan.org/pod/Test::Harness). See the [App::Yath](https://metacpan.org/pod/App::Yath) module for
+more details.
 
-# SYNOPSIS
+Try running the `yath` command inside a perl repository.
 
-## COMMAND LINE
+    $ yath
 
-    yath [options] [files] [directories]
+For help:
 
-## IN A SCRIPT
+    $ yath --help
 
-### MINIMAL
+# USING THE HARNESS IN YOUR DISTRIBUTION
 
-    use App::Yath;
-    my $yath = App::Yath->new(args => \@ARGV);
-    my $exit = $yath->run();
-    exit($exit);
+If you want to have your tests run via Test2::Harness instead of
+[Test::Harness](https://metacpan.org/pod/Test::Harness) you need to do two things:
 
-This minimal version is all most people will need. However it is recommended
-you use the complete form below. The complete form does a much better job of
-backing out of stack frames in preload+fork mode. Using the minimal can cause
-problems in some edge cases where tests assume there are no stack frames
-outside the test script itself.
+- Move your test files
 
-### COMPLETE
+    You need to put any tests that you want to run under Test2::Harness into a
+    directory other than `t/`. A good name to pick is `t2/`, as it will not be
+    picked up by [Test::Harness](https://metacpan.org/pod/Test::Harness) automatically.
 
-    use App::Yath;
+- Add a test.pl script
 
-    T2_DO_FILE: {
-        my $yath = App::Yath->new(args => \@ARGV);
-        my $exit = $yath->run();
-        exit($exit);
-    }
+    You need a script that loads Test2::Harness and tells it to run the tests. You
+    can find this script in `examples/test.pl` in this distribution. The example
+    test.pl is listed here for convenience:
 
-    my $file = $Test2::Harness::Runner::DO_FILE
-        or die "No file to run!";
+        #!/usr/bin/env perl
+        use strict;
+        use warnings;
 
-    # Test files do not always return a true value, so we cannot use require. We
-    # also cannot trust $!
-    package main;
-    $@ = '';
-    do $file;
-    die $@ if $@;
-    exit 0;
+        # Change this to list the directories where tests can be found. This should not
+        # include the directory where this file lives.
 
-In preload+fork mode the runner will attempt to break out to the `T2_DO_FILE`
-label. If the example above is inserted into your top-level script then the
-script will be able to run with minimal stack trace noise.
+        my @DIRS = ('./t2');
 
-# COMMAND LINE ARGUMENTS
+        # PRELOADS GO HERE
+        # Example:
+        # use Moose;
 
-## COMMON
+        ###########################################
+        # Do not change anything below this point #
+        ###########################################
 
-- -I\[dir\] --include="dir"
+        use App::Yath;
 
-    Add directories to `@INC`.
+        # After fork, Yath will break out of this block so that the test file being run
+        # in the new process has as small a stack as possible. It would be awful to
+        # have a bunch of Test2::Harness frames on all stack traces.
+        T2_DO_FILE: {
+            # Add eveything in @INC via -I so that using `perl -Idir this_file` will
+            # pass the include dirs on to any tests that decline to accept the preload.
+            my $yath = App::Yath->new(args => [(map { "-I$_" } @INC), '--exclude=use_harness', @DIRS, @ARGV]);
 
-- -L\[Module\] --preload="Module"
+            # This is where we turn control over to yath.
+            my $exit = $yath->run();
+            exit($exit);
+        }
 
-    Add a module to preload. (Prefork)
+        # At this point we are in a child process and need to run a test file specified
+        # in this package var.
+        my $file = $Test2::Harness::Runner::DO_FILE
+            or die "No file to run!";
 
-- -R\[name\] --renderer="name"
+        # Test files do not always return a true value, so we cannot use require. We
+        # also cannot trust $!
+        $@ = '';
+        do $file;
+        die $@ if $@;
+        exit 0;
 
-    Add a renderer. `"Test2::Harness::Renderer::$NAME"` is implied. Prefix with
-    '+' to give an absolute module name `"+My::Name"`.
+    Most (if not all) module installation tools will find `test.pl` and run it,
+    using the exit value to determine pass/fail.
 
-- -S\[s=val\] --switch="s=val"
-
-    Add switches to use when executing perl.
-
-- -c\[n\] --color=n
-
-    Override the default color level. (0=off)
-
-- -h --help
-
-    Show this usage help.
-
-- -j\[n\] --jobs=n
-
-    How many tests to run concurrently.
-
-- -m --merge
-
-    Merge STDERR and STDOUT from test files.
-
-- -q --quiet
-
-    Do not use the default renderer.
-
-- -v --verbose
-
-    Show every event, not just failures and diag.
-
-- -x\[pattern\] --exclude=\[pattern\]
-
-    Exclude any files that match the pattern.
-
-## OTHER OPTIONS
-
-- --parser=\[name\] --parser\_class=\[name\]
-
-    Override the default parser. `"Test2::Harness::Parser::$NAME"` is implied.
-    Prefix with '+' to give an absolute module name.
-
-- --runner=\[name\] --runner\_class=\[name\]
-
-    Override the default runner. `"Test2::Harness::Runner::$NAME"` is implied.
-    Prefix with '+' to give an absolute module name.
-
-# METHODS
-
-- $yath = App::Yath->new(args => \\@ARGV)
-
-    Create a new instance. Accepts an array of command line arguments.
-
-- $arg\_ref = $yath->args()
-
-    Args array passed into construction (was modified during construction.)
-
-- $harness = $yath->harness()
-
-    The [Test2::Harness](https://metacpan.org/pod/Test2::Harness) instance that will be used (configured during object
-    construction).
-
-- $files\_ref = $yath->files()
-
-    The arrayref of files as processed/expanded from the command line arguments.
-
-- $exclude\_ref = $yath->exclude()
-
-    The arrayref of file exclusion patterns.
-
-- $renderers\_ref = $yath->renderers()
-
-    The arrayref of renders that are listening for events.
-
-- $exit = $yath->run()
-
-    Run the tests, returns an integer that should be used as the exit code.
-
-- $yath->load\_module($prefix, $name)
-
-    Used to load a module given in `$name`. `$prefix` is appended to the start of
-    the module name unless `$name` begins with a '+' character.
-
-- $files\_ref = $yath->expand\_files(@files\_and\_dirs)
-
-    Takes a list of filea and directories and expands it into a complete list of
-    test files to run.
-
-- $yath->help()
-
-    Prints the command line help and exits.
+    **Note:** Since Test2::Harness does not output the traditional TAP, you cannot
+    use this example as a .t file in t/.
 
 # SOURCE
 

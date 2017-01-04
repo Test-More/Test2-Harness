@@ -16,7 +16,7 @@ sub summary {
     my $self    = shift;
     my $summary = $self->{+FILE} . ' ';
     if ($self->{+RESULT}->ran_tests) {
-        return $summary . $self->{+RESULT}->passed ? 'passed' : 'failed';
+        return $summary . ($self->{+RESULT}->passed ? 'passed' : 'failed');
     }
     else {
         return $summary . 'did not run any tests';

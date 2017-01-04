@@ -19,7 +19,7 @@
       argument, rather than just the job id.
     - Fixed the TAP parser to handle comments with leading
       whitespace. Previously it would strip all the leading whitespace out,
-      causing both "# foo" and "# foo" to be output the same way.
+      causing both "# foo" and "#     foo" to be output the same way.
     - Add example for using the harness as a preload test file
     - Document using Test2::Harness as a preload test runner
     - Rewrote all of the internals so that the harness now handles Test2

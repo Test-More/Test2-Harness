@@ -56,7 +56,7 @@ sub start {
     my $header = $self->header($file);
 
     # Localize+copy
-    local $ENV{T2_FORMATTER} = $ENV{T2_FORMATTER};
+    local $ENV{T2_FORMATTER} = $ENV{T2_FORMATTER} || '';
     if (exists $header->{features}->{formatter} && !$header->{features}->{formatter}) {
         delete $ENV{T2_FORMATTER};
 
@@ -217,7 +217,7 @@ sub via_open3 {
         $^X, @switches, $file
     );
 
-    $ENV{$_} = $old->{$_} for keys %$env;
+    $ENV{$_} = $old->{$_} || '' for keys %$env;
 
     die "Failed to execute '" . join(' ' => $^X, @switches, $file) . "'" unless $pid;
 
@@ -279,7 +279,7 @@ sub via_do {
     unshift @INC => @$libs if $libs;
     @ARGV = ();
 
-    $SET_ENV = sub { $ENV{$_} = $env->{$_} for keys %$env };
+    $SET_ENV = sub { $ENV{$_} = $env->{$_} || '' for keys %$env };
 
     $DO_FILE = $file;
     $0 = $file;
@@ -363,14 +363,14 @@ sub via_files {
 
     # local $ENV{$_} = $env->{$_} for keys %$env;  does not work...
     my $old = {%ENV};
-    $ENV{$_} = $env->{$_} for keys %$env;
+    $ENV{$_} = $env->{$_} || '' for keys %$env;
 
     my $pid = open3(
         "<&" . fileno($in_read), ">&" . fileno($out_write), ">&" . fileno($err_write),
         $^X, @switches, $file
     );
 
-    $ENV{$_} = $old->{$_} for keys %$env;
+    $ENV{$_} = $old->{$_} || '' for keys %$env;
 
     die "Failed to execute '" . join(' ' => $^X, @switches, $file) . "'" unless $pid;
 

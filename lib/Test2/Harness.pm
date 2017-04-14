@@ -16,7 +16,7 @@ use Test2::Util::HashBase qw{
     parser_class
     runner
     listeners
-    switches libs env_vars
+    switches libs env_vars test_args
     jobs
     verbose
     timeout
@@ -98,6 +98,7 @@ sub run {
                 env       => $self->environment,
                 libs      => $self->{+LIBS},
                 switches  => $self->{+SWITCHES},
+                test_args => $self->{+TEST_ARGS},
             },
             parser_class => $pclass,
         );

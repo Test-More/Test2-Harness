@@ -1,0 +1,89 @@
+#!/usr/bin/env perl
+package main;
+use strict;
+use warnings;
+
+our $VERSION = '0.001001';
+
+use Test2::Harness::Run::Runner;
+
+my ($dir) = @ARGV;
+
+my $spawn = Test2::Harness::Run::Runner->new(
+    dir => $dir,
+);
+
+$SIG{HUP} = sub {
+    print STDERR <<"    EOT";
+Got SIGHUP, adding a respawn action to the queue...
+This will cause the runner to restart as soon as it finishes processing any
+items that were already in the queue. New items that get queued will be run
+after the respawn.
+    EOT
+    $spawn->respawn;
+};
+
+my $test_file = $spawn->start;
+
+# Do not keep the signal handler post-fork when we are running a test file.
+$SIG{HUP} = 'DEFAULT';
+
+unless($test_file) {
+    my $complete = File::Spec->catfile($dir, 'complete');
+    open(my $fh, '>', $complete) or die "Could not open '$complete'";
+    print $fh '1';
+    close($fh);
+    exit 0;
+}
+
+$@ = '';
+do $test_file;
+die $@ if $@;
+
+exit 0;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+yath-spawn - Script used when spawning a test run process.
+
+=head1 DESCRIPTION
+
+=back
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

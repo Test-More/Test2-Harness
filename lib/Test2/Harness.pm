@@ -2,185 +2,230 @@ package Test2::Harness;
 use strict;
 use warnings;
 
-our $VERSION = '0.000014';
+our $VERSION = '0.001001';
 
 use Carp qw/croak/;
-use Time::HiRes qw/sleep/;
-use Scalar::Util qw/blessed/;
+use List::Util qw/sum/;
+use Time::HiRes qw/sleep time/;
 
-use Test2::Harness::Job;
-use Test2::Harness::Runner;
-use Test2::Harness::Parser;
+use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
-use Test2::Util::HashBase qw{
-    parser_class
-    runner
-    listeners
-    switches libs env_vars
-    jobs
-    verbose
-    timeout
+use Test2::Harness::Util::HashBase qw{
+    -feeder
+    -loggers
+    -renderers
+    -batch_size
+    -callback
+    -watchers
+    -active
+    -live
+    -jobs
+    -event_timeout
+    -post_exit_timeout
+    -run_id
 };
-
-sub STEP_DELAY() { '0.05' }
 
 sub init {
     my $self = shift;
 
-    $self->{+ENV_VARS}  ||= {};
-    $self->{+LIBS}      ||= [];
-    $self->{+SWITCHES}  ||= [];
-    $self->{+LISTENERS} ||= [];
+    croak "'run_id' is a required attribute"
+        unless $self->{+RUN_ID};
 
-    $self->{+PARSER_CLASS} ||= 'Test2::Harness::Parser';
+    croak "'feeder' is a required attribute"
+        unless $self->{+FEEDER};
 
-    $self->{+RUNNER} ||= Test2::Harness::Runner->new();
-    $self->{+JOBS}   ||= 1;
-}
+    croak "'renderers' is a required attribute"
+        unless $self->{+RENDERERS};
 
-sub environment {
-    my $self = shift;
+    croak "'renderers' must be an array reference'"
+        unless ref($self->{+RENDERERS}) eq 'ARRAY';
 
-    my $class = blessed($self);
-
-    my %out = (
-        'HARNESS_CLASS' => $class,
-
-        'HARNESS_ACTIVE'  => '1',
-        'HARNESS_VERSION' => $Test2::Harness::VERSION,
-
-        'HARNESS_IS_VERBOSE' => $self->verbose ? 1 : 0,
-
-        'T2_HARNESS_ACTIVE'  => '1',
-        'T2_HARNESS_VERSION' => $Test2::Harness::VERSION,
-
-        'T2_FORMATTER' => 'T2Harness',
-
-        %{$self->{+ENV_VARS}},
-
-        'HARNESS_JOBS' => $self->{+JOBS} || 1,
-    );
-
-    return \%out;
+    $self->{+BATCH_SIZE} ||= 1000;
 }
 
 sub run {
     my $self = shift;
-    my (@files) = @_;
 
-    croak "No files to run" unless @files;
+    while (1) {
+        $self->{+CALLBACK}->() if $self->{+CALLBACK};
+        my $complete = $self->{+FEEDER}->complete;
+        $self->iteration();
+        last if $complete;
+        sleep 0.02;
+    }
 
-    my $pclass  = $self->{+PARSER_CLASS};
-    my $listen  = $self->{+LISTENERS};
-    my $runner  = $self->{+RUNNER};
-    my $jobs    = $self->{+JOBS} || 1;
-    my $timeout = $self->{+TIMEOUT};
-    my $env     = $self->environment;
+    my(@fail, @pass);
+    for my $job_id (sort keys %{$self->{+WATCHERS}}) {
+        my $watcher = $self->{+WATCHERS}->{$job_id};
 
-    my $slots  = [];
-    my (@queue, @results);
+        if ($watcher->fail) {
+            push @fail => $watcher->job;
+        }
+        else {
+            push @pass => $watcher->job;
+        }
+    }
 
-    my $counter = 1;
-    my $start_file = sub {
-        my $file = shift;
-        my $job_id = $counter++;
+    return {
+        fail => \@fail,
+        pass => \@pass,
+    }
+}
 
-        my $job = Test2::Harness::Job->new(
-            id            => $job_id,
-            file          => $file,
-            listeners     => $listen,
-            event_timeout => $timeout,
-        );
+sub iteration {
+    my $self = shift;
 
-        $job->start(
-            runner => $runner,
-            start_args => {
-                env       => $self->environment,
-                libs      => $self->{+LIBS},
-                switches  => $self->{+SWITCHES},
-            },
-            parser_class => $pclass,
-        );
+    my $live = $self->{+LIVE};
+    my $jobs = $self->{+JOBS};
 
-        return $job;
-    };
+    while (1) {
+        my @events;
 
-    my $wait = sub {
-        my $slot;
-        until($slot) {
-            my $no_sleep = 0;
-            for my $s (1 .. $jobs) {
-                my $job = $slots->[$s];
+        # Track active watchers in a second hash, this avoids looping over all
+        # watchers each iteration.
+        for my $job_id (sort keys %{$self->{+ACTIVE}}) {
+            my $watcher = $self->{+ACTIVE}->{$job_id};
 
-                if ($job) {
-                    $no_sleep = 1 if $job->step;
-                    next unless $job->is_done;
-                    push @results => $job->result;
-                    $slots->[$s] = undef;
+            if ($watcher->complete) {
+                $self->{+FEEDER}->job_completed($job_id);
+                delete $self->{+ACTIVE}->{$job_id};
+            }
+            elsif($self->{+LIVE}) {
+                push @events => $self->check_timeout($watcher);
+            }
+        }
+
+        push @events => $self->{+FEEDER}->poll($self->{+BATCH_SIZE});
+        last unless @events;
+
+        for my $event (@events) {
+            my $job_id = $event->job_id;
+            next if $jobs && !$jobs->{$job_id};
+
+            # Log first, before the watchers transform the events.
+            $_->log_event($event) for @{$self->{+LOGGERS}};
+
+            if ($job_id) {
+                # This will transform the events, possibly by adding facets
+                my $watcher = $self->{+WATCHERS}->{$job_id};
+
+                unless ($watcher) {
+                    my $job = $event->facet_data->{harness_job}
+                        or die "First event for job ($job_id) was not a job start!";
+
+                    $watcher = Test2::Harness::Watcher->new(
+                        nested            => 0,
+                        job               => $job,
+                        live              => $live,
+                        event_timeout     => $self->{+EVENT_TIMEOUT},
+                        post_exit_timeout => $self->{+POST_EXIT_TIMEOUT},
+                    );
+
+                    $self->{+WATCHERS}->{$job_id} = $watcher;
+                    $self->{+ACTIVE}->{$job_id} = $watcher if $live;
                 }
 
-                next if $slots->[$s];
+                my $f;
+                ($event, $f) = $watcher->process($event);
 
-                $slot = $s;
-                last;
+                next unless $event;
+
+                if ($f && $f->{harness_job_end}) {
+                    $f->{harness_job_end}->{file} = $watcher->file;
+                    $f->{harness_job_end}->{fail} = $watcher->fail;
+
+                    my $plan = $watcher->plan;
+                    $f->{harness_job_end}->{skip} = $plan->{details} || "No reason given" if $plan && !$plan->{count};
+
+                    push @{$f->{info}} => $watcher->fail_info_facet_list;
+                }
             }
 
-            last if $slot;
-            next if $no_sleep;
-            sleep STEP_DELAY();
+            # Render it now that the watchers have done their thing.
+            $_->render_event($event) for @{$self->{+RENDERERS}};
         }
-        return $slot;
+    }
+
+    return;
+}
+
+sub check_timeout {
+    my $self = shift;
+    my ($watcher) = @_;
+
+    my $stamp = time;
+
+    my $delta = $stamp - $watcher->last_event;
+
+    my $timeouts = 0;
+    if (my $timeout = $self->{+EVENT_TIMEOUT}) {
+        return $self->timeout($watcher, 'event', $timeout, <<"        EOT") if $delta >= $timeout;
+This happens if a test has not produced any events within a timeout period, but
+does not appear to be finished. Usually this happens when a test has frozen.
+        EOT
+    }
+
+    # Not done if there is no exit
+    return unless $watcher->has_exit;
+
+    if (my $timeout = $self->{+POST_EXIT_TIMEOUT}) {
+        return $self->timeout($watcher, 'post-exit', $timeout, <<"        EOT") if $delta >= $timeout;
+Sometimes a test will fork producing output in the child while the parent is
+allowed to exit. In these cases we cannot rely on the original process exit to
+tell us when a test is complete. In cases where we have an exit, and partial
+output (assertions with no final plan, or a plan that has not been completed)
+we wait for a timeout period to see if any additional events come into
+existence.
+        EOT
+    }
+
+    return;
+}
+
+sub timeout {
+    my $self = shift;
+    my ($watcher, $type, $timeout, $msg) = @_;
+
+    my $job_id = $watcher->job->job_id;
+    my $file   = $watcher->job->file;
+
+    my @info = (
+        {
+            details   => ucfirst($type) . " timeout after $timeout second(s) for job $job_id: $file\n$msg",
+            debug     => 1,
+            important => 1,
+            tag       => 'TIMEOUT',
+        }
+    );
+
+    my $event = Test2::Harness::Event->new(
+        job_id     => $job_id,
+        run_id     => $self->{+RUN_ID},
+        event_id   => "timeout-$type-$job_id",
+        stamp      => time,
+        facet_data => {info => \@info},
+    );
+
+    return $event unless $self->{+LIVE};
+    my $pid = $watcher->job->pid || 'NA';
+
+    push @info => {
+        details   => "Killing job: $job_id, PID: $pid",
+        debug     => 1,
+        important => 1,
+        tag       => 'TIMEOUT',
+    } unless $type eq 'post-exit';
+
+    return $event if $watcher->kill;
+
+    push @info => {
+        details   => "Could not kill job $job_id",
+        debug     => 1,
+        important => 1,
+        tag       => 'TIMEOUT',
     };
 
-    for my $file (@files) {
-        if ($self->{+JOBS} > 1) {
-            my $header = $runner->header($file);
-            my $concurrent = $header->{features}->{concurrency};
-            $concurrent = 1 unless defined($concurrent);
-
-            unless ($concurrent) {
-                push @queue => $file;
-                next;
-            }
-        }
-
-        my $slot = $wait->();
-        $slots->[$slot] = $start_file->($file);
-    }
-
-    while (@$slots) {
-        my $no_sleep = 0;
-
-        my @keep;
-        for my $j (@$slots) {
-            next unless $j;
-
-            $no_sleep = 1 if $j->step;
-
-            if($j->is_done) {
-                push @results => $j->result;
-            }
-            else {
-                push @keep => $j;
-            }
-        }
-
-        @$slots = @keep;
-
-        sleep STEP_DELAY() unless $no_sleep;
-    }
-
-    for my $file (@queue) {
-        my $job = $start_file->($file);
-
-        while(!$job->is_done) {
-            sleep STEP_DELAY() unless $job->step;
-        }
-
-        push @results => $job->result;
-    }
-
-    return \@results;
+    return $event;
 }
 
 1;
@@ -193,89 +238,9 @@ __END__
 
 =head1 NAME
 
-Test2::Harness - Test2 based test harness.
+Test2::Harness - Test2 Harness designed for the Test2 event system
 
 =head1 DESCRIPTION
-
-This is an alternative to L<Test::Harness>. See the L<App::Yath> module for
-more details.
-
-Try running the C<yath> command inside a perl repository.
-
-    $ yath
-
-For help:
-
-    $ yath --help
-
-=head1 USING THE HARNESS IN YOUR DISTRIBUTION
-
-If you want to have your tests run via Test2::Harness instead of
-L<Test::Harness> you need to do two things:
-
-=over 4
-
-=item Move your test files
-
-You need to put any tests that you want to run under Test2::Harness into a
-directory other than C<t/>. A good name to pick is C<t2/>, as it will not be
-picked up by L<Test::Harness> automatically.
-
-=item Add a test.pl script
-
-You need a script that loads Test2::Harness and tells it to run the tests. You
-can find this script in C<examples/test.pl> in this distribution. The example
-test.pl is listed here for convenience:
-
-    #!/usr/bin/env perl
-    use strict;
-    use warnings;
-
-    # Change this to list the directories where tests can be found. This should not
-    # include the directory where this file lives.
-
-    my @DIRS = ('./t2');
-
-    # PRELOADS GO HERE
-    # Example:
-    # use Moose;
-
-    ###########################################
-    # Do not change anything below this point #
-    ###########################################
-
-    use App::Yath;
-
-    # After fork, Yath will break out of this block so that the test file being run
-    # in the new process has as small a stack as possible. It would be awful to
-    # have a bunch of Test2::Harness frames on all stack traces.
-    T2_DO_FILE: {
-        # Add eveything in @INC via -I so that using `perl -Idir this_file` will
-        # pass the include dirs on to any tests that decline to accept the preload.
-        my $yath = App::Yath->new(args => [(map { "-I$_" } @INC), '--exclude=use_harness', @DIRS, @ARGV]);
-
-        # This is where we turn control over to yath.
-        my $exit = $yath->run();
-        exit($exit);
-    }
-
-    # At this point we are in a child process and need to run a test file specified
-    # in this package var.
-    my $file = $Test2::Harness::Runner::DO_FILE
-        or die "No file to run!";
-
-    # Test files do not always return a true value, so we cannot use require. We
-    # also cannot trust $!
-    $@ = '';
-    do $file;
-    die $@ if $@;
-    exit 0;
-
-Most (if not all) module installation tools will find C<test.pl> and run it,
-using the exit value to determine pass/fail.
-
-B<Note:> Since Test2::Harness does not output the traditional TAP, you cannot
-use this example as a .t file in t/.
 
 =back
 
@@ -302,7 +267,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 COPYRIGHT
 
-Copyright 2016 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

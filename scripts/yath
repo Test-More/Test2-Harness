@@ -1,29 +1,85 @@
 #!/usr/bin/env perl
-package yath;
 use strict;
 use warnings;
 
-our $VERSION = '0.000014';
+our $VERSION = '0.001001';
 
-use App::Yath;
+use App::Yath::Util qw/load_command/;
+use List::Util qw/sum/;
 
-T2_DO_FILE: {
-    my $yath = App::Yath->new(args => \@ARGV);
-    my $exit = $yath->run();
-    exit($exit);
+
+my $cmd_name;
+if (@ARGV && -f $ARGV[0] && $ARGV[0] =~ m/\.jsonl(\.bz2|\.gz)$/) {
+    $cmd_name = 'replay';
+}
+elsif(!@ARGV || -d $ARGV[0] || -f $ARGV[0] || substr($ARGV[0],0,1) eq '-') {
+    $cmd_name = 'test';
+}
+else {
+    $cmd_name = shift @ARGV;
 }
 
-my $file = $Test2::Harness::Runner::DO_FILE
-    or die "No file to run!";
+my $cmd_class = load_command($cmd_name);
 
-my $set_env = $Test2::Harness::Runner::SET_ENV
-    or die "No set-env sub!";
+my $cmd = $cmd_class->new(args => \@ARGV);
 
-# Test files do not always return a true value, so we cannot use require. We
-# also cannot trust $!
-package main;
-$set_env->();
-$@ = '';
-do $file;
-die $@ if $@;
-exit 0;
+my $start = time;
+my $exit = $cmd->run;
+my ($user,$system,$cuser,$csystem) = times;
+my $end = time;
+
+my $bench = sprintf(
+    "%u wallclock secs (%5.2f usr %5.2f sys + %5.2f cusr %5.2f csys = %5.2f CPU)",
+    $end - $start,       $user,     $system,     $cuser,     $csystem,     sum($user,$system,$cuser,$csystem),
+);
+$bench =~ s/\s+/ /g;
+$bench =~ s/(\(|\))\s+/$1/g;
+print $bench, "\n\n";
+
+exit $exit;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+yath - Primary Command Line Interface (CLI) for Test2::Harness
+
+=head1 DESCRIPTION
+
+=back
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

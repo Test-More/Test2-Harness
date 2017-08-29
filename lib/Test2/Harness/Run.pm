@@ -94,6 +94,8 @@ sub find_files {
         die "'$item' does not appear to be either a file or a directory.\n";
     }
 
+    return sort @files unless @dirs;
+
     require File::Find;
     File::Find::find(
         sub {

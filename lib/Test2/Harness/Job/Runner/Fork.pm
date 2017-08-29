@@ -12,9 +12,6 @@ sub viable {
     my $class = shift;
     my ($test) = @_;
 
-    die "Test::Builder was preloaded, that is not supported"
-        if $INC{'Test/Builder.pm'};
-
     return 0 unless CAN_REALLY_FORK();
 
     return 0 if $ENV{HARNESS_PERL_SWITCHES};
@@ -31,9 +28,6 @@ sub viable {
 sub run {
     my $class = shift;
     my ($test) = @_;
-
-    die "Test::Builder was preloaded, that is not supported"
-        if $INC{'Test/Builder.pm'};
 
     my $pid = fork();
     die "Failed to fork: $!" unless defined $pid;
@@ -90,7 +84,7 @@ sub run {
     # avoid child processes sharing the same seed value as the parent
     srand();
 
-    Test2::API::test2_post_prefork_reset() if $INC{'Test2/API.pm'};
+    Test2::API::test2_post_preload_reset() if $INC{'Test2/API.pm'};
 
     push @INC => @{$test->libs};
 

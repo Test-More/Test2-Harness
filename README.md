@@ -34,6 +34,6 @@ See `http://dev.perl.org/licenses/`
 
 Hey! **The above document had some coding errors, which are explained below:**
 
-- Around line 15:
+- Around line 26:
 
-    &#x3d;back without =over
+    You forgot a '=back' before '=head1'

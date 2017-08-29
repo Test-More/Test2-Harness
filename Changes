@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Allow preload of Test::Builder
+
 0.001001  2017-08-28 22:40:20-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Complete rewrite

@@ -242,8 +242,6 @@ Test2::Harness - Test2 Harness designed for the Test2 event system
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

@@ -247,8 +247,6 @@ App::Yath::Command::replay - Command to replay a test run from an event log.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

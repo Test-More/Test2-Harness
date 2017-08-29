@@ -185,8 +185,6 @@ Test2::Harness::Job::Runner::Fork - Logic for running a test job by forking.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

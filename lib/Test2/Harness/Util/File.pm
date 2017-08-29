@@ -109,8 +109,6 @@ Test2::Harness::Util::File - Utility class for manipulating a file.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

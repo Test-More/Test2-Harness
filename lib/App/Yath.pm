@@ -22,8 +22,6 @@ App::Yath - Yet Another Test Harness (Test2-Harness) Command Line Interface
 B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
 time. Documentation and tests have not been written yet!
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at
@@ -34,8 +32,6 @@ F<http://github.com/Test-More/Test2-Harness/>.
 =over 4
 
 =item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
 
 =head1 AUTHORS
 

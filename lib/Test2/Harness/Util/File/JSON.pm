@@ -30,8 +30,6 @@ Test2::Harness::Util::File::JSON - Utility class for a JSON file.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

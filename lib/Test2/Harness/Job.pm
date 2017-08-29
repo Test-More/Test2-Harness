@@ -53,8 +53,6 @@ Test2::Harness::Job - Representation of a test job.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

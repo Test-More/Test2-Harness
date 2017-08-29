@@ -168,8 +168,6 @@ Test2::Harness::Feeder::Run - Get the event feed from a test run.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

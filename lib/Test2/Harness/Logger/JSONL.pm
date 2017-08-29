@@ -46,8 +46,6 @@ Test2::Harness::Logger::JSONL - Logger that writes events to a JSONL file.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

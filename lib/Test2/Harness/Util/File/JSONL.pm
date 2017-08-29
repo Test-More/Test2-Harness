@@ -27,8 +27,6 @@ Test2::Harness::Util::File::JSONL - Utility class for a JSONL file (stream)
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

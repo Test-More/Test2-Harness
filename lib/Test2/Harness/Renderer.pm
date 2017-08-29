@@ -22,8 +22,6 @@ Test2::Harness::Renderer - Base class for Test2::Harness event renderers.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

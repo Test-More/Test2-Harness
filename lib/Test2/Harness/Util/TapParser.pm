@@ -254,8 +254,6 @@ Test2::Harness::Util::TapParser - Produce EventFacets from a line of TAP.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

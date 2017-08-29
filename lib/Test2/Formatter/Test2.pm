@@ -597,8 +597,6 @@ Test2::Formatter::Test2 - An alternative to TAP, used by Test2::Harness.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

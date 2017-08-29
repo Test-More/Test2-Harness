@@ -83,8 +83,6 @@ Test2::Harness::Feeder::Job - Get the feed of events from a running job.
 
 =head1 DESCRIPTION
 
-=back
-
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

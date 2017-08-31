@@ -176,6 +176,10 @@ sub start {
 sub _start {
     my $self = shift;
 
+    my $run = $self->{+RUN};
+    my $env = $run->env_vars;
+    $ENV{$_} = $env->{$_} for keys %$env;
+
     my $jobs_file = Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
 
     my $queue_file = Test2::Harness::Util::File::JSONL->new(
@@ -198,7 +202,6 @@ sub _start {
         close($queue_fh) or die "Could not close queue file: $!";
     }
 
-    my $run = $self->{+RUN};
     $self->preload if $run->preload;
 
     my $max = $run->job_count;

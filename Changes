@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+    - Set env vars in the run-runner for preload
+    - Improve preload support
+    - Fix formatter selection in Open3 runner
+    - Update deps
+
 0.001002  2017-08-29 21:10:17-07:00 America/Los_Angeles
 
     - Allow preload of Test::Builder

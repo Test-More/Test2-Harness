@@ -2,7 +2,7 @@ package App::Yath::Command::test;
 use strict;
 use warnings;
 
-our $VERSION = '0.001003';
+our $VERSION = '0.001004';
 
 use File::Temp qw/tempdir/;
 use IO::Compress::Bzip2 qw/$Bzip2Error/;

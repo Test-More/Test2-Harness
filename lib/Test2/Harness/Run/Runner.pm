@@ -309,6 +309,9 @@ sub preload {
 
     local @INC = ($run->all_libs, @INC);
 
+    require Test2::API;
+    Test2::API::test2_start_preload();
+
     for my $mod (@$list) {
         my $file = pkg_to_file($mod);
         require $file;

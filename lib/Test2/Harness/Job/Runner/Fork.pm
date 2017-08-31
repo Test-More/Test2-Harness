@@ -84,7 +84,10 @@ sub run {
     # avoid child processes sharing the same seed value as the parent
     srand();
 
-    Test2::API::test2_post_preload_reset() if $INC{'Test2/API.pm'};
+    if ($INC{'Test2/API.pm'}) {
+        Test2::API::test2_stop_preload();
+        Test2::API::test2_post_preload_reset();
+    }
 
     push @INC => @{$test->libs};
 

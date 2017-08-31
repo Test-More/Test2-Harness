@@ -35,7 +35,7 @@ sub run {
 
     my $env = {
         %{$test->env_vars},
-        T2_FORMATTER => 'Stream',
+        $test->no_stream ? () : (T2_FORMATTER => 'Stream'),
     };
 
     my @cmd = (

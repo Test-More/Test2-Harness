@@ -97,6 +97,11 @@ sub run {
         Test2::Formatter::Stream->import(file => $event_file);
     }
 
+    if ($test->times) {
+        require Test2::Plugin::Times;
+        Test2::Plugin::Times->import();
+    }
+
     @ARGV = @{$test->args};
 
     return (undef, $file);

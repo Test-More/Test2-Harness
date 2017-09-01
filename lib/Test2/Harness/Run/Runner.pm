@@ -268,6 +268,7 @@ sub _start {
             # These can be overriden by the task
             no_stream => $run->no_stream,
             no_fork   => $run->no_fork,
+            times     => $run->times,
 
             %$task,
 

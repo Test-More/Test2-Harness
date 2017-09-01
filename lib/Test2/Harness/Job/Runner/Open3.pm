@@ -44,6 +44,7 @@ sub run {
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
         @{$test->switches},
         $test->no_stream ? () : ("-MTest2::Formatter::Stream=file,$event_file"),
+        $test->times ? ('-MTest2::Plugin::Times') : (),
         $test->file,
         @{$test->args},
     );

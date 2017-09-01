@@ -6,7 +6,9 @@ our $VERSION = '0.001004';
 
 use App::Yath::Util qw/load_command/;
 use List::Util qw/sum/;
+use Time::HiRes qw/time/;
 
+use Test2::Util::Times qw/render_bench/;
 
 my $cmd_name;
 if (@ARGV && -f $ARGV[0] && $ARGV[0] =~ m/\.jsonl(\.bz2|\.gz)$/) {
@@ -25,15 +27,9 @@ my $cmd = $cmd_class->new(args => \@ARGV);
 
 my $start = time;
 my $exit = $cmd->run;
-my ($user,$system,$cuser,$csystem) = times;
-my $end = time;
 
-my $bench = sprintf(
-    "%u wallclock secs (%5.2f usr %5.2f sys + %5.2f cusr %5.2f csys = %5.2f CPU)",
-    $end - $start,       $user,     $system,     $cuser,     $csystem,     sum($user,$system,$cuser,$csystem),
-);
-$bench =~ s/\s+/ /g;
-$bench =~ s/(\(|\))\s+/$1/g;
+my $end = time;
+my $bench = render_bench($start, $end, times);
 print $bench, "\n\n";
 
 exit $exit;

@@ -42,6 +42,7 @@ use Test2::Harness::Util::HashBase qw{
     -chdir
     -no_stream
     -no_fork
+    -times
 
     -verbose
     -formatter
@@ -111,6 +112,9 @@ get the same ARGV.
 
     -c path/to/dir      Tell yath to chdir to a new directory before starting
     --chdir path/to/dir
+
+    -T --times          Load Test2::Plugin::Times for each test. This will add
+                        per-test timing information.
 
     --stream            Use Test2::Formatter::Stream when running tests (Default:On)
     --no-stream         Do not use Test2::Formatter::Stream (Legacy Compatability)
@@ -290,6 +294,7 @@ sub init {
             'id|run-id=s'        => \($self->{+RUN_ID}),
             'show-opts'          => \($self->{+SHOW_OPTS}),
             'h|help'             => \($self->{+HELP}),
+            'T|times'            => \($self->{+TIMES}),
             't|tmpdir=s'         => \$tmp_dir,
 
             'et|event_timeout=i'      => \($self->{+EVENT_TIMEOUT}),
@@ -297,8 +302,8 @@ sub init {
 
             'A|author-testing' => sub { $self->{+ENV_VARS}->{AUTHOR_TESTING} = 1 },
 
-            'T|TAP|tap|no-stream' => \($self->{+NO_STREAM}),
-            'stream'              => sub { $self->{+NO_STREAM} = 0 },
+            'TAP|tap|no-stream' => \($self->{+NO_STREAM}),
+            'stream'            => sub { $self->{+NO_STREAM} = 0 },
 
             'fork' => sub { $self->{+NO_FORK} = 0 },
             'no-fork' => \($self->{+NO_FORK}),
@@ -429,6 +434,7 @@ sub run {
         env_vars   => $self->{+ENV_VARS},
         no_stream  => $self->{+NO_STREAM},
         no_fork    => $self->{+NO_FORK},
+        times      => $self->{+TIMES},
     );
 
     my $runner = Test2::Harness::Run::Runner->new(

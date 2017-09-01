@@ -101,6 +101,7 @@ sub output_filenames {
 }
 
 sub no_stream { shift->job->no_stream }
+sub times     { shift->job->times }
 sub env_vars  { shift->job->env_vars }
 sub libs      { shift->job->libs }
 sub args      { shift->job->args }

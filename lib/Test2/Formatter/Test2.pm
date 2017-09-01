@@ -58,11 +58,13 @@ sub DEFAULT_TAG_COLOR() {
         'FAILED'   => Term::ANSIColor::color('bold bright_red'),
         'REASON'   => Term::ANSIColor::color('magenta'),
         'TIMEOUT'  => Term::ANSIColor::color('magenta'),
+        'TIME'     => Term::ANSIColor::color('blue'),
     );
 }
 
 sub DEFAULT_FACET_COLOR() {
     return (
+        time    => Term::ANSIColor::color('blue'),
         about   => Term::ANSIColor::color('magenta'),
         amnesty => Term::ANSIColor::color('cyan'),
         assert  => Term::ANSIColor::color('bold bright_white'),
@@ -251,6 +253,7 @@ sub render_buffered_event {
     return [$self->render_errors($f, $tree)] if $f->{errors};
     return [$self->render_plan($f, $tree)] if $f->{plan};
     return [$self->render_info($f, $tree)] if $f->{info};
+    return [$self->render_times($f, $tree)] if $f->{times};
 
     return [$self->render_about($f, $tree)] if $f->{about};
 
@@ -275,6 +278,7 @@ sub render_event {
     push @out => $self->render_info($f, $tree) if $f->{info};
     push @out => $self->render_errors($f, $tree) if $f->{errors};
     push @out => $self->render_parent($f, $tree) if $f->{parent};
+    push @out => $self->render_times($f, $tree) if $f->{times};
 
     push @out => $self->render_about($f, $tree)
         if $f->{about} && !(@out || grep { $f->{$_} } qw/stop plan info nest assert/);
@@ -301,6 +305,7 @@ sub render_quiet {
         push @out => $self->render_info($if, $tree) if @{$if->{info}};
     }
 
+    push @out => $self->render_times($f, $tree) if $f->{times};
     push @out => $self->render_errors($f, $tree) if $f->{errors};
     push @out => $self->render_parent($f, $tree, quiet => 1) if $f->{parent} && !$f->{amnesty};
 
@@ -420,6 +425,13 @@ sub build_line {
         "${tcolor}${text}${reset}",
         "$start${blob}------ END ------$reset",
     );
+}
+
+sub render_times {
+    my $self = shift;
+    my ($f, $tree) = @_;
+
+    return $self->build_line('times', 'TIME', $tree, $f->{about}->{details});
 }
 
 sub render_halt {

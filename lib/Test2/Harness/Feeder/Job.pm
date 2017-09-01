@@ -8,6 +8,8 @@ use Carp qw/croak carp/;
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 
+use File::Path qw/remove_tree/;
+
 use Test2::Harness::Job::Dir;
 
 BEGIN { require Test2::Harness::Feeder; our @ISA = ('Test2::Harness::Feeder') }
@@ -18,6 +20,7 @@ use Test2::Harness::Util::HashBase qw{
     -job_id
     -run_id
     -dir
+    -keep_dir
 };
 
 sub init {
@@ -58,6 +61,10 @@ sub set_complete {
     my $self = shift;
 
     $self->{+_COMPLETE} = 1;
+
+    remove_tree($self->{+DIR}->job_root, {safe => 1})
+        unless $self->{+KEEP_DIR};
+
     delete $self->{+DIR};
 
     return $self->{+_COMPLETE};

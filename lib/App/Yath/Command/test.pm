@@ -457,9 +457,10 @@ sub run {
     $SIG{TERM} = sub { $handle_sig->('TERM') };
 
     my $feeder = Test2::Harness::Feeder::Run->new(
-        run    => $run,
-        runner => $runner,
-        dir    => $self->{+DIR},
+        run      => $run,
+        runner   => $runner,
+        dir      => $self->{+DIR},
+        keep_dir => $self->{+KEEP_DIR},
     );
 
     my $loggers = [];

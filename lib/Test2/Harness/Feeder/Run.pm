@@ -20,6 +20,7 @@ use Test2::Harness::Util::HashBase qw{
     -runner
     -_active -job_lookup
     -_polled
+    -keep_dir
 };
 
 sub init {
@@ -86,6 +87,7 @@ sub poll {
             run_id => $self->{+RUN}->run_id,
             complete => $self->{+RUNNER} ? 0 : 1,
             dir => File::Spec->catdir($self->{+DIR}->root, $job_id),
+            keep_dir => $self->{+KEEP_DIR},
             event_counter_ref => $self->{+EVENT_COUNTER_REF},
         );
 

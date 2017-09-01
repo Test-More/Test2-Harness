@@ -9,6 +9,7 @@ use IO::Compress::Bzip2 qw/$Bzip2Error/;
 use IO::Compress::Gzip qw/$GzipError/;
 
 use Test2::Util qw/pkg_to_file/;
+use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use Test2::Harness::Feeder::Run;
 use Test2::Harness::Run::Runner;
@@ -521,6 +522,16 @@ sub run {
 
     $runner->wait;
     my $exit = $runner->exit;
+
+    if (-t STDOUT) {
+        print STDOUT Term::ANSIColor::color('reset') if USE_ANSI_COLOR;
+        print STDOUT "\r\e[K";
+    }
+
+    if (-t STDERR) {
+        print STDERR Term::ANSIColor::color('reset') if USE_ANSI_COLOR;
+        print STDERR "\r\e[K";
+    }
 
     print "\n", '=' x 80, "\n";
     print "\nRun ID: $self->{+RUN_ID}\n";

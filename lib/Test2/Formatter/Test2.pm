@@ -221,8 +221,10 @@ sub write {
 
     if (!$self->{+VERBOSE}) {
         print $io $_, "\n" for @$lines;
-        print $io $self->render_ecount($f);
-        $self->{+_BUFFERED} = 1;
+        if ($self->{+TTY}) {
+            print $io $self->render_ecount($f);
+            $self->{+_BUFFERED} = 1;
+        }
     }
     elsif ($depth) {
         print $io $lines->[0];

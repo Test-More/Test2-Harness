@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+# HARNESS-NO-PRELOAD
 use strict;
 use warnings;
 

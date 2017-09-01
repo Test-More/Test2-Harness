@@ -41,6 +41,8 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =item Chad Granum E<lt>exodist@cpan.orgE<gt>
 
+=back
+
 =head1 AUTHORS
 
 =over 4

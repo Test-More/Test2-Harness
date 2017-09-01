@@ -1,5 +1,13 @@
 {{$NEXT}}
 
+    - Make test.pl ok with preload
+    - Fix Formatter::Test2 for non-tty output
+    - Add -T for timing data per-test
+    - Better signal handling
+    - More HARNESS- header options:
+      - HARNESS-NO-TIMEOUT
+    - Delete job dirs when they are done unless -k is used
+
 0.001003  2017-08-30 23:18:54-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Set env vars in the run-runner for preload

@@ -8,6 +8,14 @@ App::Yath - Yet Another Test Harness (Test2-Harness) Command Line Interface
 **PLEASE NOTE:** Test2::Harness is still experimental, it can all change at any
 time. Documentation and tests have not been written yet!
 
+# DO NOT FORGET TO DOCUMENT
+
+    # HARNESS-NO-PRELOAD
+    # HARNESS-NO-STREAM
+    # HARNESS-YES-TAP
+    # HARNESS-USE-TAP
+    # HARNESS-NO-TIMEOUT
+
 # SOURCE
 
 The source code repository for Test2-Harness can be found at
@@ -29,11 +37,3 @@ This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 See `http://dev.perl.org/licenses/`
-
-# POD ERRORS
-
-Hey! **The above document had some coding errors, which are explained below:**
-
-- Around line 26:
-
-    You forgot a '=back' before '=head1'

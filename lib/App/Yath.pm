@@ -22,6 +22,14 @@ App::Yath - Yet Another Test Harness (Test2-Harness) Command Line Interface
 B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
 time. Documentation and tests have not been written yet!
 
+=head1 DO NOT FORGET TO DOCUMENT
+
+    # HARNESS-NO-PRELOAD
+    # HARNESS-NO-STREAM
+    # HARNESS-YES-TAP
+    # HARNESS-USE-TAP
+    # HARNESS-NO-TIMEOUT
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

@@ -58,7 +58,7 @@ sub run {
     my $via;
 
     for my $item (@{$self->{+VIA}}) {
-        next if $item eq 'Fork' && $self->job->no_fork;
+        next if $item eq 'Fork' && $self->no_fork;
         my $class = $RUN_MAP{$item};
 
         unless ($class) {
@@ -100,12 +100,39 @@ sub output_filenames {
     return ($in_file, $out_file, $err_file, $event_file);
 }
 
-sub no_stream { shift->job->no_stream }
 sub times     { shift->job->times }
 sub env_vars  { shift->job->env_vars }
 sub libs      { shift->job->libs }
 sub args      { shift->job->args }
 sub input     { shift->job->input }
+
+sub no_timeout {
+    my $self = shift;
+    my $timeout = $self->headers->{features}->{timeout};
+    return 1 if defined($timeout) && !$timeout;
+    return 0;
+}
+
+sub no_fork {
+    my $self = shift;
+    return 1 if $self->job->no_fork;
+    my $preload = $self->headers->{features}->{preload};
+    return 1 if defined($preload) && !$preload;
+    return 0;
+}
+
+sub no_stream {
+    my $self = shift;
+    return 1 if $self->job->no_stream;
+
+    my $stream = $self->headers->{features}->{stream};
+    return 1 if defined($stream) && !$stream;
+
+    my $tap = $self->headers->{features}->{tap};
+    return 1 if $tap;
+
+    return 0;
+}
 
 sub headers {
     my $self = shift;
@@ -149,7 +176,7 @@ sub _scan {
         chomp($line);
         next if $line =~ m/^\s*$/;
 
-        if ($ln == 0) {
+        if ($ln == 0 && $ln =~ m/^#!/) {
             my $shbang = $self->_parse_shbang($line);
             if ($shbang) {
                 $self->{+_SHBANG} = $shbang;
@@ -167,7 +194,7 @@ sub _scan {
             my ($feature) = @args;
             $headers{features}->{$feature} = 0;
         }
-        elsif ($dir eq 'yes') {
+        elsif ($dir eq 'yes' || $dir eq 'use') {
             my ($feature) = @args;
             $headers{features}->{$feature} = 1;
         }

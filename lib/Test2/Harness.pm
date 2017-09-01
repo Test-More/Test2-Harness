@@ -114,11 +114,9 @@ sub iteration {
                         or die "First event for job ($job_id) was not a job start!";
 
                     $watcher = Test2::Harness::Watcher->new(
-                        nested            => 0,
-                        job               => $job,
-                        live              => $live,
-                        event_timeout     => $self->{+EVENT_TIMEOUT},
-                        post_exit_timeout => $self->{+POST_EXIT_TIMEOUT},
+                        nested => 0,
+                        job    => $job,
+                        live   => $live,
                     );
 
                     $self->{+WATCHERS}->{$job_id} = $watcher;
@@ -155,9 +153,10 @@ sub check_timeout {
 
     my $stamp = time;
 
+    return if $watcher->job->no_timeout;
+
     my $delta = $stamp - $watcher->last_event;
 
-    my $timeouts = 0;
     if (my $timeout = $self->{+EVENT_TIMEOUT}) {
         return $self->timeout($watcher, 'event', $timeout, <<"        EOT") if $delta >= $timeout;
 This happens if a test has not produced any events within a timeout period, but
@@ -188,6 +187,13 @@ sub timeout {
 
     my $job_id = $watcher->job->job_id;
     my $file   = $watcher->job->file;
+
+    $msg .= <<"    EOT";
+
+You can turn this off on a per-test basis by adding the comment
+# HARNESS-NO-TIMEOUT
+to the top of your test file (but below the #! line).
+    EOT
 
     my @info = (
         {

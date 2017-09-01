@@ -318,6 +318,8 @@ sub _start {
             via => ['Fork', 'Open3'],
         );
 
+        $job->set_no_timeout(1) if $runner->no_timeout;
+
         my ($pid, $runfile) = $runner->run;
         return $runfile if $runfile; # In child process
 

@@ -444,6 +444,18 @@ sub run {
 
     my $pid = $runner->spawn;
 
+    my $SIG;
+    my $handle_sig = sub {
+        my ($sig) = @_;
+
+        $SIG = $sig;
+
+        die "Cought SIG$sig, Attempting to shut down cleanly...\n";
+    };
+
+    $SIG{INT}  = sub { $handle_sig->('INT') };
+    $SIG{TERM} = sub { $handle_sig->('TERM') };
+
     my $feeder = Test2::Harness::Feeder::Run->new(
         run    => $run,
         runner => $runner,
@@ -524,9 +536,18 @@ sub run {
     }
     $runner->end_queue;
 
-    my $stat = $harness->run();
+    my $stat;
+    my $ok = eval { $stat = $harness->run(); 1 };
+    my $err = $@;
+
+    unless($ok) {
+        warn $@;
+        print STDERR "Killing runner\n";
+        kill($SIG || 'TERM', $pid);
+    }
 
     $runner->wait;
+
     my $exit = $runner->exit;
 
     if (-t STDOUT) {
@@ -542,24 +563,43 @@ sub run {
     print "\n", '=' x 80, "\n";
     print "\nRun ID: $self->{+RUN_ID}\n";
 
-    print "\nTest runner exited badly: $exit\n" if $exit;
+    my $bad = $stat ? $stat->{fail} : [];
 
-    my $bad = $stat->{fail};
+    # Posible failure causes
+    my $fail = $exit || !defined($exit) || !$ok || !$stat;
+
     if (@$bad) {
         print "\nThe following test jobs failed:\n";
         print "  [", $_->{job_id}, '] ', $_->file, "\n" for sort { $a->{job_id} <=> $b->{job_id} } @$bad;
         print "\n";
         $exit += @$bad;
     }
-    else {
+
+    if($fail) {
+        print "\n";
+
+        print "Test runner exited badly: $exit\n" if $exit;
+        print "Test runner exited badly: ?\n" unless defined $exit;
+        print "An exception was cought\n" if !$ok && !$SIG;
+        print "Received SIG$SIG\n" if $SIG;
+
+        print "\n";
+
+        $exit = 130 if $SIG && $SIG eq 'INT';
+        $exit = 143 if $SIG && $SIG eq 'TERM';
+        $exit ||= 255;
+    }
+
+    if (!@$bad && !$fail) {
         print "\nAll tests were successful!\n\n";
     }
 
     print "Keeping work dir: $self->{+DIR}\n" if $self->{+KEEP_DIR};
 
-    print "Wrote log file: $self->{+LOG_FILE}\n"
+    print "Wrote " . ($ok ? '' : '(Potentially Corrupt) ') . "log file: $self->{+LOG_FILE}\n"
         if $self->{+LOG_FILE};
 
+    $exit = 255 unless defined $exit;
     $exit = 255 if $exit > 255;
 
     return $exit;

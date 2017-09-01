@@ -27,6 +27,7 @@ use Test2::Harness::Util::HashBase qw{
     -err_log -out_log
     -_exit
     -pid
+    -_procs
 };
 
 sub init {
@@ -163,6 +164,21 @@ sub start {
         chdir($chdir);
     }
 
+    my $SIG;
+    my $handle_sig = sub {
+        my ($sig) = @_;
+
+        # Already being handled
+        return if $SIG;
+
+        $SIG = $sig;
+
+        die "Runner cought SIG$sig, Attempting to shut down cleanly...\n";
+    };
+
+    local $SIG{INT}  = sub { $handle_sig->('INT') };
+    local $SIG{TERM} = sub { $handle_sig->('TERM') };
+
     my $out;
     my $ok = eval { $out = $self->_start(@_); 1 };
     my $err = $@;
@@ -170,7 +186,19 @@ sub start {
     chdir($orig);
 
     return $out if $ok;
-    die $err;
+
+    warn $err;
+
+    for my $proc (@{$self->{+_PROCS} || []}) {
+        my ($pid) = @$proc;
+
+        my $sig = $SIG || 'TERM';
+        print STDERR "Killing pid ($sig): $pid\n";
+        kill($sig, $pid);
+        waitpid($pid, WNOHANG);
+    }
+
+    CORE::exit($SIG ? $SIG eq 'TERM' ? 143 : $SIG eq 'INT' ? 130 : 255 : 255);
 }
 
 sub _start {
@@ -207,6 +235,7 @@ sub _start {
     my $max = $run->job_count;
 
     my @procs;
+    $self->{+_PROCS} = \@procs;
     my $reap = sub { @procs = grep { !$self->_reap_proc($_) } @procs };
 
     my @queue;
@@ -301,6 +330,8 @@ sub _start {
         last unless @procs;
         sleep 0.02
     }
+
+    delete $self->{+_PROCS};
 
     return undef;
 }

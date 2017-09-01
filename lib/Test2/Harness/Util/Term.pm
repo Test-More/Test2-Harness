@@ -27,26 +27,6 @@ our @EXPORT_OK = qw/USE_ANSI_COLOR/;
 
     if ($use) {
         *USE_ANSI_COLOR = sub() { 1 };
-
-        my $handle_sig = sub {
-            my ($sig) = @_;
-
-            if (-t STDOUT) {
-                print STDOUT Term::ANSIColor::color('reset');
-                print STDOUT "\r\e[K";
-            }
-
-            if (-t STDERR) {
-                print STDERR Term::ANSIColor::color('reset');
-                print STDERR "\r\e[K";
-            }
-
-            print STDERR "\nCaught SIG$sig, exiting\n";
-            exit 255;
-        };
-
-        $SIG{INT}  = sub { $handle_sig->('INT') };
-        $SIG{TERM} = sub { $handle_sig->('TERM') };
     }
     else {
         *USE_ANSI_COLOR = sub() { 0 };

@@ -13,8 +13,11 @@ use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util qw/open_file write_file_atomic/;
 
 use Test2::Harness::Run();
+use Test2::Harness::Run::Queue();
+
 use Test2::Harness::Job();
 use Test2::Harness::Job::Runner();
+
 use Test2::Harness::Util::File::JSON();
 use Test2::Harness::Util::File::JSONL();
 
@@ -23,7 +26,7 @@ use File::Spec();
 use Test2::Harness::Util::HashBase qw{
     -dir
     -run
-    -run_file -jobs_file -queue_file -queue_index_file
+    -run_file -jobs_file -queue_file
     -err_log -out_log
     -_exit
     -pid
@@ -49,11 +52,10 @@ sub init {
 
     croak "'run' is a required attribute" unless $self->{+RUN};
 
-    $self->{+ERR_LOG}          = File::Spec->catfile($dir, 'error.log');
-    $self->{+OUT_LOG}          = File::Spec->catfile($dir, 'output.log');
-    $self->{+JOBS_FILE}        = File::Spec->catfile($dir, 'jobs.jsonl');
-    $self->{+QUEUE_FILE}       = File::Spec->catfile($dir, 'queue.jsonl');
-    $self->{+QUEUE_INDEX_FILE} = File::Spec->catfile($dir, 'queue_index');
+    $self->{+ERR_LOG}    = File::Spec->catfile($dir, 'error.log');
+    $self->{+OUT_LOG}    = File::Spec->catfile($dir, 'output.log');
+    $self->{+JOBS_FILE}  = File::Spec->catfile($dir, 'jobs.jsonl');
+    $self->{+QUEUE_FILE} = File::Spec->catfile($dir, 'queue.jsonl');
 
     $self->{+DIR} = $dir;
 }
@@ -210,25 +212,9 @@ sub _start {
 
     my $jobs_file = Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
 
-    my $queue_file = Test2::Harness::Util::File::JSONL->new(
-        name => $self->{+QUEUE_FILE},
-        use_write_lock => 1,
-    );
+    my $queue = Test2::Harness::Run::Queue->new(file => $self->{+QUEUE_FILE});
 
-    my $JOB_ID = 1;
-    my $queue_index_file = Test2::Harness::Util::File::JSON->new(name => $self->{+QUEUE_INDEX_FILE});
-    if ($queue_index_file->exists) {
-        my $data = $queue_index_file->read;
-        my $pos = $data->{pos};
-        $JOB_ID = $data->{job_id};
-        $queue_file->seek($pos);
-    }
-    else {
-        # Create the queue file.
-        my $queue_fh = $queue_file->open_file('>');
-        print $queue_fh "";
-        close($queue_fh) or die "Could not close queue file: $!";
-    }
+    my ($JOB_ID, %JOBS) = $queue->create_or_recall;
 
     $self->preload if $run->preload;
 
@@ -239,9 +225,8 @@ sub _start {
     my $reap = sub { @procs = grep { !$self->_reap_proc($_) } @procs };
 
     my @queue;
-
     while (1) {
-        push @queue => $queue_file->poll_with_index;
+        push @queue => $queue->poll;
 
         $reap->();
 
@@ -261,13 +246,23 @@ sub _start {
         last if $task->{end_queue};
 
         if ($task->{respawn}) {
-            $queue_index_file->write({pos => $item->[1], job_id => $JOB_ID});
+            $queue->mark($JOB_ID, \%JOBS, $item);
+            print "Respawning...\n";
             exec($self->cmd);
             warn "Should not get here!";
             CORE::exit(255);
         }
 
-        my $id = $JOB_ID++;
+        my $id;
+        if ($task->{job_id}) {
+            $id = $task->{job_id};
+            die "Duplicate job id requested!" if $JOBS{$id}++;
+        }
+        else {
+            $id = $JOB_ID++;
+            $JOBS{$id}++;
+        }
+
         my $file = $task->{file};
         my $dir = File::Spec->catdir($self->{+DIR}, $id);
         mkdir($dir) or die "Could not create job directory '$dir': $!";
@@ -287,7 +282,8 @@ sub _start {
             %{$run->env_vars},
             TMPDIR => $tmp,
             TEMPDIR => $tmp,
-            %{$task->{env_vars} || {}}
+            %{$task->{env_vars} || {}},
+            PERL_USE_UNSAFE_INC => $task->{unsafe_inc},
         };
 
         my $p5l = join $Config{path_sep} => ($env->{PERL5LIB} || ()), @libs;
@@ -310,6 +306,7 @@ sub _start {
             switches => [@{$run->switches}, @{$task->{switches} || []}],
             args     => [@{$run->args}, @{$task->{args} || []}],
             input    => $task->{input} || $run->input,
+            chdir    => $task->{chdir} || $run->chdir,
         );
 
         my $runner = Test2::Harness::Job::Runner->new(
@@ -379,38 +376,23 @@ sub _reap_proc {
 sub respawn {
     my $self = shift;
 
-    my $queue_file = Test2::Harness::Util::File::JSONL->new(
-        name => $self->{+QUEUE_FILE},
-        use_write_lock => 1,
-    );
-
-    $queue_file->write({respawn => 1});
+    my $queue = Test2::Harness::Run::Queue->new(file => $self->{+QUEUE_FILE});
+    $queue->respawn();
 }
 
 sub end_queue {
     my $self = shift;
 
-    my $queue_file = Test2::Harness::Util::File::JSONL->new(
-        name => $self->{+QUEUE_FILE},
-        use_write_lock => 1,
-    );
-
-    $queue_file->write({end_queue => 1});
+    my $queue = Test2::Harness::Run::Queue->new(file => $self->{+QUEUE_FILE});
+    $queue->end_queue();
 }
 
 sub enqueue {
     my $self = shift;
     my ($task) = @_;
 
-    croak "You cannot queue anything with the 'end_queue' hash key" if $task->{end_queue};
-    croak "You cannot queue anything with the 'respawn' hash key"   if $task->{respawn};
-
-    my $queue_file = Test2::Harness::Util::File::JSONL->new(
-        name => $self->{+QUEUE_FILE},
-        use_write_lock => 1,
-    );
-
-    $queue_file->write($task);
+    my $queue = Test2::Harness::Run::Queue->new(file => $self->{+QUEUE_FILE});
+    $queue->enqueue($task);
 }
 
 1;

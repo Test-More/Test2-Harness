@@ -20,6 +20,7 @@ use Test2::Harness::Util::HashBase qw{
     -no_stream
     -no_fork
     -times
+    -chdir
 
     no_timeout
 };

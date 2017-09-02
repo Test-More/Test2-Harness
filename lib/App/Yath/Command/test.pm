@@ -11,6 +11,7 @@ use Test2::Harness::Run;
 use parent 'App::Yath::CommandShared::Harness';
 use Test2::Harness::Util::HashBase;
 
+sub has_jobs    { 1 }
 sub has_runner  { 1 }
 sub has_logger  { 1 }
 sub has_display { 1 }

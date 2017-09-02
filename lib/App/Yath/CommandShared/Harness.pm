@@ -645,7 +645,7 @@ sub usage {
                 push @lines => $prefix . join '' => @line;
             }
 
-            push @options => join "\n" => @lines;
+            push @options => join("\n" => @lines) . "\n";
         }
     }
 
@@ -673,7 +673,7 @@ sub run {
 
     if ($settings->{help}) {
         print $self->usage;
-        return 0;
+        exit 0;
     }
 
     if ($settings->{show_opts}) {
@@ -684,7 +684,7 @@ sub run {
 
         print Test2::Harness::Util::JSON::encode_pretty_json($settings);
 
-        return 0;
+        exit 0;
     }
 
     $self->inject_signal_handlers(\my $sig);

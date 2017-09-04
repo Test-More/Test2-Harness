@@ -3,7 +3,6 @@ use warnings;
 
 use Test::More;
 
-
 sub warnings(&) {
     my $code = shift;
     my @warnings;

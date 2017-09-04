@@ -16,11 +16,9 @@ sub viable {
 
     return 0 if $ENV{HARNESS_PERL_SWITCHES};
 
-    return 0 if @{$test->switches};
+    my $job = $test->job;
 
-    if (my $headers = $test->headers) {
-        return 0 if exists($headers->{features}->{preload}) && !$headers->{features}->{preload};
-    }
+    return 0 if @{$job->switches};
 
     return 1;
 }
@@ -29,6 +27,8 @@ sub run {
     my $class = shift;
     my ($test) = @_;
 
+    my $job = $test->job;
+
     my $pid = fork();
     die "Failed to fork: $!" unless defined $pid;
 
@@ -36,9 +36,9 @@ sub run {
     return ($pid, undef) if $pid;
 
     # In Child
-    my $file = $test->file;
+    my $file = $job->file;
 
-    my $env = $test->env_vars;
+    my $env = $job->env_vars;
     $ENV{$_} = $env->{$_} for keys %$env;
 
     $ENV{T2_HARNESS_FORKED}  = 1;
@@ -66,7 +66,7 @@ sub run {
     my $stderr = clone_io(\*STDERR);
     my $die = sub { print $stderr @_; exit 255 };
 
-    write_file($in_file, $test->input);
+    write_file($in_file, $job->input);
 
     close(STDIN) or die "Could not close STDIN: $!";
     open(STDIN, '<', $in_file) or die "Could not re-open STDIN";
@@ -89,20 +89,20 @@ sub run {
         Test2::API::test2_post_preload_reset();
     }
 
-    push @INC => @{$test->libs};
+    push @INC => @{$job->libs};
 
-    unless ($test->no_stream) {
+    if ($job->use_stream) {
         $ENV{T2_FORMATTER} = 'Stream';
         require Test2::Formatter::Stream;
         Test2::Formatter::Stream->import(file => $event_file);
     }
 
-    if ($test->times) {
+    if ($job->times) {
         require Test2::Plugin::Times;
         Test2::Plugin::Times->import();
     }
 
-    @ARGV = @{$test->args};
+    @ARGV = @{$job->args};
 
     return (undef, $file);
 }

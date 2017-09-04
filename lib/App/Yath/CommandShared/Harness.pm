@@ -131,7 +131,7 @@ sub all_opts {
 
         {
             spec      => 'T|times',
-            field   => 'times',
+            field     => 'times',
             used_by   => {jobs => 1, runner => 1},
             section   => 'Job Options',
             usage     => ['-T  --times'],
@@ -179,7 +179,7 @@ sub all_opts {
 
         {
             spec      => 'k|keep-dir',
-            field   => 'keep_dir',
+            field     => 'keep_dir',
             used_by   => {jobs => 1, runner => 1},
             section   => 'Job Options',
             usage     => ["-k  --keep-dir"],
@@ -199,38 +199,35 @@ sub all_opts {
         },
 
         {
-            spec    => 'TAP|tap|no-stream',
-            field   => 'no_stream',
+            spec    => 'TAP|tap',
+            field   => 'use_stream',
+            action  => sub { $settings->{use_stream} = 0 },
             used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage     => ['--TAP  --tap', '--no-stream'],
-            summary   => ["use 'TAP' instead of the newer 'stream' output"],
-            long_desc => "Tests normally output 'TAP' unless told otherwise. This format is lossy and clunky. Test2::Harness normally uses a newer streaming format to recieve test results. There are old/legacy tests where this causes problems, in which case setting --TAP can help.",
         },
 
         {
-            spec    => 'fork',
-            field   => 'no_fork',
-            action  => sub { $settings->{no_fork} = 0 },
+            spec    => 'stream!',
+            field   => 'use_stream',
             used_by => {jobs => 1, runner => 1},
             section => 'Job Options',
-            usage   => ['--fork'],
-            summary => ['(Default: on) fork to start tests'],
+            usage     => ['--stream',                                          '--no-stream',       '--TAP  --tap'],
+            summary   => ["Use 'stream' instead of TAP (Default: use stream)", "Do not use stream", "Use TAP"],
+            long_desc => "The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to recieve test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.",
         },
 
         {
-            spec      => 'no-fork',
-            field   => 'no_fork',
-            used_by   => {jobs => 1, runner => 1},
-            section   => 'Job Options',
-            usage     => ['--no-fork'],
-            summary   => ['Do not fork to start tests, instead start a new process.'],
-            long_desc => 'Test2::Harness normally forks to start a test. Forking can break some select tests, this option will allow such tests to pass. This is not compatible with the "preload" option. This is also significantly slower. You can also add the "# HARNESS-NO-PRELOAD" comment to the top of the test file to enable this on a per-test basis.',
+            spec        => 'fork!',
+                field   => 'use_fork',
+                used_by => {jobs => 1, runner => 1},
+                section => 'Job Options',
+                usage     => ['--fork',                            '--no-fork'],
+                summary   => ['(Default: on) fork to start tests', 'Do not fork to start tests'],
+                long_desc => 'Test2::Harness normally forks to start a test. Forking can break some select tests, this option will allow such tests to pass. This is not compatible with the "preload" option. This is also significantly slower. You can also add the "# HARNESS-NO-PRELOAD" comment to the top of the test file to enable this on a per-test basis.',
         },
 
         {
             spec      => 'unsafe-inc!',
-            field   => 'unsafe_inc',
+            field     => 'unsafe_inc',
             used_by   => {display => 1},
             section   => 'Job Options',
             usage     => ['--unsafe-inc', '--no-unsafe-inc'],
@@ -354,7 +351,7 @@ sub all_opts {
 
         {
             spec      => 'et|event_timeout=i',
-            field   => 'event_timeout',
+            field     => 'event_timeout',
             used_by   => {runner => 1},
             section   => 'Harness Options',
             usage     => ['--et SECONDS', '--event_timeout #'],
@@ -365,7 +362,7 @@ sub all_opts {
 
         {
             spec      => 'pet|post-exit-timeout=i',
-            field   => 'post_exit_timeout',
+            field     => 'post_exit_timeout',
             used_by   => {runner => 1},
             section   => 'Harness Options',
             usage     => ['--pet SECONDS', '--post-exit-timeout #'],
@@ -447,7 +444,7 @@ sub all_opts {
 
         {
             spec      => 'formatter=s',
-            field   => 'formatter',
+            field     => 'formatter',
             used_by   => {display => 1},
             section   => 'Display Options',
             usage     => ['--formatter Mod', '--formatter +Mod'],
@@ -458,7 +455,7 @@ sub all_opts {
 
         {
             spec      => 'show-job-end!',
-            field   => 'show_job_end',
+            field     => 'show_job_end',
             used_by   => {display => 1},
             section   => 'Display Options',
             usage     => ['--show-job-end', '--no-show-job-end'],
@@ -487,7 +484,7 @@ sub all_opts {
             used_by => {display => 1},
             section => 'Display Options',
             usage   => ['--show-job-launch', '--no-show-job-launch'],
-            summary   => ["Show output for the start of a job", "(Default: off unless -v)"],
+            summary => ["Show output for the start of a job", "(Default: off unless -v)"],
             default => sub {
                 my ($self, $settings, $field) = @_;
                 return 1 if $settings->{verbose};
@@ -574,7 +571,7 @@ sub usage {
             or ($a->{long_desc} ? 2 : 1) <=> ($b->{long_desc} ? 2 : 1)       # Things with long desc go to bottom
             or          $a->{usage}->[0] cmp $b->{usage}->[0]                # Alphabetical by first usage example
             or       ($a->{field} || '') cmp ($b->{field} || '')             # By field if present
-    } @{$self->{+MY_OPTS}};
+    } grep { $_->{section} } @{$self->{+MY_OPTS}};
     #>>>
 
     # Get the longest 'usage' item's length

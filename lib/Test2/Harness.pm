@@ -153,7 +153,7 @@ sub check_timeout {
 
     my $stamp = time;
 
-    return if $watcher->job->no_timeout;
+    return unless $watcher->job->use_timeout;
 
     my $delta = $stamp - $watcher->last_event;
 

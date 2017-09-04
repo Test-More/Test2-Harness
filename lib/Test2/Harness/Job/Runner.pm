@@ -17,11 +17,7 @@ use Test2::Harness::Util qw/open_file/;
 use Test2::Harness::Util::HashBase qw{
     -via
     -dir
-
     -job
-    -file
-
-    -_scanned -_headers -_shbang
 };
 
 sub init {
@@ -30,14 +26,7 @@ sub init {
     my $dir  = $self->{+DIR}  or croak "'dir' is a required attribute";
     my $job  = $self->{+JOB}  or croak "'job' is a required attribute";
 
-    my $file = $job->file;
-
-    # We want absolute path
-    $file = File::Spec->rel2abs($file);
-    $self->{+FILE} = $file;
-
     croak "Invalid output directory '$dir'" unless -d $dir;
-    croak "Invalid test file '$file'"       unless -f $file;
 
     my $via = $self->{+VIA} ||= ['Open3'];
     croak "'via' must be an array reference"
@@ -55,10 +44,12 @@ my %RUN_MAP = (
 sub run {
     my $self = shift;
 
+    my $job = $self->{+JOB};
+
     my $via;
 
     for my $item (@{$self->{+VIA}}) {
-        next if $item eq 'Fork' && $self->no_fork;
+        next if $item eq 'Fork' && !$job->use_fork;
         my $class = $RUN_MAP{$item};
 
         unless ($class) {
@@ -110,138 +101,6 @@ sub output_filenames {
     my $event_file = File::Spec->catfile($dir, 'events.jsonl');
 
     return ($in_file, $out_file, $err_file, $event_file);
-}
-
-sub times     { shift->job->times }
-sub env_vars  { shift->job->env_vars }
-sub libs      { shift->job->libs }
-sub args      { shift->job->args }
-sub input     { shift->job->input }
-
-sub no_timeout {
-    my $self = shift;
-    my $timeout = $self->headers->{features}->{timeout};
-    return 1 if defined($timeout) && !$timeout;
-    return 0;
-}
-
-sub no_fork {
-    my $self = shift;
-    return 1 if $self->job->no_fork;
-    my $preload = $self->headers->{features}->{preload};
-    return 1 if defined($preload) && !$preload;
-    return 0;
-}
-
-sub no_stream {
-    my $self = shift;
-    return 1 if $self->job->no_stream;
-
-    my $stream = $self->headers->{features}->{stream};
-    return 1 if defined($stream) && !$stream;
-
-    my $tap = $self->headers->{features}->{tap};
-    return 1 if $tap;
-
-    return 0;
-}
-
-sub headers {
-    my $self = shift;
-    $self->_scan unless $self->{+_SCANNED};
-    return {} unless $self->{+_HEADERS};
-    return {%{$self->{+_HEADERS}}};
-}
-
-sub shbang {
-    my $self = shift;
-    $self->_scan unless $self->{+_SCANNED};
-    return {} unless $self->{+_SHBANG};
-    return {%{$self->{+_SHBANG}}};
-}
-
-sub switches {
-    my $self = shift;
-
-    my @out;
-
-    push @out => @{$self->job->switches};
-
-    if (my $shbang = $self->shbang) {
-        if (my $switches = $shbang->{switches}) {
-            push @out => @$switches;
-        }
-    }
-
-    return \@out;
-}
-
-sub _scan {
-    my $self = shift;
-
-    return if $self->{+_SCANNED}++;
-
-    open(my $fh, '<', $self->{+FILE}) or die "Could not open file '$self->{+FILE}': $!";
-
-    my %headers;
-    for (my $ln = 0; my $line = <$fh>; $ln++) {
-        chomp($line);
-        next if $line =~ m/^\s*$/;
-
-        if ($ln == 0 && $ln =~ m/^#!/) {
-            my $shbang = $self->_parse_shbang($line);
-            if ($shbang) {
-                $self->{+_SHBANG} = $shbang;
-                next;
-            }
-        }
-
-        next if $line =~ m/^(use|require|BEGIN)/;
-        last unless $line =~ m/^\s*#/;
-
-        next unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
-
-        my ($dir, @args) = split /-/, lc($1);
-        if ($dir eq 'no') {
-            my ($feature) = @args;
-            $headers{features}->{$feature} = 0;
-        }
-        elsif ($dir eq 'yes' || $dir eq 'use') {
-            my ($feature) = @args;
-            $headers{features}->{$feature} = 1;
-        }
-        else {
-            warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
-        }
-    }
-
-    $self->{+_HEADERS} = \%headers;
-}
-
-sub _parse_shbang {
-    my $self = shift;
-    my $line = shift;
-
-    return {} if !defined $line;
-
-    my %shbang;
-
-    # NOTE: Test this, the dashes should be included with the switches
-    my $shbang_re = qr{
-        ^
-          \#!.*\bperl.*?        # the perl path
-          (?: \s (-.+) )?       # the switches, maybe
-          \s*
-        $
-    }xi;
-
-    if ($line =~ $shbang_re) {
-        my @switches = grep { m/\S/ } split /\s+/, $1 if defined $1;
-        $shbang{switches} = \@switches;
-        $shbang{line}     = $line;
-    }
-
-    return \%shbang;
 }
 
 1;

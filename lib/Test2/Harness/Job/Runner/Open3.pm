@@ -25,28 +25,30 @@ sub run {
     my $class = shift;
     my ($test) = @_;
 
+    my $job = $test->job;
+
     my ($in_file, $out_file, $err_file, $event_file) = $test->output_filenames;
 
     my $out_fh = open_file($out_file, '>');
     my $err_fh = open_file($err_file, '>');
 
-    write_file($in_file, $test->input);
+    write_file($in_file, $job->input);
     my $in_fh = open_file($in_file, '<');
 
     my $env = {
-        %{$test->env_vars},
-        $test->no_stream ? () : (T2_FORMATTER => 'Stream'),
+        %{$job->env_vars},
+        $job->use_stream ? (T2_FORMATTER => 'Stream') : (),
     };
 
     my @cmd = (
         $^X,
-        (map { "-I$_" } @{$test->libs}, $class->find_inc),
+        (map { "-I$_" } @{$job->libs}, $class->find_inc),
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
-        @{$test->switches},
-        $test->no_stream ? () : ("-MTest2::Formatter::Stream=file,$event_file"),
-        $test->times ? ('-MTest2::Plugin::Times') : (),
-        $test->file,
-        @{$test->args},
+        @{$job->switches},
+        $job->use_stream ? ("-MTest2::Formatter::Stream=file,$event_file") : (),
+        $job->times ? ('-MTest2::Plugin::Times') : (),
+        $job->file,
+        @{$job->args},
     );
 
     my $old;

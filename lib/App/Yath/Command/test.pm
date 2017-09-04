@@ -4,9 +4,13 @@ use warnings;
 
 our $VERSION = '0.001005';
 
+use Test2::Harness::Util::TestFile;
 use Test2::Harness::Feeder::Run;
 use Test2::Harness::Run::Runner;
+use Test2::Harness::Run::Queue;
 use Test2::Harness::Run;
+
+use Time::HiRes qw/time/;
 
 use parent 'App::Yath::CommandShared::Harness';
 use Test2::Harness::Util::HashBase;
@@ -58,9 +62,11 @@ sub feeder {
         search     => $settings->{search},
         unsafe_inc => $settings->{unsafe_inc},
         env_vars   => $settings->{env_vars},
-        no_stream  => $settings->{no_stream},
-        no_fork    => $settings->{no_fork},
+        use_stream => $settings->{use_stream},
+        use_fork   => $settings->{use_fork},
         times      => $settings->{times},
+        verbose    => $settings->{verbose},
+        finite     => 1,
     );
 
     my $runner = Test2::Harness::Run::Runner->new(
@@ -70,10 +76,53 @@ sub feeder {
 
     my $pid = $runner->spawn;
 
-    my $queue_file = $runner->queue_file;
-    sleep 0.02 until -e $queue_file;
-    for my $file ($run->find_files) {
-        $runner->enqueue({file => $file});
+    my %queues = (
+        general   => Test2::Harness::Run::Queue->new(file => $runner->general_queue_file),
+        isolation => Test2::Harness::Run::Queue->new(file => $runner->isolate_queue_file),
+        long      => Test2::Harness::Run::Queue->new(file => $runner->long_queue_file),
+    );
+
+    my @files = $run->find_files;
+    sleep 0.02 until $runner->ready;
+
+    for my $file (@files) {
+        $file = File::Spec->rel2abs($file);
+        my $tf = Test2::Harness::Util::TestFile->new(file => $file);
+
+        my $queue_name = $tf->check_queue;
+        if (!$queue_name) {
+            # 'isolation' queue if isolation requested
+            $queue_name = 'isolation' if $tf->check_feature('isolation');
+
+            # 'long' queue for anything that cannot preload or fork
+            $queue_name ||= 'long' unless $tf->check_feature(preload => 1);
+            $queue_name ||= 'long' unless $tf->check_feature(fork    => 1);
+
+            # 'long' for anything with no timeout
+            $queue_name ||= 'long' unless $tf->check_feature(timeout => 1);
+
+            # Default
+            $queue_name ||= 'general';
+        }
+
+        my $queue = $queues{$queue_name};
+        unless($queue) {
+            warn "File '$file' wants queue '$queue_name', but there is no such queue. Using the 'general' queue";
+            $queue_name = 'general';
+            $queue = $queues{$queue_name};
+        }
+
+        my $item = {
+            file        => $file,
+            use_fork    => $tf->check_feature(fork => 1),
+            use_timeout => $tf->check_feature(timeout => 1),
+            use_preload => $tf->check_feature(preload => 1),
+            switches    => $tf->switches,
+            queue       => $queue_name,
+            stamp       => time,
+        };
+
+        $queue->enqueue($item);
     }
     $runner->end_queue;
 

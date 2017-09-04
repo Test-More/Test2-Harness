@@ -17,12 +17,12 @@ use Test2::Harness::Util::HashBase qw{
     -switches
     -args
     -input
-    -no_stream
-    -no_fork
     -times
     -chdir
 
-    no_timeout
+    -use_fork
+    -use_stream
+    -use_timeout
 };
 
 sub init {
@@ -39,6 +39,10 @@ sub init {
     $self->{+SWITCHES} ||= [];
     $self->{+ARGS}     ||= [];
     $self->{+INPUT}    ||= '';
+
+    $self->{+USE_FORK}    = 1 unless defined $self->{+USE_FORK};
+    $self->{+USE_STREAM}  = 1 unless defined $self->{+USE_STREAM};
+    $self->{+USE_TIMEOUT} = 1 unless defined $self->{+USE_TIMEOUT};
 }
 
 sub TO_JSON { return { %{$_[0]} } }

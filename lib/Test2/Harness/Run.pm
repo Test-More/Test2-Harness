@@ -11,20 +11,23 @@ use Test2::Util qw/IS_WIN32/;
 use Test2::Harness::Util::HashBase qw{
     -run_id
 
+    -finite
     -job_count
     -switches
     -libs -lib -blib
     -preload
     -args
     -input
+    -verbose
 
     -chdir
     -search
     -unsafe_inc
 
     -env_vars
-    -no_stream
-    -no_fork
+    -use_stream
+    -use_fork
+    -use_timeout
     -times
 };
 
@@ -52,6 +55,11 @@ sub init {
     $self->{+INPUT}     ||= undef;
 
     $self->{+UNSAFE_INC} = 1 unless defined $self->{+UNSAFE_INC};
+    $self->{+USE_STREAM} = 1 unless defined $self->{+USE_STREAM};
+    $self->{+USE_FORK}   = (IS_WIN32 ? 0 : 1) unless defined $self->{+USE_FORK};
+
+    croak "Preload requires forking"
+        if $self->{+PRELOAD} && !$self->{+USE_FORK};
 
     my $env = $self->{+ENV_VARS} ||= {};
     $env->{PERL_USE_UNSAFE_INC} = $self->{+UNSAFE_INC} unless defined $env->{PERL_USE_UNSAFE_INC};

@@ -8,12 +8,10 @@ use Carp qw/croak/;
 
 use Test2::Harness::Util qw/write_file_atomic/;
 
-use Test2::Harness::Util::File::JSON();
 use Test2::Harness::Util::File::JSONL();
 
 use Test2::Harness::Util::HashBase qw{
     -file -qh
-    -index_file
 };
 
 sub init {
@@ -22,41 +20,18 @@ sub init {
     croak "'file' is a required attribute"
         unless $self->{+FILE};
 
-    my $index_file = $self->{+FILE};
-    $index_file =~ s/\.jsonl/_index/;
-    $self->{+INDEX_FILE} ||= $index_file;
+    write_file_atomic($self->{+FILE}, "")
+        unless -f $self->{+FILE};
 }
 
-sub mark {
+sub seek {
     my $self = shift;
-    my ($job_id, $jobs, $last_item) = @_;
+    my ($pos) = @_;
 
-    my $pos = $last_item->[1];
+    $self->{+QH} ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+FILE});
+    $self->{+QH}->seek($pos);
 
-    my $index_file = Test2::Harness::Util::File::JSON->new(name => $self->{+INDEX_FILE});
-    $index_file->write({pos => $pos, job_id => $job_id, jobs => $jobs});
-}
-
-sub create_or_recall {
-    my $self = shift;
-
-    if (-f $self->{+INDEX_FILE}) {
-        die "Have index file, but no queue file!"
-            unless -f $self->{+FILE};
-
-        my $index_file = Test2::Harness::Util::File::JSON->new(name => $self->{+INDEX_FILE});
-        my $data = $index_file->read;
-
-        $self->{+QH} = Test2::Harness::Util::File::JSONL->new(name => $self->{+FILE});
-        $self->{+QH}->seek($data->{pos});
-
-        return ($data->{job_id}, %{$data->{jobs}});
-    }
-
-    write_file_atomic($self->{+FILE}, "");
-    $self->{+QH} = Test2::Harness::Util::File::JSONL->new(name => $self->{+FILE});
-    $self->{+QH}->seek(0);
-    return (1,);
+    return $pos;
 }
 
 sub poll {
@@ -65,24 +40,9 @@ sub poll {
     $self->{+QH}->poll_with_index();
 }
 
-sub respawn {
-    my $self = shift;
-    my $fh = Test2::Harness::Util::File::JSONL->new(name => $self->{+FILE}, use_write_lock => 1);
-    $fh->write({respawn => 1});
-}
-
-sub end_queue {
-    my $self = shift;
-    my $fh = Test2::Harness::Util::File::JSONL->new(name => $self->{+FILE}, use_write_lock => 1);
-    $fh->write({end_queue => 1});
-}
-
 sub enqueue {
     my $self = shift;
     my ($task) = @_;
-
-    croak "You cannot queue anything with the 'end_queue' hash key" if $task->{end_queue};
-    croak "You cannot queue anything with the 'respawn' hash key"   if $task->{respawn};
 
     my $fh = Test2::Harness::Util::File::JSONL->new(name => $self->{+FILE}, use_write_lock => 1);
     $fh->write($task);

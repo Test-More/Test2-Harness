@@ -6,6 +6,8 @@ our $VERSION = '0.001005';
 
 use Carp qw/croak/;
 
+use File::Spec;
+
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 
 BEGIN { require Test2::Harness::Renderer; our @ISA = ('Test2::Harness::Renderer') }
@@ -54,7 +56,7 @@ sub render_event {
                 tag       => 'LAUNCH',
                 debug     => 0,
                 important => 1,
-                details   => $job->file,
+                details   => File::Spec->abs2rel($job->file),
             };
         }
 
@@ -79,7 +81,7 @@ sub render_event {
                 tag => $skip ? 'SKIPPED' : $fail ? 'FAILED' : 'PASSED',
                 debug     => $fail,
                 important => 1,
-                details   => $file,
+                details   => File::Spec->abs2rel($file),
             };
             push @{$f->{info}} => {
                 tag       => 'SKIPPED',

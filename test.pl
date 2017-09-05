@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 # HARNESS-NO-PRELOAD
-# HARNESS-QUEUE-LONG
+# HARNESS-CAT-LONG
 use strict;
 use warnings;
 

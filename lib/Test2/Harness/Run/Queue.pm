@@ -6,12 +6,14 @@ our $VERSION = '0.001005';
 
 use Carp qw/croak/;
 
+use Time::HiRes qw/time/;
+
 use Test2::Harness::Util qw/write_file_atomic/;
 
 use Test2::Harness::Util::File::JSONL();
 
 use Test2::Harness::Util::HashBase qw{
-    -file -qh
+    -file -qh -ended
 };
 
 sub init {
@@ -19,9 +21,11 @@ sub init {
 
     croak "'file' is a required attribute"
         unless $self->{+FILE};
+}
 
-    write_file_atomic($self->{+FILE}, "")
-        unless -f $self->{+FILE};
+sub start {
+    my $self = shift;
+    write_file_atomic($self->{+FILE}, "");
 }
 
 sub seek {
@@ -36,11 +40,35 @@ sub seek {
 
 sub poll {
     my $self = shift;
+
+    return $self->{+ENDED} if $self->{+ENDED};
+
     $self->{+QH} ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+FILE});
-    $self->{+QH}->poll_with_index();
+    my @out = $self->{+QH}->poll_with_index();
+
+    $self->{+ENDED} = $out[-1] if @out && !defined($out[-1]->[-1]);
+
+    return @out;
+}
+
+sub end {
+    my $self = shift;
+    $self->_enqueue(undef);
 }
 
 sub enqueue {
+    my $self = shift;
+    my ($task) = @_;
+
+    croak "Invalid task"
+        unless $task && ref($task) eq 'HASH' && values %$task;
+
+    $task->{stamp} ||= time;
+
+    $self->_enqueue($task);
+}
+
+sub _enqueue {
     my $self = shift;
     my ($task) = @_;
 

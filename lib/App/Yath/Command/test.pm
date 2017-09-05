@@ -74,57 +74,51 @@ sub feeder {
         run => $run,
     );
 
+    my $queue = $runner->queue;
+    $queue->start;
+
     my $pid = $runner->spawn;
 
-    my %queues = (
-        general   => Test2::Harness::Run::Queue->new(file => $runner->general_queue_file),
-        isolation => Test2::Harness::Run::Queue->new(file => $runner->isolate_queue_file),
-        long      => Test2::Harness::Run::Queue->new(file => $runner->long_queue_file),
-    );
-
-    my @files = $run->find_files;
-    sleep 0.02 until $runner->ready;
-
-    for my $file (@files) {
+    my $job_id = 1;
+    for my $file ($run->find_files) {
         $file = File::Spec->rel2abs($file);
         my $tf = Test2::Harness::Util::TestFile->new(file => $file);
 
-        my $queue_name = $tf->check_queue;
-        if (!$queue_name) {
+        my $category = $tf->check_category;
+
+        my $fork    = $tf->check_feature(fork      => 1);
+        my $preload = $tf->check_feature(preload   => 1);
+        my $timeout = $tf->check_feature(timeout   => 1);
+        my $isolate = $tf->check_feature(isolation => 0);
+
+        if (!$category) {
             # 'isolation' queue if isolation requested
-            $queue_name = 'isolation' if $tf->check_feature('isolation');
+            $category = 'isolation' if $isolate;
 
             # 'long' queue for anything that cannot preload or fork
-            $queue_name ||= 'long' unless $tf->check_feature(preload => 1);
-            $queue_name ||= 'long' unless $tf->check_feature(fork    => 1);
+            $category ||= 'medium' unless $preload && $fork;
 
             # 'long' for anything with no timeout
-            $queue_name ||= 'long' unless $tf->check_feature(timeout => 1);
+            $category ||= 'long' unless $timeout;
 
             # Default
-            $queue_name ||= 'general';
-        }
-
-        my $queue = $queues{$queue_name};
-        unless($queue) {
-            warn "File '$file' wants queue '$queue_name', but there is no such queue. Using the 'general' queue";
-            $queue_name = 'general';
-            $queue = $queues{$queue_name};
+            $category ||= 'general';
         }
 
         my $item = {
             file        => $file,
-            use_fork    => $tf->check_feature(fork => 1),
-            use_timeout => $tf->check_feature(timeout => 1),
-            use_preload => $tf->check_feature(preload => 1),
+            use_fork    => $fork,
+            use_timeout => $timeout,
+            use_preload => $preload,
             switches    => $tf->switches,
-            queue       => $queue_name,
+            category    => $category,
             stamp       => time,
+            job_id      => $job_id++,
         };
 
         $queue->enqueue($item);
     }
-    $runner->end_queue;
+    $queue->end;
 
     my $feeder = Test2::Harness::Feeder::Run->new(
         run      => $run,

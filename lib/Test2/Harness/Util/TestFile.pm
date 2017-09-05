@@ -45,9 +45,10 @@ sub check_feature {
     return 0;
 }
 
-sub check_queue {
+sub check_category {
     my $self = shift;
-    return $self->{+_HEADERS}->{queue};
+    $self->_scan unless $self->{+_SCANNED};
+    return $self->{+_HEADERS}->{category};
 }
 
 sub headers {
@@ -105,9 +106,9 @@ sub _scan {
             my ($feature) = @args;
             $headers{features}->{$feature} = 1;
         }
-        elsif ($dir eq 'queue') {
+        elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;
-            $headers{queue} = $name;
+            $headers{category} = $name;
         }
         else {
             warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";

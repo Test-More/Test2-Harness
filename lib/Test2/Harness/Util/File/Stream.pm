@@ -22,7 +22,7 @@ sub poll_with_index {
     my @out;
     while (!$max || @out < $max) {
         my ($spos, $epos, $line) = $self->read_line(%params, from => $pos);
-        last unless defined $line;
+        last unless defined($line) || defined($spos) || defined($epos);
 
         $self->{+LINE_POS} = $epos unless $params{peek} || defined $params{from};
         push @out => [$spos, $epos, $line];

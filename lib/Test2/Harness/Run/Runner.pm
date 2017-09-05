@@ -253,7 +253,7 @@ sub start {
     warn $err;
 
     $self->kill_jobs($sig || 'TERM');
-    $self->wait_jobs();
+    $self->wait_jobs(WNOHANG);
 
     CORE::exit($SIG ? $SIG eq 'TERM' ? 143 : $SIG eq 'INT' ? 130 : 255 : 255);
 }

@@ -79,12 +79,14 @@ sub init {
     $settings->{env_vars}->{HARNESS_IS_VERBOSE}    = $settings->{verbose};
     $settings->{env_vars}->{T2_HARNESS_IS_VERBOSE} = $settings->{verbose};
 
-    remove_tree($settings->{dir}, {safe => 1, keep_root => 1})
-        if $settings->{clear_dir} && $settings->{dir} && -d $settings->{dir};
+    if ($settings->{dir}) {
+        remove_tree($settings->{dir}, {safe => 1, keep_root => 1})
+            if $settings->{clear_dir} && -d $settings->{dir};
 
-    opendir(my $DH, $settings->{dir}) or die "Could not open directory";
-    die "Work directory is not empty (use -C to clear it)" if first { !m/^\.+$/ } readdir($DH);
-    closedir($DH);
+        opendir(my $DH, $settings->{dir}) or die "Could not open directory";
+        die "Work directory is not empty (use -C to clear it)" if first { !m/^\.+$/ } readdir($DH);
+        closedir($DH);
+    }
 }
 
 sub section_order {

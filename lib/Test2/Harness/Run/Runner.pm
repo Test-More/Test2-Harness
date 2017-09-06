@@ -166,9 +166,11 @@ sub wait {
 
     return if defined $self->{+_EXIT};
 
+    local $?;
+
     my $pid = $self->{+PID} or croak "No PID, cannot wait";
     my $check = waitpid($pid, $flags || 0);
-    my $exit = ($? >> 8);
+    my $exit = ($? >> 8) || $? & 127;
 
     return if $check == 0;
     die "Spawn process was already reaped" if $check == -1;
@@ -310,13 +312,15 @@ sub wait_jobs {
 
     my $running = $self->{+STATE}->{running};
 
+    local $?;
+
     for my $cat (values %$running) {
         my @keep;
 
         for my $set (@$cat) {
             my ($pid, $exit_file) = @$set;
             my $got = waitpid($pid, $flags || 0);
-            my $ret = $? >> 8;
+            my $ret = $?;
 
             if(!$got) {
                 push @keep => $set;
@@ -442,10 +446,13 @@ sub run_job {
 sub next {
     my $self = shift;
 
+    my $state = $self->{+STATE};
+
+    return if $state->{ended} && !$self->pending;
+
     my $wait_time = $self->wait_time;
     my $max = $self->{+RUN}->job_count;
     my $meth = $self->{+_NEXT};
-    my $state = $self->{+STATE};
 
     while(1) {
         $self->wait_jobs(WNOHANG);

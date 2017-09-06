@@ -13,6 +13,7 @@ use Test2::Harness::Util::HashBase qw{
     -live
 
     -_complete
+    -killed
 
     -assertion_count
     -exit
@@ -204,14 +205,26 @@ sub fail_info_facet_list {
     push @out => {tag => 'REASON', debug => 1, details => "One or more incomplete subtests (Count: $incomplete_subtests)"}
         if $incomplete_subtests;
 
-    push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (Code: $self->{+EXIT})"}
-        if $self->{+EXIT};
+    if (my $wstat = $self->{+EXIT}) {
+        if (my $exit = ($wstat >> 8)) {
+            push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (Code: $exit)"}
+        }
+        elsif (my $sig = $wstat & 127) {
+            push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (Signal: $sig)"}
+        }
+        else {
+            push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (wstat: $wstat)"}
+        }
+    }
 
     push @out => {tag => 'REASON', debug => 1, details => "Errors were encountered (Count: $self->{+_ERRORS})"}
         if $self->{+_ERRORS};
 
     push @out => {tag => 'REASON', debug => 1, details => "Assertion failures were encountered (Count: $self->{+_FAILURES})"}
         if $self->{+_FAILURES};
+
+    push @out => {tag => 'REASON', debug => 1, details => "Test file was killed"}
+        if $self->{+KILLED};
 
     push @out => $self->subtest_fail_info_facet_list();
 
@@ -230,7 +243,7 @@ sub TO_JSON { undef }
 sub kill {
     my $self = shift;
 
-    $self->{+_COMPLETE} = 1;
+    $self->{+KILLED} = 1;
 
     return 0 unless $self->{+LIVE};
     return 1 if defined $self->{+EXIT};
@@ -253,6 +266,8 @@ sub complete {
 
     my $has_exit = defined($exit) ? 1 : 0;
     my $has_plan = defined($plan) ? 1 : 0;
+
+    return $self->{+_COMPLETE} = 1 if $self->{+KILLED} && $has_exit;
 
     # Script exited badly
     return $self->{+_COMPLETE} = 1 if $exit;

@@ -96,6 +96,7 @@ sub iteration {
         }
 
         push @events => $self->{+FEEDER}->poll($self->{+BATCH_SIZE});
+
         last unless @events;
 
         for my $event (@events) {

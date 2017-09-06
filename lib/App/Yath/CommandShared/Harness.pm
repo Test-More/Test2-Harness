@@ -302,6 +302,10 @@ sub all_opts {
             section => 'Harness Options',
             usage   => ['-t path/', '--tmpdir path/'],
             summary => ['Use a specific temp directory', '(Default: use system temp dir)'],
+            default => sub {
+                my ($self, $settings, $field) = @_;
+                return $settings->{tmp_dir} ||= $ENV{TMPDIR} || $ENV{TEMPDIR} || File::Spec->tmpdir;
+            },
         },
 
         {

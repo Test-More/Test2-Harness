@@ -35,6 +35,10 @@ sub run {
     # In parent
     return ($pid, undef) if $pid;
 
+    $SIG{TERM} = 'DEFAULT';
+    $SIG{INT} = 'DEFAULT';
+    $SIG{HUP} = 'DEFAULT';
+
     # In Child
     my $file = $job->file;
 

@@ -75,6 +75,7 @@ sub init {
 
     $self->{+JOBS_FILE} = File::Spec->catfile($dir, 'jobs.jsonl');
     $self->{+JOBS} = Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
+    $self->{+JOBS}->open_file('>>'); # Touch the file
 
     $self->{+QUEUE_FILE} = File::Spec->catfile($dir, 'queue.jsonl');
     $self->{+QUEUE} = Test2::Harness::Run::Queue->new(file => $self->{+QUEUE_FILE});
@@ -133,11 +134,13 @@ sub cmd {
         "-I$inc",
         $script,
         $self->{+DIR},
+        @_,
     );
 }
 
 sub spawn {
     my $self = shift;
+    my %params = @_;
 
     my $run = $self->{+RUN};
 
@@ -152,7 +155,7 @@ sub spawn {
 
     my $pid = open3(
         undef, ">&" . fileno($out_log), ">&" . fileno($err_log),
-        $self->cmd,
+        $self->cmd(%params),
     );
 
     $self->{+PID} = $pid;
@@ -243,7 +246,7 @@ sub start {
         # Already being handled
         return if $sig;
 
-        $sig = $sig;
+        $sig = $got_sig;
 
         die "Runner cought SIG$sig, Attempting to shut down cleanly...\n";
     };
@@ -270,7 +273,7 @@ sub start {
     $self->kill_jobs($sig || 'TERM');
     $self->wait_jobs(WNOHANG);
 
-    CORE::exit($SIG ? $SIG eq 'TERM' ? 143 : $SIG eq 'INT' ? 130 : 255 : 255);
+    CORE::exit($SIG ? 0 : 255);
 }
 
 sub _start {
@@ -431,7 +434,7 @@ sub run_job {
         load_import => $loadim,
         use_stream  => $stream,
         use_fork    => $fork,
-        timeout     => $timeout,
+        use_timeout => $timeout,
         job_id      => $job_id,
         file        => $file,
         env_vars    => $env,

@@ -16,3 +16,4 @@ t2_lib
 POD_TEMPLATE.POD
 /old*/
 event-log-*
+.yath-persist.json

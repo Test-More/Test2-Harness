@@ -335,7 +335,7 @@ sub render_tree {
             $len = $self->{+JOB_LENGTH};
         }
 
-        $job = sprintf("%sjob %0${len}u%s ", $color, $id, $reset || '');
+        $job = sprintf("%sjob %${len}s%s ", $color, $id, $reset || '');
     }
 
     my $depth = $f->{trace}->{nested} || 0;

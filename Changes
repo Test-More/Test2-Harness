@@ -2,6 +2,8 @@
 
     - Fix replay
     - Add pre-import
+    - Add load and load-import options
+    - Add persistent harness
 
 0.001005  2017-09-05 21:59:21-07:00 America/Los_Angeles (TRIAL RELEASE)
 

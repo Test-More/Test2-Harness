@@ -5,28 +5,33 @@ use warnings;
 
 our $VERSION = '0.001006';
 
-use Test2::Harness::Run::Runner;
+my ($dir, %args) = @ARGV;
 
-my ($dir) = @ARGV;
+if ($args{setsid}) {
+    require POSIX;
+    POSIX::setsid();
+}
 
+my $pid = $$;
+END {
+    local ($?, $!, $@);
+    if ($args{pfile} && -f $args{pfile} && $pid == $$) {
+        print "Deleting $args{pfile}\n";
+        unlink($args{pfile}) or warn "Could not delete $args{pfile}: $!\n";
+    }
+}
+
+require Test2::Harness::Run::Runner;
 my $spawn = Test2::Harness::Run::Runner->new(
     dir => $dir,
 );
 
-$SIG{HUP} = sub {
-    print STDERR <<"    EOT";
-Got SIGHUP, adding a respawn action to the queue...
-This will cause the runner to restart as soon as it finishes processing any
-items that were already in the queue. New items that get queued will be run
-after the respawn.
-    EOT
-    $spawn->respawn;
-};
-
 my $test_file = $spawn->start;
 
-# Do not keep the signal handler post-fork when we are running a test file.
-$SIG{HUP} = 'DEFAULT';
+# Do not keep these signal handlers post-fork when we are running a test file.
+$SIG{HUP}  = 'DEFAULT';
+$SIG{INT}  = 'DEFAULT';
+$SIG{TERM} = 'DEFAULT';
 
 unless($test_file) {
     my $complete = File::Spec->catfile($dir, 'complete');

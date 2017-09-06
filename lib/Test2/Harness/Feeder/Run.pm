@@ -21,6 +21,8 @@ use Test2::Harness::Util::HashBase qw{
     -_active -job_lookup
     -_polled
     -keep_dir
+    -job_ids
+    -seen_jobs
 };
 
 sub init {
@@ -40,6 +42,8 @@ sub init {
             run_id => $self->{+RUN}->run_id,
         );
     }
+
+    $self->{+SEEN_JOBS} = {};
 
     $self->{+_ACTIVE} = [];
 }
@@ -81,6 +85,7 @@ sub poll {
     my @new_jobs;
     for my $job ($dir->job_poll(1)) {
         my $job_id = $job->job_id;
+        next if $self->{+JOB_IDS} && !$self->{+JOB_IDS}->{$job_id};
 
         my $jfeed = Test2::Harness::Feeder::Job->new(
             job_id => $job_id,
@@ -138,6 +143,11 @@ sub poll {
 sub complete {
     my $self = shift;
 
+    if (my $job_ids = $self->{+JOB_IDS}) {
+        return 1 unless grep { !$self->{+SEEN_JOBS}->{$_} } keys %$job_ids;
+        return 0;
+    }
+
     my $runner = $self->{+RUNNER} or return 1;
     my $exit = $runner->exit;
 
@@ -153,6 +163,7 @@ sub job_completed {
     my $self = shift;
     my ($job_id) = @_;
 
+    $self->{+SEEN_JOBS}->{$job_id}++;
     $self->{+JOB_LOOKUP}->{$job_id}->set_complete(1);
 }
 

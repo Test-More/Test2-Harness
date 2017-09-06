@@ -18,9 +18,10 @@ use Test2::Harness::Util qw/read_file open_file/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use Test2::Harness;
+use Test2::Harness::Run;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw/-settings -my_opts/;
+use Test2::Harness::Util::HashBase qw/-settings -my_opts -signal/;
 
 sub has_jobs    { 0 }
 sub has_runner  { 0 }
@@ -28,6 +29,8 @@ sub has_logger  { 0 }
 sub has_display { 0 }
 sub extra_opts  { }
 sub feeder      { }
+sub always_keep_dir { 0 }
+sub manage_runner { 1 }
 
 sub init {
     my $self = shift;
@@ -96,6 +99,36 @@ sub section_order {
         'Job Options',
         'Logging Options',
         'Display Options',
+    );
+}
+
+sub make_run_from_settings {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS};
+
+    return Test2::Harness::Run->new(
+        run_id      => $settings->{run_id},
+        job_count   => $settings->{job_count},
+        switches    => $settings->{switches},
+        libs        => $settings->{libs},
+        lib         => $settings->{lib},
+        blib        => $settings->{blib},
+        preload     => $settings->{preload},
+        pre_import  => $settings->{pre_import},
+        load        => $settings->{load},
+        load_import => $settings->{load_import},
+        args        => $settings->{test_args},
+        input       => $settings->{input},
+        chdir       => $settings->{chdir},
+        search      => $settings->{search},
+        unsafe_inc  => $settings->{unsafe_inc},
+        env_vars    => $settings->{env_vars},
+        use_stream  => $settings->{use_stream},
+        use_fork    => $settings->{use_fork},
+        times       => $settings->{times},
+        verbose     => $settings->{verbose},
+        @_,
     );
 }
 
@@ -325,7 +358,7 @@ sub all_opts {
                 my ($self, $settings, $field) = @_;
                 return unless $self->has_runner;
                 return $ENV{T2_WORKDIR} if $ENV{T2_WORKDIR};
-                return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !$settings->{keep_dir}, DIR => $settings->{tmp_dir});
+                return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !($settings->{keep_dir} || $self->always_keep_dir), DIR => $settings->{tmp_dir});
             },
             normalize => sub { File::Spec->rel2abs($_[0]) },
         },
@@ -597,9 +630,6 @@ sub usage {
     my $self = shift;
     my $name = $self->name;
 
-    chomp(my $cli_args    = $self->cli_args);
-    chomp(my $description = $self->description);
-
     my $idx = 1;
     my %lookup = map {($_ => $idx++)} $self->section_order;
 
@@ -684,11 +714,21 @@ sub usage {
         }
     }
 
+    chomp(my @cli_args    = $self->cli_args);
+    chomp(my $description = $self->description);
+
+    my $head_common = "$0 $name [options]";
+    my $header = join(
+        "\n",
+        "Usage: $head_common " . shift(@cli_args),
+        map { "       $head_common $_" } @cli_args
+    );
+
     my $options = join "\n\n" => @options;
 
     my $usage = <<"    EOT";
 
-Usage: $0 $name [options] $cli_args
+$header
 
 $description
 
@@ -701,7 +741,7 @@ $options
     return $usage;
 }
 
-sub run {
+sub pre_run {
     my $self = shift;
 
     my $settings = $self->{+SETTINGS};
@@ -722,7 +762,20 @@ sub run {
         exit 0;
     }
 
-    $self->inject_signal_handlers(\my $sig);
+    $self->inject_signal_handlers();
+}
+
+sub run {
+    my $self = shift;
+
+    $self->pre_run();
+    $self->_run();
+}
+
+sub _run {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS};
 
     my $renderers = $self->renderers;
     my $loggers   = $self->loggers;
@@ -747,19 +800,22 @@ sub run {
         1;
     };
     my $err = $@;
-
-    unless ($ok) {
-        warn $err;
-        if ($pid) {
-            print STDERR "Killing runner\n";
-            kill($sig || 'TERM', $pid);
-        }
-    }
+    warn $err unless $ok;
 
     my $exit = 0;
-    if ($runner) {
-        $runner->wait;
-        $exit = $runner->exit;
+
+    if ($self->manage_runner) {
+        unless ($ok) {
+            if ($pid) {
+                print STDERR "Killing runner\n";
+                kill($self->{+SIGNAL} || 'TERM', $pid);
+            }
+        }
+
+        if ($runner && $runner->pid) {
+            $runner->wait;
+            $exit = $runner->exit;
+        }
     }
 
     if (-t STDOUT) {
@@ -788,6 +844,8 @@ sub run {
     }
 
     if ($fail) {
+        my $sig = $self->{+SIGNAL};
+
         print "\n";
 
         print "Test runner exited badly: $exit\n" if $exit;
@@ -797,8 +855,6 @@ sub run {
 
         print "\n";
 
-        $exit = 130 if $sig && $sig eq 'INT';
-        $exit = 143 if $sig && $sig eq 'TERM';
         $exit ||= 255;
     }
 
@@ -890,12 +946,11 @@ sub renderers {
 
 sub inject_signal_handlers {
     my $self = shift;
-    my ($sig_ref) = @_;
 
     my $handle_sig = sub {
         my ($sig) = @_;
 
-        $$sig_ref = $sig;
+        $self->{+SIGNAL} = $sig;
 
         die "Cought SIG$sig, Attempting to shut down cleanly...\n";
     };

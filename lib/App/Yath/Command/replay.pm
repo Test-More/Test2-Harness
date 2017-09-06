@@ -4,7 +4,7 @@ use warnings;
 
 use Carp::Always;
 
-our $VERSION = '0.001006';
+our $VERSION = '0.001007';
 
 use Test2::Util qw/pkg_to_file/;
 

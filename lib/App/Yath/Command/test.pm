@@ -56,6 +56,7 @@ sub feeder {
         lib        => $settings->{lib},
         blib       => $settings->{blib},
         preload    => $settings->{preload},
+        pre_import => $settings->{pre_import},
         args       => $settings->{test_args},
         input      => $settings->{input},
         chdir      => $settings->{chdir},

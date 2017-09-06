@@ -360,6 +360,15 @@ sub all_opts {
         },
 
         {
+            spec    => 'P|pre-import=s@',
+            field   => 'pre_import',
+            used_by => {runner => 1},
+            section => 'Harness Options',
+            usage   => ['-P Module', '--pre-import Module'],
+            summary => ['Preload AND Import a module before running tests', 'this option may be given multiple times'],
+        },
+
+        {
             spec      => 'et|event_timeout=i',
             field     => 'event_timeout',
             used_by   => {runner => 1},

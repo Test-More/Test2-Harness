@@ -15,7 +15,7 @@ use Test2::Harness::Util::HashBase qw{
     -job_count
     -switches
     -libs -lib -blib
-    -preload
+    -preload -pre_import
     -args
     -input
     -verbose
@@ -43,16 +43,17 @@ sub init {
     croak "The 'run_id' attribute is required"
         unless $self->{+RUN_ID};
 
-    $self->{+CHDIR}     ||= undef;
-    $self->{+SEARCH}    ||= ['t'];
-    $self->{+PRELOAD}   ||= undef;
-    $self->{+SWITCHES}  ||= [];
-    $self->{+ARGS}      ||= [];
-    $self->{+LIBS}      ||= [];
-    $self->{+LIB}       ||= 0;
-    $self->{+BLIB}      ||= 0;
-    $self->{+JOB_COUNT} ||= 1;
-    $self->{+INPUT}     ||= undef;
+    $self->{+CHDIR}      ||= undef;
+    $self->{+SEARCH}     ||= ['t'];
+    $self->{+PRELOAD}    ||= undef;
+    $self->{+PRE_IMPORT} ||= undef;
+    $self->{+SWITCHES}   ||= [];
+    $self->{+ARGS}       ||= [];
+    $self->{+LIBS}       ||= [];
+    $self->{+LIB}        ||= 0;
+    $self->{+BLIB}       ||= 0;
+    $self->{+JOB_COUNT}  ||= 1;
+    $self->{+INPUT}      ||= undef;
 
     $self->{+UNSAFE_INC} = 1 unless defined $self->{+UNSAFE_INC};
     $self->{+USE_STREAM} = 1 unless defined $self->{+USE_STREAM};

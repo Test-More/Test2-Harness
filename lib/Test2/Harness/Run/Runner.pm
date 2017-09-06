@@ -194,16 +194,29 @@ sub preload {
     my $self = shift;
 
     my $run = $self->{+RUN};
-    my $list = $run->preload;
+    my $req = $run->preload;
+    my $use = $run->pre_import;
+
+    return unless $req || $use;
 
     local @INC = ($run->all_libs, @INC);
 
     require Test2::API;
     Test2::API::test2_start_preload();
 
-    for my $mod (@$list) {
-        my $file = pkg_to_file($mod);
-        require $file;
+    if ($req) {
+        for my $mod (@$req) {
+            my $file = pkg_to_file($mod);
+            require $file;
+        }
+    }
+
+    if ($use) {
+        for my $mod (@$use) {
+            my $file = pkg_to_file($mod);
+            require $file;
+            $mod->import();
+        }
     }
 }
 
@@ -242,7 +255,7 @@ sub start {
         $self->{+HUP} = 1;
     };
 
-    $self->preload if $run->preload;
+    $self->preload;
 
     my $out;
     my $ok = eval { $out = $self->_start(@_); 1 };

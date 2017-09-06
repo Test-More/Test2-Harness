@@ -72,6 +72,10 @@ sub init {
             unless $settings->{search} && @{$settings->{search}};
     }
 
+    if (my $s = $ENV{HARNESS_PERL_SWITCHES}) {
+        push @{$settings->{switches}} => split /\s+/, $s;
+    }
+
     $settings->{env_vars}->{HARNESS_IS_VERBOSE}    = $settings->{verbose};
     $settings->{env_vars}->{T2_HARNESS_IS_VERBOSE} = $settings->{verbose};
 

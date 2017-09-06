@@ -1,5 +1,14 @@
 {{$NEXT}}
 
+    - Fix some bugs
+    - Remove accidentally added file
+    - Do not hang when waiting after control+c
+    - Restructure Run/Runner to be more sane
+    - Fix bugs, break out test file and queue
+    - Add extra space in help dialog
+    - Restructure common command options
+    - Better queue handling
+    - Put test and replay common logic in one place
     - Fix bugs in replay
     - Put common logic for test and replay commands in a single place.
 

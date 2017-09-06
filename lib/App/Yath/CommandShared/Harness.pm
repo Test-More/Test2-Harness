@@ -2,7 +2,7 @@ package App::Yath::CommandShared::Harness;
 use strict;
 use warnings;
 
-our $VERSION = '0.001005';
+our $VERSION = '0.001006';
 
 use File::Temp qw/tempdir/;
 use IO::Compress::Bzip2 qw/$Bzip2Error/;

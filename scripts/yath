@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-our $VERSION = '0.001005';
+our $VERSION = '0.001006';
 
 use App::Yath::Util qw/load_command/;
 use List::Util qw/sum/;

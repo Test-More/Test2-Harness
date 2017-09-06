@@ -16,6 +16,7 @@ use Test2::Harness::Util::HashBase qw{
     -switches
     -libs -lib -blib
     -preload -pre_import
+    -load    -load_import
     -args
     -input
     -verbose

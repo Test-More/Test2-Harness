@@ -19,6 +19,8 @@ use Test2::Harness::Util::HashBase qw{
     -input
     -times
     -chdir
+    -load
+    -load_import
 
     -use_fork
     -use_stream

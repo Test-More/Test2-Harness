@@ -369,6 +369,25 @@ sub all_opts {
         },
 
         {
+            spec    => 'm|load|load-module=s@',
+            field   => 'load',
+            used_by => {runner => 1},
+            section => 'Harness Options',
+            usage   => ['-m Module', '--load Module', '--load-module Mod'],
+            summary => ['Load a module in each test (after fork)', 'this option may be given multiple times'],
+        },
+
+        {
+            spec    => 'M|loadim|load-import=s@',
+            field   => 'load_import',
+            used_by => {runner => 1},
+            section => 'Harness Options',
+            usage   => ['-M Module', '--loadim Module', '--load-import Mod'],
+            summary => ['Load and import module in each test (after fork)', 'this option may be given multiple times'],
+        },
+
+
+        {
             spec      => 'et|event_timeout=i',
             field     => 'event_timeout',
             used_by   => {runner => 1},

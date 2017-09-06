@@ -6,6 +6,7 @@ our $VERSION = '0.001006';
 
 use IPC::Open3 qw/open3/;
 use Test2::Harness::Util qw/open_file write_file/;
+use Test2::Util qw/pkg_to_file/;
 
 use File::Spec();
 
@@ -45,6 +46,8 @@ sub run {
         (map { "-I$_" } @{$job->libs}, $class->find_inc),
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
         @{$job->switches},
+        (map {"-m$_"} @{$job->load || []}),
+        (map {"-M$_"} @{$job->load_import || []}),
         $job->use_stream ? ("-MTest2::Formatter::Stream=file,$event_file") : (),
         $job->times ? ('-MTest2::Plugin::Times') : (),
         $job->file,

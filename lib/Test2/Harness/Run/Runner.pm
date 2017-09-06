@@ -416,6 +416,9 @@ sub run_job {
     my $timeout = none { defined $_ && !$_ } $task->{use_timeout}, $run->use_timeout, 1;
     my $fork    = none { defined $_ && !$_ } $task->{use_fork}, $task->{use_preload}, $run->use_fork, 1;
 
+    my $load   = [@{$run->load || []},        @{$task->{load}        || []}];
+    my $loadim = [@{$run->load_import || []}, @{$task->{load_import} || []}];
+
     my $job = Test2::Harness::Job->new(
         # These can be overriden by the task
         times => $run->times,
@@ -424,15 +427,17 @@ sub run_job {
 
         # These win out over task data, most are merged with task data here
         # or above.
-        use_stream => $stream,
-        use_fork   => $fork,
-        timeout    => $timeout,
-        job_id     => $job_id,
-        file       => $file,
-        env_vars   => $env,
-        libs       => \@libs,
-        switches   => [@{$run->switches}, @{$task->{switches} || []}],
-        args       => [@{$run->args}, @{$task->{args} || []}],
+        load        => $load,
+        load_import => $loadim,
+        use_stream  => $stream,
+        use_fork    => $fork,
+        timeout     => $timeout,
+        job_id      => $job_id,
+        file        => $file,
+        env_vars    => $env,
+        libs        => \@libs,
+        switches    => [@{$run->switches}, @{$task->{switches} || []}],
+        args        => [@{$run->args}, @{$task->{args} || []}],
         input => $task->{input} || $run->input,
         chdir => $task->{chdir} || $run->chdir,
     );

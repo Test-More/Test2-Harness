@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '0.001006';
 
 use Scalar::Util qw/openhandle/;
-use Test2::Util qw/clone_io CAN_REALLY_FORK/;
+use Test2::Util qw/clone_io CAN_REALLY_FORK pkg_to_file/;
 use Test2::Harness::Util qw/write_file/;
 
 sub viable {
@@ -38,6 +38,28 @@ sub run {
     $SIG{TERM} = 'DEFAULT';
     $SIG{INT} = 'DEFAULT';
     $SIG{HUP} = 'DEFAULT';
+
+    for my $mod (@{$job->load || []}) {
+        my $file = pkg_to_file($mod);
+        require $file;
+    }
+
+    my $importer = eval <<'    EOT' or die $@;
+package main;
+#line 0 "-"
+sub { shift->import(@_) }
+    EOT
+
+    for my $mod (@{$job->load_import || []}) {
+        my @args;
+        if ($mod =~ s/=(.*)$//) {
+            @args = split /,/, $1;
+        }
+        my $file = pkg_to_file($mod);
+        local $0 = '-';
+        require $file;
+        $importer->($mod, @args);
+    }
 
     # In Child
     my $file = $job->file;

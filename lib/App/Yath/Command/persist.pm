@@ -289,7 +289,7 @@ sub run_tests {
             libs        => [$run->all_libs],
         };
 
-        $item->{args}        = $settings->{test_args}   if defined $settings->{test_args};
+        $item->{args}        = $settings->{pass}        if defined $settings->{pass};
         $item->{times}       = $settings->{times}       if defined $settings->{times};
         $item->{use_stream}  = $settings->{use_stream}  if defined $settings->{use_stream};
         $item->{load}        = $settings->{load}        if defined $settings->{load};

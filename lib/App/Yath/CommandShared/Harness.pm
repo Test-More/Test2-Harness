@@ -118,7 +118,7 @@ sub make_run_from_settings {
         pre_import  => $settings->{pre_import},
         load        => $settings->{load},
         load_import => $settings->{load_import},
-        args        => $settings->{test_args},
+        args        => $settings->{pass},
         input       => $settings->{input},
         chdir       => $settings->{chdir},
         search      => $settings->{search},

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Properly pass args given via '::'
+
 0.001006  2017-09-06 14:24:18-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Fix replay

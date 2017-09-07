@@ -253,6 +253,7 @@ sub render_buffered_event {
     return [$self->render_errors($f, $tree)] if $f->{errors};
     return [$self->render_plan($f, $tree)] if $f->{plan};
     return [$self->render_info($f, $tree)] if $f->{info};
+    return [$self->render_times($f, $tree)] if $f->{times};
 
     return [$self->render_about($f, $tree)] if $f->{about};
 
@@ -277,6 +278,7 @@ sub render_event {
     push @out => $self->render_info($f, $tree) if $f->{info};
     push @out => $self->render_errors($f, $tree) if $f->{errors};
     push @out => $self->render_parent($f, $tree) if $f->{parent};
+    push @out => $self->render_times($f, $tree) if $f->{times};
 
     push @out => $self->render_about($f, $tree)
         if $f->{about} && !(@out || grep { $f->{$_} } qw/stop plan info nest assert/);
@@ -422,6 +424,13 @@ sub build_line {
         "${tcolor}${text}${reset}",
         "$start${blob}------ END ------$reset",
     );
+}
+
+sub render_times {
+    my $self = shift;
+    my ($f, $tree) = @_;
+
+    return $self->build_line('times', 'TIME', $tree, $f->{about}->{details});
 }
 
 sub render_halt {

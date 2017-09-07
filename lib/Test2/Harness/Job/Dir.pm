@@ -284,25 +284,28 @@ sub _poll_stderr {
     my $self = shift;
     my ($max) = @_;
 
-    return if $self->{+_STDERR_INDEX} > $self->{+_EVENTS_INDEX};
-
-    my $buffer = $self->{+_STDERR_BUFFER};
-    return unless @$buffer;
-
     my @out;
-    while (my $line = shift @$buffer) {
-        chomp($line);
 
-        if ($line =~ m/^T2-HARNESS-ESYNC: (\d+)$/) {
-            $self->{+_STDERR_INDEX} = $1;
-            last;
+    until ($self->{+_STDERR_INDEX} > $self->{+_EVENTS_INDEX} || @out >= $max) {
+        my $buffer = $self->{+_STDERR_BUFFER} or last;
+
+        my @lines;
+        while (my $line = shift @$buffer) {
+            chomp($line);
+
+            if ($line =~ m/^T2-HARNESS-ESYNC: (\d+)$/) {
+                $self->{+_STDERR_INDEX} = $1;
+                last;
+            }
+
+            push @lines => $line;
         }
+
+        last unless @lines;
 
         my $id = $self->{+_STDERR_ID}++;
         my $event_id = "stderr-$id";
-        push @out => $self->_process_stderr_line($event_id, $line);
-
-        last if $max && @out >= $max;
+        push @out => $self->_process_stderr_line($event_id, join "\n" => @lines);
     }
 
     return @out;

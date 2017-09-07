@@ -227,7 +227,7 @@ sub parse_tap_comment {
 
     return undef unless $line =~ m/^#/;
 
-    $line =~ s/^#\s*//;
+    $line =~ s/^#\s*//msg;
 
     return {
         info => [

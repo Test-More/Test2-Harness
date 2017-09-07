@@ -262,6 +262,7 @@ sub run_tests {
         my $preload = $tf->check_feature(preload   => 1);
         my $timeout = $tf->check_feature(timeout   => 1);
         my $isolate = $tf->check_feature(isolation => 0);
+        my $stream  = $tf->check_feature(stream    => 1);
 
         if (!$category) {
             # 'isolation' queue if isolation requested
@@ -282,6 +283,7 @@ sub run_tests {
             use_fork    => $fork,
             use_timeout => $timeout,
             use_preload => $preload,
+            use_stream  => $stream,
             switches    => $tf->switches,
             category    => $category,
             stamp       => time,

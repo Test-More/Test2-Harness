@@ -129,7 +129,7 @@ sub _parse_shbang {
     # NOTE: Test this, the dashes should be included with the switches
     my $shbang_re = qr{
         ^
-          \#!.*\bperl.*?        # the perl path
+          \#!\S+perl.*?        # the perl path
           (?: \s (-.+) )?       # the switches, maybe
           \s*
         $

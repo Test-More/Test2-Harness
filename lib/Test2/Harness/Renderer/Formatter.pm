@@ -17,6 +17,7 @@ use Test2::Harness::Util::HashBase qw{
     -show_job_info
     -show_job_launch
     -show_job_end
+    -times
 };
 
 sub init {
@@ -32,7 +33,13 @@ sub render_event {
     my $self = shift;
     my ($event) = @_;
 
-    my $f = $event->{facet_data};
+    my $f = $event->facet_data;
+
+    my $times = $self->{+TIMES} ||= {};
+    if($f->{times}) {
+        my $job_id = $event->job_id;
+        $times->{$job_id} = $f->{about}->{details};
+    }
 
     $f->{harness} = {%$event};
     delete $f->{harness}->{facet_data};
@@ -74,7 +81,7 @@ sub render_event {
         my $fail = $f->{harness_job_end}->{fail};
         my $file = $f->{harness_job_end}->{file};
 
-        $f->{harness}->{job_id} ||= $job->{job_id};
+        my $job_id = $f->{harness}->{job_id} ||= $job->{job_id};
 
         if ($self->{+SHOW_JOB_END}) {
             unshift @{$f->{info}} => {
@@ -89,6 +96,17 @@ sub render_event {
                 important => 1,
                 details   => $skip,
             } if $skip;
+
+            # In verbose mode the timer will be printed anyway. Otherwise we
+            # will attach it to the end event.
+            if (my $time = $times->{$job_id}) {
+                push @{$f->{info}} => {
+                    tag       => 'TIME',
+                    debug     => 0,
+                    important => 1,
+                    details   => $time,
+                } unless $self->{+SHOW_JOB_LAUNCH};
+            }
         }
     }
 

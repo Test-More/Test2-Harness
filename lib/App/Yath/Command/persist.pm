@@ -249,6 +249,7 @@ sub run_tests {
 
     $run->{search} = \@search;
 
+    # TODO: This is copied test.pm, put it in one place!
     my %jobs;
     my $base_id = 1;
     for my $file ($run->find_files) {

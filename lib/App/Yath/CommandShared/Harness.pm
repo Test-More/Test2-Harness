@@ -238,7 +238,7 @@ sub all_opts {
         },
 
         {
-            spec    => 'TAP|tap',
+            spec    => 'tap',
             field   => 'use_stream',
             action  => sub { $settings->{use_stream} = 0 },
             used_by => {jobs => 1, runner => 1},

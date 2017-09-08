@@ -18,7 +18,8 @@ sub viable {
 
     my $job = $test->job;
 
-    return 0 if @{$job->switches};
+    # -w switch is ok, otherwise it is a no-go
+    return 0 if grep { !m/\s*-w\s*/ } @{$job->switches};
 
     return 1;
 }
@@ -34,6 +35,9 @@ sub run {
 
     # In parent
     return ($pid, undef) if $pid;
+
+    # toggle -w switch late
+    $^W = 1 if grep { m/\s*-w\s*/ } @{$job->switches};
 
     $SIG{TERM} = 'DEFAULT';
     $SIG{INT} = 'DEFAULT';

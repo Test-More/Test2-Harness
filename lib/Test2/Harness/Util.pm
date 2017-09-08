@@ -18,6 +18,7 @@ our @EXPORT_OK = qw{
     maybe_read_file
     maybe_open_file
     file_stamp
+    local_env
 };
 
 sub maybe_read_file {
@@ -88,6 +89,27 @@ sub file_stamp {
     my $file = shift;
     my @stat = stat($file);
     return $stat[9];
+}
+
+sub local_env {
+    my ($env, $sub) = @_;
+
+    my $old;
+    for my $key (keys %$env) {
+        $old->{$key} = $ENV{$key} if exists $ENV{$key};
+        $ENV{$key} = $env->{$key};
+    }
+
+    my $ok = eval { $sub->(); 1 };
+    my $err = $@;
+
+    for my $key (keys %$env) {
+        exists $old->{$key} ? $ENV{$key} = $old->{$key} : delete $ENV{$key};
+    }
+
+    die $err unless $ok;
+
+    return $ok;
 }
 
 1;

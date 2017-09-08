@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '0.001007';
 
 use IPC::Open3 qw/open3/;
-use Test2::Harness::Util qw/open_file write_file/;
+use Test2::Harness::Util qw/open_file write_file local_env/;
 use Test2::Util qw/pkg_to_file/;
 
 use File::Spec();
@@ -76,28 +76,13 @@ sub run {
         @{$job->args},
     );
 
-    my $old;
-    for my $key (keys %$env) {
-        $old->{$key} = $ENV{$key} if exists $ENV{$key};
-        $ENV{$key} = $env->{$key};
-    }
-
     my $pid;
-
-    my $ok = eval {
+    local_env $env => sub {
         $pid = open3(
             '<&' . fileno($in_fh), ">&" . fileno($out_fh), ">&" . fileno($err_fh),
             @cmd,
         );
-        1;
     };
-    my $err = $@;
-
-    for my $key (keys %$env) {
-        exists $old->{$key} ? $ENV{$key} = $old->{$key} : delete $ENV{$key};
-    }
-
-    die $@ unless $ok;
 
     return ($pid, undef);
 }

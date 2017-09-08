@@ -11,7 +11,7 @@ use IPC::Open3 qw/open3/;
 use List::Util qw/none sum/;
 use Time::HiRes qw/sleep time/;
 use Test2::Util qw/pkg_to_file/;
-use Test2::Harness::Util qw/open_file write_file_atomic/;
+use Test2::Harness::Util qw/open_file write_file_atomic local_env/;
 
 use Test2::Harness::Run();
 use Test2::Harness::Run::Queue();
@@ -162,12 +162,14 @@ sub spawn {
     my $out_log = open_file($self->{+OUT_LOG}, '>');
 
     my $env = $run->env_vars;
-    local $ENV{$_} = $env->{$_} for keys %$env;
 
-    my $pid = open3(
-        undef, ">&" . fileno($out_log), ">&" . fileno($err_log),
-        $self->cmd(%params),
-    );
+    my $pid;
+    local_env $env => sub {
+        $pid = open3(
+            undef, ">&" . fileno($out_log), ">&" . fileno($err_log),
+            $self->cmd(%params),
+        );
+    };
 
     $self->{+PID} = $pid;
 
@@ -215,10 +217,14 @@ sub preload {
 
     local @INC = ($run->all_libs, @INC);
 
-    require Test2::API;
-    Test2::API::test2_start_preload();
+    my $env = $run->env_vars;
 
-    $self->_preload($req, $use);
+    local_env $env => sub {
+        require Test2::API;
+        Test2::API::test2_start_preload();
+
+        $self->_preload($req, $use);
+    };
 }
 
 sub _preload {
@@ -268,9 +274,6 @@ sub start {
     my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
     write_file_atomic($pidfile, "$$");
 
-    my $env = $run->env_vars;
-    local $ENV{$_} = $env->{$_} for keys %$env;
-
     my $sig;
     my $handle_sig = sub {
         my ($got_sig) = @_;
@@ -290,17 +293,21 @@ sub start {
         $self->{+HUP} = 1;
     };
 
-    $self->init_state;
+    my $env = $run->env_vars;
 
-    $self->preload;
+    my ($out, $ok, $err);
+    local_env $env => sub {
+        $self->init_state;
 
-    write_file_atomic($self->{+READY_FILE}, "1");
+        $self->preload;
 
-    my $out;
-    my $ok = eval { $out = $self->_start(@_); 1 };
-    my $err = $@;
+        write_file_atomic($self->{+READY_FILE}, "1");
 
-    chdir($orig);
+        $ok = eval { $out = $self->_start(@_); 1 };
+        $err = $@;
+
+        chdir($orig);
+    };
 
     return $out if $ok;
 

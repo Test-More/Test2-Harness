@@ -115,7 +115,7 @@ sub init {
                     push @$tcm => $File::Find::name;
                 },
                 @dirs
-            );
+            ) if @dirs;
 
             if (@$tcm) {
                 push @{$settings->{exclude_patterns}} => "(tcm|TCM)\\.t\$";

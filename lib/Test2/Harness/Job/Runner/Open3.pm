@@ -21,6 +21,27 @@ sub find_inc {
     return File::Spec->rel2abs($inc);
 }
 
+sub find_tcm_script {
+    my $self = shift;
+
+    my $script = $ENV{T2_HARNESS_TCM_SCRIPT} || 'yath-tcm';
+    return $script if -f $script;
+
+    if ($0 && $0 =~ m{(.*)\byath(-.*)?$}) {
+        return "$1$script" if -f "$1$script";
+    }
+
+    # Do we have the full path?
+    # Load IPC::Cmd only if needed, it indirectly loads version.pm which really
+    # screws things up...
+    require IPC::Cmd;
+    if(my $out = IPC::Cmd::can_run($script)) {
+        return $out;
+    }
+
+    die "Could not find '$script' in execution path";
+}
+
 
 sub run {
     my $class = shift;
@@ -50,6 +71,7 @@ sub run {
         (map {"-M$_"} @{$job->load_import || []}),
         $job->use_stream ? ("-MTest2::Formatter::Stream=file,$event_file") : (),
         $job->times ? ('-MTest2::Plugin::Times') : (),
+        $job->tcm ? ($class->find_tcm_script) : (),
         $job->file,
         @{$job->args},
     );

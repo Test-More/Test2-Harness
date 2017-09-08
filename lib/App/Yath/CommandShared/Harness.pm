@@ -82,14 +82,48 @@ sub init {
         push @$libs => File::Spec->rel2abs('blib/arch');
     }
 
+    if ($settings->{tlib}) {
+        my $libs = $settings->{libs} ||= [];
+        push @$libs => File::Spec->rel2abs('t/lib');
+    }
+
     die "You cannot select both bzip2 and gzip for the log.\n"
         if $settings->{bzip2_log} && $settings->{gzip_log};
 
     if ($self->has_jobs) {
         $settings->{search} = delete $settings->{list};
 
-        $settings->{search} = [grep { -e $_ } './t', './t2', 'test.pl']
-            unless $settings->{search} && @{$settings->{search}};
+        my $has_search = $settings->{search} && @{$settings->{search}};
+        my $has_tcm    = $settings->{tcm}    && @{$settings->{tcm}};
+
+        unless ($has_search || $has_tcm) {
+            my @dirs = grep { -d $_ } './t', './t2';
+            my @files = grep { -f $_ } 'test.pl';
+
+            $settings->{search} = [@dirs, @files];
+        }
+
+        unless ($has_tcm || $settings->{no_tcm}) {
+            my @dirs = grep { -d $_ } @{$settings->{search} || []};
+
+            my $tcm = $settings->{tcm} = [];
+            require File::Find;
+            File::Find::find(
+                sub {
+                    return unless -d $_;
+                    return unless $File::Find::name =~ m{TestsFor$};
+                    push @$tcm => $File::Find::name;
+                },
+                @dirs
+            );
+
+            if (@$tcm) {
+                push @{$settings->{exclude_patterns}} => "(tcm|TCM)\\.t\$";
+
+                my $libs = $settings->{libs} ||= [];
+                push @$libs => File::Spec->rel2abs(File::Spec->catdir($_, File::Spec->updir)) for @$tcm;
+            }
+        }
     }
 
     if (my $s = $ENV{HARNESS_PERL_SWITCHES}) {
@@ -131,6 +165,7 @@ sub make_run_from_settings {
         libs        => $settings->{libs},
         lib         => $settings->{lib},
         blib        => $settings->{blib},
+        tlib        => $settings->{tlib},
         preload     => $settings->{preload},
         pre_import  => $settings->{pre_import},
         load        => $settings->{load},
@@ -146,6 +181,7 @@ sub make_run_from_settings {
         times       => $settings->{times},
         verbose     => $settings->{verbose},
         no_long     => $settings->{no_long},
+        tcm         => $settings->{tcm},
 
         exclude_patterns => $settings->{exclude_patterns},
         exclude_files    => {map { (File::Spec->rel2abs($_) => 1) } @{$settings->{exclude_files}}},
@@ -201,21 +237,31 @@ sub all_opts {
         },
 
         {
-            spec    => 'l|lib!',
+            spec    => 'tlib',
+            field   => 'tlib',
+            used_by => {jobs => 1, runner => 1},
+            section => 'Job Options',
+            usage   => ['--tlib'],
+            summary => ["(Default: off) Include 't/lib' in your module path"],
+            default => 0,
+        },
+
+        {
+            spec    => 'lib!',
             field   => 'lib',
             used_by => {jobs => 1, runner => 1},
             section => 'Job Options',
-            usage   => ['-l  --lib',                                       '--no-lib'],
+            usage   => ['--lib',                                           '--no-lib'],
             summary => ["(Default: on) Include 'lib' in your module path", "Do not include 'lib'"],
             default => 1,
         },
 
         {
-            spec    => 'b|blib!',
+            spec    => 'blib!',
             field   => 'blib',
             used_by => {jobs => 1, runner => 1},
             section => 'Job Options',
-            usage   => ['-b  --blib',                                       '--no-blib'],
+            usage   => ['--blib',                                           '--no-blib'],
             summary => ["(Default: on) Include 'blib/lib' and 'blib/arch'", "Do not include 'blib/lib' and 'blib/arch'"],
             default => 1,
         },
@@ -383,6 +429,25 @@ sub all_opts {
                 return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !($settings->{keep_dir} || $self->always_keep_dir), DIR => $settings->{tmp_dir});
             },
             normalize => sub { File::Spec->rel2abs($_[0]) },
+        },
+
+        {
+            spec => 'tcm=s@',
+            field => 'tcm',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Harness Options',
+            usage   => ['--tcm path/to/tests'],
+            summary => ["Run TCM tests from the path", "Can be specified multiple times"],
+            long_desc => "This will tell Test2::Harness to handle TCM tests. Any test file matching /tcm.t\$/ will be excluded automatically in favor of handling the tests internally. Note that tcm tests inside your search path will normally be found automatically and run",
+        },
+
+        {
+            spec => 'no-tcm',
+            field => 'no_tcm',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Harness Options',
+            usage   => ['--no-tcm'],
+            summary => ["Disable all automatic handling of tcm. --tcm will still work"],
         },
 
         {

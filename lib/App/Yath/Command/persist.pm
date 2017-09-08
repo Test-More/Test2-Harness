@@ -271,25 +271,7 @@ sub run_tests {
     for my $tf ($self->make_run_from_settings->find_files) {
         my $job_id = $$ . '-' . $base_id++;
 
-        my $category = $tf->check_category;
-
-        my $fork    = $tf->check_feature(fork      => 1);
-        my $preload = $tf->check_feature(preload   => 1);
-        my $timeout = $tf->check_feature(timeout   => 1);
-        my $stream  = $tf->check_feature(stream    => 1);
-
-        my $item = {
-            file        => $tf->file,
-            use_fork    => $fork,
-            use_timeout => $timeout,
-            use_preload => $preload,
-            use_stream  => $stream,
-            switches    => $tf->switches,
-            category    => $category,
-            stamp       => time,
-            job_id      => $job_id,
-            libs        => [$run->all_libs],
-        };
+        my $item = $tf->queue_item($job_id++);
 
         $item->{args}        = $settings->{pass}        if defined $settings->{pass};
         $item->{times}       = $settings->{times}       if defined $settings->{times};

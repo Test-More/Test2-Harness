@@ -6,12 +6,14 @@ our $VERSION = '0.001007';
 
 use Carp qw/croak/;
 
+use Time::HiRes qw/time/;
+
 use File::Spec();
 
 use Test2::Harness::Util qw/open_file/;
 
 use Test2::Harness::Util::HashBase qw{
-    -file -_scanned -_headers -_shbang
+    -file -_scanned -_headers -_shbang -tcm
 };
 
 sub init {
@@ -160,6 +162,31 @@ sub _parse_shbang {
     }
 
     return \%shbang;
+}
+
+sub queue_item {
+    my $self = shift;
+    my ($job_id) = @_;
+
+    my $category = $self->check_category;
+
+    my $fork    = $self->check_feature(fork    => 1);
+    my $preload = $self->check_feature(preload => 1);
+    my $timeout = $self->check_feature(timeout => 1);
+    my $stream  = $self->check_feature(stream  => 1);
+
+    return {
+        file        => $self->file,
+        use_fork    => $fork,
+        use_timeout => $timeout,
+        use_preload => $preload,
+        use_stream  => $stream,
+        switches    => $self->switches,
+        category    => $category,
+        stamp       => time,
+        job_id      => $job_id,
+        tcm         => $self->tcm,
+    };
 }
 
 1;

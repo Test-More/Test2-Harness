@@ -15,7 +15,8 @@ my %WriteMakefileArgs = (
   "DISTNAME" => "Test2-Harness",
   "EXE_FILES" => [
     "scripts/yath",
-    "scripts/yath-spawn"
+    "scripts/yath-spawn",
+    "scripts/yath-tcm"
   ],
   "LICENSE" => "perl",
   "MIN_PERL_VERSION" => "5.008001",

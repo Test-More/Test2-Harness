@@ -75,7 +75,7 @@ sub process {
 
 
     # Not actually a subtest end, someone printed to STDOUT
-    if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && @{$self->{+SUBTESTS}})) {
+    if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}})) {
         delete $f->{parent};
         delete $f->{trace};
         delete $f->{harness}->{subtest_end};
@@ -135,6 +135,8 @@ sub subtest_process {
 
         my $id = 1;
         for my $sf (@{$f->{parent}->{children}}) {
+            # Override is necessary for asyncsubtests
+            $sf->{trace}->{nested} = $self->{+NESTED} + 1;
             $sf->{harness}->{job_id} ||= $f->{harness}->{job_id};
             $sf->{harness}->{run_id} ||= $f->{harness}->{run_id};
             $sf->{harness}->{event_id} ||= $f->{harness}->{event_id} . $id++;

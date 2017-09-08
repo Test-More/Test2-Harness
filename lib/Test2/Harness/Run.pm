@@ -12,13 +12,15 @@ use Test2::Util qw/IS_WIN32/;
 
 use File::Spec;
 
+use Test2::Harness::Util::TestFile;
+
 use Test2::Harness::Util::HashBase qw{
     -run_id
 
     -finite
     -job_count
     -switches
-    -libs -lib -blib
+    -libs -lib -blib -tlib
     -preload -pre_import
     -load    -load_import
     -args
@@ -38,6 +40,7 @@ use Test2::Harness::Util::HashBase qw{
     -exclude_files
     -exclude_patterns
     -no_long
+    -tcm
 };
 
 sub init {
@@ -103,7 +106,7 @@ sub find_files {
     my (@files, @dirs);
 
     for my $item (@$search) {
-        push @files => $item and next if -f $item;
+        push @files => Test2::Harness::Util::TestFile->new(file => $item) and next if -f $item;
         push @dirs  => $item and next if -d $item;
         die "'$item' does not appear to be either a file or a directory.\n";
     }
@@ -111,25 +114,55 @@ sub find_files {
     if (@dirs) {
         require File::Find;
         File::Find::find(
-            sub {
-                no warnings 'once';
-                return unless -f $_ && m/\.t2?$/;
-                push @files => $File::Find::name;
+            {
+                no_chdir => 1,
+                wanted   => sub {
+                    no warnings 'once';
+                    return unless -f $_ && m/\.t2?$/;
+                    push @files => Test2::Harness::Util::TestFile->new(
+                        file => $File::Find::name,
+                    );
+                },
             },
             @dirs
         );
     }
 
-    @files = map { File::Spec->rel2abs($_) } @files;
-    @files = grep { !$self->{+EXCLUDE_FILES}->{$_} } @files if keys %{$self->{+EXCLUDE_FILES}};
+    my $tcm = $self->tcm;
+
+    if ($tcm && @$tcm) {
+        @dirs = ();
+
+        for my $item (@$tcm) {
+            push @files => Test2::Harness::Util::TestFile->new(file => $item, tcm => 1) and next if -f $item;
+            push @dirs  => $item and next if -d $item;
+            die "'$item' does not appear to be either a file or a directory.\n";
+        }
+
+        require File::Find;
+        File::Find::find(
+            {
+                no_chdir => 1,
+                wanted   => sub {
+                    no warnings 'once';
+                    return unless -f $_ && m/\.pm$/;
+                    push @files => Test2::Harness::Util::TestFile->new(
+                        file => $File::Find::name,
+                        tcm  => 1,
+                    );
+                },
+            },
+            @dirs,
+        );
+    }
+
+    @files = sort { $a->file cmp $b->file } @files;
+
+    @files = grep { !$self->{+EXCLUDE_FILES}->{$_->file} } @files if keys %{$self->{+EXCLUDE_FILES}};
 
     #<<< no-tidy
-    @files = grep { my $f = $_; !first { $f =~ m/$_/ } @{$self->{+EXCLUDE_PATTERNS}} } @files if @{$self->{+EXCLUDE_PATTERNS}};
+    @files = grep { my $f = $_->file; !first { $f =~ m/$_/ } @{$self->{+EXCLUDE_PATTERNS}} } @files if @{$self->{+EXCLUDE_PATTERNS}};
     #>>>
-
-    @files = sort @files;
-
-    @files = map {Test2::Harness::Util::TestFile->new(file => $_)} @files;
 
     @files = grep { $_->check_category ne 'long' } @files if $self->{+NO_LONG};
 

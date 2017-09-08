@@ -8,8 +8,6 @@ use Carp qw/croak/;
 
 use Test2::Util qw/IS_WIN32/;
 
-use File::Spec;
-
 use Test2::Harness::Util::HashBase qw{
     -run_id
 
@@ -83,13 +81,8 @@ sub init {
 sub all_libs {
     my $self = shift;
 
-    my @libs;
-
-    push @libs => 'lib' if $self->{+LIB};
-    push @libs => 'blib/lib', 'blib/arch' if $self->{+BLIB};
-    push @libs => @{$self->{+LIBS}} if $self->{+LIBS};
-
-    return map {File::Spec->rel2abs($_)} @libs;
+    my $libs = $self->{+LIBS} or return;
+    return @$libs;
 }
 
 sub TO_JSON { return { %{$_[0]} } }

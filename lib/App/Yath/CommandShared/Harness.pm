@@ -11,6 +11,8 @@ use Getopt::Long qw/GetOptionsFromArray/;
 use File::Path qw/remove_tree/;
 use List::Util qw/first max/;
 
+use File::Spec;
+
 use App::Yath::Util qw/fully_qualify/;
 
 use Test2::Util qw/pkg_to_file/;
@@ -63,6 +65,21 @@ sub init {
         # normalize the value
         $settings->{$field} = $opt->{normalize}->($settings->{$field})
             if $opt->{normalize} && defined $settings->{$field};
+    }
+
+    if (my $libs = $settings->{libs}) {
+        @$libs = map {File::Spec->rel2abs($_)} @$libs;
+    }
+
+    if ($settings->{lib}) {
+        my $libs = $settings->{libs} ||= [];
+        push @$libs => File::Spec->rel2abs('lib');
+    }
+
+    if ($settings->{blib}) {
+        my $libs = $settings->{libs} ||= [];
+        push @$libs => File::Spec->rel2abs('blib/lib');
+        push @$libs => File::Spec->rel2abs('blib/arch');
     }
 
     die "You cannot select both bzip2 and gzip for the log.\n"

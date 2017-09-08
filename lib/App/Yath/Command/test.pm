@@ -62,7 +62,6 @@ sub feeder {
 
     my $job_id = 1;
     for my $file ($run->find_files) {
-        $file = File::Spec->rel2abs($file);
         my $tf = Test2::Harness::Util::TestFile->new(file => $file);
 
         my $category = $tf->check_category;

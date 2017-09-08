@@ -6,7 +6,11 @@ our $VERSION = '0.001007';
 
 use Carp qw/croak/;
 
+use List::Util qw/first/;
+
 use Test2::Util qw/IS_WIN32/;
+
+use File::Spec;
 
 use Test2::Harness::Util::HashBase qw{
     -run_id
@@ -30,6 +34,9 @@ use Test2::Harness::Util::HashBase qw{
     -use_fork
     -use_timeout
     -times
+
+    -exclude_files
+    -exclude_patterns
 };
 
 sub init {
@@ -100,17 +107,21 @@ sub find_files {
         die "'$item' does not appear to be either a file or a directory.\n";
     }
 
-    return sort @files unless @dirs;
+    if (@dirs) {
+        require File::Find;
+        File::Find::find(
+            sub {
+                no warnings 'once';
+                return unless -f $_ && m/\.t2?$/;
+                push @files => $File::Find::name;
+            },
+            @dirs
+        );
+    }
 
-    require File::Find;
-    File::Find::find(
-        sub {
-            no warnings 'once';
-            return unless -f $_ && m/\.t2?$/;
-            push @files => $File::Find::name;
-        },
-        @dirs
-    );
+    @files = map { File::Spec->rel2abs($_) } @files;
+    @files = grep { !$self->{+EXCLUDE_FILES}->{$_} } @files if keys %{$self->{+EXCLUDE_FILES}};
+    @files = grep { my $f = $_; !first { $f =~ m/$_/ } @{$self->{+EXCLUDE_PATTERNS}} } @files if @{$self->{+EXCLUDE_PATTERNS}};
 
     return sort @files;
 }

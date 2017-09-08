@@ -145,6 +145,10 @@ sub make_run_from_settings {
         use_fork    => $settings->{use_fork},
         times       => $settings->{times},
         verbose     => $settings->{verbose},
+
+        exclude_patterns => $settings->{exclude_patterns},
+        exclude_files    => {map { (File::Spec->rel2abs($_) => 1) } @{$settings->{exclude_files}}},
+
         @_,
     );
 }
@@ -378,6 +382,26 @@ sub all_opts {
                 return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !($settings->{keep_dir} || $self->always_keep_dir), DIR => $settings->{tmp_dir});
             },
             normalize => sub { File::Spec->rel2abs($_[0]) },
+        },
+
+        {
+            spec    => 'x|exclude-file=s@',
+            field   => 'exclude_files',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Harness Options',
+            usage   => ['-x t/bad.t', '--exclude-file t/bad.t'],
+            summary => ["Exclude a file from testing", "May be specified multiple times"],
+            default => sub { [] },
+        },
+
+        {
+            spec    => 'X|exclude-pattern=s@',
+            field   => 'exclude_patterns',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Harness Options',
+            usage   => ['-X foo', '--exclude-pattern bar'],
+            summary => ["Exclude files that match", "May be specified multiple times", "matched using `m/\$PATTERN/`"],
+            default => sub { [] },
         },
 
         {
@@ -654,7 +678,7 @@ sub usage {
     my @list = sort {
           ($lookup{$a->{section}} || 99) <=> ($lookup{$b->{section}} || 99)  # Sort by section first
             or ($a->{long_desc} ? 2 : 1) <=> ($b->{long_desc} ? 2 : 1)       # Things with long desc go to bottom
-            or          $a->{usage}->[0] cmp $b->{usage}->[0]                # Alphabetical by first usage example
+            or      lc($a->{usage}->[0]) cmp lc($b->{usage}->[0])            # Alphabetical by first usage example
             or       ($a->{field} || '') cmp ($b->{field} || '')             # By field if present
     } grep { $_->{section} } @{$self->{+MY_OPTS}};
     #>>>

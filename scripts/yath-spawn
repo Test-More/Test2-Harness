@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/env perl -w
 package main;
 use strict;
 use warnings;
@@ -29,14 +29,14 @@ my $spawn = $class->new(
     dir => $dir,
 );
 
-my $test_file = $spawn->start;
+my $test = $spawn->start;
 
 # Do not keep these signal handlers post-fork when we are running a test file.
 $SIG{HUP}  = 'DEFAULT';
 $SIG{INT}  = 'DEFAULT';
 $SIG{TERM} = 'DEFAULT';
 
-unless($test_file) {
+unless($test) {
     my $complete = File::Spec->catfile($dir, 'complete');
     open(my $fh, '>', $complete) or die "Could not open '$complete'";
     print $fh '1';
@@ -45,8 +45,14 @@ unless($test_file) {
 }
 
 $@ = '';
-do $test_file;
-die $@ if $@;
+
+if (ref($test) eq 'CODE') {
+    $test->();
+}
+else {
+    do $test;
+    die $@ if $@;
+}
 
 exit 0;
 

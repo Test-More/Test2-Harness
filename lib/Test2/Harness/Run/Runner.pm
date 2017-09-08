@@ -218,18 +218,39 @@ sub preload {
     require Test2::API;
     Test2::API::test2_start_preload();
 
+    $self->_preload($req, $use);
+}
+
+sub _preload {
+    my $self = shift;
+    my ($req, $use, $block, $require) = @_;
+
+    $block ||= {};
+    $require ||= sub { require $_[0] };
+
     if ($req) {
         for my $mod (@$req) {
+            next if $block->{$mod};
             my $file = pkg_to_file($mod);
-            require $file;
+            $require->($file);
+
+            next unless $mod->isa('Test2::Harness::Preload');
+            $mod->preload($block);
         }
     }
 
     if ($use) {
         for my $mod (@$use) {
+            next if $block->{$mod};
             my $file = pkg_to_file($mod);
-            require $file;
-            $mod->import();
+            $require->($file);
+
+            if ($mod->isa('Test2::Harness::Preload')) {
+                $mod->preload($block);
+            }
+            else {
+                $mod->import();
+            }
         }
     }
 }

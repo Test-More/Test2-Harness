@@ -107,7 +107,6 @@ sub iteration {
             $_->log_event($event) for @{$self->{+LOGGERS}};
 
             if ($job_id) {
-                # This will transform the events, possibly by adding facets
                 my $watcher = $self->{+WATCHERS}->{$job_id};
 
                 unless ($watcher) {
@@ -124,6 +123,7 @@ sub iteration {
                     $self->{+ACTIVE}->{$job_id} = $watcher if $live;
                 }
 
+                # This will transform the events, possibly by adding facets
                 my $f;
                 ($event, $f) = $watcher->process($event);
 

@@ -47,24 +47,27 @@ my %EXCLUDE = (
     'strict'   => 1,
 );
 
-sub preload {
+sub _preload {
     my $self = shift;
+    my ($req, $use, $block, $base_require) = @_;
 
-    my (%dep_map, @watch);
+    my $state = $self->{+STATE};
+    $block = $block ? { %$block, %{$state->{block_preload}} } : $state->{block_preload};
 
     my $stash = \%CORE::GLOBAL::;
     # We use a string in the reference below to prevent the glob slot from
     # being auto-vivified by the compiler.
-    my $old = exists $stash->{require} ? \&{'CORE::GLOBAL::require'} : undef;
+    my $old_require = exists $stash->{require} ? \&{'CORE::GLOBAL::require'} : undef;
 
-    my $state = $self->{+STATE};
-
-    my $on = 1;
-
+    my (%dep_map, @watch);
+    my $on      = 1;
     my $require = sub {
         my $file = shift;
 
-        return CORE::require($file) unless $on;
+        unless ($on) {
+            return $old_require->($file) if $old_require;
+            return CORE::require($file);
+        }
 
         if ($file !~ m/^[\d\.]+$/) {
             my $pkg = file_to_pkg($file);
@@ -75,42 +78,17 @@ sub preload {
             }
         }
 
-        return $old->($file) if $old;
+        return $base_require->($file) if $base_require;
+        return $old_require->($file)  if $old_require;
         return CORE::require($file);
     };
-
-    my $run = $self->{+RUN};
-    my $req = $run->preload;
-    my $use = $run->pre_import;
-
-    return unless $req || $use;
-
-    local @INC = ($run->all_libs, @INC);
 
     {
         no strict 'refs';
         *{'CORE::GLOBAL::require'} = $require;
     }
 
-    require Test2::API;
-    Test2::API::test2_start_preload();
-
-    if ($req) {
-        for my $mod (@$req) {
-            next if $state->{block_preload}->{$mod};
-            my $file = pkg_to_file($mod);
-            $require->($file);
-        }
-    }
-
-    if ($use) {
-        for my $mod (@$use) {
-            next if $state->{block_preload}->{$mod};
-            my $file = pkg_to_file($mod);
-            $require->($file);
-            $mod->import();
-        }
-    }
+    $self->SUPER::_preload($req, $use, $block, $require);
 
     $on = 0;
 
@@ -179,7 +157,7 @@ sub preloads_changed {
         while(@todo) {
             my $it = shift @todo;
             next if $seen{$it}++;
-            $self->{+STATE}->{block_preload}->{$it} = 1;
+            $self->{+STATE}->{block_preload}->{$it} = 1 unless $it->isa('Test2::Harness::Preload');
             push @todo => @{$self->{+DEP_MAP}->{$it}} if $self->{+DEP_MAP}->{$it};
         }
     }

@@ -104,6 +104,8 @@ sub local_env {
     my $err = $@;
 
     for my $key (keys %$env) {
+        # If something set an env var inside than we do not want to squash it.
+        next if $ENV{$key} && $env->{key} && $ENV{$key} ne $env->{key};
         exists $old->{$key} ? $ENV{$key} = $old->{$key} : delete $ENV{$key};
     }
 

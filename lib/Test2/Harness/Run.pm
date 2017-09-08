@@ -139,21 +139,23 @@ sub find_files {
             die "'$item' does not appear to be either a file or a directory.\n";
         }
 
-        require File::Find;
-        File::Find::find(
-            {
-                no_chdir => 1,
-                wanted   => sub {
-                    no warnings 'once';
-                    return unless -f $_ && m/\.pm$/;
-                    push @files => Test2::Harness::Util::TestFile->new(
-                        file => $File::Find::name,
-                        tcm  => 1,
-                    );
+        if (@dirs) {
+            require File::Find;
+            File::Find::find(
+                {
+                    no_chdir => 1,
+                    wanted   => sub {
+                        no warnings 'once';
+                        return unless -f $_ && m/\.pm$/;
+                        push @files => Test2::Harness::Util::TestFile->new(
+                            file => $File::Find::name,
+                            tcm  => 1,
+                        );
+                    },
                 },
-            },
-            @dirs,
-        );
+                @dirs,
+            );
+        }
     }
 
     @files = sort { $a->file cmp $b->file } @files;

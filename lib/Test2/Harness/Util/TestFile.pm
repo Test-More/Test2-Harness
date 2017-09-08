@@ -48,7 +48,25 @@ sub check_feature {
 sub check_category {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
-    return $self->{+_HEADERS}->{category};
+    my $category = $self->{+_HEADERS}->{category};
+
+    return $category if $category;
+
+    my $fork    = $self->check_feature(fork      => 1);
+    my $preload = $self->check_feature(preload   => 1);
+    my $timeout = $self->check_feature(timeout   => 1);
+    my $isolate = $self->check_feature(isolation => 0);
+
+    # 'isolation' queue if isolation requested
+    return 'isolation' if $isolate;
+
+    # 'medium' queue for anything that cannot preload or fork
+    return 'medium' unless $preload && $fork;
+
+    # 'long' for anything with no timeout
+    return 'long' unless $timeout;
+
+    return 'general';
 }
 
 sub headers {

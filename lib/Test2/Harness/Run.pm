@@ -37,6 +37,7 @@ use Test2::Harness::Util::HashBase qw{
 
     -exclude_files
     -exclude_patterns
+    -no_long
 };
 
 sub init {
@@ -121,9 +122,18 @@ sub find_files {
 
     @files = map { File::Spec->rel2abs($_) } @files;
     @files = grep { !$self->{+EXCLUDE_FILES}->{$_} } @files if keys %{$self->{+EXCLUDE_FILES}};
-    @files = grep { my $f = $_; !first { $f =~ m/$_/ } @{$self->{+EXCLUDE_PATTERNS}} } @files if @{$self->{+EXCLUDE_PATTERNS}};
 
-    return sort @files;
+    #<<< no-tidy
+    @files = grep { my $f = $_; !first { $f =~ m/$_/ } @{$self->{+EXCLUDE_PATTERNS}} } @files if @{$self->{+EXCLUDE_PATTERNS}};
+    #>>>
+
+    @files = sort @files;
+
+    @files = map {Test2::Harness::Util::TestFile->new(file => $_)} @files;
+
+    @files = grep { $_->check_category ne 'long' } @files if $self->{+NO_LONG};
+
+    return @files;
 }
 
 

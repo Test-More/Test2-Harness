@@ -266,38 +266,20 @@ sub run_tests {
 
     $run->{search} = \@search;
 
-    # TODO: This is copied test.pm, put it in one place!
     my %jobs;
     my $base_id = 1;
-    for my $file ($run->find_files) {
+    for my $tf ($self->make_run_from_settings->find_files) {
         my $job_id = $$ . '-' . $base_id++;
-        $file = File::Spec->rel2abs($file);
-        my $tf = Test2::Harness::Util::TestFile->new(file => $file);
 
         my $category = $tf->check_category;
 
         my $fork    = $tf->check_feature(fork      => 1);
         my $preload = $tf->check_feature(preload   => 1);
         my $timeout = $tf->check_feature(timeout   => 1);
-        my $isolate = $tf->check_feature(isolation => 0);
         my $stream  = $tf->check_feature(stream    => 1);
 
-        if (!$category) {
-            # 'isolation' queue if isolation requested
-            $category = 'isolation' if $isolate;
-
-            # 'long' queue for anything that cannot preload or fork
-            $category ||= 'medium' unless $preload && $fork;
-
-            # 'long' for anything with no timeout
-            $category ||= 'long' unless $timeout;
-
-            # Default
-            $category ||= 'general';
-        }
-
         my $item = {
-            file        => $file,
+            file        => $tf->file,
             use_fork    => $fork,
             use_timeout => $timeout,
             use_preload => $preload,

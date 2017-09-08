@@ -2,6 +2,7 @@
 
     - Properly pass args given via '::'
     - Honor NO-STREAM header
+    - Persist now reloads when a file is changed
 
 0.001006  2017-09-06 14:24:18-07:00 America/Los_Angeles (TRIAL RELEASE)
 

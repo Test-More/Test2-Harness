@@ -838,7 +838,10 @@ sub _run {
 
     if (@$bad) {
         print "\nThe following test jobs failed:\n";
-        print "  [", $_->{job_id}, '] ', $_->file, "\n" for sort { $a->{job_id} <=> $b->{job_id} } @$bad;
+        print "  [", $_->{job_id}, '] ', $_->file, "\n" for sort {
+            # Sort numeric if possible, otherwise string
+            int($a->{job_id}) <=> int($b->{job_id}) || $a->{job_id} cmp $b->{job_id}
+        } @$bad;
         print "\n";
         $exit += @$bad;
     }

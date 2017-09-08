@@ -7,11 +7,12 @@ our $VERSION = '0.001007';
 use POSIX ":sys_wait_h";
 use Cwd qw/realpath/;
 use File::Path qw/remove_tree/;
+use Time::HiRes qw/sleep/;
 
 use File::Spec();
 
 use Test2::Harness::Feeder::Run;
-use Test2::Harness::Run::Runner;
+use Test2::Harness::Run::Runner::Persist;
 use Test2::Harness::Run;
 use Test2::Harness::Util::File::JSON;
 
@@ -19,6 +20,12 @@ use Test2::Harness::Util qw/open_file/;
 
 use parent 'App::Yath::Command::test';
 use Test2::Harness::Util::HashBase qw/-_feeder -_runner -_pid/;
+
+my $old = select STDOUT;
+$| = 1;
+select STDERR;
+$| = 1;
+select $old;
 
 sub has_jobs    { 1 }
 sub has_runner  { 1 }
@@ -167,7 +174,7 @@ sub start {
     my $ok = eval {
         my $run = $self->make_run_from_settings(finite => 0, keep_dir => 1);
 
-        $runner = Test2::Harness::Run::Runner->new(
+        $runner = Test2::Harness::Run::Runner::Persist->new(
             dir => $settings->{dir},
             run => $run,
         );
@@ -188,16 +195,26 @@ sub start {
 
     print "Waiting for runner...\n";
 
-    sleep 1;
+    my $stdout = open_file($runner->out_log);
+    my $stderr = open_file($runner->err_log);
+
     my $check = waitpid($pid, WNOHANG);
+    until($runner->ready || $check) {
+        while(my $line = <$stdout>) {
+            print STDOUT $line;
+        }
+        while (my $line = <$stderr>) {
+            print STDERR $line;
+        }
+        sleep 0.02;
+        $check = waitpid($pid, WNOHANG);
+    }
+
     if ($check != 0) {
         my $exit = $?;
         my $sig = $? & 127;
         $exit >>= 8;
         print STDERR "\nProblem with runner ($pid), waitpid returned $check, exit value: $exit Signal: $sig\n";
-
-        my $stdout = open_file($runner->out_log);
-        my $stderr = open_file($runner->err_log);
 
         while( my $line = <$stdout> ) {
             print STDOUT $line;

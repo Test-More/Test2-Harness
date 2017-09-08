@@ -3,9 +3,11 @@ package main;
 use strict;
 use warnings;
 
+use Test2::Util qw/pkg_to_file/;
+
 our $VERSION = '0.001007';
 
-my ($dir, %args) = @ARGV;
+my ($class, $dir, %args) = @ARGV;
 
 if ($args{setsid}) {
     require POSIX;
@@ -21,8 +23,9 @@ END {
     }
 }
 
-require Test2::Harness::Run::Runner;
-my $spawn = Test2::Harness::Run::Runner->new(
+my $file = pkg_to_file($class);
+require $file;
+my $spawn = $class->new(
     dir => $dir,
 );
 

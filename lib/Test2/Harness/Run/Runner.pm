@@ -42,6 +42,7 @@ use Test2::Harness::Util::HashBase qw{
     -jobs_file  -jobs
     -queue_file -queue
     -state_file -state
+    -ready_file
     -hup
 };
 
@@ -71,6 +72,8 @@ sub init {
     $self->{+ERR_LOG}   = File::Spec->catfile($dir, 'error.log');
     $self->{+OUT_LOG}   = File::Spec->catfile($dir, 'output.log');
 
+    $self->{+READY_FILE} = File::Spec->catfile($dir, 'ready');
+
     $self->{+STATE_FILE} = File::Spec->catfile($dir, 'state.json');
 
     $self->{+JOBS_FILE} = File::Spec->catfile($dir, 'jobs.jsonl');
@@ -91,6 +94,11 @@ sub init {
     }
 
     $self->{+DIR} = $dir;
+}
+
+sub ready {
+    my $self = shift;
+    return -f $self->{+READY_FILE};
 }
 
 sub find_spawn_script {
@@ -126,6 +134,8 @@ sub find_inc {
 sub cmd {
     my $self = shift;
 
+    my $class = ref($self);
+
     my $script = $self->find_spawn_script;
     my $inc    = $self->find_inc;
 
@@ -133,6 +143,7 @@ sub cmd {
         $^X,
         "-I$inc",
         $script,
+        $class,
         $self->{+DIR},
         @_,
     );
@@ -258,7 +269,11 @@ sub start {
         $self->{+HUP} = 1;
     };
 
+    $self->init_state;
+
     $self->preload;
+
+    write_file_atomic($self->{+READY_FILE}, "1");
 
     my $out;
     my $ok = eval { $out = $self->_start(@_); 1 };
@@ -276,11 +291,8 @@ sub start {
     CORE::exit($SIG ? 0 : 255);
 }
 
-sub _start {
+sub init_state {
     my $self = shift;
-
-    my $run   = $self->{+RUN};
-    my $queue = $self->{+QUEUE};
 
     if (-f $self->{+STATE_FILE}) {
         $self->{+STATE} = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->read;
@@ -292,14 +304,22 @@ sub _start {
             position => 0,
         };
     }
+}
+
+sub _start {
+    my $self = shift;
+
+    my $run   = $self->{+RUN};
+    my $queue = $self->{+QUEUE};
 
     my $state = $self->{+STATE};
     $queue->seek($state->{position});
 
     while (1) {
-        $self->respawn if $self->{+HUP};
+        $self->respawn if $self->hup; # do not use {+HUP}, this is a hook point
 
         my $task = $self->next or last;
+        next unless ref($task);
 
         my $runfile = $self->run_job($task);
         return $runfile if $runfile;
@@ -476,6 +496,7 @@ sub next {
     my $meth = $self->{+_NEXT};
 
     while(1) {
+        return -1 if $self->hup;
         $self->wait_jobs(WNOHANG);
         $self->poll_jobs();
 

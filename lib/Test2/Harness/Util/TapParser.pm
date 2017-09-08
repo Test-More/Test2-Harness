@@ -58,7 +58,7 @@ sub parse_tap_buffered_subtest {
     my ($line) = @_;
 
     # End of a buffered subtest.
-    return {parent => {}, harness => {subtest_end => 1}} if $line =~ m/^\}/;
+    return {parent => {}, harness => {subtest_end => 1}} if $line =~ m/^\}\s*$/;
 
     my $facet_data = $class->parse_tap_ok($line) or return undef;
     return $facet_data unless $facet_data->{assert}->{details} =~ s/\s*\{\s*$//g;

@@ -73,6 +73,24 @@ sub process {
         return ();
     }
 
+
+    # Not actually a subtest end, someone printed to STDOUT
+    if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && @{$self->{+SUBTESTS}})) {
+        delete $f->{parent};
+        delete $f->{trace};
+        delete $f->{harness}->{subtest_end};
+
+        push @{$f->{info}} => {
+            details => $f->{from_tap}->{details},
+            tag     => $f->{from_tap}->{source} || 'STDOUT',
+        };
+
+        return (
+            Test2::Harness::Event->new(facet_data => $f),
+            $f,
+        );
+    }
+
     # Close any deeper subtests
     if (my $sts = $self->{+SUBTESTS}) {
         my @close = sort { $b <=> $a } grep { $_ > $nested } keys %$sts;

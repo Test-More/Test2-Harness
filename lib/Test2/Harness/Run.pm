@@ -21,7 +21,7 @@ use Test2::Harness::Util::HashBase qw{
     -job_count
     -switches
     -libs -lib -blib -tlib
-    -preload -pre_import
+    -preload
     -load    -load_import
     -args
     -input
@@ -58,7 +58,6 @@ sub init {
     $self->{+CHDIR}      ||= undef;
     $self->{+SEARCH}     ||= ['t'];
     $self->{+PRELOAD}    ||= undef;
-    $self->{+PRE_IMPORT} ||= undef;
     $self->{+SWITCHES}   ||= [];
     $self->{+ARGS}       ||= [];
     $self->{+LIBS}       ||= [];

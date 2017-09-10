@@ -294,7 +294,6 @@ sub make_run_from_settings {
         blib        => $settings->{blib},
         tlib        => $settings->{tlib},
         preload     => $settings->{preload},
-        pre_import  => $settings->{pre_import},
         load        => $settings->{load},
         load_import => $settings->{load_import},
         args        => $settings->{pass},
@@ -643,15 +642,6 @@ sub all_opts {
             section => 'Harness Options',
             usage   => ['-p Module', '--preload Module'],
             summary => ['Preload a module before running tests', 'this option may be given multiple times'],
-        },
-
-        {
-            spec    => 'P|pre-import=s@',
-            field   => 'pre_import',
-            used_by => {runner => 1},
-            section => 'Harness Options',
-            usage   => ['-P Module', '--pre-import Module'],
-            summary => ['Preload AND Import a module before running tests', 'this option may be given multiple times'],
         },
 
         {

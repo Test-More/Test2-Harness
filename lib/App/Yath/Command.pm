@@ -12,6 +12,7 @@ use Getopt::Long qw/GetOptionsFromArray/;
 use File::Path qw/remove_tree/;
 use List::Util qw/first max/;
 use Test2::Util qw/pkg_to_file/;
+use POSIX qw/strftime/;
 
 use File::Spec;
 
@@ -706,7 +707,11 @@ sub all_opts {
                 my ($self, $settings, $field) = @_;
 
                 return unless $settings->{bzip2_log} || $settings->{gzip_log} || $settings->{log};
-                return "event-log-$settings->{run_id}.jsonl";
+
+                mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
+                    unless -d 'test-logs';
+
+                return File::Spec->catfile('test-logs', strftime("%Y-%m-%d~%H:%M:%S", localtime()). "~$settings->{run_id}~$$.jsonl");
             },
         },
 

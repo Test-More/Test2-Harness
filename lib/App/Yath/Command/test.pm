@@ -12,7 +12,7 @@ use Test2::Harness::Run;
 
 use Time::HiRes qw/time/;
 
-use parent 'App::Yath::CommandShared::Harness';
+use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
 sub has_jobs    { 1 }

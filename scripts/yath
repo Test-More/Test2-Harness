@@ -28,9 +28,11 @@ my $cmd = $cmd_class->new(args => \@ARGV);
 my $start = time;
 my $exit = $cmd->run;
 
-my $end = time;
-my $bench = render_bench($start, $end, times);
-print $bench, "\n\n";
+if ($cmd->show_bench) {
+    my $end = time;
+    my $bench = render_bench($start, $end, times);
+    print $bench, "\n\n";
+}
 
 exit $exit;
 

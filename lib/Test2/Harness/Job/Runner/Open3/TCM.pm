@@ -6,8 +6,6 @@ use App::Yath::Util qw/find_yath/;
 
 use parent 'Test2::Harness::Job::Runner::Open3';
 
-our $VERSION = '0.001007';
-
 sub command_file {
     my $self = shift;
     my ($test) = @_;

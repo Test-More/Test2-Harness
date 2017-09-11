@@ -4,6 +4,8 @@ use warnings;
 
 use Filter::Util::Call qw/filter_add/;
 
+our $VERSION = '0.001007';
+
 sub import {
     no warnings 'once';
     my $class = shift;

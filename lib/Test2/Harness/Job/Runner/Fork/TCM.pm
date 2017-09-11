@@ -2,8 +2,6 @@ package Test2::Harness::Job::Runner::Fork::TCM;
 use strict;
 use warnings;
 
-our $VERSION = '0.001007';
-
 use parent 'Test2::Harness::Job::Runner::Fork';
 
 sub run {

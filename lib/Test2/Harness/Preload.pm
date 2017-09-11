@@ -2,6 +2,8 @@ package Test2::Harness::Preload;
 use strict;
 use warnings;
 
+our $VERSION = '0.001007';
+
 sub preload {
     my $class = shift;
     my ($do_not_load) = @_;

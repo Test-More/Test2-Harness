@@ -4,6 +4,8 @@ use warnings;
 
 use parent 'App::Yath::Command';
 
+our $VERSION = '0.001007';
+
 use Test2::Harness::Util qw/open_file/;
 
 sub show_bench { 0 }

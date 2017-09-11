@@ -49,7 +49,7 @@ my %EXCLUDE = (
 
 sub _preload {
     my $self = shift;
-    my ($req, $use, $block, $base_require) = @_;
+    my ($req, $block, $base_require) = @_;
 
     my $state = $self->{+STATE};
     $block = $block ? { %$block, %{$state->{block_preload}} } : $state->{block_preload};
@@ -88,7 +88,7 @@ sub _preload {
         *{'CORE::GLOBAL::require'} = $require;
     }
 
-    $self->SUPER::_preload($req, $use, $block, $require);
+    $self->SUPER::_preload($req, $block, $require);
 
     $on = 0;
 

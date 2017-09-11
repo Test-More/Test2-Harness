@@ -16,11 +16,15 @@ use Test2::Harness::Run::Runner::Persist;
 use Test2::Harness::Run;
 use Test2::Harness::Util::File::JSON;
 
+use App::Yath::Util qw/find_pfile/;
 use Test2::Harness::Util qw/open_file/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
+sub group { 'persist' }
+
+sub show_bench      { 0 }
 sub has_jobs        { 0 }
 sub has_runner      { 0 }
 sub has_logger      { 0 }
@@ -40,9 +44,7 @@ foo bar baz
 sub run {
     my $self = shift;
 
-    $self->pre_run();
-
-    my $pfile = $self->find_pfile
+    my $pfile = find_pfile()
         or die "Could not find " . $self->pfile_name . " in current directory, or any parent directories.\n";
 
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();

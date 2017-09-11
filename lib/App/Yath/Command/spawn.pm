@@ -7,6 +7,8 @@ our $VERSION = '0.001007';
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
+sub internal_only { 1 }
+
 #####################################
 #
 # This is just a stub to reserve the namespace. the yath script actually

@@ -7,10 +7,11 @@ our $VERSION = '0.001007';
 use File::Spec;
 
 use Carp qw/confess/;
+use Cwd qw/realpath/;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/load_command find_yath/;
+our @EXPORT_OK = qw/load_command find_yath find_pfile PFILE_NAME/;
 
 sub load_command {
     my ($cmd_name) = @_;
@@ -43,6 +44,30 @@ sub _find_yath {
 
     die "Could not find 'yath' in execution path";
 }
+
+sub PFILE_NAME() { '.yath-persist.json' }
+
+sub find_pfile {
+    my $pfile = _find_pfile() or return;
+    return File::Spec->rel2abs($pfile);
+}
+
+sub _find_pfile {
+    my $path = PFILE_NAME();
+    return File::Spec->rel2abs($path) if -f $path;
+
+    my %seen;
+    while(1) {
+        $path = File::Spec->catdir('..', $path);
+        my $check = File::Spec->rel2abs($path);
+        last if $seen{realpath($check)}++;
+        return $check if -f $check;
+    }
+
+    return;
+}
+
+
 
 1;
 

@@ -14,7 +14,7 @@ BEGIN {
 
 our $VERSION = '0.001007';
 
-use App::Yath::Util qw/load_command/;
+use App::Yath::Util qw/load_command find_pfile/;
 use List::Util qw/sum/;
 use Time::HiRes qw/time/;
 
@@ -23,11 +23,23 @@ use Test2::Util qw/pkg_to_file/;
 use Test2::Util::Times qw/render_bench/;
 
 BEGIN {
-    if (@ARGV && -f $ARGV[0] && $ARGV[0] =~ m/\.jsonl(\.bz2|\.gz)$/) {
+    if (@ARGV && $ARGV[0] =~ m/^-*h(elp)?$/i) {
+        shift @ARGV;
+        *cmd_name = sub() { 'help' };
+    }
+    elsif (@ARGV && -f $ARGV[0] && $ARGV[0] =~ m/\.jsonl(\.bz2|\.gz)$/) {
+        print "\n** First argument is a log file, defaulting to 'replay' command **\n\n";
         *cmd_name = sub() { 'replay' };
     }
     elsif (!@ARGV || -d $ARGV[0] || -f $ARGV[0] || substr($ARGV[0], 0, 1) eq '-') {
-        *cmd_name = sub() { 'test' };
+        if (find_pfile) {
+            print "\n** Persistent runner detected, defaulting to 'run' command **\n\n";
+            *cmd_name = sub() { 'run' };
+        }
+        else {
+            print "\n** Defaulting to 'test' command **\n\n";
+            *cmd_name = sub() { 'test' };
+        }
     }
     else {
         my $cmd_name = shift @ARGV;

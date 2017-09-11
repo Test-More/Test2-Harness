@@ -21,7 +21,6 @@ use File::Path qw/remove_tree/;
 use List::Util qw/first max/;
 use Test2::Util qw/pkg_to_file/;
 use POSIX qw/strftime/;
-use Cwd qw/realpath/;
 
 use File::Spec;
 
@@ -35,6 +34,7 @@ use Test2::Harness::Util::HashBase qw/-settings -my_opts -signal -args -plugins/
 
 sub handle_list_args { }
 sub feeder           { }
+sub internal_only    { 0 }
 sub has_jobs         { 0 }
 sub has_runner       { 0 }
 sub has_logger       { 0 }
@@ -44,6 +44,8 @@ sub always_keep_dir  { 0 }
 sub manage_runner    { 1 }
 sub summary          { "No Summary" }
 sub name             { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
+
+sub group { "ZZZZZZ" }
 
 sub init {
     my $self = shift;
@@ -112,32 +114,6 @@ sub init {
 
     return;
 }
-
-sub pfile_name() { '.yath-persist.json' }
-
-sub find_pfile {
-    my $self = shift;
-    my $pfile = $self->_find_pfile or return;
-    return File::Spec->rel2abs($pfile);
-}
-
-sub _find_pfile {
-    my $self = shift;
-
-    my $path = $self->pfile_name;
-    return File::Spec->rel2abs($path) if -f $path;
-
-    my %seen;
-    while(1) {
-        $path = File::Spec->catdir('..', $path);
-        my $check = File::Spec->rel2abs($path);
-        last if $seen{realpath($check)}++;
-        return $check if -f $check;
-    }
-
-    return;
-}
-
 
 sub run {
     my $self = shift;

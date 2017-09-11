@@ -5,6 +5,7 @@ use warnings;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
+sub internal_only { 1 }
 sub show_bench { 0 }
 
 sub run {

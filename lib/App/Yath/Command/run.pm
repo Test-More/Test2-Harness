@@ -7,8 +7,12 @@ our $VERSION = '0.001007';
 use Test2::Harness::Feeder::Run;
 use Test2::Harness::Util::File::JSON;
 
+use App::Yath::Util qw/find_pfile/;
+
 use parent 'App::Yath::Command::test';
 use Test2::Harness::Util::HashBase qw/-_feeder -_runner -_pid/;
+
+sub group { 'persist' }
 
 sub has_jobs        { 1 }
 sub has_runner      { 0 }
@@ -17,7 +21,7 @@ sub has_display     { 1 }
 sub manage_runner   { 0 }
 sub always_keep_dir { 1 }
 
-sub summary { "persistent test runner" }
+sub summary { "Run tests using the persistent test runner" }
 sub cli_args { "" }
 
 sub description {
@@ -34,7 +38,7 @@ sub run {
     my $settings = $self->{+SETTINGS};
     my @search = @{$settings->{search}};
 
-    my $pfile = $self->find_pfile
+    my $pfile = find_pfile()
         or die "Could not find " . $self->pfile_name . " in current directory, or any parent directories.\n";
 
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();

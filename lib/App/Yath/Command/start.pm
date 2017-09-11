@@ -9,6 +9,7 @@ use File::Spec();
 use POSIX ":sys_wait_h";
 use Time::HiRes qw/sleep/;
 
+use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use Test2::Harness::Util qw/open_file/;
 
 use Test2::Harness::Run::Runner::Persist;
@@ -16,6 +17,8 @@ use Test2::Harness::Util::File::JSON;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
+
+sub group { 'persist' }
 
 sub has_jobs    { 1 }
 sub has_runner  { 1 }
@@ -38,12 +41,12 @@ sub run {
 
     $self->pre_run();
 
-    if (my $exists = $self->find_pfile) {
+    if (my $exists = find_pfile()) {
         die "Persistent harness appears to be running, found $exists\n"
     }
 
     my $settings = $self->{+SETTINGS};
-    my $pfile = File::Spec->rel2abs($self->pfile_name());
+    my $pfile = File::Spec->rel2abs(PFILE_NAME());
 
     my ($exit, $runner, $pid, $stat);
     my $ok = eval {

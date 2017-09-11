@@ -8,6 +8,8 @@ use Test2::Harness::Util qw/open_file/;
 
 sub show_bench { 0 }
 
+sub summary { "Create/update test.pl to run tests via Test2::Harness" }
+
 sub run {
     if (-f 'test.pl') {
         my $fh = open_file('test.pl', '<');

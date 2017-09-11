@@ -13,7 +13,9 @@ use Test2::Harness;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub summary { "replay from an event log" }
+sub summary { "Replay a test run from an event log" }
+
+sub group { ' test' }
 
 sub has_runner  { 0 }
 sub has_logger  { 0 }

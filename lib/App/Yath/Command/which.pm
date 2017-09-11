@@ -6,9 +6,14 @@ our $VERSION = '0.001007';
 
 use Test2::Harness::Util::File::JSON;
 
+use App::Yath::Util qw/find_pfile/;
+
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
+sub group { 'persist' }
+
+sub show_bench      { 0 }
 sub has_jobs        { 0 }
 sub has_runner      { 0 }
 sub has_logger      { 0 }
@@ -28,9 +33,7 @@ foo bar baz
 sub run {
     my $self = shift;
 
-    $self->pre_run();
-
-    my $pfile = $self->find_pfile;
+    my $pfile = find_pfile();
 
     unless ($pfile) {
         print "\nNo persistent harness was found for the current path.\n\n";

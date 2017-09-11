@@ -15,12 +15,14 @@ use Time::HiRes qw/time/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
+sub group { ' test' }
+
 sub has_jobs    { 1 }
 sub has_runner  { 1 }
 sub has_logger  { 1 }
 sub has_display { 1 }
 
-sub summary { "run tests" }
+sub summary { "Run tests" }
 sub cli_args { "[--] [test files/dirs] [::] [arguments to test scripts]" }
 
 sub description {

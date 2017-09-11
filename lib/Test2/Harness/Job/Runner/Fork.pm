@@ -134,19 +134,6 @@ sub { shift->import(@_) }
 
     @ARGV = @{$job->args};
 
-    if ($job->tcm) {
-        my $sub = sub {
-            require Test2::Require::Module;
-            Test2::Require::Module->import('Test::Class::Moose::Runner');
-            require $file;
-            require Test::Class::Moose::Runner;
-            Test::Class::Moose::Runner->import();
-            Test::Class::Moose::Runner->new->runtests();
-        };
-
-        return (undef, $sub);
-    }
-
     return (undef, $file);
 }
 

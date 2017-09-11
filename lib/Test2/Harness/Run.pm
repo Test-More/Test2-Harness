@@ -40,7 +40,8 @@ use Test2::Harness::Util::HashBase qw{
     -exclude_files
     -exclude_patterns
     -no_long
-    -tcm
+
+    -plugins
 };
 
 sub init {
@@ -127,34 +128,8 @@ sub find_files {
         );
     }
 
-    my $tcm = $self->tcm;
-
-    if ($tcm && @$tcm) {
-        @dirs = ();
-
-        for my $item (@$tcm) {
-            push @files => Test2::Harness::Util::TestFile->new(file => $item, tcm => 1) and next if -f $item;
-            push @dirs  => $item and next if -d $item;
-            die "'$item' does not appear to be either a file or a directory.\n";
-        }
-
-        if (@dirs) {
-            require File::Find;
-            File::Find::find(
-                {
-                    no_chdir => 1,
-                    wanted   => sub {
-                        no warnings 'once';
-                        return unless -f $_ && m/\.pm$/;
-                        push @files => Test2::Harness::Util::TestFile->new(
-                            file => $File::Find::name,
-                            tcm  => 1,
-                        );
-                    },
-                },
-                @dirs,
-            );
-        }
+    if ($self->{+PLUGINS}) {
+        push @files => $_->find_files($self) for keys %{$self->{+PLUGINS}};
     }
 
     @files = sort { $a->file cmp $b->file } @files;

@@ -2,8 +2,6 @@ package App::Yath::Command::replay;
 use strict;
 use warnings;
 
-use Carp::Always;
-
 our $VERSION = '0.001007';
 
 use Test2::Util qw/pkg_to_file/;
@@ -35,14 +33,13 @@ command accepts.
     EOT
 }
 
-sub init {
+sub handle_list_args {
     my $self = shift;
-
-    $self->SUPER::init();
+    my ($list) = @_;
 
     my $settings = $self->{+SETTINGS};
 
-    my ($log, @jobs) = @{$settings->{list}};
+    my ($log, @jobs) = @$list;
 
     $settings->{log_file} = $log;
     $settings->{jobs} = { map { $_ => 1 } @jobs} if @jobs;

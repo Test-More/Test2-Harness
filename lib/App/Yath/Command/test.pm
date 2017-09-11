@@ -43,6 +43,25 @@ get the same ARGV.
     EOT
 }
 
+sub handle_list_args {
+    my $self = shift;
+    my ($list) = @_;
+
+    my $settings = $self->{+SETTINGS} ||= {};
+
+    $settings->{search} = $list;
+
+    my $has_search = $settings->{search} && @{$settings->{search}};
+
+    unless ($has_search) {
+        my @dirs = grep { -d $_ } './t', './t2';
+        my @files = grep { -f $_ } 'test.pl';
+
+        $settings->{search} = [@dirs, @files];
+    }
+}
+
+
 sub feeder {
     my $self = shift;
 

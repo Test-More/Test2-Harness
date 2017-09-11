@@ -475,10 +475,12 @@ sub run_job {
         chdir => $task->{chdir} || $run->chdir,
     );
 
+    my $via = $task->{via} || ($fork ? ['Fork', 'Open3'] : ['Open3']);
+
     my $runner = $self->{+JOB_RUNNER_CLASS}->new(
         job => $job,
         dir => $dir,
-        via => $fork ? ['Fork', 'Open3'] : ['Open3'],
+        via => $via,
     );
 
     my ($pid, $runfile) = $runner->run;

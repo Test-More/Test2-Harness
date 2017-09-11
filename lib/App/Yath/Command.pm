@@ -23,38 +23,26 @@ use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Harness;
 use Test2::Harness::Run;
 
-use Test2::Harness::Util::HashBase qw/-settings -my_opts -signal -args/;
+use Test2::Harness::Util::HashBase qw/-settings -my_opts -signal -args -plugins/;
 
-sub feeder          { }
-sub has_jobs        { 0 }
-sub has_runner      { 0 }
-sub has_logger      { 0 }
-sub has_display     { 0 }
-sub show_bench      { 1 }
-sub always_keep_dir { 0 }
-sub manage_runner   { 1 }
-sub summary         { "No Summary" }
-sub name            { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
+sub handle_list_args { }
+sub feeder           { }
+sub has_jobs         { 0 }
+sub has_runner       { 0 }
+sub has_logger       { 0 }
+sub has_display      { 0 }
+sub show_bench       { 1 }
+sub always_keep_dir  { 0 }
+sub manage_runner    { 1 }
+sub summary          { "No Summary" }
+sub name             { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
 
 sub init {
     my $self = shift;
 
     my $settings = $self->{+SETTINGS} ||= {};
 
-    my @have;
-    push @have => 'jobs'    if $self->has_jobs;
-    push @have => 'runner'  if $self->has_runner;
-    push @have => 'logger'  if $self->has_logger;
-    push @have => 'display' if $self->has_display;
-
-    $self->{+MY_OPTS} = [
-        grep {
-            my $u = $_->{used_by};
-            $u->{all} || grep { $u->{$_} } @have
-        } $self->all_opts($settings)
-    ];
-
-    $self->parse_args($self->{+ARGS});
+    my $list = $self->parse_args($self->{+ARGS});
 
     for my $opt (@{$self->{+MY_OPTS}}) {
         my $field   = $opt->{field};
@@ -92,41 +80,7 @@ sub init {
     die "You cannot select both bzip2 and gzip for the log.\n"
         if $settings->{bzip2_log} && $settings->{gzip_log};
 
-    if ($self->has_jobs) {
-        $settings->{search} = delete $settings->{list};
-
-        my $has_search = $settings->{search} && @{$settings->{search}};
-        my $has_tcm    = $settings->{tcm}    && @{$settings->{tcm}};
-
-        unless ($has_search || $has_tcm) {
-            my @dirs = grep { -d $_ } './t', './t2';
-            my @files = grep { -f $_ } 'test.pl';
-
-            $settings->{search} = [@dirs, @files];
-        }
-
-        unless ($has_tcm || $settings->{no_tcm}) {
-            my @dirs = grep { -d $_ } @{$settings->{search} || []};
-
-            my $tcm = $settings->{tcm} = [];
-            require File::Find;
-            File::Find::find(
-                sub {
-                    return unless -d $_;
-                    return unless $File::Find::name =~ m{TestsFor$};
-                    push @$tcm => $File::Find::name;
-                },
-                @dirs
-            ) if @dirs;
-
-            if (@$tcm) {
-                push @{$settings->{exclude_patterns}} => "(tcm|TCM)\\.t\$";
-
-                my $libs = $settings->{libs} ||= [];
-                push @$libs => File::Spec->rel2abs(File::Spec->catdir($_, File::Spec->updir)) for @$tcm;
-            }
-        }
-    }
+    $self->handle_list_args($list);
 
     if (my $s = $ENV{HARNESS_PERL_SWITCHES}) {
         push @{$settings->{switches}} => split /\s+/, $s;
@@ -143,6 +97,12 @@ sub init {
         die "Work directory is not empty (use -C to clear it)" if first { !m/^\.+$/ } readdir($DH);
         closedir($DH);
     }
+
+    for my $plugin (@{$self->{+PLUGINS}}) {
+        $plugin->post_init($self, $settings);
+    }
+
+    return;
 }
 
 sub run {
@@ -307,7 +267,7 @@ sub make_run_from_settings {
         times       => $settings->{times},
         verbose     => $settings->{verbose},
         no_long     => $settings->{no_long},
-        tcm         => $settings->{tcm},
+        plugins     => $settings->{plugins},
 
         exclude_patterns => $settings->{exclude_patterns},
         exclude_files    => {map { (File::Spec->rel2abs($_) => 1) } @{$settings->{exclude_files}}},
@@ -327,7 +287,7 @@ sub section_order {
 }
 
 # {{{
-sub all_opts {
+sub options {
     my $self = shift;
     my ($settings) = @_;
 
@@ -373,7 +333,7 @@ sub all_opts {
         },
 
         {
-            spec    => 'tlib',
+            spec    => 'tlib!',
             field   => 'tlib',
             used_by => {jobs => 1, runner => 1},
             section => 'Job Options',
@@ -565,25 +525,6 @@ sub all_opts {
                 return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !($settings->{keep_dir} || $self->always_keep_dir), DIR => $settings->{tmp_dir});
             },
             normalize => sub { File::Spec->rel2abs($_[0]) },
-        },
-
-        {
-            spec => 'tcm=s@',
-            field => 'tcm',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['--tcm path/to/tests'],
-            summary => ["Run TCM tests from the path", "Can be specified multiple times"],
-            long_desc => "This will tell Test2::Harness to handle TCM tests. Any test file matching /tcm.t\$/ will be excluded automatically in favor of handling the tests internally. Note that tcm tests inside your search path will normally be found automatically and run",
-        },
-
-        {
-            spec => 'no-tcm',
-            field => 'no_tcm',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['--no-tcm'],
-            summary => ["Disable all automatic handling of tcm. --tcm will still work"],
         },
 
         {
@@ -831,7 +772,7 @@ sub parse_args {
     my $self = shift;
     my ($args) = @_;
 
-    my (@opts, @list, @pass);
+    my (@opts, @list, @pass, @plugins);
 
     my $last_mark = '';
     for my $arg (@{$self->args}) {
@@ -845,9 +786,21 @@ sub parse_args {
             }
             push @list => $arg;
         }
+        elsif ($last_mark eq '-p' || $last_mark eq '--plugin') {
+            $last_mark = '';
+            push @plugins => $arg;
+        }
         else {
             if ($arg eq '--' || $arg eq '::') {
                 $last_mark = $arg;
+                next;
+            }
+            if ($arg eq '-p' || $arg eq '--plugin') {
+                $last_mark = $arg;
+                next;
+            }
+            if ($arg =~ m/^(?:-p=?|--plugin=)(.*)$/) {
+                push @plugins => $1;
                 next;
             }
             push @opts => $arg;
@@ -856,6 +809,32 @@ sub parse_args {
 
     my $settings = $self->{+SETTINGS} ||= {};
     $settings->{pass} = \@pass;
+
+    my @options = $self->options($settings);
+
+    for my $plugin (@plugins) {
+        local $@;
+        $plugin = "App::Yath::Plugin::$plugin" unless $plugin =~ s/^\+//;
+        my $file = pkg_to_file($plugin);
+        eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";
+
+        push @options => $plugin->options($self, $settings);
+        $plugin->pre_init($self, $settings);
+    }
+
+    $self->{+PLUGINS} = \@plugins;
+
+    my @have;
+    push @have => 'jobs'    if $self->has_jobs;
+    push @have => 'runner'  if $self->has_runner;
+    push @have => 'logger'  if $self->has_logger;
+    push @have => 'display' if $self->has_display;
+    $self->{+MY_OPTS} = [
+        grep {
+            my $u = $_->{used_by};
+            $u->{all} || grep { $u->{$_} } @have
+        } @options
+    ];
 
     my @opt_map = map {
         my $spec  = $_->{spec};
@@ -870,7 +849,7 @@ sub parse_args {
     my $args_ok = GetOptionsFromArray(\@opts => @opt_map)
         or die "Could not parse the command line options given.\n";
 
-    $settings->{list} = [grep { defined($_) && length($_) } @list, @opts];
+    return [grep { defined($_) && length($_) } @list, @opts];
 }
 
 sub usage {

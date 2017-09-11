@@ -8,4 +8,19 @@ sub preload {
     die "$class does not override preload()";
 }
 
+sub pre_fork {
+    my $class = shift;
+    my ($job) = @_;
+}
+
+sub post_fork {
+    my $class = shift;
+    my ($job) = @_;
+}
+
+sub pre_launch {
+    my $class = shift;
+    my ($job) = @_;
+}
+
 1;

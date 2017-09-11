@@ -29,12 +29,17 @@ sub run {
     my ($test) = @_;
 
     my $job = $test->job;
+    my $preloads = $job->preload || [];
+
+    $_->pre_fork($job) for @$preloads;
 
     my $pid = fork();
     die "Failed to fork: $!" unless defined $pid;
 
     # In parent
     return ($pid, undef) if $pid;
+
+    $_->post_fork($job) for @$preloads;
 
     # toggle -w switch late
     $^W = 1 if grep { m/\s*-w\s*/ } @{$job->switches};
@@ -133,6 +138,8 @@ sub { shift->import(@_) }
     }
 
     @ARGV = @{$job->args};
+
+    $_->pre_launch($job) for @$preloads;
 
     return (undef, $file);
 }

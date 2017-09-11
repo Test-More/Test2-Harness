@@ -455,6 +455,9 @@ sub run_job {
         args        => [@{$run->args}, @{$task->{args} || []}],
         input => $task->{input} || $run->input,
         chdir => $task->{chdir} || $run->chdir,
+
+        # This should only come from run
+        preload => [grep { $_->isa('Test2::Harness::Preload') } @{$run->preload || []}],
     );
 
     my $via = $task->{via} || ($fork ? ['Fork', 'Open3'] : ['Open3']);

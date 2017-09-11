@@ -2,6 +2,14 @@ package App::Yath::Command;
 use strict;
 use warnings;
 
+BEGIN {
+    my $old = select STDOUT;
+    $| = 1;
+    select STDERR;
+    $| = 1;
+    select $old;
+}
+
 our $VERSION = '0.001007';
 
 use Carp qw/croak/;
@@ -13,6 +21,7 @@ use File::Path qw/remove_tree/;
 use List::Util qw/first max/;
 use Test2::Util qw/pkg_to_file/;
 use POSIX qw/strftime/;
+use Cwd qw/realpath/;
 
 use File::Spec;
 
@@ -103,6 +112,32 @@ sub init {
 
     return;
 }
+
+sub pfile_name() { '.yath-persist.json' }
+
+sub find_pfile {
+    my $self = shift;
+    my $pfile = $self->_find_pfile or return;
+    return File::Spec->rel2abs($pfile);
+}
+
+sub _find_pfile {
+    my $self = shift;
+
+    my $path = $self->pfile_name;
+    return File::Spec->rel2abs($path) if -f $path;
+
+    my %seen;
+    while(1) {
+        $path = File::Spec->catdir('..', $path);
+        my $check = File::Spec->rel2abs($path);
+        last if $seen{realpath($check)}++;
+        return $check if -f $check;
+    }
+
+    return;
+}
+
 
 sub run {
     my $self = shift;
@@ -202,8 +237,13 @@ sub run_command {
     if (@$bad) {
         print "\nThe following test jobs failed:\n";
         print "  [", $_->{job_id}, '] ', File::Spec->abs2rel($_->file), "\n" for sort {
+            my $an = $a->{job_id};
+            $an =~ s/\D+//g;
+            my $bn = $b->{job_id};
+            $bn =~ s/\D+//g;
+
             # Sort numeric if possible, otherwise string
-            int($a->{job_id}) <=> int($b->{job_id}) || $a->{job_id} cmp $b->{job_id}
+            int($an) <=> int($bn) || $a->{job_id} cmp $b->{job_id}
         } @$bad;
         print "\n";
         $exit += @$bad;
@@ -587,7 +627,7 @@ sub options {
         {
             spec    => 'm|load|load-module=s@',
             field   => 'load',
-            used_by => {runner => 1},
+            used_by => {runner => 1, jobs => 1},
             section => 'Harness Options',
             usage   => ['-m Module', '--load Module', '--load-module Mod'],
             summary => ['Load a module in each test (after fork)', 'this option may be given multiple times'],
@@ -596,7 +636,7 @@ sub options {
         {
             spec    => 'M|loadim|load-import=s@',
             field   => 'load_import',
-            used_by => {runner => 1},
+            used_by => {runner => 1, jobs => 1},
             section => 'Harness Options',
             usage   => ['-M Module', '--loadim Module', '--load-import Mod'],
             summary => ['Load and import module in each test (after fork)', 'this option may be given multiple times'],

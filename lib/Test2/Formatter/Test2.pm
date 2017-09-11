@@ -124,6 +124,7 @@ sub DEFAULT_COLOR() {
 sub init {
     my $self = shift;
 
+
     $self->{+VERBOSE} = 1 unless defined $self->{+VERBOSE};
 
     $self->{+JOB_LENGTH} ||= 2;
@@ -138,16 +139,22 @@ sub init {
 
     $self->{+TTY} = -t $io unless defined $self->{+TTY};
 
+    my $use_color = ref($self->{+COLOR}) ? 1 : delete($self->{+COLOR});
+    $use_color = $self->{+TTY} unless defined $use_color;
+
     if ($self->{+TTY} && USE_ANSI_COLOR) {
         $self->{+SHOW_BUFFER} = 1 unless defined $self->{+SHOW_BUFFER};
-        $self->{+COLOR} = {
-            DEFAULT_COLOR(),
-            TAGS   => {DEFAULT_TAG_COLOR()},
-            FACETS => {DEFAULT_FACET_COLOR()},
-            JOBS   => [DEFAULT_JOB_COLOR()],
-        } unless defined $self->{+COLOR};
 
-        $self->{+JOB_COLORS} = {free => [@{$self->{+COLOR}->{JOBS}}]};
+        if ($use_color) {
+            $self->{+COLOR} = {
+                DEFAULT_COLOR(),
+                TAGS   => {DEFAULT_TAG_COLOR()},
+                FACETS => {DEFAULT_FACET_COLOR()},
+                JOBS   => [DEFAULT_JOB_COLOR()],
+            } unless defined $self->{+COLOR};
+
+            $self->{+JOB_COLORS} = {free => [@{$self->{+COLOR}->{JOBS}}]};
+        }
     }
     else {
         $self->{+SHOW_BUFFER} = 0 unless defined $self->{+SHOW_BUFFER};

@@ -449,7 +449,7 @@ sub options {
         {
             spec      => 'unsafe-inc!',
             field     => 'unsafe_inc',
-            used_by   => {display => 1},
+            used_by   => {jobs => 1, runner => 1},
             section   => 'Job Options',
             usage     => ['--unsafe-inc', '--no-unsafe-inc'],
             summary   => ["(Default: On) put '.' in \@INC", "Do not put '.' in \@INC"],
@@ -705,6 +705,16 @@ sub options {
                 return 1 if $settings->{gzip_log};
                 return 0;
             },
+        },
+
+        {
+            spec    => 'color!',
+            field   => 'color',
+            used_by => {display => 1},
+            section => 'Display Options',
+            usage   => ['--color', '--no-color'],
+            summary => ["Turn color on (Default: on)", "Turn color off"],
+            default => 1,
         },
 
         {
@@ -1050,7 +1060,7 @@ sub renderers {
             show_run_info   => $settings->{show_run_info},
             show_job_launch => $settings->{show_job_launch},
             show_job_end    => $settings->{show_job_end},
-            formatter       => $f_class->new(verbose => $settings->{verbose}),
+            formatter       => $f_class->new(verbose => $settings->{verbose}, color => $settings->{color}),
         );
     }
     elsif ($settings->{formatter}) {
@@ -1059,7 +1069,7 @@ sub renderers {
     else {
         my $r_class = fqmod('Test2::Harness::Renderer', $r);
         require $r_class;
-        push @$renderers => $r_class->new(verbose => $settings->{verbose});
+        push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
     }
 
     return $renderers;

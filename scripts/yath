@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+package App::Yath;
 use strict;
 use warnings;
 
@@ -20,88 +21,75 @@ use Test2::Util qw/pkg_to_file/;
 
 use Test2::Util::Times qw/render_bench/;
 
-my $cmd_name;
-if (@ARGV && -f $ARGV[0] && $ARGV[0] =~ m/\.jsonl(\.bz2|\.gz)$/) {
-    $cmd_name = 'replay';
-}
-elsif(!@ARGV || -d $ARGV[0] || -f $ARGV[0] || substr($ARGV[0],0,1) eq '-') {
-    $cmd_name = 'test';
-}
-else {
-    $cmd_name = shift @ARGV;
-}
-
-unless ($cmd_name eq 'spawn') {
-    my $cmd_class = load_command($cmd_name);
-
-    my $cmd = $cmd_class->new(args => \@ARGV);
-
-    my $start = time;
-    my $exit  = $cmd->run;
-
-    if ($cmd->show_bench) {
-        my $end = time;
-        my $bench = render_bench($start, $end, times);
-        print $bench, "\n\n";
+BEGIN {
+    if (@ARGV && -f $ARGV[0] && $ARGV[0] =~ m/\.jsonl(\.bz2|\.gz)$/) {
+        *cmd_name = sub() { 'replay' };
+    }
+    elsif (!@ARGV || -d $ARGV[0] || -f $ARGV[0] || substr($ARGV[0], 0, 1) eq '-') {
+        *cmd_name = sub() { 'test' };
+    }
+    else {
+        my $cmd_name = shift @ARGV;
+        *cmd_name = sub() { $cmd_name };
     }
 
-    exit $exit;
-}
+    return unless cmd_name() eq 'spawn';
 
-########################################
-# Spawn command follows  \/
-########################################
+    ########################################
+    # Spawn command follows  \/
+    ########################################
 
-my ($class, $dir, %args) = @ARGV;
+    my ($class, $dir, %args) = @ARGV;
 
-if ($args{setsid}) {
-    require POSIX;
-    POSIX::setsid();
-}
-
-my $pid = $$;
-END {
-    local ($?, $!, $@);
-    if ($args{pfile} && -f $args{pfile} && $pid == $$) {
-        print "Deleting $args{pfile}\n";
-        unlink($args{pfile}) or warn "Could not delete $args{pfile}: $!\n";
+    if ($args{setsid}) {
+        require POSIX;
+        POSIX::setsid();
     }
+
+    my $pid = $$;
+
+    END {
+        local ($?, $!, $@);
+        if ($args{pfile} && -f $args{pfile} && $pid == $$) {
+            print "Deleting $args{pfile}\n";
+            unlink($args{pfile}) or warn "Could not delete $args{pfile}: $!\n";
+        }
+    }
+
+    my $file = pkg_to_file($class);
+    require $file;
+    my $spawn = $class->new(
+        dir => $dir,
+    );
+
+    my $test = $spawn->start;
+
+    unless ($test) {
+        my $complete = File::Spec->catfile($dir, 'complete');
+        open(my $fh, '>', $complete) or die "Could not open '$complete'";
+        print $fh '1';
+        close($fh);
+        exit 0;
+    }
+
+    require App::Yath::Filter;
+    App::Yath::Filter->import($test);
 }
 
-my $file = pkg_to_file($class);
-require $file;
-my $spawn = $class->new(
-    dir => $dir,
-);
+my $cmd_class = load_command(cmd_name());
 
-my $test = $spawn->start;
+my $cmd = $cmd_class->new(args => \@ARGV);
 
-# Do not keep these signal handlers post-fork when we are running a test file.
-$SIG{HUP}  = 'DEFAULT';
-$SIG{INT}  = 'DEFAULT';
-$SIG{TERM} = 'DEFAULT';
+my $start = time;
+my $exit  = $cmd->run;
 
-unless($test) {
-    my $complete = File::Spec->catfile($dir, 'complete');
-    open(my $fh, '>', $complete) or die "Could not open '$complete'";
-    print $fh '1';
-    close($fh);
-    exit 0;
+if ($cmd->show_bench) {
+    my $end = time;
+    my $bench = render_bench($start, $end, times);
+    print $bench, "\n\n";
 }
 
-$@ = '';
-
-if (ref($test) eq 'CODE') {
-    $test->();
-}
-else {
-    do $test;
-    die $@ if $@;
-}
-
-exit 0;
-
-
+exit $exit;
 
 __END__
 

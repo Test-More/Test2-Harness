@@ -8,7 +8,7 @@ use Carp qw/confess/;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/load_command fully_qualify/;
+our @EXPORT_OK = qw/load_command/;
 
 sub load_command {
     my ($cmd_name) = @_;
@@ -25,14 +25,6 @@ sub load_command {
     }
 
     return $cmd_class;
-}
-
-sub fully_qualify {
-    my ($base, $in) = @_;
-
-    $in =~ m/^(\+)?(.*)$/;
-    return $2 if $1;
-    return "$base\::$in";
 }
 
 1;

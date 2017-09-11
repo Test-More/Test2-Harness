@@ -12,7 +12,7 @@ use Test2::Util qw/clone_io pkg_to_file/;
 
 use File::Spec();
 
-use Test2::Harness::Util qw/open_file/;
+use Test2::Harness::Util qw/open_file fqmod/;
 
 use Test2::Harness::Util::HashBase qw{
     -via
@@ -53,13 +53,7 @@ sub run {
         my $class = $RUN_MAP{$item};
 
         unless ($class) {
-            if ($item =~ m/^\+(.*)/) {
-                $class = $1;
-            }
-            else {
-                $class = __PACKAGE__ . "::$item";
-            }
-
+            $class = fqmod(__PACKAGE__, $item);
             my $file = pkg_to_file($class);
             my $ok   = eval { require $file; 1 };
             my $err  = $@;

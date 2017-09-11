@@ -19,7 +19,14 @@ our @EXPORT_OK = qw{
     maybe_open_file
     file_stamp
     local_env
+    fqmod
 };
+
+sub fqmod {
+    my ($prefix, $input) = @_;
+    return $1 if $input =~ m/^\+(.*)$/;
+    return "$prefix\::$input";
+}
 
 sub maybe_read_file {
     my ($file) = @_;

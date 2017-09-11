@@ -16,8 +16,7 @@ use POSIX qw/strftime/;
 
 use File::Spec;
 
-use App::Yath::Util qw/fully_qualify/;
-use Test2::Harness::Util qw/read_file open_file/;
+use Test2::Harness::Util qw/read_file open_file fqmod/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use Test2::Harness;
@@ -814,7 +813,7 @@ sub parse_args {
 
     for my $plugin (@plugins) {
         local $@;
-        $plugin = "App::Yath::Plugin::$plugin" unless $plugin =~ s/^\+//;
+        $plugin = fqmod('App::Yath::Plugin', $plugin);
         my $file = pkg_to_file($plugin);
         eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";
 
@@ -1013,7 +1012,7 @@ sub renderers {
             $f_class = 'Test2::Formatter::Test2';
         }
         else {
-            $f_class = fully_qualify('Test2::Formatter', $formatter);
+            $f_class = fqmod('Test2::Formatter', $formatter);
             my $file = pkg_to_file($f_class);
             require $file;
         }
@@ -1030,7 +1029,7 @@ sub renderers {
         die "The formatter option is only available when the 'Formatter' renderer is in use.\n";
     }
     else {
-        my $r_class = fully_qualify('Test2::Harness::Renderer', $r);
+        my $r_class = fqmod('Test2::Harness::Renderer', $r);
         require $r_class;
         push @$renderers => $r_class->new(verbose => $settings->{verbose});
     }

@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
-package App::Yath;
+package # prevent cluttering main
+    App::Yath;
 use strict;
 use warnings;
 

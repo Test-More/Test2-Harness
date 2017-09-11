@@ -616,12 +616,21 @@ sub options {
         },
 
         {
-            spec    => 'p|preload=s@',
+            spec    => 'P|preload=s@',
             field   => 'preload',
             used_by => {runner => 1},
             section => 'Harness Options',
-            usage   => ['-p Module', '--preload Module'],
+            usage   => ['-P Module', '--preload Module'],
             summary => ['Preload a module before running tests', 'this option may be given multiple times'],
+        },
+
+        {
+            spec => 'p|plugin=s@',
+            field => 'plugins',
+            used_by => { all => 1},
+            section => 'Plugins',
+            usage => ['-pPlugin', '-p+My::Plugin', '--plugin Plugin'],
+            summary => ['Load a plugin', 'can be specified multiple times'],
         },
 
         {

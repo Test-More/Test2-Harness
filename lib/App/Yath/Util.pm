@@ -9,9 +9,11 @@ use File::Spec;
 use Carp qw/confess/;
 use Cwd qw/realpath/;
 
+use Test2::Harness::Util qw/open_file/;
+
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/load_command find_yath find_pfile PFILE_NAME/;
+our @EXPORT_OK = qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config/;
 
 sub load_command {
     my ($cmd_name) = @_;
@@ -45,29 +47,53 @@ sub _find_yath {
     die "Could not find 'yath' in execution path";
 }
 
-sub PFILE_NAME() { '.yath-persist.json' }
-
-sub find_pfile {
-    my $pfile = _find_pfile() or return;
-    return File::Spec->rel2abs($pfile);
-}
-
-sub _find_pfile {
-    my $path = PFILE_NAME();
+sub find_in_updir {
+    my $path = shift;
     return File::Spec->rel2abs($path) if -f $path;
 
     my %seen;
     while(1) {
         $path = File::Spec->catdir('..', $path);
-        my $check = File::Spec->rel2abs($path);
-        last if $seen{realpath($check)}++;
+        my $check = realpath(File::Spec->rel2abs($path));
+        last if $seen{$check}++;
         return $check if -f $check;
     }
 
     return;
 }
 
+sub PFILE_NAME() { '.yath-persist.json' }
 
+sub find_pfile {
+    return find_in_updir(PFILE_NAME());
+}
+
+sub read_config {
+    my ($cmd) = @_;
+
+    my $rcfile = find_in_updir('.yath.rc') or return;
+
+    my $fh = open_file($rcfile, '<');
+
+    my @out;
+
+    my $in_cmd = 0;
+    while (my $line = <$fh>) {
+        chomp($line);
+        if ($line =~ m/^\[(.*)\]$/) {
+            $in_cmd = 1 if $1 eq $cmd;
+            next;
+        }
+        next unless $in_cmd;
+
+        $line =~ s/;.*$//g;
+        $line =~ s/^\s*//g;
+        $line =~ s/\s*$//g;
+        push @out => split /\s+/, $line, 2;
+    }
+
+    return @out;
+}
 
 1;
 

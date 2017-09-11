@@ -24,6 +24,7 @@ use POSIX qw/strftime/;
 
 use File::Spec;
 
+use App::Yath::Util qw/read_config/;
 use Test2::Harness::Util qw/read_file open_file fqmod/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
@@ -51,6 +52,8 @@ sub init {
     my $self = shift;
 
     my $settings = $self->{+SETTINGS} ||= {};
+
+    unshift @{$self->{+ARGS}} => read_config($self->name);
 
     my $list = $self->parse_args($self->{+ARGS});
 

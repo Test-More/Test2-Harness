@@ -4,11 +4,13 @@ use warnings;
 
 our $VERSION = '0.001007';
 
+use File::Spec;
+
 use Carp qw/confess/;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/load_command/;
+our @EXPORT_OK = qw/load_command find_yath/;
 
 sub load_command {
     my ($cmd_name) = @_;
@@ -25,6 +27,21 @@ sub load_command {
     }
 
     return $cmd_class;
+}
+
+sub find_yath { File::Spec->rel2abs(_find_yath()) }
+
+sub _find_yath {
+    return $App::Yath::SCRIPT if $App::Yath::SCRIPT;
+    return $ENV{YATH_SCRIPT} if $ENV{YATH_SCRIPT};
+    return $0 if $0 && $0 =~ m{yath$} && -f $0;
+
+    require IPC::Cmd;
+    if(my $out = IPC::Cmd::can_run('yath')) {
+        return $out;
+    }
+
+    die "Could not find 'yath' in execution path";
 }
 
 1;

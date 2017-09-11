@@ -1,11 +1,19 @@
-#!/usr/bin/env perl
-use Test2::Require::Module 'Test::Class::Moose::Runner';
+package App::Yath::Command::spawn;
+use strict;
+use warnings;
 
-my $file = shift @ARGV;
-require $file;
-require Test::Class::Moose::Runner;
-Test::Class::Moose::Runner->import;
-Test::Class::Moose::Runner->new->runtests();
+our $VERSION = '0.001007';
+
+use parent 'App::Yath::Command';
+use Test2::Harness::Util::HashBase;
+
+#####################################
+#
+# This is just a stub to reserve the namespace. the yath script actually
+# implements this command.
+#
+
+1;
 
 __END__
 
@@ -15,6 +23,7 @@ __END__
 
 =head1 NAME
 
+App::Yath::Command::spawn - TODO
 
 =head1 DESCRIPTION
 

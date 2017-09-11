@@ -2,11 +2,21 @@
 use strict;
 use warnings;
 
+BEGIN {
+    no warnings 'once';
+    require File::Spec;
+    my $script = File::Spec->rel2abs(__FILE__);
+    $App::Yath::SCRIPT = $script;
+    $ENV{YATH_SCRIPT} = $script;
+}
+
 our $VERSION = '0.001007';
 
 use App::Yath::Util qw/load_command/;
 use List::Util qw/sum/;
 use Time::HiRes qw/time/;
+
+use Test2::Util qw/pkg_to_file/;
 
 use Test2::Util::Times qw/render_bench/;
 
@@ -21,20 +31,77 @@ else {
     $cmd_name = shift @ARGV;
 }
 
-my $cmd_class = load_command($cmd_name);
+unless ($cmd_name eq 'spawn') {
+    my $cmd_class = load_command($cmd_name);
 
-my $cmd = $cmd_class->new(args => \@ARGV);
+    my $cmd = $cmd_class->new(args => \@ARGV);
 
-my $start = time;
-my $exit = $cmd->run;
+    my $start = time;
+    my $exit  = $cmd->run;
 
-if ($cmd->show_bench) {
-    my $end = time;
-    my $bench = render_bench($start, $end, times);
-    print $bench, "\n\n";
+    if ($cmd->show_bench) {
+        my $end = time;
+        my $bench = render_bench($start, $end, times);
+        print $bench, "\n\n";
+    }
+
+    exit $exit;
 }
 
-exit $exit;
+########################################
+# Spawn command follows  \/
+########################################
+
+my ($class, $dir, %args) = @ARGV;
+
+if ($args{setsid}) {
+    require POSIX;
+    POSIX::setsid();
+}
+
+my $pid = $$;
+END {
+    local ($?, $!, $@);
+    if ($args{pfile} && -f $args{pfile} && $pid == $$) {
+        print "Deleting $args{pfile}\n";
+        unlink($args{pfile}) or warn "Could not delete $args{pfile}: $!\n";
+    }
+}
+
+my $file = pkg_to_file($class);
+require $file;
+my $spawn = $class->new(
+    dir => $dir,
+);
+
+my $test = $spawn->start;
+
+# Do not keep these signal handlers post-fork when we are running a test file.
+$SIG{HUP}  = 'DEFAULT';
+$SIG{INT}  = 'DEFAULT';
+$SIG{TERM} = 'DEFAULT';
+
+unless($test) {
+    my $complete = File::Spec->catfile($dir, 'complete');
+    open(my $fh, '>', $complete) or die "Could not open '$complete'";
+    print $fh '1';
+    close($fh);
+    exit 0;
+}
+
+$@ = '';
+
+if (ref($test) eq 'CODE') {
+    $test->();
+}
+else {
+    do $test;
+    die $@ if $@;
+}
+
+exit 0;
+
+
 
 __END__
 

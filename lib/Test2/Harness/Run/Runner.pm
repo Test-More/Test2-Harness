@@ -11,6 +11,8 @@ use IPC::Open3 qw/open3/;
 use List::Util qw/none sum/;
 use Time::HiRes qw/sleep time/;
 use Test2::Util qw/pkg_to_file/;
+
+use App::Yath::Util qw/find_yath/;
 use Test2::Harness::Util qw/open_file write_file_atomic local_env/;
 
 use Test2::Harness::Run();
@@ -101,27 +103,6 @@ sub ready {
     return -f $self->{+READY_FILE};
 }
 
-sub find_spawn_script {
-    my $self = shift;
-
-    my $script = $ENV{T2_HARNESS_SPAWN_SCRIPT} || 'yath-spawn';
-    return $script if -f $script;
-
-    if ($0 && $0 =~ m{(.*)\byath(-.*)?$}) {
-        return "$1$script" if -f "$1$script";
-    }
-
-    # Do we have the full path?
-    # Load IPC::Cmd only if needed, it indirectly loads version.pm which really
-    # screws things up...
-    require IPC::Cmd;
-    if(my $out = IPC::Cmd::can_run($script)) {
-        return $out;
-    }
-
-    die "Could not find '$script' in execution path";
-}
-
 sub find_inc {
     my $self = shift;
 
@@ -136,13 +117,14 @@ sub cmd {
 
     my $class = ref($self);
 
-    my $script = $self->find_spawn_script;
+    my $script = find_yath();
     my $inc    = $self->find_inc;
 
     return (
         $^X,
         "-I$inc",
         $script,
+        'spawn',
         $class,
         $self->{+DIR},
         @_,

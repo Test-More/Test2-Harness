@@ -2,7 +2,7 @@ package App::Yath::Command::spawn;
 use strict;
 use warnings;
 
-our $VERSION = '0.001007';
+our $VERSION = '0.001008';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;

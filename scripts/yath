@@ -14,7 +14,7 @@ BEGIN {
     $ENV{YATH_SCRIPT} = $script;
 }
 
-our $VERSION = '0.001007';
+our $VERSION = '0.001008';
 
 use App::Yath::Util qw/load_command find_pfile/;
 use List::Util qw/sum/;

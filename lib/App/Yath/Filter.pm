@@ -77,5 +77,92 @@ sub filter {
     return 0;
 }
 
-
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Filter - Source filter used to make yath preload+fork work without
+any extra stack frames.
+
+=head1 DESCRIPTION
+
+This is a source filter that allows the C<yath> script to change itself into
+your test file post-fork in preload mode.
+
+The "obvious" was to preload+fork would be to preload, then fork, then use
+C<do> or C<require> to execute the test file. The problem with the "obvious"
+way is that your test file is no longer the bottom of the stack, The code that
+called your test file is. This has implications for stack traces, warnings,
+caller, and several other things.
+
+Ideally the test file will be the bottom of the stack, no caller. This is
+REALLY hard to do. Special form of C<goto &code> cannot do it, and there is no
+equivilent for files. We also cannot use exec, that defeats the purpose of
+preload.
+
+What this filter does is it prevents the parser from reading the rest of the
+originally running script (usually yath itself) and instead returns lines from
+the test file. It also uses some C<#line> magic to make sure filename and line
+numbers are all correct.
+
+=head1 SYNOPSIS
+
+    #!/usr/bin/perl
+
+    BEGIN {
+        my $test_file = do_stuff();
+        require App::Yath::Filter;
+        App::Yath::Filter->import($test_file);
+    }
+
+    die "This statement will never be seen! Lines from the test file will be seen instead.";
+
+Sometimes yath gets codeblocks instead of files, this filter will inject lines
+that call the sub in such cases.
+
+    #!/usr/bin/perl
+
+    BEGIN {
+        require App::Yath::Filter;
+        App::Yath::Filter->import(sub { ok(1, "pass") });
+    }
+
+    die "This statement will never be seen!";
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

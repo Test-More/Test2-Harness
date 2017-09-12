@@ -27,9 +27,10 @@ is($one->encode('xxx'), 'xxx', "base class encode does nothing");
 ok(my $fh = $one->open_file, "opened file (for reading)");
 ok(dies { $two->open_file }, "Cannot open file (for reading)");
 
+my ($line) = split /\n/, $one->maybe_read, 2;
 like(
-    $one->maybe_read,
-    qr/^\Quse Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';\E$/m,
+    $line,
+    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';},
     "Can read file (using maybe_read)"
 );
 
@@ -39,9 +40,10 @@ is(
     "maybe_read returns undef for non-existant file"
 );
 
+($line) = split /\n/, $one->read, 2;
 like(
-    $one->read,
-    qr/^\Quse Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';\E$/m,
+    $line,
+    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';},
     "Can read file"
 );
 

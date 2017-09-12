@@ -96,6 +96,7 @@ sub local_env {
 
     my $old;
     for my $key (keys %$env) {
+        no warnings 'uninitialized';
         $old->{$key} = $ENV{$key} if exists $ENV{$key};
         $ENV{$key} = $env->{$key};
     }
@@ -108,6 +109,7 @@ sub local_env {
         next if !defined($ENV{$key}) xor !defined($env->{$key});
         next if defined($ENV{$key}) && defined($env->{$key}) && $ENV{$key} ne $env->{$key};
 
+        no warnings 'uninitialized';
         exists $old->{$key} ? $ENV{$key} = $old->{$key} : delete $ENV{$key};
     }
 

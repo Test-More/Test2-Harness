@@ -14,8 +14,6 @@ our $VERSION = '0.001008';
 
 use Carp qw/croak/;
 use File::Temp qw/tempdir/;
-use IO::Compress::Bzip2 qw/$Bzip2Error/;
-use IO::Compress::Gzip qw/$GzipError/;
 use Getopt::Long qw/GetOptionsFromArray/;
 use File::Path qw/remove_tree/;
 use List::Util qw/first max/;
@@ -1016,11 +1014,13 @@ sub loggers {
     my $log_fh;
     if ($settings->{bzip2_log}) {
         $file = $settings->{log_file} = "$file.bz2";
-        $log_fh = IO::Compress::Bzip2->new($file) or die "IO::Compress::Bzip2 failed: $Bzip2Error\n";
+        require IO::Compress::Bzip2;
+        $log_fh = IO::Compress::Bzip2->new($file) or die "IO::Compress::Bzip2 failed: $IO::Compress::Bzip2::Bzip2Error\n";
     }
     elsif ($settings->{gzip_log}) {
         $file = $settings->{log_file} = "$file.gz";
-        $log_fh = IO::Compress::Gzip->new($file) or die "IO::Compress::Bzip2 failed: $GzipError\n";
+        require IO::Compress::Gzip;
+        $log_fh = IO::Compress::Gzip->new($file) or die "IO::Compress::Bzip2 failed: $IO::Compress::Gzip::GzipError\n";
     }
     else {
         $log_fh = open_file($file, '>');

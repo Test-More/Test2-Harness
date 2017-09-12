@@ -74,7 +74,10 @@ sub { shift->import(@_) }
     my $file = $job->file;
 
     my $env = $job->env_vars;
-    $ENV{$_} = $env->{$_} for keys %$env;
+    {
+        no warnings 'uninitialized';
+        $ENV{$_} = $env->{$_} for keys %$env;
+    }
 
     $ENV{T2_HARNESS_FORKED}  = 1;
     $ENV{T2_HARNESS_PRELOAD} = 1;

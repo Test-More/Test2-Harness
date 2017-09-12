@@ -16,9 +16,10 @@ imported_ok qw{
     write_file_atomic
 };
 
+my ($line) = split /\n/, read_file(__FILE__), 2;
 like(
-    read_file(__FILE__),
-    qr/^\Quse Test2::Bundle::Extended -target => 'Test2::Harness::Util';\E$/m,
+    $line,
+    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util';},
     "Read file (only checking first line)"
 );
 
@@ -41,7 +42,7 @@ is(
 );
 
 ok(my $fh = open_file(__FILE__), "opened file");
-ok(my $line = <$fh>, "Can read from file, default mode is 'read'");
+ok($line = <$fh>, "Can read from file, default mode is 'read'");
 ok(lives { close_file($fh) }, "Closed file");
 ok(dies { close_file($fh) }, "already closed");
 
@@ -67,6 +68,7 @@ is(fqmod('Foo::Bar', 'Baz::Bat'),  'Foo::Bar::Baz::Bat', "fqmod on longer postfi
 is(fqmod('Foo::Bar', '+Baz'),      'Baz',                "fqmod on fq");
 is(fqmod('Foo::Bar', '+Baz::Bat'), 'Baz::Bat',           "fqmod on longer fq");
 
+no warnings 'uninitialized';
 local $ENV{FOO} = 'old';
 local $ENV{BAZ};
 local $ENV{REPLACE_A} = 'old';

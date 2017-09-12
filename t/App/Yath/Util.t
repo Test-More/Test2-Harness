@@ -33,6 +33,7 @@ subtest find_yath => sub {
         },
     );
 
+    no warnings 'uninitialized';
     local $App::Yath::SCRIPT = undef;
     local $ENV{YATH_SCRIPT}  = undef;
     local $0                 = 'fake';

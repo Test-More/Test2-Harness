@@ -6,8 +6,10 @@ use warnings;
 
 BEGIN {
     no warnings 'once';
+
     require File::Spec;
     my $script = File::Spec->rel2abs(__FILE__);
+
     $App::Yath::SCRIPT = $script;
     $ENV{YATH_SCRIPT} = $script;
 }
@@ -71,9 +73,7 @@ BEGIN {
 
     my $file = pkg_to_file($class);
     require $file;
-    my $spawn = $class->new(
-        dir => $dir,
-    );
+    my $spawn = $class->new(dir => $dir);
 
     my $test = $spawn->start;
 

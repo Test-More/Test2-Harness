@@ -6,12 +6,10 @@ use Filter::Util::Call qw/filter_add/;
 
 our $VERSION = '0.001008';
 
+my $ID = 1;
 sub import {
-    no warnings 'once';
     my $class = shift;
     my ($test) = @_;
-
-    Filter::Util::Call::filter_add(bless {}, $class);
 
     my @lines = (
         "#line " . __LINE__ . ' "' . __FILE__ . "\"\n",
@@ -26,42 +24,58 @@ sub import {
 
     my $fh;
 
-    *filter = sub {
-        my $line;
-
-        if (@lines) {
-            $line = shift @lines;
-        }
-        elsif ($fh) {
-            $line = <$fh>;
-        }
-
-        if (defined $line) {
-            $_ .= $line;
-            return 1;
-        }
-
-        return 0;
-    };
-
     if (ref($test) eq 'CODE') {
         my $ran = 0;
 
-        *run_test = $test;
+        my $id = $ID++;
+        {
+            no warnings 'once';
+            no strict 'refs';
+            *{"run_test_$id"} = $test;
+        }
 
         push @lines => (
             "#line " . __LINE__ . ' "' . __FILE__ . "\"\n",
-            "$class\::run_test();\n",
+            "$class\::run_test_$id();\n",
         );
     }
     else {
         require Test2::Harness::Util;
         $fh = Test2::Harness::Util::open_file($test, '<');
-
-        push @lines => (
-            qq{#line 1 "$test"\n},
-        );
+        push @lines => (qq{#line 1 "$test"\n});
     }
+
+    Filter::Util::Call::filter_add(
+        bless {
+            fh    => $fh,
+            lines => \@lines,
+        },
+        $class
+    );
 }
+
+sub filter {
+    my $self = shift;
+
+    my $lines = $self->{lines};
+    my $fh    = $self->{fh};
+
+    my $line;
+
+    if (@$lines) {
+        $line = shift @$lines;
+    }
+    elsif ($fh) {
+        $line = <$fh>;
+    }
+
+    if (defined $line) {
+        $_ .= $line;
+        return 1;
+    }
+
+    return 0;
+}
+
 
 1;

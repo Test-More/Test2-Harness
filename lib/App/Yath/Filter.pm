@@ -4,7 +4,7 @@ use warnings;
 
 use Filter::Util::Call qw/filter_add/;
 
-our $VERSION = '0.001008';
+our $VERSION = '0.001009';
 
 my $ID = 1;
 sub import {

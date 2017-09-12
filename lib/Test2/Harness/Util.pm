@@ -10,16 +10,15 @@ use Importer Importer => 'import';
 use Test2::Util qw/try_sig_mask do_rename/;
 
 our @EXPORT_OK = qw{
+    close_file
+    fqmod
+    local_env
+    maybe_open_file
+    maybe_read_file
+    open_file
     read_file
     write_file
     write_file_atomic
-    open_file
-    close_file
-    maybe_read_file
-    maybe_open_file
-    file_stamp
-    local_env
-    fqmod
 };
 
 sub fqmod {
@@ -92,12 +91,6 @@ sub write_file_atomic {
     return @content;
 }
 
-sub file_stamp {
-    my $file = shift;
-    my @stat = stat($file);
-    return $stat[9];
-}
-
 sub local_env {
     my ($env, $sub) = @_;
 
@@ -112,7 +105,9 @@ sub local_env {
 
     for my $key (keys %$env) {
         # If something set an env var inside than we do not want to squash it.
-        next if $ENV{$key} && $env->{key} && $ENV{$key} ne $env->{key};
+        next if !defined($ENV{$key}) xor !defined($env->{$key});
+        next if defined($ENV{$key}) && defined($env->{$key}) && $ENV{$key} ne $env->{$key};
+
         exists $old->{$key} ? $ENV{$key} = $old->{$key} : delete $ENV{$key};
     }
 

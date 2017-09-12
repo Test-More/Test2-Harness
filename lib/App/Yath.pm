@@ -12,17 +12,21 @@ our $SCRIPT;
 
 sub import {
     my $class = shift;
-    my ($argv, $runref) = @_;
+    my ($argv, $runref) = @_ or return;
     my ($pkg, $file, $line) = caller;
 
     $SCRIPT ||= $file;
-    $ENV{YATH_SCRIPT} ||= $file;
 
     my $cmd_name  = $class->parse_argv($argv);
     my $cmd_class = $class->load_command($cmd_name);
     $cmd_class->import($argv);
 
     $$runref = sub { $class->run_command($cmd_class, $cmd_name, $argv) };
+}
+
+sub info {
+    my $class = shift;
+    print STDOUT @_;
 }
 
 sub run_command {
@@ -41,7 +45,7 @@ sub run_command {
         require Test2::Util::Times;
         my $end = time;
         my $bench = Test2::Util::Times::render_bench($start, $end, times);
-        print $bench, "\n\n";
+        $class->info($bench, "\n\n");
     }
 
     return $exit;
@@ -51,23 +55,28 @@ sub parse_argv {
     my $class = shift;
     my ($argv) = @_;
 
-    if (@$argv && $argv->[0] =~ m/^-*h(elp)?$/i) {
-        shift @$argv;
-        return 'help';
+    my $first_not_command = 0;
+    if (@$argv) {
+        if ($argv->[0] =~ m/^-*h(elp)?$/i) {
+            shift @$argv;
+            return 'help';
+        }
+
+        if ($argv->[0] =~ m/\.jsonl(\.bz2|\.gz)?$/) {
+            $class->info("\n** First argument is a log file, defaulting to the 'replay' command **\n\n");
+            return 'replay';
+        }
+
+        $first_not_command = -d $argv->[0] || -f $argv->[0] || substr($argv->[0], 0, 1) eq '-';
     }
 
-    if (@$argv && -f $argv->[0] && $argv->[0] =~ m/\.jsonl(\.bz2|\.gz)$/) {
-        print "\n** First argument is a log file, defaulting to the 'replay' command **\n\n";
-        return 'replay';
-    }
-
-    if (!@$argv || -d $argv->[0] || -f $argv->[0] || substr($argv->[0], 0, 1) eq '-') {
+    if (!@$argv || $first_not_command) {
         if (find_pfile) {
-            print "\n** Persistent runner detected, defaulting to the 'run' command **\n\n";
+            $class->info("\n** Persistent runner detected, defaulting to the 'run' command **\n\n");
             return 'run';
         }
 
-        print "\n** Defaulting to the 'test' command **\n\n";
+        $class->info("\n** Defaulting to the 'test' command **\n\n");
         return 'test';
     }
 

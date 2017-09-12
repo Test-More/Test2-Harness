@@ -8,10 +8,10 @@ system($^X, '-Ilib', './scripts/yath', 'test', 't', @ARGV);
 my $exit = $?;
 
 # This makes sure it works with prove.
-if ($ENV{HARNESS_ACTIVE}) {
-    require Test2::Tools::Tiny;
-    Test2::Tools::Tiny::ok(!$exit, "Passed tests when run by yath");
-    Test2::Tools::Tiny::done_testing();
-}
+print "1..1\n";
+print "not " if $exit;
+print "ok 1 - Passed tests when run by yath\n";
+print STDERR "yath exited with $exit" if $exit;
 
-exit $exit;
+# Normalize the exit value
+exit($exit ? 255 : 0);

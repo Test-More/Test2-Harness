@@ -40,7 +40,7 @@ print "not " if $exit;
 print "ok 1 - Passed tests when run by yath\n";
 print STDERR "yath exited with $exit" if $exit;
 
-exit ($exit >> 8);
+exit($exit ? 255 : 0);
     EOT
 }
 

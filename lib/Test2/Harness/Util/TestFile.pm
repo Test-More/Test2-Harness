@@ -114,7 +114,7 @@ sub _scan {
             }
         }
 
-        next if $line =~ m/^(use|require|BEGIN)/;
+        next if $line =~ m/^\s*(use|require|BEGIN)\b/;
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
         my ($dir, @args) = split /-/, lc($1);
@@ -149,7 +149,7 @@ sub _parse_shbang {
     # NOTE: Test this, the dashes should be included with the switches
     my $shbang_re = qr{
         ^
-          \#!\S+perl.*?        # the perl path
+          \#!.*perl.*?        # the perl path
           (?: \s (-.+) )?       # the switches, maybe
           \s*
         $

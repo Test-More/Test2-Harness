@@ -2,226 +2,268 @@ use Test2::V0 -target => 'Test2::Harness::Util::TestFile';
 
 use ok $CLASS;
 
-done_testing;
+use Test2::Tools::GenTemp qw/gen_temp/;
 
-__END__
-
-sub init {
-    my $self = shift;
-
-    my $file = $self->file;
-
-    # We want absolute path
-    $file = File::Spec->rel2abs($file);
-    $self->{+FILE} = $file;
-
-    croak "Invalid test file '$file'" unless -f $file;
-}
-
-my %DEFAULTS = (
-    timeout   => 1,
-    fork      => 1,
-    preload   => 1,
-    stream    => 1,
-    isolation => 0,
+my $tmp = gen_temp(
+    long   => "#!/usr/bin/perl\n\nuse strict;\n use warnings\n\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\nfoo\n# HARNESS-NO-SEE\n",
+    med1   => "# HARNESS-NO-PRELOAD\n",
+    med2   => "#HARNESS-NO-FORK\n",
+    all    => "#HARNESS-NO-TIMEOUT\n# HARNESS-NO-STREAM\n# HARNESS-NO-FORK\n# HARNESS-NO-PRELOAD\n# HARNESS-USE-ISOLATION\n",
+    notime => "#HARNESS-NO-TIMEOUT\n",
+    warn   => "#!/usr/bin/perl -w\n",
+    taint  => "#!/usr/bin/env perl -t -w\n",
+    foo    => "#HARNESS-CATEGORY-FOO\n",
 );
 
-sub check_feature {
-    my $self = shift;
-    my ($feature, $default) = @_;
+subtest invalid => sub {
+    like(
+        dies { $CLASS->new(file => File::Spec->catfile($tmp, 'invalid')) },
+        qr/^Invalid test file/,
+        "Need a valid test file"
+    );
+};
 
-    $default = $DEFAULTS{$feature} unless defined $default;
+subtest foo => sub {
+    my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'foo'));
+    is($foo->check_category, 'foo', "Category is foo");
+};
 
-    return $default unless defined $self->headers->{features}->{$feature};
-    return 1 if $self->headers->{features}->{$feature};
-    return 0;
-}
+subtest taint => sub {
+    my $taint = $CLASS->new(file => File::Spec->catfile($tmp, 'taint'), via => ['xxx']);
 
-sub check_category {
-    my $self = shift;
-    $self->_scan unless $self->{+_SCANNED};
-    my $category = $self->{+_HEADERS}->{category};
+    is($taint->switches, ['-t', '-w'], "No SHBANG switches");
+    is($taint->shbang, {switches => ['-t', '-w'], line => "#!/usr/bin/env perl -t -w"}, "Parsed shbang");
 
-    return $category if $category;
+    is(
+        $taint->queue_item(42),
+        {
+            category    => 'general',
+            file        => $taint->file,
+            job_id      => 42,
+            stamp       => T(),
+            switches    => ['-t', '-w'],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            via         => ['xxx'],
+        },
+        "Got queue item data",
+    );
+};
 
-    my $fork    = $self->check_feature(fork      => 1);
-    my $preload = $self->check_feature(preload   => 1);
-    my $timeout = $self->check_feature(timeout   => 1);
-    my $isolate = $self->check_feature(isolation => 0);
+subtest warn => sub {
+    my $warn = $CLASS->new(file => File::Spec->catfile($tmp, 'warn'));
 
-    # 'isolation' queue if isolation requested
-    return 'isolation' if $isolate;
+    is($warn->switches, ['-w'], "got SHBANG switches");
+    is($warn->shbang, {switches => ['-w'], line => "#!/usr/bin/perl -w"}, "Parsed shbang");
 
-    # 'medium' queue for anything that cannot preload or fork
-    return 'medium' unless $preload && $fork;
+    is(
+        $warn->queue_item(42),
+        {
+            category    => 'general',
+            file        => $warn->file,
+            job_id      => 42,
+            stamp       => T(),
+            switches    => ['-w'],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+        },
+        "Got queue item data",
+    );
+};
 
-    # 'long' for anything with no timeout
-    return 'long' unless $timeout;
 
-    return 'general';
-}
+subtest notime => sub {
+    my $notime = $CLASS->new(file => File::Spec->catfile($tmp, 'notime'));
 
-sub headers {
-    my $self = shift;
-    $self->_scan unless $self->{+_SCANNED};
-    return {} unless $self->{+_HEADERS};
-    return {%{$self->{+_HEADERS}}};
-}
+    is($notime->check_feature('timeout'), 0, "Timeouts turned off");
+    is($notime->check_feature('timeout', 1), 0, "Timeouts turned off with default 1");
 
-sub shbang {
-    my $self = shift;
-    $self->_scan unless $self->{+_SCANNED};
-    return {} unless $self->{+_SHBANG};
-    return {%{$self->{+_SHBANG}}};
-}
+    is($notime->check_category, 'long', "Category is long");
 
-sub switches {
-    my $self = shift;
+    is($notime->switches, [], "No SHBANG switches");
+    is($notime->shbang, {}, "No shbang");
 
-    my $shbang   = $self->shbang       or return [];
-    my $switches = $shbang->{switches} or return [];
+    is(
+        $notime->queue_item(42),
+        {
+            category    => 'long',
+            file        => $notime->file,
+            job_id      => 42,
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 0,
+        },
+        "Got queue item data",
+    );
+};
 
-    return $switches;
-}
+subtest all => sub {
+    my $all = $CLASS->new(file => File::Spec->catfile($tmp, 'all'));
 
-sub _scan {
-    my $self = shift;
+    is($all->check_feature('timeout'), 0, "Timeouts turned off");
+    is($all->check_feature('timeout', 1), 0, "Timeouts turned off with default 1");
 
-    return if $self->{+_SCANNED}++;
+    is($all->check_feature('fork'), 0, "Forking is off");
+    is($all->check_feature('fork', 1), 0, "Checking fork with different default");
 
-    my $fh = open_file($self->{+FILE});
+    is($all->check_feature('preload'), 0, "Preload is off");
+    is($all->check_feature('preload', 1), 0, "Checking preload with different default");
 
-    my %headers;
-    for (my $ln = 1; my $line = <$fh>; $ln++) {
-        chomp($line);
-        next if $line =~ m/^\s*$/;
+    is($all->check_feature('isolation'), 1, "No isolation");
+    is($all->check_feature('isolation', 0), 1, "Use isolation with a default of false");
 
-        if ($ln == 1 && $line =~ m/^#!/) {
-            my $shbang = $self->_parse_shbang($line);
-            if ($shbang) {
-                $self->{+_SHBANG} = $shbang;
-                next;
-            }
-        }
+    is($all->check_feature('stream'), 0, "Use stream");
+    is($all->check_feature('stream', 1), 0, "no stream with a default of true");
 
-        next if $line =~ m/^(use|require|BEGIN)/;
-        last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
+    is($all->check_category, 'isolation', "Category is isolation");
 
-        my ($dir, @args) = split /-/, lc($1);
-        if ($dir eq 'no') {
-            my ($feature) = @args;
-            $headers{features}->{$feature} = 0;
-        }
-        elsif ($dir eq 'yes' || $dir eq 'use') {
-            my ($feature) = @args;
-            $headers{features}->{$feature} = 1;
-        }
-        elsif ($dir eq 'category' || $dir eq 'cat') {
-            my ($name) = @args;
-            $headers{category} = $name;
-        }
-        else {
-            warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
-        }
-    }
+    is($all->switches, [], "No SHBANG switches");
+    is($all->shbang, {}, "No shbang");
 
-    $self->{+_HEADERS} = \%headers;
-}
+    is(
+        $all->queue_item(42),
+        {
+            category    => 'isolation',
+            file        => $all->file,
+            job_id      => 42,
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 0,
+            use_preload => 0,
+            use_stream  => 0,
+            use_timeout => 0,
+        },
+        "Got queue item data",
+    );
+};
 
-sub _parse_shbang {
-    my $self = shift;
-    my $line = shift;
+subtest med2 => sub {
+    my $med2 = $CLASS->new(file => File::Spec->catfile($tmp, 'med2'));
 
-    return {} if !defined $line;
+    is($med2->check_feature('timeout'), 1, "Timeouts turned on");
+    is($med2->check_feature('timeout', 0), 0, "Timeouts turned off with default 0");
 
-    my %shbang;
+    is($med2->check_feature('fork'), 0, "Forking is off");
+    is($med2->check_feature('fork', 1), 0, "Checking fork with different default");
 
-    # NOTE: Test this, the dashes should be included with the switches
-    my $shbang_re = qr{
-        ^
-          \#!\S+perl.*?        # the perl path
-          (?: \s (-.+) )?       # the switches, maybe
-          \s*
-        $
-    }xi;
+    is($med2->check_feature('preload'), 1, "Preload is on");
+    is($med2->check_feature('preload', 0), 0, "Checking preload with different default");
 
-    if ($line =~ $shbang_re) {
-        my @switches = grep { m/\S/ } split /\s+/, $1 if defined $1;
-        $shbang{switches} = \@switches;
-        $shbang{line}     = $line;
-    }
+    is($med2->check_feature('isolation'), 0, "No isolation");
+    is($med2->check_feature('isolation', 1), 1, "Use isolation with a default of true");
 
-    return \%shbang;
-}
+    is($med2->check_feature('stream'), 1, "Use stream");
+    is($med2->check_feature('stream', 0), 0, "no stream with a default of false");
 
-sub queue_item {
-    my $self = shift;
-    my ($job_id) = @_;
+    is($med2->check_category, 'medium', "Category is medium");
 
-    my $category = $self->check_category;
+    is($med2->switches, [], "No SHBANG switches");
+    is($med2->shbang, {}, "No shbang");
 
-    my $fork    = $self->check_feature(fork    => 1);
-    my $preload = $self->check_feature(preload => 1);
-    my $timeout = $self->check_feature(timeout => 1);
-    my $stream  = $self->check_feature(stream  => 1);
+    is(
+        $med2->queue_item(42),
+        {
+            category    => 'medium',
+            file        => $med2->file,
+            job_id      => 42,
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 0,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+        },
+        "Got queue item data",
+    );
+};
 
-    return {
-        file        => $self->file,
-        use_fork    => $fork,
-        use_timeout => $timeout,
-        use_preload => $preload,
-        use_stream  => $stream,
-        switches    => $self->switches,
-        category    => $category,
-        stamp       => time,
-        job_id      => $job_id,
+subtest med1 => sub {
+    my $med1 = $CLASS->new(file => File::Spec->catfile($tmp, 'med1'));
 
-        $self->{+VIA} ? (via => $self->{+VIA}) : (),
-    };
-}
+    is($med1->check_feature('timeout'), 1, "Timeouts turned on");
+    is($med1->check_feature('timeout', 0), 0, "Timeouts turned off with default 0");
 
-1;
+    is($med1->check_feature('fork'), 1, "Forking is ok");
+    is($med1->check_feature('fork', 0), 0, "Checking fork with different default");
 
-__END__
+    is($med1->check_feature('preload'), 0, "Preload is off");
+    is($med1->check_feature('preload', 1), 0, "Checking preload with different default");
 
-=pod
+    is($med1->check_feature('isolation'), 0, "No isolation");
+    is($med1->check_feature('isolation', 1), 1, "Use isolation with a default of true");
 
-=encoding UTF-8
+    is($med1->check_feature('stream'), 1, "Use stream");
+    is($med1->check_feature('stream', 0), 0, "no stream with a default of false");
 
-=head1 NAME
+    is($med1->check_category, 'medium', "Category is medium");
 
-Test2::Harness::Job::TestFile - Logic to scan a test file.
+    is($med1->switches, [], "No SHBANG switches");
+    is($med1->shbang, {}, "No shbang");
 
-=head1 DESCRIPTION
+    is(
+        $med1->queue_item(42),
+        {
+            category    => 'medium',
+            file        => $med1->file,
+            job_id      => 42,
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 0,
+            use_stream  => 1,
+            use_timeout => 1,
+        },
+        "Got queue item data",
+    );
+};
 
-=head1 SOURCE
+subtest long => sub {
+    my $long = $CLASS->new(file => File::Spec->catfile($tmp, 'long'));
 
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
+    is($long->check_feature('timeout'), 0, "Timeouts turned off");
+    is($long->check_feature('timeout', 1), 0, "Timeouts turned off even with default 1");
 
-=head1 MAINTAINERS
+    is($long->check_feature('fork'), 1, "Forking is ok");
+    is($long->check_feature('fork', 0), 0, "Checking fork with different default");
 
-=over 4
+    is($long->check_feature('preload'), 1, "Preload is ok");
+    is($long->check_feature('preload', 0), 0, "Checking preload with different default");
 
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+    is($long->check_feature('isolation'), 1, "Use isolation");
+    is($long->check_feature('isolation', 0), 1, "Use isolation even with a default of false");
 
-=back
+    is($long->check_feature('stream'), 1, "Use stream");
+    is($long->check_feature('stream', 0), 0, "no stream with a default of false");
 
-=head1 AUTHORS
+    is($long->check_category, 'long', "Category is long");
 
-=over 4
+    ok(!exists $long->headers->{SEE}, "Did not see directive after code line");
 
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+    is($long->switches, [], "No SHBANG switches");
+    is($long->shbang, {switches => [], line => "#!/usr/bin/perl"}, "got shbang");
 
-=back
+    is(
+        $long->queue_item(42),
+        {
+            category    => 'long',
+            file        => $long->file,
+            job_id      => 42,
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 0,
+        },
+        "Got queue item data",
+    );
+};
 
-=head1 COPYRIGHT
-
-Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut
+done_testing;

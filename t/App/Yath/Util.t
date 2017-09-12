@@ -2,9 +2,9 @@ use Test2::V0 -target => 'App::Yath::Util';
 
 use Test2::Tools::GenTemp qw/gen_temp/;
 
-use ok $CLASS => qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config/;
+use ok $CLASS => qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/;
 
-imported_ok(qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config/);
+imported_ok(qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/);
 
 use Cwd qw/realpath cwd/;
 
@@ -60,6 +60,9 @@ my $tmp = gen_temp(
     '.yath-persist.json' => "XXX",
     'foo'                => "XXX",
 
+    'test_a.pl' => "\n\n# THIS IS A GENERATED YATH RUNNER TEST\n\n",
+    'test_b.pl' => "\n\n# THIS IS NOT A GENERATED YATH RUNNER TEST\n\n",
+
     '.yath.rc' => <<"    EOT",
 [foo]
 -a b c d ; xyz
@@ -92,8 +95,12 @@ my $cwd = cwd();
 
 my $ok = eval {
     chdir(File::Spec->canonpath("$tmp"));
+    is(find_in_updir('A FAKE FILE THAT SHOULD NOT BE ANYWHERE $@!#'), undef, "File not found");
     is(find_in_updir('foo'), realpath(File::Spec->rel2abs('foo')), "Found file in current dir");
     is(find_pfile, realpath(File::Spec->rel2abs('.yath-persist.json')), "Found yath persist file");
+
+    ok(is_generated_test_pl('test_a.pl'), "Is a generated test.pl");
+    ok(!is_generated_test_pl('test_b.pl'), "Is not a generated test.pl");
 
     chdir(File::Spec->canonpath("$tmp/dir_a/dir_ab/"));
     is(find_in_updir('foo'), realpath(File::Spec->rel2abs("$tmp/dir_a/foo")), "Found file in updir dir");

@@ -13,7 +13,15 @@ use Test2::Harness::Util qw/open_file/;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config/;
+our @EXPORT_OK = qw{
+    load_command
+    find_yath
+    find_pfile
+    PFILE_NAME
+    find_in_updir
+    read_config
+    is_generated_test_pl
+};
 
 sub load_command {
     my ($cmd_name) = @_;
@@ -71,7 +79,7 @@ sub find_pfile {
 sub read_config {
     my ($cmd, $rcfile) = @_;
 
-    $rcfile ||= find_in_updir('.yath.rc');
+    $rcfile ||= find_in_updir('.yath.rc') or return;
 
     my $fh = open_file($rcfile, '<');
 
@@ -93,6 +101,21 @@ sub read_config {
     }
 
     return @out;
+}
+
+sub is_generated_test_pl {
+    my ($file) = @_;
+
+    my $fh = open_file($file, '<');
+
+    my $count = 0;
+    while (my $line = <$fh>) {
+        last if $count++ > 5;
+        next unless $line =~ m/^# THIS IS A GENERATED YATH RUNNER TEST$/;
+        return 1;
+    }
+
+    return 0;
 }
 
 1;

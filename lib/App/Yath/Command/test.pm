@@ -10,6 +10,8 @@ use Test2::Harness::Run::Runner;
 use Test2::Harness::Run::Queue;
 use Test2::Harness::Run;
 
+use App::Yath::Util qw/is_generated_test_pl/;
+
 use Time::HiRes qw/time/;
 
 use parent 'App::Yath::Command';
@@ -57,7 +59,9 @@ sub handle_list_args {
 
     unless ($has_search) {
         my @dirs = grep { -d $_ } './t', './t2';
-        my @files = grep { -f $_ } 'test.pl';
+
+        my @files;
+        push @files => 'test.pl' if -f 'test.pl' && !is_generated_test_pl('test.pl');
 
         $settings->{search} = [@dirs, @files];
     }

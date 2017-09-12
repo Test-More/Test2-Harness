@@ -7,27 +7,15 @@ use parent 'App::Yath::Command';
 our $VERSION = '0.001007';
 
 use Test2::Harness::Util qw/open_file/;
+use App::Yath::Util qw/is_generated_test_pl/;
 
 sub show_bench { 0 }
 
 sub summary { "Create/update test.pl to run tests via Test2::Harness" }
 
 sub run {
-    if (-f 'test.pl') {
-        my $fh = open_file('test.pl', '<');
-
-        my $count = 0;
-        my $found = 0;
-        while (my $line = <$fh>) {
-            next if $count++ > 5;
-            next unless $line =~ m/^# THIS IS A GENERATED YATH RUNNER TEST$/;
-            $found++;
-            last;
-        }
-
-        die "'test.pl' already exists, and does not appear to be a yath runner.\n"
-            unless $found;
-    }
+    die "'test.pl' already exists, and does not appear to be a yath runner.\n"
+        if -f 'test.pl' && !is_generated_test_pl('test.pl');
 
     print "\nWriting test.pl...\n\n";
 

@@ -10,6 +10,8 @@ use Test2::Util::Term qw/term_size/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32/;
 
+use File::Spec();
+
 BEGIN { require Test2::Formatter; our @ISA = qw(Test2::Formatter) }
 
 sub import {
@@ -30,6 +32,7 @@ use Test2::Util::HashBase qw{
     -job_length
     -ecount
     -job_colors
+    -active_files
 };
 
 sub TAG_WIDTH() { 8 }
@@ -190,6 +193,16 @@ sub write {
     my ($self, $e, $num, $f) = @_;
     $f ||= $e->facet_data;
 
+    if ($f->{harness_job_launch}) {
+        my $job = $f->{harness_job};
+        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_id};
+    }
+
+    if ($f->{harness_job_end}) {
+        my $file = $f->{harness_job_end}->{file};
+        delete $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($file)};
+    }
+
     $self->{+ECOUNT}++;
 
     $self->encoding($f->{control}->{encoding}) if $f->{control}->{encoding};
@@ -248,7 +261,22 @@ sub write {
 
 sub render_ecount {
     my $self = shift;
-    return "Events seen: " . $self->{+ECOUNT};
+
+    my $active = $self->{+ACTIVE_FILES};
+
+    my $str = "Events seen: " . $self->{+ECOUNT};
+
+    if ($active && keys %$active) {
+        $str .= " (";
+        $str .= join(', ' => sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
+        $str .= ")";
+
+        my $max = term_size() || 80;
+        $str = substr($str, 0, $max - 8) . " ...)" if length($str) > $max;
+    }
+
+
+    return $str;
 }
 
 sub render_buffered_event {

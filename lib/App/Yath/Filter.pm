@@ -14,11 +14,6 @@ sub import {
     my @lines = (
         "#line " . __LINE__ . ' "' . __FILE__ . "\"\n",
         "package main;\n",
-        # Do not keep these signal handlers post-fork when we are running a test file.
-        "\$SIG{HUP}  = 'DEFAULT';\n",
-        "\$SIG{INT}  = 'DEFAULT';\n",
-        "\$SIG{TERM} = 'DEFAULT';\n",
-
         "\$@ = '';\n",
     );
 

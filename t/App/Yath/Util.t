@@ -2,27 +2,11 @@ use Test2::V0 -target => 'App::Yath::Util';
 
 use Test2::Tools::GenTemp qw/gen_temp/;
 
-use ok $CLASS => qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/;
+use ok $CLASS => qw/find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/;
 
-imported_ok(qw/load_command find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/);
+imported_ok(qw/find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/);
 
 use Cwd qw/realpath cwd/;
-
-subtest load_command => sub {
-    is(load_command('help'), 'App::Yath::Command::help', "Loaded the help command");
-    is(
-        dies { load_command('a_fake_command') },
-        "yath command 'a_fake_command' not found. (did you forget to install App::Yath::Command::a_fake_command?)\n",
-        "Exception if the command is not valid"
-    );
-
-    local @INC = ('t/lib', @INC);
-    like(
-        dies { load_command('broken') },
-        qr/This command is broken! at/,
-        "Exception is propogated if command dies on compile"
-    );
-};
 
 subtest find_yath => sub {
     require IPC::Cmd;

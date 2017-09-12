@@ -14,7 +14,6 @@ use Test2::Harness::Util qw/open_file/;
 use Importer Importer => 'import';
 
 our @EXPORT_OK = qw{
-    load_command
     find_yath
     find_pfile
     PFILE_NAME
@@ -22,23 +21,6 @@ our @EXPORT_OK = qw{
     read_config
     is_generated_test_pl
 };
-
-sub load_command {
-    my ($cmd_name) = @_;
-    my $cmd_class  = "App::Yath::Command::$cmd_name";
-    my $cmd_file   = "App/Yath/Command/$cmd_name.pm";
-
-    if (!eval { require $cmd_file; 1 }) {
-        my $load_error = $@ || 'unknown error';
-
-        die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
-            if $load_error =~ m{Can't locate \Q$cmd_file\E in \@INC};
-
-        die $load_error;
-    }
-
-    return $cmd_class;
-}
 
 sub find_yath { File::Spec->rel2abs(_find_yath()) }
 

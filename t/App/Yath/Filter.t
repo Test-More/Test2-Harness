@@ -7,7 +7,7 @@ use Test2::API qw/test2_stack/;
 use File::Temp qw/tempfile/;
 
 BEGIN {
-    plan 13;
+    plan 7;
 
     # This filter is designed to work along with forking, so we test it with
     # forking.
@@ -25,10 +25,6 @@ BEGIN {
         App::Yath::Filter->import(
             sub {
                 is(caller, "main", "called from main package");
-
-                is($SIG{HUP},  'DEFAULT', "Reset SIG{HUP}");
-                is($SIG{INT},  'DEFAULT', "Reset SIG{INT}");
-                is($SIG{TERM}, 'DEFAULT', "Reset SIG{TERM}");
             }
         );
     }
@@ -42,10 +38,6 @@ is(__FILE__, "$filename", "Got filename");
 is(__PACKAGE__, "main", "in main package");
 
 is([caller(0)], [], "no caller");
-
-is(\$SIG{HUP},  'DEFAULT', "Reset SIG{HUP}");
-is(\$SIG{INT},  'DEFAULT', "Reset SIG{INT}");
-is(\$SIG{TERM}, 'DEFAULT', "Reset SIG{TERM}");
         EOT
         close($fh);
         App::Yath::Filter->import($filename);

@@ -4,16 +4,74 @@ use warnings;
 
 our $VERSION = '0.001008';
 
+use Test2::Util qw/pkg_to_file/;
+use File::Spec;
+
+use Carp qw/confess/;
+
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub internal_only { 1 }
+sub internal_only   { 1 }
+sub has_jobs        { 0 }
+sub has_runner      { 0 }
+sub has_logger      { 0 }
+sub has_display     { 0 }
+sub show_bench      { 0 }
+sub always_keep_dir { 0 }
+sub manage_runner   { 0 }
+sub summary         { "For internal use only" }
+sub name            { 'spawn' }
 
-#####################################
-#
-# This is just a stub to reserve the namespace. the yath script actually
-# implements this command.
-#
+sub init { confess(ref($_[0]) . " is not intended to be instanciated") }
+sub run  { confess(ref($_[0]) . " does not implement run()") }
+
+sub import {
+    my $class = shift;
+    my ($argv) = @_;
+    my ($runner_class, $dir, %args) = @$argv;
+
+    if ($args{setsid}) {
+        require POSIX;
+        POSIX::setsid();
+    }
+
+    my $pid = $$;
+
+    eval <<'    EOT' or die $@;
+        END {
+            local ($?, $!, $@);
+            if ($args{pfile} && -f $args{pfile} && $pid == $$) {
+                print "Deleting $args{pfile}\n";
+                unlink($args{pfile}) or warn "Could not delete $args{pfile}: $!\n";
+            }
+        }
+
+        1;
+    EOT
+
+    my $file = pkg_to_file($runner_class);
+    require $file;
+    my $spawn = $runner_class->new(dir => $dir);
+
+    my $test = $spawn->start;
+
+    unless ($test) {
+        my $complete = File::Spec->catfile($dir, 'complete');
+        open(my $fh, '>', $complete) or die "Could not open '$complete'";
+        print $fh '1';
+        close($fh);
+        exit 0;
+    }
+
+    # Do not keep these signal handlers post-fork when we are running a test file.
+    $SIG{HUP}  = 'DEFAULT';
+    $SIG{INT}  = 'DEFAULT';
+    $SIG{TERM} = 'DEFAULT';
+
+    require App::Yath::Filter;
+    App::Yath::Filter->import($test);
+}
 
 1;
 

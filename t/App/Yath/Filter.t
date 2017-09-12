@@ -7,7 +7,7 @@ use Test2::API qw/test2_stack/;
 use File::Temp qw/tempfile/;
 
 BEGIN {
-    plan 7;
+    plan 8;
 
     # This filter is designed to work along with forking, so we test it with
     # forking.
@@ -38,6 +38,18 @@ is(__FILE__, "$filename", "Got filename");
 is(__PACKAGE__, "main", "in main package");
 
 is([caller(0)], [], "no caller");
+
+is(
+    [<DATA>],
+    ["foo\\n", "bar\\n", "baz\\n"],
+    "Got data section"
+);
+
+# Edge cases suck :-(
+\__DATA__
+foo
+bar
+baz
         EOT
         close($fh);
         App::Yath::Filter->import($filename);
@@ -45,3 +57,7 @@ is([caller(0)], [], "no caller");
 }
 
 die "Should not get here!\n";
+
+__DATA__
+
+Should not see this data!

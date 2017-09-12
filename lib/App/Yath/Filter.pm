@@ -37,13 +37,17 @@ sub import {
     else {
         require Test2::Harness::Util;
         $fh = Test2::Harness::Util::open_file($test, '<');
-        push @lines => (qq{#line 1 "$test"\n});
+        my $safe = $test;
+        $safe =~ s/"/\\"/;
+        push @lines => (qq{#line 1 "$safe"\n});
     }
 
     Filter::Util::Call::filter_add(
         bless {
             fh    => $fh,
             lines => \@lines,
+            line  => 1,
+            test  => $test,
         },
         $class
     );
@@ -52,20 +56,38 @@ sub import {
 sub filter {
     my $self = shift;
 
+    return 0 if $self->{done};
+
     my $lines = $self->{lines};
     my $fh    = $self->{fh};
 
-    my $line;
+    my ($line, $num);
 
     if (@$lines) {
         $line = shift @$lines;
     }
     elsif ($fh) {
         $line = <$fh>;
+        $num = $self->{line}++;
     }
 
     if (defined $line) {
-        $_ .= $line;
+        if ($line =~ m/^__(DATA|END)__$/) {
+            my $pos = tell($fh);
+            my $test = $self->{test};
+            $self->{done} = 1;
+
+            # We cannot know for sure what package needs DATA reset, so we
+            # inject a BEGIN block to reset it for us.
+            $_ .= <<"            EOT";
+#line ${ \__LINE__ } "${ \__FILE__ }"
+BEGIN { close(DATA); open(DATA, '<', "$test") or die "Could not reopen DATA: \$!"; seek(DATA, $pos, 0) }
+            EOT
+        }
+        else {
+            $_ .= $line;
+        }
+
         return 1;
     }
 

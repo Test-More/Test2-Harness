@@ -23,8 +23,8 @@ sub load_command {
     if (!eval { require $cmd_file; 1 }) {
         my $load_error = $@ || 'unknown error';
 
-        confess "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)"
-            if $load_error =~ m{Can't locate \Q$cmd_file in \@INC\E};
+        die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
+            if $load_error =~ m{Can't locate \Q$cmd_file\E in \@INC};
 
         die $load_error;
     }
@@ -69,9 +69,9 @@ sub find_pfile {
 }
 
 sub read_config {
-    my ($cmd) = @_;
+    my ($cmd, $rcfile) = @_;
 
-    my $rcfile = find_in_updir('.yath.rc') or return;
+    $rcfile ||= find_in_updir('.yath.rc');
 
     my $fh = open_file($rcfile, '<');
 
@@ -81,7 +81,7 @@ sub read_config {
     while (my $line = <$fh>) {
         chomp($line);
         if ($line =~ m/^\[(.*)\]$/) {
-            $in_cmd = 1 if $1 eq $cmd;
+            $in_cmd = $1 eq $cmd;
             next;
         }
         next unless $in_cmd;

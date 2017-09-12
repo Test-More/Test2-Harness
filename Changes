@@ -3,6 +3,29 @@
     - Properly pass args given via '::'
     - Honor NO-STREAM header
     - Persist now reloads when a file is changed
+    - Fix dep versions in dist.ini
+    - Improve test coverage
+    - Better test.pl detection by yath command
+    - Add color/no-color options
+    - Support for project .yath.rc files
+    - Make sure $VERSION is in correct files
+    - Add 'help' command
+    - Add 'init' command
+    - More hooks for preload modules
+    - Several bug fixes
+    - Make it so that preload+fork does not add a stack layer
+    - unify to only one 'yath' script
+    - Split persist into multiple commands
+    - Create a plugin system, Add TCM plugin to split out later
+    - Remove pre-import option
+    - Better default log location+name
+    - Move CommandShared/Harness -> App/Command.pm
+    - Add --no-long option
+    - Add --exclude option
+    - Bind lib & blib earlier, use absolute paths
+    - Fix parser error on '}'
+    - Allow -w in tests after preload
+    - Handle timers better
 
 0.001006  2017-09-06 14:24:18-07:00 America/Los_Angeles (TRIAL RELEASE)
 

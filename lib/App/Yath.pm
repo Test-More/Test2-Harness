@@ -201,7 +201,7 @@ Or you can use gzip:
     ...
     Wrote log file: test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.gz
 
-C<-B> and <C-G> both imply C<-L>.
+C<-B> and C<-G> both imply C<-L>.
 
 =head3 REPLAYING FROM A LOG
 

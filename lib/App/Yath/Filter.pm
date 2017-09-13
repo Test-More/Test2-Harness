@@ -70,14 +70,13 @@ sub filter {
 
     local $App::Yath::Filter::FH = $fh;
 
-    my ($line, $num);
+    my $line;
 
     if (@$lines) {
         $line = shift @$lines;
     }
     elsif ($fh) {
         $line = <$fh>;
-        $num = $self->{line}++;
     }
 
     if (defined $line) {

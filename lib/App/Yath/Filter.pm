@@ -14,9 +14,9 @@ sub import {
     my ($test) = @_;
 
     my @lines;
-    push @lines => "#line " . __LINE__ . ' "' . __FILE__ . "\"\n";
-    push @lines => "package main;\n";
-    push @lines => "\$@ = '';\n";
+    push @lines => "#line " . __LINE__ . ' "' . __FILE__ . '"';
+    push @lines => "package main;";
+    push @lines => "\$@ = '';";
 
     my $fh;
 
@@ -42,10 +42,10 @@ sub import {
         $HANDLES{$id} = $fh;
         my $safe = $test;
         $safe =~ s/"/\\"/;
-        push @lines => "#line " . (__LINE__ + 2) . ' "' . __FILE__ . "\"\n";
+        push @lines => "#line " . (__LINE__ + 2) . ' "' . __FILE__ . '"';
         push @lines => (
-            '{ local ($!, $?, $^E, $@); close(DATA); *DATA = $App::Yath::Filter::HANDLES{' . $id . '} }' . "\n",
-            qq{#line 1 "$safe"\n},
+            '{ local ($!, $?, $^E, $@); close(DATA); *DATA = $App::Yath::Filter::HANDLES{' . $id . '} }',
+            qq{#line 1 "$safe"},
         );
     }
 

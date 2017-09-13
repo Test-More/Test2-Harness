@@ -58,4 +58,15 @@ sub run {
     return 0;
 }
 
+sub command_help {
+    my $self = shift;
+    my ($command) = @_;
+
+    require App::Yath;
+    my $cmd_class = App::Yath->load_command($command);
+    print $cmd_class->new->usage;
+
+    return 0;
+}
+
 1;

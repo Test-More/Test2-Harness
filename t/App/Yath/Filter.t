@@ -46,7 +46,7 @@ is(
 );
 
 # Edge cases suck :-(
-\__DATA__
+__DATA__
 foo
 bar
 baz

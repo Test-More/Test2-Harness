@@ -6,23 +6,25 @@ use Filter::Util::Call qw/filter_add/;
 
 our $VERSION = '0.001010';
 
+our %HANDLES;
+
 my $ID = 1;
 sub import {
     my $class = shift;
     my ($test) = @_;
 
-    my @lines = (
-        "#line " . __LINE__ . ' "' . __FILE__ . "\"\n",
-        "package main;\n",
-        "\$@ = '';\n",
-    );
+    my @lines;
+    push @lines => "#line " . __LINE__ . ' "' . __FILE__ . "\"\n";
+    push @lines => "package main;\n";
+    push @lines => "\$@ = '';\n";
 
     my $fh;
+
+    my $id = $ID++;
 
     if (ref($test) eq 'CODE') {
         my $ran = 0;
 
-        my $id = $ID++;
         {
             no warnings 'once';
             no strict 'refs';
@@ -37,9 +39,14 @@ sub import {
     else {
         require Test2::Harness::Util;
         $fh = Test2::Harness::Util::open_file($test, '<');
+        $HANDLES{$id} = $fh;
         my $safe = $test;
         $safe =~ s/"/\\"/;
-        push @lines => (qq{#line 1 "$safe"\n});
+        push @lines => "#line " . (__LINE__ + 2) . ' "' . __FILE__ . "\"\n";
+        push @lines => (
+            '{ local ($!, $?, $^E, $@); close(DATA); *DATA = $App::Yath::Filter::HANDLES{' . $id . '} }' . "\n",
+            qq{#line 1 "$safe"\n},
+        );
     }
 
     Filter::Util::Call::filter_add(
@@ -61,6 +68,8 @@ sub filter {
     my $lines = $self->{lines};
     my $fh    = $self->{fh};
 
+    local $App::Yath::Filter::FH = $fh;
+
     my ($line, $num);
 
     if (@$lines) {
@@ -72,21 +81,11 @@ sub filter {
     }
 
     if (defined $line) {
-        if ($line =~ m/^__(DATA|END)__$/) {
-            my $pos = tell($fh);
-            my $test = $self->{test};
-            $self->{done} = 1;
-
-            # We cannot know for sure what package needs DATA reset, so we
-            # inject a BEGIN block to reset it for us.
-            $_ .= <<"            EOT";
-#line ${ \__LINE__ } "${ \__FILE__ }"
-BEGIN { close(DATA); open(DATA, '<', "$test") or die "Could not reopen DATA: \$!"; seek(DATA, $pos, 0) }
-            EOT
-        }
-        else {
-            $_ .= $line;
-        }
+        # Normalize to make sure each line ends with a newline.
+        # Without this things choke on files with no terminal newline.
+        chomp($line);
+        $_ .= $line;
+        $_ .= "\n";
 
         return 1;
     }

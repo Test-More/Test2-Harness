@@ -1,15 +1,14 @@
 {{$NEXT}}
 
-0.001008  2017-09-12 13:49:05-07:00 America/Los_Angeles
+    - Better docs
+    - More testing
+    - Minor bug fixes
 
-0.001007  2017-09-11 21:40:28-07:00 America/Los_Angeles
+0.001008  2017-09-12 13:49:05-07:00 America/Los_Angeles
 
     NOW Feature-complete!
     (Needs docs and tests)
 
-    - Properly pass args given via '::'
-    - Honor NO-STREAM header
-    - Persist now reloads when a file is changed
     - Fix dep versions in dist.ini
     - Improve test coverage
     - Better test.pl detection by yath command
@@ -33,6 +32,12 @@
     - Fix parser error on '}'
     - Allow -w in tests after preload
     - Handle timers better
+
+0.001007  2017-09-11 21:40:28-07:00 America/Los_Angeles
+
+    - Properly pass args given via '::'
+    - Honor NO-STREAM header
+    - Persist now reloads when a file is changed
 
 0.001006  2017-09-06 14:24:18-07:00 America/Los_Angeles (TRIAL RELEASE)
 

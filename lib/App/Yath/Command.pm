@@ -10,7 +10,7 @@ BEGIN {
     select $old;
 }
 
-our $VERSION = '0.001009';
+our $VERSION = '0.001010';
 
 use Carp qw/croak/;
 use File::Temp qw/tempdir/;

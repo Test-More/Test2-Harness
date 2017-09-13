@@ -2,7 +2,7 @@ package Test2::Harness::Preload;
 use strict;
 use warnings;
 
-our $VERSION = '0.001009';
+our $VERSION = '0.001010';
 
 sub preload {
     my $class = shift;

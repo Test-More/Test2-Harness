@@ -86,7 +86,7 @@ sub iteration {
         for my $job_id (sort keys %{$self->{+ACTIVE}}) {
             my $watcher = $self->{+ACTIVE}->{$job_id};
 
-            if ($watcher->complete) {
+            if ($watcher->complete || $watcher->killed) {
                 $self->{+FEEDER}->job_completed($job_id);
                 delete $self->{+ACTIVE}->{$job_id};
             }
@@ -155,6 +155,7 @@ sub check_timeout {
     my $stamp = time;
 
     return unless $watcher->job->use_timeout;
+    return if $watcher->killed;
 
     my $delta = $stamp - $watcher->last_event;
 

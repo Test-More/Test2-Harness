@@ -71,10 +71,15 @@ sub import {
     $SIG{INT}  = 'DEFAULT';
     $SIG{TERM} = 'DEFAULT';
 
-    return $$runref = $test if ref($test) eq 'CODE';
-
     require goto::file;
-    goto::file->import($test);
+
+    if (ref($test) eq 'CODE') {
+        goto::file->import(['exit($App::Yath::RUN->());']);
+        return $$runref = $test;
+    }
+    else {
+        goto::file->import(File::Spec->abs2rel($test));
+    }
 }
 
 1;

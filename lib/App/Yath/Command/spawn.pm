@@ -73,8 +73,8 @@ sub import {
 
     return $$runref = $test if ref($test) eq 'CODE';
 
-    require App::Yath::Filter;
-    App::Yath::Filter->import($test);
+    require goto::file;
+    goto::file->import($test);
 }
 
 1;

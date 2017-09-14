@@ -86,11 +86,15 @@ sub iteration {
         for my $job_id (sort keys %{$self->{+ACTIVE}}) {
             my $watcher = $self->{+ACTIVE}->{$job_id};
 
-            if ($watcher->complete || $watcher->killed) {
+            # Give it up to 5 seconds
+            my $killed = $watcher->killed;
+            my $done = $watcher->complete || ($killed ? (time - $killed) > 5 : 0);
+
+            if ($done) {
                 $self->{+FEEDER}->job_completed($job_id);
                 delete $self->{+ACTIVE}->{$job_id};
             }
-            elsif($self->{+LIVE}) {
+            elsif($self->{+LIVE} && !$killed) {
                 push @events => $self->check_timeout($watcher);
             }
         }

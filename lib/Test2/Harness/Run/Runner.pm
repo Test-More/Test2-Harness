@@ -354,7 +354,8 @@ sub wait_jobs {
                 push @keep => $set;
             }
             elsif ($got == $pid) {
-                write_file_atomic($exit_file, $ret);
+                next if eval { write_file_atomic($exit_file, $ret); 1 };
+                warn "Error writing exit file '$exit_file': $@";
             }
             else {
                 warn "Could not reap pid $pid, waitpid returned $got";
@@ -374,7 +375,7 @@ sub kill_jobs {
     my $running = $self->{+STATE}->{running};
     for my $cat (values %$running) {
         for my $set (@$cat) {
-            my ($pid) = @_;
+            my ($pid) = @$set;
             kill($sig, $pid) or warn "Could not kill pid $pid";
         }
     }

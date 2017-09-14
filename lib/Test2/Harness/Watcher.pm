@@ -263,7 +263,7 @@ sub TO_JSON { undef }
 sub kill {
     my $self = shift;
 
-    $self->{+KILLED} = 1;
+    $self->{+KILLED} = time;
 
     return 0 unless $self->{+LIVE};
     return 1 if defined $self->{+EXIT};

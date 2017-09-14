@@ -1,5 +1,14 @@
 {{$NEXT}}
 
+    - Pull out the filter into goto::file 
+    - Do not use filter for tests that come back as subrefs
+    - Improve TCM plugin
+    - Fix timeouts (again)
+    - Remove unused variable
+    - Stop waiting for a test once it is killed
+    - Fix Typos
+    - Some bug fixes
+
 0.001009  2017-09-12 23:10:05-07:00 America/Los_Angeles
 
     - Better docs

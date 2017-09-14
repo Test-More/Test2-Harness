@@ -2,7 +2,7 @@ package Test2::Harness::Job;
 use strict;
 use warnings;
 
-our $VERSION = '0.001011';
+our $VERSION = '0.001012';
 
 use Carp qw/croak/;
 

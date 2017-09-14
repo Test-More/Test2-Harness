@@ -1,4 +1,4 @@
-package TestsFor::Simple;
+package TestsFor::Simple2;
 use Test::Class::Moose;
 
 sub test_me {

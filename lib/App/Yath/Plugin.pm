@@ -12,4 +12,6 @@ sub post_init {}
 
 sub find_files {}
 
+sub block_default_search {}
+
 1;

@@ -13,7 +13,7 @@ use File::Spec();
 use Test2::Harness::Util qw/open_file/;
 
 use Test2::Harness::Util::HashBase qw{
-    -file -_scanned -_headers -_shbang -via
+    -file -_scanned -_headers -_shbang -queue_args
 };
 
 sub init {
@@ -24,6 +24,8 @@ sub init {
     # We want absolute path
     $file = File::Spec->rel2abs($file);
     $self->{+FILE} = $file;
+
+    $self->{+QUEUE_ARGS} ||= [];
 
     croak "Invalid test file '$file'" unless -f $file;
 }
@@ -186,7 +188,7 @@ sub queue_item {
         stamp       => time,
         job_id      => $job_id,
 
-        $self->{+VIA} ? (via => $self->{+VIA}) : (),
+        @{$self->{+QUEUE_ARGS}},
     };
 }
 

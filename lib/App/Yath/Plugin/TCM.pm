@@ -48,9 +48,17 @@ sub find_files {
 
     return unless @search;
 
+    my @libs = (File::Spec->rel2abs('t/lib'));
+
     my (@files, @dirs);
     for my $item (@search) {
-        push @files => Test2::Harness::Util::TestFile->new(file => $item, via => ['Fork::TCM', 'Open3::TCM']) and next if -f $item;
+        push @files => Test2::Harness::Util::TestFile->new(
+            file => $item,
+            queue_args => [
+                via => ['Fork::TCM', 'Open3::TCM'],
+                libs => \@libs,
+            ],
+        ) and next if -f $item;
         push @dirs => $item and next if -d $item;
         die "'$item' does not appear to be either a file or a directory.\n";
     }
@@ -65,7 +73,10 @@ sub find_files {
                     return unless -f $_ && m/\.pm$/;
                     push @files => Test2::Harness::Util::TestFile->new(
                         file => $File::Find::name,
-                        via  => ['Fork::TCM', 'Open3::TCM'],
+                        queue_args => [
+                            via  => ['Fork::TCM', 'Open3::TCM'],
+                            libs => \@libs,
+                        ],
                     );
                 },
             },
@@ -81,11 +92,17 @@ sub pre_init {
     my ($cmd, $settings) = @_;
 
     push @{$settings->{exclude_patterns}} => "(tcm|TCM)\\.t\$";
-    $settings->{tlib} = 1 unless defined($settings->{tlib});
-
     $settings->{plugins}->{$class} ||= [];
 
     1;
+}
+
+sub block_default_search {
+    my $class = shift;
+    my ($settings) = @_;
+
+    return 1 if @{$settings->{plugins}->{$class}};
+    return 0;
 }
 
 1;

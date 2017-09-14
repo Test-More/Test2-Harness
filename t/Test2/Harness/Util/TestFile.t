@@ -29,7 +29,7 @@ subtest foo => sub {
 };
 
 subtest taint => sub {
-    my $taint = $CLASS->new(file => File::Spec->catfile($tmp, 'taint'), via => ['xxx']);
+    my $taint = $CLASS->new(file => File::Spec->catfile($tmp, 'taint'), queue_args => [via => ['xxx']]);
 
     is($taint->switches, ['-t', '-w'], "No SHBANG switches");
     is($taint->shbang, {switches => ['-t', '-w'], line => "#!/usr/bin/env perl -t -w"}, "Parsed shbang");

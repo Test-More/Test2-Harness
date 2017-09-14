@@ -58,6 +58,8 @@ sub handle_list_args {
     my $has_search = $settings->{search} && @{$settings->{search}};
 
     unless ($has_search) {
+        return if grep { $_->block_default_search($settings) } keys %{$settings->{plugins}};
+
         my @dirs = grep { -d $_ } './t', './t2';
 
         my @files;

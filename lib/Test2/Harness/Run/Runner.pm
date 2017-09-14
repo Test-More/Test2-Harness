@@ -415,7 +415,7 @@ sub run_job {
     write_file_atomic($start_file, time());
 
     my @libs = $run->all_libs;
-    unshift @libs => @{$task->{libs}} if $task->{libs};
+    push @libs => @{$task->{libs}} if $task->{libs};
     my $env = {
         %{$run->env_vars},
         TMPDIR => $tmp,

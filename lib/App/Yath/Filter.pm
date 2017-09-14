@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use Filter::Util::Call qw/filter_add/;
+use Test2::Harness::Util qw/open_file/;
 
 our $VERSION = '0.001010';
 
@@ -22,39 +23,20 @@ sub import {
 
     my $id = $ID++;
 
-    if (ref($test) eq 'CODE') {
-        my $ran = 0;
-
-        {
-            no warnings 'once';
-            no strict 'refs';
-            *{"run_test_$id"} = $test;
-        }
-
-        push @lines => (
-            "#line " . __LINE__ . ' "' . __FILE__ . "\"\n",
-            "$class\::run_test_$id();\n",
-        );
-    }
-    else {
-        require Test2::Harness::Util;
-        $fh = Test2::Harness::Util::open_file($test, '<');
-        $HANDLES{$id} = $fh;
-        my $safe = $test;
-        $safe =~ s/"/\\"/;
-        push @lines => "#line " . (__LINE__ + 2) . ' "' . __FILE__ . '"';
-        push @lines => (
-            '{ local ($!, $?, $^E, $@); close(DATA); *DATA = $App::Yath::Filter::HANDLES{' . $id . '} }',
-            qq{#line 1 "$safe"},
-        );
-    }
+    $fh = open_file($test, '<');
+    $HANDLES{$id} = $fh;
+    my $safe = $test;
+    $safe =~ s/"/\\"/;
+    push @lines => "#line " . (__LINE__ + 2) . ' "' . __FILE__ . '"';
+    push @lines => (
+        '{ local ($!, $?, $^E, $@); close(DATA); *DATA = $App::Yath::Filter::HANDLES{' . $id . '} }',
+        qq{#line 1 "$safe"},
+    );
 
     Filter::Util::Call::filter_add(
         bless {
             fh    => $fh,
             lines => \@lines,
-            line  => 1,
-            test  => $test,
         },
         $class
     );
@@ -68,10 +50,7 @@ sub filter {
     my $lines = $self->{lines};
     my $fh    = $self->{fh};
 
-    local $App::Yath::Filter::FH = $fh;
-
     my $line;
-
     if (@$lines) {
         $line = shift @$lines;
     }

@@ -23,12 +23,14 @@ sub manage_runner   { 0 }
 sub summary         { "For internal use only" }
 sub name            { 'spawn' }
 
+my $TEST;
+
 sub init { confess(ref($_[0]) . " is not intended to be instanciated") }
 sub run  { confess(ref($_[0]) . " does not implement run()") }
 
 sub import {
     my $class = shift;
-    my ($argv) = @_;
+    my ($argv, $runref) = @_;
     my ($runner_class, $dir, %args) = @$argv;
 
     if ($args{setsid}) {
@@ -38,10 +40,10 @@ sub import {
 
     my $pid = $$;
 
-    eval <<'    EOT' or die $@;
+    eval <<'    EOT' or die $@ if $args{pfile};
         END {
             local ($?, $!, $@);
-            if ($args{pfile} && -f $args{pfile} && $pid == $$) {
+            if (-f $args{pfile} && $pid == $$) {
                 print "Deleting $args{pfile}\n";
                 unlink($args{pfile}) or warn "Could not delete $args{pfile}: $!\n";
             }
@@ -68,6 +70,8 @@ sub import {
     $SIG{HUP}  = 'DEFAULT';
     $SIG{INT}  = 'DEFAULT';
     $SIG{TERM} = 'DEFAULT';
+
+    return $$runref = $test if ref($test) eq 'CODE';
 
     require App::Yath::Filter;
     App::Yath::Filter->import($test);

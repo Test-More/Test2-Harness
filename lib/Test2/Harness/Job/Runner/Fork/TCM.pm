@@ -16,6 +16,8 @@ sub run {
         require Test::Class::Moose::Runner;
         Test::Class::Moose::Runner->import();
         Test::Class::Moose::Runner->new->runtests();
+
+        return 0;
     };
 
     return (undef, $sub);

@@ -7,7 +7,7 @@ use Test2::API qw/test2_stack/;
 use File::Temp qw/tempfile/;
 
 BEGIN {
-    plan 8;
+    plan 7;
 
     # This filter is designed to work along with forking, so we test it with
     # forking.
@@ -22,11 +22,7 @@ BEGIN {
         is($check, $pid, "was able to wait on other process");
         ok(!$exit, "Other process exited fine");
 
-        App::Yath::Filter->import(
-            sub {
-                is(caller, "main", "called from main package");
-            }
-        );
+        exit 0;
     }
     else {
         my ($fh, $filename) = tempfile(CLEANUP => 1);

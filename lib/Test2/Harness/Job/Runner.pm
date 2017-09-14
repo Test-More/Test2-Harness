@@ -49,7 +49,6 @@ sub run {
     my $via;
 
     for my $item (@{$self->{+VIA}}) {
-        next if $item eq 'Fork' && !$job->use_fork;
         my $class = $RUN_MAP{$item};
 
         unless ($class) {
@@ -67,6 +66,7 @@ sub run {
 
         next unless $class->viable($self);
         my @out;
+
 
         my $chdir = $self->job->chdir;
         my $orig = File::Spec->curdir();

@@ -18,6 +18,8 @@ sub viable {
 
     my $job = $test->job;
 
+    return 0 if !$job->use_fork;
+
     # -w switch is ok, otherwise it is a no-go
     return 0 if grep { !m/\s*-w\s*/ } @{$job->switches};
 

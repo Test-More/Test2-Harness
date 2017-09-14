@@ -89,7 +89,7 @@ Or you can use gzip:
     ...
     Wrote log file: test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.gz
 
-`-B` and <C-G> both imply `-L`.
+`-B` and `-G` both imply `-L`.
 
 ### REPLAYING FROM A LOG
 

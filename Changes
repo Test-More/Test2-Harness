@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Fix bug where no-fork skipped tests
+    - Use relative paths for tests in $0, __FILE__, and caller
 
 0.001010  2017-09-14 10:31:35-07:00 America/Los_Angeles
 

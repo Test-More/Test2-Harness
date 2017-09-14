@@ -14,6 +14,7 @@ sub run {
     my $args = $self->{+ARGS};
     my $file = shift @$args;
 
+    $file =~ s{.*lib/}{}g;
     require $file;
 
     require Test::Class::Moose::Runner;

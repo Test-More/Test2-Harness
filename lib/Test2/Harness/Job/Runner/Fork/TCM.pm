@@ -9,9 +9,10 @@ sub run {
 
     my ($pid, $file) = $class->SUPER::run(@_);
 
-    return ($pid, $file) if $pid;
+    return ($pid, undef) if $pid;
 
     my $sub = sub {
+        $file =~ s{.*lib/}{}g;
         require $file;
         require Test::Class::Moose::Runner;
         Test::Class::Moose::Runner->import();

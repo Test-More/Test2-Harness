@@ -86,7 +86,7 @@ sub { shift->import(@_) }
 
     my ($in_file, $out_file, $err_file, $event_file) = $test->output_filenames;
 
-    $0 = $file;
+    $0 = File::Spec->abs2rel($file);
     $class->_reset_DATA($file);
     @ARGV = ();
 

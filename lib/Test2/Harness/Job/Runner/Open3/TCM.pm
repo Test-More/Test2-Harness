@@ -12,7 +12,7 @@ sub command_file {
     return (
         find_yath(),
         'tcm',
-        $test->job->file,
+        File::Spec->abs2rel($test->job->file),
     );
 }
 

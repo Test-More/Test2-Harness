@@ -24,7 +24,7 @@ sub find_inc {
 sub command_file {
     my $class = shift;
     my ($test) = @_;
-    return $test->job->file;
+    return File::Spec->abs2rel($test->job->file);
 }
 
 sub command {

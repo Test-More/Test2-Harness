@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Bump minimum goto-file version (Fixes #30)
+
 0.001014  2017-09-14 21:27:29-07:00 America/Los_Angeles
 
     - Pass-Through $ENV{PERL5LIB}

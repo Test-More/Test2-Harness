@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001015  2017-09-15 08:55:30-07:00 America/Los_Angeles
+
     - Put lib, blib, and -I's before system libs (Fixes #31)
     - Bump minimum goto-file version (Fixes #30)
     - Use $Config for path seperator instead of ':'

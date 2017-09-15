@@ -63,7 +63,7 @@ You can preload as many modules as you want:
 ### COMPLEX PRELOAD
 
 If your preload is a subclass of [Test2::Harness::Preload](https://metacpan.org/pod/Test2::Harness::Preload) then more complex
-preload behavior is possible. See the <Test2::Harness::Preload> docs for more
+preload behavior is possible. See the [Test2::Harness::Preload](https://metacpan.org/pod/Test2::Harness::Preload) docs for more
 info.
 
 ## LOGGING

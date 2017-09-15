@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     -_sub_info
     -nested
     -subtests
+    -numbers
 
     -last_event
 };
@@ -39,6 +40,8 @@ sub init {
     $self->{+_FAILURES}       = 0;
     $self->{+_ERRORS}         = 0;
     $self->{+ASSERTION_COUNT} = 0;
+
+    $self->{+NUMBERS} = {};
 
     $self->{+NESTED} = 0 unless defined $self->{+NESTED};
 }
@@ -130,6 +133,9 @@ sub subtest_process {
 
     $event ||= Test2::Harness::Event->new(facet_data => $f);
 
+    $self->{+NUMBERS}->{$f->{assert}->{number}}++
+        if $f->{assert} && $f->{assert}->{number};
+
     if ($f->{parent} && $f->{assert}) {
         my $subwatcher = blessed($self)->new(nested => $self->{+NESTED} + 1, job => $self->{+JOB});
 
@@ -192,6 +198,19 @@ sub subtest_fail_info_facet_list {
 
     my $plan = $self->{+PLAN} ? $self->{+PLAN}->{count} : undef;
     my $count = $self->{+ASSERTION_COUNT};
+
+    my $numbers = $self->{+NUMBERS};
+    my ($max) = reverse sort keys %$numbers;
+    if ($max) {
+        for my $i (1 .. $max) {
+            if (!$numbers->{$i}) {
+                push @out => {tag => 'REASON', debug => 1, details => "Assertion number $i was never seen"};
+            }
+            elsif ($numbers->{$i} > 1) {
+                push @out => {tag => 'REASON', debug => 1, details => "Assertion number $i was seen more than once"};
+            }
+        }
+    }
 
     if (!$self->{+_PLANS}) {
         if ($count) {

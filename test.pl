@@ -4,23 +4,17 @@
 use strict;
 use warnings;
 
-system($^X, '-Ilib', './scripts/yath', 'test', 't');
+use Test2::Tools::Tiny;
+
+system($^X, '-Ilib', './scripts/yath', 'test', '-j2', 't');
 my $exit1 = $?;
-print STDERR "yath exited with $exit1\n" if $exit1;
+ok(!$exit1, "Passed tests when run by yath", ["`yath -j2` exited with $exit1"]);
 
-system($^X, '-Ilib', './scripts/yath', 'test', 't', '--no-fork');
+system($^X, '-Ilib', './scripts/yath', 'test', 't', '-j2', '--no-fork');
 my $exit2 ||= $?;
-print STDERR "yath --no-fork exited with $exit2\n" if $exit2;
+ok(!$exit2, "Passed tests when run by yath", ["`yath -j2 --no-fork` exited with $exit1"]);
 
-# This makes sure it works with prove.
-print "1..2\n";
-
-print "not " if $exit1;
-print "ok 1 - Passed tests when run by yath\n";
-
-print "not " if $exit2;
-print "ok 2 - Passed tests when run by yath --no-fork\n";
-
+done_testing;
 
 # Normalize the exit value
 exit(($exit1 || $exit2)? 255 : 0);

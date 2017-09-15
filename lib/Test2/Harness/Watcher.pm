@@ -274,6 +274,11 @@ sub kill {
     return 0;
 }
 
+sub set_complete {
+    my $self = shift;
+    ($self->{+_COMPLETE}) = @_;
+}
+
 sub complete {
     my $self = shift;
 

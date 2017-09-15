@@ -221,12 +221,17 @@ to the top of your test file (but below the #! line).
     return $event unless $self->{+LIVE};
     my $pid = $watcher->job->pid || 'NA';
 
+    if($type eq 'post-exit') {
+        $watcher->set_complete(1);
+        return;
+    }
+
     push @info => {
         details   => "Killing job: $job_id, PID: $pid",
         debug     => 1,
         important => 1,
         tag       => 'TIMEOUT',
-    } unless $type eq 'post-exit';
+    };
 
     return $event if $watcher->kill;
 

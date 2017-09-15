@@ -129,7 +129,7 @@ sub { shift->import(@_) }
         Test2::API::test2_post_preload_reset();
     }
 
-    push @INC => @{$job->libs};
+    unshift @INC => @{$job->libs};
 
     if ($job->use_stream) {
         $ENV{T2_FORMATTER} = 'Stream';

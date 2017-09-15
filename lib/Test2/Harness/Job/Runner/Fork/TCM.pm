@@ -12,6 +12,8 @@ sub run {
     return ($pid, undef) if $pid;
 
     my $sub = sub {
+        require Test2::Require::Module;
+        Test2::Require::Module->import('Test::Class::Moose::Runner');
         $file =~ s{.*lib/}{}g;
         require $file;
         require Test::Class::Moose::Runner;

@@ -88,6 +88,11 @@ sub init {
         push @$libs => File::Spec->rel2abs('t/lib');
     }
 
+    if (my $p5lib = $ENV{PERL5LIB}) {
+        my $libs = $settings->{libs} ||= [];
+        push @$libs => map { File::Spec->rel2abs($_) } split /:/, $p5lib;
+    }
+
     die "You cannot select both bzip2 and gzip for the log.\n"
         if $settings->{bzip2_log} && $settings->{gzip_log};
 

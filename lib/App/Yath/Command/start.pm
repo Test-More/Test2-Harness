@@ -2,7 +2,7 @@ package App::Yath::Command::start;
 use strict;
 use warnings;
 
-our $VERSION = '0.001013';
+our $VERSION = '0.001014';
 
 use File::Spec();
 

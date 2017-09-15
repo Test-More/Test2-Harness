@@ -6,11 +6,11 @@ use warnings;
 
 system($^X, '-Ilib', './scripts/yath', 'test', 't');
 my $exit1 = $?;
-print STDERR "yath exited with $exit1" if $exit1;
+print STDERR "yath exited with $exit1\n" if $exit1;
 
 system($^X, '-Ilib', './scripts/yath', 'test', 't', '--no-fork');
 my $exit2 ||= $?;
-print STDERR "yath --no-fork exited with $exit2" if $exit2;
+print STDERR "yath --no-fork exited with $exit2\n" if $exit2;
 
 # This makes sure it works with prove.
 print "1..2\n";

@@ -41,7 +41,7 @@ sub run_command {
     die "Command '$cmd_name' did not return an exit value.\n"
         unless defined $exit;
 
-    if ($cmd->show_bench) {
+    if ($cmd->show_bench && !$cmd->settings->{quiet}) {
         require Test2::Util::Times;
         my $end = time;
         my $bench = Test2::Util::Times::render_bench($start, $end, times);

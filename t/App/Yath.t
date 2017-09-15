@@ -57,6 +57,8 @@ subtest load_command => sub {
     our $OUT = 0;
     our $SHOW_BENCH;
 
+    sub settings { {} }
+
     sub new {
         my $class = shift;
         bless {@_}, $class;

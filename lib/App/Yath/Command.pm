@@ -210,8 +210,8 @@ sub run_command {
         print STDERR "\r\e[K";
     }
 
-    print "\n", '=' x 80, "\n";
-    print "\nRun ID: $settings->{run_id}\n";
+    $self->paint("\n", '=' x 80, "\n");
+    $self->paint("\nRun ID: $settings->{run_id}\n");
 
     my $bad = $stat ? $stat->{fail} : [];
 
@@ -219,8 +219,8 @@ sub run_command {
     my $fail = $exit || !defined($exit) || !$ok || !$stat;
 
     if (@$bad) {
-        print "\nThe following test jobs failed:\n";
-        print "  [", $_->{job_id}, '] ', File::Spec->abs2rel($_->file), "\n" for sort {
+        $self->paint("\nThe following test jobs failed:\n");
+        $self->paint("  [", $_->{job_id}, '] ', File::Spec->abs2rel($_->file), "\n") for sort {
             my $an = $a->{job_id};
             $an =~ s/\D+//g;
             my $bn = $b->{job_id};
@@ -229,27 +229,27 @@ sub run_command {
             # Sort numeric if possible, otherwise string
             int($an) <=> int($bn) || $a->{job_id} cmp $b->{job_id}
         } @$bad;
-        print "\n";
+        $self->paint("\n");
         $exit += @$bad;
     }
 
     if ($fail) {
         my $sig = $self->{+SIGNAL};
 
-        print "\n";
+        $self->paint("\n");
 
-        print "Test runner exited badly: $exit\n" if $exit;
-        print "Test runner exited badly: ?\n" unless defined $exit;
-        print "An exception was cought\n" if !$ok && !$sig;
-        print "Received SIG$sig\n" if $sig;
+        $self->paint("Test runner exited badly: $exit\n") if $exit;
+        $self->paint("Test runner exited badly: ?\n") unless defined $exit;
+        $self->paint("An exception was cought\n") if !$ok && !$sig;
+        $self->paint("Received SIG$sig\n") if $sig;
 
-        print "\n";
+        $self->paint("\n");
 
         $exit ||= 255;
     }
 
     if (!@$bad && !$fail) {
-        print "\nAll tests were successful!\n\n";
+        $self->paint("\nAll tests were successful!\n\n");
     }
 
     print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir};
@@ -261,6 +261,12 @@ sub run_command {
     $exit = 255 if $exit > 255;
 
     return $exit;
+}
+
+sub paint {
+    my $self = shift;
+    return if $self->{+SETTINGS}->{quiet};
+    print @_;
 }
 
 sub make_run_from_settings {
@@ -723,6 +729,16 @@ sub options {
         },
 
         {
+            spec    => 'q|quiet!',
+            field   => 'quiet',
+            used_by => {display => 1},
+            section => 'Display Options',
+            usage   => ['-q', '--quiet'],
+            summary => ["Be very quiet"],
+            default => 0,
+        },
+
+        {
             spec    => 'r|renderer=s',
             field   => 'renderer',
             used_by => {display => 1},
@@ -1043,6 +1059,8 @@ sub renderers {
     my $self      = shift;
     my $settings  = $self->{+SETTINGS};
     my $renderers = [];
+
+    return $renderers if $settings->{quiet};
 
     my $r = $settings->{renderer} or return $renderers;
 

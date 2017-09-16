@@ -7,6 +7,7 @@ our $VERSION = '0.001016';
 use Carp qw/croak/;
 use List::Util qw/sum/;
 use Time::HiRes qw/sleep time/;
+use Data::Dumper;
 
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
@@ -46,12 +47,21 @@ sub init {
 sub run {
     my $self = shift;
 
-    while (1) {
-        $self->{+CALLBACK}->() if $self->{+CALLBACK};
-        my $complete = $self->{+FEEDER}->complete;
-        $self->iteration();
-        last if $complete;
-        sleep 0.02;
+    {
+        local $SIG{USR1} = sub {
+            local $Data::Dumper::SortKeys = 1;
+            local $Data::Dumper::Indent = 1;
+            local $Data::Dumper::Terse = 1;
+            print STDERR Dumper({%$self, RENDERERS() => '~OMITTED~'});
+        };
+
+        while (1) {
+            $self->{+CALLBACK}->() if $self->{+CALLBACK};
+            my $complete = $self->{+FEEDER}->complete;
+            $self->iteration();
+            last if $complete;
+            sleep 0.02;
+        }
     }
 
     my(@fail, @pass);

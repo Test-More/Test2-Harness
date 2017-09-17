@@ -30,10 +30,11 @@ use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Harness;
 use Test2::Harness::Run;
 
-use Test2::Harness::Util::HashBase qw/-settings -my_opts -signal -args -plugins/;
+use Test2::Harness::Util::HashBase qw/-settings -_my_opts -signal -args -plugins/;
 
 sub handle_list_args { }
 sub feeder           { }
+sub cli_args         { }
 sub internal_only    { 0 }
 sub has_jobs         { 0 }
 sub has_runner       { 0 }
@@ -42,10 +43,54 @@ sub has_display      { 0 }
 sub show_bench       { 1 }
 sub always_keep_dir  { 0 }
 sub manage_runner    { 1 }
-sub summary          { "No Summary" }
 sub name             { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
 
+sub summary {
+    my $in = shift;
+    return "No Summary" unless $in && (ref($in) || $in) eq __PACKAGE__;
+    return "Base class for all yath commands.";
+}
+
+sub description {
+    my $in = shift;
+    return "No Description" unless $in && (ref($in) || $in) eq __PACKAGE__;
+    return <<"    EOT";
+This base class provides a lot of common arguments and argument processing for
+all yath commands. In short using this base class helps promote consistency
+between commands.
+    EOT
+}
+
 sub group { "ZZZZZZ" }
+
+sub my_opts {
+    my $in = shift;
+    my %params = @_;
+
+    my $ref = ref($in);
+
+    return $in->{+_MY_OPTS} if $ref && $in->{+_MY_OPTS} && !$params{plugin_options};
+
+    my $settings = $ref ? $in->{+SETTINGS} ||= {} : {};
+
+    my @options = $in->options($settings);
+    push @options => @{$params{plugin_options}} if $params{plugin_options};
+
+    my @have;
+    push @have => 'jobs'    if $in->has_jobs;
+    push @have => 'runner'  if $in->has_runner;
+    push @have => 'logger'  if $in->has_logger;
+    push @have => 'display' if $in->has_display;
+    my $out = [
+        grep {
+            my $u = $_->{used_by};
+            $u->{all} || grep { $u->{$_} } @have
+        } @options
+    ];
+
+    return $in->{+_MY_OPTS} = $out if $ref;
+    return $out;
+}
 
 sub init {
     my $self = shift;
@@ -56,7 +101,7 @@ sub init {
 
     my $list = $self->parse_args($self->{+ARGS});
 
-    for my $opt (@{$self->{+MY_OPTS}}) {
+    for my $opt (@{$self->my_opts}) {
         my $field   = $opt->{field};
         my $default = $opt->{default};
 
@@ -868,31 +913,18 @@ sub parse_args {
     my $settings = $self->{+SETTINGS} ||= {};
     $settings->{pass} = \@pass;
 
-    my @options = $self->options($settings);
-
+    my @plugin_options;
     for my $plugin (@plugins) {
         local $@;
         $plugin = fqmod('App::Yath::Plugin', $plugin);
         my $file = pkg_to_file($plugin);
         eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";
 
-        push @options => $plugin->options($self, $settings);
+        push @plugin_options => $plugin->options($self, $settings);
         $plugin->pre_init($self, $settings);
     }
 
     $self->{+PLUGINS} = \@plugins;
-
-    my @have;
-    push @have => 'jobs'    if $self->has_jobs;
-    push @have => 'runner'  if $self->has_runner;
-    push @have => 'logger'  if $self->has_logger;
-    push @have => 'display' if $self->has_display;
-    $self->{+MY_OPTS} = [
-        grep {
-            my $u = $_->{used_by};
-            $u->{all} || grep { $u->{$_} } @have
-        } @options
-    ];
 
     my @opt_map = map {
         my $spec  = $_->{spec};
@@ -901,7 +933,7 @@ sub parse_args {
         $action ||= \($settings->{$field}) if $field;
 
         ($spec => $action)
-    } @{$self->{+MY_OPTS}};
+    } @{$self->my_opts(plugin_options => \@plugin_options)};
 
     Getopt::Long::Configure("bundling");
     my $args_ok = GetOptionsFromArray(\@opts => @opt_map)
@@ -910,21 +942,148 @@ sub parse_args {
     return [grep { defined($_) && length($_) } @list, @opts];
 }
 
-sub usage {
+sub inject_pod { "" }
+
+sub generate_pod {
+    my $in = shift;
+    my $class = ref($in) || $in;
+    my $name = $class->name;
+
+    my $pod = <<"    EOT";
+#=pod
+
+#=encoding UTF-8
+
+#=head1 NAME
+
+$class - ${ \($class->summary) }
+
+#=head1 DESCRIPTION
+
+${ \($class->description) }
+
+${ \($class->usage_pod) }
+
+${ \($class->inject_pod) }
+
+${ \($class->footer_pod) }
+    EOT
+
+    $pod =~ s/^#=/=/gm;
+
+    return $pod;
+}
+
+sub footer_pod {
+    my $year = strftime "%Y", localtime;
+
+    return <<"    EOT";
+#=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+#=head1 MAINTAINERS
+
+#=over 4
+
+#=item Chad Granum E<lt>exodist\@cpan.orgE<gt>
+
+#=back
+
+#=head1 AUTHORS
+
+#=over 4
+
+#=item Chad Granum E<lt>exodist\@cpan.orgE<gt>
+
+#=back
+
+#=head1 COPYRIGHT
+
+Copyright $year Chad Granum E<lt>exodist7\@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+#=cut
+    EOT
+}
+
+sub usage_opt_order {
     my $self = shift;
-    my $name = $self->name;
 
     my $idx = 1;
     my %lookup = map {($_ => $idx++)} $self->section_order;
 
     #<<< no-tidy
-    my @list = sort {
+    return sort {
           ($lookup{$a->{section}} || 99) <=> ($lookup{$b->{section}} || 99)  # Sort by section first
             or ($a->{long_desc} ? 2 : 1) <=> ($b->{long_desc} ? 2 : 1)       # Things with long desc go to bottom
             or      lc($a->{usage}->[0]) cmp lc($b->{usage}->[0])            # Alphabetical by first usage example
             or       ($a->{field} || '') cmp ($b->{field} || '')             # By field if present
-    } grep { $_->{section} } @{$self->{+MY_OPTS}};
+    } grep { $_->{section} } @{$self->my_opts};
     #>>>
+}
+
+sub usage_pod {
+    my $in = shift;
+    my $name = $in->name;
+
+    my @list = $in->usage_opt_order;
+
+    my $out = "\n=head1 COMMAND LINE USAGE\n";
+
+    my @cli_args = $in->cli_args;
+    @cli_args = ('') unless @cli_args;
+
+    for my $args (@cli_args) {
+        $out .= "    \$ yath $name [options]";
+        $out .= " $args" if $args;
+        $out .= "\n";
+    }
+
+    my $section = '';
+    for my $opt (@list) {
+        my $sec = $opt->{section};
+        if ($sec ne $section) {
+            $out .= "\n=back\n" if $section;
+            $section = $sec;
+            $out .= "\n=head2 $section\n";
+            $out .= "\n=over 4\n";
+        }
+
+        for my $way (@{$opt->{usage}}) {
+            my @parts = split /\s+-/, $way;
+            my $count = 0;
+            for my $part (@parts) {
+                $part = "-$part" if $count++;
+                $out .= "\n=item $part\n"
+            }
+        }
+
+        for my $sum (@{$opt->{summary}}) {
+            $out .= "\n$sum\n";
+        }
+
+        if (my $desc = $opt->{long_desc}) {
+            chomp($desc);
+            $out .= "\n$desc\n";
+        }
+    }
+
+    $out .= "\n=back\n";
+
+    return $out;
+}
+
+sub usage {
+    my $self = shift;
+    my $name = $self->name;
+
+    my @list = $self->usage_opt_order;
 
     # Get the longest 'usage' item's length
     my $ul = max(map { length($_) } map { @{$_->{usage}} } @list);

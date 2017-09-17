@@ -69,4 +69,8 @@ sub command_help {
     return 0;
 }
 
+sub generate_pod {
+
+}
+
 1;

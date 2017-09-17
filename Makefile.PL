@@ -27,7 +27,7 @@ my %WriteMakefileArgs = (
     "Exporter" => 0,
     "Fcntl" => 0,
     "File::Find" => 0,
-    "File::Path" => 0,
+    "File::Path" => "2.11",
     "File::Spec" => 0,
     "File::Temp" => 0,
     "Filter::Util::Call" => 0,
@@ -68,7 +68,7 @@ my %WriteMakefileArgs = (
   },
   "VERSION" => "0.001016",
   "test" => {
-    "TESTS" => "t/*.t t/App/*.t t/App/Yath/*.t t/App/Yath/Command/*.t t/App/Yath/Plugin/*.t t/Test2/*.t t/Test2/Formatter/*.t t/Test2/Harness/*.t t/Test2/Harness/Feeder/*.t t/Test2/Harness/Job/*.t t/Test2/Harness/Job/Runner/*.t t/Test2/Harness/Job/Runner/Fork/*.t t/Test2/Harness/Job/Runner/Open3/*.t t/Test2/Harness/Logger/*.t t/Test2/Harness/Renderer/*.t t/Test2/Harness/Run/*.t t/Test2/Harness/Run/Runner/*.t t/Test2/Harness/Util/*.t t/Test2/Harness/Util/File/*.t"
+    "TESTS" => "t/*.t t/App/*.t t/App/Yath/*.t t/App/Yath/Command/*.t t/Test2/*.t t/Test2/Formatter/*.t t/Test2/Harness/*.t t/Test2/Harness/Feeder/*.t t/Test2/Harness/Job/*.t t/Test2/Harness/Job/Runner/*.t t/Test2/Harness/Logger/*.t t/Test2/Harness/Renderer/*.t t/Test2/Harness/Run/*.t t/Test2/Harness/Run/Runner/*.t t/Test2/Harness/Util/*.t t/Test2/Harness/Util/File/*.t"
   }
 );
 
@@ -81,7 +81,7 @@ my %FallbackPrereqs = (
   "Exporter" => 0,
   "Fcntl" => 0,
   "File::Find" => 0,
-  "File::Path" => 0,
+  "File::Path" => "2.11",
   "File::Spec" => 0,
   "File::Temp" => 0,
   "Filter::Util::Call" => 0,

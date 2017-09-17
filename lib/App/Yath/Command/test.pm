@@ -62,6 +62,11 @@ sub handle_list_args {
 
         my @dirs = grep { -d $_ } './t', './t2';
 
+        push @dirs => './xt'
+            if -d './xt'
+            && ($settings->{env_vars}->{AUTHOR_TESTING}
+            || $ENV{AUTHOR_TESTING});
+
         my @files;
         push @files => 'test.pl' if -f 'test.pl' && !is_generated_test_pl('test.pl');
 

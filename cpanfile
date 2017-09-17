@@ -5,7 +5,7 @@ requires "Data::Dumper" => "0";
 requires "Exporter" => "0";
 requires "Fcntl" => "0";
 requires "File::Find" => "0";
-requires "File::Path" => "0";
+requires "File::Path" => "2.11";
 requires "File::Spec" => "0";
 requires "File::Temp" => "0";
 requires "Filter::Util::Call" => "0";
@@ -46,7 +46,7 @@ requires "parent" => "0";
 requires "perl" => "5.008001";
 suggests "Cpanel::JSON::XS" => "0";
 suggests "JSON::MaybeXS" => "0";
-suggests "Term::ANSIColor" => "0";
+suggests "Term::ANSIColor" => "4.06";
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "0";

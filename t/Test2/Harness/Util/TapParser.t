@@ -83,7 +83,35 @@ subtest parse_stdout_tap_integration => sub {
     );
 
     subtest plan => sub {
-        ok(1, "todo");
+        is(
+            parse_stdout_tap('1..5'),
+            {
+                trace    => {nested => 0},
+                from_tap => { details => '1..5', source  => 'STDOUT' },
+                plan => {count => 5, skip => FDNE, details => FDNE},
+            },
+            "Parsed the plan"
+        );
+
+        is(
+            parse_stdout_tap('1..0'),
+            {
+                trace    => {nested => 0},
+                from_tap => { details => '1..0', source  => 'STDOUT' },
+                plan => {count => 0, skip => 1, details => 'no reason given'},
+            },
+            "Parsed the skip plan"
+        );
+
+        is(
+            parse_stdout_tap('1..0 # SKIP foo bar baz'),
+            {
+                trace    => {nested => 0},
+                from_tap => { details => '1..0 # SKIP foo bar baz', source  => 'STDOUT' },
+                plan => {count => 0, skip => 1, details => 'foo bar baz'},
+            },
+            "Parsed the skip + reason plan"
+        );
     };
 
     my @conds = (
@@ -309,48 +337,55 @@ subtest parse_stdout_tap_integration => sub {
     } for @conds;
 };
 
+subtest parse_tap_buffered_subtest => sub {
+    is(
+        $CLASS->parse_tap_buffered_subtest('ok {'),
+        {
+            %{$CLASS->parse_tap_ok('ok')},
+            parent => { details => '' },
+            harness => { subtest_start => 1 },
+        },
+        "Simple bufferd subtest"
+    );
+
+    is(
+        $CLASS->parse_tap_buffered_subtest('ok 1 {'),
+        {
+            %{$CLASS->parse_tap_ok('ok 1')},
+            parent => { details => '' },
+            harness => { subtest_start => 1 },
+        },
+        "Simple bufferd subtest with number"
+    );
+
+    is(
+        $CLASS->parse_tap_buffered_subtest('ok 1 - foo {'),
+        {
+            %{$CLASS->parse_tap_ok('ok 1 - foo')},
+            parent => { details => 'foo' },
+            harness => { subtest_start => 1 },
+        },
+        "Simple bufferd subtest with number and name"
+    );
+
+    is(
+        $CLASS->parse_tap_buffered_subtest('ok 1 - foo { # TODO foo bar baz'),
+        {
+            %{$CLASS->parse_tap_ok('ok 1 - foo # TODO foo bar baz')},
+            parent => { details => 'foo' },
+            harness => { subtest_start => 1 },
+        },
+        "Simple bufferd subtest with number and name and directive"
+    );
+};
+
+subtest parse_tap_ok => sub {
+    ok(1, 'todo');
+};
+
 done_testing;
 
 __END__
-
-
-sub parse_tap_line {
-    my $class = shift;
-    my ($line) = @_;
-    chomp($line);
-
-    my ($lead, $str) = ($line =~ m/^(\s+)(.+)$/) ? ($1, $2) : ('', $line);
-    $lead =~ s/\t/    /g;
-    my $nest = int(length($lead) / 4);
-
-    my @types = qw/buffered_subtest comment plan bail version/;
-    for my $type (@types) {
-        my $sub = "parse_tap_$type";
-        my $facet_data = $class->$sub($str) or next;
-        $facet_data->{trace}->{nested} = $nest;
-        return $facet_data;
-    }
-
-    return undef;
-}
-
-sub parse_tap_buffered_subtest {
-    my $class = shift;
-    my ($line) = @_;
-
-    # End of a buffered subtest.
-    return {parent => {}, harness => {subtest_end => 1}} if $line =~ m/^\}\s*$/;
-
-    my $facet_data = $class->parse_tap_ok($line) or return undef;
-    return $facet_data unless $facet_data->{assert}->{details} =~ s/\s*\{\s*$//g;
-
-    $facet_data->{parent} = {
-        details => $facet_data->{assert}->{details},
-    };
-    $facet_data->{harness}->{subtest_start} = 1;
-
-    return $facet_data;
-}
 
 sub parse_tap_ok {
     my $class = shift;

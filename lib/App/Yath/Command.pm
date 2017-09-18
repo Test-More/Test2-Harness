@@ -942,76 +942,6 @@ sub parse_args {
     return [grep { defined($_) && length($_) } @list, @opts];
 }
 
-sub inject_pod { "" }
-
-sub generate_pod {
-    my $in = shift;
-    my $class = ref($in) || $in;
-    my $name = $class->name;
-
-    my $pod = <<"    EOT";
-#=pod
-
-#=encoding UTF-8
-
-#=head1 NAME
-
-$class - ${ \($class->summary) }
-
-#=head1 DESCRIPTION
-
-${ \($class->description) }
-
-${ \($class->usage_pod) }
-
-${ \($class->inject_pod) }
-
-${ \($class->footer_pod) }
-    EOT
-
-    $pod =~ s/^#=/=/gm;
-
-    return $pod;
-}
-
-sub footer_pod {
-    my $year = strftime "%Y", localtime;
-
-    return <<"    EOT";
-#=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-#=head1 MAINTAINERS
-
-#=over 4
-
-#=item Chad Granum E<lt>exodist\@cpan.orgE<gt>
-
-#=back
-
-#=head1 AUTHORS
-
-#=over 4
-
-#=item Chad Granum E<lt>exodist\@cpan.orgE<gt>
-
-#=back
-
-#=head1 COPYRIGHT
-
-Copyright $year Chad Granum E<lt>exodist7\@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-#=cut
-    EOT
-}
-
 sub usage_opt_order {
     my $self = shift;
 
@@ -1040,7 +970,7 @@ sub usage_pod {
     @cli_args = ('') unless @cli_args;
 
     for my $args (@cli_args) {
-        $out .= "    \$ yath $name [options]";
+        $out .= "\n    \$ yath $name [options]";
         $out .= " $args" if $args;
         $out .= "\n";
     }

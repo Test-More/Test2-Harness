@@ -88,9 +88,47 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::persist
-
 =head1 DESCRIPTION
+
+=head1 SYNOPSIS
+
+
+
+=head1 COMMAND LINE USAGE
+
+    $ yath stop [options]
+
+=head2 Help
+
+=over 4
+
+=item --show-opts
+
+Exit after showing what yath thinks your options mean
+
+=item -h
+
+=item --help
+
+Exit after showing this help message
+
+=back
+
+=head2 Plugins
+
+=over 4
+
+=item -pPlugin
+
+=item -p+My::Plugin
+
+=item --plugin Plugin
+
+Load a plugin
+
+can be specified multiple times
+
+=back
 
 =head1 SOURCE
 

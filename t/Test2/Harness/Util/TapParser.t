@@ -379,225 +379,278 @@ subtest parse_tap_buffered_subtest => sub {
     );
 };
 
+subtest parse_tap_version => sub {
+    is(
+        $CLASS->parse_tap_version("TAP version 123"),
+        {
+            about => { details => 'TAP version 123' },
+            info => [{tag => 'INFO', debug => 0, details => 'TAP version 123'}],
+        },
+        "Got version facets"
+    );
+
+    is(
+        $CLASS->parse_tap_version("123"),
+        undef,
+        "No facets for invalid version line"
+    );
+};
+
+subtest parse_tap_plan => sub {
+    is(
+        $CLASS->parse_tap_plan("1..5"),
+        {plan => { count => 5, skip => F, details => '' }},
+        "Simple plan, got expected number, details is an empty string, not undef or 0"
+    );
+
+    is(
+        $CLASS->parse_tap_plan("1..9001"),
+        {plan => { count => 9001, skip => F, details => '' }},
+        "Simple plan, got expected large number"
+    );
+
+    is(
+        $CLASS->parse_tap_plan("1..0"),
+        {plan => { count => 0, skip => T, details => 'no reason given' }},
+        "Simple skip"
+    );
+
+    is(
+        $CLASS->parse_tap_plan("1..0 # SKIP Foo bar baz"),
+        {plan => { count => 0, skip => T, details => 'Foo bar baz' }},
+        "Simple skip with reason"
+    );
+
+    is(
+        $CLASS->parse_tap_plan("1..2 x"),
+        {
+            plan => { count => 2, skip => F, details => '' },
+            info => [{tag => 'PARSER', debug => 1, details => 'Extra characters after plan.'}],
+        },
+        "Extra characters in plan"
+    );
+
+    is(
+        $CLASS->parse_tap_plan(".."),
+        undef,
+        "No facets without a plan"
+    );
+};
+
+subtest parse_tap_bail => sub {
+    is(
+        $CLASS->parse_tap_bail('Bail out!'),
+        {control => { halt => 1, details => '' }},
+        "Expected facets for a bail, no reason means details is an empty string"
+    );
+
+    is(
+        $CLASS->parse_tap_bail('Bail out! foo bar baz'),
+        {control => { halt => 1, details => 'foo bar baz' }},
+        "Expected facets for a bail with reason"
+    );
+
+    is(
+        $CLASS->parse_tap_bail('Bail'),
+        undef,
+        "No facets with invalid bail-out"
+    );
+};
+
+subtest parse_tap_comment => sub {
+    is(
+        $CLASS->parse_tap_comment('# foo bar baz'),
+        {info => [{tag => 'NOTE', debug => 0, details => 'foo bar baz'}]},
+        "Got expected facets for a simple comment"
+    );
+
+    is(
+        $CLASS->parse_tap_comment("# foo\n# bar\n# baz"),
+        {info => [{tag => 'NOTE', debug => 0, details => "foo\nbar\nbaz"}]},
+        "Striped all '#' out of multi-line comment"
+    );
+
+    is(
+        $CLASS->parse_tap_comment("foo # bar baz"),
+        undef,
+        "Not a comment"
+    );
+};
+
 subtest parse_tap_ok => sub {
-    ok(1, 'todo');
+    is(
+        $CLASS->parse_tap_ok("ok"),
+        {assert => {pass => T, no_debug => 1, details => ''}},
+        "Got facets for simple ok, no name means details is an empty string"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("not ok"),
+        {assert => {pass => F, no_debug => 1, details => ''}},
+        "Got facets for simple not ok, no name means details is an empty string"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok foo"),
+        {assert => {pass => T, no_debug => 1, details => 'foo'}},
+        "Got facets for simple named ok"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok - foo"),
+        {assert => {pass => T, no_debug => 1, details => 'foo'}},
+        "Got facets for simple named ok with dash"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok 42 foo"),
+        {assert => {pass => T, no_debug => 1, details => 'foo', number => 42}},
+        "Got facets for simple named ok with number"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok 42 - foo"),
+        {assert => {pass => T, no_debug => 1, details => 'foo', number => 42}},
+        "Got facets for simple named ok with number and dash"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok 42 -"),
+        {assert => {pass => T, no_debug => 1, details => '', number => 42}},
+        "Got facets for simple named ok with number and dash, but no name"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("not ok 42 - foo"),
+        {assert => {pass => F, no_debug => 1, details => 'foo', number => 42}},
+        "Got facets for simple named not ok with number and dash"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok 42 - foo"),
+        {assert => {pass => T, no_debug => 1, details => 'foo', number => 42}},
+        "Got facets for simple named ok with number and dash"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("not ok 42 - foo # TODO"),
+        {
+            assert => {
+                pass => F, # Yes really, do not change this to true!
+                no_debug => 1,
+                details => 'foo',
+                number => 42
+            },
+            amnesty => [{tag => 'TODO', details => ''}],
+        },
+        "ok with todo directive"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok 42 - foo # SKIP"),
+        {
+            assert => { pass => T, no_debug => 1, details => 'foo', number => 42 },
+            amnesty => [{tag => 'SKIP', details => ''}],
+        },
+        "ok with skip directive"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("not ok 42 - foo # TODO & SKIP"),
+        {
+            assert => {
+                pass => F, # Yes really, do not change this to true!
+                no_debug => 1,
+                details => 'foo',
+                number => 42
+            },
+            amnesty => [
+                {tag => 'SKIP', details => ''},
+                {tag => 'TODO', details => ''},
+            ],
+        },
+        "ok with todo and skip directives"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("not ok 42 - foo # TODO foo bar baz"),
+        {
+            assert => {
+                pass => F, # Yes really, do not change this to true!
+                no_debug => 1,
+                details => 'foo',
+                number => 42
+            },
+            amnesty => [{tag => 'TODO', details => 'foo bar baz'}],
+        },
+        "ok with todo directive and reason"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok 42 - foo # SKIP foo bar baz"),
+        {
+            assert => { pass => T, no_debug => 1, details => 'foo', number => 42 },
+            amnesty => [{tag => 'SKIP', details => 'foo bar baz'}],
+        },
+        "ok with skip directive and reason"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("not ok 42 - foo # TODO & SKIP foo bar baz"),
+        {
+            assert => {
+                pass => F, # Yes really, do not change this to true!
+                no_debug => 1,
+                details => 'foo',
+                number => 42
+            },
+            amnesty => [
+                {tag => 'SKIP', details => 'foo bar baz'},
+                {tag => 'TODO', details => 'foo bar baz'},
+            ],
+        },
+        "ok with todo and skip directives and name"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("not ok 42 - Subtest: xxx"),
+        {
+            assert => {pass => F, no_debug => 1, details => 'Subtest: xxx', number => 42},
+            parent => { details => 'xxx' },
+        },
+        "Parsed subtest"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok- foo"),
+        {
+            assert => {pass => 1, no_debug => 1, details => 'foo'},
+            info => [{tag => 'PARSER', details => "'ok' is not immediately followed by a space.", debug => 1}],
+        },
+        "Parse error, no space"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok  42  foo"),
+        {
+            assert => {pass => 1, no_debug => 1, details => 'foo', number => 42},
+            info => [{tag => 'PARSER', details => "Extra space after 'ok'", debug => 1}],
+        },
+        "Parse error, extra space"
+    );
+
+    is(
+        $CLASS->parse_tap_ok("ok foo#TODOxxx"),
+        {
+            assert => {pass => 1, no_debug => 1, details => 'foo'},
+            amnesty => [{tag => 'TODO', details => 'xxx'}],
+            info => [
+                {tag => 'PARSER', details => "No space before the '#' for the 'TODO' directive.", debug => 1},
+                {tag => 'PARSER', details => "No space between 'TODO' directive and reason.", debug => 1},
+            ],
+        },
+        "Parse error, missing directive spaces"
+    );
 };
 
 done_testing;
-
-__END__
-
-sub parse_tap_ok {
-    my $class = shift;
-    my ($line) = @_;
-
-    my ($pass, $todo, $skip, $num, @errors);
-
-    return undef unless $line =~ s/^(not )?ok\b//;
-    $pass = !$1;
-
-    push @errors => "'ok' is not immediately followed by a space."
-        if $line && !($line =~ m/^ /);
-
-    if ($line =~ s/^(\s*)(\d+)\b//) {
-        my $space = $1;
-        $num = $2;
-
-        push @errors => "Extra space after 'ok'"
-            if length($space) > 1;
-    }
-
-    # Not strictly compliant, but compliant with what Test-Simple does...
-    # Standard does not have a todo & skip.
-    if ($line =~ s/#\s*(todo & skip|todo|skip)(.*)$//i) {
-        my ($directive, $reason) = ($1, $2);
-
-        push @errors => "No space before the '#' for the '$directive' directive."
-            unless $line =~ s/\s+$//;
-
-        push @errors => "No space between '$directive' directive and reason."
-            if $reason && !($reason =~ s/^\s+//);
-
-        $skip = $reason if $directive =~ m/skip/i;
-        $todo = $reason if $directive =~ m/todo/i;
-    }
-
-    # Standard says that everything after the ok (except the number) is part of
-    # the name. Most things add a dash between them, and I am deviating from
-    # standards by stripping it and surrounding whitespace.
-    $line =~ s/\s*-\s*//;
-
-    $line =~ s/^\s+//;
-    $line =~ s/\s+$//;
-
-    my $is_subtest = ($line =~ m/^Subtest:\s*(.*)$/) ? ($1 or 1) : undef;
-
-    my $facet_data = {
-        assert => {
-            pass     => $pass,
-            no_debug => 1,
-            details  => $line,
-            defined $num ? (number => $num) : (),
-        },
-    };
-
-    $facet_data->{parent} = {
-        details => $is_subtest,
-    } if defined $is_subtest;
-
-    push @{$facet_data->{amnesty}} => {
-        tag     => 'SKIP',
-        details => $skip,
-    } if defined $skip;
-
-    push @{$facet_data->{amnesty}} => {
-        tag     => 'TODO',
-        details => $todo,
-    } if defined $todo;
-
-    push @{$facet_data->{info}} => {
-        details => $_,
-        debug => 1,
-        tag => 'PARSER',
-    } for @errors;
-
-    return $facet_data;
-}
-
-sub parse_tap_version {
-    my $class = shift;
-    my ($line) = @_;
-
-    return undef unless $line =~ m/^TAP version\s/;
-
-    return {
-        about => {
-            details => $line,
-        },
-        info => [
-            {
-                tag     => 'INFO',
-                debug   => 0,
-                details => $line,
-            }
-        ],
-    };
-}
-
-sub parse_tap_plan {
-    my $class = shift;
-    my ($line) = @_;
-
-    return undef unless $line =~ s/^1\.\.(\d+)//;
-    my $max = $1;
-
-    my ($directive, $reason);
-
-    if ($max == 0) {
-        if ($line =~ s/^\s*#\s*//) {
-            if ($line =~ s/^(skip)\S*\s*//i) {
-                $directive = uc($1);
-                $reason = $line;
-                $line = "";
-            }
-        }
-
-        $directive ||= "SKIP";
-        $reason    ||= "no reason given";
-    }
-
-    my $facet_data = {
-        plan => {
-            count   => $max,
-            skip    => ($directive && $directive eq 'SKIP') ? 1 : 0,
-            details => $reason,
-        }
-    };
-
-    push @{$facet_data->{info}} => {
-        details => 'Extra characters after plan.',
-        debug => 1,
-        tag => 'PARSER',
-    } if $line =~ m/\S/;
-
-    return $facet_data;
-}
-
-sub parse_tap_bail {
-    my $class = shift;
-    my ($line) = @_;
-
-    return undef unless $line =~ m/^Bail out!\s*(.*)$/;
-
-    return {
-        control => {
-            halt => 1,
-            details => $1,
-        }
-    };
-}
-
-sub parse_tap_comment {
-    my $class = shift;
-    my ($line) = @_;
-
-    return undef unless $line =~ m/^#/;
-
-    $line =~ s/^#\s*//msg;
-
-    return {
-        info => [
-            {
-                details => $line,
-                tag     => 'NOTE',
-                debug   => 0,
-            }
-        ]
-    };
-}
-
-1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::Util::TapParser - Produce EventFacets from a line of TAP.
-
-=head1 DESCRIPTION
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

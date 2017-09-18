@@ -175,7 +175,7 @@ sub parse_tap_plan {
     return undef unless $line =~ s/^1\.\.(\d+)//;
     my $max = $1;
 
-    my ($directive, $reason);
+    my ($directive, $reason) = ("", "");
 
     if ($max == 0) {
         if ($line =~ s/^\s*#\s*//) {
@@ -193,7 +193,7 @@ sub parse_tap_plan {
     my $facet_data = {
         plan => {
             count   => $max,
-            skip    => ($directive && $directive eq 'SKIP') ? 1 : 0,
+            skip    => ($directive eq 'SKIP') ? 1 : 0,
             details => $reason,
         }
     };

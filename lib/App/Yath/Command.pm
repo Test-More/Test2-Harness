@@ -2,14 +2,6 @@ package App::Yath::Command;
 use strict;
 use warnings;
 
-BEGIN {
-    my $old = select STDOUT;
-    $| = 1;
-    select STDERR;
-    $| = 1;
-    select $old;
-}
-
 our $VERSION = '0.001016';
 
 use Carp qw/croak/;

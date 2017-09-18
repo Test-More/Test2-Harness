@@ -13,6 +13,13 @@ our $SCRIPT;
 sub import {
     my $class = shift;
     my ($argv, $runref) = @_ or return;
+
+    my $old = select STDOUT;
+    $| = 1;
+    select STDERR;
+    $| = 1;
+    select $old;
+
     my ($pkg, $file, $line) = caller;
 
     $SCRIPT ||= $file;

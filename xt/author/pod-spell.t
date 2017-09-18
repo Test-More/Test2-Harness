@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 
+use Test2::Require::AuthorTesting;
 use Test::Spelling;
 
 my @stopwords;

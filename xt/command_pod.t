@@ -1,11 +1,10 @@
 use Test2::V0;
-use strict;
-use warnings;
+use Test2::Require::AuthorTesting;
 
 use Test2::Harness::Util qw/read_file/;
 use List::Util qw/first/;
 
-my $dir = first { -d $_ } './lib/App/Yath/Command', '../lib/App/Yath/Command';
+my $dir = './lib/App/Yath/Command';
 opendir(my $DH, $dir) or die "Could not open dir: $!";
 
 for my $file (readdir($DH)) {

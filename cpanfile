@@ -46,7 +46,7 @@ requires "parent" => "0";
 requires "perl" => "5.008001";
 suggests "Cpanel::JSON::XS" => "0";
 suggests "JSON::MaybeXS" => "0";
-suggests "Term::ANSIColor" => "4.06";
+suggests "Term::ANSIColor" => "4.03";
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "0";

@@ -13,7 +13,7 @@ our @EXPORT_OK = qw/USE_ANSI_COLOR/;
     my $use = 0;
     local ($@, $!);
 
-    if (eval { require Term::ANSIColor; Term::ANSIColor->VERSION('4.06') }) {
+    if (eval { require Term::ANSIColor; Term::ANSIColor->VERSION('4.03') }) {
         if (IS_WIN32) {
             if (eval { require Win32::Console::ANSI }) {
                 Win32::Console::ANSI->import();

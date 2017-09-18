@@ -266,7 +266,7 @@ Do not use stream
 
 Use TAP
 
-The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to recieve test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.
+The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to receive test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.
 
 =item --unsafe-inc
 

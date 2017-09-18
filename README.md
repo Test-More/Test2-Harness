@@ -27,7 +27,7 @@ of the test run.
 
 # RECIPES
 
-These are common resipes for using `yath`.
+These are common recipes for using `yath`.
 
 ## RUN PROJECT TESTS
 
@@ -147,7 +147,7 @@ Stopping a persistent runner is easy
 ### INFORMATIONAL
 
 The `which` command will tell you which persistent runner will be used. Yath
-sreaches for the persistent runner in the current directory, then searches in
+searches for the persistent runner in the current directory, then searches in
 parent directories until it either hits root, or finds the persistent runner
 tracking file.
 
@@ -172,7 +172,7 @@ preloaded.
 
 The above command will create `test.pl`. `test.pl` is automatically run by
 most build utils, in which case only the exit value matters. The generated
-`test.pl` will run `yath` and excute all tests in the `./t` and/or `./t2`
+`test.pl` will run `yath` and execute all tests in the `./t` and/or `./t2`
 directories. Tests in `./t` will ALSO be run by prove, Tests in `./t2` will
 only be run by yath.
 
@@ -182,7 +182,7 @@ You can write a `.yath.rc` file. The file format is very simple, use
 `[COMMAND]` sections to start the configuration for a command. Under the
 section you can provide any options normally allowed by the command. When
 `yath` is run inside your project it will use the config specified in the rc
-file, unless overriden by command line options. Comments start with a
+file, unless overridden by command line options. Comments start with a
 semi-colon.
 
 Example .yath.rc:

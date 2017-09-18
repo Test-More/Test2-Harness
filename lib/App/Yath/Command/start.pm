@@ -260,7 +260,7 @@ May be specified multiple times
 
 =item --event_timeout #
 
-Kill test if no events recieved in timeout period
+Kill test if no events received in timeout period
 
 (Default: 60 seconds)
 
@@ -274,7 +274,7 @@ Stop waiting post-exit after the timeout period
 
 (Default: 15 seconds)
 
-Some tests fork and allow the parent to exit before writing all their output. If Test2::Harness detects an incomplete plan after the test exists it will monitor for mor events until the timeout period. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.
+Some tests fork and allow the parent to exit before writing all their output. If Test2::Harness detects an incomplete plan after the test exists it will monitor for more events until the timeout period. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.
 
 =back
 
@@ -356,7 +356,7 @@ Do not use stream
 
 Use TAP
 
-The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to recieve test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.
+The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to receive test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.
 
 =item --unsafe-inc
 

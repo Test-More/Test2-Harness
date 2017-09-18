@@ -139,7 +139,7 @@ C<yath> can be thought of as a more powerful alternative to C<prove>
 
 =head1 RECIPES
 
-These are common resipes for using C<yath>.
+These are common recipes for using C<yath>.
 
 =head2 RUN PROJECT TESTS
 
@@ -259,7 +259,7 @@ Stopping a persistent runner is easy
 =head3 INFORMATIONAL
 
 The C<which> command will tell you which persistent runner will be used. Yath
-sreaches for the persistent runner in the current directory, then searches in
+searches for the persistent runner in the current directory, then searches in
 parent directories until it either hits root, or finds the persistent runner
 tracking file.
 
@@ -284,7 +284,7 @@ preloaded.
 
 The above command will create C<test.pl>. C<test.pl> is automatically run by
 most build utils, in which case only the exit value matters. The generated
-C<test.pl> will run C<yath> and excute all tests in the C<./t> and/or C<./t2>
+C<test.pl> will run C<yath> and execute all tests in the C<./t> and/or C<./t2>
 directories. Tests in C<./t> will ALSO be run by prove, Tests in C<./t2> will
 only be run by yath.
 
@@ -294,7 +294,7 @@ You can write a C<.yath.rc> file. The file format is very simple, use
 C<[COMMAND]> sections to start the configuration for a command. Under the
 section you can provide any options normally allowed by the command. When
 C<yath> is run inside your project it will use the config specified in the rc
-file, unless overriden by command line options. Comments start with a
+file, unless overridden by command line options. Comments start with a
 semi-colon.
 
 Example .yath.rc:

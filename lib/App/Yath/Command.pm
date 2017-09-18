@@ -489,7 +489,7 @@ sub options {
             section => 'Job Options',
             usage     => ['--stream',                                          '--no-stream',       '--TAP  --tap'],
             summary   => ["Use 'stream' instead of TAP (Default: use stream)", "Do not use stream", "Use TAP"],
-            long_desc => "The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to recieve test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.",
+            long_desc => "The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to receive test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.",
         },
 
         {
@@ -693,7 +693,7 @@ sub options {
             used_by   => {runner => 1},
             section   => 'Harness Options',
             usage     => ['--et SECONDS', '--event_timeout #'],
-            summary   => ['Kill test if no events recieved in timeout period', '(Default: 60 seconds)'],
+            summary   => ['Kill test if no events received in timeout period', '(Default: 60 seconds)'],
             long_desc => 'This is used to prevent the harness for waiting forever for a hung test. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.',
             default   => 60,
         },
@@ -705,7 +705,7 @@ sub options {
             section   => 'Harness Options',
             usage     => ['--pet SECONDS', '--post-exit-timeout #'],
             summary   => ['Stop waiting post-exit after the timeout period', '(Default: 15 seconds)'],
-            long_desc => 'Some tests fork and allow the parent to exit before writing all their output. If Test2::Harness detects an incomplete plan after the test exists it will monitor for mor events until the timeout period. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.',
+            long_desc => 'Some tests fork and allow the parent to exit before writing all their output. If Test2::Harness detects an incomplete plan after the test exists it will monitor for more events until the timeout period. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.',
             default   => 15,
         },
 

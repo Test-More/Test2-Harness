@@ -22,7 +22,7 @@ sub manage_runner   { 0 }
 sub always_keep_dir { 1 }
 
 sub summary { "Run tests using the persistent test runner" }
-sub cli_args { "" }
+sub cli_args { "[--] [test files/dirs] [::] [arguments to test scripts]" }
 
 sub description {
     return <<"    EOT";
@@ -110,11 +110,9 @@ App::Yath::Command::persist
 
 =head1 SYNOPSIS
 
-
-
 =head1 COMMAND LINE USAGE
 
-    $ yath run [options]
+    $ yath run [options] [--] [test files/dirs] [::] [arguments to test scripts]
 
 =head2 Help
 
@@ -185,6 +183,26 @@ matched using `m/$PATTERN/`
 Exclude a file from testing
 
 May be specified multiple times
+
+=item --et SECONDS
+
+=item --event_timeout #
+
+Kill test if no events received in timeout period
+
+(Default: 60 seconds)
+
+This is used to prevent the harness for waiting forever for a hung test. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.
+
+=item --pet SECONDS
+
+=item --post-exit-timeout #
+
+Stop waiting post-exit after the timeout period
+
+(Default: 15 seconds)
+
+Some tests fork and allow the parent to exit before writing all their output. If Test2::Harness detects an incomplete plan after the test exists it will monitor for more events until the timeout period. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.
 
 =back
 

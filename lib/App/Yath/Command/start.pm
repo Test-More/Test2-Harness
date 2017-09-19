@@ -132,13 +132,11 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::persist
+App::Yath::Command::start
 
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS
-
-
 
 =head1 COMMAND LINE USAGE
 
@@ -175,6 +173,14 @@ Set a specific run-id
 =item --no-long
 
 Do not run tests with the HARNESS-CAT-LONG header
+
+=item --shm
+
+=item --no-shm
+
+Use shm for tempdir if possible (Default: on)
+
+Do not use shm.
 
 =item -C
 

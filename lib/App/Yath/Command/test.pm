@@ -125,8 +125,6 @@ App::Yath::Command::test - Command to run tests
 
 =head1 SYNOPSIS
 
-
-
 =head1 COMMAND LINE USAGE
 
     $ yath test [options] [--] [test files/dirs] [::] [arguments to test scripts]
@@ -162,6 +160,14 @@ Set a specific run-id
 =item --no-long
 
 Do not run tests with the HARNESS-CAT-LONG header
+
+=item --shm
+
+=item --no-shm
+
+Use shm for tempdir if possible (Default: on)
+
+Do not use shm.
 
 =item -C
 

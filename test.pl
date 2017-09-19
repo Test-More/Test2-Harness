@@ -6,7 +6,7 @@ use warnings;
 
 use Test2::Tools::Tiny;
 
-my @search = ('t');
+my @search = ('t', 't2');
 push @search => 'xt' if $ENV{AUTHOR_TESTING};
 
 system($^X, '-Ilib', './scripts/yath', 'test', '-j2', @search);

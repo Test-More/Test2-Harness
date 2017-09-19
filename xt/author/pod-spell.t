@@ -123,6 +123,7 @@ tlib
 preload
 loadim
 preloading
+shm
 
 
 ## other jargon, slang

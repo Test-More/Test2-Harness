@@ -180,6 +180,10 @@ sub _fill_buffers {
             $self->{+_EXIT_BUFFER} = $line;
             $self->{+_EXIT_DONE} = 1;
             $ended++;
+
+            $events_file->set_done(1);
+            $stderr_file->set_done(1);
+            $stdout_file->set_done(1);
         }
     }
 

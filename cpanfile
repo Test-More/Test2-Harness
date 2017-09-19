@@ -24,6 +24,7 @@ requires "Module::Pluggable" => "0";
 requires "POSIX" => "0";
 requires "Scalar::Util" => "0";
 requires "Symbol" => "0";
+requires "Term::Table" => "0.009";
 requires "Test2" => "1.302095";
 requires "Test2::API" => "1.302095";
 requires "Test2::Bundle::Extended" => "0.000077";

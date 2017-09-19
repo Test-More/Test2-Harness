@@ -13,7 +13,26 @@ my $tmp = gen_temp(
     warn   => "#!/usr/bin/perl -w\n",
     taint  => "#!/usr/bin/env perl -t -w\n",
     foo    => "#HARNESS-CATEGORY-FOO\n",
+
+    timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
+    badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
 );
+
+subtest timeouts => sub {
+    my $one = $CLASS->new(file => File::Spec->catfile($tmp, 'timeout'));
+    is($one->event_timeout, 90, "set event timeout");
+    is($one->postexit_timeout, 85, "set event timeout");
+
+    my $two = $CLASS->new(file => File::Spec->catfile($tmp, 'badtimeout'));
+    is(
+        warnings { $two->headers },
+        [
+            "'EVENTX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $two->file . " line 1.\n",
+            "'POSTEXITX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $two->file . " line 2.\n",
+        ],
+        "Got warnings"
+    );
+};
 
 subtest invalid => sub {
     like(
@@ -47,6 +66,9 @@ subtest taint => sub {
             use_stream  => 1,
             use_timeout => 1,
             via         => ['xxx'],
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
         },
         "Got queue item data",
     );
@@ -70,6 +92,9 @@ subtest warn => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
         },
         "Got queue item data",
     );
@@ -99,6 +124,9 @@ subtest notime => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
         },
         "Got queue item data",
     );
@@ -139,6 +167,9 @@ subtest all => sub {
             use_preload => 0,
             use_stream  => 0,
             use_timeout => 0,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
         },
         "Got queue item data",
     );
@@ -179,6 +210,9 @@ subtest med2 => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
         },
         "Got queue item data",
     );
@@ -219,6 +253,9 @@ subtest med1 => sub {
             use_preload => 0,
             use_stream  => 1,
             use_timeout => 1,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
         },
         "Got queue item data",
     );
@@ -261,6 +298,9 @@ subtest long => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
         },
         "Got queue item data",
     );

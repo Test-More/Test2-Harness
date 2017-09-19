@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - Add # HARNESS-TIMEOUT-[TYPE] ##  header support
     - Add -q|--quiet mode
     - Do not try to kill job after post-exit timeout
     - Remove the tcm plugin (it is failure)

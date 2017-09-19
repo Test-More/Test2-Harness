@@ -463,8 +463,12 @@ sub run_job {
         libs        => \@libs,
         switches    => [@{$run->switches}, @{$task->{switches} || []}],
         args        => [@{$run->args}, @{$task->{args} || []}],
+
         input => $task->{input} || $run->input,
         chdir => $task->{chdir} || $run->chdir,
+
+        event_timeout    => $task->{event_timeout},
+        postexit_timeout => $task->{postexit_timeout},
 
         # This should only come from run
         preload => [grep { $_->isa('Test2::Harness::Preload') } @{$run->preload || []}],

@@ -73,6 +73,9 @@ sub check_category {
     return 'general';
 }
 
+sub event_timeout    { $_[0]->headers->{timeout}->{event} }
+sub postexit_timeout { $_[0]->headers->{timeout}->{postexit} }
+
 sub headers {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
@@ -119,7 +122,8 @@ sub _scan {
         next if $line =~ m/^\s*(use|require|BEGIN)\b/;
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
-        my ($dir, @args) = split /-/, lc($1);
+        my ($dir, @args) = split /[-\s]/, lc($1);
+
         if ($dir eq 'no') {
             my ($feature) = @args;
             $headers{features}->{$feature} = 0;
@@ -131,6 +135,14 @@ sub _scan {
         elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;
             $headers{category} = $name;
+        }
+        elsif ($dir eq 'timeout') {
+            my ($type, $num) = @args;
+
+            warn "'" . uc($type) . "' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at $self->{+FILE} line $ln.\n"
+                unless $type =~ m/^(event|postexit)$/;
+
+            $headers{timeout}->{$type} = $num;
         }
         else {
             warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
@@ -187,6 +199,9 @@ sub queue_item {
         category    => $category,
         stamp       => time,
         job_id      => $job_id,
+
+        event_timeout    => $self->event_timeout,
+        postexit_timeout => $self->postexit_timeout,
 
         @{$self->{+QUEUE_ARGS}},
     };

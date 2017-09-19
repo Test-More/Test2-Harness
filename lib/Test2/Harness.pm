@@ -178,7 +178,7 @@ sub check_timeout {
 
     my $delta = $stamp - $watcher->last_event;
 
-    if (my $timeout = $self->{+EVENT_TIMEOUT}) {
+    if (my $timeout = $watcher->job->event_timeout || $self->{+EVENT_TIMEOUT}) {
         return $self->timeout($watcher, 'event', $timeout, <<"        EOT") if $delta >= $timeout;
 This happens if a test has not produced any events within a timeout period, but
 does not appear to be finished. Usually this happens when a test has frozen.
@@ -188,7 +188,7 @@ does not appear to be finished. Usually this happens when a test has frozen.
     # Not done if there is no exit
     return unless $watcher->has_exit;
 
-    if (my $timeout = $self->{+POST_EXIT_TIMEOUT}) {
+    if (my $timeout = $watcher->job->postexit_timeout || $self->{+POST_EXIT_TIMEOUT}) {
         return $self->timeout($watcher, 'post-exit', $timeout, <<"        EOT") if $delta >= $timeout;
 Sometimes a test will fork producing output in the child while the parent is
 allowed to exit. In these cases we cannot rely on the original process exit to

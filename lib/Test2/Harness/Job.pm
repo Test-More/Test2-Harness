@@ -26,6 +26,9 @@ use Test2::Harness::Util::HashBase qw{
     -use_fork
     -use_stream
     -use_timeout
+
+    -event_timeout
+    -postexit_timeout
 };
 
 sub init {

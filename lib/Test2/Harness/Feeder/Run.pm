@@ -7,6 +7,7 @@ our $VERSION = '0.001016';
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Scalar::Util qw/blessed/;
+use List::Util qw/first/;
 
 use Test2::Harness::Feeder::Job;
 use Test2::Harness::Run::Dir;
@@ -148,7 +149,7 @@ sub complete {
     my $self = shift;
 
     if (my $job_ids = $self->{+JOB_IDS}) {
-        return 1 unless grep { !$self->{+SEEN_JOBS}->{$_} } keys %$job_ids;
+        return 1 unless first { !$self->{+SEEN_JOBS}->{$_} } keys %$job_ids;
         return 0;
     }
 

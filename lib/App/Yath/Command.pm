@@ -550,6 +550,16 @@ sub options {
         },
 
         {
+            spec => 'shm!',
+            field => 'use_shm',
+            used_by => {runner => 1},
+            section => 'Harness Options',
+            usage => ['--shm', '--no-shm'],
+            summary => ["Use shm for tempdir if possible (Default: on)", "Do not use shm."],
+            default => 1,
+        },
+
+        {
             spec    => 't|tmpdir=s',
             field   => 'tmp_dir',
             used_by => {runner => 1},
@@ -558,6 +568,10 @@ sub options {
             summary => ['Use a specific temp directory', '(Default: use system temp dir)'],
             default => sub {
                 my ($self, $settings, $field) = @_;
+                if ($settings->{use_shm}) {
+                    my $shm_dir = File::Spec->canonpath('/dev/shm');
+                    $settings->{tmp_dir} = $shm_dir if -d $shm_dir;
+                }
                 return $settings->{tmp_dir} ||= $ENV{TMPDIR} || $ENV{TEMPDIR} || File::Spec->tmpdir;
             },
         },

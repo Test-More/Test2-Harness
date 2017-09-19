@@ -65,9 +65,8 @@ sub run {
     }
 
     my(@fail, @pass);
-    for my $job_id (sort keys %{$self->{+WATCHERS}}) {
-        my $watcher = $self->{+WATCHERS}->{$job_id};
-
+    while (my ($job_id, $watcher) = each %{$self->{+WATCHERS}}) {
+#    for my $watcher (values %{$self->{+WATCHERS}}) {
         if ($watcher->fail) {
             push @fail => $watcher->job;
         }
@@ -93,9 +92,8 @@ sub iteration {
 
         # Track active watchers in a second hash, this avoids looping over all
         # watchers each iteration.
-        for my $job_id (sort keys %{$self->{+ACTIVE}}) {
-            my $watcher = $self->{+ACTIVE}->{$job_id};
-
+        while(my ($job_id, $watcher) = each %{$self->{+ACTIVE}}) {
+        #for my $watcher (values %{$self->{+ACTIVE}}) {
             # Give it up to 5 seconds
             my $killed = $watcher->killed;
             my $done = $watcher->complete || ($killed ? (time - $killed) > 5 : 0);

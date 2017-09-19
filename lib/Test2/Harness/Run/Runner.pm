@@ -8,7 +8,7 @@ use Carp qw/croak/;
 use POSIX ":sys_wait_h";
 use Config qw/%Config/;
 use IPC::Open3 qw/open3/;
-use List::Util qw/none sum/;
+use List::Util qw/none sum first/;
 use Time::HiRes qw/sleep time/;
 use Test2::Util qw/pkg_to_file/;
 
@@ -323,7 +323,7 @@ sub _start {
 
         my $running = $self->{+STATE}->{running};
 
-        last unless grep { @{$running->{$_}} } keys %$running;
+        last unless first { @{$running->{$_}} } keys %$running;
 
         sleep($wait_time) if $wait_time;
     }

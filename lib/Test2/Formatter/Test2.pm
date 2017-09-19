@@ -5,10 +5,11 @@ use warnings;
 our $VERSION = '0.001016';
 
 use Scalar::Util qw/blessed/;
-use List::Util qw/shuffle/;
+use List::Util qw/shuffle first/;
 use Test2::Util::Term qw/term_size/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32/;
+use Time::HiRes;
 
 use File::Spec();
 
@@ -236,7 +237,17 @@ sub write {
     push @{$self->{+JOB_COLORS}->{free}} => delete $self->{+JOB_COLORS}->{used}->{$job_id}
         if $job_id && $f->{harness_job_end};
 
-    return unless ($lines && @$lines) || !$self->{+VERBOSE};
+    my $should_show = $lines && @$lines;
+
+    unless ($should_show || $self->{+VERBOSE}) {
+        if (my $last = $self->{last_rendered}) {
+            $self->{last_rendered} = time;
+            return if time - $last < 0.2;
+        }
+        else {
+            $self->{last_rendered} = time;
+        }
+    }
 
     my $io = $self->{+IO};
     if ($self->{+_BUFFERED}) {
@@ -322,7 +333,7 @@ sub render_event {
     push @out => $self->render_times($f, $tree) if $f->{times};
 
     push @out => $self->render_about($f, $tree)
-        if $f->{about} && !(@out || grep { $f->{$_} } qw/stop plan info nest assert/);
+        if $f->{about} && !(@out || first { $f->{$_} } qw/stop plan info nest assert/);
 
     return \@out;
 }

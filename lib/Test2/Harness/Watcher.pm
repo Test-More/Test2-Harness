@@ -6,7 +6,7 @@ our $VERSION = '0.001016';
 
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
-use List::Util qw/first/;
+use List::Util qw/first max/;
 
 use Test2::Harness::Util::HashBase qw{
     -job
@@ -209,7 +209,7 @@ sub subtest_fail_info_facet_list {
     my $count = $self->{+ASSERTION_COUNT};
 
     my $numbers = $self->{+NUMBERS};
-    my ($max) = reverse sort keys %$numbers;
+    my $max = max(keys %$numbers);
     if ($max) {
         for my $i (1 .. $max) {
             if (!$numbers->{$i}) {

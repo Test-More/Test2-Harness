@@ -21,6 +21,8 @@ use Test2::Harness::Util::HashBase qw{
     -run_id
     -dir
     -keep_dir
+
+    -last_poll
 };
 
 sub init {
@@ -49,6 +51,8 @@ sub init {
 sub poll {
     my $self = shift;
     my ($max) = @_;
+
+    $self->{+LAST_POLL} = time;
 
     return if $self->{+_COMPLETE};
 

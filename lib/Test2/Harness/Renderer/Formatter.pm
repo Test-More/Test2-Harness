@@ -33,7 +33,7 @@ sub render_event {
     my $self = shift;
     my ($event) = @_;
 
-    my $f = $event->facet_data;
+    my $f = $event->{facet_data}; # Optimization
 
     my $times = $self->{+TIMES} ||= {};
     if($f->{times}) {

@@ -7,7 +7,7 @@ our $VERSION = '0.001016';
 use Test2::Util qw/IS_WIN32/;
 
 use Importer Importer => 'import';
-our @EXPORT_OK = qw/USE_ANSI_COLOR/;
+our @EXPORT_OK = qw/USE_ANSI_COLOR window_size_changed/;
 
 {
     my $use = 0;

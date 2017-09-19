@@ -317,7 +317,16 @@ sub _start {
         return $runfile if $runfile;
     }
 
-    $self->wait_jobs;
+    my $wait_time = $self->wait_time;
+    while(1) {
+        $self->wait_jobs(WNOHANG);
+
+        my $running = $self->{+STATE}->{running};
+
+        last unless grep { @{$running->{$_}} } keys %$running;
+
+        sleep($wait_time) if $wait_time;
+    }
 
     return undef;
 }
@@ -577,10 +586,13 @@ sub next_fair {
     my $r_lng = $state->{running}->{long};
     my $r_med = $state->{running}->{long};
 
+    my $lmrun = sum(@$r_lng, @$r_med) || 0;
+    my $lmmax = $max - 1;
+
     # Do not fill all slots with 'long' or 'medium' jobs
     shift @cats while @cats > 1    # Do not change if this is the only category
         && ($cats[-1] eq 'long' || $cats[-1] eq 'medium')    # Only change if long/medium
-        && sum(@$r_lng, @$r_med) >= $max - 1;                # Only change if the sum of running long+medium is more than max - 1
+        && $lmrun >= $lmmax;                                 # Only change if the sum of running long+medium is more than max - 1
 
     my ($cat) = @cats;
 

@@ -36,24 +36,9 @@ sub show_bench       { 1 }
 sub always_keep_dir  { 0 }
 sub manage_runner    { 1 }
 sub name             { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
-
-sub summary {
-    my $in = shift;
-    return "No Summary" unless $in && (ref($in) || $in) eq __PACKAGE__;
-    return "Base class for all yath commands.";
-}
-
-sub description {
-    my $in = shift;
-    return "No Description" unless $in && (ref($in) || $in) eq __PACKAGE__;
-    return <<"    EOT";
-This base class provides a lot of common arguments and argument processing for
-all yath commands. In short using this base class helps promote consistency
-between commands.
-    EOT
-}
-
-sub group { "ZZZZZZ" }
+sub summary          { "No Summary" }
+sub description      { "No Description" }
+sub group            { "ZZZZZZ" }
 
 sub my_opts {
     my $in = shift;
@@ -682,7 +667,7 @@ sub options {
         {
             spec      => 'et|event_timeout=i',
             field     => 'event_timeout',
-            used_by   => {runner => 1},
+            used_by   => {jobs => 1},
             section   => 'Harness Options',
             usage     => ['--et SECONDS', '--event_timeout #'],
             summary   => ['Kill test if no events received in timeout period', '(Default: 60 seconds)'],
@@ -693,7 +678,7 @@ sub options {
         {
             spec      => 'pet|post-exit-timeout=i',
             field     => 'post_exit_timeout',
-            used_by   => {runner => 1},
+            used_by   => {jobs => 1},
             section   => 'Harness Options',
             usage     => ['--pet SECONDS', '--post-exit-timeout #'],
             summary   => ['Stop waiting post-exit after the timeout period', '(Default: 15 seconds)'],

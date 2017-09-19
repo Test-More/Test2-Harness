@@ -6,7 +6,7 @@ our $VERSION = '0.001016';
 
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
-use Time::HiRes qw/time/;
+use List::Util qw/first/;
 
 use Test2::Harness::Util::HashBase qw{
     -job
@@ -60,7 +60,7 @@ sub process {
 
     $self->{+LAST_EVENT} = time;
 
-    my $f = $event->facet_data;
+    my $f = $event->{facet_data};
 
     return ($event, $f) if $f->{trace}->{buffered};
 
@@ -157,9 +157,15 @@ sub subtest_process {
 
             push @{$f->{info}} => @info;
         }
-        elsif($event->causes_fail) {
-            $self->{+_SUB_FAILURES}++;
-            $f->{assert}->{pass} = 0;
+        else {
+            my $fail = $f->{assert} && !$f->{assert}->{pass} && !($f->{amnesty} && @{$f->{amnesty}});
+            $fail ||= $f->{control} && ($f->{control}->{halt} || $f->{control}->{terminate});
+            $fail ||= $f->{errors} && first { $_->{fail} } @{$f->{errors}};
+
+            if ($fail) {
+                $self->{+_SUB_FAILURES}++;
+                $f->{assert}->{pass} = 0;
+            }
         }
     }
 
@@ -168,8 +174,11 @@ sub subtest_process {
     if ($f->{assert} && !$f->{assert}->{pass} && !($f->{amnesty} && @{$f->{amnesty}})) {
         $self->{+_FAILURES}++;
     }
-    elsif ($event->causes_fail) {
-        $self->{+_ERRORS}++;
+
+    if ($f->{control} || $f->{errors}) {
+        my $err ||= $f->{control} && ($f->{control}->{halt} || $f->{control}->{terminate});
+        $err ||= $f->{errors} && first { $_->{fail} } @{$f->{errors}};
+        $self->{+_ERRORS}++ if $err;
     }
 
     if ($f->{plan} && !$f->{plan}->{none}) {

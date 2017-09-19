@@ -107,9 +107,9 @@ sub poll {
     }
 
     while (my $jfeed = shift @{$self->{+_ACTIVE}}) {
-        my $nmax = $max - @new_jobs - @out;
+        my $nmax = $max ? $max - @new_jobs - @out : undef;
 
-        if ($nmax < 1) {
+        if ($max && $nmax < 1) {
             unshift @$active => ($jfeed, @{$self->{+_ACTIVE}});
             last;
         }

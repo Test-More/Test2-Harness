@@ -75,8 +75,9 @@ sub read_line {
     my $pos = $params{from};
     $pos = $self->{+LINE_POS} ||= 0 unless defined $pos;
 
-    my $fh = $self->fh or return undef;
-    seek($fh,$pos,SEEK_SET) or die "Could not seek: $!";
+    my $fh = $self->{+_FH} || $self->fh or return undef;
+    seek($fh,$pos,SEEK_SET) or die "Could not seek: $!"
+        if eof($fh) || tell($fh) != $pos;
 
     my $line = <$fh>;
 

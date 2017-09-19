@@ -287,7 +287,7 @@ sub _poll_stderr {
 
     my @out;
 
-    until ($self->{+_STDERR_INDEX} > $self->{+_EVENTS_INDEX} || @out >= $max) {
+    until ($self->{+_STDERR_INDEX} > $self->{+_EVENTS_INDEX} || ($max && @out >= $max)) {
         my $buffer = $self->{+_STDERR_BUFFER} or last;
 
         my @lines;

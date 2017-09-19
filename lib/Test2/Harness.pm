@@ -114,7 +114,7 @@ sub iteration {
         last unless @events;
 
         for my $event (@events) {
-            my $job_id = $event->job_id;
+            my $job_id = $event->{job_id};
             next if $jobs && !$jobs->{$job_id};
 
             # Log first, before the watchers transform the events.
@@ -124,7 +124,7 @@ sub iteration {
                 my $watcher = $self->{+WATCHERS}->{$job_id};
 
                 unless ($watcher) {
-                    my $job = $event->facet_data->{harness_job}
+                    my $job = $event->{facet_data}->{harness_job}
                         or die "First event for job ($job_id) was not a job start!";
 
                     $watcher = Test2::Harness::Watcher->new(
@@ -170,6 +170,13 @@ sub check_timeout {
 
     return unless $watcher->job->use_timeout;
     return if $watcher->killed;
+
+    my $last_poll = $self->{+FEEDER}->job_lookup->{$watcher->job->job_id}->last_poll() or return;
+    my $poll_delta = $stamp - $last_poll;
+
+    # If we have not polled recently then we cannot fault the job for having no
+    # events.
+    return if $poll_delta > 2;
 
     my $delta = $stamp - $watcher->last_event;
 

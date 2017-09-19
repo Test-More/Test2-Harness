@@ -31,20 +31,6 @@ use Test2::Harness::Util::HashBase qw{
     -stamp
 };
 
-{
-    no warnings 'redefine';
-
-    sub facet_data {
-        my $self = shift;
-        my $data = $self->{+FACET_DATA};
-        $data->{harness}->{run_id}   = $self->{+RUN_ID};
-        $data->{harness}->{job_id}   = $self->{+JOB_ID};
-        $data->{harness}->{event_id} = $self->{+EVENT_ID};
-        delete $data->{facet_data};
-        return $data;
-    }
-}
-
 sub trace     { $_[0]->{+FACET_DATA}->{trace} }
 sub set_trace { confess "'trace' is a read only attribute" }
 
@@ -67,6 +53,11 @@ sub init {
 
     confess "'event_id' is a required attribute"
         unless defined $self->{+EVENT_ID};
+
+    $data->{harness}->{+RUN_ID}   = $self->{run_id}   unless defined $data->{harness}->{+RUN_ID};
+    $data->{harness}->{+JOB_ID}   = $self->{job_id}   unless defined $data->{harness}->{+JOB_ID};
+    $data->{harness}->{+EVENT_ID} = $self->{event_id} unless defined $data->{harness}->{+EVENT_ID};
+    delete $data->{facet_data};
 
     # Original trace wins.
     if (my $trace = delete $self->{+TRACE}) {

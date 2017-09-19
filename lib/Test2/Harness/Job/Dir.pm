@@ -9,7 +9,7 @@ use File::Spec();
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util qw/read_file/;
+use Test2::Harness::Util qw/read_file open_file/;
 
 use Test2::Harness::Event;
 
@@ -24,11 +24,11 @@ use Test2::Harness::Util::TapParser qw{
 
 use Test2::Harness::Util::HashBase qw{
     -run_id -job_id -job_root
-    -events_file -events_exists -_events_buffer -_events_index
-    -stderr_file -stderr_exists -_stderr_buffer -_stderr_index -_stderr_id
-    -stdout_file -stdout_exists -_stdout_buffer -_stdout_index -_stdout_id
-    -start_file  -start_exists  -_start_buffer
-    -exit_file   -_exit_done    -_exit_buffer
+    -events_file -_events_buffer -_events_index
+    -stderr_file -_stderr_buffer -_stderr_index -_stderr_id
+    -stdout_file -_stdout_buffer -_stdout_index -_stdout_id
+    -start_file  -start_exists   -_start_buffer
+    -exit_file   -_exit_done     -_exit_buffer
 
     -_file -file_file
 };
@@ -113,9 +113,9 @@ sub file {
 }
 
 my %FILE_MAP = (
-    'events.jsonl' => [EVENTS_FILE, 'Test2::Harness::Util::File::JSONL'],
-    'stdout'       => [STDOUT_FILE, 'Test2::Harness::Util::File::Stream'],
-    'stderr'       => [STDERR_FILE, 'Test2::Harness::Util::File::Stream'],
+    'events.jsonl' => [EVENTS_FILE, \&open_file],
+    'stdout'       => [STDOUT_FILE, \&open_file],
+    'stderr'       => [STDERR_FILE, \&open_file],
     'start'        => [START_FILE,  'Test2::Harness::Util::File::Value'],
     'exit'         => [EXIT_FILE,   'Test2::Harness::Util::File::Value'],
     'file'         => [FILE_FILE,   'Test2::Harness::Util::File::Value'],
@@ -128,9 +128,58 @@ sub _open_file {
     my $map = $FILE_MAP{$file} or croak "'$file' is not a known job file";
     my ($key, $type) = @$map;
 
-    my $path = File::Spec->catfile($self->{+JOB_ROOT}, $file);
+    return $self->{$key} if $self->{$key};
 
-    return $self->{$key} ||= $type->new(name => $path);
+    my $path = File::Spec->catfile($self->{+JOB_ROOT}, $file);
+    my $out;
+
+    return $self->{$key} = $type->new(name => $path)
+        unless ref $type;
+
+    return undef unless -e $path;
+    return $self->{$key} = $type->($path, '<')
+}
+
+sub _fill_stream_buffers {
+    my $self = shift;
+    my ($max) = @_;
+
+    my $events_buff = $self->{+_EVENTS_BUFFER} ||= [];
+    my $stdout_buff = $self->{+_STDOUT_BUFFER} ||= [];
+    my $stderr_buff = $self->{+_STDERR_BUFFER} ||= [];
+
+    my $events_file = $self->{+EVENTS_FILE} || $self->_open_file('events.jsonl');
+    my $stdout_file = $self->{+STDOUT_FILE} || $self->_open_file('stdout');
+    my $stderr_file = $self->{+STDERR_FILE} || $self->_open_file('stderr');
+
+    my @sets = grep { defined $_->[0] } (
+        [$events_file, $events_buff],
+        [$stdout_file, $stdout_buff],
+        [$stderr_file, $stderr_buff],
+    );
+
+    return unless @sets;
+
+    # Cache the result of the exists check on success, files can come into
+    # existence at any time though so continue to check if it fails.
+    while (!$max || @$events_buff + @$stderr_buff + @$stdout_buff < $max) {
+        my $added = 0;
+        for my $set (@sets) {
+            my ($file, $buff) = @$set;
+
+            my $pos = tell($file);
+            my $line = <$file>;
+            if (defined($line) && ($self->{+_EXIT_DONE} || substr($line, -1) eq "\n")) {
+                push @$buff => $line;
+                seek($file, 0, 1) if eof($file); # Reset EOF.
+                $added++;
+            }
+            else {
+                seek($file, $pos, 0);
+            }
+        }
+        last unless $added;
+    }
 }
 
 sub _fill_buffers {
@@ -154,22 +203,10 @@ sub _fill_buffers {
         $self->{+START_EXISTS} = 1;
     }
 
-    my $events_buff = $self->{+_EVENTS_BUFFER} ||= [];
-    my $stdout_buff = $self->{+_STDOUT_BUFFER} ||= [];
-    my $stderr_buff = $self->{+_STDERR_BUFFER} ||= [];
-
-    my $events_file = $self->{+EVENTS_FILE} || $self->_open_file('events.jsonl');
-    my $stdout_file = $self->{+STDOUT_FILE} || $self->_open_file('stdout');
-    my $stderr_file = $self->{+STDERR_FILE} || $self->_open_file('stderr');
-
-    # Cache the result of the exists check on success, files can come into
-    # existence at any time though so continue to check if it fails.
-    push @$events_buff => $events_file->poll(max => $max) if $self->{+EVENTS_EXISTS} ||= $events_file->exists;
-    push @$stderr_buff => $stderr_file->poll(max => $max) if $self->{+STDERR_EXISTS} ||= $stderr_file->exists;
-    push @$stdout_buff => $stdout_file->poll(max => $max) if $self->{+STDOUT_EXISTS} ||= $stdout_file->exists;
+    $self->_fill_stream_buffers($max);
 
     # Do not look for exit until we are done with the other streams
-    return if $self->{+_EXIT_DONE} || @$stdout_buff || @$stderr_buff || @$events_buff;
+    return if $self->{+_EXIT_DONE} || @{$self->{+_STDOUT_BUFFER}} || @{$self->{+_STDERR_BUFFER}} || @{$self->{+_EVENTS_BUFFER}};
 
     my $ended = 0;
     my $exit_file = $self->{+EXIT_FILE} || $self->_open_file('exit');
@@ -180,10 +217,6 @@ sub _fill_buffers {
             $self->{+_EXIT_BUFFER} = $line;
             $self->{+_EXIT_DONE} = 1;
             $ended++;
-
-            $events_file->set_done(1);
-            $stderr_file->set_done(1);
-            $stdout_file->set_done(1);
         }
     }
 
@@ -191,9 +224,7 @@ sub _fill_buffers {
 
     # If we found exit we need one last buffer fill on the other sources.
     # If we do not do this we have a race condition. Ignore the max for this.
-    push @$events_buff => $events_file->poll() if $self->{+EVENTS_EXISTS} ||= $events_file->exists;
-    push @$stderr_buff => $stderr_file->poll() if $self->{+STDERR_EXISTS} ||= $stderr_file->exists;
-    push @$stdout_buff => $stdout_file->poll() if $self->{+STDOUT_EXISTS} ||= $stdout_file->exists;
+    $self->_fill_stream_buffers();
 }
 
 sub _poll_start {
@@ -230,7 +261,7 @@ sub _poll_event {
     my $buffer = $self->{+_EVENTS_BUFFER};
     return unless @$buffer;
 
-    my $event_data = $buffer->[0];
+    my $event_data = decode_json($buffer->[0]);
     my $id = $event_data->{stream_id};
 
     # We need to wait for these to catch up.

@@ -18,3 +18,4 @@ POD_TEMPLATE.POD
 event-log-*
 .yath-persist.json
 test-logs/
+/pt/

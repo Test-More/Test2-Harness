@@ -569,8 +569,7 @@ sub options {
             default => sub {
                 my ($self, $settings, $field) = @_;
                 if ($settings->{use_shm}) {
-                    my $shm_dir = File::Spec->canonpath('/dev/shm');
-                    $settings->{tmp_dir} = $shm_dir if -d $shm_dir;
+                    $settings->{tmp_dir} = first { -d $_ } map { File::Spec->canonpath($_) } '/dev/shm', '/run/shm';
                 }
                 return $settings->{tmp_dir} ||= $ENV{TMPDIR} || $ENV{TEMPDIR} || File::Spec->tmpdir;
             },

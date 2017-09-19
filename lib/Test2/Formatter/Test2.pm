@@ -279,7 +279,10 @@ sub _update_active_disp {
     return $self->{+_ACTIVE_DISP} = '' unless $active && keys %$active;
 
     my $str .= " (";
-    $str .= join(', ' => map { "$active->{$_} $_" } sort { no warnings 'numeric'; ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
+    {
+        no warnings 'numeric';
+        $str .= join(', ' => map { "$active->{$_} $_" } sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
+    }
     $str .= ")";
 
     $self->{+_ACTIVE_DISP} = $str;

@@ -410,7 +410,7 @@ sub build_line {
 
     substr($tree, -2, 1, '+') if $facet eq 'assert';
 
-    my $max = term_size() || 80;
+    my $max = $self->{+TTY} ? (term_size() || 80) : undef;
     my $color = $self->{+COLOR};
     my $reset = $color ? $color->{reset} || '' : '';
     my $tcolor = $color ? $color->{TAGS}->{$tag} || $color->{FACETS}->{$facet} || '' : '';
@@ -453,7 +453,7 @@ sub build_line {
 
     my @out;
     for my $line (@lines) {
-        if( length("$ps$tag$pe  $tree$line") > $max) {
+        if($max && length("$ps$tag$pe  $tree$line") > $max) {
             @out = ();
             last;
         }

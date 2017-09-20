@@ -6,7 +6,7 @@ our $VERSION = '0.001016';
 
 sub preload {
     my $class = shift;
-    my ($do_not_load) = @_;
+    my ($do_not_load, $job_count) = @_;
     die "$class does not override preload()";
 }
 

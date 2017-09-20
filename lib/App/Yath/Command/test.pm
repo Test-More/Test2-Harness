@@ -10,6 +10,8 @@ use Test2::Harness::Run::Runner;
 use Test2::Harness::Run::Queue;
 use Test2::Harness::Run;
 
+use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
+
 use App::Yath::Util qw/is_generated_test_pl/;
 
 use Time::HiRes qw/time/;
@@ -19,10 +21,11 @@ use Test2::Harness::Util::HashBase;
 
 sub group { ' test' }
 
-sub has_jobs    { 1 }
-sub has_runner  { 1 }
-sub has_logger  { 1 }
-sub has_display { 1 }
+sub has_jobs      { 1 }
+sub has_runner    { 1 }
+sub has_logger    { 1 }
+sub has_display   { 1 }
+sub manage_runner { 1 }
 
 sub summary { "Run tests" }
 sub cli_args { "[--] [test files/dirs] [::] [arguments to test scripts]" }
@@ -90,12 +93,12 @@ sub feeder {
     my $queue = $runner->queue;
     $queue->start;
 
-    my $pid = $runner->spawn;
-
     my $job_id = 1;
     for my $tf ($run->find_files) {
         $queue->enqueue($tf->queue_item($job_id++));
     }
+
+    my $pid = $runner->spawn(job_count => $job_id - 1);
 
     $queue->end;
 
@@ -107,6 +110,115 @@ sub feeder {
     );
 
     return ($feeder, $runner, $pid);
+}
+
+sub run_command {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS};
+
+    my $renderers = $self->renderers;
+    my $loggers   = $self->loggers;
+
+    my ($feeder, $runner, $pid, $stat);
+    my $ok = eval {
+        ($feeder, $runner, $pid) = $self->feeder or die "No feeder!";
+
+        my $harness = Test2::Harness->new(
+            run_id            => $settings->{run_id},
+            live              => $pid ? 1 : 0,
+            feeder            => $feeder,
+            loggers           => $loggers,
+            renderers         => $renderers,
+            event_timeout     => $settings->{event_timeout},
+            post_exit_timeout => $settings->{post_exit_timeout},
+            jobs              => $settings->{jobs},
+        );
+
+        $stat = $harness->run();
+
+        1;
+    };
+    my $err = $@;
+    warn $err unless $ok;
+
+    my $exit = 0;
+
+    if ($self->manage_runner) {
+        unless ($ok) {
+            if ($pid) {
+                print STDERR "Killing runner\n";
+                kill($self->{+SIGNAL} || 'TERM', $pid);
+            }
+        }
+
+        if ($runner && $runner->pid) {
+            $runner->wait;
+            $exit = $runner->exit;
+        }
+    }
+
+    if (-t STDOUT) {
+        print STDOUT Term::ANSIColor::color('reset') if USE_ANSI_COLOR;
+        print STDOUT "\r\e[K";
+    }
+
+    if (-t STDERR) {
+        print STDERR Term::ANSIColor::color('reset') if USE_ANSI_COLOR;
+        print STDERR "\r\e[K";
+    }
+
+    $self->paint("\n", '=' x 80, "\n");
+    $self->paint("\nRun ID: $settings->{run_id}\n");
+
+    my $bad = $stat ? $stat->{fail} : [];
+
+    # Possible failure causes
+    my $fail = $exit || !defined($exit) || !$ok || !$stat;
+
+    if (@$bad) {
+        $self->paint("\nThe following test jobs failed:\n");
+        $self->paint("  [", $_->{job_id}, '] ', File::Spec->abs2rel($_->file), "\n") for sort {
+            my $an = $a->{job_id};
+            $an =~ s/\D+//g;
+            my $bn = $b->{job_id};
+            $bn =~ s/\D+//g;
+
+            # Sort numeric if possible, otherwise string
+            int($an) <=> int($bn) || $a->{job_id} cmp $b->{job_id}
+        } @$bad;
+        $self->paint("\n");
+        $exit += @$bad;
+    }
+
+    if ($fail) {
+        my $sig = $self->{+SIGNAL};
+
+        $self->paint("\n");
+
+        $self->paint("Test runner exited badly: $exit\n") if $exit;
+        $self->paint("Test runner exited badly: ?\n") unless defined $exit;
+        $self->paint("An exception was cought\n") if !$ok && !$sig;
+        $self->paint("Received SIG$sig\n") if $sig;
+
+        $self->paint("\n");
+
+        $exit ||= 255;
+    }
+
+    if (!@$bad && !$fail) {
+        $self->paint("\nAll tests were successful!\n\n");
+    }
+
+    print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir};
+
+    print "Wrote " . ($ok ? '' : '(Potentially Corrupt) ') . "log file: $settings->{log_file}\n"
+        if $settings->{log};
+
+    $exit = 255 unless defined $exit;
+    $exit = 255 if $exit > 255;
+
+    return $exit;
 }
 
 1;

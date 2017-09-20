@@ -41,6 +41,8 @@ use Test2::Harness::Util::HashBase qw{
 
     -job_runner_class
 
+    -job_count
+
     -jobs_file  -jobs
     -queue_file -queue
     -state_file -state
@@ -220,7 +222,7 @@ sub _preload {
             $require->($file);
 
             next unless $mod->isa('Test2::Harness::Preload');
-            $mod->preload($block);
+            $mod->preload($block, job_count => $self->{+JOB_COUNT});
         }
     }
 }
@@ -363,11 +365,11 @@ sub wait_jobs {
                 push @keep => $set;
             }
             elsif ($got == $pid) {
-                next if eval { write_file_atomic($exit_file, $ret); 1 };
-                warn "Error writing exit file '$exit_file': $@";
+                write_file_atomic($exit_file, $ret);
             }
             else {
                 warn "Could not reap pid $pid, waitpid returned $got";
+                write_file_atomic($exit_file, (255 << 8));
             }
         }
 

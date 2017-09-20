@@ -32,6 +32,8 @@ can_ok(
     use parent 'App::Yath::Command';
 }
 
+my $TCLASS = 'App::Yath::Command::fake';
+
 subtest for_override => sub {
     is([$CLASS->handle_list_args], [], "handle_list_args returns empty list");
     is([$CLASS->feeder],           [], "feeder returns empty list");
@@ -50,44 +52,74 @@ subtest for_override => sub {
     is($CLASS->summary, "No Summary", "sane default summary");
     is($CLASS->description, "No Description", "sane default description");
 
-    is(App::Yath::Command::fake->name, 'fake', "got name of command from class");
-    is(App::Yath::Command::fake->new->name, 'fake', "got name of command from instance");
+    is($TCLASS->name, 'fake', "got name of command from class");
+    is($TCLASS->new->name, 'fake', "got name of command from instance");
 
     is($CLASS->group, "ZZZZZZ", "Default group is near the end in an ASCII sort");
+};
+
+subtest my_opts => sub {
+    my $control = mock $TCLASS;
+
+    $control->override(has_jobs => sub { 1 });
+    my $opts = $TCLASS->my_opts;
+    is(@$opts, 27, "Got expected number of opts for jobs");
+    for my $opt (@$opts) {
+        next if $opt->{used_by}->{all};
+        next if $opt->{used_by}->{jobs};
+        fail("Got opt $opt->{spec}");
+    }
+    $control->reset('has_jobs');
+
+    $control->override(has_runner => sub { 1 });
+    $opts = $TCLASS->my_opts;
+    is(@$opts, 31, "Got expected number of opts for runner");
+    for my $opt (@$opts) {
+        next if $opt->{used_by}->{all};
+        next if $opt->{used_by}->{runner};
+        fail("Got opt $opt->{spec}");
+    }
+    $control->reset('has_runner');
+
+    $control->override(has_logger => sub { 1 });
+    $opts = $TCLASS->my_opts;
+    is(@$opts, 7, "Got expected number of opts for logger");
+    for my $opt (@$opts) {
+        next if $opt->{used_by}->{all};
+        next if $opt->{used_by}->{logger};
+        fail("Got opt $opt->{spec}");
+    }
+    $control->reset('has_logger');
+
+    $control->override(has_display => sub { 1 });
+    $opts = $TCLASS->my_opts;
+    is(@$opts, 12, "Got expected number of opts for display");
+    for my $opt (@$opts) {
+        next if $opt->{used_by}->{all};
+        next if $opt->{used_by}->{display};
+        fail("Got opt $opt->{spec}");
+    }
+    $control->reset('has_display');
+
+    $control->override(has_display => sub { 1 });
+    $control->override(has_jobs    => sub { 1 });
+    $control->override(has_logger  => sub { 1 });
+    $control->override(has_runner  => sub { 1 });
+    $opts = $TCLASS->my_opts;
+    is(@$opts, (my @foo = $CLASS->options({})), "Got all opts");
+
+    my $one = $TCLASS->new;
+    ref_is($one->my_opts, $one->my_opts, "Command instance caches result");
+};
+
+subtest init => sub {
+    my $control = mock $TCLASS;
 };
 
 done_testing;
 
 __END__
 
-sub my_opts {
-    my $in = shift;
-    my %params = @_;
-
-    my $ref = ref($in);
-
-    return $in->{+_MY_OPTS} if $ref && $in->{+_MY_OPTS} && !$params{plugin_options};
-
-    my $settings = $ref ? $in->{+SETTINGS} ||= {} : {};
-
-    my @options = $in->options($settings);
-    push @options => @{$params{plugin_options}} if $params{plugin_options};
-
-    my @have;
-    push @have => 'jobs'    if $in->has_jobs;
-    push @have => 'runner'  if $in->has_runner;
-    push @have => 'logger'  if $in->has_logger;
-    push @have => 'display' if $in->has_display;
-    my $out = [
-        grep {
-            my $u = $_->{used_by};
-            $u->{all} || grep { $u->{$_} } @have
-        } @options
-    ];
-
-    return $in->{+_MY_OPTS} = $out if $ref;
-    return $out;
-}
 
 sub init {
     my $self = shift;
@@ -570,6 +602,16 @@ sub options {
         },
 
         {
+            spec => 'shm!',
+            field => 'use_shm',
+            used_by => {runner => 1},
+            section => 'Harness Options',
+            usage => ['--shm', '--no-shm'],
+            summary => ["Use shm for tempdir if possible (Default: on)", "Do not use shm."],
+            default => 1,
+        },
+
+        {
             spec    => 't|tmpdir=s',
             field   => 'tmp_dir',
             used_by => {runner => 1},
@@ -578,6 +620,9 @@ sub options {
             summary => ['Use a specific temp directory', '(Default: use system temp dir)'],
             default => sub {
                 my ($self, $settings, $field) = @_;
+                if ($settings->{use_shm}) {
+                    $settings->{tmp_dir} = first { -d $_ } map { File::Spec->canonpath($_) } '/dev/shm', '/run/shm';
+                }
                 return $settings->{tmp_dir} ||= $ENV{TMPDIR} || $ENV{TEMPDIR} || File::Spec->tmpdir;
             },
         },
@@ -687,7 +732,7 @@ sub options {
         {
             spec      => 'et|event_timeout=i',
             field     => 'event_timeout',
-            used_by   => {runner => 1},
+            used_by   => {jobs => 1},
             section   => 'Harness Options',
             usage     => ['--et SECONDS', '--event_timeout #'],
             summary   => ['Kill test if no events received in timeout period', '(Default: 60 seconds)'],
@@ -698,7 +743,7 @@ sub options {
         {
             spec      => 'pet|post-exit-timeout=i',
             field     => 'post_exit_timeout',
-            used_by   => {runner => 1},
+            used_by   => {jobs => 1},
             section   => 'Harness Options',
             usage     => ['--pet SECONDS', '--post-exit-timeout #'],
             summary   => ['Stop waiting post-exit after the timeout period', '(Default: 15 seconds)'],

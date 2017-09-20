@@ -33,7 +33,7 @@ sub import {
     my ($argv, $runref) = @_;
     my ($runner_class, $dir, %args) = @$argv;
 
-    if ($args{setsid}) {
+    if (delete $args{setsid}) {
         require POSIX;
         POSIX::setsid();
     }
@@ -54,7 +54,7 @@ sub import {
 
     my $file = pkg_to_file($runner_class);
     require $file;
-    my $spawn = $runner_class->new(dir => $dir);
+    my $spawn = $runner_class->new(dir => $dir, %args);
 
     my $test = $spawn->start;
 

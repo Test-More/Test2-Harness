@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '0.001016';
 
-use Carp qw/croak/;
+use Carp qw/croak confess/;
 use File::Temp qw/tempdir/;
 use Getopt::Long qw/GetOptionsFromArray/;
 use File::Path qw/remove_tree/;
@@ -17,7 +17,6 @@ use File::Spec;
 
 use App::Yath::Util qw/read_config/;
 use Test2::Harness::Util qw/read_file open_file fqmod/;
-use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use Test2::Harness;
 use Test2::Harness::Run;
@@ -34,11 +33,11 @@ sub has_logger       { 0 }
 sub has_display      { 0 }
 sub show_bench       { 1 }
 sub always_keep_dir  { 0 }
-sub manage_runner    { 1 }
 sub name             { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
 sub summary          { "No Summary" }
 sub description      { "No Description" }
 sub group            { "ZZZZZZ" }
+sub run_command      { confess "Not Implemented" }
 
 sub my_opts {
     my $in = shift;
@@ -75,8 +74,35 @@ sub init {
     my $settings = $self->{+SETTINGS} ||= {};
 
     unshift @{$self->{+ARGS}} => read_config($self->name);
-
     my $list = $self->parse_args($self->{+ARGS});
+
+    $self->normalize_settings();
+
+    die "You cannot select both bzip2 and gzip for the log.\n"
+        if $settings->{bzip2_log} && $settings->{gzip_log};
+
+    $self->handle_list_args($list);
+
+    if ($settings->{dir}) {
+        remove_tree($settings->{dir}, {safe => 1, keep_root => 1})
+            if $settings->{clear_dir} && -d $settings->{dir};
+
+        opendir(my $DH, $settings->{dir}) or die "Could not open directory";
+        die "Work directory is not empty (use -C to clear it)" if first { !m/^\.+$/ } readdir($DH);
+        closedir($DH);
+    }
+
+    for my $plugin (@{$self->{+PLUGINS}}) {
+        $plugin->post_init($self, $settings);
+    }
+
+    return;
+}
+
+sub normalize_settings {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS} ||= {};
 
     for my $opt (@{$self->my_opts}) {
         my $field   = $opt->{field};
@@ -117,39 +143,22 @@ sub init {
         push @$libs => map { File::Spec->rel2abs($_) } split /\Q$sep\E/, $p5lib;
     }
 
-    die "You cannot select both bzip2 and gzip for the log.\n"
-        if $settings->{bzip2_log} && $settings->{gzip_log};
-
-    $self->handle_list_args($list);
-
     if (my $s = $ENV{HARNESS_PERL_SWITCHES}) {
         push @{$settings->{switches}} => split /\s+/, $s;
     }
 
     $settings->{env_vars}->{HARNESS_IS_VERBOSE}    = $settings->{verbose};
     $settings->{env_vars}->{T2_HARNESS_IS_VERBOSE} = $settings->{verbose};
-
-    if ($settings->{dir}) {
-        remove_tree($settings->{dir}, {safe => 1, keep_root => 1})
-            if $settings->{clear_dir} && -d $settings->{dir};
-
-        opendir(my $DH, $settings->{dir}) or die "Could not open directory";
-        die "Work directory is not empty (use -C to clear it)" if first { !m/^\.+$/ } readdir($DH);
-        closedir($DH);
-    }
-
-    for my $plugin (@{$self->{+PLUGINS}}) {
-        $plugin->post_init($self, $settings);
-    }
-
-    return;
 }
 
 sub run {
     my $self = shift;
 
-    $self->pre_run();
-    $self->run_command();
+    my $exit = $self->pre_run();
+    return $exit if defined $exit;
+
+    $exit = $self->run_command();
+    return $exit;
 }
 
 sub pre_run {
@@ -159,7 +168,7 @@ sub pre_run {
 
     if ($settings->{help}) {
         print $self->usage;
-        exit 0;
+        return 0;
     }
 
     if ($settings->{show_opts}) {
@@ -170,120 +179,14 @@ sub pre_run {
 
         print Test2::Harness::Util::JSON::encode_pretty_json($settings);
 
-        exit 0;
+        return 0;
     }
 
     $self->inject_signal_handlers();
+
+    return;
 }
 
-sub run_command {
-    my $self = shift;
-
-    my $settings = $self->{+SETTINGS};
-
-    my $renderers = $self->renderers;
-    my $loggers   = $self->loggers;
-
-    my ($feeder, $runner, $pid, $stat);
-    my $ok = eval {
-        ($feeder, $runner, $pid) = $self->feeder or die "No feeder!";
-
-        my $harness = Test2::Harness->new(
-            run_id            => $settings->{run_id},
-            live              => $pid ? 1 : 0,
-            feeder            => $feeder,
-            loggers           => $loggers,
-            renderers         => $renderers,
-            event_timeout     => $settings->{event_timeout},
-            post_exit_timeout => $settings->{post_exit_timeout},
-            jobs              => $settings->{jobs},
-        );
-
-        $stat = $harness->run();
-
-        1;
-    };
-    my $err = $@;
-    warn $err unless $ok;
-
-    my $exit = 0;
-
-    if ($self->manage_runner) {
-        unless ($ok) {
-            if ($pid) {
-                print STDERR "Killing runner\n";
-                kill($self->{+SIGNAL} || 'TERM', $pid);
-            }
-        }
-
-        if ($runner && $runner->pid) {
-            $runner->wait;
-            $exit = $runner->exit;
-        }
-    }
-
-    if (-t STDOUT) {
-        print STDOUT Term::ANSIColor::color('reset') if USE_ANSI_COLOR;
-        print STDOUT "\r\e[K";
-    }
-
-    if (-t STDERR) {
-        print STDERR Term::ANSIColor::color('reset') if USE_ANSI_COLOR;
-        print STDERR "\r\e[K";
-    }
-
-    $self->paint("\n", '=' x 80, "\n");
-    $self->paint("\nRun ID: $settings->{run_id}\n");
-
-    my $bad = $stat ? $stat->{fail} : [];
-
-    # Possible failure causes
-    my $fail = $exit || !defined($exit) || !$ok || !$stat;
-
-    if (@$bad) {
-        $self->paint("\nThe following test jobs failed:\n");
-        $self->paint("  [", $_->{job_id}, '] ', File::Spec->abs2rel($_->file), "\n") for sort {
-            my $an = $a->{job_id};
-            $an =~ s/\D+//g;
-            my $bn = $b->{job_id};
-            $bn =~ s/\D+//g;
-
-            # Sort numeric if possible, otherwise string
-            int($an) <=> int($bn) || $a->{job_id} cmp $b->{job_id}
-        } @$bad;
-        $self->paint("\n");
-        $exit += @$bad;
-    }
-
-    if ($fail) {
-        my $sig = $self->{+SIGNAL};
-
-        $self->paint("\n");
-
-        $self->paint("Test runner exited badly: $exit\n") if $exit;
-        $self->paint("Test runner exited badly: ?\n") unless defined $exit;
-        $self->paint("An exception was cought\n") if !$ok && !$sig;
-        $self->paint("Received SIG$sig\n") if $sig;
-
-        $self->paint("\n");
-
-        $exit ||= 255;
-    }
-
-    if (!@$bad && !$fail) {
-        $self->paint("\nAll tests were successful!\n\n");
-    }
-
-    print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir};
-
-    print "Wrote " . ($ok ? '' : '(Potentially Corrupt) ') . "log file: $settings->{log_file}\n"
-        if $settings->{log};
-
-    $exit = 255 unless defined $exit;
-    $exit = 255 if $exit > 255;
-
-    return $exit;
-}
 
 sub paint {
     my $self = shift;
@@ -861,7 +764,7 @@ sub options {
 }
 # }}}
 
-sub parse_args {
+sub pre_parse_args {
     my $self = shift;
     my ($args) = @_;
 
@@ -900,11 +803,20 @@ sub parse_args {
         }
     }
 
+    return (\@opts, \@list, \@pass, \@plugins);
+}
+
+sub parse_args {
+    my $self = shift;
+    my ($args) = @_;
+
+    my ($opts, $list, $pass, $plugins) = $self->pre_parse_args($args);
+
     my $settings = $self->{+SETTINGS} ||= {};
-    $settings->{pass} = \@pass;
+    $settings->{pass} = $pass;
 
     my @plugin_options;
-    for my $plugin (@plugins) {
+    for my $plugin (@$plugins) {
         local $@;
         $plugin = fqmod('App::Yath::Plugin', $plugin);
         my $file = pkg_to_file($plugin);
@@ -914,7 +826,7 @@ sub parse_args {
         $plugin->pre_init($self, $settings);
     }
 
-    $self->{+PLUGINS} = \@plugins;
+    $self->{+PLUGINS} = $plugins;
 
     my @opt_map = map {
         my $spec  = $_->{spec};
@@ -926,10 +838,10 @@ sub parse_args {
     } @{$self->my_opts(plugin_options => \@plugin_options)};
 
     Getopt::Long::Configure("bundling");
-    my $args_ok = GetOptionsFromArray(\@opts => @opt_map)
+    my $args_ok = GetOptionsFromArray($opts => @opt_map)
         or die "Could not parse the command line options given.\n";
 
-    return [grep { defined($_) && length($_) } @list, @opts];
+    return [grep { defined($_) && length($_) } @$list, @$opts];
 }
 
 sub usage_opt_order {

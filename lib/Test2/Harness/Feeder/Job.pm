@@ -66,7 +66,7 @@ sub set_complete {
 
     $self->{+_COMPLETE} = 1;
 
-    remove_tree($self->{+DIR}->job_root, {safe => 1})
+    remove_tree($self->{+DIR}->job_root, {safe => 1, keep_root => 1})
         unless $self->{+KEEP_DIR};
 
     delete $self->{+DIR};

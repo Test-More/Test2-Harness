@@ -10,6 +10,7 @@ use Time::HiRes qw/sleep time/;
 use Data::Dumper;
 
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
+use Test2::Harness::Util::Debug qw/DEBUG/;
 
 use Test2::Harness::Util::HashBase qw{
     -feeder
@@ -48,14 +49,8 @@ sub run {
     my $self = shift;
 
     {
-        local $SIG{USR1} = sub {
-            local $Data::Dumper::SortKeys = 1;
-            local $Data::Dumper::Indent = 1;
-            local $Data::Dumper::Terse = 1;
-            print STDERR Dumper({%$self, RENDERERS() => '~OMITTED~'});
-        };
-
         while (1) {
+            DEBUG("Harness run loop");
             $self->{+CALLBACK}->() if $self->{+CALLBACK};
             my $complete = $self->{+FEEDER}->complete;
             $self->iteration();
@@ -66,6 +61,7 @@ sub run {
 
     my(@fail, @pass);
     while (my ($job_id, $watcher) = each %{$self->{+WATCHERS}}) {
+        DEBUG("Harness watcher loop ($job_id)");
 #    for my $watcher (values %{$self->{+WATCHERS}}) {
         if ($watcher->fail) {
             push @fail => $watcher->job;
@@ -88,16 +84,19 @@ sub iteration {
     my $jobs = $self->{+JOBS};
 
     while (1) {
+        DEBUG("Harness iteration loop");
         my @events;
 
         # Track active watchers in a second hash, this avoids looping over all
         # watchers each iteration.
         while(my ($job_id, $watcher) = each %{$self->{+ACTIVE}}) {
+            DEBUG("Harness active watcher loop: $job_id");
         #for my $watcher (values %{$self->{+ACTIVE}}) {
             # Give it up to 5 seconds
-            my $killed = $watcher->killed;
-            my $done = $watcher->complete || ($killed ? (time - $killed) > 5 : 0);
+            my $killed = $watcher->killed || 0;
+            my $done = $watcher->complete || ($killed ? (time - $killed) > 5 : 0) || 0;
 
+            DEBUG("Harness active watcher $job_id - KILLED: $killed, DONE: $done");
             if ($done) {
                 $self->{+FEEDER}->job_completed($job_id);
                 delete $self->{+ACTIVE}->{$job_id};
@@ -108,6 +107,8 @@ sub iteration {
         }
 
         push @events => $self->{+FEEDER}->poll($self->{+BATCH_SIZE});
+
+        DEBUG("Harness iteration got events: " . scalar(@events));
 
         last unless @events;
 

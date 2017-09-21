@@ -254,7 +254,10 @@ sub fail_info_facet_list {
         if $incomplete_subtests;
 
     if (my $wstat = $self->{+EXIT}) {
-        if (my $exit = ($wstat >> 8)) {
+        if ($wstat == -1) {
+            push @out => {tag => 'REASON', debug => 1, details => "The harness could not get the exit code! (Code: $wstat)"}
+        }
+        elsif (my $exit = ($wstat >> 8)) {
             push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (Code: $exit)"}
         }
         elsif (my $sig = $wstat & 127) {

@@ -17,7 +17,6 @@ can_ok(
             has_display
             show_bench
             always_keep_dir
-            manage_runner
             name
             summary
             description
@@ -47,7 +46,6 @@ subtest for_override => sub {
     is($CLASS->always_keep_dir, 0, "always_keep_dir defaults to 0");
 
     is($CLASS->show_bench,    1, "show_bench defaults to 1");
-    is($CLASS->manage_runner, 1, "manage_runner defaults to 1");
 
     is($CLASS->summary, "No Summary", "sane default summary");
     is($CLASS->description, "No Description", "sane default description");
@@ -112,9 +110,9 @@ subtest my_opts => sub {
     ref_is($one->my_opts, $one->my_opts, "Command instance caches result");
 };
 
-subtest init => sub {
-    my $control = mock $TCLASS;
-};
+#subtest init => sub {
+#    my $control = mock $TCLASS;
+#};
 
 done_testing;
 

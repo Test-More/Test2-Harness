@@ -34,6 +34,7 @@ use Test2::Harness::Util::HashBase qw{
     -err_log -out_log
     -_exit
     -pid
+    -remote
 
     -wait_time
 
@@ -180,8 +181,21 @@ sub wait {
     return;
 }
 
+sub exited {
+    my $self = shift;
+
+    return 1 if defined $self->exit;
+    return 0 unless $self->{+REMOTE};
+
+    croak "No PID to check" unless $self->{+PID};
+
+    return kill(0, $self->{+PID});
+}
+
 sub exit {
     my $self = shift;
+
+    return undef if $self->{+REMOTE};
 
     return $self->{+_EXIT} if defined $self->{+_EXIT};
 
@@ -279,8 +293,13 @@ sub start {
 
     warn $err;
 
-    $self->kill_jobs($sig || 'TERM');
-    $self->wait_jobs(WNOHANG);
+    eval {
+        $self->kill_jobs($sig || 'TERM');
+        while (1) { $self->wait_job() or last };
+        1;
+    } or warn $@;
+
+    $self->write_remaining_exits();
 
     CORE::exit($SIG ? 0 : 255);
 }
@@ -293,7 +312,7 @@ sub init_state {
     }
     else {
         $self->{+STATE} = {
-            running  => {long => [], medium => [], general => [], isolation => []},
+            running  => {long => {}, medium => {}, general => {}, isolation => {}},
             pending  => {long => [], medium => [], general => [], isolation => []},
             position => 0,
         };
@@ -319,16 +338,9 @@ sub _start {
         return $runfile if $runfile;
     }
 
-    my $wait_time = $self->wait_time;
-    while(1) {
-        $self->wait_jobs(WNOHANG);
+    while(1) { $self->wait_job() or last }
 
-        my $running = $self->{+STATE}->{running};
-
-        last unless first { @{$running->{$_}} } keys %$running;
-
-        sleep($wait_time) if $wait_time;
-    }
+    $self->write_remaining_exits();
 
     return undef;
 }
@@ -345,38 +357,31 @@ sub respawn {
     CORE::exit(255);
 }
 
-sub wait_jobs {
+sub wait_job {
     my $self = shift;
-    my ($flags) = @_;
-
-    my $running = $self->{+STATE}->{running};
 
     local $?;
 
+    my $running = $self->{+STATE}->{running};
+
+    # Nothing to wait for.
+    my $pid = CORE::wait();
+    my $ret = $?;
+
+    return 0 if $pid == -1;
+
     for my $cat (values %$running) {
-        my @keep;
+        my $exit_file = delete $cat->{$pid} or next;
 
-        for my $set (@$cat) {
-            my ($pid, $exit_file) = @$set;
-            my $got = waitpid($pid, $flags || 0);
-            my $ret = $?;
+        write_file_atomic($exit_file, $ret);
 
-            if(!$got) {
-                push @keep => $set;
-            }
-            elsif ($got == $pid) {
-                write_file_atomic($exit_file, $ret);
-            }
-            else {
-                warn "Could not reap pid $pid, waitpid returned $got";
-                write_file_atomic($exit_file, (255 << 8));
-            }
-        }
-
-        @$cat = @keep;
+        return $pid;
     }
 
-    return;
+    die "Child process $pid was reaped, but was not found in the internal list of running processes";
+
+    # The die should make this unreachable.. but just in case.
+    CORE::exit(255);
 }
 
 sub kill_jobs {
@@ -385,8 +390,7 @@ sub kill_jobs {
 
     my $running = $self->{+STATE}->{running};
     for my $cat (values %$running) {
-        for my $set (@$cat) {
-            my ($pid) = @$set;
+        for my $pid (keys %$cat) {
             kill($sig, $pid) or warn "Could not kill pid $pid";
         }
     }
@@ -492,7 +496,7 @@ sub run_job {
     $category = 'general' unless $category && $self->{+STATE}->{running}->{$category};
 
     $self->{+JOBS}->write({ %{$job->TO_JSON}, pid => $pid });
-    push @{$self->{+STATE}->{running}->{$category}} => [$pid, $exit_file];
+    $self->{+STATE}->{running}->{$category}->{$pid} = $exit_file;
 
     return;
 }
@@ -510,26 +514,44 @@ sub next {
 
     while(1) {
         return -1 if $self->hup;
-        $self->wait_jobs(WNOHANG);
+
         $self->poll_jobs();
 
         return if $state->{ended} && !$self->pending;
 
         # Do not get next if we are at/over capacity, or have an isolated test running
         my $running = $self->running;
-        if ($max > $running && !@{$state->{running}->{isolation}}) {
+        if ($max > $running && !keys %{$state->{running}->{isolation}}) {
             my $next = $self->$meth($running, $max);
             return $next if $next;
-        }
 
-        sleep($wait_time) if $wait_time;
+            sleep($wait_time) if $wait_time;
+        }
+        else {
+            $self->wait_job;
+        }
     }
 }
 
 sub running {
     my $self = shift;
     my $state = $self->{+STATE};
-    return sum(map { scalar(@$_) } values %{$state->{running}});
+    return sum(map { scalar(keys %{$_}) } values %{$state->{running}});
+}
+
+sub write_remaining_exits {
+    my $self = shift;
+    my $state = $self->{+STATE};
+    my $running = $state->{running};
+
+    for my $cat (keys %$running) {
+        my $pids = $running->{$cat};
+        for my $pid (keys %$pids) {
+            my $exit_file = $pids->{$pid};
+            print STDERR "Found un-reaped '$cat' PID $pid, writing an exit file\n";
+            write_file_atomic($exit_file, '-1');
+        }
+    }
 }
 
 sub pending {
@@ -590,9 +612,9 @@ sub next_fair {
     my $state = $self->{+STATE};
 
     my $r_lng = $state->{running}->{long};
-    my $r_med = $state->{running}->{long};
+    my $r_med = $state->{running}->{medium};
 
-    my $lmrun = sum(@$r_lng, @$r_med) || 0;
+    my $lmrun = sum(scalar(keys(%$r_lng)), scalar(keys(%$r_med))) || 0;
     my $lmmax = $max - 1;
 
     # Do not fill all slots with 'long' or 'medium' jobs
@@ -608,7 +630,7 @@ sub next_fair {
         my $p_iso = $state->{pending}->{iso};
 
         # If we have something long running then go ahead and start general tasks, but nothing longer
-        return shift @$p_gen if @{$state->{running}->{long}} && @$p_gen;
+        return shift @$p_gen if keys %{$state->{running}->{long}} && @$p_gen;
 
         # Cannot run the iso yet
         return if $running;

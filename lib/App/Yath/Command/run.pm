@@ -44,8 +44,9 @@ sub run {
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
 
     my $runner = Test2::Harness::Run::Runner->new(
-        dir => $data->{dir},
-        pid => $data->{pid},
+        dir    => $data->{dir},
+        pid    => $data->{pid},
+        remote => 1,
     );
 
     my $run = $runner->run;

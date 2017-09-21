@@ -107,7 +107,11 @@ sub poll {
         );
     }
 
+    my $run_exit = $self->{+RUNNER} ? $self->{+RUNNER}->exited : 1;
+
     while (my $jfeed = shift @{$self->{+_ACTIVE}}) {
+        $jfeed->set_runner_exited(1) if $run_exit;
+
         my $nmax = $max ? $max - @new_jobs - @out : undef;
 
         if ($max && $nmax < 1) {
@@ -161,7 +165,7 @@ sub complete {
 
     return 0 if @{$self->{+_ACTIVE}};
 
-    return $self->{+DIR}->complete;
+    return $self->{+DIR}->complete();
 }
 
 sub job_completed {

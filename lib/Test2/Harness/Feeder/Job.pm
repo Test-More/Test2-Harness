@@ -61,6 +61,12 @@ sub poll {
     return @events;
 }
 
+sub set_runner_exited {
+    my $self = shift;
+    my $dir = $self->{+DIR} or return;
+    $dir->set_runner_exited($_[1]);
+}
+
 sub set_complete {
     my $self = shift;
 

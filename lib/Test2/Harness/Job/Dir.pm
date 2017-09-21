@@ -31,6 +31,8 @@ use Test2::Harness::Util::HashBase qw{
     -exit_file   -_exit_done     -_exit_buffer
 
     -_file -file_file
+
+    runner_exited
 };
 
 sub init {
@@ -218,6 +220,11 @@ sub _fill_buffers {
             $self->{+_EXIT_DONE} = 1;
             $ended++;
         }
+    }
+    elsif ($self->{+RUNNER_EXITED}) {
+        $self->{+_EXIT_BUFFER} = '-1';
+        $self->{+_EXIT_DONE} = 1;
+        $ended++;
     }
 
     return unless $ended;

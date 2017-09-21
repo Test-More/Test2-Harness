@@ -16,8 +16,9 @@ sub DEBUG_OFF { $DEBUG = 0 }
 
 sub DEBUG {
     return unless $DEBUG;
-    chomp($_[-1]);
-    print STDERR @_, "\n";
+    my @msgs = @_;
+    chomp($msgs[-1]);
+    print STDERR @msgs, "\n";
 }
 
 $SIG{USR1} = sub {

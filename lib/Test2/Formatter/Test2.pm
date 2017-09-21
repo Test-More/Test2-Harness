@@ -281,7 +281,7 @@ sub _update_active_disp {
     my $str .= " (";
     {
         no warnings 'numeric';
-        $str .= join(', ' => map { "$active->{$_} $_" } sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
+        $str .= join('  ' => map { m{([^/]+)$}; "$active->{$_}:$1" || "$active->{$_}:$_" } sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
     }
     $str .= ")";
 

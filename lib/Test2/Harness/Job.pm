@@ -18,7 +18,6 @@ use Test2::Harness::Util::HashBase qw{
     -args
     -input
     -times
-    -chdir
     -load
     -load_import
     -preload

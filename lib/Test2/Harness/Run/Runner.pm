@@ -246,11 +246,6 @@ sub start {
 
     my $run = $self->{+RUN};
 
-    my $orig = File::Spec->curdir();
-    if (my $chdir = $run->chdir) {
-        chdir($chdir);
-    }
-
     my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
     write_file_atomic($pidfile, "$$");
 
@@ -285,8 +280,6 @@ sub start {
 
         $ok = eval { $out = $self->_start(@_); 1 };
         $err = $@;
-
-        chdir($orig);
     };
 
     return $out if $ok;
@@ -471,7 +464,6 @@ sub run_job {
         args        => [@{$run->args}, @{$task->{args} || []}],
 
         input => $task->{input} || $run->input,
-        chdir => $task->{chdir} || $run->chdir,
 
         event_timeout    => $task->{event_timeout},
         postexit_timeout => $task->{postexit_timeout},

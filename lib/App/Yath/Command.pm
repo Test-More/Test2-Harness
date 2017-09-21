@@ -212,7 +212,6 @@ sub make_run_from_settings {
         load_import => $settings->{load_import},
         args        => $settings->{pass},
         input       => $settings->{input},
-        chdir       => $settings->{chdir},
         search      => $settings->{search},
         unsafe_inc  => $settings->{unsafe_inc},
         env_vars    => $settings->{env_vars},
@@ -314,15 +313,6 @@ sub options {
             usage   => ['--blib',                                           '--no-blib'],
             summary => ["(Default: on) Include 'blib/lib' and 'blib/arch'", "Do not include 'blib/lib' and 'blib/arch'"],
             default => 1,
-        },
-
-        {
-            spec    => 'chdir=s',
-            field   => 'chdir',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage   => ['--chdir path/'],
-            summary => ['Change to the specified directory before starting'],
         },
 
         {

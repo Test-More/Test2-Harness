@@ -69,7 +69,6 @@ sub run {
         $item->{load_import} = $settings->{load_import} if defined $settings->{load_import};
         $item->{env_vars}    = $settings->{env_vars}    if defined $settings->{env_vars};
         $item->{input}       = $settings->{input}       if defined $settings->{input};
-        $item->{chdir}       = $settings->{chdir}       if defined $settings->{chdir};
 
         $queue->enqueue($item);
         $jobs{$job_id} = 1;
@@ -218,10 +217,6 @@ Some tests fork and allow the parent to exit before writing all their output. If
 (Default: on) Include 'blib/lib' and 'blib/arch'
 
 Do not include 'blib/lib' and 'blib/arch'
-
-=item --chdir path/
-
-Change to the specified directory before starting
 
 =item --input-file file
 

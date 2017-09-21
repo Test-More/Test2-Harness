@@ -395,10 +395,6 @@ Some tests fork and allow the parent to exit before writing all their output. If
 
 Do not include 'blib/lib' and 'blib/arch'
 
-=item --chdir path/
-
-Change to the specified directory before starting
-
 =item --input-file file
 
 Use the specified file as standard input to ALL tests

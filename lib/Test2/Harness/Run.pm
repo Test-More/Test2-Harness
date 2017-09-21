@@ -27,7 +27,6 @@ use Test2::Harness::Util::HashBase qw{
     -input
     -verbose
 
-    -chdir
     -search
     -unsafe_inc
 
@@ -56,7 +55,6 @@ sub init {
     croak "The 'run_id' attribute is required"
         unless $self->{+RUN_ID};
 
-    $self->{+CHDIR}      ||= undef;
     $self->{+SEARCH}     ||= ['t'];
     $self->{+PRELOAD}    ||= undef;
     $self->{+SWITCHES}   ||= [];

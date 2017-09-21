@@ -165,7 +165,7 @@ sub complete {
 
     return 0 if @{$self->{+_ACTIVE}};
 
-    return $self->{+DIR}->complete();
+    return $self->{+DIR}->complete() || $runner->exited;
 }
 
 sub job_completed {

@@ -10,7 +10,7 @@ use Test2::Harness::Feeder::JSONL;
 use Test2::Harness::Run;
 use Test2::Harness;
 
-use parent 'App::Yath::Command';
+use parent 'App::Yath::Command::test';
 use Test2::Harness::Util::HashBase;
 
 sub summary { "Replay a test run from an event log" }

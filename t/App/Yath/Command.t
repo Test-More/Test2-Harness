@@ -1,5 +1,7 @@
 use Test2::V0 -target => 'App::Yath::Command';
 
+use Config qw/%Config/;
+
 use ok $CLASS;
 
 can_ok($CLASS, [qw/settings signal args plugins/], "Got public attributes");
@@ -29,6 +31,8 @@ can_ok(
 {
     package App::Yath::Command::fake;
     use parent 'App::Yath::Command';
+
+    sub cli_args {'xxx'}
 }
 
 my $TCLASS = 'App::Yath::Command::fake';
@@ -71,7 +75,7 @@ subtest my_opts => sub {
 
     $control->override(has_runner => sub { 1 });
     $opts = $TCLASS->my_opts;
-    is(@$opts, 31, "Got expected number of opts for runner");
+    is(@$opts, 32, "Got expected number of opts for runner");
     for my $opt (@$opts) {
         next if $opt->{used_by}->{all};
         next if $opt->{used_by}->{runner};
@@ -81,7 +85,7 @@ subtest my_opts => sub {
 
     $control->override(has_logger => sub { 1 });
     $opts = $TCLASS->my_opts;
-    is(@$opts, 7, "Got expected number of opts for logger");
+    is(@$opts, 8, "Got expected number of opts for logger");
     for my $opt (@$opts) {
         next if $opt->{used_by}->{all};
         next if $opt->{used_by}->{logger};
@@ -91,7 +95,7 @@ subtest my_opts => sub {
 
     $control->override(has_display => sub { 1 });
     $opts = $TCLASS->my_opts;
-    is(@$opts, 12, "Got expected number of opts for display");
+    is(@$opts, 13, "Got expected number of opts for display");
     for my $opt (@$opts) {
         next if $opt->{used_by}->{all};
         next if $opt->{used_by}->{display};
@@ -148,7 +152,7 @@ subtest init => sub {
     $control->reset_all;
 
     local @INC = (File::Spec->canonpath('t/lib'), @INC);
-    my $one = $TCLASS->new(args => ['-pTest']);
+    $one = $TCLASS->new(args => ['-pTest']);
 
     ok($INC{'App/Yath/Plugin/Test.pm'}, "Loaded test plugin") or return;
 
@@ -163,337 +167,476 @@ subtest init => sub {
     );
 };
 
+subtest normalize_settings => sub {
+    my $control = mock $TCLASS;
+    my $one = bless {}, $TCLASS;
+
+    $control->override(
+        my_opts => sub {
+            return [
+                {
+                    spec  => 'foo',
+                    field => 'foo',
+                    default => 1,
+                },
+
+                {
+                    spec   => 'bar',
+                    field  => 'bar',
+                    default => 1,
+                    action => sub {
+                        my $self = shift;
+                        my ($settings, $field, $val, $opt) = @_;
+
+                        $settings->{bar} = {self => $self, field => $field, val => $val, opt => $opt};
+                    },
+                },
+
+                {
+                    spec   => 'baz',
+                    field  => 'bugaboo',
+                    default => 1,
+                    action => sub {
+                        my $self = shift;
+                        my ($settings, $field, $val, $opt) = @_;
+
+                        $settings->{baz} = {self => $self, field => $field, val => $val, opt => $opt};
+                    },
+                },
+
+                {
+                    spec    => 'boo',
+                    field   => 'boo',
+                    default => sub {
+                        my $self = shift;
+                        my ($settings, $field) = @_;
+
+                        return {self => $self, settings => $settings, field => $field};
+                    },
+                },
+
+                {
+                    spec      => 'bun=s',
+                    field     => 'bun',
+                    default => 'a value',
+                    normalize => sub {
+                        my $self = shift;
+                        my ($settings, $field, $val) = @_;
+
+                        return {self => $self, settings => $settings, field => $field, val => $val};
+                    },
+                }
+            ];
+        }
+    );
+
+    $one->{settings} = {};
+    $one->settings->{libs} = ['xfoo', 'xbar'];
+    $one->settings->{lib}  = 1;
+    $one->settings->{blib} = 1;
+    $one->settings->{tlib} = 1;
+
+    {
+        local $ENV{PERL5LIB} = 'xbaz' . $Config{path_sep} . 'xbat';
+        my $fs_control = mock 'File::Spec' => (
+            override => [
+                rel2abs => sub { return "ABS $_[-1]" },
+            ],
+        );
+        $one->normalize_settings();
+    }
+
+    is(
+        $one->settings,
+        hash {
+            field lib  => 1;
+            field blib => 1;
+            field tlib => 1;
+            field foo  => 1;
+
+            field bar => {self => exact_ref($one), field => 'bar',     val => 1, opt => undef};
+            field baz => {self => exact_ref($one), field => 'bugaboo', val => 1, opt => undef};
+            field boo => {self => exact_ref($one), settings => exact_ref($one->settings), field => 'boo'};
+            field bun => {self => exact_ref($one), settings => exact_ref($one->settings), field => 'bun', val => 'a value'};
+
+            field env_vars => {HARNESS_IS_VERBOSE => 0, T2_HARNESS_IS_VERBOSE => 0};
+
+            field libs => bag {
+                item "ABS xfoo";
+                item "ABS xbar";
+                item "ABS xbaz";
+                item "ABS xbat";
+                item "ABS lib";
+                item "ABS blib/lib";
+                item "ABS blib/arch";
+                item "ABS t/lib";
+                end;
+            };
+            end;
+        },
+        "Got settings"
+    );
+};
+
+subtest run => sub {
+    my $control = mock $TCLASS;
+
+    my $one = $TCLASS->new;
+
+    $control->override('run_command' => sub { 321 });
+
+    $control->override('pre_run' => sub { 123 });
+    is($one->run, 123, "pre-run returned a value, did not call run_command");
+
+    $control->override('pre_run' => sub { 0 });
+    is($one->run, 0, "pre-run returned a 0 value, did not call run_command");
+
+    $control->override('pre_run' => sub { undef });
+    is($one->run, 321, "called run_command");
+};
+
+subtest pre_run => sub {
+    my $control = mock $TCLASS;
+
+    my $injected = 0;
+    $control->override(inject_signal_handlers => sub { $injected++ });
+
+    my @painted;
+    $control->override(paint => sub { shift; push @painted => @_ });
+
+    my $one = $TCLASS->new();
+
+    $one->settings->{help} = 1;
+    is($one->pre_run, 0, "returned 0 for help");
+    is(\@painted, [$one->usage], "Painted usage info");
+    ok(!$injected, "did not inject signal handlers");
+
+    @painted = ();
+
+    delete $one->settings->{help};
+    $one->settings->{show_opts} = 1;
+    $one->settings->{input} = 'foo' x 1000;
+    require Test2::Harness::Util::JSON;
+    my $json = Test2::Harness::Util::JSON::encode_pretty_json({ %{$one->settings}, input => '<TRUNCATED>' });
+    is($one->pre_run, 0, "show opts returned 0");
+    is(\@painted, [$json], "got options");
+    ok(!$injected, "did not inject signal handlers");
+
+    delete $one->settings->{show_opts};
+    is($one->pre_run, undef, "pre_run did not return a defined value");
+    is($injected, 1, "injected signal handlers");
+};
+
+subtest paint => sub {
+    my $one = $TCLASS->new;
+
+    my $out = '';
+    open(my $fh, '>', \$out);
+    my $old = select $fh;
+
+    my $ok = eval {
+        $one->settings->{quiet} = 1;
+        $one->paint("foo\n");
+        ok(!$out, "did not paint in quiet mode");
+
+        $one->settings->{quiet} = 0;
+        $one->paint("bar\n");
+        is($out, "bar\n", "wrote outside of quiet mode");
+    };
+    my $err = $@;
+
+    select $old;
+
+    die $err unless $ok;
+};
+
+subtest make_run_from_settings => sub {
+    my $one = bless(
+        {
+            settings => {
+                run_id           => 123,
+                job_count        => 3,
+                switches         => ['-w'],
+                libs             => ['foo', 'bar'],
+                lib              => 1,
+                blib             => 1,
+                tlib             => 1,
+                preload          => ['Scalar::Util'],
+                load             => [],
+                load_import      => [],
+                pass             => ['--foo'],
+                input            => "my input",
+                search           => ['t', 't2'],
+                unsafe_inc       => 1,
+                env_vars         => {foo => 1, bar => 2},
+                use_stream       => 1,
+                use_fork         => 1,
+                times            => 1,
+                verbose          => 2,
+                no_long          => 0,
+                plugins          => ['Foo::Bar'],
+                exclude_patterns => [qr/xxx/],
+                exclude_files    => ['t/xxx.t'],
+            }
+        },
+        $TCLASS
+    );
+
+    my $fs_control = mock 'File::Spec' => (
+        override => [
+            rel2abs => sub { return "ABS $_[-1]" },
+        ],
+    );
+
+    is(
+        $one->make_run_from_settings(load => ['Foo::Bar']),
+        object {
+            call run_id           => 123;
+            call job_count        => 3;
+            call switches         => ['-w'];
+            call libs             => ['foo', 'bar'];
+            call lib              => 1;
+            call blib             => 1;
+            call tlib             => 1;
+            call preload          => ['Scalar::Util'];
+            call load             => ['Foo::Bar'];
+            call load_import      => [];
+            call args             => ['--foo'];
+            call input            => "my input";
+            call search           => ['t', 't2'];
+            call unsafe_inc       => 1;
+            call use_stream       => 1;
+            call use_fork         => 1;
+            call times            => 1;
+            call verbose          => 2;
+            call no_long          => 0;
+            call plugins          => ['Foo::Bar'];
+            call exclude_patterns => [qr/xxx/];
+            call exclude_files    => {'ABS t/xxx.t' => 1};
+            call env_vars         => hash {
+                field foo => 1;
+                field bar => 2;
+                etc;
+            };
+        },
+        "Got expected run"
+    );
+};
+
+subtest section_order => sub {
+    # Just test we get a sane list of strings, do not actually test order, that
+    # can change for many reasons in the future.
+    my @got = $CLASS->section_order;
+    ok(@got > 1, "More than 1 item");
+    ok((!grep { ref($_) } @got), "No references")
+};
+
+subtest options => sub {
+    my $control = mock $TCLASS;
+
+    $control->override(has_display => sub { 1 });
+    $control->override(has_jobs    => sub { 1 });
+    $control->override(has_logger  => sub { 1 });
+    $control->override(has_runner  => sub { 1 });
+
+    subtest show_opts => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{show_opts}, "not on by default");
+
+        my $two = $TCLASS->new(args => ['--show-opts']);
+        ok($two->settings->{show_opts}, "toggled on");
+    };
+
+    subtest help => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{help}, "not on by default");
+
+        my $two = $TCLASS->new(args => ['--help']);
+        ok($two->settings->{help}, "toggled on");
+
+        my $three = $TCLASS->new(args => ['-h']);
+        ok($three->settings->{help}, "toggled on (short)");
+    };
+
+    subtest include => sub {
+        local $ENV{PERL5LIB};
+        my $one = $TCLASS->new(args => ['--no-lib', '--no-blib', '--no-tlib']);
+        ok(!$one->settings->{libs} || !@{$one->settings->{libs}}, "not on by default");
+
+        my $two = $TCLASS->new(args => ['--no-lib', '--no-blib', '--no-tlib', '--include' => 'foo', '-Ibar', '-I' => 'baz', '--include=bat']);
+        like(
+            $two->settings->{libs},
+            bag {
+                item qr/foo$/;
+                item qr/bar$/;
+                item qr/baz$/;
+                item qr/bat$/;
+                end;
+            },
+            "Got added libs"
+        );
+    };
+
+    subtest times => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{times}, "not on by default");
+
+        my $two = $TCLASS->new(args => ['-T']);
+        ok($two->settings->{times}, "toggled on");
+
+        my $three = $TCLASS->new(args => ['--times']);
+        ok($three->settings->{times}, "toggled on");
+
+        my $four = $TCLASS->new(args => ['--times', '--no-times']);
+        ok(!$four->settings->{times}, "toggled off");
+    };
+
+    subtest tlib => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{tlib}, "not on by default");
+
+        my $two = $TCLASS->new(args => ['--tlib']);
+        ok($two->settings->{tlib}, "toggled on");
+
+        my $three = $TCLASS->new(args => ['--tlib', '--no-tlib']);
+        ok(!$three->settings->{tlib}, "toggled off");
+    };
+
+    subtest lib => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{lib}, "on by default");
+
+        my $two = $TCLASS->new(args => ['--no-lib']);
+        ok(!$two->settings->{lib}, "toggled off");
+    };
+
+    subtest blib => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{blib}, "on by default");
+
+        my $two = $TCLASS->new(args => ['--no-blib']);
+        ok(!$two->settings->{blib}, "toggled off");
+    };
+
+    subtest input => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!defined($one->settings->{input}), "none by default");
+
+        $one = $TCLASS->new(args => ['--input', 'foo bar baz']);
+        is($one->settings->{input}, 'foo bar baz', "set the input string");
+    };
+
+    subtest 'keep-dir' => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{keep_dir}, "not on by default");
+
+        my $two = $TCLASS->new(args => ['-k']);
+        ok($two->settings->{keep_dir}, "toggled on");
+
+        my $three = $TCLASS->new(args => ['--keep-dir']);
+        ok($three->settings->{keep_dir}, "toggled on");
+
+        my $four = $TCLASS->new(args => ['--keep-dir', '--no-keep-dir']);
+        ok(!$four->settings->{keep_dir}, "toggled off");
+    };
+
+    subtest 'author-testing' => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!defined($one->settings->{env_vars}->{AUTHOR_TESTING}), "not on by default");
+
+        my $two = $TCLASS->new(args => ['-A']);
+        ok($two->settings->{env_vars}->{AUTHOR_TESTING}, "toggled on");
+
+        my $three = $TCLASS->new(args => ['--author-testing']);
+        ok($three->settings->{env_vars}->{AUTHOR_TESTING}, "toggled on");
+
+        my $four = $TCLASS->new(args => ['--author-testing', '--lib', '--no-author-testing']);
+        ok(!$four->settings->{env_vars}->{AUTHOR_TESTING}, "toggled off");
+        ok(defined($four->settings->{env_vars}->{AUTHOR_TESTING}), "off, but defined");
+    };
+
+    subtest tap => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{use_stream}, "stream by default");
+
+        my $two = $TCLASS->new(args => ['--tap']);
+        ok(!$two->settings->{use_stream}, "use tap");
+
+        my $three = $TCLASS->new(args => ['--TAP']);
+        ok(!$three->settings->{use_stream}, "use TAP");
+    };
+
+    subtest use_stream => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{use_stream}, "stream by default");
+
+        my $two = $TCLASS->new(args => ['--no-stream']);
+        ok(!$two->settings->{use_stream}, "use tap");
+    };
+
+    subtest fork => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{use_fork}, "fork by default");
+
+        my $two = $TCLASS->new(args => ['--no-fork']);
+        ok(!$two->settings->{use_fork}, "no fork");
+    };
+
+    # Use is() for these to verify the normalization to 1 and 0
+    subtest 'unsafe-inc' => sub {
+        subtest undef_var => sub {
+            local $ENV{PERL_USE_UNSAFE_INC};
+
+            my $one = $TCLASS->new(args => []);
+            is($one->settings->{unsafe_inc}, 1, "unsafe-inc by default");
+
+            my $two = $TCLASS->new(args => ['--no-unsafe-inc']);
+            is($two->settings->{unsafe_inc}, 0, "no unsafe-inc");
+        };
+
+        subtest true_var => sub {
+            local $ENV{PERL_USE_UNSAFE_INC} = 'YES';
+
+            my $one = $TCLASS->new(args => []);
+            is($one->settings->{unsafe_inc}, 1, "unsafe-inc");
+
+            my $two = $TCLASS->new(args => ['--no-unsafe-inc']);
+            is($two->settings->{unsafe_inc}, 0, "no unsafe-inc");
+        };
+
+        subtest false_var => sub {
+            local $ENV{PERL_USE_UNSAFE_INC} = '';
+
+            my $one = $TCLASS->new(args => []);
+            is($one->settings->{unsafe_inc}, 0, "no unsafe-inc");
+
+            my $two = $TCLASS->new(args => ['--no-unsafe-inc']);
+            is($two->settings->{unsafe_inc}, 0, "no unsafe-inc");
+        };
+    };
+
+    subtest env_vars => sub {
+        my $one = $TCLASS->new(args => ['-E', 'FOO=foo', '-EBAR=bar', '--env-var', 'BAZ=baz']);
+        is(
+            $one->settings->{env_vars},
+            hash {
+                field FOO => 'foo';
+                field BAR => 'bar';
+                field BAZ => 'baz';
+                etc;
+            },
+            "Set env vars"
+        );
+    };
+
+    subtest switch => sub {
+        
+    };
+};
+
 done_testing;
 
 __END__
-
-sub normalize_settings {
-    my $self = shift;
-
-    my $settings = $self->{+SETTINGS} ||= {};
-
-    for my $opt (@{$self->my_opts}) {
-        my $field   = $opt->{field};
-        my $default = $opt->{default};
-
-        # Set the default
-        $settings->{$field} = ref($default) ? $self->$default($settings, $field) : $default
-            if defined($default) && !defined($settings->{$field});
-
-        # normalize the value
-        $settings->{$field} = $opt->{normalize}->($settings->{$field})
-            if $opt->{normalize} && defined $settings->{$field};
-    }
-
-    if (my $libs = $settings->{libs}) {
-        @$libs = map {File::Spec->rel2abs($_)} @$libs;
-    }
-
-    if ($settings->{lib}) {
-        my $libs = $settings->{libs} ||= [];
-        push @$libs => File::Spec->rel2abs('lib');
-    }
-
-    if ($settings->{blib}) {
-        my $libs = $settings->{libs} ||= [];
-        push @$libs => File::Spec->rel2abs('blib/lib');
-        push @$libs => File::Spec->rel2abs('blib/arch');
-    }
-
-    if ($settings->{tlib}) {
-        my $libs = $settings->{libs} ||= [];
-        push @$libs => File::Spec->rel2abs('t/lib');
-    }
-
-    if (my $p5lib = $ENV{PERL5LIB}) {
-        my $libs = $settings->{libs} ||= [];
-        my $sep = $Config{path_sep};
-        push @$libs => map { File::Spec->rel2abs($_) } split /\Q$sep\E/, $p5lib;
-    }
-
-    if (my $s = $ENV{HARNESS_PERL_SWITCHES}) {
-        push @{$settings->{switches}} => split /\s+/, $s;
-    }
-
-    $settings->{env_vars}->{HARNESS_IS_VERBOSE}    = $settings->{verbose};
-    $settings->{env_vars}->{T2_HARNESS_IS_VERBOSE} = $settings->{verbose};
-}
-
-sub run {
-    my $self = shift;
-
-    my $exit = $self->pre_run();
-    return $exit if defined $exit;
-
-    $exit = $self->run_command();
-    return $exit;
-}
-
-sub pre_run {
-    my $self = shift;
-
-    my $settings = $self->{+SETTINGS};
-
-    if ($settings->{help}) {
-        print $self->usage;
-        return 0;
-    }
-
-    if ($settings->{show_opts}) {
-        require Test2::Harness::Util::JSON;
-
-        $settings->{input} = '<TRUNCATED>'
-            if $settings->{input} && (length($settings->{input}) > 80 || $settings->{input} =~ m/\n/);
-
-        print Test2::Harness::Util::JSON::encode_pretty_json($settings);
-
-        return 0;
-    }
-
-    $self->inject_signal_handlers();
-
-    return;
-}
-
-
-sub paint {
-    my $self = shift;
-    return if $self->{+SETTINGS}->{quiet};
-    print @_;
-}
-
-sub make_run_from_settings {
-    my $self = shift;
-
-    my $settings = $self->{+SETTINGS};
-
-    return Test2::Harness::Run->new(
-        run_id      => $settings->{run_id},
-        job_count   => $settings->{job_count},
-        switches    => $settings->{switches},
-        libs        => $settings->{libs},
-        lib         => $settings->{lib},
-        blib        => $settings->{blib},
-        tlib        => $settings->{tlib},
-        preload     => $settings->{preload},
-        load        => $settings->{load},
-        load_import => $settings->{load_import},
-        args        => $settings->{pass},
-        input       => $settings->{input},
-        chdir       => $settings->{chdir},
-        search      => $settings->{search},
-        unsafe_inc  => $settings->{unsafe_inc},
-        env_vars    => $settings->{env_vars},
-        use_stream  => $settings->{use_stream},
-        use_fork    => $settings->{use_fork},
-        times       => $settings->{times},
-        verbose     => $settings->{verbose},
-        no_long     => $settings->{no_long},
-        plugins     => $settings->{plugins},
-
-        exclude_patterns => $settings->{exclude_patterns},
-        exclude_files    => {map { (File::Spec->rel2abs($_) => 1) } @{$settings->{exclude_files}}},
-
-        @_,
-    );
-}
-
-sub section_order {
-    return (
-        'Help',
-        'Harness Options',
-        'Job Options',
-        'Logging Options',
-        'Display Options',
-    );
-}
-
-# {{{
-sub options {
-    my $self = shift;
-    my ($settings) = @_;
-
-    return (
-        {
-            spec    => 'show-opts',
-            field   => 'show_opts',
-            used_by => {all => 1},
-            section => 'Help',
-            usage   => ['--show-opts'],
-            summary => ['Exit after showing what yath thinks your options mean'],
-        },
-
-        {
-            spec    => 'h|help',
-            field   => 'help',
-            used_by => {all => 1},
-            section => 'Help',
-            usage   => ['-h  --help'],
-            summary => ['Exit after showing this help message'],
-        },
-
-        {
-            spec    => 'I|include=s@',
-            field   => 'libs',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage     => ['-I path/lib',                           '--include lib/'],
-            summary   => ['Add a directory to your include paths', 'This can be used multiple times'],
-            normalize => sub {
-                [map { File::Spec->rel2abs($_) } @{$_[0] || []}];
-            },
-        },
-
-        {
-            spec      => 'T|times',
-            field     => 'times',
-            used_by   => {jobs => 1, runner => 1},
-            section   => 'Job Options',
-            usage     => ['-T  --times'],
-            summary   => ['Monitor timing data for each test file'],
-            long_desc => 'This tells perl to load Test2::Plugin::Times before starting each test.',
-        },
-
-        {
-            spec    => 'tlib!',
-            field   => 'tlib',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage   => ['--tlib'],
-            summary => ["(Default: off) Include 't/lib' in your module path"],
-            default => 0,
-        },
-
-        {
-            spec    => 'lib!',
-            field   => 'lib',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage   => ['--lib',                                           '--no-lib'],
-            summary => ["(Default: on) Include 'lib' in your module path", "Do not include 'lib'"],
-            default => 1,
-        },
-
-        {
-            spec    => 'blib!',
-            field   => 'blib',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage   => ['--blib',                                           '--no-blib'],
-            summary => ["(Default: on) Include 'blib/lib' and 'blib/arch'", "Do not include 'blib/lib' and 'blib/arch'"],
-            default => 1,
-        },
-
-        {
-            spec    => 'chdir=s',
-            field   => 'chdir',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage   => ['--chdir path/'],
-            summary => ['Change to the specified directory before starting'],
-        },
-
-        {
-            spec    => 'input=s',
-            field   => 'input',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage   => ['-i "string"'],
-            summary => ['This input string will be used as standard input for ALL tests', 'See also --input-file'],
-        },
-
-        {
-            spec      => 'k|keep-dir',
-            field     => 'keep_dir',
-            used_by   => {jobs => 1, runner => 1},
-            section   => 'Job Options',
-            usage     => ["-k  --keep-dir"],
-            summary   => ['Do not delete the work directory when done'],
-            long_desc => 'This is useful if you want to inspect the work directory after the harness is done. The work directory path will be printed at the end.',
-            default   => 0,
-        },
-
-        {
-            spec    => 'A|author-testing',
-            action  => sub { $settings->{env_vars}->{AUTHOR_TESTING} = 1 },
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage     => ['-A', '--author-testing'],
-            summary   => ['This will set the AUTHOR_TESTING environment to true'],
-            long_desc => 'Many cpan modules have tests that are only run if the AUTHOR_TESTING environment variable is set. This will cause those tests to run.',
-        },
-
-        {
-            spec    => 'tap',
-            field   => 'use_stream',
-            action  => sub { $settings->{use_stream} = 0 },
-            used_by => {jobs => 1, runner => 1},
-        },
-
-        {
-            spec    => 'stream!',
-            field   => 'use_stream',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            usage     => ['--stream',                                          '--no-stream',       '--TAP  --tap'],
-            summary   => ["Use 'stream' instead of TAP (Default: use stream)", "Do not use stream", "Use TAP"],
-            long_desc => "The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to receive test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.",
-        },
-
-        {
-            spec        => 'fork!',
-                field   => 'use_fork',
-                used_by => {jobs => 1, runner => 1},
-                section => 'Job Options',
-                usage     => ['--fork',                            '--no-fork'],
-                summary   => ['(Default: on) fork to start tests', 'Do not fork to start tests'],
-                long_desc => 'Test2::Harness normally forks to start a test. Forking can break some select tests, this option will allow such tests to pass. This is not compatible with the "preload" option. This is also significantly slower. You can also add the "# HARNESS-NO-PRELOAD" comment to the top of the test file to enable this on a per-test basis.',
-        },
-
-        {
-            spec      => 'unsafe-inc!',
-            field     => 'unsafe_inc',
-            used_by   => {jobs => 1, runner => 1},
-            section   => 'Job Options',
-            usage     => ['--unsafe-inc', '--no-unsafe-inc'],
-            summary   => ["(Default: On) put '.' in \@INC", "Do not put '.' in \@INC"],
-            long_desc => "perl is removing '.' from \@INC as a security concern. This option keeps things from breaking for now.",
-            default   => sub {
-                return $ENV{PERL_USE_UNSAFE_INC} if defined $ENV{PERL_USE_UNSAFE_INC};
-                return 1;
-            },
-            normalize => sub { $_[0] ? 1 : 0 },
-        },
-
-        {
-            spec    => 'input-file=s',
-            field   => 'input',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            action  => sub {
-                my ($opt, $arg) = @_;
-                die "Input file not found: $arg\n" unless -f $arg;
-                warn "Input file is overriding another source of input.\n" if $settings->{input};
-                $settings->{input} = read_file($arg);
-            },
-            usage   => ['--input-file file'],
-            summary => ['Use the specified file as standard input to ALL tests'],
-        },
-
-        {
-            spec    => 'E|env-var=s',
-            field   => 'env_vars',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            action  => sub {
-                my ($opt, $arg) = @_;
-                my ($key, $val) = split /=/, $arg, 2;
-                $settings->{env_vars}->{$key} = $val;
-            },
-            usage   => ['-E VAR=value',                              '--env-var VAR=val'],
-            summary => ['Set an environment variable for each test', '(but not the harness)'],
-            default => sub                                           { {} },
-        },
 
         {
             spec    => 'S|switch=s',
@@ -501,7 +644,8 @@ sub options {
             used_by => {jobs => 1, runner => 1},
             section => 'Job Options',
             action  => sub {
-                my ($opt, $arg) = @_;
+                my $self = shift;
+                my ($settings, $field, $arg, $opt) = @_;
                 my ($switch, $val) = split /=/, $arg, 2;
                 push @{$settings->{switches}} => $switch;
                 push @{$settings->{switches}} => $val if defined $val;
@@ -512,7 +656,7 @@ sub options {
         },
 
         {
-            spec    => 'C|clear',
+            spec    => 'C|clear!',
             field   => 'clear_dir',
             used_by => {runner => 1},
             section => 'Harness Options',
@@ -559,7 +703,7 @@ sub options {
                 return $ENV{T2_WORKDIR} if $ENV{T2_WORKDIR};
                 return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !($settings->{keep_dir} || $self->always_keep_dir), DIR => $settings->{tmp_dir});
             },
-            normalize => sub { File::Spec->rel2abs($_[0]) },
+            normalize => sub { File::Spec->rel2abs($_[3]) },
         },
 
         {
@@ -621,12 +765,42 @@ sub options {
         },
 
         {
+            spec => 'no-preloads',
+            field => 'preload',
+            used_by => { runner => 1 },
+            section => 'Harness Options',
+            usage => ['--no-preload'],
+            summary => ['cancel any preloads listed until now'],
+            long_desc => "This can be used to negate preloads specified in .yath.rc or similar",
+            action => sub {
+                my $self = shift;
+                my ($settings, $field, $arg, $opt) = @_;
+                delete $settings->{preload};
+            },
+        },
+
+        {
             spec => 'p|plugin=s@',
             field => 'plugins',
             used_by => { all => 1},
             section => 'Plugins',
             usage => ['-pPlugin', '-p+My::Plugin', '--plugin Plugin'],
             summary => ['Load a plugin', 'can be specified multiple times'],
+        },
+
+        {
+            spec => 'no-plugins',
+            field => 'plugins',
+            used_by => { all => 1 },
+            section => 'Plugins',
+            usage => ['--no-plugins'],
+            summary => ['cancel any plugins listed until now'],
+            long_desc => "This can be used to negate plugins specified in .yath.rc or similar",
+            action => sub {
+                my $self = shift;
+                my ($settings, $field, $arg, $opt) = @_;
+                delete $settings->{plugins};
+            },
         },
 
         {
@@ -677,7 +851,7 @@ sub options {
             section => 'Logging Options',
             usage   => ['-F file.jsonl', '--log-file FILE'],
             summary => ['Specify the name of the log file', 'This option implies -L', "(Default: event_log-RUN_ID.jsonl)"],
-            normalize => sub { File::Spec->rel2abs($_[0]) },
+            normalize => sub { File::Spec->rel2abs($_[3]) },
             default   => sub {
                 my ($self, $settings, $field) = @_;
 
@@ -867,6 +1041,11 @@ sub pre_parse_args {
                 push @plugins => $1;
                 next;
             }
+            if ($arg eq '--no-plugins') {
+                # clear plugins
+                @plugins = ();
+                next;
+            }
             push @opts => $arg;
         }
     }
@@ -900,7 +1079,14 @@ sub parse_args {
         my $spec  = $_->{spec};
         my $action = $_->{action};
         my $field = $_->{field};
-        $action ||= \($settings->{$field}) if $field;
+        if ($action) {
+            my ($opt, $arg) = @_;
+            my $inner = $action;
+            $action = sub { $self->$inner($settings, $field, $arg, $opt) }
+        }
+        elsif ($field) {
+            $action = \($settings->{$field});
+        }
 
         ($spec => $action)
     } @{$self->my_opts(plugin_options => \@plugin_options)};

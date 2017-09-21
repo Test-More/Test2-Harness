@@ -189,7 +189,7 @@ sub exited {
 
     croak "No PID to check" unless $self->{+PID};
 
-    return kill(0, $self->{+PID});
+    return !kill(0, $self->{+PID});
 }
 
 sub exit {

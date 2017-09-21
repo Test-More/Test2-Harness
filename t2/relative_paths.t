@@ -1,7 +1,7 @@
 use Test2::V0;
 use File::Spec;
 
-my $path = File::Spec->canonpath('t/relative_paths.t');
+my $path = File::Spec->canonpath('t2/relative_paths.t');
 
 skip_all "This test must be run from the project root."
     unless -f $path;

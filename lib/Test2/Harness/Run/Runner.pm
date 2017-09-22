@@ -263,10 +263,6 @@ sub start {
 
     local $SIG{INT}  = sub { $handle_sig->('INT') };
     local $SIG{TERM} = sub { $handle_sig->('TERM') };
-    local $SIG{HUP}  = sub {
-        print STDERR "Runner cought SIGHUP, saving state and reloading...\n";
-        $self->{+HUP} = 1;
-    };
 
     my $env = $run->env_vars;
 
@@ -438,15 +434,8 @@ sub run_job {
     my $job_id = $task->{job_id};
     my $file = $task->{file};
 
-    unless ($job_id) {
-        warn "Task does not have a job ID, skipping";
-        next;
-    }
-
-    unless ($file) {
-        warn "Task does not have a file, skipping";
-        next;
-    }
+    die "Task does not have a job ID" unless $job_id;
+    die "Task does not have a file"   unless $file;
 
     my $run = $self->{+RUN};
 
@@ -569,7 +558,7 @@ sub next {
 sub running {
     my $self = shift;
     my $state = $self->{+STATE};
-    return sum(map { scalar(keys %{$_}) } values %{$state->{running}});
+    return sum(map { scalar(keys %{$_}) } values %{$state->{running}}) || 0;
 }
 
 sub write_remaining_exits {
@@ -590,7 +579,7 @@ sub write_remaining_exits {
 sub pending {
     my $self = shift;
     my $state = $self->{+STATE};
-    return sum(map { scalar(@{$_}) } values %{$state->{pending}});
+    return sum(map { scalar(@{$_}) } values %{$state->{pending}}) || 0;
 }
 
 sub _cats_by_stamp {
@@ -602,6 +591,7 @@ sub _cats_by_stamp {
 
 sub next_by_stamp {
     my $self = shift;
+    return if keys %{$self->{+STATE}->{running}->{isolation}};
     my ($cat) = $self->_cats_by_stamp;
     return unless $cat;
     return shift(@{$self->{+STATE}->{pending}->{$cat}});
@@ -612,11 +602,12 @@ sub next_finite {
     my ($running, $max) = @_;
 
     my $state = $self->{+STATE};
+    return if keys %{$state->{running}->{isolation}};
 
     my $p_gen = $state->{pending}->{general};
     my $p_med = $state->{pending}->{medium};
     my $p_lng = $state->{pending}->{long};
-    my $p_iso = $state->{pending}->{iso};
+    my $p_iso = $state->{pending}->{isolation};
 
     # If we have more than 1 slot available prefer a longer job
     if ($running < $max - 1) {
@@ -639,10 +630,11 @@ sub next_fair {
     my $self = shift;
     my ($running, $max) = @_;
 
+    my $state = $self->{+STATE};
+    return if keys %{$state->{running}->{isolation}};
+
     my @cats = $self->_cats_by_stamp;
     return unless @cats;
-
-    my $state = $self->{+STATE};
 
     my $r_lng = $state->{running}->{long};
     my $r_med = $state->{running}->{medium};
@@ -652,15 +644,15 @@ sub next_fair {
 
     # Do not fill all slots with 'long' or 'medium' jobs
     shift @cats while @cats > 1    # Do not change if this is the only category
-        && ($cats[-1] eq 'long' || $cats[-1] eq 'medium')    # Only change if long/medium
+        && ($cats[0] eq 'long' || $cats[0] eq 'medium')    # Only change if long/medium
         && $lmrun >= $lmmax;                                 # Only change if the sum of running long+medium is more than max - 1
 
     my ($cat) = @cats;
 
     # Next one up requires isolation :-(
-    if ($cat eq 'iso') {
+    if ($cat eq 'isolation') {
         my $p_gen = $state->{pending}->{general};
-        my $p_iso = $state->{pending}->{iso};
+        my $p_iso = $state->{pending}->{isolation};
 
         # If we have something long running then go ahead and start general tasks, but nothing longer
         return shift @$p_gen if keys %{$state->{running}->{long}} && @$p_gen;

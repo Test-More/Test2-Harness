@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'App::Yath::Command';
+skip_all "Not done, come back!";
 
 use Config qw/%Config/;
 

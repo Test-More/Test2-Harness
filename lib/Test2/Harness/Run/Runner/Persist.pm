@@ -109,6 +109,17 @@ sub hup {
     return $self->SUPER::hup();
 }
 
+sub start {
+    my $self = shift;
+
+    local $SIG{HUP}  = sub {
+        print STDERR "Runner cought SIGHUP, saving state and reloading...\n";
+        $self->{+HUP} = 1;
+    };
+
+    return $self->SUPER::start(@_);
+}
+
 sub watch {
     my $self = shift;
     my ($file) = @_;

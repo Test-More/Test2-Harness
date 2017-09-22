@@ -9,6 +9,7 @@ use File::Path qw/remove_tree/;
 use File::Spec();
 
 use Test2::Harness::Util::File::JSON();
+use Test2::Harness::Run::Runner;
 
 use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use Test2::Harness::Util qw/open_file/;
@@ -43,15 +44,16 @@ sub run {
 
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
 
-    my $exit;
-    if (kill('TERM', $data->{pid})) {
-        waitpid($data->{pid}, 0);
-        $exit = 0;
-    }
-    else {
-        warn "Could not kill pid $data->{pid}.\n";
-        $exit = 255;
-    }
+    my $runner = Test2::Harness::Run::Runner->new(
+        dir    => $data->{dir},
+        pid    => $data->{pid},
+        remote => 1,
+    );
+
+    my $queue = $runner->queue;
+    $queue->end;
+
+    waitpid($data->{pid}, 0);
 
     unlink($pfile) if -f $pfile;
 
@@ -75,7 +77,7 @@ sub run {
     remove_tree($data->{dir}, {safe => 1, keep_root => 0});
 
     print "\n";
-    return $exit;
+    return 0;
 }
 
 1;

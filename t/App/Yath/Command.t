@@ -2,6 +2,8 @@ use Test2::V0 -target => 'App::Yath::Command';
 
 use Config qw/%Config/;
 
+use File::Temp qw/tempdir/;
+
 use ok $CLASS;
 
 can_ok($CLASS, [qw/settings signal args plugins/], "Got public attributes");
@@ -374,10 +376,10 @@ subtest make_run_from_settings => sub {
                 times            => 1,
                 verbose          => 2,
                 no_long          => 0,
-                plugins          => ['Foo::Bar'],
                 exclude_patterns => [qr/xxx/],
                 exclude_files    => ['t/xxx.t'],
-            }
+            },
+            plugins => ['Foo::Bar'],
         },
         $TCLASS
     );
@@ -630,178 +632,152 @@ subtest options => sub {
     };
 
     subtest switch => sub {
-        
+        my $one = $TCLASS->new(args => [qw/-S -w -S-t --switch -e=foo=bar/]);
+        is(
+            $one->settings->{switches},
+            [qw/-w -t -e foo=bar/],
+            "Set switches"
+        );
     };
+
+    subtest clear => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{clear_dir}, "not on by default");
+
+        my $two = $TCLASS->new(args => ['-C']);
+        ok($two->settings->{clear_dir}, "toggled on");
+
+        my $three = $TCLASS->new(args => ['--clear']);
+        ok($three->settings->{clear_dir}, "toggled on");
+    };
+
+    subtest shm => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{use_shm}, "on by default");
+
+        my $two = $TCLASS->new(args => ['--no-shm']);
+        ok(!$two->settings->{use_shm}, "toggled off");
+    };
+
+    subtest tmpdir => sub {
+        if (grep { -d $_ } map { File::Spec->canonpath($_) } '/dev/shm', '/run/shm') {
+            my $one = $TCLASS->new(args => []);
+            is($one->settings->{tmp_dir}, match qr{^/(run|dev)/shm/?$}, "temp dir in shm");
+        }
+
+        my $dir = tempdir(CLEANUP => 1, TMP => 1);
+
+        local $ENV{TMPDIR} = $dir;
+        my $two = $TCLASS->new(args => ['--no-shm']);
+        is($two->settings->{tmp_dir}, $dir, "temp dir in set by TMPDIR");
+
+        local $ENV{TEMPDIR} = delete $ENV{TMPDIR};
+        my $three = $TCLASS->new(args => ['--no-shm']);
+        is($three->settings->{tmp_dir}, $dir, "temp dir in set by TEMPDIR");
+
+        delete $ENV{TEMPDIR};
+        my $four = $TCLASS->new(args => ['--no-shm']);
+        is($four->settings->{tmp_dir}, File::Spec->tmpdir, "system temp dir");
+    };
+
+    subtest workdir => sub {
+        my $dir = tempdir(CLEANUP => 1, TMP => 1);
+
+        local $ENV{T2_WORKDIR} = $dir;
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{dir}, $dir, "Set via env var");
+
+        delete $ENV{T2_WORKDIR};
+
+        delete $ENV{TMPDIR};
+        delete $ENV{TEMPDIR};
+        my $two = $TCLASS->new(args => []);
+        like($two->settings->{dir}, qr{yath-test-$$}, "Generated a directory");
+    };
+
+    subtest no_long => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{no_long}, "off by default");
+
+        my $two = $TCLASS->new(args => ['--no-long']);
+        ok($two->settings->{no_long}, "toggled on");
+    };
+
+    subtest exclude_files => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{exclude_files}, [], "default is an empty array");
+
+        my $two = $TCLASS->new(args => ['-x', 'xxx.t']);
+        is($two->settings->{exclude_files}, ['xxx.t'], "excluded a file");
+
+        my $three = $TCLASS->new(args => ['--exclude-file', 'xxx.t']);
+        is($three->settings->{exclude_files}, ['xxx.t'], "excluded a file");
+    };
+
+    subtest exclude_pattern => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{exclude_patterns}, [], "default is an empty array");
+
+        my $two = $TCLASS->new(args => ['-X', qr/xyz/]);
+        is($two->settings->{exclude_patterns}, [qr/xyz/], "excluded a pattern");
+
+        my $three = $TCLASS->new(args => ['--exclude-pattern', qr/xyz/]);
+        is($three->settings->{exclude_patterns}, [qr/xyz/], "excluded a pattern");
+    };
+
+    subtest run_id => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{run_id}, "default is a timestamp");
+
+        my $two = $TCLASS->new(args => ['--id', 'foo']);
+        is($two->settings->{run_id}, 'foo', "set id to foo");
+
+        my $three = $TCLASS->new(args => ['--run-id', 'foo']);
+        is($three->settings->{run_id}, 'foo', "set id to foo");
+    };
+
+    subtest job_count => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{job_count}, 1, "default is 1");
+
+        my $two = $TCLASS->new(args => ['-j3']);
+        is($two->settings->{job_count}, 3, "set to 3");
+
+        my $three = $TCLASS->new(args => ['--jobs', '3']);
+        is($three->settings->{job_count}, 3, "set to 3");
+
+        my $four = $TCLASS->new(args => ['--job-count', '3']);
+        is($four->settings->{job_count}, 3, "set to 3");
+    };
+
+    subtest preload => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{preload}, undef, "No preloads");
+
+        my $two = $TCLASS->new(args => ['-PScalar::Util', '--preload', 'List::Util']);
+        is($two->settings->{preload}, ['Scalar::Util', 'List::Util'], "Added preload");
+
+        my $three = $TCLASS->new(args => ['-PScalar::Util', '--preload', 'List::Util', '--no-preload', '-PData::Dumper']);
+        is($three->settings->{preload}, ['Data::Dumper'], "Added preload after canceling previous ones");
+    };
+
+    subtest plugin => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->plugins, [], "No plugins");
+
+        my $two = $TCLASS->new(args => ['-pTest', '--plugin', 'Test']);
+        is($two->plugins, ['App::Yath::Plugin::Test', 'App::Yath::Plugin::Test'], "Added plugin");
+
+        my $three = $TCLASS->new(args => ['-pFail', '--plugin', 'Fail', '--no-plugins', '-pTest']);
+        is($three->plugins, ['App::Yath::Plugin::Test'], "Added plugin after canceling previous ones");
+    };
+
+
 };
 
 done_testing;
 
 __END__
-
-        {
-            spec    => 'S|switch=s',
-            field   => 'switches',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            action  => sub {
-                my $self = shift;
-                my ($settings, $field, $arg, $opt) = @_;
-                my ($switch, $val) = split /=/, $arg, 2;
-                push @{$settings->{switches}} => $switch;
-                push @{$settings->{switches}} => $val if defined $val;
-            },
-            usage     => ['-S SW  -S SW=val', '--switch SW=val'],
-            summary   => ['Pass the specified switch to perl for each test'],
-            long_desc => 'This is not compatible with preload.',
-        },
-
-        {
-            spec    => 'C|clear!',
-            field   => 'clear_dir',
-            used_by => {runner => 1},
-            section => 'Harness Options',
-            usage   => ['-C  --clear'],
-            summary => ['Clear the work directory if it is not already empty'],
-        },
-
-        {
-            spec => 'shm!',
-            field => 'use_shm',
-            used_by => {runner => 1},
-            section => 'Harness Options',
-            usage => ['--shm', '--no-shm'],
-            summary => ["Use shm for tempdir if possible (Default: on)", "Do not use shm."],
-            default => 1,
-        },
-
-        {
-            spec    => 't|tmpdir=s',
-            field   => 'tmp_dir',
-            used_by => {runner => 1},
-            section => 'Harness Options',
-            usage   => ['-t path/', '--tmpdir path/'],
-            summary => ['Use a specific temp directory', '(Default: use system temp dir)'],
-            default => sub {
-                my ($self, $settings, $field) = @_;
-                if ($settings->{use_shm}) {
-                    $settings->{tmp_dir} = first { -d $_ } map { File::Spec->canonpath($_) } '/dev/shm', '/run/shm';
-                }
-                return $settings->{tmp_dir} ||= $ENV{TMPDIR} || $ENV{TEMPDIR} || File::Spec->tmpdir;
-            },
-        },
-
-        {
-            spec    => 'd|dir|workdir=s',
-            field   => 'dir',
-            used_by => {runner => 1},
-            section => 'Harness Options',
-            usage   => ['-d path', '--dir path', '--workdir path'],
-            summary => ['Set the work directory', '(Default: new temp directory)'],
-            default => sub {
-                my ($self, $settings, $field) = @_;
-                return unless $self->has_runner;
-                return $ENV{T2_WORKDIR} if $ENV{T2_WORKDIR};
-                return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !($settings->{keep_dir} || $self->always_keep_dir), DIR => $settings->{tmp_dir});
-            },
-            normalize => sub { File::Spec->rel2abs($_[3]) },
-        },
-
-        {
-            spec    => 'no-long',
-            field   => 'no_long',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['--no-long'],
-            summary => ["Do not run tests with the HARNESS-CAT-LONG header"],
-        },
-
-        {
-            spec    => 'x|exclude-file=s@',
-            field   => 'exclude_files',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['-x t/bad.t', '--exclude-file t/bad.t'],
-            summary => ["Exclude a file from testing", "May be specified multiple times"],
-            default => sub { [] },
-        },
-
-        {
-            spec    => 'X|exclude-pattern=s@',
-            field   => 'exclude_patterns',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['-X foo', '--exclude-pattern bar'],
-            summary => ["Exclude files that match", "May be specified multiple times", "matched using `m/\$PATTERN/`"],
-            default => sub { [] },
-        },
-
-        {
-            spec    => 'id|run-id=s',
-            field   => 'run_id',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['--id ID',               '--run_id ID'],
-            summary => ['Set a specific run-id', '(Default: current timestamp)'],
-            default => sub                       { time() },
-        },
-
-        {
-            spec    => 'j|jobs|job-count=i',
-            field   => 'job_count',
-            used_by => {runner => 1},
-            section => 'Harness Options',
-            usage   => ['-j #  --jobs #', '--job-count #'],
-            summary => ['Set the number of concurrent jobs to run', '(Default: 1)'],
-            default => 1,
-        },
-
-        {
-            spec    => 'P|preload=s@',
-            field   => 'preload',
-            used_by => {runner => 1},
-            section => 'Harness Options',
-            usage   => ['-P Module', '--preload Module'],
-            summary => ['Preload a module before running tests', 'this option may be given multiple times'],
-        },
-
-        {
-            spec => 'no-preloads',
-            field => 'preload',
-            used_by => { runner => 1 },
-            section => 'Harness Options',
-            usage => ['--no-preload'],
-            summary => ['cancel any preloads listed until now'],
-            long_desc => "This can be used to negate preloads specified in .yath.rc or similar",
-            action => sub {
-                my $self = shift;
-                my ($settings, $field, $arg, $opt) = @_;
-                delete $settings->{preload};
-            },
-        },
-
-        {
-            spec => 'p|plugin=s@',
-            field => 'plugins',
-            used_by => { all => 1},
-            section => 'Plugins',
-            usage => ['-pPlugin', '-p+My::Plugin', '--plugin Plugin'],
-            summary => ['Load a plugin', 'can be specified multiple times'],
-        },
-
-        {
-            spec => 'no-plugins',
-            field => 'plugins',
-            used_by => { all => 1 },
-            section => 'Plugins',
-            usage => ['--no-plugins'],
-            summary => ['cancel any plugins listed until now'],
-            long_desc => "This can be used to negate plugins specified in .yath.rc or similar",
-            action => sub {
-                my $self = shift;
-                my ($settings, $field, $arg, $opt) = @_;
-                delete $settings->{plugins};
-            },
-        },
 
         {
             spec    => 'm|load|load-module=s@',

@@ -240,7 +240,8 @@ sub make_run_from_settings {
         times       => $settings->{times},
         verbose     => $settings->{verbose},
         no_long     => $settings->{no_long},
-        plugins     => $settings->{plugins},
+
+        plugins => $self->{+PLUGINS} ? [@{$self->{+PLUGINS}}] : undef,
 
         exclude_patterns => $settings->{exclude_patterns},
         exclude_files    => {map { (File::Spec->rel2abs($_) => 1) } @{$settings->{exclude_files}}},
@@ -505,7 +506,6 @@ sub options {
             summary => ['Set the work directory', '(Default: new temp directory)'],
             default => sub {
                 my ($self, $settings, $field) = @_;
-                return unless $self->has_runner;
                 return $ENV{T2_WORKDIR} if $ENV{T2_WORKDIR};
                 return tempdir("yath-test-$$-XXXXXXXX", CLEANUP => !($settings->{keep_dir} || $self->always_keep_dir), DIR => $settings->{tmp_dir});
             },
@@ -581,32 +581,28 @@ sub options {
             action => sub {
                 my $self = shift;
                 my ($settings, $field, $arg, $opt) = @_;
-                delete $settings->{preload};
+                return unless $settings->{preload};
+                @{$settings->{preload}} = ();
             },
         },
 
         {
-            spec => 'p|plugin=s@',
-            field => 'plugins',
+            spec    => 'p|plugin=s@',
             used_by => { all => 1},
             section => 'Plugins',
-            usage => ['-pPlugin', '-p+My::Plugin', '--plugin Plugin'],
+            usage   => ['-pPlugin', '-p+My::Plugin', '--plugin Plugin'],
             summary => ['Load a plugin', 'can be specified multiple times'],
+            action  => sub {},
         },
 
         {
-            spec => 'no-plugins',
-            field => 'plugins',
-            used_by => { all => 1 },
-            section => 'Plugins',
-            usage => ['--no-plugins'],
-            summary => ['cancel any plugins listed until now'],
+            spec      => 'no-plugins',
+            used_by   => { all => 1 },
+            section   => 'Plugins',
+            usage     => ['--no-plugins'],
+            summary   => ['cancel any plugins listed until now'],
             long_desc => "This can be used to negate plugins specified in .yath.rc or similar",
-            action => sub {
-                my $self = shift;
-                my ($settings, $field, $arg, $opt) = @_;
-                delete $settings->{plugins};
-            },
+            action    => sub {},
         },
 
         {

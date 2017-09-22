@@ -10,7 +10,7 @@ use Test2::Harness::Util::File::JSON;
 use App::Yath::Util qw/find_pfile/;
 
 use parent 'App::Yath::Command::test';
-use Test2::Harness::Util::HashBase qw/-_feeder -_runner -_pid/;
+use Test2::Harness::Util::HashBase qw/-_feeder -_runner -_pid -_job_count/;
 
 sub group { 'persist' }
 
@@ -78,20 +78,21 @@ sub run {
         run      => $run,
         runner   => $runner,
         dir      => $data->{dir},
-        keep_dir => 0,
+        keep_dir => $settings->{keep_dir},
         job_ids  => \%jobs,
     );
 
-    $self->{+_FEEDER} = $feeder;
-    $self->{+_RUNNER} = $runner;
-    $self->{+_PID}    = $data->{pid};
+    $self->{+_FEEDER}    = $feeder;
+    $self->{+_RUNNER}    = $runner;
+    $self->{+_PID}       = $data->{pid};
+    $self->{+_JOB_COUNT} = $base_id - 1;
     $self->SUPER::run_command();
 }
 
 sub feeder {
     my $self = shift;
 
-    return ($self->{+_FEEDER}, $self->{+_RUNNER}, $self->{+_PID});
+    return ($self->{+_FEEDER}, $self->{+_RUNNER}, $self->{+_PID}, $self->{+_JOB_COUNT});
 }
 
 1;

@@ -109,7 +109,7 @@ sub feeder {
         keep_dir => $settings->{keep_dir},
     );
 
-    return ($feeder, $runner, $pid);
+    return ($feeder, $runner, $pid, $job_id - 1);
 }
 
 sub run_command {
@@ -120,9 +120,9 @@ sub run_command {
     my $renderers = $self->renderers;
     my $loggers   = $self->loggers;
 
-    my ($feeder, $runner, $pid, $stat);
+    my ($feeder, $runner, $pid, $stat, $job_count);
     my $ok = eval {
-        ($feeder, $runner, $pid) = $self->feeder or die "No feeder!";
+        ($feeder, $runner, $pid, $job_count) = $self->feeder or die "No feeder!";
 
         my $harness = Test2::Harness->new(
             run_id            => $settings->{run_id},
@@ -133,6 +133,7 @@ sub run_command {
             event_timeout     => $settings->{event_timeout},
             post_exit_timeout => $settings->{post_exit_timeout},
             jobs              => $settings->{jobs},
+            job_count         => $job_count,
         );
 
         $stat = $harness->run();
@@ -172,9 +173,10 @@ sub run_command {
     $self->paint("\nRun ID: $settings->{run_id}\n");
 
     my $bad = $stat ? $stat->{fail} : [];
+    my $lost = $stat ? $stat->{lost} : 0;
 
     # Possible failure causes
-    my $fail = $exit || !defined($exit) || !$ok || !$stat;
+    my $fail = $lost || $exit || !defined($exit) || !$ok || !$stat;
 
     if (@$bad) {
         $self->paint("\nThe following test jobs failed:\n");
@@ -200,6 +202,7 @@ sub run_command {
         $self->paint("Test runner exited badly: ?\n") unless defined $exit;
         $self->paint("An exception was cought\n") if !$ok && !$sig;
         $self->paint("Received SIG$sig\n") if $sig;
+        $self->paint("$lost test files were never run!\n") if $lost;
 
         $self->paint("\n");
 
@@ -210,7 +213,7 @@ sub run_command {
         $self->paint("\nAll tests were successful!\n\n");
     }
 
-    print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir};
+    print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir} && $settings->{dir};
 
     print "Wrote " . ($ok ? '' : '(Potentially Corrupt) ') . "log file: $settings->{log_file}\n"
         if $settings->{log};

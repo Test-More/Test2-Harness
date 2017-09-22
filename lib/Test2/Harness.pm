@@ -22,6 +22,7 @@ use Test2::Harness::Util::HashBase qw{
     -active
     -live
     -jobs
+    -job_count
     -event_timeout
     -post_exit_timeout
     -run_id
@@ -59,10 +60,10 @@ sub run {
         }
     }
 
-    my(@fail, @pass);
+    my(@fail, @pass, $seen);
     while (my ($job_id, $watcher) = each %{$self->{+WATCHERS}}) {
         DEBUG("Harness watcher loop ($job_id)");
-#    for my $watcher (values %{$self->{+WATCHERS}}) {
+        $seen++;
         if ($watcher->fail) {
             push @fail => $watcher->job;
         }
@@ -71,9 +72,15 @@ sub run {
         }
     }
 
+    my $lost;
+    if (my $want = $self->{+JOB_COUNT}) {
+        $lost = $want - $seen;
+    }
+
     return {
         fail => \@fail,
         pass => \@pass,
+        lost => $lost,
     }
 }
 

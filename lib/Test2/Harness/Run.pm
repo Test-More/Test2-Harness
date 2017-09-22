@@ -127,7 +127,7 @@ sub find_files {
     }
 
     if ($self->{+PLUGINS}) {
-        push @files => $_->find_files($self) for keys %{$self->{+PLUGINS}};
+        push @files => $_->find_files($self) for @{$self->{+PLUGINS}};
     }
 
     @files = sort { $a->file cmp $b->file } @files;

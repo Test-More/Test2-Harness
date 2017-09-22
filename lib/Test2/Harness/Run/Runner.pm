@@ -282,17 +282,21 @@ sub start {
         $err = $@;
     };
 
-    return $out if $ok;
+    unless($ok) {
+        warn $err;
+        eval { $self->kill_jobs($sig || 'TERM'); 1 } or warn $@;
+    }
 
-    warn $err;
+    unless(eval { while(1) { $self->wait_job() or last }; 1 }) {
+        warn $@;
+        $ok = 0;
+    }
 
-    eval {
-        $self->kill_jobs($sig || 'TERM');
-        while (1) { $self->wait_job() or last };
-        1;
-    } or warn $@;
+    return $out if $ok && defined($out);
 
     $self->write_remaining_exits();
+
+    return undef if $ok;
 
     CORE::exit($SIG ? 0 : 255);
 }
@@ -322,6 +326,7 @@ sub _start {
     $queue->seek($state->{position});
 
     while (1) {
+        $self->wait_jobs();
         $self->respawn if $self->hup; # do not use {+HUP}, this is a hook point
 
         my $task = $self->next or last;
@@ -331,15 +336,14 @@ sub _start {
         return $runfile if $runfile;
     }
 
-    while(1) { $self->wait_job() or last }
-
-    $self->write_remaining_exits();
-
     return undef;
 }
 
 sub respawn {
     my $self = shift;
+
+    print STDERR "Waiting for currently running jobs to complete before reloading...\n";
+    while(1) { $self->wait_job() or last }
 
     my $state = $self->{+STATE};
 
@@ -348,6 +352,42 @@ sub respawn {
     exec($self->cmd);
     warn "Should not get here, respawn failed";
     CORE::exit(255);
+}
+
+sub wait_jobs {
+    my $self = shift;
+
+    local $?;
+
+    my $out = 0;
+
+    my $running = $self->{+STATE}->{running};
+    for my $cat (values %$running) {
+        for my $pid (keys %$cat) {
+            my $got = waitpid($pid, WNOHANG);
+            my $ret = $?;
+            next if $got == 0;
+
+            my $exit_file = delete $cat->{$pid};
+            $out++;
+
+            if ($got == -1) {
+                write_file_atomic($exit_file, '-1');
+                next;
+            }
+
+            if ($got == $pid) {
+                write_file_atomic($exit_file, $ret);
+                next;
+            }
+
+            die "Unexpected return from waitpid($pid): $got";
+            # The die should make this unreachable.. but just in case.
+            CORE::exit(255);
+        }
+    }
+
+    return $out;
 }
 
 sub wait_job {
@@ -505,6 +545,7 @@ sub next {
     my $meth = $self->{+_NEXT};
 
     while(1) {
+        $self->wait_jobs();
         return -1 if $self->hup;
 
         $self->poll_jobs();
@@ -549,7 +590,7 @@ sub write_remaining_exits {
 sub pending {
     my $self = shift;
     my $state = $self->{+STATE};
-    return sum(map { scalar(@$_) } values %{$state->{pending}});
+    return sum(map { scalar(@{$_}) } values %{$state->{pending}});
 }
 
 sub _cats_by_stamp {

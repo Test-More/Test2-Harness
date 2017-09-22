@@ -240,6 +240,7 @@ sub make_run_from_settings {
         times       => $settings->{times},
         verbose     => $settings->{verbose},
         no_long     => $settings->{no_long},
+        dummy       => $settings->{dummy},
 
         plugins => $self->{+PLUGINS} ? [@{$self->{+PLUGINS}}] : undef,
 
@@ -495,6 +496,16 @@ sub options {
                 }
                 return $settings->{tmp_dir} ||= $ENV{TMPDIR} || $ENV{TEMPDIR} || File::Spec->tmpdir;
             },
+        },
+
+        {
+            spec => 'D|dummy',
+            field   => 'dummy',
+            used_by => {runner => 1},
+            section => 'Harness Options',
+            usage   => ['-D', '--dummy'],
+            summary => ['Dummy run, do not actually execute tests'],
+            default => $ENV{T2_HARNESS_DUMMY} || 0,
         },
 
         {

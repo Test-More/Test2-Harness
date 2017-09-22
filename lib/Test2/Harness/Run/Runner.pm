@@ -502,6 +502,7 @@ sub run_job {
     );
 
     my $via = $task->{via} || ($fork ? ['Fork', 'Open3'] : ['Open3']);
+    $via = ['Dummy'] if $run->dummy;
 
     my $runner = $self->{+JOB_RUNNER_CLASS}->new(
         job => $job,

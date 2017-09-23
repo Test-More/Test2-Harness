@@ -936,7 +936,7 @@ sub usage_pod {
 
     my @list = $in->usage_opt_order;
 
-    my $out = "\n=head1 COMMAND LINE USAGE\n";
+    my $out = "";
 
     my @cli_args = $in->cli_args;
     @cli_args = ('') unless @cli_args;

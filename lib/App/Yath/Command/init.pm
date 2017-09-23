@@ -59,43 +59,9 @@ __END__
 
 =head1 SYNOPSIS
 
-
-
 =head1 COMMAND LINE USAGE
 
-    $ yath init [options]
-
-=head2 Help
-
-=over 4
-
-=item --show-opts
-
-Exit after showing what yath thinks your options mean
-
-=item -h
-
-=item --help
-
-Exit after showing this help message
-
-=back
-
-=head2 Plugins
-
-=over 4
-
-=item -pPlugin
-
-=item -p+My::Plugin
-
-=item --plugin Plugin
-
-Load a plugin
-
-can be specified multiple times
-
-=back
+B<THIS SECTION IS AUTO-GENERATED AT BUILD>
 
 =head1 SOURCE
 

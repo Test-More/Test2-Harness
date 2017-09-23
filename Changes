@@ -1,5 +1,17 @@
 {{$NEXT}}
 
+    - More test coverage
+    - Added --cover option
+    - Added --dummy option
+    - Improved 'start', 'stop', and 'run'
+    - Remove chdir option
+    - Fix broken replay command
+    - Fix some deadlock conditions
+    - Cleaner output
+    - Do not wrap long output lines when output is not a terminal
+    - DZIL generates some docs now
+    - Minor bug fixes and improvements
+    - Improved performance of the parser
     - Add # HARNESS-TIMEOUT-[TYPE] ##  header support
     - Add -q|--quiet mode
     - Do not try to kill job after post-exit timeout

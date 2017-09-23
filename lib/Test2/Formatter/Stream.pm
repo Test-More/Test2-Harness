@@ -12,14 +12,15 @@ use Test2::Harness::Util::JSON qw/JSON/;
 use base qw/Test2::Formatter/;
 use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -event_id -tb -tb_handles -file -leader/;
 
-{
+BEGIN {
     my $J = JSON->new;
     $J->indent(0);
     $J->convert_blessed(1);
     $J->allow_blessed(1);
     $J->utf8(1);
 
-    sub ENCODER() { $J }
+    require constant;
+    constant->import(ENCODER => $J);
 }
 
 my $ROOT_PID;

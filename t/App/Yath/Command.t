@@ -70,7 +70,6 @@ subtest my_opts => sub {
 
     $control->override(has_jobs => sub { 1 });
     my $opts = $TCLASS->my_opts;
-    is(@$opts, 27, "Got expected number of opts for jobs");
     for my $opt (@$opts) {
         next if $opt->{used_by}->{all};
         next if $opt->{used_by}->{jobs};
@@ -80,7 +79,6 @@ subtest my_opts => sub {
 
     $control->override(has_runner => sub { 1 });
     $opts = $TCLASS->my_opts;
-    is(@$opts, 32, "Got expected number of opts for runner");
     for my $opt (@$opts) {
         next if $opt->{used_by}->{all};
         next if $opt->{used_by}->{runner};
@@ -90,7 +88,6 @@ subtest my_opts => sub {
 
     $control->override(has_logger => sub { 1 });
     $opts = $TCLASS->my_opts;
-    is(@$opts, 8, "Got expected number of opts for logger");
     for my $opt (@$opts) {
         next if $opt->{used_by}->{all};
         next if $opt->{used_by}->{logger};
@@ -100,7 +97,6 @@ subtest my_opts => sub {
 
     $control->override(has_display => sub { 1 });
     $opts = $TCLASS->my_opts;
-    is(@$opts, 13, "Got expected number of opts for display");
     for my $opt (@$opts) {
         next if $opt->{used_by}->{all};
         next if $opt->{used_by}->{display};
@@ -768,14 +764,37 @@ subtest options => sub {
         my $one = $TCLASS->new(args => []);
         is($one->plugins, [], "No plugins");
 
-        my $two = $TCLASS->new(args => ['-pTest', '--plugin', 'Test']);
-        is($two->plugins, ['App::Yath::Plugin::Test', 'App::Yath::Plugin::Test'], "Added plugin");
+        @INC = ('t/lib', @INC);
+
+        my $two = $TCLASS->new(args => ['-pTest', '--plugin', 'TestNew']);
+        is($two->plugins, ['App::Yath::Plugin::Test', object { prop blessed => 'App::Yath::Plugin::TestNew' }], "Added plugin");
 
         my $three = $TCLASS->new(args => ['-pFail', '--plugin', 'Fail', '--no-plugins', '-pTest']);
         is($three->plugins, ['App::Yath::Plugin::Test'], "Added plugin after canceling previous ones");
     };
 
+    subtest dummy => sub {
+        local $ENV{T2_HARNESS_DUMMY} = 0;
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{dummy}, "not dummy by default");
 
+        $ENV{T2_HARNESS_DUMMY} = 1;
+        my $two = $TCLASS->new(args => []);
+        ok($two->settings->{dummy}, "dummy by default with env var");
+
+        $ENV{T2_HARNESS_DUMMY} = 0;
+        my $three = $TCLASS->new(args => ['-D']);
+        ok($three->settings->{dummy}, "dummy turned on");
+
+        my $four = $TCLASS->new(args => ['--dummy']);
+        ok($four->settings->{dummy}, "dummy turned on");
+    };
+
+    subtest load => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{load}, "no loads by default");
+        
+    };
 };
 
 done_testing;

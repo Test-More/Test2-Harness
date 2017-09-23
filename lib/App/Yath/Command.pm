@@ -907,6 +907,8 @@ sub parse_args {
         my $file = pkg_to_file($plugin);
         eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";
 
+        $plugin = $plugin->new if $plugin->can('new');
+
         push @plugin_options => $plugin->options($self, $settings);
         $plugin->pre_init($self, $settings);
     }

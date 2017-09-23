@@ -27,6 +27,7 @@ use Test2::Harness::Util::HashBase qw{
     -input
     -verbose
     -dummy
+    -cover
 
     -search
     -unsafe_inc

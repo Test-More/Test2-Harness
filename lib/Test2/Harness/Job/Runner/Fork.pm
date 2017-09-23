@@ -50,11 +50,6 @@ sub run {
     $SIG{INT} = 'DEFAULT';
     $SIG{HUP} = 'DEFAULT';
 
-    for my $mod (@{$job->load || []}) {
-        my $file = pkg_to_file($mod);
-        require $file;
-    }
-
     my $importer = eval <<'    EOT' or die $@;
 package main;
 #line 0 "-"
@@ -70,6 +65,11 @@ sub { shift->import(@_) }
         local $0 = '-';
         require $file;
         $importer->($mod, @args);
+    }
+
+    for my $mod (@{$job->load || []}) {
+        my $file = pkg_to_file($mod);
+        require $file;
     }
 
     # In Child

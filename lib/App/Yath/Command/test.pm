@@ -211,6 +211,16 @@ sub run_command {
 
     if (!@$bad && !$fail) {
         $self->paint("\nAll tests were successful!\n\n");
+
+        if ($settings->{cover}) {
+            require IPC::Cmd;
+            if(my $cover = IPC::Cmd::can_run('cover')) {
+                system($^X, (map { "-I$_" } @INC), $cover);
+            }
+            else {
+                $self->paint("You will need to run the `cover` command manually to build the coverage report.\n\n");
+            }
+        }
     }
 
     print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir} && $settings->{dir};

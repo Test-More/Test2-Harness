@@ -81,6 +81,12 @@ sub init {
     die "You cannot select both bzip2 and gzip for the log.\n"
         if $settings->{bzip2_log} && $settings->{gzip_log};
 
+    die "You cannot use preloads with --cover"
+        if $settings->{cover} && $settings->{preload} && @{$settings->{preload}};
+
+    die "You cannot use forking with --cover"
+        if $settings->{cover} && $settings->{use_fork};
+
     $self->handle_list_args($list);
 
     if ($settings->{dir}) {
@@ -241,6 +247,7 @@ sub make_run_from_settings {
         verbose     => $settings->{verbose},
         no_long     => $settings->{no_long},
         dummy       => $settings->{dummy},
+        cover       => $settings->{cover},
 
         plugins => $self->{+PLUGINS} ? [@{$self->{+PLUGINS}}] : undef,
 
@@ -397,6 +404,24 @@ sub options {
             summary   => ['(Default: on) fork to start tests', 'Do not fork to start tests'],
             long_desc => 'Test2::Harness normally forks to start a test. Forking can break some select tests, this option will allow such tests to pass. This is not compatible with the "preload" option. This is also significantly slower. You can also add the "# HARNESS-NO-PRELOAD" comment to the top of the test file to enable this on a per-test basis.',
             default   => 1,
+        },
+
+        {
+            spec => 'cover',
+            field => 'cover',
+            used_by => {jobs => 1, runner => 1},
+            section => 'Job Options',
+            usage => ['--cover'],
+            summary => ['use Devel::Cover to calculate test coverage'],
+            action => sub {
+                my $self = shift;
+                my ($settings) = @_;
+                eval { require Devel::Cover; 1 } or die "Cannot use --cover without Devel::Cover: $@";
+                $settings->{cover} = 1;
+                $settings->{use_fork} = 0;
+                push @{$settings->{load_import} ||= []} => 'Devel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+            },
+            long_desc => "This is essentially the same as combining: '--no-fork', and '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl' Devel::Cover and preload/fork do not work well together.",
         },
 
         {

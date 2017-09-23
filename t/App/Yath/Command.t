@@ -1,6 +1,8 @@
 use Test2::V0 -target => 'App::Yath::Command';
 skip_all "Not done, come back!";
 
+local $ENV{HARNESS_PERL_SWITCHES};
+
 use Config qw/%Config/;
 
 use File::Temp qw/tempdir/;

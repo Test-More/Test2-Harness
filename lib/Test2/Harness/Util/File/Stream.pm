@@ -54,6 +54,7 @@ sub write {
     flock($fh, LOCK_EX) or die "Could not lock file '$name': $!"
         if $self->{+USE_WRITE_LOCK};
 
+    seek($fh,2,0);
     print $fh $self->encode($_) for @_;
     $fh->flush;
 

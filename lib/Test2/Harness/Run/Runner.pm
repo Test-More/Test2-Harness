@@ -49,6 +49,10 @@ use Test2::Harness::Util::HashBase qw{
     -state_file -state
     -ready_file
     -hup
+
+    -staged
+    -stages
+    -stage_sort
 };
 
 sub init {
@@ -70,15 +74,18 @@ sub init {
 
     croak "'run' is a required attribute" unless $self->{+RUN};
 
+    $self->{+STAGES}     ||= ['default'];
+    $self->{+STAGED}     ||= [];
+    $self->{+STAGE_SORT} ||= {default => 1};
+
     $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
 
     $self->{+JOB_RUNNER_CLASS} ||= 'Test2::Harness::Job::Runner';
 
-    $self->{+ERR_LOG}   = File::Spec->catfile($dir, 'error.log');
-    $self->{+OUT_LOG}   = File::Spec->catfile($dir, 'output.log');
+    $self->{+ERR_LOG} = File::Spec->catfile($dir, 'error.log');
+    $self->{+OUT_LOG} = File::Spec->catfile($dir, 'output.log');
 
     $self->{+READY_FILE} = File::Spec->catfile($dir, 'ready');
-
     $self->{+STATE_FILE} = File::Spec->catfile($dir, 'state.json');
 
     $self->{+JOBS_FILE} = File::Spec->catfile($dir, 'jobs.jsonl');
@@ -229,6 +236,10 @@ sub _preload {
     $block ||= {};
     $require ||= sub { require $_[0] };
 
+    my $stages = $self->{+STAGES} ||= ['default'];
+    my $staged = $self->{+STAGED} ||= [];
+    my %seen = map {($_ => 1)} @$stages;
+
     if ($req) {
         for my $mod (@$req) {
             next if $block->{$mod};
@@ -236,9 +247,26 @@ sub _preload {
             $require->($file);
 
             next unless $mod->isa('Test2::Harness::Preload');
+            push @$staged => $mod;
             $mod->preload($block, job_count => $self->{+JOB_COUNT});
+            my $idx = 0;
+            for my $stage ($mod->stages) {
+                unless ($seen{$stage}++) {
+                    splice(@$stages, $idx++, 0, $stage);
+                    next;
+                }
+
+                for (my $i = $idx; $i < @$stages; $i++) {
+                    next unless $stages->[$i] eq $stage;
+                    $idx = $i + 1;
+                    last;
+                }
+            }
         }
     }
+
+    my $num = 1;
+    $self->{+STAGE_SORT} = {map {$_ => $num++} @$stages};
 }
 
 sub start {
@@ -268,12 +296,11 @@ sub start {
 
     my ($out, $ok, $err);
     local_env $env => sub {
-        $self->init_state;
-
         $self->preload;
 
-        write_file_atomic($self->{+READY_FILE}, "1");
+        $self->init_state;
 
+        write_file_atomic($self->{+READY_FILE}, "1");
         $ok = eval { $out = $self->_start(@_); 1 };
         $err = $@;
     };
@@ -306,7 +333,9 @@ sub init_state {
     else {
         $self->{+STATE} = {
             running  => {long => {}, medium => {}, general => {}, isolation => {}, immiscible => {}},
-            pending  => {long => [], medium => [], general => [], isolation => [], immiscible => []},
+            pending  => {},
+            active   => 0,
+            todo     => 0,
             position => 0,
         };
     }
@@ -321,18 +350,52 @@ sub _start {
     my $state = $self->{+STATE};
     $queue->seek($state->{position});
 
-    while (1) {
-        $self->wait_jobs();
-        $self->respawn if $self->hup; # do not use {+HUP}, this is a hook point
+    my $wait_time = $self->wait_time;
+    while ($run->finite) {
+        $self->poll_jobs();
+        last if $state->{ended};
+        sleep($wait_time) if $wait_time;
+    }
 
-        my $task = $self->next or last;
-        next unless ref($task);
+    for my $stage (@{$self->{+STAGES}}) {
+        for my $mod (@{$self->{+STAGED}}) {
+            $mod->$stage if $mod->can($stage);
+        }
 
-        my $runfile = $self->run_job($task);
-        return $runfile if $runfile;
+        while (1) {
+            $self->wait_jobs();
+            $self->respawn if $self->hup; # do not use {+HUP}, this is a hook point
+
+            my $task = $self->next($stage) or last;
+            next unless ref($task);
+
+            $state->{active}++;
+            $state->{todo}--;
+
+            my $runfile = $self->run_job($task);
+            return $runfile if $runfile;
+        }
     }
 
     return undef;
+}
+
+sub running { $_[0]->{+STATE}->{active} }
+
+sub pending {
+    my $self = shift;
+    my ($stage) = @_;
+
+    my $state = $self->{+STATE};
+    return 0 unless $state->{todo};
+    return $state->{todo} unless $stage;
+
+    my $out = 0;
+    for my $cat (values %{$state->{pending}->{$stage}}) {
+        $out += @$cat;
+    }
+
+    return $out;
 }
 
 sub respawn {
@@ -353,6 +416,8 @@ sub respawn {
 sub wait_jobs {
     my $self = shift;
 
+    my $state = $self->{+STATE};
+
     local $?;
 
     my $out = 0;
@@ -366,6 +431,7 @@ sub wait_jobs {
 
             my $exit_file = delete $cat->{$pid};
             $out++;
+            $state->{active}--;
 
             if ($got == -1) {
                 write_file_atomic($exit_file, '-1');
@@ -401,6 +467,7 @@ sub wait_job {
 
     for my $cat (values %$running) {
         my $exit_file = delete $cat->{$pid} or next;
+        $self->{+STATE}->{active}--;
 
         write_file_atomic($exit_file, $ret);
 
@@ -518,6 +585,7 @@ sub run_job {
     $category = 'general' unless $category && $self->{+STATE}->{running}->{$category};
 
     $self->{+JOBS}->write({ %{$job->TO_JSON}, pid => $pid });
+
     $self->{+STATE}->{running}->{$category}->{$pid} = $exit_file;
 
     return;
@@ -525,6 +593,7 @@ sub run_job {
 
 sub next {
     my $self = shift;
+    my ($stage) = @_;
 
     my $state = $self->{+STATE};
 
@@ -540,12 +609,12 @@ sub next {
 
         $self->poll_jobs();
 
-        return if $state->{ended} && !$self->pending;
+        return if $state->{ended} && !$self->pending($stage);
 
         # Do not get next if we are at/over capacity, or have an isolated test running
         my $running = $self->running;
         if ($max > $running && !keys %{$state->{running}->{isolation}}) {
-            my $next = $self->$meth($running, $max);
+            my $next = $self->$meth($running, $max, $stage);
             return $next if $next;
 
             sleep($wait_time) if $wait_time;
@@ -554,12 +623,6 @@ sub next {
             $self->wait_job;
         }
     }
-}
-
-sub running {
-    my $self = shift;
-    my $state = $self->{+STATE};
-    return sum(map { scalar(keys %{$_}) } values %{$state->{running}}) || 0;
 }
 
 sub write_remaining_exits {
@@ -577,41 +640,49 @@ sub write_remaining_exits {
     }
 }
 
-sub pending {
-    my $self = shift;
-    my $state = $self->{+STATE};
-    return sum(map { scalar(@{$_}) } values %{$state->{pending}}) || 0;
-}
-
 sub _cats_by_stamp {
     my $self = shift;
+    my ($stage) = @_;
     my $state = $self->{+STATE};
-    my $pending = $state->{pending};
+    my $pending = $state->{pending}->{$stage};
     return sort { $pending->{$a}->[0]->{stamp} <=> $pending->{$b}->[0]->{stamp} } grep { @{$pending->{$_}} } keys %$pending;
 }
 
 sub next_by_stamp {
     my $self = shift;
-    return if keys %{$self->{+STATE}->{running}->{isolation}};
-    my ($cat) = $self->_cats_by_stamp;
+    my ($running, $max, $stage) = @_;
+
+    my $state = $self->{+STATE};
+    my $pend  = $state->{pending}->{$stage};
+
+    return if keys %{$state->{running}->{isolation}};
+    my ($cat) = $self->_cats_by_stamp($stage);
     return unless $cat;
-    return shift(@{$self->{+STATE}->{pending}->{$cat}});
+    return shift(@{$pend->{$cat}});
+}
+
+sub pending_state {
+    my $self = shift;
+    my ($stage) = @_;
+    my $state = $self->{+STATE};
+    return $state->{pending}->{$stage} ||= { long => [], medium => [], general => [], isolation => [], immiscible => [] };
 }
 
 sub next_finite {
     my $self = shift;
-    my ($running, $max) = @_;
+    my ($running, $max, $stage) = @_;
 
     my $state = $self->{+STATE};
     return if keys %{$state->{running}->{isolation}};
 
-    my $r_imm = @{$state->{running}->{immiscible}};
+    my $r_imm = keys %{$state->{running}->{immiscible}};
 
-    my $p_gen = $state->{pending}->{general};
-    my $p_med = $state->{pending}->{medium};
-    my $p_lng = $state->{pending}->{long};
-    my $p_iso = $state->{pending}->{isolation};
-    my $p_imm = $state->{pending}->{immiscible};
+    my $pend = $self->pending_state($stage);
+    my $p_gen = $pend->{general};
+    my $p_med = $pend->{medium};
+    my $p_lng = $pend->{long};
+    my $p_iso = $pend->{isolation};
+    my $p_imm = $pend->{immiscible};
 
     # If we have more than 1 slot available prefer a longer job
     if ($running < $max - 1) {
@@ -637,14 +708,14 @@ sub next_finite {
 
 sub next_fair {
     my $self = shift;
-    my ($running, $max) = @_;
+    my ($running, $max, $stage) = @_;
 
     my $state = $self->{+STATE};
     return if keys %{$state->{running}->{isolation}};
 
-    my $r_imm = @{$state->{running}->{immiscible}};
+    my $r_imm = keys %{$state->{running}->{immiscible}};
 
-    my @cats = $self->_cats_by_stamp;
+    my @cats = $self->_cats_by_stamp($stage);
     return unless @cats;
 
     my $r_lng = $state->{running}->{long};
@@ -669,11 +740,13 @@ sub next_fair {
     return unless @cats;
     my ($cat) = @cats;
 
+    my $pend = $self->pending_state($stage);
+
     # Next one up requires isolation :-(
     if ($cat eq 'isolation') {
-        my $p_gen = $state->{pending}->{general};
-        my $p_iso = $state->{pending}->{isolation};
-        my $p_imm = $state->{pending}->{immiscible};
+        my $p_gen = $pend->{general};
+        my $p_iso = $pend->{isolation};
+        my $p_imm = $pend->{immiscible};
 
         # If we have something long running then go ahead and start general tasks, but nothing longer
         return shift @$p_gen if keys %{$state->{running}->{long}} && @$p_gen;
@@ -689,19 +762,23 @@ sub next_fair {
     }
 
     # Return the next item by time recieved
-    return shift @{$state->{pending}->{$cat}};
+    return shift @{$pend->{$cat}};
 }
 
 sub poll_jobs {
     my $self = shift;
-    my $queue = $self->{+QUEUE};
 
     my $state = $self->{+STATE};
-    my $p = $state->{pending};
+    return if $state->{ended};
 
+    my $queue = $self->{+QUEUE};
+
+    my $added = 0;
     for my $item ($queue->poll) {
         my ($spos, $epos, $task) = @$item;
 
+        $state->{todo}++;
+        $added++;
         $state->{position} = $epos;
 
         if (!$task) {
@@ -711,11 +788,17 @@ sub poll_jobs {
 
         my $cat = $task->{category};
         $cat = 'general' unless $cat && $self->{+STATE}->{running}->{$cat};
+        $task->{category} = $cat;
 
-        push @{$p->{$cat}} => $task;
+        my $stage = $task->{stage};
+        $stage = 'default' unless $stage && $self->{+STAGE_SORT}->{$stage};
+        $task->{stage} = $stage;
+
+        my $pend = $self->pending_state($stage);
+        push @{$pend->{$cat}} => $task;
     }
 
-    return;
+    return $added;
 }
 
 1;

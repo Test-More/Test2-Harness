@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '0.001016';
 
+sub stages { () }
+
 sub preload {
     my $class = shift;
     my ($do_not_load, $job_count) = @_;
@@ -24,5 +26,6 @@ sub pre_launch {
     my $class = shift;
     my ($job) = @_;
 }
+
 
 1;

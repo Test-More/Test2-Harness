@@ -52,7 +52,7 @@ sub check_feature {
 sub check_stage {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
-    return $self->{+_HEADERS}->{stage};
+    return $self->{+_HEADERS}->{stage} || 'default';
 }
 
 sub check_category {
@@ -193,6 +193,7 @@ sub queue_item {
     my ($job_id) = @_;
 
     my $category = $self->check_category;
+    my $stage = $self->check_stage;
 
     my $fork    = $self->check_feature(fork    => 1);
     my $preload = $self->check_feature(preload => 1);
@@ -207,6 +208,7 @@ sub queue_item {
         use_stream  => $stream,
         switches    => $self->switches,
         category    => $category,
+        stage       => $stage,
         stamp       => time,
         job_id      => $job_id,
 

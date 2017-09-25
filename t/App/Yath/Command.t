@@ -1,11 +1,13 @@
 use Test2::V0 -target => 'App::Yath::Command';
-skip_all "Not done, come back!";
+#skip_all "Not done, come back!";
 
 local $ENV{HARNESS_PERL_SWITCHES};
 
 use Config qw/%Config/;
 
 use File::Temp qw/tempdir/;
+
+use Cwd qw/cwd/;
 
 use ok $CLASS;
 
@@ -34,10 +36,11 @@ can_ok(
 );
 
 {
+
     package App::Yath::Command::fake;
     use parent 'App::Yath::Command';
 
-    sub cli_args {'xxx'}
+    sub cli_args { 'xxx' }
 }
 
 my $TCLASS = 'App::Yath::Command::fake';
@@ -54,12 +57,12 @@ subtest for_override => sub {
     is($CLASS->has_display,     0, "has_display defaults to 0");
     is($CLASS->always_keep_dir, 0, "always_keep_dir defaults to 0");
 
-    is($CLASS->show_bench,    1, "show_bench defaults to 1");
+    is($CLASS->show_bench, 1, "show_bench defaults to 1");
 
-    is($CLASS->summary, "No Summary", "sane default summary");
+    is($CLASS->summary,     "No Summary",     "sane default summary");
     is($CLASS->description, "No Description", "sane default description");
 
-    is($TCLASS->name, 'fake', "got name of command from class");
+    is($TCLASS->name,      'fake', "got name of command from class");
     is($TCLASS->new->name, 'fake', "got name of command from instance");
 
     is($CLASS->group, "ZZZZZZ", "Default group is near the end in an ASCII sort");
@@ -122,11 +125,11 @@ subtest init => sub {
 
     ok(lives { $one->init }, "can call init on empty instance");
 
-    ref_ok($one->settings, 'HASH', 'Got a hash reference for settings');
+    ref_ok($one->settings,         'HASH',  'Got a hash reference for settings');
     ref_ok($one->settings->{libs}, 'ARRAY', "libs setting was normalized");
     ok(!$one->settings->{dir}, "no dir");
 
-    $control->override(has_runner  => sub { 1 });
+    $control->override(has_runner => sub { 1 });
     $one = $TCLASS->new();
 
     ok(my $dir = $one->settings->{dir}, "got a dir");
@@ -148,7 +151,6 @@ subtest init => sub {
 
     ok(lives { $one = $TCLASS->new(args => [-d => $dir, '-C']) }, "Can clear dir");
     ok(!-f $garbage, "garbage file was removed");
-
 
     $control->reset_all;
 
@@ -176,16 +178,16 @@ subtest normalize_settings => sub {
         my_opts => sub {
             return [
                 {
-                    spec  => 'foo',
-                    field => 'foo',
+                    spec    => 'foo',
+                    field   => 'foo',
                     default => 1,
                 },
 
                 {
-                    spec   => 'bar',
-                    field  => 'bar',
+                    spec    => 'bar',
+                    field   => 'bar',
                     default => 1,
-                    action => sub {
+                    action  => sub {
                         my $self = shift;
                         my ($settings, $field, $val, $opt) = @_;
 
@@ -194,10 +196,10 @@ subtest normalize_settings => sub {
                 },
 
                 {
-                    spec   => 'baz',
-                    field  => 'bugaboo',
+                    spec    => 'baz',
+                    field   => 'bugaboo',
                     default => 1,
-                    action => sub {
+                    action  => sub {
                         my $self = shift;
                         my ($settings, $field, $val, $opt) = @_;
 
@@ -219,7 +221,7 @@ subtest normalize_settings => sub {
                 {
                     spec      => 'bun=s',
                     field     => 'bun',
-                    default => 'a value',
+                    default   => 'a value',
                     normalize => sub {
                         my $self = shift;
                         my ($settings, $field, $val) = @_;
@@ -316,16 +318,16 @@ subtest pre_run => sub {
 
     delete $one->settings->{help};
     $one->settings->{show_opts} = 1;
-    $one->settings->{input} = 'foo' x 1000;
+    $one->settings->{input}     = 'foo' x 1000;
     require Test2::Harness::Util::JSON;
-    my $json = Test2::Harness::Util::JSON::encode_pretty_json({ %{$one->settings}, input => '<TRUNCATED>' });
+    my $json = Test2::Harness::Util::JSON::encode_pretty_json({%{$one->settings}, input => '<TRUNCATED>'});
     is($one->pre_run, 0, "show opts returned 0");
     is(\@painted, [$json], "got options");
     ok(!$injected, "did not inject signal handlers");
 
     delete $one->settings->{show_opts};
     is($one->pre_run, undef, "pre_run did not return a defined value");
-    is($injected, 1, "injected signal handlers");
+    is($injected,     1,     "injected signal handlers");
 };
 
 subtest paint => sub {
@@ -429,7 +431,7 @@ subtest section_order => sub {
     # can change for many reasons in the future.
     my @got = $CLASS->section_order;
     ok(@got > 1, "More than 1 item");
-    ok((!grep { ref($_) } @got), "No references")
+    ok((!grep { ref($_) } @got), "No references");
 };
 
 subtest options => sub {
@@ -552,7 +554,7 @@ subtest options => sub {
         ok($three->settings->{env_vars}->{AUTHOR_TESTING}, "toggled on");
 
         my $four = $TCLASS->new(args => ['--author-testing', '--lib', '--no-author-testing']);
-        ok(!$four->settings->{env_vars}->{AUTHOR_TESTING}, "toggled off");
+        ok(!$four->settings->{env_vars}->{AUTHOR_TESTING},         "toggled off");
         ok(defined($four->settings->{env_vars}->{AUTHOR_TESTING}), "off, but defined");
     };
 
@@ -793,308 +795,444 @@ subtest options => sub {
     subtest load => sub {
         my $one = $TCLASS->new(args => []);
         ok(!$one->settings->{load}, "no loads by default");
-        
+
+        my $two = $TCLASS->new(args => ['-mFoo', '-m', 'Bar', '--load', 'Baz', '--load-module', 'Bat']);
+        is($two->settings->{load}, [qw/Foo Bar Baz Bat/], "Added some loads");
     };
+
+    subtest load_import => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{load_import}, "no loads by default");
+
+        my $two = $TCLASS->new(args => ['-MFoo', '-M', 'Bar=foo,bar,baz', '--loadim', 'Baz', '--load-import', 'Bat']);
+        is($two->settings->{load_import}, ['Foo', 'Bar=foo,bar,baz', 'Baz', 'Bat'], "Added some loads");
+    };
+
+    subtest cover => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{cover},       "no cover by default");
+        ok($one->settings->{use_fork},     "fork allowed by default");
+        ok(!$one->settings->{load_import}, "no loads by default");
+
+        my $two = $TCLASS->new(args => ['--cover']);
+        ok($two->settings->{cover}, "cover turned on");
+        is($two->settings->{use_fork}, 0, "fork disabled");
+        is(
+            $two->settings->{load_import},
+            ['Devel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl'],
+            "Added Devel::Cover to loads"
+        );
+    };
+
+    subtest event_timeout => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{event_timeout}, 60, "Default event timeout is 60");
+
+        my $two = $TCLASS->new(args => ['--et', '30']);
+        is($two->settings->{event_timeout}, 30, "Changed to 30");
+
+        my $three = $TCLASS->new(args => ['--event_timeout', '25']);
+        is($three->settings->{event_timeout}, 25, "Changed to 25");
+    };
+
+    subtest post_exit_timeout => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{post_exit_timeout}, 15, "Default event timeout is 15");
+
+        my $two = $TCLASS->new(args => ['--pet', '30']);
+        is($two->settings->{post_exit_timeout}, 30, "Changed to 30");
+
+        my $three = $TCLASS->new(args => ['--post-exit-timeout', '25']);
+        is($three->settings->{post_exit_timeout}, 25, "Changed to 25");
+    };
+
+    subtest logging => sub {
+        my $dir = tempdir(CLEANUP => 1, TMP => 1);
+        my $old = cwd();
+        chdir($dir);
+
+        subtest log_file => sub {
+            my $one = $TCLASS->new(args => []);
+            ok(!$one->settings->{log_file}, "no log file by default");
+
+            my $two = $TCLASS->new(args => ['--log']);
+            my $run_id = $two->settings->{run_id};
+            like($two->settings->{log_file}, qr{test-logs/\d{4}-\d{2}-\d{2}~\d{2}:\d{2}:\d{2}~\Q$run_id\E~\Q$$\E\.jsonl$}, "default log file");
+            ok(-d 'test-logs', "Created test-logs dir");
+        };
+
+        subtest bzip2_log => sub {
+            my $one = $TCLASS->new(args => []);
+            ok(!$one->settings->{bzip2_log}, "no log by default");
+
+            for ('-B', '--bz2', '--bzip2-log') {
+                my $two = $TCLASS->new(args => [$_]);
+                ok($two->settings->{bzip2_log}, "bzip2 logging");
+                ok($two->settings->{log},       "logging turned on");
+            }
+        };
+
+        subtest gzip_log => sub {
+            my $one = $TCLASS->new(args => []);
+            ok(!$one->settings->{gzip_log}, "no log by default");
+
+            for ('-G', '--gz', '--gzip-log') {
+                my $two = $TCLASS->new(args => [$_]);
+                ok($two->settings->{gzip_log}, "gzip logging");
+                ok($two->settings->{log},      "logging turned on");
+            }
+        };
+
+        subtest log => sub {
+            my $one = $TCLASS->new(args => []);
+            ok(!$one->settings->{log}, "no log by default");
+
+            my $two = $TCLASS->new(args => ['-L']);
+            ok($two->settings->{log}, "logging enabled");
+
+            my $three = $TCLASS->new(args => ['--log']);
+            ok($three->settings->{log}, "logging enabled");
+        };
+
+        chdir($old);
+    };
+
+    subtest color => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{color}, "color by default");
+
+        my $two = $TCLASS->new(args => ['--no-color']);
+        ok(!$two->settings->{color}, "color turned off");
+    };
+
+    subtest quiet => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{quiet}, "quiet off by default");
+
+        my $two = $TCLASS->new(args => ['--quiet']);
+        ok($two->settings->{quiet}, "quiet turned on");
+    };
+
+    subtest renderer => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{renderer}, '+Test2::Harness::Renderer::Formatter', "Default renderer");
+
+        my $two = $TCLASS->new(args => ['--renderer', 'foo']);
+        is($two->settings->{renderer}, 'foo', "set renderer");
+    };
+
+    subtest formatter => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{formatter}, '+Test2::Formatter::Test2', "Default formatter");
+
+        my $two = $TCLASS->new(args => ['--formatter', 'foo']);
+        is($two->settings->{formatter}, 'foo', "set formatter");
+    };
+
+    subtest verbose => sub {
+        my $one = $TCLASS->new(args => []);
+        is($one->settings->{verbose}, 0, "Verbose is off by default");
+
+        my $two = $TCLASS->new(args => ['-v']);
+        is($two->settings->{verbose}, 1, "Verbose is on by default");
+
+        my $three = $TCLASS->new(args => ['-vvv']);
+        is($three->settings->{verbose}, 3, "Verbose is higher now");
+    };
+
+    subtest show_job_end => sub {
+        my $one = $TCLASS->new(args => []);
+        ok($one->settings->{show_job_end}, "show_job_end is on by default");
+
+        my $two = $TCLASS->new(args => ['--no-show-job-end']);
+        ok(!$two->settings->{show_job_end}, "show_job_end turned off");
+    };
+
+    subtest show_job_info => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{show_job_info}, "show_job_info is off by default");
+
+        my $two = $TCLASS->new(args => ['--show-job-info']);
+        ok($two->settings->{show_job_info}, "show_job_info turned on");
+
+        my $three = $TCLASS->new(args => ['-vv']);
+        ok($three->settings->{show_job_info}, "show_job_info turned on by double verbose mode");
+    };
+
+    subtest show_job_launch => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{show_job_launch}, "show_job_launch is off by default");
+
+        my $two = $TCLASS->new(args => ['--show-job-launch']);
+        ok($two->settings->{show_job_launch}, "show_job_launch turned on");
+
+        my $three = $TCLASS->new(args => ['-vv']);
+        ok($three->settings->{show_job_launch}, "show_job_launch turned on by double verbose mode");
+    };
+
+    subtest show_run_info => sub {
+        my $one = $TCLASS->new(args => []);
+        ok(!$one->settings->{show_run_info}, "show_run_info is off by default");
+
+        my $two = $TCLASS->new(args => ['--show-run-info']);
+        ok($two->settings->{show_run_info}, "show_run_info turned on");
+
+        my $three = $TCLASS->new(args => ['-vv']);
+        ok($three->settings->{show_run_info}, "show_run_info turned on by double verbose mode");
+    };
+};
+
+subtest pre_parse_args => sub {
+    my ($opts, $list, $pass, $plugins);
+
+    ($opts, $list, $pass, $plugins) = $CLASS->pre_parse_args(
+        [
+            '-x',
+            '--longer' => 'arg',
+            qw/foo bar baz/,
+            '-pFoo',
+            '--plugin' => 'Bar',
+            '-p=Baz',
+            '--plugin=Bat',
+            '--',
+            '-p' => 'uhg',
+            'bleh',
+            'blotch',
+            '::',
+            'pear',
+            'apple',
+            'bananananan',
+            '-xyz',
+        ]
+    );
+    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/], "Got opts");
+    is($list, ['-p', 'uhg', 'bleh', 'blotch'], "Got list");
+    is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
+    is($plugins, [qw/Foo Bar Baz Bat/], "Got plugins");
+
+    ($opts, $list, $pass, $plugins) = $CLASS->pre_parse_args(
+        [
+            '-x',
+            '--longer' => 'arg',
+            qw/foo bar baz/,
+            '-pFoo',
+            '--plugin' => 'Bar',
+            '-p=Baz',
+            '--no-plugins', # <---- this is what we are testing now
+            '--plugin=Bat',
+            '--',
+            '-p' => 'uhg',
+            'bleh',
+            'blotch',
+            '::',
+            'pear',
+            'apple',
+            'bananananan',
+            '-xyz',
+        ]
+    );
+    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/], "Got opts");
+    is($list, ['-p', 'uhg', 'bleh', 'blotch'], "Got list");
+    is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
+    is($plugins, [qw/Bat/], "Got only 1 plugin");
+
+    ($opts, $list, $pass, $plugins) = $CLASS->pre_parse_args(
+        [
+            '-x',
+            '--longer' => 'arg',
+            qw/foo bar baz/,
+            '-pFoo',
+            '--plugin' => 'Bar',
+            '-p=Baz',
+            '--plugin=Bat',
+            '::',
+            'pear',
+            'apple',
+            'bananananan',
+            '-xyz',
+        ]
+    );
+    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/], "Got opts");
+    is($list, [], "Got empty list");
+    is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
+    is($plugins, [qw/Foo Bar Baz Bat/], "Got plugins");
+};
+
+subtest parse_args => sub {
+    my $list;
+
+    require App::Yath::Plugin::Test;
+    require App::Yath::Plugin::TestNew;
+    App::Yath::Plugin::Test->CLEAR_CALLS;
+    App::Yath::Plugin::TestNew->CLEAR_CALLS;
+
+    my $control = mock $TCLASS;
+
+    $control->override(has_display => sub { 1 });
+    $control->override(has_jobs    => sub { 1 });
+    $control->override(has_logger  => sub { 1 });
+    $control->override(has_runner  => sub { 1 });
+    $control->override(handle_list_args => sub { $list = pop });
+
+    my $one = $TCLASS->new(args => [
+        '-x' => 'foo.t',
+        '-p' => 'Test',
+        '-p' => '+App::Yath::Plugin::TestNew',
+        '-E' => 'FOO=123',
+        '-v',
+        '-B',
+        '--no-fork',
+        'bar.t',
+        't',
+        '--',
+        'baz.t',
+        'bat.t',
+        '--foo',
+        '::',
+        '-arg1' => 1,
+        '-arg2' => 2,
+    ]);
+    my $settings = $one->settings;
+
+    is($list, ['bar.t', 't', 'baz.t', 'bat.t', '--foo'], "Got list args from both before and after --");
+    is($one->plugins, ['App::Yath::Plugin::Test', object { prop blessed => 'App::Yath::Plugin::TestNew' }], "got plugins");
+    is($settings->{exclude_files}, ['foo.t'], "Excluded foo.t");
+    is($settings->{env_vars}->{FOO}, 123, "Set an env var (used an Action)");
+    is($settings->{verbose}, 1, "Turned on verbose (set via field)");
+    ok($settings->{log}, "turned on logging");
+    ok(!$settings->{use_fork}, "turned off forking");
+    is($settings->{pass}, [qw/-arg1 1 -arg2 2/], "Got pass args");
+
+    is(
+        App::Yath::Plugin::Test->GET_CALLS,
+        {
+            options   => [['App::Yath::Plugin::Test', exact_ref($one), exact_ref($settings)]],
+            pre_init  => [['App::Yath::Plugin::Test', exact_ref($one), exact_ref($settings)]],
+            post_init => [['App::Yath::Plugin::Test', exact_ref($one), exact_ref($settings)]],
+        },
+        "Called correct plugin methods on class",
+    );
+
+    is(
+        App::Yath::Plugin::TestNew->GET_CALLS,
+        {
+            options   => [[exact_ref($one->plugins->[1]), exact_ref($one), exact_ref($settings)]],
+            pre_init  => [[exact_ref($one->plugins->[1]), exact_ref($one), exact_ref($settings)]],
+            post_init => [[exact_ref($one->plugins->[1]), exact_ref($one), exact_ref($settings)]],
+        },
+        "Called correct plugin methods on instance",
+    );
+};
+
+subtest inject_signal_handlers => sub {
+    local $SIG{INT} = 'IGNORE';
+    local $SIG{TERM} = 'IGNORE';
+
+    my $one = $TCLASS->new(args => []);
+
+    $one->inject_signal_handlers;
+    isnt($SIG{INT}, 'IGNORE', "Not ignoring SIGINT anymore");
+    isnt($SIG{TERM}, 'IGNORE', "Not ignoring SIGINT anymore");
+    ok(!$one->signal, "no signal seen yet");
+
+    is(dies { kill('INT', $$); sleep 10 }, "Cought SIGINT, Attempting to shut down cleanly...\n", "SIGINT threw exception");
+    is($one->signal, 'INT', "Recorded SIGINT");
+
+    is(dies { kill('TERM', $$); sleep 10 }, "Cought SIGTERM, Attempting to shut down cleanly...\n", "SIGTERM threw exception");
+    is($one->signal, 'TERM', "Recorded SIGTERM");
+};
+
+subtest loggers => sub {
+    my $control = mock $TCLASS;
+    $control->override(has_logger => sub { 1 });
+    $control->override(has_jobs => sub { 1 });
+
+    my $one = $TCLASS->new(args => []);
+    is($one->loggers, [], "No loggers");
+
+    my $two = $TCLASS->new(args => ['--log']);
+    is(
+        $two->loggers, [
+            object {
+                prop blessed => 'Test2::Harness::Logger::JSONL';
+                call fh => meta { prop reftype => 'GLOB' };
+            },
+        ],
+        "Got a logger with a plain file handle"
+    );
+
+    my $three = $TCLASS->new(args => ['-B']);
+    is(
+        $three->loggers, [
+            object {
+                prop blessed => 'Test2::Harness::Logger::JSONL';
+                call fh => object { prop blessed => 'IO::Compress::Bzip2' };
+            },
+        ],
+        "Got a logger with a bz2 file handle"
+    );
+
+    my $four = $TCLASS->new(args => ['-G']);
+    is(
+        $four->loggers, [
+            object {
+                prop blessed => 'Test2::Harness::Logger::JSONL';
+                call fh => object { prop blessed => 'IO::Compress::Gzip' };
+            },
+        ],
+        "Got a logger with a gz file handle"
+    );
 };
 
 done_testing;
 
 __END__
 
-        {
-            spec    => 'm|load|load-module=s@',
-            field   => 'load',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['-m Module', '--load Module', '--load-module Mod'],
-            summary => ['Load a module in each test (after fork)', 'this option may be given multiple times'],
-        },
+sub renderers {
+    my $self      = shift;
+    my $settings  = $self->{+SETTINGS};
+    my $renderers = [];
 
-        {
-            spec    => 'M|loadim|load-import=s@',
-            field   => 'load_import',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Harness Options',
-            usage   => ['-M Module', '--loadim Module', '--load-import Mod'],
-            summary => ['Load and import module in each test (after fork)', 'this option may be given multiple times'],
-        },
+    return $renderers if $settings->{quiet};
 
+    my $r = $settings->{renderer} or return $renderers;
 
-        {
-            spec      => 'et|event_timeout=i',
-            field     => 'event_timeout',
-            used_by   => {jobs => 1},
-            section   => 'Harness Options',
-            usage     => ['--et SECONDS', '--event_timeout #'],
-            summary   => ['Kill test if no events received in timeout period', '(Default: 60 seconds)'],
-            long_desc => 'This is used to prevent the harness for waiting forever for a hung test. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.',
-            default   => 60,
-        },
+    if ($r eq '+Test2::Harness::Renderer::Formatter' || $r eq 'Formatter') {
+        require Test2::Harness::Renderer::Formatter;
 
-        {
-            spec      => 'pet|post-exit-timeout=i',
-            field     => 'post_exit_timeout',
-            used_by   => {jobs => 1},
-            section   => 'Harness Options',
-            usage     => ['--pet SECONDS', '--post-exit-timeout #'],
-            summary   => ['Stop waiting post-exit after the timeout period', '(Default: 15 seconds)'],
-            long_desc => 'Some tests fork and allow the parent to exit before writing all their output. If Test2::Harness detects an incomplete plan after the test exists it will monitor for more events until the timeout period. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.',
-            default   => 15,
-        },
+        my $formatter = $settings->{formatter} or die "No formatter specified.\n";
+        my $f_class;
 
-        {
-            spec    => 'F|log-file=s',
-            field   => 'log_file',
-            used_by => {logger => 1},
-            section => 'Logging Options',
-            usage   => ['-F file.jsonl', '--log-file FILE'],
-            summary => ['Specify the name of the log file', 'This option implies -L', "(Default: event_log-RUN_ID.jsonl)"],
-            normalize => sub { File::Spec->rel2abs($_[3]) },
-            default   => sub {
-                my ($self, $settings, $field) = @_;
-
-                return unless $settings->{bzip2_log} || $settings->{gzip_log} || $settings->{log};
-
-                mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
-                    unless -d 'test-logs';
-
-                return File::Spec->catfile('test-logs', strftime("%Y-%m-%d~%H:%M:%S", localtime()). "~$settings->{run_id}~$$.jsonl");
-            },
-        },
-
-        {
-            spec    => 'B|bz2|bzip2-log',
-            field   => 'bzip2_log',
-            used_by => {logger => 1},
-            section => 'Logging Options',
-            usage   => ['-B  --bz2', '--bzip2-log'],
-            summary => ['Use bzip2 compression when writing the log', 'This option implies -L', '.bz2 prefix is added to log file name for you'],
-        },
-
-        {
-            spec    => 'G|gz|gzip-log',
-            field   => 'gzip_log',
-            used_by => {logger => 1},
-            section => 'Logging Options',
-            usage   => ['-G  --gz', '--gzip-log'],
-            summary => ['Use gzip compression when writing the log', 'This option implies -L', '.gz prefix is added to log file name for you'],
-        },
-
-        {
-            spec    => 'L|log',
-            field   => 'log',
-            used_by => {logger => 1},
-            section => 'Logging Options',
-            usage   => ['-L', '--log'],
-            summary => ['Turn on logging'],
-            default => sub {
-                my ($self, $settings) = @_;
-                return 1 if $settings->{log_file};
-                return 1 if $settings->{bzip2_log};
-                return 1 if $settings->{gzip_log};
-                return 0;
-            },
-        },
-
-        {
-            spec    => 'color!',
-            field   => 'color',
-            used_by => {display => 1},
-            section => 'Display Options',
-            usage   => ['--color', '--no-color'],
-            summary => ["Turn color on (Default: on)", "Turn color off"],
-            default => 1,
-        },
-
-        {
-            spec    => 'q|quiet!',
-            field   => 'quiet',
-            used_by => {display => 1},
-            section => 'Display Options',
-            usage   => ['-q', '--quiet'],
-            summary => ["Be very quiet"],
-            default => 0,
-        },
-
-        {
-            spec    => 'r|renderer=s',
-            field   => 'renderer',
-            used_by => {display => 1},
-            section => 'Display Options',
-            usage   => ['-r +Module', '-r Postfix', '--renderer ...'],
-            summary   => ['Specify an alternate renderer', '(Default: "Formatter")'],
-            long_desc => 'Use "+" to give a fully qualified module name. Without "+" "Test2::Harness::Renderer::" will be prepended to your argument.',
-            default   => '+Test2::Harness::Renderer::Formatter',
-        },
-
-        {
-            spec    => 'v|verbose+',
-            field   => 'verbose',
-            used_by => {display => 1},
-            section => 'Display Options',
-            usage   => ['-v   -vv', '--verbose'],
-            summary => ['Turn on verbose mode.', 'Specify multiple times to be more verbose.'],
-            default => 0,
-        },
-
-        {
-            spec      => 'formatter=s',
-            field     => 'formatter',
-            used_by   => {display => 1},
-            section   => 'Display Options',
-            usage     => ['--formatter Mod', '--formatter +Mod'],
-            summary   => ['Specify the formatter to use', '(Default: "Test2")'],
-            long_desc => 'Only useful when the renderer is set to "Formatter". This specified the Test2::Formatter::XXX that will be used to render the test output.',
-            default   => '+Test2::Formatter::Test2',
-        },
-
-        {
-            spec      => 'show-job-end!',
-            field     => 'show_job_end',
-            used_by   => {display => 1},
-            section   => 'Display Options',
-            usage     => ['--show-job-end', '--no-show-job-end'],
-            summary   => ['Show output when a job ends', '(Default: on)'],
-            long_desc => 'This is only used when the renderer is set to "Formatter"',
-            default   => 1,
-        },
-
-        {
-            spec    => 'show-job-info!',
-            field   => 'show_job_info',
-            used_by => {display => 1},
-            section => 'Display Options',
-            usage   => ['--show-job-info', '--no-show-job-info'],
-            summary => ['Show the job configuration when a job starts', '(Default: off, unless -vv)'],
-            default => sub {
-                my ($self, $settings, $field) = @_;
-                return 1 if $settings->{verbose} > 1;
-                return 0;
-            },
-        },
-
-        {
-            spec    => 'show-job-launch!',
-            field   => 'show_job_launch',
-            used_by => {display => 1},
-            section => 'Display Options',
-            usage   => ['--show-job-launch', '--no-show-job-launch'],
-            summary => ["Show output for the start of a job", "(Default: off unless -v)"],
-            default => sub {
-                my ($self, $settings, $field) = @_;
-                return 1 if $settings->{verbose};
-                return 0;
-            },
-        },
-
-        {
-            spec    => 'show-run-info!',
-            field   => 'show_run_info',
-            used_by => {display => 1},
-            section => 'Display Options',
-            usage   => ['--show-run-info', '--no-show-run-info'],
-            summary => ['Show the run configuration when a run starts', '(Default: off, unless -vv)'],
-            default => sub {
-                my ($self, $settings, $field) = @_;
-                return 1 if $settings->{verbose} > 1;
-                return 0;
-            },
-        },
-    );
-}
-# }}}
-
-sub pre_parse_args {
-    my $self = shift;
-    my ($args) = @_;
-
-    my (@opts, @list, @pass, @plugins);
-
-    my $last_mark = '';
-    for my $arg (@{$self->args}) {
-        if ($last_mark eq '::') {
-            push @pass => $arg;
-        }
-        elsif ($last_mark eq '--') {
-            if ($arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            push @list => $arg;
-        }
-        elsif ($last_mark eq '-p' || $last_mark eq '--plugin') {
-            $last_mark = '';
-            push @plugins => $arg;
+        if ($formatter eq '+Test2::Formatter::Test2' || $formatter eq 'Test2') {
+            require Test2::Formatter::Test2;
+            $f_class = 'Test2::Formatter::Test2';
         }
         else {
-            if ($arg eq '--' || $arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            if ($arg eq '-p' || $arg eq '--plugin') {
-                $last_mark = $arg;
-                next;
-            }
-            if ($arg =~ m/^(?:-p=?|--plugin=)(.*)$/) {
-                push @plugins => $1;
-                next;
-            }
-            if ($arg eq '--no-plugins') {
-                # clear plugins
-                @plugins = ();
-                next;
-            }
-            push @opts => $arg;
+            $f_class = fqmod('Test2::Formatter', $formatter);
+            my $file = pkg_to_file($f_class);
+            require $file;
         }
+
+        push @$renderers => Test2::Harness::Renderer::Formatter->new(
+            show_job_info   => $settings->{show_job_info},
+            show_run_info   => $settings->{show_run_info},
+            show_job_launch => $settings->{show_job_launch},
+            show_job_end    => $settings->{show_job_end},
+            formatter       => $f_class->new(verbose => $settings->{verbose}, color => $settings->{color}),
+        );
+    }
+    elsif ($settings->{formatter}) {
+        die "The formatter option is only available when the 'Formatter' renderer is in use.\n";
+    }
+    else {
+        my $r_class = fqmod('Test2::Harness::Renderer', $r);
+        require $r_class;
+        push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
     }
 
-    return (\@opts, \@list, \@pass, \@plugins);
+    return $renderers;
 }
 
-sub parse_args {
-    my $self = shift;
-    my ($args) = @_;
-
-    my ($opts, $list, $pass, $plugins) = $self->pre_parse_args($args);
-
-    my $settings = $self->{+SETTINGS} ||= {};
-    $settings->{pass} = $pass;
-
-    my @plugin_options;
-    for my $plugin (@$plugins) {
-        local $@;
-        $plugin = fqmod('App::Yath::Plugin', $plugin);
-        my $file = pkg_to_file($plugin);
-        eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";
-
-        push @plugin_options => $plugin->options($self, $settings);
-        $plugin->pre_init($self, $settings);
-    }
-
-    $self->{+PLUGINS} = $plugins;
-
-    my @opt_map = map {
-        my $spec  = $_->{spec};
-        my $action = $_->{action};
-        my $field = $_->{field};
-        if ($action) {
-            my ($opt, $arg) = @_;
-            my $inner = $action;
-            $action = sub { $self->$inner($settings, $field, $arg, $opt) }
-        }
-        elsif ($field) {
-            $action = \($settings->{$field});
-        }
-
-        ($spec => $action)
-    } @{$self->my_opts(plugin_options => \@plugin_options)};
-
-    Getopt::Long::Configure("bundling");
-    my $args_ok = GetOptionsFromArray($opts => @opt_map)
-        or die "Could not parse the command line options given.\n";
-
-    return [grep { defined($_) && length($_) } @$list, @$opts];
-}
 
 sub usage_opt_order {
     my $self = shift;
@@ -1268,138 +1406,4 @@ $options
     return $usage;
 }
 
-sub loggers {
-    my $self     = shift;
-    my $settings = $self->{+SETTINGS};
-    my $loggers  = [];
 
-    return $loggers unless $settings->{log};
-
-    my $file = $settings->{log_file};
-
-    my $log_fh;
-    if ($settings->{bzip2_log}) {
-        $file = $settings->{log_file} = "$file.bz2";
-        require IO::Compress::Bzip2;
-        $log_fh = IO::Compress::Bzip2->new($file) or die "IO::Compress::Bzip2 failed: $IO::Compress::Bzip2::Bzip2Error\n";
-    }
-    elsif ($settings->{gzip_log}) {
-        $file = $settings->{log_file} = "$file.gz";
-        require IO::Compress::Gzip;
-        $log_fh = IO::Compress::Gzip->new($file) or die "IO::Compress::Bzip2 failed: $IO::Compress::Gzip::GzipError\n";
-    }
-    else {
-        $log_fh = open_file($file, '>');
-    }
-
-    require Test2::Harness::Logger::JSONL;
-    push @$loggers => Test2::Harness::Logger::JSONL->new(fh => $log_fh);
-
-    return $loggers;
-}
-
-sub renderers {
-    my $self      = shift;
-    my $settings  = $self->{+SETTINGS};
-    my $renderers = [];
-
-    return $renderers if $settings->{quiet};
-
-    my $r = $settings->{renderer} or return $renderers;
-
-    if ($r eq '+Test2::Harness::Renderer::Formatter' || $r eq 'Formatter') {
-        require Test2::Harness::Renderer::Formatter;
-
-        my $formatter = $settings->{formatter} or die "No formatter specified.\n";
-        my $f_class;
-
-        if ($formatter eq '+Test2::Formatter::Test2' || $formatter eq 'Test2') {
-            require Test2::Formatter::Test2;
-            $f_class = 'Test2::Formatter::Test2';
-        }
-        else {
-            $f_class = fqmod('Test2::Formatter', $formatter);
-            my $file = pkg_to_file($f_class);
-            require $file;
-        }
-
-        push @$renderers => Test2::Harness::Renderer::Formatter->new(
-            show_job_info   => $settings->{show_job_info},
-            show_run_info   => $settings->{show_run_info},
-            show_job_launch => $settings->{show_job_launch},
-            show_job_end    => $settings->{show_job_end},
-            formatter       => $f_class->new(verbose => $settings->{verbose}, color => $settings->{color}),
-        );
-    }
-    elsif ($settings->{formatter}) {
-        die "The formatter option is only available when the 'Formatter' renderer is in use.\n";
-    }
-    else {
-        my $r_class = fqmod('Test2::Harness::Renderer', $r);
-        require $r_class;
-        push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
-    }
-
-    return $renderers;
-}
-
-sub inject_signal_handlers {
-    my $self = shift;
-
-    my $handle_sig = sub {
-        my ($sig) = @_;
-
-        $self->{+SIGNAL} = $sig;
-
-        die "Cought SIG$sig, Attempting to shut down cleanly...\n";
-    };
-
-    $SIG{INT}  = sub { $handle_sig->('INT') };
-    $SIG{TERM} = sub { $handle_sig->('TERM') };
-}
-
-1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-App::Yath::Command - Base class for yath commands
-
-=head1 DESCRIPTION
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

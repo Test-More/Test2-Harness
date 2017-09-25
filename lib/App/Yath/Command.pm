@@ -845,13 +845,13 @@ sub options {
 # }}}
 
 sub pre_parse_args {
-    my $self = shift;
+    my $class = shift;
     my ($args) = @_;
 
     my (@opts, @list, @pass, @plugins);
 
     my $last_mark = '';
-    for my $arg (@{$self->args}) {
+    for my $arg (@$args) {
         if ($last_mark eq '::') {
             push @pass => $arg;
         }
@@ -902,7 +902,6 @@ sub parse_args {
 
     my @plugin_options;
     for my $plugin (@$plugins) {
-        local $@;
         $plugin = fqmod('App::Yath::Plugin', $plugin);
         my $file = pkg_to_file($plugin);
         eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";
@@ -938,7 +937,7 @@ sub parse_args {
     my $args_ok = GetOptionsFromArray($opts => @opt_map)
         or die "Could not parse the command line options given.\n";
 
-    return [grep { defined($_) && length($_) } @$list, @$opts];
+    return [grep { defined($_) && length($_) } @$opts, @$list];
 }
 
 sub usage_opt_order {

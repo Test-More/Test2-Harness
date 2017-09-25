@@ -16,6 +16,7 @@
     - Add -q|--quiet mode
     - Do not try to kill job after post-exit timeout
     - Remove the tcm plugin (it is failure)
+    - Handle sync points when incomplete lines are written
 
 0.001015  2017-09-15 08:55:30-07:00 America/Los_Angeles
 

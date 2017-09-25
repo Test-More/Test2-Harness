@@ -297,27 +297,32 @@ sub _poll_stdout {
     while (my $line = shift @$buffer) {
         chomp($line);
 
-        if ($line =~ m/^T2-HARNESS-ESYNC: (\d+)$/) {
+        my $esync = 0;
+        if ($line =~ s/T2-HARNESS-ESYNC: (\d+)$//) {
             $self->{+_STDOUT_INDEX} = $1;
-            last;
+            $esync = 1;
         }
+
+        last if $esync && !length($line);
 
         my $id = $self->{+_STDOUT_ID}; # Do not bump yet!
         my $event_id = "stdout-$id";
 
-        my $event_data = $self->_process_stdout_line($event_id, $line);
+        my @event_datas = $self->_process_stdout_line($event_id, $line);
 
-        if(my $sid = $event_data->{stream_id}) {
-            $self->{+_STDOUT_INDEX} = $sid;
-            push @{$self->{+_EVENTS_BUFFER}} => $event_data;
-            last;
+        for my $event_data (@event_datas) {
+            if(my $sid = $event_data->{stream_id}) {
+                $self->{+_STDOUT_INDEX} = $sid;
+                push @{$self->{+_EVENTS_BUFFER}} => $event_data;
+                last;
+            }
+
+            # Now we bump it!
+            $self->{+_STDOUT_ID}++;
+            push @out => $event_data;
         }
 
-        # Now we bump it!
-        $self->{+_STDOUT_ID}++;
-        push @out => $event_data;
-
-        last if $max && @out >= $max;
+        last if $esync || ($max && @out >= $max);
     }
 
     return @out;
@@ -336,8 +341,9 @@ sub _poll_stderr {
         while (my $line = shift @$buffer) {
             chomp($line);
 
-            if ($line =~ m/^T2-HARNESS-ESYNC: (\d+)$/) {
+            if ($line =~ s/T2-HARNESS-ESYNC: (\d+)$//) {
                 $self->{+_STDERR_INDEX} = $1;
+                push @lines => $line if length($line);
                 last;
             }
 
@@ -389,31 +395,27 @@ sub _process_stdout_line {
 
     chomp($line);
 
-    my $event_data;
+    my @event_datas;
 
-    if ($line =~ m/^T2-HARNESS-EVENT: (\d+) (.*)/) {
+    if ($line =~ s/T2-HARNESS-EVENT: (\d+) (.+)$//) {
         my ($sid, $json) = ($1, $2);
 
-        $event_data = decode_json($json);
+        my $event_data = decode_json($json);
         $event_data->{stream_id} = $sid;
+        push @event_datas => $event_data;
     }
-    else {
+
+    if (length($line)) {
         my $facet_data;
 
         # Sometimes clever scripts mix events and directly printed TAP... sigh.
         $facet_data = parse_stdout_tap($line);
 
         $facet_data ||= {info => [{details => $line, tag => 'STDOUT', debug => 0}]};
-        $event_data = {facet_data => $facet_data};
+        push @event_datas => {facet_data => $facet_data};
     }
 
-    return {
-        %$event_data,
-
-        job_id   => $self->{+JOB_ID},
-        run_id   => $self->{+RUN_ID},
-        event_id => $event_id,
-    };
+    return map {{ %{$_}, job_id => $self->{+JOB_ID}, run_id => $self->{+RUN_ID}, event_id => $event_id }} @event_datas;
 }
 
 sub _process_start_line {

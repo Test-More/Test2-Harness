@@ -33,7 +33,8 @@ foo bar baz
 sub run {
     my $self = shift;
 
-    $self->pre_run();
+    my $exit = $self->pre_run();
+    return $exit if defined $exit;
 
     my $settings = $self->{+SETTINGS};
     my @search = @{$settings->{search}};
@@ -87,7 +88,8 @@ sub run {
     $self->{+_RUNNER}    = $runner;
     $self->{+_PID}       = $data->{pid};
     $self->{+_JOB_COUNT} = $base_id - 1;
-    $self->SUPER::run_command();
+
+    return $self->SUPER::run_command();
 }
 
 sub feeder {

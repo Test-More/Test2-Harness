@@ -305,8 +305,8 @@ sub init_state {
     }
     else {
         $self->{+STATE} = {
-            running  => {long => {}, medium => {}, general => {}, isolation => {}},
-            pending  => {long => [], medium => [], general => [], isolation => []},
+            running  => {long => {}, medium => {}, general => {}, isolation => {}, immiscible => {}},
+            pending  => {long => [], medium => [], general => [], isolation => [], immiscible => []},
             position => 0,
         };
     }
@@ -605,21 +605,29 @@ sub next_finite {
     my $state = $self->{+STATE};
     return if keys %{$state->{running}->{isolation}};
 
+    my $r_imm = @{$state->{running}->{immiscible}};
+
     my $p_gen = $state->{pending}->{general};
     my $p_med = $state->{pending}->{medium};
     my $p_lng = $state->{pending}->{long};
     my $p_iso = $state->{pending}->{isolation};
+    my $p_imm = $state->{pending}->{immiscible};
 
     # If we have more than 1 slot available prefer a longer job
     if ($running < $max - 1) {
         return shift @$p_lng if @$p_lng;
         return shift @$p_med if @$p_med;
+        return shift @$p_imm if @$p_imm && !$r_imm;
     }
 
     # Fallback with shortest first
     return shift @$p_gen if @$p_gen;
-    return shift @$p_lng if @$p_lng;
     return shift @$p_med if @$p_med;
+    return shift @$p_lng if @$p_lng;
+
+    # immiscible, unless one is already running, but we can if other stuff is
+    # running.
+    return shift @$p_imm if @$p_imm && !$r_imm;
 
     # Next comes isolation, so we cannot pick one if anything is running.
     return if $running;
@@ -634,6 +642,8 @@ sub next_fair {
     my $state = $self->{+STATE};
     return if keys %{$state->{running}->{isolation}};
 
+    my $r_imm = @{$state->{running}->{immiscible}};
+
     my @cats = $self->_cats_by_stamp;
     return unless @cats;
 
@@ -642,21 +652,34 @@ sub next_fair {
 
     my $lmrun = sum(scalar(keys(%$r_lng)), scalar(keys(%$r_med))) || 0;
     my $lmmax = $max - 1;
+    my $no_more_long = $lmrun >= $lmmax;
 
-    # Do not fill all slots with 'long' or 'medium' jobs
-    shift @cats while @cats > 1    # Do not change if this is the only category
-        && ($cats[0] eq 'long' || $cats[0] eq 'medium')    # Only change if long/medium
-        && $lmrun >= $lmmax;                                 # Only change if the sum of running long+medium is more than max - 1
+    while (@cats) {
+        my $act;
 
+        # Do not fill all slots with 'long' or 'medium' jobs
+        $act = shift @cats if $no_more_long && $cats[0] eq 'long' || $cats[0] eq 'medium';
+
+        # Cannot have 2 immiscible running at once.
+        $act = shift @cats if $r_imm && $cats[0] eq 'immiscible';
+
+        last unless $act;
+    }
+
+    return unless @cats;
     my ($cat) = @cats;
 
     # Next one up requires isolation :-(
     if ($cat eq 'isolation') {
         my $p_gen = $state->{pending}->{general};
         my $p_iso = $state->{pending}->{isolation};
+        my $p_imm = $state->{pending}->{immiscible};
 
         # If we have something long running then go ahead and start general tasks, but nothing longer
         return shift @$p_gen if keys %{$state->{running}->{long}} && @$p_gen;
+
+        # Same with an immiscible one, so long as no others are running
+        return shift @$p_imm if keys %{$state->{running}->{long}} && @$p_imm && !$r_imm;
 
         # Cannot run the iso yet
         return if $running;

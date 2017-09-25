@@ -49,6 +49,12 @@ sub check_feature {
     return 0;
 }
 
+sub check_stage {
+    my $self = shift;
+    $self->_scan unless $self->{+_SCANNED};
+    return $self->{+_HEADERS}->{stage};
+}
+
 sub check_category {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
@@ -131,6 +137,10 @@ sub _scan {
         elsif ($dir eq 'yes' || $dir eq 'use') {
             my ($feature) = @args;
             $headers{features}->{$feature} = 1;
+        }
+        elsif ($dir eq 'stage') {
+            my ($name) = @args;
+            $headers{stage} = $name;
         }
         elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;

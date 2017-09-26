@@ -190,3 +190,14 @@ sub file_to_pkg {
 }
 
 1;
+
+__END__
+
+    if (-f $self->{+STATE_FILE}) {
+        return $self->{+STATE} = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->read;
+    }
+
+
+    $queue->seek($state->{position});
+
+        $state->{position} = $epos;

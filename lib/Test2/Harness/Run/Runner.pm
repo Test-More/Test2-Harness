@@ -51,6 +51,7 @@ use Test2::Harness::Util::HashBase qw{
 
     -staged
     -stages
+    -fork_stages
     -stage_sort
 };
 
@@ -73,9 +74,10 @@ sub init {
 
     croak "'run' is a required attribute" unless $self->{+RUN};
 
-    $self->{+STAGES}     ||= ['default'];
-    $self->{+STAGED}     ||= [];
-    $self->{+STAGE_SORT} ||= {default => 1};
+    $self->{+STAGES}      ||= ['default'];
+    $self->{+STAGED}      ||= [];
+    $self->{+FORK_STAGES} ||= {};
+    $self->{+STAGE_SORT}  ||= {default => 1};
 
     $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
 
@@ -237,6 +239,8 @@ sub _preload {
 
     my $stages = $self->{+STAGES} ||= ['default'];
     my $staged = $self->{+STAGED} ||= [];
+    my $fork_stages = $self->{+FORK_STAGES} ||= {};
+
     my %seen = map {($_ => 1)} @$stages;
 
     my $run = $self->{+RUN};
@@ -248,8 +252,14 @@ sub _preload {
             $require->($file);
 
             next unless $mod->isa('Test2::Harness::Preload');
+
+            $mod = $mod->new if $mod->can('new');
             push @$staged => $mod;
+
             $mod->preload($block, job_count => $run->job_count, finite => $run->finite, pending => $self->pending, jobs_todo => $self->{+JOBS_TODO});
+
+            $fork_stages->{$_} = 1 for $mod->fork_stages;
+
             my $idx = 0;
             for my $stage ($mod->stages) {
                 unless ($seen{$stage}++) {
@@ -297,6 +307,8 @@ sub start {
 
     my ($out, $ok, $err);
     local_env $env => sub {
+        $self->preload;
+        $self->init_state;
         write_file_atomic($self->{+READY_FILE}, "1");
         $ok = eval { $out = $self->_start(@_); 1 };
         $err = $@;
@@ -324,16 +336,11 @@ sub start {
 sub init_state {
     my $self = shift;
 
-    if (-f $self->{+STATE_FILE}) {
-        return $self->{+STATE} = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->read;
-    }
-
     return $self->{+STATE} = {
         running  => {long => {}, medium => {}, general => {}, isolation => {}, immiscible => {}},
         pending  => {},
         active   => 0,
         todo     => 0,
-        position => 0,
     };
 }
 
@@ -343,8 +350,7 @@ sub _start {
     my $run   = $self->{+RUN};
     my $queue = $self->{+QUEUE};
 
-    my $state = $self->init_state;
-    $queue->seek($state->{position});
+    my $state = $self->{+STATE};
 
     my $wait_time = $self->wait_time;
     while ($run->finite) {
@@ -353,30 +359,61 @@ sub _start {
         sleep($wait_time) if $wait_time;
     }
 
-    $self->preload;
-
     for my $stage (@{$self->{+STAGES}}) {
+        my $fork = $self->{+FORK_STAGES}->{$stage} || 0;
+        if ($fork) {
+            my $pid = fork();
+            die "Could not fork" unless defined $pid;
+            if ($pid) {
+                my $check = waitpid($pid, 0);
+                my $ret = $?;
+
+                die "waitpid returned $check" unless $check == $pid;
+                die "Child process did not exit cleanly: $ret" if $ret;
+
+                next;
+            }
+        }
+
+        my $start_meth = "start_stage_$stage";
         for my $mod (@{$self->{+STAGED}}) {
-            $mod->$stage if $mod->can($stage);
+            next unless $mod->can($start_meth);
+            $mod->$start_meth;
         }
 
-        while (1) {
-            $self->wait_jobs();
-            $self->respawn if $self->hup; # do not use {+HUP}, this is a hook point
+        my $runfile = $self->task_loop($stage);
+        return $runfile if $runfile;
 
-            my $task = $self->next($stage) or last;
-            next unless ref($task);
+        next unless $fork;
 
-            $state->{active}++;
-            $state->{todo}--;
+        while(1) { $self->wait_job() or last };
 
-            my $runfile = $self->run_job($task);
-            return $runfile if $runfile;
-        }
+        CORE::exit(0);
     }
 
     return undef;
 }
+
+sub task_loop {
+    my $self = shift;
+    my ($stage) = @_;
+
+    my $state = $self->{+STATE};
+
+    while (1) {
+        $self->wait_jobs();
+
+        my $task = $self->next($stage) or return;
+        next unless ref($task);
+
+        $state->{active}++;
+        $state->{todo}--;
+
+        my $runfile = $self->run_job($task);
+        return $runfile if $runfile;
+    }
+}
+
 
 sub running { $_[0]->{+STATE}->{active} }
 
@@ -776,7 +813,6 @@ sub poll_jobs {
         my ($spos, $epos, $task) = @$item;
 
         $added++;
-        $state->{position} = $epos;
 
         if (!$task) {
             $state->{ended} = 1;

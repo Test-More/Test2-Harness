@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '0.001016';
 
 sub stages { () }
+sub fork_stages { () }
 
 sub preload {
     my $class = shift;

@@ -63,14 +63,14 @@ sub run {
 
         my $item = $tf->queue_item($job_id);
 
-        $item->{args}        = $settings->{pass}        if defined $settings->{pass};
-        $item->{times}       = $settings->{times}       if defined $settings->{times};
-        $item->{use_stream}  = $settings->{use_stream}  if defined $settings->{use_stream};
-        $item->{load}        = $settings->{load}        if defined $settings->{load};
-        $item->{load_import} = $settings->{load_import} if defined $settings->{load_import};
-        $item->{env_vars}    = $settings->{env_vars}    if defined $settings->{env_vars};
-        $item->{input}       = $settings->{input}       if defined $settings->{input};
-        $item->{use_fork}    = $settings->{use_fork}    if defined $settings->{use_fork};
+        $item->{args}        = $settings->{pass}        if defined $settings->{pass}        && !defined $item->{args};
+        $item->{times}       = $settings->{times}       if defined $settings->{times}       && !defined $item->{times};
+        $item->{load}        = $settings->{load}        if defined $settings->{load}        && !defined $item->{load};
+        $item->{load_import} = $settings->{load_import} if defined $settings->{load_import} && !defined $item->{load_import};
+        $item->{env_vars}    = $settings->{env_vars}    if defined $settings->{env_vars}    && !defined $item->{env_vars};
+        $item->{input}       = $settings->{input}       if defined $settings->{input}       && !defined $item->{input};
+        $item->{use_stream}  = $settings->{use_stream}  if defined $settings->{use_stream}  && !defined $item->{use_stream};
+        $item->{use_fork}    = $settings->{use_fork}    if defined $settings->{use_fork}    && !defined $item->{use_fork};
 
         $queue->enqueue($item);
         $jobs{$job_id} = 1;

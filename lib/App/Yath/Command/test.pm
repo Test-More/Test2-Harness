@@ -98,7 +98,7 @@ sub feeder {
         $queue->enqueue($tf->queue_item($job_id++));
     }
 
-    my $pid = $runner->spawn(job_count => $job_id - 1);
+    my $pid = $runner->spawn(jobs_todo => $job_id - 1);
 
     $queue->end;
 
@@ -120,9 +120,9 @@ sub run_command {
     my $renderers = $self->renderers;
     my $loggers   = $self->loggers;
 
-    my ($feeder, $runner, $pid, $stat, $job_count);
+    my ($feeder, $runner, $pid, $stat, $jobs_todo);
     my $ok = eval {
-        ($feeder, $runner, $pid, $job_count) = $self->feeder or die "No feeder!";
+        ($feeder, $runner, $pid, $jobs_todo) = $self->feeder or die "No feeder!";
 
         my $harness = Test2::Harness->new(
             run_id            => $settings->{run_id},
@@ -133,7 +133,7 @@ sub run_command {
             event_timeout     => $settings->{event_timeout},
             post_exit_timeout => $settings->{post_exit_timeout},
             jobs              => $settings->{jobs},
-            job_count         => $job_count,
+            jobs_todo         => $jobs_todo,
         );
 
         $stat = $harness->run();

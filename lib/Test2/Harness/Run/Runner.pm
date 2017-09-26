@@ -41,8 +41,7 @@ use Test2::Harness::Util::HashBase qw{
     -_next
 
     -job_runner_class
-
-    -job_count
+    -jobs_todo
 
     -jobs_file  -jobs
     -queue_file -queue
@@ -240,6 +239,8 @@ sub _preload {
     my $staged = $self->{+STAGED} ||= [];
     my %seen = map {($_ => 1)} @$stages;
 
+    my $run = $self->{+RUN};
+
     if ($req) {
         for my $mod (@$req) {
             next if $block->{$mod};
@@ -248,7 +249,7 @@ sub _preload {
 
             next unless $mod->isa('Test2::Harness::Preload');
             push @$staged => $mod;
-            $mod->preload($block, job_count => $self->{+JOB_COUNT});
+            $mod->preload($block, job_count => $run->job_count, finite => $run->finite, pending => $self->pending, jobs_todo => $self->{+JOBS_TODO});
             my $idx = 0;
             for my $stage ($mod->stages) {
                 unless ($seen{$stage}++) {
@@ -296,10 +297,6 @@ sub start {
 
     my ($out, $ok, $err);
     local_env $env => sub {
-        $self->preload;
-
-        $self->init_state;
-
         write_file_atomic($self->{+READY_FILE}, "1");
         $ok = eval { $out = $self->_start(@_); 1 };
         $err = $@;
@@ -328,17 +325,16 @@ sub init_state {
     my $self = shift;
 
     if (-f $self->{+STATE_FILE}) {
-        $self->{+STATE} = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->read;
+        return $self->{+STATE} = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->read;
     }
-    else {
-        $self->{+STATE} = {
-            running  => {long => {}, medium => {}, general => {}, isolation => {}, immiscible => {}},
-            pending  => {},
-            active   => 0,
-            todo     => 0,
-            position => 0,
-        };
-    }
+
+    return $self->{+STATE} = {
+        running  => {long => {}, medium => {}, general => {}, isolation => {}, immiscible => {}},
+        pending  => {},
+        active   => 0,
+        todo     => 0,
+        position => 0,
+    };
 }
 
 sub _start {
@@ -347,7 +343,7 @@ sub _start {
     my $run   = $self->{+RUN};
     my $queue = $self->{+QUEUE};
 
-    my $state = $self->{+STATE};
+    my $state = $self->init_state;
     $queue->seek($state->{position});
 
     my $wait_time = $self->wait_time;
@@ -356,6 +352,8 @@ sub _start {
         last if $state->{ended};
         sleep($wait_time) if $wait_time;
     }
+
+    $self->preload;
 
     for my $stage (@{$self->{+STAGES}}) {
         for my $mod (@{$self->{+STAGED}}) {
@@ -777,7 +775,6 @@ sub poll_jobs {
     for my $item ($queue->poll) {
         my ($spos, $epos, $task) = @$item;
 
-        $state->{todo}++;
         $added++;
         $state->{position} = $epos;
 
@@ -786,6 +783,7 @@ sub poll_jobs {
             next;
         }
 
+        $state->{todo}++;
         my $cat = $task->{category};
         $cat = 'general' unless $cat && $self->{+STATE}->{running}->{$cat};
         $task->{category} = $cat;

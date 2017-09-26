@@ -9,7 +9,7 @@ use File::Spec();
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util qw/read_file open_file/;
+use Test2::Harness::Util qw/maybe_read_file open_file/;
 
 use Test2::Harness::Event;
 
@@ -447,8 +447,8 @@ sub _process_exit_line {
 
     chomp($value);
 
-    my $stdout = read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stdout"));
-    my $stderr = read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stderr"));
+    my $stdout = maybe_read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stdout"));
+    my $stderr = maybe_read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stderr"));
 
     return {
         event_id => $event_id,

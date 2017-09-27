@@ -201,3 +201,20 @@ __END__
     $queue->seek($state->{position});
 
         $state->{position} = $epos;
+
+sub respawn {
+    my $self = shift;
+
+    print STDERR "Waiting for currently running jobs to complete before reloading...\n";
+    while(1) { $self->wait_job() or last }
+
+    my $state = $self->{+STATE};
+
+    Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->write($state);
+
+    exec($self->cmd);
+    warn "Should not get here, respawn failed";
+    CORE::exit(255);
+}
+
+

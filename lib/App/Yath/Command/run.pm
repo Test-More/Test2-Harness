@@ -82,6 +82,7 @@ sub run {
         dir      => $data->{dir},
         keep_dir => $settings->{keep_dir},
         job_ids  => \%jobs,
+        tail     => 10,
     );
 
     $self->{+_FEEDER}    = $feeder;

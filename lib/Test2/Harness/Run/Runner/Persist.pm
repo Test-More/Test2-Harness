@@ -2,12 +2,32 @@ package Test2::Harness::Run::Runner::Persist;
 use strict;
 use warnings;
 
+use POSIX ":sys_wait_h";
+use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET/;
+use Time::HiRes qw/sleep time/;
 use Test2::Util qw/pkg_to_file/;
+use Test2::Harness::Util qw/read_file write_file open_file/;
+
+use Test2::Harness::Run::Runner::ProcMan::Persist();
+use Test2::Harness::Util::DepTracer();
 
 our $VERSION = '0.001016';
 
 use parent 'Test2::Harness::Run::Runner';
-use Test2::Harness::Util::HashBase qw/-inotify -stats -dep_map/;
+use Test2::Harness::Util::HashBase qw{
+    -procman_pid
+    -inotify -stats -last_checked
+    -signaled
+    -pfile
+    -root_pid
+    -dtrace
+
+    -watched
+    -stage
+
+    -blacklist_file
+    -blacklist
+};
 
 BEGIN {
     local $@;
@@ -28,101 +48,277 @@ BEGIN {
     }
 }
 
-# If we are stating files on the drive we should only poll every 2 seconds. If
-# we have Inotify we can use the normal 0.02
-sub wait_time { USE_INOTIFY() ? 0.02 : 2 }
-
-sub init_state {
+sub init {
     my $self = shift;
 
-    $self->SUPER::init_state();
+    $self->{+DTRACE} = Test2::Harness::Util::DepTracer->new;
+    $self->{+ROOT_PID} = $$;
 
-    my $state = $self->{+STATE};
+    $self->load_blacklist;
 
-    $state->{block_preload} ||= {};
+    $self->SUPER::init();
 
-    return;
+    $self->{+WAIT_TIME} ||= 0.02;
+
+    $self->{+STAGE} ||= '-NONE-';
 }
 
-my %EXCLUDE = (
-    'warnings' => 1,
-    'strict'   => 1,
-);
+sub procman_class { 'Test2::Harness::Run::Runner::ProcMan::Persist' }
+
+sub procman {
+    my $self = shift;
+
+    return $self->{+_PROCMAN}
+        if $self->{+_PROCMAN};
+
+    my $procman = $self->SUPER::procman(
+        pid        => $self->{+PROCMAN_PID},
+        dir        => $self->{+DIR},
+        signal_ref => \($self->{+SIGNAL}),
+    );
+
+    $procman->spawn() or die "Could not spawn a procman!";
+
+    return $procman;
+}
+
+sub respawn {
+    my $self = shift;
+
+    my $procman = $self->procman;
+    my $pid = $procman->pid;
+
+    print "$$ ($self->{+STAGE}) Waiting for currently running jobs to complete before respawning...\n";
+    $self->procman->finish();
+
+    exec($self->cmd(procman_pid => $pid, pfile => $self->{+PFILE}));
+    warn "Should not get here, respawn failed";
+    CORE::exit(255);
+}
+
+sub handle_signal {
+    my $self = shift;
+    my ($sig) = @_;
+
+    return if $self->{+SIGNAL};
+
+    $self->{+SIGNAL} = $sig;
+
+    if ($sig eq 'HUP') {
+        print STDERR "$$ ($self->{+STAGE}) Runner cought SIG$sig, reloading...\n";
+
+        return;
+    }
+
+    die "Runner cought SIG$sig, Attempting to shut down cleanly...\n";
+}
+
+sub stage_should_fork { 0 }
+
+sub stage_start {
+    my $self = shift;
+    my ($stage) = @_;
+
+    my $posfile = File::Spec->catfile($self->{+DIR}, "$stage-pos");
+    if (-f $posfile) {
+        chomp(my $pos = read_file($posfile));
+        $self->procman->reset_io(out => $pos);
+    }
+
+    my $dtrace = $self->dtrace;
+    $dtrace->start;
+
+    my $out = $self->SUPER::stage_start(@_);
+
+    $dtrace->stop;
+
+    return $out;
+}
+
+sub stage_stop {
+    my $self = shift;
+    my ($stage) = @_;
+
+    my $posfile = File::Spec->catfile($self->{+DIR}, "$stage-pos");
+    my $pos = $self->procman->out->line_pos;
+    write_file($posfile, $pos);
+
+    print "$$ ($self->{+STAGE}) Waiting for currently running jobs to complete before exiting for restart...\n";
+    $self->procman->finish;
+}
+
+sub stage_loop {
+    my $self = shift;
+
+    my $wait_time = $self->{+WAIT_TIME};
+
+    my $pman = $self->procman;
+    my $dtrace = $self->dtrace;
+
+    my %spawn;
+    my ($root, @children) = @{$self->{+STAGES}};
+
+    my $parent = $root;
+    for my $stage (@children) {
+        if($self->SUPER::stage_should_fork($stage)) {
+            push @{$spawn{$parent}->{iso}} => $stage;
+        }
+        else {
+            $spawn{$parent}->{next} = $stage;
+            $parent = $stage;
+        }
+    }
+
+    my $stage = $root;
+    STAGE: while ($stage) {
+        my $spec = $spawn{$stage} || {};
+
+        $0 = "yath-stage-$stage";
+        $self->stage_start($stage);
+
+        my $monitor = {};
+
+        until ($pman->queue_ended) {
+            $self->check_watched();
+            my $sig = $self->{+SIGNAL};
+
+            print "$$ ($self->{+STAGE}) Waiting for child stages to exit...\n" if $sig && keys %$monitor;
+            while(my ($cs, $pid) = each %$monitor) {
+                kill($sig, $pid) or warn "$$ ($self->{+STAGE}) could not singal stage '$cs' pid $pid" if $sig;
+                my $check = waitpid($pid, $sig ? 0 : WNOHANG);
+                my $exit = $?;
+                next unless $check;
+                die "$$ ($self->{+STAGE}) waitpid error for stage '$cs': $check (expected $pid)" if $check != $pid;
+                die "$$ ($self->{+STAGE}) Stage '$cs' exited badly: $exit" if $exit;
+                print "$$ ($self->{+STAGE}) Stage '$cs' has exited ($exit)\n";
+                delete $monitor->{$cs};
+            }
+
+            last if $sig;
+
+            # Spin up any initial or missing iso stages
+            for my $iso (@{$spec->{iso}}) {
+                next if $monitor->{$iso};
+
+                my ($pid, $runfile) = $self->stage_run_iso($iso);
+                return $runfile if $runfile;
+
+                $monitor->{$iso} = $pid;
+            }
+
+            my $next = $spec->{next};
+
+            # No children, or children are spawned, do an iteration
+            if ((!$next) || $monitor->{$next}) {
+                unless($self->{+STAGE} eq $stage) {
+                    $self->{+STAGE} = $stage;
+                    $self->watch();
+                    print "$$ ($self->{+STAGE}) Ready to run tests...\n";
+                }
+                my $runfile = $self->task_loop($stage);
+                return $runfile if $runfile;
+                sleep($wait_time);
+                next;
+            }
+
+            # Spawn the child
+            $monitor->{$next} = fork() and next;
+
+            die "Could not fork" unless defined $monitor->{$next};
+            $stage = $next;
+            $dtrace->clear_loaded;
+            next STAGE; # Move to next stage
+        }
+
+        $self->stage_stop($stage);
+
+        if ($stage eq $root) {
+            $self->respawn if $self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP';
+            return undef;
+        }
+
+        CORE::exit(0);
+    }
+
+    die "Should never get here!";
+}
+
+sub stage_run_iso {
+    my $self = shift;
+    my ($stage) = @_;
+
+    my $pid = fork();
+    die "Could not fork" unless defined($pid);
+    return ($pid, undef) if $pid;
+
+    my $dtrace = $self->dtrace;
+
+    $dtrace->clear_loaded;
+    $0 = "yath-iso-stage-$stage";
+    $self->stage_start($stage);
+    $self->{+STAGE} = $stage;
+    $self->watch();
+    print "$$ ($self->{+STAGE}) Ready to run tests...\n";
+
+    my $pman = $self->procman;
+    my $wait_time = $self->{+WAIT_TIME};
+
+    until ($pman->queue_ended) {
+        $self->check_watched();
+        last if $self->{+SIGNAL};
+        my $runfile = $self->task_loop($stage);
+        return (undef, $runfile) if $runfile;
+        sleep($wait_time);
+    }
+
+    $self->stage_stop($stage);
+    CORE::exit(0);
+}
+
+sub DESTROY {
+    my $self = shift;
+    return if $self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP';
+
+    return unless $$ == $self->{+ROOT_PID};
+
+    local ($?, $@, $!);
+
+    kill('HUP', $self->{+PROCMAN_PID}) or warn "Could not kill procman"
+        if $self->{+PROCMAN_PID};
+
+    my $pfile = $self->{+PFILE} or return;
+    return unless -f $pfile;
+
+    print "$$ Deleting $pfile\n";
+    unlink($pfile) or warn "Could not delete $pfile: $!\n";
+}
 
 sub _preload {
     my $self = shift;
-    my ($req, $block, $base_require) = @_;
+    my ($req, $block) = @_;
 
-    my $state = $self->{+STATE};
-    $block = $block ? { %$block, %{$state->{block_preload}} } : $state->{block_preload};
+    $block = $block ? { %$block, %{$self->blacklist} } : { %{$self->blacklist} };
 
-    my $stash = \%CORE::GLOBAL::;
-    # We use a string in the reference below to prevent the glob slot from
-    # being auto-vivified by the compiler.
-    my $old_require = exists $stash->{require} ? \&{'CORE::GLOBAL::require'} : undef;
+    my $dtrace = $self->dtrace;
 
-    my (%dep_map, @watch);
-    my $on      = 1;
-    my $require = sub {
-        my $file = shift;
+    $dtrace->start;
+    my $out = $self->SUPER::_preload($req, $block, $dtrace->my_require);
+    $dtrace->stop;
 
-        unless ($on) {
-            return $old_require->($file) if $old_require;
-            return CORE::require($file);
-        }
-
-        if ($file !~ m/^[\d\.]+$/) {
-            my $pkg = file_to_pkg($file);
-
-            unless ($EXCLUDE{$pkg}) {
-                push @{$dep_map{$pkg}} => scalar(caller);
-                push @watch            => $file;
-            }
-        }
-
-        return $base_require->($file) if $base_require;
-        return $old_require->($file)  if $old_require;
-        return CORE::require($file);
-    };
-
-    {
-        no strict 'refs';
-        *{'CORE::GLOBAL::require'} = $require;
-    }
-
-    $self->SUPER::_preload($req, $block, $require);
-
-    $on = 0;
-
-    $self->{+DEP_MAP} = \%dep_map;
-
-    $self->watch($_) for map { $INC{$_} } @watch;
-
-    return;
-}
-
-sub hup {
-    my $self = shift;
-
-    $self->preloads_changed();
-
-    return $self->SUPER::hup();
-}
-
-sub start {
-    my $self = shift;
-
-    local $SIG{HUP}  = sub {
-        print STDERR "Runner cought SIGHUP, saving state and reloading...\n";
-        $self->{+HUP} = 1;
-    };
-
-    return $self->SUPER::start(@_);
+    return $out;
 }
 
 sub watch {
     my $self = shift;
-    my ($file) = @_;
+
+    die "$$ ($self->{+STAGE}) Watch already starated!"
+        if $self->{+WATCHED} && $self->{+WATCHED} == $$;
+
+    delete $self->{+INOTIFY};
+    $self->{+WATCHED} = $$;
+
+    my $dtrace = $self->dtrace;
+    my $stats = $self->{+STATS} ||= {};
 
     if (USE_INOTIFY()) {
         my $inotify = $self->{+INOTIFY} ||= do {
@@ -131,14 +327,106 @@ sub watch {
             $in;
         };
 
-        $inotify->watch($file, INOTIFY_MASK());
+        for my $file (keys %{$dtrace->loaded}) {
+            $file = $INC{$file} || $file;
+            next if $stats->{$file}++;
+            next unless -e $file;
+            $inotify->watch($file, INOTIFY_MASK());
+        }
     }
     else {
-        my $stats = $self->{+STATS} ||= {};
-        my (undef,undef,undef,undef,undef,undef,undef,undef,undef,$mtime,$ctime) = stat($file);
-        $stats->{$file} = [$mtime, $ctime];
+        for my $file (keys %{$dtrace->loaded}) {
+            $file = $INC{$file} || $file;
+            next if $stats->{$file};
+            next unless -e $file;
+            my (undef,undef,undef,undef,undef,undef,undef,undef,undef,$mtime,$ctime) = stat($file);
+            $stats->{$file} = [$mtime, $ctime];
+        }
     }
 }
+
+sub check_watched {
+    my $self = shift;
+
+    my %changed;
+    if (USE_INOTIFY()) {
+        my $inotify = $self->{+INOTIFY} or return;
+        $changed{$_->fullname}++ for $inotify->read;
+    }
+    else {
+        # Only check once every 2 seconds
+        return undef if $self->{+LAST_CHECKED} && 2 > (time - $self->{+LAST_CHECKED});
+
+        for my $file (keys %{$self->{+STATS}}) {
+            my (undef,undef,undef,undef,undef,undef,undef,undef,undef,$mtime,$ctime) = stat($file);
+            my $times = $self->{+STATS}->{$file};
+            next if $mtime == $times->[0] && $ctime == $times->[1];
+            $changed{$file}++;
+        }
+
+        $self->{+LAST_CHECKED} = time;
+    }
+
+    return undef unless keys %changed;
+
+    print STDERR "$$ ($self->{+STAGE}) Runner detected a change in one or more preloaded modules, blacklisting changed files and reloading...\n";
+
+    my $dtrace = $self->dtrace;
+    my $dep_map = $dtrace->dep_map;
+
+    my %CNI = reverse %INC;
+    my @todo = map {[file_to_pkg($CNI{$_}), $_]} keys %changed;
+
+    my $bl = open_file($self->{+BLACKLIST_FILE}, '>>');
+    flock($bl, LOCK_EX) or die "Could not lock blacklist: $!";
+    seek($bl,2,0);
+
+    my %seen;
+    while (@todo) {
+        my $set = shift @todo;
+        my ($pkg, $full) = @$set;
+        my $file = $CNI{$full} || $full;
+        next if $seen{$file}++;
+        next if $pkg->isa('Test2::Harness::Preload');
+        print $bl "$pkg\n";
+        my $next = $dep_map->{$file} or next;
+        push @todo => @$next;
+    }
+
+    $bl->flush;
+    flock($bl, LOCK_UN) or die "Could not unlock blacklist: $!";
+    close($bl);
+
+    return $self->{+SIGNAL} ||= 'HUP';
+}
+
+sub load_blacklist {
+    my $self = shift;
+
+    my $bfile = $self->{+BLACKLIST_FILE} ||= File::Spec->catfile($self->{+DIR}, 'BLACKLIST');
+
+    my $blacklist = $self->{+BLACKLIST} ||= {};
+
+    return unless -f $bfile;
+
+    my $fh = open_file($bfile, '<');
+    while(my $pkg = <$fh>) {
+        chomp($pkg);
+        $blacklist->{$pkg} = 1;
+    }
+}
+
+sub file_to_pkg {
+    my $file = shift;
+    my $pkg  = $file;
+    $pkg =~ s{/}{::}g;
+    $pkg =~ s/\..*$//;
+    return $pkg;
+}
+
+1;
+
+__END__
 
 sub preloads_changed {
     my $self = shift;
@@ -179,14 +467,6 @@ sub preloads_changed {
     print STDERR "Runner detected a change in one or more preloaded modules, saving state and reloading...\n";
 
     return $self->{+HUP} = 1;
-}
-
-sub file_to_pkg {
-    my $file = shift;
-    my $pkg  = $file;
-    $pkg =~ s{/}{::}g;
-    $pkg =~ s/\..*$//;
-    return $pkg;
 }
 
 1;

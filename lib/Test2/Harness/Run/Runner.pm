@@ -8,8 +8,8 @@ use Carp qw/croak/;
 use POSIX ":sys_wait_h";
 use Config qw/%Config/;
 use IPC::Open3 qw/open3/;
-use List::Util qw/none sum first/;
-use Time::HiRes qw/sleep time/;
+use List::Util qw/none/;
+use Time::HiRes qw/time/;
 use Test2::Util qw/pkg_to_file/;
 
 use App::Yath::Util qw/find_yath/;
@@ -17,39 +17,52 @@ use Test2::Harness::Util qw/open_file write_file_atomic local_env/;
 
 use Test2::Harness::Run();
 use Test2::Harness::Run::Queue();
+use Test2::Harness::Run::Runner::ProcMan();
 
 use Test2::Harness::Job();
 use Test2::Harness::Job::Runner();
 
 use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::File::JSONL();
 
 use File::Spec();
 
 use Test2::Harness::Util::HashBase qw{
     -dir
     -run
-    -run_file
+    -jobs_todo
+
+    -queue -queue_file
+
+    -run_file -ready_file
 
     -err_log -out_log
-    -_exit
-    -pid
-    -remote
+
+    -_exit -pid -remote
+    -signal
 
     -wait_time
 
-    -_next
+    -_procman
+    -_preload_done
 
-    -job_runner_class
-
-    -job_count
-
-    -jobs_file  -jobs
-    -queue_file -queue
-    -state_file -state
-    -ready_file
-    -hup
+    -staged -stages -fork_stages
 };
+
+sub job_runner_class { 'Test2::Harness::Job::Runner' }
+sub procman_class    { 'Test2::Harness::Run::Runner::ProcMan' }
+
+sub ready { -f $_[0]->{+READY_FILE} }
+
+sub find_inc {
+    # Find out where Test2::Harness::Run::Worker came from, make sure that is in our workers @INC
+    my $file = __PACKAGE__;
+    $file =~ s{::}{/}g;
+    $file .= '.pm';
+
+    my $inc = $INC{$file};
+    $inc =~ s{\Q$file\E$}{}g;
+    return File::Spec->rel2abs($inc);
+}
 
 sub init {
     my $self = shift;
@@ -72,47 +85,35 @@ sub init {
 
     $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
 
-    $self->{+JOB_RUNNER_CLASS} ||= 'Test2::Harness::Job::Runner';
+    $self->{+STAGES}      = ['default'];
+    $self->{+STAGED}      = [];
+    $self->{+FORK_STAGES} = {};
 
-    $self->{+ERR_LOG}   = File::Spec->catfile($dir, 'error.log');
-    $self->{+OUT_LOG}   = File::Spec->catfile($dir, 'output.log');
-
+    $self->{+ERR_LOG}    = File::Spec->catfile($dir, 'error.log');
+    $self->{+OUT_LOG}    = File::Spec->catfile($dir, 'output.log');
     $self->{+READY_FILE} = File::Spec->catfile($dir, 'ready');
-
-    $self->{+STATE_FILE} = File::Spec->catfile($dir, 'state.json');
-
-    $self->{+JOBS_FILE} = File::Spec->catfile($dir, 'jobs.jsonl');
-    $self->{+JOBS} = Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
-    $self->{+JOBS}->open_file('>>'); # Touch the file
-
     $self->{+QUEUE_FILE} = File::Spec->catfile($dir, 'queue.jsonl');
-    $self->{+QUEUE} = Test2::Harness::Run::Queue->new(file => $self->{+QUEUE_FILE});
 
-    if ($self->{+RUN}->job_count < 2) {
-        $self->{+_NEXT} = 'next_by_stamp';
-    }
-    elsif ($self->{+RUN}->finite) {
-        $self->{+_NEXT} = 'next_finite';
-    }
-    else {
-        $self->{+_NEXT} = 'next_fair';
-    }
+    $self->{+QUEUE} ||= Test2::Harness::Run::Queue->new(file => $self->{+QUEUE_FILE});
 
     $self->{+DIR} = $dir;
 }
 
-sub ready {
-    my $self = shift;
-    return -f $self->{+READY_FILE};
-}
-
-sub find_inc {
+sub procman {
     my $self = shift;
 
-    # Find out where Test2::Harness::Run::Worker came from, make sure that is in our workers @INC
-    my $inc = $INC{"Test2/Harness/Run/Runner.pm"};
-    $inc =~ s{/Test2/Harness/Run/Runner\.pm$}{}g;
-    return File::Spec->rel2abs($inc);
+    croak "Preload must be done before calling procman()"
+        unless $self->{+_PRELOAD_DONE};
+
+    my $num = 1;
+    return $self->{+_PROCMAN} ||= $self->procman_class->new(
+        jobs_file  => File::Spec->catfile($self->{+DIR}, 'jobs.jsonl'),
+        run        => $self->{+RUN},
+        wait_time  => $self->{+WAIT_TIME},
+        stages     => { map {($_ => $num++)} @{$self->{+STAGES}} },
+        queue      => $self->{+QUEUE},
+        @_,
+    );
 }
 
 sub cmd {
@@ -197,15 +198,26 @@ sub exit {
 
     return undef if $self->{+REMOTE};
 
-    return $self->{+_EXIT} if defined $self->{+_EXIT};
-
-    $self->wait(WNOHANG);
+    $self->wait(WNOHANG) unless defined $self->{+_EXIT};
 
     return $self->{+_EXIT};
 }
 
+sub handle_signal {
+    my $self = shift;
+    my ($sig) = @_;
+
+    return if $self->{+SIGNAL};
+
+    $self->{+SIGNAL} = $sig;
+
+    die "Runner cought SIG$sig, Attempting to shut down cleanly...\n";
+}
+
 sub preload {
     my $self = shift;
+
+    $self->{+_PRELOAD_DONE} = 1;
 
     my $run = $self->{+RUN};
     my $req = $run->preload or return;
@@ -224,21 +236,69 @@ sub preload {
 
 sub _preload {
     my $self = shift;
-    my ($req, $block, $require) = @_;
+    my ($req, $block, $require_sub) = @_;
 
     $block ||= {};
-    $require ||= sub { require $_[0] };
+
+    my $stages = $self->{+STAGES} ||= ['default'];
+    my $staged = $self->{+STAGED} ||= [];
+    my $fork_stages = $self->{+FORK_STAGES} ||= {};
+
+    my %seen = map {($_ => 1)} @$stages;
+
+    my $run = $self->{+RUN};
 
     if ($req) {
         for my $mod (@$req) {
-            next if $block->{$mod};
+            next if $block && $block->{$mod};
             my $file = pkg_to_file($mod);
-            $require->($file);
+
+            if ($require_sub) {
+                $require_sub->($file);
+            }
+            else {
+                require $file;
+            }
 
             next unless $mod->isa('Test2::Harness::Preload');
-            $mod->preload($block, job_count => $self->{+JOB_COUNT});
+
+            my %args = (
+                job_count => $run->job_count,
+                finite    => $run->finite,
+                jobs_todo => $self->{+JOBS_TODO},
+                block     => $block,
+            );
+
+            $mod = $self->_mod_preload($mod, %args);
+            push @$staged => $mod;
+
+            $fork_stages->{$_} = 1 for $mod->fork_stages;
+
+            my $idx = 0;
+            for my $stage ($mod->stages) {
+                unless ($seen{$stage}++) {
+                    splice(@$stages, $idx++, 0, $stage);
+                    next;
+                }
+
+                for (my $i = $idx; $i < @$stages; $i++) {
+                    next unless $stages->[$i] eq $stage;
+                    $idx = $i + 1;
+                    last;
+                }
+            }
         }
     }
+}
+
+sub _mod_preload {
+    my $self = shift;
+    my ($mod, %args) = @_;
+
+    return $mod->new(%args) if $mod->can('new');
+
+    $mod->preload(%args);
+    return $mod;
 }
 
 sub start {
@@ -249,84 +309,65 @@ sub start {
     my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
     write_file_atomic($pidfile, "$$");
 
-    my $sig;
-    my $handle_sig = sub {
-        my ($got_sig) = @_;
-
-        # Already being handled
-        return if $sig;
-
-        $sig = $got_sig;
-
-        die "Runner cought SIG$sig, Attempting to shut down cleanly...\n";
-    };
-
-    local $SIG{INT}  = sub { $handle_sig->('INT') };
-    local $SIG{TERM} = sub { $handle_sig->('TERM') };
+    local $SIG{INT}  = sub { $self->handle_signal('INT') };
+    local $SIG{HUP}  = sub { $self->handle_signal('HUP') };
+    local $SIG{TERM} = sub { $self->handle_signal('TERM') };
 
     my $env = $run->env_vars;
 
     my ($out, $ok, $err);
     local_env $env => sub {
-        $self->init_state;
-
         $self->preload;
-
+        $self->procman; # Make sure this si generated now
         write_file_atomic($self->{+READY_FILE}, "1");
-
-        $ok = eval { $out = $self->_start(@_); 1 };
+        $ok = eval { $out = $self->stage_loop(@_); 1 };
         $err = $@;
+        warn $err unless $ok;
     };
 
+    return $out if $ok && defined($out);
+
+    my $procman = $self->procman;
+
     unless($ok) {
-        warn $err;
-        eval { $self->kill_jobs($sig || 'TERM'); 1 } or warn $@;
+        eval { $procman->kill($self->{+SIGNAL}); 1 } or warn $@;
     }
 
-    unless(eval { while(1) { $self->wait_job() or last }; 1 }) {
+    unless(eval { $procman->finish; 1 }) {
         warn $@;
         $ok = 0;
     }
 
-    return $out if $ok && defined($out);
-
-    $self->write_remaining_exits();
-
     return undef if $ok;
 
-    CORE::exit($SIG ? 0 : 255);
+    $procman->write_remaining_exits;
+
+    CORE::exit($self->{+SIGNAL} ? 0 : 255);
 }
 
-sub init_state {
+sub stage_loop {
     my $self = shift;
 
-    if (-f $self->{+STATE_FILE}) {
-        $self->{+STATE} = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->read;
+    for my $stage (@{$self->{+STAGES}}) {
+        $self->stage_start($stage) or next;
+
+        my $runfile = $self->task_loop($stage);
+        return $runfile if $runfile;
+
+        $self->stage_stop($stage);
     }
-    else {
-        $self->{+STATE} = {
-            running  => {long => {}, medium => {}, general => {}, isolation => {}},
-            pending  => {long => [], medium => [], general => [], isolation => []},
-            position => 0,
-        };
-    }
+
+    return undef;
 }
 
-sub _start {
+sub task_loop {
     my $self = shift;
+    my ($stage) = @_;
 
-    my $run   = $self->{+RUN};
-    my $queue = $self->{+QUEUE};
-
-    my $state = $self->{+STATE};
-    $queue->seek($state->{position});
+    my $pman = $self->procman;
 
     while (1) {
-        $self->wait_jobs();
-        $self->respawn if $self->hup; # do not use {+HUP}, this is a hook point
-
-        my $task = $self->next or last;
-        next unless ref($task);
+        my $task = $pman->next($stage) or return undef;
 
         my $runfile = $self->run_job($task);
         return $runfile if $runfile;
@@ -335,96 +376,64 @@ sub _start {
     return undef;
 }
 
-sub respawn {
+sub stage_should_fork {
     my $self = shift;
-
-    print STDERR "Waiting for currently running jobs to complete before reloading...\n";
-    while(1) { $self->wait_job() or last }
-
-    my $state = $self->{+STATE};
-
-    Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE})->write($state);
-
-    exec($self->cmd);
-    warn "Should not get here, respawn failed";
-    CORE::exit(255);
+    my ($stage) = @_;
+    return $self->{+FORK_STAGES}->{$stage} || 0;
 }
 
-sub wait_jobs {
+sub stage_start {
     my $self = shift;
+    my ($stage) = @_;
 
-    local $?;
+    my $fork = $self->stage_should_fork($stage);
 
-    my $out = 0;
+    return 0 if $fork && !$self->stage_fork($stage);
 
-    my $running = $self->{+STATE}->{running};
-    for my $cat (values %$running) {
-        for my $pid (keys %$cat) {
-            my $got = waitpid($pid, WNOHANG);
-            my $ret = $?;
-            next if $got == 0;
-
-            my $exit_file = delete $cat->{$pid};
-            $out++;
-
-            if ($got == -1) {
-                write_file_atomic($exit_file, '-1');
-                next;
-            }
-
-            if ($got == $pid) {
-                write_file_atomic($exit_file, $ret);
-                next;
-            }
-
-            die "Unexpected return from waitpid($pid): $got";
-            # The die should make this unreachable.. but just in case.
-            CORE::exit(255);
-        }
+    my $start_meth = "start_stage_$stage";
+    for my $mod (@{$self->{+STAGED}}) {
+        next unless $mod->can($start_meth);
+        $mod->$start_meth;
     }
 
-    return $out;
+    return 1;
 }
 
-sub wait_job {
+sub stage_fork {
     my $self = shift;
+    my ($stage) = @_;
 
-    local $?;
+    # Must do this before we can fork
+    $self->procman->finish;
 
-    my $running = $self->{+STATE}->{running};
+    my $pid = fork();
+    die "Could not fork" unless defined $pid;
 
-    # Nothing to wait for.
-    my $pid = CORE::wait();
+    # Child returns true
+    unless ($pid) {
+        $0 = 'yath-runner-' . $stage;
+        return 1;
+    }
+
+    # Parent waits for child
+    my $check = waitpid($pid, 0);
     my $ret = $?;
 
-    return 0 if $pid == -1;
+    die "waitpid returned $check" unless $check == $pid;
+    die "Child process did not exit cleanly: $ret" if $ret;
 
-    for my $cat (values %$running) {
-        my $exit_file = delete $cat->{$pid} or next;
-
-        write_file_atomic($exit_file, $ret);
-
-        return $pid;
-    }
-
-    die "Child process $pid was reaped, but was not found in the internal list of running processes";
-
-    # The die should make this unreachable.. but just in case.
-    CORE::exit(255);
+    return 0;
 }
 
-sub kill_jobs {
+sub stage_stop {
     my $self = shift;
-    my ($sig) = @_;
+    my ($stage) = @_;
 
-    my $running = $self->{+STATE}->{running};
-    for my $cat (values %$running) {
-        for my $pid (keys %$cat) {
-            kill($sig, $pid) or warn "Could not kill pid $pid";
-        }
-    }
+    return unless $self->stage_should_fork($stage);
 
-    return;
+    $self->procman->finish;
+
+    CORE::exit(0);
 }
 
 sub run_job {
@@ -440,15 +449,14 @@ sub run_job {
     my $run = $self->{+RUN};
 
     my $dir = File::Spec->catdir($self->{+DIR}, $job_id);
-    mkdir($dir) or die "Could not create job directory '$dir': $!";
+    mkdir($dir) or die "$$ Could not create job directory '$dir': $!";
     my $tmp = File::Spec->catdir($dir, 'tmp');
     mkdir($tmp) or die "Coult not create job temp directory '$tmp': $!";
 
-    my $start_file = File::Spec->catfile($dir, 'start');
-    my $exit_file  = File::Spec->catfile($dir, 'exit');
     my $file_file  = File::Spec->catfile($dir, 'file');
-
     write_file_atomic($file_file, $file);
+
+    my $start_file = File::Spec->catfile($dir, 'start');
     write_file_atomic($start_file, time());
 
     my @libs = $run->all_libs;
@@ -504,195 +512,19 @@ sub run_job {
     my $via = $task->{via} || ($fork ? ['Fork', 'Open3'] : ['Open3']);
     $via = ['Dummy'] if $run->dummy;
 
-    my $runner = $self->{+JOB_RUNNER_CLASS}->new(
+    my $job_runner = $self->job_runner_class->new(
         job => $job,
         dir => $dir,
         via => $via,
     );
 
-    my ($pid, $runfile) = $runner->run;
+    my ($pid, $runfile) = $job_runner->run;
     return $runfile if $runfile; # In child process
 
     # In parent
-    my $category = $task->{category};
-    $category = 'general' unless $category && $self->{+STATE}->{running}->{$category};
+    $self->procman->job_started(task => $task, job => $job, pid => $pid, dir => $dir);
 
-    $self->{+JOBS}->write({ %{$job->TO_JSON}, pid => $pid });
-    $self->{+STATE}->{running}->{$category}->{$pid} = $exit_file;
-
-    return;
-}
-
-sub next {
-    my $self = shift;
-
-    my $state = $self->{+STATE};
-
-    return if $state->{ended} && !$self->pending;
-
-    my $wait_time = $self->wait_time;
-    my $max = $self->{+RUN}->job_count;
-    my $meth = $self->{+_NEXT};
-
-    while(1) {
-        $self->wait_jobs();
-        return -1 if $self->hup;
-
-        $self->poll_jobs();
-
-        return if $state->{ended} && !$self->pending;
-
-        # Do not get next if we are at/over capacity, or have an isolated test running
-        my $running = $self->running;
-        if ($max > $running && !keys %{$state->{running}->{isolation}}) {
-            my $next = $self->$meth($running, $max);
-            return $next if $next;
-
-            sleep($wait_time) if $wait_time;
-        }
-        else {
-            $self->wait_job;
-        }
-    }
-}
-
-sub running {
-    my $self = shift;
-    my $state = $self->{+STATE};
-    return sum(map { scalar(keys %{$_}) } values %{$state->{running}}) || 0;
-}
-
-sub write_remaining_exits {
-    my $self = shift;
-    my $state = $self->{+STATE};
-    my $running = $state->{running};
-
-    for my $cat (keys %$running) {
-        my $pids = $running->{$cat};
-        for my $pid (keys %$pids) {
-            my $exit_file = $pids->{$pid};
-            print STDERR "Found un-reaped '$cat' PID $pid, writing an exit file\n";
-            write_file_atomic($exit_file, '-1');
-        }
-    }
-}
-
-sub pending {
-    my $self = shift;
-    my $state = $self->{+STATE};
-    return sum(map { scalar(@{$_}) } values %{$state->{pending}}) || 0;
-}
-
-sub _cats_by_stamp {
-    my $self = shift;
-    my $state = $self->{+STATE};
-    my $pending = $state->{pending};
-    return sort { $pending->{$a}->[0]->{stamp} <=> $pending->{$b}->[0]->{stamp} } grep { @{$pending->{$_}} } keys %$pending;
-}
-
-sub next_by_stamp {
-    my $self = shift;
-    return if keys %{$self->{+STATE}->{running}->{isolation}};
-    my ($cat) = $self->_cats_by_stamp;
-    return unless $cat;
-    return shift(@{$self->{+STATE}->{pending}->{$cat}});
-}
-
-sub next_finite {
-    my $self = shift;
-    my ($running, $max) = @_;
-
-    my $state = $self->{+STATE};
-    return if keys %{$state->{running}->{isolation}};
-
-    my $p_gen = $state->{pending}->{general};
-    my $p_med = $state->{pending}->{medium};
-    my $p_lng = $state->{pending}->{long};
-    my $p_iso = $state->{pending}->{isolation};
-
-    # If we have more than 1 slot available prefer a longer job
-    if ($running < $max - 1) {
-        return shift @$p_lng if @$p_lng;
-        return shift @$p_med if @$p_med;
-    }
-
-    # Fallback with shortest first
-    return shift @$p_gen if @$p_gen;
-    return shift @$p_lng if @$p_lng;
-    return shift @$p_med if @$p_med;
-
-    # Next comes isolation, so we cannot pick one if anything is running.
-    return if $running;
-
-    return shift @$p_iso;
-}
-
-sub next_fair {
-    my $self = shift;
-    my ($running, $max) = @_;
-
-    my $state = $self->{+STATE};
-    return if keys %{$state->{running}->{isolation}};
-
-    my @cats = $self->_cats_by_stamp;
-    return unless @cats;
-
-    my $r_lng = $state->{running}->{long};
-    my $r_med = $state->{running}->{medium};
-
-    my $lmrun = sum(scalar(keys(%$r_lng)), scalar(keys(%$r_med))) || 0;
-    my $lmmax = $max - 1;
-
-    # Do not fill all slots with 'long' or 'medium' jobs
-    shift @cats while @cats > 1    # Do not change if this is the only category
-        && ($cats[0] eq 'long' || $cats[0] eq 'medium')    # Only change if long/medium
-        && $lmrun >= $lmmax;                                 # Only change if the sum of running long+medium is more than max - 1
-
-    my ($cat) = @cats;
-
-    # Next one up requires isolation :-(
-    if ($cat eq 'isolation') {
-        my $p_gen = $state->{pending}->{general};
-        my $p_iso = $state->{pending}->{isolation};
-
-        # If we have something long running then go ahead and start general tasks, but nothing longer
-        return shift @$p_gen if keys %{$state->{running}->{long}} && @$p_gen;
-
-        # Cannot run the iso yet
-        return if $running;
-
-        # Now run the iso
-        return shift @$p_iso;
-    }
-
-    # Return the next item by time recieved
-    return shift @{$state->{pending}->{$cat}};
-}
-
-sub poll_jobs {
-    my $self = shift;
-    my $queue = $self->{+QUEUE};
-
-    my $state = $self->{+STATE};
-    my $p = $state->{pending};
-
-    for my $item ($queue->poll) {
-        my ($spos, $epos, $task) = @$item;
-
-        $state->{position} = $epos;
-
-        if (!$task) {
-            $state->{ended} = 1;
-            next;
-        }
-
-        my $cat = $task->{category};
-        $cat = 'general' unless $cat && $self->{+STATE}->{running}->{$cat};
-
-        push @{$p->{$cat}} => $task;
-    }
-
-    return;
+    return undef;
 }
 
 1;

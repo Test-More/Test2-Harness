@@ -12,7 +12,7 @@ my $tmp = gen_temp(
     notime => "#HARNESS-NO-TIMEOUT\n",
     warn   => "#!/usr/bin/perl -w\n",
     taint  => "#!/usr/bin/env perl -t -w\n",
-    foo    => "#HARNESS-CATEGORY-FOO\n",
+    foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
 
     timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
     badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
@@ -45,6 +45,7 @@ subtest invalid => sub {
 subtest foo => sub {
     my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'foo'));
     is($foo->check_category, 'foo', "Category is foo");
+    is($foo->check_stage, 'foo', "Stage is foo");
 };
 
 subtest taint => sub {
@@ -57,6 +58,7 @@ subtest taint => sub {
         $taint->queue_item(42),
         {
             category    => 'general',
+            stage       => 'default',
             file        => $taint->file,
             job_id      => 42,
             stamp       => T(),
@@ -84,6 +86,7 @@ subtest warn => sub {
         $warn->queue_item(42),
         {
             category    => 'general',
+            stage       => 'default',
             file        => $warn->file,
             job_id      => 42,
             stamp       => T(),
@@ -116,6 +119,7 @@ subtest notime => sub {
         $notime->queue_item(42),
         {
             category    => 'long',
+            stage       => 'default',
             file        => $notime->file,
             job_id      => 42,
             stamp       => T(),
@@ -159,6 +163,7 @@ subtest all => sub {
         $all->queue_item(42),
         {
             category    => 'isolation',
+            stage       => 'default',
             file        => $all->file,
             job_id      => 42,
             stamp       => T(),
@@ -202,6 +207,7 @@ subtest med2 => sub {
         $med2->queue_item(42),
         {
             category    => 'medium',
+            stage       => 'default',
             file        => $med2->file,
             job_id      => 42,
             stamp       => T(),
@@ -245,6 +251,7 @@ subtest med1 => sub {
         $med1->queue_item(42),
         {
             category    => 'medium',
+            stage       => 'default',
             file        => $med1->file,
             job_id      => 42,
             stamp       => T(),
@@ -290,6 +297,7 @@ subtest long => sub {
         $long->queue_item(42),
         {
             category    => 'long',
+            stage       => 'default',
             file        => $long->file,
             job_id      => 42,
             stamp       => T(),

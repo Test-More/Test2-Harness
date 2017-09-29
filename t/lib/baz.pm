@@ -1,8 +1,10 @@
 package baz;
+use strict;
+use warnings;
 
 use foo;
 use bar;
 
-print STDERR "Loaded baz Again\n";
+print "Loaded baz\n";
 
 1;

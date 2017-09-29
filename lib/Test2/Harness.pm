@@ -22,7 +22,7 @@ use Test2::Harness::Util::HashBase qw{
     -active
     -live
     -jobs
-    -job_count
+    -jobs_todo
     -event_timeout
     -post_exit_timeout
     -run_id
@@ -73,7 +73,7 @@ sub run {
     }
 
     my $lost;
-    if (my $want = $self->{+JOB_COUNT}) {
+    if (my $want = $self->{+JOBS_TODO}) {
         $lost = $want - $seen;
     }
 

@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     -keep_dir
     -job_ids
     -seen_jobs
+    -tail
 };
 
 sub init {
@@ -43,6 +44,7 @@ sub init {
         $dir = $self->{+DIR} = Test2::Harness::Run::Dir->new(
             root   => $dir,
             run_id => $self->{+RUN}->run_id,
+            tail   => $self->{+TAIL},
         );
     }
 

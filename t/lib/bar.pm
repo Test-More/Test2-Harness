@@ -1,5 +1,9 @@
 package bar;
+use strict;
+use warnings;
 
-print STDERR "Loaded bar\n";
+use foo;
+
+print "Loaded bar\n";
 
 1;

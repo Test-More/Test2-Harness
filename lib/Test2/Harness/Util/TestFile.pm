@@ -49,6 +49,12 @@ sub check_feature {
     return 0;
 }
 
+sub check_stage {
+    my $self = shift;
+    $self->_scan unless $self->{+_SCANNED};
+    return $self->{+_HEADERS}->{stage} || 'default';
+}
+
 sub check_category {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
@@ -132,6 +138,10 @@ sub _scan {
             my ($feature) = @args;
             $headers{features}->{$feature} = 1;
         }
+        elsif ($dir eq 'stage') {
+            my ($name) = @args;
+            $headers{stage} = $name;
+        }
         elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;
             $headers{category} = $name;
@@ -183,6 +193,7 @@ sub queue_item {
     my ($job_id) = @_;
 
     my $category = $self->check_category;
+    my $stage = $self->check_stage;
 
     my $fork    = $self->check_feature(fork    => 1);
     my $preload = $self->check_feature(preload => 1);
@@ -197,6 +208,7 @@ sub queue_item {
         use_stream  => $stream,
         switches    => $self->switches,
         category    => $category,
+        stage       => $stage,
         stamp       => time,
         job_id      => $job_id,
 

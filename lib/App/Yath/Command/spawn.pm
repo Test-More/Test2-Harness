@@ -38,19 +38,7 @@ sub import {
         POSIX::setsid();
     }
 
-    my $pid = $$;
-
-    eval <<'    EOT' or die $@ if $args{pfile};
-        END {
-            local ($?, $!, $@);
-            if (-f $args{pfile} && $pid == $$) {
-                print "Deleting $args{pfile}\n";
-                unlink($args{pfile}) or warn "Could not delete $args{pfile}: $!\n";
-            }
-        }
-
-        1;
-    EOT
+    $0 = 'yath-runner';
 
     my $file = pkg_to_file($runner_class);
     require $file;

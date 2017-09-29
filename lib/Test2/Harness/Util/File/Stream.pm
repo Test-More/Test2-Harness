@@ -8,7 +8,25 @@ use Carp qw/croak/;
 use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET/;
 
 use parent 'Test2::Harness::Util::File';
-use Test2::Harness::Util::HashBase qw/use_write_lock/;
+use Test2::Harness::Util::HashBase qw/use_write_lock -tail/;
+
+sub init {
+    my $self = shift;
+
+    $self->SUPER::init();
+
+    my $tail = $self->{+TAIL} or return;
+
+    return unless $self->exists;
+
+    my @lines = $self->poll_with_index;
+    if (@lines < $self->{+TAIL}) {
+        $self->seek(0);
+    }
+    else {
+        $self->seek($lines[0 - $tail]->[0]);
+    }
+}
 
 sub poll_with_index {
     my $self = shift;

@@ -6,6 +6,8 @@ our $VERSION = '0.001016';
 
 use File::Path qw/remove_tree/;
 
+use Time::HiRes qw/sleep/;
+
 use File::Spec();
 
 use Test2::Harness::Util::File::JSON();
@@ -53,7 +55,7 @@ sub run {
     my $queue = $runner->queue;
     $queue->end;
 
-    waitpid($data->{pid}, 0);
+    sleep(0.02) while kill(0, $data->{pid});
 
     unlink($pfile) if -f $pfile;
 

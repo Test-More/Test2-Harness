@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '0.001016';
 
+use Time::HiRes qw/sleep/;
+
 use Test2::Harness::Util::File::JSON;
 
 use App::Yath::Util qw/find_pfile/;
@@ -62,6 +64,7 @@ sub run {
 
         next if $count;
         last unless -f $pfile;
+        sleep 0.02;
     }
 
     return 0;

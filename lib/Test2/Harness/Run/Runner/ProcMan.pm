@@ -5,6 +5,7 @@ use warnings;
 use Carp qw/croak/;
 use POSIX ":sys_wait_h";
 use List::Util qw/first/;
+use Time::HiRes qw/sleep/;
 
 use File::Spec();
 
@@ -53,7 +54,7 @@ sub init {
 
     $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
 
-    $self->{+JOBS}  ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
+    $self->{+JOBS} ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
 
     $self->{+_PENDING} = {};
     $self->{+_RUNNING} = {
@@ -150,6 +151,22 @@ sub finish {
     return;
 }
 
+sub bump {
+    my $self = shift;
+    my ($cat) = @_;
+
+    $self->{+_RUNNING}->{$cat}++;
+    $self->{+_RUNNING}->{__ALL__}++;
+}
+
+sub unbump {
+    my $self = shift;
+    my ($cat) = @_;
+
+    $self->{+_RUNNING}->{$cat}--;
+    $self->{+_RUNNING}->{__ALL__}--;
+}
+
 sub wait_on_jobs {
     my $self = shift;
     my %params = @_;
@@ -162,8 +179,7 @@ sub wait_on_jobs {
 
         my $params = delete $self->{+_PIDS}->{$pid};
         my $cat = $params->{task}->{category};
-        $self->{+_RUNNING}->{$cat}--;
-        $self->{+_RUNNING}->{__ALL__}--;
+        $self->unbump($cat);
 
         unless ($check == $pid) {
             $exit = -1;
@@ -190,15 +206,16 @@ sub next {
     my $self = shift;
     my ($stage) = @_;
 
-    # Make sure we have something pending in this stage
-    my $pending = $self->{+_PENDING}->{$stage} or return undef;
-    return undef unless @$pending || $self->{+QUEUE_ENDED};
+    my $pending = $self->{+_PENDING}->{$stage} ||= [];
+
+    return undef unless @$pending;
 
     my $wait_time = $self->{+WAIT_TIME};
 
     my $task;
     while(@$pending) {
         $self->wait_on_jobs;
+        $self->poll_tasks;
 
         $task = $self->fetch_task($pending);
         last if $task;
@@ -209,8 +226,7 @@ sub next {
     return undef unless $task;
 
     my $cat = $task->{category};
-    $self->{+_RUNNING}->{$cat}++;
-    $self->{+_RUNNING}->{__ALL__}++;
+    $self->bump($cat);
 
     return $task;
 }

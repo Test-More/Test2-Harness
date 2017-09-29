@@ -49,6 +49,12 @@ sub run {
 
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
 
+    my $blacklist = File::Spec->catfile($data->{dir}, 'BLACKLIST');
+    if (-e $blacklist) {
+        print "Deleting module blacklist...\n";
+        unlink($blacklist) or warn "Could not delete blacklist file!";
+    }
+
     print "\nSending SIGHUP to $data->{pid}\n\n";
     kill('HUP', $data->{pid}) or die "Could not send signal!\n";
     return 0;

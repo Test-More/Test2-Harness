@@ -8,7 +8,12 @@ use Test2::Util qw/pkg_to_file/;
 
 sub preload {
     my $class = shift;
-    my ($block) = @_;
+    my %params = @_;
+
+    my $block = $params{block} || {};
+
+    use Data::Dumper;
+    print Dumper(\%params);
 
     for my $mod ('foo', 'bar', 'baz') {
         next if $block->{$mod};
@@ -17,5 +22,6 @@ sub preload {
     }
 }
 
+print "Loaded tpree\n";
 
 1;

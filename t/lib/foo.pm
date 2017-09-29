@@ -1,5 +1,7 @@
 package foo;
+use strict;
+use warnings;
 
-print STDERR "Loaded foo Again\n";
+print "Loaded foo\n";
 
 1;

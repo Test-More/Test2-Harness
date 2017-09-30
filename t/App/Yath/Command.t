@@ -809,6 +809,7 @@ subtest options => sub {
     };
 
     subtest cover => sub {
+        local $INC{'Devel/Cover.pm'} = 1;
         my $one = $TCLASS->new(args => []);
         ok(!$one->settings->{cover},       "no cover by default");
         ok($one->settings->{use_fork},     "fork allowed by default");

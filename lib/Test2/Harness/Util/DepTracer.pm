@@ -48,7 +48,7 @@ sub init {
             return CORE::require($file);
         }
 
-        if ($file !~ m/^[\d\.]+$/) {
+        if ($file =~ m/^[_a-z]/i) {
             unless ($exclude->{$file}) {
                 push @{$dep_map->{$file}} => $self->loaded_by;
                 $loaded->{$file}++;

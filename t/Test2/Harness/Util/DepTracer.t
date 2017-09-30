@@ -38,4 +38,11 @@ eval "require Data::Dumper; 1" or die $@;
 
 is($one->loaded, {map {$_ => T} qw/baz.pm foo.pm bar.pm/}, "Did not track Data::Dumper");
 
+$one->clear_loaded;
+$one->start;
+
+eval "use 5.10.0; 1" or die $@;
+
+is($one->loaded, {}, "Did not track from version import");
+
 done_testing;

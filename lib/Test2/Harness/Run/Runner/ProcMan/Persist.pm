@@ -80,7 +80,7 @@ sub spawn {
         return $pid;
     }
 
-    $0 = 'yath-procman';
+    $0 = 'yath procman';
 
     my $handler = sub {
         print STDERR "$$ Procman got signal, exiting...\n";

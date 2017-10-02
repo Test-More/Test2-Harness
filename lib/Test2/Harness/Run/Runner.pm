@@ -46,6 +46,8 @@ use Test2::Harness::Util::HashBase qw{
     -_preload_done
 
     -staged -stages -fork_stages
+
+    -initialized_preloads
 };
 
 sub job_runner_class { 'Test2::Harness::Job::Runner' }
@@ -269,13 +271,13 @@ sub _preload {
                 block     => $block,
             );
 
-            $mod = $self->_mod_preload($mod, %args);
-            push @$staged => $mod;
+            my $imod = $self->_mod_preload($mod, %args);
+            push @$staged => $imod;
 
-            $fork_stages->{$_} = 1 for $mod->fork_stages;
+            $fork_stages->{$_} = 1 for $imod->fork_stages;
 
             my $idx = 0;
-            for my $stage ($mod->stages) {
+            for my $stage ($imod->stages) {
                 unless ($seen{$stage}++) {
                     splice(@$stages, $idx++, 0, $stage);
                     next;
@@ -411,7 +413,7 @@ sub stage_fork {
 
     # Child returns true
     unless ($pid) {
-        $0 = 'yath-runner-' . $stage;
+        $0 = 'yath runner-' . $stage;
         return 1;
     }
 

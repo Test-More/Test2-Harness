@@ -38,7 +38,7 @@ sub import {
         POSIX::setsid();
     }
 
-    $0 = 'yath-runner';
+    $0 = 'yath runner';
 
     my $file = pkg_to_file($runner_class);
     require $file;

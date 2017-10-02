@@ -41,7 +41,8 @@ sub run {
     # In parent
     return ($pid, undef) if $pid;
 
-    $_->post_fork($job) for @$preloads;
+    # In Child
+    my $file = $job->file;
 
     # toggle -w switch late
     $^W = 1 if grep { m/\s*-w\s*/ } @{$job->switches};
@@ -49,6 +50,23 @@ sub run {
     $SIG{TERM} = 'DEFAULT';
     $SIG{INT} = 'DEFAULT';
     $SIG{HUP} = 'DEFAULT';
+
+    my $env = $job->env_vars;
+    {
+        no warnings 'uninitialized';
+        $ENV{$_} = $env->{$_} for keys %$env;
+    }
+
+    $ENV{T2_HARNESS_FORKED}  = 1;
+    $ENV{T2_HARNESS_PRELOAD} = 1;
+
+    my ($in_file, $out_file, $err_file, $event_file) = $test->output_filenames;
+
+    $0 = File::Spec->abs2rel($file);
+    $class->_reset_DATA($file);
+    @ARGV = ();
+
+    $_->post_fork($job) for @$preloads;
 
     my $importer = eval <<'    EOT' or die $@;
 package main;
@@ -71,24 +89,6 @@ sub { shift->import(@_) }
         my $file = pkg_to_file($mod);
         require $file;
     }
-
-    # In Child
-    my $file = $job->file;
-
-    my $env = $job->env_vars;
-    {
-        no warnings 'uninitialized';
-        $ENV{$_} = $env->{$_} for keys %$env;
-    }
-
-    $ENV{T2_HARNESS_FORKED}  = 1;
-    $ENV{T2_HARNESS_PRELOAD} = 1;
-
-    my ($in_file, $out_file, $err_file, $event_file) = $test->output_filenames;
-
-    $0 = File::Spec->abs2rel($file);
-    $class->_reset_DATA($file);
-    @ARGV = ();
 
     # if FindBin is preloaded, reset it with the new $0
     FindBin::init() if defined &FindBin::init;

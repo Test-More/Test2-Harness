@@ -101,11 +101,22 @@ sub TO_JSON { return { %{$_[0]} } }
 sub find_files {
     my $self = shift;
 
+    my $plugins = $self->{+PLUGINS} || [];
+
     my $search = $self->search;
 
     my (@files, @dirs);
 
     for my $item (@$search) {
+        my $claimed;
+        for my $plugin (@$plugins) {
+            my $file = $plugin->claim_file($item) or next;
+            push @files => $file;
+            $claimed = 1;
+            last;
+        }
+        next if $claimed;
+
         push @files => Test2::Harness::Util::TestFile->new(file => $item) and next if -f $item;
         push @dirs  => $item and next if -d $item;
         die "'$item' does not appear to be either a file or a directory.\n";
@@ -128,9 +139,7 @@ sub find_files {
         );
     }
 
-    if ($self->{+PLUGINS}) {
-        push @files => $_->find_files($self) for @{$self->{+PLUGINS}};
-    }
+    push @files => $_->find_files($self) for @$plugins;
 
     @files = sort { $a->file cmp $b->file } @files;
 

@@ -848,7 +848,9 @@ sub pre_parse_args {
     my $class = shift;
     my ($args) = @_;
 
-    my (@opts, @list, @pass, @plugins);
+    my (@opts, @list, @pass, @plugins, @inc);
+
+    my %lib = (lib => 1, blib => 1, tlib => 0);
 
     my $last_mark = '';
     for my $arg (@$args) {
@@ -862,9 +864,14 @@ sub pre_parse_args {
             }
             push @list => $arg;
         }
-        elsif ($last_mark eq '-p' || $last_mark eq '--plugin') {
+        elsif ($last_mark eq 'plugin') {
             $last_mark = '';
             push @plugins => $arg;
+        }
+        elsif ($last_mark eq 'inc') {
+            $last_mark = '';
+            push @inc => $arg;
+            push @opts => $arg;
         }
         else {
             if ($arg eq '--' || $arg eq '::') {
@@ -872,7 +879,7 @@ sub pre_parse_args {
                 next;
             }
             if ($arg eq '-p' || $arg eq '--plugin') {
-                $last_mark = $arg;
+                $last_mark = 'plugin';
                 next;
             }
             if ($arg =~ m/^(?:-p=?|--plugin=)(.*)$/) {
@@ -884,24 +891,45 @@ sub pre_parse_args {
                 @plugins = ();
                 next;
             }
+
+            if ($arg eq '-I' || $arg eq '--include') {
+                $last_mark = 'inc';
+                # No 'next' here.
+            }
+            elsif ($arg =~ m/^(-I|--include)=(.*)$/) {
+                push @inc => $1;
+                # No 'next' here.
+            }
+            elsif ($arg =~ m/^--(no-)?(lib|blib|tlib)$/) {
+                $lib{$2} = $1 ? 0 : 1;
+            }
+
             push @opts => $arg;
         }
     }
 
-    return (\@opts, \@list, \@pass, \@plugins);
+    push @inc => File::Spec->rel2abs('lib') if $lib{lib};
+    if ($lib{blib}) {
+        push @inc => File::Spec->rel2abs('blib/lib');
+        push @inc => File::Spec->rel2abs('blib/arch');
+    }
+    push @inc => File::Spec->rel2abs('tlib') if $lib{tlib};
+
+    return (\@opts, \@list, \@pass, \@plugins, \@inc);
 }
 
 sub parse_args {
     my $self = shift;
     my ($args) = @_;
 
-    my ($opts, $list, $pass, $plugins) = $self->pre_parse_args($args);
+    my ($opts, $list, $pass, $plugins, $inc) = $self->pre_parse_args($args);
 
     my $settings = $self->{+SETTINGS} ||= {};
     $settings->{pass} = $pass;
 
     my @plugin_options;
     for my $plugin (@$plugins) {
+        local @INC = (@$inc, @INC);
         $plugin = fqmod('App::Yath::Plugin', $plugin);
         my $file = pkg_to_file($plugin);
         eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";

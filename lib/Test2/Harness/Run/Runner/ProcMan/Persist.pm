@@ -7,7 +7,7 @@ use Time::HiRes qw/sleep time/;
 use Carp qw/croak/;
 use App::Yath::Util qw/find_yath/;
 
-our $VERSION = '0.001016';
+our $VERSION = '0.001017';
 
 use Test2::Harness::Run::Runner::ProcMan();
 

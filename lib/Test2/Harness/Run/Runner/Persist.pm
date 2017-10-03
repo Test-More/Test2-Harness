@@ -12,7 +12,7 @@ use App::Yath::Util qw/find_yath/;
 use Test2::Harness::Run::Runner::ProcMan::Persist();
 use Test2::Harness::Util::DepTracer();
 
-our $VERSION = '0.001016';
+our $VERSION = '0.001017';
 
 use parent 'Test2::Harness::Run::Runner';
 use Test2::Harness::Util::HashBase qw{

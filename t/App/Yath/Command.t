@@ -984,9 +984,9 @@ subtest options => sub {
 };
 
 subtest pre_parse_args => sub {
-    my ($opts, $list, $pass, $plugins);
+    my ($opts, $list, $pass, $plugins, $inc);
 
-    ($opts, $list, $pass, $plugins) = $CLASS->pre_parse_args(
+    ($opts, $list, $pass, $plugins, $inc) = $CLASS->pre_parse_args(
         [
             '-x',
             '--longer' => 'arg',
@@ -994,6 +994,10 @@ subtest pre_parse_args => sub {
             '-pFoo',
             '--plugin' => 'Bar',
             '-p=Baz',
+            '-I=foo',
+            '-I' => 'bar',
+            '--include=baz',
+            '--include' => 'bat',
             '--plugin=Bat',
             '--',
             '-p' => 'uhg',
@@ -1006,12 +1010,13 @@ subtest pre_parse_args => sub {
             '-xyz',
         ]
     );
-    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/], "Got opts");
+    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/, '-I=foo', '-I' => 'bar', '--include=baz', '--include' => 'bat'], "Got opts");
     is($list, ['-p', 'uhg', 'bleh', 'blotch'], "Got list");
     is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
     is($plugins, [qw/Foo Bar Baz Bat/], "Got plugins");
+    like($inc, [qw{foo bar baz bat}, qr{lib$}, qr{blib/lib$}, qr{blib/arch$}], "Got libs");
 
-    ($opts, $list, $pass, $plugins) = $CLASS->pre_parse_args(
+    ($opts, $list, $pass, $plugins, $inc) = $CLASS->pre_parse_args(
         [
             '-x',
             '--longer' => 'arg',
@@ -1019,6 +1024,13 @@ subtest pre_parse_args => sub {
             '-pFoo',
             '--plugin' => 'Bar',
             '-p=Baz',
+            '-I=foo',
+            '-I' => 'bar',
+            '--include=baz',
+            '--include' => 'bat',
+            '--no-lib',
+            '--no-blib',
+            '--tlib',
             '--no-plugins', # <---- this is what we are testing now
             '--plugin=Bat',
             '--',
@@ -1032,10 +1044,11 @@ subtest pre_parse_args => sub {
             '-xyz',
         ]
     );
-    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/], "Got opts");
+    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/, '-I=foo', '-I' => 'bar', '--include=baz', '--include' => 'bat', '--no-lib', '--no-blib', '--tlib'], "Got opts");
     is($list, ['-p', 'uhg', 'bleh', 'blotch'], "Got list");
     is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
     is($plugins, [qw/Bat/], "Got only 1 plugin");
+    like($inc, [qw{foo bar baz bat}, qr{t/lib$}], "Got libs");
 
     ($opts, $list, $pass, $plugins) = $CLASS->pre_parse_args(
         [
@@ -1257,7 +1270,7 @@ sub usage_pod {
 
     my @list = $in->usage_opt_order;
 
-    my $out = "\n=head1 COMMAND LINE USAGE\n";
+    my $out = "";
 
     my @cli_args = $in->cli_args;
     @cli_args = ('') unless @cli_args;
@@ -1406,5 +1419,4 @@ $options
 
     return $usage;
 }
-
 

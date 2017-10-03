@@ -413,7 +413,7 @@ sub stage_fork {
 
     # Child returns true
     unless ($pid) {
-        $0 = 'yath runner-' . $stage;
+        $0 = find_yath() . ' runner-' . $stage;
         return 1;
     }
 

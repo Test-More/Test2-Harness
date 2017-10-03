@@ -7,6 +7,7 @@ use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET/;
 use Time::HiRes qw/sleep time/;
 use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util qw/read_file write_file open_file/;
+use App::Yath::Util qw/find_yath/;
 
 use Test2::Harness::Run::Runner::ProcMan::Persist();
 use Test2::Harness::Util::DepTracer();
@@ -173,7 +174,7 @@ sub stage_loop {
     STAGE: while ($stage) {
         my $spec = $spawn{$stage} || {};
 
-        $0 = "yath runner-$stage";
+        $0 = find_yath() . " runner-$stage";
         $self->stage_start($stage);
 
         my $monitor = {};
@@ -254,7 +255,7 @@ sub stage_run_iso {
     my $dtrace = $self->dtrace;
 
     $dtrace->clear_loaded;
-    $0 = "yath runner-iso-$stage";
+    $0 = find_yath() . " yath runner-iso-$stage";
     $self->stage_start($stage);
     $self->{+STAGE} = $stage;
     $self->watch();

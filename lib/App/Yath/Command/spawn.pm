@@ -7,6 +7,8 @@ our $VERSION = '0.001016';
 use Test2::Util qw/pkg_to_file/;
 use File::Spec;
 
+use App::Yath::Util qw/find_yath/;
+
 use Carp qw/confess/;
 
 use parent 'App::Yath::Command';
@@ -38,7 +40,7 @@ sub import {
         POSIX::setsid();
     }
 
-    $0 = 'yath runner';
+    $0 = find_yath() . ' runner';
 
     my $file = pkg_to_file($runner_class);
     require $file;

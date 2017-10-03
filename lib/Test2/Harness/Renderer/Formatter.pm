@@ -84,18 +84,15 @@ sub render_event {
         my $job_id = $f->{harness}->{job_id} ||= $job->{job_id};
 
         if ($self->{+SHOW_JOB_END}) {
+            my $name = File::Spec->abs2rel($file);
+            $name .= "  -  $skip" if $skip;
+
             unshift @{$f->{info}} => {
                 tag => $skip ? 'SKIPPED' : $fail ? 'FAILED' : 'PASSED',
                 debug     => $fail,
                 important => 1,
-                details   => File::Spec->abs2rel($file),
+                details   => $name,
             };
-            push @{$f->{info}} => {
-                tag       => 'SKIPPED',
-                debug     => 0,
-                important => 1,
-                details   => $skip,
-            } if $skip;
 
             # In verbose mode the timer will be printed anyway. Otherwise we
             # will attach it to the end event.

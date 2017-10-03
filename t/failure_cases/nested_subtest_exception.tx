@@ -1,0 +1,40 @@
+use Test2::V0;
+use Test2::API qw/context/;
+
+{
+    $INC{'My/Event.pm'} = 1;
+    package My::Event;
+    use base 'Test2::Event';
+
+    use Test2::Util::Facets2Legacy ':ALL';
+
+    sub facet_data {
+        my $self = shift;
+
+        my $out = $self->common_facet_data;
+
+        $out->{errors} = [
+            { tag => 'OOPS', fail => !$ENV{FAILURE_DO_PASS}, details => "An error occured" }
+        ];
+
+        return $out;
+    }
+}
+
+subtest foo => sub {
+    subtest bar => sub {
+        subtest baz => sub {
+            ok(1, "pass");
+
+            sub {
+                my $ctx = context;
+
+                $ctx->send_event('+My::Event');
+
+                $ctx->release;
+            }->();
+        };
+    };
+};
+
+done_testing;

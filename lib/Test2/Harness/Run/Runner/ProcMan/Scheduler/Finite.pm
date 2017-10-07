@@ -76,9 +76,11 @@ sub _fetch {
     return shift @{$queues->{+GEN}} if @{$queues->{+GEN}};
 
     # At this point we fall back and just run whatever
-    for my $q (LNG, MED, ISO) {
-        return shift @{$queues->{$q}} if @{$queues->{$q}};
-    }
+    return shift @{$queues->{+LNG}} if @{$queues->{+LNG}};
+    return shift @{$queues->{+MED}} if @{$queues->{+MED}};
+
+    # Run the iso if we can
+    return shift @{$queues->{+ISO}} if @{$queues->{+ISO}} && !grep { @{$_} } values %$queues;
 
     # Nothing can be run right now
     return undef;

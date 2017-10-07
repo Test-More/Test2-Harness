@@ -281,6 +281,18 @@ sub fetch_finite {
             next if $cat eq 'medium';
         }
 
+        if ($cat ne 'long') {
+            my ($next) = grep {; $pending->[$_]{category} eq 'long' }
+                         ($i+1 .. $#$pending);
+
+            if (defined $next) {
+                # This one isn't long, but there are long ones waiting
+                # downstream.  Let's skip ahead!
+                $found = $next;
+                last;
+            }
+        }
+
         $found = $i;
         last;
     }

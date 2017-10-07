@@ -28,7 +28,7 @@ sub import {
     my $cmd_class = $class->load_command($cmd_name);
     $cmd_class->import($argv, $runref);
 
-    $$runref ||= sub { $class->run_command($cmd_class, $cmd_name, $argv) };
+    $$runref ||= sub { $class->run_command($cmd_class, $cmd_name, [@$argv]) };
 }
 
 sub info {

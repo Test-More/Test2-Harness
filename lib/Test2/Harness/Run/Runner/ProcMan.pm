@@ -24,6 +24,7 @@ use Test2::Harness::Util::HashBase qw{
     -_pending
     -_running
     -_pids
+    -scheduler
 
     -run
     -wait_time
@@ -243,86 +244,24 @@ sub fetch_task {
     # Cannot run anything now
     return undef if $running->{__ALL__} >= $job_count;
 
+    # Simple!
     return shift @$pending if $job_count < 2;
 
     # Cannot run anything else if an isolation task is running
     return undef if $running->{isolation};
 
-    return $self->fetch_finite($pending) if $run->finite;
-    return $self->fetch_fair($pending);
-}
-
-sub fetch_finite {
-    my $self = shift;
-    my ($pending) = @_;
-
-    my $running = $self->{+_RUNNING};
-
-    my $run = $self->{+RUN};
-    my $job_count = $run->job_count;
-    my $lng_count = $job_count - 1;
-
-    my $imm_running = $running->{immiscible};
-    my $lng_running = $running->{long};
-    my $med_running = $running->{medium};
-    my $not_short = $lng_running + $med_running;
-
-    my ($backup, $found);
-    for (my $i = 0; $i < @$pending; $i++) {
-        my $task = $pending->[$i];
-        my $cat = $task->{category};
-
-        next if $cat eq 'isolation' && $running->{__ALL__};
-        next if $cat eq 'immiscible' && $imm_running;
-
-        $backup = $i unless defined $task;
-        if ($not_short >= $lng_count) {
-            next if $cat eq 'long';
-            next if $cat eq 'medium';
+    unless ($self->{+SCHEDULER}) {
+        if ($run->finite) {
+            require Test2::Harness::Run::Runner::ProcMan::Scheduler::Finite;
+            $self->{+SCHEDULER} = Test2::Harness::Run::Runner::ProcMan::Scheduler::Finite->new;
         }
-
-        $found = $i;
-        last;
+        else {
+            require Test2::Harness::Run::Runner::ProcMan::Scheduler::Fair;
+            $self->{+SCHEDULER} = Test2::Harness::Run::Runner::ProcMan::Scheduler::Fair->new;
+        }
     }
 
-    if (!defined($found)) {
-        return undef unless defined($backup);
-        $found = $backup;
-    }
-
-    return splice(@$pending, $found, 1);
-}
-
-sub fetch_fair {
-    my $self = shift;
-    my ($pending) = @_;
-
-    my $next_is_iso = @$pending && $pending->[0]->{category} eq 'isolation';
-
-    # This is the same as finite, except when the next up is isolation, we
-    # cannot save those forever
-    return $self->fetch_finite($pending) unless $next_is_iso;
-
-    my $running = $self->{+_RUNNING};
-
-    # If nothing else is running we can run the isolation
-    return shift @$pending unless $running->{__ALL__};
-
-    # If there is a long job we can run some short ones
-    return unless $running->{long};
-
-    my $found;
-    for (my $i = 0; $i < @$pending; $i++) {
-        my $task = $pending->[$i];
-        my $cat = $task->{category};
-        next unless $cat eq 'general';
-
-        $found = $i;
-        last;
-    }
-
-    return undef unless defined $found;
-    return splice(@$pending, $found, 1);
+    return $self->{+SCHEDULER}->fetch($job_count, $pending, $running);
 }
 
 1;

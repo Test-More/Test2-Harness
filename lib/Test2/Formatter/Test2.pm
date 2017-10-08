@@ -641,7 +641,7 @@ sub render_errors {
     } @{$f->{errors}};
 }
 
-sub DESTORY {
+sub DESTROY {
     my $self = shift;
 
     my $io = $self->{+IO} or return;

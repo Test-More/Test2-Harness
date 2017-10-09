@@ -65,6 +65,7 @@ sub _harness_event {
         event_id   => 'harness-' . ${$self->{+EVENT_COUNTER_REF}}++,
         run_id     => $run->run_id,
         stamp      => time,
+        times      => [times],
         facet_data => {@_},
     );
 }

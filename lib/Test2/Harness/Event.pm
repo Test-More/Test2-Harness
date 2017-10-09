@@ -29,6 +29,7 @@ use Test2::Harness::Util::HashBase qw{
     -run_id
     -job_id
     -stamp
+    -times
 };
 
 sub trace     { $_[0]->{+FACET_DATA}->{trace} }

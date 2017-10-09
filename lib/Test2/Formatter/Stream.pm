@@ -105,6 +105,7 @@ sub record {
         $json = ENCODER->encode(
             {
                 stamp        => time,
+                times        => [times],
                 stream_id    => $id,
                 event_id     => "event-$id",
                 facet_data   => $facets,

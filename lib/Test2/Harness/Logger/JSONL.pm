@@ -29,7 +29,7 @@ sub log_event {
 
     my $fh = $self->{+FH};
     my $prefix = $self->{+PREFIX};
-    print $fh $prefix, encode_canon_json($event), "\n";
+    print $fh $prefix, encode_json($event), "\n";
 }
 
 1;

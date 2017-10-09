@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '0.001018';
 
-use Carp qw/croak/;
+use Carp qw/croak confess/;
 use POSIX ":sys_wait_h";
 use Config qw/%Config/;
 use IPC::Open3 qw/open3/;
@@ -12,7 +12,6 @@ use List::Util qw/none/;
 use Time::HiRes qw/time/;
 use Test2::Util qw/pkg_to_file/;
 
-use App::Yath::Util qw/find_yath/;
 use Test2::Harness::Util qw/open_file write_file_atomic local_env/;
 
 use Test2::Harness::Run();
@@ -39,6 +38,7 @@ use Test2::Harness::Util::HashBase qw{
 
     -_exit -pid -remote
     -signal
+    -script
 
     -wait_time
 
@@ -123,8 +123,8 @@ sub cmd {
 
     my $class = ref($self);
 
-    my $script = find_yath();
-    my $inc    = $self->find_inc;
+    my $script = $self->{+SCRIPT} or confess "No spawn 'script' specified";
+    my $inc = $self->find_inc;
 
     return (
         $^X,
@@ -413,7 +413,7 @@ sub stage_fork {
 
     # Child returns true
     unless ($pid) {
-        $0 = find_yath() . ' runner-' . $stage;
+        $0 = 'yath-runner-' . $stage;
         return 1;
     }
 

@@ -5,7 +5,6 @@ use warnings;
 use POSIX ":sys_wait_h";
 use Time::HiRes qw/sleep time/;
 use Carp qw/croak/;
-use App::Yath::Util qw/find_yath/;
 
 our $VERSION = '0.001018';
 
@@ -81,7 +80,7 @@ sub spawn {
         return $pid;
     }
 
-    $0 = find_yath . ' procman';
+    $0 = 'yath-procman';
 
     my $handler = sub {
         print STDERR "$$ Procman got signal, exiting...\n";

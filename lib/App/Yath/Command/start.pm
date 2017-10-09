@@ -9,7 +9,7 @@ use File::Spec();
 use POSIX ":sys_wait_h";
 use Time::HiRes qw/sleep/;
 
-use App::Yath::Util qw/find_pfile PFILE_NAME/;
+use App::Yath::Util qw/find_pfile PFILE_NAME find_yath/;
 use Test2::Harness::Util qw/open_file/;
 
 use Test2::Harness::Run::Runner::Persist;
@@ -55,6 +55,7 @@ sub run {
         $runner = Test2::Harness::Run::Runner::Persist->new(
             dir => $settings->{dir},
             run => $run,
+            script => find_yath(),
         );
 
         my $queue = $runner->queue;

@@ -7,7 +7,7 @@ our $VERSION = '0.001018';
 use Test2::Harness::Feeder::Run;
 use Test2::Harness::Util::File::JSON;
 
-use App::Yath::Util qw/find_pfile PFILE_NAME/;
+use App::Yath::Util qw/find_pfile PFILE_NAME find_yath/;
 
 use parent 'App::Yath::Command::test';
 use Test2::Harness::Util::HashBase qw/-_feeder -_runner -_pid -_job_count/;
@@ -48,6 +48,7 @@ sub run {
         dir    => $data->{dir},
         pid    => $data->{pid},
         remote => 1,
+        script => find_yath(),
     );
 
     my $run = $runner->run;

@@ -12,7 +12,7 @@ use Test2::Harness::Run;
 
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
-use App::Yath::Util qw/is_generated_test_pl/;
+use App::Yath::Util qw/is_generated_test_pl find_yath/;
 
 use Time::HiRes qw/time/;
 
@@ -88,6 +88,7 @@ sub feeder {
     my $runner = Test2::Harness::Run::Runner->new(
         dir => $settings->{dir},
         run => $run,
+        script => find_yath(),
     );
 
     my $queue = $runner->queue;

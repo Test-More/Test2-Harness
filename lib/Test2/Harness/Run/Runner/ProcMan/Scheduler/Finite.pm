@@ -66,7 +66,7 @@ sub _fetch {
 
     # Long and Medium float to the top, but only if the slots are not all
     # saturated with them.
-    if ($max > ($total - 1)) {
+    if ($total < ($max - 1)) {
         return shift @{$queues->{+LNG}} if @{$queues->{+LNG}};
         return shift @{$queues->{+MED}} if @{$queues->{+MED}};
     }

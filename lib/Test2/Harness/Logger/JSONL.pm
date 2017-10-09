@@ -6,7 +6,7 @@ our $VERSION = '0.001018';
 
 use IO::Handle;
 
-use Test2::Harness::Util::JSON qw/encode_canon_json/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 BEGIN { require Test2::Harness::Logger; our @ISA = ('Test2::Harness::Logger') }
 use Test2::Harness::Util::HashBase qw/-fh -prefix/;

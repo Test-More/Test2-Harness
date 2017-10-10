@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '0.001018';
 
+use App::Yath::Util qw/find_yath/;
 use Test2::Util qw/pkg_to_file/;
 use File::Spec;
 
@@ -49,7 +50,7 @@ sub import {
 
     my $file = pkg_to_file($runner_class);
     require $file;
-    my $spawn = $runner_class->new(dir => $dir, %args);
+    my $spawn = $runner_class->new(dir => $dir, script => find_yath(), %args);
 
     my $test = $spawn->start;
 

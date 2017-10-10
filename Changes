@@ -1,5 +1,14 @@
 {{$NEXT}}
 
+    - Fix a DESTROY typo (Michael McClimon)
+    - Test2::Harness namespace does not use App::Yath namespace
+    - Package delcaration allowed before harness directives
+    - When respawning a stage may exit badly, nobody cares
+    - Fix scheduling properly this time
+    - Record timing data for all events
+    - Stop using expensive canonical JSON for logs
+    - Better $0 handling
+
 0.001017  2017-10-07 16:24:01-07:00 America/Los_Angeles
 
     - Fix scheduling

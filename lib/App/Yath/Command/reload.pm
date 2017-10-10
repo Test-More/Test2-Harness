@@ -2,7 +2,7 @@ package App::Yath::Command::reload;
 use strict;
 use warnings;
 
-our $VERSION = '0.001018';
+our $VERSION = '0.001019';
 
 use POSIX ":sys_wait_h";
 use Cwd qw/realpath/;

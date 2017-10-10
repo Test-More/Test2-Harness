@@ -189,7 +189,6 @@ sub stage_loop {
                 my $exit = $?;
                 next unless $check;
                 die "$$ ($self->{+STAGE}) waitpid error for stage '$cs': $check (expected $pid)" if $check != $pid;
-                die "$$ ($self->{+STAGE}) Stage '$cs' exited badly: $exit" if $exit;
                 print "$$ ($self->{+STAGE}) Stage '$cs' has exited ($exit)\n";
                 delete $monitor->{$cs};
             }

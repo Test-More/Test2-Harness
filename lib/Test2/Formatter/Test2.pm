@@ -196,16 +196,19 @@ sub write {
     my ($self, $e, $num, $f) = @_;
     $f ||= $e->facet_data;
 
+    my $should_show = 0;
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
         $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_id};
         $self->_update_active_disp;
+        $should_show = 1;
     }
 
     if ($f->{harness_job_end}) {
         my $file = $f->{harness_job_end}->{file};
         delete $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($file)};
         $self->_update_active_disp;
+        $should_show = 1;
     }
 
     $self->{+ECOUNT}++;
@@ -218,11 +221,12 @@ sub write {
 
     my $lines;
     if (!$self->{+VERBOSE}) {
-        unless ($depth) {
+        if ($depth) {
+            $lines = [];
+        }
+        else {
             $lines = $self->render_quiet($f);
         }
-
-        $lines ||= [];
     }
     elsif ($depth) {
         my $tree = $self->render_tree($f, '>');
@@ -233,12 +237,7 @@ sub write {
         $lines = $self->render_event($f, $tree);
     }
 
-    my $job_id = $f->{harness}->{job_id};
-    push @{$self->{+JOB_COLORS}->{free}} => delete $self->{+JOB_COLORS}->{used}->{$job_id}
-        if $job_id && $f->{harness_job_end};
-
-    my $should_show = $lines && @$lines;
-
+    $should_show ||= $lines && @$lines;
     unless ($should_show || $self->{+VERBOSE}) {
         if (my $last = $self->{last_rendered}) {
             $self->{last_rendered} = time;
@@ -248,6 +247,10 @@ sub write {
             $self->{last_rendered} = time;
         }
     }
+
+    my $job_id = $f->{harness}->{job_id};
+    push @{$self->{+JOB_COLORS}->{free}} => delete $self->{+JOB_COLORS}->{used}->{$job_id}
+        if $job_id && $f->{harness_job_end};
 
     my $io = $self->{+IO};
     if ($self->{+_BUFFERED}) {

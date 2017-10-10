@@ -125,7 +125,7 @@ sub _scan {
             }
         }
 
-        next if $line =~ m/^\s*(use|require|BEGIN)\b/;
+        next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
         my ($dir, @args) = split /[-\s]/, lc($1);

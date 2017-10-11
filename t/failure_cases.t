@@ -9,7 +9,9 @@ use File::Spec;
 
 my $dir = first { -d $_ } 't/failure_cases', 'failure_cases';
 
-my $yath = first { -f $_ } 'scripts/yath', '../scripts/yath', find_yath();
+my $yath = first { -f $_ } 'scripts/yath', '../scripts/yath';
+
+$yath ||= find_yath();
 
 my %CUSTOM = (
     "timeout.tx"           => ['--et',       2],

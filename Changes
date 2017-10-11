@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Don't call find_yath() if we already found a yath (Matthew Horsfall)
+    - Minor display optimizations
+
 0.001018  2017-10-10 14:42:16-07:00 America/Los_Angeles
 
     - Fix a DESTROY typo (Michael McClimon)

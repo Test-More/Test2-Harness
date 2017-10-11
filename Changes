@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001019  2017-10-11 10:08:14-07:00 America/Los_Angeles
+
     - Don't call find_yath() if we already found a yath (Matthew Horsfall)
     - Minor display optimizations
 

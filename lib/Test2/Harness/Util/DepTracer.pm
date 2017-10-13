@@ -23,6 +23,8 @@ sub stop  { shift->{+_ON} = 0 }
 
 sub clear_loaded { %{$_[0]->{+LOADED}} = () }
 
+my %REQUIRE_CACHE;
+
 sub init {
     my $self = shift;
 
@@ -39,24 +41,26 @@ sub init {
     my %seen;
 
     my $require = $self->{+MY_REQUIRE} = sub {
-        my $file = shift;
+        my ($file) = @_;
+
+        my $loaded_by = $self->loaded_by;
 
         my $real_require = $self->{+REAL_REQUIRE};
-
-        unless ($self->{+_ON}) {
-            return $real_require->($file) if $real_require;
-            return CORE::require($file);
+        unless($real_require) {
+            my $caller = $loaded_by->[0];
+            $real_require = $REQUIRE_CACHE{$caller} ||= eval "package $caller; sub { CORE::require(\$_[0]) }" or die $@;
         }
+
+        goto &$real_require unless $self->{+_ON};
 
         if ($file =~ m/^[_a-z]/i) {
             unless ($exclude->{$file}) {
-                push @{$dep_map->{$file}} => $self->loaded_by;
+                push @{$dep_map->{$file}} => $loaded_by;
                 $loaded->{$file}++;
             }
         }
 
-        return $real_require->($file)  if $real_require;
-        return CORE::require($file);
+        goto &$real_require;
     };
 
     {

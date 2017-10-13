@@ -388,6 +388,9 @@ sub stage_start {
     my $self = shift;
     my ($stage) = @_;
 
+    my $run = $self->{+RUN};
+    local @INC = ($run->all_libs, @INC);
+
     my $fork = $self->stage_should_fork($stage);
 
     return 0 if $fork && !$self->stage_fork($stage);

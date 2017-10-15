@@ -14,6 +14,8 @@ my $tmp = gen_temp(
     taint  => "#!/usr/bin/env perl -t -w\n",
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
 
+    package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
+
     timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
     badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
 );
@@ -46,6 +48,11 @@ subtest foo => sub {
     my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'foo'));
     is($foo->check_category, 'foo', "Category is foo");
     is($foo->check_stage, 'foo', "Stage is foo");
+};
+
+subtest package => sub {
+    my $one = $CLASS->new(file => File::Spec->catfile($tmp, 'package'));
+    is($one->queue_item(42)->{use_preload}, 0, "No preload");
 };
 
 subtest taint => sub {

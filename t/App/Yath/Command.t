@@ -1,5 +1,4 @@
 use Test2::V0 -target => 'App::Yath::Command';
-#skip_all "Not done, come back!";
 
 local $ENV{HARNESS_PERL_SWITCHES};
 
@@ -1202,67 +1201,37 @@ done_testing;
 
 __END__
 
-sub renderers {
-    my $self      = shift;
-    my $settings  = $self->{+SETTINGS};
-    my $renderers = [];
+        {
+            spec    => 'input-file=s',
+            field   => 'input',
+            used_by => {jobs => 1, runner => 1},
+            section => 'Job Options',
+            action  => sub {
+                my $self = shift;
+                my ($settings, $field, $arg, $opt) = @_;
+                die "Input file not found: $arg\n" unless -f $arg;
+                warn "Input file is overriding another source of input.\n" if $settings->{input};
+                $settings->{input} = read_file($arg);
+            },
+            usage   => ['--input-file file'],
+            summary => ['Use the specified file as standard input to ALL tests'],
+        },
 
-    return $renderers if $settings->{quiet};
-
-    my $r = $settings->{renderer} or return $renderers;
-
-    if ($r eq '+Test2::Harness::Renderer::Formatter' || $r eq 'Formatter') {
-        require Test2::Harness::Renderer::Formatter;
-
-        my $formatter = $settings->{formatter} or die "No formatter specified.\n";
-        my $f_class;
-
-        if ($formatter eq '+Test2::Formatter::Test2' || $formatter eq 'Test2') {
-            require Test2::Formatter::Test2;
-            $f_class = 'Test2::Formatter::Test2';
-        }
-        else {
-            $f_class = fqmod('Test2::Formatter', $formatter);
-            my $file = pkg_to_file($f_class);
-            require $file;
-        }
-
-        push @$renderers => Test2::Harness::Renderer::Formatter->new(
-            show_job_info   => $settings->{show_job_info},
-            show_run_info   => $settings->{show_run_info},
-            show_job_launch => $settings->{show_job_launch},
-            show_job_end    => $settings->{show_job_end},
-            formatter       => $f_class->new(verbose => $settings->{verbose}, color => $settings->{color}),
-        );
-    }
-    elsif ($settings->{formatter}) {
-        die "The formatter option is only available when the 'Formatter' renderer is in use.\n";
-    }
-    else {
-        my $r_class = fqmod('Test2::Harness::Renderer', $r);
-        require $r_class;
-        push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
-    }
-
-    return $renderers;
-}
-
-
-sub usage_opt_order {
-    my $self = shift;
-
-    my $idx = 1;
-    my %lookup = map {($_ => $idx++)} $self->section_order;
-
-    #<<< no-tidy
-    return sort {
-          ($lookup{$a->{section}} || 99) <=> ($lookup{$b->{section}} || 99)  # Sort by section first
-            or ($a->{long_desc} ? 2 : 1) <=> ($b->{long_desc} ? 2 : 1)       # Things with long desc go to bottom
-            or      lc($a->{usage}->[0]) cmp lc($b->{usage}->[0])            # Alphabetical by first usage example
-            or       ($a->{field} || '') cmp ($b->{field} || '')             # By field if present
-    } grep { $_->{section} } @{$self->my_opts};
-    #>>>
-}
+        {
+            spec    => 'L|log',
+            field   => 'log',
+            used_by => {logger => 1},
+            section => 'Logging Options',
+            usage   => ['-L', '--log'],
+            summary => ['Turn on logging'],
+            default => sub {
+                my ($self, $settings) = @_;
+                return 1 if $settings->{log_file};
+                return 1 if $settings->{bzip2_log};
+                return 1 if $settings->{gzip_log};
+                return 0;
+            },
+        },
 
 sub usage_pod {
     my $in = shift;
@@ -1419,4 +1388,50 @@ $options
 
     return $usage;
 }
+
+sub renderers {
+    my $self      = shift;
+    my $settings  = $self->{+SETTINGS};
+    my $renderers = [];
+
+    return $renderers if $settings->{quiet};
+
+    my $r = $settings->{renderer} or return $renderers;
+
+    if ($r eq '+Test2::Harness::Renderer::Formatter' || $r eq 'Formatter') {
+        require Test2::Harness::Renderer::Formatter;
+
+        my $formatter = $settings->{formatter} or die "No formatter specified.\n";
+        my $f_class;
+
+        if ($formatter eq '+Test2::Formatter::Test2' || $formatter eq 'Test2') {
+            require Test2::Formatter::Test2;
+            $f_class = 'Test2::Formatter::Test2';
+        }
+        else {
+            $f_class = fqmod('Test2::Formatter', $formatter);
+            my $file = pkg_to_file($f_class);
+            require $file;
+        }
+
+        push @$renderers => Test2::Harness::Renderer::Formatter->new(
+            show_job_info   => $settings->{show_job_info},
+            show_run_info   => $settings->{show_run_info},
+            show_job_launch => $settings->{show_job_launch},
+            show_job_end    => $settings->{show_job_end},
+            formatter       => $f_class->new(verbose => $settings->{verbose}, color => $settings->{color}),
+        );
+    }
+    elsif ($settings->{formatter}) {
+        die "The formatter option is only available when the 'Formatter' renderer is in use.\n";
+    }
+    else {
+        my $r_class = fqmod('Test2::Harness::Renderer', $r);
+        require $r_class;
+        push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
+    }
+
+    return $renderers;
+}
+
 

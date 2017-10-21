@@ -1,6 +1,10 @@
 {{$NEXT}}
 
+    - Update to a newer HashBase
+
 0.001022  2017-10-20 07:12:19-07:00 America/Los_Angeles
+
+    - Minor test updates
 
 0.001021  2017-10-13 11:02:22-07:00 America/Los_Angeles
 

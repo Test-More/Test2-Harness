@@ -2,17 +2,21 @@ package Test2::Harness::Util::HashBase;
 use strict;
 use warnings;
 
+our $VERSION = '0.001023';
+
 #################################################################
 #                                                               #
 #  This is a generated file! Do not modify this file directly!  #
 #  Use hashbase_inc.pl script to regenerate this file.          #
 #  The script is part of the Object::HashBase distribution.     #
+#  Note: You can modify the version number above this comment   #
+#  if needed, that is fine.                                     #
 #                                                               #
 #################################################################
 
 {
     no warnings 'once';
-    $Test2::Harness::Util::HashBase::VERSION = '0.005';
+    $Test2::Harness::Util::HashBase::HB_VERSION = '0.006';
     *Test2::Harness::Util::HashBase::ATTR_SUBS = \%Object::HashBase::ATTR_SUBS;
     *Test2::Harness::Util::HashBase::ATTR_LIST = \%Object::HashBase::ATTR_LIST;
     *Test2::Harness::Util::HashBase::VERSION   = \%Object::HashBase::VERSION;
@@ -50,9 +54,8 @@ sub import {
     my $into  = caller;
 
     # Make sure we list the OLDEST version used to create this class.
-    $Test2::Harness::Util::HashBase::VERSION{$into} = $Test2::Harness::Util::HashBase::VERSION
-        if !$Test2::Harness::Util::HashBase::VERSION{$into}
-        || $Test2::Harness::Util::HashBase::VERSION{$into} > $Test2::Harness::Util::HashBase::VERSION;
+    my $ver = $Test2::Harness::Util::HashBase::HB_VERSION || $Test2::Harness::Util::HashBase::VERSION;
+    $Test2::Harness::Util::HashBase::VERSION{$into} = $ver if !$Test2::Harness::Util::HashBase::VERSION{$into} || $Test2::Harness::Util::HashBase::VERSION{$into} > $ver;
 
     my $isa = _isa($into);
     my $attr_list = $Test2::Harness::Util::HashBase::ATTR_LIST{$into} ||= [];
@@ -240,7 +243,7 @@ supported.
 
 This is a bundled copy of L<Object::HashBase>. This file was generated using
 the
-C</home/exodist/.perlbrew/libs/5.24.1@facets/bin/hashbase_inc.pl>
+C</home/exodist/perl5/perlbrew/perls/main/bin/hashbase_inc.pl>
 script.
 
 =head1 METHODS

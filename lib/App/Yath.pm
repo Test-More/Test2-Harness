@@ -2,11 +2,10 @@ package App::Yath;
 use strict;
 use warnings;
 
+use App::Yath::Util qw/read_config find_pfile/;
+use File::Spec;
+
 our $VERSION = '0.001024';
-
-use App::Yath::Util qw/find_pfile/;
-
-use Time::HiRes qw/time/;
 
 our $SCRIPT;
 
@@ -24,11 +23,107 @@ sub import {
 
     $SCRIPT ||= $file;
 
-    my $cmd_name  = $class->parse_argv($argv);
+    my $cmd_name = $class->command_from_argv($argv);
+    my $pp_argv  = $class->pre_parse_args([read_config($cmd_name), @$argv]);
+
+    my %have = map {( $_ => 1 )} @INC;
+    my @missing = grep { !$have{$_} && !$have{File::Spec->rel2abs($_)} } @{$pp_argv->{inc}};
+
+    $class->do_exec($^X, (map {('-I' => File::Spec->rel2abs($_))} @{$pp_argv->{inc}}), $SCRIPT, $cmd_name, @$argv)
+        if @missing;
+
     my $cmd_class = $class->load_command($cmd_name);
     $cmd_class->import($argv, $runref);
 
-    $$runref ||= sub { $class->run_command($cmd_class, $cmd_name, [@$argv]) };
+    $$runref ||= sub { $class->run_command($cmd_class, $cmd_name, $pp_argv) };
+}
+
+sub do_exec {
+    my $class = shift;
+    exec(@_);
+}
+
+sub pre_parse_args {
+    my $class = shift;
+    my ($args) = @_;
+
+    my (@opts, @list, @pass, @plugins, @inc);
+
+    my %lib = (lib => 1, blib => 1, tlib => 0);
+
+    my $last_mark = '';
+    for my $arg (@$args) {
+        if ($last_mark eq '::') {
+            push @pass => $arg;
+        }
+        elsif ($last_mark eq '--') {
+            if ($arg eq '::') {
+                $last_mark = $arg;
+                next;
+            }
+            push @list => $arg;
+        }
+        elsif ($last_mark eq 'plugin') {
+            $last_mark = '';
+            push @plugins => $arg;
+        }
+        elsif ($last_mark eq 'inc') {
+            $last_mark = '';
+            push @inc => $arg;
+            push @opts => $arg;
+        }
+        else {
+            if ($arg eq '--' || $arg eq '::') {
+                $last_mark = $arg;
+                next;
+            }
+            if ($arg eq '-p' || $arg eq '--plugin') {
+                $last_mark = 'plugin';
+                next;
+            }
+            if ($arg =~ m/^(?:-p=?|--plugin=)(.*)$/) {
+                push @plugins => $1;
+                next;
+            }
+            if ($arg eq '--no-plugins') {
+                # clear plugins
+                @plugins = ();
+                next;
+            }
+
+            if ($arg eq '-I' || $arg eq '--include') {
+                $last_mark = 'inc';
+                # No 'next' here.
+            }
+            elsif ($arg =~ m/^(-I|--include)=(.*)$/) {
+                push @inc => $2;
+                # No 'next' here.
+            }
+            elsif($arg =~ m/^-I(.*)$/) {
+                push @inc => $1;
+            }
+            elsif ($arg =~ m/^--(no-)?(lib|blib|tlib)$/) {
+                $lib{$2} = $1 ? 0 : 1;
+            }
+
+            push @opts => $arg;
+        }
+    }
+
+    push @inc => File::Spec->rel2abs('lib') if $lib{lib};
+    if ($lib{blib}) {
+        push @inc => File::Spec->rel2abs('blib/lib');
+        push @inc => File::Spec->rel2abs('blib/arch');
+    }
+    push @inc => File::Spec->rel2abs('t/lib') if $lib{tlib};
+
+    return {
+        opts    => \@opts,
+        list    => \@list,
+        pass    => \@pass,
+        plugins => \@plugins,
+        inc     => \@inc,
+    };
 }
 
 sub info {
@@ -42,7 +137,8 @@ sub run_command {
 
     my $cmd = $cmd_class->new(args => $argv);
 
-    my $start = time;
+    require Time::HiRes;
+    my $start = Time::HiRes::time();
     my $exit  = $cmd->run;
 
     die "Command '$cmd_name' did not return an exit value.\n"
@@ -58,47 +154,55 @@ sub run_command {
     return $exit;
 }
 
-sub parse_argv {
+sub command_from_argv {
     my $class = shift;
     my ($argv) = @_;
 
-    my $first_not_command = 0;
     if (@$argv) {
-        if ($argv->[0] =~ m/^-*h(elp)?$/i) {
+        my $arg = $argv->[0];
+
+        if ($arg =~ m/^-*h(elp)?$/i) {
             shift @$argv;
             return 'help';
         }
 
-        if ($argv->[0] =~ m/\.jsonl(\.bz2|\.gz)?$/) {
+        if ($arg =~ m/\.jsonl(\.bz2|\.gz)?$/) {
             $class->info("\n** First argument is a log file, defaulting to the 'replay' command **\n\n");
             return 'replay';
         }
 
-        $first_not_command = -d $argv->[0] || -f $argv->[0] || substr($argv->[0], 0, 1) eq '-';
+        return shift @$argv if $class->load_command($arg, check_only => 1);
+
+        my $is_opt_or_file = 0;
+        $is_opt_or_file ||= -f $arg;
+        $is_opt_or_file ||= -d $arg;
+        $is_opt_or_file ||= $arg =~ m/^-/;
+
+        # Assume it is a command, but an invalid one.
+        return shift @$argv unless $is_opt_or_file;
     }
 
-    if (!@$argv || $first_not_command) {
-        if (find_pfile) {
-            $class->info("\n** Persistent runner detected, defaulting to the 'run' command **\n\n");
-            return 'run';
-        }
-
-        $class->info("\n** Defaulting to the 'test' command **\n\n");
-        return 'test';
+    if (find_pfile()) {
+        $class->info("\n** Persistent runner detected, defaulting to the 'run' command **\n\n");
+        return 'run';
     }
 
-    return shift @$argv;
+    $class->info("\n** Defaulting to the 'test' command **\n\n");
+    return 'test';
 }
 
 sub load_command {
     my $class = shift;
-    my ($cmd_name) = @_;
+    my ($cmd_name, %params) = @_;
 
     my $cmd_class  = "App::Yath::Command::$cmd_name";
     my $cmd_file   = "App/Yath/Command/$cmd_name.pm";
 
+    local $@;
     if (!eval { require $cmd_file; 1 }) {
         my $load_error = $@ || 'unknown error';
+
+        return undef if $params{check_only};
 
         die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
             if $load_error =~ m{Can't locate \Q$cmd_file\E in \@INC};

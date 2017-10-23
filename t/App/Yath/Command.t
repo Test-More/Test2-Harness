@@ -143,18 +143,18 @@ subtest init => sub {
     ok(-f $garbage, "Garbage file was left behind");
 
     like(
-        dies { $one = $TCLASS->new(args => [-d => $dir]) },
+        dies { $one = $TCLASS->new(args => {opts => [-d => $dir]}) },
         qr/^Work directory is not empty \(use -C to clear it\)/,
         "Cannot use a non-empty dir by default"
     );
 
-    ok(lives { $one = $TCLASS->new(args => [-d => $dir, '-C']) }, "Can clear dir");
+    ok(lives { $one = $TCLASS->new(args => {opts => [-d => $dir, '-C']}) }, "Can clear dir");
     ok(!-f $garbage, "garbage file was removed");
 
     $control->reset_all;
 
     local @INC = (File::Spec->canonpath('t/lib'), @INC);
-    $one = $TCLASS->new(args => ['-pTest']);
+    $one = $TCLASS->new(args => {plugins => ['Test']});
 
     ok($INC{'App/Yath/Plugin/Test.pm'}, "Loaded test plugin") or return;
 
@@ -442,30 +442,30 @@ subtest options => sub {
     $control->override(has_runner  => sub { 1 });
 
     subtest show_opts => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {});
         ok(!$one->settings->{show_opts}, "not on by default");
 
-        my $two = $TCLASS->new(args => ['--show-opts']);
+        my $two = $TCLASS->new(args => {opts => ['--show-opts']});
         ok($two->settings->{show_opts}, "toggled on");
     };
 
     subtest help => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {});
         ok(!$one->settings->{help}, "not on by default");
 
-        my $two = $TCLASS->new(args => ['--help']);
+        my $two = $TCLASS->new(args => {opts => ['--help']});
         ok($two->settings->{help}, "toggled on");
 
-        my $three = $TCLASS->new(args => ['-h']);
+        my $three = $TCLASS->new(args => {opts => ['-h']});
         ok($three->settings->{help}, "toggled on (short)");
     };
 
     subtest include => sub {
         local $ENV{PERL5LIB};
-        my $one = $TCLASS->new(args => ['--no-lib', '--no-blib', '--no-tlib']);
+        my $one = $TCLASS->new(args => {opts => ['--no-lib', '--no-blib', '--no-tlib']});
         ok(!$one->settings->{libs} || !@{$one->settings->{libs}}, "not on by default");
 
-        my $two = $TCLASS->new(args => ['--no-lib', '--no-blib', '--no-tlib', '--include' => 'foo', '-Ibar', '-I' => 'baz', '--include=bat']);
+        my $two = $TCLASS->new(args => {opts => ['--no-lib', '--no-blib', '--no-tlib', '--include' => 'foo', '-Ibar', '-I' => 'baz', '--include=bat']});
         like(
             $two->settings->{libs},
             bag {
@@ -480,107 +480,107 @@ subtest options => sub {
     };
 
     subtest times => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {});
         ok(!$one->settings->{times}, "not on by default");
 
-        my $two = $TCLASS->new(args => ['-T']);
+        my $two = $TCLASS->new(args => {opts => ['-T']});
         ok($two->settings->{times}, "toggled on");
 
-        my $three = $TCLASS->new(args => ['--times']);
+        my $three = $TCLASS->new(args => {opts => ['--times']});
         ok($three->settings->{times}, "toggled on");
 
-        my $four = $TCLASS->new(args => ['--times', '--no-times']);
+        my $four = $TCLASS->new(args => {opts => ['--times', '--no-times']});
         ok(!$four->settings->{times}, "toggled off");
     };
 
     subtest tlib => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{tlib}, "not on by default");
 
-        my $two = $TCLASS->new(args => ['--tlib']);
+        my $two = $TCLASS->new(args => {opts => ['--tlib']});
         ok($two->settings->{tlib}, "toggled on");
 
-        my $three = $TCLASS->new(args => ['--tlib', '--no-tlib']);
+        my $three = $TCLASS->new(args => {opts => ['--tlib', '--no-tlib']});
         ok(!$three->settings->{tlib}, "toggled off");
     };
 
     subtest lib => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{lib}, "on by default");
 
-        my $two = $TCLASS->new(args => ['--no-lib']);
+        my $two = $TCLASS->new(args => {opts => ['--no-lib']});
         ok(!$two->settings->{lib}, "toggled off");
     };
 
     subtest blib => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{blib}, "on by default");
 
-        my $two = $TCLASS->new(args => ['--no-blib']);
+        my $two = $TCLASS->new(args => {opts => ['--no-blib']});
         ok(!$two->settings->{blib}, "toggled off");
     };
 
     subtest input => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!defined($one->settings->{input}), "none by default");
 
-        $one = $TCLASS->new(args => ['--input', 'foo bar baz']);
+        $one = $TCLASS->new(args => {opts => ['--input', 'foo bar baz']});
         is($one->settings->{input}, 'foo bar baz', "set the input string");
     };
 
     subtest 'keep-dir' => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{keep_dir}, "not on by default");
 
-        my $two = $TCLASS->new(args => ['-k']);
+        my $two = $TCLASS->new(args => {opts => ['-k']});
         ok($two->settings->{keep_dir}, "toggled on");
 
-        my $three = $TCLASS->new(args => ['--keep-dir']);
+        my $three = $TCLASS->new(args => {opts => ['--keep-dir']});
         ok($three->settings->{keep_dir}, "toggled on");
 
-        my $four = $TCLASS->new(args => ['--keep-dir', '--no-keep-dir']);
+        my $four = $TCLASS->new(args => {opts => ['--keep-dir', '--no-keep-dir']});
         ok(!$four->settings->{keep_dir}, "toggled off");
     };
 
     subtest 'author-testing' => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!defined($one->settings->{env_vars}->{AUTHOR_TESTING}), "not on by default");
 
-        my $two = $TCLASS->new(args => ['-A']);
+        my $two = $TCLASS->new(args => {opts => ['-A']});
         ok($two->settings->{env_vars}->{AUTHOR_TESTING}, "toggled on");
 
-        my $three = $TCLASS->new(args => ['--author-testing']);
+        my $three = $TCLASS->new(args => {opts => ['--author-testing']});
         ok($three->settings->{env_vars}->{AUTHOR_TESTING}, "toggled on");
 
-        my $four = $TCLASS->new(args => ['--author-testing', '--lib', '--no-author-testing']);
+        my $four = $TCLASS->new(args => {opts => ['--author-testing', '--lib', '--no-author-testing']});
         ok(!$four->settings->{env_vars}->{AUTHOR_TESTING},         "toggled off");
         ok(defined($four->settings->{env_vars}->{AUTHOR_TESTING}), "off, but defined");
     };
 
     subtest tap => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{use_stream}, "stream by default");
 
-        my $two = $TCLASS->new(args => ['--tap']);
+        my $two = $TCLASS->new(args => {opts => ['--tap']});
         ok(!$two->settings->{use_stream}, "use tap");
 
-        my $three = $TCLASS->new(args => ['--TAP']);
+        my $three = $TCLASS->new(args => {opts => ['--TAP']});
         ok(!$three->settings->{use_stream}, "use TAP");
     };
 
     subtest use_stream => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{use_stream}, "stream by default");
 
-        my $two = $TCLASS->new(args => ['--no-stream']);
+        my $two = $TCLASS->new(args => {opts => ['--no-stream']});
         ok(!$two->settings->{use_stream}, "use tap");
     };
 
     subtest fork => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{use_fork}, "fork by default");
 
-        my $two = $TCLASS->new(args => ['--no-fork']);
+        my $two = $TCLASS->new(args => {opts => ['--no-fork']});
         ok(!$two->settings->{use_fork}, "no fork");
     };
 
@@ -589,36 +589,36 @@ subtest options => sub {
         subtest undef_var => sub {
             local $ENV{PERL_USE_UNSAFE_INC};
 
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             is($one->settings->{unsafe_inc}, 1, "unsafe-inc by default");
 
-            my $two = $TCLASS->new(args => ['--no-unsafe-inc']);
+            my $two = $TCLASS->new(args => {opts => ['--no-unsafe-inc']});
             is($two->settings->{unsafe_inc}, 0, "no unsafe-inc");
         };
 
         subtest true_var => sub {
             local $ENV{PERL_USE_UNSAFE_INC} = 'YES';
 
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             is($one->settings->{unsafe_inc}, 1, "unsafe-inc");
 
-            my $two = $TCLASS->new(args => ['--no-unsafe-inc']);
+            my $two = $TCLASS->new(args => {opts => ['--no-unsafe-inc']});
             is($two->settings->{unsafe_inc}, 0, "no unsafe-inc");
         };
 
         subtest false_var => sub {
             local $ENV{PERL_USE_UNSAFE_INC} = '';
 
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             is($one->settings->{unsafe_inc}, 0, "no unsafe-inc");
 
-            my $two = $TCLASS->new(args => ['--no-unsafe-inc']);
+            my $two = $TCLASS->new(args => {opts => ['--no-unsafe-inc']});
             is($two->settings->{unsafe_inc}, 0, "no unsafe-inc");
         };
     };
 
     subtest env_vars => sub {
-        my $one = $TCLASS->new(args => ['-E', 'FOO=foo', '-EBAR=bar', '--env-var', 'BAZ=baz']);
+        my $one = $TCLASS->new(args => {opts => ['-E', 'FOO=foo', '-EBAR=bar', '--env-var', 'BAZ=baz']});
         is(
             $one->settings->{env_vars},
             hash {
@@ -632,7 +632,7 @@ subtest options => sub {
     };
 
     subtest switch => sub {
-        my $one = $TCLASS->new(args => [qw/-S -w -S-t --switch -e=foo=bar/]);
+        my $one = $TCLASS->new(args => {opts => [qw/-S -w -S-t --switch -e=foo=bar/]});
         is(
             $one->settings->{switches},
             [qw/-w -t -e foo=bar/],
@@ -641,42 +641,42 @@ subtest options => sub {
     };
 
     subtest clear => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{clear_dir}, "not on by default");
 
-        my $two = $TCLASS->new(args => ['-C']);
+        my $two = $TCLASS->new(args => {opts => ['-C']});
         ok($two->settings->{clear_dir}, "toggled on");
 
-        my $three = $TCLASS->new(args => ['--clear']);
+        my $three = $TCLASS->new(args => {opts => ['--clear']});
         ok($three->settings->{clear_dir}, "toggled on");
     };
 
     subtest shm => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{use_shm}, "on by default");
 
-        my $two = $TCLASS->new(args => ['--no-shm']);
+        my $two = $TCLASS->new(args => {opts => ['--no-shm']});
         ok(!$two->settings->{use_shm}, "toggled off");
     };
 
     subtest tmpdir => sub {
         if (grep { -d $_ } map { File::Spec->canonpath($_) } '/dev/shm', '/run/shm') {
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             is($one->settings->{tmp_dir}, match qr{^/(run|dev)/shm/?$}, "temp dir in shm");
         }
 
         my $dir = tempdir(CLEANUP => 1, TMP => 1);
 
         local $ENV{TMPDIR} = $dir;
-        my $two = $TCLASS->new(args => ['--no-shm']);
+        my $two = $TCLASS->new(args => {opts => ['--no-shm']});
         is($two->settings->{tmp_dir}, $dir, "temp dir in set by TMPDIR");
 
         local $ENV{TEMPDIR} = delete $ENV{TMPDIR};
-        my $three = $TCLASS->new(args => ['--no-shm']);
+        my $three = $TCLASS->new(args => {opts => ['--no-shm']});
         is($three->settings->{tmp_dir}, $dir, "temp dir in set by TEMPDIR");
 
         delete $ENV{TEMPDIR};
-        my $four = $TCLASS->new(args => ['--no-shm']);
+        my $four = $TCLASS->new(args => {opts => ['--no-shm']});
         is($four->settings->{tmp_dir}, File::Spec->tmpdir, "system temp dir");
     };
 
@@ -684,137 +684,134 @@ subtest options => sub {
         my $dir = tempdir(CLEANUP => 1, TMP => 1);
 
         local $ENV{T2_WORKDIR} = $dir;
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{dir}, $dir, "Set via env var");
 
         delete $ENV{T2_WORKDIR};
 
         delete $ENV{TMPDIR};
         delete $ENV{TEMPDIR};
-        my $two = $TCLASS->new(args => []);
+        my $two = $TCLASS->new(args => {opts => []});
         like($two->settings->{dir}, qr{yath-test-$$}, "Generated a directory");
     };
 
     subtest no_long => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{no_long}, "off by default");
 
-        my $two = $TCLASS->new(args => ['--no-long']);
+        my $two = $TCLASS->new(args => {opts => ['--no-long']});
         ok($two->settings->{no_long}, "toggled on");
     };
 
     subtest exclude_files => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{exclude_files}, [], "default is an empty array");
 
-        my $two = $TCLASS->new(args => ['-x', 'xxx.t']);
+        my $two = $TCLASS->new(args => {opts => ['-x', 'xxx.t']});
         is($two->settings->{exclude_files}, ['xxx.t'], "excluded a file");
 
-        my $three = $TCLASS->new(args => ['--exclude-file', 'xxx.t']);
+        my $three = $TCLASS->new(args => {opts => ['--exclude-file', 'xxx.t']});
         is($three->settings->{exclude_files}, ['xxx.t'], "excluded a file");
     };
 
     subtest exclude_pattern => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{exclude_patterns}, [], "default is an empty array");
 
-        my $two = $TCLASS->new(args => ['-X', qr/xyz/]);
+        my $two = $TCLASS->new(args => {opts => ['-X', qr/xyz/]});
         is($two->settings->{exclude_patterns}, [qr/xyz/], "excluded a pattern");
 
-        my $three = $TCLASS->new(args => ['--exclude-pattern', qr/xyz/]);
+        my $three = $TCLASS->new(args => {opts => ['--exclude-pattern', qr/xyz/]});
         is($three->settings->{exclude_patterns}, [qr/xyz/], "excluded a pattern");
     };
 
     subtest run_id => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{run_id}, "default is a timestamp");
 
-        my $two = $TCLASS->new(args => ['--id', 'foo']);
+        my $two = $TCLASS->new(args => {opts => ['--id', 'foo']});
         is($two->settings->{run_id}, 'foo', "set id to foo");
 
-        my $three = $TCLASS->new(args => ['--run-id', 'foo']);
+        my $three = $TCLASS->new(args => {opts => ['--run-id', 'foo']});
         is($three->settings->{run_id}, 'foo', "set id to foo");
     };
 
     subtest job_count => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{job_count}, 1, "default is 1");
 
-        my $two = $TCLASS->new(args => ['-j3']);
+        my $two = $TCLASS->new(args => {opts => ['-j3']});
         is($two->settings->{job_count}, 3, "set to 3");
 
-        my $three = $TCLASS->new(args => ['--jobs', '3']);
+        my $three = $TCLASS->new(args => {opts => ['--jobs', '3']});
         is($three->settings->{job_count}, 3, "set to 3");
 
-        my $four = $TCLASS->new(args => ['--job-count', '3']);
+        my $four = $TCLASS->new(args => {opts => ['--job-count', '3']});
         is($four->settings->{job_count}, 3, "set to 3");
     };
 
     subtest preload => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{preload}, undef, "No preloads");
 
-        my $two = $TCLASS->new(args => ['-PScalar::Util', '--preload', 'List::Util']);
+        my $two = $TCLASS->new(args => {opts => ['-PScalar::Util', '--preload', 'List::Util']});
         is($two->settings->{preload}, ['Scalar::Util', 'List::Util'], "Added preload");
 
-        my $three = $TCLASS->new(args => ['-PScalar::Util', '--preload', 'List::Util', '--no-preload', '-PData::Dumper']);
+        my $three = $TCLASS->new(args => {opts => ['-PScalar::Util', '--preload', 'List::Util', '--no-preload', '-PData::Dumper']});
         is($three->settings->{preload}, ['Data::Dumper'], "Added preload after canceling previous ones");
     };
 
     subtest plugin => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->plugins, [], "No plugins");
 
         @INC = ('t/lib', @INC);
 
-        my $two = $TCLASS->new(args => ['-pTest', '--plugin', 'TestNew']);
+        my $two = $TCLASS->new(args => {plugins => ['Test', 'TestNew']});
         is($two->plugins, ['App::Yath::Plugin::Test', object { prop blessed => 'App::Yath::Plugin::TestNew' }], "Added plugin");
-
-        my $three = $TCLASS->new(args => ['-pFail', '--plugin', 'Fail', '--no-plugins', '-pTest']);
-        is($three->plugins, ['App::Yath::Plugin::Test'], "Added plugin after canceling previous ones");
     };
 
     subtest dummy => sub {
         local $ENV{T2_HARNESS_DUMMY} = 0;
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{dummy}, "not dummy by default");
 
         $ENV{T2_HARNESS_DUMMY} = 1;
-        my $two = $TCLASS->new(args => []);
+        my $two = $TCLASS->new(args => {opts => []});
         ok($two->settings->{dummy}, "dummy by default with env var");
 
         $ENV{T2_HARNESS_DUMMY} = 0;
-        my $three = $TCLASS->new(args => ['-D']);
+        my $three = $TCLASS->new(args => {opts => ['-D']});
         ok($three->settings->{dummy}, "dummy turned on");
 
-        my $four = $TCLASS->new(args => ['--dummy']);
+        my $four = $TCLASS->new(args => {opts => ['--dummy']});
         ok($four->settings->{dummy}, "dummy turned on");
     };
 
     subtest load => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{load}, "no loads by default");
 
-        my $two = $TCLASS->new(args => ['-mFoo', '-m', 'Bar', '--load', 'Baz', '--load-module', 'Bat']);
+        my $two = $TCLASS->new(args => {opts => ['-mFoo', '-m', 'Bar', '--load', 'Baz', '--load-module', 'Bat']});
         is($two->settings->{load}, [qw/Foo Bar Baz Bat/], "Added some loads");
     };
 
     subtest load_import => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{load_import}, "no loads by default");
 
-        my $two = $TCLASS->new(args => ['-MFoo', '-M', 'Bar=foo,bar,baz', '--loadim', 'Baz', '--load-import', 'Bat']);
+        my $two = $TCLASS->new(args => {opts => ['-MFoo', '-M', 'Bar=foo,bar,baz', '--loadim', 'Baz', '--load-import', 'Bat']});
         is($two->settings->{load_import}, ['Foo', 'Bar=foo,bar,baz', 'Baz', 'Bat'], "Added some loads");
     };
 
     subtest cover => sub {
         local $INC{'Devel/Cover.pm'} = 1;
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{cover},       "no cover by default");
         ok($one->settings->{use_fork},     "fork allowed by default");
         ok(!$one->settings->{load_import}, "no loads by default");
 
-        my $two = $TCLASS->new(args => ['--cover']);
+        my $two = $TCLASS->new(args => {opts => ['--cover']});
         ok($two->settings->{cover}, "cover turned on");
         is($two->settings->{use_fork}, 0, "fork disabled");
         is(
@@ -825,24 +822,24 @@ subtest options => sub {
     };
 
     subtest event_timeout => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{event_timeout}, 60, "Default event timeout is 60");
 
-        my $two = $TCLASS->new(args => ['--et', '30']);
+        my $two = $TCLASS->new(args => {opts => ['--et', '30']});
         is($two->settings->{event_timeout}, 30, "Changed to 30");
 
-        my $three = $TCLASS->new(args => ['--event_timeout', '25']);
+        my $three = $TCLASS->new(args => {opts => ['--event_timeout', '25']});
         is($three->settings->{event_timeout}, 25, "Changed to 25");
     };
 
     subtest post_exit_timeout => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{post_exit_timeout}, 15, "Default event timeout is 15");
 
-        my $two = $TCLASS->new(args => ['--pet', '30']);
+        my $two = $TCLASS->new(args => {opts => ['--pet', '30']});
         is($two->settings->{post_exit_timeout}, 30, "Changed to 30");
 
-        my $three = $TCLASS->new(args => ['--post-exit-timeout', '25']);
+        my $three = $TCLASS->new(args => {opts => ['--post-exit-timeout', '25']});
         is($three->settings->{post_exit_timeout}, 25, "Changed to 25");
     };
 
@@ -852,45 +849,45 @@ subtest options => sub {
         chdir($dir);
 
         subtest log_file => sub {
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             ok(!$one->settings->{log_file}, "no log file by default");
 
-            my $two = $TCLASS->new(args => ['--log']);
+            my $two = $TCLASS->new(args => {opts => ['--log']});
             my $run_id = $two->settings->{run_id};
             like($two->settings->{log_file}, qr{test-logs/\d{4}-\d{2}-\d{2}~\d{2}:\d{2}:\d{2}~\Q$run_id\E~\Q$$\E\.jsonl$}, "default log file");
             ok(-d 'test-logs', "Created test-logs dir");
         };
 
         subtest bzip2_log => sub {
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             ok(!$one->settings->{bzip2_log}, "no log by default");
 
             for ('-B', '--bz2', '--bzip2-log') {
-                my $two = $TCLASS->new(args => [$_]);
+                my $two = $TCLASS->new(args => {opts => [$_]});
                 ok($two->settings->{bzip2_log}, "bzip2 logging");
                 ok($two->settings->{log},       "logging turned on");
             }
         };
 
         subtest gzip_log => sub {
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             ok(!$one->settings->{gzip_log}, "no log by default");
 
             for ('-G', '--gz', '--gzip-log') {
-                my $two = $TCLASS->new(args => [$_]);
+                my $two = $TCLASS->new(args => {opts => [$_]});
                 ok($two->settings->{gzip_log}, "gzip logging");
                 ok($two->settings->{log},      "logging turned on");
             }
         };
 
         subtest log => sub {
-            my $one = $TCLASS->new(args => []);
+            my $one = $TCLASS->new(args => {opts => []});
             ok(!$one->settings->{log}, "no log by default");
 
-            my $two = $TCLASS->new(args => ['-L']);
+            my $two = $TCLASS->new(args => {opts => ['-L']});
             ok($two->settings->{log}, "logging enabled");
 
-            my $three = $TCLASS->new(args => ['--log']);
+            my $three = $TCLASS->new(args => {opts => ['--log']});
             ok($three->settings->{log}, "logging enabled");
         };
 
@@ -898,177 +895,88 @@ subtest options => sub {
     };
 
     subtest color => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{color}, "color by default");
 
-        my $two = $TCLASS->new(args => ['--no-color']);
+        my $two = $TCLASS->new(args => {opts => ['--no-color']});
         ok(!$two->settings->{color}, "color turned off");
     };
 
     subtest quiet => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{quiet}, "quiet off by default");
 
-        my $two = $TCLASS->new(args => ['--quiet']);
+        my $two = $TCLASS->new(args => {opts => ['--quiet']});
         ok($two->settings->{quiet}, "quiet turned on");
     };
 
     subtest renderer => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{renderer}, '+Test2::Harness::Renderer::Formatter', "Default renderer");
 
-        my $two = $TCLASS->new(args => ['--renderer', 'foo']);
+        my $two = $TCLASS->new(args => {opts => ['--renderer', 'foo']});
         is($two->settings->{renderer}, 'foo', "set renderer");
     };
 
     subtest formatter => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{formatter}, '+Test2::Formatter::Test2', "Default formatter");
 
-        my $two = $TCLASS->new(args => ['--formatter', 'foo']);
+        my $two = $TCLASS->new(args => {opts => ['--formatter', 'foo']});
         is($two->settings->{formatter}, 'foo', "set formatter");
     };
 
     subtest verbose => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         is($one->settings->{verbose}, 0, "Verbose is off by default");
 
-        my $two = $TCLASS->new(args => ['-v']);
+        my $two = $TCLASS->new(args => {opts => ['-v']});
         is($two->settings->{verbose}, 1, "Verbose is on by default");
 
-        my $three = $TCLASS->new(args => ['-vvv']);
+        my $three = $TCLASS->new(args => {opts => ['-vvv']});
         is($three->settings->{verbose}, 3, "Verbose is higher now");
     };
 
     subtest show_job_end => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok($one->settings->{show_job_end}, "show_job_end is on by default");
 
-        my $two = $TCLASS->new(args => ['--no-show-job-end']);
+        my $two = $TCLASS->new(args => {opts => ['--no-show-job-end']});
         ok(!$two->settings->{show_job_end}, "show_job_end turned off");
     };
 
     subtest show_job_info => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{show_job_info}, "show_job_info is off by default");
 
-        my $two = $TCLASS->new(args => ['--show-job-info']);
+        my $two = $TCLASS->new(args => {opts => ['--show-job-info']});
         ok($two->settings->{show_job_info}, "show_job_info turned on");
 
-        my $three = $TCLASS->new(args => ['-vv']);
+        my $three = $TCLASS->new(args => {opts => ['-vv']});
         ok($three->settings->{show_job_info}, "show_job_info turned on by double verbose mode");
     };
 
     subtest show_job_launch => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{show_job_launch}, "show_job_launch is off by default");
 
-        my $two = $TCLASS->new(args => ['--show-job-launch']);
+        my $two = $TCLASS->new(args => {opts => ['--show-job-launch']});
         ok($two->settings->{show_job_launch}, "show_job_launch turned on");
 
-        my $three = $TCLASS->new(args => ['-vv']);
+        my $three = $TCLASS->new(args => {opts => ['-vv']});
         ok($three->settings->{show_job_launch}, "show_job_launch turned on by double verbose mode");
     };
 
     subtest show_run_info => sub {
-        my $one = $TCLASS->new(args => []);
+        my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{show_run_info}, "show_run_info is off by default");
 
-        my $two = $TCLASS->new(args => ['--show-run-info']);
+        my $two = $TCLASS->new(args => {opts => ['--show-run-info']});
         ok($two->settings->{show_run_info}, "show_run_info turned on");
 
-        my $three = $TCLASS->new(args => ['-vv']);
+        my $three = $TCLASS->new(args => {opts => ['-vv']});
         ok($three->settings->{show_run_info}, "show_run_info turned on by double verbose mode");
     };
-};
-
-subtest pre_parse_args => sub {
-    my ($opts, $list, $pass, $plugins, $inc);
-
-    ($opts, $list, $pass, $plugins, $inc) = $CLASS->pre_parse_args(
-        [
-            '-x',
-            '--longer' => 'arg',
-            qw/foo bar baz/,
-            '-pFoo',
-            '--plugin' => 'Bar',
-            '-p=Baz',
-            '-I=foo',
-            '-I' => 'bar',
-            '--include=baz',
-            '--include' => 'bat',
-            '--plugin=Bat',
-            '--',
-            '-p' => 'uhg',
-            'bleh',
-            'blotch',
-            '::',
-            'pear',
-            'apple',
-            'bananananan',
-            '-xyz',
-        ]
-    );
-    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/, '-I=foo', '-I' => 'bar', '--include=baz', '--include' => 'bat'], "Got opts");
-    is($list, ['-p', 'uhg', 'bleh', 'blotch'], "Got list");
-    is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
-    is($plugins, [qw/Foo Bar Baz Bat/], "Got plugins");
-    like($inc, [qw{foo bar baz bat}, qr{lib$}, qr{blib/lib$}, qr{blib/arch$}], "Got libs");
-
-    ($opts, $list, $pass, $plugins, $inc) = $CLASS->pre_parse_args(
-        [
-            '-x',
-            '--longer' => 'arg',
-            qw/foo bar baz/,
-            '-pFoo',
-            '--plugin' => 'Bar',
-            '-p=Baz',
-            '-I=foo',
-            '-I' => 'bar',
-            '--include=baz',
-            '--include' => 'bat',
-            '--no-lib',
-            '--no-blib',
-            '--tlib',
-            '--no-plugins', # <---- this is what we are testing now
-            '--plugin=Bat',
-            '--',
-            '-p' => 'uhg',
-            'bleh',
-            'blotch',
-            '::',
-            'pear',
-            'apple',
-            'bananananan',
-            '-xyz',
-        ]
-    );
-    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/, '-I=foo', '-I' => 'bar', '--include=baz', '--include' => 'bat', '--no-lib', '--no-blib', '--tlib'], "Got opts");
-    is($list, ['-p', 'uhg', 'bleh', 'blotch'], "Got list");
-    is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
-    is($plugins, [qw/Bat/], "Got only 1 plugin");
-    like($inc, [qw{foo bar baz bat}, qr{t/lib$}], "Got libs");
-
-    ($opts, $list, $pass, $plugins) = $CLASS->pre_parse_args(
-        [
-            '-x',
-            '--longer' => 'arg',
-            qw/foo bar baz/,
-            '-pFoo',
-            '--plugin' => 'Bar',
-            '-p=Baz',
-            '--plugin=Bat',
-            '::',
-            'pear',
-            'apple',
-            'bananananan',
-            '-xyz',
-        ]
-    );
-    is($opts, ['-x', '--longer' => 'arg', qw/foo bar baz/], "Got opts");
-    is($list, [], "Got empty list");
-    is($pass, ['pear', 'apple', 'bananananan', '-xyz'], "Got args to pass");
-    is($plugins, [qw/Foo Bar Baz Bat/], "Got plugins");
 };
 
 subtest parse_args => sub {
@@ -1087,24 +995,32 @@ subtest parse_args => sub {
     $control->override(has_runner  => sub { 1 });
     $control->override(handle_list_args => sub { $list = pop });
 
-    my $one = $TCLASS->new(args => [
-        '-x' => 'foo.t',
-        '-p' => 'Test',
-        '-p' => '+App::Yath::Plugin::TestNew',
-        '-E' => 'FOO=123',
-        '-v',
-        '-B',
-        '--no-fork',
-        'bar.t',
-        't',
-        '--',
-        'baz.t',
-        'bat.t',
-        '--foo',
-        '::',
-        '-arg1' => 1,
-        '-arg2' => 2,
-    ]);
+    my $one = $TCLASS->new(
+        args => {
+            opts => [
+                '-x' => 'foo.t',
+                '-E' => 'FOO=123',
+                '-v',
+                '-B',
+                '--no-fork',
+                'bar.t',
+                't',
+            ],
+            plugins => [
+                'Test',
+                '+App::Yath::Plugin::TestNew',
+            ],
+            list => [
+                'baz.t',
+                'bat.t',
+                '--foo',
+            ],
+            pass => [
+                '-arg1' => 1,
+                '-arg2' => 2,
+            ],
+        }
+    );
     my $settings = $one->settings;
 
     is($list, ['bar.t', 't', 'baz.t', 'bat.t', '--foo'], "Got list args from both before and after --");
@@ -1141,7 +1057,7 @@ subtest inject_signal_handlers => sub {
     local $SIG{INT} = 'IGNORE';
     local $SIG{TERM} = 'IGNORE';
 
-    my $one = $TCLASS->new(args => []);
+    my $one = $TCLASS->new(args => {opts => []});
 
     $one->inject_signal_handlers;
     isnt($SIG{INT}, 'IGNORE', "Not ignoring SIGINT anymore");
@@ -1160,10 +1076,10 @@ subtest loggers => sub {
     $control->override(has_logger => sub { 1 });
     $control->override(has_jobs => sub { 1 });
 
-    my $one = $TCLASS->new(args => []);
+    my $one = $TCLASS->new(args => {opts => []});
     is($one->loggers, [], "No loggers");
 
-    my $two = $TCLASS->new(args => ['--log']);
+    my $two = $TCLASS->new(args => {opts => ['--log']});
     is(
         $two->loggers, [
             object {
@@ -1174,7 +1090,7 @@ subtest loggers => sub {
         "Got a logger with a plain file handle"
     );
 
-    my $three = $TCLASS->new(args => ['-B']);
+    my $three = $TCLASS->new(args => {opts => ['-B']});
     is(
         $three->loggers, [
             object {
@@ -1185,7 +1101,7 @@ subtest loggers => sub {
         "Got a logger with a bz2 file handle"
     );
 
-    my $four = $TCLASS->new(args => ['-G']);
+    my $four = $TCLASS->new(args => {opts => ['-G']});
     is(
         $four->loggers, [
             object {

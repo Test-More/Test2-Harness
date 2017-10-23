@@ -6,10 +6,7 @@ our $VERSION = '0.001024';
 
 use File::Spec;
 
-use Carp qw/confess/;
 use Cwd qw/realpath/;
-
-use Test2::Harness::Util qw/open_file/;
 
 use Importer Importer => 'import';
 
@@ -63,7 +60,7 @@ sub read_config {
 
     $rcfile ||= find_in_updir('.yath.rc') or return;
 
-    my $fh = open_file($rcfile, '<');
+    open(my $fh, '<', $rcfile) or die "Could not open '$rcfile': $!";
 
     my @out;
 
@@ -88,7 +85,7 @@ sub read_config {
 sub is_generated_test_pl {
     my ($file) = @_;
 
-    my $fh = open_file($file, '<');
+    open(my $fh, '<', $file) or die "Could not open '$file': $!";
 
     my $count = 0;
     while (my $line = <$fh>) {

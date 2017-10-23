@@ -129,7 +129,8 @@ sub { shift->import(@_) }
         Test2::API::test2_post_preload_reset();
     }
 
-    unshift @INC => @{$job->libs};
+    my %seen;
+    @INC = grep { !$seen{$_}++ } (@{$job->libs}, @INC);
 
     if ($job->use_stream) {
         $ENV{T2_FORMATTER} = 'Stream';

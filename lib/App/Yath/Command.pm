@@ -15,7 +15,6 @@ use Config qw/%Config/;
 
 use File::Spec;
 
-use App::Yath::Util qw/read_config/;
 use Test2::Harness::Util qw/read_file open_file fqmod/;
 
 use Test2::Harness;
@@ -73,8 +72,7 @@ sub init {
 
     my $settings = $self->{+SETTINGS} ||= {};
 
-    unshift @{$self->{+ARGS}} => read_config($self->name);
-    my $list = $self->parse_args($self->{+ARGS});
+    my $list = $self->parse_args($self->{+ARGS} ||= {});
 
     $self->normalize_settings();
 
@@ -844,92 +842,19 @@ sub options {
 }
 # }}}
 
-sub pre_parse_args {
-    my $class = shift;
-    my ($args) = @_;
-
-    my (@opts, @list, @pass, @plugins, @inc);
-
-    my %lib = (lib => 1, blib => 1, tlib => 0);
-
-    my $last_mark = '';
-    for my $arg (@$args) {
-        if ($last_mark eq '::') {
-            push @pass => $arg;
-        }
-        elsif ($last_mark eq '--') {
-            if ($arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            push @list => $arg;
-        }
-        elsif ($last_mark eq 'plugin') {
-            $last_mark = '';
-            push @plugins => $arg;
-        }
-        elsif ($last_mark eq 'inc') {
-            $last_mark = '';
-            push @inc => $arg;
-            push @opts => $arg;
-        }
-        else {
-            if ($arg eq '--' || $arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            if ($arg eq '-p' || $arg eq '--plugin') {
-                $last_mark = 'plugin';
-                next;
-            }
-            if ($arg =~ m/^(?:-p=?|--plugin=)(.*)$/) {
-                push @plugins => $1;
-                next;
-            }
-            if ($arg eq '--no-plugins') {
-                # clear plugins
-                @plugins = ();
-                next;
-            }
-
-            if ($arg eq '-I' || $arg eq '--include') {
-                $last_mark = 'inc';
-                # No 'next' here.
-            }
-            elsif ($arg =~ m/^(-I|--include)=(.*)$/) {
-                push @inc => $2;
-                # No 'next' here.
-            }
-            elsif ($arg =~ m/^--(no-)?(lib|blib|tlib)$/) {
-                $lib{$2} = $1 ? 0 : 1;
-            }
-
-            push @opts => $arg;
-        }
-    }
-
-    push @inc => File::Spec->rel2abs('lib') if $lib{lib};
-    if ($lib{blib}) {
-        push @inc => File::Spec->rel2abs('blib/lib');
-        push @inc => File::Spec->rel2abs('blib/arch');
-    }
-    push @inc => File::Spec->rel2abs('t/lib') if $lib{tlib};
-
-    return (\@opts, \@list, \@pass, \@plugins, \@inc);
-}
-
 sub parse_args {
     my $self = shift;
     my ($args) = @_;
 
-    my ($opts, $list, $pass, $plugins, $inc) = $self->pre_parse_args($args);
+    my $opts    = $args->{opts}    || [];
+    my $list    = $args->{list}    || [];
+    my $plugins = $args->{plugins} || [];
 
     my $settings = $self->{+SETTINGS} ||= {};
-    $settings->{pass} = $pass;
+    $settings->{pass} = $args->{pass} || [];
 
     my @plugin_options;
     for my $plugin (@$plugins) {
-        local @INC = (@$inc, @INC);
         $plugin = fqmod('App::Yath::Plugin', $plugin);
         my $file = pkg_to_file($plugin);
         eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";

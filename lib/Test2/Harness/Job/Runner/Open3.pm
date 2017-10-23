@@ -33,9 +33,10 @@ sub command {
 
     my $job = $test->job;
 
+    my %seen;
     return (
         $^X,
-        (map { "-I$_" } @{$job->libs}, $class->find_inc),
+        (map { "-I$_" } grep {!$seen{$_}++} @{$job->libs}, $class->find_inc, @INC),
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
         @{$job->switches},
         (map {"-M$_"} @{$job->load_import || []}),

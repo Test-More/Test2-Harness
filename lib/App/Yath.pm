@@ -202,10 +202,12 @@ sub load_command {
     if (!eval { require $cmd_file; 1 }) {
         my $load_error = $@ || 'unknown error';
 
-        return undef if $params{check_only};
+        my $not_found = $load_error =~ m{Can't locate \Q$cmd_file\E in \@INC};
+
+        return undef if $params{check_only} && $not_found;
 
         die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
-            if $load_error =~ m{Can't locate \Q$cmd_file\E in \@INC};
+            if $not_found;
 
         die $load_error;
     }

@@ -64,8 +64,13 @@ sub handle_list_args {
         return if grep { $_->block_default_search($settings) } keys %{$settings->{plugins}};
         return unless $settings->{default_search};
 
+        my @search = @{$settings->{default_search}};
+
+        push @search => @{$settings->{default_at_search}}
+            if $ENV{AUTHOR_TESTING} || $settings->{env_vars}->{AUTHOR_TESTING};
+
         my (@dirs, @files);
-        for my $path (@{$settings->{default_search}}) {
+        for my $path (@search) {
             if (-d $path) {
                 push @dirs => $path;
                 next;
@@ -80,24 +85,6 @@ sub handle_list_args {
     }
 }
 
-sub normalize_settings {
-    my $self = shift;
-
-    $self->SUPER::normalize_settings(@_);
-
-    my $settings = $self->{+SETTINGS};
-
-    return if $settings->{default_search} && @{$settings->{default_search}};
-
-    my @default = ('./t', './t2');
-    push @default => './xt' if $ENV{AUTHOR_TESTING} || $settings->{env_vars}->{AUTHOR_TESTING};
-    push @default => 'test.pl';
-
-    $settings->{default_search} = \@default;
-
-    return;
-}
-
 sub options {
     my $self = shift;
 
@@ -110,7 +97,18 @@ sub options {
             used_by => {runner => 1, jobs => 1},
             section => 'Job Options',
             usage   => ['--default_search t'],
-            long_desc => ["Specify the default file/dir search. defaults to './t', './t2', 'test.pl', and when 'AUTHOR_TESTING' is set './xt'. The default search is only used if no files were specified at the command line"],
+            default => sub { ['./t', './t2', 'test.pl'] },
+            long_desc => "Specify the default file/dir search. defaults to './t', './t2', and 'test.pl'. The default search is only used if no files were specified at the command line",
+        },
+
+        {
+            spec    => 'default-at-search=s@',
+            field   => 'default_at_search',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Job Options',
+            usage   => ['--default_at_search xt'],
+            default => sub { ['./xt'] },
+            long_desc => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",
         },
     );
 }

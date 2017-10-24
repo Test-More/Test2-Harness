@@ -2,7 +2,7 @@ package Test2::Harness::Feeder::JSONL;
 use strict;
 use warnings;
 
-our $VERSION = '0.001025';
+our $VERSION = '0.001026';
 
 use Carp qw/croak/;
 

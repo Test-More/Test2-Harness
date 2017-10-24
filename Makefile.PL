@@ -64,7 +64,7 @@ my %WriteMakefileArgs = (
     "Time::HiRes" => 0,
     "base" => 0,
     "constant" => 0,
-    "goto::file" => "0.004",
+    "goto::file" => "0.005",
     "parent" => 0
   },
   "VERSION" => "0.001025",
@@ -119,7 +119,7 @@ my %FallbackPrereqs = (
   "Time::HiRes" => 0,
   "base" => 0,
   "constant" => 0,
-  "goto::file" => "0.004",
+  "goto::file" => "0.005",
   "parent" => 0
 );
 

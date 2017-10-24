@@ -31,7 +31,7 @@ use warnings;
 
 use App::Yath::Util qw/find_yath/;
 
-system($^X, '-Ilib', find_yath(), 'test', 't', (-d 't2' ? ('t2') : ()), @ARGV);
+system($^X, '-Ilib', find_yath(), 'test', @ARGV);
 my $exit = $?;
 
 # This makes sure it works with prove.

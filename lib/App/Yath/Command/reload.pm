@@ -45,7 +45,7 @@ sub run {
     my $self = shift;
 
     my $pfile = find_pfile()
-        or die "Could not find " . $self->pfile_name . " in current directory, or any parent directories.\n";
+        or die "Could not find a persistent yath running.\n";
 
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
 

@@ -123,19 +123,14 @@ sub normalize_settings {
         # Set the default
         if (defined($default) && !defined($settings->{$field})) {
             my $val = ref($default) ? $self->$default($settings, $field) : $default;
-
-            if ($action) {
-                $self->$action($settings, $field, $val);
-            }
-            else {
-                $settings->{$field} = $val;
-            }
+            $settings->{$field} = $val;
         }
 
         next unless $normalize && defined $settings->{$field};
 
         # normalize the value
         $settings->{$field} = $self->$normalize($settings, $field, $settings->{$field});
+
     }
 
     if (my $libs = $settings->{libs}) {

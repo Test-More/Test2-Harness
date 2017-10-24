@@ -57,7 +57,7 @@ sub options {
             section => 'Display Options',
             usage   => ['-s total,events', '--sort total,events'],
             summary => ['Columns to sort by'],
-            default => 'total,startup,events,cleanup,file',
+            default => sub { [qw/total startup events cleanup file/] },
             long_desc => "Allowed column names: total, startup, events, cleanup, file",
             action => sub {
                 my $self = shift;

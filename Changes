@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Do not inject a HASHREF as an env var key
+
 0.001026  2017-10-24 10:00:34-07:00 America/Los_Angeles
 
     - Fix a couple commands that broke due ot @INC fixes

@@ -185,7 +185,7 @@ subtest normalize_settings => sub {
                 {
                     spec    => 'bar',
                     field   => 'bar',
-                    default => 1,
+                    default => sub { {self => $_[0], field => 'bar', val => 1, opt => undef} },
                     action  => sub {
                         my $self = shift;
                         my ($settings, $field, $val, $opt) = @_;
@@ -196,8 +196,8 @@ subtest normalize_settings => sub {
 
                 {
                     spec    => 'baz',
-                    field   => 'bugaboo',
-                    default => 1,
+                    field   => 'baz',
+                    default => sub { {self => $_[0], field => 'baz', val => 1, opt => undef} },
                     action  => sub {
                         my $self = shift;
                         my ($settings, $field, $val, $opt) = @_;
@@ -256,8 +256,8 @@ subtest normalize_settings => sub {
             field tlib => 1;
             field foo  => 1;
 
-            field bar => {self => exact_ref($one), field => 'bar',     val => 1, opt => undef};
-            field baz => {self => exact_ref($one), field => 'bugaboo', val => 1, opt => undef};
+            field bar => {self => exact_ref($one), field => 'bar', val => 1, opt => undef};
+            field baz => {self => exact_ref($one), field => 'baz', val => 1, opt => undef};
             field boo => {self => exact_ref($one), settings => exact_ref($one->settings), field => 'boo'};
             field bun => {self => exact_ref($one), settings => exact_ref($one->settings), field => 'bun', val => 'a value'};
 

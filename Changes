@@ -1,6 +1,8 @@
 {{$NEXT}}
 
     - Require a newer goto-file to avoid changing exceptions
+    - Allow control of default search locations
+    - stop command now prints all to stdout
 
 0.001024  2017-10-23 12:12:53-07:00 America/Los_Angeles
 

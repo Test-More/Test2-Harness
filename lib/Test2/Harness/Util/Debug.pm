@@ -2,7 +2,7 @@ package Test2::Harness::Util::Debug;
 use strict;
 use warnings;
 
-our $VERSION = '0.001026';
+our $VERSION = '0.001027';
 
 use Importer Importer => 'import';
 

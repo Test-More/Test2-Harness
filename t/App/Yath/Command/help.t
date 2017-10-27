@@ -27,7 +27,7 @@ subtest run_command => sub {
 
     $out = run_yath_command($CLASS->name, 'test');
     is($out->{exit}, 0, "Exit Success");
-    like($out->{stdout}, qr{Usage: scripts/yath test}, "Expected output");
+    like($out->{stdout}, qr{Usage: .*yath test}, "Expected output");
     ok(!$out->{stderr}, "no stderr");
 };
 

@@ -7,10 +7,11 @@ our $VERSION = '0.001027';
 use IPC::Open3 qw/open3/;
 use Test2::Harness::Util qw/open_file/;
 use List::Util qw/first/;
+use File::Spec;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/run_yath_command/;
+our @EXPORT_OK = qw/run_yath_command run_command/;
 
 my ($YATH) = first { -x $_ } 'scripts/yath', '../scripts/yath';
 $YATH ||= do {
@@ -18,13 +19,15 @@ $YATH ||= do {
     App::Yath::Util::find_yath();
 };
 
-sub run_yath_command {
-    my ($cmd, @args) = @_;
+$YATH = File::Spec->rel2abs($YATH);
+
+sub run_command {
+    my (@cmd) = @_;
 
     pipe(my($r_out, $w_out)) or die "Could not open pipe for STDOUT: $!";
     pipe(my($r_err, $w_err)) or die "Could not open pipe for STDERR: $!";
 
-    my $pid = open3(undef, '>&' . fileno($w_out), '>&' . fileno($w_err), $^X, $YATH, $cmd, @args);
+    my $pid = open3(undef, '>&' . fileno($w_out), '>&' . fileno($w_err), @cmd);
     close($w_out);
     close($w_err);
 
@@ -38,6 +41,11 @@ sub run_yath_command {
         stdout => join("" => <$r_out>),
         stderr => join("" => <$r_err>),
     };
+
+}
+
+sub run_yath_command {
+    return run_command($^X, $YATH, @_);
 }
 
 1;

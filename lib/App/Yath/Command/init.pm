@@ -42,6 +42,8 @@ print STDERR "yath exited with $exit" if $exit;
 
 exit($exit ? 255 : 0);
     EOT
+
+    return 0;
 }
 
 1;

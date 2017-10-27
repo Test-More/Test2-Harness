@@ -11,7 +11,6 @@ my @to_load;
 find(
     sub {
         return unless m/\.pm/;
-        return if m/HashBase\.pm$/;
         push @to_load => $File::Find::name;
     },
     'lib',

@@ -1048,6 +1048,8 @@ sub usage {
     chomp(my @cli_args    = $self->cli_args);
     chomp(my $description = $self->description);
 
+    @cli_args = ('') unless @cli_args;
+
     my $head_common = "$0 $name [options]";
     my $header = join(
         "\n",

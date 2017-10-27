@@ -3,10 +3,10 @@ use Test2::V0 -target => 'App::Yath::Command';
 local $ENV{HARNESS_PERL_SWITCHES};
 
 use Config qw/%Config/;
-
 use File::Temp qw/tempdir/;
-
 use Cwd qw/cwd/;
+
+use Test2::Harness::Util qw/read_file/;
 
 use ok $CLASS;
 
@@ -528,6 +528,36 @@ subtest options => sub {
         is($one->settings->{input}, 'foo bar baz', "set the input string");
     };
 
+    subtest input_file => sub {
+        my $one = $TCLASS->new(args => {opts => []});
+        ok(!defined($one->settings->{input}), "none by default");
+
+        my $data = read_file(__FILE__);
+        my $two = $TCLASS->new(args => {opts => ['--input-file', __FILE__]});
+        is($two->settings->{input}, $data, "set the input string");
+
+        is(
+            warnings {
+                is(
+                    dies { $TCLASS->new(args => {opts => ['--input-file', '/a_path/to_a_fake/file']}) },
+                    "Could not parse the command line options given.\n",
+                    "Input file not found causes exception"
+                );
+            },
+            ["Input file not found: /a_path/to_a_fake/file\n"],
+            "Input file not found message seen"
+        );
+
+        is(
+            warnings {
+                $TCLASS->new(args => {opts => ['--input', 'foo', '--input-file', __FILE__]});
+            },
+            ["Input file is overriding another source of input.\n"],
+            "Overriden input warns"
+        );
+
+    };
+
     subtest 'keep-dir' => sub {
         my $one = $TCLASS->new(args => {opts => []});
         ok(!$one->settings->{keep_dir}, "not on by default");
@@ -891,6 +921,7 @@ subtest options => sub {
             ok($three->settings->{log}, "logging enabled");
         };
 
+
         chdir($old);
     };
 
@@ -1113,241 +1144,284 @@ subtest loggers => sub {
     );
 };
 
-done_testing;
+subtest renderers => sub {
+    my $control = mock $TCLASS;
+    $control->override(has_display => sub { 1 });
 
-__END__
+    my $one = $TCLASS->new(args => {opts => ['--quiet']});
+    is($one->renderers, [], "No renderers in quiet mode.");
 
-        {
-            spec    => 'input-file=s',
-            field   => 'input',
-            used_by => {jobs => 1, runner => 1},
-            section => 'Job Options',
-            action  => sub {
-                my $self = shift;
-                my ($settings, $field, $arg, $opt) = @_;
-                die "Input file not found: $arg\n" unless -f $arg;
-                warn "Input file is overriding another source of input.\n" if $settings->{input};
-                $settings->{input} = read_file($arg);
-            },
-            usage   => ['--input-file file'],
-            summary => ['Use the specified file as standard input to ALL tests'],
-        },
+    $one = $TCLASS->new(args => {opts => []});
+    $one->settings->{renderer} = '';
+    is($one->renderers, [], "Empty renderer setting.");
 
-        {
-            spec    => 'L|log',
-            field   => 'log',
-            used_by => {logger => 1},
-            section => 'Logging Options',
-            usage   => ['-L', '--log'],
-            summary => ['Turn on logging'],
-            default => sub {
-                my ($self, $settings) = @_;
-                return 1 if $settings->{log_file};
-                return 1 if $settings->{bzip2_log};
-                return 1 if $settings->{gzip_log};
-                return 0;
-            },
-        },
+    $one = $TCLASS->new(args => {opts => []});
+    is($one->settings->{renderer},  '+Test2::Harness::Renderer::Formatter', "Got default renderer");
+    $one->settings->{formatter} = undef;
+    is(dies { $one->renderers }, "No formatter specified.\n", "Need a formatter");
 
-sub usage_pod {
-    my $in = shift;
-    my $name = $in->name;
+    {
+        # This is to avoid extra output from the new formatter
+        my $STDOUT = "";
+        local *STDOUT;
+        open(STDOUT, '>', \$STDOUT) or die "could not redirect STDOUT";
 
-    my @list = $in->usage_opt_order;
+        $one = $TCLASS->new(args => {opts => []});
+        is($one->settings->{renderer},  '+Test2::Harness::Renderer::Formatter', "Got default renderer");
+        is($one->settings->{formatter}, '+Test2::Formatter::Test2',             "Got default formatter");
+        is(
+            $one->renderers,
+            [
+                object {
+                    prop blessed => 'Test2::Harness::Renderer::Formatter';
 
-    my $out = "";
+                    call show_job_end    => T();
+                    call show_job_launch => F();
+                    call show_run_info   => F();
+                    call show_job_info   => F();
 
-    my @cli_args = $in->cli_args;
-    @cli_args = ('') unless @cli_args;
+                    call formatter => object { prop blessed => 'Test2::Formatter::Test2' };
+                },
+            ],
+            "Got expected renderer"
+        );
 
-    for my $args (@cli_args) {
-        $out .= "\n    \$ yath $name [options]";
-        $out .= " $args" if $args;
-        $out .= "\n";
+        $one = $TCLASS->new(args => {opts => ['--formatter' => 'TAP']});
+        is($one->settings->{renderer},  '+Test2::Harness::Renderer::Formatter', "Got default renderer");
+        is($one->settings->{formatter}, 'TAP',             "formatter is TAP");
+        is(
+            $one->renderers,
+            [
+                object {
+                    prop blessed => 'Test2::Harness::Renderer::Formatter';
+
+                    call show_job_end    => T();
+                    call show_job_launch => F();
+                    call show_run_info   => F();
+                    call show_job_info   => F();
+
+                    call formatter => object { prop blessed => 'Test2::Formatter::TAP' };
+                },
+            ],
+            "Got expected renderer with TAP formatter"
+        );
     }
 
-    my $section = '';
-    for my $opt (@list) {
-        my $sec = $opt->{section};
-        if ($sec ne $section) {
-            $out .= "\n=back\n" if $section;
-            $section = $sec;
-            $out .= "\n=head2 $section\n";
-            $out .= "\n=over 4\n";
-        }
-
-        for my $way (@{$opt->{usage}}) {
-            my @parts = split /\s+-/, $way;
-            my $count = 0;
-            for my $part (@parts) {
-                $part = "-$part" if $count++;
-                $out .= "\n=item $part\n"
-            }
-        }
-
-        for my $sum (@{$opt->{summary}}) {
-            $out .= "\n$sum\n";
-        }
-
-        if (my $desc = $opt->{long_desc}) {
-            chomp($desc);
-            $out .= "\n$desc\n";
-        }
-    }
-
-    $out .= "\n=back\n";
-
-    return $out;
-}
-
-sub usage {
-    my $self = shift;
-    my $name = $self->name;
-
-    my @list = $self->usage_opt_order;
-
-    # Get the longest 'usage' item's length
-    my $ul = max(map { length($_) } map { @{$_->{usage}} } @list);
-
-    my $section = '';
-    my @options;
-    for my $opt (@list) {
-        my $sec = $opt->{section};
-        if ($sec ne $section) {
-            $section = $sec;
-            push @options => "  $section:";
-        }
-
-        my @set;
-        for (my $i = 0; 1; $i++) {
-            my $usage = $opt->{usage}->[$i]   || '';
-            my $summ  = $opt->{summary}->[$i] || '';
-            last unless length($usage) || length($summ);
-
-            my $line = sprintf("    %-${ul}s    %s", $usage, $summ);
-
-            if (length($line) > 80) {
-                my @words = grep { $_ } split /(\s+)/, $line;
-                my @lines;
-                while (@words) {
-                    my $prefix = @lines ? (' ' x ($ul + 8)) : '';
-                    my $length = length($prefix);
-
-                    shift @words while @lines && @words && $words[0] =~ m/^\s+$/;
-                    last unless @words;
-
-                    my @line;
-                    while (@words && (!@line || 80 >= $length + length($words[0]))) {
-                        $length += length($words[0]);
-                        push @line => shift @words;
-                    }
-                    push @lines => $prefix . join '' => @line;
-                }
-
-                push @set => join "\n" => @lines;
-            }
-            else {
-                push @set => $line;
-            }
-        }
-        push @options => join "\n" => @set;
-
-        if (my $desc = $opt->{long_desc}) {
-            chomp($desc);
-
-            my @words = grep { $_ } split /(\s+)/, $desc;
-            my @lines;
-            my $size = 0;
-            while (@words && $size != @words) {
-                $size = @words;
-                my $prefix = '        ';
-                my $length = 8;
-
-                shift @words while @lines && @words && $words[0] =~ m/^\s+$/;
-                last unless @words;
-
-                my @line;
-                while (@words && (!@line || 80 >= $length + length($words[0]))) {
-                    $length += length($words[0]);
-                    push @line => shift @words;
-                }
-                push @lines => $prefix . join '' => @line;
-            }
-
-            push @options => join("\n" => @lines) . "\n";
-        }
-    }
-
-    chomp(my @cli_args    = $self->cli_args);
-    chomp(my $description = $self->description);
-
-    my $head_common = "$0 $name [options]";
-    my $header = join(
-        "\n",
-        "Usage: $head_common " . shift(@cli_args),
-        map { "       $head_common $_" } @cli_args
+    require Test2::Harness::Renderer;
+    my $rmock = mock 'Test2::Harness::Renderer' => (
+        add => { new => sub { bless {}, $_[0] } },
+    );
+    $one = $TCLASS->new(args => {opts => ['--renderer' => '+Test2::Harness::Renderer']});
+    is(
+        $one->renderers,
+        [object { prop blessed => 'Test2::Harness::Renderer' }],
+        "Got expected renderer, no formatter"
     );
 
-    my $options = join "\n\n" => @options;
+    is(
+        dies { $TCLASS->new( args => { opts => [ '--formatter'  => 'foo', '--renderer' => 'foo' ] })->renderers },
+        "The formatter option is only available when the 'Formatter' renderer is in use.\n",
+        "Cannot use a formatter with a regular renderer"
+    );
+};
 
-    my $usage = <<"    EOT";
+subtest usage_opt_order => sub {
+    my $control = mock $TCLASS;
 
-$header
+    $control->add(section_order => sub { qw/foo bar baz/ });
+    $control->add(
+        my_opts => sub {
+            return [
+                {section => 'xxx', field => '0', usage => ['0'], long_desc => undef},
+                {section => 'bar', field => 'a', usage => ['b'], long_desc => 'a'},
+                {section => 'bar', field => 'b', usage => ['b'], long_desc => 'a'},
+                {section => 'baz', field => 'b', usage => ['b'], long_desc => undef},
+                {section => 'foo', field => 'x', usage => ['b'], long_desc => undef},
+                {section => 'foo', field => 'y', usage => ['a'], long_desc => undef},
+                {section => 'baz', field => 'a', usage => ['a'], long_desc => 'blah'},
+            ];
+        }
+    );
 
-$description
+    is(
+        [$TCLASS->usage_opt_order()],
+        [
+            {section => 'foo', field => 'y', usage => ['a'], long_desc => undef},
+            {section => 'foo', field => 'x', usage => ['b'], long_desc => undef},
+            {section => 'bar', field => 'a', usage => ['b'], long_desc => 'a'},
+            {section => 'bar', field => 'b', usage => ['b'], long_desc => 'a'},
+            {section => 'baz', field => 'b', usage => ['b'], long_desc => undef},
+            {section => 'baz', field => 'a', usage => ['a'], long_desc => 'blah'},
+            {section => 'xxx', field => '0', usage => ['0'], long_desc => undef},
+        ],
+        "Sorted options"
+    );
+};
+
+subtest option_docs => sub {
+    my $control = mock $TCLASS;
+
+    $control->add(section_order => sub { qw/foo bar baz/ });
+    $control->add(description => sub { 'this is a command' });
+    $control->add(summary => sub { 'this command does stuff' });
+    $control->add(
+        my_opts => sub {
+            return [
+                {
+                    section => 'bat',
+                    usage => ['--bat'],
+                    summary => [],
+                    long_desc => undef,
+                },
+
+                {
+                    section   => 'foo',
+                    usage     => ['--foo ...', '-f...'],
+                    summary   => ["Do a thing", "it is a thing"],
+                    long_desc => undef,
+                },
+
+                {
+                    section   => 'foo',
+                    usage     => ['--foo2 ...', '-f2...'],
+                    summary   => ["This is some very long text:" . (' xxx' x 20)],
+                    long_desc => undef,
+                },
+
+                {
+                    section   => 'foo',
+                    usage     => ['--foo3 ...', '-f3...'],
+                    summary   => ["Do a thing", "it is a thing"],
+                    long_desc => "Long desc is longish....",
+                },
+
+                {
+                    section   => 'bar',
+                    usage     => ['--bar ...', '-b...'],
+                    summary   => ['xxx', 'yyyy'],
+                    long_desc => undef,
+                },
+
+                {
+                    section   => 'bar',
+                    usage     => ['--bar2'],
+                    summary   => ['xxx', 'yyyy'],
+                    long_desc => "xxxxxxxx",
+                },
+            ];
+        }
+    );
+
+    my $raw_pod = <<'    EOT';
+
+        $ yath fake [options] xxx
+
+    =head2 foo
+
+    =over 4
+
+    =item --foo ...
+
+    =item -f...
+
+    Do a thing
+
+    it is a thing
+
+    =item --foo2 ...
+
+    =item -f2...
+
+    This is some very long text: xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx
+
+    =item --foo3 ...
+
+    =item -f3...
+
+    Do a thing
+
+    it is a thing
+
+    Long desc is longish....
+
+    =back
+
+    =head2 bar
+
+    =over 4
+
+    =item --bar ...
+
+    =item -b...
+
+    xxx
+
+    yyyy
+
+    =item --bar2
+
+    xxx
+
+    yyyy
+
+    xxxxxxxx
+
+    =back
+
+    =head2 bat
+
+    =over 4
+
+    =item --bat
+
+    =back
+    EOT
+
+    $raw_pod =~ s/^    //gms;
+
+    is([split /\n/, $TCLASS->usage_pod], [split /\n/, $raw_pod], "Got expected POD");
+
+    my $raw_usage = <<'    EOT';
+
+Usage: t/App/Yath/Command.t fake [options] xxx
+
+this is a command
 
 OPTIONS:
 
-$options
+  foo:
+
+    --foo ...     Do a thing
+    -f...         it is a thing
+
+    --foo2 ...    This is some very long text: xxx xxx xxx xxx xxx xxx xxx xxx
+                  xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx
+    -f2...
+
+    --foo3 ...    Do a thing
+    -f3...        it is a thing
+
+        Long desc is longish....
+
+
+  bar:
+
+    --bar ...     xxx
+    -b...         yyyy
+
+    --bar2        xxx
+                  yyyy
+
+        xxxxxxxx
+
+
+  bat:
+
+    --bat
 
     EOT
 
-    return $usage;
-}
+    is([split /\n/, $TCLASS->usage], [split /\n/, $raw_usage], "got expected usage");
+};
 
-sub renderers {
-    my $self      = shift;
-    my $settings  = $self->{+SETTINGS};
-    my $renderers = [];
-
-    return $renderers if $settings->{quiet};
-
-    my $r = $settings->{renderer} or return $renderers;
-
-    if ($r eq '+Test2::Harness::Renderer::Formatter' || $r eq 'Formatter') {
-        require Test2::Harness::Renderer::Formatter;
-
-        my $formatter = $settings->{formatter} or die "No formatter specified.\n";
-        my $f_class;
-
-        if ($formatter eq '+Test2::Formatter::Test2' || $formatter eq 'Test2') {
-            require Test2::Formatter::Test2;
-            $f_class = 'Test2::Formatter::Test2';
-        }
-        else {
-            $f_class = fqmod('Test2::Formatter', $formatter);
-            my $file = pkg_to_file($f_class);
-            require $file;
-        }
-
-        push @$renderers => Test2::Harness::Renderer::Formatter->new(
-            show_job_info   => $settings->{show_job_info},
-            show_run_info   => $settings->{show_run_info},
-            show_job_launch => $settings->{show_job_launch},
-            show_job_end    => $settings->{show_job_end},
-            formatter       => $f_class->new(verbose => $settings->{verbose}, color => $settings->{color}),
-        );
-    }
-    elsif ($settings->{formatter}) {
-        die "The formatter option is only available when the 'Formatter' renderer is in use.\n";
-    }
-    else {
-        my $r_class = fqmod('Test2::Harness::Renderer', $r);
-        require $r_class;
-        push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
-    }
-
-    return $renderers;
-}
-
-
+done_testing;

@@ -778,7 +778,19 @@ sub options {
             usage     => ['--formatter Mod', '--formatter +Mod'],
             summary   => ['Specify the formatter to use', '(Default: "Test2")'],
             long_desc => 'Only useful when the renderer is set to "Formatter". This specified the Test2::Formatter::XXX that will be used to render the test output.',
-            default   => '+Test2::Formatter::Test2',
+            default   => sub {
+                my ($self, $settings, $field) = @_;
+
+                my $renderer = $settings->{renderer} or return undef;
+
+                my $need_formatter = 0;
+                $need_formatter ||= 1 if $renderer eq 'Formatter';
+                $need_formatter ||= 1 if $renderer eq '+Test2::Harness::Renderer::Formatter';
+
+                return undef unless $need_formatter;
+
+                return '+Test2::Formatter::Test2';
+            },
         },
 
         {
@@ -1057,6 +1069,8 @@ $options
 
     EOT
 
+    $usage =~ s/ +$//gms;
+
     return $usage;
 }
 
@@ -1128,7 +1142,8 @@ sub renderers {
     }
     else {
         my $r_class = fqmod('Test2::Harness::Renderer', $r);
-        require $r_class;
+        my $file = pkg_to_file($r_class);
+        require $file;
         push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
     }
 

@@ -16,9 +16,9 @@ subtest import => sub {
     local $App::Yath::SCRIPT;
 
     my $ref;
-#line 22 "my-yath"
+#line 20 "my-yath"
     $main::CLASS->import(['help'], \$ref);
-#line 24 "t/App/Yath.t"
+#line 22 "t/App/Yath.t"
     main::ref_ok($ref, 'CODE', "got a coderef");
 
     $ref->();
@@ -190,9 +190,9 @@ subtest command_from_argv => sub {
 
     @info = ();
     $persist = 0;
-    @argv = ('foo', 'x');
+    @argv = ('test', 'x');
     $cmd = $CLASS->command_from_argv(\@argv);
-    is($cmd, 'foo', "first arg is a command");
+    is($cmd, 'test', "first arg is a command");
     is(\@argv, ['x'], "argv shifted");
     is(\@info, [], "No info");
 };

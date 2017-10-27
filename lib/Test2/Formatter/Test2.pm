@@ -2,7 +2,7 @@ package Test2::Formatter::Test2;
 use strict;
 use warnings;
 
-our $VERSION = '0.001027';
+our $VERSION = '0.001028';
 
 use Scalar::Util qw/blessed/;
 use List::Util qw/shuffle first/;

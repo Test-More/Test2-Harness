@@ -5,7 +5,7 @@ use warnings;
 use App::Yath::Util qw/read_config find_pfile/;
 use File::Spec;
 
-our $VERSION = '0.001027';
+our $VERSION = '0.001028';
 
 our $SCRIPT;
 

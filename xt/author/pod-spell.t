@@ -56,6 +56,7 @@ untestable
 EventFacet
 EventFacets
 renderers
+xt
 
 ## computerese
 blackbox

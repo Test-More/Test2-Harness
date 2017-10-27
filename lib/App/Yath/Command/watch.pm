@@ -29,7 +29,8 @@ sub cli_args { "" }
 
 sub description {
     return <<"    EOT";
-foo bar baz
+This command will tail the logs from a persistent instance of yath. STDOUT and
+STDERR will be printed as seen, so may not be in proper order.
     EOT
 }
 

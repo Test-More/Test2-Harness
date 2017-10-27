@@ -26,7 +26,7 @@ sub cli_args { "" }
 
 sub description {
     return <<"    EOT";
-foo bar baz
+This will tell you about any persistent runners it can find.
     EOT
 }
 

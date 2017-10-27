@@ -26,7 +26,8 @@ sub cli_args { "[--] [test files/dirs] [::] [arguments to test scripts]" }
 
 sub description {
     return <<"    EOT";
-foo bar baz
+This command will run tests through an already started persistent instance. See
+the start command for details on how to launch a persistant instance.
     EOT
 }
 

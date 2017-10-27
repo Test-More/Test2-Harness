@@ -15,6 +15,14 @@ sub show_bench { 0 }
 
 sub summary { 'Show a this list of commands' }
 
+sub description {
+    return <<"    EOT"
+This command provides a list of commands when called with no arguments.
+When given a command name as an argument it will print the help for that
+command.
+    EOT
+}
+
 sub group { '' }
 
 sub run {

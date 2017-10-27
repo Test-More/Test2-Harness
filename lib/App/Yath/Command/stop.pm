@@ -34,7 +34,7 @@ sub cli_args { "" }
 
 sub description {
     return <<"    EOT";
-foo bar baz
+This command will stop a persistent instance, and output any log contents.
     EOT
 }
 

@@ -37,7 +37,8 @@ sub cli_args { "" }
 
 sub description {
     return <<"    EOT";
-foo bar baz
+This will send a SIGHUP to the persistent runner, forcing it to reload. This
+will also clear the blacklist allowing all preloads to load as normal.
     EOT
 }
 

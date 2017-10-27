@@ -2,11 +2,9 @@ use Test2::V0 -target => 'App::Yath::Command::init';
 
 use ok $CLASS;
 
-use Test2::Tools::HarnessTester qw/run_yath_command run_command/;
-use File::Temp qw/tempdir/;
+use Test2::Tools::HarnessTester qw/run_yath_command run_command make_example_dir/;
 
-my $dir = tempdir(CLEANUP => 1, TMP => 1);
-
+my $dir = make_example_dir();
 chdir($dir);
 
 subtest run_command => sub {
@@ -38,11 +36,6 @@ subtest run_command => sub {
     is($out->{exit}, 0, "exit success", $out->{stderr});
     ok(-e "test.pl", "created test.pl");
 
-    mkdir('t') or die "couldnot make t dir";
-    open($fh, '>', "t/test.t");
-    print $fh "use Test2::Tools::Tiny;\nok(1, 'a passing test');\ndone_testing\n";
-    close($fh);
-
     $out = run_command($^X, 'test.pl');
     is($out->{exit}, 0, "test.pl ran with success");
     ok(!$out->{stderr}, "no stderr output");
@@ -58,6 +51,7 @@ subtest run_command => sub {
         [split /\n/, $out->{stdout}],
         bag {
             item qr{\Q( PASSED )  job  1    t/test.t\E};
+            item qr{\Q( PASSED )  job  2    t2/t2_test.t\E};
             item qr{All tests were successful!};
             item qr{^\Q1..1\E$};
             item qr{^ok 1 - Passed tests when run by yath$};

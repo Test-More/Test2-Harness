@@ -7,11 +7,12 @@ our $VERSION = '0.001027';
 use IPC::Open3 qw/open3/;
 use Test2::Harness::Util qw/open_file/;
 use List::Util qw/first/;
+use File::Temp qw/tempdir/;
 use File::Spec;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/run_yath_command run_command/;
+our @EXPORT_OK = qw/run_yath_command run_command make_example_dir/;
 
 my ($YATH) = first { -x $_ } 'scripts/yath', '../scripts/yath';
 $YATH ||= do {
@@ -46,6 +47,32 @@ sub run_command {
 
 sub run_yath_command {
     return run_command($^X, $YATH, @_);
+}
+
+sub _gen_passing_test {
+    my ($dir, $subdir, $file) = @_;
+
+    my $path = File::Spec->catdir($dir, $subdir);
+    my $full = File::Spec->catfile($path, $file);
+
+    mkdir($path) or die "Could not make $subdir subdir: $!"
+        unless -d $path;
+
+    open(my $fh, '>', $full);
+    print $fh "use Test2::Tools::Tiny;\nok(1, 'a passing test');\ndone_testing\n";
+    close($fh);
+
+    return $full;
+}
+
+sub make_example_dir {
+    my $dir = tempdir(CLEANUP => 1, TMP => 1);
+
+    _gen_passing_test($dir, 't', 'test.t');
+    _gen_passing_test($dir, 't2', 't2_test.t');
+    _gen_passing_test($dir, 'xt', 'xt_test.t');
+
+    return $dir;
 }
 
 1;

@@ -8,6 +8,7 @@ use File::Spec();
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
+use List::Util qw/first/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/maybe_read_file open_file/;
 
@@ -294,7 +295,8 @@ sub _poll_stdout {
     return unless @$buffer;
 
     my @out;
-    while (my $line = shift @$buffer) {
+    while (@$buffer) {
+        my $line = shift @$buffer;
         chomp($line);
 
         my $esync = 0;
@@ -325,7 +327,7 @@ sub _poll_stdout {
         last if $esync || ($max && @out >= $max);
     }
 
-    return @out;
+    return $self->merge_info(\@out);
 }
 
 sub _poll_stderr {
@@ -338,7 +340,8 @@ sub _poll_stderr {
         my $buffer = $self->{+_STDERR_BUFFER} or last;
 
         my @lines;
-        while (my $line = shift @$buffer) {
+        while (@$buffer) {
+            my $line = shift @$buffer;
             chomp($line);
 
             if ($line =~ s/T2-HARNESS-ESYNC: (\d+)$//) {
@@ -355,6 +358,37 @@ sub _poll_stderr {
         my $id = $self->{+_STDERR_ID}++;
         my $event_id = "stderr-$id";
         push @out => $self->_process_stderr_line($event_id, join "\n" => @lines);
+    }
+
+    return $self->merge_info(\@out);
+}
+
+sub merge_info {
+    my $self = shift;
+    my ($events) = @_;
+
+    my @out;
+    my $current;
+
+    for my $e (@$events) {
+        my $f = $e->{facet_data};
+        my $no_merge = first { $_ ne 'info' } keys %$f;
+        $no_merge ||= @{$f->{info}} > 1;
+
+        if ($no_merge) {
+            $current = undef;
+            push @out => $e;
+            next;
+        }
+
+        if ($current && $f->{info}->[0]->{tag} eq $current->{info}->[0]->{tag}) {
+            $current->{info}->[0]->{details} .= "\n" . $f->{info}->[0]->{details};
+            next;
+        }
+
+        push @out => $e;
+        $current = $f;
+        next;
     }
 
     return @out;
@@ -405,7 +439,7 @@ sub _process_stdout_line {
         push @event_datas => $event_data;
     }
 
-    if (length($line)) {
+    if (defined $line) {
         my $facet_data;
 
         # Sometimes clever scripts mix events and directly printed TAP... sigh.

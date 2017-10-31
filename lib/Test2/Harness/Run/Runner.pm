@@ -7,12 +7,12 @@ our $VERSION = '0.001029';
 use Carp qw/croak confess/;
 use POSIX ":sys_wait_h";
 use Config qw/%Config/;
-use IPC::Open3 qw/open3/;
 use List::Util qw/none/;
 use Time::HiRes qw/time/;
 use Test2::Util qw/pkg_to_file/;
 
 use Test2::Harness::Util qw/open_file write_file_atomic local_env/;
+use Test2::Harness::Util::IPC qw/run_cmd/;
 
 use Test2::Harness::Run();
 use Test2::Harness::Run::Queue();
@@ -153,9 +153,10 @@ sub spawn {
 
     my $pid;
     local_env $env => sub {
-        $pid = open3(
-            undef, ">&" . fileno($out_log), ">&" . fileno($err_log),
-            $self->cmd(%params),
+        $pid = run_cmd(
+            command => [$self->cmd(%params)],
+            stdout => $out_log,
+            stderr => $err_log,
         );
     };
 
@@ -514,7 +515,7 @@ sub run_job {
         preload => [grep { $_->isa('Test2::Harness::Preload') } @{$run->preload || []}],
     );
 
-    my $via = $task->{via} || ($fork ? ['Fork', 'Open3'] : ['Open3']);
+    my $via = $task->{via} || ($fork ? ['Fork', 'IPC'] : ['IPC']);
     $via = ['Dummy'] if $run->dummy;
 
     my $job_runner = $self->job_runner_class->new(

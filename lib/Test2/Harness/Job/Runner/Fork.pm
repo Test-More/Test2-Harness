@@ -4,9 +4,11 @@ use warnings;
 
 our $VERSION = '0.001029';
 
+use POSIX;
 use Scalar::Util qw/openhandle/;
 use Test2::Util qw/clone_io CAN_REALLY_FORK pkg_to_file/;
 use Test2::Harness::Util qw/write_file/;
+use Test2::Harness::Util::IPC qw/swap_io/;
 
 sub viable {
     my $class = shift;
@@ -104,22 +106,21 @@ sub { shift->import(@_) }
 
     # Keep a copy of the old STDERR for a while so we can still report errors
     my $stderr = clone_io(\*STDERR);
-    my $die = sub { print $stderr @_; exit 255 };
 
     write_file($in_file, $job->input);
 
-    close(STDIN) or die "Could not close STDIN: $!";
-    open(STDIN, '<', $in_file) or die "Could not re-open STDIN";
-    die "New STDIN did not get fileno 0!" unless fileno(STDIN) == 0;
+    my $die = sub {
+        my @caller = caller;
+        my @caller2 = caller(1);
+        my $msg = "$_[0] at $caller[1] line $caller[2] ($caller2[1] line $caller2[2]).\n";
+        print $stderr $msg;
+        print STDERR $msg;
+        POSIX::_exit(127);
+    };
 
-    close(STDOUT) or die "Could not close STDOUT: $!";
-    open(STDOUT, '>', $out_file) or die "Could not re-open STDOUT";
-    die "New STDOUT did not get fileno 1!" unless fileno(STDOUT) == 1;
-
-    # Should get fileno 2
-    close(STDERR) or $die->("Could not close STDERR: $!");
-    open(STDERR, '>', $err_file) or $die->("Could not re-open STDOUT");
-    $die->("New STDERR did not get fileno 2!") unless fileno(STDERR) == 2;
+    swap_io(\*STDIN,  $in_file,  $die);
+    swap_io(\*STDOUT, $out_file, $die);
+    swap_io(\*STDERR, $err_file, $die);
 
     # avoid child processes sharing the same seed value as the parent
     srand();

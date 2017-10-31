@@ -6,7 +6,6 @@ our $VERSION = '0.001029';
 
 use Carp qw/croak confess/;
 use List::Util qw/first/;
-use IPC::Open3 qw/open3/;
 use Scalar::Util qw/openhandle/;
 use Test2::Util qw/clone_io pkg_to_file/;
 
@@ -28,16 +27,18 @@ sub init {
 
     croak "Invalid output directory '$dir'" unless -d $dir;
 
-    my $via = $self->{+VIA} ||= ['Open3'];
+    my $via = $self->{+VIA} ||= ['IPC'];
     croak "'via' must be an array reference"
         if !ref($via) || ref($via) ne 'ARRAY';
 }
 
-require Test2::Harness::Job::Runner::Open3;
+require Test2::Harness::Job::Runner::Open3; # TODO: Remove
+require Test2::Harness::Job::Runner::IPC;
 require Test2::Harness::Job::Runner::Fork;
 
 my %RUN_MAP = (
-    Open3 => 'Test2::Harness::Job::Runner::Open3',
+    Open3 => 'Test2::Harness::Job::Runner::Open3',    # TODO: remove
+    IPC   => 'Test2::Harness::Job::Runner::IPC',
     Fork  => 'Test2::Harness::Job::Runner::Fork',
 );
 

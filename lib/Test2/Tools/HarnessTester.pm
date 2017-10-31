@@ -4,8 +4,8 @@ use warnings;
 
 our $VERSION = '0.001029';
 
-use IPC::Open3 qw/open3/;
 use Test2::Harness::Util qw/open_file/;
+use Test2::Harness::Util::IPC qw/run_cmd/;
 use List::Util qw/first/;
 use File::Temp qw/tempdir/;
 use File::Spec;
@@ -28,7 +28,7 @@ sub run_command {
     pipe(my($r_out, $w_out)) or die "Could not open pipe for STDOUT: $!";
     pipe(my($r_err, $w_err)) or die "Could not open pipe for STDERR: $!";
 
-    my $pid = open3(undef, '>&' . fileno($w_out), '>&' . fileno($w_err), @cmd);
+    my $pid = run_cmd(stdout => $w_out, stderr => $w_err, command => \@cmd);
     close($w_out);
     close($w_err);
 

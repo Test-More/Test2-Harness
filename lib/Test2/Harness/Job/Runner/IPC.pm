@@ -1,4 +1,4 @@
-package Test2::Harness::Job::Runner::Dummy;
+package Test2::Harness::Job::Runner::IPC;
 use strict;
 use warnings;
 
@@ -21,22 +21,29 @@ sub find_inc {
     return File::Spec->rel2abs($inc);
 }
 
+sub command_file {
+    my $class = shift;
+    my ($test) = @_;
+    return File::Spec->abs2rel($test->job->file);
+}
+
 sub command {
     my $class = shift;
     my ($test, $event_file) = @_;
 
     my $job = $test->job;
 
+    my %seen;
     return (
         $^X,
-        (map { "-I$_" } @{$job->libs}, $class->find_inc),
+        (map { "-I$_" } grep { !$seen{$_}++ } @{$job->libs}, $class->find_inc, @INC),
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
         @{$job->switches},
-        (map {"-m$_"} @{$job->load || []}),
-        (map {"-M$_"} @{$job->load_import || []}),
+        (map { "-M$_" } @{$job->load_import || []}),
+        (map { "-m$_" } @{$job->load        || []}),
         $job->use_stream ? ("-MTest2::Formatter::Stream=file,$event_file") : (),
         $job->times ? ('-MTest2::Plugin::Times') : (),
-        '-e', 'print "1..0 # SKIP dummy mode"',
+        $class->command_file($test),
         @{$job->args},
     );
 }
@@ -75,3 +82,49 @@ sub run {
     return ($pid, undef);
 }
 
+1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Harness::Job::Runner::IPC - Logic for running a test in a new perl
+process.
+
+=head1 DESCRIPTION
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

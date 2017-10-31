@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - More test coverage improvements
+
 0.001027  2017-10-27 15:11:57-07:00 America/Los_Angeles
 
     - Do not inject a HASHREF as an env var key

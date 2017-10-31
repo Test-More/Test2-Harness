@@ -45,7 +45,6 @@ sub handle_list_args {
 
     $settings->{log_file} = $log;
     $settings->{jobs} = { map { $_ => 1 } @jobs} if @jobs;
-    $settings->{run_id} ||= 'replay';
 
     die "You must specify a log file.\n"
         unless $log;

@@ -6,7 +6,7 @@ use POSIX ":sys_wait_h";
 use Time::HiRes qw/sleep time/;
 use Carp qw/croak/;
 
-our $VERSION = '0.001028';
+our $VERSION = '0.001029';
 
 use Test2::Harness::Run::Runner::ProcMan();
 

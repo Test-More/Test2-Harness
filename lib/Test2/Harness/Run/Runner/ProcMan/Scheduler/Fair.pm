@@ -2,7 +2,7 @@ package Test2::Harness::Run::Runner::ProcMan::Scheduler::Fair;
 use strict;
 use warnings;
 
-our $VERSION = '0.001028';
+our $VERSION = '0.001029';
 
 use parent 'Test2::Harness::Run::Runner::ProcMan::Scheduler::Finite';
 use Test2::Harness::Util::HashBase;

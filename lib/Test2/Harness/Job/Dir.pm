@@ -2,7 +2,7 @@ package Test2::Harness::Job::Dir;
 use strict;
 use warnings;
 
-our $VERSION = '0.001028';
+our $VERSION = '0.001029';
 
 use File::Spec();
 

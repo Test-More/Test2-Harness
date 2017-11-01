@@ -683,15 +683,15 @@ subtest options => sub {
 
     subtest shm => sub {
         my $one = $TCLASS->new(args => {opts => []});
-        ok($one->settings->{use_shm}, "on by default");
+        ok(!$one->settings->{use_shm}, "off by default");
 
-        my $two = $TCLASS->new(args => {opts => ['--no-shm']});
-        ok(!$two->settings->{use_shm}, "toggled off");
+        my $two = $TCLASS->new(args => {opts => ['--shm']});
+        ok($two->settings->{use_shm}, "toggled on");
     };
 
     subtest tmpdir => sub {
         if (grep { -d $_ } map { File::Spec->canonpath($_) } '/dev/shm', '/run/shm') {
-            my $one = $TCLASS->new(args => {opts => []});
+            my $one = $TCLASS->new(args => {opts => ['--shm']});
             is($one->settings->{tmp_dir}, match qr{^/(run|dev)/shm/?$}, "temp dir in shm");
         }
 

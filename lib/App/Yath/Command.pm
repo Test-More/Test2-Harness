@@ -496,8 +496,8 @@ sub options {
             used_by => {runner => 1},
             section => 'Harness Options',
             usage => ['--shm', '--no-shm'],
-            summary => ["Use shm for tempdir if possible (Default: on)", "Do not use shm."],
-            default => 1,
+            summary => ["Use shm for tempdir if possible (Default: off)", "Do not use shm."],
+            default => 0,
         },
 
         {

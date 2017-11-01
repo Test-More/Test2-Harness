@@ -2,7 +2,7 @@ package App::Yath::Command::spawn;
 use strict;
 use warnings;
 
-our $VERSION = '0.001030';
+our $VERSION = '0.001031';
 
 use App::Yath::Util qw/find_yath/;
 use Test2::Util qw/pkg_to_file/;

@@ -2,7 +2,7 @@ package Test2::Harness::Run::Runner::ProcMan::Scheduler::Finite;
 use strict;
 use warnings;
 
-our $VERSION = '0.001030';
+our $VERSION = '0.001031';
 
 use List::Util qw/sum/;
 

@@ -50,10 +50,41 @@ subtest run_command => sub {
     is($out->{exit}, 0, "Success");
     like($out->{stdout}, qr/ job\s+$_ /, "Saw job $_") for 1 .. 12;
 
-    my $out = run_yath_command('replay', 't/example_log.jsonl.bz2', 5, 6);
+    $out = run_yath_command('replay', 't/example_log.jsonl.bz2', 5, 6);
     is($out->{exit}, 0, "Success");
     like($out->{stdout}, qr/ job\s+$_ /, "Saw job $_") for 5 .. 6;
     unlike($out->{stdout}, qr/ job\s+$_ /, "Ignored job $_") for 1 .. 4, 7 .. 12;
+};
+
+subtest run => sub {
+    is(
+        dies { $CLASS->new },
+        "You must specify a log file.\n",
+        "Log file is required"
+    );
+
+    {
+        my $stdout = "";
+        local *STDOUT;
+        open(STDOUT, '>', \$stdout) or die "Could not open fake STDOUT: $!";
+        my $one = $CLASS->new(args => {opts => ['t/example_log.jsonl.bz2']});
+
+        is($one->run(), 0, "success");
+
+        like($stdout, qr/ job\s+$_ /, "Saw job $_") for 1 .. 12;
+    }
+
+    {
+        my $stdout = "";
+        local *STDOUT;
+        open(STDOUT, '>', \$stdout) or die "Could not open fake STDOUT: $!";
+        my $one = $CLASS->new(args => {opts => ['t/example_log.jsonl.bz2', 5 ,6]});
+
+        is($one->run(), 0, "success");
+
+        like($stdout, qr/ job\s+$_ /, "Saw job $_") for 5 .. 6;
+        unlike($stdout, qr/ job\s+$_ /, "Ignored job $_") for 1 .. 4, 7 .. 12;
+    }
 };
 
 done_testing;

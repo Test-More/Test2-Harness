@@ -2,8 +2,6 @@ use Test2::V0 -target => 'App::Yath::Command::help';
 
 use ok $CLASS;
 
-use Test2::Tools::HarnessTester qw/run_yath_command/;
-
 sub capture(&) {
     my $code = shift;
 
@@ -15,21 +13,6 @@ sub capture(&) {
 
     return $stdout;
 }
-
-# This section is just to make sure that it is possible to run the command. We
-# do not actually care abotu the output much. This is to prevent a release from
-# making a command simply die.
-subtest run_command => sub {
-    my $out = run_yath_command($CLASS->name);
-    is($out->{exit}, 0, "Exit Success");
-    like($out->{stdout}, qr/Available Commands/, "Expected output");
-    ok(!$out->{stderr}, "no stderr");
-
-    $out = run_yath_command($CLASS->name, 'test');
-    is($out->{exit}, 0, "Exit Success");
-    like($out->{stdout}, qr{Usage: .*yath test}, "Expected output");
-    ok(!$out->{stderr}, "no stderr");
-};
 
 subtest command_help => sub {
     my $stdout = capture {

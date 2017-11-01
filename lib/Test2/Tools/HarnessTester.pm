@@ -10,17 +10,31 @@ use List::Util qw/first/;
 use File::Temp qw/tempdir/;
 use File::Spec;
 
-use Importer Importer => 'import';
+our @EXPORT_OK = qw/run_yath_command run_command make_example_dir yath_script/;
 
-our @EXPORT_OK = qw/run_yath_command run_command make_example_dir/;
+my $YATH;
 
-my ($YATH) = first { -x $_ } 'scripts/yath', '../scripts/yath';
-$YATH ||= do {
-    require App::Yath::Util;
-    App::Yath::Util::find_yath();
-};
+sub yath_script { $YATH }
 
-$YATH = File::Spec->rel2abs($YATH);
+sub import {
+    my $class = shift;
+
+    my @imports;
+    my %params;
+    while (@_) {
+        my $arg = shift @_;
+        if ($arg =~ m/^-(.*)/) {
+            $params{$1} = shift @_;
+        }
+        else {
+            push @imports => $arg;
+        }
+    }
+
+    $YATH = File::Spec->rel2abs($params{yath_script}) if $params{yath_script};
+
+    Importer->import_into($class, scalar(caller), @imports);
+}
 
 sub run_command {
     my (@cmd) = @_;
@@ -42,11 +56,16 @@ sub run_command {
         stdout => join("" => <$r_out>),
         stderr => join("" => <$r_err>),
     };
-
 }
 
 sub run_yath_command {
-    return run_command($^X, $YATH, @_);
+    unless($YATH) {
+        require App::Yath::Util;
+        $YATH = File::Spec->rel2abs(App::Yath::Util::find_yath());
+    }
+
+    my @libs = map {( '-I' => File::Spec->rel2abs($_) )} @INC;
+    return run_command($^X, @libs, $YATH, @_);
 }
 
 sub _gen_passing_test {

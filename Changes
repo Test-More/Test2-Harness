@@ -1,5 +1,13 @@
 {{$NEXT}}
 
+    - Make tests work witohut old version installed
+    - Do not use shm by default
+    - add tests for replay command
+    - better test.pl
+    - use clone_io instead of hand rolling it (Formatter)
+    - doc fixes
+    - make sure test.pl does not run itself
+
 0.001029  2017-10-31 14:53:52-07:00 America/Los_Angeles
 
     - Move away from IPC::Open3

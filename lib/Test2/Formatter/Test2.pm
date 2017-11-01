@@ -8,7 +8,7 @@ use Scalar::Util qw/blessed/;
 use List::Util qw/shuffle first/;
 use Test2::Util::Term qw/term_size/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
-use Test2::Util qw/IS_WIN32/;
+use Test2::Util qw/IS_WIN32 clone_io/;
 use Time::HiRes;
 
 use File::Spec();
@@ -136,7 +136,7 @@ sub init {
     $self->{+JOB_LENGTH} ||= 2;
 
     unless ($self->{+IO}) {
-        open(my $io, '>&', STDOUT) or die "Can't dup STDOUT:  $!";
+        my $io = clone_io(\*STDOUT) or die "Can't dup STDOUT: $!";
         $self->{+IO} = $io;
     }
 

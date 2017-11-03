@@ -5,7 +5,6 @@ use warnings;
 our $VERSION = '0.001031';
 
 use POSIX ":sys_wait_h";
-use Cwd qw/realpath/;
 use File::Path qw/remove_tree/;
 use Time::HiRes qw/sleep/;
 

@@ -41,7 +41,7 @@ is($one->loaded, {map {$_ => T} qw/baz.pm foo.pm bar.pm/}, "Did not track Data::
 $one->clear_loaded;
 $one->start;
 
-eval "use 5.10.0; 1" or die $@;
+eval "use 5.8.9; 1" or die $@;
 
 is($one->loaded, {}, "Did not track from version import");
 

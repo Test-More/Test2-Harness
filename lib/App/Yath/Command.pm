@@ -22,9 +22,9 @@ use Test2::Harness::Run;
 
 use Test2::Harness::Util::HashBase qw/-settings -_my_opts -signal -args -plugins/;
 
-sub handle_list_args { }
-sub feeder           { }
-sub cli_args         { }
+sub handle_list_args { () }
+sub feeder           { () }
+sub cli_args         { () }
 sub internal_only    { 0 }
 sub has_jobs         { 0 }
 sub has_runner       { 0 }

@@ -5,6 +5,9 @@ use ok $CLASS;
 
 use Test2::Tools::HarnessTester -yath_script => 'scripts/yath', qw/run_yath_command run_command make_example_dir yath_script/;
 
+use Cwd qw/getcwd/;
+my $orig = getcwd();
+
 my $dir = make_example_dir();
 chdir($dir);
 
@@ -41,12 +44,13 @@ $out = run_command($^X, 'test.pl');
 is($out->{exit}, 0, "test.pl ran with success");
 ok(!$out->{stderr}, "no stderr output", $out->{stderr});
 
-require TAP::Parser;
-my $tp = TAP::Parser->new({tap => $out->{stdout}});
+if (eval { require TAP::Parser; 1 }) {
+    my $tp = TAP::Parser->new({tap => $out->{stdout}});
 
-$tp->run();
+    $tp->run();
 
-ok(!$tp->has_problems, "Output from test.pl is fine if accidentally run through Test2::Harness");
+    ok(!$tp->has_problems, "Output from test.pl is fine if accidentally run through Test2::Harness");
+}
 
 like(
     [split /\n/, $out->{stdout}],
@@ -62,3 +66,4 @@ like(
 );
 
 done_testing;
+chdir($orig);

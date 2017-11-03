@@ -198,18 +198,24 @@ sub load_command {
     my $cmd_class  = "App::Yath::Command::$cmd_name";
     my $cmd_file   = "App/Yath/Command/$cmd_name.pm";
 
-    local $@;
-    if (!eval { require $cmd_file; 1 }) {
-        my $load_error = $@ || 'unknown error';
+    my ($found, $error);
+    {
+        local $@;
+        $found = eval { require $cmd_file; 1 };
+        $error = $@;
+    }
 
-        my $not_found = $load_error =~ m{Can't locate \Q$cmd_file\E in \@INC};
+    if (!$found) {
+        $error ||= 'unknown error';
+
+        my $not_found = $error =~ m{Can't locate \Q$cmd_file\E in \@INC};
 
         return undef if $params{check_only} && $not_found;
 
         die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
             if $not_found;
 
-        die $load_error;
+        die $error;
     }
 
     return $cmd_class;

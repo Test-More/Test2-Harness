@@ -6,6 +6,7 @@ our $VERSION = '0.001031';
 
 use Carp qw/croak confess/;
 use Time::HiRes qw/time/;
+use IO::Handle;
 
 use Test2::Harness::Util::JSON qw/JSON/;
 

@@ -4,6 +4,9 @@ use ok $CLASS;
 
 use Test2::Tools::HarnessTester qw/make_example_dir/;
 
+use Cwd qw/getcwd/;
+my $orig = getcwd();
+
 subtest run => sub {
     my $dir = make_example_dir();
     chdir($dir);
@@ -41,3 +44,4 @@ subtest run => sub {
 };
 
 done_testing;
+chdir($orig);

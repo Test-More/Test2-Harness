@@ -3,6 +3,9 @@ use Test2::V0 -target => "App::Yath::Command::reload";
 
 use ok $CLASS;
 
+use Cwd qw/getcwd/;
+my $orig = getcwd();
+
 use Test2::Tools::HarnessTester -yath_script => 'scripts/yath', qw/run_yath_command run_command make_example_dir/;
 
 use App::Yath::Util qw/PFILE_NAME/;
@@ -60,3 +63,4 @@ like(
 );
 
 done_testing;
+chdir($orig);

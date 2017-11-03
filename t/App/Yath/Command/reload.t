@@ -7,6 +7,9 @@ use Test2::Tools::HarnessTester qw/make_example_dir/;
 use App::Yath::Util qw/PFILE_NAME/;
 use Test2::Harness::Util::File::JSON;
 
+use Cwd qw/getcwd/;
+my $orig = getcwd();
+
 my $dir = make_example_dir();
 chdir($dir);
 
@@ -85,3 +88,4 @@ subtest run => sub {
 };
 
 done_testing;
+chdir($orig);

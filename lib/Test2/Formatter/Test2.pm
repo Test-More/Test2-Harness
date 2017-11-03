@@ -10,6 +10,7 @@ use Test2::Util::Term qw/term_size/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32 clone_io/;
 use Time::HiRes;
+use IO::Handle;
 
 use File::Spec();
 

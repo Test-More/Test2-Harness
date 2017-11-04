@@ -514,7 +514,7 @@ sub render_plan {
         return $self->build_line('plan', 'SKIP ALL', $tree, "No reason given");
     }
 
-    return $self->build_line('plan', 'PLAN', $tree, "Expected asserions: $f->{plan}->{count}");
+    return $self->build_line('plan', 'PLAN', $tree, "Expected assertions: $f->{plan}->{count}");
 }
 
 sub render_assert {

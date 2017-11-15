@@ -11,6 +11,7 @@ use Test2::Harness::Util::HashBase qw/
     -loaded
     -my_require
     -real_require
+    -_my_inc
 /;
 
 my %DEFAULT_EXCLUDE = (
@@ -18,8 +19,48 @@ my %DEFAULT_EXCLUDE = (
     'strict.pm'   => 1,
 );
 
-sub start { shift->{+_ON} = 1 }
-sub stop  { shift->{+_ON} = 0 }
+sub start {
+    my $self = shift;
+
+    unshift @INC => $self->my_inc;
+
+    $self->{+_ON} = 1;
+}
+
+sub stop {
+    my $self = shift;
+
+    $self->{+_ON} = 0;
+
+    my $inc = $self->{+_MY_INC} or return 0;
+
+    @INC = grep { !(ref($_) && $inc == $_) } @INC;
+    return 0;
+}
+
+sub my_inc {
+    my $self = shift;
+
+    return $self->{+_MY_INC} if $self->{+_MY_INC};
+
+    my $exclude = $self->{+EXCLUDE} ||= {%DEFAULT_EXCLUDE};
+    my $dep_map = $self->{+DEP_MAP} ||= {};
+    my $loaded  = $self->{+LOADED}  ||= {};
+
+    return $self->{+_MY_INC} ||= sub {
+        my ($this, $file) = @_;
+
+        return unless $self->{+_ON};
+        return unless $file =~ m/^[_a-z]/i;
+        return if $exclude->{$file};
+
+        my $loaded_by = $self->loaded_by;
+        push @{$dep_map->{$file}} => $loaded_by;
+        $loaded->{$file}++;
+
+        return;
+    };
+}
 
 sub clear_loaded { %{$_[0]->{+LOADED}} = () }
 
@@ -37,8 +78,7 @@ sub init {
 
     my $dep_map = $self->{+DEP_MAP} ||= {};
     my $loaded  = $self->{+LOADED} ||= {};
-
-    my %seen;
+    my $inc = $self->my_inc;
 
     my $require = $self->{+MY_REQUIRE} = sub {
         my ($file) = @_;
@@ -60,7 +100,16 @@ sub init {
             }
         }
 
-        goto &$real_require;
+        if (!ref($INC[0]) || $INC[0] != $inc) {
+            @INC = (
+                $inc,
+                grep { !(ref($_) && $inc == $_) } @INC,
+            );
+        }
+
+        local @INC = @INC[1 .. $#INC];
+
+        $real_require->(@_);
     };
 
     {

@@ -51,7 +51,7 @@ BEGIN {
 sub init {
     my $self = shift;
 
-    $self->{+DTRACE} = Test2::Harness::Util::DepTracer->new;
+    $self->{+DTRACE} ||= Test2::Harness::Util::DepTracer->new;
     $self->{+ROOT_PID} = $$;
 
     $self->load_blacklist;

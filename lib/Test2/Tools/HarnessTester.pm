@@ -10,7 +10,7 @@ use List::Util qw/first/;
 use File::Temp qw/tempdir/;
 use File::Spec;
 
-our @EXPORT_OK = qw/run_yath_command run_command make_example_dir yath_script/;
+our @EXPORT_OK = qw/run_yath_command run_command make_example_dir yath_script summarize_events/;
 
 my $YATH;
 
@@ -92,6 +92,53 @@ sub make_example_dir {
     _gen_passing_test($dir, 'xt', 'xt_test.t');
 
     return $dir;
+}
+
+my $HARNESS_ID = 1;
+sub summarize_events {
+    my ($events) = @_;
+
+    my @caller = caller(0);
+
+    my $id     = $HARNESS_ID++;
+    my $run_id = "run-$id";
+    my $job_id = "job-$id";
+
+    require Test2::Harness::Job;
+    my $job = Test2::Harness::Job->new(
+        file   => $caller[1],
+        job_id => $job_id,
+    );
+
+    require Test2::Harness::Watcher;
+    my $watcher = Test2::Harness::Watcher->new(job => $job, live => 0);
+    my $eid = 1;
+
+    require Test2::Harness::Event;
+    for my $e (@$events) {
+        my $fd = $e->facet_data;
+        my $he = Test2::Harness::Event->new(
+            facet_data => $fd,
+            stream_id  => "stream-$id",
+            event_id   => $eid++,
+            run_id     => $run_id,
+            job_id     => $job_id,
+            stamp      => time,
+        );
+
+        $watcher->process($he);
+    }
+
+    $watcher->set_complete(1);
+
+    return {
+        plan       => $watcher->plan,
+        pass       => $watcher->pass,
+        fail       => $watcher->fail,
+        errors     => $watcher->_errors,
+        failures   => $watcher->_failures,
+        assertions => $watcher->assertion_count,
+    };
 }
 
 1;

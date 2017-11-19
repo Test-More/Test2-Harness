@@ -2,7 +2,7 @@ package App::Yath::Command::replay;
 use strict;
 use warnings;
 
-our $VERSION = '0.001033';
+our $VERSION = '0.001034';
 
 use Test2::Util qw/pkg_to_file/;
 

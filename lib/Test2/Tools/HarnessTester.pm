@@ -2,7 +2,7 @@ package Test2::Tools::HarnessTester;
 use strict;
 use warnings;
 
-our $VERSION = '0.001033';
+our $VERSION = '0.001034';
 
 use Test2::Harness::Util qw/open_file/;
 use Test2::Harness::Util::IPC qw/run_cmd/;

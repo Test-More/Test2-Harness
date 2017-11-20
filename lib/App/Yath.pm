@@ -4,6 +4,7 @@ use warnings;
 
 use App::Yath::Util qw/read_config find_pfile/;
 use File::Spec;
+use Test2::Util qw/IS_WIN32/;
 
 our $VERSION = '0.001034';
 
@@ -26,11 +27,13 @@ sub import {
     my $cmd_name = $class->command_from_argv($argv);
     my $pp_argv  = $class->pre_parse_args([read_config($cmd_name), @$argv]);
 
-    my %have = map {( $_ => 1 )} @INC;
-    my @missing = grep { !$have{$_} && !$have{File::Spec->rel2abs($_)} } @{$pp_argv->{inc}};
+    unless (IS_WIN32) {
+        my %have = map {( $_ => 1, File::Spec->rel2abs($_) => 1 )} @INC;
+        my @missing = grep { !$have{$_} && !$have{File::Spec->rel2abs($_)} } @{$pp_argv->{inc}};
 
-    $class->do_exec($^X, (map {('-I' => File::Spec->rel2abs($_))} @{$pp_argv->{inc}}, @INC), $SCRIPT, $cmd_name, @$argv)
-        if @missing;
+        $class->do_exec($^X, (map {('-I' => File::Spec->rel2abs($_))} @{$pp_argv->{inc}}, @INC), $SCRIPT, $cmd_name, @$argv)
+            if @missing;
+    }
 
     my $cmd_class = $class->load_command($cmd_name);
     $cmd_class->import($argv, $runref);

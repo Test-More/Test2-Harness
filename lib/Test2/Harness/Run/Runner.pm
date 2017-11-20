@@ -9,7 +9,7 @@ use POSIX ":sys_wait_h";
 use Config qw/%Config/;
 use List::Util qw/none/;
 use Time::HiRes qw/time/;
-use Test2::Util qw/pkg_to_file/;
+use Test2::Util qw/pkg_to_file IS_WIN32/;
 
 use Test2::Harness::Util qw/open_file write_file_atomic local_env/;
 use Test2::Harness::Util::IPC qw/run_cmd/;
@@ -516,6 +516,7 @@ sub run_job {
     );
 
     my $via = $task->{via} || ($fork ? ['Fork', 'IPC'] : ['IPC']);
+    $via = ['Open3'] if IS_WIN32;
     $via = ['Dummy'] if $run->dummy;
 
     my $job_runner = $self->job_runner_class->new(

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Prevent deadlock on win32 (tests do not pass yet in win32)
+
 0.001033  2017-11-18 16:16:52-08:00 America/Los_Angeles
 
     - Add a summarize_events to Test2::Tools::HarnessTester

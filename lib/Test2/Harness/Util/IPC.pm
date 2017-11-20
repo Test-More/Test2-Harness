@@ -22,8 +22,6 @@ sub swap_io {
     my $orig_fd = fileno($fh);
     $die->("Could not get original fd ($fh)") unless defined $orig_fd;
 
-    close($fh);
-
     if (ref($to)) {
         my $mode = $orig_fd ? '>&' : '<&';
         open($fh, $mode, $to) or $die->("Could not redirect output: $!");
@@ -37,7 +35,6 @@ sub swap_io {
 
     $die->("New handle does not have the desired fd!");
 }
-
 
 sub run_cmd {
     my %params = @_;

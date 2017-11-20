@@ -9,7 +9,7 @@ use File::Temp qw/tempdir/;
 use Getopt::Long qw/GetOptionsFromArray/;
 use File::Path qw/remove_tree/;
 use List::Util qw/first max/;
-use Test2::Util qw/pkg_to_file/;
+use Test2::Util qw/pkg_to_file IS_WIN32/;
 use POSIX qw/strftime/;
 use Config qw/%Config/;
 
@@ -107,6 +107,11 @@ sub normalize_settings {
     my $self = shift;
 
     my $settings = $self->{+SETTINGS} ||= {};
+
+    if (IS_WIN32) {
+        die "Fork mode is not supported on windows" if $settings->{fork};
+        die "Preload mode is not supported on windows" if $settings->{preload};
+    }
 
     for my $opt (@{$self->my_opts}) {
         my $field     = $opt->{field};
@@ -396,7 +401,7 @@ sub options {
             usage     => ['--fork',                            '--no-fork'],
             summary   => ['(Default: on) fork to start tests', 'Do not fork to start tests'],
             long_desc => 'Test2::Harness normally forks to start a test. Forking can break some select tests, this option will allow such tests to pass. This is not compatible with the "preload" option. This is also significantly slower. You can also add the "# HARNESS-NO-PRELOAD" comment to the top of the test file to enable this on a per-test basis.',
-            default   => 1,
+            default   => !IS_WIN32,
         },
 
         {

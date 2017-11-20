@@ -32,12 +32,12 @@ sub init {
         if !ref($via) || ref($via) ne 'ARRAY';
 }
 
-require Test2::Harness::Job::Runner::Open3; # TODO: Remove
+require Test2::Harness::Job::Runner::Open3;
 require Test2::Harness::Job::Runner::IPC;
 require Test2::Harness::Job::Runner::Fork;
 
 my %RUN_MAP = (
-    Open3 => 'Test2::Harness::Job::Runner::Open3',    # TODO: remove
+    Open3 => 'Test2::Harness::Job::Runner::Open3',
     IPC   => 'Test2::Harness::Job::Runner::IPC',
     Fork  => 'Test2::Harness::Job::Runner::Fork',
 );

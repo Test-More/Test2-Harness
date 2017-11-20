@@ -11,7 +11,7 @@ use Carp qw/cluck/;
 
 use File::Spec();
 
-sub viable { cluck __PACKAGE__ . " is deprecated"; 1 }
+sub viable { 1 }
 
 sub find_inc {
     my $class = shift;

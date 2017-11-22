@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - Fix infinite recrusion looking for .yathrc
     - Add 'failed' command
 
 0.001034  2017-11-20 09:19:47-08:00 America/Los_Angeles

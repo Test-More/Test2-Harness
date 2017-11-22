@@ -42,7 +42,7 @@ sub find_in_updir {
     while(1) {
         $path = File::Spec->catdir('..', $path);
         my $check = eval { realpath(File::Spec->rel2abs($path)) };
-        next unless $check;
+        last unless $check;
         last if $seen{$check}++;
         return $check if -f $check;
     }

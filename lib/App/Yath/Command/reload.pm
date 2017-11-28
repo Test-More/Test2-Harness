@@ -2,7 +2,7 @@ package App::Yath::Command::reload;
 use strict;
 use warnings;
 
-our $VERSION = '0.001036';
+our $VERSION = '0.001037';
 
 use POSIX ":sys_wait_h";
 use File::Path qw/remove_tree/;

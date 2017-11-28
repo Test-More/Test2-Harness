@@ -15,9 +15,12 @@ use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use App::Yath::Util qw/is_generated_test_pl find_yath/;
 
 use Time::HiRes qw/time/;
+use Sys::Hostname qw/hostname/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
+
+sub MAX_ATTACH() { 1_048_576 }
 
 sub group { ' test' }
 
@@ -110,6 +113,50 @@ sub options {
             default => sub { ['./xt'] },
             long_desc => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",
         },
+
+        {
+            spec => 'email-from=s@',
+            field => 'email_from',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--email-from foo@example.com'],
+            long_desc => "If any email is sent, this is who it will be from",
+            default => sub {
+                my $user = getlogin() || scalar(getpwuid($<)) || $ENV{USER} || 'unknown';
+                my $host = hostname() || 'unknown';
+                return "${user}\@${host}";
+            },
+        },
+
+        {
+            spec => 'email=s@',
+            field => 'email',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--email foo@example.com'],
+            long_desc => "Email the test results (and any log file) to the specified email address(es)",
+            action => sub {
+                my $self = shift;
+                my ($settings, $field, $arg, $opt) = @_;
+                eval { require Email::Stuffer; 1 } or die "Cannot use --email without Email::Stuffer: $@";
+                push @{$settings->{email}} => $arg;
+            },
+        },
+
+        {
+            spec => 'email-owner',
+            field => 'email_owner',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--email-owner'],
+            long_desc => 'Email the owner of broken tests files upon failure. Add `# HARNESS-META-OWNER foo@example.com` to the top of a test file to give it an owner',
+            action => sub {
+                my $self = shift;
+                my ($settings, $field, $arg, $opt) = @_;
+                eval { require Email::Stuffer; 1 } or die "Cannot use --email-owner without Email::Stuffer: $@";
+                $settings->{email_owner} = 1;
+            },
+        },
     );
 }
 
@@ -195,6 +242,9 @@ sub run_command {
         }
     }
 
+    # Let the loggers clean up.
+    @$loggers = ();
+
     if (-t STDOUT) {
         print STDOUT Term::ANSIColor::color('reset') if USE_ANSI_COLOR;
         print STDOUT "\r\e[K";
@@ -245,6 +295,8 @@ sub run_command {
         $exit ||= 255;
     }
 
+    $self->send_owner_email($bad) if $settings->{email_owner} && ($fail || @$bad);
+
     if (!@$bad && !$fail) {
         $self->paint("\nAll tests were successful!\n\n");
 
@@ -259,6 +311,8 @@ sub run_command {
         }
     }
 
+    $self->send_email if $settings->{email};
+
     print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir} && $settings->{dir};
 
     print "Wrote " . ($ok ? '' : '(Potentially Corrupt) ') . "log file: $settings->{log_file}\n"
@@ -270,7 +324,59 @@ sub run_command {
     return $exit;
 }
 
-1;
+sub send_email {
+    my $self = shift;
+    my $body = join '' => @{$self->{+PAINTED}};
+    my $settings = $self->{+SETTINGS};
+    $self->_send_email($body, @{$settings->{email}});
+}
+
+sub send_owner_email {
+    my $self = shift;
+    my ($bad) = @_;
+
+    my %owners;
+
+    for my $filename (map { $_->file } @$bad) {
+        my $file = Test2::Harness::Util::TestFile->new(file => $filename);
+        my @owners = $file->meta('owner') or next;
+
+        push @{$owners{$_}} => File::Spec->abs2rel($filename) for @owners;
+    }
+
+    for my $owner (sort keys %owners) {
+        my $host  = hostname();
+        my $fails = join "\n" => map { "  $_" } @{$owners{$owner}};
+        my $body  = <<"        EOT";
+The following test(s) failed on $host. You are receiving this email because you
+are listed as an owner of these tests.
+
+Failing tests:
+$fails
+        EOT
+
+        $self->_send_email($body, $owner);
+    }
+}
+
+sub _send_email {
+    my $self = shift;
+    my ($body, @to) = @_;
+
+    my $settings = $self->{+SETTINGS};
+    my $host     = hostname();
+    my $subject  = "Test run $settings->{run_id} on $host";
+
+    $body .= "\nThe log file can be found on $host at " . File::Spec->rel2abs($settings->{log_file}) . "\n"
+        if $settings->{log};
+
+    my $mail = Email::Stuffer->to(@to);
+    $mail->from($settings->{email_from});
+    $mail->subject($subject);
+    $mail->text_body($body);
+    $mail->attach_file($settings->{log_file}) if $settings->{log} && (-s $settings->{log_file} <= MAX_ATTACH);
+    eval { $mail->send_or_die; 1 } or warn $@;
+}
 
 __END__
 

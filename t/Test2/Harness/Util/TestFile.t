@@ -13,7 +13,7 @@ my $tmp = gen_temp(
     warn   => "#!/usr/bin/perl -w\n",
     taint  => "#!/usr/bin/env perl -t -w\n",
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
-    meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META-mykey-myval2\n",
+    meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey myval2\n",
 
     package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
 

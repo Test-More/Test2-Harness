@@ -55,6 +55,18 @@ sub check_stage {
     return $self->{+_HEADERS}->{stage} || 'default';
 }
 
+sub meta {
+    my $self = shift;
+    my ($key) = @_;
+
+    $self->_scan unless $self->{+_SCANNED};
+    my $meta = $self->{+_HEADERS}->{meta} or return ();
+
+    return () unless $key && $meta->{$key};
+
+    return @{$meta->{$key}};
+}
+
 sub check_category {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
@@ -141,6 +153,10 @@ sub _scan {
         elsif ($dir eq 'stage') {
             my ($name) = @args;
             $headers{stage} = $name;
+        }
+        elsif ($dir eq 'meta') {
+            my ($key, $val) = @args;
+            push @{$headers{meta}->{$key}} => $val;
         }
         elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;

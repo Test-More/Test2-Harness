@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Harness directives for meta-data
+
 0.001035  2017-11-22 09:59:49-08:00 America/Los_Angeles
 
     - Fix infinite recrusion looking for .yathrc

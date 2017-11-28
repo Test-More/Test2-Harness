@@ -13,6 +13,7 @@ my $tmp = gen_temp(
     warn   => "#!/usr/bin/perl -w\n",
     taint  => "#!/usr/bin/env perl -t -w\n",
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
+    meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META-mykey-myval2\n",
 
     package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
 
@@ -42,6 +43,15 @@ subtest invalid => sub {
         qr/^Invalid test file/,
         "Need a valid test file"
     );
+};
+
+subtest meta => sub {
+    my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'meta'));
+
+    is([$foo->meta], [], "No key returns empty list");
+    is([$foo->meta('foo')], [], "Empty key returns empty list");
+    is([$foo->meta('mykey')], [qw/myval myval2/], "Got both values for the 'mykey' key");
+    is([$foo->meta('otherkey')], ['otherval'], "Got other key");
 };
 
 subtest foo => sub {

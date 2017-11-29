@@ -47,6 +47,8 @@ requires "goto::file" => "0.005";
 requires "parent" => "0";
 requires "perl" => "5.008009";
 suggests "Cpanel::JSON::XS" => "0";
+suggests "Email::Stuffer" => "0.016";
+suggests "HTTP::Tiny" => "0.070";
 suggests "JSON::MaybeXS" => "0";
 suggests "Term::ANSIColor" => "4.03";
 

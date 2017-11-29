@@ -193,6 +193,17 @@ Example .yath.rc:
     [start]
     -PMoose ;Always preload Moose with a persistent runner
 
+This file is normally committed into the projects repo.
+
+## USER PROJECT SPECIFIC YATH CONFIG
+
+You can add a `.yath.user.rc` file. Format is the same as the regular
+`.yath.rc` file. This file will be read in addition to the regular config
+file. Directives in this file will come AFTER the directives in the primary
+config, so it may be used to override config.
+
+This file should not normally be committed to the project repo.
+
 ## HARNESS DIRECTIVES INSIDE TESTS
 
 `yath` will recognise a number of directive comments placed near the top of

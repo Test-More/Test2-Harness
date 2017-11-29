@@ -433,7 +433,7 @@ Example .yath.rc:
     [start]
     -PMoose ;Always preload Moose with a persistent runner
 
-This file is normally commited into the projects repo.
+This file is normally committed into the projects repo.
 
 =head2 USER PROJECT SPECIFIC YATH CONFIG
 
@@ -442,7 +442,7 @@ C<.yath.rc> file. This file will be read in addition to the regular config
 file. Directives in this file will come AFTER the directives in the primary
 config, so it may be used to override config.
 
-This file should not normally be commited to the project repo.
+This file should not normally be committed to the project repo.
 
 =head2 HARNESS DIRECTIVES INSIDE TESTS
 

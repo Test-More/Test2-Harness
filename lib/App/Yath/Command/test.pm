@@ -134,7 +134,7 @@ sub options {
             used_by => {jobs => 1},
             section => 'Job Options',
             usage => ['--slack-url "URL"'],
-            summary => ["Specify an API endpoint for slack webhook itegrations"],
+            summary => ["Specify an API endpoint for slack webhook integrations"],
             long_desc => "This should be your slack webhook url.",
             action => sub {
                 my $self = shift;

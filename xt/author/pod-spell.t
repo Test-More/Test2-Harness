@@ -142,6 +142,8 @@ SIGHUP
 SIGTERM
 SIGUSR1
 SIGUSR2
+webhook
+integrations
 
 ## Spelled correctly according to google:
 recognise

@@ -10,6 +10,7 @@ use Test2::Harness::Run::Runner;
 use Test2::Harness::Run::Queue;
 use Test2::Harness::Run;
 
+use Test2::Harness::Util::JSON qw/encode_json/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use App::Yath::Util qw/is_generated_test_pl find_yath/;
@@ -88,6 +89,19 @@ sub handle_list_args {
     }
 }
 
+sub normalize_settings {
+    my $self = shift;
+
+    $self->SUPER::normalize_settings();
+
+    my $settings = $self->{+SETTINGS};
+
+    unless ($settings->{slack_url}) {
+        die "\n--slack-url is required when using --slack.\n"      if $settings->{slack};
+        die "\n--slack-url is required when using --slack-fail.\n" if $settings->{slack_fail};
+    }
+}
+
 sub options {
     my $self = shift;
 
@@ -112,6 +126,64 @@ sub options {
             usage   => ['--default-at-search xt'],
             default => sub { ['./xt'] },
             long_desc => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",
+        },
+
+        {
+            spec => 'slack-url=s',
+            field => 'slack_url',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--slack-url "URL"'],
+            summary => ["Specify an API endpoint for slack webhook itegrations"],
+            long_desc => "This should be your slack webhook url.",
+            action => sub {
+                my $self = shift;
+                my ($settings, $field, $arg, $opt) = @_;
+                eval { require HTTP::Tiny; 1 } or die "Cannot use --slack-url without HTTP::Tiny: $@";
+                die "HTTP::Tiny reports that it does not support SSL, cannot use --slack-url without ssl."
+                    unless HTTP::Tiny::can_ssl();
+                $settings->{slack_url} = $arg;
+            },
+        },
+
+        {
+            spec => 'slack=s@',
+            field => 'slack',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--slack "#CHANNEL"', '--slack "@USER"'],
+            summary => ['Send results to a slack channel', 'Send results to a slack user'],
+        },
+
+        {
+            spec => 'slack-fail=s@',
+            field => 'slack_fail',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--slack-fail "#CHANNEL"', '--slack-fail "@USER"'],
+            summary => ['Send failing results to a slack channel', 'Send failing results to a slack user'],
+        },
+
+        {
+            spec => 'slack-notify!',
+            field => 'slack_notify',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--slack-notify', '--no-slack-notify'],
+            summary => ['On by default if --slack-url is specified'],
+            long_desc => "Send slack notifications to the slack channels/users listed in test meta-data when tests fail.",
+            default => 1,
+        },
+
+        {
+            spec => 'slack-log!',
+            field => 'slack_log',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--slack-log', '--no-slack-log'],
+            summary => ['On by default, log file will be attached if available'],
+            long_desc => "Attach the event log to any slack notifications.",
+            default => 1,
         },
 
         {
@@ -295,9 +367,24 @@ sub run_command {
         $exit ||= 255;
     }
 
-    $self->send_owner_email($bad) if $settings->{email_owner} && ($fail || @$bad);
+    if ($fail || @$bad) {
+        my (%owners, %slacks);
+        for my $filename (map { $_->file } @$bad) {
+            my $file = Test2::Harness::Util::TestFile->new(file => $filename);
+            my @owners = $file->meta('owner');
+            my @slacks = $file->meta('slack');
+            push @{$owners{$_}} => File::Spec->abs2rel($filename) for @owners;
+            push @{$slacks{$_}} => File::Spec->abs2rel($filename) for @slacks;
+        }
 
-    if (!@$bad && !$fail) {
+        $self->send_owner_email(\%owners) if $settings->{email_owner};
+
+        if ($settings->{slack_url}) {
+            $self->send_slack_fail($bad) if $settings->{slack_fail};
+            $self->send_slack_notify(\%slacks) if $settings->{slack_notify};
+        }
+    }
+    else {
         $self->paint("\nAll tests were successful!\n\n");
 
         if ($settings->{cover}) {
@@ -312,6 +399,7 @@ sub run_command {
     }
 
     $self->send_email if $settings->{email};
+    $self->send_slack if $settings->{slack} && $settings->{slack_url};
 
     print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir} && $settings->{dir};
 
@@ -324,6 +412,103 @@ sub run_command {
     return $exit;
 }
 
+sub send_slack {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS};
+    require HTTP::Tiny;
+    my $ht = HTTP::Tiny->new();
+
+    for my $dest (@{$settings->{slack}}) {
+        my $r = $ht->post(
+            $settings->{slack_url},
+            {
+                headers => {'content-type' => 'application/json'},
+                content => encode_json(
+                    {
+                        channel     => $dest,
+                        text        => "Test run $settings->{run_id} has completed on " . hostname(),
+                        attachments => [
+                            {
+                                fallback => 'Test Summary',
+                                pretext  => 'Test Summary',
+                                text     => join('' => @{$self->{+PAINTED}}),
+                            },
+                        ],
+                    }
+                ),
+            },
+        );
+        warn "Failed to send slack message to '$dest'" unless $r->{success};
+    }
+}
+
+sub send_slack_fail {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS};
+    require HTTP::Tiny;
+    my $ht = HTTP::Tiny->new();
+
+    for my $dest (@{$settings->{slack_fail}}) {
+        my $r = $ht->post(
+            $settings->{slack_url},
+            {
+                headers => {'content-type' => 'application/json'},
+                content => encode_json(
+                    {
+                        channel     => $dest,
+                        text        => "Test run $settings->{run_id} failed on " . hostname(),
+                        attachments => [
+                            {
+                                fallback => 'Test Failure Summary',
+                                pretext  => 'Test Failure Summary',
+                                text     => join('' => @{$self->{+PAINTED}}),
+                            },
+                        ],
+                    }
+                ),
+            },
+        );
+        warn "Failed to send slack message to '$dest'" unless $r->{success};
+    }
+}
+
+sub send_slack_notify {
+    my $self = shift;
+    my ($slacks) = @_;
+
+    my $settings = $self->{+SETTINGS};
+    require HTTP::Tiny;
+    my $ht   = HTTP::Tiny->new();
+    my $host = hostname();
+
+    for my $dest (sort keys %$slacks) {
+        my $fails = join "\n" => @{$slacks->{$dest}};
+
+        my $r = $ht->post(
+            $settings->{slack_url},
+            {
+                headers => {'content-type' => 'application/json'},
+                content => encode_json(
+                    {
+                        channel     => $dest,
+                        text        => "Test(s) failed on $host",
+                        attachments => [
+                            {
+                                fallback => 'Test Failure Notifications',
+                                pretext  => 'Test Failure Notifications',
+                                text     => $fails,
+                            },
+                        ],
+                    }
+                ),
+            },
+        );
+        warn "Failed to send slack message to '$dest'" unless $r->{success};
+    }
+}
+
 sub send_email {
     my $self = shift;
     my $body = join '' => @{$self->{+PAINTED}};
@@ -333,20 +518,11 @@ sub send_email {
 
 sub send_owner_email {
     my $self = shift;
-    my ($bad) = @_;
+    my ($owners) = @_;
 
-    my %owners;
-
-    for my $filename (map { $_->file } @$bad) {
-        my $file = Test2::Harness::Util::TestFile->new(file => $filename);
-        my @owners = $file->meta('owner') or next;
-
-        push @{$owners{$_}} => File::Spec->abs2rel($filename) for @owners;
-    }
-
-    for my $owner (sort keys %owners) {
-        my $host  = hostname();
-        my $fails = join "\n" => map { "  $_" } @{$owners{$owner}};
+    my $host  = hostname();
+    for my $owner (sort keys %$owners) {
+        my $fails = join "\n" => map { "  $_" } @{$owners->{$owner}};
         my $body  = <<"        EOT";
 The following test(s) failed on $host. You are receiving this email because you
 are listed as an owner of these tests.

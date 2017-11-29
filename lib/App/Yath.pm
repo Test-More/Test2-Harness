@@ -25,7 +25,13 @@ sub import {
     $SCRIPT ||= $file;
 
     my $cmd_name = $class->command_from_argv($argv);
-    my $pp_argv  = $class->pre_parse_args([read_config($cmd_name), @$argv]);
+    my $pp_argv  = $class->pre_parse_args(
+        [
+            read_config($cmd_name, file => '.yath.rc',      search => 1),
+            read_config($cmd_name, file => '.yath.user.rc', search => 1),
+            @$argv
+        ]
+    );
 
     unless (IS_WIN32) {
         my %have = map {( $_ => 1, File::Spec->rel2abs($_) => 1 )} @INC;
@@ -426,6 +432,17 @@ Example .yath.rc:
 
     [start]
     -PMoose ;Always preload Moose with a persistent runner
+
+This file is normally commited into the projects repo.
+
+=head2 USER PROJECT SPECIFIC YATH CONFIG
+
+You can add a C<.yath.user.rc> file. Format is the same as the regular
+C<.yath.rc> file. This file will be read in addition to the regular config
+file. Directives in this file will come AFTER the directives in the primary
+config, so it may be used to override config.
+
+This file should not normally be commited to the project repo.
 
 =head2 HARNESS DIRECTIVES INSIDE TESTS
 

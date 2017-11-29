@@ -96,19 +96,19 @@ my $ok = eval {
     is(find_pfile, realpath(File::Spec->rel2abs("$tmp/.yath-persist.json")), "Found yath persist file");
 
     is(
-        [read_config('foo')],
+        [read_config('foo', file => '.yath.rc', search => 1)],
         ['-a', 'b c d', 't', 't2', '--foo', '--zoo', 'bar'],
         "Got config for foo command"
     );
 
     is(
-        [read_config('bar')],
+        [read_config('bar', file => '.yath.rc', search => 1)],
         ['-x', 'y', '--xxx', 'xx', '--yyy'],
         "Got config for bar command"
     );
 
     is(
-        [read_config('bub')],
+        [read_config('bub', file => '.yath.rc', search => 1)],
         [],
         "Got config for bar command (empty)"
     );

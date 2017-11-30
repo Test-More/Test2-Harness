@@ -7,7 +7,7 @@ our $VERSION = '0.001038';
 use List::Util qw/sum/;
 
 use parent 'Test2::Harness::Run::Runner::ProcMan::Scheduler';
-use Test2::Harness::Util::HashBase qw/-index -queues/;
+use Test2::Harness::Util::HashBase qw/-index -queues -seen/;
 
 sub GEN() { 'general' }
 sub LNG() { 'long' }
@@ -19,7 +19,7 @@ sub init {
     my $self = shift;
 
     $self->{+INDEX} = 0;
-
+    $self->{+SEEN} = {};
     $self->{+QUEUES} = { map { $_ => [] } GEN, LNG, MED, IMM, ISO };
 }
 
@@ -27,10 +27,12 @@ sub fetch {
     my $self = shift;
     my ($max, $pending, $running) = @_;
 
+    my $seen = $self->{+SEEN};
     my $queues = $self->{+QUEUES};
 
     while (@$pending > $self->{+INDEX}) {
         my $task = $pending->[$self->{+INDEX}++];
+        next if $seen->{$task->{job_id}}++;
         my $cat = $task->{category};
         $cat = GEN() unless $cat && $self->{+QUEUES}->{$cat};
 
@@ -40,9 +42,13 @@ sub fetch {
     my $task = $self->_fetch(@_);
 
     if (defined($task)) {
-        $self->{+INDEX}--;
         @$pending = grep { $_->{job_id} ne $task->{job_id} } @$pending;
+        $self->{+INDEX} = @$pending;
     }
+
+    # Do not let the seen hashref grow forever, we can reset it whenever
+    # pending hits 0.
+    $self->{+SEEN} = {} unless @$pending;
 
     return $task;
 }

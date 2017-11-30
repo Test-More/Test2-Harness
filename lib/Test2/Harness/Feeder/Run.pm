@@ -155,18 +155,18 @@ sub poll {
 sub complete {
     my $self = shift;
 
+    # If runner exited with an error we need to be complete
+    my $runner = $self->{+RUNNER};
+    return 1 if $runner && $runner->exit;
+
     if (my $job_ids = $self->{+JOB_IDS}) {
         return 1 unless first { !$self->{+SEEN_JOBS}->{$_} } keys %$job_ids;
         return 0;
     }
 
-    my $runner = $self->{+RUNNER} or return 1;
-    my $exit = $runner->exit;
-
-    # If runner exited with an error we need to be complete
-    return 1 if $exit;
     return 0 if @{$self->{+_ACTIVE}};
     return 1 if $self->{+DIR}->complete();
+    return 1 unless $runner;
     return 1 if $runner->exited;
     return 0;
 }

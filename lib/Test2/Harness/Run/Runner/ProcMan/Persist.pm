@@ -24,6 +24,7 @@ use Test2::Harness::Util::HashBase qw{
 
     -pid
     -parent_pid
+    -requests
 
     -batch_only
     -batches
@@ -117,9 +118,10 @@ sub _spawn {
     my $in        = $self->{+IN};
 
     my @reqs;
+    $self->{+REQUESTS} = \@reqs;
 
     my $pcheck = 0;
-    until($self->{+QUEUE_ENDED}) {
+    while(1) {
         if (kill(0, $self->{+PARENT_PID})) {
             $pcheck = undef;
         }
@@ -135,13 +137,16 @@ sub _spawn {
         push @reqs => $in->poll;
 
         my @keep;
+        my $handled = 0;
         for my $req (@reqs) {
-            return undef unless $req;
+            $handled++;
+            next unless $req;
             push @keep => $req unless $self->handle_request($req);
         }
         @reqs = @keep;
 
-        return if $self->{+QUEUE_ENDED};
+        return if $self->{+QUEUE_ENDED} && !@reqs && !$handled;
+
         sleep($wait_time);
     }
 }
@@ -169,6 +174,11 @@ sub handle_request {
     }
     elsif ($req->{type} eq 'exit') {
         return $self->req_exit($req);
+    }
+    elsif ($req->{type} eq 'dump') {
+        require Data::Dumper;
+        print STDERR Data::Dumper::Dumper($self);
+        return 1;
     }
 
     die "Invalid request type: $req->{type}";
@@ -227,7 +237,8 @@ sub batch_complete {
     my $out = $self->{+OUT};
     $out->write({batch => $batch, done => 1});
 
-    delete $self->{+BATCHES}->{$batch};
+    warn "FIXME";
+#    delete $self->{+QUEUED_BATCHES}->{$batch};
 }
 
 sub batch_check {

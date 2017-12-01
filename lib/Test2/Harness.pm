@@ -58,7 +58,8 @@ sub run {
         }
     }
 
-    my(@fail, @pass, $seen);
+    my $seen = 0;
+    my(@fail, @pass);
     while (my ($job_id, $watcher) = each %{$self->{+WATCHERS}}) {
         $seen++;
         if ($watcher->fail) {

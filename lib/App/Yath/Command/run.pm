@@ -58,10 +58,13 @@ sub run {
 
     $run->{search} = \@search;
 
+    my $batch = $$ . '-' . time;
+
     my %jobs;
     my $base_id = 1;
     for my $tf ($self->make_run_from_settings->find_files) {
         my $job_id = $$ . '-' . $base_id++;
+        $jobs{$job_id} = 1;
 
         my $item = $tf->queue_item($job_id);
 
@@ -74,9 +77,12 @@ sub run {
         $item->{use_stream}  = $settings->{use_stream}  if defined $settings->{use_stream}  && !defined $item->{use_stream};
         $item->{use_fork}    = $settings->{use_fork}    if defined $settings->{use_fork}    && !defined $item->{use_fork};
 
+        $item->{batch} = $batch;
+
         $queue->enqueue($item);
-        $jobs{$job_id} = 1;
     }
+
+    $queue->enqueue({batch => $batch, queue_complete => 1});
 
     my $feeder = Test2::Harness::Feeder::Run->new(
         run      => $run,
@@ -85,6 +91,7 @@ sub run {
         keep_dir => $settings->{keep_dir},
         job_ids  => \%jobs,
         tail     => 10,
+        batch    => $batch,
     );
 
     $self->{+_FEEDER}    = $feeder;

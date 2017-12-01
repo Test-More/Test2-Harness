@@ -82,6 +82,16 @@ sub preload_queue {
     return 1;
 }
 
+sub meta_task {
+    my $self = shift;
+    my ($task) = @_;
+
+    use Data::Dumper;
+    print STDERR Dumper($task);
+
+    die "Task without job-id found in queue";
+}
+
 sub poll_tasks {
     my $self = shift;
 
@@ -92,6 +102,11 @@ sub poll_tasks {
     my $added = 0;
     for my $item ($queue->poll) {
         my ($spos, $epos, $task) = @$item;
+
+        if ($task && !$task->{job_id}) {
+            $self->meta_task($task);
+            next;
+        }
 
         $added++;
 

@@ -24,6 +24,11 @@ use Test2::Harness::Util::HashBase qw{
 
     -pid
     -parent_pid
+
+    -batch_only
+    -batches
+    -batch_checked
+    -queued_batches
 };
 
 sub init {
@@ -33,11 +38,15 @@ sub init {
         unless $self->{+DIR};
 
     croak "'signal_ref' is a required attribute"
-        unless $self->{+SIGNAL_REF};
+        unless $self->{+SIGNAL_REF} || $self->{+BATCH_ONLY};
 
-    $self->SUPER::init();
-
-    $self->{+JOBS} = Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE}, use_write_lock => 1);
+    if ($self->{+BATCH_ONLY}) {
+        $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
+    }
+    else {
+        $self->SUPER::init();
+        $self->{+JOBS} = Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE}, use_write_lock => 1);
+    }
 
     $self->{+IN_FILE}  = File::Spec->catfile($self->{+DIR}, 'procman_in.jsonl');
     $self->{+OUT_FILE} = File::Spec->catfile($self->{+DIR}, 'procman_out.jsonl');
@@ -137,6 +146,18 @@ sub _spawn {
     }
 }
 
+sub meta_task {
+    my $self = shift;
+    my ($task) = @_;
+
+    if ($task->{batch} && $task->{queue_complete}) {
+        $self->batch_complete($task->{batch}, queue => 1);
+        return;
+    }
+
+    $self->SUPER::meta_task($task);
+}
+
 sub handle_request {
     my $self = shift;
     my ($req) = @_;
@@ -167,6 +188,10 @@ sub req_next {
     my $out = $self->{+OUT};
     $out->write($task);
 
+    if (my $batch = $task->{batch}) {
+        $self->{+_RUNNING}->{__BATCH__}->{$batch}++;
+    }
+
     return 1; # Handled!
 }
 
@@ -175,10 +200,53 @@ sub req_exit {
     my ($req) = @_;
 
     my $cat = $req->{category};
-
     $self->unbump($cat);
 
+    if (my $batch = $req->{batch}) {
+        $self->{+_RUNNING}->{__BATCH__}->{$batch}--;
+        $self->batch_complete($batch);
+    }
+
     return 1;
+}
+
+# We want to say a batch is complete when it has no more items running or
+# pending, however we must also be sure all the batches jobs have been
+# Scheduled
+sub batch_complete {
+    my $self = shift;
+    my ($batch, %params) = @_;
+
+    my $queued = $self->{+QUEUED_BATCHES}->{$batch} ||= $params{queue};
+    return unless $queued;
+
+    my $count = $self->{+_RUNNING}->{__BATCH__}->{$batch};
+    $count += grep { $_->{batch} && $_->{batch} eq $batch } map { @{$_} } values %{$self->{+_PENDING} || {}};
+    return if $count;
+
+    my $out = $self->{+OUT};
+    $out->write({batch => $batch, done => 1});
+
+    delete $self->{+BATCHES}->{$batch};
+}
+
+sub batch_check {
+    my $self = shift;
+    my ($batch) = @_;
+
+    # Do not hammer IO.
+    my $batch_check = $self->{+BATCH_CHECKED} || 0;
+    return $self->{+BATCHES}->{$batch} if (time - $batch_check) < 0.5;
+    $self->{+BATCH_CHECKED} = time;
+
+    my $out = $self->{+OUT};
+
+    for my $task ($out->poll()) {
+        my $b = $task->{batch} or next;
+        $self->{+BATCHES}->{$b} = $task->{done};
+    }
+
+    return $self->{+BATCHES}->{$batch};
 }
 
 sub next {
@@ -209,10 +277,11 @@ sub next {
                 $self->{+QUEUE_ENDED} = 1;
                 last;
             }
-            elsif($task->{stage} eq $stage) {
-                die "Too many tesks were found" if $found;
-                $found = $task;
-            }
+
+            next unless $task->{stage};
+            next unless $task->{stage} eq $stage;
+            die "Too many tesks were found" if $found;
+            $found = $task;
         }
     }
 
@@ -227,7 +296,7 @@ sub write_exit {
 
     $self->SUPER::write_exit(@_);
 
-    $self->{+IN}->write({type => 'exit', category => $params{task}->{category}});
+    $self->{+IN}->write({type => 'exit', category => $params{task}->{category}, batch => $params{task}->{batch}});
 }
 
 1;

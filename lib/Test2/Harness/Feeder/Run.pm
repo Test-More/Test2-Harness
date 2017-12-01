@@ -25,6 +25,8 @@ use Test2::Harness::Util::HashBase qw{
     -job_ids
     -seen_jobs
     -tail
+
+    -batch
 };
 
 sub init {
@@ -160,6 +162,19 @@ sub complete {
     return 1 if $runner && $runner->exit;
 
     if (my $job_ids = $self->{+JOB_IDS}) {
+        if (my $batch = $self->{+BATCH}) {
+            require Test2::Harness::Run::Runner::ProcMan::Persist;
+            my $pm = $self->{procman} ||= Test2::Harness::Run::Runner::ProcMan::Persist->new(
+                batch_only => 1,
+                dir => $self->{+DIR}->root,
+            );
+
+            my $done = $pm->batch_check($self->{+BATCH});
+            return 0 unless defined $done; # Nothing happened yet
+            return 1 if $done; # all done!
+            return 0; # Still running
+        }
+
         return 1 unless first { !$self->{+SEEN_JOBS}->{$_} } keys %$job_ids;
         return 0;
     }

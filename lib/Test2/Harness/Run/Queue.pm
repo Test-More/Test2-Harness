@@ -38,6 +38,11 @@ sub seek {
     return $pos;
 }
 
+sub reset {
+    my $self = shift;
+    delete $self->{+QH};
+}
+
 sub poll {
     my $self = shift;
 

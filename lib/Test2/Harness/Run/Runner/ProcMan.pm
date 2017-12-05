@@ -18,6 +18,7 @@ use Test2::Harness::Run::Queue();
 our $VERSION = '0.001040';
 
 use Test2::Harness::Util::HashBase qw{
+    -pid
     -queue  -queue_ended
     -jobs   -jobs_file -jobs_seen
     -stages
@@ -57,6 +58,8 @@ sub init {
 
     croak "'stages' is a required attribute"
         unless $self->{+STAGES};
+
+    $self->{+PID} = $$;
 
     $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
 
@@ -106,12 +109,16 @@ sub poll_tasks {
     return if $self->{+QUEUE_ENDED};
 
     my $queue = $self->{+QUEUE};
+    if ($self->{+PID} != $$) {
+        $queue->reset;
+        $self->{+PID} = $$;
+    }
 
     my $added = 0;
     for my $item ($queue->poll) {
         my ($spos, $epos, $task) = @$item;
 
-        next if $task && $self->{+JOBS_SEEN}->{$task->{job_id}};
+        next if $task && $self->{+JOBS_SEEN}->{$task->{job_id}}++;
 
         $added++;
 

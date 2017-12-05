@@ -8,7 +8,7 @@ use IO::Handle;
 
 use Test2::Harness::Util();
 
-use Carp qw/croak/;
+use Carp qw/croak confess/;
 use Fcntl qw/SEEK_SET SEEK_CUR/;
 
 use Test2::Harness::Util::HashBase qw{ -name -_fh done -stamped -line_pos };
@@ -43,7 +43,9 @@ sub maybe_read {
 sub read {
     my $self = shift;
     my $out = Test2::Harness::Util::read_file($self->{+NAME});
-    return $self->decode($out);
+
+    eval { $out = $self->decode($out); 1 } or confess "$self->{+NAME}: $@";
+    return $out;
 }
 
 sub write {
@@ -90,7 +92,7 @@ sub read_line {
     my $new_pos = tell($fh);
     die "Failed to 'tell': $!" if $new_pos == -1;
 
-    $line = $self->decode($line);
+    eval { $line = $self->decode($line); 1 } or confess "$self->{+NAME}: $@";
 
     $self->{+LINE_POS} = $new_pos unless defined $params{peek} || defined $params{from};
     return ($pos, $new_pos, $line);

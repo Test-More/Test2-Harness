@@ -229,6 +229,21 @@ sub options {
                 $settings->{email_owner} = 1;
             },
         },
+
+        {
+            spec => 'qvf',
+            field => 'formatter',
+            used_by => {display => 1},
+            section   => 'Display Options',
+            usage     => ['--qvf'],
+            summary   => ['Quiet, but verbose on failure'],
+            long_desc => 'Hide all output from tests when they pass, except to say they passed. If a test fails then ALL output from the test is verbosely output.',
+            action   => sub {
+                my ($self, $settings, $field) = @_;
+                $settings->{formatter} = '+Test2::Formatter::QVF';
+            },
+
+        },
     );
 }
 

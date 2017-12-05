@@ -143,7 +143,7 @@ sub iteration {
 
                 if ($f && $f->{harness_job_end}) {
                     $f->{harness_job_end}->{file} = $watcher->file;
-                    $f->{harness_job_end}->{fail} = $watcher->fail;
+                    $f->{harness_job_end}->{fail} = $watcher->fail ? 1 : 0;
 
                     my $plan = $watcher->plan;
                     $f->{harness_job_end}->{skip} = $plan->{details} || "No reason given" if $plan && !$plan->{count};

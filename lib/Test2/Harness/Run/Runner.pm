@@ -104,9 +104,6 @@ sub init {
 sub procman {
     my $self = shift;
 
-    croak "Preload must be done before calling procman()"
-        unless $self->{+_PRELOAD_DONE};
-
     my $num = 1;
     return $self->{+_PROCMAN} ||= $self->procman_class->new(
         jobs_file  => File::Spec->catfile($self->{+DIR}, 'jobs.jsonl'),
@@ -114,6 +111,7 @@ sub procman {
         wait_time  => $self->{+WAIT_TIME},
         stages     => { map {($_ => $num++)} @{$self->{+STAGES}} },
         queue      => $self->{+QUEUE},
+        dir        => $self->{+DIR},
         @_,
     );
 }
@@ -371,9 +369,9 @@ sub task_loop {
     my $pman = $self->procman;
 
     while (1) {
-        my $task = $pman->next($stage) or return undef;
+        my ($task, $lock) = $pman->next($stage) or return undef;
 
-        my $runfile = $self->run_job($task);
+        my $runfile = $self->run_job($task, $lock);
         return $runfile if $runfile;
     }
 
@@ -444,7 +442,7 @@ sub stage_stop {
 
 sub run_job {
     my $self = shift;
-    my ($task) = @_;
+    my ($task, $lock) = @_;
 
     my $job_id = $task->{job_id};
     my $file = $task->{file};
@@ -526,10 +524,12 @@ sub run_job {
     );
 
     my ($pid, $runfile) = $job_runner->run;
-    return $runfile if $runfile; # In child process
+
+    # In child process
+    return $runfile if $runfile;
 
     # In parent
-    $self->procman->job_started(task => $task, job => $job, pid => $pid, dir => $dir);
+    $self->procman->job_started(task => $task, job => $job, pid => $pid, dir => $dir, lock => $lock);
 
     return undef;
 }

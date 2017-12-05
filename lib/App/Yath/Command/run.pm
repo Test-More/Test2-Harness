@@ -82,8 +82,6 @@ sub run {
         $queue->enqueue($item);
     }
 
-    $queue->enqueue({batch => $batch, queue_complete => 1});
-
     my $feeder = Test2::Harness::Feeder::Run->new(
         run      => $run,
         runner   => $runner,

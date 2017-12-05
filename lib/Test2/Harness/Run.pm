@@ -141,7 +141,14 @@ sub find_files {
 
     push @files => $_->find_files($self) for @$plugins;
 
-    @files = sort { $a->file cmp $b->file } @files;
+    # With -jN > 1 we want to sort jobs based on their category, otherwise
+    # filename sort is better for people.
+    if ($self->{+JOB_COUNT} > 1 || !$self->{+FINITE}) {
+        @files = sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @files;
+    }
+    else {
+        @files = sort { $a->file cmp $b->file } @files;
+    }
 
     @files = grep { !$self->{+EXCLUDE_FILES}->{$_->file} } @files if keys %{$self->{+EXCLUDE_FILES}};
 

@@ -235,6 +235,18 @@ sub queue_item {
     };
 }
 
+my %RANK = (
+    immiscible => 1,
+    long       => 2,
+    medium     => 3,
+    general    => 4,
+    isolation  => 5,
+);
+sub rank {
+    my $self = shift;
+    return $RANK{$self->check_category} || 1;
+}
+
 1;
 
 __END__

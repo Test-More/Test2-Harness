@@ -11,6 +11,7 @@ use File::Spec();
 
 use Test2::Harness::Util qw/write_file_atomic/;
 
+use Test2::Harness::Run::Runner::ProcMan::Locker();
 use Test2::Harness::Util::File::JSONL();
 use Test2::Harness::Run::Queue();
 
@@ -18,14 +19,15 @@ our $VERSION = '0.001039';
 
 use Test2::Harness::Util::HashBase qw{
     -queue  -queue_ended
-    -jobs   -jobs_file
+    -jobs   -jobs_file -jobs_seen
     -stages
 
-    -_pending
-    -_running
+    -locker
+    -pending
     -_pids
-    -scheduler
+    -end_loop_cb
 
+    -dir
     -run
     -wait_time
 };
@@ -44,6 +46,9 @@ sub init {
     croak "'run' is a required attribute"
         unless $self->{+RUN};
 
+    croak "'dir' is a required attribute"
+        unless $self->{+DIR};
+
     croak "'queue' is a required attribute"
         unless $self->{+QUEUE};
 
@@ -56,14 +61,27 @@ sub init {
     $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
 
     $self->{+JOBS} ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
+    $self->{+JOBS_SEEN} = {};
 
-    $self->{+_PENDING} = {};
-    $self->{+_RUNNING} = {
-        __ALL__ => 0,
-        map { $_ => 0 } keys %CATEGORIES,
-    };
+    $self->{+LOCKER} = Test2::Harness::Run::Runner::ProcMan::Locker->new(
+        dir => $self->{+DIR},
+        slots => $self->{+RUN}->job_count,
+    );
 
+    $self->read_jobs();
     $self->preload_queue();
+}
+
+sub read_jobs {
+    my $self = shift;
+
+    my $jobs = $self->{+JOBS};
+    return unless $jobs->exists;
+
+    my $jobs_seen = $self->{+JOBS_SEEN};
+    for my $job ($jobs->read) {
+        $jobs_seen->{$job->{job_id}}++;
+    }
 }
 
 sub preload_queue {
@@ -82,16 +100,6 @@ sub preload_queue {
     return 1;
 }
 
-sub meta_task {
-    my $self = shift;
-    my ($task) = @_;
-
-    use Data::Dumper;
-    print STDERR Dumper($task);
-
-    die "Task without job-id found in queue";
-}
-
 sub poll_tasks {
     my $self = shift;
 
@@ -103,10 +111,7 @@ sub poll_tasks {
     for my $item ($queue->poll) {
         my ($spos, $epos, $task) = @$item;
 
-        if ($task && !$task->{job_id}) {
-            $self->meta_task($task);
-            next;
-        }
+        next if $task && $self->{+JOBS_SEEN}->{$task->{job_id}};
 
         $added++;
 
@@ -123,7 +128,7 @@ sub poll_tasks {
         $stage = 'default' unless $stage && $self->{+STAGES}->{$stage};
         $task->{stage} = $stage;
 
-        push @{$self->{+_PENDING}->{$stage} ||= []} => $task;
+        push @{$self->{+PENDING}->{$stage}} => $task;
     }
 
     return $added;
@@ -167,22 +172,6 @@ sub finish {
     return;
 }
 
-sub bump {
-    my $self = shift;
-    my ($cat) = @_;
-
-    $self->{+_RUNNING}->{$cat}++;
-    $self->{+_RUNNING}->{__ALL__}++;
-}
-
-sub unbump {
-    my $self = shift;
-    my ($cat) = @_;
-
-    $self->{+_RUNNING}->{$cat}--;
-    $self->{+_RUNNING}->{__ALL__}--;
-}
-
 sub wait_on_jobs {
     my $self = shift;
     my %params = @_;
@@ -195,7 +184,6 @@ sub wait_on_jobs {
 
         my $params = delete $self->{+_PIDS}->{$pid};
         my $cat = $params->{task}->{category};
-        $self->unbump($cat);
 
         unless ($check == $pid) {
             $exit = -1;
@@ -222,61 +210,42 @@ sub next {
     my $self = shift;
     my ($stage) = @_;
 
-    my $pending = $self->{+_PENDING}->{$stage} ||= [];
-
-    return undef unless @$pending;
+    $self->poll_tasks;
+    my $list = $self->{+PENDING}->{$stage} or return;
 
     my $wait_time = $self->{+WAIT_TIME};
+    my $end_cb = $self->{+END_LOOP_CB};
 
-    my $task;
-    while(@$pending) {
+    my $gen = 0;
+    my $no_gen;
+    while (@$list || !$self->{+QUEUE_ENDED}) {
+        return if $end_cb && $end_cb->();
+        $no_gen = 0 if $self->poll_tasks;
         $self->wait_on_jobs;
-        $self->poll_tasks;
 
-        $task = $self->fetch_task($pending);
-        last if $task;
+        my %tried;
+        for (my $i = 0; $i < @$list; $i++) {
+            my $task = $list->[$i];
 
+            my $cat = $task->{category};
+            $gen++ if $cat eq 'general';
+            next if $tried{$cat}++;
+
+            my $meth = "get_$cat";
+            $meth = "get_general" if $no_gen && ($cat eq 'long' || $cat eq 'medium');
+
+            my $lock = $self->{+LOCKER}->$meth or next;
+
+            splice(@$list, $i, 1);
+
+            return ($task, $lock);
+        }
+
+        $no_gen = !$gen;
         sleep($wait_time) if $wait_time;
     }
 
-    return undef unless $task;
-
-    my $cat = $task->{category};
-    $self->bump($cat);
-
-    return $task;
-}
-
-sub fetch_task {
-    my $self = shift;
-    my ($pending) = @_;
-
-    my $running = $self->{+_RUNNING};
-
-    my $run = $self->{+RUN};
-    my $job_count = $run->job_count;
-
-    # Cannot run anything now
-    return undef if $running->{__ALL__} >= $job_count;
-
-    # Simple!
-    return shift @$pending if $job_count < 2;
-
-    # Cannot run anything else if an isolation task is running
-    return undef if $running->{isolation};
-
-    unless ($self->{+SCHEDULER}) {
-        if ($run->finite) {
-            require Test2::Harness::Run::Runner::ProcMan::Scheduler::Finite;
-            $self->{+SCHEDULER} = Test2::Harness::Run::Runner::ProcMan::Scheduler::Finite->new;
-        }
-        else {
-            require Test2::Harness::Run::Runner::ProcMan::Scheduler::Fair;
-            $self->{+SCHEDULER} = Test2::Harness::Run::Runner::ProcMan::Scheduler::Fair->new;
-        }
-    }
-
-    return $self->{+SCHEDULER}->fetch($job_count, $pending, $running);
+    return;
 }
 
 1;

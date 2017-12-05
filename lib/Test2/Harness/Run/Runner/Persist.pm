@@ -8,14 +8,12 @@ use Time::HiRes qw/sleep time/;
 use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util qw/read_file write_file open_file/;
 
-use Test2::Harness::Run::Runner::ProcMan::Persist();
 use Test2::Harness::Util::DepTracer();
 
 our $VERSION = '0.001039';
 
 use parent 'Test2::Harness::Run::Runner';
 use Test2::Harness::Util::HashBase qw{
-    -procman_pid
     -inotify -stats -last_checked
     -signaled
     -pfile
@@ -63,35 +61,20 @@ sub init {
     $self->{+STAGE} ||= '-NONE-';
 }
 
-sub procman_class { 'Test2::Harness::Run::Runner::ProcMan::Persist' }
-
 sub procman {
     my $self = shift;
-
-    return $self->{+_PROCMAN}
-        if $self->{+_PROCMAN};
-
-    my $procman = $self->SUPER::procman(
-        pid        => $self->{+PROCMAN_PID},
-        dir        => $self->{+DIR},
-        signal_ref => \($self->{+SIGNAL}),
-    );
-
-    $procman->spawn() or die "Could not spawn a procman!";
-
-    return $procman;
+    return $self->{+_PROCMAN} if $self->{+_PROCMAN};
+    return $self->SUPER::procman(end_loop_cb => sub { $self->check_watched });
 }
 
 sub respawn {
     my $self = shift;
 
-    my $procman = $self->procman;
-    my $pid = $procman->pid;
-
     print "$$ ($self->{+STAGE}) Waiting for currently running jobs to complete before respawning...\n";
+    my $procman = $self->procman;
     $self->procman->finish();
 
-    exec($self->cmd(procman_pid => $pid, pfile => $self->{+PFILE}));
+    exec($self->cmd(pfile => $self->{+PFILE}));
     warn "Should not get here, respawn failed";
     CORE::exit(255);
 }
@@ -139,11 +122,7 @@ sub stage_stop {
     my $self = shift;
     my ($stage) = @_;
 
-    my $posfile = File::Spec->catfile($self->{+DIR}, "$stage-pos");
-    my $pos = $self->procman->out->line_pos;
-    write_file($posfile, $pos);
-
-    print "$$ ($self->{+STAGE}) Waiting for currently running jobs to complete before exiting for restart...\n";
+    print "$$ ($self->{+STAGE}) Waiting for currently running jobs to complete before exiting...\n";
     $self->procman->finish;
 }
 
@@ -281,9 +260,6 @@ sub DESTROY {
     return unless $$ == $self->{+ROOT_PID};
 
     local ($?, $@, $!);
-
-    kill('HUP', $self->{+PROCMAN_PID}) or warn "Could not kill procman"
-        if $self->{+PROCMAN_PID};
 
     my $pfile = $self->{+PFILE} or return;
     return unless -f $pfile;

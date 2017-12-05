@@ -11,6 +11,9 @@ our $VERSION = '0.001039';
 our $SCRIPT;
 
 sub import {
+    # Do not let anything mess with our $.
+    local $.;
+
     my $class = shift;
     my ($argv, $runref) = @_ or return;
 

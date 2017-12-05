@@ -185,28 +185,6 @@ sub complete {
 
     if (my $job_ids = $self->{+JOB_IDS}) {
         return 1 unless first { !$self->{+SEEN_JOBS}->{$_} } keys %$job_ids;
-
-        if (my $batch = $self->{+BATCH}) {
-            require Test2::Harness::Run::Runner::ProcMan::Persist;
-            my $pm = $self->{procman} ||= Test2::Harness::Run::Runner::ProcMan::Persist->new(
-                batch_only => 1,
-                dir => $self->{+DIR}->root,
-            );
-
-            my $done = $pm->batch_check($batch);
-
-            return 0 unless defined $done; # Nothing happened yet
-            return 0 unless $done; # Still running
-
-            my @more = $self->{+DIR}->jobs_file->poll(max => 1, peek => 1);
-            my @more2 = $self->{+DIR}->jobs_file->poll(max => 1, peek => 1);
-            use Data::Dumper;
-            print STDERR Dumper(\@more, \@more2);
-
-            return 1 if $done && !@more;
-            return 0; # Still running
-        }
-
         return 0;
     }
 

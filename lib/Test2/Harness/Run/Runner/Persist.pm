@@ -10,7 +10,7 @@ use Test2::Harness::Util qw/read_file write_file open_file/;
 
 use Test2::Harness::Util::DepTracer();
 
-our $VERSION = '0.001039';
+our $VERSION = '0.001040';
 
 use parent 'Test2::Harness::Run::Runner';
 use Test2::Harness::Util::HashBase qw{

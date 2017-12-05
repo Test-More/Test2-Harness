@@ -2,7 +2,7 @@ package App::Yath::Plugin;
 use strict;
 use warnings;
 
-our $VERSION = '0.001040';
+our $VERSION = '0.001041';
 
 sub options {}
 

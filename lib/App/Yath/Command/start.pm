@@ -9,7 +9,7 @@ BEGIN {
     $DTRACE = Test2::Harness::Util::DepTracer->new;
 }
 
-our $VERSION = '0.001040';
+our $VERSION = '0.001041';
 
 use File::Spec();
 

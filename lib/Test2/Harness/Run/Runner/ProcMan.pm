@@ -15,7 +15,7 @@ use Test2::Harness::Run::Runner::ProcMan::Locker();
 use Test2::Harness::Util::File::JSONL();
 use Test2::Harness::Run::Queue();
 
-our $VERSION = '0.001040';
+our $VERSION = '0.001041';
 
 use Test2::Harness::Util::HashBase qw{
     -pid

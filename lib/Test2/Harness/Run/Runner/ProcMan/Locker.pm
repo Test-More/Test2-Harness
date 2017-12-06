@@ -8,7 +8,7 @@ use Time::HiRes qw/sleep/;
 
 use Test2::Harness::Run::Runner::ProcMan::Locker::Lock;
 
-our $VERSION = '0.001041';
+our $VERSION = '0.001042';
 
 use Test2::Harness::Util::HashBase qw{-dir -slots};
 

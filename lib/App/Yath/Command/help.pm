@@ -89,7 +89,7 @@ sub command_help {
 
     require App::Yath;
     my $cmd_class = App::Yath->load_command($command);
-    print $cmd_class->new->usage;
+    print $cmd_class->usage;
 
     return 0;
 }

@@ -14,13 +14,22 @@ sub capture(&) {
     return $stdout;
 }
 
-# MJD -- needs more tests here, some of these failed
 subtest command_help => sub {
-    my $stdout = capture {
+  for my $cmd (sort $CLASS->command_list) {
+    subtest "command_help_$cmd" => sub {
+      my $stdout = capture {
         my $one = $CLASS->new;
-        is($one->command_help('test'), 0, "got return of 0");
-    };
-    is($stdout, App::Yath::Command::test->usage, "printed usage of command");
+        my $res;
+        ok(lives { $res = $one->command_help($cmd) }, "ran $cmd\->command_help");
+        is($res, 0, "got return of 0");
+      };
+      if ($cmd eq "test") {
+        is($stdout, App::Yath::Command::test->usage, "printed usage of command");
+      }
+      my ($first_line) = ($stdout =~ /\A \n* (.*) \n/x);
+      like($first_line, qr#\AUsage: t/App/Yath/Command/help\.t $cmd \[options\]#, "First line of usage message");
+    }
+  }
 };
 
 subtest run => sub {

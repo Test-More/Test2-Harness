@@ -167,6 +167,15 @@ subtest init => sub {
         },
         "Called correct plugin methods",
     );
+
+    {
+      my @painted;
+      $control->override(paint => sub { shift; push @painted => @_ });
+      my $one = $TCLASS->new();
+      $one->settings->{help} = 1;
+      $one->init;
+      is(\@painted, [$one->usage], "Painted usage info");
+    }
 };
 
 subtest normalize_settings => sub {
@@ -303,18 +312,14 @@ subtest pre_run => sub {
     my $injected = 0;
     $control->override(inject_signal_handlers => sub { $injected++ });
 
-    my @painted;
-    $control->override(paint => sub { shift; push @painted => @_ });
-
     my $one = $TCLASS->new();
 
     $one->settings->{help} = 1;
     is($one->pre_run, 0, "returned 0 for help");
-    is(\@painted, [$one->usage], "Painted usage info");
     ok(!$injected, "did not inject signal handlers");
 
-    @painted = ();
-
+    my @painted = ();
+    $control->override(paint => sub { shift; push @painted => @_ });
     delete $one->settings->{help};
     $one->settings->{show_opts} = 1;
     $one->settings->{input}     = 'foo' x 1000;

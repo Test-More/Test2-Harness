@@ -2,7 +2,7 @@ use strict;
 use warnings;
 
 use Test2::Require::AuthorTesting;
-use Test::Spelling;
+use Test2::Require::Module 'Test::Spelling';
 
 my @stopwords;
 for (<DATA>) {

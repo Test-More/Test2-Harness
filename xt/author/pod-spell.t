@@ -3,6 +3,7 @@ use warnings;
 
 use Test2::Require::AuthorTesting;
 use Test2::Require::Module 'Test::Spelling';
+use Test::Spelling;
 
 my @stopwords;
 for (<DATA>) {
@@ -125,6 +126,7 @@ preload
 loadim
 preloading
 shm
+qvf
 
 
 ## other jargon, slang

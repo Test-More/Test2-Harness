@@ -21,17 +21,22 @@ sub init {
     $self->{+SLOTS} ||= 1;
 }
 
-*get_general = \&get_slot;
+sub DEFAULT_SLOT_PREFIX() { 'slot' }
 
-sub get_slot {
+sub get_lock {
     my $self   = shift;
     my %params = @_;
 
+    my $prefix    = $params{prefix}    || DEFAULT_SLOT_PREFIX;
+    my $max_delta = $params{max_delta} || 0;
+    my $max       = $params{max} || ($self->{+SLOTS} + $max_delta);
+
     while (1) {
-        for my $slot (1 .. $self->{+SLOTS}) {
-            open(my $fh, '>>', File::Spec->catfile($self->{+DIR}, "slot-$slot")) or die "Could not open slot-$slot lock file: $!";
+        for my $slot (1 .. $max) {
+            my $file = "$prefix-$slot";
+            open(my $fh, '>>', File::Spec->catfile($self->{+DIR}, $file)) or die "Could not open $file lock file: $!";
             flock($fh, LOCK_EX | LOCK_NB) or next;
-            return bless([[$slot, $fh]], 'Test2::Harness::Run::Runner::ProcMan::Locker::Lock');
+            return Test2::Harness::Run::Runner::ProcMan::Locker::Lock->new($file, $fh);
         }
 
         return undef unless $params{block};
@@ -40,60 +45,48 @@ sub get_slot {
 }
 
 *get_medium = \&get_long;
-
 sub get_long {
     my $self   = shift;
     my %params = @_;
-    my $flags  = LOCK_EX;
-    $flags |= LOCK_NB unless $params{block};
 
-    return $self->get_slot(@_) if $self->{+SLOTS} < 2;
+    $params{prefix} = 'long';
+    $params{max_delta} = $self->{+SLOTS} > 1 ? -1 : 0;
 
-    for my $slot (2 .. $self->{+SLOTS}) {
-        open(my $fh, '>>', File::Spec->catfile($self->{+DIR}, "long-$slot")) or die "Could not open slot-$slot lock file: $!";
-        flock($fh, $flags) or next;
-
-        my $slot = $self->get_slot(@_) or return undef;
-        push @$slot => ["long-$slot" => $fh];
-        return $slot;
-    }
-
-    return undef;
+    return $self->get_lock(%params);
 }
 
 sub get_immiscible {
     my $self   = shift;
     my %params = @_;
-    my $flags  = LOCK_EX;
-    $flags |= LOCK_NB unless $params{block};
 
-    open(my $fh, '>>', File::Spec->catfile($self->{+DIR}, 'immiscible')) or die "Could not open immiscible lock file: $!";
-    flock($fh, $flags) or return undef;
+    $params{prefix} = 'immiscible';
+    $params{max} = 1;
 
-    my $slot = $self->get_slot(%params) or return undef;
-
-    push @$slot => ['immiscible', $fh];
-    return $slot;
+    return $self->get_lock(%params);
 }
 
 sub get_isolation {
     my $self   = shift;
     my %params = @_;
-    my $flags  = LOCK_EX;
+
+    $params{prefix} = 'isolation';
+    $params{max} = 1;
+
+    my $lock = $self->get_lock(%params) or return undef;
+
+    my $flags = LOCK_EX;
     $flags |= LOCK_NB unless $params{block};
 
-    open(my $iso, '>>', File::Spec->catfile($self->{+DIR}, 'isolation')) or die "Could not open isolation lock file: $!";
-    flock($iso, $flags) or return undef;
-
-    my @locks = (['isolation' => $iso]);
-
     for my $slot (1 .. $self->{+SLOTS}) {
-        open(my $fh, '>>', File::Spec->catfile($self->{+DIR}, "slot-$slot")) or die "Could not open slot-$slot lock file: $!";
+        my $file = DEFAULT_SLOT_PREFIX . "-$slot";
+
+        open(my $fh, '>>', File::Spec->catfile($self->{+DIR}, $file)) or die "Could not open $file lock file: $!";
         flock($fh, $flags) or return undef;
-        push @locks => [$slot => $fh];
+
+        $lock->add($file, $fh);
     }
 
-    return bless(\@locks, 'Test2::Harness::Run::Runner::ProcMan::Locker::Lock');
+    return $lock;
 }
 
 1;

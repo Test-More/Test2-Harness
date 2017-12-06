@@ -217,38 +217,68 @@ sub next {
     my $self = shift;
     my ($stage) = @_;
 
-    $self->poll_tasks;
-    my $list = $self->{+PENDING}->{$stage} or return;
-
+    my $list      = $self->{+PENDING}->{$stage} ||= [];
     my $wait_time = $self->{+WAIT_TIME};
-    my $end_cb = $self->{+END_LOOP_CB};
+    my $end_cb    = $self->{+END_LOOP_CB};
+    my $locker    = $self->{+LOCKER};
 
-    my $gen = 0;
-    my $no_gen;
+    my $no_gen = 0;
     while (@$list || !$self->{+QUEUE_ENDED}) {
         return if $end_cb && $end_cb->();
+
+        my $gen = 0;
         $no_gen = 0 if $self->poll_tasks;
         $self->wait_on_jobs;
 
-        my %tried;
-        for (my $i = 0; $i < @$list; $i++) {
-            my $task = $list->[$i];
+        unless (@$list) {
+            sleep($wait_time) if $wait_time;
+            next;
+        }
 
-            my $cat = $task->{category};
-            $gen++ if $cat eq 'general';
-            next if $tried{$cat}++;
-
-            my $meth = "get_$cat";
-            $meth = "get_general" if $no_gen && ($cat eq 'long' || $cat eq 'medium');
-
-            my $lock = $self->{+LOCKER}->$meth or next;
-
-            splice(@$list, $i, 1);
-
+        # If the first item is an isolation then it is time, we have to run it,
+        # so block until we own all slots.
+        my $cat = $list->[0]->{category};
+        if ($cat eq 'isolation') {
+            my $task = shift @$list;
+            my $lock = $locker->get_isolation(block => 1);
             return ($task, $lock);
         }
 
-        $no_gen = !$gen;
+        # Get a lock, everything from here on out needs one.
+        my $lock = $locker->get_lock();
+        unless($lock) {
+            sleep($wait_time) if $wait_time;
+            next;
+        }
+
+        my (%seen, $use, $fallback);
+        for (my $i = 0; $i < @$list; $i++) {
+            my $task = $list->[$i];
+            my $cat = $task->{category};
+            next if $cat eq 'isolation'; # Not handled here.
+
+            if ($cat eq 'general') {
+                $use = $i;
+                last;
+            }
+            else {
+                $fallback = $i unless defined $fallback;
+                next if $seen{$cat}++;
+
+                my $meth = "get_$cat";
+                my $add_lock = $locker->$meth or next;
+                $lock->merge($add_lock);
+                $use = $i;
+                last;
+            }
+        }
+
+        $use = $fallback unless defined $use;
+        if (defined $use) {
+            my $task = splice(@$list, $use, 1);
+            return ($task, $lock);
+        }
+
         sleep($wait_time) if $wait_time;
     }
 

@@ -15,40 +15,45 @@ subtest one_slot => sub {
     my $one = $CLASS->new(dir => $DIR);
     isa_ok($one, [$CLASS], "Created an instance");
 
-    my $slot = $one->get_slot();
-    is($slot, [[1 => T()]], "Got back the slot number and a file descriptor");
+    {
+        my $slot = $one->get_lock();
+        is($slot, [["slot-1" => T()]], "Got back the slot number and a file descriptor");
+        ok(!$one->get_lock(), "Cannot get the slot again, it is locked");
+        $slot = undef;
 
-    ok(!$one->get_slot(),       "Cannot get the slot again, it is locked");
-    ok(!$one->get_immiscible(), "Cannot get immiscible while a slot is locked");
-    ok(!$one->get_isolation(),  "Cannot get isolation while a slot is locked");
+        ok($one->get_lock, "got the lock again");
+    }
 
-    $slot = undef;
-    ok($one->get_slot(), "Can get slot again after freeing the old ref");
+    {
+        my $slot  = $one->get_lock;           # Make sure these work with a slot locked
+        my $lock1 = $one->get_immiscible();
+        ok($lock1,                  "got immiscible lock");
+        ok(!$one->get_immiscible(), "Cannot get immiscible again");
+        $lock1 = undef;
+        ok($one->get_immiscible(), "Can get immiscible again once freed");
 
-    my $lock;
-    is(
-        $lock = $one->get_immiscible(),
-        [
-            [1            => T()],
-            ['immiscible' => T()],
-        ],
-        "Got immiscible lock and slot"
+        $lock1 = $one->get_long();
+        ok($lock1,            "got long lock");
+        ok(!$one->get_long(), "Cannot get long again");
+        $lock1 = undef;
+        ok($one->get_long(), "Can get long again once freed");
+    }
+
+    my $lock1 = $one->get_isolation();
+    ok($lock1, "Got isolation lock");
+    like(
+        $lock1,
+        [["isolation-1"], ["slot-1"]],
+        "Got both the isolation lock, and the slot locks"
     );
 
-    ok(!$one->get_slot(), "Cannot get the slot again, it is locked");
-    $lock = undef;
+    ok(!$one->get_isolation, "Only 1 isolation at a time");
 
-    is(
-        $lock = $one->get_isolation(),
-        [
-            ['isolation' => T()],
-            [1           => T()],
-        ],
-        "Got isolation lock and slot"
-    );
+    $lock1 = undef;
+    ok($one->get_isolation, "Isolation available again");
 
-    ok(!$one->get_slot, "Cannot get the slot again, it is locked");
-    $lock = undef;
+    $lock1 = $one->get_lock;
+    ok(!$one->get_isolation, "No isolation if a slot is locked");
 };
 
 subtest two_slots => sub {
@@ -56,51 +61,49 @@ subtest two_slots => sub {
     my $one = $CLASS->new(dir => $DIR, slots => 2);
     isa_ok($one, [$CLASS], "Created an instance");
 
-    my $slot1 = $one->get_slot();
-    is($slot1, [[1 => T()]], "Got back the slot number and a file descriptor");
+    {
+        my $slot1 = $one->get_lock();
+        is($slot1, [["slot-1" => T()]], "Got back the slot number and a file descriptor");
 
-    my $slot2 = $one->get_slot();
-    is($slot2, [[2 => T()]], "Got back the slot number and a file descriptor");
+        my $slot2 = $one->get_lock();
+        is($slot2, [["slot-2" => T()]], "Got back the slot number and a file descriptor");
 
-    ok(!$one->get_slot(),       "Cannot get a slot, all locked");
-    ok(!$one->get_immiscible(), "Cannot get immiscible while slots are all locked");
-    ok(!$one->get_isolation(),  "Cannot get isolation while slots are all locked");
+        ok(!$one->get_lock(), "Cannot get the slot again, it all locked");
+        $slot1 = undef;
 
-    $slot1 = undef;
-    ok($one->get_slot(), "Can get slot again after freeing the old ref");
+        ok($one->get_lock, "got the lock again");
+    }
 
-    my $lock;
-    is(
-        $lock = $one->get_immiscible(),
-        [
-            [1            => T()],
-            ['immiscible' => T()],
-        ],
-        "Got immiscible lock and a slot"
+    {
+        my $slot  = $one->get_lock;           # Make sure these work with a slot locked
+        my $lock1 = $one->get_immiscible();
+        ok($lock1,                  "got immiscible lock");
+        ok(!$one->get_immiscible(), "Cannot get immiscible again");
+        $lock1 = undef;
+        ok($one->get_immiscible(), "Can get immiscible again once freed");
+
+        $lock1 = $one->get_long();
+        ok($lock1,            "got long lock");
+        ok(!$one->get_long(), "Cannot get long again");
+        $lock1 = undef;
+        ok($one->get_long(), "Can get long again once freed");
+    }
+
+    my $lock1 = $one->get_isolation();
+    ok($lock1, "Got isolation lock");
+    like(
+        $lock1,
+        [["isolation-1"], ["slot-1"], ["slot-2"]],
+        "Got both the isolation lock, and the slot locks"
     );
 
-    $slot2 = undef;
-    ok($one->get_slot(),        "There is a free slot");
-    ok(!$one->get_immiscible(), "Cannot get immiscible while there is another immiscible");
-    $lock = undef;
+    ok(!$one->get_isolation, "Only 1 isolation at a time");
 
-    $slot1 = $one->get_slot();
-    ok($one->get_slot(),       "There is a free slot");
-    ok(!$one->get_isolation(), "Cannot get isolation while any slot is locked");
-    $slot1 = undef;
+    $lock1 = undef;
+    ok($one->get_isolation, "Isolation available again");
 
-    is(
-        $lock = $one->get_isolation(),
-        [
-            ['isolation' => T()],
-            [1           => T()],
-            [2           => T()],
-        ],
-        "Got isolation lock and both slots"
-    );
-
-    ok(!$one->get_slot(), "Cannot get the slot again, it is locked");
-    $lock = undef;
+    $lock1 = $one->get_lock;
+    ok(!$one->get_isolation, "No isolation if a slot is locked");
 };
 
 subtest five_slots => sub {
@@ -108,53 +111,68 @@ subtest five_slots => sub {
     my $one = $CLASS->new(dir => $DIR, slots => 5);
     isa_ok($one, [$CLASS], "Created an instance");
 
-    my $cnt = 1;
-    my @slots;
-    while (my $slot = $one->get_slot()) {
-        push @slots => $slot;
-        is($slot, [[$cnt++ => T()]], "Got back the slot number and a file descriptor");
+    {
+        my $slot1 = $one->get_lock();
+        is($slot1, [["slot-1" => T()]], "Got back the slot number and a file descriptor");
+
+        my $slot2 = $one->get_lock();
+        is($slot2, [["slot-2" => T()]], "Got back the slot number and a file descriptor");
+
+        my $slot3 = $one->get_lock();
+        is($slot3, [["slot-3" => T()]], "Got back the slot number and a file descriptor");
+
+        my $slot4 = $one->get_lock();
+        is($slot4, [["slot-4" => T()]], "Got back the slot number and a file descriptor");
+
+        my $slot5 = $one->get_lock();
+        is($slot5, [["slot-5" => T()]], "Got back the slot number and a file descriptor");
+
+        ok(!$one->get_lock(), "Cannot get the slot again, it all locked");
+        $slot1 = undef;
+
+        ok($one->get_lock, "got the lock again");
     }
 
-    ok(!$one->get_immiscible(), "Cannot get immiscible while slots are all locked");
-    ok(!$one->get_isolation(),  "Cannot get isolation while slots are all locked");
+    {
+        my $slot  = $one->get_lock;           # Make sure these work with a slot locked
+        my $lock1 = $one->get_immiscible();
+        ok($lock1,                  "got immiscible lock");
+        ok(!$one->get_immiscible(), "Cannot get immiscible again");
+        $lock1 = undef;
+        ok($one->get_immiscible(), "Can get immiscible again once freed");
 
-    @slots = ($slots[-1]);
+        $lock1 = $one->get_long();
+        ok($lock1,            "got long lock");
 
-    my $lock;
-    is(
-        $lock = $one->get_immiscible(),
-        [
-            [1            => T()],
-            ['immiscible' => T()],
-        ],
-        "Got immiscible lock and a slot"
+        my $lock2 = $one->get_long();
+        ok($lock2,            "got long lock");
+
+        my $lock3 = $one->get_long();
+        ok($lock3,            "got long lock");
+
+        my $lock4 = $one->get_long();
+        ok($lock4,            "got long lock");
+
+        ok(!$one->get_long(), "Cannot get long again");
+        $lock1 = undef;
+        ok($one->get_long(), "Can get long again once freed");
+    }
+
+    my $lock1 = $one->get_isolation();
+    ok($lock1, "Got isolation lock");
+    like(
+        $lock1,
+        [["isolation-1"], ["slot-1"], ["slot-2"], ["slot-3"], ["slot-4"], ["slot-5"]],
+        "Got both the isolation lock, and the slot locks"
     );
 
-    @slots = ();
-    ok($one->get_slot(),        "There is a free slot");
-    ok(!$one->get_immiscible(), "Cannot get immiscible while there is another immiscible");
-    $lock = undef;
+    ok(!$one->get_isolation, "Only 1 isolation at a time");
 
-    my $slot1 = $one->get_slot();
-    ok($one->get_slot(),       "There is a free slot");
-    ok(!$one->get_isolation(), "Cannot get isolation while any slot is locked");
-    $slot1 = undef;
+    $lock1 = undef;
+    ok($one->get_isolation, "Isolation available again");
 
-    is(
-        $lock = $one->get_isolation(),
-        [
-            ['isolation' => T()],
-            [1           => T()],
-            [2           => T()],
-            [3           => T()],
-            [4           => T()],
-            [5           => T()],
-        ],
-        "Got isolation lock and all slots"
-    );
-
-    ok(!$one->get_slot(), "Cannot get the slot again, it is locked");
-    $lock = undef;
+    $lock1 = $one->get_lock;
+    ok(!$one->get_isolation, "No isolation if a slot is locked");
 };
 
 done_testing;

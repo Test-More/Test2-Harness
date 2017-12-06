@@ -76,6 +76,14 @@ sub init {
 
     $self->normalize_settings();
 
+    # handle --help before the command has a chance
+    # to decide that anything might be wrong with the arguments
+    if ($settings->{help}) {
+        delete $settings->{quiet};
+        $self->paint($self->usage);
+        return;
+    }
+
     die "You cannot select both bzip2 and gzip for the log.\n"
         if $settings->{bzip2_log} && $settings->{gzip_log};
 
@@ -187,12 +195,6 @@ sub pre_run {
 
     my $settings = $self->{+SETTINGS};
 
-    if ($settings->{help}) {
-        delete $settings->{quiet};
-        $self->paint($self->usage);
-        return 0;
-    }
-
     if ($settings->{show_opts}) {
         require Test2::Harness::Util::JSON;
 
@@ -205,6 +207,10 @@ sub pre_run {
 
         return 0;
     }
+
+    # init() will already have printed the help message
+    # so there is nothing more to do
+    return 0 if $settings->{help};
 
     $self->inject_signal_handlers();
 

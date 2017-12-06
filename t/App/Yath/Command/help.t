@@ -16,21 +16,45 @@ sub capture(&) {
 
 subtest command_help => sub {
   for my $cmd (sort $CLASS->command_list) {
-    subtest "command_help_$cmd" => sub {
-      my $stdout = capture {
+
+    # Run 'yath cmd --help'
+    my $stdout_1 = capture {
+      my $cmd_class = App::Yath->load_command($cmd);
+      undef $@;
+      ok(lives { $cmd_class->new(args => { opts => ['--help'] }) },
+         "does $cmd --help live");
+      diag("exception: $@") if $@;
+    };
+
+    # Run 'yath help cmd'
+    my $stdout_2 = capture {
         my $one = $CLASS->new;
         my $res;
         ok(lives { $res = $one->command_help($cmd) }, "ran $cmd\->command_help");
         is($res, 0, "got return of 0");
       };
-      if ($cmd eq "test") {
-        is($stdout, App::Yath::Command::test->usage, "printed usage of command");
-      }
-      my ($first_line) = ($stdout =~ /\A \n* (.*) \n/x);
-      like($first_line, qr#\AUsage: t/App/Yath/Command/help\.t $cmd \[options\]#, "First line of usage message");
+
+    # Check the complete output of the 'test' command
+    if ($cmd eq "test") {
+      is($stdout_1, App::Yath::Command::test->usage, "printed usage of 'test --help'");
+      is($stdout_2, App::Yath::Command::test->usage, "printed usage of 'help test'");
+    }
+
+    # Check the first line of the output of every command
+    for my $t ( ["$cmd --help", $stdout_1 ],
+                ["help $cmd",   $stdout_2 ]) {
+      my ($what, $output) = @$t;
+      my $first_line = _first_line($output);
+      like($first_line, qr#\AUsage: t/App/Yath/Command/help\.t $cmd \[options\]#, "First line of usage message of '$what'");
     }
   }
 };
+
+sub _first_line {
+  my ($text) = @_;
+  my ($first) = ($text =~ /\A \n* (.*) \n/x);
+  return $first;
+}
 
 subtest run => sub {
     subtest a_command => sub {

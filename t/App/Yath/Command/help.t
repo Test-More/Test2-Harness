@@ -14,6 +14,7 @@ sub capture(&) {
     return $stdout;
 }
 
+# MJD -- needs more tests here, some of these failed
 subtest command_help => sub {
     my $stdout = capture {
         my $one = $CLASS->new;

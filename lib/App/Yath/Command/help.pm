@@ -10,6 +10,7 @@ use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
 use Test2::Harness::Util qw/open_file/;
+use List::Util ();
 
 sub show_bench { 0 }
 
@@ -25,21 +26,12 @@ command.
 
 sub group { '' }
 
-sub run {
+sub command_info_hash {
     my $self = shift;
-
-    my $args = $self->{+ARGS};
-
-    my @list;
-    push @list => @{$args->{opts}} if $args;
-    push @list => @{$args->{list}} if $args;
-
-    return $self->command_help(shift @list) if @list;
 
     require Module::Pluggable;
     Module::Pluggable->import(search_path => ['App::Yath::Command']);
 
-    my $len = 0;
     my %commands;
     for my $pkg ($self->plugins) {
         my $file = pkg_to_file($pkg);
@@ -51,19 +43,40 @@ sub run {
                 my $name = $pkg->name;
 
                 $commands{$group}->{$name} = $pkg->summary;
-                my $l = length($name);
-                $len = $l if $l > $len;
             }
             1;
         };
-    }
+      }
+    return \%commands;
+}
+
+sub command_list {
+    my $self = shift;
+
+    my $command_hash = $self->command_info_hash();
+    my @commands = map keys %$_, values %$command_hash;
+    return @commands;
+}
+
+sub run {
+    my $self = shift;
+    my $args = $self->{+ARGS};
+
+    my @list;
+    push @list => @{$args->{opts}} if $args;
+    push @list => @{$args->{list}} if $args;
+
+    return $self->command_help(shift @list) if @list;
+
+    my $maxlen = List::Util::max(map length, $self->command_list);
 
     print "\nUsage: $0 COMMAND [options]\n\nAvailable Commands:\n";
 
-    for my $group (sort keys %commands) {
-        my $set = $commands{$group};
+    my $command_info_hash = $self->command_info_hash;
+    for my $group (sort keys %$command_info_hash) {
+        my $set = $command_info_hash->{$group};
 
-        printf("    %${len}s:  %s\n", $_, $set->{$_}) for sort keys %$set;
+        printf("    %${maxlen}s:  %s\n", $_, $set->{$_}) for sort keys %$set;
         print "\n";
     }
 

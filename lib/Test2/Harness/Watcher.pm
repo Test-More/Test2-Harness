@@ -15,6 +15,8 @@ use Test2::Harness::Util::HashBase qw{
     -_complete
     -killed
 
+    -events
+
     -assertion_count
     -exit
     -plan
@@ -46,6 +48,8 @@ sub init {
     $self->{+NESTED} = 0 unless defined $self->{+NESTED};
 }
 
+sub clear_events { delete $_[0]->{+EVENTS} }
+
 sub has_exit { defined $_[0]->{+EXIT} }
 sub has_plan { defined $_[0]->{+PLAN} }
 
@@ -55,6 +59,16 @@ sub file {
 }
 
 sub process {
+    my $self = shift;
+
+    my ($e, $f) = $self->_process(@_);
+
+    push @{$self->{+EVENTS}} => $e if $e;
+
+    return ($e, $f);
+}
+
+sub _process {
     my $self = shift;
     my ($event) = @_;
 
@@ -75,7 +89,6 @@ sub process {
         $st->{event} = $event;
         return ();
     }
-
 
     # Not actually a subtest end, someone printed to STDOUT
     if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}})) {

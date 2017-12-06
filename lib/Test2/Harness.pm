@@ -7,6 +7,8 @@ our $VERSION = '0.001041';
 use Carp qw/croak/;
 use List::Util qw/sum/;
 use Time::HiRes qw/sleep time/;
+use Sys::Hostname qw/hostname/;
+use Test2::Harness::Util::JSON qw/encode_canon_json encode_json/;
 use Data::Dumper;
 
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
@@ -25,6 +27,13 @@ use Test2::Harness::Util::HashBase qw{
     -event_timeout
     -post_exit_timeout
     -run_id
+
+    -email_from
+    -email_owner
+    -slack_url
+    -slack_fail
+    -slack_notify
+    -slack_log
 };
 
 sub init {
@@ -149,6 +158,10 @@ sub iteration {
                     $f->{harness_job_end}->{skip} = $plan->{details} || "No reason given" if $plan && !$plan->{count};
 
                     push @{$f->{info}} => $watcher->fail_info_facet_list;
+
+                    $self->send_notices($watcher, $event) if $watcher->fail;
+
+                    $watcher->clear_events();
                 }
             }
 
@@ -158,6 +171,110 @@ sub iteration {
     }
 
     return;
+}
+
+sub send_notices {
+    my $self = shift;
+    my ($watcher, $event) = @_;
+
+    return unless $self->{+EMAIL_OWNER} || $self->{+SLACK_FAIL} || $self->{+SLACK_NOTIFY};
+
+    my $file = $watcher->file;
+    my $events = $watcher->events;
+    my $log = "";
+    my $pretty = "";
+    my $host = hostname();
+
+    require Test2::Formatter::Test2;
+    open(my $fh, '>>', \$pretty) or die "Could not open pretty: $!";
+    print $fh <<"    EOT";
+Test Failed on $host: $file
+
+    EOT
+    my $renderer = Test2::Formatter::Test2->new(io => $fh, verbose => 100);
+
+    for my $e (@$events) {
+        $log .= encode_canon_json($e) . "\n";
+        $renderer->write($e);
+    }
+    $log .= encode_canon_json($event) . "\n";
+    $renderer->write($event);
+
+    require Test2::Harness::Util::TestFile;
+    my $tf = Test2::Harness::Util::TestFile->new(file => $watcher->file);
+
+    $self->send_slack_owners($tf, $log, $pretty);
+    $self->send_email_owners($tf, $log, $pretty);
+}
+
+sub send_slack_owners {
+    my $self = shift;
+    my ($tf, $log, $pretty) = @_;
+
+    return unless $self->{+SLACK_URL};
+
+    my @to = $tf->meta('slack');
+    push @to => @{$self->{+SLACK_FAIL}} if $self->{+SLACK_FAIL};
+    return unless @to;
+
+    require HTTP::Tiny;
+    my $ht = HTTP::Tiny->new();
+
+    my @attach = ({
+        fallback => 'Test Output',
+        pretext  => 'Test Output',
+        text => "```$pretty```",
+        mrkdwn_in => ['text'],
+    });
+
+    push @attach => {
+        fallback => 'Test Event Log',
+        pretext  => 'Test Event Log',
+        text     => $log,
+    } if $self->{+SLACK_LOG};
+
+    my $host = hostname();
+    my $file = $tf->file;
+
+    for my $dest (@to) {
+        my $r = $ht->post(
+            $self->{+SLACK_URL},
+            {
+                headers => {'content-type' => 'application/json'},
+                content => encode_json(
+                    {
+                        channel     => $dest,
+                        text        => "Test Failed on $host: $file",
+                        attachments => \@attach
+                    }
+                ),
+            },
+        );
+        warn "Failed to send slack message to '$dest'" unless $r->{success};
+    }
+}
+
+sub send_email_owners {
+    my $self = shift;
+    my ($tf, $log, $body) = @_;
+
+    my @to = $tf->meta('owner');
+
+    my $host     = hostname();
+    my $subject  = "Test Failure on $host";
+
+    my $mail = Email::Stuffer->to(@to);
+    $mail->from($self->{+EMAIL_FROM});
+    $mail->subject($subject);
+    $mail->html_body("<html><body><pre>$body</pre></body></html>");
+
+    $mail->attach(
+        $log,
+        content_type => 'application/x-json-stream',
+        filename => 'log.jsonl',
+    );
+
+    eval { $mail->send_or_die; 1 } or warn $@;
 }
 
 sub check_timeout {

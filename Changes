@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - Make realtime slack/email of failures possible
     - Add QVF (Quiet but verbose on failure) formatter
 
 0.001040  2017-12-04 23:20:35-08:00 America/Los_Angeles

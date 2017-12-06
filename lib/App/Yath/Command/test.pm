@@ -181,9 +181,9 @@ sub options {
             used_by => {jobs => 1},
             section => 'Job Options',
             usage => ['--slack-log', '--no-slack-log'],
-            summary => ['On by default, log file will be attached if available'],
+            summary => ['Off by default, log file will be attached if available'],
             long_desc => "Attach the event log to any slack notifications.",
-            default => 1,
+            default => 0,
         },
 
         {
@@ -228,6 +228,16 @@ sub options {
                 eval { require Email::Stuffer; 1 } or die "Cannot use --email-owner without Email::Stuffer: $@";
                 $settings->{email_owner} = 1;
             },
+        },
+
+        {
+            spec => 'batch-owner-notices!',
+            field => 'batch_owner_notices',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--no-batch-owner-notices'],
+            long_desc => 'Usually owner failures are sent as a single batch at the end of testing. Toggle this to send failures as they happen.',
+            default => 1,
         },
 
         {
@@ -304,6 +314,15 @@ sub run_command {
             post_exit_timeout => $settings->{post_exit_timeout},
             jobs              => $settings->{jobs},
             jobs_todo         => $jobs_todo,
+
+            $settings->{batch_owner_notices} ? () : (
+                email_owner  => $settings->{email_owner},
+                email_from   => $settings->{email_from},
+                slack_url    => $settings->{slack_url},
+                slack_fail   => $settings->{slack_fail},
+                slack_notify => $settings->{slack_notify},
+                slack_log    => $settings->{slack_log},
+            ),
         );
 
         $stat = $harness->run();
@@ -382,7 +401,7 @@ sub run_command {
         $exit ||= 255;
     }
 
-    if ($fail || @$bad) {
+    if ($settings->{batch_owner_notices} && ($fail || @$bad)) {
         my (%owners, %slacks);
         for my $filename (map { $_->file } @$bad) {
             my $file = Test2::Harness::Util::TestFile->new(file => $filename);

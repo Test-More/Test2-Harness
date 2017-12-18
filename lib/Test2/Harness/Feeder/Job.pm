@@ -2,7 +2,7 @@ package Test2::Harness::Feeder::Job;
 use strict;
 use warnings;
 
-our $VERSION = '0.001042';
+our $VERSION = '0.001043';
 
 use Carp qw/croak carp/;
 use Scalar::Util qw/blessed/;

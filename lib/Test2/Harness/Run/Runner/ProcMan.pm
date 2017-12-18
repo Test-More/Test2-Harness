@@ -6,12 +6,12 @@ use Carp qw/croak/;
 use POSIX ":sys_wait_h";
 use List::Util qw/first/;
 use Time::HiRes qw/sleep/;
+use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
 
 use File::Spec();
 
 use Test2::Harness::Util qw/write_file_atomic/;
 
-use Test2::Harness::Run::Runner::ProcMan::Locker();
 use Test2::Harness::Util::File::JSONL();
 use Test2::Harness::Run::Queue();
 
@@ -23,7 +23,9 @@ use Test2::Harness::Util::HashBase qw{
     -jobs   -jobs_file -jobs_seen
     -stages
 
-    -locker
+    -slots
+
+    -_lock -lock_file
     -pending
     -_pids
     -end_loop_cb
@@ -65,11 +67,6 @@ sub init {
 
     $self->{+JOBS} ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
     $self->{+JOBS_SEEN} = {};
-
-    $self->{+LOCKER} = Test2::Harness::Run::Runner::ProcMan::Locker->new(
-        dir => $self->{+DIR},
-        slots => $self->{+RUN}->job_count,
-    );
 
     $self->read_jobs();
     $self->preload_queue();
@@ -191,6 +188,8 @@ sub wait_on_jobs {
 
         my $params = delete $self->{+_PIDS}->{$pid};
         my $cat = $params->{task}->{category};
+        $cat = 'long' if $cat eq 'medium';
+        $self->{+SLOTS}->{$cat}++;
 
         unless ($check == $pid) {
             $exit = -1;
@@ -199,6 +198,8 @@ sub wait_on_jobs {
 
         $self->write_exit(%$params, exit => $exit);
     }
+
+    $self->unlock unless keys %{$self->{+_PIDS}};
 }
 
 sub write_remaining_exits {
@@ -217,72 +218,107 @@ sub next {
     my $self = shift;
     my ($stage) = @_;
 
-    my $list      = $self->{+PENDING}->{$stage} ||= [];
-    my $wait_time = $self->{+WAIT_TIME};
-    my $end_cb    = $self->{+END_LOOP_CB};
-    my $locker    = $self->{+LOCKER};
+    my $task = $self->_next($stage);
 
-    my $no_gen = 0;
-    while (@$list || !$self->{+QUEUE_ENDED}) {
-        return if $end_cb && $end_cb->();
-
-        my $gen = 0;
-        $no_gen = 0 if $self->poll_tasks;
-        $self->wait_on_jobs;
-
-        unless (@$list) {
-            sleep($wait_time) if $wait_time;
-            next;
-        }
-
-        # If the first item is an isolation then it is time, we have to run it,
-        # so block until we own all slots.
-        my $cat = $list->[0]->{category};
-        if ($cat eq 'isolation') {
-            my $task = shift @$list;
-            my $lock = $locker->get_isolation(block => 1);
-            return ($task, $lock);
-        }
-
-        # Get a lock, everything from here on out needs one.
-        my $lock = $locker->get_lock();
-        unless($lock) {
-            sleep($wait_time) if $wait_time;
-            next;
-        }
-
-        my (%seen, $use, $fallback);
-        for (my $i = 0; $i < @$list; $i++) {
-            my $task = $list->[$i];
-            my $cat = $task->{category};
-            next if $cat eq 'isolation'; # Not handled here.
-
-            if ($cat eq 'general') {
-                $use = $i;
-                last;
-            }
-            else {
-                $fallback = $i unless defined $fallback;
-                next if $seen{$cat}++;
-
-                my $meth = "get_$cat";
-                my $add_lock = $locker->$meth or next;
-                $lock->merge($add_lock);
-                $use = $i;
-                last;
-            }
-        }
-
-        $use = $fallback unless defined $use;
-        if (defined $use) {
-            my $task = splice(@$list, $use, 1);
-            return ($task, $lock);
-        }
-
-        sleep($wait_time) if $wait_time;
+    unless ($task) {
+        $self->wait_on_jobs() while keys %{$self->{+_PIDS}};
     }
 
-    return;
+    return $task;
+}
+
+sub lock {
+    my $self = shift;
+    return 1 if $self->{+_LOCK};
+    return 1 unless $self->{+LOCK_FILE};
+
+    open(my $lock, '>>', $self->{+LOCK_FILE}) or die "Could not open lock file: $!";
+    flock($lock, LOCK_EX | LOCK_NB) or next;
+    $self->{+_LOCK} = $lock;
+
+    return 1;
+}
+
+sub unlock {
+    my $self = shift;
+
+    my $lock = delete $self->{+_LOCK} or return 1;
+    flock($lock, LOCK_UN);
+    close($lock);
+    return 1;
+}
+
+sub _next {
+    my $self = shift;
+    my ($stage) = @_;
+
+    my $end_cb    = $self->{+END_LOOP_CB};
+    my $list      = $self->{+PENDING}->{$stage} ||= [];
+    my $wait_time = $self->{+WAIT_TIME};
+
+    my $max = $self->{+RUN}->job_count || 1;
+    my $slow = $max - 1;
+
+    my $slots = $self->{+SLOTS} ||= {
+        immiscible => 1,
+        isolation  => 1,
+        long       => $max - 1,
+        general    => $max,
+    };
+
+    my $first = 1;
+    while (@$list || !$self->{+QUEUE_ENDED}) {
+        return if $end_cb && $end_cb->();
+        sleep $wait_time unless $first;
+        $first = 0;
+
+        $self->poll_tasks;
+        $self->wait_on_jobs;
+
+        next unless @$list;
+        next unless $self->lock;
+
+        my $running = 0;
+        my %cats;
+        for my $job (values %{$self->{+_PIDS}}) {
+            $running++;
+            $cats{$job->{task}->{category}}++;
+        }
+
+        # At max jobs already
+        next if $running >= $max;
+
+        # None if isolation is running
+        next if $cats{isolation};
+
+        return shift @$list if $max == 1;
+
+        my $fallback;
+        for(my $i = 0; $i < @$list; $i++) {
+            my $cat = $list->[$i]->{category};
+            $cat = 'long' if $cat eq 'medium';
+
+            die "Unknown category: $cat" unless defined $slots->{$cat};
+
+            $fallback = $i if $cat eq 'long';
+
+            next unless $slots->{$cat};
+            $self->{+SLOTS}->{$cat}--;
+            return scalar splice(@$list, $i, 1);
+        }
+
+        # If we have a long one, but no generals, we can go ahead and run the long one
+        return scalar splice(@$list, $fallback, 1)
+            if $fallback;
+    }
 }
 
 1;
+
+__END__
+    long       => 1,
+    medium     => 1,
+    general    => 1,
+    isolation  => 1,
+    immiscible => 1,
+

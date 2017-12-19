@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Remove test for deleted file
+
 0.001042  2017-12-18 15:03:26-08:00 America/Los_Angeles
 
     - Better scheduling simplification

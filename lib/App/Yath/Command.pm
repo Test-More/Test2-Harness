@@ -84,6 +84,12 @@ sub init {
         return;
     }
 
+    if ($settings->{version}) {
+        delete $settings->{quiet};
+        $self->paint($self->version_details);
+        return;
+    }
+
     die "You cannot select both bzip2 and gzip for the log.\n"
         if $settings->{bzip2_log} && $settings->{gzip_log};
 
@@ -210,7 +216,7 @@ sub pre_run {
 
     # init() will already have printed the help message
     # so there is nothing more to do
-    return 0 if $settings->{help};
+    return 0 if $settings->{help} || $settings->{version};
 
     $self->inject_signal_handlers();
 
@@ -294,6 +300,24 @@ sub options {
             section => 'Help',
             usage   => ['-h  --help'],
             summary => ['Exit after showing this help message'],
+        },
+
+        {
+            spec    => 'h|help',
+            field   => 'help',
+            used_by => {all => 1},
+            section => 'Help',
+            usage   => ['-h  --help'],
+            summary => ['Exit after showing this help message'],
+        },
+
+        {
+            spec    => 'V|version',
+            field   => 'version',
+            used_by => {all => 1},
+            section => 'Help',
+            usage   => ['-V --version'],
+            summary => ['Show version information'],
         },
 
         {
@@ -1086,6 +1110,31 @@ $options
     $usage =~ s/ +$//gms;
 
     return $usage;
+}
+
+sub version_details {
+    my $self = shift;
+
+    require Test2::Util::Table;
+
+    my $out = <<"    EOT";
+
+Yath version: $VERSION
+
+Other version info:
+    EOT
+
+    my @vers = (
+        [perl => $^V],
+        map {eval "require $_;" && [$_ => $_->VERSION]} qw/App::Yath Test2::Harness Test2::Suite Test2::API Test::Builder/
+    );
+
+    $out .= join "\n" => Test2::Util::Table::table(
+        header => [qw/COMPONENT VERSION/],
+        rows   => \@vers,
+    );
+
+    return "$out\n\n";
 }
 
 sub loggers {

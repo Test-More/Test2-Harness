@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add -V/--version flags
+
 0.001043  2017-12-19 10:12:22-08:00 America/Los_Angeles
 
     - Remove test for deleted file

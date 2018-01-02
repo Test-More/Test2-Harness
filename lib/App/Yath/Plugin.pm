@@ -10,6 +10,8 @@ sub pre_init {}
 
 sub post_init {}
 
+sub post_run {}
+
 sub find_files {}
 
 sub block_default_search {}

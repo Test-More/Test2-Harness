@@ -370,6 +370,10 @@ sub run_command {
     # Possible failure causes
     my $fail = $lost || $exit || !defined($exit) || !$ok || !$stat;
 
+    for my $plugin (@{$self->{+PLUGINS}}) {
+        $plugin->post_run(command => $self, settings => $settings, stat => $stat);
+    }
+
     if (@$bad) {
         $self->paint("\nThe following test jobs failed:\n");
         $self->paint("  [", $_->{job_id}, '] ', File::Spec->abs2rel($_->file), "\n") for sort {

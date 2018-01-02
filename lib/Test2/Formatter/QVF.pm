@@ -24,7 +24,8 @@ sub write {
 
     push @{$self->{+JOB_BUFFERS}->{$job_id}} => [$e, $num, $f];
 
-    my $show = 0;
+    my $show = $self->update_active_disp($f);
+
     if ($f->{harness_job_end}) {
         $show = 1;
 

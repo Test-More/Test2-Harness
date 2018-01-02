@@ -197,20 +197,7 @@ sub write {
     my ($self, $e, $num, $f) = @_;
     $f ||= $e->facet_data;
 
-    my $should_show = 0;
-    if ($f->{harness_job_launch}) {
-        my $job = $f->{harness_job};
-        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_id};
-        $self->_update_active_disp;
-        $should_show = 1;
-    }
-
-    if ($f->{harness_job_end}) {
-        my $file = $f->{harness_job_end}->{file};
-        delete $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($file)};
-        $self->_update_active_disp;
-        $should_show = 1;
-    }
+    my $should_show = $self->update_active_disp($f);
 
     $self->{+ECOUNT}++;
 
@@ -275,8 +262,25 @@ sub write {
     }
 }
 
-sub _update_active_disp {
+sub update_active_disp {
     my $self = shift;
+    my ($f) = @_;
+
+    my $should_show = 0;
+
+    if ($f->{harness_job_launch}) {
+        my $job = $f->{harness_job};
+        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_id};
+        $should_show = 1;
+    }
+
+    if ($f->{harness_job_end}) {
+        my $file = $f->{harness_job_end}->{file};
+        delete $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($file)};
+        $should_show = 1;
+    }
+
+    return 0 unless $should_show;
 
     my $active = $self->{+ACTIVE_FILES};
 
@@ -290,6 +294,8 @@ sub _update_active_disp {
     $str .= ")";
 
     $self->{+_ACTIVE_DISP} = $str;
+
+    return 1;
 }
 
 sub render_ecount {

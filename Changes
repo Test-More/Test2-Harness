@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - Make it possible to toggle --qvf off
     - Show files being run in --qvf mode
 
 0.001044  2018-01-02 07:25:06-08:00 America/Los_Angeles

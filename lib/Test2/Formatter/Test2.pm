@@ -253,7 +253,7 @@ sub write {
             $self->{+_BUFFERED} = 1;
         }
     }
-    elsif ($depth) {
+    elsif ($depth && $lines && @$lines) {
         print $io $lines->[0];
         $self->{+_BUFFERED} = 1;
     }
@@ -600,6 +600,7 @@ sub render_about {
     my $self = shift;
     my ($f, $tree) = @_;
 
+    return if $f->{about}->{no_display};
     return unless $f->{about} && $f->{about}->{package} && $f->{about}->{details};
 
     my $type = substr($f->{about}->{package}, 0 - TAG_WIDTH, TAG_WIDTH);

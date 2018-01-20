@@ -300,6 +300,14 @@ sub _mod_preload {
     return $mod;
 }
 
+sub set_sig_handlers {
+    my $self = shift;
+
+    $SIG{INT}  = sub { $self->handle_signal('INT') };
+    $SIG{HUP}  = sub { $self->handle_signal('HUP') };
+    $SIG{TERM} = sub { $self->handle_signal('TERM') };
+}
+
 sub start {
     my $self = shift;
 
@@ -311,9 +319,10 @@ sub start {
     my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
     write_file_atomic($pidfile, "$$");
 
-    local $SIG{INT}  = sub { $self->handle_signal('INT') };
-    local $SIG{HUP}  = sub { $self->handle_signal('HUP') };
-    local $SIG{TERM} = sub { $self->handle_signal('TERM') };
+    local $SIG{INT}  = $SIG{INT};
+    local $SIG{HUP}  = $SIG{HUP};
+    local $SIG{TERM} = $SIG{TERM};
+    $self->set_sig_handlers;
 
     my $env = $run->env_vars;
 
@@ -396,6 +405,11 @@ sub stage_start {
 
     my $start_meth = "start_stage_$stage";
     for my $mod (@{$self->{+STAGED}}) {
+        # Localize these in case something we preload tries to modify them.
+        local $SIG{INT}  = $SIG{INT};
+        local $SIG{HUP}  = $SIG{HUP};
+        local $SIG{TERM} = $SIG{TERM};
+
         next unless $mod->can($start_meth);
         $mod->$start_meth;
     }

@@ -21,6 +21,7 @@ use Test2::Harness::Util::HashBase qw{
     -root_pid
     -dtrace
 
+    -monitor
     -watched
     -stage
 
@@ -66,7 +67,7 @@ sub procman {
     my $self = shift;
     return $self->{+_PROCMAN} if $self->{+_PROCMAN};
     return $self->SUPER::procman(
-        end_loop_cb => sub { $self->check_watched },
+        end_loop_cb => sub { $self->check_watched || $self->check_monitored },
         lock_file => File::Spec->catfile($self->{+DIR}, 'lock'),
     );
 }
@@ -93,7 +94,6 @@ sub handle_signal {
 
     if ($sig eq 'HUP') {
         print STDERR "$$ ($self->{+STAGE}) Runner cought SIG$sig, reloading...\n";
-
         return;
     }
 
@@ -130,6 +130,27 @@ sub stage_stop {
     $self->procman->finish;
 }
 
+sub check_monitored {
+    my $self = shift;
+
+    my $monitor = $self->{+MONITOR} or return;
+    my $sig = $self->{+SIGNAL};
+
+    my $reaped = 0;
+    while(my ($cs, $pid) = each %$monitor) {
+        kill($sig, $pid) or warn "$$ ($self->{+STAGE}) could not singal stage '$cs' pid $pid" if $sig;
+        my $check = waitpid($pid, $sig ? 0 : WNOHANG);
+        my $exit = $?;
+        next unless $check;
+        $reaped++;
+        die "$$ ($self->{+STAGE}) waitpid error for stage '$cs': $check (expected $pid)" if $check != $pid;
+        print "$$ ($self->{+STAGE}) Stage '$cs' has exited ($exit)\n";
+        delete $monitor->{$cs};
+    }
+
+    return $reaped;
+}
+
 sub stage_loop {
     my $self = shift;
 
@@ -159,22 +180,14 @@ sub stage_loop {
         $0 = "yath-runner-$stage";
         $self->stage_start($stage);
 
-        my $monitor = {};
+        my $monitor = $self->{+MONITOR} = {};
 
         until ($pman->queue_ended) {
             $self->check_watched();
             my $sig = $self->{+SIGNAL};
 
-            print "$$ ($self->{+STAGE}) Waiting for child stages to exit...\n" if $sig && keys %$monitor;
-            while(my ($cs, $pid) = each %$monitor) {
-                kill($sig, $pid) or warn "$$ ($self->{+STAGE}) could not singal stage '$cs' pid $pid" if $sig;
-                my $check = waitpid($pid, $sig ? 0 : WNOHANG);
-                my $exit = $?;
-                next unless $check;
-                die "$$ ($self->{+STAGE}) waitpid error for stage '$cs': $check (expected $pid)" if $check != $pid;
-                print "$$ ($self->{+STAGE}) Stage '$cs' has exited ($exit)\n";
-                delete $monitor->{$cs};
-            }
+            print "$$ ($self->{+STAGE}) Waiting for child stages to exit...\n" if $sig && keys %{$monitor};
+            $self->check_monitored();
 
             last if $sig;
 
@@ -232,6 +245,8 @@ sub stage_run_iso {
     my $pid = fork();
     die "Could not fork" unless defined($pid);
     return ($pid, undef) if $pid;
+
+    delete $self->{+MONITOR};
 
     my $dtrace = $self->dtrace;
 
@@ -326,6 +341,8 @@ sub watch {
 
 sub check_watched {
     my $self = shift;
+
+    return $self->{+SIGNAL} if $self->{+SIGNAL};
 
     my %changed;
     if (USE_INOTIFY()) {

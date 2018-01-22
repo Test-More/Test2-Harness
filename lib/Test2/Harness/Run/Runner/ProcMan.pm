@@ -233,7 +233,7 @@ sub lock {
     return 1 unless $self->{+LOCK_FILE};
 
     open(my $lock, '>>', $self->{+LOCK_FILE}) or die "Could not open lock file: $!";
-    flock($lock, LOCK_EX | LOCK_NB) or next;
+    flock($lock, LOCK_EX | LOCK_NB) or return 0;
     $self->{+_LOCK} = $lock;
 
     return 1;

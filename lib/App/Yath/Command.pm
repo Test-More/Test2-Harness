@@ -303,15 +303,6 @@ sub options {
         },
 
         {
-            spec    => 'h|help',
-            field   => 'help',
-            used_by => {all => 1},
-            section => 'Help',
-            usage   => ['-h  --help'],
-            summary => ['Exit after showing this help message'],
-        },
-
-        {
             spec    => 'V|version',
             field   => 'version',
             used_by => {all => 1},

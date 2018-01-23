@@ -948,10 +948,10 @@ subtest options => sub {
 
     subtest renderer => sub {
         my $one = $TCLASS->new(args => {opts => []});
-        is($one->settings->{renderer}, '+Test2::Harness::Renderer::Formatter', "Default renderer");
+        is($one->settings->{renderers}, ['+Test2::Harness::Renderer::Formatter'], "Default renderer");
 
         my $two = $TCLASS->new(args => {opts => ['--renderer', 'foo']});
-        is($two->settings->{renderer}, 'foo', "set renderer");
+        is($two->settings->{renderers}, ['foo'], "set renderer");
     };
 
     subtest formatter => sub {
@@ -1157,13 +1157,7 @@ subtest renderers => sub {
     is($one->renderers, [], "No renderers in quiet mode.");
 
     $one = $TCLASS->new(args => {opts => []});
-    $one->settings->{renderer} = '';
-    is($one->renderers, [], "Empty renderer setting.");
-
-    $one = $TCLASS->new(args => {opts => []});
-    is($one->settings->{renderer},  '+Test2::Harness::Renderer::Formatter', "Got default renderer");
-    $one->settings->{formatter} = undef;
-    is(dies { $one->renderers }, "No formatter specified.\n", "Need a formatter");
+    is($one->settings->{renderers}, ['+Test2::Harness::Renderer::Formatter'], "Got default renderer");
 
     {
         # This is to avoid extra output from the new formatter
@@ -1172,7 +1166,7 @@ subtest renderers => sub {
         open(STDOUT, '>', \$STDOUT) or die "could not redirect STDOUT";
 
         $one = $TCLASS->new(args => {opts => []});
-        is($one->settings->{renderer},  '+Test2::Harness::Renderer::Formatter', "Got default renderer");
+        is($one->settings->{renderers},  ['+Test2::Harness::Renderer::Formatter'], "Got default renderer");
         is($one->settings->{formatter}, '+Test2::Formatter::Test2',             "Got default formatter");
         is(
             $one->renderers,
@@ -1192,7 +1186,7 @@ subtest renderers => sub {
         );
 
         $one = $TCLASS->new(args => {opts => ['--formatter' => 'TAP']});
-        is($one->settings->{renderer},  '+Test2::Harness::Renderer::Formatter', "Got default renderer");
+        is($one->settings->{renderers}, ['+Test2::Harness::Renderer::Formatter'], "Got default renderer");
         is($one->settings->{formatter}, 'TAP',             "formatter is TAP");
         is(
             $one->renderers,
@@ -1214,19 +1208,13 @@ subtest renderers => sub {
 
     require Test2::Harness::Renderer;
     my $rmock = mock 'Test2::Harness::Renderer' => (
-        add => { new => sub { bless {}, $_[0] } },
+        override => { new => sub { bless {}, $_[0] } },
     );
     $one = $TCLASS->new(args => {opts => ['--renderer' => '+Test2::Harness::Renderer']});
     is(
         $one->renderers,
         [object { prop blessed => 'Test2::Harness::Renderer' }],
         "Got expected renderer, no formatter"
-    );
-
-    is(
-        dies { $TCLASS->new( args => { opts => [ '--formatter'  => 'foo', '--renderer' => 'foo' ] })->renderers },
-        "The formatter option is only available when the 'Formatter' renderer is in use.\n",
-        "Cannot use a formatter with a regular renderer"
     );
 };
 

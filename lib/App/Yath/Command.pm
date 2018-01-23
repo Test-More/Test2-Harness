@@ -777,14 +777,14 @@ sub options {
         },
 
         {
-            spec    => 'r|renderer=s',
-            field   => 'renderer',
+            spec    => 'r|renderer=s@',
+            field   => 'renderers',
             used_by => {display => 1},
             section => 'Display Options',
-            usage   => ['-r +Module', '-r Postfix', '--renderer ...'],
-            summary   => ['Specify an alternate renderer', '(Default: "Formatter")'],
+            usage   => ['-r +Module', '-r Postfix', '--renderer ...', '-r +Module=output_file'],
+            summary   => ['Specify renderers', '(Default: "Formatter")'],
             long_desc => 'Use "+" to give a fully qualified module name. Without "+" "Test2::Harness::Renderer::" will be prepended to your argument.',
-            default   => '+Test2::Harness::Renderer::Formatter',
+            default   => sub { $_[1]->{quiet} ? [] : ['+Test2::Harness::Renderer::Formatter'] },
         },
 
         {
@@ -804,15 +804,14 @@ sub options {
             section   => 'Display Options',
             usage     => ['--formatter Mod', '--formatter +Mod'],
             summary   => ['Specify the formatter to use', '(Default: "Test2")'],
-            long_desc => 'Only useful when the renderer is set to "Formatter". This specified the Test2::Formatter::XXX that will be used to render the test output.',
+            long_desc => 'Only useful when a renderer is set to "Formatter". This specified the Test2::Formatter::XXX that will be used to render the test output.',
             default   => sub {
                 my ($self, $settings, $field) = @_;
 
-                my $renderer = $settings->{renderer} or return undef;
+                my $renderers = $settings->{renderers} or return undef;
 
                 my $need_formatter = 0;
-                $need_formatter ||= 1 if $renderer eq 'Formatter';
-                $need_formatter ||= 1 if $renderer eq '+Test2::Harness::Renderer::Formatter';
+                $need_formatter ||= 1 if grep { $_ eq 'Formatter' || $_ eq '+Test2::Harness::Renderer::Formatter'} @$renderers;
 
                 return undef unless $need_formatter;
 
@@ -1163,42 +1162,27 @@ sub renderers {
     my $settings  = $self->{+SETTINGS};
     my $renderers = [];
 
-    return $renderers if $settings->{quiet};
+    for my $arg (@{$settings->{renderers}}) {
+        my ($mod, $file) = split /\s*=\s*/, $arg;
 
-    my $r = $settings->{renderer} or return $renderers;
+        $mod = fqmod('Test2::Harness::Renderer', $mod);
+        my $pkg_file = pkg_to_file($mod);
+        require $pkg_file;
 
-    if ($r eq '+Test2::Harness::Renderer::Formatter' || $r eq 'Formatter') {
-        require Test2::Harness::Renderer::Formatter;
-
-        my $formatter = $settings->{formatter} or die "No formatter specified.\n";
-        my $f_class;
-
-        if ($formatter eq '+Test2::Formatter::Test2' || $formatter eq 'Test2') {
-            require Test2::Formatter::Test2;
-            $f_class = 'Test2::Formatter::Test2';
-        }
-        else {
-            $f_class = fqmod('Test2::Formatter', $formatter);
-            my $file = pkg_to_file($f_class);
-            require $file;
+        my ($io, $io_err) = (\*STDOUT, \*STDERR);
+        if ($file) {
+            $io = undef;
+            open($io, '>', $file) or confess "Could not open file '$file' for writing: $!";
+            $io_err = $io;
         }
 
-        push @$renderers => Test2::Harness::Renderer::Formatter->new(
-            show_job_info   => $settings->{show_job_info},
-            show_run_info   => $settings->{show_run_info},
-            show_job_launch => $settings->{show_job_launch},
-            show_job_end    => $settings->{show_job_end},
-            formatter       => $f_class->new(verbose => $settings->{verbose}, color => $settings->{color}),
+        push @$renderers => $mod->new(
+            verbose  => $settings->{verbose},
+            color    => $settings->{color},
+            settings => $self->{+SETTINGS},
+            io       => $io,
+            io_err   => $io_err
         );
-    }
-    elsif ($settings->{formatter}) {
-        die "The formatter option is only available when the 'Formatter' renderer is in use.\n";
-    }
-    else {
-        my $r_class = fqmod('Test2::Harness::Renderer', $r);
-        my $file = pkg_to_file($r_class);
-        require $file;
-        push @$renderers => $r_class->new(verbose => $settings->{verbose}, color => $settings->{color});
     }
 
     return $renderers;

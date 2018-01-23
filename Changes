@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix return via next issue
+
 0.001047  2018-01-19 21:58:13-08:00 America/Los_Angeles
 
     - Fix auto-reload for preload mode

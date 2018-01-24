@@ -5,12 +5,17 @@ CREATE TABLE users (
     pw_salt         VARCHAR(22)     NOT NULL
 );
 
+CREATE TABLE streams (
+    stream_id       BIGSERIAL   PRIMARY KEY,
+    user_id         INTEGER     NOT NULL REFERENCES users(user_id)
+);
+
 CREATE TABLE runs (
     run_ui_id       BIGSERIAL   PRIMARY KEY,
-    user_id         INTEGER     NOT NULL REFERENCES users(user_id),
+    stream_id       BIGINT      NOT NULL REFERENCES streams(stream_id),
     run_id          TEXT        NOT NULL,
 
-    UNIQUE(user_id, run_id)
+    UNIQUE(stream_id, run_id)
 );
 
 CREATE TABLE jobs (
@@ -29,7 +34,7 @@ CREATE TABLE events (
     stamp           DECIMAL,
 
     event_id        TEXT        NOT NULL,
-    stream_id       TEXT        NOT NULL,
+    stream_id       TEXT,
 
     UNIQUE(job_ui_id, event_id)
 );
@@ -46,6 +51,7 @@ CREATE TYPE facet_type AS ENUM(
     'parent',
     'plan',
     'trace',
+    'harness',
     'harness_run',
     'harness_job',
     'harness_job_launch',

@@ -1,0 +1,316 @@
+{
+   "username" : "simple",
+   "password" : "simple",
+   "events" : [
+      {
+         "times" : [
+            0.26,
+            0.05,
+            0,
+            0
+         ],
+         "facet_data" : {
+            "harness" : {
+               "run_id" : 1516735347,
+               "job_id" : 0,
+               "event_id" : "harness-1"
+            },
+            "about" : {
+               "no_display" : 1
+            },
+            "harness_run" : {
+               "load_import" : null,
+               "exclude_patterns" : [],
+               "env_vars" : {
+                  "HARNESS_VERSION" : "Test2-Harness-0.001049",
+                  "HARNESS_JOBS" : 1,
+                  "T2_HARNESS_JOBS" : 1,
+                  "T2_HARNESS_RUN_ID" : 1516735347,
+                  "HARNESS_IS_VERBOSE" : 0,
+                  "T2_HARNESS_VERSION" : "0.001049",
+                  "HARNESS_ACTIVE" : 1,
+                  "T2_HARNESS_IS_VERBOSE" : 0,
+                  "T2_HARNESS_ACTIVE" : 1,
+                  "PERL_USE_UNSAFE_INC" : 1
+               },
+               "lib" : 1,
+               "search" : [
+                  "t2/simple.t"
+               ],
+               "dummy" : 0,
+               "switches" : [],
+               "load" : null,
+               "libs" : [
+                  "/home/exodist/projects/Test2/Test2-Harness/lib",
+                  "/home/exodist/projects/Test2/Test2-Harness/lib",
+                  "/home/exodist/projects/Test2/Test2-Harness/blib/lib",
+                  "/home/exodist/projects/Test2/Test2-Harness/blib/arch"
+               ],
+               "args" : [],
+               "use_fork" : 1,
+               "exclude_files" : {},
+               "verbose" : 0,
+               "no_long" : null,
+               "cover" : null,
+               "unsafe_inc" : 1,
+               "tlib" : 0,
+               "finite" : 1,
+               "run_id" : 1516735347,
+               "preload" : null,
+               "times" : null,
+               "input" : null,
+               "use_stream" : 1,
+               "plugins" : [],
+               "job_count" : 1,
+               "blib" : 1
+            }
+         },
+         "stream_id" : "harness",
+         "run_id" : 1516735347,
+         "job_id" : 0,
+         "stamp" : 1516735347.64279,
+         "event_id" : "harness-1"
+      },
+      {
+         "run_id" : 1516735347,
+         "stream_id" : "harness",
+         "facet_data" : {
+            "harness_job" : {
+               "use_fork" : 1,
+               "category" : "general",
+               "load" : [],
+               "libs" : [
+                  "/home/exodist/projects/Test2/Test2-Harness/lib",
+                  "/home/exodist/projects/Test2/Test2-Harness/lib",
+                  "/home/exodist/projects/Test2/Test2-Harness/blib/lib",
+                  "/home/exodist/projects/Test2/Test2-Harness/blib/arch"
+               ],
+               "args" : [],
+               "switches" : [
+                  "-w"
+               ],
+               "file" : "/home/exodist/projects/Test2/Test2-Harness/t2/simple.t",
+               "env_vars" : {
+                  "PERL5LIB" : "/home/exodist/projects/Test2/Test2-Harness/lib:/home/exodist/projects/Test2/Test2-Harness/lib:/home/exodist/projects/Test2/Test2-Harness/blib/lib:/home/exodist/projects/Test2/Test2-Harness/blib/arch",
+                  "T2_HARNESS_IS_VERBOSE" : 0,
+                  "TEMPDIR" : "/tmp/yath-test-2427-uSdYJFoi/1/tmp",
+                  "PERL_USE_UNSAFE_INC" : null,
+                  "T2_HARNESS_ACTIVE" : 1,
+                  "TMPDIR" : "/tmp/yath-test-2427-uSdYJFoi/1/tmp",
+                  "HARNESS_VERSION" : "Test2-Harness-0.001049",
+                  "HARNESS_JOBS" : 1,
+                  "T2_HARNESS_JOBS" : 1,
+                  "T2_HARNESS_RUN_ID" : 1516735347,
+                  "HARNESS_IS_VERBOSE" : 0,
+                  "HARNESS_ACTIVE" : 1,
+                  "T2_HARNESS_VERSION" : "0.001049"
+               },
+               "load_import" : [],
+               "postexit_timeout" : null,
+               "job_id" : 1,
+               "stamp" : 1516735347.64107,
+               "preload" : [],
+               "pid" : 2429,
+               "times" : null,
+               "input" : "",
+               "use_preload" : 1,
+               "use_stream" : 1,
+               "stage" : "default",
+               "event_timeout" : null,
+               "use_timeout" : 1
+            },
+            "harness" : {
+               "run_id" : 1516735347,
+               "event_id" : "harness-2",
+               "job_id" : 1
+            },
+            "harness_job_launch" : {
+               "stamp" : 1516735347.80548
+            }
+         },
+         "times" : [
+            0.26,
+            0.05,
+            0,
+            0
+         ],
+         "event_id" : "harness-2",
+         "stamp" : 1516735347.80549,
+         "job_id" : 1
+      },
+      {
+         "run_id" : 1516735347,
+         "facet_data" : {
+            "harness" : {
+               "job_id" : 1,
+               "event_id" : "start",
+               "run_id" : 1516735347
+            },
+            "harness_job_start" : {
+               "details" : "Job 1 started at 1516735347.80138",
+               "file" : "/home/exodist/projects/Test2/Test2-Harness/t2/simple.t",
+               "job_id" : 1,
+               "stamp" : "1516735347.80138"
+            }
+         },
+         "event_id" : "start",
+         "stamp" : "1516735347.80138",
+         "job_id" : 1
+      },
+      {
+         "stream_id" : 1,
+         "event_id" : "event-1",
+         "run_id" : 1516735347,
+         "facet_data" : {
+            "harness" : {
+               "job_id" : 1,
+               "event_id" : "event-1",
+               "run_id" : 1516735347
+            },
+            "control" : {
+               "encoding" : "utf8"
+            }
+         },
+         "times" : [
+            0.07,
+            0,
+            0,
+            0
+         ],
+         "stamp" : 1516735347.91006,
+         "assert_count" : null,
+         "job_id" : 1
+      },
+      {
+         "event_id" : "event-2",
+         "stream_id" : 2,
+         "job_id" : 1,
+         "stamp" : 1516735347.91021,
+         "assert_count" : 1,
+         "times" : [
+            0.07,
+            0,
+            0,
+            0
+         ],
+         "facet_data" : {
+            "assert" : {
+               "no_debug" : 1,
+               "pass" : 1,
+               "details" : "pass"
+            },
+            "harness" : {
+               "run_id" : 1516735347,
+               "job_id" : 1,
+               "event_id" : "event-2"
+            },
+            "about" : {
+               "package" : "Test2::Event::Ok"
+            },
+            "control" : {},
+            "trace" : {
+               "pid" : 2429,
+               "frame" : [
+                  "main",
+                  "t2/simple.t",
+                  4,
+                  "Test2::Tools::Basic::ok"
+               ],
+               "cid" : "C1",
+               "buffered" : 0,
+               "hid" : "2429~0~1",
+               "tid" : 0,
+               "nested" : 0
+            }
+         },
+         "run_id" : 1516735347
+      },
+      {
+         "times" : [
+            0.07,
+            0,
+            0,
+            0
+         ],
+         "facet_data" : {
+            "trace" : {
+               "cid" : "C2",
+               "frame" : [
+                  "main",
+                  "t2/simple.t",
+                  5,
+                  "Test2::Tools::Basic::done_testing"
+               ],
+               "buffered" : 0,
+               "hid" : "2429~0~1",
+               "tid" : 0,
+               "nested" : 0,
+               "pid" : 2429
+            },
+            "harness" : {
+               "event_id" : "event-3",
+               "job_id" : 1,
+               "run_id" : 1516735347
+            },
+            "plan" : {
+               "count" : 1
+            },
+            "about" : {
+               "package" : "Test2::Event::Plan"
+            },
+            "control" : {
+               "terminate" : null
+            }
+         },
+         "run_id" : 1516735347,
+         "job_id" : 1,
+         "stamp" : 1516735347.91032,
+         "assert_count" : 1,
+         "stream_id" : 3,
+         "event_id" : "event-3"
+      },
+      {
+         "run_id" : 1516735347,
+         "facet_data" : {
+            "harness" : {
+               "event_id" : "exit",
+               "job_id" : 1,
+               "run_id" : 1516735347
+            },
+            "harness_job_exit" : {
+               "file" : "/home/exodist/projects/Test2/Test2-Harness/t2/simple.t",
+               "stdout" : "T2-HARNESS-ESYNC: 1\nT2-HARNESS-ESYNC: 2\nT2-HARNESS-ESYNC: 3\n",
+               "job_id" : 1,
+               "stderr" : "T2-HARNESS-ESYNC: 1\nT2-HARNESS-ESYNC: 2\nT2-HARNESS-ESYNC: 3\n",
+               "details" : "Test script exited 0",
+               "exit" : "0"
+            }
+         },
+         "event_id" : "exit",
+         "job_id" : 1
+      },
+      {
+         "stream_id" : "harness",
+         "run_id" : 1516735347,
+         "times" : [
+            0.26,
+            0.05,
+            0.29,
+            0.06
+         ],
+         "facet_data" : {
+            "harness_job_end" : {
+               "stamp" : 1516735347.92922
+            },
+            "harness" : {
+               "event_id" : "harness-3",
+               "job_id" : 1,
+               "run_id" : 1516735347
+            }
+         },
+         "event_id" : "harness-3",
+         "job_id" : 1,
+         "stamp" : 1516735347.92922
+      }
+   ]
+}

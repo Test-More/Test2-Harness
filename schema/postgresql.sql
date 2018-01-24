@@ -19,6 +19,12 @@ CREATE TYPE facet_type AS ENUM(
     'harness_job_end'
 );
 
+CREATE TYPE perms AS ENUM(
+    'private',
+    'protected',
+    'public'
+);
+
 CREATE TABLE users (
     user_ui_id      SERIAL          PRIMARY KEY,
     username        VARCHAR(255)    NOT NULL,
@@ -29,13 +35,15 @@ CREATE TABLE users (
 CREATE TABLE feeds (
     feed_ui_id      BIGSERIAL   PRIMARY KEY,
     user_ui_id      INTEGER     NOT NULL REFERENCES users(user_ui_id),
-    stamp           TIMESTAMP   NOT NULL DEFAULT now()
+    stamp           TIMESTAMP   NOT NULL DEFAULT now(),
+    permissions     perms       NOT NULL DEFAULT 'private'
 );
 
 CREATE TABLE runs (
     run_ui_id       BIGSERIAL   PRIMARY KEY,
     feed_ui_id      BIGINT      NOT NULL REFERENCES feeds(feed_ui_id),
 
+    permissions     perms       NOT NULL DEFAULT 'private',
     run_id          TEXT        NOT NULL,
 
     UNIQUE(feed_ui_id, run_id)
@@ -45,8 +53,9 @@ CREATE TABLE jobs (
     job_ui_id       BIGSERIAL   PRIMARY KEY,
     run_ui_id       BIGINT      NOT NULL REFERENCES runs(run_ui_id),
 
-    file            TEXT,
+    permissions     perms       NOT NULL DEFAULT 'private',
     job_id          TEXT        NOT NULL,
+    file            TEXT,
 
     UNIQUE(run_ui_id, job_id)
 );

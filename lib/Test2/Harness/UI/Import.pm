@@ -74,14 +74,17 @@ sub _import_events {
     if ($feed_ui_id) {
         $feed = $schema->resultset('Feed')->find({user_ui_id => $user->user_ui_id, feed_ui_id => $feed_ui_id});
         return $self->_fail("Invalid feed") unless $feed;
+
+        return $self->_fail("permissions ($params->{permissions}) do not match established permissions (" . $feed->permissions . ") for this feed ($feed_ui_id)")
+            unless $feed->permissions eq $params->{permissions};
     }
     else {
-        $feed = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id});
+        $feed = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id, permissions => $params->{permissions} || 'private'});
     }
 
     my $cnt = 0;
     for my $event (@{$params->{events}}) {
-        my $error = $self->import_event($feed->feed_ui_id, $event);
+        my $error = $self->import_event($feed, $event);
         return $self->_fail("error processing event number $cnt: $error") if $error;
         $cnt++;
     }
@@ -101,18 +104,18 @@ sub format_stamp {
 
 sub import_event {
     my $self = shift;
-    my ($feed_ui_id, $event_data) = @_;
+    my ($feed, $event_data) = @_;
 
     my $schema = $self->{+SCHEMA};
 
     my $run_id = $event_data->{run_id};
     return "no run_id provided" unless defined $run_id;
-    my $run = $schema->resultset('Run')->find_or_create({feed_ui_id => $feed_ui_id, run_id => $run_id})
+    my $run = $schema->resultset('Run')->find_or_create({feed_ui_id => $feed->feed_ui_id, run_id => $run_id, permissions => $feed->permissions})
         or die "Unable to find/add run: $run_id";
 
     my $job_id = $event_data->{job_id};
     return "no job_id provided" unless defined $job_id;
-    my $job = $schema->resultset('Job')->find_or_create({job_id => $job_id, run_ui_id => $run->run_ui_id});
+    my $job = $schema->resultset('Job')->find_or_create({job_id => $job_id, run_ui_id => $run->run_ui_id, permissions => $feed->permissions});
 
     my $event = $schema->resultset('Event')->create(
         {

@@ -1,6 +1,7 @@
 {
    "username" : "simple",
    "password" : "simple",
+   "permissions" : "protected",
    "events" : [
       {
          "times" : [

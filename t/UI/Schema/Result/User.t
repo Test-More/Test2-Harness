@@ -1,12 +1,9 @@
 use Test2::V0 -target => 'Test2::Harness::UI::Schema::Result::User';
-# HARNESS-NO-TIMEOUT
 
 use lib 't/lib';
 use Test2::Harness::DB::Postgresql;
 
 my $db = Test2::Harness::DB::Postgresql->new();
-
-$db->import_simple_data();
 
 my $schema = $db->connect;
 
@@ -42,11 +39,9 @@ is($user->pw_salt, $salt, "salt was stored properly");
 
 ok($user->gen_salt ne $user->gen_salt, "Different salt each time it is generated");
 
-my $stream1 = $schema->resultset('Stream')->create({user_id => $user->user_id});
-my $stream2 = $schema->resultset('Stream')->create({user_id => $user->user_id});
+my $feed1 = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id});
+my $feed2 = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id});
 
-is([sort map { $_->stream_id } $user->streams->all], [$stream1->stream_id, $stream2->stream_id], "Found streams");
-
-sleep 1000000;
+is([sort map { $_->feed_ui_id } $user->feeds->all], [sort $feed1->feed_ui_id, $feed2->feed_ui_id], "Found feeds");
 
 done_testing;

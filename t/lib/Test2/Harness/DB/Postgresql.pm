@@ -74,7 +74,7 @@ sub init {
     $self->_run([$INITDB, '-D', $db_dir]);
 
     open(my $cf, '>>', "$db_dir/postgresql.conf") or die "Could not open config file: $!";
-    print $cf "\nunix_socket_directories = '$dir'\n";
+    print $cf "\nunix_socket_directories = '$dir'\nlisten_addresses = ''\n";
     close($cf);
 
     my $pid = $self->_run([$POSTGRES, '-D', $db_dir], {no_wait => 1});
@@ -99,6 +99,8 @@ sub init {
         '-f' => "schema/postgresql.sql",
         'harness_ui'
     ]);
+
+    $self->import_simple_data();
 
     my $ctx = context();
     $ctx->note("Database ready: $dir");

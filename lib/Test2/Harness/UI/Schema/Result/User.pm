@@ -9,9 +9,9 @@ use constant COST => 8;
 use Crypt::Eksblowfish::Bcrypt qw(bcrypt_hash en_base64 de_base64);
 
 __PACKAGE__->table('users');
-__PACKAGE__->add_columns(qw/user_id username pw_hash pw_salt/);
-__PACKAGE__->set_primary_key('user_id');
-__PACKAGE__->has_many(streams => 'Test2::Harness::UI::Schema::Result::Stream', 'user_id');
+__PACKAGE__->add_columns(qw/user_ui_id username pw_hash pw_salt/);
+__PACKAGE__->set_primary_key('user_ui_id');
+__PACKAGE__->has_many(feeds => 'Test2::Harness::UI::Schema::Result::Feed', 'user_ui_id');
 
 sub new {
     my $class = shift;

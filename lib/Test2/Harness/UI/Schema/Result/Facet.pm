@@ -10,6 +10,9 @@ __PACKAGE__->set_primary_key('facet_ui_id');
 
 __PACKAGE__->belongs_to(event => 'Test2::Harness::UI::Schema::Result::Event', 'event_ui_id');
 
+__PACKAGE__->might_have(run => 'Test2::Harness::UI::Schema::Result::Run', 'run_ui_id');
+__PACKAGE__->might_have(job => 'Test2::Harness::UI::Schema::Result::Job', 'job_ui_id');
+
 my %ALLOWED_TYPES = (
     'other'              => 1,
     'about'              => 1,
@@ -30,9 +33,6 @@ my %ALLOWED_TYPES = (
     'harness_job_exit'   => 1,
     'harness_job_end'    => 1,
 );
-
-sub job { shift->event->job }
-sub run { shift->event->job->run }
 
 sub new {
     my $class = shift;

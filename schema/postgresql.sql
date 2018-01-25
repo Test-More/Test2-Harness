@@ -29,7 +29,9 @@ CREATE TABLE users (
     user_ui_id      SERIAL          PRIMARY KEY,
     username        VARCHAR(255)    NOT NULL,
     pw_hash         VARCHAR(31)     NOT NULL,
-    pw_salt         VARCHAR(22)     NOT NULL
+    pw_salt         VARCHAR(22)     NOT NULL,
+
+    UNIQUE(username)
 );
 
 CREATE TABLE feeds (

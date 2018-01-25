@@ -90,7 +90,14 @@ sub init {
         sleep 0.01;
     }
 
-    $self->_run([$CREATEDB, '-h', $dir, 'harness_ui']);
+    for my $try ( 1 .. 5 ) {
+        print $log "Trying creatdb step try $try of 5\n";
+        my $ok = eval { $self->_run([$CREATEDB, '-h', $dir, 'harness_ui']); 1 };
+        my $err = $@;
+        last if $ok;
+        die $@ if $try == 5;
+        sleep 1;
+    }
 
     $self->_run([
         $PSQL,

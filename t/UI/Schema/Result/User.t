@@ -44,5 +44,4 @@ my $feed2 = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id}
 
 is([sort map { $_->feed_ui_id } $user->feeds->all], [sort $feed1->feed_ui_id, $feed2->feed_ui_id], "Found feeds");
 
-sleep 1000000;
 done_testing;

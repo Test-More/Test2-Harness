@@ -34,7 +34,7 @@ sub import_events {
     $schema->txn_begin;
 
     my $out;
-    my $ok = eval { $out = $self->_import_events(@_); 1 };
+    my $ok = eval { $out = $self->process_params(@_); 1 };
     my $err = $@;
 
     if (!$ok) {
@@ -53,34 +53,19 @@ sub import_events {
     return $out;
 }
 
-sub _import_events {
+sub process_params {
     my $self = shift;
     my ($params) = @_;
 
     $params = decode_json($params) unless ref $params;
 
-    my $schema = $self->{+SCHEMA};
-
     # Verify credentials
-    my $username = $params->{username} or return $self->_fail("No username specified");
-    my $password = $params->{password} or return $self->_fail("No password specified");
-    my $user = $schema->resultset('User')->find({username => $username});
-    return $self->_fail("Incorrect credentials")
-        unless $user && $user->verify_password($password);
+    my $user = $self->verify_credentials($params->{username}, $params->{password})
+        or return $self->_fail("Incorrect credentials");
 
     # Verify or create feed
-    my $feed_ui_id = $params->{feed};
-    my $feed;
-    if ($feed_ui_id) {
-        $feed = $schema->resultset('Feed')->find({user_ui_id => $user->user_ui_id, feed_ui_id => $feed_ui_id});
-        return $self->_fail("Invalid feed") unless $feed;
-
-        return $self->_fail("permissions ($params->{permissions}) do not match established permissions (" . $feed->permissions . ") for this feed ($feed_ui_id)")
-            unless $feed->permissions eq $params->{permissions};
-    }
-    else {
-        $feed = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id, permissions => $params->{permissions} || 'private'});
-    }
+    my ($feed, $error) = $self->find_feed($user, $params);
+    return $error if $error;
 
     my $cnt = 0;
     for my $event (@{$params->{events}}) {
@@ -89,7 +74,42 @@ sub _import_events {
         $cnt++;
     }
 
-    return {success => 1, events_added => $cnt};
+    return {success => 1, events_added => $cnt, feed => $feed->feed_ui_id};
+}
+
+sub find_feed {
+    my $self = shift;
+    my ($user, $params) = @_;
+
+    my $schema = $self->{+SCHEMA};
+
+    # New feed!
+    my $feed_ui_id = $params->{feed}
+        or return $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id, permissions => $params->{permissions} || 'private'});
+
+    # Verify existing feed
+
+    my $feed = $schema->resultset('Feed')->find({user_ui_id => $user->user_ui_id, feed_ui_id => $feed_ui_id})
+        or return $self->_fail("Invalid feed");
+
+    return $self->_fail("permissions ($params->{permissions}) do not match established permissions (" . $feed->permissions . ") for this feed ($feed_ui_id)")
+        unless $feed->permissions eq $params->{permissions};
+
+    return $feed;
+}
+
+sub verify_credentials {
+    my $self = shift;
+    my ($username, $password) = @_;
+
+    return undef unless defined $username;
+    return undef unless defined $password;
+
+    my $schema = $self->{+SCHEMA};
+    my $user = $schema->resultset('User')->find({username => $username})
+        or return undef;
+
+    return $user if $user->verify_password($password);
 }
 
 sub format_stamp {
@@ -142,8 +162,8 @@ sub import_event {
             die "Could not add facet '$facet_name' number $cnt" unless $facet;
             $cnt++;
 
-            $run->update({facet_ui_id => $facet->facet_ui_id}) if $facet_name eq 'harness_run';
-            $job->update({facet_ui_id => $facet->facet_ui_id, file => $val->{file}}) if $facet_name eq 'harness_job';
+            $run->update({facet_ui_id => $facet->facet_ui_id}) if $facet_name eq 'harness_run' && !$run->facet_ui_id;
+            $job->update({facet_ui_id => $facet->facet_ui_id, file => $val->{file}}) if $facet_name eq 'harness_job' && !$job->facet_ui_id;
         }
     }
 

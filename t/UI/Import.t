@@ -165,6 +165,8 @@ describe import_events => sub {
 
 done_testing;
 
+die "finish me!";
+
 __END__
 
 sub process_params {

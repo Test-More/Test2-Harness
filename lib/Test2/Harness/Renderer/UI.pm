@@ -30,6 +30,9 @@ sub init {
 
     croak "An 'api_key' is required"
         unless $self->{+API_KEY};
+
+    croak "file '$self->{+FILE}' already exists"
+        if $self->{+FILE} && -e $self->{+FILE};
 }
 
 sub render_event {
@@ -45,10 +48,13 @@ sub finish { shift->flush }
 sub flush {
     my $self = shift;
 
+    my $events = delete $self->{+BUFFER} or return;
+    return unless @$events;
+
     my $data = {
         api_key     => $self->{+API_KEY},
         permissions => $self->{+PERMISSIONS} || 'private',
-        events      => delete $self->{+BUFFER},
+        events      => $events,
     };
 
     if (my $file = $self->{+FILE}) {
@@ -58,10 +64,12 @@ sub flush {
 
     if (my $sock = $self->{+SOCKET}) {
         die "No socket support yet";
+        die "Remember to save the feed id if we do not have one";
     }
 
     if (my $sock = $self->{+URL}) {
         die "No url support yet";
+        die "Remember to save the feed id if we do not have one";
     }
 }
 

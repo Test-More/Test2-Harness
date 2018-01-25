@@ -39,8 +39,8 @@ is($user->pw_salt, $salt, "salt was stored properly");
 
 ok($user->gen_salt ne $user->gen_salt, "Different salt each time it is generated");
 
-my $feed1 = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id});
-my $feed2 = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id});
+my $feed1 = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id, api_key_ui_id => 1});
+my $feed2 = $schema->resultset('Feed')->create({user_ui_id => $user->user_ui_id, api_key_ui_id => 1});
 
 is([sort map { $_->feed_ui_id } $user->feeds->all], [sort $feed1->feed_ui_id, $feed2->feed_ui_id], "Found feeds");
 

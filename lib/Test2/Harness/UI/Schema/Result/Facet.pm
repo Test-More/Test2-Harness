@@ -11,7 +11,9 @@ __PACKAGE__->set_primary_key('facet_ui_id');
 __PACKAGE__->belongs_to(event => 'Test2::Harness::UI::Schema::Result::Event', 'event_ui_id');
 
 __PACKAGE__->might_have(run => 'Test2::Harness::UI::Schema::Result::Run', 'facet_ui_id');
-__PACKAGE__->might_have(job => 'Test2::Harness::UI::Schema::Result::Job', 'facet_ui_id');
+
+__PACKAGE__->might_have(job => 'Test2::Harness::UI::Schema::Result::Job', 'job_facet_ui_id');
+__PACKAGE__->might_have(end => 'Test2::Harness::UI::Schema::Result::Job', 'end_facet_ui_id');
 
 my %ALLOWED_TYPES = (
     'other'              => 1,

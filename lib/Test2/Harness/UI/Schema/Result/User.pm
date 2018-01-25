@@ -2,6 +2,9 @@ package Test2::Harness::UI::Schema::Result::User;
 use strict;
 use warnings;
 
+use Data::GUID;
+use Carp qw/croak/;
+
 use parent qw/DBIx::Class::Core/;
 
 use constant COST => 8;
@@ -12,6 +15,7 @@ __PACKAGE__->table('users');
 __PACKAGE__->add_columns(qw/user_ui_id username pw_hash pw_salt/);
 __PACKAGE__->set_primary_key('user_ui_id');
 __PACKAGE__->has_many(feeds => 'Test2::Harness::UI::Schema::Result::Feed', 'user_ui_id');
+__PACKAGE__->has_many(api_keys => 'Test2::Harness::UI::Schema::Result::APIKey', 'user_ui_id');
 
 sub new {
     my $class = shift;
@@ -53,6 +57,26 @@ sub gen_salt {
     my $salt = '';
     $salt .= chr(rand() * 256) while length($salt) < 16;
     return $salt;
+}
+
+sub gen_api_key {
+    my $self = shift;
+    my ($name) = @_;
+
+    croak "Must provide a key name"
+        unless defined($name);
+
+    my $guid = Data::GUID->new;
+    my $val  = $guid->as_string;
+
+    return $self->result_source->schema->resultset('APIKey')->create(
+        {
+            user_ui_id => $self->user_ui_id,
+            value      => $val,
+            status     => 'active',
+            name       => 'blah',
+        }
+    );
 }
 
 1;

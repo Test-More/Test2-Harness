@@ -9,7 +9,7 @@ use File::Path qw/remove_tree/;
 use Time::HiRes qw/sleep/;
 use Test2::API qw/context/;
 
-use Test2::Harness::UI::Util::HashBase qw/-dir -pid -my_pid -log -db_dir/;
+use Test2::Harness::UI::Util::HashBase qw/-dir -pid -my_pid -log -db_dir -schema/;
 
 my ($CREATEDB, $INITDB, $POSTGRES, $PSQL);
 
@@ -124,11 +124,13 @@ sub connect {
 
     my $dir = $self->{+DIR} or die "No data dir!";
 
-    return Test2::Harness::UI::Schema->connect("dbi:Pg:dbname=harness_ui;host=$dir", '', '', {AutoCommit => 1});
+    return $self->{+SCHEMA} ||= Test2::Harness::UI::Schema->connect("dbi:Pg:dbname=harness_ui;host=$dir", '', '', {AutoCommit => 1});
 }
 
 sub DESTROY {
     my $self = shift;
+
+    eval { $self->{+SCHEMA}->storage->dbh->disconnect } if $self->{+SCHEMA};
 
     return unless $self->{+MY_PID} && $self->{+MY_PID} == $$;
 
@@ -150,6 +152,15 @@ sub import_simple_data {
         username => 'simple',
         password => 'simple',
     });
+
+    my $api_key = $schema->resultset('APIKey')->create(
+        {
+            user_ui_id => $user->user_ui_id,
+            name       => 'simple',
+            value      => 'C082674C-0218-11E8-90FC-A8C4224AE347',
+            status     => 'active',
+        }
+    );
 
     require Test2::Harness::UI::Import;
     my $import = Test2::Harness::UI::Import->new(schema => $self->connect);

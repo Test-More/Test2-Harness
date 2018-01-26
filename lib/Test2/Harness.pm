@@ -67,6 +67,8 @@ sub run {
         }
     }
 
+    $_->finish() for @{$self->{+RENDERERS}};
+
     my $seen = 0;
     my(@fail, @pass);
     while (my ($job_id, $watcher) = each %{$self->{+WATCHERS}}) {

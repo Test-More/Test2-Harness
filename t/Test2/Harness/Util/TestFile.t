@@ -23,7 +23,7 @@ my $tmp = gen_temp(
 
 subtest timeouts => sub {
     my $one = $CLASS->new(file => File::Spec->catfile($tmp, 'timeout'));
-    is($one->event_timeout, 90, "set event timeout");
+    is($one->event_timeout,    90, "set event timeout");
     is($one->postexit_timeout, 85, "set event timeout");
 
     my $two = $CLASS->new(file => File::Spec->catfile($tmp, 'badtimeout'));
@@ -48,16 +48,16 @@ subtest invalid => sub {
 subtest meta => sub {
     my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'meta'));
 
-    is([$foo->meta], [], "No key returns empty list");
-    is([$foo->meta('foo')], [], "Empty key returns empty list");
-    is([$foo->meta('mykey')], [qw/myval myval2/], "Got both values for the 'mykey' key");
-    is([$foo->meta('otherkey')], ['otherval'], "Got other key");
+    is([$foo->meta],             [],                 "No key returns empty list");
+    is([$foo->meta('foo')],      [],                 "Empty key returns empty list");
+    is([$foo->meta('mykey')],    [qw/myval myval2/], "Got both values for the 'mykey' key");
+    is([$foo->meta('otherkey')], ['otherval'],       "Got other key");
 };
 
 subtest foo => sub {
     my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'foo'));
     is($foo->check_category, 'foo', "Category is foo");
-    is($foo->check_stage, 'foo', "Stage is foo");
+    is($foo->check_stage,    'foo', "Stage is foo");
 };
 
 subtest package => sub {
@@ -85,6 +85,8 @@ subtest taint => sub {
             use_stream  => 1,
             use_timeout => 1,
             via         => ['xxx'],
+            shbang      => {line => "#!/usr/bin/env perl -t -w", switches => ['-t', '-w']},
+            headers     => {},
 
             event_timeout    => undef,
             postexit_timeout => undef,
@@ -112,6 +114,8 @@ subtest warn => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            shbang      => {line => "#!/usr/bin/perl -w", switches => ['-w']},
+            headers     => {},
 
             event_timeout    => undef,
             postexit_timeout => undef,
@@ -119,7 +123,6 @@ subtest warn => sub {
         "Got queue item data",
     );
 };
-
 
 subtest notime => sub {
     my $notime = $CLASS->new(file => File::Spec->catfile($tmp, 'notime'));
@@ -145,6 +148,8 @@ subtest notime => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            shbang      => {},
+            headers     => {features => {timeout => 0}},
 
             event_timeout    => undef,
             postexit_timeout => undef,
@@ -189,6 +194,16 @@ subtest all => sub {
             use_preload => 0,
             use_stream  => 0,
             use_timeout => 0,
+            shbang      => {},
+            headers     => {
+                'features' => {
+                    'timeout'   => 0,
+                    'stream'    => 0,
+                    'fork'      => 0,
+                    'isolation' => 1,
+                    'preload'   => 0
+                },
+            },
 
             event_timeout    => undef,
             postexit_timeout => undef,
@@ -233,6 +248,8 @@ subtest med2 => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            shbang      => {},
+            headers     => {features => {fork => 0}},
 
             event_timeout    => undef,
             postexit_timeout => undef,
@@ -277,6 +294,8 @@ subtest med1 => sub {
             use_preload => 0,
             use_stream  => 1,
             use_timeout => 1,
+            shbang      => {},
+            headers     => {features => {preload => 0}},
 
             event_timeout    => undef,
             postexit_timeout => undef,
@@ -323,6 +342,14 @@ subtest long => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            shbang      => {line => "#!/usr/bin/perl", switches => []},
+            headers     => {
+                category => 'long',
+                features => {
+                    isolation => 1,
+                    timeout   => 0,
+                },
+            },
 
             event_timeout    => undef,
             postexit_timeout => undef,

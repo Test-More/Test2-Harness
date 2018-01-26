@@ -16,6 +16,7 @@ use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 
 BEGIN { require Test2::Harness::Renderer; our @ISA = ('Test2::Harness::Renderer') }
 use Test2::Harness::Util::HashBase qw{
+    -io -io_err
     -formatter
     -show_run_info
     -show_job_info
@@ -34,11 +35,23 @@ sub init {
     my $f_file = pkg_to_file($f_class);
     require $f_file;
 
+    my $io = $self->{+IO} || $self->{output} || \*STDOUT;
+    unless(ref $io) {
+        open(my $fh, '>', $io) or die "Could not open file '$io' for writing: $!";
+        $self->{+IO} = $fh;
+    }
+
+    my $io_err = $self->{+IO_ERR} || $self->{output} || \*STDERR;
+    unless(ref $io_err) {
+        open(my $fh, '>', $io_err) or die "Could not open file '$io_err' for writing: $!";
+        $self->{+IO_ERR} = $fh;
+    }
+
     $self->{+FORMATTER} = $f_class->new(
-        io => $self->{+IO},
+        io      => $self->{+IO},
         handles => [$self->{+IO}, $self->{+IO_ERR}, $self->{+IO}],
         verbose => $settings->{verbose},
-        color => $settings->{color},
+        color   => $settings->{color},
     );
 
     $self->{+SHOW_JOB_INFO}   = $settings->{show_job_info}   unless defined $self->{+SHOW_JOB_INFO};

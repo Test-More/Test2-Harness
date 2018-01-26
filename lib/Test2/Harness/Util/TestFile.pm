@@ -217,16 +217,18 @@ sub queue_item {
     my $stream  = $self->check_feature(stream  => 1);
 
     return {
-        file        => $self->file,
-        use_fork    => $fork,
-        use_timeout => $timeout,
-        use_preload => $preload,
-        use_stream  => $stream,
-        switches    => $self->switches,
         category    => $category,
+        file        => $self->file,
+        headers     => $self->headers,
+        job_id      => $job_id,
+        shbang      => $self->shbang,
         stage       => $stage,
         stamp       => time,
-        job_id      => $job_id,
+        switches    => $self->switches,
+        use_fork    => $fork,
+        use_preload => $preload,
+        use_stream  => $stream,
+        use_timeout => $timeout,
 
         event_timeout    => $self->event_timeout,
         postexit_timeout => $self->postexit_timeout,

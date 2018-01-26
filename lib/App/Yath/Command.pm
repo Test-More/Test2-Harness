@@ -781,9 +781,9 @@ sub options {
             field   => 'renderers',
             used_by => {display => 1},
             section => 'Display Options',
-            usage   => ['-r +Module', '-r Postfix', '--renderer ...', '-r +Module=output_file'],
+            usage   => ['-r +Module', '-r Postfix', '--renderer ...', '-r +Module=arg1,arg2,...'],
             summary   => ['Specify renderers', '(Default: "Formatter")'],
-            long_desc => 'Use "+" to give a fully qualified module name. Without "+" "Test2::Harness::Renderer::" will be prepended to your argument.',
+            long_desc => 'Use "+" to give a fully qualified module name. Without "+" "Test2::Harness::Renderer::" will be prepended to your argument. You may specify custom arguments to the constructor after an "=" sign.',
             default   => sub { $_[1]->{quiet} ? [] : ['+Test2::Harness::Renderer::Formatter'] },
         },
 
@@ -1163,25 +1163,18 @@ sub renderers {
     my $renderers = [];
 
     for my $arg (@{$settings->{renderers}}) {
-        my ($mod, $file) = split /\s*=\s*/, $arg;
+        my ($mod, $args) = split /\s*=\s*/, $arg, 2;
+        my %args = defined($args) ? (split /\s*,\s*/, $args) : ();
 
         $mod = fqmod('Test2::Harness::Renderer', $mod);
         my $pkg_file = pkg_to_file($mod);
         require $pkg_file;
 
-        my ($io, $io_err) = (\*STDOUT, \*STDERR);
-        if ($file) {
-            $io = undef;
-            open($io, '>', $file) or confess "Could not open file '$file' for writing: $!";
-            $io_err = $io;
-        }
-
         push @$renderers => $mod->new(
-            verbose  => $settings->{verbose},
-            color    => $settings->{color},
+            verbose => $settings->{verbose},
+            color   => $settings->{color},
+            %args,
             settings => $self->{+SETTINGS},
-            io       => $io,
-            io_err   => $io_err
         );
     }
 

@@ -4,8 +4,15 @@ use warnings;
 
 use parent qw/DBIx::Class::Core/;
 
+__PACKAGE__->load_components('InflateColumn::Serializer', 'Core');
+
 __PACKAGE__->table('facets');
-__PACKAGE__->add_columns(qw/facet_ui_id event_ui_id facet_type facet_name facet_value/);
+
+__PACKAGE__->add_columns(
+    qw/facet_ui_id event_ui_id facet_type facet_name/,
+    facet_value => { 'serializer_class' => 'JSON' },
+);
+
 __PACKAGE__->set_primary_key('facet_ui_id');
 
 __PACKAGE__->belongs_to(event => 'Test2::Harness::UI::Schema::Result::Event', 'event_ui_id');

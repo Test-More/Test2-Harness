@@ -34,7 +34,7 @@ tests integration => sub {
     my $data = decode_json($json);
     $data->{feed} = $res->{feed};
     ok(lives { $res = $one->import_events($data) }, "Did not die");
-    is($res, {errors => ['error processing event number 0: Duplicate event']}, "Noticed duplicate");
+    is($res, {errors => ['error processing event number 0: Duplicate Event']}, "Noticed duplicate");
 
     my $control = mock $CLASS => (
         'override' => [ import_facet => sub { die "fake error" } ],
@@ -48,14 +48,8 @@ tests integration => sub {
 tests format_stamp => sub {
     my $fmt = $CLASS->can('format_stamp');
 
-    my $base_stamp = 1516906552;
-    my $base_fmted = '2018-01-25T18:55:52';
-
-    is($fmt->($base_stamp), $base_fmted, "Formatted base stamp");
-    is($fmt->($base_stamp . ".5"), "$base_fmted.5", "Kept decimals");
-
-    my $exp_stamp = sprintf("%.10e", "$base_stamp.5");
-    is($fmt->($exp_stamp), "$base_fmted.5", "From exponent form");
+    is($fmt->(), undef, "No stamp, no datetime");
+    isa_ok($fmt->(1516906552.123), ['DateTime'], "Got a datetime object");
 };
 
 tests verify_credentials => sub {
@@ -163,66 +157,107 @@ describe import_events => sub {
     };
 };
 
-done_testing;
+tests process_params => sub {
+    my $one = $CLASS->new(schema => $schema);
 
-die "finish me!";
+    my ($vc, @ff, $ie);
+    my $control = mock $CLASS => (
+        override => [
+            verify_credentials => sub { return $vc },
+            find_feed          => sub { return @ff },
+            import_event       => sub { return $ie },
+        ],
+    );
+
+    $vc = undef;
+    is(
+        $one->process_params({}),
+        {errors => ["Incorrect credentials"]},
+        "Credential failure"
+    );
+
+    $vc = 1;
+    @ff = ({}, {errors => ["foo"]});
+    is(
+        $one->process_params({}),
+        {errors => ["foo"]},
+        "Find feed error"
+    );
+
+    @ff = mock {feed_ui_id => 43};
+    $ie = "xxx xxx";
+    is(
+        $one->process_params({events => [{}]}),
+        {errors => ["error processing event number 0: xxx xxx"]},
+        "Event import error"
+    );
+
+    $ie = undef;
+    is(
+        $one->process_params({events => [{}, {}, {}]}),
+        {success => 1, events_added => 3, feed => 43},
+        "Success"
+    );
+};
+
+tests vivify_row => sub {
+    my $one = $CLASS->new(schema => $schema);
+
+    my (undef, $error) = $one->vivify_row('Run', 'run_id', {}, {});
+    is($error, "No run_id provided", "Must provide the key");
+
+    ok(my $new = $one->vivify_row('Run', 'run_id', {feed_ui_id => 1, run_id => 'foo'}, {permissions => 'protected'}), "Created a new one");
+    is($new->run_id, 'foo', "set the run_id");
+    is($new->permissions, 'protected', "set the permissions");
+
+    ok(my $found = $one->vivify_row('Run', 'run_id', {feed_ui_id => 1, run_id => 'foo'}, {permissions => 'public'}), "Found an existing one");
+    is($new->run_id, 'foo', "got the run_id");
+    is($new->permissions, 'protected', "did not change the permissions");
+};
+
+tests unique_row => sub {
+    my $one = $CLASS->new(schema => $schema);
+
+    my (undef, $oops) = $one->unique_row('Event', 'event_id', {job_ui_id => 1}, {stream_id => 'foo'});
+    is($oops, "No event_id provided", "need event_id");
+
+    my ($new, $error) = $one->unique_row('Event', 'event_id', {job_ui_id => 1, event_id => 'fake-event'}, {stream_id => 'foo'});
+    ok(!$error, "No error");
+    ok($new, "Make a new row");
+    is($new->stream_id, 'foo', "set stream id");
+
+    (my $f, $error) = $one->unique_row('Event', 'event_id', {job_ui_id => 1, event_id => 'fake-event'}, {stream_id => 'anything'});
+    ok(!$f, "no object returned");
+    is($error, "Duplicate Event", "Got error");
+};
+
+tests import_event => sub {
+    my $one = $CLASS->new(schema => $schema);
+
+    my $feed = $schema->resultset('Feed')->find({feed_ui_id => 1});
+
+    is($one->import_event($feed, {}), "No run_id provided", "need run_id");
+    is($one->import_event($feed, {run_id => "foo"}), "No job_id provided", "need job_id");
+    is($one->import_event($feed, {run_id => "foo", job_id => "foo"}), "No event_id provided", "need event_id");
+    is($one->import_event($feed, {run_id => "foo", job_id => "foo", event_id => 'foo'}), undef, "No error");
+    is($one->import_event($feed, {run_id => "foo", job_id => "foo", event_id => 'foo'}), "Duplicate Event", "Duplicate");
+};
+
+tests import_facets => sub {
+    my $one = $CLASS->new(schema => $schema);
+    
+};
+
+done_testing;
 
 __END__
 
-sub process_params {
+sub import_facets {
     my $self = shift;
-    my ($params) = @_;
+    my ($run, $job, $event, $facets) = @_;
 
-    $params = decode_json($params) unless ref $params;
+    return unless $facets;
 
-    # Verify credentials
-    my $key = $self->verify_credentials($params->{api_key})
-        or return {errors => ["Incorrect credentials"]};
-
-    # Verify or create feed
-    my ($feed, $error) = $self->find_feed($key, $params);
-    return $error if $error;
-
-    my $cnt = 0;
-    for my $event (@{$params->{events}}) {
-        my $error = $self->import_event($feed, $event);
-        return {errors => ["error processing event number $cnt: $error"]} if $error;
-        $cnt++;
-    }
-
-    return {success => 1, events_added => $cnt, feed => $feed->feed_ui_id};
-}
-
-sub import_event {
-    my $self = shift;
-    my ($feed, $event_data) = @_;
-
-    my $schema = $self->{+SCHEMA};
-
-    my $run_id = $event_data->{run_id};
-    return "no run_id provided" unless defined $run_id;
-    my $run = $schema->resultset('Run')->find_or_create({feed_ui_id => $feed->feed_ui_id, run_id => $run_id, permissions => $feed->permissions})
-        or die "Unable to find/add run: $run_id";
-
-    my $job_id = $event_data->{job_id};
-    return "no job_id provided" unless defined $job_id;
-    my $job = $schema->resultset('Job')->find_or_create({job_id => $job_id, run_ui_id => $run->run_ui_id, permissions => $feed->permissions})
-        or die "Unable to find/add job: $job_id";
-
-    my $new_data = {
-        job_ui_id => $job->job_ui_id,
-        event_id  => $event_data->{event_id},
-    };
-
-    return "Duplicate event" if $schema->resultset('Event')->find($new_data);
-
-    $new_data->{stamp}     = format_stamp($event_data->{stamp});
-    $new_data->{stream_id} = $event_data->{stream_id};
-
-    my $event = $schema->resultset('Event')->create($new_data)
-        or die "Could not create event";
-
-    my $facets = $event_data->{facet_data} || {};
     my $cnt = 0;
     for my $facet_name (keys %$facets) {
         my $val = $facets->{$facet_name} or next;

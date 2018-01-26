@@ -23,6 +23,9 @@ ok($facet = $schema->resultset('Facet')->find({facet_type => 'assert'}), "Found 
 ok($facet->event, "Facet belongs to an event");
 ok(!$facet->run,  "This facet does not define a run");
 ok(!$facet->job,  "This facet does define a job");
+is($facet->facet_value, {'details' => 'pass', 'no_debug' => 1, 'pass' => 1}, "JSON deserialized");
+$facet->update({facet_value => {'details' => 'passed', 'no_debug' => 1, 'pass' => 1}});
+is($facet->facet_value, {'details' => 'passed', 'no_debug' => 1, 'pass' => 1}, "JSON modified");
 
 subtest types => sub {
     my $facet = $schema->resultset('Facet')->create({facet_name => 'foo', event_ui_id => 1, facet_value => '{"a":"b"}'});

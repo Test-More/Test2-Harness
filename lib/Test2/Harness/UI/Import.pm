@@ -105,47 +105,69 @@ sub verify_credentials {
 sub format_stamp {
     my $stamp = shift;
     return undef unless $stamp;
+    return DateTime->from_epoch(epoch => $stamp);
+}
 
-    my $out = DateTime->from_epoch(epoch => $stamp)->stringify;
-    if (sprintf("%.10f", $stamp) =~ m/(\.\d+)$/) {
-        $out .= $1;
-        $out =~ s/0+$//g;
-        $out =~ s/\.$//g;
-    }
+sub vivify_row {
+    my $self = shift;
+    my ($type, $field, $find, $create) = @_;
 
-    return $out;
+    return (undef, "No $field provided") unless defined $find->{$field};
+
+    my $schema = $self->{+SCHEMA};
+    my $row = $schema->resultset($type)->find($find);
+    return $row if $row;
+
+    return $schema->resultset($type)->create({%$find, %$create}) || die "Unable to find/add $type: $find->{$field}";
+}
+
+sub unique_row {
+    my $self = shift;
+    my ($type, $field, $find, $create) = @_;
+
+    return (undef, "No $field provided") unless defined $find->{$field};
+
+    my $schema = $self->{+SCHEMA};
+    return (undef, "Duplicate $type") if $schema->resultset($type)->find($find);
+    return $schema->resultset($type)->create({%$find, %$create}) || die "Could not create $type";
 }
 
 sub import_event {
     my $self = shift;
     my ($feed, $event_data) = @_;
 
-    my $schema = $self->{+SCHEMA};
+    my ($run, $run_error) = $self->vivify_row(
+        'Run' => 'run_id',
+        {feed_ui_id  => $feed->feed_ui_id, run_id => $event_data->{run_id}},
+        {permissions => $feed->permissions},
+    );
+    return $run_error if $run_error;
 
-    my $run_id = $event_data->{run_id};
-    return "no run_id provided" unless defined $run_id;
-    my $run = $schema->resultset('Run')->find_or_create({feed_ui_id => $feed->feed_ui_id, run_id => $run_id, permissions => $feed->permissions})
-        or die "Unable to find/add run: $run_id";
+    my ($job, $job_error) = $self->vivify_row(
+        'Job' => 'job_id',
+        {run_ui_id   => $run->run_ui_id, job_id => $event_data->{job_id}},
+        {permissions => $feed->permissions},
+    );
+    return $job_error if $job_error;
 
-    my $job_id = $event_data->{job_id};
-    return "no job_id provided" unless defined $job_id;
-    my $job = $schema->resultset('Job')->find_or_create({job_id => $job_id, run_ui_id => $run->run_ui_id, permissions => $feed->permissions})
-        or die "Unable to find/add job: $job_id";
+    return "No event_id provided" unless $event_data->{event_id};
 
-    my $new_data = {
-        job_ui_id => $job->job_ui_id,
-        event_id  => $event_data->{event_id},
-    };
+    my ($event, $error) = $self->unique_row(
+        'Event' => 'event_id',
+        {job_ui_id => $job->job_ui_id,                    event_id => $event_data->{event_id}},
+        {stamp     => format_stamp($event_data->{stamp}), stream_id => $event_data->{stream_id}},
+    );
+    return $error if $error;
 
-    return "Duplicate event" if $schema->resultset('Event')->find($new_data);
+    return $self->import_facets($run, $job, $event, $event_data->{facet_data});
+}
 
-    $new_data->{stamp}     = format_stamp($event_data->{stamp});
-    $new_data->{stream_id} = $event_data->{stream_id};
+sub import_facets {
+    my $self = shift;
+    my ($run, $job, $event, $facets) = @_;
 
-    my $event = $schema->resultset('Event')->create($new_data)
-        or die "Could not create event";
+    return unless $facets;
 
-    my $facets = $event_data->{facet_data} || {};
     my $cnt = 0;
     for my $facet_name (keys %$facets) {
         my $val = $facets->{$facet_name} or next;

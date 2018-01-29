@@ -245,52 +245,66 @@ tests import_event => sub {
 
 tests import_facets => sub {
     my $one = $CLASS->new(schema => $schema);
-    
+    my $event = $schema->resultset('Event')->find({event_ui_id => 1});
+
+    is([$one->import_facets($event, {foo => {foo => 1}, bar => [{bar => 1}, {bar => 2}]})], [], "No return value");
+
+    my %facets;
+    for my $facet ($schema->resultset('Facet')->search({event_ui_id => 1})->all) {
+        next unless $facet->facet_name eq 'foo' || $facet->facet_name eq 'bar';
+        push @{$facets{$facet->facet_name}} => $facet->facet_value;
+    }
+
+    is(
+        \%facets,
+        {
+            'foo' => [{'foo' => 1}],
+            'bar' => [{'bar' => 1}, {'bar' => 2}],
+        },
+        "Added the facets, both single and list types"
+    );
+};
+
+tests import_facet => sub {
+    my $one = $CLASS->new(schema => $schema);
+
+    my $user = $schema->resultset('User')->find({user_ui_id => 1}) or die "No user";
+    my $key = $schema->resultset('APIKey')->find({user_ui_id => 1, status => 'active'}) or die "No active api key";
+
+    my $feed = $schema->resultset('Feed')->create({user_ui_id => 1, api_key_ui_id => $key->api_key_ui_id}) or die "Could not make feed";
+
+    my $run = $schema->resultset('Run')->create({feed_ui_id => $feed->feed_ui_id, run_id => 'xxx'}) or die "Could not make run";
+    my $job = $schema->resultset('Job')->create({run_ui_id  => $run->run_ui_id,   job_id => 'yyy'}) or die "Could not make job";
+    my $event = $schema->resultset('Event')->create({job_ui_id => $job->job_ui_id, event_id => 'zzz',}) or die "Could not make event";
+
+    my $foo_f = $one->import_facet($event, foo             => {foo => 1});
+    my $run_f = $one->import_facet($event, harness_run     => {foo => 1});
+    my $job_f = $one->import_facet($event, harness_job     => {foo => 1});
+    my $end_f = $one->import_facet($event, harness_job_end => {baz => 1, file => 'foo.t', fail => 1});
+
+    my %facets = map { $_->facet_name => $_->facet_value } $event->facets;
+
+    is(
+        \%facets,
+        {
+            foo             => {foo => 1},
+            harness_run     => {foo => 1},
+            harness_job     => {foo => 1},
+            harness_job_end => {baz => 1, file => 'foo.t', fail => 1},
+        },
+        "Added all 4 facets"
+    );
+
+    # These need to be refreshed
+    $run = $event->run;
+    $job = $event->job;
+
+    is($run->facet_ui_id,     $run_f->facet_ui_id, "Added facet id for run");
+    is($job->job_facet_ui_id, $job_f->facet_ui_id, "Added facet id for job");
+    is($job->end_facet_ui_id, $end_f->facet_ui_id, "Added facet id for end");
+
+    is($job->file, 'foo.t', "Set file on job");
+    is($job->fail, 1,       "Set fail on job");
 };
 
 done_testing;
-
-__END__
-
-sub import_facets {
-    my $self = shift;
-    my ($run, $job, $event, $facets) = @_;
-
-    return unless $facets;
-
-    my $cnt = 0;
-    for my $facet_name (keys %$facets) {
-        my $val = $facets->{$facet_name} or next;
-
-        unless (ref($val) eq 'ARRAY') {
-            $self->import_facet($run, $job, $event, $facet_name, $val, $cnt++);
-            next;
-        }
-
-        $self->import_facet($run, $job, $event, $facet_name, $_, $cnt++) for @$val;
-    }
-
-    return;
-}
-
-sub import_facet {
-    my $self = shift;
-    my ($run, $job, $event, $facet_name, $val, $cnt) = @_;
-
-    my $schema = $self->{+SCHEMA};
-
-    my $facet = $schema->resultset('Facet')->create(
-        {
-            event_ui_id => $event->event_ui_id,
-            facet_name  => $facet_name,
-            facet_value => encode_json($val),
-        }
-    );
-    die "Could not add facet '$facet_name' number $cnt" unless $facet;
-
-    $run->update({facet_ui_id     => $facet->facet_ui_id}) if $facet_name eq 'harness_run' && !$run->facet_ui_id;
-    $job->update({job_facet_ui_id => $facet->facet_ui_id}) if $facet_name eq 'harness_job' && !$job->job_facet_ui_id;
-    $job->update({end_facet_ui_id => $facet->facet_ui_id, file => $val->{file}, fail => $val->{fail}}) if $facet_name eq 'harness_job_end' && !$job->end_facet_ui_id;
-}
-
-1;

@@ -12,7 +12,7 @@ use Test2::Harness::Util::HashBase qw{
     -batch_size
     -buffer
 
-    -url -socket -file
+    -url
 
     -api_key -feed -permissions
 };
@@ -22,17 +22,11 @@ sub init {
 
     $self->{+BATCH_SIZE} ||= 1000;
 
-    croak "one of 'socket', 'url', or 'file' is required"
-        unless $self->{+URL} || $self->{+SOCKET} || $self->{+FILE};
-
-    croak "Invalid socket '$self->{+SOCKET}'"
-        if $self->{+SOCKET} && ! -S $self->{+SOCKET};
+    croak "'url' is required"
+        unless $self->{+URL};
 
     croak "An 'api_key' is required"
         unless $self->{+API_KEY};
-
-    croak "file '$self->{+FILE}' already exists"
-        if $self->{+FILE} && -e $self->{+FILE};
 }
 
 sub render_event {
@@ -56,16 +50,6 @@ sub flush {
         permissions => $self->{+PERMISSIONS} || 'private',
         events      => $events,
     };
-
-    if (my $file = $self->{+FILE}) {
-        open(my $fh, '>>', $file) or die "Could not open file '$file' for appending: $!";
-        print $fh encode_pretty_json($data);
-    }
-
-    if (my $sock = $self->{+SOCKET}) {
-        die "No socket support yet";
-        die "Remember to save the feed id if we do not have one";
-    }
 
     if (my $sock = $self->{+URL}) {
         die "No url support yet";

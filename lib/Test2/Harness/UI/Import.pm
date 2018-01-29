@@ -159,25 +159,24 @@ sub import_event {
     );
     return $error if $error;
 
-    return $self->import_facets($run, $job, $event, $event_data->{facet_data});
+    return $self->import_facets($event, $event_data->{facet_data});
 }
 
 sub import_facets {
     my $self = shift;
-    my ($run, $job, $event, $facets) = @_;
+    my ($event, $facets) = @_;
 
     return unless $facets;
 
-    my $cnt = 0;
     for my $facet_name (keys %$facets) {
         my $val = $facets->{$facet_name} or next;
 
         unless (ref($val) eq 'ARRAY') {
-            $self->import_facet($run, $job, $event, $facet_name, $val, $cnt++);
+            $self->import_facet($event, $facet_name, $val);
             next;
         }
 
-        $self->import_facet($run, $job, $event, $facet_name, $_, $cnt++) for @$val;
+        $self->import_facet($event, $facet_name, $_) for @$val;
     }
 
     return;
@@ -185,7 +184,7 @@ sub import_facets {
 
 sub import_facet {
     my $self = shift;
-    my ($run, $job, $event, $facet_name, $val, $cnt) = @_;
+    my ($event, $facet_name, $val) = @_;
 
     my $schema = $self->{+SCHEMA};
 
@@ -196,11 +195,22 @@ sub import_facet {
             facet_value => encode_json($val),
         }
     );
-    die "Could not add facet '$facet_name' number $cnt" unless $facet;
+    die "Could not add facet '$facet_name'" unless $facet;
 
-    $run->update({facet_ui_id     => $facet->facet_ui_id}) if $facet_name eq 'harness_run' && !$run->facet_ui_id;
-    $job->update({job_facet_ui_id => $facet->facet_ui_id}) if $facet_name eq 'harness_job' && !$job->job_facet_ui_id;
-    $job->update({end_facet_ui_id => $facet->facet_ui_id, file => $val->{file}, fail => $val->{fail}}) if $facet_name eq 'harness_job_end' && !$job->end_facet_ui_id;
+    if ($facet_name eq 'harness_run') {
+        my $run = $event->run;
+        $run->update({facet_ui_id => $facet->facet_ui_id}) unless $run->facet_ui_id;
+    }
+    elsif ($facet_name eq 'harness_job') {
+        my $job = $event->job;
+        $job->update({job_facet_ui_id => $facet->facet_ui_id}) unless $job->job_facet_ui_id;
+    }
+    elsif ($facet_name eq 'harness_job_end') {
+        my $job = $event->job;
+        $job->update({end_facet_ui_id => $facet->facet_ui_id, file => $val->{file}, fail => $val->{fail}}) unless $job->end_facet_ui_id;
+    }
+
+    return $facet;
 }
 
 1;

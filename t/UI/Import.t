@@ -6,7 +6,7 @@ use lib 't/lib';
 use Test2::Harness::DB::Postgresql;
 
 my $db = Test2::Harness::DB::Postgresql->new();
-my $schema = $db->connect;
+my $schema = $db->schema;
 
 tests init => sub {
     like(dies { $CLASS->new }, qr/'schema' is a required attribute/, "Need schema");

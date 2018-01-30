@@ -5,7 +5,7 @@ use Test2::Harness::DB::Postgresql;
 
 my $db = Test2::Harness::DB::Postgresql->new();
 
-my $schema = $db->connect;
+my $schema = $db->schema;
 
 ok(my $event = $schema->resultset('Event')->find({event_ui_id => 1}), "Found the first event");
 

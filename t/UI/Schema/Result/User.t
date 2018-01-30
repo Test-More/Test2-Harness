@@ -5,7 +5,7 @@ use Test2::Harness::DB::Postgresql;
 
 my $db = Test2::Harness::DB::Postgresql->new();
 
-my $schema = $db->connect;
+my $schema = $db->schema;
 
 my $user = $schema->resultset('User')->create({
     username => 'theuser',

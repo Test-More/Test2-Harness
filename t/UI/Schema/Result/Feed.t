@@ -4,7 +4,7 @@ use lib 't/lib';
 use Test2::Harness::DB::Postgresql;
 
 my $db = Test2::Harness::DB::Postgresql->new();
-my $schema = $db->connect;
+my $schema = $db->schema;
 
 ok(my $feed = $schema->resultset('Feed')->find({feed_ui_id => 1}), "Found the first feed");
 

@@ -4,7 +4,7 @@ use lib 't/lib';
 use Test2::Harness::DB::Postgresql;
 
 my $db     = Test2::Harness::DB::Postgresql->new();
-my $schema = $db->connect;
+my $schema = $db->schema;
 
 ok(my $job = $schema->resultset('Job')->find({job_id => 0}), "Found job (harness-id: 0)");
 can_ok($job, qw/job_ui_id run_ui_id job_facet_ui_id end_facet_ui_id job_id file permissions/);

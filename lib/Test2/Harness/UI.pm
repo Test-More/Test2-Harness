@@ -4,27 +4,59 @@ use warnings;
 
 our $VERSION = '0.000001';
 
-use Test2::Harness::UI::Util::HashBase qw/-config_file/;
-
 use Plack::Builder;
-use Test2::Harnes::UI::Controller::Feed;
 
-sub schema {
-    my $self = shift;
-}
+use Test2::Harness::UI::Request;
+use Test2::Harness::UI::Controller::Page;
+use Test2::Harness::UI::Controller::API;
+use Test2::Harness::UI::Controller::User;
+
+use Test2::Harness::Util::JSON qw/encode_json/;
+
+use Test2::Harness::UI::Util::Errors qw/ERROR_404 ERROR_405/;
+
+use Test2::Harness::UI::Util::HashBase qw/-config_file -schema/;
 
 sub to_app {
     my $self = shift;
 
     return builder {
-        mount "/feed" => Test2::Harnes::UI::Controller::Feed->new(ui => $self)->to_app;
-
-        mount "/" => sub {
-            my $env = shift;
-
-            return ['200', ['Content-Type' => 'text/html'], ["<html>Hello World</html>"]];
-        };
+        mount "/api"  => sub { $self->wrap('Test2::Harness::UI::Controller::API'  => @_) };
+        mount "/data" => sub { $self->wrap('Test2::Harness::UI::Controller::Data' => @_) };
+        mount "/user" => sub { $self->wrap('Test2::Harness::UI::Controller::User' => @_) };
+        mount "/"     => sub { $self->wrap('Test2::Harness::UI::Controller::Page' => @_) };
     };
+}
+
+sub wrap {
+    my $self = shift;
+    my ($class, $env) = @_;
+
+    my $req = Test2::Harness::UI::Request->new(env => $env, schema => $self->{+SCHEMA});
+
+    my ($headers, $content);
+    my $ok = eval {
+        my $controller = $class->new(request => $req, schema => $self->schema);
+        ($content, $headers) = $controller->process();
+
+        1;
+    };
+    my $err = $@;
+
+    return [200, $headers, [$content]] if $ok;
+
+    if ($err) {
+        return [404, ['Content-Type' => 'text/plain'], ["404 page not found\n"]]
+            if $err == ERROR_404();
+
+        return [405, ['Content-Type' => 'text/plain'], ["405 Method not allowed\n"]]
+            if $err == ERROR_405();
+
+        return [500, ['Content-Type' => 'text/plain'], ["$err\n"]]
+            if $ENV{T2_HARNESS_UI_ENV} eq 'dev';
+    }
+
+    return [500, ['Content-Type' => 'text/plain'], ["Internal Server Error\n"]];
 }
 
 __END__

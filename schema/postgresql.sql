@@ -36,8 +36,31 @@ CREATE TABLE users (
     username        VARCHAR(32)     NOT NULL,
     pw_hash         VARCHAR(31)     NOT NULL,
     pw_salt         VARCHAR(22)     NOT NULL,
+    is_admin        BOOL            DEFAULT FALSE,
 
     UNIQUE(username)
+);
+
+CREATE TABLE sessions (
+    session_ui_id   SERIAL          PRIMARY KEY,
+    session_id      VARCHAR(36)     NOT NULL,
+    active          BOOL            DEFAULT TRUE,
+
+    UNIQUE(session_id)
+);
+
+CREATE TABLE session_hosts (
+    session_host_ui_id  SERIAL      PRIMARY KEY,
+    session_ui_id       INT         NOT NULL REFERENCES sessions(session_ui_id),
+    user_ui_id          INTEGER     REFERENCES users(user_ui_id),
+
+    created             TIMESTAMP   NOT NULL DEFAULT now(),
+    accessed            TIMESTAMP   NOT NULL DEFAULT now(),
+
+    address             TEXT        NOT NULL,
+    agent               TEXT        NOT NULL,
+
+    UNIQUE(session_ui_id, address, agent)
 );
 
 CREATE TABLE api_keys (
@@ -111,3 +134,5 @@ CREATE INDEX IF NOT EXISTS run_jobs          ON jobs   (run_ui_id);
 CREATE INDEX IF NOT EXISTS job_events        ON events (job_ui_id);
 CREATE INDEX IF NOT EXISTS facet_type_index  ON facets (facet_type);
 CREATE INDEX IF NOT EXISTS facet_event_index ON facets (event_ui_id);
+
+INSERT INTO users(username, pw_hash, pw_salt, is_admin) VALUES('root', 'Hffc/wurxNeSHmWeZOJ2SnlKNXy.QOy', 'j3rWkFXozdPaDKobXVV5u.', TRUE);

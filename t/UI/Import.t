@@ -58,7 +58,7 @@ tests verify_credentials => sub {
     ok(!$one->verify_credentials(), "No key");
     ok(!$one->verify_credentials('xxx'), "invalid key");
 
-    my $key = $schema->resultset('User')->find({username => 'simple'})->gen_api_key('blah');
+    my $key = $schema->resultset('User')->find({username => 'root'})->gen_api_key('blah');
     ok($one->verify_credentials($key->value), "Good api key");
     $key->update({status => 'revoked'});
     ok(!$one->verify_credentials($key->value), "Revoked api key");
@@ -66,7 +66,7 @@ tests verify_credentials => sub {
 
 tests find_feed => sub {
     my $one = $CLASS->new(schema => $schema);
-    my $user = $schema->resultset('User')->find({username => 'simple'});
+    my $user = $schema->resultset('User')->find({username => 'root'});
     my $key = $user->api_keys->first;
 
     ok(my $new_feed = $one->find_feed($key, {}), "Generated a new feed");

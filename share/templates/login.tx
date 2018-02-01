@@ -1,0 +1,21 @@
+<div id="login">
+    <form id="login_form" method="POST">
+        <label for="username">username<label>
+        <input name="username" id="login_user" type="text" required/>
+        <br />
+        <label for="password">password<label>
+        <input name="password" id="login_pass" type="password" required/>
+        <br />
+        <input type="submit" name="action" value="Login">
+    </form>
+</div>
+
+: if $errors && $errors[0] {
+<div id="errors">
+    <ul>
+    : for $errors -> $e {
+        <li><: $e :></li>
+    : }
+    </ul>
+</div>
+: }

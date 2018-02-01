@@ -6,7 +6,7 @@ use DateTime;
 
 use Carp qw/croak/;
 
-use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use Test2::Harness::UI::Util::HashBase qw/-schema/;
 
@@ -19,18 +19,19 @@ sub init {
 
 sub import_events {
     my $self = shift;
+    my ($key, $payload) = @_;
 
     my $schema = $self->{+SCHEMA};
     $schema->txn_begin;
 
     my $out;
-    my $ok = eval { $out = $self->process_params(@_); 1 };
+    my $ok = eval { $out = $self->process_params($key, $payload); 1 };
     my $err = $@;
 
     if (!$ok) {
         warn $@;
         $schema->txn_rollback;
-        return { errors => ['Internal Error'], internal_error => 1 };
+        die $err;
     }
 
     if   ($out->{success}) { $schema->txn_commit }
@@ -41,20 +42,14 @@ sub import_events {
 
 sub process_params {
     my $self = shift;
-    my ($params) = @_;
-
-    $params = decode_json($params) unless ref $params;
-
-    # Verify credentials
-    my $key = $self->verify_credentials($params->{api_key})
-        or return {errors => ["Incorrect credentials"]};
+    my ($key, $payload) = @_;
 
     # Verify or create feed
-    my ($feed, $error) = $self->find_feed($key, $params);
+    my ($feed, $error) = $self->find_feed($key, $payload);
     return $error if $error;
 
     my $cnt = 0;
-    for my $event (@{$params->{events}}) {
+    for my $event (@{$payload->{events}}) {
         my $error = $self->import_event($feed, $event);
         return {errors => ["error processing event number $cnt: $error"]} if $error;
         $cnt++;
@@ -65,14 +60,14 @@ sub process_params {
 
 sub find_feed {
     my $self = shift;
-    my ($key, $params) = @_;
+    my ($key, $payload) = @_;
 
-    my $perms = $params->{permissions} || 'private';
+    my $perms = $payload->{permissions} || 'private';
 
     my $schema = $self->{+SCHEMA};
 
     # New feed!
-    my $feed_ui_id = $params->{feed}
+    my $feed_ui_id = $payload->{feed}
         or return $schema->resultset('Feed')->create({api_key_ui_id => $key->api_key_ui_id, user_ui_id => $key->user_ui_id, permissions => $perms});
 
     # Verify existing feed
@@ -85,21 +80,6 @@ sub find_feed {
         unless $feed->permissions eq $perms;
 
     return $feed;
-}
-
-sub verify_credentials {
-    my $self = shift;
-    my ($api_key) = @_;
-
-    return unless $api_key;
-
-    my $schema = $self->{+SCHEMA};
-    my $key = $schema->resultset('APIKey')->find({value => $api_key})
-        or return undef;
-
-    return undef unless $key->status eq 'active';
-
-    return $key;
 }
 
 sub format_stamp {

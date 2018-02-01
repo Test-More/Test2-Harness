@@ -1,0 +1,19 @@
+<div id="logout">
+    <form id="logout_form" method="POST">
+        <input type="submit" name="action" value="Logout">
+    </form>
+</div>
+
+<br />
+Hello <: $user.username :>
+<br />
+
+: if $errors && $errors[0] {
+<div id="errors">
+    <ul>
+    : for $errors -> $e {
+        <li><: $e :></li>
+    : }
+    </ul>
+</div>
+: }

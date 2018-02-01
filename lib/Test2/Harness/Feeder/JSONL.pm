@@ -58,6 +58,7 @@ sub poll {
         bless($line->{facet_data}->{harness_job}, 'Test2::Harness::Job')
             if $line->{facet_data}->{harness_job};
 
+        next if $line->{processed};
         push @out => Test2::Harness::Event->new(%$line);
         last if $max && @out >= $max
     }

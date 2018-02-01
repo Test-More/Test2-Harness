@@ -23,6 +23,9 @@ sub init {
     }
 }
 
+*log_raw_event       = \&log_event;
+*log_processed_event = \&log_event;
+
 sub log_event {
     my $self = shift;
     my ($event) = @_;
@@ -30,6 +33,12 @@ sub log_event {
     my $fh = $self->{+FH};
     my $prefix = $self->{+PREFIX};
     print $fh $prefix, encode_json($event), "\n";
+}
+
+sub finish {
+    my $self = shift;
+    close($self->{+FH});
+    $self->{+FH} = undef;
 }
 
 1;

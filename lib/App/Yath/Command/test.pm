@@ -357,6 +357,7 @@ sub run_command {
     }
 
     # Let the loggers clean up.
+    $_->finish for @$loggers;
     @$loggers = ();
 
     if (-t STDOUT) {

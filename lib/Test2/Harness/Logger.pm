@@ -8,7 +8,10 @@ use Carp qw/confess/;
 
 use Test2::Harness::Util::HashBase;
 
-sub log_event { confess "not implemented" };
+sub log_raw_event { }
+sub log_processed_event { }
+
+sub finish {}
 
 1;
 

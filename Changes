@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Allow logging of both processed and unprocessed events
+    - Add finish() hook to loggers
+    - This is a breaking change for any existing loggers (still alpha! Do not complain!)
+
 0.001049  2018-01-26 14:27:16-08:00 America/Los_Angeles
 
     - Better 'renderer' handling

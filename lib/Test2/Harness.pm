@@ -127,7 +127,7 @@ sub iteration {
             next if $jobs && !$jobs->{$job_id};
 
             # Log first, before the watchers transform the events.
-            $_->log_event($event) for @{$self->{+LOGGERS}};
+            $_->log_raw_event($event) for @{$self->{+LOGGERS}};
 
             if ($job_id) {
                 my $watcher = $self->{+WATCHERS}->{$job_id};
@@ -152,6 +152,7 @@ sub iteration {
 
                 next unless $event;
 
+
                 if ($f && $f->{harness_job_end}) {
                     $f->{harness_job_end}->{file} = $watcher->file;
                     $f->{harness_job_end}->{fail} = $watcher->fail ? 1 : 0;
@@ -168,7 +169,9 @@ sub iteration {
             }
 
             # Render it now that the watchers have done their thing.
-            $_->render_event($event) for @{$self->{+RENDERERS}};
+            $event->{processed} = time;
+            $_->render_event($event)        for @{$self->{+RENDERERS}};
+            $_->log_processed_event($event) for @{$self->{+LOGGERS}};
         }
     }
 

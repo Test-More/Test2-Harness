@@ -15,7 +15,7 @@ use Test2::Harness::Util qw/write_file_atomic/;
 use Test2::Harness::Util::File::JSONL();
 use Test2::Harness::Run::Queue();
 
-our $VERSION = '0.001050';
+our $VERSION = '0.001051';
 
 use Test2::Harness::Util::HashBase qw{
     -pid

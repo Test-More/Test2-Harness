@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001050  2018-02-01 13:31:58-08:00 America/Los_Angeles
+
     - Allow logging of both processed and unprocessed events
     - Add finish() hook to loggers
     - This is a breaking change for any existing loggers (still alpha! Do not complain!)

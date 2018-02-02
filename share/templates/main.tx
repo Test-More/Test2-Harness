@@ -3,8 +3,42 @@
 <title><: $title :></title>
 </head>
 <body>
-<div id="header">HEADER</div>
+<div id="header">
+
+: if $user {
+    <a href="<: $base_uri :>user?action=logout">logout</a>
+: }
+: else {
+    <a href="<: $base_uri :>user">login</a>
+: }
+
 <br />
+
+HEADER
+</div>
+
+: if $messages && $messages[0] {
+<div id="messages">
+    <ul>
+    : for $messages -> $m {
+        <li><: $m :></li>
+    : }
+    </ul>
+</div>
+<br />
+: }
+
+: if $errors && $errors[0] {
+<div id="errors">
+    <ul>
+    : for $errors -> $e {
+        <li><: $e :></li>
+    : }
+    </ul>
+</div>
+<br />
+: }
+
 <div id="content"><: $content :></div>
 <br />
 <div id="footer">FOOTER</div>

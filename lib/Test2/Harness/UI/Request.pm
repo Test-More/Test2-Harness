@@ -23,6 +23,8 @@ sub schema { $_[0]->{schema} }
 sub session {
     my $self = shift;
 
+    return $self->{session} if $self->{session};
+
     my $cookies = $self->cookies;
 
     my $id = $cookies->{id} or return undef;

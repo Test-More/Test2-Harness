@@ -76,9 +76,11 @@ CREATE TABLE api_keys (
 CREATE TABLE feeds (
     feed_ui_id      BIGSERIAL   PRIMARY KEY,
     user_ui_id      INTEGER     NOT NULL REFERENCES users(user_ui_id),
-    api_key_ui_id   INTEGER     NOT NULL REFERENCES api_keys(api_key_ui_id),
     stamp           TIMESTAMP   NOT NULL DEFAULT now(),
-    permissions     perms       NOT NULL DEFAULT 'private'
+    permissions     perms       NOT NULL DEFAULT 'private',
+    name            TEXT        NOT NULL,
+
+    UNIQUE(user_ui_id, name)
 );
 
 CREATE TABLE runs (
@@ -108,12 +110,13 @@ CREATE TABLE events (
     event_ui_id     BIGSERIAL   PRIMARY KEY,
     job_ui_id       BIGSERIAL   NOT NULL REFERENCES jobs(job_ui_id),
 
-    stamp           TIMESTAMP,
+    stamp           TIMESTAMP   DEFAULT NULL,
+    processed       TIMESTAMP   DEFAULT NULL,
 
     event_id        TEXT        NOT NULL,
     stream_id       TEXT,
 
-    UNIQUE(job_ui_id, event_id)
+    UNIQUE(job_ui_id, event_id, processed)
 );
 
 CREATE TABLE facets (

@@ -9,7 +9,7 @@ __PACKAGE__->load_components(qw/InflateColumn::DateTime Core/);
 __PACKAGE__->table('events');
 
 __PACKAGE__->add_columns(
-    qw/event_ui_id job_ui_id event_id stream_id/,
+    qw/event_ui_id job_ui_id event_id stream_id processed/,
     stamp => { data_type => 'datetime' },
 );
 

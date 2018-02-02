@@ -4,38 +4,46 @@ use warnings;
 
 our $VERSION = '0.000001';
 
-use Plack::Builder;
-
 use Test2::Harness::UI::Request;
 use Test2::Harness::UI::Controller::Page;
-use Test2::Harness::UI::Controller::API;
+use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 
 use Test2::Harness::Util::JSON qw/encode_json/;
 
-use Test2::Harness::UI::Util::Errors qw/ERROR_404 ERROR_405/;
+use Test2::Harness::UI::Util::Errors qw/ERROR_404 ERROR_405 ERROR_401/;
 
 use Test2::Harness::UI::Util::HashBase qw/-config_file -schema/;
+
+my %ROUTING = (
+    "/upload" => 'Test2::Harness::UI::Controller::Upload',
+    "/user"   => 'Test2::Harness::UI::Controller::User',
+    "/"       => 'Test2::Harness::UI::Controller::Page',
+);
 
 sub to_app {
     my $self = shift;
 
-    return builder {
-        mount "/api"  => sub { $self->wrap('Test2::Harness::UI::Controller::API'  => @_) };
-        mount "/data" => sub { $self->wrap('Test2::Harness::UI::Controller::Data' => @_) };
-        mount "/user" => sub { $self->wrap('Test2::Harness::UI::Controller::User' => @_) };
-        mount "/"     => sub { $self->wrap('Test2::Harness::UI::Controller::Page' => @_) };
-    };
+    return sub {
+        my $env = shift;
+
+        my $req = Test2::Harness::UI::Request->new(env => $env, schema => $self->{+SCHEMA});
+
+        my $path = $req->path;
+        $path =~ s{/+$}{}g unless $path eq '/';
+
+        $self->wrap($ROUTING{$path}, $req);
+    }
 }
 
 sub wrap {
     my $self = shift;
-    my ($class, $env) = @_;
-
-    my $req = Test2::Harness::UI::Request->new(env => $env, schema => $self->{+SCHEMA});
+    my ($class, $req) = @_;
 
     my ($headers, $content);
     my $ok = eval {
+        die ERROR_404() unless $class;
+
         my $controller = $class->new(request => $req, schema => $self->schema);
         ($content, $headers) = $controller->process();
 
@@ -46,6 +54,9 @@ sub wrap {
     return [200, $headers, [$content]] if $ok;
 
     if ($err) {
+        return [401, ['Content-Type' => 'text/plain'], ["401 Unauthorized\n"]]
+            if $err == ERROR_401();
+
         return [404, ['Content-Type' => 'text/plain'], ["404 page not found\n"]]
             if $err == ERROR_404();
 

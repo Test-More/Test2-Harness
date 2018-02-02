@@ -1,0 +1,31 @@
+<h1>Upload a log file</h1>
+
+<div id="log_upload">
+    <form id="log_upload" method="POST" enctype="multipart/form-data">
+        <label for="log_file">Log File</label>
+        <input type="file" name="log_file" id="log_file" required>
+        <br />
+
+        : if !$user {
+            <label for="api_key">API Key</label>
+            <input type="password" name="api_key" id="api_key" required>
+            <small>(Log in to avoid entering an API key)</small>
+            <br />
+        : }
+
+         <label for="feed_name">Feed Name</label>
+         <input type="text" name="feed_name" id="feed_name">
+         <small>(Optional, defaults to upload file name)</small>
+         <br />
+
+         <label for="permissions">Permissions</label>
+         <select name="permissions" id="permissions">
+            <option value="private">Private (only you)</option>
+            <option value="protected">Protected (anyone logged in)</option>
+            <option value="public">Public (anyone)</option>
+         </select>
+         <br />
+
+        <input type="submit" value="Upload Log" name="action">
+    </form>
+</div>

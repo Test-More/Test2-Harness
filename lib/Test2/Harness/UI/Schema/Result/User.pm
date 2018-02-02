@@ -49,8 +49,7 @@ sub set_password {
     my $salt = $self->gen_salt;
     my $hash = bcrypt_hash({key_nul => 1, cost => COST, salt => $salt}, $pw);
 
-    $self->pw_hash(en_base64($hash));
-    $self->pw_salt(en_base64($salt));
+    $self->update({pw_hash => en_base64($hash), pw_salt => en_base64($salt)});
 }
 
 sub gen_salt {
@@ -74,7 +73,7 @@ sub gen_api_key {
             user_ui_id => $self->user_ui_id,
             value      => $val,
             status     => 'active',
-            name       => 'blah',
+            name       => $name,
         }
     );
 }

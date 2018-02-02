@@ -1,19 +1,57 @@
-<div id="logout">
-    <form id="logout_form" method="POST">
-        <input type="submit" name="action" value="Logout">
+<div id="change_password">
+    <form id="change_password_form" method="POST">
+        <br />
+        <label for="old_password">old password<label>
+        <input name="old_password" type="password" required/>
+        <br />
+        <label for="new_password_1">new password<label>
+        <input name="new_password_1" type="password" required/>
+        <br />
+        <label for="new_password_2">new password (again)<label>
+        <input name="new_password_2" type="password" required/>
+        <br />
+        <input type="submit" name="action" value="Change Password">
     </form>
 </div>
 
 <br />
-Hello <: $user.username :>
+
+<div id="add_key">
+    <form id="add_key_form" method="POST">
+        <label for="key_name">Key Name</label>
+        <input type="text" name="key_name" required>
+        <input type="submit" name="action" value="Generate Key">
+    </form>
+</div>
+<div id="api_keys">
+        <table class="key_table">
+            <tr><th>Key Name</th><th>Key</th><th>Status</th><th>Actions</th></tr>
+            : for $keys -> $key {
+                <tr>
+                    <td><: $key.name :></td>
+                    <td><: $key.value :></td>
+                    <td><: $key.status :></td>
+                    <td>
+                        : if $key.status == 'active' {
+                            <form method="POST">
+                                <input type="submit" name="action" value="Disable">
+                                <input type="submit" name="action" value="Revoke">
+                                <input type="hidden" name="api_key_ui_id" value="<: $key.api_key_ui_id :>">
+                            </form>
+                        : }
+                        : else if $key.status == 'disabled' {
+                            <form method="POST">
+                                <input type="submit" name="action" value="Enable">
+                                <input type="submit" name="action" value="Revoke">
+                                <input type="hidden" name="api_key_ui_id" value="<: $key.api_key_ui_id :>">
+                            <form method="POST">
+                        : }
+                    </td>
+                </tr>
+            : }
+        </table>
+</div>
+
 <br />
 
-: if $errors && $errors[0] {
-<div id="errors">
-    <ul>
-    : for $errors -> $e {
-        <li><: $e :></li>
-    : }
-    </ul>
-</div>
-: }
+

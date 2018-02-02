@@ -6,26 +6,43 @@ use DateTime;
 
 use Carp qw/croak/;
 
-use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
-use Test2::Harness::UI::Util::HashBase qw/-schema/;
+use Test2::Harness::UI::Util::HashBase qw/-schema -feed_name -file -user -permissions -_feed -filename/;
+
+use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
+use IO::Uncompress::Gunzip qw($GunzipError) ;
 
 sub init {
     my $self = shift;
 
     croak "'schema' is a required attribute"
         unless $self->{+SCHEMA};
+
+    croak "'feed_name' is a required attribute"
+        unless $self->{+FEED_NAME};
+
+    croak "'file' is a required attribute"
+        unless $self->{+FILE};
+
+    croak "'user' is a required attribute"
+        unless $self->{+USER};
+
+    croak "'permissions' is a required attribute"
+        unless $self->{+PERMISSIONS};
+
+    croak "'filename' is a required attribute"
+        unless $self->{+FILENAME};
 }
 
-sub import_events {
+sub run {
     my $self = shift;
-    my ($key, $payload) = @_;
 
     my $schema = $self->{+SCHEMA};
     $schema->txn_begin;
 
     my $out;
-    my $ok = eval { $out = $self->process_params($key, $payload); 1 };
+    my $ok = eval { $out = $self->process; 1 };
     my $err = $@;
 
     if (!$ok) {
@@ -40,46 +57,48 @@ sub import_events {
     return $out;
 }
 
-sub process_params {
+sub process {
     my $self = shift;
-    my ($key, $payload) = @_;
-
-    # Verify or create feed
-    my ($feed, $error) = $self->find_feed($key, $payload);
-    return $error if $error;
 
     my $cnt = 0;
-    for my $event (@{$payload->{events}}) {
-        my $error = $self->import_event($feed, $event);
+
+    my $filename = $self->{+FILENAME};
+    my $file = $self->{+FILE};
+    my $fh;
+
+    if ($filename =~ m/\.jsonl\.bz2$/) {
+        $fh = IO::Uncompress::Bunzip2->new($file) or die "Could not open bz2 file '$file': $Bunzip2Error";
+    }
+    elsif ($filename =~ m/\.jsonl\.gz$/) {
+        $fh = IO::Uncompress::Gunzip2->new($file) or die "Could not open gz file '$file': $GunzipError";
+    }
+    elsif ($filename =~ m/\.jsonl$/) {
+        open($fh, '<', $file) or die "Could not open uploaded file '$file': $!";
+    }
+    else {
+        return {errors => ["Unsupported file type, must be .jsonl, .jsonl.bz2, or .jsonl.gz"]};
+    }
+
+    while (my $line = <$fh>) {
+        my $event = eval { decode_json($line) };
+        my $error = $event ? $self->import_event($event) : $@;
         return {errors => ["error processing event number $cnt: $error"]} if $error;
         $cnt++;
     }
 
-    return {success => 1, events_added => $cnt, feed => $feed->feed_ui_id};
+    return {success => $cnt};
 }
 
-sub find_feed {
+sub feed {
     my $self = shift;
-    my ($key, $payload) = @_;
 
-    my $perms = $payload->{permissions} || 'private';
-
-    my $schema = $self->{+SCHEMA};
-
-    # New feed!
-    my $feed_ui_id = $payload->{feed}
-        or return $schema->resultset('Feed')->create({api_key_ui_id => $key->api_key_ui_id, user_ui_id => $key->user_ui_id, permissions => $perms});
-
-    # Verify existing feed
-
-    my $feed = $schema->resultset('Feed')->find({feed_ui_id => $feed_ui_id});
-
-    return (undef, {errors => ["Invalid feed"]}) unless $feed && $feed->user_ui_id == $key->user_ui_id;
-
-    return (undef, {errors => ["permissions ($perms) do not match established permissions (" . $feed->permissions . ") for this feed ($feed_ui_id)"]})
-        unless $feed->permissions eq $perms;
-
-    return $feed;
+    return $self->{+_FEED} ||= $self->{+SCHEMA}->resultset('Feed')->create(
+        {
+            user_ui_id  => $self->user->user_ui_id,
+            name        => $self->{+FEED_NAME},
+            permissions => $self->{+PERMISSIONS},
+        }
+    );
 }
 
 sub format_stamp {
@@ -114,7 +133,9 @@ sub unique_row {
 
 sub import_event {
     my $self = shift;
-    my ($feed, $event_data) = @_;
+    my ($event_data) = @_;
+
+    my $feed = $self->feed;
 
     my ($run, $run_error) = $self->vivify_row(
         'Run' => 'run_id',
@@ -134,8 +155,15 @@ sub import_event {
 
     my ($event, $error) = $self->unique_row(
         'Event' => 'event_id',
-        {job_ui_id => $job->job_ui_id,                    event_id => $event_data->{event_id}},
-        {stamp     => format_stamp($event_data->{stamp}), stream_id => $event_data->{stream_id}},
+        {
+            job_ui_id => $job->job_ui_id,
+            event_id  => $event_data->{event_id},
+            processed => format_stamp($event_data->{processed}),
+        },
+        {
+            stamp     => format_stamp($event_data->{stamp}),
+            stream_id => $event_data->{stream_id},
+        },
     );
     return $error if $error;
 

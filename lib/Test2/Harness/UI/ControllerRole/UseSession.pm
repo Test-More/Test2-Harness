@@ -9,26 +9,29 @@ use Data::GUID();
 
 our @EXPORT = qw/SESSION session add_headers do_once/;
 
-BEGIN {
-    require Test2::Harness::UI::Controller;
-    *SCHEMA  = Test2::Harness::UI::Controller->can('SCHEMA');
-    *REQUEST = Test2::Harness::UI::Controller->can('REQUEST');
-}
-
 sub SESSION() { 'session' }
 
 sub do_once {
     my $self = shift;
 
-    $self->{+REQUEST}->session_host;
+    $self->session;
+    $self->request->session_host;
 }
 
 sub session {
     my $self = shift;
 
-    return $self->{+SESSION} ||= $self->{+REQUEST}->session || $self->{schema}->resultset('Session')->create(
-        {session_id => Data::GUID->new->as_string},
-    );
+    return $self->{+SESSION} if $self->{+SESSION};
+
+    unless($self->{+SESSION} = $self->request->session) {
+        $self->{+SESSION} = $self->schema->resultset('Session')->create(
+            {session_id => Data::GUID->new->as_string},
+        );
+
+        $self->request->{session} = $self->{+SESSION};
+    }
+
+    return $self->{+SESSION};
 }
 
 sub add_headers {

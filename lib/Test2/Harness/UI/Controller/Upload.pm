@@ -2,6 +2,8 @@ package Test2::Harness::UI::Controller::Upload;
 use strict;
 use warnings;
 
+use File::Temp qw/tempfile/;
+
 use Test2::Harness::UI::Import;
 use Test2::Harness::UI::Util::Errors qw/ERROR_405 ERROR_404 ERROR_401/;
 
@@ -51,27 +53,26 @@ sub process_form {
     my $user = $req->user || $self->api_user($req->parameters->{api_key});
     die ERROR_401 unless $user;
 
-    my $file  = $req->uploads->{log_file}->tempname;
-    my $name  = $req->parameters->{feed_name} || $req->uploads->{log_file}->filename;
+    my ($fh, $local) = tempfile('T2-UI-Feed-XXXXXXXX', TMPDIR => 1, CLEANUP => 0);
+    close($fh);
+    rename($req->uploads->{log_file}->tempname, $local) or die "Could not move feed file: $!";
+
+    my $orig  = $req->uploads->{log_file}->filename;
+    my $name  = $req->parameters->{feed_name} || $orig;
     my $perms = $req->parameters->{permissions} || 'private';
 
-    my $import = Test2::Harness::UI::Import->new(
-        schema      => $self->{+SCHEMA},
-        feed_name   => $name,
-        file        => $file,
-        filename    => $req->uploads->{log_file}->filename,
-        user        => $user,
-        permissions => $perms,
+    my $feed = $self->{+SCHEMA}->resultset('Feed')->create(
+        {
+            user_ui_id  => $user->user_ui_id,
+            name        => $name,
+            orig_file   => $orig,
+            local_file  => $local,
+            permissions => $perms,
+            status      => 'pending',
+        }
     );
 
-    my $stat = $import->run;
-
-    use Data::Dumper;
-    print Dumper($stat);
-
-    return $self->add_message("Upload Success, imported $stat->{success} event(s).") if defined $stat->{success};
-
-    push @{$self->{+MESSAGES} ||= []} => @{$stat->{errors} || []};
+    return $self->add_message("Upload Success, added import to queue");
 }
 
 sub api_user {
@@ -81,7 +82,7 @@ sub api_user {
     return unless $key_val;
 
     my $schema = $self->{+SCHEMA};
-    my $key = $schema->resultset('APIKey')->find({value => $key_val})
+    my $key = $schema->resultset('ApiKey')->find({value => $key_val})
         or return undef;
 
     return undef unless $key->status eq 'active';
@@ -171,7 +172,7 @@ sub verify_credentials {
     my $api_key = $data->{api_key} or return;
 
     my $schema = $self->{+SCHEMA};
-    my $key = $schema->resultset('APIKey')->find({value => $api_key})
+    my $key = $schema->resultset('ApiKey')->find({value => $api_key})
         or return undef;
 
     return undef unless $key->status eq 'active';

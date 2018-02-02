@@ -101,7 +101,7 @@ sub process_form {
     if ($ACTION_MAP{$action}) {
         my $user = $req->user or return $self->add_error("You must be logged in");
         my $key_id = $p->{api_key_ui_id} or return $self->add_error("A key id is required");
-        my $key = $schema->resultset('APIKey')->find({api_key_ui_id => $key_id, user_ui_id => $user->user_ui_id});
+        my $key = $schema->resultset('ApiKey')->find({api_key_ui_id => $key_id, user_ui_id => $user->user_ui_id});
 
         return $self->add_error("Invalid key") unless $key;
 

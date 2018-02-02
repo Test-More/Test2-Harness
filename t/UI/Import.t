@@ -269,7 +269,7 @@ tests import_facet => sub {
     my $one = $CLASS->new(schema => $schema);
 
     my $user = $schema->resultset('User')->find({user_ui_id => 1}) or die "No user";
-    my $key = $schema->resultset('APIKey')->find({user_ui_id => 1, status => 'active'}) or die "No active api key";
+    my $key = $schema->resultset('ApiKey')->find({user_ui_id => 1, status => 'active'}) or die "No active api key";
 
     my $feed = $schema->resultset('Feed')->create({user_ui_id => 1, api_key_ui_id => $key->api_key_ui_id}) or die "Could not make feed";
 

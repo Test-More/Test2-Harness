@@ -1,4 +1,4 @@
-use Test2::V0 -target => 'Test2::Harness::UI::Schema::Result::APIKey';
+use Test2::V0 -target => 'Test2::Harness::UI::Schema::Result::ApiKey';
 
 use lib 't/lib';
 use Test2::Harness::DB::Postgresql;
@@ -6,7 +6,7 @@ use Test2::Harness::DB::Postgresql;
 my $db = Test2::Harness::DB::Postgresql->new();
 my $schema = $db->schema;
 
-ok(my $key = $schema->resultset('APIKey')->find({api_key_ui_id => 1}), "Found the first key");
+ok(my $key = $schema->resultset('ApiKey')->find({api_key_ui_id => 1}), "Found the first key");
 
 can_ok($key, qw/api_key_ui_id user_ui_id name value status/);
 

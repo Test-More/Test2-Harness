@@ -51,7 +51,7 @@ sub verify_credentials {
     my $api_key = $data->{api_key} or return;
 
     my $schema = $self->{+SCHEMA};
-    my $key = $schema->resultset('APIKey')->find({value => $api_key})
+    my $key = $schema->resultset('ApiKey')->find({value => $api_key})
         or return undef;
 
     return undef unless $key->status eq 'active';

@@ -300,6 +300,17 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:9tqcqU8frIwVZTQmWJJdyw
 
+sub run  { shift->job->run }
+sub user { shift->job->run->user }
 
-# You can replace this text with custom code or comments, and it will be preserved on regeneration
+sub facet_data {
+    my $self = shift;
+
+    my $other = $self->other_facets;
+    my %data = $other ? %$other : ();
+    @data{@STANDARD_FACETS, @HARNESS_FACETS} = @{$self}{@STANDARD_FACETS, @HARNESS_FACETS};
+
+    return \%data;
+}
+
 1;

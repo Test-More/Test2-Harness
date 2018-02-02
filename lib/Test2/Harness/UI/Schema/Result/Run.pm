@@ -141,6 +141,6 @@ __PACKAGE__->has_many(
 # Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:wmyC64MRs++LZvHRu/W42w
 
+sub user { shift->feed->user }
 
-# You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

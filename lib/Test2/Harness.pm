@@ -333,9 +333,13 @@ sub timeout {
 
     $msg .= <<"    EOT";
 
-You can turn this off on a per-test basis by adding the comment
+If you do not want this test to time-out you can turn timeouts off on a
+per-test basis by adding the following comment to the top of your test file.
+
 # HARNESS-NO-TIMEOUT
-to the top of your test file (but below the #! line).
+
+CAUTION: THIS IS ALMOST ALWAYS THE WRONG THING TO DO!
+         A test suite can hang forever when you turn timeouts off.
     EOT
 
     my @info = (

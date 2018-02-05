@@ -1100,10 +1100,10 @@ subtest inject_signal_handlers => sub {
     isnt($SIG{TERM}, 'IGNORE', "Not ignoring SIGINT anymore");
     ok(!$one->signal, "no signal seen yet");
 
-    is(dies { kill('INT', $$); sleep 10 }, "caught SIGINT, Attempting to shut down cleanly...\n", "SIGINT threw exception");
+    is(dies { kill('INT', $$); sleep 10 }, "caught SIGINT. Attempting to shut down cleanly...\n", "SIGINT threw exception");
     is($one->signal, 'INT', "Recorded SIGINT");
 
-    is(dies { kill('TERM', $$); sleep 10 }, "caught SIGTERM, Attempting to shut down cleanly...\n", "SIGTERM threw exception");
+    is(dies { kill('TERM', $$); sleep 10 }, "caught SIGTERM. Attempting to shut down cleanly...\n", "SIGTERM threw exception");
     is($one->signal, 'TERM', "Recorded SIGTERM");
 };
 

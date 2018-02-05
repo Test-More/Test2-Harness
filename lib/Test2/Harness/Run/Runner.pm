@@ -212,7 +212,7 @@ sub handle_signal {
 
     $self->{+SIGNAL} = $sig;
 
-    die "Runner caught SIG$sig, Attempting to shut down cleanly...\n";
+    die "Runner caught SIG$sig. Attempting to shut down cleanly...\n";
 }
 
 sub preload {

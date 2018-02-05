@@ -97,7 +97,7 @@ sub handle_signal {
         return;
     }
 
-    die "Runner caught SIG$sig, Attempting to shut down cleanly...\n";
+    die "Runner caught SIG$sig. Attempting to shut down cleanly...\n";
 }
 
 sub stage_should_fork { 0 }

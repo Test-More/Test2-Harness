@@ -13,6 +13,7 @@ use Time::HiRes;
 use IO::Handle;
 
 use File::Spec();
+use Test2::Formatter::Test2::Composer;
 
 BEGIN { require Test2::Formatter; our @ISA = qw(Test2::Formatter) }
 
@@ -23,6 +24,7 @@ sub import {
 }
 
 use Test2::Util::HashBase qw{
+    -composer
     -last_depth
     -_buffered
     -io
@@ -127,8 +129,18 @@ sub DEFAULT_COLOR() {
     );
 }
 
+my %FACET_TAG_BORDERS = (
+    'default' => ['[', ']'],
+    'amnesty' => ['{', '}'],
+    'info'    => ['(', ')'],
+    'error'   => ['<', '>'],
+    'parent'  => [' ', ' '],
+);
+
 sub init {
     my $self = shift;
+
+    $self->{+COMPOSER} ||= Test2::Formatter::Test2::Composer->new;
 
     $self->{+_ACTIVE_DISP} = '';
 
@@ -308,66 +320,58 @@ sub render_buffered_event {
     my $self = shift;
     my ($f, $tree) = @_;
 
-    return [$self->render_halt($f, $tree)] if $f->{control}->{halt};
-    return [$self->render_assert($f, $tree)] if $f->{assert};
-    return [$self->render_errors($f, $tree)] if $f->{errors};
-    return [$self->render_plan($f, $tree)] if $f->{plan};
-    return [$self->render_info($f, $tree)] if $f->{info};
-    return [$self->render_times($f, $tree)] if $f->{times};
+    my $comp = $self->{+COMPOSER}->render_one_line($f) or return;
 
-    return [$self->render_about($f, $tree)] if $f->{about};
-
-    return;
+    return unless @$comp;
+    return [$self->build_line($tree, @$comp)];
 }
 
 sub render_event {
     my $self = shift;
     my ($f, $tree) = @_;
 
-    my @out;
+    my $comps = $self->{+COMPOSER}->render_verbose($f);
 
-    push @out => $self->render_halt($f, $tree) if $f->{control}->{halt};
-    push @out => $self->render_plan($f, $tree) if $f->{plan};
+    my (@parent, @times);
 
-    if ($f->{assert}) {
-        push @out => $self->render_assert($f, $tree);
-        push @out => $self->render_debug($f, $tree) unless $f->{assert}->{pass} || $f->{assert}->{no_debug};
-        push @out => $self->render_amnesty($f, $tree) if $f->{amnesty} && ! $f->{assert}->{pass};
+    if ($f->{parent}) {
+        @parent = $self->render_parent($f, $tree);
+
+        if (@$comps && $comps->[-1]->[0] eq 'times') {
+            my $times = pop(@$comps);
+            @times = $self->build_line($tree, @$times);
+        }
     }
 
-    push @out => $self->render_info($f, $tree) if $f->{info};
-    push @out => $self->render_errors($f, $tree) if $f->{errors};
-    push @out => $self->render_parent($f, $tree) if $f->{parent};
-    push @out => $self->render_times($f, $tree) if $f->{times};
+    my @out;
 
-    push @out => $self->render_about($f, $tree)
-        if $f->{about} && !(@out || first { $f->{$_} } qw/stop plan info nest assert/);
+    for my $comp (@$comps) {
+        my $ctree = $tree;
+        substr($ctree, -2, 2, '+~') if $comp->[0] eq 'assert' && $f->{parent};
+        push @out => $self->build_line($ctree, @$comp);
+    }
+
+    push @out => (@parent, @times);
 
     return \@out;
 }
 
 sub render_quiet {
     my $self = shift;
-    my ($f) = @_;
+    my ($f, $tree) = @_;
 
     my @out;
 
-    my $tree;
-    push @out => $self->render_halt($f, $tree ||= $self->render_tree($f,)) if $f->{control}->{halt};
-
-    if ($f->{assert} && !$f->{assert}->{pass} && !$f->{amnesty}) {
-        push @out => $self->render_assert($f, $tree ||= $self->render_tree($f,));
-        push @out => $self->render_debug($f, $tree ||= $self->render_tree($f,)) unless $f->{assert}->{pass} || $f->{assert}->{no_debug};
-        push @out => $self->render_amnesty($f, $tree ||= $self->render_tree($f,)) if $f->{amnesty} && ! $f->{assert}->{pass};
+    my $comps = $self->{+COMPOSER}->render_brief($f);
+    for my $comp (@$comps) {
+        my $ctree = $tree ||= $self->render_tree($f);
+        substr($ctree, -2, 2, '+~') if $comp->[0] eq 'assert' && $f->{parent};
+        push @out => $self->build_line($ctree, @$comp);
     }
 
-    if ($f->{info}) {
-        my $if = { %$f, info => [grep { $_->{debug} || $_->{important} } @{$f->{info}}] };
-        push @out => $self->render_info($if, $tree ||= $self->render_tree($f,)) if @{$if->{info}};
+    if ($f->{parent} && !$f->{amnesty}) {
+        push @out => $self->render_parent($f, $tree ||= $self->render_tree($f), quiet => 1);
     }
-
-    push @out => $self->render_errors($f, $tree ||= $self->render_tree($f,)) if $f->{errors};
-    push @out => $self->render_parent($f, $tree ||= $self->render_tree($f,), quiet => 1) if $f->{parent} && !$f->{amnesty};
 
     return \@out;
 }
@@ -406,7 +410,7 @@ sub render_tree {
 
 sub build_line {
     my $self = shift;
-    my ($facet, $tag, $tree, $text, $ps, $pe) = @_;
+    my ($tree, $facet, $tag, $text) = @_;
 
     $tree ||= '';
     $tag  ||= '';
@@ -415,12 +419,14 @@ sub build_line {
 
     substr($tree, -2, 1, '+') if $facet eq 'assert';
 
+    $tag = substr($tag, 0 - TAG_WIDTH, TAG_WIDTH) if length($tag) > TAG_WIDTH;
+
     my $max = $self->{+TTY} ? (term_size() || 80) : undef;
     my $color = $self->{+COLOR};
     my $reset = $color ? $color->{reset} || '' : '';
     my $tcolor = $color ? $color->{TAGS}->{$tag} || $color->{FACETS}->{$facet} || '' : '';
 
-    ($ps, $pe) = ('[', ']') unless $ps;
+    my ($ps, $pe) = @{$FACET_TAG_BORDERS{$facet} || $FACET_TAG_BORDERS{default}};
 
     $tag = uc($tag);
     my $length = length($tag);
@@ -487,122 +493,6 @@ sub build_line {
     );
 }
 
-sub render_times {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    return $self->build_line('times', 'TIME', $tree, $f->{about}->{details});
-}
-
-sub render_halt {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    return $self->build_line('control', 'HALT', $tree, $f->{control}->{details});
-}
-
-sub render_plan {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    my $plan = $f->{plan};
-    return $self->build_line('plan', 'NO  PLAN', $tree, $f->{plan}->{details}) if $plan->{none};
-
-    if ($plan->{skip}) {
-        return $self->build_line('plan', 'SKIP ALL', $tree, $f->{plan}->{details})
-            if $f->{plan}->{details};
-
-        return $self->build_line('plan', 'SKIP ALL', $tree, "No reason given");
-    }
-
-    return $self->build_line('plan', 'PLAN', $tree, "Expected assertions: $f->{plan}->{count}");
-}
-
-sub render_assert {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    substr($tree, -2, 2, '+~') if $f->{parent};
-
-    my $name = $f->{assert}->{details} || '<UNNAMED ASSERTION>';
-
-    return $self->build_line('assert', 'PASS', $tree, $name)
-        if $f->{assert}->{pass};
-
-    return $self->build_line('assert', '! PASS !', $tree, $name)
-        if $f->{amnesty} && @{$f->{amnesty}};
-
-    return $self->build_line('assert', 'FAIL', $tree, $name)
-}
-
-sub render_amnesty {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    my %seen;
-    return map {
-        $seen{join '' => @{$_}{qw/tag details/}}++
-            ? ()
-            : $self->build_line('amnesty', $_->{tag}, $tree, $_->{details}, '{', '}');
-    } @{$f->{amnesty}};
-}
-
-sub render_debug {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    my $name  = $f->{assert}->{details};
-    my $trace = $f->{trace};
-
-    my $debug;
-    if ($trace) {
-        $debug = $trace->{details};
-        if(!$debug && $trace->{frame}) {
-            my $frame = $trace->{frame};
-            $debug = "$frame->[1] line $frame->[2]";
-        }
-    }
-
-    $debug ||= "[No trace info available]";
-
-    chomp($debug);
-
-    return $self->build_line('trace', 'DEBUG', $tree, $debug);
-}
-
-sub render_info {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    return map {
-        my $details = $_->{details} || '';
-
-        my $msg;
-        if (ref($details)) {
-            require Data::Dumper;
-            my $dumper = Data::Dumper->new([$details])->Indent(2)->Terse(1)->Useqq(1)->Sortkeys(1);
-            chomp($msg = $dumper->Dump);
-        }
-        else {
-            chomp($msg = $details);
-        }
-
-        $self->build_line('info', $_->{tag}, $tree, $details, '(', ')')
-    } @{$f->{info}};
-}
-
-sub render_about {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    return if $f->{about}->{no_display};
-    return unless $f->{about} && $f->{about}->{package} && $f->{about}->{details};
-
-    my $type = substr($f->{about}->{package}, 0 - TAG_WIDTH, TAG_WIDTH);
-
-    return $self->build_line('info', $type, $tree, $f->{about}->{details});
-}
-
 sub render_parent {
     my $self = shift;
     my ($f, $tree, %params) = @_;
@@ -619,33 +509,12 @@ sub render_parent {
     return unless @out;
 
     push @out => (
-        $self->build_line('parent', '', "$tree^", '', ' ', ' '),
+        $self->build_line("$tree^", 'parent', '', ''),
     );
 
     return @out;
 }
 
-
-sub render_errors {
-    my $self = shift;
-    my ($f, $tree) = @_;
-
-    return map {
-        my $details = $_->{details};
-
-        my $msg;
-        if (ref($details)) {
-            require Data::Dumper;
-            my $dumper = Data::Dumper->new([$details])->Indent(2)->Terse(1)->Useqq(1)->Sortkeys(1);
-            chomp($msg = $dumper->Dump);
-        }
-        else {
-            chomp($msg = $details);
-        }
-
-        $self->build_line('error', $_->{fail} ? 'FATAL' : 'ERROR', $tree, $details, '<', '>')
-    } @{$f->{errors}};
-}
 
 sub DESTROY {
     my $self = shift;

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Extract composer logic from Test2 formatter so it can be re-used
+
 0.001050  2018-02-01 13:31:58-08:00 America/Los_Angeles
 
     - Allow logging of both processed and unprocessed events

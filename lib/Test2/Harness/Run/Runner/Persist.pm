@@ -93,11 +93,11 @@ sub handle_signal {
     $self->{+SIGNAL} = $sig;
 
     if ($sig eq 'HUP') {
-        print STDERR "$$ ($self->{+STAGE}) Runner cought SIG$sig, reloading...\n";
+        print STDERR "$$ ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
         return;
     }
 
-    die "Runner cought SIG$sig, Attempting to shut down cleanly...\n";
+    die "Runner caught SIG$sig, Attempting to shut down cleanly...\n";
 }
 
 sub stage_should_fork { 0 }

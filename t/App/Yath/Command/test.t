@@ -218,7 +218,7 @@ sub run_command {
 
         $self->paint("Test runner exited badly: $exit\n") if $exit;
         $self->paint("Test runner exited badly: ?\n") unless defined $exit;
-        $self->paint("An exception was cought\n") if !$ok && !$sig;
+        $self->paint("An exception was caught\n") if !$ok && !$sig;
         $self->paint("Received SIG$sig\n") if $sig;
         $self->paint("$lost test files were never run!\n") if $lost;
 

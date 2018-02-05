@@ -1189,7 +1189,7 @@ sub inject_signal_handlers {
 
         $self->{+SIGNAL} = $sig;
 
-        die "Cought SIG$sig, Attempting to shut down cleanly...\n";
+        die "Caught SIG$sig. Attempting to shut down cleanly...\n";
     };
 
     $SIG{INT}  = sub { $handle_sig->('INT') };

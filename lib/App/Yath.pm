@@ -256,13 +256,13 @@ This is the primary documentation for C<yath>, L<App::Yath>, L<Test2::Harness>.
 The canonical source of up-to-date command options are the help output when
 using C<$ yath help> and C<$ yath help COMMAND>.
 
-This document is mainly for an overview of C<yath> usage, and common recipes.
+This document is mainly an overview of C<yath> usage and common recipes.
 
 =head1 OVERVIEW
 
-To use L<Test2::Harness> you use the C<yath> command. Yath will find the tests
-(or use the ones you specify), and run them. As it runs it will output
-diagnostics information such as failures. At the end yath will print a summary
+To use L<Test2::Harness>, you use the C<yath> command. Yath will find the tests
+(or use the ones you specify) and run them. As it runs, it will output
+diagnostic information such as failures. At the end, yath will print a summary
 of the test run.
 
 C<yath> can be thought of as a more powerful alternative to C<prove>
@@ -277,10 +277,10 @@ These are common recipes for using C<yath>.
     $ yath
 
 Simply running yath with no arguments means "Run all tests for the current
-project". Yath will look for tests in C<./t>, C<./t2>, and C<./test.pl>,
-running any that are found.
+project". Yath will look for tests in C<./t>, C<./t2>, and C<./test.pl> and
+run any which are found.
 
-Normally this implies the C<test> command, but will instead imply the C<run>
+Normally this implies the C<test> command but will instead imply the C<run>
 command if a persistent test runner is detected.
 
 =head2 PRELOAD MODULES
@@ -306,27 +306,26 @@ You can preload as many modules as you want:
 =head3 COMPLEX PRELOAD
 
 If your preload is a subclass of L<Test2::Harness::Preload> then more complex
-preload behavior is possible. See the L<Test2::Harness::Preload> docs for more
-info.
+preload behavior is possible. See those docs for more info.
 
 =head2 LOGGING
 
 =head3 RECORDING A LOG
 
-You can turn on logging very easily, the filename of the log will be printed at
+You can turn on logging with a flag. The filename of the log will be printed at
 the end.
 
     $ yath -L
     ...
     Wrote log file: test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl
 
-The event log can be quite large, it is better to compress it with bzip2
+The event log can be quite large. It can be compressed with bzip2.
 
     $ yath -B
     ...
     Wrote log file: test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2
 
-Or you can use gzip:
+gzip compression is also supported.
 
     $ yath -G
     ...
@@ -344,7 +343,7 @@ This will be significantly faster than the initial run as no tests are actually
 being executed. All events are simply read from the log, and processed by the
 harness.
 
-You can change display options, and limit rendering/processing to specific test
+You can change display options and limit rendering/processing to specific test
 jobs from the run:
 
     $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v 5 10
@@ -364,18 +363,18 @@ The C<-T> option will cause each test file to report how long it took to run.
 =head2 PERSISTENT RUNNER
 
 yath supports starting a yath session that waits for tests to run. This is very
-useful if combined with preload.
+useful when combined with preload.
 
 =head3 STARTING
 
-This starts the server, many options available to the 'test' command will work
-here, but not all. See C<$ yath help start> for more info.
+This starts the server. Many options available to the 'test' command will work
+here but not all. See C<$ yath help start> for more info.
 
     $ yath start
 
 =head3 RUNNING
 
-This will run tests using the persistent runner. By default it will search for
+This will run tests using the persistent runner. By default, it will search for
 tests just like the 'test' command. Many options available to the C<test>
 command will work for this as well. See C<$ yath help run> for more details.
 
@@ -383,7 +382,7 @@ command will work for this as well. See C<$ yath help run> for more details.
 
 =head3 STOPPING
 
-Stopping a persistent runner is easy
+Stopping a persistent runner is easy.
 
     $ yath stop
 
@@ -391,21 +390,21 @@ Stopping a persistent runner is easy
 
 The C<which> command will tell you which persistent runner will be used. Yath
 searches for the persistent runner in the current directory, then searches in
-parent directories until it either hits root, or finds the persistent runner
-tracking file.
+parent directories until it either hits the root directory, or finds the
+persistent runner tracking file.
 
     $ yath which
 
-The C<watch> command will tail the runners log files.
+The C<watch> command will tail the runner's log files.
 
     $ yath watch
 
 =head3 PRELOAD + PERSISTENT RUNNER
 
-You can use preloads with the C<yath start> command. In this case yath will
-track all the modules pulled in during preload, if any of them changes the
+You can use preloads with the C<yath start> command. In this case, yath will
+track all the modules pulled in during preload. If any of them change, the
 server will reload itself to bring in the changes. Further, modified modules
-will be blacklisted so that they are not preloaded on the next reloads. This
+will be blacklisted so that they are not preloaded on subsequent reloads. This
 behavior is useful if you are actively working on a module that is normally
 preloaded.
 
@@ -416,41 +415,42 @@ preloaded.
 The above command will create C<test.pl>. C<test.pl> is automatically run by
 most build utils, in which case only the exit value matters. The generated
 C<test.pl> will run C<yath> and execute all tests in the C<./t> and/or C<./t2>
-directories. Tests in C<./t> will ALSO be run by prove, Tests in C<./t2> will
-only be run by yath.
+directories. Tests in C<./t> will ALSO be run by prove but tests in C<./t2>
+will only be run by yath.
 
-=head2 PROJECT SPECIFIC YATH CONFIG
+=head2 PROJECT-SPECIFIC YATH CONFIG
 
-You can write a C<.yath.rc> file. The file format is very simple, use
-C<[COMMAND]> sections to start the configuration for a command. Under the
-section you can provide any options normally allowed by the command. When
-C<yath> is run inside your project it will use the config specified in the rc
-file, unless overridden by command line options. Comments start with a
-semi-colon.
+You can write a C<.yath.rc> file. The file format is very simple. Create a
+C<[COMMAND]> section to start the configuration for a command and then
+provide any options normally allowed by it. When C<yath> is run inside your
+project, it will use the config specified in the rc file, unless overridden
+by command line options.
+
+Comments start with a semi-colon.
 
 Example .yath.rc:
 
     [test]
-    -B ;Always write a log, compressed with BZip2
+    -B ;Always write a bzip2-compressed log
 
     [start]
     -PMoose ;Always preload Moose with a persistent runner
 
-This file is normally committed into the projects repo.
+This file is normally committed into the project's repo.
 
-=head2 USER PROJECT SPECIFIC YATH CONFIG
+=head2 PROJECT-SPECIFIC YATH CONFIG USER OVERRIDES
 
 You can add a C<.yath.user.rc> file. Format is the same as the regular
 C<.yath.rc> file. This file will be read in addition to the regular config
 file. Directives in this file will come AFTER the directives in the primary
-config, so it may be used to override config.
+config so it may be used to override config.
 
 This file should not normally be committed to the project repo.
 
 =head2 HARNESS DIRECTIVES INSIDE TESTS
 
 C<yath> will recognise a number of directive comments placed near the top of
-any test files. These directives should be placed after the SHBANG line, but
+test files. These directives should be placed after the C<#!> line but
 before any real code or comments. These may be placed AFTER C<use> and
 C<require> statements.
 
@@ -547,7 +547,7 @@ set.
 =head3 HARNESS-CATEGORY-ISOLATION
 
 This lets you tell C<yath> that the test cannot be run concurrently with other
-tests. Yath will hold off and run these tests 1 at a time after all other
+tests. Yath will hold off and run these tests one at a time after all other
 tests.
 
 =head3 HARNESS-CATEGORY-GENERAL

@@ -276,7 +276,7 @@ sub _poll_event {
     return if $id > $self->{+_STDOUT_INDEX};
     return if $id > $self->{+_STDERR_INDEX};
 
-    # All cought up, time for the event!
+    # All caught up, time for the event!
     shift @$buffer;
     $self->{+_EVENTS_INDEX} = $id;
 

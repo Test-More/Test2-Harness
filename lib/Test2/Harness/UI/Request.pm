@@ -71,20 +71,3 @@ sub user {
 }
 
 1;
-
-__END__
-
-CREATE TABLE session_hosts (
-    session_host_ui_id  SERIAL      PRIMARY KEY,
-    session_ui_id       INT         NOT NULL REFERENCES sessions(session_ui_id),
-    user_ui_id          INTEGER     REFERENCES users(user_ui_id),
-
-    created             TIMESTAMP   NOT NULL DEFAULT now(),
-    accessed            TIMESTAMP   NOT NULL DEFAULT now(),
-
-    address             TEXT        NOT NULL,
-    agent               TEXT        NOT NULL,
-
-    UNIQUE(session_ui_id, address, agent)
-);
-

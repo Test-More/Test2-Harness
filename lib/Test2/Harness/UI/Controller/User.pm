@@ -54,7 +54,7 @@ sub process_form {
 
     # This one we allow non-post, all others need post.
     if ('logout' eq $action) {
-        $req->session_host->update({'user_ui_id' => undef});
+        $req->session_host->update({'user_id' => undef});
         return $self->add_msg("You have been logged out.");
     }
 
@@ -69,7 +69,7 @@ sub process_form {
         return $self->add_error("Invalid username or password")
             unless $user && $user->verify_password($password);
 
-        $req->session_host->update({'user_ui_id' => $user->user_ui_id});
+        $req->session_host->update({'user_id' => $user->user_id});
         return $self->add_msg("You have been logged in.");
     }
 
@@ -100,8 +100,8 @@ sub process_form {
 
     if ($ACTION_MAP{$action}) {
         my $user = $req->user or return $self->add_error("You must be logged in");
-        my $key_id = $p->{api_key_ui_id} or return $self->add_error("A key id is required");
-        my $key = $schema->resultset('ApiKey')->find({api_key_ui_id => $key_id, user_ui_id => $user->user_ui_id});
+        my $key_id = $p->{api_key_id} or return $self->add_error("A key id is required");
+        my $key = $schema->resultset('ApiKey')->find({api_key_id => $key_id, user_id => $user->user_id});
 
         return $self->add_error("Invalid key") unless $key;
 

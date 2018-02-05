@@ -63,7 +63,7 @@ sub process_form {
 
     my $feed = $self->{+SCHEMA}->resultset('Feed')->create(
         {
-            user_ui_id  => $user->user_ui_id,
+            user_id  => $user->user_id,
             name        => $name,
             orig_file   => $orig,
             local_file  => $local,

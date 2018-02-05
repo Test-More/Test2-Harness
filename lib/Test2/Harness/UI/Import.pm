@@ -121,20 +121,20 @@ sub parse_event {
 
     my $run = $cache->{run}->{$event_data->{run_id}} ||= $schema->resultset('Run')->find_or_create(
         {
-            feed_ui_id => $feed->feed_ui_id,
+            feed_id => $feed->feed_id,
             run_id     => $event_data->{run_id}
         },
     ) or return (undef, "Could not find or create run");
 
     my $job = $cache->{job}->{$event_data->{job_id}} ||= $schema->resultset('Job')->find_or_create(
         {
-            run_ui_id => $run->run_ui_id,
+            run_id => $run->run_id,
             job_id => $event_data->{job_id}
         },
     ) or return (undef, "Could not find or create job");
 
     my $fields = {
-        job_ui_id => $job->job_ui_id,
+        job_id => $job->job_id,
         event_id  => $event_data->{event_id},
         stream_id => $event_data->{stream_id},
         processed => format_stamp($event_data->{processed}),

@@ -39,7 +39,7 @@ sub process {
     my $self = shift;
     my ($feed) = @_;
 
-    syswrite(\*STDOUT, "Starting feed " . $feed->feed_ui_id . " (" . $feed->name . ")\n");
+    syswrite(\*STDOUT, "Starting feed " . $feed->feed_id . " (" . $feed->name . ")\n");
 
     my $status;
     my $ok = eval {
@@ -58,12 +58,12 @@ sub process {
 
     if ($ok && !$status->{errors}) {
         $feed->update({status => 'complete'});
-        syswrite(\*STDOUT, "Completed feed " . $feed->feed_ui_id . " (" . $feed->name . ")\n");
+        syswrite(\*STDOUT, "Completed feed " . $feed->feed_id . " (" . $feed->name . ")\n");
     }
     else {
         my $error = $ok ? join("\n" => @{$status->{errors}}) : $err;
         $feed->update({status => 'failed', error => $err});
-        syswrite(\*STDOUT, "Failed feed " . $feed->feed_ui_id . " (" . $feed->name . ")\n");
+        syswrite(\*STDOUT, "Failed feed " . $feed->feed_id . " (" . $feed->name . ")\n");
     }
 
     return;

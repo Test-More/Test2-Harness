@@ -48,7 +48,7 @@ sub session_host {
 
     my $host = $schema->resultset('SessionHost')->find_or_create(
         {
-            session_ui_id => $session->session_ui_id,
+            session_id => $session->session_id,
             address       => $self->address,
             agent         => $self->user_agent,
         }
@@ -66,7 +66,7 @@ sub user {
 
     my $host = $self->session_host or return undef;
 
-    return undef unless $host->user_ui_id;
+    return undef unless $host->user_id;
     return $host->user;
 }
 

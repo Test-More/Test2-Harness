@@ -25,6 +25,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::InflateColumn::Serializer::JSON>
 
+=item * L<DBIx::Class::Tree::AdjacencyList>
+
 =back
 
 =cut
@@ -33,6 +35,7 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
+  "Tree::AdjacencyList",
 );
 
 =head1 TABLE: C<api_keys>
@@ -43,14 +46,14 @@ __PACKAGE__->table("api_keys");
 
 =head1 ACCESSORS
 
-=head2 api_key_ui_id
+=head2 api_key_id
 
   data_type: 'integer'
   is_auto_increment: 1
   is_nullable: 0
-  sequence: 'api_keys_api_key_ui_id_seq'
+  sequence: 'api_keys_api_key_id_seq'
 
-=head2 user_ui_id
+=head2 user_id
 
   data_type: 'integer'
   is_foreign_key: 1
@@ -78,14 +81,14 @@ __PACKAGE__->table("api_keys");
 =cut
 
 __PACKAGE__->add_columns(
-  "api_key_ui_id",
+  "api_key_id",
   {
     data_type         => "integer",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "api_keys_api_key_ui_id_seq",
+    sequence          => "api_keys_api_key_id_seq",
   },
-  "user_ui_id",
+  "user_id",
   { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
   "name",
   { data_type => "varchar", is_nullable => 0, size => 128 },
@@ -107,13 +110,13 @@ __PACKAGE__->add_columns(
 
 =over 4
 
-=item * L</api_key_ui_id>
+=item * L</api_key_id>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("api_key_ui_id");
+__PACKAGE__->set_primary_key("api_key_id");
 
 =head1 UNIQUE CONSTRAINTS
 
@@ -131,7 +134,7 @@ __PACKAGE__->add_unique_constraint("api_keys_value_key", ["value"]);
 
 =head1 RELATIONS
 
-=head2 user_ui
+=head2 user
 
 Type: belongs_to
 
@@ -140,15 +143,15 @@ Related object: L<Test2::Harness::UI::Schema::Result::User>
 =cut
 
 __PACKAGE__->belongs_to(
-  "user_ui",
+  "user",
   "Test2::Harness::UI::Schema::Result::User",
-  { user_ui_id => "user_ui_id" },
+  { user_id => "user_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Lo4PTp3CVNd1ltTr3Z0Qew
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:o3RhAw7irW7TRtqhm/2qEQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

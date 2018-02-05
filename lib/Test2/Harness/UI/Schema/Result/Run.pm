@@ -25,6 +25,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::InflateColumn::Serializer::JSON>
 
+=item * L<DBIx::Class::Tree::AdjacencyList>
+
 =back
 
 =cut
@@ -33,6 +35,7 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
+  "Tree::AdjacencyList",
 );
 
 =head1 TABLE: C<runs>
@@ -43,59 +46,112 @@ __PACKAGE__->table("runs");
 
 =head1 ACCESSORS
 
-=head2 run_ui_id
+=head2 run_id
 
   data_type: 'bigint'
   is_auto_increment: 1
   is_nullable: 0
-  sequence: 'runs_run_ui_id_seq'
+  sequence: 'runs_run_id_seq'
 
-=head2 feed_ui_id
+=head2 user_id
 
-  data_type: 'bigint'
+  data_type: 'integer'
   is_foreign_key: 1
   is_nullable: 0
 
-=head2 run_id
+=head2 name
 
   data_type: 'text'
+  is_nullable: 0
+
+=head2 yath_run_id
+
+  data_type: 'text'
+  is_nullable: 1
+
+=head2 error
+
+  data_type: 'text'
+  is_nullable: 1
+
+=head2 added
+
+  data_type: 'timestamp'
+  default_value: current_timestamp
+  is_nullable: 0
+  original: {default_value => \"now()"}
+
+=head2 permissions
+
+  data_type: 'enum'
+  default_value: 'private'
+  extra: {custom_type_name => "perms",list => ["private","protected","public"]}
+  is_nullable: 0
+
+=head2 log_file
+
+  data_type: 'text'
+  is_nullable: 1
+
+=head2 status
+
+  data_type: 'enum'
+  default_value: 'pending'
+  extra: {custom_type_name => "queue_status",list => ["pending","running","complete","failed"]}
   is_nullable: 0
 
 =cut
 
 __PACKAGE__->add_columns(
-  "run_ui_id",
+  "run_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "runs_run_ui_id_seq",
+    sequence          => "runs_run_id_seq",
   },
-  "feed_ui_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "run_id",
+  "user_id",
+  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+  "name",
   { data_type => "text", is_nullable => 0 },
+  "yath_run_id",
+  { data_type => "text", is_nullable => 1 },
+  "error",
+  { data_type => "text", is_nullable => 1 },
+  "added",
+  {
+    data_type     => "timestamp",
+    default_value => \"current_timestamp",
+    is_nullable   => 0,
+    original      => { default_value => \"now()" },
+  },
+  "permissions",
+  {
+    data_type => "enum",
+    default_value => "private",
+    extra => {
+      custom_type_name => "perms",
+      list => ["private", "protected", "public"],
+    },
+    is_nullable => 0,
+  },
+  "log_file",
+  { data_type => "text", is_nullable => 1 },
+  "status",
+  {
+    data_type => "enum",
+    default_value => "pending",
+    extra => {
+      custom_type_name => "queue_status",
+      list => ["pending", "running", "complete", "failed"],
+    },
+    is_nullable => 0,
+  },
 );
 
 =head1 PRIMARY KEY
 
 =over 4
-
-=item * L</run_ui_id>
-
-=back
-
-=cut
-
-__PACKAGE__->set_primary_key("run_ui_id");
-
-=head1 UNIQUE CONSTRAINTS
-
-=head2 C<runs_feed_ui_id_run_id_key>
-
-=over 4
-
-=item * L</feed_ui_id>
 
 =item * L</run_id>
 
@@ -103,24 +159,25 @@ __PACKAGE__->set_primary_key("run_ui_id");
 
 =cut
 
-__PACKAGE__->add_unique_constraint("runs_feed_ui_id_run_id_key", ["feed_ui_id", "run_id"]);
+__PACKAGE__->set_primary_key("run_id");
 
-=head1 RELATIONS
+=head1 UNIQUE CONSTRAINTS
 
-=head2 feed_ui
+=head2 C<runs_user_id_name_key>
 
-Type: belongs_to
+=over 4
 
-Related object: L<Test2::Harness::UI::Schema::Result::Feed>
+=item * L</user_id>
+
+=item * L</name>
+
+=back
 
 =cut
 
-__PACKAGE__->belongs_to(
-  "feed_ui",
-  "Test2::Harness::UI::Schema::Result::Feed",
-  { feed_ui_id => "feed_ui_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
-);
+__PACKAGE__->add_unique_constraint("runs_user_id_name_key", ["user_id", "name"]);
+
+=head1 RELATIONS
 
 =head2 jobs
 
@@ -133,14 +190,27 @@ Related object: L<Test2::Harness::UI::Schema::Result::Job>
 __PACKAGE__->has_many(
   "jobs",
   "Test2::Harness::UI::Schema::Result::Job",
-  { "foreign.run_ui_id" => "self.run_ui_id" },
+  { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 user
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:wmyC64MRs++LZvHRu/W42w
+Type: belongs_to
 
-sub user { shift->feed->user }
+Related object: L<Test2::Harness::UI::Schema::Result::User>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "user",
+  "Test2::Harness::UI::Schema::Result::User",
+  { user_id => "user_id" },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+);
+
+
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BLQS/68GWUQ78f599AfZaA
 
 1;

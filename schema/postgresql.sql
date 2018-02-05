@@ -18,7 +18,7 @@ CREATE TYPE api_key_status AS ENUM(
 );
 
 CREATE TABLE users (
-    user_ui_id      SERIAL          PRIMARY KEY,
+    user_id         SERIAL          PRIMARY KEY,
     username        VARCHAR(32)     NOT NULL,
     pw_hash         VARCHAR(31)     NOT NULL,
     pw_salt         VARCHAR(22)     NOT NULL,
@@ -28,17 +28,17 @@ CREATE TABLE users (
 );
 
 CREATE TABLE sessions (
-    session_ui_id   SERIAL          PRIMARY KEY,
-    session_id      VARCHAR(36)     NOT NULL,
+    session_id      SERIAL          PRIMARY KEY,
+    session_val     VARCHAR(36)     NOT NULL,
     active          BOOL            DEFAULT TRUE,
 
     UNIQUE(session_id)
 );
 
 CREATE TABLE session_hosts (
-    session_host_ui_id  SERIAL      PRIMARY KEY,
-    session_ui_id       INT         NOT NULL REFERENCES sessions(session_ui_id),
-    user_ui_id          INTEGER     REFERENCES users(user_ui_id),
+    session_host_id     SERIAL      PRIMARY KEY,
+    session_id          INT         NOT NULL REFERENCES sessions(session_id),
+    user_id             INTEGER     REFERENCES users(user_id),
 
     created             TIMESTAMP   NOT NULL DEFAULT now(),
     accessed            TIMESTAMP   NOT NULL DEFAULT now(),
@@ -46,12 +46,12 @@ CREATE TABLE session_hosts (
     address             TEXT        NOT NULL,
     agent               TEXT        NOT NULL,
 
-    UNIQUE(session_ui_id, address, agent)
+    UNIQUE(session_id, address, agent)
 );
 
 CREATE TABLE api_keys (
-    api_key_ui_id   SERIAL          PRIMARY KEY,
-    user_ui_id      INTEGER         NOT NULL REFERENCES users(user_ui_id),
+    api_key_id      SERIAL          PRIMARY KEY,
+    user_id         INTEGER         NOT NULL REFERENCES users(user_id),
     name            VARCHAR(128)    NOT NULL,
     value           VARCHAR(36)     NOT NULL,
     status          api_key_status  NOT NULL DEFAULT 'active',
@@ -59,89 +59,94 @@ CREATE TABLE api_keys (
     UNIQUE(value)
 );
 
-CREATE TABLE feeds (
-    feed_ui_id      BIGSERIAL   PRIMARY KEY,
-    user_ui_id      INTEGER     NOT NULL REFERENCES users(user_ui_id),
+CREATE TABLE runs (
+    run_id          BIGSERIAL   PRIMARY KEY,
+    user_id         INTEGER     NOT NULL REFERENCES users(user_id),
 
     name            TEXT        NOT NULL,
-    orig_file       TEXT        NOT NULL,
-    local_file      TEXT        NOT NULL,
+    yath_run_id     TEXT        DEFAULT NULL,
     error           TEXT        DEFAULT NULL,
-    stamp           TIMESTAMP   NOT NULL DEFAULT now(),
+    added           TIMESTAMP   NOT NULL DEFAULT now(),
 
-    permissions     perms           NOT NULL DEFAULT 'private',
+    permissions     perms       NOT NULL DEFAULT 'private',
+
+    log_file        TEXT,
     status          queue_status    NOT NULL DEFAULT 'pending',
 
-    UNIQUE(user_ui_id, name)
-);
-
-CREATE TABLE runs (
-    run_ui_id       BIGSERIAL   PRIMARY KEY,
-    feed_ui_id      BIGINT      NOT NULL REFERENCES feeds(feed_ui_id),
-
-    run_id          TEXT        NOT NULL,
-
-    UNIQUE(feed_ui_id, run_id)
+    UNIQUE(user_id, name)
 );
 
 CREATE TABLE jobs (
-    job_ui_id       BIGSERIAL   PRIMARY KEY,
-    run_ui_id       BIGINT      NOT NULL REFERENCES runs(run_ui_id),
+    job_id          BIGSERIAL   PRIMARY KEY,
+    run_id          BIGINT      NOT NULL REFERENCES runs(run_id),
 
-    job_id          TEXT        NOT NULL,
+    yath_job_id     TEXT        NOT NULL,
 
     -- Summaries
     fail            BOOL        DEFAULT NULL,
     file            TEXT,
 
-    UNIQUE(run_ui_id, job_id)
+    UNIQUE(run_id, job_id)
 );
 
 CREATE TABLE events (
-    event_ui_id     BIGSERIAL   PRIMARY KEY,
-    job_ui_id       BIGSERIAL   NOT NULL REFERENCES jobs(job_ui_id),
+    event_id        BIGSERIAL   PRIMARY KEY,
+    job_id          BIGINT      NOT NULL REFERENCES jobs(job_id),
+    parent_id       BIGINT      REFERENCES events(event_id),
 
-    -- Event fields
-    event_id        TEXT        NOT NULL,
-    stream_id       TEXT        DEFAULT NULL,
     stamp           TIMESTAMP   DEFAULT NULL,
     processed       TIMESTAMP   DEFAULT NULL,
 
-    -- Summaries for easy lookup
+    -- Summaries for lookup/display
+    is_subtest      BOOL        NOT NULL,
     causes_fail     BOOL        NOT NULL,
+    no_display      BOOL        NOT NULL,
     assert_pass     BOOL        DEFAULT NULL,
-    plan_count      BIGINT      DEFAULT NULL,
-    in_hid          TEXT        DEFAULT NULL,
-    is_hid          TEXT        DEFAULT NULL,
+    plan_count      INTEGER     DEFAULT NULL,
 
     -- Standard Facets
-    about           JSONB       DEFAULT NULL,
-    amnesty         JSONB       DEFAULT NULL,
-    assert          JSONB       DEFAULT NULL,
-    control         JSONB       DEFAULT NULL,
-    error           JSONB       DEFAULT NULL,
-    info            JSONB       DEFAULT NULL,
-    meta            JSONB       DEFAULT NULL,
-    parent          JSONB       DEFAULT NULL,
-    plan            JSONB       DEFAULT NULL,
-    trace           JSONB       DEFAULT NULL,
+    f_render        JSONB       DEFAULT NULL,
+    f_about         JSONB       DEFAULT NULL,
+    f_amnesty       JSONB       DEFAULT NULL,
+    f_assert        JSONB       DEFAULT NULL,
+    f_control       JSONB       DEFAULT NULL,
+    f_error         JSONB       DEFAULT NULL,
+    f_info          JSONB       DEFAULT NULL,
+    f_meta          JSONB       DEFAULT NULL,
+    f_parent        JSONB       DEFAULT NULL,
+    f_plan          JSONB       DEFAULT NULL,
+    f_trace         JSONB       DEFAULT NULL,
 
     -- Harness Facets
-    harness             JSONB   DEFAULT NULL,
-    harness_job         JSONB   DEFAULT NULL,
-    harness_job_end     JSONB   DEFAULT NULL,
-    harness_job_exit    JSONB   DEFAULT NULL,
-    harness_job_launch  JSONB   DEFAULT NULL,
-    harness_job_start   JSONB   DEFAULT NULL,
-    harness_run         JSONB   DEFAULT NULL,
+    f_harness               JSONB   DEFAULT NULL,
+    f_harness_job           JSONB   DEFAULT NULL,
+    f_harness_job_end       JSONB   DEFAULT NULL,
+    f_harness_job_exit      JSONB   DEFAULT NULL,
+    f_harness_job_launch    JSONB   DEFAULT NULL,
+    f_harness_job_start     JSONB   DEFAULT NULL,
+    f_harness_run           JSONB   DEFAULT NULL,
 
     -- The rest
-    other_facets    JSONB       DEFAULT NULL
+    f_other         JSONB       DEFAULT NULL
 );
 
-CREATE INDEX IF NOT EXISTS run_jobs     ON jobs   (run_ui_id);
-CREATE INDEX IF NOT EXISTS job_events   ON events (job_ui_id);
-CREATE INDEX IF NOT EXISTS subtests     ON events (is_hid);
-CREATE INDEX IF NOT EXISTS children     ON events (in_hid);
+CREATE TABLE event_links (
+    event_link_id       BIGSERIAL   PRIMARY KEY,
 
+    job_id              BIGINT      NOT NULL REFERENCES jobs(job_id),
+    yath_eid            TEXT        NOT NULL,
+    trace_hid           TEXT        NOT NULL,
+
+    buffered_proc_id    BIGINT      REFERENCES events(event_id),
+    unbuffered_proc_id  BIGINT      REFERENCES events(event_id),
+    buffered_raw_id     BIGINT      REFERENCES events(event_id),
+    unbuffered_raw_id   BIGINT      REFERENCES events(event_id),
+
+    UNIQUE(job_id, yath_eid, trace_hid)
+);
+
+CREATE INDEX IF NOT EXISTS run_jobs      ON jobs   (run_id);
+CREATE INDEX IF NOT EXISTS events_job_id ON events (job_id);
+
+-- Password is 'root'
 INSERT INTO users(username, pw_hash, pw_salt, is_admin) VALUES('root', 'Hffc/wurxNeSHmWeZOJ2SnlKNXy.QOy', 'j3rWkFXozdPaDKobXVV5u.', TRUE);

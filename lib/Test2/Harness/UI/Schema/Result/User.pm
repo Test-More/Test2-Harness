@@ -25,6 +25,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::InflateColumn::Serializer::JSON>
 
+=item * L<DBIx::Class::Tree::AdjacencyList>
+
 =back
 
 =cut
@@ -33,6 +35,7 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
+  "Tree::AdjacencyList",
 );
 
 =head1 TABLE: C<users>
@@ -43,12 +46,12 @@ __PACKAGE__->table("users");
 
 =head1 ACCESSORS
 
-=head2 user_ui_id
+=head2 user_id
 
   data_type: 'integer'
   is_auto_increment: 1
   is_nullable: 0
-  sequence: 'users_user_ui_id_seq'
+  sequence: 'users_user_id_seq'
 
 =head2 username
 
@@ -77,12 +80,12 @@ __PACKAGE__->table("users");
 =cut
 
 __PACKAGE__->add_columns(
-  "user_ui_id",
+  "user_id",
   {
     data_type         => "integer",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "users_user_ui_id_seq",
+    sequence          => "users_user_id_seq",
   },
   "username",
   { data_type => "varchar", is_nullable => 0, size => 32 },
@@ -98,13 +101,13 @@ __PACKAGE__->add_columns(
 
 =over 4
 
-=item * L</user_ui_id>
+=item * L</user_id>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("user_ui_id");
+__PACKAGE__->set_primary_key("user_id");
 
 =head1 UNIQUE CONSTRAINTS
 
@@ -133,22 +136,22 @@ Related object: L<Test2::Harness::UI::Schema::Result::ApiKey>
 __PACKAGE__->has_many(
   "api_keys",
   "Test2::Harness::UI::Schema::Result::ApiKey",
-  { "foreign.user_ui_id" => "self.user_ui_id" },
+  { "foreign.user_id" => "self.user_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 feeds
+=head2 runs
 
 Type: has_many
 
-Related object: L<Test2::Harness::UI::Schema::Result::Feed>
+Related object: L<Test2::Harness::UI::Schema::Result::Run>
 
 =cut
 
 __PACKAGE__->has_many(
-  "feeds",
-  "Test2::Harness::UI::Schema::Result::Feed",
-  { "foreign.user_ui_id" => "self.user_ui_id" },
+  "runs",
+  "Test2::Harness::UI::Schema::Result::Run",
+  { "foreign.user_id" => "self.user_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
@@ -163,13 +166,20 @@ Related object: L<Test2::Harness::UI::Schema::Result::SessionHost>
 __PACKAGE__->has_many(
   "session_hosts",
   "Test2::Harness::UI::Schema::Result::SessionHost",
-  { "foreign.user_ui_id" => "self.user_ui_id" },
+  { "foreign.user_id" => "self.user_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:JNL128M9p/80UscOd1ZP2g
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:W/m14GzolBw+GRT4B2RExw
+
+use Data::GUID;
+use Carp qw/croak/;
+
+use constant COST => 8;
+
+use Crypt::Eksblowfish::Bcrypt qw(bcrypt_hash en_base64 de_base64);
 
 sub new {
     my $class = shift;
@@ -224,10 +234,10 @@ sub gen_api_key {
 
     return $self->result_source->schema->resultset('ApiKey')->create(
         {
-            user_ui_id => $self->user_ui_id,
-            value      => $val,
-            status     => 'active',
-            name       => $name,
+            user_id => $self->user_id,
+            value   => $val,
+            status  => 'active',
+            name    => $name,
         }
     );
 }

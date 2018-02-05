@@ -25,6 +25,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::InflateColumn::Serializer::JSON>
 
+=item * L<DBIx::Class::Tree::AdjacencyList>
+
 =back
 
 =cut
@@ -33,6 +35,7 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
+  "Tree::AdjacencyList",
 );
 
 =head1 TABLE: C<sessions>
@@ -43,14 +46,14 @@ __PACKAGE__->table("sessions");
 
 =head1 ACCESSORS
 
-=head2 session_ui_id
+=head2 session_id
 
   data_type: 'integer'
   is_auto_increment: 1
   is_nullable: 0
-  sequence: 'sessions_session_ui_id_seq'
+  sequence: 'sessions_session_id_seq'
 
-=head2 session_id
+=head2 session_val
 
   data_type: 'varchar'
   is_nullable: 0
@@ -65,14 +68,14 @@ __PACKAGE__->table("sessions");
 =cut
 
 __PACKAGE__->add_columns(
-  "session_ui_id",
+  "session_id",
   {
     data_type         => "integer",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "sessions_session_ui_id_seq",
+    sequence          => "sessions_session_id_seq",
   },
-  "session_id",
+  "session_val",
   { data_type => "varchar", is_nullable => 0, size => 36 },
   "active",
   { data_type => "boolean", default_value => \"true", is_nullable => 1 },
@@ -82,27 +85,13 @@ __PACKAGE__->add_columns(
 
 =over 4
 
-=item * L</session_ui_id>
-
-=back
-
-=cut
-
-__PACKAGE__->set_primary_key("session_ui_id");
-
-=head1 UNIQUE CONSTRAINTS
-
-=head2 C<sessions_session_id_key>
-
-=over 4
-
 =item * L</session_id>
 
 =back
 
 =cut
 
-__PACKAGE__->add_unique_constraint("sessions_session_id_key", ["session_id"]);
+__PACKAGE__->set_primary_key("session_id");
 
 =head1 RELATIONS
 
@@ -117,13 +106,13 @@ Related object: L<Test2::Harness::UI::Schema::Result::SessionHost>
 __PACKAGE__->has_many(
   "session_hosts",
   "Test2::Harness::UI::Schema::Result::SessionHost",
-  { "foreign.session_ui_id" => "self.session_ui_id" },
+  { "foreign.session_id" => "self.session_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:uDPS3JTA09EnGa7IDy9zTg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:ln8DGaa4RauqLrZttCN0PQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

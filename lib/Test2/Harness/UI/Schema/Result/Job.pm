@@ -25,6 +25,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::InflateColumn::Serializer::JSON>
 
+=item * L<DBIx::Class::Tree::AdjacencyList>
+
 =back
 
 =cut
@@ -33,6 +35,7 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
+  "Tree::AdjacencyList",
 );
 
 =head1 TABLE: C<jobs>
@@ -43,20 +46,20 @@ __PACKAGE__->table("jobs");
 
 =head1 ACCESSORS
 
-=head2 job_ui_id
+=head2 job_id
 
   data_type: 'bigint'
   is_auto_increment: 1
   is_nullable: 0
-  sequence: 'jobs_job_ui_id_seq'
+  sequence: 'jobs_job_id_seq'
 
-=head2 run_ui_id
+=head2 run_id
 
   data_type: 'bigint'
   is_foreign_key: 1
   is_nullable: 0
 
-=head2 job_id
+=head2 yath_job_id
 
   data_type: 'text'
   is_nullable: 0
@@ -74,16 +77,16 @@ __PACKAGE__->table("jobs");
 =cut
 
 __PACKAGE__->add_columns(
-  "job_ui_id",
+  "job_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "jobs_job_ui_id_seq",
+    sequence          => "jobs_job_id_seq",
   },
-  "run_ui_id",
+  "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "job_id",
+  "yath_job_id",
   { data_type => "text", is_nullable => 0 },
   "fail",
   { data_type => "boolean", is_nullable => 1 },
@@ -95,21 +98,21 @@ __PACKAGE__->add_columns(
 
 =over 4
 
-=item * L</job_ui_id>
+=item * L</job_id>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("job_ui_id");
+__PACKAGE__->set_primary_key("job_id");
 
 =head1 UNIQUE CONSTRAINTS
 
-=head2 C<jobs_run_ui_id_job_id_key>
+=head2 C<jobs_run_id_job_id_key>
 
 =over 4
 
-=item * L</run_ui_id>
+=item * L</run_id>
 
 =item * L</job_id>
 
@@ -117,9 +120,24 @@ __PACKAGE__->set_primary_key("job_ui_id");
 
 =cut
 
-__PACKAGE__->add_unique_constraint("jobs_run_ui_id_job_id_key", ["run_ui_id", "job_id"]);
+__PACKAGE__->add_unique_constraint("jobs_run_id_job_id_key", ["run_id", "job_id"]);
 
 =head1 RELATIONS
+
+=head2 event_links
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::EventLink>
+
+=cut
+
+__PACKAGE__->has_many(
+  "event_links",
+  "Test2::Harness::UI::Schema::Result::EventLink",
+  { "foreign.job_id" => "self.job_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 
 =head2 events
 
@@ -132,11 +150,11 @@ Related object: L<Test2::Harness::UI::Schema::Result::Event>
 __PACKAGE__->has_many(
   "events",
   "Test2::Harness::UI::Schema::Result::Event",
-  { "foreign.job_ui_id" => "self.job_ui_id" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 run_ui
+=head2 run
 
 Type: belongs_to
 
@@ -145,15 +163,15 @@ Related object: L<Test2::Harness::UI::Schema::Result::Run>
 =cut
 
 __PACKAGE__->belongs_to(
-  "run_ui",
+  "run",
   "Test2::Harness::UI::Schema::Result::Run",
-  { run_ui_id => "run_ui_id" },
+  { run_id => "run_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:XMMxbVfmP/lX+tFdnqhgFg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:0+9NACa4CL2afcwWVWS/jw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

@@ -138,6 +138,7 @@ sub _process {
             $fd->{parent}->{hid} ||= $n;
             $fd->{parent}->{children} ||= $st->{children};
             $fd->{harness}->{closed_by} = $event;
+            $fd->{harness}->{closed_by_eid} = $event->{event_id};
 
             my $pn = $n - 1;
             if ($pn > $self->{+NESTED}) {
@@ -165,7 +166,7 @@ sub subtest_process {
     my $self = shift;
     my ($f, $event) = @_;
 
-    my $closer = $f->{harness}->{closed_by};
+    my $closer = delete $f->{harness}->{closed_by};
     $event ||= Test2::Harness::Event->new(facet_data => $f);
 
     $self->{+NUMBERS}->{$f->{assert}->{number}}++

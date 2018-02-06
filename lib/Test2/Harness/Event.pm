@@ -71,6 +71,7 @@ sub TO_JSON {
     my $out = {%{$_[0]}};
     $out->{+FACET_DATA} = { %{$out->{+FACET_DATA}} };
     delete $out->{+FACET_DATA}->{harness_job_watcher};
+    delete $out->{+FACET_DATA}->{harness}->{closed_by};
     return $out;
 }
 

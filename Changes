@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001052  2018-02-06 15:03:08-08:00 America/Los_Angeles (TRIAL RELEASE)
+
     - Fix infinite recursion in closed subtests log json
 
 0.001051  2018-02-06 13:29:38-08:00 America/Los_Angeles (TRIAL RELEASE)

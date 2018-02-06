@@ -1,8 +1,12 @@
 {{$NEXT}}
 
+
+
 0.001051  2018-02-06 13:29:38-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Extract composer logic from Test2 formatter so it can be re-used
+    - Revamp Watcher to stop mangling events
+    - Onlt log processed events now by default (since mangling has stopped)
 
 0.001050  2018-02-01 13:31:58-08:00 America/Los_Angeles
 

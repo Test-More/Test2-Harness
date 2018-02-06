@@ -52,13 +52,20 @@ sub poll {
 
     my @out;
     while (my $line = $self->{+FILE}->read_line) {
+        my $watcher = delete $line->{facet_data}->{harness_watcher};
+        next if $watcher->{added_by_watcher};
+
         bless($line->{facet_data}->{harness_run}, 'Test2::Harness::Run')
             if $line->{facet_data}->{harness_run};
 
         bless($line->{facet_data}->{harness_job}, 'Test2::Harness::Job')
             if $line->{facet_data}->{harness_job};
 
-        next if $line->{processed};
+        # Strip out any previous harness errors
+        if (my $errors = $line->{facet_data}->{errors}) {
+            @$errors = grep {!$_->{from_harness}} @$errors;
+        }
+
         push @out => Test2::Harness::Event->new(%$line);
         last if $max && @out >= $max
     }

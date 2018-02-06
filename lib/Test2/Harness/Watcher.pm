@@ -60,12 +60,13 @@ sub file {
 
 sub process {
     my $self = shift;
+    my ($event) = @_;
 
-    my ($e, $f) = $self->_process(@_);
+    my @e = $self->_process($event);
 
-    push @{$self->{+EVENTS}} => $e if $e;
+    push @{$self->{+EVENTS}} => ($event, @e);
 
-    return ($e, $f);
+    return @e;
 }
 
 sub _process {
@@ -76,35 +77,51 @@ sub _process {
 
     my $f = $event->{facet_data};
 
-    return ($event, $f) if $f->{trace}->{buffered};
+    return if $f->{trace} && $f->{trace}->{buffered};
 
-    my $nested = $f->{trace}->{nested} || 0;
+    my $nested = $f->{trace} ? $f->{trace}->{nested} || 0 : 0;
     my $is_ours = $nested == $self->{+NESTED};
 
-    return ($event, $f) unless $is_ours || $f->{from_tap};
+    return unless $is_ours || $f->{from_tap};
 
     # Add parent if we start a buffered subtest
     if ($f->{harness} && $f->{harness}->{subtest_start}) {
         my $st = $self->{+SUBTESTS}->{$nested + 1} ||= {};
         $st->{event} = $event;
-        return ();
+        $f->{harness_watcher}->{no_render} = 1;
+        return;
     }
+
+    my @out;
 
     # Not actually a subtest end, someone printed to STDOUT
     if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}})) {
-        delete $f->{parent};
-        delete $f->{trace};
-        delete $f->{harness}->{subtest_end};
+        # Alter $f so that this incorrect event is not send to the renderer.
+        $f->{harness_watcher}->{no_render} = 1;
 
-        push @{$f->{info}} => {
-            details => $f->{from_tap}->{details},
-            tag     => $f->{from_tap}->{source} || 'STDOUT',
+        # Make a new $f and $event for the rest of the processing.
+        $f = {
+            %{$f},
+            harness_watcher => {added_by_watcher => 1},
+            parent          => undef,
+            trace           => undef,
+            harness         => {
+                %{$f->{harness} || {}},
+                subtest_end => undef,
+            },
+            info => [
+                @{$f->{info} || []},
+                {
+                    details      => $f->{from_tap}->{details},
+                    tag          => $f->{from_tap}->{source} || 'STDOUT',
+                    from_harness => 1,
+                }
+            ],
         };
 
-        return (
-            Test2::Harness::Event->new(facet_data => $f),
-            $f,
-        );
+        $event = Test2::Harness::Event->new(facet_data => $f);
+
+        push @out => $event;
     }
 
     # Close any deeper subtests
@@ -115,17 +132,20 @@ sub _process {
             my $st = delete $sts->{$n};
             my $se = $st->{event} || $event;
 
-            my $fd = $se->facet_data;
+
+            my $fd = $se->{facet_data};
+            delete $fd->{harness_watcher}->{no_render};
             $fd->{parent}->{hid} ||= $n;
             $fd->{parent}->{children} ||= $st->{children};
+            $fd->{harness}->{closed_by} = $event;
 
             my $pn = $n - 1;
             if ($pn > $self->{+NESTED}) {
                 push @{$sts->{$pn}->{children}} => $fd;
-                return ($event, $f);
             }
             elsif ($pn == $self->{+NESTED}) {
-                return $self->subtest_process($fd, $se);
+                $self->subtest_process($fd, $se);
+                push @out => $se;
             }
         }
     }
@@ -134,16 +154,18 @@ sub _process {
         my $st = $self->{+SUBTESTS}->{$nested} ||= {};
         my $fd = {%$f};
         push @{$st->{children}} => $fd;
-        return ($event, $f);
+        return @out;
     }
 
-    return $self->subtest_process($f, $event);
+    $self->subtest_process($f, $event);
+    return @out;
 }
 
 sub subtest_process {
     my $self = shift;
     my ($f, $event) = @_;
 
+    my $closer = $f->{harness}->{closed_by};
     $event ||= Test2::Harness::Event->new(facet_data => $f);
 
     $self->{+NUMBERS}->{$f->{assert}->{number}}++
@@ -154,31 +176,29 @@ sub subtest_process {
 
         my $id = 1;
         for my $sf (@{$f->{parent}->{children}}) {
-            # Override is necessary for asyncsubtests
-            $sf->{trace}->{nested} = $self->{+NESTED} + 1;
             $sf->{harness}->{job_id} ||= $f->{harness}->{job_id};
             $sf->{harness}->{run_id} ||= $f->{harness}->{run_id};
             $sf->{harness}->{event_id} ||= $f->{harness}->{event_id} . $id++;
             $subwatcher->subtest_process($sf);
         }
 
-        my @info = $subwatcher->subtest_fail_info_facet_list();
+        my @errors = $subwatcher->subtest_fail_error_facet_list();
 
-        if (@info) {
+        if ($f->{harness}->{subtest_start}) {
+            push @{$f->{errors}} => {tag => 'REASON', fail => 1, from_harness => 1, details => "Buffered subtest ended abruptly (missing closing brace event)"}
+                unless $closer && $closer->{facet_data}->{harness}->{subtest_end};
+        }
+
+        if (@errors) {
             $self->{+_SUB_FAILURES}++;
-            $f->{assert}->{pass} = 0;
-
-            push @{$f->{info}} => @info;
+            push @{$f->{errors}} => @errors;
         }
         else {
             my $fail = $f->{assert} && !$f->{assert}->{pass} && !($f->{amnesty} && @{$f->{amnesty}});
             $fail ||= $f->{control} && ($f->{control}->{halt} || $f->{control}->{terminate});
             $fail ||= $f->{errors} && first { $_->{fail} } @{$f->{errors}};
 
-            if ($fail) {
-                $self->{+_SUB_FAILURES}++;
-                $f->{assert}->{pass} = 0;
-            }
+            $self->{+_SUB_FAILURES}++ if $fail;
         }
     }
 
@@ -203,15 +223,15 @@ sub subtest_process {
         $self->{+EXIT} = $f->{harness_job_exit}->{exit};
     }
 
-    return ($event, $f);
+    return;
 }
 
 sub fail {
     my $self = shift;
-    return !!$self->fail_info_facet_list;
+    return !!$self->fail_error_facet_list;
 }
 
-sub subtest_fail_info_facet_list {
+sub subtest_fail_error_facet_list {
     my $self = shift;
 
     return @{$self->{+_SUB_INFO}} if $self->{+_SUB_INFO};
@@ -226,36 +246,36 @@ sub subtest_fail_info_facet_list {
     if ($max) {
         for my $i (1 .. $max) {
             if (!$numbers->{$i}) {
-                push @out => {tag => 'REASON', debug => 1, details => "Assertion number $i was never seen"};
+                push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Assertion number $i was never seen"};
             }
             elsif ($numbers->{$i} > 1) {
-                push @out => {tag => 'REASON', debug => 1, details => "Assertion number $i was seen more than once"};
+                push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Assertion number $i was seen more than once"};
             }
         }
     }
 
     if (!$self->{+_PLANS}) {
         if ($count) {
-            push @out => {tag => 'REASON', debug => 1, details => "No plan was declared"};
+            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "No plan was declared"};
         }
         else {
-            push @out => {tag => 'REASON', debug => 1, details => "No plan was declared, and no assertions were made."};
+            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "No plan was declared, and no assertions were made."};
         }
     }
     elsif ($self->{+_PLANS} > 1) {
-        push @out => {tag => 'REASON', debug => 1, details => "Too many plans were declared (Count: $self->{+_PLANS})"};
+        push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Too many plans were declared (Count: $self->{+_PLANS})"};
     }
 
-    push @out => {tag => 'REASON', debug => 1, details => "Planned for $plan assertions, but saw $self->{+ASSERTION_COUNT}"}
+    push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Planned for $plan assertions, but saw $self->{+ASSERTION_COUNT}"}
         if $plan && $count != $plan;
 
-    push @out => {tag => 'REASON', debug => 1, details => "Subtest failures were encountered (Count: $self->{+_SUB_FAILURES})"}
+    push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Subtest failures were encountered (Count: $self->{+_SUB_FAILURES})"}
         if $self->{+_SUB_FAILURES};
 
     return @out;
 }
 
-sub fail_info_facet_list {
+sub fail_error_facet_list {
     my $self = shift;
 
     return @{$self->{+_INFO}} if $self->{+_INFO};
@@ -263,34 +283,34 @@ sub fail_info_facet_list {
     my @out;
 
     my $incomplete_subtests = values %{$self->{+SUBTESTS}};
-    push @out => {tag => 'REASON', debug => 1, details => "One or more incomplete subtests (Count: $incomplete_subtests)"}
+    push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "One or more incomplete subtests (Count: $incomplete_subtests)"}
         if $incomplete_subtests;
 
     if (my $wstat = $self->{+EXIT}) {
         if ($wstat == -1) {
-            push @out => {tag => 'REASON', debug => 1, details => "The harness could not get the exit code! (Code: $wstat)"}
+            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "The harness could not get the exit code! (Code: $wstat)"}
         }
         elsif (my $exit = ($wstat >> 8)) {
-            push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (Code: $exit)"}
+            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (Code: $exit)"}
         }
         elsif (my $sig = $wstat & 127) {
-            push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (Signal: $sig)"}
+            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (Signal: $sig)"}
         }
         else {
-            push @out => {tag => 'REASON', debug => 1, details => "Test script returned error (wstat: $wstat)"}
+            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (wstat: $wstat)"}
         }
     }
 
-    push @out => {tag => 'REASON', debug => 1, details => "Errors were encountered (Count: $self->{+_ERRORS})"}
+    push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Errors were encountered (Count: $self->{+_ERRORS})"}
         if $self->{+_ERRORS};
 
-    push @out => {tag => 'REASON', debug => 1, details => "Assertion failures were encountered (Count: $self->{+_FAILURES})"}
+    push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Assertion failures were encountered (Count: $self->{+_FAILURES})"}
         if $self->{+_FAILURES};
 
-    push @out => {tag => 'REASON', debug => 1, details => "Test file was killed"}
+    push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test file was killed"}
         if $self->{+KILLED};
 
-    push @out => $self->subtest_fail_info_facet_list();
+    push @out => $self->subtest_fail_error_facet_list();
 
     return @out;
 }

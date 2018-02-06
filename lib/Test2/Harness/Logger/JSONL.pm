@@ -23,10 +23,7 @@ sub init {
     }
 }
 
-*log_raw_event       = \&log_event;
-*log_processed_event = \&log_event;
-
-sub log_event {
+sub log_processed_event {
     my $self = shift;
     my ($event) = @_;
 

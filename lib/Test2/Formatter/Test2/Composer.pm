@@ -246,7 +246,9 @@ sub render_errors {
             chomp($msg = $details);
         }
 
-        ['error', $_->{fail} ? 'FATAL' : 'ERROR', $details]
+        my $tag = $_->{tag} || ($_->{fail} ? 'FATAL' : 'ERROR');
+
+        ['error', $tag, $details]
     } @{$f->{errors}};
 }
 

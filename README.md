@@ -13,13 +13,13 @@ This is the primary documentation for `yath`, [App::Yath](https://metacpan.org/p
 The canonical source of up-to-date command options are the help output when
 using `$ yath help` and `$ yath help COMMAND`.
 
-This document is mainly for an overview of `yath` usage, and common recipes.
+This document is mainly an overview of `yath` usage and common recipes.
 
 # OVERVIEW
 
-To use [Test2::Harness](https://metacpan.org/pod/Test2::Harness) you use the `yath` command. Yath will find the tests
-(or use the ones you specify), and run them. As it runs it will output
-diagnostics information such as failures. At the end yath will print a summary
+To use [Test2::Harness](https://metacpan.org/pod/Test2::Harness), you use the `yath` command. Yath will find the tests
+(or use the ones you specify) and run them. As it runs, it will output
+diagnostic information such as failures. At the end, yath will print a summary
 of the test run.
 
 `yath` can be thought of as a more powerful alternative to `prove`
@@ -34,10 +34,10 @@ These are common recipes for using `yath`.
     $ yath
 
 Simply running yath with no arguments means "Run all tests for the current
-project". Yath will look for tests in `./t`, `./t2`, and `./test.pl`,
-running any that are found.
+project". Yath will look for tests in `./t`, `./t2`, and `./test.pl` and
+run any which are found.
 
-Normally this implies the `test` command, but will instead imply the `run`
+Normally this implies the `test` command but will instead imply the `run`
 command if a persistent test runner is detected.
 
 ## PRELOAD MODULES
@@ -63,27 +63,26 @@ You can preload as many modules as you want:
 ### COMPLEX PRELOAD
 
 If your preload is a subclass of [Test2::Harness::Preload](https://metacpan.org/pod/Test2::Harness::Preload) then more complex
-preload behavior is possible. See the [Test2::Harness::Preload](https://metacpan.org/pod/Test2::Harness::Preload) docs for more
-info.
+preload behavior is possible. See those docs for more info.
 
 ## LOGGING
 
 ### RECORDING A LOG
 
-You can turn on logging very easily, the filename of the log will be printed at
+You can turn on logging with a flag. The filename of the log will be printed at
 the end.
 
     $ yath -L
     ...
     Wrote log file: test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl
 
-The event log can be quite large, it is better to compress it with bzip2
+The event log can be quite large. It can be compressed with bzip2.
 
     $ yath -B
     ...
     Wrote log file: test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2
 
-Or you can use gzip:
+gzip compression is also supported.
 
     $ yath -G
     ...
@@ -101,7 +100,7 @@ This will be significantly faster than the initial run as no tests are actually
 being executed. All events are simply read from the log, and processed by the
 harness.
 
-You can change display options, and limit rendering/processing to specific test
+You can change display options and limit rendering/processing to specific test
 jobs from the run:
 
     $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v 5 10
@@ -121,18 +120,18 @@ The `-T` option will cause each test file to report how long it took to run.
 ## PERSISTENT RUNNER
 
 yath supports starting a yath session that waits for tests to run. This is very
-useful if combined with preload.
+useful when combined with preload.
 
 ### STARTING
 
-This starts the server, many options available to the 'test' command will work
-here, but not all. See `$ yath help start` for more info.
+This starts the server. Many options available to the 'test' command will work
+here but not all. See `$ yath help start` for more info.
 
     $ yath start
 
 ### RUNNING
 
-This will run tests using the persistent runner. By default it will search for
+This will run tests using the persistent runner. By default, it will search for
 tests just like the 'test' command. Many options available to the `test`
 command will work for this as well. See `$ yath help run` for more details.
 
@@ -140,7 +139,7 @@ command will work for this as well. See `$ yath help run` for more details.
 
 ### STOPPING
 
-Stopping a persistent runner is easy
+Stopping a persistent runner is easy.
 
     $ yath stop
 
@@ -148,21 +147,21 @@ Stopping a persistent runner is easy
 
 The `which` command will tell you which persistent runner will be used. Yath
 searches for the persistent runner in the current directory, then searches in
-parent directories until it either hits root, or finds the persistent runner
-tracking file.
+parent directories until it either hits the root directory, or finds the
+persistent runner tracking file.
 
     $ yath which
 
-The `watch` command will tail the runners log files.
+The `watch` command will tail the runner's log files.
 
     $ yath watch
 
 ### PRELOAD + PERSISTENT RUNNER
 
-You can use preloads with the `yath start` command. In this case yath will
-track all the modules pulled in during preload, if any of them changes the
+You can use preloads with the `yath start` command. In this case, yath will
+track all the modules pulled in during preload. If any of them change, the
 server will reload itself to bring in the changes. Further, modified modules
-will be blacklisted so that they are not preloaded on the next reloads. This
+will be blacklisted so that they are not preloaded on subsequent reloads. This
 behavior is useful if you are actively working on a module that is normally
 preloaded.
 
@@ -173,41 +172,42 @@ preloaded.
 The above command will create `test.pl`. `test.pl` is automatically run by
 most build utils, in which case only the exit value matters. The generated
 `test.pl` will run `yath` and execute all tests in the `./t` and/or `./t2`
-directories. Tests in `./t` will ALSO be run by prove, Tests in `./t2` will
-only be run by yath.
+directories. Tests in `./t` will ALSO be run by prove but tests in `./t2`
+will only be run by yath.
 
-## PROJECT SPECIFIC YATH CONFIG
+## PROJECT-SPECIFIC YATH CONFIG
 
-You can write a `.yath.rc` file. The file format is very simple, use
-`[COMMAND]` sections to start the configuration for a command. Under the
-section you can provide any options normally allowed by the command. When
-`yath` is run inside your project it will use the config specified in the rc
-file, unless overridden by command line options. Comments start with a
-semi-colon.
+You can write a `.yath.rc` file. The file format is very simple. Create a
+`[COMMAND]` section to start the configuration for a command and then
+provide any options normally allowed by it. When `yath` is run inside your
+project, it will use the config specified in the rc file, unless overridden
+by command line options.
+
+Comments start with a semi-colon.
 
 Example .yath.rc:
 
     [test]
-    -B ;Always write a log, compressed with BZip2
+    -B ;Always write a bzip2-compressed log
 
     [start]
     -PMoose ;Always preload Moose with a persistent runner
 
-This file is normally committed into the projects repo.
+This file is normally committed into the project's repo.
 
-## USER PROJECT SPECIFIC YATH CONFIG
+## PROJECT-SPECIFIC YATH CONFIG USER OVERRIDES
 
 You can add a `.yath.user.rc` file. Format is the same as the regular
 `.yath.rc` file. This file will be read in addition to the regular config
 file. Directives in this file will come AFTER the directives in the primary
-config, so it may be used to override config.
+config so it may be used to override config.
 
 This file should not normally be committed to the project repo.
 
 ## HARNESS DIRECTIVES INSIDE TESTS
 
 `yath` will recognise a number of directive comments placed near the top of
-any test files. These directives should be placed after the SHBANG line, but
+test files. These directives should be placed after the `#!` line but
 before any real code or comments. These may be placed AFTER `use` and
 `require` statements.
 
@@ -300,7 +300,7 @@ set.
 ### HARNESS-CATEGORY-ISOLATION
 
 This lets you tell `yath` that the test cannot be run concurrently with other
-tests. Yath will hold off and run these tests 1 at a time after all other
+tests. Yath will hold off and run these tests one at a time after all other
 tests.
 
 ### HARNESS-CATEGORY-GENERAL

@@ -2,18 +2,29 @@ package Test2::Harness::UI::Util::Errors;
 use strict;
 use warnings;
 
+use Scalar::Util qw/blessed/;
+
 use Importer Importer => 'import';
 
-our @EXPORT = qw/ERROR_404 ERROR_405 ERROR_401/;
+our @EXPORT = qw/is_error_code/;
 
-my $e401 = 'e401';
-sub ERROR_401() { \$e401 }
+sub is_error_code {
+    my $thing = shift;
+    return undef unless blessed($thing);
+    return undef unless $thing->isa(__PACKAGE__);
+    return $$thing;
+}
 
-my $e404 = 'e404';
-sub ERROR_404() { \$e404 }
+for my $code (400 .. 405) {
+    my $val = 0 + $code;
+    my $ref = bless \$val, __PACKAGE__;
+    my $name = "ERROR_$code";
+    push @EXPORT => $name;
 
-my $e405 = 'e405';
-sub ERROR_405() { \$e405 }
+    no strict 'refs';
+    *{$name} = sub() { $ref };
+}
+
+sub code { ${$_[0]} }
 
 1;
-

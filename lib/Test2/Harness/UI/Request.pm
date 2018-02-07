@@ -13,12 +13,12 @@ sub new {
     my $env = delete $params{env} or croak "'env' is a required attribute";
 
     my $self = $class->SUPER::new($env);
-    $self->{'schema'} = delete $params{schema} or croak "'schema' is a required attribute";
+    $self->{'config'} = delete $params{config} or croak "'config' is a required attribute";
 
     return $self;
 }
 
-sub schema { $_[0]->{schema} }
+sub schema { $_[0]->{config} }
 
 sub session {
     my $self = shift;
@@ -29,7 +29,7 @@ sub session {
 
     my $id = $cookies->{id} or return undef;
 
-    my $session = $self->{schema}->resultset('Session')->find({session_id => $id});
+    my $session = $self->{config}->schema->resultset('Session')->find({session_id => $id});
 
     return undef unless $session && $session->active;
 
@@ -42,15 +42,15 @@ sub session_host {
 
     my $session = $self->session or return undef;
 
-    my $schema = $self->{schema};
+    my $schema = $self->{config}->schema;
 
     $schema->txn_begin;
 
     my $host = $schema->resultset('SessionHost')->find_or_create(
         {
             session_id => $session->session_id,
-            address       => $self->address,
-            agent         => $self->user_agent,
+            address    => $self->address,
+            agent      => $self->user_agent,
         }
     );
 

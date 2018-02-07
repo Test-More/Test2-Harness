@@ -27,6 +27,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::Tree::AdjacencyList>
 
+=item * L<DBIx::Class::UUIDColumns>
+
 =back
 
 =cut
@@ -36,6 +38,7 @@ __PACKAGE__->load_components(
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
   "Tree::AdjacencyList",
+  "UUIDColumns",
 );
 
 =head1 TABLE: C<users>
@@ -171,8 +174,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:W/m14GzolBw+GRT4B2RExw
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 08:12:50
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:VamHd+19BIVx37gdFGlW0Q
 
 use Data::GUID;
 use Carp qw/croak/;

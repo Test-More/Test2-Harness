@@ -6,29 +6,24 @@ use Carp qw/croak/;
 
 use Test2::Harness::UI::Import;
 
-use Test2::Harness::UI::Util::HashBase qw/-schema -max/;
-use Parallel::Runner;
+use Test2::Harness::UI::Util::HashBase qw/-config/;
 
 sub init {
     my $self = shift;
 
-    croak "'schema' is a required attribute"
-        unless $self->{+SCHEMA};
-
-    $self->{+MAX} ||= 1;
+    croak "'config' is a required attribute"
+        unless $self->{+CONFIG};
 }
 
 sub run {
     my $self = shift;
 
-    my $schema = $self->{+SCHEMA};
+    my $schema = $self->{+CONFIG}->schema;
 
-    my $runner = Parallel::Runner->new($self->{+MAX});
-
-    while(1) {
-        while (my $feed = $schema->resultset('Feed')->search({status => 'pending'})->first()) {
-            $feed->update({status => 'running'});
-            $runner->run(sub { $self->process($feed) });
+    while (1) {
+        while (my $run = $schema->resultset('Run')->search({status => 'pending'})->first()) {
+            $run->update({status => 'running'});
+            $self->process($run);
         }
 
         sleep 1;
@@ -37,33 +32,36 @@ sub run {
 
 sub process {
     my $self = shift;
-    my ($feed) = @_;
+    my ($run) = @_;
 
-    syswrite(\*STDOUT, "Starting feed " . $feed->feed_id . " (" . $feed->name . ")\n");
+    my $start = time;
+    syswrite(\*STDOUT, "Starting run " . $run->run_id . " (" . $run->name . ")\n");
 
     my $status;
     my $ok = eval {
         my $import = Test2::Harness::UI::Import->new(
-            schema => $self->{+SCHEMA},
-            feed => $feed,
+            config => $self->{+CONFIG},
+            run    => $run,
         );
 
-        $status = $import->run;
+        $status = $import->process;
 
         1;
     };
     my $err = $@;
 
-    unlink($feed->local_file);
+    unlink($run->log_file);
+
+    my $total = time - $start;
 
     if ($ok && !$status->{errors}) {
-        $feed->update({status => 'complete'});
-        syswrite(\*STDOUT, "Completed feed " . $feed->feed_id . " (" . $feed->name . ")\n");
+        syswrite(\*STDOUT, "Completed run " . $run->run_id . " (" . $run->name . ") in $total seconds.\n");
+        $run->update({status => 'complete'});
     }
     else {
         my $error = $ok ? join("\n" => @{$status->{errors}}) : $err;
-        $feed->update({status => 'failed', error => $err});
-        syswrite(\*STDOUT, "Failed feed " . $feed->feed_id . " (" . $feed->name . ")\n");
+        syswrite(\*STDOUT, "Failed feed " . $run->run_id . " (" . $run->name . ") in $total seconds.\n$error\n");
+        $run->update({status => 'failed', error => $error});
     }
 
     return;

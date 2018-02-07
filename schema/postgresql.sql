@@ -1,3 +1,5 @@
+CREATE EXTENSION pgcrypto;
+
 CREATE TYPE perms AS ENUM(
     'private',
     'protected',
@@ -17,6 +19,19 @@ CREATE TYPE api_key_status AS ENUM(
     'revoked'
 );
 
+CREATE TYPE edisp_lvl AS ENUM(
+    'no_render',    -- no_render set by harness
+    'no_display',   -- no_display on about facet
+    'parameters',   -- harness_job, harness_run, etc
+    'preview',      -- nested, but no parent_id (ie buffered preview)
+    'normal',       -- Default, most events
+    'note',         -- info facets
+    'diag',         -- diagnostics messages
+    'fail',         -- causes fail
+    'error',        -- error facets
+    'important'    -- Really important to show
+);
+
 CREATE TABLE users (
     user_id         SERIAL          PRIMARY KEY,
     username        VARCHAR(32)     NOT NULL,
@@ -28,16 +43,13 @@ CREATE TABLE users (
 );
 
 CREATE TABLE sessions (
-    session_id      SERIAL          PRIMARY KEY,
-    session_val     VARCHAR(36)     NOT NULL,
-    active          BOOL            DEFAULT TRUE,
-
-    UNIQUE(session_id)
+    session_id      VARCHAR(36)     PRIMARY KEY,
+    active          BOOL            DEFAULT TRUE
 );
 
 CREATE TABLE session_hosts (
     session_host_id     SERIAL      PRIMARY KEY,
-    session_id          INT         NOT NULL REFERENCES sessions(session_id),
+    session_id          VARCHAR(36) NOT NULL REFERENCES sessions(session_id),
     user_id             INTEGER     REFERENCES users(user_id),
 
     created             TIMESTAMP   NOT NULL DEFAULT now(),
@@ -64,7 +76,8 @@ CREATE TABLE runs (
     user_id         INTEGER     NOT NULL REFERENCES users(user_id),
 
     name            TEXT        NOT NULL,
-    yath_run_id     TEXT        DEFAULT NULL,
+
+    parameters      JSONB       DEFAULT NULL,
     error           TEXT        DEFAULT NULL,
     added           TIMESTAMP   NOT NULL DEFAULT now(),
 
@@ -77,76 +90,51 @@ CREATE TABLE runs (
 );
 
 CREATE TABLE jobs (
-    job_id          BIGSERIAL   PRIMARY KEY,
+    job_id          UUID        NOT NULL DEFAULT GEN_RANDOM_UUID() PRIMARY KEY,
+    job_ord         BIGINT      NOT NULL,
     run_id          BIGINT      NOT NULL REFERENCES runs(run_id),
 
-    yath_job_id     TEXT        NOT NULL,
+    parameters      JSONB       DEFAULT NULL,
 
     -- Summaries
     fail            BOOL        DEFAULT NULL,
-    file            TEXT,
-
-    UNIQUE(run_id, job_id)
+    file            TEXT        DEFAULT NULL,
+    exit            INT         DEFAULT NULL,
+    launch          TIMESTAMP   DEFAULT NULL,
+    start           TIMESTAMP   DEFAULT NULL,
+    ended           TIMESTAMP   DEFAULT NULL
 );
 
 CREATE TABLE events (
-    event_id        BIGSERIAL   PRIMARY KEY,
-    job_id          BIGINT      NOT NULL REFERENCES jobs(job_id),
-    parent_id       BIGINT      REFERENCES events(event_id),
-
-    stamp           TIMESTAMP   DEFAULT NULL,
-    processed       TIMESTAMP   DEFAULT NULL,
+    event_id        UUID        NOT NULL DEFAULT GEN_RANDOM_UUID() PRIMARY KEY,
+    event_ord       BIGINT      NOT NULL,
+    job_id          UUID        NOT NULL REFERENCES jobs(job_id),
+    parent_id       UUID        DEFAULT NULL REFERENCES events(event_id),
 
     -- Summaries for lookup/display
-    is_subtest      BOOL        NOT NULL,
+
+    nested          INT         NOT NULL,
     causes_fail     BOOL        NOT NULL,
-    no_display      BOOL        NOT NULL,
+
+    is_parent       BOOL        NOT NULL,
+    is_assert       BOOL        NOT NULL,
+    is_plan         BOOL        NOT NULL,
+
     assert_pass     BOOL        DEFAULT NULL,
     plan_count      INTEGER     DEFAULT NULL,
 
-    -- Standard Facets
-    f_render        JSONB       DEFAULT NULL,
-    f_about         JSONB       DEFAULT NULL,
-    f_amnesty       JSONB       DEFAULT NULL,
-    f_assert        JSONB       DEFAULT NULL,
-    f_control       JSONB       DEFAULT NULL,
-    f_error         JSONB       DEFAULT NULL,
-    f_info          JSONB       DEFAULT NULL,
-    f_meta          JSONB       DEFAULT NULL,
-    f_parent        JSONB       DEFAULT NULL,
-    f_plan          JSONB       DEFAULT NULL,
-    f_trace         JSONB       DEFAULT NULL,
-
-    -- Harness Facets
-    f_harness               JSONB   DEFAULT NULL,
-    f_harness_job           JSONB   DEFAULT NULL,
-    f_harness_job_end       JSONB   DEFAULT NULL,
-    f_harness_job_exit      JSONB   DEFAULT NULL,
-    f_harness_job_launch    JSONB   DEFAULT NULL,
-    f_harness_job_start     JSONB   DEFAULT NULL,
-    f_harness_run           JSONB   DEFAULT NULL,
-
-    -- The rest
-    f_other         JSONB       DEFAULT NULL
+    facets          JSONB       DEFAULT NULL
 );
 
-CREATE TABLE event_links (
-    event_link_id       BIGSERIAL   PRIMARY KEY,
+CREATE TABLE event_lines (
+    event_line_id   BIGSERIAL   PRIMARY KEY,
+    event_id        UUID        DEFAULT NULL REFERENCES events(event_id),
 
-    job_id              BIGINT      NOT NULL REFERENCES jobs(job_id),
-    yath_eid            TEXT        NOT NULL,
-    trace_hid           TEXT        NOT NULL,
-
-    buffered_proc_id    BIGINT      REFERENCES events(event_id),
-    unbuffered_proc_id  BIGINT      REFERENCES events(event_id),
-    buffered_raw_id     BIGINT      REFERENCES events(event_id),
-    unbuffered_raw_id   BIGINT      REFERENCES events(event_id),
-
-    UNIQUE(job_id, yath_eid, trace_hid)
+    display_level   edisp_lvl   NOT NULL,
+    tag             VARCHAR(8)  NOT NULL,
+    facet           VARCHAR(32) NOT NULL,
+    content         TEXT        NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS run_jobs      ON jobs   (run_id);
-CREATE INDEX IF NOT EXISTS events_job_id ON events (job_id);
 
 -- Password is 'root'
 INSERT INTO users(username, pw_hash, pw_salt, is_admin) VALUES('root', 'Hffc/wurxNeSHmWeZOJ2SnlKNXy.QOy', 'j3rWkFXozdPaDKobXVV5u.', TRUE);

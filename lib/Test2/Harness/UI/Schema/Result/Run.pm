@@ -27,6 +27,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::Tree::AdjacencyList>
 
+=item * L<DBIx::Class::UUIDColumns>
+
 =back
 
 =cut
@@ -36,6 +38,7 @@ __PACKAGE__->load_components(
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
   "Tree::AdjacencyList",
+  "UUIDColumns",
 );
 
 =head1 TABLE: C<runs>
@@ -64,9 +67,9 @@ __PACKAGE__->table("runs");
   data_type: 'text'
   is_nullable: 0
 
-=head2 yath_run_id
+=head2 parameters
 
-  data_type: 'text'
+  data_type: 'jsonb'
   is_nullable: 1
 
 =head2 error
@@ -114,8 +117,8 @@ __PACKAGE__->add_columns(
   { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
   "name",
   { data_type => "text", is_nullable => 0 },
-  "yath_run_id",
-  { data_type => "text", is_nullable => 1 },
+  "parameters",
+  { data_type => "jsonb", is_nullable => 1 },
   "error",
   { data_type => "text", is_nullable => 1 },
   "added",
@@ -210,7 +213,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BLQS/68GWUQ78f599AfZaA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 08:12:50
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:id0gTO7h8q9KBfQ84z29mQ
 
 1;

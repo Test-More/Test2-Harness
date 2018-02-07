@@ -4,13 +4,15 @@ use warnings;
 
 use Carp qw/croak/;
 
-use Test2::Harness::UI::Util::HashBase qw/-request -schema/;
+use Test2::Harness::UI::Util::HashBase qw/-request -config -schema/;
 
 sub init {
     my $self = shift;
 
-    croak "The 'schema' attribute is required"  unless $self->{+SCHEMA};
+    croak "The 'config' attribute is required"  unless $self->{+CONFIG};
     croak "The 'request' attribute is required" unless $self->{+REQUEST};
+
+    $self->{+SCHEMA} ||= $self->{+CONFIG}->schema;
 }
 
 sub do_once {}

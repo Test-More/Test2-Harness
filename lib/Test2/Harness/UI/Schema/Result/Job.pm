@@ -27,6 +27,8 @@ use base 'DBIx::Class::Core';
 
 =item * L<DBIx::Class::Tree::AdjacencyList>
 
+=item * L<DBIx::Class::UUIDColumns>
+
 =back
 
 =cut
@@ -36,6 +38,7 @@ __PACKAGE__->load_components(
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
   "Tree::AdjacencyList",
+  "UUIDColumns",
 );
 
 =head1 TABLE: C<jobs>
@@ -48,10 +51,15 @@ __PACKAGE__->table("jobs");
 
 =head2 job_id
 
-  data_type: 'bigint'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: gen_random_uuid()
   is_nullable: 0
-  sequence: 'jobs_job_id_seq'
+  size: 16
+
+=head2 job_ord
+
+  data_type: 'bigint'
+  is_nullable: 0
 
 =head2 run_id
 
@@ -59,10 +67,10 @@ __PACKAGE__->table("jobs");
   is_foreign_key: 1
   is_nullable: 0
 
-=head2 yath_job_id
+=head2 parameters
 
-  data_type: 'text'
-  is_nullable: 0
+  data_type: 'jsonb'
+  is_nullable: 1
 
 =head2 fail
 
@@ -74,24 +82,54 @@ __PACKAGE__->table("jobs");
   data_type: 'text'
   is_nullable: 1
 
+=head2 exit
+
+  data_type: 'integer'
+  is_nullable: 1
+
+=head2 launch
+
+  data_type: 'timestamp'
+  is_nullable: 1
+
+=head2 start
+
+  data_type: 'timestamp'
+  is_nullable: 1
+
+=head2 ended
+
+  data_type: 'timestamp'
+  is_nullable: 1
+
 =cut
 
 __PACKAGE__->add_columns(
   "job_id",
   {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "jobs_job_id_seq",
+    data_type => "uuid",
+    default_value => \"gen_random_uuid()",
+    is_nullable => 0,
+    size => 16,
   },
+  "job_ord",
+  { data_type => "bigint", is_nullable => 0 },
   "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "yath_job_id",
-  { data_type => "text", is_nullable => 0 },
+  "parameters",
+  { data_type => "jsonb", is_nullable => 1 },
   "fail",
   { data_type => "boolean", is_nullable => 1 },
   "file",
   { data_type => "text", is_nullable => 1 },
+  "exit",
+  { data_type => "integer", is_nullable => 1 },
+  "launch",
+  { data_type => "timestamp", is_nullable => 1 },
+  "start",
+  { data_type => "timestamp", is_nullable => 1 },
+  "ended",
+  { data_type => "timestamp", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
@@ -106,38 +144,7 @@ __PACKAGE__->add_columns(
 
 __PACKAGE__->set_primary_key("job_id");
 
-=head1 UNIQUE CONSTRAINTS
-
-=head2 C<jobs_run_id_job_id_key>
-
-=over 4
-
-=item * L</run_id>
-
-=item * L</job_id>
-
-=back
-
-=cut
-
-__PACKAGE__->add_unique_constraint("jobs_run_id_job_id_key", ["run_id", "job_id"]);
-
 =head1 RELATIONS
-
-=head2 event_links
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::EventLink>
-
-=cut
-
-__PACKAGE__->has_many(
-  "event_links",
-  "Test2::Harness::UI::Schema::Result::EventLink",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
 
 =head2 events
 
@@ -170,8 +177,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-05 12:00:37
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:0+9NACa4CL2afcwWVWS/jw
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 13:52:58
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:SxIws0T2M1Ea4kHXikKhOw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

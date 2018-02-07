@@ -4,11 +4,11 @@ use warnings;
 
 use File::Temp qw/tempfile/;
 
-use Test2::Harness::UI::Import;
+use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Util::Errors qw/ERROR_405 ERROR_404 ERROR_401/;
 
+use Test2::Harness::UI::Import();
 use Text::Xslate();
-use Test2::Harness::UI::Util qw/share_dir/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase qw/-key/;
@@ -53,21 +53,20 @@ sub process_form {
     my $user = $req->user || $self->api_user($req->parameters->{api_key});
     die ERROR_401 unless $user;
 
-    my ($fh, $local) = tempfile('T2-UI-Feed-XXXXXXXX', TMPDIR => 1, CLEANUP => 0);
-    close($fh);
-    rename($req->uploads->{log_file}->tempname, $local) or die "Could not move feed file: $!";
+    my $ud = $self->{+CONFIG}->upload_dir;
 
-    my $orig  = $req->uploads->{log_file}->filename;
+    my $orig = $req->uploads->{log_file}->filename;
+    rename($req->uploads->{log_file}->tempname, "$ud/$orig") or die "Could not move feed file: $!";
+
     my $name  = $req->parameters->{feed_name} || $orig;
     my $perms = $req->parameters->{permissions} || 'private';
 
-    my $feed = $self->{+SCHEMA}->resultset('Feed')->create(
+    my $run = $self->{+SCHEMA}->resultset('Run')->create(
         {
-            user_id  => $user->user_id,
+            user_id     => $user->user_id,
             name        => $name,
-            orig_file   => $orig,
-            local_file  => $local,
             permissions => $perms,
+            log_file    => "$ud/$orig",
             status      => 'pending',
         }
     );
@@ -88,104 +87,6 @@ sub api_user {
     return undef unless $key->status eq 'active';
 
     return $key->user;
-}
-
-1;
-__END__
-
-$VAR1 = bless( {
-                 'log_file' => bless( {
-                                        'headers' => bless( {
-                                                              'content-type' => 'application/x-bzip',
-                                                              'content-disposition' => 'form-data; name="log_file"; filename="2018-02-01~13:30:24~1517520624~9587.jsonl.bz2"'
-                                                            }, 'HTTP::Headers::Fast' ),
-                                        'size' => 167108,
-                                        'filename' => '2018-02-01~13:30:24~1517520624~9587.jsonl.bz2',
-                                        'tempname' => '/tmp/AFyEe/82jQDZIxHQ'
-                                      }, 'Plack::Request::Upload' )
-               }, 'Hash::MultiValue' );
-$VAR2 = bless( {
-                 'api_key' => 'fasdfas',
-                 'action' => 'Upload Log'
-               }, 'Hash::MultiValue' );
-
-
-    my $user = $req->user
-        or return ($self->login(), ['Content-Type' => 'text/html']);
-
-    my $template = share_dir('templates/user.tx');
-    my $tx       = Text::Xslate->new();
-    my $sort_val = {active => 1, disabled => 2, revoked => 3};
-    my $content = $tx->render(
-        $template,
-        {
-            base_uri => $self->base_uri,
-            user     => $user,
-            keys     => [sort { $sort_val->{$a->status} <=> $sort_val->{$b->status} } $user->api_keys->all],
-            errors   => $self->{+ERRORS} || [],
-            messages => $self->{+MESSAGES} || [],
-        }
-    );
-
-    return ($content, ['Content-Type' => 'text/html']);
-}
-
-
-__END__
-sub process_request {
-    my $self = shift;
-
-    my $req = $self->request;
-
-    die ERROR_404 if $req->path ne '/';
-
-    my $json = $req->content;
-    my $data;
-    my $ok = eval { $data = decode_json($json); 1 };
-    my $err = $@;
-
-    my $out = $ok ? $self->handle_payload($data) : {errors => ["JSON decoding error"]};
-
-    return (encode_json($out), ['Content-Type' => 'application/json']);
-}
-
-sub handle_payload {
-    my $self = shift;
-    my ($data) = @_;
-
-    # Verify credentials
-    $self->verify_credentials($data) or return {errors => ["Incorrect credentials"]};
-
-    my $action = $data->{action} or return {errors => ["No action specified"]};
-
-    my $meth = "action_$action";
-    return {errors => ["Invalid action '$action'"]}
-        unless $self->can($meth);
-
-    return $self->$meth($data->{payload});
-}
-
-sub verify_credentials {
-    my $self = shift;
-    my ($data) = @_;
-
-    my $api_key = $data->{api_key} or return;
-
-    my $schema = $self->{+SCHEMA};
-    my $key = $schema->resultset('ApiKey')->find({value => $api_key})
-        or return undef;
-
-    return undef unless $key->status eq 'active';
-
-    return $self->{+KEY} = $key;
-}
-
-sub action_feed {
-    my $self = shift;
-    my ($payload) = @_;
-
-    my $import = Test2::Harness::UI::Import->new(schema => $self->{+SCHEMA});
-    return $import->import_events($self->{+KEY}, $payload);
 }
 
 1;

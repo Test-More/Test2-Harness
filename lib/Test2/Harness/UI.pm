@@ -11,9 +11,9 @@ use Test2::Harness::UI::Controller::User;
 
 use Test2::Harness::Util::JSON qw/encode_json/;
 
-use Test2::Harness::UI::Util::Errors qw/ERROR_404 ERROR_405 ERROR_401/;
+use Test2::Harness::UI::Util::Errors qw/ERROR_404 ERROR_405 ERROR_401 is_error_code/;
 
-use Test2::Harness::UI::Util::HashBase qw/-config_file -schema/;
+use Test2::Harness::UI::Util::HashBase qw/-config/;
 
 my %ROUTING = (
     "/upload" => 'Test2::Harness::UI::Controller::Upload',
@@ -27,7 +27,7 @@ sub to_app {
     return sub {
         my $env = shift;
 
-        my $req = Test2::Harness::UI::Request->new(env => $env, schema => $self->{+SCHEMA});
+        my $req = Test2::Harness::UI::Request->new(env => $env, config => $self->{+CONFIG});
 
         my $path = $req->path;
         $path =~ s{/+$}{}g unless $path eq '/';
@@ -44,7 +44,7 @@ sub wrap {
     my $ok = eval {
         die ERROR_404() unless $class;
 
-        my $controller = $class->new(request => $req, schema => $self->schema);
+        my $controller = $class->new(request => $req, config => $self->{+CONFIG});
         ($content, $headers) = $controller->process();
 
         1;
@@ -54,14 +54,16 @@ sub wrap {
     return [200, $headers, [$content]] if $ok;
 
     if ($err) {
-        return [401, ['Content-Type' => 'text/plain'], ["401 Unauthorized\n"]]
-            if $err == ERROR_401();
+        if (my $code = is_error_code($err)) {
+            return [401, ['Content-Type' => 'text/plain'], ["401 Unauthorized\n"]]
+                if $code == 401;
 
-        return [404, ['Content-Type' => 'text/plain'], ["404 page not found\n"]]
-            if $err == ERROR_404();
+            return [404, ['Content-Type' => 'text/plain'], ["404 page not found\n"]]
+                if $code == 404;
 
-        return [405, ['Content-Type' => 'text/plain'], ["405 Method not allowed\n"]]
-            if $err == ERROR_405();
+            return [405, ['Content-Type' => 'text/plain'], ["405 Method not allowed\n"]]
+                if $code == 405;
+        }
 
         return [500, ['Content-Type' => 'text/plain'], ["$err\n"]]
             if $ENV{T2_HARNESS_UI_ENV} eq 'dev';

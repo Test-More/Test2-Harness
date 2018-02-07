@@ -36,14 +36,14 @@
                             <form method="POST">
                                 <input type="submit" name="action" value="Disable">
                                 <input type="submit" name="action" value="Revoke">
-                                <input type="hidden" name="api_key_ui_id" value="<: $key.api_key_ui_id :>">
+                                <input type="hidden" name="api_key_id" value="<: $key.api_key_id :>">
                             </form>
                         : }
                         : else if $key.status == 'disabled' {
                             <form method="POST">
                                 <input type="submit" name="action" value="Enable">
                                 <input type="submit" name="action" value="Revoke">
-                                <input type="hidden" name="api_key_ui_id" value="<: $key.api_key_ui_id :>">
+                                <input type="hidden" name="api_key_id" value="<: $key.api_key_id :>">
                             <form method="POST">
                         : }
                     </td>

@@ -9,19 +9,7 @@ use Test2::Harness::UI::Config;
 use DBIx::QuickDB;
 use File::Temp qw/tempdir/;
 
-my $db = DBIx::QuickDB->build_db(
-    harness_ui => {
-        driver => 'PostgreSQL',
-        config => {
-            shared_buffers     => "'3096MB'",
-            wal_buffers        => "'64MB'",
-            work_mem           => "'512MB'",
-            fsync              => "off",
-            synchronous_commit => "off",
-            full_page_writes   => "off",
-        },
-    }
-);
+my $db = DBIx::QuickDB->build_db(harness_ui => {driver => 'PostgreSQL'});
 {
     my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
     $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
@@ -37,10 +25,11 @@ print "DBI_DSN: $dsn\n";
 print "Both: '$dsn' '$uploads'\n";
 
 my $config = Test2::Harness::UI::Config->new(
-    dbi_dsn    => $dsn,
-    dbi_user   => '',
-    dbi_pass   => '',
-    upload_dir => $uploads,
+    dbi_dsn     => $dsn,
+    dbi_user    => '',
+    dbi_pass    => '',
+    upload_dir  => $uploads,
+    single_user => 1,
 );
 
 Test2::Harness::UI->new(config => $config)->to_app;

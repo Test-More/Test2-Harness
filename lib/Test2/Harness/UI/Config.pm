@@ -9,6 +9,7 @@ use Test2::Harness::UI::Util::HashBase qw{
     -_schema
     -upload_dir
     -dbi_dsn -dbi_user -dbi_pass
+    -single_user
 };
 
 sub init {

@@ -52,7 +52,6 @@ __PACKAGE__->table("jobs");
 =head2 job_id
 
   data_type: 'uuid'
-  default_value: gen_random_uuid()
   is_nullable: 0
   size: 16
 
@@ -72,14 +71,19 @@ __PACKAGE__->table("jobs");
   data_type: 'jsonb'
   is_nullable: 1
 
-=head2 fail
+=head2 name
 
-  data_type: 'boolean'
-  is_nullable: 1
+  data_type: 'text'
+  is_nullable: 0
 
 =head2 file
 
   data_type: 'text'
+  is_nullable: 1
+
+=head2 fail
+
+  data_type: 'boolean'
   is_nullable: 1
 
 =head2 exit
@@ -106,22 +110,19 @@ __PACKAGE__->table("jobs");
 
 __PACKAGE__->add_columns(
   "job_id",
-  {
-    data_type => "uuid",
-    default_value => \"gen_random_uuid()",
-    is_nullable => 0,
-    size => 16,
-  },
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "job_ord",
   { data_type => "bigint", is_nullable => 0 },
   "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
-  "fail",
-  { data_type => "boolean", is_nullable => 1 },
+  "name",
+  { data_type => "text", is_nullable => 0 },
   "file",
   { data_type => "text", is_nullable => 1 },
+  "fail",
+  { data_type => "boolean", is_nullable => 1 },
   "exit",
   { data_type => "integer", is_nullable => 1 },
   "launch",
@@ -177,8 +178,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 13:52:58
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:SxIws0T2M1Ea4kHXikKhOw
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-08 13:01:46
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:aYfSXbrQewzc8bHZVwt3PA
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

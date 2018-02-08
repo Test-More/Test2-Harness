@@ -60,14 +60,8 @@ __PACKAGE__->table("event_lines");
 
   data_type: 'uuid'
   is_foreign_key: 1
-  is_nullable: 1
-  size: 16
-
-=head2 display_level
-
-  data_type: 'enum'
-  extra: {custom_type_name => "edisp_lvl",list => ["no_render","no_display","parameters","preview","normal","note","diag","fail","error","important"]}
   is_nullable: 0
+  size: 16
 
 =head2 tag
 
@@ -84,7 +78,12 @@ __PACKAGE__->table("event_lines");
 =head2 content
 
   data_type: 'text'
-  is_nullable: 0
+  is_nullable: 1
+
+=head2 content_json
+
+  data_type: 'jsonb'
+  is_nullable: 1
 
 =cut
 
@@ -97,33 +96,15 @@ __PACKAGE__->add_columns(
     sequence          => "event_lines_event_line_id_seq",
   },
   "event_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
-  "display_level",
-  {
-    data_type => "enum",
-    extra => {
-      custom_type_name => "edisp_lvl",
-      list => [
-        "no_render",
-        "no_display",
-        "parameters",
-        "preview",
-        "normal",
-        "note",
-        "diag",
-        "fail",
-        "error",
-        "important",
-      ],
-    },
-    is_nullable => 0,
-  },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "tag",
   { data_type => "varchar", is_nullable => 0, size => 8 },
   "facet",
   { data_type => "varchar", is_nullable => 0, size => 32 },
   "content",
-  { data_type => "text", is_nullable => 0 },
+  { data_type => "text", is_nullable => 1 },
+  "content_json",
+  { data_type => "jsonb", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
@@ -152,17 +133,12 @@ __PACKAGE__->belongs_to(
   "event",
   "Test2::Harness::UI::Schema::Result::Event",
   { event_id => "event_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "NO ACTION",
-    on_update     => "NO ACTION",
-  },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 10:33:07
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:x1Xb0L6Whc6YKI34WAXPaQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-08 14:46:44
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Qmr+4Yfjxur0igKhAhpVSg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

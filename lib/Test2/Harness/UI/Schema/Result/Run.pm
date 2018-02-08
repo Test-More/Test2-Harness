@@ -91,6 +91,27 @@ __PACKAGE__->table("runs");
   extra: {custom_type_name => "perms",list => ["private","protected","public"]}
   is_nullable: 0
 
+=head2 mode
+
+  data_type: 'enum'
+  default_value: 'qvfd'
+  extra: {custom_type_name => "run_modes",list => ["summary","qvfd","qvf","complete"]}
+  is_nullable: 0
+
+=head2 store_facets
+
+  data_type: 'enum'
+  default_value: 'fail'
+  extra: {custom_type_name => "store_toggle",list => ["yes","no","fail"]}
+  is_nullable: 0
+
+=head2 store_orphans
+
+  data_type: 'enum'
+  default_value: 'fail'
+  extra: {custom_type_name => "store_toggle",list => ["yes","no","fail"]}
+  is_nullable: 0
+
 =head2 log_file
 
   data_type: 'text'
@@ -136,6 +157,30 @@ __PACKAGE__->add_columns(
       custom_type_name => "perms",
       list => ["private", "protected", "public"],
     },
+    is_nullable => 0,
+  },
+  "mode",
+  {
+    data_type => "enum",
+    default_value => "qvfd",
+    extra => {
+      custom_type_name => "run_modes",
+      list => ["summary", "qvfd", "qvf", "complete"],
+    },
+    is_nullable => 0,
+  },
+  "store_facets",
+  {
+    data_type => "enum",
+    default_value => "fail",
+    extra => { custom_type_name => "store_toggle", list => ["yes", "no", "fail"] },
+    is_nullable => 0,
+  },
+  "store_orphans",
+  {
+    data_type => "enum",
+    default_value => "fail",
+    extra => { custom_type_name => "store_toggle", list => ["yes", "no", "fail"] },
     is_nullable => 0,
   },
   "log_file",
@@ -213,7 +258,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 08:12:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:id0gTO7h8q9KBfQ84z29mQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-08 08:38:55
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5SPNPXbaZzrvBq1/W/SaWw
 
 1;

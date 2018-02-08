@@ -58,16 +58,22 @@ sub process_form {
     my $orig = $req->uploads->{log_file}->filename;
     rename($req->uploads->{log_file}->tempname, "$ud/$orig") or die "Could not move feed file: $!";
 
-    my $name  = $req->parameters->{feed_name} || $orig;
-    my $perms = $req->parameters->{permissions} || 'private';
+    my $name          = $req->parameters->{feed_name}     || $orig;
+    my $perms         = $req->parameters->{permissions}   || 'private';
+    my $mode          = $req->parameters->{mode}          || 'qvfd';
+    my $store_orphans = $req->parameters->{store_orphans} || 'fail';
+    my $store_facets  = $req->parameters->{store_facets}  || 'fail';
 
     my $run = $self->{+SCHEMA}->resultset('Run')->create(
         {
-            user_id     => $user->user_id,
-            name        => $name,
-            permissions => $perms,
-            log_file    => "$ud/$orig",
-            status      => 'pending',
+            user_id       => $user->user_id,
+            name          => $name,
+            permissions   => $perms,
+            mode          => $mode,
+            store_orphans => $store_orphans,
+            store_facets  => $store_facets,
+            log_file      => "$ud/$orig",
+            status        => 'pending',
         }
     );
 

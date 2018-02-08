@@ -52,7 +52,6 @@ __PACKAGE__->table("events");
 =head2 event_id
 
   data_type: 'uuid'
-  default_value: gen_random_uuid()
   is_nullable: 0
   size: 16
 
@@ -85,6 +84,16 @@ __PACKAGE__->table("events");
   data_type: 'boolean'
   is_nullable: 0
 
+=head2 no_render
+
+  data_type: 'boolean'
+  is_nullable: 0
+
+=head2 no_display
+
+  data_type: 'boolean'
+  is_nullable: 0
+
 =head2 is_parent
 
   data_type: 'boolean'
@@ -96,6 +105,16 @@ __PACKAGE__->table("events");
   is_nullable: 0
 
 =head2 is_plan
+
+  data_type: 'boolean'
+  is_nullable: 0
+
+=head2 is_diag
+
+  data_type: 'boolean'
+  is_nullable: 0
+
+=head2 is_orphan
 
   data_type: 'boolean'
   is_nullable: 0
@@ -119,12 +138,7 @@ __PACKAGE__->table("events");
 
 __PACKAGE__->add_columns(
   "event_id",
-  {
-    data_type => "uuid",
-    default_value => \"gen_random_uuid()",
-    is_nullable => 0,
-    size => 16,
-  },
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "event_ord",
   { data_type => "bigint", is_nullable => 0 },
   "job_id",
@@ -135,11 +149,19 @@ __PACKAGE__->add_columns(
   { data_type => "integer", is_nullable => 0 },
   "causes_fail",
   { data_type => "boolean", is_nullable => 0 },
+  "no_render",
+  { data_type => "boolean", is_nullable => 0 },
+  "no_display",
+  { data_type => "boolean", is_nullable => 0 },
   "is_parent",
   { data_type => "boolean", is_nullable => 0 },
   "is_assert",
   { data_type => "boolean", is_nullable => 0 },
   "is_plan",
+  { data_type => "boolean", is_nullable => 0 },
+  "is_diag",
+  { data_type => "boolean", is_nullable => 0 },
+  "is_orphan",
   { data_type => "boolean", is_nullable => 0 },
   "assert_pass",
   { data_type => "boolean", is_nullable => 1 },
@@ -229,8 +251,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 13:52:58
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:LUJ03pfaeE2ewuQIBPnlHA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-08 21:47:35
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:e7549o0JNM9smvM9d0y3lA
 
 __PACKAGE__->parent_column('parent_id');
 

@@ -1,5 +1,3 @@
-CREATE EXTENSION pgcrypto;
-
 CREATE TYPE perms AS ENUM(
     'private',
     'protected',
@@ -19,17 +17,17 @@ CREATE TYPE api_key_status AS ENUM(
     'revoked'
 );
 
-CREATE TYPE edisp_lvl AS ENUM(
-    'no_render',    -- no_render set by harness
-    'no_display',   -- no_display on about facet
-    'parameters',   -- harness_job, harness_run, etc
-    'preview',      -- nested, but no parent_id (ie buffered preview)
-    'normal',       -- Default, most events
-    'note',         -- info facets
-    'diag',         -- diagnostics messages
-    'fail',         -- causes fail
-    'error',        -- error facets
-    'important'    -- Really important to show
+CREATE TYPE run_modes AS ENUM(
+    'summary',
+    'qvfd',
+    'qvf',
+    'complete'
+);
+
+CREATE TYPE store_toggle AS ENUM(
+    'yes',
+    'no',
+    'fail'
 );
 
 CREATE TABLE users (
@@ -81,7 +79,10 @@ CREATE TABLE runs (
     error           TEXT        DEFAULT NULL,
     added           TIMESTAMP   NOT NULL DEFAULT now(),
 
-    permissions     perms       NOT NULL DEFAULT 'private',
+    permissions     perms           NOT NULL DEFAULT 'private',
+    mode            run_modes       NOT NULL DEFAULT 'qvfd',
+    store_facets    store_toggle    NOT NULL DEFAULT 'fail',
+    store_orphans   store_toggle    NOT NULL DEFAULT 'fail',
 
     log_file        TEXT,
     status          queue_status    NOT NULL DEFAULT 'pending',
@@ -90,15 +91,16 @@ CREATE TABLE runs (
 );
 
 CREATE TABLE jobs (
-    job_id          UUID        NOT NULL DEFAULT GEN_RANDOM_UUID() PRIMARY KEY,
+    job_id          UUID        NOT NULL PRIMARY KEY,
     job_ord         BIGINT      NOT NULL,
     run_id          BIGINT      NOT NULL REFERENCES runs(run_id),
 
     parameters      JSONB       DEFAULT NULL,
 
     -- Summaries
-    fail            BOOL        DEFAULT NULL,
+    name            TEXT        NOT NULL,
     file            TEXT        DEFAULT NULL,
+    fail            BOOL        DEFAULT NULL,
     exit            INT         DEFAULT NULL,
     launch          TIMESTAMP   DEFAULT NULL,
     start           TIMESTAMP   DEFAULT NULL,
@@ -106,7 +108,7 @@ CREATE TABLE jobs (
 );
 
 CREATE TABLE events (
-    event_id        UUID        NOT NULL DEFAULT GEN_RANDOM_UUID() PRIMARY KEY,
+    event_id        UUID        NOT NULL PRIMARY KEY,
     event_ord       BIGINT      NOT NULL,
     job_id          UUID        NOT NULL REFERENCES jobs(job_id),
     parent_id       UUID        DEFAULT NULL REFERENCES events(event_id),
@@ -116,9 +118,14 @@ CREATE TABLE events (
     nested          INT         NOT NULL,
     causes_fail     BOOL        NOT NULL,
 
+    no_render       BOOL        NOT NULL,
+    no_display      BOOL        NOT NULL,
+
     is_parent       BOOL        NOT NULL,
     is_assert       BOOL        NOT NULL,
     is_plan         BOOL        NOT NULL,
+    is_diag         BOOL        NOT NULL,
+    is_orphan       BOOL        NOT NULL,
 
     assert_pass     BOOL        DEFAULT NULL,
     plan_count      INTEGER     DEFAULT NULL,
@@ -128,12 +135,12 @@ CREATE TABLE events (
 
 CREATE TABLE event_lines (
     event_line_id   BIGSERIAL   PRIMARY KEY,
-    event_id        UUID        DEFAULT NULL REFERENCES events(event_id),
+    event_id        UUID        NOT NULL REFERENCES events(event_id),
 
-    display_level   edisp_lvl   NOT NULL,
     tag             VARCHAR(8)  NOT NULL,
     facet           VARCHAR(32) NOT NULL,
-    content         TEXT        NOT NULL
+    content         TEXT        DEFAULT NULL,
+    content_json    JSONB       DEFAULT NULL
 );
 
 -- Password is 'root'

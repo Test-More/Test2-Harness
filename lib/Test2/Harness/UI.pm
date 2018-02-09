@@ -91,6 +91,8 @@ sub wrap {
                 user     => $req->user     || undef,
                 errors   => $res->errors   || [],
                 messages => $res->messages || [],
+                add_css  => $res->css      || [],
+                add_js   => $res->js       || [],
                 title    => $res->title    || ($controller ? $controller->title : 'Test2-Harness-UI'),
 
                 base_uri => $req->base->as_string || '',

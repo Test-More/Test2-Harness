@@ -1,0 +1,217 @@
+div#header_wrapper {
+    overflow: hidden;
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    padding-bottom: 8px;
+}
+
+div#footer_wrapper {
+    overflow: hidden;
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    padding-top: 8px;
+    padding-bottom: 4px;
+}
+
+div#header {
+    border-bottom: 1px solid #000000;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    padding-bottom: 5px;
+    overflow: hidden;
+    display: block;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+div#footer {
+    text-align: right;
+    font-size: small;
+    padding-top: 5px;
+    padding-right: 20px;
+
+    border-top: 1px solid #000000;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+div#main_wrapper {
+    margin-top: 112px;
+}
+
+div#header h1 {
+    padding-left: 50px;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+div#header div#login_header {
+    display: block;
+    padding: 4px;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+
+    margin-left: 100px;
+    margin-bottom: 100px;
+
+    border: 1px dotted #3030FF;
+    border-radius: 5px;
+}
+
+div#header div#login_header a.login {
+    text-decoration: none;
+    color: #008000;
+}
+
+div#header div#login_header a.logout {
+    text-decoration: none;
+    color: #FF2020;
+}
+
+div#header ul#nav_main {
+    list-style: none;
+    overflow: hidden;
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+div#header ul#nav_main li {
+    display: block;
+    float: left;
+    margin-right: 10px;
+    margin-left: 10px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-bottom: 2px;
+}
+
+div#header ul#nav_main li:hover {
+    border-bottom: 1px solid #A04040;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-bottom: 0px;
+}
+
+div#header ul#nav_main li.split {
+    width: 1px !important;
+    background: #b0b0b0 !important;
+    padding: 0px !important;
+    margin: 0 !important;
+    border: none !important;
+}
+
+div#header ul#nav_main li a {
+    text-decoration: none;
+    color: #000080;
+}
+
+div#content {
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+h2 {
+    margin-left: 200px;
+}
+
+dl.tiny {
+    list-style: none;
+    overflow: hidden;
+}
+
+dl.tiny > dt {
+    float: left;
+    margin: 0;
+    width: 100px;
+    margin-right: -160px;
+    padding-top: 4px;
+}
+
+dl.tiny > dd {
+    float: left;
+    margin: 0;
+    width: 100%;
+    padding-left: 110px;
+    padding-top: 4px;
+}
+
+dl.form {
+    list-style: none;
+    overflow: hidden;
+}
+
+dl.form > dt {
+    float: left;
+    margin: 0;
+    width: 150px;
+    margin-top: 12px;
+    margin-right: -160px;
+    padding-top: 4px;
+}
+
+dl.form > dd {
+    float: left;
+    margin: 0;
+    width: 100%;
+    margin-top: 12px;
+    padding-left: 160px;
+    padding-top: 4px;
+    border-top: 1px dotted #d0d0d0;
+}
+
+div#errors {
+    color: #FF4040;
+    border: 1px solid #FF0000;
+    border-radius: 10px;
+    padding: 5px;
+    background: #FFF0F0;
+}
+
+div#messages {
+    color: #007000;
+    border: 1px solid #00C000;
+    border-radius: 10px;
+    padding: 5px;
+    background: #F0FFF0;
+}
+
+dl.medium {
+    list-style: none;
+    overflow: hidden;
+}
+
+dl.medium > dt {
+    float: left;
+    margin: 0;
+    width: 140px;
+    margin-right: -160px;
+    padding-top: 4px;
+}
+
+dl.medium > dd {
+    float: left;
+    margin: 0;
+    width: 100%;
+    padding-left: 140px;
+    padding-top: 4px;
+}
+
+

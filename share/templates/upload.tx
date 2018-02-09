@@ -1,54 +1,108 @@
-<h1>Upload a log file</h1>
-
 <div id="log_upload">
     <form id="log_upload" method="POST" enctype="multipart/form-data">
-        <label for="log_file">Log File</label>
-        <input type="file" name="log_file" id="log_file" required>
-        <br />
+        <dl class="form">
+            <dt><label for="feed_name">Feed Name</label></dt>
+            <dd>
+                <input type="text" name="feed_name" id="feed_name">
+                <small>Optional, defaults to upload file name.</small>
+            </dd>
 
-        : if !$user {
-            <label for="api_key">API Key</label>
-            <input type="password" name="api_key" id="api_key" required>
-            <small>(Log in to avoid entering an API key)</small>
-            <br />
-        : }
+            <dt><label for="log_file">Log File</label></dt>
+            <dd><input type="file" name="log_file" id="log_file" required></dd>
 
-        <label for="feed_name">Feed Name</label>
-        <input type="text" name="feed_name" id="feed_name">
-        <small>(Optional, defaults to upload file name)</small>
-        <br />
+            : if !$user {
+                <dt><label for="api_key">API Key</label></dt>
+                <dd>
+                    <input type="password" name="api_key" id="api_key" required>
+                    <small>Log in to avoid entering an API key.</small>
+                </dd>
+            : }
 
-        <label for="permissions">Permissions</label>
-        <select name="permissions" id="permissions">
-            <option value="private">Private (only you)</option>
-            <option value="protected">Protected (anyone logged in)</option>
-            <option value="public">Public (anyone)</option>
-        </select>
-        <br />
+            <dt><label for="permissions">Permissions</label></dt>
+            <dd>
+                <select name="permissions" id="permissions">
+                    <option value="private">Private</option>
+                    <option value="protected">Protected</option>
+                    <option value="public">Public</option>
+                </select>
+                <small>
+                    <dl class="tiny">
+                        <dt>Private</dt>
+                        <dd>Only you can look at these test results.</dd>
+                        <dt>Protected</dt>
+                        <dd>Anyone who is logged in can look at these results.</dd>
+                        <dt>Public</dt>
+                        <dd>Anyone can look at these results.</dd>
+                    </dl>
+                </small>
+            </dd>
 
-        <label for="mode">Mode</label>
-        <select name="mode" id="mode">
-            <option value="summary">Summary</option>
-            <option value="qvf">QVF</option>
-            <option value="qvfd" selected>QVF+D</option>
-            <option value="complete">Complete</option>
-        </select>
-        <br />
+            <dt><label for="mode">Mode</label></dt>
+            <dd>
+                <select name="mode" id="mode">
+                    <option value="summary">Summary</option>
+                    <option value="qvf">QVF</option>
+                    <option value="qvfd" selected>QVF+D</option>
+                    <option value="complete">Complete</option>
+                </select>
+                <small>
+                    <dl class="tiny">
+                        <dt>Summary</dt>
+                        <dd>Import each test job/file, but no events. (You can only see ovarall pass/fail)</dd>
+                        <dt>QVF</dt>
+                        <dd>Import summaries for passing jobs, but all events for failing ones.</dd>
+                        <dt>QVF+D</dt>
+                        <dd>Same as QVF except diagnostics events are also imported for passing jobs.</dd>
+                        <dt>Complete</dt>
+                        <dd>Import all events for all jobs.</dd>
+                    </dl>
+                </small>
+            </dd>
 
-        <label for="store_facets">Store Facet Data</label>
-        <select name="store_facets" id="store_facets">
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-            <option value="fail" selected>On Fail</option>
-        </select>
+            <dt><label for="store_facets">Store Facet Data</label></dt>
+            <dd>
+                <select name="store_facets" id="store_facets">
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                    <option value="fail" selected>On Fail</option>
+                </select>
 
-        <label for="store_orphans">Store Orphans</label>
-        <select name="store_orphans" id="store_orphans">
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-            <option value="fail" selected>On Fail</option>
-        </select>
+                <small>
+                    Facet data is the structure events use to convey
+                    information. This structure can be imported as JSON if
+                    desired. The <i>On Fail</i> option will skip it for passing
+                    jobs, but import it on failing ones. The JSON data can take
+                    a lot of storage space, but is useful for debugging, so
+                    <i>On Fail</i> is recommended.
+                </small>
+            </dd>
 
-        <input type="submit" value="Upload Log" name="action">
+            <dt><label for="store_orphans">Store Orphans</label></dt>
+            <dd>
+                <select name="store_orphans" id="store_orphans">
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                    <option value="fail" selected>On Fail</option>
+                </select>
+                <small>
+                    Events that are part of a subtest are usually sent twice,
+                    once in real-time and once as part of the completed
+                    subtest. The real-time copy of the event is called an
+                    orphan as it is known to be part of a subtest, but it is
+                    not possible to know which subtest it is part of. Normally
+                    there is no reason to see or store an orphan. There are
+                    some subtest failure conditions (serious exceptions,
+                    segv's, etc) where seeing them can be useful, as such the
+                    default is to import them only on failure.
+                </small>
+            </dd>
+
+            <dt>&nbsp;</dt>
+            <dd>
+                <br />
+                <input type="submit" value="Upload Log" name="action">
+            </dd>
+        </dl>
+
     </form>
 </div>

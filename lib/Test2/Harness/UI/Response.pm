@@ -55,7 +55,7 @@ my %DEFAULT_ERRORS = (
 );
 
 BEGIN {
-    for my $accessor (qw/no_wrap is_error errors messages title/) {
+    for my $accessor (qw/no_wrap is_error errors messages title css js/) {
         no strict 'refs';
         *{"$accessor"} = sub { $_[0]->{$accessor} = $_[1] if @_ > 1; $_[0]->{$accessor} };
     }
@@ -88,6 +88,22 @@ sub add_error {
     my $self = shift;
 
     push @{$self->{errors} ||= []} => @_;
+
+    return;
+}
+
+sub add_css {
+    my $self = shift;
+
+    push @{$self->{css} ||= []} => @_;
+
+    return;
+}
+
+sub add_js {
+    my $self = shift;
+
+    push @{$self->{js} ||= []} => @_;
 
     return;
 }

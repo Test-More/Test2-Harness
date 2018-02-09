@@ -1,0 +1,84 @@
+div.run_list {
+    display: block;
+    overflow: hidden;
+    width: 500px;
+    border-radius: 8px;
+    border: 1px solid black;
+    min-height 200px;
+    padding: 4px;
+    margin: 0;
+    float: left;
+    margin-right: 6px;
+    margin-bottom: 6px;
+}
+
+div.run_list h3 {
+    text-align: center;
+    margin: 0;
+    border-bottom: 1px dashed #E0E0E0;
+}
+
+div.run_list ul.run_list {
+    list-style: none;
+    overflow: hidden;
+    width: 100%;
+    padding: 0px;
+}
+
+div.run_list ul.run_list li {
+    margin: 0;
+    border: 1px dotted #A0A0A0;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    overflow: hidden;
+    padding: 3px;
+}
+
+div.run_list ul.run_list li.pass {
+    border: 1px solid #00C000;
+    background: #F0FFF0;
+}
+
+div.run_list ul.run_list li.fail {
+    border: 1px solid #FF0000;
+    background: #FFF0F0;
+}
+
+div.run_list ul.run_list li.pending {
+    border: 1px solid #0000FF;
+    background: #F0F0FF;
+}
+
+div.run_list ul.run_list li div.run_name {
+    margin: 0;
+    display: block;
+    overflow: hidden;
+    border-bottom: 1px dotted #A0A0A0;
+}
+
+div.run_list ul.run_list li dl.run_stats {
+    list-style: none;
+    margin: 0;
+    padding: 0px;
+    overflow: hidden;
+    float: right;
+    display: block;
+}
+
+table.run_stats {
+    width: 100%;
+}
+
+table.run_stats td.pass {
+    text-align: left;
+    width: 33%
+}
+
+table.run_stats td.total {
+    text-align: right;
+    width: 33%
+}
+
+table.run_stats td.fail {
+    text-align: center;
+}

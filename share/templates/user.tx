@@ -1,16 +1,18 @@
 <div id="change_password">
     <form id="change_password_form" method="POST">
-        <br />
-        <label for="old_password">old password<label>
-        <input name="old_password" type="password" required/>
-        <br />
-        <label for="new_password_1">new password<label>
-        <input name="new_password_1" type="password" required/>
-        <br />
-        <label for="new_password_2">new password (again)<label>
-        <input name="new_password_2" type="password" required/>
-        <br />
-        <input type="submit" name="action" value="Change Password">
+        <dl class="medium">
+            <dt><label for="old_password">old password<label></dt>
+            <dd><input name="old_password" type="password" required/></dd>
+
+            <dt><label for="new_password_1">new password<label></dt>
+            <dd><input name="new_password_1" type="password" required/></dd>
+
+            <dt><label for="new_password_2">new password (again)<label></dt>
+            <dd><input name="new_password_2" type="password" required/></dd>
+
+            <dt>&nbsp;</dt>
+            <dd><br /><input type="submit" name="action" value="Change Password"></dd>
+        </dl>
     </form>
 </div>
 

@@ -12,7 +12,7 @@ use Test2::Harness::UI::Response qw/resp error/;
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
 
-sub title { 'Upload' }
+sub title { 'Upload A Test Log' }
 
 sub handle {
     my $self = shift;
@@ -20,6 +20,7 @@ sub handle {
     my $req = $self->request;
 
     my $res = resp(200);
+    $res->add_css('upload.css');
     $self->process_form($res) if keys %{$req->parameters};
 
     my $template = share_dir('templates/upload.tx');

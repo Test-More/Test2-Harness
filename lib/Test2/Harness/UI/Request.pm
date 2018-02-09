@@ -2,6 +2,7 @@ package Test2::Harness::UI::Request;
 use strict;
 use warnings;
 
+use Data::GUID;
 use Carp qw/croak/;
 
 use parent 'Plack::Request';
@@ -18,20 +19,31 @@ sub new {
     return $self;
 }
 
-sub schema { $_[0]->{config} }
+sub schema { $_[0]->{config}->schema }
 
 sub session {
     my $self = shift;
 
     return $self->{session} if $self->{session};
 
+    my $schema = $self->schema;
+
+    my $session;
     my $cookies = $self->cookies;
 
-    my $id = $cookies->{id} or return undef;
+    if (my $id = $cookies->{id}) {
+        $session = $schema->resultset('Session')->find({session_id => $id});
+        $session = undef unless $session && $session->active;
+    }
 
-    my $session = $self->{config}->schema->resultset('Session')->find({session_id => $id});
+    $session ||= $self->schema->resultset('Session')->create(
+        {session_id => Data::GUID->new->as_string},
+    );
 
-    return undef unless $session && $session->active;
+    $self->{session} = $session;
+
+    # Vivify this
+    $self->session_host;
 
     return $session;
 }
@@ -40,9 +52,11 @@ my $warned = 0;
 sub session_host {
     my $self = shift;
 
+    return $self->{session_host} if $self->{session_host};
+
     my $session = $self->session or return undef;
 
-    my $schema = $self->{config}->schema;
+    my $schema = $self->schema;
 
     $schema->txn_begin;
 
@@ -58,13 +72,13 @@ sub session_host {
 
     $schema->txn_commit;
 
-    return $host;
+    return $self->{session_host} = $host;
 }
 
 sub user {
     my $self = shift;
 
-    return $self->{config}->schema->resultset('User')->find({user_id => 1})
+    return $self->schema->resultset('User')->find({user_id => 1})
         if $self->{config}->single_user;
 
     my $host = $self->session_host or return undef;

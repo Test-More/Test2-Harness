@@ -5,15 +5,18 @@ use warnings;
 our $VERSION = '0.000001';
 
 use Router::Simple;
+use Text::Xslate(qw/mark_raw/);
+use Scalar::Util qw/blessed/;
 
 use Test2::Harness::UI::Request;
-use Test2::Harness::UI::Controller::Page;
+use Test2::Harness::UI::Controller::Dashboard;
 use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 
-use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::UI::Util qw/share_dir/;
+use Test2::Harness::UI::Response qw/resp error/;
 
-use Test2::Harness::UI::Util::Errors qw/ERROR_404 ERROR_405 ERROR_401 is_error_code/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use Test2::Harness::UI::Util::HashBase qw/-config -router/;
 
@@ -22,9 +25,9 @@ sub init {
 
     my $router = $self->{+ROUTER} ||= Router::Simple->new;
 
-    $router->connect('/'           => {controller => 'Page'});
-    $router->connect(qr'/user/?'   => {controller => 'User'});
-    $router->connect(qr'/upload/?' => {controller => 'Upload'});
+    $router->connect('/'           => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+    $router->connect(qr'/user/?'   => {controller => 'Test2::Harness::UI::Controller::User'});
+    $router->connect(qr'/upload/?' => {controller => 'Test2::Harness::UI::Controller::Upload'});
 }
 
 sub to_app {
@@ -45,40 +48,65 @@ sub to_app {
 
 sub wrap {
     my $self = shift;
-    my ($controller, $req) = @_;
+    my ($class, $req) = @_;
 
-    my ($headers, $content);
+    my ($controller, $res, $session);
     my $ok = eval {
-        die ERROR_404() unless $controller;
-        my $class = "Test2::Harness::UI::Controller::$controller";
+        die error(404) unless $class;
 
-        my $controller = $class->new(request => $req, config => $self->{+CONFIG});
-        ($content, $headers) = $controller->process();
+        if ($class->uses_session) {
+            $session = $req->session;
+            $req->session_host; # vivify this
+        }
+
+        $controller = $class->new(request => $req, config => $self->{+CONFIG});
+        $res = $controller->handle();
 
         1;
     };
-    my $err = $@;
+    my $err = $@ || 'Internal Error';
 
-    return [200, $headers, [$content]] if $ok;
-
-    if ($err) {
-        if (my $code = is_error_code($err)) {
-            return [401, ['Content-Type' => 'text/plain'], ["401 Unauthorized\n"]]
-                if $code == 401;
-
-            return [404, ['Content-Type' => 'text/plain'], ["404 page not found\n"]]
-                if $code == 404;
-
-            return [405, ['Content-Type' => 'text/plain'], ["405 Method not allowed\n"]]
-                if $code == 405;
+    unless ($ok && $res) {
+        if (blessed($err) && $err->isa('Test2::Harness::UI::Response')) {
+            $res = $err;
         }
-
-        return [500, ['Content-Type' => 'text/plain'], ["$err\n"]]
-            if $ENV{T2_HARNESS_UI_ENV} eq 'dev';
+        else {
+            my $msg = $ENV{T2_HARNESS_UI_ENV} eq 'dev' ? "$err\n" : undef;
+            $res = error(500 => $msg);
+        }
     }
 
-    return [500, ['Content-Type' => 'text/plain'], ["Internal Server Error\n"]];
+    my $ct = $res->content_type();
+    $ct ||= do { $res->content_type('text/html'); 'text/html' };
+
+    if (lc($ct) eq 'text/html') {
+        my $template = share_dir('templates/main.tx');
+
+        my $tx      = Text::Xslate->new();
+        my $wrapped = $tx->render(
+            $template,
+            {
+                config => $self->{+CONFIG},
+
+                user     => $req->user     || undef,
+                errors   => $res->errors   || [],
+                messages => $res->messages || [],
+                title    => $res->title    || ($controller ? $controller->title : 'Test2-Harness-UI'),
+
+                base_uri => $req->base->as_string || '',
+                content  => mark_raw($res->body)  || '',
+            }
+        );
+
+        $res->body($wrapped);
+    }
+
+    $res->cookies->{id} = {value => $session->session_id, httponly => 1, expires => '+1M'}
+        if $session;
+
+    return $res->finalize;
 }
+
 
 __END__
 

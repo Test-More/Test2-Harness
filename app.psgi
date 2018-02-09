@@ -29,7 +29,7 @@ my $config = Test2::Harness::UI::Config->new(
     dbi_user    => '',
     dbi_pass    => '',
     upload_dir  => $uploads,
-#    single_user => 1,
+    single_user => 1,
 );
 
 Test2::Harness::UI->new(config => $config)->to_app;

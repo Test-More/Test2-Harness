@@ -2,27 +2,25 @@ package Test2::Harness::UI::Controller::Upload;
 use strict;
 use warnings;
 
-use File::Temp qw/tempfile/;
-
-use Test2::Harness::UI::Util qw/share_dir/;
-use Test2::Harness::UI::Util::Errors qw/ERROR_405 ERROR_404 ERROR_401/;
-
-use Test2::Harness::UI::Import();
 use Text::Xslate();
 
+use Test2::Harness::UI::Import();
+
+use Test2::Harness::UI::Util qw/share_dir/;
+use Test2::Harness::UI::Response qw/resp error/;
+
 use parent 'Test2::Harness::UI::Controller';
-use Test2::Harness::UI::Util::HashBase qw/-key/;
-use Test2::Harness::UI::ControllerRole::UseSession;
-use Test2::Harness::UI::ControllerRole::HTML;
+use Test2::Harness::UI::Util::HashBase;
 
-sub title { 'upload' }
+sub title { 'Upload' }
 
-sub process_request {
+sub handle {
     my $self = shift;
 
     my $req = $self->request;
 
-    $self->process_form() if keys %{$req->parameters};
+    my $res = resp(200);
+    $self->process_form($res) if keys %{$req->parameters};
 
     my $template = share_dir('templates/upload.tx');
     my $tx       = Text::Xslate->new();
@@ -31,27 +29,27 @@ sub process_request {
     my $content = $tx->render(
         $template,
         {
-            base_uri => $self->base_uri,
+            base_uri => $req->base->as_string,
             user     => $user,
-            errors   => $self->{+ERRORS} || [],
-            messages => $self->{+MESSAGES} || [],
         }
     );
 
-    return ($content, ['Content-Type' => 'text/html']);
+    $res->body($content);
+    return $res;
 }
 
 sub process_form {
     my $self = shift;
+    my ($res) = @_;
 
-    my $req = $self->request;
+    my $req = $self->{+REQUEST};
 
-    die ERROR_405 unless $req->method eq 'POST';
+    die error(405) unless $req->method eq 'POST';
 
     return unless 'upload log' eq lc($req->parameters->{action});
 
     my $user = $req->user || $self->api_user($req->parameters->{api_key});
-    die ERROR_401 unless $user;
+    die error(401) unless $user;
 
     my $ud = $self->{+CONFIG}->upload_dir;
 
@@ -64,7 +62,7 @@ sub process_form {
     my $store_orphans = $req->parameters->{store_orphans} || 'fail';
     my $store_facets  = $req->parameters->{store_facets}  || 'fail';
 
-    my $run = $self->{+SCHEMA}->resultset('Run')->create(
+    my $run = $self->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
             name          => $name,
@@ -77,7 +75,7 @@ sub process_form {
         }
     );
 
-    return $self->add_message("Upload Success, added import to queue");
+    return $res->add_message("Upload Success, added import to queue");
 }
 
 sub api_user {
@@ -86,7 +84,7 @@ sub api_user {
 
     return unless $key_val;
 
-    my $schema = $self->{+SCHEMA};
+    my $schema = $self->schema;
     my $key = $schema->resultset('ApiKey')->find({value => $key_val})
         or return undef;
 

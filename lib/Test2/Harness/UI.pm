@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '0.000001';
 
+use Router::Simple;
+
 use Test2::Harness::UI::Request;
 use Test2::Harness::UI::Controller::Page;
 use Test2::Harness::UI::Controller::Upload;
@@ -13,36 +15,42 @@ use Test2::Harness::Util::JSON qw/encode_json/;
 
 use Test2::Harness::UI::Util::Errors qw/ERROR_404 ERROR_405 ERROR_401 is_error_code/;
 
-use Test2::Harness::UI::Util::HashBase qw/-config/;
+use Test2::Harness::UI::Util::HashBase qw/-config -router/;
 
-my %ROUTING = (
-    "/upload" => 'Test2::Harness::UI::Controller::Upload',
-    "/user"   => 'Test2::Harness::UI::Controller::User',
-    "/"       => 'Test2::Harness::UI::Controller::Page',
-);
+sub init {
+    my $self = shift;
+
+    my $router = $self->{+ROUTER} ||= Router::Simple->new;
+
+    $router->connect('/'           => {controller => 'Page'});
+    $router->connect(qr'/user/?'   => {controller => 'User'});
+    $router->connect(qr'/upload/?' => {controller => 'Upload'});
+}
 
 sub to_app {
     my $self = shift;
+
+    my $router = $self->{+ROUTER};
 
     return sub {
         my $env = shift;
 
         my $req = Test2::Harness::UI::Request->new(env => $env, config => $self->{+CONFIG});
 
-        my $path = $req->path;
-        $path =~ s{/+$}{}g unless $path eq '/';
+        my $r = $router->match($env) || {};
 
-        $self->wrap($ROUTING{$path}, $req);
-    }
+        $self->wrap($r->{controller}, $req);
+    };
 }
 
 sub wrap {
     my $self = shift;
-    my ($class, $req) = @_;
+    my ($controller, $req) = @_;
 
     my ($headers, $content);
     my $ok = eval {
-        die ERROR_404() unless $class;
+        die ERROR_404() unless $controller;
+        my $class = "Test2::Harness::UI::Controller::$controller";
 
         my $controller = $class->new(request => $req, config => $self->{+CONFIG});
         ($content, $headers) = $controller->process();

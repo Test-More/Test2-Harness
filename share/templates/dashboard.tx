@@ -4,21 +4,21 @@
         <ul class="run_list">
             <li class="pass">
                 <div class="run_name">Run Name</div>
-                <table class="run_stats">
-                    <tr><td class="pass">Passed: 9999999</td><td class="fail">Failed: 0</td><td class="total">Total: 9999999</td></tr>
-                </table>
+                <div class="pass">Passed: 9999999</div>
+                <div class="fail">Failed: 0</div>
+                <div class="total">Total: 9999999</div>
             </li>
             <li class="fail">
                 <div class="run_name">Run Name a really super duper long one that is long really long</div>
-                <table class="run_stats">
-                    <tr><td class="pass">Passed: 89</td><td class="fail">Failed: 10</td><td class="total">Total: 99</td></tr>
-                </table>
+                <div class="pass">Passed: 89</div>
+                <div class="fail">Failed: 10</div>
+                <div class="total">Total: 99</div>
             </li>
             <li class="pending">
                 <div class="run_name">Run Name</div>
-                <table class="run_stats">
-                    <tr><td class="pass">Passed: 99</td><td class="fail">Failed: 0</td><td class="total">Total: ?</td></tr>
-                </table>
+                <div class="pass">Passed: 9</div>
+                <div class="fail">Failed: 0</div>
+                <div class="total">Total: -</div>
             </li>
         </ul>
     </div>
@@ -34,9 +34,9 @@
         <ul class="run_list">
             <li class="fail">
                 <div class="run_name">Run Name</div>
-                <table class="run_stats">
-                    <tr><td class="pass">Passed: 89</td><td class="fail">Failed: 10</td><td class="total">Total: 99</td></tr>
-                </table>
+                <div class="pass">Passed: 89</div>
+                <div class="fail">Failed: 10</div>
+                <div class="total">Total: 99</div>
             </li>
         </ul>
     </div>

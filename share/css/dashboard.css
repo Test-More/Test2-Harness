@@ -2,7 +2,7 @@ div.run_list {
     display: block;
     overflow: hidden;
     width: 500px;
-    border-radius: 8px;
+    border-radius: 15px;
     border: 1px solid black;
     min-height 200px;
     padding: 4px;
@@ -56,29 +56,25 @@ div.run_list ul.run_list li div.run_name {
     border-bottom: 1px dotted #A0A0A0;
 }
 
-div.run_list ul.run_list li dl.run_stats {
-    list-style: none;
-    margin: 0;
-    padding: 0px;
-    overflow: hidden;
-    float: right;
-    display: block;
-}
-
-table.run_stats {
-    width: 100%;
-}
-
-table.run_stats td.pass {
+div.run_list ul.run_list li div.pass {
     text-align: left;
+    display: block;
+    float: left;
     width: 33%
 }
 
-table.run_stats td.total {
-    text-align: right;
-    width: 33%
-}
-
-table.run_stats td.fail {
+div.run_list ul.run_list li div.fail {
     text-align: center;
+    display: block;
+    width: 34%;
+    float: left;
+    clear: none;
+}
+
+div.run_list ul.run_list li div.total {
+    text-align: right;
+    display: block;
+    float: left;
+    clear: none;
+    width: 33%
 }

@@ -74,11 +74,12 @@ __PACKAGE__->table("users");
   is_nullable: 0
   size: 22
 
-=head2 is_admin
+=head2 role
 
-  data_type: 'boolean'
-  default_value: false
-  is_nullable: 1
+  data_type: 'enum'
+  default_value: 'user'
+  extra: {custom_type_name => "user_type",list => ["admin","user","bot","uploader"]}
+  is_nullable: 0
 
 =cut
 
@@ -96,8 +97,16 @@ __PACKAGE__->add_columns(
   { data_type => "varchar", is_nullable => 0, size => 31 },
   "pw_salt",
   { data_type => "varchar", is_nullable => 0, size => 22 },
-  "is_admin",
-  { data_type => "boolean", default_value => \"false", is_nullable => 1 },
+  "role",
+  {
+    data_type => "enum",
+    default_value => "user",
+    extra => {
+      custom_type_name => "user_type",
+      list => ["admin", "user", "bot", "uploader"],
+    },
+    is_nullable => 0,
+  },
 );
 
 =head1 PRIMARY KEY
@@ -143,6 +152,66 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 event_comments
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::EventComment>
+
+=cut
+
+__PACKAGE__->has_many(
+  "event_comments",
+  "Test2::Harness::UI::Schema::Result::EventComment",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 job_signoffs
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::JobSignoff>
+
+=cut
+
+__PACKAGE__->has_many(
+  "job_signoffs",
+  "Test2::Harness::UI::Schema::Result::JobSignoff",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 run_comments
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::RunComment>
+
+=cut
+
+__PACKAGE__->has_many(
+  "run_comments",
+  "Test2::Harness::UI::Schema::Result::RunComment",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 run_shares
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::RunShare>
+
+=cut
+
+__PACKAGE__->has_many(
+  "run_shares",
+  "Test2::Harness::UI::Schema::Result::RunShare",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 runs
 
 Type: has_many
@@ -174,8 +243,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 08:12:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:VamHd+19BIVx37gdFGlW0Q
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 22:04:12
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:OLI1bDxnQZIoEFuAeZTfvQ
 
 use Data::GUID;
 use Carp qw/croak/;

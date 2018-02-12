@@ -15,6 +15,7 @@ use Test2::Formatter::Test2::Composer;
 
 use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_facets -store_orphans/;
 
+use IO::Compress::Bzip2 qw($Bzip2Error);
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip qw($GunzipError);
 
@@ -73,6 +74,9 @@ sub process {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my $log_data;
+    my $bz2 = IO::Compress::Bzip2->new(\$log_data) or die "IO::Compress::Bzip2 failed: $Bzip2Error";
+
     local $| = 1;
     my $last = 0;
     while (my $line = <$fh>) {
@@ -86,10 +90,13 @@ sub process {
         $error = $self->process_event($ord, $line);
         $error ||= $self->flush_ready if @{$self->{+READY}};
 
-        return {errors => ["error processing line number $.: $error"]} if $error;
+        return {errors => ["error processing line number $ord: $error"]} if $error;
+        $bz2->write($line);
     }
 
     $self->flush_all;
+
+    $run->update({log_data => $log_data});
 
     return {success => 1};
 }

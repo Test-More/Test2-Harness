@@ -1,7 +1,7 @@
 div.run_list {
     display: block;
     overflow: hidden;
-    width: 500px;
+    max-width: 500px;
     border-radius: 15px;
     border: 1px solid black;
     min-height 200px;

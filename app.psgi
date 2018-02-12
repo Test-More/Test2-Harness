@@ -36,29 +36,31 @@ my $config = Test2::Harness::UI::Config->new(
     single_user => 0,
 );
 
-my $run = $config->schema->resultset('Run')->create(
-    {
-        user_id       => 1,
-        name          => 'Moose',
-        permissions   => 'public',
-        mode          => 'complete',
-        store_facets  => 'yes',
-        store_orphans => 'yes',
-        log_file      => './demo/moose.jsonl.bz2',
-        status        => 'pending',
-    }
-);
+my $project = $config->schema->resultset('Project')->create({name => 'Moose'});
 
-my $import = Test2::Harness::UI::Import->new(
-    config => $config,
-    run    => $run,
-);
+for (1 .. 10) {
+    my $run = $config->schema->resultset('Run')->create(
+        {
+            user_id       => 1,
+            name          => 'Moose',
+            permissions   => 'public',
+            mode          => 'qvfd',
+            store_facets  => 'fail',
+            store_orphans => 'fail',
+            log_file      => './demo/moose.jsonl.bz2',
+            status        => 'pending',
+            project_id    => $project->project_id,
+            version       => '2.2009',
+        }
+    );
 
-my $status = $import->process;
+    my $import = Test2::Harness::UI::Import->new(
+        config => $config,
+        run    => $run,
+    );
 
-use Data::Dumper;
-print Dumper($status);
-
+    my $status = $import->process;
+}
 
 builder {
     mount '/js'  => Plack::App::Directory->new({root => share_dir('/js')})->to_app;

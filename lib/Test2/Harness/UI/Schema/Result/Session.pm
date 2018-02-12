@@ -51,9 +51,9 @@ __PACKAGE__->table("sessions");
 
 =head2 session_id
 
-  data_type: 'varchar'
+  data_type: 'uuid'
   is_nullable: 0
-  size: 36
+  size: 16
 
 =head2 active
 
@@ -65,7 +65,7 @@ __PACKAGE__->table("sessions");
 
 __PACKAGE__->add_columns(
   "session_id",
-  { data_type => "varchar", is_nullable => 0, size => 36 },
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "active",
   { data_type => "boolean", default_value => \"true", is_nullable => 1 },
 );
@@ -100,8 +100,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 08:12:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5rJDvNQ7J7/PQffb6NAmFA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:47:50
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:uxmqtPU/fgMz5Hiw3NcjLg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

@@ -65,6 +65,17 @@ __PACKAGE__->table("runs");
 =head2 name
 
   data_type: 'text'
+  is_nullable: 1
+
+=head2 project_id
+
+  data_type: 'bigint'
+  is_foreign_key: 1
+  is_nullable: 0
+
+=head2 version
+
+  data_type: 'text'
   is_nullable: 0
 
 =head2 parameters
@@ -83,6 +94,24 @@ __PACKAGE__->table("runs");
   default_value: current_timestamp
   is_nullable: 0
   original: {default_value => \"now()"}
+
+=head2 need_signoff
+
+  data_type: 'boolean'
+  default_value: false
+  is_nullable: 0
+
+=head2 persist_events
+
+  data_type: 'boolean'
+  default_value: false
+  is_nullable: 0
+
+=head2 pinned
+
+  data_type: 'boolean'
+  default_value: false
+  is_nullable: 0
 
 =head2 permissions
 
@@ -115,6 +144,11 @@ __PACKAGE__->table("runs");
 =head2 log_file
 
   data_type: 'text'
+  is_nullable: 0
+
+=head2 log_data
+
+  data_type: 'bytea'
   is_nullable: 1
 
 =head2 status
@@ -137,6 +171,10 @@ __PACKAGE__->add_columns(
   "user_id",
   { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
   "name",
+  { data_type => "text", is_nullable => 1 },
+  "project_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "version",
   { data_type => "text", is_nullable => 0 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
@@ -149,6 +187,12 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
+  "need_signoff",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  "persist_events",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  "pinned",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "permissions",
   {
     data_type => "enum",
@@ -184,7 +228,9 @@ __PACKAGE__->add_columns(
     is_nullable => 0,
   },
   "log_file",
-  { data_type => "text", is_nullable => 1 },
+  { data_type => "text", is_nullable => 0 },
+  "log_data",
+  { data_type => "bytea", is_nullable => 1 },
   "status",
   {
     data_type => "enum",
@@ -209,22 +255,6 @@ __PACKAGE__->add_columns(
 
 __PACKAGE__->set_primary_key("run_id");
 
-=head1 UNIQUE CONSTRAINTS
-
-=head2 C<runs_user_id_name_key>
-
-=over 4
-
-=item * L</user_id>
-
-=item * L</name>
-
-=back
-
-=cut
-
-__PACKAGE__->add_unique_constraint("runs_user_id_name_key", ["user_id", "name"]);
-
 =head1 RELATIONS
 
 =head2 jobs
@@ -238,6 +268,36 @@ Related object: L<Test2::Harness::UI::Schema::Result::Job>
 __PACKAGE__->has_many(
   "jobs",
   "Test2::Harness::UI::Schema::Result::Job",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 project
+
+Type: belongs_to
+
+Related object: L<Test2::Harness::UI::Schema::Result::Project>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "project",
+  "Test2::Harness::UI::Schema::Result::Project",
+  { project_id => "project_id" },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+);
+
+=head2 run_shares
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::RunShare>
+
+=cut
+
+__PACKAGE__->has_many(
+  "run_shares",
+  "Test2::Harness::UI::Schema::Result::RunShare",
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
@@ -258,7 +318,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-08 08:38:55
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5SPNPXbaZzrvBq1/W/SaWw
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 22:20:18
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:4FeEPS5yFRht1h6ywxp5Bw
 
 1;

@@ -30,24 +30,31 @@ CREATE TYPE store_toggle AS ENUM(
     'fail'
 );
 
+CREATE TYPE user_type AS ENUM(
+    'admin',    -- Can add users
+    'user',     -- Can view their own runs, protected runs, and shared runs
+    'bot',      -- Can request signoffs
+    'uploader'  -- Can upload public runs and view them
+);
+
 CREATE TABLE users (
     user_id         SERIAL          PRIMARY KEY,
     username        VARCHAR(32)     NOT NULL,
     pw_hash         VARCHAR(31)     NOT NULL,
     pw_salt         VARCHAR(22)     NOT NULL,
-    is_admin        BOOL            DEFAULT FALSE,
+    role            user_type       NOT NULL DEFAULT 'user',
 
     UNIQUE(username)
 );
 
 CREATE TABLE sessions (
-    session_id      VARCHAR(36)     PRIMARY KEY,
-    active          BOOL            DEFAULT TRUE
+    session_id      UUID     PRIMARY KEY,
+    active          BOOL     DEFAULT TRUE
 );
 
 CREATE TABLE session_hosts (
     session_host_id     SERIAL      PRIMARY KEY,
-    session_id          VARCHAR(36) NOT NULL REFERENCES sessions(session_id),
+    session_id          UUID        NOT NULL REFERENCES sessions(session_id),
     user_id             INTEGER     REFERENCES users(user_id),
 
     created             TIMESTAMP   NOT NULL DEFAULT now(),
@@ -69,25 +76,54 @@ CREATE TABLE api_keys (
     UNIQUE(value)
 );
 
+CREATE TABLE projects (
+    project_id      BIGSERIAL   PRIMARY KEY,
+    name            TEXT        NOT NULL,
+
+    UNIQUE(name)
+);
+
 CREATE TABLE runs (
     run_id          BIGSERIAL   PRIMARY KEY,
     user_id         INTEGER     NOT NULL REFERENCES users(user_id),
 
-    name            TEXT        NOT NULL,
+    name            TEXT        DEFAULT NULL,
+
+    project_id      BIGINT      NOT NULL REFERENCES projects(project_id),
+    version         TEXT        NOT NULL,
 
     parameters      JSONB       DEFAULT NULL,
     error           TEXT        DEFAULT NULL,
     added           TIMESTAMP   NOT NULL DEFAULT now(),
 
+    need_signoff    BOOL            NOT NULL DEFAULT FALSE,
+    persist_events  BOOL            NOT NULL DEFAULT FALSE,
+    pinned          BOOL            NOT NULL DEFAULT FALSE,
     permissions     perms           NOT NULL DEFAULT 'private',
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
     store_facets    store_toggle    NOT NULL DEFAULT 'fail',
     store_orphans   store_toggle    NOT NULL DEFAULT 'fail',
 
-    log_file        TEXT,
-    status          queue_status    NOT NULL DEFAULT 'pending',
+    log_file        TEXT            NOT NULL,
+    log_data        BYTEA           DEFAULT NULL,
+    status          queue_status    NOT NULL DEFAULT 'pending'
+);
 
-    UNIQUE(user_id, name)
+CREATE TABLE run_comments (
+    run_comment_id  BIGSERIAL   NOT NULL PRIMARY KEY,
+    user_id         INTEGER     NOT NULL REFERENCES users(user_id),
+    created         TIMESTAMP   NOT NULL DEFAULT now(),
+    content         TEXT        NOT NULL
+);
+
+CREATE TABLE run_shares (
+    run_share_id    BIGSERIAL   NOT NULL PRIMARY KEY,
+    run_id          BIGINT      NOT NULL REFERENCES runs(run_id),
+    user_id         INTEGER     NOT NULL REFERENCES users(user_id),
+    pinned          BOOL        NOT NULL DEFAULT FALSE,
+    created         TIMESTAMP   NOT NULL DEFAULT now(),
+
+    UNIQUE(run_id, user_id)
 );
 
 CREATE TABLE jobs (
@@ -105,6 +141,15 @@ CREATE TABLE jobs (
     launch          TIMESTAMP   DEFAULT NULL,
     start           TIMESTAMP   DEFAULT NULL,
     ended           TIMESTAMP   DEFAULT NULL
+);
+
+CREATE TABLE job_signoffs (
+    job_signoff_id  BIGSERIAL   PRIMARY KEY,
+    job_id          UUID        NOT NULL REFERENCES jobs(job_id),
+    user_id         INTEGER     NOT NULL REFERENCES users(user_id),
+    note            TEXT        DEFAULT NULL,
+    created         TIMESTAMP   NOT NULL DEFAULT now(),
+    UNIQUE(job_id, user_id)
 );
 
 CREATE TABLE events (
@@ -133,6 +178,13 @@ CREATE TABLE events (
     facets          JSONB       DEFAULT NULL
 );
 
+CREATE TABLE event_comments (
+    event_comment_id    BIGSERIAL   NOT NULL PRIMARY KEY,
+    user_id             INTEGER     NOT NULL REFERENCES users(user_id),
+    created             TIMESTAMP   NOT NULL DEFAULT now(),
+    content             TEXT        NOT NULL
+);
+
 CREATE TABLE event_lines (
     event_line_id   BIGSERIAL   PRIMARY KEY,
     event_id        UUID        NOT NULL REFERENCES events(event_id),
@@ -144,4 +196,4 @@ CREATE TABLE event_lines (
 );
 
 -- Password is 'root'
-INSERT INTO users(username, pw_hash, pw_salt, is_admin) VALUES('root', 'Hffc/wurxNeSHmWeZOJ2SnlKNXy.QOy', 'j3rWkFXozdPaDKobXVV5u.', TRUE);
+INSERT INTO users(username, pw_hash, pw_salt, role) VALUES('root', 'Hffc/wurxNeSHmWeZOJ2SnlKNXy.QOy', 'j3rWkFXozdPaDKobXVV5u.', 'admin');

@@ -1,12 +1,12 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::SessionHost;
+package Test2::Harness::UI::Schema::Result::JobSignoff;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
 
 =head1 NAME
 
-Test2::Harness::UI::Schema::Result::SessionHost
+Test2::Harness::UI::Schema::Result::JobSignoff
 
 =cut
 
@@ -41,22 +41,22 @@ __PACKAGE__->load_components(
   "UUIDColumns",
 );
 
-=head1 TABLE: C<session_hosts>
+=head1 TABLE: C<job_signoffs>
 
 =cut
 
-__PACKAGE__->table("session_hosts");
+__PACKAGE__->table("job_signoffs");
 
 =head1 ACCESSORS
 
-=head2 session_host_id
+=head2 job_signoff_id
 
-  data_type: 'integer'
+  data_type: 'bigint'
   is_auto_increment: 1
   is_nullable: 0
-  sequence: 'session_hosts_session_host_id_seq'
+  sequence: 'job_signoffs_job_signoff_id_seq'
 
-=head2 session_id
+=head2 job_id
 
   data_type: 'uuid'
   is_foreign_key: 1
@@ -67,6 +67,11 @@ __PACKAGE__->table("session_hosts");
 
   data_type: 'integer'
   is_foreign_key: 1
+  is_nullable: 0
+
+=head2 note
+
+  data_type: 'text'
   is_nullable: 1
 
 =head2 created
@@ -76,37 +81,22 @@ __PACKAGE__->table("session_hosts");
   is_nullable: 0
   original: {default_value => \"now()"}
 
-=head2 accessed
-
-  data_type: 'timestamp'
-  default_value: current_timestamp
-  is_nullable: 0
-  original: {default_value => \"now()"}
-
-=head2 address
-
-  data_type: 'text'
-  is_nullable: 0
-
-=head2 agent
-
-  data_type: 'text'
-  is_nullable: 0
-
 =cut
 
 __PACKAGE__->add_columns(
-  "session_host_id",
+  "job_signoff_id",
   {
-    data_type         => "integer",
+    data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "session_hosts_session_host_id_seq",
+    sequence          => "job_signoffs_job_signoff_id_seq",
   },
-  "session_id",
+  "job_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "user_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 1 },
+  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+  "note",
+  { data_type => "text", is_nullable => 1 },
   "created",
   {
     data_type     => "timestamp",
@@ -114,66 +104,50 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
-  "accessed",
-  {
-    data_type     => "timestamp",
-    default_value => \"current_timestamp",
-    is_nullable   => 0,
-    original      => { default_value => \"now()" },
-  },
-  "address",
-  { data_type => "text", is_nullable => 0 },
-  "agent",
-  { data_type => "text", is_nullable => 0 },
 );
 
 =head1 PRIMARY KEY
 
 =over 4
 
-=item * L</session_host_id>
+=item * L</job_signoff_id>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("session_host_id");
+__PACKAGE__->set_primary_key("job_signoff_id");
 
 =head1 UNIQUE CONSTRAINTS
 
-=head2 C<session_hosts_session_id_address_agent_key>
+=head2 C<job_signoffs_job_id_user_id_key>
 
 =over 4
 
-=item * L</session_id>
+=item * L</job_id>
 
-=item * L</address>
-
-=item * L</agent>
+=item * L</user_id>
 
 =back
 
 =cut
 
-__PACKAGE__->add_unique_constraint(
-  "session_hosts_session_id_address_agent_key",
-  ["session_id", "address", "agent"],
-);
+__PACKAGE__->add_unique_constraint("job_signoffs_job_id_user_id_key", ["job_id", "user_id"]);
 
 =head1 RELATIONS
 
-=head2 session
+=head2 job
 
 Type: belongs_to
 
-Related object: L<Test2::Harness::UI::Schema::Result::Session>
+Related object: L<Test2::Harness::UI::Schema::Result::Job>
 
 =cut
 
 __PACKAGE__->belongs_to(
-  "session",
-  "Test2::Harness::UI::Schema::Result::Session",
-  { session_id => "session_id" },
+  "job",
+  "Test2::Harness::UI::Schema::Result::Job",
+  { job_id => "job_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
@@ -189,17 +163,12 @@ __PACKAGE__->belongs_to(
   "user",
   "Test2::Harness::UI::Schema::Result::User",
   { user_id => "user_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "NO ACTION",
-    on_update     => "NO ACTION",
-  },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:47:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:FaV/4jkyPGSqhR+3k96TRQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:26:09
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Q/Suc643CnZQC7vCN/IKVg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

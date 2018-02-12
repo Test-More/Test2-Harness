@@ -71,12 +71,12 @@ __PACKAGE__->table("runs");
 =head2 project
 
   data_type: 'citext'
-  is_nullable: 0
+  is_nullable: 1
 
 =head2 version
 
-  data_type: 'text'
-  is_nullable: 0
+  data_type: 'citext'
+  is_nullable: 1
 
 =head2 parameters
 
@@ -161,9 +161,9 @@ __PACKAGE__->add_columns(
   "name",
   { data_type => "text", is_nullable => 1 },
   "project",
-  { data_type => "citext", is_nullable => 0 },
+  { data_type => "citext", is_nullable => 1 },
   "version",
-  { data_type => "text", is_nullable => 0 },
+  { data_type => "citext", is_nullable => 1 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
   "error",
@@ -317,7 +317,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:fEhvK85I+xhPZ6ky7gdmKQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:30:42
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:I+Cyw9T/xGBR+yzPANyQow
 
 1;

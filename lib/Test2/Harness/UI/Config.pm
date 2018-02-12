@@ -15,10 +15,10 @@ use Test2::Harness::UI::Util::HashBase qw{
 sub init {
     my $self = shift;
 
-    my $ud = $self->{+UPLOAD_DIR} or croak "'upload_dir' is a required attribute";
+    my $ud = $self->{+UPLOAD_DIR};
 
     croak "'upload_dir' must be a valid directory"
-        unless -d $ud;
+        if $ud && ! -d $ud;
 
     croak "'dbi_dsn' is a required attribute"
         unless defined $self->{+DBI_DSN};

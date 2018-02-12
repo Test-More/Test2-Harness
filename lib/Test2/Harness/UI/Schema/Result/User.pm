@@ -189,6 +189,36 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 dashboards_show_users
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Dashboard>
+
+=cut
+
+__PACKAGE__->has_many(
+  "dashboards_show_users",
+  "Test2::Harness::UI::Schema::Result::Dashboard",
+  { "foreign.show_user" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 dashboards_users
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Dashboard>
+
+=cut
+
+__PACKAGE__->has_many(
+  "dashboards_users",
+  "Test2::Harness::UI::Schema::Result::Dashboard",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 event_comments
 
 Type: has_many
@@ -310,8 +340,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:auEMYvSoXiPbwhXgAxOnSg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:30:42
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:zzJMiK/xOxz0COx5QPuzDA
 
 use Data::GUID;
 use Carp qw/croak/;

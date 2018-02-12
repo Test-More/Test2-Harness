@@ -91,8 +91,8 @@ CREATE TABLE runs (
 
     name            TEXT            DEFAULT NULL,
 
-    project         CITEXT          NOT NULL,
-    version         TEXT            NOT NULL,
+    project         CITEXT          DEFAULT NULL,
+    version         CITEXT          DEFAULT NULL,
 
     parameters      JSONB           DEFAULT NULL,
     error           TEXT            DEFAULT NULL,
@@ -111,6 +111,8 @@ CREATE TABLE runs (
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
 CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
+CREATE INDEX IF NOT EXISTS run_perms ON runs(permissions);
+CREATE INDEX IF NOT EXISTS run_user_perms ON runs(user_id, permissions);
 
 CREATE TABLE signoffs (
     run_id          UUID            NOT NULL PRIMARY KEY,
@@ -143,6 +145,26 @@ CREATE TABLE run_pins (
     user_id         UUID        NOT NULL REFERENCES users(user_id)
 );
 CREATE INDEX IF NOT EXISTS run_pin_user ON run_pins(user_id);
+CREATE INDEX IF NOT EXISTS run_pin_run  ON run_pins(run_id);
+
+CREATE TABLE dashboards (
+    dashboard_id        UUID        DEFAULT UUID_GENERATE_V4() NOT NULL PRIMARY KEY,
+    user_id             UUID        NOT NULL REFERENCES users(user_id),
+
+    weight              SMALLINT    NOT NULL DEFAULT 0,
+
+    show_passes         BOOL        NOT NULL,
+    show_failures       BOOL        NOT NULL,
+    show_pending        BOOL        NOT NULL,
+    show_protected      BOOL        NOT NULL,
+    show_public         BOOL        NOT NULL,
+    show_signoff_only   BOOL        NOT NULL,
+
+    show_user           UUID        DEFAULT NULL REFERENCES users(user_id),
+    show_project        CITEXT      DEFAULT NULL,
+    show_version        CITEXT      DEFAULT NULL
+);
+CREATE INDEX IF NOT EXISTS dashboard_user ON dashboards(user_id);
 
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,
@@ -220,7 +242,3 @@ CREATE TABLE event_lines (
     content_json    JSONB       DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS event_lines_event ON event_lines(event_id);
-
--- Password is 'root'
-INSERT INTO users(username, pw_hash, pw_salt, role) VALUES('root', 'Hffc/wurxNeSHmWeZOJ2SnlKNXy.QOy', 'j3rWkFXozdPaDKobXVV5u.', 'admin');
-

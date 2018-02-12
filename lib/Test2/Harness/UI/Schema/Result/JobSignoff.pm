@@ -51,10 +51,10 @@ __PACKAGE__->table("job_signoffs");
 
 =head2 job_signoff_id
 
-  data_type: 'bigint'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'job_signoffs_job_signoff_id_seq'
+  size: 16
 
 =head2 job_id
 
@@ -65,9 +65,10 @@ __PACKAGE__->table("job_signoffs");
 
 =head2 user_id
 
-  data_type: 'integer'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
+  size: 16
 
 =head2 note
 
@@ -86,15 +87,15 @@ __PACKAGE__->table("job_signoffs");
 __PACKAGE__->add_columns(
   "job_signoff_id",
   {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "job_signoffs_job_signoff_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "job_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "user_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "note",
   { data_type => "text", is_nullable => 1 },
   "created",
@@ -167,8 +168,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:26:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Q/Suc643CnZQC7vCN/IKVg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:rN/Z+kI7NsEZWo/bUGrEDg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

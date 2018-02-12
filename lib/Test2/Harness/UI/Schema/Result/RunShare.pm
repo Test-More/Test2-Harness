@@ -51,59 +51,39 @@ __PACKAGE__->table("run_shares");
 
 =head2 run_share_id
 
-  data_type: 'bigint'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'run_shares_run_share_id_seq'
+  size: 16
 
 =head2 run_id
 
-  data_type: 'bigint'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
+  size: 16
 
 =head2 user_id
 
-  data_type: 'integer'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
-
-=head2 pinned
-
-  data_type: 'boolean'
-  default_value: false
-  is_nullable: 0
-
-=head2 created
-
-  data_type: 'timestamp'
-  default_value: current_timestamp
-  is_nullable: 0
-  original: {default_value => \"now()"}
+  size: 16
 
 =cut
 
 __PACKAGE__->add_columns(
   "run_share_id",
   {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "run_shares_run_share_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "run_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "user_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
-  "pinned",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "created",
-  {
-    data_type     => "timestamp",
-    default_value => \"current_timestamp",
-    is_nullable   => 0,
-    original      => { default_value => \"now()" },
-  },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
 );
 
 =head1 PRIMARY KEY
@@ -167,8 +147,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:26:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:CwmCrs7Uti+0AxZVa/+8fQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:NgWkyWzkHs3aapBzukMy1g
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

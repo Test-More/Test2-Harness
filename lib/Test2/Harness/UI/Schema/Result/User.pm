@@ -51,16 +51,25 @@ __PACKAGE__->table("users");
 
 =head2 user_id
 
-  data_type: 'integer'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'users_user_id_seq'
+  size: 16
 
 =head2 username
 
-  data_type: 'varchar'
+  data_type: 'citext'
   is_nullable: 0
-  size: 32
+
+=head2 email
+
+  data_type: 'citext'
+  is_nullable: 1
+
+=head2 slack
+
+  data_type: 'citext'
+  is_nullable: 1
 
 =head2 pw_hash
 
@@ -86,13 +95,17 @@ __PACKAGE__->table("users");
 __PACKAGE__->add_columns(
   "user_id",
   {
-    data_type         => "integer",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "users_user_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "username",
-  { data_type => "varchar", is_nullable => 0, size => 32 },
+  { data_type => "citext", is_nullable => 0 },
+  "email",
+  { data_type => "citext", is_nullable => 1 },
+  "slack",
+  { data_type => "citext", is_nullable => 1 },
   "pw_hash",
   { data_type => "varchar", is_nullable => 0, size => 31 },
   "pw_salt",
@@ -122,6 +135,30 @@ __PACKAGE__->add_columns(
 __PACKAGE__->set_primary_key("user_id");
 
 =head1 UNIQUE CONSTRAINTS
+
+=head2 C<users_email_key>
+
+=over 4
+
+=item * L</email>
+
+=back
+
+=cut
+
+__PACKAGE__->add_unique_constraint("users_email_key", ["email"]);
+
+=head2 C<users_slack_key>
+
+=over 4
+
+=item * L</slack>
+
+=back
+
+=cut
+
+__PACKAGE__->add_unique_constraint("users_slack_key", ["slack"]);
 
 =head2 C<users_username_key>
 
@@ -197,6 +234,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 run_pins
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::RunPin>
+
+=cut
+
+__PACKAGE__->has_many(
+  "run_pins",
+  "Test2::Harness::UI::Schema::Result::RunPin",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 run_shares
 
 Type: has_many
@@ -242,9 +294,24 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 signoffs
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 22:04:12
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:OLI1bDxnQZIoEFuAeZTfvQ
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Signoff>
+
+=cut
+
+__PACKAGE__->has_many(
+  "signoffs",
+  "Test2::Harness::UI::Schema::Result::Signoff",
+  { "foreign.requested_by" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:auEMYvSoXiPbwhXgAxOnSg
 
 use Data::GUID;
 use Carp qw/croak/;

@@ -62,9 +62,10 @@ __PACKAGE__->table("jobs");
 
 =head2 run_id
 
-  data_type: 'bigint'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
+  size: 16
 
 =head2 parameters
 
@@ -114,7 +115,7 @@ __PACKAGE__->add_columns(
   "job_ord",
   { data_type => "bigint", is_nullable => 0 },
   "run_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
   "name",
@@ -193,8 +194,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:26:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:W6GV9XZMJ7jEnHuONDuROA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:i4Da/Y8HOPzaW7ag88VElg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

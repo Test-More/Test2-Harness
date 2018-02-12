@@ -52,6 +52,7 @@ __PACKAGE__->table("sessions");
 =head2 session_id
 
   data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
   size: 16
 
@@ -65,7 +66,12 @@ __PACKAGE__->table("sessions");
 
 __PACKAGE__->add_columns(
   "session_id",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
+  {
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
+  },
   "active",
   { data_type => "boolean", default_value => \"true", is_nullable => 1 },
 );
@@ -100,8 +106,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:47:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:uxmqtPU/fgMz5Hiw3NcjLg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:jvPDhKL8sCC3zWjcrJWbtg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

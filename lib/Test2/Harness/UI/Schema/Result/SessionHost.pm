@@ -51,10 +51,10 @@ __PACKAGE__->table("session_hosts");
 
 =head2 session_host_id
 
-  data_type: 'integer'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'session_hosts_session_host_id_seq'
+  size: 16
 
 =head2 session_id
 
@@ -65,9 +65,10 @@ __PACKAGE__->table("session_hosts");
 
 =head2 user_id
 
-  data_type: 'integer'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 1
+  size: 16
 
 =head2 created
 
@@ -98,15 +99,15 @@ __PACKAGE__->table("session_hosts");
 __PACKAGE__->add_columns(
   "session_host_id",
   {
-    data_type         => "integer",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "session_hosts_session_host_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "session_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "user_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 1 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
   "created",
   {
     data_type     => "timestamp",
@@ -198,8 +199,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:47:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:FaV/4jkyPGSqhR+3k96TRQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:DdbntmXogDm+XQ+ZBnhlAQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

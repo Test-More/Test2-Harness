@@ -51,26 +51,26 @@ __PACKAGE__->table("runs");
 
 =head2 run_id
 
-  data_type: 'bigint'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'runs_run_id_seq'
+  size: 16
 
 =head2 user_id
 
-  data_type: 'integer'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
+  size: 16
 
 =head2 name
 
   data_type: 'text'
   is_nullable: 1
 
-=head2 project_id
+=head2 project
 
-  data_type: 'bigint'
-  is_foreign_key: 1
+  data_type: 'citext'
   is_nullable: 0
 
 =head2 version
@@ -95,19 +95,7 @@ __PACKAGE__->table("runs");
   is_nullable: 0
   original: {default_value => \"now()"}
 
-=head2 need_signoff
-
-  data_type: 'boolean'
-  default_value: false
-  is_nullable: 0
-
 =head2 persist_events
-
-  data_type: 'boolean'
-  default_value: false
-  is_nullable: 0
-
-=head2 pinned
 
   data_type: 'boolean'
   default_value: false
@@ -163,17 +151,17 @@ __PACKAGE__->table("runs");
 __PACKAGE__->add_columns(
   "run_id",
   {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "runs_run_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "user_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "name",
   { data_type => "text", is_nullable => 1 },
-  "project_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "project",
+  { data_type => "citext", is_nullable => 0 },
   "version",
   { data_type => "text", is_nullable => 0 },
   "parameters",
@@ -187,11 +175,7 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
-  "need_signoff",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "persist_events",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "pinned",
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "permissions",
   {
@@ -272,19 +256,34 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 project
+=head2 run_comments
 
-Type: belongs_to
+Type: has_many
 
-Related object: L<Test2::Harness::UI::Schema::Result::Project>
+Related object: L<Test2::Harness::UI::Schema::Result::RunComment>
 
 =cut
 
-__PACKAGE__->belongs_to(
-  "project",
-  "Test2::Harness::UI::Schema::Result::Project",
-  { project_id => "project_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+__PACKAGE__->has_many(
+  "run_comments",
+  "Test2::Harness::UI::Schema::Result::RunComment",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 run_pins
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::RunPin>
+
+=cut
+
+__PACKAGE__->has_many(
+  "run_pins",
+  "Test2::Harness::UI::Schema::Result::RunPin",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
 );
 
 =head2 run_shares
@@ -318,7 +317,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 22:20:18
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:4FeEPS5yFRht1h6ywxp5Bw
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:fEhvK85I+xhPZ6ky7gdmKQ
 
 1;

@@ -51,16 +51,17 @@ __PACKAGE__->table("api_keys");
 
 =head2 api_key_id
 
-  data_type: 'integer'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'api_keys_api_key_id_seq'
+  size: 16
 
 =head2 user_id
 
-  data_type: 'integer'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
+  size: 16
 
 =head2 name
 
@@ -86,13 +87,13 @@ __PACKAGE__->table("api_keys");
 __PACKAGE__->add_columns(
   "api_key_id",
   {
-    data_type         => "integer",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "api_keys_api_key_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "user_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "name",
   { data_type => "varchar", is_nullable => 0, size => 128 },
   "value",
@@ -153,8 +154,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-07 08:12:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:cLla31Pivb3BBPoCZGj25w
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:78M4FVGNk2tRu5Xar5ltIA
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

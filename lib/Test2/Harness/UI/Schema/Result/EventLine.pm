@@ -51,10 +51,10 @@ __PACKAGE__->table("event_lines");
 
 =head2 event_line_id
 
-  data_type: 'bigint'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'event_lines_event_line_id_seq'
+  size: 16
 
 =head2 event_id
 
@@ -90,10 +90,10 @@ __PACKAGE__->table("event_lines");
 __PACKAGE__->add_columns(
   "event_line_id",
   {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "event_lines_event_line_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "event_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
@@ -137,8 +137,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-08 14:46:44
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Qmr+4Yfjxur0igKhAhpVSg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Al+Op3n3ItRMuMx00EL7iw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

@@ -51,16 +51,24 @@ __PACKAGE__->table("event_comments");
 
 =head2 event_comment_id
 
-  data_type: 'bigint'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'event_comments_event_comment_id_seq'
+  size: 16
+
+=head2 event_id
+
+  data_type: 'uuid'
+  is_foreign_key: 1
+  is_nullable: 0
+  size: 16
 
 =head2 user_id
 
-  data_type: 'integer'
+  data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
+  size: 16
 
 =head2 created
 
@@ -79,13 +87,15 @@ __PACKAGE__->table("event_comments");
 __PACKAGE__->add_columns(
   "event_comment_id",
   {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "event_comments_event_comment_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
+  "event_id",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "user_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "created",
   {
     data_type     => "timestamp",
@@ -111,6 +121,21 @@ __PACKAGE__->set_primary_key("event_comment_id");
 
 =head1 RELATIONS
 
+=head2 event
+
+Type: belongs_to
+
+Related object: L<Test2::Harness::UI::Schema::Result::Event>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "event",
+  "Test2::Harness::UI::Schema::Result::Event",
+  { event_id => "event_id" },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+);
+
 =head2 user
 
 Type: belongs_to
@@ -127,8 +152,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 21:26:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:oqnvfXaktxHUOvr0hM6OwQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:wwjQ7gSWO3DNTfonb1wtuA
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

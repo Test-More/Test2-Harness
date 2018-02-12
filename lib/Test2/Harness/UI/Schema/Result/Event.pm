@@ -185,6 +185,21 @@ __PACKAGE__->set_primary_key("event_id");
 
 =head1 RELATIONS
 
+=head2 event_comments
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::EventComment>
+
+=cut
+
+__PACKAGE__->has_many(
+  "event_comments",
+  "Test2::Harness::UI::Schema::Result::EventComment",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 event_lines
 
 Type: has_many
@@ -251,8 +266,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-08 21:47:35
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:e7549o0JNM9smvM9d0y3lA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:q75JUNWE7Ea0YUSVlZ6idg
 
 __PACKAGE__->parent_column('parent_id');
 

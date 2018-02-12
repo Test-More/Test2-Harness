@@ -36,12 +36,12 @@ my $config = Test2::Harness::UI::Config->new(
     single_user => 0,
 );
 
-my $project = $config->schema->resultset('Project')->create({name => 'Moose'});
+my $user = $config->schema->resultset('User')->find({username => 'root'});
 
 for (1 .. 10) {
     my $run = $config->schema->resultset('Run')->create(
         {
-            user_id       => 1,
+            user_id       => $user->user_id,
             name          => 'Moose',
             permissions   => 'public',
             mode          => 'qvfd',
@@ -49,7 +49,7 @@ for (1 .. 10) {
             store_orphans => 'fail',
             log_file      => './demo/moose.jsonl.bz2',
             status        => 'pending',
-            project_id    => $project->project_id,
+            project       => 'Moose',
             version       => '2.2009',
         }
     );

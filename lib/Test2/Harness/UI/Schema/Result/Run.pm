@@ -68,6 +68,16 @@ __PACKAGE__->table("runs");
   data_type: 'text'
   is_nullable: 1
 
+=head2 passed
+
+  data_type: 'integer'
+  is_nullable: 1
+
+=head2 failed
+
+  data_type: 'integer'
+  is_nullable: 1
+
 =head2 project
 
   data_type: 'citext'
@@ -137,7 +147,7 @@ __PACKAGE__->table("runs");
 =head2 log_data
 
   data_type: 'bytea'
-  is_nullable: 1
+  is_nullable: 0
 
 =head2 status
 
@@ -160,6 +170,10 @@ __PACKAGE__->add_columns(
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "name",
   { data_type => "text", is_nullable => 1 },
+  "passed",
+  { data_type => "integer", is_nullable => 1 },
+  "failed",
+  { data_type => "integer", is_nullable => 1 },
   "project",
   { data_type => "citext", is_nullable => 1 },
   "version",
@@ -214,7 +228,7 @@ __PACKAGE__->add_columns(
   "log_file",
   { data_type => "text", is_nullable => 0 },
   "log_data",
-  { data_type => "bytea", is_nullable => 1 },
+  { data_type => "bytea", is_nullable => 0 },
   "status",
   {
     data_type => "enum",
@@ -301,6 +315,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 signoff
+
+Type: might_have
+
+Related object: L<Test2::Harness::UI::Schema::Result::Signoff>
+
+=cut
+
+__PACKAGE__->might_have(
+  "signoff",
+  "Test2::Harness::UI::Schema::Result::Signoff",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 user
 
 Type: belongs_to
@@ -317,7 +346,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:30:42
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:I+Cyw9T/xGBR+yzPANyQow
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 13:38:05
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:THwer4bJG3obBEZkNNFtug
 
 1;

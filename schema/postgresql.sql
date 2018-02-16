@@ -91,6 +91,9 @@ CREATE TABLE runs (
 
     name            TEXT            DEFAULT NULL,
 
+    passed          INTEGER         DEFAULT NULL,
+    failed          INTEGER         DEFAULT NULL,
+
     project         CITEXT          DEFAULT NULL,
     version         CITEXT          DEFAULT NULL,
 
@@ -105,7 +108,7 @@ CREATE TABLE runs (
     store_orphans   store_toggle    NOT NULL DEFAULT 'fail',
 
     log_file        TEXT            NOT NULL,
-    log_data        BYTEA           DEFAULT NULL,
+    log_data        BYTEA           NOT NULL,
     status          queue_status    NOT NULL DEFAULT 'pending'
 );
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project);
@@ -115,7 +118,7 @@ CREATE INDEX IF NOT EXISTS run_perms ON runs(permissions);
 CREATE INDEX IF NOT EXISTS run_user_perms ON runs(user_id, permissions);
 
 CREATE TABLE signoffs (
-    run_id          UUID            NOT NULL PRIMARY KEY,
+    run_id          UUID            NOT NULL PRIMARY KEY REFERENCES runs(run_id),
     requested_by    UUID            NOT NULL REFERENCES users(user_id),
     completed       TIMESTAMP       DEFAULT NULL
 );
@@ -151,16 +154,24 @@ CREATE TABLE dashboards (
     dashboard_id        UUID        DEFAULT UUID_GENERATE_V4() NOT NULL PRIMARY KEY,
     user_id             UUID        NOT NULL REFERENCES users(user_id),
 
+    is_public           BOOL        DEFAULT NULL,
+
+    name                TEXT        NOT NULL,
+
     weight              SMALLINT    NOT NULL DEFAULT 0,
 
     show_passes         BOOL        NOT NULL,
     show_failures       BOOL        NOT NULL,
     show_pending        BOOL        NOT NULL,
+    show_shared         BOOL        NOT NULL,
+    show_mine           BOOL        NOT NULL,
     show_protected      BOOL        NOT NULL,
     show_public         BOOL        NOT NULL,
     show_signoff_only   BOOL        NOT NULL,
+    show_errors_only    BOOL        NOT NULL,
 
-    show_user           UUID        DEFAULT NULL REFERENCES users(user_id),
+    show_columns        JSONB       NOT NULL,
+
     show_project        CITEXT      DEFAULT NULL,
     show_version        CITEXT      DEFAULT NULL
 );

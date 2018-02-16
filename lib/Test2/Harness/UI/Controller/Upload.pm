@@ -52,16 +52,18 @@ sub process_form {
     my $user = $req->user || $self->api_user($req->parameters->{api_key});
     die error(401) unless $user;
 
-    my $ud = $self->{+CONFIG}->upload_dir;
-
-    my $orig = $req->uploads->{log_file}->filename;
-    rename($req->uploads->{log_file}->tempname, "$ud/$orig") or die "Could not move feed file: $!";
-
-    my $name          = $req->parameters->{feed_name}     || $orig;
-    my $perms         = $req->parameters->{permissions}   || 'private';
-    my $mode          = $req->parameters->{mode}          || 'qvfd';
+    my $file          = $req->uploads->{log_file}->filename;
+    my $tmp           = $req->uploads->{log_file}->tempname;
+    my $name          = $req->parameters->{feed_name} || $file;
+    my $perms         = $req->parameters->{permissions} || 'private';
+    my $mode          = $req->parameters->{mode} || 'qvfd';
     my $store_orphans = $req->parameters->{store_orphans} || 'fail';
-    my $store_facets  = $req->parameters->{store_facets}  || 'fail';
+    my $store_facets  = $req->parameters->{store_facets} || 'fail';
+
+    return {errors => ["Unsupported file type, must be .jsonl.bz2, or .jsonl.gz"]}
+        unless $file =~ m/\.jsonl\.(bz2|gz)$/;
+
+    open(my $fh, '<:raw', $tmp) or die "Could not open uploaded file '$tmp': $!";
 
     my $run = $self->schema->resultset('Run')->create(
         {
@@ -71,7 +73,8 @@ sub process_form {
             mode          => $mode,
             store_orphans => $store_orphans,
             store_facets  => $store_facets,
-            log_file      => "$ud/$orig",
+            log_file      => $file,
+            log_data      => do { local $/; <$fh> },
             status        => 'pending',
         }
     );

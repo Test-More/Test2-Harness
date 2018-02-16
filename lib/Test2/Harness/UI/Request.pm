@@ -78,7 +78,7 @@ sub session_host {
 sub user {
     my $self = shift;
 
-    return $self->schema->resultset('User')->find({user_id => 1})
+    return $self->schema->resultset('User')->find({username => 'root'})
         if $self->{config}->single_user;
 
     my $host = $self->session_host or return undef;

@@ -52,6 +52,7 @@ __PACKAGE__->table("signoffs");
 =head2 run_id
 
   data_type: 'uuid'
+  is_foreign_key: 1
   is_nullable: 0
   size: 16
 
@@ -71,7 +72,7 @@ __PACKAGE__->table("signoffs");
 
 __PACKAGE__->add_columns(
   "run_id",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "requested_by",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "completed",
@@ -107,9 +108,24 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
+=head2 run
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:E8EVluB2wnf8DMZZTpRSmQ
+Type: belongs_to
+
+Related object: L<Test2::Harness::UI::Schema::Result::Run>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "run",
+  "Test2::Harness::UI::Schema::Result::Run",
+  { run_id => "run_id" },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+);
+
+
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 13:38:05
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:tlsjDnA03HAmTonR1VxfNg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

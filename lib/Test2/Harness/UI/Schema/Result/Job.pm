@@ -198,5 +198,14 @@ __PACKAGE__->belongs_to(
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:i4Da/Y8HOPzaW7ag88VElg
 
 
+sub short_file {
+    my $self = shift;
+    my $file = $self->file or return '<NO FILE>';
+
+    return $1 if $file =~ m{/(t2?/.*)$}i;
+    return $1 if $file =~ m{([^/\\]+\.(?:t2?|pl))$}i;
+    return $file;
+}
+
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

@@ -1,0 +1,65 @@
+div.run div.run_job dl dt > span {
+    display: block;
+    float: left;
+    border-right: 1px solid #A0A0A0;
+    border-radius: 7px;
+    margin-right: 1ch;
+    padding-right: 1ch;
+    text-align: center;
+    padding-top: 3px;
+    margin-top: -3px;
+    padding-bottom: 3px;
+    margin-bottom: -3px;
+    font-weight: normal;
+}
+
+div.run div.run_job dl dt.harness_log {
+    background: #F0FAFF;
+}
+
+div.run div.run_job dl dt.pass {
+    background: #F0FFF0;
+}
+
+div.run div.run_job dl dt.fail {
+    background: #FFF0F0;
+}
+
+div.run div.run_job dl {
+    list-style: none;
+}
+
+div.run div.run_job dl dt, div.run div.run_job dl dd {
+    margin: 0;
+    padding: 2px;
+    border-radius: 6px;
+    border: 1px solid;
+    padding-left: 1ch;
+    padding-right: 1ch;
+}
+
+div.run div.run_job dl dt {
+    margin-top: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;
+    text-align: left;
+}
+
+div.run div.run_job dl dt.open {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: 1px dotted #A0A0A0;
+}
+
+div.run div.run_job dl dd {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top: none;
+    padding: 1ch;
+    max-height: 75%;
+}
+

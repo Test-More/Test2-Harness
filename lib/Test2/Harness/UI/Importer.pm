@@ -39,6 +39,7 @@ sub process {
 
     my $status;
     my $ok = eval {
+        $run->update({status => 'running'});
         my $import = Test2::Harness::UI::Import->new(
             config => $self->{+CONFIG},
             run    => $run,
@@ -56,7 +57,7 @@ sub process {
 
     if ($ok && !$status->{errors}) {
         syswrite(\*STDOUT, "Completed run " . $run->run_id . " (" . $run->name . ") in $total seconds.\n");
-        $run->update({status => 'complete'});
+        $run->update({status => 'complete', passed => $status->{passed}, failed => $status->{failed}});
     }
     else {
         my $error = $ok ? join("\n" => @{$status->{errors}}) : $err;

@@ -1,43 +1,19 @@
-<div id="runs">
-    <div class="run_list" id="your_runs">
-        <h3>Your Runs</h3>
-        <ul class="run_list">
-            <li class="pass">
-                <div class="run_name">Run Name</div>
-                <div class="pass">Passed: 9999999</div>
-                <div class="fail">Failed: 0</div>
-                <div class="total">Total: 9999999</div>
-            </li>
-            <li class="fail">
-                <div class="run_name">Run Name a really super duper long one that is long really long</div>
-                <div class="pass">Passed: 89</div>
-                <div class="fail">Failed: 10</div>
-                <div class="total">Total: 99</div>
-            </li>
-            <li class="pending">
-                <div class="run_name">Run Name</div>
-                <div class="pass">Passed: 9</div>
-                <div class="fail">Failed: 0</div>
-                <div class="total">Total: -</div>
-            </li>
-        </ul>
-    </div>
-
-    <div class="run_list" id="protected_runs">
-        <h3>Protected Runs</h3>
-        <ul class="run_list">
-        </ul>
-    </div>
-
-    <div class="run_list" id="public_runs">
-        <h3>Public Runs</h3>
-        <ul class="run_list">
-            <li class="fail">
-                <div class="run_name">Run Name</div>
-                <div class="pass">Passed: 89</div>
-                <div class="fail">Failed: 10</div>
-                <div class="total">Total: 99</div>
-            </li>
-        </ul>
+<div class="dashboard">
+    <h3 onclick="location.href = '<: $base_uri :>dashboard/<: $dash.dashboard_id :>'"><: $dash.name :></h3>
+    <div class="dashboard_wrapper">
+        <table>
+            <tr class="dashhead">
+                : for $header -> $head {
+                    <th><: $head :></th>
+                : }
+            </tr>
+            : for $rows -> $row {
+                <tr class="<: $row.class :>" onclick="location.href = '<: $base_uri :>run/<: $row.run_id :>'">
+                    : for $row.vals -> $val {
+                        <td><: $val :></td>
+                    : }
+                </tr>
+            : }
+        </table>
     </div>
 </div>

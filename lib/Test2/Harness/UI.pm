@@ -12,6 +12,7 @@ use Test2::Harness::UI::Request;
 use Test2::Harness::UI::Controller::Dashboard;
 use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
+use Test2::Harness::UI::Controller::Run;
 
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -25,7 +26,12 @@ sub init {
 
     my $router = $self->{+ROUTER} ||= Router::Simple->new;
 
-    $router->connect('/'           => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+    $router->connect('/'                      => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+    $router->connect('/dashboard/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+    $router->connect(qr'/dashboards?/?'       => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+
+    $router->connect('/run/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Run'});
+
     $router->connect(qr'/user/?'   => {controller => 'Test2::Harness::UI::Controller::User'});
     $router->connect(qr'/upload/?' => {controller => 'Test2::Harness::UI::Controller::Upload'});
 }
@@ -42,13 +48,13 @@ sub to_app {
 
         my $r = $router->match($env) || {};
 
-        $self->wrap($r->{controller}, $req);
+        $self->wrap($r->{controller}, $req, $r);
     };
 }
 
 sub wrap {
     my $self = shift;
-    my ($class, $req) = @_;
+    my ($class, $req, $r) = @_;
 
     my ($controller, $res, $session);
     my $ok = eval {
@@ -60,7 +66,7 @@ sub wrap {
         }
 
         $controller = $class->new(request => $req, config => $self->{+CONFIG});
-        $res = $controller->handle();
+        $res = $controller->handle($r);
 
         1;
     };

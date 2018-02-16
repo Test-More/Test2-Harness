@@ -34,12 +34,12 @@
 
         : if !$config.single_user {
             <div id="login_header">
-        :   if $user {
+            : if $user {
                 <a class="logout" href="<: $base_uri :>user?action=logout">Log-Out</a>
-        :   }
-        :   else {
+            : }
+            : else {
                 <a class="login" href="<: $base_uri :>user">Log-In</a>
-        :   }
+            : }
             </div>
         : }
     </div>

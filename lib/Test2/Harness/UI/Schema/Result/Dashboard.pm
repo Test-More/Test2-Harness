@@ -63,6 +63,16 @@ __PACKAGE__->table("dashboards");
   is_nullable: 0
   size: 16
 
+=head2 is_public
+
+  data_type: 'boolean'
+  is_nullable: 1
+
+=head2 name
+
+  data_type: 'text'
+  is_nullable: 0
+
 =head2 weight
 
   data_type: 'smallint'
@@ -84,6 +94,16 @@ __PACKAGE__->table("dashboards");
   data_type: 'boolean'
   is_nullable: 0
 
+=head2 show_shared
+
+  data_type: 'boolean'
+  is_nullable: 0
+
+=head2 show_mine
+
+  data_type: 'boolean'
+  is_nullable: 0
+
 =head2 show_protected
 
   data_type: 'boolean'
@@ -99,12 +119,15 @@ __PACKAGE__->table("dashboards");
   data_type: 'boolean'
   is_nullable: 0
 
-=head2 show_user
+=head2 show_errors_only
 
-  data_type: 'uuid'
-  is_foreign_key: 1
-  is_nullable: 1
-  size: 16
+  data_type: 'boolean'
+  is_nullable: 0
+
+=head2 show_columns
+
+  data_type: 'jsonb'
+  is_nullable: 0
 
 =head2 show_project
 
@@ -128,6 +151,10 @@ __PACKAGE__->add_columns(
   },
   "user_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "is_public",
+  { data_type => "boolean", is_nullable => 1 },
+  "name",
+  { data_type => "text", is_nullable => 0 },
   "weight",
   { data_type => "smallint", default_value => 0, is_nullable => 0 },
   "show_passes",
@@ -136,14 +163,20 @@ __PACKAGE__->add_columns(
   { data_type => "boolean", is_nullable => 0 },
   "show_pending",
   { data_type => "boolean", is_nullable => 0 },
+  "show_shared",
+  { data_type => "boolean", is_nullable => 0 },
+  "show_mine",
+  { data_type => "boolean", is_nullable => 0 },
   "show_protected",
   { data_type => "boolean", is_nullable => 0 },
   "show_public",
   { data_type => "boolean", is_nullable => 0 },
   "show_signoff_only",
   { data_type => "boolean", is_nullable => 0 },
-  "show_user",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  "show_errors_only",
+  { data_type => "boolean", is_nullable => 0 },
+  "show_columns",
+  { data_type => "jsonb", is_nullable => 0 },
   "show_project",
   { data_type => "citext", is_nullable => 1 },
   "show_version",
@@ -164,26 +197,6 @@ __PACKAGE__->set_primary_key("dashboard_id");
 
 =head1 RELATIONS
 
-=head2 show_user
-
-Type: belongs_to
-
-Related object: L<Test2::Harness::UI::Schema::Result::User>
-
-=cut
-
-__PACKAGE__->belongs_to(
-  "show_user",
-  "Test2::Harness::UI::Schema::Result::User",
-  { user_id => "show_user" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "NO ACTION",
-    on_update     => "NO ACTION",
-  },
-);
-
 =head2 user
 
 Type: belongs_to
@@ -200,9 +213,15 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:30:42
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:NXbHgVu6TSPJOrJCFP3clQ
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 14:32:56
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:2chZG5K/UlwbbdIiUDc74Q
 
+__PACKAGE__->inflate_column(
+    show_columns => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('show_columns', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('show_columns', {}),
+    },
+);
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

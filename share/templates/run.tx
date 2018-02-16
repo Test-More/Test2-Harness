@@ -1,0 +1,21 @@
+<div class="run">
+    <div class="run_job">
+        <dl>
+            <style>
+                div.run div.run_job dl dt > span {
+                    width: <: $name_len + 1 :>ch;
+                }
+            </style>
+            : for $jobs -> $job {
+                : if $job.name == 0 {
+                    <dt class="<: $job.class :> open"><span><: $job.name :></span> <: $job.file :></dt>
+                    <dd class="<: $job.class :>" style="">dfasdfasdfasfd</dd>
+                : }
+                : else {
+                    <dt class="<: $job.class :> closed"><span><: $job.name :></span> <: $job.file :></dt>
+                    <dd class="<: $job.class :>" style="display: none;">Booh!</dd>
+                : }
+            : }
+        </dl>
+    </div>
+</div>

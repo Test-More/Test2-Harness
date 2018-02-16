@@ -7,18 +7,12 @@ use Carp qw/croak/;
 use Test2::Harness::UI::Util::HashBase qw{
     -_dbh
     -_schema
-    -upload_dir
     -dbi_dsn -dbi_user -dbi_pass
     -single_user
 };
 
 sub init {
     my $self = shift;
-
-    my $ud = $self->{+UPLOAD_DIR};
-
-    croak "'upload_dir' must be a valid directory"
-        if $ud && ! -d $ud;
 
     croak "'dbi_dsn' is a required attribute"
         unless defined $self->{+DBI_DSN};

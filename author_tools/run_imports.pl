@@ -7,13 +7,15 @@ use Test2::Harness::UI;
 use Test2::Harness::UI::Config;
 use Test2::Harness::UI::Importer;
 
-my ($dsn, $uploads) = @ARGV;
+my ($dsn, $user, $pass) = @ARGV;
+
+$user ||= '';
+$pass ||= '';
 
 my $config = Test2::Harness::UI::Config->new(
     dbi_dsn    => $dsn,
-    dbi_user   => '',
-    dbi_pass   => '',
-    upload_dir => $uploads,
+    dbi_user   => $user,
+    dbi_pass   => $pass,
 );
 
 Test2::Harness::UI::Importer->new(config => $config, max => 2)->run;

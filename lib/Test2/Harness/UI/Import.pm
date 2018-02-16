@@ -13,11 +13,11 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Formatter::Test2::Composer;
 
-use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_facets -store_orphans/;
+use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_facets -store_orphans -passed -failed/;
 
-use IO::Compress::Bzip2 qw($Bzip2Error);
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
-use IO::Uncompress::Gunzip qw($GunzipError);
+use IO::Uncompress::Gunzip  qw($GunzipError);
+
 
 my %MODES = (
     summary  => 5,
@@ -45,6 +45,9 @@ sub init {
     $self->{+READY}  = [];
     $self->{+JOB_ORD} = 0;
 
+    $self->{+PASSED} = 0;
+    $self->{+FAILED} = 0;
+
     my $mode = $self->{+RUN}->mode;
     $self->{+MODE} = $MODES{$mode} or croak "Invalid mode '$mode'";
 
@@ -56,26 +59,16 @@ sub process {
     my $self = shift;
 
     my $run  = $self->{+RUN};
-    my $file = $run->log_file;
 
     my $fh;
-    if ($file =~ m/\.jsonl\.bz2$/) {
-        $fh = IO::Uncompress::Bunzip2->new($file) or die "Could not open bz2 file '$file': $Bunzip2Error";
-    }
-    elsif ($file =~ m/\.jsonl\.gz$/) {
-        $fh = IO::Uncompress::Gunzip2->new($file) or die "Could not open gz file '$file': $GunzipError";
-    }
-    elsif ($file =~ m/\.jsonl$/) {
-        open($fh, '<', $file) or die "Could not open uploaded file '$file': $!";
+    if ($run->log_file =~ m/\.bz2$/) {
+        $fh = IO::Uncompress::Bunzip2->new(\($run->log_data)) or die "Could not open bz2 data: $Bunzip2Error";
     }
     else {
-        return {errors => ["Unsupported file type, must be .jsonl, .jsonl.bz2, or .jsonl.gz"]};
+        $fh = IO::Uncompress::Gunzip->new(\($run->log_data)) or die "Could not open gz data: $GunzipError";
     }
 
     my $schema = $self->{+CONFIG}->schema;
-
-    my $log_data;
-    my $bz2 = IO::Compress::Bzip2->new(\$log_data) or die "IO::Compress::Bzip2 failed: $Bzip2Error";
 
     local $| = 1;
     my $last = 0;
@@ -91,14 +84,11 @@ sub process {
         $error ||= $self->flush_ready if @{$self->{+READY}};
 
         return {errors => ["error processing line number $ord: $error"]} if $error;
-        $bz2->write($line);
     }
 
     $self->flush_all;
 
-    $run->update({log_data => $log_data});
-
-    return {success => 1};
+    return {success => 1, passed => $self->{+PASSED}, failed => $self->{+FAILED}};
 }
 
 sub flush_ready {
@@ -114,7 +104,7 @@ sub flush_ready {
     for my $job (@$jobs) {
         my $raw = delete $job->{raw_events};
 
-        my $internal = $job->{name} eq 'INTERNAL' ? 1 : 0;
+        my $internal = $job->{name} eq 'LOG' ? 1 : 0;
 
         next if $mode <= $MODES{summary} && !$internal;
 
@@ -187,13 +177,13 @@ sub _new_job {
 
     my $run = $self->{+RUN};
 
-    $name = 'INTERNAL' if "$name" eq '0';
-
     return {
         job_id  => Data::GUID->new->as_string,
         job_ord => $self->{+JOB_ORD}++,
         run_id  => $run->run_id,
         name    => $name,
+
+        "$name" eq '0' ? (file => 'HARNESS INTERNAL LOG') : (),
     };
 }
 
@@ -263,6 +253,8 @@ sub process_event {
         $job->{file} ||= $job_end->{file};
         $job->{fail}  = $job_end->{fail};
         $job->{ended} = format_stamp($job_end->{stamp});
+
+        $job->{fail} ? $self->{+FAILED}++ : $self->{+PASSED}++;
 
         # All done
         push @{$self->{+READY}} => delete $buffer->{$job_name};

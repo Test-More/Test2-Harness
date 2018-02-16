@@ -126,6 +126,7 @@ div#header ul#nav_main li a {
 div#content {
     padding-left: 15px;
     padding-right: 15px;
+    padding-bottom: 30px;
 }
 
 h2 {

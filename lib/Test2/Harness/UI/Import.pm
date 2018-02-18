@@ -130,6 +130,7 @@ sub flush_ready {
                     next unless $fail;
                 }
 
+                delete $event->{is_diag};
                 push @events => $event;
             }
         }

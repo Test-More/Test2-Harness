@@ -33,52 +33,93 @@ div.run div div.expander {
 
 div.run div.job-render {
     margin-top: 8px;
-    background: #000000;
-    border-radius: 6px;
-    border: 2px solid #0000FF;
-    color: #FFFFFF;
-    padding: 4px;
+}
+
+div.run div.job-render:empty:after {
+    content: "No events, or events not saved.";
+}
+
+div.run div.job-render div.event {
+    border-radius: 4px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    background: #E9E9E9;
 }
 
 div.run div.job-render table {
-    color: #FFFFFF;
     border-collapse: collapse;
     width: 100%;
-    cursor: pointer;
+    table-layout: fixed;
 }
 
-div.run div.job-render > table > tr {
-    border-bottom: 1px dotted #505050;
+td.event_content, td.event_content pre {
+    font-size: 16px;
+    padding-left: 6px;
+    margin: 0;
+    overflow: auto;
 }
 
-div.run div.job-render > table > tr > th {
+div.run div.job-render table > tr.no_lines {
+    color: #A0A0A0;
+}
+div.run div.job-render table > tr.no_lines:hover {
+    color: black;
+}
+
+div.run div.job-render table > tr {
+    border-top: 1px dotted #C0C0C0;
+    max-width: 100%;
+}
+
+div.run div.job-render table > tr:first-child {
+    border-top: none;
+}
+
+
+div.run div.job-render table > tr > th {
     vertical-align: top;
     width: 8ch;
     font-weight: normal;
+    white-space: nowrap;
 }
 
-div.run div.job-render > table > tr > td.left, div.run div.job-render > table > tr > td.right {
+div.run div.job-render table > tr > td.controls, div.run div.job-render table > tr > td.no_controls {
+    vertical-align: top;
+    width: 2ch;
+}
+
+div.run div.job-render table > tr > td.left, div.run div.job-render table > tr > td.right {
     vertical-align: top;
     width: 1ch;
 }
-div.run div.job-render > table > tr > td.left:after {
+div.run div.job-render table > tr > td.left:after {
     font-weight: bold;
-    color: #FFFFFF;
     content: '[';
     text-align: center;
 }
-div.run div.job-render > table > tr > td.right:before {
+div.run div.job-render table > tr > td.right:before {
     font-weight: bold;
-    color: #FFFFFF;
     content: ']';
     text-align: center;
 }
 
-div.run div.job-render:empty:after {
-    content: "No event data currently stored";
+div.expander.facets {
+    border-radius: 0;
+    border: none;
+    padding: 0px;
+    margin: none;
+    background: inherit;
 }
 
+div.expander.facets > div.expander-head {
+    border: none;
+    border-radius: 0;
+    background: inherit;
+}
 
+div.expander.facets > div.expander-body {
+    margin: 0;
+}
 
 /*
 
@@ -123,6 +164,7 @@ my %FACET_TAG_BORDERS = (
     'error'   => ['<', '>'],
     'parent'  => [' ', ' '],
 );
+
 
 
 

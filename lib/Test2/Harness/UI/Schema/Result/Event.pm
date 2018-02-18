@@ -193,6 +193,14 @@ __PACKAGE__->belongs_to(
 
 __PACKAGE__->parent_column('parent_id');
 
+__PACKAGE__->inflate_column(
+    facets => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('facets', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('facets', {}),
+    },
+);
+
+
 sub run  { shift->job->run }
 sub user { shift->job->run->user }
 
@@ -205,5 +213,15 @@ sub verify_access {
     return $run->verify_access($type, $user);
 }
 
+sub TO_JSON {
+    my $self = shift;
+    my %cols = $self->get_columns;
+
+    # Inflate
+    $cols{facets} = $self->facets;
+    $cols{lines} = Test2::Formatter::Test2::Composer->render_verbose($cols{facets});
+
+    return \%cols;
+}
 
 1;

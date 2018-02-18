@@ -179,7 +179,6 @@ for my $file (qw/moose.jsonl.bz2 simple-fail.jsonl.bz2  simple-pass.jsonl.bz2 fa
             name          => $file,
             permissions   => shift @perms || 'public',
             mode          => shift @modes || 'qvfd',
-            store_facets  => 'fail',
             store_orphans => 'fail',
             log_file      => $file,
             log_data      => $log_data,

@@ -59,24 +59,6 @@
                 </small>
             </dd>
 
-            <dt><label for="store_facets">Store Facet Data</label></dt>
-            <dd>
-                <select name="store_facets" id="store_facets">
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                    <option value="fail" selected>On Fail</option>
-                </select>
-
-                <small>
-                    Facet data is the structure events use to convey
-                    information. This structure can be imported as JSON if
-                    desired. The <i>On Fail</i> option will skip it for passing
-                    jobs, but import it on failing ones. The JSON data can take
-                    a lot of storage space, but is useful for debugging, so
-                    <i>On Fail</i> is recommended.
-                </small>
-            </dd>
-
             <dt><label for="store_orphans">Store Orphans</label></dt>
             <dd>
                 <select name="store_orphans" id="store_orphans">

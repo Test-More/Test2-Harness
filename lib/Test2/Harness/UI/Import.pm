@@ -13,7 +13,7 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Formatter::Test2::Composer;
 
-use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_facets -store_orphans -passed -failed/;
+use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_orphans -passed -failed/;
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip  qw($GunzipError);
@@ -51,7 +51,6 @@ sub init {
     my $mode = $self->{+RUN}->mode;
     $self->{+MODE} = $MODES{$mode} or croak "Invalid mode '$mode'";
 
-    $self->{+STORE_FACETS}  = $self->{+RUN}->store_facets;
     $self->{+STORE_ORPHANS} = $self->{+RUN}->store_orphans;
 }
 
@@ -98,7 +97,6 @@ sub flush_ready {
     $self->{+READY} = [];
 
     my @events;
-    my @event_lines;
 
     my $mode = $self->{+MODE};
     for my $job (@$jobs) {
@@ -132,8 +130,7 @@ sub flush_ready {
                     next unless $fail;
                 }
 
-                push @events      => $event;
-                push @event_lines => @{$self->render_event($event)};
+                push @events => $event;
             }
         }
     }
@@ -146,7 +143,6 @@ sub flush_ready {
         local $ENV{DBIC_DT_SEARCH_OK} = 1;
         $schema->resultset('Job')->populate($jobs);
         $schema->resultset('Event')->populate(\@events);
-        $schema->resultset('EventLine')->populate(\@event_lines);
         1;
     };
     my $err = $@;
@@ -277,25 +273,13 @@ sub process_facets {
     my $nested = $f->{trace} ? ($f->{trace}->{nested} || 0) : 0;
 
     my $row = {
-        f         => $f,
         event_id  => $db_id,
         event_ord => $ord,
         job_id    => $job->{job_id},
         parent_id => $parent_db_id,
 
-        nested      => $nested,
-        causes_fail => causes_fail($f) ? 1 : 0,
-
-        no_render  => $f->{harness_watcher} && $f->{harness_watcher}->{no_render} ? 1 : 0,
-        no_display => $f->{about}           && $f->{about}->{no_display}          ? 1 : 0,
-        is_orphan  => $nested               && !$parent_db_id                     ? 1 : 0,
-
-        is_parent => $f->{parent} ? 1 : 0,
-        is_assert => $f->{assert} ? 1 : 0,
-        is_plan   => $f->{plan}   ? 1 : 0,
-
-        assert_pass => $f->{assert} ? $f->{assert}->{pass} : undef,
-        plan_count  => $f->{plan}   ? $f->{plan}->{count}  : undef,
+        nested    => $nested,
+        is_orphan => $nested && !$parent_db_id ? 1 : 0,
     };
 
     my @children;
@@ -314,7 +298,7 @@ sub process_facets {
         $f->{parent}->{children} = "Removed, see events with parent_id $db_id";
     }
 
-    $row->{facets} = encode_json($f) if $self->{+STORE_FACETS} eq 'yes' || ($self->{+STORE_FACETS} eq 'fail' && $job->{fail});
+    $row->{facets} = encode_json($f);
 
     if ($self->{+MODE} == $MODES{qvfd} && !$job->{fail} && !$parent_db_id) {
         @children = grep { $_->{is_diag} } @children;
@@ -323,41 +307,6 @@ sub process_facets {
     $row->{is_diag} = $is_diag ? 1 : 0;
 
     return ([$row, @children], undef, $is_diag);
-}
-
-sub render_event {
-    my $self = shift;
-    my ($event, $out) = @_;
-
-    my $f = delete $event->{f};
-
-    my $got = Test2::Formatter::Test2::Composer->render_verbose($f);
-
-    $out ||= [];
-    $self->render_event($_, $out) for @{$event->{events} || []};
-
-    for my $line (@$got) {
-        my ($facet, $tag, $data) = @$line;
-
-        my ($content, $content_json);
-
-        if (ref($data)) {
-            $content = encode_json($data);
-        }
-        else {
-            $content = $data;
-        }
-
-        push @$out => {
-            event_id     => $event->{event_id},
-            facet        => $facet,
-            tag          => $tag,
-            content      => $content,
-            content_json => $content_json,
-        };
-    }
-
-    return $out;
 }
 
 sub clean {

@@ -58,7 +58,6 @@ sub process_form {
     my $perms         = $req->parameters->{permissions} || 'private';
     my $mode          = $req->parameters->{mode} || 'qvfd';
     my $store_orphans = $req->parameters->{store_orphans} || 'fail';
-    my $store_facets  = $req->parameters->{store_facets} || 'fail';
 
     return {errors => ["Unsupported file type, must be .jsonl.bz2, or .jsonl.gz"]}
         unless $file =~ m/\.jsonl\.(bz2|gz)$/;
@@ -72,7 +71,6 @@ sub process_form {
             permissions   => $perms,
             mode          => $mode,
             store_orphans => $store_orphans,
-            store_facets  => $store_facets,
             log_file      => $file,
             log_data      => do { local $/; <$fh> },
             status        => 'pending',

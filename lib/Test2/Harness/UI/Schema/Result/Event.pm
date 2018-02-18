@@ -74,65 +74,20 @@ __PACKAGE__->table("events");
   is_nullable: 1
   size: 16
 
+=head2 facets
+
+  data_type: 'jsonb'
+  is_nullable: 0
+
 =head2 nested
 
   data_type: 'integer'
-  is_nullable: 0
-
-=head2 causes_fail
-
-  data_type: 'boolean'
-  is_nullable: 0
-
-=head2 no_render
-
-  data_type: 'boolean'
-  is_nullable: 0
-
-=head2 no_display
-
-  data_type: 'boolean'
-  is_nullable: 0
-
-=head2 is_parent
-
-  data_type: 'boolean'
-  is_nullable: 0
-
-=head2 is_assert
-
-  data_type: 'boolean'
-  is_nullable: 0
-
-=head2 is_plan
-
-  data_type: 'boolean'
-  is_nullable: 0
-
-=head2 is_diag
-
-  data_type: 'boolean'
   is_nullable: 0
 
 =head2 is_orphan
 
   data_type: 'boolean'
   is_nullable: 0
-
-=head2 assert_pass
-
-  data_type: 'boolean'
-  is_nullable: 1
-
-=head2 plan_count
-
-  data_type: 'integer'
-  is_nullable: 1
-
-=head2 facets
-
-  data_type: 'jsonb'
-  is_nullable: 1
 
 =cut
 
@@ -145,30 +100,12 @@ __PACKAGE__->add_columns(
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "parent_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  "facets",
+  { data_type => "jsonb", is_nullable => 0 },
   "nested",
   { data_type => "integer", is_nullable => 0 },
-  "causes_fail",
-  { data_type => "boolean", is_nullable => 0 },
-  "no_render",
-  { data_type => "boolean", is_nullable => 0 },
-  "no_display",
-  { data_type => "boolean", is_nullable => 0 },
-  "is_parent",
-  { data_type => "boolean", is_nullable => 0 },
-  "is_assert",
-  { data_type => "boolean", is_nullable => 0 },
-  "is_plan",
-  { data_type => "boolean", is_nullable => 0 },
-  "is_diag",
-  { data_type => "boolean", is_nullable => 0 },
   "is_orphan",
   { data_type => "boolean", is_nullable => 0 },
-  "assert_pass",
-  { data_type => "boolean", is_nullable => 1 },
-  "plan_count",
-  { data_type => "integer", is_nullable => 1 },
-  "facets",
-  { data_type => "jsonb", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
@@ -196,21 +133,6 @@ Related object: L<Test2::Harness::UI::Schema::Result::EventComment>
 __PACKAGE__->has_many(
   "event_comments",
   "Test2::Harness::UI::Schema::Result::EventComment",
-  { "foreign.event_id" => "self.event_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-=head2 event_lines
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::EventLine>
-
-=cut
-
-__PACKAGE__->has_many(
-  "event_lines",
-  "Test2::Harness::UI::Schema::Result::EventLine",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
@@ -266,8 +188,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 08:17:03
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:q75JUNWE7Ea0YUSVlZ6idg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-17 22:03:02
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:c7keOljlJsGIjwYGB9rYPA
 
 __PACKAGE__->parent_column('parent_id');
 

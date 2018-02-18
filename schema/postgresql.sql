@@ -103,7 +103,6 @@ CREATE TABLE runs (
 
     permissions     perms           NOT NULL DEFAULT 'private',
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
-    store_facets    store_toggle    NOT NULL DEFAULT 'fail',
     store_orphans   store_toggle    NOT NULL DEFAULT 'fail',
 
     log_file        TEXT            NOT NULL,
@@ -213,25 +212,11 @@ CREATE TABLE events (
     event_ord       BIGINT      NOT NULL,
     job_id          UUID        NOT NULL REFERENCES jobs(job_id),
     parent_id       UUID        DEFAULT NULL REFERENCES events(event_id),
+    facets          JSONB       NOT NULL,
 
     -- Summaries for lookup/display
-
     nested          INT         NOT NULL,
-    causes_fail     BOOL        NOT NULL,
-
-    no_render       BOOL        NOT NULL,
-    no_display      BOOL        NOT NULL,
-
-    is_parent       BOOL        NOT NULL,
-    is_assert       BOOL        NOT NULL,
-    is_plan         BOOL        NOT NULL,
-    is_diag         BOOL        NOT NULL,
-    is_orphan       BOOL        NOT NULL,
-
-    assert_pass     BOOL        DEFAULT NULL,
-    plan_count      INTEGER     DEFAULT NULL,
-
-    facets          JSONB       DEFAULT NULL
+    is_orphan       BOOL        NOT NULL
 );
 CREATE INDEX IF NOT EXISTS event_job ON events(job_id);
 
@@ -243,14 +228,3 @@ CREATE TABLE event_comments (
     content             TEXT        NOT NULL
 );
 CREATE INDEX IF NOT EXISTS event_comment_event ON event_comments(event_id);
-
-CREATE TABLE event_lines (
-    event_line_id   UUID        DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    event_id        UUID        NOT NULL REFERENCES events(event_id),
-
-    tag             VARCHAR(8)  NOT NULL,
-    facet           VARCHAR(32) NOT NULL,
-    content         TEXT        DEFAULT NULL,
-    content_json    JSONB       DEFAULT NULL
-);
-CREATE INDEX IF NOT EXISTS event_lines_event ON event_lines(event_id);

@@ -14,7 +14,6 @@ use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
 use Test2::Harness::UI::Controller::Jobs;
-use Test2::Harness::UI::Controller::EventLines;
 
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -36,11 +35,10 @@ sub init {
     $router->connect('/run/:name_or_id/jobs' => {controller => 'Test2::Harness::UI::Controller::Jobs'});
 
     $router->connect('/job/:name_or_id'             => {controller => 'Test2::Harness::UI::Controller::Job'});
-#    $router->connect('/job/:name_or_id/events'      => {controller => 'Test2::Harness::UI::Controller::Events'});
-    $router->connect('/job/:name_or_id/event_lines' => {controller => 'Test2::Harness::UI::Controller::EventLines', from => 'job'});
+    #$router->connect('/job/:name_or_id/events'      => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
 
 #    $router->connect('/event/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Event'});
-#    $router->connect('/event/:name_or_id/lines' => {controller => 'Test2::Harness::UI::Controller::EventLines', from => 'event'});
+    #$router->connect('/event/:name_or_id/events' => {controller => 'Test2::Harness::UI::Controller::EventLines', from => 'event'});
 
     $router->connect(qr'/user/?'   => {controller => 'Test2::Harness::UI::Controller::User'});
     $router->connect(qr'/upload/?' => {controller => 'Test2::Harness::UI::Controller::Upload'});

@@ -119,13 +119,6 @@ __PACKAGE__->table("runs");
   extra: {custom_type_name => "run_modes",list => ["summary","qvfd","qvf","complete"]}
   is_nullable: 0
 
-=head2 store_facets
-
-  data_type: 'enum'
-  default_value: 'fail'
-  extra: {custom_type_name => "store_toggle",list => ["yes","no","fail"]}
-  is_nullable: 0
-
 =head2 store_orphans
 
   data_type: 'enum'
@@ -201,13 +194,6 @@ __PACKAGE__->add_columns(
       custom_type_name => "run_modes",
       list => ["summary", "qvfd", "qvf", "complete"],
     },
-    is_nullable => 0,
-  },
-  "store_facets",
-  {
-    data_type => "enum",
-    default_value => "fail",
-    extra => { custom_type_name => "store_toggle", list => ["yes", "no", "fail"] },
     is_nullable => 0,
   },
   "store_orphans",
@@ -338,8 +324,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-17 10:41:52
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:oFr3eEve6yX1gLaanJo3mw
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-17 22:03:02
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:99Wmfae+Vzkf1FmeX+AArw
 
 __PACKAGE__->inflate_column(
     parameters => {

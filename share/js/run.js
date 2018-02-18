@@ -37,32 +37,32 @@ t2hui.build_job = function(job) {
 
         var render = $('<div class="job-render"></div>');
 
-        var uri = base_uri + 'job/' + job.job_id + '/event_lines';
-        t2hui.fetch(uri, function(e) {
-            console.log(e);
-            var table = $('<table data="' + e.event_id + '"></table>');
-
-            var len = e.lines.length;
-            for (var i = 0; i < len; i++) {
-                var line = e.lines[i];
-                var cls = line.facet.replace(' ', '-') + ' ' + line.tag.replace(' ', '-');
-                var row = $('<tr class="' + cls + '"><td class="left"></td><th>' + line.tag + '</th><td class="right"></td></tr>');
-                console.log(i, cls, row);
-
-                if (line.content_json !== null) {
-                    var column = $('<td></td>');
-                    column.jsonView(line.content_json);
-                    row.append(column);
-                }
-                else {
-                    var content = line.content;
-                    row.append('<td><pre>' + content + '</pre></td>');
-                }
-
-                table.append(row);
-            }
-            render.append(table);
-        });
+        var uri = base_uri + 'job/' + job.job_id + '/events';
+//        t2hui.fetch(uri, function(e) {
+//            console.log(e);
+//            var table = $('<table data="' + e.event_id + '"></table>');
+//
+//            var len = e.lines.length;
+//            for (var i = 0; i < len; i++) {
+//                var line = e.lines[i];
+//                var cls = line.facet.replace(' ', '-') + ' ' + line.tag.replace(' ', '-');
+//                var row = $('<tr class="' + cls + '"><td class="left"></td><th>' + line.tag + '</th><td class="right"></td></tr>');
+//                console.log(i, cls, row);
+//
+//                if (line.content_json !== null) {
+//                    var column = $('<td></td>');
+//                    column.jsonView(line.content_json);
+//                    row.append(column);
+//                }
+//                else {
+//                    var content = line.content;
+//                    row.append('<td><pre>' + content + '</pre></td>');
+//                }
+//
+//                table.append(row);
+//            }
+//            render.append(table);
+//        });
 
         root.body.append(details.root);
         root.body.append(render);

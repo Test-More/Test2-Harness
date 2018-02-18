@@ -101,7 +101,6 @@ CREATE TABLE runs (
     error           TEXT            DEFAULT NULL,
     added           TIMESTAMP       NOT NULL DEFAULT now(),
 
-    persist_events  BOOL            NOT NULL DEFAULT FALSE,
     permissions     perms           NOT NULL DEFAULT 'private',
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
     store_facets    store_toggle    NOT NULL DEFAULT 'fail',
@@ -181,6 +180,8 @@ CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,
     job_ord         BIGINT      NOT NULL,
     run_id          UUID        NOT NULL REFERENCES runs(run_id),
+
+    stream_ord      SERIAL      NOT NULL,
 
     parameters      JSONB       DEFAULT NULL,
 

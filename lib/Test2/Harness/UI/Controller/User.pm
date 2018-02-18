@@ -20,7 +20,7 @@ sub handle {
     my $user = $req->user;
 
     unless($user) {
-        $res->body($self->login());
+        $res->raw_body($self->login());
         return $res;
     }
 
@@ -38,7 +38,7 @@ sub handle {
         }
     );
 
-    $res->body($content);
+    $res->raw_body($content);
     return $res;
 }
 

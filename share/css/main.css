@@ -50,6 +50,21 @@ div#main_wrapper {
     margin-top: 112px;
 }
 
+@media only screen and (max-height: 500px) {
+    div#header_wrapper {
+        position: static;
+    }
+
+    div#footer_wrapper {
+        position: static;
+    }
+
+    div#main_wrapper {
+        margin-top: 6px;
+    }
+}
+
+
 div#header h1 {
     padding-left: 50px;
     margin-top: 2px;
@@ -124,13 +139,9 @@ div#header ul#nav_main li a {
 }
 
 div#content {
-    padding-left: 15px;
-    padding-right: 15px;
+    padding-left: 0px;
+    padding-right: 0px;
     padding-bottom: 30px;
-}
-
-h2 {
-    margin-left: 200px;
 }
 
 dl.tiny {
@@ -215,4 +226,59 @@ dl.medium > dd {
     padding-top: 4px;
 }
 
+div.expander {
+    display: block;
+    border-radius: 6px;
+    border: 1px solid #000000;
+    background: #EAEAEA;
+    padding: 6px;
+}
 
+div.expander-head {
+    display: block;
+    padding: 6px;
+    cursor: pointer;
+    border-radius: 6px;
+    margin: -6px;
+    background: inherit;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;
+    text-align: left;
+}
+div.expander-head:hover {
+    filter: brightness(90%);
+}
+
+div.expander-head div.expander-title {
+    display: inline-block;
+}
+
+div.expander-head:after {
+    content: "+";
+    width: 20px;
+    display: inline-block;
+    text-align: center;
+    font-weight: bold;
+}
+
+div.expander-head.open {
+    border-bottom: 1px dotted #C0C0C0;
+}
+
+div.expander-head.open:after {
+    content: "-";
+}
+div.expander-head.closed:after {
+    content: "+";
+}
+
+div.expander-body {
+    display: none;
+    margin-top: 12px;
+    padding: 4px;
+    max-height: 70%;
+    overflow: auto;
+}

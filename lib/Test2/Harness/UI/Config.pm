@@ -46,7 +46,9 @@ sub schema {
 
     require Test2::Harness::UI::Schema;
 
-    return $self->{+_SCHEMA} = Test2::Harness::UI::Schema->connect({dbh_maker => sub { $self->connect }});
+    my $dbh = $self->connect;
+
+    return $self->{+_SCHEMA} = Test2::Harness::UI::Schema->connect({dbh_maker => sub { $dbh }});
 }
 
 1;

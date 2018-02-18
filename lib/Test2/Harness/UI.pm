@@ -13,11 +13,13 @@ use Test2::Harness::UI::Controller::Dashboard;
 use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
+use Test2::Harness::UI::Controller::Jobs;
+use Test2::Harness::UI::Controller::EventLines;
 
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
 
-use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use Test2::Harness::UI::Util::HashBase qw/-config -router/;
 
@@ -30,7 +32,15 @@ sub init {
     $router->connect('/dashboard/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
     $router->connect(qr'/dashboards?/?'       => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
 
-    $router->connect('/run/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Run'});
+    $router->connect('/run/:name_or_id'      => {controller => 'Test2::Harness::UI::Controller::Run'});
+    $router->connect('/run/:name_or_id/jobs' => {controller => 'Test2::Harness::UI::Controller::Jobs'});
+
+    $router->connect('/job/:name_or_id'             => {controller => 'Test2::Harness::UI::Controller::Job'});
+#    $router->connect('/job/:name_or_id/events'      => {controller => 'Test2::Harness::UI::Controller::Events'});
+    $router->connect('/job/:name_or_id/event_lines' => {controller => 'Test2::Harness::UI::Controller::EventLines', from => 'job'});
+
+#    $router->connect('/event/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Event'});
+#    $router->connect('/event/:name_or_id/lines' => {controller => 'Test2::Harness::UI::Controller::EventLines', from => 'event'});
 
     $router->connect(qr'/user/?'   => {controller => 'Test2::Harness::UI::Controller::User'});
     $router->connect(qr'/upload/?' => {controller => 'Test2::Harness::UI::Controller::Upload'});
@@ -84,8 +94,13 @@ sub wrap {
 
     my $ct = $res->content_type();
     $ct ||= do { $res->content_type('text/html'); 'text/html' };
+    $ct = lc($ct);
 
-    if (lc($ct) eq 'text/html') {
+    if (my $stream = $res->stream) {
+        return $stream;
+    }
+
+    if ($ct eq 'text/html') {
         my $template = share_dir('templates/main.tx');
 
         my $tx      = Text::Xslate->new();
@@ -102,11 +117,14 @@ sub wrap {
                 title    => $res->title    || ($controller ? $controller->title : 'Test2-Harness-UI'),
 
                 base_uri => $req->base->as_string || '',
-                content  => mark_raw($res->body)  || '',
+                content  => mark_raw($res->raw_body)  || '',
             }
         );
 
         $res->body($wrapped);
+    }
+    elsif($ct eq 'application/x-jsonl' || $ct eq 'application/x-ndjson') {
+        $res->body(encode_json($res->raw_body));
     }
 
     $res->cookies->{id} = {value => $session->session_id, httponly => 1, expires => '+1M'}

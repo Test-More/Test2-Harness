@@ -157,7 +157,8 @@ my $dash_public = $config->schema->resultset('Dashboard')->create(
 
 my @runs;
 my @perms = qw/public protected private/;
-for my $file (qw/moose.jsonl.bz2 simple-fail.jsonl.bz2  simple-pass.jsonl.bz2 fake.jsonl.bz2/) {
+my @modes = qw/complete/;
+for my $file (qw/moose.jsonl.bz2 simple-fail.jsonl.bz2  simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2/) {
     my $fh = IO::Uncompress::Bunzip2->new("./demo/$file") or die "Could not open bz2 file: $Bunzip2Error";
     my $log_data;
     bzip2 $fh => \$log_data or die "IO::Compress::Bzip2 failed: $Bzip2Error";
@@ -177,7 +178,7 @@ for my $file (qw/moose.jsonl.bz2 simple-fail.jsonl.bz2  simple-pass.jsonl.bz2 fa
             user_id       => $user->user_id,
             name          => $file,
             permissions   => shift @perms || 'public',
-            mode          => 'qvfd',
+            mode          => shift @modes || 'qvfd',
             store_facets  => 'fail',
             store_orphans => 'fail',
             log_file      => $file,
@@ -212,7 +213,7 @@ $config->schema->resultset('RunShare')->create(
 
 my @commands = (
     [$^X, '-Ilib', 'author_tools/run_imports.pl', $dsn],
-    ['plackup', '-Ilib', '-r', './demo.psgi'],
+    ['starman', '-Ilib', '-r', './demo.psgi'],
 );
 
 my $start = $$;

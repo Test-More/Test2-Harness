@@ -1,4 +1,133 @@
-div.run div.run_job dl dt > span {
+div.run {
+    display: block;
+}
+
+div.run > div {
+    display: block;
+    border-radius: 6px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+div.run > div:empty {
+    display: none;
+}
+
+div.run div.log {
+    background: #E5E5E5;
+}
+
+div.run div.failed {
+    background: #F5E5E5;
+}
+
+div.run div.passed {
+    background: #E5F5E5;
+}
+
+div.run div div.expander {
+    background: inherit;
+    border-color: inherit;
+    margin-bottom: -1px;
+}
+
+div.run div.job-render {
+    margin-top: 8px;
+    background: #000000;
+    border-radius: 6px;
+    border: 2px solid #0000FF;
+    color: #FFFFFF;
+    padding: 4px;
+}
+
+div.run div.job-render table {
+    color: #FFFFFF;
+    border-collapse: collapse;
+    width: 100%;
+    cursor: pointer;
+}
+
+div.run div.job-render > table > tr {
+    border-bottom: 1px dotted #505050;
+}
+
+div.run div.job-render > table > tr > th {
+    vertical-align: top;
+    width: 8ch;
+    font-weight: normal;
+}
+
+div.run div.job-render > table > tr > td.left, div.run div.job-render > table > tr > td.right {
+    vertical-align: top;
+    width: 1ch;
+}
+div.run div.job-render > table > tr > td.left:after {
+    font-weight: bold;
+    color: #FFFFFF;
+    content: '[';
+    text-align: center;
+}
+div.run div.job-render > table > tr > td.right:before {
+    font-weight: bold;
+    color: #FFFFFF;
+    content: ']';
+    text-align: center;
+}
+
+div.run div.job-render:empty:after {
+    content: "No event data currently stored";
+}
+
+
+
+/*
+
+        'DEBUG'    => Term::ANSIColor::color('red'),
+        'DIAG'     => Term::ANSIColor::color('yellow'),
+        'ERROR'    => Term::ANSIColor::color('red'),
+        'FATAL'    => Term::ANSIColor::color('bold red'),
+        'FAIL'     => Term::ANSIColor::color('red'),
+        'HALT'     => Term::ANSIColor::color('bold red'),
+        'PASS'     => Term::ANSIColor::color('green'),
+        '! PASS !' => Term::ANSIColor::color('cyan'),
+        'TODO'     => Term::ANSIColor::color('cyan'),
+        'NO  PLAN' => Term::ANSIColor::color('yellow'),
+        'SKIP'     => Term::ANSIColor::color('bold cyan'),
+        'SKIP ALL' => Term::ANSIColor::color('bold white on_blue'),
+        'STDERR'   => Term::ANSIColor::color('yellow'),
+        'RUN INFO' => Term::ANSIColor::color('bold bright_blue'),
+        'JOB INFO' => Term::ANSIColor::color('bold bright_blue'),
+        'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
+        'PASSED'   => Term::ANSIColor::color('bold bright_green'),
+        'FAILED'   => Term::ANSIColor::color('bold bright_red'),
+        'REASON'   => Term::ANSIColor::color('magenta'),
+        'TIMEOUT'  => Term::ANSIColor::color('magenta'),
+        'TIME'     => Term::ANSIColor::color('blue'),
+
+sub DEFAULT_FACET_COLOR() {
+        time    => Term::ANSIColor::color('blue'),
+        about   => Term::ANSIColor::color('magenta'),
+        amnesty => Term::ANSIColor::color('cyan'),
+        assert  => Term::ANSIColor::color('bold bright_white'),
+        control => Term::ANSIColor::color('bold red'),
+        error   => Term::ANSIColor::color('yellow'),
+        info    => Term::ANSIColor::color('yellow'),
+        meta    => Term::ANSIColor::color('magenta'),
+        parent  => Term::ANSIColor::color('magenta'),
+        trace   => Term::ANSIColor::color('bold red'),
+
+my %FACET_TAG_BORDERS = (
+    'default' => ['[', ']'],
+    'amnesty' => ['{', '}'],
+    'info'    => ['(', ')'],
+    'error'   => ['<', '>'],
+    'parent'  => [' ', ' '],
+);
+
+
+
+
+div.run dl.job_list dt > span {
     display: block;
     float: left;
     border-right: 1px solid #A0A0A0;
@@ -13,23 +142,23 @@ div.run div.run_job dl dt > span {
     font-weight: normal;
 }
 
-div.run div.run_job dl dt.harness_log {
+div.run dl.job_list dt.harness_log {
     background: #F0FAFF;
 }
 
-div.run div.run_job dl dt.pass {
+div.run dl.job_list dt.pass {
     background: #F0FFF0;
 }
 
-div.run div.run_job dl dt.fail {
+div.run dl.job_list dt.fail {
     background: #FFF0F0;
 }
 
-div.run div.run_job dl {
+div.run dl.job_list {
     list-style: none;
 }
 
-div.run div.run_job dl dt, div.run div.run_job dl dd {
+div.run dl.job_list dt, div.run dl.job_list dd {
     margin: 0;
     padding: 2px;
     border-radius: 6px;
@@ -38,7 +167,7 @@ div.run div.run_job dl dt, div.run div.run_job dl dd {
     padding-right: 1ch;
 }
 
-div.run div.run_job dl dt {
+div.run dl.job_list dt {
     margin-top: 4px;
     cursor: pointer;
     font-weight: bold;
@@ -49,17 +178,17 @@ div.run div.run_job dl dt {
     text-align: left;
 }
 
-div.run div.run_job dl dt.open {
+div.run dl.job_list dt.open {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
     border-bottom: 1px dotted #A0A0A0;
 }
 
-div.run div.run_job dl dd {
+div.run dl.job_list dd {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
     border-top: none;
     padding: 1ch;
     max-height: 75%;
 }
-
+*/

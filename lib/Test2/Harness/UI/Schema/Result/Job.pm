@@ -67,6 +67,13 @@ __PACKAGE__->table("jobs");
   is_nullable: 0
   size: 16
 
+=head2 stream_ord
+
+  data_type: 'integer'
+  is_auto_increment: 1
+  is_nullable: 0
+  sequence: 'jobs_stream_ord_seq'
+
 =head2 parameters
 
   data_type: 'jsonb'
@@ -116,6 +123,13 @@ __PACKAGE__->add_columns(
   { data_type => "bigint", is_nullable => 0 },
   "run_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "stream_ord",
+  {
+    data_type         => "integer",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "jobs_stream_ord_seq",
+  },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
   "name",
@@ -194,9 +208,15 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:i4Da/Y8HOPzaW7ag88VElg
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-16 09:43:43
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:lmz/YovQDn4XgwEMwEasDA
 
+__PACKAGE__->inflate_column(
+    parameters => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
+    },
+);
 
 sub short_file {
     my $self = shift;
@@ -206,6 +226,29 @@ sub short_file {
     return $1 if $file =~ m{([^/\\]+\.(?:t2?|pl))$}i;
     return $file;
 }
+
+sub TO_JSON {
+    my $self = shift;
+    my %cols = $self->get_columns;
+
+    $cols{short_file} = $self->short_file;
+
+    # Inflate
+    $cols{parameters} = $self->parameters;
+
+    return \%cols;
+}
+
+sub verify_access {
+    my $self = shift;
+    my ($type, $user) = @_;
+
+    my $run = $self->run;
+
+    return $run->verify_access($type, $user);
+}
+
+
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

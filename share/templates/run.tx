@@ -1,21 +1,19 @@
-<div class="run">
-    <div class="run_job">
-        <dl>
-            <style>
-                div.run div.run_job dl dt > span {
-                    width: <: $name_len + 1 :>ch;
-                }
-            </style>
-            : for $jobs -> $job {
-                : if $job.name == 0 {
-                    <dt class="<: $job.class :> open"><span><: $job.name :></span> <: $job.file :></dt>
-                    <dd class="<: $job.class :>" style="">dfasdfasdfasfd</dd>
-                : }
-                : else {
-                    <dt class="<: $job.class :> closed"><span><: $job.name :></span> <: $job.file :></dt>
-                    <dd class="<: $job.class :>" style="display: none;">Booh!</dd>
-                : }
-            : }
-        </dl>
+<div class="run" data-run-id="<: $run_id :>">
+    <div class="expander">
+        <div class="expander-head"><div class="expander-title">Run Details</div></div>
+        <div class="expander-body">
+            <div class="json-view" data="<: $run :>"></div>
+        </div>
     </div>
+
+    <div class="log"></div>
+    <div class="failed"></div>
+    <div class="passed"></div>
 </div>
+
+<!--
+<div class="expander">
+    <div class="expander-head">Foo</div>
+    <div class="expander-body">
+<pre>
+-->

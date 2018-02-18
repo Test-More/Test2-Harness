@@ -157,6 +157,13 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:78M4FVGNk2tRu5Xar5ltIA
 
+sub verify_access {
+    my $self = shift;
+    my ($type, $user) = @_;
+
+    return 0 unless $user;
+    return $self->user_id eq $user->user_id ? 1 : 0;
+}
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

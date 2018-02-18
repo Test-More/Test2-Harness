@@ -2,6 +2,9 @@ package Test2::Harness::UI::Response;
 use strict;
 use warnings;
 
+use Carp qw/croak/;
+use Time::HiRes qw/sleep/;
+
 use parent 'Plack::Response';
 
 use Importer Importer => 'import';
@@ -55,10 +58,50 @@ my %DEFAULT_ERRORS = (
 );
 
 BEGIN {
-    for my $accessor (qw/no_wrap is_error errors messages title css js/) {
+    for my $accessor (qw/no_wrap is_error errors messages title css js raw_body/) {
         no strict 'refs';
         *{"$accessor"} = sub { $_[0]->{$accessor} = $_[1] if @_ > 1; $_[0]->{$accessor} };
     }
+}
+
+sub stream {
+    my $self = shift;
+    if (@_) {
+        my %params = @_;
+        my $done   = $params{done} or croak "'done' is a required parameter";
+        my $fetch  = $params{fetch} or croak "'fetch' is a required parameter";
+        my $env    = $params{env} or croak "'env' is a required parameter";
+
+        my $wait = $params{wait} || 0.2;
+        my $cleanup = $params{cleanup};
+
+        my $ct = $params{content_type} || $params{'content-type'} || $params{'Content-Type'} or croak "'content_type' is a required attribute";
+
+        $self->{stream} = sub {
+            my $responder = shift;
+            my $writer = $responder->([200, ['Content-Type' => $ct]]);
+
+            my $end = 0;
+            while (!$end) {
+                $end = $done->();
+
+                last unless $env->{'psgix.io'}->connected;
+
+                my $seen = 0;
+                for my $item ($fetch->()) {
+                    $writer->write($item);
+                    $seen++;
+                }
+
+                sleep $wait unless $seen;
+            }
+
+            $cleanup->() if $cleanup;
+            $writer->close;
+        };
+    }
+
+    return $self->{stream};
 }
 
 sub error {

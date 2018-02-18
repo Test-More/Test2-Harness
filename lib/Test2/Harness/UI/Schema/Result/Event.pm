@@ -274,4 +274,14 @@ __PACKAGE__->parent_column('parent_id');
 sub run  { shift->job->run }
 sub user { shift->job->run->user }
 
+sub verify_access {
+    my $self = shift;
+    my ($type, $user) = @_;
+
+    my $run = $self->run;
+
+    return $run->verify_access($type, $user);
+}
+
+
 1;

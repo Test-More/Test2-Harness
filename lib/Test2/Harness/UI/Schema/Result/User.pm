@@ -396,4 +396,15 @@ sub gen_api_key {
     );
 }
 
+sub verify_access {
+    my $self = shift;
+    my ($type, $user) = @_;
+
+    return 0 unless $user;
+    return 1 if $user && $user->user_id eq $self->user_id;
+
+    return 1 if $user->role eq 'admin';
+    return 0;
+}
+
 1;

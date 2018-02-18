@@ -140,6 +140,32 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-11 19:33:16
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Al+Op3n3ItRMuMx00EL7iw
 
+__PACKAGE__->inflate_column(
+    content_json => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('content_json', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('content_json', {}),
+    },
+);
+
+sub verify_access {
+    my $self = shift;
+    my ($type, $user) = @_;
+
+    my $event = $self->event;
+
+    return $event->verify_access($type, $user);
+}
+
+sub TO_JSON {
+    my $self = shift;
+    my %cols = $self->get_columns;
+
+    # Inflate
+    $cols{content_json} = $self->content_json;
+
+    return \%cols;
+}
+
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

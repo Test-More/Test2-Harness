@@ -223,5 +223,18 @@ __PACKAGE__->inflate_column(
     },
 );
 
+sub verify_access {
+    my $self = shift;
+    my ($type, $user) = @_;
+
+    # Owner can do anything
+    return 1 if $user && $self->user_id eq $user->user_id;
+
+    # Anyone can read it if it is public
+    return 1 if $type eq 'r' && $self->is_public;
+
+    return 0;
+}
+
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

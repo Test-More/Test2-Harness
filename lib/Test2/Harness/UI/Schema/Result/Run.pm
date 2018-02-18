@@ -105,12 +105,6 @@ __PACKAGE__->table("runs");
   is_nullable: 0
   original: {default_value => \"now()"}
 
-=head2 persist_events
-
-  data_type: 'boolean'
-  default_value: false
-  is_nullable: 0
-
 =head2 permissions
 
   data_type: 'enum'
@@ -189,8 +183,6 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
-  "persist_events",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "permissions",
   {
     data_type => "enum",
@@ -346,7 +338,62 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-12 13:38:05
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:THwer4bJG3obBEZkNNFtug
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-17 10:41:52
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:oFr3eEve6yX1gLaanJo3mw
+
+__PACKAGE__->inflate_column(
+    parameters => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
+    },
+);
+
+sub complete {
+    my $self = shift;
+
+    my $status = $self->status;
+
+    return 1 if $status eq 'complete';
+    return 1 if $status eq 'failed';
+    return 0;
+}
+
+sub TO_JSON {
+    my $self = shift;
+    my %cols = $self->get_columns;
+
+    # Just No.
+    delete $cols{log_data};
+
+    # Inflate
+    $cols{parameters} = $self->parameters;
+
+    return \%cols;
+}
+
+sub verify_access {
+    my $self = shift;
+    my ($type, $user) = @_;
+
+    return 1 if $user && $user->user_id eq $self->user_id;
+
+    return 0 unless $type eq 'r';
+
+    return 1 if $self->permissions eq 'public';
+
+    return 0 unless $user;
+
+    return 1 if $self->permissions eq 'protected';
+
+    my $share = $self->result_source->schema->resultset('RunShare')->find(
+        {
+            run_id  => $self->run_id,
+            user_id => $self->user_id,
+        }
+    );
+
+    return 1 if $share;
+    return 0;
+}
 
 1;

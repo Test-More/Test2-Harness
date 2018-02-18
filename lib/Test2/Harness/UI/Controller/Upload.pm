@@ -35,7 +35,7 @@ sub handle {
         }
     );
 
-    $res->body($content);
+    $res->raw_body($content);
     return $res;
 }
 

@@ -7,6 +7,7 @@ use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase qw/-title/;
@@ -19,6 +20,7 @@ sub handle {
 
     my $res = resp(200);
     $res->add_css('run.css');
+    $res->add_js('run.js');
 
     my $user = $req->user;
 
@@ -27,27 +29,17 @@ sub handle {
     my $query = [{name => $it}];
     push @$query => {run_id => $it} if eval { Data::GUID->from_string($it) };
 
-    use Data::Dumper;
-    print Dumper($query);
-
     my $run = $user->runs($query)->first or die error(404 => 'Invalid run');
 
     $self->{+TITLE} = 'Run: ' . $run->name;
 
-    my $jobs = [ sort _sort_jobs $run->jobs->all];
+    my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html');
 
-    my $len = 0;
-    @$jobs = map {
-        my $class = $_->job_ord eq '0' ? 'harness_log' : ($_->fail ? 'fail' : 'pass');
-        $len = max($len, length($_->name));
-        {
-            job   => $_,
-            class => $class,
-            name  => $_->name,
-            file  => $_->short_file,
-            id    => $_->job_id,
-        }
-    } @$jobs;
+    if ($ct eq 'application/x-jsonl' || $ct eq 'application/x-ndjson') {
+        $res->content_type($ct);
+        $res->raw_body($run);
+        return $res;
+    }
 
     my $template = share_dir('templates/run.tx');
     my $tx       = Text::Xslate->new();
@@ -56,31 +48,13 @@ sub handle {
         {
             base_uri => $req->base->as_string,
             user     => $user,
-            run      => $run,
-            jobs     => $jobs,
-            name_len => $len,
+            run      => encode_json($run),
+            run_id   => $run->run_id,
         }
     );
 
-    $res->body($content);
+    $res->raw_body($content);
     return $res;
-}
-
-sub _sort_jobs($$) {
-    my ($a, $b) = @_;
-
-    return -1 if $a->name eq '0';
-    return 1  if $b->name eq '0';
-
-    my $delta = $b->fail <=> $a->fail;
-    return $delta if $delta;
-
-    my ($a_name) = $a->name =~ m/(\d+)$/;
-    my ($b_name) = $b->name =~ m/(\d+)$/;
-    $delta = int($a_name) <=> int($b_name);
-    return $delta if $delta;
-
-    return $a->file cmp $b->file || $a->job_ord <=> $b->job_ord;
 }
 
 1;

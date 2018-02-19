@@ -1,0 +1,158 @@
+div.event {
+    border-radius: 4px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    background: #E9E9E9;
+}
+
+div.event.orphan table {
+    color: #A0A0A0;
+    font-style: italic;
+}
+div.event.orphan table:hover {
+    color: black;
+}
+
+div.event.no_lines table {
+    color: #A0A0A0;
+}
+div.event.no_lines table:hover {
+    color: black;
+}
+
+div.event > table > tr.facet_data {
+    display: none;
+}
+
+div.event > table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+}
+
+div.event td.event_content {
+    padding: 0px;
+    overflow: hidden;
+}
+
+div.event td.event_content pre {
+    padding: 1px;
+    overflow: auto;
+    padding-left: 4px;
+}
+
+div.event td.event_content pre:not(:nth-child(2)) {
+    border-left: 1px solid #A0A0A0;
+}
+
+div.event.orphan td.event_content pre:not(:nth-child(2)) {
+    border-left: 1px solid transparent;
+}
+
+div.event td.event_content, div.event td.event_content pre {
+    font-size: 16px;
+    margin: 0;
+}
+
+div.event > table > tr {
+    border-top: 1px dotted #C0C0C0;
+    max-width: 100%;
+}
+
+div.event > table > tr:first-child {
+    border-top: none;
+}
+
+div.event > table > tr > th {
+    vertical-align: top;
+    width: 8ch;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+div.event > table > tr > td.controls, div.event > table > tr > td.no_controls {
+    vertical-align: top;
+    width: 2ch;
+}
+
+div.event div.subtest_block {
+    display: block;
+    width: 2ch;
+    float: left;
+    text-align: center;
+}
+
+div.event.orphan div.subtest_block:after {
+    content: ">";
+}
+
+div.event div.subtest_block:not(.etoggle) {
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.etoggle {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.etoggle:hover, .etoggle.clicked {
+    border-color: #AABBFF;
+    background: #DDEEFF;
+}
+
+.etoggle.clicked:hover {
+    background: inherit;
+}
+
+div.subtest_block.etoggle:after {
+    content: '+';
+}
+
+div.subtest_block.etoggle.clicked:after {
+    content: '-';
+}
+
+
+div.event > table > tr > td.controls > div {
+    display: block;
+    float: left;
+    width: 2ch;
+}
+
+div.event > table > tr > td.left, div.event > table > tr > td.right {
+    vertical-align: top;
+    width: 1ch;
+}
+div.event > table > tr > td.left:after {
+    font-weight: bold;
+    content: '[';
+    text-align: center;
+}
+div.event > table > tr > td.right:before {
+    font-weight: bold;
+    content: ']';
+    text-align: center;
+}
+
+div.event div.expander.facets {
+    border-radius: 0;
+    border: none;
+    padding: 0px;
+    margin: none;
+    background: inherit;
+}
+
+div.event div.expander.facets > div.expander-head {
+    border: none;
+    border-radius: 0;
+    background: inherit;
+}
+
+div.event div.expander.facets > div.expander-body {
+    margin: 0;
+}
+
+

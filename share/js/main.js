@@ -6,7 +6,7 @@ $(function() {
     $("div.json-view").each(function() {
         var div = $(this);
         var data = div.attr('data');
-        div.jsonView(data);
+        div.jsonView(data, {collapsed: true});
     });
 });
 
@@ -85,27 +85,3 @@ t2hui.build_expander = function(title, add_class, cb) {
 
     return { "root": root, "head": head, "body": body };
 }
-
-//
-//$(function() {
-//    var last_index = 0;
-//    $.ajax('?content-type=application/x-jsonl', {
-//        async: true,
-//        complete: function() { console.log("all done") },
-//        xhrFields: {
-//            onprogress: function(e) {
-//                var todo = e.currentTarget.response;
-//                var start = last_index;
-//                last_index = todo.lastIndexOf("\n");
-//
-//                var now = todo.substring(start, last_index);
-//                now.split("\n").forEach(function(json) {
-//                    if (!json) { return }
-//                    var item = JSON.parse(json);
-//
-//                    $('div#job_list').append("X");
-//                });
-//            }
-//        }
-//    });
-//});

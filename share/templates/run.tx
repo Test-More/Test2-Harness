@@ -10,10 +10,3 @@
     <div class="failed"></div>
     <div class="passed"></div>
 </div>
-
-<!--
-<div class="expander">
-    <div class="expander-head">Foo</div>
-    <div class="expander-body">
-<pre>
--->

@@ -1,0 +1,33 @@
+div.job div.expander {
+    background: inherit;
+    border-color: inherit;
+    margin-bottom: -1px;
+}
+
+div.job {
+    margin-top: 8px;
+}
+
+div.job:empty:after {
+    content: "No events, or events not saved.";
+}
+
+div.job dl.job_controls dt {
+    float: left;
+    width: auto;
+    margin: 0;
+    padding: 0px;
+}
+
+div.job dl.job_controls dd {
+    float: left;
+    width: auto;
+    margin: 0;
+    padding: 0px;
+    margin-right: 20px;
+    cursor: pointer;
+}
+
+div.job dl.job_controls dd:hover {
+    color: #204090;
+}

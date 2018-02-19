@@ -237,6 +237,9 @@ sub process_event {
     if (my $job_exit = $f->{harness_job_exit}) {
         $job->{file} ||= $job_exit->{file};
         $job->{exit} = $job_exit->{exit};
+
+        $job->{stderr} = clean_output(delete $job_exit->{stderr});
+        $job->{stdout} = clean_output(delete $job_exit->{stdout});
     }
     if (my $job_start = $f->{harness_job_start}) {
         $job->{file} ||= $job_start->{file};
@@ -260,6 +263,17 @@ sub process_event {
     return;
 }
 
+sub clean_output {
+    my $text = shift;
+
+    return undef unless defined $text;
+    $text =~ s/^T2-HARNESS-ESYNC: \d+\n//gm;
+    chomp($text);
+
+    return undef unless length($text);
+    return $text;
+}
+
 sub process_facets {
     my $self = shift;
     my ($ord, $f, $job, $parent_db_id) = @_;
@@ -280,11 +294,13 @@ sub process_facets {
         parent_id => $parent_db_id,
 
         nested    => $nested,
+        is_parent => 0,
         is_orphan => $nested && !$parent_db_id ? 1 : 0,
     };
 
     my @children;
     if ($f->{parent} && $f->{parent}->{children}) {
+        $row->{is_parent} = 1;
         my $cnt = 0;
         for my $child (@{$f->{parent}->{children}}) {
             my ($crows, $error, $diag) = $self->process_facets($cnt, $child, $job, $db_id);

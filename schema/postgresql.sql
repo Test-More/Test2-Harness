@@ -191,7 +191,10 @@ CREATE TABLE jobs (
     exit            INT         DEFAULT NULL,
     launch          TIMESTAMP   DEFAULT NULL,
     start           TIMESTAMP   DEFAULT NULL,
-    ended           TIMESTAMP   DEFAULT NULL
+    ended           TIMESTAMP   DEFAULT NULL,
+
+    stdout          TEXT        DEFAULT NULL,
+    stderr          TEXT        DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
@@ -216,6 +219,7 @@ CREATE TABLE events (
 
     -- Summaries for lookup/display
     nested          INT         NOT NULL,
+    is_parent       BOOL        NOT NULL,
     is_orphan       BOOL        NOT NULL
 );
 CREATE INDEX IF NOT EXISTS event_job ON events(job_id);

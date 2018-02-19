@@ -84,6 +84,11 @@ __PACKAGE__->table("events");
   data_type: 'integer'
   is_nullable: 0
 
+=head2 is_parent
+
+  data_type: 'boolean'
+  is_nullable: 0
+
 =head2 is_orphan
 
   data_type: 'boolean'
@@ -104,6 +109,8 @@ __PACKAGE__->add_columns(
   { data_type => "jsonb", is_nullable => 0 },
   "nested",
   { data_type => "integer", is_nullable => 0 },
+  "is_parent",
+  { data_type => "boolean", is_nullable => 0 },
   "is_orphan",
   { data_type => "boolean", is_nullable => 0 },
 );
@@ -188,8 +195,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-17 22:03:02
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:c7keOljlJsGIjwYGB9rYPA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-18 11:29:29
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:MlcRSYsjBhTBkaaywA8gAA
 
 __PACKAGE__->parent_column('parent_id');
 

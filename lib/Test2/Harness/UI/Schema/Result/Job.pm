@@ -114,6 +114,16 @@ __PACKAGE__->table("jobs");
   data_type: 'timestamp'
   is_nullable: 1
 
+=head2 stdout
+
+  data_type: 'text'
+  is_nullable: 1
+
+=head2 stderr
+
+  data_type: 'text'
+  is_nullable: 1
+
 =cut
 
 __PACKAGE__->add_columns(
@@ -146,6 +156,10 @@ __PACKAGE__->add_columns(
   { data_type => "timestamp", is_nullable => 1 },
   "ended",
   { data_type => "timestamp", is_nullable => 1 },
+  "stdout",
+  { data_type => "text", is_nullable => 1 },
+  "stderr",
+  { data_type => "text", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
@@ -208,8 +222,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-16 09:43:43
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:lmz/YovQDn4XgwEMwEasDA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-18 10:58:08
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:/Vick+8AUyjtBTPbIynV8Q
 
 __PACKAGE__->inflate_column(
     parameters => {

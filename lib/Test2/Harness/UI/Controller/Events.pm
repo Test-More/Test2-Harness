@@ -26,6 +26,8 @@ sub handle {
     die error(404 => 'Missing route') unless $route;
     my $it = $route->{name_or_id} or die error(404 => 'No name or id');
 
+    my @events;
+
     if ($route->{from} eq 'job') {
         my $job_id = $it;
         my $job = $schema->resultset('Job')->find({job_id => $job_id})
@@ -33,27 +35,40 @@ sub handle {
 
         $job->verify_access('r', $user) or die error(401);
 
-        my @events = $schema->resultset('Event')->search(
-            {'job_id' => $job_id, nested => 0},
+        @events = $schema->resultset('Event')->search(
+            {'job_id' => $job_id, parent_id => undef},
             {order_by => ['event_ord', 'event_id']},
         )->all;
+    }
+    elsif ($route->{from} eq 'event') {
+        my $event_id = $it;
+        my $event = $schema->resultset('Event')->find({event_id => $event_id})
+            or die error(404 => 'Invalid Event');
 
-        $res->stream(
-            env          => $req->env,
-            content_type => 'application/x-jsonl',
+        $event->verify_access('r', $user) or die error(401);
 
-            done  => sub { !@events },
-            fetch => sub {
-                my $event = shift @events or return;
-
-                return encode_json($event) . "\n";
-            },
-        );
-
-        return $res;
+        @events = $schema->resultset('Event')->search(
+            {'parent_id' => $event_id},
+            {order_by => ['event_ord', 'event_id']},
+        )->all;
+    }
+    else {
+        die error(501);
     }
 
-    die error(501);
+    $res->stream(
+        env          => $req->env,
+        content_type => 'application/x-jsonl',
+
+        done  => sub { !@events },
+        fetch => sub {
+            my $event = shift @events or return;
+
+            return encode_json($event) . "\n";
+        },
+    );
+
+    return $res;
 }
 
 1;

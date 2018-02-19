@@ -1,14 +1,18 @@
+div#dashboards {
+    text-align: center;
+}
+
 div.dashboard {
-    display: block;
+    display: inline-block;
     overflow: hidden;
     border-radius: 15px;
     border: 1px solid black;
     padding-bottom: 15px;
     margin: 0;
-    margin-right: 6px;
     margin-bottom: 30px;
-    float: left;
     max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 div.dashboard h3 {

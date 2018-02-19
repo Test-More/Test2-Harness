@@ -1,4 +1,4 @@
-<div id="runs">
+<div id="dashboards">
     : for $dashboards -> $dash {
 <: $dash :>
     : }

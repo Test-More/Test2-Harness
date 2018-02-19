@@ -7,6 +7,7 @@ div#header_wrapper {
     width: 100%;
     background: white;
     padding-bottom: 8px;
+    z-index: 1000;
 }
 
 div#footer_wrapper {
@@ -19,6 +20,7 @@ div#footer_wrapper {
     background: white;
     padding-top: 8px;
     padding-bottom: 4px;
+    z-index: 1000;
 }
 
 div#header {
@@ -281,4 +283,23 @@ div.expander-body {
     padding: 4px;
     max-height: 70%;
     overflow: auto;
+}
+
+.spinner:before {
+    position: sticky;
+    top: 10px;
+    left: 10px;
+    display: block;
+    content: ' ';
+    border: 10px solid #E0E0E0;
+    border-top: 10px solid #2040E0;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }

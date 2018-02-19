@@ -14,35 +14,62 @@ t2hui.sleep = function(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-t2hui.fetch = function(url, cb) {
+t2hui.fetch = function(url, cb, spin_in) {
     var last_index = 0;
+    var running = false;
+    var done = false;
+
+    if (spin_in) {
+        spin_in.addClass('spinner');
+    }
 
     $.ajax(url + '?content-type=application/x-jsonl', {
         async: true,
-        complete: function() { true },
+        complete: function() {
+            done = true;
+
+            if (spin_in && !running) {
+                spin_in.removeClass('spinner');
+            }
+
+            return true;
+        },
         xhrFields: {
             onprogress: async function(e) {
-                var todo = e.currentTarget.response;
-                var start = last_index;
-                last_index = todo.lastIndexOf("\n");
+                if (running) return;
+                running = true;
 
-                var now = todo.substring(start, last_index);
-                var items = now.split("\n");
-                var len = items.length;
+                while(true) {
+                    var todo = e.currentTarget.response;
+                    var start = last_index;
+                    last_index = todo.lastIndexOf("\n");
 
-                var counter = 0;
-                for (var i = 0; i < len; i++) {
-                    var json = items[i];
-                    if (!json) { continue }
+                    var now = todo.substring(start, last_index);
+                    var items = now.split("\n");
+                    var len = items.length;
 
-                    counter++;
-                    var item = JSON.parse(json);
-                    cb(item);
+                    var counter = 0;
+                    for (var i = 0; i < len; i++) {
+                        var json = items[i];
+                        if (!json) { continue }
 
-                    if (!(counter % 25)) {
-                        await t2hui.sleep(50);
-                    }
-                };
+                        counter++;
+                        var item = JSON.parse(json);
+                        cb(item);
+
+                        if (!(counter % 25)) {
+                            await t2hui.sleep(50);
+                        }
+                    };
+
+                    if (!counter) break;
+                }
+
+                running = false;
+
+                if (done && spin_in) {
+                    spin_in.removeClass('spinner');
+                }
             }
         }
     });

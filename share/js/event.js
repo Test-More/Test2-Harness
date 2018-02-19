@@ -27,7 +27,7 @@ t2hui.build_event = function(e, options) {
     var facet_toggle = $('<div class="facet_toggle etoggle">F</div>');
     controls.append(facet_toggle);
 
-    var style = 'style="padding-left: ' + (2.2 + 2 * e.nested) + 'ch"';
+    var style = 'style="padding-left: ' + (3 + 2 * e.nested) + 'ch"';
 
     var first_row;
     if (len) {
@@ -37,7 +37,7 @@ t2hui.build_event = function(e, options) {
             var tag = line[1];
             var content = line[2];
 
-            var cls = facet.replace(' ', '-') + ' ' + tag.replace(' ', '-');
+            var cls = facet.replace(/ /g, '-') + ' ' + tag.replace(/ /g, '-').replace(/!/g, 'N');
             var row = $('<tr class="' + cls + '"><td class="left"></td><th>' + tag + '</th><td class="right"></td></tr>');
             if (i === 0) {
                 row.prepend(controls);
@@ -53,7 +53,16 @@ t2hui.build_event = function(e, options) {
                 row.append(column);
             }
             else {
-                row.append('<td class="event_content" ' + style +'><pre>' + content + '</pre></td>');
+                var type = typeof(content);
+                if (type !== 'string' && type !== 'number') content = '&nbsp;';
+
+                var pre = $('<pre></pre>');
+                pre.text(content);
+
+                var td = $('<td class="event_content" ' + style +'></td>');
+                td.append(pre);
+
+                row.append(td);
             }
 
             table.append(row);

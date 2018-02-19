@@ -20,6 +20,6 @@ $(function() {
             else {
                 passed.append(job_dom);
             }
-        });
+        }, it);
     });
 });

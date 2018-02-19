@@ -44,7 +44,7 @@ t2hui.build_job = function(job) {
             controls.append(show_orphans);
             job_body.append(controls);
             job_body.append(e_body);
-        });
+        }, job_body);
 
         root.body.append(job_body);
     });

@@ -71,7 +71,7 @@ div.event > table > tr > th {
 
 div.event > table > tr > td.controls, div.event > table > tr > td.no_controls {
     vertical-align: top;
-    width: 2ch;
+    width: 2.4ch;
 }
 
 div.subtest_control.etoggle {
@@ -79,8 +79,8 @@ div.subtest_control.etoggle {
     width: 2ch;
     float: left;
     text-align: center;
-    margin-left: -2.2ch;
-    margin-right: -2.2ch;
+    margin-left: -2.5ch;
+    margin-right: -2.5ch;
 }
 
 div.subtest_control.etoggle:after {
@@ -96,6 +96,8 @@ div.subtest_control.etoggle.clicked:after {
     border-radius: 4px;
     cursor: pointer;
     text-align: center;
+    color: black;
+    font-weight: bold;
 }
 
 .etoggle:hover, .etoggle.clicked {
@@ -146,48 +148,40 @@ div.event div.expander.facets > div.expander-body {
     margin: 0;
 }
 
+div.event > table > tr.amnesty > td.left:after   { content: '{'; }
+div.event > table > tr.amnesty > td.right:before { content: '}'; }
+div.event > table > tr.info    > td.left:after   { content: '('; }
+div.event > table > tr.info    > td.right:before { content: ')'; }
+div.event > table > tr.error   > td.left:after   { content: '<'; }
+div.event > table > tr.error   > td.right:before { content: '>'; }
 
-/*
+/* Rules for facets */
+div.event > table > tr.time    {  color: #12539e;                     }
+div.event > table > tr.about   {  color: #000000;                     }
+div.event > table > tr.amnesty {  color: #0f6989;                     }
+div.event > table > tr.assert  {  color: #000000;                     }
+div.event > table > tr.control {  color: #b26521;                     }
+div.event > table > tr.error   {  color: #af0c0c;                     }
+div.event > table > tr.info    {  color: #000000;                     }
+div.event > table > tr.meta    {  color: #000000;                     }
+div.event > table > tr.parent  {  color: #000000;                     }
+div.event > table > tr.trace   {  color: #b26521;                     }
+div.event > table > tr.plan    {  color: #3d6011;                     }
 
-        'DEBUG'    => Term::ANSIColor::color('red'),
-        'DIAG'     => Term::ANSIColor::color('yellow'),
-        'ERROR'    => Term::ANSIColor::color('red'),
-        'FATAL'    => Term::ANSIColor::color('bold red'),
-        'FAIL'     => Term::ANSIColor::color('red'),
-        'HALT'     => Term::ANSIColor::color('bold red'),
-        'PASS'     => Term::ANSIColor::color('green'),
-        '! PASS !' => Term::ANSIColor::color('cyan'),
-        'TODO'     => Term::ANSIColor::color('cyan'),
-        'NO  PLAN' => Term::ANSIColor::color('yellow'),
-        'SKIP'     => Term::ANSIColor::color('bold cyan'),
-        'SKIP ALL' => Term::ANSIColor::color('bold white on_blue'),
-        'STDERR'   => Term::ANSIColor::color('yellow'),
-        'RUN INFO' => Term::ANSIColor::color('bold bright_blue'),
-        'JOB INFO' => Term::ANSIColor::color('bold bright_blue'),
-        'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
-        'PASSED'   => Term::ANSIColor::color('bold bright_green'),
-        'FAILED'   => Term::ANSIColor::color('bold bright_red'),
-        'REASON'   => Term::ANSIColor::color('magenta'),
-        'TIMEOUT'  => Term::ANSIColor::color('magenta'),
-        'TIME'     => Term::ANSIColor::color('blue'),
-
-sub DEFAULT_FACET_COLOR() {
-        time    => Term::ANSIColor::color('blue'),
-        about   => Term::ANSIColor::color('magenta'),
-        amnesty => Term::ANSIColor::color('cyan'),
-        assert  => Term::ANSIColor::color('bold bright_white'),
-        control => Term::ANSIColor::color('bold red'),
-        error   => Term::ANSIColor::color('yellow'),
-        info    => Term::ANSIColor::color('yellow'),
-        meta    => Term::ANSIColor::color('magenta'),
-        parent  => Term::ANSIColor::color('magenta'),
-        trace   => Term::ANSIColor::color('bold red'),
-
-my %FACET_TAG_BORDERS = (
-    'default' => ['[', ']'],
-    'amnesty' => ['{', '}'],
-    'info'    => ['(', ')'],
-    'error'   => ['<', '>'],
-    'parent'  => [' ', ' '],
-);
-*/
+/* Rules for tags */
+div.event > table > tr.DEBUG    { color: #b26521;                     }
+div.event > table > tr.DIAG     { color: #b23721;                     }
+div.event > table > tr.ERROR    { color: #af0c0c;                     }
+div.event > table > tr.FATAL    { color: #c10000;                     }
+div.event > table > tr.FAIL     { color: #c10000;                     }
+div.event > table > tr.HALT     { color: #c10000;                     }
+div.event > table > tr.PASS     { color: #266d39;                     }
+div.event > table > tr.N-PASS-N { color: #1d756d;                     }
+div.event > table > tr.TODO     { color: #521d93;                     }
+div.event > table > tr.NO--PLAN { color: #d17c32;                     }
+div.event > table > tr.SKIP     { color: #67156d;                     }
+div.event > table > tr.SKIP-ALL { color: #FFFFFF; background: #026b09 }
+div.event > table > tr.STDERR   { color: #bc7d16;                     }
+div.event > table > tr.REASON   { color: #b26521;                     }
+div.event > table > tr.TIMEOUT  { color: #b26521;                     }
+div.event > table > tr.TIME     { color: #12539e;                     }

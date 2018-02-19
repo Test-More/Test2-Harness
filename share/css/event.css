@@ -1,13 +1,12 @@
 div.event {
-    border-radius: 4px;
     margin-top: 2px;
     margin-bottom: 2px;
-    background: #E9E9E9;
+    border-bottom: 2px solid #C0C0C0;
 }
 
 div.event.orphan table {
-    color: #A0A0A0;
     font-style: italic;
+    color: #A0A0A0;
 }
 div.event.orphan table:hover {
     color: black;

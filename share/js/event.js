@@ -62,47 +62,9 @@ t2hui.build_event = function(e) {
         rows.push(row);
     }
 
-    var subtest_block = $('<div class="subtest_block"></div>');
     for(r = 0; r < rows.length; r++) {
         var row = rows[r];
-        var content = row.find('td.event_content').first();
-
-        for(i = e.nested; i >= 0; i--) {
-            var block = subtest_block.clone();
-
-            if (e.is_parent && i === e.nested) {
-                block.addClass('etoggle');
-                block.text('');
-
-                var children = [];
-                block.one('click', function() {
-                    var me = $(this);
-                    var uri = base_uri + 'event/' + e.event_id + '/events';
-                    var last = rows.slice(-1)[0];
-
-                    t2hui.fetch(uri, function(e) {
-                        var e_body = t2hui.build_event(e);
-                        e_body.find('> table > tr').each(function() {
-                            var tr = $(this);
-                            last.after(tr);
-                            last = tr;
-                            children.push(tr);
-                        });
-                    });
-
-                    me.addClass('clicked');
-
-                    me.click(function() {
-                        me.toggleClass('clicked');
-                        for (j = 0; j < children.length; j++) {
-                            children[j].slideToggle();
-                        }
-                    });
-                });
-            }
-
-            content.prepend(block);
-        }
+        t2hui.apply_subtest_blocks(e, row, r, rows.slice(-1)[0]);
     }
 
     facet_toggle.one('click', function() {
@@ -111,6 +73,9 @@ t2hui.build_event = function(e) {
         column.jsonView(e.facets, {collapsed: true});
         row.prepend(no_controls);
         row.append(column);
+
+        var pad = 2 + (2 * e.nested);
+        column.attr('style', 'padding-left: ' + pad + 'ch;');
 
         // Add after other rows from the initial event, before any added subtest events
         rows.slice(-1)[0].after(row);
@@ -127,3 +92,47 @@ t2hui.build_event = function(e) {
 
     return wrap;
 };
+
+t2hui.apply_subtest_blocks = function(e, row, r, where) {
+    var subtest_block = $('<div class="subtest_block"></div>');
+    var content = row.find('td.event_content').first();
+
+    for(i = e.nested; i >= 0; i--) {
+        var block = subtest_block.clone();
+
+        if (r == 0 && e.is_parent && i === e.nested) {
+            block.addClass('etoggle');
+            block.text('');
+
+            var children = [];
+            block.one('click', function() {
+                var me = $(this);
+                var uri = base_uri + 'event/' + e.event_id + '/events';
+                var last = where;
+
+                t2hui.fetch(uri, function(e) {
+                    var e_body = t2hui.build_event(e);
+                    e_body.find('> table > tr').each(function() {
+                        var tr = $(this);
+                        last.after(tr);
+                        last = tr;
+                        children.push(tr);
+                    });
+                });
+
+                me.addClass('clicked');
+
+                me.click(function() {
+                    me.toggleClass('clicked');
+
+                    for (j = 0; j < children.length; j++) {
+                        children[j].slideToggle();
+                    }
+                });
+            });
+        }
+
+        content.prepend(block);
+    }
+}
+

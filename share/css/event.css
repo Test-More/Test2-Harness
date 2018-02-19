@@ -40,12 +40,12 @@ div.event td.event_content pre {
     padding-left: 4px;
 }
 
-div.event td.event_content pre:not(:nth-child(2)) {
-    border-left: 1px solid #A0A0A0;
+div.event td.event_content pre {
+    border-left: 1px solid transparent;
 }
 
-div.event.orphan td.event_content pre:not(:nth-child(2)) {
-    border-left: 1px solid transparent;
+div.event.nested td.event_content pre {
+    border-left: 1px solid #A0A0A0;
 }
 
 div.event td.event_content, div.event td.event_content pre {
@@ -74,20 +74,21 @@ div.event > table > tr > td.controls, div.event > table > tr > td.no_controls {
     width: 2ch;
 }
 
-div.event div.subtest_block {
+div.subtest_control.etoggle {
     display: block;
     width: 2ch;
     float: left;
     text-align: center;
+    margin-left: -2.2ch;
+    margin-right: -2.2ch;
 }
 
-div.event.orphan div.subtest_block:after {
-    content: ">";
+div.subtest_control.etoggle:after {
+    content: '+';
 }
 
-div.event div.subtest_block:not(.etoggle) {
-    border: 1px solid transparent;
-    border-radius: 4px;
+div.subtest_control.etoggle.clicked:after {
+    content: '-';
 }
 
 .etoggle {
@@ -105,15 +106,6 @@ div.event div.subtest_block:not(.etoggle) {
 .etoggle.clicked:hover {
     background: inherit;
 }
-
-div.subtest_block.etoggle:after {
-    content: '+';
-}
-
-div.subtest_block.etoggle.clicked:after {
-    content: '-';
-}
-
 
 div.event > table > tr > td.controls > div {
     display: block;
@@ -155,3 +147,47 @@ div.event div.expander.facets > div.expander-body {
 }
 
 
+/*
+
+        'DEBUG'    => Term::ANSIColor::color('red'),
+        'DIAG'     => Term::ANSIColor::color('yellow'),
+        'ERROR'    => Term::ANSIColor::color('red'),
+        'FATAL'    => Term::ANSIColor::color('bold red'),
+        'FAIL'     => Term::ANSIColor::color('red'),
+        'HALT'     => Term::ANSIColor::color('bold red'),
+        'PASS'     => Term::ANSIColor::color('green'),
+        '! PASS !' => Term::ANSIColor::color('cyan'),
+        'TODO'     => Term::ANSIColor::color('cyan'),
+        'NO  PLAN' => Term::ANSIColor::color('yellow'),
+        'SKIP'     => Term::ANSIColor::color('bold cyan'),
+        'SKIP ALL' => Term::ANSIColor::color('bold white on_blue'),
+        'STDERR'   => Term::ANSIColor::color('yellow'),
+        'RUN INFO' => Term::ANSIColor::color('bold bright_blue'),
+        'JOB INFO' => Term::ANSIColor::color('bold bright_blue'),
+        'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
+        'PASSED'   => Term::ANSIColor::color('bold bright_green'),
+        'FAILED'   => Term::ANSIColor::color('bold bright_red'),
+        'REASON'   => Term::ANSIColor::color('magenta'),
+        'TIMEOUT'  => Term::ANSIColor::color('magenta'),
+        'TIME'     => Term::ANSIColor::color('blue'),
+
+sub DEFAULT_FACET_COLOR() {
+        time    => Term::ANSIColor::color('blue'),
+        about   => Term::ANSIColor::color('magenta'),
+        amnesty => Term::ANSIColor::color('cyan'),
+        assert  => Term::ANSIColor::color('bold bright_white'),
+        control => Term::ANSIColor::color('bold red'),
+        error   => Term::ANSIColor::color('yellow'),
+        info    => Term::ANSIColor::color('yellow'),
+        meta    => Term::ANSIColor::color('magenta'),
+        parent  => Term::ANSIColor::color('magenta'),
+        trace   => Term::ANSIColor::color('bold red'),
+
+my %FACET_TAG_BORDERS = (
+    'default' => ['[', ']'],
+    'amnesty' => ['{', '}'],
+    'info'    => ['(', ')'],
+    'error'   => ['<', '>'],
+    'parent'  => [' ', ' '],
+);
+*/

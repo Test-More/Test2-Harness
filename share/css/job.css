@@ -31,3 +31,24 @@ div.job dl.job_controls dd {
 div.job dl.job_controls dd:hover {
     color: #204090;
 }
+
+div.expander.job > div.expander-body.open {
+    border: 1px solid black;
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+    padding: 0px;
+    background: white;
+}
+
+
+div.expander.job div.expander-body.open > div.expander.details {
+    border: none;
+    border-bottom: 1px solid;
+    max-height: 40%;
+    overflow: auto;
+    background: #E5E5E5;
+}
+
+div.expander.job div.expander-body.open > div.expander.details > div.expander-head {
+    background: #D5D5D5;
+}

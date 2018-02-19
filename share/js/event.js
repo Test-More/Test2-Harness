@@ -1,14 +1,21 @@
-t2hui.build_event = function(e) {
+t2hui.build_event = function(e, options) {
     var len = e.lines.length;
     var wrap = $('<div class="event"></div>');
 
-    if (e.is_orphan) {
+    if (options === undefined) {
+        options = {};
+    }
+
+    if (e.is_orphan || options.is_orphan) {
         wrap.addClass('orphan');
         wrap.hide();
     }
     if (len == 0) {
         wrap.addClass('no_lines');
         wrap.hide();
+    }
+    if (e.nested) {
+        wrap.addClass('nested');
     }
 
     var table = $('<table></table>');
@@ -20,7 +27,9 @@ t2hui.build_event = function(e) {
     var facet_toggle = $('<div class="facet_toggle etoggle">F</div>');
     controls.append(facet_toggle);
 
-    var rows = [];
+    var style = 'style="padding-left: ' + (2.2 + 2 * e.nested) + 'ch"';
+
+    var first_row;
     if (len) {
         for (var i = 0; i < len; i++) {
             var line = e.lines[i];
@@ -39,46 +48,65 @@ t2hui.build_event = function(e) {
             }
 
             if (content !== null && typeof(content) === 'object') {
-                var column = $('<td class="event_content"></td>');
+                var column = $('<td class="event_content" ' + style + '"></td>');
                 column.jsonView(content, {collapsed: true});
                 row.append(column);
             }
             else {
-                row.append('<td class="event_content"><pre>' + content + '</pre></td>');
+                row.append('<td class="event_content" ' + style +'><pre>' + content + '</pre></td>');
             }
 
-            rows.push(row);
             table.append(row);
         }
     }
     else {
         var row = $('<tr><td class="left"></td><th>HIDDEN</th><td class="right"></td></tr>');
-        var column = $('<td class="event_content"><pre>' + e.event_id + '</pre></td>');
+        var column = $('<td class="event_content" ' + style + '><pre>' + e.event_id + '</pre></td>');
 
         row.prepend(controls);
         row.append(column);
         table.append(row);
 
-        rows.push(row);
+        first_row = row;
     }
 
-    for(r = 0; r < rows.length; r++) {
-        var row = rows[r];
-        t2hui.apply_subtest_blocks(e, row, r, rows.slice(-1)[0]);
+    if (e.is_parent) {
+        var etoggle = $('<div class="etoggle subtest_control"></div>');
+        first_row.find('pre').before(etoggle);
+
+        etoggle.one('click', function() {
+            var uri = base_uri + 'event/' + e.event_id + '/events';
+
+            var kids = [];
+            t2hui.fetch(uri, function(e2) {
+                var sub_e = t2hui.build_event(e2, {is_orphan: e.is_orphan});
+                sub_e.hide();
+                wrap.after(sub_e);
+                sub_e.slideDown();
+                kids.push(sub_e);
+            });
+
+            etoggle.toggleClass('clicked');
+
+            etoggle.click(function() {
+                etoggle.toggleClass('clicked');
+
+                for (i = 0; i < kids.length; i++) {
+                    kids[i].find('div.subtest_control.clicked').click();
+                    kids[i].slideToggle();
+                }
+            });
+        });
     }
 
     facet_toggle.one('click', function() {
         var row = $('<tr class="facet_data"><td class="left"></td><th>FACETS</th><td class="right"></td></tr>');
-        var column = $('<td class="event_content"></td>');
+        var column = $('<td class="event_content" ' + style + '></td>');
         column.jsonView(e.facets, {collapsed: true});
         row.prepend(no_controls);
         row.append(column);
 
-        var pad = 2 + (2 * e.nested);
-        column.attr('style', 'padding-left: ' + pad + 'ch;');
-
-        // Add after other rows from the initial event, before any added subtest events
-        rows.slice(-1)[0].after(row);
+        table.append(row);
 
         facet_toggle.toggleClass('clicked');
 
@@ -93,18 +121,8 @@ t2hui.build_event = function(e) {
     return wrap;
 };
 
-t2hui.apply_subtest_blocks = function(e, row, r, where) {
-    var subtest_block = $('<div class="subtest_block"></div>');
-    var content = row.find('td.event_content').first();
 
-    for(i = e.nested; i >= 0; i--) {
-        var block = subtest_block.clone();
-
-        if (r == 0 && e.is_parent && i === e.nested) {
-            block.addClass('etoggle');
-            block.text('');
-
-            var children = [];
+/*
             block.one('click', function() {
                 var me = $(this);
                 var uri = base_uri + 'event/' + e.event_id + '/events';
@@ -130,9 +148,4 @@ t2hui.apply_subtest_blocks = function(e, row, r, where) {
                     }
                 });
             });
-        }
-
-        content.prepend(block);
-    }
-}
-
+*/

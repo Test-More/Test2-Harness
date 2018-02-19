@@ -13,134 +13,20 @@ div.run > div:empty {
     display: none;
 }
 
-div.run div.log {
+div.run div.log > div {
     background: #E5E5E5;
 }
 
-div.run div.failed {
+div.run div.failed > div {
     background: #F5E5E5;
 }
 
-div.run div.passed {
+div.run div.passed > div {
     background: #E5F5E5;
 }
 
 div.run div div.expander {
-    background: inherit;
     border-color: inherit;
     margin-bottom: -1px;
 }
 
-/*
-
-        'DEBUG'    => Term::ANSIColor::color('red'),
-        'DIAG'     => Term::ANSIColor::color('yellow'),
-        'ERROR'    => Term::ANSIColor::color('red'),
-        'FATAL'    => Term::ANSIColor::color('bold red'),
-        'FAIL'     => Term::ANSIColor::color('red'),
-        'HALT'     => Term::ANSIColor::color('bold red'),
-        'PASS'     => Term::ANSIColor::color('green'),
-        '! PASS !' => Term::ANSIColor::color('cyan'),
-        'TODO'     => Term::ANSIColor::color('cyan'),
-        'NO  PLAN' => Term::ANSIColor::color('yellow'),
-        'SKIP'     => Term::ANSIColor::color('bold cyan'),
-        'SKIP ALL' => Term::ANSIColor::color('bold white on_blue'),
-        'STDERR'   => Term::ANSIColor::color('yellow'),
-        'RUN INFO' => Term::ANSIColor::color('bold bright_blue'),
-        'JOB INFO' => Term::ANSIColor::color('bold bright_blue'),
-        'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
-        'PASSED'   => Term::ANSIColor::color('bold bright_green'),
-        'FAILED'   => Term::ANSIColor::color('bold bright_red'),
-        'REASON'   => Term::ANSIColor::color('magenta'),
-        'TIMEOUT'  => Term::ANSIColor::color('magenta'),
-        'TIME'     => Term::ANSIColor::color('blue'),
-
-sub DEFAULT_FACET_COLOR() {
-        time    => Term::ANSIColor::color('blue'),
-        about   => Term::ANSIColor::color('magenta'),
-        amnesty => Term::ANSIColor::color('cyan'),
-        assert  => Term::ANSIColor::color('bold bright_white'),
-        control => Term::ANSIColor::color('bold red'),
-        error   => Term::ANSIColor::color('yellow'),
-        info    => Term::ANSIColor::color('yellow'),
-        meta    => Term::ANSIColor::color('magenta'),
-        parent  => Term::ANSIColor::color('magenta'),
-        trace   => Term::ANSIColor::color('bold red'),
-
-my %FACET_TAG_BORDERS = (
-    'default' => ['[', ']'],
-    'amnesty' => ['{', '}'],
-    'info'    => ['(', ')'],
-    'error'   => ['<', '>'],
-    'parent'  => [' ', ' '],
-);
-
-
-
-
-
-div.run dl.job_list dt > span {
-    display: block;
-    float: left;
-    border-right: 1px solid #A0A0A0;
-    border-radius: 7px;
-    margin-right: 1ch;
-    padding-right: 1ch;
-    text-align: center;
-    padding-top: 3px;
-    margin-top: -3px;
-    padding-bottom: 3px;
-    margin-bottom: -3px;
-    font-weight: normal;
-}
-
-div.run dl.job_list dt.harness_log {
-    background: #F0FAFF;
-}
-
-div.run dl.job_list dt.pass {
-    background: #F0FFF0;
-}
-
-div.run dl.job_list dt.fail {
-    background: #FFF0F0;
-}
-
-div.run dl.job_list {
-    list-style: none;
-}
-
-div.run dl.job_list dt, div.run dl.job_list dd {
-    margin: 0;
-    padding: 2px;
-    border-radius: 6px;
-    border: 1px solid;
-    padding-left: 1ch;
-    padding-right: 1ch;
-}
-
-div.run dl.job_list dt {
-    margin-top: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    direction: rtl;
-    text-align: left;
-}
-
-div.run dl.job_list dt.open {
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    border-bottom: 1px dotted #A0A0A0;
-}
-
-div.run dl.job_list dd {
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    border-top: none;
-    padding: 1ch;
-    max-height: 75%;
-}
-*/

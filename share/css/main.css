@@ -7,7 +7,7 @@ div#header_wrapper {
     width: 100%;
     background: white;
     padding-bottom: 8px;
-    z-index: 1000;
+    z-index: 10;
 }
 
 div#footer_wrapper {
@@ -20,7 +20,7 @@ div#footer_wrapper {
     background: white;
     padding-top: 8px;
     padding-bottom: 4px;
-    z-index: 1000;
+    z-index: 10;
 }
 
 div#header {
@@ -297,9 +297,70 @@ div.expander-body {
     width: 20px;
     height: 20px;
     animation: spin 2s linear infinite;
+    z-index: 1000;
 }
 
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+div#free_modal {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #E5E5E5;
+    background: rgba(229, 229, 229, 0.8);
+    position: fixed;
+    left: 0px;
+    top: 0px;
+    z-index: 100;
+    cursor: pointer;
+}
+
+div#modal_inner_wrap {
+    width: auto;
+    height: 90%;
+    margin: 2%;
+    background: white;
+    border: 1px solid black;
+    border-radius: 10px;
+    position: relative;
+    top: 0px;
+    left: 0px;
+    cursor: default;
+    overflow: hidden;
+}
+
+div#modal_close {
+    display: block;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    color: red;
+    font-weight: bold;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    text-align: center;
+}
+
+div#modal_close:hover {
+    color: orange;
+}
+
+div#modal_body {
+    overflow: auto;
+    margin-top: 3ch;
+    height: calc(100% - 4ch);
+    margin-left: 1ch;
+}
+
+/*
+<div id="free_modal">
+    <div id="modal_inner_wrap">
+        <div id="modal_close">X</div>
+        <div id="modal_body"></div>
+    </div>
+</div>
+*/

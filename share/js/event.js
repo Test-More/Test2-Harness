@@ -1,35 +1,52 @@
 t2hui.build_event = function(e, options) {
     var len = e.lines.length;
-    var wrap = $('<div class="event"></div>');
 
     if (options === undefined) {
         options = {};
     }
 
+    var eclass = "";
+
     if (e.is_orphan || options.is_orphan) {
-        wrap.addClass('orphan');
-        wrap.hide();
+        eclass = eclass + " orphan";
     }
     if (len == 0) {
-        wrap.addClass('no_lines');
-        wrap.hide();
+        eclass = eclass + " no_lines";
     }
     if (e.nested) {
-        wrap.addClass('nested');
+        eclass = eclass + " nested";
     }
 
-    var table = $('<table></table>');
-    wrap.append(table);
+    var st_width = 3 + (2 * e.nested);
 
-    var no_controls  = $('<td class="no_controls">&nbsp;</td>');
-    var controls     = $('<td class="controls"></td>');
+    var ebreak  = $('<div class="event_break"></div>');
+    var econt   = $('<div class="event_controls"></div>');
+    var ftoggle = $('<div class="etoggle">F</div>');
+    econt.append(ftoggle);
+    ftoggle.click(function() {
+        $('#modal_body').jsonView(e, {collapsed: true});
+        $('#free_modal').slideDown();
+    });
 
-    var facet_toggle = $('<div class="facet_toggle etoggle">F</div>');
-    controls.append(facet_toggle);
+    var etoggle;
+    if (e.is_parent) {
+        etoggle = $('<div class="etoggle subtest"></div>');
 
-    var style = 'style="padding-left: ' + (3 + 2 * e.nested) + 'ch"';
+        etoggle.one('click', function() {
+            etoggle.toggleClass('clicked');
 
-    var first_row;
+            var last = $(me.slice(-1)[0]);
+            var uri = base_uri + 'event/' + e.event_id + '/events';
+            t2hui.fetch(uri, {done: function() { etoggle.remove() } }, function(e2) {
+                var sub_e = t2hui.build_event(e2, {is_orphan: e.is_orphan});
+                last.after(sub_e);
+                last = $(sub_e.slice(-1)[0]);
+            });
+        });
+    }
+
+    var me = [ebreak[0], econt[0]];
+
     if (len) {
         for (var i = 0; i < len; i++) {
             var line = e.lines[i];
@@ -37,124 +54,51 @@ t2hui.build_event = function(e, options) {
             var tag = line[1];
             var content = line[2];
 
-            var cls = facet.replace(/ /g, '-') + ' ' + tag.replace(/ /g, '-').replace(/!/g, 'N');
-            var row = $('<tr class="' + cls + '"><td class="left"></td><th>' + tag + '</th><td class="right"></td></tr>');
-            if (i === 0) {
-                row.prepend(controls);
-                first_row = row;
-            }
-            else {
-                row.prepend(no_controls.clone());
-            }
-
             if (content !== null && typeof(content) === 'object') {
-                var column = $('<td class="event_content" ' + style + '"></td>');
-                column.jsonView(content, {collapsed: true});
-                row.append(column);
-            }
-            else {
-                var type = typeof(content);
-                if (type !== 'string' && type !== 'number') content = '&nbsp;';
+                var data = content;
+                content = $('<div class="open_event_json">* JSON, click here to open *</div>');
 
-                var pre = $('<pre></pre>');
-                pre.text(content);
-
-                var td = $('<td class="event_content" ' + style +'></td>');
-                td.append(pre);
-
-                row.append(td);
+                content.click(function() {
+                    $('#modal_body').jsonView(data, {collapsed: true});
+                    $('#free_modal').slideDown();
+                });
             }
 
-            table.append(row);
+            var cls = facet.replace(/ /g, '-') + ' ' + tag.replace(/ /g, '-').replace(/!/g, 'N');
+            var row = t2hui.build_event_flesh(facet, tag, content, st_width, (i == 0 ? etoggle : null));
+            $(row).addClass(cls);
+
+            me = $.merge(me, row);
         }
+
     }
     else {
-        var row = $('<tr><td class="left"></td><th>HIDDEN</th><td class="right"></td></tr>');
-        var column = $('<td class="event_content" ' + style + '><pre>' + e.event_id + '</pre></td>');
-
-        row.prepend(controls);
-        row.append(column);
-        table.append(row);
-
-        first_row = row;
+        eclass = eclass + ' HIDDEN';
+        var row = t2hui.build_event_flesh('hidden', 'HIDDEN', e.event_id, st_width, etoggle);
+        $(row).addClass(cls);
+        me = $.merge(me, row);
     }
 
-    if (e.is_parent) {
-        var etoggle = $('<div class="etoggle subtest_control"></div>');
-        first_row.find('pre').before(etoggle);
+    if (eclass) { $(me).addClass(eclass) }
 
-        etoggle.one('click', function() {
-            var uri = base_uri + 'event/' + e.event_id + '/events';
-
-            var kids = [];
-            t2hui.fetch(uri, function(e2) {
-                var sub_e = t2hui.build_event(e2, {is_orphan: e.is_orphan});
-                sub_e.hide();
-                wrap.after(sub_e);
-                sub_e.slideDown();
-                kids.push(sub_e);
-            });
-
-            etoggle.toggleClass('clicked');
-
-            etoggle.click(function() {
-                etoggle.toggleClass('clicked');
-
-                for (i = 0; i < kids.length; i++) {
-                    kids[i].find('div.subtest_control.clicked').click();
-                    kids[i].slideToggle();
-                }
-            });
-        });
-    }
-
-    facet_toggle.one('click', function() {
-        var row = $('<tr class="facet_data"><td class="left"></td><th>FACETS</th><td class="right"></td></tr>');
-        var column = $('<td class="event_content" ' + style + '></td>');
-        column.jsonView(e.facets, {collapsed: true});
-        row.prepend(no_controls);
-        row.append(column);
-
-        table.append(row);
-
-        facet_toggle.toggleClass('clicked');
-
-        row.slideDown();
-
-        facet_toggle.click(function() {
-            facet_toggle.toggleClass('clicked');
-            row.slideToggle();
-        });
-    });
-
-    return wrap;
+    return me;
 };
 
+t2hui.build_event_flesh = function(facet, tag, text, st_width, st_toggle) {
+    var lbrace  = $('<div class="event_lbrace"></div>');
+    var etag    = $('<div class="event_tag">' + tag + '</div>');
+    var rbrace  = $('<div class="event_rbrace"></div>');
+    var cwrap   = $('<div class="event_c_wrap"></div>');
+    var stgap   = $('<div class="event_st_gap" style="width: ' + st_width + 'ch;"></div>');
+    var content = $('<div class="event_content"></div>');
 
-/*
-            block.one('click', function() {
-                var me = $(this);
-                var uri = base_uri + 'event/' + e.event_id + '/events';
-                var last = where;
+    content.append(text);
+    cwrap.append(stgap, content);
+    if (st_toggle) { stgap.append(st_toggle) }
 
-                t2hui.fetch(uri, function(e) {
-                    var e_body = t2hui.build_event(e);
-                    e_body.find('> table > tr').each(function() {
-                        var tr = $(this);
-                        last.after(tr);
-                        last = tr;
-                        children.push(tr);
-                    });
-                });
+    var me = [lbrace[0], etag[0], rbrace[0], cwrap[0]];
 
-                me.addClass('clicked');
+    $(me).addClass('' + tag + ' ' + facet);
 
-                me.click(function() {
-                    me.toggleClass('clicked');
-
-                    for (j = 0; j < children.length; j++) {
-                        children[j].slideToggle();
-                    }
-                });
-            });
-*/
+    return me;
+}

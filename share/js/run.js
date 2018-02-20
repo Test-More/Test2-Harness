@@ -8,7 +8,7 @@ $(function() {
         var failed = it.children('div.failed').first();
         var passed = it.children('div.passed').first();
 
-        t2hui.fetch(uri, function(job) {
+        t2hui.fetch(uri, {spin_in: it}, function(job) {
             job_dom = t2hui.build_job(job);
 
             if (job.name === '0') {
@@ -20,6 +20,6 @@ $(function() {
             else {
                 passed.append(job_dom);
             }
-        }, it);
+        });
     });
 });

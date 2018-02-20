@@ -2,18 +2,59 @@ t2hui.build_job = function(job) {
     var root;
 
     root = t2hui.build_expander(job.short_file, 'job', function() {
-        var details;
-        details = t2hui.build_expander('Details', 'details', function() {
-            var jsonv = $('<div class="job json-view"></div>');
-            jsonv.jsonView(job, {collapsed: true});
-            details.body.append(jsonv);
-        });
-        root.body.append(details.root);
+        var controls = $('<ul class="job_controls"></ul>');
+        var job_body = $('<div class="job_body"></div>');
+        root.body.append(controls);
+        root.body.append(job_body);
 
-        var job_body = $('<div class="job"></div>');
+        var json = $('<li class="open_json">Details</li>');
+        controls.prepend(json);
+        json.click(function() {
+            $('#modal_body').jsonView(job, {collapsed: true});
+            $('#free_modal').slideDown();
+        });
+
+        var orphan_toggle = false;
+        var orphans = $('<li class="load_orphans">Load Orphans</li>');
+        controls.prepend(orphans);
+
+        var spinner = $('<li class="spin_control"></li>');
+        controls.append(spinner);
+
+        var events = $('<div class="events"></div>');
+        job_body.append(events);
+
+        orphans.click(function() {
+            events.empty();
+            orphan_toggle = !orphan_toggle;
+            t2hui.load_job_events(job, events, controls, orphan_toggle, spinner);
+            if (orphan_toggle) {
+                orphans.text('Unload Orphans');
+            }
+            else {
+                orphans.text('Load Orphans');
+            }
+        });
+
+        t2hui.load_job_events(job, events, controls, orphan_toggle, spinner);
+    });
+
+    return root.root;
+};
+
+t2hui.load_job_events = function(job, events, controls, load_orphans, spinner) {
+    var uri = base_uri + 'job/' + job.job_id + '/events';
+    var data = { 'load_orphans': load_orphans };
+
+    t2hui.fetch(uri, {'data': data, 'spin_in': spinner}, function(e) {
+        var parts = t2hui.build_event(e);
+        events.append(parts);
+    });
+}
+
+/*
 
         var first = 1;
-        var uri = base_uri + 'job/' + job.job_id + '/events';
         t2hui.fetch(uri, function(e) {
             var e_body = t2hui.build_event(e);
 
@@ -46,8 +87,6 @@ t2hui.build_job = function(job) {
             job_body.append(e_body);
         }, job_body);
 
-        root.body.append(job_body);
-    });
 
-    return root.root;
-};
+
+ */

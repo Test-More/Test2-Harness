@@ -8,28 +8,43 @@ $(function() {
         var data = div.attr('data');
         div.jsonView(data, {collapsed: true});
     });
+
+    var modal = $("div#free_modal");
+    var modal_body = $("div#modal_body");
+    $("div#free_modal").click(function()  { modal.slideUp(function() { modal_body.empty() })});
+    $("div#modal_close").click(function() { modal.slideUp(function() { modal_body.empty() })});
+    $("div#modal_inner_wrap").click(function(e) { e.stopPropagation() });
 });
 
 t2hui.sleep = function(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-t2hui.fetch = function(url, cb, spin_in) {
+t2hui.fetch = function(url, args, cb) {
     var last_index = 0;
     var running = false;
     var done = false;
 
-    if (spin_in) {
-        spin_in.addClass('spinner');
+    if (!args) { args = {} }
+
+    if (args.spin_in) {
+        args.spin_in.addClass('spinner');
     }
+
+    var t;
 
     $.ajax(url + '?content-type=application/x-jsonl', {
         async: true,
+        data: args.data,
         complete: function() {
             done = true;
 
-            if (spin_in && !running) {
-                spin_in.removeClass('spinner');
+            if (args.spin_in && !running) {
+                args.spin_in.removeClass('spinner');
+            }
+
+            if (args.done) {
+                args.done();
             }
 
             return true;
@@ -39,8 +54,10 @@ t2hui.fetch = function(url, cb, spin_in) {
                 if (running) return;
                 running = true;
 
-                while(true) {
-                    var todo = e.currentTarget.response;
+                if (!t) t = e.currentTarget;
+
+                while(true && e.currentTarget) {
+                    var todo = t.response;
                     var start = last_index;
                     last_index = todo.lastIndexOf("\n");
 
@@ -67,8 +84,8 @@ t2hui.fetch = function(url, cb, spin_in) {
 
                 running = false;
 
-                if (done && spin_in) {
-                    spin_in.removeClass('spinner');
+                if (done && args.spin_in) {
+                    args.spin_in.removeClass('spinner');
                 }
             }
         }

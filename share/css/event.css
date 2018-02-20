@@ -1,103 +1,83 @@
-div.event {
-    margin-top: 2px;
-    margin-bottom: 2px;
-    border-bottom: 2px solid #C0C0C0;
+div.events {
+    display: grid;
+    grid-gap: 0px;
+    grid-template-columns: min-content min-content min-content min-content auto;
 }
 
-div.event.orphan table {
-    font-style: italic;
-    color: #A0A0A0;
-}
-div.event.orphan table:hover {
-    color: black;
-}
-
-div.event.no_lines table {
-    color: #A0A0A0;
-}
-div.event.no_lines table:hover {
-    color: black;
-}
-
-div.event > table > tr.facet_data {
-    display: none;
-}
-
-div.event > table {
-    border-collapse: collapse;
-    width: 100%;
-    table-layout: fixed;
-}
-
-div.event td.event_content {
-    padding: 0px;
-    overflow: hidden;
-}
-
-div.event td.event_content pre {
-    padding: 1px;
-    overflow: auto;
-    padding-left: 4px;
-}
-
-div.event td.event_content pre {
-    border-left: 1px solid transparent;
-}
-
-div.event.nested td.event_content pre {
-    border-left: 1px solid #A0A0A0;
-}
-
-div.event td.event_content, div.event td.event_content pre {
-    font-size: 16px;
-    margin: 0;
-}
-
-div.event > table > tr {
-    border-top: 1px dotted #C0C0C0;
-    max-width: 100%;
-}
-
-div.event > table > tr:first-child {
-    border-top: none;
-}
-
-div.event > table > tr > th {
-    vertical-align: top;
-    width: 8ch;
-    font-weight: normal;
-    white-space: nowrap;
-}
-
-div.event > table > tr > td.controls, div.event > table > tr > td.no_controls {
-    vertical-align: top;
-    width: 2.4ch;
-}
-
-div.subtest_control.etoggle {
-    display: block;
-    width: 2ch;
-    float: left;
+div.events > div {
     text-align: center;
-    margin-left: -2.5ch;
-    margin-right: -2.5ch;
+    vertical-align: top;
 }
 
-div.subtest_control.etoggle:after {
-    content: '+';
+div.events:empty:after {
+    grid-column-start: 1;
+    grid-column-end: 6;
+    content: "No events, or events not saved.";
 }
 
-div.subtest_control.etoggle.clicked:after {
-    content: '-';
+div.event_break {
+    grid-column-start: 1;
+    grid-column-end: 6;
+    height: 1px;
+    border-bottom: 1px dotted #E6E6E6;
+}
+
+div.event_controls {
+    grid-column-start: 1;
+    grid-column-end: 2;
+}
+
+div.event_lbrace {
+    grid-column-start: 2;
+    grid-column-end: 3;
+}
+
+div.event_tag {
+    grid-column-start: 3;
+    grid-column-end: 4;
+}
+
+div.event_rbrace {
+    grid-column-start: 4;
+    grid-column-end: 5;
+}
+
+div.event_c_wrap {
+    grid-column-start: 5;
+    grid-column-end: 6;
+    display: grid;
+    grid-gap: 4px;
+    grid-template-columns: min-content auto;
+}
+
+div.event_st_gap {
+    grid-column-start: 1;
+    grid-column-end: 2;
+    border-right: 1px solid #D0D0D0;
+    width: 3ch;
+}
+
+div.event_content {
+    text-align: left;
+    vertical-align: top;
+    padding-left: 4px;
+    white-space: pre;
+    grid-column-start: 2;
+    grid-column-end: 3;
 }
 
 .etoggle {
+    display: block;
     border: 1px solid transparent;
     border-radius: 4px;
     cursor: pointer;
     text-align: center;
     color: black;
     font-weight: bold;
+    font-size: 14px;
+    width: 1.8ch;
+    text-align: center;
+    vertical-align: middle;
 }
 
 .etoggle:hover, .etoggle.clicked {
@@ -105,83 +85,92 @@ div.subtest_control.etoggle.clicked:after {
     background: #DDEEFF;
 }
 
-.etoggle.clicked:hover {
+div.subtest.etoggle {
+    float: right;
+}
+
+div.subtest.etoggle.clicked {
     background: inherit;
 }
-
-div.event > table > tr > td.controls > div {
+div.subtest.etoggle.clicked:after {
     display: block;
-    float: left;
-    width: 2ch;
+    content: ' ';
+    border: 3px solid #E0E0E0;
+    border-top: 3px solid #2040E0;
+    border-radius: 50%;
+    width: 1ch;
+    height: 1ch;
+    animation: spin 2s linear infinite;
 }
 
-div.event > table > tr > td.left, div.event > table > tr > td.right {
-    vertical-align: top;
-    width: 1ch;
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
-div.event > table > tr > td.left:after {
+
+div.subtest.etoggle:after {
+    content: '+';
+}
+
+div.event_lbrace:after {
     font-weight: bold;
     content: '[';
     text-align: center;
+    font-size: 14px;
 }
-div.event > table > tr > td.right:before {
+div.event_rbrace:before {
     font-weight: bold;
     content: ']';
     text-align: center;
+    font-size: 14px;
 }
 
-div.event div.expander.facets {
-    border-radius: 0;
-    border: none;
-    padding: 0px;
-    margin: none;
-    background: inherit;
+div.events div.open_event_json {
+    cursor: pointer;
+}
+div.events div.open_event_json:hover {
+    color: #0022AA;
 }
 
-div.event div.expander.facets > div.expander-head {
-    border: none;
-    border-radius: 0;
-    background: inherit;
-}
+div.events > div.event_lbrace.amnesty:after  { content: '{'; }
+div.events > div.event_rbrace.amnesty:before { content: '}'; }
+div.events > div.event_lbrace.info:after     { content: '('; }
+div.events > div.event_rbrace.info:before    { content: ')'; }
+div.events > div.event_lbrace.error:after    { content: '<'; }
+div.events > div.event_rbrace.error:before   { content: '>'; }
 
-div.event div.expander.facets > div.expander-body {
-    margin: 0;
-}
+div.events > div.time    {  color: #12539e; }
+div.events > div.about   {  color: #000000; }
+div.events > div.amnesty {  color: #0f6989; }
+div.events > div.assert  {  color: #000000; }
+div.events > div.control {  color: #b26521; }
+div.events > div.error   {  color: #af0c0c; }
+div.events > div.info    {  color: #000000; }
+div.events > div.meta    {  color: #000000; }
+div.events > div.parent  {  color: #000000; }
+div.events > div.trace   {  color: #b26521; }
+div.events > div.plan    {  color: #3d6011; }
 
-div.event > table > tr.amnesty > td.left:after   { content: '{'; }
-div.event > table > tr.amnesty > td.right:before { content: '}'; }
-div.event > table > tr.info    > td.left:after   { content: '('; }
-div.event > table > tr.info    > td.right:before { content: ')'; }
-div.event > table > tr.error   > td.left:after   { content: '<'; }
-div.event > table > tr.error   > td.right:before { content: '>'; }
+div.events div.hidden       { color: #A0A0A0; }
+div.events div.hidden:hover { color: inherit; }
 
-/* Rules for facets */
-div.event > table > tr.time    {  color: #12539e;                     }
-div.event > table > tr.about   {  color: #000000;                     }
-div.event > table > tr.amnesty {  color: #0f6989;                     }
-div.event > table > tr.assert  {  color: #000000;                     }
-div.event > table > tr.control {  color: #b26521;                     }
-div.event > table > tr.error   {  color: #af0c0c;                     }
-div.event > table > tr.info    {  color: #000000;                     }
-div.event > table > tr.meta    {  color: #000000;                     }
-div.event > table > tr.parent  {  color: #000000;                     }
-div.event > table > tr.trace   {  color: #b26521;                     }
-div.event > table > tr.plan    {  color: #3d6011;                     }
+div.events div.orphan       { color: #A0A0A0; background: #F0F0F0; font-style: italic; }
+div.events div.orphan:hover { color: inherit; background: inherit; }
 
-/* Rules for tags */
-div.event > table > tr.DEBUG    { color: #b26521;                     }
-div.event > table > tr.DIAG     { color: #b23721;                     }
-div.event > table > tr.ERROR    { color: #af0c0c;                     }
-div.event > table > tr.FATAL    { color: #c10000;                     }
-div.event > table > tr.FAIL     { color: #c10000;                     }
-div.event > table > tr.HALT     { color: #c10000;                     }
-div.event > table > tr.PASS     { color: #266d39;                     }
-div.event > table > tr.N-PASS-N { color: #1d756d;                     }
-div.event > table > tr.TODO     { color: #521d93;                     }
-div.event > table > tr.NO--PLAN { color: #d17c32;                     }
-div.event > table > tr.SKIP     { color: #67156d;                     }
-div.event > table > tr.SKIP-ALL { color: #FFFFFF; background: #026b09 }
-div.event > table > tr.STDERR   { color: #bc7d16;                     }
-div.event > table > tr.REASON   { color: #b26521;                     }
-div.event > table > tr.TIMEOUT  { color: #b26521;                     }
-div.event > table > tr.TIME     { color: #12539e;                     }
+div.events > div.DEBUG    { color: #b26521;                     }
+div.events > div.DIAG     { color: #b23721;                     }
+div.events > div.ERROR    { color: #af0c0c;                     }
+div.events > div.FATAL    { color: #c10000;                     }
+div.events > div.FAIL     { color: #c10000;                     }
+div.events > div.HALT     { color: #c10000;                     }
+div.events > div.PASS     { color: #266d39;                     }
+div.events > div.N-PASS-N { color: #1d756d;                     }
+div.events > div.TODO     { color: #521d93;                     }
+div.events > div.NO--PLAN { color: #d17c32;                     }
+div.events > div.SKIP     { color: #67156d;                     }
+div.events > div.SKIP-ALL { color: #FFFFFF; background: #026b09 }
+div.events > div.STDERR   { color: #bc7d16;                     }
+div.events > div.REASON   { color: #b26521;                     }
+div.events > div.TIMEOUT  { color: #b26521;                     }
+div.events > div.TIME     { color: #12539e;                     }
+

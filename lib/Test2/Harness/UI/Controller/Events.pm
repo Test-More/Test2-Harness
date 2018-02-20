@@ -26,6 +26,10 @@ sub handle {
     die error(404 => 'Missing route') unless $route;
     my $it = $route->{name_or_id} or die error(404 => 'No name or id');
 
+    my $p = $req->parameters;
+    my %base_query;
+    $base_query{is_orphan} = 0 unless $p->{load_orphans} && lc($p->{load_orphans} ne 'false');
+
     my @events;
 
     if ($route->{from} eq 'job') {
@@ -36,8 +40,8 @@ sub handle {
         $job->verify_access('r', $user) or die error(401);
 
         @events = $schema->resultset('Event')->search(
-            {'job_id' => $job_id, parent_id => undef},
-            {order_by => ['event_ord', 'event_id']},
+            {%base_query, 'job_id' => $job_id, parent_id => undef},
+            {order_by => {-asc => ['event_ord', 'event_id']}},
         )->all;
     }
     elsif ($route->{from} eq 'event') {
@@ -48,8 +52,8 @@ sub handle {
         $event->verify_access('r', $user) or die error(401);
 
         @events = $schema->resultset('Event')->search(
-            {'parent_id' => $event_id},
-            {order_by => ['event_ord', 'event_id']},
+            {%base_query, 'parent_id' => $event_id},
+            {order_by => {-asc => ['event_ord', 'event_id']}},
         )->all;
     }
     else {

@@ -1,54 +1,66 @@
-div.job div.expander {
-    background: inherit;
-    border-color: inherit;
-    margin-bottom: -1px;
-}
-
 div.job {
     margin-top: 8px;
 }
 
-div.job:empty:after {
-    content: "No events, or events not saved.";
+div.expander.job {
+    overflow: hidden;
 }
 
-div.job dl.job_controls dt {
-    float: left;
-    width: auto;
-    margin: 0;
-    padding: 0px;
-}
-
-div.job dl.job_controls dd {
-    float: left;
-    width: auto;
-    margin: 0;
-    padding: 0px;
-    margin-right: 20px;
-    cursor: pointer;
-}
-
-div.job dl.job_controls dd:hover {
-    color: #204090;
-}
-
-div.expander.job > div.expander-body.open {
-    border: 1px solid black;
-    border-top-left-radius: 8px;
-    border-bottom-left-radius: 8px;
-    padding: 0px;
-    background: white;
-}
-
-
-div.expander.job div.expander-body.open > div.expander.details {
-    border: none;
-    border-bottom: 1px solid;
-    max-height: 40%;
+div.expander.job > div.expander-body {
     overflow: auto;
-    background: #E5E5E5;
+    max-height: 70%;
+    max-width: 100%;
+    padding: 2px;
 }
 
-div.expander.job div.expander-body.open > div.expander.details > div.expander-head {
-    background: #D5D5D5;
+div.job ul.job_controls {
+    display: block;
+    list-style: none;
+    overflow: hidden;
+    margin: 0;
+    padding: 0px;
+    margin-bottom: 8px;
+    position: sticky;
+    top: 0px;
+    right: 0px;
+}
+
+div.job ul.job_controls > li {
+    display: block;
+    float: right;
+    color: #4060F0;
+    border: 1px solid #909090;
+    border-radius: 8px;
+    padding: 5px;
+    cursor: pointer;
+    margin-left: 4px;
+    margin-right: 4px;
+    background: #f0f0f0;
+}
+
+div.job ul.job_controls > li:hover {
+    background: #C0E0F0;
+    color: #2040E0;
+    border: 1px solid #2040E0;
+}
+
+div.job ul.job_controls > li.spin_control {
+    margin-top: -5px;
+    border: none;
+    background: inherit;
+    cursor: default;
+}
+
+div.job ul.job_controls > li.spin_control:hover {
+    border: none;
+    background: inherit;
+}
+
+div.job_body {
+    display: block;
+    background: #F8F8F8;
+    border-radius: 8px;
+    padding: 4px;
+    overflow: hidden;
+    min-width: fit-content;
 }

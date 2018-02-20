@@ -281,7 +281,6 @@ div.expander-body {
     display: none;
     margin-top: 12px;
     padding: 4px;
-    max-height: 70%;
     overflow: auto;
 }
 

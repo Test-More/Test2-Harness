@@ -21,9 +21,6 @@ t2hui.sleep = function(ms) {
 }
 
 t2hui.fetch = function(url, args, cb) {
-    var last_index = 0;
-    var running = false;
-    var done = false;
 
     if (!args) { args = {} }
 
@@ -31,62 +28,63 @@ t2hui.fetch = function(url, args, cb) {
         args.spin_in.addClass('spinner');
     }
 
-    var t;
+    var last_index = 0;
+    var running = false;
+    var done = false;
+    var iterate = async function(response) {
+        if (running) return;
+        running = true;
+
+        while(true) {
+            var start = last_index;
+            last_index = response.lastIndexOf("\n");
+
+            var now = response.substring(start, last_index);
+            var items = now.split("\n");
+            var len = items.length;
+
+            var counter = 0;
+            for (var i = 0; i < len; i++) {
+                var json = items[i];
+                if (!json) { continue }
+
+                counter++;
+                var item = JSON.parse(json);
+                cb(item);
+
+                if (!(counter % 25)) {
+                    await t2hui.sleep(50);
+                }
+            };
+
+            if (!counter) break;
+        }
+
+        running = false;
+    };
+
 
     $.ajax(url + '?content-type=application/x-jsonl', {
         async: true,
         data: args.data,
-        complete: function() {
-            done = true;
-
-            if (args.spin_in && !running) {
+        xhrFields: {
+            onprogress: async function(e) {
+                if (!e || !e.currentTarget) return;
+                iterate(e.currentTarget.response);
+            }
+        },
+        success: async function(response) {
+            while (running) { await t2hui.sleep(50); }
+            iterate(response);
+        },
+        complete: async function() {
+            while (running) { await t2hui.sleep(50); }
+            if (args.spin_in) {
                 args.spin_in.removeClass('spinner');
             }
 
             if (args.done) {
                 args.done();
-            }
-
-            return true;
-        },
-        xhrFields: {
-            onprogress: async function(e) {
-                if (running) return;
-                running = true;
-
-                if (!t) t = e.currentTarget;
-
-                while(true && e.currentTarget) {
-                    var todo = t.response;
-                    var start = last_index;
-                    last_index = todo.lastIndexOf("\n");
-
-                    var now = todo.substring(start, last_index);
-                    var items = now.split("\n");
-                    var len = items.length;
-
-                    var counter = 0;
-                    for (var i = 0; i < len; i++) {
-                        var json = items[i];
-                        if (!json) { continue }
-
-                        counter++;
-                        var item = JSON.parse(json);
-                        cb(item);
-
-                        if (!(counter % 25)) {
-                            await t2hui.sleep(50);
-                        }
-                    };
-
-                    if (!counter) break;
-                }
-
-                running = false;
-
-                if (done && args.spin_in) {
-                    args.spin_in.removeClass('spinner');
-                }
             }
         }
     });

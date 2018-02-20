@@ -16,6 +16,12 @@ $(function() {
     $("div#modal_inner_wrap").click(function(e) { e.stopPropagation() });
 });
 
+t2hui.dynstyle = $('style.dynamic-style')[0];
+
+t2hui.add_style = function(text) {
+    t2hui.dynstyle.insertRule(text);
+}
+
 t2hui.sleep = function(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }

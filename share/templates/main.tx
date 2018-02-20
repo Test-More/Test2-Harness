@@ -19,6 +19,10 @@
     <script src="<: $base_uri :>js/<: $js :>"></script>
 : }
 
+    <!-- Some tools need to dynamically add styles -->
+    <style id="dynamic-style">
+    </style>
+
 </head>
 
 <body>

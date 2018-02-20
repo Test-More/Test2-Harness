@@ -25,6 +25,13 @@ div.event_break {
 div.event_controls {
     grid-column-start: 1;
     grid-column-end: 2;
+    height: auto;
+    overflow: hidden;
+}
+
+div.event_controls > div.event_controls_inner {
+    height: 0px;
+    overflow: visible;
 }
 
 div.event_lbrace {
@@ -35,6 +42,7 @@ div.event_lbrace {
 div.event_tag {
     grid-column-start: 3;
     grid-column-end: 4;
+    white-space: nowrap;
 }
 
 div.event_rbrace {

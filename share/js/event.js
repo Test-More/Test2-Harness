@@ -1,3 +1,10 @@
+t2hui.event_classes = {
+    tags_seen:   {},
+    facets_seen: {},
+    tags:        [],
+    facets:      [],
+};
+
 t2hui.build_event = function(e, options) {
     var len = e.lines.length;
 
@@ -10,9 +17,6 @@ t2hui.build_event = function(e, options) {
     if (e.is_orphan || options.is_orphan) {
         eclass = eclass + " orphan";
     }
-    if (len == 0) {
-        eclass = eclass + " no_lines";
-    }
     if (e.nested) {
         eclass = eclass + " nested";
     }
@@ -21,12 +25,14 @@ t2hui.build_event = function(e, options) {
 
     var ebreak  = $('<div class="event_break"></div>');
     var econt   = $('<div class="event_controls"></div>');
+    var econt_i = $('<div class="event_controls_inner"></div>');
     var ftoggle = $('<div class="etoggle">F</div>');
-    econt.append(ftoggle);
     ftoggle.click(function() {
         $('#modal_body').jsonView(e, {collapsed: true});
         $('#free_modal').slideDown();
     });
+    econt_i.append(ftoggle);
+    econt.append(econt_i);
 
     var etoggle;
     if (e.is_parent) {
@@ -72,12 +78,10 @@ t2hui.build_event = function(e, options) {
         }
 
     }
-    else {
-        eclass = eclass + ' HIDDEN';
-        var row = t2hui.build_event_flesh('hidden', 'HIDDEN', e.event_id, st_width, etoggle);
-        $(row).addClass(cls);
-        me = $.merge(me, row);
-    }
+
+    var row = t2hui.build_event_flesh('', 'EVENT ID', e.event_id, st_width, etoggle);
+    $(row).addClass('EVENT_ID');
+    me = $.merge(me, row);
 
     if (eclass) { $(me).addClass(eclass) }
 
@@ -85,6 +89,17 @@ t2hui.build_event = function(e, options) {
 };
 
 t2hui.build_event_flesh = function(facet, tag, text, st_width, st_toggle) {
+    if (!t2hui.event_classes.tags_seen[tag]) {
+        t2hui.event_classes.tags_seen[tag] = 1;
+        t2hui.event_classes.tags.push(tag);
+        t2hui.event_classes.tags.sort;
+    }
+    if (facet && !t2hui.event_classes.facets_seen[facet]) {
+        t2hui.event_classes.facets_seen[facet] = 1;
+        t2hui.event_classes.facets.push(facet);
+        t2hui.event_classes.facets.sort;
+    }
+
     var lbrace  = $('<div class="event_lbrace"></div>');
     var etag    = $('<div class="event_tag">' + tag + '</div>');
     var rbrace  = $('<div class="event_rbrace"></div>');
@@ -97,8 +112,6 @@ t2hui.build_event_flesh = function(facet, tag, text, st_width, st_toggle) {
     if (st_toggle) { stgap.append(st_toggle) }
 
     var me = [lbrace[0], etag[0], rbrace[0], cwrap[0]];
-
-    $(me).addClass('' + tag + ' ' + facet);
 
     return me;
 }

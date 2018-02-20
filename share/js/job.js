@@ -7,7 +7,7 @@ t2hui.build_job = function(job) {
         root.body.append(controls);
         root.body.append(job_body);
 
-        var json = $('<li class="open_json">Details</li>');
+        var json = $('<li class="open_json">Job JSON</li>');
         controls.prepend(json);
         json.click(function() {
             $('#modal_body').jsonView(job, {collapsed: true});
@@ -46,9 +46,19 @@ t2hui.load_job_events = function(job, events, controls, load_orphans, spinner) {
     var uri = base_uri + 'job/' + job.job_id + '/events';
     var data = { 'load_orphans': load_orphans };
 
+    var facets = 0;
+    var tags = 0;
+
     t2hui.fetch(uri, {'data': data, 'spin_in': spinner}, function(e) {
         var parts = t2hui.build_event(e);
         events.append(parts);
+
+        if (facets != t2hui.event_classes.facets.length) {
+
+        }
+        if (facets != t2hui.event_classes.facets.length) {
+
+        }
     });
 }
 

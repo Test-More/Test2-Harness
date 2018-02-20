@@ -59,6 +59,6 @@ div.job_body {
     background: #F8F8F8;
     border-radius: 8px;
     padding: 4px;
-    overflow: hidden;
+    overflow: auto;
     min-width: fit-content;
 }

@@ -1,8 +1,10 @@
 t2hui.event_classes = {
-    tags_seen:   {},
-    facets_seen: {},
-    tags:        [],
-    facets:      [],
+    tags_seen:      {},
+    facets_seen:    {},
+    tags:           [],
+    facets:         [],
+    tag_watchers:   [],
+    facet_watchers: [],
 };
 
 t2hui.build_event = function(e, options) {
@@ -28,7 +30,7 @@ t2hui.build_event = function(e, options) {
     var econt_i = $('<div class="event_controls_inner"></div>');
     var ftoggle = $('<div class="etoggle">F</div>');
     ftoggle.click(function() {
-        $('#modal_body').jsonView(e, {collapsed: true});
+        $('#modal_body').jsonView(e.facets, {collapsed: true});
         $('#free_modal').slideDown();
     });
     econt_i.append(ftoggle);
@@ -53,6 +55,8 @@ t2hui.build_event = function(e, options) {
 
     var me = [ebreak[0], econt[0]];
 
+    var toggle_added = false;
+
     if (len) {
         for (var i = 0; i < len; i++) {
             var line = e.lines[i];
@@ -70,17 +74,22 @@ t2hui.build_event = function(e, options) {
                 });
             }
 
-            var cls = facet.replace(/ /g, '-') + ' ' + tag.replace(/ /g, '-').replace(/!/g, 'N');
-            var row = t2hui.build_event_flesh(facet, tag, content, st_width, (i == 0 ? etoggle : null));
+            var et = null;
+            if (etoggle && !toggle_added && facet === 'assert') {
+                toggle_added = true;
+                et = etoggle;
+            }
+
+            var cls = 'facet_' + t2hui.sanitize_class(facet) + ' tag_' + t2hui.sanitize_class(tag);
+            var row = t2hui.build_event_flesh(facet, tag, content, st_width, et);
             $(row).addClass(cls);
 
             me = $.merge(me, row);
         }
-
     }
 
-    var row = t2hui.build_event_flesh('', 'EVENT ID', e.event_id, st_width, etoggle);
-    $(row).addClass('EVENT_ID');
+    var row = t2hui.build_event_flesh('', 'EVENT ID', e.event_id, st_width, (toggle_added ? null : etoggle));
+    $(row).addClass('tag_EVENT-ID');
     me = $.merge(me, row);
 
     if (eclass) { $(me).addClass(eclass) }
@@ -93,11 +102,13 @@ t2hui.build_event_flesh = function(facet, tag, text, st_width, st_toggle) {
         t2hui.event_classes.tags_seen[tag] = 1;
         t2hui.event_classes.tags.push(tag);
         t2hui.event_classes.tags.sort;
+        $(t2hui.event_classes.tag_watchers).each(function() { this() })
     }
     if (facet && !t2hui.event_classes.facets_seen[facet]) {
         t2hui.event_classes.facets_seen[facet] = 1;
         t2hui.event_classes.facets.push(facet);
         t2hui.event_classes.facets.sort;
+        $(t2hui.event_classes.facet_watchers).each(function() { this() })
     }
 
     var lbrace  = $('<div class="event_lbrace"></div>');

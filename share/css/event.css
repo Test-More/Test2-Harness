@@ -15,11 +15,18 @@ div.events:empty:after {
     content: "No events, or events not saved.";
 }
 
-div.event_break {
+div.events > div {
+    border-top: 1px dotted #E0E0E0;
+}
+
+div.events > div.event_break {
     grid-column-start: 1;
     grid-column-end: 6;
     height: 1px;
-    border-bottom: 1px dotted #E6E6E6;
+    background: #D0D0D0;
+    border: none;
+    padding: 0px;
+    margin: 0;
 }
 
 div.event_controls {
@@ -147,38 +154,35 @@ div.events > div.event_rbrace.info:before    { content: ')'; }
 div.events > div.event_lbrace.error:after    { content: '<'; }
 div.events > div.event_rbrace.error:before   { content: '>'; }
 
-div.events > div.time    {  color: #12539e; }
-div.events > div.about   {  color: #000000; }
-div.events > div.amnesty {  color: #0f6989; }
-div.events > div.assert  {  color: #000000; }
-div.events > div.control {  color: #b26521; }
-div.events > div.error   {  color: #af0c0c; }
-div.events > div.info    {  color: #000000; }
-div.events > div.meta    {  color: #000000; }
-div.events > div.parent  {  color: #000000; }
-div.events > div.trace   {  color: #b26521; }
-div.events > div.plan    {  color: #3d6011; }
+div.events > div.orphan       { text-decoration: line-through; font-style: italic; }
+div.events > div.orphan:hover { text-decoration: inherit; }
 
-div.events div.hidden       { color: #A0A0A0; }
-div.events div.hidden:hover { color: inherit; }
+div.events > div.facet_time    {  color: #12539e; }
+div.events > div.facet_about   {  color: #000000; }
+div.events > div.facet_amnesty {  color: #0f6989; }
+div.events > div.facet_assert  {  color: #000000; }
+div.events > div.facet_control {  color: #b26521; }
+div.events > div.facet_error   {  color: #af0c0c; }
+div.events > div.facet_info    {  color: #000000; }
+div.events > div.facet_meta    {  color: #000000; }
+div.events > div.facet_parent  {  color: #000000; }
+div.events > div.facet_trace   {  color: #b26521; }
+div.events > div.facet_plan    {  color: #3d6011; }
 
-div.events div.orphan       { color: #A0A0A0; background: #F0F0F0; font-style: italic; }
-div.events div.orphan:hover { color: inherit; background: inherit; }
-
-div.events > div.DEBUG    { color: #b26521;                     }
-div.events > div.DIAG     { color: #b23721;                     }
-div.events > div.ERROR    { color: #af0c0c;                     }
-div.events > div.FATAL    { color: #c10000;                     }
-div.events > div.FAIL     { color: #c10000;                     }
-div.events > div.HALT     { color: #c10000;                     }
-div.events > div.PASS     { color: #266d39;                     }
-div.events > div.N-PASS-N { color: #1d756d;                     }
-div.events > div.TODO     { color: #521d93;                     }
-div.events > div.NO--PLAN { color: #d17c32;                     }
-div.events > div.SKIP     { color: #67156d;                     }
-div.events > div.SKIP-ALL { color: #FFFFFF; background: #026b09 }
-div.events > div.STDERR   { color: #bc7d16;                     }
-div.events > div.REASON   { color: #b26521;                     }
-div.events > div.TIMEOUT  { color: #b26521;                     }
-div.events > div.TIME     { color: #12539e;                     }
+div.events > div.tag_DEBUG    { color: #b26521;                     }
+div.events > div.tag_DIAG     { color: #b23721;                     }
+div.events > div.tag_ERROR    { color: #af0c0c;                     }
+div.events > div.tag_FATAL    { color: #c10000;                     }
+div.events > div.tag_FAIL     { color: #c10000;                     }
+div.events > div.tag_HALT     { color: #c10000;                     }
+div.events > div.tag_PASS     { color: #266d39;                     }
+div.events > div.tag_N-PASS-N { color: #1d756d;                     }
+div.events > div.tag_TODO     { color: #521d93;                     }
+div.events > div.tag_NO--PLAN { color: #d17c32;                     }
+div.events > div.tag_SKIP     { color: #67156d;                     }
+div.events > div.tag_SKIP-ALL { color: #FFFFFF; background: #026b09 }
+div.events > div.tag_STDERR   { color: #bc7d16;                     }
+div.events > div.tag_REASON   { color: #b26521;                     }
+div.events > div.tag_TIMEOUT  { color: #b26521;                     }
+div.events > div.tag_TIME     { color: #12539e;                     }
 

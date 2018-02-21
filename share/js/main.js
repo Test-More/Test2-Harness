@@ -1,6 +1,8 @@
 var t2hui = {};
 
 $(function() {
+    t2hui.dynstyle = $('style#dynamic-style')[0].sheet;
+
     $("div.expander").each(function() { t2hui.apply_expander($(this)) });
 
     $("div.json-view").each(function() {
@@ -16,9 +18,10 @@ $(function() {
     $("div#modal_inner_wrap").click(function(e) { e.stopPropagation() });
 });
 
-t2hui.dynstyle = $('style.dynamic-style')[0];
-
+t2hui.added_styles = {};
 t2hui.add_style = function(text) {
+    if (t2hui.added_styles[text]) { return; }
+    t2hui.added_styles[text] = true;
     t2hui.dynstyle.insertRule(text);
 }
 
@@ -132,4 +135,8 @@ t2hui.build_expander = function(title, add_class, cb) {
     t2hui.apply_expander(root, cb);
 
     return { "root": root, "head": head, "body": body };
+}
+
+t2hui.sanitize_class = function(text) {
+    return text.replace(/ /g, '-').replace(/!/g, 'N');
 }

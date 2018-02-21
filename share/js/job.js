@@ -1,9 +1,11 @@
 t2hui.build_job = function(job) {
     var root;
 
+    t2hui.add_style('div.job_body.filter_tag_EVENT-ID > div.events > div.tag_EVENT-ID { display: none; }');
+
     root = t2hui.build_expander(job.short_file, 'job', function() {
         var controls = $('<ul class="job_controls"></ul>');
-        var job_body = $('<div class="job_body"></div>');
+        var job_body = $('<div class="job_body filter_tag_EVENT-ID"></div>');
         root.body.append(controls);
         root.body.append(job_body);
 
@@ -18,6 +20,16 @@ t2hui.build_job = function(job) {
         var orphans = $('<li class="load_orphans">Load Orphans</li>');
         controls.prepend(orphans);
 
+        var subtest_toggle = false;
+        var subtest = $('<li class="load_orphans">Open Subtests</li>');
+        controls.prepend(subtest);
+
+        var filter_facets = t2hui.build_filter('facet', 'Facet Filter', job_body, controls);
+        controls.prepend(filter_facets);
+
+        var filter_tags = t2hui.build_filter('tag', 'Tag Filter', job_body, controls);
+        controls.prepend(filter_tags);
+
         var spinner = $('<li class="spin_control"></li>');
         controls.append(spinner);
 
@@ -27,7 +39,7 @@ t2hui.build_job = function(job) {
         orphans.click(function() {
             events.empty();
             orphan_toggle = !orphan_toggle;
-            t2hui.load_job_events(job, events, controls, orphan_toggle, spinner);
+            t2hui.load_job_events(job, events, controls, orphan_toggle, subtest_toggle, spinner);
             if (orphan_toggle) {
                 orphans.text('Unload Orphans');
             }
@@ -36,67 +48,90 @@ t2hui.build_job = function(job) {
             }
         });
 
-        t2hui.load_job_events(job, events, controls, orphan_toggle, spinner);
+        subtest.click(function() {
+            events.empty();
+            subtest_toggle = !subtest_toggle;
+            t2hui.load_job_events(job, events, controls, orphan_toggle, subtest_toggle, spinner);
+            if (subtest_toggle) {
+                subtest.text('Close Subtests');
+            }
+            else {
+                subtest.text('Open Subtests');
+            }
+        });
+
+        t2hui.load_job_events(job, events, controls, orphan_toggle, subtest_toggle, spinner);
     });
 
     return root.root;
 };
 
-t2hui.load_job_events = function(job, events, controls, load_orphans, spinner) {
+t2hui.load_job_events = function(job, events, controls, load_orphans, load_subtests, spinner) {
     var uri = base_uri + 'job/' + job.job_id + '/events';
-    var data = { 'load_orphans': load_orphans };
-
-    var facets = 0;
-    var tags = 0;
+    var data = { 'load_orphans': load_orphans, 'load_subtests': load_subtests };
 
     t2hui.fetch(uri, {'data': data, 'spin_in': spinner}, function(e) {
         var parts = t2hui.build_event(e);
         events.append(parts);
-
-        if (facets != t2hui.event_classes.facets.length) {
-
-        }
-        if (facets != t2hui.event_classes.facets.length) {
-
-        }
     });
-}
+};
 
-/*
 
-        var first = 1;
-        t2hui.fetch(uri, function(e) {
-            var e_body = t2hui.build_event(e);
+t2hui.build_filter = function(filter_type, text, job_body, controls) {
+    var control = $('<li class="filter_' + filter_type + 's">' + text + '</li>');
 
-            if (first === 0) {
-                job_body.append(e_body);
-                return;
-            }
+    control.click(function() {
+        var done = false;
+        controls.siblings('div.job_filter').each(function() {
+            var x = $(this);
+            if (x.hasClass(filter_type)) { done = true; }
+            x.slideUp(function() { x.remove() });
+        });
 
-            first = 0;
+        if (done) { return }
 
-            var controls = $('<dl class="job_controls tiny"></dl>');
-            var show_hidden = $('<dt><input type="checkbox" unchecked></input></dt><dd>Show Hidden Events</dd>');
-            var show_orphans = $('<dt><input type="checkbox" unchecked></input></dt><dd>Show Orphan Events</dd>');
+        var filter = $('<div class="job_filter ' + filter_type + 's" style="display: none;"><label>' + filter_type + ' filter</label></div>');
+        var close = $('<div class="close">&otimes;</div>');
+        filter.append(close);
+        close.click(function() { filter.slideUp(function() { filter.remove() }) });
 
-            show_hidden.find(':checkbox').click(function() { job_body.find('div.event.no_lines').slideToggle() });
-            show_hidden.filter('dd').click(function() {
-                show_hidden.find(':checkbox').each(function() { this.checked = !this.checked });
-                job_body.find('div.event.no_lines').slideToggle();
+        var list = $('<ul class="job_filter_list"></ul>');
+        filter.append(list);
+
+        var populate = function() {
+            list.empty();
+
+            $(t2hui.event_classes[filter_type + 's']).each(function() {
+                var it = this;
+                var cl = filter_type + '_' + t2hui.sanitize_class(it);
+                var fcl = 'filter_' + cl;
+                var li = $('<li>' + it + '</li>');
+
+                if (!job_body.hasClass(fcl)) { li.addClass('selected') }
+
+                li.click(function() {
+                    li.toggleClass('selected');
+                    job_body.toggleClass(fcl);
+                    t2hui.add_style('div.job_body.' + fcl + ' > div.events > div.' + cl + ' { display: none; }');
+                });
+
+                list.append(li);
             });
+        };
 
-            show_orphans.find(':checkbox').click(function() { job_body.find('div.event.orphan').slideToggle() });
-            show_orphans.filter('dd').click(function() {
-                show_orphans.find(':checkbox').each(function() { this.checked = !this.checked });
-                job_body.find('div.event.orphan').slideToggle();
-            });
+        var watchers = t2hui.event_classes[filter_type + '_watchers'];
+        watchers.push(populate);
+        populate();
 
-            controls.append(show_hidden);
-            controls.append(show_orphans);
-            job_body.append(controls);
-            job_body.append(e_body);
-        }, job_body);
+        filter.on("remove", function() {
+            var idx = $.inArray(populate, watchers);
+            if (idx == -1) { return };
+            watchers.splice(idx, 1);
+        });
 
+        controls.before(filter);
+        filter.slideDown();
+    });
 
-
- */
+    return control;
+};

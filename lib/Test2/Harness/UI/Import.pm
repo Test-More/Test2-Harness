@@ -13,7 +13,7 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Formatter::Test2::Composer;
 
-use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_orphans -passed -failed/;
+use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_orphans -passed -failed -event_ord/;
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip  qw($GunzipError);
@@ -44,6 +44,7 @@ sub init {
     $self->{+BUFFER} = {};
     $self->{+READY}  = [];
     $self->{+JOB_ORD} = 0;
+    $self->{+EVENT_ORD} = 0;
 
     $self->{+PASSED} = 0;
     $self->{+FAILED} = 0;
@@ -52,6 +53,11 @@ sub init {
     $self->{+MODE} = $MODES{$mode} or croak "Invalid mode '$mode'";
 
     $self->{+STORE_ORPHANS} = $self->{+RUN}->store_orphans;
+}
+
+sub eord {
+    my $self = shift;
+    return $self->{+EVENT_ORD}++;
 }
 
 sub process {
@@ -79,7 +85,7 @@ sub process {
         }
         my $error = $@;
 
-        $error = $self->process_event($ord, $line);
+        $error = $self->process_event($line);
         $error ||= $self->flush_ready if @{$self->{+READY}};
 
         return {errors => ["error processing line number $ord: $error"]} if $error;
@@ -117,7 +123,7 @@ sub flush_ready {
             $f = $self->_facet_data($f) unless ref $f;
             return $f unless ref $f;
 
-            my ($new, $error) = $self->process_facets($ord++, $f, $job);
+            my ($new, $error) = $self->process_facets($f, $job);
             return $error if $error;
 
             for my $event (@$new) {
@@ -196,7 +202,7 @@ sub _facet_data {
 
 sub process_event {
     my $self = shift;
-    my ($ord, $json) = @_;
+    my ($json) = @_;
 
     my $run = $self->{+RUN};
     my $buffer = $self->{+BUFFER} ||= {};
@@ -276,7 +282,9 @@ sub clean_output {
 
 sub process_facets {
     my $self = shift;
-    my ($ord, $f, $job, $parent_db_id) = @_;
+    my ($f, $job, $parent_db_id) = @_;
+
+    my $ord = $self->eord();
 
     my $db_id = Data::GUID->new->as_string;
 
@@ -303,7 +311,7 @@ sub process_facets {
         $row->{is_parent} = 1;
         my $cnt = 0;
         for my $child (@{$f->{parent}->{children}}) {
-            my ($crows, $error, $diag) = $self->process_facets($cnt, $child, $job, $db_id);
+            my ($crows, $error, $diag) = $self->process_facets($child, $job, $db_id);
             return (undef, "Error in subevent [$cnt]: $error") if $error || !$crows;
 
             $is_diag ||= 1 if $diag;

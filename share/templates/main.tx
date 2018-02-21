@@ -5,6 +5,7 @@
 
 <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/main.css">
 <script src="<: $base_uri :>js/jquery.js"></script>
+<script src="<: $base_uri :>js/jquery-ui.js"></script>
 
 <script src="<: $base_uri :>js/jquery.json-view.min.js"></script>
 <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/jquery.json-view.min.css">

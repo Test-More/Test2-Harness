@@ -1,0 +1,143 @@
+<html>
+<body>
+
+<style>
+    div.events {
+        display: grid;
+        grid-gap: 0px;
+        grid-template-columns: min-content min-content min-content min-content max-content;
+    }
+
+    div.events > div {
+        text-align: center;
+        vertical-align: top;
+    }
+
+    div.event_break {
+        grid-column-start: 1;
+        grid-column-end: 6;
+        height: 1px;
+        border-bottom: 1px dotted #E6E6E6;
+    }
+
+    div.event_controls {
+        grid-column-start: 1;
+        grid-column-end: 2;
+    }
+
+    div.event_lbrace {
+        grid-column-start: 2;
+        grid-column-end: 3;
+    }
+
+    div.event_tag {
+        grid-column-start: 3;
+        grid-column-end: 4;
+    }
+
+    div.event_rbrace {
+        grid-column-start: 4;
+        grid-column-end: 5;
+    }
+
+    div.event_c_wrap {
+        grid-column-start: 5;
+        grid-column-end: 6;
+        display: grid;
+        grid-gap: 4px;
+        grid-template-columns: min-content max-content;
+    }
+
+    div.event_st_gap {
+        grid-column-start: 1;
+        grid-column-end: 2;
+        border-right: 1px solid #D0D0D0;
+        width: 3ch;
+    }
+
+    div.event_content {
+        text-align: left;
+        vertical-align: top;
+        padding-left: 4px;
+        white-space: pre;
+        grid-column-start: 2;
+        grid-column-end: 3;
+    }
+
+    .etoggle {
+        display: block;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        text-align: center;
+        color: black;
+        font-weight: bold;
+        width: 2ch;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .etoggle:hover, .etoggle.clicked {
+        border-color: #AABBFF;
+        background: #DDEEFF;
+    }
+
+    .etoggle.clicked:hover {
+        background: inherit;
+    }
+
+    div.subtest.etoggle {
+        float: right;
+    }
+
+    div.subtest.etoggle:after {
+        content: '+';
+    }
+
+    div.subtest.etoggle.clicked:after {
+        content: '-';
+    }
+
+</style>
+
+<div class="events">
+        <div class="event_break"></div>
+        <div class="event_controls"><div class="etoggle">F</div></div>
+        <div class="event_lbrace">[</div>
+        <div class="event_tag">PASS</div>
+        <div class="event_rbrace">]</div>
+        <div class="event_c_wrap">
+            <div class="event_st_gap"></div>
+            <div class="event_content">gsfgsdgfgsfggsfgdsfgfsadfad</div>
+        </div>
+
+        <div class="event_break"></div>
+        <div class="event_lbrace">[</div>
+        <div class="event_tag">PASS</div>
+        <div class="event_rbrace">]</div>
+        <div class="event_c_wrap">
+            <div class="event_st_gap"><div class="etoggle subtest"></div></div>
+            <div class="event_content">gsfgsdgfgsfggsfgdsfgfsadfad
+            fsdsa
+   fasdfsafdsa
+            </div>
+        </div>
+
+        <div class="event_break"></div>
+        <div class="event_lbrace">[</div>
+        <div class="event_tag">PASS</div>
+        <div class="event_rbrace">]</div>
+        <div class="event_c_wrap">
+            <div class="event_st_gap" style="width: 5ch;"></div>
+            <div class="event_content">gsfgsdgfgsfggsfgdsfgfsadfaddffjhfajdhfasjkldfhjkashfdjskahfakjshfkjsdhfjksahfjkdhsjkdfhdjksahfjksdhfjksahdjfkhsajkfhsjkhfdjdskhfjksdhfjksahdjfhskjafhjksahfdjksahfsjkdhfjkasdhkjsahdfjkshfkjdhsajkdfhsadkjfhsjkdfhjksahfjksadhfjkdshfkjsdhkjfhsakdjfhkjsahfkjsdhfkjshdjkfhjksdhfjksahfjksdhfdjkshfkjsadhfjkdshfjkshdfjkhsdjkfhskajfhskajhfjkdshfkjhdfkjsahdjkfhjksadhfjkashf</div>
+        </div>
+</div>
+
+</body>
+</html>
+
+<!--
+
+
+        <div class="event_st_gap"><div class="etoggle subtest"></div></div>
+-->

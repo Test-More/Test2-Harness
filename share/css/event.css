@@ -27,6 +27,7 @@ div.events > div.event_break {
     border: none;
     padding: 0px;
     margin: 0;
+    margin-top: -1px;
 }
 
 div.event_controls {
@@ -34,11 +35,18 @@ div.event_controls {
     grid-column-end: 2;
     height: auto;
     overflow: hidden;
+    border-top: none !important;
 }
 
 div.event_controls > div.event_controls_inner {
     height: 0px;
     overflow: visible;
+    white-space: nowrap;
+    text-align: left;
+}
+
+div.event_controls > div.event_controls_inner > div.etoggle {
+    display: inline-block;
 }
 
 div.event_lbrace {

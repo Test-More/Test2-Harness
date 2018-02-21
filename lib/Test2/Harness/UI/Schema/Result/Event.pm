@@ -79,6 +79,18 @@ __PACKAGE__->table("events");
   data_type: 'jsonb'
   is_nullable: 0
 
+=head2 cid
+
+  data_type: 'uuid'
+  is_nullable: 1
+  size: 16
+
+=head2 hid
+
+  data_type: 'uuid'
+  is_nullable: 1
+  size: 16
+
 =head2 nested
 
   data_type: 'integer'
@@ -107,6 +119,10 @@ __PACKAGE__->add_columns(
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
   "facets",
   { data_type => "jsonb", is_nullable => 0 },
+  "cid",
+  { data_type => "uuid", is_nullable => 1, size => 16 },
+  "hid",
+  { data_type => "uuid", is_nullable => 1, size => 16 },
   "nested",
   { data_type => "integer", is_nullable => 0 },
   "is_parent",
@@ -195,8 +211,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-18 11:29:29
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:MlcRSYsjBhTBkaaywA8gAA
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-21 07:50:43
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:MVKjqlLT4frFgHqsf+q/IA
 
 __PACKAGE__->parent_column('parent_id');
 

@@ -13,10 +13,17 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Formatter::Test2::Composer;
 
-use Test2::Harness::UI::Util::HashBase qw/-config -run -buffer -ready -job_ord -mode -store_orphans -passed -failed -event_ord/;
-
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip  qw($GunzipError);
+
+use Test2::Harness::UI::Util::HashBase qw{
+    -config  -run
+    -buffer  -ready
+    -job_ord -event_ord
+    -mode    -store_orphans
+    -passed  -failed
+    -cids    -hids
+};
 
 
 my %MODES = (
@@ -45,6 +52,9 @@ sub init {
     $self->{+READY}  = [];
     $self->{+JOB_ORD} = 0;
     $self->{+EVENT_ORD} = 0;
+
+    $self->{+CIDS} = {};
+    $self->{+HIDS} = {};
 
     $self->{+PASSED} = 0;
     $self->{+FAILED} = 0;
@@ -123,7 +133,7 @@ sub flush_ready {
             $f = $self->_facet_data($f) unless ref $f;
             return $f unless ref $f;
 
-            my ($new, $error) = $self->process_facets($f, $job);
+            my ($new, $error) = $self->process_facets($f, $job, undef, 0);
             return $error if $error;
 
             for my $event (@$new) {
@@ -264,6 +274,8 @@ sub process_event {
 
         # All done
         push @{$self->{+READY}} => delete $buffer->{$job_name};
+        delete $self->{+CIDS}->{$job->{job_id}};
+        delete $self->{+HIDS}->{$job->{job_id}};
     }
 
     return;
@@ -282,7 +294,7 @@ sub clean_output {
 
 sub process_facets {
     my $self = shift;
-    my ($f, $job, $parent_db_id) = @_;
+    my ($f, $job, $parent_db_id, $orphan) = @_;
 
     my $ord = $self->eord();
 
@@ -293,7 +305,21 @@ sub process_facets {
     $is_diag ||= $f->{assert} && !($f->{assert}->{pass} || $f->{amnesty});
     $is_diag ||= grep { $_->{debug} || $_->{important} } @{$f->{info}} if $f->{info};
 
-    my $nested = $f->{trace} ? ($f->{trace}->{nested} || 0) : 0;
+    my ($nested, $cid, $hid);
+    if (my $trace = $f->{trace}) {
+        $nested = $trace->{nested} || 0;
+        if (length(my $c = $trace->{cid})) {
+            $cid = $self->{+CIDS}->{$job->{job_id}}->{$c} ||= Data::GUID->new->as_string;
+        }
+        if (length(my $h = $trace->{hid})) {
+            $hid = $self->{+HIDS}->{$job->{job_id}}->{$h} ||= Data::GUID->new->as_string;
+        }
+    }
+    else {
+        $nested = 0;
+    }
+
+    $orphan = 1 if $nested && !$parent_db_id;
 
     my $row = {
         event_id  => $db_id,
@@ -301,17 +327,21 @@ sub process_facets {
         job_id    => $job->{job_id},
         parent_id => $parent_db_id,
 
+        hid => $hid,
+        cid => $cid,
+
         nested    => $nested,
         is_parent => 0,
-        is_orphan => $nested && !$parent_db_id ? 1 : 0,
+        is_orphan => $orphan,
     };
 
     my @children;
     if ($f->{parent} && $f->{parent}->{children}) {
         $row->{is_parent} = 1;
+
         my $cnt = 0;
         for my $child (@{$f->{parent}->{children}}) {
-            my ($crows, $error, $diag) = $self->process_facets($child, $job, $db_id);
+            my ($crows, $error, $diag) = $self->process_facets($child, $job, $db_id, $orphan);
             return (undef, "Error in subevent [$cnt]: $error") if $error || !$crows;
 
             $is_diag ||= 1 if $diag;

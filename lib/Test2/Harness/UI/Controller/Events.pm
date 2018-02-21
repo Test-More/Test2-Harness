@@ -74,6 +74,26 @@ sub handle {
 
         @events = $schema->resultset('Event')->search(\%query, \%attrs)->all;
     }
+    elsif ($route->{from} eq 'cid') {
+        my $job_id = $it;
+        my $cid = $route->{cid} or die error(404 => 'No cid');
+
+        my $job = $schema->resultset('Job')->find({job_id => $job_id})
+            or die error(404 => 'Invalid Job');
+
+        $job->verify_access('r', $user) or die error(401);
+
+        $query{job_id} = $job_id;
+        $query{cid} = $cid;
+        if ($p->{load_orphans} && lc($p->{load_orphans} ne 'false')) {
+            $query{is_orphan} = 1;
+        }
+        else {
+            $query{is_orphan} = 0;
+        }
+
+        @events = $schema->resultset('Event')->search(\%query, \%attrs)->all;
+    }
     else {
         die error(501);
     }

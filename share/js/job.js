@@ -71,7 +71,7 @@ t2hui.load_job_events = function(job, events, controls, load_orphans, load_subte
     var data = { 'load_orphans': load_orphans, 'load_subtests': load_subtests };
 
     t2hui.fetch(uri, {'data': data, 'spin_in': spinner}, function(e) {
-        var parts = t2hui.build_event(e);
+        var parts = t2hui.build_event(e, {no_subtest_toggle: load_subtests});
         events.append(parts);
     });
 };
@@ -84,7 +84,7 @@ t2hui.build_filter = function(filter_type, text, job_body, controls) {
         var done = false;
         controls.siblings('div.job_filter').each(function() {
             var x = $(this);
-            if (x.hasClass(filter_type)) { done = true; }
+            if (x.hasClass(filter_type + 's')) { done = true; }
             x.slideUp(function() { x.remove() });
         });
 

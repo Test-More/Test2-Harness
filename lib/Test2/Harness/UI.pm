@@ -38,6 +38,7 @@ sub init {
     $router->connect('/run/:name_or_id/jobs'     => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
     $router->connect('/job/:name_or_id/events'   => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
     $router->connect('/event/:name_or_id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
+    $router->connect('/cid/:cid/:name_or_id/events'  => {controller => 'Test2::Harness::UI::Controller::Events', from => 'cid'});
 
 #    TODO:
 #    $router->connect('/job/:name_or_id'   => {controller => 'Test2::Harness::UI::Controller::Job'});

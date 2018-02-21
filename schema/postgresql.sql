@@ -218,6 +218,8 @@ CREATE TABLE events (
     facets          JSONB       NOT NULL,
 
     -- Summaries for lookup/display
+    cid             UUID        DEFAULT NULL,
+    hid             UUID        DEFAULT NULL,
     nested          INT         NOT NULL,
     is_parent       BOOL        NOT NULL,
     is_orphan       BOOL        NOT NULL

@@ -35,7 +35,7 @@ sub process {
     my ($run) = @_;
 
     my $start = time;
-    syswrite(\*STDOUT, "Starting run " . $run->run_id . " (" . $run->name . ")\n");
+    syswrite(\*STDOUT, "Starting run " . $run->run_id . " (" . $run->log_file . ")\n");
 
     my $status;
     my $ok = eval {
@@ -56,12 +56,12 @@ sub process {
     my $total = time - $start;
 
     if ($ok && !$status->{errors}) {
-        syswrite(\*STDOUT, "Completed run " . $run->run_id . " (" . $run->name . ") in $total seconds.\n");
+        syswrite(\*STDOUT, "Completed run " . $run->run_id . " (" . $run->log_file . ") in $total seconds.\n");
         $run->update({status => 'complete', passed => $status->{passed}, failed => $status->{failed}});
     }
     else {
         my $error = $ok ? join("\n" => @{$status->{errors}}) : $err;
-        syswrite(\*STDOUT, "Failed feed " . $run->run_id . " (" . $run->name . ") in $total seconds.\n$error\n");
+        syswrite(\*STDOUT, "Failed feed " . $run->run_id . " (" . $run->log_file . ") in $total seconds.\n$error\n");
         $run->update({status => 'failed', error => $error});
     }
 

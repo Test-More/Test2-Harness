@@ -89,25 +89,6 @@ div.event_content {
     grid-column-end: 3;
 }
 
-.etoggle {
-    display: block;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    cursor: pointer;
-    text-align: center;
-    color: black;
-    font-weight: bold;
-    font-size: 14px;
-    width: 1.8ch;
-    text-align: center;
-    vertical-align: middle;
-}
-
-.etoggle:hover, .etoggle.clicked {
-    border-color: #AABBFF;
-    background: #DDEEFF;
-}
-
 div.subtest.etoggle {
     float: right;
 }

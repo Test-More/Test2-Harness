@@ -172,7 +172,7 @@ dl.form {
     overflow: hidden;
 }
 
-dl.form > dt {
+dl.form > dt, dl.form > .wrapper > dt {
     float: left;
     margin: 0;
     width: 150px;
@@ -181,7 +181,7 @@ dl.form > dt {
     padding-top: 4px;
 }
 
-dl.form > dd {
+dl.form > dd, dl.form > .wrapper > dd {
     float: left;
     margin: 0;
     width: 100%;
@@ -364,11 +364,112 @@ div#modal_body {
     margin-left: 1ch;
 }
 
-/*
-<div id="free_modal">
-    <div id="modal_inner_wrap">
-        <div id="modal_close">X</div>
-        <div id="modal_body"></div>
-    </div>
-</div>
-*/
+.etoggle {
+    display: block;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+    color: black;
+    font-weight: bold;
+    font-size: 14px;
+    width: 1.8ch;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.etoggle:hover, .etoggle.clicked {
+    border-color: #AABBFF;
+    background: #DDEEFF;
+}
+
+div.grid {
+    display: grid;
+    grid-gap: 0px;
+    grid-template-columns: min-content;
+    grid-column-gap: 1px;
+    grid-row-gap: 1px;
+    background: #C0C0C0;
+    overflow: auto;
+    padding: 5px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    width: min-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div.grid > div {
+    display: block;
+    text-align: left;
+    vertical-align: top;
+    background: #F8F8F8;
+    padding: 2px 4px;
+    white-space: nowrap;
+}
+
+div.grid > div.hover {
+    filter: brightness(90%);
+}
+
+div.grid > div.head {
+    font-weight: bold;
+    text-align: center;
+    padding: 3px 6px;
+}
+
+div.grid > div.pending {
+    background: #C0D0F0;
+}
+
+div.grid > div.running {
+    animation: running_pulse 2s infinite !important;
+}
+@keyframes running_pulse {
+    0% { background-color: #B0C0E0 }
+    50% { background-color: #CFDFFF }
+    100% { background-color: #B0C0E0 }
+}
+
+div.grid > div.failed {
+    background: #A08080;
+}
+
+div.grid > div.failing {
+    background: #F0D0D0;
+}
+
+div.pass {
+    color: #009000;
+}
+
+div.fail {
+    color: #F02222;
+}
+
+div.grid > div.passing {
+    background: #D0F0D0;
+}
+
+div.grid > div.col1  { grid-column: 1  / 2;  }
+div.grid > div.col2  { grid-column: 2  / 3;  }
+div.grid > div.col3  { grid-column: 3  / 4;  }
+div.grid > div.col4  { grid-column: 4  / 5;  }
+div.grid > div.col5  { grid-column: 5  / 6;  }
+div.grid > div.col6  { grid-column: 6  / 7;  }
+div.grid > div.col7  { grid-column: 7  / 8;  }
+div.grid > div.col8  { grid-column: 8  / 9;  }
+div.grid > div.col9  { grid-column: 9  / 10; }
+div.grid > div.col10 { grid-column: 10 / 11; }
+div.grid > div.col11 { grid-column: 11 / 12; }
+div.grid > div.col12 { grid-column: 12 / 13; }
+div.grid > div.col13 { grid-column: 13 / 14; }
+div.grid > div.col14 { grid-column: 14 / 15; }
+div.grid > div.col15 { grid-column: 15 / 16; }
+div.grid > div.col16 { grid-column: 16 / 17; }
+div.grid > div.col17 { grid-column: 17 / 18; }
+div.grid > div.col18 { grid-column: 18 / 19; }
+div.grid > div.col19 { grid-column: 19 / 20; }
+div.grid > div.col20 { grid-column: 20 / 21; }
+
+

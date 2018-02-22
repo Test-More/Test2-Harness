@@ -63,11 +63,6 @@ __PACKAGE__->table("runs");
   is_nullable: 0
   size: 16
 
-=head2 name
-
-  data_type: 'text'
-  is_nullable: 1
-
 =head2 passed
 
   data_type: 'integer'
@@ -81,9 +76,24 @@ __PACKAGE__->table("runs");
 =head2 project
 
   data_type: 'citext'
-  is_nullable: 1
+  is_nullable: 0
 
 =head2 version
+
+  data_type: 'citext'
+  is_nullable: 1
+
+=head2 tier
+
+  data_type: 'citext'
+  is_nullable: 1
+
+=head2 category
+
+  data_type: 'citext'
+  is_nullable: 1
+
+=head2 build
 
   data_type: 'citext'
   is_nullable: 1
@@ -155,15 +165,19 @@ __PACKAGE__->add_columns(
   },
   "user_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "name",
-  { data_type => "text", is_nullable => 1 },
   "passed",
   { data_type => "integer", is_nullable => 1 },
   "failed",
   { data_type => "integer", is_nullable => 1 },
   "project",
-  { data_type => "citext", is_nullable => 1 },
+  { data_type => "citext", is_nullable => 0 },
   "version",
+  { data_type => "citext", is_nullable => 1 },
+  "tier",
+  { data_type => "citext", is_nullable => 1 },
+  "category",
+  { data_type => "citext", is_nullable => 1 },
+  "build",
   { data_type => "citext", is_nullable => 1 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
@@ -324,8 +338,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-17 22:03:02
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:99Wmfae+Vzkf1FmeX+AArw
+# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-21 16:37:07
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:EBhVZgkVpoGMYhb/WAqckA
 
 __PACKAGE__->inflate_column(
     parameters => {
@@ -353,6 +367,8 @@ sub TO_JSON {
 
     # Inflate
     $cols{parameters} = $self->parameters;
+
+    $cols{user} = $self->user->email || $self->user->username;
 
     return \%cols;
 }

@@ -139,7 +139,7 @@ sub flush_ready {
             for my $event (@$new) {
                 next unless $internal || $fail || $mode > $MODES{qvfd} || $event->{is_diag};
 
-                if ($event->{nested} && $self->{+STORE_ORPHANS} ne 'yes' && !$internal) {
+                if ($event->{is_orphan} && $self->{+STORE_ORPHANS} ne 'yes' && !$internal) {
                     next if $self->{+STORE_ORPHANS} eq 'no';
 
                     # store on fail only

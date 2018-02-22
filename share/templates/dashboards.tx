@@ -1,5 +1,0 @@
-<div id="dashboards">
-    : for $dashboards -> $dash {
-<: $dash :>
-    : }
-</div>

@@ -85,6 +85,9 @@ t2hui.fetch = function(url, args, cb) {
         success: async function(response) {
             while (running) { await t2hui.sleep(50); }
             iterate(response);
+            if (args.spin_in) {
+                args.spin_in.removeClass('spinner');
+            }
         },
         complete: async function() {
             while (running) { await t2hui.sleep(50); }

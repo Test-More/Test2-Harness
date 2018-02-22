@@ -33,128 +33,6 @@ my $config = Test2::Harness::UI::Config->new(
 
 my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root'});
 
-my $dash_error = $config->schema->resultset('Dashboard')->create(
-    {
-        name              => 'Bad Logs',
-        user_id           => $user->user_id,    #UUID        NOT NULL REFERENCES users(user_id),
-        weight            => -100,                #SMALLINT    NOT NULL DEFAULT 0,
-        show_passes       => 0,                 #BOOL        NOT NULL,
-        show_failures     => 0,                 #BOOL        NOT NULL,
-        show_shared       => 0,                 #BOOL        NOT NULL,
-        show_pending      => 0,                 #BOOL        NOT NULL,
-        show_protected    => 0,                 #BOOL        NOT NULL,
-        show_public       => 0,                 #BOOL        NOT NULL,
-        show_signoff_only => 0,                 #BOOL        NOT NULL,
-        show_errors_only  => 1,
-        show_mine         => 1,
-        show_project      => undef,             #CITEXT      DEFAULT NULL,
-        show_version      => undef,             #CITEXT      DEFAULT NULL
-        show_columns      => ["date", "uploaded_by", "name", "status", "error"],
-    }
-);
-
-
-my $dash_sign = $config->schema->resultset('Dashboard')->create(
-    {
-        name              => 'Require Signoff',
-        user_id           => $user->user_id,    #UUID        NOT NULL REFERENCES users(user_id),
-        weight            => -2,                #SMALLINT    NOT NULL DEFAULT 0,
-        show_passes       => 1,                 #BOOL        NOT NULL,
-        show_failures     => 1,                 #BOOL        NOT NULL,
-        show_shared       => 1,                 #BOOL        NOT NULL,
-        show_pending      => 1,                 #BOOL        NOT NULL,
-        show_protected    => 1,                 #BOOL        NOT NULL,
-        show_public       => 1,                 #BOOL        NOT NULL,
-        show_signoff_only => 1,                 #BOOL        NOT NULL,
-        show_errors_only  => 0,
-        show_mine         => 1,
-        show_project      => undef,             #CITEXT      DEFAULT NULL,
-        show_version      => undef,             #CITEXT      DEFAULT NULL
-        show_columns      => ["passed", "failed", "project", "version", "date", "uploaded_by", "name", "status"],
-    }
-);
-
-my $dash_shared = $config->schema->resultset('Dashboard')->create(
-    {
-        name              => 'Shared With Me',
-        user_id           => $user->user_id,    #UUID        NOT NULL REFERENCES users(user_id),
-        weight            => -1,                #SMALLINT    NOT NULL DEFAULT 0,
-        show_passes       => 1,                 #BOOL        NOT NULL,
-        show_failures     => 1,                 #BOOL        NOT NULL,
-        show_shared       => 1,                 #BOOL        NOT NULL,
-        show_pending      => 1,                 #BOOL        NOT NULL,
-        show_protected    => 0,                 #BOOL        NOT NULL,
-        show_public       => 0,                 #BOOL        NOT NULL,
-        show_signoff_only => 0,                 #BOOL        NOT NULL,
-        show_errors_only  => 0,
-        show_project      => undef,             #CITEXT      DEFAULT NULL,
-        show_version      => undef,             #CITEXT      DEFAULT NULL
-        show_mine         => 0,
-        show_columns      => ["passed", "failed", "project", "version", "date", "uploaded_by", "name", "status"],
-    }
-);
-
-my $dash_my = $config->schema->resultset('Dashboard')->create(
-    {
-        name              => 'My Runs',
-        user_id           => $user->user_id,    #UUID        NOT NULL REFERENCES users(user_id),
-        weight            => 0,                 #SMALLINT    NOT NULL DEFAULT 0,
-        show_passes       => 1,                 #BOOL        NOT NULL,
-        show_failures     => 1,                 #BOOL        NOT NULL,
-        show_shared       => 0,                 #BOOL        NOT NULL,
-        show_pending      => 1,                 #BOOL        NOT NULL,
-        show_protected    => 0,                 #BOOL        NOT NULL,
-        show_public       => 0,                 #BOOL        NOT NULL,
-        show_signoff_only => 0,                 #BOOL        NOT NULL,
-        show_errors_only  => 0,
-        show_project      => undef,             #CITEXT      DEFAULT NULL,
-        show_version      => undef,             #CITEXT      DEFAULT NULL
-        show_mine         => 1,
-        show_columns      => ["passed", "failed", "project", "version", "date", "uploaded_by", "name", "status"],
-    }
-);
-
-my $dash_protected = $config->schema->resultset('Dashboard')->create(
-    {
-        name              => 'Protected Runs',
-        user_id           => $user->user_id,     #UUID        NOT NULL REFERENCES users(user_id),
-        weight            => 1,                  #SMALLINT    NOT NULL DEFAULT 0,
-        show_passes       => 1,                  #BOOL        NOT NULL,
-        show_failures     => 1,                  #BOOL        NOT NULL,
-        show_pending      => 1,                  #BOOL        NOT NULL,
-        show_shared       => 0,                 #BOOL        NOT NULL,
-        show_protected    => 1,                  #BOOL        NOT NULL,
-        show_public       => 0,                  #BOOL        NOT NULL,
-        show_signoff_only => 0,                  #BOOL        NOT NULL,
-        show_errors_only  => 0,
-        show_project      => undef,              #CITEXT      DEFAULT NULL,
-        show_version      => undef,              #CITEXT      DEFAULT NULL
-        show_mine         => 0,
-        show_columns      => ["passed", "failed", "project", "version", "date", "uploaded_by", "name", "status"],
-    }
-);
-
-my $dash_public = $config->schema->resultset('Dashboard')->create(
-    {
-        name              => 'Public Runs',
-        user_id           => $user->user_id,     #UUID        NOT NULL REFERENCES users(user_id),
-        weight            => 2,                  #SMALLINT    NOT NULL DEFAULT 0,
-        show_passes       => 1,                  #BOOL        NOT NULL,
-        show_failures     => 1,                  #BOOL        NOT NULL,
-        show_pending      => 1,                  #BOOL        NOT NULL,
-        show_shared       => 0,                 #BOOL        NOT NULL,
-        show_protected    => 0,                  #BOOL        NOT NULL,
-        show_public       => 1,                  #BOOL        NOT NULL,
-        show_signoff_only => 0,                  #BOOL        NOT NULL,
-        show_errors_only  => 0,
-        show_project      => undef,              #CITEXT      DEFAULT NULL,
-        show_version      => undef,              #CITEXT      DEFAULT NULL
-        is_public         => 1,
-        show_mine         => 0,
-        show_columns      => ["passed", "failed", "project", "version", "date", "uploaded_by", "name", "status"],
-    }
-);
-
 my @runs;
 my @perms = qw/public protected private/;
 my @modes = qw/complete/;
@@ -176,7 +54,6 @@ for my $file (qw/moose.jsonl.bz2 simple-fail.jsonl.bz2  simple-pass.jsonl.bz2 fa
     push @runs => $config->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
-            name          => $file,
             permissions   => shift @perms || 'public',
             mode          => shift @modes || 'qvfd',
             store_orphans => 'fail',

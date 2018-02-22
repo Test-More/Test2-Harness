@@ -89,13 +89,14 @@ CREATE TABLE runs (
     run_id          UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     user_id         UUID            NOT NULL REFERENCES users(user_id),
 
-    name            TEXT            DEFAULT NULL,
-
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
 
-    project         CITEXT          DEFAULT NULL,
+    project         CITEXT          NOT NULL,
     version         CITEXT          DEFAULT NULL,
+    tier            CITEXT          DEFAULT NULL,
+    category        CITEXT          DEFAULT NULL,
+    build           CITEXT          DEFAULT NULL,
 
     parameters      JSONB           DEFAULT NULL,
     error           TEXT            DEFAULT NULL,
@@ -113,7 +114,6 @@ CREATE INDEX IF NOT EXISTS run_projects ON runs(project);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
 CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
 CREATE INDEX IF NOT EXISTS run_perms ON runs(permissions);
-CREATE INDEX IF NOT EXISTS run_user_perms ON runs(user_id, permissions);
 
 CREATE TABLE signoffs (
     run_id          UUID            NOT NULL PRIMARY KEY REFERENCES runs(run_id),
@@ -147,33 +147,6 @@ CREATE TABLE run_pins (
 );
 CREATE INDEX IF NOT EXISTS run_pin_user ON run_pins(user_id);
 CREATE INDEX IF NOT EXISTS run_pin_run  ON run_pins(run_id);
-
-CREATE TABLE dashboards (
-    dashboard_id        UUID        DEFAULT UUID_GENERATE_V4() NOT NULL PRIMARY KEY,
-    user_id             UUID        NOT NULL REFERENCES users(user_id),
-
-    is_public           BOOL        DEFAULT NULL,
-
-    name                TEXT        NOT NULL,
-
-    weight              SMALLINT    NOT NULL DEFAULT 0,
-
-    show_passes         BOOL        NOT NULL,
-    show_failures       BOOL        NOT NULL,
-    show_pending        BOOL        NOT NULL,
-    show_shared         BOOL        NOT NULL,
-    show_mine           BOOL        NOT NULL,
-    show_protected      BOOL        NOT NULL,
-    show_public         BOOL        NOT NULL,
-    show_signoff_only   BOOL        NOT NULL,
-    show_errors_only    BOOL        NOT NULL,
-
-    show_columns        JSONB       NOT NULL,
-
-    show_project        CITEXT      DEFAULT NULL,
-    show_version        CITEXT      DEFAULT NULL
-);
-CREATE INDEX IF NOT EXISTS dashboard_user ON dashboards(user_id);
 
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,

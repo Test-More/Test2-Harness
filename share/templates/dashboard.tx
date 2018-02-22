@@ -1,19 +1,2 @@
-<div class="dashboard">
-    <h3 onclick="location.href = '<: $base_uri :>dashboard/<: $dash.dashboard_id :>'"><: $dash.name :></h3>
-    <div class="dashboard_wrapper">
-        <table>
-            <tr class="dashhead">
-                : for $header -> $head {
-                    <th><: $head :></th>
-                : }
-            </tr>
-            : for $rows -> $row {
-                <tr class="<: $row.class :>" onclick="location.href = '<: $base_uri :>run/<: $row.run_id :>'">
-                    : for $row.vals -> $val {
-                        <td><: $val :></td>
-                    : }
-                </tr>
-            : }
-        </table>
-    </div>
+<div id="dashboard">
 </div>

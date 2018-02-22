@@ -13,6 +13,9 @@ use Test2::Harness::UI::Controller::Dashboard;
 use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
+
+use Test2::Harness::UI::Controller::Query;
+use Test2::Harness::UI::Controller::Runs;
 use Test2::Harness::UI::Controller::Jobs;
 use Test2::Harness::UI::Controller::Events;
 
@@ -28,21 +31,24 @@ sub init {
 
     my $router = $self->{+ROUTER} ||= Router::Simple->new;
 
-    $router->connect('/'           => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-    $router->connect('/dashboard'  => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-    $router->connect('/dashboards' => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+    $router->connect('/'          => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+    $router->connect('/dashboard' => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
 
-    $router->connect('/dashboard/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-    $router->connect('/run/:name_or_id'       => {controller => 'Test2::Harness::UI::Controller::Run'});
+    $router->connect('/runs' => {controller => 'Test2::Harness::UI::Controller::Runs'});
 
-    $router->connect('/run/:name_or_id/jobs'     => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
-    $router->connect('/job/:name_or_id/events'   => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
-    $router->connect('/event/:name_or_id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
-    $router->connect('/cid/:cid/:name_or_id/events'  => {controller => 'Test2::Harness::UI::Controller::Events', from => 'cid'});
+    $router->connect('/query/:name'      => {controller => 'Test2::Harness::UI::Controller::Query'});
+    $router->connect('/query/:name/:arg' => {controller => 'Test2::Harness::UI::Controller::Query'});
+
+    $router->connect('/run/:id' => {controller => 'Test2::Harness::UI::Controller::Run'});
+
+    $router->connect('/run/:id/jobs'        => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
+    $router->connect('/job/:id/events'      => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
+    $router->connect('/event/:id/events'    => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
+    $router->connect('/cid/:cid/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'cid'});
 
 #    TODO:
-#    $router->connect('/job/:name_or_id'   => {controller => 'Test2::Harness::UI::Controller::Job'});
-#    $router->connect('/event/:name_or_id' => {controller => 'Test2::Harness::UI::Controller::Event'});
+#    $router->connect('/job/:id'   => {controller => 'Test2::Harness::UI::Controller::Job'});
+#    $router->connect('/event/:id' => {controller => 'Test2::Harness::UI::Controller::Event'});
 
     $router->connect('/user'   => {controller => 'Test2::Harness::UI::Controller::User'});
     $router->connect('/upload' => {controller => 'Test2::Harness::UI::Controller::Upload'});
@@ -125,7 +131,7 @@ sub wrap {
 
         $res->body($wrapped);
     }
-    elsif($ct eq 'application/x-jsonl' || $ct eq 'application/x-ndjson') {
+    elsif($ct eq 'application/json') {
         $res->body(encode_json($res->raw_body));
     }
 

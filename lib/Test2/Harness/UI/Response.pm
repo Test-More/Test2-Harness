@@ -4,6 +4,7 @@ use warnings;
 
 use Carp qw/croak/;
 use Time::HiRes qw/sleep/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use parent 'Plack::Response';
 
@@ -68,9 +69,19 @@ sub stream {
     my $self = shift;
     if (@_) {
         my %params = @_;
-        my $done   = $params{done} or croak "'done' is a required parameter";
-        my $fetch  = $params{fetch} or croak "'fetch' is a required parameter";
-        my $env    = $params{env} or croak "'env' is a required parameter";
+
+        my $env = $params{env} or croak "'env' is a required parameter";
+
+        my ($done, $fetch);
+        if(my $rs = $params{resultset}) {
+            my $go = 1;
+            $done = sub { !$go };
+            $fetch = sub { $go = $rs->next() or return; encode_json($go) . "\n" };
+        }
+        else {
+            $done  = $params{done} or croak "'done' is a required parameter";
+            $fetch = $params{fetch} or croak "'fetch' is a required parameter";
+        }
 
         my $wait = $params{wait} || 0.2;
         my $cleanup = $params{cleanup};

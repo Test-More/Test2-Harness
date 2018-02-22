@@ -5,6 +5,7 @@ use warnings;
 use Text::Xslate();
 
 use Test2::Harness::UI::Import();
+use Test2::Harness::UI::Queries();
 
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -21,6 +22,7 @@ sub handle {
 
     my $res = resp(200);
     $res->add_css('upload.css');
+    $res->add_js('upload.js');
     $self->process_form($res) if keys %{$req->parameters};
 
     my $template = share_dir('templates/upload.tx');
@@ -32,6 +34,7 @@ sub handle {
         {
             base_uri => $req->base->as_string,
             user     => $user,
+            projects => Test2::Harness::UI::Queries->new(config => $self->{+CONFIG})->projects,
         }
     );
 
@@ -52,11 +55,18 @@ sub process_form {
     my $user = $req->user || $self->api_user($req->parameters->{api_key});
     die error(401) unless $user;
 
-    my $file          = $req->uploads->{log_file}->filename;
-    my $tmp           = $req->uploads->{log_file}->tempname;
-    my $name          = $req->parameters->{feed_name} || $file;
-    my $perms         = $req->parameters->{permissions} || 'private';
-    my $mode          = $req->parameters->{mode} || 'qvfd';
+    my $file = $req->uploads->{log_file}->filename;
+    my $tmp  = $req->uploads->{log_file}->tempname;
+
+    my $project = $req->parameters->{project} || return {errors => ['project is required']};
+
+    my $version  = $req->parameters->{version};
+    my $category = $req->parameters->{category};
+    my $tier     = $req->parameters->{tier};
+    my $build    = $req->parameters->{build};
+
+    my $perms         = $req->parameters->{permissions}   || 'private';
+    my $mode          = $req->parameters->{mode}          || 'qvfd';
     my $store_orphans = $req->parameters->{store_orphans} || 'fail';
 
     return {errors => ["Unsupported file type, must be .jsonl.bz2, or .jsonl.gz"]}
@@ -67,12 +77,16 @@ sub process_form {
     my $run = $self->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
-            name          => $name,
             permissions   => $perms,
             mode          => $mode,
             store_orphans => $store_orphans,
             log_file      => $file,
             log_data      => do { local $/; <$fh> },
+            project       => $project,
+            version       => $version,
+            category      => $category,
+            tier          => $tier,
+            build         => $build,
             status        => 'pending',
         }
     );

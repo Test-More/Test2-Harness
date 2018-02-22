@@ -24,10 +24,10 @@ sub handle {
     my $schema = $self->{+CONFIG}->schema;
 
     die error(404 => 'Missing route') unless $route;
-    my $it = $route->{name_or_id} or die error(404 => 'No name or id');
+    my $it = $route->{id} or die error(404 => 'No name or id');
 
     my $p = $req->parameters;
-    my (%query, %attrs, @events);
+    my (%query, %attrs, $rs);
 
     $attrs{order_by} = {-asc => ['event_ord', 'event_id']};
 
@@ -42,7 +42,7 @@ sub handle {
         $query{is_orphan} = 0 unless $p->{load_orphans} && lc($p->{load_orphans} ne 'false');
         $query{parent_id} = undef unless $p->{load_subtests} && lc($p->{load_subtests}) ne 'false';
 
-        @events = $schema->resultset('Event')->search(\%query, \%attrs)->all;
+        $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }
     elsif ($route->{from} eq 'event') {
         my $event_id = $it;
@@ -72,7 +72,7 @@ sub handle {
             $query{'parent_id'} = $event_id;
         }
 
-        @events = $schema->resultset('Event')->search(\%query, \%attrs)->all;
+        $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }
     elsif ($route->{from} eq 'cid') {
         my $job_id = $it;
@@ -92,7 +92,7 @@ sub handle {
             $query{is_orphan} = 0;
         }
 
-        @events = $schema->resultset('Event')->search(\%query, \%attrs)->all;
+        $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }
     else {
         die error(501);
@@ -101,13 +101,7 @@ sub handle {
     $res->stream(
         env          => $req->env,
         content_type => 'application/x-jsonl',
-
-        done  => sub { !@events },
-        fetch => sub {
-            my $event = shift @events or return;
-
-            return encode_json($event) . "\n";
-        },
+        resultset    => $rs,
     );
 
     return $res;

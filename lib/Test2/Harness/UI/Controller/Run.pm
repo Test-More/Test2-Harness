@@ -29,17 +29,16 @@ sub handle {
     my $user = $req->user;
 
     die error(404 => 'Missing route') unless $route;
-    my $it = $route->{name_or_id} or die error(404 => 'No name or id');
-    my $query = [{name => $it}];
-    push @$query => {run_id => $it} if eval { Data::GUID->from_string($it) };
+    my $it = $route->{id} or die error(404 => 'No id');
+    my $query = [{run_id => $it}];
 
     my $run = $user->runs($query)->first or die error(404 => 'Invalid run');
 
-    $self->{+TITLE} = 'Run: ' . $run->name;
+    $self->{+TITLE} = 'Run: ' . $run->project . ' - ' . $run->run_id;
 
     my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html');
 
-    if ($ct eq 'application/x-jsonl' || $ct eq 'application/x-ndjson') {
+    if ($ct eq 'application/json') {
         $res->content_type($ct);
         $res->raw_body($run);
         return $res;

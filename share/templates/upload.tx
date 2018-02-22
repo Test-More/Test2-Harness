@@ -1,10 +1,42 @@
 <div id="log_upload">
     <form id="log_upload" method="POST" enctype="multipart/form-data">
         <dl class="form">
-            <dt><label for="feed_name">Feed Name</label></dt>
+            <dt><label for="project">Project</label></dt>
             <dd>
-                <input type="text" name="feed_name" id="feed_name">
-                <small>Optional, defaults to upload file name.</small>
+                <input type="text" name="project" id="project" list="projects" required>
+                <datalist id="projects">
+                    : for $projects -> $project {
+                        <option value="<: $project :>">
+                    : }
+                </datalist>
+                <small>Required</small>
+            </dd>
+
+            <dt><label for="version">Version</label></dt>
+            <dd>
+                <input type="text" name="version" id="version" list="versions">
+                <datalist id="versions"></datalist>
+                <small>Optional</small>
+            </dd>
+
+            <dt><label for="category">Category</label></dt>
+            <dd>
+                <input type="text" name="category" id="category" list="categories">
+                <datalist id="categories"></datalist>
+                <small>Optional</small>
+            </dd>
+
+            <dt><label for="tier">Tier</label></dt>
+            <dd>
+                <input type="text" name="tier" id="tier" list="tiers">
+                <datalist id="tiers"></datalist>
+                <small>Optional</small>
+            </dd>
+
+            <dt><label for="build">Build</label></dt>
+            <dd>
+                <input type="text" name="build" id="build">
+                <small>Optional</small>
             </dd>
 
             <dt><label for="log_file">Log File</label></dt>
@@ -88,3 +120,5 @@
 
     </form>
 </div>
+
+

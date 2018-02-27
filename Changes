@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - No changes since last trial
+
 0.001052  2018-02-06 15:03:08-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Fix infinite recursion in closed subtests log json

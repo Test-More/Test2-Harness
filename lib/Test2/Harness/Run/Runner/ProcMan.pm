@@ -79,7 +79,7 @@ sub read_jobs {
     return unless $jobs->exists;
 
     my $jobs_seen = $self->{+JOBS_SEEN};
-    for my $job ($jobs->read) {
+    for my $job ($jobs->poll) {
         $jobs_seen->{$job->{job_id}}++;
     }
 }
@@ -272,11 +272,13 @@ sub _next {
         sleep $wait_time unless $first;
         $first = 0;
 
+        next unless $self->lock;
+
+        $self->read_jobs;
         $self->poll_tasks;
         $self->wait_on_jobs;
 
         next unless @$list;
-        next unless $self->lock;
 
         my $running = 0;
         my %cats;

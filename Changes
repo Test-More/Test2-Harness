@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Switch Streaming write() to use syswrite
+    - Fix bug where jobs would re-run after a reload
+
 0.001053  2018-02-27 07:15:53-08:00 America/Los_Angeles
 
     - No changes since last trial

@@ -69,7 +69,6 @@ sub init {
     $self->{+JOBS_SEEN} = {};
 
     $self->read_jobs();
-    $self->preload_queue();
 }
 
 sub read_jobs {
@@ -89,7 +88,7 @@ sub preload_queue {
 
     my $run = $self->{+RUN};
 
-    return $self->poll_tasks unless $run->finite;
+    return unless $run->finite;
 
     my $wait_time = $self->{+WAIT_TIME};
     until ($self->{+QUEUE_ENDED}) {
@@ -110,6 +109,8 @@ sub poll_tasks {
         $queue->reset;
         $self->{+PID} = $$;
     }
+
+    $self->read_jobs;
 
     my $added = 0;
     for my $item ($queue->poll) {
@@ -274,7 +275,6 @@ sub _next {
 
         next unless $self->lock;
 
-        $self->read_jobs;
         $self->poll_tasks;
         $self->wait_on_jobs;
 

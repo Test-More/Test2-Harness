@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '0.001054';
 
 use Carp qw/croak/;
-use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET/;
+use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET O_APPEND O_CREAT O_SYNC O_WRONLY/;
 
 use parent 'Test2::Harness::Util::File';
 use Test2::Harness::Util::HashBase qw/use_write_lock -tail/;
@@ -67,14 +67,15 @@ sub write {
 
     my $name = $self->{+NAME};
 
-    my $fh = $self->open_file('>>');
+    my $mode = O_APPEND | O_CREAT | O_SYNC | O_WRONLY;
+
+    sysopen(my $fh, $self->name, $mode) or die "Could not open file: $!";
 
     flock($fh, LOCK_EX) or die "Could not lock file '$name': $!"
         if $self->{+USE_WRITE_LOCK};
 
-    seek($fh,2,0);
-    print $fh $self->encode($_) for @_;
-    $fh->flush;
+    sysseek($fh,2,0);
+    syswrite($fh, $self->encode($_)) for @_;
 
     flock($fh, LOCK_UN) or die "Could not unlock file '$name': $!"
         if $self->{+USE_WRITE_LOCK};

@@ -16,6 +16,7 @@ use Config qw/%Config/;
 use File::Spec;
 
 use Test2::Harness::Util qw/read_file open_file fqmod/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness;
 use Test2::Harness::Run;
@@ -259,6 +260,7 @@ sub make_run_from_settings {
         no_long     => $settings->{no_long},
         dummy       => $settings->{dummy},
         cover       => $settings->{cover},
+        uuid        => $settings->{uuid},
 
         plugins => $self->{+PLUGINS} ? [@{$self->{+PLUGINS}}] : undef,
 
@@ -603,8 +605,8 @@ sub options {
             used_by => {runner => 1, jobs => 1},
             section => 'Harness Options',
             usage   => ['--id ID',               '--run_id ID'],
-            summary => ['Set a specific run-id', '(Default: current timestamp)'],
-            default => sub                       { time() },
+            summary => ['Set a specific run-id', '(Default: a UUID)'],
+            default => sub                       { gen_uuid() },
         },
 
         {

@@ -110,13 +110,9 @@ sub poll_tasks {
         $self->{+PID} = $$;
     }
 
-    $self->read_jobs;
-
     my $added = 0;
     for my $item ($queue->poll) {
         my ($spos, $epos, $task) = @$item;
-
-        next if $task && $self->{+JOBS_SEEN}->{$task->{job_id}}++;
 
         $added++;
 
@@ -256,6 +252,7 @@ sub _next {
     my $end_cb    = $self->{+END_LOOP_CB};
     my $list      = $self->{+PENDING}->{$stage} ||= [];
     my $wait_time = $self->{+WAIT_TIME};
+    my $jobs_seen = $self->{+JOBS_SEEN};
 
     my $max = $self->{+RUN}->job_count || 1;
     my $slow = $max - 1;
@@ -273,12 +270,17 @@ sub _next {
         sleep $wait_time unless $first;
         $first = 0;
 
-        next unless $self->lock;
-
         $self->poll_tasks;
         $self->wait_on_jobs;
 
-        next unless @$list;
+        next unless $self->lock;
+
+        $self->read_jobs;
+        @$list = grep { !$jobs_seen->{$_->{job_id}} } @$list;
+        unless (@$list) {
+            $self->unlock;
+            next;
+        }
 
         my $running = 0;
         my %cats;
@@ -316,11 +318,3 @@ sub _next {
 }
 
 1;
-
-__END__
-    long       => 1,
-    medium     => 1,
-    general    => 1,
-    isolation  => 1,
-    immiscible => 1,
-

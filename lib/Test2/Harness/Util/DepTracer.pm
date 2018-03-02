@@ -2,7 +2,7 @@ package Test2::Harness::Util::DepTracer;
 use strict;
 use warnings;
 
-our $VERSION = '0.001054';
+our $VERSION = '0.001055';
 
 use Test2::Harness::Util::HashBase qw/
     -_on

@@ -2,6 +2,7 @@ requires "Carp" => "0";
 requires "Config" => "0";
 requires "Cwd" => "0";
 requires "Data::Dumper" => "0";
+requires "Data::UUID" => "1.148";
 requires "Exporter" => "0";
 requires "Fcntl" => "0";
 requires "File::Find" => "0";

@@ -2,7 +2,7 @@ package Test2::Harness::Watcher;
 use strict;
 use warnings;
 
-our $VERSION = '0.001055';
+our $VERSION = '0.001056';
 
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;

@@ -12,8 +12,8 @@ like(
 
 open(my $tmpfh, '<', __FILE__) or die "Could not open file: $!";
 my $zed = $CLASS->new(name => __FILE__, fh => $tmpfh);
-is($zed->fh, $tmpfh, "saved fh");
-is($tmpfh->blocking, 0, "fh was set to non-blocking");
+is($zed->_init_fh, $tmpfh, "saved fh");
+is($zed->fh->blocking, 0, "fh was set to non-blocking");
 $zed = undef;
 
 my $one = $CLASS->new(name => __FILE__);

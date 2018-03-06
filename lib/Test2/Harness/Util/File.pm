@@ -11,7 +11,7 @@ use Test2::Harness::Util();
 use Carp qw/croak confess/;
 use Fcntl qw/SEEK_SET SEEK_CUR/;
 
-use Test2::Harness::Util::HashBase qw{ -name -_fh done -stamped -line_pos };
+use Test2::Harness::Util::HashBase qw{ -name -_fh -_init_fh done -stamped -line_pos };
 
 sub exists { -e $_[0]->{+NAME} }
 
@@ -23,10 +23,7 @@ sub init {
 
     croak "'name' is a required attribute" unless $self->{+NAME};
 
-    if (my $fh = delete $self->{fh}) {
-        $fh->blocking(0);
-        $self->{+_FH} = $fh;
-    }
+    $self->{+_INIT_FH} = delete $self->{fh};
 }
 
 sub open_file {
@@ -63,11 +60,20 @@ sub reset {
 
 sub fh {
     my $self = shift;
-    return $self->{+_FH} if $self->{+_FH};
+    return $self->{+_FH}->{$$} if $self->{+_FH}->{$$};
 
-    $self->{+_FH} = Test2::Harness::Util::maybe_open_file($self->{+NAME}) or return undef;
-    $self->{+_FH}->blocking(0);
-    return $self->{+_FH};
+    # Remove any other PID handles
+    $self->{+_FH} = {};
+
+    if (my $fh = $self->{+_INIT_FH}) {
+        $self->{+_FH}->{$$} = $fh;
+    }
+    else {
+        $self->{+_FH}->{$$} = Test2::Harness::Util::maybe_open_file($self->{+NAME}) or return undef;
+    }
+
+    $self->{+_FH}->{$$}->blocking(0);
+    return $self->{+_FH}->{$$};
 }
 
 sub read_line {
@@ -77,7 +83,7 @@ sub read_line {
     my $pos = $params{from};
     $pos = $self->{+LINE_POS} ||= 0 unless defined $pos;
 
-    my $fh = $self->{+_FH} || $self->fh or return undef;
+    my $fh = $self->{+_FH}->{$$} || $self->fh or return undef;
     seek($fh,$pos,SEEK_SET) or die "Could not seek: $!"
         if eof($fh) || tell($fh) != $pos;
 

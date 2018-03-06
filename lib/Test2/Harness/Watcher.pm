@@ -8,6 +8,8 @@ use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
 use List::Util qw/first max/;
 
+use Test2::Harness::Util qw/hub_truth/;
+
 use Test2::Harness::Util::HashBase qw{
     -job
     -live
@@ -77,9 +79,11 @@ sub _process {
 
     my $f = $event->{facet_data};
 
-    return if $f->{trace} && $f->{trace}->{buffered};
+    my $hf = hub_truth($f);
 
-    my $nested = $f->{trace} ? $f->{trace}->{nested} || 0 : 0;
+    return if $hf->{buffered};
+
+    my $nested = $hf->{nested} || 0;
     my $is_ours = $nested == $self->{+NESTED};
 
     return unless $is_ours || $f->{from_tap};

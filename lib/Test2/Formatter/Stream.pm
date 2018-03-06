@@ -9,6 +9,7 @@ use Time::HiRes qw/time/;
 use IO::Handle;
 
 use Test2::Harness::Util::JSON qw/JSON/;
+use Test2::Harness::Util qw/hub_truth/;
 
 use base qw/Test2::Formatter/;
 use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -event_id -tb -tb_handles -file -leader/;
@@ -182,7 +183,8 @@ sub write {
         $tb_only ||= !$todo_match;
 
         if ($tb_only) {
-            $self->{+TB}->write($e, $num, $f) if $self->{+TB} && !$f->{trace}->{buffered};
+            my $buffered = hub_truth($f)->{buffered};
+            $self->{+TB}->write($e, $num, $f) if $self->{+TB} && !$buffered;
             return;
         }
     }

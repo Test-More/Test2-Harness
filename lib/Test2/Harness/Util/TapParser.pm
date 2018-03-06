@@ -47,6 +47,7 @@ sub parse_tap_line {
         my $sub = "parse_tap_$type";
         my $facet_data = $class->$sub($str) or next;
         $facet_data->{trace}->{nested} = $nest;
+        $facet_data->{hubs}->[0]->{nested} = $nest;
         return $facet_data;
     }
 

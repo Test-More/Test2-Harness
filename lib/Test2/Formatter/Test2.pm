@@ -7,6 +7,7 @@ our $VERSION = '0.001056';
 use Scalar::Util qw/blessed/;
 use List::Util qw/shuffle first/;
 use Test2::Util::Term qw/term_size/;
+use Test2::Harness::Util qw/hub_truth/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32 clone_io/;
 use Time::HiRes;
@@ -210,7 +211,8 @@ sub write {
 
     $self->encoding($f->{control}->{encoding}) if $f->{control}->{encoding};
 
-    my $depth = $f->{trace}->{nested};
+    my $hf = hub_truth($f);
+    my $depth = $hf->{nested} || 0;
 
     return if $depth && !$self->{+SHOW_BUFFER};
 
@@ -402,7 +404,8 @@ sub render_tree {
         $job = sprintf("%sjob %${len}s%s ", $color, $id, $reset || '');
     }
 
-    my $depth = $f->{trace}->{nested} || 0;
+    my $hf = hub_truth($f);
+    my $depth = $hf->{nested} || 0;
 
     my @pipes = (' ', map $char, 1 .. $depth);
     return join(' ' => $job, @pipes) . ' ';

@@ -65,7 +65,7 @@ sub init {
 
     $self->{+WAIT_TIME} = 0.02 unless defined $self->{+WAIT_TIME};
 
-    $self->{+JOBS} ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE});
+    $self->{+JOBS} ||= Test2::Harness::Util::File::JSONL->new(name => $self->{+JOBS_FILE}, use_write_lock => 1);
     $self->{+JOBS_SEEN} = {};
 
     $self->read_jobs();

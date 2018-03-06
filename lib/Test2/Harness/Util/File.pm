@@ -92,7 +92,7 @@ sub read_line {
     my $new_pos = tell($fh);
     die "Failed to 'tell': $!" if $new_pos == -1;
 
-    eval { $line = $self->decode($line); 1 } or confess "$self->{+NAME}: $@";
+    eval { $line = $self->decode($line); 1 } or confess "$self->{+NAME} ($pos -> $new_pos): $@";
 
     $self->{+LINE_POS} = $new_pos unless defined $params{peek} || defined $params{from};
     return ($pos, $new_pos, $line);

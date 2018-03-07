@@ -518,6 +518,8 @@ sub run_job {
         switches    => [@{$run->switches}, @{$task->{switches} || []}],
         args        => [@{$run->args}, @{$task->{args} || []}],
 
+        event_uuids => $run->event_uuids,
+
         input => $task->{input} || $run->input,
 
         event_timeout    => $task->{event_timeout},

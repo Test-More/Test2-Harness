@@ -133,6 +133,11 @@ sub { shift->import(@_) }
     my %seen;
     @INC = grep { !$seen{$_}++ } (@{$job->libs}, @INC);
 
+    if ($job->event_uuids) {
+        require Test2::Plugin::UUID;
+        Test2::Plugin::UUID->import();
+    }
+
     if ($job->use_stream) {
         $ENV{T2_FORMATTER} = 'Stream';
         require Test2::Formatter::Stream;

@@ -260,7 +260,7 @@ sub make_run_from_settings {
         no_long     => $settings->{no_long},
         dummy       => $settings->{dummy},
         cover       => $settings->{cover},
-        uuid        => $settings->{uuid},
+        event_uuids => $settings->{event_uuids},
 
         plugins => $self->{+PLUGINS} ? [@{$self->{+PLUGINS}}] : undef,
 

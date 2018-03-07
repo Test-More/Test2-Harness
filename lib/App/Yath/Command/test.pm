@@ -262,6 +262,16 @@ sub options {
                 }
             },
         },
+
+        {
+            spec    => 'uuids!',
+            field   => 'event_uuids',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage   => ['--no-uuids'],
+            summary => ['Disable Test2::Plugin::UUID (Loaded by default)'],
+            default => 1,
+        },
     );
 }
 

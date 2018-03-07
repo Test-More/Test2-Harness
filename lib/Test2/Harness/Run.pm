@@ -28,6 +28,7 @@ use Test2::Harness::Util::HashBase qw{
     -verbose
     -dummy
     -cover
+    -event_uuids
 
     -search
     -unsafe_inc

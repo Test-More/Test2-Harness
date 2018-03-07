@@ -12,6 +12,8 @@ use File::Spec();
 
 use Test2::Harness::Util qw/open_file/;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
+
 use Test2::Harness::Util::HashBase qw{
     -file -_scanned -_headers -_shbang -queue_args
 };
@@ -221,6 +223,7 @@ sub queue_item {
         file        => $self->file,
         headers     => $self->headers,
         job_id      => $job_id,
+        uuid        => gen_uuid(),
         shbang      => $self->shbang,
         stage       => $stage,
         stamp       => time,

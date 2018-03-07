@@ -5,9 +5,11 @@ use warnings;
 our $VERSION = '0.001058';
 
 use Carp qw/croak/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
     -job_id
+    -uuid
 
     -pid
 
@@ -21,6 +23,8 @@ use Test2::Harness::Util::HashBase qw{
     -load
     -load_import
     -preload
+
+    -event_uuids
 
     -use_fork
     -use_stream
@@ -38,6 +42,8 @@ sub init {
 
     croak "The 'file' attribute is required"
         unless $self->{+FILE};
+
+    $self->{+UUID} ||= gen_uuid();
 
     $self->{+ENV_VARS} ||= {};
     $self->{+LIBS}     ||= [];

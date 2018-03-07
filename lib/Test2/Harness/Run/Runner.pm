@@ -2,7 +2,7 @@ package Test2::Harness::Run::Runner;
 use strict;
 use warnings;
 
-our $VERSION = '0.001057';
+our $VERSION = '0.001058';
 
 use Carp qw/croak confess/;
 use POSIX ":sys_wait_h";

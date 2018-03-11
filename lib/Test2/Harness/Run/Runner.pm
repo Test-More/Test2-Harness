@@ -519,6 +519,7 @@ sub run_job {
         args        => [@{$run->args}, @{$task->{args} || []}],
 
         event_uuids => $run->event_uuids,
+        mem_usage   => $run->mem_usage,
 
         input => $task->{input} || $run->input,
 

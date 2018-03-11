@@ -138,6 +138,11 @@ sub { shift->import(@_) }
         Test2::Plugin::UUID->import();
     }
 
+    if ($job->mem_usage) {
+        require Test2::Plugin::MemUsage;
+        Test2::Plugin::MemUsage->import();
+    }
+
     if ($job->use_stream) {
         $ENV{T2_FORMATTER} = 'Stream';
         require Test2::Formatter::Stream;

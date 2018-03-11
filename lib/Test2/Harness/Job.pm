@@ -25,6 +25,7 @@ use Test2::Harness::Util::HashBase qw{
     -preload
 
     -event_uuids
+    -mem_usage
 
     -use_fork
     -use_stream

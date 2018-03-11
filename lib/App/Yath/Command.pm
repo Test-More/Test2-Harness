@@ -261,6 +261,7 @@ sub make_run_from_settings {
         dummy       => $settings->{dummy},
         cover       => $settings->{cover},
         event_uuids => $settings->{event_uuids},
+        mem_usage   => $settings->{mem_usage},
 
         plugins => $self->{+PLUGINS} ? [@{$self->{+PLUGINS}}] : undef,
 

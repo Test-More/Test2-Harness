@@ -40,6 +40,7 @@ sub command {
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
         @{$job->switches},
         $job->event_uuids ? ('-MTest2::Plugin::UUID') : (),
+        $job->mem_usage ? ('-MTest2::Plugin::MemUsage') : (),
         (map {"-M$_"} @{$job->load_import || []}),
         (map {"-m$_"} @{$job->load || []}),
         $job->use_stream ? ("-MTest2::Formatter::Stream=file,$event_file") : (),

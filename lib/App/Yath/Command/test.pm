@@ -272,6 +272,16 @@ sub options {
             summary => ['Disable Test2::Plugin::UUID (Loaded by default)'],
             default => 1,
         },
+
+        {
+            spec    => 'mem-usage!',
+            field   => 'mem_usage',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage   => ['--no-mem-usage'],
+            summary => ['Disable Test2::Plugin::MemUsage (Loaded by default)'],
+            default => 1,
+        },
     );
 }
 

@@ -127,6 +127,7 @@ loadim
 preloading
 shm
 qvf
+mem
 
 
 ## other jargon, slang

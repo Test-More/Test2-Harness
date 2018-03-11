@@ -486,17 +486,23 @@ subtest options => sub {
 
     subtest times => sub {
         my $one = $TCLASS->new(args => {});
-        ok(!$one->settings->{times}, "not on by default");
+        ok($one->settings->{times}, "on by default");
+
+        my $two = $TCLASS->new(args => {opts => ['--no-times']});
+        ok(!$two->settings->{times}, "toggled off");
+    };
+
+    subtest show_times => sub {
+        my $one = $TCLASS->new(args => {});
+        ok(!$one->settings->{show_times}, "not on by default");
 
         my $two = $TCLASS->new(args => {opts => ['-T']});
-        ok($two->settings->{times}, "toggled on");
+        ok($two->settings->{show_times}, "toggled on");
 
-        my $three = $TCLASS->new(args => {opts => ['--times']});
-        ok($three->settings->{times}, "toggled on");
-
-        my $four = $TCLASS->new(args => {opts => ['--times', '--no-times']});
-        ok(!$four->settings->{times}, "toggled off");
+        my $three = $TCLASS->new(args => {opts => ['--show-times']});
+        ok($three->settings->{show_times}, "toggled on");
     };
+
 
     subtest tlib => sub {
         my $one = $TCLASS->new(args => {opts => []});

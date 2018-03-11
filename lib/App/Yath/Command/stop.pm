@@ -2,7 +2,7 @@ package App::Yath::Command::stop;
 use strict;
 use warnings;
 
-our $VERSION = '0.001058';
+our $VERSION = '0.001059';
 
 use File::Path qw/remove_tree/;
 

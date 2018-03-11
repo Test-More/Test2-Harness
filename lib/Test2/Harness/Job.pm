@@ -20,6 +20,7 @@ use Test2::Harness::Util::HashBase qw{
     -args
     -input
     -times
+    -show_times
     -load
     -load_import
     -preload

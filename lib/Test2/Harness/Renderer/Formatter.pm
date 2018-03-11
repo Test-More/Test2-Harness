@@ -69,10 +69,12 @@ sub render_event {
     # so we deep clone it.
     $event = dclone($event);
 
+    my $settings = $self->{+SETTINGS};
+
     my $f = $event->{facet_data}; # Optimization
 
     my $times = $self->{+TIMES} ||= {};
-    if($f->{times}) {
+    if ($settings->{show_times} && $f->{times}) {
         my $job_id = $event->job_id;
         $times->{$job_id} = $f->{about}->{details};
     }

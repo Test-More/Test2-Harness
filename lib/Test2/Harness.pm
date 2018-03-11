@@ -360,7 +360,6 @@ CAUTION: THIS IS ALMOST ALWAYS THE WRONG THING TO DO!
         run_id     => $self->{+RUN_ID},
         event_id   => "timeout-$type-$job_id",
         stamp      => time,
-        times      => [times],
         facet_data => {info => \@info},
     );
 

@@ -68,12 +68,14 @@ sub DEFAULT_TAG_COLOR() {
         'REASON'   => Term::ANSIColor::color('magenta'),
         'TIMEOUT'  => Term::ANSIColor::color('magenta'),
         'TIME'     => Term::ANSIColor::color('blue'),
+        'MEMORY'     => Term::ANSIColor::color('blue'),
     );
 }
 
 sub DEFAULT_FACET_COLOR() {
     return (
         time    => Term::ANSIColor::color('blue'),
+        memory  => Term::ANSIColor::color('blue'),
         about   => Term::ANSIColor::color('magenta'),
         amnesty => Term::ANSIColor::color('cyan'),
         assert  => Term::ANSIColor::color('bold bright_white'),

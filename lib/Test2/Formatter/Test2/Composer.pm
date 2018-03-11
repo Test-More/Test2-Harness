@@ -54,6 +54,7 @@ sub render_verbose {
     push @out => $class->render_info($f)   if $f->{info};
     push @out => $class->render_errors($f) if $f->{errors};
     push @out => $class->render_times($f)  if $f->{times};
+    push @out => $class->render_memory($f) if $f->{memory};
 
     push @out => $class->render_about($f)
         if $f->{about} && !(@out || first { $f->{$_} } qw/stop plan info nest assert/);
@@ -121,6 +122,14 @@ sub render_times {
 
     return ['times', 'TIME', $f->{about}->{details}];
 }
+
+sub render_memory {
+    my $class = shift;
+    my ($f) = @_;
+
+    return ['memory', 'MEMORY', $f->{memory}->{details}];
+}
+
 
 sub render_halt {
     my $class = shift;

@@ -9,6 +9,7 @@ use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
 use List::Util qw/first/;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Feeder::Job;
 use Test2::Harness::Run::Dir;
 use Test2::Harness::Event;
@@ -60,9 +61,8 @@ sub _harness_event {
     my $run = $self->{+RUN};
 
     return Test2::Harness::Event->new(
-        stream_id  => 'harness',
         job_id     => $job_id,
-        event_id   => 'harness-' . ${$self->{+EVENT_COUNTER_REF}}++,
+        event_id   => gen_uuid(),
         run_id     => $run->run_id,
         stamp      => time,
         facet_data => {@_},
@@ -119,7 +119,6 @@ sub poll {
                 complete => $self->{+RUNNER} ? 0 : 1,
                 dir => File::Spec->catdir($self->{+DIR}->root, $job_id),
                 keep_dir => $self->{+KEEP_DIR},
-                event_counter_ref => $self->{+EVENT_COUNTER_REF},
             );
 
             $self->{+JOB_LOOKUP}->{$job_id} = $jfeed;

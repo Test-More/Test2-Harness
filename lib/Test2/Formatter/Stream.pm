@@ -8,11 +8,12 @@ use Carp qw/croak confess/;
 use Time::HiRes qw/time/;
 use IO::Handle;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON/;
 use Test2::Harness::Util qw/hub_truth/;
 
 use base qw/Test2::Formatter/;
-use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -event_id -tb -tb_handles -file -leader/;
+use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -file -leader/;
 
 BEGIN {
     my $J = JSON->new;
@@ -42,7 +43,7 @@ sub hide_buffered { 0 }
 sub init {
     my $self = shift;
 
-    $self->{+EVENT_ID} = 1;
+    $self->{+STREAM_ID} = 1;
 
     if (my $file = $self->{+FILE}) {
         confess "File '$file' already exists!" if -f $file;
@@ -104,12 +105,14 @@ sub record {
         no warnings 'once';
         local *UNIVERSAL::TO_JSON = sub { "$_[0]" };
 
+        my $event_id = $facets->{about}->{uuid} ||= gen_uuid();
+
         $json = ENCODER->encode(
             {
                 stamp        => time,
                 times        => [times],
                 stream_id    => $id,
-                event_id     => "event-$id",
+                event_id     => $event_id,
                 facet_data   => $facets,
                 assert_count => $self->{+_NO_NUMBERS} ? undef : $num,
             }
@@ -126,7 +129,7 @@ sub encoding {
 
     if (@_) {
         my ($enc) = @_;
-        $self->record($self->{+EVENT_ID}++, {control => {encoding => $enc}});
+        $self->record($self->{+STREAM_ID}++, {control => {encoding => $enc}});
         $self->_set_encoding($enc);
         $self->{+TB}->encoding($enc) if $self->{+TB};
     }
@@ -189,7 +192,7 @@ sub write {
         }
     }
 
-    my $id = $self->{+EVENT_ID}++;
+    my $id = $self->{+STREAM_ID}++;
     $self->record($id, $f, $num);
 }
 

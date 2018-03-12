@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '0.001059';
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util qw/open_file/;
 use Test2::Harness::Util::IPC qw/run_cmd/;
 use List::Util qw/first/;
@@ -112,15 +113,13 @@ sub summarize_events {
 
     require Test2::Harness::Watcher;
     my $watcher = Test2::Harness::Watcher->new(job => $job, live => 0);
-    my $eid = 1;
 
     require Test2::Harness::Event;
     for my $e (@$events) {
         my $fd = $e->facet_data;
         my $he = Test2::Harness::Event->new(
             facet_data => $fd,
-            stream_id  => "stream-$id",
-            event_id   => $eid++,
+            event_id   => gen_uuid(),
             run_id     => $run_id,
             job_id     => $job_id,
             stamp      => time,

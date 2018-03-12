@@ -9,7 +9,7 @@ use List::Util qw/sum/;
 use Time::HiRes qw/sleep time/;
 use Sys::Hostname qw/hostname/;
 use Test2::Harness::Util::JSON qw/encode_canon_json encode_json/;
-use Data::Dumper;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
@@ -355,12 +355,13 @@ CAUTION: THIS IS ALMOST ALWAYS THE WRONG THING TO DO!
         }
     );
 
+    my $event_id = gen_uuid();
     my $event = Test2::Harness::Event->new(
         job_id     => $job_id,
         run_id     => $self->{+RUN_ID},
-        event_id   => "timeout-$type-$job_id",
+        event_id   => $event_id,
         stamp      => time,
-        facet_data => {info => \@info},
+        facet_data => {info => \@info, about => { uuid => $event_id }},
     );
 
     return $event unless $self->{+LIVE};

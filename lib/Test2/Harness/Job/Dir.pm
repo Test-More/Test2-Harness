@@ -9,6 +9,7 @@ use File::Spec();
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use List::Util qw/first/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/maybe_read_file open_file/;
 
@@ -243,9 +244,7 @@ sub _poll_start {
     return unless defined $self->{+_START_BUFFER};
     my $value = delete $self->{+_START_BUFFER};
 
-    my $event_id = 'start';
-
-    return $self->_process_start_line($event_id, $value);
+    return $self->_process_start_line($value);
 }
 
 sub _poll_exit {
@@ -256,9 +255,7 @@ sub _poll_exit {
     return unless defined $self->{+_EXIT_BUFFER};
     my $value = delete $self->{+_EXIT_BUFFER};
 
-    my $event_id = 'exit';
-
-    return $self->_process_exit_line($event_id, $value);
+    return $self->_process_exit_line($value);
 }
 
 sub _poll_event {
@@ -280,9 +277,7 @@ sub _poll_event {
     shift @$buffer;
     $self->{+_EVENTS_INDEX} = $id;
 
-    my $event_id = "event-$id";
-
-    return $self->_process_events_line($event_id, $event_data);
+    return $self->_process_events_line($event_data);
 }
 
 sub _poll_stdout {
@@ -308,9 +303,8 @@ sub _poll_stdout {
         last if $esync && !length($line);
 
         my $id = $self->{+_STDOUT_ID}; # Do not bump yet!
-        my $event_id = "stdout-$id";
 
-        my @event_datas = $self->_process_stdout_line($event_id, $line);
+        my @event_datas = $self->_process_stdout_line($line);
 
         for my $event_data (@event_datas) {
             if(my $sid = $event_data->{stream_id}) {
@@ -356,8 +350,7 @@ sub _poll_stderr {
         last unless @lines;
 
         my $id = $self->{+_STDERR_ID}++;
-        my $event_id = "stderr-$id";
-        push @out => $self->_process_stderr_line($event_id, join "\n" => @lines);
+        push @out => $self->_process_stderr_line(join "\n" => @lines);
     }
 
     return $self->merge_info(\@out);
@@ -396,24 +389,26 @@ sub merge_info {
 
 sub _process_events_line {
     my $self = shift;
-    my ($event_id, $event_data) = @_;
+    my ($event_data) = @_;
 
-    $event_data->{job_id}   = $self->{+JOB_ID};
-    $event_data->{run_id}   = $self->{+RUN_ID};
-    $event_data->{event_id} = $event_id;
+    $event_data->{job_id} = $self->{+JOB_ID};
+    $event_data->{run_id} = $self->{+RUN_ID};
+    $event_data->{event_id} ||= $event_data->{facet_data}->{about}->{uuid} ||= gen_uuid();
 
     return $event_data;
 }
 
 sub _process_stderr_line {
     my $self = shift;
-    my ($event_id, $line) = @_;
+    my ($line) = @_;
 
     chomp($line);
 
     my $facet_data;
     $facet_data = parse_stderr_tap($line);
     $facet_data ||= {info => [{details => $line, tag => 'STDERR', debug => 1}]};
+
+    my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
 
     return {
         job_id     => $self->{+JOB_ID},
@@ -425,7 +420,7 @@ sub _process_stderr_line {
 
 sub _process_stdout_line {
     my $self = shift;
-    my ($event_id, $line) = @_;
+    my ($line) = @_;
 
     chomp($line);
 
@@ -436,6 +431,7 @@ sub _process_stdout_line {
 
         my $event_data = decode_json($json);
         $event_data->{stream_id} = $sid;
+        $event_data->{event_id} ||= $event_data->{facet_data}->{about}->{uuid} ||= gen_uuid();
         push @event_datas => $event_data;
     }
 
@@ -446,17 +442,22 @@ sub _process_stdout_line {
         $facet_data = parse_stdout_tap($line);
 
         $facet_data ||= {info => [{details => $line, tag => 'STDOUT', debug => 0}]};
-        push @event_datas => {facet_data => $facet_data};
+
+        my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
+
+        unshift @event_datas => {facet_data => $facet_data, event_id => $event_id};
     }
 
-    return map {{ %{$_}, job_id => $self->{+JOB_ID}, run_id => $self->{+RUN_ID}, event_id => $event_id }} @event_datas;
+    return map {{ %{$_}, job_id => $self->{+JOB_ID}, run_id => $self->{+RUN_ID} }} @event_datas;
 }
 
 sub _process_start_line {
     my $self = shift;
-    my ($event_id, $value) = @_;
+    my ($value) = @_;
 
     chomp($value);
+
+    my $event_id = gen_uuid();
 
     return {
         event_id => $event_id,
@@ -465,6 +466,7 @@ sub _process_start_line {
         stamp    => $value,
 
         facet_data => {
+            about             => {uuid => $event_id},
             harness_job_start => {
                 details => "Job $self->{+JOB_ID} started at $value",
                 job_id  => $self->{+JOB_ID},
@@ -477,12 +479,14 @@ sub _process_start_line {
 
 sub _process_exit_line {
     my $self = shift;
-    my ($event_id, $value) = @_;
+    my ($value) = @_;
 
     chomp($value);
 
     my $stdout = maybe_read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stdout"));
     my $stderr = maybe_read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stderr"));
+
+    my $event_id = gen_uuid();
 
     return {
         event_id => $event_id,
@@ -490,6 +494,7 @@ sub _process_exit_line {
         run_id   => $self->{+RUN_ID},
 
         facet_data => {
+            about            => {uuid => $event_id},
             harness_job_exit => {
                 details => "Test script exited $value",
                 exit    => $value,

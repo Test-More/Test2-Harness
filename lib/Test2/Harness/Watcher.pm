@@ -8,6 +8,8 @@ use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
 use List::Util qw/first max/;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
+
 use Test2::Harness::Util qw/hub_truth/;
 
 use Test2::Harness::Util::HashBase qw{
@@ -183,7 +185,7 @@ sub subtest_process {
         for my $sf (@{$f->{parent}->{children}}) {
             $sf->{harness}->{job_id} ||= $f->{harness}->{job_id};
             $sf->{harness}->{run_id} ||= $f->{harness}->{run_id};
-            $sf->{harness}->{event_id} ||= $f->{harness}->{event_id} . $id++;
+            $sf->{harness}->{event_id} ||= $sf->{about}->{uuid} ||= gen_uuid();
             $subwatcher->subtest_process($sf);
         }
 

@@ -9,7 +9,7 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
     -job_id
-    -uuid
+    -job_name
 
     -pid
 
@@ -45,7 +45,7 @@ sub init {
     croak "The 'file' attribute is required"
         unless $self->{+FILE};
 
-    $self->{+UUID} ||= gen_uuid();
+    $self->{+JOB_NAME} ||= $self->{+JOB_ID};
 
     $self->{+ENV_VARS} ||= {};
     $self->{+LIBS}     ||= [];

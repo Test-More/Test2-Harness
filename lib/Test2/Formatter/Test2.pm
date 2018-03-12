@@ -39,6 +39,7 @@ use Test2::Util::HashBase qw{
     -job_colors
     -active_files
     -_active_disp
+    -job_names
 };
 
 sub TAG_WIDTH() { 8 }
@@ -281,8 +282,9 @@ sub update_active_disp {
 
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
-        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_id};
+        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_name} || $job->{job_id};
         $should_show = 1;
+        $self->{+JOB_NAMES}->{$job->{job_id}} = $job->{job_name} || $job->{job_id};
     }
 
     if ($f->{harness_job_end}) {
@@ -388,6 +390,7 @@ sub render_tree {
     my $job = '';
     if ($f->{harness} && $f->{harness}->{job_id}) {
         my $id = $f->{harness}->{job_id};
+        my $name = $self->{+JOB_NAMES}->{$id};
 
         my ($color, $reset) = (''. '');
         if ($self->{+JOB_COLORS}) {
@@ -395,7 +398,7 @@ sub render_tree {
             $reset = $self->{+COLOR}->{reset};
         }
 
-        my $len = length($id);
+        my $len = length($name);
         if (!$self->{+JOB_LENGTH} || $len > $self->{+JOB_LENGTH}) {
             $self->{+JOB_LENGTH} = $len;
         }
@@ -403,7 +406,7 @@ sub render_tree {
             $len = $self->{+JOB_LENGTH};
         }
 
-        $job = sprintf("%sjob %${len}s%s ", $color, $id, $reset || '');
+        $job = sprintf("%sjob %${len}s%s ", $color, $name, $reset || '');
     }
 
     my $hf = hub_truth($f);

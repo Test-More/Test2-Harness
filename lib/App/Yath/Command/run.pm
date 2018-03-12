@@ -61,12 +61,13 @@ sub run {
     my $batch = $$ . '-' . time;
 
     my %jobs;
-    my $base_id = 1;
+    my $base_id = 0;
     for my $tf ($self->make_run_from_settings->find_files) {
-        my $job_id = $$ . '-' . $base_id++;
-        $jobs{$job_id} = 1;
+        $base_id++;
+        my $job_name = $$ . '-' . $base_id;
 
-        my $item = $tf->queue_item($job_id);
+        my $item = $tf->queue_item($job_name);
+        $jobs{$item->{job_id}} = 1;
 
         $item->{args}        = $settings->{pass}        if defined $settings->{pass}        && !defined $item->{args};
         $item->{times}       = $settings->{times}       if defined $settings->{times}       && !defined $item->{times};
@@ -95,7 +96,7 @@ sub run {
     $self->{+_FEEDER}    = $feeder;
     $self->{+_RUNNER}    = $runner;
     $self->{+_PID}       = $data->{pid};
-    $self->{+_JOB_COUNT} = $base_id - 1;
+    $self->{+_JOB_COUNT} = $base_id;
 
     return $self->SUPER::run_command();
 }

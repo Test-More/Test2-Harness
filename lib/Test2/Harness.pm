@@ -24,6 +24,7 @@ use Test2::Harness::Util::HashBase qw{
     -live
     -jobs
     -jobs_todo
+    -job_map
     -event_timeout
     -post_exit_timeout
     -run_id
@@ -52,6 +53,8 @@ sub init {
         unless ref($self->{+RENDERERS}) eq 'ARRAY';
 
     $self->{+BATCH_SIZE} ||= 1000;
+
+    $self->{+JOB_MAP} ||= {};
 }
 
 sub run {
@@ -98,6 +101,7 @@ sub iteration {
 
     my $live = $self->{+LIVE};
     my $jobs = $self->{+JOBS};
+    my $job_map = $self->{+JOB_MAP};
 
     while (1) {
         my @events;
@@ -124,13 +128,20 @@ sub iteration {
 
         for my $event (@events) {
             my $job_id = $event->{job_id};
-            next if $jobs && !$jobs->{$job_id};
 
             # Log first, before the watchers transform the events.
             $_->log_raw_event($event) for @{$self->{+LOGGERS}};
 
             my @delayed;
             if ($job_id) {
+                my $job = $job_map->{$job_id} ||= $event->{facet_data}->{harness_job}
+                    or die "First event for job ($job_id) was not a job start!";
+
+                if ($jobs) {
+                    my $see = $jobs->{$job_id} || $jobs->{$job->{job_name}} || $jobs->{$job->{file}};
+                    next unless $see;
+                }
+
                 my $watcher = $self->{+WATCHERS}->{$job_id};
 
                 unless ($watcher) {

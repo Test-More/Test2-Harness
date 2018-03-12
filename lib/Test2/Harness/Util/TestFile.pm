@@ -208,7 +208,7 @@ sub _parse_shbang {
 
 sub queue_item {
     my $self = shift;
-    my ($job_id) = @_;
+    my ($job_name) = @_;
 
     my $category = $self->check_category;
     my $stage = $self->check_stage;
@@ -222,8 +222,8 @@ sub queue_item {
         category    => $category,
         file        => $self->file,
         headers     => $self->headers,
-        job_id      => $job_id,
-        uuid        => gen_uuid(),
+        job_id      => gen_uuid(),
+        job_name    => $job_name,
         shbang      => $self->shbang,
         stage       => $stage,
         stamp       => time,

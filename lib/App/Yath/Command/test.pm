@@ -301,12 +301,13 @@ sub feeder {
     my $queue = $runner->queue;
     $queue->start;
 
-    my $job_id = 1;
+    my $job_count = 0;
     for my $tf ($run->find_files) {
-        $queue->enqueue($tf->queue_item($job_id++));
+        $job_count++;
+        $queue->enqueue($tf->queue_item($job_count));
     }
 
-    my $pid = $runner->spawn(jobs_todo => $job_id - 1);
+    my $pid = $runner->spawn(jobs_todo => $job_count);
 
     $queue->end;
 
@@ -317,7 +318,7 @@ sub feeder {
         keep_dir => $settings->{keep_dir},
     );
 
-    return ($feeder, $runner, $pid, $job_id - 1);
+    return ($feeder, $runner, $pid, $job_count);
 }
 
 sub run_command {
@@ -405,7 +406,7 @@ sub run_command {
 
     if (@$bad) {
         $self->paint("\nThe following test jobs failed:\n");
-        $self->paint("  [", $_->{job_id}, '] ', File::Spec->abs2rel($_->file), "\n") for sort {
+        $self->paint("  [", $_->{job_id}, '] ' . $_->{job_name} . ': ', File::Spec->abs2rel($_->file), "\n") for sort {
             my $an = $a->{job_id};
             $an =~ s/\D+//g;
             my $bn = $b->{job_id};

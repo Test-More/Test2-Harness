@@ -2,7 +2,7 @@ package Test2::Harness::Renderer;
 use strict;
 use warnings;
 
-our $VERSION = '0.001059';
+our $VERSION = '0.001060';
 
 use Carp qw/croak/;
 

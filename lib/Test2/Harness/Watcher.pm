@@ -138,7 +138,6 @@ sub _process {
             my $st = delete $sts->{$n};
             my $se = $st->{event} || $event;
 
-
             my $fd = $se->{facet_data};
             delete $fd->{harness_watcher}->{no_render};
             $fd->{parent}->{hid} ||= $n;
@@ -147,12 +146,18 @@ sub _process {
             $fd->{harness}->{closed_by_eid} = $event->{event_id};
 
             my $pn = $n - 1;
-            if ($pn > $self->{+NESTED}) {
-                push @{$sts->{$pn}->{children}} => $fd;
+
+            if ($st->{event}) {
+                if ($pn > $self->{+NESTED}) {
+                    push @{$sts->{$pn}->{children}} => $fd;
+                }
+                elsif ($pn == $self->{+NESTED}) {
+                    $self->subtest_process($fd, $se);
+                    push @out => $se;
+                }
             }
-            elsif ($pn == $self->{+NESTED}) {
-                $self->subtest_process($fd, $se);
-                push @out => $se;
+            else {
+                push @out => $se if $self->{+NESTED} && $pn == $self->{+NESTED};
             }
         }
     }

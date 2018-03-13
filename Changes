@@ -1,8 +1,20 @@
 {{$NEXT}}
 
+    - Fix parsing of streaming subtests
+
 0.001059  2018-03-12 13:26:43-07:00 America/Los_Angeles
 
+    - Job id's are now uuid's. Numbers for humans are now names
+    - Use UUIDs for event IDs
+    - Update min Test2 version
+
 0.001058  2018-03-11 15:29:23-07:00 America/Los_Angeles
+
+    - Fix broken tests
+    - Record times by default, but only show when requested
+    - Add memory usage
+    - Do not add times from the harness itself
+    - Add UUIDs to everything
 
 0.001057  2018-03-07 08:09:18-08:00 America/Los_Angeles
 

@@ -119,6 +119,9 @@ sub record {
         );
     }
 
+    # Local is expensive! Only do it if we really need to.
+    local($\, $,) = (undef, '') if $\ || $,;
+
     my ($out, @sync) = @{$self->{+IO}};
     print $out $self->{+LEADER} ? ("T2-HARNESS-EVENT: ", $id, ' ', $json, "\n") : ($json, "\n");
     print $_ "T2-HARNESS-ESYNC: ", $id, "\n" for @sync;

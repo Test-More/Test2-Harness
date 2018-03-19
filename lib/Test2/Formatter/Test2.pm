@@ -252,6 +252,9 @@ sub write {
     push @{$self->{+JOB_COLORS}->{free}} => delete $self->{+JOB_COLORS}->{used}->{$job_id}
         if $job_id && $f->{harness_job_end};
 
+    # Local is expensive! Only do it if we really need to.
+    local($\, $,) = (undef, '') if $\ || $,;
+
     my $io = $self->{+IO};
     if ($self->{+_BUFFERED}) {
         print $io "\r\e[K";
@@ -528,6 +531,9 @@ sub DESTROY {
     my $self = shift;
 
     my $io = $self->{+IO} or return;
+
+    # Local is expensive! Only do it if we really need to.
+    local($\, $,) = (undef, '') if $\ || $,;
 
     print $io Term::ANSIColor::color('reset')
         if USE_ANSI_COLOR;

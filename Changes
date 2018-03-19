@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001062  2018-03-19 09:22:18-07:00 America/Los_Angeles
+
     - Fix bug where $, and $\ would break the formatters
 
 0.001061  2018-03-14 12:47:28-07:00 America/Los_Angeles

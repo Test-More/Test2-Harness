@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Make it possible to use relative paths in yath.rc
+
 0.001062  2018-03-19 09:22:18-07:00 America/Los_Angeles
 
     - Fix bug where $, and $\ would break the formatters

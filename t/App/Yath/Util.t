@@ -54,6 +54,8 @@ my $tmp = gen_temp(
 t t2
 --foo
 --zoo bar
+--path rel(./x/y/z)
+--path ./x/y/z
 ;xyz
 ;[bub]
 
@@ -97,7 +99,7 @@ my $ok = eval {
 
     is(
         [read_config('foo', file => '.yath.rc', search => 1)],
-        ['-a', 'b c d', 't', 't2', '--foo', '--zoo', 'bar'],
+        ['-a', 'b c d', 't', 't2', '--foo', '--zoo', 'bar', '--path' => File::Spec->canonpath("$tmp/x/y/z"), '--path' => './x/y/z'],
         "Got config for foo command"
     );
 

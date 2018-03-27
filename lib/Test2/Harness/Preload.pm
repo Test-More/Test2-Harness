@@ -2,7 +2,7 @@ package Test2::Harness::Preload;
 use strict;
 use warnings;
 
-our $VERSION = '0.001063';
+our $VERSION = '0.001064';
 
 sub stages { () }
 sub fork_stages { () }

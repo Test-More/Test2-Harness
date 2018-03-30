@@ -24,6 +24,7 @@ use Test2::Harness::Util::HashBase qw{
     -load
     -load_import
     -preload
+    -ch_dir
 
     -event_uuids
     -mem_usage

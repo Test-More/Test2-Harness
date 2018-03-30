@@ -16,7 +16,11 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
     -file -_scanned -_headers -_shbang -queue_args
+    _category _stage
 };
+
+*set_category = \&set__category;
+*set_stage    = \&set__stage;
 
 sub init {
     my $self = shift;
@@ -53,6 +57,9 @@ sub check_feature {
 
 sub check_stage {
     my $self = shift;
+
+    return $self->{+_STAGE} if $self->{+_STAGE};
+
     $self->_scan unless $self->{+_SCANNED};
     return $self->{+_HEADERS}->{stage} || 'default';
 }
@@ -71,6 +78,9 @@ sub meta {
 
 sub check_category {
     my $self = shift;
+
+    return $self->{+_CATEGORY} if $self->{+_CATEGORY};
+
     $self->_scan unless $self->{+_SCANNED};
     my $category = $self->{+_HEADERS}->{category};
 

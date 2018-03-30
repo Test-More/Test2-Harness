@@ -8,6 +8,7 @@ use Test2::Harness::Feeder::Run;
 use Test2::Harness::Util::File::JSON;
 
 use App::Yath::Util qw/find_pfile PFILE_NAME find_yath/;
+use Cwd qw/cwd/;
 
 use parent 'App::Yath::Command::test';
 use Test2::Harness::Util::HashBase qw/-_feeder -_runner -_pid -_job_count/;
@@ -74,11 +75,14 @@ sub run {
         $item->{load}        = $settings->{load}        if defined $settings->{load}        && !defined $item->{load};
         $item->{load_import} = $settings->{load_import} if defined $settings->{load_import} && !defined $item->{load_import};
         $item->{env_vars}    = $settings->{env_vars}    if defined $settings->{env_vars}    && !defined $item->{env_vars};
+        $item->{libs}        = $settings->{libs}        if defined $settings->{libs}        && !defined $item->{libs};
         $item->{input}       = $settings->{input}       if defined $settings->{input}       && !defined $item->{input};
         $item->{use_stream}  = $settings->{use_stream}  if defined $settings->{use_stream}  && !defined $item->{use_stream};
         $item->{use_fork}    = $settings->{use_fork}    if defined $settings->{use_fork}    && !defined $item->{use_fork};
 
         $item->{batch} = $batch;
+
+        $item->{ch_dir} = cwd();
 
         $queue->enqueue($item);
     }

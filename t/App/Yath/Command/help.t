@@ -97,6 +97,7 @@ subtest run => sub {
         like(
             \@command,
             bag {
+                item qr{projects:  Run tests for multiple projects};
                 item qr{replay:  Replay a test run from an event log};
                 item qr{test:  Run tests};
                 item qr{init:  Create/update test.pl to run tests via Test2::Harness};

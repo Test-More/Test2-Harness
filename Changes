@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Make it possible to chdir for a given test
+    - Make run automatically chdir to the dir you were in when queuing tests
+    - Add 'projects' command to run a dir with multiple projects
+
 0.001063  2018-03-27 10:17:02-07:00 America/Los_Angeles
 
     - Make it possible to use relative paths in yath.rc

@@ -23,13 +23,13 @@ sub find_inc {
 
 sub command {
     my $class = shift;
-    my ($test, $event_file) = @_;
+    my ($test, $event_file, $inc) = @_;
 
     my $job = $test->job;
 
     return (
         $^X,
-        (map { "-I$_" } @{$job->libs}, $class->find_inc),
+        (map { "-I$_" } @$inc),
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
         @{$job->switches},
         $job->event_uuids ? ('-MTest2::Plugin::UUID') : (),
@@ -62,12 +62,14 @@ sub run {
         $job->use_stream ? (T2_FORMATTER => 'Stream') : (),
     };
 
-    my @cmd = $class->command($test, $event_file);
+    my %seen;
+    my @inc = (map { File::Spec->rel2abs($_) } @{$job->libs}, $class->find_inc);
 
     my $pid;
     local_env $env => sub {
         $pid = run_cmd(
-            command => \@cmd,
+            chdir   => $job->ch_dir,
+            command => sub { $class->command($test, $event_file, \@inc) },
             stdin   => $in_fh,
             stdout  => $out_fh,
             stderr  => $err_fh,

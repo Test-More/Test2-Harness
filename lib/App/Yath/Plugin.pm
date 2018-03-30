@@ -14,6 +14,8 @@ sub post_run {}
 
 sub find_files {}
 
+sub munge_files {}
+
 sub block_default_search {}
 
 sub claim_file {}

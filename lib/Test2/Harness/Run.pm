@@ -31,6 +31,8 @@ use Test2::Harness::Util::HashBase qw{
     -event_uuids
     -mem_usage
 
+    -default_search
+    -projects
     -search
     -unsafe_inc
 
@@ -104,9 +106,45 @@ sub TO_JSON { return { %{$_[0]} } }
 sub find_files {
     my $self = shift;
 
-    my $plugins = $self->{+PLUGINS} || [];
-
     my $search = $self->search;
+
+    if ($self->{+PROJECTS}) {
+        my @out;
+
+        for my $root (@$search) {
+            opendir(my $dh, $root) or die "Failed to open project dir: $!";
+            for my $file (readdir($dh)) {
+                next if $file =~ /^\.+/;
+                next unless -d "$root/$file";
+
+                my @sub_search = grep { -d $_ } map { "$root/$file/$_" } @{$self->{+DEFAULT_SEARCH}};
+                next unless @sub_search;
+                my @new = $self->_find_files(\@sub_search);
+
+                for my $task (@new) {
+                    push @{$task->queue_args} => (ch_dir => "$root/$file");
+
+                    push @{$task->queue_args} => (libs => [grep { -d $_ } (
+                        "$root/$file/lib",
+                        "$root/$file/blib",
+                    )]);
+                }
+
+                push @out => @new;
+            }
+        }
+
+        return @out;
+    }
+
+    return $self->_find_files($search);
+}
+
+sub _find_files {
+    my $self = shift;
+    my ($search) = @_;
+
+    my $plugins = $self->{+PLUGINS} || [];
 
     my (@files, @dirs);
 
@@ -142,7 +180,9 @@ sub find_files {
         );
     }
 
-    push @files => $_->find_files($self) for @$plugins;
+    push @files => $_->find_files($self, $search) for @$plugins;
+
+    $_->munge_files(\@files) for @$plugins;
 
     # With -jN > 1 we want to sort jobs based on their category, otherwise
     # filename sort is better for people.

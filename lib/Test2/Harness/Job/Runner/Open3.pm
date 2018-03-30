@@ -30,13 +30,13 @@ sub command_file {
 
 sub command {
     my $class = shift;
-    my ($test, $event_file) = @_;
+    my ($test, $event_file, $inc) = @_;
 
     my $job = $test->job;
     my %seen;
     return (
         $^X,
-        (map { "-I$_" } grep {!$seen{$_}++} @{$job->libs}, $class->find_inc, @INC),
+        (map { "-I$_" } @$inc),
         $ENV{HARNESS_PERL_SWITCHES} ? $ENV{HARNESS_PERL_SWITCHES} : (),
         @{$job->switches},
         $job->event_uuids ? ('-MTest2::Plugin::UUID') : (),
@@ -69,10 +69,19 @@ sub run {
         $job->use_stream ? (T2_FORMATTER => 'Stream') : (),
     };
 
-    my @cmd = $class->command($test, $event_file);
 
     my $pid;
     local_env $env => sub {
+        my $job = $test->job;
+
+        my %seen;
+        my @inc = (grep { !$seen{$_}++ } map {File::Spec->rel2abs($_)} @{$job->libs}, $class->find_inc, @INC);
+
+        if (my $dir = $job->ch_dir) {
+            chdir($dir) or die "Could not chdir: $!";
+        }
+
+        my @cmd = $class->command($test, $event_file, \@inc);
         $pid = open3(
             '<&' . fileno($in_fh), ">&" . fileno($out_fh), ">&" . fileno($err_fh),
             @cmd,

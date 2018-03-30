@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '0.001064';
 
 use POSIX;
+use File::Spec();
 use Scalar::Util qw/openhandle/;
 use Test2::Util qw/clone_io CAN_REALLY_FORK pkg_to_file/;
 use Test2::Harness::Util qw/write_file/;
@@ -42,6 +43,14 @@ sub run {
 
     # In parent
     return ($pid, undef) if $pid;
+
+    my %seen = (map { ($_ => 1) } @INC);
+
+    unshift @INC => (grep { !$seen{$_}++ } (map {File::Spec->rel2abs($_)} @{$job->libs}));
+
+    if (my $dir = $job->ch_dir) {
+        chdir($dir) or die "Could not chdir: $!";
+    }
 
     # In Child
     my $file = $job->file;
@@ -129,9 +138,6 @@ sub { shift->import(@_) }
         Test2::API::test2_stop_preload();
         Test2::API::test2_post_preload_reset();
     }
-
-    my %seen;
-    @INC = grep { !$seen{$_}++ } (@{$job->libs}, @INC);
 
     if ($job->event_uuids) {
         require Test2::Plugin::UUID;

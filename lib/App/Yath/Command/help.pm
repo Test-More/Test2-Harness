@@ -14,7 +14,7 @@ use List::Util ();
 
 sub show_bench { 0 }
 
-sub summary { 'Show a this list of commands' }
+sub summary { 'Show this list of commands' }
 
 sub description {
     return <<"    EOT"

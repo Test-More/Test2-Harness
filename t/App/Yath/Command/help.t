@@ -84,7 +84,7 @@ subtest run => sub {
         is(shift @lines, 'Available Commands:', "got title of available commands");
 
         $skip_space->();
-        is(shift @lines, '      help:  Show a this list of commands', "Help command is first");
+        like(shift @lines, qr{help:  Show this list of commands}, "Help command is first");
 
         my (@command, @space);
         for my $line (@lines) {
@@ -94,22 +94,22 @@ subtest run => sub {
 
         ok(@space >= 4, "at least 4 sections");
 
-        is(
+        like(
             \@command,
             bag {
-                item '    replay:  Replay a test run from an event log';
-                item '      test:  Run tests';
-                item '      init:  Create/update test.pl to run tests via Test2::Harness';
-                item '    reload:  Reload the persistent test runner';
-                item '       run:  Run tests using the persistent test runner';
-                item '     start:  Start the persistent test runner';
-                item '      stop:  Stop the persistent test runner';
-                item '     watch:  Monitor the persistent test runner';
-                item '     which:  Locate the persistent test runner';
-                item '     times:  Get times from a test log';
+                item qr{replay:  Replay a test run from an event log};
+                item qr{test:  Run tests};
+                item qr{init:  Create/update test.pl to run tests via Test2::Harness};
+                item qr{reload:  Reload the persistent test runner};
+                item qr{run:  Run tests using the persistent test runner};
+                item qr{start:  Start the persistent test runner};
+                item qr{stop:  Stop the persistent test runner};
+                item qr{watch:  Monitor the persistent test runner};
+                item qr{which:  Locate the persistent test runner};
+                item qr{times:  Get times from a test log};
                 etc;
             },
-            "Got all basic commands (and maybe soem extras)"
+            "Got all basic commands (and maybe some extras)",
         );
     };
 

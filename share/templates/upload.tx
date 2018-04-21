@@ -40,7 +40,7 @@
             </dd>
 
             <dt><label for="log_file">Log File</label></dt>
-            <dd><input type="file" name="log_file" id="log_file" required></dd>
+            <dd><input type="file" name="log_file" id="log_file" accept=".jsonl.bz2,.jsonl.gz" required></dd>
 
             : if !$user {
                 <dt><label for="api_key">API Key</label></dt>
@@ -88,26 +88,6 @@
                         <dt>Complete</dt>
                         <dd>Import all events for all jobs.</dd>
                     </dl>
-                </small>
-            </dd>
-
-            <dt><label for="store_orphans">Store Orphans</label></dt>
-            <dd>
-                <select name="store_orphans" id="store_orphans">
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                    <option value="fail" selected>On Fail</option>
-                </select>
-                <small>
-                    Events that are part of a subtest are usually sent twice,
-                    once in real-time and once as part of the completed
-                    subtest. The real-time copy of the event is called an
-                    orphan as it is known to be part of a subtest, but it is
-                    not possible to know which subtest it is part of. Normally
-                    there is no reason to see or store an orphan. There are
-                    some subtest failure conditions (serious exceptions,
-                    segv's, etc) where seeing them can be useful, as such the
-                    default is to import them only on failure.
                 </small>
             </dd>
 

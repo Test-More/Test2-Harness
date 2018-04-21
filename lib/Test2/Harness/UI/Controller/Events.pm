@@ -39,7 +39,6 @@ sub handle {
         $job->verify_access('r', $user) or die error(401);
 
         $query{job_id} = $job_id;
-        $query{is_orphan} = 0 unless $p->{load_orphans} && lc($p->{load_orphans} ne 'false');
         $query{parent_id} = undef unless $p->{load_subtests} && lc($p->{load_subtests}) ne 'false';
 
         $rs = $schema->resultset('Event')->search(\%query, \%attrs);
@@ -52,7 +51,6 @@ sub handle {
 
         $event->verify_access('r', $user) or die error(401);
 
-        $query{is_orphan} = 0;
         $query{job_id} = $event->job_id;
 
         if ($p->{load_subtests}) {
@@ -85,12 +83,6 @@ sub handle {
 
         $query{job_id} = $job_id;
         $query{cid} = $cid;
-        if ($p->{load_orphans} && lc($p->{load_orphans} ne 'false')) {
-            $query{is_orphan} = 1;
-        }
-        else {
-            $query{is_orphan} = 0;
-        }
 
         $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }

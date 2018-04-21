@@ -37,7 +37,7 @@ sub handle {
 
         done  => sub { $run->complete },
         fetch => sub {
-            my @jobs = map {encode_json($_) . "\n"} sort _sort_jobs $run->jobs(undef, {offset => $offset, order_by => {-asc => 'stream_ord'}})->all;
+            my @jobs = map {encode_json($_) . "\n"} sort _sort_jobs $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
             $offset += @jobs;
             return @jobs;
         },
@@ -49,8 +49,8 @@ sub handle {
 sub _sort_jobs($$) {
     my ($a, $b) = @_;
 
-    return -1 if $a->name eq '0';
-    return 1  if $b->name eq '0';
+    return -1 unless $a->file;
+    return 1  unless $b->file;
 
     my $delta = $b->fail <=> $a->fail;
     return $delta if $delta;

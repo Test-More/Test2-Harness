@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><: $title :></title>
 
+<link rel="stylesheet" type="text/css" href="<: $base_uri :>css/theme.css">
 <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/main.css">
 <script src="<: $base_uri :>js/fontawesome-all.min.js"></script>
 <script src="<: $base_uri :>js/jquery.js"></script>
@@ -62,12 +63,13 @@
             : }
             </div>
         : }
+        <div id="progress_bar"></div>
     </div>
 </div>
 
 <div id="main_wrapper">
     : if $messages && $messages[0] {
-    <div id="messages">
+    <div id="messages" class="success_box">
         <ul>
         : for $messages -> $m {
             <li><: $m :></li>
@@ -78,7 +80,7 @@
     : }
 
     : if $errors && $errors[0] {
-    <div id="errors">
+    <div id="errors" class="error_box">
         <ul>
         : for $errors -> $e {
             <li><: $e :></li>
@@ -87,8 +89,6 @@
     </div>
     <br />
     : }
-
-    <h2><: $title :></h2>
 
     <div id="content"><: $content :></div>
 </div>

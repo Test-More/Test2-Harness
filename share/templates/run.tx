@@ -1,12 +1,2 @@
 <div class="run" data-run-id="<: $run_id :>">
-    <div class="expander">
-        <div class="expander-head"><div class="expander-title">Run Details</div></div>
-        <div class="expander-body">
-            <div class="json-view" data="<: $run :>"></div>
-        </div>
-    </div>
-
-    <div class="log"></div>
-    <div class="failed"></div>
-    <div class="passed"></div>
 </div>

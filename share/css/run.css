@@ -1,3 +1,5 @@
+
+/*
 div.run {
     display: block;
 }
@@ -17,16 +19,8 @@ div.run div.log > div {
     background: #E5E5E5;
 }
 
-div.run div.failed > div {
-    background: #F5E5E5;
-}
-
-div.run div.passed > div {
-    background: #E5F5E5;
-}
-
 div.run div div.expander {
     border-color: inherit;
     margin-bottom: -1px;
 }
-
+*/

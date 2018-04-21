@@ -23,7 +23,8 @@ sub handle {
     my $res = resp(200);
     $res->add_css('upload.css');
     $res->add_js('upload.js');
-    $self->process_form($res) if keys %{$req->parameters};
+
+    $self->process_form($res) if $req->parameters->{action};
 
     my $template = share_dir('templates/upload.tx');
     my $tx       = Text::Xslate->new();
@@ -50,7 +51,9 @@ sub process_form {
 
     die error(405) unless $req->method eq 'POST';
 
-    return unless 'upload log' eq lc($req->parameters->{action});
+    unless( 'upload log' eq lc($req->parameters->{action})) {
+        return $res->add_error('Invalid Action');
+    }
 
     my $user = $req->user || $self->api_user($req->parameters->{api_key});
     die error(401) unless $user;
@@ -58,7 +61,7 @@ sub process_form {
     my $file = $req->uploads->{log_file}->filename;
     my $tmp  = $req->uploads->{log_file}->tempname;
 
-    my $project = $req->parameters->{project} || return {errors => ['project is required']};
+    my $project = $req->parameters->{project} || return $res->add_error('project is required');
 
     my $version  = $req->parameters->{version};
     my $category = $req->parameters->{category};
@@ -67,9 +70,8 @@ sub process_form {
 
     my $perms         = $req->parameters->{permissions}   || 'private';
     my $mode          = $req->parameters->{mode}          || 'qvfd';
-    my $store_orphans = $req->parameters->{store_orphans} || 'fail';
 
-    return {errors => ["Unsupported file type, must be .jsonl.bz2, or .jsonl.gz"]}
+    return $res->add_error("Unsupported file type, must be .jsonl.bz2, or .jsonl.gz")
         unless $file =~ m/\.jsonl\.(bz2|gz)$/;
 
     open(my $fh, '<:raw', $tmp) or die "Could not open uploaded file '$tmp': $!";
@@ -79,15 +81,17 @@ sub process_form {
             user_id       => $user->user_id,
             permissions   => $perms,
             mode          => $mode,
-            store_orphans => $store_orphans,
-            log_file      => $file,
-            log_data      => do { local $/; <$fh> },
             project       => $project,
             version       => $version,
             category      => $category,
             tier          => $tier,
             build         => $build,
             status        => 'pending',
+
+            log_file => {
+                name => $file,
+                data => do { local $/; <$fh> },
+            },
         }
     );
 

@@ -30,12 +30,10 @@ t2hui.sleep = function(ms) {
 }
 
 t2hui.fetch = function(url, args, cb) {
-
     if (!args) { args = {} }
 
-    if (args.spin_in) {
-        args.spin_in.addClass('spinner');
-    }
+    var prog = $('<span>|</span>');
+    $('div#progress_bar').append(prog);
 
     var last_index = 0;
     var running = false;
@@ -85,19 +83,14 @@ t2hui.fetch = function(url, args, cb) {
         success: async function(response) {
             while (running) { await t2hui.sleep(50); }
             iterate(response);
-            if (args.spin_in) {
-                args.spin_in.removeClass('spinner');
-            }
+            prog.detach();
         },
         complete: async function() {
             while (running) { await t2hui.sleep(50); }
-            if (args.spin_in) {
-                args.spin_in.removeClass('spinner');
-            }
 
-            if (args.done) {
-                args.done();
-            }
+            if (args.done) { args.done() }
+
+            prog.detach();
         }
     });
 };

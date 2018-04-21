@@ -1,29 +1,23 @@
 $(function() {
-    $("div#dashboard").append(t2hui.build_dashboard());
+    $("div.dashboard").each(function() { $(this).replaceWith(t2hui.build_dashboard()) });
 
     setInterval(function() {
         Object.keys(t2hui.dashboard_to_update).forEach(function (run_id) {
             var old = t2hui.dashboard_to_update[run_id];
             delete t2hui.dashboard_to_update[run_id];
 
-            console.log(run_id);
-
             var url = base_uri + 'run/' + run_id;
             $.ajax(url, {
                 'data': { 'content-type': 'application/json' },
-                'error': function(a, b, c) { console.log(a, b, c); t2hui.dashboard_to_update[run_id] = old },
+                'error': function(a, b, c) { t2hui.dashboard_to_update[run_id] = old },
                 'success': function(item) {
                     var run = t2hui.build_dashboard_run(item);
                     $(old[0]).replaceWith(run);
                     old.remove();
-
-                    if (item.status == 'pending' || item.status == 'running') {
-                        t2hui.dashboard_to_update[item.run_id] = run;
-                    }
                 },
             });
         });
-    }, 15 * 1000);
+    }, 5 * 1000);
 });
 
 t2hui.dashboard_to_update = {};
@@ -45,12 +39,12 @@ t2hui.build_dashboard_controls = function() {
     return controls;
 }
 
-t2hui.build_dashboard_runs = function() {
+t2hui.build_dashboard_runs = function(list) {
     var runs = $('<div class="dashboard_runs grid"></div>');
 
     runs.append($('<div class="col1 head tools">Tools</div>'));
-    runs.append($('<div class="col2 head pass">P</div>'));
-    runs.append($('<div class="col3 head fail">F</div>'));
+    runs.append($('<div class="col2 head count">P</div>'));
+    runs.append($('<div class="col3 head count">F</div>'));
     runs.append($('<div class="col4 head project">Project</div>'));
     runs.append($('<div class="col5 head version"><div class="head_collapse">Version</div></div>'));
     runs.append($('<div class="col6 head category"><div class="head_collapse">Category</div></div>'));
@@ -61,15 +55,19 @@ t2hui.build_dashboard_runs = function() {
     runs.append($('<div class="col11 head permissions">Permissions</div>'));
     runs.append($('<div class="col12 head date">Date</div>'));
 
-    var uri = base_uri + 'runs';
-    t2hui.fetch(uri, {}, function(item) {
-        var run = t2hui.build_dashboard_run(item);
-        runs.append(run);
-
-        if (item.status == 'pending' || item.status == 'running') {
-            t2hui.dashboard_to_update[item.run_id] = run;
-        }
-    })
+    if (list === null || list === undefined) {
+        var uri = base_uri + 'runs';
+        t2hui.fetch(uri, {}, function(item) {
+            var run = t2hui.build_dashboard_run(item);
+            runs.append(run);
+        })
+    }
+    else {
+        $(list).each(function() {
+            var run = t2hui.build_dashboard_run(this);
+            runs.append(run);
+        });
+    }
 
     return runs;
 }
@@ -83,7 +81,7 @@ t2hui.dashboard_clean_maybe = function(thing) {
 t2hui.dashboard_clean_maybe_fail = function(thing) {
     if (thing === null) { return '' };
     if (thing === undefined) { return '' };
-    if (thing == 0) { return '<div class="pass">' + thing + '</div>' }
+    if (thing == 0) { return '<div class="success_txt">' + thing + '</div>' }
     return thing;
 }
 
@@ -117,8 +115,8 @@ t2hui.build_dashboard_run = function(run) {
         tools.append(go);
     }
 
-    me.push($('<div class="col2 pass">' + t2hui.dashboard_clean_maybe(run.passed) + '</div>')[0]);
-    me.push($('<div class="col3 fail">' + t2hui.dashboard_clean_maybe_fail(run.failed) + '</div>')[0]);
+    me.push($('<div class="col2 count success_txt">' + t2hui.dashboard_clean_maybe(run.passed) + '</div>')[0]);
+    me.push($('<div class="col3 count error_txt">' + t2hui.dashboard_clean_maybe_fail(run.failed) + '</div>')[0]);
     me.push($('<div class="col4 project">' + run.project + '</div>')[0]);
     me.push($('<div class="col5 version"><div class="head_collapse">'  + t2hui.dashboard_clean_maybe(run.version)  + '</div></div>')[0]);
     me.push($('<div class="col6 category"><div class="head_collapse">' + t2hui.dashboard_clean_maybe(run.category) + '</div></div>')[0]);
@@ -131,19 +129,23 @@ t2hui.build_dashboard_run = function(run) {
 
     var $me = $(me);
 
-    $me.addClass(run.status);
+    $me.addClass(run.status + "_set");
 
     if (run.failed) {
-        $me.addClass('failing');
+        $me.addClass('error_set');
     }
     else if(run.passed) {
-        $me.addClass('passing');
+        $me.addClass('success_set');
     }
 
     $me.hover(
         function() { $me.addClass('hover') },
         function() { $me.removeClass('hover') },
     );
+
+    if (run.status == 'pending' || run.status == 'running') {
+        t2hui.dashboard_to_update[run.run_id] = $me;
+    }
 
     return $me;
 };

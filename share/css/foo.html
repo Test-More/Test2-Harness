@@ -1,142 +1,126 @@
 <html>
-<body>
+<head>
 
 <style>
-    div.events {
-        display: grid;
-        grid-gap: 0px;
-        grid-template-columns: min-content min-content min-content min-content max-content;
-    }
 
-    div.events > div {
-        text-align: center;
-        vertical-align: top;
-    }
-
-    div.event_break {
-        grid-column-start: 1;
-        grid-column-end: 6;
-        height: 1px;
-        border-bottom: 1px dotted #E6E6E6;
-    }
-
-    div.event_controls {
-        grid-column-start: 1;
-        grid-column-end: 2;
-    }
-
-    div.event_lbrace {
-        grid-column-start: 2;
-        grid-column-end: 3;
-    }
-
-    div.event_tag {
-        grid-column-start: 3;
-        grid-column-end: 4;
-    }
-
-    div.event_rbrace {
-        grid-column-start: 4;
-        grid-column-end: 5;
-    }
-
-    div.event_c_wrap {
-        grid-column-start: 5;
-        grid-column-end: 6;
-        display: grid;
-        grid-gap: 4px;
-        grid-template-columns: min-content max-content;
-    }
-
-    div.event_st_gap {
-        grid-column-start: 1;
-        grid-column-end: 2;
-        border-right: 1px solid #D0D0D0;
-        width: 3ch;
-    }
-
-    div.event_content {
-        text-align: left;
-        vertical-align: top;
-        padding-left: 4px;
-        white-space: pre;
-        grid-column-start: 2;
-        grid-column-end: 3;
-    }
-
-    .etoggle {
-        display: block;
-        border: 1px solid transparent;
-        border-radius: 4px;
-        cursor: pointer;
-        text-align: center;
-        color: black;
-        font-weight: bold;
-        width: 2ch;
-        text-align: center;
-        vertical-align: middle;
-    }
-
-    .etoggle:hover, .etoggle.clicked {
-        border-color: #AABBFF;
-        background: #DDEEFF;
-    }
-
-    .etoggle.clicked:hover {
-        background: inherit;
-    }
-
-    div.subtest.etoggle {
-        float: right;
-    }
-
-    div.subtest.etoggle:after {
-        content: '+';
-    }
-
-    div.subtest.etoggle.clicked:after {
-        content: '-';
-    }
+div.s {
+    display: block;
+    padding: 6px;
+    border-radius: 10px;
+    margin: 5px;
+}
 
 </style>
 
-<div class="events">
-        <div class="event_break"></div>
-        <div class="event_controls"><div class="etoggle">F</div></div>
-        <div class="event_lbrace">[</div>
-        <div class="event_tag">PASS</div>
-        <div class="event_rbrace">]</div>
-        <div class="event_c_wrap">
-            <div class="event_st_gap"></div>
-            <div class="event_content">gsfgsdgfgsfggsfgdsfgfsadfad</div>
-        </div>
+<link rel="stylesheet" type="text/css" href="main.css">
+<link rel="stylesheet" type="text/css" href="theme.css">
 
-        <div class="event_break"></div>
-        <div class="event_lbrace">[</div>
-        <div class="event_tag">PASS</div>
-        <div class="event_rbrace">]</div>
-        <div class="event_c_wrap">
-            <div class="event_st_gap"><div class="etoggle subtest"></div></div>
-            <div class="event_content">gsfgsdgfgsfggsfgdsfgfsadfad
-            fsdsa
-   fasdfsafdsa
-            </div>
-        </div>
+</head>
+<body>
+    <div class="s error">error </div>
+    <div class="s success">success </div>
+    <div class="s broken">broken </div>
+    <div class="s pending">pending </div>
+    <div class="s running">running </div>
 
-        <div class="event_break"></div>
-        <div class="event_lbrace">[</div>
-        <div class="event_tag">PASS</div>
-        <div class="event_rbrace">]</div>
-        <div class="event_c_wrap">
-            <div class="event_st_gap" style="width: 5ch;"></div>
-            <div class="event_content">gsfgsdgfgsfggsfgdsfgfsadfaddffjhfajdhfasjkldfhjkashfdjskahfakjshfkjsdhfjksahfjkdhsjkdfhdjksahfjksdhfjksahdjfkhsajkfhsjkhfdjdskhfjksdhfjksahdjfhskjafhjksahfdjksahfsjkdhfjkasdhkjsahdfjkshfkjdhsajkdfhsadkjfhsjkdfhjksahfjksadhfjkdshfkjsdhkjfhsakdjfhkjsahfkjsdhfkjshdjkfhjksdhfjksahfjksdhfdjkshfkjsadhfjkdshfjkshdfjkhsdjkfhskajfhskajhfjkdshfkjhdfkjsahdjkfhjksadhfjkashf</div>
-        </div>
-</div>
+    <div class="s error_box">error box</div>
+    <div class="s success_box">success box</div>
+    <div class="s broken_box">broken box</div>
+    <div class="s pending_box">pending box</div>
+    <div class="s running_box">running box</div>
+
+    <div class="s error_txt">error txt</div>
+    <div class="s success_txt">success txt</div>
+    <div class="s broken_txt">broken txt</div>
+    <div class="s pending_txt">pending txt</div>
+    <div class="s running_txt">running txt</div>
+
+    <div class="s error_set">error set</div>
+    <div class="s success_set">success set</div>
+    <div class="s broken_set">broken set</div>
+    <div class="s pending_set">pending set</div>
+    <div class="s running_set">running set</div>
+
+    <div class="etoggle">T</div>
+    <div class="etoggle">Toggle</div>
+
+    <div class="etoggle clicked">C</div>
+    <div class="etoggle clicked">Clicked</div>
+
+    <div class="grid">
+        <div class="col1">col1</div>
+        <div class="col2">col2</div>
+        <div class="col3">col3</div>
+        <div class="col4">col4</div>
+
+        <div class="col1">col1</div>
+        <div class="col2">col2</div>
+        <div class="col4">col4</div>
+
+        <div class="col1">col1</div>
+        <div class="col2">col2</div>
+        <div class="col3">col3</div>
+        <div class="col4">col4</div>
+    </div>
+
+    <hr />
+
+    <div class="grid">
+        <div class="col1">col1</div>
+        <div class="col2">col2</div>
+        <div class="col3">col3</div>
+        <div class="col4">col4</div>
+
+        <div class="colfat">colfat fdsfasdfsaffasjdhfasfhsahgdfhasgfhasgdfgajsdhgfakshdfghsadgfhasgfdhasgfhsagdhfgasjhgfhsagfhsdgahfgshadgfhsagdhgfhsgadhgfahsdgfhasgfhsagdfhghsdghasgfhgsadhfghasdgfhsadgfhdsgfhjsdgfkhsdgfsadhgfsdhgfhsdghjfdghfgdhfhagfhsdgfhsadgfkjasgdfskajfsajkfgkasgfdasgkasfhasgfkhdghsgafhgdshfgsadhgfhsdgfdhgfdhgjhgdhgfhdgsafskjdgksjafgdhgasjdsjkagfhgsadfhsagfjksafsdahfksagdhkashgfkhdsgksajhgfkjdsg</div>
+
+        <div class="col1">col1</div>
+        <div class="col2">col2</div>
+        <div class="col3">col3</div>
+        <div class="col4">col4</div>
+    </div>
+
+    <hr />
+
+    <div class="grid top">
+        <div class="col1">col1</div>
+        <div class="col2">col2</div>
+        <div class="col3">col3</div>
+        <div class="col4">col4</div>
+    </div>
+
+    <div class="grid middle">
+        <div class="colfat">colfat fdsfasdfsaffasjdhfasfhsahgdfhasgfhasgdfgajsdhgfakshdfghsadgfhasgfdhasgfhsagdhfgasjhgfhsagfhsdgahfgshadgfhsagdhgfhsgadhgfahsdgfhasgfhsagdfhghsdghasgfhgsadhfghasdgfhsadgfhdsgfhjsdgfkhsdgfsadhgfsdhgfhsdghjfdghfgdhfhagfhsdgfhsadgfkjasgdfskajfsajkfgkasgfdasgkasfhasgfkhdghsgafhgdshfgsadhgfhsdgfdhgfdhgjhgdhgfhdgsafskjdgksjafgdhgasjdsjkagfhgsadfhsagfjksafsdahfksagdhkashgfkhdsgksajhgfkjdsg</div>
+    </div>
+
+    <div class="grid bottom">
+        <div class="col1">col1</div>
+        <div class="col2">col2</div>
+        <div class="col3">col3</div>
+        <div class="col4">col4</div>
+    </div>
 
 </body>
 </html>
 
 <!--
+
+.error_box   { border-color: #FF0000; background: #FFF0F0; }
+.success_box { border-color: #00C000; background: #F0FFF0; }
+.broken_box  { border-color: #FF00FF; background: #F0B0F0; }
+.pending_box { border-color: #0000C0; background: #F0F0FF; }
+.running_box {
+    animation: running_pulse 2s infinite !important;
+}
+@keyframes running_pulse {
+    0%  { background-color: #F0F0FF }
+    50% { background-color: #A0A0AA }
+}
+
+.error_txt   { color: #FF4040; }
+.success_txt { color: #007000; }
+.broken_txt  { color: #FF00FF; }
+.pending_txt { color: #0000A0; }
+.running_txt { color: #0000A0; }
 
 
         <div class="event_st_gap"><div class="etoggle subtest"></div></div>

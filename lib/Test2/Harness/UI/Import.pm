@@ -5,11 +5,13 @@ use warnings;
 use DateTime;
 use Data::GUID;
 use Time::HiRes qw/time/;
+use List::Util qw/first/;
 
 use Carp qw/croak/;
 
 use Test2::Util::Facets2Legacy qw/causes_fail/;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Formatter::Test2::Composer;
 
@@ -17,14 +19,10 @@ use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip  qw($GunzipError);
 
 use Test2::Harness::UI::Util::HashBase qw{
-    -config  -run
-    -buffer  -ready
-    -job_ord -event_ord
-    -mode    -store_orphans
-    -passed  -failed
-    -cids    -hids
+    -config -run -mode
+    -passed -failed
+    -job0_id -job_ord -job_buffer -ready_jobs
 };
-
 
 my %MODES = (
     summary  => 5,
@@ -48,39 +46,36 @@ sub init {
     croak "'run' is a required attribute"
         unless $self->{+RUN};
 
-    $self->{+BUFFER} = {};
-    $self->{+READY}  = [];
-    $self->{+JOB_ORD} = 0;
-    $self->{+EVENT_ORD} = 0;
-
-    $self->{+CIDS} = {};
-    $self->{+HIDS} = {};
+    my $mode = $self->{+RUN}->mode;
+    $self->{+MODE} = $MODES{$mode} or croak "Invalid mode '$mode'";
 
     $self->{+PASSED} = 0;
     $self->{+FAILED} = 0;
 
-    my $mode = $self->{+RUN}->mode;
-    $self->{+MODE} = $MODES{$mode} or croak "Invalid mode '$mode'";
-
-    $self->{+STORE_ORPHANS} = $self->{+RUN}->store_orphans;
-}
-
-sub eord {
-    my $self = shift;
-    return $self->{+EVENT_ORD}++;
+    $self->{+JOB_ORD}    = 1;
+    $self->{+JOB0_ID}    = gen_uuid();
+    $self->{+JOB_BUFFER} = {
+        $self->{+JOB0_ID} => {
+            job_id  => $self->{+JOB0_ID},
+            job_ord => $self->{+JOB_ORD}++,
+            run_id  => $self->{+RUN}->run_id,
+            name    => "HARNESS INTERNAL LOG",
+        },
+    };
 }
 
 sub process {
     my $self = shift;
 
-    my $run  = $self->{+RUN};
+    my $run = $self->{+RUN};
+    my $log = $run->log_file or die "No log file";
 
     my $fh;
-    if ($run->log_file =~ m/\.bz2$/) {
-        $fh = IO::Uncompress::Bunzip2->new(\($run->log_data)) or die "Could not open bz2 data: $Bunzip2Error";
+    if ($log->name =~ m/\.bz2$/) {
+        $fh = IO::Uncompress::Bunzip2->new(\($log->data)) or die "Could not open bz2 data: $Bunzip2Error";
     }
     else {
-        $fh = IO::Uncompress::Gunzip->new(\($run->log_data)) or die "Could not open gz data: $GunzipError";
+        $fh = IO::Uncompress::Gunzip->new(\($log->data)) or die "Could not open gz data: $GunzipError";
     }
 
     my $schema = $self->{+CONFIG}->schema;
@@ -88,72 +83,59 @@ sub process {
     local $| = 1;
     my $last = 0;
     while (my $line = <$fh>) {
-        my $ord = $.;
+        my $ln = $.;
         if (time - $last >= 0.1) {
-            print "$ord\r";
+            print "$ln\r";
             $last = time;
         }
-        my $error = $@;
 
-        $error = $self->process_event($line);
-        $error ||= $self->flush_ready if @{$self->{+READY}};
+        my $error = $self->process_event_json($ln => $line);
+        $error ||= $self->flush_ready_jobs() if $self->{+READY_JOBS} && @{$self->{+READY_JOBS}};
 
-        return {errors => ["error processing line number $ord: $error"]} if $error;
+        return {errors => ["error processing line number $ln: $error"]} if $error;
     }
 
-    $self->flush_all;
+    $self->flush_all_jobs();
 
     return {success => 1, passed => $self->{+PASSED}, failed => $self->{+FAILED}};
 }
 
-sub flush_ready {
+sub flush_ready_jobs {
     my $self = shift;
 
-    my $jobs = delete $self->{+READY};
-    $self->{+READY} = [];
+    my $jobs = delete $self->{+READY_JOBS};
+    return unless $jobs && @$jobs;
 
     my @events;
 
     my $mode = $self->{+MODE};
+
     for my $job (@$jobs) {
-        my $raw = delete $job->{raw_events};
+        delete $job->{event_ord};
+        my $events = delete $job->{events};
 
-        my $internal = $job->{name} eq 'LOG' ? 1 : 0;
+        next if $mode <= $MODES{summary};
 
-        next if $mode <= $MODES{summary} && !$internal;
+        my $record_job = $mode >= $MODES{complete} ? 1 : 0;
+        $record_job ||= 1 if $job->{job_id} eq $self->{+JOB0_ID};
+        $record_job ||= 1 if $mode >= $MODES{qvf} && $job->{fail};;
 
-        my $fail = $job->{fail};
-        next if $mode <= $MODES{qvf} && !$fail && !$internal;
+        my @local_events;
+        for my $event (sort { $a->{event_ord} <=> $b->{event_ord} } values %$events) {
+            my $is_diag = delete $event->{is_diag};
+            my $record_event = $record_job || ($mode >= $MODES{qvfd} && $is_diag);
+            next unless $record_event;
 
-        my $db_id = $job->{job_id};
+            clean($event->{facets});
+            clean($event->{orphan});
 
-        my $start = time;
-        my $ord   = 0;
-        for my $f (@$raw) {
-            $f = $self->_facet_data($f) unless ref $f;
-            return $f unless ref $f;
-
-            my ($new, $error) = $self->process_facets($f, $job, undef, 0);
-            return $error if $error;
-
-            for my $event (@$new) {
-                next unless $internal || $fail || $mode > $MODES{qvfd} || $event->{is_diag};
-
-                if ($event->{is_orphan} && $self->{+STORE_ORPHANS} ne 'yes' && !$internal) {
-                    next if $self->{+STORE_ORPHANS} eq 'no';
-
-                    # store on fail only
-                    next unless $fail;
-                }
-
-                delete $event->{is_diag};
-                push @events => $event;
-            }
+            $event->{facets} = encode_json($event->{facets}) if $event->{facets};
+            $event->{orphan} = encode_json($event->{orphan}) if $event->{orphan};
+            push @events => $event;
         }
     }
 
     my $schema = $self->{+CONFIG}->schema;
-
     $schema->txn_begin;
     my $ok = eval {
         my $start = time;
@@ -173,80 +155,120 @@ sub flush_ready {
     die $err;
 }
 
-sub flush_all {
+sub flush_all_jobs {
     my $self = shift;
 
-    my $buffer = delete $self->{+BUFFER};
+    my $all = delete $self->{+JOB_BUFFER};
+    push @{$self->{+READY_JOBS}} => values %$all;
 
-    push @{$self->{+READY}} => values %$buffer;
-
-    $self->flush_ready;
-    return;
+    $self->flush_ready_jobs();
 }
 
-sub _new_job {
+sub process_event_json {
     my $self = shift;
-    my ($name) = @_;
+    my ($ln, $json) = @_;
 
-    my $run = $self->{+RUN};
+    my $data;
+    eval { $data = decode_json($json); 1 } or return "Error decoding facets for line $ln: $@";
+    return "No event for line $ln" unless $data;
 
-    return {
-        job_id  => Data::GUID->new->as_string,
-        job_ord => $self->{+JOB_ORD}++,
-        run_id  => $run->run_id,
-        name    => $name,
+    my $f = $data->{facet_data} or return "No facet data for event on line $ln.";
 
-        "$name" eq '0' ? (file => 'HARNESS INTERNAL LOG') : (),
-    };
-}
-
-sub _facet_data {
-    my $self = shift;
-    my ($json) = @_;
-
-    my $event_data;
-    my $ok = eval { $event_data = decode_json($json) };
-    return $@ unless $ok;
-    return $event_data->{facet_data};
+    return $self->process_event($f, %$data, line => $ln);
 }
 
 sub process_event {
     my $self = shift;
-    my ($json) = @_;
+    my ($f, %params) = @_;
 
-    my $run = $self->{+RUN};
-    my $buffer = $self->{+BUFFER} ||= {};
+    my $job_id = $f->{harness}->{job_id};
+    $job_id = $self->{+JOB0_ID} if !$job_id || $job_id eq '0';
+    my $job = $self->{+JOB_BUFFER}->{$job_id} ||= {
+        job_id      => $job_id,
+        job_ord     => $self->{+JOB_ORD}++,
+        run_id      => $self->{+RUN}->run_id,
+        events      => {},
+        event_ord   => 1,
+        fail_count  => 0,
+        pass_count  => 0,
+    };
 
-    my $f;
-    my $job_name = ($json =~ m/"job_id"\s*:\s*"([^"]+)"/) ? $1 : undef;
-    unless (defined($job_name) && length($job_name)) {
-        $f = $self->_facet_data($json);
-        return $f unless ref $f;
-        $job_name = $f->{harness}->{job_id};
-        return "No 'job_id'" unless defined $job_name;
+    my $e_id = $f->{harness}->{event_id};
+    my $e = $job->{events}->{$e_id} ||= {
+        event_id => $f->{harness}->{event_id},
+        job_id   => $job->{job_id},
+    };
+
+    my $nested = $f->{hubs}->[0]->{nested} || 0;
+
+    $e->{trace_id} ||= $f->{trace}->{uuid};
+    $e->{stamp}    ||= format_stamp($params{stamp});
+    $e->{nested}   //= $nested;
+
+    $e->{is_diag} //=
+           ($f->{errors} && @{$f->{errors}})
+        || ($f->{assert} && !($f->{assert}->{pass} || $f->{amnesty}))
+        || ($f->{info} && grep { $_->{debug} || $_->{important} } @{$f->{info}});
+
+    my $orphan = $nested ? 1 : 0;
+    if (my $p = $params{parent_id}) {
+        $e->{parent_id} ||= $p;
+        $orphan = 0;
     }
 
-    my $job = $buffer->{$job_name} ||= $self->_new_job($job_name);
+    if ($orphan) {
+        $e->{orphan} = $f;
+        $e->{orphan_line} = $params{line};
 
-    unless ($json =~ m/"harness_(?:run|job(?:_(?:start|exit|launch|end))?)"/) {
-        push @{$job->{raw_events}} => $f || $json;
         return;
     }
 
-    $f ||= $self->_facet_data($json);
-    return $f unless ref $f;
+    $e->{event_ord} ||= $job->{event_ord}++;
+    $e->{facets} = $f;
+    $e->{facets_line} = $params{line};
 
-    push @{$job->{raw_events}} => $f;
+    if ($f->{parent} && $f->{parent}->{children}) {
+        $self->process_event($_, parent_id => $e_id, line => $params{line}) for @{$f->{parent}->{children}};
+        $f->{parent}->{children} = "Removed, used to populate events table";
+    }
 
-    # Handle the run event
+    return if $nested;
+
+    if ($f->{assert}) {
+        if (causes_fail($f)) {
+            $job->{fail_count}++;
+        }
+        else {
+            $job->{pass_count}++;
+        }
+    }
+    elsif (causes_fail($f)) {
+        $job->{fail_count}++;
+    }
+
+    $self->update_other($job, $f) if first { $f->{$_} } qw{
+        harness_job harness_job_exit harness_job_start harness_job_launch harness_job_end
+        memory times
+        harness_run
+    };
+
+    return;
+}
+
+sub update_other {
+    my $self = shift;
+    my ($job, $f) = @_;
+
     if (my $run_data = $f->{harness_run}) {
-        $run->update({parameters => encode_json($run_data)});
-        $f->{harness_run} = "Removed, see run with run_id " . $run->run_id;
+        clean($run_data);
+        $self->{+RUN}->update({parameters => $run_data});
     }
 
     # Handle job events
     if (my $job_data = $f->{harness_job}) {
         $job->{file} ||= $job_data->{file};
+        $job->{name} ||= $job_data->{job_name};
+        clean($job_data);
         $job->{parameters} = encode_json($job_data);
         $f->{harness_job}  = "Removed, see job with job_id $job->{job_id}";
     }
@@ -273,12 +295,22 @@ sub process_event {
         $job->{fail} ? $self->{+FAILED}++ : $self->{+PASSED}++;
 
         # All done
-        push @{$self->{+READY}} => delete $buffer->{$job_name};
-        delete $self->{+CIDS}->{$job->{job_id}};
-        delete $self->{+HIDS}->{$job->{job_id}};
+        push @{$self->{+READY_JOBS}} => delete $self->{+JOB_BUFFER}->{$job->{job_id}};
     }
-
-    return;
+    if (my $memory = $f->{memory}) {
+        $job->{mem_peak}   = $memory->{peak}->[0];
+        $job->{mem_peak_u} = $memory->{peak}->[1];
+        $job->{mem_size}   = $memory->{size}->[0];
+        $job->{mem_size_u} = $memory->{size}->[1];
+        $job->{mem_rss}    = $memory->{rss}->[0];
+        $job->{mem_rss_u}  = $memory->{rss}->[1];
+    }
+    if (my $times = $f->{times}) {
+        $job->{time_user}  = $times->{user};
+        $job->{time_sys}   = $times->{sys};
+        $job->{time_cuser} = $times->{cuser};
+        $job->{time_csys}  = $times->{csys};
+    }
 }
 
 sub clean_output {
@@ -290,78 +322,6 @@ sub clean_output {
 
     return undef unless length($text);
     return $text;
-}
-
-sub process_facets {
-    my $self = shift;
-    my ($f, $job, $parent_db_id, $orphan) = @_;
-
-    my $ord = $self->eord();
-
-    my $db_id = Data::GUID->new->as_string;
-
-    my $is_diag = 0;
-    $is_diag ||= $f->{errors} && @{$f->{errors}};
-    $is_diag ||= $f->{assert} && !($f->{assert}->{pass} || $f->{amnesty});
-    $is_diag ||= grep { $_->{debug} || $_->{important} } @{$f->{info}} if $f->{info};
-
-    my ($nested, $cid, $hid);
-    if (my $trace = $f->{trace}) {
-        $nested = $trace->{nested} || 0;
-        if (length(my $c = $trace->{cid})) {
-            $cid = $self->{+CIDS}->{$job->{job_id}}->{$c} ||= Data::GUID->new->as_string;
-        }
-        if (length(my $h = $trace->{hid})) {
-            $hid = $self->{+HIDS}->{$job->{job_id}}->{$h} ||= Data::GUID->new->as_string;
-        }
-    }
-    else {
-        $nested = 0;
-    }
-
-    $orphan = 1 if $nested && !$parent_db_id;
-
-    my $row = {
-        event_id  => $db_id,
-        event_ord => $ord,
-        job_id    => $job->{job_id},
-        parent_id => $parent_db_id,
-
-        hid => $hid,
-        cid => $cid,
-
-        nested    => $nested,
-        is_parent => 0,
-        is_orphan => $orphan,
-    };
-
-    my @children;
-    if ($f->{parent} && $f->{parent}->{children}) {
-        $row->{is_parent} = 1;
-
-        my $cnt = 0;
-        for my $child (@{$f->{parent}->{children}}) {
-            my ($crows, $error, $diag) = $self->process_facets($child, $job, $db_id, $orphan);
-            return (undef, "Error in subevent [$cnt]: $error") if $error || !$crows;
-
-            $is_diag ||= 1 if $diag;
-            $cnt++;
-
-            push @children => @$crows;
-        }
-
-        $f->{parent}->{children} = "Removed, see events with parent_id $db_id";
-    }
-
-    $row->{facets} = encode_json($f);
-
-    if ($self->{+MODE} == $MODES{qvfd} && !$job->{fail} && !$parent_db_id) {
-        @children = grep { $_->{is_diag} } @children;
-    }
-
-    $row->{is_diag} = $is_diag ? 1 : 0;
-
-    return ([$row, @children], undef, $is_diag);
 }
 
 sub clean {
@@ -400,3 +360,4 @@ sub clean_array {
 }
 
 1;
+

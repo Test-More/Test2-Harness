@@ -11,7 +11,7 @@ CREATE TYPE queue_status AS ENUM(
     'pending',
     'running',
     'complete',
-    'failed'
+    'broken'
 );
 
 CREATE TYPE api_key_status AS ENUM(
@@ -25,12 +25,6 @@ CREATE TYPE run_modes AS ENUM(
     'qvfd',
     'qvf',
     'complete'
-);
-
-CREATE TYPE store_toggle AS ENUM(
-    'yes',
-    'no',
-    'fail'
 );
 
 CREATE TYPE user_type AS ENUM(
@@ -85,30 +79,33 @@ CREATE TABLE api_keys (
 );
 CREATE INDEX IF NOT EXISTS api_key_user ON api_keys(user_id);
 
+CREATE TABLE log_files (
+    log_file_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    name            TEXT            NOT NULL,
+    data            BYTEA           NOT NULL
+);
+
 CREATE TABLE runs (
     run_id          UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     user_id         UUID            NOT NULL REFERENCES users(user_id),
+    status          queue_status    NOT NULL DEFAULT 'pending',
+    error           TEXT            DEFAULT NULL,
 
-    passed          INTEGER         DEFAULT NULL,
-    failed          INTEGER         DEFAULT NULL,
-
+    -- User Input
     project         CITEXT          NOT NULL,
     version         CITEXT          DEFAULT NULL,
     tier            CITEXT          DEFAULT NULL,
     category        CITEXT          DEFAULT NULL,
     build           CITEXT          DEFAULT NULL,
-
-    parameters      JSONB           DEFAULT NULL,
-    error           TEXT            DEFAULT NULL,
     added           TIMESTAMP       NOT NULL DEFAULT now(),
-
     permissions     perms           NOT NULL DEFAULT 'private',
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
-    store_orphans   store_toggle    NOT NULL DEFAULT 'fail',
+    log_file_id     UUID            DEFAULT NULL REFERENCES log_files(log_file_id),
 
-    log_file        TEXT            NOT NULL,
-    log_data        BYTEA           NOT NULL,
-    status          queue_status    NOT NULL DEFAULT 'pending'
+    -- From Log
+    passed          INTEGER         DEFAULT NULL,
+    failed          INTEGER         DEFAULT NULL,
+    parameters      JSONB           DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
@@ -153,21 +150,37 @@ CREATE TABLE jobs (
     job_ord         BIGINT      NOT NULL,
     run_id          UUID        NOT NULL REFERENCES runs(run_id),
 
-    stream_ord      SERIAL      NOT NULL,
-
     parameters      JSONB       DEFAULT NULL,
 
     -- Summaries
-    name            TEXT        NOT NULL,
-    file            TEXT        DEFAULT NULL,
-    fail            BOOL        DEFAULT NULL,
-    exit            INT         DEFAULT NULL,
-    launch          TIMESTAMP   DEFAULT NULL,
-    start           TIMESTAMP   DEFAULT NULL,
-    ended           TIMESTAMP   DEFAULT NULL,
+    name            TEXT            DEFAULT NULL,
+    file            TEXT            DEFAULT NULL,
+    fail            BOOL            DEFAULT NULL,
+    exit            INT             DEFAULT NULL,
+    launch          TIMESTAMP       DEFAULT NULL,
+    start           TIMESTAMP       DEFAULT NULL,
+    ended           TIMESTAMP       DEFAULT NULL,
 
-    stdout          TEXT        DEFAULT NULL,
-    stderr          TEXT        DEFAULT NULL
+    pass_count      BIGINT          DEFAULT NULL,
+    fail_count      BIGINT          DEFAULT NULL,
+
+    -- Process time data
+    time_user       DECIMAL(20,10)  DEFAULT NULL,
+    time_sys        DECIMAL(20,10)  DEFAULT NULL,
+    time_cuser      DECIMAL(20,10)  DEFAULT NULL,
+    time_csys       DECIMAL(20,10)  DEFAULT NULL,
+
+    -- Process memory data
+    mem_peak        BIGINT          DEFAULT NULL,
+    mem_size        BIGINT          DEFAULT NULL,
+    mem_rss         BIGINT          DEFAULT NULL,
+    mem_peak_u      VARCHAR(2)      DEFAULT NULL,
+    mem_size_u      VARCHAR(2)      DEFAULT NULL,
+    mem_rss_u       VARCHAR(2)      DEFAULT NULL,
+
+    -- Output data
+    stdout          TEXT            DEFAULT NULL,
+    stderr          TEXT            DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
@@ -185,19 +198,25 @@ CREATE INDEX IF NOT EXISTS job_signoff_job ON job_signoffs(job_id);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,
-    event_ord       BIGINT      NOT NULL,
     job_id          UUID        NOT NULL REFERENCES jobs(job_id),
-    parent_id       UUID        DEFAULT NULL REFERENCES events(event_id),
-    facets          JSONB       NOT NULL,
 
-    -- Summaries for lookup/display
-    cid             UUID        DEFAULT NULL,
-    hid             UUID        DEFAULT NULL,
-    nested          INT         NOT NULL,
-    is_parent       BOOL        NOT NULL,
-    is_orphan       BOOL        NOT NULL
+    event_ord       BIGINT      NOT NULL,
+
+    stamp           TIMESTAMP   DEFAULT NULL,
+
+    parent_id       UUID        DEFAULT NULL REFERENCES events(event_id),
+    trace_id        UUID        DEFAULT NULL,
+    nested          INT         DEFAULT 0,
+
+    facets          JSONB       DEFAULT NULL,
+    facets_line     BIGINT      DEFAULT NULL,
+
+    orphan          JSONB       DEFAULT NULL,
+    orphan_line     BIGINT      DEFAULT NULL
 );
-CREATE INDEX IF NOT EXISTS event_job ON events(job_id);
+CREATE INDEX IF NOT EXISTS event_job    ON events(job_id);
+CREATE INDEX IF NOT EXISTS event_trace  ON events(trace_id);
+CREATE INDEX IF NOT EXISTS event_parent ON events(parent_id);
 
 CREATE TABLE event_comments (
     event_comment_id    UUID        DEFAULT UUID_GENERATE_V4() PRIMARY KEY,

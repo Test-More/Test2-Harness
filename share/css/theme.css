@@ -1,0 +1,66 @@
+.grid {
+    background: #C0C0C0;
+    border: 4px solid #C0C0C0;
+}
+
+.grid > * {
+    background: #F8F8F8;
+}
+
+.grid > .hover {
+    filter: brightness(90%);
+}
+
+.error,   .error_box,   .error_txt   { color: #FF4040; }
+.success, .success_box, .success_txt { color: #007000; }
+.broken,  .broken_box,  .broken_txt  { color: #902090; }
+.pending, .pending_box, .pending_txt { color: #0000A0; }
+.running, .running_box, .running_txt { color: #00A0A0; }
+
+.error,   .error_box,   .error_set   { background: #FFE0E0; }
+.success, .success_box, .success_set { background: #E0FFE0; }
+.broken,  .broken_box,  .broken_set  { background: #FFB0D0; }
+.pending, .pending_box, .pending_set { background: #F0F0FF; }
+.running, .running_box, .running_set {
+    animation: running_set_pulse 2s infinite !important;
+}
+@keyframes running_set_pulse {
+    0%   { background-color: #F0F0FF }
+    50%  { background-color: #C0C0F0 }
+    100% { background-color: #F0F0FF }
+}
+
+.error_box   { border: 1px solid #FF0000; background: #FFF0F0; }
+.success_box { border: 1px solid #00C000; background: #F0FFF0; }
+.broken_box  { border: 1px solid #902090; }
+.pending_box { border: 1px solid #0000C0; }
+.running_box { border: 1px solid #009090; }
+
+.etoggle {
+    border: 1px solid #999999;
+    color:  #585858;
+}
+
+.etoggle:hover, .etoggle.clicked:hover {
+    border-color: #0000FF;
+    color:  #0000A0;
+}
+
+.etoggle.clicked {
+    border: 1px solid #AABBFF;
+    background: #DDEEFF;
+    color:  #000060;
+}
+
+div#progress_bar {
+    animation: running_set_pulse 2s infinite !important;
+}
+
+div#progress_bar:empty {
+    display: none;
+}
+
+.grid > .tools > .tool.error {
+    color: red;
+}
+

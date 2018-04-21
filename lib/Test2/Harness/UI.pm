@@ -13,6 +13,7 @@ use Test2::Harness::UI::Controller::Dashboard;
 use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
+use Test2::Harness::UI::Controller::Job;
 
 use Test2::Harness::UI::Controller::Query;
 use Test2::Harness::UI::Controller::Runs;
@@ -40,15 +41,11 @@ sub init {
     $router->connect('/query/:name/:arg' => {controller => 'Test2::Harness::UI::Controller::Query'});
 
     $router->connect('/run/:id' => {controller => 'Test2::Harness::UI::Controller::Run'});
+    $router->connect('/job/:id' => {controller => 'Test2::Harness::UI::Controller::Job'});
 
     $router->connect('/run/:id/jobs'        => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
     $router->connect('/job/:id/events'      => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
     $router->connect('/event/:id/events'    => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
-    $router->connect('/cid/:cid/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'cid'});
-
-#    TODO:
-#    $router->connect('/job/:id'   => {controller => 'Test2::Harness::UI::Controller::Job'});
-#    $router->connect('/event/:id' => {controller => 'Test2::Harness::UI::Controller::Event'});
 
     $router->connect('/user'   => {controller => 'Test2::Harness::UI::Controller::User'});
     $router->connect('/upload' => {controller => 'Test2::Harness::UI::Controller::Upload'});

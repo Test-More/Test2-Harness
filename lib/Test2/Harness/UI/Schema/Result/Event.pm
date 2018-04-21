@@ -55,17 +55,22 @@ __PACKAGE__->table("events");
   is_nullable: 0
   size: 16
 
-=head2 event_ord
-
-  data_type: 'bigint'
-  is_nullable: 0
-
 =head2 job_id
 
   data_type: 'uuid'
   is_foreign_key: 1
   is_nullable: 0
   size: 16
+
+=head2 event_ord
+
+  data_type: 'bigint'
+  is_nullable: 0
+
+=head2 stamp
+
+  data_type: 'timestamp'
+  is_nullable: 1
 
 =head2 parent_id
 
@@ -74,18 +79,7 @@ __PACKAGE__->table("events");
   is_nullable: 1
   size: 16
 
-=head2 facets
-
-  data_type: 'jsonb'
-  is_nullable: 0
-
-=head2 cid
-
-  data_type: 'uuid'
-  is_nullable: 1
-  size: 16
-
-=head2 hid
+=head2 trace_id
 
   data_type: 'uuid'
   is_nullable: 1
@@ -94,41 +88,54 @@ __PACKAGE__->table("events");
 =head2 nested
 
   data_type: 'integer'
-  is_nullable: 0
+  default_value: 0
+  is_nullable: 1
 
-=head2 is_parent
+=head2 facets
 
-  data_type: 'boolean'
-  is_nullable: 0
+  data_type: 'jsonb'
+  is_nullable: 1
 
-=head2 is_orphan
+=head2 facets_line
 
-  data_type: 'boolean'
-  is_nullable: 0
+  data_type: 'bigint'
+  is_nullable: 1
+
+=head2 orphan
+
+  data_type: 'jsonb'
+  is_nullable: 1
+
+=head2 orphan_line
+
+  data_type: 'bigint'
+  is_nullable: 1
 
 =cut
 
 __PACKAGE__->add_columns(
   "event_id",
   { data_type => "uuid", is_nullable => 0, size => 16 },
-  "event_ord",
-  { data_type => "bigint", is_nullable => 0 },
   "job_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "event_ord",
+  { data_type => "bigint", is_nullable => 0 },
+  "stamp",
+  { data_type => "timestamp", is_nullable => 1 },
   "parent_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
-  "facets",
-  { data_type => "jsonb", is_nullable => 0 },
-  "cid",
-  { data_type => "uuid", is_nullable => 1, size => 16 },
-  "hid",
+  "trace_id",
   { data_type => "uuid", is_nullable => 1, size => 16 },
   "nested",
-  { data_type => "integer", is_nullable => 0 },
-  "is_parent",
-  { data_type => "boolean", is_nullable => 0 },
-  "is_orphan",
-  { data_type => "boolean", is_nullable => 0 },
+  { data_type => "integer", default_value => 0, is_nullable => 1 },
+  "facets",
+  { data_type => "jsonb", is_nullable => 1 },
+  "facets_line",
+  { data_type => "bigint", is_nullable => 1 },
+  "orphan",
+  { data_type => "jsonb", is_nullable => 1 },
+  "orphan_line",
+  { data_type => "bigint", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
@@ -211,18 +218,21 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-21 07:50:43
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:MVKjqlLT4frFgHqsf+q/IA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2018-04-20 04:04:36
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:MvMhWGkPznxSKkUTK+JqQA
 
 __PACKAGE__->parent_column('parent_id');
 
 __PACKAGE__->inflate_column(
     facets => {
         inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('facets', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('facets', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('facets',   {}),
+    },
+    orphan => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('orphan', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('orphan',   {}),
     },
 );
-
 
 sub run  { shift->job->run }
 sub user { shift->job->run->user }
@@ -242,7 +252,7 @@ sub TO_JSON {
 
     # Inflate
     $cols{facets} = $self->facets;
-    $cols{lines} = Test2::Formatter::Test2::Composer->render_verbose($cols{facets});
+    $cols{lines}  = Test2::Formatter::Test2::Composer->render_verbose($cols{facets});
 
     return \%cols;
 }

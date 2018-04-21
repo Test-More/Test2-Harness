@@ -67,13 +67,6 @@ __PACKAGE__->table("jobs");
   is_nullable: 0
   size: 16
 
-=head2 stream_ord
-
-  data_type: 'integer'
-  is_auto_increment: 1
-  is_nullable: 0
-  sequence: 'jobs_stream_ord_seq'
-
 =head2 parameters
 
   data_type: 'jsonb'
@@ -82,7 +75,7 @@ __PACKAGE__->table("jobs");
 =head2 name
 
   data_type: 'text'
-  is_nullable: 0
+  is_nullable: 1
 
 =head2 file
 
@@ -114,6 +107,80 @@ __PACKAGE__->table("jobs");
   data_type: 'timestamp'
   is_nullable: 1
 
+=head2 pass_count
+
+  data_type: 'bigint'
+  is_nullable: 1
+
+=head2 fail_count
+
+  data_type: 'bigint'
+  is_nullable: 1
+
+=head2 time_user
+
+  data_type: 'numeric'
+  default_value: null
+  is_nullable: 1
+  size: [20,10]
+
+=head2 time_sys
+
+  data_type: 'numeric'
+  default_value: null
+  is_nullable: 1
+  size: [20,10]
+
+=head2 time_cuser
+
+  data_type: 'numeric'
+  default_value: null
+  is_nullable: 1
+  size: [20,10]
+
+=head2 time_csys
+
+  data_type: 'numeric'
+  default_value: null
+  is_nullable: 1
+  size: [20,10]
+
+=head2 mem_peak
+
+  data_type: 'bigint'
+  is_nullable: 1
+
+=head2 mem_size
+
+  data_type: 'bigint'
+  is_nullable: 1
+
+=head2 mem_rss
+
+  data_type: 'bigint'
+  is_nullable: 1
+
+=head2 mem_peak_u
+
+  data_type: 'varchar'
+  default_value: null
+  is_nullable: 1
+  size: 2
+
+=head2 mem_size_u
+
+  data_type: 'varchar'
+  default_value: null
+  is_nullable: 1
+  size: 2
+
+=head2 mem_rss_u
+
+  data_type: 'varchar'
+  default_value: null
+  is_nullable: 1
+  size: 2
+
 =head2 stdout
 
   data_type: 'text'
@@ -133,17 +200,10 @@ __PACKAGE__->add_columns(
   { data_type => "bigint", is_nullable => 0 },
   "run_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "stream_ord",
-  {
-    data_type         => "integer",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "jobs_stream_ord_seq",
-  },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
   "name",
-  { data_type => "text", is_nullable => 0 },
+  { data_type => "text", is_nullable => 1 },
   "file",
   { data_type => "text", is_nullable => 1 },
   "fail",
@@ -156,6 +216,65 @@ __PACKAGE__->add_columns(
   { data_type => "timestamp", is_nullable => 1 },
   "ended",
   { data_type => "timestamp", is_nullable => 1 },
+  "pass_count",
+  { data_type => "bigint", is_nullable => 1 },
+  "fail_count",
+  { data_type => "bigint", is_nullable => 1 },
+  "time_user",
+  {
+    data_type => "numeric",
+    default_value => \"null",
+    is_nullable => 1,
+    size => [20, 10],
+  },
+  "time_sys",
+  {
+    data_type => "numeric",
+    default_value => \"null",
+    is_nullable => 1,
+    size => [20, 10],
+  },
+  "time_cuser",
+  {
+    data_type => "numeric",
+    default_value => \"null",
+    is_nullable => 1,
+    size => [20, 10],
+  },
+  "time_csys",
+  {
+    data_type => "numeric",
+    default_value => \"null",
+    is_nullable => 1,
+    size => [20, 10],
+  },
+  "mem_peak",
+  { data_type => "bigint", is_nullable => 1 },
+  "mem_size",
+  { data_type => "bigint", is_nullable => 1 },
+  "mem_rss",
+  { data_type => "bigint", is_nullable => 1 },
+  "mem_peak_u",
+  {
+    data_type => "varchar",
+    default_value => \"null",
+    is_nullable => 1,
+    size => 2,
+  },
+  "mem_size_u",
+  {
+    data_type => "varchar",
+    default_value => \"null",
+    is_nullable => 1,
+    size => 2,
+  },
+  "mem_rss_u",
+  {
+    data_type => "varchar",
+    default_value => \"null",
+    is_nullable => 1,
+    size => 2,
+  },
   "stdout",
   { data_type => "text", is_nullable => 1 },
   "stderr",
@@ -222,8 +341,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-18 10:58:08
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:/Vick+8AUyjtBTPbIynV8Q
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2018-04-20 07:01:56
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:HOhpv866C3Z/QoRwHTKCBA
 
 __PACKAGE__->inflate_column(
     parameters => {
@@ -234,7 +353,7 @@ __PACKAGE__->inflate_column(
 
 sub short_file {
     my $self = shift;
-    my $file = $self->file or return '<NO FILE>';
+    my $file = $self->file or return undef;
 
     return $1 if $file =~ m{/(t2?/.*)$}i;
     return $1 if $file =~ m{([^/\\]+\.(?:t2?|pl))$}i;

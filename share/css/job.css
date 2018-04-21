@@ -2,6 +2,72 @@ div.job {
     margin-top: 8px;
 }
 
+div.event_filter_wrapper {
+    display: block;
+    position: sticky;
+    left: 0px;
+    top: 80px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+    border: 1px solid black;
+    border-radius: 6px;
+    padding: 4px;
+    overflow: hidden;
+    background: #FFFFFF;
+}
+
+ul.event_filter {
+    display: block;
+    list-style: none;
+    margin: 0;
+    padding: 0px;
+}
+
+ul.event_filter li.tag_filter {
+    display: block;
+    margin: 0;
+    padding: 4px;
+    border: 1px solid black;
+    float: left;
+    margin: 4px;
+    border-radius: 4px;
+    background: #AAEECC;
+    cursor: pointer;
+}
+
+ul.event_filter li.tag_filter:hover, ul.event_filter li.tag_filter.off:hover {
+    border-color: #0010FF;
+    background: #99CCEE;
+}
+
+ul.event_filter li.tag_filter.off {
+    background: #CCCCCC;
+}
+
+
+div.stoggle {
+    display: block;
+    float: left;
+    padding-left: 0.5ch;
+    cursor: pointer;
+    margin-left: -2ch;
+    margin-right: -2ch;
+}
+
+pre.testout {
+    margin: 0;
+    padding: 0px;
+    border-left: 1px dotted #B0B0B0;
+    padding-left: 4px;
+    height: 100%;
+    display: block;
+    font-size: 16px;
+}
+
+div.stoggle:hover {
+    color: #1010FF;
+}
+
 div.expander.job {
     overflow: show;
     position: relative;
@@ -129,3 +195,34 @@ ul.job_filter_list > li:hover {
 ul.job_filter_list > li.selected {
     text-decoration: none;
 }
+
+div.facet_time    {  color: #12539e; }
+div.facet_about   {  color: #000000; }
+div.facet_amnesty {  color: #0f6989; }
+div.facet_assert  {  color: #000000; }
+div.facet_control {  color: #b26521; }
+div.facet_error   {  color: #af0c0c; }
+div.facet_info    {  color: #000000; }
+div.facet_meta    {  color: #000000; }
+div.facet_parent  {  color: #000000; }
+div.facet_trace   {  color: #b26521; }
+div.facet_plan    {  color: #3d6011; }
+
+div.tag_DEBUG    { color: #b26521;                     }
+div.tag_DIAG     { color: #b23721;                     }
+div.tag_ERROR    { color: #af0c0c;                     }
+div.tag_FATAL    { color: #c10000;                     }
+div.tag_FAIL     { color: #c10000;                     }
+div.tag_HALT     { color: #c10000;                     }
+div.tag_PASS     { color: #266d39;                     }
+div.tag_N-PASS-N { color: #1d756d;                     }
+div.tag_TODO     { color: #521d93;                     }
+div.tag_NO--PLAN { color: #d17c32;                     }
+div.tag_SKIP     { color: #67156d;                     }
+div.tag_SKIP-ALL { color: #FFFFFF; background: #026b09 }
+div.tag_STDERR   { color: #bc7d16;                     }
+div.tag_REASON   { color: #b26521;                     }
+div.tag_TIMEOUT  { color: #b26521;                     }
+div.tag_TIME     { color: #12539e;                     }
+div.tag_MEMORY   { color: #12539e;                     }
+

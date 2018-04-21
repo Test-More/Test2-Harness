@@ -44,13 +44,15 @@
         <h1>Test2-Harness-UI</h1>
 
         <ul id="nav_main">
-            <li><a href="<: $base_uri :>">Dashboard</a></li>
+            : if !$config.single_run {
+                <li><a href="<: $base_uri :>">Dashboard</a></li>
+                <li class="split">&nbsp;</li>
+                <li><a href="<: $base_uri :>upload">Upload A Log</a></li>
+            : }
             : if !$config.single_user {
                 <li class="split">&nbsp;</li>
                 <li><a href="<: $base_uri :>user">User Settings</a></li>
             : }
-            <li class="split">&nbsp;</li>
-            <li><a href="<: $base_uri :>upload">Upload A Log</a></li>
         </ul>
 
         : if !$config.single_user {

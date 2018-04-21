@@ -8,7 +8,7 @@ use Test2::Harness::UI::Util::HashBase qw{
     -_dbh
     -_schema
     -dbi_dsn -dbi_user -dbi_pass
-    -single_user
+    -single_user -single_run
 };
 
 sub init {

@@ -5,7 +5,8 @@ $(function() {
     });
 });
 
-t2hui.filters = { seen: {}, state: {} };
+t2hui.filters  = { seen: {}, state: {} };
+t2hui.controls = { state: {} };
 
 t2hui.build_job = function(job_id, root, list) {
     if (root === null || root === undefined) {
@@ -31,16 +32,20 @@ t2hui.build_job = function(job_id, root, list) {
     var events = $('<div class="event_list grid"></div>');
     events.append(t2hui.build_job_event_header());
 
-    if (!t2hui.filters.dom) {
-        var filter = $('<div class="event_filter_wrapper">Filter Tags:</div>');
-        var filters = $('<ul class="event_filter"></ul>');
-        filter.append(filters);
-
-        t2hui.filters.dom = filter;
-        t2hui.filters.listdom = filters;
+    if (!t2hui.controls.dom) {
+        var controls = $('<div class="event_controls"></div>');
+        t2hui.controls.dom = controls;
     }
 
-    root.append(t2hui.filters.dom, events);
+    if (!t2hui.filters.dom) {
+        var filters = $('<ul class="event_filter"></ul>');
+        var filter = $('<li>Filter Tags:</li>');
+        t2hui.filters.dom = filters;
+        filters.append(filter);
+        t2hui.controls.dom.append(filters);
+    }
+
+    root.append(t2hui.controls.dom, events);
 
     t2hui.fetch(events_uri, {}, function(e) {
         events.append(t2hui.render_event(e));
@@ -98,7 +103,7 @@ t2hui.render_event = function(e) {
 
     var seen = t2hui.filters.seen;
     var state = t2hui.filters.state;
-    var filters = t2hui.filters.listdom;
+    var filters = t2hui.filters.dom;
 
     for (var i = 0; i < len; i++) {
         var line = e.lines[i];
@@ -107,7 +112,7 @@ t2hui.render_event = function(e) {
             seen[line[1]] = 1;
             state[line[1]] = true;
 
-            var filter = $('<li class="tag_filter">' + line[1] + '</li>');
+            var filter = $('<li class="filter">' + line[1] + '</li>');
             filter.click(function() {
                 state[line[1]] = !state[line[1]];
                 if (state[line[1]]) {

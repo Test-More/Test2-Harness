@@ -31,24 +31,29 @@ sub init {
     my $self = shift;
 
     my $router = $self->{+ROUTER} ||= Router::Simple->new;
+    my $config = $self->{+CONFIG};
 
-    $router->connect('/'          => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-    $router->connect('/dashboard' => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+    if ($config->single_run) {
+        $router->connect('/' => {controller => 'Test2::Harness::UI::Controller::Run'});
+    }
+    else {
+        $router->connect('/'          => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+        $router->connect('/dashboard' => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+        $router->connect('/runs'      => {controller => 'Test2::Harness::UI::Controller::Runs'});
+        $router->connect('/upload'    => {controller => 'Test2::Harness::UI::Controller::Upload'});
+    }
 
-    $router->connect('/runs' => {controller => 'Test2::Harness::UI::Controller::Runs'});
+    $router->connect('/user' => {controller => 'Test2::Harness::UI::Controller::User'})
+        unless $config->single_user;
 
     $router->connect('/query/:name'      => {controller => 'Test2::Harness::UI::Controller::Query'});
     $router->connect('/query/:name/:arg' => {controller => 'Test2::Harness::UI::Controller::Query'});
 
-    $router->connect('/run/:id' => {controller => 'Test2::Harness::UI::Controller::Run'});
-    $router->connect('/job/:id' => {controller => 'Test2::Harness::UI::Controller::Job'});
-
-    $router->connect('/run/:id/jobs'        => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
-    $router->connect('/job/:id/events'      => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
-    $router->connect('/event/:id/events'    => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
-
-    $router->connect('/user'   => {controller => 'Test2::Harness::UI::Controller::User'});
-    $router->connect('/upload' => {controller => 'Test2::Harness::UI::Controller::Upload'});
+    $router->connect('/run/:id'          => {controller => 'Test2::Harness::UI::Controller::Run'});
+    $router->connect('/job/:id'          => {controller => 'Test2::Harness::UI::Controller::Job'});
+    $router->connect('/run/:id/jobs'     => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
+    $router->connect('/job/:id/events'   => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
+    $router->connect('/event/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
 }
 
 sub to_app {

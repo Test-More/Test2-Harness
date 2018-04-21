@@ -68,28 +68,29 @@ for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2
             },
         }
     );
+    last;
 }
 
-$config->schema->resultset('Signoff')->create(
-    {
-        run_id       => $runs[0]->run_id,
-        requested_by => $user->user_id,
-    }
-);
-
-$config->schema->resultset('RunShare')->create(
-    {
-        run_id  => $runs[0]->run_id,
-        user_id => $user->user_id,
-    }
-);
-
-$config->schema->resultset('RunShare')->create(
-    {
-        run_id  => $runs[1]->run_id,
-        user_id => $user->user_id,
-    }
-);
+#$config->schema->resultset('Signoff')->create(
+#    {
+#        run_id       => $runs[0]->run_id,
+#        requested_by => $user->user_id,
+#    }
+#);
+#
+#$config->schema->resultset('RunShare')->create(
+#    {
+#        run_id  => $runs[0]->run_id,
+#        user_id => $user->user_id,
+#    }
+#);
+#
+#$config->schema->resultset('RunShare')->create(
+#    {
+#        run_id  => $runs[1]->run_id,
+#        user_id => $user->user_id,
+#    }
+#);
 
 my @commands = (
     [$^X, '-Ilib', 'author_tools/run_imports.pl', $dsn],

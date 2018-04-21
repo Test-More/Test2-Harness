@@ -22,11 +22,9 @@ sub handle {
     $res->add_css('dashboard.css');
     $res->add_css('run.css');
     $res->add_css('job.css');
-    $res->add_css('event.css');
     $res->add_js('dashboard.js');
     $res->add_js('run.js');
     $res->add_js('job.js');
-    $res->add_js('event.js');
 
     my $schema = $self->{+CONFIG}->schema;
     my $user = $req->user;

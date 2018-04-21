@@ -31,10 +31,17 @@ sub handle {
     my $user = $req->user;
 
     die error(404 => 'Missing route') unless $route;
-    my $it = $route->{id} or die error(404 => 'No id');
-    my $query = [{run_id => $it}];
 
-    my $run = $user->runs($query)->first or die error(404 => 'Invalid run');
+    my $run;
+
+    if ($self->{+CONFIG}->single_run) {
+        $run = $user->runs->first or die error(404 => 'Invalid run');
+    }
+    else {
+        my $it = $route->{id} or die error(404 => 'No id');
+        my $query = [{run_id => $it}];
+        $run = $user->runs($query)->first or die error(404 => 'Invalid run');
+    }
 
     $self->{+TITLE} = 'Run: ' . $run->project . ' - ' . $run->run_id;
 

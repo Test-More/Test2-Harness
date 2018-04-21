@@ -2,45 +2,56 @@ div.job {
     margin-top: 8px;
 }
 
-div.event_filter_wrapper {
-    display: block;
-    position: sticky;
-    left: 0px;
-    top: 80px;
-    margin-top: 6px;
-    margin-bottom: 6px;
-    border: 1px solid black;
-    border-radius: 6px;
-    padding: 4px;
-    overflow: hidden;
-    background: #FFFFFF;
+@media only screen and (max-height: 500px) {
+    div.event_filter_wrapper {
+        top: 0px;
+    }
 }
 
-ul.event_filter {
+div.event_controls {
+    background: #FFFFFF;
+    border-radius: 6px;
+    border: 1px solid black;
+    display: block;
+    margin-bottom: 6px;
+    margin-top: 6px;
+    padding: 4px;
+    overflow: hidden;
+    position: sticky;
+    top: 40px;
+    left: 0px;
+    z-index: 11;
+}
+
+div.event_controls ul {
     display: block;
     list-style: none;
+    overflow: hidden;
     margin: 0;
     padding: 0px;
 }
 
-ul.event_filter li.tag_filter {
+div.event_controls ul li {
     display: block;
     margin: 0;
     padding: 4px;
-    border: 1px solid black;
     float: left;
     margin: 4px;
+}
+
+div.event_controls ul li.filter {
+    border: 1px solid black;
     border-radius: 4px;
     background: #AAEECC;
     cursor: pointer;
 }
 
-ul.event_filter li.tag_filter:hover, ul.event_filter li.tag_filter.off:hover {
+div.event_controls ul li.filter:hover, div.event_controls ul li.filter.off:hover {
     border-color: #0010FF;
     background: #99CCEE;
 }
 
-ul.event_filter li.tag_filter.off {
+div.event_controls ul li.filter.off {
     background: #CCCCCC;
 }
 

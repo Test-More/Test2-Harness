@@ -20,7 +20,6 @@ BEGIN {
     $J->indent(0);
     $J->convert_blessed(1);
     $J->allow_blessed(1);
-    $J->utf8(1);
 
     require constant;
     constant->import(ENCODER => $J);

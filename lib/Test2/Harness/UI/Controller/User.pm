@@ -26,11 +26,10 @@ sub handle {
 
     $self->{+TITLE} = 'User Settings';
 
-    my $template = share_dir('templates/user.tx');
-    my $tx       = Text::Xslate->new();
+    my $tx = Text::Xslate->new(path => [share_dir('templates')]);
     my $sort_val = {active => 1, disabled => 2, revoked => 3};
     my $content = $tx->render(
-        $template,
+        'user.tx',
         {
             base_uri => $req->base->as_string,
             user     => $user,
@@ -117,11 +116,9 @@ sub login {
 
     $self->{+TITLE} = 'Login';
 
-    my $template = share_dir('templates/login.tx');
-
-    my $tx = Text::Xslate->new();
+    my $tx = Text::Xslate->new(path => [share_dir('templates')]);
     return $tx->render(
-        $template,
+        'login.tx',
         {
             base_uri => $self->{+REQUEST}->base->as_string,
         }

@@ -6,7 +6,7 @@ our $VERSION = '0.001066';
 
 use Test2::Util qw/pkg_to_file/;
 
-use Test2::Harness::UI::Util qw/share_dir/;
+use Test2::Harness::UI::Util qw/share_dir share_file/;
 
 use Test2::Harness::Feeder::JSONL;
 use Test2::Harness::UI::Config;
@@ -63,7 +63,7 @@ sub run_command {
 
     my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
     $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
-    $db->load_sql(harness_ui => share_dir('schema/postgresql.sql'));
+    $db->load_sql(harness_ui => share_file('schema/postgresql.sql'));
     my $dsn = $db->connect_string('harness_ui');
     $dbh = undef;
 

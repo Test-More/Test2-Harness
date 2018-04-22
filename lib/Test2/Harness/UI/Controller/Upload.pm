@@ -26,12 +26,11 @@ sub handle {
 
     $self->process_form($res) if $req->parameters->{action};
 
-    my $template = share_dir('templates/upload.tx');
-    my $tx       = Text::Xslate->new();
-    my $user     = $req->user;
+    my $tx = Text::Xslate->new(path => [share_dir('templates')]);
+    my $user = $req->user;
 
     my $content = $tx->render(
-        $template,
+        'upload.tx',
         {
             base_uri => $req->base->as_string,
             user     => $user,

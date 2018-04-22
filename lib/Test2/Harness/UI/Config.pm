@@ -2,10 +2,11 @@ package Test2::Harness::UI::Config;
 use strict;
 use warnings;
 
+use Test2::Util qw/get_tid/;
+
 use Carp qw/croak/;
 
 use Test2::Harness::UI::Util::HashBase qw{
-    -_dbh
     -_schema
     -dbi_dsn -dbi_user -dbi_pass
     -single_user -single_run
@@ -27,11 +28,9 @@ sub init {
 sub connect {
     my $self = shift;
 
-    return $self->{+_DBH} if $self->{+_DBH};
-
     require DBI;
 
-    return $self->{+_DBH} = DBI->connect(
+    return DBI->connect(
         $self->{+DBI_DSN},
         $self->{+DBI_USER},
         $self->{+DBI_PASS},
@@ -46,9 +45,7 @@ sub schema {
 
     require Test2::Harness::UI::Schema;
 
-    my $dbh = $self->connect;
-
-    return $self->{+_SCHEMA} = Test2::Harness::UI::Schema->connect({dbh_maker => sub { $dbh }});
+    return $self->{+_SCHEMA} = Test2::Harness::UI::Schema->connect({dbh_maker => sub { $self->connect }});
 }
 
 1;

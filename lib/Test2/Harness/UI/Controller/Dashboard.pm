@@ -23,10 +23,9 @@ sub handle {
 
     my $user = $req->user;
 
-    my $template = share_dir('templates/dashboard.tx');
-    my $tx       = Text::Xslate->new();
+    my $tx      = Text::Xslate->new(path => [share_dir('templates')]);
     my $content = $tx->render(
-        $template,
+        'dashboard.tx',
         {
             base_uri => $req->base->as_string,
             user     => $user,

@@ -97,7 +97,8 @@ sub wrap {
             $res = $err;
         }
         else {
-            my $msg = $ENV{T2_HARNESS_UI_ENV} eq 'dev' ? "$err\n" : undef;
+            warn $err;
+            my $msg = ($ENV{T2_HARNESS_UI_ENV} || '') eq 'dev' ? "$err\n" : undef;
             $res = error(500 => $msg);
         }
     }
@@ -111,11 +112,10 @@ sub wrap {
     }
 
     if ($ct eq 'text/html') {
-        my $template = share_dir('templates/main.tx');
 
-        my $tx      = Text::Xslate->new();
+        my $tx      = Text::Xslate->new(path => [share_dir('templates')]);
         my $wrapped = $tx->render(
-            $template,
+            'main.tx',
             {
                 config => $self->{+CONFIG},
 

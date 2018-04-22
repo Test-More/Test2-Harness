@@ -50,10 +50,9 @@ sub handle {
         return $res;
     }
 
-    my $template = share_dir('templates/run.tx');
-    my $tx       = Text::Xslate->new();
+    my $tx      = Text::Xslate->new(path => [share_dir('templates')]);
     my $content = $tx->render(
-        $template,
+        'run.tx',
         {
             base_uri => $req->base->as_string,
             user     => $user,

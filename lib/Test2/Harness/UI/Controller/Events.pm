@@ -4,8 +4,6 @@ use warnings;
 
 use Data::GUID;
 use List::Util qw/max/;
-use Text::Xslate(qw/mark_raw/);
-use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 

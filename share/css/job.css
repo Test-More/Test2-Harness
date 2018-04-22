@@ -8,6 +8,10 @@ div.job {
     }
 }
 
+div.hidden_tag, div.hidden_group {
+    display: none !important;
+}
+
 div.event_controls {
     background: #FFFFFF;
     border-radius: 6px;

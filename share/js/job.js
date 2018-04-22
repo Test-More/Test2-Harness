@@ -6,7 +6,12 @@ $(function() {
 });
 
 t2hui.filters  = { seen: {}, state: {} };
-t2hui.controls = { state: {} };
+t2hui.controls = {
+    count: 0,
+    group: 0,
+    state: [true, true, true],
+    ranges: [[null,null]],
+};
 
 t2hui.build_job = function(job_id, root, list) {
     if (root === null || root === undefined) {
@@ -34,14 +39,14 @@ t2hui.build_job = function(job_id, root, list) {
 
     if (!t2hui.controls.dom) {
         var controls = $('<div class="event_controls"></div>');
+        var list = $('<ul class="event_groups"><li>Show Ranges:</li></ul>');
         t2hui.controls.dom = controls;
+        t2hui.controls.list = list;
     }
 
     if (!t2hui.filters.dom) {
-        var filters = $('<ul class="event_filter"></ul>');
-        var filter = $('<li>Filter Tags:</li>');
+        var filters = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
         t2hui.filters.dom = filters;
-        filters.append(filter);
         t2hui.controls.dom.append(filters);
     }
 
@@ -66,7 +71,33 @@ t2hui.build_job_event_header = function(job) {
 
 t2hui.render_event = function(e) {
     var me = [];
-    var len = e.lines.length;
+
+    t2hui.controls.count++;
+    t2hui.controls.ranges[t2hui.controls.group][1] = t2hui.controls.count;
+
+    if (!t2hui.controls.ranges[t2hui.controls.group][0]) {
+        t2hui.controls.ranges[t2hui.controls.group][0] = t2hui.controls.count;
+        var li = $('<li class="filter">' + t2hui.controls.ranges[t2hui.controls.group][0] + ' -> ' + t2hui.controls.ranges[t2hui.controls.group][1] + '</li>');
+        if (!t2hui.controls.state[t2hui.controls.group]) { li.addClass('off') }
+
+        var g = t2hui.controls.group;
+        li.click(function() {
+            t2hui.controls.state[g] = !t2hui.controls.state[g];
+
+            if (t2hui.controls.state[g]) {
+                li.removeClass('off');
+                $('div.event_group_' + g).removeClass('hidden_group');
+            }
+            else {
+                li.addClass('off');
+                $('div.event_group_' + g).addClass('hidden_group');;
+            }
+        });
+
+        t2hui.controls.list.append(li);
+    }
+
+    t2hui.controls.list.children().last().text(t2hui.controls.ranges[t2hui.controls.group][0] + ' -> ' + t2hui.controls.ranges[t2hui.controls.group][1]);
 
     var etools = [];
 
@@ -105,6 +136,7 @@ t2hui.render_event = function(e) {
     var state = t2hui.filters.state;
     var filters = t2hui.filters.dom;
 
+    var len = e.lines.length;
     for (var i = 0; i < len; i++) {
         var line = e.lines[i];
 
@@ -117,11 +149,11 @@ t2hui.render_event = function(e) {
                 state[line[1]] = !state[line[1]];
                 if (state[line[1]]) {
                     filter.removeClass('off');
-                    $('div.tag_' + line[1]).show()
+                    $('div.tag_' + line[1]).removeClass('hidden_tag');
                 }
                 else {
                     filter.addClass('off');
-                    $('div.tag_' + line[1]).hide()
+                    $('div.tag_' + line[1]).addClass('hidden_tag');
                 }
             });
 
@@ -138,7 +170,7 @@ t2hui.render_event = function(e) {
             if (!added) { filters.append(filter) };
         }
 
-        var classes = 'facet_' + line[0] + ' tag_' + line[1]
+        var classes = 'facet_' + line[0] + ' tag_' + line[1] + ' event_group_' + t2hui.controls.group;
 
         var ltools = $('<div class="col1 ' + classes + ' tools"></div>');
         ltools.append(etools);
@@ -166,14 +198,30 @@ t2hui.render_event = function(e) {
         var tag = $('<div class="col2 tag ' + classes + '">' + line[1] + '</div>');
 
         if (!state[line[1]]) {
-            ltools.hide();
-            tag.hide();
-            render.hide();
+            ltools.addClass('hidden_tag');
+            tag.addClass('hidden_tag');
+            render.addClass('hidden_tag');
+        }
+
+        if (!t2hui.controls.state[t2hui.controls.group]) {
+            ltools.addClass('hidden_group');
+            tag.addClass('hidden_group');
+            render.addClass('hidden_group');
         }
 
         me.push(ltools);
         me.push(tag);
         me.push(render);
+    }
+
+    if (!(t2hui.controls.count % 300)) {
+        t2hui.controls.ranges[t2hui.controls.group][1] = t2hui.controls.count;
+        t2hui.controls.group++;
+        t2hui.controls.ranges[t2hui.controls.group] = [null,null];
+
+        if (t2hui.controls.group == 3) {
+            t2hui.controls.dom.append(t2hui.controls.list);
+        }
     }
 
     return me;

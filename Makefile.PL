@@ -24,27 +24,81 @@ my %WriteMakefileArgs = (
   "MIN_PERL_VERSION" => "5.008009",
   "NAME" => "Test2::Harness::UI",
   "PREREQ_PM" => {
+    "Carp" => 0,
+    "Crypt::Eksblowfish::Bcrypt" => 0,
+    "DBI" => 0,
+    "DBIx::Class::InflateColumn::DateTime" => 0,
+    "DBIx::Class::InflateColumn::Serializer" => 0,
+    "DBIx::Class::InflateColumn::Serializer::JSON" => 0,
+    "DBIx::Class::Schema::Loader" => 0,
+    "DBIx::Class::Tree::AdjacencyList" => 0,
+    "DBIx::Class::UUIDColumns" => 0,
+    "DBIx::QuickDB" => 0,
+    "Data::GUID" => 0,
+    "DateTime" => 0,
+    "File::ShareDir" => 0,
+    "IO::Uncompress::Bunzip2" => 0,
+    "IO::Uncompress::Gunzip" => 0,
     "Importer" => "0.024",
     "JSON::MaybeXS" => 0,
+    "List::Util" => 0,
+    "Plack::App::Directory" => 0,
+    "Plack::Builder" => 0,
+    "Router::Simple" => 0,
+    "Scalar::Util" => 0,
     "Test2" => "1.302120",
     "Test2::API" => "1.302120",
+    "Test2::Formatter::Test2::Composer" => 0,
     "Test2::Harness" => "0.001049",
-    "Test2::V0" => "0.000097"
+    "Test2::Harness::Util::JSON" => 0,
+    "Test2::Harness::Util::UUID" => 0,
+    "Test2::Util::Facets2Legacy" => 0,
+    "Test2::V0" => "0.000097",
+    "Text::Xslate" => 0,
+    "Time::HiRes" => 0,
+    "parent" => 0
   },
   "VERSION" => "0.000001",
   "test" => {
-    "TESTS" => "t/*.t t/Renderer/*.t t/UI/*.t t/UI/Schema/Result/*.t"
+    "TESTS" => "t/*.t t/UI/*.t"
   }
 );
 
 
 my %FallbackPrereqs = (
+  "Carp" => 0,
+  "Crypt::Eksblowfish::Bcrypt" => 0,
+  "DBI" => 0,
+  "DBIx::Class::InflateColumn::DateTime" => 0,
+  "DBIx::Class::InflateColumn::Serializer" => 0,
+  "DBIx::Class::InflateColumn::Serializer::JSON" => 0,
+  "DBIx::Class::Schema::Loader" => 0,
+  "DBIx::Class::Tree::AdjacencyList" => 0,
+  "DBIx::Class::UUIDColumns" => 0,
+  "DBIx::QuickDB" => 0,
+  "Data::GUID" => 0,
+  "DateTime" => 0,
+  "File::ShareDir" => 0,
+  "IO::Uncompress::Bunzip2" => 0,
+  "IO::Uncompress::Gunzip" => 0,
   "Importer" => "0.024",
   "JSON::MaybeXS" => 0,
+  "List::Util" => 0,
+  "Plack::App::Directory" => 0,
+  "Plack::Builder" => 0,
+  "Router::Simple" => 0,
+  "Scalar::Util" => 0,
   "Test2" => "1.302120",
   "Test2::API" => "1.302120",
+  "Test2::Formatter::Test2::Composer" => 0,
   "Test2::Harness" => "0.001049",
-  "Test2::V0" => "0.000097"
+  "Test2::Harness::Util::JSON" => 0,
+  "Test2::Harness::Util::UUID" => 0,
+  "Test2::Util::Facets2Legacy" => 0,
+  "Test2::V0" => "0.000097",
+  "Text::Xslate" => 0,
+  "Time::HiRes" => 0,
+  "parent" => 0
 );
 
 

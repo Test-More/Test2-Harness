@@ -17,7 +17,7 @@ $SIG{INT} = sub { $db = undef; exit 255 };
 my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
 $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
 
-$db->load_sql(harness_ui => 'schema/postgresql.sql');
+$db->load_sql(harness_ui => 'share/schema/postgresql.sql');
 
 my $dsn = $db->connect_string('harness_ui');
 print "DBI_DSN: $dsn\n";

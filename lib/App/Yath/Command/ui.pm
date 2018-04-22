@@ -57,14 +57,13 @@ sub handle_list_args {
 sub run_command {
     my $self = shift;
 
-    $ENV{"T2_HARNESS_UI_ENV"} = 'dev';
     my $settings = $self->{+SETTINGS};
 
     my $db = DBIx::QuickDB->build_db(harness_ui => {driver => 'PostgreSQL'});
 
     my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
     $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
-    $db->load_sql(harness_ui => 'schema/postgresql.sql');
+    $db->load_sql(harness_ui => share_dir('schema/postgresql.sql'));
     my $dsn = $db->connect_string('harness_ui');
     $dbh = undef;
 

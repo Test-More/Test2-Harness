@@ -17,11 +17,12 @@ sub init {
 
 sub run {
     my $self = shift;
+    my ($max) = @_;
 
     my $schema = $self->{+CONFIG}->schema;
 
 
-    while (1) {
+    while (!defined($max) || $max--) {
         my $run = $schema->txn_do(
             sub {
                 my $run = $schema->resultset('Run')->search(

@@ -2,7 +2,7 @@ package Test2::Plugin::UUID;
 use strict;
 use warnings;
 
-our $VERSION = '0.001065';
+our $VERSION = '0.001066';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::API qw/test2_add_uuid_via/;

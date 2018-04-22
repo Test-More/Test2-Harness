@@ -19,7 +19,6 @@ sub handle {
     my $req = $self->{+REQUEST};
 
     my $res = resp(200);
-    $res->add_css('dashboard.css');
     $res->add_js('dashboard.js');
 
     my $user = $req->user;

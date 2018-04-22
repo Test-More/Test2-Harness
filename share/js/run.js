@@ -24,7 +24,6 @@ t2hui.build_run = function(run_id, root, list) {
 
     var jobs = $('<div class="job_list grid"></div>');
     jobs.append(t2hui.build_run_job_header());
-    // [expand], [params], [link]
 
     var pos  = $('<div style="display: none;"></div>');
     var log = pos.clone();

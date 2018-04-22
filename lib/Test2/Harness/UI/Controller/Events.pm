@@ -72,20 +72,6 @@ sub handle {
 
         $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }
-    elsif ($route->{from} eq 'cid') {
-        my $job_id = $it;
-        my $cid = $route->{cid} or die error(404 => 'No cid');
-
-        my $job = $schema->resultset('Job')->find({job_id => $job_id})
-            or die error(404 => 'Invalid Job');
-
-        $job->verify_access('r', $user) or die error(401);
-
-        $query{job_id} = $job_id;
-        $query{cid} = $cid;
-
-        $rs = $schema->resultset('Event')->search(\%query, \%attrs);
-    }
     else {
         die error(501);
     }

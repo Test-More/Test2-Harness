@@ -550,6 +550,14 @@ This lets you tell C<yath> that the test cannot be run concurrently with other
 tests. Yath will hold off and run these tests one at a time after all other
 tests.
 
+=head3 HARNESS-CATEGORY-IMMISCIBLE
+
+This lets you tell C<yath> that the test cannot be run concurrently with other
+tests of this class. This is helpful when you have multiple tests which would
+otherwise have to be run sequentially at the end of the run.
+
+Yath prioritizes running these tests above HARNESS-CATEGORY-LONG.
+
 =head3 HARNESS-CATEGORY-GENERAL
 
 This is the default category.

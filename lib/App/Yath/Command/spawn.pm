@@ -33,7 +33,7 @@ sub name            { 'spawn' }
 
 my $TEST;
 
-sub init { confess(ref($_[0]) . " is not intended to be instanciated") }
+sub init { confess(ref($_[0]) . " is not intended to be instantiated") }
 sub run  { confess(ref($_[0]) . " does not implement run()") }
 
 sub import {

@@ -137,7 +137,8 @@ sub check_monitored {
     my $sig = $self->{+SIGNAL};
 
     my $reaped = 0;
-    while(my ($cs, $pid) = each %$monitor) {
+    foreach my $cs (sort keys %$monitor) {
+        my $pid = $monitor->{$cs};
         kill($sig, $pid) or warn "$$ ($self->{+STAGE}) could not singal stage '$cs' pid $pid" if $sig;
         my $check = waitpid($pid, $sig ? 0 : WNOHANG);
         my $exit = $?;

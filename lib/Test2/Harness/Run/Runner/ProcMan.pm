@@ -307,7 +307,7 @@ sub _next {
             $fallback = $i if $cat eq 'long';
 
             next unless $slots->{$cat};
-            $self->{+SLOTS}->{$cat}--;
+            $slots->{$cat}--;
             return scalar splice(@$list, $i, 1);
         }
 

@@ -296,9 +296,18 @@ sub _next {
         # What categories are running and how many?
         my $running = 0;
         my %cats;
+        my %active_conflicts;
         for my $job (values %{$self->{+_PIDS}}) {
             $running++;
             $cats{$job->{task}->{category}}++;
+
+            # Mark all the conflicts which the actively jobs have asserted.
+            foreach my $conflict (@{$job->{task}->{conflicts}}) {
+                $active_conflicts{$conflict}++;
+
+                # This should never happen.
+                $active_conflicts{$conflict} < 2 or die("Unexpected parallel conflict '$conflict' ($active_conflicts{$conflict}) running at this time!");
+            }
         }
 
         # No new jobs yet to kick off yet because too many are running.
@@ -323,6 +332,10 @@ sub _next {
             # There's already something running so we're not allowed to kick off a isolation job.
             # We can do last because the jobs are sorted with isolation at the end of the list.
             last if $running && $cat eq 'isolation';
+
+            # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.
+            my $job_conflicts = $list->[$i]->{conflicts};
+            next if first { $active_conflicts{$_} } @$job_conflicts;
 
             # Set to current loop position if it's long.
             $fallback = $i if $cat eq 'long';

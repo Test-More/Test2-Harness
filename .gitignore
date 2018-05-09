@@ -2,6 +2,9 @@
 *~
 *.old
 *.tar.gz
+*.ERR
+*.orig
+*.rej
 Makefile
 blib/
 pm_to_blib

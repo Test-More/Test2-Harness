@@ -299,10 +299,14 @@ sub _next {
 
         my $fallback;
         for (my $i = 0; $i < @$list; $i++) {
-            my $cat = $list->[$i]->{category};
+            my $cat = $list->[$i]->{category} || 'EMPTY CATEGORY???';
             $cat = 'long' if $cat eq 'medium';
 
             die "Unknown category: $cat" unless defined $slots->{$cat};
+
+            # There's already something running so we're not allowed to kick off a isolation job.
+            # We can do last because the jobs are sorted with isolation at the end of the list.
+            last if $running && $cat eq 'isolation';
 
             $fallback = $i if $cat eq 'long';
 

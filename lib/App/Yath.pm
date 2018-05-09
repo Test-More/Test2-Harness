@@ -451,8 +451,9 @@ This file should not normally be committed to the project repo.
 
 C<yath> will recognise a number of directive comments placed near the top of
 test files. These directives should be placed after the C<#!> line but
-before any real code or comments. These may be placed AFTER C<use> and
-C<require> statements.
+before any real code.
+
+Real code is defined as any line that does not start with use, require, BEGIN, package, or #
 
 =over 4
 

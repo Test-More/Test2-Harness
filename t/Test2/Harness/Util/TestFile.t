@@ -15,10 +15,11 @@ my $tmp = gen_temp(
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
     meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey myval2\n",
 
-    package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
-
+    package    => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
     timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
     badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
+
+    extra_comments => "#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n",
 );
 
 subtest timeouts => sub {
@@ -364,5 +365,61 @@ subtest long => sub {
         "Got queue item data",
     );
 };
+
+
+#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n
+subtest extra_comments => sub {
+    my $long = $CLASS->new(file => File::Spec->catfile($tmp, 'extra_comments'));
+
+    is($long->check_feature('timeout'), 0, "Timeouts turned off");
+    is($long->check_feature('timeout', 1), 0, "Timeouts turned off even with default 1");
+
+    is($long->check_feature('fork'), 1, "Forking is ok");
+    is($long->check_feature('fork', 0), 0, "Checking fork with different default");
+
+    is($long->check_feature('preload'), 1, "Preload is ok");
+    is($long->check_feature('preload', 0), 0, "Checking preload with different default");
+
+    is($long->check_feature('isolation'), 1, "Use isolation");
+    is($long->check_feature('isolation', 0), 1, "Use isolation even with a default of false");
+
+    is($long->check_feature('stream'), 1, "Use stream");
+    is($long->check_feature('stream', 0), 0, "no stream with a default of false");
+
+    is($long->check_category, 'long', "Category is long");
+
+    is($long->switches, [], "No SHBANG switches");
+    is($long->shbang, {switches => [], line => "#!/usr/bin/perl"}, "got shbang");
+
+    is(
+        $long->queue_item(42),
+        {
+            category    => 'long',
+            stage       => 'default',
+            file        => $long->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 0,
+            shbang      => {line => "#!/usr/bin/perl", switches => []},
+            headers     => {
+                category => 'long',
+                features => {
+                    isolation => 1,
+                    timeout   => 0,
+                },
+            },
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
+        },
+        "Got queue item data",
+    );
+};
+
 
 done_testing;

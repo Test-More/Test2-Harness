@@ -149,7 +149,8 @@ sub _scan {
             }
         }
 
-        next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;
+        next if $line =~ m/^\s*#/ && $line !~ m/^\s*#\s*HARNESS-.+/; # Ignore commented lines which aren't HARNESS-?
+        next if $line =~ m/^\s*(use|require|BEGIN|package)\b/; # Only supports single line BEGINs
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
         my ($dir, @args) = split /[-\s]/, lc($1);

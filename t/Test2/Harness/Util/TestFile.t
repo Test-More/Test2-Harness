@@ -15,9 +15,10 @@ my $tmp = gen_temp(
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
     meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey myval2\n",
 
-    package    => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
-    timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
-    badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
+    package     => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
+    timeout     => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
+    timeout2    => "# HARNESS-TIMEOUT-EVENT-90\n# HARNESS-TIMEOUT-POSTEXIT-85\n",
+    badtimeout  => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
 
     extra_comments => "#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n",
 );
@@ -27,12 +28,16 @@ subtest timeouts => sub {
     is($one->event_timeout,    90, "set event timeout");
     is($one->postexit_timeout, 85, "set event timeout");
 
-    my $two = $CLASS->new(file => File::Spec->catfile($tmp, 'badtimeout'));
+    my $two = $CLASS->new(file => File::Spec->catfile($tmp, 'timeout2'));
+    is($two->event_timeout,    90, "set event timeout");
+    is($two->postexit_timeout, 85, "set event timeout");
+
+    my $bad = $CLASS->new(file => File::Spec->catfile($tmp, 'badtimeout'));
     is(
-        warnings { $two->headers },
+        warnings { $bad->headers },
         [
-            "'EVENTX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $two->file . " line 1.\n",
-            "'POSTEXITX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $two->file . " line 2.\n",
+            "'EVENTX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $bad->file . " line 1.\n",
+            "'POSTEXITX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $bad->file . " line 2.\n",
         ],
         "Got warnings"
     );

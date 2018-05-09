@@ -15,10 +15,15 @@ my $tmp = gen_temp(
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
     meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey myval2\n",
 
-    package     => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
-    timeout     => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
-    timeout2    => "# HARNESS-TIMEOUT-EVENT-90\n# HARNESS-TIMEOUT-POSTEXIT-85\n",
-    badtimeout  => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
+    package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
+
+    timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
+    timeout2   => "# HARNESS-TIMEOUT-EVENT-90\n# HARNESS-TIMEOUT-POSTEXIT-85\n",
+    badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
+
+    conflicts1 => "# HARNESS-CONFLICTS PASSWD\n",
+    conflicts2 => "# HARNESS-CONFLICTS PASSWD DAEMON\n",
+    conflicts3 => "# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS DAEMON   # Nothing to see here\n",
 
     extra_comments => "#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n",
 );
@@ -91,6 +96,7 @@ subtest taint => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            conflicts   => [],
             via         => ['xxx'],
             shbang      => {line => "#!/usr/bin/env perl -t -w", switches => ['-t', '-w']},
             headers     => {},
@@ -122,6 +128,7 @@ subtest warn => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            conflicts   => [],
             shbang      => {line => "#!/usr/bin/perl -w", switches => ['-w']},
             headers     => {},
 
@@ -157,6 +164,7 @@ subtest notime => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            conflicts   => [],
             shbang      => {},
             headers     => {features => {timeout => 0}},
 
@@ -204,6 +212,7 @@ subtest all => sub {
             use_preload => 0,
             use_stream  => 0,
             use_timeout => 0,
+            conflicts   => [],
             shbang      => {},
             headers     => {
                 'features' => {
@@ -259,6 +268,7 @@ subtest med2 => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            conflicts   => [],
             shbang      => {},
             headers     => {features => {fork => 0}},
 
@@ -306,6 +316,7 @@ subtest med1 => sub {
             use_preload => 0,
             use_stream  => 1,
             use_timeout => 1,
+            conflicts   => [],
             shbang      => {},
             headers     => {features => {preload => 0}},
 
@@ -355,6 +366,7 @@ subtest long => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            conflicts   => [],
             shbang      => {line => "#!/usr/bin/perl", switches => []},
             headers     => {
                 category => 'long',
@@ -370,7 +382,6 @@ subtest long => sub {
         "Got queue item data",
     );
 };
-
 
 #!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n
 subtest extra_comments => sub {
@@ -410,6 +421,7 @@ subtest extra_comments => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            conflicts   => [],
             shbang      => {line => "#!/usr/bin/perl", switches => []},
             headers     => {
                 category => 'long',
@@ -426,5 +438,15 @@ subtest extra_comments => sub {
     );
 };
 
+subtest conflicts => sub {
+    my $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts1'));
+    is($parsed_file->conflicts_list, ['passwd'], "1 conflict line is reflected as an array");
+
+    $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts2'));
+    is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "1 conflict line with 2 conflict categories");
+
+    $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts3'));
+    is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "2 conflict lines with some comments on one of them");
+};
 
 done_testing;

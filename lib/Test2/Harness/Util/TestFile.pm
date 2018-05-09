@@ -106,6 +106,10 @@ sub check_category {
 sub event_timeout    { $_[0]->headers->{timeout}->{event} }
 sub postexit_timeout { $_[0]->headers->{timeout}->{postexit} }
 
+sub conflicts_list {
+    return $_[0]->headers->{conflicts} || [];    # Assure conflicts is always an array ref.
+}
+
 sub headers {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
@@ -149,8 +153,8 @@ sub _scan {
             }
         }
 
-        next if $line =~ m/^\s*#/ && $line !~ m/^\s*#\s*HARNESS-.+/; # Ignore commented lines which aren't HARNESS-?
-        next if $line =~ m/^\s*(use|require|BEGIN|package)\b/; # Only supports single line BEGINs
+        next if $line =~ m/^\s*#/ && $line !~ m/^\s*#\s*HARNESS-.+/;    # Ignore commented lines which aren't HARNESS-?
+        next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;          # Only supports single line BEGINs
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
         my ($dir, @args) = split /[-\s]/, lc($1);
@@ -174,6 +178,19 @@ sub _scan {
         elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;
             $headers{category} = $name;
+        }
+        elsif ($dir eq 'conflicts') {
+            my @conflicts_array;
+
+            foreach my $arg (@args) {
+                next if $arg eq '';       # We don't split on [-\s]+ so these might be blank.
+                last if $arg =~ m/^#/;    # Stop accepting conflict categories after a comment sign.
+                push @conflicts_array, $arg;
+            }
+
+            # Allow multiple lines with # HARNESS-CONFLICTS FOO
+            $headers{conflicts} ||= [];
+            push @{$headers{conflicts}}, @conflicts_array;
         }
         elsif ($dir eq 'timeout') {
             my ($type, $num) = @args;
@@ -222,7 +239,7 @@ sub queue_item {
     my ($job_name) = @_;
 
     my $category = $self->check_category;
-    my $stage = $self->check_stage;
+    my $stage    = $self->check_stage;
 
     my $fork    = $self->check_feature(fork    => 1);
     my $preload = $self->check_feature(preload => 1);
@@ -243,10 +260,10 @@ sub queue_item {
         use_preload => $preload,
         use_stream  => $stream,
         use_timeout => $timeout,
+        conflicts   => $self->conflicts_list,
 
         event_timeout    => $self->event_timeout,
         postexit_timeout => $self->postexit_timeout,
-
         @{$self->{+QUEUE_ARGS}},
     };
 }
@@ -258,6 +275,7 @@ my %RANK = (
     general    => 4,
     isolation  => 5,
 );
+
 sub rank {
     my $self = shift;
     return $RANK{$self->check_category} || 1;

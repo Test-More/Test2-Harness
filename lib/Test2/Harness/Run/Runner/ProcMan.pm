@@ -174,7 +174,7 @@ sub finish {
 }
 
 sub wait_on_jobs {
-    my $self = shift;
+    my $self   = shift;
     my %params = @_;
 
     for my $pid (keys %{$self->{+_PIDS}}) {
@@ -184,7 +184,7 @@ sub wait_on_jobs {
         next unless $check || $params{force_exit};
 
         my $params = delete $self->{+_PIDS}->{$pid};
-        my $cat = $params->{task}->{category};
+        my $cat    = $params->{task}->{category};
         $cat = 'long' if $cat eq 'medium';
         $self->{+SLOTS}->{$cat}++;
 
@@ -205,9 +205,9 @@ sub write_remaining_exits {
 }
 
 sub write_exit {
-    my $self = shift;
+    my $self   = shift;
     my %params = @_;
-    my $file = File::Spec->catfile($params{dir}, 'exit');
+    my $file   = File::Spec->catfile($params{dir}, 'exit');
     write_file_atomic($file, $params{exit});
 }
 
@@ -298,7 +298,7 @@ sub _next {
         return shift @$list if $max == 1;
 
         my $fallback;
-        for(my $i = 0; $i < @$list; $i++) {
+        for (my $i = 0; $i < @$list; $i++) {
             my $cat = $list->[$i]->{category};
             $cat = 'long' if $cat eq 'medium';
 

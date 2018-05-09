@@ -1,5 +1,13 @@
 {{$NEXT}}
 
+    - Fix issue where isolation jobs were being kicked off too early. It needs to wait for all non-isolation jobs to finish first.
+    - New Feature: # HARNESS-CONFLICTS-XXX
+    - New documentation for HARNESS-CATEGORY-IMMISCIBLE
+    - New documentation for HARNESS-TIMEOUT-EVENT
+    - Switch Test2::Harness::Util::UUID to use a more random UUID
+    - Get rid of the use of each when walking a hash.
+    - Allow comment only lines prior to HARNESS-XXX directives
+
 0.001065  2018-04-22 03:26:57-07:00 America/Los_Angeles
 
     - Fix utf8 double encoding error

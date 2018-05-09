@@ -10,6 +10,8 @@ use Time::HiRes qw/time/;
 
 use File::Spec();
 
+use List::Util qw/uniq/;
+
 use Test2::Harness::Util qw/open_file/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
@@ -191,6 +193,9 @@ sub _scan {
             # Allow multiple lines with # HARNESS-CONFLICTS FOO
             $headers{conflicts} ||= [];
             push @{$headers{conflicts}}, @conflicts_array;
+
+            # Make sure no more than 1 conflict is ever present.
+            @{$headers{conflicts}} = uniq @{$headers{conflicts}};
         }
         elsif ($dir eq 'timeout') {
             my ($type, $num) = @args;

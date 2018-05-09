@@ -24,6 +24,7 @@ my $tmp = gen_temp(
     conflicts1 => "# HARNESS-CONFLICTS PASSWD\n",
     conflicts2 => "# HARNESS-CONFLICTS PASSWD DAEMON\n",
     conflicts3 => "# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS DAEMON   # Nothing to see here\n",
+    conflicts4 => "# HARNESS-CONFLICTS PASSWD DAEMON\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD DAEMON\n",
 
     extra_comments => "#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n",
 );
@@ -447,6 +448,10 @@ subtest conflicts => sub {
 
     $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts3'));
     is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "2 conflict lines with some comments on one of them");
+
+    $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts4'));
+    is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "Duplicate conflict lines only lead to 2 conflict items.");
+
 };
 
 done_testing;

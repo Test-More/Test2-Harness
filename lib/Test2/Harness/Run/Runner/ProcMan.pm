@@ -215,12 +215,15 @@ sub next {
     my $self = shift;
     my ($stage) = @_;
 
+    # Get a new task to run.
     my $task = $self->_next($stage);
 
+    # If there are no more tasks then wait on the remaining jobs to complete.
     unless ($task) {
         $self->wait_on_jobs() while keys %{$self->{+_PIDS}};
     }
 
+    # Return task or undef if we're done.
     return $task;
 }
 
@@ -266,15 +269,23 @@ sub _next {
 
     my $first = 1;
     while (@$list || !$self->{+QUEUE_ENDED}) {
-        return if $end_cb && $end_cb->();
+        return if $end_cb && $end_cb->();    # End loop callback.
+
+        # Delay this loop the first time we enter it polling for a task to run.
         sleep $wait_time unless $first;
         $first = 0;
 
+        # Check the job files for active and newly kicked off tasks.
+        # Updates $list which we use to decide if we need to keep looping.
         $self->poll_tasks;
+
+        # Reap any completed PIDs
         $self->wait_on_jobs;
 
+        # Make sure the lock file is still in place.
         next unless $self->lock;
 
+        # What jobs need running? If nothing then loop.
         $self->read_jobs;
         @$list = grep { !$jobs_seen->{$_->{job_id}} } @$list;
         unless (@$list) {
@@ -282,6 +293,7 @@ sub _next {
             next;
         }
 
+        # What categories are running and how many?
         my $running = 0;
         my %cats;
         for my $job (values %{$self->{+_PIDS}}) {
@@ -289,17 +301,21 @@ sub _next {
             $cats{$job->{task}->{category}}++;
         }
 
-        # At max jobs already
+        # No new jobs yet to kick off yet because too many are running.
+        # This also assures the additional ( $max - 1) long job isn't kicked off.
         next if $running >= $max;
 
-        # None if isolation is running
+        # Only 1 isolation job can be running and 1 is so let's
+        # wait for that pid to die.
         next if $cats{isolation};
 
+        # If we're only allowing 1 job at a time, then just give the
+        # next one on the list.
         return shift @$list if $max == 1;
 
         my $fallback;
         for (my $i = 0; $i < @$list; $i++) {
-            my $cat = $list->[$i]->{category} || 'EMPTY CATEGORY???';
+            my $cat = $list->[$i]->{category};
             $cat = 'long' if $cat eq 'medium';
 
             die "Unknown category: $cat" unless defined $slots->{$cat};
@@ -308,8 +324,10 @@ sub _next {
             # We can do last because the jobs are sorted with isolation at the end of the list.
             last if $running && $cat eq 'isolation';
 
+            # Set to current loop position if it's long.
             $fallback = $i if $cat eq 'long';
 
+            # There are no more allowed parallel jobs in this category.
             next unless $slots->{$cat};
             $slots->{$cat}--;
             return scalar splice(@$list, $i, 1);

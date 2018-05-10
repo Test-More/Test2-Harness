@@ -18,7 +18,7 @@ my $tmp = gen_temp(
     package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
 
     timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
-    timeout2   => "# HARNESS-TIMEOUT-EVENT-90\n# HARNESS-TIMEOUT-POSTEXIT-85\n",
+    timeout2   => "# HARNESS-TIMEOUT-EVENT-90\n# HARNESS-TIMEOUT-POSTEXIT   85\n",
     badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
 
     conflicts1 => "# HARNESS-CONFLICTS PASSWD\n",

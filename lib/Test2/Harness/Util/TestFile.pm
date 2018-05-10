@@ -159,7 +159,7 @@ sub _scan {
         next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;          # Only supports single line BEGINs
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
-        my ($dir, @args) = split /[-\s]/, lc($1);
+        my ($dir, @args) = split /[-\s]+/, lc($1);
 
         if ($dir eq 'no') {
             my ($feature) = @args;
@@ -185,7 +185,6 @@ sub _scan {
             my @conflicts_array;
 
             foreach my $arg (@args) {
-                next if $arg eq '';       # We don't split on [-\s]+ so these might be blank.
                 last if $arg =~ m/^#/;    # Stop accepting conflict categories after a comment sign.
                 push @conflicts_array, $arg;
             }

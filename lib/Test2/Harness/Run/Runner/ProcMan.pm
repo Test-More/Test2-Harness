@@ -331,7 +331,7 @@ sub _next {
 
             # There's already something running so we're not allowed to kick off a isolation job.
             # We can do last because the jobs are sorted with isolation at the end of the list.
-            last if $running && $cat eq 'isolation';
+            next if $running && $cat eq 'isolation';
 
             # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.
             my $job_conflicts = $list->[$i]->{conflicts};

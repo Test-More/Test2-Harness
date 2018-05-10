@@ -4,7 +4,6 @@
     - New Feature: # HARNESS-CONFLICTS-XXX
     - New documentation for HARNESS-CATEGORY-IMMISCIBLE
     - New documentation for HARNESS-TIMEOUT-EVENT
-    - Switch Test2::Harness::Util::UUID to use a more random UUID
     - Get rid of the use of each when walking a hash.
     - Allow comment only lines prior to HARNESS-XXX directives
 

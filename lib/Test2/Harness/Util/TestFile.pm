@@ -159,7 +159,17 @@ sub _scan {
         next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;          # Only supports single line BEGINs
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
-        my ($dir, @args) = split /[-\s]+/, lc($1);
+        my ($dir, $rest) = split /[-\s]+/, lc($1), 2;
+        my @args;
+        if ($dir eq 'meta') {
+            @args = split /\s+/, $rest, 2;                              # Check for white space delimited
+            @args = split(/[-]+/, $rest, 2) if scalar @args == 1;       # Check for dash delimited
+            $args[1] =~ s/\s+(?:#.*)?$//;                               # Strip trailing white space and comment if present
+        }
+        else {
+            $rest =~ s/\s+(?:#.*)?$//;                                  # Strip trailing white space and comment if present
+            @args = split /[-\s]+/, $rest;
+        }
 
         if ($dir eq 'no') {
             my ($feature) = @args;
@@ -185,7 +195,6 @@ sub _scan {
             my @conflicts_array;
 
             foreach my $arg (@args) {
-                last if $arg =~ m/^#/;    # Stop accepting conflict categories after a comment sign.
                 push @conflicts_array, $arg;
             }
 

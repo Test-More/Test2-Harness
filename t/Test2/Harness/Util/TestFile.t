@@ -13,7 +13,7 @@ my $tmp = gen_temp(
     warn   => "#!/usr/bin/perl -w\n",
     taint  => "#!/usr/bin/env perl -t -w\n",
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
-    meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey myval2\n",
+    meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey my-val2\n# HARNESS-META slack #my-val # comment after harness statement\n",
 
     package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
 
@@ -60,10 +60,11 @@ subtest invalid => sub {
 subtest meta => sub {
     my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'meta'));
 
-    is([$foo->meta],             [],                 "No key returns empty list");
-    is([$foo->meta('foo')],      [],                 "Empty key returns empty list");
-    is([$foo->meta('mykey')],    [qw/myval myval2/], "Got both values for the 'mykey' key");
-    is([$foo->meta('otherkey')], ['otherval'],       "Got other key");
+    is([$foo->meta],             [],                  "No key returns empty list");
+    is([$foo->meta('foo')],      [],                  "Empty key returns empty list");
+    is([$foo->meta('mykey')],    [qw/myval my-val2/], "Got both values for the 'mykey' key");
+    is([$foo->meta('otherkey')], ['otherval'],        "Got other key");
+    is([$foo->meta('slack')],    ['#my-val'],         "Got hyphenated key");
 };
 
 subtest foo => sub {

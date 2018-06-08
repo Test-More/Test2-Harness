@@ -1,0 +1,520 @@
+body {
+}
+
+h1 {
+    margin-left: 20px;
+    margin-bottom: 0px;
+}
+
+ul#navigation {
+    list-style: none;
+    margin: 0;
+    padding: 0px;
+    display: block;
+    padding-left: 20px;
+    padding-right: 20px;
+    height: 20px;
+    display: block;
+    float: left;
+    clear: both;
+    margin-bottom: 4px;
+    border-bottom: 2px solid green;
+    border-radius: 10px;
+    padding-bottom: 2px;
+    position: fixed;
+    top: 0;
+    background: white;
+    z-index: 1000;
+}
+
+ul#navigation li {
+    float: left;
+    margin-left: 10px;
+    margin-right: 10px;
+    display: block;
+    vertical-align: middle;
+}
+
+ul#navigation li a,
+ul#navigation li a:link,
+ul#navigation li a:visited,
+ul#navigation li a:active {
+    text-decoration: none;
+    color: blue;
+    vertical-align: middle;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+ul#navigation li a:hover {
+    border-top: 1px solid blue;
+    border-bottom: 1px solid blue;
+    border-radius: 5px;
+    background: #EAFBFF;
+}
+
+ul#navigation li.active a,
+ul#navigation li.active a:link,
+ul#navigation li.active a:active,
+ul#navigation li.active a:visited,
+ul#navigation li.active a:hover {
+    font-weight: bold;
+    border: none;
+    color: blue;
+    background: inherit;
+}
+
+ul.lineage {
+    list-style: none;
+    overflow: hidden;
+    margin: 0;
+    padding: 0px;
+}
+
+ul.lineage li {
+    float: left;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+div#content {
+    margin-top: 30px;
+    min-height: 350px;
+    border: none;
+    clear: both;
+    overflow: hidden;
+}
+
+div#copyright {
+    text-align: right;
+    font-size: small;
+    display: block;
+}
+
+div#small_title {
+    font-size: smaller;
+    margin-left: 75px;
+    margin-bottom: 20px;
+    margin-top: -8px;
+}
+
+div#subnav {
+    padding: 0px;
+    margin: 0;
+    width: 126px;
+    overflow: hidden;
+    float: left;
+    display: block;
+    margin-right: -120px;
+    position: fixed;
+}
+
+ul.listnav {
+    border-top: 3px solid;
+    border-bottom: 3px solid;
+    border-color: #33AAAA;
+    border-radius: 10px;
+    border-left: thin dotted #33AAAA;
+    border-right: thin dotted #33AAAA;
+    background: white;
+
+    display: block;
+
+    padding: 0px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    margin-right: -120px;
+    width: 124px;
+
+    list-style: none;
+
+    text-align: center;
+
+    clear: left;
+    overflow: hidden;
+
+    margin-top: 0;
+}
+
+ul.listnav li {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    display: block;
+}
+
+ul.listnav li a,
+ul.listnav li a:link,
+ul.listnav li a:visited,
+ul.listnav li a:active {
+    display: block;
+    color: blue;
+    text-decoration: none;
+    vertical-align: middle;
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-bottom: 1px;
+    padding-top: 1px;
+    width: auto;
+}
+
+ul.listnav li.active a {
+    font-weight: bold;
+    padding-bottom: 1px;
+    padding-top: 1px;
+    border-radius: 4px;
+    border-left: 1px solid green;
+    border-right: 1px solid green;
+}
+
+ul.listnav li a:hover {
+    border-top: 1px solid green;
+    border-bottom: 1px solid green;
+    border-radius: 4px;
+    padding-bottom: 0px;
+    padding-top: 0px;
+    background: #EEFFFF;
+}
+
+div#view {
+    display: block;
+    float: left;
+
+    border-radius: 10px;
+    border: thin dotted;
+    border-top: 3px solid;
+    border-bottom: 3px solid;
+    border-color: #33AAFF;
+
+    clear: right;
+
+    min-width: 700px;
+    min-height: 350px;
+    padding: 14px;
+
+    margin-left: 130px;
+}
+
+div#view>div{
+    width: 900px;
+}
+
+div#view>div.debugger{
+    width: auto;
+}
+
+table.symbol_list {
+    border-spacing: 0px;
+    width: 100%;
+}
+
+table.symbol_list th {
+    text-align: left;
+    padding-left: 12px;
+}
+
+table.symbol_list tr.symbol td {
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 8px;
+    padding-bottom: 5px;
+}
+
+table.symbol_list tr.symbol td.left {
+    border-top-left-radius:10px;
+    border-bottom-left-radius:10px;
+    border-bottom: 1px solid;
+    border-color: #33AAAA;
+
+    font-weight: bold;
+    border-right: 1px dotted #E0E0E0;
+}
+
+table.symbol_list tr.symbol td.right {
+    border-top-right-radius:10px;
+    border-bottom: 1px solid;
+    border-color: #33AAAA;
+    width: 90%;
+}
+
+table.symbol_list tr.symbol.open td {
+    border-top: 2px solid green;
+    border-bottom: 1px dotted #66EEEE;
+    padding-top: 6px;
+    padding-bottom: 3px;
+}
+
+table.symbol_list tr.symbol_details td {
+    border-radius: 10px;
+    border-bottom: 2px solid green;
+    padding: 6px;
+}
+
+h2 {
+    margin: 0;
+    margin-bottom: 8px;
+}
+
+h3 {
+    margin: 0;
+    margin-top: 20px;
+    margin-bottom: 6px;
+    border-top: 1px dotted #DDDDDD;
+}
+
+ul.role_list {
+    list-style: none;
+    display: block;
+    width: 100%;
+    padding: 0px;
+    margin: 0;
+    margin-bottom: 10px;
+    margin-left: 10px;
+    overflow: hidden;
+}
+
+ul.role_list li {
+    float: left;
+    display: block;
+    margin-left: 6px;
+    margin-right: 6px;
+}
+
+ul.role_list li a,
+ul.role_list li a:hover,
+ul.role_list li a:visited,
+ul.role_list li a:link,
+ul.role_list li a:active {
+    color: blue;
+    text-decoration: none;
+}
+
+ul.role_list li a:hover {
+    text-decoration: underline;
+}
+
+tr.symbol:hover {
+    background: #EEEEEE;
+}
+
+tr.symbol.open {
+    background: #FAFAFF;
+}
+
+.example,
+ul.usage {
+    list-style: none;
+    margin: 4px;
+    padding: 4px;
+    border: 1px dotted #D0D0D0;
+    background: #FAFAFA;
+    overflow: hidden;
+}
+
+#error_window {
+    display: block;
+    position: absolute;
+    width: 500px;
+    height: 300px;
+    border: 2px solid red;
+    border-radius: 10px;
+    left: 100px;
+    top: 100px;
+    background: white;
+    padding: 10px;
+}
+
+div#nonav {
+    height: 11px;
+    width: 114px;
+    border: none;
+    overflow: hidden;
+    display: block;
+    font-size: 10px;
+    margin-bottom: -12px;
+    text-decoration: underline;
+    text-align: center;
+    cursor: pointer;
+}
+
+div#nonav.nonav {
+    width: 8px;
+    height: 100px;
+    border: 1px solid #33AAAA;
+    border-right: 2px solid #33AAAA;
+    border-left: none;
+    border-top-right-radius:10px;
+    border-bottom-right-radius:10px;
+    position: absolute;
+    left: 0px;
+    top: 160px;
+    background: #ddffee;
+    z-index: 100;
+}
+
+div#subnav.nonav ul {
+    display: none !important;
+}
+
+div#view.nonav {
+    margin-left: 4px;
+    padding: 2px;
+    padding-left: 0px;
+    padding-right: 0px;
+    width: 100%;
+    border: none;
+    margin: none;
+    z-index: 10;
+}
+
+table#debugger tr td {
+    border-top: 1px dotted #CCCCCC;
+    border-right: 1px dotted #CCCCCC;
+    padding: 0px;
+    margin: 0;
+}
+
+table#debugger tr td table tr td {
+    border: none;
+}
+
+table#debugger h3 {
+    border: none;
+    text-align: left;
+    padding: 0px;
+    margin: 0;
+    padding-left: 100px;
+    text-decoration: underline;
+}
+
+table#debugger tr td#debug_out {
+    vertical-align: bottom;
+    border-top: none;
+}
+
+table#debugger tr td#debugger_state_wrapper {
+    vertical-align: top;
+    height: 120px;
+}
+
+ul#debugger_controls {
+    list-style: none;
+    float: left;
+    display: block;
+    overflow: hidden;
+    margin: 0;
+    padding: 0px;
+    margin-left: 100px;
+}
+
+ul#debugger_controls li {
+    float: left;
+    margin-left: 20px;
+    margin-right: 20px;
+    padding: 0px;
+    color: blue;
+    cursor: pointer;
+}
+
+ul#debugger_controls li:hover {
+    text-decoration: underline;
+}
+
+table#debugger tr td#debug_source div.line.debug_highlight {
+    background: #FFFF11 !important;
+}
+
+table#debugger_state {
+    border-collapse: collapse;
+    width: 330px;
+}
+
+table#debugger_state tr {
+    border-bottom: 1px solid #CCCCCC;
+}
+
+table#debugger_state th {
+    font-size: 18px;
+}
+
+table#debugger_state td {
+    text-align: center;
+}
+
+table#debugger_state tr.active.parent {
+    background: #FFFF11 !important;
+}
+
+table#debugger_state tr.active.child_1 {
+    background: #88AAFF !important;
+}
+
+table#debugger_state tr.active.child_2 {
+    background: #AAFFAA !important;
+}
+
+dl.descriptive_points dt {
+    font-weight: bold;
+}
+
+dl.descriptive_points dd {
+    margin-bottom: 12px;
+}
+
+ul.horizontal_list {
+    overflow: hidden;
+    list-style: none;
+}
+
+ul.horizontal_list li {
+    float: left;
+    margin-left: 40px;
+}
+
+table.benchmark td, table.benchmark th {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+dl.short, dl.medium {
+    list-style: none;
+    margin: 0;
+    padding: 0px;
+    display: block;
+    overflow: hidden;
+}
+
+dl.short dt, dl.medium dt {
+    float: left;
+    font-weight: bold;
+    padding-left: 10px;
+    width: 60px;
+    margin-right: 10px;
+    margin-bottom: 8px;
+    clear: left;
+}
+
+dl.short dd, dl.medium dd {
+    float: left;
+    clear: right;
+}
+
+dl.medium dt {
+    width: 100px;
+}
+
+#wf_code div.syntaxhighlighter {
+    height: 350px;
+}
+
+div.syntaxhighlighter {
+    padding-bottom: 2px !important;
+    overflow-y: hidden !important;
+}
+
+table.bundle_table tr th {
+    text-align: left;
+}
+
+table.bundle_table tr.zebra {
+    background: #E0E0E0;
+}

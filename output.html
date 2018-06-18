@@ -1,0 +1,107 @@
+<dl class="listnav">
+    <dt id="default">Default</dt>
+    <dd>
+        <h2>Default Output</h2>
+
+        The default output provided by yath is intended for humans, not parsers.
+        <p>
+
+        The rules are similar to prove's, passing test gets one line, diagnostics messages and failed tests are still printed.
+        <p>
+
+        Yath output includes the job the output came from, useful when things run concurrently.
+        <p>
+
+        <img src="output-default.png" />
+    </dd>
+
+    <dt id="quiet">Quiet</dt>
+    <dd>
+        <h2>Quiet Mode</h2>
+        <br />
+        <br />
+        <br />
+        <br />
+
+        Easiest slide ever!!
+        <br />
+        <br />
+        <br />
+        <br />
+
+        Quiet mode has no output, just a true or false exit code.
+    </dd>
+
+    <dt id="verbose">Verbose</dt>
+    <dd>
+        <h2>Verbose Mode</h2>
+
+        All output, all the time.
+        <p>
+
+        <img src="output-verbose.png" />
+    </dd>
+
+    <dt id="qvf">QVF</dt>
+    <dd>
+        <h2>QVF (Quiet, but verbose on failure)</h2>
+
+        Passing tests only show a passing line, no diag messages or STDERR.
+        <p>
+        Failing tests are completely verbose.
+        <p>
+        Output is buffered until the test file is complete, so no muxing.
+        <p>
+        <img src="output-qvf.png" />
+    </dd>
+
+    <dt id="renderers">Renderers</dt>
+    <dd>
+        <h2>Renderers</h2>
+        <p>
+
+        You can write your own renderers for yath to completely control the output.
+        <p>
+
+        The default renderer is called Test2::Harness::Renderer::Formatter, which lets you use any Test2 formatter as your output.
+        <p>
+
+        Writing a custom formatter is intended to be simple/trivial, but in practice there is still some work to do on that.
+        <p>
+
+        Renderers being worked on by someone somewhere (not me):
+        <ul>
+            <li>JUnit XML</li>
+            <li>Team City</li>
+        </ul>
+    </dd>
+
+    <dt id="log">Log</dt>
+    <dd>
+        <h2>Event Log</h2>
+
+        <p>
+
+        The event log is a jsonl file containing every event the harness saw.
+        <p>
+
+        The event log is a lossless format that will let you completely replay a test run (or parts of it) without actually re-running your tests.
+        <p>
+
+        The event log has Test2 events, with all their context data, in most cases there was no TAP conversion involved.
+        <p>
+
+        stdout/stderr exit codes, and all other data the harness collects are placed into events in the log.
+        <p>
+
+        There are several tools to process logs and provide useful metrics or summarize results.
+        <p>
+
+        <ul>
+            <li>Longest running tests</li>
+            <li>How much time is spent in startup, teardown, runtime, etc.</li>
+            <li>UI tool to view events in a web interface</li>
+        </ul>
+    </dd>
+
+</dl>

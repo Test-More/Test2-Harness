@@ -1,0 +1,249 @@
+<dl class="listnav">
+    <dt id="events">Events</dt>
+    <dd>
+        <h2>Events</h2>
+
+        <br /><br />
+        <br /><br />
+
+        <ul>
+            <li>yath uses Test2 events directly serialized as json.</li>
+            <li>No Test2 -&gt; TAP -&gt; Test2 conversion (lossless!)</li>
+            <li>Any/All meta-data and debug info (file, line, etc) is preserved and available</li>
+            <li>stderr/stdout are converted to events</li>
+            <li>TAP parsing still occurs for tests that opt-out, or just print TAP</li>
+        </ul>
+    </dd>
+
+    <dt id="config">Config</dt>
+    <dd>
+        <h2>Project config</h2>
+
+        2 config files are supported, .yath.rc and .yath.user.rc.
+
+        <p>
+
+        .yath.rc is intended to be a project config that specifies plugins, preloads, and default arguments. This SHOULD be commited to the repository.
+        <p>
+        .yath.user.rc is intended to be local overrides to .yath.rc, it SHOULD NOT be commited to the repository.
+
+        <p>
+
+        Both files have the same layout:
+
+        <script class="output">
+        [test]      # Name of the command to which the following arguments are applied
+        -pet 30     # Set the post-exit timeout
+        --qvf       # Use quiet but verbose on failure mode
+        -P Moose    # Preload Moose
+        </script>
+    </dd>
+
+    <dt id="timeouts">Timeouts</dt>
+    <dd>
+        <h2>Event Timeout</h2>
+
+        If a test produces no output at all for 60 seconds (configurable) the
+        test will be killed and reported as a failure.
+
+        <p>
+
+        You can configure the timeout either at the command line, or provide
+        test-specific timeouts via directives written in the test itself:
+
+        <script class="output">
+            $ yath test -et 300
+        </script>
+        <script class="code">
+            #!/usr/bin/perl
+            # HARNESS-TIMEOUT-EVENT 300
+        </script>
+
+        <h2>Post-Exit Timeout</h2>
+
+        If a test has exited, but the output looks incomplete, yath will wait for more output, and will timeout after 15 seconds of silence.
+        <p>
+        This is also configurable:
+
+        <script class="output">
+            $ yath test -pet 300
+        </script>
+        <script class="code">
+            #!/usr/bin/perl
+            # HARNESS-TIMEOUT-POSTEXIT 300
+        </script>
+    </dd>
+
+    <dt id="preload">Preload</dt>
+    <dd>
+        <h2>Preload</h2>
+
+        <ul>
+            <li>Yath runs tests by forking a 'runner' process</li>
+            <li>You can preload modules before tests are run</li>
+            <li>This can save a LOT of time</li>
+            <li>You can disable preload and/or forking at the command line</li>
+            <li>You can disable preload/fork on a per-test basis with directives</li>
+            <li>You can also write custom preloads with helpful features (covered later)</li>
+        </ul>
+
+        <script class="output">
+            $ yath test --no-fork --no-preload
+            $ yath test -P Moose
+        </script>
+
+        <script class="code">
+            #!/usr/bin/perl
+            # HARNESS-NO-FORK
+            # HARNESS-NO-PRELOAD
+        </script>
+
+        This has a profound impact on the performance of the Moose test suite:
+        <script class="output">
+yath test -q          85.12s user 7.86s system 98% cpu 1:34.17  total
+yath test -q -PMoose  29.84s user 5.74s system 96% cpu   36.943 total
+        </script>
+    </dd>
+
+    <dt id="plugins">Plugins</dt>
+    <dd>
+        <h2>Plugins</h2>
+
+        <br />
+        <br />
+        <br />
+
+        Plugins are a way to control many aspects of yath.
+
+        <ul>
+            <li>Add custom CLI arguments</li>
+            <li>Custom logic before and after init</li>
+            <li>Custom logic after a run completes</li>
+            <li>Custom test file searching</li>
+            <li>Modify data about each test before running it</li>
+        </ul>
+
+        <script class="output">
+        $ yath -p My::Plugin
+        </script>
+    </dd>
+
+    <dt id="directives">Directives</dt>
+    <dd>
+        <dl class="sub_list">
+            <dt id="overview">Overview</dt>
+            <dd>
+                <h2>In-Test Directives</h2>
+
+                Directives are special comments at the top of test files that tell the harness the test needs special treatment.
+                <p>
+                There are 2 forms for directives, the first type is used to set key/value attributes:
+
+                <script class="code">
+            #!/usr/bin/perl
+            # HARNESS-CAT-LONG
+            # HARNESS-CATEGORY-FOO
+            # HARNESS-STAGE-FOO
+            # HARNESS-TIMEOUT-EVENT 90
+            # HARNESS-TIMEOUT-POSTEXIT 85
+            # HARNESS-META mykey myval2
+            # HARNESS-META-mykey-myval
+            # HARNESS-META-otherkey-otherval
+                </script>
+                <p>
+                The other style is for toggling behaviors on or off:
+                <script class="code">
+            #!/usr/bin/perl
+            # HARNESS-NO-FORK
+            # HARNESS-NO-PRELOAD
+            # HARNESS-NO-TIMEOUT
+            # HARNESS-USE-STREAM
+                </script>
+            </dd>
+
+            <dt id="categories">Categories</dt>
+            <dd>
+                <h2>Categories</h2>
+
+                <script class="code"> # HARNESS-CATEGORY-GENERAL </script>
+                This is the default category, implies nothing special.
+                <p>
+
+                <script class="code"> # HARNESS-CATEGORY-IMMISCIBLE </script>
+                Tests with this set cannot run concurrently with any other
+                tests that set this.
+                <p>
+
+                <script class="code"> # HARNESS-CATEGORY-ISOLATION </script>
+                This test cannot run with any other tests, it must be run
+                non-concurrently.
+                <p>
+
+                <script class="code"> # HARNESS-CATEGORY-LONG </script>
+                This test takes a long time to complete. In a concurrent run
+                this will be run as soon as possible.
+                <p>
+
+                <script class="code"> # HARNESS-CATEGORY-MEDIUM </script>
+                Currently an alias to 'long' but may not always be.
+            </dd>
+
+            <dt id="config">Config</dt>
+            <dd>
+                <h2>Configuration</h2>
+
+                <script class="code"># HARNESS-STAGE-FOO</script>
+                Set the stage to run in (only useful with custom preloads).
+                <script class="code"># HARNESS-TIMEOUT-EVENT 90</script>
+                Set the event timeout in seconds.
+                <script class="code"># HARNESS-TIMEOUT-POSTEXIT 85</script>
+                Set the post-exit timeout in seconds.
+                <script class="code"># HARNESS-META mykey myval2</script>
+                Set a custom key/value pair.
+                <script class="code"># HARNESS-NO-PRELOAD</script>
+                Do not run this test with preloads, start a clean process to run
+                it. Currently this is identical to NO-FORK but that may not always
+                be the case.
+                <script class="code"># HARNESS-NO-FORK</script>
+                Do not run tests in a forked process, start a new process instead (fork+exec).
+                <script class="code"># HARNESS-NO-TIMEOUT</script>
+                Wait forever, do not timeout.
+                <script class="code">
+                    # HARNESS-NO-STREAM
+                    # HARNESS-USE-TAP
+                </script>
+                Do not use the Test2 Stream formatter, use TAP instead.
+            </dd>
+        </dl>
+    </dd>
+
+    <dt id="tmpdir">TempDir</dt>
+    <dd>
+        <h2>Temporary Directories</h2>
+
+        <br />
+        <br />
+        <br />
+
+        <ul>
+            <li>Yath has a single temp dir under which all temp data is kept</li>
+            <li>When requested, yath will put the temp dir into shm</li>
+            <li>Every test that yath runs has a temporary directory (under the main one) where output and meta-data are stored.</li>
+            <li>Each test has the $TMPDIR env var set to a test-specific temp dir under the tests dir.</li>
+            <li>This makes cleaning temp files easy, everything is nested under the main temp dir.</li>
+        </ul>
+    </dd>
+</dl>
+
+<!--
+
+
+    <dt id=""></dt>
+    <dd>
+        <h2></h2>
+    </dd>
+
+  * Persist
+  * Notifications
+
+-->

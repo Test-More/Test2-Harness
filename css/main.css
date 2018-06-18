@@ -6,6 +6,12 @@ h1 {
     margin-bottom: 0px;
 }
 
+ul.clean {
+    list-style: none;
+    margin: 0;
+    padding: 0px;
+}
+
 ul#navigation {
     list-style: none;
     margin: 0;
@@ -195,7 +201,7 @@ div#view {
 }
 
 div#view>div{
-    width: 900px;
+    min-width: 900px;
 }
 
 div#view>div.debugger{

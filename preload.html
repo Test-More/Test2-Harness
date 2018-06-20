@@ -1,0 +1,182 @@
+<dl class="listnav">
+    <dt id="advanced">Advanced</dt>
+    <dd>
+        <h2>Advanced Preloading</h2>
+
+        <br />
+        <br />
+
+        Advanced preloading occurs whenever you preload a module that subclasses <b>Test2::Harness::Preload</b>.
+        <p>
+
+        Advanced preload modules have several hooks that are covered in this section.
+    </dd>
+
+    <dt id="prefork">pre_fork</dt>
+    <dd>
+        <h2>$class->pre_fork($job)</h2>
+
+        <br />
+        <br />
+
+        This hook is called just before yath forks to run your test.
+        <p>
+        <br />
+
+        The argument to this hook is the Test2::Harness::Job object, from which
+        you can get things like the filename, directives, etc.
+    </dd>
+
+    <dt id="postfork">post_fork</dt>
+    <dd>
+        <h2>$class->post_fork($job)</h2>
+        <br />
+        <br />
+
+        This hook is called just after yath forks to run your test.
+        <p>
+
+        Note that this occurs BEFORE some state cleanup such as fixing $0 and
+        rewinding DATA handles is done.
+        <p>
+        <br />
+
+        The argument to this hook is the Test2::Harness::Job object, from which
+        you can get things like the filename, directives, etc.
+    </dd>
+
+    <dt id="prelaunch">pre_launch</dt>
+    <dd>
+        <h2>$class->pre_launch($job)</h2>
+        <br />
+        <br />
+
+        This hook is called just after yath finishes reseting the state such as $0 and DATA handles.
+        <p>
+
+        The very next thing after this hook returns is the use of <b>goto::file</b> to jump into the test file.
+    </dd>
+
+    <dt id="preload">preload</dt>
+    <dd>
+        <h2>$class->preload(\%do_not_load, $job_count)</h2>
+
+        <br />
+        <br />
+
+        This hook gives you a chance to do additional custom preloading.
+
+        <p>
+
+        This is very useful if you have a very long list of modules to preload.
+
+        <p>
+
+        The first argument is a hashref of blacklisted modules you should skip
+        (if possible).  This list is built based on inotify changes that have
+        been observed in previous iterations.
+
+        <p>
+
+        The second argument is the number of jobs that will be run. This is
+        useful if you want to avoid preloading eveything when only a single
+        test file will be run.
+    </dd>
+
+    <dt id="stages">stages</dt>
+    <dd>
+        <h2>@list = $class->stages()</h2>
+
+        If your codebase is sufficiently complex you may want to create multiple preload stages.
+
+        <p>
+
+        Preload stages are different groups of preloads, often built on top of previous stages.
+
+        <p>
+
+        As an example, at ZipRecruiter we have stages like this:
+
+        <dl>
+            <dt>CPAN</dt><dd>CPAN modules are loaded, but no internal code is</dd>
+            <dt>base</dt><dd>Our basic modules are loaded, this is built on top of the CPAN preloads</dd>
+            <dt>app1</dt><dd>One of our apps is preloaded on top of base</dd>
+            <dt>app2</dt><dd>Another app is preloaded on top of base.</dd>
+        </dl>
+
+        Note that app1 and app2 are both built on top of base, and do not
+        inherit preloads from eachother, the next page explains how!
+    </dd>
+
+    <dt id="forkstages">fork_stages</dt>
+    <dd>
+        <h2>@list = $class->fork_stages()</h2>
+
+        <br />
+        <br />
+
+        This hook allows you to specify that yath should fork before
+        initializing the listed stages, which means nothing else will inherit
+        from them.
+
+        <p>
+
+        Note that this all works for persist mode as well, each stage will have its own process all set to go!
+    </dd>
+
+    <dt id="future">future</dt>
+    <dd>
+        <h2>How will this change going forward?</h2>
+        <br />
+        <br />
+
+        The way this preload system grew was fairly organic to solve a problem at ZipRecruiter.
+
+        <p>
+
+        For backcompat none of these hooks should change very much.
+
+        <p>
+
+        Moving forward there may be a new system that lets you define your
+        preloads as a data structure (DSL?) that allows smarter inheritence,
+        and requires less work from you.
+    </dd>
+</dl>
+
+<!--
+    <dt id=""></dt>
+    <dd>
+        <h2></h2>
+    </dd>
+
+
+package Test2::Harness::Preload;
+use strict;
+use warnings;
+
+our $VERSION = '0.001066';
+
+sub stages { () }
+sub fork_stages { () }
+
+sub preload {
+    my $class = shift;
+    my ($do_not_load, $job_count) = @_;
+    die "$class does not override preload()";
+}
+
+1;
+
+Quick Start
+ * Install
+ * yath
+ * yath test
+ * yath test -PMoose
+ * yath start -PMoose
+ * yath run ...
+ * yath which
+ * yath stop
+
+-->
+

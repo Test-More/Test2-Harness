@@ -66,7 +66,7 @@
         The default renderer is called Test2::Harness::Renderer::Formatter, which lets you use any Test2 formatter as your output.
         <p>
 
-        Writing a custom formatter is intended to be simple/trivial, but in practice there is still some work to do on that.
+        Writing a custom renderer is intended to be simple/trivial, but in practice there is still some work to do on that.
         <p>
 
         Renderers being worked on by someone somewhere (not me):
@@ -75,33 +75,4 @@
             <li>Team City</li>
         </ul>
     </dd>
-
-    <dt id="log">Log</dt>
-    <dd>
-        <h2>Event Log</h2>
-
-        <p>
-
-        The event log is a jsonl file containing every event the harness saw.
-        <p>
-
-        The event log is a lossless format that will let you completely replay a test run (or parts of it) without actually re-running your tests.
-        <p>
-
-        The event log has Test2 events, with all their context data, in most cases there was no TAP conversion involved.
-        <p>
-
-        stdout/stderr exit codes, and all other data the harness collects are placed into events in the log.
-        <p>
-
-        There are several tools to process logs and provide useful metrics or summarize results.
-        <p>
-
-        <ul>
-            <li>Longest running tests</li>
-            <li>How much time is spent in startup, teardown, runtime, etc.</li>
-            <li>UI tool to view events in a web interface</li>
-        </ul>
-    </dd>
-
 </dl>

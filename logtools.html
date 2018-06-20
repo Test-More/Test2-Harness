@@ -1,0 +1,56 @@
+<dl class="listnav">
+    <dt id="log">Log</dt>
+    <dd>
+        <h2>Event Log</h2>
+
+        <script class="output">
+        yath test -L
+        [...]
+        Wrote log file: [...]/2018-06-19~10:03:26~AE857318-73E2-11E8-B001-C21D2A288BEE~8910.jsonl
+        </script>
+
+        The event log is a jsonl file containing every event the harness saw.
+        <p>
+
+        The log can be output in a compressed form using gzip or bzip2 (-G or -B flags)
+        <p>
+
+        The event log is a lossless format that will let you completely replay a test run (or parts of it) without actually re-running your tests.
+        <p>
+
+        The event log has Test2 events, with all their context data, in most cases there was no TAP conversion involved.
+        <p>
+
+        stdout/stderr exit codes, and all other data the harness collects are placed into events in the log.
+        <p>
+
+        There are several tools to process logs and provide useful metrics or summarize results.
+        <p>
+
+        <ul>
+            <li>Longest running tests</li>
+            <li>How much time is spent in startup, teardown, runtime, etc.</li>
+            <li>UI tool to view events in a web interface</li>
+        </ul>
+    </dd>
+
+    <dt id="more">More</dt>
+    <dd>
+        <h2>More tools!</h2>
+
+        <br />
+        <br />
+        <b>I did not have time to finish this section, so I will generate a log file and show you the tools in action!</b>
+    </dd>
+
+</dl>
+
+<!--
+    <dt id=""></dt>
+    <dd>
+        <h2></h2>
+    </dd>
+
+-->
+
+

@@ -1,0 +1,42 @@
+    --slack "#CHANNEL"              Send results to a slack channel
+    --slack "@USER"                 Send results to a slack user
+
+    --slack-fail "#CHANNEL"         Send failing results to a slack channel
+    --slack-fail "@USER"            Send failing results to a slack user
+
+    --slack-log                     Off by default, log file will be attached if
+                                    available
+
+        Attach the event log to any slack notifications.
+
+
+    --slack-notify                  On by default if --slack-url is specified
+    --no-slack-notify
+
+        Send slack notifications to the slack channels/users listed in test
+        meta-data when tests fail.
+
+
+    --slack-url "URL"               Specify an API endpoint for slack webhook
+                                    integrations
+
+        This should be your slack webhook url.
+
+    --email foo@example.com
+
+        Email the test results (and any log file) to the specified email
+        address(es)
+
+    --email-owner
+
+        Email the owner of broken tests files upon failure. Add `#
+        HARNESS-META-OWNER foo@example.com` to the top of a test file to give it
+        an owner
+
+    --no-batch-owner-notices
+
+        Usually owner failures are sent as a single batch at the end of testing.
+        Toggle this to send failures as they happen.
+
+
+

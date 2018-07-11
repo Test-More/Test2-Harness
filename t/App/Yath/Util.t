@@ -41,7 +41,7 @@ subtest find_yath => sub {
     is(find_yath, File::Spec->rel2abs('c_yath_run'), "found via \$App::Yath::SCRIPT");
 };
 
-my $tmp = gen_temp(
+my $tmp = realpath(gen_temp(
     '.yath-persist.json' => "XXX",
     'foo'                => "XXX",
 
@@ -76,7 +76,7 @@ t t2
     dir_b => {
         dir_bb => {},
     },
-);
+));
 
 my $cwd = cwd();
 

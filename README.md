@@ -208,8 +208,9 @@ This file should not normally be committed to the project repo.
 
 `yath` will recognise a number of directive comments placed near the top of
 test files. These directives should be placed after the `#!` line but
-before any real code or comments. These may be placed AFTER `use` and
-`require` statements.
+before any real code.
+
+Real code is defined as any line that does not start with use, require, BEGIN, package, or #
 
 - good example 1
 
@@ -281,6 +282,24 @@ c&lt;yath> will usually kill a test if no events occur within a timeout (default
 60 seconds). You can add this directive to tests that are expected to trip the
 timeout, but should be allowed to continue.
 
+NOTE: you usually are doing the wrong thing if you need to set this. See:
+`HARNESS-TIMEOUT-EVENT`.
+
+### HARNESS-TIMEOUT-EVENT 60
+
+c&lt;yath> can be told to alter the default event timeout from 60 seconds to another
+value. This is the recommended alternative to HARNESS-NO-TIMEOUT
+
+### HARNESS-TIMEOUT-POSTEXIT 15
+
+c&lt;yath> can be told to alter the default POSTEXIT timeout from 15 seconds to another value.
+
+Sometimes a test will fork producing output in the child while the parent is
+allowed to exit. In these cases we cannot rely on the original process exit to
+tell us when a test is complete. In cases where we have an exit, and partial
+output (assertions with no final plan, or a plan that has not been completed)
+we wait for a timeout period to see if any additional events come into
+
 ### HARNESS-CATEGORY-LONG
 
 This lets you tell `yath` that the test file is long-running. This is
@@ -303,9 +322,44 @@ This lets you tell `yath` that the test cannot be run concurrently with other
 tests. Yath will hold off and run these tests one at a time after all other
 tests.
 
+### HARNESS-CATEGORY-IMMISCIBLE
+
+This lets you tell `yath` that the test cannot be run concurrently with other
+tests of this class. This is helpful when you have multiple tests which would
+otherwise have to be run sequentially at the end of the run.
+
+Yath prioritizes running these tests above HARNESS-CATEGORY-LONG.
+
 ### HARNESS-CATEGORY-GENERAL
 
 This is the default category.
+
+### HARNESS-CONFLICTS-XXX
+
+This lets you tell `yath` that no other test of type XXX can be run at the
+same time as this one. You are able to set multiple conflict types and `yath`
+will honor them.
+
+XXX can be replaced with any type of your chosing.
+
+NOTE: This directive does not alter the category of your test. You are free
+to mark the test with LONG or MEDIUM in addition to this marker.
+
+- Example with multiple lines.
+
+        #!/usr/bin/perl
+        # DASH and space are split the same way.
+        # HARNESS-CONFLICTS-DAEMON
+        # HARNESS-CONFLICTS  MYSQL
+
+        ...
+
+- Or on a single line.
+
+        #!/usr/bin/perl
+        # HARNESS-CONFLICTS DAEMON MYSQL
+
+        ...
 
 # MODULE DOCS
 

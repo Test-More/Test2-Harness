@@ -147,6 +147,9 @@ SIGUSR1
 SIGUSR2
 webhook
 integrations
+IMMISCIBLE
+POSTEXIT
+
 
 ## Spelled correctly according to google:
 recognise

@@ -340,7 +340,7 @@ This lets you tell `yath` that no other test of type XXX can be run at the
 same time as this one. You are able to set multiple conflict types and `yath`
 will honor them.
 
-XXX can be replaced with any type of your chosing.
+XXX can be replaced with any type of your choosing.
 
 NOTE: This directive does not alter the category of your test. You are free
 to mark the test with LONG or MEDIUM in addition to this marker.

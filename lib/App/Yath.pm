@@ -6,7 +6,7 @@ use App::Yath::Util qw/read_config find_pfile/;
 use File::Spec;
 use Test2::Util qw/IS_WIN32/;
 
-our $VERSION = '0.001066';
+our $VERSION = '0.001067';
 
 our $SCRIPT;
 

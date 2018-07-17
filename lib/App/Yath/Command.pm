@@ -719,6 +719,38 @@ sub options {
         },
 
         {
+            spec    => 'L|log',
+            field   => 'log',
+            used_by => {logger => 1},
+            section => 'Logging Options',
+            usage   => ['-L', '--log'],
+            summary => ['Turn on logging'],
+            default => sub {
+                my ($self, $settings) = @_;
+                return 1 if $settings->{log_file} || $settings->{log_file_format} || exists $ENV{YATH_LOG_FILE_FORMAT};
+                return 1 if $settings->{bzip2_log};
+                return 1 if $settings->{gzip_log};
+                return 0;
+            },
+        },
+
+        {
+            spec    => 'lff|log-file-format=s',
+            field   => 'log_file_format',
+            used_by => {logger => 1},
+            section => 'Logging Options',
+            usage   => ['--lff format-string', '--log-file-format format-string'],
+            summary => ['Specify the format for automatically-generated log files.', 'Overridden by --log-file, if given',
+                        'This option implies -L', "(Default: \$YATH_LOG_FILE_FORMAT, if that is set, or else '%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl')"],
+            long_desc => "This is a string in which percent-escape sequences will be replaced as per POSIX::strftime.  The following special escape sequences are also replaced: (%!U : the unique test run ID)  (%!p : the process ID) (%!S : the number of seconds since local midnight UTC ",
+            default   => sub {
+                my ($self, $settings) = @_;
+                return unless $settings->{log};
+                return $ENV{YATH_LOG_FILE_FORMAT} // '%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl';
+            },
+        },
+
+        {
             spec    => 'F|log-file=s',
             field   => 'log_file',
             used_by => {logger => 1},
@@ -734,7 +766,9 @@ sub options {
                 mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
                     unless -d 'test-logs';
 
-                return File::Spec->catfile('test-logs', strftime("%Y-%m-%d~%H:%M:%S", localtime()). "~$settings->{run_id}~$$.jsonl");
+                my $format = $settings->{log_file_format};
+                my $filename = $self->expand_log_file_format($format, $settings);
+                return File::Spec->catfile('test-logs', $filename);
             },
         },
 
@@ -754,22 +788,6 @@ sub options {
             section => 'Logging Options',
             usage   => ['-G  --gz', '--gzip-log'],
             summary => ['Use gzip compression when writing the log', 'This option implies -L', '.gz prefix is added to log file name for you'],
-        },
-
-        {
-            spec    => 'L|log',
-            field   => 'log',
-            used_by => {logger => 1},
-            section => 'Logging Options',
-            usage   => ['-L', '--log'],
-            summary => ['Turn on logging'],
-            default => sub {
-                my ($self, $settings) = @_;
-                return 1 if $settings->{log_file};
-                return 1 if $settings->{bzip2_log};
-                return 1 if $settings->{gzip_log};
-                return 0;
-            },
         },
 
         {
@@ -1210,6 +1228,35 @@ sub inject_signal_handlers {
 
     $SIG{INT}  = sub { $handle_sig->('INT') };
     $SIG{TERM} = sub { $handle_sig->('TERM') };
+}
+
+sub time_for_strftime { time() }
+
+sub expand_log_file_format {
+  my ($self, $pattern, $settings) = @_;
+  my %custom_expansion = (U => $settings->{run_id},
+                          p => $$,
+                          S => $self->time_for_strftime() % 86400,
+                         );
+  my $before = $pattern;
+  $pattern =~ s{%!(\w)}{$self->expand($1, $settings)}ge;
+  my $res = strftime($pattern, localtime($self->time_for_strftime()));
+  return $res;
+}
+
+sub expand {
+  my ($self, $letter, $settings) = @_;
+  # This could be driven by a hash, but for now if-else is easiest
+  if ($letter eq "U") { return $settings->{run_id} }
+  elsif ($letter eq "p") { return $$ }
+  elsif ($letter eq "S") {
+    # Number of seconds since midnight
+    my ($s, $m, $h) = (localtime($self->time_for_strftime))[0, 1, 2];
+    return sprintf("%05d", $s + 60 * $m + 3600 * $h);
+  } else {
+    # unrecognized `%!x` expansion.  Should we warn?  Die?
+    return "%!$letter";
+  }
 }
 
 1;

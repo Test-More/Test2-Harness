@@ -2,7 +2,7 @@ package Test2::Harness::Util;
 use strict;
 use warnings;
 
-our $VERSION = '0.001067';
+our $VERSION = '0.001068';
 
 use Carp qw/confess/;
 use Importer Importer => 'import';

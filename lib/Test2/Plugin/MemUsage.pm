@@ -2,7 +2,7 @@ package Test2::Plugin::MemUsage;
 use strict;
 use warnings;
 
-our $VERSION = '0.001067';
+our $VERSION = '0.001068';
 
 use Test2::Harness::Util qw/maybe_read_file/;
 

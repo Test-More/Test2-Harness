@@ -5,6 +5,7 @@ local $ENV{HARNESS_PERL_SWITCHES};
 use Config qw/%Config/;
 use File::Temp qw/tempdir/;
 use Cwd qw/cwd/;
+use POSIX qw/strftime/;
 
 use Test2::Harness::Util qw/read_file/;
 
@@ -39,7 +40,9 @@ can_ok(
     package App::Yath::Command::fake;
     use parent 'App::Yath::Command';
 
+    my $time = time;
     sub cli_args { 'xxx' }
+    sub time_for_strftime { $time }
 }
 
 my $TCLASS = 'App::Yath::Command::fake';
@@ -895,6 +898,7 @@ subtest options => sub {
 
             my $two = $TCLASS->new(args => {opts => ['--log']});
             my $run_id = $two->settings->{run_id};
+            # default log file format
             like($two->settings->{log_file}, qr{test-logs/\d{4}-\d{2}-\d{2}~\d{2}:\d{2}:\d{2}~\Q$run_id\E~\Q$$\E\.jsonl$}, "default log file");
             ok(-d 'test-logs', "Created test-logs dir");
         };
@@ -932,6 +936,42 @@ subtest options => sub {
             ok($three->settings->{log}, "logging enabled");
         };
 
+        subtest log_file_format => sub {
+            my $one = $TCLASS->new(args => {opts => []});
+            ok(!$one->settings->{log_file_format}, "no log file format by default");
+
+            my $fake_time = $one->time_for_strftime();
+
+            for my $try (["fpuzhpx" => sub { qr/fpuzhpx/ }],
+                         ["%a/%b/%c/%d" => sub { my $rx = strftime("%a/%b/%c/%d", localtime($fake_time)); return qr/\Q$rx\E/ } ],
+                         ["-%!p-" => sub { qr/-$$-/ } ],
+                         ["-%!U-" => sub { my $rx = sprintf("-%s-", $_[0]{run_id}); return qr/$rx/; } ],
+                         ["-%!S-" => sub { qr/-\d{5}-/ } ],
+                        ) {
+
+                my ($arg, $result_func) = @$try;
+                my $two = $TCLASS->new(args => {opts => ['--log-file-format', $arg]});
+                my $result_regex = $result_func->($two->settings);
+                # The log file actually has a directory prepended, so we also look for the slash and the end-of-string.
+                like($two->settings->{log_file}, qr#/$result_regex\z#, "$arg =~ $result_regex");
+            }
+
+            my $three = $TCLASS->new(args => {opts => ['--log-file-format', 'laurel', '--log-file', 'hardy']});
+            like($three->settings->{log_file}, qr#/hardy$#, "--log-file overrides --log-file-format");
+
+            subtest "YATH_LOG_FILE_FORMAT environment variable" => sub {
+              local $ENV{YATH_LOG_FILE_FORMAT} = "moe";
+              my $four = $TCLASS->new(args => {opts => []});
+              ok($four->settings->{log}, "setting YATH_LOG_FILE_FORMAT implies --log");
+              like($four->settings->{log_file}, qr#/test-logs/moe$#, "log file gets format from env");
+
+              my $five = $TCLASS->new(args => {opts => [ '--log-file', 'larry' ]});
+              like($five->settings->{log_file}, qr#/larry$#, "--log-file overrides env var");
+
+              my $six = $TCLASS->new(args => {opts => [ '--log-file-format', 'curly' ]});
+              like($six->settings->{log_file}, qr#/test-logs/curly$#, "--log-file-format overrides env var");
+            };
+        };
 
         chdir($old);
     };

@@ -1,6 +1,9 @@
 {{$NEXT}}
 
+0.001068  2018-07-27 09:12:45-07:00 America/Los_Angeles
+
     - Fix more encoding/utf8 bugs
+    - Fix missing dep on sufficient List::Utils version
 
 0.001067  2018-07-18 07:42:06-07:00 America/Los_Angeles
 

@@ -57,19 +57,27 @@ sub init {
     croak "You must specify at least 1 filehandle for output"
         unless $self->{+IO} && @{$self->{+IO}};
 
-    $_->autoflush(1) for @{$self->{+IO}};
+    for (@{$self->{+IO}}) {
+        $_->autoflush(1);
+        binmode($_, ":utf8") for @{$self->{+IO}};
+    }
+
     STDOUT->autoflush(1);
+    binmode(STDOUT, ":utf8");
     STDERR->autoflush(1);
+    binmode(STDERR, ":utf8");
 
     if ($INC{'Test2/API.pm'}) {
         Test2::API::test2_stdout()->autoflush(1);
         Test2::API::test2_stderr()->autoflush(1);
+        binmode($_, ":utf8") for (Test2::API::test2_stdout(), Test2::API::test2_stderr());
     }
 
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;
         $self->{+TB} = Test::Builder::Formatter->new();
         $self->{+TB_HANDLES} = [@{$self->{+TB}->handles}];
+        binmode($_, ":utf8") for @{$self->{+TB_HANDLES}};
     }
 }
 
@@ -131,6 +139,7 @@ sub encoding {
 
     if (@_) {
         my ($enc) = @_;
+        confess "Stream formatter only supports utf8" unless $enc =~ m/^utf-?8$/i;
         $self->record($self->{+STREAM_ID}++, {control => {encoding => $enc}});
         $self->_set_encoding($enc);
         $self->{+TB}->encoding($enc) if $self->{+TB};
@@ -148,15 +157,8 @@ sub _set_encoding {
         # https://rt.perl.org/Public/Bug/Display.html?id=31923
         # If utf8 is requested we use ':utf8' instead of ':encoding(utf8)' in
         # order to avoid the thread segfault.
-        if ($enc =~ m/^utf-?8$/i) {
-            binmode($self->{+IO}->[0], ":utf8");
-            binmode($self->{+IO}->[1], ":utf8");
-        }
-        else {
-            binmode($self->{+IO}->[0], ":encoding($enc)");
-            binmode($self->{+IO}->[1], ":encoding($enc)");
-        }
-        $self->{+_ENCODING} = $enc;
+        confess "Stream formatter only supports utf8" unless $enc =~ m/^utf-?8$/i;
+        binmode($_, ":utf8") for @{$self->{+IO}};
     }
 
     return $self->{+_ENCODING};

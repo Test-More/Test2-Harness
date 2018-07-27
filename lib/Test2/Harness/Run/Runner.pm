@@ -485,6 +485,7 @@ sub run_job {
         TEMPDIR => $tmp,
         %{$task->{env_vars} || {}},
         PERL_USE_UNSAFE_INC => $task->{unsafe_inc},
+        TEST2_JOB_DIR => $dir,
     };
 
     my $p5l = join $Config{path_sep} => ($env->{PERL5LIB} || ()), @libs;

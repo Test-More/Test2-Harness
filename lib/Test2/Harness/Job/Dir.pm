@@ -141,7 +141,7 @@ sub _open_file {
         unless ref $type;
 
     return undef unless -e $path;
-    return $self->{$key} = $type->($path, '<')
+    return $self->{$key} = $type->($path, '<:utf8');
 }
 
 sub _fill_stream_buffers {

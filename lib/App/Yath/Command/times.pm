@@ -2,7 +2,7 @@ package App::Yath::Command::times;
 use strict;
 use warnings;
 
-our $VERSION = '0.001068';
+our $VERSION = '0.001069';
 
 use Test2::Util qw/pkg_to_file/;
 

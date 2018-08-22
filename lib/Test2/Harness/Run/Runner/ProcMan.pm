@@ -164,10 +164,8 @@ sub kill {
 sub finish {
     my $self = shift;
 
-    my $wait_time = $self->{+WAIT_TIME};
     while (keys %{$self->{+_PIDS}}) {
-        $self->wait_on_jobs and next;
-        sleep($wait_time) if $wait_time;
+        $self->wait_on_jobs;
     }
 
     return;
@@ -177,12 +175,14 @@ sub wait_on_jobs {
     my $self   = shift;
     my %params = @_;
 
+    my $cleared_one;
     for my $pid (keys %{$self->{+_PIDS}}) {
         my $check = waitpid($pid, WNOHANG);
         my $exit = $?;
 
         next unless $check || $params{force_exit};
 
+        $cleared_one = 1;
         my $params = delete $self->{+_PIDS}->{$pid};
         my $cat    = $params->{task}->{category};
         $cat = 'long' if $cat eq 'medium';
@@ -197,6 +197,13 @@ sub wait_on_jobs {
     }
 
     $self->unlock unless keys %{$self->{+_PIDS}};
+
+    unless ($cleared_one) {
+        my $wait_time = $self->{+WAIT_TIME};
+        sleep($wait_time) if $wait_time;
+    }
+
+    return $cleared_one;
 }
 
 sub write_remaining_exits {

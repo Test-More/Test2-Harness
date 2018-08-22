@@ -803,6 +803,9 @@ subtest options => sub {
 
         my $three = $TCLASS->new(args => {opts => ['-PScalar::Util', '--preload', 'List::Util', '--no-preload', '-PData::Dumper']});
         is($three->settings->{preload}, ['Data::Dumper'], "Added preload after canceling previous ones");
+
+        my $four = $TCLASS->new(args => {opts => ['-PScalar::Util', '--preload', 'List::Util', '--no-preload']});
+        is($four->settings->{preload}, undef, "Clearing preloads puts setting back at undef");
     };
 
     subtest plugin => sub {

@@ -65,7 +65,10 @@ sub run {
 
     my $env = {
         %{$job->env_vars},
-        $job->use_stream ? (T2_FORMATTER => 'Stream') : (),
+        $job->use_stream
+            ? ( T2_FORMATTER => 'Stream',
+                T2_STREAM_FILE => $event_file )
+            : (),
     };
 
     my %seen;

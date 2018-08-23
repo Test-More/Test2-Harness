@@ -2,7 +2,7 @@ package App::Yath::Util;
 use strict;
 use warnings;
 
-our $VERSION = '0.001069';
+our $VERSION = '0.001070';
 
 use File::Spec;
 

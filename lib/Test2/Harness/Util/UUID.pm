@@ -2,7 +2,7 @@ package Test2::Harness::Util::UUID;
 use strict;
 use warnings;
 
-our $VERSION = '0.001069';
+our $VERSION = '0.001070';
 
 use Data::UUID;
 use Importer 'Importer' => 'import';

@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix busy-spin in job reaper
+    - Allow --no-fork and --no-preload simultaneously
+
 0.001068  2018-07-27 09:12:45-07:00 America/Los_Angeles
 
     - Fix more encoding/utf8 bugs

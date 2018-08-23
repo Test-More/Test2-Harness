@@ -266,7 +266,9 @@ sub _poll_event {
     my $buffer = $self->{+_EVENTS_BUFFER};
     return unless @$buffer;
 
-    my $event_data = decode_json($buffer->[0]);
+    my $event_data = ref($buffer->[0]) eq "HASH"
+        ? $buffer->[0]
+        : decode_json($buffer->[0]);
     my $id = $event_data->{stream_id};
 
     # We need to wait for these to catch up.

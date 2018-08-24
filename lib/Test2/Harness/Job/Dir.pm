@@ -435,6 +435,7 @@ sub _process_stdout_line {
         $event_data->{stream_id} = $sid;
         $event_data->{event_id} ||= $event_data->{facet_data}->{about}->{uuid} ||= gen_uuid();
         push @event_datas => $event_data;
+        $line = undef if $line eq "";
     }
 
     if (defined $line) {

@@ -750,7 +750,8 @@ sub options {
             default   => sub {
                 my ($self, $settings) = @_;
                 return unless $settings->{log};
-                return $ENV{YATH_LOG_FILE_FORMAT} // '%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl';
+                return defined($ENV{YATH_LOG_FILE_FORMAT}) ? $ENV{YATH_LOG_FILE_FORMAT}
+                                                           : '%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl';
             },
         },
 

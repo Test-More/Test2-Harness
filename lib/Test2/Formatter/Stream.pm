@@ -85,7 +85,7 @@ sub new_root {
     my $class = shift;
     my %params = @_;
 
-    $ROOT_PID //= $$;
+    $ROOT_PID = $$ unless defined $ROOT_PID;
     confess "new_root called from child process!"
         if $ROOT_PID != $$;
 

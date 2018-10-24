@@ -4,8 +4,6 @@ use warnings;
 
 our $VERSION = '0.001070';
 
-use Scalar::Util qw/blessed/;
-use List::Util qw/shuffle first/;
 use Test2::Util::Term qw/term_size/;
 use Test2::Harness::Util qw/hub_truth/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;

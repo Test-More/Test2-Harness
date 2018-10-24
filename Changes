@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Allow --author-testing in 'projects' command
+    - Misc minor changes
+
 0.001069  2018-08-23 13:48:54-07:00 America/Los_Angeles
 
     - Fix busy-spin in job reaper

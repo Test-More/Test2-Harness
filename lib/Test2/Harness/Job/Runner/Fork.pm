@@ -68,8 +68,9 @@ sub run {
         $ENV{$_} = $env->{$_} for keys %$env;
     }
 
-    $ENV{T2_HARNESS_FORKED}  = 1;
-    $ENV{T2_HARNESS_PRELOAD} = 1;
+    $ENV{T2_HARNESS_JOB_NAME} = $job->job_name;
+    $ENV{T2_HARNESS_FORKED}   = 1;
+    $ENV{T2_HARNESS_PRELOAD}  = 1;
 
     my ($in_file, $out_file, $err_file, $event_file) = $test->output_filenames;
 

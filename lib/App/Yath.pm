@@ -525,7 +525,7 @@ L<Test2::Formatter::TAP> or L<Test::Builder::Formatter>.
 
 =head3 HARNESS-NO-TIMEOUT
 
-c<yath> will usually kill a test if no events occur within a timeout (default
+C<yath> will usually kill a test if no events occur within a timeout (default
 60 seconds). You can add this directive to tests that are expected to trip the
 timeout, but should be allowed to continue.
 
@@ -534,12 +534,12 @@ C<HARNESS-TIMEOUT-EVENT>.
 
 =head3 HARNESS-TIMEOUT-EVENT 60
 
-c<yath> can be told to alter the default event timeout from 60 seconds to another
+C<yath> can be told to alter the default event timeout from 60 seconds to another
 value. This is the recommended alternative to HARNESS-NO-TIMEOUT
 
 =head3 HARNESS-TIMEOUT-POSTEXIT 15
 
-c<yath> can be told to alter the default POSTEXIT timeout from 15 seconds to another value.
+C<yath> can be told to alter the default POSTEXIT timeout from 15 seconds to another value.
 
 Sometimes a test will fork producing output in the child while the parent is
 allowed to exit. In these cases we cannot rely on the original process exit to

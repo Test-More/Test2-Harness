@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # Do not use warnings/strict, we want to avoid contamination of the
 # file/namespace/scope
 use App::Yath(\@ARGV, \$App::Yath::RUN);

@@ -17,7 +17,7 @@ use POSIX ":sys_wait_h";
 use Time::HiRes qw/sleep/;
 
 use App::Yath::Util qw/find_pfile PFILE_NAME find_yath/;
-use Test2::Harness::Util qw/open_file/;
+use Test2::Harness::Util qw/open_file parse_exit/;
 
 use Test2::Harness::Run::Runner::Persist;
 use Test2::Harness::Util::File::JSON;
@@ -105,10 +105,8 @@ sub run {
     }
 
     if ($check != 0) {
-        my $exit = $?;
-        my $sig = $? & 127;
-        $exit >>= 8;
-        print STDERR "\nProblem with runner ($pid), waitpid returned $check, exit value: $exit Signal: $sig\n";
+        my $exit = parse_exit($?);
+        print STDERR "\nProblem with runner ($pid), waitpid returned $check, exit value: $exit->{err} Signal: $exit->{sig}\n";
 
         while( my $line = <$stdout> ) {
             print STDOUT $line;

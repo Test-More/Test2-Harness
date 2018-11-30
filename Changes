@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix exit code parsing and reporting
+
 0.001070  2018-10-24 13:19:53-07:00 America/Los_Angeles
 
     - Allow --author-testing in 'projects' command

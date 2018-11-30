@@ -98,7 +98,7 @@ sub run_command {
     my $lost = $stat ? $stat->{lost} : 0;
 
     # Possible failure causes
-    my $fail = $lost || $exit || !defined($exit) || !$ok || !$stat;
+    my $fail = $lost || !$ok || !$stat;
 
     if (@$bad) {
         print(File::Spec->abs2rel($_->file), "\n") for sort {

@@ -10,7 +10,7 @@ use List::Util qw/first max/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
-use Test2::Harness::Util qw/hub_truth/;
+use Test2::Harness::Util qw/hub_truth parse_exit/;
 
 use Test2::Harness::Util::HashBase qw{
     -job
@@ -300,16 +300,16 @@ sub fail_error_facet_list {
 
     if (my $wstat = $self->{+EXIT}) {
         if ($wstat == -1) {
-            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "The harness could not get the exit code! (Code: $wstat)"}
-        }
-        elsif (my $exit = ($wstat >> 8)) {
-            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (Code: $exit)"}
-        }
-        elsif (my $sig = $wstat & 127) {
-            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (Signal: $sig)"}
+            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "The harness could not get the exit code! (Code: $wstat)"};
         }
         else {
-            push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (wstat: $wstat)"}
+            my $e = parse_exit($wstat);
+            if ($e->{err}) {
+                push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (Err: $e->{err})"};
+            }
+            if ($e->{sig}) {
+                push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test script returned error (Signal: $e->{sig})"};
+            }
         }
     }
 

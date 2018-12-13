@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001071  2018-12-13 09:43:38-08:00 America/Los_Angeles
+
     - Add --notify-text CLI option
     - Fix exit code parsing and reporting
 

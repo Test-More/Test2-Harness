@@ -246,6 +246,15 @@ sub options {
         },
 
         {
+            spec => 'notify-text=s',
+            field => 'notify_text',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage => ['--notify-text "custom notification info"'],
+            long_desc => "Add a custom text snippet to email/slack notifications",
+        },
+
+        {
             spec => 'qvf!',
             field => 'formatter',
             used_by => {display => 1},
@@ -352,6 +361,7 @@ sub run_command {
                 slack_fail   => $settings->{slack_fail},
                 slack_notify => $settings->{slack_notify},
                 slack_log    => $settings->{slack_log},
+                notify_text  => $settings->{notify_text},
             ),
         );
 
@@ -491,6 +501,11 @@ sub send_slack {
     require HTTP::Tiny;
     my $ht = HTTP::Tiny->new();
 
+    my $text = "Test run $settings->{run_id} has completed on " . hostname();
+    if (my $append = $settings->{notify_text}) {
+        $text .= "\n$append";
+    }
+
     for my $dest (@{$settings->{slack}}) {
         my $r = $ht->post(
             $settings->{slack_url},
@@ -499,7 +514,7 @@ sub send_slack {
                 content => encode_json(
                     {
                         channel     => $dest,
-                        text        => "Test run $settings->{run_id} has completed on " . hostname(),
+                        text        => $text,
                         attachments => [
                             {
                                 fallback => 'Test Summary',
@@ -522,6 +537,11 @@ sub send_slack_fail {
     require HTTP::Tiny;
     my $ht = HTTP::Tiny->new();
 
+    my $text = "Test run $settings->{run_id} failed on " . hostname();
+    if (my $append = $settings->{notify_text}) {
+        $text .= "\n$append";
+    }
+
     for my $dest (@{$settings->{slack_fail}}) {
         my $r = $ht->post(
             $settings->{slack_url},
@@ -530,7 +550,7 @@ sub send_slack_fail {
                 content => encode_json(
                     {
                         channel     => $dest,
-                        text        => "Test run $settings->{run_id} failed on " . hostname(),
+                        text        => $text,
                         attachments => [
                             {
                                 fallback => 'Test Failure Summary',
@@ -555,6 +575,11 @@ sub send_slack_notify {
     my $ht   = HTTP::Tiny->new();
     my $host = hostname();
 
+    my $text = "Test(s) failed on $host.";
+    if (my $append = $settings->{notify_text}) {
+        $text .= "\n$append";
+    }
+
     for my $dest (sort keys %$slacks) {
         my $fails = join "\n" => @{$slacks->{$dest}};
 
@@ -565,7 +590,7 @@ sub send_slack_notify {
                 content => encode_json(
                     {
                         channel     => $dest,
-                        text        => "Test(s) failed on $host",
+                        text        => $text,
                         attachments => [
                             {
                                 fallback => 'Test Failure Notifications',
@@ -614,6 +639,8 @@ sub _send_email {
     my $settings = $self->{+SETTINGS};
     my $host     = hostname();
     my $subject  = "Test run $settings->{run_id} on $host";
+
+    $body = "$settings->{notify_text}\n\n$body" if $settings->{notify_text};
 
     $body .= "\nThe log file can be found on $host at " . File::Spec->rel2abs($settings->{log_file}) . "\n"
         if $settings->{log};

@@ -278,7 +278,7 @@ Some tests depend on using a TAP formatter. This option will make `yath` use
 
 ### HARNESS-NO-TIMEOUT
 
-c&lt;yath> will usually kill a test if no events occur within a timeout (default
+`yath` will usually kill a test if no events occur within a timeout (default
 60 seconds). You can add this directive to tests that are expected to trip the
 timeout, but should be allowed to continue.
 
@@ -287,12 +287,12 @@ NOTE: you usually are doing the wrong thing if you need to set this. See:
 
 ### HARNESS-TIMEOUT-EVENT 60
 
-c&lt;yath> can be told to alter the default event timeout from 60 seconds to another
+`yath` can be told to alter the default event timeout from 60 seconds to another
 value. This is the recommended alternative to HARNESS-NO-TIMEOUT
 
 ### HARNESS-TIMEOUT-POSTEXIT 15
 
-c&lt;yath> can be told to alter the default POSTEXIT timeout from 15 seconds to another value.
+`yath` can be told to alter the default POSTEXIT timeout from 15 seconds to another value.
 
 Sometimes a test will fork producing output in the child while the parent is
 allowed to exit. In these cases we cannot rely on the original process exit to

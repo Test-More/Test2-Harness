@@ -282,7 +282,7 @@ RECIPES
 
   HARNESS-NO-TIMEOUT
 
-    c<yath> will usually kill a test if no events occur within a timeout
+    yath will usually kill a test if no events occur within a timeout
     (default 60 seconds). You can add this directive to tests that are
     expected to trip the timeout, but should be allowed to continue.
 
@@ -291,14 +291,14 @@ RECIPES
 
   HARNESS-TIMEOUT-EVENT 60
 
-    c<yath> can be told to alter the default event timeout from 60 seconds
-    to another value. This is the recommended alternative to
+    yath can be told to alter the default event timeout from 60 seconds to
+    another value. This is the recommended alternative to
     HARNESS-NO-TIMEOUT
 
   HARNESS-TIMEOUT-POSTEXIT 15
 
-    c<yath> can be told to alter the default POSTEXIT timeout from 15
-    seconds to another value.
+    yath can be told to alter the default POSTEXIT timeout from 15 seconds
+    to another value.
 
     Sometimes a test will fork producing output in the child while the
     parent is allowed to exit. In these cases we cannot rely on the

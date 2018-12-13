@@ -35,6 +35,7 @@ use Test2::Harness::Util::HashBase qw{
     -slack_fail
     -slack_notify
     -slack_log
+    -notify_text
 };
 
 sub init {
@@ -257,6 +258,11 @@ sub send_slack_owners {
     my $host = hostname();
     my $file = $tf->file;
 
+    my $text = "Test Failed on $host: $file";
+    if (my $append = $self->{+NOTIFY_TEXT}) {
+        $text .= "\n$append";
+    }
+
     for my $dest (@to) {
         my $r = $ht->post(
             $self->{+SLACK_URL},
@@ -265,7 +271,7 @@ sub send_slack_owners {
                 content => encode_json(
                     {
                         channel     => $dest,
-                        text        => "Test Failed on $host: $file",
+                        text        => $text,
                         attachments => \@attach
                     }
                 ),
@@ -287,7 +293,9 @@ sub send_email_owners {
     my $mail = Email::Stuffer->to(@to);
     $mail->from($self->{+EMAIL_FROM});
     $mail->subject($subject);
-    $mail->html_body("<html><body><pre>$body</pre></body></html>");
+
+    my $append = $self->{+NOTIFY_TEXT} || "";
+    $mail->html_body("<html><body>$append<p><pre>$body</pre></body></html>");
 
     $mail->attach(
         $log,

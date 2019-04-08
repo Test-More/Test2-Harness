@@ -2,7 +2,7 @@ package App::Yath::Command::run;
 use strict;
 use warnings;
 
-our $VERSION = '0.001072';
+our $VERSION = '0.001073';
 
 use Test2::Harness::Feeder::Run;
 use Test2::Harness::Util::File::JSON;

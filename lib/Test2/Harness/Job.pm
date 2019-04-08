@@ -2,7 +2,7 @@ package Test2::Harness::Job;
 use strict;
 use warnings;
 
-our $VERSION = '0.001072';
+our $VERSION = '0.001073';
 
 use Carp qw/croak/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;

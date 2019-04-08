@@ -274,6 +274,17 @@ sub options {
         },
 
         {
+            spec => 'progress!',
+            field => 'progress',
+            default => 1,
+            used_by => {display => 1},
+            section   => 'Display Options',
+            usage     => ['--no-progress'],
+            summary   => ['Turn off progress indicators'],
+            long_desc => 'This disables "events seen" counter and buffered event pre-display',
+        },
+
+        {
             spec    => 'uuids!',
             field   => 'event_uuids',
             used_by => {jobs => 1},

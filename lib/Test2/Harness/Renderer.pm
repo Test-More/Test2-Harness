@@ -6,7 +6,7 @@ our $VERSION = '0.001072';
 
 use Carp qw/croak/;
 
-use Test2::Harness::Util::HashBase qw/-settings -verbose -color/;
+use Test2::Harness::Util::HashBase qw/-settings -verbose -progress -color/;
 
 sub render_event { croak "$_[0] forgot to override 'render_event()'" }
 

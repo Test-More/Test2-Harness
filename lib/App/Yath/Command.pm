@@ -1212,6 +1212,7 @@ sub renderers {
         push @$renderers => $mod->new(
             verbose => $settings->{verbose},
             color   => $settings->{color},
+            progress => $settings->{progress},
             %args,
             settings => $self->{+SETTINGS},
         );

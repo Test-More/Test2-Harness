@@ -43,6 +43,7 @@ sub write {
     $self->{+ECOUNT}++;
 
     return unless $self->{+TTY};
+    return unless $self->{+PROGRESS};
 
     $show ||= 1 unless $self->{+ECOUNT} % 10;
 

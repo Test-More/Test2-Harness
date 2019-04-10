@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add support for disabled progress indicators to QVF mode
+
 0.001072  2019-04-08 10:27:50-07:00 America/Los_Angeles
 
     - Add option to turn off progress indicators

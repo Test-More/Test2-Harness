@@ -308,21 +308,6 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 signoff
-
-Type: might_have
-
-Related object: L<Test2::Harness::UI::Schema::Result::Signoff>
-
-=cut
-
-__PACKAGE__->might_have(
-  "signoff",
-  "Test2::Harness::UI::Schema::Result::Signoff",
-  { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 user
 
 Type: belongs_to
@@ -339,8 +324,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2018-04-20 01:19:54
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:gjuUE3YGdyU7UTSZmZQ3og
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 07:34:26
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:wgoM9ZD2SwHjc5++sQF1QA
 
 __PACKAGE__->inflate_column(
     parameters => {

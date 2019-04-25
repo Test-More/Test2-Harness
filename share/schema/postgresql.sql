@@ -30,7 +30,6 @@ CREATE TYPE run_modes AS ENUM(
 CREATE TYPE user_type AS ENUM(
     'admin',    -- Can add users
     'user',     -- Can view their own runs, protected runs, and shared runs
-    'bot',      -- Can request signoffs
     'uploader'  -- Can upload public runs and view them
 );
 
@@ -112,13 +111,6 @@ CREATE INDEX IF NOT EXISTS run_status ON runs(status);
 CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
 CREATE INDEX IF NOT EXISTS run_perms ON runs(permissions);
 
-CREATE TABLE signoffs (
-    run_id          UUID            NOT NULL PRIMARY KEY REFERENCES runs(run_id),
-    requested_by    UUID            NOT NULL REFERENCES users(user_id),
-    completed       TIMESTAMP       DEFAULT NULL
-);
-CREATE INDEX IF NOT EXISTS signoff_completed ON signoffs(completed);
-
 CREATE TABLE run_comments (
     run_comment_id  UUID        DEFAULT UUID_GENERATE_V4() NOT NULL PRIMARY KEY,
     run_id          UUID        NOT NULL REFERENCES runs(run_id),
@@ -185,16 +177,6 @@ CREATE TABLE jobs (
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
-
-CREATE TABLE job_signoffs (
-    job_signoff_id  UUID        DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    job_id          UUID        NOT NULL REFERENCES jobs(job_id),
-    user_id         UUID        NOT NULL REFERENCES users(user_id),
-    note            TEXT        DEFAULT NULL,
-    created         TIMESTAMP   NOT NULL DEFAULT now(),
-    UNIQUE(job_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS job_signoff_job ON job_signoffs(job_id);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,

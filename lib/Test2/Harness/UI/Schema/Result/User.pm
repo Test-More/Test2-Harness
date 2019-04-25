@@ -87,7 +87,7 @@ __PACKAGE__->table("users");
 
   data_type: 'enum'
   default_value: 'user'
-  extra: {custom_type_name => "user_type",list => ["admin","user","bot","uploader"]}
+  extra: {custom_type_name => "user_type",list => ["admin","user","uploader"]}
   is_nullable: 0
 
 =cut
@@ -116,7 +116,7 @@ __PACKAGE__->add_columns(
     default_value => "user",
     extra => {
       custom_type_name => "user_type",
-      list => ["admin", "user", "bot", "uploader"],
+      list => ["admin", "user", "uploader"],
     },
     is_nullable => 0,
   },
@@ -204,21 +204,6 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 job_signoffs
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::JobSignoff>
-
-=cut
-
-__PACKAGE__->has_many(
-  "job_signoffs",
-  "Test2::Harness::UI::Schema::Result::JobSignoff",
-  { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 run_comments
 
 Type: has_many
@@ -294,24 +279,9 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 signoffs
 
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::Signoff>
-
-=cut
-
-__PACKAGE__->has_many(
-  "signoffs",
-  "Test2::Harness::UI::Schema::Result::Signoff",
-  { "foreign.requested_by" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-21 11:36:57
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Ymru9C+GUStp6UezlMDsgA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 07:34:26
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5j/FxpU4O1E8Y30H7PqtDw
 
 use Data::GUID;
 use Carp qw/croak/;

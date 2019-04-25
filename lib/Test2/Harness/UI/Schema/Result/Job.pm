@@ -310,21 +310,6 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 job_signoffs
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::JobSignoff>
-
-=cut
-
-__PACKAGE__->has_many(
-  "job_signoffs",
-  "Test2::Harness::UI::Schema::Result::JobSignoff",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 run
 
 Type: belongs_to
@@ -341,8 +326,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2018-04-20 07:01:56
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:HOhpv866C3Z/QoRwHTKCBA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 07:34:26
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:iK/hEFQUl1v8B1M0n9T7Rg
 
 __PACKAGE__->inflate_column(
     parameters => {

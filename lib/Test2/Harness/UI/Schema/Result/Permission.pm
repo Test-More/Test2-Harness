@@ -77,11 +77,10 @@ __PACKAGE__->table("permissions");
   is_nullable: 0
   original: {default_value => \"now()"}
 
-=head2 source
+=head2 imported
 
-  data_type: 'enum'
-  default_value: 'manual'
-  extra: {custom_type_name => "perm_source",list => ["manual","import"]}
+  data_type: 'boolean'
+  default_value: false
   is_nullable: 0
 
 =cut
@@ -105,13 +104,8 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
-  "source",
-  {
-    data_type => "enum",
-    default_value => "manual",
-    extra => { custom_type_name => "perm_source", list => ["manual", "import"] },
-    is_nullable => 0,
-  },
+  "imported",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
 );
 
 =head1 PRIMARY KEY
@@ -128,7 +122,7 @@ __PACKAGE__->set_primary_key("permission_id");
 
 =head1 UNIQUE CONSTRAINTS
 
-=head2 C<permissions_project_id_user_id_source_key>
+=head2 C<permissions_project_id_user_id_imported_key>
 
 =over 4
 
@@ -136,15 +130,15 @@ __PACKAGE__->set_primary_key("permission_id");
 
 =item * L</user_id>
 
-=item * L</source>
+=item * L</imported>
 
 =back
 
 =cut
 
 __PACKAGE__->add_unique_constraint(
-  "permissions_project_id_user_id_source_key",
-  ["project_id", "user_id", "source"],
+  "permissions_project_id_user_id_imported_key",
+  ["project_id", "user_id", "imported"],
 );
 
 =head1 RELATIONS
@@ -180,8 +174,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 08:44:17
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:tpfcsqOmvpvI1BEn3gdnWg
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BJ+BoRDt7cO+G+W4/XWTxg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

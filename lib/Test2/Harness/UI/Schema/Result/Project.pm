@@ -137,13 +137,5 @@ __PACKAGE__->has_many(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 13:34:52
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:+yMNJ9ON8Drr5KdFibvTlQ
 
-sub verify_access {
-    my $self = shift;
-    my ($type, $user) = @_;
-
-    return 1;
-}
-
-
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

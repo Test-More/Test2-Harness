@@ -109,13 +109,6 @@ __PACKAGE__->table("runs");
   is_nullable: 0
   original: {default_value => \"now()"}
 
-=head2 permissions
-
-  data_type: 'enum'
-  default_value: 'private'
-  extra: {custom_type_name => "perms",list => ["private","protected","public"]}
-  is_nullable: 0
-
 =head2 mode
 
   data_type: 'enum'
@@ -185,16 +178,6 @@ __PACKAGE__->add_columns(
     default_value => \"current_timestamp",
     is_nullable   => 0,
     original      => { default_value => \"now()" },
-  },
-  "permissions",
-  {
-    data_type => "enum",
-    default_value => "private",
-    extra => {
-      custom_type_name => "perms",
-      list => ["private", "protected", "public"],
-    },
-    is_nullable => 0,
   },
   "mode",
   {
@@ -280,51 +263,6 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
-=head2 run_comments
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::RunComment>
-
-=cut
-
-__PACKAGE__->has_many(
-  "run_comments",
-  "Test2::Harness::UI::Schema::Result::RunComment",
-  { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-=head2 run_pins
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::RunPin>
-
-=cut
-
-__PACKAGE__->has_many(
-  "run_pins",
-  "Test2::Harness::UI::Schema::Result::RunPin",
-  { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-=head2 run_shares
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::RunShare>
-
-=cut
-
-__PACKAGE__->has_many(
-  "run_shares",
-  "Test2::Harness::UI::Schema::Result::RunShare",
-  { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 user
 
 Type: belongs_to
@@ -341,8 +279,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 08:44:17
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BxzwwBRVLx9yVdi8NiX6WQ
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:35lWHgmUJsDiUAkUr0aE9w
 
 __PACKAGE__->inflate_column(
     parameters => {
@@ -371,35 +309,10 @@ sub TO_JSON {
     # Inflate
     $cols{parameters} = $self->parameters;
 
-    $cols{user} = $self->user->email || $self->user->username;
+    $cols{user} = $self->user->username;
     $cols{project} = $self->project->name;
 
     return \%cols;
-}
-
-sub verify_access {
-    my $self = shift;
-    my ($type, $user) = @_;
-
-    return 1 if $user && $user->user_id eq $self->user_id;
-
-    return 0 unless $type eq 'r';
-
-    return 1 if $self->permissions eq 'public';
-
-    return 0 unless $user;
-
-    return 1 if $self->permissions eq 'protected';
-
-    my $share = $self->result_source->schema->resultset('RunShare')->find(
-        {
-            run_id  => $self->run_id,
-            user_id => $self->user_id,
-        }
-    );
-
-    return 1 if $share;
-    return 0;
 }
 
 1;

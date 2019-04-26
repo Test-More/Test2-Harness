@@ -357,16 +357,5 @@ sub TO_JSON {
     return \%cols;
 }
 
-sub verify_access {
-    my $self = shift;
-    my ($type, $user) = @_;
-
-    my $run = $self->run;
-
-    return $run->verify_access($type, $user);
-}
-
-
-
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

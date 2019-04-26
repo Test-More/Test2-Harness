@@ -35,7 +35,6 @@ my $user = $config->schema->resultset('User')->create({username => 'root', passw
 
 my %projects;
 my @runs;
-my @perms = qw/public protected private/;
 my @modes = qw/complete complete complete complete/;
 for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2/) {
     my $fh = IO::Uncompress::Bunzip2->new("./demo/$file") or die "Could not open bz2 file: $Bunzip2Error";
@@ -62,7 +61,6 @@ for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2
     push @runs => $config->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
-            permissions   => shift @perms || 'public',
             mode          => shift @modes || 'qvfd',
             status        => 'pending',
             project_id    => $projects{$project}->project_id,
@@ -75,20 +73,6 @@ for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2
         }
     );
 }
-
-$config->schema->resultset('RunShare')->create(
-    {
-        run_id  => $runs[0]->run_id,
-        user_id => $user->user_id,
-    }
-);
-
-$config->schema->resultset('RunShare')->create(
-    {
-        run_id  => $runs[1]->run_id,
-        user_id => $user->user_id,
-    }
-);
 
 my @commands = (
     [$^X, '-Ilib', 'author_tools/run_imports.pl', $dsn],

@@ -22,19 +22,14 @@ sub handle {
 
     die error(404 => 'Missing route') unless $route;
 
+    my $page = $route->{page} || 1;
+    my $size = $route->{size} || 100;
+
     my $p = $req->parameters;
 
     my $a = {order_by => { -desc => [qw/added status project_id version/]}};
-    my $q = [{permissions => 'public'}];
-    if ($user) {
-        push @$q => {permissions => 'protected'};
-        push @$q => {'me.user_id' => $user->user_id};
 
-        push @{$a->{join}} => 'run_shares';
-        push @$q => {'run_shares.user_id' => $user->user_id};
-    }
-
-    my $runs = $schema->resultset('Run')->search($q, $a);
+    my $runs = $schema->resultset('Run')->search(undef, {page => $page, rows => $size, order_by => { -desc => 'added'}});
 
     $res->stream(
         env          => $req->env,

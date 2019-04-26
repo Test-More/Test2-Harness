@@ -68,7 +68,6 @@ sub process_form {
     my $tier     = $req->parameters->{tier};
     my $build    = $req->parameters->{build};
 
-    my $perms = $req->parameters->{permissions} || 'private';
     my $mode  = $req->parameters->{mode}        || 'qvfd';
 
     return $res->add_error("Unsupported file type, must be .jsonl.bz2, or .jsonl.gz")
@@ -80,7 +79,6 @@ sub process_form {
         {
             user_id       => $user->user_id,
             project_id    => $project->project_id,
-            permissions   => $perms,
             mode          => $mode,
             version       => $version,
             category      => $category,

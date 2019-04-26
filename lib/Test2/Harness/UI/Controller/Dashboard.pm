@@ -20,6 +20,7 @@ sub handle {
 
     my $res = resp(200);
     $res->add_js('dashboard.js');
+    $res->add_css('dashboard.css');
 
     my $user = $req->user;
 

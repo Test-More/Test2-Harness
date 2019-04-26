@@ -82,7 +82,7 @@ __PACKAGE__->table("users");
 
   data_type: 'enum'
   default_value: 'user'
-  extra: {custom_type_name => "user_type",list => ["admin","user","uploader"]}
+  extra: {custom_type_name => "user_type",list => ["admin","user"]}
   is_nullable: 0
 
 =cut
@@ -107,10 +107,7 @@ __PACKAGE__->add_columns(
   {
     data_type => "enum",
     default_value => "user",
-    extra => {
-      custom_type_name => "user_type",
-      list => ["admin", "user", "uploader"],
-    },
+    extra => { custom_type_name => "user_type", list => ["admin", "user"] },
     is_nullable => 0,
   },
 );
@@ -173,21 +170,6 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 event_comments
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::EventComment>
-
-=cut
-
-__PACKAGE__->has_many(
-  "event_comments",
-  "Test2::Harness::UI::Schema::Result::EventComment",
-  { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 permissions
 
 Type: has_many
@@ -199,51 +181,6 @@ Related object: L<Test2::Harness::UI::Schema::Result::Permission>
 __PACKAGE__->has_many(
   "permissions",
   "Test2::Harness::UI::Schema::Result::Permission",
-  { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-=head2 run_comments
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::RunComment>
-
-=cut
-
-__PACKAGE__->has_many(
-  "run_comments",
-  "Test2::Harness::UI::Schema::Result::RunComment",
-  { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-=head2 run_pins
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::RunPin>
-
-=cut
-
-__PACKAGE__->has_many(
-  "run_pins",
-  "Test2::Harness::UI::Schema::Result::RunPin",
-  { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-=head2 run_shares
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::RunShare>
-
-=cut
-
-__PACKAGE__->has_many(
-  "run_shares",
-  "Test2::Harness::UI::Schema::Result::RunShare",
   { "foreign.user_id" => "self.user_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
@@ -279,8 +216,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 01:45:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:tWHnKrHy3DmoFs1Erc///Q
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:hc75Al5ZbozO5GfTLEpLMg
 
 use Data::GUID;
 use Carp qw/croak/;
@@ -348,21 +285,6 @@ sub gen_api_key {
             name    => $name,
         }
     );
-}
-
-sub verify_access {
-    my $self = shift;
-    my ($type, $user) = @_;
-
-    return 0 unless $user;
-    return 1 if $user && $user->user_id eq $self->user_id;
-
-    return 1 if $user->role eq 'admin';
-    return 0;
-}
-
-sub email {
-    
 }
 
 1;

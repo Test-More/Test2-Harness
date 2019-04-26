@@ -1,5 +1,5 @@
 $(function() {
-    $("div.dashboard").each(function() { $(this).replaceWith(t2hui.build_dashboard()) });
+    $("div.dashboard").each(function() { $(this).replaceWith(t2hui.build_dashboard(1, 100)) });
 
     setInterval(function() {
         Object.keys(t2hui.dashboard_to_update).forEach(function (run_id) {
@@ -22,11 +22,11 @@ $(function() {
 
 t2hui.dashboard_to_update = {};
 
-t2hui.build_dashboard = function() {
+t2hui.build_dashboard = function(page, count) {
     var root = $('<div class="dashboard"></div>');
 
-    var controls = t2hui.build_dashboard_controls();
-    var runs     = t2hui.build_dashboard_runs();
+    var controls = t2hui.build_dashboard_controls(page, count);
+    var runs     = t2hui.build_dashboard_runs(null, page, count);
 
     root.append(controls);
     root.append(runs);
@@ -34,12 +34,33 @@ t2hui.build_dashboard = function() {
     return root;
 }
 
-t2hui.build_dashboard_controls = function() {
+t2hui.build_dashboard_controls = function(page, count) {
     var controls = $('<div class="dashboard_controls"></div>');
+
+    if (page > 1) {
+        var prev = $('<div class="dashboard_pager">&lt;&lt;</div>');
+        prev.click(function() {
+            $("div.dashboard").each(function() { $(this).replaceWith(t2hui.build_dashboard(page - 1, count)) });
+        });
+        controls.append(prev);
+    }
+    else {
+        var prev = $('<div class="dashboard_pager hide">&nbsp;&nbsp;</div>');
+        controls.append(prev);
+    }
+
+    controls.append('<div class="dashboard_page">Page ' + page + '</div>');
+
+    var next = $('<div class="dashboard_pager">&gt;&gt;</div>');
+    next.click(function() {
+        $("div.dashboard").each(function() { $(this).replaceWith(t2hui.build_dashboard(page + 1, count)) });
+    });
+    controls.append(next);
+
     return controls;
 }
 
-t2hui.build_dashboard_runs = function(list) {
+t2hui.build_dashboard_runs = function(list, page, count) {
     var runs = $('<div class="dashboard_runs grid"></div>');
 
     runs.append($('<div class="col1 head tools">Tools</div>'));
@@ -52,11 +73,10 @@ t2hui.build_dashboard_runs = function(list) {
     runs.append($('<div class="col8 head build"><div class="head_collapse">Build</div></div>'));
     runs.append($('<div class="col9 head status">Status</div>'));
     runs.append($('<div class="col10 head user"><div class="head_collapse">User</div></div>'));
-    runs.append($('<div class="col11 head permissions">Permissions</div>'));
-    runs.append($('<div class="col12 head date">Date</div>'));
+    runs.append($('<div class="col11 head date">Date</div>'));
 
     if (list === null || list === undefined) {
-        var uri = base_uri + 'runs';
+        var uri = base_uri + 'runs/' + page + '/' + count;
         t2hui.fetch(uri, {}, function(item) {
             var run = t2hui.build_dashboard_run(item);
             runs.append(run);
@@ -124,8 +144,7 @@ t2hui.build_dashboard_run = function(run) {
     me.push($('<div class="col8 build"><div class="head_collapse">'    + t2hui.dashboard_clean_maybe(run.build)    + '</div></div>')[0]);
     me.push($('<div class="col9 status">' + run.status + '</div>')[0]);
     me.push($('<div class="col10 user"><div class="head_collapse">' + run.user + '</div></div>')[0]);
-    me.push($('<div class="col11 permissions">' + run.permissions + '</div>')[0]);
-    me.push($('<div class="col12 date">' + run.added + '</div>')[0]);
+    me.push($('<div class="col11 date">' + run.added + '</div>')[0]);
 
     var $me = $(me);
 

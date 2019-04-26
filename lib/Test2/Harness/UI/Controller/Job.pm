@@ -32,7 +32,6 @@ sub handle {
     my $it = $route->{id} or die error(404 => 'No id');
 
     my $job = $schema->resultset('Job')->search({job_id => $it})->first or die error(404 => 'Invalid Job');
-    $job->verify_access('r', $user) or die error(404 => 'Invalid Job');
 
     $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id;
 

@@ -34,8 +34,6 @@ sub handle {
         my $job = $schema->resultset('Job')->find({job_id => $job_id})
             or die error(404 => 'Invalid Job');
 
-        $job->verify_access('r', $user) or die error(401);
-
         $query{job_id} = $job_id;
         $query{parent_id} = undef unless $p->{load_subtests} && lc($p->{load_subtests}) ne 'false';
 
@@ -46,8 +44,6 @@ sub handle {
 
         my $event = $schema->resultset('Event')->find({event_id => $event_id})
             or die error(404 => 'Invalid Event');
-
-        $event->verify_access('r', $user) or die error(401);
 
         $query{job_id} = $event->job_id;
 

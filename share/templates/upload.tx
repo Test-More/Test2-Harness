@@ -50,23 +50,6 @@
                 </dd>
             : }
 
-            <dt><label for="permissions">Permissions</label></dt>
-            <dd>
-                <select name="permissions" id="permissions">
-                    <option value="private">Private</option>
-                    <option value="protected">Protected</option>
-                    <option value="public">Public</option>
-                </select>
-                    <dl class="tiny">
-                        <dt>Private</dt>
-                        <dd>Only you can look at these test results.</dd>
-                        <dt>Protected</dt>
-                        <dd>Anyone who is logged in can look at these results.</dd>
-                        <dt>Public</dt>
-                        <dd>Anyone can look at these results.</dd>
-                    </dl>
-            </dd>
-
             <dt><label for="mode">Mode</label></dt>
             <dd>
                 <select name="mode" id="mode">

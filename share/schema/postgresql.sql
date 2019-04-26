@@ -1,18 +1,6 @@
 CREATE EXTENSION "citext";
 CREATE EXTENSION "uuid-ossp";
 
-CREATE TYPE perms AS ENUM(
-    'private',
-    'protected',
-    'public'
-);
-
-CREATE TYPE perm_source AS ENUM(
-    'manual',
-    'import'
-);
-
-
 CREATE TYPE queue_status AS ENUM(
     'pending',
     'running',
@@ -34,9 +22,8 @@ CREATE TYPE run_modes AS ENUM(
 );
 
 CREATE TYPE user_type AS ENUM(
-    'admin',    -- Can add users
-    'user',     -- Can view their own runs, protected runs, and shared runs
-    'uploader'  -- Can upload public runs and view them
+    'admin',    -- Can add users and set permissions
+    'user'     -- Can manage reports for their projects
 );
 
 CREATE TABLE users (
@@ -112,9 +99,9 @@ CREATE TABLE permissions (
     user_id         UUID            NOT NULL REFERENCES users(user_id),
     updated         TIMESTAMP       NOT NULL DEFAULT now(),
 
-    source          perm_source     NOT NULL DEFAULT 'manual',
+    imported        BOOL            NOT NULL DEFAULT FALSE,
 
-    UNIQUE(project_id, user_id, source)
+    UNIQUE(project_id, user_id, imported)
 );
 
 CREATE TABLE runs (
@@ -130,7 +117,6 @@ CREATE TABLE runs (
     category        CITEXT          DEFAULT NULL,
     build           CITEXT          DEFAULT NULL,
     added           TIMESTAMP       NOT NULL DEFAULT now(),
-    permissions     perms           NOT NULL DEFAULT 'private',
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
     log_file_id     UUID            DEFAULT NULL REFERENCES log_files(log_file_id),
 
@@ -142,33 +128,6 @@ CREATE TABLE runs (
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
 CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
-CREATE INDEX IF NOT EXISTS run_perms ON runs(permissions);
-
-CREATE TABLE run_comments (
-    run_comment_id  UUID        DEFAULT UUID_GENERATE_V4() NOT NULL PRIMARY KEY,
-    run_id          UUID        NOT NULL REFERENCES runs(run_id),
-    user_id         UUID        NOT NULL REFERENCES users(user_id),
-    created         TIMESTAMP   NOT NULL DEFAULT now(),
-    content         TEXT        NOT NULL
-);
-CREATE INDEX IF NOT EXISTS run_comment_run ON run_comments(run_id);
-
-CREATE TABLE run_shares (
-    run_share_id    UUID        DEFAULT UUID_GENERATE_V4() NOT NULL PRIMARY KEY,
-    run_id          UUID        NOT NULL REFERENCES runs(run_id),
-    user_id         UUID        NOT NULL REFERENCES users(user_id),
-
-    UNIQUE(run_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS run_share_user ON run_shares(user_id);
-
-CREATE TABLE run_pins (
-    run_pin_id      UUID        DEFAULT UUID_GENERATE_V4() NOT NULL PRIMARY KEY,
-    run_id          UUID        NOT NULL REFERENCES runs(run_id),
-    user_id         UUID        NOT NULL REFERENCES users(user_id)
-);
-CREATE INDEX IF NOT EXISTS run_pin_user ON run_pins(user_id);
-CREATE INDEX IF NOT EXISTS run_pin_run  ON run_pins(run_id);
 
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,
@@ -232,12 +191,3 @@ CREATE TABLE events (
 CREATE INDEX IF NOT EXISTS event_job    ON events(job_id);
 CREATE INDEX IF NOT EXISTS event_trace  ON events(trace_id);
 CREATE INDEX IF NOT EXISTS event_parent ON events(parent_id);
-
-CREATE TABLE event_comments (
-    event_comment_id    UUID        DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    event_id            UUID        NOT NULL REFERENCES events(event_id),
-    user_id             UUID        NOT NULL REFERENCES users(user_id),
-    created             TIMESTAMP   NOT NULL DEFAULT now(),
-    content             TEXT        NOT NULL
-);
-CREATE INDEX IF NOT EXISTS event_comment_event ON event_comments(event_id);

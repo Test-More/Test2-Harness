@@ -31,8 +31,9 @@ my $config = Test2::Harness::UI::Config->new(
     single_user => 1,
 );
 
-my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root'});
+my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
 
+my %projects;
 my @runs;
 my @perms = qw/public protected private/;
 my @modes = qw/complete complete complete complete/;
@@ -53,13 +54,18 @@ for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2
         $version ||= '123';
     }
 
+    unless ($projects{$project}) {
+        my $p = $config->schema->resultset('Project')->create({name => $project});
+        $projects{$project} = $p;
+    }
+
     push @runs => $config->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
             permissions   => shift @perms || 'public',
             mode          => shift @modes || 'qvfd',
             status        => 'pending',
-            project       => $project,
+            project_id    => $projects{$project}->project_id,
             version       => $version,
 
             log_file => {
@@ -69,13 +75,6 @@ for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2
         }
     );
 }
-
-$config->schema->resultset('Signoff')->create(
-    {
-        run_id       => $runs[0]->run_id,
-        requested_by => $user->user_id,
-    }
-);
 
 $config->schema->resultset('RunShare')->create(
     {

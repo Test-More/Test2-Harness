@@ -61,16 +61,6 @@ __PACKAGE__->table("users");
   data_type: 'citext'
   is_nullable: 0
 
-=head2 email
-
-  data_type: 'citext'
-  is_nullable: 1
-
-=head2 slack
-
-  data_type: 'citext'
-  is_nullable: 1
-
 =head2 pw_hash
 
   data_type: 'varchar'
@@ -82,6 +72,11 @@ __PACKAGE__->table("users");
   data_type: 'varchar'
   is_nullable: 0
   size: 22
+
+=head2 realname
+
+  data_type: 'text'
+  is_nullable: 0
 
 =head2 role
 
@@ -102,14 +97,12 @@ __PACKAGE__->add_columns(
   },
   "username",
   { data_type => "citext", is_nullable => 0 },
-  "email",
-  { data_type => "citext", is_nullable => 1 },
-  "slack",
-  { data_type => "citext", is_nullable => 1 },
   "pw_hash",
   { data_type => "varchar", is_nullable => 0, size => 31 },
   "pw_salt",
   { data_type => "varchar", is_nullable => 0, size => 22 },
+  "realname",
+  { data_type => "text", is_nullable => 0 },
   "role",
   {
     data_type => "enum",
@@ -135,30 +128,6 @@ __PACKAGE__->add_columns(
 __PACKAGE__->set_primary_key("user_id");
 
 =head1 UNIQUE CONSTRAINTS
-
-=head2 C<users_email_key>
-
-=over 4
-
-=item * L</email>
-
-=back
-
-=cut
-
-__PACKAGE__->add_unique_constraint("users_email_key", ["email"]);
-
-=head2 C<users_slack_key>
-
-=over 4
-
-=item * L</slack>
-
-=back
-
-=cut
-
-__PACKAGE__->add_unique_constraint("users_slack_key", ["slack"]);
 
 =head2 C<users_username_key>
 
@@ -189,6 +158,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 emails
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Email>
+
+=cut
+
+__PACKAGE__->has_many(
+  "emails",
+  "Test2::Harness::UI::Schema::Result::Email",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 event_comments
 
 Type: has_many
@@ -200,6 +184,21 @@ Related object: L<Test2::Harness::UI::Schema::Result::EventComment>
 __PACKAGE__->has_many(
   "event_comments",
   "Test2::Harness::UI::Schema::Result::EventComment",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 permissions
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Permission>
+
+=cut
+
+__PACKAGE__->has_many(
+  "permissions",
+  "Test2::Harness::UI::Schema::Result::Permission",
   { "foreign.user_id" => "self.user_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
@@ -280,8 +279,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 07:34:26
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5j/FxpU4O1E8Y30H7PqtDw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 01:45:09
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:tWHnKrHy3DmoFs1Erc///Q
 
 use Data::GUID;
 use Carp qw/croak/;
@@ -360,6 +359,10 @@ sub verify_access {
 
     return 1 if $user->role eq 'admin';
     return 0;
+}
+
+sub email {
+    
 }
 
 1;

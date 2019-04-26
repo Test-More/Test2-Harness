@@ -1,12 +1,12 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::ApiKey;
+package Test2::Harness::UI::Schema::Result::Permission;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
 
 =head1 NAME
 
-Test2::Harness::UI::Schema::Result::ApiKey
+Test2::Harness::UI::Schema::Result::Permission
 
 =cut
 
@@ -41,18 +41,25 @@ __PACKAGE__->load_components(
   "UUIDColumns",
 );
 
-=head1 TABLE: C<api_keys>
+=head1 TABLE: C<permissions>
 
 =cut
 
-__PACKAGE__->table("api_keys");
+__PACKAGE__->table("permissions");
 
 =head1 ACCESSORS
 
-=head2 api_key_id
+=head2 permission_id
 
   data_type: 'uuid'
   default_value: uuid_generate_v4()
+  is_nullable: 0
+  size: 16
+
+=head2 project_id
+
+  data_type: 'uuid'
+  is_foreign_key: 1
   is_nullable: 0
   size: 16
 
@@ -63,49 +70,46 @@ __PACKAGE__->table("api_keys");
   is_nullable: 0
   size: 16
 
-=head2 name
+=head2 updated
 
-  data_type: 'varchar'
+  data_type: 'timestamp'
+  default_value: current_timestamp
   is_nullable: 0
-  size: 128
+  original: {default_value => \"now()"}
 
-=head2 value
-
-  data_type: 'varchar'
-  is_nullable: 0
-  size: 36
-
-=head2 status
+=head2 source
 
   data_type: 'enum'
-  default_value: 'active'
-  extra: {custom_type_name => "api_key_status",list => ["active","disabled","revoked"]}
+  default_value: 'manual'
+  extra: {custom_type_name => "perm_source",list => ["manual","import"]}
   is_nullable: 0
 
 =cut
 
 __PACKAGE__->add_columns(
-  "api_key_id",
+  "permission_id",
   {
     data_type => "uuid",
     default_value => \"uuid_generate_v4()",
     is_nullable => 0,
     size => 16,
   },
+  "project_id",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "user_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "name",
-  { data_type => "varchar", is_nullable => 0, size => 128 },
-  "value",
-  { data_type => "varchar", is_nullable => 0, size => 36 },
-  "status",
+  "updated",
+  {
+    data_type     => "timestamp",
+    default_value => \"current_timestamp",
+    is_nullable   => 0,
+    original      => { default_value => \"now()" },
+  },
+  "source",
   {
     data_type => "enum",
-    default_value => "active",
-    extra => {
-      custom_type_name => "api_key_status",
-      list => ["active", "disabled", "revoked"],
-    },
+    default_value => "manual",
+    extra => { custom_type_name => "perm_source", list => ["manual", "import"] },
     is_nullable => 0,
   },
 );
@@ -114,29 +118,51 @@ __PACKAGE__->add_columns(
 
 =over 4
 
-=item * L</api_key_id>
+=item * L</permission_id>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("api_key_id");
+__PACKAGE__->set_primary_key("permission_id");
 
 =head1 UNIQUE CONSTRAINTS
 
-=head2 C<api_keys_value_key>
+=head2 C<permissions_project_id_user_id_source_key>
 
 =over 4
 
-=item * L</value>
+=item * L</project_id>
+
+=item * L</user_id>
+
+=item * L</source>
 
 =back
 
 =cut
 
-__PACKAGE__->add_unique_constraint("api_keys_value_key", ["value"]);
+__PACKAGE__->add_unique_constraint(
+  "permissions_project_id_user_id_source_key",
+  ["project_id", "user_id", "source"],
+);
 
 =head1 RELATIONS
+
+=head2 project
+
+Type: belongs_to
+
+Related object: L<Test2::Harness::UI::Schema::Result::Project>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "project",
+  "Test2::Harness::UI::Schema::Result::Project",
+  { project_id => "project_id" },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+);
 
 =head2 user
 
@@ -155,15 +181,8 @@ __PACKAGE__->belongs_to(
 
 
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 08:44:17
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:d3Hn1C7cGz4i2z7bhS2S6Q
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:tpfcsqOmvpvI1BEn3gdnWg
 
-sub verify_access {
-    my $self = shift;
-    my ($type, $user) = @_;
-
-    return 0 unless $user;
-    return $self->user_id eq $user->user_id ? 1 : 0;
-}
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

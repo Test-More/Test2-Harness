@@ -18,7 +18,7 @@ sub projects {
 
     my $dbh = $self->{+CONFIG}->connect;
 
-    my $sth = $dbh->prepare('SELECT distinct(project) FROM runs ORDER BY project ASC');
+    my $sth = $dbh->prepare('SELECT name FROM projects ORDER BY name ASC');
     $sth->execute() or die $sth->errstr;
     my $rows = $sth->fetchall_arrayref;
     return [map { $_->[0] } @$rows];
@@ -31,15 +31,18 @@ sub builds     { $_[0]->_from_project(build    => $_[1]) }
 
 sub _from_project {
     my $self = shift;
-    my ($field, $project) = @_;
+    my ($field, $project_name) = @_;
 
-    croak "project is required"
-        unless defined $project;
+    croak "project_name is required"
+        unless defined $project_name;
 
     my $dbh = $self->{+CONFIG}->connect;
 
-    my $sth = $dbh->prepare("SELECT distinct($field) FROM runs WHERE project = ? ORDER BY $field ASC");
-    $sth->execute($project) or die $sth->errstr;
+    my $schema = $self->{+CONFIG}->schema;
+    my $project = $schema->resultset('Project')->find({name => $project_name}) or return [];
+
+    my $sth = $dbh->prepare("SELECT distinct($field) FROM runs WHERE project_id = ? ORDER BY $field ASC");
+    $sth->execute($project->project_id) or die $sth->errstr;
     my $rows = $sth->fetchall_arrayref;
     return [map { $_->[0] } @$rows];
 }

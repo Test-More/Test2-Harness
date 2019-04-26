@@ -24,7 +24,7 @@ sub handle {
 
     my $p = $req->parameters;
 
-    my $a = {order_by => { -desc => [qw/added status project version/]}};
+    my $a = {order_by => { -desc => [qw/added status project_id version/]}};
     my $q = [{permissions => 'public'}];
     if ($user) {
         push @$q => {permissions => 'protected'};

@@ -75,10 +75,12 @@ __PACKAGE__->table("runs");
   data_type: 'text'
   is_nullable: 1
 
-=head2 project
+=head2 project_id
 
-  data_type: 'citext'
+  data_type: 'uuid'
+  is_foreign_key: 1
   is_nullable: 0
+  size: 16
 
 =head2 version
 
@@ -167,8 +169,8 @@ __PACKAGE__->add_columns(
   },
   "error",
   { data_type => "text", is_nullable => 1 },
-  "project",
-  { data_type => "citext", is_nullable => 0 },
+  "project_id",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "version",
   { data_type => "citext", is_nullable => 1 },
   "tier",
@@ -263,6 +265,21 @@ __PACKAGE__->belongs_to(
   },
 );
 
+=head2 project
+
+Type: belongs_to
+
+Related object: L<Test2::Harness::UI::Schema::Result::Project>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "project",
+  "Test2::Harness::UI::Schema::Result::Project",
+  { project_id => "project_id" },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+);
+
 =head2 run_comments
 
 Type: has_many
@@ -324,8 +341,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 07:34:26
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:wgoM9ZD2SwHjc5++sQF1QA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 08:44:17
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BxzwwBRVLx9yVdi8NiX6WQ
 
 __PACKAGE__->inflate_column(
     parameters => {
@@ -355,6 +372,7 @@ sub TO_JSON {
     $cols{parameters} = $self->parameters;
 
     $cols{user} = $self->user->email || $self->user->username;
+    $cols{project} = $self->project->name;
 
     return \%cols;
 }

@@ -60,15 +60,16 @@ sub process_form {
     my $file = $req->uploads->{log_file}->filename;
     my $tmp  = $req->uploads->{log_file}->tempname;
 
-    my $project = $req->parameters->{project} || return $res->add_error('project is required');
+    my $project_name = $req->parameters->{project} || return $res->add_error('project is required');
+    my $project = $self->schema->resultset('Project')->find_or_create({name => $project_name});
 
     my $version  = $req->parameters->{version};
     my $category = $req->parameters->{category};
     my $tier     = $req->parameters->{tier};
     my $build    = $req->parameters->{build};
 
-    my $perms         = $req->parameters->{permissions}   || 'private';
-    my $mode          = $req->parameters->{mode}          || 'qvfd';
+    my $perms = $req->parameters->{permissions} || 'private';
+    my $mode  = $req->parameters->{mode}        || 'qvfd';
 
     return $res->add_error("Unsupported file type, must be .jsonl.bz2, or .jsonl.gz")
         unless $file =~ m/\.jsonl\.(bz2|gz)$/;
@@ -78,9 +79,9 @@ sub process_form {
     my $run = $self->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
+            project_id    => $project->project_id,
             permissions   => $perms,
             mode          => $mode,
-            project       => $project,
             version       => $version,
             category      => $category,
             tier          => $tier,

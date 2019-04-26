@@ -51,14 +51,14 @@ __PACKAGE__->table("projects");
 
 =head2 project_id
 
-  data_type: 'bigint'
-  is_auto_increment: 1
+  data_type: 'uuid'
+  default_value: uuid_generate_v4()
   is_nullable: 0
-  sequence: 'projects_project_id_seq'
+  size: 16
 
 =head2 name
 
-  data_type: 'text'
+  data_type: 'citext'
   is_nullable: 0
 
 =cut
@@ -66,13 +66,13 @@ __PACKAGE__->table("projects");
 __PACKAGE__->add_columns(
   "project_id",
   {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "projects_project_id_seq",
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
   },
   "name",
-  { data_type => "text", is_nullable => 0 },
+  { data_type => "citext", is_nullable => 0 },
 );
 
 =head1 PRIMARY KEY
@@ -103,6 +103,21 @@ __PACKAGE__->add_unique_constraint("projects_name_key", ["name"]);
 
 =head1 RELATIONS
 
+=head2 permissions
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Permission>
+
+=cut
+
+__PACKAGE__->has_many(
+  "permissions",
+  "Test2::Harness::UI::Schema::Result::Permission",
+  { "foreign.project_id" => "self.project_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 runs
 
 Type: has_many
@@ -119,8 +134,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-10 22:04:12
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:ElW41yO7oMNUlVR0mVxO1A
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 13:34:52
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:+yMNJ9ON8Drr5KdFibvTlQ
 
 sub verify_access {
     my $self = shift;

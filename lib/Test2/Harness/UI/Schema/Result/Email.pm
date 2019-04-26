@@ -1,12 +1,12 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::ApiKey;
+package Test2::Harness::UI::Schema::Result::Email;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
 
 =head1 NAME
 
-Test2::Harness::UI::Schema::Result::ApiKey
+Test2::Harness::UI::Schema::Result::Email
 
 =cut
 
@@ -41,15 +41,15 @@ __PACKAGE__->load_components(
   "UUIDColumns",
 );
 
-=head1 TABLE: C<api_keys>
+=head1 TABLE: C<email>
 
 =cut
 
-__PACKAGE__->table("api_keys");
+__PACKAGE__->table("email");
 
 =head1 ACCESSORS
 
-=head2 api_key_id
+=head2 email_id
 
   data_type: 'uuid'
   default_value: uuid_generate_v4()
@@ -63,29 +63,32 @@ __PACKAGE__->table("api_keys");
   is_nullable: 0
   size: 16
 
-=head2 name
+=head2 local
 
-  data_type: 'varchar'
+  data_type: 'citext'
   is_nullable: 0
-  size: 128
 
-=head2 value
+=head2 domain
 
-  data_type: 'varchar'
+  data_type: 'citext'
   is_nullable: 0
-  size: 36
 
-=head2 status
+=head2 verified
 
-  data_type: 'enum'
-  default_value: 'active'
-  extra: {custom_type_name => "api_key_status",list => ["active","disabled","revoked"]}
+  data_type: 'boolean'
+  default_value: false
+  is_nullable: 0
+
+=head2 is_primary
+
+  data_type: 'boolean'
+  default_value: false
   is_nullable: 0
 
 =cut
 
 __PACKAGE__->add_columns(
-  "api_key_id",
+  "email_id",
   {
     data_type => "uuid",
     default_value => \"uuid_generate_v4()",
@@ -94,47 +97,57 @@ __PACKAGE__->add_columns(
   },
   "user_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "name",
-  { data_type => "varchar", is_nullable => 0, size => 128 },
-  "value",
-  { data_type => "varchar", is_nullable => 0, size => 36 },
-  "status",
-  {
-    data_type => "enum",
-    default_value => "active",
-    extra => {
-      custom_type_name => "api_key_status",
-      list => ["active", "disabled", "revoked"],
-    },
-    is_nullable => 0,
-  },
+  "local",
+  { data_type => "citext", is_nullable => 0 },
+  "domain",
+  { data_type => "citext", is_nullable => 0 },
+  "verified",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  "is_primary",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
 );
 
 =head1 PRIMARY KEY
 
 =over 4
 
-=item * L</api_key_id>
+=item * L</email_id>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("api_key_id");
+__PACKAGE__->set_primary_key("email_id");
 
 =head1 UNIQUE CONSTRAINTS
 
-=head2 C<api_keys_value_key>
+=head2 C<email_local_domain_key>
 
 =over 4
 
-=item * L</value>
+=item * L</local>
+
+=item * L</domain>
 
 =back
 
 =cut
 
-__PACKAGE__->add_unique_constraint("api_keys_value_key", ["value"]);
+__PACKAGE__->add_unique_constraint("email_local_domain_key", ["local", "domain"]);
+
+=head2 C<email_user_id_is_primary_key>
+
+=over 4
+
+=item * L</user_id>
+
+=item * L</is_primary>
+
+=back
+
+=cut
+
+__PACKAGE__->add_unique_constraint("email_user_id_is_primary_key", ["user_id", "is_primary"]);
 
 =head1 RELATIONS
 
@@ -154,16 +167,9 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 08:44:17
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:d3Hn1C7cGz4i2z7bhS2S6Q
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 01:45:09
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:+lqBd4HxhHMsayYkX4zAOA
 
-sub verify_access {
-    my $self = shift;
-    my ($type, $user) = @_;
-
-    return 0 unless $user;
-    return $self->user_id eq $user->user_id ? 1 : 0;
-}
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

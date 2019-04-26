@@ -7,6 +7,12 @@ CREATE TYPE perms AS ENUM(
     'public'
 );
 
+CREATE TYPE perm_source AS ENUM(
+    'manual',
+    'import'
+);
+
+
 CREATE TYPE queue_status AS ENUM(
     'pending',
     'running',
@@ -36,15 +42,24 @@ CREATE TYPE user_type AS ENUM(
 CREATE TABLE users (
     user_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     username        CITEXT          NOT NULL,
-    email           CITEXT          DEFAULT NULL,
-    slack           CITEXT          DEFAULT NULL,
     pw_hash         VARCHAR(31)     NOT NULL,
     pw_salt         VARCHAR(22)     NOT NULL,
+    realname        TEXT            NOT NULL,
     role            user_type       NOT NULL DEFAULT 'user',
 
-    UNIQUE(username),
-    UNIQUE(slack),
-    UNIQUE(email)
+    UNIQUE(username)
+);
+
+CREATE TABLE email (
+    email_id        UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    user_id         UUID            NOT NULL REFERENCES users(user_id),
+    local           CITEXT          NOT NULL,
+    domain          CITEXT          NOT NULL,
+    verified        BOOL            NOT NULL DEFAULT FALSE,
+    is_primary      BOOL            NOT NULL DEFAULT FALSE,
+
+    UNIQUE(local, domain),
+    UNIQUE(user_id, is_primary)
 );
 
 CREATE TABLE sessions (
@@ -84,14 +99,32 @@ CREATE TABLE log_files (
     data            BYTEA           NOT NULL
 );
 
+CREATE TABLE projects (
+    project_id      UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    name            CITEXT          NOT NULL,
+
+    UNIQUE(name)
+);
+
+CREATE TABLE permissions (
+    permission_id   UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    project_id      UUID            NOT NULL REFERENCES projects(project_id),
+    user_id         UUID            NOT NULL REFERENCES users(user_id),
+    updated         TIMESTAMP       NOT NULL DEFAULT now(),
+
+    source          perm_source     NOT NULL DEFAULT 'manual',
+
+    UNIQUE(project_id, user_id, source)
+);
+
 CREATE TABLE runs (
     run_id          UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     user_id         UUID            NOT NULL REFERENCES users(user_id),
     status          queue_status    NOT NULL DEFAULT 'pending',
     error           TEXT            DEFAULT NULL,
+    project_id      UUID            NOT NULL REFERENCES projects(project_id),
 
     -- User Input
-    project         CITEXT          NOT NULL,
     version         CITEXT          DEFAULT NULL,
     tier            CITEXT          DEFAULT NULL,
     category        CITEXT          DEFAULT NULL,
@@ -106,7 +139,7 @@ CREATE TABLE runs (
     failed          INTEGER         DEFAULT NULL,
     parameters      JSONB           DEFAULT NULL
 );
-CREATE INDEX IF NOT EXISTS run_projects ON runs(project);
+CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
 CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
 CREATE INDEX IF NOT EXISTS run_perms ON runs(permissions);

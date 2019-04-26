@@ -57,7 +57,6 @@
                     <option value="protected">Protected</option>
                     <option value="public">Public</option>
                 </select>
-                <small>
                     <dl class="tiny">
                         <dt>Private</dt>
                         <dd>Only you can look at these test results.</dd>
@@ -66,7 +65,6 @@
                         <dt>Public</dt>
                         <dd>Anyone can look at these results.</dd>
                     </dl>
-                </small>
             </dd>
 
             <dt><label for="mode">Mode</label></dt>
@@ -77,7 +75,6 @@
                     <option value="qvfd" selected>QVF+D</option>
                     <option value="complete">Complete</option>
                 </select>
-                <small>
                     <dl class="tiny">
                         <dt>Summary</dt>
                         <dd>Import each test job/file, but no events. (You can only see ovarall pass/fail)</dd>
@@ -88,7 +85,6 @@
                         <dt>Complete</dt>
                         <dd>Import all events for all jobs.</dd>
                     </dl>
-                </small>
             </dd>
 
             <dt>&nbsp;</dt>

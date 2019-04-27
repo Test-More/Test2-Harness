@@ -40,6 +40,7 @@ sub handle {
             user     => $user,
             keys     => [sort { $sort_val->{$a->status} <=> $sort_val->{$b->status} } $user->api_keys->all],
             emails   => [sort { $b->is_primary <=> $a->is_primary || $a->domain cmp $b->domain || $a->local cmp $b->local } $user->emails],
+            perms    => [sort { $a->project->name cmp $b->project->name } $user->permissions],
         }
     );
 

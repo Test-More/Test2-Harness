@@ -111,6 +111,8 @@ CREATE TABLE permissions (
     user_id         UUID            NOT NULL REFERENCES users(user_id),
     updated         TIMESTAMP       NOT NULL DEFAULT now(),
 
+    cpan_batch      BIGINT          DEFAULT NULL,
+
     UNIQUE(project_id, user_id)
 );
 

@@ -77,6 +77,11 @@ __PACKAGE__->table("permissions");
   is_nullable: 0
   original: {default_value => \"now()"}
 
+=head2 cpan_batch
+
+  data_type: 'bigint'
+  is_nullable: 1
+
 =cut
 
 __PACKAGE__->add_columns(
@@ -98,6 +103,8 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
+  "cpan_batch",
+  { data_type => "bigint", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
@@ -164,8 +171,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 08:35:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:huonv5RDW4LsdrEu2EqFqw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 06:16:47
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:a6JR+PWLsls7t5IWbn52rg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

@@ -18,6 +18,54 @@
 
 <br />
 
+<div id="add_email">
+    <form id="add_email_form" method="POST">
+        <label for="email">Add Email Address</label>
+        <input type="text" name="new_email" required>
+        <input type="submit" name="action" value="Add Email">
+    </form>
+</div>
+
+<div id="emails">
+    : if $emails.0 {
+        <table class="user_table">
+            <tr><th>address</th><th>verified</th><th>primary</th><th>Actions</th></tr>
+            : for $emails -> $email {
+                <tr>
+                    <td><: $email.local :>@<: $email.domain :></td>
+                    <td class="flag"><: $email.verified   ? "Y" : "N" :></td>
+                    <td class="flag"><: $email.is_primary ? "Y" : "N" :></td>
+                    <td>
+                        <form method="POST">
+                            <input type="submit" name="action" value="Delete">
+                            <input type="hidden" name="email_id" value="<: $email.email_id :>">
+
+                            : if !$email.is_primary  {
+                                <input type="submit" name="action" value="Make Primary">
+                            : }
+
+                            : if !$email.verified  {
+                                <input type="submit" name="action" value="Send Verification Code">
+                            : }
+                        </form>
+                    </td>
+                    : if !$email.verified {
+                        <td>
+                            <form method="POST">
+                                <input type="hidden" name="email_id" value="<: $email.email_id :>">
+                                <input type="text" name="verification_code" required>
+                                <input type="submit" name="action" value="Verify">
+                            </form>
+                        </td>
+                    : }
+                </tr>
+            : }
+        </table>
+    : }
+    <br />
+</div>
+
+    <br />
 <div id="add_key">
     <form id="add_key_form" method="POST">
         <label for="key_name">Key Name</label>
@@ -26,13 +74,14 @@
     </form>
 </div>
 <div id="api_keys">
-        <table class="key_table">
+    : if $keys.0 {
+        <table class="user_table">
             <tr><th>Key Name</th><th>Key</th><th>Status</th><th>Actions</th></tr>
             : for $keys -> $key {
                 <tr>
                     <td><: $key.name :></td>
                     <td><: $key.value :></td>
-                    <td><: $key.status :></td>
+                    <td class="flag"><: $key.status :></td>
                     <td>
                         : if $key.status == 'active' {
                             <form method="POST">
@@ -52,6 +101,7 @@
                 </tr>
             : }
         </table>
+    : }
 </div>
 
 <br />

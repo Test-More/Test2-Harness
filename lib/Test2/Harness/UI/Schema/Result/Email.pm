@@ -79,12 +79,6 @@ __PACKAGE__->table("email");
   default_value: false
   is_nullable: 0
 
-=head2 is_primary
-
-  data_type: 'boolean'
-  default_value: false
-  is_nullable: 0
-
 =cut
 
 __PACKAGE__->add_columns(
@@ -102,8 +96,6 @@ __PACKAGE__->add_columns(
   "domain",
   { data_type => "citext", is_nullable => 0 },
   "verified",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "is_primary",
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
 );
 
@@ -135,21 +127,37 @@ __PACKAGE__->set_primary_key("email_id");
 
 __PACKAGE__->add_unique_constraint("email_local_domain_key", ["local", "domain"]);
 
-=head2 C<email_user_id_is_primary_key>
+=head1 RELATIONS
 
-=over 4
+=head2 email_verification_code
 
-=item * L</user_id>
+Type: might_have
 
-=item * L</is_primary>
-
-=back
+Related object: L<Test2::Harness::UI::Schema::Result::EmailVerificationCode>
 
 =cut
 
-__PACKAGE__->add_unique_constraint("email_user_id_is_primary_key", ["user_id", "is_primary"]);
+__PACKAGE__->might_have(
+  "email_verification_code",
+  "Test2::Harness::UI::Schema::Result::EmailVerificationCode",
+  { "foreign.email_id" => "self.email_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 
-=head1 RELATIONS
+=head2 primary_email
+
+Type: might_have
+
+Related object: L<Test2::Harness::UI::Schema::Result::PrimaryEmail>
+
+=cut
+
+__PACKAGE__->might_have(
+  "primary_email",
+  "Test2::Harness::UI::Schema::Result::PrimaryEmail",
+  { "foreign.email_id" => "self.email_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 
 =head2 user
 
@@ -167,9 +175,34 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 01:45:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:+lqBd4HxhHMsayYkX4zAOA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 02:58:27
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5jzsCZMh/EHh31Pqi4z/hg
 
+sub is_primary {
+    my $self = shift;
+    my $pri = $self->primary_email;
+    return $pri ? 1 : 0;
+}
+
+sub delete {
+    my $self = shift;
+
+    if (my $pri = $self->primary_email) {
+        $pri->delete;
+    }
+
+    if (my $code = $self->email_verification_code) {
+        $code->delete;
+    }
+
+    $self->SUPER::delete();
+}
+
+sub address {
+    my $self = shift;
+
+    return join '@' => ($self->local, $self->domain);
+}
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

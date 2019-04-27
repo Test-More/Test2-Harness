@@ -1,12 +1,12 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::Permission;
+package Test2::Harness::UI::Schema::Result::PrimaryEmail;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
 
 =head1 NAME
 
-Test2::Harness::UI::Schema::Result::Permission
+Test2::Harness::UI::Schema::Result::PrimaryEmail
 
 =cut
 
@@ -41,27 +41,13 @@ __PACKAGE__->load_components(
   "UUIDColumns",
 );
 
-=head1 TABLE: C<permissions>
+=head1 TABLE: C<primary_email>
 
 =cut
 
-__PACKAGE__->table("permissions");
+__PACKAGE__->table("primary_email");
 
 =head1 ACCESSORS
-
-=head2 permission_id
-
-  data_type: 'uuid'
-  default_value: uuid_generate_v4()
-  is_nullable: 0
-  size: 16
-
-=head2 project_id
-
-  data_type: 'uuid'
-  is_foreign_key: 1
-  is_nullable: 0
-  size: 16
 
 =head2 user_id
 
@@ -70,55 +56,25 @@ __PACKAGE__->table("permissions");
   is_nullable: 0
   size: 16
 
-=head2 updated
+=head2 email_id
 
-  data_type: 'timestamp'
-  default_value: current_timestamp
+  data_type: 'uuid'
+  is_foreign_key: 1
   is_nullable: 0
-  original: {default_value => \"now()"}
+  size: 16
 
 =cut
 
 __PACKAGE__->add_columns(
-  "permission_id",
-  {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    size => 16,
-  },
-  "project_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "user_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "updated",
-  {
-    data_type     => "timestamp",
-    default_value => \"current_timestamp",
-    is_nullable   => 0,
-    original      => { default_value => \"now()" },
-  },
+  "email_id",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
 );
 
 =head1 PRIMARY KEY
 
 =over 4
-
-=item * L</permission_id>
-
-=back
-
-=cut
-
-__PACKAGE__->set_primary_key("permission_id");
-
-=head1 UNIQUE CONSTRAINTS
-
-=head2 C<permissions_project_id_user_id_key>
-
-=over 4
-
-=item * L</project_id>
 
 =item * L</user_id>
 
@@ -126,25 +82,36 @@ __PACKAGE__->set_primary_key("permission_id");
 
 =cut
 
-__PACKAGE__->add_unique_constraint(
-  "permissions_project_id_user_id_key",
-  ["project_id", "user_id"],
-);
+__PACKAGE__->set_primary_key("user_id");
+
+=head1 UNIQUE CONSTRAINTS
+
+=head2 C<primary_email_email_id_key>
+
+=over 4
+
+=item * L</email_id>
+
+=back
+
+=cut
+
+__PACKAGE__->add_unique_constraint("primary_email_email_id_key", ["email_id"]);
 
 =head1 RELATIONS
 
-=head2 project
+=head2 email
 
 Type: belongs_to
 
-Related object: L<Test2::Harness::UI::Schema::Result::Project>
+Related object: L<Test2::Harness::UI::Schema::Result::Email>
 
 =cut
 
 __PACKAGE__->belongs_to(
-  "project",
-  "Test2::Harness::UI::Schema::Result::Project",
-  { project_id => "project_id" },
+  "email",
+  "Test2::Harness::UI::Schema::Result::Email",
+  { email_id => "email_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
@@ -164,8 +131,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 08:35:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:huonv5RDW4LsdrEu2EqFqw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 02:53:48
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:ZyPxhUf4sVU72njgSIm/3w
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

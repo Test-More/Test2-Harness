@@ -28,7 +28,8 @@ my $config = Test2::Harness::UI::Config->new(
     dbi_dsn     => $dsn,
     dbi_user    => '',
     dbi_pass    => '',
-    single_user => 1,
+    single_user => 0,
+    email       => 'exodist7@gmail.com',
 );
 
 my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});

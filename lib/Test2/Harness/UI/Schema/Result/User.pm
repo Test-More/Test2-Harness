@@ -185,6 +185,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 primary_email
+
+Type: might_have
+
+Related object: L<Test2::Harness::UI::Schema::Result::PrimaryEmail>
+
+=cut
+
+__PACKAGE__->might_have(
+  "primary_email",
+  "Test2::Harness::UI::Schema::Result::PrimaryEmail",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 runs
 
 Type: has_many
@@ -216,8 +231,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:hc75Al5ZbozO5GfTLEpLMg
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 02:58:27
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Qzlgwn31ezLK5DZmX1rzcw
 
 use Data::GUID;
 use Carp qw/croak/;

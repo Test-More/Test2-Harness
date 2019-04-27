@@ -43,10 +43,22 @@ CREATE TABLE email (
     local           CITEXT          NOT NULL,
     domain          CITEXT          NOT NULL,
     verified        BOOL            NOT NULL DEFAULT FALSE,
-    is_primary      BOOL            NOT NULL DEFAULT FALSE,
 
-    UNIQUE(local, domain),
-    UNIQUE(user_id, is_primary)
+    UNIQUE(local, domain)
+);
+
+CREATE TABLE primary_email (
+    user_id         UUID            NOT NULL REFERENCES users(user_id) PRIMARY KEY,
+    email_id        UUID            NOT NULL REFERENCES email(email_id),
+
+    unique(email_id)
+);
+
+CREATE TABLE email_verification_codes (
+    evcode_id       UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    email_id        UUID            NOT NULL REFERENCES email(email_id),
+
+    unique(email_id)
 );
 
 CREATE TABLE sessions (
@@ -99,9 +111,7 @@ CREATE TABLE permissions (
     user_id         UUID            NOT NULL REFERENCES users(user_id),
     updated         TIMESTAMP       NOT NULL DEFAULT now(),
 
-    imported        BOOL            NOT NULL DEFAULT FALSE,
-
-    UNIQUE(project_id, user_id, imported)
+    UNIQUE(project_id, user_id)
 );
 
 CREATE TABLE runs (

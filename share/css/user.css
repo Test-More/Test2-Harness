@@ -1,0 +1,14 @@
+table.user_table td {
+    vertical-align: middle;
+}
+
+table.user_table td input {
+    display: block;
+    float: left;
+    margin-top: 2px;
+    margin-right: 6px;
+}
+
+table.user_table td.flag {
+    text-align: center;
+}

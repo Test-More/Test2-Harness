@@ -18,7 +18,8 @@ builder {
             dbi_dsn     => $ENV{HARNESS_UI_DSN},
             dbi_user    => '',
             dbi_pass    => '',
-            single_user => 1,
+            single_user => 0,
+            email       => 'exodist7@gmail.com',
         );
 
         Test2::Harness::UI->new(config => $config)->to_app->(@_);

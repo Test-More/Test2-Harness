@@ -48,7 +48,6 @@ sub session {
     return $session;
 }
 
-my $warned = 0;
 sub session_host {
     my $self = shift;
 
@@ -67,8 +66,6 @@ sub session_host {
             agent      => $self->user_agent,
         }
     );
-
-    warn "Update session-host access time" unless $warned++;
 
     $schema->txn_commit;
 

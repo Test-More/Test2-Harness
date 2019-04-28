@@ -61,6 +61,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::Config - UI configuration
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

@@ -106,6 +106,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::CPANImporter - Import permissions from CPAN
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

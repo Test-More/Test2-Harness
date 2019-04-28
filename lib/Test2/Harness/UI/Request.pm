@@ -96,6 +96,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::Request - web request
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

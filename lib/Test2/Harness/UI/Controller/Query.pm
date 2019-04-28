@@ -62,6 +62,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::Controller::Query
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

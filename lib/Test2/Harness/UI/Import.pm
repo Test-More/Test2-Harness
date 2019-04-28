@@ -371,6 +371,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::Import
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

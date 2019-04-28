@@ -126,11 +126,13 @@ __END__
 
 App::Yath::Command::ui - Command to view a test log via a web UI.
 
-=head1 DESCRIPTION
-
-=head1 SYNOPSIS
-
 =head1 COMMAND LINE USAGE
+
+    yath ui path/to/log/file.jsonl.gz
+    yath ui path/to/log/file.jsonl.bz2
+
+The command will give you a portnumberon your localhost to visit in your web
+browser.
 
 =head1 SOURCE
 

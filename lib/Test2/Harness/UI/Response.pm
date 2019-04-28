@@ -174,6 +174,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::Response - Web Response
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

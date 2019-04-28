@@ -227,6 +227,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::Controller::User
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

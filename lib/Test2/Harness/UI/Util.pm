@@ -52,6 +52,8 @@ __END__
 
 =head1 NAME
 
+Test2::Harness::UI::Util - General Utilities
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

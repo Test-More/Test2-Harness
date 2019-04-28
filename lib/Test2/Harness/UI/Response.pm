@@ -2,6 +2,8 @@ package Test2::Harness::UI::Response;
 use strict;
 use warnings;
 
+our $VERSION = '0.000001';
+
 use Carp qw/croak/;
 use Time::HiRes qw/sleep/;
 use Test2::Harness::Util::JSON qw/encode_json/;

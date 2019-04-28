@@ -2,6 +2,8 @@ package Test2::Harness::UI::Controller::Events;
 use strict;
 use warnings;
 
+our $VERSION = '0.000001';
+
 use Data::GUID;
 use List::Util qw/max/;
 use Test2::Harness::UI::Response qw/resp error/;

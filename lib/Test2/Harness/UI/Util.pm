@@ -2,6 +2,8 @@ package Test2::Harness::UI::Util;
 use strict;
 use warnings;
 
+our $VERSION = '0.000001';
+
 use Carp qw/croak/;
 
 use File::ShareDir();

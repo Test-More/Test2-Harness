@@ -2,7 +2,7 @@ package App::Yath::Command::ui;
 use strict;
 use warnings;
 
-our $VERSION = '0.001066';
+our $VERSION = '0.000001';
 
 use Test2::Util qw/pkg_to_file/;
 
@@ -124,15 +124,13 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::replay - Command to replay a test run from an event log.
+App::Yath::Command::ui - Command to view a test log via a web UI.
 
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS
 
 =head1 COMMAND LINE USAGE
-
-B<THIS SECTION IS AUTO-GENERATED AT BUILD>
 
 =head1 SOURCE
 
@@ -157,7 +155,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 COPYRIGHT
 
-Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

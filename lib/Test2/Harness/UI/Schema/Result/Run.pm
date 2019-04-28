@@ -282,6 +282,8 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:35lWHgmUJsDiUAkUr0aE9w
 
+our $VERSION = '0.000001';
+
 __PACKAGE__->inflate_column(
     parameters => {
         inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),

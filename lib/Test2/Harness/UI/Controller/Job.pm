@@ -2,6 +2,8 @@ package Test2::Harness::UI::Controller::Job;
 use strict;
 use warnings;
 
+our $VERSION = '0.000001';
+
 use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);

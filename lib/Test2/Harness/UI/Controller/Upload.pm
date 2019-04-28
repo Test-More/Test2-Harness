@@ -2,6 +2,8 @@ package Test2::Harness::UI::Controller::Upload;
 use strict;
 use warnings;
 
+our $VERSION = '0.000001';
+
 use Text::Xslate();
 
 use Test2::Harness::UI::Import();

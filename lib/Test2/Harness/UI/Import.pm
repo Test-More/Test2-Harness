@@ -2,6 +2,8 @@ package Test2::Harness::UI::Import;
 use strict;
 use warnings;
 
+our $VERSION = '0.000001';
+
 use DateTime;
 use Data::GUID;
 use Time::HiRes qw/time/;

@@ -234,6 +234,8 @@ __PACKAGE__->has_many(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 02:58:27
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Qzlgwn31ezLK5DZmX1rzcw
 
+our $VERSION = '0.000001';
+
 use Data::GUID;
 use Carp qw/croak/;
 

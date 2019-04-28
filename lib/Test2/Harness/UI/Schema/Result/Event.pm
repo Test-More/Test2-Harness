@@ -206,7 +206,7 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BlN5IBao5gc/vhVZAo9aAw
 
-our $VERSION = '0.000001';
+our $VERSION = '0.000002';
 
 __PACKAGE__->parent_column('parent_id');
 

@@ -134,8 +134,8 @@ App::Yath::Command::ui - Command to view a test log via a web UI.
 
 =head1 SOURCE
 
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
+The source code repository for Test2-Harness-UI can be found at
+F<http://github.com/Test-More/Test2-Harness-UI/>.
 
 =head1 MAINTAINERS
 

@@ -77,16 +77,16 @@ sub run_command {
         single_run  => 1,
     );
 
-    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root'});
+    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
+    my $proj = $config->schema->resultset('Project')->create({name => 'default'});
 
     open(my $lf, '<', $settings->{log_file}) or die "Could no open log file: $!";
     $config->schema->resultset('Run')->create(
         {
-            user_id       => $user->user_id,
-            permissions   => 'public',
-            mode          => 'complete',
-            status        => 'pending',
-            project       => 'default',
+            user_id    => $user->user_id,
+            mode       => 'complete',
+            status     => 'pending',
+            project_id => $proj->project_id,
 
             log_file => {
                 name => $settings->{log_file},

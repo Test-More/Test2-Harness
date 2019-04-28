@@ -13,7 +13,7 @@ install_share dist => "share";
 
 
 my %WriteMakefileArgs = (
-  "ABSTRACT" => "Work in progress",
+  "ABSTRACT" => "Web interface for viewing and inspecting yath test logs",
   "AUTHOR" => "Chad Granum <exodist\@cpan.org>",
   "CONFIGURE_REQUIRES" => {
     "ExtUtils::MakeMaker" => 0,

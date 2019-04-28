@@ -1,14 +1,21 @@
 # NAME
 
-Test2::Harness::UI - Work in progress
+Test2::Harness::UI - Web interface for viewing and inspecting yath test logs
+
+# EARLY VERSION WARNING
+
+This program is still in early development. There are many bugs, missing
+features, and things that will change.
 
 # DESCRIPTION
 
-Work in progress
+This package provides a web UI for yath logs.
 
 # SYNOPSIS
 
-TODO
+The easiest thing to do is use the `yath ui path/to/logfile` command, which
+will create a temporary postgresql db, load your lgo into it, then launch the
+app in starman on a local port that you can visit in your browser.
 
 # SOURCE
 

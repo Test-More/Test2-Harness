@@ -11,7 +11,7 @@ use File::Spec;
 
 use Test2::Harness::Util::DepTracer();
 
-our $VERSION = '0.001074';
+our $VERSION = '0.001075';
 
 use parent 'Test2::Harness::Run::Runner';
 use Test2::Harness::Util::HashBase qw{

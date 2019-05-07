@@ -222,7 +222,7 @@ sub render_info {
             chomp($msg = $details);
         }
 
-        ['info', $_->{tag}, $details]
+        ['info', $_->{tag}, $details, $_->{table} || ()]
     } @{$f->{info}};
 }
 

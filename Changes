@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add support for table structures
+
 0.001073  2019-04-10 08:21:04-07:00 America/Los_Angeles
 
     - Add support for disabled progress indicators to QVF mode

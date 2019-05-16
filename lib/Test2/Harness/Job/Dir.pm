@@ -166,10 +166,11 @@ sub _fill_stream_buffers {
 
     # Cache the result of the exists check on success, files can come into
     # existence at any time though so continue to check if it fails.
-    while (!$max || @$events_buff + @$stderr_buff + @$stdout_buff < $max) {
+    while (1) {
         my $added = 0;
         for my $set (@sets) {
             my ($file, $buff) = @$set;
+            next if $max && @$buff > $max;
 
             my $pos = tell($file);
             my $line = <$file>;

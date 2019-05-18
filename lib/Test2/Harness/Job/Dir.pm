@@ -73,29 +73,28 @@ sub poll {
     # If this finds that we do not need any more it will exit the loop instead
     # of returning a number.
     my $check = defined($max) ? sub {
-        no warnings 'exiting';
         my $want = $max - scalar(@out) - scalar(@new);
-        last if $want < 1;
+        return undef if $want < 1;
         return $want;
-    } : sub { undef };
+    } : sub { 0 };
 
     while(!defined($max) || @out < $max) {
         # Micro-optimization, 'start' only ever has 1 thing, so do not enter
         # the sub if we do not need to.
-        push @new => $self->_poll_start($check->()) if $self->{+_START_BUFFER};
+        push @new => $self->_poll_start($check->() // last) if $self->{+_START_BUFFER};
 
         # Do not re-order these. Everything syncs to event, so put it last. We
         # want STDOUT to appear before STDERR typically We will only work so
         # hard to order stdout/stderr, this is as far as we go.
-        push @new => $self->_poll_stdout($check->());
-        push @new => $self->_poll_stderr($check->());
-        push @new => $self->_poll_event($check->());
+        push @new => $self->_poll_stdout($check->() // last);
+        push @new => $self->_poll_stderr($check->() // last);
+        push @new => $self->_poll_event($check->() // last);
 
         # 'exit' MUST come last, so do not even think about grabbing
         # them until @new is empty.
         # Micro-optimization, 'exit' only ever has 1 thing, so do
         # not enter the subs if we do not need to.
-        push @new => $self->_poll_exit($check->()) if !@new && defined $self->{+_EXIT_BUFFER};
+        push @new => $self->_poll_exit($check->() // last) if !@new && defined $self->{+_EXIT_BUFFER};
 
         last unless @new;
 
@@ -278,7 +277,7 @@ sub _poll_event {
 
     # All caught up, time for the event!
     shift @$buffer;
-    $self->{+_EVENTS_INDEX} = $id;
+    $self->{+_EVENTS_INDEX} = $id if !defined($self->{+_EVENTS_INDEX}) || $id > $self->{+_EVENTS_INDEX};
 
     return $self->_process_events_line($event_data);
 }
@@ -299,7 +298,7 @@ sub _poll_stdout {
 
         my $esync = 0;
         if ($line =~ s/T2-HARNESS-ESYNC: (\d+)$//) {
-            $self->{+_STDOUT_INDEX} = $1;
+            $self->{+_STDOUT_INDEX} = $1 if !defined($self->{+_STDOUT_INDEX}) || $self->{+_STDOUT_INDEX} < $1;
             $esync = 1;
         }
 
@@ -342,7 +341,7 @@ sub _poll_stderr {
             chomp($line);
 
             if ($line =~ s/T2-HARNESS-ESYNC: (\d+)$//) {
-                $self->{+_STDERR_INDEX} = $1;
+                $self->{+_STDERR_INDEX} = $1 if !defined($self->{+_STDERR_INDEX}) || $self->{+_STDERR_INDEX} < $1;
                 push @lines => $line if length($line);
                 last;
             }

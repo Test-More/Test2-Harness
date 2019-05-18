@@ -12,6 +12,8 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON/;
 use Test2::Harness::Util qw/hub_truth/;
 
+use use Test2::Util qw/get_tid/;
+
 use base qw/Test2::Formatter/;
 use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -file -leader/;
 
@@ -25,6 +27,7 @@ BEGIN {
     constant->import(ENCODER => $J);
 }
 
+my $ROOT_TID
 my $ROOT_PID;
 my $ROOT_FILE;
 sub import {
@@ -34,6 +37,7 @@ sub import {
     $class->SUPER::import();
 
     $ROOT_PID  = $$;
+    $ROOT_TID  = get_tid();
     $ROOT_FILE = $params{file} if $params{file};
 }
 
@@ -86,8 +90,13 @@ sub new_root {
     my %params = @_;
 
     $ROOT_PID = $$ unless defined $ROOT_PID;
+    $ROOT_TID = get_tid() unless defined $ROOT_TID;
+
     confess "new_root called from child process!"
         if $ROOT_PID != $$;
+
+    confess "new_root called from child thread!"
+        if $ROOT_TID != get_tid();
 
     require Test2::API;
     my $io = $params{+IO} = [Test2::API::test2_stdout(), Test2::API::test2_stderr()];

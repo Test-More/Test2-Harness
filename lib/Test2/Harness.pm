@@ -2,7 +2,7 @@ package Test2::Harness;
 use strict;
 use warnings;
 
-our $VERSION = '0.001075';
+our $VERSION = '0.001076';
 
 use Carp qw/croak/;
 use List::Util qw/sum/;

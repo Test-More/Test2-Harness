@@ -1,7 +1,7 @@
 # HARNESS-NO-FORK
 BEGIN { $INC{'Test2/Formatter/Stream.pm'} && exec($^X, $0); };
 # Force into stdout
-BEGIN { delete $ENV{T2_STREAM_FILE} };
+BEGIN { delete $ENV{T2_STREAM_DIR} };
 
 use Test::Builder;
 use Test2::V0;

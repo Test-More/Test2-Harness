@@ -7,15 +7,16 @@ our $VERSION = '0.001075';
 use Carp qw/croak confess/;
 use Time::HiRes qw/time/;
 use IO::Handle;
+use File::Spec();
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON/;
 use Test2::Harness::Util qw/hub_truth/;
 
-use use Test2::Util qw/get_tid/;
+use Test2::Util qw/get_tid ipc_separator/;
 
 use base qw/Test2::Formatter/;
-use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -file -leader/;
+use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh/;
 
 BEGIN {
     my $J = JSON->new;
@@ -27,39 +28,62 @@ BEGIN {
     constant->import(ENCODER => $J);
 }
 
-my $ROOT_TID
-my $ROOT_PID;
-my $ROOT_FILE;
+my ($ROOT_TID, $ROOT_PID, $ROOT_DIR);
 sub import {
     my $class = shift;
     my %params = @_;
+
+    confess "$class no longer accept the 'file' argument, it now takes a 'dir' argument"
+        if exists $params{file};
 
     $class->SUPER::import();
 
     $ROOT_PID  = $$;
     $ROOT_TID  = get_tid();
-    $ROOT_FILE = $params{file} if $params{file};
+    $ROOT_DIR = $params{dir} if $params{dir};
 }
 
 sub hide_buffered { 0 }
+
+sub fh {
+    my $self = shift;
+
+    my $dir = $self->{+DIR} or return undef;
+
+    my $pid = $self->{+_PID};
+    my $tid = $self->{+_TID};
+
+    if ($pid && $pid != $$) {
+        delete $self->{+_PID};
+        delete $self->{+_FH};
+    }
+
+    if ($tid && $tid != get_tid()) {
+        delete $self->{+_TID};
+        delete $self->{+_FH};
+    }
+
+    return $self->{+_FH} if $self->{+_FH};
+
+    $self->{+STREAM_ID} = 1;
+
+    $pid = $self->{+_PID} = $$;
+    $tid = $self->{+_TID} = get_tid();
+
+    my $file = File::Spec->catfile($dir, join(ipc_separator() => 'events', $pid, $tid) . ".jsonl");
+
+    mkdir($dir) or die "Could not make dir '$dir': $!" unless -d $dir;
+    confess "File '$file' already exists!" if -f $file;
+    open(my $fh, '>:utf8', $file) or die "Could not open file: $file";
+    $fh->autoflush(1);
+
+    return $self->{+_FH} = $fh;
+}
 
 sub init {
     my $self = shift;
 
     $self->{+STREAM_ID} = 1;
-
-    if (my $file = $self->{+FILE}) {
-        confess "File '$file' already exists!" if -f $file;
-        open(my $fh, '>', $file) or die "Could not open file: $file";
-        $fh->autoflush(1);
-        unshift @{$self->{+IO}} => $fh;
-        $self->{+LEADER} = 0 unless defined $self->{+LEADER};
-    }
-
-    $self->{+LEADER} = 1 unless defined $self->{+LEADER};
-
-    croak "You must specify at least 1 filehandle for output"
-        unless $self->{+IO} && @{$self->{+IO}};
 
     for (@{$self->{+IO}}) {
         $_->autoflush(1);
@@ -102,11 +126,14 @@ sub new_root {
     my $io = $params{+IO} = [Test2::API::test2_stdout(), Test2::API::test2_stderr()];
     $_->autoflush(1) for @$io;
 
-    $params{+FILE} ||= $ENV{T2_STREAM_FILE} || $ROOT_FILE;
+    confess "T2_STREAM_FILE is no longer used, see T2_STREAM_DIR"
+        if exists $ENV{T2_STREAM_FILE};
+
+    $params{+DIR} ||= $ENV{T2_STREAM_DIR} || $ROOT_DIR;
 
     # DO NOT REOPEN THEM!
-    delete $ENV{T2_STREAM_FILE};
-    $ROOT_FILE = undef;
+    delete $ENV{T2_STREAM_DIR};
+    $ROOT_DIR = undef;
 
     $params{check_tb} = 1 if $INC{'Test/Builder.pm'};
 
@@ -115,7 +142,19 @@ sub new_root {
 
 sub record {
     my $self = shift;
-    my ($id, $facets, $num) = @_;
+    my ($facets, $num) = @_;
+
+    my @sync = @{$self->{+IO}};
+    my $leader = 0;
+
+    my $fh = $self->fh;
+    unless($fh) {
+        $leader = 1;
+        $fh = shift @sync;
+    }
+
+    my $tid = get_tid();
+    my $id = $self->{+STREAM_ID}++;
 
     my $json;
     {
@@ -129,6 +168,8 @@ sub record {
                 stamp        => time,
                 times        => [times],
                 stream_id    => $id,
+                tid          => $tid,
+                pid          => $$,
                 event_id     => $event_id,
                 facet_data   => $facets,
                 assert_count => $self->{+_NO_NUMBERS} ? undef : $num,
@@ -139,9 +180,9 @@ sub record {
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
 
-    my ($out, @sync) = @{$self->{+IO}};
-    print $out $self->{+LEADER} ? ("T2-HARNESS-EVENT: ", $id, ' ', $json, "\n") : ($json, "\n");
-    print $_ "T2-HARNESS-ESYNC: ", $id, "\n" for @sync;
+    print $fh $leader ? ("T2-HARNESS-EVENT: ", $json, "\n") : ($json, "\n");
+
+    print $_ "T2-HARNESS-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
 }
 
 sub encoding {
@@ -150,7 +191,7 @@ sub encoding {
     if (@_) {
         my ($enc) = @_;
         confess "Stream formatter only supports utf8" unless $enc =~ m/^utf-?8$/i;
-        $self->record($self->{+STREAM_ID}++, {control => {encoding => $enc}});
+        $self->record({control => {encoding => $enc}});
         $self->_set_encoding($enc);
         $self->{+TB}->encoding($enc) if $self->{+TB};
     }
@@ -206,8 +247,7 @@ sub write {
         }
     }
 
-    my $id = $self->{+STREAM_ID}++;
-    $self->record($id, $f, $num);
+    $self->record($f, $num);
 }
 
 sub no_header  { $_[0]->{+_NO_HEADER} }

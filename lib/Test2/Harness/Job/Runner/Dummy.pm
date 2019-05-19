@@ -23,7 +23,7 @@ sub find_inc {
 
 sub command {
     my $class = shift;
-    my ($test, $event_file, $inc) = @_;
+    my ($test, $event_dir, $inc) = @_;
 
     my $job = $test->job;
 
@@ -36,7 +36,7 @@ sub command {
         $job->mem_usage ? ('-MTest2::Plugin::MemUsage') : (),
         (map {"-m$_"} @{$job->load || []}),
         (map {"-M$_"} @{$job->load_import || []}),
-        $job->use_stream ? ("-MTest2::Formatter::Stream=file,$event_file") : (),
+        $job->use_stream ? ("-MTest2::Formatter::Stream=dir,$event_dir") : (),
         $job->times ? ('-MTest2::Plugin::Times') : (),
         '-e', 'print "1..0 # SKIP dummy mode"',
         @{$job->args},
@@ -49,7 +49,7 @@ sub run {
 
     my $job = $test->job;
 
-    my ($in_file, $out_file, $err_file, $event_file) = $test->output_filenames;
+    my ($in_file, $out_file, $err_file, $event_dir) = $test->output_filenames;
 
     my $out_fh = open_file($out_file, '>');
     my $err_fh = open_file($err_file, '>');
@@ -69,7 +69,7 @@ sub run {
     local_env $env => sub {
         $pid = run_cmd(
             chdir   => $job->ch_dir,
-            command => sub { $class->command($test, $event_file, \@inc) },
+            command => sub { $class->command($test, $event_dir, \@inc) },
             stdin   => $in_fh,
             stdout  => $out_fh,
             stderr  => $err_fh,

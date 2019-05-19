@@ -79,12 +79,12 @@ sub output_filenames {
 
     my $dir = $self->{+DIR};
 
-    my $in_file    = File::Spec->catfile($dir, 'stdin');
-    my $out_file   = File::Spec->catfile($dir, 'stdout');
-    my $err_file   = File::Spec->catfile($dir, 'stderr');
-    my $event_file = File::Spec->catfile($dir, 'events.jsonl');
+    my $in_file   = File::Spec->catfile($dir, 'stdin');
+    my $out_file  = File::Spec->catfile($dir, 'stdout');
+    my $err_file  = File::Spec->catfile($dir, 'stderr');
+    my $event_dir = File::Spec->catfile($dir, 'events');
 
-    return ($in_file, $out_file, $err_file, $event_file);
+    return ($in_file, $out_file, $err_file, $event_dir);
 }
 
 1;

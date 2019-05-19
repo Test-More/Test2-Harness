@@ -9,6 +9,9 @@ use File::Spec();
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use List::Util qw/first/;
+
+use Test2::Util qw/ipc_separator/;
+
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/maybe_read_file open_file/;
@@ -26,9 +29,14 @@ use Test2::Harness::Util::TapParser qw{
 
 use Test2::Harness::Util::HashBase qw{
     -run_id -job_id -job_root
-    -events_file -_events_buffer -_events_index
-    -stderr_file -_stderr_buffer -_stderr_index -_stderr_id
-    -stdout_file -_stdout_buffer -_stdout_index -_stdout_id
+
+    -_ready_buffer
+
+    -_events_files -_events_buffer -_events_indexes -events_dir -_events_seen
+
+    -stderr_file -_stderr_buffer -_stderr_index
+    -stdout_file -_stdout_buffer -_stdout_index
+
     -start_file  -start_exists   -_start_buffer
     -exit_file   -_exit_done     -_exit_buffer
 
@@ -49,14 +57,12 @@ sub init {
     croak "'job_root' is a required attribute"
         unless $self->{+JOB_ROOT};
 
-    $self->{+_EVENTS_INDEX} = 0;
-    $self->{+_STDOUT_INDEX} = 0;
-    $self->{+_STDERR_INDEX} = 0;
-    $self->{+_STDOUT_ID}    = 0;
-    $self->{+_STDERR_ID}    = 0;
-    $self->{+_EVENTS_BUFFER} ||= [];
+    $self->{+_EVENTS_SEEN} = {};
+
     $self->{+_STDOUT_BUFFER} ||= [];
     $self->{+_STDERR_BUFFER} ||= [];
+    $self->{+_EVENTS_BUFFER} ||= {};
+    $self->{+_READY_BUFFER}  ||= [];
 }
 
 sub poll {
@@ -83,12 +89,7 @@ sub poll {
         # the sub if we do not need to.
         push @new => $self->_poll_start($check->() // last) if $self->{+_START_BUFFER};
 
-        # Do not re-order these. Everything syncs to event, so put it last. We
-        # want STDOUT to appear before STDERR typically We will only work so
-        # hard to order stdout/stderr, this is as far as we go.
-        push @new => $self->_poll_stdout($check->() // last);
-        push @new => $self->_poll_stderr($check->() // last);
-        push @new => $self->_poll_event($check->() // last);
+        push @new => $self->_poll_streams($check->() // last);
 
         # 'exit' MUST come last, so do not even think about grabbing
         # them until @new is empty.
@@ -105,6 +106,99 @@ sub poll {
     return map { Test2::Harness::Event->new(%{$_}) } @out;
 }
 
+sub _poll_streams {
+    my $self = shift;
+    my ($max) = @_;
+
+    my $ready = $self->{+_READY_BUFFER};
+
+    return splice(@$ready, 0, $max) unless @$ready < $max;
+
+    my $sep = ipc_separator();
+    my $stdout = $self->{+_STDOUT_BUFFER};
+    my $stderr = $self->{+_STDERR_BUFFER};
+    my $events = $self->{+_EVENTS_BUFFER};
+    my $seen   = $self->{+_EVENTS_SEEN};
+
+    my ($eout, $eerr);
+    for my $set ([$stdout, \$eout, 'STDOUT', 0, \&parse_stdout_tap], [$stderr, \$eerr, 'STDERR', 1, \&parse_stderr_tap]) {
+        my ($buff, $want, $tag, $debug, $parser) = @$set;
+
+        while (@$buff) {
+            my $line = $buff->[0];
+            if (ref $line) {
+                $$want = $line;
+                last;
+            }
+
+            chomp($line);
+            if ($line =~ s/T2-HARNESS-(ESYNC|EVENT): (.+)//) {
+                my ($type, $data) = ($1, $2);
+
+                my $esync;
+                if ($type eq 'ESYNC') {
+                    $esync = [split /\Q$sep\E/, $data];
+                }
+                elsif ($type eq 'EVENT') {
+                    my $event_data = decode_json($data);
+                    my $pid        = $event_data->{pid};
+                    my $tid        = $event_data->{tid};
+                    my $sid        = $event_data->{stream_id};
+
+                    push @{$events->{$pid}->{$tid}} => $event_data;
+                    $esync = [$pid, $tid, $sid];
+                }
+                else {
+                    die "Unexpected harness type: $type";
+                }
+
+                # This becomes the esync, anything leftover actually belongs to the
+                # next line.
+                $buff->[0] = $esync;
+                $buff->[1] = defined($buff->[1]) ? $line . $buff->[1] : $line if length $line;
+                $$want     = $esync;
+
+                last;
+            }
+
+            shift @$buff;
+            my $facet_data = $parser->($line);
+            $facet_data ||= {info => [{details => $line, tag => $tag, debug => $debug}]};
+            my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
+
+            push @$ready => {
+                facet_data => $facet_data,
+                event_id   => $event_id,
+                job_id     => $self->{+JOB_ID},
+                run_id     => $self->{+RUN_ID},
+            };
+        }
+    }
+
+    if ($eout && $eerr) {
+        for my $set ($eout, $eerr) {
+            my ($pid, $tid, $sid) = @$set;
+
+            next if $seen->{$tid}->{$pid}->{$sid};
+            if (my $e = shift @{$events->{$pid}->{$tid}}) {
+                $seen->{$tid}->{$pid}->{$sid} = 1;
+
+                $e = ref($e) ? $e : decode_json($e);
+
+                die "Stream error: Events skipped or recieved out of order ($e->{stream_id} != $sid)"
+                    if $e->{stream_id} != $sid;
+
+                shift @$stdout;
+                shift @$stderr;
+
+                push @$ready => $self->_process_events_line($e);
+            }
+        }
+    }
+
+    return splice(@$ready, 0, $max);
+}
+
 sub file {
     my $self = shift;
     return $self->{+_FILE} if $self->{+_FILE};
@@ -116,7 +210,6 @@ sub file {
 }
 
 my %FILE_MAP = (
-    'events.jsonl' => [EVENTS_FILE, \&open_file],
     'stdout'       => [STDOUT_FILE, \&open_file],
     'stderr'       => [STDERR_FILE, \&open_file],
     'start'        => [START_FILE,  'Test2::Harness::Util::File::Value'],
@@ -147,16 +240,13 @@ sub _fill_stream_buffers {
     my $self = shift;
     my ($max) = @_;
 
-    my $events_buff = $self->{+_EVENTS_BUFFER} ||= [];
     my $stdout_buff = $self->{+_STDOUT_BUFFER} ||= [];
     my $stderr_buff = $self->{+_STDERR_BUFFER} ||= [];
 
-    my $events_file = $self->{+EVENTS_FILE} || $self->_open_file('events.jsonl');
     my $stdout_file = $self->{+STDOUT_FILE} || $self->_open_file('stdout');
     my $stderr_file = $self->{+STDERR_FILE} || $self->_open_file('stderr');
 
     my @sets = grep { defined $_->[0] } (
-        [$events_file, $events_buff],
         [$stdout_file, $stdout_buff],
         [$stderr_file, $stderr_buff],
     );
@@ -167,7 +257,8 @@ sub _fill_stream_buffers {
     # existence at any time though so continue to check if it fails.
     while (1) {
         my $added = 0;
-        for my $set (@sets) {
+        my @events_files = $self->events_files();
+        for my $set (@events_files, @sets) {
             my ($file, $buff) = @$set;
             next if $max && @$buff > $max;
 
@@ -184,6 +275,27 @@ sub _fill_stream_buffers {
         }
         last unless $added;
     }
+}
+
+sub events_files {
+    my $self = shift;
+
+    my $buff  = $self->{+_EVENTS_BUFFER} ||= {};
+    my $files = $self->{+_EVENTS_FILES}  ||= {};
+
+    my $dir = File::Spec->catfile($self->{+JOB_ROOT}, 'events');
+    return unless -d $dir;
+
+    opendir(my $dh, $dir) or die "Could not open events dir: $!";
+    for my $file (readdir($dh)) {
+        next unless '.jsonl' eq substr($file, -6);
+        $files->{$file} ||= [
+            split(ipc_separator() => substr(substr($file, 6 + length(ipc_separator())), 0, -6)),
+            open_file(File::Spec->catfile($dir, $file), '<:utf8'),
+        ];
+    }
+
+    return map {[$_->[2] => $buff->{$_->[0]}->{$_->[1]} ||= []]} values %$files;
 }
 
 sub _fill_buffers {
@@ -210,7 +322,7 @@ sub _fill_buffers {
     $self->_fill_stream_buffers($max);
 
     # Do not look for exit until we are done with the other streams
-    return if $self->{+_EXIT_DONE} || @{$self->{+_STDOUT_BUFFER}} || @{$self->{+_STDERR_BUFFER}} || @{$self->{+_EVENTS_BUFFER}};
+    return if $self->{+_EXIT_DONE} || @{$self->{+_STDOUT_BUFFER}} || @{$self->{+_STDERR_BUFFER}} || first { @$_ } map { values %{$_} } values %{$self->{+_EVENTS_BUFFER}};
 
     my $ended = 0;
     my $exit_file = $self->{+EXIT_FILE} || $self->_open_file('exit');
@@ -258,106 +370,6 @@ sub _poll_exit {
     return $self->_process_exit_line($value);
 }
 
-sub _poll_event {
-    my $self = shift;
-    # Intentionally ignoring the max argument, this only ever returns 1 item,
-    # and would not be called if max was 0.
-
-    my $buffer = $self->{+_EVENTS_BUFFER};
-    return unless @$buffer;
-
-    my $event_data = ref($buffer->[0]) eq "HASH"
-        ? $buffer->[0]
-        : decode_json($buffer->[0]);
-    my $id = $event_data->{stream_id};
-
-    # We need to wait for these to catch up.
-    return if $id > $self->{+_STDOUT_INDEX};
-    return if $id > $self->{+_STDERR_INDEX};
-
-    # All caught up, time for the event!
-    shift @$buffer;
-    $self->{+_EVENTS_INDEX} = $id if !defined($self->{+_EVENTS_INDEX}) || $id > $self->{+_EVENTS_INDEX};
-
-    return $self->_process_events_line($event_data);
-}
-
-sub _poll_stdout {
-    my $self = shift;
-    my ($max) = @_;
-
-    return if $self->{+_STDOUT_INDEX} > $self->{+_EVENTS_INDEX};
-
-    my $buffer = $self->{+_STDOUT_BUFFER};
-    return unless @$buffer;
-
-    my @out;
-    while (@$buffer) {
-        my $line = shift @$buffer;
-        chomp($line);
-
-        my $esync = 0;
-        if ($line =~ s/T2-HARNESS-ESYNC: (\d+)$//) {
-            $self->{+_STDOUT_INDEX} = $1 if !defined($self->{+_STDOUT_INDEX}) || $self->{+_STDOUT_INDEX} < $1;
-            $esync = 1;
-        }
-
-        last if $esync && !length($line);
-
-        my $id = $self->{+_STDOUT_ID}; # Do not bump yet!
-
-        my @event_datas = $self->_process_stdout_line($line);
-
-        for my $event_data (@event_datas) {
-            if(my $sid = $event_data->{stream_id}) {
-                $self->{+_STDOUT_INDEX} = $sid;
-                push @{$self->{+_EVENTS_BUFFER}} => $event_data;
-                last;
-            }
-
-            # Now we bump it!
-            $self->{+_STDOUT_ID}++;
-            push @out => $event_data;
-        }
-
-        last if $esync || ($max && @out >= $max);
-    }
-
-    return $self->merge_info(\@out);
-}
-
-sub _poll_stderr {
-    my $self = shift;
-    my ($max) = @_;
-
-    my @out;
-
-    until ($self->{+_STDERR_INDEX} > $self->{+_EVENTS_INDEX} || ($max && @out >= $max)) {
-        my $buffer = $self->{+_STDERR_BUFFER} or last;
-
-        my @lines;
-        while (@$buffer) {
-            my $line = shift @$buffer;
-            chomp($line);
-
-            if ($line =~ s/T2-HARNESS-ESYNC: (\d+)$//) {
-                $self->{+_STDERR_INDEX} = $1 if !defined($self->{+_STDERR_INDEX}) || $self->{+_STDERR_INDEX} < $1;
-                push @lines => $line if length($line);
-                last;
-            }
-
-            push @lines => $line;
-        }
-
-        last unless @lines;
-
-        my $id = $self->{+_STDERR_ID}++;
-        push @out => $self->_process_stderr_line(join "\n" => @lines);
-    }
-
-    return $self->merge_info(\@out);
-}
-
 sub merge_info {
     my $self = shift;
     my ($events) = @_;
@@ -398,60 +410,6 @@ sub _process_events_line {
     $event_data->{event_id} ||= $event_data->{facet_data}->{about}->{uuid} ||= gen_uuid();
 
     return $event_data;
-}
-
-sub _process_stderr_line {
-    my $self = shift;
-    my ($line) = @_;
-
-    chomp($line);
-
-    my $facet_data;
-    $facet_data = parse_stderr_tap($line);
-    $facet_data ||= {info => [{details => $line, tag => 'STDERR', debug => 1}]};
-
-    my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
-
-    return {
-        job_id     => $self->{+JOB_ID},
-        run_id     => $self->{+RUN_ID},
-        event_id   => $event_id,
-        facet_data => $facet_data,
-    };
-}
-
-sub _process_stdout_line {
-    my $self = shift;
-    my ($line) = @_;
-
-    chomp($line);
-
-    my @event_datas;
-
-    if ($line =~ s/T2-HARNESS-EVENT: (\d+) (.+)$//) {
-        my ($sid, $json) = ($1, $2);
-
-        my $event_data = decode_json($json);
-        $event_data->{stream_id} = $sid;
-        $event_data->{event_id} ||= $event_data->{facet_data}->{about}->{uuid} ||= gen_uuid();
-        push @event_datas => $event_data;
-        $line = undef if $line eq "";
-    }
-
-    if (defined $line) {
-        my $facet_data;
-
-        # Sometimes clever scripts mix events and directly printed TAP... sigh.
-        $facet_data = parse_stdout_tap($line);
-
-        $facet_data ||= {info => [{details => $line, tag => 'STDOUT', debug => 0}]};
-
-        my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
-
-        unshift @event_datas => {facet_data => $facet_data, event_id => $event_id};
-    }
-
-    return map {{ %{$_}, job_id => $self->{+JOB_ID}, run_id => $self->{+RUN_ID} }} @event_datas;
 }
 
 sub _process_start_line {
@@ -508,21 +466,6 @@ sub _process_exit_line {
             },
         }
     };
-}
-
-sub have_buffer {
-    my $self = shift;
-
-    # These are scalar buffers
-    return 1 if defined $self->{+_START_BUFFER};
-    return 1 if defined $self->{+_EXIT_BUFFER};
-
-    # These are array buffers
-    return 1 if @{$self->{+_EVENTS_BUFFER}};
-    return 1 if @{$self->{+_STDOUT_BUFFER}};
-    return 1 if @{$self->{+_STDERR_BUFFER}};
-
-    return 0;
 }
 
 1;

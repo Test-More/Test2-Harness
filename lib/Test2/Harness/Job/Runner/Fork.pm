@@ -72,7 +72,7 @@ sub run {
     $ENV{T2_HARNESS_FORKED}   = 1;
     $ENV{T2_HARNESS_PRELOAD}  = 1;
 
-    my ($in_file, $out_file, $err_file, $event_file) = $test->output_filenames;
+    my ($in_file, $out_file, $err_file, $event_dir) = $test->output_filenames;
 
     $0 = File::Spec->abs2rel($file);
     $class->_reset_DATA($file);
@@ -153,7 +153,7 @@ sub { shift->import(@_) }
     if ($job->use_stream) {
         $ENV{T2_FORMATTER} = 'Stream';
         require Test2::Formatter::Stream;
-        Test2::Formatter::Stream->import(file => $event_file);
+        Test2::Formatter::Stream->import(dir => $event_dir);
     }
 
     if ($job->times) {

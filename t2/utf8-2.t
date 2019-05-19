@@ -7,6 +7,7 @@ use Test2::API qw/test2_stack/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Tools::Basic qw/skip_all/;
 use File::Spec;
+use Test2::Util qw/get_tid ipc_separator/;
 
 print STDOUT "STDOUT: Mākaha\n";
 print STDERR "STDERR: Mākaha\n";
@@ -20,7 +21,8 @@ my $fmt = $hub->format;
 skip_all "This test requires the stream formatter"
     unless $fmt && $fmt->isa('Test2::Formatter::Stream');
 
-open(my $events_fh, '<:utf8', $fmt->file) or die "Could not open events file: $!";
+my $file = File::Spec->catfile($fmt->dir, join(ipc_separator() => 'events', $$, 0) . ".jsonl");
+open(my $events_fh, '<:utf8', $file) or die "Could not open events file: $!";
 open(my $stdout_fh, '<:utf8', File::Spec->catfile($ENV{TEST2_JOB_DIR}, 'stdout')) or die "Could not open STDOUT for reading: $!";
 open(my $stderr_fh, '<:utf8', File::Spec->catfile($ENV{TEST2_JOB_DIR}, 'stderr')) or die "Could not open STDERR for reading: $!";
 

@@ -38,9 +38,19 @@ sub parse_tap_line {
     my ($line) = @_;
     chomp($line);
 
-    my ($lead, $str) = ($line =~ m/^(\s+)(.+)$/) ? ($1, $2) : ('', $line);
-    $lead =~ s/\t/    /g;
-    my $nest = int(length($lead) / 4);
+    my ($lead, $lead_len, $nest, $str) = ('', 0, 0, $line);
+    if ($line =~ m/^(\s+)\S/) {
+        $lead = $1;
+        $str =~ s/^\Q$lead\E//mg;
+
+        $lead =~ s/\t/    /g;
+        $lead_len = length($lead);
+
+        # indentation other than 0 or a multiple of 4 spaces... not an event
+        return undef if $lead_len % 4;
+
+        $nest = $lead_len / 4;
+    }
 
     my @types = qw/buffered_subtest comment plan bail version/;
     for my $type (@types) {
@@ -226,9 +236,9 @@ sub parse_tap_comment {
     my $class = shift;
     my ($line) = @_;
 
-    return undef unless $line =~ m/^#/;
+    return undef unless $line =~ m/^\s*#/;
 
-    $line =~ s/^#\s*//msg;
+    $line =~ s/^\s*# ?//msg;
 
     return {
         info => [

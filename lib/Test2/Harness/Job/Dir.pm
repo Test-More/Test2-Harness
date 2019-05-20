@@ -34,8 +34,8 @@ use Test2::Harness::Util::HashBase qw{
 
     -_events_files -_events_buffer -_events_indexes -events_dir -_events_seen
 
-    -stderr_file -_stderr_buffer -_stderr_index
-    -stdout_file -_stdout_buffer -_stdout_index
+    -stderr_file -_stderr_buffer -_stderr_index -_stderr_cg
+    -stdout_file -_stdout_buffer -_stdout_index -_stdout_cg
 
     -start_file  -start_exists   -_start_buffer
     -exit_file   -_exit_done     -_exit_buffer
@@ -120,9 +120,35 @@ sub _poll_streams {
     my $events = $self->{+_EVENTS_BUFFER};
     my $seen   = $self->{+_EVENTS_SEEN};
 
+    my $stdout_cg = $self->{+_STDOUT_CG} ||= [];
+    my $stderr_cg = $self->{+_STDERR_CG} ||= [];
+
     my ($eout, $eerr);
-    for my $set ([$stdout, \$eout, 'STDOUT', 0, \&parse_stdout_tap], [$stderr, \$eerr, 'STDERR', 1, \&parse_stderr_tap]) {
-        my ($buff, $want, $tag, $debug, $parser) = @$set;
+    for my $set ([$stdout, \$eout, $stdout_cg, 'STDOUT', 0, \&parse_stdout_tap], [$stderr, \$eerr, $stderr_cg, 'STDERR', 1, \&parse_stderr_tap]) {
+        my ($buff, $want, $comment_group, $tag, $debug, $parser) = @$set;
+
+        my $add_event = sub {
+            my ($line) = @_;
+
+            my $facet_data = $parser->($line);
+            $facet_data ||= {info => [{details => $line, tag => $tag, debug => $debug}]};
+            my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
+
+            push @$ready => {
+                facet_data => $facet_data,
+                event_id   => $event_id,
+                job_id     => $self->{+JOB_ID},
+                run_id     => $self->{+RUN_ID},
+            };
+        };
+
+        my $comment_indent;
+        my $flush_comment_group = sub {
+            return unless @$comment_group;
+            my $line = join "\n" => @$comment_group;
+            $add_event->($line);
+            @$comment_group = ();
+        };
 
         while (@$buff) {
             my $line = $buff->[0];
@@ -158,20 +184,37 @@ sub _poll_streams {
                 $buff->[1] = defined($buff->[1]) ? $line . $buff->[1] : $line if length $line;
                 $$want     = $esync;
 
+                # Flush any comment group already buffered, an event is a sane
+                # boundary, not above that partial comments that might be
+                # interrupted by the sync point will be part of the next group
+                $flush_comment_group->();
+
                 last;
             }
 
-            shift @$buff;
-            my $facet_data = $parser->($line);
-            $facet_data ||= {info => [{details => $line, tag => $tag, debug => $debug}]};
-            my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
+            # Put 'comment' lines together in a group, IE buffer this until we are done with comments
+            if ($line =~ m/^(\s*)#/) {
+                my $indent = $1;
 
-            push @$ready => {
-                facet_data => $facet_data,
-                event_id   => $event_id,
-                job_id     => $self->{+JOB_ID},
-                run_id     => $self->{+RUN_ID},
-            };
+                # If comment indentation has changed we do not want to append to the group
+                $flush_comment_group->() if defined($comment_indent) && $indent ne $comment_indent;
+                $comment_indent = $indent;
+
+                push @$comment_group => $line;
+                shift @$buff;
+                next;
+            }
+
+            # non-comment line, flush the comment group
+            $flush_comment_group->();
+
+            shift @$buff;
+            $add_event->($line);
+        }
+
+        if ($self->{+_EXIT_DONE} && @$comment_group) {
+            # All done, flush the comment group
+            $flush_comment_group->();
         }
     }
 

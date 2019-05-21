@@ -72,6 +72,27 @@ subtest parse_stdout_tap_integration => sub {
     );
 
     is(
+        parse_stdout_tap("    #     An indented multiline padded comment\n    #     line 2"),
+        {
+            trace => {nested  => 1},
+            hubs  => [{nested => 1}],
+            info  => [
+                {
+                    debug   => 0,
+                    details => "    An indented multiline padded comment\n    line 2",
+                    tag     => 'NOTE',
+                }
+            ],
+            from_tap => {
+                details => "    #     An indented multiline padded comment\n    #     line 2",
+                source  => 'STDOUT',
+            },
+        },
+        "Got expected facets for an indented multiline padded comment"
+    );
+
+
+    is(
         parse_stdout_tap('TAP version 42'),
         {
             trace    => {nested  => 0},
@@ -477,6 +498,12 @@ subtest parse_tap_comment => sub {
         $CLASS->parse_tap_comment("# foo\n# bar\n# baz"),
         {info => [{tag => 'NOTE', debug => 0, details => "foo\nbar\nbaz"}]},
         "Striped all '#' out of multi-line comment"
+    );
+
+    is(
+        $CLASS->parse_tap_comment("    # foo\n    # bar\n    # baz"),
+        {info => [{tag => 'NOTE', debug => 0, details => "foo\nbar\nbaz"}]},
+        "Striped all '#' out of multi-line indented comment"
     );
 
     is(

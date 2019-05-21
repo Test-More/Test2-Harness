@@ -111,135 +111,218 @@ sub _poll_streams {
     my ($max) = @_;
 
     my $ready = $self->{+_READY_BUFFER};
-
     return splice(@$ready, 0, $max) unless @$ready < $max;
 
-    my $sep = ipc_separator();
-    my $stdout = $self->{+_STDOUT_BUFFER};
-    my $stderr = $self->{+_STDERR_BUFFER};
-    my $events = $self->{+_EVENTS_BUFFER};
-    my $seen   = $self->{+_EVENTS_SEEN};
+    my $stdout        = $self->{+_STDOUT_BUFFER};
+    my $stdout_cg     = $self->{+_STDOUT_CG} ||= [];
+    my $stdout_params = {
+        buffer        => $stdout,
+        comment_group => $stdout_cg,
+        tag           => 'STDOUT',
+        debug         => 0,
+        parser        => \&parse_stdout_tap,
+        max           => $max,
+    };
 
-    my $stdout_cg = $self->{+_STDOUT_CG} ||= [];
-    my $stderr_cg = $self->{+_STDERR_CG} ||= [];
+    my $stderr        = $self->{+_STDERR_BUFFER};
+    my $stderr_cg     = $self->{+_STDERR_CG} ||= [];
+    my $stderr_params = {
+        buffer        => $stderr,
+        comment_group => $stderr_cg,
+        tag           => 'STDERR',
+        debug         => 1,
+        parser        => \&parse_stderr_tap,
+        max           => $max,
+    };
 
-    my ($eout, $eerr);
-    for my $set ([$stdout, \$eout, $stdout_cg, 'STDOUT', 0, \&parse_stdout_tap], [$stderr, \$eerr, $stderr_cg, 'STDERR', 1, \&parse_stderr_tap]) {
-        my ($buff, $want, $comment_group, $tag, $debug, $parser) = @$set;
+    my $out_event = $self->_poll_stream($stdout_params);
+    my $err_event = $self->_poll_stream($stderr_params);
 
-        my $add_event = sub {
-            my ($line) = @_;
-
-            my $facet_data = $parser->($line);
-            $facet_data ||= {info => [{details => $line, tag => $tag, debug => $debug}]};
-            my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
-
-            push @$ready => {
-                facet_data => $facet_data,
-                event_id   => $event_id,
-                job_id     => $self->{+JOB_ID},
-                run_id     => $self->{+RUN_ID},
-            };
-        };
-
-        my $comment_indent;
-        my $flush_comment_group = sub {
-            return unless @$comment_group;
-            my $line = join "\n" => @$comment_group;
-            $add_event->($line);
-            @$comment_group = ();
-        };
-
-        while (@$buff) {
-            my $line = $buff->[0];
-            if (ref $line) {
-                $$want = $line;
-                last;
-            }
-
-            chomp($line);
-            if ($line =~ s/T2-HARNESS-(ESYNC|EVENT): (.+)//) {
-                my ($type, $data) = ($1, $2);
-
-                my $esync;
-                if ($type eq 'ESYNC') {
-                    $esync = [split /\Q$sep\E/, $data];
-                }
-                elsif ($type eq 'EVENT') {
-                    my $event_data = decode_json($data);
-                    my $pid        = $event_data->{pid};
-                    my $tid        = $event_data->{tid};
-                    my $sid        = $event_data->{stream_id};
-
-                    push @{$events->{$pid}->{$tid}} => $event_data;
-                    $esync = [$pid, $tid, $sid];
-                }
-                else {
-                    die "Unexpected harness type: $type";
-                }
-
-                # This becomes the esync, anything leftover actually belongs to the
-                # next line.
-                $buff->[0] = $esync;
-                $buff->[1] = defined($buff->[1]) ? $line . $buff->[1] : $line if length $line;
-                $$want     = $esync;
-
-                # Flush any comment group already buffered, an event is a sane
-                # boundary, not above that partial comments that might be
-                # interrupted by the sync point will be part of the next group
-                $flush_comment_group->();
-
-                last;
-            }
-
-            # Put 'comment' lines together in a group, IE buffer this until we are done with comments
-            if ($line =~ m/^(\s*)#/) {
-                my $indent = $1;
-
-                # If comment indentation has changed we do not want to append to the group
-                $flush_comment_group->() if defined($comment_indent) && $indent ne $comment_indent;
-                $comment_indent = $indent;
-
-                push @$comment_group => $line;
-                shift @$buff;
-                next;
-            }
-
-            # non-comment line, flush the comment group
-            $flush_comment_group->();
-
-            shift @$buff;
-            $add_event->($line);
-        }
-
-        if ($self->{+_EXIT_DONE} && @$comment_group) {
-            # All done, flush the comment group
-            $flush_comment_group->();
-        }
+    # Once both stderr and stdout are waiting for an event we should go ahead
+    # and stick the events into ready. More often than not both streams will be
+    # waiting for the same event, the read_buffer_event logic will avoid
+    # duplicates. We want to call it on both buffers because some IPC
+    # situations can result in both streams waiting for different events. Also
+    # we need the sync point removed from both buffers so things can continue.
+    # This is an intentional bottle-neck that keeps STDOUT, STDERR, and the
+    # Test2 events in sync so that stderr and stdout appear where they should
+    # (mostly) relative to the events. This is not perfect, but it is as close
+    # as we can get when recombining 3+ output streams.
+    if ($out_event && $err_event) {
+        $self->_poll_streams_ready_buffer_event($stdout);
+        $self->_poll_streams_ready_buffer_event($stderr);
     }
 
-    if ($eout && $eerr) {
-        for my $set ($eout, $eerr) {
-            my ($pid, $tid, $sid) = @$set;
-
-            next if $seen->{$tid}->{$pid}->{$sid};
-            if (my $e = shift @{$events->{$pid}->{$tid}}) {
-                $seen->{$tid}->{$pid}->{$sid} = 1;
-
-                $e = ref($e) ? $e : decode_json($e);
-
-                die "Stream error: Events skipped or recieved out of order ($e->{stream_id} != $sid)"
-                    if $e->{stream_id} != $sid;
-
-                shift @$stdout;
-                shift @$stderr;
-
-                push @$ready => $self->_process_events_line($e);
-            }
-        }
+    if ($self->{+_EXIT_DONE}) {
+        # All done, flush the comment groups
+        $self->_poll_stream_flush_group($stdout_params) if @$stdout_cg;
+        $self->_poll_stream_flush_group($stderr_params) if @$stderr_cg;
     }
 
     return splice(@$ready, 0, $max);
+}
+
+sub _poll_streams_ready_buffer_event {
+    my $self = shift;
+    my ($buffer) = @_;
+
+    my $set = shift @$buffer;
+    my ($pid, $tid, $sid) = @$set;
+
+    my $seen = $self->{+_EVENTS_SEEN};
+    return if $seen->{$tid}->{$pid}->{$sid};
+
+    my $e = shift @{$self->{+_EVENTS_BUFFER}->{$pid}->{$tid}} or return;
+    $seen->{$tid}->{$pid}->{$sid} = 1;
+
+    $e = ref($e) ? $e : decode_json($e);
+
+    die "Stream error: Events skipped or recieved out of order ($e->{stream_id} != $sid)"
+        if $e->{stream_id} != $sid;
+
+    push @{$self->{+_READY_BUFFER}} => $self->_process_events_line($e);
+}
+
+sub _poll_stream_add_event {
+    my $self = shift;
+    my ($line, $params) = @_;
+
+    my $parser = $params->{parser};
+    my $tag    = $params->{tag};
+    my $debug  = $params->{debug};
+
+    my $facet_data = $parser->($line);
+    $facet_data ||= {info => [{details => $line, tag => $tag, debug => $debug}]};
+    my $event_id = $facet_data->{about}->{uuid} ||= gen_uuid();
+
+    push @{$self->{+_READY_BUFFER}} => {
+        facet_data => $facet_data,
+        event_id   => $event_id,
+        job_id     => $self->{+JOB_ID},
+        run_id     => $self->{+RUN_ID},
+    };
+}
+
+sub _poll_stream_flush_group {
+    my $self = shift;
+    my ($params) = @_;
+
+    my $comment_group = $params->{comment_group};
+
+    return unless @$comment_group;
+
+    shift @$comment_group; # Remove the indentation state
+
+    my $line = join "\n" => @$comment_group;
+    $self->_poll_stream_add_event($line, $params);
+    @$comment_group = ();
+}
+
+sub _poll_stream_buffer_group {
+    my $self = shift;
+    my ($line, $params) = @_;
+
+    return undef unless $line =~ m/^(\s*)#/;
+    my $indent = $1;
+
+    my $comment_group = $params->{comment_group};
+
+    if (@$comment_group && $comment_group->[0] ne $indent) {
+        # If comment indentation has changed we do not want to append to the group
+        $self->_poll_stream_flush_group($params);
+        return 1;
+    }
+    else {
+        # Starting a new group
+        push @$comment_group => $indent;
+    }
+
+    push @$comment_group => $line;
+    shift @{$params->{buffer}};
+    return 0;
+}
+
+sub _poll_stream {
+    my $self = shift;
+    my ($params) = @_;
+
+    my $max           = $params->{max};
+    my $buff          = $params->{buffer};
+    my $comment_group = $params->{comment_group};
+
+    my $added = 0;
+    while (@$buff && (!$max || $added < $max)) {
+        my $line = $buff->[0];
+
+        # Already have an esync waiting
+        return 1 if ref $line;
+
+        chomp($line);
+
+        my $esync = $self->_poll_stream_process_harness_line($line, $params);
+        return 1 if $esync;
+
+        # Put 'comment' lines together in a group, IE buffer this until we are done with comments
+        # get undef if there was no comment to buffer
+        # get 1 if we had to flush the buffer and start a new one
+        # get 0 if we did buffer the event, but no flush
+        my $stat = $self->_poll_stream_buffer_group($line, $params);
+        if (defined($stat)) {
+            $added += $stat;
+            next;
+        }
+
+        # non-comment line, flush the comment group
+        if (@$comment_group) {
+            $self->_poll_stream_flush_group($params);
+            $added++;
+            next;
+        }
+
+        shift @$buff;
+        $self->_poll_stream_add_event($line, $params);
+        $added++;
+    }
+
+    return 0;
+}
+
+sub _poll_stream_process_harness_line {
+    my $self = shift;
+    my ($line, $params) = @_;
+
+    return undef unless $line =~ s/T2-HARNESS-(ESYNC|EVENT): (.+)//;
+    my ($type, $data) = ($1, $2);
+
+    my $esync;
+    if ($type eq 'ESYNC') {
+        $esync = [split ipc_separator() => $data];
+    }
+    elsif ($type eq 'EVENT') {
+        my $event_data = decode_json($data);
+        my $pid        = $event_data->{pid};
+        my $tid        = $event_data->{tid};
+        my $sid        = $event_data->{stream_id};
+
+        push @{$self->{+_EVENTS_BUFFER}->{$pid}->{$tid}} => $event_data;
+        $esync = [$pid, $tid, $sid];
+    }
+    else {
+        die "Unexpected harness type: $type";
+    }
+
+    # This becomes the esync, anything leftover actually belongs to the
+    # next line.
+    my $buff = $params->{buffer};
+    $buff->[0] = $esync;
+    $buff->[1] = defined($buff->[1]) ? $line . $buff->[1] : $line if length $line;
+
+    # Flush any comment group already buffered, an event is a sane
+    # boundary, not above that partial comments that might be
+    # interrupted by the sync point will be part of the next group
+    $self->_poll_stream_flush_group($params);
+
+    return $esync;
 }
 
 sub file {
@@ -253,11 +336,11 @@ sub file {
 }
 
 my %FILE_MAP = (
-    'stdout'       => [STDOUT_FILE, \&open_file],
-    'stderr'       => [STDERR_FILE, \&open_file],
-    'start'        => [START_FILE,  'Test2::Harness::Util::File::Value'],
-    'exit'         => [EXIT_FILE,   'Test2::Harness::Util::File::Value'],
-    'file'         => [FILE_FILE,   'Test2::Harness::Util::File::Value'],
+    'stdout' => [STDOUT_FILE, \&open_file],
+    'stderr' => [STDERR_FILE, \&open_file],
+    'start'  => [START_FILE,  'Test2::Harness::Util::File::Value'],
+    'exit'   => [EXIT_FILE,   'Test2::Harness::Util::File::Value'],
+    'file'   => [FILE_FILE,   'Test2::Harness::Util::File::Value'],
 );
 
 sub _open_file {
@@ -411,37 +494,6 @@ sub _poll_exit {
     my $value = delete $self->{+_EXIT_BUFFER};
 
     return $self->_process_exit_line($value);
-}
-
-sub merge_info {
-    my $self = shift;
-    my ($events) = @_;
-
-    my @out;
-    my $current;
-
-    for my $e (@$events) {
-        my $f = $e->{facet_data};
-        my $no_merge = first { $_ ne 'info' } keys %$f;
-        $no_merge ||= @{$f->{info}} > 1;
-
-        if ($no_merge) {
-            $current = undef;
-            push @out => $e;
-            next;
-        }
-
-        if ($current && $f->{info}->[0]->{tag} eq $current->{info}->[0]->{tag}) {
-            $current->{info}->[0]->{details} .= "\n" . $f->{info}->[0]->{details};
-            next;
-        }
-
-        push @out => $e;
-        $current = $f;
-        next;
-    }
-
-    return @out;
 }
 
 sub _process_events_line {

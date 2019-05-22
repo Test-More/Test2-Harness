@@ -155,13 +155,30 @@ sub _poll_streams {
         $self->_poll_streams_ready_buffer_event($stderr);
     }
 
-    if ($self->{+_EXIT_DONE}) {
+    if ($self->{+_EXIT_DONE} && (!$max || @$ready < $max)) {
         # All done, flush the comment groups
         $self->_poll_stream_flush_group($stdout_params) if @$stdout_cg;
         $self->_poll_stream_flush_group($stderr_params) if @$stderr_cg;
+
+        $self->_poll_streams_flush_events();
     }
 
     return splice(@$ready, 0, $max);
+}
+
+sub _poll_streams_flush_events {
+    my $self = shift;
+
+    my $buffers = $self->{+_EVENTS_BUFFER};
+    for my $pid (keys %$buffers) {
+        for my $tid (keys %{$buffers->{$pid}}) {
+            my $buffer = $buffers->{$pid}->{$tid} or next;
+            while(my $e = shift @$buffer) {
+                $e = ref($e) ? $e : decode_json($e);
+                push @{$self->{+_READY_BUFFER}} => $self->_process_events_line($e);
+            }
+        }
+    }
 }
 
 sub _poll_streams_ready_buffer_event {

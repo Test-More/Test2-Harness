@@ -61,6 +61,7 @@ sub init {
 sub run {
     my $self = shift;
 
+    # Do the runs.
     {
         while (1) {
             $self->{+CALLBACK}->() if $self->{+CALLBACK};
@@ -71,10 +72,9 @@ sub run {
         }
     }
 
-    $_->finish() for @{$self->{+RENDERERS}};
-
+    # Track pass/fail for all our jobs.
     my $seen = 0;
-    my(@fail, @pass);
+    my (@fail, @pass);
     while (my ($job_id, $watcher) = each %{$self->{+WATCHERS}}) {
         $seen++;
         if ($watcher->fail) {
@@ -85,6 +85,7 @@ sub run {
         }
     }
 
+    # Determine what plans didn't finish.
     my $lost;
     if (my $want = $self->{+JOBS_TODO}) {
         $lost = $want - $seen;
@@ -94,14 +95,14 @@ sub run {
         fail => \@fail,
         pass => \@pass,
         lost => $lost,
-    }
+    };
 }
 
 sub iteration {
     my $self = shift;
 
-    my $live = $self->{+LIVE};
-    my $jobs = $self->{+JOBS};
+    my $live    = $self->{+LIVE};
+    my $jobs    = $self->{+JOBS};
     my $job_map = $self->{+JOB_MAP};
 
     while (1) {
@@ -109,7 +110,7 @@ sub iteration {
 
         # Track active watchers in a second hash, this avoids looping over all
         # watchers each iteration.
-        foreach my $job_id ( sort keys %{$self->{+ACTIVE}} ) {
+        foreach my $job_id (sort keys %{$self->{+ACTIVE}}) {
             my $watcher = $self->{+ACTIVE}->{$job_id};
             # Give it up to 5 seconds
             my $killed = $watcher->killed || 0;
@@ -119,7 +120,7 @@ sub iteration {
                 $self->{+FEEDER}->job_completed($job_id);
                 delete $self->{+ACTIVE}->{$job_id};
             }
-            elsif($self->{+LIVE} && !$killed) {
+            elsif ($self->{+LIVE} && !$killed) {
                 push @events => $self->check_timeout($watcher);
             }
         }
@@ -201,11 +202,11 @@ sub send_notices {
 
     return unless $self->{+EMAIL_OWNER} || $self->{+SLACK_FAIL} || $self->{+SLACK_NOTIFY};
 
-    my $file = $watcher->file;
+    my $file   = $watcher->file;
     my $events = $watcher->events;
-    my $log = "";
+    my $log    = "";
     my $pretty = "";
-    my $host = hostname();
+    my $host   = hostname();
 
     require Test2::Formatter::Test2;
     open(my $fh, '>>', \$pretty) or die "Could not open pretty: $!";
@@ -242,12 +243,14 @@ sub send_slack_owners {
     require HTTP::Tiny;
     my $ht = HTTP::Tiny->new();
 
-    my @attach = ({
-        fallback => 'Test Output',
-        pretext  => 'Test Output',
-        text => "```$pretty```",
-        mrkdwn_in => ['text'],
-    });
+    my @attach = (
+        {
+            fallback  => 'Test Output',
+            pretext   => 'Test Output',
+            text      => "```$pretty```",
+            mrkdwn_in => ['text'],
+        }
+    );
 
     push @attach => {
         fallback => 'Test Event Log',
@@ -287,8 +290,8 @@ sub send_email_owners {
 
     my @to = $tf->meta('owner');
 
-    my $host     = hostname();
-    my $subject  = "Test Failure on $host";
+    my $host    = hostname();
+    my $subject = "Test Failure on $host";
 
     my $mail = Email::Stuffer->to(@to);
     $mail->from($self->{+EMAIL_FROM});
@@ -300,7 +303,7 @@ sub send_email_owners {
     $mail->attach(
         $log,
         content_type => 'application/x-json-stream',
-        filename => 'log.jsonl',
+        filename     => 'log.jsonl',
     );
 
     eval { $mail->send_or_die; 1 } or warn $@;
@@ -376,18 +379,18 @@ CAUTION: THIS IS ALMOST ALWAYS THE WRONG THING TO DO!
     );
 
     my $event_id = gen_uuid();
-    my $event = Test2::Harness::Event->new(
+    my $event    = Test2::Harness::Event->new(
         job_id     => $job_id,
         run_id     => $self->{+RUN_ID},
         event_id   => $event_id,
         stamp      => time,
-        facet_data => {info => \@info, about => { uuid => $event_id }},
+        facet_data => {info => \@info, about => {uuid => $event_id}},
     );
 
     return $event unless $self->{+LIVE};
     my $pid = $watcher->job->pid || 'NA';
 
-    if($type eq 'post-exit') {
+    if ($type eq 'post-exit') {
         $watcher->set_complete(1);
         return;
     }

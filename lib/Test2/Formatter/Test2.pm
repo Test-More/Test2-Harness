@@ -63,6 +63,7 @@ sub DEFAULT_TAG_COLOR() {
         'RUN INFO' => Term::ANSIColor::color('bold bright_blue'),
         'JOB INFO' => Term::ANSIColor::color('bold bright_blue'),
         'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
+        'RETRY'    => Term::ANSIColor::color('bold bright_white'),
         'PASSED'   => Term::ANSIColor::color('bold bright_green'),
         'FAILED'   => Term::ANSIColor::color('bold bright_red'),
         'REASON'   => Term::ANSIColor::color('magenta'),

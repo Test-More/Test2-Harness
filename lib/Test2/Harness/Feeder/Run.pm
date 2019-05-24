@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     -job_ids
     -seen_jobs
     -tail
+    -is_retry
 
     -batch
 };
@@ -126,7 +127,7 @@ sub poll {
 
             push @new_jobs => $self->_harness_event(
                 $job_id,
-                harness_job_launch => {stamp => time},
+                harness_job_launch => {stamp => time, retry => $self->{+IS_RETRY}},
                 harness_job        => $job,
             );
         }

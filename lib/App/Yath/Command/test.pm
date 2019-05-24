@@ -12,6 +12,7 @@ use Test2::Harness::Run;
 
 use Test2::Harness::Util::JSON qw/encode_json/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
+use File::Path qw/remove_tree/;
 
 use Test2::Harness::Util qw/parse_exit/;
 use App::Yath::Util qw/is_generated_test_pl find_yath/;
@@ -32,7 +33,7 @@ sub has_logger    { 1 }
 sub has_display   { 1 }
 sub manage_runner { 1 }
 
-sub summary { "Run tests" }
+sub summary  { "Run tests" }
 sub cli_args { "[--] [test files/dirs] [::] [arguments to test scripts]" }
 
 sub description {
@@ -114,34 +115,34 @@ sub options {
         $self->SUPER::options(),
 
         {
-            spec    => 'default-search=s@',
-            field   => 'default_search',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Job Options',
-            usage   => ['--default-search t'],
-            default => sub { ['./t', './t2', 'test.pl'] },
+            spec      => 'default-search=s@',
+            field     => 'default_search',
+            used_by   => {runner => 1, jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--default-search t'],
+            default   => sub { ['./t', './t2', 'test.pl'] },
             long_desc => "Specify the default file/dir search. defaults to './t', './t2', and 'test.pl'. The default search is only used if no files were specified at the command line",
         },
 
         {
-            spec    => 'default-at-search=s@',
-            field   => 'default_at_search',
-            used_by => {runner => 1, jobs => 1},
-            section => 'Job Options',
-            usage   => ['--default-at-search xt'],
-            default => sub { ['./xt'] },
+            spec      => 'default-at-search=s@',
+            field     => 'default_at_search',
+            used_by   => {runner => 1, jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--default-at-search xt'],
+            default   => sub { ['./xt'] },
             long_desc => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",
         },
 
         {
-            spec => 'slack-url=s',
-            field => 'slack_url',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--slack-url "URL"'],
-            summary => ["Specify an API endpoint for slack webhook integrations"],
+            spec      => 'slack-url=s',
+            field     => 'slack_url',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--slack-url "URL"'],
+            summary   => ["Specify an API endpoint for slack webhook integrations"],
             long_desc => "This should be your slack webhook url.",
-            action => sub {
+            action    => sub {
                 my $self = shift;
                 my ($settings, $field, $arg, $opt) = @_;
                 eval { require HTTP::Tiny; 1 } or die "Cannot use --slack-url without HTTP::Tiny: $@";
@@ -152,53 +153,53 @@ sub options {
         },
 
         {
-            spec => 'slack=s@',
-            field => 'slack',
+            spec    => 'slack=s@',
+            field   => 'slack',
             used_by => {jobs => 1},
             section => 'Job Options',
-            usage => ['--slack "#CHANNEL"', '--slack "@USER"'],
+            usage   => ['--slack "#CHANNEL"', '--slack "@USER"'],
             summary => ['Send results to a slack channel', 'Send results to a slack user'],
         },
 
         {
-            spec => 'slack-fail=s@',
-            field => 'slack_fail',
+            spec    => 'slack-fail=s@',
+            field   => 'slack_fail',
             used_by => {jobs => 1},
             section => 'Job Options',
-            usage => ['--slack-fail "#CHANNEL"', '--slack-fail "@USER"'],
+            usage   => ['--slack-fail "#CHANNEL"', '--slack-fail "@USER"'],
             summary => ['Send failing results to a slack channel', 'Send failing results to a slack user'],
         },
 
         {
-            spec => 'slack-notify!',
-            field => 'slack_notify',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--slack-notify', '--no-slack-notify'],
-            summary => ['On by default if --slack-url is specified'],
+            spec      => 'slack-notify!',
+            field     => 'slack_notify',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--slack-notify', '--no-slack-notify'],
+            summary   => ['On by default if --slack-url is specified'],
             long_desc => "Send slack notifications to the slack channels/users listed in test meta-data when tests fail.",
-            default => 1,
+            default   => 1,
         },
 
         {
-            spec => 'slack-log!',
-            field => 'slack_log',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--slack-log', '--no-slack-log'],
-            summary => ['Off by default, log file will be attached if available'],
+            spec      => 'slack-log!',
+            field     => 'slack_log',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--slack-log', '--no-slack-log'],
+            summary   => ['Off by default, log file will be attached if available'],
             long_desc => "Attach the event log to any slack notifications.",
-            default => 0,
+            default   => 0,
         },
 
         {
-            spec => 'email-from=s@',
-            field => 'email_from',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--email-from foo@example.com'],
+            spec      => 'email-from=s@',
+            field     => 'email_from',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--email-from foo@example.com'],
             long_desc => "If any email is sent, this is who it will be from",
-            default => sub {
+            default   => sub {
                 my $user = getlogin() || scalar(getpwuid($<)) || $ENV{USER} || 'unknown';
                 my $host = hostname() || 'unknown';
                 return "${user}\@${host}";
@@ -206,13 +207,13 @@ sub options {
         },
 
         {
-            spec => 'email=s@',
-            field => 'email',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--email foo@example.com'],
+            spec      => 'email=s@',
+            field     => 'email',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--email foo@example.com'],
             long_desc => "Email the test results (and any log file) to the specified email address(es)",
-            action => sub {
+            action    => sub {
                 my $self = shift;
                 my ($settings, $field, $arg, $opt) = @_;
                 eval { require Email::Stuffer; 1 } or die "Cannot use --email without Email::Stuffer: $@";
@@ -221,13 +222,13 @@ sub options {
         },
 
         {
-            spec => 'email-owner',
-            field => 'email_owner',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--email-owner'],
+            spec      => 'email-owner',
+            field     => 'email_owner',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--email-owner'],
             long_desc => 'Email the owner of broken tests files upon failure. Add `# HARNESS-META-OWNER foo@example.com` to the top of a test file to give it an owner',
-            action => sub {
+            action    => sub {
                 my $self = shift;
                 my ($settings, $field, $arg, $opt) = @_;
                 eval { require Email::Stuffer; 1 } or die "Cannot use --email-owner without Email::Stuffer: $@";
@@ -236,33 +237,33 @@ sub options {
         },
 
         {
-            spec => 'batch-owner-notices!',
-            field => 'batch_owner_notices',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--no-batch-owner-notices'],
+            spec      => 'batch-owner-notices!',
+            field     => 'batch_owner_notices',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--no-batch-owner-notices'],
             long_desc => 'Usually owner failures are sent as a single batch at the end of testing. Toggle this to send failures as they happen.',
-            default => 1,
+            default   => 1,
         },
 
         {
-            spec => 'notify-text=s',
-            field => 'notify_text',
-            used_by => {jobs => 1},
-            section => 'Job Options',
-            usage => ['--notify-text "custom notification info"'],
+            spec      => 'notify-text=s',
+            field     => 'notify_text',
+            used_by   => {jobs => 1},
+            section   => 'Job Options',
+            usage     => ['--notify-text "custom notification info"'],
             long_desc => "Add a custom text snippet to email/slack notifications",
         },
 
         {
-            spec => 'qvf!',
-            field => 'formatter',
-            used_by => {display => 1},
+            spec      => 'qvf!',
+            field     => 'formatter',
+            used_by   => {display => 1},
             section   => 'Display Options',
             usage     => ['--qvf'],
             summary   => ['Quiet, but verbose on failure'],
             long_desc => 'Hide all output from tests when they pass, except to say they passed. If a test fails then ALL output from the test is verbosely output.',
-            action   => sub {
+            action    => sub {
                 my ($self, $settings, $field, $arg) = @_;
                 if ($arg) {
                     $settings->{formatter} = '+Test2::Formatter::QVF';
@@ -274,10 +275,10 @@ sub options {
         },
 
         {
-            spec => 'progress!',
-            field => 'progress',
-            default => 1,
-            used_by => {display => 1},
+            spec      => 'progress!',
+            field     => 'progress',
+            default   => 1,
+            used_by   => {display => 1},
             section   => 'Display Options',
             usage     => ['--no-progress'],
             summary   => ['Turn off progress indicators'],
@@ -303,6 +304,24 @@ sub options {
             summary => ['Disable Test2::Plugin::MemUsage (Loaded by default)'],
             default => 1,
         },
+        {
+            spec    => 'retry=i',
+            field   => 'retry',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage   => ['--retry=1'],
+            summary => ['Run any jobs that failed a second time. NOTE: --retry=1 means failing tests will be attempted twice!'],
+            default => 0,
+        },
+        {
+            spec    => 'retry-job-count=i',
+            field   => 'retry_job_count',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage   => ['--retry-job-count=1'],
+            summary => ['When re-running failed tests, use a different number of parallel jobs. You might do this if your tests are not reliably parallel safe'],
+            default => 0,
+        },
     );
 }
 
@@ -314,8 +333,8 @@ sub feeder {
     my $run = $self->make_run_from_settings(finite => 1);
 
     my $runner = Test2::Harness::Run::Runner->new(
-        dir => $settings->{dir},
-        run => $run,
+        dir    => $settings->{dir},
+        run    => $run,
         script => find_yath(),
     );
 
@@ -342,46 +361,115 @@ sub feeder {
     return ($feeder, $runner, $pid, $job_count);
 }
 
+sub re_run_setup {
+    my ($self, @jobs_to_retry) = @_;
+
+    my $settings = $self->{+SETTINGS};
+
+    remove_tree($settings->{dir}, {safe => 1, keep_root => 1});
+
+    my $run = $self->make_run_from_settings(
+        finite    => 1,
+        job_count => $settings->{'retry_job_count'} || $settings->{'job_count'} || 1
+    );
+
+    my $runner = Test2::Harness::Run::Runner->new(
+        dir    => $settings->{dir},
+        run    => $run,
+        script => find_yath(),
+    );
+
+    my $queue = $runner->queue;
+    $queue->start;
+
+    my $job_count = 0;
+    foreach my $job (@jobs_to_retry) {
+        my $tf = Test2::Harness::Util::TestFile->new(file => $job->{'file'});
+        $queue->enqueue($tf->queue_item($job->{'job_name'}));
+        $job_count++;
+    }
+
+    my $pid = $runner->spawn(jobs_todo => $job_count);
+
+    $queue->end;
+
+    my $feeder = Test2::Harness::Feeder::Run->new(
+        run      => $run,
+        runner   => $runner,
+        dir      => $settings->{dir},
+        keep_dir => $settings->{keep_dir},
+        is_retry => 1,
+    );
+
+    return ($feeder, $runner, $pid, $job_count);
+}
+
 sub run_command {
     my $self = shift;
 
     my $settings = $self->{+SETTINGS};
 
+    my ($feeder, $runner, $pid, $stat, $jobs_todo);
+    my $runs_to_try = ($settings->{'retry'} || 0) + 1;
+    my $retry_job_count = $settings->{'retry_job_count'} || $settings->{'job_count'} || 1;
+
+    my ($ok);
+
     my $renderers = $self->renderers;
     my $loggers   = $self->loggers;
+    ($feeder, $runner, $pid, $jobs_todo) = $self->feeder or die "No feeder!";
+    my $harness;
 
-    my ($feeder, $runner, $pid, $stat, $jobs_todo);
-    my $ok = eval {
-        ($feeder, $runner, $pid, $jobs_todo) = $self->feeder or die "No feeder!";
+    my $runs_tried = 0;
+    while ($runs_tried++ < $runs_to_try) {
+        $ok = eval {
 
-        my $harness = Test2::Harness->new(
-            run_id            => $settings->{run_id},
-            live              => $pid ? 1 : 0,
-            feeder            => $feeder,
-            loggers           => $loggers,
-            renderers         => $renderers,
-            event_timeout     => $settings->{event_timeout},
-            post_exit_timeout => $settings->{post_exit_timeout},
-            jobs              => $settings->{jobs},
-            jobs_todo         => $jobs_todo,
+            $harness = Test2::Harness->new(
+                run_id            => $settings->{run_id},
+                live              => $pid ? 1 : 0,
+                feeder            => $feeder,
+                loggers           => $loggers,
+                renderers         => $renderers,
+                event_timeout     => $settings->{event_timeout},
+                post_exit_timeout => $settings->{post_exit_timeout},
+                jobs              => $settings->{jobs},
+                jobs_todo         => $jobs_todo,
 
-            $settings->{batch_owner_notices} ? () : (
-                email_owner  => $settings->{email_owner},
-                email_from   => $settings->{email_from},
-                slack_url    => $settings->{slack_url},
-                slack_fail   => $settings->{slack_fail},
-                slack_notify => $settings->{slack_notify},
-                slack_log    => $settings->{slack_log},
-                notify_text  => $settings->{notify_text},
-            ),
-        );
+                $settings->{batch_owner_notices} ? () : (
+                    email_owner  => $settings->{email_owner},
+                    email_from   => $settings->{email_from},
+                    slack_url    => $settings->{slack_url},
+                    slack_fail   => $settings->{slack_fail},
+                    slack_notify => $settings->{slack_notify},
+                    slack_log    => $settings->{slack_log},
+                    notify_text  => $settings->{notify_text},
+                ),
+            );
 
-        $stat = $harness->run();
+            # Emit a message at the harness level saying we're doing a re-run.
+            if ($runs_tried > 1) {
+                $feeder->_harness_event(
+                    0,    # Job ID 0 means it's related to the overall run.
+                    harness_retry => {'runs_tried' => $runs_tried}
+                );
+            }
 
-        1;
-    };
-    my $err = $@;
-    warn $err unless $ok;
+            $stat = $harness->run();
+
+            1;
+        };
+        my $err = $@;
+        warn $err unless $ok;
+        my $failed_jobs = $stat->{'fail'};
+
+        last if $runs_tried >= $runs_to_try;
+        last unless scalar @$failed_jobs;
+
+        ($feeder, $runner, $pid, $jobs_todo) = $self->re_run_setup(@$failed_jobs);
+    }
+
+    # All runs we were going to attempt have finished. Let all the renderers know we are done.
+    $_->finish() foreach (@$renderers);
 
     my $exit = 0;
 
@@ -416,7 +504,7 @@ sub run_command {
     $self->paint("\n", '=' x 80, "\n");
     $self->paint("\nRun ID: $settings->{run_id}\n");
 
-    my $bad = $stat ? $stat->{fail} : [];
+    my $bad  = $stat ? $stat->{fail} : [];
     my $lost = $stat ? $stat->{lost} : 0;
 
     # Possible failure causes
@@ -463,7 +551,7 @@ sub run_command {
     if ($settings->{batch_owner_notices} && ($fail || @$bad)) {
         my (%owners, %slacks);
         for my $filename (map { $_->file } @$bad) {
-            my $file = Test2::Harness::Util::TestFile->new(file => $filename);
+            my $file   = Test2::Harness::Util::TestFile->new(file => $filename);
             my @owners = $file->meta('owner');
             my @slacks = $file->meta('slack');
             push @{$owners{$_}} => File::Spec->abs2rel($filename) for @owners;
@@ -482,7 +570,7 @@ sub run_command {
 
         if ($settings->{cover}) {
             require IPC::Cmd;
-            if(my $cover = IPC::Cmd::can_run('cover')) {
+            if (my $cover = IPC::Cmd::can_run('cover')) {
                 system($^X, (map { "-I$_" } @INC), $cover);
             }
             else {
@@ -618,8 +706,8 @@ sub send_slack_notify {
 }
 
 sub send_email {
-    my $self = shift;
-    my $body = join '' => @{$self->{+PAINTED}};
+    my $self     = shift;
+    my $body     = join '' => @{$self->{+PAINTED}};
     my $settings = $self->{+SETTINGS};
     $self->_send_email($body, @{$settings->{email}});
 }
@@ -628,10 +716,10 @@ sub send_owner_email {
     my $self = shift;
     my ($owners) = @_;
 
-    my $host  = hostname();
+    my $host = hostname();
     for my $owner (sort keys %$owners) {
         my $fails = join "\n" => map { "  $_" } @{$owners->{$owner}};
-        my $body  = <<"        EOT";
+        my $body = <<"        EOT";
 The following test(s) failed on $host. You are receiving this email because you
 are listed as an owner of these tests.
 

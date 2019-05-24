@@ -378,6 +378,11 @@ been gathered to that point and creates the junit xml file.
 
 An C<XML::Generator> instance, to be used to generate XML output.
 
+=item init
+
+This subroutine is called during object initialization for Test2::Hanress objects.
+We do basic setup here.
+
 =back
 
 =head1 SOURCE

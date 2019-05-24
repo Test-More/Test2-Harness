@@ -52,6 +52,11 @@ moment and needed to be able to generate JUnit output for.
 
     An `XML::Generator` instance, to be used to generate XML output.
 
+- init
+
+    This subroutine is called during object initialization for Test2::Hanress objects.
+    We do basic setup here.
+
 # SOURCE
 
 The source code repository for Test2-Harness-Renderer-JUnit can be found at

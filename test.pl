@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # HARNESS-NO-PRELOAD
 # HARNESS-CAT-LONG
 # THIS IS A GENERATED YATH RUNNER TEST

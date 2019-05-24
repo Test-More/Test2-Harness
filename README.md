@@ -64,11 +64,11 @@ The source code repository for Test2-Harness-Renderer-JUnit can be found at
 
 # MAINTAINERS
 
-- Todd Rinaldo &lt;lt>toddr@cpanel.net>
+- Todd Rinaldo Todd Rinaldo, `<toddr at cpanel.net>`
 
 # AUTHORS
 
-- Todd Rinaldo &lt;lt>toddr@cpan.org>
+- Todd Rinaldo, `<toddr at cpanel.net>`
 
 # COPYRIGHT
 

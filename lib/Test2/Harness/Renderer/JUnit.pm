@@ -394,7 +394,7 @@ F<https://github.com/CpanelInc/Test2-Harness-Renderer-JUnit>.
 
 =over 4
 
-=item Todd Rinaldo <lt>toddr@cpanel.netE<gt>
+=item Todd Rinaldo Todd Rinaldo, C<< <toddr at cpanel.net> >>
 
 =back
 
@@ -402,7 +402,7 @@ F<https://github.com/CpanelInc/Test2-Harness-Renderer-JUnit>.
 
 =over 4
 
-=item Todd Rinaldo <lt>toddr@cpan.orgE<gt>
+=item Todd Rinaldo, C<< <toddr at cpanel.net> >>
 
 =back
 

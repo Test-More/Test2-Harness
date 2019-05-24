@@ -1,0 +1,63 @@
+{
+   "abstract" : "Captures Test2::Harness results and emits a junit xml file.",
+   "author" : [
+      "Todd E. Rinaldo <toddr@cpanel.net>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "ExtUtils::MakeMaker version 7.34, CPAN::Meta::Converter version 2.150010",
+   "license" : [
+      "artistic_2"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : 2
+   },
+   "name" : "Test2-Harness-Renderer-JUnit",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "inc"
+      ]
+   },
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "ExtUtils::MakeMaker" : "0"
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "ExtUtils::MakeMaker" : "0"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "File::Spec" : "0",
+            "Storable" : "0",
+            "Test2::Harness::Renderer" : "0.001077",
+            "Test2::Harness::Util::HashBase" : "0.001077",
+            "XML::Generator" : "0",
+            "perl" : "5.010001"
+         }
+      },
+      "test" : {
+         "requires" : {
+            "Test::More" : "0"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/cpanelinc/Test2-Harness-Renderer-JUnit/issues"
+      },
+      "license" : [
+         "http://dev.perl.org/licenses/"
+      ],
+      "repository" : {
+         "url" : "https://github.com/cpanelinc/Test2-Harness-Renderer-JUnit"
+      }
+   },
+   "version" : "0.001077",
+   "x_serialization_backend" : "JSON::PP version 2.97001"
+}

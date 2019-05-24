@@ -5,7 +5,7 @@ use ExtUtils::MakeMaker;
 
 my %WriteMakefileArgs = (
     NAME             => 'Test2::Harness::Renderer::JUnit',
-    AUTHOR           => q{Todd E. Rinaldo <toddr@cpan.org>},
+    AUTHOR           => q{Todd E. Rinaldo <toddr@cpanel.net>},
     VERSION_FROM     => 'lib/Test2/Harness/Renderer/JUnit.pm',
     ABSTRACT_FROM    => 'lib/Test2/Harness/Renderer/JUnit.pm',
     LICENSE          => 'artistic_2',
@@ -17,7 +17,11 @@ my %WriteMakefileArgs = (
         'Test::More' => '0',
     },
     PREREQ_PM => {
-        'Test2::Harness::Renderer' => 0,
+        'Test2::Harness::Renderer' => '0.001077',
+        'Test2::Harness::Util::HashBase' => '0.001077',
+        'File::Spec' => 0,
+        'Storable' => 0,
+        'XML::Generator' => 0,
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'Test2-Harness-Renderer-JUnit-*' },

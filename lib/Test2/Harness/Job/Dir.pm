@@ -78,13 +78,15 @@ sub poll {
     # will return the amount we still need.
     # If this finds that we do not need any more it will exit the loop instead
     # of returning a number.
-    my $check = defined($max) ? sub {
+    my $check = defined($max)
+        ? sub {
         my $want = $max - scalar(@out) - scalar(@new);
         return undef if $want < 1;
         return $want;
-    } : sub { 0 };
+        }
+        : sub { 0 };
 
-    while(!defined($max) || @out < $max) {
+    while (!defined($max) || @out < $max) {
         # Micro-optimization, 'start' only ever has 1 thing, so do not enter
         # the sub if we do not need to.
         push @new => $self->_poll_start($check->() // last) if $self->{+_START_BUFFER};
@@ -103,7 +105,7 @@ sub poll {
         @new = ();
     }
 
-    return map { Test2::Harness::Event->new(%{$_}) } @out;
+    return map { Test2::Harness::Event->new(stamp => time, %{$_}) } @out;
 }
 
 sub _poll_streams {
@@ -211,7 +213,7 @@ sub _poll_stream_flush_group {
 
     return unless @$comment_group;
 
-    shift @$comment_group; # Remove the indentation state
+    shift @$comment_group;    # Remove the indentation state
 
     my $line = join "\n" => @$comment_group;
     $self->_poll_stream_add_event($line, $params);
@@ -382,17 +384,17 @@ sub _fill_stream_buffers {
     # Cache the result of the exists check on success, files can come into
     # existence at any time though so continue to check if it fails.
     while (1) {
-        my $added = 0;
+        my $added        = 0;
         my @events_files = $self->events_files();
         for my $set (@events_files, @sets) {
             my ($file, $buff) = @$set;
             next if $max && @$buff > $max;
 
-            my $pos = tell($file);
+            my $pos  = tell($file);
             my $line = <$file>;
             if (defined($line) && ($self->{+_EXIT_DONE} || substr($line, -1) eq "\n")) {
                 push @$buff => $line;
-                seek($file, 0, 1) if eof($file); # Reset EOF.
+                seek($file, 0, 1) if eof($file);    # Reset EOF.
                 $added++;
             }
             else {
@@ -421,7 +423,7 @@ sub events_files {
         ];
     }
 
-    return map {[$_->[2] => $buff->{$_->[0]}->{$_->[1]} ||= []]} values %$files;
+    return map { [$_->[2] => $buff->{$_->[0]}->{$_->[1]} ||= []] } values %$files;
 }
 
 sub _fill_buffers {
@@ -457,13 +459,13 @@ sub _fill_buffers {
         my $line = $exit_file->read_line;
         if (defined($line)) {
             $self->{+_EXIT_BUFFER} = $line;
-            $self->{+_EXIT_DONE} = 1;
+            $self->{+_EXIT_DONE}   = 1;
             $ended++;
         }
     }
     elsif ($self->{+RUNNER_EXITED}) {
         $self->{+_EXIT_BUFFER} = '-1';
-        $self->{+_EXIT_DONE} = 1;
+        $self->{+_EXIT_DONE}   = 1;
         $ended++;
     }
 
@@ -564,7 +566,6 @@ sub _process_exit_line {
 }
 
 1;
-
 
 __END__
 

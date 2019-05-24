@@ -125,7 +125,7 @@ sub _process {
             ],
         };
 
-        $event = Test2::Harness::Event->new(facet_data => $f);
+        $event = Test2::Harness::Event->new(stamp => time, facet_data => $f);
 
         push @out => $event;
     }
@@ -142,7 +142,7 @@ sub _process {
             delete $fd->{harness_watcher}->{no_render};
             $fd->{parent}->{hid} ||= $n;
             $fd->{parent}->{children} ||= $st->{children};
-            $fd->{harness}->{closed_by} = $event;
+            $fd->{harness}->{closed_by}     = $event;
             $fd->{harness}->{closed_by_eid} = $event->{event_id};
 
             my $pn = $n - 1;
@@ -188,8 +188,8 @@ sub subtest_process {
 
         my $id = 1;
         for my $sf (@{$f->{parent}->{children}}) {
-            $sf->{harness}->{job_id} ||= $f->{harness}->{job_id};
-            $sf->{harness}->{run_id} ||= $f->{harness}->{run_id};
+            $sf->{harness}->{job_id}   ||= $f->{harness}->{job_id};
+            $sf->{harness}->{run_id}   ||= $f->{harness}->{run_id};
             $sf->{harness}->{event_id} ||= $sf->{about}->{uuid} ||= gen_uuid();
             $subwatcher->subtest_process($sf);
         }
@@ -254,7 +254,7 @@ sub subtest_fail_error_facet_list {
     my $count = $self->{+ASSERTION_COUNT};
 
     my $numbers = $self->{+NUMBERS};
-    my $max = max(keys %$numbers);
+    my $max     = max(keys %$numbers);
     if ($max) {
         for my $i (1 .. $max) {
             if (!$numbers->{$i}) {

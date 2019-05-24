@@ -14,7 +14,7 @@ use Test2::Harness::Util::File::JSONL;
 use Test2::Harness::Util qw/open_file/;
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
-use IO::Uncompress::Gunzip qw($GunzipError) ;
+use IO::Uncompress::Gunzip qw($GunzipError);
 
 BEGIN { require Test2::Harness::Feeder; our @ISA = ('Test2::Harness::Feeder') }
 
@@ -63,11 +63,11 @@ sub poll {
 
         # Strip out any previous harness errors
         if (my $errors = $line->{facet_data}->{errors}) {
-            @$errors = grep {!$_->{from_harness}} @$errors;
+            @$errors = grep { !$_->{from_harness} } @$errors;
         }
 
-        push @out => Test2::Harness::Event->new(%$line);
-        last if $max && @out >= $max
+        push @out => Test2::Harness::Event->new(stamp => time, %$line);
+        last if $max && @out >= $max;
     }
 
     return @out;

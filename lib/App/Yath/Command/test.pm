@@ -12,7 +12,6 @@ use Test2::Harness::Run;
 
 use Test2::Harness::Util::JSON qw/encode_json/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
-use File::Path qw/remove_tree/;
 
 use Test2::Harness::Util qw/parse_exit/;
 use App::Yath::Util qw/is_generated_test_pl find_yath/;
@@ -362,11 +361,15 @@ sub feeder {
 }
 
 sub re_run_setup {
-    my ($self, @jobs_to_retry) = @_;
+    my ($self, $runs_tried, @jobs_to_retry) = @_;
 
     my $settings = $self->{+SETTINGS};
 
-    remove_tree($settings->{dir}, {safe => 1, keep_root => 1});
+    # We need to use a new rundir for each pass. So we'll just set a base dir inside of our tempdir.
+    # That way we only need to report the one directory at the end of the run.
+    $settings->{'retry_basedir'} //= $settings->{'dir'};
+    $settings->{'dir'} = $settings->{'retry_basedir'} . '/retry' . sprintf("%03d", $runs_tried);
+    mkdir $settings->{'dir'};
 
     my $run = $self->make_run_from_settings(
         finite    => 1,
@@ -465,7 +468,7 @@ sub run_command {
         last if $runs_tried >= $runs_to_try;
         last unless scalar @$failed_jobs;
 
-        ($feeder, $runner, $pid, $jobs_todo) = $self->re_run_setup(@$failed_jobs);
+        ($feeder, $runner, $pid, $jobs_todo) = $self->re_run_setup($runs_tried, @$failed_jobs);
     }
 
     # All runs we were going to attempt have finished. Let all the renderers know we are done.
@@ -582,7 +585,7 @@ sub run_command {
     $self->send_email if $settings->{email};
     $self->send_slack if $settings->{slack} && $settings->{slack_url};
 
-    print "Keeping work dir: $settings->{dir}\n" if $settings->{keep_dir} && $settings->{dir};
+    printf("Keeping work dir: %s\n", $settings->{'retry_basedir'} // $settings->{dir}) if $settings->{keep_dir} && $settings->{dir};
 
     print "Wrote " . ($ok ? '' : '(Potentially Corrupt) ') . "log file: $settings->{log_file}\n"
         if $settings->{log};

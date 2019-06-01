@@ -87,7 +87,6 @@ sub process {
     while (my $line = <$fh>) {
         my $ln = $.;
         if (time - $last >= 0.1) {
-            print "$ln\r";
             $last = time;
         }
 
@@ -122,7 +121,6 @@ sub flush_ready_jobs {
         $record_job ||= 1 if $job->{job_id} eq $self->{+JOB0_ID};
         $record_job ||= 1 if $mode >= $MODES{qvf} && $job->{fail};;
 
-        my @local_events;
         for my $event (sort { $a->{event_ord} <=> $b->{event_ord} } values %$events) {
             my $is_diag = delete $event->{is_diag};
             my $record_event = $record_job || ($mode >= $MODES{qvfd} && $is_diag);
@@ -133,6 +131,7 @@ sub flush_ready_jobs {
 
             $event->{facets} = encode_json($event->{facets}) if $event->{facets};
             $event->{orphan} = encode_json($event->{orphan}) if $event->{orphan};
+
             push @events => $event;
         }
     }
@@ -203,9 +202,10 @@ sub process_event {
 
     my $nested = $f->{hubs}->[0]->{nested} || 0;
 
-    $e->{trace_id} ||= $f->{trace}->{uuid};
-    $e->{stamp}    ||= format_stamp($params{stamp});
-    $e->{nested}   //= $nested;
+    $e->{trace_id}  ||= $f->{trace}->{uuid};
+    $e->{stamp}     ||= format_stamp($params{stamp});
+    $e->{event_ord} ||= $job->{event_ord}++;
+    $e->{nested} //= $nested;
 
     $e->{is_diag} //=
            ($f->{errors} && @{$f->{errors}})
@@ -225,7 +225,6 @@ sub process_event {
         return;
     }
 
-    $e->{event_ord} ||= $job->{event_ord}++;
     $e->{facets} = $f;
     $e->{facets_line} = $params{line};
 

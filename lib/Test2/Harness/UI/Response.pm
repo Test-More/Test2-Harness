@@ -76,9 +76,14 @@ sub stream {
 
         my ($done, $fetch);
         if(my $rs = $params{resultset}) {
+            my $json = Test2::Harness::Util::JSON::JSON()->new->utf8(0)->convert_blessed(1)->allow_nonref(1);
             my $go = 1;
             $done = sub { !$go };
-            $fetch = sub { $go = $rs->next() or return; encode_json($go) . "\n" };
+            $fetch = sub {
+                $go = $rs->next() or return;
+                my $out = $json->encode($go) . "\n";
+                return $out;
+            };
         }
         else {
             $done  = $params{done} or croak "'done' is a required parameter";

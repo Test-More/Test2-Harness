@@ -74,7 +74,7 @@ sub handle {
 
     $res->stream(
         env          => $req->env,
-        content_type => 'application/x-jsonl',
+        content_type => 'application/x-jsonl; charset=utf-8',
         resultset    => $rs,
     );
 

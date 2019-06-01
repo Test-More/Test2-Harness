@@ -69,6 +69,7 @@ sub run_command {
 
     $ENV{HARNESS_UI_DSN} = $dsn;
 
+    print "DSN: $dsn\n";
     my $config = Test2::Harness::UI::Config->new(
         dbi_dsn     => $dsn,
         dbi_user    => '',

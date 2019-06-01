@@ -37,7 +37,7 @@ my $user = $config->schema->resultset('User')->create({username => 'root', passw
 my %projects;
 my @runs;
 my @modes = qw/complete complete complete complete/;
-for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2/) {
+for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2/) {
     my $fh = IO::Uncompress::Bunzip2->new("./demo/$file") or die "Could not open bz2 file: $Bunzip2Error";
     my $log_data;
     bzip2 $fh => \$log_data or die "IO::Compress::Bzip2 failed: $Bzip2Error";
@@ -77,7 +77,7 @@ for my $file (qw/moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2
 
 my @commands = (
     [$^X, '-Ilib', 'author_tools/run_imports.pl', $dsn],
-    ['starman', '-Ilib', '-r', './demo.psgi'],
+    ['starman', '-Ilib', '-r', './demo/demo.psgi'],
 );
 
 my $start = $$;

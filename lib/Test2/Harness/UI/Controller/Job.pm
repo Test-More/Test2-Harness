@@ -37,7 +37,7 @@ sub handle {
 
     $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id;
 
-    my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html');
+    my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');
 
     if ($ct eq 'application/json') {
         $res->content_type($ct);

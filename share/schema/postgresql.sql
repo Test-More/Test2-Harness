@@ -190,7 +190,7 @@ CREATE TABLE events (
 
     stamp           TIMESTAMP   DEFAULT NULL,
 
-    parent_id       UUID        DEFAULT NULL REFERENCES events(event_id),
+    parent_id       UUID        DEFAULT NULL, -- REFERENCES events(event_id),
     trace_id        UUID        DEFAULT NULL,
     nested          INT         DEFAULT 0,
 

@@ -162,9 +162,35 @@ t2hui.render_event = function(e) {
         ltools.append(etools);
 
         var render = $('<div class="col3 message ' + classes + '" style="padding-left: ' + indent + '"></div>');
-        var pre = $('<pre class="testout"></pre>');
-        pre.append(line[2]);
-        render.append(pre);
+        if (line[3]) {
+            var table = $('<table class="testtable"></table>');
+
+            var header = $('<tr></tr>');
+            table.append(header);
+            for (var x = 0; x < line[3].header.length; x++) {
+                var th = $('<th class="header"></th>');
+                th.text(line[3].header[x]);
+                header.append(th);
+            }
+            render.append(table);
+
+            for (var x = 0; x < line[3].rows.length; x++) {
+                var row_data = line[3].rows[x];
+                var row = $('<tr></tr>');
+                table.append(row);
+
+                for (var y = 0; y < row_data.length; y++) {
+                    var col = $('<td class="' + line[3].header[y].toLowerCase() + '"></td>');
+                    col.text(row_data[y]);
+                    row.append(col);
+                }
+            }
+        }
+        else {
+            var pre = $('<pre class="testout"></pre>');
+            pre.text(line[2]);
+            render.append(pre);
+        }
 
         if (p && line[0] == 'assert') {
             var expand = $('<div class="stoggle">+</div>');

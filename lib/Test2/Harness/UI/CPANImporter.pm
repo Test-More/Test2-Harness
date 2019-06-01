@@ -70,8 +70,6 @@ sub run {
                 updated => \'NOW()',
                 cpan_batch => $batch,
             }) or die "Could not add permissions for $id on $project";
-
-            print "Added $id to $project_name\n";
         }
     }
     close($dfh);

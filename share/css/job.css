@@ -241,3 +241,17 @@ div.tag_TIMEOUT  { color: #b26521;                     }
 div.tag_TIME     { color: #12539e;                     }
 div.tag_MEMORY   { color: #12539e;                     }
 
+table.testtable {
+    border: 1px solid black;
+    border-collapse: collapse;
+    margin: 4px;
+}
+
+table.testtable th.header {
+    background: #AAAAAA;
+}
+
+table.testtable td, table.testtable th {
+    border: 1px solid black;
+    padding: 4px;
+}

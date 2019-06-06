@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 die "No directory specified" unless @ARGV;
 chdir($ARGV[0]) or die "Could not chdir to $ARGV[0]";

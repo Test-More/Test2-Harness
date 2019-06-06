@@ -2,7 +2,7 @@ package Test2::Harness::Feeder;
 use strict;
 use warnings;
 
-our $VERSION = '0.001077';
+our $VERSION = '0.001078';
 
 use Carp qw/confess/;
 

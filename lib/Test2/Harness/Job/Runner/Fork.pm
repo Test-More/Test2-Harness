@@ -2,7 +2,7 @@ package Test2::Harness::Job::Runner::Fork;
 use strict;
 use warnings;
 
-our $VERSION = '0.001077';
+our $VERSION = '0.001078';
 
 use POSIX;
 use File::Spec();

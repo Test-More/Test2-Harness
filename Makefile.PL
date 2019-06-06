@@ -71,7 +71,7 @@ my %WriteMakefileArgs = (
     "goto::file" => "0.005",
     "parent" => 0
   },
-  "VERSION" => "0.001077",
+  "VERSION" => "0.001078",
   "test" => {
     "TESTS" => "t/*.t t/App/*.t t/App/Yath/*.t t/App/Yath/Command/*.t t/Test2/*.t t/Test2/Formatter/*.t t/Test2/Harness/*.t t/Test2/Harness/Feeder/*.t t/Test2/Harness/Job/*.t t/Test2/Harness/Job/Runner/*.t t/Test2/Harness/Logger/*.t t/Test2/Harness/Renderer/*.t t/Test2/Harness/Run/*.t t/Test2/Harness/Run/Runner/*.t t/Test2/Harness/Util/*.t t/Test2/Harness/Util/File/*.t t/Test2/Tools/*.t"
   }

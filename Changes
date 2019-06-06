@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001077  2019-06-06 15:04:32-07:00 America/Los_Angeles
+
     - Add --retry options (toddr)
     - Make sure all events are flushed if there is a sync issue
     - Added some tests

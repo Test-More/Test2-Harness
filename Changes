@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - A few fixes
+    - Add table support
+    - Fix db connection issues in demo
+
 0.000001  2019-04-28 03:53:19-07:00 America/Los_Angeles
 
     - Initial Release

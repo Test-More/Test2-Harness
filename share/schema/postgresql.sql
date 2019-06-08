@@ -135,6 +135,7 @@ CREATE TABLE runs (
     -- From Log
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
+    retried         INTEGER         DEFAULT NULL,
     parameters      JSONB           DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
@@ -152,6 +153,7 @@ CREATE TABLE jobs (
     name            TEXT            DEFAULT NULL,
     file            TEXT            DEFAULT NULL,
     fail            BOOL            DEFAULT NULL,
+    retried         BOOL            DEFAULT NULL,
     exit            INT             DEFAULT NULL,
     launch          TIMESTAMP       DEFAULT NULL,
     start           TIMESTAMP       DEFAULT NULL,

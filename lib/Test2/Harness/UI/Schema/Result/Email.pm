@@ -178,7 +178,7 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 02:58:27
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5jzsCZMh/EHh31Pqi4z/hg
 
-our $VERSION = '0.000002';
+our $VERSION = '0.000003';
 
 sub is_primary {
     my $self = shift;

@@ -137,7 +137,7 @@ __PACKAGE__->has_many(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 06:16:47
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:OeZR9VGwwsx++1nEpbfB0g
 
-our $VERSION = '0.000002';
+our $VERSION = '0.000003';
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

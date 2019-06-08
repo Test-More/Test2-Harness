@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::User;
 use strict;
 use warnings;
 
-our $VERSION = '0.000002';
+our $VERSION = '0.000003';
 
 use Text::Xslate();
 use Test2::Harness::UI::Util qw/share_dir/;

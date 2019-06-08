@@ -19,7 +19,7 @@
     <dd>
         <h2>Project config</h2>
 
-        2 config files are supported, .yath.rc and .yath.user.rc.
+        Two config files are supported, .yath.rc and .yath.user.rc.
 
         <p>
 
@@ -33,7 +33,7 @@
 
         <script class="output">
         [test]      # Name of the command to which the following arguments are applied
-        -pet 30     # Set the post-exit timeout
+        --pet 30    # Set the post-exit timeout
         --qvf       # Use quiet but verbose on failure mode
         -P Moose    # Preload Moose
         </script>
@@ -52,7 +52,7 @@
         test-specific timeouts via directives written in the test itself:
 
         <script class="output">
-            $ yath test -et 300
+            $ yath test --et 300
         </script>
         <script class="code">
             #!/usr/bin/perl
@@ -66,7 +66,7 @@
         This is also configurable:
 
         <script class="output">
-            $ yath test -pet 300
+            $ yath test --pet 300
         </script>
         <script class="code">
             #!/usr/bin/perl
@@ -260,17 +260,3 @@
         </dl>
     </dd>
 </dl>
-
-<!--
-    <dt id=""></dt>
-    <dd>
-        <h2></h2>
-    </dd>
-
-  * Notifications
-
-
-
-
-
--->

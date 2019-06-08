@@ -34,15 +34,185 @@
         </ul>
     </dd>
 
-    <dt id="more">More</dt>
+    <dt id="example">Example</dt>
     <dd>
-        <h2>More tools!</h2>
+        <h2>Example</h2>
 
-        <br />
-        <br />
-        <b>I did not have time to finish this section, so I will generate a log file and show you the tools in action!</b>
+        Here is an example test run which will be used to demonstrate the next several tools:
+        <script class="output">
+[  FAIL  ]  job  1  + fail
+(  DIAG  )  job  1    Failed test 'fail'
+(  DIAG  )  job  1    at t/fail1.t line 3.
+(  DIAG  )  job  1    Seeded srand with seed '20190608' from local date.
+( FAILED )  job  1    t/fail1.t
+< REASON >  job  1    Test script returned error (Err: 1)
+< REASON >  job  1    Assertion failures were encountered (Count: 1)
+[  FAIL  ]  job  2  + fail
+(  DIAG  )  job  2    Failed test 'fail'
+(  DIAG  )  job  2    at t/fail2.t line 3.
+(  DIAG  )  job  2    Seeded srand with seed '20190608' from local date.
+( FAILED )  job  2    t/fail2.t
+< REASON >  job  2    Test script returned error (Err: 1)
+< REASON >  job  2    Assertion failures were encountered (Count: 1)
+[  FAIL  ]  job  3  + fail
+(  DIAG  )  job  3    Failed test 'fail'
+(  DIAG  )  job  3    at t/fail3.t line 3.
+(  DIAG  )  job  3    Seeded srand with seed '20190608' from local date.
+( FAILED )  job  3    t/fail3.t
+< REASON >  job  3    Test script returned error (Err: 1)
+< REASON >  job  3    Assertion failures were encountered (Count: 1)
+( PASSED )  job  4    t/pass1.t
+( PASSED )  job  5    t/pass2.t
+( PASSED )  job  6    t/pass3.t
+
+================================================================================
+
+Run ID: A3C40FD8-8A30-11E9-BEB6-7D470975F158
+
+The following test jobs failed:
+  [A3C64D0C-8A30-11E9-BEB6-7D470975F158] 1: t/fail1.t
+  [A3C650F4-8A30-11E9-BEB6-7D470975F158] 2: t/fail2.t
+  [A3C6531A-8A30-11E9-BEB6-7D470975F158] 3: t/fail3.t
+
+Wrote log file: mylog.jsonl
+        </script>
     </dd>
 
+    <dt id="replay">Replay</dt>
+    <dd>
+        <h2>Replay</h2>
+
+        This command lets you replay a run from a log. This will not actually
+        re-run the tests, it will just re-render it. You can provide alternate
+        rendering options to make it easier to read. You can also provide a
+        list of jobs to show, others will be hidden.
+
+        <p>
+
+        Here we ask it to only output from one of the failures.
+        <script class="output">
+$ yath replay mylog.t A3C650F4-8A30-11E9-BEB6-7D470975F158
+[  FAIL  ]  job  2  + fail
+(  DIAG  )  job  2    Failed test 'fail'
+(  DIAG  )  job  2    at t/fail2.t line 3.
+(  DIAG  )  job  2    Seeded srand with seed '20190608' from local date.
+( FAILED )  job  2    t/fail2.t
+< REASON >  job  2    Test script returned error (Err: 1)
+< REASON >  job  2    Assertion failures were encountered (Count: 1)
+        </script>
+
+        <p>
+        Now we will ask it for the verbose version of the output
+
+        <script class="output">
+$ yath replay -v mylog.t A3C650F4-8A30-11E9-BEB6-7D470975F158
+( LAUNCH )  job  2    t/fail2.t
+[  FAIL  ]  job  2  + fail
+(  DIAG  )  job  2    Failed test 'fail'
+(  DIAG  )  job  2    at t/fail2.t line 3.
+[  PLAN  ]  job  2    Expected assertions: 1
+[ MEMORY ]  job  2    rss:  25844kB
+[ MEMORY ]  job  2    size: 46244kB
+[ MEMORY ]  job  2    peak: 46244kB
+[  TIME  ]  job  2    0.03409s on wallclock (0.04 usr 0.00 sys + 0.00 cusr 0.00 csys = 0.04 CPU)
+(  DIAG  )  job  2    Seeded srand with seed '20190608' from local date.
+( FAILED )  job  2    t/fail2.t
+< REASON >  job  2    Test script returned error (Err: 1)
+< REASON >  job  2    Assertion failures were encountered (Count: 1)
+        </script>
+    </dd>
+
+    <dt id="failed">Failed</dt>
+    <dd>
+        <h2>Failed</h2>
+
+        <br />
+        <br />
+
+        The 'failed' command is a simple way to get a list of what test files failed in a given test log:
+
+        <br />
+        <script class="output">
+$ yath failed mylog.t
+t/fail1.t
+t/fail2.t
+t/fail3.t
+        </script>
+    </dd>
+
+    <dt id="times">Times</dt>
+    <dd>
+        <h2>Times</h2>
+
+        This command lets you see how long each test took. It also breaks the
+        timing down to different stages.
+        <p>
+
+        <dl class="medium">
+            <dt>Total</dt><dd>Total time taken</dd>
+            <dt>Startup</dt><dd>Time between test executing and first event seen</dd>
+            <dt>Events</dt><dd>Total time between the first and last events seen</dd>
+            <dt>Cleanup</dt><dd>Total time between the last event seen and the process exiting</dd>
+        </dl>
+
+        <script class="output">
+yath times -s events mylog.t
++----------+----------+----------+----------+-----------+
+| Events   | Total    | Startup  | Cleanup  | File      |
++----------+----------+----------+----------+-----------+
+| 0.04089s | 0.09885s | 0.05796s | 0.00000s | t/pass3.t |
+| 0.04172s | 0.09259s | 0.05087s | 0.00000s | t/fail1.t |
+| 0.04222s | 0.09375s | 0.05153s | 0.00000s | t/fail2.t |
+| 0.04254s | 0.09774s | 0.05520s | 0.00000s | t/pass2.t |
+| 0.04425s | 0.09526s | 0.05101s | 0.00000s | t/fail3.t |
+| 0.04602s | 0.09696s | 0.05094s | 0.00000s | t/pass1.t |
+| --       | --       | --       | --       | --        |
+| 0.25764s | 0.57515s | 0.31751s | 0.00000s | TOTAL     |
++----------+----------+----------+----------+-----------+
+        </script>
+
+        You can also provide a custom sort order:
+
+        <script class="output">
+$ yath times -s events,startup mylog.t
++----------+----------+----------+----------+-----------+
+| Events   | Startup  | Total    | Cleanup  | File      |
++----------+----------+----------+----------+-----------+
+| 0.04089s | 0.05796s | 0.09885s | 0.00000s | t/pass3.t |
+| 0.04172s | 0.05087s | 0.09259s | 0.00000s | t/fail1.t |
+| 0.04222s | 0.05153s | 0.09375s | 0.00000s | t/fail2.t |
+| 0.04254s | 0.05520s | 0.09774s | 0.00000s | t/pass2.t |
+| 0.04425s | 0.05101s | 0.09526s | 0.00000s | t/fail3.t |
+| 0.04602s | 0.05094s | 0.09696s | 0.00000s | t/pass1.t |
+| --       | --       | --       | --       | --        |
+| 0.25764s | 0.31751s | 0.57515s | 0.00000s | TOTAL     |
++----------+----------+----------+----------+-----------+
+        </script>
+    </dd>
+
+    <dt id="ui">UI</dt>
+    <dd>
+        <h2>UI</h2>
+
+        <b>This command requires a seperate module: Test2::Harness::UI</b>
+
+        <p>
+
+        This command will load a log file into a PostgreSQL database and launch
+        a web-app that lets you view the run in detail.
+
+        <p>
+
+        Assuming you are watching this presentation and not simply reading my
+        slides, I will now demonstrate the command.
+
+        <p>
+
+        For anyone reading the slides, here is a screenshot for your trouble:
+        <p>
+
+        <img src="ui.png" style="border: 1px dashed blue; margin-top: 8px;"/>
+    </dd>
 </dl>
 
 <!--

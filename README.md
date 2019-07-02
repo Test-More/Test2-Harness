@@ -418,7 +418,7 @@ The source code repository for Test2-Harness can be found at
 
 # COPYRIGHT
 
-Copyright 2017 Chad Granum <exodist7@gmail.com>.
+Copyright 2019 Chad Granum <exodist7@gmail.com>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

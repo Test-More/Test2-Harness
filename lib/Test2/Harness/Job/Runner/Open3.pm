@@ -2,7 +2,7 @@ package Test2::Harness::Job::Runner::Open3;
 use strict;
 use warnings;
 
-our $VERSION = '0.001078';
+our $VERSION = '0.001079';
 
 use IPC::Open3 qw/open3/;
 use Test2::Harness::Util qw/open_file write_file local_env/;

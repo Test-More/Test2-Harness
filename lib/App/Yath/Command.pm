@@ -2,7 +2,7 @@ package App::Yath::Command;
 use strict;
 use warnings;
 
-our $VERSION = '0.001078';
+our $VERSION = '0.001079';
 
 use Carp qw/croak confess/;
 use File::Temp qw/tempdir/;

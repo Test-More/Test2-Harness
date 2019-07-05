@@ -10,15 +10,41 @@ BEGIN {
         require JSON::MaybeXS;
         JSON::MaybeXS->import('JSON');
         1;
+
+        if (JSON() eq 'JSON::PP') {
+            *JSON_IS_PP = sub() { 1 };
+            *JSON_IS_XS = sub() { 0 };
+            *JSON_IS_CPANEL = sub() { 0 };
+            *JSON_IS_CPANEL_OR_XS = sub() { 0 };
+        }
+        elsif (JSON() eq 'JSON::XS') {
+            *JSON_IS_PP = sub() { 0 };
+            *JSON_IS_XS = sub() { 1 };
+            *JSON_IS_CPANEL = sub() { 0 };
+            *JSON_IS_CPANEL_OR_XS = sub() { 1 };
+        }
+        elsif (JSON() eq 'Cpanel::JSON::XS') {
+            *JSON_IS_PP = sub() { 0 };
+            *JSON_IS_XS = sub() { 0 };
+            *JSON_IS_CPANEL = sub() { 1 };
+            *JSON_IS_CPANEL_OR_XS = sub() { 1 };
+        }
     };
 
     unless ($ok) {
         require JSON::PP;
         *JSON = sub() { 'JSON::PP' };
+
+        *JSON_IS_PP = sub() { 1 };
+        *JSON_IS_XS = sub() { 0 };
+        *JSON_IS_CPANEL = sub() { 0 };
+        *JSON_IS_CPANEL_OR_XS = sub() { 0 };
     }
+
 }
 
 our @EXPORT = qw{JSON encode_json decode_json encode_pretty_json encode_canon_json};
+our @EXPORT_OK = qw{JSON_IS_PP JSON_IS_XS JSON_IS_CPANEL JSON_IS_CPANEL_OR_XS};
 BEGIN { require Exporter; our @ISA = qw(Exporter) }
 
 my $json          = JSON->new->utf8(1)->convert_blessed(1)->allow_nonref(1);

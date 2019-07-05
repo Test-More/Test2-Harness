@@ -10,7 +10,7 @@ use IO::Handle;
 use File::Spec();
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
-use Test2::Harness::Util::JSON qw/JSON/;
+use Test2::Harness::Util::JSON qw/JSON JSON_IS_XS/;
 use Test2::Harness::Util qw/hub_truth/;
 
 use Test2::Util qw/get_tid ipc_separator/;
@@ -26,6 +26,16 @@ BEGIN {
 
     require constant;
     constant->import(ENCODER => $J);
+
+    if (JSON_IS_XS) {
+        require JSON::PP;
+        my $JPP = JSON::PP->new;
+        $JPP->indent(0);
+        $JPP->convert_blessed(1);
+        $JPP->allow_blessed(1);
+
+        constant->import(ENCODER_PP => $JPP);
+    }
 }
 
 my ($ROOT_TID, $ROOT_PID, $ROOT_DIR);
@@ -163,18 +173,48 @@ sub record {
 
         my $event_id = $facets->{about}->{uuid} ||= gen_uuid();
 
-        $json = ENCODER->encode(
-            {
-                stamp        => time,
-                times        => [times],
-                stream_id    => $id,
-                tid          => $tid,
-                pid          => $$,
-                event_id     => $event_id,
-                facet_data   => $facets,
-                assert_count => $self->{+_NO_NUMBERS} ? undef : $num,
+        if (JSON_IS_XS) {
+            for my $encoder (ENCODER, ENCODER_PP) {
+                local $@;
+                my $ok = eval {
+                    $json = $encoder->encode(
+                        {
+                            stamp        => time,
+                            times        => [times],
+                            stream_id    => $id,
+                            tid          => $tid,
+                            pid          => $$,
+                            event_id     => $event_id,
+                            facet_data   => $facets,
+                            assert_count => $self->{+_NO_NUMBERS} ? undef : $num,
+                        }
+                    );
+                    1;
+                };
+                my $err = $@;
+                last if $ok;
+
+                # Intercept bug in JSON::XS so we can fall back to JSON::PP
+                next if $encoder eq ENCODER && $err =~ m/Modification of a read-only value attempted/;
+
+                # Different error, time to die.
+                die $err;
             }
-        );
+        }
+        else {
+            $json = ENCODER->encode(
+                {
+                    stamp        => time,
+                    times        => [times],
+                    stream_id    => $id,
+                    tid          => $tid,
+                    pid          => $$,
+                    event_id     => $event_id,
+                    facet_data   => $facets,
+                    assert_count => $self->{+_NO_NUMBERS} ? undef : $num,
+                }
+            );
+        }
     }
 
     # Local is expensive! Only do it if we really need to.

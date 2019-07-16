@@ -135,6 +135,49 @@ t2hui.build_dashboard_run = function(run) {
         tools.append(go);
     }
 
+    var pin = $('<i class="fa-star"></i>');
+    var pintool = $('<a class="tool etoggle"></a>');
+
+    var pinstate;
+    if (run.pinned) {
+        pintool.prop('title', 'unpin');
+        pinstate = true;
+        pin.addClass('fas');
+    }
+    else {
+        pintool.prop('title', 'pin');
+        pinstate = false;
+        pin.addClass('far');
+    }
+
+    pintool.append(pin);
+    tools.prepend(pintool);
+
+    pintool.click(function() {
+        var url = link + '/pin';
+        $.ajax(url, {
+            'data': { 'content-type': 'application/json' },
+            'error': function(a, b, c) { alert("Failed to pin run") },
+            'success': function(item) {
+                pinstate = !pinstate;
+                pintool.children().remove();
+
+                pin = $('<i class="fa-star"></i>');
+                if (pinstate) {
+                    pintool.prop('title', 'unpin');
+                    pin.addClass('fas');
+                }
+                else {
+                    pintool.prop('title', 'pin');
+                    pin.addClass('far');
+                }
+
+                pintool.append(pin);
+            },
+        });
+
+    });
+
     me.push($('<div class="col2 count success_txt">' + t2hui.dashboard_clean_maybe(run.passed) + '</div>')[0]);
     me.push($('<div class="col3 count error_txt">' + t2hui.dashboard_clean_maybe_fail(run.failed) + '</div>')[0]);
     me.push($('<div class="col4 project">' + run.project + '</div>')[0]);

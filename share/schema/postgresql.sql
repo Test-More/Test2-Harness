@@ -123,6 +123,8 @@ CREATE TABLE runs (
     error           TEXT            DEFAULT NULL,
     project_id      UUID            NOT NULL REFERENCES projects(project_id),
 
+    pinned          BOOL            NOT NULL DEFAULT FALSE,
+
     -- User Input
     version         CITEXT          DEFAULT NULL,
     tier            CITEXT          DEFAULT NULL,

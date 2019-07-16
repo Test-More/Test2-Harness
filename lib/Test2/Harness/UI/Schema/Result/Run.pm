@@ -82,6 +82,12 @@ __PACKAGE__->table("runs");
   is_nullable: 0
   size: 16
 
+=head2 pinned
+
+  data_type: 'boolean'
+  default_value: false
+  is_nullable: 0
+
 =head2 version
 
   data_type: 'citext'
@@ -133,6 +139,11 @@ __PACKAGE__->table("runs");
   data_type: 'integer'
   is_nullable: 1
 
+=head2 retried
+
+  data_type: 'integer'
+  is_nullable: 1
+
 =head2 parameters
 
   data_type: 'jsonb'
@@ -164,6 +175,8 @@ __PACKAGE__->add_columns(
   { data_type => "text", is_nullable => 1 },
   "project_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "pinned",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "version",
   { data_type => "citext", is_nullable => 1 },
   "tier",
@@ -194,6 +207,8 @@ __PACKAGE__->add_columns(
   "passed",
   { data_type => "integer", is_nullable => 1 },
   "failed",
+  { data_type => "integer", is_nullable => 1 },
+  "retried",
   { data_type => "integer", is_nullable => 1 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
@@ -279,8 +294,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:35lWHgmUJsDiUAkUr0aE9w
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-07-16 09:19:17
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:TcUhB4aT+9dAp7iUDXP65g
 
 our $VERSION = '0.000003';
 

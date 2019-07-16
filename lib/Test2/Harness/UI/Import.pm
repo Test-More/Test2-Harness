@@ -83,12 +83,8 @@ sub process {
     my $schema = $self->{+CONFIG}->schema;
 
     local $| = 1;
-    my $last = 0;
     while (my $line = <$fh>) {
         my $ln = $.;
-        if (time - $last >= 0.1) {
-            $last = time;
-        }
 
         my $error = $self->process_event_json($ln => $line);
         $error ||= $self->flush_ready_jobs() if $self->{+READY_JOBS} && @{$self->{+READY_JOBS}};
@@ -118,8 +114,8 @@ sub flush_ready_jobs {
         next if $mode <= $MODES{summary};
 
         my $record_job = $mode >= $MODES{complete} ? 1 : 0;
-        $record_job ||= 1 if $job->{job_id} eq $self->{+JOB0_ID};
-        $record_job ||= 1 if $mode >= $MODES{qvf} && $job->{fail};;
+        $record_job ||= 1 if $job->{job_id} eq $self->{+JOB0_ID} || !$job->{job_id};
+        $record_job ||= 1 if $mode >= $MODES{qvf} && $job->{fail};
 
         for my $event (sort { $a->{event_ord} <=> $b->{event_ord} } values %$events) {
             my $is_diag = delete $event->{is_diag};

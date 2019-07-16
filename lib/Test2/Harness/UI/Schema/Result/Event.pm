@@ -75,7 +75,6 @@ __PACKAGE__->table("events");
 =head2 parent_id
 
   data_type: 'uuid'
-  is_foreign_key: 1
   is_nullable: 1
   size: 16
 
@@ -123,7 +122,7 @@ __PACKAGE__->add_columns(
   "stamp",
   { data_type => "timestamp", is_nullable => 1 },
   "parent_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  { data_type => "uuid", is_nullable => 1, size => 16 },
   "trace_id",
   { data_type => "uuid", is_nullable => 1, size => 16 },
   "nested",
@@ -152,21 +151,6 @@ __PACKAGE__->set_primary_key("event_id");
 
 =head1 RELATIONS
 
-=head2 events
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::Event>
-
-=cut
-
-__PACKAGE__->has_many(
-  "events",
-  "Test2::Harness::UI::Schema::Result::Event",
-  { "foreign.parent_id" => "self.event_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 job
 
 Type: belongs_to
@@ -182,29 +166,9 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
-=head2 parent_rel
 
-Type: belongs_to
-
-Related object: L<Test2::Harness::UI::Schema::Result::Event>
-
-=cut
-
-__PACKAGE__->belongs_to(
-  "parent_rel",
-  "Test2::Harness::UI::Schema::Result::Event",
-  { event_id => "parent_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "NO ACTION",
-    on_update     => "NO ACTION",
-  },
-);
-
-
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-26 02:50:49
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BlN5IBao5gc/vhVZAo9aAw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-07-16 09:23:22
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:OaUxd53QiuO+i5O/ZwFzVg
 
 our $VERSION = '0.000003';
 
@@ -234,6 +198,41 @@ sub TO_JSON {
 
     return \%cols;
 }
+
+=head2 events
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Event>
+
+=cut
+
+__PACKAGE__->has_many(
+  "events",
+  "Test2::Harness::UI::Schema::Result::Event",
+  { "foreign.parent_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 parent_rel
+
+Type: belongs_to
+
+Related object: L<Test2::Harness::UI::Schema::Result::Event>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "parent_rel",
+  "Test2::Harness::UI::Schema::Result::Event",
+  { event_id => "parent_id" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "NO ACTION",
+    on_update     => "NO ACTION",
+  },
+);
 
 1;
 

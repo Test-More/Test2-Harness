@@ -87,6 +87,11 @@ __PACKAGE__->table("jobs");
   data_type: 'boolean'
   is_nullable: 1
 
+=head2 retried
+
+  data_type: 'boolean'
+  is_nullable: 1
+
 =head2 exit
 
   data_type: 'integer'
@@ -208,6 +213,8 @@ __PACKAGE__->add_columns(
   { data_type => "text", is_nullable => 1 },
   "fail",
   { data_type => "boolean", is_nullable => 1 },
+  "retried",
+  { data_type => "boolean", is_nullable => 1 },
   "exit",
   { data_type => "integer", is_nullable => 1 },
   "launch",
@@ -326,8 +333,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-25 07:34:26
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:iK/hEFQUl1v8B1M0n9T7Rg
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-07-16 09:19:17
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:8NuQjZoBMCqod6+91SUqKw
 
 our $VERSION = '0.000003';
 

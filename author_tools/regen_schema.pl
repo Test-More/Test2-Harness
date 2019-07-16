@@ -15,6 +15,7 @@ system(
     '-o' => 'dump_directory=./lib',
     '-o' => 'components=["InflateColumn::DateTime", "InflateColumn::Serializer", "InflateColumn::Serializer::JSON", "Tree::AdjacencyList", "UUIDColumns"]',
     '-o' => 'debug=1',
+    '-o' => 'skip_load_external=1',
     'Test2::Harness::UI::Schema',
     $db->connect_string('harness_ui'),
     '',

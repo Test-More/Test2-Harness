@@ -20,6 +20,9 @@ my %WriteMakefileArgs = (
     "File::ShareDir::Install" => "0.06"
   },
   "DISTNAME" => "Test2-Harness-UI",
+  "EXE_FILES" => [
+    "scripts/yath-ui-importer.pl"
+  ],
   "LICENSE" => "perl",
   "MIN_PERL_VERSION" => "5.008009",
   "NAME" => "Test2::Harness::UI",

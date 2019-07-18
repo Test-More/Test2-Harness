@@ -174,7 +174,7 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-04-27 06:16:47
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:a6JR+PWLsls7t5IWbn52rg
 
-our $VERSION = '0.000003';
+our $VERSION = '0.000004';
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

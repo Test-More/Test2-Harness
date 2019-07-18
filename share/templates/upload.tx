@@ -42,7 +42,7 @@
             <dt><label for="log_file">Log File</label></dt>
             <dd><input type="file" name="log_file" id="log_file" accept=".jsonl.bz2,.jsonl.gz" required></dd>
 
-            : if !$user {
+            : if !$user && !$single_user {
                 <dt><label for="api_key">API Key</label></dt>
                 <dd>
                     <input type="password" name="api_key" id="api_key" required>

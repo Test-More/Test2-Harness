@@ -35,6 +35,7 @@ sub handle {
         'upload.tx',
         {
             base_uri => $req->base->as_string,
+            single_user => $self->{+CONFIG}->single_user,
             user     => $user,
             projects => Test2::Harness::UI::Queries->new(config => $self->{+CONFIG})->projects,
         }
@@ -56,7 +57,7 @@ sub process_form {
         return $res->add_error('Invalid Action');
     }
 
-    my $user = $req->user || $self->api_user($req->parameters->{api_key});
+    my $user = $self->{+CONFIG}->single_user || $req->user || $self->api_user($req->parameters->{api_key});
     die error(401) unless $user;
 
     my $file = $req->uploads->{log_file}->filename;

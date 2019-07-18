@@ -46,8 +46,11 @@
         <ul id="nav_main">
             : if !$config.single_run {
                 <li><a href="<: $base_uri :>">Dashboard</a></li>
-                <li class="split">&nbsp;</li>
-                <li><a href="<: $base_uri :>upload">Upload A Log</a></li>
+
+                : if !$config.no_upload {
+                    <li class="split">&nbsp;</li>
+                    <li><a href="<: $base_uri :>upload">Upload A Log</a></li>
+                : }
             : }
             : if !$config.single_user {
                 <li class="split">&nbsp;</li>

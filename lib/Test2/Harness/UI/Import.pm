@@ -21,7 +21,7 @@ use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip  qw($GunzipError);
 
 use Test2::Harness::UI::Util::HashBase qw{
-    -config -run -mode
+    -config -run -mode -fh
     -passed -failed
     -job0_id -job_ord -job_buffer -ready_jobs
 };
@@ -70,14 +70,16 @@ sub process {
     my $self = shift;
 
     my $run = $self->{+RUN};
-    my $log = $run->log_file or die "No log file";
+    my $fh = $self->{+FH};
 
-    my $fh;
-    if ($log->name =~ m/\.bz2$/) {
-        $fh = IO::Uncompress::Bunzip2->new(\($log->data)) or die "Could not open bz2 data: $Bunzip2Error";
-    }
-    else {
-        $fh = IO::Uncompress::Gunzip->new(\($log->data)) or die "Could not open gz data: $GunzipError";
+    unless ($fh) {
+        my $log = $run->log_file or die "No log file";
+        if ($log->name =~ m/\.bz2$/) {
+            $fh = IO::Uncompress::Bunzip2->new(\($log->data)) or die "Could not open bz2 data: $Bunzip2Error";
+        }
+        else {
+            $fh = IO::Uncompress::Gunzip->new(\($log->data)) or die "Could not open gz data: $GunzipError";
+        }
     }
 
     my $schema = $self->{+CONFIG}->schema;

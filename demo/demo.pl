@@ -76,7 +76,7 @@ for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 su
 }
 
 my @commands = (
-    [$^X, '-Ilib', 'author_tools/run_imports.pl', $dsn],
+    [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
     ['starman', '-Ilib', '-r', '--port', 8081, './demo/demo.psgi'],
 );
 

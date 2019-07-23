@@ -60,7 +60,7 @@ sub run {
     }
 
     my $settings = $self->{+SETTINGS};
-    my $pfile = File::Spec->rel2abs(PFILE_NAME());
+    my $pfile = File::Spec->rel2abs(PFILE_NAME(),$ENV{YATH_PERSISTENCE_DIR}||'./');
 
     my ($exit, $runner, $pid, $stat);
     my $ok = eval {

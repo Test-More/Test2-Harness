@@ -4,10 +4,11 @@ use ok $CLASS;
 
 use Test2::Tools::HarnessTester qw/make_example_dir/;
 
-use App::Yath::Util qw/PFILE_NAME/;
+use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use Test2::Harness::Util::File::JSON;
 
 use Cwd qw/getcwd/;
+use File::Spec;
 my $orig = getcwd();
 
 my $dir = make_example_dir();
@@ -30,7 +31,15 @@ subtest simple => sub {
 };
 
 subtest run => sub {
-    unlink(PFILE_NAME) if -e PFILE_NAME;
+    # Since we want to control our environment, keep this persistence
+    # file within the test's temp directory. Otherwise you can get weird
+    # errors if you're using the env var and yath to run the test suite
+    local $ENV{YATH_PERSISTENCE_DIR} = $dir;
+
+    my $pfile = find_pfile();
+    if ($pfile && -e $pfile){
+      unlink($pfile);
+    }
     my $HUP = 0;
     local $SIG{HUP} = sub { $HUP++ };
 
@@ -42,7 +51,8 @@ subtest run => sub {
         "Cannot work without a persistent harness"
     );
 
-    Test2::Harness::Util::File::JSON->new(name => PFILE_NAME)->write(
+    $pfile = File::Spec->rel2abs(PFILE_NAME(),$dir);
+    Test2::Harness::Util::File::JSON->new(name => $pfile)->write(
         {
             pid => $$,
             dir => $dir,

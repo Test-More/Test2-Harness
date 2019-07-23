@@ -81,6 +81,8 @@ t t2
 my $cwd = cwd();
 
 my $ok = eval {
+    # Guard against yath being run with a YATH_PERSISTENCE_DIR
+    local $ENV{YATH_PERSISTENCE_DIR} = undef;
     chdir(File::Spec->canonpath("$tmp"));
     is(find_in_updir('A FAKE FILE THAT SHOULD NOT BE ANYWHERE $@!#'), undef, "File not found");
     is(find_in_updir('foo'), realpath(File::Spec->rel2abs('foo')), "Found file in current dir");
@@ -96,6 +98,16 @@ my $ok = eval {
     chdir(File::Spec->canonpath("$tmp/dir_b/dir_bb/"));
     is(find_in_updir('foo'), realpath(File::Spec->rel2abs("$tmp/foo")), "Found file in updir/updir dir");
     is(find_pfile, realpath(File::Spec->rel2abs("$tmp/.yath-persist.json")), "Found yath persist file");
+
+    # Explicitly test a YATH_PERSISTENCE_DIR env var
+    local $ENV{YATH_PERSISTENCE_DIR} = $tmp;
+    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/.yath-persist.json")), "Found yath persist file");
+
+    # Make sure that the environment variable is respected by setting
+    # the ENV var to a known good folder that is not the CWD
+    local $ENV{YATH_PERSISTENCE_DIR} = realpath(File::Spec->rel2abs("$tmp/dir_a"));
+    chdir(File::Spec->canonpath("$tmp"));
+    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/dir_a/.yath-persist.json")), "Found yath persist file");
 
     is(
         [read_config('foo', file => '.yath.rc', search => 1)],

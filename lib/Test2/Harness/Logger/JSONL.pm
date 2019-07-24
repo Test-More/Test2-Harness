@@ -2,7 +2,7 @@ package Test2::Harness::Logger::JSONL;
 use strict;
 use warnings;
 
-our $VERSION = '0.001080';
+our $VERSION = '0.001081';
 
 use IO::Handle;
 

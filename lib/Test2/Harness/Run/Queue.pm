@@ -2,7 +2,7 @@ package Test2::Harness::Run::Queue;
 use strict;
 use warnings;
 
-our $VERSION = '0.001080';
+our $VERSION = '0.001081';
 
 use Carp qw/croak/;
 

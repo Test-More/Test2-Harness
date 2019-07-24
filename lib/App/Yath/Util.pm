@@ -55,6 +55,13 @@ sub find_in_updir {
 sub PFILE_NAME() { '.yath-persist.json' }
 
 sub find_pfile {
+    #If we find the file where YATH_PERSISTENCE_DIR is specified, return that path
+    #Otherwise search for the file further
+    if (my $base = $ENV{YATH_PERSISTENCE_DIR}){
+        if (my $path = find_in_updir(File::Spec->catdir($base,PFILE_NAME()))){
+            return $path;
+        }
+    }
     return find_in_updir(PFILE_NAME());
 }
 

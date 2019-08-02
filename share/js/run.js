@@ -79,8 +79,20 @@ t2hui.build_run_job = function(job) {
     var params = $('<div class="tool etoggle" title="See Job Parameters"><i class="far fa-list-alt"></i></div>');
     tools.append(params);
     params.click(function() {
-        $('#modal_body').jsonView(job.parameters, {collapsed: true});
+
+        $('#modal_body').empty();
+        $('#modal_body').text("loading...");
         $('#free_modal').slideDown();
+
+        var job_uri = base_uri + 'job/' + job.job_id;
+
+        $.ajax(job_uri, {
+            'data': { 'content-type': 'application/json' },
+            'success': function(job) {
+                $('#modal_body').empty();
+                $('#modal_body').jsonView(job.parameters, {collapsed: true});
+            },
+        });
     });
 
     var link = base_uri + 'job/' + job.job_id;

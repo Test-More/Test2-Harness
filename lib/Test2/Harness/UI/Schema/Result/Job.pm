@@ -366,6 +366,19 @@ sub TO_JSON {
     return \%cols;
 }
 
+my @GLANCE_FIELDS = qw{ exit fail fail_count file job_id name pass_count };
+sub glance_data {
+    my $self = shift;
+    my %cols = $self->get_columns;
+
+    my %data;
+    @data{@GLANCE_FIELDS} = @cols{@GLANCE_FIELDS};
+
+    $data{short_file} = $self->short_file;
+
+    return \%data;
+}
+
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;
 

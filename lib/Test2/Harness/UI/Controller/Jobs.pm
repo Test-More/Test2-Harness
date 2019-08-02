@@ -37,7 +37,7 @@ sub handle {
 
         done  => sub { $run->complete },
         fetch => sub {
-            my @jobs = map {encode_json($_) . "\n"} sort _sort_jobs $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
+            my @jobs = map {encode_json($_->glance_data) . "\n"} sort _sort_jobs $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
             $offset += @jobs;
             return @jobs;
         },

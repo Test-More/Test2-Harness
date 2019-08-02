@@ -36,7 +36,6 @@ my $user = $config->schema->resultset('User')->create({username => 'root', passw
 
 my %projects;
 my @runs;
-my @modes = qw/complete complete complete complete/;
 for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2/) {
     my $fh = IO::Uncompress::Bunzip2->new("./demo/$file") or die "Could not open bz2 file: $Bunzip2Error";
     my $log_data;
@@ -62,7 +61,7 @@ for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 su
     push @runs => $config->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
-            mode          => shift @modes || 'qvfd',
+            mode          => 'complete',
             status        => 'pending',
             project_id    => $projects{$project}->project_id,
             version       => $version,

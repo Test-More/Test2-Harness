@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Less data streamed when looking at a run
+    - Developer docker image
 
 0.000004  2019-07-22 15:35:13-07:00 America/Los_Angeles
 

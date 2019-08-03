@@ -17,6 +17,9 @@ RUN ["apt-get", "install", "-y", "perl", "cpanminus", "libdbd-pg-perl"]
 # Needed for building/installing modules later
 RUN ["apt-get", "install", "-y", "rsync", "uuid-dev", "libcurl4-gnutls-dev", "libncurses5-dev", "libreadline-dev"],
 
+# Needed for postgres tools
+RUN ["apt-get", "install", "-y", "locales-all"]
+
 # Sometimes cpanminus has an issue installing DBIx::Class due to order of
 # modules. Install the system packages to get the requirements all in place,
 # cpanm will upgrade it next.
@@ -27,14 +30,13 @@ RUN ln -s /usr/lib/postgresql/10/bin/* /usr/bin/ 2>/dev/null || true
 RUN ["cpanm", "LWP"]
 RUN ["cpanm", "App::cpanminus"]
 RUN ["cpanm", "File::ShareDir::Install"]
-RUN ["cpanm", "Test2::Harness"]
+RUN ["cpanm", "-v", "Test2::Harness"]
 
 # Module tests run commands that cannot be run as root, but installation must be done as root... sigh
-RUN ["cpanm", "-n", "DBIx::QuickDB"]
+RUN ["cpanm", "-n", "-v", "DBIx::QuickDB"]
 
 RUN ["cpanm", "--installdeps", "-v", "Test2::Harness::UI"]
 
-RUN ["apt-get", "install", "-y", "locales-all"]
 
 RUN groupadd -g 999 appuser && useradd -r -u 999 -g appuser appuser
 

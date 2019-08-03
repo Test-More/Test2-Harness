@@ -366,7 +366,7 @@ sub TO_JSON {
     return \%cols;
 }
 
-my @GLANCE_FIELDS = qw{ exit fail fail_count file job_id name pass_count };
+my @GLANCE_FIELDS = qw{ exit fail fail_count job_id name pass_count };
 sub glance_data {
     my $self = shift;
     my %cols = $self->get_columns;

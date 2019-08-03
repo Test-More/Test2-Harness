@@ -40,7 +40,7 @@ t2hui.build_run = function(run_id, root, list) {
 
         job_dom = t2hui.build_run_job(job);
 
-        if (!job.file) {
+        if (!job.short_file) {
             log.before(job_dom);
         }
         else if (job.fail) {
@@ -109,7 +109,7 @@ t2hui.build_run_job = function(job) {
 
     var $me = $(me);
 
-    if (job.file) {
+    if (job.short_file) {
         if (job.fail) {
             $me.addClass('error_set');
         }

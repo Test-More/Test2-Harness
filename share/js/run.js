@@ -22,10 +22,11 @@ t2hui.build_run = function(run_id, root, list) {
         },
     });
 
-    var jobs = $('<div class="job_list grid"></div>');
-    jobs.append(t2hui.build_run_job_header());
+    var jobs = $('<table class="job_list"></table>');
+    jobs.append('<tr><th>Tools</th><th>P</th><th>F</th><th>File/Job Name</th><th>Exit</th><tr>)');
 
-    var pos  = $('<div style="display: none;"></div>');
+
+    var pos  = $('<tr style="display: none;"></tr>');
     var log = pos.clone();
     var error = pos.clone();
     var other = pos.clone();
@@ -61,20 +62,9 @@ t2hui.build_run = function(run_id, root, list) {
     return root;
 };
 
-t2hui.build_run_job_header = function(job) {
-    var me = [
-        $('<div class="col1 head tools">Tools</div>'),
-        $('<div class="col2 head pass count">P</div>'),
-        $('<div class="col3 head fail count">F</div>'),
-        $('<div class="col4 head job_name">File/Job Name</div>'),
-        $('<div class="col5 head exit count">Exit</div>'),
-    ];
-
-    return me;
-}
 
 t2hui.build_run_job = function(job) {
-    var tools = $('<div class="col1 tools"></div>');
+    var tools = $('<td class="tools"></td>');
 
     var params = $('<div class="tool etoggle" title="See Job Parameters"><i class="far fa-list-alt"></i></div>');
     tools.append(params);
@@ -101,13 +91,13 @@ t2hui.build_run_job = function(job) {
 
     var me = [
         tools[0],
-        $('<div class="col2 pass count">' + (job.pass_count || '0') + '</div>')[0],
-        $('<div class="col3 fail count">' + (job.fail_count || '0') + '</div>')[0],
-        $('<div class="col4 job_name">' + (job.short_file || job.name) + '</div>')[0],
-        $('<div class="col5 exit count">' + (job.exit != null ? job.exit : 'N/A') + '</div>')[0],
+        $('<td class="pass count">' + (job.pass_count || '0') + '</td>')[0],
+        $('<td class="fail count">' + (job.fail_count || '0') + '</td>')[0],
+        $('<td class="job_name">' + (job.short_file || job.name) + '</td>')[0],
+        $('<td class="exit count">' + (job.exit != null ? job.exit : 'N/A') + '</td>')[0],
     ];
 
-    var $me = $(me);
+    var $me = $('<tr></tr>').append($(me));
 
     if (job.short_file) {
         if (job.fail) {

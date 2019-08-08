@@ -311,7 +311,7 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-08 09:22:09
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:JGV1FvNOvMsvZOzcyjVIcQ
 
-our $VERSION = '0.000006';
+our $VERSION = '0.000007';
 
 __PACKAGE__->inflate_column(
     parameters => {

@@ -115,6 +115,13 @@ __PACKAGE__->table("runs");
   is_nullable: 0
   original: {default_value => \"now()"}
 
+=head2 status_changed
+
+  data_type: 'timestamp'
+  default_value: current_timestamp
+  is_nullable: 0
+  original: {default_value => \"now()"}
+
 =head2 mode
 
   data_type: 'enum'
@@ -186,6 +193,13 @@ __PACKAGE__->add_columns(
   "build",
   { data_type => "citext", is_nullable => 1 },
   "added",
+  {
+    data_type     => "timestamp",
+    default_value => \"current_timestamp",
+    is_nullable   => 0,
+    original      => { default_value => \"now()" },
+  },
+  "status_changed",
   {
     data_type     => "timestamp",
     default_value => \"current_timestamp",
@@ -294,8 +308,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-07-16 09:19:17
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:TcUhB4aT+9dAp7iUDXP65g
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-08 09:22:09
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:JGV1FvNOvMsvZOzcyjVIcQ
 
 our $VERSION = '0.000006';
 

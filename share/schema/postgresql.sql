@@ -131,6 +131,7 @@ CREATE TABLE runs (
     category        CITEXT          DEFAULT NULL,
     build           CITEXT          DEFAULT NULL,
     added           TIMESTAMP       NOT NULL DEFAULT now(),
+    status_changed  TIMESTAMP       NOT NULL DEFAULT now(),
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
     log_file_id     UUID            DEFAULT NULL REFERENCES log_files(log_file_id),
 
@@ -143,6 +144,21 @@ CREATE TABLE runs (
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
 CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
+
+CREATE OR REPLACE FUNCTION update_status_changed() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF (NEW.status != OLD.status) THEN
+        NEW.status_changed = now();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER status_changed
+  BEFORE UPDATE
+  ON runs
+  FOR EACH ROW
+  EXECUTE PROCEDURE update_status_changed();
 
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,

@@ -46,7 +46,7 @@ sub handle {
 
     my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html');
 
-    if ($route->{action} eq 'pin_toggle') {
+    if ($route->{action} && $route->{action} eq 'pin_toggle') {
         $run->update({pinned => $run->pinned ? 0 : 1});
     }
 

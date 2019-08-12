@@ -343,9 +343,9 @@ sub options {
             field     => 'times',
             used_by   => {jobs => 1, runner => 1},
             section   => 'Job Options',
-            usage     => ['-T  --times'],
+            usage     => ['--times'],
             summary   => ['Monitor timing data for each test file'],
-            long_desc => 'This tells perl to load Test2::Plugin::Times before starting each test.',
+            long_desc => 'This tells perl to load Test2::Plugin::Times before starting each test. Use -T to show the timing data',
             default   => 1,
         },
 

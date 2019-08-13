@@ -2,7 +2,7 @@ package Test2::Harness::Util::TestFile;
 use strict;
 use warnings;
 
-our $VERSION = '0.001081';
+our $VERSION = '0.001082';
 
 use Carp qw/croak/;
 

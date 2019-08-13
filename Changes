@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Add Git injection plugin
+    - Add DBI Profile plugin
+    - Calculate and record timing data
+
 0.001080  2019-07-24 09:56:41-07:00 America/Los_Angeles
 
     - Make it possible to relocate the persistence file

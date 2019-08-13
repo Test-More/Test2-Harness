@@ -20,4 +20,6 @@ sub block_default_search {}
 
 sub claim_file {}
 
+sub inject_run_data {}
+
 1;

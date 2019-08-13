@@ -6,7 +6,7 @@ our $VERSION = '0.001081';
 
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
-use List::Util qw/first max/;
+use List::Util qw/first max min/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
@@ -33,6 +33,7 @@ use Test2::Harness::Util::HashBase qw{
     -nested
     -subtests
     -numbers
+    -_times
 
     -last_event
 };
@@ -48,6 +49,7 @@ sub init {
     $self->{+ASSERTION_COUNT} = 0;
 
     $self->{+NUMBERS} = {};
+    $self->{+_TIMES} = {};
 
     $self->{+NESTED} = 0 unless defined $self->{+NESTED};
 }
@@ -60,6 +62,20 @@ sub has_plan { defined $_[0]->{+PLAN} }
 sub file {
     my $self = shift;
     return $self->{+JOB}->file;
+}
+
+sub times {
+    my $self  = shift;
+    my $times = $self->{+_TIMES};
+
+    my $out = {};
+
+    $out->{total}   = $times->{stop} - $times->{start}  if $times->{stop}  && $times->{start};
+    $out->{events}  = $times->{last} - $times->{first}  if $times->{last}  && $times->{first};
+    $out->{startup} = $times->{first} - $times->{start} if $times->{first} && $times->{start};
+    $out->{cleanup} = $times->{stop} - $times->{last}   if $times->{stop}  && $times->{last};
+
+    return $out;
 }
 
 sub process {
@@ -79,9 +95,17 @@ sub _process {
 
     $self->{+LAST_EVENT} = time;
 
-    my $f = $event->{facet_data};
+    my $stamp = $event->{stamp};
+    my $f     = $event->{facet_data};
+    my $hf    = hub_truth($f);
 
-    my $hf = hub_truth($f);
+    $self->{+_TIMES}->{start} = $self->{+_TIMES}->{start} ? min($stamp, $self->{+_TIMES}->{start}) : $stamp;
+    $self->{+_TIMES}->{stop} = $self->{+_TIMES}->{stop} ? max($stamp, $self->{+_TIMES}->{stop}) : $stamp;
+
+    if ($f->{assert} || $f->{plan} || $f->{errors} || $f->{info}) {
+        $self->{+_TIMES}->{first} = $self->{+_TIMES}->{first} ? min($self->{+_TIMES}->{first}, $stamp) : $stamp;
+        $self->{+_TIMES}->{last} = $self->{+_TIMES}->{last} ? max($self->{+_TIMES}->{last}, $stamp) : $stamp;
+    }
 
     return if $hf->{buffered};
 

@@ -173,6 +173,8 @@ sub iteration {
                     my $plan = $watcher->plan;
                     $f->{harness_job_end}->{skip} = $plan->{details} || "No reason given" if $plan && !$plan->{count};
 
+                    $f->{harness_job_end}->{times} = $watcher->times;
+
                     push @{$f->{errors}} => $watcher->fail_error_facet_list;
 
                     $self->send_notices($watcher, $event) if $watcher->fail;

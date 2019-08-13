@@ -101,7 +101,18 @@ sub all_libs {
     return @$libs;
 }
 
-sub TO_JSON { return { %{$_[0]} } }
+sub TO_JSON {
+    my $self = shift;
+
+    my $out = { %$self };
+
+    my $plugins = $self->{+PLUGINS} or return $out;
+
+    my $meta = $out->{meta} //= {};
+    $_->inject_run_data($meta) for @$plugins;
+
+    return $out;
+}
 
 sub find_files {
     my $self = shift;

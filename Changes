@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001081  2019-08-13 13:49:32-07:00 America/Los_Angeles
+
     - Add Git injection plugin
     - Add DBI Profile plugin
     - Calculate and record timing data

@@ -2,7 +2,7 @@ package Test2::Plugin::DBIProfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.001082';
+our $VERSION = '0.001083';
 
 use DBI::Profile;
 use Test2::API qw/test2_add_callback_exit/;

@@ -34,6 +34,7 @@ use Test2::Harness::Util::HashBase qw{
     -subtests
     -numbers
     -_times
+    -_times_done
 
     -last_event
 };
@@ -102,9 +103,10 @@ sub _process {
     $self->{+_TIMES}->{start} = $self->{+_TIMES}->{start} ? min($stamp, $self->{+_TIMES}->{start}) : $stamp;
     $self->{+_TIMES}->{stop} = $self->{+_TIMES}->{stop} ? max($stamp, $self->{+_TIMES}->{stop}) : $stamp;
 
-    if ($f->{assert} || $f->{plan} || $f->{errors} || $f->{info}) {
+    if ($f->{trace} && !$self->{+_TIMES_DONE}) {
         $self->{+_TIMES}->{first} = $self->{+_TIMES}->{first} ? min($self->{+_TIMES}->{first}, $stamp) : $stamp;
         $self->{+_TIMES}->{last} = $self->{+_TIMES}->{last} ? max($self->{+_TIMES}->{last}, $stamp) : $stamp;
+        $self->{+_TIMES_DONE} = 1 if $f->{control} && $f->{control}->{phase} && $f->{control}->{phase} eq 'END';
     }
 
     return if $hf->{buffered};

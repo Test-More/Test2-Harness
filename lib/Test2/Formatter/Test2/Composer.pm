@@ -34,8 +34,9 @@ sub render_one_line {
 
 sub render_verbose {
     my $class = shift;
-    my $in   = shift;
-    my $f    = blessed($in) ? $in->facet_data : $in;
+    my ($in) = @_;
+
+    my $f = blessed($in) ? $in->facet_data : $in;
 
     return [map {[$_->{facet}, uc($_->{tag}), $_->{details}]} @{$f->{render}}]
         if $f->{render} && @{$f->{render}};
@@ -60,6 +61,96 @@ sub render_verbose {
         if $f->{about} && !(@out || first { $f->{$_} } qw/stop plan info nest assert/);
 
     return \@out;
+}
+
+sub render_super_verbose {
+    my $class = shift;
+    my ($in) = @_;
+
+    my $out = $class->render_verbose($in);
+
+    my $f = blessed($in) ? $in->facet_data : $in;
+
+    push @$out => $class->render_launch($f)  if $f->{harness_job_launch};
+    push @$out => $class->render_start($f)   if $f->{harness_job_start};
+    push @$out => $class->render_exit($f)    if $f->{harness_job_exit};
+    push @$out => $class->render_end($f)     if $f->{harness_job_end};
+    push @$out => $class->render_encoding($f) if $f->{control}->{encoding};
+
+    unless (@$out) {
+        my ($name, $fallback);
+        for my $k (sort keys %$f) {
+            my $v = $f->{$k};
+
+            # Fallback should be longest harness* facet name
+            $fallback = $k if $k =~ m/harness/ && (!$fallback || length($fallback) < length($k));
+
+            my $list = ref($v) eq 'ARRAY' ? $v : [$v];
+            for my $i (@$list) {
+                next unless ref($i);
+                last if $name = $i->{details};
+            }
+        }
+
+        $name //= $fallback // join ', ' => sort keys %$f;
+
+        push @$out => ['harness', 'HARNESS', $name];
+    }
+
+    return $out;
+}
+
+sub render_launch {
+    my $class = shift;
+    my ($f) = @_;
+
+    return ['harness', 'HARNESS', 'Job Launched at ' . $f->{harness_job_launch}->{stamp}];
+}
+
+sub render_start {
+    my $class = shift;
+    my ($f) = @_;
+
+    return ['harness', 'HARNESS', $f->{harness_job_start}->{details}];
+}
+
+sub render_exit {
+    my $class = shift;
+    my ($f) = @_;
+
+    return ['harness', 'HARNESS', $f->{harness_job_exit}->{details}];
+}
+
+sub render_end {
+    my $class = shift;
+    my ($f) = @_;
+
+    my @out;
+
+    push @out => ['harness', 'HARNESS', "Job completed at " . $f->{harness_job_end}->{stamp}];
+
+    if (my $times = $f->{harness_job_end}->{times}) {
+        my $string = "Startup: $times->{startup}\nEvents: $times->{events}\nCleanup: $times->{cleanup}\nTotal: $times->{total}";
+        my $table = {
+            header => ["Phase", "Time", "Explanation"],
+            rows   => [
+                ['Startup', sprintf("%.6fs", $times->{startup}), "Time from launch to first test event."],
+                ['Events',  sprintf("%.6fs", $times->{events}),  "Time spent generating test events."],
+                ['Cleanup', sprintf("%.6fs", $times->{cleanup}), "Time from last test event to test exit."],
+                ['Total',   sprintf("%.6fs", $times->{total}),   "Total time"],
+            ],
+        };
+        push @out => ['harness','TIME', $string, $table];
+    }
+
+    return @out;
+}
+
+sub render_encoding {
+    my $class = shift;
+    my ($f) = @_;
+
+    return ['control', 'ENCODING', $f->{control}->{encoding}];
 }
 
 my %SHOW_BRIEF_TAGS = (

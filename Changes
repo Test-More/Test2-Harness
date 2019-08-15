@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+    - Support 'END' phase in calculating times
+    - Support super verbose mode in composer
+    - Improvement ot DBIProfile
+    - New minimum Test2 version
+
 0.001081  2019-08-13 13:49:32-07:00 America/Los_Angeles
 
     - Add Git injection plugin

@@ -24,7 +24,7 @@ sub send_profile_event {
     my $data = $p->{Data};
     my ($summary) = $p->format;
 
-    $ctx->send_ev2('DBIProfile' => $data, info => [{tag => 'NOTE', details => $summary}]);
+    $ctx->send_ev2('DBIProfile' => $data, about => {details => $summary});
 }
 
 1;

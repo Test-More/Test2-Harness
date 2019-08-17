@@ -2,7 +2,7 @@ package Test2::Harness::Logger;
 use strict;
 use warnings;
 
-our $VERSION = '0.001084';
+our $VERSION = '0.001085';
 
 use Carp qw/confess/;
 

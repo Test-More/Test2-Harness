@@ -2,7 +2,7 @@ package Test2::Harness::LogFormat;
 use strict;
 use warnings;
 
-our $VERSION = '0.001084';
+our $VERSION = '0.001085';
 
 1;
 

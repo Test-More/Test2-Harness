@@ -54,8 +54,6 @@ sub render_verbose {
 
     push @out => $class->render_info($f)   if $f->{info};
     push @out => $class->render_errors($f) if $f->{errors};
-    push @out => $class->render_times($f)  if $f->{times};
-    push @out => $class->render_memory($f) if $f->{memory};
 
     push @out => $class->render_about($f)
         if $f->{about} && !(@out || first { $f->{$_} } qw/stop plan info nest assert/);
@@ -207,21 +205,6 @@ sub render_brief {
     return \@out;
 }
 
-sub render_times {
-    my $class = shift;
-    my ($f) = @_;
-
-    return ['times', 'TIME', $f->{about}->{details}];
-}
-
-sub render_memory {
-    my $class = shift;
-    my ($f) = @_;
-
-    return ['memory', 'MEMORY', $f->{memory}->{details}];
-}
-
-
 sub render_halt {
     my $class = shift;
     my ($f) = @_;
@@ -322,11 +305,16 @@ sub render_about {
     my ($f) = @_;
 
     return if $f->{about}->{no_display};
-    return unless $f->{about} && $f->{about}->{package} && $f->{about}->{details};
+    return unless $f->{about} && $f->{about}->{details};
 
-    my $type = $f->{about}->{package};
+    my $type;
+    if ($f->{about}->{package}) {
+        my $type = $f->{about}->{package};
+        $type =~ s/^.*:://;
+    }
+    $type //= 'ABOUT';
 
-    return ['info', $type, $f->{about}->{details}];
+    return ['about', $type, $f->{about}->{details}];
 }
 
 sub render_errors {

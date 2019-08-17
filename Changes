@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Split out some plugins (DBIProfile, MemUsage, UUID)
+    - No special treatment for plugins, they need to use INFO facets
+
 0.001082  2019-08-15 11:03:22-07:00 America/Los_Angeles
 
     - Support 'END' phase in calculating times

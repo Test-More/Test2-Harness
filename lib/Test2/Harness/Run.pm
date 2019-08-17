@@ -109,7 +109,9 @@ sub TO_JSON {
     my $plugins = $self->{+PLUGINS} or return $out;
 
     my $meta = $out->{meta} //= {};
-    $_->inject_run_data($meta) for @$plugins;
+    for my $p (@$plugins) {
+        $p->inject_run_data(meta => $meta, run => $self);
+    }
 
     return $out;
 }

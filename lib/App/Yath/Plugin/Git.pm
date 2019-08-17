@@ -9,7 +9,9 @@ use parent 'App::Yath::Plugin';
 
 sub inject_run_data {
     my $class = shift;
-    my ($meta) = @_;
+    my %params = @_;
+
+    my $meta = $params{meta};
 
     my $cmd = can_run('git') or return;
 

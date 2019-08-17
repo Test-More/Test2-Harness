@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Make More information available to plugins
+
 0.001083  2019-08-16 19:55:17-07:00 America/Los_Angeles
 
     - Split out some plugins (DBIProfile, MemUsage, UUID)

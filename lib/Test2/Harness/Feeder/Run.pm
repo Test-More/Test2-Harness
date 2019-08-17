@@ -2,7 +2,7 @@ package Test2::Harness::Feeder::Run;
 use strict;
 use warnings;
 
-our $VERSION = '0.001083';
+our $VERSION = '0.001084';
 
 use Carp qw/croak/;
 use Time::HiRes qw/time sleep/;

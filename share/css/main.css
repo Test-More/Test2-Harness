@@ -368,29 +368,29 @@ div#progress_bar {
     text-align: center;
 }
 
-.grid > .tools {
+.tools {
     text-align: left;
 }
 
-.grid > .tools > .tool {
+.tools > .tool {
     display: inline-block;
     margin-right: 4px;
 }
-.grid > .tools > .tool:last-child {
+.tools > .tool:last-child {
     margin-right: inherit;
 }
 
-.grid > .count {
+.count {
     text-align: center;
 }
 
-.grid > .tools > .tool.etoggle {
+.tool.etoggle {
     border-color: transparent;
     background: inherit;
     border-radius: 50%;
 }
 
-.grid > .tools > .tool:hover {
+.tools > .tool:hover {
     background: #D0E0F0;
 }
 

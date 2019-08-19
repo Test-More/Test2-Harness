@@ -109,8 +109,9 @@ sub TO_JSON {
     my $plugins = $self->{+PLUGINS} or return $out;
 
     my $meta = $out->{meta} //= {};
+    my $fields = $out->{harness_run_fields} //= [];
     for my $p (@$plugins) {
-        $p->inject_run_data(meta => $meta, run => $self);
+        $p->inject_run_data(meta => $meta, fields => $fields, run => $self);
     }
 
     return $out;

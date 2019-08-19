@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Do not require DBIProfile yet until we need it (#111)
+    - Standardize how fields are specified
 
 0.001084  2019-08-16 20:08:48-07:00 America/Los_Angeles
 

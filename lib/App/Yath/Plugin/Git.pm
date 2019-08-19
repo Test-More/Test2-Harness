@@ -12,6 +12,7 @@ sub inject_run_data {
     my %params = @_;
 
     my $meta = $params{meta};
+    my $fields = $params{fields};
 
     my $cmd = can_run('git') or return;
 
@@ -22,6 +23,8 @@ sub inject_run_data {
     $meta->{git}->{sha}       = $long_sha;
     $meta->{git}->{sha_short} = $short_sha;
     $meta->{git}->{status}    = $status;
+
+    $fields->{git_sha} => $long_sha;
 
     return;
 }

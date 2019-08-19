@@ -255,3 +255,26 @@ table.testtable td, table.testtable th {
     border: 1px solid black;
     padding: 4px;
 }
+
+.job_list {
+    border-spacing: 0;
+    border-collapse: collapse;
+    border: none;
+}
+
+.job_list table, .job_list th, .job_list td {
+    border: 1px solid #C0C0C0;
+    padding:2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-spacing: -1px;
+}
+
+.job_list_wrapper {
+    border: 4px solid #C0C0C0;
+    border-radius: 10px;
+    overflow: hidden;
+    display: block;
+    width: fit-content;
+    padding: 0px;
+}

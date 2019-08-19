@@ -22,7 +22,9 @@ t2hui.build_run = function(run_id, root, list) {
         },
     });
 
+    var wrapper = $('<div class="job_list_wrapper"></div>');
     var jobs = $('<table class="job_list"></table>');
+    wrapper.append(jobs);
     jobs.append('<tr><th>Tools</th><th>P</th><th>F</th><th>File/Job Name</th><th>Exit</th><tr>)');
 
 
@@ -32,7 +34,7 @@ t2hui.build_run = function(run_id, root, list) {
     var other = pos.clone();
     jobs.append(log, error, other);
 
-    root.append('<h3>Jobs:</h3>', jobs);
+    root.append('<h3>Jobs:</h3>', wrapper);
 
     var inject = function(job) {
         if (job === null || job === undefined) {

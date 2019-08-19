@@ -275,7 +275,7 @@ div#messages {
 }
 
 .etoggle {
-    display: block;
+    display: inline-block;
     border-radius: 4px;
     text-align: center;
     font-weight: bold;
@@ -393,7 +393,3 @@ div#progress_bar {
 .tools > .tool:hover {
     background: #D0E0F0;
 }
-
-.etoggle { display: inline-block; }
-.job_list { border-spacing: 0; border: 4px solid #C0C0C0; border-radius: 10px;}
-.job_list table, .job_list th, .job_list td { border: 1px solid #C0C0C0; padding:4px; }

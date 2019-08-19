@@ -11,6 +11,7 @@ t2hui.filters  = {
     hide: {
         'PASS': true,
         'PLAN': true,
+        'HARNESS': true,
     }
 };
 

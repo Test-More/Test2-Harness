@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Show ALL events
+
 0.000006  2019-08-08 10:52:25-07:00 America/Los_Angeles
 
     - Add a status changed column

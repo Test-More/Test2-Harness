@@ -121,6 +121,8 @@ sub flush_ready_jobs {
 
         for my $event (sort { $a->{event_ord} <=> $b->{event_ord} } values %$events) {
             my $is_diag = delete $event->{is_diag};
+            my $is_harness = delete $event->{is_harness};
+            my $is_time = delete $event->{is_time};
             my $record_event = $record_job || ($mode >= $MODES{qvfd} && $is_diag);
             next unless $record_event;
 

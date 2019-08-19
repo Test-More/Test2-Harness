@@ -194,7 +194,7 @@ sub TO_JSON {
 
     # Inflate
     $cols{facets} = $self->facets;
-    $cols{lines}  = Test2::Formatter::Test2::Composer->render_verbose($cols{facets});
+    $cols{lines}  = Test2::Formatter::Test2::Composer->render_super_verbose($cols{facets});
 
     return \%cols;
 }

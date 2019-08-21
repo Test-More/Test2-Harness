@@ -34,6 +34,7 @@ function FieldTable(spec) {
     me.dynamic_column_lookup = {};
     me.redraw = {};
     me.redraw_id = 1;
+    me.row_state = {};
 
     me.render = function() {
         me.table = $('<table class="field-table ' + spec.class + '"></table>');
@@ -92,7 +93,7 @@ function FieldTable(spec) {
         }
 
         if (me.spec.place_row) {
-            if (!me.spec.place_row(row.html, item, table)) {
+            if (!me.spec.place_row(row.html, item, me.table, me.row_state)) {
                 me.table.append(row.html);
             }
         }
@@ -120,11 +121,18 @@ function FieldTable(spec) {
             'item': item,
         };
 
-        me.spec.columns.forEach(function(data) {
-            var col = me.render_row_col(data, item);
-            row.html.append(col);
-            row.columns.push(col);
-        });
+        row.html.hover(
+            function() { row.html.addClass('hover') },
+            function() { row.html.removeClass('hover') },
+        );
+
+        if (me.spec.columns) {
+            me.spec.columns.forEach(function(data) {
+                var col = me.render_row_col(data, item);
+                row.html.append(col);
+                row.columns.push(col);
+            });
+        }
 
         me.dynamic_columns.forEach(function() {
             var col = $('<td></td>');
@@ -132,11 +140,13 @@ function FieldTable(spec) {
             row.dynamic_columns.push(col);
         });
 
-        me.spec.postfix_columns.forEach(function(data) {
-            var col = me.render_row_col(data, item);
-            row.html.append(col);
-            row.postfix_columns.push(col);
-        });
+        if (me.spec.postfix_columns) {
+            me.spec.postfix_columns.forEach(function(data) {
+                var col = me.render_row_col(data, item);
+                row.html.append(col);
+                row.postfix_columns.push(col);
+            });
+        }
 
         var attr = me.spec.dynamic_field_attribute;
         if (attr && item[attr]) {
@@ -215,17 +225,21 @@ function FieldTable(spec) {
     me.render_header = function() {
         var header = $('<tr class="field-table-header"></tr>');
 
-        me.spec.columns.forEach(function(data) {
-            var col = me.render_header_col(data);
-            header.append(col);
-            me.columns.push(col);
-        });
+        if (me.spec.columns) {
+            me.spec.columns.forEach(function(data) {
+                var col = me.render_header_col(data);
+                header.append(col);
+                me.columns.push(col);
+            });
+        }
 
-        me.spec.postfix_columns.forEach(function(data) {
-            var col = me.render_header_col(data);
-            header.append(col);
-            me.postfix_columns.push(col);
-        });
+        if (me.spec.postfix_columns) {
+            me.spec.postfix_columns.forEach(function(data) {
+                var col = me.render_header_col(data);
+                header.append(col);
+                me.postfix_columns.push(col);
+            });
+        }
 
         return header;
     }

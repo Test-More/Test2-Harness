@@ -188,9 +188,4 @@ t2hui.dashboard.modify_row = function(row, item) {
     }
 
     row.addClass(item.status + "_set");
-
-    row.hover(
-        function() { row.addClass('hover') },
-        function() { row.removeClass('hover') },
-    );
 };

@@ -1,83 +1,87 @@
 $(function() {
     $("div.run").each(function() {
-        var me = $(this);
-        t2hui.build_run(me.attr('data-run-id'), me);
+        var root = $(this);
+
+        var run_id = root.attr('data-run-id');
+        var run_uri = base_uri + 'run/' + run_id;
+        $.ajax(run_uri, {
+            'data': { 'content-type': 'application/json' },
+            'success': function(item) {
+                var dash = t2hui.dashboard.build_table([item]);
+                root.prepend($('<h3>Run: ' + run_id + '</h3>'), dash, $('<hr />'));
+            },
+        });
+
+        var jobs_uri = run_uri + '/jobs';
+        var table = t2hui.run.build_table(jobs_uri);
+        root.append(table);
     });
 });
 
-t2hui.build_run = function(run_id, root, list) {
-    if (root === null || root === undefined) {
-        root = $('<div class="run" data-run-id="' + run_id + '"></div>');
-    }
+t2hui.run = {};
 
-    var run_uri = base_uri + 'run/' + run_id;
-    var jobs_uri = run_uri + '/jobs';
+t2hui.run.build_table = function(uri) {
+    var columns = [
+        { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'sortable': false, 'builder': t2hui.run.tool_builder },
 
-    $.ajax(run_uri, {
-        'data': { 'content-type': 'application/json' },
-        'success': function(item) {
-            var dash = t2hui.dashboard.build_table([item]);
-            root.prepend($('<h3>Run: ' + run_id + '</h3>'), dash, $('<hr />'));
-        },
+        { 'name': 'pass_count', 'label': 'P', 'class': 'count', 'sortable': true, 'builder': t2hui.run.build_pass },
+        { 'name': 'fail_count', 'label': 'F', 'class': 'count', 'sortable': true, 'builder': t2hui.run.build_fail },
+
+        { 'name': 'name', 'label': 'file/job name', 'class': 'job_name', 'sortable': true, 'builder': t2hui.run.build_name },
+
+        { 'name': 'exit',  'label': 'exit',  'class': 'exit', 'sortable': true, 'builder': t2hui.run.build_exit }
+    ];
+
+    var table = new FieldTable({
+        'class': 'run_table',
+        'id': 'run_jobs',
+        'fetch': uri,
+
+        'modify_row_hook': t2hui.run.modify_row,
+        'place_row': t2hui.run.place_row,
+
+        'dynamic_field_attribute': 'fields',
+        'dynamic_field_fetch': t2hui.run.field_fetch,
+
+        'columns': columns,
     });
 
-    var wrapper = $('<div class="job_list_wrapper"></div>');
-    var jobs = $('<table class="job_list"></table>');
-    wrapper.append(jobs);
-    jobs.append('<tr><th>Tools</th><th>P</th><th>F</th><th>File/Job Name</th><th>Exit</th><tr>)');
-
-
-    var pos  = $('<tr style="display: none;"></tr>');
-    var log = pos.clone();
-    var error = pos.clone();
-    var other = pos.clone();
-    jobs.append(log, error, other);
-
-    root.append('<h3>Jobs:</h3>', wrapper);
-
-    var inject = function(job) {
-        if (job === null || job === undefined) {
-            job = this;
-        }
-
-        job_dom = t2hui.build_run_job(job);
-
-        if (!job.short_file) {
-            log.before(job_dom);
-        }
-        else if (job.fail) {
-            error.before(job_dom);
-        }
-        else {
-            other.before(job_dom);
-        }
-    }
-
-    if (list === null || list === undefined) {
-        t2hui.fetch(jobs_uri, {}, inject);
-    }
-    else {
-        $(list).each(inject);
-    };
-
-    return root;
+    return table.render();
 };
 
+t2hui.run.build_pass = function(item, col, data) {
+    var val = item.pass_count || '0';
+    col.text(val);
+    col.addClass('count');
+};
 
-t2hui.build_run_job = function(job) {
-    var tools = $('<td class="tools"></td>');
+t2hui.run.build_fail = function(item, col, data) {
+    var val = item.fail_count || '0';
+    col.text(val);
+    col.addClass('count');
+};
 
+t2hui.run.build_exit = function(item, col, data) {
+    var val = item.exit != null ? item.exit : 'N/A';
+    col.text(val);
+};
+
+t2hui.run.build_name = function(item, col, data) {
+    var val = item.short_file || item.name;
+    col.text(val);
+};
+
+t2hui.run.tool_builder = function(item, tools, data) {
     var params = $('<div class="tool etoggle" title="See Job Parameters"><i class="far fa-list-alt"></i></div>');
     tools.append(params);
     params.click(function() {
-
         $('#modal_body').empty();
         $('#modal_body').text("loading...");
         $('#free_modal').slideDown();
 
-        var job_uri = base_uri + 'job/' + job.job_id;
+        var uri = base_uri + 'job/' + item.job_id;
 
-        $.ajax(job_uri, {
+        $.ajax(uri, {
             'data': { 'content-type': 'application/json' },
             'success': function(job) {
                 $('#modal_body').empty();
@@ -86,28 +90,65 @@ t2hui.build_run_job = function(job) {
         });
     });
 
-    var link = base_uri + 'job/' + job.job_id;
+    var link = base_uri + 'job/' + item.job_id;
     var go = $('<a class="tool etoggle" title="Open Job" href="' + link + '"><i class="fas fa-external-link-alt"></i></a>');
     tools.append(go);
+};
 
-    var me = [
-        tools[0],
-        $('<td class="pass count">' + (job.pass_count || '0') + '</td>')[0],
-        $('<td class="fail count">' + (job.fail_count || '0') + '</td>')[0],
-        $('<td class="job_name">' + (job.short_file || job.name) + '</td>')[0],
-        $('<td class="exit count">' + (job.exit != null ? job.exit : 'N/A') + '</td>')[0],
-    ];
-
-    var $me = $('<tr></tr>').append($(me));
-
-    if (job.short_file) {
-        if (job.fail) {
-            $me.addClass('error_set');
+t2hui.run.modify_row = function(row, item) {
+    if (item.short_file) {
+        if (item.fail) {
+            row.addClass('error_set');
         }
         else {
-            $me.addClass('success_set');
+            row.addClass('success_set');
         }
     }
+};
 
-    return $me;
+t2hui.run.field_fetch = function(field_data) {
+    return base_uri + 'jobfield/' + field_data.job_field_id;
+};
+
+t2hui.run.build_jobs = function(run_id) {
+    var root = $('<div class="run" data-run-id="' + run_id + '"></div>');
+    var uri = base_uri + 'run/' + run_id + "/jobs";
+    var table = t2hui.run.build_table(uri);
+    root.append(table);
+    return root;
+};
+
+t2hui.run.place_row = function(row, item, table, state) {
+    if (!state['header']) {
+        state['header'] = table.children().first();
+    }
+
+    if (!item.short_file) {
+        if (state['log']) {
+            state['log'].after(row);
+        }
+        else {
+            state['header'].after(row);
+        }
+
+        state['log'] = row;
+        return true;
+    }
+
+    if (item.fail) {
+        if (state['fail']) {
+            state['fail'].after(row);
+        }
+        else if (state['log']) {
+            state['log'].after(row);
+        }
+        else {
+            state['header'].after(row);
+        }
+
+        state['fail'] = row;
+        return true;
+    }
+
+    return false;
 };

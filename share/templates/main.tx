@@ -13,6 +13,8 @@
 <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/jquery.json-view.min.css">
 
 <script src="<: $base_uri :>js/main.js"></script>
+<script src="<: $base_uri :>js/fieldtable.js"></script>
+<link rel="stylesheet" type="text/css" href="<: $base_uri :>css/fieldtable.css">
 
 : for $add_css -> $css {
     <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/<: $css :>">
@@ -31,6 +33,8 @@
 <body>
 
 <script>base_uri = '<: $base_uri :>';</script>
+<script>single_user = <: $config.single_user :>;</script>
+<script>time_zone = '<: $time_zone :>';</script>
 
 <div id="free_modal" style="display: none">
     <div id="modal_inner_wrap">

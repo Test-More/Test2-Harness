@@ -126,10 +126,6 @@ CREATE TABLE runs (
     pinned          BOOL            NOT NULL DEFAULT FALSE,
 
     -- User Input
-    version         CITEXT          DEFAULT NULL,
-    tier            CITEXT          DEFAULT NULL,
-    category        CITEXT          DEFAULT NULL,
-    build           CITEXT          DEFAULT NULL,
     added           TIMESTAMP       NOT NULL DEFAULT now(),
     status_changed  TIMESTAMP       NOT NULL DEFAULT now(),
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
@@ -160,6 +156,15 @@ CREATE TRIGGER status_changed
   FOR EACH ROW
   EXECUTE PROCEDURE update_status_changed();
 
+CREATE TABLE run_fields (
+    run_field_id    UUID    DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    run_id          UUID    NOT NULL REFERENCES runs(run_id),
+    name            CITEXT  NOT NULL,
+    details         CITEXT  NOT NULL,
+    link            CITEXT  DEFAULT NULL,
+    data            JSONB   DEFAULT NULL
+);
+
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,
     job_ord         BIGINT      NOT NULL,
@@ -180,20 +185,6 @@ CREATE TABLE jobs (
     pass_count      BIGINT          DEFAULT NULL,
     fail_count      BIGINT          DEFAULT NULL,
 
-    -- Process time data
-    time_user       DECIMAL(20,10)  DEFAULT NULL,
-    time_sys        DECIMAL(20,10)  DEFAULT NULL,
-    time_cuser      DECIMAL(20,10)  DEFAULT NULL,
-    time_csys       DECIMAL(20,10)  DEFAULT NULL,
-
-    -- Process memory data
-    mem_peak        BIGINT          DEFAULT NULL,
-    mem_size        BIGINT          DEFAULT NULL,
-    mem_rss         BIGINT          DEFAULT NULL,
-    mem_peak_u      VARCHAR(2)      DEFAULT NULL,
-    mem_size_u      VARCHAR(2)      DEFAULT NULL,
-    mem_rss_u       VARCHAR(2)      DEFAULT NULL,
-
     -- Output data
     stdout          TEXT            DEFAULT NULL,
     stderr          TEXT            DEFAULT NULL
@@ -201,6 +192,15 @@ CREATE TABLE jobs (
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
+
+CREATE TABLE job_fields (
+    job_field_id    UUID    DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    job_id          UUID    NOT NULL REFERENCES jobs(job_id),
+    name            CITEXT  NOT NULL,
+    details         CITEXT  NOT NULL,
+    link            CITEXT  DEFAULT NULL,
+    data            JSONB   DEFAULT NULL
+);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,

@@ -1,0 +1,33 @@
+div.field-table-wrapper {
+    border: 4px solid #C0C0C0;
+    border-radius: 10px;
+    overflow: hidden;
+    display: block;
+    width: fit-content;
+    padding: 0px;
+}
+
+table.field-table {
+    background: #F8F8F8;
+    border-spacing: 0;
+    border-collapse: collapse;
+    border: none;
+}
+
+table.field-table, table.field-table > tr > th, table.field-table > tr > td {
+    border: 1px solid #C0C0C0;
+    padding:2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-spacing: -1px;
+}
+
+table.field-table > tr.hover {
+    filter: brightness(90%);
+}
+
+table.field-table > tr > th {
+    text-transform: uppercase;
+    text-align: center;
+}
+

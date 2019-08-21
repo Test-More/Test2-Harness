@@ -122,70 +122,6 @@ __PACKAGE__->table("jobs");
   data_type: 'bigint'
   is_nullable: 1
 
-=head2 time_user
-
-  data_type: 'numeric'
-  default_value: null
-  is_nullable: 1
-  size: [20,10]
-
-=head2 time_sys
-
-  data_type: 'numeric'
-  default_value: null
-  is_nullable: 1
-  size: [20,10]
-
-=head2 time_cuser
-
-  data_type: 'numeric'
-  default_value: null
-  is_nullable: 1
-  size: [20,10]
-
-=head2 time_csys
-
-  data_type: 'numeric'
-  default_value: null
-  is_nullable: 1
-  size: [20,10]
-
-=head2 mem_peak
-
-  data_type: 'bigint'
-  is_nullable: 1
-
-=head2 mem_size
-
-  data_type: 'bigint'
-  is_nullable: 1
-
-=head2 mem_rss
-
-  data_type: 'bigint'
-  is_nullable: 1
-
-=head2 mem_peak_u
-
-  data_type: 'varchar'
-  default_value: null
-  is_nullable: 1
-  size: 2
-
-=head2 mem_size_u
-
-  data_type: 'varchar'
-  default_value: null
-  is_nullable: 1
-  size: 2
-
-=head2 mem_rss_u
-
-  data_type: 'varchar'
-  default_value: null
-  is_nullable: 1
-  size: 2
-
 =head2 stdout
 
   data_type: 'text'
@@ -227,61 +163,6 @@ __PACKAGE__->add_columns(
   { data_type => "bigint", is_nullable => 1 },
   "fail_count",
   { data_type => "bigint", is_nullable => 1 },
-  "time_user",
-  {
-    data_type => "numeric",
-    default_value => \"null",
-    is_nullable => 1,
-    size => [20, 10],
-  },
-  "time_sys",
-  {
-    data_type => "numeric",
-    default_value => \"null",
-    is_nullable => 1,
-    size => [20, 10],
-  },
-  "time_cuser",
-  {
-    data_type => "numeric",
-    default_value => \"null",
-    is_nullable => 1,
-    size => [20, 10],
-  },
-  "time_csys",
-  {
-    data_type => "numeric",
-    default_value => \"null",
-    is_nullable => 1,
-    size => [20, 10],
-  },
-  "mem_peak",
-  { data_type => "bigint", is_nullable => 1 },
-  "mem_size",
-  { data_type => "bigint", is_nullable => 1 },
-  "mem_rss",
-  { data_type => "bigint", is_nullable => 1 },
-  "mem_peak_u",
-  {
-    data_type => "varchar",
-    default_value => \"null",
-    is_nullable => 1,
-    size => 2,
-  },
-  "mem_size_u",
-  {
-    data_type => "varchar",
-    default_value => \"null",
-    is_nullable => 1,
-    size => 2,
-  },
-  "mem_rss_u",
-  {
-    data_type => "varchar",
-    default_value => \"null",
-    is_nullable => 1,
-    size => 2,
-  },
   "stdout",
   { data_type => "text", is_nullable => 1 },
   "stderr",
@@ -317,6 +198,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 job_fields
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::JobField>
+
+=cut
+
+__PACKAGE__->has_many(
+  "job_fields",
+  "Test2::Harness::UI::Schema::Result::JobField",
+  { "foreign.job_id" => "self.job_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 run
 
 Type: belongs_to
@@ -333,8 +229,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-07-16 09:19:17
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:8NuQjZoBMCqod6+91SUqKw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-19 11:42:41
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:V6nPVaOzmXvMaBty4hDOIA
 
 our $VERSION = '0.000007';
 

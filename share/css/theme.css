@@ -1,16 +1,3 @@
-.grid {
-    background: #C0C0C0;
-    border: 4px solid #C0C0C0;
-}
-
-.grid > * {
-    background: #F8F8F8;
-}
-
-.grid > .hover {
-    filter: brightness(90%);
-}
-
 .error,   .error_box,   .error_txt   { color: #FF4040; }
 .success, .success_box, .success_txt { color: #007000; }
 .broken,  .broken_box,  .broken_txt  { color: #902090; }
@@ -38,7 +25,7 @@
 
 .etoggle {
     border: 1px solid #999999;
-    color:  #585858;
+    color: black;
 }
 
 .etoggle:hover, .etoggle.clicked:hover {
@@ -52,6 +39,10 @@
     color:  #000060;
 }
 
+.etoggle.error {
+    color: red;
+}
+
 div#progress_bar {
     animation: running_set_pulse 2s infinite !important;
 }
@@ -59,8 +50,3 @@ div#progress_bar {
 div#progress_bar:empty {
     display: none;
 }
-
-.grid > .tools > .tool.error {
-    color: red;
-}
-

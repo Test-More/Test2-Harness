@@ -88,26 +88,6 @@ __PACKAGE__->table("runs");
   default_value: false
   is_nullable: 0
 
-=head2 version
-
-  data_type: 'citext'
-  is_nullable: 1
-
-=head2 tier
-
-  data_type: 'citext'
-  is_nullable: 1
-
-=head2 category
-
-  data_type: 'citext'
-  is_nullable: 1
-
-=head2 build
-
-  data_type: 'citext'
-  is_nullable: 1
-
 =head2 added
 
   data_type: 'timestamp'
@@ -184,14 +164,6 @@ __PACKAGE__->add_columns(
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "pinned",
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "version",
-  { data_type => "citext", is_nullable => 1 },
-  "tier",
-  { data_type => "citext", is_nullable => 1 },
-  "category",
-  { data_type => "citext", is_nullable => 1 },
-  "build",
-  { data_type => "citext", is_nullable => 1 },
   "added",
   {
     data_type     => "timestamp",
@@ -292,6 +264,21 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
+=head2 run_fields
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::RunField>
+
+=cut
+
+__PACKAGE__->has_many(
+  "run_fields",
+  "Test2::Harness::UI::Schema::Result::RunField",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 user
 
 Type: belongs_to
@@ -308,8 +295,10 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-08 09:22:09
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:JGV1FvNOvMsvZOzcyjVIcQ
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-19 11:42:41
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:kdaI6h4Rtl5G7PSUA7jzmA
+
+require DateTime::Format::Pg;
 
 our $VERSION = '0.000007';
 
@@ -342,6 +331,20 @@ sub TO_JSON {
 
     $cols{user} = $self->user->username;
     $cols{project} = $self->project->name;
+
+    my $dt = DateTime::Format::Pg->parse_datetime( $cols{added} );
+
+    # Convert from UTC to localtime
+    $dt->set_time_zone('UTC');
+    $dt->set_time_zone('local');
+
+    $cols{added} = $dt->strftime("%Y-%m-%d %I:%M%P");
+
+    for my $run_field ($self->run_fields) {
+        my %field = $run_field->get_columns;
+        $field{data} = !!$field{data};
+        push @{$cols{fields}} => \%field;
+    }
 
     return \%cols;
 }

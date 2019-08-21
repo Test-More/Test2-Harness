@@ -16,9 +16,8 @@ t2hui.build_run = function(run_id, root, list) {
     $.ajax(run_uri, {
         'data': { 'content-type': 'application/json' },
         'success': function(item) {
-            var dash = t2hui.build_dashboard_runs([item]);
+            var dash = t2hui.dashboard.build_table([item]);
             root.prepend($('<h3>Run: ' + run_id + '</h3>'), dash, $('<hr />'));
-
         },
     });
 

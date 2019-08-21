@@ -24,5 +24,4 @@ div.dashboard_controls div.dashboard_pager:hover {
 
 div.dashboard_controls div.dashboard_pager.hide {
     visibility: hidden;
-    margin-right: 20px;
 }

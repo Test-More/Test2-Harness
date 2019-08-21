@@ -36,7 +36,7 @@ my %MODES = (
 sub format_stamp {
     my $stamp = shift;
     return undef unless $stamp;
-    return DateTime->from_epoch(epoch => $stamp);
+    return DateTime->from_epoch(epoch => $stamp, time_zone => 'UTC');
 }
 
 sub init {
@@ -105,12 +105,16 @@ sub flush_ready_jobs {
     my $jobs = delete $self->{+READY_JOBS};
     return unless $jobs && @$jobs;
 
-    my @events;
+    my (@events, @fields);
 
     my $mode = $self->{+MODE};
 
     for my $job (@$jobs) {
         delete $job->{event_ord};
+
+        my $fields = delete $job->{fields};
+        push @fields => @$fields if $fields;
+
         my $events = delete $job->{events};
 
         next if $mode <= $MODES{summary};
@@ -142,6 +146,7 @@ sub flush_ready_jobs {
         my $start = time;
         local $ENV{DBIC_DT_SEARCH_OK} = 1;
         $schema->resultset('Job')->populate($jobs);
+        $schema->resultset('JobField')->populate(\@fields);
         $schema->resultset('Event')->populate(\@events);
         1;
     };
@@ -248,9 +253,8 @@ sub process_event {
     }
 
     $self->update_other($job, $f) if first { $f->{$_} } qw{
-        harness_job harness_job_exit harness_job_start harness_job_launch harness_job_end
-        memory times
-        harness_run
+        harness_job harness_job_exit harness_job_start harness_job_launch
+        harness_job_end harness_job_fields harness_run
     };
 
     return;
@@ -263,6 +267,11 @@ sub update_other {
     if (my $run_data = $f->{harness_run}) {
         clean($run_data);
         $self->{+RUN}->update({parameters => $run_data});
+        if (my $fields = $run_data->{harness_run_fields}) {
+            my $run_id = $self->{+RUN}->run_id;
+            my @fields = map { { %{$_}, run_id => $run_id, $_->{data} ? (data => encode_json($_->{data})) : () } } @$fields;
+            $self->{+CONFIG}->schema->resultset('RunField')->populate(\@fields) if @fields;
+        }
     }
 
     # Handle job events
@@ -298,19 +307,8 @@ sub update_other {
         # All done
         push @{$self->{+READY_JOBS}} => delete $self->{+JOB_BUFFER}->{$job->{job_id}};
     }
-    if (my $memory = $f->{memory}) {
-        $job->{mem_peak}   = $memory->{peak}->[0];
-        $job->{mem_peak_u} = $memory->{peak}->[1];
-        $job->{mem_size}   = $memory->{size}->[0];
-        $job->{mem_size_u} = $memory->{size}->[1];
-        $job->{mem_rss}    = $memory->{rss}->[0];
-        $job->{mem_rss_u}  = $memory->{rss}->[1];
-    }
-    if (my $times = $f->{times}) {
-        $job->{time_user}  = $times->{user};
-        $job->{time_sys}   = $times->{sys};
-        $job->{time_cuser} = $times->{cuser};
-        $job->{time_csys}  = $times->{csys};
+    if (my $job_fields = $f->{harness_job_fields}) {
+        push @{$job->{fields}} => map { { %{$_}, job_id => $job->{job_id} } } @$job_fields;
     }
 }
 

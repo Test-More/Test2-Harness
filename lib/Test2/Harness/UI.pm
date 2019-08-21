@@ -7,6 +7,7 @@ our $VERSION = '0.000007';
 use Router::Simple;
 use Text::Xslate(qw/mark_raw/);
 use Scalar::Util qw/blessed/;
+use DateTime;
 
 use Test2::Harness::UI::Request;
 use Test2::Harness::UI::Controller::Dashboard;
@@ -19,6 +20,9 @@ use Test2::Harness::UI::Controller::Query;
 use Test2::Harness::UI::Controller::Runs;
 use Test2::Harness::UI::Controller::Jobs;
 use Test2::Harness::UI::Controller::Events;
+
+use Test2::Harness::UI::Controller::RunField;
+use Test2::Harness::UI::Controller::JobField;
 
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -57,6 +61,8 @@ sub init {
     $router->connect('/run/:id/jobs'     => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
     $router->connect('/job/:id/events'   => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
     $router->connect('/event/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
+    $router->connect('/runfield/:id'     => {controller => 'Test2::Harness::UI::Controller::RunField'});
+    $router->connect('/jobfield/:id'     => {controller => 'Test2::Harness::UI::Controller::JobField'});
 }
 
 sub to_app {
@@ -115,6 +121,7 @@ sub wrap {
     }
 
     if ($ct eq 'text/html') {
+        my $dt = DateTime->now(time_zone => 'local');
 
         my $tx      = Text::Xslate->new(path => [share_dir('templates')]);
         my $wrapped = $tx->render(
@@ -128,6 +135,8 @@ sub wrap {
                 add_css  => $res->css      || [],
                 add_js   => $res->js       || [],
                 title    => $res->title    || ($controller ? $controller->title : 'Test2-Harness-UI'),
+
+                time_zone => $dt->strftime("%Z"),
 
                 base_uri => $req->base->as_string || '',
                 content  => mark_raw($res->raw_body)  || '',

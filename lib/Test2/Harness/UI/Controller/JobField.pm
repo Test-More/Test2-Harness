@@ -1,44 +1,29 @@
-package Test2::Harness::UI::Controller::Runs;
+package Test2::Harness::UI::Controller::JobField;
 use strict;
 use warnings;
 
 our $VERSION = '0.000007';
 
-use Data::GUID;
 use Test2::Harness::UI::Response qw/resp error/;
-use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
-
-sub title { 'Runs' }
 
 sub handle {
     my $self = shift;
     my ($route) = @_;
 
     my $req = $self->{+REQUEST};
-    my $res = resp(200);
-    my $user = $req->user;
-    my $schema = $self->{+CONFIG}->schema;
 
     die error(404 => 'Missing route') unless $route;
 
-    my $page = $route->{page} || 1;
-    my $size = $route->{size} || 100;
+    my $it = $route->{id} or die error(404 => 'No id');
+    my $schema = $self->{+CONFIG}->schema;
+    my $field = $schema->resultset('JobField')->search({job_field_id => $it})->first or die error(404 => 'Invalid Run');
 
-    my $p = $req->parameters;
-
-    my $a = {order_by => { -desc => [qw/added status project_id/]}};
-
-    my $runs = $schema->resultset('Run')->search(undef, {page => $page, rows => $size, order_by => { -desc => 'added'}});
-
-    $res->stream(
-        env          => $req->env,
-        content_type => 'application/x-jsonl',
-        resultset    => $runs,
-    );
-
+    my $res = resp(200);
+    $res->content_type('application/json');
+    $res->raw_body($field);
     return $res;
 }
 
@@ -52,7 +37,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Controller::Runs
+Test2::Harness::UI::Controller::JobField
 
 =head1 DESCRIPTION
 

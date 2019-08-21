@@ -28,7 +28,7 @@ my $config = Test2::Harness::UI::Config->new(
     dbi_dsn     => $dsn,
     dbi_user    => '',
     dbi_pass    => '',
-    single_user => 0,
+    single_user => 1,
     email       => 'exodist7@gmail.com',
 );
 
@@ -36,7 +36,8 @@ my $user = $config->schema->resultset('User')->create({username => 'root', passw
 
 my %projects;
 my @runs;
-for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2/) {
+for my $file (qw/fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2/) {
+#for my $file (qw/fields.jsonl.bz2/) {
     my $fh = IO::Uncompress::Bunzip2->new("./demo/$file") or die "Could not open bz2 file: $Bunzip2Error";
     my $log_data;
     bzip2 $fh => \$log_data or die "IO::Compress::Bzip2 failed: $Bzip2Error";
@@ -50,7 +51,6 @@ for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 su
         $project = $1 if $file =~ m/^([\w\d]+)/;
         $version = 'fail' if $file =~ m/fail/;
         $version = 'pass' if $file =~ m/pass/;
-        $version ||= '123';
     }
 
     unless ($projects{$project}) {
@@ -58,13 +58,12 @@ for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 su
         $projects{$project} = $p;
     }
 
-    push @runs => $config->schema->resultset('Run')->create(
+    my $run = $config->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
             mode          => 'complete',
             status        => 'pending',
             project_id    => $projects{$project}->project_id,
-            version       => $version,
 
             log_file => {
                 name => $file,
@@ -72,6 +71,14 @@ for my $file (qw/table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 su
             },
         }
     );
+
+    $config->schema->resultset('RunField')->create({
+        run_id => $run->run_id,
+        name => 'version',
+        details => $version,
+    }) if $version;
+
+    push @runs => $run;
 }
 
 my @commands = (

@@ -22,10 +22,8 @@ sub handle {
 
     my $res = resp(200);
     $res->add_css('run.css');
-    $res->add_css('job.css');
     $res->add_js('dashboard.js');
     $res->add_js('run.js');
-    $res->add_js('job.js');
 
     my $user = $req->user;
 

@@ -24,7 +24,7 @@ sub inject_run_data {
     $meta->{git}->{sha_short} = $short_sha;
     $meta->{git}->{status}    = $status;
 
-    $fields->{git_sha} => $long_sha;
+    push @$fields => { name => 'git_sha', details => $short_sha, data => $meta->{git} };
 
     return;
 }

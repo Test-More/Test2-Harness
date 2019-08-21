@@ -246,7 +246,7 @@ function FieldTable(spec) {
 
     me.render_header_col = function(data) {
         var label = data.label ? data.label : data.name;
-        var col = $('<th class="field-table-header-col ' + data.class + '">' + label + '</th>');
+        var col = $('<th class="field-table-header-col ' + (data.class || data.name || '') + '"><div class="field-table-header-col-inner">' + label + '</div></th>');
         if (data.sortable) {
             col.addClass('sortable');
         }

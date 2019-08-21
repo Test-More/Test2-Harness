@@ -259,6 +259,12 @@ sub TO_JSON {
     # Inflate
     $cols{parameters} = $self->parameters;
 
+    for my $run_field ($self->job_fields) {
+        my %field = $run_field->get_columns;
+        $field{data} = !!$field{data};
+        push @{$cols{fields}} => \%field;
+    }
+
     return \%cols;
 }
 
@@ -271,6 +277,12 @@ sub glance_data {
     @data{@GLANCE_FIELDS} = @cols{@GLANCE_FIELDS};
 
     $data{short_file} = $self->short_file;
+
+    for my $run_field ($self->job_fields) {
+        my %field = $run_field->get_columns;
+        $field{data} = !!$field{data};
+        push @{$data{fields}} => \%field;
+    }
 
     return \%data;
 }

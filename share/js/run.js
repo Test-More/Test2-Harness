@@ -27,9 +27,9 @@ t2hui.run.build_table = function(uri) {
         { 'name': 'pass_count', 'label': 'P', 'class': 'count', 'sortable': true, 'builder': t2hui.run.build_pass },
         { 'name': 'fail_count', 'label': 'F', 'class': 'count', 'sortable': true, 'builder': t2hui.run.build_fail },
 
-        { 'name': 'name', 'label': 'file/job name', 'class': 'job_name', 'sortable': true, 'builder': t2hui.run.build_name },
+        { 'name': 'exit',  'label': 'exit',  'class': 'exit', 'sortable': true, 'builder': t2hui.run.build_exit },
 
-        { 'name': 'exit',  'label': 'exit',  'class': 'exit', 'sortable': true, 'builder': t2hui.run.build_exit }
+        { 'name': 'name', 'label': 'file/job name', 'class': 'job_name', 'sortable': true, 'builder': t2hui.run.build_name },
     ];
 
     var table = new FieldTable({

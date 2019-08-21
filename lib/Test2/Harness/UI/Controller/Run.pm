@@ -21,7 +21,6 @@ sub handle {
     my $req = $self->{+REQUEST};
 
     my $res = resp(200);
-    $res->add_css('run.css');
     $res->add_js('dashboard.js');
     $res->add_js('run.js');
 

@@ -33,6 +33,7 @@ table.field-table > thead > tr.field-table-header > th {
     background: #E8E8E8;
     padding: 0;
     height: 1px;
+    white-space: nowrap;
 }
 
 div.field-table-header-col-inner {
@@ -48,6 +49,7 @@ div.field-table-header-col-inner {
     align-items: center;
     text-align: center;
     justify-content: center;
+    white-space: nowrap;
 }
 
 @media only screen and (max-height: 500px) {

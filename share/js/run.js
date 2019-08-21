@@ -22,14 +22,14 @@ t2hui.run = {};
 
 t2hui.run.build_table = function(uri) {
     var columns = [
-        { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'sortable': false, 'builder': t2hui.run.tool_builder },
+        { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.run.tool_builder },
 
-        { 'name': 'pass_count', 'label': 'P', 'class': 'count', 'sortable': true, 'builder': t2hui.run.build_pass },
-        { 'name': 'fail_count', 'label': 'F', 'class': 'count', 'sortable': true, 'builder': t2hui.run.build_fail },
+        { 'name': 'pass_count', 'label': 'P', 'class': 'count', 'builder': t2hui.run.build_pass },
+        { 'name': 'fail_count', 'label': 'F', 'class': 'count', 'builder': t2hui.run.build_fail },
 
-        { 'name': 'exit',  'label': 'exit',  'class': 'exit', 'sortable': true, 'builder': t2hui.run.build_exit },
+        { 'name': 'exit',  'label': 'exit',  'class': 'exit', 'builder': t2hui.run.build_exit },
 
-        { 'name': 'name', 'label': 'file/job name', 'class': 'job_name', 'sortable': true, 'builder': t2hui.run.build_name },
+        { 'name': 'name', 'label': 'file/job name', 'class': 'job_name', 'builder': t2hui.run.build_name },
     ];
 
     var table = new FieldTable({

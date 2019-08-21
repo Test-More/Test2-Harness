@@ -27,7 +27,7 @@ sub handle {
     my $it = $route->{id} or die error(404 => 'No name or id');
 
     my $p = $req->parameters;
-    my (%query, %attrs, $rs);
+    my (%query, %attrs, $rs, $meth);
 
     $attrs{order_by} = {-asc => ['event_ord', 'event_id']};
 
@@ -39,7 +39,18 @@ sub handle {
         $query{job_id} = $job_id;
         $query{parent_id} = undef unless $p->{load_subtests} && lc($p->{load_subtests}) ne 'false';
 
+        $meth = 'line_data';
         $rs = $schema->resultset('Event')->search(\%query, \%attrs);
+    }
+    elsif ($route->{from} eq 'single_event') {
+        my $event_id = $it;
+
+        my $event = $schema->resultset('Event')->find({event_id => $event_id})
+            or die error(404 => 'Invalid Event');
+
+        $res->content_type('application/json');
+        $res->raw_body($event);
+        return $res;
     }
     elsif ($route->{from} eq 'event') {
         my $event_id = $it;
@@ -66,6 +77,7 @@ sub handle {
             $query{'parent_id'} = $event_id;
         }
 
+        $meth = 'line_data';
         $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }
     else {
@@ -76,6 +88,7 @@ sub handle {
         env          => $req->env,
         content_type => 'application/x-jsonl; charset=utf-8',
         resultset    => $rs,
+        data_method  => $meth,
     );
 
     return $res;

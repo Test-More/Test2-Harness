@@ -199,6 +199,28 @@ sub TO_JSON {
     return \%cols;
 }
 
+sub line_data {
+    my $self = shift;
+    my %cols = $self->get_columns;
+    my %out;
+
+    # Inflate
+    $cols{facets} = $self->facets;
+    $out{lines}  = Test2::Formatter::Test2::Composer->render_super_verbose($cols{facets});
+
+    $out{facets} = $cols{facets} ? 1 : 0;
+    $out{orphan} = $cols{orphan} ? 1 : 0;
+
+    $out{parent_id} = $cols{parent_id} if $cols{parent_id};
+    $out{nested} = $cols{nested} // 0;
+
+    $out{event_id} = $cols{event_id};
+
+    $out{is_parent} = $cols{facets}{parent} ? 1 : 0;
+
+    return \%out;
+}
+
 =head2 events
 
 Type: has_many

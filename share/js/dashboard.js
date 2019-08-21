@@ -12,17 +12,17 @@ t2hui.dashboard = {};
 
 t2hui.dashboard.build_table = function(uri) {
     var columns = [
-        { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'sortable': false, 'builder': t2hui.dashboard.tool_builder },
+        { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.dashboard.tool_builder },
 
-        { 'name': 'passed', 'label': 'P', 'class': 'count', 'sortable': true, 'builder': t2hui.dashboard.build_pass },
-        { 'name': 'failed', 'label': 'F', 'class': 'count', 'sortable': true, 'builder': t2hui.dashboard.build_fail },
+        { 'name': 'passed', 'label': 'P', 'class': 'count', 'builder': t2hui.dashboard.build_pass },
+        { 'name': 'failed', 'label': 'F', 'class': 'count', 'builder': t2hui.dashboard.build_fail },
 
-        { 'name': 'project', 'label': 'project', 'class': 'project', 'sortable': true },
-        { 'name': 'status',  'label': 'status',  'class': 'status',  'sortable': true }
+        { 'name': 'project', 'label': 'project', 'class': 'project'},
+        { 'name': 'status',  'label': 'status',  'class': 'status'}
     ];
 
     if (!single_user) {
-        columns.push({ 'name': 'user', 'label': 'user', 'class': 'user', 'sortable': true});
+        columns.push({ 'name': 'user', 'label': 'user', 'class': 'user'});
     }
 
     var table = new FieldTable({
@@ -42,7 +42,7 @@ t2hui.dashboard.build_table = function(uri) {
 
         'columns': columns,
         'postfix_columns': [
-            { 'name': 'added', 'label': 'date+time (' + time_zone + ')', 'class': 'date', 'sortable': true },
+            { 'name': 'added', 'label': 'date+time (' + time_zone + ')', 'class': 'date' },
         ]
     });
 

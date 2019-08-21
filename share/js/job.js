@@ -1,225 +1,252 @@
 $(function() {
     $("div.job").each(function() {
-        var me = $(this);
-        t2hui.build_job(me.attr('data-job-id'), me);
+        var root = $(this);
+        var job_id = root.attr('data-job-id');
+
+        var job_uri = base_uri + 'job/' + job_id;
+        $.ajax(job_uri, {
+            'data': { 'content-type': 'application/json' },
+            'success': function(item) {
+                var dash = t2hui.run.build_table([item]);
+                root.prepend($('<h3>Job: ' + job_id + '</h3>'), dash, $('<hr />'));
+            },
+        });
+
+        var controls = $('<div class="event_controls"></div>');
+        var filters = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
+        controls.append(filters);
+        root.append(controls);
+        t2hui.job.filters.dom = filters;
+
+        var events_uri = job_uri + '/events';
+        var table = t2hui.job.build_table(events_uri);
+        root.append(table);
     });
 });
 
-t2hui.filters  = {
-    seen: {},
-    state: {},
-    hide: {
-        'PASS': true,
-        'PLAN': true,
-        'HARNESS': true,
-    }
+t2hui.job = {
+    'filters': {
+        seen: {},
+        state: {},
+        hide: {
+            'PASS': true,
+            'PLAN': true,
+            'HARNESS': true,
+        }
+    },
 };
 
-t2hui.controls = {
-    count: 0,
-    group: 0,
-    state: [true, true, true],
-    ranges: [[null,null]],
-};
-
-t2hui.build_job = function(job_id, root, list) {
-    if (root === null || root === undefined) {
-        root = $('<div class="job" data-job-id="' + run_id + '"></div>');
-    }
-
-    var job_uri = base_uri + 'job/' + job_id;
-    var events_uri = job_uri + '/events';
-
-    $.ajax(job_uri, {
-        'data': { 'content-type': 'application/json' },
-        'success': function(item) {
-            var job_grid = $('<div class="job_list grid"></div>');
-            var jhead = t2hui.build_run_job(item);
-
-            job_grid.append(t2hui.build_run_job_header());
-            job_grid.append(jhead);
-
-            root.prepend($('<h3>Job: ' + job_id + '</h3>'), job_grid, $('<hr />'));
-        },
-    });
-
-    var events = $('<div class="event_list grid"></div>');
-    events.append(t2hui.build_job_event_header());
-
-    if (!t2hui.controls.dom) {
-        var controls = $('<div class="event_controls"></div>');
-        t2hui.controls.dom = controls;
-    }
-
-    if (!t2hui.filters.dom) {
-        var filters = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
-        t2hui.filters.dom = filters;
-        t2hui.controls.dom.append(filters);
-    }
-
-    root.append(t2hui.controls.dom, events);
-
-    t2hui.fetch(events_uri, {}, function(e) {
-        events.append(t2hui.render_event(e));
-    });
-
-    return root;
-};
-
-t2hui.build_job_event_header = function(job) {
-    var me = [
-        $('<div class="col1 head tools">Tools</div>'),
-        $('<div class="col2 head">Tag</div>'),
-        $('<div class="col3 head">Message</div>'),
+t2hui.job.build_table = function(uri) {
+    var columns = [
+        { 'name': 'tools',   'label': 'tools',   'class': 'tools', 'builder': t2hui.job.tool_builder },
+        { 'name': 'tag',     'label': 'tag',     'class': 'tag' },
+        { 'name': 'message', 'label': 'message', 'class': 'message', 'builder': t2hui.job.message_builder },
     ];
 
-    return me;
+    var table = new FieldTable({
+        'class': 'job_table',
+        'id': 'jobs_events',
+        'fetch': uri,
+        'sortable': false,
+        'expand_item': t2hui.job.expand_item,
+
+        'place_row': t2hui.job.place_row,
+        'modify_row_hook': t2hui.job.modify_row,
+
+        'columns': columns,
+    });
+
+    var dom = table.render();
+
+    t2hui.job.table = table;
+
+    return dom;
+};
+
+t2hui.job.expand_item = function(item) {
+    var out = [];
+
+    var tools = true;
+    var count = 0;
+    item.lines.forEach(function(line) {
+        out.push({
+            'tools': tools ? item.lines.length : false,
+            'tag': line[1],
+            'message': line[2],
+            'table': line[3],
+            'facet': line[0],
+            'item': item,
+            'set_ord': count++,
+            'set_total': item.lines.length,
+        });
+        tools = false;
+    });
+
+    return out;
 }
 
-t2hui.render_event = function(e) {
-    var me = [];
+t2hui.job.message_builder = function(item, dest, data) {
+    t2hui.job.message_inner_builder(item, dest, data);
 
-    t2hui.controls.count++;
+    var indent = '' + ((item.item.nested + 1) * 2) + 'ch';
+    dest.css('padding-left', indent);
 
-    var etools = [];
+    if (!item.item.is_parent) { return }
 
-    if (e.facets) {
+    var expand = $('<div class="stoggle">+</div>');
+    dest.prepend(expand);
+
+    expand.one('click', function() {
+        expand.text('~');
+        expand.addClass('expanded');
+        var events_uri = base_uri + 'event/' + item.item.event_id + '/events';
+
+        t2hui.fetch(events_uri, {}, t2hui.job.table.render_item)
+    });
+}
+
+t2hui.job.place_row = function(row, item, table, state) {
+    if (!item.item.parent_id) { return false }
+
+    var pid = item.item.parent_id;
+    if (!state[pid]) {
+        state[pid] = table.find('tr[data-event-id="' + item.item.parent_id + '"]').last();
+    }
+
+    state[pid].after(row);
+    state[pid] = row;
+
+    return true;
+}
+
+t2hui.job.message_inner_builder = function(item, dest, data) {
+    if (!item.table) {
+        var pre = $('<pre class="testout"></pre>');
+        pre.text(item.message);
+        dest.append(pre);
+        return;
+    }
+
+    var data = item.table;
+
+    var table = $('<table class="testtable"></table>');
+    var header = $('<tr></tr>');
+    table.append(header);
+
+    for (var x = 0; x < data.header.length; x++) {
+        var th = $('<th class="header"></th>');
+        th.text(data.header[x]);
+        header.append(th);
+    }
+
+    for (var x = 0; x < data.rows.length; x++) {
+        var row_data = data.rows[x];
+        var row = $('<tr></tr>');
+        table.append(row);
+
+        for (var y = 0; y < row_data.length; y++) {
+            var col = $('<td class="' + data.header[y].toLowerCase() + '"></td>');
+            col.text(row_data[y]);
+            row.append(col);
+        }
+    }
+
+    dest.append(table);
+}
+
+t2hui.job.tool_builder = function(item, tools, data) {
+    if (!item.tools) { tools.hide(); return }
+
+    tools.attr('rowspan', item.tools);
+
+    if (item.item.facets) {
         var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><i class="far fa-list-alt"></i></div>');
-        etools.push(efacet);
+        tools.append(efacet);
         efacet.click(function() {
-            $('#modal_body').jsonView(e.facets, {collapsed: true});
+            $('#modal_body').empty();
+            $('#modal_body').text("loading...");
             $('#free_modal').slideDown();
+
+            var uri = base_uri + 'event/' + item.item.event_id;
+
+            $.ajax(uri, {
+                'data': { 'content-type': 'application/json' },
+                'success': function(event) {
+                    $('#modal_body').empty();
+                    $('#modal_body').jsonView(event.facets, {collapsed: true});
+                },
+            });
         });
     }
 
-    if (e.orphan) {
+    if (item.item.orphan) {
         var eorphan = $('<div class="tool etoggle" title="See Orphan Facet Data"><i class="fas fa-code-branch"></i></div>');
-        etools.push(eorphan);
+        tools.append(eorphan);
         eorphan.click(function() {
-            $('#modal_body').jsonView(e.orphan, {collapsed: true});
+            $('#modal_body').empty();
+            $('#modal_body').text("loading...");
             $('#free_modal').slideDown();
+
+            var uri = base_uri + 'event/' + item.item.event_id;
+
+            $.ajax(uri, {
+                'data': { 'content-type': 'application/json' },
+                'success': function(event) {
+                    $('#modal_body').empty();
+                    $('#modal_body').jsonView(event.orphan, {collapsed: true});
+                },
+            });
         });
     }
-
-    var nested = e.nested;
-    var indent = '' + ((nested + 1) * 2) + 'ch';
-
-    var f;
-    if (e.facets && e.facets.hubs) {
-        f = e.facets;
-    }
-    else if (e.orphan && e.orphan.hubs) {
-        f = e.orphan;
-    }
-
-    var p = f && f.parent;
-
-    var seen = t2hui.filters.seen;
-    var state = t2hui.filters.state;
-    var filters = t2hui.filters.dom;
-
-    var len = e.lines.length;
-    for (var i = 0; i < len; i++) {
-        var line = e.lines[i];
-
-        if (!seen[line[1]]) {
-            seen[line[1]] = 1;
-            state[line[1]] = true;
-
-            var filter = $('<li class="filter">' + line[1] + '</li>');
-            filter.click(function() {
-                state[line[1]] = !state[line[1]];
-                if (state[line[1]]) {
-                    filter.removeClass('off');
-                    $('div.tag_' + line[1]).removeClass('hidden_tag');
-                }
-                else {
-                    filter.addClass('off');
-                    $('div.tag_' + line[1]).addClass('hidden_tag');
-                }
-            });
-
-            var added = false;
-            var others = filters.children().toArray();
-            for (var j = 0; j < others.length; j++) {
-                if ($(others[j]).text() > line[1] && $(others[j]).text() !== 'Filter Tags:') {
-                    $(others[j]).before(filter);
-                    added = true;
-                    break;
-                }
-            }
-
-            if (!added) {
-                filters.append(filter);
-                if (t2hui.filters.hide[line[1]]) {
-                    filter.trigger('click');
-                }
-            };
-        }
-
-        var classes = 'facet_' + line[0] + ' tag_' + line[1];
-
-        var ltools = $('<div class="col1 ' + classes + ' tools"></div>');
-        ltools.append(etools);
-
-        var render = $('<div class="col3 message ' + classes + '" style="padding-left: ' + indent + '"></div>');
-        if (line[3]) {
-            var table = $('<table class="testtable"></table>');
-
-            var header = $('<tr></tr>');
-            table.append(header);
-            for (var x = 0; x < line[3].header.length; x++) {
-                var th = $('<th class="header"></th>');
-                th.text(line[3].header[x]);
-                header.append(th);
-            }
-            render.append(table);
-
-            for (var x = 0; x < line[3].rows.length; x++) {
-                var row_data = line[3].rows[x];
-                var row = $('<tr></tr>');
-                table.append(row);
-
-                for (var y = 0; y < row_data.length; y++) {
-                    var col = $('<td class="' + line[3].header[y].toLowerCase() + '"></td>');
-                    col.text(row_data[y]);
-                    row.append(col);
-                }
-            }
-        }
-        else {
-            var pre = $('<pre class="testout"></pre>');
-            pre.text(line[2]);
-            render.append(pre);
-        }
-
-        if (p && line[0] == 'assert') {
-            var expand = $('<div class="stoggle">+</div>');
-            expand.one('click', function() {
-                expand.detach();
-                var events_uri = base_uri + 'event/' + e.event_id + '/events';
-                var before = me[me.length - 1];
-                t2hui.fetch(events_uri, {}, function(se) {
-                    var it = t2hui.render_event(se, filters, seen);
-                    before.after(it);
-                    before = it[it.length - 1];
-                });
-            });
-            render.prepend(expand);
-        }
-
-        var tag = $('<div class="col2 tag ' + classes + '">' + line[1] + '</div>');
-
-        if (!state[line[1]]) {
-            ltools.addClass('hidden_tag');
-            tag.addClass('hidden_tag');
-            render.addClass('hidden_tag');
-        }
-
-        me.push(ltools);
-        me.push(tag);
-        me.push(render);
-    }
-
-    return me;
 }
+
+t2hui.job.modify_row = function(row, item) {
+    var tag = item.tag;
+
+    row.addClass('facet_' + item.facet);
+    row.addClass('tag_' + tag);
+
+    row.attr('data-event-id', item.item.event_id);
+
+    if (!t2hui.job.filters.seen[tag]) {
+        t2hui.job.filters.state[tag] = !t2hui.job.filters.hide[tag];
+        t2hui.job.filters.seen[tag] = 1;
+
+        var filter = $('<li class="filter">' + tag + '</li>');
+        var added = false;
+        t2hui.job.filters.dom.children('.filter').each(function() {
+            if (added) { return false };
+
+            var it = $(this);
+            if (tag < it.text()) {
+                added = true;
+                it.before(filter);
+                return false;
+            }
+        });
+        if (!added) { t2hui.job.filters.dom.append(filter) }
+
+        if (!t2hui.job.filters.state[tag]) {
+            filter.addClass('off');
+        }
+
+        filter.click(function() {
+            if (t2hui.job.filters.state[tag]) {
+                t2hui.job.filters.state[tag] = false;
+                $(this).addClass('off');
+                t2hui.job.table.table.find('tr.tag_' + tag).addClass('hidden_row');
+            }
+            else {
+                t2hui.job.filters.state[tag] = true;
+                $(this).removeClass('off');
+                t2hui.job.table.table.find('tr.tag_' + tag).removeClass('hidden_row');
+            }
+        })
+    }
+
+    if (!t2hui.job.filters.state[tag]) {
+        row.addClass('hidden_row');
+    }
+}
+
+

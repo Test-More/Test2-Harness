@@ -81,7 +81,11 @@ sub stream {
             $done = sub { !$go };
             $fetch = sub {
                 $go = $rs->next() or return;
-                my $out = $json->encode($go) . "\n";
+                my $data = $go;
+                if(my $meth = $params{data_method}) {
+                    $data = $go->$meth();
+                }
+                my $out = $json->encode($data) . "\n";
                 return $out;
             };
         }

@@ -95,6 +95,16 @@ function FieldTable(spec) {
     }
 
     me.render_item = function(item) {
+        if (me.spec.expand_item) {
+            var list = me.spec.expand_item(item);
+            list.forEach(me._render_item);
+        }
+        else {
+            me._render_item(item);
+        }
+    }
+
+    me._render_item = function(item) {
         var row = me.render_row(item);
 
         if (me.spec.modify_row_hook) {

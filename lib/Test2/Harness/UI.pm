@@ -60,6 +60,7 @@ sub init {
     $router->connect('/job/:id'          => {controller => 'Test2::Harness::UI::Controller::Job'});
     $router->connect('/run/:id/jobs'     => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
     $router->connect('/job/:id/events'   => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
+    $router->connect('/event/:id'        => {controller => 'Test2::Harness::UI::Controller::Events', from => 'single_event'});
     $router->connect('/event/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
     $router->connect('/runfield/:id'     => {controller => 'Test2::Harness::UI::Controller::RunField'});
     $router->connect('/jobfield/:id'     => {controller => 'Test2::Harness::UI::Controller::JobField'});

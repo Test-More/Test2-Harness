@@ -1,16 +1,32 @@
-div.job {
-    margin-top: 8px;
-}
+.facet_time    {  color: #12539e; }
+.facet_about   {  color: #000000; }
+.facet_amnesty {  color: #0f6989; }
+.facet_assert  {  color: #000000; }
+.facet_control {  color: #b26521; }
+.facet_error   {  color: #af0c0c; }
+.facet_info    {  color: #000000; }
+.facet_meta    {  color: #000000; }
+.facet_parent  {  color: #000000; }
+.facet_trace   {  color: #b26521; }
+.facet_plan    {  color: #3d6011; }
 
-@media only screen and (max-height: 500px) {
-    div.event_filter_wrapper {
-        top: 0px;
-    }
-}
-
-div.hidden_tag, div.hidden_group {
-    display: none !important;
-}
+.tag_DEBUG    { color: #b26521;                     }
+.tag_DIAG     { color: #b23721;                     }
+.tag_ERROR    { color: #af0c0c;                     }
+.tag_FATAL    { color: #c10000;                     }
+.tag_FAIL     { color: #c10000;                     }
+.tag_HALT     { color: #c10000;                     }
+.tag_PASS     { color: #266d39;                     }
+.tag_N-PASS-N { color: #1d756d;                     }
+.tag_TODO     { color: #521d93;                     }
+.tag_NO--PLAN { color: #d17c32;                     }
+.tag_SKIP     { color: #67156d;                     }
+.tag_SKIP-ALL { color: #FFFFFF; background: #026b09 }
+.tag_STDERR   { color: #bc7d16;                     }
+.tag_REASON   { color: #b26521;                     }
+.tag_TIMEOUT  { color: #b26521;                     }
+.tag_TIME     { color: #12539e;                     }
+.tag_MEMORY   { color: #12539e;                     }
 
 div.event_controls {
     background: #FFFFFF;
@@ -59,14 +75,18 @@ div.event_controls ul li.filter.off {
     background: #CCCCCC;
 }
 
+table.field-table.job_table > * > tr.field-table-header > th {
+    top: 84px;
+}
 
-div.stoggle {
-    display: block;
-    float: left;
-    padding-left: 0.5ch;
-    cursor: pointer;
-    margin-left: -2ch;
-    margin-right: -2ch;
+@media only screen and (max-height: 500px) {
+    div.event_controls {
+        top: 0px;
+    }
+
+    table.field-table.job_table > * > tr.field-table-header > th {
+        top: 44px !important;
+    }
 }
 
 pre.testout {
@@ -78,168 +98,6 @@ pre.testout {
     display: block;
     font-size: 16px;
 }
-
-div.stoggle:hover {
-    color: #1010FF;
-}
-
-div.expander.job {
-    overflow: show;
-    position: relative;
-    top: 0;
-    left: 0;
-}
-
-div.expander.job > div.expander-body {
-    overflow: auto;
-    padding: 2px;
-}
-
-div.job ul.job_controls {
-    display: block;
-    height: 0px;
-    overflow: visible;
-    list-style: none;
-    margin: 0;
-    padding: 0px;
-    margin-bottom: 8px;
-    position: sticky;
-    top: 0px;
-    right: 0px;
-}
-
-div.job ul.job_controls > li {
-    display: block;
-    float: right;
-    color: #4060F0;
-    border: 1px solid #909090;
-    border-radius: 8px;
-    padding: 5px;
-    cursor: pointer;
-    margin-left: 4px;
-    margin-right: 4px;
-    background: #f0f0f0;
-}
-
-div.job ul.job_controls > li:hover {
-    background: #C0E0F0;
-    color: #2040E0;
-    border: 1px solid #2040E0;
-}
-
-div.job ul.job_controls > li.spin_control {
-    margin-top: -5px;
-    border: none;
-    background: inherit;
-    cursor: default;
-}
-
-div.job ul.job_controls > li.spin_control:hover {
-    border: none;
-    background: inherit;
-}
-
-div.job_body {
-    display: block;
-    background: #F8F8F8;
-    border-radius: 8px;
-    padding: 4px;
-    overflow: auto;
-    min-width: 90%;
-}
-
-div.job_filter {
-    display: block;
-    position: absolute;
-    top: 100px;
-    right: 4px;
-    border: 1px solid black;
-    background: white;
-    border-radius: 10px;
-    padding: 5px;
-    z-index: 10;
-}
-
-div.job_filter > div.close {
-    display: block;
-    font-size: 30px;
-    position: absolute;
-    top: -5px;
-    right: 0px;
-    color: red;
-    text-align: right;
-    vertical-align: top;
-    cursor: pointer;
-}
-
-div.job_filter > label {
-    display: block;
-    text-transform: uppercase;
-    background: #E0E0E0;
-    border-bottom: 1px dotted #A0A0A0;
-    border-radius: 10px;
-    margin: -5px;
-    padding: 5px;
-    padding-right: 25px;
-    margin-bottom: 0;
-}
-
-ul.job_filter_list {
-    list-style: none;
-    display: block;
-    margin: 0;
-    padding: 0px;
-    border: none;
-}
-
-ul.job_filter_list > li {
-    display: block;
-    width: auto;
-
-    color: #4060F0;
-    padding: 4px;
-    cursor: pointer;
-
-    text-decoration: line-through;
-}
-
-ul.job_filter_list > li:hover {
-    color: #0020D0;
-}
-
-ul.job_filter_list > li.selected {
-    text-decoration: none;
-}
-
-div.facet_time    {  color: #12539e; }
-div.facet_about   {  color: #000000; }
-div.facet_amnesty {  color: #0f6989; }
-div.facet_assert  {  color: #000000; }
-div.facet_control {  color: #b26521; }
-div.facet_error   {  color: #af0c0c; }
-div.facet_info    {  color: #000000; }
-div.facet_meta    {  color: #000000; }
-div.facet_parent  {  color: #000000; }
-div.facet_trace   {  color: #b26521; }
-div.facet_plan    {  color: #3d6011; }
-
-div.tag_DEBUG    { color: #b26521;                     }
-div.tag_DIAG     { color: #b23721;                     }
-div.tag_ERROR    { color: #af0c0c;                     }
-div.tag_FATAL    { color: #c10000;                     }
-div.tag_FAIL     { color: #c10000;                     }
-div.tag_HALT     { color: #c10000;                     }
-div.tag_PASS     { color: #266d39;                     }
-div.tag_N-PASS-N { color: #1d756d;                     }
-div.tag_TODO     { color: #521d93;                     }
-div.tag_NO--PLAN { color: #d17c32;                     }
-div.tag_SKIP     { color: #67156d;                     }
-div.tag_SKIP-ALL { color: #FFFFFF; background: #026b09 }
-div.tag_STDERR   { color: #bc7d16;                     }
-div.tag_REASON   { color: #b26521;                     }
-div.tag_TIMEOUT  { color: #b26521;                     }
-div.tag_TIME     { color: #12539e;                     }
-div.tag_MEMORY   { color: #12539e;                     }
 
 table.testtable {
     border: 1px solid black;
@@ -256,25 +114,27 @@ table.testtable td, table.testtable th {
     padding: 4px;
 }
 
-.job_list {
-    border-spacing: 0;
-    border-collapse: collapse;
-    border: none;
-}
-
-.job_list table, .job_list th, .job_list td {
-    border: 1px solid #C0C0C0;
-    padding:2px;
-    padding-left: 4px;
-    padding-right: 4px;
-    border-spacing: -1px;
-}
-
-.job_list_wrapper {
-    border: 4px solid #C0C0C0;
-    border-radius: 10px;
-    overflow: hidden;
+div.stoggle {
     display: block;
-    width: fit-content;
-    padding: 0px;
+    float: left;
+    padding-left: 0.5ch;
+    cursor: pointer;
+    margin-left: -2ch;
+    margin-right: -2ch;
+}
+
+div.stoggle:hover {
+    color: #1010FF;
+}
+
+div.stoggle.expanded:hover {
+    color: inherit;
+    cursor: inherit;
+}
+
+.hidden_row {
+    visibility: collapse;
+    line-height:0;
+    height: 0;
+    overflow: hidden;
 }

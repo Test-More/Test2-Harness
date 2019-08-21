@@ -36,6 +36,7 @@ t2hui.run.build_table = function(uri) {
         'class': 'run_table',
         'id': 'run_jobs',
         'fetch': uri,
+        'sortable': true,
 
         'modify_row_hook': t2hui.run.modify_row,
         'place_row': t2hui.run.place_row,
@@ -119,19 +120,8 @@ t2hui.run.build_jobs = function(run_id) {
 };
 
 t2hui.run.place_row = function(row, item, table, state) {
-    if (!state['header']) {
-        state['header'] = table.children().first();
-    }
-
     if (!item.short_file) {
-        if (state['log']) {
-            state['log'].after(row);
-        }
-        else {
-            state['header'].after(row);
-        }
-
-        state['log'] = row;
+        state['header'].after(row);
         return true;
     }
 
@@ -139,11 +129,8 @@ t2hui.run.place_row = function(row, item, table, state) {
         if (state['fail']) {
             state['fail'].after(row);
         }
-        else if (state['log']) {
-            state['log'].after(row);
-        }
         else {
-            state['header'].after(row);
+            state['body'].prepend(row);
         }
 
         state['fail'] = row;

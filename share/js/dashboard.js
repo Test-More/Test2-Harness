@@ -29,6 +29,7 @@ t2hui.dashboard.build_table = function(uri) {
         'class': 'dashboard_table',
         'id': 'dashboard_runs',
         'fetch': uri,
+        'sortable': true,
 
         'modify_row_hook': t2hui.dashboard.modify_row,
 

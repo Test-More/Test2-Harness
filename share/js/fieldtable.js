@@ -15,7 +15,7 @@
 //  dynamic_field_fetch  => function(field_data) { return uri },
 //
 //  columns => [
-//      { field: '', label: '', sortable: BOOL, class: '', builder => function(item, col, field_spec) { ... }},
+//      { field: '', label: '', class: '', builder => function(item, col, field_spec) { ... }},
 //      ...
 //  ],
 //
@@ -39,8 +39,17 @@ function FieldTable(spec) {
 
     me.render = function() {
         me.table = $('<table class="field-table ' + spec.class + '"></table>');
+
         me.header = me.render_header();
-        me.table.append(me.header);
+        var hwrap = $('<thead></thead>');
+        hwrap.append(me.header);
+        me.table.append(hwrap);
+
+        me.body = $('<tbody></tbody>');
+        me.table.append(me.body);
+
+        me.row_state.body = me.body;
+        me.row_state.header = me.header;
 
         if (me.spec.row_redraw_interval) {
             setInterval(function() {
@@ -83,7 +92,6 @@ function FieldTable(spec) {
         var wrapper = $('<div id="' + spec.id + '" class="field-table-wrapper ' + spec.class + '"></div>');
         wrapper.append(me.table);
         return wrapper;
-
     }
 
     me.render_item = function(item) {
@@ -95,11 +103,11 @@ function FieldTable(spec) {
 
         if (me.spec.place_row) {
             if (!me.spec.place_row(row.html, item, me.table, me.row_state)) {
-                me.table.append(row.html);
+                me.body.append(row.html);
             }
         }
         else {
-            me.table.append(row.html);
+            me.body.append(row.html);
         }
 
         if (me.spec.row_redraw_check) {
@@ -111,6 +119,39 @@ function FieldTable(spec) {
 
         row.index = me.rows.length;
         me.rows.push(row);
+
+        if (me.spec.sortable) {
+            me.table.tablesort({
+                'compare': function(a, b) {
+                    var an = parseFloat(a);
+                    var bn = parseFloat(b);
+
+                    if (!isNaN(an) && !isNaN(bn)) {
+                        if (an > bn) {
+                            return 1;
+                        } else if (an < bn) {
+                            return -1;
+                        } else {
+                            return 0;
+                        }
+                    }
+                    if (!isNaN(an)) {
+                        return 1;
+                    }
+                    if (!isNaN(bn)) {
+                        return -1;
+                    }
+
+                    if (a > b) {
+                        return 1;
+                    } else if (a < b) {
+                        return -1;
+                    } else {
+                        return 0;
+                    }
+                }
+            });
+        }
     }
 
     me.render_row = function(item) {
@@ -163,7 +204,7 @@ function FieldTable(spec) {
 
                 var idx = me.find_dynamic_column(field.name);
                 if (idx === null) {
-                    idx = me.inject_dynamic_column({"sortable": true, "name": field.name});
+                    idx = me.inject_dynamic_column({"name": field.name});
                     if (row.dynamic_columns.length) {
                         row.dynamic_columns[row.dynamic_columns.length - 1].after(col);
                     }
@@ -258,10 +299,10 @@ function FieldTable(spec) {
 
     me.render_header_col = function(data) {
         var label = data.label ? data.label : data.name;
-        var col = $('<th class="field-table-header-col ' + me.column_class(data) + '"><div class="field-table-header-col-inner">' + label + '</div></th>');
-        if (data.sortable) {
-            col.addClass('sortable');
-        }
+        var inner = $('<div class="field-table-header-col-inner">' + label + '</div>');
+        var col = $('<th class="field-table-header-col ' + me.column_class(data) + '"></th>');
+        col.append(inner);
+        inner.click(function() { col.trigger('click'); });
         return col;
     }
 
@@ -287,14 +328,9 @@ function FieldTable(spec) {
             col.hide();
             me.table.find('td.' + cclass).hide();
             me.hidden_columns[data.name] = 1;
+            return false;
         });
         tools.append(close);
-
-//        var sort = $('<div class="etoggle" title="hide column"><i class="fas fa-sort"></i></div>');
-//        sort.click(function() {
-//            console.log('sort!');
-//        });
-//        tools.append(sort);
 
         if (me.dynamic_columns.length) {
             me.dynamic_columns[me.dynamic_columns.length - 1].after(col);

@@ -2,7 +2,7 @@ package Test2::Harness::Util::Term;
 use strict;
 use warnings;
 
-our $VERSION = '0.001085';
+our $VERSION = '0.001086';
 
 use Test2::Util qw/IS_WIN32/;
 

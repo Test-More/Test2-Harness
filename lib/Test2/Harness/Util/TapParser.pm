@@ -2,7 +2,7 @@ package Test2::Harness::Util::TapParser;
 use strict;
 use warnings;
 
-our $VERSION = '0.001085';
+our $VERSION = '0.001086';
 
 use Importer 'Importer' => 'import';
 

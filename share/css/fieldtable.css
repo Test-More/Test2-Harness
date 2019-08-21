@@ -29,22 +29,29 @@ table.field-table > tr.field-table-header > th {
     text-transform: uppercase;
     text-align: center;
     position: sticky;
-    top: 80px;
+    top: 79px;
     background: #E8E8E8;
     padding: 0;
+    height: 1px;
 }
 
 div.field-table-header-col-inner {
     border-bottom: 2px solid #C0C0C0;
     border-top: 1px solid #C0C0C0;
     margin-top: -1px;
+    margin-bottom: -1px;
     padding: 2px;
     padding-left: 1px;
     padding-right: 1px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    text-align: center;
+    justify-content: center;
 }
 
 @media only screen and (max-height: 500px) {
     table.field-table > tr.field-table-header > th {
-        top: 0;
+        top: -1px;
     }
 }

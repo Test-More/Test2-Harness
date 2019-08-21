@@ -35,6 +35,7 @@ function FieldTable(spec) {
     me.redraw = {};
     me.redraw_id = 1;
     me.row_state = {};
+    me.hidden_columns = {};
 
     me.render = function() {
         me.table = $('<table class="field-table ' + spec.class + '"></table>');
@@ -134,10 +135,14 @@ function FieldTable(spec) {
             });
         }
 
-        me.dynamic_columns.forEach(function() {
-            var col = $('<td></td>');
+        me.dynamic_columns.forEach(function(header) {
+            var name = header.attr('data-dynamic-name');
+            var col = $('<td class="col-' + name + '"></td>');
             row.html.append(col);
             row.dynamic_columns.push(col);
+            if (me.hidden_columns[name]) {
+                col.hide();
+            }
         });
 
         if (me.spec.postfix_columns) {
@@ -151,7 +156,10 @@ function FieldTable(spec) {
         var attr = me.spec.dynamic_field_attribute;
         if (attr && item[attr]) {
             item[attr].forEach(function(field) {
-                var col = me.render_dynamic_col(field);
+                var col = me.render_dynamic_col(field, field.name);
+                if (me.hidden_columns[field.name]) {
+                    col.hide();
+                }
 
                 var idx = me.find_dynamic_column(field.name);
                 if (idx === null) {
@@ -178,8 +186,8 @@ function FieldTable(spec) {
         return row;
     }
 
-    me.render_dynamic_col = function(field) {
-        var col = $('<td>' + field.details + '</td>');
+    me.render_dynamic_col = function(field, name) {
+        var col = $('<td class="col-' + name + '">' + field.details + '</td>');
 
         if (field.data) {
             var viewer = $('<div class="tool etoggle" title="Extended Data"><i class="far fa-list-alt"></i></div>');
@@ -244,9 +252,13 @@ function FieldTable(spec) {
         return header;
     }
 
+    me.column_class = function(data) {
+        return "col-" + (data.class || data.name);
+    }
+
     me.render_header_col = function(data) {
         var label = data.label ? data.label : data.name;
-        var col = $('<th class="field-table-header-col ' + (data.class || data.name || '') + '"><div class="field-table-header-col-inner">' + label + '</div></th>');
+        var col = $('<th class="field-table-header-col ' + me.column_class(data) + '"><div class="field-table-header-col-inner">' + label + '</div></th>');
         if (data.sortable) {
             col.addClass('sortable');
         }
@@ -263,12 +275,32 @@ function FieldTable(spec) {
 
     me.inject_dynamic_column = function(data) {
         var col = me.render_header_col(data);
+        col.addClass('dynamic');
+        col.attr('data-dynamic_name', data.name);
+
+        var cclass = me.column_class(data);
+
+        var tools = col.children('div').first();
+
+        var close = $('<div class="etoggle red_hover" title="hide column"><i class="far fa-times-circle"></i></div>');
+        close.click(function() {
+            col.hide();
+            me.table.find('td.' + cclass).hide();
+            me.hidden_columns[data.name] = 1;
+        });
+        tools.append(close);
+
+//        var sort = $('<div class="etoggle" title="hide column"><i class="fas fa-sort"></i></div>');
+//        sort.click(function() {
+//            console.log('sort!');
+//        });
+//        tools.append(sort);
 
         if (me.dynamic_columns.length) {
             me.dynamic_columns[me.dynamic_columns.length - 1].after(col);
 
             me.rows.forEach(function(row) {
-                var td = $('<td></td>');
+                var td = $('<td class="' + cclass + '"></td>');
                 row.dynamic_columns[row.dynamic_columns.length - 1].after(td);
                 row.dynamic_columns.push(td);
             });
@@ -277,7 +309,7 @@ function FieldTable(spec) {
             me.columns[me.columns.length - 1].after(col);
 
             me.rows.forEach(function(row) {
-                var td = $('<td></td>');
+                var td = $('<td class="' + cclass + '"></td>');
                 row.columns[row.columns.length - 1].after(td);
                 row.dynamic_columns.push(td);
             });
@@ -287,7 +319,7 @@ function FieldTable(spec) {
 
             var row;
             me.rows.forEach(function(row) {
-                var td = $('<td></td>');
+                var td = $('<td class="' + cclass + '"></td>');
                 row.append(td);
                 row.dynamic_columns.push(td);
             });

@@ -24,13 +24,15 @@
 .running_box { border: 1px solid #009090; }
 
 .etoggle {
-    border: 1px solid #999999;
     color: black;
 }
 
 .etoggle:hover, .etoggle.clicked:hover {
-    border-color: #0000FF;
     color:  #0000A0;
+}
+
+.etoggle.red_hover:hover, .etoggle.clicked.red_hover:hover {
+    color:  #F00000;
 }
 
 .etoggle.clicked {

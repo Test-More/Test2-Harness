@@ -56,6 +56,12 @@ div#progress_bar:empty {
 span.tooltip-expand {
     float: left;
     padding-right: 6px;
+    cursor: zoom-in;
+}
+
+span.tooltip-expand.locked {
+    color: #6060F0;
+    cursor: zoom-out;
 }
 
 div.tooltip {

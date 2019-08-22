@@ -93,7 +93,14 @@ t2hui.run.build_name = function(item, col, data) {
 
     ddd.click(function() {
         locked = !locked;
-        if (tooltip && !locked) { tooltip.detach(); tooltip = null }
+        if (tooltip && !locked) {
+            tooltip.detach();
+            tooltip = null;
+            ddd.removeClass('locked');
+        }
+        else {
+            ddd.addClass('locked');
+        }
     });
 
     col.append(shrt, ddd);

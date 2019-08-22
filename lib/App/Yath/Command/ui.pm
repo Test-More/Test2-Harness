@@ -17,6 +17,7 @@ use Test2::Harness;
 use DBIx::QuickDB;
 use Plack::Builder;
 use Plack::App::Directory;
+use Plack::App::File;
 use Plack::Runner;
 
 use parent 'App::Yath::Command::test';
@@ -101,6 +102,7 @@ sub run_command {
     my $app = builder {
         mount '/js'  => Plack::App::Directory->new({root => share_dir('js')})->to_app;
         mount '/css' => Plack::App::Directory->new({root => share_dir('css')})->to_app;
+        mount '/favicon.ico' => Plack::App::File->new({file => share_dir('img') . '/favicon.ico'})->to_app;
 
         mount '/' => sub {
             Test2::Harness::UI->new(config => $config)->to_app->(@_);

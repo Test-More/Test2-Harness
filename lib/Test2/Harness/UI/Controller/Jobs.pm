@@ -31,36 +31,25 @@ sub handle {
     my $run = $schema->resultset('Run')->search({run_id => $it})->first or die error(404 => 'Invalid Run');
 
     my $offset = 0;
+    my @jobs;
+    my $flush = 0;
     $res->stream(
         env          => $req->env,
         content_type => 'application/x-jsonl',
 
-        done  => sub { $run->complete },
+        done  => sub { $flush && !@jobs && $run->complete },
         fetch => sub {
-            my @jobs = map {encode_json($_->glance_data) . "\n"} sort _sort_jobs $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
-            $offset += @jobs;
-            return @jobs;
+            $flush = 1 if $run->complete;
+            my @new = map {encode_json($_->glance_data) . "\n"} $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
+            if (@new) {
+                $offset += @new;
+                push @jobs => @new;
+            }
+            return shift @jobs;
         },
     );
 
     return $res;
-}
-
-sub _sort_jobs($$) {
-    my ($a, $b) = @_;
-
-    return -1 unless $a->file;
-    return 1  unless $b->file;
-
-    my $delta = $b->fail <=> $a->fail;
-    return $delta if $delta;
-
-    my ($a_name) = $a->name =~ m/(\d+)$/;
-    my ($b_name) = $b->name =~ m/(\d+)$/;
-    $delta = int($a_name) <=> int($b_name);
-    return $delta if $delta;
-
-    return $a->file cmp $b->file || $a->job_ord <=> $b->job_ord;
 }
 
 1;

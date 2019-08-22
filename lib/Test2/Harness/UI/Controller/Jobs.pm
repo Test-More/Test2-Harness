@@ -40,12 +40,15 @@ sub handle {
         done  => sub { $flush && !@jobs && $run->complete },
         fetch => sub {
             $flush = 1 if $run->complete;
-            my @new = map {encode_json($_->glance_data) . "\n"} $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
+
+            my @new = $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
             if (@new) {
                 $offset += @new;
                 push @jobs => @new;
             }
-            return shift @jobs;
+
+            return unless @jobs;
+            return encode_json(shift(@jobs)->glance_data) . "\n";
         },
     );
 

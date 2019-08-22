@@ -8,7 +8,7 @@ $(function() {
             'data': { 'content-type': 'application/json' },
             'success': function(item) {
                 var dash = t2hui.run.build_table([item]);
-                root.prepend($('<h3>Job: ' + job_id + '</h3>'), dash, $('<hr />'));
+                root.prepend($('<h3>Job: ' + (item.short_file || item.name) + '</h3>'), dash, $('<hr />'));
             },
         });
 

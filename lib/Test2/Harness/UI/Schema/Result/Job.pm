@@ -262,7 +262,7 @@ sub TO_JSON {
     my %cols = $self->get_columns;
 
     $cols{short_file} = $self->short_file;
-    $cols{shortest_file} = $self->short_file;
+    $cols{shortest_file} = $self->shortest_file;
 
     # Inflate
     $cols{parameters} = $self->parameters;

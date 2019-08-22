@@ -2,7 +2,7 @@ package Test2::Harness::UI::CPANImporter;
 use strict;
 use warnings;
 
-our $VERSION = '0.000008';
+our $VERSION = '0.000009';
 
 use Carp qw/croak/;
 

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Runs;
 use strict;
 use warnings;
 
-our $VERSION = '0.000008';
+our $VERSION = '0.000009';
 
 use Data::GUID;
 use Test2::Harness::UI::Response qw/resp error/;

@@ -20,6 +20,9 @@ table.field-table, table.field-table > * > tr > th, table.field-table > * > tr >
     padding-right: 4px;
     border-spacing: -1px;
     white-space: nowrap;
+}
+
+table.field-table > * > tr > td {
     position: relative;
 }
 
@@ -36,6 +39,7 @@ table.field-table > thead > tr.field-table-header > th {
     padding: 0;
     height: 1px;
     white-space: nowrap;
+    z-index: 20;
 }
 
 div.field-table-header-col-inner {

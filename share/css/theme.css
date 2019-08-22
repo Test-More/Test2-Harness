@@ -75,7 +75,7 @@ div.tooltip {
     background: #EEEEFF;
     width: auto;
     min-width: 101%; /* So it does not try to wrap the contents to fit in the same size as our parent */
-    z-index: 20;
+    z-index: 19;
 
     padding: 3px;
 

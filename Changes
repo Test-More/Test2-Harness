@@ -2,6 +2,7 @@
 
     - Return failed jobs first in jobs controller
     - Shorten test name to just the filename, tooltip to see full path.
+    - Show job name/file when looking at a job
 
 0.000012  2019-08-22 13:35:23-07:00 America/Los_Angeles
 

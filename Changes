@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Add missing version numbers
+    - Do not include the demo dir in the tarball
+
 0.000007  2019-08-21 16:51:18-07:00 America/Los_Angeles
 
     - Show ALL events

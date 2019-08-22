@@ -138,6 +138,8 @@ __PACKAGE__->belongs_to(
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-19 11:52:16
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:/dJonFuss8WA7tehHymwpw
 
+our $VERSION = '0.000008';
+
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_columns;

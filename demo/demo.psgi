@@ -5,6 +5,7 @@ BEGIN {$ENV{T2_HARNESS_UI_ENV} = 'dev'}
 
 use Plack::Builder;
 use Plack::App::Directory;
+use Plack::App::File;
 
 require Test2::Harness::UI::Config;
 
@@ -19,6 +20,7 @@ my $config = Test2::Harness::UI::Config->new(
 builder {
     mount '/js'  => Plack::App::Directory->new({root => 'share/js'})->to_app;
     mount '/css' => Plack::App::Directory->new({root => 'share/css'})->to_app;
+    mount '/favicon.ico' => Plack::App::File->new({file => 'share/img/favicon.ico'})->to_app;
 
     mount '/' => sub {
         require Test2::Harness::UI;

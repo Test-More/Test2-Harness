@@ -52,3 +52,26 @@ div#progress_bar {
 div#progress_bar:empty {
     display: none;
 }
+
+span.tooltip-expand {
+    float: left;
+    padding-right: 6px;
+}
+
+div.tooltip {
+    display: block;
+    position: absolute;
+    top: -3px;
+    left: 26px;
+
+    border: 2px solid #6060B0;
+    border-radius: 6px;
+    background: #EEEEFF;
+    width: auto;
+    min-width: 101%; /* So it does not try to wrap the contents to fit in the same size as our parent */
+    z-index: 20;
+
+    padding: 3px;
+
+    white-space: normal;
+}

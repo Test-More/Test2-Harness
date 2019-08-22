@@ -240,6 +240,14 @@ __PACKAGE__->inflate_column(
     },
 );
 
+sub shortest_file {
+    my $self = shift;
+    my $file = $self->file or return undef;
+
+    return $1 if $file =~ m{([^/]+)$};
+    return $file;
+}
+
 sub short_file {
     my $self = shift;
     my $file = $self->file or return undef;
@@ -254,6 +262,7 @@ sub TO_JSON {
     my %cols = $self->get_columns;
 
     $cols{short_file} = $self->short_file;
+    $cols{shortest_file} = $self->short_file;
 
     # Inflate
     $cols{parameters} = $self->parameters;
@@ -271,6 +280,7 @@ sub glance_data {
     @data{@GLANCE_FIELDS} = @cols{@GLANCE_FIELDS};
 
     $data{short_file} = $self->short_file;
+    $data{shortest_file} = $self->shortest_file;
 
     # Inflate
     if ($data{fields} = $self->fields) {

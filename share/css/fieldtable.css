@@ -19,6 +19,8 @@ table.field-table, table.field-table > * > tr > th, table.field-table > * > tr >
     padding-left: 4px;
     padding-right: 4px;
     border-spacing: -1px;
+    white-space: nowrap;
+    position: relative;
 }
 
 table.field-table > * > tr.hover {

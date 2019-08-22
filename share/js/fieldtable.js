@@ -189,7 +189,6 @@ function FieldTable(spec) {
 
         me.dynamic_columns.forEach(function(header) {
             var name = header.attr('data-dynamic-name');
-            console.log(name, header);
             var col = $('<td class="col-' + name + '"></td>');
             row.html.append(col);
             row.dynamic_columns.push(col);
@@ -240,7 +239,6 @@ function FieldTable(spec) {
     }
 
     me.render_dynamic_col = function(field, name) {
-        console.log(name);
         var col = $('<td class="col-' + name + '">' + field.details + '</td>');
 
         if (field.data) {

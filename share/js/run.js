@@ -69,8 +69,34 @@ t2hui.run.build_exit = function(item, col, data) {
 };
 
 t2hui.run.build_name = function(item, col, data) {
-    var val = item.short_file || item.name;
-    col.text(val);
+    var shrt = item.shortest_file || item.name;
+    var lng  = item.short_file || item.name;
+
+    var ddd = $('<span class="tooltip-expand"><i class="fas fa-ellipsis-h"></i></span');
+
+    var tooltip;
+    var locked = false;
+    ddd.hover(
+        function() {
+            if (!tooltip) {
+                locked = false;
+                tooltip = $('<div class="tooltip">' + lng + '</div>');
+                ddd.after(tooltip)
+                tooltip.hover(function() { col.parent().removeClass('hover') });
+            }
+            col.parent().removeClass('hover');
+        },
+        function() {
+            if (tooltip && !locked) { tooltip.detach(); tooltip = null }
+        }
+    );
+
+    ddd.click(function() {
+        locked = !locked;
+        if (tooltip && !locked) { tooltip.detach(); tooltip = null }
+    });
+
+    col.append(shrt, ddd);
 };
 
 t2hui.run.tool_builder = function(item, tools, data) {

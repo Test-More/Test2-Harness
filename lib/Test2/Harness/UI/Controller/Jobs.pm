@@ -41,7 +41,7 @@ sub handle {
         fetch => sub {
             $flush = 1 if $run->complete;
 
-            my @new = $run->jobs(undef, {offset => $offset, order_by => {-asc => 'job_ord'}})->all;
+            my @new = $run->jobs(undef, {offset => $offset, order_by => [{-desc => 'fail'}, {-asc => 'job_ord'}]})->all;
             if (@new) {
                 $offset += @new;
                 push @jobs => @new;

@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Return failed jobs first in jobs controller
+    - Shorten test name to just the filename, tooltip to see full path.
+
 0.000012  2019-08-22 13:35:23-07:00 America/Los_Angeles
 
     - Stop using seperate field tables

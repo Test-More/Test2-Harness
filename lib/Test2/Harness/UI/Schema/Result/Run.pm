@@ -131,6 +131,11 @@ __PACKAGE__->table("runs");
   data_type: 'integer'
   is_nullable: 1
 
+=head2 fields
+
+  data_type: 'jsonb'
+  is_nullable: 1
+
 =head2 parameters
 
   data_type: 'jsonb'
@@ -196,6 +201,8 @@ __PACKAGE__->add_columns(
   { data_type => "integer", is_nullable => 1 },
   "retried",
   { data_type => "integer", is_nullable => 1 },
+  "fields",
+  { data_type => "jsonb", is_nullable => 1 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
 );
@@ -264,21 +271,6 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
-=head2 run_fields
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::RunField>
-
-=cut
-
-__PACKAGE__->has_many(
-  "run_fields",
-  "Test2::Harness::UI::Schema::Result::RunField",
-  { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 user
 
 Type: belongs_to
@@ -295,8 +287,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-19 11:42:41
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:kdaI6h4Rtl5G7PSUA7jzmA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-22 10:04:36
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:z5hNUU26bhWFKdOklyBvzQ
 
 require DateTime::Format::Pg;
 
@@ -306,6 +298,13 @@ __PACKAGE__->inflate_column(
     parameters => {
         inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
         deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
+    },
+);
+
+__PACKAGE__->inflate_column(
+    fields => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('fields', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('fields', {}),
     },
 );
 
@@ -328,6 +327,7 @@ sub TO_JSON {
 
     # Inflate
     $cols{parameters} = $self->parameters;
+    $cols{fields} = $self->fields;
 
     $cols{user} = $self->user->username;
     $cols{project} = $self->project->name;
@@ -339,12 +339,6 @@ sub TO_JSON {
     $dt->set_time_zone('local');
 
     $cols{added} = $dt->strftime("%Y-%m-%d %I:%M%P");
-
-    for my $run_field ($self->run_fields) {
-        my %field = $run_field->get_columns;
-        $field{data} = !!$field{data};
-        push @{$cols{fields}} => \%field;
-    }
 
     return \%cols;
 }

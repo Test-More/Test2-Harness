@@ -12,7 +12,8 @@
 //  row_redraw_interval => integer,
 //
 //  dynamic_field_attribute => FIELD_NAME,
-//  dynamic_field_fetch  => function(field_data) { return uri },
+//  dynamic_field_fetch     => function(field_data) { return uri },
+//  dynamic_field_builder   => function(data) { return data },
 //
 //  columns => [
 //      { field: '', label: '', class: '', builder => function(item, col, field_spec) { ... }},
@@ -188,6 +189,7 @@ function FieldTable(spec) {
 
         me.dynamic_columns.forEach(function(header) {
             var name = header.attr('data-dynamic-name');
+            console.log(name, header);
             var col = $('<td class="col-' + name + '"></td>');
             row.html.append(col);
             row.dynamic_columns.push(col);
@@ -238,6 +240,7 @@ function FieldTable(spec) {
     }
 
     me.render_dynamic_col = function(field, name) {
+        console.log(name);
         var col = $('<td class="col-' + name + '">' + field.details + '</td>');
 
         if (field.data) {
@@ -253,8 +256,9 @@ function FieldTable(spec) {
                 $.ajax(uri, {
                     'data': { 'content-type': 'application/json' },
                     'success': function(field) {
+                        var data = me.spec.dynamic_field_builder ? me.spec.dynamic_field_builder(field, name) : field;
                         $('#modal_body').empty();
-                        $('#modal_body').jsonView(field.data, {collapsed: true});
+                        $('#modal_body').jsonView(data, {collapsed: true});
                     },
                 });
             });
@@ -327,7 +331,7 @@ function FieldTable(spec) {
     me.inject_dynamic_column = function(data) {
         var col = me.render_header_col(data);
         col.addClass('dynamic');
-        col.attr('data-dynamic_name', data.name);
+        col.attr('data-dynamic-name', data.name);
 
         var cclass = me.column_class(data);
 

@@ -105,7 +105,7 @@ sub flush_ready_jobs {
     my $jobs = delete $self->{+READY_JOBS};
     return unless $jobs && @$jobs;
 
-    my (@events, @fields);
+    my (@events);
 
     my $mode = $self->{+MODE};
 
@@ -113,7 +113,7 @@ sub flush_ready_jobs {
         delete $job->{event_ord};
 
         my $fields = delete $job->{fields};
-        push @fields => @$fields if $fields;
+        $job->{fields} = encode_json($fields) if $fields && @$fields;
 
         my $events = delete $job->{events};
 
@@ -146,7 +146,6 @@ sub flush_ready_jobs {
         my $start = time;
         local $ENV{DBIC_DT_SEARCH_OK} = 1;
         $schema->resultset('Job')->populate($jobs);
-        $schema->resultset('JobField')->populate(\@fields);
         $schema->resultset('Event')->populate(\@events);
         1;
     };
@@ -269,8 +268,8 @@ sub update_other {
         $self->{+RUN}->update({parameters => $run_data});
         if (my $fields = $run_data->{harness_run_fields}) {
             my $run_id = $self->{+RUN}->run_id;
-            my @fields = map { { %{$_}, run_id => $run_id, $_->{data} ? (data => encode_json($_->{data})) : () } } @$fields;
-            $self->{+CONFIG}->schema->resultset('RunField')->populate(\@fields) if @fields;
+            my @fields = map { { %{$_}, run_id => $run_id } } @$fields;
+            $self->{+RUN}->update({fields => encode_json(\@fields)});
         }
     }
 

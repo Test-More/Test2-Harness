@@ -39,6 +39,7 @@ t2hui.dashboard.build_table = function(uri) {
 
         'dynamic_field_attribute': 'fields',
         'dynamic_field_fetch': t2hui.dashboard.field_fetch,
+        'dynamic_field_builder': t2hui.dashboard.field_builder,
 
         'columns': columns,
         'postfix_columns': [
@@ -177,7 +178,19 @@ t2hui.dashboard.redraw_fetch = function(item) {
 };
 
 t2hui.dashboard.field_fetch = function(field_data) {
-    return base_uri + 'runfield/' + field_data.run_field_id;
+    return base_uri + 'run/' + field_data.run_id;
+};
+
+t2hui.dashboard.field_builder = function(data, name) {
+    var it;
+    data.fields.forEach(function(field) {
+        if (field.name === name) {
+            it = field.data;
+            return false;
+        }
+    });
+
+    return it;
 };
 
 t2hui.dashboard.modify_row = function(row, item) {

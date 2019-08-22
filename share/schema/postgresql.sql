@@ -135,6 +135,7 @@ CREATE TABLE runs (
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
+    fields          JSONB           DEFAULT NULL,
     parameters      JSONB           DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
@@ -156,21 +157,13 @@ CREATE TRIGGER status_changed
   FOR EACH ROW
   EXECUTE PROCEDURE update_status_changed();
 
-CREATE TABLE run_fields (
-    run_field_id    UUID    DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    run_id          UUID    NOT NULL REFERENCES runs(run_id),
-    name            CITEXT  NOT NULL,
-    details         CITEXT  NOT NULL,
-    link            CITEXT  DEFAULT NULL,
-    data            JSONB   DEFAULT NULL
-);
-
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,
     job_ord         BIGINT      NOT NULL,
     run_id          UUID        NOT NULL REFERENCES runs(run_id),
 
     parameters      JSONB       DEFAULT NULL,
+    fields          JSONB       DEFAULT NULL,
 
     -- Summaries
     name            TEXT            DEFAULT NULL,
@@ -192,15 +185,6 @@ CREATE TABLE jobs (
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
-
-CREATE TABLE job_fields (
-    job_field_id    UUID    DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    job_id          UUID    NOT NULL REFERENCES jobs(job_id),
-    name            CITEXT  NOT NULL,
-    details         CITEXT  NOT NULL,
-    link            CITEXT  DEFAULT NULL,
-    data            JSONB   DEFAULT NULL
-);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,

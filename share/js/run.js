@@ -43,6 +43,7 @@ t2hui.run.build_table = function(uri) {
 
         'dynamic_field_attribute': 'fields',
         'dynamic_field_fetch': t2hui.run.field_fetch,
+        'dynamic_field_builder': t2hui.run.field_builder,
 
         'columns': columns,
     });
@@ -107,8 +108,20 @@ t2hui.run.modify_row = function(row, item) {
     }
 };
 
+t2hui.run.field_builder = function(data, name) {
+    var it;
+    data.fields.forEach(function(field) {
+        if (field.name === name) {
+            it = field.data;
+            return false;
+        }
+    });
+
+    return it;
+};
+
 t2hui.run.field_fetch = function(field_data) {
-    return base_uri + 'jobfield/' + field_data.job_field_id;
+    return base_uri + 'job/' + field_data.job_id;
 };
 
 t2hui.run.build_jobs = function(run_id) {

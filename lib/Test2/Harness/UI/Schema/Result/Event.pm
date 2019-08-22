@@ -179,6 +179,9 @@ __PACKAGE__->inflate_column(
         inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('facets', {}),
         deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('facets',   {}),
     },
+);
+
+__PACKAGE__->inflate_column(
     orphan => {
         inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('orphan', {}),
         deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('orphan',   {}),

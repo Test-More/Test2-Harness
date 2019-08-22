@@ -9,6 +9,7 @@ use Test2::Harness::UI::Import;
 use Test2::Harness::UI::Config;
 use IO::Compress::Bzip2     qw($Bzip2Error bzip2);
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 my $db = DBIx::QuickDB->build_db(harness_ui => {driver => 'PostgreSQL'});
 
@@ -72,11 +73,19 @@ for my $file (qw/fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2
         }
     );
 
-    $config->schema->resultset('RunField')->create({
-        run_id => $run->run_id,
-        name => 'version',
-        details => $version,
-    }) if $version;
+    $run->update(
+        {
+            fields => encode_json(
+                [
+                    {
+                        run_id  => $run->run_id,
+                        name    => 'version',
+                        details => $version,
+                    }
+                ]
+            )
+        }
+    ) if $version;
 
     push @runs => $run;
 }

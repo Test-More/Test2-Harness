@@ -72,6 +72,11 @@ __PACKAGE__->table("jobs");
   data_type: 'jsonb'
   is_nullable: 1
 
+=head2 fields
+
+  data_type: 'jsonb'
+  is_nullable: 1
+
 =head2 name
 
   data_type: 'text'
@@ -143,6 +148,8 @@ __PACKAGE__->add_columns(
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
+  "fields",
+  { data_type => "jsonb", is_nullable => 1 },
   "name",
   { data_type => "text", is_nullable => 1 },
   "file",
@@ -198,21 +205,6 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
-=head2 job_fields
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::JobField>
-
-=cut
-
-__PACKAGE__->has_many(
-  "job_fields",
-  "Test2::Harness::UI::Schema::Result::JobField",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 run
 
 Type: belongs_to
@@ -229,8 +221,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-19 11:42:41
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:V6nPVaOzmXvMaBty4hDOIA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-22 10:04:36
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:KarQxs9jc9dxLUXWcTcRZQ
 
 our $VERSION = '0.000012';
 
@@ -238,6 +230,13 @@ __PACKAGE__->inflate_column(
     parameters => {
         inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
         deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
+    },
+);
+
+__PACKAGE__->inflate_column(
+    fields => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('fields', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('fields', {}),
     },
 );
 
@@ -258,12 +257,7 @@ sub TO_JSON {
 
     # Inflate
     $cols{parameters} = $self->parameters;
-
-    for my $run_field ($self->job_fields) {
-        my %field = $run_field->get_columns;
-        $field{data} = !!$field{data};
-        push @{$cols{fields}} => \%field;
-    }
+    $cols{fields}     = $self->fields;
 
     return \%cols;
 }
@@ -278,10 +272,9 @@ sub glance_data {
 
     $data{short_file} = $self->short_file;
 
-    for my $run_field ($self->job_fields) {
-        my %field = $run_field->get_columns;
-        $field{data} = !!$field{data};
-        push @{$data{fields}} => \%field;
+    # Inflate
+    if ($data{fields} = $self->fields) {
+        $_->{data} = !!$_->{data} for @{$data{fields}};
     }
 
     return \%data;

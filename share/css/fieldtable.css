@@ -64,6 +64,6 @@ div.field-table-header-col-inner {
     }
 }
 
-.running.sorting {
-    color: inherit;
+.sorting {
+    background: #80A0D0 !important;
 }

@@ -88,9 +88,9 @@ function FieldTable(spec) {
         }
         else if (typeof(me.spec.fetch) === 'object') {
             me.spec.fetch.forEach(me.render_item);
-            //if (me.spec.fetch.length > 1) {
-            //    me.make_sortable();
-            //}
+            if (me.spec.fetch.length > 1) {
+                me.make_sortable();
+            }
         }
 
         var wrapper = $('<div id="' + spec.id + '" class="field-table-wrapper ' + spec.class + '"></div>');
@@ -101,6 +101,12 @@ function FieldTable(spec) {
 
     me.make_sortable = function() {
         if (!me.spec.sortable) { return }
+
+        var them = me.table.children('thead').children('tr').first().children('th');
+
+        them.click(function() {
+            $(this).addClass('sorting');
+        });
 
         var x = me.table.tablesort({
             'compare': function(a, b) {
@@ -133,14 +139,7 @@ function FieldTable(spec) {
             }
         });
 
-        me.table.children('thead').children('tr').first().children('th').click(function() {
-            $(this).addClass('running');
-            $(this).addClass('sorting');
-        });
-
         me.table.on('tablesort:complete', function() {
-            var them = $(this).children('thead').children('tr').first().children('th');
-            them.removeClass('running');
             them.removeClass('sorting');
         })
     }

@@ -70,7 +70,7 @@ t2hui.run.build_exit = function(item, col, data) {
 
 t2hui.run.build_name = function(item, col, data) {
     var shrt = item.shortest_file || item.name;
-    var lng  = item.short_file || item.name;
+    var lng  = item.file || item.name;
 
     var ddd = $('<span class="tooltip-expand"><i class="fas fa-ellipsis-h"></i></span');
 

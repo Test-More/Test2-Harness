@@ -127,7 +127,7 @@ sub flush_ready_jobs {
             my $is_diag = delete $event->{is_diag};
             my $is_harness = delete $event->{is_harness};
             my $is_time = delete $event->{is_time};
-            my $record_event = $record_job || ($mode >= $MODES{qvfd} && ($is_diag || first { substr($_, 0, 8) eq 'harness_' } keys %{$event->{facets}}));
+            my $record_event = $record_job || ($mode >= $MODES{qvfd} && $is_diag);
             next unless $record_event;
 
             clean($event->{facets});
@@ -214,7 +214,8 @@ sub process_event {
     $e->{is_diag} //=
            ($f->{errors} && @{$f->{errors}})
         || ($f->{assert} && !($f->{assert}->{pass} || $f->{amnesty}))
-        || ($f->{info} && grep { $_->{debug} || $_->{important} } @{$f->{info}});
+        || (first { substr($_, 0, 8) eq 'harness_' } keys %$f)
+        || ($f->{info} && first { $_->{debug} || $_->{important} } @{$f->{info}});
 
     my $orphan = $nested ? 1 : 0;
     if (my $p = $params{parent_id}) {
@@ -264,12 +265,19 @@ sub update_other {
     my ($job, $f) = @_;
 
     if (my $run_data = $f->{harness_run}) {
+        my $run = $self->{+RUN};
+
         clean($run_data);
-        $self->{+RUN}->update({parameters => $run_data});
+        $run->update({parameters => $run_data});
+
         if (my $fields = $run_data->{harness_run_fields}) {
-            my $run_id = $self->{+RUN}->run_id;
-            my @fields = map { { %{$_}, run_id => $run_id } } @$fields;
-            $self->{+RUN}->update({fields => encode_json(\@fields)});
+            my $run_id = $run->run_id;
+            my $old = $run->fields;
+            my @new = map { { %{$_}, run_id => $run_id } } @$fields;
+
+            my @merged = ($old ? (@$old) : (), @new);
+
+            $self->{+RUN}->update({fields => encode_json(\@merged)});
         }
     }
 

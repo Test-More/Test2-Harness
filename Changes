@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - More efficient is-diag during import
+    - Import now merges run_fields instead of overriding them
+
 0.000013  2019-08-23 00:04:53-07:00 America/Los_Angeles
 
     - Return failed jobs first in jobs controller

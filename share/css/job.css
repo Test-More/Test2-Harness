@@ -40,7 +40,7 @@ div.event_controls {
     position: sticky;
     top: 40px;
     left: 0px;
-    z-index: 11;
+    z-index: 18;
 }
 
 div.event_controls ul {
@@ -130,6 +130,10 @@ div.stoggle:hover {
 div.stoggle.expanded:hover {
     color: inherit;
     cursor: inherit;
+}
+
+div.stoggle.running {
+    border-radius: 15px;
 }
 
 .hidden_row {

@@ -62,7 +62,7 @@ for my $file (qw/fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2
     my $run = $config->schema->resultset('Run')->create(
         {
             user_id       => $user->user_id,
-            mode          => 'complete',
+            mode          => 'qvfd',
             status        => 'pending',
             project_id    => $projects{$project}->project_id,
 

@@ -127,7 +127,7 @@ sub flush_ready_jobs {
             my $is_diag = delete $event->{is_diag};
             my $is_harness = delete $event->{is_harness};
             my $is_time = delete $event->{is_time};
-            my $record_event = $record_job || ($mode >= $MODES{qvfd} && $is_diag);
+            my $record_event = $record_job || ($mode >= $MODES{qvfd} && ($is_diag || first { substr($_, 0, 8) eq 'harness_' } keys %{$event->{facets}}));
             next unless $record_event;
 
             clean($event->{facets});

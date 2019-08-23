@@ -98,10 +98,15 @@ t2hui.job.message_builder = function(item, dest, data) {
 
     expand.one('click', function() {
         expand.text('~');
+        expand.addClass('running');
         expand.addClass('expanded');
         var events_uri = base_uri + 'event/' + item.item.event_id + '/events';
 
-        t2hui.fetch(events_uri, {}, t2hui.job.table.render_item)
+        t2hui.fetch(
+            events_uri,
+            {done: function() { expand.removeClass('running') } },
+            t2hui.job.table.render_item,
+        )
     });
 }
 

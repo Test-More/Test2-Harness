@@ -39,7 +39,7 @@ table.field-table > thead > tr.field-table-header > th {
     padding: 0;
     height: 1px;
     white-space: nowrap;
-    z-index: 20;
+    z-index: 8;
 }
 
 div.field-table-header-col-inner {
@@ -62,4 +62,8 @@ div.field-table-header-col-inner {
     table.field-table > * > tr.field-table-header > th {
         top: -1px !important;
     }
+}
+
+.running.sorting {
+    color: inherit;
 }

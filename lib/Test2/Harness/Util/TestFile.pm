@@ -19,6 +19,7 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::HashBase qw{
     -file -_scanned -_headers -_shbang -queue_args
     _category _stage
+    -via
 };
 
 *set_category = \&set__category;
@@ -274,6 +275,7 @@ sub queue_item {
         use_stream  => $stream,
         use_timeout => $timeout,
         conflicts   => $self->conflicts_list,
+        via         => $self->via,
 
         event_timeout    => $self->event_timeout,
         postexit_timeout => $self->postexit_timeout,

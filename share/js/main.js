@@ -136,3 +136,38 @@ t2hui.build_expander = function(title, add_class, cb) {
 t2hui.sanitize_class = function(text) {
     return text.replace(/ /g, '-').replace(/!/g, 'N');
 }
+
+t2hui.build_tooltip = function(box, text) {
+    var ddd = $('<span class="tooltip-expand"><i class="fas fa-ellipsis-h"></i></span');
+
+    var tooltip;
+    var locked = false;
+    ddd.hover(
+        function() {
+            if (!tooltip) {
+                locked = false;
+                tooltip = $('<div class="tooltip">' + text + '</div>');
+                ddd.after(tooltip)
+                tooltip.hover(function() { box.removeClass('hover') });
+            }
+            box.removeClass('hover');
+        },
+        function() {
+            if (tooltip && !locked) { tooltip.detach(); tooltip = null }
+        }
+    );
+
+    ddd.click(function() {
+        locked = !locked;
+        if (tooltip && !locked) {
+            tooltip.detach();
+            tooltip = null;
+            ddd.removeClass('locked');
+        }
+        else {
+            ddd.addClass('locked');
+        }
+    });
+
+    return ddd;
+};

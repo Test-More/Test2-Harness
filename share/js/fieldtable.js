@@ -256,6 +256,11 @@ function FieldTable(spec) {
 
     me.render_dynamic_col = function(field, name) {
         var col = $('<td class="col-' + name + '">' + field.details + '</td>');
+        if (field.raw) {
+            col.attr('data-sort-value', field.raw);
+            var tt = t2hui.build_tooltip(col.parent(), field.raw);
+            col.append(tt);
+        }
 
         if (field.data) {
             var viewer = $('<div class="tool etoggle" title="Extended Data"><i class="far fa-list-alt"></i></div>');

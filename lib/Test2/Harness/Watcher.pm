@@ -114,6 +114,7 @@ sub _process {
         $self->{+_TIMES}->{first} = $self->{+_TIMES}->{first} ? min($self->{+_TIMES}->{first}, $stamp) : $stamp;
         $self->{+_TIMES}->{last} = $self->{+_TIMES}->{last} ? max($self->{+_TIMES}->{last}, $stamp) : $stamp;
         $self->{+_TIMES_DONE} = 1 if $f->{control} && $f->{control}->{phase} && $f->{control}->{phase} eq 'END';
+        $self->{+_TIMES_DONE} = 1 if $f->{plan} && !$f->{plan}->{none} && $self->{+ASSERTION_COUNT};
     }
 
     return if $hf->{buffered};

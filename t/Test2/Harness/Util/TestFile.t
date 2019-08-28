@@ -27,6 +27,10 @@ my $tmp = gen_temp(
     conflicts4 => "# HARNESS-CONFLICTS PASSWD DAEMON\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD DAEMON\n",
 
     extra_comments => "#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n",
+
+    not_perl     => "#!/usr/bin/bash\n",
+    not_env_perl => "#!/usr/bin/env bash\n",
+    binary       => "\0\a\cX\e\n\cR",
 );
 
 subtest timeouts => sub {
@@ -98,6 +102,8 @@ subtest taint => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
             conflicts   => [],
             via         => ['xxx'],
             shbang      => {line => "#!/usr/bin/env perl -t -w", switches => ['-t', '-w']},
@@ -130,6 +136,8 @@ subtest warn => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
             conflicts   => [],
             shbang      => {line => "#!/usr/bin/perl -w", switches => ['-w']},
             headers     => {},
@@ -166,6 +174,8 @@ subtest notime => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            binary      => 0,
+            non_perl    => 0,
             conflicts   => [],
             shbang      => {},
             headers     => {features => {timeout => 0}},
@@ -216,6 +226,8 @@ subtest all => sub {
             use_timeout => 0,
             conflicts   => [],
             shbang      => {},
+            binary      => 0,
+            non_perl    => 0,
             headers     => {
                 'features' => {
                     'timeout'   => 0,
@@ -270,6 +282,8 @@ subtest med2 => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
             conflicts   => [],
             shbang      => {},
             headers     => {features => {fork => 0}},
@@ -318,6 +332,8 @@ subtest med1 => sub {
             use_preload => 0,
             use_stream  => 1,
             use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
             conflicts   => [],
             shbang      => {},
             headers     => {features => {preload => 0}},
@@ -368,6 +384,8 @@ subtest long => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            binary      => 0,
+            non_perl    => 0,
             conflicts   => [],
             shbang      => {line => "#!/usr/bin/perl", switches => []},
             headers     => {
@@ -385,7 +403,6 @@ subtest long => sub {
     );
 };
 
-#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n
 subtest extra_comments => sub {
     my $long = $CLASS->new(file => File::Spec->catfile($tmp, 'extra_comments'));
 
@@ -423,6 +440,8 @@ subtest extra_comments => sub {
             use_preload => 1,
             use_stream  => 1,
             use_timeout => 0,
+            binary      => 0,
+            non_perl    => 0,
             conflicts   => [],
             shbang      => {line => "#!/usr/bin/perl", switches => []},
             headers     => {
@@ -453,6 +472,154 @@ subtest conflicts => sub {
     $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts4'));
     is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "Duplicate conflict lines only lead to 2 conflict items.");
 
+};
+
+subtest binary => sub {
+    my $path = File::Spec->catfile($tmp, 'binary');
+    ok(-B $path, "File is binary");
+
+    is(
+        dies { my $binary = $CLASS->new(file => $path); $binary->shbang },
+        "Cannot run binary test file '$path': file is not executable.\n",
+        "File must be executable",
+    );
+
+    my $control = mock $CLASS => (
+        override => [
+            is_executable => sub { 1 },
+        ],
+    );
+
+    my $binary = $CLASS->new(file => $path);
+    is($binary->switches, [], "No SHBANG switches");
+    is($binary->shbang, {}, "No shbang");
+
+    is(
+        $binary->queue_item(42),
+        {
+            category    => 'general',
+            stage       => 'default',
+            file        => $path,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            conflicts   => [],
+            shbang      => {},
+            headers     => {},
+            binary      => 1,
+            non_perl    => 1,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
+        },
+        "Got queue item data",
+    );
+};
+
+subtest not_perl => sub {
+    my $path = File::Spec->catfile($tmp, 'not_perl');
+
+    is(
+        dies { my $not_perl = $CLASS->new(file => $path); $not_perl->shbang },
+        "Cannot run non-perl test file '$path': file is not executable.\n",
+        "File must be executable",
+    );
+
+    my $control = mock $CLASS => (
+        override => [
+            is_executable => sub { 1 },
+        ],
+    );
+
+    my $not_perl = $CLASS->new(file => File::Spec->catfile($tmp, 'not_perl'));
+
+    is($not_perl->switches, [], "No SHBANG switches");
+    is($not_perl->shbang, {line => "#!/usr/bin/bash", non_perl => 1}, "Non-perl shbang");
+
+    is(
+        $not_perl->queue_item(42),
+        {
+            category    => 'general',
+            stage       => 'default',
+            file        => $not_perl->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            conflicts   => [],
+            shbang      => {
+                line     => "#!/usr/bin/bash",
+                non_perl => 1,
+            },
+            headers  => {},
+            binary   => 0,
+            non_perl => 1,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
+        },
+        "Got queue item data",
+    );
+};
+
+
+subtest not_env_perl => sub {
+    my $path = File::Spec->catfile($tmp, 'not_env_perl');
+
+    is(
+        dies { my $not_env_perl = $CLASS->new(file => $path); $not_env_perl->shbang },
+        "Cannot run non-perl test file '$path': file is not executable.\n",
+        "File must be executable",
+    );
+
+    my $control = mock $CLASS => (
+        override => [
+            is_executable => sub { 1 },
+        ],
+    );
+
+    my $not_env_perl = $CLASS->new(file => File::Spec->catfile($tmp, 'not_env_perl'));
+
+    is($not_env_perl->switches, [], "No SHBANG switches");
+    is($not_env_perl->shbang, {line => "#!/usr/bin/env bash", non_perl => 1}, "Non-perl shbang");
+
+    is(
+        $not_env_perl->queue_item(42),
+        {
+            category    => 'general',
+            stage       => 'default',
+            file        => $not_env_perl->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            conflicts   => [],
+            shbang      => {
+                line     => "#!/usr/bin/env bash",
+                non_perl => 1,
+            },
+            headers  => {},
+            binary   => 0,
+            non_perl => 1,
+
+            event_timeout    => undef,
+            postexit_timeout => undef,
+        },
+        "Got queue item data",
+    );
 };
 
 done_testing;

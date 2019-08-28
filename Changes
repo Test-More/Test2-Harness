@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Support for non-perl tests
+
 0.001085  2019-08-21 16:49:20-07:00 America/Los_Angeles
 
     - Do not require DBIProfile yet until we need it (#111)

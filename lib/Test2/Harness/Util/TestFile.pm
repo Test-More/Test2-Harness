@@ -17,7 +17,7 @@ use Test2::Harness::Util qw/open_file/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
-    -file -_scanned -_headers -_shbang -queue_args
+    -file -_scanned -_headers -_shbang -queue_args -is_binary -non_perl
     _category _stage
 };
 
@@ -36,6 +36,12 @@ sub init {
     $self->{+QUEUE_ARGS} ||= [];
 
     croak "Invalid test file '$file'" unless -f $file;
+
+    if($self->{+IS_BINARY} = -B $file) {
+        $self->{+NON_PERL} = 1;
+        die "Cannot run binary test file '$file': file is not executable.\n"
+            unless $self->is_executable;
+    }
 }
 
 my %DEFAULTS = (
@@ -135,10 +141,18 @@ sub switches {
     return $switches;
 }
 
+sub is_executable {
+    my $self = shift;
+    my ($file) = @_;
+    $file //= $self->{+FILE};
+    return -x $file;
+}
+
 sub _scan {
     my $self = shift;
 
     return if $self->{+_SCANNED}++;
+    return if $self->{+IS_BINARY};
 
     my $fh = open_file($self->{+FILE});
 
@@ -151,6 +165,14 @@ sub _scan {
             my $shbang = $self->_parse_shbang($line);
             if ($shbang) {
                 $self->{+_SHBANG} = $shbang;
+
+                if ($shbang->{non_perl}) {
+                    $self->{+NON_PERL} = 1;
+
+                    die "Cannot run non-perl test file '" . $self->{+FILE} . "': file is not executable.\n"
+                        unless $self->is_executable;
+                }
+
                 next;
             }
         }
@@ -243,6 +265,10 @@ sub _parse_shbang {
         $shbang{switches} = \@switches;
         $shbang{line}     = $line;
     }
+    elsif ($line =~ m/^#!/ && $line !~ m/perl/i) {
+        $shbang{line} = $line;
+        $shbang{non_perl} = 1;
+    }
 
     return \%shbang;
 }
@@ -259,6 +285,9 @@ sub queue_item {
     my $timeout = $self->check_feature(timeout => 1);
     my $stream  = $self->check_feature(stream  => 1);
 
+    my $binary  = $self->{+IS_BINARY} ? 1 : 0;
+    my $non_perl = $self->{+NON_PERL} ? 1 : 0;
+
     return {
         category    => $category,
         file        => $self->file,
@@ -274,6 +303,8 @@ sub queue_item {
         use_stream  => $stream,
         use_timeout => $timeout,
         conflicts   => $self->conflicts_list,
+        binary      => $binary,
+        non_perl    => $non_perl,
 
         event_timeout    => $self->event_timeout,
         postexit_timeout => $self->postexit_timeout,

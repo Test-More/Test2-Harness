@@ -1,1 +1,3 @@
-; Intentionally Blank
+[test]
+-It2/lib
+-pSelfTest

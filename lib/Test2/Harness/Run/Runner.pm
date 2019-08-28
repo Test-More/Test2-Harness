@@ -532,9 +532,25 @@ sub run_job {
         preload => [grep { $_->isa('Test2::Harness::Preload') } @{$run->preload || []}],
     );
 
-    my $via = $task->{via} || ($fork ? ['Fork', 'IPC'] : ['IPC']);
-    $via = ['Open3'] if IS_WIN32;
-    $via = ['Dummy'] if $run->dummy;
+    my $via = $run->dummy ? ['Dummy'] : $task->{via};
+
+    if (!$via) {
+        if ($task->{binary}) {
+            $via = ['Binary'];
+        }
+        elsif ($task->{non_perl}) {
+            $via = ['SHBang'];
+        }
+        elsif (IS_WIN32) {
+            $via = ['Open3'];
+        }
+        elsif ($fork) {
+            $via = ['Fork', 'IPC'];
+        }
+        else {
+            $via = ['IPC'];
+        }
+    }
 
     my $job_runner = $self->job_runner_class->new(
         job => $job,

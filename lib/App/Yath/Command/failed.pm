@@ -2,7 +2,7 @@ package App::Yath::Command::failed;
 use strict;
 use warnings;
 
-our $VERSION = '0.001086';
+our $VERSION = '0.001087';
 
 use Test2::Util qw/pkg_to_file/;
 

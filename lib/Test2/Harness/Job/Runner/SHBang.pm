@@ -2,7 +2,7 @@ package Test2::Harness::Job::Runner::SHBang;
 use strict;
 use warnings;
 
-our $VERSION = '0.001086';
+our $VERSION = '0.001087';
 
 use parent 'Test2::Harness::Job::Runner::IPC';
 

@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '0.001086';
 
 use Test2::Util qw/pkg_to_file/;
+use Test2::Util::Times qw/render_duration/;
 
 use Test2::Harness::Feeder::JSONL;
 use Test2::Harness::Run;
@@ -195,41 +196,6 @@ sub feeder {
     my $feeder = Test2::Harness::Feeder::JSONL->new(file => $settings->{log_file});
 
     return ($feeder);
-}
-
-sub render_duration {
-    my ($time) = @_;
-
-    return 'NA' unless defined $time;
-
-    if ($time < 10) {
-        return sprintf('%1.5fs', $time);
-    }
-    elsif ($time < 60) {
-        return sprintf('%2.4fs', $time);
-    }
-    else {
-        my $msec  = substr(sprintf('%0.2f', $time - int($time)), -2, 2);
-        my $secs  = $time % 60;
-        my $mins  = int($time / 60) % 60;
-        my $hours = int($time / 60 / 60) % 24;
-        my $days  = int($time / 60 / 60 / 24);
-
-        my @units = (qw/d h m/, '');
-
-        my $duration = '';
-        for my $t ($days, $hours, $mins, $secs) {
-            my $u = shift @units;
-            next unless $t || $duration;
-            $duration = join ':' => grep { length($_) } $duration, sprintf('%02u%s', $t, $u);
-        }
-
-        $duration ||= '0';
-        $duration .= ".$msec" if int($msec);
-        $duration .= 's';
-
-        return $duration;
-    }
 }
 
 1;

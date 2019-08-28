@@ -173,15 +173,40 @@ sub iteration {
                     my $plan = $watcher->plan;
                     $f->{harness_job_end}->{skip} = $plan->{details} || "No reason given" if $plan && !$plan->{count};
 
-                    my $times = $watcher->times;
-                    $f->{harness_job_end}->{times} = $times;
+                    if (my $times = $watcher->times) {
+                        $f->{harness_job_end}->{times} = $times;
 
-                    $f->{harness_job_fields} = [
-                        {name => 'time_total',   details => $times->{total}},
-                        {name => 'time_events',  details => $times->{events}},
-                        {name => 'time_startup', details => $times->{startup}},
-                        {name => 'time_cleanup', details => $times->{cleanup}},
-                    ];
+                        my $time_string = "";
+                        my $time_table  = {
+                            header => ["Phase", "Time", "Raw", "Explanation"],
+                            rows   => [],
+                        };
+
+                        my %DESC = (
+                            startup => "Time from launch to first test event.",
+                            events  => "Time spent generating test events.",
+                            cleanup => "Time from last test event to test exit.",
+                            total   => "Total time",
+                        );
+
+                        for my $field (qw/startup events cleanup total/) {
+                            my $val   = $times->{$field} // next;
+                            my $hval  = $times->{"h_$field"};
+                            my $title = ucfirst($field);
+
+                            $time_string .= " | " if $time_string;
+                            $time_string .= "$title: $hval";
+
+                            push @{$time_table->{rows}} => [$title, $hval, $val, $DESC{$field}];
+                            push @{$f->{harness_job_fields}} => {name => "time_$field", details => $hval, raw => $val};
+                        }
+
+                        push @{$f->{info}} => {
+                            tag     => 'TIME',
+                            details => $time_string,
+                            table   => $time_table,
+                        } if $time_string;
+                    }
 
                     push @{$f->{errors}} => $watcher->fail_error_facet_list;
 

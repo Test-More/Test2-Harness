@@ -40,7 +40,6 @@ use Test2::Harness::Util::HashBase qw{
     -use_stream
     -use_fork
     -use_timeout
-    -times
     -show_times
 
     -exclude_files

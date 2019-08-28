@@ -71,7 +71,6 @@ sub run {
         $jobs{$item->{job_id}} = 1;
 
         $item->{args}        = $settings->{pass}        if defined $settings->{pass}        && !defined $item->{args};
-        $item->{times}       = $settings->{times}       if defined $settings->{times}       && !defined $item->{times};
         $item->{load}        = $settings->{load}        if defined $settings->{load}        && !defined $item->{load};
         $item->{load_import} = $settings->{load_import} if defined $settings->{load_import} && !defined $item->{load_import};
         $item->{env_vars}    = $settings->{env_vars}    if defined $settings->{env_vars}    && !defined $item->{env_vars};

@@ -127,20 +127,6 @@ sub render_end {
 
     push @out => ['harness', 'HARNESS', "Job completed at " . $f->{harness_job_end}->{stamp}];
 
-    if (my $times = $f->{harness_job_end}->{times}) {
-        my $string = "Startup: $times->{startup}\nEvents: $times->{events}\nCleanup: $times->{cleanup}\nTotal: $times->{total}";
-        my $table = {
-            header => ["Phase", "Time", "Explanation"],
-            rows   => [
-                ['Startup', sprintf("%.6fs", $times->{startup}), "Time from launch to first test event."],
-                ['Events',  sprintf("%.6fs", $times->{events}),  "Time spent generating test events."],
-                ['Cleanup', sprintf("%.6fs", $times->{cleanup}), "Time from last test event to test exit."],
-                ['Total',   sprintf("%.6fs", $times->{total}),   "Total time"],
-            ],
-        };
-        push @out => ['harness','TIME', $string, $table];
-    }
-
     return @out;
 }
 

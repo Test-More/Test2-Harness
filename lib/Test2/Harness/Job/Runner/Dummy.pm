@@ -37,7 +37,6 @@ sub command {
         (map {"-m$_"} @{$job->load || []}),
         (map {"-M$_"} @{$job->load_import || []}),
         $job->use_stream ? ("-MTest2::Formatter::Stream=dir,$event_dir") : (),
-        $job->times ? ('-MTest2::Plugin::Times') : (),
         '-e', 'print "1..0 # SKIP dummy mode"',
         @{$job->args},
     );

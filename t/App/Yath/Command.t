@@ -381,7 +381,6 @@ subtest make_run_from_settings => sub {
                 env_vars         => {foo => 1, bar => 2},
                 use_stream       => 1,
                 use_fork         => 1,
-                times            => 1,
                 verbose          => 2,
                 no_long          => 0,
                 exclude_patterns => [qr/xxx/],
@@ -417,7 +416,6 @@ subtest make_run_from_settings => sub {
             call unsafe_inc       => 1;
             call use_stream       => 1;
             call use_fork         => 1;
-            call times            => 1;
             call verbose          => 2;
             call no_long          => 0;
             call plugins          => ['Foo::Bar'];
@@ -485,14 +483,6 @@ subtest options => sub {
             },
             "Got added libs"
         );
-    };
-
-    subtest times => sub {
-        my $one = $TCLASS->new(args => {});
-        ok($one->settings->{times}, "on by default");
-
-        my $two = $TCLASS->new(args => {opts => ['--no-times']});
-        ok(!$two->settings->{times}, "toggled off");
     };
 
     subtest show_times => sub {

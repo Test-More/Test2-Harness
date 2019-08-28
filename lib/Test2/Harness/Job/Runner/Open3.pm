@@ -44,7 +44,6 @@ sub command {
         (map {"-M$_"} @{$job->load_import || []}),
         (map {"-m$_"} @{$job->load || []}),
         $job->use_stream ? ("-MTest2::Formatter::Stream=dir,$event_dir") : (),
-        $job->times ? ('-MTest2::Plugin::Times') : (),
         $class->command_file($test),
         @{$job->args},
     );

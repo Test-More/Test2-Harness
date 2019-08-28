@@ -74,12 +74,6 @@ sub render_event {
 
     my $f = $event->{facet_data}; # Optimization
 
-    my $times = $self->{+TIMES} ||= {};
-    if ($settings->{show_times} && $f->{times}) {
-        my $job_id = $event->job_id;
-        $times->{$job_id} = $f->{about}->{details};
-    }
-
     $f->{harness} = {%$event};
     delete $f->{harness}->{facet_data};
 
@@ -122,6 +116,14 @@ sub render_event {
 
         my $job_id = $f->{harness}->{job_id} ||= $job->{job_id};
 
+        # Make the times important if they were requested
+        if ($settings->{show_times} && $f->{info}) {
+            for my $info (@{$f->{info}}) {
+                next unless $info->{tag} eq 'TIME';
+                $info->{important} = 1;
+            }
+        }
+
         if ($self->{+SHOW_JOB_END}) {
             my $name = File::Spec->abs2rel($file);
             $name .= "  -  $skip" if $skip;
@@ -132,17 +134,6 @@ sub render_event {
                 important => 1,
                 details   => $name,
             };
-
-            # In verbose mode the timer will be printed anyway. Otherwise we
-            # will attach it to the end event.
-            if (my $time = $times->{$job_id}) {
-                push @{$f->{info}} => {
-                    tag       => 'TIME',
-                    debug     => 0,
-                    important => 1,
-                    details   => $time,
-                } unless $self->{+SHOW_JOB_LAUNCH};
-            }
         }
     }
 

@@ -11,6 +11,7 @@ use List::Util qw/first max min/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util qw/hub_truth parse_exit/;
+use Test2::Util::Times qw/render_duration/;
 
 use Test2::Harness::Util::HashBase qw{
     -job
@@ -75,6 +76,12 @@ sub times {
     $out->{events}  = $times->{last} - $times->{first}  if $times->{last}  && $times->{first};
     $out->{startup} = $times->{first} - $times->{start} if $times->{first} && $times->{start};
     $out->{cleanup} = $times->{stop} - $times->{last}   if $times->{stop}  && $times->{last};
+
+    for my $field (qw/total events startup cleanup/) {
+        $out->{"h_$field"} = render_duration($out->{$field}) if defined $out->{$field};
+    }
+
+    return unless 0 < keys %$out;
 
     return $out;
 }

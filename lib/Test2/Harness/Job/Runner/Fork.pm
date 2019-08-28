@@ -156,11 +156,6 @@ sub { shift->import(@_) }
         Test2::Formatter::Stream->import(dir => $event_dir);
     }
 
-    if ($job->times) {
-        require Test2::Plugin::Times;
-        Test2::Plugin::Times->import();
-    }
-
     @ARGV = @{$job->args};
 
     $_->pre_launch($job) for @$preloads;

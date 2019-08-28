@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+    - Fix overall harness run time where HiRes was only used for start time,
+      not end time (sometimes resulting in a negative run time being printed)
+    - Do not use Test2::Plugin::Times
+    - Use event based timing data for -T
+    - remove --times flag
     - Support for non-perl tests
 
 0.001085  2019-08-21 16:49:20-07:00 America/Los_Angeles

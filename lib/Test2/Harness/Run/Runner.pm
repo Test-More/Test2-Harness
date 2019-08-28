@@ -501,7 +501,6 @@ sub run_job {
 
     my $job = Test2::Harness::Job->new(
         # These can be overriden by the task
-        times => $run->times,
         show_times => $run->show_times,
 
         %$task,

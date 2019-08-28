@@ -255,7 +255,6 @@ sub make_run_from_settings {
         env_vars    => $settings->{env_vars},
         use_stream  => $settings->{use_stream},
         use_fork    => $settings->{use_fork},
-        times       => $settings->{times},
         show_times  => $settings->{show_times},
         verbose     => $settings->{verbose},
         no_long     => $settings->{no_long},
@@ -335,18 +334,6 @@ sub options {
             section   => 'Display Options',
             usage     => ['-T  --show-times'],
             summary   => ['Show the timing data for each job'],
-        },
-
-
-        {
-            spec      => 'times!',
-            field     => 'times',
-            used_by   => {jobs => 1, runner => 1},
-            section   => 'Job Options',
-            usage     => ['--times'],
-            summary   => ['Monitor timing data for each test file'],
-            long_desc => 'This tells perl to load Test2::Plugin::Times before starting each test. Use -T to show the timing data',
-            default   => 1,
         },
 
         {

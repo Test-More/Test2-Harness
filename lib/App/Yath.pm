@@ -158,7 +158,7 @@ sub run_command {
 
     if ($cmd->show_bench && !$cmd->settings->{quiet}) {
         require Test2::Util::Times;
-        my $end = time;
+        my $end = Time::HiRes::time();
         my $bench = Test2::Util::Times::render_bench($start, $end, times);
         $class->info($bench, "\n\n");
     }

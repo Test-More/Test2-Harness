@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.001086  2019-08-28 14:19:57-07:00 America/Los_Angeles
+
     - Fix overall harness run time where HiRes was only used for start time,
       not end time (sometimes resulting in a negative run time being printed)
     - Do not use Test2::Plugin::Times

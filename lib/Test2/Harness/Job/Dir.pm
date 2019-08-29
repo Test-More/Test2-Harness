@@ -42,6 +42,8 @@ use Test2::Harness::Util::HashBase qw{
 
     -_file -file_file
 
+    -last_stamp
+
     runner_exited
 };
 
@@ -63,6 +65,8 @@ sub init {
     $self->{+_STDERR_BUFFER} ||= [];
     $self->{+_EVENTS_BUFFER} ||= {};
     $self->{+_READY_BUFFER}  ||= [];
+
+    $self->{+LAST_STAMP} = time();
 }
 
 sub poll {
@@ -105,7 +109,10 @@ sub poll {
         @new = ();
     }
 
-    return map { Test2::Harness::Event->new(stamp => time, %{$_}) } @out;
+    return map {
+        my $stamp = $_->{stamp} ? $self->{+LAST_STAMP} = $_->{stamp} : $self->{+LAST_STAMP};
+        Test2::Harness::Event->new(stamp => $stamp, %{$_});
+    } @out;
 }
 
 sub _poll_streams {
@@ -534,6 +541,8 @@ sub _process_start_line {
 
     my $event_id = gen_uuid();
 
+    $self->{+LAST_STAMP} = $value;
+
     return {
         event_id => $event_id,
         job_id   => $self->{+JOB_ID},
@@ -563,20 +572,25 @@ sub _process_exit_line {
 
     my $event_id = gen_uuid();
 
+    my ($exit, $stamp) = split /\s+/, $value, 2;
+
     return {
         event_id => $event_id,
         job_id   => $self->{+JOB_ID},
         run_id   => $self->{+RUN_ID},
+        stamp    => $stamp,
 
         facet_data => {
             about            => {uuid => $event_id},
             harness_job_exit => {
                 details => "Test script exited $value",
-                exit    => $value,
+                exit    => $exit,
                 job_id  => $self->{+JOB_ID},
                 file    => $self->file,
                 stdout  => $stdout,
                 stderr  => $stderr,
+                stamp   => $stamp,
+                line    => $value,
             },
         }
     };

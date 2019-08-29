@@ -5,7 +5,7 @@ use warnings;
 use Carp qw/croak/;
 use POSIX ":sys_wait_h";
 use List::Util qw/first/;
-use Time::HiRes qw/sleep/;
+use Time::HiRes qw/sleep time/;
 use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
 
 use File::Spec();
@@ -193,7 +193,7 @@ sub wait_on_jobs {
             warn "Waitpid returned $check for pid $pid" if $check;
         }
 
-        $self->write_exit(%$params, exit => $exit);
+        $self->write_exit(%$params, exit => $exit, stamp => time);
     }
 
     $self->unlock unless keys %{$self->{+_PIDS}};
@@ -215,7 +215,7 @@ sub write_exit {
     my $self   = shift;
     my %params = @_;
     my $file   = File::Spec->catfile($params{dir}, 'exit');
-    write_file_atomic($file, $params{exit});
+    write_file_atomic($file, "$params{exit} $params{stamp}");
 }
 
 sub next {

@@ -154,6 +154,9 @@ sub record {
     my $self = shift;
     my ($facets, $num) = @_;
 
+    my $stamp = time;
+    my $times = [times];
+
     my @sync = @{$self->{+IO}};
     my $leader = 0;
 
@@ -179,8 +182,8 @@ sub record {
                 my $ok = eval {
                     $json = $encoder->encode(
                         {
-                            stamp        => time,
-                            times        => [times],
+                            stamp        => $stamp,
+                            times        => $times,
                             stream_id    => $id,
                             tid          => $tid,
                             pid          => $$,
@@ -204,8 +207,8 @@ sub record {
         else {
             $json = ENCODER->encode(
                 {
-                    stamp        => time,
-                    times        => [times],
+                    stamp        => $stamp,
+                    times        => $times,
                     stream_id    => $id,
                     tid          => $tid,
                     pid          => $$,

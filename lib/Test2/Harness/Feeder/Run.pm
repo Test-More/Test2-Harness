@@ -65,7 +65,6 @@ sub _harness_event {
         job_id     => $job_id,
         event_id   => gen_uuid(),
         run_id     => $run->run_id,
-        stamp      => time,
         facet_data => {@_},
     );
 }
@@ -127,7 +126,7 @@ sub poll {
 
             push @new_jobs => $self->_harness_event(
                 $job_id,
-                harness_job_launch => {stamp => time, retry => $self->{+IS_RETRY}},
+                harness_job_launch => {retry => $self->{+IS_RETRY}},
                 harness_job        => $job,
             );
         }
@@ -150,7 +149,7 @@ sub poll {
             my $err = $@;
             push @events => $self->_harness_event(
                 $jfeed->job_id,
-                harness_job_end => {stamp => time},
+                harness_job_end => {},
                 errors => [{ tag => 'JOB POLL', details => $err, fail => 1 }],
             );
         }
@@ -160,7 +159,7 @@ sub poll {
 
             push @events => $self->_harness_event(
                 $jfeed->job_id,
-                harness_job_end => {stamp => time},
+                harness_job_end => {},
             );
         }
         else {

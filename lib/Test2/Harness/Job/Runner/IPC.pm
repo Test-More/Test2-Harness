@@ -2,7 +2,7 @@ package Test2::Harness::Job::Runner::IPC;
 use strict;
 use warnings;
 
-our $VERSION = '0.001089';
+our $VERSION = '0.001090';
 
 use Test2::Harness::Util qw/open_file write_file local_env/;
 use Test2::Harness::Util::IPC qw/run_cmd/;

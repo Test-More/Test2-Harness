@@ -2,7 +2,7 @@ package App::Yath::Plugin::Git;
 use strict;
 use warnings;
 
-our $VERSION = '0.001088';
+our $VERSION = '0.001089';
 
 use IPC::Cmd qw/can_run/;
 use parent 'App::Yath::Plugin';

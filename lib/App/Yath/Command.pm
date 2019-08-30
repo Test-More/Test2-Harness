@@ -334,20 +334,19 @@ sub options {
             field => 'fields',
             used_by => {runner => 1},
             section => "Harness Options",
-            usage => ['-f name:value', '--field name:value:link:json_data' ],
+            usage => ['-f name:details', qq|--field '{"name": "NAME", "details": "DETAILS", "link": "LINK", "data":{...}}'| ],
             summary => ['Add custom harness_run_fields'],
             action => sub {
                 my $self = shift;
                 my ($settings, $field, $raw) = @_;
 
-                my ($name, $val, $link, $data) = split /:/, $raw, 4;
-
-                my $run_field = {
-                    name => $name,
-                    details => $val,
-                    $link ? (link => $link) : (),
-                    $data ? (data => Test2::Harness::Util::JSON::decode_json($data)) : (),
-                };
+                my $run_field;
+                if ($raw =~ m/^{/) {
+                    $run_field = Test2::Harness::Util::JSON::decode_json($raw);
+                }
+                elsif ($raw =~ m/^([^:]+):([^:]+)$/) {
+                    $run_field = { name => $1, details => $2 };
+                }
 
                 push @{$settings->{$field}} => $run_field;
             },

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Allow specifying run-fields as JSON
+
 0.001089  2019-08-30 09:05:59-07:00 America/Los_Angeles
 
     - Allow listing run-fields on the command line

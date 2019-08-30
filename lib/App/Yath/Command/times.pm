@@ -7,6 +7,7 @@ our $VERSION = '0.001088';
 use Test2::Util qw/pkg_to_file/;
 use Test2::Util::Times qw/render_duration/;
 
+use Test2::Harness::Watcher::TimeTracker;
 use Test2::Harness::Feeder::JSONL;
 use Test2::Harness::Run;
 use Test2::Harness;
@@ -111,26 +112,12 @@ sub run_command {
             my $f      = $event->{facet_data} or next;
 
             my $job = $jobs{$job_id} ||= {};
+            $job->{file} //= File::Spec->abs2rel($f->{harness_job}->{file}) if $f->{harness_job};
+            $job->{count}++ if $f->{assert};
 
-            $job->{file} ||= File::Spec->abs2rel($f->{harness_job}->{file}) if $f->{harness_job};
-
-            $job->{start} = $job->{start} ? min($job->{start}, $stamp) : $stamp;
-            $job->{stop} = $job->{stop} ? max($job->{stop}, $stamp) : $stamp;
-
-            if ($f->{plan} || $f->{assert} || $f->{errors} || $f->{info}) {
-                $job->{first} = $job->{first} ? min($job->{first}, $stamp) : $stamp;
-                $job->{last} = $job->{last} ? max($job->{last}, $stamp) : $stamp;
-            }
+            my $tracker = $job->{tracker} //= Test2::Harness::Watcher::TimeTracker->new();
+            $tracker->process($event, $f, undef, $job->{count});
         }
-    }
-
-    for my $set (values %jobs) {
-        next unless $set->{stop} && $set->{start} && $set->{last} && $set->{first};
-
-        $set->{total}   = $set->{stop} - $set->{start}  if $set->{stop}  && $set->{start};
-        $set->{events}  = $set->{last} - $set->{first}  if $set->{last}  && $set->{first};
-        $set->{startup} = $set->{first} - $set->{start} if $set->{first} && $set->{start};
-        $set->{cleanup} = $set->{stop} - $set->{last}   if $set->{stop}  && $set->{last};
     }
 
     my @rows;
@@ -139,8 +126,9 @@ sub run_command {
     my @jobs = sort { $self->sort_compare($a, $b) } values %jobs;
 
     for my $job (@jobs) {
-        push @rows => $self->build_row($job);
-        $totals->{$_} += $job->{$_} for @NUMERIC;
+        my $data = $job->{tracker}->totals;
+        push @rows => $self->build_row({%$data, file => $job->{file}});
+        $totals->{$_} += $data->{$_} for @NUMERIC;
     }
 
     push @rows => [map { '--' } @FIELDS];
@@ -160,7 +148,7 @@ sub build_row {
 
     my $settings = $self->{+SETTINGS};
 
-    return [ map { $NUMERIC{$_} ? render_duration($data->{$_}) : $data->{$_} } @{$settings->{sort}}];
+    return [ map { $NUMERIC{$_} && defined($data->{$_}) ? render_duration($data->{$_}) : $data->{$_} } @{$settings->{sort}}];
 }
 
 sub sort_compare {
@@ -170,9 +158,12 @@ sub sort_compare {
     my $settings = $self->{+SETTINGS};
     my $order = $settings->{sort};
 
+    my $ta = $ja->{tracker}->totals;
+    my $tb = $jb->{tracker}->totals;
+
     for my $field (@$order) {
-        my $fa = $a->{$field};
-        my $fb = $b->{$field};
+        my $fa = $ta->{$field};
+        my $fb = $tb->{$field};
 
         my $da = defined $fa;
         my $db = defined $fb;

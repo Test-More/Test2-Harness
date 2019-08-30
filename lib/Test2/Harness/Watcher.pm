@@ -6,12 +6,13 @@ our $VERSION = '0.001088';
 
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
-use List::Util qw/first max min/;
+use List::Util qw/first max/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util qw/hub_truth parse_exit/;
-use Test2::Util::Times qw/render_duration/;
+
+use Test2::Harness::Watcher::TimeTracker;
 
 use Test2::Harness::Util::HashBase qw{
     -job
@@ -34,8 +35,7 @@ use Test2::Harness::Util::HashBase qw{
     -nested
     -subtests
     -numbers
-    -_times
-    -_times_done
+    -times
 
     -last_event
 };
@@ -51,7 +51,7 @@ sub init {
     $self->{+ASSERTION_COUNT} = 0;
 
     $self->{+NUMBERS} = {};
-    $self->{+_TIMES} = {};
+    $self->{+TIMES} = Test2::Harness::Watcher::TimeTracker->new();
 
     $self->{+NESTED} = 0 unless defined $self->{+NESTED};
 }
@@ -64,26 +64,6 @@ sub has_plan { defined $_[0]->{+PLAN} }
 sub file {
     my $self = shift;
     return $self->{+JOB}->file;
-}
-
-sub times {
-    my $self  = shift;
-    my $times = $self->{+_TIMES};
-
-    my $out = {};
-
-    $out->{total}   = $times->{stop} - $times->{start}  if $times->{stop}  && $times->{start};
-    $out->{events}  = $times->{last} - $times->{first}  if $times->{last}  && $times->{first};
-    $out->{startup} = $times->{first} - $times->{start} if $times->{first} && $times->{start};
-    $out->{cleanup} = $times->{stop} - $times->{last}   if $times->{stop}  && $times->{last};
-
-    for my $field (qw/total events startup cleanup/) {
-        $out->{"h_$field"} = render_duration($out->{$field}) if defined $out->{$field};
-    }
-
-    return unless 0 < keys %$out;
-
-    return $out;
 }
 
 sub process {
@@ -106,24 +86,12 @@ sub _process {
     my $f  = $event->{facet_data};
     my $hf = hub_truth($f);
 
-    if (my $stamp = $event->{stamp}) {
-        $self->{+_TIMES}->{start} = $self->{+_TIMES}->{start} ? min($stamp, $self->{+_TIMES}->{start}) : $stamp;
-        $self->{+_TIMES}->{stop} = $self->{+_TIMES}->{stop} ? max($stamp, $self->{+_TIMES}->{stop}) : $stamp;
+    my $nested = $hf->{nested} || 0;
 
-        if ($f->{trace} && !$self->{+_TIMES_DONE}) {
-            $self->{+_TIMES}->{first} = $self->{+_TIMES}->{first} ? min($self->{+_TIMES}->{first}, $stamp) : $stamp;
-            $self->{+_TIMES}->{last} = $self->{+_TIMES}->{last} ? max($self->{+_TIMES}->{last}, $stamp) : $stamp;
-        }
-    }
-
-    if ($f->{trace} && !$self->{+_TIMES_DONE}) {
-        $self->{+_TIMES_DONE} = 1 if $f->{control} && $f->{control}->{phase} && $f->{control}->{phase} eq 'END';
-        $self->{+_TIMES_DONE} = 1 if $f->{plan}    && !$f->{plan}->{none}    && $self->{+ASSERTION_COUNT};
-    }
+    $self->times->process($event, $f, $hf, $self->{+ASSERTION_COUNT}) unless $nested;
 
     return if $hf->{buffered};
 
-    my $nested = $hf->{nested} || 0;
     my $is_ours = $nested == $self->{+NESTED};
 
     return unless $is_ours || $f->{from_tap};

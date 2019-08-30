@@ -31,6 +31,9 @@ use Test2::Harness::Util::HashBase qw{
     -event_uuids
     -mem_usage
 
+    -meta
+    -harness_run_fields
+
     -default_search
     -projects
     -search
@@ -107,8 +110,8 @@ sub TO_JSON {
 
     my $plugins = $self->{+PLUGINS} or return $out;
 
-    my $meta = $out->{meta} //= {};
-    my $fields = $out->{harness_run_fields} //= [];
+    my $meta = $out->{+META} //= {};
+    my $fields = $out->{+HARNESS_RUN_FIELDS} //= [];
     for my $p (@$plugins) {
         $p->inject_run_data(meta => $meta, fields => $fields, run => $self);
     }

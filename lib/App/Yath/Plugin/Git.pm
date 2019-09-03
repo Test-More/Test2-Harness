@@ -16,15 +16,19 @@ sub inject_run_data {
 
     my $cmd = can_run('git') or return;
 
-    chomp(my $long_sha  = `$cmd rev-parse HEAD`);
-    chomp(my $short_sha = `$cmd rev-parse --short HEAD`);
-    chomp(my $status    = `$cmd status -s`);
+    chomp(my $long_sha  = $ENV{GIT_LONG_SHA}  || `$cmd rev-parse HEAD`);
+    chomp(my $short_sha = $ENV{GIT_SHORT_SHA} || `$cmd rev-parse --short HEAD`);
+    chomp(my $status    = $ENV{GIT_STATUS}    || `$cmd status -s`);
+
+    return unless $long_sha;
+
+    $short_sha ||= substr($long_sha, 0, 10);
 
     $meta->{git}->{sha}       = $long_sha;
     $meta->{git}->{sha_short} = $short_sha;
-    $meta->{git}->{status}    = $status;
+    $meta->{git}->{status}    = $status if $status;
 
-    push @$fields => { name => 'git_sha', details => $short_sha, data => $meta->{git} };
+    push @$fields => { name => 'git_sha', details => $short_sha, raw => $long_sha, data => $meta->{git} };
 
     return;
 }

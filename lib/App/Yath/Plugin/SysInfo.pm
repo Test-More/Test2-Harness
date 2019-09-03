@@ -15,16 +15,16 @@ sub inject_run_data {
     my $meta   = $params{meta};
     my $fields = $params{fields};
 
-    my $hostname = hostname;
+    if (my $hostname = hostname()) {
+        my $short = $hostname;
+        $short =~ s/\..*$// while length($short) > 18 && $short =~ m/\./;
 
-    my $short = $hostname;
-    $short =~ s/\..*$//g;
-
-    push @$fields => {
-        name    => 'hostname',
-        details => $short,
-        raw     => $hostname,
-    };
+        push @$fields => {
+            name    => 'hostname',
+            details => $short,
+            raw     => $hostname,
+        };
+    }
 
     push @$fields => {
         name    => 'user',

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Minor tweaks to SysInfo and Git plugins
+
 0.001091  2019-08-30 14:03:19-07:00 America/Los_Angeles
 
     - Add Yath::Plugin::SysInfo

@@ -78,7 +78,7 @@ t2hui.run.build_name = function(item, col, data) {
 };
 
 t2hui.run.tool_builder = function(item, tools, data) {
-    var params = $('<div class="tool etoggle" title="See Job Parameters"><i class="far fa-list-alt"></i></div>');
+    var params = $('<div class="tool etoggle" title="See Job Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
     params.click(function() {
         $('#modal_body').empty();
@@ -97,7 +97,7 @@ t2hui.run.tool_builder = function(item, tools, data) {
     });
 
     var link = base_uri + 'job/' + item.job_id;
-    var go = $('<a class="tool etoggle" title="Open Job" href="' + link + '"><i class="fas fa-external-link-alt"></i></a>');
+    var go = $('<a class="tool etoggle" title="Open Job" href="' + link + '"><img src="/img/goto.png" /></a>');
     tools.append(go);
 };
 

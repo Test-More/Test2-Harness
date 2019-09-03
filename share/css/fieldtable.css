@@ -67,3 +67,18 @@ div.field-table-header-col-inner {
 .sorting {
     background: #80A0D0 !important;
 }
+
+table.tool_table {
+    border-collapse: collapse;
+    border: none;
+    padding: 0;
+    display: inline;
+}
+
+table.tool_table tr {
+    padding: 0;
+}
+
+table.tool_table td {
+    padding: 0;
+}

@@ -5,7 +5,6 @@
 
 <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/theme.css">
 <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/main.css">
-<script src="<: $base_uri :>js/fontawesome-all.min.js"></script>
 <script src="<: $base_uri :>js/jquery.js"></script>
 <script src="<: $base_uri :>js/jquery-ui.js"></script>
 
@@ -105,7 +104,8 @@
 </div>
 
 <div id="footer_wrapper">
-    <div id="footer"></div>
+    <div id="footer">
+    </div>
 </div>
 </body>
 </html>

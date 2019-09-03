@@ -165,7 +165,7 @@ t2hui.job.tool_builder = function(item, tools, data) {
     tools.attr('rowspan', item.tools);
 
     if (item.item.facets) {
-        var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><i class="far fa-list-alt"></i></div>');
+        var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><img src="/img/data.png" /></div>');
         tools.append(efacet);
         efacet.click(function() {
             $('#modal_body').empty();
@@ -185,7 +185,7 @@ t2hui.job.tool_builder = function(item, tools, data) {
     }
 
     if (item.item.orphan) {
-        var eorphan = $('<div class="tool etoggle" title="See Orphan Facet Data"><i class="fas fa-code-branch"></i></div>');
+        var eorphan = $('<div class="tool etoggle" title="See Orphan Facet Data"><img src="/img/orphan.png" /></div>');
         tools.append(eorphan);
         eorphan.click(function() {
             $('#modal_body').empty();

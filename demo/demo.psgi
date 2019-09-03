@@ -20,6 +20,7 @@ my $config = Test2::Harness::UI::Config->new(
 builder {
     mount '/js'  => Plack::App::Directory->new({root => 'share/js'})->to_app;
     mount '/css' => Plack::App::Directory->new({root => 'share/css'})->to_app;
+    mount '/img' => Plack::App::Directory->new({root => 'share/img'})->to_app;
     mount '/favicon.ico' => Plack::App::File->new({file => 'share/img/favicon.ico'})->to_app;
 
     mount '/' => sub {

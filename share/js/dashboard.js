@@ -102,7 +102,7 @@ t2hui.dashboard.build_fail = function(item, col) {
 t2hui.dashboard.tool_builder = function(item, tools, data) {
     var link = base_uri + 'run/' + item.run_id;
 
-    var params = $('<div class="tool etoggle" title="See Run Parameters"><i class="far fa-list-alt"></i></div>');
+    var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
     params.click(function() {
         $('#modal_body').jsonView(item.parameters, {collapsed: true});
@@ -110,7 +110,7 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
     });
 
     if (item.error) {
-        var err = $('<div class="tool etoggle error" title="See Error Message"><i class="fas fa-exclamation-triangle"></i></div>');
+        var err = $('<div class="tool etoggle error" title="See Error Message"><img src="/img/error.png"/></div>');
         tools.append(err);
         err.click(function() {
             var pre = $('<pre></pre>');
@@ -120,23 +120,23 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
         });
     }
     else {
-        var go = $('<a class="tool etoggle" title="Open Run" href="' + link + '"><i class="fas fa-external-link-alt"></i></a>');
+        var go = $('<a class="tool etoggle" title="Open Run" href="' + link + '"><img src="/img/goto.png" /></a>');
         tools.append(go);
     }
 
-    var pin = $('<i class="fa-star"></i>');
+    var pin = $('<img />');
     var pintool = $('<a class="tool etoggle"></a>');
 
     var pinstate;
     if (item.pinned) {
         pintool.prop('title', 'unpin');
         pinstate = true;
-        pin.addClass('fas');
+        pin.attr('src', '/img/locked.png');
     }
     else {
         pintool.prop('title', 'pin');
         pinstate = false;
-        pin.addClass('far');
+        pin.attr('src', '/img/unlocked.png');
     }
 
     pintool.append(pin);
@@ -151,14 +151,14 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
                 pinstate = !pinstate;
                 pintool.children().remove();
 
-                pin = $('<i class="fa-star"></i>');
+                pin = $('<img />');
                 if (pinstate) {
                     pintool.prop('title', 'unpin');
-                    pin.addClass('fas');
+                    pin.attr('src', '/img/locked.png');
                 }
                 else {
                     pintool.prop('title', 'pin');
-                    pin.addClass('far');
+                    pin.attr('src', '/img/unlocked.png');
                 }
 
                 pintool.append(pin);

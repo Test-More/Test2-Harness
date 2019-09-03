@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Stop using fontawesome and hand-make icons
+
 0.000015  2019-08-28 14:22:10-07:00 America/Los_Angeles
 
     - Better sorting and raw vs formatted data

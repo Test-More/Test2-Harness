@@ -255,16 +255,28 @@ function FieldTable(spec) {
     }
 
     me.render_dynamic_col = function(field, name) {
-        var col = $('<td class="col-' + name + '">' + field.details + '</td>');
+        var tooltable = $('<table class="tool_table"></table>');
+        var toolrow = $('<tr></tr>');
+        tooltable.append(toolrow);
+
+        var col = $('<td class="col-' + name + '"></td>');
+        col.append(tooltable);
+
+        toolrow.append('<td>' + field.details + '</td>');
+
         if (field.raw) {
             col.attr('data-sort-value', field.raw);
             var tt = t2hui.build_tooltip(col.parent(), field.raw);
-            col.append(tt);
+            var td = $('<td></td>');
+            td.append(tt);
+            toolrow.prepend(td);
         }
 
         if (field.data) {
-            var viewer = $('<div class="tool etoggle" title="Extended Data"><i class="far fa-list-alt"></i></div>');
-            col.prepend(viewer);
+            var viewer = $('<div class="tool etoggle" title="Extended Data"><img src="/img/data.png" /></div>');
+            var td = $('<td></td>');
+            td.append(viewer);
+            toolrow.prepend(td);
             viewer.click(function() {
                 $('#modal_body').empty();
                 $('#modal_body').text("loading...");
@@ -284,7 +296,7 @@ function FieldTable(spec) {
         }
 
         if (field.link) {
-            var link = $('<a class="tool etoggle" title="Link" href="' + field.link + '"><i class="fas fa-external-link-alt"></i></a>');
+            var link = $('<td><a class="tool etoggle" title="Link" href="' + field.link + '"><img src="/img/link.png" /></a></td>');
             col.prepend(link);
         }
 
@@ -356,7 +368,15 @@ function FieldTable(spec) {
 
         var tools = col.children('div').first();
 
-        var close = $('<div class="etoggle red_hover" title="hide column"><i class="far fa-times-circle"></i></div>');
+        var close_icon = $('<img src="/img/close.png" />');
+        var close = $('<div class="etoggle" title="hide column"></div>');
+        close.append(close_icon);
+
+        close.hover(
+            function() { close_icon.attr('src', '/img/close_red.png') },
+            function() { close_icon.attr('src', '/img/close.png') },
+        );
+
         close.click(function() {
             col.hide();
             me.table.find('td.' + cclass).hide();

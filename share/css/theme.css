@@ -31,10 +31,6 @@
     color:  #0000A0;
 }
 
-.etoggle.red_hover:hover, .etoggle.clicked.red_hover:hover {
-    color:  #F00000;
-}
-
 .etoggle.clicked {
     border: 1px solid #AABBFF;
     background: #DDEEFF;

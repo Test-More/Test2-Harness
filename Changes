@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add branch info to git data
+
 0.001092  2019-09-03 10:32:46-07:00 America/Los_Angeles
 
     - Minor tweaks to SysInfo and Git plugins

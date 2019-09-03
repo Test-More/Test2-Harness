@@ -297,7 +297,7 @@ function FieldTable(spec) {
 
         if (field.link) {
             var link = $('<td><a class="tool etoggle" title="Link" href="' + field.link + '"><img src="/img/link.png" /></a></td>');
-            col.prepend(link);
+            toolrow.prepend(link);
         }
 
         return col;

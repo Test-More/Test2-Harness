@@ -73,8 +73,18 @@ t2hui.run.build_name = function(item, col, data) {
     var lng  = item.file || item.name;
 
     var tt = t2hui.build_tooltip(col.parent(), lng);
+    var tooltable = $('<table class="tool_table"></table>');
+    var toolrow = $('<tr></tr>');
+    tooltable.append(toolrow);
 
-    col.append(shrt, tt);
+    var toolcol = $('<td></td>');
+    toolcol.append(tt);
+
+    var textcol = $('<td>' + shrt + '</td>');
+
+    toolrow.append(toolcol, textcol);
+
+    col.append(tooltable);
 };
 
 t2hui.run.tool_builder = function(item, tools, data) {

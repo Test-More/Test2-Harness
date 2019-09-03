@@ -64,16 +64,30 @@ div.tooltip {
     display: block;
     position: absolute;
     top: -3px;
-    left: 26px;
+    left: 23px;
 
     border: 2px solid #6060B0;
     border-radius: 6px;
     background: #EEEEFF;
     width: auto;
-    min-width: 101%; /* So it does not try to wrap the contents to fit in the same size as our parent */
+    min-width: max-content;
     z-index: 9;
 
     padding: 3px;
 
+    white-space: no-wrap;
+}
+
+table.tool_table {
+    position: relative;
+}
+
+table.tool_table > tr > td {
+    position: relative;
+}
+
+table.tool_table > tr > td > div.tooltip {
+    top: -5px;
+    left: 18px;
     white-space: no-wrap;
 }

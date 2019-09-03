@@ -292,7 +292,7 @@ __PACKAGE__->belongs_to(
 
 require DateTime::Format::Pg;
 
-our $VERSION = '0.000017';
+our $VERSION = '0.000018';
 
 __PACKAGE__->inflate_column(
     parameters => {

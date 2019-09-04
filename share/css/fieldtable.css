@@ -65,10 +65,6 @@ div.field-table-header-col-inner {
     }
 }
 
-.sorting {
-    background: #80A0D0 !important;
-}
-
 table.tool_table {
     border-collapse: collapse;
     border: none;

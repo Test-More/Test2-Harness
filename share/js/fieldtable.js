@@ -102,46 +102,53 @@ function FieldTable(spec) {
     me.make_sortable = function() {
         if (!me.spec.sortable) { return }
 
-        var them = me.table.children('thead').children('tr').first().children('th');
-
-        them.click(function() {
-            $(this).addClass('sorting');
+        me.table.DataTable({
+            paging: false,
+            searching: false,
+            info: false,
+            orderCellsTop: true,
         });
 
-        var x = me.table.tablesort({
-            'compare': function(a, b) {
-                var an = parseFloat(a);
-                var bn = parseFloat(b);
+//        var them = me.table.children('thead').children('tr').first().children('th');
 
-                if (!isNaN(an) && !isNaN(bn)) {
-                    if (an > bn) {
-                        return 1;
-                    } else if (an < bn) {
-                        return -1;
-                    } else {
-                        return 0;
-                    }
-                }
-                if (!isNaN(an)) {
-                    return 1;
-                }
-                if (!isNaN(bn)) {
-                    return -1;
-                }
-
-                if (a > b) {
-                    return 1;
-                } else if (a < b) {
-                    return -1;
-                } else {
-                    return 0;
-                }
-            }
-        });
-
-        me.table.on('tablesort:complete', function() {
-            them.removeClass('sorting');
-        })
+//        them.click(function() {
+//            $(this).addClass('sorting');
+//        });
+//
+//        var x = me.table.tablesort({
+//            'compare': function(a, b) {
+//                var an = parseFloat(a);
+//                var bn = parseFloat(b);
+//
+//                if (!isNaN(an) && !isNaN(bn)) {
+//                    if (an > bn) {
+//                        return 1;
+//                    } else if (an < bn) {
+//                        return -1;
+//                    } else {
+//                        return 0;
+//                    }
+//                }
+//                if (!isNaN(an)) {
+//                    return 1;
+//                }
+//                if (!isNaN(bn)) {
+//                    return -1;
+//                }
+//
+//                if (a > b) {
+//                    return 1;
+//                } else if (a < b) {
+//                    return -1;
+//                } else {
+//                    return 0;
+//                }
+//            }
+//        });
+//
+//        me.table.on('tablesort:complete', function() {
+//            them.removeClass('sorting');
+//        })
     }
 
     me.render_item = function(item) {
@@ -265,7 +272,7 @@ function FieldTable(spec) {
         toolrow.append('<td>' + field.details + '</td>');
 
         if (field.raw) {
-            col.attr('data-sort-value', field.raw);
+            col.attr('data-order', field.raw);
             var tt = t2hui.build_tooltip(col.parent(), field.raw);
             var td = $('<td></td>');
             td.append(tt);

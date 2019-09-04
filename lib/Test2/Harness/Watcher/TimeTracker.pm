@@ -2,7 +2,7 @@ package Test2::Harness::Watcher::TimeTracker;
 use strict;
 use warnings;
 
-our $VERSION = '0.001094';
+our $VERSION = '0.001095';
 
 use Test2::Harness::Util qw/hub_truth/;
 use Test2::Util::Times qw/render_duration/;

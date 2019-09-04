@@ -63,4 +63,6 @@ sub inject_run_data {
     };
 }
 
+sub TO_JSON { ref($_[0]) }
+
 1;

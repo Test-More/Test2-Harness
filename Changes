@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix logging of plugin when it is blessed
+
 0.001094  2019-09-04 14:44:55-07:00 America/Los_Angeles
 
     - Improve+Test SysInfo and Git Plugins

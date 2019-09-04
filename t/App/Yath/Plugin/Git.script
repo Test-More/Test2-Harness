@@ -1,0 +1,20 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+my $args = join ' ' => @ARGV;
+
+my %out = (
+    'rev-parse HEAD'              => "4570988f2c2bd26a1691a82766d5bf5c7524bcea\n",
+    'rev-parse --short HEAD'      => "4570988\n",
+    'status -s'                   => " M lib/App/Yath/Plugin/Git.pm\n",
+    'rev-parse --abbrev-ref HEAD' => "my.branch.foo\n",
+);
+
+if (my $text = $out{$args}) {
+    print $text;
+    exit 0;
+}
+
+print STDERR "Invalid args: $args\n";
+exit 1;

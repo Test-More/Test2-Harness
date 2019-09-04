@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Improve+Test SysInfo and Git Plugins
+
 0.001093  2019-09-03 13:23:04-07:00 America/Los_Angeles
 
     - Add branch info to git data

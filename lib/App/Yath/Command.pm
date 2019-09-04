@@ -678,7 +678,7 @@ sub options {
             spec    => 'p|plugin=s@',
             used_by => { all => 1},
             section => 'Plugins',
-            usage   => ['-pPlugin', '-p+My::Plugin', '--plugin Plugin'],
+            usage   => ['-pPlugin', '-pPlugin=arg1,arg2,...', '-p+My::Plugin', '--plugin Plugin'],
             summary => ['Load a plugin', 'can be specified multiple times'],
             action  => sub {},
         },
@@ -939,11 +939,22 @@ sub parse_args {
 
     my @plugin_options;
     for my $plugin (@$plugins) {
+        my @args;
+        if ($plugin =~ m/=/) {
+            my $args;
+            ($plugin, $args) = split '=', $plugin, 2;
+            @args = split ',', $args;
+        }
         $plugin = fqmod('App::Yath::Plugin', $plugin);
         my $file = pkg_to_file($plugin);
         eval { require $file; 1 } or die "Could not load plugin '$plugin': $@";
 
-        $plugin = $plugin->new if $plugin->can('new');
+        if ($plugin->can('new')) {
+            $plugin = $plugin->new(@args);
+        }
+        elsif (@args) {
+            die "Plugin $plugin cannot accept args\n";
+        }
 
         push @plugin_options => $plugin->options($self, $settings);
         $plugin->pre_init($self, $settings);

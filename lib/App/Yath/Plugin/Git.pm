@@ -8,29 +8,40 @@ use IPC::Cmd qw/can_run/;
 use parent 'App::Yath::Plugin';
 
 sub inject_run_data {
-    my $class = shift;
+    my $class  = shift;
     my %params = @_;
 
-    my $meta = $params{meta};
+    my $meta   = $params{meta};
     my $fields = $params{fields};
 
-    my $cmd = can_run('git') or return;
+    my $long_sha  = $ENV{GIT_LONG_SHA};
+    my $short_sha = $ENV{GIT_SHORT_SHA};
+    my $status    = $ENV{GIT_STATUS};
+    my $branch    = $ENV{GIT_BRANCH};
 
-    chomp(my $long_sha  = $ENV{GIT_LONG_SHA}  || `$cmd rev-parse HEAD`);
-    chomp(my $short_sha = $ENV{GIT_SHORT_SHA} || `$cmd rev-parse --short HEAD`);
-    chomp(my $status    = $ENV{GIT_STATUS}    || `$cmd status -s`);
-    chomp(my $branch    = $ENV{GIT_BRANCH}    || `git branch --show-current`);
+    if (my $cmd = can_run('git')) {
+        chomp($long_sha  ||= `$cmd rev-parse HEAD`);
+        chomp($short_sha ||= `$cmd rev-parse --short HEAD`);
+        chomp($status    ||= `$cmd status -s`);
+        chomp($branch    ||= `$cmd rev-parse --abbrev-ref HEAD`);
+    }
 
     return unless $long_sha;
 
-    $short_sha ||= substr($long_sha, 0, 10);
+    $meta->{git}->{sha}    = $long_sha;
+    $meta->{git}->{status} = $status if $status;
 
-    $meta->{git}->{sha}       = $long_sha;
-    $meta->{git}->{sha_short} = $short_sha;
-    $meta->{git}->{status}    = $status if $status;
-    $meta->{git}->{branch}    = $branch if $branch;
+    if ($branch) {
+        $meta->{git}->{branch} = $branch;
 
-    push @$fields => { name => 'git_sha', details => $short_sha, raw => $long_sha, data => $meta->{git} };
+        my $short = length($branch) > 20 ? substr($branch, 0, 20) : $branch;
+
+        push @$fields => {name => 'git', details => $short, raw => $branch, data => $meta->{git}};
+    }
+    else {
+        $short_sha ||= substr($long_sha, 0, 16);
+        push @$fields => {name => 'git', details => $short_sha, raw => $long_sha, data => $meta->{git}};
+    }
 
     return;
 }

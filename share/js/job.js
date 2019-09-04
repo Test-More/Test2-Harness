@@ -205,11 +205,17 @@ t2hui.job.tool_builder = function(item, tools, data) {
     }
 }
 
+t2hui.job.clean_tag = function(tag) {
+    var clean = tag.replace(' ', '_');
+    return clean;
+}
+
 t2hui.job.modify_row = function(row, item) {
     var tag = item.tag;
+    var ctag = t2hui.job.clean_tag(tag);
 
     row.addClass('facet_' + item.facet);
-    row.addClass('tag_' + tag);
+    row.addClass('tag_' + ctag);
 
     row.attr('data-event-id', item.item.event_id);
 
@@ -239,12 +245,12 @@ t2hui.job.modify_row = function(row, item) {
             if (t2hui.job.filters.state[tag]) {
                 t2hui.job.filters.state[tag] = false;
                 $(this).addClass('off');
-                t2hui.job.table.table.find('tr.tag_' + tag).addClass('hidden_row');
+                t2hui.job.table.table.find('tr.tag_' + ctag).addClass('hidden_row');
             }
             else {
                 t2hui.job.filters.state[tag] = true;
                 $(this).removeClass('off');
-                t2hui.job.table.table.find('tr.tag_' + tag).removeClass('hidden_row');
+                t2hui.job.table.table.find('tr.tag_' + ctag).removeClass('hidden_row');
             }
         })
     }

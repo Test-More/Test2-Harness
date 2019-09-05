@@ -154,7 +154,7 @@ sub kill {
     $sig = 'TERM' unless defined $sig;
 
     for my $pid (keys %{$self->{+_PIDS}}) {
-        kill($sig, $pid) or warn "Could not kill pid";
+        kill("-$sig", $pid) or kill($sig, $pid) or warn "Could not kill pid";
     }
 
     return;

@@ -9,7 +9,7 @@ use File::Spec();
 use Scalar::Util qw/openhandle/;
 use Test2::Util qw/clone_io CAN_REALLY_FORK pkg_to_file/;
 use Test2::Harness::Util qw/write_file/;
-use Test2::Harness::Util::IPC qw/swap_io/;
+use Test2::Harness::Util::IPC qw/swap_io new_pgrp/;
 
 sub viable {
     my $class = shift;
@@ -43,6 +43,7 @@ sub run {
 
     # In parent
     return ($pid, undef) if $pid;
+    new_pgrp();
 
     my %seen = (map { ($_ => 1) } @INC);
 

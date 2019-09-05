@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Tests start as their own process groups
+
 0.001095  2019-09-04 15:38:07-07:00 America/Los_Angeles
 
     - Fix logging of plugin when it is blessed

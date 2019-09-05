@@ -250,7 +250,7 @@ sub options {
             field     => 'notify_text',
             used_by   => {jobs => 1},
             section   => 'Job Options',
-            usage     => ['--notify-text "custom notification info"'],
+            usage     => ['--notify-text "custom"'],
             long_desc => "Add a custom text snippet to email/slack notifications",
         },
 

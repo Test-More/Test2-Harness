@@ -334,7 +334,7 @@ sub options {
             field => 'fields',
             used_by => {runner => 1},
             section => "Harness Options",
-            usage => ['-f name:details', qq|--field '{"name": "NAME", "details": "DETAILS", "link": "LINK", "data":{...}}'| ],
+            usage => ['-f name:details', qq|--field 'JSON_STRING'| ],
             summary => ['Add custom harness_run_fields'],
             action => sub {
                 my $self = shift;
@@ -755,7 +755,7 @@ sub options {
             field   => 'log_file_format',
             used_by => {logger => 1},
             section => 'Logging Options',
-            usage   => ['--lff format-string', '--log-file-format format-string'],
+            usage   => ['--lff format-string', '--log-file-format ...'],
             summary => ['Specify the format for automatically-generated log files.', 'Overridden by --log-file, if given',
                         'This option implies -L', "(Default: \$YATH_LOG_FILE_FORMAT, if that is set, or else '%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl')"],
             long_desc => "This is a string in which percent-escape sequences will be replaced as per POSIX::strftime.  The following special escape sequences are also replaced: (%!U : the unique test run ID)  (%!p : the process ID) (%!S : the number of seconds since local midnight UTC ",

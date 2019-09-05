@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Cleanup help options a bit
+
 0.001095  2019-09-04 15:38:07-07:00 America/Los_Angeles
 
     - Fix logging of plugin when it is blessed

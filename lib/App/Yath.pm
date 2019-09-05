@@ -547,21 +547,24 @@ tell us when a test is complete. In cases where we have an exit, and partial
 output (assertions with no final plan, or a plan that has not been completed)
 we wait for a timeout period to see if any additional events come into
 
-=head3 HARNESS-CATEGORY-LONG
+=head3 HARNESS-DURATION-LONG
 
 This lets you tell C<yath> that the test file is long-running. This is
 primarily used when concurrency is turned on in order to run longer tests
 earlier, and concurrently with shorter ones. There is also a C<yath> option to
-skip all long category tests.
+skip all long tests.
 
-This category is set automatically if HARNESS-NO-TIMEOUT is set.
+This duration is set automatically if HARNESS-NO-TIMEOUT is set.
 
-=head3 HARNESS-CATEGORY-MEDIUM
+=head3 HARNESS-DURATION-MEDIUM
 
-This lets you tell C<yath> that the test is medium-length.
+This lets you tell C<yath> that the test is medium.
 
-This category is set automatically if HARNESS-NO-FORK or HARNESS-NO-PRELOAD are
-set.
+This is the default duration.
+
+=head3 HARNESS-DURATION-SHORT
+
+This lets you tell C<yath> That the test is short.
 
 =head3 HARNESS-CATEGORY-ISOLATION
 

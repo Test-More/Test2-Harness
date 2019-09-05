@@ -307,21 +307,24 @@ RECIPES
     plan, or a plan that has not been completed) we wait for a timeout
     period to see if any additional events come into
 
-  HARNESS-CATEGORY-LONG
+  HARNESS-DURATION-LONG
 
     This lets you tell yath that the test file is long-running. This is
     primarily used when concurrency is turned on in order to run longer
     tests earlier, and concurrently with shorter ones. There is also a yath
-    option to skip all long category tests.
+    option to skip all long tests.
 
-    This category is set automatically if HARNESS-NO-TIMEOUT is set.
+    This duration is set automatically if HARNESS-NO-TIMEOUT is set.
 
-  HARNESS-CATEGORY-MEDIUM
+  HARNESS-DURATION-MEDIUM
 
-    This lets you tell yath that the test is medium-length.
+    This lets you tell yath that the test is medium.
 
-    This category is set automatically if HARNESS-NO-FORK or
-    HARNESS-NO-PRELOAD are set.
+    This is the default duration.
+
+  HARNESS-DURATION-SHORT
+
+    This lets you tell yath That the test is short.
 
   HARNESS-CATEGORY-ISOLATION
 

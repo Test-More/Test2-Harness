@@ -258,6 +258,7 @@ sub make_run_from_settings {
         show_times  => $settings->{show_times},
         verbose     => $settings->{verbose},
         no_long     => $settings->{no_long},
+        only_long   => $settings->{only_long},
         dummy       => $settings->{dummy},
         cover       => $settings->{cover},
         event_uuids => $settings->{event_uuids},
@@ -602,7 +603,16 @@ sub options {
             used_by => {runner => 1, jobs => 1},
             section => 'Harness Options',
             usage   => ['--no-long'],
-            summary => ["Do not run tests with the HARNESS-CAT-LONG header"],
+            summary => ["Do not run tests with the HARNESS-DURATION-LONG header"],
+        },
+
+        {
+            spec    => 'only-long',
+            field   => 'only_long',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Harness Options',
+            usage   => ['--only-long'],
+            summary => ["only run tests with the HARNESS-DURATION-LONG header"],
         },
 
         {

@@ -1,6 +1,8 @@
 {{$NEXT}}
 
     - Cleanup help options a bit
+    - Split category into category and duration
+    - Clean up the ProcMan module
 
 0.001095  2019-09-04 15:38:07-07:00 America/Los_Angeles
 

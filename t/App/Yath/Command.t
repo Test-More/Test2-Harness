@@ -383,6 +383,7 @@ subtest make_run_from_settings => sub {
                 use_fork         => 1,
                 verbose          => 2,
                 no_long          => 0,
+                only_long        => 0,
                 exclude_patterns => [qr/xxx/],
                 exclude_files    => ['t/xxx.t'],
             },
@@ -418,6 +419,7 @@ subtest make_run_from_settings => sub {
             call use_fork         => 1;
             call verbose          => 2;
             call no_long          => 0;
+            call only_long        => 0;
             call plugins          => ['Foo::Bar'];
             call exclude_patterns => [qr/xxx/];
             call exclude_files    => {'ABS t/xxx.t' => 1};
@@ -735,6 +737,14 @@ subtest options => sub {
 
         my $two = $TCLASS->new(args => {opts => ['--no-long']});
         ok($two->settings->{no_long}, "toggled on");
+    };
+
+    subtest only_long => sub {
+        my $one = $TCLASS->new(args => {opts => []});
+        ok(!$one->settings->{only_long}, "off by default");
+
+        my $two = $TCLASS->new(args => {opts => ['--only-long']});
+        ok($two->settings->{only_long}, "toggled on");
     };
 
     subtest exclude_files => sub {

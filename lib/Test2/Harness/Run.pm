@@ -48,6 +48,7 @@ use Test2::Harness::Util::HashBase qw{
     -exclude_files
     -exclude_patterns
     -no_long
+    -only_long
 
     -plugins
 };
@@ -215,7 +216,8 @@ sub _find_files {
     @files = grep { my $f = $_->file; !first { $f =~ m/$_/ } @{$self->{+EXCLUDE_PATTERNS}} } @files if @{$self->{+EXCLUDE_PATTERNS}};
     #>>>
 
-    @files = grep { $_->check_category ne 'long' } @files if $self->{+NO_LONG};
+    @files = grep { $_->check_duration ne 'long' } @files if $self->{+NO_LONG};
+    @files = grep { $_->check_duration eq 'long' } @files if $self->{+ONLY_LONG};
 
     return @files;
 }

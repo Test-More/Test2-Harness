@@ -18,9 +18,10 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
     -file -_scanned -_headers -_shbang -queue_args -is_binary -non_perl
-    _category _stage
+    _category _stage _duration
 };
 
+*set_duration = \&set__duration;
 *set_category = \&set__category;
 *set_stage    = \&set__stage;
 
@@ -84,6 +85,23 @@ sub meta {
     return @{$meta->{$key}};
 }
 
+sub check_duration {
+    my $self = shift;
+
+    return $self->{+_DURATION} if $self->{+_DURATION};
+
+    $self->_scan unless $self->{+_SCANNED};
+    my $duration = $self->{+_HEADERS}->{duration};
+    return $duration if $duration;
+
+    my $timeout = $self->check_feature(timeout => 1);
+
+    # 'long' for anything with no timeout
+    return 'long' unless $timeout;
+
+    return 'medium';
+}
+
 sub check_category {
     my $self = shift;
 
@@ -94,19 +112,10 @@ sub check_category {
 
     return $category if $category;
 
-    my $fork    = $self->check_feature(fork      => 1);
-    my $preload = $self->check_feature(preload   => 1);
-    my $timeout = $self->check_feature(timeout   => 1);
     my $isolate = $self->check_feature(isolation => 0);
 
     # 'isolation' queue if isolation requested
     return 'isolation' if $isolate;
-
-    # 'medium' queue for anything that cannot preload or fork
-    return 'medium' unless $preload && $fork;
-
-    # 'long' for anything with no timeout
-    return 'long' unless $timeout;
 
     return 'general';
 }
@@ -209,9 +218,18 @@ sub _scan {
             my ($key, $val) = @args;
             push @{$headers{meta}->{$key}} => $val;
         }
+        elsif ($dir eq 'duration' || $dir eq 'dur') {
+            my ($name) = @args;
+            $headers{duration} = $name;
+        }
         elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;
-            $headers{category} = $name;
+            if ($name =~ m/^(long|medium|short)$/i) {
+                $headers{duration} = $name;
+            }
+            else {
+                $headers{category} = $name;
+            }
         }
         elsif ($dir eq 'conflicts') {
             my @conflicts_array;
@@ -278,6 +296,7 @@ sub queue_item {
     my ($job_name) = @_;
 
     my $category = $self->check_category;
+    my $duration = $self->check_duration;
     my $stage    = $self->check_stage;
 
     my $fork    = $self->check_feature(fork    => 1);
@@ -290,6 +309,7 @@ sub queue_item {
 
     return {
         category    => $category,
+        duration    => $duration,
         file        => $self->file,
         headers     => $self->headers,
         job_id      => gen_uuid(),
@@ -316,13 +336,18 @@ my %RANK = (
     immiscible => 1,
     long       => 2,
     medium     => 3,
-    general    => 4,
+    short      => 4,
     isolation  => 5,
 );
 
 sub rank {
     my $self = shift;
-    return $RANK{$self->check_category} || 1;
+
+    my $rank = $RANK{$self->check_category};
+    $rank ||= $RANK{$self->check_duration};
+    $rank ||= 1;
+
+    return $rank;
 }
 
 1;

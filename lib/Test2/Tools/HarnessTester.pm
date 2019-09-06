@@ -40,8 +40,9 @@ sub import {
 sub run_command {
     my (@cmd) = @_;
 
-    pipe(my($r_out, $w_out)) or die "Could not open pipe for STDOUT: $!";
-    pipe(my($r_err, $w_err)) or die "Could not open pipe for STDERR: $!";
+    my $dir = tempdir(CLEANUP => 1);
+    open(my $w_out, '>', "$dir/stdout") or die "Could not create file: $!";
+    open(my $w_err, '>', "$dir/stderr") or die "Could not create file: $!";
 
     my $pid = run_cmd(stdout => $w_out, stderr => $w_err, command => \@cmd);
     close($w_out);
@@ -51,6 +52,9 @@ sub run_command {
     my $exit = $?;
 
     die "Error waiting on child process" unless $ret == $pid;
+
+    open(my $r_out, '<', "$dir/stdout") or die "Could not read file: $!";
+    open(my $r_err, '<', "$dir/stderr") or die "Could not read file: $!";
 
     return {
         exit => $exit,

@@ -2,7 +2,7 @@ package Test2::Harness::Job::Runner::Binary;
 use strict;
 use warnings;
 
-our $VERSION = '0.001096';
+our $VERSION = '0.001097';
 
 use parent 'Test2::Harness::Job::Runner::IPC';
 

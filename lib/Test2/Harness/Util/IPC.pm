@@ -5,10 +5,18 @@ use warnings;
 our $VERSION = '0.001096';
 
 use POSIX;
+use Config qw/%Config/;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw/run_cmd swap_io/;
+our @EXPORT_OK = qw/run_cmd swap_io new_pgrp/;
+
+if ($Config{'d_setpgrp'}) {
+    *new_pgrp = sub() { setpgrp(0, 0) };
+}
+else {
+    *new_pgrp = sub() { 0 };
+}
 
 sub swap_io {
     my ($fh, $to, $die) = @_;
@@ -44,6 +52,7 @@ sub run_cmd {
     my $pid = fork;
     die "Failed to fork" unless defined $pid;
     return $pid if $pid;
+    new_pgrp() if $params{setpgrp};
 
     my $stdout = $params{stdout};
     my $stderr = $params{stderr};

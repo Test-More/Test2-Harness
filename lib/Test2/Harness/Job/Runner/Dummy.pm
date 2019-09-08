@@ -67,6 +67,7 @@ sub run {
     my $pid;
     local_env $env => sub {
         $pid = run_cmd(
+            setpgrp => 1,
             chdir   => $job->ch_dir,
             command => sub { $class->command($test, $event_dir, \@inc) },
             stdin   => $in_fh,

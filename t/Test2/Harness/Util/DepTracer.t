@@ -1,5 +1,6 @@
 use Test2::V0 -target => 'Test2::Harness::Util::DepTracer';
 # HARNESS-NO-PRELOAD
+# HARNESS-DURATION-SHORT
 
 use ok $CLASS;
 

@@ -1,4 +1,5 @@
 use Test2::V0 -target => "App::Yath::Command::reload";
+# HARNESS-DURATION-SHORT
 
 use ok $CLASS;
 

@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'App::Yath::Command';
+# HARNESS-DURATION-SHORT
 
 local $ENV{HARNESS_PERL_SWITCHES};
 

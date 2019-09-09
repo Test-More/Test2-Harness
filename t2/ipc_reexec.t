@@ -1,4 +1,5 @@
 # HARNESS-NO-FORK
+# HARNESS-DURATION-SHORT
 BEGIN { $INC{'Test2/Formatter/Stream.pm'} && exec($^X, $0); };
 # Force into stdout
 BEGIN { delete $ENV{T2_STREAM_DIR} };

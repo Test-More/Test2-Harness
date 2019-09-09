@@ -1,4 +1,5 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Util';
+# HARNESS-DURATION-SHORT
 
 use ok $CLASS => ':ALL';
 

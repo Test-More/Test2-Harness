@@ -1,5 +1,6 @@
 use Test2::V0 -target => 'App::Yath::Plugin::SysInfo';
 use Test2::Util qw/CAN_THREAD CAN_REALLY_FORK CAN_FORK CAN_SIGSYS/;
+# HARNESS-DURATION-SHORT
 
 my $control = mock $CLASS => (
     override => [

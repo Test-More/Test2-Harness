@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+# HARNESS-DURATION-MEDIUM
 
 use Test2::V0;
 use Time::HiRes qw/sleep/;

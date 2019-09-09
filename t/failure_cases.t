@@ -1,5 +1,5 @@
 use Test2::V0;
-# HARNESS-CAT-LONG
+# HARNESS-DURATION-LONG
 
 use List::Util qw/first/;
 use Test2::API qw/context/;

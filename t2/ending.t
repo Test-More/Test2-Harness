@@ -1,3 +1,4 @@
+# HARNESS-DURATION-SHORT
 package FooBarBaz;
 use strict;
 use warnings;

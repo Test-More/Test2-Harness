@@ -1,5 +1,6 @@
 use Test2::V0;
 use File::Spec;
+# HARNESS-DURATION-SHORT
 
 my $path = File::Spec->canonpath('t2/relative_paths.t');
 

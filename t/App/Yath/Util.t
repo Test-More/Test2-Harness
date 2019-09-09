@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'App::Yath::Util';
+# HARNESS-DURATION-SHORT
 
 use Test2::Tools::GenTemp qw/gen_temp/;
 

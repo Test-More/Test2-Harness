@@ -1,4 +1,5 @@
 use Test2::V0;
+# HARNESS-DURATION-SHORT
 
 my $file = __FILE__;
 my $line = __LINE__ + 1;

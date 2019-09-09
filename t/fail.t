@@ -1,4 +1,5 @@
 #!perl
+# HARNESS-DURATION-SHORT
 
 # This test can be used to validate the yath test --retry feature since you need the test to fail initially but pass the second time around.
 # You do this by touching t/fail_once which causes a fail but then removes the file so it passes the second time.

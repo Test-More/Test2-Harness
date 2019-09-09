@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'Test2::Harness::Util::Term';
+# HARNESS-DURATION-SHORT
 
 use ok $CLASS => qw/USE_ANSI_COLOR/;
 

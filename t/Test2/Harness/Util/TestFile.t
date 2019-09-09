@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'Test2::Harness::Util::TestFile';
+# HARNESS-DURATION-SHORT
 
 use ok $CLASS;
 

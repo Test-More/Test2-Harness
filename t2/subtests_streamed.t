@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use Test2::Tools::Tiny;
 use Test2::Tools::Subtest qw/subtest_streamed/;
+# HARNESS-DURATION-SHORT
 
 subtest_streamed foo => sub {
     subtest_streamed bar => sub {

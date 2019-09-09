@@ -1,4 +1,5 @@
 use Test2::V0;
+# HARNESS-DURATION-SHORT
 
 use Test2::Require::AuthorTesting;
 

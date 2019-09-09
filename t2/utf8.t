@@ -4,6 +4,7 @@ use Test2::Plugin::UTF8;
 use Test2::API qw/test2_stack/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Util qw/get_tid ipc_separator/;
+# HARNESS-DURATION-SHORT
 
 test2_stack()->top;
 my ($hub) = test2_stack()->all();

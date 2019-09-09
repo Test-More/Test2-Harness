@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'App::Yath::Command::help';
+# HARNESS-DURATION-SHORT
 require App::Yath;
 
 use ok $CLASS;

@@ -1,5 +1,6 @@
 use Test2::V0 -target => 'Test2::Harness::Run::Runner::ProcMan';
 use v5.10;
+# HARNESS-DURATION-SHORT
 
 use Test2::Util qw/CAN_REALLY_FORK/;
 use POSIX ":sys_wait_h";

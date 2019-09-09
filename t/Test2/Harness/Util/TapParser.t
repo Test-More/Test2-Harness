@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'Test2::Harness::Util::TapParser';
+# HARNESS-DURATION-SHORT
 
 use ok $CLASS => qw/parse_stdout_tap parse_stderr_tap/;
 

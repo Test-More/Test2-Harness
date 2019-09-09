@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'Test2::Harness::Run::Runner';
+# HARNESS-DURATION-SHORT
 skip_all "Not done, come back!";
 
 use File::Temp qw/tempdir/;

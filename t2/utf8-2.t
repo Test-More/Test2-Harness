@@ -8,6 +8,7 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Tools::Basic qw/skip_all/;
 use File::Spec;
 use Test2::Util qw/get_tid ipc_separator/;
+# HARNESS-DURATION-SHORT
 
 print STDOUT "STDOUT: Mākaha\n";
 print STDERR "STDERR: Mākaha\n";

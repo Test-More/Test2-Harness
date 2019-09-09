@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+# HARNESS-DURATION-SHORT
 
 use Test::More;
 

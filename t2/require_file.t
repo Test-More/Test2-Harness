@@ -2,6 +2,7 @@ use strict;
 use warnings;
 use Test2::Tools::Tiny;
 use File::Spec;
+# HARNESS-DURATION-SHORT
 
 my $file = __FILE__;
 $file =~ s/\.t$/.pm/;

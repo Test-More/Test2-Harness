@@ -21,6 +21,8 @@ use Test2::Harness::UI::Controller::Runs;
 use Test2::Harness::UI::Controller::Jobs;
 use Test2::Harness::UI::Controller::Events;
 
+use Test2::Harness::UI::Controller::Durations;
+
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
 
@@ -59,6 +61,9 @@ sub init {
     $router->connect('/job/:id/events'   => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
     $router->connect('/event/:id'        => {controller => 'Test2::Harness::UI::Controller::Events', from => 'single_event'});
     $router->connect('/event/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
+
+    $router->connect('/durations/:project'                => {controller => 'Test2::Harness::UI::Controller::Durations'});
+    $router->connect('/durations/:project/:short/:medium' => {controller => 'Test2::Harness::UI::Controller::Durations'});
 }
 
 sub to_app {

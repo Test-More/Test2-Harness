@@ -157,6 +157,13 @@ CREATE TRIGGER status_changed
   FOR EACH ROW
   EXECUTE PROCEDURE update_status_changed();
 
+CREATE TABLE durations (
+    project_id  UUID                NOT NULL REFERENCES projects(project_id),
+    rel_file    TEXT                NOT NULL,
+    duration    DOUBLE PRECISION    NOT NULL,
+    added       TIMESTAMP           NOT NULL DEFAULT now()
+);
+
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,
     job_ord         BIGINT      NOT NULL,

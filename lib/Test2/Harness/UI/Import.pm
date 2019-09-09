@@ -24,6 +24,7 @@ use Test2::Harness::UI::Util::HashBase qw{
     -config -run -mode -fh
     -passed -failed
     -job0_id -job_ord -job_buffer -ready_jobs
+    -durations
 };
 
 my %MODES = (
@@ -64,6 +65,8 @@ sub init {
             name    => "HARNESS INTERNAL LOG",
         },
     };
+
+    $self->{+DURATIONS} = [];
 }
 
 sub process {
@@ -95,8 +98,32 @@ sub process {
     }
 
     $self->flush_all_jobs();
+    $self->flush_durations();
 
     return {success => 1, passed => $self->{+PASSED}, failed => $self->{+FAILED}};
+}
+
+sub flush_durations {
+    my $self = shift;
+    my $durs = $self->{+DURATIONS} or return;
+    return unless @$durs;
+
+    my $schema = $self->{+CONFIG}->schema;
+    $schema->txn_begin;
+    my $ok = eval {
+        local $ENV{DBIC_DT_SEARCH_OK} = 1;
+        $schema->resultset('Duration')->populate($durs);
+        1;
+    };
+    my $err = $@;
+
+    if ($ok) {
+        $schema->txn_commit;
+        return;
+    }
+
+    $schema->txn_rollback;
+    die $err;
 }
 
 sub flush_ready_jobs {
@@ -313,6 +340,14 @@ sub update_other {
 
         # All done
         push @{$self->{+READY_JOBS}} => delete $self->{+JOB_BUFFER}->{$job->{job_id}};
+
+        if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
+            push @{$self->{+DURATIONS}} => {
+                project_id => $self->{+RUN}->project_id,
+                rel_file   => $job_end->{rel_file},
+                duration   => $job_end->{times}->{totals}->{total},
+            };
+        }
     }
     if (my $job_fields = $f->{harness_job_fields}) {
         push @{$job->{fields}} => map { { %{$_}, job_id => $job->{job_id} } } @$job_fields;

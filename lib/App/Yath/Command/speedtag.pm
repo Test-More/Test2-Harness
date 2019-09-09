@@ -2,7 +2,7 @@ package App::Yath::Command::speedtag;
 use strict;
 use warnings;
 
-our $VERSION = '0.001097';
+our $VERSION = '0.001098';
 
 use Test2::Util qw/pkg_to_file/;
 use Test2::Util::Times qw/render_duration/;

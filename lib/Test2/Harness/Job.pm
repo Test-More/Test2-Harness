@@ -6,6 +6,7 @@ our $VERSION = '0.001098';
 
 use Carp qw/croak/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
+use File::Spec;
 
 use Test2::Harness::Util::HashBase qw{
     -job_id
@@ -14,6 +15,8 @@ use Test2::Harness::Util::HashBase qw{
     -pid
 
     -file
+    -rel_file
+    -abs_file
     -env_vars
     -libs
     -switches
@@ -44,6 +47,9 @@ sub init {
 
     croak "The 'file' attribute is required"
         unless $self->{+FILE};
+
+    $self->{+ABS_FILE} = File::Spec->rel2abs($self->{+FILE});
+    $self->{+REL_FILE} = File::Spec->abs2rel($self->{+FILE});
 
     $self->{+JOB_NAME} ||= $self->{+JOB_ID};
 

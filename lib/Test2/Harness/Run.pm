@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '0.001098';
 
 use Carp qw/croak/;
+use Cwd qw/getcwd/;
 
 use List::Util qw/first/;
 
@@ -51,6 +52,8 @@ use Test2::Harness::Util::HashBase qw{
     -only_long
 
     -plugins
+
+    -cwd
 };
 
 sub init {
@@ -78,6 +81,8 @@ sub init {
     $self->{+UNSAFE_INC} = 1 unless defined $self->{+UNSAFE_INC};
     $self->{+USE_STREAM} = 1 unless defined $self->{+USE_STREAM};
     $self->{+USE_FORK}   = (IS_WIN32 ? 0 : 1) unless defined $self->{+USE_FORK};
+
+    $self->{+CWD} ||= getcwd();
 
     croak "Preload requires forking"
         if $self->{+PRELOAD} && !$self->{+USE_FORK};

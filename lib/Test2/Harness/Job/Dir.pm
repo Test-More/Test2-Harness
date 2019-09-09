@@ -556,6 +556,8 @@ sub _process_start_line {
                 job_id  => $self->{+JOB_ID},
                 stamp   => $value,
                 file    => $self->file,
+                rel_file => File::Spec->abs2rel($self->file),
+                abs_file => File::Spec->rel2abs($self->file),
             },
         }
     };

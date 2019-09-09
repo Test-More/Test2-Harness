@@ -118,7 +118,7 @@ subtest job_started => sub {
     ok(!$one->{_state_cache}, "state cache was cleared");
 
     my ($line) = $one->jobs->read();
-    is(
+    like(
         $line,
         {
             use_timeout => 1,
@@ -129,6 +129,8 @@ subtest job_started => sub {
             pid         => 123,
             input       => '',
             file        => 'fake',
+            abs_file    => qr/fake$/,
+            rel_file    => qr/fake$/,
             libs        => [],
             args        => [],
             switches    => [],

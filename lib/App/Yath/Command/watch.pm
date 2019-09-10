@@ -2,7 +2,7 @@ package App::Yath::Command::watch;
 use strict;
 use warnings;
 
-our $VERSION = '0.001099';
+our $VERSION = '0.001100';
 
 use Time::HiRes qw/sleep/;
 

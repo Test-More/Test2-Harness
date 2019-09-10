@@ -2,7 +2,7 @@ package Test2::Harness::Event;
 use strict;
 use warnings;
 
-our $VERSION = '0.001099';
+our $VERSION = '0.001100';
 
 use Carp qw/confess/;
 use Time::HiRes qw/time/;

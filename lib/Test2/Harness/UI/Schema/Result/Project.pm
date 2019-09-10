@@ -118,6 +118,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 durations_states
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::DurationsState>
+
+=cut
+
+__PACKAGE__->has_many(
+  "durations_states",
+  "Test2::Harness::UI::Schema::Result::DurationsState",
+  { "foreign.project_id" => "self.project_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 permissions
 
 Type: has_many
@@ -149,8 +164,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-09-09 13:14:05
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:7nlNf93VRYs/WHahU6SROQ
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-09-10 11:27:39
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:H5PzsrHeABiCxXJoEgzEjA
 
 our $VERSION = '0.000021';
 

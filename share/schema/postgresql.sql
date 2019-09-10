@@ -164,6 +164,15 @@ CREATE TABLE durations (
     added       TIMESTAMP           NOT NULL DEFAULT now()
 );
 
+CREATE TABLE durations_state (
+    state_id    TEXT        NOT NULL,
+    project_id  UUID        NOT NULL REFERENCES projects(project_id),
+    durations   JSONB       NOT NULL,
+    added       TIMESTAMP   NOT NULL DEFAULT now(),
+
+    UNIQUE(project_id, state_id)
+);
+
 CREATE TABLE jobs (
     job_id          UUID        NOT NULL PRIMARY KEY,
     job_ord         BIGINT      NOT NULL,

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add duration states
+
 0.000020  2019-09-09 21:13:09-07:00 America/Los_Angeles
 
     - fix durations controller when json is requested

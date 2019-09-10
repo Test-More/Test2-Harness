@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - fix durations controller when json is requested
+    - fix 'ui' yath command to include images
+
 0.000019  2019-09-09 14:39:56-07:00 America/Los_Angeles
 
     - Add durations controller

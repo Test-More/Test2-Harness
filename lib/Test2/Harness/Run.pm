@@ -11,6 +11,8 @@ use List::Util qw/first/;
 
 use Test2::Util qw/IS_WIN32/;
 
+use Test2::Harness::Util::JSON qw/decode_json/;
+
 use File::Spec;
 
 use Test2::Harness::Util::TestFile;
@@ -34,6 +36,8 @@ use Test2::Harness::Util::HashBase qw{
 
     -meta
     -harness_run_fields
+    -durations
+    -maybe_durations
 
     -default_search
     -projects
@@ -100,6 +104,54 @@ sub init {
     $env->{HARNESS_JOBS}    = $self->{+JOB_COUNT};
 
     $env->{T2_HARNESS_RUN_ID} = $self->{+RUN_ID};
+
+
+    $self->pull_durations();
+}
+
+sub pull_durations {
+    my $self = shift;
+
+    my $primary  = delete $self->{+MAYBE_DURATIONS} || [];
+    my $fallback = delete $self->{+DURATIONS};
+
+    for my $path (@$primary) {
+        local $@;
+        my $durations = eval { $self->_pull_durations($path) } or print "Could not fetch optional durations '$path', ignoring...\n";
+        next unless $durations;
+
+        print "Found durations: $path\n";
+        return $self->{+DURATIONS} = $durations;
+    }
+
+    return $self->{+DURATIONS} = $self->_pull_durations($fallback)
+        if $fallback;
+}
+
+sub _pull_durations {
+    my $self = shift;
+    my ($in) = @_;
+
+    if (my $type = ref($in)) {
+        return $self->{+DURATIONS} = $in if $type eq 'HASH';
+    }
+    elsif ($in =~ m{^https?://}) {
+        require HTTP::Tiny;
+        my $ht = HTTP::Tiny->new();
+        my $res = $ht->get($in, {headers => {'Content-Type' => 'application/json'}});
+
+        die "Could not query durations from '$in'\n$res->{status}: $res->{reason}\n$res->{content}"
+            unless $res->{success};
+
+        return $self->{+DURATIONS} = decode_json($res->{content});
+    }
+    elsif(-f $in) {
+        require Test2::Harness::Util::File::JSON;
+        my $file = Test2::Harness::Util::File::JSON->new(name => $in);
+        return $self->{+DURATIONS} = $file->read();
+    }
+
+    die "Invalid duration specification: $in";
 }
 
 sub all_libs {
@@ -203,6 +255,14 @@ sub _find_files {
     }
 
     push @files => $_->find_files($self, $search) for @$plugins;
+
+    if (my $durations = $self->{+DURATIONS}) {
+        for my $file (@files) {
+            my $rel = File::Spec->abs2rel($file->file);
+            my $dur = $durations->{$rel} or next;
+            $file->set_duration($dur);
+        }
+    }
 
     $_->munge_files(\@files) for @$plugins;
 

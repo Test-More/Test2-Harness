@@ -263,7 +263,10 @@ sub make_run_from_settings {
         cover       => $settings->{cover},
         event_uuids => $settings->{event_uuids},
         mem_usage   => $settings->{mem_usage},
-        default_search => $settings->{default_search},
+        durations   => $settings->{durations},
+
+        maybe_durations => $settings->{maybe_durations},
+        default_search  => $settings->{default_search},
 
         harness_run_fields => $settings->{fields},
 
@@ -613,6 +616,24 @@ sub options {
             section => 'Harness Options',
             usage   => ['--only-long'],
             summary => ["only run tests with the HARNESS-DURATION-LONG header"],
+        },
+
+        {
+            spec => 'durations=s',
+            field => 'durations',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Harness Options',
+            usage => ['--durations path', '--durations url'],
+            long_desc => "Point at a json file or url which has a hash of relative test filenames as keys, and 'SHORT', 'MEDIUM', or 'LONG' as values. This will override durations listed in the file headers. An exception will be thrown if the durations file or url does not work.",
+        },
+
+        {
+            spec => 'maybe-durations=s@',
+            field => 'maybe_durations',
+            used_by => {runner => 1, jobs => 1},
+            section => 'Harness Options',
+            usage => ['--maybe-durations path', '--maybe-durations url'],
+            long_desc => "Same as 'durations' except not fatal if not found. If this and 'durations' are both specified then 'durations' is used as a fallback when this fails. You may specify this option multiple times and the first one that works will be used"
         },
 
         {

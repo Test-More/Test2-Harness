@@ -21,9 +21,9 @@ use Test2::Harness::Util::HashBase qw{
     _category _stage _duration
 };
 
-*set_duration = \&set__duration;
-*set_category = \&set__category;
-*set_stage    = \&set__stage;
+sub set_duration { $_[0]->set__duration(lc($_[1])) }
+sub set_category { $_[0]->set__category(lc($_[1])) }
+sub set_stage    { $_[0]->set__stage(   lc($_[1])) }
 
 sub init {
     my $self = shift;

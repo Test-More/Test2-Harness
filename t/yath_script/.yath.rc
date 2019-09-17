@@ -1,0 +1,27 @@
+
+; comment!
+
+-Dpre_lib; comment!
+-D=rel(pre/xxx/lib)    ;comment!
+-D=rel( pre/yyy/lib )
+-pXXX
+-p YYY
+-D SPLIT
+
+[test]
+-Itest_lib; comment!
+-I=rel(test/xxx/lib)    ;comment!
+-I rel( test/yyy/lib )
+-xxxx;comment!
+foo
+bar
+baz bat
+
+[run]
+-Irun_lib
+-I=rel(run/xxx/lib)
+-I rel( run/yyy/lib )
+-xxxx
+foo
+bar
+

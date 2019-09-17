@@ -1,3 +1,6 @@
-[test]
--It2/lib
+-D
+-D=rel(t2/lib)
 -pSelfTest
+
+[test]
+-Irel(t2/lib)

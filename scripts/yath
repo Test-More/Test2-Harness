@@ -1,8 +1,197 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Do not use warnings/strict, we want to avoid contamination of the
-# file/namespace/scope
-use App::Yath(\@ARGV, \$App::Yath::RUN);
-exit($App::Yath::RUN->());
+
+# '-D' and '--dev-lib' MUST be handled well in advance of loading ANYTHING.
+# These will get re-processed later, but they MUST come even before App::Yath
+# is loaded.
+BEGIN {
+    return if $^C;
+
+    package App::Yath::Script;
+    local ($., $?, $@);
+
+    my @ORIG_ARGV = @ARGV;
+    my @DEVLIBS;
+    my %CONFIG;
+    my $SCRIPT;
+
+    # ==START TESTABLE CODE FIND_CONFIG_FILES==
+
+    my ($config_file, $user_config_file);
+
+    # Would be nice if we could use File::Spec, but we cannot load ANYTHING yet.
+    my %no_stat = (mswin32 => 1, vms => 1, riscos => 1, os2 => 1, cygwin => 1);
+    my %seen;
+    my $dir = './';
+    for (1 .. 100) {    # If we are more than 100 deep we have other problems
+        if ($no_stat{lc($^O)}) {
+            opendir(my $dh, $dir) or die "$!";
+            my $key = join ':' => sort readdir($dh);
+            last if $seen{$key}++;
+        }
+        else {
+            my ($dev, $ino) = stat $dir;
+            last if $seen{$dev}{$ino}++;
+        }
+
+        $config_file      //= "${dir}.yath.rc"      if -f "${dir}.yath.rc";
+        $user_config_file //= "${dir}.yath.user.rc" if -f "${dir}.yath.user.rc";
+
+        last if $config_file && $user_config_file;
+
+        $dir .= "../";
+    }
+
+    # ==END TESTABLE CODE FIND_CONFIG_FILES==
+    # ==START TESTABLE CODE PARSE_CONFIG_FILES==
+
+    my (@CONFIG_ARGS, @TO_CLEAN);
+    for my $file ($config_file, $user_config_file) {
+        next unless $file && -f $file;
+
+        my $cmd;
+        open(my $fh, '<', $file) or die "Could not open config file '$file' for reading: $!";
+        while (my $line = <$fh>) {
+            chomp($line);
+            $cmd = $1 and next if $line =~ m/^\[(.*)\]$/;
+            $line =~ s/;.*$//g;
+            $line =~ s/^\s*//g;
+            $line =~ s/\s*$//g;
+            next unless length($line);
+
+            my ($key, $eq, $val);
+            if ($line =~ m/^(-\S)(rel\(.*\))$/) {   # Handle things like -Irel(...)
+                $key = $1;
+                $eq  = '';
+                $val = $2;
+            }
+            else {
+                ($key, $eq, $val) = split /(=|\s+)/, $line, 2;  # Covers most cases
+            }
+
+            $eq = '=' if $val && ($key eq '-D' || $key eq '--dev-lib');
+            my $need_to_clean;
+            if ($val && $val =~ s/(^|=)\s*rel\(\s*//) {
+                die "Syntax error in $file line $.: Expected ')'\n" unless $val =~ s/\s*\)$//;
+                my $path = $file;
+                $path =~ s{[^/]*$}{}g;
+                $val           = "${path}${val}";
+                $need_to_clean = 1;
+            }
+
+            $eq //= '';
+            my @parts = $eq eq '=' ? ("${key}${eq}${val}") : (grep { defined $_ } $key, $val);
+
+            if ($cmd) {
+                push @{$CONFIG{$cmd}} => @parts;
+                push @TO_CLEAN => [$cmd, $#{$CONFIG{$cmd}}, $key, $eq, $val] if $need_to_clean;
+            }
+            else {
+                push @CONFIG_ARGS => @parts;
+            }
+        }
+        close($fh);
+    }
+
+    unshift @ARGV => @CONFIG_ARGS;
+
+    # ==END TESTABLE CODE PARSE_CONFIG_FILES==
+    # ==START TESTABLE CODE PRE_PARSE_D_ARGS==
+
+    my (@libs, %done, @args, $maybe_exec);
+    while (my $arg = shift @ARGV) {
+        if ($arg eq '--' || $arg eq '::') {
+            push @args => $arg;
+            last;
+        }
+
+        if ($arg eq '--no-dev-lib') {
+            @libs = ();
+            %done = ();
+            next;
+        }
+
+        if ($arg =~ m{^(?:(?:-D=?|--dev-lib=)(.*)|--dev-lib)$}) {
+            my @add = $1 ? ($1) : ();
+            unless (@add) {
+                @add        = ('lib', 'blib/lib', 'blib/arch');
+                $maybe_exec = $arg;
+            }
+
+            push @libs => grep { !$done{$_}++ } @add;
+            next;
+        }
+
+        push @args => $arg;
+    }
+    @ARGV = (@args, @ARGV);
+
+    unshift @INC => @libs;
+    unshift @DEVLIBS => @libs;
+
+    # ==END TESTABLE CODE PRE_PARSE_D_ARGS==
+    # ==START TESTABLE CODE EXEC==
+
+    # Now it is safe/ok to load things.
+    require Cwd;
+    require File::Spec;
+
+    $SCRIPT = Cwd::realpath(__FILE__) // File::Spec->rel2abs(__FILE__);
+
+    if ($maybe_exec && -e 'scripts/yath') {
+        my $script = Cwd::realpath('scripts/yath') // File::Spec->rel2abs('scripts/yath');
+
+        if ($SCRIPT ne $script) {
+            warn "\n** $maybe_exec was used, and scripts/yath is present, using exec to switch to it. **\n\n";
+            exec($script, @ORIG_ARGV);
+            die("Should not see this, exec failed!");
+        }
+    }
+
+    # ==END TESTABLE CODE EXEC==
+    # ==START TESTABLE CODE CLEANUP_PATHS==
+
+    if (@libs || @TO_CLEAN) {
+        for (my $i = 0; $i < @libs; $i++) {
+            $DEVLIBS[$i] = $INC[$i] = Cwd::realpath($INC[$i]) // File::Spec->rel2abs($INC[$i]);
+        }
+
+        for my $clean (@TO_CLEAN) {
+            my ($cmd, $idx, $key, $eq, $val) = @$clean;
+            $val = Cwd::realpath($val) // File::Spec->rel2abs($val);
+
+            if ($eq eq '=') {
+                $CONFIG{$cmd}->[$idx] = "${key}${eq}${val}";
+            }
+            else {
+                $CONFIG{$cmd}->[$idx] = $val;
+            }
+        }
+    }
+
+    # ==END TESTABLE CODE CLEANUP_PATHS==
+    # ==START TESTABLE CODE CREATE_APP==
+
+    require Time::HiRes;
+    require App::Yath;
+    my $app = App::Yath->new(
+        argv    => \@ARGV,
+        config  => \%CONFIG,
+        settings => {
+            yath => {
+                script => $SCRIPT,
+                dev_libs => \@DEVLIBS,
+                start => Time::HiRes::time(),
+            },
+        },
+    );
+
+    $app->generate_run_sub('App::Yath::Script::run');
+
+    # ==END TESTABLE CODE CREATE_APP==
+}
+
+exit(App::Yath::Script::run());
 
 __END__
 

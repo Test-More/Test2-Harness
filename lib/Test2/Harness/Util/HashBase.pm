@@ -16,7 +16,7 @@ our $VERSION = '0.001100';
 
 {
     no warnings 'once';
-    $Test2::Harness::Util::HashBase::HB_VERSION = '0.006';
+    $Test2::Harness::Util::HashBase::HB_VERSION = '0.007';
     *Test2::Harness::Util::HashBase::ATTR_SUBS = \%Object::HashBase::ATTR_SUBS;
     *Test2::Harness::Util::HashBase::ATTR_LIST = \%Object::HashBase::ATTR_LIST;
     *Test2::Harness::Util::HashBase::VERSION   = \%Object::HashBase::VERSION;
@@ -47,6 +47,8 @@ BEGIN {
 my %STRIP = (
     '^' => 1,
     '-' => 1,
+    '>' => 1,
+    '<' => 1,
 );
 
 sub import {
@@ -71,11 +73,30 @@ sub import {
                 substr($x, 0, 1) = '' if $STRIP{$p};
                 push @$attr_list => $x;
                 my ($sub, $attr) = (uc $x, $x);
-                $sub => ($attr_subs->{$sub} = sub() { $attr }),
-                    $attr => sub { $_[0]->{$attr} },
-                      $p eq '-' ? ("set_$attr" => sub { Carp::croak("'$attr' is read-only") })
-                    : $p eq '^' ? ("set_$attr" => sub { Carp::carp("set_$attr() is deprecated"); $_[0]->{$attr} = $_[1] })
-                    : ("set_$attr" => sub { $_[0]->{$attr} = $_[1] }),
+
+                $attr_subs->{$sub} = sub() { $attr };
+                my %out = ($sub => $attr_subs->{$sub});
+
+                if ($p eq '>') {
+                    $out{"set_$attr"} = sub { $_[0]->{$attr} = $_[1] };
+                }
+                elsif ($p eq '<') {
+                    $out{$attr} = sub { $_[0]->{$attr} };
+                }
+                else {
+                    $out{$attr} = sub { $_[0]->{$attr} };
+                    if ($p eq '-') {
+                      $out{"set_$attr"} = sub { Carp::croak("'$attr' is read-only") };
+                    }
+                    elsif ($p eq '^') {
+                        $out{"set_$attr"} = sub { Carp::carp("set_$attr() is deprecated"); $_[0]->{$attr} = $_[1] };
+                    }
+                    else {
+                        $out{"set_$attr"} = sub { $_[0]->{$attr} = $_[1] };
+                    }
+                }
+
+                %out;
             } @_
         ),
     );
@@ -425,7 +446,7 @@ F<http://github.com/Test-More/HashBase/>.
 
 =head1 COPYRIGHT
 
-Copyright 2019 Chad Granum E<lt>exodist@cpan.orgE<gt>.
+Copyright 2017 Chad Granum E<lt>exodist@cpan.orgE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

@@ -22,4 +22,6 @@ sub claim_file {}
 
 sub inject_run_data {}
 
+sub TO_JSON { ref($_[0]) || "$_[0]" }
+
 1;

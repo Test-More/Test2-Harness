@@ -2,173 +2,200 @@ package App::Yath;
 use strict;
 use warnings;
 
-use App::Yath::Util qw/read_config find_pfile/;
-use File::Spec;
-use Test2::Util qw/IS_WIN32/;
-
 our $VERSION = '0.001100';
 
-our $SCRIPT;
+use Test2::Harness::Util::HashBase qw{
+    -config
+    -settings
 
-sub import {
-    # Do not let anything mess with our $.
-    local $.;
+    -_options -options_loaded
+    -_argv   -argv_processed
 
-    my $class = shift;
-    my ($argv, $runref) = @_ or return;
+    -_command_class
+};
 
-    my $old = select STDOUT;
-    $| = 1;
-    select STDERR;
-    $| = 1;
-    select $old;
+use Time::HiRes();
+use File::Spec();
+use Cwd();
 
-    my ($pkg, $file, $line) = caller;
+use Test2::Util::Table qw/table/;
 
-    $SCRIPT ||= $file;
+use App::Yath::Util qw/find_libraries find_pfile mod2file clean_path/;
+use App::Yath::Options;
+use App::Yath::Options::Instance;
 
-    my $cmd_name = $class->command_from_argv($argv);
-    my $pp_argv  = $class->pre_parse_args(
-        [
-            read_config($cmd_name, file => '.yath.rc',      search => 1),
-            read_config($cmd_name, file => '.yath.user.rc', search => 1),
-            @$argv
-        ]
+use Test2::Harness::Util::JSON();
+
+option_group {prefix => 'yath'} => sub {
+    option plugins => (
+        type  => 'm',
+        short => 'p',
+        name  => 'plugin',
+
+        pre_command => 1,
+
+        category       => 'Plugins',
+        long_examples  => [' PLUGIN', ' +App::Yath::Plugin::PLUGIN', ' PLUGIN=arg1,arg2,...'],
+        short_examples => ['PLUGIN'],
+        description    => 'Load a yath plugin.',
+
+        default => sub { {} },
+
+        action => \&plugin_action,
     );
 
-    unless (IS_WIN32) {
-        my %have = map {( $_ => 1, File::Spec->rel2abs($_) => 1 )} @INC;
-        my @missing = grep { !$have{$_} && !$have{File::Spec->rel2abs($_)} } @{$pp_argv->{inc}};
+    option dev_libs => (
+        type  => 'D',
+        short => 'D',
+        name  => 'dev-lib',
 
-        $class->do_exec($^X, (map {('-I' => File::Spec->rel2abs($_))} @{$pp_argv->{inc}}, @INC), $SCRIPT, $cmd_name, @$argv)
-            if @missing;
-    }
+        pre_command => 1,
 
-    my $cmd_class = $class->load_command($cmd_name);
-    $cmd_class->import($argv, $runref);
+        category    => 'Developer',
+        description => 'Add paths to @INC before loading ANYTHING. This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
 
-    $$runref ||= sub { $class->run_command($cmd_class, $cmd_name, $pp_argv) };
+        long_examples  => ['', '=lib'],
+        short_examples => ['', '=lib', 'lib'],
+
+        normalize => \&normalize_dev_libs,
+        action    => \&dev_libs_action,
+    );
+
+    option 'show-opts' => (
+        category            => 'Help',
+        description         => 'Exit after showing what yath thinks your options mean',
+        post_process        => \&_post_process_show_opts,
+        post_process_weight => 99999,
+        pre_command         => 1,
+    );
+
+    option version => (
+        short        => 'V',
+        category     => 'Help',
+        description  => "Exit after showing a helpful usage message",
+        post_process => \&_post_process_version,
+        pre_command  => 1,
+    );
+};
+
+sub init {
+    my $self = shift;
+
+    my ($pkg, $file, $line) = caller(1);
+
+    $self->{+SETTINGS} //= {};
+    $self->{+SETTINGS}->{yath}->{scriptx} //= clean_path($file);
+    $self->{+SETTINGS}->{yath}->{start}  //= Time::HiRes::time();
+
+    $self->{+_ARGV}  //= delete($self->{argv}) // [];
+    $self->{+CONFIG} //= {};
 }
 
-sub do_exec {
-    my $class = shift;
-    exec(@_);
-}
+sub generate_run_sub {
+    my $self = shift;
+    my ($symbol) = @_;
 
-sub pre_parse_args {
-    my $class = shift;
-    my ($args) = @_;
+    my $options = $self->load_options();
+    my $argv    = $self->process_argv();
 
-    my (@opts, @list, @pass, @plugins, @inc);
+    my $cmd_class = $self->command_class();
 
-    my %lib = (lib => 1, blib => 1, tlib => 0);
+    return $cmd_class->generate_run_sub($symbol, $argv) if $cmd_class->can('generate_run_sub');
 
-    my $last_mark = '';
-    for my $arg (@$args) {
-        if ($last_mark eq '::') {
-            push @pass => $arg;
-        }
-        elsif ($last_mark eq '--') {
-            if ($arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            push @list => $arg;
-        }
-        elsif ($last_mark eq 'plugin') {
-            $last_mark = '';
-            push @plugins => $arg;
-        }
-        elsif ($last_mark eq 'inc') {
-            $last_mark = '';
-            push @inc => $arg;
-            push @opts => $arg;
-        }
-        else {
-            if ($arg eq '--' || $arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            if ($arg eq '-p' || $arg eq '--plugin') {
-                $last_mark = 'plugin';
-                next;
-            }
-            if ($arg =~ m/^(?:-p=?|--plugin=)(.*)$/) {
-                push @plugins => $1;
-                next;
-            }
-            if ($arg eq '--no-plugins') {
-                # clear plugins
-                @plugins = ();
-                next;
-            }
+    my $cmd = $cmd_class->new(settings => $options->settings, args => $argv);
+    $options->process_option_post_actions($cmd);
+    my $run = sub { $self->run_command($cmd) };
 
-            if ($arg eq '-I' || $arg eq '--include') {
-                $last_mark = 'inc';
-                # No 'next' here.
-            }
-            elsif ($arg =~ m/^(-I|--include)=(.*)$/) {
-                push @inc => $2;
-                # No 'next' here.
-            }
-            elsif($arg =~ m/^-I(.*)$/) {
-                push @inc => $1;
-            }
-            elsif ($arg =~ m/^--(no-)?(lib|blib|tlib)$/) {
-                $lib{$2} = $1 ? 0 : 1;
-            }
-
-            push @opts => $arg;
-        }
+    {
+        no strict 'refs';
+        *{$symbol} = $run;
     }
 
-    push @inc => File::Spec->rel2abs('lib') if $lib{lib};
-    if ($lib{blib}) {
-        push @inc => File::Spec->rel2abs('blib/lib');
-        push @inc => File::Spec->rel2abs('blib/arch');
-    }
-    push @inc => File::Spec->rel2abs('t/lib') if $lib{tlib};
-
-    return {
-        opts    => \@opts,
-        list    => \@list,
-        pass    => \@pass,
-        plugins => \@plugins,
-        inc     => \@inc,
-    };
-}
-
-sub info {
-    my $class = shift;
-    print STDOUT @_;
+    return;
 }
 
 sub run_command {
-    my $class = shift;
-    my ($cmd_class, $cmd_name, $argv) = @_;
+    my $self = shift;
+    my ($cmd) = @_;
 
-    my $cmd = $cmd_class->new(args => $argv);
+    my $exit = $cmd->run;
 
-    require Time::HiRes;
-    my $start = Time::HiRes::time();
-    my $exit  = $cmd->run;
-
-    die "Command '$cmd_name' did not return an exit value.\n"
+    die "Command '" . $cmd->name() . "' did not return an exit value.\n"
         unless defined $exit;
-
-    if ($cmd->show_bench && !$cmd->settings->{quiet}) {
-        require Test2::Util::Times;
-        my $end = Time::HiRes::time();
-        my $bench = Test2::Util::Times::render_bench($start, $end, times);
-        $class->info($bench, "\n\n");
-    }
 
     return $exit;
 }
 
-sub command_from_argv {
-    my $class = shift;
-    my ($argv) = @_;
+sub load_options {
+    my $self = shift;
+
+    my $options = $self->{+_OPTIONS} //= App::Yath::Options::Instance->new(settings => $self->{+SETTINGS});
+
+    return $options if $self->{+OPTIONS_LOADED}++;
+
+    $options->include(options());
+
+    my $option_libs = find_libraries('App::Yath::Plugin::*');
+    for my $lib (sort keys %$option_libs) {
+        my $ok = eval { require $option_libs->{$lib}; 1 };
+        unless ($ok) {
+            warn "Failed to load plugin '$option_libs->{$lib}': $@";
+            next;
+        }
+
+        next unless $lib->can('options');
+        my $mod_opts = $lib->options or next;
+
+        $options->include($mod_opts);
+    }
+
+    return $options;
+}
+
+sub process_argv {
+    my $self = shift;
+
+    return $self->{+_ARGV} if $self->{+ARGV_PROCESSED}++;
+
+    my $options = $self->load_options();
+    $options->set_args($self->{+_ARGV});
+    $options->grab_pre_command_opts();
+
+    my $cmd_name  = $self->_command_from_argv();
+    my $cmd_class = $self->load_command($cmd_name);
+    $options->set_command_class($cmd_class);
+    $self->{+_COMMAND_CLASS} = $cmd_class;
+
+    $options->grab_pre_command_opts(stop_at_non_opt => 1, passthrough => 1, die_at_non_opt => 0);
+
+    my $config_cmd_args = $self->{+CONFIG}->{$cmd_name};
+
+    $options->grab_pre_command_opts(args => $config_cmd_args, stop_at_non_opt => 1, passthrough => 1, die_at_non_opt => 0)
+        if $config_cmd_args;
+
+    $options->process_pre_command_opts();
+
+    $options->grab_command_opts(args => $config_cmd_args, die_at_non_opt => 1, stop_at_non_opt => 0, passthrough => 0)
+        if $config_cmd_args;
+
+    $options->grab_command_opts();
+    $options->process_command_opts();
+
+    return $self->{+_ARGV};
+}
+
+sub command_class {
+    my $self = shift;
+
+    $self->process_argv() unless $self->{+_COMMAND_CLASS};
+
+    return $self->{+_COMMAND_CLASS};
+}
+
+sub _command_from_argv {
+    my $self = shift;
+
+    my $argv = $self->{+_ARGV};
 
     if (@$argv) {
         my $arg = $argv->[0];
@@ -179,11 +206,11 @@ sub command_from_argv {
         }
 
         if ($arg =~ m/\.jsonl(\.bz2|\.gz)?$/) {
-            $class->info("\n** First argument is a log file, defaulting to the 'replay' command **\n\n");
+            warn "\n** First argument is a log file, defaulting to the 'replay' command **\n\n";
             return 'replay';
         }
 
-        return shift @$argv if $class->load_command($arg, check_only => 1);
+        return shift @$argv if $self->load_command($arg, check_only => 1);
 
         my $is_opt_or_file = 0;
         $is_opt_or_file ||= -f $arg;
@@ -195,20 +222,20 @@ sub command_from_argv {
     }
 
     if (find_pfile()) {
-        $class->info("\n** Persistent runner detected, defaulting to the 'run' command **\n\n");
+        warn "\n** Persistent runner detected, defaulting to the 'run' command **\n\n";
         return 'run';
     }
 
-    $class->info("\n** Defaulting to the 'test' command **\n\n");
+    warn "\n** Defaulting to the 'test' command **\n\n";
     return 'test';
 }
 
 sub load_command {
-    my $class = shift;
+    my $self = shift;
     my ($cmd_name, %params) = @_;
 
-    my $cmd_class  = "App::Yath::Command::$cmd_name";
-    my $cmd_file   = "App/Yath/Command/$cmd_name.pm";
+    my $cmd_class = "App::Yath::Command::$cmd_name";
+    my $cmd_file  = "App/Yath/Command/$cmd_name.pm";
 
     my ($found, $error);
     {
@@ -233,9 +260,120 @@ sub load_command {
     return $cmd_class;
 }
 
+sub plugin_action {
+    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+
+    my ($p, $class, $args) = $norm =~ m/^(\+)?([^=]+)(?:=(.*))?$/;
+
+    $args = $args ? [split ',', $args] : [];
+
+    $class = "App::Yath::Plugin::$class" unless $p;
+    my $file = mod2file($class);
+    my $ok = eval { require $file; 1 };
+    warn "Failed to load plugin '$class': $@" unless $ok;
+
+    ${$slot}->{$class} = $args;
+}
+
+sub normalize_dev_libs {
+    my $val = shift;
+
+    return $val if $val eq '1';
+
+    return Cwd::realpath($val) // File::Spec->rel2abs($val);
+}
+
+sub dev_libs_action {
+    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+
+    my %seen = map { $_ => 1 } @{$$slot};
+
+    my @new = grep { !$seen{$_}++ } ($norm eq '1') ? (map { Cwd::realpath($_) // File::Spec->rel2abs($_) } 'lib', 'blib/lib', 'blib/arch') : ($norm);
+
+    return unless @new;
+
+    warn <<"    EOT" for @new;
+dev-lib '$_' added to \@INC late, it is possible some yath libraries were already loaded from other paths.
+(Maybe you need to move the -D or --dev-lib argument(s) to be earlier in your command line or config file?)
+    EOT
+
+    unshift @INC   => @new;
+    unshift @{$$slot} => @new;
+}
+
+sub _post_process_show_opts {
+    my %params = @_;
+
+    my $settings = $params{settings};
+
+    print "\nCommand selected: " . $params{command}->name . "  (" . ref($params{command}) . ")\n" if $params{command};
+
+    my $args = $params{args};
+    print "\nCommand args: " . join(', ' => @$args) . "\n" if @$args;
+
+
+    my $out = Test2::Harness::Util::JSON::encode_pretty_json($settings);
+
+    print "\nCurrent command line and config options result in these settings:\n";
+    print "$out\n";
+
+    exit 0;
+}
+
+sub _post_process_version {
+    my %params = @_;
+
+    my $out = <<"    EOT";
+
+Yath version: $App::Yath::VERSION
+
+Extended Version Info
+    EOT
+
+    my $plugin_libs = find_libraries('App::Yath::Plugin::*');
+
+    my @vers = (
+        [perl        => $^V],
+        ['App::Yath' => App::Yath->VERSION],
+        (
+            map {
+                eval { require(mod2file($_)); 1 }
+                    ? [$_ => $_->VERSION // 'N/A']
+                    : [$_ => 'N/A']
+            } qw/Test2::API Test2::Suite Test::Builder/
+        ),
+        (
+            map {
+                eval { require($plugin_libs->{$_}); 1 }
+                    && [$_ => $_->VERSION // 'N/A']
+            } sort keys %$plugin_libs
+        ),
+    );
+
+    $out .= join "\n" => table(
+        header => [qw/COMPONENT VERSION/],
+        rows   => \@vers,
+    );
+
+    print "$out\n\n";
+
+    exit 0;
+}
+
+
+
 1;
 
 __END__
+
+
+    my $old = select STDOUT;
+    $| = 1;
+    select STDERR;
+    $| = 1;
+    select $old;
+
+
 
 =pod
 
@@ -426,9 +564,14 @@ provide any options normally allowed by it. When C<yath> is run inside your
 project, it will use the config specified in the rc file, unless overridden
 by command line options.
 
+B<Note:> You can also add pre-command options by placing them at the top of
+your config file I<BEFORE> any C<[cmd]> markers.
+
 Comments start with a semi-colon.
 
 Example .yath.rc:
+
+    -pFoo ; Load the 'foo' plugin before dealing with commands.
 
     [test]
     -B ;Always write a bzip2-compressed log

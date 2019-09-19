@@ -3,9 +3,9 @@ use Test2::V0 -target => 'App::Yath::Util';
 
 use Test2::Tools::GenTemp qw/gen_temp/;
 
-use ok $CLASS => qw/find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/;
+use ok $CLASS => qw/find_yath find_pfile PFILE_NAME find_in_updir is_generated_test_pl find_libraries/;
 
-imported_ok(qw/find_yath find_pfile PFILE_NAME find_in_updir read_config is_generated_test_pl/);
+imported_ok(qw/find_yath find_pfile PFILE_NAME find_in_updir is_generated_test_pl find_libraries/);
 
 use Cwd qw/realpath cwd/;
 
@@ -48,24 +48,6 @@ my $tmp = realpath(gen_temp(
 
     'test_a.pl' => "\n\n# THIS IS A GENERATED YATH RUNNER TEST\n\n",
     'test_b.pl' => "\n\n# THIS IS NOT A GENERATED YATH RUNNER TEST\n\n",
-
-    '.yath.rc' => <<"    EOT",
-[foo]
--a b c d ; xyz
-t t2
---foo
---zoo bar
---path rel(./x/y/z)
---path ./x/y/z
-;xyz
-;[bub]
-
-[bar]
--x y
---xxx xx ; xyz
---yyy
-
-    EOT
 
     dir_a => {
         '.yath-persist.json' => "XXX",
@@ -110,24 +92,6 @@ my $ok = eval {
     chdir(File::Spec->canonpath("$tmp"));
     is(find_pfile, realpath(File::Spec->rel2abs("$tmp/dir_a/.yath-persist.json")), "Found yath persist file");
 
-    is(
-        [read_config('foo', file => '.yath.rc', search => 1)],
-        ['-a', 'b c d', 't', 't2', '--foo', '--zoo', 'bar', '--path' => File::Spec->canonpath("$tmp/x/y/z"), '--path' => './x/y/z'],
-        "Got config for foo command"
-    );
-
-    is(
-        [read_config('bar', file => '.yath.rc', search => 1)],
-        ['-x', 'y', '--xxx', 'xx', '--yyy'],
-        "Got config for bar command"
-    );
-
-    is(
-        [read_config('bub', file => '.yath.rc', search => 1)],
-        [],
-        "Got config for bar command (empty)"
-    );
-
     1;
 };
 my $err = $@;
@@ -135,5 +99,56 @@ my $err = $@;
 chdir($cwd);
 
 die $err unless $ok;
+
+subtest find_libraries => sub {
+    my $tmp = realpath(gen_temp(
+        lib => {
+            Foo => {
+                'Bar.pm' => 1,
+                'Baz.pm' => 1,
+                'Bat' => { 'xxx.pm' => 1 },
+            },
+            Foo2 => {
+                'Bar.pm' => 1,
+                'Baz.pm' => 1,
+                'Bat' => { 'xxx.pm' => 1 },
+            },
+        },
+    ));
+
+    my $libs = find_libraries('Foo::*', "$tmp/lib");
+    is(
+        $libs,
+        {'Foo::Bar' => 'Foo/Bar.pm', 'Foo::Baz' => 'Foo/Baz.pm'},
+        "Found libs under foo"
+    );
+
+    $libs = find_libraries('*::*::xxx', "$tmp/lib");
+    is(
+        $libs,
+        {
+            'Foo::Bat::xxx'  => 'Foo/Bat/xxx.pm',
+            'Foo2::Bat::xxx' => 'Foo2/Bat/xxx.pm',
+        },
+        "Found */*/xxx libs"
+    );
+
+    $libs = find_libraries('*::*::Util');
+    like(
+        $libs,
+        {
+          'App::Yath::Util' => 'App/Yath/Util.pm',
+          'Term::Table::Util' => 'Term/Table/Util.pm',
+          'Test2::Harness::Util' => 'Test2/Harness/Util.pm',
+        },
+        "Found the *::*::Util libs we know must be around"
+    );
+
+    ok(!grep(m/x86_64-linux/, keys %$libs), "Did not add the arch/ stuff");
+};
+
+die "test mod2file";
+die "test show_bench";
+die "test strip_arisdottle";
 
 done_testing;

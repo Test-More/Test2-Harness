@@ -7,14 +7,15 @@ use Test2::Util qw/pkg_to_file/;
 our $VERSION = '0.001100';
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase;
+use Test2::Harness::Util::HashBase qw/<_command_info_hash/;
 
+use App::Yath::Util qw/find_libraries/;
 use Test2::Harness::Util qw/open_file/;
 use List::Util ();
 
-sub show_bench { 0 }
-
-sub summary { 'Show this list of commands' }
+sub options {};
+sub group { '' }
+sub summary { 'Show the list of commands' }
 
 sub description {
     return <<"    EOT"
@@ -24,30 +25,27 @@ command.
     EOT
 }
 
-sub group { '' }
-
 sub command_info_hash {
     my $self = shift;
 
-    require Module::Pluggable;
-    Module::Pluggable->import(search_path => ['App::Yath::Command']);
+    return $self->{+_COMMAND_INFO_HASH} if $self->{+_COMMAND_INFO_HASH};
 
     my %commands;
-    for my $pkg ($self->plugins) {
-        my $file = pkg_to_file($pkg);
-        eval {
-            require $file;
+    my $command_libs = find_libraries('App::Yath::Command::*');
+    for my $lib (sort keys %$command_libs) {
+        my $ok = eval { require $command_libs->{$lib}; 1 };
+        unless ($ok) {
+            warn "Failed to load command '$command_libs->{$lib}': $@";
+            next;
+        }
 
-            unless($pkg->internal_only) {
-                my $group = $pkg->group;
-                my $name = $pkg->name;
+        next if $lib->internal_only;
+        my $name = $lib->name;
+        my $group = $lib->group;
+        $commands{$group}->{$name} = $lib->summary;
+    }
 
-                $commands{$group}->{$name} = $pkg->summary;
-            }
-            1;
-        };
-      }
-    return \%commands;
+    return $self->{+_COMMAND_INFO_HASH} = \%commands;
 }
 
 sub command_list {
@@ -62,15 +60,12 @@ sub run {
     my $self = shift;
     my $args = $self->{+ARGS};
 
-    my @list;
-    push @list => @{$args->{opts}} if $args;
-    push @list => @{$args->{list}} if $args;
+    return $self->command_help($args->[0]) if @$args;
 
-    return $self->command_help(shift @list) if @list;
-
+    my $script = $self->settings->{script} // $0;
     my $maxlen = List::Util::max(map length, $self->command_list);
 
-    print "\nUsage: $0 COMMAND [options]\n\nAvailable Commands:\n";
+    print "\nUsage: $script COMMAND [options]\n\nAvailable Commands:\n";
 
     my $command_info_hash = $self->command_info_hash;
     for my $group (sort keys %$command_info_hash) {
@@ -89,7 +84,7 @@ sub command_help {
 
     require App::Yath;
     my $cmd_class = App::Yath->load_command($command);
-    print $cmd_class->usage;
+    print $cmd_class->cli_help(settings => $self->{+SETTINGS});
 
     return 0;
 }
@@ -98,48 +93,5 @@ sub command_help {
 
 __END__
 
-=pod
+=head1 POD IS AUTO-GENERATED
 
-=encoding UTF-8
-
-=head1 NAME
-
-=head1 DESCRIPTION
-
-=head1 SYNOPSIS
-
-=head1 COMMAND LINE USAGE
-
-B<THIS SECTION IS AUTO-GENERATED AT BUILD>
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

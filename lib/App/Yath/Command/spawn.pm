@@ -20,25 +20,18 @@ use Carp qw/confess/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub internal_only   { 1 }
-sub has_jobs        { 0 }
-sub has_runner      { 0 }
-sub has_logger      { 0 }
-sub has_display     { 0 }
-sub show_bench      { 0 }
-sub always_keep_dir { 0 }
-sub manage_runner   { 0 }
-sub summary         { "For internal use only" }
-sub name            { 'spawn' }
-
-my $TEST;
+sub internal_only { 1 }
+sub summary       { '"Magic" command to spawn the runner that does the actual work' }
+sub description   { '"Magic" command to spawn the runner that does the actual work' }
+sub group         { "internal" }
+sub doc_args      { (qw/runner_class directory ...args.../) }
 
 sub init { confess(ref($_[0]) . " is not intended to be instantiated") }
 sub run  { confess(ref($_[0]) . " does not implement run()") }
 
-sub import {
+sub generate_run_sub {
     my $class = shift;
-    my ($argv, $runref) = @_;
+    my ($symbol, $argv) = @_;
     my ($runner_class, $dir, %args) = @$argv;
 
     if (delete $args{setsid}) {
@@ -71,7 +64,9 @@ sub import {
 
     if (ref($test) eq 'CODE') {
         goto::file->import(['exit($App::Yath::RUN->());']);
-        return $$runref = $test;
+
+        no strict 'refs';
+        return *{$symbol} = $test;
     }
     else {
         goto::file->import(File::Spec->abs2rel($test));

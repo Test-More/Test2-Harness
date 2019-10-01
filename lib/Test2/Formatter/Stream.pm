@@ -19,6 +19,11 @@ use base qw/Test2::Formatter/;
 use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh/;
 
 BEGIN {
+    (\*STDOUT)->autoflush(1);
+    binmode(STDOUT, ":utf8");
+    (\*STDERR)->autoflush(1);
+    binmode(STDERR, ":utf8");
+
     my $J = JSON->new;
     $J->indent(0);
     $J->convert_blessed(1);
@@ -100,9 +105,9 @@ sub init {
         binmode($_, ":utf8") for @{$self->{+IO}};
     }
 
-    STDOUT->autoflush(1);
+    (\*STDOUT)->autoflush(1);
     binmode(STDOUT, ":utf8");
-    STDERR->autoflush(1);
+    (\*STDERR)->autoflush(1);
     binmode(STDERR, ":utf8");
 
     if ($INC{'Test2/API.pm'}) {

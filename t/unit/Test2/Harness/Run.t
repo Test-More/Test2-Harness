@@ -1,3 +1,7 @@
+use Test2::V0;
+
+__END__
+
 package Test2::Harness::Run;
 use strict;
 use warnings;
@@ -41,8 +45,6 @@ use Test2::Harness::Util::HashBase qw{
     <load <load_import
 
     <fields <meta
-
-    <retry <retry_isolated
 };
 
 sub init {
@@ -231,7 +233,7 @@ sub find_files {
 
     $_->munge_files(\@out) for @$plugins;
 
-    return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @out ];
+    return [ sort { $a->file cmp $b->file } @out ];
 }
 
 sub _include_file {
@@ -257,52 +259,3 @@ sub _include_file {
 }
 
 1;
-
-__END__
-
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::Run - Representation of a set of tests to run, and their
-options.
-
-=head1 DESCRIPTION
-
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

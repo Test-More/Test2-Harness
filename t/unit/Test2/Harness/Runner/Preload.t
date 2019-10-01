@@ -1,3 +1,7 @@
+use Test2::V0;
+
+__END__
+
 package Test2::Harness::Preload;
 use strict;
 use warnings;

@@ -1,7 +1,3 @@
-use Test2::V0;
-
-__END__
-
 package App::Yath::Command::runner;
 use strict;
 use warnings;
@@ -336,7 +332,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::spawn - TODO
+App::Yath::Command::runner - TODO
 
 =head1 DESCRIPTION
 

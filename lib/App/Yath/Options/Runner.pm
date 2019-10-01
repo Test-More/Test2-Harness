@@ -83,6 +83,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option event_timeout => (
         alt => ['et'],
 
+        type => 's',
         default => 60,
 
         long_examples  => [' SECONDS'],
@@ -93,6 +94,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option post_exit_timeout => (
         alt => ['pet'],
 
+        type => 's',
         default => 15,
 
         long_examples  => [' SECONDS'],

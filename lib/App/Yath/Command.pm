@@ -7,13 +7,14 @@ use v5.10;
 our $VERSION = '0.001100';
 
 use Test2::Harness::Util::HashBase qw/-settings -args/;
-use App::Yath::Options;
+use App::Yath::Options();
 
-sub internal_only { 0 }
-sub summary       { "No Summary" }
-sub description   { "No Description" }
-sub group         { "Z-UNFINISHED" }
-sub doc_args      {()}
+sub internal_only   { 0 }
+sub always_keep_dir { 0 }
+sub summary         { "No Summary" }
+sub description     { "No Description" }
+sub group           { "Z-UNFINISHED" }
+sub doc_args        { () }
 
 sub name { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
 
@@ -25,26 +26,24 @@ sub run {
     return 1;
 }
 
-option help => (
-    short        => 'h',
-    prefix       => 'yath',
-    category     => 'Help',
-    description  => "exit after showing help information",
-    post_process => \&_post_process_help,
-);
-
 sub cli_help {
     my $class = shift;
     my %params = @_;
 
     my $settings = $params{settings} // {};
-    my $script   = $settings->{script} // $0;
+    my $script   = $settings->yath->script // $0;
 
     my $cmd = $class->name;
     my (@args) = $class->doc_args;
 
+    my $options = $params{options};
+    unless ($options) {
+        $options = App::Yath::Options->new;
+        $options->set_command_class($class);
+    }
+
     my ($pre_opts, $cmd_opts);
-    if (my $options = $params{options} || $class->options) {
+    if ($options) {
         $pre_opts = $options->pre_docs('cli');
         $cmd_opts = $options->cmd_docs('cli');
     }
@@ -103,7 +102,7 @@ sub generate_pod {
     my $cmd = $class->name;
     my (@args) = $class->doc_args;
 
-    my $options = App::Yath::Options::Instance->new();
+    my $options = App::Yath::Options->new();
     require App::Yath;
     $options->include(App::Yath->options);
     $options->set_command_class($class);
@@ -143,19 +142,6 @@ sub generate_pod {
     );
 
     return join("\n\n" => grep { $_ } @out);
-}
-
-sub _post_process_help {
-    my %params = @_;
-
-    if (my $cmd = $params{command}) {
-        print $cmd->cli_help(%params);
-    }
-    else {
-        print __PACKAGE__->cli_help(%params);
-    }
-
-    exit 0;
 }
 
 1;

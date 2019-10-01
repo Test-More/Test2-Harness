@@ -9,8 +9,7 @@ our $VERSION = '0.001100';
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/<_command_info_hash/;
 
-use App::Yath::Util qw/find_libraries/;
-use Test2::Harness::Util qw/open_file/;
+use Test2::Harness::Util qw/open_file find_libraries/;
 use List::Util ();
 
 sub options {};
@@ -62,7 +61,7 @@ sub run {
 
     return $self->command_help($args->[0]) if @$args;
 
-    my $script = $self->settings->{script} // $0;
+    my $script = $self->settings->yath->script // $0;
     my $maxlen = List::Util::max(map length, $self->command_list);
 
     print "\nUsage: $script COMMAND [options]\n\nAvailable Commands:\n";

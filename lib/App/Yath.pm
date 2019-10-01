@@ -14,83 +14,26 @@ use Test2::Harness::Util::HashBase qw{
     -_command_class
 };
 
-use Time::HiRes();
-use File::Spec();
-use Cwd();
+use Time::HiRes qw/time/;
 
-use Test2::Util::Table qw/table/;
-
-use App::Yath::Util qw/find_libraries find_pfile mod2file clean_path/;
-use App::Yath::Options;
-use App::Yath::Options::Instance;
-
-use Test2::Harness::Util::JSON();
-
-option_group {prefix => 'yath'} => sub {
-    option plugins => (
-        type  => 'm',
-        short => 'p',
-        name  => 'plugin',
-
-        pre_command => 1,
-
-        category       => 'Plugins',
-        long_examples  => [' PLUGIN', ' +App::Yath::Plugin::PLUGIN', ' PLUGIN=arg1,arg2,...'],
-        short_examples => ['PLUGIN'],
-        description    => 'Load a yath plugin.',
-
-        default => sub { {} },
-
-        action => \&plugin_action,
-    );
-
-    option dev_libs => (
-        type  => 'D',
-        short => 'D',
-        name  => 'dev-lib',
-
-        pre_command => 1,
-
-        category    => 'Developer',
-        description => 'Add paths to @INC before loading ANYTHING. This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
-
-        long_examples  => ['', '=lib'],
-        short_examples => ['', '=lib', 'lib'],
-
-        normalize => \&normalize_dev_libs,
-        action    => \&dev_libs_action,
-    );
-
-    option 'show-opts' => (
-        category            => 'Help',
-        description         => 'Exit after showing what yath thinks your options mean',
-        post_process        => \&_post_process_show_opts,
-        post_process_weight => 99999,
-        pre_command         => 1,
-    );
-
-    option version => (
-        short        => 'V',
-        category     => 'Help',
-        description  => "Exit after showing a helpful usage message",
-        post_process => \&_post_process_version,
-        pre_command  => 1,
-    );
-};
+use App::Yath::Util qw/find_pfile/;
+use Test2::Harness::Util qw/find_libraries clean_path/;
+use App::Yath::Options();
 
 sub init {
     my $self = shift;
 
     my ($pkg, $file, $line) = caller(1);
 
-    $self->{+SETTINGS} //= {};
-    $self->{+SETTINGS}->{yath}->{scriptx} //= clean_path($file);
-    $self->{+SETTINGS}->{yath}->{start}  //= Time::HiRes::time();
+    $self->{+SETTINGS} //= App::Yath::Settings->new;
+    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('script')} //= clean_path($file);
+    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('start')}  //= time();
 
     $self->{+_ARGV}  //= delete($self->{argv}) // [];
     $self->{+CONFIG} //= {};
 }
 
+my $called = 0;
 sub generate_run_sub {
     my $self = shift;
     my ($symbol) = @_;
@@ -103,7 +46,9 @@ sub generate_run_sub {
     return $cmd_class->generate_run_sub($symbol, $argv) if $cmd_class->can('generate_run_sub');
 
     my $cmd = $cmd_class->new(settings => $options->settings, args => $argv);
+
     $options->process_option_post_actions($cmd);
+
     my $run = sub { $self->run_command($cmd) };
 
     {
@@ -129,11 +74,14 @@ sub run_command {
 sub load_options {
     my $self = shift;
 
-    my $options = $self->{+_OPTIONS} //= App::Yath::Options::Instance->new(settings => $self->{+SETTINGS});
+    my $options = $self->{+_OPTIONS} //= App::Yath::Options->new(settings => $self->{+SETTINGS});
 
     return $options if $self->{+OPTIONS_LOADED}++;
 
-    $options->include(options());
+    $options->include_from(
+        'App::Yath::Options::Debug',
+        'App::Yath::Options::PreCommand',
+    );
 
     my $option_libs = find_libraries('App::Yath::Plugin::*');
     for my $lib (sort keys %$option_libs) {
@@ -260,107 +208,6 @@ sub load_command {
     return $cmd_class;
 }
 
-sub plugin_action {
-    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
-
-    my ($p, $class, $args) = $norm =~ m/^(\+)?([^=]+)(?:=(.*))?$/;
-
-    $args = $args ? [split ',', $args] : [];
-
-    $class = "App::Yath::Plugin::$class" unless $p;
-    my $file = mod2file($class);
-    my $ok = eval { require $file; 1 };
-    warn "Failed to load plugin '$class': $@" unless $ok;
-
-    ${$slot}->{$class} = $args;
-}
-
-sub normalize_dev_libs {
-    my $val = shift;
-
-    return $val if $val eq '1';
-
-    return Cwd::realpath($val) // File::Spec->rel2abs($val);
-}
-
-sub dev_libs_action {
-    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
-
-    my %seen = map { $_ => 1 } @{$$slot};
-
-    my @new = grep { !$seen{$_}++ } ($norm eq '1') ? (map { Cwd::realpath($_) // File::Spec->rel2abs($_) } 'lib', 'blib/lib', 'blib/arch') : ($norm);
-
-    return unless @new;
-
-    warn <<"    EOT" for @new;
-dev-lib '$_' added to \@INC late, it is possible some yath libraries were already loaded from other paths.
-(Maybe you need to move the -D or --dev-lib argument(s) to be earlier in your command line or config file?)
-    EOT
-
-    unshift @INC   => @new;
-    unshift @{$$slot} => @new;
-}
-
-sub _post_process_show_opts {
-    my %params = @_;
-
-    my $settings = $params{settings};
-
-    print "\nCommand selected: " . $params{command}->name . "  (" . ref($params{command}) . ")\n" if $params{command};
-
-    my $args = $params{args};
-    print "\nCommand args: " . join(', ' => @$args) . "\n" if @$args;
-
-
-    my $out = Test2::Harness::Util::JSON::encode_pretty_json($settings);
-
-    print "\nCurrent command line and config options result in these settings:\n";
-    print "$out\n";
-
-    exit 0;
-}
-
-sub _post_process_version {
-    my %params = @_;
-
-    my $out = <<"    EOT";
-
-Yath version: $App::Yath::VERSION
-
-Extended Version Info
-    EOT
-
-    my $plugin_libs = find_libraries('App::Yath::Plugin::*');
-
-    my @vers = (
-        [perl        => $^V],
-        ['App::Yath' => App::Yath->VERSION],
-        (
-            map {
-                eval { require(mod2file($_)); 1 }
-                    ? [$_ => $_->VERSION // 'N/A']
-                    : [$_ => 'N/A']
-            } qw/Test2::API Test2::Suite Test::Builder/
-        ),
-        (
-            map {
-                eval { require($plugin_libs->{$_}); 1 }
-                    && [$_ => $_->VERSION // 'N/A']
-            } sort keys %$plugin_libs
-        ),
-    );
-
-    $out .= join "\n" => table(
-        header => [qw/COMPONENT VERSION/],
-        rows   => \@vers,
-    );
-
-    print "$out\n\n";
-
-    exit 0;
-}
-
-
 
 1;
 
@@ -443,8 +290,8 @@ You can preload as many modules as you want:
 
 =head3 COMPLEX PRELOAD
 
-If your preload is a subclass of L<Test2::Harness::Preload> then more complex
-preload behavior is possible. See those docs for more info.
+If your preload is a subclass of L<Test2::Harness::Runner::Preload> then more
+complex preload behavior is possible. See those docs for more info.
 
 =head2 LOGGING
 

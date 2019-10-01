@@ -5,12 +5,14 @@
 # These will get re-processed later, but they MUST come even before App::Yath
 # is loaded.
 BEGIN {
+    local ($., $?, $@);
     return if $^C;
 
     package App::Yath::Script;
-    local ($., $?, $@);
 
+    my %ORIG_SIG = map { defined($SIG{$_}) ? ($_ => $SIG{$_}) : ()} keys %SIG;
     my @ORIG_ARGV = @ARGV;
+    my @ORIG_INC = @INC;
     my @DEVLIBS;
     my %CONFIG;
     my $SCRIPT;
@@ -172,18 +174,24 @@ BEGIN {
     # ==END TESTABLE CODE CLEANUP_PATHS==
     # ==START TESTABLE CODE CREATE_APP==
 
-    require Time::HiRes;
     require App::Yath;
+    require Time::HiRes;
+    require App::Yath::Settings;
+    my $settings = App::Yath::Settings->new(
+        yath => {
+            orig_sig  => \%ORIG_SIG,
+            orig_argv => \@ORIG_ARGV,
+            orig_inc  => \@ORIG_INC,
+            script    => $SCRIPT,
+            dev_libs  => \@DEVLIBS,
+            start     => Time::HiRes::time(),
+        },
+    );
+
     my $app = App::Yath->new(
         argv    => \@ARGV,
         config  => \%CONFIG,
-        settings => {
-            yath => {
-                script => $SCRIPT,
-                dev_libs => \@DEVLIBS,
-                start => Time::HiRes::time(),
-            },
-        },
+        settings => $settings,
     );
 
     $app->generate_run_sub('App::Yath::Script::run');
@@ -204,6 +212,9 @@ __END__
 yath - Primary Command Line Interface (CLI) for Test2::Harness
 
 =head1 DESCRIPTION
+
+This is the primary command line interface for App::Yath/Test2::Harness. Yath
+is essentially a shell around the components of L<Test2::Harness>.
 
 =head1 SOURCE
 

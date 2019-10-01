@@ -195,19 +195,19 @@ sub test_pre_parse_d_args {
 
     is(
         $libs,
-        ['lib', 't/lib', 'blib/lib', 'blib/arch', 'xxx', 'foo', 'bbb'],
+        ['lib', 'blib/lib', 'blib/arch', 'xxx', 'foo', 'bbb'],
         "Got expected libs"
     );
 
     is(
         [@DEVLIBS],
-        ['lib', 't/lib', 'blib/lib', 'blib/arch', 'xxx', 'foo', 'bbb'],
+        ['lib', 'blib/lib', 'blib/arch', 'xxx', 'foo', 'bbb'],
         "Got expected devlibs"
     );
 
     is(
         [@INC],
-        ['lib', 't/lib', 'blib/lib', 'blib/arch', 'xxx', 'foo', 'bbb', 'START', 'END'],
+        ['lib', 'blib/lib', 'blib/arch', 'xxx', 'foo', 'bbb', 'START', 'END'],
         "prepended libs to \@INC"
     );
 
@@ -215,7 +215,6 @@ sub test_pre_parse_d_args {
         $done,
         {
             'lib' => 2,
-            't/lib' => 2,
             'blib/lib' => 2,
             'blib/arch' => 2,
             'xxx' => 2,
@@ -360,6 +359,48 @@ sub test_exec {
     Test2::V0::like($exec, [qr{scripts/yath$}, '-xyz'], "exec called new yath");
     Test2::V0::like($die, qr/Should not see this, exec failed/, "Died when exec failed");
     Test2::V0::like(\@warn, [qr{-D was used, and scripts/yath is present, using exec to switch to it\.}], "Warned about the exec");
+}
+
+test_create_app();
+sub test_create_app {
+    my $code = delete $sections{create_app};
+
+    my $args;
+    require App::Yath;
+    my $control = Test2::V0::mock(
+        'App::Yath' => (
+            override => {
+                generate_run_sub => sub { $args = [@_] },
+            },
+        )
+    );
+
+    my (%ORIG_SIG, @ORIG_ARGV, @ORIG_INC, @DEVLIBS, @ARGV, %CONFIG);
+    my $SCRIPT = "foobar";
+    eval $code or die $@;
+
+    my ($app, $symbol) = @$args;
+    Test2::V0::isa_ok($app, 'App::Yath');
+    Test2::V0::is($symbol, 'App::Yath::Script::run', "Got correct symbol");
+
+    Test2::V0::ref_is($app->_argv, \@ARGV, "Used ARGV");
+    Test2::V0::ref_is($app->config, \%CONFIG, "Used CONFIG");
+
+    my $settings = $app->settings;
+    is(
+        $settings,
+        {
+            yath => {
+                orig_sig  => Test2::V0::exact_ref(\%ORIG_SIG),
+                orig_argv => Test2::V0::exact_ref(\@ORIG_ARGV),
+                orig_inc  => Test2::V0::exact_ref(\@ORIG_INC),
+                dev_libs  => Test2::V0::exact_ref(\@DEVLIBS),
+                script    => $SCRIPT,
+                start     => Test2::V0::T(),
+            },
+        },
+        "Got settings"
+    );
 }
 
 die "The following sections were not tested: " . join(', ', keys %sections)

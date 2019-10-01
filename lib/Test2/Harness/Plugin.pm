@@ -1,20 +1,25 @@
-package App::Yath::Plugin;
+package Test2::Harness::Plugin;
 use strict;
 use warnings;
 
 our $VERSION = '0.001100';
 
-use parent 'Test2::Harness::Plugin';
+sub find_files {}
 
-sub pre_init {}
+sub munge_files {}
 
-sub post_init {}
+sub block_default_search {}
 
-sub post_run {}
+sub claim_file {}
+
+sub inject_run_data {}
+
+sub TO_JSON { ref($_[0]) || "$_[0]" }
 
 1;
 
 __END__
+
 
 =pod
 
@@ -22,7 +27,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Plugin - Base class for yath plugins
+Test2::Harness::Plugin - Base class for Test2::Harness plugins.
 
 =head1 DESCRIPTION
 

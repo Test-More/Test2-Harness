@@ -336,7 +336,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::spawn - TODO
+App::Yath::Command::runner - TODO
 
 =head1 DESCRIPTION
 

@@ -19,8 +19,8 @@ use Long::Jump qw/setjump/;
 use File::Spec();
 use Scope::Guard();
 
-use Test2::Harness::Preload();
 use Test2::Harness::Util::Queue();
+use Test2::Harness::Runner::Preload();
 use Test2::Harness::Runner::DepTracer();
 use Test2::Harness::Runner::Run();
 use Test2::Harness::Runner::Stage();
@@ -215,7 +215,7 @@ sub check_monitored {
         my ($pkg, $full) = @$set;
         my $file = $CNI{$full} || $full;
         next if $seen{$file}++;
-        next if $pkg->isa('Test2::Harness::Preload');
+        next if $pkg->isa('Test2::Harness::Runner::Preload');
         print $bl "$pkg\n";
         my $next = $dep_map->{$file} or next;
         push @todo => @$next;
@@ -521,3 +521,51 @@ sub _preload {
 }
 
 1;
+
+__END__
+
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Harness::Runner::Persist - Persistent variant of the test runner.
+
+=head1 DESCRIPTION
+
+B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
+time. Documentation and tests have not been written yet!
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

@@ -294,8 +294,8 @@ You can preload as many modules as you want:
 
 =head3 COMPLEX PRELOAD
 
-If your preload is a subclass of L<Test2::Harness::Preload> then more complex
-preload behavior is possible. See those docs for more info.
+If your preload is a subclass of L<Test2::Harness::Runner::Preload> then more
+complex preload behavior is possible. See those docs for more info.
 
 =head2 LOGGING
 

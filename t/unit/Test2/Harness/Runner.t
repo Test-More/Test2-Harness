@@ -207,7 +207,7 @@ sub _preload_module {
 
     $require_sub ? $require_sub->($file) : require $file;
 
-    return unless $mod->isa('Test2::Harness::Preload');
+    return unless $mod->isa('Test2::Harness::Runner::Preload');
 
     my %args = (
         finite => $self->finite,

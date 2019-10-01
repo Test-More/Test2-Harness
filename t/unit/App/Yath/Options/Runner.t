@@ -87,6 +87,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option event_timeout => (
         alt => ['et'],
 
+        type => 's',
         default => 60,
 
         long_examples  => [' SECONDS'],
@@ -97,6 +98,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option post_exit_timeout => (
         alt => ['pet'],
 
+        type => 's',
         default => 15,
 
         long_examples  => [' SECONDS'],
@@ -118,3 +120,51 @@ sub cover_post_process {
 }
 
 1;
+
+__END__
+
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Options::Runner - Runner options for Yath.
+
+=head1 DESCRIPTION
+
+B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
+time. Documentation and tests have not been written yet!
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

@@ -4,22 +4,16 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-use POSIX;
 use File::Spec();
 
-use Carp qw/croak confess/;
-use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
-use Config qw/%Config/;
-use List::Util qw/none first/;
-use Time::HiRes qw/sleep time/;
-use Test2::Util qw/CAN_REALLY_FORK/;
-
-use Test2::Harness::Util qw/clean_path mod2file write_file_atomic read_file/;
-use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util::Queue;
-
-use Test2::Harness::Runner::Run();
 use Test2::Harness::Runner::Job();
+
+use Carp qw/croak/;
+use Time::HiRes qw/time/;
+
+use Test2::Harness::Util qw/clean_path mod2file write_file_atomic/;
+
+use Test2::Harness::Runner::Constants;
 
 use parent 'Test2::Harness::IPC';
 use Test2::Harness::Util::HashBase(
@@ -36,50 +30,22 @@ use Test2::Harness::Util::HashBase(
 
         <event_timeout <post_exit_timeout
     },
-    # Other fields
+    # From Construction
     qw{
         <dir <settings <fork_job_callback
-
+    },
+    # Other
+    qw {
         <signal
 
         <staged <stages <stage_check <fork_stages
 
-        <initialized_preloads
-
-        +queue
-        +run
         +preload_done
-
-        +pending +grouped +todo +smoke
-
-        +lock -lock_file
-
-        +state_cache
 
         +event_timeout_last
         +post_exit_timeout_last
     },
 );
-
-my %CATEGORIES = (
-    general    => 1,
-    isolation  => 1,
-    immiscible => 1,
-);
-
-my %DURATIONS = (
-    long   => 1,
-    medium => 1,
-    short  => 1,
-);
-
-sub finite { 1 }
-
-sub smoke { $_[0]->{+SMOKE}->{$_[1]->run_id}->{$_[2]} //= {} }
-sub todo { $_[0]->{+TODO}->{$_[1]->run_id}->{$_[2]} //= {main => 0, smoke => 0} }
-
-sub grouped { $_[0]->{+GROUPED}->{$_[1]->run_id}->{$_[2]} //= {} }
-sub pending { $_[0]->{+PENDING}->{$_[1]->run_id}->{$_[2]} //= [] }
 
 sub init {
     my $self = shift;
@@ -108,6 +74,18 @@ sub init {
     $self->SUPER::init();
 }
 
+sub completed_task { }
+
+sub queue_ended { $_[0]->run->queue_ended }
+sub job_class   { 'Test2::Harness::Runner::Job' }
+
+sub run        { croak(ref($_[0]) . " Does not implement run()") }
+sub run_stages { croak(ref($_[0]) . " Does not implement run_stages()") }
+sub add_task   { croak(ref($_[0]) . " Does not implement add_task()") }
+sub retry_task { croak(ref($_[0]) . " Does not implement retry_task()") }
+
+sub stage_should_fork { $_[0]->{+FORK_STAGES}->{$_[1]} // 0 }
+
 sub process {
     my $self = shift;
 
@@ -121,12 +99,10 @@ sub process {
 
     $self->preload;
 
-    my $ok  = eval { $self->stage_loop(); 1 };
+    my $ok  = eval { $self->run_stages(); 1 };
     my $err = $@;
 
     warn $err unless $ok;
-
-    $self->write_remaining_exits;
 
     $self->stop();
 
@@ -241,127 +217,18 @@ sub _preload_module_init {
     return $mod;
 }
 
-sub stage_should_fork {
-    my $self = shift;
-    my ($stage) = @_;
-    return $self->{+FORK_STAGES}->{$stage} || 0;
-}
-
-sub stage_fork {
-    my $self = shift;
-    my ($stage) = @_;
-
-    # Must do this before we can fork
-    $self->wait(all_cat => Test2::Harness::Runner::Job->category);
-
-    my $pid = fork();
-    die "Could not fork" unless defined $pid;
-
-    # Child returns true
-    unless ($pid) {
-        $0 = 'yath-runner-' . $stage;
-        return 1;
-    }
-
-    # Parent waits for child
-    my $check = waitpid($pid, 0);
-    my $ret = $?;
-
-    die "waitpid returned $check" unless $check == $pid;
-    die "Child process did not exit cleanly: $ret" if $ret;
-
-    return 0;
-}
-
-sub stage_start {
-    my $self = shift;
-    my ($stage) = @_;
-
-    my $fork = $self->stage_should_fork($stage);
-
-    return 0 if $fork && !$self->stage_fork($stage);
-
-    my $start_meth = "start_stage_$stage";
-    for my $mod (@{$self->{+STAGED}}) {
-        # Localize these in case something we preload tries to modify them.
-        local $SIG{INT}  = $SIG{INT};
-        local $SIG{HUP}  = $SIG{HUP};
-        local $SIG{TERM} = $SIG{TERM};
-
-        next unless $mod->can($start_meth);
-        $mod->$start_meth;
-    }
-
-    return 1;
-}
-
-sub stage_stop {
-    my $self = shift;
-    my ($stage) = @_;
-
-    return unless $self->stage_should_fork($stage);
-
-    CORE::exit(0);
-}
-
-sub stage_loop {
-    my $self = shift;
-
-    my $run = $self->run(); # Find the run pre-fork since we are not a persistent runner
-
-    for my $stage (@{$self->{+STAGES}}) {
-        $self->stage_start($stage) or next;
-
-        $self->task_loop($stage);
-
-        $self->stage_stop($stage);
-    }
-}
-
-sub run {
-    my $self = shift;
-    my ($stage) = @_;
-
-    return $self->{+RUN} if $self->{+RUN};
-
-    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'));
-    my @runs = $run_queue->poll();
-
-    confess "More than 1 run was found in the queue for a non-persistent runner"
-        if @runs != 2 || defined($runs[1]->[-1]) || !$run_queue->ended;
-
-    return $self->{+RUN} = Test2::Harness::Runner::Run->new(
-        %{$runs[0]->[-1]},
-        workdir => $self->{+DIR},
-    );
-}
-
-sub task_loop {
-    my $self = shift;
-    my ($stage) = @_;
-
-    my $run = $self->run($stage);
-
-    while (1) {
-        my $task = $self->next($run, $stage);
-
-        # If we have no tasks and no pending jobs then we can be sure we are done
-        last unless $task || $self->wait(cat => Test2::Harness::Runner::Job->category);
-
-        $self->run_job($run, $task) if $task;
-    };
-}
-
 sub run_job {
     my $self = shift;
     my ($run, $task) = @_;
 
-    my $job = Test2::Harness::Runner::Job->new(
+    my $job = $self->job_class->new(
         runner   => $self,
         task     => $task,
         run      => $run,
         settings => $self->settings,
     );
+
+    print "Starting: " . $job->file . " \n";
 
     $job->prepare_dir();
 
@@ -379,20 +246,9 @@ sub run_job {
 
     $run->jobs->write($job);
 
-    delete $self->{+STATE_CACHE};
+    print "Started $pid: " . $job->file . " \n" if $pid;
 
     return $pid;
-}
-
-sub next {
-    my $self = shift;
-    my ($run, $stage) = @_;
-
-    # Get a new task to run.
-    my $task = $self->_next($run, $stage);
-
-    # Return task or undef if we're done.
-    return $task;
 }
 
 sub check_timeouts {
@@ -405,8 +261,8 @@ sub check_timeouts {
 
     return unless $check_ev || $check_pe;
 
-    $self->{+EVENT_TIMEOUT_LAST}     = time;
-    $self->{+POST_EXIT_TIMEOUT_LAST} = time;
+    $self->{+EVENT_TIMEOUT_LAST}     = $now;
+    $self->{+POST_EXIT_TIMEOUT_LAST} = $now;
 
     for my $pid (keys %{$self->{+PROCS}}) {
         my $job       = $self->{+PROCS}->{$pid};
@@ -426,6 +282,9 @@ sub check_timeouts {
 
         my $sig = $kill ? 'KILL' : 'TERM';
         $sig = "-$sig" if $self->USE_P_GROUPS;
+
+        print STDERR $job->file . " did not respond to SIGTERM, sending SIGKILL to $pid...\n" if $kill;
+
         kill($sig, $pid);
     }
 }
@@ -435,117 +294,49 @@ sub set_proc_exit {
     my ($proc, $exit, $time, @args) = @_;
 
     if ($proc->isa('Test2::Harness::Runner::Job')) {
+        my $task = $proc->task;
+
         if ($exit && $proc->is_try < $proc->retry) {
-            my $task    = {%{$proc->task}};
-            my $pending = $self->pending($proc->run, $task->{stage});
+            $task = {%$task}; # Clone
             $task->{is_try}++;
-
-            unshift @$pending => $task;
-
+            $self->retry_task($task);
             push @args => 'will-retry';
+        }
+        else {
+            $self->completed_task($task);
         }
     }
 
     $self->SUPER::set_proc_exit($proc, $exit, $time, @args);
 }
 
-sub wait {
-    my $self = shift;
-    my %params = @_;
-
-    my $found = $self->SUPER::wait(%params);
-
-    $self->unlock unless keys %{$self->{+PROCS}};
-    delete $self->{+STATE_CACHE} if $found;
-
-    return $found;
-}
-
-sub lock {
-    my $self = shift;
-    return 1 if $self->{+LOCK};
-    return 1 unless $self->{+LOCK_FILE};
-
-    open(my $lock, '>>', $self->{+LOCK_FILE}) or die "Could not open lock file: $!";
-    flock($lock, LOCK_EX | LOCK_NB) or return 0;
-    $self->{+LOCK} = $lock;
-
-    return 1;
-}
-
-sub unlock {
+sub stop {
     my $self = shift;
 
-    my $lock = delete $self->{+LOCK} or return 1;
-    flock($lock, LOCK_UN);
-    close($lock);
-    return 1;
-}
+    $self->check_for_fork;
 
-sub end_loop { 0 }
-
-sub _next {
-    my $self = shift;
-    my ($run, $stage) = @_;
-
-    my $todo = $self->todo($run, $stage);
-    my $list = $self->pending($run, $stage);
-
-    my $max = $self->{+JOB_COUNT};
-
-    my $next_meth = $max <= 1 ? '_next_simple' : '_next_concurrent';
-
-    my $iter = 0;
-    while (@$list || $todo->{smoke} || $todo->{main} || !$run->queue_ended) {
-        return if $self->end_loop;
-
-        my $task = $self->_next_iter($run, $stage, $iter++, $max, $next_meth);
-
-        return $task if $task;
+    if (keys %{$self->{+PROCS}}) {
+        print "Sending all child processes the TERM signal...\n";
+        # Send out the TERM signal
+        $self->killall($self->{+SIGNAL} // 'TERM');
+        $self->wait(all => 1, timeout => 5);
     }
 
-    return;
-}
-
-sub _next_iter {
-    my $self = shift;
-    my ($run, $stage, $iter, $max, $next_meth) = @_;
-
-    sleep($self->{+WAIT_TIME}) if $iter && $self->{+WAIT_TIME};
-
-    # Check the job files for active and newly kicked off tasks.
-    # Updates $list which we use to decide if we need to keep looping.
-    $self->poll_tasks($run);
-
-    # Reap any completed PIDs
-    $self->wait();
-
-    if ($self->{+LOCK_FILE}) {
-        my $todo = $self->todo($run, $stage);
-        my $pending = $self->pending($run, $stage);
-
-        unless ($todo->{smoke} || $todo->{main} || @$pending) {
-            $self->unlock;
-            return;
-        }
-
-        # Make sure we have the lock
-        return unless $self->lock;
+    # Time to get serious
+    if (keys %{$self->{+PROCS}}) {
+        print STDERR "Some child processes are refusing to exit, sending KILL signal...\n";
+        $self->killall('KILL')
     }
 
-    # No new jobs yet to kick off yet because too many are running.
-    return if keys(%{$self->{+PROCS}}) >= $max;
-
-    my $task = $self->$next_meth($run, $stage) or return;
-    return $task;
+    $self->SUPER::stop();
 }
 
 sub poll_tasks {
     my $self = shift;
-    my ($run) = @_;
 
-    return if $run->queue_ended;
+    return if $self->queue_ended;
 
+    my $run = $self->run;
     my $queue = $run->queue;
 
     my $added = 0;
@@ -560,212 +351,21 @@ sub poll_tasks {
         }
 
         my $cat = $task->{category};
-        $cat = 'general' unless $cat && $CATEGORIES{$cat};
+        $cat = 'general' unless $cat && CATEGORIES->{$cat};
         $task->{category} = $cat;
 
         my $dur = $task->{duration};
-        $dur = 'medium' unless $dur && $DURATIONS{$dur};
+        $dur = 'medium' unless $dur && DURATIONS->{$dur};
         $task->{duration} = $dur;
 
         my $stage = $task->{stage};
         $stage = 'default' unless $stage && $self->{+STAGE_CHECK}->{$stage};
         $task->{stage} = $stage;
 
-        my $list = $self->pending($run, $stage);
-
-        # Smoke tasks to the front!
-        $task->{smoke} ? unshift @$list => $task : push @$list => $task;
+        $self->add_task($task);
     }
 
     return $added;
-}
-
-sub _next_simple {
-    my $self = shift;
-    my ($run, $stage) = @_;
-
-    # If we're only allowing 1 job at a time, then just give the
-    # next one on the list, unless 1 is running
-    return shift @{$self->pending($run, $stage)};
-}
-
-sub _running_state {
-    my $self = shift;
-
-    return $self->{+STATE_CACHE} if $self->{+STATE_CACHE};
-
-    my $running = 0;
-    my %cats;
-    my %durs;
-    my %active_conflicts;
-
-    for my $job (values %{$self->{+PROCS}}) {
-        my $task = $job->task;
-        $running++;
-        $cats{$task->{category}}++;
-        $durs{$task->{duration}}++;
-
-        # Mark all the conflicts which the actively jobs have asserted.
-        foreach my $conflict (@{$task->{conflicts}}) {
-            $active_conflicts{$conflict}++;
-
-            # This should never happen.
-            $active_conflicts{$conflict} < 2 or die("Unexpected parallel conflict '$conflict' ($active_conflicts{$conflict}) running at this time!");
-        }
-    }
-
-    return $self->{+STATE_CACHE} = {
-        running    => $running,
-        categories => \%cats,
-        durations  => \%durs,
-        conflicts  => \%active_conflicts,
-    };
-}
-
-sub _group_items {
-    my $self = shift;
-    my ($run, $stage) = @_;
-
-    my $smoke   = $self->smoke($run, $stage);
-    my $grouped = $self->grouped($run, $stage);
-    my $list    = $self->pending($run, $stage);
-    my $todo    = $self->todo($run, $stage);
-
-    while (my $item = shift @$list) {
-        my $cat = $item->{category};
-        my $dur = $item->{duration};
-
-        die "Invalid category: $cat" unless $CATEGORIES{$cat};
-        die "Invalid duration: $dur" unless $DURATIONS{$dur};
-
-        if ($item->{smoke}) {
-            push @{$smoke->{$cat}->{$dur}} => $item;
-            $todo->{smoke}++;
-        }
-        else {
-            push @{$grouped->{$cat}->{$dur}} => $item;
-            $todo->{main}++;
-        }
-    }
-
-    return($smoke, $grouped);
-}
-
-sub _cat_order {
-    my $self = shift;
-    my ($state) = @_;
-
-    $state ||= $self->_running_state();
-
-    my @cat_order = ('general');
-
-    # Only search immiscible if we have no immsicible running
-    unshift @cat_order => 'immiscible' unless $state->{categories}->{immiscible};
-
-    # Only search isolation if nothing it running.
-    push @cat_order => 'isolation' unless $state->{running};
-
-    return \@cat_order;
-}
-
-sub _dur_order {
-    my $self = shift;
-    my ($state) = @_;
-
-    my $max = $self->{+JOB_COUNT};
-    my $maxm1 = $max - 1;
-
-    $state ||= $self->_running_state();
-    my $durs = $state->{durations};
-
-    # 'short' is always ok.
-    my @dur_order = ('short');
-
-    # long and medium should be on the front of the search unless we are
-    # already running (max - 1) tests of the duration We want long first if
-    # we are not saturation on them, followed by medium, whcih is why they
-    # are listed in this order.
-    for my $c (qw/medium long/) {
-        if ($durs->{$c} && $durs->{$c} >= $maxm1) {
-            push @dur_order => $c;    # Back of the list
-        }
-        else {
-            unshift @dur_order => $c;    # Front of the list
-        }
-    }
-
-    return \@dur_order;
-}
-
-sub _next_concurrent {
-    my $self = shift;
-    my ($run, $stage) = @_;
-
-    my $todo = $self->todo($run, $stage);
-
-    my $state = $self->_running_state();
-    my ($running, $cats, $durs, $active_conflicts) = @{$state}{qw/running categories durations conflicts/};
-
-    # Only 1 isolation job can be running and 1 is so let's
-    # wait for that pid to die.
-    return if $cats->{isolation};
-
-    my $cat_order = $self->_cat_order($state);
-    my $dur_order = $self->_dur_order($state);
-
-    my ($smoke, $grouped) = $self->_group_items($run, $stage);
-
-    return $self->_next_concurrent_from($smoke, $cat_order, $dur_order, $active_conflicts, \($todo->{smoke}))
-        if $todo->{smoke};
-
-    return $self->_next_concurrent_from($grouped, $cat_order, $dur_order, $active_conflicts, \($todo->{main}));
-}
-
-sub _next_concurrent_from {
-    my $self = shift;
-    my ($from, $cat_order, $dur_order, $active_conflicts, $todo) = @_;
-
-    for my $lcat (@$cat_order) {
-        for my $ldur (@$dur_order) {
-            my $search = $from->{$lcat}->{$ldur} or next;
-
-            for (my $i = 0; $i < @$search; $i++) {
-                # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.
-                my $job_conflicts = $search->[$i]->{conflicts};
-                next if first { $active_conflicts->{$_} } @$job_conflicts;
-
-                $$todo--;
-                return scalar splice(@$search, $i, 1);
-            }
-        }
-    }
-
-    return;
-}
-
-sub write_remaining_exits {
-    my $self = shift;
-
-    $self->check_for_fork;
-
-    eval {
-        while (1) {
-            sleep 1 if $self->killall($self->{+SIGNAL} // 'TERM');
-            last unless $self->wait();
-        }
-        1;
-    } or warn $@;
-
-    for my $pid (keys %{$self->{+PROCS}}) {
-        my $job = delete $self->{+PROCS}->{$pid};
-        delete $self->{+PROCS_BY_CAT}->{$job->category};
-        warn "Forcefully terminating pid $pid\n";
-        kill('KILL', $pid);
-        my $check = waitpid($pid, WNOHANG);
-        my $exit = $check == $pid ? $? : -1;
-
-        $job->set_exit($self, $exit, time);
-    }
 }
 
 1;
@@ -778,7 +378,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Runner - Logic for executing a test run.
+Test2::Harness::Runner - Base class for test runners
 
 =head1 DESCRIPTION
 

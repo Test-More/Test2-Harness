@@ -1,3 +1,7 @@
+use Test2::V0;
+
+__END__
+
 package App::Yath::Command::test;
 use strict;
 use warnings;
@@ -62,7 +66,6 @@ sub run {
 
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
-    print "DIR: $dir\n";
 
     $self->write_settings_to($dir, 'settings.json');
 
@@ -70,10 +73,10 @@ sub run {
     $ipc->start();
 
     my $run = $self->build_run();
-    my $runner_proc = $self->start_runner();
+    $self->start_runner();
 
 #    # Start a collector
-#    my $collector_proc = $self->start_collector($run, $runner_proc->pid);
+#    my $collector_proc = $self->start_collector($run);
 
 #    # Start an auditor
 #    my $auditor_proc = Test2::Harness::Process->new(
@@ -92,48 +95,6 @@ sub run {
 
     system('cat', File::Spec->catfile($dir, 'output.log'));
     system('cat', File::Spec->catfile($dir, 'error.log'));
-    print "\n";
-
-    opendir(my $root, $dir);
-    for my $run_dir (sort readdir($root)) {
-        next if $run_dir =~ m/^\./;
-        $run_dir = "$dir/$run_dir";
-        next unless -d $run_dir;
-        opendir(my $rh, $run_dir);
-        for my $job_dir (sort readdir($rh)) {
-            next if $job_dir =~ m/^\./;
-            $job_dir = "$run_dir/$job_dir";
-            next unless -d $job_dir;
-
-            use Test2::Harness::Util qw/read_file/;
-
-            my $term = read_file("$job_dir/exit");
-            my ($exit, $code, $sig, $dmp, $stop, $retry) = split /\s+/, $term;
-
-            print "$job_dir\n";
-            print "File: " . read_file("$job_dir/file") . "\n";
-            print "  Start: " . read_file("$job_dir/start") . "\n";
-            print "  Stop:  $stop\n";
-            print "  Exit:  $exit\n";
-            print "  Code:  $code\n";
-            print "   Sig:  $sig\n";
-            print "  Dump:  $dmp\n";
-            print " Retry:  " . ($retry ? 'Yes' : 'No') . "\n";
-
-            for my $line (split /\n/, read_file("$job_dir/stderr")) {
-                next if $line =~ m/T2-HARNESS-ESYNC/;
-                print "STDERR: $line\n";
-            }
-            for my $line (split /\n/, read_file("$job_dir/stdout")) {
-                next if $line =~ m/T2-HARNESS-ESYNC/;
-                print "STDOUT: $line\n";
-            }
-
-            print "-------------------\n\n";
-        }
-    }
-
-    #system('for i in '. $dir .'/*/*/; do cat $i/file; echo; echo -n "  START (time):  "; cat $i/start; echo; echo -n "  EXIT (err sig time retry): "; cat $i/exit; echo; echo; done');
     print "DIR: $dir\n";
 
     return 0;
@@ -141,7 +102,7 @@ sub run {
 
 sub start_collector {
     my $self = shift;
-    my ($run, $runner_pid) = @_;
+    my ($run) = @_;
 
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
@@ -151,7 +112,7 @@ sub start_collector {
             $^X, $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
             collector => 'Test2::Harness::Collector',
-            $dir, $run->run_id, $runner_pid,
+            $dir, $run->run_id,
             show_runner_output => 1,
         ],
     );
@@ -168,13 +129,12 @@ sub start_runner {
 
     my $ipc = $self->ipc;
     $ipc->spawn(
-        #stderr => File::Spec->catfile($dir, 'error.log'),
-        #stdout => File::Spec->catfile($dir, 'output.log'),
-        no_set_pgrp => 1,
+        stderr => File::Spec->catfile($dir, 'error.log'),
+        stdout => File::Spec->catfile($dir, 'output.log'),
         command => [
             $^X, $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
-            runner => 'Test2::Harness::Runner::Linear',
+            runner => 'Test2::Harness::Runner',
             $dir,
         ],
     );

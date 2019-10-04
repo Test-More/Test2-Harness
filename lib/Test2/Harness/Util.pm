@@ -34,9 +34,13 @@ our @EXPORT_OK = qw{
 sub parse_exit {
     my ($exit) = @_;
 
+    my $sig = $exit & 127;
+    my $dmp = $exit & 128;
+
     return {
-        sig => ($exit & 127),
+        sig => $sig,
         err => ($exit >> 8),
+        dmp => $dmp,
         all => $exit,
     };
 }

@@ -12,7 +12,7 @@ use Time::HiRes qw/time/;
 
 use File::Spec();
 
-use Test2::Harness::Util qw/fqmod clean_path write_file_atomic write_file mod2file open_file/;
+use Test2::Harness::Util qw/fqmod clean_path write_file_atomic write_file mod2file open_file parse_exit/;
 use Test2::Harness::IPC;
 
 use parent 'Test2::Harness::IPC::Process';
@@ -53,6 +53,8 @@ use Test2::Harness::Util::HashBase(
         +preloads_with_callbacks
 
         +switches_from_env
+
+        +et_file +pet_file
     }
 );
 
@@ -168,8 +170,8 @@ sub TO_JSON {
 sub file     { $_[0]->{+FILE}     //= clean_path($_[0]->{+TASK}->{file}) }
 sub err_file { $_[0]->{+ERR_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stderr')) }
 sub out_file { $_[0]->{+OUT_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stdout')) }
-sub et_file  { $_[0]->{+OUT_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'event_timeout')) }
-sub pet_file { $_[0]->{+OUT_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'post_exit_timeout')) }
+sub et_file  { $_[0]->{+ET_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'event_timeout')) }
+sub pet_file { $_[0]->{+PET_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'post_exit_timeout')) }
 sub run_dir  { $_[0]->{+RUN_DIR}  //= clean_path(File::Spec->catdir($_[0]->{+RUNNER}->dir, $_[0]->{+RUN}->run_id)) }
 
 sub output_size {
@@ -412,7 +414,9 @@ sub set_exit {
 
     my $file = File::Spec->catfile($self->job_dir, 'exit');
 
-    write_file_atomic($file, join(" " => $exit, $time, @args));
+    my $e = parse_exit($exit);
+
+    write_file_atomic($file, join(" " => $exit, $e->{err}, $e->{sig}, $e->{dmp}, $time, @args));
 }
 
 1;

@@ -42,19 +42,22 @@ else {
 }
 
 use Test2::Harness::Util::HashBase qw{
-    <pid
+    <pid <root_pid
     <handlers
     <procs
     <procs_by_cat
     <waiting
     <wait_time
     <started
+    <sig_count
 };
 
 sub init {
     my $self = shift;
 
     $self->{+PID} = $$;
+    $self->{+ROOT_PID} = $$;
+
     $self->{+PROCS} //= {};
     $self->{+PROCS_BY_CAT} //= {};
 
@@ -62,6 +65,8 @@ sub init {
 
     $self->{+HANDLERS} //= {};
     $self->{+HANDLERS}->{CHLD} //= sub { 1 };
+
+    $self->{+SIG_COUNT} //= 0;
 }
 
 sub start {
@@ -99,6 +104,8 @@ sub set_sig_handler {
 sub handle_sig {
     my $self = shift;
     my ($sig) = @_;
+
+    $self->{+SIG_COUNT}++ unless $sig eq 'CHLD';
 
     return $self->{+HANDLERS}->{$sig}->($sig) if $self->{+HANDLERS}->{$sig};
 
@@ -148,6 +155,7 @@ sub _bring_out_yer_dead {
     my $found = 0;
     while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
         my $exit = $?;
+        print "PID: $pid - $exit\n";
         die "waitpid returned pid '$pid', but we are not monitoring that one!" unless $procs->{$pid};
         $found++;
         $waiting->{$pid} = [$exit, time()];
@@ -169,7 +177,7 @@ sub _check_if_dead_yet {
         $found++;
         my $args = delete $waiting->{$pid};
         my $proc = delete $procs->{$pid};
-        delete $cat_procs->{$proc->category};
+        delete $cat_procs->{$proc->category}->{$pid};
         $self->set_proc_exit($proc, @$args);
     }
 
@@ -207,6 +215,8 @@ sub wait {
 
     $self->check_for_fork();
 
+    my $sig_count = $self->{+SIG_COUNT};
+
     my $procs     = $self->{+PROCS}        //= {};
     my $cat_procs = $self->{+PROCS_BY_CAT} //= {};
     my $waiting   = $self->{+WAITING}      //= {};
@@ -214,8 +224,10 @@ sub wait {
     return 0 unless keys(%$procs) || keys(%$waiting);
 
     my $cat_total = $params{cat} ? keys %{$cat_procs->{$params{cat}}} : 0;
-    return 0 if $params{cat} && !$cat_total;
 
+    my $start = time;
+
+    my $count = 0;
     my $found = 0;
     while (1) {
         $self->check_timeouts;
@@ -223,29 +235,47 @@ sub wait {
         $found += $self->_bring_out_yer_dead();
         $found += $self->_check_if_dead_yet();
 
-        my $done = $params{block} ? $found : 1;
+        return $found if $self->wait_done($found, $start, \%params);
 
-        $done = 0 if $params{all}     && keys %$procs;
-        $done = 0 if $params{all_cat} && keys %{$cat_procs->{$params{all_cat}}};
-
-        if ($params{cat}) {
-            my $cur_total = keys %{$cat_procs->{$params{cat}}};
+        if (my $cat = $params{cat}) {
+            my $cur_total = keys %{$cat_procs->{$cat}};
             my $delta = $cat_total - $cur_total;
             return $delta if $delta;
-            $done = 0;
         }
-
-        return $found if $done;
 
         # This is expensive, so only do it if we are gonna end up waiting
         # anyway If we do find anything here do not bother waiting.
         next if $self->_ex_parrots();
+
+        # Break the loop if we had a signal come in since starting
+        last if $self->{+SIG_COUNT} > $sig_count;
 
         sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
     }
 
     warn "We escaped the wait cycle";
     return $found;
+}
+
+sub wait_done {
+    my $self = shift;
+    my ($found, $start, $params) = @_;
+
+    my $all = keys(%{$self->{+PROCS}});
+    return 1 unless $all;
+
+    return 1 if $params->{timeout} && time - $start >= $params->{timeout};
+
+    return 0 if $all && $params->{all};
+
+    return 0 if $params->{all_cat} && keys %{$self->{+PROCS_BY_CAT}->{$params->{all_cat}}};
+
+    return 0 if $params->{block} && !$found;
+
+    # This gets validated outside this loop
+    return 0 if $params->{cat};
+
+    return 1;
 }
 
 sub swap_io {
@@ -336,7 +366,7 @@ sub _run_cmd_fork {
     die "Failed to fork" unless defined $pid;
     return $pid if $pid;
     %ENV = (%ENV, %{$params{env}}) if $params{env};
-    setpgrp(0, 0) if USE_P_GROUPS;
+    setpgrp(0, 0) if USE_P_GROUPS && !$params{no_set_pgrp};
 
     $cmd = [$cmd->()] if ref($cmd) eq 'CODE';
 

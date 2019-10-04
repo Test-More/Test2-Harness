@@ -1,4 +1,4 @@
-package Test2::Harness::Util::TestFile;
+package Test2::Harness::TestFile;
 use strict;
 use warnings;
 
@@ -8,16 +8,17 @@ use Carp qw/croak/;
 
 use Time::HiRes qw/time/;
 
-use File::Spec();
-
 use List::Util 1.45 qw/uniq/;
 
-use Test2::Harness::Util qw/open_file/;
+use Test2::Harness::Util qw/open_file clean_path/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
+use File::Spec;
+
 use Test2::Harness::Util::HashBase qw{
-    -file -_scanned -_headers -_shbang -queue_args -is_binary -non_perl
+    <file +relative <_scanned <_headers +_shbang <is_binary <non_perl
+    queue_args
     _category _stage _duration
 };
 
@@ -25,13 +26,20 @@ sub set_duration { $_[0]->set__duration(lc($_[1])) }
 sub set_category { $_[0]->set__category(lc($_[1])) }
 sub set_stage    { $_[0]->set__stage(   lc($_[1])) }
 
+sub set_smoke {
+    my $self = shift;
+    my $val = @_ ? $_[0] : 1;
+
+    $self->{+_HEADERS}->{features}->{smoke} = $val;
+}
+
 sub init {
     my $self = shift;
 
     my $file = $self->file;
 
     # We want absolute path
-    $file = File::Spec->rel2abs($file);
+    $file = clean_path($file);
     $self->{+FILE} = $file;
 
     $self->{+QUEUE_ARGS} ||= [];
@@ -45,12 +53,19 @@ sub init {
     }
 }
 
+sub relative {
+    my $self = shift;
+    return $self->{+RELATIVE} //= File::Spec->abs2rel($self->{+FILE});
+}
+
 my %DEFAULTS = (
     timeout   => 1,
     fork      => 1,
     preload   => 1,
     stream    => 1,
+    run       => 1,
     isolation => 0,
+    smoke     => 0,
 );
 
 sub check_feature {
@@ -121,7 +136,7 @@ sub check_category {
 }
 
 sub event_timeout    { $_[0]->headers->{timeout}->{event} }
-sub postexit_timeout { $_[0]->headers->{timeout}->{postexit} }
+sub post_exit_timeout { $_[0]->headers->{timeout}->{postexit} }
 
 sub conflicts_list {
     return $_[0]->headers->{conflicts} || [];    # Assure conflicts is always an array ref.
@@ -157,6 +172,12 @@ sub is_executable {
     return -x $file;
 }
 
+sub scan {
+    my $self = shift;
+    $self->_scan();
+    return;
+}
+
 sub _scan {
     my $self = shift;
 
@@ -186,6 +207,12 @@ sub _scan {
             }
         }
 
+        # Uhg, breaking encapsulation between yath and the harness
+        if ($line =~ m/^\s*#\s*THIS IS A GENERATED YATH RUNNER TEST/) {
+            $headers{features}->{run} = 0;
+            next;
+        }
+
         next if $line =~ m/^\s*#/ && $line !~ m/^\s*#\s*HARNESS-.+/;    # Ignore commented lines which aren't HARNESS-?
         next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;          # Only supports single line BEGINs
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
@@ -197,7 +224,7 @@ sub _scan {
             @args = split(/[-]+/, $rest, 2) if scalar @args == 1;       # Check for dash delimited
             $args[1] =~ s/\s+(?:#.*)?$//;                               # Strip trailing white space and comment if present
         }
-        else {
+        elsif ($rest) {
             $rest =~ s/\s+(?:#.*)?$//;                                  # Strip trailing white space and comment if present
             @args = split /[-\s]+/, $rest;
         }
@@ -205,6 +232,24 @@ sub _scan {
         if ($dir eq 'no') {
             my ($feature) = @args;
             $headers{features}->{$feature} = 0;
+        }
+        elsif ($dir eq 'smoke') {
+            $headers{features}->{smoke} = 1;
+        }
+        elsif ($dir eq 'retry') {
+            $headers{retry} = 1 unless @args;
+            for my $arg (@args) {
+                if ($arg =~ m/^\d+$/) {
+                    $headers{retry} = $arg;
+                }
+                elsif ($arg =~ m/^iso/) {
+                    $headers{retry} //= 1;
+                    $headers{retry_isolated} = 1;
+                }
+                else {
+                    warn "Unknown 'HARNESS-RETRY' argument '$arg' at $self->{+FILE} line $ln.\n";
+                }
+            }
         }
         elsif ($dir eq 'yes' || $dir eq 'use') {
             my ($feature) = @args;
@@ -246,7 +291,9 @@ sub _scan {
             @{$headers{conflicts}} = uniq @{$headers{conflicts}};
         }
         elsif ($dir eq 'timeout') {
-            my ($type, $num) = @args;
+            my ($type, $num, $extra) = @args;
+
+            ($type, $num) = ('postexit', $extra) if $type eq 'post' && $num eq 'exit';
 
             warn "'" . uc($type) . "' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at $self->{+FILE} line $ln.\n"
                 unless $type =~ m/^(event|postexit)$/;
@@ -295,26 +342,37 @@ sub queue_item {
     my $self = shift;
     my ($job_name) = @_;
 
+    die "The '$self->{+FILE}' test specifies that it should not be run by Test2::Harness.\n"
+        unless $self->check_feature(run => 1);
+
     my $category = $self->check_category;
     my $duration = $self->check_duration;
     my $stage    = $self->check_stage;
 
+    my $smoke   = $self->check_feature(smoke   => 0);
     my $fork    = $self->check_feature(fork    => 1);
     my $preload = $self->check_feature(preload => 1);
     my $timeout = $self->check_feature(timeout => 1);
     my $stream  = $self->check_feature(stream  => 1);
 
-    my $binary  = $self->{+IS_BINARY} ? 1 : 0;
-    my $non_perl = $self->{+NON_PERL} ? 1 : 0;
+    my $retry          = $self->{+_HEADERS}->{retry};
+    my $retry_isolated = $self->{+_HEADERS}->{retry_isolated};
+
+    my $binary   = $self->{+IS_BINARY} ? 1 : 0;
+    my $non_perl = $self->{+NON_PERL}  ? 1 : 0;
+
+    my $et  = $self->event_timeout;
+    my $pet = $self->post_exit_timeout;
 
     return {
+        binary      => $binary,
         category    => $category,
+        conflicts   => $self->conflicts_list,
         duration    => $duration,
         file        => $self->file,
-        headers     => $self->headers,
         job_id      => gen_uuid(),
         job_name    => $job_name,
-        shbang      => $self->shbang,
+        non_perl    => $non_perl,
         stage       => $stage,
         stamp       => time,
         switches    => $self->switches,
@@ -322,26 +380,31 @@ sub queue_item {
         use_preload => $preload,
         use_stream  => $stream,
         use_timeout => $timeout,
-        conflicts   => $self->conflicts_list,
-        binary      => $binary,
-        non_perl    => $non_perl,
+        smoke       => $smoke,
+        rank        => $self->rank,
 
-        event_timeout    => $self->event_timeout,
-        postexit_timeout => $self->postexit_timeout,
+        defined($retry)          ? (retry             => $retry)                   : (),
+        defined($retry_isolated) ? (retry_isolated    => $retry_isolated)          : (),
+        defined($et)             ? (event_timeout     => $et)                      : (),
+        defined($pet)            ? (post_exit_timeout => $self->post_exit_timeout) : (),
+
         @{$self->{+QUEUE_ARGS}},
     };
 }
 
 my %RANK = (
-    immiscible => 1,
-    long       => 2,
-    medium     => 3,
-    short      => 4,
-    isolation  => 5,
+    smoke      => 1,
+    immiscible => 10,
+    long       => 20,
+    medium     => 50,
+    short      => 80,
+    isolation  => 100,
 );
 
 sub rank {
     my $self = shift;
+
+    return $RANK{smoke} if $self->check_feature('smoke');
 
     my $rank = $RANK{$self->check_category};
     $rank ||= $RANK{$self->check_duration};
@@ -360,7 +423,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Job::TestFile - Logic to scan a test file.
+Test2::Harness::TestFile - Logic to scan a test file.
 
 =head1 DESCRIPTION
 

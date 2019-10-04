@@ -1,4 +1,5 @@
 use Test2::V0;
+# HARNESS-NO-PRELOAD
 
 use Test2::Harness::Util qw/file2mod/;
 use File::Find;

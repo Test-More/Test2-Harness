@@ -1,15 +1,13 @@
-package Test2::Harness::Runner::Persist;
+package Test2::Harness::Runner::Multi;
 use strict;
 use warnings;
 
 our $VERSION = '0.001100';
 
 use Carp qw/confess/;
-use POSIX ":sys_wait_h";
-use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET/;
+use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET LOCK_NB/;
 use Time::HiRes qw/sleep time/;
-use Test2::Util qw/pkg_to_file/;
-use Test2::Harness::Util qw/read_file write_file_atomic write_file open_file parse_exit file2mod/;
+use Test2::Harness::Util qw/write_file_atomic open_file parse_exit file2mod/;
 use Long::Jump qw/setjump longjump/;
 
 use File::Spec();
@@ -18,14 +16,11 @@ use Test2::Harness::Util::Queue();
 use Test2::Harness::Runner::Preload();
 use Test2::Harness::Runner::DepTracer();
 use Test2::Harness::Runner::Run();
-use Test2::Harness::Runner::Stage();
+use Test2::Harness::Runner::Multi::Stage();
 
 use parent 'Test2::Harness::Runner';
 use Test2::Harness::Util::HashBase qw{
     -inotify -stats -last_checked
-    -signaled
-    -pfile
-    -root_pid
     -dtrace
 
     -monitored
@@ -35,9 +30,11 @@ use Test2::Harness::Util::HashBase qw{
     -blacklist_lock
     -blacklist
 
-    +end_loop
+    <pending
+    +run +runs +runs_ended
 
-    +runs +run_queue
+    +tasks +complete        +dispatch       +state
+           +complete_queue  +dispatch_queue
 };
 
 BEGIN {
@@ -59,45 +56,29 @@ BEGIN {
     }
 }
 
-sub stage_fork { confess "stage_fork() is not supported" }
-
 sub init {
     my $self = shift;
 
     $self->{+DTRACE} ||= Test2::Harness::Runner::DepTracer->new;
-    $self->{+ROOT_PID} = $$;
 
     $self->SUPER::init();
 
-    $self->{+LOCK_FILE} = File::Spec->catfile($self->{+DIR}, 'lock');
+    delete $self->{+STAGE};
 
-    $self->{+STAGE} ||= '-NONE-';
+    $self->{+PENDING} //= [];
 
     $self->{+HANDLERS}->{HUP} = sub {
         my $sig = shift;
         print STDERR "$$ ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
+        $self->{+SIGNAL} = $sig;
     };
-}
-
-sub DESTROY {
-    my $self = shift;
-    return if $self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP';
-
-    return unless $$ == $self->{+ROOT_PID};
-
-    local ($?, $@, $!);
-
-    my $pfile = $self->{+PFILE} or return;
-    return unless -f $pfile;
-
-    print "$$ Deleting $pfile\n";
-    unlink($pfile) or warn "Could not delete $pfile: $!\n";
 }
 
 sub respawn {
     my $self = shift;
 
     print "$$ ($self->{+STAGE}) Waiting for currently running jobs to complete before respawning...\n";
+    $self->killall('HUP');
     $self->wait(all => 1);
 
     my $settings = $self->settings;
@@ -109,7 +90,6 @@ sub respawn {
         'runner',
         ref($self),
         $self->{+DIR},
-        pfile => $self->{+PFILE},
     );
 
     warn "Should not get here, respawn failed";
@@ -276,32 +256,36 @@ sub unlock_blacklist {
     return;
 }
 
-sub stage_should_fork { 0 }
-
-sub stage_start {
+sub _preload {
     my $self = shift;
-    my ($stage) = @_;
+    my ($req, $block) = @_;
 
-    $0 = "yath-runner-$stage";
-    $self->{+STAGE} = $stage;
-    $self->load_blacklist;
+    $block = $block ? { %$block, %{$self->blacklist} } : { %{$self->blacklist} };
 
     my $dtrace = $self->dtrace;
+
     $dtrace->start;
-
-    my $out = $self->SUPER::stage_start(@_);
-
+    my $out = $self->SUPER::_preload($req, $block, $dtrace->my_require);
     $dtrace->stop;
 
     return $out;
 }
 
-sub stage_stop {
+sub run_stages {
     my $self = shift;
-    my ($stage) = @_;
 
-    print "$$ ($self->{+STAGE}) Waiting for jobs and child stages to complete before exiting...\n";
-    $self->wait(all => 1);
+    my $wait_time = $self->{+WAIT_TIME};
+
+    my $dtrace = $self->dtrace;
+
+    my $stage = $self->{+STAGES}->[0];
+    my $spawn = $self->stage_spawn_map();
+
+    my $ok = eval { $self->spawn_stage($stage, $spawn); 1 };
+    my $err = $@;
+
+    warn $ok ? $err : "Should never get here, spawn_stage() is not supposed to return";
+    CORE::exit(1);
 }
 
 sub stage_spawn_map {
@@ -319,23 +303,6 @@ sub stage_spawn_map {
     return \%spawn;
 }
 
-sub stage_loop {
-    my $self = shift;
-
-    my $wait_time = $self->{+WAIT_TIME};
-
-    my $dtrace = $self->dtrace;
-
-    my $stage = $self->{+STAGES}->[0];
-    my $spawn = $self->stage_spawn_map();
-
-    my $ok = eval { $self->spawn_stage($stage, $spawn); 1 };
-    my $err = $@;
-
-    warn $ok ? $err : "Should never get here, spawn_stage() is not supposed to return";
-    CORE::exit(1);
-}
-
 sub spawn_child_stages {
     my $self = shift;
     my ($list) = @_;
@@ -351,7 +318,7 @@ sub spawn_child_stages {
         # Child;
         return $stage unless $pid;
 
-        my $proc = Test2::Harness::Runner::Stage->new(pid => $pid, name => $stage);
+        my $proc = Test2::Harness::Runner::Multi::Stage->new(pid => $pid, name => $stage);
         $self->watch($proc);
     }
 
@@ -393,17 +360,39 @@ sub spawn_stage {
         $err = $@;
     };
 
+    $self->check_for_fork();
+
     # If we are here than a shild stage exited cleanly and we are already in a
     # child stage and need to swap to it.
     goto &$spawn_stage if $jump && ($$new_stage = $jump->[0]);
 
-    $self->stage_stop($stage);
     $self->stage_exit($stage, $ok, $err);
+}
+
+sub stage_start {
+    my $self = shift;
+    my ($stage) = @_;
+
+    $0 = "yath-runner-$stage";
+    $self->{+STAGE} = $stage;
+    $self->load_blacklist;
+
+    my $dtrace = $self->dtrace;
+    $dtrace->start;
+
+    my $out = $self->SUPER::stage_start(@_);
+
+    $dtrace->stop;
+
+    return $out;
 }
 
 sub stage_exit {
     my $self = shift;
     my ($stage, $ok, $err) = @_;
+
+    print "$$ ($self->{+STAGE}) Waiting for jobs and child stages to complete before exiting...\n";
+    $self->wait(all => 1);
 
     if ($ok && $stage eq $self->{+STAGES}->[0] && $self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP') {
         $self->respawn;
@@ -425,12 +414,13 @@ sub set_proc_exit {
 
     $self->SUPER::set_proc_exit($proc, $exit, $time, @args);
 
-    return unless $proc->isa('Test2::Harness::Runner::Stage');
+    return unless $proc->isa('Test2::Harness::Runner::Multi::Stage');
 
     my $stage = $proc->name;
 
     if ($exit != 0) {
-        warn "Child stage '$stage' did not exit cleanly ($exit)!\n";
+        my $e = parse_exit($exit);
+        warn "Child stage '$stage' did not exit cleanly (sig: $e->{sig}, err: $e->{err})!\n";
         CORE::exit(1);
     }
 
@@ -442,7 +432,7 @@ sub set_proc_exit {
 
     # Add the replacement process to the watch list
     if ($pid) {
-        $self->watch(Test2::Harness::Runner::Stage->new(pid => $pid, name => $stage));
+        $self->watch(Test2::Harness::Runner::Multi::Stage->new(pid => $pid, name => $stage));
         return;
     }
 
@@ -455,105 +445,257 @@ sub set_proc_exit {
 
 sub task_loop {
     my $self = shift;
-    my ($stage) = @_;
 
-    while (1) {
-        last if $self->end_loop();
-        my $run = $self->run($stage) or last;
-
-        my %complete;
-        for my $job ($run->jobs->read()) {
-            $complete{$job->job_id}->{$job->is_try} = 1;
-        }
-
-        while (1) {
-            return if $self->end_loop();
-
-            my $task = $self->next($run, $stage);
-
-            # If we have no tasks and no pending jobs then we can be sure we are done
-            last unless $task || $self->wait(cat => Test2::Harness::Runner::Job->category);
-
-            next unless $task;
-
-            next if $complete{$task->{job_id}}->{$task->{is_try} // 0};
-            $self->run_job($run, $task);
-        };
-
-        delete $self->{+RUN};
-        write_file_atomic($self->run_stage_complete_file($stage, $run->run_id), time);
+    while(my $task = $self->next) {
+        $self->run_job($self->run, $task);
     }
 }
 
-sub run_stage_complete_file {
+sub next {
     my $self = shift;
-    my ($stage, $run_id) = @_;
 
-    return File::Spec->catfile($self->{+DIR}, "${run_id}-${stage}-complete");
+    my $pending = $self->{+PENDING};
+
+    while (1) {
+        $self->poll();
+        return shift @$pending if @$pending;
+
+        next if $self->wait();
+
+        next if $self->manage_dispatch;
+
+        return if $self->all_done();
+
+        sleep $self->{+WAIT_TIME} if $self->{+WAIT_TIME};
+    }
 }
 
-sub run {
+sub all_done {
     my $self = shift;
-    my ($stage) = @_;
 
-    my $run_queue = $self->{+RUN_QUEUE} //= Test2::Harness::Util::Queue->new(
-        file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'),
-    );
+    $self->check_monitored;
+
+    return 1 if $self->{+SIG};
+
+    return 0 if @{$self->{+PENDING} //= []};
+
+    return 0 if keys %{$self->{+STATE}};
+    return 0 if keys %{$self->{+TASKS}};
+
+    return 0 if $self->run;
+    return 0 if @{$self->poll_runs};
+
+    return 1 if $self->{+RUNS_ENDED};
+    return 0;
+}
+
+sub poll {
+    my $self = shift;
+
+    # This will poll runs for us.
+    return unless $self->run;
+
+    $self->poll_tasks();
+    $self->poll_complete();
+    $self->poll_dispatch();
+}
+
+sub poll_runs {
+    my $self = shift;
 
     my $runs = $self->{+RUNS} //= [];
 
-    while (1) {
-        return if $self->end_loop();
+    return $runs if $self->{+RUNS_ENDED};
 
-        push @$runs => $run_queue->poll();
+    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'));
+    my @new       = $run_queue->poll();
 
-        if (!@$runs) {
-            $self->wait() or sleep($self->{+WAIT_TIME});
-            next;
+    for my $item ($run_queue->poll()) {
+        my $run_data = $item->[-1];
+
+        if (!defined $run_data) {
+            $self->{+RUNS_ENDED} = 1;
+            last;
         }
 
-        my $run_data = shift(@$runs)->[-1];
-        return undef unless $run_data;
-
-        # This stage+run is already complete, possibly due to a SIGHUP
-        next if -f $self->run_stage_complete_file($stage, $run_data->{run_id});
-
-        return $self->{+RUN} = Test2::Harness::Runner::Run->new(
+        push @$runs => Test2::Harness::Runner::Run->new(
             %$run_data,
             workdir => $self->{+DIR},
         );
     }
+
+    return $runs;
 }
 
-sub end_loop {
+sub clear_finished_run {
     my $self = shift;
-    return $self->{+END_LOOP} if $self->{+END_LOOP};
 
-    return $self->{+END_LOOP} = 1 if $self->{+SIGNAL};
-    return $self->{+END_LOOP} = 1 if $self->check_monitored;
+    return unless $self->{+QUEUE_ENDED};
+    return if @{$self->{+PENDING} //= []};
+    return if keys %{$self->{+STATE}};
+    return if keys %{$self->{+TASKS}};
 
-    return 0;
+    delete $self->{+RUN};
 }
 
-sub _preload {
+sub run {
     my $self = shift;
-    my ($req, $block) = @_;
 
-    $block = $block ? { %$block, %{$self->blacklist} } : { %{$self->blacklist} };
+    $self->clear_finished_run;
 
-    my $dtrace = $self->dtrace;
+    return $self->{+RUN} if $self->{+RUN};
 
-    $dtrace->start;
-    my $out = $self->SUPER::_preload($req, $block, $dtrace->my_require);
-    $dtrace->stop;
+    my $runs = $self->poll_runs;
+    return undef unless @$runs;
 
-    return $out;
+    # Reset the task states since we are starting a new run.
+    %{$self->{+TASKS}}    = ();
+    %{$self->{+COMPLETE}} = ();
+
+    delete $self->{+QUEUE_ENDED};
+
+    $self->{+RUN} = shift @$runs;
+}
+
+sub retry_task {
+    my $self = shift;
+    my ($task) = @_;
+
+    unshift @{$self->{+PENDING}} => $task;
+}
+
+sub completed_task {
+    my $self = shift;
+    my ($task) = @_;
+
+    $self->complete($task->{job_id});
+    $self->complete_queue->enqueue({job_id => $task->{job_id}});
+}
+
+sub complete_queue {
+    my $self = shift;
+    $self->{+COMPLETE_QUEUE} //= Test2::Harness::Util::Queue->new(
+        file => File::Spec->catfile($self->{+DIR}, "complete.jsonl"),
+    );
+}
+
+sub dispatch_queue {
+    my $self = shift;
+    $self->{+DISPATCH_QUEUE} //= Test2::Harness::Util::Queue->new(
+        file => File::Spec->catfile($self->{+DIR}, "dispatch.jsonl"),
+    );
+}
+
+sub poll_complete {
+    my $self = shift;
+    my $queue = $self->complete_queue;
+    for my $item ($queue->poll) {
+        my $task = $item->[-1];
+
+        my $job_id = $task->{job_id};
+        $self->complete($job_id);
+    }
+
+    return $self->{+COMPLETE};
+}
+
+sub complete {
+    my $self = shift;
+    my ($job_id) = @_;
+
+    if ($job_id) {
+        $self->{+COMPLETE}->{$job_id} = 1;
+        delete $self->{+STATE}->{$job_id};
+        delete $self->{+TASKS}->{$job_id};
+    }
+
+    return $self->{+COMPLETE};
+}
+
+sub poll_dispatch {
+    my $self = shift;
+    my $queue = $self->dispatch_queue;
+    for my $item ($queue->poll) {
+        my $task = $item->[-1];
+
+        my $job_id = $task->{job_id};
+        $self->dispatch($job_id);
+    }
+}
+
+sub dispatch {
+    my $self = shift;
+    my ($job_id) = @_;
+
+    if ($job_id && !$self->{+COMPLETE}->{$job_id}) {
+        my $task = $self->{+STATE}->{$job_id} = delete $self->{+TASKS}->{$job_id} or die "Could not find task '$job_id'";
+        push @{$self->{+PENDING}} => $task if $task->{stage} eq $self->{+STAGE};
+    }
+}
+
+sub poll_tasks {
+    my $self = shift;
+    $self->SUPER::poll_tasks();
+    return $self->{+TASKS};
+}
+
+sub add_task {
+    my $self = shift;
+    my ($task) = @_;
+
+    my $stage = $task->{stage} // 'default';
+
+    my $tasks = $self->{+TASKS} //= {};
+
+    $tasks->{$task->{job_id}} = $task;
+}
+
+sub manage_dispatch {
+    my $self = shift;
+
+    my $queue = $self->dispatch_queue;
+    my $lock = open_file($queue->file, '>>');
+    flock($lock, LOCK_EX | LOCK_NB) or return 0;
+    seek($lock,2,0);
+
+    my $ok = eval { $self->dispatch_loop; 1 };
+    my $err = $@;
+
+    # Unlock
+    $lock->flush;
+    flock($lock, LOCK_UN) or warn "Could not unlock dispatch queue: $!";
+    close($lock);
+
+    die $err unless $ok;
+
+    return 1;
+}
+
+sub dispatch_loop {
+    my $self = shift;
+
+    while (1) {
+        $self->poll;
+
+        $self->write_dispatch();
+
+        next if $self->wait();
+
+        last if @{$self->{+PENDING}};
+
+        last if $self->all_done();
+
+        sleep $self->{+WAIT_TIME} if $self->{+WAIT_TIME};
+    }
+}
+
+sub write_pending {
+    die "Ooops";
 }
 
 1;
 
 __END__
-
 
 =pod
 
@@ -561,7 +703,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Runner::Persist - Persistent variant of the test runner.
+Test2::Harness::Runner::Multi - Runner that loads all stages concurrently.
 
 =head1 DESCRIPTION
 

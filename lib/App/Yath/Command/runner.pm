@@ -78,7 +78,6 @@ sub launch_via_fork {
     my $class = shift;
     my ($runner, $job) = @_;
 
-    print "Launch via fork!\n";
 
     my $preloads = $job->preloads_with_callbacks;
 
@@ -86,6 +85,8 @@ sub launch_via_fork {
 
     my $pid = fork();
     die "Failed to fork: $!" unless defined $pid;
+
+    print "Launch $pid via fork! " . $job->file . "\n" if $pid;
 
     # In parent
     return $pid if $pid;

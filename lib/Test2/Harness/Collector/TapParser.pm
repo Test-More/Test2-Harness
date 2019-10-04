@@ -1,4 +1,4 @@
-package Test2::Harness::Util::TapParser;
+package Test2::Harness::Collector::TapParser;
 use strict;
 use warnings;
 
@@ -261,7 +261,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Util::TapParser - Produce EventFacets from a line of TAP.
+Test2::Harness::Collector::TapParser - Produce EventFacets from a line of TAP.
 
 =head1 DESCRIPTION
 

@@ -6,6 +6,7 @@ our $VERSION = '0.001100';
 
 use Carp qw/confess/;
 use Time::HiRes qw/time/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use Importer 'Test2::Util::Facets2Legacy' => ':ALL';
 
@@ -23,13 +24,14 @@ BEGIN {
 }
 
 use Test2::Harness::Util::HashBase qw{
-    -facet_data
-    -stream_id
-    -event_id
-    -run_id
-    -job_id
-    -stamp
-    -times
+    +facet_data
+    +stream_id
+    +event_id
+    +run_id
+    +job_id
+    +stamp
+    +times
+    +json
     processed
 };
 
@@ -43,35 +45,39 @@ sub init {
 
     my $data = $self->{+FACET_DATA} || confess "'facet_data' is a required attribute";
 
-    $self->{+RUN_ID}   = $data->{harness}->{run_id}   unless defined $self->{+RUN_ID};
-    $self->{+JOB_ID}   = $data->{harness}->{job_id}   unless defined $self->{+JOB_ID};
-    $self->{+EVENT_ID} = $data->{harness}->{event_id} unless defined $self->{+EVENT_ID};
+    for my $field (RUN_ID(), JOB_ID(), EVENT_ID) {
+        my $v1 = $self->{$field};
+        my $v2 = $data->{harness}->{$field};
 
-    confess "'run_id' is a required attribute"
-        unless defined $self->{+RUN_ID};
+        my $d1 = defined($v1);
+        my $d2 = defined($v2);
 
-    confess "'job_id' is a required attribute"
-        unless defined $self->{+JOB_ID};
+        confess "'$field' is a required attribute" unless $d1 || $d2;
+        confess "'$field' has different values between attribute and facet data"
+            if $d1 && $d2 && $v1 ne $v2;
 
-    confess "'event_id' is a required attribute"
-        unless defined $self->{+EVENT_ID};
+        $self->{$field} = $data->{harness}->{$field} = $v1 // $v2;
+    }
 
-    $data->{harness}->{+RUN_ID}   = $self->{run_id}   unless defined $data->{harness}->{+RUN_ID};
-    $data->{harness}->{+JOB_ID}   = $self->{job_id}   unless defined $data->{harness}->{+JOB_ID};
-    $data->{harness}->{+EVENT_ID} = $self->{event_id} unless defined $data->{harness}->{+EVENT_ID};
     delete $data->{facet_data};
 
     # Original trace wins.
     if (my $trace = delete $self->{+TRACE}) {
-        $self->{+FACET_DATA}->{trace} ||= $trace;
+        $self->{+FACET_DATA}->{trace} //= $trace;
     }
 }
 
+sub as_json { $_[0]->{+JSON} //= encode_json($_[0]) }
+
 sub TO_JSON {
     my $out = {%{$_[0]}};
+
     $out->{+FACET_DATA} = { %{$out->{+FACET_DATA}} };
     delete $out->{+FACET_DATA}->{harness_job_watcher};
     delete $out->{+FACET_DATA}->{harness}->{closed_by};
+    delete $out->{+JSON};
+    delete $out->{+PROCESSED};
+
     return $out;
 }
 

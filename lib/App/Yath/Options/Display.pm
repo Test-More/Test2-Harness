@@ -33,7 +33,6 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
     );
 
     option renderers => (
-        short => 'r',
         alt   => ['renderer'],
         type  => 'H',
 

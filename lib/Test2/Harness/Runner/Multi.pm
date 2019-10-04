@@ -17,6 +17,7 @@ use Test2::Harness::Runner::Preload();
 use Test2::Harness::Runner::DepTracer();
 use Test2::Harness::Runner::Run();
 use Test2::Harness::Runner::Multi::Stage();
+use Test2::Harness::Runner::State();
 
 use parent 'Test2::Harness::Runner';
 use Test2::Harness::Util::HashBase qw{
@@ -33,8 +34,10 @@ use Test2::Harness::Util::HashBase qw{
     <pending
     +run +runs +runs_ended
 
-    +tasks +complete        +dispatch       +state
-           +complete_queue  +dispatch_queue
+    +state
+
+    +dispatch_queue
+    +dispatch_lock_file
 };
 
 BEGIN {
@@ -56,6 +59,11 @@ BEGIN {
     }
 }
 
+sub dispatch_lock_file {
+    my $self = shift;
+    return $self->{+DISPATCH_LOCK_FILE} //= File::Spec->catfile($self->{+DIR}, 'DISPATCH_LOCK');
+}
+
 sub init {
     my $self = shift;
 
@@ -66,6 +74,11 @@ sub init {
     delete $self->{+STAGE};
 
     $self->{+PENDING} //= [];
+
+    $self->{+STATE} //= Test2::Harness::Runner::State->new(
+        concurrent_stages => 1,
+        job_count         => $self->{+JOB_COUNT},
+    );
 
     $self->{+HANDLERS}->{HUP} = sub {
         my $sig = shift;
@@ -284,7 +297,7 @@ sub run_stages {
     my $ok = eval { $self->spawn_stage($stage, $spawn); 1 };
     my $err = $@;
 
-    warn $ok ? $err : "Should never get here, spawn_stage() is not supposed to return";
+    warn $ok ? "Should never get here, spawn_stage() is not supposed to return" : $err;
     CORE::exit(1);
 }
 
@@ -352,6 +365,9 @@ sub spawn_stage {
     goto &$spawn_stage if $$new_stage = $self->spawn_child_stages($spawn->{$stage});
 
     $self->monitor();
+
+    $self->dispatch_queue->enqueue({action => 'mark_stage_ready', arg => $stage});
+
     print "$$ ($self->{+STAGE}) Ready to run tests...\n";
 
     my ($ok, $err);
@@ -380,11 +396,20 @@ sub stage_start {
     my $dtrace = $self->dtrace;
     $dtrace->start;
 
-    my $out = $self->SUPER::stage_start(@_);
+    my $start_meth = "start_stage_$stage";
+    for my $mod (@{$self->{+STAGED}}) {
+        # Localize these in case something we preload tries to modify them.
+        local $SIG{INT}  = $SIG{INT};
+        local $SIG{HUP}  = $SIG{HUP};
+        local $SIG{TERM} = $SIG{TERM};
+
+        next unless $mod->can($start_meth);
+        $mod->$start_meth;
+    }
 
     $dtrace->stop;
 
-    return $out;
+    return;
 }
 
 sub stage_exit {
@@ -424,6 +449,8 @@ sub set_proc_exit {
         CORE::exit(1);
     }
 
+    return if $self->all_done;
+
     my $pid = fork;
     unless (defined($pid)) {
         warn "Failed to fork";
@@ -462,9 +489,9 @@ sub next {
 
         next if $self->wait();
 
-        next if $self->manage_dispatch;
-
         return if $self->all_done();
+
+        next if $self->manage_dispatch;
 
         sleep $self->{+WAIT_TIME} if $self->{+WAIT_TIME};
     }
@@ -475,12 +502,11 @@ sub all_done {
 
     $self->check_monitored;
 
-    return 1 if $self->{+SIG};
+    return 1 if $self->{+SIGNAL};
 
     return 0 if @{$self->{+PENDING} //= []};
 
-    return 0 if keys %{$self->{+STATE}};
-    return 0 if keys %{$self->{+TASKS}};
+    return 0 if $self->{+STATE}->todo;
 
     return 0 if $self->run;
     return 0 if @{$self->poll_runs};
@@ -496,7 +522,6 @@ sub poll {
     return unless $self->run;
 
     $self->poll_tasks();
-    $self->poll_complete();
     $self->poll_dispatch();
 }
 
@@ -508,7 +533,6 @@ sub poll_runs {
     return $runs if $self->{+RUNS_ENDED};
 
     my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'));
-    my @new       = $run_queue->poll();
 
     for my $item ($run_queue->poll()) {
         my $run_data = $item->[-1];
@@ -530,10 +554,11 @@ sub poll_runs {
 sub clear_finished_run {
     my $self = shift;
 
-    return unless $self->{+QUEUE_ENDED};
+    return unless $self->{+RUN};
+    return unless $self->{+RUN}->queue_ended;
+
     return if @{$self->{+PENDING} //= []};
-    return if keys %{$self->{+STATE}};
-    return if keys %{$self->{+TASKS}};
+    return if $self->{+STATE}->todo;
 
     delete $self->{+RUN};
 }
@@ -548,11 +573,7 @@ sub run {
     my $runs = $self->poll_runs;
     return undef unless @$runs;
 
-    # Reset the task states since we are starting a new run.
-    %{$self->{+TASKS}}    = ();
-    %{$self->{+COMPLETE}} = ();
-
-    delete $self->{+QUEUE_ENDED};
+    die "Previous run is not done!" if $self->{+STATE}->todo;
 
     $self->{+RUN} = shift @$runs;
 }
@@ -567,16 +588,7 @@ sub retry_task {
 sub completed_task {
     my $self = shift;
     my ($task) = @_;
-
-    $self->complete($task->{job_id});
-    $self->complete_queue->enqueue({job_id => $task->{job_id}});
-}
-
-sub complete_queue {
-    my $self = shift;
-    $self->{+COMPLETE_QUEUE} //= Test2::Harness::Util::Queue->new(
-        file => File::Spec->catfile($self->{+DIR}, "complete.jsonl"),
-    );
+    $self->dispatch_queue->enqueue({action => 'complete', arg => $task});
 }
 
 sub dispatch_queue {
@@ -586,75 +598,56 @@ sub dispatch_queue {
     );
 }
 
-sub poll_complete {
-    my $self = shift;
-    my $queue = $self->complete_queue;
-    for my $item ($queue->poll) {
-        my $task = $item->[-1];
-
-        my $job_id = $task->{job_id};
-        $self->complete($job_id);
-    }
-
-    return $self->{+COMPLETE};
-}
-
-sub complete {
-    my $self = shift;
-    my ($job_id) = @_;
-
-    if ($job_id) {
-        $self->{+COMPLETE}->{$job_id} = 1;
-        delete $self->{+STATE}->{$job_id};
-        delete $self->{+TASKS}->{$job_id};
-    }
-
-    return $self->{+COMPLETE};
-}
-
+my %ACTIONS = (dispatch => 1, complete => 1, mark_stage_ready => 1);
 sub poll_dispatch {
     my $self = shift;
     my $queue = $self->dispatch_queue;
     for my $item ($queue->poll) {
-        my $task = $item->[-1];
+        my $data = $item->[-1];
+        my $arg = $data->{arg};
+        my $action = $data->{action};
 
-        my $job_id = $task->{job_id};
-        $self->dispatch($job_id);
+        use Data::Dumper;
+        print Dumper([$action, $arg]);
+
+        die "Invalid action '$action'" unless $ACTIONS{$action};
+
+        $self->$action($arg);
     }
+}
+
+sub mark_stage_ready {
+    my $self = shift;
+    my ($stage) = @_;
+
+    $self->{+STATE}->mark_stage_ready($stage);
 }
 
 sub dispatch {
     my $self = shift;
-    my ($job_id) = @_;
+    my ($task) = @_;
 
-    if ($job_id && !$self->{+COMPLETE}->{$job_id}) {
-        my $task = $self->{+STATE}->{$job_id} = delete $self->{+TASKS}->{$job_id} or die "Could not find task '$job_id'";
-        push @{$self->{+PENDING}} => $task if $task->{stage} eq $self->{+STAGE};
-    }
-}
-
-sub poll_tasks {
-    my $self = shift;
-    $self->SUPER::poll_tasks();
-    return $self->{+TASKS};
+    $self->{+STATE}->start_task($task);
+    push @{$self->{+PENDING}} => $task if $task->{stage} eq $self->{+STAGE};
 }
 
 sub add_task {
     my $self = shift;
     my ($task) = @_;
 
-    my $stage = $task->{stage} // 'default';
+    $self->{+STATE}->add_pending_task($task);
+}
 
-    my $tasks = $self->{+TASKS} //= {};
-
-    $tasks->{$task->{job_id}} = $task;
+sub complete {
+    my $self = shift;
+    my ($task) = @_;
+    $self->{+STATE}->stop_task($task);
 }
 
 sub manage_dispatch {
     my $self = shift;
 
-    my $queue = $self->dispatch_queue;
-    my $lock = open_file($queue->file, '>>');
+    my $lock = open_file($self->dispatch_lock_file, '>>');
     flock($lock, LOCK_EX | LOCK_NB) or return 0;
     seek($lock,2,0);
 
@@ -663,7 +656,7 @@ sub manage_dispatch {
 
     # Unlock
     $lock->flush;
-    flock($lock, LOCK_UN) or warn "Could not unlock dispatch queue: $!";
+    flock($lock, LOCK_UN) or warn "Could not unlock dispatch: $!";
     close($lock);
 
     die $err unless $ok;
@@ -677,7 +670,7 @@ sub dispatch_loop {
     while (1) {
         $self->poll;
 
-        $self->write_dispatch();
+        $self->do_dispatch();
 
         next if $self->wait();
 
@@ -689,8 +682,12 @@ sub dispatch_loop {
     }
 }
 
-sub write_pending {
-    die "Ooops";
+sub do_dispatch {
+    my $self = shift;
+
+    my $task = $self->{+STATE}->pick_task() or return;
+    $self->dispatch_queue->enqueue({action => 'dispatch', arg => $task});
+    return $task;
 }
 
 1;

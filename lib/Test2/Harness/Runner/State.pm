@@ -276,8 +276,8 @@ sub _stage_order {
 
     # Add in any eager stages, but make sure they are last.
     for my $rstage (@{$self->{+READY_STAGE_LIST}}) {
-        next unless exists $self->{+EAGER_STAGES}->{$_};
-        push @stages => map {[$_ => $rstage]} grep { !$seen{$_}++ } @{$self->{+EAGER_STAGES}->{$_}};
+        next unless exists $self->{+EAGER_STAGES}->{$rstage};
+        push @stages => map {[$_ => $rstage]} grep { !$seen{$_}++ } @{$self->{+EAGER_STAGES}->{$rstage}};
     }
 
     return \@stages;

@@ -174,7 +174,7 @@ sub start_runner {
         command => [
             $^X, $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
-            runner => 'Test2::Harness::Runner::Linear',
+            runner => 'Test2::Harness::Runner::Multi',
             $dir,
         ],
     );

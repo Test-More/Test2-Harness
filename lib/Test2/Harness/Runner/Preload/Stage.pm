@@ -85,14 +85,6 @@ sub add_to_load_sequence {
     return @_;
 }
 
-sub do_load {
-    my $self = shift;
-
-    for my $item (@{$self->{+LOAD_SEQUENCE}}) {
-        ref($item) eq 'CODE' ? $item->($self) : require(mod2file($item));
-    }
-}
-
 sub do_pre_fork   { my $self = shift; $_->(@_) for @{$self->{+PRE_FORK_CALLBACKS}} }
 sub do_post_fork  { my $self = shift; $_->(@_) for @{$self->{+POST_FORK_CALLBACKS}} }
 sub do_pre_launch { my $self = shift; $_->(@_) for @{$self->{+PRE_LAUNCH_CALLBACKS}} }

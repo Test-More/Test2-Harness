@@ -17,6 +17,8 @@ use Long::Jump qw/setjump longjump/;
 
 use Test2::Harness::Util qw/mod2file write_file_atomic open_file/;
 
+use Test2::Harness::Runner::Preloader();
+
 # If FindBin is installed, go ahead and load it. We do not care much about
 # success vs failure here.
 BEGIN {
@@ -39,7 +41,7 @@ sub run  { confess(ref($_[0]) . " does not implement run()") }
 sub generate_run_sub {
     my $class = shift;
     my ($symbol, $argv) = @_;
-    my ($runner_class, $dir, %args) = @$argv;
+    my ($dir, %args) = @$argv;
 
     $0 = 'yath-runner';
 
@@ -50,12 +52,22 @@ sub generate_run_sub {
 
     my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
 
+    my $preloader = Test2::Harness::Runner::Preloader->new(
+        %args,
+        dir => $dir,
+        preloads => $settings->runner->preloads,
+    );
+
+    $preloader->preload;
+    my $runner_class = $preloader->runner_class;
+
     my $jump = setjump "Test-Runner" => sub {
         local %SIG = %SIG;
         my $runner = $settings->build(
             runner   => $runner_class,
             dir      => $dir,
             settings => $settings,
+            preloads => $preloader,
 
             fork_job_callback => sub { $class->launch_via_fork(@_) }
         );

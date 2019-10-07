@@ -1,11 +1,11 @@
-package Test2::Harness::Runner::Multi;
+package Test2::Harness::Runner::Staged;
 use strict;
 use warnings;
 
 our $VERSION = '0.001100';
 
 use Carp qw/confess/;
-use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET LOCK_NB/;
+use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
 use Time::HiRes qw/sleep time/;
 use Test2::Harness::Util qw/write_file_atomic open_file parse_exit file2mod/;
 use Long::Jump qw/setjump longjump/;
@@ -16,20 +16,12 @@ use Test2::Harness::Util::Queue();
 use Test2::Harness::Runner::Preload();
 use Test2::Harness::Runner::DepTracer();
 use Test2::Harness::Runner::Run();
-use Test2::Harness::Runner::Multi::Stage();
+use Test2::Harness::Runner::Staged::Stage();
 use Test2::Harness::Runner::State();
 
 use parent 'Test2::Harness::Runner';
 use Test2::Harness::Util::HashBase qw{
-    -inotify -stats -last_checked
-    -dtrace
-
-    -monitored
     -stage
-
-    -blacklist_file
-    -blacklist_lock
-    -blacklist
 
     <pending
     +run +runs +runs_ended
@@ -40,25 +32,6 @@ use Test2::Harness::Util::HashBase qw{
     +dispatch_lock_file
 };
 
-BEGIN {
-    local $@;
-    my $inotify = eval { require Linux::Inotify2; 1 };
-    if ($inotify) {
-        my $MASK = Linux::Inotify2::IN_MODIFY();
-        $MASK |= Linux::Inotify2::IN_ATTRIB();
-        $MASK |= Linux::Inotify2::IN_DELETE_SELF();
-        $MASK |= Linux::Inotify2::IN_MOVE_SELF();
-
-        *USE_INOTIFY = sub() { 1 };
-        require constant;
-        constant->import(INOTIFY_MASK => $MASK);
-    }
-    else {
-        *USE_INOTIFY = sub() { 0 };
-        *INOTIFY_MASK = sub() { 0 };
-    }
-}
-
 sub dispatch_lock_file {
     my $self = shift;
     return $self->{+DISPATCH_LOCK_FILE} //= File::Spec->catfile($self->{+DIR}, 'DISPATCH_LOCK');
@@ -67,8 +40,6 @@ sub dispatch_lock_file {
 sub init {
     my $self = shift;
 
-    $self->{+DTRACE} ||= Test2::Harness::Runner::DepTracer->new;
-
     $self->SUPER::init();
 
     delete $self->{+STAGE};
@@ -76,8 +47,8 @@ sub init {
     $self->{+PENDING} //= [];
 
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
-        concurrent_stages => 1,
-        job_count         => $self->{+JOB_COUNT},
+        staged    => 1,
+        job_count => $self->{+JOB_COUNT},
     );
 
     $self->{+HANDLERS}->{HUP} = sub {
@@ -109,187 +80,10 @@ sub respawn {
     CORE::exit(1);
 }
 
-sub load_blacklist {
-    my $self = shift;
-
-    my $bfile = $self->{+BLACKLIST_FILE} ||= File::Spec->catfile($self->{+DIR}, 'BLACKLIST');
-
-    my $blacklist = $self->{+BLACKLIST} ||= {};
-
-    return unless -f $bfile;
-
-    my $fh = open_file($bfile, '<');
-    while(my $pkg = <$fh>) {
-        chomp($pkg);
-        $blacklist->{$pkg} = 1;
-    }
-}
-
-sub monitor {
-    my $self = shift;
-
-    die "$$ ($self->{+STAGE}) monitor already starated!"
-        if $self->{+MONITORED} && $self->{+MONITORED} == $$;
-
-    delete $self->{+INOTIFY};
-    $self->{+MONITORED} = $$;
-
-    my $dtrace = $self->dtrace;
-    my $stats = $self->{+STATS} ||= {};
-
-    return $self->_monitor_inotify() if USE_INOTIFY();
-    return $self->_monitor_hardway();
-}
-
-sub _monitor_inotify {
-    my $self = shift;
-
-    my $dtrace = $self->dtrace;
-    my $stats = $self->{+STATS} ||= {};
-
-    my $inotify = $self->{+INOTIFY} //= do {
-        my $in = Linux::Inotify2->new;
-        $in->blocking(0);
-        $in;
-    };
-
-    for my $file (keys %{$dtrace->loaded}) {
-        $file = $INC{$file} || $file;
-        next if $stats->{$file}++;
-        next unless -e $file;
-        $inotify->watch($file, INOTIFY_MASK());
-    }
-
-    return;
-}
-
-sub _monitor_hardway {
-    my $self = shift;
-
-    my $dtrace = $self->dtrace;
-    my $stats  = $self->{+STATS} ||= {};
-
-    for my $file (keys %{$dtrace->loaded}) {
-        $file = $INC{$file} || $file;
-        next if $stats->{$file};
-        next unless -e $file;
-        my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);
-        $stats->{$file} = [$mtime, $ctime];
-    }
-
-    return;
-}
-
-sub check_monitored {
-    my $self = shift;
-
-    return $self->{+SIGNAL} if defined $self->{+SIGNAL};
-
-    my $changed = USE_INOTIFY ? $self->_check_monitored_inotify : $self->_check_monitored_hardway;
-    return undef unless $changed;
-
-    print "$$ ($self->{+STAGE}) Runner detected a change in one or more preloaded modules, blacklisting changed files and reloading...\n";
-
-    my %CNI = reverse %INC;
-    my @todo = map {[file2mod($CNI{$_}), $_]} keys %$changed;
-
-    my $bl = $self->lock_blacklist();
-
-    my $dep_map = $self->dtrace->dep_map;
-
-    my %seen;
-    while (@todo) {
-        my $set = shift @todo;
-        my ($pkg, $full) = @$set;
-        my $file = $CNI{$full} || $full;
-        next if $seen{$file}++;
-        next if $pkg->isa('Test2::Harness::Runner::Preload');
-        print $bl "$pkg\n";
-        my $next = $dep_map->{$file} or next;
-        push @todo => @$next;
-    }
-
-    $self->unlock_blacklist();
-
-    return $self->{+SIGNAL} ||= 'HUP';
-}
-
-
-sub _check_monitored_inotify {
-    my $self    = shift;
-    my $inotify = $self->{+INOTIFY} or return;
-
-    my @todo = $inotify->read or return;
-
-    return {map { ($_->fullname() => 1) } @todo};
-}
-
-sub _check_monitored_hardway {
-    my $self = shift;
-
-    # Only check once every 2 seconds
-    return if $self->{+LAST_CHECKED} && 2 > (time - $self->{+LAST_CHECKED});
-
-    my (%changed, $found);
-    for my $file (keys %{$self->{+STATS}}) {
-        my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);
-        my $times = $self->{+STATS}->{$file};
-        next if $mtime == $times->[0] && $ctime == $times->[1];
-        $found++;
-        $changed{$file}++;
-    }
-
-    $self->{+LAST_CHECKED} = time;
-
-    return unless $found;
-    return \%changed;
-}
-
-sub lock_blacklist {
-    my $self = shift;
-
-    return $self->{+BLACKLIST_LOCK} if $self->{+BLACKLIST_LOCK};
-
-    my $bl = open_file($self->{+BLACKLIST_FILE}, '>>');
-    flock($bl, LOCK_EX) or die "Could not lock blacklist: $!";
-    seek($bl,2,0);
-
-    return $self->{+BLACKLIST_LOCK} = $bl;
-}
-
-sub unlock_blacklist {
-    my $self = shift;
-
-    my $bl = delete $self->{+BLACKLIST_LOCK} or return;
-
-    $bl->flush;
-    flock($bl, LOCK_UN) or die "Could not unlock blacklist: $!";
-    close($bl);
-
-    return;
-}
-
-sub _preload {
-    my $self = shift;
-    my ($req, $block) = @_;
-
-    $block = $block ? { %$block, %{$self->blacklist} } : { %{$self->blacklist} };
-
-    my $dtrace = $self->dtrace;
-
-    $dtrace->start;
-    my $out = $self->SUPER::_preload($req, $block, $dtrace->my_require);
-    $dtrace->stop;
-
-    return $out;
-}
-
-sub run_stages {
+sub run_tests {
     my $self = shift;
 
     my $wait_time = $self->{+WAIT_TIME};
-
-    my $dtrace = $self->dtrace;
 
     my $stage = $self->{+STAGES}->[0];
     my $spawn = $self->stage_spawn_map();
@@ -331,7 +125,7 @@ sub spawn_child_stages {
         # Child;
         return $stage unless $pid;
 
-        my $proc = Test2::Harness::Runner::Multi::Stage->new(pid => $pid, name => $stage);
+        my $proc = Test2::Harness::Runner::Staged::Stage->new(pid => $pid, name => $stage);
         $self->watch($proc);
     }
 
@@ -439,7 +233,7 @@ sub set_proc_exit {
 
     $self->SUPER::set_proc_exit($proc, $exit, $time, @args);
 
-    return unless $proc->isa('Test2::Harness::Runner::Multi::Stage');
+    return unless $proc->isa('Test2::Harness::Runner::Staged::Stage');
 
     my $stage = $proc->name;
 
@@ -459,7 +253,7 @@ sub set_proc_exit {
 
     # Add the replacement process to the watch list
     if ($pid) {
-        $self->watch(Test2::Harness::Runner::Multi::Stage->new(pid => $pid, name => $stage));
+        $self->watch(Test2::Harness::Runner::Staged::Stage->new(pid => $pid, name => $stage));
         return;
     }
 
@@ -690,6 +484,16 @@ sub do_dispatch {
     return $task;
 }
 
+sub task_stage {
+    my $self = shift;
+    my ($task) = @_;
+
+    my $stage = $task->{stage};
+    $stage = 'default' unless $stage && $self->{+PRELOADS}->stage_check($stage);
+
+    return $stage;
+}
+
 1;
 
 __END__
@@ -700,7 +504,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Runner::Multi - Runner that loads all stages concurrently.
+Test2::Harness::Runner::Staged - Runner that loads all stages concurrently.
 
 =head1 DESCRIPTION
 

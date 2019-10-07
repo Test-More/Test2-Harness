@@ -38,8 +38,6 @@ use Test2::Harness::Util::HashBase(
     qw {
         <signal
 
-        <staged <stages <stage_check <fork_stages
-
         +preload_done
 
         +event_timeout_last
@@ -60,12 +58,6 @@ sub init {
 
     $self->{+DIR} = $dir;
 
-    $self->{+STAGES}      = ['default'];
-    $self->{+STAGE_CHECK} = { map {($_ => 1)} @{$self->{+STAGES}} };
-
-    $self->{+STAGED}      = [];
-    $self->{+FORK_STAGES} = {};
-
     $self->{+JOB_COUNT} //= 1;
 
     $self->{+EVENT_TIMEOUT_LAST}     = time;
@@ -78,13 +70,12 @@ sub completed_task { }
 
 sub queue_ended { $_[0]->run->queue_ended }
 sub job_class   { 'Test2::Harness::Runner::Job' }
+sub task_stage  { 'default' }
 
 sub run        { croak(ref($_[0]) . " Does not implement run()") }
-sub run_stages { croak(ref($_[0]) . " Does not implement run_stages()") }
+sub run_tests  { croak(ref($_[0]) . " Does not implement run_tests()") }
 sub add_task   { croak(ref($_[0]) . " Does not implement add_task()") }
 sub retry_task { croak(ref($_[0]) . " Does not implement retry_task()") }
-
-sub stage_should_fork { $_[0]->{+FORK_STAGES}->{$_[1]} // 0 }
 
 sub process {
     my $self = shift;
@@ -99,7 +90,7 @@ sub process {
 
     $self->preload;
 
-    my $ok  = eval { $self->run_stages(); 1 };
+    my $ok  = eval { $self->run_tests(); 1 };
     my $err = $@;
 
     warn $err unless $ok;
@@ -136,85 +127,6 @@ sub all_libs {
     push @out => map { clean_path($_) } @{$self->{+INCLUDES}} if $self->{+INCLUDES};
 
     return @out;
-}
-
-sub preload {
-    my $self = shift;
-
-    return if $self->{+PRELOAD_DONE};
-    $self->{+PRELOAD_DONE} = 1;
-
-    my $preloads = $self->{+PRELOADS} or return;
-    return unless @$preloads;
-
-    require Test2::API;
-    Test2::API::test2_start_preload();
-
-    $self->_preload($preloads);
-}
-
-sub _preload {
-    my $self = shift;
-    my ($preloads, $block, $require_sub) = @_;
-
-    return unless $preloads && @$preloads;
-
-    $block //= {};
-
-    my %seen = map { ($_ => 1) } @{$self->{+STAGES}};
-
-    for my $mod (@$preloads) {
-        next if $block && $block->{$mod};
-
-        $self->_preload_module($mod, $block, $require_sub);
-    }
-}
-
-sub _preload_module {
-    my $self = shift;
-    my ($mod, $block, $require_sub) = @_;
-
-    my $file = mod2file($mod);
-
-    $require_sub ? $require_sub->($file) : require $file;
-
-    return unless $mod->isa('Test2::Harness::Runner::Preload');
-
-    my %args = (
-        finite => $self->finite,
-        block  => $block,
-    );
-
-    my $imod = $self->_preload_module_init($mod, %args);
-    push @{$self->{+STAGED}} => $imod;
-
-    $self->{+FORK_STAGES}->{$_} = 1 for $imod->fork_stages;
-
-    my %seen;
-    my $stages = $self->{+STAGES};
-    my $idx = 0;
-    for my $stage ($imod->stages) {
-        unless ($seen{$stage}++) {
-            splice(@$stages, $idx++, 0, $stage);
-            next;
-        }
-
-        for (my $i = $idx; $i < @$stages; $i++) {
-            next unless $stages->[$i] eq $stage;
-            $idx = $i + 1;
-            last;
-        }
-    }
-}
-
-sub _preload_module_init {
-    my $self = shift;
-    my ($mod, %args) = @_;
-
-    return $mod->new(%args) if $mod->can('new');
-
-    $mod->preload(%args);
-    return $mod;
 }
 
 sub run_job {
@@ -255,6 +167,8 @@ sub check_timeouts {
     my $self = shift;
 
     my $now = time;
+
+    warn "FIXME: This ignores per-file timeout specifications";
 
     my $check_ev = $self->{+EVENT_TIMEOUT}     && $now >= ($self->{+EVENT_TIMEOUT_LAST} + $self->{+EVENT_TIMEOUT});
     my $check_pe = $self->{+POST_EXIT_TIMEOUT} && $now >= ($self->{+POST_EXIT_TIMEOUT_LAST} + $self->{+POST_EXIT_TIMEOUT});
@@ -331,6 +245,7 @@ sub stop {
     $self->SUPER::stop();
 }
 
+
 sub poll_tasks {
     my $self = shift;
 
@@ -358,15 +273,14 @@ sub poll_tasks {
         $dur = 'medium' unless $dur && DURATIONS->{$dur};
         $task->{duration} = $dur;
 
-        my $stage = $task->{stage};
-        $stage = 'default' unless $stage && $self->{+STAGE_CHECK}->{$stage};
-        $task->{stage} = $stage;
+        $task->{stage} = $self->task_stage($task);
 
         $self->add_task($task);
     }
 
     return $added;
 }
+
 
 1;
 

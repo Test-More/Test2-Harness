@@ -12,7 +12,7 @@ use Test2::Harness::Runner::Constants;
 use Test2::Harness::Util::HashBase(
     # These are construction arguments
     qw{
-        <concurrent_stages
+        <staged
         <eager_stages
         <job_count
     },
@@ -47,8 +47,8 @@ sub init {
     croak "You must specify a 'job_count' (1 or greater)"
         unless $self->{+JOB_COUNT};
 
-    croak "You must define a value for the 'concurrent_stages' attribute"
-        unless defined $self->{+CONCURRENT_STAGES};
+    croak "You must define a value for the 'staged' attribute"
+        unless defined $self->{+STAGED};
 
     # Eager Stages is a hashref where keys are stages that will run tasks for
     # later stages if they get bored. The value is an arrayref of stages from
@@ -89,6 +89,13 @@ sub mark_stage_ready {
     push @{$self->{+READY_STAGE_LIST}} => $stage;
 }
 
+sub task_stage {
+    my $self = shift;
+    my ($task) = @_;
+    return 'default' unless $self->{+STAGED};
+    return $task->{stage} || confess "'stage' is missing from the task";
+}
+
 sub add_pending_task {
     my $self = shift;
     my ($task) = @_;
@@ -99,7 +106,7 @@ sub add_pending_task {
     croak "Invalid category: $cat" unless CATEGORIES->{$cat};
     croak "Invalid duration: $dur" unless DURATIONS->{$dur};
 
-    my $stage = $task->{stage} or croak "'stage' is missing from the task";
+    my $stage = $self->task_stage($task);
     my $smoke = $task->{smoke} ? 'smoke' : 'main';
 
     my $pending = $self->{+PENDING_TASKS} //= {};
@@ -173,19 +180,6 @@ sub pick_and_start {
 
 sub pick_task {
     my $self = shift;
-    my ($stage) = @_;
-
-    if ($self->{+CONCURRENT_STAGES}) {
-        croak "pick_task() does not accept a stage when 'concurrent_stages' is set"
-            if $stage;
-    }
-    else {
-        croak "pick_task() requires a stage unless 'concurrent_stages' is set"
-            unless $stage;
-
-        croak "Stage '$stage' is not ready"
-            unless $self->{+READY_STAGE_LOOKUP}->{$stage};
-    }
 
     # Only 1 isolation job can be running and 1 is so let's
     # wait for that one to go away
@@ -193,7 +187,7 @@ sub pick_task {
     return undef if $self->{+RUNNING} >= $self->{+JOB_COUNT};
     return undef unless $self->{+TODO}->{total};
 
-    my ($run_stage, $task) = $self->_next($stage);
+    my ($run_stage, $task) = $self->_next();
 
     return undef unless $task;
 
@@ -214,7 +208,9 @@ sub _update_todo {
     my $smoke = $task->{smoke} ? 'smoke' : 'main';
     $todo->{$smoke} += $delta;
 
-    $todo->{stages}->{$smoke}->{$task->{stage}} += $delta;
+    my $stage = $self->task_stage($task);
+
+    $todo->{stages}->{$smoke}->{$stage} += $delta;
 }
 
 sub _cat_order {
@@ -265,14 +261,12 @@ sub _dur_order {
 # work. This is what allows us to find tasks for 'eager' stages that are bored.
 sub _stage_order {
     my $self = shift;
-    my ($stage) = @_;
-
-    # Non-concurrent means only the specified stage can run
-    return [[$stage => $stage]] unless $self->{+CONCURRENT_STAGES};
 
     # Populate list with all ready stages
     my %seen;
     my @stages = map {[$_ => $_]} grep { !$seen{$_}++ } @{$self->{+READY_STAGE_LIST}};
+
+    return \@stages unless $self->{+STAGED};
 
     # Add in any eager stages, but make sure they are last.
     for my $rstage (@{$self->{+READY_STAGE_LIST}}) {
@@ -285,13 +279,12 @@ sub _stage_order {
 
 sub _next {
     my $self = shift;
-    my ($stage) = @_;
 
     my $pending   = $self->{+PENDING_TASKS};
     my $conflicts = $self->{+RUNNING_CONFLICTS};
     my $cat_order = $self->_cat_order;
     my $dur_order = $self->_dur_order;
-    my $stages    = $self->_stage_order($stage);
+    my $stages    = $self->_stage_order();
 
     # Ugly....
     my $search = $pending;

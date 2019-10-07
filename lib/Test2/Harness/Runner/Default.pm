@@ -1,4 +1,4 @@
-package Test2::Harness::Runner::Linear;
+package Test2::Harness::Runner::Default;
 use strict;
 use warnings;
 
@@ -7,24 +7,17 @@ our $VERSION = '0.001100';
 use File::Spec();
 
 use Carp qw/confess/;
-use List::Util qw/first/;
 use Time::HiRes qw/sleep/;
 
 use Test2::Harness::Util::Queue;
 
 use Test2::Harness::Runner::Run();
-use Test2::Harness::Runner::Job();
 use Test2::Harness::Runner::State();
 
 use Test2::Harness::Runner::Constants;
 
 use parent 'Test2::Harness::Runner';
-use Test2::Harness::Util::HashBase(
-    qw {
-        +queue +run
-        +state
-    },
-);
+use Test2::Harness::Util::HashBase qw/ +queue +run +state /;
 
 sub add_task { $_[0]->{+STATE}->add_pending_task($_[1]) }
 
@@ -49,84 +42,13 @@ sub init {
     $self->SUPER::init();
 
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
-        concurrent_stages => 0,
-        job_count         => $self->{+JOB_COUNT},
+        staged    => 0,
+        job_count => $self->{+JOB_COUNT},
     );
-}
-
-sub run_stages {
-    my $self = shift;
-
-    $self->run(); # Find the run pre-fork since we are not a persistent runner
-
-    for my $stage (@{$self->{+STAGES}}) {
-        $self->stage_start($stage) or next;
-
-        $self->task_loop($stage);
-
-        $self->stage_stop($stage);
-    }
-}
-
-sub stage_fork {
-    my $self = shift;
-    my ($stage) = @_;
-
-    my $pid = fork();
-    die "Could not fork" unless defined $pid;
-
-    # Child returns true
-    unless ($pid) {
-        $0 = 'yath-runner-' . $stage;
-        return 1;
-    }
-
-    # Parent waits for child
-    my $check = waitpid($pid, 0);
-    my $ret = $?;
-
-    die "waitpid returned $check" unless $check == $pid;
-    die "Child process did not exit cleanly: $ret" if $ret;
-
-    return 0;
-}
-
-sub stage_start {
-    my $self = shift;
-    my ($stage) = @_;
-
-    my $fork = $self->stage_should_fork($stage);
-
-    return 0 if $fork && !$self->stage_fork($stage);
-
-    my $start_meth = "start_stage_$stage";
-    for my $mod (@{$self->{+STAGED}}) {
-        # Localize these in case something we preload tries to modify them.
-        local $SIG{INT}  = $SIG{INT};
-        local $SIG{HUP}  = $SIG{HUP};
-        local $SIG{TERM} = $SIG{TERM};
-
-        next unless $mod->can($start_meth);
-        $mod->$start_meth;
-    }
-
-    $self->{+STATE}->mark_stage_ready($stage);
-
-    return 1;
-}
-
-sub stage_stop {
-    my $self = shift;
-    my ($stage) = @_;
-
-    return unless $self->stage_should_fork($stage);
-
-    CORE::exit(0);
 }
 
 sub run {
     my $self = shift;
-    my ($stage) = @_;
 
     return $self->{+RUN} if $self->{+RUN};
 
@@ -142,15 +64,16 @@ sub run {
     );
 }
 
-sub task_loop {
+sub run_tests {
     my $self = shift;
-    my ($stage) = @_;
+
+    $self->{+STATE}->mark_stage_ready('default');
 
     while (1) {
-        my $task = $self->next($stage);
+        my $task = $self->next();
 
         # If we have no tasks and no pending jobs then we can be sure we are done
-        last unless $task || $self->wait(cat => Test2::Harness::Runner::Job->category);
+        last unless $task || $self->wait(cat => $self->job_class->category);
 
         $self->run_job($self->run, $task) if $task;
     };
@@ -158,9 +81,8 @@ sub task_loop {
 
 sub end_loop {
     my $self = shift;
-    my ($stage) = @_;
 
-    return 0 if $self->{+STATE}->todo($stage);
+    return 0 if $self->{+STATE}->todo('default');
     return 0 unless $self->queue_ended;
 
     return 1;
@@ -168,11 +90,10 @@ sub end_loop {
 
 sub next {
     my $self = shift;
-    my ($stage) = @_;
 
     my $iter = 0;
-    until ($self->end_loop($stage)) {
-        my $task = $self->_next_iter($stage, $iter++);
+    until ($self->end_loop()) {
+        my $task = $self->_next_iter($iter++);
         return $task if $task;
     }
 
@@ -181,7 +102,7 @@ sub next {
 
 sub _next_iter {
     my $self = shift;
-    my ($stage, $iter) = @_;
+    my ($iter) = @_;
 
     sleep($self->{+WAIT_TIME}) if $iter && $self->{+WAIT_TIME};
 
@@ -192,7 +113,7 @@ sub _next_iter {
     # Reap any completed PIDs
     $self->wait();
 
-    my $out = $self->{+STATE}->pick_and_start($stage);
+    my $out = $self->{+STATE}->pick_and_start('default');
     return $out;
 }
 
@@ -206,7 +127,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Runner::Linear - Run through each stage in a linear way.
+Test2::Harness::Runner::Default - Run All tests without any preload-stages.
 
 =head1 DESCRIPTION
 

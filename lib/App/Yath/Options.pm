@@ -24,6 +24,8 @@ use Test2::Harness::Util::HashBase qw{
     <command_class
 
     <pending_pre <pending_cmd <pending_post
+
+    <included
 };
 
 sub import {
@@ -80,6 +82,8 @@ sub init {
 
     $self->{+SETTINGS} //= App::Yath::Settings->new();
 
+    $self->{+INCLUDED} //= {};
+
     return $self;
 }
 
@@ -115,9 +119,11 @@ sub include_from {
     for my $pkg (@_) {
         require(mod2file($pkg));
 
-        my $options = $pkg->can('options') ? $pkg->options : undef;
-        croak "$pkg' does not have any options to include" unless $options;
+        next unless $pkg->can('options');
+        my $options = $pkg->options or next;
         $self->include($options);
+
+        $self->{+INCLUDED}->{$pkg}++;
     }
 
     return;
@@ -181,10 +187,7 @@ sub set_command_class {
     croak "Invalid command class: $class"
         unless $class->isa('App::Yath::Command');
 
-    if ($class->can('options')) {
-        my $cmd_options = $class->options;
-        $self->include($cmd_options) if $cmd_options;
-    }
+    $self->include_from($class) if $class->can('options');
 
     return $self->{+COMMAND_CLASS} = $class;
 }
@@ -521,25 +524,29 @@ sub _index_option {
 
     my $index = $self->{+LOOKUP};
 
+    my $out = 0;
+
     for my $n ($opt->name, @{$opt->alt || []}) {
         if (my $existing = $index->{$n}) {
-            return 0 if "$existing" eq "$opt";
+            next if "$existing" eq "$opt";
             croak "Option '$n' was already defined (" . $existing->trace_string . ")";
         }
 
+        $out++;
         $index->{$n} = $opt;
     }
 
     if (my $short = $opt->short) {
         if (my $existing = $index->{$short}) {
-            return 0 if "$existing" eq "$opt";
+            return $out if "$existing" eq "$opt";
             croak "Option '$short' was already defined (" . $existing->trace_string . ")";
         }
 
+        $out++;
         $index->{$short} = $opt;
     }
 
-    return 1;
+    return $out;
 }
 
 sub _list_option {

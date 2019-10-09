@@ -150,6 +150,7 @@ sub start_collector {
         command => [
             $^X, $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
+            '--no-scan-plugins', # Do not preload any plugin modules
             collector => 'Test2::Harness::Collector',
             $dir, $run->run_id, $runner_pid,
             show_runner_output => 1,
@@ -174,6 +175,7 @@ sub start_runner {
         command => [
             $^X, $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
+            '--no-scan-plugins', # Do not preload any plugin modules
             runner => $dir,
         ],
     );

@@ -24,6 +24,14 @@ option_group {prefix => 'yath'} => sub {
         action => \&plugin_action,
     );
 
+    option no_scan_plugins => (
+        type => 'b',
+        pre_command => 1,
+
+        category => 'Plugins',
+        description => 'Normally yath scans for and loads all App::Yath::Plugin::* modules in order to bring in command-line options they may provide. This flag will disable that. This is useful if you have a naughty plugin that it loading other modules when it should not.',
+    );
+
     option dev_libs => (
         type  => 'D',
         short => 'D',

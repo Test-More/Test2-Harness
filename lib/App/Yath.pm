@@ -23,17 +23,24 @@ use App::Yath::Options();
 sub init {
     my $self = shift;
 
-    my ($pkg, $file, $line) = caller(1);
+    my $old = select STDOUT;
+    $| = 1;
+    select STDERR;
+    $| = 1;
+    select $old;
+
+    my @caller = caller(1);
 
     $self->{+SETTINGS} //= App::Yath::Settings->new;
-    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('script')} //= clean_path($file);
-    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('start')}  //= time();
+
+    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('script')}          //= clean_path($caller[1]);
+    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('start')}           //= time();
+    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('no_scan_plugins')} //= 0;
 
     $self->{+_ARGV}  //= delete($self->{argv}) // [];
     $self->{+CONFIG} //= {};
 }
 
-my $called = 0;
 sub generate_run_sub {
     my $self = shift;
     my ($symbol) = @_;
@@ -83,6 +90,8 @@ sub load_options {
         'App::Yath::Options::PreCommand',
     );
 
+    return $options if $self->{+SETTINGS}->yath->no_scan_plugins;
+
     my $option_libs = find_libraries('App::Yath::Plugin::*');
     for my $lib (sort keys %$option_libs) {
         my $ok = eval { require $option_libs->{$lib}; 1 };
@@ -92,9 +101,7 @@ sub load_options {
         }
 
         next unless $lib->can('options');
-        my $mod_opts = $lib->options or next;
-
-        $options->include($mod_opts);
+        $options->include_from($lib);
     }
 
     return $options;
@@ -145,28 +152,29 @@ sub _command_from_argv {
 
     my $argv = $self->{+_ARGV};
 
-    if (@$argv) {
-        my $arg = $argv->[0];
+    for (my $idx = 0; $idx < @$argv; $idx++) {
+        my $arg = $argv->[$idx];
 
         if ($arg =~ m/^-*h(elp)?$/i) {
-            shift @$argv;
+            splice(@$argv, $idx, 1);
             return 'help';
         }
+
+        next if $arg =~ /^-/;
 
         if ($arg =~ m/\.jsonl(\.bz2|\.gz)?$/) {
             warn "\n** First argument is a log file, defaulting to the 'replay' command **\n\n";
             return 'replay';
         }
 
-        return shift @$argv if $self->load_command($arg, check_only => 1);
+        return splice(@$argv, $idx, 1) if $self->load_command($arg, check_only => 1);
 
-        my $is_opt_or_file = 0;
-        $is_opt_or_file ||= -f $arg;
-        $is_opt_or_file ||= -d $arg;
-        $is_opt_or_file ||= $arg =~ m/^-/;
+        my $is_path = 0;
+        $is_path ||= -f $arg;
+        $is_path ||= -d $arg;
 
         # Assume it is a command, but an invalid one.
-        return shift @$argv unless $is_opt_or_file;
+        return splice(@$argv, $idx, 1) unless $is_path;
     }
 
     if (find_pfile()) {
@@ -185,41 +193,23 @@ sub load_command {
     my $cmd_class = "App::Yath::Command::$cmd_name";
     my $cmd_file  = "App/Yath/Command/$cmd_name.pm";
 
-    my ($found, $error);
-    {
-        local $@;
-        $found = eval { require $cmd_file; 1 };
-        $error = $@;
-    }
+    return $cmd_class if eval { require $cmd_file; 1 };
+    my $error = $@ || 'unknown error';
 
-    if (!$found) {
-        $error ||= 'unknown error';
+    my $not_found = $error =~ m{Can't locate \Q$cmd_file\E in \@INC};
 
-        my $not_found = $error =~ m{Can't locate \Q$cmd_file\E in \@INC};
+    return undef if $params{check_only} && $not_found;
 
-        return undef if $params{check_only} && $not_found;
+    die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
+        if $not_found;
 
-        die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
-            if $not_found;
-
-        die $error;
-    }
-
-    return $cmd_class;
+    die $error;
 }
 
 
 1;
 
 __END__
-
-
-    my $old = select STDOUT;
-    $| = 1;
-    select STDERR;
-    $| = 1;
-    select $old;
-
 
 
 =pod

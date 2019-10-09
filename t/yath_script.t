@@ -177,8 +177,9 @@ sub test_pre_parse_d_args {
     my $code = delete $sections{pre_parse_d_args};
 
     local @INC = ('START', 'END');
-    local @ARGV = ('START', '-D=aaa', '-Dbbb', '--no-dev-lib', '-D', '--dev-lib', '-Dxxx', '-Dxxx', '--dev-lib=foo', '-Dbbb', '::', '-Doops', 'END');
+    local @ARGV = ('START', '-D=aaa', '-Dbbb', '--no-scan-plugins', '--no-dev-lib', '-D', '--dev-lib', '-Dxxx', '-Dxxx', '--dev-lib=foo', '-Dbbb', '::', '-Doops', 'END');
     my @DEVLIBS;
+    my $NO_PLUGINS;
 
     my ($libs, $done);
     eval $code . <<'    EOT' or die $@;
@@ -209,6 +210,12 @@ sub test_pre_parse_d_args {
         [@INC],
         ['lib', 'blib/lib', 'blib/arch', 'xxx', 'foo', 'bbb', 'START', 'END'],
         "prepended libs to \@INC"
+    );
+
+    is(
+        $NO_PLUGINS,
+        1,
+        "Set no plugins"
     );
 
     is(
@@ -375,7 +382,8 @@ sub test_create_app {
         )
     );
 
-    my (%ORIG_SIG, @ORIG_ARGV, @ORIG_INC, @DEVLIBS, @ARGV, %CONFIG);
+    my (%ORIG_SIG, @ORIG_ARGV, @ORIG_INC, @DEVLIBS, @ARGV, %CONFIG, $NO_PLUGINS);
+    $NO_PLUGINS = 2;
     my $SCRIPT = "foobar";
     eval $code or die $@;
 
@@ -391,12 +399,13 @@ sub test_create_app {
         $settings,
         {
             yath => {
-                orig_sig  => Test2::V0::exact_ref(\%ORIG_SIG),
-                orig_argv => Test2::V0::exact_ref(\@ORIG_ARGV),
-                orig_inc  => Test2::V0::exact_ref(\@ORIG_INC),
-                dev_libs  => Test2::V0::exact_ref(\@DEVLIBS),
-                script    => $SCRIPT,
-                start     => Test2::V0::T(),
+                orig_sig   => Test2::V0::exact_ref(\%ORIG_SIG),
+                orig_argv  => Test2::V0::exact_ref(\@ORIG_ARGV),
+                orig_inc   => Test2::V0::exact_ref(\@ORIG_INC),
+                dev_libs   => Test2::V0::exact_ref(\@DEVLIBS),
+                script     => $SCRIPT,
+                no_scan_plugins => 2,
+                start      => Test2::V0::T(),
             },
         },
         "Got settings"

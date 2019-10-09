@@ -16,6 +16,7 @@ BEGIN {
     my @DEVLIBS;
     my %CONFIG;
     my $SCRIPT;
+    my $NO_PLUGINS;
 
     # ==START TESTABLE CODE FIND_CONFIG_FILES==
 
@@ -124,6 +125,11 @@ BEGIN {
             next;
         }
 
+        if ($arg eq '--no-scan-plugins') {
+            $NO_PLUGINS = 1;
+            next;
+        }
+
         push @args => $arg;
     }
     @ARGV = (@args, @ARGV);
@@ -179,12 +185,13 @@ BEGIN {
     require App::Yath::Settings;
     my $settings = App::Yath::Settings->new(
         yath => {
-            orig_sig  => \%ORIG_SIG,
-            orig_argv => \@ORIG_ARGV,
-            orig_inc  => \@ORIG_INC,
-            script    => $SCRIPT,
-            dev_libs  => \@DEVLIBS,
-            start     => Time::HiRes::time(),
+            orig_sig        => \%ORIG_SIG,
+            orig_argv       => \@ORIG_ARGV,
+            orig_inc        => \@ORIG_INC,
+            script          => $SCRIPT,
+            no_scan_plugins => $NO_PLUGINS,
+            dev_libs        => \@DEVLIBS,
+            start           => Time::HiRes::time(),
         },
     );
 

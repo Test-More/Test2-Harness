@@ -51,8 +51,6 @@ use Test2::Harness::Util::HashBase(
 
         +event_timeout +post_exit_timeout
 
-        +preloads_with_callbacks
-
         +switches_from_env
 
         +et_file +pet_file
@@ -148,7 +146,6 @@ my %JSON_SKIP = (
     RUN()                     => 1,
     CLI_INCLUDES()            => 1,
     CLI_OPTIONS()             => 1,
-    PRELOADS_WITH_CALLBACKS() => 1,
 );
 
 sub TO_JSON {
@@ -220,8 +217,6 @@ sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }
 sub cli_includes { @{$_[0]->{+CLI_INCLUDES} //= [ map {("-I$_")} $_[0]->includes ]} }
 
 sub runner_includes { @{$_[0]->{+RUNNER_INCLUDES} //= [$_[0]->{+RUNNER}->all_libs]} }
-
-sub preloads_with_callbacks {$_[0]->{+PRELOADS_WITH_CALLBACKS} //= [grep { $_->isa('Test2::Harness::Runner::Preload') } @{$_[0]->{+RUNNER}->preloads}]}
 #>>>
 
 sub _fallback {

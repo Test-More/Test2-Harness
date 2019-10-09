@@ -86,14 +86,26 @@ sub generate_run_sub {
     $class->cleanup_process(@$jump);
 }
 
+sub get_stage {
+    my $class = shift;
+    my ($runner) = @_;
+
+    return unless $runner->can('stage');
+
+    my $stage_name = $runner->stage    or return;
+    my $preloads   = $runner->preloads or return;
+    my $p          = $preloads->staged or return;
+
+    return $p->stage_lookup->{$stage_name};
+}
+
 sub launch_via_fork {
     my $class = shift;
     my ($runner, $job) = @_;
 
+    my $stage = $class->get_stage($runner);
 
-    my $preloads = $job->preloads_with_callbacks;
-
-    $_->pre_fork($job) for @$preloads;
+    $stage->do_pre_fork($job) if $stage;
 
     my $pid = fork();
     die "Failed to fork: $!" unless defined $pid;
@@ -109,9 +121,9 @@ sub launch_via_fork {
         setpgrp(0, 0) if Test2::Harness::IPC::USE_P_GROUPS();
         $runner->stop();
 
-        $_->post_fork($job) for @$preloads;
+        $stage->do_post_fork($job) if $stage;
 
-        longjump "Test-Runner" => ($job, $preloads);
+        longjump "Test-Runner" => ($job, $stage);
 
         1;
     };
@@ -122,7 +134,7 @@ sub launch_via_fork {
 
 sub cleanup_process {
     my $class = shift;
-    my ($job, $preloads) = @_;
+    my ($job, $stage) = @_;
 
     $class->update_io($job);           # Get the correct filehandles in place early
     $class->set_env($job);             # Set up the necessary env vars
@@ -130,7 +142,7 @@ sub cleanup_process {
     $class->do_loads($job);            # Modules that we wanted loaded/imported post fork
     $class->test2_state($job);         # Normalize the Test2 state
 
-    $_->pre_launch($job) for @$preloads;
+    $stage->do_pre_launch($job) if $stage;
 
     $class->final_state($job); # Important final cleanup
 }

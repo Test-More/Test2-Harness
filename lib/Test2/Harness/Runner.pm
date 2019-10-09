@@ -84,8 +84,6 @@ sub process {
 
     $self->start();
 
-    $self->preload;
-
     my $ok  = eval { $self->run_tests(); 1 };
     my $err = $@;
 

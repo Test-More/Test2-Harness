@@ -54,13 +54,11 @@ sub init {
     my $self = shift;
 
     $self->{+PRELOADS} //= [];
+    $self->{+STARTED_STAGES} = {};
 
     if ($self->{+MONITOR}) {
         require Test2::Harness::Runner::DepTracer;
         $self->{+DTRACE} //= Test2::Harness::Runner::DepTracer->new();
-
-        $self->{+STAGED} //= [];
-        $self->{+STARTED_STAGES} = {};
 
         $self->{+BLACKLIST}      //= {};
         $self->{+BLACKLIST_FILE} //= File::Spec->catfile($self->{+DIR}, 'BLACKLIST');
@@ -92,7 +90,7 @@ sub runner_class {
     croak "You must run preload() before asking for a runner class"
         unless $self->{+DONE};
 
-    if (@{$self->{+STAGED}}) {
+    if ($self->{+STAGED}) {
         require Test2::Harness::Runner::Staged;
         return 'Test2::Harness::Runner::Staged';
     }
@@ -107,19 +105,18 @@ sub start_stage {
 
     $self->load_blacklist if $self->{+MONITOR};
 
-    my $meth = $self->{+MONITOR} ? '_monitor_preload' : '_preload';
-    for my $mod (@{$self->{+STAGED}}) {
+    if (my $p = $self->{+STAGED}) {
         # Localize these in case something we preload tries to modify them.
         local $SIG{INT}  = $SIG{INT};
         local $SIG{HUP}  = $SIG{HUP};
         local $SIG{TERM} = $SIG{TERM};
 
-        my $p        = $mod->TEST2_HARNESS_PRELOAD() or next;
-        my $stage    = $p->stage_lookup->{$stage}    or next;
-        my $preloads = $stage->load_sequence         or next;
-        next unless @$preloads;
+        my $stage    = $p->stage_lookup->{$stage};
+        my $preloads = $stage ? $stage->load_sequence : [];
 
-        $self->$meth($preloads);
+        my $meth = $self->{+MONITOR} ? '_monitor_preload' : '_preload';
+
+        $self->$meth($preloads) if $preloads && @$preloads;
     }
 
     $self->_monitor() if $self->{+MONITOR};
@@ -206,7 +203,16 @@ sub _preload_module {
 
     $require_sub ? $require_sub->($file) : require $file;
 
-    push @{$self->{+STAGED}} => $mod if $mod->can('TEST2_HARNESS_PRELOAD');
+    return unless $mod->can('TEST2_HARNESS_PRELOAD');
+
+    $self->{+STAGED} //= do {
+        require Test2::Harness::Runner::Preload;
+        Test2::Harness::Runner::Preload->new();
+    };
+
+    $self->{+STAGED}->merge($mod->TEST2_HARNESS_PRELOAD);
+
+    return;
 }
 
 sub load_blacklist {

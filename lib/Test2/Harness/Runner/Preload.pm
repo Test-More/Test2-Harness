@@ -50,7 +50,6 @@ sub import {
 }
 
 use Test2::Harness::Util::HashBase qw{
-    <linear
     <stage_list
     <stage_lookup
     <stack
@@ -63,8 +62,6 @@ sub init {
     $self->{+STAGE_LOOKUP} //= {};
 
     $self->{+STACK} //= [];
-
-    $self->{+LINEAR} //= @{$self->{+STAGE_LIST}} > 1 ? 0 : 1;
 }
 
 sub build_stage {
@@ -79,7 +76,6 @@ sub build_stage {
     my $stage = Test2::Harness::Runner::Preload::Stag->new(
         stage_lookup => $self->{+STAGE_LOOKUP},
         stage_list   => $self->{+STAGE_LOOKUP},
-        linear       => $self->{+LINEAR},
         %params,
     );
 
@@ -129,11 +125,9 @@ A stage named '$name' was already defined.
         }
 
         $self->{+STAGE_LOOKUP}->{$name} = $item;
-        $self->{+LINEAR} &= @{$self->{+STAGE_LIST}} <= 1
     }
 
     push @{$self->{+STAGE_LIST}} => $stage;
-    $self->{+LINEAR} &= @{$self->{+STAGE_LIST}} <= 1
 }
 
 sub merge {
@@ -141,8 +135,6 @@ sub merge {
     my ($merge) = @_;
 
     my $caller = [caller()];
-
-    $self->{+LINEAR} &= $merge->{+LINEAR};
 
     for my $stage (@{$merge->{+STAGE_LIST}}) {
         $self->add_stage($stage, $caller);

@@ -40,8 +40,7 @@ use Test2::Harness::Util::HashBase(
 
         +preload_done
 
-        +event_timeout_last
-        +post_exit_timeout_last
+        +last_timeout_check
     },
 );
 
@@ -59,9 +58,6 @@ sub init {
     $self->{+DIR} = $dir;
 
     $self->{+JOB_COUNT} //= 1;
-
-    $self->{+EVENT_TIMEOUT_LAST}     = time;
-    $self->{+POST_EXIT_TIMEOUT_LAST} = time;
 
     $self->SUPER::init();
 }
@@ -168,31 +164,32 @@ sub check_timeouts {
 
     my $now = time;
 
-    warn "FIXME: This ignores per-file timeout specifications";
-
-    my $check_ev = $self->{+EVENT_TIMEOUT}     && $now >= ($self->{+EVENT_TIMEOUT_LAST} + $self->{+EVENT_TIMEOUT});
-    my $check_pe = $self->{+POST_EXIT_TIMEOUT} && $now >= ($self->{+POST_EXIT_TIMEOUT_LAST} + $self->{+POST_EXIT_TIMEOUT});
-
-    return unless $check_ev || $check_pe;
-
-    $self->{+EVENT_TIMEOUT_LAST}     = $now;
-    $self->{+POST_EXIT_TIMEOUT_LAST} = $now;
+    # Check only once per second, that is as granular as we get. Also the check is not cheep.
+    return if $self->{+LAST_TIMEOUT_CHECK} && $now < (1 + $self->{+LAST_TIMEOUT_CHECK});
 
     for my $pid (keys %{$self->{+PROCS}}) {
-        my $job       = $self->{+PROCS}->{$pid};
-        my $last_size = $job->last_output_size;
-        my $new_size  = $job->output_size;
+        my $job = $self->{+PROCS}->{$pid};
 
-        # If last_size is undefined then we have never checked this job, so it
-        # started since the last loop, do not time it out yet.
-        next unless defined $last_size;
+        my $et  = $job->event_timeout     // $self->{+EVENT_TIMEOUT};
+        my $pet = $job->post_exit_timeout // $self->{+POST_EXIT_TIMEOUT};
 
-        next if $new_size > $last_size;
+        next unless $et || $pet;
+
+        my $changed = $job->output_changed();
+        my $delta   = $now - $changed;
+
+        # Event timout if we are checking for one, and if the delta is larger than the timeout.
+        my $e_to = $et && $delta > $et;
+
+        # Post-Exit timeout if we are checking for one, the process has exited (we are waiting) and the delta is larger than the timeout.
+        my $pe_to = $pet && $self->{+WAITING}->{$pid} && $delta > $pet;
+
+        next unless $e_to || $pe_to;
 
         my $kill = -f $job->et_file || -f $job->pet_file;
 
-        write_file_atomic($job->et_file,  $now) if $check_ev && !-f $job->et_file;
-        write_file_atomic($job->pet_file, $now) if $check_pe && !-f $job->pet_file;
+        write_file_atomic($job->et_file,  $now) if $e_to && !-f $job->et_file;
+        write_file_atomic($job->pet_file, $now) if $pe_to && !-f $job->pet_file;
 
         my $sig = $kill ? 'KILL' : 'TERM';
         $sig = "-$sig" if $self->USE_P_GROUPS;
@@ -201,6 +198,8 @@ sub check_timeouts {
 
         kill($sig, $pid);
     }
+
+    $self->{+LAST_TIMEOUT_CHECK} = time;
 }
 
 sub set_proc_exit {

@@ -20,6 +20,7 @@ use Test2::Harness::Util::HashBase(
     qw{ <task <runner <run <settings }, # required
     qw{
         <last_output_size
+        +output_changed
 
         +via
 
@@ -179,10 +180,23 @@ sub output_size {
 
     my $size = 0;
 
-    $size += -s $self->err_file;
-    $size += -s $self->out_file;
+    $size += -s $self->err_file || 0;
+    $size += -s $self->out_file || 0;
 
     return $self->{+LAST_OUTPUT_SIZE} = $size;
+}
+
+sub output_changed {
+    my $self = shift;
+
+    my $last = $self->{+LAST_OUTPUT_SIZE};
+    my $size = $self->output_size();
+
+    # Output changed, update time
+    return $self->{+OUTPUT_CHANGED} = time() if $last && $size != $last;
+
+    # Return the last recorded time, if there is no previously recorded time then the record starts now
+    return $self->{+OUTPUT_CHANGED} //= time();
 }
 
 sub is_try      { $_[0]->{+IS_TRY}      //= $_[0]->{+TASK}->{is_try} // 0 }

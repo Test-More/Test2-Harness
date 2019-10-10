@@ -169,6 +169,7 @@ sub TO_JSON {
 
     for my $attr (Test2::Harness::Util::HashBase::attr_list(blessed($self))) {
         next if $JSON_SKIP{$attr};
+        $self->$attr unless defined $self->{$attr};
         $out->{$attr} = $self->{$attr};
     }
 

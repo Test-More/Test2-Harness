@@ -38,13 +38,10 @@ use Test2::Harness::Util::HashBase qw{
     -stderr_file -_stderr_buffer -_stderr_index -_stderr_cg
     -stdout_file -_stdout_buffer -_stdout_index -_stdout_cg
 
-    -start_file  -start_exists   -_start_buffer
     -exit_file   -_exit_done     -_exit_buffer
 
     -et_file  -et_buffer
     -pet_file -pet_buffer
-
-    -_file -file_file
 
     -last_stamp
 };
@@ -93,10 +90,6 @@ sub poll {
         : sub { 0 };
 
     while (!defined($max) || @out < $max) {
-        # Micro-optimization, 'start' only ever has 1 thing, so do not enter
-        # the sub if we do not need to.
-        push @new => $self->_poll_start($check->() // last) if $self->{+_START_BUFFER};
-
         push @new => $self->_poll_streams($check->() // last);
 
         push @new => $self->_poll_timeouts($check->() // last) if $self->{+ET_BUFFER} || $self->{+PET_BUFFER};
@@ -355,22 +348,10 @@ sub _poll_stream_process_harness_line {
     return $esync;
 }
 
-sub file {
-    my $self = shift;
-    return $self->{+_FILE} if $self->{+_FILE};
-
-    my $fh = $self->_open_file('file');
-    return 'UNKNOWN' unless $fh->exists;
-
-    return $self->{+_FILE} = $fh->read_line;
-}
-
 my %FILE_MAP = (
     'stdout' => [STDOUT_FILE, \&open_file],
     'stderr' => [STDERR_FILE, \&open_file],
-    'start'  => [START_FILE,  'Test2::Harness::Util::File::Value'],
     'exit'   => [EXIT_FILE,   'Test2::Harness::Util::File::Value'],
-    'file'   => [FILE_FILE,   'Test2::Harness::Util::File::Value'],
 
     'event_timeout'     => [ET_FILE,  'Test2::Harness::Util::File::Value'],
     'post_exit_timeout' => [PET_FILE, 'Test2::Harness::Util::File::Value'],
@@ -470,13 +451,8 @@ sub _fill_buffers {
     # still need to add to the buffers each time though in case we are waiting
     # for a sync event before we flush.
 
-    # Do not read anything until the start file is present and read.
-    unless ($self->{+START_EXISTS}) {
-        my $start_file = $self->{+START_FILE} || $self->_open_file('start');
-        return unless $start_file->exists;
-        $self->{+_START_BUFFER} = $start_file->read_line or return;
-        $self->{+START_EXISTS} = 1;
-    }
+    # Wait for the directory
+    return unless -d $self->{+JOB_ROOT};
 
     $self->_fill_stream_buffers($max);
 
@@ -519,17 +495,6 @@ sub _fill_buffers {
     # If we found exit we need one last buffer fill on the other sources.
     # If we do not do this we have a race condition. Ignore the max for this.
     $self->_fill_stream_buffers();
-}
-
-sub _poll_start {
-    my $self = shift;
-    # Intentionally ignoring the max argument, this only ever returns 1 item,
-    # and would not be called if max was 0.
-
-    return unless defined $self->{+_START_BUFFER};
-    my $value = delete $self->{+_START_BUFFER};
-
-    return $self->_process_start_line($value);
 }
 
 sub _poll_timeouts {
@@ -582,38 +547,6 @@ sub _process_events_line {
     return $event_data;
 }
 
-sub _process_start_line {
-    my $self = shift;
-    my ($value) = @_;
-
-    chomp($value);
-
-    my $event_id = gen_uuid();
-
-    $self->{+LAST_STAMP} = $value;
-
-    $self->{+DONE} = 1;
-
-    return {
-        event_id => $event_id,
-        job_id   => $self->{+JOB_ID},
-        run_id   => $self->{+RUN_ID},
-        stamp    => $value,
-
-        facet_data => {
-            about             => {uuid => $event_id},
-            harness_job_start => {
-                details => "Job $self->{+JOB_ID} started at $value",
-                job_id  => $self->{+JOB_ID},
-                stamp   => $value,
-                file    => $self->file,
-                rel_file => File::Spec->abs2rel($self->file),
-                abs_file => File::Spec->rel2abs($self->file),
-            },
-        }
-    };
-}
-
 sub _process_exit_line {
     my $self = shift;
     my ($value) = @_;
@@ -625,7 +558,9 @@ sub _process_exit_line {
 
     my $event_id = gen_uuid();
 
-    my ($exit, $stamp) = split /\s+/, $value, 2;
+    my ($exit, $err, $sig, $dmp, $stamp, $retry) = split /\s+/, $value;
+
+    $self->{+DONE} = {retry => $retry};
 
     return {
         event_id => $event_id,
@@ -636,10 +571,13 @@ sub _process_exit_line {
         facet_data => {
             about            => {uuid => $event_id},
             harness_job_exit => {
-                details => "Test script exited $value",
+                details => "Test script exited $exit ($err\:$sig)",
                 exit    => $exit,
+                code    => $err,
+                signal  => $sig,
+                dumped  => $dmp,
+                retry   => $retry,
                 job_id  => $self->{+JOB_ID},
-                file    => $self->file,
                 stdout  => $stdout,
                 stderr  => $stderr,
                 stamp   => $stamp,

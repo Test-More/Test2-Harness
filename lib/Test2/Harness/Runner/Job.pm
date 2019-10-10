@@ -80,8 +80,8 @@ sub init {
 sub prepare_dir {
     my $self = shift;
 
-    $self->write_initial_files();
-    $self->make_temp_dir();
+    $self->job_dir();
+    $self->tmp_dir();
 }
 
 sub via {
@@ -141,11 +141,25 @@ sub switches_from_env {
 }
 
 my %JSON_SKIP = (
-    TASK()                    => 1,
-    RUNNER()                  => 1,
-    RUN()                     => 1,
-    CLI_INCLUDES()            => 1,
-    CLI_OPTIONS()             => 1,
+    SETTINGS()         => 1,
+    TASK()             => 1,
+    RUNNER()           => 1,
+    RUN()              => 1,
+    CLI_INCLUDES()     => 1,
+    CLI_OPTIONS()      => 1,
+    ERR_FILE()         => 1,
+    ET_FILE()          => 1,
+    EVENT_DIR()        => 1,
+    EXIT()             => 1,
+    EXIT_TIME()        => 1,
+    IN_FILE()          => 1,
+    JOB_DIR()          => 1,
+    LAST_OUTPUT_SIZE() => 1,
+    OUT_FILE()         => 1,
+    OUTPUT_CHANGED()   => 1,
+    PET_FILE()         => 1,
+    RUN_DIR()          => 1,
+    TMP_DIR()          => 1,
 );
 
 sub TO_JSON {
@@ -155,7 +169,7 @@ sub TO_JSON {
 
     for my $attr (Test2::Harness::Util::HashBase::attr_list(blessed($self))) {
         next if $JSON_SKIP{$attr};
-        $out->{$attr} = $self->$attr;
+        $out->{$attr} = $self->{$attr};
     }
 
     $out->{job_name} //= $out->{job_id};
@@ -241,7 +255,6 @@ sub job_dir {
     $self->{+JOB_DIR} = $job_dir;
 }
 
-sub make_temp_dir { $_[0]->tmp_dir }
 sub tmp_dir {
     my $self = shift;
     return $self->{+TMP_DIR} if $self->{+TMP_DIR};
@@ -276,17 +289,6 @@ sub in_file {
     write_file($stdin, $content);
 
     return $self->{+IN_FILE} = $stdin;
-}
-
-sub write_initial_files {
-    my $self = shift;
-
-    my $job_dir = $self->job_dir;
-    my $file_file = File::Spec->catfile($job_dir, 'file');
-    write_file_atomic($file_file, $self->{+TASK}->{file});
-
-    my $start_file = File::Spec->catfile($job_dir, 'start');
-    write_file_atomic($start_file, time());
 }
 
 sub use_fork {

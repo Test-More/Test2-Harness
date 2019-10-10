@@ -138,19 +138,25 @@ sub run_job {
 
     $job->prepare_dir();
 
+    my $spawn_time;
+
     my $pid;
     my $via = $job->via;
     $via //= $self->{+FORK_JOB_CALLBACK} if $job->use_fork;
     if ($via) {
+        $spawn_time = time();
         $pid = $self->$via($job);
         $job->set_pid($pid);
         $self->watch($job);
     }
     else {
+        $spawn_time = time();
         $self->spawn($job);
     }
 
-    $run->jobs->write($job);
+    my $json_data = $job->TO_JSON();
+    $json_data->{stamp} = $spawn_time;
+    $run->jobs->write($json_data);
 
     print "Started $pid: " . $job->file . " \n" if $pid;
 

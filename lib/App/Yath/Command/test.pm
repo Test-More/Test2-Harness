@@ -11,6 +11,9 @@ use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
+
+use Test2::Harness::Util::JSON qw/encode_json/;
+
 use File::Spec;
 
 use Carp qw/croak/;
@@ -72,8 +75,12 @@ sub run {
     my $run = $self->build_run();
     my $runner_proc = $self->start_runner();
 
-#    # Start a collector
-#    my $collector_proc = $self->start_collector($run, $runner_proc->pid);
+    my ($auditor_in, $collector_out);
+    pipe($auditor_in, $collector_out) or die "Could not make a pipe: $!";
+
+    # Start a collector
+    my $collector_proc = $self->start_collector($run, $runner_proc->pid, $collector_out);
+    close($collector_out);
 
 #    # Start an auditor
 #    my $auditor_proc = Test2::Harness::Process->new(
@@ -90,50 +97,49 @@ sub run {
     $ipc->wait(all => 1);
     $ipc->stop;
 
-    system('cat', File::Spec->catfile($dir, 'output.log'));
-    system('cat', File::Spec->catfile($dir, 'error.log'));
-    print "\n";
+#    system('cat', File::Spec->catfile($dir, 'output.log'));
+#    system('cat', File::Spec->catfile($dir, 'error.log'));
+#    print "\n";
+#
+#    opendir(my $root, $dir);
+#    for my $run_dir (sort readdir($root)) {
+#        next if $run_dir =~ m/^\./;
+#        $run_dir = "$dir/$run_dir";
+#        next unless -d $run_dir;
+#        opendir(my $rh, $run_dir);
+#        for my $job_dir (sort readdir($rh)) {
+#            next if $job_dir =~ m/^\./;
+#            $job_dir = "$run_dir/$job_dir";
+#            next unless -d $job_dir;
+#
+#            use Test2::Harness::Util qw/read_file/;
+#
+#            my $term = read_file("$job_dir/exit");
+#            my ($exit, $code, $sig, $dmp, $stop, $retry) = split /\s+/, $term;
+#
+#            print "$job_dir\n";
+#            print "File: " . read_file("$job_dir/file") . "\n";
+#            print "  Start: " . read_file("$job_dir/start") . "\n";
+#            print "  Stop:  $stop\n";
+#            print "  Exit:  $exit\n";
+#            print "  Code:  $code\n";
+#            print "   Sig:  $sig\n";
+#            print "  Dump:  $dmp\n";
+#            print " Retry:  " . ($retry ? 'Yes' : 'No') . "\n";
+#
+#            for my $line (split /\n/, read_file("$job_dir/stderr")) {
+#                next if $line =~ m/T2-HARNESS-ESYNC/;
+#                print "STDERR: $line\n";
+#            }
+#            for my $line (split /\n/, read_file("$job_dir/stdout")) {
+#                next if $line =~ m/T2-HARNESS-ESYNC/;
+#                print "STDOUT: $line\n";
+#            }
+#
+#            print "-------------------\n\n";
+#        }
+#    }
 
-    opendir(my $root, $dir);
-    for my $run_dir (sort readdir($root)) {
-        next if $run_dir =~ m/^\./;
-        $run_dir = "$dir/$run_dir";
-        next unless -d $run_dir;
-        opendir(my $rh, $run_dir);
-        for my $job_dir (sort readdir($rh)) {
-            next if $job_dir =~ m/^\./;
-            $job_dir = "$run_dir/$job_dir";
-            next unless -d $job_dir;
-
-            use Test2::Harness::Util qw/read_file/;
-
-            my $term = read_file("$job_dir/exit");
-            my ($exit, $code, $sig, $dmp, $stop, $retry) = split /\s+/, $term;
-
-            print "$job_dir\n";
-            print "File: " . read_file("$job_dir/file") . "\n";
-            print "  Start: " . read_file("$job_dir/start") . "\n";
-            print "  Stop:  $stop\n";
-            print "  Exit:  $exit\n";
-            print "  Code:  $code\n";
-            print "   Sig:  $sig\n";
-            print "  Dump:  $dmp\n";
-            print " Retry:  " . ($retry ? 'Yes' : 'No') . "\n";
-
-            for my $line (split /\n/, read_file("$job_dir/stderr")) {
-                next if $line =~ m/T2-HARNESS-ESYNC/;
-                print "STDERR: $line\n";
-            }
-            for my $line (split /\n/, read_file("$job_dir/stdout")) {
-                next if $line =~ m/T2-HARNESS-ESYNC/;
-                print "STDOUT: $line\n";
-            }
-
-            print "-------------------\n\n";
-        }
-    }
-
-    #system('for i in '. $dir .'/*/*/; do cat $i/file; echo; echo -n "  START (time):  "; cat $i/start; echo; echo -n "  EXIT (err sig time retry): "; cat $i/exit; echo; echo; done');
     print "DIR: $dir\n";
 
     return 0;
@@ -141,24 +147,32 @@ sub run {
 
 sub start_collector {
     my $self = shift;
-    my ($run, $runner_pid) = @_;
+    my ($run, $runner_pid, $stdout) = @_;
 
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
 
-    my $collector_proc = Test2::Harness::Process->new(
-        command => [
+    my ($rh, $wh);
+    pipe($rh, $wh) or die "Could not create pipe";
+
+    my $ipc = $self->ipc;
+    $ipc->spawn(
+        stdout      => $stdout,
+        stdin       => $rh,
+        no_set_pgrp => 1,
+        command     => [
             $^X, $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
-            '--no-scan-plugins', # Do not preload any plugin modules
+            '--no-scan-plugins',    # Do not preload any plugin modules
             collector => 'Test2::Harness::Collector',
             $dir, $run->run_id, $runner_pid,
             show_runner_output => 1,
         ],
     );
-    $collector_proc->start;
 
-    return $collector_proc;
+    close($rh);
+    print $wh encode_json($run) . "\n";
+    close($wh);
 }
 
 sub start_runner {
@@ -169,8 +183,8 @@ sub start_runner {
 
     my $ipc = $self->ipc;
     $ipc->spawn(
-        #stderr => File::Spec->catfile($dir, 'error.log'),
-        #stdout => File::Spec->catfile($dir, 'output.log'),
+        stderr => File::Spec->catfile($dir, 'error.log'),
+        stdout => File::Spec->catfile($dir, 'output.log'),
         no_set_pgrp => 1,
         command => [
             $^X, $settings->yath->script,

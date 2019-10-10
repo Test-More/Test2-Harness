@@ -83,6 +83,8 @@ sub write_queue {
     return $job_count;
 }
 
+sub TO_JSON { +{ %{$_[0]} } }
+
 sub queue_item {
     my $self = shift;
     my ($plugins) = @_;

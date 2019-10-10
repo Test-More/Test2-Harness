@@ -13,7 +13,26 @@ our @EXPORT_OK = qw{
     find_pfile
     is_generated_test_pl
     fit_to_width
+    isolate_stdout
 };
+
+sub isolate_stdout {
+    # Make $fh point at STDOUT, it is our primary output
+    open(my $fh, '>&', STDOUT) or die "Could not clone STDOUT: $!";
+    select $fh;
+    $| = 1;
+
+    # re-open STDOUT redirected to STDERR
+    open(STDOUT, '>&', STDERR) or die "Could not redirect STDOUT to STDERR: $!";
+    select STDOUT;
+    $| = 1;
+
+    # Yes, we want to keep STDERR selected
+    select STDERR;
+    $| = 1;
+
+    return $fh;
+}
 
 sub is_generated_test_pl {
     my ($file) = @_;

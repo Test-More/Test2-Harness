@@ -107,6 +107,7 @@ sub render_event {
         my $skip = $f->{harness_job_end}->{skip};
         my $fail = $f->{harness_job_end}->{fail};
         my $file = $f->{harness_job_end}->{file};
+        my $retry = $f->{harness_job_end}->{retry};
 
         my $job_id = $f->{harness}->{job_id} ||= $job->{job_id};
 
@@ -122,8 +123,13 @@ sub render_event {
             my $name = File::Spec->abs2rel($file);
             $name .= "  -  $skip" if $skip;
 
+            my $tag = 'PASSED';
+            $tag = 'SKIPPED'  if $skip;
+            $tag = 'FAILED'   if $fail;
+            $tag = 'TO RETRY' if $retry;
+
             unshift @{$f->{info}} => {
-                tag => $skip ? 'SKIPPED' : $fail ? 'FAILED' : 'PASSED',
+                tag       => $tag,
                 debug     => $fail,
                 important => 1,
                 details   => $name,

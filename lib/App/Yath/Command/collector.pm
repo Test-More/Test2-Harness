@@ -6,6 +6,8 @@ our $VERSION = '0.001100';
 
 use File::Spec;
 
+use App::Yath::Util qw/isolate_stdout/;
+
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/mod2file/;
 
@@ -16,7 +18,7 @@ use Test2::Harness::Util::HashBase;
 
 sub internal_only   { 1 }
 sub summary         { "For internal use only" }
-sub name            { 'runner' }
+sub name            { 'collector' }
 
 sub run {
     my $self = shift;
@@ -24,19 +26,7 @@ sub run {
 
     $0 = 'yath-collector';
 
-    # Make $fh point at STDOUT, it is our primary output
-    open(my $fh, '>&', STDOUT) or die "Could not clone STDOUT: $!";
-    select $fh;
-    $| = 1;
-
-    # re-open STDOUT redirected to STDERR
-    open(STDOUT, '>&', STDERR) or die "Could not redirect STDOUT to STDERR: $!";
-    select STDOUT;
-    $| = 1;
-
-    # Yes, we want to keep STDERR selected
-    select STDERR;
-    $| = 1;
+    my $fh = isolate_stdout();
 
     my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
 

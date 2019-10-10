@@ -1,10 +1,10 @@
-package Test2::Harness::Watcher;
+package Test2::Harness::Auditor::Watcher;
 use strict;
 use warnings;
 
 our $VERSION = '0.001100';
 
-use Carp qw/croak/;
+use Carp qw/croak confess/;
 use Scalar::Util qw/blessed/;
 use List::Util qw/first max/;
 
@@ -12,16 +12,11 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util qw/hub_truth parse_exit/;
 
-use Test2::Harness::Watcher::TimeTracker;
+use Test2::Harness::Auditor::TimeTracker;
 
 use Test2::Harness::Util::HashBase qw{
     -job
     -live
-
-    -_complete
-    -killed
-
-    -events
 
     -assertion_count
     -exit
@@ -36,8 +31,6 @@ use Test2::Harness::Util::HashBase qw{
     -subtests
     -numbers
     -times
-
-    -last_event
 };
 
 sub init {
@@ -51,37 +44,21 @@ sub init {
     $self->{+ASSERTION_COUNT} = 0;
 
     $self->{+NUMBERS} = {};
-    $self->{+TIMES} = Test2::Harness::Watcher::TimeTracker->new();
+    $self->{+TIMES} = Test2::Harness::Auditor::TimeTracker->new();
 
     $self->{+NESTED} = 0 unless defined $self->{+NESTED};
 }
 
-sub clear_events { delete $_[0]->{+EVENTS} }
+sub pass { !$_[0]->fail }
+sub file { $_[0]->{+JOB}->{file} }
+sub fail { !!$_[0]->fail_error_facet_list }
 
 sub has_exit { defined $_[0]->{+EXIT} }
 sub has_plan { defined $_[0]->{+PLAN} }
 
-sub file {
-    my $self = shift;
-    return $self->{+JOB}->file;
-}
-
 sub process {
     my $self = shift;
     my ($event) = @_;
-
-    my @e = $self->_process($event);
-
-    push @{$self->{+EVENTS}} => ($event, @e);
-
-    return @e;
-}
-
-sub _process {
-    my $self = shift;
-    my ($event) = @_;
-
-    $self->{+LAST_EVENT} = time;
 
     my $f  = $event->{facet_data};
     my $hf = hub_truth($f);
@@ -108,7 +85,7 @@ sub _process {
 
     # Not actually a subtest end, someone printed to STDOUT
     if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}})) {
-        # Alter $f so that this incorrect event is not send to the renderer.
+        # Alter $f so that this incorrect event is not sent to the renderer.
         $f->{harness_watcher}->{no_render} = 1;
 
         # Make a new $f and $event for the rest of the processing.
@@ -132,9 +109,9 @@ sub _process {
         };
 
         $event = Test2::Harness::Event->new(stamp => time, facet_data => $f);
-
-        push @out => $event;
     }
+
+    push @out => $event;
 
     # Close any deeper subtests
     if (my $sts = $self->{+SUBTESTS}) {
@@ -237,16 +214,33 @@ sub subtest_process {
         $self->{+PLAN} = $f->{plan};
     }
 
-    if ($f->{harness_job_exit} && defined $f->{harness_job_exit}->{exit}) {
+    if ($f->{harness_job_exit}) {
         $self->{+EXIT} = $f->{harness_job_exit}->{exit};
+
+        my $file = $self->file();
+
+        my $end = $f->{harness_job_end} = {
+            file     => $file,
+            rel_file => File::Spec->abs2rel($file),
+            abs_file => File::Spec->rel2abs($file),
+            retry    => $f->{harness_job_exit}->{retry},
+            fail     => $self->fail(),
+        };
+
+        my $plan = $self->plan;
+        $end->{skip} = $plan->{details} || "No reason given" if $plan && !$plan->{count};
+
+        my $times = $self->times;
+        if ($times && $times->useful) {
+            $end->{times} = $times->data_dump;
+            push @{$f->{harness_job_fields}} => $times->job_fields;
+            push @{$f->{info}} => {tag => 'TIME', details => $times->summary, table => $times->table};
+        }
+
+        push @{$f->{errors}} => $self->fail_error_facet_list;
     }
 
     return;
-}
-
-sub fail {
-    my $self = shift;
-    return !!$self->fail_error_facet_list;
 }
 
 sub subtest_fail_error_facet_list {
@@ -325,70 +319,9 @@ sub fail_error_facet_list {
     push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Assertion failures were encountered (Count: $self->{+_FAILURES})"}
         if $self->{+_FAILURES};
 
-    push @out => {tag => 'REASON', fail => 1, from_harness => 1, details => "Test file was killed"}
-        if $self->{+KILLED};
-
     push @out => $self->subtest_fail_error_facet_list();
 
     return @out;
-}
-
-sub pass {
-    my $self = shift;
-
-    return !$self->fail;
-}
-
-# We do not ever want the watcher to be stored
-sub TO_JSON { undef }
-
-sub kill {
-    my $self = shift;
-
-    $self->{+KILLED} = time;
-
-    return 0 unless $self->{+LIVE};
-    return 1 if defined $self->{+EXIT};
-
-    my $pid = $self->{+JOB}->pid;
-
-    if ($pid ) {
-        my $sig = 'TERM';
-        return kill("-$sig", $pid) || kill($sig, $pid);
-    }
-    return 0;
-}
-
-sub set_complete {
-    my $self = shift;
-    ($self->{+_COMPLETE}) = @_;
-}
-
-sub complete {
-    my $self = shift;
-
-    return 1 unless $self->{+LIVE};
-    return 1 if $self->{+_COMPLETE};
-
-    my $exit  = $self->{+EXIT};
-    my $plan  = $self->{+PLAN} ? $self->{+PLAN}->{count} : undef;
-    my $count = $self->{+ASSERTION_COUNT};
-
-    my $has_exit = defined($exit) ? 1 : 0;
-    my $has_plan = defined($plan) ? 1 : 0;
-
-    return $self->{+_COMPLETE} = 1 if $self->{+KILLED} && $has_exit;
-
-    # Script exited badly
-    return $self->{+_COMPLETE} = 1 if $exit;
-
-    # Script exited with no plan or assertions
-    return $self->{+_COMPLETE} = 1 if $has_exit && !$has_plan && !$count;
-
-    # Script exited with completed plan
-    return $self->{+_COMPLETE} = 1 if $has_exit && $has_plan && $plan <= $count;
-
-    return 0;
 }
 
 1;

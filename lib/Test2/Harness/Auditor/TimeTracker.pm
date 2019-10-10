@@ -1,4 +1,4 @@
-package Test2::Harness::Watcher::TimeTracker;
+package Test2::Harness::Auditor::TimeTracker;
 use strict;
 use warnings;
 

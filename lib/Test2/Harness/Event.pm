@@ -24,13 +24,13 @@ BEGIN {
 }
 
 use Test2::Harness::Util::HashBase qw{
-    +facet_data
-    +stream_id
-    +event_id
-    +run_id
-    +job_id
-    +stamp
-    +times
+    <facet_data
+    <stream_id
+    <event_id
+    <run_id
+    <job_id
+    <stamp
+    <times
     +json
     processed
 };

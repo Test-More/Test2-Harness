@@ -65,11 +65,12 @@ sub DEFAULT_TAG_COLOR() {
         'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
         'RETRY'    => Term::ANSIColor::color('bold bright_white'),
         'PASSED'   => Term::ANSIColor::color('bold bright_green'),
+        'TO RETRY' => Term::ANSIColor::color('bold bright_yellow'),
         'FAILED'   => Term::ANSIColor::color('bold bright_red'),
         'REASON'   => Term::ANSIColor::color('magenta'),
         'TIMEOUT'  => Term::ANSIColor::color('magenta'),
         'TIME'     => Term::ANSIColor::color('blue'),
-        'MEMORY'     => Term::ANSIColor::color('blue'),
+        'MEMORY'   => Term::ANSIColor::color('blue'),
     );
 }
 

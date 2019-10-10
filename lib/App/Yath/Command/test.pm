@@ -76,25 +76,25 @@ sub run {
     my $run = $self->build_run();
     my $runner_proc = $self->start_runner();
 
-    my ($auditor_in, $collector_out);
-    pipe($auditor_in, $collector_out) or die "Could not make a pipe: $!";
+    my ($auditor_read, $collector_write);
+    pipe($auditor_read, $collector_write) or die "Could not make a pipe: $!";
 
     # Start a collector
-    my $collector_proc = $self->start_collector($run, $runner_proc->pid, $collector_out);
-    close($collector_out);
+    my $collector_proc = $self->start_collector($run, $runner_proc->pid, $collector_write);
+    close($collector_write);
 
-    my ($renderer_in, $auditor_out);
+    my ($renderer_read, $auditor_write);
     if ($settings->logging->log) {
-        open($auditor_out, '>', $settings->logging->log_file) or die "Could not open log file for writing: $!";
-        open($renderer_in, '<', $settings->logging->log_file) or die "Could not open log file for reading: $!";
+        open($auditor_write, '>', $settings->logging->log_file) or die "Could not open log file for writing: $!";
+        open($renderer_read, '<', $settings->logging->log_file) or die "Could not open log file for reading: $!";
     }
     else {
-        pipe($renderer_in, $auditor_out) or die "Could not make pipe: $!";
+        pipe($renderer_read, $auditor_write) or die "Could not make pipe: $!";
     }
 
-    #my $auditor_proc = $self->start_auditor($run, $auditor_in, $auditor_out);
-    #close($auditor_in);
-    #close($auditor_out);
+    my $auditor_proc = $self->start_auditor($run, $auditor_read, $auditor_write);
+    close($auditor_read);
+    close($auditor_write);
 
     my @renderers;
     for my $class (@{$settings->display->renderers->{'@'}}) {
@@ -105,7 +105,7 @@ sub run {
     }
 
     # render results from log
-    while (my $line = <$auditor_in>) {
+    while (my $line = <$renderer_read>) {
         my $event = decode_json($line);
         last unless defined $event;
 
@@ -114,12 +114,37 @@ sub run {
 
     $_->finish() for @renderers;
 
+    my $final_data = decode_json(<$renderer_read>);
+    use Data::Dumper;
+    print Dumper($final_data);
+
     $ipc->wait(all => 1);
     $ipc->stop;
 
     print "DIR: $dir\n";
 
     return 0;
+}
+
+sub start_auditor {
+    my $self = shift;
+    my ($run, $stdin, $stdout) = @_;
+
+    my $settings = $self->settings;
+
+    my $ipc = $self->ipc;
+    $ipc->spawn(
+        stdin       => $stdin,
+        stdout      => $stdout,
+        no_set_pgrp => 1,
+        command     => [
+            $^X, $settings->yath->script,
+            (map { "-D$_" } @{$settings->yath->dev_libs}),
+            '--no-scan-plugins',    # Do not preload any plugin modules
+            auditor => 'Test2::Harness::Auditor',
+            $run->run_id,
+        ],
+    );
 }
 
 sub start_collector {

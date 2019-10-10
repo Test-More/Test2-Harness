@@ -8,13 +8,13 @@ use Test2::Util::Term qw/term_size/;
 use Test2::Harness::Util qw/hub_truth/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32 clone_io/;
-use Time::HiRes;
+use Time::HiRes qw/time/;
 use IO::Handle;
 
 use File::Spec();
 use Test2::Formatter::Test2::Composer;
 
-BEGIN { require Test2::Formatter; our @ISA = qw(Test2::Formatter) }
+use parent 'Test2::Formatter';
 
 sub import {
     my $class = shift;
@@ -283,11 +283,14 @@ sub update_active_disp {
 
     my $should_show = 0;
 
+    if (my $task = $f->{harness_job_queued}) {
+        $self->{+JOB_NAMES}->{$task->{job_id}} = $task->{job_name} || $task->{job_id};
+    }
+
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
         $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_name} || $job->{job_id};
         $should_show = 1;
-        $self->{+JOB_NAMES}->{$job->{job_id}} = $job->{job_name} || $job->{job_id};
     }
 
     if ($f->{harness_job_end}) {

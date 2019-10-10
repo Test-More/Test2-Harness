@@ -32,9 +32,15 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
         description => 'Show the timing data for each job',
     );
 
+    option 'progress' => (
+        default => sub { -t STDOUT ? 1 : 0 },
+
+        description => "Toggle progress indicators. On by default if STDOUT is a TTY. You can use --no-progress to disable the 'events seen' counter and buffered event pre-display",
+    );
+
     option renderers => (
-        alt   => ['renderer'],
-        type  => 'H',
+        alt  => ['renderer'],
+        type => 'H',
 
         description => 'Specify renderers, (Default: "Formatter=Test2"). Use "+" to give a fully qualified module name. Without "+" "Test2::Harness::Renderer::" will be prepended to your argument.',
 
@@ -56,7 +62,8 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
             $handler->($slot, [$class, $args]);
         },
 
-        post_process => sub {
+        post_process_weight => 100,
+        post_process        => sub {
             my %params   = @_;
             my $settings = $params{settings};
 
@@ -65,13 +72,9 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
 
             my $quiet   = $display->quiet;
             my $verbose = $display->verbose;
-            my $qvf     = $display->qvf;
 
             die "The 'quiet' and 'verbose' options may not be used together.\n"
                 if $verbose && $quiet;
-
-            my $formatter = 'Test2';
-            $formatter = 'QVF' if $qvf && !$verbose;
 
             if ($quiet) {
                 delete $renderers->{'Test2::Harness::Renderer::Formatter'};
@@ -79,16 +82,41 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
                 return;
             }
 
+            my @args = map { $_ => $settings->formatter->$_ } qw{
+                formatter
+                show_run_info
+                show_job_info
+                show_job_launch
+                show_job_end
+            };
+
             if (my $formatter_args = $renderers->{'Test2::Harness::Renderer::Formatter'}) {
-                @$formatter_args = ($formatter) unless @$formatter_args;
+                @$formatter_args = @args unless @$formatter_args;
                 return;
             }
 
             return if $renderers->{'@'} && @{$renderers->{'@'}};
 
             push @{$renderers->{'@'}} => 'Test2::Harness::Renderer::Formatter';
-            $renderers->{'Test2::Harness::Renderer::Formatter'} = [$formatter];
+            $renderers->{'Test2::Harness::Renderer::Formatter'} = \@args;
         },
+    );
+};
+
+option_group {prefix => 'formatter', category => "Formatter Options"} => sub {
+    option formatter => (
+        type                => 's',
+        post_process_weight => 90,
+        post_process        => sub {
+            my %params   = @_;
+            my $settings = $params{settings};
+
+            $settings->formatter->formatter //= $settings->formatter->qvf ? 'QVF' : 'Test2';
+        },
+    );
+
+    option 'qvf' => (
+        description => '[Q]uiet, but [V]erbose on [F]ailure. Hide all output from tests when they pass, except to say they passed. If a test fails then ALL output from the test is verbosely output.',
     );
 
     option show_job_end => (
@@ -97,46 +125,39 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
     );
 
     option show_job_info => (
-        description  => 'Show the job configuration when a job starts. (Default: off, unless -vv)',
-        default      => 0,
-        post_process => sub {
+        description         => 'Show the job configuration when a job starts. (Default: off, unless -vv)',
+        default             => 0,
+        post_process_weight => 90,
+        post_process        => sub {
             my %params   = @_;
             my $settings = $params{settings};
 
-            $settings->display->show_job_info = 1 if $settings->display->verbose > 1;
+            $settings->formatter->show_job_info = 1 if $settings->display->verbose > 1;
         },
     );
 
     option show_job_launch => (
-        description  => "Show output for the start of a job. (Default: off unless -v)",
-        default      => 0,
-        post_process => sub {
+        description         => "Show output for the start of a job. (Default: off unless -v)",
+        default             => 0,
+        post_process_weight => 90,
+        post_process        => sub {
             my %params   = @_;
             my $settings = $params{settings};
 
-            $settings->display->show_job_launch = 1 if $settings->display->verbose > 1;
+            $settings->formatter->show_job_launch = 1 if $settings->display->verbose > 1;
         },
     );
 
     option show_run_info => (
-        description  => 'Show the run configuration when a run starts. (Default: off, unless -vv)',
-        default      => 0,
-        post_process => sub {
+        description         => 'Show the run configuration when a run starts. (Default: off, unless -vv)',
+        default             => 0,
+        post_process_weight => 90,
+        post_process        => sub {
             my %params   = @_;
             my $settings = $params{settings};
 
-            $settings->display->show_run_info = 1 if $settings->display->verbose > 1;
+            $settings->formatter->show_run_info = 1 if $settings->display->verbose > 1;
         },
-    );
-
-    option 'qvf' => (
-        description => '[Q]uiet, but [V]erbose on [F]ailure. Hide all output from tests when they pass, except to say they passed. If a test fails then ALL output from the test is verbosely output.',
-    );
-
-    option 'progress' => (
-        default => sub { -t STDOUT ? 1 : 0 },
-
-        description => "Toggle progress indicators. On by default if STDOUT is a TTY. You can use --no-progress to disable the 'events seen' counter and buffered event pre-display",
     );
 };
 

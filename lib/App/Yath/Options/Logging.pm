@@ -49,7 +49,7 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
     );
 
     option log_file => (
-        alt          => ['F'],
+        short        => 'F',
         type         => 's',
         normalize    => \&clean_path,
         description  => "Specify the name of the log file. This option implies -L.",
@@ -61,12 +61,16 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
             if ($logging->log || $logging->bzip2_log || $logging->gzip_log) {
                 # We want to keep the log and put it in a findable location
 
-                mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
-                    unless -d 'test-logs';
+                $logging->log = 1;
 
-                my $format   = $logging->log_file_format;
-                my $filename = expand_log_file_format($format, $settings);
-                $logging->log_file = clean_path(File::Spec->catfile('test-logs', $filename));
+                unless ($logging->log_file) {
+                    mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
+                        unless -d 'test-logs';
+
+                    my $format   = $logging->log_file_format;
+                    my $filename = expand_log_file_format($format, $settings);
+                    $logging->log_file = clean_path(File::Spec->catfile('test-logs', $filename));
+                }
             }
 
             if ($logging->log_file) {

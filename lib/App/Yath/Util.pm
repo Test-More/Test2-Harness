@@ -12,6 +12,7 @@ use Importer Importer => 'import';
 our @EXPORT_OK = qw{
     find_pfile
     is_generated_test_pl
+    fit_to_width
 };
 
 sub is_generated_test_pl {
@@ -58,6 +59,31 @@ sub find_pfile {
     }
     return find_in_updir(PFILE_NAME());
 }
+
+sub fit_to_width {
+    my ($width, $join, $text) = @_;
+
+    my @parts = ref($text) ? @$text : split /\s+/, $text;
+
+    my @out;
+
+    my $line = "";
+    for my $part (@parts) {
+        my $new = $line ? "$line$join$part" : $part;
+
+        if ($line && length($new) > $width) {
+            push @out => $line;
+            $line = $part;
+        }
+        else {
+            $line = $new;
+        }
+    }
+    push @out => $line if $line;
+
+    return join "\n" => @out;
+}
+
 
 1;
 

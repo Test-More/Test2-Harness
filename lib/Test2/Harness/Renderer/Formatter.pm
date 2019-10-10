@@ -10,8 +10,7 @@ use File::Spec;
 
 use Storable qw/dclone/;
 
-use Test2::Util qw/pkg_to_file/;
-use Test2::Harness::Util qw/fqmod/;
+use Test2::Harness::Util qw/fqmod mod2file/;
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 
 BEGIN { require Test2::Harness::Renderer; our @ISA = ('Test2::Harness::Renderer') }
@@ -22,7 +21,6 @@ use Test2::Harness::Util::HashBase qw{
     -show_job_info
     -show_job_launch
     -show_job_end
-    -times
 };
 
 sub init {
@@ -30,36 +28,32 @@ sub init {
 
     my $settings = $self->{+SETTINGS};
 
-    my $formatter = $settings->{formatter} || 'Test2';
-    my $f_class = fqmod('Test2::Formatter', $formatter);
-    my $f_file = pkg_to_file($f_class);
+    my $formatter = $self->{+FORMATTER} //= 'Test2';
+    my $f_class   = fqmod('Test2::Formatter', $formatter);
+    my $f_file    = mod2file($f_class);
     require $f_file;
 
     my $io = $self->{+IO} || $self->{output} || \*STDOUT;
-    unless(ref $io) {
+    unless (ref $io) {
         open(my $fh, '>', $io) or die "Could not open file '$io' for writing: $!";
         $self->{+IO} = $fh;
     }
 
     my $io_err = $self->{+IO_ERR} || $self->{output} || \*STDERR;
-    unless(ref $io_err) {
+    unless (ref $io_err) {
         open(my $fh, '>', $io_err) or die "Could not open file '$io_err' for writing: $!";
         $self->{+IO_ERR} = $fh;
     }
 
     $self->{+FORMATTER} = $f_class->new(
         io       => $self->{+IO},
-        progress => $self->{progress},
+        progress => $self->{+PROGRESS},
         handles  => [$self->{+IO}, $self->{+IO_ERR}, $self->{+IO}],
-        verbose  => $settings->{verbose},
-        color    => $settings->{color},
+        verbose  => $settings->display->verbose,
+        color    => $settings->display->color,
     );
 
-    $self->{+SHOW_JOB_INFO}   = $settings->{show_job_info}   unless defined $self->{+SHOW_JOB_INFO};
-    $self->{+SHOW_RUN_INFO}   = $settings->{show_run_info}   unless defined $self->{+SHOW_RUN_INFO};
-    $self->{+SHOW_JOB_LAUNCH} = $settings->{show_job_launch} unless defined $self->{+SHOW_JOB_LAUNCH};
-    $self->{+SHOW_JOB_END}    = $settings->{show_job_end}    unless defined $self->{+SHOW_JOB_END};
-    $self->{+SHOW_JOB_END}    = 1                            unless defined $self->{+SHOW_JOB_END};
+    $self->{+SHOW_JOB_END} = 1 unless defined $self->{+SHOW_JOB_END};
 }
 
 sub render_event {
@@ -117,7 +111,7 @@ sub render_event {
         my $job_id = $f->{harness}->{job_id} ||= $job->{job_id};
 
         # Make the times important if they were requested
-        if ($settings->{show_times} && $f->{info}) {
+        if ($settings->display->show_times && $f->{info}) {
             for my $info (@{$f->{info}}) {
                 next unless $info->{tag} eq 'TIME';
                 $info->{important} = 1;

@@ -12,7 +12,8 @@ use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
 
-use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::Util qw/mod2file/;
 
 use File::Spec;
 
@@ -82,63 +83,39 @@ sub run {
     my $collector_proc = $self->start_collector($run, $runner_proc->pid, $collector_out);
     close($collector_out);
 
-#    # Start an auditor
-#    my $auditor_proc = Test2::Harness::Process->new(
-#        command => [
-#            $^X, $settings->yath->script,
-#            (map { "-D$_" } @{$settings->yath->dev_libs}),
-#            auditor => 'Test2::Harness::Auditor',
-#            $dir => $run->run_id,
-#        ],
-#    );
+    my ($renderer_in, $auditor_out);
+    if ($settings->logging->log) {
+        open($auditor_out, '>', $settings->logging->log_file) or die "Could not open log file for writing: $!";
+        open($renderer_in, '<', $settings->logging->log_file) or die "Could not open log file for reading: $!";
+    }
+    else {
+        pipe($renderer_in, $auditor_out) or die "Could not make pipe: $!";
+    }
+
+    #my $auditor_proc = $self->start_auditor($run, $auditor_in, $auditor_out);
+    #close($auditor_in);
+    #close($auditor_out);
+
+    my @renderers;
+    for my $class (@{$settings->display->renderers->{'@'}}) {
+        require(mod2file($class));
+        my $args = $settings->display->renderers->{$class};
+        my $renderer = $class->new(@$args, settings => $settings);
+        push @renderers => $renderer;
+    }
 
     # render results from log
+    while (my $line = <$auditor_in>) {
+        my $event = decode_json($line);
+        last unless defined $event;
+
+        $_->render_event($event) for @renderers;
+    }
+
+    $_->finish() for @renderers;
 
     $ipc->wait(all => 1);
     $ipc->stop;
-
-#    system('cat', File::Spec->catfile($dir, 'output.log'));
-#    system('cat', File::Spec->catfile($dir, 'error.log'));
-#    print "\n";
-#
-#    opendir(my $root, $dir);
-#    for my $run_dir (sort readdir($root)) {
-#        next if $run_dir =~ m/^\./;
-#        $run_dir = "$dir/$run_dir";
-#        next unless -d $run_dir;
-#        opendir(my $rh, $run_dir);
-#        for my $job_dir (sort readdir($rh)) {
-#            next if $job_dir =~ m/^\./;
-#            $job_dir = "$run_dir/$job_dir";
-#            next unless -d $job_dir;
-#
-#            use Test2::Harness::Util qw/read_file/;
-#
-#            my $term = read_file("$job_dir/exit");
-#            my ($exit, $code, $sig, $dmp, $stop, $retry) = split /\s+/, $term;
-#
-#            print "$job_dir\n";
-#            print "File: " . read_file("$job_dir/file") . "\n";
-#            print "  Start: " . read_file("$job_dir/start") . "\n";
-#            print "  Stop:  $stop\n";
-#            print "  Exit:  $exit\n";
-#            print "  Code:  $code\n";
-#            print "   Sig:  $sig\n";
-#            print "  Dump:  $dmp\n";
-#            print " Retry:  " . ($retry ? 'Yes' : 'No') . "\n";
-#
-#            for my $line (split /\n/, read_file("$job_dir/stderr")) {
-#                next if $line =~ m/T2-HARNESS-ESYNC/;
-#                print "STDERR: $line\n";
-#            }
-#            for my $line (split /\n/, read_file("$job_dir/stdout")) {
-#                next if $line =~ m/T2-HARNESS-ESYNC/;
-#                print "STDOUT: $line\n";
-#            }
-#
-#            print "-------------------\n\n";
-#        }
-#    }
 
     print "DIR: $dir\n";
 

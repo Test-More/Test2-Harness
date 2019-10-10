@@ -210,30 +210,6 @@ sub find_libraries {
     return \%out;
 }
 
-sub fit_to_width {
-    my ($width, $join, $text) = @_;
-
-    my @parts = ref($text) ? @$text : split /\s+/, $text;
-
-    my @out;
-
-    my $line = "";
-    for my $part (@parts) {
-        my $new = $line ? "$line$join$part" : $part;
-
-        if ($line && length($new) > $width) {
-            push @out => $line;
-            $line = $part;
-        }
-        else {
-            $line = $new;
-        }
-    }
-    push @out => $line if $line;
-
-    return join "\n" => @out;
-}
-
 1;
 
 __END__

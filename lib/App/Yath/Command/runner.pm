@@ -110,8 +110,6 @@ sub launch_via_fork {
     my $pid = fork();
     die "Failed to fork: $!" unless defined $pid;
 
-    print "Launch $pid via fork! " . $job->file . "\n" if $pid;
-
     # In parent
     return $pid if $pid;
 

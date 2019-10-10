@@ -155,7 +155,6 @@ sub _bring_out_yer_dead {
     my $found = 0;
     while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
         my $exit = $?;
-        print "PID: $pid - $exit\n";
         die "waitpid returned pid '$pid', but we are not monitoring that one!" unless $procs->{$pid};
         $found++;
         $waiting->{$pid} = [$exit, time()];

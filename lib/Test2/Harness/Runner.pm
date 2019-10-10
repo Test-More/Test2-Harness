@@ -134,8 +134,6 @@ sub run_job {
         settings => $self->settings,
     );
 
-    print "Starting: " . $job->file . " \n";
-
     $job->prepare_dir();
 
     my $spawn_time;
@@ -157,8 +155,6 @@ sub run_job {
     my $json_data = $job->TO_JSON();
     $json_data->{stamp} = $spawn_time;
     $run->jobs->write($json_data);
-
-    print "Started $pid: " . $job->file . " \n" if $pid;
 
     return $pid;
 }

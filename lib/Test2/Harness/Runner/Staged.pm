@@ -401,9 +401,6 @@ sub poll_dispatch {
         my $arg = $data->{arg};
         my $action = $data->{action};
 
-        use Data::Dumper;
-        print Dumper([$action, $arg]);
-
         die "Invalid action '$action'" unless $ACTIONS{$action};
 
         $self->$action($arg);

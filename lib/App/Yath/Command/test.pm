@@ -66,7 +66,6 @@ sub run {
 
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
-    print "DIR: $dir\n";
 
     $self->write_settings_to($dir, 'settings.json');
 

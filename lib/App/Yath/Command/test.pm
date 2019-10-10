@@ -14,6 +14,7 @@ use Test2::Harness::IPC;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Harness::Util qw/mod2file/;
+use Test2::Util::Table qw/table/;
 
 use File::Spec;
 
@@ -82,13 +83,24 @@ sub run {
     my $collector_proc = $self->start_collector($run, $runner_proc->pid, $collector_write);
     close($collector_write);
 
-    my ($renderer_read, $auditor_write);
+    my ($auditor_write, $renderer_get_event);
     if ($settings->logging->log) {
         open($auditor_write, '>', $settings->logging->log_file) or die "Could not open log file for writing: $!";
-        open($renderer_read, '<', $settings->logging->log_file) or die "Could not open log file for reading: $!";
+        my $renderer_read = Test2::Harness::Util::File::JSONL->new(name => $settings->logging->log_file);
+
+        my @pending;
+        $renderer_get_event = sub {
+            while (1) {
+                return shift(@pending) if @pending;
+                push @pending => $renderer_read->poll;
+                sleep 0.02 unless @pending;
+            }
+        };
     }
     else {
+        my $renderer_read;
         pipe($renderer_read, $auditor_write) or die "Could not make pipe: $!";
+        $renderer_get_event = sub { decode_json( scalar <$renderer_read> ) };
     }
 
     my $auditor_proc = $self->start_auditor($run, $auditor_read, $auditor_write);
@@ -104,25 +116,52 @@ sub run {
     }
 
     # render results from log
-    while (my $line = <$renderer_read>) {
-        my $event = decode_json($line);
-        last unless defined $event;
+    while (my $e = $renderer_get_event->()) {
+        last unless defined $e;
 
-        $_->render_event($event) for @renderers;
+        $_->render_event($e) for @renderers;
     }
 
     $_->finish() for @renderers;
 
-    my $final_data = decode_json(<$renderer_read>);
-    use Data::Dumper;
-    print Dumper($final_data);
+    my $final_data = $renderer_get_event->();
+
+    if (my $rows = $final_data->{retried}) {
+        print "\nThe following jobs failed at least once:\n";
+        print join "\n" => table(
+            header => ['Job ID', 'Times Run', 'Test File', "Succeded Eventually?"],
+            rows   => $rows,
+        );
+        print "\n";
+    }
+
+    if (my $rows = $final_data->{failed}) {
+        print "\nThe following jobs failed:\n";
+        print join "\n" => table(
+            header => ['Job ID', 'Test File'],
+            rows   => $rows,
+        );
+        print "\n";
+    }
+
+    if (my $rows = $final_data->{unseen}) {
+        print "\nThe following jobs never ran:\n";
+        print join "\n" => table(
+            header => ['Job ID', 'Test File'],
+            rows   => $rows,
+        );
+        print "\n";
+    }
 
     $ipc->wait(all => 1);
     $ipc->stop;
 
-    print "DIR: $dir\n";
+    printf("\nKeeping work dir: %s\n", $dir) if $settings->debug->keep_dirs;
 
-    return 0;
+    print "Wrote log file: " . $settings->logging->log_file . "\n"
+        if $settings->logging->log;
+
+    return $final_data->{pass} ? 0 : 1;
 }
 
 sub start_auditor {

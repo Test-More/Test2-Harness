@@ -79,17 +79,17 @@ sub broken {
 sub finish {
     my $self = shift;
 
-    my $final_data = { pass => 1 };
+    my $final_data = {pass => 1};
 
-    while(my ($job_id, $watchers) = each %{$self->{+WATCHERS}}) {
+    while (my ($job_id, $watchers) = each %{$self->{+WATCHERS}}) {
         my $file = $self->{+QUEUED}->{$job_id}->{file};
 
         if (@$watchers) {
-            $final_data->{failed}->{$job_id} = $file if $watchers->[-1]->fail;
-            $final_data->{retried}->{$job_id} = [$file, @$watchers - 1] if @$watchers > 1;
+            push @{$final_data->{failed}} => [$job_id, $file] if $watchers->[-1]->fail;
+            push @{$final_data->{retried}} => [$job_id, @$watchers - 1, $file, $watchers->[-1]->pass ? 'YES' : 'NO'] if @$watchers > 1;
         }
         else {
-            $final_data->{unseen}->{$job_id} = $self->{+QUEUED}->{$job_id}->{file};
+            push @{$final_data->{unseen}} => [$job_id, $self->{+QUEUED}->{$job_id}->{file}];
         }
     }
 

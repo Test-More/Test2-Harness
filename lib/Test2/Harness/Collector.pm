@@ -13,6 +13,8 @@ use Test2::Harness::Util::Queue;
 use Time::HiRes qw/sleep/;
 use File::Spec;
 
+use File::Path qw/remove_tree/;
+
 use Test2::Harness::Util::HashBase qw{
     <run
     <workdir
@@ -74,6 +76,7 @@ sub process {
             my $done = $jdir->done or next;
 
             delete $jobs->{$job_try};
+            remove_tree($jdir->job_root, {safe => 1, keep_root => 0}) unless $self->settings->debug->keep_dirs;
 
             delete $self->{+PENDING}->{$jdir->job_id} unless $done->{retry};
         }
@@ -86,6 +89,8 @@ sub process {
     $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
 
     $self->{+ACTION}->(undef) if $self->{+JOBS_DONE} && $self->{+TASKS_DONE};
+
+    remove_tree($self->{+RUN_DIR}, {safe => 1, keep_root => 0}) unless $self->settings->debug->keep_dirs;
 
     return;
 }

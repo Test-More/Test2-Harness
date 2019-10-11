@@ -115,7 +115,7 @@ sub run {
 
     my $run = $self->build_run();
 
-    my $runner_proc    = $self->start_runner();
+    my $runner_proc    = $self->start_runner(monitor_preloads => 0);
     my $collector_proc = $self->start_collector($run, $runner_proc->pid);
     my $auditor_proc   = $self->start_auditor($run);
 
@@ -130,7 +130,10 @@ sub run {
         last unless defined $e;
 
         $_->render_event($e) for @$renderers;
+
+        $ipc->wait();
     }
+    close($logger) if $logger;
 
     $_->finish() for @$renderers;
 
@@ -242,6 +245,8 @@ sub start_auditor {
             $run->run_id,
         ],
     );
+
+    close($self->auditor_writer());
 }
 
 sub start_collector {
@@ -272,10 +277,13 @@ sub start_collector {
     close($rh);
     print $wh encode_json($run) . "\n";
     close($wh);
+
+    close($self->collector_writer());
 }
 
 sub start_runner {
     my $self = shift;
+    my %args = @_;
 
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
@@ -290,6 +298,7 @@ sub start_runner {
             (map { "-D$_" } @{$settings->yath->dev_libs}),
             '--no-scan-plugins', # Do not preload any plugin modules
             runner => $dir,
+            %args,
         ],
     );
 }

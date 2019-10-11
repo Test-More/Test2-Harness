@@ -90,7 +90,7 @@ sub render_event {
                 tag       => $f->{harness_job_launch}->{retry} ? 'RETRY' : 'LAUNCH',
                 debug     => 0,
                 important => 1,
-                details   => File::Spec->abs2rel($job->file),
+                details   => File::Spec->abs2rel($job->{file}),
             };
         }
 

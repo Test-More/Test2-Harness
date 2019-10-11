@@ -24,7 +24,6 @@ use Test2::Harness::Util::HashBase qw{
     -stage
 
     <pending
-    +run +runs +runs_ended
 
     +state
 
@@ -295,12 +294,14 @@ sub all_done {
     my $self = shift;
 
     $self->check_monitored;
+    $self->poll_dispatch();
 
     return 1 if $self->{+SIGNAL};
 
     return 0 if @{$self->{+PENDING} //= []};
 
     return 0 if $self->{+STATE}->todo;
+    return 0 if $self->{+STATE}->running;
 
     return 0 if $self->run;
     return 0 if @{$self->poll_runs};
@@ -309,74 +310,38 @@ sub all_done {
     return 0;
 }
 
+sub clear_finished_run {
+    my $self = shift;
+
+    $self->poll_dispatch();
+
+    return if @{$self->{+PENDING} //= []};
+
+    # More to do!
+    return if $self->{+STATE}->todo;
+
+    # Still running, some may need a retry
+    return if $self->{+STATE}->running;
+
+    return $self->SUPER::clear_finished_run();
+}
+
 sub poll {
     my $self = shift;
+
+    $self->poll_dispatch();
 
     # This will poll runs for us.
     return unless $self->run;
 
     $self->poll_tasks();
-    $self->poll_dispatch();
-}
-
-sub poll_runs {
-    my $self = shift;
-
-    my $runs = $self->{+RUNS} //= [];
-
-    return $runs if $self->{+RUNS_ENDED};
-
-    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'));
-
-    for my $item ($run_queue->poll()) {
-        my $run_data = $item->[-1];
-
-        if (!defined $run_data) {
-            $self->{+RUNS_ENDED} = 1;
-            last;
-        }
-
-        push @$runs => Test2::Harness::Runner::Run->new(
-            %$run_data,
-            workdir => $self->{+DIR},
-        );
-    }
-
-    return $runs;
-}
-
-sub clear_finished_run {
-    my $self = shift;
-
-    return unless $self->{+RUN};
-    return unless $self->{+RUN}->queue_ended;
-
-    return if @{$self->{+PENDING} //= []};
-    return if $self->{+STATE}->todo;
-
-    delete $self->{+RUN};
-}
-
-sub run {
-    my $self = shift;
-
-    $self->clear_finished_run;
-
-    return $self->{+RUN} if $self->{+RUN};
-
-    my $runs = $self->poll_runs;
-    return undef unless @$runs;
-
-    die "Previous run is not done!" if $self->{+STATE}->todo;
-
-    $self->{+RUN} = shift @$runs;
 }
 
 sub retry_task {
     my $self = shift;
     my ($task) = @_;
 
-    unshift @{$self->{+PENDING}} => $task;
+    $self->dispatch_queue->enqueue({action => 'retry', arg => $task});
 }
 
 sub completed_task {
@@ -392,7 +357,7 @@ sub dispatch_queue {
     );
 }
 
-my %ACTIONS = (dispatch => 1, complete => 1, mark_stage_ready => 1);
+my %ACTIONS = (dispatch => 1, complete => 1, mark_stage_ready => 1, retry => 1);
 sub poll_dispatch {
     my $self = shift;
     my $queue = $self->dispatch_queue;
@@ -405,6 +370,15 @@ sub poll_dispatch {
 
         $self->$action($arg);
     }
+}
+
+sub retry {
+    my $self = shift;
+    my ($task) = @_;
+
+    $task = { %$task, category => 'isolation' };
+
+    $self->{+STATE}->add_pending_task($task);
 }
 
 sub mark_stage_ready {

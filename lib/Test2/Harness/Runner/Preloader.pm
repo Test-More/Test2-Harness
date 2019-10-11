@@ -7,7 +7,7 @@ our $VERSION = '0.001100';
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN/;
 use Time::HiRes qw/time/;
-use Test2::Harness::Util qw/open_file file2mod/;
+use Test2::Harness::Util qw/open_file file2mod mod2file/;
 
 use File::Spec();
 

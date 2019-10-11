@@ -47,21 +47,16 @@ sub init {
     );
 }
 
-sub run {
+sub clear_finished_run {
     my $self = shift;
 
-    return $self->{+RUN} if $self->{+RUN};
+    # More to do!
+    return if $self->{+STATE}->todo;
 
-    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'));
-    my @runs = $run_queue->poll();
+    # Still running, some may need a retry
+    return if $self->{+STATE}->running;
 
-    confess "More than 1 run was found in the queue for a linear runner"
-        if @runs != 2 || defined($runs[1]->[-1]) || !$run_queue->ended;
-
-    return $self->{+RUN} = Test2::Harness::Runner::Run->new(
-        %{$runs[0]->[-1]},
-        workdir => $self->{+DIR},
-    );
+    return $self->SUPER::clear_finished_run();
 }
 
 sub run_tests {
@@ -69,52 +64,60 @@ sub run_tests {
 
     $self->{+STATE}->mark_stage_ready('default');
 
-    while (1) {
+    until ($self->end_test_loop()) {
+        my $run = $self->run or last;
+
         my $task = $self->next();
+        $self->run_job($run, $task) if $task;
 
-        # If we have no tasks and no pending jobs then we can be sure we are done
-        last unless $task || $self->wait(cat => $self->job_class->category);
+        next if $self->wait(cat => $self->job_class->category);
+        next if $task;
 
-        $self->run_job($self->run, $task) if $task;
+        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
     };
+
+    $self->wait(all => 1);
 }
 
-sub end_loop {
+sub end_test_loop {
     my $self = shift;
 
-    return 0 if $self->{+STATE}->todo('default');
-    return 0 unless $self->queue_ended;
+    return 0 unless $self->end_task_loop;
 
-    return 1;
+    return 0 if @{$self->poll_runs};
+    return 1 if $self->{+RUNS_ENDED};
+
+    return 0;
+}
+
+sub end_task_loop {
+    my $self = shift;
+
+    return 0 if $self->{+STATE}->todo;
+    return 0 if $self->{+STATE}->running;
+    return 1 if $self->queue_ended;
+
+    return 0;
 }
 
 sub next {
     my $self = shift;
 
     my $iter = 0;
-    until ($self->end_loop()) {
-        my $task = $self->_next_iter($iter++);
+    until ($self->end_task_loop()) {
+        $self->poll_tasks();
+
+        # Reap any completed PIDs
+        $self->wait();
+
+        my $task = $self->{+STATE}->pick_and_start('default');
+
         return $task if $task;
+
+        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
     }
 
-    return;
-}
-
-sub _next_iter {
-    my $self = shift;
-    my ($iter) = @_;
-
-    sleep($self->{+WAIT_TIME}) if $iter && $self->{+WAIT_TIME};
-
-    # Check the job files for active and newly kicked off tasks.
-    # Updates $list which we use to decide if we need to keep looping.
-    $self->poll_tasks();
-
-    # Reap any completed PIDs
-    $self->wait();
-
-    my $out = $self->{+STATE}->pick_and_start('default');
-    return $out;
+    return undef;
 }
 
 1;

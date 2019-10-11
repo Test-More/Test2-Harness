@@ -15,6 +15,9 @@ use Test2::Harness::Util qw/clean_path mod2file write_file_atomic/;
 
 use Test2::Harness::Runner::Constants;
 
+use Test2::Harness::Util::Queue;
+use Test2::Harness::Runner::Run;
+
 use parent 'Test2::Harness::IPC';
 use Test2::Harness::Util::HashBase(
     # Fields from settings
@@ -41,6 +44,8 @@ use Test2::Harness::Util::HashBase(
         +preload_done
 
         +last_timeout_check
+
+        +run +runs +runs_ended
     },
 );
 
@@ -64,14 +69,18 @@ sub init {
 
 sub completed_task { }
 
-sub queue_ended { $_[0]->run->queue_ended }
 sub job_class   { 'Test2::Harness::Runner::Job' }
 sub task_stage  { 'default' }
 
-sub run        { croak(ref($_[0]) . " Does not implement run()") }
 sub run_tests  { croak(ref($_[0]) . " Does not implement run_tests()") }
 sub add_task   { croak(ref($_[0]) . " Does not implement add_task()") }
 sub retry_task { croak(ref($_[0]) . " Does not implement retry_task()") }
+
+sub queue_ended {
+    my $self = shift;
+    my $run = $self->run or return 1;
+    return $run->queue_ended;
+}
 
 sub process {
     my $self = shift;
@@ -280,6 +289,53 @@ sub poll_tasks {
     return $added;
 }
 
+sub poll_runs {
+    my $self = shift;
+
+    my $runs = $self->{+RUNS} //= [];
+
+    return $runs if $self->{+RUNS_ENDED};
+
+    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'));
+
+    for my $item ($run_queue->poll()) {
+        my $run_data = $item->[-1];
+
+        if (!defined $run_data) {
+            $self->{+RUNS_ENDED} = 1;
+            last;
+        }
+
+        push @$runs => Test2::Harness::Runner::Run->new(
+            %$run_data,
+            workdir => $self->{+DIR},
+        );
+    }
+
+    return $runs;
+}
+
+sub clear_finished_run {
+    my $self = shift;
+
+    return unless $self->{+RUN};
+    return unless $self->{+RUN}->queue_ended;
+
+    delete $self->{+RUN};
+}
+
+sub run {
+    my $self = shift;
+
+    $self->clear_finished_run;
+
+    return $self->{+RUN} if $self->{+RUN};
+
+    my $runs = $self->poll_runs;
+    return undef unless @$runs;
+
+    $self->{+RUN} = shift @$runs;
+}
 
 1;
 

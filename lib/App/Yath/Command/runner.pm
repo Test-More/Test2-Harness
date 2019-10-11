@@ -31,9 +31,9 @@ use Carp qw/confess/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub internal_only   { 1 }
-sub summary         { "For internal use only" }
-sub name            { 'runner' }
+sub internal_only { 1 }
+sub summary       { "For internal use only" }
+sub name          { 'runner' }
 
 sub init { confess(ref($_[0]) . " is not intended to be instantiated") }
 sub run  { confess(ref($_[0]) . " does not implement run()") }
@@ -53,9 +53,9 @@ sub generate_run_sub {
     my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
 
     my $preloader = Test2::Harness::Runner::Preloader->new(
-        %args,
-        dir => $dir,
+        dir      => $dir,
         preloads => $settings->runner->preloads,
+        monitor  => $args{monitor_preloads},
     );
 
     $preloader->preload;

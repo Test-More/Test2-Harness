@@ -24,27 +24,27 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
         default => sub { $ENV{YATH_LOG_FILE_FORMAT} // '%Y-%m-%d_%H:%M:%S_%!U.jsonl' },
     );
 
-    option bzip2_log => (
+    option bzip2 => (
         short        => 'B',
-        alt          => ['bz2'],
+        alt          => ['bz2', 'bzip2_log'],
         description  => 'Use bzip2 compression when writing the log. This option implies -L. The .bz2 prefix is added to log file name for you',
         post_process => sub {
             my %params   = @_;
             my $settings = $params{settings};
             my $logging  = $settings->logging;
-            die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2_log && $logging->gzip_log;
+            die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2 && $logging->gzip;
         },
     );
 
-    option gzip_log => (
+    option gzip => (
         short        => 'G',
-        alt          => ['gz'],
+        alt          => ['gz', 'gzip_log'],
         description  => 'Use gzip compression when writing the log. This option implies -L. The .gz prefix is added to log file name for you',
         post_process => sub {
             my %params   = @_;
             my $settings = $params{settings};
             my $logging  = $settings->logging;
-            die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2_log && $logging->gzip_log;
+            die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2 && $logging->gzip;
         },
     );
 
@@ -58,7 +58,7 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
             my $settings = $params{settings};
             my $logging  = $settings->logging;
 
-            if ($logging->log || $logging->bzip2_log || $logging->gzip_log) {
+            if ($logging->log || $logging->bzip2 || $logging->gzip) {
                 # We want to keep the log and put it in a findable location
 
                 $logging->log = 1;
@@ -77,8 +77,8 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
                 $logging->log_file =~ s/\.(gz|bz2)$//;
                 $logging->log_file =~ s/\.jsonl?$//;
                 $logging->log_file .= "\.jsonl";
-                $logging->log_file .= "\.bz2" if $logging->bzip2_log;
-                $logging->log_file .= "\.gz" if $logging->gzip_log;
+                $logging->log_file .= "\.bz2" if $logging->bzip2;
+                $logging->log_file .= "\.gz" if $logging->gzip;
             }
         },
     );

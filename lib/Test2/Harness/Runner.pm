@@ -4,19 +4,20 @@ use warnings;
 
 our $VERSION = '0.001100';
 
+use Carp qw/confess croak/;
+
 use File::Spec();
 
+use Test2::Harness::Util::Queue();
 use Test2::Harness::Runner::Job();
-
-use Carp qw/croak/;
-use Time::HiRes qw/time/;
-
-use Test2::Harness::Util qw/clean_path mod2file write_file_atomic/;
+use Test2::Harness::Runner::Run();
+use Test2::Harness::Runner::State();
 
 use Test2::Harness::Runner::Constants;
 
-use Test2::Harness::Util::Queue;
-use Test2::Harness::Runner::Run;
+use Test2::Harness::Util qw/clean_path mod2file write_file_atomic/;
+
+use Time::HiRes qw/sleep time/;
 
 use parent 'Test2::Harness::IPC';
 use Test2::Harness::Util::HashBase(
@@ -35,30 +36,38 @@ use Test2::Harness::Util::HashBase(
     },
     # From Construction
     qw{
-        <dir <settings <fork_job_callback
+        <dir <settings <fork_job_callback <respawn_runner_callback <monitor_preloads
     },
     # Other
     qw {
-        <signal
+        <preloader
 
-        +preload_done
+        <signal
 
         +last_timeout_check
 
         +run +runs +runs_ended
+
+        +queue +run +state
     },
 );
 
 sub init {
     my $self = shift;
 
-    croak "'dir' is a required attribute" unless $self->{+DIR};
+    croak "'dir' is a required attribute"      unless $self->{+DIR};
     croak "'settings' is a required attribute" unless $self->{+SETTINGS};
 
     my $dir = clean_path($self->{+DIR});
 
     croak "'$dir' is not a valid directory"
         unless -d $dir;
+
+    $self->{+PRELOADER} //= Test2::Harness::Runner::Preloader->new(
+        dir      => $dir,
+        preloads => $self->preloads,
+        monitor  => $self->{+MONITOR_PRELOADS},
+    );
 
     $self->{+DIR} = $dir;
 
@@ -67,18 +76,29 @@ sub init {
     $self->SUPER::init();
 }
 
-sub completed_task { }
+sub completed_task {
+    my $self = shift;
+    my ($task) = @_;
 
-sub job_class   { 'Test2::Harness::Runner::Job' }
-sub task_stage  { 'default' }
+    $self->{+STATE}->stop_task($task);
+}
 
-sub run_tests  { croak(ref($_[0]) . " Does not implement run_tests()") }
-sub add_task   { croak(ref($_[0]) . " Does not implement add_task()") }
-sub retry_task { croak(ref($_[0]) . " Does not implement retry_task()") }
+sub job_class  { 'Test2::Harness::Runner::Job' }
+sub task_stage { 'default' }
+
+sub add_task { $_[0]->{+STATE}->add_pending_task($_[1]) }
+
+sub retry_task {
+    my $self = shift;
+    my ($task) = @_;
+
+    $self->{+STATE}->add_pending_task($task);
+    $self->{+STATE}->stop_task($task);
+}
 
 sub queue_ended {
     my $self = shift;
-    my $run = $self->run or return 1;
+    my $run  = $self->run or return 1;
     return $run->queue_ended;
 }
 
@@ -103,6 +123,74 @@ sub process {
     return $self->{+SIGNAL} ? 128 + $self->SIG_MAP->{$self->{+SIGNAL}} : $ok ? 0 : 1;
 }
 
+sub run_tests {
+    my $self = shift;
+
+    $self->{+PRELOADER}->preload();
+
+    $self->{+STATE} //= Test2::Harness::Runner::State->new(
+        staged    => $self->{+PRELOADER}->staged ? 1 : 0,
+        job_count => $self->{+JOB_COUNT},
+    );
+
+    $self->{+STATE}->mark_stage_ready('default');
+
+    until ($self->end_test_loop()) {
+        my $run = $self->run or last;
+
+        my $task = $self->next();
+        $self->run_job($run, $task) if $task;
+
+        next if $self->wait(cat => $self->job_class->category);
+        next if $task;
+
+        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
+    }
+
+    $self->wait(all => 1);
+}
+
+sub end_test_loop {
+    my $self = shift;
+
+    return 0 unless $self->end_task_loop;
+
+    return 0 if @{$self->poll_runs};
+    return 1 if $self->{+RUNS_ENDED};
+
+    return 0;
+}
+
+sub end_task_loop {
+    my $self = shift;
+
+    return 0 if $self->{+STATE}->todo;
+    return 0 if $self->{+STATE}->running;
+    return 1 if $self->queue_ended;
+
+    return 0;
+}
+
+sub next {
+    my $self = shift;
+
+    my $iter = 0;
+    until ($self->end_task_loop()) {
+        $self->poll_tasks();
+
+        # Reap any completed PIDs
+        $self->wait();
+
+        my $task = $self->{+STATE}->pick_and_start('default');
+
+        return $task if $task;
+
+        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
+    }
+
+    return undef;
+}
+
 sub handle_sig {
     my $self = shift;
     my ($sig) = @_;
@@ -120,7 +208,7 @@ sub all_libs {
 
     my @out;
     push @out => clean_path('t/lib') if $self->{+TLIB};
-    push @out => clean_path('lib') if $self->{+LIB};
+    push @out => clean_path('lib')   if $self->{+LIB};
 
     if ($self->{+BLIB}) {
         push @out => clean_path('blib/lib');
@@ -152,7 +240,7 @@ sub run_job {
     $via //= $self->{+FORK_JOB_CALLBACK} if $job->use_fork;
     if ($via) {
         $spawn_time = time();
-        $pid = $self->$via($job);
+        $pid        = $self->$via($job);
         $job->set_pid($pid);
         $self->watch($job);
     }
@@ -197,7 +285,7 @@ sub check_timeouts {
 
         my $kill = -f $job->et_file || -f $job->pet_file;
 
-        write_file_atomic($job->et_file,  $now) if $e_to && !-f $job->et_file;
+        write_file_atomic($job->et_file,  $now) if $e_to  && !-f $job->et_file;
         write_file_atomic($job->pet_file, $now) if $pe_to && !-f $job->pet_file;
 
         my $sig = $kill ? 'KILL' : 'TERM';
@@ -219,7 +307,7 @@ sub set_proc_exit {
         my $task = $proc->task;
 
         if ($exit && $proc->is_try < $proc->retry) {
-            $task = {%$task}; # Clone
+            $task = {%$task};    # Clone
             $task->{is_try}++;
             $self->retry_task($task);
             push @args => 'will-retry';
@@ -247,19 +335,18 @@ sub stop {
     # Time to get serious
     if (keys %{$self->{+PROCS}}) {
         print STDERR "Some child processes are refusing to exit, sending KILL signal...\n";
-        $self->killall('KILL')
+        $self->killall('KILL');
     }
 
     $self->SUPER::stop();
 }
-
 
 sub poll_tasks {
     my $self = shift;
 
     return if $self->queue_ended;
 
-    my $run = $self->run;
+    my $run   = $self->run;
     my $queue = $run->queue;
 
     my $added = 0;
@@ -317,6 +404,9 @@ sub poll_runs {
 
 sub clear_finished_run {
     my $self = shift;
+
+    return if $self->{+STATE}->todo;
+    return if $self->{+STATE}->running;
 
     return unless $self->{+RUN};
     return unless $self->{+RUN}->queue_ended;

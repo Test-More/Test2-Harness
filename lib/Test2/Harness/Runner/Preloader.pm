@@ -84,21 +84,6 @@ sub preload {
     $self->_preload($preloads);
 }
 
-sub runner_class {
-    my $self = shift;
-
-    croak "You must run preload() before asking for a runner class"
-        unless $self->{+DONE};
-
-    if ($self->{+STAGED}) {
-        require Test2::Harness::Runner::Staged;
-        return 'Test2::Harness::Runner::Staged';
-    }
-
-    require Test2::Harness::Runner::Default;
-    return 'Test2::Harness::Runner::Default';
-}
-
 sub start_stage {
     my $self = shift;
     my ($stage) = @_;

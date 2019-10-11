@@ -52,24 +52,18 @@ sub generate_run_sub {
 
     my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
 
-    my $preloader = Test2::Harness::Runner::Preloader->new(
-        dir      => $dir,
-        preloads => $settings->runner->preloads,
-        monitor  => $args{monitor_preloads},
-    );
-
-    $preloader->preload;
-    my $runner_class = $preloader->runner_class;
-
     my $jump = setjump "Test-Runner" => sub {
         local %SIG = %SIG;
         my $runner = $settings->build(
-            runner   => $runner_class,
+            runner => 'Test2::Harness::Runner',
+
+            %args,
+
             dir      => $dir,
             settings => $settings,
-            preloads => $preloader,
 
-            fork_job_callback => sub { $class->launch_via_fork(@_) }
+            fork_job_callback       => sub { $class->launch_via_fork(@_) },
+            respawn_runner_callback => sub { longjump "Test-Runner" => 'respawn' },
         );
 
         my $exit = $runner->process();
@@ -82,8 +76,19 @@ sub generate_run_sub {
 
     die "Test runner completed, but failed to exit" unless $jump;
 
-    goto::file->import($jump->[0]->file);
-    $class->cleanup_process(@$jump);
+    my ($action, $job, $stage) = @$jump;
+
+    if($action eq 'respawn') {
+        print "Respawning the runner...\n";
+        exec($^X, $settings->yath->script, @{$settings->yath->orig_argv});
+        warn "exec failed!";
+        exit 1;
+    }
+
+    die "Invalid action: $action" if $action ne 'run_test';
+
+    goto::file->import($job->file);
+    $class->cleanup_process($job, $stage);
 }
 
 sub get_stage {
@@ -121,7 +126,7 @@ sub launch_via_fork {
 
         $stage->do_post_fork($job) if $stage;
 
-        longjump "Test-Runner" => ($job, $stage);
+        longjump "Test-Runner" => ('run_test', $job, $stage);
 
         1;
     };

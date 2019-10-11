@@ -379,7 +379,9 @@ sub _grab_opts {
     my $lookup = $self->_build_lookup($opts);
 
     my (@keep_args, @opts);
-    while (my $arg = shift @$args) {
+    while (@$args) {
+        my $arg = shift @$args;
+
         if ($ARG_ENDS{$arg}) {
             push @keep_args => $arg;
             last;

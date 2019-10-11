@@ -102,7 +102,9 @@ BEGIN {
     # ==START TESTABLE CODE PRE_PARSE_D_ARGS==
 
     my (@libs, %done, @args, $maybe_exec);
-    while (my $arg = shift @ARGV) {
+    while (@ARGV) {
+        my $arg = shift @ARGV;
+
         if ($arg eq '--' || $arg eq '::') {
             push @args => $arg;
             last;

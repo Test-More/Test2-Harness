@@ -21,7 +21,19 @@ use File::Spec;
 use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw/<runner_pid <harness_pid <ipc/;
+use Test2::Harness::Util::HashBase qw/
+    <runner_pid <harness_pid <ipc
+
+    +run
+
+    +auditor_reader
+    +collector_writer
+    +renderer_reader
+    +auditor_writer
+
+    +renderers
+    +logger
+/;
 
 include_options(
     'App::Yath::Options::Debug',
@@ -60,6 +72,34 @@ get the same ARGV.
     EOT
 }
 
+sub auditor_reader {
+    my $self = shift;
+    return $self->{+AUDITOR_READER} if $self->{+AUDITOR_READER};
+    pipe($self->{+AUDITOR_READER}, $self->{+COLLECTOR_WRITER}) or die "Could not create pipe: $!";
+    return $self->{+AUDITOR_READER};
+}
+
+sub collector_writer {
+    my $self = shift;
+    return $self->{+COLLECTOR_WRITER} if $self->{+COLLECTOR_WRITER};
+    pipe($self->{+AUDITOR_READER}, $self->{+COLLECTOR_WRITER}) or die "Could not create pipe: $!";
+    return $self->{+COLLECTOR_WRITER};
+}
+
+sub renderer_reader {
+    my $self = shift;
+    return $self->{+RENDERER_READER} if $self->{+RENDERER_READER};
+    pipe($self->{+RENDERER_READER}, $self->{+AUDITOR_WRITER}) or die "Could not create pipe: $!";
+    return $self->{+RENDERER_READER};
+}
+
+sub auditor_writer {
+    my $self = shift;
+    return $self->{+AUDITOR_WRITER} if $self->{+AUDITOR_WRITER};
+    pipe($self->{+RENDERER_READER}, $self->{+AUDITOR_WRITER}) or die "Could not create pipe: $!";
+    return $self->{+AUDITOR_WRITER};
+}
+
 sub run {
     my $self = shift;
 
@@ -74,60 +114,43 @@ sub run {
     $ipc->start();
 
     my $run = $self->build_run();
-    my $runner_proc = $self->start_runner();
 
-    my ($auditor_read, $collector_write);
-    pipe($auditor_read, $collector_write) or die "Could not make a pipe: $!";
+    my $runner_proc    = $self->start_runner();
+    my $collector_proc = $self->start_collector($run, $runner_proc->pid);
+    my $auditor_proc   = $self->start_auditor($run);
 
-    # Start a collector
-    my $collector_proc = $self->start_collector($run, $runner_proc->pid, $collector_write);
-    close($collector_write);
-
-    my ($renderer_read, $auditor_write);
-    pipe($renderer_read, $auditor_write) or die "Could not make pipe: $!";
-
-    my $auditor_proc = $self->start_auditor($run, $auditor_read, $auditor_write);
-    close($auditor_read);
-    close($auditor_write);
-
-    my @renderers;
-    for my $class (@{$settings->display->renderers->{'@'}}) {
-        require(mod2file($class));
-        my $args = $settings->display->renderers->{$class};
-        my $renderer = $class->new(@$args, settings => $settings);
-        push @renderers => $renderer;
-    }
-
-    my $log;
-    if ($settings->logging->log) {
-        my $file = $settings->logging->log_file;
-
-        if ($settings->logging->bzip2) {
-            require IO::Compress::Bzip2;
-            $log = IO::Compress::Bzip2->new($file) or die "Could not open log file '$file': $IO::Compress::Bzip2::Bzip2Error";
-        }
-        elsif ($settings->logging->gzip) {
-            require IO::Compress::Gzip;
-            $log = IO::Compress::Gzip->new($file) or die "Could not open log file '$file': $IO::Compress::Gzip::GzipError";
-        }
-        else {
-            $log = open_file($file, '>');
-        }
-    }
+    my $renderers = $self->renderers;
+    my $logger    = $self->logger;
 
     # render results from log
-    while (my $line = <$renderer_read>) {
-        print $log $line if $log;
+    my $reader = $self->renderer_reader();
+    while (my $line = <$reader>) {
+        print $logger $line if $logger;
         my $e = decode_json($line);
         last unless defined $e;
 
-        $_->render_event($e) for @renderers;
+        $_->render_event($e) for @$renderers;
     }
 
-    $_->finish() for @renderers;
+    $_->finish() for @$renderers;
 
-    $renderer_read->blocking(0);
-    my $final_data = decode_json(<$renderer_read>);
+    my $final_data = decode_json(scalar <$reader>);
+    $self->render_final_data($final_data);
+
+    $ipc->wait(all => 1);
+    $ipc->stop;
+
+    printf("\nKeeping work dir: %s\n", $dir) if $settings->debug->keep_dirs;
+
+    print "\nWrote log file: " . $settings->logging->log_file . "\n"
+        if $settings->logging->log;
+
+    return $final_data->{pass} ? 0 : 1;
+}
+
+sub render_final_data {
+    my $self = shift;
+    my ($final_data) = @_;
 
     if (my $rows = $final_data->{retried}) {
         print "\nThe following jobs failed at least once:\n";
@@ -155,28 +178,61 @@ sub run {
         );
         print "\n";
     }
+}
 
-    $ipc->wait(all => 1);
-    $ipc->stop;
+sub logger {
+    my $self = shift;
 
-    printf("\nKeeping work dir: %s\n", $dir) if $settings->debug->keep_dirs;
+    return $self->{+LOGGER} if $self->{+LOGGER};
 
-    print "Wrote log file: " . $settings->logging->log_file . "\n"
-        if $settings->logging->log;
+    my $settings = $self->{+SETTINGS};
 
-    return $final_data->{pass} ? 0 : 1;
+    return unless $settings->logging->log;
+
+    my $file = $settings->logging->log_file;
+
+    if ($settings->logging->bzip2) {
+        require IO::Compress::Bzip2;
+        $self->{+LOGGER} = IO::Compress::Bzip2->new($file) or die "Could not open log file '$file': $IO::Compress::Bzip2::Bzip2Error";
+        return $self->{+LOGGER};
+    }
+    elsif ($settings->logging->gzip) {
+        require IO::Compress::Gzip;
+        $self->{+LOGGER} = IO::Compress::Gzip->new($file) or die "Could not open log file '$file': $IO::Compress::Gzip::GzipError";
+        return $self->{+LOGGER};
+    }
+
+    return $self->{+LOGGER} = open_file($file, '>');
+}
+
+sub renderers {
+    my $self = shift;
+
+    return $self->{+RENDERERS} if $self->{+RENDERERS};
+
+    my $settings = $self->{+SETTINGS};
+
+    my @renderers;
+    for my $class (@{$settings->display->renderers->{'@'}}) {
+        require(mod2file($class));
+        my $args     = $settings->display->renderers->{$class};
+        my $renderer = $class->new(@$args, settings => $settings);
+        push @renderers => $renderer;
+    }
+
+    return $self->{+RENDERERS} = \@renderers;
 }
 
 sub start_auditor {
     my $self = shift;
-    my ($run, $stdin, $stdout) = @_;
+    my ($run) = @_;
 
     my $settings = $self->settings;
 
     my $ipc = $self->ipc;
     $ipc->spawn(
-        stdin       => $stdin,
-        stdout      => $stdout,
+        stdin       => $self->auditor_reader(),
+        stdout      => $self->auditor_writer(),
         no_set_pgrp => 1,
         command     => [
             $^X, $settings->yath->script,
@@ -190,7 +246,7 @@ sub start_auditor {
 
 sub start_collector {
     my $self = shift;
-    my ($run, $runner_pid, $stdout) = @_;
+    my ($run, $runner_pid) = @_;
 
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
@@ -200,7 +256,7 @@ sub start_collector {
 
     my $ipc = $self->ipc;
     $ipc->spawn(
-        stdout      => $stdout,
+        stdout      => $self->collector_writer,
         stdin       => $rh,
         no_set_pgrp => 1,
         command     => [
@@ -241,6 +297,8 @@ sub start_runner {
 sub build_run {
     my $self = shift;
 
+    return $self->{+RUN} if $self->{+RUN};
+
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
 
@@ -252,7 +310,7 @@ sub build_run {
     $run_queue->enqueue($run->queue_item($settings->yath->plugins));
     $run_queue->end;
 
-    return $run;
+    return $self->{+RUN} = $run;
 }
 
 sub parse_args {

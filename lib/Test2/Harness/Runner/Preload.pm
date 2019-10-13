@@ -73,9 +73,8 @@ sub build_stage {
     die "A coderef is required at $caller->[1] line $caller->[2].\n"
         unless $params{code};
 
-    my $stage = Test2::Harness::Runner::Preload::Stag->new(
+    my $stage = Test2::Harness::Runner::Preload::Stage->new(
         stage_lookup => $self->{+STAGE_LOOKUP},
-        stage_list   => $self->{+STAGE_LOOKUP},
         %params,
     );
 

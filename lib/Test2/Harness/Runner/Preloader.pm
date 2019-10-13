@@ -54,7 +54,6 @@ sub init {
     my $self = shift;
 
     $self->{+PRELOADS} //= [];
-    $self->{+STARTED_STAGES} = {};
 
     if ($self->{+MONITOR}) {
         require Test2::Harness::Runner::DepTracer;
@@ -95,7 +94,44 @@ sub preload {
     }
 
     return 'default' unless $self->{+STAGED};
-    die "oops";
+
+    my $name = 'base';
+    my @procs;
+
+    my @stages = @{$self->{+STAGED}->stage_list};
+    while (my $stage = shift @stages) {
+        my $proc = $self->launch_stage($stage);
+
+        if ($proc) {
+            push @procs => $proc;
+            next;
+        }
+
+        # We are in the stage now, reset these
+        $name   = $stage->name;
+        @procs  = ();
+        @stages = @{$stage->children};
+    }
+
+    return($name, @procs);
+}
+
+sub launch_stage {
+    my $self = shift;
+    my ($stage) = @_;
+
+    $stage = $self->{+STAGED}->stage_lookup->{$stage} unless ref $stage;
+
+    my $pid = fork();
+
+    return Test2::Harness::Runner::Preloader::Stage->new(
+        pid => $pid,
+        name => $stage->name,
+    ) if $pid;
+
+    $self->start_stage($stage);
+
+    return;
 }
 
 sub start_stage {
@@ -104,23 +140,18 @@ sub start_stage {
 
     $self->load_blacklist if $self->{+MONITOR};
 
-    if (my $p = $self->{+STAGED}) {
-        # Localize these in case something we preload tries to modify them.
-        local $SIG{INT}  = $SIG{INT};
-        local $SIG{HUP}  = $SIG{HUP};
-        local $SIG{TERM} = $SIG{TERM};
+    # Localize these in case something we preload tries to modify them.
+    local $SIG{INT}  = $SIG{INT};
+    local $SIG{HUP}  = $SIG{HUP};
+    local $SIG{TERM} = $SIG{TERM};
 
-        my $stage    = $p->stage_lookup->{$stage};
-        my $preloads = $stage ? $stage->load_sequence : [];
+    my $preloads = $stage ? $stage->load_sequence : [];
 
-        my $meth = $self->{+MONITOR} ? '_monitor_preload' : '_preload';
+    my $meth = $self->{+MONITOR} ? '_monitor_preload' : '_preload';
 
-        $self->$meth($preloads) if $preloads && @$preloads;
-    }
+    $self->$meth($preloads) if $preloads && @$preloads;
 
     $self->_monitor() if $self->{+MONITOR};
-
-    $self->{+STARTED_STAGES}->{$stage} = 1;
 }
 
 sub check {
@@ -182,13 +213,15 @@ sub _preload {
         next if $seen{$mod}++;
 
         if (ref($mod) eq 'CODE') {
-            $mod->($block, $require_sub);
+            next if eval { $mod->($block, $require_sub); 1 };
+            $self->{+DONE} ? warn $@ : die $@;
             next;
         }
 
         next if $block && $block->{$mod};
 
-        $self->_preload_module($mod, $block, $require_sub);
+        next if eval { $self->_preload_module($mod, $block, $require_sub); 1 };
+        $self->{+DONE} ? warn $@ : die $@;
     }
 
     return;
@@ -203,6 +236,8 @@ sub _preload_module {
     $require_sub ? $require_sub->($file) : require $file;
 
     return unless $mod->can('TEST2_HARNESS_PRELOAD');
+
+    die "You cannot load a Test2::Harness::Runner::Preload module from within another" if $self->{+DONE};
 
     $self->{+STAGED} //= do {
         require Test2::Harness::Runner::Preload;

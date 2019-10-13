@@ -8,18 +8,21 @@ use File::Spec();
 
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
+use Long::Jump qw/setjump longjump/;
 use Time::HiRes qw/sleep time/;
 
-use Test2::Harness::Runner::Constants;
 use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic/;
-
-use Test2::Harness::Runner::DepTracer();
-use Test2::Harness::Runner::Job();
-use Test2::Harness::Runner::Preload();
-use Test2::Harness::Runner::Run();
-use Test2::Harness::Runner::Staged::Stage();
-use Test2::Harness::Runner::State();
 use Test2::Harness::Util::Queue();
+
+use Test2::Harness::Runner::Constants;
+
+use Test2::Harness::Runner::Run();
+use Test2::Harness::Runner::Job();
+use Test2::Harness::Runner::State();
+use Test2::Harness::Runner::Preload();
+use Test2::Harness::Runner::Preloader();
+use Test2::Harness::Runner::Preloader::Stage();
+use Test2::Harness::Runner::DepTracer();
 
 use parent 'Test2::Harness::IPC';
 use Test2::Harness::Util::HashBase(
@@ -51,7 +54,7 @@ use Test2::Harness::Util::HashBase(
 
         +run +runs +runs_ended +run_queue
 
-        +queue +run +state
+        +state
 
         +dispatch_queue
         +dispatch_lock_file
@@ -232,10 +235,45 @@ sub run_tests {
 
     $self->watch($_) for @procs;
 
+    while(1) {
+        my $jump = setjump "Stage-Runner" => sub {
+            $self->run_stage($stage);
+        };
+
+        last unless $jump;
+
+        $stage = @$jump;
+        $self->_reset_stage();
+    }
+
+    return;
+}
+
+sub reset_stage {
+    my $self = shift;
+
+    delete $self->{+STAGE};
+    delete $self->{+STATE};
+    delete $self->{+PRELOADER};
+    delete $self->{+PENDING};
+    delete $self->{+LAST_TIMEOUT_CHECK};
+    delete $self->{+RUN};
+    delete $self->{+RUNS};
+    delete $self->{+RUNS_ENDED};
+    delete $self->{+RUN_QUEUE};
+    delete $self->{+STATE};
+    delete $self->{+DISPATCH_QUEUE};
+    delete $self->{+DISPATCH_LOCK_FILE};
+}
+
+sub run_stage {
+    my $self = shift;
+    my ($stage) = @_;
+
     $self->{+STAGE} = $stage;
     $self->dispatch_queue->enqueue({action => 'mark_stage_ready', arg => $stage});
 
-    $self->{+STATE} //= Test2::Harness::Runner::State->new(
+    $self->{+STATE} = Test2::Harness::Runner::State->new(
         staged    => $self->{+PRELOADER}->staged ? 1 : 0,
         job_count => $self->{+JOB_COUNT},
     );
@@ -499,9 +537,6 @@ sub retry {
 
     $task = { %$task, category => 'isolation' } if $self->run->retry_isolated;
 
-    use Data::Dumper;
-    print Dumper($task);
-
     $self->{+STATE}->stop_task($task);
     $self->{+STATE}->add_pending_task($task);
 }
@@ -590,7 +625,7 @@ sub set_proc_exit {
             $self->completed_task($task);
         }
     }
-    elsif ($proc->isa('Test2::Harness::Runner::Staged::Stage')) {
+    elsif ($proc->isa('Test2::Harness::Runner::Preloader::Stage')) {
         my $stage = $proc->name;
 
         if ($exit != 0) {
@@ -599,8 +634,9 @@ sub set_proc_exit {
         }
 
         unless ($self->end_task_loop) {
-            my $new = $self->preloader->launch_stage($stage, $exit);
-            $self->watch($new);
+            my $proc = $self->preloader->launch_stage($stage, $exit);
+            longjump "Stage-Runner" => $stage unless $proc;
+            $self->watch($proc);
         }
     }
 

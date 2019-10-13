@@ -4,20 +4,22 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-use Carp qw/confess croak/;
-
 use File::Spec();
 
-use Test2::Harness::Util::Queue();
-use Test2::Harness::Runner::Job();
-use Test2::Harness::Runner::Run();
-use Test2::Harness::Runner::State();
+use Carp qw/confess croak/;
+use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
+use Time::HiRes qw/sleep time/;
 
 use Test2::Harness::Runner::Constants;
+use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic/;
 
-use Test2::Harness::Util qw/clean_path mod2file write_file_atomic/;
-
-use Time::HiRes qw/sleep time/;
+use Test2::Harness::Runner::DepTracer();
+use Test2::Harness::Runner::Job();
+use Test2::Harness::Runner::Preload();
+use Test2::Harness::Runner::Run();
+use Test2::Harness::Runner::Staged::Stage();
+use Test2::Harness::Runner::State();
+use Test2::Harness::Util::Queue();
 
 use parent 'Test2::Harness::IPC';
 use Test2::Harness::Util::HashBase(
@@ -41,16 +43,22 @@ use Test2::Harness::Util::HashBase(
     # Other
     qw {
         <preloader
-
+        <stage
         <signal
+        <pending
 
         +last_timeout_check
 
-        +run +runs +runs_ended
+        +run +runs +runs_ended +run_queue
 
         +queue +run +state
+
+        +dispatch_queue
+        +dispatch_lock_file
     },
 );
+
+sub job_class  { 'Test2::Harness::Runner::Job' }
 
 sub init {
     my $self = shift;
@@ -73,187 +81,15 @@ sub init {
 
     $self->{+JOB_COUNT} //= 1;
 
+    $self->{+PENDING} //= [];
+
+    $self->{+HANDLERS}->{HUP} = sub {
+        my $sig = shift;
+        print STDERR "$$ ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
+        $self->{+SIGNAL} = $sig;
+    };
+
     $self->SUPER::init();
-}
-
-sub completed_task {
-    my $self = shift;
-    my ($task) = @_;
-
-    $self->{+STATE}->stop_task($task);
-}
-
-sub job_class  { 'Test2::Harness::Runner::Job' }
-sub task_stage { 'default' }
-
-sub add_task { $_[0]->{+STATE}->add_pending_task($_[1]) }
-
-sub retry_task {
-    my $self = shift;
-    my ($task) = @_;
-
-    $self->{+STATE}->add_pending_task($task);
-    $self->{+STATE}->stop_task($task);
-}
-
-sub queue_ended {
-    my $self = shift;
-    my $run  = $self->run or return 1;
-    return $run->queue_ended;
-}
-
-sub process {
-    my $self = shift;
-
-    my %seen;
-    @INC = grep { !$seen{$_}++ } $self->all_libs, @INC, $self->unsafe_inc ? ('.') : ();
-
-    my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
-    write_file_atomic($pidfile, "$$");
-
-    $self->start();
-
-    my $ok  = eval { $self->run_tests(); 1 };
-    my $err = $@;
-
-    warn $err unless $ok;
-
-    $self->stop();
-
-    return $self->{+SIGNAL} ? 128 + $self->SIG_MAP->{$self->{+SIGNAL}} : $ok ? 0 : 1;
-}
-
-sub run_tests {
-    my $self = shift;
-
-    $self->{+PRELOADER}->preload();
-
-    $self->{+STATE} //= Test2::Harness::Runner::State->new(
-        staged    => $self->{+PRELOADER}->staged ? 1 : 0,
-        job_count => $self->{+JOB_COUNT},
-    );
-
-    $self->{+STATE}->mark_stage_ready('default');
-
-    until ($self->end_test_loop()) {
-        my $run = $self->run or last;
-
-        my $task = $self->next();
-        $self->run_job($run, $task) if $task;
-
-        next if $self->wait(cat => $self->job_class->category);
-        next if $task;
-
-        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
-    }
-
-    $self->wait(all => 1);
-}
-
-sub end_test_loop {
-    my $self = shift;
-
-    return 0 unless $self->end_task_loop;
-
-    return 0 if @{$self->poll_runs};
-    return 1 if $self->{+RUNS_ENDED};
-
-    return 0;
-}
-
-sub end_task_loop {
-    my $self = shift;
-
-    return 0 if $self->{+STATE}->todo;
-    return 0 if $self->{+STATE}->running;
-    return 1 if $self->queue_ended;
-
-    return 0;
-}
-
-sub next {
-    my $self = shift;
-
-    my $iter = 0;
-    until ($self->end_task_loop()) {
-        $self->poll_tasks();
-
-        # Reap any completed PIDs
-        $self->wait();
-
-        my $task = $self->{+STATE}->pick_and_start('default');
-
-        return $task if $task;
-
-        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
-    }
-
-    return undef;
-}
-
-sub handle_sig {
-    my $self = shift;
-    my ($sig) = @_;
-
-    return if $self->{+SIGNAL};
-
-    return $self->{+HANDLERS}->{$sig}->($sig) if $self->{+HANDLERS}->{$sig};
-
-    $self->{+SIGNAL} = $sig;
-    die "Runner caught SIG$sig. Attempting to shut down cleanly...\n";
-}
-
-sub all_libs {
-    my $self = shift;
-
-    my @out;
-    push @out => clean_path('t/lib') if $self->{+TLIB};
-    push @out => clean_path('lib')   if $self->{+LIB};
-
-    if ($self->{+BLIB}) {
-        push @out => clean_path('blib/lib');
-        push @out => clean_path('blib/arch');
-    }
-
-    push @out => map { clean_path($_) } @{$self->{+INCLUDES}} if $self->{+INCLUDES};
-
-    return @out;
-}
-
-sub run_job {
-    my $self = shift;
-    my ($run, $task) = @_;
-
-    my $job = $self->job_class->new(
-        runner   => $self,
-        task     => $task,
-        run      => $run,
-        settings => $self->settings,
-    );
-
-    $job->prepare_dir();
-
-    my $spawn_time;
-
-    my $pid;
-    my $via = $job->via;
-    $via //= $self->{+FORK_JOB_CALLBACK} if $job->use_fork;
-    if ($via) {
-        $spawn_time = time();
-        $pid        = $self->$via($job);
-        $job->set_pid($pid);
-        $self->watch($job);
-    }
-    else {
-        $spawn_time = time();
-        $self->spawn($job);
-    }
-
-    my $json_data = $job->TO_JSON();
-    $json_data->{stamp} = $spawn_time;
-    $run->jobs->write($json_data);
-
-    return $pid;
 }
 
 sub check_timeouts {
@@ -299,27 +135,6 @@ sub check_timeouts {
     $self->{+LAST_TIMEOUT_CHECK} = time;
 }
 
-sub set_proc_exit {
-    my $self = shift;
-    my ($proc, $exit, $time, @args) = @_;
-
-    if ($proc->isa('Test2::Harness::Runner::Job')) {
-        my $task = $proc->task;
-
-        if ($exit && $proc->is_try < $proc->retry) {
-            $task = {%$task};    # Clone
-            $task->{is_try}++;
-            $self->retry_task($task);
-            push @args => 'will-retry';
-        }
-        else {
-            $self->completed_task($task);
-        }
-    }
-
-    $self->SUPER::set_proc_exit($proc, $exit, $time, @args);
-}
-
 sub stop {
     my $self = shift;
 
@@ -341,12 +156,274 @@ sub stop {
     $self->SUPER::stop();
 }
 
+sub dispatch_lock_file {
+    my $self = shift;
+    return $self->{+DISPATCH_LOCK_FILE} //= File::Spec->catfile($self->{+DIR}, 'DISPATCH_LOCK');
+}
+
+sub dispatch_queue {
+    my $self = shift;
+    $self->{+DISPATCH_QUEUE} //= Test2::Harness::Util::Queue->new(
+        file => File::Spec->catfile($self->{+DIR}, "dispatch.jsonl"),
+    );
+}
+
+sub run_queue {
+    my $self = shift;
+    return $self->{+RUN_QUEUE} //= Test2::Harness::Util::Queue->new(
+        file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'),
+    );
+}
+
+sub handle_sig {
+    my $self = shift;
+    my ($sig) = @_;
+
+    return if $self->{+SIGNAL};
+
+    return $self->{+HANDLERS}->{$sig}->($sig) if $self->{+HANDLERS}->{$sig};
+
+    $self->{+SIGNAL} = $sig;
+    die "Runner caught SIG$sig. Attempting to shut down cleanly...\n";
+}
+
+sub all_libs {
+    my $self = shift;
+
+    my @out;
+    push @out => clean_path('t/lib') if $self->{+TLIB};
+    push @out => clean_path('lib')   if $self->{+LIB};
+
+    if ($self->{+BLIB}) {
+        push @out => clean_path('blib/lib');
+        push @out => clean_path('blib/arch');
+    }
+
+    push @out => map { clean_path($_) } @{$self->{+INCLUDES}} if $self->{+INCLUDES};
+
+    return @out;
+}
+
+sub process {
+    my $self = shift;
+
+    my %seen;
+    @INC = grep { !$seen{$_}++ } $self->all_libs, @INC, $self->unsafe_inc ? ('.') : ();
+
+    my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
+    write_file_atomic($pidfile, "$$");
+
+    $self->start();
+
+    my $ok  = eval { $self->run_tests(); 1 };
+    my $err = $@;
+
+    warn $err unless $ok;
+
+    $self->stop();
+
+    return $self->{+SIGNAL} ? 128 + $self->SIG_MAP->{$self->{+SIGNAL}} : $ok ? 0 : 1;
+}
+
+sub run_tests {
+    my $self = shift;
+
+    my ($stage, @procs) = $self->{+PRELOADER}->preload();
+
+    $self->watch($_) for @procs;
+
+    $self->{+STAGE} = $stage;
+    $self->dispatch_queue->enqueue({action => 'mark_stage_ready', arg => $stage});
+
+    $self->{+STATE} //= Test2::Harness::Runner::State->new(
+        staged    => $self->{+PRELOADER}->staged ? 1 : 0,
+        job_count => $self->{+JOB_COUNT},
+    );
+
+    while (1) {
+        my $run = $self->run or last;
+
+        my $task = $self->next();
+        $self->run_job($run, $task) if $task;
+
+        next if $self->wait(cat => $self->job_class->category);
+        next if $task;
+
+        last if $self->end_test_loop();
+
+        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
+    }
+
+    $self->dispatch_queue->enqueue({action => 'mark_stage_down', arg => $stage});
+    $self->wait(all => 1);
+}
+
+sub run_job {
+    my $self = shift;
+    my ($run, $task) = @_;
+
+    my $job = $self->job_class->new(
+        runner   => $self,
+        task     => $task,
+        run      => $run,
+        settings => $self->settings,
+    );
+
+    $job->prepare_dir();
+
+    my $spawn_time;
+
+    my $pid;
+    my $via = $job->via;
+    $via //= $self->{+FORK_JOB_CALLBACK} if $job->use_fork;
+    if ($via) {
+        $spawn_time = time();
+        $pid        = $self->$via($job);
+        $job->set_pid($pid);
+        $self->watch($job);
+    }
+    else {
+        $spawn_time = time();
+        $self->spawn($job);
+    }
+
+    my $json_data = $job->TO_JSON();
+    $json_data->{stamp} = $spawn_time;
+    $run->jobs->write($json_data);
+
+    return $pid;
+}
+
+sub end_test_loop {
+    my $self = shift;
+
+    $self->{+respawn_runner_callback}->()
+        if $self->{+PRELOADER}->check
+        || $self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP';
+
+    return 1 if $self->{+SIGNAL};
+
+    return 0 unless $self->end_task_loop;
+
+    return 0 if @{$self->poll_runs};
+    return 1 if $self->{+RUNS_ENDED};
+
+    return 0;
+}
+
+sub queue_ended {
+    my $self = shift;
+    my $run  = $self->run or return 1;
+    return $run->queue_ended;
+}
+
+sub run {
+    my $self = shift;
+
+    $self->clear_finished_run;
+
+    return $self->{+RUN} if $self->{+RUN};
+
+    my $runs = $self->poll_runs;
+    return undef unless @$runs;
+
+    $self->{+RUN} = shift @$runs;
+}
+
+sub clear_finished_run {
+    my $self = shift;
+
+    $self->poll_dispatch();
+
+    return if @{$self->{+PENDING} //= []};
+    return if $self->{+STATE}->todo;
+    return if $self->{+STATE}->running;
+
+    return unless $self->{+RUN};
+    return unless $self->{+RUN}->queue_ended;
+
+    delete $self->{+RUN};
+}
+
+sub poll_runs {
+    my $self = shift;
+
+    my $runs = $self->{+RUNS} //= [];
+
+    return $runs if $self->{+RUNS_ENDED};
+
+    my $run_queue = $self->run_queue();
+
+    for my $item ($run_queue->poll()) {
+        my $run_data = $item->[-1];
+
+        if (!defined $run_data) {
+            $self->{+RUNS_ENDED} = 1;
+            last;
+        }
+
+        push @$runs => Test2::Harness::Runner::Run->new(
+            %$run_data,
+            workdir => $self->{+DIR},
+        );
+    }
+
+    return $runs;
+}
+
+sub next {
+    my $self = shift;
+
+    my $pending = $self->{+PENDING};
+
+    while (1) {
+        $self->poll();
+        return shift @$pending if @$pending;
+
+        # Reap any completed PIDs
+        next if $self->wait();
+
+        next if $self->manage_dispatch;
+
+        last if $self->end_task_loop();
+
+        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
+    }
+
+    return undef;
+}
+
+sub end_task_loop {
+    my $self = shift;
+
+    $self->poll_dispatch();
+
+    return 0 if @{$self->{+PENDING} //= []};
+    return 0 if $self->{+STATE}->todo;
+    return 0 if $self->{+STATE}->running;
+    return 0 if $self->run;
+    return 1 if $self->queue_ended;
+
+    return 0;
+}
+
+sub poll {
+    my $self = shift;
+
+    $self->poll_dispatch();
+
+    # This will poll runs for us.
+    return unless $self->run;
+
+    $self->poll_tasks();
+}
+
 sub poll_tasks {
     my $self = shift;
 
     return if $self->queue_ended;
 
-    my $run   = $self->run;
+    my $run   = $self->run or return;
     my $queue = $run->queue;
 
     my $added = 0;
@@ -376,55 +453,171 @@ sub poll_tasks {
     return $added;
 }
 
-sub poll_runs {
+sub task_stage {
+    my $self = shift;
+    my ($task) = @_;
+
+    my $stage = $task->{stage};
+    $stage = 'default' unless $stage && $self->{+PRELOADER}->stage_check($stage);
+
+    return $stage;
+}
+
+sub add_task {
+    my $self = shift;
+    my ($task) = @_;
+
+    $self->{+STATE}->add_pending_task($task);
+}
+
+my %ACTIONS = (dispatch => 1, complete => 1, mark_stage_ready => 1, mark_stage_down => 1, retry => 1);
+sub poll_dispatch {
+    my $self = shift;
+    my $queue = $self->dispatch_queue;
+    for my $item ($queue->poll) {
+        my $data = $item->[-1];
+        my $arg = $data->{arg};
+        my $action = $data->{action};
+
+        die "Invalid action '$action'" unless $ACTIONS{$action};
+
+        $self->$action($arg);
+    }
+}
+
+sub dispatch {
+    my $self = shift;
+    my ($task) = @_;
+
+    $self->{+STATE}->start_task($task);
+    push @{$self->{+PENDING}} => $task if $task->{stage} eq $self->{+STAGE};
+}
+
+sub retry {
+    my $self = shift;
+    my ($task) = @_;
+
+    $task = { %$task, category => 'isolation' } if $self->run->retry_isolated;
+
+    use Data::Dumper;
+    print Dumper($task);
+
+    $self->{+STATE}->stop_task($task);
+    $self->{+STATE}->add_pending_task($task);
+}
+
+sub mark_stage_ready {
+    my $self = shift;
+    my ($stage) = @_;
+
+    $self->{+STATE}->mark_stage_ready($stage);
+}
+
+sub mark_stage_down {
+    my $self = shift;
+    my ($stage) = @_;
+
+    $self->{+STATE}->mark_stage_down($stage);
+}
+
+sub complete {
+    my $self = shift;
+    my ($task) = @_;
+    $self->{+STATE}->stop_task($task);
+}
+
+sub manage_dispatch {
     my $self = shift;
 
-    my $runs = $self->{+RUNS} //= [];
+    my $lock = open_file($self->dispatch_lock_file, '>>');
+    flock($lock, LOCK_EX | LOCK_NB) or return 0;
+    seek($lock,2,0);
 
-    return $runs if $self->{+RUNS_ENDED};
+    my $ok = eval { $self->dispatch_loop; 1 };
+    my $err = $@;
 
-    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'));
+    # Unlock
+    $lock->flush;
+    flock($lock, LOCK_UN) or warn "Could not unlock dispatch: $!";
+    close($lock);
 
-    for my $item ($run_queue->poll()) {
-        my $run_data = $item->[-1];
+    die $err unless $ok;
 
-        if (!defined $run_data) {
-            $self->{+RUNS_ENDED} = 1;
-            last;
+    return 1;
+}
+
+sub dispatch_loop {
+    my $self = shift;
+
+    while (1) {
+        $self->poll;
+
+        $self->do_dispatch();
+
+        last if @{$self->{+PENDING}};
+
+        next if $self->wait();
+
+        last if $self->end_task_loop;
+
+        sleep $self->{+WAIT_TIME} if $self->{+WAIT_TIME};
+    }
+}
+
+sub do_dispatch {
+    my $self = shift;
+
+    my $task = $self->{+STATE}->pick_task() or return;
+    $self->dispatch_queue->enqueue({action => 'dispatch', arg => $task});
+
+    return;
+}
+
+sub set_proc_exit {
+    my $self = shift;
+    my ($proc, $exit, $time, @args) = @_;
+
+    if ($proc->isa('Test2::Harness::Runner::Job')) {
+        my $task = $proc->task;
+
+        if ($exit && $proc->is_try < $proc->retry) {
+            $task = {%$task};    # Clone
+            $task->{is_try}++;
+            $self->retry_task($task);
+            push @args => 'will-retry';
+        }
+        else {
+            $self->completed_task($task);
+        }
+    }
+    elsif ($proc->isa('Test2::Harness::Runner::Staged::Stage')) {
+        my $stage = $proc->name;
+
+        if ($exit != 0) {
+            my $e = parse_exit($exit);
+            warn "Child stage '$stage' did not exit cleanly (sig: $e->{sig}, err: $e->{err})!\n";
         }
 
-        push @$runs => Test2::Harness::Runner::Run->new(
-            %$run_data,
-            workdir => $self->{+DIR},
-        );
+        unless ($self->end_task_loop) {
+            my $new = $self->preloader->launch_stage($stage, $exit);
+            $self->watch($new);
+        }
     }
 
-    return $runs;
+    $self->SUPER::set_proc_exit($proc, $exit, $time, @args);
 }
 
-sub clear_finished_run {
+sub retry_task {
     my $self = shift;
+    my ($task) = @_;
 
-    return if $self->{+STATE}->todo;
-    return if $self->{+STATE}->running;
-
-    return unless $self->{+RUN};
-    return unless $self->{+RUN}->queue_ended;
-
-    delete $self->{+RUN};
+    $self->dispatch_queue->enqueue({action => 'retry', arg => $task});
 }
 
-sub run {
+sub completed_task {
     my $self = shift;
-
-    $self->clear_finished_run;
-
-    return $self->{+RUN} if $self->{+RUN};
-
-    my $runs = $self->poll_runs;
-    return undef unless @$runs;
-
-    $self->{+RUN} = shift @$runs;
+    my ($task) = @_;
+    $self->dispatch_queue->enqueue({action => 'complete', arg => $task});
 }
 
 1;

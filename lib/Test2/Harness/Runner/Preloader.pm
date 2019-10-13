@@ -65,23 +65,37 @@ sub init {
     }
 }
 
+sub stage_check {
+    my $self = shift;
+    my ($stage) = @_;
+    my $p = $self->{+STAGED} or return 0;
+    return 1 if $p->stage_lookup->{$stage};
+    return 0;
+}
+
 sub preload {
     my $self = shift;
 
-    return if $self->{+DONE};
+    croak "Already preloaded" if $self->{+DONE};
     $self->{+DONE} = 1;
 
-    my $preloads = $self->{+PRELOADS} or return;
-    return unless @$preloads;
+    my $preloads = $self->{+PRELOADS} or return 'default';
+    return 'default' unless @$preloads;
 
     require Test2::API;
     Test2::API::test2_start_preload();
 
     # Not loading blacklist yet because any preloads in this list need to
     # happen regardless of the blacklist.
-    return $self->_monitor_preload($preloads) if $self->{+MONITOR};
+    if ($self->{+MONITOR}) {
+        $self->_monitor_preload($preloads) if $self->{+MONITOR};
+    }
+    else {
+        $self->_preload($preloads);
+    }
 
-    $self->_preload($preloads);
+    return 'default' unless $self->{+STAGED};
+    die "oops";
 }
 
 sub start_stage {

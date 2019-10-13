@@ -18,7 +18,6 @@ use Test2::Harness::Util::HashBase(
     },
 
     qw{
-        <ready_stage_list
         <ready_stage_lookup
     },
 
@@ -55,7 +54,6 @@ sub init {
     # which they can take tasks.
     $self->{+EAGER_STAGES} //= {};
 
-    $self->{+READY_STAGE_LIST}   //= [];
     $self->{+READY_STAGE_LOOKUP} //= {};
 
     $self->{+TODO}          = {smoke => 0, main => 0, total => 0, stages => {}};
@@ -86,7 +84,13 @@ sub mark_stage_ready {
     my ($stage) = @_;
 
     $self->{+READY_STAGE_LOOKUP}->{$stage} = 1;
-    push @{$self->{+READY_STAGE_LIST}} => $stage;
+}
+
+sub mark_stage_down {
+    my $self = shift;
+    my ($stage) = @_;
+
+    delete $self->{+READY_STAGE_LOOKUP}->{$stage};
 }
 
 sub task_stage {
@@ -262,14 +266,16 @@ sub _dur_order {
 sub _stage_order {
     my $self = shift;
 
+    my @stage_list = sort keys %{$self->{+READY_STAGE_LOOKUP}};
+
     # Populate list with all ready stages
     my %seen;
-    my @stages = map {[$_ => $_]} grep { !$seen{$_}++ } @{$self->{+READY_STAGE_LIST}};
+    my @stages = map {[$_ => $_]} grep { !$seen{$_}++ } @stage_list;
 
     return \@stages unless $self->{+STAGED};
 
     # Add in any eager stages, but make sure they are last.
-    for my $rstage (@{$self->{+READY_STAGE_LIST}}) {
+    for my $rstage (@stage_list) {
         next unless exists $self->{+EAGER_STAGES}->{$rstage};
         push @stages => map {[$_ => $rstage]} grep { !$seen{$_}++ } @{$self->{+EAGER_STAGES}->{$rstage}};
     }

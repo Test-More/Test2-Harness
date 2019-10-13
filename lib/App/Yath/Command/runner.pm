@@ -97,9 +97,9 @@ sub get_stage {
 
     return unless $runner->can('stage');
 
-    my $stage_name = $runner->stage    or return;
-    my $preloads   = $runner->preloads or return;
-    my $p          = $preloads->staged or return;
+    my $stage_name = $runner->stage     or return;
+    my $preloader  = $runner->preloader or return;
+    my $p          = $preloader->staged or return;
 
     return $p->stage_lookup->{$stage_name};
 }

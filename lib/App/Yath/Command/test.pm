@@ -290,8 +290,8 @@ sub start_runner {
 
     my $ipc = $self->ipc;
     $ipc->spawn(
-        stderr => File::Spec->catfile($dir, 'error.log'),
-        stdout => File::Spec->catfile($dir, 'output.log'),
+        #stderr => File::Spec->catfile($dir, 'error.log'),
+        #stdout => File::Spec->catfile($dir, 'output.log'),
         no_set_pgrp => 1,
         command => [
             $^X, $settings->yath->script,

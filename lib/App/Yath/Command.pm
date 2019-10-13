@@ -6,8 +6,14 @@ use v5.10;
 
 our $VERSION = '0.001100';
 
+use File::Spec;
+use Carp qw/croak/;
+
 use Test2::Harness::Util::HashBase qw/-settings -args/;
+
 use App::Yath::Options();
+
+use Test2::Harness::Util::File::JSON();
 
 sub internal_only   { 0 }
 sub always_keep_dir { 0 }
@@ -142,6 +148,19 @@ sub generate_pod {
     );
 
     return join("\n\n" => grep { $_ } @out);
+}
+
+sub write_settings_to {
+    my $self = shift;
+    my ($dir, $file) = @_;
+
+    croak "'directory' is a required parameter" unless $dir;
+    croak "'filename' is a required parameter" unless $file;
+
+    my $settings = $self->settings;
+    my $settings_file = Test2::Harness::Util::File::JSON->new(name => File::Spec->catfile($dir, $file));
+    $settings_file->write($settings);
+    return $settings_file->name;
 }
 
 1;

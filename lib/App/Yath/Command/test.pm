@@ -22,7 +22,7 @@ use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/
-    <runner_pid <harness_pid <ipc
+    <runner_pid <ipc
 
     +run
 
@@ -290,8 +290,8 @@ sub start_runner {
 
     my $ipc = $self->ipc;
     $ipc->spawn(
-        #stderr => File::Spec->catfile($dir, 'error.log'),
-        #stdout => File::Spec->catfile($dir, 'output.log'),
+        stderr => File::Spec->catfile($dir, 'error.log'),
+        stdout => File::Spec->catfile($dir, 'output.log'),
         no_set_pgrp => 1,
         command => [
             $^X, $settings->yath->script,
@@ -339,19 +339,6 @@ sub parse_args {
     }
 
     return;
-}
-
-sub write_settings_to {
-    my $self = shift;
-    my ($dir, $file) = @_;
-
-    croak "'directory' is a required parameter" unless $dir;
-    croak "'filename' is a required parameter" unless $file;
-
-    my $settings = $self->settings;
-    my $settings_file = Test2::Harness::Util::File::JSON->new(name => File::Spec->catfile($dir, $file));
-    $settings_file->write($settings);
-    return $settings_file->name;
 }
 
 1;

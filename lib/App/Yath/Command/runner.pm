@@ -17,6 +17,8 @@ use Long::Jump qw/setjump longjump/;
 
 use Test2::Harness::Util qw/mod2file write_file_atomic open_file/;
 
+use Test2::Harness::Util::IPC qw/swap_io/;
+
 use Test2::Harness::Runner::Preloader();
 
 # If FindBin is installed, go ahead and load it. We do not care much about
@@ -289,9 +291,9 @@ sub update_io {
         POSIX::_exit(127);
     };
 
-    Test2::Harness::IPC->swap_io(\*STDIN,  $in_fh,  $die);
-    Test2::Harness::IPC->swap_io(\*STDOUT, $out_fh, $die);
-    Test2::Harness::IPC->swap_io(\*STDERR, $err_fh, $die);
+    swap_io(\*STDIN,  $in_fh,  $die);
+    swap_io(\*STDOUT, $out_fh, $die);
+    swap_io(\*STDERR, $err_fh, $die);
 
     return;
 }

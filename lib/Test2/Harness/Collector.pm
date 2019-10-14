@@ -116,7 +116,7 @@ sub runner_exited {
 sub process_runner_output {
     my $self = shift;
 
-    return unless $self->{show_runner_output};
+    return unless $self->{+SHOW_RUNNER_OUTPUT};
 
     my $stdout = $self->{+RUNNER_STDOUT} //= Test2::Harness::Util::File::Stream->new(
         name => File::Spec->catfile($self->{+WORKDIR}, 'output.log'),
@@ -124,7 +124,7 @@ sub process_runner_output {
 
     for my $line ($stdout->poll()) {
         chomp($line);
-        my $e = $self->_harness_event(0, info => [{details => $line, tag => 'INTERNAL'}]);
+        my $e = $self->_harness_event(0, info => [{details => $line, tag => 'INTERNAL', important => 1}]);
         $self->{+ACTION}->($e);
     }
 
@@ -134,7 +134,7 @@ sub process_runner_output {
 
     for my $line ($stderr->poll()) {
         chomp($line);
-        my $e = $self->_harness_event(0, info => [{details => $line, tag => 'INTERNAL', debug => 1}]);
+        my $e = $self->_harness_event(0, info => [{details => $line, tag => 'INTERNAL', debug => 1, important => 1}]);
         $self->{+ACTION}->($e);
     }
 }

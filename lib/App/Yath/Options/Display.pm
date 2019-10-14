@@ -90,6 +90,14 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
                 show_job_end
             };
 
+            push @args => map { $_ => $settings->display->$_ } qw{
+                progress
+                color
+                quiet
+                verbose
+                show_times
+            };
+
             if (my $formatter_args = $renderers->{'Test2::Harness::Renderer::Formatter'}) {
                 @$formatter_args = @args unless @$formatter_args;
                 return;

@@ -285,8 +285,6 @@ sub run_stage {
     );
 
     while (1) {
-        print "stage loop\n";
-
         next if $self->run_job();
 
         next if $self->wait(cat => $self->job_class->category);
@@ -341,23 +339,17 @@ sub run_job {
 sub end_test_loop {
     my $self = shift;
 
-    print "A\n";
     $self->{+respawn_runner_callback}->()
         if $self->{+PRELOADER}->check
         || $self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP';
 
-    print "B\n";
     return 1 if $self->{+SIGNAL};
 
-    print "C\n";
     return 0 unless $self->end_task_loop;
 
-    print "D\n";
     return 0 if @{$self->poll_runs};
-    print "E\n";
     return 1 if $self->{+RUNS_ENDED};
 
-    print "F\n";
     return 0;
 }
 
@@ -577,26 +569,13 @@ sub manage_dispatch {
     my $self = shift;
 
     # Do not bother with the lock if we are not staged
-    unless ($self->{+PRELOADER}->staged) {
-        $self->dispatch_loop;
-        return 1;
-    }
+    return $self->dispatch_loop unless $self->{+PRELOADER}->staged;
 
     my $lock = open_file($self->dispatch_lock_file, '>>');
     flock($lock, LOCK_EX | LOCK_NB) or return 0;
-    seek($lock,2,0);
 
-    my $ok = eval { $self->dispatch_loop; 1 };
-    my $err = $@;
-
-    # Unlock
-    $lock->flush;
-    flock($lock, LOCK_UN) or warn "Could not unlock dispatch: $!";
-    close($lock);
-
-    die $err unless $ok;
-
-    return 1;
+    # Lock goes away with scope
+    return $self->dispatch_loop;
 }
 
 sub dispatch_loop {
@@ -615,6 +594,8 @@ sub dispatch_loop {
 
         sleep $self->{+WAIT_TIME} if $self->{+WAIT_TIME};
     }
+
+    return 1;
 }
 
 sub do_dispatch {

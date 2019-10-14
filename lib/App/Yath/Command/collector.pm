@@ -43,7 +43,7 @@ sub run {
         run        => $run,
         # as_json may already have the json form of the event cached, if so
         # we can avoid doing an extra call to encode_json
-        action => sub { print $fh defined($_[0]) ? $_[0]->as_json . "\n" : "null\n" },
+        action => sub { print $fh defined($_[0]) ? $_[0]->as_json . "\n" : "null\n"; },
     );
 
     local $SIG{PIPE} = 'IGNORE';

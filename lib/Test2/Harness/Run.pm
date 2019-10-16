@@ -60,29 +60,6 @@ sub run_dir {
     return File::Spec->catfile($workdir, $self->{+RUN_ID});
 }
 
-sub queue {
-    my $self = shift;
-    my ($run_dir) = @_;
-    return Test2::Harness::Util::Queue->new(file => File::Spec->catfile($run_dir, 'queue.jsonl'));
-}
-
-sub write_queue {
-    my $self = shift;
-    my ($workdir, $plugins) = @_;
-
-    my $run_dir = $self->run_dir($workdir);
-    mkdir($run_dir) or die "Could not create run-dir '$run_dir': $!";
-
-    my $queue = $self->queue($run_dir);
-    $queue->start;
-
-    my $job_count = 0;
-    $queue->enqueue($_->queue_item(++$job_count)) for @{$self->find_files($plugins)};
-    $queue->end;
-
-    return $job_count;
-}
-
 sub TO_JSON { +{ %{$_[0]} } }
 
 sub queue_item {

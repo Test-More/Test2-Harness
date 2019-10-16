@@ -11,6 +11,7 @@ use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
+use Test2::Harness::Runner::State;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Harness::Util qw/mod2file open_file/;
@@ -122,6 +123,8 @@ sub run {
 
     my $run = $self->build_run();
 
+    $self->populate_queue($run);
+
     my $runner_proc    = $self->start_runner(monitor_preloads => 0);
     my $collector_proc = $self->start_collector($run, $runner_proc->pid);
     my $auditor_proc   = $self->start_auditor($run);
@@ -156,6 +159,29 @@ sub run {
         if $settings->logging->log;
 
     return $final_data->{pass} ? 0 : 1;
+}
+
+sub populate_queue {
+    my $self = shift;
+    my ($run) = @_;
+
+    my $state = Test2::Harness::Runner::State->new(workdir => $self->workdir, job_count => 1);
+
+    my $plugins = $self->settings->yath->plugins;
+
+    $state->queue_run($run->queue_item($plugins));
+
+    my $tasks_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($run->run_dir($self->workdir), 'queue.jsonl'));
+
+    my $job_count = 0;
+    for my $file ( @{$run->find_files($plugins)} ) {
+        my $task = $file->queue_item(++$job_count, $run->run_id);
+        $state->queue_task($task);
+        $tasks_queue->enqueue($task);
+    }
+
+    $tasks_queue->end();
+    $state->end_queue();
 }
 
 sub render_final_data {
@@ -325,23 +351,10 @@ sub build_run {
     my $dir = $self->workdir;
 
     my $run = $settings->build(run => 'Test2::Harness::Run');
-    $run->write_queue($dir, $settings->yath->plugins);
 
-    $self->build_run_item($run);
+    mkdir($run->run_dir($dir)) or die "Could not make run dir: $!";
 
     return $self->{+RUN} = $run;
-}
-
-sub build_run_item {
-    my $self = shift;
-    my ($run) = @_;
-
-    my $settings = $self->{+SETTINGS};
-
-    my $run_queue = $self->run_queue;
-    $run_queue->start();
-    $run_queue->enqueue($run->queue_item($settings->yath->plugins));
-    $self->run_queue->end;
 }
 
 sub parse_args {

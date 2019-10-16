@@ -41,7 +41,7 @@ use Test2::Harness::Util::HashBase(
 
         +args +file
 
-        +out_file +err_file +in_file
+        +out_file +err_file +in_file +bail_file
 
         +load +load_import
 
@@ -156,6 +156,7 @@ my %JSON_SKIP = (
     JOB_DIR()          => 1,
     LAST_OUTPUT_SIZE() => 1,
     OUT_FILE()         => 1,
+    BAIL_FILE()        => 1,
     OUTPUT_CHANGED()   => 1,
     PET_FILE()         => 1,
     RUN_DIR()          => 1,
@@ -180,12 +181,31 @@ sub TO_JSON {
     return $out;
 }
 
-sub file     { $_[0]->{+FILE}     //= clean_path($_[0]->{+TASK}->{file}) }
-sub err_file { $_[0]->{+ERR_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stderr')) }
-sub out_file { $_[0]->{+OUT_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stdout')) }
-sub et_file  { $_[0]->{+ET_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'event_timeout')) }
-sub pet_file { $_[0]->{+PET_FILE} //= clean_path(File::Spec->catfile($_[0]->job_dir, 'post_exit_timeout')) }
-sub run_dir  { $_[0]->{+RUN_DIR}  //= clean_path(File::Spec->catdir($_[0]->{+RUNNER}->dir, $_[0]->{+RUN}->run_id)) }
+sub file      { $_[0]->{+FILE}      //= clean_path($_[0]->{+TASK}->{file}) }
+sub err_file  { $_[0]->{+ERR_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stderr')) }
+sub out_file  { $_[0]->{+OUT_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stdout')) }
+sub bail_file { $_[0]->{+BAIL_FILE} //= clean_path(File::Spec->catfile($_[0]->event_dir, 'bail')) }
+sub et_file   { $_[0]->{+ET_FILE}   //= clean_path(File::Spec->catfile($_[0]->job_dir, 'event_timeout')) }
+sub pet_file  { $_[0]->{+PET_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'post_exit_timeout')) }
+sub run_dir   { $_[0]->{+RUN_DIR}   //= clean_path(File::Spec->catdir($_[0]->{+RUNNER}->dir, $_[0]->{+RUN}->run_id)) }
+
+sub bailed_out {
+    my $self = shift;
+
+    if(-f $self->bail_file) {
+        my $fh = open_file($self->bail_file, '<');
+        my $reason = <$fh> || 1;
+        return $reason;
+    }
+
+    my $fh = open_file($self->out_file, '<');
+    while (my $line = <$fh>) {
+        next unless $line =~ m/^Bail out!\s*(.*)$/;
+        return $1 || 1;
+    }
+
+    return "";
+}
 
 sub output_size {
     my $self = shift;
@@ -217,10 +237,10 @@ sub unsafe_inc  { $_[0]->{+UNSAFE_INC}  //= $_[0]->{+RUNNER}->unsafe_inc }
 sub event_uuids { $_[0]->{+EVENT_UUIDS} //= $_[0]->run->event_uuids }
 sub mem_usage   { $_[0]->{+MEM_USAGE}   //= $_[0]->run->mem_usage }
 
-sub smoke             { $_[0]->{+SMOKE}             //= $_[0]->_fallback(smoke             => 0,  qw/task run/) }
+sub smoke             { $_[0]->{+SMOKE}             //= $_[0]->_fallback(smoke             => 0,  qw/task/) }
 sub retry             { $_[0]->{+RETRY}             //= $_[0]->_fallback(retry             => 0,  qw/task run/) }
 sub retry_isolated    { $_[0]->{+RETRY_ISOLATED}    //= $_[0]->_fallback(retry_isolated    => 0,  qw/task run/) }
-sub use_stream        { $_[0]->{+USE_STREAM}        //= $_[0]->_fallback(use_stream        => '', qw/task run/) }
+sub use_stream        { $_[0]->{+USE_STREAM}        //= $_[0]->_fallback(use_stream        => 1,  qw/task run/) }
 sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_timeout     => '', qw/task runner/) }
 sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => '', qw/task runner/) }
 
@@ -238,13 +258,23 @@ sub _fallback {
     my $self = shift;
     my ($name, $default, @from) = @_;
 
+    my @vals;
     for my $from (@from) {
         my $source = $self->$from;
         my $val = blessed($source) ? $source->$name : $source->{$name};
-        return $val if defined $val;
+        push @vals => $val if defined $val;
     }
 
-    return $default;
+    return $default unless @vals;
+
+    # If the default is a ref we will just returnt he first value we found, truthiness check is useless
+    return shift @vals if ref $default;
+
+    # If the default is true, then we only return true if none of the vals are false
+    return !grep { !$_ } @vals if $default;
+
+    # If the default is false, then we return true if any of the valse are true
+    return grep { $_ } @vals;
 }
 
 sub job_dir {

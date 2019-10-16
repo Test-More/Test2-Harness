@@ -166,6 +166,19 @@ sub record {
         $fh = shift @sync;
     }
 
+    if ($facets->{control}->{halt}) {
+        my $reason = $facets->{control}->{details} || "";
+
+        if ($leader) {
+            print $fh "\nBail out!  $reason\n";
+        }
+        else {
+            open(my $bh, '>', File::Spec->catfile($self->{+DIR}, 'bail')) or die "Could not create bail file: $!";
+            print $bh $reason;
+            close($bh);
+        }
+    }
+
     my $tid = get_tid();
     my $id = $self->{+STREAM_ID}++;
 

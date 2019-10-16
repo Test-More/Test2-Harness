@@ -45,18 +45,13 @@ use Test2::Harness::Util::HashBase(
     },
     # Other
     qw {
-        <preloader
-        <stage
-        <signal
-        <pending
-
-        +last_timeout_check
-
-        +run +runs +runs_ended +run_queue
-
+        +preloader
         +state
 
-        +dispatch_queue
+        <stage
+        <signal
+
+        +last_timeout_check
         +dispatch_lock_file
     },
 );
@@ -74,17 +69,8 @@ sub init {
     croak "'$dir' is not a valid directory"
         unless -d $dir;
 
-    $self->{+PRELOADER} //= Test2::Harness::Runner::Preloader->new(
-        dir      => $dir,
-        preloads => $self->preloads,
-        monitor  => $self->{+MONITOR_PRELOADS},
-    );
-
     $self->{+DIR} = $dir;
-
     $self->{+JOB_COUNT} //= 1;
-
-    $self->{+PENDING} //= [];
 
     $self->{+HANDLERS}->{HUP} = sub {
         my $sig = shift;
@@ -93,6 +79,25 @@ sub init {
     };
 
     $self->SUPER::init();
+}
+
+sub preloader {
+    my $self = shift;
+
+    $self->{+PRELOADER} //= Test2::Harness::Runner::Preloader->new(
+        dir      => $self->{+DIR},
+        preloads => $self->preloads,
+        monitor  => $self->{+MONITOR_PRELOADS},
+    );
+}
+
+sub state {
+    my $self = shift;
+
+    $self->{+STATE} //= Test2::Harness::Runner::State->new(
+        job_count => $self->{+JOB_COUNT},
+        workdir   => $self->{+DIR},
+    );
 }
 
 sub check_timeouts {
@@ -161,21 +166,7 @@ sub stop {
 
 sub dispatch_lock_file {
     my $self = shift;
-    return $self->{+DISPATCH_LOCK_FILE} //= File::Spec->catfile($self->{+DIR}, 'DISPATCH_LOCK');
-}
-
-sub dispatch_queue {
-    my $self = shift;
-    $self->{+DISPATCH_QUEUE} //= Test2::Harness::Util::Queue->new(
-        file => File::Spec->catfile($self->{+DIR}, "dispatch.jsonl"),
-    );
-}
-
-sub run_queue {
-    my $self = shift;
-    return $self->{+RUN_QUEUE} //= Test2::Harness::Util::Queue->new(
-        file => File::Spec->catfile($self->{+DIR}, 'run_queue.jsonl'),
-    );
+    return $self->{+DISPATCH_LOCK_FILE} //= File::Spec->catfile($self->{+DIR}, 'dispatch.lock');
 }
 
 sub handle_sig {
@@ -231,7 +222,7 @@ sub process {
 sub run_tests {
     my $self = shift;
 
-    my ($stage, @procs) = $self->{+PRELOADER}->preload();
+    my ($stage, @procs) = $self->preloader->preload();
 
     $self->watch($_) for @procs;
 
@@ -259,15 +250,7 @@ sub reset_stage {
     delete $self->{+STAGE};
     delete $self->{+STATE};
     delete $self->{+PRELOADER};
-    delete $self->{+PENDING};
     delete $self->{+LAST_TIMEOUT_CHECK};
-    delete $self->{+RUN};
-    delete $self->{+RUNS};
-    delete $self->{+RUNS_ENDED};
-    delete $self->{+RUN_QUEUE};
-    delete $self->{+STATE};
-    delete $self->{+DISPATCH_QUEUE};
-    delete $self->{+DISPATCH_LOCK_FILE};
 
     return;
 }
@@ -277,12 +260,7 @@ sub run_stage {
     my ($stage) = @_;
 
     $self->{+STAGE} = $stage;
-    $self->dispatch_queue->enqueue({action => 'mark_stage_ready', arg => $stage, pid => $$, stamp => time});
-
-    $self->{+STATE} = Test2::Harness::Runner::State->new(
-        staged    => $self->{+PRELOADER}->staged ? 1 : 0,
-        job_count => $self->{+JOB_COUNT},
-    );
+    $self->state->stage_ready($stage);
 
     while (1) {
         next if $self->run_job();
@@ -294,7 +272,7 @@ sub run_stage {
         sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
     }
 
-    $self->dispatch_queue->enqueue({action => 'mark_stage_down', arg => $stage, pid => $$, stamp => time});
+    $self->state->stage_down($stage);
     $self->wait(all => 1);
 }
 
@@ -302,7 +280,7 @@ sub run_job {
     my $self = shift;
 
     my $task = $self->next() or return 0;
-    my $run = $self->run() or die "Where did the run go?";
+    my $run = $self->state->run() or return 1;
 
     my $job = $self->job_class->new(
         runner   => $self,
@@ -340,260 +318,14 @@ sub end_test_loop {
     my $self = shift;
 
     $self->{+RESPAWN_RUNNER_CALLBACK}->()
-        if ($self->{+PRELOADER} && $self->{+PRELOADER}->check)
+        if $self->preloader->check
         || ($self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP');
 
     return 1 if $self->{+SIGNAL};
 
-    return 0 unless $self->end_task_loop;
-
-    return 0 if @{$self->poll_runs};
-    return 1 if $self->{+RUNS_ENDED};
+    return 1 if $self->state->done;
 
     return 0;
-}
-
-sub queue_ended {
-    my $self = shift;
-    my $run  = $self->run or return 1;
-    return $run->queue_ended;
-}
-
-sub run {
-    my $self = shift;
-
-    $self->clear_finished_run;
-
-    return $self->{+RUN} if $self->{+RUN};
-
-    my $runs = $self->poll_runs;
-    return undef unless @$runs;
-
-    $self->{+RUN} = shift @$runs;
-}
-
-sub clear_finished_run {
-    my $self = shift;
-
-    $self->poll_dispatch();
-
-    return if @{$self->{+PENDING} //= []};
-    return if $self->{+STATE}->todo;
-    return if $self->{+STATE}->running;
-
-    return unless $self->{+RUN};
-    return unless $self->{+RUN}->queue_ended;
-
-    delete $self->{+RUN};
-}
-
-sub poll_runs {
-    my $self = shift;
-
-    my $runs = $self->{+RUNS} //= [];
-
-    return $runs if $self->{+RUNS_ENDED};
-
-    my $run_queue = $self->run_queue();
-
-    for my $item ($run_queue->poll()) {
-        my $run_data = $item->[-1];
-
-        if (!defined $run_data) {
-            $self->{+RUNS_ENDED} = 1;
-            last;
-        }
-
-        push @$runs => Test2::Harness::Runner::Run->new(
-            %$run_data,
-            workdir => $self->{+DIR},
-        );
-    }
-
-    return $runs;
-}
-
-sub next {
-    my $self = shift;
-
-    my $pending = $self->{+PENDING};
-
-    while (1) {
-        $self->poll();
-        return shift @$pending if @$pending;
-
-        # Reap any completed PIDs
-        next if $self->wait();
-
-        next if $self->manage_dispatch;
-
-        last if $self->end_task_loop();
-
-        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
-    }
-
-    return undef;
-}
-
-sub end_task_loop {
-    my $self = shift;
-
-    $self->poll_dispatch();
-
-    return 0 if @{$self->{+PENDING} //= []};
-    return 0 if $self->{+STATE}->todo;
-    return 0 if $self->{+STATE}->running;
-    return 0 if $self->run;
-    return 1 if $self->queue_ended;
-
-    return 0;
-}
-
-sub poll {
-    my $self = shift;
-
-    $self->poll_dispatch();
-
-    # This will poll runs for us.
-    return unless $self->run;
-
-    $self->poll_tasks();
-}
-
-sub poll_tasks {
-    my $self = shift;
-
-    return if $self->queue_ended;
-
-    my $run   = $self->run or return;
-    my $queue = $run->queue;
-
-    my $added = 0;
-    for my $item ($queue->poll) {
-        my ($spos, $epos, $task) = @$item;
-
-        $added++;
-
-        if (!$task) {
-            $run->set_queue_ended(1);
-            last;
-        }
-
-        my $cat = $task->{category};
-        $cat = 'general' unless $cat && CATEGORIES->{$cat};
-        $task->{category} = $cat;
-
-        my $dur = $task->{duration};
-        $dur = 'medium' unless $dur && DURATIONS->{$dur};
-        $task->{duration} = $dur;
-
-        $task->{stage} = $self->task_stage($task);
-
-        $self->add_task($task);
-    }
-
-    return $added;
-}
-
-sub task_stage {
-    my $self = shift;
-    my ($task) = @_;
-
-    my $stage = $task->{stage};
-    $stage = 'default' unless $stage && $self->{+PRELOADER}->stage_check($stage);
-
-    return $stage;
-}
-
-sub add_task {
-    my $self = shift;
-    my ($task) = @_;
-
-    $self->{+STATE}->add_pending_task($task);
-}
-
-my %ACTIONS = (dispatch => 1, complete => 1, mark_stage_ready => 1, mark_stage_down => 1, retry => 1, start_run => 1);
-sub poll_dispatch {
-    my $self = shift;
-    my $queue = $self->dispatch_queue;
-    for my $item ($queue->poll) {
-        my $data = $item->[-1];
-        my $arg = $data->{arg};
-        my $action = $data->{action};
-
-        die "Invalid action '$action'" unless $ACTIONS{$action};
-
-        $self->$action($arg);
-    }
-}
-
-sub start_run {
-    my $self = shift;
-    my ($run_id) = @_;
-
-    $self->{+STATE}->start_run($run_id);
-}
-
-sub stop_run {
-    my $self = shift;
-    my ($run_id) = @_;
-
-    $self->{+STATE}->stop_run();
-}
-
-sub dispatch {
-    my $self = shift;
-    my ($task) = @_;
-
-    $self->{+STATE}->start_task($task);
-    push @{$self->{+PENDING}} => $task if $task->{stage} eq $self->{+STAGE};
-}
-
-sub retry {
-    my $self = shift;
-    my ($task) = @_;
-
-    $task = { %$task, category => 'isolation' } if $self->run->retry_isolated;
-
-    $self->{+STATE}->stop_task($task);
-    $self->{+STATE}->add_pending_task($task);
-}
-
-sub mark_stage_ready {
-    my $self = shift;
-    my ($stage) = @_;
-
-    $self->{+STATE}->mark_stage_ready($stage);
-}
-
-sub mark_stage_down {
-    my $self = shift;
-    my ($stage) = @_;
-
-    $self->{+STATE}->mark_stage_down($stage);
-}
-
-sub complete {
-    my $self = shift;
-    my ($task) = @_;
-    $self->{+STATE}->stop_task($task);
-}
-
-sub manage_dispatch {
-    my $self = shift;
-
-    # Do not bother with the lock if we are not staged
-    my $lock;
-    if ($self->{+PRELOADER}->staged) {
-        $lock = $self->lock_dispatch() or return 0;
-    }
-
-    # Lock goes away with scope
-    my $out = $self->dispatch_loop;
-
-    $lock = undef;
-
-    return $out;
 }
 
 sub lock_dispatch {
@@ -605,33 +337,27 @@ sub lock_dispatch {
     return $lock;
 }
 
-sub dispatch_loop {
+sub next {
     my $self = shift;
+
+    my $state = $self->state;
 
     while (1) {
-        $self->poll;
 
-        $self->do_dispatch();
+        if(my $task = $state->next_task()) {
+            next unless $task->{stage} eq $self->{+STAGE};
+            return $task;
+        }
 
-        return 1 if @{$self->{+PENDING}};
+        if (my $lock = $self->lock_dispatch) {
+            while (1) {
+                next if $state->advance();
+                last;
+            }
+        }
 
-        next if $self->wait();
-
-        return 0 if $self->end_task_loop;
-
-        sleep $self->{+WAIT_TIME} if $self->{+WAIT_TIME};
+        return undef;
     }
-
-    return 0;
-}
-
-sub do_dispatch {
-    my $self = shift;
-
-    my $task = $self->{+STATE}->pick_task() or return;
-    $self->dispatch_queue->enqueue({action => 'dispatch', arg => $task, pid => $$, stamp => time});
-
-    return;
 }
 
 sub set_proc_exit {
@@ -642,13 +368,16 @@ sub set_proc_exit {
         my $task = $proc->task;
 
         if ($exit && $proc->is_try < $proc->retry) {
-            $task = {%$task};    # Clone
-            $task->{is_try}++;
-            $self->retry_task($task);
+            $self->state->retry_task($task->{job_id});
             push @args => 'will-retry';
         }
         else {
-            $self->completed_task($task);
+            $self->state->stop_task($task->{job_id});
+        }
+
+        if(my $bail = $exit ? $proc->bailed_out : 0) {
+            print "BAIL-OUT detected: $bail\nAborting the test run...\n";
+            $self->state->halt_run($task->{run_id});
         }
     }
     elsif ($proc->isa('Test2::Harness::Runner::Preloader::Stage')) {
@@ -667,19 +396,6 @@ sub set_proc_exit {
     }
 
     $self->SUPER::set_proc_exit($proc, $exit, $time, @args);
-}
-
-sub retry_task {
-    my $self = shift;
-    my ($task) = @_;
-
-    $self->dispatch_queue->enqueue({action => 'retry', arg => $task, pid => $$, stamp => time});
-}
-
-sub completed_task {
-    my $self = shift;
-    my ($task) = @_;
-    $self->dispatch_queue->enqueue({action => 'complete', arg => $task, pid => $$, stamp => time});
 }
 
 1;

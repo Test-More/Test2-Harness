@@ -4,39 +4,43 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-use Carp qw/croak confess/;
+use Carp qw/croak/;
+
+use File::Spec;
+use Time::HiRes qw/time/;
 use List::Util qw/first/;
 
 use Test2::Harness::Runner::Constants;
 
+use Test2::Harness::Runner::Run;
+use Test2::Harness::Util::Queue;
+
 use Test2::Harness::Util::HashBase(
     # These are construction arguments
     qw{
-        <staged
         <eager_stages
         <job_count
+        <workdir
     },
 
     qw{
-        <ready_stage_lookup
-    },
+        <dispatch_file
+        <queue_ended
 
-    # These represent the current running state, that is tasks that are
-    # currently running. These are used to make sure we do not exceed the job
-    # count, and so that we schedule things to avoid conflicts (immiscible,
-    # isolation, etc).
-    qw{
+        <pending_tasks <task_lookup
+        <pending_runs  <run
+
         <running
         <running_categories
         <running_durations
         <running_conflicts
         <running_tasks
-    },
 
-    # These represent the tasks that still need to be run.
-    qw{
-        +pending_tasks
-        +todo
+        <stage_readiness
+
+        <task_list
+
+        <halted_runs
     },
 );
 
@@ -46,101 +50,218 @@ sub init {
     croak "You must specify a 'job_count' (1 or greater)"
         unless $self->{+JOB_COUNT};
 
-    croak "You must define a value for the 'staged' attribute"
-        unless defined $self->{+STAGED};
+    croak "You must specify a workdir"
+        unless defined $self->{+WORKDIR};
 
-    # Eager Stages is a hashref where keys are stages that will run tasks for
-    # later stages if they get bored. The value is an arrayref of stages from
-    # which they can take tasks.
-    $self->{+EAGER_STAGES} //= {};
+    $self->{+DISPATCH_FILE} = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+WORKDIR}, 'dispatch.jsonl'));
 
-    $self->{+READY_STAGE_LOOKUP} //= {};
-
-    $self->{+TODO}          = {smoke => 0, main => 0, total => 0, stages => {}};
-    $self->{+PENDING_TASKS} = {};
-
-    $self->{+RUNNING} = 0;
-
-    $self->{+RUNNING_CATEGORIES} = {};
-    $self->{+RUNNING_DURATIONS}  = {};
-    $self->{+RUNNING_CONFLICTS}  = {};
-    $self->{+RUNNING_TASKS}      = {};
+    $self->poll;
 }
 
-sub todo {
+sub done {
     my $self = shift;
-    my ($stage) = @_;
 
-    return $self->{+TODO}->{total} //= 0 unless $stage;
+    $self->poll();
 
-    my $smoke = $self->{+TODO}->{stages}->{smoke}->{$stage} //= 0;
-    my $main  = $self->{+TODO}->{stages}->{main}->{$stage} //= 0;
+    return 0 if $self->{+RUNNING};
+    return 0 if keys %{$self->{+PENDING_TASKS}};
 
-    return $smoke + $main;
+    return 0 if $self->{+RUN};
+    return 0 if @{$self->{+PENDING_RUNS}};
+
+    return 0 unless $self->{+QUEUE_ENDED};
+
+    return 1;
 }
 
-sub mark_stage_ready {
+sub next_task {
     my $self = shift;
-    my ($stage) = @_;
+    $self->poll();
 
-    $self->{+READY_STAGE_LOOKUP}->{$stage} = 1;
+    while(1) {
+        my $task = shift @{$self->{+TASK_LIST}} or return undef;
+
+        # If we are replaying a state then the task may have already completed,
+        # so skip it if it is not in the running lookup.
+        next unless $self->{+RUNNING_TASKS}->{$task->{job_id}};
+
+        return $task;
+    }
 }
 
-sub mark_stage_down {
+sub advance {
     my $self = shift;
-    my ($stage) = @_;
 
-    delete $self->{+READY_STAGE_LOOKUP}->{$stage};
+    $self->poll();
+
+    return 1 if $self->advance_run();
+    return 0 unless $self->{+RUN};
+    return $self->advance_tasks();
 }
 
-sub task_stage {
+my %ACTIONS = (
+    queue_run   => '_queue_run',
+    queue_task  => '_queue_task',
+    start_run   => '_start_run',
+    start_task  => '_start_task',
+    stop_run    => '_stop_run',
+    stop_task   => '_stop_task',
+    retry_task  => '_retry_task',
+    stage_ready => '_stage_ready',
+    stage_down  => '_stage_down',
+    end_queue   => '_end_queue',
+    halt_run    => '_halt_run',
+);
+
+sub poll {
+    my $self = shift;
+
+    my $queue = $self->{+DISPATCH_FILE};
+
+    for my $item ($queue->poll) {
+        my $data   = $item->[-1];
+        my $item   = $data->{item};
+        my $action = $data->{action};
+
+        my $sub = $ACTIONS{$action} or die "Invalid action '$action'";
+
+        $self->$sub($item);
+    }
+}
+
+sub _enqueue {
+    my $self = shift;
+    my ($action, $item) = @_;
+    $self->{+DISPATCH_FILE}->enqueue({action => $action, item => $item, stamp => time, pid => $$});
+    $self->poll;
+}
+
+sub end_queue  { $_[0]->_enqueue('end_queue' => 1) }
+sub _end_queue { $_[0]->{+QUEUE_ENDED} = 1 }
+
+sub halt_run {
+    my $self = shift;
+    my ($run_id) = @_;
+    $self->_enqueue(halt_run => $run_id);
+}
+
+sub _halt_run {
+    my $self = shift;
+    my ($run_id) = @_;
+
+    delete $self->{+PENDING_TASKS}->{$run_id};
+
+    $self->{+HALTED_RUNS}->{$run_id}++;
+}
+
+sub queue_run {
+    my $self = shift;
+    my ($run) = @_;
+    $self->_enqueue(queue_run => $run);
+}
+
+sub _queue_run {
+    my $self = shift;
+    my ($run) = @_;
+    push @{$self->{+PENDING_RUNS}} => Test2::Harness::Runner::Run->new(
+        %$run,
+        workdir => $self->{+WORKDIR},
+    );
+
+    return;
+}
+
+sub start_run {
+    my $self = shift;
+    my ($run_id) = @_;
+    $self->_enqueue(start_run => $run_id);
+}
+
+sub _start_run {
+    my $self = shift;
+    my ($run_id) = @_;
+
+    my $run = shift @{$self->{+PENDING_RUNS}};
+    die "Run stack mismatch, run start requested, but no pending runs to start" unless $run;
+    die "Run stack mismatch, run-id does not match next pending run" unless $run->run_id eq $run_id;
+
+    $self->{+RUN} = $run;
+
+    return;
+}
+
+sub stop_run {
+    my $self = shift;
+    my ($run_id) = @_;
+    $self->_enqueue(stop_run => $run_id);
+}
+
+sub _stop_run {
+    my $self = shift;
+    my ($run_id) = @_;
+
+    my $run = delete $self->{+RUN} or die "Run stop requested, but no run to stop";
+    die "Run mismatch, current run and stopped run have different ids" unless $run->run_id eq $run_id;
+
+    die "Run still has pending tasks" if $self->{+PENDING_TASKS}->{$run_id};
+
+    return;
+}
+
+sub queue_task {
     my $self = shift;
     my ($task) = @_;
-    return 'default' unless $self->{+STAGED};
-    return $task->{stage} || confess "'stage' is missing from the task";
+    $self->_enqueue(queue_task => $task);
 }
 
-sub add_pending_task {
+sub _queue_task {
     my $self = shift;
     my ($task) = @_;
 
-    my $cat = $task->{category};
-    my $dur = $task->{duration};
+    my $job_id = $task->{job_id} or die "Task missing job_id";
+    my $run_id = $task->{run_id} or die "Task missing run_id";
 
-    croak "Invalid category: $cat" unless CATEGORIES->{$cat};
-    croak "Invalid duration: $dur" unless DURATIONS->{$dur};
+    die "Task already in queue" if $self->{+TASK_LOOKUP}->{$job_id};
 
-    my $stage = $self->task_stage($task);
-    my $smoke = $task->{smoke} ? 'smoke' : 'main';
+    return if $self->{+HALTED_RUNS}->{$run_id};
 
-    my $pending = $self->{+PENDING_TASKS} //= {};
+    $self->{+TASK_LOOKUP}->{$job_id} = $task;
 
-    # Walk the tree...
-    $pending = $pending->{$smoke} //= {};
-    $pending = $pending->{$stage} //= {};
-    $pending = $pending->{$cat} //= {};
-    $pending = $pending->{$dur} //= [];
+    my $pending = $self->task_pending_lookup($task);
+    $pending->{$job_id} = $task;
 
-    push @$pending => $task;
-
-    $self->_update_todo($task, 1);
-
-    return $task;
+    return;
 }
 
 sub start_task {
     my $self = shift;
-    my ($task) = @_;
+    my ($spec) = @_;
+    $self->_enqueue(start_task => $spec);
+}
 
-    my $job_id = $task->{job_id};
-    croak "Already running task '$job_id'" if $self->{+RUNNING_TASKS}->{$job_id};
+sub _start_task {
+    my $self = shift;
+    my ($spec) = @_;
+
+    my $job_id    = $spec->{job_id} or die "No job_id provided";
+    my $run_stage = $spec->{stage}  or die "No stage provided";
+
+    my $task = $self->{+TASK_LOOKUP}->{$job_id} or die "Could not find task to start";
+
+    my ($run_id, $smoke, $stage, $cat, $dur) = $self->task_fields($task);
+    delete $self->{+PENDING_TASKS}->{$run_id}->{$smoke}->{$stage}->{$cat}->{$dur}->{$job_id} or die "Task was not pending";
+    $self->prune_hash($self->{+PENDING_TASKS}, $run_id, $smoke, $stage, $cat, $dur);
+
+    # Set the stage, new task hashref
+    $task = {%$task, stage => $run_stage} unless $task->{stage} eq $run_stage;
+
+    die "Already running task" if $self->{+RUNNING_TASKS}->{$job_id};
     $self->{+RUNNING_TASKS}->{$job_id} = $task;
+
+    push @{$self->{+TASK_LIST}} => $task;
+
     $self->{+RUNNING}++;
-
-    my $cat = $task->{category};
     $self->{+RUNNING_CATEGORIES}->{$cat}++;
-
-    my $dur = $task->{duration};
     $self->{+RUNNING_DURATIONS}->{$dur}++;
 
     my $cfls = $task->{conflicts} //= [];
@@ -149,65 +270,176 @@ sub start_task {
             if $self->{+RUNNING_CONFLICTS}->{$cfl}++;
     }
 
-    $self->{counter}++;
-
-    return $task;
+    return;
 }
 
 sub stop_task {
     my $self = shift;
-    my ($it) = @_;
-    my $job_id = ref($it) ? $it->{job_id} : $it;
+    my ($job_id) = @_;
+    $self->_enqueue(stop_task => $job_id);
+}
 
-    my $task = delete $self->{+RUNNING_TASKS}->{$job_id} or croak "Not running task '$job_id'";
+sub _stop_task {
+    my $self = shift;
+    my ($job_id) = @_;
 
+    my $task = delete $self->{+TASK_LOOKUP}->{$job_id} or die "Could not find task to stop ($job_id)";
+
+    delete $self->{+RUNNING_TASKS}->{$job_id} or die "Task is not running, cannot stop it ($job_id)";
+
+    my ($run_id, $smoke, $stage, $cat, $dur) = $self->task_fields($task);
     $self->{+RUNNING}--;
-
-    my $cat = $task->{category};
     $self->{+RUNNING_CATEGORIES}->{$cat}--;
-
-    my $dur = $task->{duration};
     $self->{+RUNNING_DURATIONS}->{$dur}--;
 
     my $cfls = $task->{conflicts} //= [];
     $self->{+RUNNING_CONFLICTS}->{$_}-- for @$cfls;
 
-    return $it;
+    return;
 }
 
-sub pick_task {
+sub retry_task {
+    my $self = shift;
+    my ($job_id) = @_;
+
+    $self->_enqueue(retry_task => $job_id);
+}
+
+sub _retry_task {
+    my $self = shift;
+    my ($job_id) = @_;
+
+    my $task = $self->{+TASK_LOOKUP}->{$job_id} or die "Could not find task to retry";
+
+    $self->_stop_task($job_id);
+
+    return if $self->{+HALTED_RUNS}->{$task->{run_id}};
+
+    $task = {is_try => 0, %$task};
+    $task->{is_try}++;
+    $task->{category} = 'isolation' if $self->run->retry_isolated;
+
+    $self->_queue_task($task);
+
+    return;
+}
+
+sub stage_ready {
+    my $self = shift;
+    my ($stage) = @_;
+    $self->_enqueue(stage_ready => $stage);
+}
+
+sub _stage_ready {
+    my $self = shift;
+    my ($stage) = @_;
+
+    $self->{+STAGE_READINESS}->{$stage} = 1;
+
+    return;
+}
+
+sub stage_down {
+    my $self = shift;
+    my ($stage) = @_;
+    $self->_enqueue(stage_down => $stage);
+}
+
+sub _stage_down {
+    my $self = shift;
+    my ($stage) = @_;
+
+    $self->{+STAGE_READINESS}->{$stage} = 0;
+
+    return;
+}
+
+sub task_stage {
+    my $self = shift;
+    my ($task) = @_;
+    return $task->{stage} // 'default';
+}
+
+sub task_pending_lookup {
+    my $self = shift;
+    my ($task) = @_;
+
+    my ($run_id, $smoke, $stage, $cat, $dur) = $self->task_fields($task);
+
+    return $self->{+PENDING_TASKS}->{$run_id}->{$smoke}->{$stage}->{$cat}->{$dur} //= {};
+}
+
+sub task_fields {
+    my $self = shift;
+    my ($task) = @_;
+
+    my $run_id = $task->{run_id} or die "No run id provided by task";
+    my $smoke  = $task->{smoke} ? 'smoke' : 'main';
+    my $stage = $self->task_stage($task);
+
+    my $cat = $task->{category};
+    my $dur = $task->{duration};
+
+    die "Invalid category: $cat" unless CATEGORIES->{$cat};
+    die "Invalid duration: $dur" unless DURATIONS->{$dur};
+
+    return ($run_id, $smoke, $stage, $cat, $dur);
+}
+
+sub prune_hash {
+    my $self = shift;
+    my ($hash, @path) = @_;
+
+    die "No path!" unless @path;
+
+    my $key = shift @path;
+
+    if (@path) {
+        my $empty = $self->prune_hash($hash->{$key}, @path);
+        return 0 unless $empty;
+    }
+
+    return 1 unless exists $hash->{$key};
+    return 0 if keys %{$hash->{$key}};
+    delete $hash->{$key};
+    return 1;
+}
+
+sub advance_run {
     my $self = shift;
 
-    # Only 1 isolation job can be running and 1 is so let's
-    # wait for that one to go away
-    return undef if $self->{+RUNNING_CATEGORIES}->{isolation};
-    return undef if $self->{+RUNNING} >= $self->{+JOB_COUNT};
-    return undef unless $self->{+TODO}->{total};
+    return $self->clear_finished_run() if $self->{+RUN};
+
+    return 0 unless @{$self->{+PENDING_RUNS}};
+
+    $self->start_run($self->{+PENDING_RUNS}->[0]->run_id);
+
+    return 1;
+}
+
+sub clear_finished_run {
+    my $self = shift;
+
+    my $run = $self->{+RUN} or return 0;
+
+    return 0 if $self->{+PENDING_TASKS}->{$run->run_id};
+    return 0 if $self->{+RUNNING};
+
+    delete $self->{+RUN};
+
+    return 1;
+}
+
+sub advance_tasks {
+    my $self = shift;
 
     my ($run_stage, $task) = $self->_next();
 
-    return undef unless $task;
+    return 0 unless $task;
 
-    $self->_update_todo($task, -1);
+    $self->start_task({job_id => $task->{job_id}, stage => $run_stage});
 
-    # Returnt he task, but override stage with the designated one, which may be
-    # different if we have any eager stages.
-    return {%$task, stage => $run_stage};
-}
-
-sub _update_todo {
-    my $self = shift;
-    my ($task, $delta) = @_;
-
-    my $todo = $self->{+TODO} //= {};
-    $todo->{total} += $delta;
-
-    my $smoke = $task->{smoke} ? 'smoke' : 'main';
-    $todo->{$smoke} += $delta;
-
-    my $stage = $self->task_stage($task);
-
-    $todo->{stages}->{$smoke}->{$stage} += $delta;
+    return 1;
 }
 
 sub _cat_order {
@@ -259,13 +491,13 @@ sub _dur_order {
 sub _stage_order {
     my $self = shift;
 
-    my @stage_list = sort keys %{$self->{+READY_STAGE_LOOKUP}};
+    my $stage_check = $self->{+STAGE_READINESS} //= {};
+
+    my @stage_list = sort grep { $stage_check->{$_} } keys %$stage_check;
 
     # Populate list with all ready stages
     my %seen;
     my @stages = map {[$_ => $_]} grep { !$seen{$_}++ } @stage_list;
-
-    return \@stages unless $self->{+STAGED};
 
     # Add in any eager stages, but make sure they are last.
     for my $rstage (@stage_list) {
@@ -279,7 +511,11 @@ sub _stage_order {
 sub _next {
     my $self = shift;
 
-    my $pending   = $self->{+PENDING_TASKS};
+    my $run    = $self->{+RUN} or return;
+    my $run_id = $run->run_id;
+
+    my $pending = $self->{+PENDING_TASKS}->{$run_id} or return;
+
     my $conflicts = $self->{+RUNNING_CONFLICTS};
     my $cat_order = $self->_cat_order;
     my $dur_order = $self->_dur_order;
@@ -300,11 +536,11 @@ sub _next {
                 for my $ldur (@$dur_order) {
                     my $search = $search->{$ldur} or next;
 
-                    for (my $i = 0; $i < @$search; $i++) {
+                    for my $task (values %$search) {
                         # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.
-                        next if first { $conflicts->{$_} } @{$search->[$i]->{conflicts}};
+                        next if first { $conflicts->{$_} } @{$task->{conflicts}};
 
-                        return ($run_by_stage => scalar splice(@$search, $i, 1));
+                        return ($run_by_stage => $task);
                     }
                 }
             }

@@ -340,7 +340,7 @@ sub _parse_shbang {
 
 sub queue_item {
     my $self = shift;
-    my ($job_name) = @_;
+    my ($job_name, $run_id) = @_;
 
     die "The '$self->{+FILE}' test specifies that it should not be run by Test2::Harness.\n"
         unless $self->check_feature(run => 1);
@@ -372,6 +372,7 @@ sub queue_item {
         file        => $self->file,
         job_id      => gen_uuid(),
         job_name    => $job_name,
+        run_id      => $run_id,
         non_perl    => $non_perl,
         stage       => $stage,
         stamp       => time,

@@ -28,6 +28,12 @@ sub import {
         );
     };
 
+    $exports{eager} = sub {
+        croak "No current stage" unless @{$instance->stack};
+        my $stage = $instance->stack->[-1];
+        $stage->set_eager(1);
+    };
+
     for my $name (qw/pre_fork pre_fork pre_launch/) {
         my $meth = "add_${name}_callback";
         $exports{$name} = sub {
@@ -138,6 +144,21 @@ sub merge {
     for my $stage (@{$merge->{+STAGE_LIST}}) {
         $self->add_stage($stage, $caller);
     }
+}
+
+sub eager_stages {
+    my $self = shift;
+
+    my %eager;
+
+    for my $root (@{$self->{+STAGE_LIST}}) {
+        for my $stage ($root, @{$root->all_children}) {
+            next unless $stage->eager;
+            $eager{$stage->name} = [map { $_->name } @{$stage->all_children}];
+        }
+    }
+
+    return \%eager;
 }
 
 1;

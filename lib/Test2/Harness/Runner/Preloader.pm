@@ -256,6 +256,13 @@ sub _preload_module {
     return;
 }
 
+sub eager_stages {
+    my $self = shift;
+
+    return unless $self->{+STAGED};
+    return $self->{+STAGED}->eager_stages;
+}
+
 sub load_blacklist {
     my $self = shift;
 

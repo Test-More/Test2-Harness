@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '0.001100';
 
 use parent 'Test2::Harness::IPC::Process';
-use Test2::Harness::Util::HashBase qw{ <name };
+use Test2::Harness::Util::HashBase qw{ <name eager };
 
 sub category { $_[0]->{+CATEGORY} //= 'stage' }
 

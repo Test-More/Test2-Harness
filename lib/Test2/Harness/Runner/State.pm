@@ -410,7 +410,7 @@ sub advance_run {
 
     return $self->clear_finished_run() if $self->{+RUN};
 
-    return 0 unless @{$self->{+PENDING_RUNS}};
+    return 0 unless @{$self->{+PENDING_RUNS} //= []};
 
     $self->start_run($self->{+PENDING_RUNS}->[0]->run_id);
 

@@ -87,7 +87,7 @@ sub preload {
     # Not loading blacklist yet because any preloads in this list need to
     # happen regardless of the blacklist.
     if ($self->{+MONITOR}) {
-        $self->_monitor_preload($preloads) if $self->{+MONITOR};
+        $self->_monitor_preload($preloads);
     }
     else {
         $self->_preload($preloads);
@@ -137,6 +137,13 @@ sub launch_stage {
 sub start_stage {
     my $self = shift;
     my ($stage) = @_;
+
+    if ($stage && !ref($stage) && $self->{+STAGED}) {
+        $stage = $self->{+STAGED}->stage_lookup->{$stage};
+    }
+    else {
+        $stage = undef;
+    }
 
     $self->load_blacklist if $self->{+MONITOR};
 

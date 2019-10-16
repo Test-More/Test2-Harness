@@ -22,7 +22,7 @@ use File::Spec;
 use Carp qw/croak/;
 
 use parent 'App::Yath::Command::test';
-use Test2::Harness::Util::HashBase qw/+pfile_data/;
+use Test2::Harness::Util::HashBase qw/+pfile_data +pfile/;
 
 include_options(
     'App::Yath::Options::Debug',
@@ -44,12 +44,22 @@ the start command for details on how to launch a persistant instance.
     EOT
 }
 
+sub terminate_queue {}
+sub write_settings_to {}
+
+sub monitor_preloads { 1 }
+sub job_count { 1 }
+
+sub pfile {
+    my $self = shift;
+    $self->{+PFILE} //= find_pfile() or die "No persistent harness was found for the current path.\n";
+}
+
 sub pfile_data {
     my $self = shift;
     return $self->{+PFILE_DATA} if $self->{+PFILE_DATA};
 
-    my $pfile = find_pfile()
-        or die "No persistent harness was found for the current path.\n";
+    my $pfile = $self->pfile;
 
     return $self->{+PFILE_DATA} = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
 }
@@ -59,21 +69,9 @@ sub workdir {
     return $self->pfile_data->{dir};
 }
 
-sub build_run_item {
-    my $self = shift;
-    my ($run) = @_;
-
-    my $settings = $self->{+SETTINGS};
-
-    my $run_queue = $self->run_queue;
-    $run_queue->enqueue($run->queue_item($settings->yath->plugins));
-}
-
 sub start_runner {
     my $self = shift;
-    return Test2::Harness::IPC::Process->new(pid => $self->pfile_data->{pid});
+    $self->{+RUNNER_PID} = $self->pfile_data->{pid};
 }
-
-sub write_settings_to {}
 
 1;

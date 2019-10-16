@@ -15,7 +15,7 @@ use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use Test2::Harness::Util qw/open_file/;
 use File::Path qw/remove_tree/;
 
-use parent 'App::Yath::Command';
+use parent 'App::Yath::Command::run';
 use Test2::Harness::Util::HashBase;
 
 sub group { 'persist' }
@@ -32,28 +32,14 @@ This command will stop a persistent instance, and output any log contents.
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile()
-        or die "Could not find " . PFILE_NAME() . " in current directory, or any parent directories.\n";
+    $self->App::Yath::Command::test::terminate_queue();
 
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+    sleep(0.02) while kill(0, $self->pfile_data->{pid});
 
-    my $dir = $data->{dir};
-
-    my $run_queue_file = File::Spec->catfile($dir, 'run_queue.jsonl');
-    if (-f $run_queue_file) {
-        my $run_queue = Test2::Harness::Util::Queue->new(file => $run_queue_file);
-        $run_queue->end;
-    }
-    else {
-        print "Could not find queue file, sending SIGTERM instead\n";
-        kill('TERM', $data->{pid});
-    }
-
-    sleep(0.02) while kill(0, $data->{pid});
-
+    my $pfile = $self->pfile;
     unlink($pfile) if -f $pfile;
 
-    remove_tree($dir, {safe => 1, keep_root => 0}) if -d $dir;
+    remove_tree($self->workdir, {safe => 1, keep_root => 0}) if -d $self->workdir;
 
     print "\n\nRunner stopped\n\n";
     return 0;

@@ -13,7 +13,7 @@ use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use Test2::Harness::Util qw/mod2file open_file/;
+use Test2::Harness::Util qw/mod2file open_file parse_exit/;
 use Test2::Util::Table qw/table/;
 
 use Test2::Harness::Util::IPC qw/run_cmd USE_P_GROUPS/;
@@ -31,6 +31,7 @@ include_options(
     'App::Yath::Options::PreCommand',
     'App::Yath::Options::Runner',
     'App::Yath::Options::Workspace',
+    'App::Yath::Options::Persist',
 );
 
 sub MAX_ATTACH() { 1_048_576 }
@@ -74,8 +75,14 @@ sub run {
     my $pfile = File::Spec->rel2abs(PFILE_NAME(), $ENV{YATH_PERSISTENCE_DIR} // './');
 
     my $pid = run_cmd(
-        #stderr => File::Spec->catfile($dir, 'error.log'),
-        #stdout => File::Spec->catfile($dir, 'output.log'),
+        $settings->runner->daemon
+        ? (
+            stderr => File::Spec->catfile($dir, 'error.log'),
+            stdout => File::Spec->catfile($dir, 'output.log'),
+            )
+        : (
+            no_set_pgrp => 1,
+        ),
 
         command => [
             $^X, $settings->yath->script,
@@ -96,9 +103,21 @@ sub run {
 
     Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir});
 
-    waitpid($pid, 0);
+    return 0 if $settings->runner->daemon;
 
-    return 0;
+    $SIG{TERM} = sub { kill(TERM => $pid) };
+    $SIG{INT}  = sub { kill(INT  => $pid) };
+
+    while (1) {
+        my $out = waitpid($pid, 0);
+        my $wstat = $?;
+
+        next if $out == 0;
+        return 255 if $out < 0;
+
+        my $exit = parse_exit($?);
+        return $exit->{err} || $exit->{sig} || 0;
+    }
 }
 
 1;

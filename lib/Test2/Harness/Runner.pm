@@ -246,6 +246,10 @@ sub reset_stage {
     # Normalize IPC
     $self->check_for_fork();
 
+    # If no stage was set we do not want to clear this, root stages need to
+    # preserve the preloads
+    return unless $self->{+STAGE};
+
     # From Runner
     delete $self->{+STAGE};
     delete $self->{+STATE};
@@ -260,6 +264,7 @@ sub run_stage {
     my ($stage) = @_;
 
     $self->{+STAGE} = $stage;
+    $self->preloader->start_stage($stage);
     $self->state->stage_ready($stage);
 
     while (1) {

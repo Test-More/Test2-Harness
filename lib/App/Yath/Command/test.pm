@@ -23,7 +23,7 @@ use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/
-    <runner_pid <ipc
+    <runner_pid +ipc
 
     +run
 
@@ -36,6 +36,8 @@ use Test2::Harness::Util::HashBase qw/
     +logger
 
     +run_queue
+    +tasks_queue
+    +state
 /;
 
 include_options(
@@ -108,27 +110,28 @@ sub workdir {
     $self->settings->workspace->workdir;
 }
 
+sub ipc {
+    my $self = shift;
+    return $self->{+IPC} //= Test2::Harness::IPC->new;
+}
+
+sub monitor_preloads { 0 }
+
 sub run {
     my $self = shift;
 
-    $self->parse_args;
-
-    my $settings = $self->settings;
-    my $dir = $self->workdir();
-
-    $self->write_settings_to($dir, 'settings.json');
-
-    my $ipc = $self->{+IPC} //= Test2::Harness::IPC->new;
+    my $ipc = $self->ipc;
     $ipc->start();
 
-    my $run = $self->build_run();
+    $self->parse_args;
+    $self->write_settings_to($self->workdir, 'settings.json');
+    $self->populate_queue();
+    $self->terminate_queue();
+    $self->start_runner();
+    $self->start_collector();
+    $self->start_auditor();
 
-    $self->populate_queue($run);
-
-    my $runner_proc    = $self->start_runner(monitor_preloads => 0);
-    my $collector_proc = $self->start_collector($run, $runner_proc->pid);
-    my $auditor_proc   = $self->start_auditor($run);
-
+    my $settings  = $self->settings;
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
 
@@ -153,7 +156,7 @@ sub run {
     $ipc->wait(all => 1);
     $ipc->stop;
 
-    printf("\nKeeping work dir: %s\n", $dir) if $settings->debug->keep_dirs;
+    printf("\nKeeping work dir: %s\n", $self->workdir) if $settings->debug->keep_dirs;
 
     print "\nWrote log file: " . $settings->logging->log_file . "\n"
         if $settings->logging->log;
@@ -161,17 +164,68 @@ sub run {
     return $final_data->{pass} ? 0 : 1;
 }
 
+sub terminate_queue {
+    my $self = shift;
+
+    $self->tasks_queue->end();
+    $self->state->end_queue();
+}
+
+sub build_run {
+    my $self = shift;
+
+    return $self->{+RUN} if $self->{+RUN};
+
+    my $settings = $self->settings;
+    my $dir = $self->workdir;
+
+    my $run = $settings->build(run => 'Test2::Harness::Run');
+
+    mkdir($run->run_dir($dir)) or die "Could not make run dir: $!";
+
+    return $self->{+RUN} = $run;
+}
+
+sub state {
+    my $self = shift;
+
+    $self->{+STATE} //= Test2::Harness::Runner::State->new(
+        workdir   => $self->workdir,
+        job_count => $self->job_count,
+    );
+}
+
+sub job_count {
+    my $self = shift;
+
+    return $self->settings->runner->job_count;
+}
+
+sub run_queue {
+    my $self = shift;
+    my $dir = $self->workdir;
+    return $self->{+RUN_QUEUE} //= Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
+}
+
+sub tasks_queue {
+    my $self = shift;
+
+    $self->{+TASKS_QUEUE} //= Test2::Harness::Util::Queue->new(
+        file => File::Spec->catfile($self->build_run->run_dir($self->workdir), 'queue.jsonl'),
+    );
+}
+
 sub populate_queue {
     my $self = shift;
-    my ($run) = @_;
 
-    my $state = Test2::Harness::Runner::State->new(workdir => $self->workdir, job_count => 1);
+    my $run = $self->build_run();
+    my $settings = $self->settings;
 
+    my $state = $self->state;
+    my $tasks_queue = $self->tasks_queue;
     my $plugins = $self->settings->yath->plugins;
 
     $state->queue_run($run->queue_item($plugins));
-
-    my $tasks_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($run->run_dir($self->workdir), 'queue.jsonl'));
 
     my $job_count = 0;
     for my $file ( @{$run->find_files($plugins)} ) {
@@ -179,9 +233,6 @@ sub populate_queue {
         $state->queue_task($task);
         $tasks_queue->enqueue($task);
     }
-
-    $tasks_queue->end();
-    $state->end_queue();
 }
 
 sub render_final_data {
@@ -228,11 +279,13 @@ sub logger {
     my $file = $settings->logging->log_file;
 
     if ($settings->logging->bzip2) {
+        no warnings 'once';
         require IO::Compress::Bzip2;
         $self->{+LOGGER} = IO::Compress::Bzip2->new($file) or die "Could not open log file '$file': $IO::Compress::Bzip2::Bzip2Error";
         return $self->{+LOGGER};
     }
     elsif ($settings->logging->gzip) {
+        no warnings 'once';
         require IO::Compress::Gzip;
         $self->{+LOGGER} = IO::Compress::Gzip->new($file) or die "Could not open log file '$file': $IO::Compress::Gzip::GzipError";
         return $self->{+LOGGER};
@@ -261,8 +314,8 @@ sub renderers {
 
 sub start_auditor {
     my $self = shift;
-    my ($run) = @_;
 
+    my $run = $self->build_run();
     my $settings = $self->settings;
 
     my $ipc = $self->ipc;
@@ -284,10 +337,11 @@ sub start_auditor {
 
 sub start_collector {
     my $self = shift;
-    my ($run, $runner_pid) = @_;
 
-    my $settings = $self->settings;
-    my $dir = $self->workdir;
+    my $dir        = $self->workdir;
+    my $run        = $self->build_run();
+    my $settings   = $self->settings;
+    my $runner_pid = $self->runner_pid;
 
     my ($rh, $wh);
     pipe($rh, $wh) or die "Could not create pipe";
@@ -318,11 +372,13 @@ sub start_runner {
     my $self = shift;
     my %args = @_;
 
+    $args{monitor_preloads} //= $self->monitor_preloads;
+
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
 
     my $ipc = $self->ipc;
-    $ipc->spawn(
+    my $proc = $ipc->spawn(
         stderr => File::Spec->catfile($dir, 'error.log'),
         stdout => File::Spec->catfile($dir, 'output.log'),
         no_set_pgrp => 1,
@@ -334,27 +390,10 @@ sub start_runner {
             %args,
         ],
     );
-}
 
-sub run_queue {
-    my $self = shift;
-    my $dir = $self->workdir;
-    return $self->{+RUN_QUEUE} //= Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
-}
+    $self->{+RUNNER_PID} = $proc->pid;
 
-sub build_run {
-    my $self = shift;
-
-    return $self->{+RUN} if $self->{+RUN};
-
-    my $settings = $self->settings;
-    my $dir = $self->workdir;
-
-    my $run = $settings->build(run => 'Test2::Harness::Run');
-
-    mkdir($run->run_dir($dir)) or die "Could not make run dir: $!";
-
-    return $self->{+RUN} = $run;
+    return $proc;
 }
 
 sub parse_args {

@@ -18,7 +18,10 @@ use Test2::Util::Table qw/table/;
 
 use Test2::Harness::Util::IPC qw/run_cmd USE_P_GROUPS/;
 
+use POSIX;
 use File::Spec;
+
+use Time::HiRes qw/sleep/;
 
 use Carp qw/croak/;
 use File::Path qw/remove_tree/;
@@ -74,15 +77,14 @@ sub run {
 
     my $pfile = File::Spec->rel2abs(PFILE_NAME(), $ENV{YATH_PERSISTENCE_DIR} // './');
 
+    my $stderr = File::Spec->catfile($dir, 'error.log');
+    my $stdout = File::Spec->catfile($dir, 'output.log');
+
     my $pid = run_cmd(
-        $settings->runner->daemon
-        ? (
-            stderr => File::Spec->catfile($dir, 'error.log'),
-            stdout => File::Spec->catfile($dir, 'output.log'),
-            )
-        : (
-            no_set_pgrp => 1,
-        ),
+        stderr => $stderr,
+        stdout => $stdout,
+
+        no_set_pgrp => $settings->runner->daemon,
 
         command => [
             $^X, $settings->yath->script,
@@ -98,8 +100,7 @@ sub run {
 
     print "Runner PID: $pid\n";
     print "Runner dir: $dir\n";
-    print "Runner logs:\n";
-    print "\nUse `yath watch` to monitor the persistent runner\n\n";
+    print "\nUse `yath watch` to monitor the persistent runner\n\n" if $settings->runner->daemon;
 
     Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir});
 
@@ -108,9 +109,24 @@ sub run {
     $SIG{TERM} = sub { kill(TERM => $pid) };
     $SIG{INT}  = sub { kill(INT  => $pid) };
 
+    my $err_fh = open_file($stderr, '<');
+    my $out_fh = open_file($stdout, '<');
+
     while (1) {
-        my $out = waitpid($pid, 0);
+        my $out = waitpid($pid, WNOHANG);
         my $wstat = $?;
+
+        my $count = 0;
+        while (my $line = <$out_fh>) {
+            $count++;
+            print STDOUT $line;
+        }
+        while (my $line = <$err_fh>) {
+            $count++;
+            print STDERR $line;
+        }
+
+        sleep(0.02) unless $out || $count;
 
         next if $out == 0;
         return 255 if $out < 0;

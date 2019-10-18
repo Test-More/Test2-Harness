@@ -28,6 +28,7 @@ sub process {
     $f  //= $event->{facet_data};
     $hf //= hub_truth($f);
 
+
     if ($f->{harness_job_exit}) {
         $self->{+STOP}    = $stamp;
         $self->{+STOP_ID} = $id;

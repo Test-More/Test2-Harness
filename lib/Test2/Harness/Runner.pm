@@ -97,7 +97,7 @@ sub state {
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
         job_count => $self->{+JOB_COUNT},
         workdir   => $self->{+DIR},
-        eager_stages => $self->preloader->eager_stages,
+        eager_stages => $self->preloader->eager_stages // {},
     );
 }
 

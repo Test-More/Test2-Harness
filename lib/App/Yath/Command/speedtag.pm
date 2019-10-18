@@ -4,20 +4,16 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-use Test2::Util qw/pkg_to_file/;
-use Test2::Util::Times qw/render_duration/;
+use Test2::Harness::Util::File::JSONL;
 
-use Test2::Harness::Watcher::TimeTracker;
-use Test2::Harness::Feeder::JSONL;
-use Test2::Harness::Run;
-use Test2::Harness;
-
-use Term::Table;
-
-use List::Util qw/min max/;
+use App::Yath::Options;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw/-max_short -max_medium/;
+use Test2::Harness::Util::HashBase qw/-log_file -max_short -max_medium/;
+
+include_options(
+    'App::Yath::Options::Debug',
+);
 
 sub group { 'log' }
 
@@ -32,65 +28,48 @@ from the log based on the max durations for each type.
     EOT
 }
 
-sub has_runner  { 0 }
-sub has_logger  { 0 }
-sub has_display { 0 }
-sub show_bench  { 0 }
-
-sub handle_list_args {
+sub init {
     my $self = shift;
-    my ($list) = @_;
 
-    my $settings = $self->{+SETTINGS};
-
-    my ($log, $max_short, $max_medium, @bad) = @$list;
-
-    die "Too many arguments\n" if @bad;
-
-    $self->{+MAX_SHORT}  = $max_short  || 15;
-    $self->{+MAX_MEDIUM} = $max_medium || 30;
-
-    $settings->{log_file} = $log;
-
-    die "You must specify a log file.\n"
-        unless $log;
-
-    die "Invalid log file: '$log'"
-        unless -f $log;
+    $self->{+MAX_SHORT}  //= 15;
+    $self->{+MAX_MEDIUM} //= 30;
 }
 
-sub feeder {
+sub run {
     my $self = shift;
 
-    my $settings = $self->{+SETTINGS};
+    my $settings = $self->settings;
+    my $args     = $self->args;
 
-    my $feeder = Test2::Harness::Feeder::JSONL->new(file => $settings->{log_file});
+    shift @$args if @$args && $args->[0] eq '--';
 
-    return ($feeder);
-}
+    $self->{+LOG_FILE} = shift @$args or die "You must specify a log file";
+    die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
+    die "'$self->{+LOG_FILE}' does not look like a log file" unless $self->{+LOG_FILE} =~ m/\.jsonl(\.(gz|bz2))?$/;
 
-sub run_command {
-    my $self = shift;
+    $self->{+MAX_SHORT}  = shift @$args if @$args;
+    $self->{+MAX_MEDIUM} = shift @$args if @$args;
 
-    my $settings = $self->{+SETTINGS};
+    die "max short duration must be an integer, got '$self->{+MAX_SHORT}'"  unless $self->{+MAX_SHORT}  && $self->{+MAX_SHORT} =~ m/^\d+$/;
+    die "max short duration must be an integer, got '$self->{+MAX_MEDIUM}'" unless $self->{+MAX_MEDIUM} && $self->{+MAX_MEDIUM} =~ m/^\d+$/;
 
-    my $feeder = $self->feeder;
+    my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
 
-    my %jobs;
+    while(1) {
+        my @events = $stream->poll(max => 1000) or last;
 
-    while (1) {
-        my @events = $feeder->poll(1000) or last;
         for my $event (@events) {
             my $stamp  = $event->{stamp}      or next;
             my $job_id = $event->{job_id}     or next;
             my $f      = $event->{facet_data} or next;
 
-            my $job = $jobs{$job_id} ||= {};
-            $job->{file} //= File::Spec->abs2rel($f->{harness_job}->{file})    if $f->{harness_job}     && $f->{harness_job}->{file};
-            $job->{time} //= $f->{harness_job_end}->{times}->{totals}->{total} if $f->{harness_job_end} && $f->{harness_job_end}->{times};
+            next unless $f->{harness_job_end};
+
+            my $job = {};
+            $job->{file} = $f->{harness_job_end}->{rel_file} if $f->{harness_job_end} && $f->{harness_job_end}->{rel_file};
+            $job->{time} = $f->{harness_job_end}->{times}->{totals}->{total} if $f->{harness_job_end} && $f->{harness_job_end}->{times};
 
             next unless $job->{file} && $job->{time};
-            delete $jobs{$job_id};
 
             my $dur;
             if ($job->{time} < $self->{+MAX_SHORT}) {

@@ -3,7 +3,9 @@ use strict;
 use warnings;
 
 use File::Spec;
+use Time::HiRes qw/time/;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use Test2::Harness::Event;
@@ -101,8 +103,16 @@ sub finish {
 
     $final_data->{pass} = 0 if $final_data->{failed} or $final_data->{unseen};
 
+    my $e = Test2::Harness::Event->new(
+        job_id     => 0,
+        stamp      => time,
+        event_id   => gen_uuid(),
+        run_id     => $self->{+RUN_ID},
+        facet_data => {harness_final => $final_data},
+    );
+
+    $self->{+ACTION}->($e);
     $self->{+ACTION}->(undef);
-    $self->{+ACTION}->($final_data);
 }
 
 1;

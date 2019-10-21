@@ -38,6 +38,8 @@ use Test2::Harness::Util::HashBase qw/
     +run_queue
     +tasks_queue
     +state
+
+    <final_data
 /;
 
 include_options(
@@ -120,9 +122,23 @@ sub monitor_preloads { 0 }
 sub run {
     my $self = shift;
 
-    my $ipc = $self->ipc;
-    $ipc->start();
+    my $settings = $self->settings;
 
+    $self->start();
+    $self->render();
+    $self->stop();
+
+    my $final_data = $self->{+FINAL_DATA} or die "Final data never received from auditor!\n";
+
+    $self->render_final_data($final_data);
+
+    return $final_data->{pass} ? 0 : 1;
+}
+
+sub start {
+    my $self = shift;
+
+    $self->ipc->start();
     $self->parse_args;
     $self->write_settings_to($self->workdir, 'settings.json');
     $self->populate_queue();
@@ -130,7 +146,12 @@ sub run {
     $self->start_runner();
     $self->start_collector();
     $self->start_auditor();
+}
 
+sub render {
+    my $self = shift;
+
+    my $ipc       = $self->ipc;
     my $settings  = $self->settings;
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
@@ -142,17 +163,28 @@ sub run {
         my $e = decode_json($line);
         last unless defined $e;
 
-        $_->render_event($e) for @$renderers;
+        if (my $final = $e->{facet_data}->{harness_final}) {
+            $self->{+FINAL_DATA} = $final;
+        }
+        else {
+            $_->render_event($e) for @$renderers;
+        }
 
-        $ipc->wait();
+        $ipc->wait() if $ipc;
     }
+}
+
+sub stop {
+    my $self = shift;
+
+    my $settings  = $self->settings;
+    my $renderers = $self->renderers;
+    my $logger    = $self->logger;
     close($logger) if $logger;
 
     $_->finish() for @$renderers;
 
-    my $final_data = decode_json(scalar <$reader>);
-    $self->render_final_data($final_data);
-
+    my $ipc = $self->ipc;
     $ipc->wait(all => 1);
     $ipc->stop;
 
@@ -160,8 +192,6 @@ sub run {
 
     print "\nWrote log file: " . $settings->logging->log_file . "\n"
         if $settings->logging->log;
-
-    return $final_data->{pass} ? 0 : 1;
 }
 
 sub terminate_queue {

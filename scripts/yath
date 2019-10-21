@@ -15,8 +15,9 @@ BEGIN {
     my @ORIG_INC = @INC;
     my @DEVLIBS;
     my %CONFIG;
-    my $SCRIPT;
     my $NO_PLUGINS;
+
+    our $SCRIPT;
 
     # ==START TESTABLE CODE FIND_CONFIG_FILES==
 

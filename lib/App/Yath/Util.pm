@@ -10,6 +10,7 @@ use Test2::Harness::Util qw/clean_path/;
 
 use Cwd qw/realpath/;
 use Importer Importer => 'import';
+use Config qw/%Config/;
 
 our @EXPORT_OK = qw{
     find_pfile
@@ -17,7 +18,38 @@ our @EXPORT_OK = qw{
     fit_to_width
     isolate_stdout
     PFILE_NAME
+    find_yath
 };
+
+sub find_yath {
+    return $App::Yath::Script::SCRIPT if defined $App::Yath::Script::SCRIPT;
+
+    if (-d 'scripts') {
+        my $script = File::Spec->catfile('scripts', 'yath');
+        return $App::Yath::Script::SCRIPT = $script if -e $script && -x $script;
+    }
+
+    my @keys = qw{
+        bin binexp initialinstalllocation installbin installscript
+        installsitebin installsitescript installusrbinperl installvendorbin
+        scriptdir scriptdirexp sitebin sitebinexp sitescript sitescriptexp
+        vendorbin vendorbinexp
+    };
+
+    my %seen;
+    for my $path (@Config{@keys}) {
+        next unless $path;
+        next if $seen{$path}++;
+
+        my $script = File::Spec->catfile($path, 'yath');
+        next unless -f $script && -x $script;
+
+        $App::Yath::Script::SCRIPT = $script;
+        return $script;
+    }
+
+    die "Could not find yath in Config paths";
+}
 
 sub isolate_stdout {
     # Make $fh point at STDOUT, it is our primary output

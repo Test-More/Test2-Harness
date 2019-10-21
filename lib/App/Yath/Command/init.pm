@@ -9,7 +9,7 @@ our $VERSION = '0.001100';
 use Test2::Harness::Util qw/open_file/;
 use App::Yath::Util qw/is_generated_test_pl/;
 
-sub show_bench { 0 }
+sub group { 'zinit' }
 
 sub summary { "Create/update test.pl to run tests via Test2::Harness" }
 
@@ -39,9 +39,10 @@ sub run {
 use strict;
 use warnings;
 
+use lib 'lib';
 use App::Yath::Util qw/find_yath/;
 
-system($^X, '-Ilib', find_yath(), 'test', '--default-search' => './t', '--default-search' => './t2', @ARGV);
+system($^X, find_yath(), '-D', 'test', '--default-search' => './t', '--default-search' => './t2', @ARGV);
 my $exit = $?;
 
 # This makes sure it works with prove.

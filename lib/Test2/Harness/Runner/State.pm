@@ -433,6 +433,10 @@ sub clear_finished_run {
 sub advance_tasks {
     my $self = shift;
 
+    my $max = $self->{+JOB_COUNT} // 0;
+    my $cur = $self->{+RUNNING}   // 0;
+    return 0 if $cur >= $max;
+
     my ($run_stage, $task) = $self->_next();
 
     return 0 unless $task;

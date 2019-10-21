@@ -31,6 +31,7 @@ use Test2::Harness::Util::HashBase qw{
     -subtests
     -numbers
     -times
+    -halt
 };
 
 sub init {
@@ -207,6 +208,7 @@ sub subtest_process {
         my $err ||= $f->{control} && ($f->{control}->{halt} || $f->{control}->{terminate});
         $err ||= $f->{errors} && first { $_->{fail} } @{$f->{errors}};
         $self->{+_ERRORS}++ if $err;
+        $self->{+HALT} = $f->{control}->{details} || '1' if $f->{control} && $f->{control}->{halt} && (!$self->{+HALT} || $self->{+HALT} eq '1');
     }
 
     if ($f->{plan} && !$f->{plan}->{none}) {

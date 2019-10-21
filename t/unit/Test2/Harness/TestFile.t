@@ -1,7 +1,7 @@
 use Test2::V0 -target => 'Test2::Harness::TestFile';
 # HARNESS-DURATION-SHORT
 
-use Test2::Plugin::BailOnFail;
+use Test2::Plugin::DieOnFail;
 
 use ok $CLASS;
 

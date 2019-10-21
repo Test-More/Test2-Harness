@@ -2,6 +2,8 @@ package Test2::Harness::Auditor;
 use strict;
 use warnings;
 
+use File::Spec;
+
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use Test2::Harness::Event;
@@ -82,11 +84,15 @@ sub finish {
     my $final_data = {pass => 1};
 
     while (my ($job_id, $watchers) = each %{$self->{+WATCHERS}}) {
-        my $file = $self->{+QUEUED}->{$job_id}->{file};
+        my $file = File::Spec->abs2rel($self->{+QUEUED}->{$job_id}->{file});
 
         if (@$watchers) {
             push @{$final_data->{failed}} => [$job_id, $file] if $watchers->[-1]->fail;
             push @{$final_data->{retried}} => [$job_id, scalar(@$watchers), $file, $watchers->[-1]->pass ? 'YES' : 'NO'] if @$watchers > 1;
+
+            if (my $halt = $watchers->[-1]->halt) {
+                push @{$final_data->{halted}} => [$job_id, $file, $halt];
+            }
         }
         else {
             push @{$final_data->{unseen}} => [$job_id, $self->{+QUEUED}->{$job_id}->{file}];

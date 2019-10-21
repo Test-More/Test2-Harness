@@ -257,6 +257,15 @@ sub render_final_data {
         print "\n";
     }
 
+    if (my $rows = $final_data->{halted}) {
+        print "\nThe following jobs requested all testing be halted:\n";
+        print join "\n" => table(
+            header => ['Job ID', 'Test File', "Reason"],
+            rows   => $rows,
+        );
+        print "\n";
+    }
+
     if (my $rows = $final_data->{unseen}) {
         print "\nThe following jobs never ran:\n";
         print join "\n" => table(

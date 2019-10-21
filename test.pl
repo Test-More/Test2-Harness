@@ -5,7 +5,10 @@
 use strict;
 use warnings;
 
-system($^X, '-Ilib', './scripts/yath', 'test', '--default-search' => './t', '--default-search' => './t2', @ARGV);
+use lib 'lib';
+use App::Yath::Util qw/find_yath/;
+
+system($^X, find_yath(), '-D', 'test', '--default-search' => './t', '--default-search' => './t2', @ARGV);
 my $exit = $?;
 
 # This makes sure it works with prove.

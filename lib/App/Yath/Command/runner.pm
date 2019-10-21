@@ -8,6 +8,7 @@ use File::Spec;
 use goto::file();
 use Test2::Harness::IPC();
 
+use Carp qw/confess/;
 use Scalar::Util qw/openhandle/;
 use List::Util qw/first/;
 use File::Path qw/remove_tree/;
@@ -30,8 +31,6 @@ BEGIN {
     local $@;
     eval { require FindBin; FindBin->import };
 }
-
-use Carp qw/confess/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;

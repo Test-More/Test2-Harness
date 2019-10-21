@@ -7,14 +7,6 @@ our $VERSION = '0.001100';
 use parent 'App::Yath::Command::test';
 use Test2::Harness::Util::HashBase;
 
-sub group           { ' test' }
-sub always_keep_dir { 0 }
-sub has_display     { 1 }
-sub has_jobs        { 1 }
-sub has_logger      { 1 }
-sub has_runner      { 1 }
-sub manage_runner   { 1 }
-
 sub summary { "Run tests for multiple projects" }
 sub cli_args { "[--] projects_dir [::] [arguments to test scripts]" }
 
@@ -24,22 +16,7 @@ This command will run all the tests for each project within a parent directory.
     EOT
 }
 
-sub make_run_from_settings {
-    my $self = shift;
-
-    # Add the Author Testing search paths if enabled
-    my $settings       = $self->{+SETTINGS} ||= {};
-    my @default_search = @{$settings->{default_search}};
-    if ($ENV{AUTHOR_TESTING} || $settings->{env_vars}{AUTHOR_TESTING}) {
-        push @default_search, @{$settings->{default_at_search}};
-    }
-
-    # Go set up our test runner.
-    return $self->SUPER::make_run_from_settings(
-        projects       => 1,
-        default_search => \@default_search,
-    );
-}
+sub run_args {(multi_project => 1)}
 
 1;
 

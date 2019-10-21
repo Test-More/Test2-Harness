@@ -78,7 +78,7 @@ sub _run_cmd_fork {
 
     $cmd = [$cmd->()] if ref($cmd) eq 'CODE';
 
-    if (my $dir = $params{chdir}) {
+    if (my $dir = $params{chdir} // $params{ch_dir}) {
         chdir($dir) or die "Could not chdir: $!";
     }
 

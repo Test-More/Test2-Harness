@@ -186,14 +186,15 @@ sub all_libs {
     my $self = shift;
 
     my @out;
-    push @out => clean_path('t/lib') if $self->{+TLIB};
-    push @out => clean_path('lib')   if $self->{+LIB};
+    push @out => 't/lib' if $self->{+TLIB};
+    push @out => 'lib'   if $self->{+LIB};
 
     if ($self->{+BLIB}) {
-        push @out => clean_path('blib/lib');
-        push @out => clean_path('blib/arch');
+        push @out => 'blib/lib';
+        push @out => 'blib/arch';
     }
 
+    push @out => map { clean_path($_) } @{$self->settings->yath->dev_libs};
     push @out => map { clean_path($_) } @{$self->{+INCLUDES}} if $self->{+INCLUDES};
 
     return @out;
@@ -203,7 +204,7 @@ sub process {
     my $self = shift;
 
     my %seen;
-    @INC = grep { !$seen{$_}++ } $self->all_libs, @INC, $self->unsafe_inc ? ('.') : ();
+    @INC = grep { !$seen{$_}++ } map { clean_path($_) } $self->all_libs, @INC, $self->unsafe_inc ? ('.') : ();
 
     my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
     write_file_atomic($pidfile, "$$");

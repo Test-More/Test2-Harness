@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '0.001100';
 
 use Carp qw/croak/;
+use Cwd qw/getcwd/;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/write_file_atomic clean_path/;
@@ -43,6 +44,8 @@ use Test2::Harness::Util::HashBase qw{
     <fields <meta
 
     <retry <retry_isolated
+
+    <multi_project
 };
 
 sub init {
@@ -132,10 +135,55 @@ sub find_files {
     my $self = shift;
     my ($plugins) = @_;
 
+    my $search = $self->{+SEARCH} // [];
+
+    return $self->_find_files($plugins, $search) unless $self->{+MULTI_PROJECT};
+
+    use Carp::Always;
+
+    die "multi-project search must be a single directory, or the current directory" if @$search > 1;
+    my ($pdir) = @$search;
+
+    my $out = [];
+    my $dir = clean_path(getcwd());
+    my $ok = eval {
+        chdir($pdir) if defined $pdir;
+        my $ret = clean_path(getcwd());
+
+        opendir(my $dh, '.') or die "Could not open project dir: $!";
+        for my $subdir (readdir($dh)) {
+            chdir($ret);
+
+            next if $subdir =~ m/^\./;
+            my $path = clean_path(File::Spec->catdir($ret, $subdir));
+            next unless -d $path;
+
+            chdir($path) or die "Could not chdir to $path: $!\n";
+
+            for my $item (@{$self->_find_files($plugins, [])}) {
+                push @{$item->queue_args} => ('ch_dir' => $path);
+                push @$out => $item;
+            }
+        }
+
+        1;
+    };
+    my $err = $@;
+
+    chdir($dir) if defined $pdir;
+    die $err unless $ok;
+
+    return $out;
+}
+
+sub _find_files {
+    my $self = shift;
+    my ($plugins, $search) = @_;
+
     $plugins //= [];
+    $search  //= [];
 
     my $have_list = 1;
-    my $search = $self->{+SEARCH} // [];
     unless (@$search || first { $_->block_default_search() } @$plugins) {
         $have_list = 0;
         push @$search => @{$self->{+DEFAULT_SEARCH}};
@@ -151,7 +199,7 @@ sub find_files {
             push @files => $path;
             next;
         }
-        die "'$path' is not a valid file or directory.\n";
+        die "'$path' is not a valid file or directory.\n" if $have_list;
     }
 
     for my $plugin (@$plugins) {

@@ -46,7 +46,7 @@ sub init {
 
     croak "Invalid test file '$file'" unless -f $file;
 
-    if($self->{+IS_BINARY} = -B $file) {
+    if($self->{+IS_BINARY} = -B $file && !-z $file) {
         $self->{+NON_PERL} = 1;
         die "Cannot run binary test file '$file': file is not executable.\n"
             unless $self->is_executable;

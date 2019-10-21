@@ -4,23 +4,15 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-use Test2::Util qw/pkg_to_file/;
+use Test2::Util::Table qw/table/;
+use Test2::Harness::Util::File::JSONL;
 
-use Test2::Harness::Feeder::JSONL;
-use Test2::Harness::Run;
-use Test2::Harness;
-
-use parent 'App::Yath::Command::test';
-use Test2::Harness::Util::HashBase;
+use parent 'App::Yath::Command';
+use Test2::Harness::Util::HashBase qw{<log_file};
 
 sub summary { "Replay a test run from an event log" }
 
 sub group { 'log' }
-
-sub has_runner  { 0 }
-sub has_logger  { 0 }
-sub has_display { 0 }
-sub show_bench  { 0 }
 
 sub cli_args { "[--] event_log.jsonl[.gz|.bz2] [job1, job2, ...]" }
 
@@ -36,89 +28,51 @@ command accepts.
     EOT
 }
 
-sub handle_list_args {
-    my $self = shift;
-    my ($list) = @_;
-
-    my $settings = $self->{+SETTINGS};
-
-    my ($log, @jobs) = @$list;
-
-    $settings->{log_file} = $log;
-    $settings->{jobs} = { map { $_ => 1 } @jobs} if @jobs;
-
-    die "You must specify a log file.\n"
-        unless $log;
-
-    die "Invalid log file: '$log'"
-        unless -f $log;
-}
-
-sub feeder {
+sub run {
     my $self = shift;
 
-    my $settings = $self->{+SETTINGS};
+    my $settings = $self->settings;
+    my $args     = $self->args;
 
-    my $feeder = Test2::Harness::Feeder::JSONL->new(file => $settings->{log_file});
+    shift @$args if @$args && $args->[0] eq '--';
 
-    return ($feeder);
-}
+    $self->{+LOG_FILE} = shift @$args or die "You must specify a log file";
+    die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
+    die "'$self->{+LOG_FILE}' does not look like a log file" unless $self->{+LOG_FILE} =~ m/\.jsonl(\.(gz|bz2))?$/;
 
-sub run_command {
-    my $self = shift;
+    my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
 
-    my $settings = $self->{+SETTINGS};
+    my %failed;
 
-    my ($feeder, $runner, $pid, $stat, $jobs_todo);
-    my $ok = eval {
-        ($feeder, $runner, $pid, $jobs_todo) = $self->feeder or die "No feeder!";
+    while(1) {
+        my @events = $stream->poll(max => 1000) or last;
 
-        my $harness = Test2::Harness->new(
-            run_id            => $settings->{run_id},
-            live              => $pid ? 1 : 0,
-            feeder            => $feeder,
-            loggers           => [],
-            renderers         => [],
-            event_timeout     => $settings->{event_timeout},
-            post_exit_timeout => $settings->{post_exit_timeout},
-            jobs              => $settings->{jobs},
-            jobs_todo         => $jobs_todo,
-        );
+        for my $event (@events) {
+            my $stamp  = $event->{stamp}      or next;
+            my $job_id = $event->{job_id}     or next;
+            my $f      = $event->{facet_data} or next;
 
-        $stat = $harness->run();
+            next unless $f->{harness_job_end};
+            next unless $f->{harness_job_end}->{fail} || $failed{$job_id};
 
-        1;
-    };
-    my $err = $@;
-    warn $err unless $ok;
-
-    my $exit = 0;
-
-    my $bad  = $stat ? $stat->{fail} : [];
-    my $lost = $stat ? $stat->{lost} : 0;
-
-    # Possible failure causes
-    my $fail = $lost || !$ok || !$stat;
-
-    if (@$bad) {
-        print(File::Spec->abs2rel($_->file), "\n") for sort {
-            my $an = $a->{job_id};
-            $an =~ s/\D+//g;
-            my $bn = $b->{job_id};
-            $bn =~ s/\D+//g;
-
-            # Sort numeric if possible, otherwise string
-            int($an) <=> int($bn) || $a->{job_id} cmp $b->{job_id}
-        } @$bad;
-        $exit += @$bad;
+            push @{$failed{$job_id}} => $f->{harness_job_end};
+        }
     }
 
-    $exit ||= 255 if $fail;
-    $exit = 255 if $exit > 255;
+    my $rows = [];
+    while (my ($job_id, $ends) = each %failed) {
+        push @$rows => [$job_id, scalar(@$ends), $ends->[-1]->{rel_file}, $ends->[-1]->{fail} ? "NO" : "YES"];
+    }
 
-    return $exit;
+    print "\nThe following jobs failed at least once:\n";
+    print join "\n" => table(
+        header => ['Job ID', 'Times Run', 'Test File', "Succeded Eventually?"],
+        rows   => $rows,
+    );
+    print "\n";
+
+    return 0;
 }
-
 
 1;
 

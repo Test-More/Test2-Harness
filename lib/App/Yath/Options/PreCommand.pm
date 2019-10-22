@@ -62,7 +62,7 @@ sub plugin_action {
     my $file = mod2file($class);
     require $file;
 
-    my $plugin = $args ? $class->new(@$args) : $class;
+    my $plugin = $class->can('new') ? $class->new(@{$args // []}) : $class;
 
     $handler->($slot, $plugin);
 }

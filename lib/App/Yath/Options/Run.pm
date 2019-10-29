@@ -9,6 +9,17 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use App::Yath::Options;
 
 option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harness::Run'} => sub {
+    option link => (
+        field => 'links',
+        type => 'm',
+        long_examples  => [
+            " 'https://travis.work/builds/42'",
+            " 'https://jenkins.work/job/42'",
+            " 'https://buildbot.work/builders/foo/builds/42'",
+        ],
+        description => "Provide one or more links people can follow to see more about this run."
+    );
+
     option test_args => (
         type => 'm',
 

@@ -27,6 +27,8 @@ use Test2::Harness::Util::HashBase qw{
 
     <env_vars <author_testing <unsafe_inc
 
+    <links
+
     <event_uuids
     <use_stream
     <mem_usage

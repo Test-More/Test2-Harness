@@ -17,6 +17,7 @@ use Test2::Harness::Util::HashBase qw{
     <default <normalize <action <negate
 
     <post_process <post_process_weight
+    +applicable
 
     <builds
     <category
@@ -125,6 +126,13 @@ sub init {
     }
 
     return $self;
+}
+
+sub applicable {
+    my $self = shift;
+    my ($options) = @_;
+    my $cb = $self->{+APPLICABLE} or return 1;
+    return $self->$cb($options);
 }
 
 sub long_args {

@@ -269,7 +269,7 @@ sub _command_options {
     my $cmd = $class->name;
     my $cmd_options = $self->{+CMD_LIST} // [];
 
-    return [@$cmd_options];
+    return [grep { $_->applicable($self) } @$cmd_options];
 }
 
 sub _process_opts {

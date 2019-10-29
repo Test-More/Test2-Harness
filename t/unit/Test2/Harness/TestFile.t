@@ -123,6 +123,7 @@ subtest taint => sub {
             conflicts   => [],
             via         => ['xxx'],
             rank        => T(),
+            run_id      => FDNE(),
         },
         "Got queue item data",
     );
@@ -154,6 +155,7 @@ subtest warn => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            run_id      => FDNE(),
         },
         "Got queue item data",
     );
@@ -191,6 +193,7 @@ subtest notime => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            run_id      => FDNE(),
         },
         "Got queue item data",
     );
@@ -239,6 +242,7 @@ subtest all => sub {
             conflicts   => [],
             binary      => 0,
             non_perl    => 0,
+            run_id      => FDNE(),
         },
         "Got queue item data",
     );
@@ -271,6 +275,7 @@ subtest med2 => sub {
     is(
         $med2->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
             stage       => 'default',
@@ -320,6 +325,7 @@ subtest med1 => sub {
     is(
         $med1->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
             stage       => 'default',
@@ -371,6 +377,7 @@ subtest long => sub {
     is(
         $long->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'isolation',
             duration    => 'long',
             stage       => 'default',
@@ -420,6 +427,7 @@ subtest extra_comments => sub {
     is(
         $long->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'isolation',
             duration    => 'long',
             stage       => 'default',
@@ -480,6 +488,7 @@ subtest binary => sub {
     is(
         $binary->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
             stage       => 'default',
@@ -525,6 +534,7 @@ subtest not_perl => sub {
     is(
         $not_perl->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
             stage       => 'default',
@@ -571,6 +581,7 @@ subtest not_env_perl => sub {
     is(
         $not_env_perl->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
             stage       => 'default',
@@ -599,6 +610,7 @@ subtest smoke => sub {
     is(
         $smoke1->queue_item(42),
         {
+            run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
             stage       => 'default',

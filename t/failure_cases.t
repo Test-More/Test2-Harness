@@ -17,8 +17,8 @@ my %CUSTOM = (
     "timeout.tx"           => ['--et',       2],
     "post_exit_timeout.tx" => ['--pet',      2],
     "noplan.tx"            => ['--pet',      2],
-    #"dupnums.tx"           => ['--no-quiet', '-v'],
-    #"missingnums.tx"       => ['--no-quiet', '-v'],
+    "dupnums.tx"           => [],
+    "missingnums.tx"       => [],
 );
 
 opendir(my $DH, $dir) or die "Could not open directory $dir: $!";
@@ -35,7 +35,7 @@ sub run_test {
 
     my $ctx = context();
 
-    my @cmd = ($yath, 'test', '-q', ($args ? @$args : ()), $path);
+    my @cmd = ($yath, 'test', '-qq', ($args ? @$args : ()), $path);
 
     {
         local $ENV{FAILURE_DO_PASS} = 0;

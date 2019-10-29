@@ -1,110 +1,156 @@
-use Test2::V0;
+use Test2::V0 -target => 'App::Yath::Util';
+BEGIN { skip_all 'TODO' }
 
-__END__
+# HARNESS-DURATION-SHORT
 
-package App::Yath::Util;
-use strict;
-use warnings;
+use Test2::Tools::GenTemp qw/gen_temp/;
 
-our $VERSION = '0.001100';
+use ok $CLASS => qw/find_yath find_pfile PFILE_NAME find_in_updir is_generated_test_pl find_libraries/;
 
-use File::Spec;
+imported_ok(qw/find_yath find_pfile PFILE_NAME find_in_updir is_generated_test_pl find_libraries/);
 
-use Cwd qw/realpath/;
-use Importer Importer => 'import';
+use Cwd qw/realpath cwd/;
 
-our @EXPORT_OK = qw{
-    find_pfile
-    is_generated_test_pl
+subtest find_yath => sub {
+    require IPC::Cmd;
+    my $can_run;
+    my $control = mock 'IPC::Cmd' => (
+        override => {
+            can_run => sub { $can_run },
+        },
+    );
+
+    no warnings 'uninitialized';
+    local $App::Yath::SCRIPT = undef;
+    local $ENV{YATH_SCRIPT}  = undef;
+    local $0                 = 'fake';
+
+    like(
+        dies { find_yath },
+        qr/Could not find 'yath' in execution path/,
+        "Dies if yath cannot be found"
+    );
+
+    $can_run = 'a_yath';
+    is(find_yath, File::Spec->rel2abs('a_yath'), "found via can_run");
+
+    $0 = 'scripts/yath';
+    is(find_yath, File::Spec->rel2abs('scripts/yath'), "found via \$0");
+
+    $ENV{YATH_SCRIPT} = 'b_yath';
+    is(find_yath, File::Spec->rel2abs('b_yath'), "found via \$ENV{YATH_SCRIPT}");
+
+    $App::Yath::SCRIPT = 'c_yath_run';
+    is(find_yath, File::Spec->rel2abs('c_yath_run'), "found via \$App::Yath::SCRIPT");
 };
 
-sub is_generated_test_pl {
-    my ($file) = @_;
+my $tmp = realpath(gen_temp(
+    '.yath-persist.json' => "XXX",
+    'foo'                => "XXX",
 
-    open(my $fh, '<', $file) or die "Could not open '$file': $!";
+    'test_a.pl' => "\n\n# THIS IS A GENERATED YATH RUNNER TEST\n\n",
+    'test_b.pl' => "\n\n# THIS IS NOT A GENERATED YATH RUNNER TEST\n\n",
 
-    my $count = 0;
-    while (my $line = <$fh>) {
-        last if $count++ > 5;
-        next unless $line =~ m/^# THIS IS A GENERATED YATH RUNNER TEST$/;
-        return 1;
-    }
+    dir_a => {
+        '.yath-persist.json' => "XXX",
+        'foo'                => "XXX",
 
-    return 0;
-}
+        dir_ab => {},
+    },
 
+    dir_b => {
+        dir_bb => {},
+    },
+));
 
-sub find_in_updir {
-    my $path = shift;
-    return clean_path($path) if -f $path;
+my $cwd = cwd();
 
-    my %seen;
-    while(1) {
-        $path = File::Spec->catdir('..', $path);
-        my $check = eval { realpath(File::Spec->rel2abs($path)) };
-        last unless $check;
-        last if $seen{$check}++;
-        return $check if -f $check;
-    }
+my $ok = eval {
+    # Guard against yath being run with a YATH_PERSISTENCE_DIR
+    local $ENV{YATH_PERSISTENCE_DIR} = undef;
+    chdir(File::Spec->canonpath("$tmp"));
+    is(find_in_updir('A FAKE FILE THAT SHOULD NOT BE ANYWHERE $@!#'), undef, "File not found");
+    is(find_in_updir('foo'), realpath(File::Spec->rel2abs('foo')), "Found file in current dir");
+    is(find_pfile, realpath(File::Spec->rel2abs('.yath-persist.json')), "Found yath persist file");
 
-    return;
-}
+    ok(is_generated_test_pl('test_a.pl'), "Is a generated test.pl");
+    ok(!is_generated_test_pl('test_b.pl'), "Is not a generated test.pl");
 
-sub PFILE_NAME() { '.yath-persist.json' }
+    chdir(File::Spec->canonpath("$tmp/dir_a/dir_ab/"));
+    is(find_in_updir('foo'), realpath(File::Spec->rel2abs("$tmp/dir_a/foo")), "Found file in updir dir");
+    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/dir_a/.yath-persist.json")), "Found yath persist file");
 
-sub find_pfile {
-    #If we find the file where YATH_PERSISTENCE_DIR is specified, return that path
-    #Otherwise search for the file further
-    if (my $base = $ENV{YATH_PERSISTENCE_DIR}){
-        if (my $path = find_in_updir(File::Spec->catdir($base,PFILE_NAME()))){
-            return $path;
-        }
-    }
-    return find_in_updir(PFILE_NAME());
-}
+    chdir(File::Spec->canonpath("$tmp/dir_b/dir_bb/"));
+    is(find_in_updir('foo'), realpath(File::Spec->rel2abs("$tmp/foo")), "Found file in updir/updir dir");
+    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/.yath-persist.json")), "Found yath persist file");
 
-1;
+    # Explicitly test a YATH_PERSISTENCE_DIR env var
+    local $ENV{YATH_PERSISTENCE_DIR} = $tmp;
+    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/.yath-persist.json")), "Found yath persist file");
 
-__END__
+    # Make sure that the environment variable is respected by setting
+    # the ENV var to a known good folder that is not the CWD
+    local $ENV{YATH_PERSISTENCE_DIR} = realpath(File::Spec->rel2abs("$tmp/dir_a"));
+    chdir(File::Spec->canonpath("$tmp"));
+    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/dir_a/.yath-persist.json")), "Found yath persist file");
 
-=pod
+    1;
+};
+my $err = $@;
 
-=encoding UTF-8
+chdir($cwd);
 
-=head1 NAME
+die $err unless $ok;
 
-App::Yath::Util - Common utils for yath.
+subtest find_libraries => sub {
+    my $tmp = realpath(gen_temp(
+        lib => {
+            Foo => {
+                'Bar.pm' => 1,
+                'Baz.pm' => 1,
+                'Bat' => { 'xxx.pm' => 1 },
+            },
+            Foo2 => {
+                'Bar.pm' => 1,
+                'Baz.pm' => 1,
+                'Bat' => { 'xxx.pm' => 1 },
+            },
+        },
+    ));
 
-=head1 DESCRIPTION
+    my $libs = find_libraries('Foo::*', "$tmp/lib");
+    is(
+        $libs,
+        {'Foo::Bar' => 'Foo/Bar.pm', 'Foo::Baz' => 'Foo/Baz.pm'},
+        "Found libs under foo"
+    );
 
-=head1 SOURCE
+    $libs = find_libraries('*::*::xxx', "$tmp/lib");
+    is(
+        $libs,
+        {
+            'Foo::Bat::xxx'  => 'Foo/Bat/xxx.pm',
+            'Foo2::Bat::xxx' => 'Foo2/Bat/xxx.pm',
+        },
+        "Found */*/xxx libs"
+    );
 
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
+    $libs = find_libraries('*::*::Util');
+    like(
+        $libs,
+        {
+          'App::Yath::Util' => 'App/Yath/Util.pm',
+          'Term::Table::Util' => 'Term/Table/Util.pm',
+          'Test2::Harness::Util' => 'Test2/Harness/Util.pm',
+        },
+        "Found the *::*::Util libs we know must be around"
+    );
 
-=head1 MAINTAINERS
+    ok(!grep(m/x86_64-linux/, keys %$libs), "Did not add the arch/ stuff");
+};
 
-=over 4
+die "test mod2file";
+die "test show_bench";
+die "test strip_arisdottle";
 
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut
+done_testing;

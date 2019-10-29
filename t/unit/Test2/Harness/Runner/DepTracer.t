@@ -1,187 +1,97 @@
-use Test2::V0;
+use Test2::V0 -target => 'Test2::Harness::Runner::DepTracer';
+# HARNESS-NO-PRELOAD
 
-__END__
+skip_all 'TODO';
 
-package Test2::Harness::Runner::DepTracer;
-use strict;
-use warnings;
+use ok $CLASS;
 
-our $VERSION = '0.001100';
+unshift @INC => 't/lib';
 
-use Test2::Harness::Util::HashBase qw/
-    -_on
-    -exclude
-    -dep_map
-    -loaded
-    -my_require
-    -real_require
-    -_my_inc
-/;
+subtest require_hook => sub {
+    my $one = $CLASS->new;
+    isa_ok($one, [$CLASS], "Made a new instance");
+    ok(!$one->real_require, "Did not find an existing require hook");
 
-my %DEFAULT_EXCLUDE = (
-    'warnings.pm' => 1,
-    'strict.pm'   => 1,
-);
+    my $two = $CLASS->new;
+    ref_is($one->my_require, $two->real_require, "Found the existing require hook");
 
-sub start {
-    my $self = shift;
+    require xxx;
 
-    unshift @INC => $self->my_inc;
+    is($one->loaded, {}, "Nothing tracked yet");
 
-    $self->{+_ON} = 1;
-}
+    $one->start;
 
-sub stop {
-    my $self = shift;
+    # use eval so we do not pre-bind the require
+    eval qq(#line ${ \__LINE__ } "${ \__FILE__ }"\nrequire baz; 1) or die $@;
 
-    $self->{+_ON} = 0;
+    is($one->loaded, {map { $_ => T } qw/baz.pm foo.pm bar.pm/}, "Loaded 3 modules");
 
-    my $inc = $self->{+_MY_INC} or return 0;
+    is(
+        $one->dep_map, {
+            'baz.pm' => [['main', 't/Test2/Harness/Runner/DepTracer.t']],
+            'foo.pm' => [['baz',  't/lib/baz.pm'], ['bar', 't/lib/bar.pm']],
+            'bar.pm' => [['baz',  't/lib/baz.pm']],
+        },
+        "Built dep-map"
+    );
 
-    @INC = grep { !(ref($_) && $inc == $_) } @INC;
-    return 0;
-}
+    $one->stop;
 
-sub my_inc {
-    my $self = shift;
+    eval "require Data::Dumper; 1" or die $@;
 
-    return $self->{+_MY_INC} if $self->{+_MY_INC};
+    is($one->loaded, {map { $_ => T } qw/baz.pm foo.pm bar.pm/}, "Did not track Data::Dumper");
 
-    my $exclude = $self->{+EXCLUDE} ||= {%DEFAULT_EXCLUDE};
-    my $dep_map = $self->{+DEP_MAP} ||= {};
-    my $loaded  = $self->{+LOADED}  ||= {};
+    $one->clear_loaded;
+    $one->start;
 
-    return $self->{+_MY_INC} ||= sub {
-        my ($this, $file) = @_;
+    eval "use 5.8.9; 1" or die $@;
 
-        return unless $self->{+_ON};
-        return unless $file =~ m/^[_a-z]/i;
-        return if $exclude->{$file};
+    is($one->loaded, {}, "Did not track from version import");
+};
 
-        my $loaded_by = $self->loaded_by;
-        push @{$dep_map->{$file}} => $loaded_by;
-        $loaded->{$file}++;
+subtest inc_hook => sub {
+    my $one = $CLASS->new;
+    isa_ok($one, [$CLASS], "Made a new instance");
+    ok($one->real_require, "Did find an existing require hook");
 
-        return;
-    };
-}
+    my $two = $CLASS->new;
+    ref_is($one->my_require, $two->real_require, "Found the existing require hook");
 
-sub clear_loaded { %{$_[0]->{+LOADED}} = () }
+    require xxx;
 
-my %REQUIRE_CACHE;
+    is($one->loaded, {}, "Nothing tracked yet");
 
-sub init {
-    my $self = shift;
+    $one->start;
 
-    my $exclude = $self->{+EXCLUDE} ||= { %DEFAULT_EXCLUDE };
+    # use eval so we do not pre-bind the require
+    eval qq(#line ${ \__LINE__ } "${ \__FILE__ }"\nCORE::require('baz_core.pm'); 1) or die $@;
 
-    my $stash = \%CORE::GLOBAL::;
-    # We use a string in the reference below to prevent the glob slot from
-    # being auto-vivified by the compiler.
-    $self->{+REAL_REQUIRE} = exists $stash->{require} ? \&{'CORE::GLOBAL::require'} : undef;
+    is($one->loaded, {map { $_ => T } qw/baz_core.pm foo_core.pm bar_core.pm/}, "Loaded 3 modules");
 
-    my $dep_map = $self->{+DEP_MAP} ||= {};
-    my $loaded  = $self->{+LOADED} ||= {};
-    my $inc = $self->my_inc;
+    is(
+        $one->dep_map, {
+            'baz_core.pm' => [['main', 't/Test2/Harness/Runner/DepTracer.t']],
+            # The @INC hook is limited, it can catch hidden loads for watching,
+            # but it cannot trace deps when a thing is loaded more than once.
+            'foo_core.pm' => [['baz_core',  't/lib/baz_core.pm']], #, ['bar', 't/lib/bar_core.pm']],
+            'bar_core.pm' => [['baz_core',  't/lib/baz_core.pm']],
+        },
+        "Built dep-map"
+    );
 
-    my $require = $self->{+MY_REQUIRE} = sub {
-        my ($file) = @_;
+    $one->stop;
 
-        my $loaded_by = $self->loaded_by;
+    eval "CORE::require('yyy.pm'); 1" or die $@;
 
-        my $real_require = $self->{+REAL_REQUIRE};
-        unless($real_require) {
-            my $caller = $loaded_by->[0];
-            $real_require = $REQUIRE_CACHE{$caller} ||= eval "package $caller; sub { CORE::require(\$_[0]) }" or die $@;
-        }
+    is($one->loaded, {map { $_ => T } qw/baz_core.pm foo_core.pm bar_core.pm/}, "Did not track yyy");
 
-        goto &$real_require unless $self->{+_ON};
+    $one->clear_loaded;
+    $one->start;
 
-        if ($file =~ m/^[_a-z]/i) {
-            unless ($exclude->{$file}) {
-                push @{$dep_map->{$file}} => $loaded_by;
-                $loaded->{$file}++;
-            }
-        }
+    eval "use 5.8.9; 1" or die $@;
 
-        if (!ref($INC[0]) || $INC[0] != $inc) {
-            @INC = (
-                $inc,
-                grep { !(ref($_) && $inc == $_) } @INC,
-            );
-        }
-
-        local @INC = @INC[1 .. $#INC];
-
-        $real_require->(@_);
-    };
-
-    {
-        no strict 'refs';
-        no warnings 'redefine';
-        *{'CORE::GLOBAL::require'} = $require;
-    }
-}
-
-sub loaded_by {
-    my $level = 1;
-
-    while(my @caller = caller($level++)) {
-        next if $caller[0] eq __PACKAGE__;
-
-        return [$caller[0], $caller[1]];
-    }
-
-    return ['', ''];
-}
-
-1;
-
-__END__
+    is($one->loaded, {}, "Did not track from version import");
+};
 
 
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::Runner::DepTracer - Tool for tracing module dependancies as
-they are loaded.
-
-=head1 DESCRIPTION
-
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut
+done_testing;

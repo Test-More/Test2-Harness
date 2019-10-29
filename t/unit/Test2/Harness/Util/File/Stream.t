@@ -1,148 +1,118 @@
-use Test2::V0;
+use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File::Stream';
+use File::Temp qw/tempfile/;
+# HARNESS-DURATION-SHORT
 
-__END__
+use ok $CLASS;
 
-package Test2::Harness::Util::File::Stream;
-use strict;
-use warnings;
+my ($wh, $filename) = tempfile("test-$$-XXXXXXXX", TMPDIR => 1);
+print $wh "";
+close($wh);
 
-our $VERSION = '0.001100';
+ok(my $one = $CLASS->new(name => $filename), "New instance");
+$one->write("line1\n");
+$one->write("line2\n");
+$one->write("line3\n");
+$one->write("line");
 
-use Carp qw/croak/;
-use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET O_APPEND O_CREAT O_SYNC O_WRONLY/;
+my $fh = $one->open_file('<');
+is(
+    [<$fh>],
+    ["line1\n", "line2\n", "line3\n", "line"],
+    "file written as expected"
+);
 
-use parent 'Test2::Harness::Util::File';
-use Test2::Harness::Util::HashBase qw/use_write_lock -tail/;
+is($one->read_line, "line1\n", "got first line");
 
-sub init {
-    my $self = shift;
+is(
+    [$one->poll],
+    [
+        "line2\n",
+        "line3\n",
+    ],
+    "Got unseen completed lines, but not incomplete line"
+);
 
-    $self->SUPER::init();
+is($one->read_line, undef, "no new lines are ready");
 
-    my $tail = $self->{+TAIL} or return;
+is(
+    [$one->read],
+    [
+        "line1\n",
+        "line2\n",
+        "line3\n",
+    ],
+    "Read gets lines"
+);
 
-    return unless $self->exists;
+$one->write("4\n");
+$one->write("line5");
 
-    my @lines = $self->poll_with_index;
-    if (@lines < $self->{+TAIL}) {
-        $self->seek(0);
-    }
-    else {
-        $self->seek($lines[0 - $tail]->[0]);
-    }
-}
+is(
+    [$one->read],
+    [
+        "line1\n",
+        "line2\n",
+        "line3\n",
+        "line4\n",
+    ],
+    "Read sees the new lines"
+);
 
-sub poll_with_index {
-    my $self = shift;
-    my %params = @_;
+is([$one->poll], ["line4\n"], "Poll sees new line after a read");
 
-    my $max = delete $params{max} || 0;
+$one->write("\nline6");
 
-    my $pos = $params{from};
-    $pos = $self->{+LINE_POS} ||= 0 unless defined $pos;
+is($one->read_line, "line5\n", "read_line moves to the next line");
 
-    my @out;
-    while (!$max || @out < $max) {
-        my ($spos, $epos, $line) = $self->read_line(%params, from => $pos);
-        last unless defined($line) || defined($spos) || defined($epos);
+is($one->read_line, undef, "no new lines are ready");
+is([$one->poll], [], "no new lines are ready");
 
-        $self->{+LINE_POS} = $epos unless $params{peek} || defined $params{from};
-        push @out => [$spos, $epos, $line];
-        $pos = $epos;
-    }
+$one->set_done(1);
 
-    return @out;
-}
+is([$one->poll], ["line6"], "got unterminated line after 'done' was set");
 
-sub read {
-    my $self = shift;
+$one->reset;
+is(
+    [$one->read],
+    [
+        "line1\n",
+        "line2\n",
+        "line3\n",
+        "line4\n",
+        "line5\n",
+    ],
+    "read all lines but the last unterminated one"
+);
 
-    return $self->poll(from => 0);
-}
+is(
+    [$one->poll],
+    [
+        "line1\n",
+        "line2\n",
+        "line3\n",
+        "line4\n",
+        "line5\n",
+    ],
+    "poll all lines but the last unterminated one"
+);
 
-sub poll {
-    my $self = shift;
-    my @lines = $self->poll_with_index(@_);
-    return map { $_->[-1] } @lines;
-}
+$one->set_done(1);
+is([$one->poll], ["line6"], "got unterminated line after 'done' was set");
 
-sub write {
-    my $self = shift;
+$one = undef;
 
-    my $name = $self->{+NAME};
+$one = $CLASS->new(name => $filename);
+$one->seek(6);
+is(
+    [$one->poll],
+    [
+        "line2\n",
+        "line3\n",
+        "line4\n",
+        "line5\n",
+    ],
+    "Was able to seek past the first item",
+);
 
-    my $mode = O_APPEND | O_CREAT | O_SYNC | O_WRONLY;
-
-    sysopen(my $fh, $self->name, $mode) or die "Could not open file: $!";
-
-    flock($fh, LOCK_EX) or die "Could not lock file '$name': $!"
-        if $self->{+USE_WRITE_LOCK};
-
-    sysseek($fh,2,0);
-    syswrite($fh, $self->encode($_)) for @_;
-
-    flock($fh, LOCK_UN) or die "Could not unlock file '$name': $!"
-        if $self->{+USE_WRITE_LOCK};
-
-    close($fh) or die "Could not clone file '$name': $!";
-
-    return @_;
-}
-
-sub seek {
-    my $self = shift;
-    my ($pos) = @_;
-
-    my $fh   = $self->fh;
-    my $name = $self->{+NAME};
-
-    seek($fh, $pos, SEEK_SET) or die "Could not seek to position $pos in file '$name': $!";
-    $self->{+LINE_POS} = $pos;
-}
-
-1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::Util::File::Stream - Utility class for manipulating a file that
-serves as an output stream.
-
-=head1 DESCRIPTION
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut
+unlink($filename);
+done_testing;

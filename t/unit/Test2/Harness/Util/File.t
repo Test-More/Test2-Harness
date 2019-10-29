@@ -1,155 +1,102 @@
-use Test2::V0;
+use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';
+# HARNESS-DURATION-SHORT
+
+use ok $CLASS;
+
+can_ok($CLASS, qw/name done set_done/);
+
+like(
+    dies { $CLASS->new },
+    qr/'name' is a required attribute/,
+    "Must provide the 'name' attribute"
+);
+
+open(my $tmpfh, '<', __FILE__) or die "Could not open file: $!";
+my $zed = $CLASS->new(name => __FILE__, fh => $tmpfh);
+is($zed->_init_fh, $tmpfh, "saved fh");
+is($zed->fh->blocking, 0, "fh was set to non-blocking");
+$zed = undef;
+
+my $one = $CLASS->new(name => __FILE__);
+my $two = $CLASS->new(name => '/some/super/fake/file/that must not exist');
+ok($one->exists, "This file exists");
+ok(!$two->exists, "The file does not exist");
+
+is($one->decode('xxx'), 'xxx', "base class decode does nothing");
+is($one->encode('xxx'), 'xxx', "base class encode does nothing");
+
+ok(my $fh = $one->open_file, "opened file (for reading)");
+ok(dies { $two->open_file }, "Cannot open file (for reading)");
+
+my ($line) = split /\n/, $one->maybe_read, 2;
+like(
+    $line,
+    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';},
+    "Can read file (using maybe_read)"
+);
+
+is(
+    $two->maybe_read,
+    undef,
+    "maybe_read returns undef for non-existant file"
+);
+
+($line) = split /\n/, $one->read, 2;
+like(
+    $line,
+    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';},
+    "Can read file"
+);
+
+ok(dies { $two->read }, "read() dies on missing file");
+
+close($fh);
+
+ok($fh = $one->fh, "Can generate an FH");
+is($one->fh, $fh, "FH is remembered");
+is($fh->blocking, 0, "FH is non-blocking");
+
+close($fh);
+
+is($two->fh, undef, "return undef for missing file");
+
+$one->set_done(1);
+is($one->done, 1, "can set done");
+$one->reset;
+ok(!$one->{_fh}, "removed fh");
+ok(!$one->done, "cleared done flag");
+
+$two->reset;
+is($two->read_line, undef, "cannot read lines from missing file");
+
+is(
+    $one->read_line,
+    "use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';\n",
+    "Got first line"
+);
+
+while(my $l = $one->read_line) { 1 }
+
+is($one->read_line, undef, "no line to read yet");
+$one->set_done(1);
+
+is(
+    $one->read_line,
+    "This line MUST be here, and MUST not end with a newline.",
+    "Got final line with no terminator"
+);
+
+$one->reset;
+is(
+    $one->read_line,
+    "use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';\n",
+    "Got first line again after reset"
+);
+
+#TODO: write (it is atomic)
+
+done_testing;
 
 __END__
 
-package Test2::Harness::Util::File;
-use strict;
-use warnings;
-
-our $VERSION = '0.001100';
-
-use IO::Handle;
-
-use Test2::Harness::Util();
-
-use Carp qw/croak confess/;
-use Fcntl qw/SEEK_SET SEEK_CUR/;
-
-use Test2::Harness::Util::HashBase qw{ -name -_fh -_init_fh done -stamped -line_pos };
-
-sub exists { -e $_[0]->{+NAME} }
-
-sub decode { shift; $_[0] }
-sub encode { shift; $_[0] }
-
-sub init {
-    my $self = shift;
-
-    croak "'name' is a required attribute" unless $self->{+NAME};
-
-    $self->{+_INIT_FH} = delete $self->{fh};
-}
-
-sub open_file {
-    my $self = shift;
-    return Test2::Harness::Util::open_file($self->{+NAME}, @_)
-}
-
-sub maybe_read {
-    my $self = shift;
-    return undef unless -e $self->{+NAME};
-    return $self->read;
-}
-
-sub read {
-    my $self = shift;
-    my $out = Test2::Harness::Util::read_file($self->{+NAME});
-
-    eval { $out = $self->decode($out); 1 } or confess "$self->{+NAME}: $@";
-    return $out;
-}
-
-sub write {
-    my $self = shift;
-    return Test2::Harness::Util::write_file_atomic($self->{+NAME}, $self->encode(@_));
-}
-
-sub reset {
-    my $self = shift;
-    delete $self->{+_FH};
-    delete $self->{+DONE};
-    delete $self->{+LINE_POS};
-    return;
-}
-
-sub fh {
-    my $self = shift;
-    return $self->{+_FH}->{$$} if $self->{+_FH}->{$$};
-
-    # Remove any other PID handles
-    $self->{+_FH} = {};
-
-    if (my $fh = $self->{+_INIT_FH}) {
-        $self->{+_FH}->{$$} = $fh;
-    }
-    else {
-        $self->{+_FH}->{$$} = Test2::Harness::Util::maybe_open_file($self->{+NAME}) or return undef;
-    }
-
-    $self->{+_FH}->{$$}->blocking(0);
-    return $self->{+_FH}->{$$};
-}
-
-sub read_line {
-    my $self = shift;
-    my %params = @_;
-
-    my $pos = $params{from};
-    $pos = $self->{+LINE_POS} ||= 0 unless defined $pos;
-
-    my $fh = $self->{+_FH}->{$$} || $self->fh or return undef;
-    seek($fh,$pos,SEEK_SET) or die "Could not seek: $!"
-        if eof($fh) || tell($fh) != $pos;
-
-    my $line = <$fh>;
-
-    # No line, nothing to do
-    return unless defined $line && length($line);
-
-    # Partial line, hold off unless done
-    return unless $self->{+DONE} || substr($line, -1, 1) eq "\n";
-
-    my $new_pos = tell($fh);
-    die "Failed to 'tell': $!" if $new_pos == -1;
-
-    eval { $line = $self->decode($line); 1 } or confess "$self->{+NAME} ($pos -> $new_pos): $@";
-
-    $self->{+LINE_POS} = $new_pos unless defined $params{peek} || defined $params{from};
-    return ($pos, $new_pos, $line);
-}
-
-1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::Util::File - Utility class for manipulating a file.
-
-=head1 DESCRIPTION
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut
+This line MUST be here, and MUST not end with a newline.

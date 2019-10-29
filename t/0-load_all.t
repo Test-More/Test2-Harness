@@ -1,5 +1,4 @@
 use Test2::V0;
-# HARNESS-NO-PRELOAD
 
 use File::Find;
 use Test2::Harness;

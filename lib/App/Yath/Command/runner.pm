@@ -89,7 +89,7 @@ sub generate_run_sub {
 
     die "Invalid action: $action" if $action ne 'run_test';
 
-    goto::file->import($job->file);
+    goto::file->import($job->rel_file);
     $class->cleanup_process($job, $stage);
 }
 
@@ -246,7 +246,7 @@ sub build_init_state {
     my $class = shift;
     my ($job) = @_;
 
-    $0 = $job->file;
+    $0 = $job->rel_file;
     $class->_reset_DATA();
     @ARGV = ();
 

@@ -39,7 +39,7 @@ use Test2::Harness::Util::HashBase(
         +smoke
         +retry +retry_isolated +is_try
 
-        +args +file
+        +args +file +rel_file
 
         +out_file +err_file +in_file +bail_file
 
@@ -101,7 +101,7 @@ sub spawn_params {
 
     my $command;
     if ($task->{binary} || $task->{non_perl}) {
-        $command = [$self->file, $self->args];
+        $command = [$self->rel_file, $self->args];
     }
     else {
         $command = [
@@ -110,7 +110,7 @@ sub spawn_params {
             $self->switches,
             $self->cli_options,
 
-            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : ($self->file),
+            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : ($self->rel_file),
 
             $self->args,
         ];
@@ -176,11 +176,11 @@ sub TO_JSON {
 
     $out->{job_name} //= $out->{job_id};
     $out->{abs_file} = clean_path($self->file);
-    $out->{rel_file} = File::Spec->abs2rel($self->file);
 
     return $out;
 }
 
+sub rel_file  { $_[0]->{+REL_FILE}  //= File::Spec->abs2rel($_[0]->file) }
 sub file      { $_[0]->{+FILE}      //= clean_path($_[0]->{+TASK}->{file}) }
 sub err_file  { $_[0]->{+ERR_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stderr')) }
 sub out_file  { $_[0]->{+OUT_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stdout')) }

@@ -241,8 +241,8 @@ sub smoke             { $_[0]->{+SMOKE}             //= $_[0]->_fallback(smoke  
 sub retry             { $_[0]->{+RETRY}             //= $_[0]->_fallback(retry             => 0,  qw/task run/) }
 sub retry_isolated    { $_[0]->{+RETRY_ISOLATED}    //= $_[0]->_fallback(retry_isolated    => 0,  qw/task run/) }
 sub use_stream        { $_[0]->{+USE_STREAM}        //= $_[0]->_fallback(use_stream        => 1,  qw/task run/) }
-sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_timeout     => '', qw/task runner/) }
-sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => '', qw/task runner/) }
+sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_timeout     => undef, qw/task runner/) }
+sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => undef, qw/task runner/) }
 
 sub args { @{$_[0]->{+ARGS} //= $_[0]->_fallback(test_args => [], qw/task run/)} }
 sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }
@@ -267,8 +267,8 @@ sub _fallback {
 
     return $default unless @vals;
 
-    # If the default is a ref we will just returnt he first value we found, truthiness check is useless
-    return shift @vals if ref $default;
+    # If the default is a ref we will just return the first value we found, truthiness check is useless
+    return shift @vals if ref $default || !defined($default) || $default !~ m/^(0|1)$/;
 
     # If the default is true, then we only return true if none of the vals are false
     return !grep { !$_ } @vals if $default;

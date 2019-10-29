@@ -124,6 +124,7 @@ sub include_from {
         $self->include($options);
 
         $self->{+INCLUDED}->{$pkg}++;
+        $self->{+INCLUDED}->{$_}++ for keys %{$options->included};
     }
 
     return;

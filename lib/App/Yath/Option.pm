@@ -16,7 +16,6 @@ use Test2::Harness::Util::HashBase qw{
 
     <default <normalize <action <negate
 
-    <post_process <post_process_weight
     +applicable
 
     <builds
@@ -107,7 +106,7 @@ sub init {
         confess "'default' must be a simple scalar, or a coderef, got a '$ref'" if $ref && $ref ne 'CODE';
     }
 
-    for my $key (NORMALIZE(), ACTION(), POST_PROCESS()) {
+    for my $key (NORMALIZE(), ACTION()) {
         my $val = $self->{$key} or next;
         my $ref = ref($val) || 'not a ref';
         next if $ref eq 'CODE';
@@ -117,8 +116,6 @@ sub init {
     $self->{+TRACE}       //= [caller(1)];
     $self->{+CATEGORY}    //= 'NO CATEGORY - FIX ME';
     $self->{+DESCRIPTION} //= 'NO DESCRIPTION - FIX ME';
-
-    $self->{+POST_PROCESS_WEIGHT} //= 0;
 
     for my $key (sort keys %$self) {
         confess "'$key' is not a valid option attribute"

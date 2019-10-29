@@ -43,6 +43,15 @@ sub import {
     my $option  = sub { ($instance //= $class->new())->_option([caller()], shift(@_), @common ? (%{$common[-1]}) : (), @_) };
     my $include = sub { ($instance //= $class->new())->include_from(@_) };
 
+    my $post = sub {
+        my $cb = pop;
+        my $weight = shift // 0;
+
+        croak "You must provide a callback coderef" unless $cb && ref($cb) eq 'CODE';
+
+        ($instance //= $class->new())->_post($weight, $cb);
+    };
+
     my $group = sub {
         my ($set, $sub) = @_;
 
@@ -63,8 +72,9 @@ sub import {
 
     {
         no strict 'refs';
-        *{"$caller\::options"}         = $options;
+        *{"$caller\::post"}            = $post;
         *{"$caller\::option"}          = $option;
+        *{"$caller\::options"}         = $options;
         *{"$caller\::option_group"}    = $group;
         *{"$caller\::include_options"} = $include;
     }
@@ -113,6 +123,9 @@ sub include {
     my ($inc) = @_;
 
     $self->include_option($_) for @{$inc->all};
+
+    $self->{+POST_LIST_SORTED} = 0;
+    push @{$self->{+POST_LIST}} => @{$inc->post_list};
 
     return;
 }
@@ -248,14 +261,12 @@ sub process_option_post_actions {
     }
 
     unless ($self->{+POST_LIST_SORTED}++) {
-        @{$self->{+POST_LIST}} = sort { $a->post_process_weight <=> $b->post_process_weight } @{$self->{+POST_LIST}};
+        @{$self->{+POST_LIST}} = sort { $a->[0] <=> $b->[0] } @{$self->{+POST_LIST}};
     }
 
-    for my $opt (@{$self->{+POST_LIST}}) {
-        my $post = $opt->post_process;
-        $post->(
+    for my $post (@{$self->{+POST_LIST}}) {
+        $post->[1]->(
             options  => $self,
-            option   => $opt,
             args     => $self->{+ARGS},
             settings => $self->{+SETTINGS},
             $cmd ? (command => $cmd) : (),
@@ -437,6 +448,17 @@ sub _build_lookup {
     return $lookup;
 }
 
+sub _post {
+    my $self = shift;
+    my ($weight, $cb) = @_;
+
+    $self->{+POST_LIST_SORTED} = 0;
+
+    $weight //= 0;
+
+    push @{$self->{+POST_LIST} //= []} => [$weight, $cb];
+}
+
 sub _option {
     my $self = shift;
     my ($trace, @spec) = @_;
@@ -560,11 +582,6 @@ sub _index_option {
 sub _list_option {
     my $self = shift;
     my ($opt) = @_;
-
-    if (my $post = $opt->post_process) {
-        $self->{+POST_LIST_SORTED} = 0;
-        push @{$self->{+POST_LIST} //= []} => $opt;
-    }
 
     return push @{$self->{+PRE_LIST}} => $opt
         if $opt->pre_command;

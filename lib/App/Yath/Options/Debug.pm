@@ -11,6 +11,11 @@ use Test2::Harness::Util qw/find_libraries mod2file/;
 use App::Yath::Options;
 
 option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
+
+    post 99999 => \&_post_process_show_opts;
+    post \&_post_process_version;
+    post \&_post_process_help;
+
     option dummy => (
         short       => 'd',
         description => 'Dummy run, do not actually execute anything',
@@ -26,22 +31,18 @@ option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
 
     option 'show-opts' => (
         description         => 'Exit after showing what yath thinks your options mean',
-        post_process        => \&_post_process_show_opts,
-        post_process_weight => 99999,
         pre_command         => 1,
     );
 
     option version => (
         short        => 'V',
         description  => "Exit after showing a helpful usage message",
-        post_process => \&_post_process_version,
         pre_command  => 1,
     );
 
     option help => (
         short        => 'h',
         description  => "exit after showing help information",
-        post_process => \&_post_process_help,
     );
 };
 

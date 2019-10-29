@@ -68,9 +68,9 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         description => 'Preload a module before running tests',
     );
 
+    post \&cover_post_process;
     option cover => (
         description  => 'Use Devel::Cover to calculate test coverage. This disables forking',
-        post_process => \&cover_post_process,
     );
 
     option switch => (

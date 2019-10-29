@@ -38,26 +38,27 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
         short        => 'w',
         description  => 'Set the work directory (Default: new temp directory)',
         normalize    => \&clean_path,
-        post_process => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-
-            return if $settings->workspace->workdir;
-
-            return $settings->workspace->workdir = $ENV{T2_WORKDIR} if $ENV{T2_WORKDIR};
-
-            $settings->workspace->workdir = tempdir(
-                "yath-test-$$-XXXXXXXX",
-                DIR => $settings->workspace->tmp_dir,
-                CLEANUP => !($settings->debug->keep_dirs || $params{command}->always_keep_dir),
-            );
-        }
     );
 
     option clear => (
         short       => 'C',
         description => 'Clear the work directory if it is not already empty',
     );
+
+    post sub {
+        my %params   = @_;
+        my $settings = $params{settings};
+
+        return if $settings->workspace->workdir;
+
+        return $settings->workspace->workdir = $ENV{T2_WORKDIR} if $ENV{T2_WORKDIR};
+
+        $settings->workspace->workdir = tempdir(
+            "yath-test-$$-XXXXXXXX",
+            DIR     => $settings->workspace->tmp_dir,
+            CLEANUP => !($settings->debug->keep_dirs || $params{command}->always_keep_dir),
+        );
+    };
 };
 
 1;

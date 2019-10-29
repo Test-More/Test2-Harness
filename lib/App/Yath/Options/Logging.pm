@@ -28,24 +28,12 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
         short        => 'B',
         alt          => ['bz2', 'bzip2_log'],
         description  => 'Use bzip2 compression when writing the log. This option implies -L. The .bz2 prefix is added to log file name for you',
-        post_process => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-            my $logging  = $settings->logging;
-            die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2 && $logging->gzip;
-        },
     );
 
     option gzip => (
         short        => 'G',
         alt          => ['gz', 'gzip_log'],
         description  => 'Use gzip compression when writing the log. This option implies -L. The .gz prefix is added to log file name for you',
-        post_process => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-            my $logging  = $settings->logging;
-            die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2 && $logging->gzip;
-        },
     );
 
     option log_file => (
@@ -53,36 +41,38 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
         type         => 's',
         normalize    => \&clean_path,
         description  => "Specify the name of the log file. This option implies -L.",
-        post_process => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-            my $logging  = $settings->logging;
-
-            if ($logging->log || $logging->bzip2 || $logging->gzip) {
-                # We want to keep the log and put it in a findable location
-
-                $logging->log = 1;
-
-                unless ($logging->log_file) {
-                    mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
-                        unless -d 'test-logs';
-
-                    my $format   = $logging->log_file_format;
-                    my $filename = expand_log_file_format($format, $settings);
-                    $logging->log_file = clean_path(File::Spec->catfile('test-logs', $filename));
-                }
-            }
-
-            if ($logging->log_file) {
-                $logging->log_file =~ s/\.(gz|bz2)$//;
-                $logging->log_file =~ s/\.jsonl?$//;
-                $logging->log_file .= "\.jsonl";
-                $logging->log_file .= "\.bz2" if $logging->bzip2;
-                $logging->log_file .= "\.gz" if $logging->gzip;
-            }
-        },
     );
+
+    post \&post_process;
 };
+
+sub post_process {
+    my %params   = @_;
+    my $settings = $params{settings};
+    my $logging  = $settings->logging;
+
+    die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2 && $logging->gzip;
+
+    return unless $logging->log || $logging->bzip2 || $logging->gzip || $logging->log_file;
+
+    # We want to keep the log and put it in a findable location
+    $logging->log = 1;
+
+    unless ($logging->log_file) {
+        mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
+            unless -d 'test-logs';
+
+        my $format   = $logging->log_file_format;
+        my $filename = expand_log_file_format($format, $settings);
+        $logging->log_file = clean_path(File::Spec->catfile('test-logs', $filename));
+    }
+
+    $logging->log_file =~ s/\.(gz|bz2)$//;
+    $logging->log_file =~ s/\.jsonl?$//;
+    $logging->log_file .= "\.jsonl";
+    $logging->log_file .= "\.bz2" if $logging->bzip2;
+    $logging->log_file .= "\.gz" if $logging->gzip;
+}
 
 sub time_for_strftime { time() }
 

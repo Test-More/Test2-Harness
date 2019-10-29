@@ -61,28 +61,28 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
 
             $handler->($slot, [$class, $args]);
         },
+    );
 
-        post_process_weight => 100,
-        post_process        => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
+    post 100 => sub {
+        my %params   = @_;
+        my $settings = $params{settings};
 
-            my $display   = $settings->display;
-            my $renderers = $display->renderers;
+        my $display   = $settings->display;
+        my $renderers = $display->renderers;
 
-            my $quiet   = $display->quiet;
-            my $verbose = $display->verbose;
+        my $quiet   = $display->quiet;
+        my $verbose = $display->verbose;
 
-            die "The 'quiet' and 'verbose' options may not be used together.\n"
-                if $verbose && $quiet;
+        die "The 'quiet' and 'verbose' options may not be used together.\n"
+            if $verbose && $quiet;
 
-            if ($quiet) {
-                delete $renderers->{'Test2::Harness::Renderer::Formatter'};
-                @{$renderers->{'@'}} = grep { $_ ne 'Test2::Harness::Renderer::Formatter' } @{$renderers->{'@'}};
-                return;
-            }
+        if ($quiet) {
+            delete $renderers->{'Test2::Harness::Renderer::Formatter'};
+            @{$renderers->{'@'}} = grep { $_ ne 'Test2::Harness::Renderer::Formatter' } @{$renderers->{'@'}};
+            return;
+        }
 
-            my @args = map { $_ => $settings->formatter->$_ } qw{
+        my @args = map { $_ => $settings->formatter->$_ } qw{
                 formatter
                 show_run_info
                 show_job_info
@@ -90,7 +90,7 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
                 show_job_end
             };
 
-            push @args => map { $_ => $settings->display->$_ } qw{
+        push @args => map { $_ => $settings->display->$_ } qw{
                 progress
                 color
                 quiet
@@ -98,29 +98,21 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
                 show_times
             };
 
-            if (my $formatter_args = $renderers->{'Test2::Harness::Renderer::Formatter'}) {
-                @$formatter_args = @args unless @$formatter_args;
-                return;
-            }
+        if (my $formatter_args = $renderers->{'Test2::Harness::Renderer::Formatter'}) {
+            @$formatter_args = @args unless @$formatter_args;
+            return;
+        }
 
-            return if $renderers->{'@'} && @{$renderers->{'@'}};
+        return if $renderers->{'@'} && @{$renderers->{'@'}};
 
-            push @{$renderers->{'@'}} => 'Test2::Harness::Renderer::Formatter';
-            $renderers->{'Test2::Harness::Renderer::Formatter'} = \@args;
-        },
-    );
+        push @{$renderers->{'@'}} => 'Test2::Harness::Renderer::Formatter';
+        $renderers->{'Test2::Harness::Renderer::Formatter'} = \@args;
+    };
 };
 
 option_group {prefix => 'formatter', category => "Formatter Options"} => sub {
     option formatter => (
         type                => 's',
-        post_process_weight => 90,
-        post_process        => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-
-            $settings->formatter->formatter //= $settings->formatter->qvf ? 'QVF' : 'Test2';
-        },
     );
 
     option 'qvf' => (
@@ -135,38 +127,30 @@ option_group {prefix => 'formatter', category => "Formatter Options"} => sub {
     option show_job_info => (
         description         => 'Show the job configuration when a job starts. (Default: off, unless -vv)',
         default             => 0,
-        post_process_weight => 90,
-        post_process        => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-
-            $settings->formatter->show_job_info = 1 if $settings->display->verbose > 1;
-        },
     );
 
     option show_job_launch => (
         description         => "Show output for the start of a job. (Default: off unless -v)",
         default             => 0,
-        post_process_weight => 90,
-        post_process        => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-
-            $settings->formatter->show_job_launch = 1 if $settings->display->verbose > 1;
-        },
     );
 
     option show_run_info => (
         description         => 'Show the run configuration when a run starts. (Default: off, unless -vv)',
         default             => 0,
-        post_process_weight => 90,
-        post_process        => sub {
-            my %params   = @_;
-            my $settings = $params{settings};
-
-            $settings->formatter->show_run_info = 1 if $settings->display->verbose > 1;
-        },
     );
+
+    post 90 => sub {
+        my %params   = @_;
+        my $settings = $params{settings};
+
+        $settings->formatter->formatter //= $settings->formatter->qvf ? 'QVF' : 'Test2';
+
+        if ($settings->display->verbose > 1) {
+            $settings->formatter->show_job_info   = 1;
+            $settings->formatter->show_job_launch = 1;
+            $settings->formatter->show_run_info   = 1;
+        }
+    };
 };
 
 1;

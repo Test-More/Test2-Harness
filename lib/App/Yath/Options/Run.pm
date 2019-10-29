@@ -9,6 +9,8 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use App::Yath::Options;
 
 option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harness::Run'} => sub {
+    post \&post_process;
+
     option link => (
         field => 'links',
         type => 'm',
@@ -56,7 +58,6 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     option author_testing => (
         short        => 'A',
         description  => 'This will set the AUTHOR_TESTING environment to true',
-        post_process => \&author_testing_post_process,
     );
 
     option use_stream => (
@@ -164,26 +165,12 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         type => 'm',
 
         description => "Specify the default file/dir search. defaults to './t', './t2', and 'test.pl'. The default search is only used if no files were specified at the command line",
-
-        post_process => sub {
-            my %params = @_;
-            my $settings = $params{settings};
-            $settings->run->default_search = ['./t', './t2', 'test.pl']
-                unless $settings->run->default_search && @{$settings->run->default_search};
-        },
     );
 
     option default_at_search => (
         type => 'm',
 
         description => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",
-
-        post_process => sub {
-            my %params = @_;
-            my $settings = $params{settings};
-            $settings->run->default_at_search = ['./xt']
-                unless $settings->run->default_at_search && @{$settings->run->default_at_search};
-        },
     );
 
     option event_uuids => (
@@ -212,10 +199,18 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     );
 };
 
-sub author_testing_post_process {
+sub post_process {
     my %params   = @_;
     my $settings = $params{settings};
+
     $settings->run->env_vars->{AUTHOR_TESTING} = 1 if $settings->run->author_testing;
+
+    $settings->run->default_search = ['./t', './t2', 'test.pl']
+        unless $settings->run->default_search && @{$settings->run->default_search};
+
+    $settings->run->default_at_search = ['./xt']
+        unless $settings->run->default_at_search && @{$settings->run->default_at_search};
+
 }
 
 sub fields_action {

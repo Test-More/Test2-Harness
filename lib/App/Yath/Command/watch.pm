@@ -16,14 +16,6 @@ use Test2::Harness::Util::HashBase;
 
 sub group { 'persist' }
 
-sub show_bench      { 0 }
-sub has_jobs        { 0 }
-sub has_runner      { 0 }
-sub has_logger      { 0 }
-sub has_display     { 0 }
-sub manage_runner   { 0 }
-sub always_keep_dir { 0 }
-
 sub summary { "Monitor the persistent test runner" }
 sub cli_args { "" }
 

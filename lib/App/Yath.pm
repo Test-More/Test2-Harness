@@ -50,7 +50,7 @@ sub generate_run_sub {
 
     my $cmd_class = $self->command_class();
 
-    return $cmd_class->generate_run_sub($symbol, $argv) if $cmd_class->can('generate_run_sub');
+    return $cmd_class->generate_run_sub($symbol, $argv, $self->{+SETTINGS}) if $cmd_class->can('generate_run_sub');
 
     my $cmd = $cmd_class->new(settings => $options->settings, args => $argv);
 

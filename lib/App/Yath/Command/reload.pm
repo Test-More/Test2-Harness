@@ -4,15 +4,7 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-use POSIX ":sys_wait_h";
-use File::Path qw/remove_tree/;
-use Time::HiRes qw/sleep/;
-
 use File::Spec();
-
-use Test2::Harness::Feeder::Run;
-use Test2::Harness::Run::Runner::Persist;
-use Test2::Harness::Run;
 use Test2::Harness::Util::File::JSON;
 
 use App::Yath::Util qw/find_pfile/;
@@ -22,14 +14,6 @@ use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
 sub group { 'persist' }
-
-sub show_bench      { 0 }
-sub has_jobs        { 0 }
-sub has_runner      { 0 }
-sub has_logger      { 0 }
-sub has_display     { 0 }
-sub manage_runner   { 0 }
-sub always_keep_dir { 0 }
 
 sub summary { "Reload the persistent test runner" }
 sub cli_args { "" }

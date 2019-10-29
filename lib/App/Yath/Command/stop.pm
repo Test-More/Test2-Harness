@@ -4,30 +4,21 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-use File::Path qw/remove_tree/;
-
 use Time::HiRes qw/sleep/;
 
 use File::Spec();
 
 use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Run::Runner;
+use Test2::Harness::Util::Queue();
 
 use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use Test2::Harness::Util qw/open_file/;
+use File::Path qw/remove_tree/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
 sub group { 'persist' }
-
-sub show_bench      { 0 }
-sub has_jobs        { 0 }
-sub has_runner      { 0 }
-sub has_logger      { 0 }
-sub has_display     { 0 }
-sub always_keep_dir { 0 }
-sub manage_runner   { 0 }
 
 sub summary { "Stop the persistent test runner" }
 sub cli_args { "" }
@@ -46,39 +37,25 @@ sub run {
 
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
 
-    my $runner = Test2::Harness::Run::Runner->new(
-        dir    => $data->{dir},
-        pid    => $data->{pid},
-        remote => 1,
-    );
+    my $dir = $data->{dir};
 
-    my $queue = $runner->queue;
-    $queue->end;
+    my $run_queue_file = File::Spec->catfile($dir, 'run_queue.jsonl');
+    if (-f $run_queue_file) {
+        my $run_queue = Test2::Harness::Util::Queue->new(file => $run_queue_file);
+        $run_queue->end;
+    }
+    else {
+        print "Could not find queue file, sending SIGTERM instead\n";
+        kill('TERM', $data->{pid});
+    }
 
     sleep(0.02) while kill(0, $data->{pid});
 
     unlink($pfile) if -f $pfile;
 
-    my $stdout = open_file(File::Spec->catfile($data->{dir}, 'output.log'));
-    my $stderr = open_file(File::Spec->catfile($data->{dir}, 'error.log'));
+    remove_tree($dir, {safe => 1, keep_root => 0}) if -d $dir;
 
-    print "\nSTDOUT LOG:\n";
-    print "========================\n";
-    while( my $line = <$stdout> ) {
-        print $line;
-    }
-    print "\n========================\n";
-
-    print "\nSTDERR LOG:\n";
-    print "========================\n";
-    while (my $line = <$stderr>) {
-        print $line;
-    }
-    print "\n========================\n";
-
-    remove_tree($data->{dir}, {safe => 1, keep_root => 0});
-
-    print "\n";
+    print "\n\nRunner stopped\n\n";
     return 0;
 }
 

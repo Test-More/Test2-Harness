@@ -175,13 +175,6 @@ sub stop_task {
     return $it;
 }
 
-sub pick_and_start {
-    my $self = shift;
-    my $task = $self->pick_task(@_) or return;
-    $self->start_task($task);
-    return $task;
-}
-
 sub pick_task {
     my $self = shift;
 

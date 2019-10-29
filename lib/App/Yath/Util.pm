@@ -6,6 +6,8 @@ our $VERSION = '0.001100';
 
 use File::Spec;
 
+use Test2::Harness::Util qw/clean_path/;
+
 use Cwd qw/realpath/;
 use Importer Importer => 'import';
 
@@ -14,6 +16,7 @@ our @EXPORT_OK = qw{
     is_generated_test_pl
     fit_to_width
     isolate_stdout
+    PFILE_NAME
 };
 
 sub isolate_stdout {

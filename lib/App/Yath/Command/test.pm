@@ -33,6 +33,8 @@ use Test2::Harness::Util::HashBase qw/
 
     +renderers
     +logger
+
+    +run_queue
 /;
 
 include_options(
@@ -100,13 +102,18 @@ sub auditor_writer {
     return $self->{+AUDITOR_WRITER};
 }
 
+sub workdir {
+    my $self = shift;
+    $self->settings->workspace->workdir;
+}
+
 sub run {
     my $self = shift;
 
     $self->parse_args;
 
     my $settings = $self->settings;
-    my $dir = $settings->workspace->workdir;
+    my $dir = $self->workdir();
 
     $self->write_settings_to($dir, 'settings.json');
 
@@ -254,7 +261,7 @@ sub start_collector {
     my ($run, $runner_pid) = @_;
 
     my $settings = $self->settings;
-    my $dir = $settings->workspace->workdir;
+    my $dir = $self->workdir;
 
     my ($rh, $wh);
     pipe($rh, $wh) or die "Could not create pipe";
@@ -303,23 +310,38 @@ sub start_runner {
     );
 }
 
+sub run_queue {
+    my $self = shift;
+    my $dir = $self->workdir;
+    return $self->{+RUN_QUEUE} //= Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
+}
+
 sub build_run {
     my $self = shift;
 
     return $self->{+RUN} if $self->{+RUN};
 
     my $settings = $self->settings;
-    my $dir = $settings->workspace->workdir;
+    my $dir = $self->workdir;
 
     my $run = $settings->build(run => 'Test2::Harness::Run');
     $run->write_queue($dir, $settings->yath->plugins);
 
-    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
-    $run_queue->start();
-    $run_queue->enqueue($run->queue_item($settings->yath->plugins));
-    $run_queue->end;
+    $self->build_run_item($run);
 
     return $self->{+RUN} = $run;
+}
+
+sub build_run_item {
+    my $self = shift;
+    my ($run) = @_;
+
+    my $settings = $self->{+SETTINGS};
+
+    my $run_queue = $self->run_queue;
+    $run_queue->start();
+    $run_queue->enqueue($run->queue_item($settings->yath->plugins));
+    $self->run_queue->end;
 }
 
 sub parse_args {

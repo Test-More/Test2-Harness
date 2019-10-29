@@ -301,8 +301,8 @@ sub run_stage {
 sub run_job {
     my $self = shift;
 
-    my $run = $self->run() or return 0;
     my $task = $self->next() or return 0;
+    my $run = $self->run() or die "Where did the run go?";
 
     my $job = $self->job_class->new(
         runner   => $self,
@@ -339,9 +339,9 @@ sub run_job {
 sub end_test_loop {
     my $self = shift;
 
-    $self->{+respawn_runner_callback}->()
-        if $self->{+PRELOADER}->check
-        || $self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP';
+    $self->{+RESPAWN_RUNNER_CALLBACK}->()
+        if ($self->{+PRELOADER} && $self->{+PRELOADER}->check)
+        || ($self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP');
 
     return 1 if $self->{+SIGNAL};
 
@@ -512,7 +512,7 @@ sub add_task {
     $self->{+STATE}->add_pending_task($task);
 }
 
-my %ACTIONS = (dispatch => 1, complete => 1, mark_stage_ready => 1, mark_stage_down => 1, retry => 1);
+my %ACTIONS = (dispatch => 1, complete => 1, mark_stage_ready => 1, mark_stage_down => 1, retry => 1, start_run => 1);
 sub poll_dispatch {
     my $self = shift;
     my $queue = $self->dispatch_queue;
@@ -525,6 +525,20 @@ sub poll_dispatch {
 
         $self->$action($arg);
     }
+}
+
+sub start_run {
+    my $self = shift;
+    my ($run_id) = @_;
+
+    $self->{+STATE}->start_run($run_id);
+}
+
+sub stop_run {
+    my $self = shift;
+    my ($run_id) = @_;
+
+    $self->{+STATE}->stop_run();
 }
 
 sub dispatch {
@@ -569,13 +583,26 @@ sub manage_dispatch {
     my $self = shift;
 
     # Do not bother with the lock if we are not staged
-    return $self->dispatch_loop unless $self->{+PRELOADER}->staged;
-
-    my $lock = open_file($self->dispatch_lock_file, '>>');
-    flock($lock, LOCK_EX | LOCK_NB) or return 0;
+    my $lock;
+    if ($self->{+PRELOADER}->staged) {
+        $lock = $self->lock_dispatch() or return 0;
+    }
 
     # Lock goes away with scope
-    return $self->dispatch_loop;
+    my $out = $self->dispatch_loop;
+
+    $lock = undef;
+
+    return $out;
+}
+
+sub lock_dispatch {
+    my $self = shift;
+
+    my $lock = open_file($self->dispatch_lock_file, '>>');
+    flock($lock, LOCK_EX | LOCK_NB) or return undef;
+
+    return $lock;
 }
 
 sub dispatch_loop {
@@ -586,16 +613,16 @@ sub dispatch_loop {
 
         $self->do_dispatch();
 
-        last if @{$self->{+PENDING}};
+        return 1 if @{$self->{+PENDING}};
 
         next if $self->wait();
 
-        last if $self->end_task_loop;
+        return 0 if $self->end_task_loop;
 
         sleep $self->{+WAIT_TIME} if $self->{+WAIT_TIME};
     }
 
-    return 1;
+    return 0;
 }
 
 sub do_dispatch {

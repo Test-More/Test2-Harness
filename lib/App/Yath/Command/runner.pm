@@ -10,6 +10,9 @@ use Test2::Harness::IPC();
 
 use Scalar::Util qw/openhandle/;
 use List::Util qw/first/;
+use File::Path qw/remove_tree/;
+
+use Scope::Guard;
 
 use Test2::Util qw/clone_io/;
 
@@ -42,17 +45,14 @@ sub run  { confess(ref($_[0]) . " does not implement run()") }
 
 sub generate_run_sub {
     my $class = shift;
-    my ($symbol, $argv) = @_;
+    my ($symbol, $argv, $spawn_settings) = @_;
     my ($dir, %args) = @$argv;
 
     $0 = 'yath-runner';
 
-    if (delete $args{setsid}) {
-        require POSIX;
-        POSIX::setsid();
-    }
-
     my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+
+    my $cleanup = $class->cleanup($settings, \%args, $dir);
 
     my $jump = setjump "Test-Runner" => sub {
         local %SIG = %SIG;
@@ -81,8 +81,9 @@ sub generate_run_sub {
     my ($action, $job, $stage) = @$jump;
 
     if($action eq 'respawn') {
-        print "Respawning the runner...\n";
-        exec($^X, $settings->yath->script, @{$settings->yath->orig_argv});
+        print "$$ Respawning the runner...\n";
+        $cleanup->dismiss(1);
+        exec($^X, $settings->yath->script, @{$spawn_settings->yath->orig_argv});
         warn "exec failed!";
         exit 1;
     }
@@ -91,6 +92,22 @@ sub generate_run_sub {
 
     goto::file->import($job->file);
     $class->cleanup_process($job, $stage);
+}
+
+sub cleanup {
+    my $class = shift;
+    my ($settings, $args, $dir) = @_;
+
+    my $pfile = $args->{persist} or return;
+
+    my $pid = $$;
+    return Scope::Guard->new(sub {
+        return unless $pid == $$;
+
+        unlink($pfile);
+
+        remove_tree($dir, {safe => 1, keep_root => 0}) unless $settings->debug->keep_dirs;
+    });
 }
 
 sub get_stage {

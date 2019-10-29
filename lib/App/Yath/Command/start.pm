@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '0.001100';
 
+use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use App::Yath::Options;
 
 use Test2::Harness::Run;
@@ -20,6 +21,7 @@ use Test2::Harness::Util::IPC qw/run_cmd USE_P_GROUPS/;
 use File::Spec;
 
 use Carp qw/croak/;
+use File::Path qw/remove_tree/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
@@ -57,24 +59,44 @@ sub run {
     my $self = shift;
 
     my $settings = $self->settings;
-    my $dir = $settings->workspace->workdir;
+    my $dir      = $settings->workspace->workdir;
+
+    if (my $exists = find_pfile()) {
+        remove_tree($dir, {safe => 1, keep_root => 0});
+        die "Persistent harness appears to be running, found $exists\n";
+    }
 
     $self->write_settings_to($dir, 'settings.json');
 
+    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
+    $run_queue->start();
+
+    my $pfile = File::Spec->rel2abs(PFILE_NAME(), $ENV{YATH_PERSISTENCE_DIR} // './');
+
     my $pid = run_cmd(
-        stderr => File::Spec->catfile($dir, 'error.log'),
-        stdout => File::Spec->catfile($dir, 'output.log'),
+        #stderr => File::Spec->catfile($dir, 'error.log'),
+        #stdout => File::Spec->catfile($dir, 'output.log'),
 
         command => [
             $^X, $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
-            '--no-scan-plugins', # Do not preload any plugin modules
-            runner => $dir,
+            '--no-scan-plugins',    # Do not preload any plugin modules
+            runner           => $dir,
             monitor_preloads => 1,
+            persist          => $pfile,
         ],
     );
 
-    print "PID: $pid\n";
+    print "\nPersistent runner started!\n";
+
+    print "Runner PID: $pid\n";
+    print "Runner dir: $dir\n";
+    print "Runner logs:\n";
+    print "\nUse `yath watch` to monitor the persistent runner\n\n";
+
+    Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir});
+
+    waitpid($pid, 0);
 
     return 0;
 }

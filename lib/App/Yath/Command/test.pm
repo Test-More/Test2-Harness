@@ -7,6 +7,7 @@ our $VERSION = '0.001100';
 use App::Yath::Options;
 
 use Test2::Harness::Run;
+use Test2::Harness::Event;
 use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
@@ -155,6 +156,9 @@ sub render {
     my $settings  = $self->settings;
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
+    my $plugins = $self->settings->yath->plugins;
+
+    $plugins = [grep {$_->can('handle_event')} @$plugins];
 
     # render results from log
     my $reader = $self->renderer_reader();
@@ -163,12 +167,16 @@ sub render {
         my $e = decode_json($line);
         last unless defined $e;
 
+        bless($e, 'Test2::Harness::Event');
+
         if (my $final = $e->{facet_data}->{harness_final}) {
             $self->{+FINAL_DATA} = $final;
         }
         else {
             $_->render_event($e) for @$renderers;
         }
+
+        $_->handle_event($e, $settings) for @$plugins;
 
         $ipc->wait() if $ipc;
     }
@@ -177,11 +185,13 @@ sub render {
 sub stop {
     my $self = shift;
 
+    my $plugins = $self->settings->yath->plugins;
     my $settings  = $self->settings;
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
     close($logger) if $logger;
 
+    $_->finish($settings) for @$plugins;
     $_->finish() for @$renderers;
 
     my $ipc = $self->ipc;

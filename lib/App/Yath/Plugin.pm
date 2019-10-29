@@ -12,6 +12,11 @@ sub post_init {}
 
 sub post_run {}
 
+# We do not want this defined by default, but it should be documented
+#sub handle_event {}
+
+sub finish {}
+
 1;
 
 __END__

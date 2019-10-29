@@ -26,6 +26,8 @@ use Test2::Harness::Util::HashBase qw{
     <pending_pre <pending_cmd <pending_post
 
     <included
+
+    <set_by_cli
 };
 
 sub import {
@@ -83,6 +85,8 @@ sub init {
     $self->{+SETTINGS} //= App::Yath::Settings->new();
 
     $self->{+INCLUDED} //= {};
+
+    $self->{+SET_BY_CLI} //= {};
 
     return $self;
 }
@@ -279,6 +283,7 @@ sub _process_opts {
     for my $opt_set (@$list) {
         my ($opt, $meth, @args) = @$opt_set;
         $opt->$meth(@args, $self->{+SETTINGS});
+        $self->{+SET_BY_CLI}->{$opt->prefix}->{$opt->field}++;
     }
 }
 

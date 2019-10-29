@@ -336,8 +336,8 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Watcher - Class to monitor events for a single job and pass
-judgement on the result.
+Test2::Harness::Auditor::Watcher - Class to monitor events for a single job and
+pass judgement on the result.
 
 =head1 DESCRIPTION
 

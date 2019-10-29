@@ -54,6 +54,8 @@ __END__
 
 =head1 NAME
 
+App::Yath::Command::reload - Command to have the persistent yath runner reload
+preloaded modules.
 
 =head1 DESCRIPTION
 

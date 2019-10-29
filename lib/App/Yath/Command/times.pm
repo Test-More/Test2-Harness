@@ -151,7 +151,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::speedtag - Tag tests with proper duration tags based on a log
+App::Yath::Command::times - Extract timing data from a test log.
 
 =head1 DESCRIPTION
 

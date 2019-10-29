@@ -74,6 +74,9 @@ __END__
 
 =head1 NAME
 
+App::Yath::Command::watch - Command to monitor output from a persistent test
+runner.
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

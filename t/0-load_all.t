@@ -18,7 +18,7 @@ sub wanted {
     my $mod = file2mod($file);
     my $sym = "$mod\::VERSION";
     no strict 'refs';
-    is($$sym, $Test2::Harness::VERSION, "Package $mod has the version number");
+    is($$sym, $Test2::Harness::VERSION, "Package $mod ($file) has the version number");
 };
 
 done_testing;

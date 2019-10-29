@@ -84,7 +84,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::failed
+App::Yath::Command::failed - Command to scan a log for failed tests
 
 =head1 DESCRIPTION
 

@@ -55,6 +55,8 @@ __END__
 
 =head1 NAME
 
+App::Yath::Command::stop - Command to stop a persistent runner.
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

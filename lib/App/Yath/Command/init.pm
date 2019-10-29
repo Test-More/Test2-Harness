@@ -68,6 +68,8 @@ __END__
 
 =head1 NAME
 
+App::Yath::Command::init - Command to add a test.pl file that launches yath
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

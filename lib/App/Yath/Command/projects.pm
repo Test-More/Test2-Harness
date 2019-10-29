@@ -28,7 +28,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::projects
+App::Yath::Command::projects - Command to run tests for multiple projects at once.
 
 =head1 DESCRIPTION
 

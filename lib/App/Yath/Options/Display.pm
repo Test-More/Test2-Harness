@@ -16,6 +16,7 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
 
     option quiet => (
         short       => 'q',
+        type        => 'c',
         description => "Be very quiet.",
         default     => 0,
     );

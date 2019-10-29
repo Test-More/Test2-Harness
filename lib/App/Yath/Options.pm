@@ -46,10 +46,13 @@ sub import {
     my $post = sub {
         my $cb = pop;
         my $weight = shift // 0;
+        my ($applicable) = @_;
+
+        $applicable //= $common[-1]->{applicable} if @common;
 
         croak "You must provide a callback coderef" unless $cb && ref($cb) eq 'CODE';
 
-        ($instance //= $class->new())->_post($weight, $cb);
+        ($instance //= $class->new())->_post($weight, $applicable, $cb);
     };
 
     my $group = sub {
@@ -265,7 +268,8 @@ sub process_option_post_actions {
     }
 
     for my $post (@{$self->{+POST_LIST}}) {
-        $post->[1]->(
+        next if $post->[1] && !$post->[1]->($post->[2], $self);
+        $post->[2]->(
             options  => $self,
             args     => $self->{+ARGS},
             settings => $self->{+SETTINGS},
@@ -450,13 +454,13 @@ sub _build_lookup {
 
 sub _post {
     my $self = shift;
-    my ($weight, $cb) = @_;
+    my ($weight, $applicable, $cb) = @_;
 
     $self->{+POST_LIST_SORTED} = 0;
 
     $weight //= 0;
 
-    push @{$self->{+POST_LIST} //= []} => [$weight, $cb];
+    push @{$self->{+POST_LIST} //= []} => [$weight, $applicable, $cb];
 }
 
 sub _option {

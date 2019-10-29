@@ -281,6 +281,8 @@ sub render_final_data {
     my $self = shift;
     my ($final_data) = @_;
 
+    return if $self->settings->display->quiet > 1;
+
     if (my $rows = $final_data->{retried}) {
         print "\nThe following jobs failed at least once:\n";
         print join "\n" => table(

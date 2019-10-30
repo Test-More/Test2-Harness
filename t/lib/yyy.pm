@@ -1,2 +1,0 @@
-package yyy;
-1;

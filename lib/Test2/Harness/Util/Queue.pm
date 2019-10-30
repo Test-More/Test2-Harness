@@ -1,13 +1,11 @@
-package Test2::Harness::Run::Queue;
+package Test2::Harness::Util::Queue;
 use strict;
 use warnings;
 
 our $VERSION = '0.001100';
 
 use Carp qw/croak/;
-
 use Time::HiRes qw/time/;
-
 use Test2::Harness::Util qw/write_file_atomic/;
 
 use Test2::Harness::Util::File::JSONL();
@@ -91,7 +89,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Run::Queue - Logic for a runner queue
+Test2::Harness::Util::Queue - Logic for a runner queue
 
 =head1 DESCRIPTION
 

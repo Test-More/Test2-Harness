@@ -1,6 +1,6 @@
 -D
 -D=rel(t2/lib)
--pSelfTest
+;-pSelfTest
 
 [test]
 -Irel(t2/lib)

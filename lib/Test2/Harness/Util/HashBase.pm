@@ -16,7 +16,7 @@ our $VERSION = '0.001100';
 
 {
     no warnings 'once';
-    $Test2::Harness::Util::HashBase::HB_VERSION = '0.007';
+    $Test2::Harness::Util::HashBase::HB_VERSION = '0.008';
     *Test2::Harness::Util::HashBase::ATTR_SUBS = \%Object::HashBase::ATTR_SUBS;
     *Test2::Harness::Util::HashBase::ATTR_LIST = \%Object::HashBase::ATTR_LIST;
     *Test2::Harness::Util::HashBase::VERSION   = \%Object::HashBase::VERSION;
@@ -44,11 +44,12 @@ BEGIN {
     }
 }
 
-my %STRIP = (
-    '^' => 1,
-    '-' => 1,
-    '>' => 1,
-    '<' => 1,
+my %SPEC = (
+    '^' => {reader => 1, writer => 0, dep_writer => 1, read_only => 0, strip => 1},
+    '-' => {reader => 1, writer => 0, dep_writer => 0, read_only => 1, strip => 1},
+    '>' => {reader => 0, writer => 1, dep_writer => 0, read_only => 0, strip => 1},
+    '<' => {reader => 1, writer => 0, dep_writer => 0, read_only => 0, strip => 1},
+    '+' => {reader => 0, writer => 0, dep_writer => 0, read_only => 0, strip => 1},
 );
 
 sub import {
@@ -70,31 +71,20 @@ sub import {
             map {
                 my $p = substr($_, 0, 1);
                 my $x = $_;
-                substr($x, 0, 1) = '' if $STRIP{$p};
+
+                my $spec = $SPEC{$p} || {reader => 1, writer => 1};
+
+                substr($x, 0, 1) = '' if $spec->{strip};
                 push @$attr_list => $x;
                 my ($sub, $attr) = (uc $x, $x);
 
                 $attr_subs->{$sub} = sub() { $attr };
                 my %out = ($sub => $attr_subs->{$sub});
 
-                if ($p eq '>') {
-                    $out{"set_$attr"} = sub { $_[0]->{$attr} = $_[1] };
-                }
-                elsif ($p eq '<') {
-                    $out{$attr} = sub { $_[0]->{$attr} };
-                }
-                else {
-                    $out{$attr} = sub { $_[0]->{$attr} };
-                    if ($p eq '-') {
-                      $out{"set_$attr"} = sub { Carp::croak("'$attr' is read-only") };
-                    }
-                    elsif ($p eq '^') {
-                        $out{"set_$attr"} = sub { Carp::carp("set_$attr() is deprecated"); $_[0]->{$attr} = $_[1] };
-                    }
-                    else {
-                        $out{"set_$attr"} = sub { $_[0]->{$attr} = $_[1] };
-                    }
-                }
+                $out{$attr}       = sub { $_[0]->{$attr} }                                                  if $spec->{reader};
+                $out{"set_$attr"} = sub { $_[0]->{$attr} = $_[1] }                                          if $spec->{writer};
+                $out{"set_$attr"} = sub { Carp::croak("'$attr' is read-only") }                             if $spec->{read_only};
+                $out{"set_$attr"} = sub { Carp::carp("set_$attr() is deprecated"); $_[0]->{$attr} = $_[1] } if $spec->{dep_writer};
 
                 %out;
             } @_
@@ -188,7 +178,7 @@ A class:
     use warnings;
 
     # Generate 3 accessors
-    use Test2::Harness::Util::HashBase qw/foo -bar ^baz/;
+    use Test2::Harness::Util::HashBase qw/foo -bar ^baz <bat >ban +boo/;
 
     # Chance to initialize defaults
     sub init {
@@ -196,10 +186,13 @@ A class:
         $self->{+FOO} ||= "foo";
         $self->{+BAR} ||= "bar";
         $self->{+BAZ} ||= "baz";
+        $self->{+BAT} ||= "bat";
+        $self->{+BAN} ||= "ban";
+        $self->{+BOO} ||= "boo";
     }
 
     sub print {
-        print join ", " => map { $self->{$_} } FOO, BAR, BAZ;
+        print join ", " => map { $self->{$_} } FOO, BAR, BAZ, BAT, BAN, BOO;
     }
 
 Subclass it
@@ -210,14 +203,14 @@ Subclass it
 
     # Note, you should subclass before loading HashBase.
     use base 'My::Class';
-    use Test2::Harness::Util::HashBase qw/bat/;
+    use Test2::Harness::Util::HashBase qw/bub/;
 
     sub init {
         my $self = shift;
 
         # We get the constants from the base class for free.
         $self->{+FOO} ||= 'SubFoo';
-        $self->{+BAT} ||= 'bat';
+        $self->{+BUB} ||= 'bub';
 
         $self->SUPER::init();
     }
@@ -234,10 +227,13 @@ use it:
     my $two   = My::Class->new({foo => 'MyFoo', bar => 'MyBar'});
     my $three = My::Class->new(['MyFoo', 'MyBar']);
 
-    # Accessors!
+    # Readers!
     my $foo = $one->foo;    # 'MyFoo'
     my $bar = $one->bar;    # 'MyBar'
     my $baz = $one->baz;    # Defaulted to: 'baz'
+    my $bat = $one->bat;    # Defaulted to: 'bat'
+    # '>ban' means setter only, no reader
+    # '+boo' means no setter or reader, just the BOO constant
 
     # Setters!
     $one->set_foo('A Foo');
@@ -248,6 +244,9 @@ use it:
     # '^baz' means deprecated setter, this will warn about the setter being
     # deprecated.
     $one->set_baz('A Baz');
+
+    # '<bat' means no setter defined at all
+    # '+boo' means no setter or reader, just the BOO constant
 
     $one->{+FOO} = 'xxx';
 
@@ -391,6 +390,24 @@ This will set the value, but it will also warn you that the method is
 deprecated.
 
 =back
+
+=head2 NO SETTER
+
+    use Test2::Harness::Util::HashBase qw/<foo/;
+
+Only gives you a reader, no C<set_foo> method is defined at all.
+
+=head2 NO READER
+
+    use Test2::Harness::Util::HashBase qw/>foo/;
+
+Only gives you a write (C<set_foo>), no C<foo> method is defined at all.
+
+=head2 CONSTANT ONLY
+
+    use Test2::Harness::Util::HashBase qw/+foo/;
+
+This does not create any methods for you, it just adds the C<FOO> constant.
 
 =head1 SUBCLASSING
 

@@ -1,425 +1,637 @@
-use Test2::V0;
+use Test2::V0 -target => 'Test2::Harness::TestFile';
+# HARNESS-DURATION-SHORT
 
-__END__
+use Test2::Plugin::BailOnFail;
 
-package Test2::Harness::TestFile;
-use strict;
-use warnings;
+use ok $CLASS;
 
-our $VERSION = '0.001100';
+use Test2::Tools::GenTemp qw/gen_temp/;
 
-use Carp qw/croak/;
+my $tmp = gen_temp(
+    long   => "#!/usr/bin/perl\n\nuse strict;\n use warnings\n\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\nfoo\n# HARNESS-NO-SEE\n",
+    med1   => "# HARNESS-NO-PRELOAD\n",
+    med2   => "#HARNESS-NO-FORK\n",
+    all    => "#HARNESS-NO-TIMEOUT\n# HARNESS-NO-STREAM\n# HARNESS-NO-FORK\n# HARNESS-NO-PRELOAD\n# HARNESS-USE-ISOLATION\n",
+    notime => "#HARNESS-NO-TIMEOUT\n",
+    warn   => "#!/usr/bin/perl -w\n",
+    taint  => "#!/usr/bin/env perl -t -w\n",
+    foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
+    meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey my-val2\n# HARNESS-META slack #my-val # comment after harness statement\n",
 
-use Time::HiRes qw/time/;
+    package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
 
-use List::Util 1.45 qw/uniq/;
+    timeout    => "# HARNESS-TIMEOUT-EVENT 90\n# HARNESS-TIMEOUT-POSTEXIT 85\n",
+    timeout2   => "# HARNESS-TIMEOUT-EVENT-90\n# HARNESS-TIMEOUT-POST-EXIT   85\n",
+    badtimeout => "# HARNESS-TIMEOUT-EVENTX 90\n# HARNESS-TIMEOUT-POSTEXITX 85\n",
 
-use Test2::Harness::Util qw/open_file clean_path/;
+    conflicts1 => "# HARNESS-CONFLICTS PASSWD\n",
+    conflicts2 => "# HARNESS-CONFLICTS PASSWD DAEMON\n",
+    conflicts3 => "# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS DAEMON   # Nothing to see here\n",
+    conflicts4 => "# HARNESS-CONFLICTS PASSWD DAEMON\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD DAEMON\n",
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+    extra_comments => "#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n",
 
-use File::Spec;
+    smoke1     => "#HARNESS-SMOKE\n",
+    smoke2     => "#HARNESS-YES-SMOKE\n",
+    retry      => "#HARNESS-RETRY\n",
+    retry5     => "#HARNESS-RETRY 5\n",
+    retry_iso  => "#HARNESS-RETRY-ISO\n",
+    retry_iso3 => "#HARNESS-RETRY-ISO 3\n",
 
-use Test2::Harness::Util::HashBase qw{
-    <file +relative <_scanned <_headers +_shbang <is_binary <non_perl
-    queue_args
-    _category _stage _duration
+    not_perl     => "#!/usr/bin/bash\n",
+    not_env_perl => "#!/usr/bin/env bash\n",
+    binary       => "\0\a\cX\e\n\cR",
+);
+
+subtest timeouts => sub {
+    my $one = $CLASS->new(file => File::Spec->catfile($tmp, 'timeout'));
+    is($one->event_timeout,    90, "set event timeout");
+    is($one->post_exit_timeout, 85, "set event timeout");
+
+    my $task = $one->queue_item(42);
+    is($task->{event_timeout},     90, "event timeout made it to task");
+    is($task->{post_exit_timeout}, 85, "post-exit timeout made it to task");
+
+    my $two = $CLASS->new(file => File::Spec->catfile($tmp, 'timeout2'));
+    is($two->event_timeout,     90, "set event timeout");
+    is($two->post_exit_timeout, 85, "set event timeout");
+
+    my $bad = $CLASS->new(file => File::Spec->catfile($tmp, 'badtimeout'));
+    is(
+        warnings { $bad->headers },
+        [
+            "'EVENTX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $bad->file . " line 1.\n",
+            "'POSTEXITX' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at " . $bad->file . " line 2.\n",
+        ],
+        "Got warnings"
+    );
 };
 
-sub set_duration { $_[0]->set__duration(lc($_[1])) }
-sub set_category { $_[0]->set__category(lc($_[1])) }
-sub set_stage    { $_[0]->set__stage(   lc($_[1])) }
-
-sub init {
-    my $self = shift;
-
-    my $file = $self->file;
-
-    # We want absolute path
-    $file = clean_path($file);
-    $self->{+FILE} = $file;
-
-    $self->{+QUEUE_ARGS} ||= [];
-
-    croak "Invalid test file '$file'" unless -f $file;
-
-    if($self->{+IS_BINARY} = -B $file) {
-        $self->{+NON_PERL} = 1;
-        die "Cannot run binary test file '$file': file is not executable.\n"
-            unless $self->is_executable;
-    }
-}
-
-sub relative {
-    my $self = shift;
-    return $self->{+RELATIVE} //= File::Spec->abs2rel($self->{+FILE});
-}
-
-my %DEFAULTS = (
-    timeout   => 1,
-    fork      => 1,
-    preload   => 1,
-    stream    => 1,
-    isolation => 0,
-    run       => 1,
-);
-
-sub check_feature {
-    my $self = shift;
-    my ($feature, $default) = @_;
-
-    $default = $DEFAULTS{$feature} unless defined $default;
-
-    return $default unless defined $self->headers->{features}->{$feature};
-    return 1 if $self->headers->{features}->{$feature};
-    return 0;
-}
-
-sub check_stage {
-    my $self = shift;
-
-    return $self->{+_STAGE} if $self->{+_STAGE};
-
-    $self->_scan unless $self->{+_SCANNED};
-    return $self->{+_HEADERS}->{stage} || 'default';
-}
-
-sub meta {
-    my $self = shift;
-    my ($key) = @_;
-
-    $self->_scan unless $self->{+_SCANNED};
-    my $meta = $self->{+_HEADERS}->{meta} or return ();
-
-    return () unless $key && $meta->{$key};
-
-    return @{$meta->{$key}};
-}
-
-sub check_duration {
-    my $self = shift;
-
-    return $self->{+_DURATION} if $self->{+_DURATION};
-
-    $self->_scan unless $self->{+_SCANNED};
-    my $duration = $self->{+_HEADERS}->{duration};
-    return $duration if $duration;
-
-    my $timeout = $self->check_feature(timeout => 1);
-
-    # 'long' for anything with no timeout
-    return 'long' unless $timeout;
-
-    return 'medium';
-}
-
-sub check_category {
-    my $self = shift;
-
-    return $self->{+_CATEGORY} if $self->{+_CATEGORY};
-
-    $self->_scan unless $self->{+_SCANNED};
-    my $category = $self->{+_HEADERS}->{category};
-
-    return $category if $category;
-
-    my $isolate = $self->check_feature(isolation => 0);
-
-    # 'isolation' queue if isolation requested
-    return 'isolation' if $isolate;
-
-    return 'general';
-}
-
-sub event_timeout    { $_[0]->headers->{timeout}->{event} }
-sub post_exit_timeout { $_[0]->headers->{timeout}->{postexit} }
-
-sub conflicts_list {
-    return $_[0]->headers->{conflicts} || [];    # Assure conflicts is always an array ref.
-}
-
-sub headers {
-    my $self = shift;
-    $self->_scan unless $self->{+_SCANNED};
-    return {} unless $self->{+_HEADERS};
-    return {%{$self->{+_HEADERS}}};
-}
-
-sub shbang {
-    my $self = shift;
-    $self->_scan unless $self->{+_SCANNED};
-    return {} unless $self->{+_SHBANG};
-    return {%{$self->{+_SHBANG}}};
-}
-
-sub switches {
-    my $self = shift;
-
-    my $shbang   = $self->shbang       or return [];
-    my $switches = $shbang->{switches} or return [];
-
-    return $switches;
-}
-
-sub is_executable {
-    my $self = shift;
-    my ($file) = @_;
-    $file //= $self->{+FILE};
-    return -x $file;
-}
-
-sub scan {
-    my $self = shift;
-    $self->_scan();
-    return;
-}
-
-sub _scan {
-    my $self = shift;
-
-    return if $self->{+_SCANNED}++;
-    return if $self->{+IS_BINARY};
-
-    my $fh = open_file($self->{+FILE});
-
-    my %headers;
-    for (my $ln = 1; my $line = <$fh>; $ln++) {
-        chomp($line);
-        next if $line =~ m/^\s*$/;
-
-        if ($ln == 1 && $line =~ m/^#!/) {
-            my $shbang = $self->_parse_shbang($line);
-            if ($shbang) {
-                $self->{+_SHBANG} = $shbang;
-
-                if ($shbang->{non_perl}) {
-                    $self->{+NON_PERL} = 1;
-
-                    die "Cannot run non-perl test file '" . $self->{+FILE} . "': file is not executable.\n"
-                        unless $self->is_executable;
-                }
-
-                next;
-            }
-        }
-
-        # Uhg, breaking encapsulation between yath and the harness
-        if ($line =~ m/^\s*#\s*THIS IS A GENERATED YATH RUNNER TEST/) {
-            $headers{features}->{run} = 0;
-            next;
-        }
-
-        next if $line =~ m/^\s*#/ && $line !~ m/^\s*#\s*HARNESS-.+/;    # Ignore commented lines which aren't HARNESS-?
-        next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;          # Only supports single line BEGINs
-        last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
-
-        my ($dir, $rest) = split /[-\s]+/, lc($1), 2;
-        my @args;
-        if ($dir eq 'meta') {
-            @args = split /\s+/, $rest, 2;                              # Check for white space delimited
-            @args = split(/[-]+/, $rest, 2) if scalar @args == 1;       # Check for dash delimited
-            $args[1] =~ s/\s+(?:#.*)?$//;                               # Strip trailing white space and comment if present
-        }
-        else {
-            $rest =~ s/\s+(?:#.*)?$//;                                  # Strip trailing white space and comment if present
-            @args = split /[-\s]+/, $rest;
-        }
-
-        if ($dir eq 'no') {
-            my ($feature) = @args;
-            $headers{features}->{$feature} = 0;
-        }
-        elsif ($dir eq 'yes' || $dir eq 'use') {
-            my ($feature) = @args;
-            $headers{features}->{$feature} = 1;
-        }
-        elsif ($dir eq 'stage') {
-            my ($name) = @args;
-            $headers{stage} = $name;
-        }
-        elsif ($dir eq 'meta') {
-            my ($key, $val) = @args;
-            push @{$headers{meta}->{$key}} => $val;
-        }
-        elsif ($dir eq 'duration' || $dir eq 'dur') {
-            my ($name) = @args;
-            $headers{duration} = $name;
-        }
-        elsif ($dir eq 'category' || $dir eq 'cat') {
-            my ($name) = @args;
-            if ($name =~ m/^(long|medium|short)$/i) {
-                $headers{duration} = $name;
-            }
-            else {
-                $headers{category} = $name;
-            }
-        }
-        elsif ($dir eq 'conflicts') {
-            my @conflicts_array;
-
-            foreach my $arg (@args) {
-                push @conflicts_array, $arg;
-            }
-
-            # Allow multiple lines with # HARNESS-CONFLICTS FOO
-            $headers{conflicts} ||= [];
-            push @{$headers{conflicts}}, @conflicts_array;
-
-            # Make sure no more than 1 conflict is ever present.
-            @{$headers{conflicts}} = uniq @{$headers{conflicts}};
-        }
-        elsif ($dir eq 'timeout') {
-            my ($type, $num) = @args;
-
-            warn "'" . uc($type) . "' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at $self->{+FILE} line $ln.\n"
-                unless $type =~ m/^(event|postexit)$/;
-
-            $headers{timeout}->{$type} = $num;
-        }
-        else {
-            warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
-        }
-    }
-
-    $self->{+_HEADERS} = \%headers;
-}
-
-sub _parse_shbang {
-    my $self = shift;
-    my $line = shift;
-
-    return {} if !defined $line;
-
-    my %shbang;
-
-    # NOTE: Test this, the dashes should be included with the switches
-    my $shbang_re = qr{
-        ^
-          \#!.*perl.*?        # the perl path
-          (?: \s (-.+) )?       # the switches, maybe
-          \s*
-        $
-    }xi;
-
-    if ($line =~ $shbang_re) {
-        my @switches = grep { m/\S/ } split /\s+/, $1 if defined $1;
-        $shbang{switches} = \@switches;
-        $shbang{line}     = $line;
-    }
-    elsif ($line =~ m/^#!/ && $line !~ m/perl/i) {
-        $shbang{line} = $line;
-        $shbang{non_perl} = 1;
-    }
-
-    return \%shbang;
-}
-
-sub queue_item {
-    my $self = shift;
-    my ($job_name) = @_;
-
-    die "The '$self->{+FILE}' test specifies that it should not be run by Test2::Harness.\n"
-        unless $self->check_feature(run => 1);
-
-    my $category = $self->check_category;
-    my $duration = $self->check_duration;
-    my $stage    = $self->check_stage;
-
-    my $fork    = $self->check_feature(fork    => 1);
-    my $preload = $self->check_feature(preload => 1);
-    my $timeout = $self->check_feature(timeout => 1);
-    my $stream  = $self->check_feature(stream  => 1);
-
-    my $binary   = $self->{+IS_BINARY} ? 1 : 0;
-    my $non_perl = $self->{+NON_PERL}  ? 1 : 0;
-
-    my $et  = $self->event_timeout;
-    my $pet = $self->post_exit_timeout;
-
-    return {
-        binary      => $binary,
-        category    => $category,
-        conflicts   => $self->conflicts_list,
-        duration    => $duration,
-        file        => $self->file,
-        job_id      => gen_uuid(),
-        job_name    => $job_name,
-        non_perl    => $non_perl,
-        stage       => $stage,
-        stamp       => time,
-        switches    => $self->switches,
-        use_fork    => $fork,
-        use_preload => $preload,
-        use_stream  => $stream,
-        use_timeout => $timeout,
-
-        defined($et) ? (event_timeout => $et) : (),
-        defined($pet) ? (post_exit_timeout => $self->post_exit_timeout) : (),
-
-        @{$self->{+QUEUE_ARGS}},
-    };
-}
-
-my %RANK = (
-    immiscible => 1,
-    long       => 2,
-    medium     => 3,
-    short      => 4,
-    isolation  => 5,
-);
-
-sub rank {
-    my $self = shift;
-
-    my $rank = $RANK{$self->check_category};
-    $rank ||= $RANK{$self->check_duration};
-    $rank ||= 1;
-
-    return $rank;
-}
-
-1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::TestFile - Logic to scan a test file.
-
-=head1 DESCRIPTION
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut
+subtest invalid => sub {
+    like(
+        dies { $CLASS->new(file => File::Spec->catfile($tmp, 'invalid')) },
+        qr/^Invalid test file/,
+        "Need a valid test file"
+    );
+};
+
+subtest meta => sub {
+    my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'meta'));
+
+    is([$foo->meta],             [],                  "No key returns empty list");
+    is([$foo->meta('foo')],      [],                  "Empty key returns empty list");
+    is([$foo->meta('mykey')],    [qw/myval my-val2/], "Got both values for the 'mykey' key");
+    is([$foo->meta('otherkey')], ['otherval'],        "Got other key");
+    is([$foo->meta('slack')],    ['#my-val'],         "Got hyphenated key");
+};
+
+subtest foo => sub {
+    my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'foo'));
+    is($foo->check_category, 'foo', "Category is foo");
+    is($foo->check_stage,    'foo', "Stage is foo");
+};
+
+subtest package => sub {
+    my $one = $CLASS->new(file => File::Spec->catfile($tmp, 'package'));
+    is($one->queue_item(42)->{use_preload}, 0, "No preload");
+};
+
+subtest taint => sub {
+    my $taint = $CLASS->new(file => File::Spec->catfile($tmp, 'taint'), queue_args => [via => ['xxx']]);
+
+    is($taint->switches, ['-t', '-w'], "No SHBANG switches");
+    is($taint->shbang, {switches => ['-t', '-w'], line => "#!/usr/bin/env perl -t -w"}, "Parsed shbang");
+
+    is(
+        $taint->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $taint->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => ['-t', '-w'],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 0,
+            conflicts   => [],
+            via         => ['xxx'],
+        },
+        "Got queue item data",
+    );
+};
+
+subtest warn => sub {
+    my $warn = $CLASS->new(file => File::Spec->catfile($tmp, 'warn'));
+
+    is($warn->switches, ['-w'], "got SHBANG switches");
+    is($warn->shbang, {switches => ['-w'], line => "#!/usr/bin/perl -w"}, "Parsed shbang");
+
+    is(
+        $warn->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $warn->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => ['-w'],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 0,
+            conflicts   => [],
+        },
+        "Got queue item data",
+    );
+};
+
+subtest notime => sub {
+    my $notime = $CLASS->new(file => File::Spec->catfile($tmp, 'notime'));
+
+    is($notime->check_feature('timeout'), 0, "Timeouts turned off");
+    is($notime->check_feature('timeout', 1), 0, "Timeouts turned off with default 1");
+
+    is($notime->check_category, 'general', "Category is general");
+    is($notime->check_duration, 'long', "Duration is long");
+
+    is($notime->switches, [], "No SHBANG switches");
+    is($notime->shbang, {}, "No shbang");
+
+    is(
+        $notime->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'long',
+            stage       => 'default',
+            file        => $notime->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 0,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 0,
+            conflicts   => [],
+        },
+        "Got queue item data",
+    );
+};
+
+subtest all => sub {
+    my $all = $CLASS->new(file => File::Spec->catfile($tmp, 'all'));
+
+    is($all->check_feature('timeout'), 0, "Timeouts turned off");
+    is($all->check_feature('timeout', 1), 0, "Timeouts turned off with default 1");
+
+    is($all->check_feature('fork'), 0, "Forking is off");
+    is($all->check_feature('fork', 1), 0, "Checking fork with different default");
+
+    is($all->check_feature('preload'), 0, "Preload is off");
+    is($all->check_feature('preload', 1), 0, "Checking preload with different default");
+
+    is($all->check_feature('isolation'), 1, "No isolation");
+    is($all->check_feature('isolation', 0), 1, "Use isolation with a default of false");
+
+    is($all->check_feature('stream'), 0, "Use stream");
+    is($all->check_feature('stream', 1), 0, "no stream with a default of true");
+
+    is($all->check_category, 'isolation', "Category is isolation");
+
+    is($all->switches, [], "No SHBANG switches");
+    is($all->shbang, {}, "No shbang");
+
+    is(
+        $all->queue_item(42),
+        {
+            category    => 'isolation',
+            duration    => 'long',
+            stage       => 'default',
+            file        => $all->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 0,
+            use_preload => 0,
+            use_stream  => 0,
+            use_timeout => 0,
+            smoke       => 0,
+            conflicts   => [],
+            binary      => 0,
+            non_perl    => 0,
+        },
+        "Got queue item data",
+    );
+};
+
+subtest med2 => sub {
+    my $med2 = $CLASS->new(file => File::Spec->catfile($tmp, 'med2'));
+
+    is($med2->check_feature('timeout'), 1, "Timeouts turned on");
+    is($med2->check_feature('timeout', 0), 0, "Timeouts turned off with default 0");
+
+    is($med2->check_feature('fork'), 0, "Forking is off");
+    is($med2->check_feature('fork', 1), 0, "Checking fork with different default");
+
+    is($med2->check_feature('preload'), 1, "Preload is on");
+    is($med2->check_feature('preload', 0), 0, "Checking preload with different default");
+
+    is($med2->check_feature('isolation'), 0, "No isolation");
+    is($med2->check_feature('isolation', 1), 1, "Use isolation with a default of true");
+
+    is($med2->check_feature('stream'), 1, "Use stream");
+    is($med2->check_feature('stream', 0), 0, "no stream with a default of false");
+
+    is($med2->check_category, 'general', "Category is general");
+    is($med2->check_duration, 'medium', "duration is medium");
+
+    is($med2->switches, [], "No SHBANG switches");
+    is($med2->shbang, {}, "No shbang");
+
+    is(
+        $med2->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $med2->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 0,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 0,
+            conflicts   => [],
+        },
+        "Got queue item data",
+    );
+};
+
+subtest med1 => sub {
+    my $med1 = $CLASS->new(file => File::Spec->catfile($tmp, 'med1'));
+
+    is($med1->check_feature('timeout'), 1, "Timeouts turned on");
+    is($med1->check_feature('timeout', 0), 0, "Timeouts turned off with default 0");
+
+    is($med1->check_feature('fork'), 1, "Forking is ok");
+    is($med1->check_feature('fork', 0), 0, "Checking fork with different default");
+
+    is($med1->check_feature('preload'), 0, "Preload is off");
+    is($med1->check_feature('preload', 1), 0, "Checking preload with different default");
+
+    is($med1->check_feature('isolation'), 0, "No isolation");
+    is($med1->check_feature('isolation', 1), 1, "Use isolation with a default of true");
+
+    is($med1->check_feature('stream'), 1, "Use stream");
+    is($med1->check_feature('stream', 0), 0, "no stream with a default of false");
+
+    is($med1->check_category, 'general', "Category is general");
+    is($med1->check_duration, 'medium', "duration is medium");
+
+    is($med1->switches, [], "No SHBANG switches");
+    is($med1->shbang, {}, "No shbang");
+
+    is(
+        $med1->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $med1->file,
+            job_name    => 42,
+            stamp       => T(),
+            job_id      => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 0,
+            use_stream  => 1,
+            use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 0,
+            conflicts   => [],
+        },
+        "Got queue item data",
+    );
+};
+
+subtest long => sub {
+    my $long = $CLASS->new(file => File::Spec->catfile($tmp, 'long'));
+
+    is($long->check_feature('timeout'), 0, "Timeouts turned off");
+    is($long->check_feature('timeout', 1), 0, "Timeouts turned off even with default 1");
+
+    is($long->check_feature('fork'), 1, "Forking is ok");
+    is($long->check_feature('fork', 0), 0, "Checking fork with different default");
+
+    is($long->check_feature('preload'), 1, "Preload is ok");
+    is($long->check_feature('preload', 0), 0, "Checking preload with different default");
+
+    is($long->check_feature('isolation'), 1, "Use isolation");
+    is($long->check_feature('isolation', 0), 1, "Use isolation even with a default of false");
+
+    is($long->check_feature('stream'), 1, "Use stream");
+    is($long->check_feature('stream', 0), 0, "no stream with a default of false");
+
+    is($long->check_category, 'isolation', "Category is isolation");
+    is($long->check_duration, 'long',    "duration is long");
+
+    ok(!exists $long->headers->{SEE}, "Did not see directive after code line");
+
+    is($long->switches, [], "No SHBANG switches");
+    is($long->shbang, {switches => [], line => "#!/usr/bin/perl"}, "got shbang");
+
+    is(
+        $long->queue_item(42),
+        {
+            category    => 'isolation',
+            duration    => 'long',
+            stage       => 'default',
+            file        => $long->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 0,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 0,
+            conflicts   => [],
+        },
+        "Got queue item data",
+    );
+};
+
+subtest extra_comments => sub {
+    my $long = $CLASS->new(file => File::Spec->catfile($tmp, 'extra_comments'));
+
+    is($long->check_feature('timeout'), 0, "Timeouts turned off");
+    is($long->check_feature('timeout', 1), 0, "Timeouts turned off even with default 1");
+
+    is($long->check_feature('fork'), 1, "Forking is ok");
+    is($long->check_feature('fork', 0), 0, "Checking fork with different default");
+
+    is($long->check_feature('preload'), 1, "Preload is ok");
+    is($long->check_feature('preload', 0), 0, "Checking preload with different default");
+
+    is($long->check_feature('isolation'), 1, "Use isolation");
+    is($long->check_feature('isolation', 0), 1, "Use isolation even with a default of false");
+
+    is($long->check_feature('stream'), 1, "Use stream");
+    is($long->check_feature('stream', 0), 0, "no stream with a default of false");
+
+    is($long->check_category, 'isolation', "Category is isolation");
+    is($long->check_duration, 'long', "Duration is long");
+
+    is($long->switches, [], "No SHBANG switches");
+    is($long->shbang, {switches => [], line => "#!/usr/bin/perl"}, "got shbang");
+
+    is(
+        $long->queue_item(42),
+        {
+            category    => 'isolation',
+            duration    => 'long',
+            stage       => 'default',
+            file        => $long->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 0,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 0,
+            conflicts   => [],
+        },
+        "Got queue item data",
+    );
+};
+
+subtest conflicts => sub {
+    my $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts1'));
+    is($parsed_file->conflicts_list, ['passwd'], "1 conflict line is reflected as an array");
+
+    $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts2'));
+    is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "1 conflict line with 2 conflict categories");
+
+    $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts3'));
+    is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "2 conflict lines with some comments on one of them");
+
+    $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts4'));
+    is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "Duplicate conflict lines only lead to 2 conflict items.");
+
+};
+
+subtest binary => sub {
+    my $path = File::Spec->catfile($tmp, 'binary');
+    ok(-B $path, "File is binary");
+
+    is(
+        dies { my $binary = $CLASS->new(file => $path); $binary->shbang },
+        "Cannot run binary test file '$path': file is not executable.\n",
+        "File must be executable",
+    );
+
+    my $control = mock $CLASS => (
+        override => [
+            is_executable => sub { 1 },
+        ],
+    );
+
+    my $binary = $CLASS->new(file => $path);
+    is($binary->switches, [], "No SHBANG switches");
+    is($binary->shbang, {}, "No shbang");
+
+    is(
+        $binary->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $path,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            conflicts   => [],
+            binary      => 1,
+            non_perl    => 1,
+            smoke       => 0,
+        },
+        "Got queue item data",
+    );
+};
+
+subtest not_perl => sub {
+    my $path = File::Spec->catfile($tmp, 'not_perl');
+
+    is(
+        dies { my $not_perl = $CLASS->new(file => $path); $not_perl->shbang },
+        "Cannot run non-perl test file '$path': file is not executable.\n",
+        "File must be executable",
+    );
+
+    my $control = mock $CLASS => (
+        override => [
+            is_executable => sub { 1 },
+        ],
+    );
+
+    my $not_perl = $CLASS->new(file => File::Spec->catfile($tmp, 'not_perl'));
+
+    is($not_perl->switches, [], "No SHBANG switches");
+    is($not_perl->shbang, {line => "#!/usr/bin/bash", non_perl => 1}, "Non-perl shbang");
+
+    is(
+        $not_perl->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $not_perl->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            conflicts   => [],
+            binary      => 0,
+            non_perl    => 1,
+            smoke       => 0,
+        },
+        "Got queue item data",
+    );
+};
+
+
+subtest not_env_perl => sub {
+    my $path = File::Spec->catfile($tmp, 'not_env_perl');
+
+    is(
+        dies { my $not_env_perl = $CLASS->new(file => $path); $not_env_perl->shbang },
+        "Cannot run non-perl test file '$path': file is not executable.\n",
+        "File must be executable",
+    );
+
+    my $control = mock $CLASS => (
+        override => [
+            is_executable => sub { 1 },
+        ],
+    );
+
+    my $not_env_perl = $CLASS->new(file => File::Spec->catfile($tmp, 'not_env_perl'));
+
+    is($not_env_perl->switches, [], "No SHBANG switches");
+    is($not_env_perl->shbang, {line => "#!/usr/bin/env bash", non_perl => 1}, "Non-perl shbang");
+
+    is(
+        $not_env_perl->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $not_env_perl->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            conflicts   => [],
+            smoke       => 0,
+            binary      => 0,
+            non_perl    => 1,
+        },
+        "Got queue item data",
+    );
+};
+
+subtest smoke => sub {
+    my $smoke1 = $CLASS->new(file => File::Spec->catfile($tmp, 'smoke1'));
+    is($smoke1->check_feature(smoke => 0), 1, "Turned smoke on");
+    is(
+        $smoke1->queue_item(42),
+        {
+            category    => 'general',
+            duration    => 'medium',
+            stage       => 'default',
+            file        => $smoke1->file,
+            job_name    => 42,
+            job_id      => T(),
+            stamp       => T(),
+            switches    => [],
+            use_fork    => 1,
+            use_preload => 1,
+            use_stream  => 1,
+            use_timeout => 1,
+            binary      => 0,
+            non_perl    => 0,
+            smoke       => 1,
+            conflicts   => [],
+        },
+        "Got queue item data",
+    );
+
+    my $smoke2 = $CLASS->new(file => File::Spec->catfile($tmp, 'smoke2'));
+    is($smoke2->check_feature(smoke => 0), 1, "Turned smoke on");
+};
+
+subtest smoke => sub {
+    my $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry'));
+    my $task = $retry->queue_item(42);
+    is($task->{retry}, 1, "Enabled retry");
+    ok(!exists($task->{retry_isolated}), "not isolated");
+
+    $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry5'));
+    $task = $retry->queue_item(42);
+    is($task->{retry}, 5, "Enabled retry, count 5");
+    ok(!exists($task->{retry_isolated}), "not isolated");
+
+    $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry_iso'));
+    $task = $retry->queue_item(42);
+    is($task->{retry}, 1, "Enabled retry");
+    is($task->{retry_isolated}, T(), "isolated retry");
+
+    $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry_iso3'));
+    $task = $retry->queue_item(42);
+    is($task->{retry}, 3, "Enabled retry, count 3");
+    is($task->{retry_isolated}, T(), "isolated retry");
+};
+
+done_testing;

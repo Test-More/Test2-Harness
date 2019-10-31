@@ -37,6 +37,15 @@ include_options(
     'App::Yath::Options::Persist',
 );
 
+option_group {prefix => 'runner', category => "Persistent Runner Options"} => sub {
+    option quiet => (
+        short       => 'q',
+        type        => 'c',
+        description => "Be very quiet.",
+        default     => 0,
+    );
+};
+
 sub MAX_ATTACH() { 1_048_576 }
 
 sub group { 'persist' }
@@ -96,11 +105,13 @@ sub run {
         ],
     );
 
-    print "\nPersistent runner started!\n";
+    unless ($settings->runner->quiet) {
+        print "\nPersistent runner started!\n";
 
-    print "Runner PID: $pid\n";
-    print "Runner dir: $dir\n";
-    print "\nUse `yath watch` to monitor the persistent runner\n\n" if $settings->runner->daemon;
+        print "Runner PID: $pid\n";
+        print "Runner dir: $dir\n";
+        print "\nUse `yath watch` to monitor the persistent runner\n\n" if $settings->runner->daemon;
+    }
 
     Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir});
 

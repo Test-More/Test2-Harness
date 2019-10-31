@@ -1,0 +1,20 @@
+#!perl
+# HARNESS-DURATION-SHORT
+
+use strict;
+use warnings;
+
+use Test::More;
+use File::Spec;
+
+my $dir = $ENV{RETRY_DIR} or die "No retry dir!";
+
+my $fail_once_file = File::Spec->catfile($dir, 'fail_once');
+my $fail_many_file = File::Spec->catfile($dir, 'fail_repeatedly');
+
+ok(!-e $fail_once_file, "$fail_once_file is there.");
+unlink $fail_once_file;
+
+ok(!-e $fail_many_file, "$fail_many_file is there.");
+
+done_testing();

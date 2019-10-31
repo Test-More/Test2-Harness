@@ -238,9 +238,9 @@ sub event_uuids { $_[0]->{+EVENT_UUIDS} //= $_[0]->run->event_uuids }
 sub mem_usage   { $_[0]->{+MEM_USAGE}   //= $_[0]->run->mem_usage }
 
 sub smoke             { $_[0]->{+SMOKE}             //= $_[0]->_fallback(smoke             => 0,  qw/task/) }
-sub retry             { $_[0]->{+RETRY}             //= $_[0]->_fallback(retry             => 0,  qw/task run/) }
 sub retry_isolated    { $_[0]->{+RETRY_ISOLATED}    //= $_[0]->_fallback(retry_isolated    => 0,  qw/task run/) }
 sub use_stream        { $_[0]->{+USE_STREAM}        //= $_[0]->_fallback(use_stream        => 1,  qw/task run/) }
+sub retry             { $_[0]->{+RETRY}             //= $_[0]->_fallback(retry             => undef, qw/task run/) }
 sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_timeout     => undef, qw/task runner/) }
 sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => undef, qw/task runner/) }
 

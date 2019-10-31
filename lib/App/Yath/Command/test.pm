@@ -198,10 +198,12 @@ sub stop {
     $ipc->wait(all => 1);
     $ipc->stop;
 
-    printf("\nKeeping work dir: %s\n", $self->workdir) if $settings->debug->keep_dirs;
+    unless ($settings->display->quiet > 2) {
+        printf("\nKeeping work dir: %s\n", $self->workdir) if $settings->debug->keep_dirs;
 
-    print "\nWrote log file: " . $settings->logging->log_file . "\n"
-        if $settings->logging->log;
+        print "\nWrote log file: " . $settings->logging->log_file . "\n"
+            if $settings->logging->log;
+    }
 }
 
 sub terminate_queue {

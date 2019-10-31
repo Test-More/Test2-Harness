@@ -41,7 +41,7 @@ sub run {
 
     remove_tree($self->workdir, {safe => 1, keep_root => 0}) if -d $self->workdir;
 
-    print "\n\nRunner stopped\n\n";
+    print "\n\nRunner stopped\n\n" unless $self->settings->display->quiet;
     return 0;
 }
 

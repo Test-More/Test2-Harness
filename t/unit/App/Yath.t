@@ -32,8 +32,8 @@ subtest init => sub {
         type   => 'c',
         prefix => 'foo',
         short  => 'v',
-        post_process => sub { $main::POST++ },
     );
+    post sub { $main::POST++ };
 
     use Test2::Harness::Util::HashBase qw/settings argv/;
     our @ISA = ('App::Yath::Command');
@@ -58,6 +58,7 @@ subtest generate_run_sub => sub {
             'App::Yath::Command::GEN',
             'main::RUNSUB',
             [],
+            exact_ref($one->settings),
         ],
         "Ran command generate_run_sub with correct args"
     );
@@ -140,7 +141,7 @@ subtest load_options => sub {
 
     $two->settings->yath->no_scan_plugins = 0;
 
-    $options = $two->load_options();
+    warns { $options = $two->load_options() };
     like(
         $options->included,
         {
@@ -158,7 +159,7 @@ subtest process_argv => sub {
     local @INC = (@INC, 't/lib');
 
     my $one = $CLASS->new(
-        argv   => [qw/-Dfoo -Dbar --pre-hook fake -x -y --post-hook blah uhg/],
+        argv   => [qw/-Dfoo -Dbar fake -x -y blah uhg/],
         config => {fake => [qw/-Dbaz -z/], other => [qw/-noop/]},
     );
 
@@ -168,8 +169,6 @@ subtest process_argv => sub {
     is(
         ${$one->settings->fake},
         {
-            post_hook => 1,
-            pre_hook  => 1,
             x         => 1,
             y         => 1,
             z         => 1,
@@ -189,8 +188,8 @@ subtest process_argv => sub {
 
     is($one->_argv, [qw/blah uhg/], "Remaining args");
 
+    no warnings 'once';
     is($main::POST_HOOK, F(), "Did not run hook yet (requires command instance)");
-    is($main::PRE_HOOK,  F(), "Did not run hook yet (requires command instance)");
 };
 
 subtest command_from_argv => sub {

@@ -2,6 +2,8 @@ package App::Yath::Tester;
 use strict;
 use warnings;
 
+our $VERSION = '0.001100';
+
 use App::Yath::Util qw/find_yath/;
 use File::Spec;
 use File::Temp qw/tempfile tempdir/;
@@ -84,57 +86,45 @@ sub _yath {
 1;
 
 __END__
-use List::Util qw/first/;
-use Test2::API qw/context/;
-use App::Yath::Util qw/find_yath/;
 
-use File::Spec;
+=pod
 
-my $dir = first { -d $_ } 't/integration/failure_cases', 'integration/failure_cases', 'failure_cases';
+=encoding UTF-8
 
-my $yath = first { -f $_ } 'scripts/yath', '../scripts/yath';
+=head1 NAME
 
-$yath ||= find_yath();
+App::Yath::Tester - Tools for testing yath
 
-my %CUSTOM = (
-    "timeout.tx"           => ['--et',       2],
-    "post_exit_timeout.tx" => ['--pet',      2],
-    "noplan.tx"            => ['--pet',      2],
-    "dupnums.tx"           => [],
-    "missingnums.tx"       => [],
-);
+=head1 DESCRIPTION
 
-opendir(my $DH, $dir) or die "Could not open directory $dir: $!";
+=head1 SOURCE
 
-for my $file (readdir($DH)) {
-    yath_test($file);
-}
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
 
-sub yath_test {
-    my ($file) = @_;
-    my $path = File::Spec->canonpath("$dir/$file");
-    return unless -f $path;
-    my $args = $CUSTOM{$file};
+=head1 MAINTAINERS
 
-    my $ctx = context();
+=over 4
 
-    my @cmd = ($yath, 'test', '-qq', ($args ? @$args : ()), $path);
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
 
-    {
-        local $ENV{FAILURE_DO_PASS} = 0;
-        system($^X, (map { "-I$_" } @INC), @cmd);
-        my $fail_exit = $?;
-        $ctx->ok($fail_exit, "$file failure case was a failure ($fail_exit)", ["Command: " . join " " => @cmd]);
-    }
+=back
 
-    {
-        local $ENV{FAILURE_DO_PASS} = 1;
-        system($^X, (map { "-I$_" } @INC), @cmd);
-        my $pass_exit = $?;
-        $ctx->ok(!$pass_exit, "$file failure passes when failure cause is removed ($pass_exit)", ["Command: " . join " " => @cmd]);
-    }
+=head1 AUTHORS
 
-    $ctx->release;
-}
+=over 4
 
-done_testing;
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

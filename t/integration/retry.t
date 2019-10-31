@@ -1,4 +1,6 @@
 use Test2::V0;
+# HARNESS-DURATION-LONG
+
 use App::Yath::Tester qw/yath_test_with_log yath_start yath_stop yath_run_with_log/;
 use Test2::Harness::Util::File::JSONL;
 

@@ -22,8 +22,6 @@ use Test2::Harness::Util::HashBase qw{
     <category
     <description
     <short_examples <long_examples
-
-    <meta
 };
 
 my %TYPES = (
@@ -36,6 +34,7 @@ my %TYPES = (
     h => 1,
     H => 1,
 );
+sub valid_type { $TYPES{$_[-1]} }
 
 my %LONG_TO_SHORT_TYPES = (
     bool    => 'b',
@@ -65,12 +64,13 @@ my %LONG_TO_SHORT_TYPES = (
     'hash' => 'h',
     'hash-list' => 'H',
 );
+sub canon_type { $LONG_TO_SHORT_TYPES{$_[-1]} }
 
-my %TAKES_ARG = (s => 1, m => 1, h => 1, H => 1);
-sub takes_arg { $TAKES_ARG{$_[0]->{+TYPE}} }
+my %REQUIRES_ARG = (s => 1, m => 1, h => 1, H => 1);
+sub requires_arg { $REQUIRES_ARG{$_[0]->{+TYPE}} }
 
 my %ALLOWS_ARG = (d => 1, D => 1);
-sub allows_arg { $ALLOWS_ARG{$_[0]->{+TYPE}} || $TAKES_ARG{$_[0]->{+TYPE} } }
+sub allows_arg { $ALLOWS_ARG{$_[0]->{+TYPE}} || $REQUIRES_ARG{$_[0]->{+TYPE} } }
 
 sub init {
     my $self = shift;
@@ -98,8 +98,8 @@ sub init {
     }
 
     $self->{+TYPE} //= 'b';
-    $self->{+TYPE} = $LONG_TO_SHORT_TYPES{$self->{+TYPE}} // $self->{+TYPE} if length($self->{+TYPE}) > 1;
-    confess "Invalid type '$self->{+TYPE}'" unless $TYPES{$self->{+TYPE}};
+    $self->{+TYPE} = $self->canon_type($self->{+TYPE}) // $self->{+TYPE} if length($self->{+TYPE}) > 1;
+    confess "Invalid type '$self->{+TYPE}'" unless $self->valid_type($self->{+TYPE});
 
     if (my $def = $self->{+DEFAULT}) {
         my $ref = ref($def);
@@ -255,7 +255,7 @@ sub handle_negation {
         if $self->{+TYPE} eq 'm'
         || $self->{+TYPE} eq 'D';
 
-    return @{$$slot //= {}} = ()
+    return %{$$slot //= {}} = ()
         if $self->{+TYPE} eq 'h'
         || $self->{+TYPE} eq 'H';
 
@@ -302,8 +302,14 @@ sub cli_docs {
     my $self = shift;
 
     my @forms = (map { "--$self->{+NAME}$_" } @{$self->{+LONG_EXAMPLES}  || $TYPE_LONG_ARGS{$self->{+TYPE}}});
+
+    for my $alt (@{$self->{+ALT} || []}) {
+        push @forms => (map { "--$alt$_" } @{$self->{+LONG_EXAMPLES}  || $TYPE_LONG_ARGS{$self->{+TYPE}}});
+    }
+
     push @forms => map { "-$self->{+SHORT}$_" } @{$self->{+SHORT_EXAMPLES} || $TYPE_SHORT_ARGS{$self->{+TYPE}}}
         if $self->{+SHORT};
+
     push @forms => "--no-$self->{+NAME}";
 
     my @out;
@@ -329,6 +335,9 @@ sub pod_docs {
     my $self = shift;
 
     my @forms = (map { "--$self->{+NAME}$_" } @{$self->{+LONG_EXAMPLES}  || $TYPE_LONG_ARGS{$self->{+TYPE}}});
+    for my $alt (@{$self->{+ALT} || []}) {
+        push @forms => (map { "--$alt$_" } @{$self->{+LONG_EXAMPLES}  || $TYPE_LONG_ARGS{$self->{+TYPE}}});
+    }
     push @forms => map { "-$self->{+SHORT}$_" } @{$self->{+SHORT_EXAMPLES} || $TYPE_SHORT_ARGS{$self->{+TYPE}}}
         if $self->{+SHORT};
     push @forms => "--no-$self->{+NAME}";
@@ -339,7 +348,7 @@ sub pod_docs {
 
     push @out => $TYPE_NOTES{$self->{+TYPE}} if $TYPE_NOTES{$self->{+TYPE}};
 
-    return join "\n\n" => @out;
+    return join("\n\n" => @out) . "\n";
 }
 
 1;

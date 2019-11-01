@@ -330,7 +330,7 @@ sub _handle_long_option {
 
     my $opt;
     if ($opt = $lookup->{long}->{$full}) {
-        if ($opt->takes_arg) {
+        if ($opt->requires_arg) {
             $val //= shift(@$args) // die "Option --$full requires an argument.\n";
         }
         elsif($opt->allows_arg) {
@@ -364,7 +364,7 @@ sub _handle_short_option {
 
             $val //= '' if $assign;
 
-            if ($opt->takes_arg) {
+            if ($opt->requires_arg) {
                 $val //= shift(@$args) // die "Option -$main requires an argument.\n";
             }
             else {

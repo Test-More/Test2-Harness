@@ -10,7 +10,6 @@ my $base = './lib/App/Yath/Command';
 opendir(my $dh, $base) or die "Could not open command dir!";
 
 for my $file (readdir($dh)) {
-    next unless $file =~ m/help/;
     next unless $file =~ m/\.pm$/;
     my $fq = "$base/$file";
 
@@ -26,9 +25,6 @@ for my $file (readdir($dh)) {
     my $pod = $pkg->generate_pod or die "Could not get usage POD!";
 
     $pod = join "\n\n" => start(), $pod, ending();
-
-    print "$pod\n";
-    exit 0;
 
     my $found;
     my @lines;

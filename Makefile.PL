@@ -2,12 +2,12 @@
 use strict;
 use warnings;
 
-use 5.008009;
+use 5.010000;
 
 use ExtUtils::MakeMaker;
 
 my %WriteMakefileArgs = (
-  "ABSTRACT" => "Test2 Harness designed for the Test2 event system",
+  "ABSTRACT" => "A new and improved test harness with better L<Test2> integration.",
   "AUTHOR" => "Chad Granum <exodist\@cpan.org>",
   "CONFIGURE_REQUIRES" => {
     "ExtUtils::MakeMaker" => 0
@@ -17,7 +17,7 @@ my %WriteMakefileArgs = (
     "scripts/yath"
   ],
   "LICENSE" => "perl",
-  "MIN_PERL_VERSION" => "5.008009",
+  "MIN_PERL_VERSION" => "5.010000",
   "NAME" => "Test2::Harness",
   "PREREQ_PM" => {
     "Carp" => 0,
@@ -27,12 +27,12 @@ my %WriteMakefileArgs = (
     "Data::UUID" => "1.148",
     "Exporter" => 0,
     "Fcntl" => 0,
-    "File::Find" => 0,
     "File::Path" => "2.11",
     "File::Spec" => 0,
     "File::Temp" => 0,
     "Filter::Util::Call" => 0,
     "Getopt::Long" => "2.36",
+    "HTTP::Tiny" => "0.070",
     "IO::Compress::Bzip2" => 0,
     "IO::Compress::Gzip" => 0,
     "IO::Handle" => "1.27",
@@ -43,9 +43,11 @@ my %WriteMakefileArgs = (
     "Importer" => "0.024",
     "JSON::PP" => 0,
     "List::Util" => "1.44",
+    "Long::Jump" => "0.000001",
     "Module::Pluggable" => 0,
     "POSIX" => 0,
     "Scalar::Util" => 0,
+    "Scope::Guard" => 0,
     "Symbol" => 0,
     "Sys::Hostname" => 0,
     "Term::Table" => "0.011",
@@ -72,9 +74,12 @@ my %WriteMakefileArgs = (
     "goto::file" => "0.005",
     "parent" => 0
   },
+  "TEST_REQUIRES" => {
+    "File::Find" => 0
+  },
   "VERSION" => "0.001100",
   "test" => {
-    "TESTS" => "t/*.t t/App/*.t t/App/Yath/*.t t/App/Yath/Command/*.t t/App/Yath/Plugin/*.t t/Test2/*.t t/Test2/Formatter/*.t t/Test2/Harness/*.t t/Test2/Harness/Feeder/*.t t/Test2/Harness/Job/*.t t/Test2/Harness/Job/Runner/*.t t/Test2/Harness/Logger/*.t t/Test2/Harness/Renderer/*.t t/Test2/Harness/Run/*.t t/Test2/Harness/Run/Runner/*.t t/Test2/Harness/Util/*.t t/Test2/Harness/Util/File/*.t t/Test2/Tools/*.t"
+    "TESTS" => "t/*.t t/integration/*.t t/unit/App/*.t t/unit/App/Yath/*.t t/unit/App/Yath/Command/*.t t/unit/App/Yath/Options/*.t t/unit/App/Yath/Plugin/*.t t/unit/App/Yath/Settings/*.t t/unit/Test2/*.t t/unit/Test2/Formatter/*.t t/unit/Test2/Formatter/Test2/*.t t/unit/Test2/Harness/*.t t/unit/Test2/Harness/Auditor/*.t t/unit/Test2/Harness/Collector/*.t t/unit/Test2/Harness/IPC/*.t t/unit/Test2/Harness/Renderer/*.t t/unit/Test2/Harness/Runner/*.t t/unit/Test2/Harness/Runner/Preload/*.t t/unit/Test2/Harness/Runner/Preloader/*.t t/unit/Test2/Harness/Runner/Staged/*.t t/unit/Test2/Harness/Util/*.t t/unit/Test2/Harness/Util/File/*.t"
   }
 );
 
@@ -93,6 +98,7 @@ my %FallbackPrereqs = (
   "File::Temp" => 0,
   "Filter::Util::Call" => 0,
   "Getopt::Long" => "2.36",
+  "HTTP::Tiny" => "0.070",
   "IO::Compress::Bzip2" => 0,
   "IO::Compress::Gzip" => 0,
   "IO::Handle" => "1.27",
@@ -103,9 +109,11 @@ my %FallbackPrereqs = (
   "Importer" => "0.024",
   "JSON::PP" => 0,
   "List::Util" => "1.44",
+  "Long::Jump" => "0.000001",
   "Module::Pluggable" => 0,
   "POSIX" => 0,
   "Scalar::Util" => 0,
+  "Scope::Guard" => 0,
   "Symbol" => 0,
   "Sys::Hostname" => 0,
   "Term::Table" => "0.011",

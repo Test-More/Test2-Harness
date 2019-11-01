@@ -110,7 +110,8 @@ sub generate_pod {
 
     my $options = App::Yath::Options->new();
     require App::Yath;
-    $options->include(App::Yath->options);
+    my $ay = App::Yath->new();
+    $options->include($ay->load_options);
     $options->set_command_class($class);
     my $pre_opts = $options->pre_docs('pod');
     my $cmd_opts = $options->cmd_docs('pod');

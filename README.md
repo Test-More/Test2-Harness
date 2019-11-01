@@ -62,8 +62,8 @@ You can preload as many modules as you want:
 
 ### COMPLEX PRELOAD
 
-If your preload is a subclass of [Test2::Harness::Preload](https://metacpan.org/pod/Test2::Harness::Preload) then more complex
-preload behavior is possible. See those docs for more info.
+If your preload is a subclass of [Test2::Harness::Runner::Preload](https://metacpan.org/pod/Test2::Harness::Runner::Preload) then more
+complex preload behavior is possible. See those docs for more info.
 
 ## LOGGING
 
@@ -183,9 +183,14 @@ provide any options normally allowed by it. When `yath` is run inside your
 project, it will use the config specified in the rc file, unless overridden
 by command line options.
 
+**Note:** You can also add pre-command options by placing them at the top of
+your config file _BEFORE_ any `[cmd]` markers.
+
 Comments start with a semi-colon.
 
 Example .yath.rc:
+
+    -pFoo ; Load the 'foo' plugin before dealing with commands.
 
     [test]
     -B ;Always write a bzip2-compressed log

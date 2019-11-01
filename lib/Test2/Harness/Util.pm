@@ -151,6 +151,8 @@ sub find_libraries {
 
     @paths = @INC unless @paths;
 
+    @paths = map { File::Spec->canonpath($_) } @paths;
+
     my %prefixes = map {$_ => 1} @paths;
 
     my @found;

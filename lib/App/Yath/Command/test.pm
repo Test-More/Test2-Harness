@@ -36,6 +36,7 @@ use Test2::Harness::Util::HashBase qw/
     +renderers
     +logger
 
+    +tests_seen
     +run_queue
     +tasks_queue
     +state
@@ -133,7 +134,7 @@ sub run {
 
     $self->render_final_data($final_data);
 
-    return $final_data->{pass} ? 0 : 1;
+    return $self->{+TESTS_SEEN} ? $final_data->{pass} ? 0 : 1 : 1;
 }
 
 sub start {
@@ -176,6 +177,8 @@ sub render {
             $_->render_event($e) for @$renderers;
         }
 
+        $self->{+TESTS_SEEN}++ if $e->{facet_data}->{harness_job_launch};
+
         $_->handle_event($e, $settings) for @$plugins;
 
         $ipc->wait() if $ipc;
@@ -199,6 +202,8 @@ sub stop {
     $ipc->stop;
 
     unless ($settings->display->quiet > 2) {
+        printf STDERR "\nNo tests were seen!\n" unless $self->{+TESTS_SEEN};
+
         printf("\nKeeping work dir: %s\n", $self->workdir) if $settings->debug->keep_dirs;
 
         print "\nWrote log file: " . $settings->logging->log_file . "\n"
@@ -434,8 +439,8 @@ sub start_runner {
 
     my $ipc = $self->ipc;
     my $proc = $ipc->spawn(
-        #stderr => File::Spec->catfile($dir, 'error.log'),
-        #stdout => File::Spec->catfile($dir, 'output.log'),
+        stderr => File::Spec->catfile($dir, 'error.log'),
+        stdout => File::Spec->catfile($dir, 'output.log'),
         no_set_pgrp => 1,
         command => [
             $^X, $settings->yath->script,

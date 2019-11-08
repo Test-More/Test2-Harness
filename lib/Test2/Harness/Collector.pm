@@ -46,7 +46,7 @@ sub init {
 
     $self->{+WAIT_TIME} //= 0.02;
 
-    $self->{+ACTION}->($self->_harness_event(0, time, harness_run => $self->{+RUN}, about => {no_display => 1}));
+    $self->{+ACTION}->($self->_harness_event(0, time, harness_run => $self->{+RUN}, harness_settings => $self->settings, about => {no_display => 1}));
 }
 
 sub process {

@@ -421,6 +421,7 @@ sub env_vars {
         T2_HARNESS_JOB_NAME => $self->{+TASK}->{job_name},
         PERL_USE_UNSAFE_INC => $self->unsafe_inc,
         TEST2_JOB_DIR       => $self->job_dir,
+        TEST2_RUN_DIR       => $self->run_dir,
         TMPDIR              => $self->tmp_dir,
         TEMPDIR             => $self->tmp_dir,
     };

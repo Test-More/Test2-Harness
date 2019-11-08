@@ -137,17 +137,21 @@ sub find_files {
     my $self = shift;
     my ($plugins) = @_;
 
+    return $self->_find_project_files($plugins) if $self->multi_project;
+    return $self->_find_files($plugins, $self->{+SEARCH});
+}
+
+sub _find_project_files {
+    my $self = shift;
+    my ($plugins) = @_;
+
     my $search = $self->{+SEARCH} // [];
-
-    return $self->_find_files($plugins, $search) unless $self->{+MULTI_PROJECT};
-
-    use Carp::Always;
 
     die "multi-project search must be a single directory, or the current directory" if @$search > 1;
     my ($pdir) = @$search;
+    my $dir = clean_path(getcwd());
 
     my $out = [];
-    my $dir = clean_path(getcwd());
     my $ok = eval {
         chdir($pdir) if defined $pdir;
         my $ret = clean_path(getcwd());
@@ -180,44 +184,36 @@ sub find_files {
 
 sub _find_files {
     my $self = shift;
-    my ($plugins, $search) = @_;
+    my ($plugins, $input) = @_;
 
+    $input   //= [];
     $plugins //= [];
-    $search  //= [];
 
-    my $have_list = 1;
-    unless (@$search || first { $_->block_default_search() } @$plugins) {
-        $have_list = 0;
-        push @$search => @{$self->{+DEFAULT_SEARCH}};
-        push @$search => @{$self->{+DEFAULT_AT_SEARCH}} if $self->{+AUTHOR_TESTING};
-    }
+    my $default_search = [@{$self->default_search}];
+    push @$default_search => @{$self->default_at_search} if $self->author_testing;
 
-    my (@dirs, %listed, @files, @found, @claimed, %seen);
+    $_->munge_search($self, $input, $default_search) for @$plugins;
+
+    my $search = @$input ? $input : $default_search;
+
+    die "No tests to run, search is empty\n" unless @$search;
+
+    my (%seen, @tests, @dirs);
     for my $path (@$search) {
         push @dirs => $path and next if -d $path;
-        if (-f $path) {
-            $path = clean_path($path);
-            $listed{$path}++ if $have_list;
-            push @files => $path;
-            next;
+
+        die "'$path' is not a valid file or directory.\n" unless -f $path;
+
+        $path = clean_path($path);
+        $seen{$path}++;
+
+        my $test;
+        unless (first { $test = $_->claim_file($path) } @$plugins) {
+            $test = Test2::Harness::TestFile->new(file => $path);
+            next unless @$input || $self->_include_file($test);
         }
-        die "'$path' is not a valid file or directory.\n" if $have_list;
-    }
 
-    for my $plugin (@$plugins) {
-        my $class = ref($plugin) || $plugin;
-
-        for my $test ($plugin->find_files($self, \@dirs)) {
-            die "$class\->find_files returned an '$test' instead of an instance of Test2::Harness::TestFile, please correct this.\n"
-                unless $test->isa('Test2::Harness::TestFile');
-
-            my $file = $test->file;
-
-            die "Plugin '$class' tried to add '$file', but it was already added by '$seen{$file}'.\n" if $seen{$file};
-
-            $seen{$file} = $class;
-            push @claimed => $test;
-        }
+        push @tests => $test;
     }
 
     if (@dirs) {
@@ -227,40 +223,29 @@ sub _find_files {
                 no_chdir => 1,
                 wanted   => sub {
                     no warnings 'once';
-                    return unless -f $_ && m/\.t2?$/;
-                    push @files => clean_path($File::Find::name);
+
+                    my $file = clean_path($File::Find::name);
+
+                    return if $seen{$file}++;
+                    return unless -f $file;
+
+                    my $test;
+                    unless(first { $test = $_->claim_file($file) } @$plugins) {
+                        return unless m/\.t2?$/;
+                        $test = Test2::Harness::TestFile->new(file => $file);
+                    }
+
+                    return unless $self->_include_file($test);
+                    push @tests => $test;
                 },
             },
             @dirs
         );
     }
 
-    for my $file (@files) {
-        next if $seen{$file};
+    $_->munge_files($self, \@tests) for @$plugins;
 
-        for my $plugin (@$plugins) {
-            my $test = $plugin->claim_file($file) or next;
-
-            my $class = ref($plugin);
-            die "$class\->find_files returned an '$test' instead of an instance of Test2::Harness::TestFile, please correct this.\n"
-                unless $test->isa('Test2::Harness::TestFile');
-
-            $seen{$file} = $class;
-            push @claimed => $test;
-            last;
-        }
-
-        next if $seen{$file};
-        $seen{$file} = ref($self);
-        my $test = Test2::Harness::TestFile->new(file => $file);
-        push @found => $test;
-    }
-
-    my @out = grep { $self->_include_file($_) || $listed{$_->file} } @claimed, @found;
-
-    $_->munge_files(\@out) for @$plugins;
-
-    return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @out ];
+    return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
 }
 
 sub _include_file {

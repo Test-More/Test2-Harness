@@ -4,13 +4,11 @@ use warnings;
 
 our $VERSION = '0.001100';
 
-sub find_files {}
-
-sub munge_files {}
-
-sub block_default_search {}
+sub munge_search {}
 
 sub claim_file {}
+
+sub munge_files {}
 
 sub inject_run_data {}
 

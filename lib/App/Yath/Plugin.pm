@@ -6,12 +6,6 @@ our $VERSION = '0.001100';
 
 use parent 'Test2::Harness::Plugin';
 
-sub pre_init {}
-
-sub post_init {}
-
-sub post_run {}
-
 # We do not want this defined by default, but it should be documented
 #sub handle_event {}
 

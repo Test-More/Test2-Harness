@@ -7,6 +7,8 @@ our $VERSION = '0.001100';
 use App::Yath::Util qw/find_yath/;
 use File::Spec;
 use File::Temp qw/tempfile tempdir/;
+use Test2::Harness::Util::IPC qw/run_cmd/;
+use POSIX;
 
 use Carp qw/croak/;
 
@@ -22,9 +24,9 @@ sub yath_test_with_log {
     my ($fh, $logfile) = tempfile(CLEANUP => 1, SUFFIX => '.jsonl');
     close($fh);
 
-    my $exit = _yath('test', $file, $test, @options, '-F' => $logfile);
+    my ($exit, $out) = _yath('test', $file, $test, @options, '-F' => $logfile);
 
-    return ($exit, Test2::Harness::Util::File::JSONL->new(name => $logfile));
+    return ($exit, Test2::Harness::Util::File::JSONL->new(name => $logfile), $out);
 }
 
 sub yath_test {
@@ -62,25 +64,50 @@ sub yath_run_with_log {
     my ($fh, $logfile) = tempfile(CLEANUP => 1, SUFFIX => '.jsonl');
     close($fh);
 
-    my $exit = _yath('run', $file, $test, @options, '-F' => $logfile);
+    my ($exit, $out) = _yath('run', $file, $test, @options, '-F' => $logfile);
 
-    return ($exit, Test2::Harness::Util::File::JSONL->new(name => $logfile));
+    return ($exit, Test2::Harness::Util::File::JSONL->new(name => $logfile), $out);
 }
 
 
 sub _yath {
     my ($cmd, $file, $test, @options) = @_;
 
-    $file =~ s/\.t2?$//g;
-    $file = File::Spec->catfile($file, "$test.tx");
+    my $pre_opts = ref($options[0]) eq 'ARRAY' ? shift @options : [];
 
-    croak "Could not find test '$test' at '$file'" unless -f $file;
+    my $dir = $file;
+    $dir =~ s/\.t2?$//g;
+
+    my $run = $test ? File::Spec->catfile($dir, "$test.tx") : undef;
+    croak "Could not find test '$test' at '$run'" if $run && !-f $run;
+
+    my $inc = File::Spec->catdir($dir, 'lib');
+    $inc = undef unless -d $inc;
 
     my $yath = find_yath;
 
-    my $exit = system($^X, $yath, '-D', $cmd, @options, $file);
+    pipe(my ($rh, $wh)) or die "Could not open pipe: $!";
+    my @final = ($^X, $yath, $inc ? ("-D$inc") : (), '-D', @$pre_opts, $cmd, @options, $run ? ($run) : ());
+    my $pid = run_cmd(
+        stderr => $wh,
+        stdout => $wh,
+        command => \@final,
+    );
 
-    return $exit;
+    $rh->blocking(0);
+    my (@lines, $exit);
+    while(1) {
+        push @lines => <$rh>;
+
+        waitpid($pid, WNOHANG) or next;
+        $exit = $?;
+        last;
+    }
+
+    push @lines => <$rh>;
+
+    return $exit unless wantarray;
+    return ($exit, join '' => @lines);
 }
 
 1;

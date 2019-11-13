@@ -6,9 +6,6 @@ use Test2::Harness::Util::File::JSONL;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 
-my $dir = __FILE__;
-$dir =~ s{\.t$}{};
-
 my ($exit, $log, $out) = yath_test_with_log(undef, ['--no-plugins', '-pTestPlugin'], '-A');
 ok(!$exit, "Exited success");
 

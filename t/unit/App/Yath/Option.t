@@ -342,7 +342,7 @@ subtest cli_docs => sub {
         short_examples => [' KEY=VALX,VALY,...', '=KEY=VALX,VALY,...'],
     );
 
-    chomp(my $res = <<'    EOT');
+    chomp($res = <<'    EOT');
 --foo KEY=VALX,VALY,...,  --foo=KEY=VALX,VALY,...,  --bar KEY=VALX,VALY,...
 --bar=KEY=VALX,VALY,...,  --baz KEY=VALX,VALY,...,  --baz=KEY=VALX,VALY,...
 -F KEY=VALX,VALY,...,  -F=KEY=VALX,VALY,...,  --no-foo

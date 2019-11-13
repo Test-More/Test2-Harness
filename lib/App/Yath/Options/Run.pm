@@ -24,8 +24,14 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
 
     option test_args => (
         type => 'm',
-
         description => 'Arguments to pass in as @ARGV for all tests that are run. These can be provided easier using the \'::\' argument seperator.'
+    );
+
+    option extension => (
+        field => 'extensions',
+        type => 'm',
+        alt => ['ext'],
+        description => 'Specify valid test filename extensions, default: t and t2',
     );
 
     option search => (
@@ -211,6 +217,10 @@ sub post_process {
     $settings->run->default_at_search = ['./xt']
         unless $settings->run->default_at_search && @{$settings->run->default_at_search};
 
+    @{$settings->run->extensions} = ('t', 't2')
+        unless @{$settings->run->extensions};
+
+    s/^\.//g for @{$settings->run->extensions};
 }
 
 sub fields_action {

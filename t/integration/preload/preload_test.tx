@@ -1,0 +1,5 @@
+use Test2::V0;
+
+ok($INC{'TestPreload.pm'}, "Preload is loaded");
+
+done_testing;

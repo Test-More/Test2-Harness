@@ -24,7 +24,8 @@ use Test2::Harness::Util::HashBase qw{
 
 sub set_duration { $_[0]->set__duration(lc($_[1])) }
 sub set_category { $_[0]->set__category(lc($_[1])) }
-sub set_stage    { $_[0]->set__stage(   lc($_[1])) }
+
+sub set_stage { $_[0]->set__stage($_[1]) }
 
 sub set_smoke {
     my $self = shift;
@@ -85,7 +86,7 @@ sub check_stage {
     return $self->{+_STAGE} if $self->{+_STAGE};
 
     $self->_scan unless $self->{+_SCANNED};
-    return $self->{+_HEADERS}->{stage} || 'default';
+    return $self->{+_HEADERS}->{stage} || undef;
 }
 
 sub meta {
@@ -217,7 +218,8 @@ sub _scan {
         next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;          # Only supports single line BEGINs
         last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
 
-        my ($dir, $rest) = split /[-\s]+/, lc($1), 2;
+        my ($dir, $rest) = split /[-\s]+/, $1, 2;
+        $dir = lc($dir);
         my @args;
         if ($dir eq 'meta') {
             @args = split /\s+/, $rest, 2;                              # Check for white space delimited
@@ -231,6 +233,7 @@ sub _scan {
 
         if ($dir eq 'no') {
             my ($feature) = @args;
+            $feature = lc($feature);
             $headers{features}->{$feature} = 0;
         }
         elsif ($dir eq 'smoke') {
@@ -242,7 +245,7 @@ sub _scan {
                 if ($arg =~ m/^\d+$/) {
                     $headers{retry} = $arg;
                 }
-                elsif ($arg =~ m/^iso/) {
+                elsif ($arg =~ m/^iso/i) {
                     $headers{retry} //= 1;
                     $headers{retry_isolated} = 1;
                 }
@@ -253,6 +256,7 @@ sub _scan {
         }
         elsif ($dir eq 'yes' || $dir eq 'use') {
             my ($feature) = @args;
+            $feature = lc($feature);
             $headers{features}->{$feature} = 1;
         }
         elsif ($dir eq 'stage') {
@@ -261,14 +265,17 @@ sub _scan {
         }
         elsif ($dir eq 'meta') {
             my ($key, $val) = @args;
+            $key = lc($key);
             push @{$headers{meta}->{$key}} => $val;
         }
         elsif ($dir eq 'duration' || $dir eq 'dur') {
             my ($name) = @args;
+            $name = lc($name);
             $headers{duration} = $name;
         }
         elsif ($dir eq 'category' || $dir eq 'cat') {
             my ($name) = @args;
+            $name = lc($name);
             if ($name =~ m/^(long|medium|short)$/i) {
                 $headers{duration} = $name;
             }
@@ -292,6 +299,8 @@ sub _scan {
         }
         elsif ($dir eq 'timeout') {
             my ($type, $num, $extra) = @args;
+            $type = lc($type);
+            $num = lc($num);
 
             ($type, $num) = ('postexit', $extra) if $type eq 'post' && $num eq 'exit';
 

@@ -20,6 +20,7 @@ use Test2::Util::Table qw/table/;
 
 use File::Spec;
 
+use Time::HiRes qw/sleep/;
 use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
@@ -163,7 +164,15 @@ sub render {
 
     # render results from log
     my $reader = $self->renderer_reader();
-    while (my $line = <$reader>) {
+    $reader->blocking(0);
+    while (1) {
+        my $line = <$reader>;
+        unless(defined $line) {
+            $ipc->wait() if $ipc;
+            sleep 0.02;
+            next;
+        }
+
         print $logger $line if $logger;
         my $e = decode_json($line);
         last unless defined $e;
@@ -241,6 +250,7 @@ sub state {
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
         workdir   => $self->workdir,
         job_count => $self->job_count,
+        no_poll   => 1,
     );
 }
 

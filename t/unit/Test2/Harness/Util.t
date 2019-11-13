@@ -1,5 +1,5 @@
 use Test2::Bundle::Extended -target => 'Test2::Harness::Util';
-skip_all 'TODO';
+BEGIN { skip_all 'TODO' }
 
 use ok $CLASS => ':ALL';
 

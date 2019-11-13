@@ -34,7 +34,21 @@ sub import {
         $stage->set_eager(1);
     };
 
-    for my $name (qw/pre_fork pre_fork pre_launch/) {
+    $exports{default} = sub {
+        croak "No current stage" unless @{$instance->stack};
+        my $stage = $instance->stack->[-1];
+        my $name = $stage->name;
+        $instance->set_default_stage($name);
+    };
+
+    $exports{file_stage} = sub {
+        my ($callback) = @_;
+        my @caller = caller();
+        croak "'file_stage' cannot be used under a stage" if @{$instance->stack};
+        $instance->add_file_stage(\@caller, $callback);
+    };
+
+    for my $name (qw/pre_fork post_fork pre_launch/) {
         my $meth = "add_${name}_callback";
         $exports{$name} = sub {
             croak "No current stage" unless @{$instance->stack};
@@ -59,6 +73,8 @@ use Test2::Harness::Util::HashBase qw{
     <stage_list
     <stage_lookup
     <stack
+    +default_stage
+    +file_stage
 };
 
 sub init {
@@ -68,6 +84,8 @@ sub init {
     $self->{+STAGE_LOOKUP} //= {};
 
     $self->{+STACK} //= [];
+
+    $self->{+FILE_STAGE} //= [];
 }
 
 sub build_stage {
@@ -144,6 +162,51 @@ sub merge {
     for my $stage (@{$merge->{+STAGE_LIST}}) {
         $self->add_stage($stage, $caller);
     }
+
+    push @{$self->{+FILE_STAGE}} => @{$merge->{+FILE_STAGE}};
+
+    $self->{+DEFAULT_STAGE} //= $merge->default_stage;
+}
+
+sub add_file_stage {
+    my $self = shift;
+    my ($caller, $code) = @_;
+
+    croak "Caller must be defined and an array" unless $caller && ref($caller) eq 'ARRAY';
+    croak "Code must be defined and a coderef"  unless $code   && ref($code) eq 'CODE';
+
+    push @{$self->{+FILE_STAGE}} => [$caller, $code];
+}
+
+sub file_stage {
+    my $self = shift;
+    my ($file) = @_;
+
+    for my $cb (@{$self->{+FILE_STAGE}}) {
+        my ($caller, $code) = @$cb;
+        my $stage = $code->($file) or next;
+
+        die "file_stage callback returned invalid stage: $stage at $caller->[1] line $caller->[2].\n"
+            unless $self->{+STAGE_LOOKUP}->{$stage};
+
+        return $stage;
+    }
+
+    return;
+}
+
+sub default_stage {
+    my $self = shift;
+    return $self->{+DEFAULT_STAGE} if $self->{+DEFAULT_STAGE};
+    return $self->{+STAGE_LIST}->[0];
+}
+
+sub set_default_stage {
+    my $self = shift;
+    my ($name) = @_;
+
+    croak "Default stage already set to $self->{+DEFAULT_STAGE}" if $self->{+DEFAULT_STAGE};
+    $self->{+DEFAULT_STAGE} = $name;
 }
 
 sub eager_stages {

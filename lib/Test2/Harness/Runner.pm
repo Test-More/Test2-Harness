@@ -53,6 +53,7 @@ use Test2::Harness::Util::HashBase(
 
         +last_timeout_check
         +dispatch_lock_file
+        +can_stage
     },
 );
 
@@ -74,7 +75,7 @@ sub init {
 
     $self->{+HANDLERS}->{HUP} = sub {
         my $sig = shift;
-        print STDERR "$$ ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
+        print STDERR "$0 $$ ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
         $self->{+SIGNAL} = $sig;
     };
 
@@ -98,6 +99,7 @@ sub state {
         job_count => $self->{+JOB_COUNT},
         workdir   => $self->{+DIR},
         eager_stages => $self->preloader->eager_stages // {},
+        preloader => $self->preloader,
     );
 }
 
@@ -111,6 +113,7 @@ sub check_timeouts {
 
     for my $pid (keys %{$self->{+PROCS}}) {
         my $job = $self->{+PROCS}->{$pid};
+        next unless $job->isa('Test2::Harness::Runner::Job');
 
         my $et  = $job->event_timeout     // $self->{+EVENT_TIMEOUT};
         my $pet = $job->post_exit_timeout // $self->{+POST_EXIT_TIMEOUT};
@@ -136,7 +139,7 @@ sub check_timeouts {
         my $sig = $kill ? 'KILL' : 'TERM';
         $sig = "-$sig" if $self->USE_P_GROUPS;
 
-        print STDERR $job->file . " did not respond to SIGTERM, sending SIGKILL to $pid...\n" if $kill;
+        print STDERR "$0 " . $job->file . " did not respond to SIGTERM, sending SIGKILL to $pid...\n" if $kill;
 
         kill($sig, $pid);
     }
@@ -150,7 +153,7 @@ sub stop {
     $self->check_for_fork;
 
     if (keys %{$self->{+PROCS}}) {
-        print "Sending all child processes the TERM signal...\n";
+        print "$0 Sending all child processes the TERM signal...\n";
         # Send out the TERM signal
         $self->killall($self->{+SIGNAL} // 'TERM');
         $self->wait(all => 1, timeout => 5);
@@ -158,7 +161,9 @@ sub stop {
 
     # Time to get serious
     if (keys %{$self->{+PROCS}}) {
-        print STDERR "Some child processes are refusing to exit, sending KILL signal...\n";
+        print STDERR "$0 Some child processes are refusing to exit, sending KILL signal...\n";
+        use POSIX;
+        print("$0 == $_ " . waitpid($_, WNOHANG) . "\n") for keys %{$self->{+PROCS}};
         $self->killall('KILL');
     }
 
@@ -213,6 +218,7 @@ sub process {
 
     my $ok  = eval { $self->run_tests(); 1 };
     my $err = $@;
+    $self->{+CAN_STAGE} = 0;
 
     warn $err unless $ok;
 
@@ -229,6 +235,7 @@ sub run_tests {
     $self->watch($_) for @procs;
 
     while(1) {
+        $self->{+CAN_STAGE} = 1;
         my $jump = setjump "Stage-Runner" => sub {
             $self->run_stage($stage);
         };
@@ -236,7 +243,7 @@ sub run_tests {
         last unless $jump;
 
         $stage = @$jump;
-        $self->_reset_stage();
+        $self->reset_stage();
     }
 
     return;
@@ -350,7 +357,6 @@ sub next {
     my $state = $self->state;
 
     while (1) {
-
         if(my $task = $state->next_task()) {
             next unless $task->{stage} eq $self->{+STAGE};
             return $task;
@@ -383,7 +389,7 @@ sub set_proc_exit {
         }
 
         if(my $bail = $exit ? $proc->bailed_out : 0) {
-            print "BAIL-OUT detected: $bail\nAborting the test run...\n";
+            print "$0 BAIL-OUT detected: $bail\nAborting the test run...\n";
             $self->state->halt_run($task->{run_id});
         }
     }
@@ -392,10 +398,11 @@ sub set_proc_exit {
 
         if ($exit != 0) {
             my $e = parse_exit($exit);
-            warn "Child stage '$stage' did not exit cleanly (sig: $e->{sig}, err: $e->{err})!\n";
+            my $err = "$0 Child stage '$stage' did not exit cleanly (sig: $e->{sig}, err: $e->{err})!\n";
+            $self->{+MONITOR_PRELOADS} ? warn $err : die $err;
         }
 
-        unless ($self->end_task_loop) {
+        if ($self->{+MONITOR_PRELOADS} && $self->{+CAN_STAGE} && !$self->end_test_loop) {
             my $proc = $self->preloader->launch_stage($stage, $exit);
             longjump "Stage-Runner" => $stage unless $proc;
             $self->watch($proc);

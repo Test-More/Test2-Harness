@@ -41,7 +41,7 @@ use Test2::Harness::Util::HashBase(
 
         <staged <started_stages
 
-        +monitor
+        <monitor
         <monitored
 
         <blacklist_file
@@ -72,11 +72,22 @@ sub stage_check {
     return 0;
 }
 
+sub task_stage {
+    my $self = shift;
+    my ($file, $wants) = @_;
+
+    return 'default' unless $self->{+STAGED};
+    return $wants if $wants && $self->stage_check($wants);
+
+    my $stage = $self->{+STAGED}->file_stage($file) // $self->{+STAGED}->default_stage;
+
+    return $stage;
+}
+
 sub preload {
     my $self = shift;
 
     croak "Already preloaded" if $self->{+DONE};
-    $self->{+DONE} = 1;
 
     my $preloads = $self->{+PRELOADS} or return 'default';
     return 'default' unless @$preloads;
@@ -92,6 +103,8 @@ sub preload {
     else {
         $self->_preload($preloads);
     }
+
+    $self->{+DONE} = 1;
 
     return 'default' unless $self->{+STAGED};
 
@@ -128,6 +141,9 @@ sub launch_stage {
         pid => $pid,
         name => $stage->name,
     ) if $pid;
+
+    $0 .= "-" . $stage->name;
+    $ENV{HARNESS_STAGE} = $stage->name;
 
     $self->start_stage($stage);
 
@@ -221,14 +237,14 @@ sub _preload {
 
         if (ref($mod) eq 'CODE') {
             next if eval { $mod->($block, $require_sub); 1 };
-            $self->{+DONE} ? warn $@ : die $@;
+            $self->{+MONITOR} ? warn $@ : die $@;
             next;
         }
 
         next if $block && $block->{$mod};
 
         next if eval { $self->_preload_module($mod, $block, $require_sub); 1 };
-        $self->{+DONE} ? warn $@ : die $@;
+        $self->{+MONITOR} ? warn $@ : die $@;
     }
 
     return;

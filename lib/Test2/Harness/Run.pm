@@ -39,7 +39,7 @@ use Test2::Harness::Util::HashBase qw{
 
     <input <input_file
 
-    <search <test_args
+    <search <test_args <extensions
 
     <load <load_import
 
@@ -231,11 +231,14 @@ sub _find_files {
 
                     my $test;
                     unless(first { $test = $_->claim_file($file) } @$plugins) {
-                        return unless m/\.t2?$/;
-                        $test = Test2::Harness::TestFile->new(file => $file);
+                        for my $ext (@{$self->{+EXTENSIONS}}) {
+                            next unless m/\.\Q$ext\E$/;
+                            $test = Test2::Harness::TestFile->new(file => $file);
+                            last;
+                        }
                     }
 
-                    return unless $self->_include_file($test);
+                    return unless $test && $self->_include_file($test);
                     push @tests => $test;
                 },
             },

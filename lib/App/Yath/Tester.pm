@@ -13,7 +13,7 @@ use POSIX;
 use Carp qw/croak/;
 
 use Importer Importer => 'import';
-our @EXPORT = qw/yath_test yath_test_with_log yath_start yath_stop yath_run yath_run_with_log/;
+our @EXPORT = qw/yath_test yath_test_with_log yath_start yath_stop yath_run yath_run_with_log yath/;
 
 my $pdir = tempdir(CLEANUP => 1);
 
@@ -88,12 +88,15 @@ sub _yath {
 
     pipe(my ($rh, $wh)) or die "Could not open pipe: $!";
     my @final = ($^X, $yath, $inc ? ("-D$inc") : (), '-D', @$pre_opts, $cmd, @options, $run ? ($run) : ());
+    local $ENV{NESTED_YATH} = 1;
     my $pid = run_cmd(
+        no_set_pgrp => 1,
         stderr => $wh,
         stdout => $wh,
         command => \@final,
     );
 
+    close($wh);
     $rh->blocking(0);
     my (@lines, $exit);
     while(1) {
@@ -108,6 +111,88 @@ sub _yath {
 
     return $exit unless wantarray;
     return ($exit, join '' => @lines);
+}
+
+sub yath {
+    my %params = @_;
+
+    my $cmd = $params{cmd} // $params{command};
+    my $cli = $params{cli} // $params{args} // [];
+
+    $params{debug}   //= 0;
+    $params{inc}     //= 1;
+    $params{capture} //= 1;
+    $params{log}     //= 0;
+
+    my @inc;
+    if ($params{inc}) {
+        my ($pkg, $file) = caller();
+        my $dir = $file;
+        $dir =~ s/\.t2?$//g;
+
+        my $inc = File::Spec->catdir($dir, 'lib');
+        push @inc => "-D$inc" if -d $inc;
+    }
+
+    my ($rh, $wh);
+    if ($params{capture}) {
+        pipe($rh, $wh) or die "Could not open pipe: $!";
+    }
+
+    my (@log, $logfile);
+    if ($params{log}) {
+        my $fh;
+        ($fh, $logfile) = tempfile(CLEANUP => 1, SUFFIX => '.jsonl');
+        close($fh);
+        @log = ('-F' => $logfile);
+        print "DEBUG: log file = '$logfile'\n" if $params{debug};
+    }
+
+    my $yath = find_yath;
+    my @cmd = ($^X, $yath, @inc, $cmd ? ($cmd) : (), @log, @$cli);
+
+    print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $params{debug};
+
+    local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
+    local $ENV{NESTED_YATH} = 1;
+    my $pid = run_cmd(
+        no_set_pgrp => 1,
+        $params{capture} ? (stderr => $wh, stdout => $wh) : (),
+        command => \@cmd,
+    );
+
+    my (@lines, $exit);
+    if ($params{capture}) {
+        close($wh);
+
+        $rh->blocking(0);
+        while (1) {
+            my @new = <$rh>;
+            push @lines => @new;
+            print map { chomp($_); "DEBUG: > $_\n" } @new if $params{debug} > 1;
+
+            waitpid($pid, WNOHANG) or next;
+            $exit = $?;
+            last;
+        }
+
+        my @new = <$rh>;
+        push @lines => @new;
+        print map { chomp($_); "DEBUG: > $_\n" } @new if $params{debug} > 1;
+    }
+    else {
+        print "DEBUG: Waiting for $pid\n" if $params{debug};
+        waitpid($pid, 0);
+        $exit = $?;
+    }
+
+    print "DEBUG: Exit: $exit\n" if $params{debug};
+
+    return {
+        exit => $exit,
+        $params{capture} ? (output => join('', @lines)) : (),
+        $params{log} ? (log => Test2::Harness::Util::File::JSONL->new(name => $logfile)) : (),
+    };
 }
 
 1;

@@ -115,7 +115,7 @@ sub write_file_atomic {
     my ($ok, $err) = try_sig_mask {
         write_file($pend, @content);
         my ($ren_ok, $ren_err) = do_rename($pend, $file);
-        die $ren_err unless $ren_ok;
+        die "$pend -> $file: $ren_err" unless $ren_ok;
     };
 
     die $err unless $ok;

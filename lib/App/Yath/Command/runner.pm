@@ -47,7 +47,7 @@ sub generate_run_sub {
     my ($symbol, $argv, $spawn_settings) = @_;
     my ($dir, %args) = @$argv;
 
-    $0 = 'yath-runner';
+    $0 = $ENV{NESTED_YATH} ? 'yath-nested-runner' : 'yath-runner';
 
     my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
 

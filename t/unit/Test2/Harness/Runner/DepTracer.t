@@ -1,7 +1,7 @@
 use Test2::V0 -target => 'Test2::Harness::Runner::DepTracer';
 # HARNESS-NO-PRELOAD
 
-skip_all 'TODO';
+BEGIN { skip_all 'TODO' }
 
 use ok $CLASS;
 

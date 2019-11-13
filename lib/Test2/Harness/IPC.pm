@@ -110,8 +110,6 @@ sub killall {
 
     $self->check_for_fork();
 
-    $sig = "-$sig" if USE_P_GROUPS;
-
     kill($sig, keys %{$self->{+PROCS}});
 }
 
@@ -223,6 +221,7 @@ sub wait {
 
         if (my $cat = $params{cat}) {
             my $cur_total = keys %{$cat_procs->{$cat}};
+            return 0 unless $cur_total;
             my $delta = $cat_total - $cur_total;
             return $delta if $delta;
         }

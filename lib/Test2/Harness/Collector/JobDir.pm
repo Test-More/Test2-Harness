@@ -40,8 +40,8 @@ use Test2::Harness::Util::HashBase qw{
 
     -exit_file   -_exit_done     -_exit_buffer
 
-    -et_file  -et_buffer
-    -pet_file -pet_buffer
+    -et_file  -et_buffer  -et_done
+    -pet_file -pet_buffer -pet_done
 
     -last_stamp
 };
@@ -502,8 +502,8 @@ sub _poll_timeouts {
 
     my @out;
 
-    if (defined $self->{+ET_BUFFER}) {
-        push @out => $self->_process_timeout_line('event' => delete $self->{+ET_BUFFER}, <<"        EOT");
+    if (defined $self->{+ET_BUFFER} && !$self->{+ET_DONE}++) {
+        push @out => $self->_process_timeout_line('event' => $self->{+ET_BUFFER}, <<"        EOT");
 Test2::Harness checks for timeouts at a configurable interval, if a test does
 not produce any output to stdout or stderr between intervals it will be
 forcefully killed under the assumption it has hung. See the '--event-timeout'
@@ -511,8 +511,8 @@ option to configure the interval.
         EOT
     }
 
-    if (defined $self->{+PET_BUFFER}) {
-        push @out => $self->_process_timeout_line('post-exit' => delete $self->{+ET_BUFFER}, <<"        EOT");
+    if (defined $self->{+PET_BUFFER} && !$self->{+PET_DONE}++) {
+        push @out => $self->_process_timeout_line('post-exit' => $self->{+ET_BUFFER}, <<"        EOT");
 Sometimes tests will fork and then return. On supported systems Test2::Harness
 will start all tests with their own process group and will wait for the entire
 group to exit before considering the test done. In these cases Test2::Harness
@@ -591,7 +591,7 @@ sub _process_timeout_line {
     my $self = shift;
     my ($type, $stamp, $reason) = @_;
 
-    chomp($stamp);
+    chomp($stamp //= '');
 
     my $event_id = gen_uuid();
 

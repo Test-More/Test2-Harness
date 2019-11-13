@@ -21,6 +21,8 @@ use Test2::Harness::Util::HashBase(
         <eager_stages
         <job_count
         <workdir
+        <preloader
+        <no_poll
     },
 
     qw{
@@ -115,6 +117,8 @@ my %ACTIONS = (
 
 sub poll {
     my $self = shift;
+
+    return if $self->{+NO_POLL};
 
     my $queue = $self->{+DISPATCH_FILE};
 
@@ -253,7 +257,7 @@ sub _start_task {
     $self->prune_hash($self->{+PENDING_TASKS}, $run_id, $smoke, $stage, $cat, $dur);
 
     # Set the stage, new task hashref
-    $task = {%$task, stage => $run_stage} unless $task->{stage} eq $run_stage;
+    $task = {%$task, stage => $run_stage} unless $task->{stage} && $task->{stage} eq $run_stage;
 
     die "Already running task" if $self->{+RUNNING_TASKS}->{$job_id};
     $self->{+RUNNING_TASKS}->{$job_id} = $task;
@@ -357,7 +361,12 @@ sub _stage_down {
 sub task_stage {
     my $self = shift;
     my ($task) = @_;
-    return $task->{stage} // 'default';
+
+    my $wants = $task->{stage};
+
+    return $wants if $self->{+NO_POLL};
+
+    return $self->preloader->task_stage($task->{file}, $wants);
 }
 
 sub task_pending_lookup {
@@ -435,6 +444,7 @@ sub advance_tasks {
 
     my $max = $self->{+JOB_COUNT} // 0;
     my $cur = $self->{+RUNNING}   // 0;
+
     return 0 if $cur >= $max;
 
     my ($run_stage, $task) = $self->_next();

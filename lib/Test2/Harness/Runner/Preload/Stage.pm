@@ -14,6 +14,7 @@ use Test2::Harness::Util::HashBase qw{
     <post_fork_callbacks
     <pre_launch_callbacks
     <load_sequence
+    eager
 };
 
 sub init {

@@ -15,7 +15,7 @@ my $tmp = gen_temp(
     notime => "#HARNESS-NO-TIMEOUT\n",
     warn   => "#!/usr/bin/perl -w\n",
     taint  => "#!/usr/bin/env perl -t -w\n",
-    foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FOO",
+    foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FoO",
     meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey my-val2\n# HARNESS-META slack #my-val # comment after harness statement\n",
 
     package => "package Foo::Bar::Baz;\n# HARNESS-NO-PRELOAD\n",
@@ -88,7 +88,7 @@ subtest meta => sub {
 subtest foo => sub {
     my $foo = $CLASS->new(file => File::Spec->catfile($tmp, 'foo'));
     is($foo->check_category, 'foo', "Category is foo");
-    is($foo->check_stage,    'foo', "Stage is foo");
+    is($foo->check_stage,    'FoO', "Stage is FoO, case-sensitive");
 };
 
 subtest package => sub {
@@ -107,7 +107,7 @@ subtest taint => sub {
         {
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $taint->file,
             job_name    => 42,
             job_id      => T(),
@@ -140,7 +140,7 @@ subtest warn => sub {
         {
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $warn->file,
             job_name    => 42,
             job_id      => T(),
@@ -178,7 +178,7 @@ subtest notime => sub {
         {
             category    => 'general',
             duration    => 'long',
-            stage       => 'default',
+            stage       => undef,
             file        => $notime->file,
             job_name    => 42,
             job_id      => T(),
@@ -227,7 +227,7 @@ subtest all => sub {
         {
             category    => 'isolation',
             duration    => 'long',
-            stage       => 'default',
+            stage       => undef,
             file        => $all->file,
             job_name    => 42,
             job_id      => T(),
@@ -278,7 +278,7 @@ subtest med2 => sub {
             run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $med2->file,
             job_name    => 42,
             job_id      => T(),
@@ -328,7 +328,7 @@ subtest med1 => sub {
             run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $med1->file,
             job_name    => 42,
             stamp       => T(),
@@ -380,7 +380,7 @@ subtest long => sub {
             run_id      => FDNE(),
             category    => 'isolation',
             duration    => 'long',
-            stage       => 'default',
+            stage       => undef,
             file        => $long->file,
             job_name    => 42,
             job_id      => T(),
@@ -430,7 +430,7 @@ subtest extra_comments => sub {
             run_id      => FDNE(),
             category    => 'isolation',
             duration    => 'long',
-            stage       => 'default',
+            stage       => undef,
             file        => $long->file,
             job_name    => 42,
             job_id      => T(),
@@ -451,6 +451,8 @@ subtest extra_comments => sub {
 };
 
 subtest conflicts => sub {
+    my $TODO = todo "Should these be case sensitive?";
+
     my $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts1'));
     is($parsed_file->conflicts_list, ['passwd'], "1 conflict line is reflected as an array");
 
@@ -491,7 +493,7 @@ subtest binary => sub {
             run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $path,
             job_name    => 42,
             job_id      => T(),
@@ -537,7 +539,7 @@ subtest not_perl => sub {
             run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $not_perl->file,
             job_name    => 42,
             job_id      => T(),
@@ -584,7 +586,7 @@ subtest not_env_perl => sub {
             run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $not_env_perl->file,
             job_name    => 42,
             job_id      => T(),
@@ -613,7 +615,7 @@ subtest smoke => sub {
             run_id      => FDNE(),
             category    => 'general',
             duration    => 'medium',
-            stage       => 'default',
+            stage       => undef,
             file        => $smoke1->file,
             job_name    => 42,
             rank        => T(),

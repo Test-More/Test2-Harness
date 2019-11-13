@@ -135,15 +135,15 @@ sub _pull_durations {
 
 sub find_files {
     my $self = shift;
-    my ($plugins) = @_;
+    my ($plugins, $settings) = @_;
 
-    return $self->_find_project_files($plugins) if $self->multi_project;
-    return $self->_find_files($plugins, $self->{+SEARCH});
+    return $self->_find_project_files($plugins, $settings) if $self->multi_project;
+    return $self->_find_files($plugins, $settings, $self->{+SEARCH});
 }
 
 sub _find_project_files {
     my $self = shift;
-    my ($plugins) = @_;
+    my ($plugins, $settings) = @_;
 
     my $search = $self->{+SEARCH} // [];
 
@@ -166,7 +166,7 @@ sub _find_project_files {
 
             chdir($path) or die "Could not chdir to $path: $!\n";
 
-            for my $item (@{$self->_find_files($plugins, [])}) {
+            for my $item (@{$self->_find_files($plugins, $settings, [])}) {
                 push @{$item->queue_args} => ('ch_dir' => $path);
                 push @$out => $item;
             }
@@ -184,7 +184,7 @@ sub _find_project_files {
 
 sub _find_files {
     my $self = shift;
-    my ($plugins, $input) = @_;
+    my ($plugins, $settings, $input) = @_;
 
     $input   //= [];
     $plugins //= [];
@@ -192,7 +192,7 @@ sub _find_files {
     my $default_search = [@{$self->default_search}];
     push @$default_search => @{$self->default_at_search} if $self->author_testing;
 
-    $_->munge_search($self, $input, $default_search) for @$plugins;
+    $_->munge_search($self, $input, $default_search, $settings) for @$plugins;
 
     my $search = @$input ? $input : $default_search;
 
@@ -208,7 +208,7 @@ sub _find_files {
         $seen{$path}++;
 
         my $test;
-        unless (first { $test = $_->claim_file($path) } @$plugins) {
+        unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
             $test = Test2::Harness::TestFile->new(file => $path);
             next unless @$input || $self->_include_file($test);
         }
@@ -230,7 +230,7 @@ sub _find_files {
                     return unless -f $file;
 
                     my $test;
-                    unless(first { $test = $_->claim_file($file) } @$plugins) {
+                    unless(first { $test = $_->claim_file($file, $settings) } @$plugins) {
                         for my $ext (@{$self->{+EXTENSIONS}}) {
                             next unless m/\.\Q$ext\E$/;
                             $test = Test2::Harness::TestFile->new(file => $file);
@@ -246,7 +246,7 @@ sub _find_files {
         );
     }
 
-    $_->munge_files($self, \@tests) for @$plugins;
+    $_->munge_files($self, \@tests, $settings) for @$plugins;
 
     return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
 }

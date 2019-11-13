@@ -287,7 +287,7 @@ sub populate_queue {
     $state->queue_run($run->queue_item($plugins));
 
     my $job_count = 0;
-    for my $file ( @{$run->find_files($plugins)} ) {
+    for my $file ( @{$run->find_files($plugins, $self->settings)} ) {
         my $task = $file->queue_item(++$job_count, $run->run_id);
         $state->queue_task($task);
         $tasks_queue->enqueue($task);

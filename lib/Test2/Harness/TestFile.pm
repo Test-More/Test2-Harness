@@ -287,7 +287,7 @@ sub _scan {
             my @conflicts_array;
 
             foreach my $arg (@args) {
-                push @conflicts_array, $arg;
+                push @conflicts_array, lc($arg);
             }
 
             # Allow multiple lines with # HARNESS-CONFLICTS FOO

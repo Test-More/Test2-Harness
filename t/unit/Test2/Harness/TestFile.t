@@ -451,8 +451,6 @@ subtest extra_comments => sub {
 };
 
 subtest conflicts => sub {
-    my $TODO = todo "Should these be case sensitive?";
-
     my $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts1'));
     is($parsed_file->conflicts_list, ['passwd'], "1 conflict line is reflected as an array");
 

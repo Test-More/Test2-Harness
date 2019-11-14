@@ -242,7 +242,7 @@ sub run_tests {
 
         last unless $jump;
 
-        $stage = @$jump;
+        ($stage) = @$jump;
         $self->reset_stage();
     }
 
@@ -294,7 +294,8 @@ sub run_job {
     my $self = shift;
 
     my $task = $self->next() or return 0;
-    my $run = $self->state->run() or return 1;
+    my $run = $self->state->run();
+    return 1 unless $run;
 
     my $job = $self->job_class->new(
         runner   => $self,
@@ -319,6 +320,7 @@ sub run_job {
     else {
         $spawn_time = time();
         $self->spawn($job);
+        $pid = $job->pid;
     }
 
     my $json_data = $job->TO_JSON();

@@ -30,7 +30,7 @@ use Test2::Harness::Util::HashBase(
         <queue_ended
 
         <pending_tasks <task_lookup
-        <pending_runs  <run
+        <pending_runs  +run <stopped_runs
 
         <running
         <running_categories
@@ -60,16 +60,23 @@ sub init {
     $self->poll;
 }
 
+sub run {
+    my $self = shift;
+    return $self->{+RUN} if $self->{+RUN};
+    $self->poll();
+    return $self->{+RUN};
+}
+
 sub done {
     my $self = shift;
 
     $self->poll();
 
     return 0 if $self->{+RUNNING};
-    return 0 if keys %{$self->{+PENDING_TASKS}};
+    return 0 if keys %{$self->{+PENDING_TASKS} //= {}};
 
     return 0 if $self->{+RUN};
-    return 0 if @{$self->{+PENDING_RUNS}};
+    return 0 if @{$self->{+PENDING_RUNS} //= []};
 
     return 0 unless $self->{+QUEUE_ENDED};
 
@@ -93,12 +100,12 @@ sub next_task {
 
 sub advance {
     my $self = shift;
-
     $self->poll();
 
-    return 1 if $self->advance_run();
+    $self->advance_run();
     return 0 unless $self->{+RUN};
-    return $self->advance_tasks();
+    return 1 if $self->advance_tasks();
+    return $self->clear_finished_run();
 }
 
 my %ACTIONS = (
@@ -167,6 +174,7 @@ sub queue_run {
 sub _queue_run {
     my $self = shift;
     my ($run) = @_;
+
     push @{$self->{+PENDING_RUNS}} => Test2::Harness::Runner::Run->new(
         %$run,
         workdir => $self->{+WORKDIR},
@@ -204,10 +212,7 @@ sub _stop_run {
     my $self = shift;
     my ($run_id) = @_;
 
-    my $run = delete $self->{+RUN} or die "Run stop requested, but no run to stop";
-    die "Run mismatch, current run and stopped run have different ids" unless $run->run_id eq $run_id;
-
-    die "Run still has pending tasks" if $self->{+PENDING_TASKS}->{$run_id};
+    $self->{+STOPPED_RUNS}->{$run_id} = 1;
 
     return;
 }
@@ -240,6 +245,8 @@ sub _queue_task {
 sub start_task {
     my $self = shift;
     my ($spec) = @_;
+    my $job_id = $spec->{job_id};
+    my $task = $self->{+TASK_LOOKUP}->{$job_id};
     $self->_enqueue(start_task => $spec);
 }
 
@@ -321,7 +328,7 @@ sub _retry_task {
 
     $task = {is_try => 0, %$task};
     $task->{is_try}++;
-    $task->{category} = 'isolation' if $self->run->retry_isolated;
+    $task->{category} = 'isolation' if $self->{+RUN}->retry_isolated;
 
     $self->_queue_task($task);
 
@@ -417,10 +424,9 @@ sub prune_hash {
 sub advance_run {
     my $self = shift;
 
-    return $self->clear_finished_run() if $self->{+RUN};
+    return 0 if $self->{+RUN};
 
     return 0 unless @{$self->{+PENDING_RUNS} //= []};
-
     $self->start_run($self->{+PENDING_RUNS}->[0]->run_id);
 
     return 1;
@@ -431,6 +437,7 @@ sub clear_finished_run {
 
     my $run = $self->{+RUN} or return 0;
 
+    return 0 unless $self->{+STOPPED_RUNS}->{$run->run_id};
     return 0 if $self->{+PENDING_TASKS}->{$run->run_id};
     return 0 if $self->{+RUNNING};
 

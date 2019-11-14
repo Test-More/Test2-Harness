@@ -145,8 +145,6 @@ sub launch_stage {
     $0 .= "-" . $stage->name;
     $ENV{HARNESS_STAGE} = $stage->name;
 
-    $self->start_stage($stage);
-
     return;
 }
 
@@ -297,11 +295,12 @@ sub load_blacklist {
 sub _monitor {
     my $self = shift;
 
-    confess "Monitor already starated"
-        if $self->{+MONITORED} && $self->{+MONITORED} == $$;
+    if ($self->{+MONITORED} && $self->{+MONITORED}->[0] == $$) {
+        die "Monitor already starated\n" . "\n=======\n$0\n" . Carp::longmess() . "\n=====\n" . $self->{+MONITORED}->[1] . "\n" . $self->{+MONITORED}->[2] . "\n=======\n";
+    }
 
     delete $self->{+INOTIFY};
-    $self->{+MONITORED} = $$;
+    $self->{+MONITORED} = [$$, $0, Carp::longmess()];
 
     my $dtrace = $self->dtrace;
     my $stats = $self->{+STATS} ||= {};

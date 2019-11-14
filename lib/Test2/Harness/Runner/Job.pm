@@ -418,12 +418,14 @@ sub env_vars {
         $self->use_stream ? (T2_FORMATTER => 'Stream', T2_STREAM_DIR => $self->event_dir) : (),
 
         PERL5LIB            => $p5l,
-        T2_HARNESS_JOB_NAME => $self->{+TASK}->{job_name},
         PERL_USE_UNSAFE_INC => $self->unsafe_inc,
         TEST2_JOB_DIR       => $self->job_dir,
         TEST2_RUN_DIR       => $self->run_dir,
         TMPDIR              => $self->tmp_dir,
         TEMPDIR             => $self->tmp_dir,
+
+        T2_HARNESS_JOB_NAME   => $self->{+TASK}->{job_name},
+        T2_HARNESS_JOB_IS_TRY => $self->{+IS_TRY} // 0,
     };
 }
 

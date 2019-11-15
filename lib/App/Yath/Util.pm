@@ -26,7 +26,7 @@ sub find_yath {
 
     if (-d 'scripts') {
         my $script = File::Spec->catfile('scripts', 'yath');
-        return $App::Yath::Script::SCRIPT = $script if -e $script && -x $script;
+        return $App::Yath::Script::SCRIPT = clean_path($script) if -e $script && -x $script;
     }
 
     my @keys = qw{
@@ -44,7 +44,7 @@ sub find_yath {
         my $script = File::Spec->catfile($path, 'yath');
         next unless -f $script && -x $script;
 
-        $App::Yath::Script::SCRIPT = $script;
+        $App::Yath::Script::SCRIPT = clean_path($script);
         return $script;
     }
 

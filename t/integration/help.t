@@ -4,6 +4,7 @@ use File::Temp qw/tempdir/;
 use File::Spec;
 
 use App::Yath::Tester qw/yath/;
+use App::Yath::Util qw/find_yath/;
 
 my $out;
 
@@ -18,6 +19,7 @@ like($out->{output}, qr{^\s+help:  Show the list of commands$}m, "'help' command
 like($out->{output}, qr{^\s+test:  Run tests$}m, "'test' command is listed");
 like($out->{output}, qr{^\s+start:  Start the persistent test runner$}m, "'start' command is listed");
 
+my $script = find_yath();
 $out = yath(command => 'help', args => ['help']);
 ok(!$out->{exit}, "success");
 is($out->{output}, <<EOT, "Got output for the help command");
@@ -27,7 +29,7 @@ This command provides a list of commands when called with no arguments.
 When given a command name as an argument it will print the help for that
 command.
 
-Usage: /home/exodist/projects/Test2/Test2-Harness/scripts/yath help
+Usage: $script help
 EOT
 
 $out = yath(command => 'help', args => ['test']);

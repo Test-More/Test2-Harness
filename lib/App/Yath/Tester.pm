@@ -118,6 +118,7 @@ sub yath {
 
     my $cmd = $params{cmd} // $params{command};
     my $cli = $params{cli} // $params{args} // [];
+    my $env = $params{env} // {};
 
     $params{debug}   //= 0;
     $params{inc}     //= 1;
@@ -153,8 +154,10 @@ sub yath {
 
     print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $params{debug};
 
-    local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
-    local $ENV{NESTED_YATH} = 1;
+    local %ENV = %ENV;
+    $ENV{YATH_PERSISTENCE_DIR} = $pdir;
+    $ENV{NESTED_YATH} = 1;
+    $ENV{$_} = $env->{$_} for keys %$env;
     my $pid = run_cmd(
         no_set_pgrp => 1,
         $params{capture} ? (stderr => $wh, stdout => $wh) : (),

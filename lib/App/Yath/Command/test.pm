@@ -127,15 +127,17 @@ sub run {
 
     my $settings = $self->settings;
 
-    $self->start();
-    $self->render();
+    if ($self->start()) {
+        $self->render();
+        $self->stop();
+
+        my $final_data = $self->{+FINAL_DATA} or die "Final data never received from auditor!\n";
+        $self->render_final_data($final_data);
+        return $self->{+TESTS_SEEN} ? $final_data->{pass} ? 0 : 1 : 1;
+    }
+
     $self->stop();
-
-    my $final_data = $self->{+FINAL_DATA} or die "Final data never received from auditor!\n";
-
-    $self->render_final_data($final_data);
-
-    return $self->{+TESTS_SEEN} ? $final_data->{pass} ? 0 : 1 : 1;
+    return 1;
 }
 
 sub start {
@@ -144,11 +146,15 @@ sub start {
     $self->ipc->start();
     $self->parse_args;
     $self->write_settings_to($self->workdir, 'settings.json');
-    $self->populate_queue();
+
+    return 0 unless $self->populate_queue();
+
     $self->terminate_queue();
     $self->start_runner();
     $self->start_collector();
     $self->start_auditor();
+
+    return 1;
 }
 
 sub render {
@@ -293,6 +299,8 @@ sub populate_queue {
         $state->stop_run($run->run_id);
         $tasks_queue->enqueue($task);
     }
+
+    return $job_count;
 }
 
 sub render_final_data {

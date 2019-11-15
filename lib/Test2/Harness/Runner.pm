@@ -312,6 +312,8 @@ sub run_job {
     my $via = $job->via;
     $via //= $self->{+FORK_JOB_CALLBACK} if $job->use_fork;
     if ($via) {
+        require(mod2file($1)) if !defined(&{$via}) && $via =~ m/^(.+)::[^:]+$/;
+
         $spawn_time = time();
         $pid        = $self->$via($job);
         $job->set_pid($pid);

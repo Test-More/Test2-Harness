@@ -125,7 +125,8 @@ sub write_file_atomic {
 
 sub clean_path {
     my $path = shift;
-    return realpath($path) // File::Spec->rel2abs($path);
+    $path = realpath($path) // $path;
+    return File::Spec->rel2abs($path);
 }
 
 sub mod2file {

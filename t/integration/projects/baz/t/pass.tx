@@ -1,0 +1,9 @@
+use Test2::V0;
+use Baz;
+
+like(dies { require Foo }, qr{Loaded Foo.pm from the wrong project}, "Using our own libs (Foo)");
+like(dies { require Bar }, qr{Loaded Bar.pm from the wrong project}, "Using our own libs (Bar)");
+
+ok(1, "Pass");
+
+done_testing;

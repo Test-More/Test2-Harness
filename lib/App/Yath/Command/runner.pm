@@ -246,6 +246,10 @@ sub build_init_state {
     my $class = shift;
     my ($job) = @_;
 
+    if (my $chdir = $job->ch_dir) {
+        chdir($chdir) or die "Could not chdir: $!";
+    }
+
     $0 = $job->rel_file;
     $class->_reset_DATA();
     @ARGV = ();
@@ -254,10 +258,6 @@ sub build_init_state {
 
     @INC = $job->includes;    # Make @INC = (-I's, @ORIG)
     push @INC => '.' if $job->unsafe_inc && !first { $_ eq '.' } @INC;
-
-    if (my $chdir = $job->ch_dir) {
-        chdir($chdir) or die "Could not chdir: $!";
-    }
 
     # if FindBin is preloaded, reset it with the new $0
     FindBin::init() if defined &FindBin::init;

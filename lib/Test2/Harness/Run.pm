@@ -172,11 +172,12 @@ sub _find_project_files {
             }
         }
 
+        chdir($ret);
         1;
     };
     my $err = $@;
 
-    chdir($dir) if defined $pdir;
+    chdir($dir);
     die $err unless $ok;
 
     return $out;
@@ -202,7 +203,10 @@ sub _find_files {
     for my $path (@$search) {
         push @dirs => $path and next if -d $path;
 
-        die "'$path' is not a valid file or directory.\n" unless -f $path;
+        unless(-f $path) {
+            die "'$path' is not a valid file or directory.\n" if @$input;
+            next;
+        }
 
         $path = clean_path($path);
         $seen{$path}++;

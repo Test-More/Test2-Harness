@@ -39,7 +39,7 @@ use Test2::Harness::Util::HashBase(
         +smoke
         +retry +retry_isolated +is_try
 
-        +args +file +rel_file
+        +args +file
 
         +out_file +err_file +in_file +bail_file
 
@@ -180,7 +180,7 @@ sub TO_JSON {
     return $out;
 }
 
-sub rel_file  { $_[0]->{+REL_FILE}  //= File::Spec->abs2rel($_[0]->file) }
+sub rel_file  { File::Spec->abs2rel($_[0]->file) }
 sub file      { $_[0]->{+FILE}      //= clean_path($_[0]->{+TASK}->{file}) }
 sub err_file  { $_[0]->{+ERR_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stderr')) }
 sub out_file  { $_[0]->{+OUT_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stdout')) }

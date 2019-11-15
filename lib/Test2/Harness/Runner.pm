@@ -297,7 +297,19 @@ sub run_job {
     my $run = $self->state->run();
     return 1 unless $run;
 
-    my $job = $self->job_class->new(
+    my $job_class;
+    if ($task->{job_class}) {
+        $job_class = $task->{job_class};
+        require(mod2file($job_class));
+
+        die "Custom job class $job_class overrode the category, this is a fatal mistake"
+            unless $job_class->category eq $self->job_class->category;
+    }
+    else {
+        $job_class = $self->job_class;
+    }
+
+    my $job = $job_class->new(
         runner   => $self,
         task     => $task,
         run      => $run,

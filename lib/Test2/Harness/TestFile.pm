@@ -19,6 +19,7 @@ use File::Spec;
 use Test2::Harness::Util::HashBase qw{
     <file +relative <_scanned <_headers +_shbang <is_binary <non_perl
     queue_args
+    job_class
     _category _stage _duration
 };
 
@@ -373,6 +374,8 @@ sub queue_item {
     my $et  = $self->event_timeout;
     my $pet = $self->post_exit_timeout;
 
+    my $job_class = $self->job_class;
+
     return {
         binary      => $binary,
         category    => $category,
@@ -393,6 +396,7 @@ sub queue_item {
         smoke       => $smoke,
         rank        => $self->rank,
 
+        defined($job_class)      ? (job_class         => $job_class)               : (),
         defined($retry)          ? (retry             => $retry)                   : (),
         defined($retry_isolated) ? (retry_isolated    => $retry_isolated)          : (),
         defined($et)             ? (event_timeout     => $et)                      : (),

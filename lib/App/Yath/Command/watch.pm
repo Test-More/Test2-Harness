@@ -29,6 +29,10 @@ STDERR will be printed as seen, so may not be in proper order.
 sub run {
     my $self = shift;
 
+    my $args     = $self->args;
+    shift @$args if @$args && $args->[0] eq '--';
+    my $stop = 1 if @$args && $args->[0] eq 'STOP';
+
     my $pfile = find_pfile()
         or die "No persistent harness was found for the current path.\n";
 
@@ -56,6 +60,7 @@ sub run {
         }
 
         next if $count;
+        last if $stop;
         last unless -f $pfile;
         sleep 0.02;
     }

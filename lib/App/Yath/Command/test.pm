@@ -147,9 +147,11 @@ sub start {
     $self->parse_args;
     $self->write_settings_to($self->workdir, 'settings.json');
 
-    return 0 unless $self->populate_queue();
-
+    my $pop = $self->populate_queue();
     $self->terminate_queue();
+
+    return unless $pop;
+
     $self->start_runner();
     $self->start_collector();
     $self->start_auditor();
@@ -296,9 +298,10 @@ sub populate_queue {
     for my $file ( @{$run->find_files($plugins, $self->settings)} ) {
         my $task = $file->queue_item(++$job_count, $run->run_id);
         $state->queue_task($task);
-        $state->stop_run($run->run_id);
         $tasks_queue->enqueue($task);
     }
+
+    $state->stop_run($run->run_id);
 
     return $job_count;
 }

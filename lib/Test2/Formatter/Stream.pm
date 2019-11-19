@@ -16,7 +16,7 @@ use Test2::Harness::Util qw/hub_truth/;
 use Test2::Util qw/get_tid ipc_separator/;
 
 use base qw/Test2::Formatter/;
-use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh/;
+use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id/;
 
 BEGIN {
     my $J = JSON->new;
@@ -38,7 +38,7 @@ BEGIN {
     }
 }
 
-my ($ROOT_TID, $ROOT_PID, $ROOT_DIR);
+my ($ROOT_TID, $ROOT_PID, $ROOT_DIR, $ROOT_JOB_ID);
 sub import {
     my $class = shift;
     my %params = @_;
@@ -51,6 +51,7 @@ sub import {
     $ROOT_PID  = $$;
     $ROOT_TID  = get_tid();
     $ROOT_DIR = $params{dir} if $params{dir};
+    $ROOT_JOB_ID = $params{job_id} if $params{job_id};
 }
 
 sub hide_buffered { 0 }
@@ -140,6 +141,7 @@ sub new_root {
         if exists $ENV{T2_STREAM_FILE};
 
     $params{+DIR} ||= $ENV{T2_STREAM_DIR} || $ROOT_DIR;
+    $params{+JOB_ID} ||= $ENV{T2_STREAM_JOB_ID} || $ROOT_JOB_ID || 1;
 
     # DO NOT REOPEN THEM!
     delete $ENV{T2_STREAM_DIR};
@@ -236,9 +238,11 @@ sub record {
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
 
-    print $fh $leader ? ("T2-HARNESS-EVENT: ", $json, "\n") : ($json, "\n");
+    my $job_id = $self->{+JOB_ID};
 
-    print $_ "T2-HARNESS-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
+    print $fh $leader ? ("T2--HARNESS-$job_id-EVENT: ", $json, "\n") : ($json, "\n");
+
+    print $_ "T2-HARNESS-$job_id-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
 }
 
 sub encoding {

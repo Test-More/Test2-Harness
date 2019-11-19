@@ -190,7 +190,7 @@ sub test2_state {
     if ($job->use_stream) {
         $ENV{T2_FORMATTER} = 'Stream';
         require Test2::Formatter::Stream;
-        Test2::Formatter::Stream->import(dir => $job->event_dir);
+        Test2::Formatter::Stream->import(dir => $job->event_dir, job_id => $job->job_id);
     }
 
     return;

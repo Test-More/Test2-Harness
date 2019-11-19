@@ -77,6 +77,8 @@ sub init {
     confess "Task does not have a file"   unless $task->{file};
 }
 
+sub job_id { $_[0]->{+TASK}->{job_id} }
+
 sub prepare_dir {
     my $self = shift;
 
@@ -359,9 +361,10 @@ sub cli_options {
     my $self = shift;
 
     my $event_dir = $self->event_dir;
+    my $job_id = $self->job_id;
 
     return (
-        $self->use_stream  ? ("-MTest2::Formatter::Stream=dir,$event_dir") : (),
+        $self->use_stream  ? ("-MTest2::Formatter::Stream=dir,$event_dir,job_id,$job_id") : (),
         $self->event_uuids ? ('-MTest2::Plugin::UUID')                     : (),
         $self->mem_usage   ? ('-MTest2::Plugin::MemUsage')                 : (),
         (map { @{$_[1]} ? "-M$_[0]=" . join(',' => @{$_[1]}) : "-M$_[0]" } $self->load_import),
@@ -415,7 +418,7 @@ sub env_vars {
         $from_run  ? (%$from_run)  : (),
         $from_task ? (%$from_task) : (),
 
-        $self->use_stream ? (T2_FORMATTER => 'Stream', T2_STREAM_DIR => $self->event_dir) : (),
+        $self->use_stream ? (T2_FORMATTER => 'Stream', T2_STREAM_DIR => $self->event_dir, T2_STREAM_JOB_ID => $self->job_id) : (),
 
         PERL5LIB            => $p5l,
         PERL_USE_UNSAFE_INC => $self->unsafe_inc,

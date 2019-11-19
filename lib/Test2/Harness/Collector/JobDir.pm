@@ -314,7 +314,8 @@ sub _poll_stream_process_harness_line {
     my $self = shift;
     my ($line, $params) = @_;
 
-    return undef unless $line =~ s/T2-HARNESS-(ESYNC|EVENT): (.+)//;
+    my $job_id = $self->{+JOB_ID};
+    return undef unless $line =~ s/T2-HARNESS-\Q$job_id\E-(ESYNC|EVENT): (.+)//;
     my ($type, $data) = ($1, $2);
 
     my $esync;
@@ -555,6 +556,9 @@ sub _process_exit_line {
 
     my $stdout = maybe_read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stdout"));
     my $stderr = maybe_read_file(File::Spec->catfile($self->{+JOB_ROOT}, "stderr"));
+
+    $stdout =~ s/T2-HARNESS-\S+-(?:ESYNC|EVENT): .+\n//g;
+    $stderr =~ s/T2-HARNESS-\S+-(?:ESYNC|EVENT): .+\n//g;
 
     my $event_id = gen_uuid();
 

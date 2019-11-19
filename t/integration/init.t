@@ -4,6 +4,8 @@ use File::Temp qw/tempdir/;
 use File::Spec;
 
 use App::Yath::Tester qw/yath/;
+use App::Yath::Util qw/find_yath/;
+find_yath(); # cache result before we chdir
 
 my $dir = tempdir(CLEANUP => 1);
 chdir($dir);

@@ -4,7 +4,12 @@ use File::Temp qw/tempdir/;
 use File::Spec;
 use File::Copy qw/copy/;
 
+use Test2::Harness::Util::File::JSONL;
+
 use App::Yath::Tester qw/yath/;
+
+use App::Yath::Util qw/find_yath/;
+find_yath(); # cache result before we chdir
 
 my $tmp = tempdir(CLEANUP => 1);
 

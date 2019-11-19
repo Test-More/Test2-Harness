@@ -3,6 +3,9 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec;
 
+use App::Yath::Util qw/find_yath/;
+find_yath(); # cache result before we chdir
+
 use App::Yath::Tester qw/yath/;
 use Test2::Harness::Util::File::JSONL;
 

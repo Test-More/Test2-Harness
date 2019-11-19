@@ -3,6 +3,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec;
 
+use Test2::Harness::Util::File::JSONL;
 use App::Yath::Tester qw/yath/;
 
 my $dir = __FILE__;

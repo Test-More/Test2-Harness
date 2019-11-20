@@ -11,14 +11,9 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 
-my $log;
-{
-    local %ENV = %ENV;
-    $ENV{NOPE} = 1;
-    my $out = yath(command => 'test', args => [$dir, '--ext=tx', '-j4'], log => 1, debug => 0);
-    ok(!$out->{exit}, "exit success");
-    $log = $out->{log};
-}
+my $out = yath(command => 'test', args => [$dir, '--ext=tx', '-j4'], log => 1, debug => 0);
+ok(!$out->{exit}, "exit success");
+my $log = $out->{log};
 
 my @order;
 my @events = $log->poll();

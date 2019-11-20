@@ -54,6 +54,7 @@ sub generate_run_sub {
     my $cleanup = $class->cleanup($settings, \%args, $dir);
 
     my $jump = setjump "Test-Runner" => sub {
+        local $.;
         local %SIG = %SIG;
         my $runner = $settings->build(
             runner => 'Test2::Harness::Runner',

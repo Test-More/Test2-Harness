@@ -119,6 +119,7 @@ sub yath {
     my $cmd = $params{cmd} // $params{command};
     my $cli = $params{cli} // $params{args} // [];
     my $env = $params{env} // {};
+    my $pre = $params{pre} // $params{pre_command} // [];
 
     $params{debug}   //= 0;
     $params{inc}     //= 1;
@@ -150,7 +151,7 @@ sub yath {
     }
 
     my $yath = find_yath;
-    my @cmd = ($^X, $yath, @inc, $cmd ? ($cmd) : (), @log, @$cli);
+    my @cmd = ($^X, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
 
     print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $params{debug};
 

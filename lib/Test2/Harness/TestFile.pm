@@ -32,6 +32,8 @@ sub set_smoke {
     my $self = shift;
     my $val = @_ ? $_[0] : 1;
 
+    $self->scan;
+
     $self->{+_HEADERS}->{features}->{smoke} = $val;
 }
 

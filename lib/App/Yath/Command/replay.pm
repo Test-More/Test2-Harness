@@ -8,7 +8,7 @@ use App::Yath::Options;
 require App::Yath::Command::test;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw/+renderers <final_data <log_file/;
+use Test2::Harness::Util::HashBase qw/+renderers <final_data <log_file <tests_seen <asserts_seen/;
 
 include_options(
     'App::Yath::Options::Debug',
@@ -35,6 +35,14 @@ command accepts.
     EOT
 }
 
+sub init {
+    my $self = shift;
+    $self->SUPER::init() if $self->can('SUPER::init');
+
+    $self->{+TESTS_SEEN}   //= 0;
+    $self->{+ASSERTS_SEEN} //= 0;
+}
+
 sub run {
     my $self = shift;
 
@@ -58,6 +66,9 @@ sub run {
         for my $e (@events) {
             last unless defined $e;
 
+            $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
+            $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
+
             if (my $final = $e->{facet_data}->{harness_final}) {
                 $self->{+FINAL_DATA} = $final;
             }
@@ -73,6 +84,7 @@ sub run {
     my $final_data = $self->{+FINAL_DATA} or die "Log did not contain final data!\n";
 
     $self->App::Yath::Command::test::render_final_data($final_data);
+    $self->App::Yath::Command::test::render_summary($final_data->{pass});
 
     return $final_data->{pass} ? 0 : 1;
 }

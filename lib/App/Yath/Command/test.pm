@@ -20,7 +20,8 @@ use Test2::Util::Table qw/table/;
 
 use File::Spec;
 
-use Time::HiRes qw/sleep/;
+use Time::HiRes qw/sleep time/;
+use List::Util qw/sum max/;
 use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
@@ -38,6 +39,8 @@ use Test2::Harness::Util::HashBase qw/
     +logger
 
     +tests_seen
+    +asserts_seen
+
     +run_queue
     +tasks_queue
     +state
@@ -80,6 +83,14 @@ If you wish to specify the ARGV for tests you may append them after '::'. This
 is mainly useful for Test::Class::Moose and similar tools. EVERY test run will
 get the same ARGV.
     EOT
+}
+
+sub init {
+    my $self = shift;
+    $self->SUPER::init() if $self->can('SUPER::init');
+
+    $self->{+TESTS_SEEN}   //= 0;
+    $self->{+ASSERTS_SEEN} //= 0;
 }
 
 sub auditor_reader {
@@ -133,7 +144,9 @@ sub run {
 
         my $final_data = $self->{+FINAL_DATA} or die "Final data never received from auditor!\n";
         $self->render_final_data($final_data);
-        return $self->{+TESTS_SEEN} ? $final_data->{pass} ? 0 : 1 : 1;
+        my $pass = $self->{+TESTS_SEEN} && $final_data->{pass};
+        $self->render_summary($pass);
+        return $pass ? 0 : 1;
     }
 
     $self->stop();
@@ -194,7 +207,8 @@ sub render {
             $_->render_event($e) for @$renderers;
         }
 
-        $self->{+TESTS_SEEN}++ if $e->{facet_data}->{harness_job_launch};
+        $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
+        $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
 
         $_->handle_event($e, $settings) for @$plugins;
 
@@ -304,6 +318,46 @@ sub populate_queue {
     $state->stop_run($run->run_id);
 
     return $job_count;
+}
+
+sub render_summary {
+    my $self = shift;
+    my ($pass) = @_;
+
+    return if $self->settings->display->quiet > 1;
+
+    my $runtime = sprintf("%.2fs", time() - $self->settings->yath->start);
+    my ($user, $system, $cuser, $csystem) = times();
+
+    my @times = times();
+    push @times => sum @times;
+
+    my @summary = (
+        "     File Count: $self->{+TESTS_SEEN}",
+        "Assertion Count: $self->{+ASSERTS_SEEN}",
+        sprintf("           Time: %.2f seconds (usr: %.2fs sys: %.2fs cusr: %.2fs csys: %.2fs total: %.2fs)", time() - $self->settings->yath->start, @times),
+    );
+
+
+    my $res = "         Result: " . ($pass ? 'PASSED' : 'FAILED');
+    if ($self->settings->display->color && eval { require Term::ANSIColor; 1 }) {
+        my $color = $pass ? Term::ANSIColor::color('green') : Term::ANSIColor::color('red');
+        my $reset = Term::ANSIColor::color('reset');
+        $res = "$color$res$reset";
+    }
+    push @summary => $res;
+
+    my $msg = "Yath Result Summary";
+    my $length = max map { length($_) } @summary;
+    my $prefix = ($length - length($msg)) / 2;
+
+    print "\n";
+    print " " x $prefix;
+    print "$msg\n";
+    print "-" x $length;
+    print "\n";
+    print join "\n" => @summary;
+    print "\n";
 }
 
 sub render_final_data {

@@ -19,6 +19,7 @@ my $out1 = yath(
 
 # Strip out log line, and extra newlines
 $out1->{output} =~ s/^.*Wrote log file:.*$//m;
+$out1->{output} =~ s/^\s*Time: .*\)//m;
 $out1->{output} =~ s/\n+/\n/g;
 
 like($out1->{output}, qr{FAILED.*fail\.tx}, "'fail.tx' was seen as a failure when reading the log");
@@ -32,6 +33,7 @@ my $out2 = yath(
 );
 
 # Strip out extra newlines
+$out2->{output} =~ s/^\s*Time: .*\)//m;
 $out2->{output} =~ s/\n+/\n/g;
 is($out2->{output}, $out1->{output}, "Replay has identical output to original");
 is($out2->{exit}, $out1->{exit}, "Replay has identical exit");

@@ -278,6 +278,15 @@ sub write {
     }
 }
 
+sub finalize {
+    my $self = shift;
+
+    my $io = $self->{+IO};
+    print $io "\r\e[K" if $self->{+_BUFFERED};
+
+    return;
+}
+
 sub update_active_disp {
     my $self = shift;
     my ($f) = @_;

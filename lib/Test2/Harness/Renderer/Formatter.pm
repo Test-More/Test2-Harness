@@ -142,6 +142,11 @@ sub render_event {
     $self->{+FORMATTER}->write($event, $num, $f);
 }
 
+sub finish {
+    my $self = shift;
+    $self->{+FORMATTER}->finalize();
+}
+
 1;
 
 __END__

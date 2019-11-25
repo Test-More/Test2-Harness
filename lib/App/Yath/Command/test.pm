@@ -329,17 +329,20 @@ sub render_summary {
     my $runtime = sprintf("%.2fs", time() - $self->settings->yath->start);
     my ($user, $system, $cuser, $csystem) = times();
 
+    my $time = time() - $self->settings->yath->start;
     my @times = times();
-    push @times => sum @times;
+    unshift @times => sum @times;
+    my $percent = $times[0] / $time * 100;
 
     my @summary = (
         "     File Count: $self->{+TESTS_SEEN}",
         "Assertion Count: $self->{+ASSERTS_SEEN}",
-        sprintf("           Time: %.2f seconds (usr: %.2fs sys: %.2fs cusr: %.2fs csys: %.2fs total: %.2fs)", time() - $self->settings->yath->start, @times),
+        sprintf("      Wall Time: %.2f seconds", $time),
+        sprintf("       CPU Time: %.2f seconds (usr: %.2fs | sys: %.2fs | cusr: %.2fs | csys: %.2fs)", @times),
+        sprintf("      CPU Usage: %i%%", $percent),
     );
 
-
-    my $res = "         Result: " . ($pass ? 'PASSED' : 'FAILED');
+    my $res = "    -->  Result: " . ($pass ? 'PASSED' : 'FAILED') . "  <--";
     if ($self->settings->display->color && eval { require Term::ANSIColor; 1 }) {
         my $color = $pass ? Term::ANSIColor::color('green') : Term::ANSIColor::color('red');
         my $reset = Term::ANSIColor::color('reset');

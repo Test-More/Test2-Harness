@@ -101,9 +101,11 @@ sub spawn_params {
 
     my $task = $self->{+TASK};
 
+    my $file = $self->ch_dir ? $self->file : $self->rel_file;
+
     my $command;
     if ($task->{binary} || $task->{non_perl}) {
-        $command = [$self->rel_file, $self->args];
+        $command = [$file, $self->args];
     }
     else {
         $command = [
@@ -112,7 +114,7 @@ sub spawn_params {
             $self->switches,
             $self->cli_options,
 
-            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : ($self->rel_file),
+            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : ($file),
 
             $self->args,
         ];
@@ -367,7 +369,7 @@ sub cli_options {
         $self->use_stream  ? ("-MTest2::Formatter::Stream=dir,$event_dir,job_id,$job_id") : (),
         $self->event_uuids ? ('-MTest2::Plugin::UUID')                     : (),
         $self->mem_usage   ? ('-MTest2::Plugin::MemUsage')                 : (),
-        (map { @{$_[1]} ? "-M$_[0]=" . join(',' => @{$_[1]}) : "-M$_[0]" } $self->load_import),
+        (map { @{$_->[1]} ? "-M$_->[0]=" . join(',' => @{$_->[1]}) : "-M$_->[0]" } $self->load_import),
         (map { "-m$_" } $self->load),
     );
 }
@@ -441,7 +443,7 @@ sub load_import {
 
     my @out;
     for my $mod (@{$from_run->{'@'} // []}) {
-        push @out => [$mod, $from_run->{$mod}];
+        push @out => [$mod, $from_run->{$mod} // []];
     }
 
     return @{$self->{+LOAD_IMPORT} = \@out};

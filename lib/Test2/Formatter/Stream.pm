@@ -145,6 +145,7 @@ sub new_root {
 
     # DO NOT REOPEN THEM!
     delete $ENV{T2_STREAM_DIR};
+    delete $ENV{T2_STREAM_JOB_ID};
     $ROOT_DIR = undef;
 
     $params{check_tb} = 1 if $INC{'Test/Builder.pm'};

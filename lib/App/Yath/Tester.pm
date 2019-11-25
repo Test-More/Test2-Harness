@@ -4,11 +4,14 @@ use warnings;
 
 our $VERSION = '0.001100';
 
+use Test2::API qw/context/;
 use App::Yath::Util qw/find_yath/;
 use File::Spec;
 use File::Temp qw/tempfile tempdir/;
 use Test2::Harness::Util::IPC qw/run_cmd/;
 use POSIX;
+
+use Test2::Harness::Util qw/clean_path/;
 
 use Carp qw/croak/;
 
@@ -16,6 +19,11 @@ use Importer Importer => 'import';
 our @EXPORT = qw/yath_test yath_test_with_log yath_start yath_stop yath_run yath_run_with_log yath/;
 
 my $pdir = tempdir(CLEANUP => 1);
+
+require App::Yath;
+my $apppath = $INC{'App/Yath.pm'};
+$apppath =~ s{App\S+Yath\.pm$}{}g;
+$apppath = clean_path($apppath);
 
 sub yath_test_with_log {
     my ($test, @options) = @_;
@@ -116,6 +124,8 @@ sub _yath {
 sub yath {
     my %params = @_;
 
+    my $ctx = context();
+
     my $cmd = $params{cmd} // $params{command};
     my $cli = $params{cli} // $params{args} // [];
     my $env = $params{env} // {};
@@ -149,6 +159,8 @@ sub yath {
         @log = ('-F' => $logfile);
         print "DEBUG: log file = '$logfile'\n" if $params{debug};
     }
+
+    unshift @inc => "-D$apppath";
 
     my $yath = find_yath;
     my @cmd = ($^X, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
@@ -191,6 +203,8 @@ sub yath {
     }
 
     print "DEBUG: Exit: $exit\n" if $params{debug};
+
+    $ctx->release;
 
     return {
         exit => $exit,

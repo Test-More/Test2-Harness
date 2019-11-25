@@ -223,7 +223,7 @@ sub do_loads {
     my $importer = eval <<'    EOT' or die $@;
 package main;
 #line 0 "-"
-sub { shift->import(@_) }
+sub { $_[0]->import(@{$_[1]}) }
     EOT
 
     for my $set ($job->load_import) {
@@ -231,7 +231,7 @@ sub { shift->import(@_) }
         my $file = mod2file($mod);
         local $0 = '-';
         require $file;
-        $importer->($mod, @$args);
+        $importer->($mod, $args);
     }
 
     for my $mod ($job->load) {

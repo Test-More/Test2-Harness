@@ -18,6 +18,7 @@ my $out;
 
 $out = yath(command => 'projects', args => ['--ext=tx', '--', $dir]);
 ok(!$out->{exit}, "Passed");
+
 like($out->{output}, qr{PASSED .*foo.*t.*pass\.tx}, "Found pass.tx in foo project");
 like($out->{output}, qr{PASSED .*bar.*t.*pass\.tx}, "Found pass.tx in bar project");
 like($out->{output}, qr{PASSED .*baz.*t.*pass\.tx}, "Found pass.tx in baz project");
@@ -31,8 +32,9 @@ like($out->{output}, qr{PASSED .*baz.*t.*pass\.tx}, "Found pass.tx in baz projec
 like($out->{output}, qr{FAILED .*baz.*t.*fail\.txx}, "ran fail.txx");
 
 chdir($dir);
-$out = yath(command => 'projects', args => ['--ext=tx']);
+$out = yath(command => 'projects', args => ['--ext=tx', '-v']);
 ok(!$out->{exit}, "Passed");
+
 like($out->{output}, qr{PASSED .*foo.*t.*pass\.tx}, "Found pass.tx in foo project");
 like($out->{output}, qr{PASSED .*bar.*t.*pass\.tx}, "Found pass.tx in bar project");
 like($out->{output}, qr{PASSED .*baz.*t.*pass\.tx}, "Found pass.tx in baz project");

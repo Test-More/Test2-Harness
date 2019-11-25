@@ -13,6 +13,8 @@ use Test2::Util qw/CAN_REALLY_FORK/;
 skip_all "Cannot fork, skipping preload test"
     unless CAN_REALLY_FORK;
 
+skip_all "This test requires forking" if $ENV{T2_NO_FORK};
+
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 

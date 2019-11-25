@@ -13,7 +13,11 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option use_fork => (
         alt         => ['fork'],
         description => "(default: on, except on windows) Normally tests are run by forking, which allows for features like preloading. This will turn off the behavior globally (which is not compatible with preloading). This is slower, it is better to tag misbehaving tests with the '# HARNESS-NO-PRELOAD' coment in their header to disable forking only for those tests.",
-        default     => sub { !IS_WIN32 },
+        default     => sub {
+            return 0 if IS_WIN32;
+            return 0 if $ENV{T2_NO_FORK};
+            return 1;
+        },
     );
 
     option use_timeout => (
@@ -108,11 +112,11 @@ sub cover_post_process {
     my $settings = $params{settings};
 
     return unless $settings->runner->cover;
-    eval { require Devel::Cover; 1 } or die "Cannot use --cover without Devel::Cover: $@";
 
     $settings->runner->use_fork = 0;
 
-    unshift @{$settings->run->load_import //= []} => 'Devel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+    push @{$settings->run->load_import->{'@'}} => 'Devel::Cover';
+    $settings->run->load_import->{'Devel::Cover'} = ['-silent' => 1, '+ignore' => '^t/', '+ignore' => '^t2/', '+ignore' => '^xt', '+ignore' => '^test.pl'];
 }
 
 1;

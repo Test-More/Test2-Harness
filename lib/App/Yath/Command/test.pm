@@ -351,7 +351,7 @@ sub render_summary {
 
     my $res = "    -->  Result: " . ($pass ? 'PASSED' : 'FAILED') . "  <--";
     if ($self->settings->display->color && eval { require Term::ANSIColor; 1 }) {
-        my $color = $pass ? Term::ANSIColor::color('green') : Term::ANSIColor::color('red');
+        my $color = $pass ? Term::ANSIColor::color('bold bright_green') : Term::ANSIColor::color('bold bright_red');
         my $reset = Term::ANSIColor::color('reset');
         $res = "$color$res$reset";
     }

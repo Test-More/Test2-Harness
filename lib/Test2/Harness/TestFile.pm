@@ -20,6 +20,7 @@ use Test2::Harness::Util::HashBase qw{
     <file +relative <_scanned <_headers +_shbang <is_binary <non_perl
     queue_args
     job_class
+    comment
     _category _stage _duration
 };
 
@@ -189,6 +190,7 @@ sub _scan {
     return if $self->{+IS_BINARY};
 
     my $fh = open_file($self->{+FILE});
+    my $comment = $self->{+COMMENT} // '#';
 
     my %headers;
     for (my $ln = 1; my $line = <$fh>; $ln++) {
@@ -219,7 +221,7 @@ sub _scan {
 
         next if $line =~ m/^\s*#/ && $line !~ m/^\s*#\s*HARNESS-.+/;    # Ignore commented lines which aren't HARNESS-?
         next if $line =~ m/^\s*(use|require|BEGIN|package)\b/;          # Only supports single line BEGINs
-        last unless $line =~ m/^\s*#\s*HARNESS-(.+)$/;
+        last unless $line =~ m/^\s*\Q$comment\E\s*HARNESS-(.+)$/;
 
         my ($dir, $rest) = split /[-\s]+/, $1, 2;
         $dir = lc($dir);

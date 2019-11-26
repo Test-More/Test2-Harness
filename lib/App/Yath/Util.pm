@@ -14,6 +14,7 @@ use Config qw/%Config/;
 
 our @EXPORT_OK = qw{
     find_pfile
+    find_in_updir
     is_generated_test_pl
     fit_to_width
     isolate_stdout
@@ -104,14 +105,12 @@ sub find_in_updir {
 sub PFILE_NAME() { '.yath-persist.json' }
 
 sub find_pfile {
-    #If we find the file where YATH_PERSISTENCE_DIR is specified, return that path
-    #Otherwise search for the file further
-    if (my $base = $ENV{YATH_PERSISTENCE_DIR}){
-        if (my $path = find_in_updir(File::Spec->catdir($base,PFILE_NAME()))){
-            return $path;
-        }
-    }
-    return find_in_updir(PFILE_NAME());
+    # YATH_PERSISTENCE_DIR means we can skip the main search
+    return find_in_updir(PFILE_NAME()) unless $ENV{YATH_PERSISTENCE_DIR};
+
+    my $file = File::Spec->catfile($ENV{YATH_PERSISTENCE_DIR}, PFILE_NAME());
+    return $file if -f $file;
+    return undef;
 }
 
 sub fit_to_width {

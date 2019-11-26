@@ -1,156 +1,187 @@
 use Test2::V0 -target => 'App::Yath::Util';
-BEGIN { skip_all 'TODO' }
+use Test2::Tools::Spec;
 
-# HARNESS-DURATION-SHORT
-
+use Test2::Util qw/CAN_REALLY_FORK/;
 use Test2::Tools::GenTemp qw/gen_temp/;
+use Test2::Harness::Util qw/clean_path/;
+use File::Temp qw/tempfile/;
+use Cwd qw/cwd/;
 
-use ok $CLASS => qw/find_yath find_pfile PFILE_NAME find_in_updir is_generated_test_pl find_libraries/;
+use File::Spec;
 
-imported_ok(qw/find_yath find_pfile PFILE_NAME find_in_updir is_generated_test_pl find_libraries/);
+use App::Yath::Util qw{
+    find_pfile
+    is_generated_test_pl
+    fit_to_width
+    isolate_stdout
+    PFILE_NAME
+    find_yath
+    find_in_updir
+};
 
-use Cwd qw/realpath cwd/;
+imported_ok qw{
+    find_pfile
+    is_generated_test_pl
+    fit_to_width
+    isolate_stdout
+    PFILE_NAME
+    find_yath
+    find_in_updir
+};
 
-subtest find_yath => sub {
-    require IPC::Cmd;
-    my $can_run;
-    my $control = mock 'IPC::Cmd' => (
-        override => {
-            can_run => sub { $can_run },
-        },
-    );
+is(PFILE_NAME(), '.yath-persist.json', "pfile name constant");
 
-    no warnings 'uninitialized';
-    local $App::Yath::SCRIPT = undef;
-    local $ENV{YATH_SCRIPT}  = undef;
-    local $0                 = 'fake';
+my $initial_dir = cwd();
+after_each chdir => sub {
+    chdir($initial_dir);
+};
 
+tests find_yath => sub {
+    local $App::Yath::Script::SCRIPT = 'foobar';
+    is(find_yath, 'foobar', "Use \$App::Yath::Script::SCRIPT if set");
+
+    $App::Yath::Script::SCRIPT = undef;
+
+    my $tmp = gen_temp('scripts' => {'yath' => 'xxx'});
+    my $yath = clean_path(File::Spec->catfile($tmp, 'scripts', 'yath'));
+    chdir($tmp);
+    eval { chmod(0755, File::Spec->catfile($tmp, 'scripts', 'yath')); 1 } or warn $@;
+    is(find_yath, $yath, "found yath script in scripts/ dir");
+    is($App::Yath::Script::SCRIPT, $yath, "cached result");
+
+    my $tmp2 = gen_temp();
+    chdir($tmp2);
+
+    $App::Yath::Script::SCRIPT = undef;
+    local %App::Yath::Util::Config = ();
     like(
         dies { find_yath },
-        qr/Could not find 'yath' in execution path/,
-        "Dies if yath cannot be found"
+        qr/Could not find yath in Config paths/,
+        "No yath found"
     );
 
-    $can_run = 'a_yath';
-    is(find_yath, File::Spec->rel2abs('a_yath'), "found via can_run");
-
-    $0 = 'scripts/yath';
-    is(find_yath, File::Spec->rel2abs('scripts/yath'), "found via \$0");
-
-    $ENV{YATH_SCRIPT} = 'b_yath';
-    is(find_yath, File::Spec->rel2abs('b_yath'), "found via \$ENV{YATH_SCRIPT}");
-
-    $App::Yath::SCRIPT = 'c_yath_run';
-    is(find_yath, File::Spec->rel2abs('c_yath_run'), "found via \$App::Yath::SCRIPT");
+    local %App::Yath::Util::Config = (
+        scriptdir => File::Spec->catdir($tmp, 'scripts'),
+    );
+    is(find_yath, $yath, "Found it in a config path");
 };
 
-my $tmp = realpath(gen_temp(
-    '.yath-persist.json' => "XXX",
-    'foo'                => "XXX",
+tests isolate_stdout => sub {
+    my ($stdout_r, $stdout_w, $stderr_r, $stderr_w);
+    pipe($stdout_r, $stdout_w) or die "Could not open pipe: $!";
+    pipe($stderr_r, $stderr_w) or die "Could not open pipe: $!";
 
-    'test_a.pl' => "\n\n# THIS IS A GENERATED YATH RUNNER TEST\n\n",
-    'test_b.pl' => "\n\n# THIS IS NOT A GENERATED YATH RUNNER TEST\n\n",
+    my $pid = fork;
+    die "Could not fork" unless defined $pid;
 
-    dir_a => {
-        '.yath-persist.json' => "XXX",
-        'foo'                => "XXX",
+    unless ($pid) { # child
+        close($stdout_r);
+        close($stderr_r);
+        open(STDOUT, '>&', $stdout_w) or die "Could not redirect STDOUT";
+        open(STDERR, '>&', $stderr_w) or die "Could not redirect STDOUT";
+        my $fh = isolate_stdout();
 
-        dir_ab => {},
-    },
+        print $fh "Should go to STDOUT\n";
+        print "Should go to STDERR 1\n";
+        print STDOUT "Should go to STDERR 2\n";
+        print STDERR "Should go to STDERR 3\n";
 
-    dir_b => {
-        dir_bb => {},
-    },
-));
+        exit 0;
+    }
 
-my $cwd = cwd();
+    close($stdout_w);
+    close($stderr_w);
+    waitpid($pid, 0);
+    is($?, 0, "Clean exit");
 
-my $ok = eval {
-    # Guard against yath being run with a YATH_PERSISTENCE_DIR
+    is(
+        [<$stdout_r>],
+        ["Should go to STDOUT\n"],
+        "Got expected STDOUT"
+    );
+    is(
+        [<$stderr_r>],
+        [
+            "Should go to STDERR 1\n",
+            "Should go to STDERR 2\n",
+            "Should go to STDERR 3\n",
+        ],
+        "Got expected STDERR"
+    );
+} if CAN_REALLY_FORK;
+
+subtest is_generated_test_pl => sub {
+    ok(!is_generated_test_pl(__FILE__), "This is not a generated test file");
+
+    my ($fh, $name) = tempfile(CLEANUP => 1);
+    print $fh "use strict;\nuse warnings;\n# THIS IS A GENERATED YATH RUNNER TEST\ndfasdafas\n";
+    close($fh);
+    ok(is_generated_test_pl($name), "Found a generated file");
+};
+
+subtest find_in_updir => sub {
+    my $tmp = gen_temp(
+        thefile => 'xxx',
+        nest => {
+            nest_a => { thefile => 'xxx' },
+            nest_b => {},
+        },
+    );
+
+    chdir(File::Spec->catdir($tmp, 'nest', 'nest_a')) or die "$!";
+    is(find_in_updir('thefile'), File::Spec->catfile($tmp, 'nest', 'nest_a', 'thefile'), "Found file in expected spot");
+
+    chdir(File::Spec->catdir($tmp, 'nest', 'nest_b')) or die "$!";
+    is(find_in_updir('thefile'), File::Spec->catfile($tmp, 'thefile'), "Found file in expected spot");
+};
+
+subtest find_pfile => sub {
+    my $tmp = gen_temp(
+        PFILE_NAME() => 'xxx',
+        nest => {
+            nest_a => { PFILE_NAME() => 'xxx' },
+            nest_b => {},
+        },
+    );
+
     local $ENV{YATH_PERSISTENCE_DIR} = undef;
-    chdir(File::Spec->canonpath("$tmp"));
-    is(find_in_updir('A FAKE FILE THAT SHOULD NOT BE ANYWHERE $@!#'), undef, "File not found");
-    is(find_in_updir('foo'), realpath(File::Spec->rel2abs('foo')), "Found file in current dir");
-    is(find_pfile, realpath(File::Spec->rel2abs('.yath-persist.json')), "Found yath persist file");
 
-    ok(is_generated_test_pl('test_a.pl'), "Is a generated test.pl");
-    ok(!is_generated_test_pl('test_b.pl'), "Is not a generated test.pl");
+    chdir(File::Spec->catdir($tmp, 'nest', 'nest_a')) or die "$!";
+    is(find_pfile(), File::Spec->catfile($tmp, 'nest', 'nest_a', PFILE_NAME), "Found file in expected spot");
 
-    chdir(File::Spec->canonpath("$tmp/dir_a/dir_ab/"));
-    is(find_in_updir('foo'), realpath(File::Spec->rel2abs("$tmp/dir_a/foo")), "Found file in updir dir");
-    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/dir_a/.yath-persist.json")), "Found yath persist file");
+    chdir(File::Spec->catdir($tmp, 'nest', 'nest_b')) or die "$!";
+    is(find_pfile(), File::Spec->catfile($tmp, PFILE_NAME), "Found file in expected spot");
 
-    chdir(File::Spec->canonpath("$tmp/dir_b/dir_bb/"));
-    is(find_in_updir('foo'), realpath(File::Spec->rel2abs("$tmp/foo")), "Found file in updir/updir dir");
-    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/.yath-persist.json")), "Found yath persist file");
+    chdir($initial_dir) or die $!;
 
-    # Explicitly test a YATH_PERSISTENCE_DIR env var
-    local $ENV{YATH_PERSISTENCE_DIR} = $tmp;
-    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/.yath-persist.json")), "Found yath persist file");
+    $ENV{YATH_PERSISTENCE_DIR} = File::Spec->catdir($tmp, 'nest', 'nest_a');
+    is(find_pfile(), File::Spec->catfile($tmp, 'nest', 'nest_a', PFILE_NAME), "Found file in expected spot");
 
-    # Make sure that the environment variable is respected by setting
-    # the ENV var to a known good folder that is not the CWD
-    local $ENV{YATH_PERSISTENCE_DIR} = realpath(File::Spec->rel2abs("$tmp/dir_a"));
-    chdir(File::Spec->canonpath("$tmp"));
-    is(find_pfile, realpath(File::Spec->rel2abs("$tmp/dir_a/.yath-persist.json")), "Found yath persist file");
-
-    1;
-};
-my $err = $@;
-
-chdir($cwd);
-
-die $err unless $ok;
-
-subtest find_libraries => sub {
-    my $tmp = realpath(gen_temp(
-        lib => {
-            Foo => {
-                'Bar.pm' => 1,
-                'Baz.pm' => 1,
-                'Bat' => { 'xxx.pm' => 1 },
-            },
-            Foo2 => {
-                'Bar.pm' => 1,
-                'Baz.pm' => 1,
-                'Bat' => { 'xxx.pm' => 1 },
-            },
-        },
-    ));
-
-    my $libs = find_libraries('Foo::*', "$tmp/lib");
-    is(
-        $libs,
-        {'Foo::Bar' => 'Foo/Bar.pm', 'Foo::Baz' => 'Foo/Baz.pm'},
-        "Found libs under foo"
-    );
-
-    $libs = find_libraries('*::*::xxx', "$tmp/lib");
-    is(
-        $libs,
-        {
-            'Foo::Bat::xxx'  => 'Foo/Bat/xxx.pm',
-            'Foo2::Bat::xxx' => 'Foo2/Bat/xxx.pm',
-        },
-        "Found */*/xxx libs"
-    );
-
-    $libs = find_libraries('*::*::Util');
-    like(
-        $libs,
-        {
-          'App::Yath::Util' => 'App/Yath/Util.pm',
-          'Term::Table::Util' => 'Term/Table/Util.pm',
-          'Test2::Harness::Util' => 'Test2/Harness/Util.pm',
-        },
-        "Found the *::*::Util libs we know must be around"
-    );
-
-    ok(!grep(m/x86_64-linux/, keys %$libs), "Did not add the arch/ stuff");
+    $ENV{YATH_PERSISTENCE_DIR} = File::Spec->catdir($tmp, 'nest', 'nest_b');
+    is(find_pfile(), undef, "File is not in the specified dir");
 };
 
-die "test mod2file";
-die "test show_bench";
-die "test strip_arisdottle";
+subtest fit_to_width => sub {
+    is(fit_to_width(100, " ", "hello there"), "hello there", "No change for short string");
+    is(fit_to_width(2, " ", "hello there"), "hello\nthere", "Split across multiple lines");
+
+    is(
+        fit_to_width(20, " ", "hello there, this is a longer string that needs splitting."),
+        "hello there, this is\na longer string that\nneeds splitting.",
+        "Split across multiple lines"
+    );
+
+    is(
+        fit_to_width(100, " ", ["hello there", "this is a", "longer string that", "needs no splitting."]),
+        "hello there this is a longer string that needs no splitting.",
+        "Split across multiple lines"
+    );
+
+    is(
+        fit_to_width(50, " ", ["hello there", "this is a", "longer string that", "needs splitting."]),
+        "hello there this is a longer string that\nneeds splitting.",
+        "Split across multiple lines"
+    );
+};
 
 done_testing;

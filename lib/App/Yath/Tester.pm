@@ -2,7 +2,7 @@ package App::Yath::Tester;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '1.000000';
 
 use Test2::API qw/context/;
 use App::Yath::Util qw/find_yath/;

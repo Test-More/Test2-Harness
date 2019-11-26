@@ -2,7 +2,7 @@ package App::Yath::Command::start;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '1.000000';
 
 use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use App::Yath::Options;

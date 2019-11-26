@@ -4,7 +4,7 @@ use warnings;
 
 use v5.10;
 
-our $VERSION = '0.001100';
+our $VERSION = '1.000000';
 
 use File::Spec;
 use Carp qw/croak/;

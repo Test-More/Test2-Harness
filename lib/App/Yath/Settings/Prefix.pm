@@ -2,7 +2,7 @@ package App::Yath::Settings::Prefix;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '1.000000';
 
 use Carp();
 use Test2::Harness::Util();

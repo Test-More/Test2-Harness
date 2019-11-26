@@ -2,7 +2,7 @@ package App::Yath::Options::Display;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '1.000000';
 
 use Test2::Harness qw/mod2file/;
 

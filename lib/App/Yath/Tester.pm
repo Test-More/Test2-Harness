@@ -25,6 +25,12 @@ my $apppath = $INC{'App/Yath.pm'};
 $apppath =~ s{App\S+Yath\.pm$}{}g;
 $apppath = clean_path($apppath);
 
+sub cover {
+    return unless $ENV{T2_DEVEL_COVER};
+    $ENV{T2_COVER_SELF} = 1;
+    return '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+}
+
 sub yath_test_with_log {
     my ($test, @options) = @_;
     my ($pkg, $file) = caller();
@@ -47,14 +53,16 @@ sub yath_start {
     my (@options) = @_;
     local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
     my $yath = find_yath;
-    my $exit = system($^X, $yath, '-D', 'start', @options);
+    my @cover = cover();
+    my $exit = system($^X, @cover, $yath, '-D', 'start', @options);
 }
 
 sub yath_stop {
     my (@options) = @_;
     local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
     my $yath = find_yath;
-    my $exit = system($^X, $yath, '-D', 'stop', @options);
+    my @cover = cover();
+    my $exit = system($^X, @cover, $yath, '-D', 'stop', @options);
 }
 
 sub yath_run {
@@ -94,8 +102,10 @@ sub _yath {
 
     my $yath = find_yath;
 
+    my @cover = cover();
+
     pipe(my ($rh, $wh)) or die "Could not open pipe: $!";
-    my @final = ($^X, $yath, $inc ? ("-D$inc") : (), '-D', @$pre_opts, $cmd, @options, $run ? ($run) : ());
+    my @final = ($^X, @cover, $yath, $inc ? ("-D$inc") : (), '-D', @$pre_opts, $cmd, @options, $run ? ($run) : ());
     local $ENV{NESTED_YATH} = 1;
     my $pid = run_cmd(
         no_set_pgrp => 1,
@@ -162,8 +172,10 @@ sub yath {
 
     unshift @inc => "-D$apppath";
 
+    my @cover = cover();
+
     my $yath = find_yath;
-    my @cmd = ($^X, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
+    my @cmd = ($^X, @cover, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
 
     print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $params{debug};
 

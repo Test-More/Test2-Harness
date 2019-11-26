@@ -49,6 +49,12 @@ sub define_prefix {
     return ${$self}->{$prefix} //= App::Yath::Settings::Prefix->new;
 }
 
+sub check_prefix {
+    my $self = shift;
+    my ($prefix) = @_;
+    return exists(${$self}->{$prefix});
+}
+
 sub prefix {
     my $self = shift;
     my ($prefix, @args) = @_;

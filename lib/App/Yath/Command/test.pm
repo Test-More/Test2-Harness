@@ -85,6 +85,13 @@ get the same ARGV.
     EOT
 }
 
+sub cover {
+    return unless $ENV{T2_DEVEL_COVER};
+    return unless $ENV{T2_COVER_SELF};
+    return '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+}
+
+
 sub init {
     my $self = shift;
     $self->SUPER::init() if $self->can('SUPER::init');
@@ -463,7 +470,7 @@ sub start_auditor {
         stdout      => $self->auditor_writer(),
         no_set_pgrp => 1,
         command     => [
-            $^X, $settings->yath->script,
+            $^X, cover(), $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             auditor => 'Test2::Harness::Auditor',
@@ -491,7 +498,7 @@ sub start_collector {
         stdin       => $rh,
         no_set_pgrp => 1,
         command     => [
-            $^X, $settings->yath->script,
+            $^X, cover(), $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             collector => 'Test2::Harness::Collector',
@@ -522,7 +529,7 @@ sub start_runner {
         stdout => File::Spec->catfile($dir, 'output.log'),
         no_set_pgrp => 1,
         command => [
-            $^X, $settings->yath->script,
+            $^X, cover(), $settings->yath->script,
             (map { "-D$_" } @{$settings->yath->dev_libs}),
             '--no-scan-plugins', # Do not preload any plugin modules
             runner => $dir,

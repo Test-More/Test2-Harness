@@ -111,10 +111,16 @@ sub cover_post_process {
     my %params   = @_;
     my $settings = $params{settings};
 
+    $settings->runner->cover = 1 if $ENV{T2_DEVEL_COVER};
+
     return unless $settings->runner->cover;
 
+    # For nested things
+    $ENV{T2_NO_FORK} = 1;
+    $ENV{T2_DEVEL_COVER} = 1;
     $settings->runner->use_fork = 0;
 
+    return unless $settings->check_prefix('run');
     push @{$settings->run->load_import->{'@'}} => 'Devel::Cover';
     $settings->run->load_import->{'Devel::Cover'} = ['-silent' => 1, '+ignore' => '^t/', '+ignore' => '^t2/', '+ignore' => '^xt', '+ignore' => '^test.pl'];
 }

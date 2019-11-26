@@ -27,6 +27,12 @@ for my $file (readdir($DH)) {
     run_test($file);
 }
 
+sub cover {
+    return unless $ENV{T2_DEVEL_COVER};
+    $ENV{T2_COVER_SELF} = 1;
+    return '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+}
+
 sub run_test {
     my ($file) = @_;
     my $path = File::Spec->canonpath("$dir/$file");
@@ -39,14 +45,14 @@ sub run_test {
 
     {
         local $ENV{FAILURE_DO_PASS} = 0;
-        system($^X, (map { "-I$_" } @INC), @cmd);
+        system($^X, (map { "-I$_" } @INC), cover(), @cmd);
         my $fail_exit = $?;
         $ctx->ok($fail_exit, "$file failure case was a failure ($fail_exit)", ["Command: " . join " " => @cmd]);
     }
 
     {
         local $ENV{FAILURE_DO_PASS} = 1;
-        system($^X, (map { "-I$_" } @INC), @cmd);
+        system($^X, (map { "-I$_" } @INC), cover(), @cmd);
         my $pass_exit = $?;
         $ctx->ok(!$pass_exit, "$file failure passes when failure cause is removed ($pass_exit)", ["Command: " . join " " => @cmd]);
     }

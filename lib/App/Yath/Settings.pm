@@ -27,7 +27,7 @@ sub new {
 
         if (Scalar::Util::blessed($val)) {
             Carp::croak("All prefixes must contain instances of App::Yath::Settings::Prefix")
-                unless !$val->isa('App::Yath::Settings::Prefix');
+                unless $val->isa('App::Yath::Settings::Prefix');
 
             $hash->{$key} = $val;
             next;

@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '0.001077';
 
 # This is used frequently during development to determine what different events look like so we can determine how to capture test data.
-#use Data::Dumper; $Data::Dumper::Sortkeys = 1;
+use Data::Dumper; $Data::Dumper::Sortkeys = 1;
 
 use File::Spec;
 use Storable qw/dclone/;

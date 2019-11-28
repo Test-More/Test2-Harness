@@ -330,7 +330,7 @@ Test2::Harness::Renderer::JUnit - Captures Test2::Harness results and emits a ju
 
 On the command line, with F<yath>:
 
-  JUNIT_TEST_FILE="/tmp/foo.xml" ALLOW_PASSING_TODOS=1 yath test -j18 t/*.t
+  JUNIT_TEST_FILE="/tmp/foo.xml" ALLOW_PASSING_TODOS=1 yath test --renderer=Formatter --renderer=JUnit -j18 t/*.t
 
 =head1 DESCRIPTION
 

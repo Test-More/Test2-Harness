@@ -209,7 +209,7 @@ sub render_event {
 sub finish {
     my $self = shift;
 
-    open( my $fh, '>', $self->{'junit_file'} ) or die("Can't open '$self->{junit_file}' ($!)");
+    open( my $fh, '>:encoding(UTF-8)', $self->{'junit_file'} ) or die("Can't open '$self->{junit_file}' ($!)");
 
     my $xml = $self->xml;
 

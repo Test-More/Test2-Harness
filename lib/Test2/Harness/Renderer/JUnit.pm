@@ -1,4 +1,7 @@
 package Test2::Harness::Renderer::JUnit;
+
+# Test2::Harness itself requires 5.10.
+use 5.010000;
 use strict;
 use warnings;
 

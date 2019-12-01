@@ -71,7 +71,8 @@ sub decode_json {
     };
     $error ||= $@;
     return $data if $ok;
-    die "JSON decode error: $error$input\n";
+    my $mess = Carp::longmess("JSON decode error: $error");
+    die "$mess\n=======\n$input\n=======\n";
 }
 
 1;

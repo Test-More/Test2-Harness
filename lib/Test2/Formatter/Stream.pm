@@ -144,6 +144,7 @@ sub new_root {
     $params{+JOB_ID} ||= $ENV{T2_STREAM_JOB_ID} || $ROOT_JOB_ID || 1;
 
     # DO NOT REOPEN THEM!
+    delete $ENV{T2_FORMATTER} if $ENV{T2_FORMATTER} && $ENV{T2_FORMATTER} eq 'Stream';
     delete $ENV{T2_STREAM_DIR};
     delete $ENV{T2_STREAM_JOB_ID};
     $ROOT_DIR = undef;

@@ -193,11 +193,23 @@ sub render {
     # render results from log
     my $reader = $self->renderer_reader();
     $reader->blocking(0);
+    my $buffer;
     while (1) {
         my $line = <$reader>;
         unless(defined $line) {
             $ipc->wait() if $ipc;
             sleep 0.02;
+            next;
+        }
+
+        if ($buffer) {
+            $line = $buffer . $line;
+            $buffer = undef;
+        }
+
+        unless (substr($line, -1, 1) eq "\n") {
+            $buffer //= "";
+            $buffer .= $line;
             next;
         }
 

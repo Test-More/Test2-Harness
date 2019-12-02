@@ -8,6 +8,7 @@ use parent 'Test2::Harness::Plugin';
 
 # We do not want this defined by default, but it should be documented
 #sub handle_event {}
+#sub sort_files {}
 
 sub finish {}
 

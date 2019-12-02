@@ -8,6 +8,29 @@ use parent 'App::Yath::Plugin';
 
 print "TEST PLUGIN: Loaded Plugin\n";
 
+sub sort_files {
+    my $self = shift;
+    my (@files) = @_;
+
+    my %rank = (
+        test => 1,
+        c    => 2,
+        b    => 3,
+        a    => 4,
+        d    => 5,
+    );
+
+    @files = sort {
+        my $an = $a->file;
+        my $bn = $b->file;
+        $an =~ s/^.*\W(\w+)\.tx$/$1/;
+        $bn =~ s/^.*\W(\w+)\.tx$/$1/;
+        $rank{$an} <=> $rank{$bn};
+    } @files;
+
+    return @files;
+};
+
 sub munge_files {
     print "TEST PLUGIN: munge_files\n";
     return;

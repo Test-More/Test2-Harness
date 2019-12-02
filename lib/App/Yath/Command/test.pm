@@ -327,8 +327,15 @@ sub populate_queue {
 
     $state->queue_run($run->queue_item($plugins));
 
+    my @files = @{$run->find_files($plugins, $self->settings)};
+
+    for my $plugin (@$plugins) {
+        next unless $plugin->can('sort_files');
+        @files = $plugin->sort_files(@files);
+    }
+
     my $job_count = 0;
-    for my $file ( @{$run->find_files($plugins, $self->settings)} ) {
+    for my $file (@files) {
         my $task = $file->queue_item(++$job_count, $run->run_id);
         $state->queue_task($task);
         $tasks_queue->enqueue($task);

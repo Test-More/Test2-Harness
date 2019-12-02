@@ -7,6 +7,7 @@ use Test2::Harness::Util::File::JSONL;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 my ($exit, $log, $out) = yath_test_with_log(undef, ['--no-plugins', '-pTestPlugin'], '-A');
+
 ok(!$exit, "Exited success");
 
 like($out, qr/TEST PLUGIN: Loaded Plugin/,   "Yath loaded the plugin");
@@ -31,5 +32,16 @@ if (ok($out =~ m/^FIELDS:(.*)$/m, "Found fields")) {
         "Injected the run data"
     );
 }
+
+my %rank = (
+    test => 1,
+    c    => 2,
+    b    => 3,
+    a    => 4,
+    d    => 5,
+);
+
+my %jobs = reverse ($out =~ m{job\s+(\d+)\s+.*\W(\w+)\.tx}g);
+is(\%jobs, \%rank, "Ran jobs in specified order");
 
 done_testing;

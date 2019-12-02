@@ -15,7 +15,6 @@ use Test2::Harness::Util::Queue;
 
 use List::Util qw/first/;
 
-use HTTP::Tiny;
 use File::Spec;
 
 use Test2::Harness::Util::HashBase qw{
@@ -116,6 +115,7 @@ sub _pull_durations {
         return $self->{+DURATIONS} = $in if $type eq 'HASH';
     }
     elsif ($in =~ m{^https?://}) {
+        require HTTP::Tiny;
         my $ht = HTTP::Tiny->new();
         my $res = $ht->get($in, {headers => {'Content-Type' => 'application/json'}});
 

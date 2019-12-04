@@ -237,7 +237,7 @@ sub _queue_task {
     $self->{+TASK_LOOKUP}->{$job_id} = $task;
 
     my $pending = $self->task_pending_lookup($task);
-    $pending->{$job_id} = $task;
+    push @{$pending} => $task;
 
     return;
 }
@@ -260,13 +260,18 @@ sub _start_task {
     my $task = $self->{+TASK_LOOKUP}->{$job_id} or die "Could not find task to start";
 
     my ($run_id, $smoke, $stage, $cat, $dur) = $self->task_fields($task);
-    delete $self->{+PENDING_TASKS}->{$run_id}->{$smoke}->{$stage}->{$cat}->{$dur}->{$job_id} or die "Task was not pending";
+
+    my $set = $self->{+PENDING_TASKS}->{$run_id}->{$smoke}->{$stage}->{$cat}->{$dur};
+    my $count = @$set;
+    @$set = grep { $_->{job_id} ne $job_id } @$set;
+    die "Task $job_id was not pending ($count -> " . scalar(@$set) . ")" unless $count > @$set;
+
     $self->prune_hash($self->{+PENDING_TASKS}, $run_id, $smoke, $stage, $cat, $dur);
 
     # Set the stage, new task hashref
     $task = {%$task, stage => $run_stage} unless $task->{stage} && $task->{stage} eq $run_stage;
 
-    die "Already running task" if $self->{+RUNNING_TASKS}->{$job_id};
+    die "Already running task $job_id" if $self->{+RUNNING_TASKS}->{$job_id};
     $self->{+RUNNING_TASKS}->{$job_id} = $task;
 
     push @{$self->{+TASK_LIST}} => $task;
@@ -382,7 +387,7 @@ sub task_pending_lookup {
 
     my ($run_id, $smoke, $stage, $cat, $dur) = $self->task_fields($task);
 
-    return $self->{+PENDING_TASKS}->{$run_id}->{$smoke}->{$stage}->{$cat}->{$dur} //= {};
+    return $self->{+PENDING_TASKS}->{$run_id}->{$smoke}->{$stage}->{$cat}->{$dur} //= [];
 }
 
 sub task_fields {
@@ -416,7 +421,15 @@ sub prune_hash {
     }
 
     return 1 unless exists $hash->{$key};
-    return 0 if keys %{$hash->{$key}};
+
+    my $ref = ref($hash->{$key});
+    if ($ref eq 'HASH') {
+        return 0 if keys %{$hash->{$key}};
+    }
+    elsif ($ref eq 'ARRAY') {
+        return 0 if @{$hash->{$key}};
+    }
+
     delete $hash->{$key};
     return 1;
 }
@@ -557,7 +570,7 @@ sub _next {
                 for my $ldur (@$dur_order) {
                     my $search = $search->{$ldur} or next;
 
-                    for my $task (values %$search) {
+                    for my $task (@$search) {
                         # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.
                         next if first { $conflicts->{$_} } @{$task->{conflicts}};
 

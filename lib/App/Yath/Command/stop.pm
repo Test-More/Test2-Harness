@@ -11,7 +11,6 @@ use File::Spec();
 use Test2::Harness::Util::File::JSON();
 use Test2::Harness::Util::Queue();
 
-use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use Test2::Harness::Util qw/open_file/;
 use File::Path qw/remove_tree/;
 

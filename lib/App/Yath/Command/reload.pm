@@ -28,7 +28,7 @@ will also clear the blacklist allowing all preloads to load as normal.
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile()
+    my $pfile = find_pfile($self->settings)
         or die "Could not find a persistent yath running.\n";
 
     my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();

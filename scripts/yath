@@ -73,7 +73,12 @@ BEGIN {
                 ($key, $eq, $val) = split /(=|\s+)/, $line, 2;  # Covers most cases
             }
 
-            $eq = '=' if $val && ($key eq '-D' || $key eq '--dev-lib');
+            my $is_d;
+            if ($key eq '-D' || $key eq '--dev-lib') {
+                $eq = '=' if $val;
+                $is_d = 1;
+            }
+
             my $need_to_clean;
             if ($val && $val =~ s/(^|=)\s*rel\(\s*//) {
                 die "Syntax error in $file line $.: Expected ')'\n" unless $val =~ s/\s*\)$//;
@@ -86,12 +91,13 @@ BEGIN {
             $eq //= '';
             my @parts = $eq eq '=' ? ("${key}${eq}${val}") : (grep { defined $_ } $key, $val);
 
-            if ($cmd) {
-                push @{$CONFIG{$cmd}} => @parts;
-                push @TO_CLEAN => [$cmd, $#{$CONFIG{$cmd}}, $key, $eq, $val] if $need_to_clean;
+            if ($is_d) {
+                push @CONFIG_ARGS => @parts;
             }
             else {
-                push @CONFIG_ARGS => @parts;
+                $cmd //= '~';
+                push @{$CONFIG{$cmd}} => @parts;
+                push @TO_CLEAN => [$cmd, $#{$CONFIG{$cmd}}, $key, $eq, $val] if $need_to_clean;
             }
         }
         close($fh);

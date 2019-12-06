@@ -4,17 +4,16 @@ use warnings;
 
 our $VERSION = '1.000000';
 
+use App::Yath::Util qw/find_pfile/;
 use Test2::Harness::Util qw/mod2file clean_path/;
 
 use App::Yath::Options;
 
-option_group {prefix => 'yath'} => sub {
+option_group {prefix => 'yath', pre_command => 1} => sub {
     option plugins => (
         type  => 'm',
         short => 'p',
         alt  => ['plugin'],
-
-        pre_command => 1,
 
         category       => 'Plugins',
         long_examples  => [' PLUGIN', ' +App::Yath::Plugin::PLUGIN', ' PLUGIN=arg1,arg2,...'],
@@ -26,18 +25,35 @@ option_group {prefix => 'yath'} => sub {
 
     option no_scan_plugins => (
         type => 'b',
-        pre_command => 1,
 
         category => 'Plugins',
         description => 'Normally yath scans for and loads all App::Yath::Plugin::* modules in order to bring in command-line options they may provide. This flag will disable that. This is useful if you have a naughty plugin that it loading other modules when it should not.',
+    );
+
+    option project => (
+        type => 's',
+        alt => ['project-name'],
+        category => 'Environment',
+        description => 'This lets you provide a label for your current project/codebase. This is best used in a .yath.rc file. This is necessary for a persistent runner.',
+    );
+
+    option persist_dir => (
+        type => 's',
+        description => 'Where to find persistence files.',
+        normalize => \&clean_path,
+    );
+
+    option persist_file => (
+        type => 's',
+        alt => ['pfile'],
+        normalize => \&clean_path,
+        description => "Where to find the persistence file. The default is /{system-tempdir}/project-yath-persist.json. If no project is specified then it will fall back to the current directory. If the current directory is not writable it will default to /tmp/yath-persist.json which limits you to one persistent runner on your system.",
     );
 
     option dev_libs => (
         type  => 'D',
         short => 'D',
         name  => 'dev-lib',
-
-        pre_command => 1,
 
         category    => 'Developer',
         description => 'Add paths to @INC before loading ANYTHING. This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
@@ -48,6 +64,8 @@ option_group {prefix => 'yath'} => sub {
         normalize => \&normalize_dev_libs,
         action    => \&dev_libs_action,
     );
+
+    post \&post_process;
 };
 
 sub plugin_action {
@@ -91,6 +109,13 @@ dev-lib '$_' added to \@INC late, it is possible some yath libraries were alread
 
     unshift @INC   => @new;
     unshift @{$$slot} => @new;
+}
+
+sub post_process {
+    my %params   = @_;
+    my $settings = $params{settings};
+
+    $settings->yath->persist_file //= find_pfile($settings, vivify => 1)
 }
 
 1;

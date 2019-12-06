@@ -11,6 +11,7 @@ use Test2::Harness::Util qw/clean_path/;
 use Cwd qw/realpath/;
 use Importer Importer => 'import';
 use Config qw/%Config/;
+use Carp qw/croak/;
 
 our @EXPORT_OK = qw{
     find_pfile
@@ -18,7 +19,6 @@ our @EXPORT_OK = qw{
     is_generated_test_pl
     fit_to_width
     isolate_stdout
-    PFILE_NAME
     find_yath
 };
 
@@ -102,15 +102,48 @@ sub find_in_updir {
     return;
 }
 
-sub PFILE_NAME() { '.yath-persist.json' }
-
 sub find_pfile {
-    # YATH_PERSISTENCE_DIR means we can skip the main search
-    return find_in_updir(PFILE_NAME()) unless $ENV{YATH_PERSISTENCE_DIR};
+    my ($settings, %params) = @_;
 
-    my $file = File::Spec->catfile($ENV{YATH_PERSISTENCE_DIR}, PFILE_NAME());
-    return $file if -f $file;
-    return undef;
+    croak "Settings is a required argument" unless $settings;
+
+    # First do the entire search without vivify
+    if ($params{vivify}) {
+        my $found = find_pfile($settings, %params, vivify => 0);
+        return $found if $found;
+    }
+
+    my $yath = $settings->yath;
+
+    if (my $pfile = $yath->persist_file) {
+        return $pfile if -f $pfile || $params{vivify};
+
+        return; # Specified, but not found and no vivify
+    }
+
+    my $project = $yath->project;
+    my $name = $project ? "$project-yath-persist.jsonl" : "yath-persist.jsonl";
+    my $set_dir = $yath->persist_dir // $ENV{YATH_PERSISTENCE_DIR};
+    my $dir = $set_dir // $ENV{TMPDIR} // $ENV{TEMPDIR} // File::Spec->tmpdir;
+
+    # If a dir was specified, or if the current dir is not writable then we must use $dir/$name
+    if ($project || $set_dir || !-w '.') {
+        my $pfile = clean_path(File::Spec->catfile($dir, $name));
+        return $pfile if -f $pfile || $params{vivify};
+
+        return; # Not found, no vivify
+    }
+
+    # Fall back to using the current dir (which must be writable)
+    $name = ".yath-persist.json";
+    my $pfile = find_in_updir($name);
+    return $pfile if $pfile && -f $pfile;
+
+    # Creating it here!
+    return $name if $params{vivify};
+
+    # Nope, nothing.
+    return;
 }
 
 sub fit_to_width {

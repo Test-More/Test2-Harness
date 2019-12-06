@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '1.000000';
 
-use App::Yath::Util qw/find_pfile PFILE_NAME/;
+use App::Yath::Util qw/find_pfile/;
 use App::Yath::Options;
 
 use Test2::Harness::Run;
@@ -74,17 +74,17 @@ sub run {
     my $settings = $self->settings;
     my $dir      = $settings->workspace->workdir;
 
-    if (my $exists = find_pfile()) {
+    my $pfile = find_pfile($settings, vivify => 1);
+
+    if (-f $pfile) {
         remove_tree($dir, {safe => 1, keep_root => 0});
-        die "Persistent harness appears to be running, found $exists\n";
+        die "Persistent harness appears to be running, found $pfile\n";
     }
 
     $self->write_settings_to($dir, 'settings.json');
 
     my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
     $run_queue->start();
-
-    my $pfile = File::Spec->rel2abs(PFILE_NAME(), $ENV{YATH_PERSISTENCE_DIR} // './');
 
     my $stderr = File::Spec->catfile($dir, 'error.log');
     my $stdout = File::Spec->catfile($dir, 'output.log');

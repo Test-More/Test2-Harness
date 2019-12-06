@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '1.000000';
 
 use File::Spec();
+use File::Path qw/remove_tree/;
 use File::Temp qw/tempdir/;
 
 use Test2::Harness::Util qw/clean_path/;
@@ -12,19 +13,6 @@ use Test2::Harness::Util qw/clean_path/;
 use App::Yath::Options;
 
 option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
-    option use_shm => (
-        alt         => ['shm'],
-        description => "Use shm for tempdir if possible (Default: off)",
-        action      => sub {
-            my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
-
-            my ($found) = first { -d $_ } map { File::Spec->canonpath($_) } '/dev/shm', '/run/shm';
-            $settings->workspace->tmp_dir = $found if $found;
-
-            $handler->($slot, $norm);
-        },
-    );
-
     option tmp_dir => (
         type        => 's',
         short       => 't',
@@ -49,12 +37,24 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
         my %params   = @_;
         my $settings = $params{settings};
 
-        return if $settings->workspace->workdir;
+        $settings->workspace->workdir //= $ENV{T2_WORKDIR} // $ENV{YATH_WORKDIR};
 
-        return $settings->workspace->workdir = $ENV{T2_WORKDIR} if $ENV{T2_WORKDIR};
+        if (my $workdir = $settings->workspace->workdir) {
+            if (-d $workdir) {
+                remove_tree($workdir, {safe => 1, keep_root => 1}) if $settings->workspace->clear;
+            }
+            else {
+                mkdir($workdir) or die "Could not create workdir: $!";
+            }
+
+            return;
+        }
+
+        my $project = $settings->yath->project;
+        my $template = join '-' => ( "yath", $project // "test", $$, "XXXXXXXX");
 
         $settings->workspace->workdir = tempdir(
-            "yath-test-$$-XXXXXXXX",
+            $template,
             DIR     => $settings->workspace->tmp_dir,
             CLEANUP => !($settings->debug->keep_dirs || $params{command}->always_keep_dir),
         );

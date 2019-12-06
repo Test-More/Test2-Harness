@@ -52,7 +52,7 @@ sub job_count { 1 }
 
 sub pfile {
     my $self = shift;
-    $self->{+PFILE} //= find_pfile() or die "No persistent harness was found for the current path.\n";
+    $self->{+PFILE} //= find_pfile($self->settings) or die "No persistent harness was found for the current path.\n";
 }
 
 sub pfile_data {

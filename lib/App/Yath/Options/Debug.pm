@@ -11,7 +11,6 @@ use Test2::Harness::Util qw/find_libraries mod2file/;
 use App::Yath::Options;
 
 option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
-
     post 99999 => \&_post_process_show_opts;
     post \&_post_process_version;
     post \&_post_process_help;

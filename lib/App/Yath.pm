@@ -113,8 +113,15 @@ sub process_argv {
     return $self->{+_ARGV} if $self->{+ARGV_PROCESSED}++;
 
     my $options = $self->load_options();
+
+    my $config_pre_args = $self->{+CONFIG}->{'~'};
+    $options->grab_pre_command_opts(args => $config_pre_args, stop_at_non_opt => 0, passthrough => 0, die_at_non_opt => 1)
+        if $config_pre_args;
+
     $options->set_args($self->{+_ARGV});
     $options->grab_pre_command_opts();
+
+    $options->process_pre_command_opts();
 
     my $cmd_name  = $self->_command_from_argv();
     my $cmd_class = $self->load_command($cmd_name);
@@ -177,7 +184,7 @@ sub _command_from_argv {
         return splice(@$argv, $idx, 1) unless $is_path;
     }
 
-    if (find_pfile()) {
+    if (find_pfile($self->settings)) {
         warn "\n** Persistent runner detected, defaulting to the 'run' command **\n\n";
         return 'run';
     }

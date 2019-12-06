@@ -19,9 +19,9 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
         alt  => ['lff'],
         type => 's',
 
-        description => 'Specify the format for automatically-generated log files. Overridden by --log-file, if given. This option implies -L (Default: \$YATH_LOG_FILE_FORMAT, if that is set, or else "%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl"). This is a string in which percent-escape sequences will be replaced as per POSIX::strftime. The following special escape sequences are also replaced: (%!U : the unique test run ID) (%!p : the process ID) (%!S : the number of seconds since local midnight UTC)',
+        description => 'Specify the format for automatically-generated log files. Overridden by --log-file, if given. This option implies -L (Default: \$YATH_LOG_FILE_FORMAT, if that is set, or else "%!P%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl"). This is a string in which percent-escape sequences will be replaced as per POSIX::strftime. The following special escape sequences are also replaced: (%!P : Project name followed by a ~, if a project is defined, otherwise empty string) (%!U : the unique test run ID) (%!p : the process ID) (%!S : the number of seconds since local midnight UTC)',
 
-        default => sub { $ENV{YATH_LOG_FILE_FORMAT} // '%Y-%m-%d_%H:%M:%S_%!U.jsonl' },
+        default => sub { $ENV{YATH_LOG_FILE_FORMAT} // '%!P%Y-%m-%d_%H:%M:%S_%!U.jsonl' },
     );
 
     option bzip2 => (
@@ -34,6 +34,12 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
         short        => 'G',
         alt          => ['gz', 'gzip_log'],
         description  => 'Use gzip compression when writing the log. This option implies -L. The .gz prefix is added to log file name for you',
+    );
+
+    option log_dir => (
+        type        => 's',
+        normalize   => \&clean_path,
+        description => 'Specify a log directory. Will fall back to the system temp dir.',
     );
 
     option log_file => (
@@ -59,12 +65,14 @@ sub post_process {
     $logging->log = 1;
 
     unless ($logging->log_file) {
-        mkdir('test-logs') or die "Could not create dir 'test-logs': $!"
-            unless -d 'test-logs';
+        my $log_dir = $logging->log_dir // $settings->workspace->tmp_dir;
+
+        mkdir($log_dir) or die "Could not create dir '$log_dir': $!"
+            unless -d $log_dir;
 
         my $format   = $logging->log_file_format;
         my $filename = expand_log_file_format($format, $settings);
-        $logging->log_file = clean_path(File::Spec->catfile('test-logs', $filename));
+        $logging->log_file = clean_path(File::Spec->catfile($log_dir, $filename));
     }
 
     $logging->log_file =~ s/\.(gz|bz2)$//;
@@ -78,11 +86,6 @@ sub time_for_strftime { time() }
 
 sub expand_log_file_format {
     my ($pattern, $settings) = @_;
-    my %custom_expansion = (
-        U => $settings->run->run_id,
-        p => $$,
-        S => time_for_strftime() % 86400,
-    );
     my $before = $pattern;
     $pattern =~ s{%!(\w)}{expand($1, $settings)}ge;
     my $res = strftime($pattern, localtime(time_for_strftime()));
@@ -94,6 +97,10 @@ sub expand {
     # This could be driven by a hash, but for now if-else is easiest
     if    ($letter eq "U") { return $settings->run->run_id }
     elsif ($letter eq "p") { return $$ }
+    elsif ($letter eq "P") {
+        my $project = $settings->yath->project // return "";
+        return $project . "~";
+    }
     elsif ($letter eq "S") {
         # Number of seconds since midnight
         my ($s, $m, $h) = (localtime(time_for_strftime()))[0, 1, 2];

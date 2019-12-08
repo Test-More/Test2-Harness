@@ -14,7 +14,6 @@ use App::Yath::Util qw{
     is_generated_test_pl
     fit_to_width
     isolate_stdout
-    PFILE_NAME
     find_yath
     find_in_updir
 };
@@ -24,12 +23,9 @@ imported_ok qw{
     is_generated_test_pl
     fit_to_width
     isolate_stdout
-    PFILE_NAME
     find_yath
     find_in_updir
 };
-
-is(PFILE_NAME(), '.yath-persist.json', "pfile name constant");
 
 my $initial_dir = cwd();
 after_each chdir => sub {
@@ -133,32 +129,6 @@ subtest find_in_updir => sub {
 
     chdir(File::Spec->catdir($tmp, 'nest', 'nest_b')) or die "$!";
     is(find_in_updir('thefile'), File::Spec->catfile($tmp, 'thefile'), "Found file in expected spot");
-};
-
-subtest find_pfile => sub {
-    my $tmp = gen_temp(
-        PFILE_NAME() => 'xxx',
-        nest => {
-            nest_a => { PFILE_NAME() => 'xxx' },
-            nest_b => {},
-        },
-    );
-
-    local $ENV{YATH_PERSISTENCE_DIR} = undef;
-
-    chdir(File::Spec->catdir($tmp, 'nest', 'nest_a')) or die "$!";
-    is(find_pfile(), File::Spec->catfile($tmp, 'nest', 'nest_a', PFILE_NAME), "Found file in expected spot");
-
-    chdir(File::Spec->catdir($tmp, 'nest', 'nest_b')) or die "$!";
-    is(find_pfile(), File::Spec->catfile($tmp, PFILE_NAME), "Found file in expected spot");
-
-    chdir($initial_dir) or die $!;
-
-    $ENV{YATH_PERSISTENCE_DIR} = File::Spec->catdir($tmp, 'nest', 'nest_a');
-    is(find_pfile(), File::Spec->catfile($tmp, 'nest', 'nest_a', PFILE_NAME), "Found file in expected spot");
-
-    $ENV{YATH_PERSISTENCE_DIR} = File::Spec->catdir($tmp, 'nest', 'nest_b');
-    is(find_pfile(), undef, "File is not in the specified dir");
 };
 
 subtest fit_to_width => sub {

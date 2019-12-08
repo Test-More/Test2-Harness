@@ -59,15 +59,14 @@ sub import {
         my ($set, $sub) = @_;
 
         my $common = {@common ? (%{$common[-1]}) : (), %$set};
-        push @common => $common;
 
         if (my $class = $common->{builds}) {
             require(mod2file($class));
         }
 
+        push @common => $common;
         my $ok  = eval { $sub->(); 1 };
         my $err = $@;
-
         pop @common;
 
         die $err unless $ok;
@@ -104,18 +103,6 @@ sub init {
     return $self;
 }
 
-sub reset_processing {
-    my $self = shift;
-
-    $self->{+SETTINGS} = {};
-    delete $self->{+ARGS};
-    delete $self->{+COMMAND_CLASS};
-    delete $self->{+PENDING_PRE};
-    delete $self->{+PENDING_CMD};
-
-    return;
-}
-
 sub option {
     my $self = shift;
     $self->_option([caller()], @_);
@@ -124,6 +111,9 @@ sub option {
 sub include {
     my $self = shift;
     my ($inc) = @_;
+
+    croak "Include must be an instance of ${ \__PACKAGE__ }, got ${ defined($inc) ? \qq['$inc'] : \'undef' }"
+        unless $inc && blessed($inc) && $inc->isa(__PACKAGE__);
 
     $self->include_option($_) for @{$inc->all};
 
@@ -137,7 +127,7 @@ sub include_from {
     my $self = shift;
 
     for my $pkg (@_) {
-        require(mod2file($pkg));
+        require(mod2file($pkg)) unless $pkg->can('options');
 
         next unless $pkg->can('options');
         my $options = $pkg->options or next;
@@ -154,11 +144,9 @@ sub populate_pre_defaults {
     my $self = shift;
 
     for my $opt (@{$self->_pre_command_options}) {
-        my @val = $opt->get_default($self->{+SETTINGS});
-        next unless @val;
-
         my $slot = $opt->option_slot($self->{+SETTINGS});
-        $$slot //= $val[0];
+        my $val = $opt->get_default($self->{+SETTINGS});
+        $$slot //= $val;
     }
 }
 
@@ -287,8 +275,9 @@ sub _command_options {
 
     my $cmd = $class->name;
     my $cmd_options = $self->{+CMD_LIST} // [];
+    my $pre_options = $self->{+PRE_LIST} // [];
 
-    return [grep { $_->applicable($self) } @$cmd_options];
+    return [grep { $_->applicable($self) } @$cmd_options, @$pre_options];
 }
 
 sub _process_opts {
@@ -524,7 +513,7 @@ sub _parse_option_caller {
 
     $prefix = lc($prefix) if $prefix;
 
-    croak "Could not find an option prefix and option is not top-level ($proto->{field})"
+    croak "Could not find an option prefix and option is not top-level ($proto->{title})"
         unless $is_top || defined($prefix) || defined($proto->{prefix});
 
     return (

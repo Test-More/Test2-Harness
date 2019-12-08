@@ -33,6 +33,8 @@ sub run {
 
     $self->App::Yath::Command::test::terminate_queue();
 
+    $_->teardown($self->settings) for @{$self->settings->yath->plugins};
+
     sleep(0.02) while kill(0, $self->pfile_data->{pid});
 
     my $pfile = $self->pfile;

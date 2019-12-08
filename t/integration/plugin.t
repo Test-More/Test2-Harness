@@ -1,47 +1,80 @@
 use Test2::V0;
 
-use App::Yath::Tester qw/yath_test_with_log yath_start yath_stop yath_run_with_log/;
+use App::Yath::Tester qw/yath/;
 use File::Temp qw/tempdir/;
 use Test2::Harness::Util::File::JSONL;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 
-my ($exit, $log, $out) = yath_test_with_log(undef, ['--no-plugins', '-pTestPlugin'], '-A');
+my $dir = __FILE__;
+$dir =~ s{\.t$}{}g;
 
-ok(!$exit, "Exited success");
+sub verify {
+    my (@outputs) = @_;
 
-like($out, qr/TEST PLUGIN: Loaded Plugin/,   "Yath loaded the plugin");
-like($out, qr/TEST PLUGIN: munge_files/,     "munge_files() was called");
-like($out, qr/TEST PLUGIN: munge_search/,    "munge_search() was called");
-like($out, qr/TEST PLUGIN: inject_run_data/, "inject_run_data() was called");
-like($out, qr/TEST PLUGIN: handle_event/,    "handle_event() was called");
+    my $ctx = context();
 
-like($out, qr/TEST PLUGIN: claim_file .*test\.tx$/m,       "claim_file(test.tx) was called");
-like($out, qr/TEST PLUGIN: claim_file .*TestPlugin\.pm$/m, "claim_file(TestPlugin.pm) was called");
-like($out, qr/TEST PLUGIN: finish App::Yath::Settings/,    "finish() was called with settings");
+    my $text = '';
+    for my $out (@outputs) {
+        ok(!$out->{exit}, "Exited success");
+        $text .= $out->{output};
+    }
 
-if (ok($out =~ m/^FIELDS:(.*)$/m, "Found fields")) {
-    my $data = decode_json($1);
-    is(
-        $data,
-        [
-            {
+    like($text, qr/TEST PLUGIN: Loaded Plugin/,   "Yath loaded the plugin");
+    like($text, qr/TEST PLUGIN: munge_files/,     "munge_files() was called");
+    like($text, qr/TEST PLUGIN: munge_search/,    "munge_search() was called");
+    like($text, qr/TEST PLUGIN: inject_run_data/, "inject_run_data() was called");
+    like($text, qr/TEST PLUGIN: handle_event/,    "handle_event() was called");
+
+    like($text, qr/TEST PLUGIN: claim_file .*test\.tx$/m,       "claim_file(test.tx) was called");
+    like($text, qr/TEST PLUGIN: claim_file .*TestPlugin\.pm$/m, "claim_file(TestPlugin.pm) was called");
+    like($text, qr/TEST PLUGIN: setup App::Yath::Settings/,     "setup() was called with settings");
+    like($text, qr/TEST PLUGIN: teardown App::Yath::Settings/,  "teardown() was called with settings");
+    like($text, qr/TEST PLUGIN: finish App::Yath::Settings/,    "finish() was called with settings");
+
+    is(@{[$text =~ m/TEST PLUGIN: setup/g]},    1, "Only ran setup once");
+    is(@{[$text =~ m/TEST PLUGIN: teardown/g]}, 1, "Only ran teardown once");
+
+    if (ok($text =~ m/^FIELDS:(.*)$/m, "Found fields")) {
+        my $data = decode_json($1);
+        is(
+            $data,
+            [{
                 name => 'test_plugin', details => 'foo', raw => 'bar', data => 'baz',
-            }
-        ],
-        "Injected the run data"
+            }],
+            "Injected the run data"
+        );
+    }
+
+    my %rank = (
+        test => 1,
+        c    => 2,
+        b    => 3,
+        a    => 4,
+        d    => 5,
     );
+
+    my %jobs = reverse($text =~ m{job\s+(\d+)\s+.*\W(\w+)\.tx}g);
+    is(\%jobs, \%rank, "Ran jobs in specified order");
+
+    $ctx->release;
 }
 
-my %rank = (
-    test => 1,
-    c    => 2,
-    b    => 3,
-    a    => 4,
-    d    => 5,
-);
+subtest test => sub {
+    verify(
+        yath(
+            command => 'test',
+            args    => [$dir, '--ext=tx', '-A', '--no-plugins', '-pTestPlugin'],
+        ),
+    );
+};
 
-my %jobs = reverse ($out =~ m{job\s+(\d+)\s+.*\W(\w+)\.tx}g);
-is(\%jobs, \%rank, "Ran jobs in specified order");
+subtest persist => sub {
+    verify(
+        yath(command => 'start', args => ['--no-plugins', '-pTestPlugin']),
+        yath(command => 'run',   args => ['--no-plugins', '-pTestPlugin', $dir, '--ext=tx', '-A']),
+        yath(command => 'stop',  args => ['--no-plugins', '-pTestPlugin']),
+    );
+};
 
 done_testing;

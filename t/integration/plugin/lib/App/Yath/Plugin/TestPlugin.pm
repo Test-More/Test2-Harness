@@ -96,4 +96,18 @@ sub finish {
     return;
 }
 
+sub setup {
+    my $self = shift;
+    my ($settings) = @_;
+    print "TEST PLUGIN: setup " . ref($settings) . "\n";
+    return;
+}
+
+sub teardown {
+    my $self = shift;
+    my ($settings) = @_;
+    print "TEST PLUGIN: teardown " . ref($settings) . "\n";
+    return;
+}
+
 1;

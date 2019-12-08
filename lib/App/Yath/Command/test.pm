@@ -172,11 +172,23 @@ sub start {
 
     return unless $pop;
 
+    $self->setup_plugins();
+
     $self->start_runner();
     $self->start_collector();
     $self->start_auditor();
 
     return 1;
+}
+
+sub setup_plugins {
+    my $self = shift;
+    $_->setup($self->settings) for @{$self->settings->yath->plugins};
+}
+
+sub teardown_plugins {
+    my $self = shift;
+    $_->teardown($self->settings) for @{$self->settings->yath->plugins};
 }
 
 sub render {
@@ -243,6 +255,8 @@ sub stop {
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
     close($logger) if $logger;
+
+    $self->teardown_plugins();
 
     $_->finish($settings) for @$plugins;
     $_->finish() for @$renderers;

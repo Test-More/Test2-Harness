@@ -12,6 +12,10 @@ sub munge_files {}
 
 sub inject_run_data {}
 
+sub setup {}
+
+sub teardown {}
+
 sub TO_JSON { ref($_[0]) || "$_[0]" }
 
 1;

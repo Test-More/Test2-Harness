@@ -46,6 +46,8 @@ the start command for details on how to launch a persistant instance.
 
 sub terminate_queue {}
 sub write_settings_to {}
+sub setup_plugins {}
+sub teardown_plugins {}
 
 sub monitor_preloads { 1 }
 sub job_count { 1 }

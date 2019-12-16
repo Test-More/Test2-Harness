@@ -16,6 +16,7 @@ use Test2::Harness::Auditor::TimeTracker;
 
 use Test2::Harness::Util::HashBase qw{
     -job
+    -try
     -live
 
     -assertion_count
@@ -39,6 +40,9 @@ sub init {
 
     croak "'job' is a required attribute"
         unless $self->{+JOB};
+
+    croak "'try' is a required attribute"
+        unless defined $self->{+TRY};
 
     $self->{+_FAILURES}       = 0;
     $self->{+_ERRORS}         = 0;
@@ -109,7 +113,7 @@ sub process {
             ],
         };
 
-        $event = Test2::Harness::Event->new(stamp => time, facet_data => $f);
+        $event = Test2::Harness::Event->new(stamp => time, job_try => $self->{+TRY}, facet_data => $f);
     }
 
     push @out => $event;
@@ -162,13 +166,13 @@ sub subtest_process {
     my ($f, $event) = @_;
 
     my $closer = delete $f->{harness}->{closed_by};
-    $event ||= Test2::Harness::Event->new(facet_data => $f);
+    $event ||= Test2::Harness::Event->new(facet_data => $f, job_try => $self->{+TRY});
 
     $self->{+NUMBERS}->{$f->{assert}->{number}}++
         if $f->{assert} && $f->{assert}->{number};
 
     if ($f->{parent} && $f->{assert}) {
-        my $subwatcher = blessed($self)->new(nested => $self->{+NESTED} + 1, job => $self->{+JOB});
+        my $subwatcher = blessed($self)->new(nested => $self->{+NESTED} + 1, job => $self->{+JOB}, try => $self->{+TRY});
 
         my $id = 1;
         for my $sf (@{$f->{parent}->{children}}) {

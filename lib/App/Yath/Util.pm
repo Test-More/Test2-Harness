@@ -122,7 +122,7 @@ sub find_pfile {
     }
 
     my $project = $yath->project;
-    my $name = $project ? "$project-yath-persist.jsonl" : "yath-persist.jsonl";
+    my $name = $project ? "$project-yath-persist.json" : "yath-persist.json";
     my $set_dir = $yath->persist_dir // $ENV{YATH_PERSISTENCE_DIR};
     my $dir = $set_dir // $ENV{TMPDIR} // $ENV{TEMPDIR} // File::Spec->tmpdir;
 

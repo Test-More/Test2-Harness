@@ -4,7 +4,8 @@ use warnings;
 
 our $VERSION = '1.000000';
 
-use Test2::API qw/context/;
+use Test2::API qw/context run_subtest/;
+use Test2::Tools::Compare qw/is/;
 use App::Yath::Util qw/find_yath/;
 use File::Spec;
 use File::Temp qw/tempfile tempdir/;
@@ -12,11 +13,12 @@ use Test2::Harness::Util::IPC qw/run_cmd/;
 use POSIX;
 
 use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util::File::JSONL;
 
 use Carp qw/croak/;
 
 use Importer Importer => 'import';
-our @EXPORT = qw/yath_test yath_test_with_log yath_start yath_stop yath_run yath_run_with_log yath/;
+our @EXPORT = qw/yath/;
 
 my $pdir = tempdir(CLEANUP => 1);
 
@@ -31,123 +33,30 @@ sub cover {
     return '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
 }
 
-sub yath_test_with_log {
-    my ($test, @options) = @_;
-    my ($pkg, $file) = caller();
-
-    my ($fh, $logfile) = tempfile(CLEANUP => 1, SUFFIX => '.jsonl');
-    close($fh);
-
-    my ($exit, $out) = _yath('test', $file, $test, @options, '-F' => $logfile);
-
-    return ($exit, Test2::Harness::Util::File::JSONL->new(name => $logfile), $out);
-}
-
-sub yath_test {
-    my ($test, @options) = @_;
-    my ($pkg, $file) = caller();
-    return _yath('test', $file, $test, @options);
-}
-
-sub yath_start {
-    my (@options) = @_;
-    local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
-    my $yath = find_yath;
-    my @cover = cover();
-    my $exit = system($^X, @cover, $yath, '-D', 'start', @options);
-}
-
-sub yath_stop {
-    my (@options) = @_;
-    local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
-    my $yath = find_yath;
-    my @cover = cover();
-    my $exit = system($^X, @cover, $yath, '-D', 'stop', @options);
-}
-
-sub yath_run {
-    local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
-    my ($test, @options) = @_;
-    my ($pkg, $file) = caller();
-    return _yath('run', $file, $test, @options);
-}
-
-sub yath_run_with_log {
-    local $ENV{YATH_PERSISTENCE_DIR} = $pdir;
-    my ($test, @options) = @_;
-    my ($pkg, $file) = caller();
-
-    my ($fh, $logfile) = tempfile(CLEANUP => 1, SUFFIX => '.jsonl');
-    close($fh);
-
-    my ($exit, $out) = _yath('run', $file, $test, @options, '-F' => $logfile);
-
-    return ($exit, Test2::Harness::Util::File::JSONL->new(name => $logfile), $out);
-}
-
-
-sub _yath {
-    my ($cmd, $file, $test, @options) = @_;
-
-    my $pre_opts = ref($options[0]) eq 'ARRAY' ? shift @options : [];
-
-    my $dir = $file;
-    $dir =~ s/\.t2?$//g;
-
-    my $run = $test ? File::Spec->catfile($dir, "$test.tx") : undef;
-    croak "Could not find test '$test' at '$run'" if $run && !-f $run;
-
-    my $inc = File::Spec->catdir($dir, 'lib');
-    $inc = undef unless -d $inc;
-
-    my $yath = find_yath;
-
-    my @cover = cover();
-
-    pipe(my ($rh, $wh)) or die "Could not open pipe: $!";
-    my @final = ($^X, @cover, $yath, $inc ? ("-D$inc") : (), '-D', @$pre_opts, $cmd, @options, $run ? ($run) : ());
-    local $ENV{NESTED_YATH} = 1;
-    my $pid = run_cmd(
-        no_set_pgrp => 1,
-        stderr => $wh,
-        stdout => $wh,
-        command => \@final,
-    );
-
-    close($wh);
-    $rh->blocking(0);
-    my (@lines, $exit);
-    while(1) {
-        push @lines => <$rh>;
-
-        waitpid($pid, WNOHANG) or next;
-        $exit = $?;
-        last;
-    }
-
-    push @lines => <$rh>;
-
-    return $exit unless wantarray;
-    return ($exit, join '' => @lines);
-}
-
 sub yath {
     my %params = @_;
 
     my $ctx = context();
 
-    my $cmd = $params{cmd} // $params{command};
-    my $cli = $params{cli} // $params{args} // [];
-    my $env = $params{env} // {};
-    my $pre = $params{pre} // $params{pre_command} // [];
+    my $cmd = delete $params{cmd} // delete $params{command};
+    my $cli = delete $params{cli} // delete $params{args} // [];
+    my $pre = delete $params{pre} // delete $params{pre_command} // [];
+    my $env = delete $params{env} // {};
 
-    $params{debug}   //= 0;
-    $params{inc}     //= 1;
-    $params{capture} //= 1;
-    $params{log}     //= 0;
+    my $subtest  = delete $params{test} // delete $params{tests} // delete $params{subtest};
+    my $exittest = delete $params{exit};
+
+    my $debug   = delete $params{debug}   // 0;
+    my $inc     = delete $params{inc}     // 1;
+    my $capture = delete $params{capture} // 1;
+    my $log     = delete $params{log}     // 0;
+
+    if (keys %params) {
+        croak "Unexpected parameters: " . join (', ', sort keys %params);
+    }
 
     my @inc;
-    if ($params{inc}) {
+    if ($inc) {
         my ($pkg, $file) = caller();
         my $dir = $file;
         $dir =~ s/\.t2?$//g;
@@ -157,17 +66,17 @@ sub yath {
     }
 
     my ($rh, $wh);
-    if ($params{capture}) {
+    if ($capture) {
         pipe($rh, $wh) or die "Could not open pipe: $!";
     }
 
     my (@log, $logfile);
-    if ($params{log}) {
+    if ($log) {
         my $fh;
         ($fh, $logfile) = tempfile(CLEANUP => 1, SUFFIX => '.jsonl');
         close($fh);
         @log = ('-F' => $logfile);
-        print "DEBUG: log file = '$logfile'\n" if $params{debug};
+        print "DEBUG: log file = '$logfile'\n" if $debug;
     }
 
     unshift @inc => "-D$apppath";
@@ -177,7 +86,7 @@ sub yath {
     my $yath = find_yath;
     my @cmd = ($^X, @cover, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
 
-    print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $params{debug};
+    print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $debug;
 
     local %ENV = %ENV;
     $ENV{YATH_PERSISTENCE_DIR} = $pdir;
@@ -185,19 +94,19 @@ sub yath {
     $ENV{$_} = $env->{$_} for keys %$env;
     my $pid = run_cmd(
         no_set_pgrp => 1,
-        $params{capture} ? (stderr => $wh, stdout => $wh) : (),
+        $capture ? (stderr => $wh, stdout => $wh) : (),
         command => \@cmd,
     );
 
     my (@lines, $exit);
-    if ($params{capture}) {
+    if ($capture) {
         close($wh);
 
         $rh->blocking(0);
         while (1) {
             my @new = <$rh>;
             push @lines => @new;
-            print map { chomp($_); "DEBUG: > $_\n" } @new if $params{debug} > 1;
+            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;
 
             waitpid($pid, WNOHANG) or next;
             $exit = $?;
@@ -206,23 +115,52 @@ sub yath {
 
         my @new = <$rh>;
         push @lines => @new;
-        print map { chomp($_); "DEBUG: > $_\n" } @new if $params{debug} > 1;
+        print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;
     }
     else {
-        print "DEBUG: Waiting for $pid\n" if $params{debug};
+        print "DEBUG: Waiting for $pid\n" if $debug;
         waitpid($pid, 0);
         $exit = $?;
     }
 
-    print "DEBUG: Exit: $exit\n" if $params{debug};
+    print "DEBUG: Exit: $exit\n" if $debug;
+
+    my $out = {
+        exit => $exit,
+        $capture ? (output => join('', @lines)) : (),
+        $log ? (log => Test2::Harness::Util::File::JSONL->new(name => $logfile)) : (),
+    };
+
+    my $name = join(' ', map { length($_) < 30 ? $_ : substr($_, 0, 10) . "[...]" . substr($_, -10) } 'yath', grep { defined($_) } @$pre, $cmd ? ($cmd) : (), @$cli);
+    run_subtest(
+        $name,
+        sub {
+            if (defined $exittest) {
+                my $ictx = context(level => 3);
+                is($exit, $exittest, "Exit Value Check");
+                $ictx->release;
+            }
+
+            if ($subtest) {
+                local $_ = $out->{output};
+                local $? = $out->{exit};
+                $subtest->($out);
+            }
+
+            my $ictx = context(level => 3);
+
+            $ictx->diag("Command = " . join(' ' => grep { defined $_ } @cmd) . "\nExit = $exit\n==== Output ====\n$out->{output}\n========")
+                unless $ictx->hub->is_passing;
+
+            $ictx->release;
+        },
+        {buffered => 1},
+        $out,
+    ) if $subtest || defined $exittest;
 
     $ctx->release;
 
-    return {
-        exit => $exit,
-        $params{capture} ? (output => join('', @lines)) : (),
-        $params{log} ? (log => Test2::Harness::Util::File::JSONL->new(name => $logfile)) : (),
-    };
+    return $out;
 }
 
 1;

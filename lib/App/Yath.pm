@@ -143,7 +143,26 @@ sub process_argv {
     $options->grab_command_opts();
     $options->process_command_opts();
 
+    $options->clear_env();
+
+    $self->clear_env();
+
     return $self->{+_ARGV};
+}
+
+sub clear_env {
+    delete $ENV{T2_FORMATTER};
+    delete $ENV{T2_HARNESS_FORKED};
+    delete $ENV{T2_HARNESS_JOB_IS_TRY};
+    delete $ENV{T2_HARNESS_JOB_NAME};
+    delete $ENV{T2_HARNESS_PRELOAD};
+    delete $ENV{T2_STREAM_DIR};
+    delete $ENV{T2_STREAM_FILE};
+    delete $ENV{T2_STREAM_JOB_ID};
+    delete $ENV{TEST2_ACTIVE};
+    delete $ENV{TEST2_JOB_DIR};
+    delete $ENV{TEST2_RUN_DIR};
+    delete $ENV{TEST_ACTIVE};
 }
 
 sub command_class {

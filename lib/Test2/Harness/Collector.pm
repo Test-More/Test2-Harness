@@ -46,7 +46,7 @@ sub init {
 
     $self->{+WAIT_TIME} //= 0.02;
 
-    $self->{+ACTION}->($self->_harness_event(0, time, harness_run => $self->{+RUN}, harness_settings => $self->settings, about => {no_display => 1}));
+    $self->{+ACTION}->($self->_harness_event(0, undef, time, harness_run => $self->{+RUN}, harness_settings => $self->settings, about => {no_display => 1}));
 }
 
 sub process {
@@ -124,7 +124,7 @@ sub process_runner_output {
 
     for my $line ($stdout->poll()) {
         chomp($line);
-        my $e = $self->_harness_event(0, time, info => [{details => $line, tag => 'INTERNAL', important => 1}]);
+        my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => 'INTERNAL', important => 1}]);
         $self->{+ACTION}->($e);
     }
 
@@ -134,7 +134,7 @@ sub process_runner_output {
 
     for my $line ($stderr->poll()) {
         chomp($line);
-        my $e = $self->_harness_event(0, time, info => [{details => $line, tag => 'INTERNAL', debug => 1, important => 1}]);
+        my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => 'INTERNAL', debug => 1, important => 1}]);
         $self->{+ACTION}->($e);
     }
 }
@@ -160,7 +160,7 @@ sub process_tasks {
         $self->{+TASKS}->{$job_id} = $task;
         $self->{+PENDING}->{$job_id} = 1 + ($task->{retry} || $self->run->retry || 0);
 
-        my $e = $self->_harness_event($job_id, $task->{stamp}, 'harness_job_queued' => $task);
+        my $e = $self->_harness_event($job_id, $task->{is_try} // 0, $task->{stamp}, 'harness_job_queued' => $task);
         $self->{+ACTION}->($e);
     }
 
@@ -194,6 +194,7 @@ sub jobs {
         my $file = $job->{file};
         my $e = $self->_harness_event(
             $job_id,
+            $job->{is_try},
             $job->{stamp},
             harness_job        => $job,
             harness_job_start  => {
@@ -215,6 +216,7 @@ sub jobs {
         my $job_try = $job_id . '+' . $job->{is_try};
 
         $jobs->{$job_try} = Test2::Harness::Collector::JobDir->new(
+            job_try    => $job->{is_try} // 0,
             job_id     => $job_id,
             run_id     => $self->{+RUN_ID},
             runner_pid => $self->{+RUNNER_PID},
@@ -227,7 +229,7 @@ sub jobs {
 
 sub _harness_event {
     my $self = shift;
-    my ($job_id, $stamp, %args) = @_;
+    my ($job_id, $job_try, $stamp, %args) = @_;
 
     croak "Job id is required" unless defined $job_id;
     croak "Stamp is required" unless defined $stamp;
@@ -235,6 +237,7 @@ sub _harness_event {
     return Test2::Harness::Event->new(
         stamp      => $stamp,
         job_id     => $job_id,
+        job_try    => $job_try,
         event_id   => gen_uuid(),
         run_id     => $self->{+RUN_ID},
         facet_data => \%args,

@@ -18,13 +18,16 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
         short       => 't',
         alt         => ['tmpdir'],
         description => 'Use a specific temp directory (Default: use system temp dir)',
-        default     => sub { $ENV{TMPDIR} || $ENV{TEMPDIR} || File::Spec->tmpdir },
+        env_vars => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
+        default     => sub { File::Spec->tmpdir },
     );
 
     option workdir => (
         type         => 's',
         short        => 'w',
         description  => 'Set the work directory (Default: new temp directory)',
+        env_vars => [qw/T2_WORKDIR YATH_WORKDIR/],
+        clear_env_vars => 1,
         normalize    => \&clean_path,
     );
 
@@ -36,8 +39,6 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
     post sub {
         my %params   = @_;
         my $settings = $params{settings};
-
-        $settings->workspace->workdir //= $ENV{T2_WORKDIR} // $ENV{YATH_WORKDIR};
 
         if (my $workdir = $settings->workspace->workdir) {
             if (-d $workdir) {

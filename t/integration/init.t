@@ -5,27 +5,30 @@ use File::Spec;
 
 use App::Yath::Tester qw/yath/;
 use App::Yath::Util qw/find_yath/;
-find_yath(); # cache result before we chdir
+find_yath();    # cache result before we chdir
 
 my $dir = tempdir(CLEANUP => 1);
 chdir($dir);
 
-my $out;
+yath(
+    command => 'init',
+    args    => [],
+    exit    => 0,
+    test    => sub {
+        like($_, qr/Writing test\.pl/, "Short message");
 
-$out = yath(command => 'init', args => []);
-ok(!$out->{exit}, "Exit success");
-like($out->{output}, qr/Writing test\.pl/, "Short message");
+        ok(-e 'test.pl', "Added test.pl");
 
-ok(-e 'test.pl', "Added test.pl");
+        open(my $fh, '<', 'test.pl') or die $!;
+        my $found = 0;
+        while (my $line = <$fh>) {
+            next unless $line =~ m/THIS IS A GENERATED YATH RUNNER TEST/;
+            $found++;
+            last;
+        }
 
-open(my $fh, '<', 'test.pl') or die $!;
-my $found = 0;
-while (my $line = <$fh>) {
-    next unless $line =~ m/THIS IS A GENERATED YATH RUNNER TEST/;
-    $found++;
-    last;
-}
-
-ok($found, "Found generated note");
+        ok($found, "Found generated note");
+    },
+);
 
 done_testing;

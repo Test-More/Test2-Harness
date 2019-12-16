@@ -28,7 +28,7 @@ use Test2::Harness::Collector::TapParser qw{
 };
 
 use Test2::Harness::Util::HashBase qw{
-    -run_id -job_id -job_root -runner_pid
+    <run_id <job_id <job_try <job_root <runner_pid
     <done
 
     -_ready_buffer
@@ -222,6 +222,7 @@ sub _poll_stream_add_event {
         facet_data => $facet_data,
         event_id   => $event_id,
         job_id     => $self->{+JOB_ID},
+        job_try    => $self->{+JOB_TRY},
         run_id     => $self->{+RUN_ID},
     };
 }
@@ -541,8 +542,9 @@ sub _process_events_line {
     my $self = shift;
     my ($event_data) = @_;
 
-    $event_data->{job_id} = $self->{+JOB_ID};
-    $event_data->{run_id} = $self->{+RUN_ID};
+    $event_data->{job_id}  = $self->{+JOB_ID};
+    $event_data->{job_try} = $self->{+JOB_TRY};
+    $event_data->{run_id}  = $self->{+RUN_ID};
     $event_data->{event_id} ||= $event_data->{facet_data}->{about}->{uuid} ||= gen_uuid();
 
     return $event_data;
@@ -569,6 +571,7 @@ sub _process_exit_line {
     return {
         event_id => $event_id,
         job_id   => $self->{+JOB_ID},
+        job_try  => $self->{+JOB_TRY},
         run_id   => $self->{+RUN_ID},
         stamp    => $stamp,
 
@@ -582,6 +585,7 @@ sub _process_exit_line {
                 dumped  => $dmp,
                 retry   => $retry,
                 job_id  => $self->{+JOB_ID},
+                job_try => $self->{+JOB_TRY},
                 stdout  => $stdout,
                 stderr  => $stderr,
                 stamp   => $stamp,
@@ -602,24 +606,25 @@ sub _process_timeout_line {
     return {
         event_id => $event_id,
         job_id   => $self->{+JOB_ID},
+        job_try  => $self->{+JOB_TRY},
         run_id   => $self->{+RUN_ID},
         stamp    => $stamp,
 
         facet_data => {
-            about => {uuid => $event_id, details => "Timeout ($type)"},
+            about  => {uuid => $event_id, details => "Timeout ($type)"},
             errors => [
                 {
-                    tag => 'TIMEOUT',
+                    tag     => 'TIMEOUT',
                     details => "A timeout ($type) has occured, job was forcefully killed",
-                    fail => 1,
+                    fail    => 1,
                 },
             ],
             info => [
                 {
-                    tag => 'TIMEOUT',
-                    debug => 1,
+                    tag       => 'TIMEOUT',
+                    debug     => 1,
                     important => 1,
-                    details => $reason,
+                    details   => $reason,
                 },
             ],
         }

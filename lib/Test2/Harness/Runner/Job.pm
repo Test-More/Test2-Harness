@@ -66,6 +66,8 @@ sub init {
     croak "'run' is a required attribute"      unless $self->{+RUN};
     croak "'settings' is a required attribute" unless $self->{+SETTINGS};
 
+    delete $self->{+JOB_DIR};
+
     # Avoid a ref cycle
     #weaken($self->{+RUNNER});
 
@@ -84,6 +86,7 @@ sub prepare_dir {
 
     $self->job_dir();
     $self->tmp_dir();
+    $self->event_dir();
 }
 
 sub via {
@@ -130,7 +133,7 @@ sub spawn_params {
         stdout  => $out_fh,
         stderr  => $err_fh,
         chdir   => $self->ch_dir(),
-        set_env => $self->env_vars(),
+        env     => $self->env_vars(),
     };
 }
 
@@ -286,7 +289,7 @@ sub job_dir {
     return $self->{+JOB_DIR} if $self->{+JOB_DIR};
 
     my $job_dir = File::Spec->catdir($self->run_dir, $self->{+TASK}->{job_id} . '+' . $self->is_try);
-    mkdir($job_dir) or die "$$ Could not create job directory '$job_dir': $!";
+    mkdir($job_dir) or die "$$ $0 Could not create job directory '$job_dir': $!";
     $self->{+JOB_DIR} = $job_dir;
 }
 
@@ -295,7 +298,7 @@ sub tmp_dir {
     return $self->{+TMP_DIR} if $self->{+TMP_DIR};
 
     my $tmp_dir = File::Spec->catdir($self->job_dir, 'tmp');
-    mkdir($tmp_dir) or die "$$ Could not create temp directory '$tmp_dir': $!";
+    mkdir($tmp_dir) or die "$$ $0 Could not create temp directory '$tmp_dir': $!";
     $self->{+TMP_DIR} = $tmp_dir;
 }
 
@@ -306,7 +309,7 @@ sub event_dir {
 
     my $events_dir = File::Spec->catdir($self->job_dir, 'events');
     unless (-d $events_dir) {
-        mkdir($events_dir) or die "$$ Could not create events directory '$events_dir': $!";
+        mkdir($events_dir) or die "$$ $0 Could not create events directory '$events_dir': $!";
     }
     $self->{+EVENT_DIR} = $events_dir;
 }

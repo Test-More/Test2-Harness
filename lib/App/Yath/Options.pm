@@ -663,6 +663,19 @@ sub _doc_sort_ops($$) {
     return $ret;
 }
 
+sub clear_env {
+    my $self = shift;
+
+    for my $opt (@{$self->{+ALL}}) {
+        next unless $opt->clear_env_vars;
+        my $env = $opt->env_vars or next;
+        for my $var (@$env) {
+            $var =~ s/^!//;
+            delete $ENV{$var};
+        }
+    }
+}
+
 1;
 
 __END__

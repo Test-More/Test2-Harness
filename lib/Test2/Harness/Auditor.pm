@@ -47,7 +47,8 @@ sub process_event {
     my $self = shift;
     my ($e) = @_;
 
-    my $job_id = $e->job_id;
+    my $job_id  = $e->job_id;
+    my $job_try = $e->job_try // 0;
 
     # Do nothing for non-job events
     return $e unless $job_id;
@@ -56,17 +57,17 @@ sub process_event {
 
     if (my $task = $f->{harness_job_queued}) {
         $self->{+WATCHERS}->{$job_id} //= [];
-        $self->{+QUEUED}->{$job_id} = $task;
+        $self->{+QUEUED}->{$job_id} //= $task;
         return $e;
     }
 
     my $tries = $self->{+WATCHERS}->{$job_id} or return $self->broken($e, "Never saw queue entry");
 
     if (my $job = $f->{harness_job}) {
-        push @$tries => Test2::Harness::Auditor::Watcher->new(job => $job);
+        $tries->[$job_try] = Test2::Harness::Auditor::Watcher->new(job => $job, try => $job_try);
     }
 
-    my $watcher = $tries->[-1] or return $self->broken($e, "never saw harness_job facet");
+    my $watcher = $tries->[$job_try] or return $self->broken($e, "never saw harness_job facet");
 
     return $watcher->process($e);
 }

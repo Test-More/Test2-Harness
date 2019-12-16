@@ -143,6 +143,14 @@ sub new_root {
     $params{+DIR} ||= $ENV{T2_STREAM_DIR} || $ROOT_DIR;
     $params{+JOB_ID} ||= $ENV{T2_STREAM_JOB_ID} || $ROOT_JOB_ID || 1;
 
+
+    if ($ENV{FAIL_ONCE}) {
+        no warnings 'uninitialized';
+        print STDERR "T2_FORMATTER: $ENV{T2_FORMATTER}\n";
+        print STDERR "T2_STREAM_DIR: $ENV{T2_STREAM_DIR}\n";
+        print STDERR "T2_STREAM_JOB_ID: $ENV{T2_STREAM_JOB_ID}\n";
+    }
+
     # DO NOT REOPEN THEM!
     delete $ENV{T2_FORMATTER} if $ENV{T2_FORMATTER} && $ENV{T2_FORMATTER} eq 'Stream';
     delete $ENV{T2_STREAM_DIR};

@@ -75,7 +75,7 @@ sub init {
 
     $self->{+HANDLERS}->{HUP} = sub {
         my $sig = shift;
-        print STDERR "$0 $$ ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
+        print STDERR "$$ $0 ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
         $self->{+SIGNAL} = $sig;
     };
 
@@ -139,7 +139,7 @@ sub check_timeouts {
         my $sig = $kill ? 'KILL' : 'TERM';
         $sig = "-$sig" if $self->USE_P_GROUPS;
 
-        print STDERR "$0 " . $job->file . " did not respond to SIGTERM, sending SIGKILL to $pid...\n" if $kill;
+        print STDERR "$$ $0 " . $job->file . " did not respond to SIGTERM, sending SIGKILL to $pid...\n" if $kill;
 
         kill($sig, $pid);
     }
@@ -153,7 +153,7 @@ sub stop {
     $self->check_for_fork;
 
     if (keys %{$self->{+PROCS}}) {
-        print "$0 Sending all child processes the TERM signal...\n";
+        print "$$ $0 Sending all child processes the TERM signal...\n";
         # Send out the TERM signal
         $self->killall($self->{+SIGNAL} // 'TERM');
         $self->wait(all => 1, timeout => 5);
@@ -161,9 +161,9 @@ sub stop {
 
     # Time to get serious
     if (keys %{$self->{+PROCS}}) {
-        print STDERR "$0 Some child processes are refusing to exit, sending KILL signal...\n";
+        print STDERR "$$ $0 Some child processes are refusing to exit, sending KILL signal...\n";
         use POSIX;
-        print("$0 == $_ " . waitpid($_, WNOHANG) . "\n") for keys %{$self->{+PROCS}};
+        print("$$ $0 == $_ " . waitpid($_, WNOHANG) . "\n") for keys %{$self->{+PROCS}};
         $self->killall('KILL');
     }
 
@@ -405,7 +405,7 @@ sub set_proc_exit {
         }
 
         if(my $bail = $exit ? $proc->bailed_out : 0) {
-            print "$0 BAIL-OUT detected: $bail\nAborting the test run...\n";
+            print "$$ $0 BAIL-OUT detected: $bail\nAborting the test run...\n";
             $self->state->halt_run($task->{run_id});
         }
     }
@@ -414,7 +414,7 @@ sub set_proc_exit {
 
         if ($exit != 0) {
             my $e = parse_exit($exit);
-            my $err = "$0 Child stage '$stage' did not exit cleanly (sig: $e->{sig}, err: $e->{err})!\n";
+            my $err = "$$ $0 Child stage '$stage' did not exit cleanly (sig: $e->{sig}, err: $e->{err})!\n";
             $self->{+MONITOR_PRELOADS} ? warn $err : die $err;
         }
 

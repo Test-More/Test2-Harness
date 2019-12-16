@@ -26,7 +26,7 @@ use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/
-    <runner_pid +ipc
+    <runner_pid +ipc +signal
 
     +run
 
@@ -91,7 +91,6 @@ sub cover {
     return '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
 }
 
-
 sub init {
     my $self = shift;
     $self->SUPER::init() if $self->can('SUPER::init');
@@ -135,7 +134,27 @@ sub workdir {
 
 sub ipc {
     my $self = shift;
-    return $self->{+IPC} //= Test2::Harness::IPC->new;
+    return $self->{+IPC} //= Test2::Harness::IPC->new(
+        handlers => {
+            INT  => sub { $self->handle_sig(@_) },
+            TERM => sub { $self->handle_sig(@_) },
+        }
+    );
+}
+
+sub handle_sig {
+    my $self = shift;
+    my ($sig) = @_;
+
+    print STDERR "\nCought SIG$sig, forwarding signal to child processes...\n";
+    $self->ipc->killall($sig);
+
+    if ($self->{+SIGNAL}) {
+        print STDERR "\nSecond signal ($self->{+SIGNAL} followed by $sig), exiting now without waiting\n";
+        exit 1;
+    }
+
+    $self->{+SIGNAL} = $sig;
 }
 
 sub monitor_preloads { 0 }
@@ -207,6 +226,8 @@ sub render {
     $reader->blocking(0);
     my $buffer;
     while (1) {
+        return if $self->{+SIGNAL};
+
         my $line = <$reader>;
         unless(defined $line) {
             $ipc->wait() if $ipc;
@@ -262,6 +283,7 @@ sub stop {
     $_->finish() for @$renderers;
 
     my $ipc = $self->ipc;
+    print STDERR "Waiting for child processes to exit...\n" if $self->{+SIGNAL};
     $ipc->wait(all => 1);
     $ipc->stop;
 

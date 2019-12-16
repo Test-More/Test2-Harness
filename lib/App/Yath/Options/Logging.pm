@@ -19,9 +19,11 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
         alt  => ['lff'],
         type => 's',
 
+        env_vars => [qw/YATH_LOG_FILE_FORMAT TEST2_HARNESS_LOG_FORMAT/],
+        default => sub { '%!P%Y-%m-%d_%H:%M:%S_%!U.jsonl' },
+
         description => 'Specify the format for automatically-generated log files. Overridden by --log-file, if given. This option implies -L (Default: \$YATH_LOG_FILE_FORMAT, if that is set, or else "%!P%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl"). This is a string in which percent-escape sequences will be replaced as per POSIX::strftime. The following special escape sequences are also replaced: (%!P : Project name followed by a ~, if a project is defined, otherwise empty string) (%!U : the unique test run ID) (%!p : the process ID) (%!S : the number of seconds since local midnight UTC)',
 
-        default => sub { $ENV{YATH_LOG_FILE_FORMAT} // '%!P%Y-%m-%d_%H:%M:%S_%!U.jsonl' },
     );
 
     option bzip2 => (

@@ -143,7 +143,7 @@ sub launch_stage {
     ) if $pid;
 
     $0 .= "-" . $stage->name;
-    $ENV{HARNESS_STAGE} = $stage->name;
+    $ENV{T2_HARNESS_STAGE} = $stage->name;
 
     return;
 }

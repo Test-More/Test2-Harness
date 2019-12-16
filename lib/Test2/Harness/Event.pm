@@ -29,6 +29,7 @@ use Test2::Harness::Util::HashBase qw{
     <event_id
     <run_id
     <job_id
+    <job_try
     <stamp
     <times
     +json
@@ -45,7 +46,7 @@ sub init {
 
     my $data = $self->{+FACET_DATA} || confess "'facet_data' is a required attribute";
 
-    for my $field (RUN_ID(), JOB_ID(), EVENT_ID) {
+    for my $field (RUN_ID(), JOB_ID(), EVENT_ID()) {
         my $v1 = $self->{$field};
         my $v2 = $data->{harness}->{$field};
 
@@ -58,6 +59,11 @@ sub init {
 
         $self->{$field} = $data->{harness}->{$field} = $v1 // $v2;
     }
+
+    $self->{+JOB_TRY} //= $data->{harness}->{job_try} if exists($data->{harness}) && exists ($data->{harness}->{job_try});
+
+    confess "'job_try' is a required field when 'job_id' is not 0 (job_id is $self->{+JOB_ID})"
+        unless !$self->{+JOB_ID} || defined($self->{+JOB_TRY});
 
     delete $data->{facet_data};
 

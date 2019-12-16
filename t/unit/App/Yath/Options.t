@@ -1,4 +1,5 @@
 use Test2::V0 -target => 'App::Yath::Options';
+require App::Yath::Command;
 
 subtest sugar => sub {
     package Test::Options::One;
@@ -191,6 +192,7 @@ subtest _parse_option_args => sub {
 };
 
 subtest _parse_option_caller => sub {
+    no warnings 'once';
     local *My::Caller::A::option_prefix = sub { 'MyPrefix' };
     my $one = $CLASS->new();
 
@@ -404,6 +406,7 @@ subtest include_from => sub {
     $two->_post(1, undef, $post);
     $two->included->{'fake'} = 2;
 
+    no warnings 'once';
     *Some::Fake::Package::options = sub { $two };
 
     $one->include_from('Some::Fake::Package');
@@ -606,7 +609,7 @@ subtest _grab_opts => sub {
     );
 
     $one->{args} = ['-f', '--ba', 'xxx', '--xyz', '--baz=uhg'];
-    my @out = $one->_grab_opts($one->all, 'foo', passthrough => 1);
+    @out = $one->_grab_opts($one->all, 'foo', passthrough => 1);
 
     is($one->args, ['xxx', '--xyz'], "Pulled out known args");
     is(
@@ -772,266 +775,8 @@ subtest post => sub {
         "Need args first"
     );
 
-    my $one = $CLASS->new();
+    $one = $CLASS->new();
     $one->set_args(['foo']);
 };
 
-die "Not Done";
-
 done_testing;
-
-__END__
-
-sub process_option_post_actions {
-    my $self = shift;
-    my ($cmd) = @_;
-
-    croak "The 'args' attribute has not yet been set"
-        unless $self->{+ARGS};
-
-    if ($cmd) {
-        croak "The 'command_class' attribute has not yet been set"
-            unless $self->{+COMMAND_CLASS};
-
-        croak "The process_option_post_actions requires an App::Yath::Command instance, got: " . ($cmd // "undef")
-            unless blessed($cmd) && $cmd->isa('App::Yath::Command');
-
-        croak "The command '$cmd' dos not match the expected class '$self->{+COMMAND_CLASS}'"
-            unless blessed($cmd) eq $self->{+COMMAND_CLASS};
-    }
-
-    unless ($self->{+POST_LIST_SORTED}++) {
-        @{$self->{+POST_LIST}} = sort { $a->[0] <=> $b->[0] } @{$self->{+POST_LIST}};
-    }
-
-    for my $post (@{$self->{+POST_LIST}}) {
-        next if $post->[1] && !$post->[1]->($post->[2], $self);
-        $post->[2]->(
-            options  => $self,
-            args     => $self->{+ARGS},
-            settings => $self->{+SETTINGS},
-            $cmd ? (command => $cmd) : (),
-        );
-    }
-}
-
-sub _pre_command_options { $_[0]->{+PRE_LIST} }
-
-sub _command_options {
-    my $self = shift;
-
-    my $class = $self->{+COMMAND_CLASS} or croak "The 'command_class' attribute has not yet been set";
-
-    my $cmd = $class->name;
-    my $cmd_options = $self->{+CMD_LIST} // [];
-
-    return [grep { $_->applicable($self) } @$cmd_options];
-}
-
-sub _process_opts {
-    my $self = shift;
-    my ($list) = @_;
-
-    for my $opt_set (@$list) {
-        my ($opt, $meth, @args) = @$opt_set;
-        $opt->$meth(@args, $self->{+SETTINGS});
-        $self->{+SET_BY_CLI}->{$opt->prefix}->{$opt->field}++;
-    }
-}
-
-sub _parse_long_option {
-    my $self = shift;
-    my ($arg) = @_;
-
-    $arg =~ m/^--((?:no-)?([^=]+))(=(.*))?$/ or confess "Invalid long option: $arg";
-
-    #return (main, full, val);
-    return ($2, $1, $3 ? $4 // '' : undef);
-}
-
-sub _parse_short_option {
-    my $self = shift;
-    my ($arg) = @_;
-
-    $arg =~ m/^-([^-])(=)?(.+)?$/ or confess "Invalid short option: $arg";
-
-    #return (main, remain, assign);
-    return ($1, $3, $2);
-}
-
-sub _handle_long_option {
-    my $self = shift;
-    my ($arg, $lookup, $args) = @_;
-
-    my ($main, $full, $val) = $self->_parse_long_option($arg);
-
-    my $opt;
-    if ($opt = $lookup->{long}->{$full}) {
-        if ($opt->requires_arg) {
-            $val //= shift(@$args) // die "Option --$full requires an argument.\n";
-        }
-        elsif($opt->allows_arg) {
-            $val //= 1;
-        }
-        else {
-            die "Option --$full does not take an argument\n" if defined $val;
-            $val = 1;
-        }
-
-        return [$opt, 'handle', $val];
-    }
-    elsif ($opt = $lookup->{long}->{$main}) {
-        die "Option --$full does not take an argument\n" if defined $val;
-        return [$opt, 'handle_negation'];
-    }
-
-    return undef;
-}
-
-sub _handle_short_option {
-    my $self = shift;
-    my ($arg, $lookup, $args) = @_;
-
-    my ($main, $remain, $assign) = $self->_parse_short_option($arg);
-
-    if (my $opt = $lookup->{short}->{$main}) {
-        my $val = 1;
-        if ($opt->allows_arg) {
-            $val = $remain;
-
-            $val //= '' if $assign;
-
-            if ($opt->requires_arg) {
-                $val //= shift(@$args) // die "Option -$main requires an argument.\n";
-            }
-            else {
-                $val //= 1;
-            }
-
-            return [$opt, 'handle', $val];
-        }
-        elsif ($assign) {
-            die "Option -$main does not take an argument\n";
-        }
-        elsif(defined($remain) && length($remain)) {
-            unshift @$args => "-$remain";
-        }
-
-        return [$opt, 'handle', $val];
-    }
-
-    return undef;
-}
-
-sub _build_lookup {
-    my $self = shift;
-    my ($opts) = @_;
-
-    my $lookup = {long => {}, short => {}};
-
-    my %seen;
-    for my $opt (@$opts) {
-        next if $seen{$opt}++;
-
-        for my $long ($opt->long_args) {
-            $lookup->{long}->{$long} //= $opt;
-        }
-
-        my $short = $opt->short or next;
-        $lookup->{short}->{$short} //= $opt;
-    }
-
-    return $lookup;
-}
-
-***************
-***************
-***************
-***************
-***************
-***************
-***************
-***************
-***************
-***************
-
-sub pre_docs {
-    my $self = shift;
-
-    return $self->_docs($self->_pre_command_options(), @_);
-}
-
-sub cmd_docs {
-    my $self = shift;
-
-    return unless $self->{+COMMAND_CLASS};
-
-    return $self->_docs($self->_command_options(), @_);
-}
-
-my %DOC_FORMATS = (
-    'cli' => [
-        'cli_docs',    # Method to call on opt
-        "\n",          # how to join lines
-        sub { "\n$_[1]" },                        # how to render the category
-        sub { $_[0] =~ s/^/  /mg; "$_[0]\n" },    # transform the value from the opt
-        sub { },                                  # add this at the end
-    ],
-    'pod' => [
-        'pod_docs',                               # Method to call on opt
-        "\n\n",                                   # how to join lines
-        sub { ($_[0] ? ("=back") : (), "=head3 $_[1]", "=over 4") },    # how to render the category
-        sub { $_[0] },                                                  # transform the value from the opt
-        sub { $_[0] ? ("=back") : () },                                 # add this at the end
-    ],
-);
-
-sub _docs {
-    my $self = shift;
-    my ($opts, $format) = @_;
-
-    $format //= "UNDEFINED";
-    my $fset = $DOC_FORMATS{$format} or croak "Invalid documentation format '$format'";
-    my ($fmeth, $join, $fcat, $ftrans, $fend) = @$fset;
-
-    return unless $opts;
-    return unless @$opts;
-
-    my @opts = sort _doc_sort_ops @$opts;
-
-    my @out;
-
-    my $cat;
-    for my $opt (@opts) {
-        if (!$cat || $opt->category ne $cat) {
-            push @out => $fcat->($cat, $opt->category);
-            $cat = $opt->category;
-        }
-
-        my $help = $opt->$fmeth();
-        push @out => $ftrans->($help);
-    }
-
-    push @out => $fend->($cat);
-
-    return join $join => @out;
-}
-
-sub _doc_sort_ops($$) {
-    my ($a, $b) = @_;
-
-    my $anc = $a->category eq 'NO CATEGORY - FIX ME';
-    my $bnc = $b->category eq 'NO CATEGORY - FIX ME';
-
-    if($anc xor $bnc) {
-        return 1 if $anc;
-        return -1;
-    }
-
-    my $ret = $a->category cmp $b->category;
-    $ret ||= ($a->prefix || '') cmp ($b->prefix || '');
-    $ret ||= $a->field cmp $b->field;
-    $ret ||= $a->name cmp $b->name;
-
-    return $ret;
-}

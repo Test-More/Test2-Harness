@@ -84,14 +84,11 @@ $code
             '-Dpre_lib',
             '-D=./../pre/xxx/lib',
             '-D=./../pre/yyy/lib',
-            '-pXXX',
-            '-p' => 'YYY',
             '-D=SPLIT',
+            '--no-scan-plugins',
             '-Dpre_user_lib',
             '-D=./pre/xxx/user/lib',
             '-D=./pre/yyy/user/lib',
-            '-pUSER_XXX',
-            '-p' => 'USER_YYY',
         ],
         "Got pre-args from all config files"
     );
@@ -102,14 +99,11 @@ $code
             '-Dpre_lib',
             '-D=./../pre/xxx/lib',
             '-D=./../pre/yyy/lib',
-            '-pXXX',
-            '-p' => 'YYY',
             '-D=SPLIT',
+            '--no-scan-plugins',
             '-Dpre_user_lib',
             '-D=./pre/xxx/user/lib',
             '-D=./pre/yyy/user/lib',
-            '-pUSER_XXX',
-            '-p' => 'USER_YYY',
             'START',
             'END',
         ],
@@ -119,6 +113,12 @@ $code
     is(
         {%CONFIG},
         {
+            '~' => [
+                '-pXXX',
+                '-p' => 'YYY',
+                '-pUSER_XXX',
+                '-p' => 'USER_YYY',
+            ],
             test => [
                 '-Itest_lib',
                 '-I=./../test/xxx/lib',

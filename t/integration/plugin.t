@@ -16,7 +16,6 @@ sub verify {
 
     my $text = '';
     for my $out (@outputs) {
-        ok(!$out->{exit}, "Exited success");
         $text .= $out->{output};
     }
 
@@ -60,20 +59,18 @@ sub verify {
     $ctx->release;
 }
 
-subtest test => sub {
-    verify(
-        yath(
-            command => 'test',
-            args    => [$dir, '--ext=tx', '-A', '--no-plugins', '-pTestPlugin'],
-        ),
-    );
-};
+yath(
+    command => 'test',
+    args    => [$dir, '--ext=tx', '-A', '--no-plugins', '-pTestPlugin'],
+    exit    => 0,
+    test    => \&verify,
+);
 
 subtest persist => sub {
     verify(
-        yath(command => 'start', args => ['--no-plugins', '-pTestPlugin']),
-        yath(command => 'run',   args => ['--no-plugins', '-pTestPlugin', $dir, '--ext=tx', '-A']),
-        yath(command => 'stop',  args => ['--no-plugins', '-pTestPlugin']),
+        yath(command => 'start', args => ['--no-plugins', '-pTestPlugin'], exit => 0),
+        yath(command => 'run', args => ['--no-plugins', '-pTestPlugin', exit => 0, $dir, '--ext=tx', '-A']),
+        yath(command => 'stop', args => ['--no-plugins', '-pTestPlugin'], exit => 0),
     );
 };
 

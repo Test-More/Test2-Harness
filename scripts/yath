@@ -73,10 +73,14 @@ BEGIN {
                 ($key, $eq, $val) = split /(=|\s+)/, $line, 2;  # Covers most cases
             }
 
-            my $is_d;
-            if ($key eq '-D' || $key eq '--dev-lib') {
+            my $is_pre;
+            if ($key =~ m/^-D/ || $key eq '--dev-lib') {
                 $eq = '=' if $val;
-                $is_d = 1;
+                $is_pre = 1;
+            }
+
+            if ($key eq '--no-scan-plugins') {
+                $is_pre = 1;
             }
 
             my $need_to_clean;
@@ -91,7 +95,7 @@ BEGIN {
             $eq //= '';
             my @parts = $eq eq '=' ? ("${key}${eq}${val}") : (grep { defined $_ } $key, $val);
 
-            if ($is_d) {
+            if ($is_pre) {
                 push @CONFIG_ARGS => @parts;
             }
             else {

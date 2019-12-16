@@ -13,9 +13,9 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option use_fork => (
         alt         => ['fork'],
         description => "(default: on, except on windows) Normally tests are run by forking, which allows for features like preloading. This will turn off the behavior globally (which is not compatible with preloading). This is slower, it is better to tag misbehaving tests with the '# HARNESS-NO-PRELOAD' coment in their header to disable forking only for those tests.",
+        env_vars => [qw/!T2_NO_FORK T2_HARNESS_FORK !T2_HARNESS_NO_FORK YATH_FORK !YATH_NO_FORK/],
         default     => sub {
             return 0 if IS_WIN32;
-            return 0 if $ENV{T2_NO_FORK};
             return 1;
         },
     );
@@ -27,11 +27,13 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option job_count => (
-        type        => 's',
-        short       => 'j',
-        alt         => ['jobs'],
-        description => 'Set the number of concurrent jobs to run (Default: 1)',
-        default     => 1,
+        type           => 's',
+        short          => 'j',
+        alt            => ['jobs'],
+        description    => 'Set the number of concurrent jobs to run (Default: 1)',
+        env_vars       => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
+        clear_env_vars => 1,
+        default        => 1,
     );
 
     option includes => (
@@ -59,10 +61,8 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
 
     option unsafe_inc => (
         description => "perl is removing '.' from \@INC as a security concern. This option keeps things from breaking for now.",
-        default     => sub {
-            return $ENV{PERL_USE_UNSAFE_INC} if defined $ENV{PERL_USE_UNSAFE_INC};
-            return 1;
-        },
+        env_vars    => [qw/PERL_USE_UNSAFE_INC/],
+        default     => 1,
     );
 
     option preloads => (

@@ -1,55 +1,73 @@
 use Test2::V0;
 # HARNESS-DURATION-LONG
 
-use App::Yath::Tester qw/yath_test_with_log yath_start yath_stop yath_run_with_log/;
-use Test2::Harness::Util::File::JSONL;
+use App::Yath::Tester qw/yath/;
 
-use File::Temp qw/tempdir/;
+my $dir = __FILE__;
+$dir =~ s{\.t$}{}g;
 
+run_tests('test');
 
-for my $tool (qw/yath_test_with_log yath_run_with_log/) {
-    subtest $tool => sub {
-        my $cmd = __PACKAGE__->can($tool);
+my $project = "asgadfgds";
 
-        my $dir = tempdir(CLEANUP => 1);
-        $ENV{RETRY_DIR} = $dir;
+my $out = yath(command => 'start', pre => ['--project', $project], args => [], exit => 0, test => sub {
+    run_tests('run');
+    yath(command => 'stop', args => [], exit => 0);
+});
 
-        ok(!yath_start('-q'), "Started yath") if $tool eq 'yath_run_with_log';
+sub run_tests {
+    my ($cmd) = @_;
 
-        my ($exit, $log) = $cmd->('retry', '-r3', '-qqq');
-        ok(!$exit, "Passed");
-        my $final = ($log->poll())[-2];
-        is($final->{facet_data}->{harness_final}->{pass}, T(), "Passed in log");
+    yath(
+        command => $cmd,
+        pre => ['--project', $project],
+        args    => [$dir, '--ext=tx', '-r3'],
+        log     => 1,
+        exit    => 0,
+        test    => sub {
+            my $out   = shift;
+            my $final = ($out->{log}->poll())[-2];
+            is($final->{facet_data}->{harness_final}->{pass}, T(), "Passed in log");
+        },
+    );
 
-        open(my $fh, '>', File::Spec->catfile($dir, 'fail_once')) or die "$!";
-        print $fh "1\n";
-        close($fh);
+    yath(
+        command => $cmd,
+        pre     => ['--project', $project],
+        args    => [$dir, '--ext=tx', '-r3', '--env-var' => "FAIL_ONCE=1", '-v'],
+        log     => 1,
+        exit    => 0,
+        debug   => 0,
+        test    => sub {
+            my $out = shift;
 
-        ($exit, $log) = $cmd->('retry', '-r3', '-qqq');
-        ok(!$exit, "Passed");
-        $final = ($log->poll())[-2];
-        my $retry_data = $final->{facet_data}->{harness_final}->{retried}->[0];
-        my ($uuid, $tries, $file, $status) = @$retry_data;
-        is($tries, 2, "Tried twice");
-        like($file, qr{retry\.tx}, "Retried the right file");
-        is($status, 'YES', "Eventually passed");
+            my $final      = ($out->{log}->poll())[-2];
+            my $retry_data = $final->{facet_data}->{harness_final}->{retried}->[0];
+            ok($retry_data, "got retry data") or return;
+            my ($uuid, $tries, $file, $status) = @$retry_data;
+            is($tries, 2, "Tried twice");
+            like($file, qr{retry\.tx}, "Retried the right file");
+            is($status, 'YES', "Eventually passed");
+        },
+    );
 
-        open($fh, '>', File::Spec->catfile($dir, 'fail_repeatedly')) or die "$!";
-        print $fh "1\n";
-        close($fh);
+    yath(
+        command => $cmd,
+        pre => ['--project', $project],
+        args    => [$dir, '--ext=tx', '-r3', '--env-var' => "FAIL_ALWAYS=1"],
+        log     => 1,
+        exit    => T(),
+        test    => sub {
+            my $out        = shift;
+            my $final      = ($out->{log}->poll())[-2];
+            my $retry_data = $final->{facet_data}->{harness_final}->{retried}->[0];
+            my ($uuid, $tries, $file, $status) = @$retry_data;
 
-        ($exit, $log) = $cmd->('retry', '-r3', '-qqq');
-        ok($exit, "Did not pass");
-        $final      = ($log->poll())[-2];
-        $retry_data = $final->{facet_data}->{harness_final}->{retried}->[0];
-        ($uuid, $tries, $file, $status) = @$retry_data;
-        is($tries, 3, "Tried 3 times");
-        like($file, qr{retry\.tx}, "Retried the right file");
-        is($status, 'NO', "Never passed");
-
-        ok(!yath_stop('-qqq'), "Stopped yath") if $tool eq 'yath_run_with_log';
-    };
-}
-
+            is($tries, 3, "Tried 3 times");
+            like($file, qr{retry\.tx}, "Retried the right file");
+            is($status, 'NO', "Never passed");
+        },
+    );
+};
 
 done_testing;

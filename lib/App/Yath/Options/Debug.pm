@@ -16,9 +16,11 @@ option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
     post \&_post_process_help;
 
     option dummy => (
-        short       => 'd',
-        description => 'Dummy run, do not actually execute anything',
-        default     => sub { $ENV{T2_HARNESS_DUMMY} || 0 },
+        short          => 'd',
+        description    => 'Dummy run, do not actually execute anything',
+        env_vars       => [qw/T2_HARNESS_DUMMY/],
+        clear_env_vars => 1,
+        default        => 0,
     );
 
     option keep_dirs => (

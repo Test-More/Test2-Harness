@@ -25,23 +25,29 @@ my $out1 = yath(
     command => 'test',
     args    => [$dir, '--ext=tx'],
     log     => 1,
+    exit    => T(),
+    test    => sub {
+        my $out = shift;
+        clean_output($out);
+
+        like($out->{output}, qr{FAILED.*fail\.tx}, "'fail.tx' was seen as a failure when reading the log");
+        like($out->{output}, qr{PASSED.*pass\.tx}, "'pass.tx' was not seen as a failure when reading the log");
+
+    },
 );
-
-clean_output($out1);
-
-like($out1->{output}, qr{FAILED.*fail\.tx}, "'fail.tx' was seen as a failure when reading the log");
-like($out1->{output}, qr{PASSED.*pass\.tx}, "'pass.tx' was not seen as a failure when reading the log");
 
 my $logfile = $out1->{log}->name;
 
-my $out2 = yath(
+yath(
     command => 'replay',
     args    => [$logfile],
-);
+    exit => $out1->{exit},
+    test => sub {
+        my $out2 = shift;
+        clean_output($out2);
 
-# Strip out extra newlines
-clean_output($out2);
-is($out2->{output}, $out1->{output}, "Replay has identical output to original");
-is($out2->{exit}, $out1->{exit}, "Replay has identical exit");
+        is($out2->{output}, $out1->{output}, "Replay has identical output to original");
+    },
+);
 
 done_testing;

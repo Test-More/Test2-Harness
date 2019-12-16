@@ -1,20 +1,30 @@
-#!perl
 # HARNESS-DURATION-SHORT
-
 use strict;
 use warnings;
 
-use Test::More;
-use File::Spec;
+use Test2::V0;
+use Test2::API qw/test2_formatter/;
 
-my $dir = $ENV{RETRY_DIR} or die "No retry dir!";
+ok(1, "Minimal result");
 
-my $fail_once_file = File::Spec->catfile($dir, 'fail_once');
-my $fail_many_file = File::Spec->catfile($dir, 'fail_repeatedly');
+sub {
+    my $ctx = context();
 
-ok(!-e $fail_once_file, "$fail_once_file is there.");
-unlink $fail_once_file;
+    diag "Formatter: " . test2_formatter();
 
-ok(!-e $fail_many_file, "$fail_many_file is there.");
+    $ctx->release;
+}->();
+
+
+$ENV{T2_HARNESS_JOB_IS_TRY} //= 0;
+$ENV{FAIL_ONCE}             //= 0;
+$ENV{FAIL_ALWAYS}           //= 0;
+
+diag "JOB_IS_TRY  = $ENV{T2_HARNESS_JOB_IS_TRY}";
+diag "FAIL_ONCE   = $ENV{FAIL_ONCE}";
+diag "FAIL_ALWAYS = $ENV{FAIL_ALWAYS}";
+
+ok(0, "Should fail once") if $ENV{FAIL_ONCE} && $ENV{T2_HARNESS_JOB_IS_TRY} < 1;
+ok(0, "Should fail always") if $ENV{FAIL_ALWAYS};
 
 done_testing();

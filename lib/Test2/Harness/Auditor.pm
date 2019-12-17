@@ -37,9 +37,14 @@ sub process {
         last unless defined $data;
         my $e = Test2::Harness::Event->new($data);
 
-        my @events = $self->process_event($e);
-
-        $self->{+ACTION}->($_) for @events;
+        # If process_event does not return anything we need to record just this
+        # event. If it does return then we want to record what it returns.
+        if (my @events = $self->process_event($e)) {
+            $self->{+ACTION}->($_) for @events;
+        }
+        else {
+            $self->{+ACTION}->($e);
+        }
     }
 }
 

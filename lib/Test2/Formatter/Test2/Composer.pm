@@ -34,7 +34,7 @@ sub render_one_line {
 
 sub render_verbose {
     my $class = shift;
-    my ($in) = @_;
+    my ($in, %params) = @_;
 
     my $f = blessed($in) ? $in->facet_data : $in;
 
@@ -43,7 +43,7 @@ sub render_verbose {
 
     my @out;
 
-    push @out => $class->render_halt($f) if $f->{control} && defined $f->{control}->{halt};
+    push @out => $class->render_control($f, %params) if $f->{control};
     push @out => $class->render_plan($f) if $f->{plan};
 
     if ($f->{assert}) {
@@ -65,7 +65,7 @@ sub render_super_verbose {
     my $class = shift;
     my ($in) = @_;
 
-    my $out = $class->render_verbose($in);
+    my $out = $class->render_verbose($in, super_verbose => 1);
 
     my $f = blessed($in) ? $in->facet_data : $in;
 
@@ -73,7 +73,6 @@ sub render_super_verbose {
     push @$out => $class->render_start($f)   if $f->{harness_job_start};
     push @$out => $class->render_exit($f)    if $f->{harness_job_exit};
     push @$out => $class->render_end($f)     if $f->{harness_job_end};
-    push @$out => $class->render_encoding($f) if $f->{control}->{encoding};
 
     unless (@$out) {
         my ($name, $fallback);
@@ -123,18 +122,29 @@ sub render_end {
     my $class = shift;
     my ($f) = @_;
 
-    my @out;
-
-    push @out => ['harness', 'HARNESS', "Job completed at " . $f->{harness_job_end}->{stamp}];
-
-    return @out;
+    return ['harness', 'HARNESS', "Job completed at " . $f->{harness_job_end}->{stamp}];
 }
 
-sub render_encoding {
+sub render_control {
     my $class = shift;
-    my ($f) = @_;
+    my ($f, %params) = @_;
 
-    return ['control', 'ENCODING', $f->{control}->{encoding}];
+    my @out;
+
+    push @out => ['control', 'HALT', $f->{control}->{details}]
+        if defined $f->{control}->{halt};
+
+    return @out unless $params{super_verbose};
+
+    push @out => ['control', 'ENCODING', $f->{control}->{encoding}]
+        if $f->{control}->{encoding};
+
+    return @out if @out;
+
+    return ['control', 'CONTROL', $f->{control}->{details}]
+        if defined $f->{control}->{details};
+
+    return;
 }
 
 my %SHOW_BRIEF_TAGS = (
@@ -174,7 +184,7 @@ sub render_brief {
 
     my @out;
 
-    push @out => $class->render_halt($f) if $f->{control} && defined $f->{control}->{halt};
+    push @out => $class->render_control($f) if $f->{control};
 
     if ($f->{assert} && !$f->{assert}->{pass} && !$f->{amnesty}) {
         push @out => $class->render_assert($f);
@@ -189,13 +199,6 @@ sub render_brief {
     push @out => $class->render_errors($f) if $f->{errors};
 
     return \@out;
-}
-
-sub render_halt {
-    my $class = shift;
-    my ($f) = @_;
-
-    return ['control', 'HALT', $f->{control}->{details}];
 }
 
 sub render_plan {

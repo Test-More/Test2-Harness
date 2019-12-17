@@ -1,7 +1,6 @@
 use Test2::V0 -target => 'App::Yath';
 use Data::Dumper;
 use Carp;
-*Data::Dumper::Dumper = \&Carp::confess;
 
 use App::Yath;
 

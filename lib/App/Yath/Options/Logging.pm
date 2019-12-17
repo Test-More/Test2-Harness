@@ -77,6 +77,7 @@ sub post_process {
         $logging->log_file = clean_path(File::Spec->catfile($log_dir, $filename));
     }
 
+    $logging->log_file =~ s{/+$}{}g;
     $logging->log_file =~ s/\.(gz|bz2)$//;
     $logging->log_file =~ s/\.jsonl?$//;
     $logging->log_file .= "\.jsonl";

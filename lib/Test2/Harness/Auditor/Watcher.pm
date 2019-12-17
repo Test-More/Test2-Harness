@@ -231,6 +231,7 @@ sub subtest_process {
             abs_file => File::Spec->rel2abs($file),
             retry    => $f->{harness_job_exit}->{retry},
             fail     => $self->fail(),
+            stamp    => $f->{harness_job_exit}->{stamp},
         };
 
         my $plan = $self->plan;

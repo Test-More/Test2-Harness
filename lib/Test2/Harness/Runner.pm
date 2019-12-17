@@ -106,6 +106,8 @@ sub state {
 sub check_timeouts {
     my $self = shift;
 
+    return unless $self->settings->runner->use_timeout;
+
     my $now = time;
 
     # Check only once per second, that is as granular as we get. Also the check is not cheep.
@@ -114,6 +116,7 @@ sub check_timeouts {
     for my $pid (keys %{$self->{+PROCS}}) {
         my $job = $self->{+PROCS}->{$pid};
         next unless $job->isa('Test2::Harness::Runner::Job');
+        next unless $job->use_timeout;
 
         my $et  = $job->event_timeout     // $self->{+EVENT_TIMEOUT};
         my $pet = $job->post_exit_timeout // $self->{+POST_EXIT_TIMEOUT};

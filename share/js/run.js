@@ -24,8 +24,10 @@ t2hui.run.build_table = function(uri) {
     var columns = [
         { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.run.tool_builder },
 
-        { 'name': 'pass_count', 'label': 'P', 'class': 'count', 'builder': t2hui.run.build_pass },
-        { 'name': 'fail_count', 'label': 'F', 'class': 'count', 'builder': t2hui.run.build_fail },
+        { 'name': 'try', 'label': 'T', 'class': 'count', 'builder': t2hui.run.build_try },
+
+        { 'name': 'pass_count',  'label': 'P', 'class': 'count', 'builder': t2hui.run.build_pass },
+        { 'name': 'fail_count',  'label': 'F', 'class': 'count', 'builder': t2hui.run.build_fail },
 
         { 'name': 'exit',  'label': 'exit',  'class': 'exit', 'builder': t2hui.run.build_exit },
 
@@ -63,6 +65,12 @@ t2hui.run.build_fail = function(item, col, data) {
     col.addClass('count');
 };
 
+t2hui.run.build_try = function(item, col, data) {
+    var val = item.job_try || '0';
+    col.text(val);
+    col.addClass('count');
+};
+
 t2hui.run.build_exit = function(item, col, data) {
     var val = item.exit != null ? item.exit : 'N/A';
     col.text(val);
@@ -95,7 +103,7 @@ t2hui.run.tool_builder = function(item, tools, data) {
         $('#modal_body').text("loading...");
         $('#free_modal').slideDown();
 
-        var uri = base_uri + 'job/' + item.job_id;
+        var uri = base_uri + 'job/' + item.job_key;
 
         $.ajax(uri, {
             'data': { 'content-type': 'application/json' },
@@ -106,14 +114,18 @@ t2hui.run.tool_builder = function(item, tools, data) {
         });
     });
 
-    var link = base_uri + 'job/' + item.job_id;
+    var link = base_uri + 'job/' + item.job_key;
     var go = $('<a class="tool etoggle" title="Open Job" href="' + link + '"><img src="/img/goto.png" /></a>');
     tools.append(go);
 };
 
 t2hui.run.modify_row = function(row, item) {
     if (item.short_file) {
-        if (item.fail) {
+        if (item.retry) {
+            row.addClass('iffy_set');
+            row.addClass('retry_txt');
+        }
+        else if (item.fail) {
             row.addClass('error_set');
         }
         else {
@@ -135,7 +147,7 @@ t2hui.run.field_builder = function(data, name) {
 };
 
 t2hui.run.field_fetch = function(field_data) {
-    return base_uri + 'job/' + field_data.job_id;
+    return base_uri + 'job/' + field_data.job_key;
 };
 
 t2hui.run.build_jobs = function(run_id) {
@@ -152,7 +164,7 @@ t2hui.run.place_row = function(row, item, table, state) {
         return true;
     }
 
-    if (item.fail) {
+    if (item.fail && !item.retry) {
         if (state['fail']) {
             state['fail'].after(row);
         }

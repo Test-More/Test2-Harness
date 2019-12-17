@@ -1,9 +1,9 @@
 $(function() {
     $("div.job").each(function() {
         var root = $(this);
-        var job_id = root.attr('data-job-id');
+        var job_key = root.attr('data-job-key');
 
-        var job_uri = base_uri + 'job/' + job_id;
+        var job_uri = base_uri + 'job/' + job_key;
         $.ajax(job_uri, {
             'data': { 'content-type': 'application/json' },
             'success': function(item) {

@@ -3,7 +3,11 @@
 .broken,  .broken_box,  .broken_txt  { color: #902090; }
 .pending, .pending_box, .pending_txt { color: #0000A0; }
 .running, .running_box, .running_txt { color: #00A0A0; }
+.iffy,    .iffy_box,    .iffy_txt    { color: #b55d05; }
 
+.retry_txt    { text-decoration: line-through; }
+
+.iffy,    .iffy_box,    .iffy_set    { background: #fcfc03; }
 .error,   .error_box,   .error_set   { background: #FFE0E0; }
 .success, .success_box, .success_set { background: #E0FFE0; }
 .broken,  .broken_box,  .broken_set  { background: #FFB0D0; }

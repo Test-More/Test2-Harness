@@ -49,11 +49,23 @@ __PACKAGE__->table("jobs");
 
 =head1 ACCESSORS
 
+=head2 job_key
+
+  data_type: 'uuid'
+  is_nullable: 0
+  size: 16
+
 =head2 job_id
 
   data_type: 'uuid'
   is_nullable: 0
   size: 16
+
+=head2 job_try
+
+  data_type: 'integer'
+  default_value: 0
+  is_nullable: 0
 
 =head2 job_ord
 
@@ -92,7 +104,7 @@ __PACKAGE__->table("jobs");
   data_type: 'boolean'
   is_nullable: 1
 
-=head2 retried
+=head2 retry
 
   data_type: 'boolean'
   is_nullable: 1
@@ -140,8 +152,12 @@ __PACKAGE__->table("jobs");
 =cut
 
 __PACKAGE__->add_columns(
+  "job_key",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "job_id",
   { data_type => "uuid", is_nullable => 0, size => 16 },
+  "job_try",
+  { data_type => "integer", default_value => 0, is_nullable => 0 },
   "job_ord",
   { data_type => "bigint", is_nullable => 0 },
   "run_id",
@@ -156,7 +172,7 @@ __PACKAGE__->add_columns(
   { data_type => "text", is_nullable => 1 },
   "fail",
   { data_type => "boolean", is_nullable => 1 },
-  "retried",
+  "retry",
   { data_type => "boolean", is_nullable => 1 },
   "exit",
   { data_type => "integer", is_nullable => 1 },
@@ -180,13 +196,29 @@ __PACKAGE__->add_columns(
 
 =over 4
 
-=item * L</job_id>
+=item * L</job_key>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("job_id");
+__PACKAGE__->set_primary_key("job_key");
+
+=head1 UNIQUE CONSTRAINTS
+
+=head2 C<jobs_job_id_job_try_key>
+
+=over 4
+
+=item * L</job_id>
+
+=item * L</job_try>
+
+=back
+
+=cut
+
+__PACKAGE__->add_unique_constraint("jobs_job_id_job_try_key", ["job_id", "job_try"]);
 
 =head1 RELATIONS
 
@@ -201,7 +233,7 @@ Related object: L<Test2::Harness::UI::Schema::Result::Event>
 __PACKAGE__->has_many(
   "events",
   "Test2::Harness::UI::Schema::Result::Event",
-  { "foreign.job_id" => "self.job_id" },
+  { "foreign.job_key" => "self.job_key" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
@@ -221,8 +253,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-08-22 10:04:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:KarQxs9jc9dxLUXWcTcRZQ
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-12-16 15:09:13
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:gQnNADemfICyuaQ77kjPFw
 
 our $VERSION = '0.000022';
 
@@ -271,7 +303,7 @@ sub TO_JSON {
     return \%cols;
 }
 
-my @GLANCE_FIELDS = qw{ exit fail fail_count job_id name pass_count file };
+my @GLANCE_FIELDS = qw{ exit fail fail_count job_key job_try retry name pass_count file };
 sub glance_data {
     my $self = shift;
     my %cols = $self->get_columns;

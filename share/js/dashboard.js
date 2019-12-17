@@ -14,8 +14,9 @@ t2hui.dashboard.build_table = function(uri) {
     var columns = [
         { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.dashboard.tool_builder },
 
-        { 'name': 'passed', 'label': 'P', 'class': 'count', 'builder': t2hui.dashboard.build_pass },
-        { 'name': 'failed', 'label': 'F', 'class': 'count', 'builder': t2hui.dashboard.build_fail },
+        { 'name': 'passed',  'label': 'P', 'class': 'count', 'builder': t2hui.dashboard.build_pass },
+        { 'name': 'failed',  'label': 'F', 'class': 'count', 'builder': t2hui.dashboard.build_fail },
+        { 'name': 'retried', 'label': 'R', 'class': 'count', 'builder': t2hui.dashboard.build_retry },
 
         { 'name': 'project', 'label': 'project', 'class': 'project'},
         { 'name': 'status',  'label': 'status',  'class': 'status'}
@@ -97,6 +98,14 @@ t2hui.dashboard.build_fail = function(item, col) {
     if (val === undefined) { return };
     if (val == 0) { col.append($('<div class="success_txt">' + val + '</div>')) }
     else { col.text(val) }
+};
+
+t2hui.dashboard.build_retry = function(item, col) {
+    var val = item.retried;
+    if (val === null) { return };
+    if (val === undefined) { return };
+    if (val == 0) { col.append($('<div class="success_txt">' + val + '</div>')) }
+    else { col.append($('<div class="iffy_txt">' + val + '</div>')) }
 };
 
 t2hui.dashboard.tool_builder = function(item, tools, data) {

@@ -22,7 +22,7 @@ use IO::Uncompress::Gunzip  qw($GunzipError);
 
 use Test2::Harness::UI::Util::HashBase qw{
     -config -run -mode -fh
-    -passed -failed
+    -passed -failed -retried
     -job0_id -job_ord -job_buffer -ready_jobs
     -durations
 };
@@ -59,10 +59,14 @@ sub init {
     $self->{+JOB0_ID}    = gen_uuid();
     $self->{+JOB_BUFFER} = {
         $self->{+JOB0_ID} => {
-            job_id  => $self->{+JOB0_ID},
-            job_ord => $self->{+JOB_ORD}++,
-            run_id  => $self->{+RUN}->run_id,
-            name    => "HARNESS INTERNAL LOG",
+            0 => {
+                job_key => gen_uuid,
+                job_id  => $self->{+JOB0_ID},
+                job_try => 0,
+                job_ord => $self->{+JOB_ORD}++,
+                run_id  => $self->{+RUN}->run_id,
+                name    => "HARNESS INTERNAL LOG",
+            },
         },
     };
 
@@ -89,6 +93,7 @@ sub process {
 
     local $| = 1;
     while (my $line = <$fh>) {
+        next if $line =~ m/^null$/ims;
         my $ln = $.;
 
         my $error = $self->process_event_json($ln => $line);
@@ -100,7 +105,7 @@ sub process {
     $self->flush_all_jobs();
     $self->flush_durations();
 
-    return {success => 1, passed => $self->{+PASSED}, failed => $self->{+FAILED}};
+    return {success => 1, passed => $self->{+PASSED}, failed => $self->{+FAILED}, retried => $self->{+RETRIED}};
 }
 
 sub flush_durations {
@@ -139,6 +144,9 @@ sub flush_ready_jobs {
     for my $job (@$jobs) {
         delete $job->{event_ord};
 
+        # Normalize this boolean
+        $job->{fail} = $job->{fail} ? 1 : 0;
+
         my $fields = delete $job->{fields};
         $job->{fields} = encode_json($fields) if $fields && @$fields;
 
@@ -156,6 +164,9 @@ sub flush_ready_jobs {
             my $is_time = delete $event->{is_time};
             my $record_event = $record_job || ($mode >= $MODES{qvfd} && $is_diag);
             next unless $record_event;
+
+            delete $event->{job_id};
+            delete $event->{job_try};
 
             clean($event->{facets});
             clean($event->{orphan});
@@ -191,7 +202,9 @@ sub flush_all_jobs {
     my $self = shift;
 
     my $all = delete $self->{+JOB_BUFFER};
-    push @{$self->{+READY_JOBS}} => values %$all;
+    for my $jobs (values %$all) {
+        push @{$self->{+READY_JOBS}} => values %$jobs;
+    }
 
     $self->flush_ready_jobs();
 }
@@ -214,9 +227,12 @@ sub process_event {
     my ($f, %params) = @_;
 
     my $job_id = $f->{harness}->{job_id};
+    my $job_try = $f->{harness}->{job_try} // 0;
     $job_id = $self->{+JOB0_ID} if !$job_id || $job_id eq '0';
-    my $job = $self->{+JOB_BUFFER}->{$job_id} ||= {
+    my $job = $self->{+JOB_BUFFER}->{$job_id}->{$job_try} ||= {
+        job_key     => gen_uuid(),
         job_id      => $job_id,
+        job_try     => $job_try,
         job_ord     => $self->{+JOB_ORD}++,
         run_id      => $self->{+RUN}->run_id,
         events      => {},
@@ -226,9 +242,9 @@ sub process_event {
     };
 
     my $e_id = $f->{harness}->{event_id};
-    my $e = $job->{events}->{$e_id} ||= {
+    my $e    = $job->{events}->{$e_id} ||= {
         event_id => $f->{harness}->{event_id},
-        job_id   => $job->{job_id},
+        job_key  => $job->{job_key},
     };
 
     my $nested = $f->{hubs}->[0]->{nested} || 0;
@@ -314,11 +330,20 @@ sub update_other {
         $job->{name} ||= $job_data->{job_name};
         clean($job_data);
         $job->{parameters} = encode_json($job_data);
-        $f->{harness_job}  = "Removed, see job with job_id $job->{job_id}";
+        $f->{harness_job}  = "Removed, see job with job_key $job->{job_key}";
     }
     if (my $job_exit = $f->{harness_job_exit}) {
         $job->{file} ||= $job_exit->{file};
         $job->{exit} = $job_exit->{exit};
+
+        if ($job_exit->{retry} && $job_exit->{retry} eq 'will-retry') {
+            $job->{retry} = 1;
+            $self->{+RETRIED}++;
+            $self->{+FAILED}--;
+        }
+        else {
+            $job->{retry} = 0;
+        }
 
         $job->{stderr} = clean_output(delete $job_exit->{stderr});
         $job->{stdout} = clean_output(delete $job_exit->{stdout});
@@ -339,7 +364,7 @@ sub update_other {
         $job->{fail} ? $self->{+FAILED}++ : $self->{+PASSED}++;
 
         # All done
-        push @{$self->{+READY_JOBS}} => delete $self->{+JOB_BUFFER}->{$job->{job_id}};
+        push @{$self->{+READY_JOBS}} => delete $self->{+JOB_BUFFER}->{$job->{job_id}}->{$job->{job_try}};
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
             push @{$self->{+DURATIONS}} => {
@@ -350,7 +375,7 @@ sub update_other {
         }
     }
     if (my $job_fields = $f->{harness_job_fields}) {
-        push @{$job->{fields}} => map { { %{$_}, job_id => $job->{job_id} } } @$job_fields;
+        push @{$job->{fields}} => map { {%{$_}} } @$job_fields;
     }
 }
 

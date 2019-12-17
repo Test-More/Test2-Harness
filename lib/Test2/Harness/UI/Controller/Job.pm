@@ -31,9 +31,9 @@ sub handle {
     die error(404 => 'Missing route') unless $route;
     my $it = $route->{id} or die error(404 => 'No id');
 
-    my $job = $schema->resultset('Job')->search({job_id => $it})->first or die error(404 => 'Invalid Job');
+    my $job = $schema->resultset('Job')->search({job_key => $it})->first or die error(404 => 'Invalid Job');
 
-    $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id;
+    $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id . '+' . $job->job_try;
 
     my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');
 
@@ -50,7 +50,7 @@ sub handle {
             base_uri => $req->base->as_string,
             user     => $user,
             job      => encode_json($job),
-            job_id   => $job->job_id,
+            job_key   => $job->job_key,
         }
     );
 

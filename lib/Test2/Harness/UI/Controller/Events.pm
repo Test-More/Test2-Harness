@@ -32,11 +32,11 @@ sub handle {
     $attrs{order_by} = {-asc => ['event_ord', 'event_id']};
 
     if ($route->{from} eq 'job') {
-        my $job_id = $it;
-        my $job = $schema->resultset('Job')->find({job_id => $job_id})
+        my $job_key = $it;
+        my $job = $schema->resultset('Job')->find({job_key => $job_key})
             or die error(404 => 'Invalid Job');
 
-        $query{job_id} = $job_id;
+        $query{job_key} = $job_key;
         $query{parent_id} = undef unless $p->{load_subtests} && lc($p->{load_subtests}) ne 'false';
 
         $meth = 'line_data';
@@ -57,8 +57,6 @@ sub handle {
 
         my $event = $schema->resultset('Event')->find({event_id => $event_id})
             or die error(404 => 'Invalid Event');
-
-        $query{job_id} = $event->job_id;
 
         if ($p->{load_subtests}) {
             # If we are loading subtests then we want ALL descendants, so here

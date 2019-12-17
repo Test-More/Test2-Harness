@@ -174,7 +174,10 @@ CREATE TABLE durations_state (
 );
 
 CREATE TABLE jobs (
-    job_id          UUID        NOT NULL PRIMARY KEY,
+    job_key         UUID        NOT NULL PRIMARY KEY,
+
+    job_id          UUID        NOT NULL,
+    job_try         INT         NOT NULL DEFAULT 0,
     job_ord         BIGINT      NOT NULL,
     run_id          UUID        NOT NULL REFERENCES runs(run_id),
 
@@ -185,7 +188,7 @@ CREATE TABLE jobs (
     name            TEXT            DEFAULT NULL,
     file            TEXT            DEFAULT NULL,
     fail            BOOL            DEFAULT NULL,
-    retried         BOOL            DEFAULT NULL,
+    retry           BOOL            DEFAULT NULL,
     exit            INT             DEFAULT NULL,
     launch          TIMESTAMP       DEFAULT NULL,
     start           TIMESTAMP       DEFAULT NULL,
@@ -196,15 +199,19 @@ CREATE TABLE jobs (
 
     -- Output data
     stdout          TEXT            DEFAULT NULL,
-    stderr          TEXT            DEFAULT NULL
+    stderr          TEXT            DEFAULT NULL,
+
+    UNIQUE(job_id, job_try)
 );
+CREATE INDEX IF NOT EXISTS job_look ON jobs(job_id, job_try);
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,
-    job_id          UUID        NOT NULL REFERENCES jobs(job_id),
+
+    job_key         UUID        NOT NULL REFERENCES jobs(job_key),
 
     event_ord       BIGINT      NOT NULL,
 
@@ -220,6 +227,6 @@ CREATE TABLE events (
     orphan          JSONB       DEFAULT NULL,
     orphan_line     BIGINT      DEFAULT NULL
 );
-CREATE INDEX IF NOT EXISTS event_job    ON events(job_id);
+CREATE INDEX IF NOT EXISTS event_job    ON events(job_key);
 CREATE INDEX IF NOT EXISTS event_trace  ON events(trace_id);
 CREATE INDEX IF NOT EXISTS event_parent ON events(parent_id);

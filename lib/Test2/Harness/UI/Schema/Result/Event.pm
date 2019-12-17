@@ -55,7 +55,7 @@ __PACKAGE__->table("events");
   is_nullable: 0
   size: 16
 
-=head2 job_id
+=head2 job_key
 
   data_type: 'uuid'
   is_foreign_key: 1
@@ -115,7 +115,7 @@ __PACKAGE__->table("events");
 __PACKAGE__->add_columns(
   "event_id",
   { data_type => "uuid", is_nullable => 0, size => 16 },
-  "job_id",
+  "job_key",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "event_ord",
   { data_type => "bigint", is_nullable => 0 },
@@ -151,7 +151,7 @@ __PACKAGE__->set_primary_key("event_id");
 
 =head1 RELATIONS
 
-=head2 job
+=head2 job_key
 
 Type: belongs_to
 
@@ -160,15 +160,15 @@ Related object: L<Test2::Harness::UI::Schema::Result::Job>
 =cut
 
 __PACKAGE__->belongs_to(
-  "job",
+  "job_key",
   "Test2::Harness::UI::Schema::Result::Job",
-  { job_id => "job_id" },
+  { job_key => "job_key" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-07-16 09:23:22
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:OaUxd53QiuO+i5O/ZwFzVg
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-12-16 12:15:46
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:EbHxcLeZU0l1ydu/xTUvhw
 
 our $VERSION = '0.000022';
 

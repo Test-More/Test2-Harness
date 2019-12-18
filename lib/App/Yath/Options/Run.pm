@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '1.000000';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::Util qw/fqmod/;
 
 use App::Yath::Options;
 
@@ -32,6 +33,14 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         type => 'm',
         alt => ['ext'],
         description => 'Specify valid test filename extensions, default: t and t2',
+    );
+
+    option finder => (
+        type => 's',
+        default => 'Test2::Harness::Run::Finder',
+        description => 'Specify what Finder subclass to use when searching for files/processing the file list. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Run::Finder::XXX namespace is assumed.',
+        long_examples  => [' MyFinder', ' +Test2::Harness::Run::Finder::MyFinder'],
+        normalize => sub { fqmod('Test2::Harness::Run::Finder', $_[0]) },
     );
 
     option search => (
@@ -158,7 +167,7 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
 
     option load_import => (
         type  => 'H',
-        short => 'H',
+        short => 'M',
         alt   => ['loadim'],
 
         long_examples  => [' Module', ' Module=import_arg1,arg2,...'],

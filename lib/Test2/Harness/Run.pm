@@ -5,21 +5,18 @@ use warnings;
 our $VERSION = '1.000000';
 
 use Carp qw/croak/;
-use Cwd qw/getcwd/;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util qw/write_file_atomic clean_path/;
+use Test2::Harness::Util qw/write_file_atomic mod2file/;
 
-use Test2::Harness::TestFile;
 use Test2::Harness::Util::Queue;
-
-use List::Util qw/first/;
 
 use File::Spec;
 
 use Test2::Harness::Util::HashBase qw{
     <run_id
 
+    <finder
     <default_search <default_at_search
 
     <durations <maybe_durations +duration_data
@@ -137,144 +134,9 @@ sub find_files {
     my $self = shift;
     my ($plugins, $settings) = @_;
 
-    return $self->_find_project_files($plugins, $settings) if $self->multi_project;
-    return $self->_find_files($plugins, $settings, $self->{+SEARCH});
-}
-
-sub _find_project_files {
-    my $self = shift;
-    my ($plugins, $settings) = @_;
-
-    my $search = $self->{+SEARCH} // [];
-
-    die "multi-project search must be a single directory, or the current directory" if @$search > 1;
-    my ($pdir) = @$search;
-    my $dir = clean_path(getcwd());
-
-    my $out = [];
-    my $ok = eval {
-        chdir($pdir) if defined $pdir;
-        my $ret = clean_path(getcwd());
-
-        opendir(my $dh, '.') or die "Could not open project dir: $!";
-        for my $subdir (readdir($dh)) {
-            chdir($ret);
-
-            next if $subdir =~ m/^\./;
-            my $path = clean_path(File::Spec->catdir($ret, $subdir));
-            next unless -d $path;
-
-            chdir($path) or die "Could not chdir to $path: $!\n";
-
-            for my $item (@{$self->_find_files($plugins, $settings, [])}) {
-                push @{$item->queue_args} => ('ch_dir' => $path);
-                push @$out => $item;
-            }
-        }
-
-        chdir($ret);
-        1;
-    };
-    my $err = $@;
-
-    chdir($dir);
-    die $err unless $ok;
-
-    return $out;
-}
-
-sub _find_files {
-    my $self = shift;
-    my ($plugins, $settings, $input) = @_;
-
-    $input   //= [];
-    $plugins //= [];
-
-    my $default_search = [@{$self->default_search}];
-    push @$default_search => @{$self->default_at_search} if $self->author_testing;
-
-    $_->munge_search($self, $input, $default_search, $settings) for @$plugins;
-
-    my $search = @$input ? $input : $default_search;
-
-    die "No tests to run, search is empty\n" unless @$search;
-
-    my (%seen, @tests, @dirs);
-    for my $path (@$search) {
-        push @dirs => $path and next if -d $path;
-
-        unless(-f $path) {
-            die "'$path' is not a valid file or directory.\n" if @$input;
-            next;
-        }
-
-        $path = clean_path($path);
-        $seen{$path}++;
-
-        my $test;
-        unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
-            $test = Test2::Harness::TestFile->new(file => $path);
-            next unless @$input || $self->_include_file($test);
-        }
-
-        push @tests => $test;
-    }
-
-    if (@dirs) {
-        require File::Find;
-        File::Find::find(
-            {
-                no_chdir => 1,
-                wanted   => sub {
-                    no warnings 'once';
-
-                    my $file = clean_path($File::Find::name);
-
-                    return if $seen{$file}++;
-                    return unless -f $file;
-
-                    my $test;
-                    unless(first { $test = $_->claim_file($file, $settings) } @$plugins) {
-                        for my $ext (@{$self->{+EXTENSIONS}}) {
-                            next unless m/\.\Q$ext\E$/;
-                            $test = Test2::Harness::TestFile->new(file => $file);
-                            last;
-                        }
-                    }
-
-                    return unless $test && $self->_include_file($test);
-                    push @tests => $test;
-                },
-            },
-            @dirs
-        );
-    }
-
-    $_->munge_files($self, \@tests, $settings) for @$plugins;
-
-    return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
-}
-
-sub _include_file {
-    my $self = shift;
-    my ($test) = @_;
-
-    return 0 unless $test->check_feature(run => 1);
-
-    my $full = $test->file;
-    my $rel  = $test->relative;
-
-    return 0 if $self->{+EXCLUDE_FILES}->{$full};
-    return 0 if $self->{+EXCLUDE_FILES}->{$rel};
-    return 0 if first { $rel =~ m/$_/ } @{$self->{+EXCLUDE_PATTERNS}};
-
-    my $durations = $self->duration_data;
-    $test->set_duration($durations->{$rel}) if $durations->{$rel};
-
-    return 0 if $self->{+NO_LONG}   && $test->check_duration eq 'long';
-    return 0 if $self->{+ONLY_LONG} && $test->check_duration ne 'long';
-
-    return 1;
+    my $finder = $self->{+FINDER};
+    require(mod2file($finder));
+    return $finder->find_files($self, @_);
 }
 
 1;

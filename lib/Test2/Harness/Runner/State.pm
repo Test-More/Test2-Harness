@@ -375,6 +375,7 @@ sub task_stage {
     my ($task) = @_;
 
     my $wants = $task->{stage};
+    $wants //= 'NOPRELOAD' unless $task->{use_preload};
 
     return $wants if $self->{+NO_POLL};
 

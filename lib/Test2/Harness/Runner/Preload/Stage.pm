@@ -24,7 +24,8 @@ sub init {
 
     croak "'name' is a required attribute" unless $self->{+NAME};
 
-    croak "Stage name 'base' is reserved, pick another name" if $self->{+NAME} eq 'base';
+    croak "Stage name 'base' is reserved, pick another name"      if $self->{+NAME} eq 'base';
+    croak "Stage name 'NOPRELOAD' is reserved, pick another name" if $self->{+NAME} eq 'NOPRELOAD';
 
     $self->{+CHILDREN} //= [];
 

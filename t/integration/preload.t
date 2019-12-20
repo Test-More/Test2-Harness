@@ -25,6 +25,7 @@ yath(
     test    => sub {
         my $out = shift;
 
+        like($out->{output}, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
         like($out->{output}, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
         like($out->{output}, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
         like($out->{output}, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
@@ -61,6 +62,7 @@ yath(
             test    => sub {
                 my $out = shift;
 
+                like($out->{output}, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
                 like($out->{output}, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
                 like($out->{output}, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
                 like($out->{output}, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
@@ -91,6 +93,7 @@ yath(
                 my $out = shift;
 
                 like($out->{output}, qr{This is broken},           "Reported the error");
+                like($out->{output}, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
                 like($out->{output}, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
                 like($out->{output}, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
                 like($out->{output}, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');

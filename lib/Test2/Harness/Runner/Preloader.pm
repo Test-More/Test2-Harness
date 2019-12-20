@@ -9,6 +9,8 @@ use Fcntl qw/LOCK_EX LOCK_UN/;
 use Time::HiRes qw/time/;
 use Test2::Harness::Util qw/open_file file2mod mod2file/;
 
+use Test2::Harness::Runner::Preloader::Stage;
+
 use File::Spec();
 
 BEGIN {
@@ -76,6 +78,7 @@ sub stage_check {
     return 0 if $self->{+BELOW_THRESHOLD};
 
     my $p = $self->{+STAGED} or return 0;
+    return 1 if $stage eq 'NOPRELOAD';
     return 1 if $p->stage_lookup->{$stage};
     return 0;
 }
@@ -86,6 +89,7 @@ sub task_stage {
 
     return 'default' if $self->{+BELOW_THRESHOLD};
     return 'default' unless $self->{+STAGED};
+
     return $wants if $wants && $self->stage_check($wants);
 
     my $stage = $self->{+STAGED}->file_stage($file) // $self->{+STAGED}->default_stage;
@@ -122,7 +126,7 @@ sub preload {
     my $name = 'base';
     my @procs;
 
-    my @stages = @{$self->{+STAGED}->stage_list};
+    my @stages = ('NOPRELOAD', @{$self->{+STAGED}->stage_list});
     while (my $stage = shift @stages) {
         my $proc = $self->launch_stage($stage);
 
@@ -132,9 +136,16 @@ sub preload {
         }
 
         # We are in the stage now, reset these
-        $name   = $stage->name;
-        @procs  = ();
-        @stages = @{$stage->children};
+        if (ref $stage) {
+            $name   = $stage->name;
+            @procs  = ();
+            @stages = @{$stage->children};
+        }
+        else { # NOPRELOAD
+            $name   = $stage;
+            @procs  = ();
+            @stages = ();
+        }
     }
 
     return($name, @procs);
@@ -144,17 +155,19 @@ sub launch_stage {
     my $self = shift;
     my ($stage) = @_;
 
-    $stage = $self->{+STAGED}->stage_lookup->{$stage} unless ref $stage;
+    $stage = $self->{+STAGED}->stage_lookup->{$stage} unless ref $stage || $stage eq 'NOPRELOAD';
+
+    my $name = ref($stage) ? $stage->name : $stage;
 
     my $pid = fork();
 
     return Test2::Harness::Runner::Preloader::Stage->new(
         pid => $pid,
-        name => $stage->name,
+        name => $name,
     ) if $pid;
 
-    $0 .= "-" . $stage->name;
-    $ENV{T2_HARNESS_STAGE} = $stage->name;
+    $0 .= "-$name";
+    $ENV{T2_HARNESS_STAGE} = $name;
 
     return;
 }

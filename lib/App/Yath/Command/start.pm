@@ -104,6 +104,7 @@ sub run {
             runner           => $dir,
             monitor_preloads => 1,
             persist          => $pfile,
+            jobs_todo        => 0,
         ],
     );
 

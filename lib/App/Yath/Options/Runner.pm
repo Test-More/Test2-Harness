@@ -72,6 +72,14 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         description => 'Preload a module before running tests',
     );
 
+    option preload_threshold => (
+        short => 'W',
+        alt => ['Pt'],
+        type => 's',
+        default => 0,
+        description => "Only do preload if at least N tests are going to be run. In some cases a full preload takes longer than simply running the tests, this lets you specify a minimum number of test jobs that will be run for preload to happen. This has no effect for a persistent runner. The default is 0, and it means always preload."
+    );
+
     post \&cover_post_process;
     option cover => (
         description  => 'Use Devel::Cover to calculate test coverage. This disables forking',

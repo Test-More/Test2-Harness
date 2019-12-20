@@ -35,6 +35,7 @@ use Test2::Harness::Util::HashBase(
         <dir
         <preloads
         <done
+        <below_threshold
 
         <inotify <stats <last_checked
         <dtrace
@@ -55,6 +56,10 @@ sub init {
 
     $self->{+PRELOADS} //= [];
 
+    $self->{+BELOW_THRESHOLD} //= 0;
+
+    return if $self->{+BELOW_THRESHOLD};
+
     if ($self->{+MONITOR}) {
         require Test2::Harness::Runner::DepTracer;
         $self->{+DTRACE} //= Test2::Harness::Runner::DepTracer->new();
@@ -67,6 +72,9 @@ sub init {
 sub stage_check {
     my $self = shift;
     my ($stage) = @_;
+
+    return 0 if $self->{+BELOW_THRESHOLD};
+
     my $p = $self->{+STAGED} or return 0;
     return 1 if $p->stage_lookup->{$stage};
     return 0;
@@ -76,6 +84,7 @@ sub task_stage {
     my $self = shift;
     my ($file, $wants) = @_;
 
+    return 'default' if $self->{+BELOW_THRESHOLD};
     return 'default' unless $self->{+STAGED};
     return $wants if $wants && $self->stage_check($wants);
 
@@ -88,6 +97,8 @@ sub preload {
     my $self = shift;
 
     croak "Already preloaded" if $self->{+DONE};
+
+    return 'default' if $self->{+BELOW_THRESHOLD};
 
     my $preloads = $self->{+PRELOADS} or return 'default';
     return 'default' unless @$preloads;

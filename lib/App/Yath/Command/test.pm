@@ -193,7 +193,7 @@ sub start {
 
     $self->setup_plugins();
 
-    $self->start_runner();
+    $self->start_runner(jobs_todo => $pop);
     $self->start_collector();
     $self->start_auditor();
 

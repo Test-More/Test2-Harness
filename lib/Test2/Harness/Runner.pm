@@ -33,7 +33,7 @@ use Test2::Harness::Util::HashBase(
         <includes <tlib <lib <blib
         <unsafe_inc
 
-        <use_fork <preloads <switches
+        <use_fork <preloads <preload_threshold <switches
 
         <cover
 
@@ -42,6 +42,7 @@ use Test2::Harness::Util::HashBase(
     # From Construction
     qw{
         <dir <settings <fork_job_callback <respawn_runner_callback <monitor_preloads
+        <jobs_todo
     },
     # Other
     qw {
@@ -89,6 +90,8 @@ sub preloader {
         dir      => $self->{+DIR},
         preloads => $self->preloads,
         monitor  => $self->{+MONITOR_PRELOADS},
+
+        below_threshold => ($self->{+PRELOAD_THRESHOLD} && $self->{+JOBS_TODO} && $self->{+PRELOAD_THRESHOLD} > $self->{+JOBS_TODO}) ? 1 : 0,
     );
 }
 

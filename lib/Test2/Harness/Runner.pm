@@ -313,10 +313,11 @@ sub run_job {
     }
 
     my $job = $job_class->new(
-        runner   => $self,
-        task     => $task,
-        run      => $run,
-        settings => $self->settings,
+        runner        => $self,
+        task          => $task,
+        run           => $run,
+        settings      => $self->settings,
+        fork_callback => $self->{+FORK_JOB_CALLBACK},
     );
 
     $job->prepare_dir();
@@ -324,8 +325,7 @@ sub run_job {
     my $spawn_time;
 
     my $pid;
-    my $via = $job->via;
-    $via //= $self->{+FORK_JOB_CALLBACK} if $job->use_fork;
+    my $via = $job->via();
     if ($via) {
         require(mod2file($1)) if !defined(&{$via}) && $via =~ m/^(.+)::[^:]+$/;
 

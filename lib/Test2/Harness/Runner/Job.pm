@@ -19,6 +19,7 @@ use parent 'Test2::Harness::IPC::Process';
 use Test2::Harness::Util::HashBase(
     qw{ <task <runner <run <settings }, # required
     qw{
+        <fork_callback
         <last_output_size
         +output_changed
 
@@ -92,10 +93,15 @@ sub prepare_dir {
 sub via {
     my $self = shift;
 
+    return undef if $self->{+SETTINGS}->debug->dummy;
+
     return $self->{+VIA} if exists $self->{+VIA};
 
     my $task = $self->{+TASK};
     return $self->{+VIA} = $task->{via} if $task->{via};
+
+    return $self->{+VIA} = $self->{+FORK_CALLBACK} if $self->{+FORK_CALLBACK} && $self->use_fork;
+
     return $self->{+VIA} = undef;
 }
 
@@ -180,6 +186,9 @@ sub TO_JSON {
         $self->$attr unless defined $self->{$attr};
         $out->{$attr} = $self->{$attr};
     }
+
+    delete $out->{+FORK_CALLBACK};
+    delete $out->{+VIA} if ref($out->{+VIA}) eq 'CODE';
 
     $out->{job_name} //= $out->{job_id};
     $out->{abs_file} = clean_path($self->file);

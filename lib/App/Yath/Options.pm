@@ -593,7 +593,7 @@ sub cmd_docs {
 
     return unless $self->{+COMMAND_CLASS};
 
-    return $self->_docs($self->_command_options(), @_);
+    return $self->_docs([grep { !$_->pre_command } @{$self->_command_options()}], @_);
 }
 
 my %DOC_FORMATS = (

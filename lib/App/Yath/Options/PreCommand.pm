@@ -31,22 +31,24 @@ option_group {prefix => 'yath', pre_command => 1} => sub {
     );
 
     option project => (
-        type => 's',
-        alt => ['project-name'],
-        category => 'Environment',
+        type        => 's',
+        alt         => ['project-name'],
+        category    => 'Environment',
         description => 'This lets you provide a label for your current project/codebase. This is best used in a .yath.rc file. This is necessary for a persistent runner.',
     );
 
     option persist_dir => (
-        type => 's',
+        type        => 's',
+        category    => 'Environment',
         description => 'Where to find persistence files.',
-        normalize => \&clean_path,
+        normalize   => \&clean_path,
     );
 
     option persist_file => (
-        type => 's',
-        alt => ['pfile'],
-        normalize => \&clean_path,
+        type        => 's',
+        category    => 'Environment',
+        alt         => ['pfile'],
+        normalize   => \&clean_path,
         description => "Where to find the persistence file. The default is /{system-tempdir}/project-yath-persist.json. If no project is specified then it will fall back to the current directory. If the current directory is not writable it will default to /tmp/yath-persist.json which limits you to one persistent runner on your system.",
     );
 

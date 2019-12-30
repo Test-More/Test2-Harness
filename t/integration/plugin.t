@@ -29,10 +29,16 @@ sub verify {
     like($text, qr/TEST PLUGIN: claim_file .*TestPlugin\.pm$/m, "claim_file(TestPlugin.pm) was called");
     like($text, qr/TEST PLUGIN: setup App::Yath::Settings/,     "setup() was called with settings");
     like($text, qr/TEST PLUGIN: teardown App::Yath::Settings/,  "teardown() was called with settings");
-    like($text, qr/TEST PLUGIN: finish App::Yath::Settings/,    "finish() was called with settings");
+
+    like(
+        $text,
+        qr/TEST PLUGIN: finish asserts_seen => 5, final_data => HASH, pass => 1, settings => App::Yath::Settings, tests_seen => 5/,
+        "finish() was called with necessary args"
+    );
 
     is(@{[$text =~ m/TEST PLUGIN: setup/g]},    1, "Only ran setup once");
     is(@{[$text =~ m/TEST PLUGIN: teardown/g]}, 1, "Only ran teardown once");
+    is(@{[$text =~ m/TEST PLUGIN: finish/g]},   1, "Only ran finish once");
 
     if (ok($text =~ m/^FIELDS:(.*)$/m, "Found fields")) {
         my $data = decode_json($1);

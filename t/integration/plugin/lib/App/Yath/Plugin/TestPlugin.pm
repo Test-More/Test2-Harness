@@ -91,8 +91,9 @@ sub handle_event {
 
 sub finish {
     my $self = shift;
-    my ($settings) = @_;
-    print "TEST PLUGIN: finish " . ref($settings) . "\n";
+    my %args = @_;
+
+    print "TEST PLUGIN: finish " . join(', ' => map { "$_ => " . (ref($args{$_}) || $args{$_} // '?') } sort keys %args) . "\n";
     return;
 }
 

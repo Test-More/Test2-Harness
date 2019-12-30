@@ -163,6 +163,7 @@ sub run {
     my $self = shift;
 
     my $settings = $self->settings;
+    my $plugins = $self->settings->yath->plugins;
 
     if ($self->start()) {
         $self->render();
@@ -172,6 +173,18 @@ sub run {
         $self->render_final_data($final_data);
         my $pass = $self->{+TESTS_SEEN} && $final_data->{pass};
         $self->render_summary($pass);
+
+        if (@$plugins) {
+            my %args = (
+                settings     => $settings,
+                final_data   => $final_data,
+                pass         => $pass ? 1 : 0,
+                tests_seen   => $self->{+TESTS_SEEN} // 0,
+                asserts_seen => $self->{+ASSERTS_SEEN} // 0,
+            );
+            $_->finish(%args) for @$plugins;
+        }
+
         return $pass ? 0 : 1;
     }
 
@@ -271,7 +284,6 @@ sub render {
 sub stop {
     my $self = shift;
 
-    my $plugins = $self->settings->yath->plugins;
     my $settings  = $self->settings;
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
@@ -279,7 +291,6 @@ sub stop {
 
     $self->teardown_plugins();
 
-    $_->finish($settings) for @$plugins;
     $_->finish() for @$renderers;
 
     my $ipc = $self->ipc;

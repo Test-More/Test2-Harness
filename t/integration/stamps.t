@@ -14,7 +14,6 @@ $dir =~ s{\.t$}{}g;
 yath(
     command => 'test',
     args    => [$dir, '--ext=tx', '-A', '--no-plugins', '-pTestPlugin', '-v'],
-    debug   => 2,
     exit    => T(),
     log     => 1,
     test    => sub {

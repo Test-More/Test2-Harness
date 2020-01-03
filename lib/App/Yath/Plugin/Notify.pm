@@ -267,7 +267,8 @@ sub _send_email {
 
 sub finish {
     my $self = shift;
-    my ($settings) = @_;
+    my %params = @_;
+    my $settings = $params{settings};
 
     my $e = $self->{+FINAL} or return;
     my $f = $e->facet_data or return;

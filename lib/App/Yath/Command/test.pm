@@ -325,7 +325,7 @@ sub build_run {
     my $settings = $self->settings;
     my $dir = $self->workdir;
 
-    my $run = $settings->build(run => 'Test2::Harness::Run', $self->run_args);
+    my $run = $settings->build(run => 'Test2::Harness::Run', finder => $settings->yath->finder, $self->run_args);
 
     mkdir($run->run_dir($dir)) or die "Could not make run dir: $!";
 

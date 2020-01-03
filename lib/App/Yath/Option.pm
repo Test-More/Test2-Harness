@@ -229,16 +229,17 @@ my %HANDLERS = (
 
 sub handle {
     my $self = shift;
-    my ($raw, $settings) = @_;
+    my ($raw, $settings, $options, $list) = @_;
 
     confess "A settings instance is required" unless $settings;
+    confess "An options instance is required" unless $options;
 
     my $slot = $self->option_slot($settings);
     my $norm = $self->get_normalized($raw);
 
     my $handler = $HANDLERS{$self->{+TYPE}} //= sub { ${$_[0]} = $_[1] };
 
-    return $self->{+ACTION}->($self->{+PREFIX}, $self->{+FIELD}, $raw, $norm, $slot, $settings, $handler)
+    return $self->{+ACTION}->($self->{+PREFIX}, $self->{+FIELD}, $raw, $norm, $slot, $settings, $handler, $options)
         if $self->{+ACTION};
 
     return $handler->($slot, $norm);
@@ -246,13 +247,14 @@ sub handle {
 
 sub handle_negation {
     my $self = shift;
-    my ($settings) = @_;
+    my ($settings, $options) = @_;
 
     confess "A settings instance is required" unless $settings;
+    confess "An options instance is required" unless $options;
 
     my $slot = $self->option_slot($settings);
 
-    return $self->{+NEGATE}->($self->{+PREFIX}, $self->{+FIELD}, $slot, $settings)
+    return $self->{+NEGATE}->($self->{+PREFIX}, $self->{+FIELD}, $slot, $settings, $options)
         if $self->{+NEGATE};
 
     return $$slot = 0

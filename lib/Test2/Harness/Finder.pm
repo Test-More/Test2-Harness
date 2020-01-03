@@ -1,4 +1,4 @@
-package Test2::Harness::Run::Finder;
+package Test2::Harness::Finder;
 use strict;
 use warnings;
 
@@ -165,7 +165,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Run::Finder - Library that searches for test files
+Test2::Harness::Finder - Library that searches for test files
 
 =head1 DESCRIPTION
 

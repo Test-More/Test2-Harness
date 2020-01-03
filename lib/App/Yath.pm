@@ -81,7 +81,9 @@ sub run_command {
 sub load_options {
     my $self = shift;
 
-    my $options = $self->{+_OPTIONS} //= App::Yath::Options->new(settings => $self->{+SETTINGS});
+    my $settings = $self->{+SETTINGS} = $self->{+SETTINGS};
+
+    my $options = $self->{+_OPTIONS} //= App::Yath::Options->new(settings => $settings);
 
     return $options if $self->{+OPTIONS_LOADED}++;
 
@@ -146,6 +148,14 @@ sub process_argv {
     $options->clear_env();
 
     $self->clear_env();
+
+    my $settings = $self->settings;
+
+    my %seen = map {((ref($_) || $_) => 1)} @{$settings->yath->plugins};
+    for my $plugin (@{$options->used_plugins}) {
+        next if $seen{$plugin}++;
+        push @{$settings->yath->plugins} => $plugin;
+    }
 
     return $self->{+_ARGV};
 }

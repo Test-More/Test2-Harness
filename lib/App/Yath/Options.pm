@@ -25,6 +25,8 @@ use Test2::Harness::Util::HashBase qw{
 
     <pending_pre <pending_cmd <pending_post
 
+    <used_plugins
+
     <included
 
     <set_by_cli
@@ -89,6 +91,8 @@ sub init {
 
     $self->{+ALL}   //= [];
     $self->{+LOOKUP} //= {};
+
+    $self->{+USED_PLUGINS} //= [];
 
     $self->{+PRE_LIST} //= [];
     $self->{+CMD_LIST} //= [];
@@ -284,10 +288,11 @@ sub _process_opts {
     my $self = shift;
     my ($list) = @_;
 
-    for my $opt_set (@$list) {
+    while (my $opt_set  = shift @$list) {
         my ($opt, $meth, @args) = @$opt_set;
-        $opt->$meth(@args, $self->{+SETTINGS});
+        $opt->$meth(@args, $self->{+SETTINGS}, $self, $list);
         $self->{+SET_BY_CLI}->{$opt->prefix}->{$opt->field}++;
+        push @{$self->{+USED_PLUGINS}} => $opt->from_plugin if $opt->from_plugin;
     }
 }
 

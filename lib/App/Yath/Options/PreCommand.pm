@@ -30,6 +30,14 @@ option_group {prefix => 'yath', pre_command => 1} => sub {
         description => 'Normally yath scans for and loads all App::Yath::Plugin::* modules in order to bring in command-line options they may provide. This flag will disable that. This is useful if you have a naughty plugin that it loading other modules when it should not.',
     );
 
+    option finder => (
+        type => 's',
+        default => 'Test2::Harness::Finder',
+        description => 'Specify what Finder subclass to use when searching for files/processing the file list. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Finder::XXX namespace is assumed.',
+        long_examples  => [' MyFinder', ' +Test2::Harness::Finder::MyFinder'],
+        action => \&finder_action,
+    );
+
     option project => (
         type        => 's',
         alt         => ['project-name'],
@@ -70,8 +78,24 @@ option_group {prefix => 'yath', pre_command => 1} => sub {
     post \&post_process;
 };
 
+sub finder_action {
+    my ($prefix, $field, $raw, $norm, $slot, $settings, $handler, $options) = @_;
+
+    my $class = $norm;
+
+    $class = "App::Yath::Finder::$class"
+        unless $class =~ s/^\+//;
+
+    my $file = mod2file($class);
+    require $file;
+
+    $options->include_from($class) if $class->can('options');
+
+    $handler->($slot, $class);
+}
+
 sub plugin_action {
-    my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
+    my ($prefix, $field, $raw, $norm, $slot, $settings, $handler, $options) = @_;
 
     my ($class, $args) = split /=/, $norm, 2;
     $args = [split ',', $args] if $args;
@@ -79,8 +103,12 @@ sub plugin_action {
     $class = "App::Yath::Plugin::$class"
         unless $class =~ s/^\+//;
 
+    return if grep { $class eq (ref($_) || $_) } @{$settings->yath->plugins};
+
     my $file = mod2file($class);
     require $file;
+
+    $options->include_from($class) if $class->can('options');
 
     my $plugin = $class->can('new') ? $class->new(@{$args // []}) : $class;
 

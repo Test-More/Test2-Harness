@@ -51,6 +51,7 @@ use Test2::Harness::Util::HashBase qw/
 include_options(
     'App::Yath::Options::Debug',
     'App::Yath::Options::Display',
+    'App::Yath::Options::Finder',
     'App::Yath::Options::Logging',
     'App::Yath::Options::PreCommand',
     'App::Yath::Options::Run',
@@ -315,8 +316,6 @@ sub terminate_queue {
     $self->state->end_queue();
 }
 
-sub run_args {()}
-
 sub build_run {
     my $self = shift;
 
@@ -325,7 +324,7 @@ sub build_run {
     my $settings = $self->settings;
     my $dir = $self->workdir;
 
-    my $run = $settings->build(run => 'Test2::Harness::Run', finder => $settings->yath->finder, $self->run_args);
+    my $run = $settings->build(run => 'Test2::Harness::Run');
 
     mkdir($run->run_dir($dir)) or die "Could not make run dir: $!";
 
@@ -362,11 +361,14 @@ sub tasks_queue {
     );
 }
 
+sub finder_args {()}
+
 sub populate_queue {
     my $self = shift;
 
     my $run = $self->build_run();
     my $settings = $self->settings;
+    my $finder = $settings->build(finder => $settings->finder->finder, $self->finder_args);
 
     my $state = $self->state;
     my $tasks_queue = $self->tasks_queue;
@@ -374,7 +376,7 @@ sub populate_queue {
 
     $state->queue_run($run->queue_item($plugins));
 
-    my @files = @{$run->find_files($plugins, $self->settings)};
+    my @files = @{$finder->find_files($plugins, $self->settings)};
 
     for my $plugin (@$plugins) {
         next unless $plugin->can('sort_files');
@@ -613,7 +615,7 @@ sub parse_args {
     my $settings = $self->settings;
     my $args = $self->args;
 
-    my $dest = $settings->run->search;
+    my $dest = $settings->finder->search;
     for my $arg (@$args) {
         next if $arg eq '--';
         if ($arg eq '::') {

@@ -14,6 +14,8 @@ use Test2::Harness::Util::HashBase qw{
 
     <pre_command <from_plugin <from_command
 
+    <no_build
+
     <default <normalize <action <negate
     <env_vars <clear_env_vars
 
@@ -95,7 +97,7 @@ sub init {
 
     if (my $class = $self->{+BUILDS}) {
         confess "class '$class' does not have a '$self->{+FIELD}' method"
-            unless $class->can($self->{+FIELD});
+            unless $self->{+NO_BUILD} || $class->can($self->{+FIELD});
     }
 
     $self->{+TYPE} //= 'b';

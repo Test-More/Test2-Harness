@@ -6,20 +6,10 @@ our $VERSION = '1.000000';
 
 use Carp qw/croak/;
 
-use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util qw/write_file_atomic mod2file/;
-
-use Test2::Harness::Util::Queue;
-
 use File::Spec;
 
 use Test2::Harness::Util::HashBase qw{
     <run_id
-
-    <finder
-    <default_search <default_at_search
-
-    <durations <maybe_durations +duration_data
 
     <env_vars <author_testing <unsafe_inc
 
@@ -29,21 +19,13 @@ use Test2::Harness::Util::HashBase qw{
     <use_stream
     <mem_usage
 
-    <exclude_files  <exclude_patterns
-
-    <no_long <only_long
-
-    <input <input_file
-
-    <search <test_args <extensions
+    <input <input_file <test_args
 
     <load <load_import
 
     <fields <meta
 
     <retry <retry_isolated
-
-    <multi_project
 };
 
 sub init {
@@ -51,8 +33,6 @@ sub init {
 
     croak "run_id is required"
         unless $self->{+RUN_ID};
-
-    $self->{+EXCLUDE_FILES} = { map {( $_ => 1 )} @{$self->{+EXCLUDE_FILES}} } if ref($self->{+EXCLUDE_FILES}) eq 'ARRAY';
 }
 
 sub run_dir {
@@ -78,65 +58,6 @@ sub queue_item {
     }
 
     return $out;
-}
-
-sub duration_data {
-    my $self = shift;
-    return $self->{+DURATION_DATA} //= $self->pull_durations() // {};
-}
-
-sub pull_durations {
-    my $self = shift;
-
-    my $primary  = delete $self->{+MAYBE_DURATIONS} || [];
-    my $fallback = delete $self->{+DURATIONS};
-
-    for my $path (@$primary) {
-        local $@;
-        my $durations = eval { $self->_pull_durations($path) } or print "Could not fetch optional durations '$path', ignoring...\n";
-        next unless $durations;
-
-        print "Found durations: $path\n";
-        return $self->{+DURATION_DATA} = $durations;
-    }
-
-    return $self->{+DURATION_DATA} = $self->_pull_durations($fallback)
-        if $fallback;
-}
-
-sub _pull_durations {
-    my $self = shift;
-    my ($in) = @_;
-
-    if (my $type = ref($in)) {
-        return $self->{+DURATIONS} = $in if $type eq 'HASH';
-    }
-    elsif ($in =~ m{^https?://}) {
-        require HTTP::Tiny;
-        my $ht = HTTP::Tiny->new();
-        my $res = $ht->get($in, {headers => {'Content-Type' => 'application/json'}});
-
-        die "Could not query durations from '$in'\n$res->{status}: $res->{reason}\n$res->{content}"
-            unless $res->{success};
-
-        return $self->{+DURATIONS} = decode_json($res->{content});
-    }
-    elsif(-f $in) {
-        require Test2::Harness::Util::File::JSON;
-        my $file = Test2::Harness::Util::File::JSON->new(name => $in);
-        return $self->{+DURATIONS} = $file->read();
-    }
-
-    die "Invalid duration specification: $in";
-}
-
-sub find_files {
-    my $self = shift;
-    my ($plugins, $settings) = @_;
-
-    my $finder = $self->{+FINDER};
-    require(mod2file($finder));
-    return $finder->find_files($self, @_);
 }
 
 1;

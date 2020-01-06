@@ -38,7 +38,7 @@ sub munge_files {
 
 sub munge_search {
     my $self = shift;
-    my ($run, $search, $default_search) = @_;
+    my ($search, $default_search) = @_;
 
     print "TEST PLUGIN: munge_search\n";
 

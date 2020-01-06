@@ -16,7 +16,7 @@ This command will run all the tests for each project within a parent directory.
     EOT
 }
 
-sub run_args {(multi_project => 1)}
+sub finder_args {(multi_project => 1)}
 
 1;
 

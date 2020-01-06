@@ -197,40 +197,42 @@ subtest get_normalized => sub {
 };
 
 subtest handle => sub {
+    require App::Yath::Options;
+    my $options = App::Yath::Options->new();
     my $new = sub { $CLASS->new(title => 'foo', prefix => 'xxx', @_), App::Yath::Settings->new() };
 
     my ($one, $settings) = $new->(type => 'c');
-    $one->handle(1, $settings);
+    $one->handle(1, $settings, $options);
     is($settings->xxx->foo, 1, "increment by 1");
-    $one->handle('a', $settings);
+    $one->handle('a', $settings, $options);
     is($settings->xxx->foo, 2, "increment by 1 again");
 
     ($one, $settings) = $new->(type => 'm');
-    $one->handle('a', $settings);
+    $one->handle('a', $settings, $options);
     is($settings->xxx->foo, ['a'], "Pushed value");
-    $one->handle('b', $settings);
+    $one->handle('b', $settings, $options);
     is($settings->xxx->foo, ['a', 'b'], "Pushed value again");
 
     ($one, $settings) = $new->(type => 'D');
-    $one->handle('a', $settings);
+    $one->handle('a', $settings, $options);
     is($settings->xxx->foo, ['a'], "Pushed value");
-    $one->handle('b', $settings);
+    $one->handle('b', $settings, $options);
     is($settings->xxx->foo, ['a', 'b'], "Pushed value again");
 
     ($one, $settings) = $new->(type => 'h');
-    $one->handle('foo=bar', $settings);
+    $one->handle('foo=bar', $settings, $options);
     is($settings->xxx->foo, {'@' => ['foo'], foo => 'bar'}, "Set value and added it to the list key");
-    $one->handle('foo=baz', $settings);
+    $one->handle('foo=baz', $settings, $options);
     is($settings->xxx->foo, {'@' => ['foo'], foo => 'baz'}, "Reset value, not duplicated in the list key");
-    $one->handle('fog=baz', $settings);
+    $one->handle('fog=baz', $settings, $options);
     is($settings->xxx->foo, {'@' => ['foo', 'fog'], foo => 'baz', fog => 'baz'}, "Set second key");
 
     ($one, $settings) = $new->(type => 'H');
-    $one->handle('foo=bar', $settings);
+    $one->handle('foo=bar', $settings, $options);
     is($settings->xxx->foo, {'@' => ['foo'], foo => ['bar']}, "Set value and added it to the list key");
-    $one->handle('foo=baz,bat', $settings);
+    $one->handle('foo=baz,bat', $settings, $options);
     is($settings->xxx->foo, {'@' => ['foo'], foo => ['bar', 'baz', 'bat']}, "Added more values");
-    $one->handle('fog', $settings);
+    $one->handle('fog', $settings, $options);
     is($settings->xxx->foo, {'@' => ['foo', 'fog'], foo => ['bar', 'baz', 'bat'], fog => []}, "Set second key");
 
     my $args;
@@ -241,7 +243,7 @@ subtest handle => sub {
         return 'xxx';
     });
 
-    is($one->handle('foo=baz,bat', $settings), 'xxx', "Returned value from action");
+    is($one->handle('foo=baz,bat', $settings, $options), 'xxx', "Returned value from action");
     is($settings->xxx->foo, {'@' => ['foo'], foo => ['baz', 'bat']}, "Set value via handler");
     is(
         $args,
@@ -253,42 +255,45 @@ subtest handle => sub {
             exact_ref($one->option_slot($settings)),
             exact_ref($settings),
             meta { prop reftype => 'CODE' },
+            exact_ref($options),
         ],
         "Got args"
     );
 };
 
 subtest handle_negation => sub {
+    require App::Yath::Options;
+    my $options = App::Yath::Options->new();
     my $new = sub { $CLASS->new(title => 'foo', prefix => 'xxx', @_), App::Yath::Settings->new() };
 
     for my $type (qw/b c/) {
         my ($one, $settings) = $new->(type => $type);
-        $one->handle(1, $settings);
+        $one->handle(1, $settings, $options);
         is($settings->xxx->foo, 1, "'$type' Is set");
-        $one->handle_negation($settings);
+        $one->handle_negation($settings, $options);
         is($settings->xxx->foo, 0, "'$type' Cleared");
     }
 
     for my $type (qw/m D/) {
         my ($one, $settings) = $new->(type => $type);
-        $one->handle('abc', $settings);
+        $one->handle('abc', $settings, $options);
         is($settings->xxx->foo, ['abc'], "'$type' Is set");
-        $one->handle_negation($settings);
+        $one->handle_negation($settings, $options);
         is($settings->xxx->foo, [], "'$type' Cleared");
     }
 
     for my $type (qw/h H/) {
         my ($one, $settings) = $new->(type => $type);
-        $one->handle('abc', $settings);
+        $one->handle('abc', $settings, $options);
         is($settings->xxx->foo, {'@' => ['abc'], abc => T()}, "'$type' Is set");
-        $one->handle_negation($settings);
+        $one->handle_negation($settings, $options);
         is($settings->xxx->foo, {}, "'$type' Cleared");
     }
 
     my ($one, $settings) = $new->(type => 's');
-    $one->handle('abc', $settings);
+    $one->handle('abc', $settings, $options);
     is($settings->xxx->foo, 'abc', "'s' Is set");
-    $one->handle_negation($settings);
+    $one->handle_negation($settings, $options);
     is($settings->xxx->foo, undef, "'s' Cleared");
 };
 

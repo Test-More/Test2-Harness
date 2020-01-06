@@ -11,19 +11,91 @@ use Cwd qw/getcwd/;
 use Test2::Harness::TestFile;
 use File::Spec;
 
-sub find_files {
-    my $class = shift;
-    my ($run, $plugins, $settings) = @_;
+use Test2::Harness::Util::HashBase qw{
+    <default_search <default_at_search
 
-    return $class->_find_project_files($run, $plugins, $settings) if $run->multi_project;
-    return $class->_find_files($run, $plugins, $settings, $run->search);
+    <durations <maybe_durations +duration_data
+
+    <exclude_files  <exclude_patterns
+
+    <no_long <only_long
+
+    <search <extensions
+
+    <multi_project
+};
+
+sub munge_settings {}
+
+sub init {
+    my $self = shift;
+
+    $self->{+EXCLUDE_FILES} = { map {( $_ => 1 )} @{$self->{+EXCLUDE_FILES}} } if ref($self->{+EXCLUDE_FILES}) eq 'ARRAY';
+}
+
+sub duration_data {
+    my $self = shift;
+    return $self->{+DURATION_DATA} //= $self->pull_durations() // {};
+}
+
+sub pull_durations {
+    my $self = shift;
+
+    my $primary  = delete $self->{+MAYBE_DURATIONS} || [];
+    my $fallback = delete $self->{+DURATIONS};
+
+    for my $path (@$primary) {
+        local $@;
+        my $durations = eval { $self->_pull_durations($path) } or print "Could not fetch optional durations '$path', ignoring...\n";
+        next unless $durations;
+
+        print "Found durations: $path\n";
+        return $self->{+DURATION_DATA} = $durations;
+    }
+
+    return $self->{+DURATION_DATA} = $self->_pull_durations($fallback)
+        if $fallback;
+}
+
+sub _pull_durations {
+    my $self = shift;
+    my ($in) = @_;
+
+    if (my $type = ref($in)) {
+        return $self->{+DURATIONS} = $in if $type eq 'HASH';
+    }
+    elsif ($in =~ m{^https?://}) {
+        require HTTP::Tiny;
+        my $ht = HTTP::Tiny->new();
+        my $res = $ht->get($in, {headers => {'Content-Type' => 'application/json'}});
+
+        die "Could not query durations from '$in'\n$res->{status}: $res->{reason}\n$res->{content}"
+            unless $res->{success};
+
+        return $self->{+DURATIONS} = decode_json($res->{content});
+    }
+    elsif(-f $in) {
+        require Test2::Harness::Util::File::JSON;
+        my $file = Test2::Harness::Util::File::JSON->new(name => $in);
+        return $self->{+DURATIONS} = $file->read();
+    }
+
+    die "Invalid duration specification: $in";
+}
+
+sub find_files {
+    my $self = shift;
+    my ($plugins, $settings) = @_;
+
+    return $self->_find_project_files($plugins, $settings) if $self->multi_project;
+    return $self->_find_files($plugins, $settings, $self->search);
 }
 
 sub _find_project_files {
-    my $class = shift;
-    my ($run, $plugins, $settings) = @_;
+    my $self = shift;
+    my ($plugins, $settings) = @_;
 
-    my $search = $run->search // [];
+    my $search = $self->search // [];
 
     die "multi-project search must be a single directory, or the current directory" if @$search > 1;
     my ($pdir) = @$search;
@@ -44,7 +116,7 @@ sub _find_project_files {
 
             chdir($path) or die "Could not chdir to $path: $!\n";
 
-            for my $item (@{$class->_find_files($run, $plugins, $settings, [])}) {
+            for my $item (@{$self->_find_files($plugins, $settings, [])}) {
                 push @{$item->queue_args} => ('ch_dir' => $path);
                 push @$out => $item;
             }
@@ -62,16 +134,16 @@ sub _find_project_files {
 }
 
 sub _find_files {
-    my $class = shift;
-    my ($run, $plugins, $settings, $input) = @_;
+    my $self = shift;
+    my ($plugins, $settings, $input) = @_;
 
     $input   //= [];
     $plugins //= [];
 
-    my $default_search = [@{$run->default_search}];
-    push @$default_search => @{$run->default_at_search} if $run->author_testing;
+    my $default_search = [@{$self->default_search}];
+    push @$default_search => @{$self->default_at_search} if $settings->check_prefix('run') && $settings->run->author_testing;
 
-    $_->munge_search($run, $input, $default_search, $settings) for @$plugins;
+    $_->munge_search($input, $default_search, $settings) for @$plugins;
 
     my $search = @$input ? $input : $default_search;
 
@@ -92,7 +164,7 @@ sub _find_files {
         my $test;
         unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
             $test = Test2::Harness::TestFile->new(file => $path);
-            next unless @$input || $class->_include_file($run, $test);
+            next unless @$input || $self->_include_file($test);
         }
 
         push @tests => $test;
@@ -113,14 +185,14 @@ sub _find_files {
 
                     my $test;
                     unless(first { $test = $_->claim_file($file, $settings) } @$plugins) {
-                        for my $ext (@{$run->extensions}) {
+                        for my $ext (@{$self->extensions}) {
                             next unless m/\.\Q$ext\E$/;
                             $test = Test2::Harness::TestFile->new(file => $file);
                             last;
                         }
                     }
 
-                    return unless $test && $class->_include_file($run, $test);
+                    return unless $test && $self->_include_file($test);
                     push @tests => $test;
                 },
             },
@@ -128,29 +200,29 @@ sub _find_files {
         );
     }
 
-    $_->munge_files($run, \@tests, $settings) for @$plugins;
+    $_->munge_files(\@tests, $settings) for @$plugins;
 
     return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
 }
 
 sub _include_file {
-    my $class = shift;
-    my ($run, $test) = @_;
+    my $self = shift;
+    my ($test) = @_;
 
     return 0 unless $test->check_feature(run => 1);
 
     my $full = $test->file;
     my $rel  = $test->relative;
 
-    return 0 if $run->exclude_files->{$full};
-    return 0 if $run->exclude_files->{$rel};
-    return 0 if first { $rel =~ m/$_/ } @{$run->exclude_patterns};
+    return 0 if $self->exclude_files->{$full};
+    return 0 if $self->exclude_files->{$rel};
+    return 0 if first { $rel =~ m/$_/ } @{$self->exclude_patterns};
 
-    my $durations = $run->duration_data;
+    my $durations = $self->duration_data;
     $test->set_duration($durations->{$rel}) if $durations->{$rel};
 
-    return 0 if $run->no_long   && $test->check_duration eq 'long';
-    return 0 if $run->only_long && $test->check_duration ne 'long';
+    return 0 if $self->no_long   && $test->check_duration eq 'long';
+    return 0 if $self->only_long && $test->check_duration ne 'long';
 
     return 1;
 }

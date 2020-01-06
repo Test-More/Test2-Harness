@@ -115,6 +115,7 @@ sub process_argv {
     return $self->{+_ARGV} if $self->{+ARGV_PROCESSED}++;
 
     my $options = $self->load_options();
+    my $settings = $self->settings;
 
     my $config_pre_args = $self->{+CONFIG}->{'~'};
     $options->grab_pre_command_opts(args => $config_pre_args, stop_at_non_opt => 0, passthrough => 0, die_at_non_opt => 1)
@@ -148,8 +149,6 @@ sub process_argv {
     $options->clear_env();
 
     $self->clear_env();
-
-    my $settings = $self->settings;
 
     my %seen = map {((ref($_) || $_) => 1)} @{$settings->yath->plugins};
     for my $plugin (@{$options->used_plugins}) {

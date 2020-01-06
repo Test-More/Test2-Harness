@@ -27,6 +27,7 @@ use Test2::Harness::Util::HashBase qw/+pfile_data +pfile/;
 include_options(
     'App::Yath::Options::Debug',
     'App::Yath::Options::Display',
+    'App::Yath::Options::Finder',
     'App::Yath::Options::Logging',
     'App::Yath::Options::PreCommand',
     'App::Yath::Options::Run',

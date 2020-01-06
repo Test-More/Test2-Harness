@@ -27,19 +27,6 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         description => 'Arguments to pass in as @ARGV for all tests that are run. These can be provided easier using the \'::\' argument seperator.'
     );
 
-    option extension => (
-        field => 'extensions',
-        type => 'm',
-        alt => ['ext'],
-        description => 'Specify valid test filename extensions, default: t and t2',
-    );
-
-    option search => (
-        type => 'm',
-
-        description => 'List of tests and test directories to use instead of the default search paths. Typically these can simply be listed as command line arguments without the --search prefix.',
-    );
-
     option input => (
         type        => 's',
         description => 'Input string to be used as standard input for ALL tests. See also: --input-file',
@@ -97,52 +84,6 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         description    => 'Set environment variables to set when each test is run.',
     );
 
-    option no_long => (
-        description => "Do not run tests that have their duration flag set to 'LONG'",
-    );
-
-    option only_long => (
-        description => "Only run tests that have their duration flag set to 'LONG'",
-    );
-
-    option durations => (
-        type => 's',
-
-        long_examples  => [' file.json', ' http://example.com/durations.json'],
-        short_examples => [' file.json', ' http://example.com/durations.json'],
-
-        description => "Point at a json file or url which has a hash of relative test filenames as keys, and 'SHORT', 'MEDIUM', or 'LONG' as values. This will override durations listed in the file headers. An exception will be thrown if the durations file or url does not work.",
-    );
-
-    option maybe_durations => (
-        type => 's',
-
-        long_examples  => [' file.json', ' http://example.com/durations.json'],
-        short_examples => [' file.json', ' http://example.com/durations.json'],
-
-        description => "Point at a json file or url which has a hash of relative test filenames as keys, and 'SHORT', 'MEDIUM', or 'LONG' as values. This will override durations listed in the file headers. An exception will be thrown if the durations file or url does not work.",
-    );
-
-    option exclude_file => (
-        field => 'exclude_files',
-        type  => 'm',
-
-        long_examples  => [' t/nope.t'],
-        short_examples => [' t/nope.t'],
-
-        description => "Exclude a file from testing",
-    );
-
-    option exclude_pattern => (
-        field => 'exclude_patterns',
-        type  => 'm',
-
-        long_examples  => [' t/nope.t'],
-        short_examples => [' t/nope.t'],
-
-        description => "Exclude a pattern from testing, matched using m/\$PATTERN/",
-    );
-
     option run_id => (
         alt         => ['id'],
         description => 'Set a specific run-id. (Default: a UUID)',
@@ -165,18 +106,6 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         short_examples => [' Module', ' Module=import_arg1,arg2,...'],
 
         description => 'Load a module in each test (after fork). Import is called.',
-    );
-
-    option default_search => (
-        type => 'm',
-
-        description => "Specify the default file/dir search. defaults to './t', './t2', and 'test.pl'. The default search is only used if no files were specified at the command line",
-    );
-
-    option default_at_search => (
-        type => 'm',
-
-        description => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",
     );
 
     option event_uuids => (
@@ -210,17 +139,6 @@ sub post_process {
     my $settings = $params{settings};
 
     $settings->run->env_vars->{AUTHOR_TESTING} = 1 if $settings->run->author_testing;
-
-    $settings->run->default_search = ['./t', './t2', 'test.pl']
-        unless $settings->run->default_search && @{$settings->run->default_search};
-
-    $settings->run->default_at_search = ['./xt']
-        unless $settings->run->default_at_search && @{$settings->run->default_at_search};
-
-    @{$settings->run->extensions} = ('t', 't2')
-        unless @{$settings->run->extensions};
-
-    s/^\.//g for @{$settings->run->extensions};
 }
 
 sub fields_action {

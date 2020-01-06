@@ -50,8 +50,6 @@ sub my_inc {
     return $self->{+_MY_INC} ||= sub {
         my ($this, $file) = @_;
 
-        print "LOAD INC: $file\n";
-
         return unless $self->{+_ON};
         return unless $file =~ m/^[_a-z]/i;
         return if $exclude->{$file};

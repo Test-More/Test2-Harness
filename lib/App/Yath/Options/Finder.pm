@@ -120,8 +120,13 @@ sub finder_action {
     my $file = mod2file($class);
     require $file;
 
-    $options->include_from($class) if $class->can('options');
-    $class->munge_settings($settings) if $class->can('munge_settings');
+    if ($class->can('options')) {
+        $options->include_from($class);
+        $options->populate_pre_defaults();
+        $options->populate_cmd_defaults();
+    }
+
+    $class->munge_settings($settings, $options) if $class->can('munge_settings');
 
     $handler->($slot, $class);
 }

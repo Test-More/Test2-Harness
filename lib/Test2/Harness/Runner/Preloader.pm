@@ -146,6 +146,8 @@ sub preload {
             @procs  = ();
             @stages = ();
         }
+
+        $self->start_stage($stage);
     }
 
     return($name, @procs);
@@ -176,8 +178,10 @@ sub start_stage {
     my $self = shift;
     my ($stage) = @_;
 
-    if ($stage && !ref($stage) && $self->{+STAGED}) {
-        $stage = $self->{+STAGED}->stage_lookup->{$stage};
+    if ($self->{+STAGED}) {
+        if ($stage && !ref($stage)) {
+            $stage = $self->{+STAGED}->stage_lookup->{$stage};
+        }
     }
     else {
         $stage = undef;

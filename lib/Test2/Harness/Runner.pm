@@ -279,7 +279,6 @@ sub run_stage {
     my ($stage) = @_;
 
     $self->{+STAGE} = $stage;
-    $self->preloader->start_stage($stage);
     $self->state->stage_ready($stage);
 
     while (1) {

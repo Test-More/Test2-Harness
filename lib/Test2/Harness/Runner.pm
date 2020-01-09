@@ -268,7 +268,6 @@ sub reset_stage {
     # From Runner
     delete $self->{+STAGE};
     delete $self->{+STATE};
-    delete $self->{+PRELOADER};
     delete $self->{+LAST_TIMEOUT_CHECK};
 
     return;
@@ -292,7 +291,12 @@ sub run_stage {
     }
 
     $self->state->stage_down($stage);
+
+    $self->killall($self->{+SIGNAL}) if $self->{+SIGNAL};
+
     $self->wait(all => 1);
+
+    exit 0 unless $stage eq 'base' || $stage eq 'default';
 }
 
 sub run_job {
@@ -352,9 +356,16 @@ sub run_job {
 sub end_test_loop {
     my $self = shift;
 
-    $self->{+RESPAWN_RUNNER_CALLBACK}->()
-        if $self->preloader->check
-        || ($self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP');
+    no warnings 'uninitialized';
+    if (!$self->{+STAGE} || $self->{+STAGE} eq 'default' || $self->{+STAGE} eq 'base') {
+        $self->{+RESPAWN_RUNNER_CALLBACK}->()
+            if $self->preloader->check || ($self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP');
+    }
+
+    if ($self->preloader->check) {
+        $self->{+SIGNAL} //= 'HUP';
+        return 1;
+    }
 
     return 1 if $self->{+SIGNAL};
 
@@ -424,9 +435,10 @@ sub set_proc_exit {
         }
 
         if ($self->{+MONITOR_PRELOADS} && $self->{+CAN_STAGE} && !$self->end_test_loop) {
-            my $proc = $self->preloader->launch_stage($stage, $exit);
-            longjump "Stage-Runner" => $stage unless $proc;
-            $self->watch($proc);
+            my $pid = $$;
+            my ($name, @procs) = $self->preloader->preload_stages($stage);
+            $self->watch($_) for @procs;
+            longjump "Stage-Runner" => $name unless $pid == $$;
         }
     }
 

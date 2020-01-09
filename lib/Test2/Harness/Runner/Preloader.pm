@@ -46,6 +46,7 @@ use Test2::Harness::Util::HashBase(
 
         <monitor
         <monitored
+        <changed
 
         <blacklist_file
         <blacklist_lock
@@ -123,11 +124,19 @@ sub preload {
 
     return 'default' unless $self->{+STAGED};
 
+    return $self->preload_stages('NOPRELOAD', @{$self->{+STAGED}->stage_list});
+}
+
+sub preload_stages {
+    my $self = shift;
+    my @stages = @_;
+
     my $name = 'base';
     my @procs;
 
-    my @stages = ('NOPRELOAD', @{$self->{+STAGED}->stage_list});
     while (my $stage = shift @stages) {
+        $stage = $self->{+STAGED}->stage_lookup->{$stage} unless ref $stage || $stage eq 'NOPRELOAD';
+
         my $proc = $self->launch_stage($stage);
 
         if ($proc) {
@@ -206,12 +215,15 @@ sub start_stage {
 sub check {
     my $self = shift;
 
+    return 1 if $self->{+CHANGED};
+
     return 0 unless $self->{+MONITOR};
 
     my $changed = USE_INOTIFY ? $self->_check_monitored_inotify : $self->_check_monitored_hardway;
     return 0 unless $changed;
 
-    print "Runner detected a change in one or more preloaded modules, blacklisting changed files and reloading...\n";
+    $self->{+CHANGED} = 1;
+    print "$$ $0 - Runner detected a change in one or more preloaded modules, blacklisting changed files and reloading...\n";
 
     my %CNI = reverse %INC;
     my @todo = map {[file2mod($CNI{$_}), $_]} keys %$changed;

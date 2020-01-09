@@ -53,6 +53,7 @@ sub generate_run_sub {
 
     my $cleanup = $class->cleanup($settings, \%args, $dir);
 
+    my $runner_pid = $$;
     my $jump = setjump "Test-Runner" => sub {
         local $.;
         local %SIG = %SIG;
@@ -65,7 +66,7 @@ sub generate_run_sub {
             settings => $settings,
 
             fork_job_callback       => sub { $class->launch_via_fork(@_) },
-            respawn_runner_callback => sub { longjump "Test-Runner" => 'respawn' },
+            respawn_runner_callback => sub { return unless $$ == $runner_pid; longjump "Test-Runner" => 'respawn' },
         );
 
         my $exit = $runner->process();

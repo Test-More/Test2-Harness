@@ -10,19 +10,21 @@ use App::Yath::Options;
 
 option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2::Harness::Finder'} => sub {
     option finder => (
-        type => 's',
-        default => 'Test2::Harness::Finder',
-        description => 'Specify what Finder subclass to use when searching for files/processing the file list. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Finder::XXX namespace is assumed.',
-        long_examples  => [' MyFinder', ' +Test2::Harness::Finder::MyFinder'],
-        action => \&finder_action,
-        pre_command => 1,
-        no_build => 1,
+        type          => 's',
+        default       => 'Test2::Harness::Finder',
+        description   => 'Specify what Finder subclass to use when searching for files/processing the file list. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Finder::XXX namespace is assumed.',
+        long_examples => [' MyFinder', ' +Test2::Harness::Finder::MyFinder'],
+        pre_command   => 1,
+        no_build      => 1,
+        adds_options  => 1,
+        pre_process   => \&finder_pre_process,
+        action        => \&finder_action,
     );
 
     option extension => (
-        field => 'extensions',
-        type => 'm',
-        alt => ['ext'],
+        field       => 'extensions',
+        type        => 'm',
+        alt         => ['ext'],
         description => 'Specify valid test filename extensions, default: t and t2',
     );
 
@@ -109,10 +111,8 @@ sub _post_process {
     s/^\.//g for @{$settings->finder->extensions};
 }
 
-sub finder_action {
-    my ($prefix, $field, $raw, $norm, $slot, $settings, $handler, $options) = @_;
-
-    my $class = $norm;
+sub normalize_class {
+    my ($class) = @_;
 
     $class = "Test2::Harness::Finder::$class"
         unless $class =~ s/^\+//;
@@ -120,8 +120,29 @@ sub finder_action {
     my $file = mod2file($class);
     require $file;
 
+    return $class;
+}
+
+sub finder_pre_process {
+    my %params = @_;
+
+    my $class = $params{val} or return;
+
+    $class = normalize_class($class);
+
+    return unless $class->can('options');
+
+    $params{options}->include_from($class);
+}
+
+sub finder_action {
+    my ($prefix, $field, $raw, $norm, $slot, $settings, $handler, $options) = @_;
+
+    my $class = $norm;
+
+    $class = normalize_class($class);
+
     if ($class->can('options')) {
-        $options->include_from($class);
         $options->populate_pre_defaults();
         $options->populate_cmd_defaults();
     }

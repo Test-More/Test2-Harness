@@ -174,7 +174,7 @@ sub grab_pre_command_opts {
     $self->populate_pre_defaults();
 
     unshift @{$self->{+PENDING_PRE} //= []} => $self->_grab_opts(
-        $self->_pre_command_options(),
+        '_pre_command_options',
         'pre-command',
         stop_at_non_opt => 1,
         passthrough => 1,
@@ -225,7 +225,7 @@ sub grab_command_opts {
     $self->populate_cmd_defaults();
 
     push @{$self->{+PENDING_CMD} //= []} => $self->_grab_opts(
-        $self->_command_options(),
+        '_command_options',
         "command (" . $self->{+COMMAND_CLASS}->name . ")",
         %config,
     );
@@ -384,14 +384,14 @@ my %ARG_ENDS = ('--' => 1, '::' => 1);
 
 sub _grab_opts {
     my $self = shift;
-    my ($opts, $type, %config) = @_;
+    my ($opt_fetch, $type, %config) = @_;
 
-    croak "The opts array is required" unless $opts;
+    croak "The opt_fetch callback is required" unless $opt_fetch;
     croak "The arg type is required"   unless $type;
 
     my $args = $config{args} || $self->{+ARGS} or confess "The 'args' attribute has not yet been set";
 
-    my $lookup = $self->_build_lookup($opts);
+    my $lookup = $self->_build_lookup($self->$opt_fetch());
 
     my (@keep_args, @opts);
     while (@$args) {
@@ -405,6 +405,22 @@ sub _grab_opts {
         if (substr($arg, 0, 1) eq '-') {
             my $handler = (substr($arg, 1, 1) eq '-') ? '_handle_long_option' : '_handle_short_option';
             if(my $opt_set = $self->$handler($arg, $lookup, $args)) {
+                my ($opt, $action, @val) = @$opt_set;
+
+                if (my $pre = $opt->pre_process) {
+                    $pre->(
+                        opt          => $opt,
+                        options      => $self,
+                        action       => $action,
+                        type         => $type,
+
+                        @val ? (val => $val[0]) : (),
+                    );
+                }
+
+                $lookup = $self->_build_lookup($self->$opt_fetch())
+                    if $opt->adds_options;
+
                 push @opts => $opt_set;
                 next;
             }

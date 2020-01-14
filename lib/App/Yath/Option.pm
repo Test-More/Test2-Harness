@@ -15,6 +15,8 @@ use Test2::Harness::Util::HashBase qw{
     <pre_command <from_plugin <from_command
 
     <no_build
+    <pre_process
+    <adds_options
 
     <default <normalize <action <negate
     <env_vars <clear_env_vars

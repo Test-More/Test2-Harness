@@ -171,8 +171,9 @@ sub run {
         $self->stop();
 
         my $final_data = $self->{+FINAL_DATA} or die "Final data never received from auditor!\n";
-        $self->render_final_data($final_data);
         my $pass = $self->{+TESTS_SEEN} && $final_data->{pass};
+        $self->write_summary($pass);
+        $self->render_final_data($final_data);
         $self->render_summary($pass);
 
         if (@$plugins) {
@@ -393,6 +394,34 @@ sub populate_queue {
     $state->stop_run($run->run_id);
 
     return $job_count;
+}
+
+sub write_summary {
+    my $self = shift;
+    my ($pass) = @_;
+
+    my $file = $self->settings->debug->summary or return;
+
+    my $final_data = $self->{+FINAL_DATA};
+
+    my $failures = @{$final_data->{failed}};
+
+    my %data = (
+        %$final_data,
+
+        pass => $pass ? 1 : 0,
+
+        total_failures => $failures              // 0,
+        total_tests    => $self->{+TESTS_SEEN}   // 0,
+        total_asserts  => $self->{+ASSERTS_SEEN} // 0,
+    );
+
+    require Test2::Harness::Util::File::JSON;
+    my $jfile = Test2::Harness::Util::File::JSON->new(name => $file);
+    $jfile->write(\%data);
+
+    print "\nWrote summary file: $file\n\n";
+
 }
 
 sub render_summary {

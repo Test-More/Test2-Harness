@@ -6,7 +6,7 @@ our $VERSION = '1.000000';
 
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 use Test2::Util::Table qw/table/;
-use Test2::Harness::Util qw/find_libraries mod2file/;
+use Test2::Harness::Util qw/find_libraries mod2file clean_path/;
 
 use App::Yath::Options;
 
@@ -45,7 +45,38 @@ option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
         short        => 'h',
         description  => "exit after showing help information",
     );
+
+    option summary => (
+        type => 'd',
+        description => "Write out a summary json file, if no path is provided 'summary.json' will be used. The .json extention is added automatically if omitted.",
+
+        long_examples  => ['', '=/path/to/summary.json'],
+
+        normalize => \&normalize_summary,
+        action    => \&summary_action,
+    );
 };
+
+sub normalize_summary {
+    my $val = shift;
+
+    return $val if $val eq '1';
+
+    $val =~ s/\.json$//g;
+    $val .= '.json';
+
+    return clean_path($val);
+}
+
+sub summary_action {
+    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+
+    return $$slot = clean_path($norm)
+        unless $norm eq '1';
+
+    return if $$slot;
+    return $$slot = clean_path('summary.json');
+}
 
 sub _post_process_help {
     my %params = @_;

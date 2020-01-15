@@ -87,11 +87,11 @@ sub find_files {
     my $self = shift;
     my ($plugins, $settings) = @_;
 
-    return $self->_find_project_files($plugins, $settings) if $self->multi_project;
-    return $self->_find_files($plugins, $settings, $self->search);
+    return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
+    return $self->find_project_files($plugins, $settings, $self->search);
 }
 
-sub _find_project_files {
+sub find_multi_project_files {
     my $self = shift;
     my ($plugins, $settings) = @_;
 
@@ -116,7 +116,7 @@ sub _find_project_files {
 
             chdir($path) or die "Could not chdir to $path: $!\n";
 
-            for my $item (@{$self->_find_files($plugins, $settings, [])}) {
+            for my $item (@{$self->find_project_files($plugins, $settings, [])}) {
                 push @{$item->queue_args} => ('ch_dir' => $path);
                 push @$out => $item;
             }
@@ -133,7 +133,7 @@ sub _find_project_files {
     return $out;
 }
 
-sub _find_files {
+sub find_project_files {
     my $self = shift;
     my ($plugins, $settings, $input) = @_;
 

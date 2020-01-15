@@ -533,18 +533,18 @@ subtest _grab_opts => sub {
 
     like(
         dies { $one->_grab_opts() },
-        qr/The opts array is required/,
+        qr/The opt_fetch callback is required/,
         "Need opts"
     );
 
     like(
-        dies { $one->_grab_opts([]) },
+        dies { $one->_grab_opts(sub {[]}) },
         qr/The arg type is required/,
         "Need arg type"
     );
 
     like(
-        dies { $one->_grab_opts([], 'blah') },
+        dies { $one->_grab_opts(sub {[]}, 'blah') },
         qr/The 'args' attribute has not yet been set/,
         "Need args"
     );
@@ -557,7 +557,7 @@ subtest _grab_opts => sub {
     my $opt5 = $one->option('ban', prefix => 'x', type => 'd');
 
     $one->{args} = ['-f', '--ba', 'xxx', '--baz=uhg', '--bat', 'a', '--no-foo', '--bat', 'b', '--ban=y', '--ban', 'blah', '--', '--bat', 'NO'];
-    my @out = $one->_grab_opts($one->all, 'foo');
+    my @out = $one->_grab_opts('all', 'foo');
 
     is($one->args, ['xxx', 'blah', '--', '--bat', 'NO'], "Pulled out known args, stopped at --");
     is(
@@ -576,7 +576,7 @@ subtest _grab_opts => sub {
     );
 
     $one->{args} = ['-f', '--ba', 'xxx', '--baz=uhg', '--bat', 'a', '--no-foo', '--bat', 'b', '--ban=y', '--ban', 'blah', '::', '--bat', 'NO'];
-    @out = $one->_grab_opts($one->all, 'foo');
+    @out = $one->_grab_opts('all', 'foo');
 
     is($one->args, ['xxx', 'blah', '::', '--bat', 'NO'], "Pulled out known args, stopped at ::");
     is(
@@ -596,20 +596,20 @@ subtest _grab_opts => sub {
 
     $one->{args} = ['-f', '--ba', 'xxx', '--baz=uhg'];
     like(
-        dies { $one->_grab_opts($one->all, 'foo', die_at_non_opt => 1) },
+        dies { $one->_grab_opts('all', 'foo', die_at_non_opt => 1) },
         qr/Invalid foo option: xxx/,
         "Died at non-opt",
     );
 
     $one->{args} = ['-f', '--ba', 'xxx', '--xyz', '--baz=uhg'];
     like(
-        dies { $one->_grab_opts($one->all, 'foo') },
+        dies { $one->_grab_opts('all', 'foo') },
         qr/Invalid foo option: --xyz/,
         "Died at invalid opt",
     );
 
     $one->{args} = ['-f', '--ba', 'xxx', '--xyz', '--baz=uhg'];
-    @out = $one->_grab_opts($one->all, 'foo', passthrough => 1);
+    @out = $one->_grab_opts('all', 'foo', passthrough => 1);
 
     is($one->args, ['xxx', '--xyz'], "Pulled out known args");
     is(

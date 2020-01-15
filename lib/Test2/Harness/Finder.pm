@@ -164,7 +164,7 @@ sub _find_files {
         my $test;
         unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
             $test = Test2::Harness::TestFile->new(file => $path);
-            next unless @$input || $self->_include_file($test);
+            next unless @$input || $self->include_file($test);
         }
 
         push @tests => $test;
@@ -192,7 +192,7 @@ sub _find_files {
                         }
                     }
 
-                    return unless $test && $self->_include_file($test);
+                    return unless $test && $self->include_file($test);
                     push @tests => $test;
                 },
             },
@@ -205,7 +205,7 @@ sub _find_files {
     return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
 }
 
-sub _include_file {
+sub include_file {
     my $self = shift;
     my ($test) = @_;
 

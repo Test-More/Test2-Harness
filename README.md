@@ -364,6 +364,11 @@ to mark the test with LONG or MEDIUM in addition to this marker.
 
         ...
 
+
+### HARNESS-NO-RETRY
+
+Use this to avoid this test being retried regardless of your retry settings.
+
 # MODULE DOCS
 
 This section documents the [App::Yath](https://metacpan.org/pod/App::Yath) module itself.

@@ -616,6 +616,10 @@ to mark the test with LONG or MEDIUM in addition to this marker.
 
 =back
 
+=head3 HARNESS-NO-RETRY
+
+Use this to avoid this test being retried regardless of your retry settings.
+
 =head1 MODULE DOCS
 
 This section documents the L<App::Yath> module itself.

@@ -304,6 +304,15 @@ sub options {
             default => 1,
         },
         {
+            spec    => 'retry-long!',
+            field   => 'retry_long',
+            used_by => {jobs => 1},
+            section => 'Job Options',
+            usage   => ['--no-retry-long'],
+            summary => ["Don't retry LONG jobs"],
+            default => 1,
+        },
+        {
             spec    => 'retry=i',
             field   => 'retry',
             used_by => {jobs => 1},
@@ -387,6 +396,7 @@ sub re_run_setup {
 
     my $job_count = 0;
     foreach my $job (@jobs_to_retry) {
+        next if !$job->{use_retry} || (!$settings->{retry_long} && $job->{duration} eq 'long');
         my $tf = Test2::Harness::Util::TestFile->new(file => $job->{'file'});
         $queue->enqueue($tf->queue_item($job->{'job_name'}));
         $job_count++;

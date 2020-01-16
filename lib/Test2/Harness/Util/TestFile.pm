@@ -50,6 +50,7 @@ my %DEFAULTS = (
     fork      => 1,
     preload   => 1,
     stream    => 1,
+    retry     => 1,
     isolation => 0,
 );
 
@@ -301,6 +302,7 @@ sub queue_item {
 
     my $fork    = $self->check_feature(fork    => 1);
     my $preload = $self->check_feature(preload => 1);
+    my $retry   = $self->check_feature(retry   => 1);
     my $timeout = $self->check_feature(timeout => 1);
     my $stream  = $self->check_feature(stream  => 1);
 
@@ -320,6 +322,7 @@ sub queue_item {
         switches    => $self->switches,
         use_fork    => $fork,
         use_preload => $preload,
+        use_retry   => $retry,
         use_stream  => $stream,
         use_timeout => $timeout,
         conflicts   => $self->conflicts_list,

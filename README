@@ -372,6 +372,10 @@ RECIPES
       
           ...
 
+  HARNESS-NO-RETRY
+
+    Use this to avoid this test being retried regardless of your retry settings.
+
 MODULE DOCS
 
     This section documents the App::Yath module itself.

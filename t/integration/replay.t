@@ -18,7 +18,10 @@ sub clean_output {
     $out->{output} =~ s/^\s*Wall Time:.*seconds//m;
     $out->{output} =~ s/^\s*CPU Time:.*s\)//m;
     $out->{output} =~ s/^\s*CPU Usage:.*%//m;
+    $out->{output} =~ s/^\s*-+$//m;
+    $out->{output} =~ s/^\s+$//m;
     $out->{output} =~ s/\n+/\n/g;
+    $out->{output} =~ s/^\s+//mg;
 }
 
 my $out1 = yath(
@@ -45,6 +48,7 @@ yath(
     test => sub {
         my $out2 = shift;
         clean_output($out2);
+        clean_output($out1);
 
         is($out2->{output}, $out1->{output}, "Replay has identical output to original");
     },

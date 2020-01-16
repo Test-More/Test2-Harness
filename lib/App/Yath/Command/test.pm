@@ -172,9 +172,8 @@ sub run {
 
         my $final_data = $self->{+FINAL_DATA} or die "Final data never received from auditor!\n";
         my $pass = $self->{+TESTS_SEEN} && $final_data->{pass};
-        $self->write_summary($pass);
         $self->render_final_data($final_data);
-        $self->render_summary($pass);
+        $self->produce_summary($pass);
 
         if (@$plugins) {
             my %args = (
@@ -396,15 +395,38 @@ sub populate_queue {
     return $job_count;
 }
 
-sub write_summary {
+sub produce_summary {
     my $self = shift;
     my ($pass) = @_;
+
+    my $settings = $self->settings;
+
+    my $time_data = {
+        start => $settings->yath->start,
+        stop  => time(),
+    };
+
+    $time_data->{wall} = $time_data->{stop} - $time_data->{start};
+
+    my @times = times();
+    @{$time_data}{qw/user system cuser csystem/} = @times;
+    $time_data->{cpu} = sum @times;
+
+    my $cpu_usage = int($time_data->{cpu} / $time_data->{wall} * 100);
+
+    $self->write_summary($pass, $time_data, $cpu_usage);
+    $self->render_summary($pass, $time_data, $cpu_usage);
+}
+
+sub write_summary {
+    my $self = shift;
+    my ($pass, $time_data, $cpu_usage) = @_;
 
     my $file = $self->settings->debug->summary or return;
 
     my $final_data = $self->{+FINAL_DATA};
 
-    my $failures = @{$final_data->{failed}};
+    my $failures = @{$final_data->{failed} // []};
 
     my %data = (
         %$final_data,
@@ -414,6 +436,10 @@ sub write_summary {
         total_failures => $failures              // 0,
         total_tests    => $self->{+TESTS_SEEN}   // 0,
         total_asserts  => $self->{+ASSERTS_SEEN} // 0,
+
+        cpu_usage => $cpu_usage,
+
+        times => $time_data,
     );
 
     require Test2::Harness::Util::File::JSON;
@@ -422,28 +448,27 @@ sub write_summary {
 
     print "\nWrote summary file: $file\n\n";
 
+    return;
 }
 
 sub render_summary {
     my $self = shift;
-    my ($pass) = @_;
+    my ($pass, $time_data, $cpu_usage) = @_;
 
     return if $self->settings->display->quiet > 1;
 
-    my $runtime = sprintf("%.2fs", time() - $self->settings->yath->start);
-    my ($user, $system, $cuser, $csystem) = times();
-
-    my $time = time() - $self->settings->yath->start;
-    my @times = times();
-    unshift @times => sum @times;
-    my $percent = $times[0] / $time * 100;
+    my $final_data = $self->{+FINAL_DATA};
+    my $failures = @{$final_data->{failed} // []};
 
     my @summary = (
+        $failures ? ("     Fail Count: $failures") : (),
         "     File Count: $self->{+TESTS_SEEN}",
         "Assertion Count: $self->{+ASSERTS_SEEN}",
-        sprintf("      Wall Time: %.2f seconds", $time),
-        sprintf("       CPU Time: %.2f seconds (usr: %.2fs | sys: %.2fs | cusr: %.2fs | csys: %.2fs)", @times),
-        sprintf("      CPU Usage: %i%%", $percent),
+        $time_data ? (
+            sprintf("      Wall Time: %.2f seconds", $time_data->{wall}),
+            sprintf("       CPU Time: %.2f seconds (usr: %.2fs | sys: %.2fs | cusr: %.2fs | csys: %.2fs)", @{$time_data}{qw/cpu user system cuser csystem/}),
+            sprintf("      CPU Usage: %i%%", $cpu_usage),
+        ) : (),
     );
 
     my $res = "    -->  Result: " . ($pass ? 'PASSED' : 'FAILED') . "  <--";

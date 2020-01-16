@@ -14,7 +14,7 @@ use Test2::Harness::IPC;
 
 use Test2::Harness::Runner::State;
 
-use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json JSON/;
 use Test2::Harness::Util qw/mod2file open_file/;
 use Test2::Util::Table qw/table/;
 
@@ -409,7 +409,7 @@ sub write_summary {
     my %data = (
         %$final_data,
 
-        pass => $pass ? 1 : 0,
+        pass => $pass ? JSON->true : JSON->false,
 
         total_failures => $failures              // 0,
         total_tests    => $self->{+TESTS_SEEN}   // 0,

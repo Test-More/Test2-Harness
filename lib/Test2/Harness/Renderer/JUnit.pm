@@ -60,11 +60,6 @@ sub render_event {
         my $full_test_name = $job->{'file'};
         my $test_file      = File::Spec->abs2rel($full_test_name);
 
-        # Purge any previous runs of this job if we're seeing a new one starting.
-        foreach my $id ( keys %{ $self->{'tests'} } ) {
-            delete $self->{'tests'}->{$id} if $self->{'tests'}->{$id}->{name} eq $full_test_name;
-        }
-
         $self->{'tests'}->{$job_id} = {
             'name'           => $job->{'file'},
             'job_id'         => $job_id,

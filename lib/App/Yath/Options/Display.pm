@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '1.000000';
 
-use Test2::Harness qw/mod2file/;
+use Test2::Harness::Util qw/mod2file/;
 
 use App::Yath::Options;
 

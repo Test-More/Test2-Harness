@@ -74,6 +74,7 @@ sub render_event {
                 'failures' => 0,
                 'tests'    => 0,
                 'name'     => _get_testsuite_name($test_file),
+                'id'       => $job_id, # add a UID in the XML output
             },
         };
 

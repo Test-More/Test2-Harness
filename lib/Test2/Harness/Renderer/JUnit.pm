@@ -11,6 +11,7 @@ our $VERSION = '0.001077';
 use Data::Dumper; $Data::Dumper::Sortkeys = 1;
 
 use File::Spec;
+use POSIX ();
 use Storable qw/dclone/;
 use XML::Generator ();
 
@@ -88,6 +89,7 @@ sub render_event {
         $self->close_open_failure_testcase( $test, -1 );
         $test->{'stop'} = $event->{'stamp'};
         $test->{'testsuite'}->{'time'} = $test->{'stop'} - $test->{'start'};
+        $test->{'testsuite'}->{'timestamp'} = _timestamp( $test->{'start'} );
 
         push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "Tear down.", 'time' => $stamp - $test->{'last_job_start'} }, "" );
 
@@ -312,6 +314,11 @@ sub _squeaky_clean {
     $string =~ s/([\x7f-\xff])/'[\\x'.sprintf('%02x',ord($1)).']'/ge;
     return $string;
 }
+
+sub _timestamp {
+     my $time = shift;
+     return POSIX::strftime('%Y-%m-%dT%H:%M:%S', localtime(int($time)));
+ }
 
 1;
 

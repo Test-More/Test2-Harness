@@ -3,7 +3,7 @@ use Test2::V0 -target => 'App::Yath::Command::init';
 
 use ok $CLASS;
 
-use Test2::Tools::HarnessTester qw/make_example_dir/;
+use App::Yath::Tester qw/make_example_dir/;
 
 use Cwd qw/getcwd/;
 my $orig = getcwd();

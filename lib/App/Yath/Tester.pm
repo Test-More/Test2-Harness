@@ -6,19 +6,19 @@ our $VERSION = '1.000000';
 
 use Test2::API qw/context run_subtest/;
 use Test2::Tools::Compare qw/is/;
-use App::Yath::Util qw/find_yath/;
-use File::Spec;
-use File::Temp qw/tempfile tempdir/;
-use Test2::Harness::Util::IPC qw/run_cmd/;
-use POSIX;
-
-use Test2::Harness::Util qw/clean_path/;
-use Test2::Harness::Util::File::JSONL;
 
 use Carp qw/croak/;
+use File::Spec;
+use File::Temp qw/tempfile tempdir/;
+use POSIX;
+
+use App::Yath::Util qw/find_yath/;
+use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util::IPC qw/run_cmd/;
+use Test2::Harness::Util::File::JSONL;
 
 use Importer Importer => 'import';
-our @EXPORT = qw/yath/;
+our @EXPORT = qw/yath make_example_dir/;
 
 my $pdir = tempdir(CLEANUP => 1);
 
@@ -162,6 +162,33 @@ sub yath {
 
     return $out;
 }
+
+sub _gen_passing_test {
+    my ($dir, $subdir, $file) = @_;
+
+    my $path = File::Spec->catdir($dir, $subdir);
+    my $full = File::Spec->catfile($path, $file);
+
+    mkdir($path) or die "Could not make $subdir subdir: $!"
+        unless -d $path;
+
+    open(my $fh, '>', $full);
+    print $fh "use Test2::Tools::Tiny;\nok(1, 'a passing test');\ndone_testing\n";
+    close($fh);
+
+    return $full;
+}
+
+sub make_example_dir {
+    my $dir = tempdir(CLEANUP => 1, TMP => 1);
+
+    _gen_passing_test($dir, 't', 'test.t');
+    _gen_passing_test($dir, 't2', 't2_test.t');
+    _gen_passing_test($dir, 'xt', 'xt_test.t');
+
+    return $dir;
+}
+
 
 1;
 

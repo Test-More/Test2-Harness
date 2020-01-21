@@ -17,8 +17,8 @@ my %WriteMakefileArgs = (
         'Test::More' => '0',
     },
     PREREQ_PM => {
-        'Test2::Harness::Renderer' => '0.001077',
-        'Test2::Harness::Util::HashBase' => '0.001077',
+        'Test2::Harness::Renderer' => '1.000000',
+        'Test2::Harness::Util::HashBase' => '1.000000',
         'File::Spec' => 0,
         'Storable' => 0,
         'XML::Generator' => 0,

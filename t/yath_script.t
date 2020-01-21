@@ -4,8 +4,6 @@
 use strict;
 use warnings;
 
-use Carp::Always;
-
 my %ORIG_INC = (%INC);
 
 @ARGV = ();

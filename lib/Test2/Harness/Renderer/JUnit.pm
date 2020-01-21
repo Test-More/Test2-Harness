@@ -63,6 +63,7 @@ sub render_event {
 
         $self->{'tests'}->{$job_id} = {
             'name'           => $job->{'file'},
+            'file'           => _squeaky_clean( $test_file ),
             'job_id'         => $job_id,
             'job_name'       => $f->{'harness_job'}->{'job_name'},
             'testcase'       => [],
@@ -91,7 +92,9 @@ sub render_event {
         $test->{'testsuite'}->{'time'} = $test->{'stop'} - $test->{'start'};
         $test->{'testsuite'}->{'timestamp'} = _timestamp( $test->{'start'} );
 
-        push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "Tear down.", 'time' => $stamp - $test->{'last_job_start'} }, "" );
+        push @{ $test->{'testcase'} }, $self->xml->testcase(
+            { 'name' => "Tear down.", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'file'} },
+            "" );
 
         if ( $f->{'errors'} ) {
             $test->{'error-msg'} //= '';
@@ -152,10 +155,10 @@ sub render_event {
 
         if ( $f->{'amnesty'} && grep { ( $_->{'tag'} // '' ) eq 'TODO' } @{ $f->{'amnesty'} } ) {    # All TODO Tests
             if ( !$f->{'assert'}->{'pass'} ) {                                                       # Failing TODO
-                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (TODO)", 'time' => $run_time }, "" );
+                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (TODO)",  'time' => $run_time, 'classname' => $test->{'file'} }, "" );
             }
             elsif ( $self->{'allow_passing_todos'} ) {                                               # junit parsers don't like passing TODO tests. Let's just not tell them about it if $ENV{ALLOW_PASSING_TODOS} is set.
-                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (PASSING TODO)", 'time' => $run_time }, "" );
+                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (PASSING TODO)", 'time' => $run_time, 'classname' => $test->{'file'} }, "" );
             }
             else {                                                                                   # Passing TODO (Failure) when not allowed.
 
@@ -166,7 +169,7 @@ sub render_event {
                 my ($todo_message) = map { $_->{'details'} } grep { $_->{'tag'} // '' eq 'TODO' } @{ $f->{'amnesty'} };
 
                 push @{ $test->{'testcase'} }, $self->xml->testcase(
-                    { 'name' => "$test_string (TODO)", 'time' => $run_time },
+                    { 'name' => "$test_string (TODO)", 'time' => $run_time, 'classname' => $test->{'file'} },
                     $self->xml->error(
                         { 'message' => $todo_message, 'type' => "TodoTestSucceeded" },
                         $self->_cdata("ok $test_string")
@@ -176,7 +179,9 @@ sub render_event {
             }
         }
         elsif ( $f->{'assert'}->{'pass'} ) {    # Passing test
-            push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string", 'time' => $run_time }, "" );
+            push @{ $test->{'testcase'} }, $self->xml->testcase(
+                { 'name' => "$test_string", 'time' => $run_time, 'classname' => $test->{'file'} },
+                "" );
         }
         else {                                  # Failing Test.
             $test->{'testsuite'}->{'failures'}++;
@@ -254,7 +259,7 @@ sub close_open_failure_testcase {
 
     my $xml = $self->xml;
     push @{ $test->{'testcase'} }, $xml->testcase(
-        { 'name' => "$fail->{test_num} - $fail->{test_name}", 'time' => $fail->{'time'} },
+        { 'name' => "$fail->{test_num} - $fail->{test_name}", 'time' => $fail->{'time'}, 'classname' => $test->{'file'} },
         $xml->failure(
             { 'message' => "not ok $fail->{test_num} - $fail->{test_name}", 'type' => 'TestFailed' },
             $self->_cdata( $fail->{'message'} )

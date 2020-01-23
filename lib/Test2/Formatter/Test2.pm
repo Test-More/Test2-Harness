@@ -90,6 +90,7 @@ sub DEFAULT_FACET_COLOR() {
     );
 }
 
+# These colors all look decent enough to use, ordered to avoid putting similar ones together
 use constant DEFAULT_JOB_COLOR_NAMES => (
         'bold green on_blue',
         'bold blue on_white',
@@ -133,30 +134,9 @@ use constant DEFAULT_JOB_COLOR_NAMES => (
         #'bold dark bright_yellow on_black',
 );
 
-# These colors all look decent enough to use, ordered to avoid putting similar ones together
 sub DEFAULT_JOB_COLOR() {
     return map { Term::ANSIColor::color($_) } DEFAULT_JOB_COLOR_NAMES;
 }
-
-sub test_colors {
-    my @colors   = DEFAULT_JOB_COLOR();
-    my %defaults = DEFAULT_COLOR();
-
-    my $id = 0;
-    my $reset = $defaults{reset};
-
-    my $len = 45;
-
-    foreach my $name ( DEFAULT_JOB_COLOR_NAMES ) {
-        ++$id;
-        my $color = Term::ANSIColor::color($name);
-        printf("%scolor #%02d %${len}s%s\n", $color, $id, $name, $reset || '');
-    }
-
-    return;
-}
-
-test_colors() unless caller; # can be removed
 
 sub DEFAULT_COLOR() {
     return (

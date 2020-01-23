@@ -90,13 +90,12 @@ sub DEFAULT_FACET_COLOR() {
     );
 }
 
-# These colors all look decent enough to use, ordered to avoid putting similar ones together
-sub DEFAULT_JOB_COLOR() {
-    return map { Term::ANSIColor::color($_) } (
+use constant DEFAULT_JOB_COLOR_NAMES => (
         'bold green on_blue',
         'bold blue on_white',
         'bold black on_cyan',
         'bold green on_bright_black',
+        'bold dark blue on_white',
         'bold black on_green',
         'bold cyan on_blue',
         'bold black on_white',
@@ -112,18 +111,52 @@ sub DEFAULT_JOB_COLOR() {
         'bold bright_green on_blue',
         'bold bright_blue on_white',
         'bold bright_white on_bright_black',
+        'bold yellow on_blue',
         'bold bright_black on_cyan',
         'bold bright_green on_bright_black',
         'bold blue on_green',
         'bold bright_cyan on_blue',
         'bold bright_blue on_cyan',
+        'bold dark bright_white on_bright_black',
         'bold bright_blue on_green',
+        'bold dark bright_blue on_white',
         'bold bright_white on_blue',
         'bold bright_cyan on_bright_black',
         'bold bright_white on_cyan',
         'bold bright_white on_green',
-    );
+        'bold bright_yellow on_blue',
+        #'bold magenta on_white',
+        #'bold dark magenta on_white',
+        #'bold dark cyan on_white',
+        'bold dark bright_cyan on_bright_black',
+        #'bold dark bright_green on_black',
+        #'bold dark bright_yellow on_black',
+);
+
+# These colors all look decent enough to use, ordered to avoid putting similar ones together
+sub DEFAULT_JOB_COLOR() {
+    return map { Term::ANSIColor::color($_) } DEFAULT_JOB_COLOR_NAMES;
 }
+
+sub test_colors {
+    my @colors   = DEFAULT_JOB_COLOR();
+    my %defaults = DEFAULT_COLOR();
+
+    my $id = 0;
+    my $reset = $defaults{reset};
+
+    my $len = 45;
+
+    foreach my $name ( DEFAULT_JOB_COLOR_NAMES ) {
+        ++$id;
+        my $color = Term::ANSIColor::color($name);
+        printf("%scolor #%02d %${len}s%s\n", $color, $id, $name, $reset || '');
+    }
+
+    return;
+}
+
+test_colors() unless caller; # can be removed
 
 sub DEFAULT_COLOR() {
     return (

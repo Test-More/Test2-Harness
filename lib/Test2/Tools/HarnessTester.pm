@@ -59,7 +59,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::HarnessTester - Tools for t
+Test2::Tools::HarnessTester - Run events through a harness for a summary
 
 =head1 DESCRIPTION
 

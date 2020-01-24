@@ -258,8 +258,9 @@ sub build_init_state {
 
     srand();    # avoid child processes sharing the same seed value as the parent
 
-    @INC = $job->includes;    # Make @INC = (-I's, @ORIG)
-    push @INC => '.' if $job->unsafe_inc && !first { $_ eq '.' } @INC;
+    # Make sure our specified includes are at the front of the list.
+    my %seen;
+    @INC = grep { !$seen{$_}++ } $job->unsafe_inc ? ('.') : (), $job->includes, @INC;
 
     # if FindBin is preloaded, reset it with the new $0
     FindBin::init() if defined &FindBin::init;

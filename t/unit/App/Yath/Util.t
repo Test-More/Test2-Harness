@@ -59,7 +59,7 @@ tests find_yath => sub {
     local %App::Yath::Util::Config = (
         scriptdir => File::Spec->catdir($tmp, 'scripts'),
     );
-    is(find_yath, $yath, "Found it in a config path");
+    like(find_yath, qr{\Q$yath\E$}, "Found it in a config path");
 };
 
 tests isolate_stdout => sub {
@@ -125,10 +125,12 @@ subtest find_in_updir => sub {
     );
 
     chdir(File::Spec->catdir($tmp, 'nest', 'nest_a')) or die "$!";
-    is(find_in_updir('thefile'), File::Spec->catfile($tmp, 'nest', 'nest_a', 'thefile'), "Found file in expected spot");
+    my $file = File::Spec->catfile($tmp, 'nest', 'nest_a', 'thefile');
+    like(find_in_updir('thefile'), qr{\Q$file\E$}, "Found file in expected spot");
 
     chdir(File::Spec->catdir($tmp, 'nest', 'nest_b')) or die "$!";
-    is(find_in_updir('thefile'), File::Spec->catfile($tmp, 'thefile'), "Found file in expected spot");
+    $file = File::Spec->catfile($tmp, 'thefile');
+    like(find_in_updir('thefile'), qr{\Q$file\E$}, "Found file in expected spot");
 };
 
 subtest fit_to_width => sub {

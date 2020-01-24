@@ -1,8 +1,6 @@
 use Test2::V0 -target => 'Test2::Harness::TestFile';
 # HARNESS-DURATION-SHORT
 
-use Test2::Plugin::DieOnFail;
-
 use ok $CLASS;
 
 use Test2::Tools::GenTemp qw/gen_temp/;
@@ -469,9 +467,9 @@ subtest binary => sub {
     my $path = File::Spec->catfile($tmp, 'binary');
     ok(-B $path, "File is binary");
 
-    is(
+    like(
         dies { my $binary = $CLASS->new(file => $path); $binary->shbang },
-        "Cannot run binary test file '$path': file is not executable.\n",
+        qr{Cannot run binary test file '[^']*\Q$path\E': file is not executable\.},
         "File must be executable",
     );
 
@@ -492,7 +490,7 @@ subtest binary => sub {
             category    => 'general',
             duration    => 'medium',
             stage       => undef,
-            file        => $path,
+            file        => match qr{\Q$path\E$},
             job_name    => 42,
             job_id      => T(),
             rank        => T(),
@@ -514,9 +512,9 @@ subtest binary => sub {
 subtest not_perl => sub {
     my $path = File::Spec->catfile($tmp, 'not_perl');
 
-    is(
+    like(
         dies { my $not_perl = $CLASS->new(file => $path); $not_perl->shbang },
-        "Cannot run non-perl test file '$path': file is not executable.\n",
+        qr{Cannot run non-perl test file '[^']*\Q$path\E': file is not executable\.},
         "File must be executable",
     );
 
@@ -538,7 +536,7 @@ subtest not_perl => sub {
             category    => 'general',
             duration    => 'medium',
             stage       => undef,
-            file        => $not_perl->file,
+            file        => match qr{\Q$path\E$},
             job_name    => 42,
             job_id      => T(),
             rank        => T(),
@@ -561,9 +559,9 @@ subtest not_perl => sub {
 subtest not_env_perl => sub {
     my $path = File::Spec->catfile($tmp, 'not_env_perl');
 
-    is(
+    like(
         dies { my $not_env_perl = $CLASS->new(file => $path); $not_env_perl->shbang },
-        "Cannot run non-perl test file '$path': file is not executable.\n",
+        qr{Cannot run non-perl test file '[^']*\Q$path\E': file is not executable\.},
         "File must be executable",
     );
 
@@ -585,7 +583,7 @@ subtest not_env_perl => sub {
             category    => 'general',
             duration    => 'medium',
             stage       => undef,
-            file        => $not_env_perl->file,
+            file        => match qr{\Q$path\E$},
             job_name    => 42,
             job_id      => T(),
             rank        => T(),
@@ -605,7 +603,8 @@ subtest not_env_perl => sub {
 };
 
 subtest smoke => sub {
-    my $smoke1 = $CLASS->new(file => File::Spec->catfile($tmp, 'smoke1'));
+    my $path = File::Spec->catfile($tmp, 'smoke1');
+    my $smoke1 = $CLASS->new(file => $path);
     is($smoke1->check_feature(smoke => 0), 1, "Turned smoke on");
     is(
         $smoke1->queue_item(42),
@@ -614,7 +613,7 @@ subtest smoke => sub {
             category    => 'general',
             duration    => 'medium',
             stage       => undef,
-            file        => $smoke1->file,
+            file        => match qr{\Q$path\E$},
             job_name    => 42,
             rank        => T(),
             job_id      => T(),

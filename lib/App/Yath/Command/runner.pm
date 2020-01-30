@@ -9,6 +9,7 @@ use goto::file();
 use Test2::Harness::IPC();
 
 use Carp qw/confess/;
+use Config qw/%Config/;
 use Scalar::Util qw/openhandle/;
 use List::Util qw/first/;
 use File::Path qw/remove_tree/;
@@ -56,7 +57,9 @@ sub generate_run_sub {
     my $runner_pid = $$;
     my $jump = setjump "Test-Runner" => sub {
         local $.;
-        local %SIG = %SIG;
+        my @SIGNAMES = grep { $_ ne 'ZERO' } split /\s+/, $Config{sig_name};
+        local @SIG{ @SIGNAMES } = @SIG{ @SIGNAMES };
+
         my $runner = $settings->build(
             runner => 'Test2::Harness::Runner',
 

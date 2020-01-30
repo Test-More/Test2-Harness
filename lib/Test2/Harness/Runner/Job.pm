@@ -443,6 +443,9 @@ sub env_vars {
         TMPDIR              => $self->tmp_dir,
         TEMPDIR             => $self->tmp_dir,
 
+        HARNESS_ACTIVE       => 1,
+        TEST2_HARNESS_ACTIVE => 1,
+
         T2_HARNESS_JOB_NAME   => $self->{+TASK}->{job_name},
         T2_HARNESS_JOB_IS_TRY => $self->{+IS_TRY} // 0,
     };

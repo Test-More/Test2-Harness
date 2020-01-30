@@ -197,7 +197,7 @@ sub TO_JSON {
 }
 
 sub rel_file  { File::Spec->abs2rel($_[0]->file) }
-sub file      { $_[0]->{+FILE}      //= clean_path($_[0]->{+TASK}->{file}) }
+sub file      { $_[0]->{+FILE}      //= clean_path($_[0]->{+TASK}->{file}, 0) }
 sub err_file  { $_[0]->{+ERR_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stderr')) }
 sub out_file  { $_[0]->{+OUT_FILE}  //= clean_path(File::Spec->catfile($_[0]->job_dir, 'stdout')) }
 sub bail_file { $_[0]->{+BAIL_FILE} //= clean_path(File::Spec->catfile($_[0]->event_dir, 'bail')) }

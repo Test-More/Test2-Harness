@@ -57,4 +57,41 @@ yath(
     },
 );
 
+{
+    my $sdir = $dir . '-symlinks';
+    my $base    = "$sdir/_base.xt";
+    my $symlink = "$sdir/symlink_to_base.xt";
+
+    unlink $symlink if -e $symlink;
+    if ( eval{ symlink('_base.xt', $symlink); 1 } ) {
+
+        yath(
+            command => 'test',
+            args => [$sdir, '--ext=xt' ],
+            exit => 0,
+            test => sub {
+                my $out = shift;
+
+                like($out->{output}, qr{SKIPPED.*\Q$base\E}, "'_base.xt' was skipped");
+                like($out->{output}, qr{PASSED.*\Q$symlink\E}, "'symlink_to_base.xt' passed [and is not skipped]");
+            },
+        );
+
+        yath(
+            command => 'test',
+            args => [ $base, $symlink ],
+            exit => 0,
+            test => sub {
+                my $out = shift;
+
+                like($out->{output}, qr{SKIPPED.*\Q$base\E}, "'_base.xt' was skipped");
+                like($out->{output}, qr{PASSED.*\Q$symlink\E}, "'symlink_to_base.xt' passed [and is not skipped]");
+            },
+        );
+
+
+    }
+
+}
+
 done_testing;

@@ -124,8 +124,11 @@ sub write_file_atomic {
 }
 
 sub clean_path {
-    my $path = shift;
-    $path = realpath($path) // $path;
+    my ( $path, $absolute ) = @_;
+
+    $absolute //= 1;
+    $path = realpath($path) // $path if $absolute;
+
     return File::Spec->rel2abs($path);
 }
 

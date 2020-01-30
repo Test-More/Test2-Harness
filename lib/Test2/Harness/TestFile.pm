@@ -44,7 +44,7 @@ sub init {
     my $file = $self->file;
 
     # We want absolute path
-    $file = clean_path($file);
+    $file = clean_path($file, 0);
     $self->{+FILE} = $file;
 
     $self->{+QUEUE_ARGS} ||= [];

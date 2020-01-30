@@ -10,6 +10,7 @@ use App::Yath::Options;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/-log_file -max_short -max_medium/;
+use Test2::Harness::Util qw/clean_path/;
 
 include_options(
     'App::Yath::Options::Debug',
@@ -66,7 +67,7 @@ sub run {
             next unless $f->{harness_job_end};
 
             my $job = {};
-            $job->{file} = $f->{harness_job_end}->{rel_file} if $f->{harness_job_end} && $f->{harness_job_end}->{rel_file};
+            $job->{file} = clean_path( $f->{harness_job_end}->{file} ) if $f->{harness_job_end} && $f->{harness_job_end}->{file};
             $job->{time} = $f->{harness_job_end}->{times}->{totals}->{total} if $f->{harness_job_end} && $f->{harness_job_end}->{times};
 
             next unless $job->{file} && $job->{time};

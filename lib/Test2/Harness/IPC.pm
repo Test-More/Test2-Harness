@@ -18,7 +18,7 @@ BEGIN {
     my %SIG_MAP;
     my @SIGNAMES = split /\s+/, $Config{sig_name};
     my @SIGNUMS  = split /\s+/, $Config{sig_num};
-    while (@SIGNAMES || @SIGNUMS) {
+    while (@SIGNAMES) {
         $SIG_MAP{shift(@SIGNAMES)} = shift @SIGNUMS;
     }
 

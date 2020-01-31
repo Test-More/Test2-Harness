@@ -2,7 +2,10 @@ package App::Yath::Plugin::TestPlugin;
 use strict;
 use warnings;
 
+use Test2::Harness::Util::HashBase qw/-foo/;
 use Test2::Harness::Util::JSON qw/encode_json/;
+
+use Scalar::Util qw/blessed/;
 
 use parent 'App::Yath::Plugin';
 
@@ -10,6 +13,9 @@ print "TEST PLUGIN: Loaded Plugin\n";
 
 sub sort_files {
     my $self = shift;
+
+    die "self is not an instance! ($self)" unless blessed($self);
+
     my (@files) = @_;
 
     my %rank = (
@@ -32,12 +38,15 @@ sub sort_files {
 };
 
 sub munge_files {
+    my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     print "TEST PLUGIN: munge_files\n";
     return;
 }
 
 sub munge_search {
     my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     my ($search, $default_search) = @_;
 
     print "TEST PLUGIN: munge_search\n";
@@ -54,6 +63,7 @@ sub munge_search {
 
 sub claim_file {
     my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     my ($file) = @_;
     print "TEST PLUGIN: claim_file $file\n";
 
@@ -67,6 +77,7 @@ sub claim_file {
 
 sub inject_run_data {
     my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     my %params = @_;
     print "TEST PLUGIN: inject_run_data\n";
 
@@ -79,6 +90,7 @@ sub inject_run_data {
 my $seen = 0;
 sub handle_event {
     my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     my ($event) = @_;
     print "TEST PLUGIN: handle_event\n" unless $seen++;
 
@@ -91,6 +103,7 @@ sub handle_event {
 
 sub finish {
     my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     my %args = @_;
 
     print "TEST PLUGIN: finish " . join(', ' => map { "$_ => " . (ref($args{$_}) || $args{$_} // '?') } sort keys %args) . "\n";
@@ -99,6 +112,7 @@ sub finish {
 
 sub setup {
     my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     my ($settings) = @_;
     print "TEST PLUGIN: setup " . ref($settings) . "\n";
     return;
@@ -106,6 +120,7 @@ sub setup {
 
 sub teardown {
     my $self = shift;
+    die "self is not an instance! ($self)" unless blessed($self);
     my ($settings) = @_;
     print "TEST PLUGIN: teardown " . ref($settings) . "\n";
     return;

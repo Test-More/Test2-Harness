@@ -45,7 +45,7 @@ sub find_yath {
         my $script = File::Spec->catfile($path, 'yath');
         next unless -f $script && -x $script;
 
-        $App::Yath::Script::SCRIPT = clean_path($script);
+        $App::Yath::Script::SCRIPT = $script = clean_path($script);
         return $script;
     }
 

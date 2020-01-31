@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '1.000000';
 
+use Config qw/%Config/;
 use File::Spec;
 use goto::file();
 use Test2::Harness::IPC();
@@ -24,6 +25,8 @@ use Test2::Harness::Util qw/mod2file write_file_atomic open_file/;
 use Test2::Harness::Util::IPC qw/swap_io/;
 
 use Test2::Harness::Runner::Preloader();
+
+my @SIGNALS = grep { $_ ne 'ZERO' } split /\s+/, $Config{sig_name};
 
 # If FindBin is installed, go ahead and load it. We do not care much about
 # success vs failure here.
@@ -56,7 +59,21 @@ sub generate_run_sub {
     my $runner_pid = $$;
     my $jump = setjump "Test-Runner" => sub {
         local $.;
-        local %SIG = %SIG;
+
+        my %orig_sig = %SIG;
+        my $guard = Scope::Guard->new(sub {
+            my %seen;
+            for my $sig (@SIGNALS) {
+                next if $seen{$sig}++;
+                if (exists $orig_sig{$sig}) {
+                    $SIG{$sig} = $orig_sig{$sig};
+                }
+                else {
+                    delete $SIG{$sig};
+                }
+            }
+        });
+
         my $runner = $settings->build(
             runner => 'Test2::Harness::Runner',
 

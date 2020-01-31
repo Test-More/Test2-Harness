@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix signal restoration for forked tests
+
 0.001099  2019-09-09 21:12:15-07:00 America/Los_Angeles
 
     - Add --durations and --maybe_durations options

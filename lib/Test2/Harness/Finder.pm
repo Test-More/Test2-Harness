@@ -158,7 +158,7 @@ sub find_project_files {
             next;
         }
 
-        $path = clean_path($path);
+        $path = clean_path($path, 0);
         $seen{$path}++;
 
         my $test;
@@ -178,7 +178,7 @@ sub find_project_files {
                 wanted   => sub {
                     no warnings 'once';
 
-                    my $file = clean_path($File::Find::name);
+                    my $file = clean_path($File::Find::name, 0);
 
                     return if $seen{$file}++;
                     return unless -f $file;

@@ -1,0 +1,7 @@
+use Test2::V0;
+
+skip_all( "Do Not Run on the Main base.t" ) if $0 =~ m{\Q/_base.xt\E$};
+
+like $0, qr{symlink_to_base\.xt}, q[symlink preserved in $0];
+
+done_testing;

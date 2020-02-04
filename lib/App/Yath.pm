@@ -153,7 +153,7 @@ sub process_argv {
     my %seen = map {((ref($_) || $_) => 1)} @{$settings->yath->plugins};
     for my $plugin (@{$options->used_plugins}) {
         next if $seen{$plugin}++;
-        push @{$settings->yath->plugins} => $plugin;
+        push @{$settings->yath->plugins} => $plugin->can('new') ? $plugin->new() : $plugin;
     }
 
     return $self->{+_ARGV};

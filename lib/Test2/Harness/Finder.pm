@@ -164,7 +164,7 @@ sub find_project_files {
         my $test;
         unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
             $test = Test2::Harness::TestFile->new(file => $path);
-            next unless @$input || $self->include_file($test);
+            next unless @$input && $self->include_file($test);
         }
 
         push @tests => $test;

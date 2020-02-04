@@ -57,6 +57,18 @@ yath(
     },
 );
 
+yath(
+    command => 'test',
+    args    => [ "--exclude-file=$dir/fail.txx", "$dir/pass.tx", "$dir/fail.txx" ],
+    exit    => 0,
+    test    => sub {
+        my $out = shift;
+
+        unlike($out->{output}, qr{FAILED.*fail\.tx}, "'fail.tx' was excluded using '--exclude-file' option");
+        like($out->{output}, qr{PASSED.*pass\.tx}, "'pass.tx' was not seen as a failure when reading the output");
+    },
+);
+
 {
     my $sdir = $dir . '-symlinks';
     my $base    = "$sdir/_base.xt";

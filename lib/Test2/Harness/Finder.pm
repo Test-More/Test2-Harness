@@ -149,6 +149,8 @@ sub find_project_files {
 
     die "No tests to run, search is empty\n" unless @$search;
 
+    my $durations = $self->duration_data;
+
     my (%seen, @tests, @dirs);
     for my $path (@$search) {
         push @dirs => $path and next if -d $path;
@@ -164,14 +166,17 @@ sub find_project_files {
         my $test;
         unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
             $test = Test2::Harness::TestFile->new(file => $path);
-            if (my @exclude = $self->exclude_file($test)) {
-                if (@$input) {
-                    print STDERR "File '$path' was listed on the command line, but has been exluded for the following reasons:\n";
-                    print STDERR "  $_\n" for @exclude;
-                }
+        }
 
-                next;
+        my $rel = $test->relative;
+        $test->set_duration($durations->{$rel}) if $durations->{$rel};
+        if (my @exclude = $self->exclude_file($test)) {
+            if (@$input) {
+                print STDERR "File '$path' was listed on the command line, but has been exluded for the following reasons:\n";
+                print STDERR "  $_\n" for @exclude;
             }
+
+            next;
         }
 
         push @tests => $test;
@@ -199,7 +204,10 @@ sub find_project_files {
                         }
                     }
 
-                    return unless $test && $self->include_file($test);
+                    return unless $test;
+                    my $rel = $test->relative;
+                    $test->set_duration($durations->{$rel}) if $durations->{$rel};
+                    return unless $self->include_file($test);
                     push @tests => $test;
                 },
             },
@@ -234,9 +242,6 @@ sub exclude_file {
 
     push @out => 'File is in the exclude list.' if $self->exclude_files->{$full} || $self->exclude_files->{$rel};
     push @out => 'File matches an exclusion pattern.' if first { $rel =~ m/$_/ } @{$self->exclude_patterns};
-
-    my $durations = $self->duration_data;
-    $test->set_duration($durations->{$rel}) if $durations->{$rel};
 
     push @out => 'File is marked as "long", but the "no long tests" opition was specified.'
         if $self->no_long && $test->check_duration eq 'long';

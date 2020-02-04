@@ -90,8 +90,8 @@ sub run {
 
     my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
 
-    my $summary_file = $self->settings->speedtag->generate_durations_file;
-    my %summary;
+    my $durations_file = $self->settings->speedtag->generate_durations_file;
+    my %durations;
 
     while(1) {
         my @events = $stream->poll(max => 1000) or last;
@@ -154,14 +154,14 @@ sub run {
             print $fh @lines;
             close($fh);
 
-            $summary{ $job->{file} } = uc( $dur ) if $summary_file;
+            $durations{ $job->{file} } = uc( $dur ) if $durations_file;
             print "Tagged '$dur': $job->{file}\n";
         }
     }
 
-    if ( $summary_file ) {
-        my $jfile = Test2::Harness::Util::File::JSON->new(name => $summary_file );
-        $jfile->write( \%summary );
+    if ( $durations_file ) {
+        my $jfile = Test2::Harness::Util::File::JSON->new(name => $durations_file );
+        $jfile->write( \%durations );
     }
 
     return 0;

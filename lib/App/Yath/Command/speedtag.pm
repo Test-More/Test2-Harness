@@ -16,6 +16,19 @@ include_options(
     'App::Yath::Options::Debug',
 );
 
+option_group {prefix => 'speedtag', category => 'speedtag options'} => sub {
+    option generate_durations_file => (
+        type => 'd',
+        alt         => ['durations', 'duration'],
+        description => "Write out a duration json file, if no path is provided 'duration.json' will be used. The .json extention is added automatically if omitted.",
+
+        long_examples  => ['', '=/path/to/durations.json'],
+
+        normalize => \&normalize_duration,
+        action    => \&duration_action,
+    );
+};
+
 sub group { 'log' }
 
 sub summary { "Tag tests with duration (short medium long) using a source log" }
@@ -34,6 +47,27 @@ sub init {
 
     $self->{+MAX_SHORT}  //= 15;
     $self->{+MAX_MEDIUM} //= 30;
+}
+
+sub normalize_duration {
+    my $val = shift;
+
+    return $val if $val eq '1';
+
+    $val =~ s/\.json$//g;
+    $val .= '.json';
+
+    return clean_path($val);
+}
+
+sub duration_action {
+    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+
+    return $$slot = clean_path($norm)
+        unless $norm eq '1';
+
+    return if $$slot;
+    return $$slot = clean_path('durations.json');
 }
 
 sub run {
@@ -55,6 +89,9 @@ sub run {
     die "max short duration must be an integer, got '$self->{+MAX_MEDIUM}'" unless $self->{+MAX_MEDIUM} && $self->{+MAX_MEDIUM} =~ m/^\d+$/;
 
     my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
+
+    my $summary_file = $self->settings->speedtag->generate_durations_file;
+    my %summary;
 
     while(1) {
         my @events = $stream->poll(max => 1000) or last;
@@ -117,8 +154,14 @@ sub run {
             print $fh @lines;
             close($fh);
 
+            $summary{ $job->{file} } = uc( $dur ) if $summary_file;
             print "Tagged '$dur': $job->{file}\n";
         }
+    }
+
+    if ( $summary_file ) {
+        my $jfile = Test2::Harness::Util::File::JSON->new(name => $summary_file );
+        $jfile->write( \%summary );
     }
 
     return 0;

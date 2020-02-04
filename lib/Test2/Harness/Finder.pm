@@ -164,7 +164,14 @@ sub find_project_files {
         my $test;
         unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
             $test = Test2::Harness::TestFile->new(file => $path);
-            next unless @$input || $self->include_file($test);
+            if (my @exclude = $self->exclude_file($test)) {
+                if (@$input) {
+                    print STDERR "File '$path' was listed on the command line, but has been exluded for the following reasons:\n";
+                    print STDERR "  $_\n" for @exclude;
+                }
+
+                next;
+            }
         }
 
         push @tests => $test;
@@ -209,22 +216,35 @@ sub include_file {
     my $self = shift;
     my ($test) = @_;
 
-    return 0 unless $test->check_feature(run => 1);
+    my @exclude = $self->exclude_file($test);
+
+    return !@exclude;
+}
+
+sub exclude_file {
+    my $self = shift;
+    my ($test) = @_;
+
+    my @out;
+
+    push @out => "File has a do-not-run directive inside it." unless $test->check_feature(run => 1);
 
     my $full = $test->file;
     my $rel  = $test->relative;
 
-    return 0 if $self->exclude_files->{$full};
-    return 0 if $self->exclude_files->{$rel};
-    return 0 if first { $rel =~ m/$_/ } @{$self->exclude_patterns};
+    push @out => 'File is in the exclude list.' if $self->exclude_files->{$full} || $self->exclude_files->{$rel};
+    push @out => 'File matches an exclusion pattern.' if first { $rel =~ m/$_/ } @{$self->exclude_patterns};
 
     my $durations = $self->duration_data;
     $test->set_duration($durations->{$rel}) if $durations->{$rel};
 
-    return 0 if $self->no_long   && $test->check_duration eq 'long';
-    return 0 if $self->only_long && $test->check_duration ne 'long';
+    push @out => 'File is marked as "long", but the "no long tests" opition was specified.'
+        if $self->no_long && $test->check_duration eq 'long';
 
-    return 1;
+    push @out => 'File is not marked "long", but the "only long tests" option was specified.'
+        if $self->only_long && $test->check_duration ne 'long';
+
+    return @out;
 }
 
 1;

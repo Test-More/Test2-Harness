@@ -1,0 +1,8 @@
+{
+	"t/integration/test-durations/fast-01.tx": "SHORT",
+	"t/integration/test-durations/fast-02.tx": "SHORT",
+	"t/integration/test-durations/fast-03.tx": "SHORT",
+	"t/integration/test-durations/fast-04.tx": "SHORT",
+	"t/integration/test-durations/slow-01.tx": "LONG",
+	"t/integration/test-durations/slow-02.tx": "LONG"
+}

@@ -19,6 +19,8 @@ BEGIN {
 
     our $SCRIPT;
 
+    our $VERSION = '1.000000';
+
     # ==START TESTABLE CODE FIND_CONFIG_FILES==
 
     my ($config_file, $user_config_file);

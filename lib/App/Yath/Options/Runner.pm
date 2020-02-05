@@ -9,6 +9,8 @@ use Test2::Harness::Util qw/clean_path/;
 
 use App::Yath::Options;
 
+my $DEFAULT_COVER_ARGS = '-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+
 option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option use_fork => (
         alt         => ['fork'],
@@ -82,7 +84,15 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
 
     post \&cover_post_process;
     option cover => (
-        description  => 'Use Devel::Cover to calculate test coverage. This disables forking',
+        type        => 'd',
+        description => "Use Devel::Cover to calculate test coverage. This disables forking. If no args are specified the following are used: $DEFAULT_COVER_ARGS",
+        long_examples => ['', '=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl'],
+        action      => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+
+            return $$slot = $DEFAULT_COVER_ARGS if $norm eq '1';
+            return $$slot = $norm;
+        },
     );
 
     option switch => (
@@ -119,18 +129,20 @@ sub cover_post_process {
     my %params   = @_;
     my $settings = $params{settings};
 
-    $settings->runner->cover = 1 if $ENV{T2_DEVEL_COVER};
+    if ($ENV{T2_DEVEL_COVER} && !$settings->runner->cover) {
+        $settings->runner->cover = $ENV{T2_DEVEL_COVER} eq '1' ? $ENV{T2_DEVEL_COVER} : $DEFAULT_COVER_ARGS;
+    }
 
     return unless $settings->runner->cover;
 
     # For nested things
     $ENV{T2_NO_FORK} = 1;
-    $ENV{T2_DEVEL_COVER} = 1;
+    $ENV{T2_DEVEL_COVER} = $settings->runner->cover;
     $settings->runner->use_fork = 0;
 
     return unless $settings->check_prefix('run');
     push @{$settings->run->load_import->{'@'}} => 'Devel::Cover';
-    $settings->run->load_import->{'Devel::Cover'} = ['-silent' => 1, '+ignore' => '^t/', '+ignore' => '^t2/', '+ignore' => '^xt', '+ignore' => '^test.pl'];
+    $settings->run->load_import->{'Devel::Cover'} = [split(/,/, $settings->runner->cover)];
 }
 
 1;

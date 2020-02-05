@@ -57,6 +57,9 @@ yath(
     },
 );
 
+
+note q[Checking --exclude-file option when a file is provided on the command line];
+
 yath(
     command => 'test',
     args    => [ "--exclude-file=$dir/fail.txx", "$dir/pass.tx", "$dir/fail.txx" ],
@@ -70,6 +73,8 @@ yath(
 );
 
 {
+    note q[Testsuite using symlinks: check that $0 is preserved];
+
     my $sdir = $dir . '-symlinks';
     my $base    = "$sdir/_base.xt";
     my $symlink = "$sdir/symlink_to_base.xt";
@@ -104,6 +109,67 @@ yath(
 
     }
 
+}
+
+{
+    note "Testing durations when provided using a json file";
+
+    my $sdir = $dir . '-durations';
+
+    # using a directory
+    yath(
+        command => 'test',
+        args => [ '-v', '-j1', '--durations', "$sdir/../test-durations.json", '--ext=tx', $sdir, ],
+        exit => 0,
+        test => sub {
+            my $out = shift;
+
+            my @lines = grep { m/\Q( PASSED )\E/ } split /\n/, $out->{output};
+
+            is \@lines, array {
+
+                item match qr{\Qslow-01.tx\E};
+                item match qr{\Qslow-02.tx\E};
+                item match qr{\Qfast-01.tx\E};
+                item match qr{\Qfast-02.tx\E};
+                item match qr{\Qfast-03.tx\E};
+                item match qr{\Qfast-04.tx\E};
+
+                end;
+            }, "tests are run in order from slow to fast - using a directory";
+        },
+    );
+
+    # using a list of files
+    my @files = (
+            "$sdir/fast-01.tx", "$sdir/fast-02.tx", "$sdir/fast-03.tx", "$sdir/fast-04.tx",
+            "$sdir/slow-01.tx", "$sdir/slow-02.tx"
+    );
+    my %hfiles = map { $_ => 1 } @files;
+    yath(
+        command => 'test',
+        args => [ '-v', '-j1', '--durations', "$sdir/../test-durations.json", '--ext=tx',
+            keys %hfiles, # random order
+        ],
+        exit => 0,
+        test => sub {
+            my $out = shift;
+
+            my @lines = grep { m/\Q( PASSED )\E/ } split /\n/, $out->{output};
+
+            is \@lines, array {
+
+                item match qr{\Qslow-01.tx\E};
+                item match qr{\Qslow-02.tx\E};
+                item match qr{\Qfast-01.tx\E};
+                item match qr{\Qfast-02.tx\E};
+                item match qr{\Qfast-03.tx\E};
+                item match qr{\Qfast-04.tx\E};
+
+                end;
+            }, "tests are run in order from slow to fast - using a list of files";
+        },
+    );
 }
 
 done_testing;

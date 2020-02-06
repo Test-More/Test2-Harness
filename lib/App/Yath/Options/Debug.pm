@@ -83,11 +83,21 @@ sub _post_process_help {
 
     return unless $params{settings}->debug->help;
 
+    my $help;
     if (my $cmd = $params{command}) {
-        print $cmd->cli_help(%params);
+        $help = $cmd->cli_help(%params);
     }
     else {
-        print __PACKAGE__->cli_help(%params);
+        $help = __PACKAGE__->cli_help(%params);
+    }
+
+    if (eval { require IO::Pager; 1 }) {
+        local $SIG{PIPE} = sub {};
+        my $pager = IO::Pager->new(*STDOUT);
+        $pager->print($help);
+    }
+    else {
+        print $help;
     }
 
     exit 0;

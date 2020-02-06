@@ -63,7 +63,7 @@ sub run_tests {
             my $retry_data = $final->{facet_data}->{harness_final}->{retried}->[0];
             my ($uuid, $tries, $file, $status) = @$retry_data;
 
-            is($tries, 3, "Tried 3 times");
+            is($tries, 4, "Tried 4 times: 1 run + 3 retries");
             like($file, qr{retry\.tx}, "Retried the right file");
             is($status, 'NO', "Never passed");
         },

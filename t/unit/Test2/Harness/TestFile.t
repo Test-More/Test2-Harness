@@ -31,7 +31,8 @@ my $tmp = gen_temp(
 
     smoke1     => "#HARNESS-SMOKE\n",
     smoke2     => "#HARNESS-YES-SMOKE\n",
-    retry      => "#HARNESS-RETRY\n",
+
+    retry      => "#HARNESS-RETRY\n",     # mean retry once => --retry similar to --retry=1
     retry5     => "#HARNESS-RETRY 5\n",
     retry_iso  => "#HARNESS-RETRY-ISO\n",
     retry_iso3 => "#HARNESS-RETRY-ISO 3\n",
@@ -638,22 +639,22 @@ subtest smoke => sub {
 subtest smoke => sub {
     my $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry'));
     my $task = $retry->queue_item(42);
-    is($task->{retry}, 2, "Enabled retry");
+    is($task->{retry}, 1, "Enabled retry");
     ok(!exists($task->{retry_isolated}), "not isolated");
 
     $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry5'));
     $task = $retry->queue_item(42);
-    is($task->{retry}, 6, "Enabled retry, value of 5 results in '6' because of initial try");
+    is($task->{retry}, 5, "Enabled retry, value of 5 results in '6' because of initial try");
     ok(!exists($task->{retry_isolated}), "not isolated");
 
     $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry_iso'));
     $task = $retry->queue_item(42);
-    is($task->{retry}, 2, "Enabled retry");
+    is($task->{retry}, 1, "Enabled retry");
     is($task->{retry_isolated}, T(), "isolated retry");
 
     $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry_iso3'));
     $task = $retry->queue_item(42);
-    is($task->{retry}, 4, "Enabled retry, 1 initital + 3 retries");
+    is($task->{retry}, 3, "Enabled retry, 1 initital + 3 retries");
     is($task->{retry_isolated}, T(), "isolated retry");
 };
 

@@ -64,7 +64,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option unsafe_inc => (
         description => "perl is removing '.' from \@INC as a security concern. This option keeps things from breaking for now.",
         env_vars    => [qw/PERL_USE_UNSAFE_INC/],
-        default     => 1,
+        default     => 0,
     );
 
     option preloads => (

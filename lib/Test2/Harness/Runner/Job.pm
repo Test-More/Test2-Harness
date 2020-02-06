@@ -267,7 +267,12 @@ sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }
 
 
 #<<< no-tidy
-sub cli_includes { @{$_[0]->{+CLI_INCLUDES} //= [ map {("-I$_")} $_[0]->includes ]} }
+sub cli_includes { @{$_[0]->{+CLI_INCLUDES} //= [
+        map {("-I$_")}
+        map { $INC{"App/Yath/Command/projects.pm"} || ( $ENV{YATH_CMD} // '' ) eq 'projects' ? $_ : clean_path($_) }
+        $_[0]->includes
+        ]}
+}
 
 sub runner_includes { @{$_[0]->{+RUNNER_INCLUDES} //= [$_[0]->{+RUNNER}->all_libs]} }
 #>>>
@@ -428,7 +433,9 @@ sub env_vars {
     my $from_run = $self->run->env_vars;
     my $from_task = $self->{+TASK}->{env_vars};
 
-    my $p5l = join $Config{path_sep} => grep { defined $_ } $from_task->{PERL5LIB}, $from_run->{PERL5LIB}, $self->runner_includes;
+    my $p5l = join $Config{path_sep} =>
+        map { clean_path( $_ ) }
+        grep { defined $_ } $from_task->{PERL5LIB}, $from_run->{PERL5LIB}, $self->runner_includes;
 
     return $self->{+ENV_VARS} = {
         $from_run  ? (%$from_run)  : (),

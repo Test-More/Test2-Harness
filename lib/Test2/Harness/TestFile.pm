@@ -247,7 +247,7 @@ sub _scan {
         elsif ($dir eq 'retry') {
             $headers{retry} = 1 unless @args;
             for my $arg (@args) {
-                if ($arg =~ m/^\d+$/a) {
+                if ($arg =~ m/^\d+$/) {
                     $headers{retry} = int $arg;
                 }
                 elsif ($arg =~ m/^iso/i) {

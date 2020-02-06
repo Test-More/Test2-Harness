@@ -245,13 +245,13 @@ sub _scan {
             $headers{features}->{smoke} = 1;
         }
         elsif ($dir eq 'retry') {
-            $headers{retry} = 2 unless @args;
+            $headers{retry} = 1 unless @args;
             for my $arg (@args) {
-                if ($arg =~ m/^\d+$/) {
-                    $headers{retry} = $arg + 1;
+                if ($arg =~ m/^\d+$/a) {
+                    $headers{retry} = int $arg;
                 }
                 elsif ($arg =~ m/^iso/i) {
-                    $headers{retry} //= 2;
+                    $headers{retry} //= 1;
                     $headers{retry_isolated} = 1;
                 }
                 else {

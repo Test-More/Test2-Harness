@@ -414,7 +414,7 @@ sub set_proc_exit {
     if ($proc->isa('Test2::Harness::Runner::Job')) {
         my $task = $proc->task;
 
-        if ($exit && $proc->is_try < ($proc->retry - 1)) {
+        if ($exit && $proc->is_try < $proc->retry ) {
             $self->state->retry_task($task->{job_id});
             push @args => 'will-retry';
         }

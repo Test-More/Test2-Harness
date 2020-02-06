@@ -54,6 +54,7 @@ requires "perl" => "5.010000";
 suggests "Cpanel::JSON::XS" => "0";
 suggests "Email::Stuffer" => "0.016";
 suggests "HTTP::Tiny" => "0.070";
+suggests "IO::Pager" => "1.00";
 suggests "JSON::MaybeXS" => "0";
 suggests "Term::ANSIColor" => "4.03";
 

@@ -27,7 +27,7 @@ like(dies { $one->foo(1) }, qr/Too many arguments for foo\(\)/, "No args");
 }
 
 $one->foo->vivify_field('xxx');
-$one->foo->xxx = 'yyy';
+$one->foo->field(xxx => 'yyy');
 
 my $thing = $one->build('foo', 'XXX', a => 'b');
 isa_ok($thing, ['XXX'], "Got a blessed instance of XXX");

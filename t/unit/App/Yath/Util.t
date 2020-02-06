@@ -49,16 +49,16 @@ tests find_yath => sub {
     chdir($tmp2);
 
     $App::Yath::Script::SCRIPT = undef;
-    local %App::Yath::Util::Config = ();
+    local *App::Yath::Util::Config = {};
     like(
         dies { find_yath },
         qr/Could not find yath in Config paths/,
         "No yath found"
     );
 
-    local %App::Yath::Util::Config = (
+    local *App::Yath::Util::Config = {
         scriptdir => File::Spec->catdir($tmp, 'scripts'),
-    );
+    };
     like(find_yath, qr{\Q$yath\E$}, "Found it in a config path");
 };
 

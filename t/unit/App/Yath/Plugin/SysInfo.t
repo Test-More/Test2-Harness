@@ -8,7 +8,7 @@ my $control = mock $CLASS => (
     ],
 );
 
-local %App::Yath::Plugin::SysInfo::Config = (
+local *App::Yath::Plugin::SysInfo::Config = {
     'useperlio'       => 'define',
     'use64bitint'     => 'define',
     'use64bitall'     => 'define',
@@ -18,7 +18,7 @@ local %App::Yath::Plugin::SysInfo::Config = (
     'usemultiplicity' => undef,
     'version'         => '1.2.3',
     'uselongdouble'   => undef,
-);
+};
 
 local $ENV{USER} = 'bob';
 local $ENV{SHELL} = '/bin/shell';

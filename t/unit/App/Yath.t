@@ -127,7 +127,7 @@ subtest load_options => sub {
     local @INC = (@INC, 't/lib');
     my $one = $CLASS->new();
 
-    $one->settings->yath->no_scan_plugins = 1;
+    $one->settings->yath->field(no_scan_plugins => 1);
 
     my $options = $one->load_options();
     is(
@@ -141,7 +141,7 @@ subtest load_options => sub {
 
     my $two = $CLASS->new();
 
-    $two->settings->yath->no_scan_plugins = 0;
+    $two->settings->yath->field(no_scan_plugins => 0);
 
     warns { $options = $two->load_options() };
     like(

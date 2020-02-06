@@ -18,6 +18,8 @@ use Test2::Harness::Util::JSON qw/encode_json decode_json JSON/;
 use Test2::Harness::Util qw/mod2file open_file/;
 use Test2::Util::Table qw/table/;
 
+use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
+
 use File::Spec;
 
 use Time::HiRes qw/sleep time/;
@@ -472,7 +474,7 @@ sub render_summary {
     );
 
     my $res = "    -->  Result: " . ($pass ? 'PASSED' : 'FAILED') . "  <--";
-    if ($self->settings->display->color && eval { require Term::ANSIColor; 1 }) {
+    if ($self->settings->display->color && USE_ANSI_COLOR) {
         my $color = $pass ? Term::ANSIColor::color('bold bright_green') : Term::ANSIColor::color('bold bright_red');
         my $reset = Term::ANSIColor::color('reset');
         $res = "$color$res$reset";

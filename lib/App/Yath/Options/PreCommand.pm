@@ -121,7 +121,8 @@ sub post_process {
     my %params   = @_;
     my $settings = $params{settings};
 
-    $settings->yath->persist_file //= find_pfile($settings, vivify => 1)
+    $settings->yath->field(persist_file => find_pfile($settings, vivify => 1))
+        unless defined $settings->yath->persist_file;
 }
 
 1;

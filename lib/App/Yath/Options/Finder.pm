@@ -99,10 +99,10 @@ sub _post_process {
     my %params   = @_;
     my $settings = $params{settings};
 
-    $settings->finder->default_search = ['./t', './t2', 'test.pl']
+    $settings->finder->field(default_search => ['./t', './t2', 'test.pl'])
         unless $settings->finder->default_search && @{$settings->finder->default_search};
 
-    $settings->finder->default_at_search = ['./xt']
+    $settings->finder->field(default_at_search => ['./xt'])
         unless $settings->finder->default_at_search && @{$settings->finder->default_at_search};
 
     @{$settings->finder->extensions} = ('t', 't2')

@@ -103,7 +103,7 @@ option_group {prefix => 'notify', category => "Notification Options", applicable
 
         # Should we use email?
         if (@{$settings->notify->email} || $settings->notify->email_owner) {
-            $settings->notify->email_owner = 1 unless $set_by_cli->{email_owner};
+            $settings->notify->field(email_owner => 1) unless $set_by_cli->{email_owner};
 
             # Do we have Email::Stuffer?
             eval { require Email::Stuffer; 1 } or die "Cannot use --email-owner without Email::Stuffer, which is not installed.\n";
@@ -121,7 +121,7 @@ option_group {prefix => 'notify', category => "Notification Options", applicable
             die "HTTP::Tiny reports that it does not support SSL, cannot use slack without ssl."
                 unless HTTP::Tiny::can_ssl();
 
-            $settings->notify->slack_owner = 1 unless $set_by_cli->{slack_owner};
+            $settings->notify->field(slack_owner => 1) unless $set_by_cli->{slack_owner};
 
             push @{$settings->yath->plugins} => __PACKAGE__->new() unless grep { $_->isa(__PACKAGE__) } @{$settings->yath->plugins};
         }

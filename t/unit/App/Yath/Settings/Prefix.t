@@ -16,8 +16,13 @@ is($one->foo, undef, "Not set yet");
 $one->foo('bar');
 is($one->foo, 'bar', "Set value");
 
-$one->foo = 'baz';
-is($one->foo, 'baz', "Set via lvalue");
+if ($] ge "5.016") {
+    $one->foo = 'baz';
+    is($one->foo, 'baz', "Set via lvalue");
+}
+else {
+    $one->field(foo => 'baz');
+}
 
 is($one->field('foo'), 'baz', "Got via field");
 $one->field('foo', 'xxx');

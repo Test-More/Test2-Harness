@@ -64,7 +64,7 @@ sub post_process {
     return unless $logging->log || $logging->bzip2 || $logging->gzip || $logging->log_file;
 
     # We want to keep the log and put it in a findable location
-    $logging->log = 1;
+    $logging->field(log => 1);
 
     unless ($logging->log_file) {
         my $log_dir = $logging->log_dir // $settings->workspace->tmp_dir;
@@ -74,15 +74,17 @@ sub post_process {
 
         my $format   = $logging->log_file_format;
         my $filename = expand_log_file_format($format, $settings);
-        $logging->log_file = clean_path(File::Spec->catfile($log_dir, $filename));
+        $logging->field(log_file => clean_path(File::Spec->catfile($log_dir, $filename)));
     }
 
-    $logging->log_file =~ s{/+$}{}g;
-    $logging->log_file =~ s/\.(gz|bz2)$//;
-    $logging->log_file =~ s/\.jsonl?$//;
-    $logging->log_file .= "\.jsonl";
-    $logging->log_file .= "\.bz2" if $logging->bzip2;
-    $logging->log_file .= "\.gz" if $logging->gzip;
+    my $log_file = $logging->log_file;
+    $log_file =~ s{/+$}{}g;
+    $log_file =~ s/\.(gz|bz2)$//;
+    $log_file =~ s/\.jsonl?$//;
+    $log_file .= "\.jsonl";
+    $log_file .= "\.bz2" if $logging->bzip2;
+    $log_file .= "\.gz" if $logging->gzip;
+    $logging->field(log_file => $log_file);
 }
 
 sub time_for_strftime { time() }

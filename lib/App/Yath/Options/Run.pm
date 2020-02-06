@@ -41,7 +41,7 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
             die "Input file not found: $norm\n" unless -f $norm;
             if ($settings->run->input) {
                 warn "Input file is overriding another source of input.\n";
-                $settings->run->input = undef;
+                $settings->run->field(input => undef);
             }
 
             $handler->($slot, $norm);

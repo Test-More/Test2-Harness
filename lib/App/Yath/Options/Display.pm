@@ -144,12 +144,13 @@ option_group {prefix => 'formatter', category => "Formatter Options"} => sub {
         my %params   = @_;
         my $settings = $params{settings};
 
-        $settings->formatter->formatter //= $settings->formatter->qvf ? 'QVF' : 'Test2';
+        $settings->formatter->field(formatter => $settings->formatter->qvf ? 'QVF' : 'Test2')
+            unless defined $settings->formatter->formatter;
 
         if ($settings->display->verbose > 1) {
-            $settings->formatter->show_job_info   = 1;
-            $settings->formatter->show_job_launch = 1;
-            $settings->formatter->show_run_info   = 1;
+            $settings->formatter->field(show_job_info   => 1);
+            $settings->formatter->field(show_job_launch => 1);
+            $settings->formatter->field(show_run_info   => 1);
         }
     };
 };

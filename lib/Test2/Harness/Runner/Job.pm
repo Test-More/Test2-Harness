@@ -437,6 +437,9 @@ sub env_vars {
         map { clean_path( $_ ) }
         grep { defined $_ } $from_task->{PERL5LIB}, $from_run->{PERL5LIB}, $self->runner_includes;
 
+    # Make sure we include any existing PERL5LIB
+    $p5l .= "$Config{path_sep}$ENV{PERL5LIB}" if $ENV{PERL5LIB};
+
     return $self->{+ENV_VARS} = {
         $from_run  ? (%$from_run)  : (),
         $from_task ? (%$from_task) : (),

@@ -54,11 +54,13 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
         my $project = $settings->yath->project;
         my $template = join '-' => ( "yath", $project // "test", $$, "XXXXXXXX");
 
-        $settings->workspace->workdir = tempdir(
+        my $tmpdir = tempdir(
             $template,
             DIR     => $settings->workspace->tmp_dir,
             CLEANUP => !($settings->debug->keep_dirs || $params{command}->always_keep_dir),
         );
+
+        $settings->workspace->field(workdir => $tmpdir);
     };
 };
 

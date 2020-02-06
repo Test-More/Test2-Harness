@@ -142,7 +142,9 @@ sub check_timeouts {
         write_file_atomic($job->et_file,  $now) if $e_to  && !-f $job->et_file;
         write_file_atomic($job->pet_file, $now) if $pe_to && !-f $job->pet_file;
 
-        my $sig = $kill ? 'KILL' : 'TERM';
+        my $sigmap = $self->SIG_MAP;
+        my $sig = $kill ? $sigmap->{'KILL'} : $sigmap->{'TERM'};
+
         $sig = "-$sig" if $self->USE_P_GROUPS;
 
         print STDERR "$$ $0 " . $job->file . " did not respond to SIGTERM, sending SIGKILL to $pid...\n" if $kill;

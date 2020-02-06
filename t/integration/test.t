@@ -173,7 +173,7 @@ yath(
     );
 }
 
-{
+if ($] ge '5.026000') {
     note q[Checking %INC and @INC setup];
 
     local @INC =  map { clean_path( $_ ) } grep { $_ ne '.' } @INC;
@@ -185,6 +185,7 @@ yath(
         command => 'test',
         args => [ '-v', '--ext=tx', '--no-unsafe-inc', $sdir ],
         exit => 0,
+        debug => 2,
         test => sub {
             my $out = shift;
 

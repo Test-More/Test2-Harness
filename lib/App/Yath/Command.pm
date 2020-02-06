@@ -2,8 +2,6 @@ package App::Yath::Command;
 use strict;
 use warnings;
 
-use v5.10;
-
 our $VERSION = '1.000000';
 
 use File::Spec;

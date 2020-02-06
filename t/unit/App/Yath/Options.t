@@ -484,7 +484,7 @@ subtest populate_cmd_defaults => sub {
         "Need to set command class first"
     );
 
-    local *App::Yath::Command::fake::ISA = ['App::Yath::Command'];
+    push @App::Yath::Command::fake::ISA => 'App::Yath::Command';
     $one->set_command_class('App::Yath::Command::fake');
     $one->populate_cmd_defaults();
 

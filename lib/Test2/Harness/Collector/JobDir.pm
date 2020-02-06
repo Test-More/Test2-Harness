@@ -564,7 +564,7 @@ sub _process_exit_line {
 
     my $event_id = gen_uuid();
 
-    my ($exit, $err, $sig, $dmp, $stamp, $retry) = split /\s+/, $value;
+    my ($exit, $err, $sig, $dmp, $stamp, $retry) = (split(/\s+/, $value), '', '', '', '', '', '');
 
     $self->{+DONE} = {retry => $retry};
 

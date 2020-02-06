@@ -130,7 +130,7 @@ sub cover_post_process {
     my $settings = $params{settings};
 
     if ($ENV{T2_DEVEL_COVER} && !$settings->runner->cover) {
-        $settings->runner->cover = $ENV{T2_DEVEL_COVER} eq '1' ? $ENV{T2_DEVEL_COVER} : $DEFAULT_COVER_ARGS;
+        $settings->runner->field(cover => $ENV{T2_DEVEL_COVER} eq '1' ? $ENV{T2_DEVEL_COVER} : $DEFAULT_COVER_ARGS);
     }
 
     return unless $settings->runner->cover;
@@ -138,7 +138,7 @@ sub cover_post_process {
     # For nested things
     $ENV{T2_NO_FORK} = 1;
     $ENV{T2_DEVEL_COVER} = $settings->runner->cover;
-    $settings->runner->use_fork = 0;
+    $settings->runner->field(use_fork => 0);
 
     return unless $settings->check_prefix('run');
     push @{$settings->run->load_import->{'@'}} => 'Devel::Cover';

@@ -48,6 +48,16 @@ sub cli_help {
         $options->set_command_class($class);
     }
 
+    if ( $options && $options->command_class && -t STDIN ) {
+        my $command_class = $options->command_class;
+        local $ENV{PERL5LIB};
+        my $perldoc = qq[$^Xdoc];
+        $perldoc = q[perldoc] unless -x $perldoc;
+
+        exec( $perldoc, $command_class );
+        die "Failed to run perldoc: $!";
+    }
+
     my ($pre_opts, $cmd_opts);
     if ($options) {
         $pre_opts = $options->pre_docs('cli');

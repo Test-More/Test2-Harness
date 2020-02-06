@@ -20,7 +20,7 @@ use Test2::Util qw/clone_io/;
 
 use Long::Jump qw/setjump longjump/;
 
-use Test2::Harness::Util qw/mod2file write_file_atomic open_file/;
+use Test2::Harness::Util qw/mod2file write_file_atomic open_file clean_path/;
 
 use Test2::Harness::Util::IPC qw/swap_io/;
 
@@ -277,7 +277,7 @@ sub build_init_state {
 
     # Make sure our specified includes are at the front of the list.
     my %seen;
-    @INC = grep { !$seen{$_}++ } $job->unsafe_inc ? ('.') : (), $job->includes, @INC;
+    @INC = grep { !$seen{$_}++ } $job->unsafe_inc ? ('.') : (), map { clean_path( $_ ) } $job->includes, @INC;
 
     # if FindBin is preloaded, reset it with the new $0
     FindBin::init() if defined &FindBin::init;

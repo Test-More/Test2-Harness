@@ -6,6 +6,7 @@ use File::Spec;
 use App::Yath::Tester qw/yath/;
 use Test2::Harness::Util::File::JSONL;
 
+use Test2::Harness::Util       qw/clean_path/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 my $dir = __FILE__;
@@ -168,6 +169,26 @@ yath(
 
                 end;
             }, "tests are run in order from slow to fast - using a list of files";
+        },
+    );
+}
+
+{
+    note q[Checking %INC and @INC setup];
+
+    local @INC =  map { clean_path( $_ ) } grep { $_ ne '.' } @INC;
+    local $ENV{PERL5LIB} = join ':', map { clean_path( $_ ) } grep { $_ ne '.' } split( ':', $ENV{PERL5LIB} );
+
+    my $sdir = $dir . '-inc';
+
+    yath(
+        command => 'test',
+        args => [ '-v', '--ext=tx', '--no-unsafe-inc', $sdir ],
+        exit => 0,
+        test => sub {
+            my $out = shift;
+
+            unlike($out->{output}, qr{FAILED}, q[no failures]);
         },
     );
 }

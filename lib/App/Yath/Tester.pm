@@ -90,6 +90,7 @@ sub yath {
 
     local %ENV = %ENV;
     $ENV{YATH_PERSISTENCE_DIR} = $pdir;
+    $ENV{YATH_CMD} = $cmd;
     $ENV{NESTED_YATH} = 1;
     $ENV{$_} = $env->{$_} for keys %$env;
     my $pid = run_cmd(

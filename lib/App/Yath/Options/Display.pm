@@ -39,6 +39,18 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
         description => 'Show the timing data for each job',
     );
 
+    option term_width => (
+        type          => 's',
+        alt           => ['term-size'],
+        description   => 'Alternative to setting $TABLE_TERM_SIZE. Setting this will override the terminal width detection to the number of characters specified.',
+        long_examples => [' 80', ' 200'],
+
+        action => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
+            $ENV{TABLE_TERM_SIZE} = $norm;
+        },
+    );
+
     option 'progress' => (
         default => sub { -t STDOUT ? 1 : 0 },
 

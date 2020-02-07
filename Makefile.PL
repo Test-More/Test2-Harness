@@ -139,7 +139,7 @@ my %FallbackPrereqs = (
   "parent" => 0
 );
 
-# inserted by Dist::Zilla::Plugin::DynamicPrereqs 0.035
+# inserted by Dist::Zilla::Plugin::DynamicPrereqs 0.036
 if ($^O eq 'Win32') {
     $WriteMakefileArgs{META_MERGE}{'meta-spec'} = { version => 2 };
     $WriteMakefileArgs{META_MERGE}{prereqs}{runtime}{suggests}{'Win32::Console::ANSI'} = 0;

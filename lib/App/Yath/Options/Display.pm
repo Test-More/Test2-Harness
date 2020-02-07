@@ -28,6 +28,12 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
         default     => 0,
     );
 
+    option no_wrap => (
+        type        => 'b',
+        description => "Do not do fancy text-wrapping, let the terminal handle it",
+        default     => 0,
+    );
+
     option show_times => (
         short       => 'T',
         description => 'Show the timing data for each job',

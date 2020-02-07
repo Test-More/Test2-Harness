@@ -51,6 +51,7 @@ sub init {
         handles  => [$self->{+IO}, $self->{+IO_ERR}, $self->{+IO}],
         verbose  => $settings->display->verbose,
         color    => $settings->display->color,
+        no_wrap  => $settings->display->no_wrap,
     );
 
     $self->{+SHOW_JOB_END} = 1 unless defined $self->{+SHOW_JOB_END};

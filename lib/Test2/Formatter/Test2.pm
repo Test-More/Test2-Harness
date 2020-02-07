@@ -32,6 +32,7 @@ use Test2::Util::HashBase qw{
     -color
     -progress
     -tty
+    -no_wrap
     -verbose
     -job_length
     -ecount
@@ -458,7 +459,7 @@ sub build_line {
 
     $tag = substr($tag, 0 - TAG_WIDTH, TAG_WIDTH) if length($tag) > TAG_WIDTH;
 
-    my $max = $self->{+TTY} ? (term_size() || 80) : undef;
+    my $max = $self->{+TTY} && !$self->{+NO_WRAP} ? (term_size() || 80) : undef;
     my $color = $self->{+COLOR};
     my $reset = $color ? $color->{reset} || '' : '';
     my $tcolor = $color ? $color->{TAGS}->{$tag} || $color->{FACETS}->{$facet} || '' : '';

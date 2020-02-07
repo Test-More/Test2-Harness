@@ -116,7 +116,7 @@ sub run {
         print "\nUse `yath watch` to monitor the persistent runner\n\n" if $settings->runner->daemon;
     }
 
-    Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir});
+    Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir, version => $VERSION});
 
     return 0 if $settings->runner->daemon;
 

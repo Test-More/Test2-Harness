@@ -205,6 +205,7 @@ BEGIN {
             no_scan_plugins => $NO_PLUGINS,
             dev_libs        => \@DEVLIBS,
             start           => Time::HiRes::time(),
+            version         => $App::Yath::VERSION,
         },
     );
 

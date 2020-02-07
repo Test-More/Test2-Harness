@@ -74,7 +74,14 @@ sub workdir {
 
 sub start_runner {
     my $self = shift;
-    $self->{+RUNNER_PID} = $self->pfile_data->{pid};
+
+    my $data = $self->pfile_data;
+
+    if ($data->{version} ne $VERSION) {
+        die "Version mismatch, persistent runner is version $data->{version}, runner is version $VERSION.\n";
+    }
+
+    $self->{+RUNNER_PID} = $data->{pid};
 }
 
 1;

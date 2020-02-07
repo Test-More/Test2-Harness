@@ -49,7 +49,7 @@ sub render_verbose {
     if ($f->{assert}) {
         push @out => $class->render_assert($f);
         push @out => $class->render_debug($f) unless $f->{assert}->{pass} || $f->{assert}->{no_debug};
-        push @out => $class->render_amnesty($f) if $f->{amnesty} && !$f->{assert}->{pass};
+        push @out => $class->render_amnesty($f) if $f->{amnesty} && @{$f->{amnesty}};
     }
 
     push @out => $class->render_info($f)   if $f->{info};
@@ -224,11 +224,11 @@ sub render_assert {
 
     my $name = $f->{assert}->{details} || '<UNNAMED ASSERTION>';
 
-    return ['assert', 'PASS', $name]
-        if $f->{assert}->{pass};
-
     return ['assert', '! PASS !', $name]
         if $f->{amnesty} && @{$f->{amnesty}};
+
+    return ['assert', 'PASS', $name]
+        if $f->{assert}->{pass};
 
     return ['assert', 'FAIL', $name]
 }

@@ -16,7 +16,7 @@ is($one->foo, undef, "Not set yet");
 $one->foo('bar');
 is($one->foo, 'bar', "Set value");
 
-if ($] ge "5.016") {
+if ("$]" >= 5.016) {
     $one->foo = 'baz';
     is($one->foo, 'baz', "Set via lvalue");
 }

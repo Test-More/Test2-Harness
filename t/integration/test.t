@@ -197,7 +197,7 @@ yath(
     );
 }
 
-if ($] ge '5.026000') {
+if ("$]" >= 5.026) {
     note q[Checking %INC and @INC setup];
 
     local @INC =  map { clean_path( $_ ) } grep { $_ ne '.' } @INC;

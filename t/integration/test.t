@@ -113,6 +113,30 @@ yath(
 }
 
 {
+    note q[Testsuite checking broken symlinks #103];
+
+    my $sdir = $dir . '-broken-symlinks';
+    my $symlink = "$sdir/broken-symlink.tx";
+
+    unlink $symlink if -e $symlink;
+    if ( eval{ symlink('nothing-there', $symlink); 1 } ) {
+
+        yath(
+            command => 'test',
+            args => [$sdir, '--ext=tx' ],
+            exit => 0,
+            test => sub {
+                my $out = shift;
+
+                unlike($out->{output}, qr{FAILED}, q[no failures]);
+                unlike($out->{output}, qr{\Qbroken-symlink.tx\E}, q[no mention of broken-symlink.tx] );
+                like($out->{output}, qr{PASSED.*\Qt/integration/test-broken-symlinks/pass.tx\E}, q[t/integration/test-broken-symlinks/pass.tx PASSED]);
+            },
+        );
+    }
+}
+
+{
     note "Testing durations when provided using a json file";
 
     my $sdir = $dir . '-durations';

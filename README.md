@@ -8,7 +8,7 @@ App::Yath - Yet Another Test Harness (Test2-Harness) Command Line Interface
 **PLEASE NOTE:** Test2::Harness is still experimental, it can all change at any
 time. Documentation and tests have not been written yet!
 
-This is the primary documentation for `yath`, [App::Yath](https://metacpan.org/pod/App::Yath), [Test2::Harness](https://metacpan.org/pod/Test2::Harness).
+This is the primary documentation for `yath`, [App::Yath](https://metacpan.org/pod/App%3A%3AYath), [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness).
 
 The canonical source of up-to-date command options are the help output when
 using `$ yath help` and `$ yath help COMMAND`.
@@ -17,13 +17,13 @@ This document is mainly an overview of `yath` usage and common recipes.
 
 # OVERVIEW
 
-To use [Test2::Harness](https://metacpan.org/pod/Test2::Harness), you use the `yath` command. Yath will find the tests
+To use [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness), you use the `yath` command. Yath will find the tests
 (or use the ones you specify) and run them. As it runs, it will output
 diagnostic information such as failures. At the end, yath will print a summary
 of the test run.
 
 `yath` can be thought of as a more powerful alternative to `prove`
-([Test::Harness](https://metacpan.org/pod/Test::Harness))
+([Test::Harness](https://metacpan.org/pod/Test%3A%3AHarness))
 
 # RECIPES
 
@@ -62,7 +62,7 @@ You can preload as many modules as you want:
 
 ### COMPLEX PRELOAD
 
-If your preload is a subclass of [Test2::Harness::Runner::Preload](https://metacpan.org/pod/Test2::Harness::Runner::Preload) then more
+If your preload is a subclass of [Test2::Harness::Runner::Preload](https://metacpan.org/pod/Test2%3A%3AHarness%3A%3ARunner%3A%3APreload) then more
 complex preload behavior is possible. See those docs for more info.
 
 ## LOGGING
@@ -277,9 +277,9 @@ This implies HARNESS-NO-PRELOAD.
 
 ### HARNESS-NO-STREAM
 
-`yath` usually uses the [Test2::Formatter::Stream](https://metacpan.org/pod/Test2::Formatter::Stream) formatter instead of TAP.
+`yath` usually uses the [Test2::Formatter::Stream](https://metacpan.org/pod/Test2%3A%3AFormatter%3A%3AStream) formatter instead of TAP.
 Some tests depend on using a TAP formatter. This option will make `yath` use
-[Test2::Formatter::TAP](https://metacpan.org/pod/Test2::Formatter::TAP) or [Test::Builder::Formatter](https://metacpan.org/pod/Test::Builder::Formatter).
+[Test2::Formatter::TAP](https://metacpan.org/pod/Test2%3A%3AFormatter%3A%3ATAP) or [Test::Builder::Formatter](https://metacpan.org/pod/Test%3A%3ABuilder%3A%3AFormatter).
 
 ### HARNESS-NO-TIMEOUT
 
@@ -371,7 +371,7 @@ to mark the test with LONG or MEDIUM in addition to this marker.
 
 # MODULE DOCS
 
-This section documents the [App::Yath](https://metacpan.org/pod/App::Yath) module itself.
+This section documents the [App::Yath](https://metacpan.org/pod/App%3A%3AYath) module itself.
 
 ## SYNOPSIS
 

@@ -1,5 +1,24 @@
 Revision history for Test2-Harness-Renderer-JUnit
 
+1.000000 2020-02-08 - Todd Rinaldo
+ - Release to conform with major_refactor branch of Test2::Harness
+ - Add missing --renderer options to SYNOPSIS example
+ - Always load Data::Dumper for error handling
+ - Open the XML file handle with the UTF-8 encoding layer
+ - Remove -T flag from all tests
+ - Require Perl 5.10.0 everywhere (rather than 5.10.0)
+ - Update README.md from POD
+ - Update example in POD to suggest a different filename and reduce jobs to 4
+ - Performance optimization when rendering XML
+ - Remove boilerplate checks now we're clear
+ - Remove generated META files from source control.
+ - Job ID are reused on rerun now with major_refactor
+ - Add the job ID to the XML output
+ - Add a timestamp for each testsuite entry
+ - Add classname to every testcase
+ - Add extra debug information when time stamps are missing. This is considered fatal now in the major_refactor branch.
+ - Bump version requirement for Test2::Harness 1.000000 to require the major_refactor changes.
+
 0.001077 2019-05-24 - Todd Rinaldo
-        First version based on unreleased Upstream Test2::Harness.
+ - First version based on unreleased Upstream Test2::Harness.
 

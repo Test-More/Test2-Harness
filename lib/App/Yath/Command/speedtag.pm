@@ -8,6 +8,8 @@ use Test2::Harness::Util::File::JSONL;
 
 use App::Yath::Options;
 
+use Cwd qw/getcwd/;
+
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/-log_file -max_short -max_medium/;
 use Test2::Harness::Util qw/clean_path/;
@@ -26,6 +28,11 @@ option_group {prefix => 'speedtag', category => 'speedtag options'} => sub {
 
         normalize => \&normalize_duration,
         action    => \&duration_action,
+    );
+
+    option pretty => (
+        description => "Generate a pretty 'durations.json' file when combined with --generate-durations-file. (sorted and multilines)",
+        default     => 0,
     );
 };
 
@@ -77,6 +84,8 @@ sub run {
     my $args     = $self->args;
 
     shift @$args if @$args && $args->[0] eq '--';
+
+    my $initial_dir = clean_path(getcwd());
 
     $self->{+LOG_FILE} = shift @$args or die "You must specify a log file";
     die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
@@ -154,13 +163,18 @@ sub run {
             print $fh @lines;
             close($fh);
 
-            $durations{ $job->{file} } = uc( $dur ) if $durations_file;
+            if ( $durations_file ) {
+                my $tfile = $job->{file};
+                $tfile =~ s{^\Q$initial_dir\E/+}{};
+                $durations{ $tfile } = uc( $dur );
+            }
+
             print "Tagged '$dur': $job->{file}\n";
         }
     }
 
     if ( $durations_file ) {
-        my $jfile = Test2::Harness::Util::File::JSON->new(name => $durations_file );
+        my $jfile = Test2::Harness::Util::File::JSON->new(name => $durations_file, pretty => $self->settings->speedtag->pretty );
         $jfile->write( \%durations );
     }
 

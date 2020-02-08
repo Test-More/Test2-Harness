@@ -31,3 +31,4 @@ inc/
 /MANIFEST.bak
 /pm_to_blib
 /*.zip
+/Test2-Harness-Renderer-JUnit-*

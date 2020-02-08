@@ -86,9 +86,23 @@ sub write_file {
     return @content;
 };
 
+my %COMPRESSION = (
+    bz2 => {module => 'IO::Uncompress::Bunzip2', errors => \$IO::Uncompress::Bunzip2::Bunzip2Error},
+    gz  => {module => 'IO::Uncompress::Gunzip',  errors => \$IO::Uncompress::Gunzip::GunzipError},
+);
 sub open_file {
     my ($file, $mode) = @_;
     $mode ||= '<';
+
+    if ($mode eq '<' && $file =~ m/\.(gz|bz2)$/i) {
+        my $ext = lc($1);
+        my $spec = $COMPRESSION{$ext} or die "Unknown compression: $ext";
+        my $mod = $spec->{module};
+        require(mod2file($mod));
+
+        my $fh = $mod->new($file) or die "Could not open $ext file '$file' ($mode): ${$spec->{errors}}";
+        return $fh;
+    }
 
     open(my $fh, $mode, $file) or confess "Could not open file '$file' ($mode): $!";
     return $fh;

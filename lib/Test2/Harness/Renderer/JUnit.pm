@@ -220,19 +220,19 @@ sub finish {
     my $out_method = 'system-out';
     my $err_method = 'system-err';
 
-    print {$fh} $xml->testsuites(
-        map {
-            $xml->testsuite(
-                $_->{'testsuite'},
-                @{ $_->{'testcase'} },
-                $xml->$out_method( $self->_cdata( $_->{$out_method} ) ),
-                $xml->$err_method( $self->_cdata( $_->{$err_method} ) ),
-                $_->{'error-msg'} ? $xml->error( { 'message' => $_->{'error-msg'} } ) : (),
-              )
-          }
-          sort { $a->{'job_name'} <=> $b->{'job_name'} } values %{ $self->{'tests'} }
-    ) . "\n";
+    print {$fh} "<testsuites>\n";
+    my @jobs = sort { $a->{'job_name'} <=> $b->{'job_name'} } values %{ $self->{'tests'} };
+    foreach my $job (@jobs) {
+      print {$fh} $xml->testsuite(
+                $job->{'testsuite'},
+                @{ $job->{'testcase'} },
+                $xml->$out_method( $self->_cdata( $job->{$out_method} ) ),
+                $xml->$err_method( $self->_cdata( $job->{$err_method} ) ),
+                $job->{'error-msg'} ? $xml->error( { 'message' => $job->{'error-msg'} } ) : (),
+              ) . "\n";
+    }
 
+    print {$fh} "</testsuites>\n";
     close $fh;
 
     return;

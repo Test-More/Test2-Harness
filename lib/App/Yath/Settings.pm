@@ -108,8 +108,61 @@ App::Yath::Settings - Configuration settings for yath.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This module represents the options provided at the yath command line. Each
+option has a prefix, and each prefix can be accessed from the settings.
+
+=head1 SYNOPSIS
+
+    # You will rarely if ever need to construct settings yourself, usually a
+    # component of yath will expose them to you.
+    my $settings = $yath->settings;
+
+    # All prefixes have a method generated for them via AUTOLOAD
+    my $display = $settings->display;
+
+    # You can also use the prefix method
+    my $display = $settings->prefix('display');
+
+
+    # The prefix can be used in a similar way
+    my $verbose = $settings->display->verbose;
+
+See L<App::Yath::Settings::Prefix> for more details on how to use the prefixes.
+
+=head1 METHODS
+
+Note that any prefix that does not conflict with the predefined methods can be
+accessed via AUTOLOAD generating the methods as needed.
+
+=over 4
+
+=item $settings->define_prefix($prefix_name)
+
+This is used to create a prefix.
+
+=item $bool = $settings->check_prefix($prefix_name)
+
+This is used to check if a prefix is defined or not.
+
+=item $prefix = $settings->prefix($prefix_name)
+
+=item $prefix = $settings->$prefix_name
+
+This will retrieve a prefix if it exists. If the prefix is not defined this
+will throw an exception. If you are unsure if a prefix exists use
+C<$settings->check_prefix($prefix_name)>.
+
+=item $thing = $settings->build($prefix_name, $class, @args)
+
+This will create an instance of C<$class> passing the key/value pairs from the
+specified prefix as arguments. Additional arguments can be provided in
+C<@args>.
+
+=item $hashref = $settings->TO_JSON()
+
+This method allows settings to be serialized into JSON.
+
+=back
 
 =head1 SOURCE
 

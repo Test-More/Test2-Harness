@@ -20,6 +20,13 @@ sub vivify_field {
     return \(${$self}->{$field});
 }
 
+sub check_field {
+    my $self = shift;
+    my ($field) = @_;
+
+    return exists ${$self}->{$field};
+}
+
 sub field : lvalue {
     my $self = shift;
     my ($field, @args) = @_;
@@ -71,12 +78,76 @@ __END__
 
 =head1 NAME
 
-App::Yath::Settings::Prefix - Abstraction of a settings section, aka prefix.
+App::Yath::Settings::Prefix - Abstraction of a settings category, aka prefix.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This class represents a settings category (prefix) from the yath command line.
+
+=head1 SYNOPSIS
+
+    # You will rarely if ever need to construct settings yourself, usually a
+    # component of yath will expose them to you.
+    my $settings = $yath->settings;
+    my $display = $settings->display;
+
+    # Once you have your prefix you can read data from it:
+    my $verbose = $display->verbose;
+
+    # If you dislike autoload methods you can use the 'field' method:
+    my $verbose = $display->field('verbose');
+
+    # You can also change values:
+    $display->field(verbose => 1);
+
+    # You can also use the autoloaded method as an lvalue, but this breaks on
+    # perls older than 5.16, so it is not used internally, and you should only
+    # use it if you know you will never need an older perl:
+    $display->verbose = 1;
+
+=head1 METHODS
+
+Note that any field that does not conflict with the predefined methods can be
+accessed via AUTOLOAD generating the methods as needed.
+
+=over 4
+
+=item $scalar_ref = $prefix->vivify_field($field_name)
+
+This will force a field into existance. It returns a scalar reference to the
+field which can be used to set the value:
+
+    my $vref = $display->vivify_field('verbose');    # Create or find field
+    ${$vref} = 1;                                    # set verbosity to 1
+
+=item $bool = $prefix->check_field($field_name)
+
+Check if a field is defined or not.
+
+=item $val = $prefix->field($field_name)
+
+=item $val = $prefix->$field_name
+
+=item $prefix->field($field_name, $val)
+
+=item $prefix->$field_name = $val
+
+Retrieve or set the value of the specified field. This will throw an exception
+if the field does not exist.
+
+B<Note>: The lvalue form C<< $prefix->$field_name = $val >> breaks on perls
+older then 5.16.
+
+=item $thing = $prefix->build($class, @args)
+
+This will create an instance of C<$class> passing the key/value pairs from the
+prefix as arguments. Additional arguments can be provided in C<@args>.
+
+=item $hashref = $prefix->TO_JSON()
+
+This method allows settings to be serialized into JSON.
+
+=back
 
 =head1 SOURCE
 

@@ -86,7 +86,7 @@ sub run {
     my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
     $run_queue->start();
 
-    $_->setup($self->settings) for @{$self->settings->yath->plugins};
+    $_->setup($self->settings) for @{$self->settings->harness->plugins};
 
     my $stderr = File::Spec->catfile($dir, 'error.log');
     my $stdout = File::Spec->catfile($dir, 'output.log');
@@ -98,8 +98,8 @@ sub run {
         no_set_pgrp => $settings->runner->daemon,
 
         command => [
-            $^X, $settings->yath->script,
-            (map { "-D$_" } @{$settings->yath->dev_libs}),
+            $^X, $settings->harness->script,
+            (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             runner           => $dir,
             monitor_preloads => 1,

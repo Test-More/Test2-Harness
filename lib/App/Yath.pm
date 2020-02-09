@@ -33,9 +33,9 @@ sub init {
 
     $self->{+SETTINGS} //= Test2::Harness::Settings->new;
 
-    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('script')}          //= clean_path($caller[1]);
-    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('start')}           //= time();
-    ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('no_scan_plugins')} //= 0;
+    ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('script')}          //= clean_path($caller[1]);
+    ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('start')}           //= time();
+    ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('no_scan_plugins')} //= 0;
 
     $self->{+_ARGV}  //= delete($self->{argv}) // [];
     $self->{+CONFIG} //= {};
@@ -92,7 +92,7 @@ sub load_options {
         'App::Yath::Options::PreCommand',
     );
 
-    return $options if $self->{+SETTINGS}->yath->no_scan_plugins;
+    return $options if $self->{+SETTINGS}->harness->no_scan_plugins;
 
     my $option_libs = find_libraries('App::Yath::Plugin::*');
     for my $lib (sort keys %$option_libs) {
@@ -150,10 +150,10 @@ sub process_argv {
 
     $self->clear_env();
 
-    my %seen = map {((ref($_) || $_) => 1)} @{$settings->yath->plugins};
+    my %seen = map {((ref($_) || $_) => 1)} @{$settings->harness->plugins};
     for my $plugin (@{$options->used_plugins}) {
         next if $seen{$plugin}++;
-        push @{$settings->yath->plugins} => $plugin->can('new') ? $plugin->new() : $plugin;
+        push @{$settings->harness->plugins} => $plugin->can('new') ? $plugin->new() : $plugin;
     }
 
     return $self->{+_ARGV};

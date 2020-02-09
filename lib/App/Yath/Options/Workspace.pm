@@ -51,7 +51,7 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
             return;
         }
 
-        my $project = $settings->yath->project;
+        my $project = $settings->harness->project;
         my $template = join '-' => ( "yath", $project // "test", $$, "XXXXXXXX");
 
         my $tmpdir = tempdir(

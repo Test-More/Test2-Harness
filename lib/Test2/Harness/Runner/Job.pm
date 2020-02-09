@@ -373,7 +373,7 @@ sub includes {
     return @{$self->{+INCLUDES}} if $self->{+INCLUDES};
 
     my @inc = $self->runner_includes;
-    push @inc => @{$self->{+SETTINGS}->yath->orig_inc};
+    push @inc => @{$self->{+SETTINGS}->harness->orig_inc};
 
     return @{$self->{+INCLUDES} = \@inc};
 }

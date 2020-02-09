@@ -61,7 +61,7 @@ sub run {
 
     return $self->command_help($args->[0]) if @$args;
 
-    my $script = $self->settings->yath->script // $0;
+    my $script = $self->settings->harness->script // $0;
     my $maxlen = List::Util::max(map length, $self->command_list);
 
     print "\nUsage: $script COMMAND [options]\n\nAvailable Commands:\n";

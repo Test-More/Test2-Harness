@@ -35,7 +35,7 @@ sub cli_help {
     my %params = @_;
 
     my $settings = $params{settings} // {};
-    my $script   = $settings->yath->script // $0;
+    my $script   = $settings->harness->script // $0;
 
     my $cmd = $class->name;
     my (@args) = $class->doc_args;

@@ -113,7 +113,7 @@ sub find_pfile {
         return $found if $found;
     }
 
-    my $yath = $settings->yath;
+    my $yath = $settings->harness;
 
     if (my $pfile = $yath->persist_file) {
         return $pfile if -f $pfile || $params{vivify};

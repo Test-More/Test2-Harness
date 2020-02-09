@@ -104,18 +104,18 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Settings - Configuration settings for yath.
+Test2::Harness::Settings - Configuration settings for Test2::Harness.
 
 =head1 DESCRIPTION
 
-This module represents the options provided at the yath command line. Each
-option has a prefix, and each prefix can be accessed from the settings.
+This module represents the options provided at the command line. Each option
+has a prefix, and each prefix can be accessed from the settings.
 
 =head1 SYNOPSIS
 
     # You will rarely if ever need to construct settings yourself, usually a
-    # component of yath will expose them to you.
-    my $settings = $yath->settings;
+    # component of Test2::Harness will expose them to you.
+    my $settings = $thing->settings;
 
     # All prefixes have a method generated for them via AUTOLOAD
     my $display = $settings->display;

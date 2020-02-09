@@ -207,7 +207,7 @@ sub all_libs {
         push @out => 'blib/arch';
     }
 
-    push @out => map { clean_path($_) } @{$self->settings->yath->dev_libs};
+    push @out => map { clean_path($_) } @{$self->settings->harness->dev_libs};
     push @out => map { clean_path($_) } @{$self->{+INCLUDES}} if $self->{+INCLUDES};
 
     return @out;

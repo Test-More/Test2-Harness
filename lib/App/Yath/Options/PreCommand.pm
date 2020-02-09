@@ -9,7 +9,7 @@ use Test2::Harness::Util qw/mod2file clean_path/;
 
 use App::Yath::Options;
 
-option_group {prefix => 'yath', pre_command => 1} => sub {
+option_group {prefix => 'harness', pre_command => 1} => sub {
     option plugins => (
         type  => 'm',
         short => 'p',
@@ -79,7 +79,7 @@ sub plugin_action {
     $class = "App::Yath::Plugin::$class"
         unless $class =~ s/^\+//;
 
-    return if grep { $class eq (ref($_) || $_) } @{$settings->yath->plugins};
+    return if grep { $class eq (ref($_) || $_) } @{$settings->harness->plugins};
 
     my $file = mod2file($class);
     require $file;
@@ -121,8 +121,8 @@ sub post_process {
     my %params   = @_;
     my $settings = $params{settings};
 
-    $settings->yath->field(persist_file => find_pfile($settings, vivify => 1))
-        unless defined $settings->yath->persist_file;
+    $settings->harness->field(persist_file => find_pfile($settings, vivify => 1))
+        unless defined $settings->harness->persist_file;
 }
 
 1;

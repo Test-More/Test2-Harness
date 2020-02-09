@@ -101,7 +101,7 @@ sub generate_run_sub {
     if($action eq 'respawn') {
         print "$$ Respawning the runner...\n";
         $cleanup->dismiss(1);
-        exec($^X, $settings->yath->script, @{$spawn_settings->yath->orig_argv});
+        exec($^X, $settings->harness->script, @{$spawn_settings->harness->orig_argv});
         warn "exec failed!";
         exit 1;
     }

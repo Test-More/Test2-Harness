@@ -103,7 +103,7 @@ sub expand {
     if    ($letter eq "U") { return $settings->run->run_id }
     elsif ($letter eq "p") { return $$ }
     elsif ($letter eq "P") {
-        my $project = $settings->yath->project // return "";
+        my $project = $settings->harness->project // return "";
         return $project . "~";
     }
     elsif ($letter eq "S") {

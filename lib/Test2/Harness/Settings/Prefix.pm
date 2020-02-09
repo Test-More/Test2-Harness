@@ -82,13 +82,13 @@ Test2::Harness::Settings::Prefix - Abstraction of a settings category, aka prefi
 
 =head1 DESCRIPTION
 
-This class represents a settings category (prefix) from the yath command line.
+This class represents a settings category (prefix).
 
 =head1 SYNOPSIS
 
     # You will rarely if ever need to construct settings yourself, usually a
-    # component of yath will expose them to you.
-    my $settings = $yath->settings;
+    # component of Test2::Harness will expose them to you.
+    my $settings = $thing->settings;
     my $display = $settings->display;
 
     # Once you have your prefix you can read data from it:

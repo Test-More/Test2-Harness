@@ -197,7 +197,7 @@ BEGIN {
     require Time::HiRes;
     require Test2::Harness::Settings;
     my $settings = Test2::Harness::Settings->new(
-        yath => {
+        harness => {
             orig_sig        => \%ORIG_SIG,
             orig_argv       => \@ORIG_ARGV,
             orig_inc        => \@ORIG_INC,

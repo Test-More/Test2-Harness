@@ -12,7 +12,7 @@ subtest init => sub {
 
     isa_ok($one->settings, 'Test2::Harness::Settings');
 
-    is($one->settings->yath->script, clean_path(__FILE__), "Yath script set to this test file");
+    is($one->settings->harness->script, clean_path(__FILE__), "Yath script set to this test file");
 
     is($one->_argv, [foo => 'bar'], "Grabbed argv");
 
@@ -127,7 +127,7 @@ subtest load_options => sub {
     local @INC = (@INC, 't/lib');
     my $one = $CLASS->new();
 
-    $one->settings->yath->field(no_scan_plugins => 1);
+    $one->settings->harness->field(no_scan_plugins => 1);
 
     my $options = $one->load_options();
     is(
@@ -141,7 +141,7 @@ subtest load_options => sub {
 
     my $two = $CLASS->new();
 
-    $two->settings->yath->field(no_scan_plugins => 0);
+    $two->settings->harness->field(no_scan_plugins => 0);
 
     warns { $options = $two->load_options() };
     like(
@@ -179,7 +179,7 @@ subtest process_argv => sub {
     );
 
     like(
-        $one->settings->yath->dev_libs,
+        $one->settings->harness->dev_libs,
         bag {
             item qr/foo$/;
             item qr/bar$/;
@@ -196,9 +196,9 @@ subtest process_argv => sub {
 
 subtest command_from_argv => sub {
     my $one = $CLASS->new();
-    $one->settings->yath->vivify_field('persist_file');
-    $one->settings->yath->vivify_field('project');
-    $one->settings->yath->vivify_field('persist_dir');
+    $one->settings->harness->vivify_field('persist_file');
+    $one->settings->harness->vivify_field('project');
+    $one->settings->harness->vivify_field('persist_dir');
 
     like(
         warning { is($one->_command_from_argv, 'test', "Default to test") },
@@ -215,44 +215,44 @@ subtest command_from_argv => sub {
     $control = undef;
 
     $one = $CLASS->new(argv => ['-f', '--foo', 'test', '-b', '--bar']);
-    $one->settings->yath->vivify_field('persist_file');
-    $one->settings->yath->vivify_field('project');
-    $one->settings->yath->vivify_field('persist_dir');
+    $one->settings->harness->vivify_field('persist_file');
+    $one->settings->harness->vivify_field('project');
+    $one->settings->harness->vivify_field('persist_dir');
     is($one->_command_from_argv(), "test", "Found 'test' command");
     is($one->_argv, ['-f', '--foo', '-b', '--bar'], "Command was removed from argv");
 
     $one = $CLASS->new(argv => ['-f', '--foo', 'hfajhdajshfj', '-b', '--bar']);
-    $one->settings->yath->vivify_field('persist_file');
-    $one->settings->yath->vivify_field('project');
-    $one->settings->yath->vivify_field('persist_dir');
+    $one->settings->harness->vivify_field('persist_file');
+    $one->settings->harness->vivify_field('project');
+    $one->settings->harness->vivify_field('persist_dir');
     is($one->_command_from_argv(), "hfajhdajshfj", "Found 'hfajhdajshfj' command");
     is($one->_argv, ['-f', '--foo', '-b', '--bar'], "Command was removed from argv");
 
     $one = $CLASS->new(argv => ['-f', '--foo', '--help', '-b', '--bar']);
-    $one->settings->yath->vivify_field('persist_file');
-    $one->settings->yath->vivify_field('project');
-    $one->settings->yath->vivify_field('persist_dir');
+    $one->settings->harness->vivify_field('persist_file');
+    $one->settings->harness->vivify_field('project');
+    $one->settings->harness->vivify_field('persist_dir');
     is($one->_command_from_argv(), "help", "Found 'help' command");
     is($one->_argv, ['-f', '--foo', '-b', '--bar'], "Command was removed from argv");
 
     $one = $CLASS->new(argv => ['-f', '--foo', '-h', '-b', '--bar']);
-    $one->settings->yath->vivify_field('persist_file');
-    $one->settings->yath->vivify_field('project');
-    $one->settings->yath->vivify_field('persist_dir');
+    $one->settings->harness->vivify_field('persist_file');
+    $one->settings->harness->vivify_field('project');
+    $one->settings->harness->vivify_field('persist_dir');
     is($one->_command_from_argv(), "help", "Found 'help' command");
     is($one->_argv, ['-f', '--foo', '-b', '--bar'], "Command was removed from argv");
 
     $one = $CLASS->new(argv => ['-f', '--foo', 'foo.jsonl.bz2', '-b', '--bar']);
-    $one->settings->yath->vivify_field('persist_file');
-    $one->settings->yath->vivify_field('project');
-    $one->settings->yath->vivify_field('persist_dir');
+    $one->settings->harness->vivify_field('persist_file');
+    $one->settings->harness->vivify_field('project');
+    $one->settings->harness->vivify_field('persist_dir');
     warns { is($one->_command_from_argv(), "replay", "Found 'replay' command because we got a log") };
     is($one->_argv, ['-f', '--foo', 'foo.jsonl.bz2', '-b', '--bar'], "log was not removed from argv");
 
     $one = $CLASS->new(argv => ['-f', '--foo', __FILE__, '-b', '--bar']);
-    $one->settings->yath->vivify_field('persist_file');
-    $one->settings->yath->vivify_field('project');
-    $one->settings->yath->vivify_field('persist_dir');
+    $one->settings->harness->vivify_field('persist_file');
+    $one->settings->harness->vivify_field('project');
+    $one->settings->harness->vivify_field('persist_dir');
     warns { is($one->_command_from_argv(), "test", "Found 'test' command because we got a path") };
     is($one->_argv, ['-f', '--foo', __FILE__, '-b', '--bar'], "path was not removed");
 };

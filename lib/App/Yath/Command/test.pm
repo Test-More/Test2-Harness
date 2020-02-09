@@ -166,7 +166,7 @@ sub run {
     my $self = shift;
 
     my $settings = $self->settings;
-    my $plugins = $self->settings->yath->plugins;
+    my $plugins = $self->settings->harness->plugins;
 
     if ($self->start()) {
         $self->render();
@@ -218,12 +218,12 @@ sub start {
 
 sub setup_plugins {
     my $self = shift;
-    $_->setup($self->settings) for @{$self->settings->yath->plugins};
+    $_->setup($self->settings) for @{$self->settings->harness->plugins};
 }
 
 sub teardown_plugins {
     my $self = shift;
-    $_->teardown($self->settings) for @{$self->settings->yath->plugins};
+    $_->teardown($self->settings) for @{$self->settings->harness->plugins};
 }
 
 sub render {
@@ -233,7 +233,7 @@ sub render {
     my $settings  = $self->settings;
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
-    my $plugins = $self->settings->yath->plugins;
+    my $plugins = $self->settings->harness->plugins;
 
     $plugins = [grep {$_->can('handle_event')} @$plugins];
 
@@ -374,7 +374,7 @@ sub populate_queue {
 
     my $state = $self->state;
     my $tasks_queue = $self->tasks_queue;
-    my $plugins = $self->settings->yath->plugins;
+    my $plugins = $self->settings->harness->plugins;
 
     $state->queue_run($run->queue_item($plugins));
 
@@ -404,7 +404,7 @@ sub produce_summary {
     my $settings = $self->settings;
 
     my $time_data = {
-        start => $settings->yath->start,
+        start => $settings->harness->start,
         stop  => time(),
     };
 
@@ -594,8 +594,8 @@ sub start_auditor {
         stdout      => $self->auditor_writer(),
         no_set_pgrp => 1,
         command     => [
-            $^X, cover(), $settings->yath->script,
-            (map { "-D$_" } @{$settings->yath->dev_libs}),
+            $^X, cover(), $settings->harness->script,
+            (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             auditor => 'Test2::Harness::Auditor',
             $run->run_id,
@@ -622,8 +622,8 @@ sub start_collector {
         stdin       => $rh,
         no_set_pgrp => 1,
         command     => [
-            $^X, cover(), $settings->yath->script,
-            (map { "-D$_" } @{$settings->yath->dev_libs}),
+            $^X, cover(), $settings->harness->script,
+            (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             collector => 'Test2::Harness::Collector',
             $dir, $run->run_id, $runner_pid,
@@ -653,8 +653,8 @@ sub start_runner {
         stdout => File::Spec->catfile($dir, 'output.log'),
         no_set_pgrp => 1,
         command => [
-            $^X, cover(), $settings->yath->script,
-            (map { "-D$_" } @{$settings->yath->dev_libs}),
+            $^X, cover(), $settings->harness->script,
+            (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins', # Do not preload any plugin modules
             runner => $dir,
             %args,

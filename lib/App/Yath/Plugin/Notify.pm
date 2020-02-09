@@ -108,7 +108,7 @@ option_group {prefix => 'notify', category => "Notification Options", applicable
             # Do we have Email::Stuffer?
             eval { require Email::Stuffer; 1 } or die "Cannot use --email-owner without Email::Stuffer, which is not installed.\n";
 
-            push @{$settings->yath->plugins} => __PACKAGE__->new() unless grep { $_->isa(__PACKAGE__) } @{$settings->yath->plugins};
+            push @{$settings->harness->plugins} => __PACKAGE__->new() unless grep { $_->isa(__PACKAGE__) } @{$settings->harness->plugins};
         }
 
         my $use_slack = grep { $settings->notify->$_ } qw/slack_url slack_owner/;
@@ -123,7 +123,7 @@ option_group {prefix => 'notify', category => "Notification Options", applicable
 
             $settings->notify->field(slack_owner => 1) unless $set_by_cli->{slack_owner};
 
-            push @{$settings->yath->plugins} => __PACKAGE__->new() unless grep { $_->isa(__PACKAGE__) } @{$settings->yath->plugins};
+            push @{$settings->harness->plugins} => __PACKAGE__->new() unless grep { $_->isa(__PACKAGE__) } @{$settings->harness->plugins};
         }
     };
 };

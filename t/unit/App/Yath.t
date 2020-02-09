@@ -10,7 +10,7 @@ subtest init => sub {
     my $one = $CLASS->new(argv => [foo => 'bar']);
     isa_ok($one, $CLASS);
 
-    isa_ok($one->settings, 'App::Yath::Settings');
+    isa_ok($one->settings, 'Test2::Harness::Settings');
 
     is($one->settings->yath->script, clean_path(__FILE__), "Yath script set to this test file");
 

@@ -27,12 +27,12 @@ sub verify {
 
     like($text, qr/TEST PLUGIN: claim_file .*test\.tx$/m,       "claim_file(test.tx) was called");
     like($text, qr/TEST PLUGIN: claim_file .*TestPlugin\.pm$/m, "claim_file(TestPlugin.pm) was called");
-    like($text, qr/TEST PLUGIN: setup App::Yath::Settings/,     "setup() was called with settings");
-    like($text, qr/TEST PLUGIN: teardown App::Yath::Settings/,  "teardown() was called with settings");
+    like($text, qr/TEST PLUGIN: setup Test2::Harness::Settings/,     "setup() was called with settings");
+    like($text, qr/TEST PLUGIN: teardown Test2::Harness::Settings/,  "teardown() was called with settings");
 
     like(
         $text,
-        qr/TEST PLUGIN: finish asserts_seen => 5, final_data => HASH, pass => 1, settings => App::Yath::Settings, tests_seen => 5/,
+        qr/TEST PLUGIN: finish asserts_seen => 5, final_data => HASH, pass => 1, settings => Test2::Harness::Settings, tests_seen => 5/,
         "finish() was called with necessary args"
     );
 

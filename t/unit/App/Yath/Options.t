@@ -132,7 +132,7 @@ subtest init => sub {
         "Set defaults",
     );
 
-    isa_ok($one->settings, ['App::Yath::Settings'], "Generated a settings object by default");
+    isa_ok($one->settings, ['Test2::Harness::Settings'], "Generated a settings object by default");
 };
 
 subtest option => sub {

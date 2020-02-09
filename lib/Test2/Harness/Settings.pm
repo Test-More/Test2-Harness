@@ -1,4 +1,4 @@
-package App::Yath::Settings;
+package Test2::Harness::Settings;
 use strict;
 use warnings;
 
@@ -7,7 +7,7 @@ our $VERSION = '1.000000';
 use Carp();
 use Scalar::Util();
 
-use App::Yath::Settings::Prefix;
+use Test2::Harness::Settings::Prefix;
 
 sub new {
     my $class = shift;
@@ -26,8 +26,8 @@ sub new {
         my $val = delete $hash->{$key};
 
         if (Scalar::Util::blessed($val)) {
-            Carp::croak("All prefixes must contain instances of App::Yath::Settings::Prefix")
-                unless $val->isa('App::Yath::Settings::Prefix');
+            Carp::croak("All prefixes must contain instances of Test2::Harness::Settings::Prefix")
+                unless $val->isa('Test2::Harness::Settings::Prefix');
 
             $hash->{$key} = $val;
             next;
@@ -36,7 +36,7 @@ sub new {
         Carp::croak("All prefixes must be defined as hashes")
             unless ref($val) eq 'HASH';
 
-        $hash->{$key} = App::Yath::Settings::Prefix->new(%$val);
+        $hash->{$key} = Test2::Harness::Settings::Prefix->new(%$val);
     }
 
     return bless(\$hash, $class);
@@ -46,7 +46,7 @@ sub define_prefix {
     my $self = shift;
     my ($prefix) = @_;
 
-    return ${$self}->{$prefix} //= App::Yath::Settings::Prefix->new;
+    return ${$self}->{$prefix} //= Test2::Harness::Settings::Prefix->new;
 }
 
 sub check_prefix {
@@ -104,7 +104,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Settings - Configuration settings for yath.
+Test2::Harness::Settings - Configuration settings for yath.
 
 =head1 DESCRIPTION
 
@@ -127,7 +127,7 @@ option has a prefix, and each prefix can be accessed from the settings.
     # The prefix can be used in a similar way
     my $verbose = $settings->display->verbose;
 
-See L<App::Yath::Settings::Prefix> for more details on how to use the prefixes.
+See L<Test2::Harness::Settings::Prefix> for more details on how to use the prefixes.
 
 =head1 METHODS
 

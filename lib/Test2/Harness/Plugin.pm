@@ -64,7 +64,7 @@ line.
 C<$default_search> is an arrayref with the default files/directories pulled in
 when nothing is specified at the command ine.
 
-C<$settings> is an instance of L<App::Yath::Settings>
+C<$settings> is an instance of L<Test2::Harness::Settings>
 
 =item $plugin->claim_file
 

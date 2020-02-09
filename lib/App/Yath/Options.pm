@@ -9,7 +9,7 @@ use Scalar::Util qw/blessed/;
 use Test2::Harness::Util qw/mod2file/;
 
 use App::Yath::Option();
-use App::Yath::Settings();
+use Test2::Harness::Settings();
 
 use Test2::Harness::Util::HashBase qw{
     <all <lookup
@@ -98,7 +98,7 @@ sub init {
     $self->{+CMD_LIST} //= [];
     $self->{+POST_LIST} //= [];
 
-    $self->{+SETTINGS} //= App::Yath::Settings->new();
+    $self->{+SETTINGS} //= Test2::Harness::Settings->new();
 
     $self->{+INCLUDED} //= {};
 

@@ -52,7 +52,7 @@ sub generate_run_sub {
 
     $0 = $ENV{NESTED_YATH} ? 'yath-nested-runner' : 'yath-runner';
 
-    my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+    my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
 
     my $cleanup = $class->cleanup($settings, \%args, $dir);
 

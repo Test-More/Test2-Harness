@@ -1,4 +1,4 @@
-use Test2::V0 -target => 'App::Yath::Settings::Prefix';
+use Test2::V0 -target => 'Test2::Harness::Settings::Prefix';
 
 my $one = $CLASS->new();
 isa_ok($one, [$CLASS], "Created an instance");

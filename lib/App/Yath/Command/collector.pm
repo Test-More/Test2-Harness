@@ -28,7 +28,7 @@ sub run {
 
     my $fh = isolate_stdout();
 
-    my $settings = App::Yath::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+    my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
 
     require(mod2file($collector_class));
 

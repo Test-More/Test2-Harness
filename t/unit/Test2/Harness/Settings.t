@@ -1,4 +1,4 @@
-use Test2::V0 -target => 'App::Yath::Settings';
+use Test2::V0 -target => 'Test2::Harness::Settings';
 use File::Temp qw/tempfile/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
@@ -10,7 +10,7 @@ like(dies { $one->foo }, qr/The 'foo' prefix is not defined/, "Cannot call foo i
 like(dies { $one->prefix('foo') }, qr/The 'foo' prefix is not defined/, "Cannot call prefix(foo) if it is not defined");
 
 $one->define_prefix('foo');
-isa_ok($one->foo, ['App::Yath::Settings::Prefix'], "Defined the prefix");
+isa_ok($one->foo, ['Test2::Harness::Settings::Prefix'], "Defined the prefix");
 ok($one->check_prefix('foo'), "foo is now defined");
 ok($one->foo, "Can call foo if it is defined");
 ok($one->prefix('foo'), "Can call prefix(foo) if it is defined");
@@ -57,7 +57,7 @@ like(
 
 like(
     dies { $CLASS->new(foo => bless({}, 'XXX')) },
-    qr/All prefixes must contain instances of App::Yath::Settings::Prefix/,
+    qr/All prefixes must contain instances of Test2::Harness::Settings::Prefix/,
     "Blessed Prefixes must be prefixes"
 );
 

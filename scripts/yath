@@ -195,8 +195,8 @@ BEGIN {
 
     require App::Yath;
     require Time::HiRes;
-    require App::Yath::Settings;
-    my $settings = App::Yath::Settings->new(
+    require Test2::Harness::Settings;
+    my $settings = Test2::Harness::Settings->new(
         yath => {
             orig_sig        => \%ORIG_SIG,
             orig_argv       => \@ORIG_ARGV,

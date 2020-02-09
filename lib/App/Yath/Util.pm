@@ -208,7 +208,7 @@ import.
 
 =item $path_to_pfile = find_pfile($settings, %params)
 
-The first argument must be an instance of L<App::Yath::Settings>.
+The first argument must be an instance of L<Test2::Harness::Settings>.
 
 Currently the only supported param is C<vivify>, when set to true the pfile
 will be created if one does not already exist.

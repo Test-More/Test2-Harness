@@ -31,7 +31,7 @@ sub init {
 
     my @caller = caller(1);
 
-    $self->{+SETTINGS} //= App::Yath::Settings->new;
+    $self->{+SETTINGS} //= Test2::Harness::Settings->new;
 
     ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('script')}          //= clean_path($caller[1]);
     ${$self->{+SETTINGS}->define_prefix('yath')->vivify_field('start')}           //= time();

@@ -1,4 +1,4 @@
-package App::Yath::Settings::Prefix;
+package Test2::Harness::Settings::Prefix;
 use strict;
 use warnings;
 
@@ -78,7 +78,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Settings::Prefix - Abstraction of a settings category, aka prefix.
+Test2::Harness::Settings::Prefix - Abstraction of a settings category, aka prefix.
 
 =head1 DESCRIPTION
 

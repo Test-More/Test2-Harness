@@ -265,17 +265,17 @@ sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_ex
 sub args { @{$_[0]->{+ARGS} //= $_[0]->_fallback(test_args => [], qw/task run/)} }
 sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }
 
+sub cli_includes {
+    my $self = shift;
 
-#<<< no-tidy
-sub cli_includes { @{$_[0]->{+CLI_INCLUDES} //= [
-        map {("-I$_")}
-        map { $INC{"App/Yath/Command/projects.pm"} || ( $ENV{YATH_CMD} // '' ) eq 'projects' ? $_ : clean_path($_) }
-        $_[0]->includes
-        ]}
+    $self->{+CLI_INCLUDES} //= [
+        map { "-I" . clean_path($self->{+CH_DIR} ? File::Spec->catdir($self->{+CH_DIR}, $_) : $_) } $self->includes,
+    ];
+
+    return @{$self->{+CLI_INCLUDES}};
 }
 
 sub runner_includes { @{$_[0]->{+RUNNER_INCLUDES} //= [$_[0]->{+RUNNER}->all_libs]} }
-#>>>
 
 sub _fallback {
     my $self = shift;

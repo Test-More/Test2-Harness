@@ -29,13 +29,24 @@ App::Yath::Plugin - Base class for yath plugins
 This is a base class for yath plugins. Note this class also subclasses
 L<Test2::Harness::Plugin>.
 
+This class holds the methods specific to yath, which is the UI layer.
+L<Test2::Harness::Plugin> holds the methods specific to L<Test2::Harness> which
+is the backend.
+
 =head1 SYNOPSIS
+
+    package App::Yath::Plugin::MyPlugin;
 
     use parent 'App::Yath::Plugin';
 
     # ... Define methods
 
     1;
+
+
+Then to use it at the command line:
+
+    $ yath -pMyPlugin ...
 
 =head1 NOTE ON INSTANCE VS CLASS
 

@@ -33,8 +33,55 @@ Test2::Harness::Plugin - Base class for Test2::Harness plugins.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This class holds the methods specific to L<Test2::Harness> which
+is the backend. Most of the time you actually want to subclass
+L<App::Yath::Plugin> which subclasses this class, and holds additional methods
+that apply to yath (the UI layer).
+
+=head1 SYNOPSIS
+
+You probably want to subclass L<App::Yath::Plugin> instead. This class here
+mainly exists to separate concerns, but is not something you should use
+directly.
+
+    package Test2::Harness::Plugin::MyPlugin;
+
+    use parent 'Test2::Harness::Plugin';
+
+    # ... Define methods
+
+    1;
+
+=head1 METHODS
+
+=over 4
+
+=item $plugin->munge_search($input, $default_search, $settings)
+
+C<$input> is an arrayref of files and/or directories provided at the command
+line.
+
+C<$default_search> is an arrayref with the default files/directories pulled in
+when nothing is specified at the command ine.
+
+C<$settings> is an instance of L<App::Yath::Settings>
+
+=item $plugin->claim_file
+
+=item $plugin->munge_files
+
+=item $plugin->inject_run_data
+
+=item $plugin->setup
+
+=item $plugin->teardown
+
+=item $plugin->TO_JSON
+
+This is here as a bare minimum serialization method. It returns the plugin
+class name.
+
+=back
 
 =head1 SOURCE
 

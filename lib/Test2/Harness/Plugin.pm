@@ -66,15 +66,53 @@ when nothing is specified at the command ine.
 
 C<$settings> is an instance of L<Test2::Harness::Settings>
 
-=item $plugin->claim_file
+=item $undef_or_inst = $plugin->claim_file($path, $settings)
 
-=item $plugin->munge_files
+This is a chance for a plugin to claim a test file early, before Test2::Harness
+takes care of it. If your plugin does not want to claim the file just return
+undef. To claim the file return an instance of L<Test2::Harness::TestFile>
+created with C<$path>.
 
-=item $plugin->inject_run_data
+=item $plugin->munge_files(\@tests, $settings)
 
-=item $plugin->setup
+This is an opportunity for your plugin to modify the data for any test file
+that will be run. The first argument is an arrayref of
+L<Test2::Harness::TestFile> objects.
 
-=item $plugin->teardown
+=item $plugin->inject_run_data(meta => $meta, fields => $fields, run => $run)
+
+This is a callback that lets your plugin add meta-data or custom fields to the
+run event. The meta-data and fields are available in the event log, and are
+particularily useful to L<App::Yath::UI>.
+
+    sub inject_run_data {
+        my $class  = shift;
+        my %params = @_;
+
+        my $meta   = $params{meta};
+        my $fields = $params{fields};
+
+        # Meta-data is a hash, each plugin should define its own key, and put
+        # data under that key
+        $meta->{MyPlugin}->{stuff} = "Stuff!";
+
+        # Fields is an array of fields that a UI might want to display when showing the run.
+        push @$fields => {name => 'MyPlugin', details => "Human Friendly Stuff", raw => "Less human friendly stuff", data => $all_the_stuff};
+
+        return;
+    }
+
+=item $plugin->setup($settings)
+
+This is a callback that lets you run setup logic when the runner starts. Note
+that in a persistent runner this is run once on startup, it is not run for each
+C<run> command against the persistent runner.
+
+=item $plugin->teardown($settings)
+
+This is a callback that lets you run teardown logic when the runner stops. Note
+that in a persistent runner this is run once on termination, it is not run for
+each C<run> command against the persistent runner.
 
 =item $plugin->TO_JSON
 

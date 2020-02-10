@@ -628,7 +628,7 @@ my %DOC_FORMATS = (
     'pod' => [
         'pod_docs',                               # Method to call on opt
         "\n\n",                                   # how to join lines
-        sub { ($_[0] ? ("=back") : (), "=head3 $_[1]", "=over 4") },    # how to render the category
+        sub { ($_[0] ? ("=back") : (), "=head$_[2] $_[1]", "=over 4") },    # how to render the category
         sub { $_[0] },                                                  # transform the value from the opt
         sub { $_[0] ? ("=back") : () },                                 # add this at the end
     ],
@@ -636,7 +636,7 @@ my %DOC_FORMATS = (
 
 sub _docs {
     my $self = shift;
-    my ($opts, $format) = @_;
+    my ($opts, $format, @args) = @_;
 
     $format //= "UNDEFINED";
     my $fset = $DOC_FORMATS{$format} or croak "Invalid documentation format '$format'";
@@ -652,7 +652,7 @@ sub _docs {
     my $cat;
     for my $opt (@opts) {
         if (!$cat || $opt->category ne $cat) {
-            push @out => $fcat->($cat, $opt->category);
+            push @out => $fcat->($cat, $opt->category, @args);
             $cat = $opt->category;
         }
 

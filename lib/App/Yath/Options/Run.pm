@@ -178,8 +178,9 @@ App::Yath::Options::Run - Run options for Yath.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This is where command lines options for a single test run are defined.
+
+=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 
 =head1 SOURCE
 

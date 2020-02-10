@@ -111,8 +111,8 @@ sub generate_pod {
     my $ay = App::Yath->new();
     $options->include($ay->load_options);
     $options->set_command_class($class);
-    my $pre_opts = $options->pre_docs('pod');
-    my $cmd_opts = $options->cmd_docs('pod');
+    my $pre_opts = $options->pre_docs('pod', 3);
+    my $cmd_opts = $options->cmd_docs('pod', 3);
 
     my $usage = "    \$ yath [YATH OPTIONS] $cmd";
 
@@ -175,6 +175,155 @@ __END__
 App::Yath::Command - Base class for yath commands
 
 =head1 DESCRIPTION
+
+This is the base class for any/all yath commands. If you wish to add a new yath
+command you should subclass this package.
+
+=head1 SYNOPSIS
+
+    package App::Yath::Command::mycommand;
+    use strict;
+    use warnings;
+
+    use App::Yath::Options();
+    use parent 'App::Yath::Command';
+
+    # Include existing option sets
+    include_options(
+        'App::Yath::Options::Debug',
+        'App::Yath::Options::PreCommand',
+        ...,
+    );
+
+    # Add some custom options
+    option_group {prefix => 'mycommand', category => 'mycommand options'} => sub {
+        option foo => (
+            description => "the foo option",
+            default     => 0,
+        );
+    };
+
+    # This is used to sort/group commands in the "yath help" output
+    sub group { 'thirdparty' }
+
+    # Brief 1-line summary
+    sub summary { "This is a third party command, it does stuff..." }
+
+    # Longer description of the command (used in yath help mycommand)
+    sub description {
+        return <<"    EOT";
+    This command does:
+    This
+    That
+    Those
+        EOT
+    }
+
+    # Entrypoint
+    sub run {
+        my $self = shift;
+
+        my $settings = $self->settings;
+        my $args     = $self->args;
+
+        print "Hello Third Party!\n"
+
+        # Return an exit value.
+        return 0;
+    }
+
+=head1 CLASS METHODS
+
+=over 4
+
+=item $string = $cmd_class->cli_help(settings => $settings, options => $options)
+
+This method generates the command line help for any given command. In general
+you will NOT want to override this.
+
+$settings should be an instance of L<Test2::Harness::Settings>.
+
+$options should be an instance of L<App::Yath::Options> if provided. This
+method is usually capable of filling in the details when this is omitted.
+
+=item $multi_line_string = $cmd_class->description()
+
+Long-form description of the command. Used in C<cli_help()>.
+
+=item @list = $cmd_class->doc_args()
+
+A list of argument names to the command, used to generate documentation.
+
+=item $string = $cmd_class->generate_pod()
+
+This can be used to generate POD documentation from the command itself using
+the other fields listed in this section, as well as all applicable command
+lines options specified in the command.
+
+=item $string = $cmd_class->group()
+
+Used for sorting/grouping commands in the C<yath help> output.
+
+Existing groups:
+
+    ' test'     # Space in front to make sure test related command float up
+    'log'       # Log processing commands
+    'persist'   # Commands related to the persistent runner
+    'zinit'     # The init command and related command sink to the bottom.
+
+Unless your command OBVIOUSLY and CLEARLY belongs in one of the above groups
+you should probably create your own. Please do not prefix it with a space to
+make it float, C<' test'> is a special case, you are not that special.
+
+=item $string = $cmd_class->name()
+
+Name of the command. By default this is the last part of the package name. You
+will probably never want to override this.
+
+=item $short_string = $cmd_class->summary()
+
+A short summary of what this command is.
+
+=back
+
+=head1 OBJECT METHODS
+
+=over 4
+
+=item $bool = $cmd->always_keep_dir()
+
+By default the working directory is deleted when yath exits. Some commands such
+as L<App::Yath::Command::start> need to keep the directory. Override this
+method to return true if your command uses the workdir and needs to keep it.
+
+=item $arrayref = $cmd->args()
+
+Get an arrayref of command line arguments B<AFTER> options have been
+process/removed.
+
+=item $bool = $cmd->internal_only()
+
+Set this to true if you do not want your command to show up in the help output.
+
+=item $exit_code = $cmd->run()
+
+This is the main entrypoint for the command. You B<MUST> override this. This
+method should return an exit code.
+
+=item $settings = $cmd->settings()
+
+Get the settings as populated by the command line options.
+
+=item $cmd->write_settings_to($directory, $filename)
+
+A helper method to write the settings to a specified directory and filename.
+File is written as JSON.
+
+If you are subclassing another command such as L<App::Yath::Command::test> you
+may want to override this to a no-op to prevent the settings file from being
+written, the L<App::Yath::Command:run> command does this.
+
+=back
 
 =head1 SOURCE
 

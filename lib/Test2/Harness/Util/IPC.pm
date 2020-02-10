@@ -38,7 +38,7 @@ sub swap_io {
     $die ||= sub {
         my @caller = caller;
         my @caller2 = caller(1);
-        die("$_[0] at $caller[1] line $caller[2] ($caller2[1] line $caller2[2]).\n");
+        die("$_[0] at $caller[1] line $caller[2] ($caller2[1] line $caller2[2], ${ \__FILE__ } line ${ \__LINE__ }).\n");
     };
 
     my $orig_fd;
@@ -129,7 +129,7 @@ sub _run_cmd_spwn {
     my $die = sub {
         my $caller1 = $params{caller1};
         my $caller2 = $params{caller2};
-        my $msg = "$_[0] at $caller1->[1] line $caller1->[2] ($caller2->[1] line $caller2->[2]).\n";
+        my $msg = "$_[0] at $caller1->[1] line $caller1->[2] ($caller2->[1] line $caller2->[2], ${ \__FILE__ } line ${ \__LINE__ }).\n";
         print $OLD_STDERR $msg;
         print STDERR $msg;
         POSIX::_exit(127);
@@ -154,7 +154,7 @@ sub _run_cmd_spwn {
     }
 
     die $err unless $ok;
-    die "Spawn resulted in code $bad" if $bad;
+    die "Spawn resulted in code $bad" if $bad && $bad != $pid;
     die "Failed to spawn" unless $pid;
 
     return $pid;

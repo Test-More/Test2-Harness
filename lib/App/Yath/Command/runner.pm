@@ -277,7 +277,10 @@ sub build_init_state {
 
     # Make sure our specified includes are at the front of the list.
     my %seen;
-    @INC = grep { !$seen{$_}++ } $job->unsafe_inc ? ('.') : (), map { clean_path( $_ ) } $job->includes, @INC;
+    @INC = grep { !$seen{$_}++ } $job->unsafe_inc ? ('.') : (), map {
+        my $p = clean_path( $_ );
+        index($p, '/', 0 ) != 0 || -d $p ? $p : ()
+    } $job->includes, @INC;
 
     # if FindBin is preloaded, reset it with the new $0
     FindBin::init() if defined &FindBin::init;

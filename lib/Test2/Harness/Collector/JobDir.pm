@@ -14,7 +14,7 @@ use Test2::Util qw/ipc_separator/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util qw/maybe_read_file open_file/;
+use Test2::Harness::Util qw/maybe_read_file open_file apply_encoding/;
 
 use Test2::Harness::Event;
 
@@ -375,7 +375,7 @@ sub _open_file {
         unless ref $type;
 
     return undef unless -e $path;
-    return $self->{$key} = $type->($path, '<:utf8');
+    return $self->{$key} = $type->($path, '<');
 }
 
 sub _fill_stream_buffers {
@@ -389,8 +389,8 @@ sub _fill_stream_buffers {
     my $stderr_file = $self->{+STDERR_FILE} || $self->_open_file('stderr');
 
     my @sets = grep { defined $_->[0] } (
-        [$stdout_file, $stdout_buff],
-        [$stderr_file, $stderr_buff],
+        [$stdout_file, $stdout_buff, 'io'],
+        [$stderr_file, $stderr_buff, 'io'],
     );
 
     return unless @sets;
@@ -401,13 +401,18 @@ sub _fill_stream_buffers {
         my $added        = 0;
         my @events_files = $self->events_files();
         for my $set (@events_files, @sets) {
-            my ($file, $buff) = @$set;
+            my ($file, $buff, $type) = @$set;
             next if $max && @$buff > $max;
 
             my $pos  = tell($file);
             my $line = <$file>;
             if (defined($line) && ($self->{+_EXIT_DONE} || substr($line, -1) eq "\n")) {
-                push @$buff => $line;
+                my $job_id = $self->{+JOB_ID};
+                if ($type eq 'io' && $line =~ s/T2-HARNESS-\Q$job_id\E-ENCODING: (.+)\n$//) {
+                    apply_encoding($file, $1);
+                }
+
+                push @$buff => $line if length($line);
                 seek($file, 0, 1) if eof($file);    # Reset EOF.
                 $added++;
             }
@@ -433,11 +438,11 @@ sub events_files {
         next unless '.jsonl' eq substr($file, -6);
         $files->{$file} ||= [
             split(ipc_separator() => substr(substr($file, 6 + length(ipc_separator())), 0, -6)),
-            open_file(File::Spec->catfile($dir, $file), '<:utf8'),
+            open_file(File::Spec->catfile($dir, $file), '<'),
         ];
     }
 
-    return map { [$_->[2] => $buff->{$_->[0]}->{$_->[1]} ||= []] } values %$files;
+    return map { [$_->[2] => $buff->{$_->[0]}->{$_->[1]} ||= [], 'jsonl'] } values %$files;
 }
 
 sub _fill_buffers {

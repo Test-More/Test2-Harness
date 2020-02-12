@@ -11,7 +11,7 @@ use File::Spec();
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON JSON_IS_XS/;
-use Test2::Harness::Util qw/hub_truth/;
+use Test2::Harness::Util qw/hub_truth apply_encoding/;
 
 use Test2::Util qw/get_tid ipc_separator/;
 
@@ -23,6 +23,7 @@ BEGIN {
     $J->indent(0);
     $J->convert_blessed(1);
     $J->allow_blessed(1);
+    $J->utf8(1);
 
     require constant;
     constant->import(ENCODER => $J);
@@ -33,6 +34,7 @@ BEGIN {
         $JPP->indent(0);
         $JPP->convert_blessed(1);
         $JPP->allow_blessed(1);
+        $JPP->utf8(1);
 
         constant->import(ENCODER_PP => $JPP);
     }
@@ -85,8 +87,11 @@ sub fh {
 
     mkdir($dir) or die "Could not make dir '$dir': $!" unless -d $dir;
     confess "File '$file' already exists!" if -f $file;
-    open(my $fh, '>:utf8', $file) or die "Could not open file: $file";
+    open(my $fh, '>', $file) or die "Could not open file: $file";
     $fh->autoflush(1);
+
+    # Do not apply encoding to the UTF8 output, we let the utf8 formatter
+    # handle that. This means do not apply encoding to $self->{+_FH}.
 
     return $self->{+_FH} = $fh;
 }
@@ -98,25 +103,20 @@ sub init {
 
     for (@{$self->{+IO}}) {
         $_->autoflush(1);
-        binmode($_, ":utf8") for @{$self->{+IO}};
     }
 
     STDOUT->autoflush(1);
-    binmode(STDOUT, ":utf8");
     STDERR->autoflush(1);
-    binmode(STDERR, ":utf8");
 
     if ($INC{'Test2/API.pm'}) {
         Test2::API::test2_stdout()->autoflush(1);
         Test2::API::test2_stderr()->autoflush(1);
-        binmode($_, ":utf8") for (Test2::API::test2_stdout(), Test2::API::test2_stderr());
     }
 
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;
         $self->{+TB} = Test::Builder::Formatter->new();
         $self->{+TB_HANDLES} = [@{$self->{+TB}->handles}];
-        binmode($_, ":utf8") for @{$self->{+TB_HANDLES}};
     }
 }
 
@@ -250,7 +250,7 @@ sub record {
 
     my $job_id = $self->{+JOB_ID};
 
-    print $fh $leader ? ("T2--HARNESS-$job_id-EVENT: ", $json, "\n") : ($json, "\n");
+    print $fh $leader ? ("T2-HARNESS-$job_id-EVENT: ", $json, "\n") : ($json, "\n");
 
     print $_ "T2-HARNESS-$job_id-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
 }
@@ -260,7 +260,6 @@ sub encoding {
 
     if (@_) {
         my ($enc) = @_;
-        confess "Stream formatter only supports utf8" unless $enc =~ m/^utf-?8$/i;
         $self->record({control => {encoding => $enc}});
         $self->_set_encoding($enc);
         $self->{+TB}->encoding($enc) if $self->{+TB};
@@ -275,11 +274,17 @@ sub _set_encoding {
     if (@_) {
         my ($enc) = @_;
 
-        # https://rt.perl.org/Public/Bug/Display.html?id=31923
-        # If utf8 is requested we use ':utf8' instead of ':encoding(utf8)' in
-        # order to avoid the thread segfault.
-        confess "Stream formatter only supports utf8" unless $enc =~ m/^utf-?8$/i;
-        binmode($_, ":utf8") for @{$self->{+IO}};
+        # Do not apply encoding to the UTF8 output, we let the utf8 formatter
+        # handle that. This means do not apply encoding to $self->{+_FH}.
+
+        apply_encoding(\*STDOUT, $enc);
+        apply_encoding(\*STDERR, $enc);
+
+        my $job_id = $self->{+JOB_ID};
+        for my $fh (@{$self->{+IO}}) {
+            print $fh "T2-HARNESS-$job_id-ENCODING: $enc\n";
+            apply_encoding($fh, $enc);
+        }
     }
 
     return $self->{+_ENCODING};

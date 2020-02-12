@@ -29,7 +29,20 @@ our @EXPORT_OK = qw{
     write_file_atomic
 
     hub_truth
+
+    apply_encoding
 };
+
+sub apply_encoding {
+    my ($fh, $enc) = @_;
+    return unless $enc;
+
+    # https://rt.perl.org/Public/Bug/Display.html?id=31923
+    # If utf8 is requested we use ':utf8' instead of ':encoding(utf8)' in
+    # order to avoid the thread segfault.
+    return binmode($fh, ":utf8") if $enc =~ m/^utf-?8$/i;
+    binmode($fh, ":encoding($enc)");
+}
 
 sub parse_exit {
     my ($exit) = @_;

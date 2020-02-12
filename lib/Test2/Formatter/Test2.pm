@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '1.000000';
 
 use Test2::Util::Term qw/term_size/;
-use Test2::Harness::Util qw/hub_truth/;
+use Test2::Harness::Util qw/hub_truth apply_encoding/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32 clone_io/;
 use Time::HiRes qw/time/;
@@ -26,7 +26,9 @@ use Test2::Util::HashBase qw{
     -composer
     -last_depth
     -_buffered
-    -io
+    <job_io
+    +io
+    <enc_io
     -_encoding
     -show_buffer
     -color
@@ -194,20 +196,31 @@ sub init {
     }
 }
 
+sub io {
+    my $self = shift;
+    my ($job_id) = @_;
+    return $self->{+IO} unless defined $job_id;
+    return $self->{+JOB_IO}->{$job_id} // $self->{+IO};
+}
+
 sub encoding {
     my $self = shift;
 
     if (@_) {
-        my ($enc) = @_;
+        my ($enc, $job_id) = @_;
+        if (defined $job_id) {
+            my $io;
 
-        # https://rt.perl.org/Public/Bug/Display.html?id=31923
-        # If utf8 is requested we use ':utf8' instead of ':encoding(utf8)' in
-        # order to avoid the thread segfault.
-        if ($enc =~ m/^utf-?8$/i) {
-            binmode($self->{+IO}, ":utf8");
+            unless ($io = $self->{+ENC_IO}->{$enc}) {
+                $io = $self->{+ENC_IO}->{$enc} = clone_io($self->{+IO} || \*STDOUT) or die "Cannot get a filehandle: $!";
+                $io->autoflush(1);
+                apply_encoding($io, $enc);
+            }
+
+            $self->{+JOB_IO}->{$job_id} = $io;
         }
         else {
-            binmode($self->{+IO}, ":encoding($enc)");
+            apply_encoding($self->{+IO}, $enc);
         }
         $self->{+_ENCODING} = $enc;
     }
@@ -227,7 +240,8 @@ sub write {
 
     $self->{+ECOUNT}++;
 
-    $self->encoding($f->{control}->{encoding}) if $f->{control}->{encoding};
+    my $job_id = $f->{harness}->{job_id};
+    $self->encoding($f->{control}->{encoding}, $job_id) if $f->{control}->{encoding};
 
     my $hf = hub_truth($f);
     my $depth = $hf->{nested} || 0;
@@ -263,14 +277,13 @@ sub write {
         }
     }
 
-    my $job_id = $f->{harness}->{job_id};
     push @{$self->{+JOB_COLORS}->{free}} => delete $self->{+JOB_COLORS}->{used}->{$job_id}
         if $job_id && $f->{harness_job_end};
 
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
 
-    my $io = $self->{+IO};
+    my $io = $self->io($job_id);
     if ($self->{+_BUFFERED}) {
         print $io "\r\e[K";
         $self->{+_BUFFERED} = 0;
@@ -290,6 +303,8 @@ sub write {
     else {
         print $io $_, "\n" for @$lines;
     }
+
+    delete $self->{+JOB_IO}->{$job_id} if $job_id && $f->{harness_job_end};
 }
 
 sub finalize {

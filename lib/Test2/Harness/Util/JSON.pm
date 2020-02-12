@@ -43,7 +43,7 @@ BEGIN {
 
 }
 
-our @EXPORT = qw{JSON encode_json decode_json encode_pretty_json encode_canon_json};
+our @EXPORT = qw{JSON encode_json decode_json decode_json_non_utf8 encode_pretty_json encode_canon_json};
 our @EXPORT_OK = qw{JSON_IS_PP JSON_IS_XS JSON_IS_CPANEL JSON_IS_CPANEL_OR_XS};
 BEGIN { require Exporter; our @ISA = qw(Exporter) }
 
@@ -73,6 +73,24 @@ sub decode_json {
     return $data if $ok;
     my $mess = Carp::longmess("JSON decode error: $error");
     die "$mess\n=======\n$input\n=======\n";
+}
+
+# This is here because Test2::Formatter::Stream's JSON encoder
+# doesn't encode as UTF-8 (i.e., its utf8() mode is not enabled).
+# Thus, we need the logic that decodes that JSON not to decode UTF-8.
+sub decode_json_non_utf8 {
+    my ($input) = @_;
+    my $data;
+
+    local $@;
+    my $error;
+
+    eval { $data = $json_non_utf8->decode($input); 1 } or do {
+        my $mess = Carp::longmess("JSON decode error: $@");
+        die "$mess\n=======\n$input\n=======\n";
+    };
+
+    return $data;
 }
 
 1;

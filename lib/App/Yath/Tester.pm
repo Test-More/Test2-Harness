@@ -13,7 +13,7 @@ use File::Temp qw/tempfile tempdir/;
 use POSIX;
 
 use App::Yath::Util qw/find_yath/;
-use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util qw/clean_path apply_encoding/;
 use Test2::Harness::Util::IPC qw/run_cmd/;
 use Test2::Harness::Util::File::JSONL;
 
@@ -42,6 +42,7 @@ sub yath {
     my $cli = delete $params{cli} // delete $params{args} // [];
     my $pre = delete $params{pre} // delete $params{pre_command} // [];
     my $env = delete $params{env} // {};
+    my $enc = delete $params{encoding};
 
     my $subtest  = delete $params{test} // delete $params{tests} // delete $params{subtest};
     my $exittest = delete $params{exit};
@@ -102,6 +103,8 @@ sub yath {
     my (@lines, $exit);
     if ($capture) {
         close($wh);
+
+        apply_encoding($rh, $enc) if $enc;
 
         $rh->blocking(0);
         while (1) {

@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '1.000000';
 
 use IPC::Cmd qw/can_run/;
+use Test2::Harness::Util::IPC qw/run_cmd/;
 use parent 'App::Yath::Plugin';
 
 sub inject_run_data {
@@ -20,10 +21,25 @@ sub inject_run_data {
     my $branch    = $ENV{GIT_BRANCH};
 
     if (my $cmd = can_run('git')) {
-        chomp($long_sha  ||= `$cmd rev-parse HEAD`);
-        chomp($short_sha ||= `$cmd rev-parse --short HEAD`);
-        chomp($status    ||= `$cmd status -s`);
-        chomp($branch    ||= `$cmd rev-parse --abbrev-ref HEAD`);
+        my @sets = (
+            [\$long_sha, 'rev-parse', 'HEAD'],
+            [\$short_sha, 'rev-parse', '--short', 'HEAD'],
+            [\$status, 'status', '-s'],
+            [\$branch, 'rev-parse', '--abbrev-ref', 'HEAD'],
+        );
+
+        for my $set (@sets) {
+            my ($var, @args) = @$set;
+
+            my ($rh, $wh, $irh, $iwh);
+            pipe($rh, $wh) or die "No pipe: $!";
+            pipe($irh, $iwh) or die "No pipe: $!";
+            my $pid = run_cmd(stderr => $iwh, stdout => $wh, command => [$cmd, @args]);
+            waitpid($pid, 0);
+            next if $?;
+            close($wh);
+            chomp($$var = join "\n" => <$rh>);
+        }
     }
 
     return unless $long_sha;

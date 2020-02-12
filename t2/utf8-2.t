@@ -11,8 +11,6 @@ use Test2::Util qw/get_tid ipc_separator/;
 # HARNESS-DURATION-SHORT
 
 print STDOUT "STDOUT: Mākaha\n";
-print STDERR "STDERR: Mākaha\n";
-diag "DIAG: Mākaha";
 note "NOTE: Mākaha";
 ok(1, "ASSERT: Mākaha");
 
@@ -25,17 +23,13 @@ skip_all "This test requires the stream formatter"
 my $file = File::Spec->catfile($fmt->dir, join(ipc_separator() => 'events', $$, 0) . ".jsonl");
 open(my $events_fh, '<:utf8', $file) or die "Could not open events file: $!";
 open(my $stdout_fh, '<:utf8', File::Spec->catfile($ENV{TEST2_JOB_DIR}, 'stdout')) or die "Could not open STDOUT for reading: $!";
-open(my $stderr_fh, '<:utf8', File::Spec->catfile($ENV{TEST2_JOB_DIR}, 'stderr')) or die "Could not open STDERR for reading: $!";
 
 my @events = map { decode_json($_) } grep m/(NOTE|DIAG|ASSERT): /, <$events_fh>;
 my ($stdout) = grep m/STDOUT: /, <$stdout_fh>;
-my ($stderr) = grep m/STDERR: /, <$stderr_fh>;
 
 is($stdout, "STDOUT: Mākaha\n", "Round trip STDOUT encoding/decoding");
-is($stderr, "STDERR: Mākaha\n", "Round trip STDERR encoding/decoding");
 
-is($events[0]->{facet_data}->{info}->[0]->{details}, "DIAG: Mākaha", "Round trip encoding/decoding a diag");
-is($events[1]->{facet_data}->{info}->[0]->{details}, "NOTE: Mākaha", "Round trip encoding/decoding a note");
-is($events[2]->{facet_data}->{assert}->{details}, "ASSERT: Mākaha", "Round trip encoding/decoding an assert");
+is($events[0]->{facet_data}->{info}->[0]->{details}, "NOTE: Mākaha", "Round trip encoding/decoding a note");
+is($events[1]->{facet_data}->{assert}->{details}, "ASSERT: Mākaha", "Round trip encoding/decoding an assert");
 
 done_testing;

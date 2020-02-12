@@ -20,7 +20,7 @@ sub inject_run_data {
     my $status    = $ENV{GIT_STATUS};
     my $branch    = $ENV{GIT_BRANCH};
 
-    if (my $cmd = can_run('git')) {
+    if (my $cmd = $ENV{GIT_COMMAND} || can_run('git')) {
         my @sets = (
             [\$long_sha, 'rev-parse', 'HEAD'],
             [\$short_sha, 'rev-parse', '--short', 'HEAD'],
@@ -30,6 +30,7 @@ sub inject_run_data {
 
         for my $set (@sets) {
             my ($var, @args) = @$set;
+            next if $$var; # Already set
 
             my ($rh, $wh, $irh, $iwh);
             pipe($rh, $wh) or die "No pipe: $!";

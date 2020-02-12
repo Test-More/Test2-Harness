@@ -9,6 +9,7 @@ subtest NOTHING => sub {
         ],
     );
 
+    local $ENV{GIT_COMMAND};
     local $ENV{GIT_LONG_SHA};
     local $ENV{GIT_SHORT_SHA};
     local $ENV{GIT_STATUS};
@@ -23,16 +24,9 @@ subtest NOTHING => sub {
 };
 
 subtest ENV => sub {
-    my $control = mock $CLASS => (
-        override => [
-            can_run => sub {
-                my $script = __FILE__;
-                $script =~ s/\.t$/\.script/;
-                return "$^X $script";
-            },
-        ],
-    );
-
+    my $script = __FILE__;
+    $script =~ s/\.t$/\.script/;
+    local $ENV{GIT_COMMAND} = $script;
     local $ENV{GIT_LONG_SHA}  = "1230988f2c2bd26a1691a82766d5bf5c7524b123";
     local $ENV{GIT_SHORT_SHA} = "1230988";
     local $ENV{GIT_STATUS}    = " M lib/App/Yath/Command.pm";
@@ -69,16 +63,9 @@ subtest ENV => sub {
 };
 
 subtest CMD => sub {
-    my $control = mock $CLASS => (
-        override => [
-            can_run => sub {
-                my $script = __FILE__;
-                $script =~ s/\.t$/\.script/;
-                return "$^X $script";
-            },
-        ],
-    );
-
+    my $script = __FILE__;
+    $script =~ s/\.t$/\.script/;
+    local $ENV{GIT_COMMAND} = $script;
     local $ENV{GIT_LONG_SHA};
     local $ENV{GIT_SHORT_SHA};
     local $ENV{GIT_STATUS};
@@ -115,16 +102,9 @@ subtest CMD => sub {
 };
 
 subtest MIX => sub {
-    my $control = mock $CLASS => (
-        override => [
-            can_run => sub {
-                my $script = __FILE__;
-                $script =~ s/\.t$/\.script/;
-                return "$^X $script";
-            },
-        ],
-    );
-
+    my $script = __FILE__;
+    $script =~ s/\.t$/\.script/;
+    local $ENV{GIT_COMMAND} = $script;
     local $ENV{GIT_LONG_SHA} = "1230988f2c2bd26a1691a82766d5bf5c7524b123";
     local $ENV{GIT_SHORT_SHA};
     local $ENV{GIT_STATUS};

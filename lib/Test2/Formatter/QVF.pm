@@ -36,6 +36,7 @@ sub write {
             $self->SUPER::write(@{$_}) for @$buffer;
         }
         else {
+            $f->{info} = [grep { $_->{tag} ne 'TIME' } @{$f->{info}}] if $f->{info};
             $self->SUPER::write($e, $num, $f)
         }
     }

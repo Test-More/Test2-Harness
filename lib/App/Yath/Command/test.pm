@@ -77,7 +77,11 @@ look for the 't', and 't2' dirctories, as well as the 'test.pl' file.
 This command is always recursive when given directories.
 
 This command will add 'lib', 'blib/arch' and 'blib/lib' to the perl path for
-you by default.
+you by default (after any -I's). You can specify -l if you just want lib, -b if
+you just want the blib paths. If you specify both -l and -b both will be added
+in the order you specify (order relative to any -I options will also be
+preserved.  If you do not specify they will be added in this order: -I's, lib,
+blib/lib, blib/arch. You can also add --no-lib and --no-blib to avoid both.
 
 Any command line argument that is not an option will be treated as a test file
 or directory of test files to be run.

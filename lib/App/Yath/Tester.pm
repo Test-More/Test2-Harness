@@ -52,6 +52,9 @@ sub yath {
     my $capture = delete $params{capture} // 1;
     my $log     = delete $params{log}     // 0;
 
+    my $no_app_path = delete $params{no_app_path};
+    my $lib = delete $params{lib} // [];
+
     if (keys %params) {
         croak "Unexpected parameters: " . join (', ', sort keys %params);
     }
@@ -80,12 +83,12 @@ sub yath {
         print "DEBUG: log file = '$logfile'\n" if $debug;
     }
 
-    unshift @inc => "-D$apppath";
+    unshift @inc => "-D$apppath" unless $no_app_path;
 
     my @cover = cover();
 
     my $yath = find_yath;
-    my @cmd = ($^X, @cover, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
+    my @cmd = ($^X, @$lib, @cover, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
 
     print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $debug;
 

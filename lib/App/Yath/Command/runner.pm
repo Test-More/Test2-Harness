@@ -20,7 +20,7 @@ use Test2::Util qw/clone_io/;
 
 use Long::Jump qw/setjump longjump/;
 
-use Test2::Harness::Util qw/mod2file write_file_atomic open_file clean_path/;
+use Test2::Harness::Util qw/mod2file write_file_atomic open_file clean_path process_includes/;
 
 use Test2::Harness::Util::IPC qw/swap_io/;
 
@@ -275,9 +275,12 @@ sub build_init_state {
 
     srand();    # avoid child processes sharing the same seed value as the parent
 
-    # Make sure our specified includes are at the front of the list.
-    my %seen;
-    @INC = grep { !$seen{$_}++ } $job->unsafe_inc ? ('.') : (), map { clean_path( $_ ) } $job->includes, @INC;
+    @INC = process_includes(
+        list            => [$job->includes],
+        include_dot     => $job->unsafe_inc,
+        include_current => 1,
+        clean           => 1,
+    );
 
     # if FindBin is preloaded, reset it with the new $0
     FindBin::init() if defined &FindBin::init;

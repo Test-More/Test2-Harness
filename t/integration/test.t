@@ -202,6 +202,8 @@ if ("$]" >= 5.026) {
 
     local @INC =  map { clean_path( $_ ) } grep { $_ ne '.' } @INC;
     local $ENV{PERL5LIB} = join ':', map { clean_path( $_ ) } grep { $_ ne '.' } split( ':', $ENV{PERL5LIB} );
+    local $ENV{PERL_USE_UNSAFE_INC};
+    delete $ENV{PERL_USE_UNSAFE_INC};
 
     my $sdir = $dir . '-inc';
 

@@ -12,7 +12,7 @@ use Time::HiRes qw/time/;
 
 use File::Spec();
 
-use Test2::Harness::Util qw/fqmod clean_path write_file_atomic write_file mod2file open_file parse_exit/;
+use Test2::Harness::Util qw/fqmod clean_path write_file_atomic write_file mod2file open_file parse_exit process_includes/;
 use Test2::Harness::IPC;
 
 use parent 'Test2::Harness::IPC::Process';
@@ -114,7 +114,7 @@ sub spawn_params {
 
     my $command;
     if ($task->{binary} || $task->{non_perl}) {
-        $command = [$file, $self->args];
+        $command = [clean_path($file), $self->args];
     }
     else {
         $command = [
@@ -268,9 +268,8 @@ sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }
 sub cli_includes {
     my $self = shift;
 
-    $self->{+CLI_INCLUDES} //= [
-        map { "-I" . clean_path($self->{+CH_DIR} ? File::Spec->catdir($self->{+CH_DIR}, $_) : $_) } $self->includes,
-    ];
+    # '.' is handled via the PERL_USE_UNSAFE_INC env var set later
+    $self->{+CLI_INCLUDES} //= [map { "-I$_" } grep { $_ ne '.' } $self->includes];
 
     return @{$self->{+CLI_INCLUDES}};
 }
@@ -372,10 +371,17 @@ sub includes {
 
     return @{$self->{+INCLUDES}} if $self->{+INCLUDES};
 
-    my @inc = $self->runner_includes;
-    push @inc => @{$self->{+SETTINGS}->harness->orig_inc};
+    $self->{+INCLUDES} = [
+        process_includes(
+            list            => [$self->runner_includes, @{$self->{+SETTINGS}->harness->orig_inc}],
+            include_dot     => $self->unsafe_inc,
+            include_current => 1,
+            clean           => 1,
+            $self->{+CH_DIR} ? (ch_dir => $self->{+CH_DIR}) : (),
+        )
+    ];
 
-    return @{$self->{+INCLUDES} = \@inc};
+    return @{$self->{+INCLUDES}};
 }
 
 sub cli_options {
@@ -433,12 +439,10 @@ sub env_vars {
     my $from_run = $self->run->env_vars;
     my $from_task = $self->{+TASK}->{env_vars};
 
-    my $p5l = join $Config{path_sep} =>
-        map { clean_path( $_ ) }
-        grep { defined $_ } $from_task->{PERL5LIB}, $from_run->{PERL5LIB}, $self->runner_includes;
-
-    # Make sure we include any existing PERL5LIB
-    $p5l .= "$Config{path_sep}$ENV{PERL5LIB}" if $ENV{PERL5LIB};
+    my @p5l = ($from_task->{PERL5LIB}, $from_run->{PERL5LIB});
+    push @p5l => $self->includes if $self->{+TASK}->{binary} || $self->{+TASK}->{non_perl};
+    push @p5l => $ENV{PERL5LIB} if $ENV{PERL5LIB};
+    my $p5l = join $Config{path_sep} => grep { defined $_ && $_ ne '.' } @p5l;
 
     return $self->{+ENV_VARS} = {
         $from_run  ? (%$from_run)  : (),

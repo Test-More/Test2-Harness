@@ -6,6 +6,7 @@ our $VERSION = '1.000000';
 
 use Test2::Util qw/IS_WIN32/;
 use Test2::Harness::Util qw/clean_path/;
+use File::Spec;
 
 use App::Yath::Options;
 
@@ -43,22 +44,44 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         short       => 'I',
         type        => 'm',
         description => "Add a directory to your include paths",
-        normalize   => \&clean_path,
     );
 
     option tlib => (
         description => "(Default: off) Include 't/lib' in your module path",
         default     => 0,
+        action => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
+            push @{$settings->runner->includes} => File::Spec->catdir('t', 'lib');
+        },
     );
 
     option lib => (
-        description => "(Default: on) Include 'lib' in your module path",
+        short => 'l',
+        description => "(Default: include if it exists) Include 'lib' in your module path",
         default     => 1,
+        action => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
+            push @{$settings->runner->includes} => 'lib';
+            $settings->runner->lib(0);
+            $settings->runner->blib(0);
+        },
     );
 
     option blib => (
-        description => "(Default: on) Include 'blib/lib' and 'blib/arch' in your module path",
+        short => 'b',
+        description => "(Default: include if it exists) Include 'blib/lib' and 'blib/arch' in your module path",
         default     => 1,
+        action => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
+
+            push @{$settings->runner->includes} => (
+                File::Spec->catdir('blib', 'lib'),
+                File::Spec->catdir('blib', 'arch'),
+            );
+
+            $settings->runner->lib(0);
+            $settings->runner->blib(0);
+        },
     );
 
     option unsafe_inc => (

@@ -1,0 +1,28 @@
+use Test2::V0;
+
+use File::Spec;
+
+my @parts = File::Spec->splitpath(File::Spec->rel2abs(__FILE__));
+pop @parts;
+my $path = File::Spec->catpath(@parts);
+
+like(
+    \@INC,
+    [
+        File::Spec->catdir($path, 'a'),
+
+        File::Spec->catdir($path, 'blib', 'lib'),
+        File::Spec->catdir($path, 'blib', 'arch'),
+
+        File::Spec->catdir($path, 'b'),
+
+        File::Spec->catdir($path, 'lib'),
+
+        File::Spec->catdir($path, 'c'),
+    ],
+    "Added all via cli, in order"
+);
+
+is($ENV{PERL5LIB}, "foo", "PERL5LIB has not been modified");
+
+done_testing;

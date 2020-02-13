@@ -11,7 +11,7 @@ use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
 use Long::Jump qw/setjump longjump/;
 use Time::HiRes qw/sleep time/;
 
-use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic/;
+use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes/;
 use Test2::Harness::Util::Queue();
 
 use Test2::Harness::Runner::Constants;
@@ -199,6 +199,9 @@ sub all_libs {
     my $self = shift;
 
     my @out;
+
+    push @out => @{$self->{+INCLUDES}} if $self->{+INCLUDES};
+
     push @out => 't/lib' if $self->{+TLIB};
     push @out => 'lib'   if $self->{+LIB};
 
@@ -207,17 +210,18 @@ sub all_libs {
         push @out => 'blib/arch';
     }
 
-    push @out => map { clean_path($_) } @{$self->settings->harness->dev_libs};
-    push @out => map { clean_path($_) } @{$self->{+INCLUDES}} if $self->{+INCLUDES};
-
     return @out;
 }
 
 sub process {
     my $self = shift;
 
-    my %seen;
-    @INC = grep { !$seen{$_}++ } map { clean_path($_) } $self->all_libs, @INC, $self->unsafe_inc ? ('.') : ();
+    @INC = process_includes(
+        list            => [@{$self->settings->harness->dev_libs}, $self->all_libs],
+        include_dot     => $self->unsafe_inc,
+        include_current => 1,
+        clean           => 1,
+    );
 
     my $pidfile = File::Spec->catfile($self->{+DIR}, 'PID');
     write_file_atomic($pidfile, "$$");

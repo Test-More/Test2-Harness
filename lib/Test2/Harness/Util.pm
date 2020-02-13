@@ -31,7 +31,48 @@ our @EXPORT_OK = qw{
     hub_truth
 
     apply_encoding
+
+    process_includes
 };
+
+sub process_includes {
+    my %params = @_;
+
+    my @start = @{delete $params{list} // []};
+
+    my @list;
+    my %seen = ('.' => 1);
+
+    if (my $ch_dir = delete $params{ch_dir}) {
+        for my $path (@start) {
+            # '.' is special.
+            $seen{'.'}++ and next if $path eq '.';
+
+            if (File::Spec->file_name_is_absolute($path)) {
+                push @list => $path;
+            }
+            else {
+                push @list => File::Spec->catdir($ch_dir, $path);
+            }
+        }
+    }
+    else {
+        @list = @start;
+    }
+
+    push @list => @INC if delete $params{include_current};
+
+    @list = map { $_ eq '.' ? $_ : clean_path($_) || $_ } @list if delete $params{clean};
+
+    @list = grep { !$seen{$_}++ } @list;
+
+    # If we ask for dot, or saw it during our processing, add it to the end.
+    push @list => '.' if delete($params{include_dot}) || $seen{'.'} > 1;
+
+    confess "Invalid parameters: " . join(', ' => sort keys %params) if keys %params;
+
+    return @list;
+}
 
 sub apply_encoding {
     my ($fh, $enc) = @_;

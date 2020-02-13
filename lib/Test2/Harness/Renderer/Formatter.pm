@@ -113,10 +113,14 @@ sub render_event {
         my $job_id = $f->{harness}->{job_id} ||= $job->{job_id};
 
         # Make the times important if they were requested
-        if ($settings->display->show_times && $f->{info}) {
-            for my $info (@{$f->{info}}) {
-                next unless $info->{tag} eq 'TIME';
-                $info->{important} = 1;
+        if ( $f->{info} ) {
+            if ( $settings->display->show_times ) {
+                for my $info (@{$f->{info}}) {
+                    next unless $info->{tag} eq 'TIME';
+                    $info->{important} = 1;
+                }
+            }  else {
+                $f->{info} = [ grep { $_->{tag} ne 'TIME' } @{$f->{info}} ];
             }
         }
 

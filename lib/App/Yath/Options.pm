@@ -711,14 +711,190 @@ App::Yath::Options - Tools for defining and tracking yath CLI options.
 
 =head1 DESCRIPTION
 
-This package exports the tools used to provide options for Yath. All exports
-act on the singleton instance of L<App::Yath::Options>.
+This class represents a collection of options, and holds the logic for
+processing them. This package also exports sugar to help you define options.
 
 =head1 SYNOPSIS
 
+    package My::Options;
+
+    use App::Yath::Options;
+
+    # This package now has a package instance of options, which can be obtained
+    # via the options() method.
+    my $options = __PACKAGE__->options;
+
+    # We can include options from other packages
+    include_options(
+        'Package::With::Options::A',
+        'Package::With::Options::B',
+        ...,
+    );
+
+    # Define an option group with some options
+    option_group { %common_fields } => sub {
+
+        # Define an option
+        option foo => (
+            type => 's',
+            default => "FOOOOOOO",
+            category => 'foo',
+            description => "This is foo"
+            long_examples => [' value'],
+            ...
+        );
+
+        option bar => ( ... );
+        ...
+    };
+
+    # Action to call right after options are parsed.
+    post sub {
+        my %params = @_;
+
+        ...
+    };
 
 =head1 EXPORTS
 
+=over 4
+
+=item $opts = options()
+
+=item $opts = $class->options()
+
+This returns the options instance associated with your package.
+
+=item include_options(@CLASSES)
+
+This lets you include options defined in other packages.
+
+=item option_group \%COMMON_FIELDS => sub { ... }
+
+An option group is simply a block where all calls to C<option()> will have
+common fields added automatically, this makes it easier to define multiple
+options that share common fields. Common fields can be overridden inside the
+option definition.
+
+These are both equivelent:
+
+    # Using option group
+    option_group { category => 'foo', prefix => 'foo' } => sub {
+        option a => (type => 'b');
+        option b => (type => 's');
+    };
+
+    # Not using option group
+    option a => (type => 'b', category => 'foo', prefix => 'foo');
+    option b => (type => 's', category => 'foo', prefix => 'foo');
+
+=item option TITLE => %FIELDS
+
+Define an option. The first argument is the C<title> attribute for the new
+option, all other arguments should be attribute/value pairs used to construct
+the option. See L<App::Yath::Option> for the documentation of attributes.
+
+=item post sub { ... }
+
+=item post $weight => sub { ... }
+
+C<post> callbacks are run after all command line arguments have been processed.
+This is a place to verify the result of several options combined, sanity check,
+or even add short-circuit behavior. This is how the C<--help> and
+C<--show-opts> options are implemented.
+
+If no C<$weight> is specified then C<0> is used. C<post> callbacks or sorted
+based on weight with higher values being run later.
+
+=back
+
+=head1 OPTIONS INSTANCES
+
+In general you should not be using the options instance directly. Options
+instances are mostly an implementation detail that should be treated as a black
+box. There are however a few valid reasons to interact with them directly. In
+those cases there are a few public attributes/methods you can work with. This
+section documents the public interface.
+
+=head2 ATTRIBUTES
+
+This section only lists attributes that may be useful to people working with
+options instances. There are a lot of internal (to yath) attributes that are
+implementation details that are not listed here. Attributes not listed here are
+not intended for external use and may change at any time.
+
+=over 4
+
+=item $arrayref = $options->all
+
+Arrayref containing all the L<App::Yath::Option> instances in the options
+instance.
+
+=item $settings = $options->settings
+
+Get the L<Test2::Harness::Settings> instance.
+
+=item $arrayref = $options->args
+
+Get the reference to the list of command line arguments. This list is modified
+as arguments are processed, there are no guarentees about what is in here at
+any given stage of argument processing.
+
+=item $class_name = $options->command_class
+
+If yath has determined what command is being executed this will be populated
+with that command class. This will be undefined if the class has not been
+determined yet.
+
+=item $arrayref = $options->used_plugins
+
+This is a list of all plugins who's options have been used. Plugins may appear
+more than once.
+
+=item $hashref = $options->included
+
+A hashref where every key is a package who's options have been included into
+this options instance. The values are an implementation detail, do not rely on
+them.
+
+=back
+
+=head2 METHODS
+
+This section only lists methods that may be useful to people working with
+options instances. There are a lot of internal (to yath) methods that are
+implementation details that are not listed here. Methods not listed here are
+not intended for external use and may change at any time.
+
+=over 4
+
+=item $opt = $options->option(%OPTION_ATTRIBUTES)
+
+This will create a new option with the provided attributes and add it to the
+options instance. A C<trace> attribute will be automatically set for you.
+
+=item $options->include($options_instance)
+
+This method lets you directly include options from a second instance into the
+first.
+
+=item $options->include_from(@CLASSES)
+
+This lets you include options from multiple classes that have options defined.
+
+=item $options->include_option($opt)
+
+This lets you include a single already defined option instance.
+
+=item $options->pre_docs($format, @args)
+
+Get documentation for pre-command options. $format may be 'cli' or 'pod'.
+
+=item $options->cmd_docs($format, @args)
+
+Get documentation for command options. $format may be 'cli' or 'pod'.
+
+=back
 
 =head1 SOURCE
 

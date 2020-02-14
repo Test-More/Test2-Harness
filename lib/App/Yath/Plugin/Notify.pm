@@ -366,8 +366,41 @@ App::Yath::Plugin::Notify - Plugin to send email and/or slack notifications
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This plugin is used for sending email and/or slack notifications from yath.
+
+=head1 SYNOPSIS
+
+=head2 IN A TEST
+
+    #!/usr/bin/perl
+    use Test2::V0;
+    # HARNESS-META owner author@example.com
+    # HARNESS-META slack #slack_channel
+    # HARNESS-META slack #slack_user
+
+You can use the C<# HARNESS-META owner EMAIL_ADDRESS> to specify an "owner"
+email address. You can use the C<# HARNESS-META slack USER/CHANNEL> to specify
+a slack user or channel that owns the test.
+
+=head2 RUNNING WITH NOTIFICATIONS ENABLED
+
+    $ yath test -pNotify ...
+
+Also of note, most of the time you can just specify the notification options
+you want and the plugin will load as needed as long as C<--no-scan-plugins> was
+not specified.
+
+=head3 EMAIL
+
+    $ yath test --notify-email-owner --notify-email-from user@example.com --notify-email-fail fixer@example.com
+
+=head3 SLACK
+
+A slack hooks url is always needed for slack to work.
+
+    $ yath test --notify-slack-url https://hooks.slack.com/... --notify-slack-fail '#foo' --notify-slack-owner
+
+=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 
 =head1 SOURCE
 

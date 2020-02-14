@@ -15,10 +15,11 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         description   => 'Specify what Finder subclass to use when searching for files/processing the file list. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Finder::XXX namespace is assumed.',
         long_examples => [' MyFinder', ' +Test2::Harness::Finder::MyFinder'],
         pre_command   => 1,
-        no_build      => 1,
         adds_options  => 1,
         pre_process   => \&finder_pre_process,
         action        => \&finder_action,
+
+        builds => undef,    # This option is not for the build
     );
 
     option extension => (

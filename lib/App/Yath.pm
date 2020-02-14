@@ -258,9 +258,6 @@ App::Yath - Yet Another Test Harness (Test2-Harness) Command Line Interface
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
-
 This is the primary documentation for C<yath>, L<App::Yath>, L<Test2::Harness>.
 
 The canonical source of up-to-date command options are the help output when
@@ -356,7 +353,7 @@ harness.
 You can change display options and limit rendering/processing to specific test
 jobs from the run:
 
-    $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v 5 10
+    $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v [TEST UUID(S)]
 
 Note: This is done using the C<$ yath replay ...> command. The C<replay>
 command is implied if the first argument is a log file.
@@ -367,8 +364,8 @@ The C<-T> option will cause each test file to report how long it took to run.
 
     $ yath -T
 
-    ( PASSED )  job  1    t/App/Yath.t
-    (  TIME  )  job  1    0.06942s on wallclock (0.07 usr 0.01 sys + 0.00 cusr 0.00 csys = 0.08 CPU)
+    ( PASSED )  job  1    t/yath_script.t
+    (  TIME  )  job  1    Startup: 0.07692s | Events: 0.01170s | Cleanup: 0.00190s | Total: 0.09052s
 
 =head2 PERSISTENT RUNNER
 
@@ -637,43 +634,67 @@ This section documents the L<App::Yath> module itself.
 
 =head2 SYNOPSIS
 
-This is the entire C<yath> script, comments removed.
+In practice you should never need to write your own yath script, or construct
+an L<App::Yath> instance, or even access themain instance when yath is running.
+However some aspects of doing so are documented here for completeness.
 
-    #!/usr/bin/env perl
-    use App::Yath(\@ARGV, \$App::Yath::RUN);
-    exit($App::Yath::RUN->());
+A minimum yath script looks like this:
 
-=head2 METHODS
+    BEGIN {
+        package App::Yath:Script;
+
+        require Time::HiRes;
+        require App::Yath;
+        require Test2::Harness::Settings;
+
+        my $settings = Test2::Harness::Settings->new(
+            harness => {
+                orig_argv       => [@ARGV],
+                orig_inc        => [@INC],
+                script          => __FILE__,
+                start           => Time::HiRes::time(),
+                version         => $App::Yath::VERSION,
+            },
+        );
+
+        my $app = App::Yath->new(
+            argv    => \@ARGV,
+            config  => {},
+            settings => $settings,
+        );
+
+        $app->generate_run_sub('App::Yath::Script::run');
+    }
+
+    exit(App::Yath::Script::run());
+
+It is important that most logic live in a BEGIN block. This is so that
+L<goto::file> can be used post-fork to execute a test script.
+
+The actual yath script is significantly more complicated with the following behaviors:
 
 =over 4
 
-=item $class->import(\@argv, \$runref)
+=item pre-process essential arguments such as -D and no-scan-plugins
 
-This will find, load, and process the command as found via C<@argv> processing.
-It will set C<$runref> to a coderef that should be executed at runtime (IE not
-in the C<BEGIN> block implied by C<use>.
+=item re-exec with a different yath script if in developer mode and a local copy is found
 
-Please note that statements after the import may never be reached. A source
-filter may be used to rewrite the rest of the file to be the source of a
-running test.
+=item Parse the yath-rc config files
 
-=item $class->info("Message")
+=item gather and store essential startup information
 
-Print a message to STDOUT.
+=back
 
-=item $class->run_command($cmd_class, $cmd_name, \@argv)
+=head2 METHODS
 
-Run a command identified by C<$cmd_class> and C<$cmd_name>, using C<\@argv> as
-input.
+App::Yath does not provide many methods to use externally.
 
-=item $cmd_name = $class->parse_argv(\@argv)
+=over 4
 
-Determine what command should be used based on C<\@argv>. C<\@argv> may be
-modified depending on what it contains.
+=item $app->generate_run_sub($symbol_name)
 
-=item $cmd_class = $class->load_command($cmd_name)
-
-Load a command by name, returns the class of the command.
+This tells App::Yath to generate a subroutine at the specified symbol name
+which can be run and be expected to return an exit value.
 
 =back
 

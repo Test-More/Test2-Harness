@@ -211,6 +211,207 @@ App::Yath::Tester - Tools for testing yath
 
 =head1 DESCRIPTION
 
+This package provides utilities for running yath from within tests to verify
+its behavior. This is primarily used for integration testing of yath and for
+third party components.
+
+=head1 SYNOPSIS
+
+    use App::Yath::Tester qw/yath/;
+
+    my $result = yath(
+        # Command and arguments
+        command => 'test',
+        args    => ['-pMyPlugin', 'path/to/test', ...],
+
+        # Exit code we expect from yath
+        exit => 0,
+
+        # Subtest to verify results
+        test => sub {
+            my $result = shift;
+
+            # Redundant since we have the exit check above
+            is($result->{exit}, 0, "Verify exit");
+
+            is($result->{output}, $expected_output, "Got the expected output from yath");
+        },
+    );
+
+=head1 EXPORTS
+
+There are 2 exports from this module.
+
+=head2 $result = yath(...)
+
+    my $result = yath(
+        # Command and arguments
+        command => 'test',
+        args    => ['-pMyPlugin', 'path/to/test', ...],
+
+        # Exit code we expect from yath
+        exit => 0,
+
+        # Subtest to verify results
+        test => sub {
+            my $result = shift;
+
+            # Redundant since we have the exit check above
+            is($result->{exit}, 0, "Verify exit");
+
+            is($result->{output}, $expected_output, "Got the expected output from yath");
+        },
+    );
+
+=head3 ARGUMENTS
+
+=over 4
+
+=item cmd => $command
+
+=item command => $command
+
+Either 'cmd' or 'command' can be used. This argument takes a string that should
+be a command name.
+
+=item cli => \@ARGS
+
+=item args => \@ARGS
+
+Either 'cli' or 'args' can be used. If none are provided an empty arrayref is
+used. This argument takes an arrayref of arguments to the yath command.
+
+    $ yath [PRE_COMMAND] [COMMAND] [ARGS]
+
+=item pre => \@ARGS
+
+=item pre_command => \@ARGS
+
+Either 'pre' or 'pre_command' can be used. An empty arrayref is used if none
+are provided. These are arguments provided to yath BEFORE the command on the
+command line.
+
+    $ yath [PRE_COMMAND] [COMMAND] [ARGS]
+
+=item env => \%ENV
+
+Provide custom environment variable values to set before running the yath
+command.
+
+=item encoding => $encoding_name
+
+If you expect your yath command's output to be in a specific encoding you can
+specify it here to make sure the C<< $result->{output} >> text has been read
+properly.
+
+=item test => sub { ... }
+
+=item tests => sub { ... }
+
+=item subtest => sub { ... }
+
+These 3 arguments are all aliases for the same thing, only one should be used.
+The codeblock will be called with C<$result> as the onyl argument. The
+codeblock will be run as a subtest. If you specify the C<'exit'> argument that
+check will also happen in the same subtest.
+
+    test => sub {
+        my $result = shift;
+
+        ... verify result ...
+    },
+
+=item exit => $integer
+
+Verify that the yath command exited with the specified exit code. This check
+will be run in a subtest. If you specify a custom subtest then this check will
+appear to come from that subtest.
+
+=item debug => $integer
+
+Output debug info in realtime, depending on the $integer value this may include
+the output from the yath command being run.
+
+    0 - No debugging
+    1 - Output the command and other action being taken by the tool
+    2 - Echo yath output as it happens
+
+=item inc => $bool
+
+This defaults to true.
+
+When true the tool will look for a directory next to your test file with an
+identical name except that '.t' or '.t2' will be stripped from it. If that
+directory exists it will be added as a dev-lib to the yath command.
+
+If your test file is 't/foo/bar.t' then your yath command will look like this:
+
+    $ yath -D=t/foo/bar [PRE-COMMAND] [COMMAND] [ARGS]
+
+=item capture => $bool
+
+Defaults to true.
+
+When true the yath output will be captured and put into
+C<< $result->{output} >>.
+
+=item log => $bool
+
+Defaults to false.
+
+When true yath will be instructed to produce a log, the log will be accessible
+via C<< $result->{log} >>. C<< $result->{log} >> will be an instance of
+L<Test2::Harness::Util::File::JSONL>.
+
+=item no_app_path => $bool
+
+Default to false.
+
+Normally C<< -D=/path/to/lib >> is added to the yath command where
+C<'/path/to/lib'> is the path the the lib dir L<App::Yath> was loaded from.
+This normally insures the correct version of yath libraries is loaded.
+
+When this argument is set to true the path is not added.
+
+=item lib => [...]
+
+This poorly named argument allows you to inject command line argumentes between
+C<perl> and C<yath> in the command.
+
+    perl [LIB] path/to/yath [PRE-COMMAND] [COMMAND] [ARGS]
+
+=back
+
+=head3 RESULT
+
+The result hashref may containt he following fields depending on the arguments
+passed into C<yath()>.
+
+=over 4
+
+=item exit => $integer
+
+Exit value returned from yath.
+
+=item output => $string
+
+The output produced by the yath command.
+
+=item log => $jsonl_object
+
+An instance of L<Test2::Harness::Util::File::JSONL> opened from the log file
+produced by the yath command.
+
+B<Note:> By default no logging is done, you must specify the C<< log => 1 >>
+argument to enable it.
+
+=back
+
+=head2 $path = make_example_dir()
+
+This will create a temporary directory with 't', 't2', and 'xt' subdirectories
+each of which will contain a single passing test.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

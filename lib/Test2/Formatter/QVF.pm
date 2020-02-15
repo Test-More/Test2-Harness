@@ -80,8 +80,14 @@ Test2::Formatter::QVF - Test2 formatter that is [Q]uiet but [V]erbose on
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This formatter is a subclass of L<Test2::Formatter::Test2>. This one will
+buffer all output from a test file and only show it to you if there is a
+failure. Most of the time it willonly show you the completion notifications for
+each test.
+
+=head1 SYNOPSIS
+
+    $ yath test --qvf ...
 
 =head1 SOURCE
 

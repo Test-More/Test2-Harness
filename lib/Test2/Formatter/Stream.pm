@@ -420,6 +420,27 @@ Test2::Formatter::Stream - Test2 Formatter that directly writes events.
 
 =head1 DESCRIPTION
 
+This formatter writes all test2 events to event files (one per process/thread)
+instead of writing them to STDERR/STDOUT. It will output synchronization
+messages to STDERR/STDOUT every time an event is written. From this data the
+test output can be properly reconstructed in order with STDERR/STDOUT and
+events mostly synced so that they appear in the correct order.
+
+This formatter is not usually useful to humans. This formatter is used by
+L<Test2::Harness> when possible to prevent the loss of data that normally
+occurs when TAP is used.
+
+=head1 SYNOPSIS
+
+If you really want your test to output this:
+
+    use Test2::Formatter::Stream;
+    use Test2::V0;
+    ...
+
+Otherwise just use L<App::Yath> without the C<--no-stream> argument and this
+formatter will be used when possible.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

@@ -31,7 +31,6 @@ use Test2::Harness::Util::HashBase qw{
     <job_id
     <job_try
     <stamp
-    <times
     +json
     processed
 };
@@ -98,6 +97,91 @@ Test2::Harness::Event - Subclass of Test2::Event used by Test2::Harness under
 the hood.
 
 =head1 DESCRIPTION
+
+Test2 tests produce a sequence of events objects L<Test2::Event>. This is a
+subclass of those events for use in L<Test2::Harness>. Event non-test tests
+which produce TAP output will have the output parsed into these types of
+events.
+
+=head1 SYNOPSIS
+
+In normal usage ou will never need to create one fo these events yourself. This
+documentation assumes you are operating on an existing event C<$event> that the
+harness exposed to you via a plugin or similar.
+
+    my $facet_data = $event->facet_data;
+    my $run_id     = $event->run_id;
+    my $job_id     = $event->job_id;
+    my $job_try    = $event->job_try;
+    my $event_id   = $event->event_id;
+
+=head1 METHODS
+
+See L<Test2::Event> for methods provided by the base class.
+
+=over 4
+
+=item $hashref = $event->TO_JSON
+
+Used for json serialization.
+
+=item $json_string = $event->as_json
+
+This will return a json representation of the event. Note that this is a lossy
+conversion with some harness specific state removed by design. This may even be
+a cached copy of the json string that was decoded to produce the original
+object. If the string was not cached before it will be cached for all future
+calls ignoring any state change to the event.
+
+The lossy/cached conversion is intended so that events get passed through the
+harness pipeline without modifications from one step translating to another. If
+you need something extra to go through you need to either replace the event or
+create an additional one.
+
+=item $string = $event->event_id
+
+Usually a UUID, but not always!
+
+=item i$hashref = $event->facet_data
+
+Get the event facet data, this is the meat of the event that hold all the
+state.
+
+=item $string = $event->job_id
+
+Usually a UUID, but not always!
+
+=item $int = $event->job_try
+
+Integer, 0 or greater. Some jobs are run additional times if they fail, this
+says which attempt the event is for. The counter starts at 0.
+
+=item $bool = $event->processed
+
+This will be true if the event has been process by the harness. Note that this
+attibute is not serialized by C<TO_JSON> or C<as_json>.
+
+=item $string = $event->run_id
+
+The run id. This is usually a UUID, but not always!
+
+=item $ts = $event->stamp
+
+A unix timestamp for when the event was created.
+
+=item $id = $event->stream_id
+
+This is an implementation detail of L<Test2::Formatter::Stream>, do not rely on
+it. This is used to prevent parsing errors when stream output is nested in
+other stream output, which can happen if you are writing tests for the stream
+formatter itself.
+
+=item $trace = $event->trace
+
+This si a shortcut for C<< $event->facet_data->{trace} >>. The trace data is
+essential and used everywhere.
+
+=back
 
 =head1 SOURCE
 

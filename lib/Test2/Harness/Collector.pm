@@ -283,8 +283,18 @@ an event stream.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This module is responsible for reading and parsing the output produced by
+multiple jobs running under yath.
+
+This module is not intended for external use, it is an implementation detail
+and can change at any time. Currently instances of this module are not passed
+to any plugins or callbacks.
+
+If you need a collector for a third-party command you should look at
+L<App::Yath::Command::collector>. When a command needs a collector (such as
+L<App::Yath::Command::test> does) it normally spawns a collector process by
+execuing C<yath collector>. The C<start_collector()> subroutine in
+L<App::Yath::Command::test> is a good place to look for more details.
 
 =head1 SOURCE
 

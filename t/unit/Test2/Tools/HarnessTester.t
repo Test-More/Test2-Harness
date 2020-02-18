@@ -18,7 +18,7 @@ is(
         errors     => 0,
         fail       => 1,
         failures   => 1,
-        pass       => '',
+        pass       => 0,
         plan       => {count => 6},
     },
     "Failure, assertion count, plan",
@@ -35,7 +35,7 @@ is(
     {
         assertions => 4,
         errors     => 0,
-        fail       => '',
+        fail       => 0,
         failures   => 0,
         pass       => 1,
         plan       => {count => 4},

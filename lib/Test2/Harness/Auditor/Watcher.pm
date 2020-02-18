@@ -17,7 +17,6 @@ use Test2::Harness::Auditor::TimeTracker;
 use Test2::Harness::Util::HashBase qw{
     -job
     -try
-    -live
 
     -assertion_count
     -exit
@@ -70,7 +69,7 @@ sub process {
 
     my $nested = $hf->{nested} || 0;
 
-    $self->times->process($event, $f, $hf, $self->{+ASSERTION_COUNT}) unless $nested;
+    $self->times->process($event, $f, $self->{+ASSERTION_COUNT}) unless $nested;
 
     return if $hf->{buffered};
 
@@ -345,6 +344,105 @@ Test2::Harness::Auditor::Watcher - Class to monitor events for a single job and
 pass judgement on the result.
 
 =head1 DESCRIPTION
+
+This module represents a per-job state tracker. This module sees every event
+and manages the state produced. In the end this tracker determines if a test
+job passed or failed, and why.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Auditor::Watcher;
+
+    my $watcher = Test2::Harness::Auditor::Watcher->new();
+
+    for my $event (@events) {
+        $watcher->process($event);
+    }
+
+    print "Pass!" if $watcher->pass;
+    print "Fail!" if $watcher->fail;
+
+=head1 METHODS
+
+=over 4
+
+=item $int = $watcher->assertion_count()
+
+Number of assertions that have been seen.
+
+=item $exit = $watcher->exit()
+
+If the job has exited this will return the exit value (integer, 0 or greater).
+If the job has not exited yet (or at least if the watcher has not seen the exit
+event yet) this will return undef.
+
+=item $bool = $watcher->fail()
+
+Returns true if the job has failed/is failing.
+
+=item @error_facets = $watcher->fail_error_facet_list
+
+Used internally to get a list of 'error' facets to inject into the
+harness_job_exit event.
+
+=item $file = $watcher->file
+
+If the test file is known this will return it (string). This will return undef
+if the file is not yet known.
+
+=item $string = $watcher->halt
+
+If the test was halted (bail-out) this will contain the human readible reason.
+
+=item $bool = $watcher->has_exit
+
+Check if the exit value is known.
+
+=item $bool = $watcher->has_plan
+
+Check if a plan has been seen.
+
+=item $job = $watcher->job
+
+If the job is known this will return the detailed structure of the job.
+
+=item $int = $watcher->nested
+
+If this watcher represents a subtest this will be an integer greater than 0,
+the top-level test is 0.
+
+=item $hash = $watcher->numbers
+
+This is an internal state tracking what test numbers have been seen. This is
+really only applicable in tests that produced TAP.
+
+=item $bool = $watcher->pass
+
+Check if the test job is passing.
+
+=item $plan_facet = $watcher->plan()
+
+If the plan facet has been seen this will return it.
+
+=item $watcher->process($event);
+
+Modify the state based on the provided event.
+
+=item $watcher->subtest_fail_error_facet_list
+
+Used internally to get a list of 'error' facets to inject into the
+harness_job_exit event.
+
+=item $times = $watcher->times()
+
+Retuns the L<Test2::Harness::Auditor::TimeTracker> instance.
+
+=item $int = $watcher->try()
+
+Sometimes a job is run more than once, in those cases this will be an integer
+greater than 0 representing the try. 0 is used for the first try.
+
+=back
 
 =head1 SOURCE
 

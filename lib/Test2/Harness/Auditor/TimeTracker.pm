@@ -20,14 +20,16 @@ use Test2::Harness::Util::HashBase qw{
 
 sub process {
     my $self = shift;
-    my ($event, $f, $hf, $assertion_count) = @_;
+    my ($event, $f, $assertion_count) = @_;
+
+    # Invalidate cache
+    delete $self->{+_TOTALS};
+    delete $self->{+_SOURCE};
 
     my $stamp = $event->{stamp} or return;
     my $id    = $event->{event_id} // 'N/A';
 
     $f  //= $event->{facet_data};
-    $hf //= hub_truth($f);
-
 
     if ($f->{harness_job_exit}) {
         $self->{+STOP}    = $stamp;
@@ -210,8 +212,130 @@ event stream is processed.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+The timetracker module tracks timing data of an event stream. All events for a
+given job should be run through a timetracker, which can then give data on how
+long the test took in each of several stages.
+
+=over 4
+
+=item startup - Time from launch to first test event.
+
+=item events - Time spent generating test events.
+
+=item cleanup - Time from last test event to test exit.
+
+=item total - Total time.
+
+=back
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Auditor::TimeTracker;
+
+    my $tracker = Test2::Harness::Auditor::TimeTracker->new();
+
+    my $assert_count = 0;
+    for my $event (@events) {
+        my $facet_data = $events->facet_data;
+        $assert_count++ if $facet_data->{assert};
+        $tracker->process($event, $facet_data, $assert_count);
+    }
+
+    print $tracker->summary;
+    # Startup: 0.00708s | Events: 0.00000s | Cleanup: 0.10390s | Total: 0.11098s
+
+=head1 METHODS
+
+=over 4
+
+=item $tracker->process($event, $facet_data, $assert_count)
+
+=item $tracker->process($event, undef, $assert_count)
+
+TimeTracker builds its state from multiple events, each event should be
+processed by this method.
+
+The second argument is optional, if no facet_data is provided it will pull the
+facet_data from the event itself. This is mainly a micro-optimization to avoid
+calling the C<facet_data()> method on the event multiple times if you have
+already called it.
+
+=item $bool = $tracker->useful()
+
+Returns true if there is any useful data to display.
+
+=item $totals = $tracker->totals()
+
+Returns the totals like this:
+
+    {
+        # Raw numbers
+        startup => ...,
+        events  => ...,
+        cleanup => ...,
+        total   => ...,
+
+        # Human friendly versions
+        h_startup => ...,
+        h_events  => ...,
+        h_cleanup => ...,
+        h_total   => ...,
+    }
+
+=item $source = $tracker->source()
+
+This method returns the data from which the totals are derived.
+
+    {
+        start => ...,    # timestamp of the job starting
+        stop  => ...,    # timestamp of the job ending
+        first => ...,    # timestamp of the first non-harness event
+        last  => ...,    # timestamp of the last non-harness event
+
+        # These are event_id's of the events that provided the above stamps.
+        start_id    => ...,
+        stop_id     => ...,
+        first_id    => ...,
+        last_id     => ...,
+        complete_id => ...,
+    }
+
+=item $data = $tracker->data_dump
+
+This dumps the totals and source data:
+
+    {
+        totals => $tracker->totals,
+        source => $tracker->source,
+    }
+
+=item $string = $tracker->summary
+
+This produces a summary string of the totals data:
+
+    Startup: 0.00708s | Events: 0.00000s | Cleanup: 0.10390s | Total: 0.11098s
+
+Fields that have no data will be ommited from the string.
+
+=item $table = $tracker->table
+
+Returns this structure that is good for use in L<Term::Table>.
+
+    {
+        header => ["Phase", "Time", "Raw", "Explanation"],
+        rows   => [
+            ['startup', $human_readible, $raw, "Time from launch to first test event."],
+            ['events',  $human_radible,  $raw, 'Time spent generating test events.'],
+            ['cleanup', $human_radible,  $raw, 'Time from last test event to test exit.'],
+            ['total',   $human_radible,  $raw, 'Total time.'],
+        ],
+    }
+
+=item @items = $tracker->job_fields()
+
+This is used to obtain extra data to attach to the job completion event.
+
+=back
 
 =head1 SOURCE
 

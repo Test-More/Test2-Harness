@@ -465,6 +465,109 @@ Test2::Harness::Runner - Base class for test runners
 
 =head1 DESCRIPTION
 
+This module does the heavy lifting of running all the tests.
+
+You should never need to create an instance of the runner yourself. In most
+cases the runner module is exposed via a callback or a plugin affordance.
+
+=head1 PUBLIC METHODS
+
+=head2 FROM SETTINGS
+
+These are attributesd with values set from the L<Test2::Harness::Settings>
+instance created from command line arguments.
+
+See L<App::Yath::Options::Runner> for the most up to date documentation on
+these.
+
+=over 4
+
+=item $runner->job_count
+
+=item $runner->includes
+
+=item $runner->tlib
+
+=item $runner->lib
+
+=item $runner->blib
+
+=item $runner->unsafe_inc
+
+=item $runner->use_fork
+
+=item $runner->preloads
+
+=item $runner->preload_threshold
+
+=item $runner->switches
+
+=item $runner->cover
+
+=item $runner->event_timeout
+
+=item $runner->post_exit_timeout
+
+=back
+
+=head2 FROM CONSTRUCTION
+
+These attributes are set when the runner is created.
+
+=over 4
+
+=item $path = $runner->dir
+
+Path to the working directory.
+
+=item $settings = $runner->settings
+
+The L<App::Yath::Settings> instance.
+
+=item $coderef = $runner->fork_job_callback
+
+Callback used to spawn new tests via fork.
+
+=item $coderef = $runner->respawn_runner_callback
+
+Callback to restart the runner process.
+
+=item $bool = $runner->monitor_preloads
+
+True if preloads should be watched for changes.
+
+=item $int = $runner->jobs_todo
+
+A count of total jobs to run. This will always be 0 in a persistent runner.
+
+=back
+
+=head2 OTHER PUBLIC METHODS
+
+If a method is not documented here then it is an implementation detail and you
+should not use it.
+
+=over 4
+
+=item $class = $runner->job_class
+
+Class for new test jobs.
+
+=item $preload = $runner->preloader
+
+Get the L<Test2::Harness::Runner::Preloader> instance.
+
+=item $state = $runner->state
+
+Get the L<Test2::Harness::Runner::State> instance.
+
+=item @list = $runner->all_libs
+
+Get all the libs that should be added to @INC by default. Note that specific
+runs and even specific tests can have custom paths on top of these.
+
+=back
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

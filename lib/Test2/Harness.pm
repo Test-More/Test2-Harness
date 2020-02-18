@@ -19,8 +19,13 @@ integration.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+Test2::Harness is the backend code that handles running/processing the tests.
+In general a user will not use it directly, instead you should probably be
+looking at L<App::Yath> which is the UI layer built around Test2::Harness.
+
+=head1 SEE ALSO
+
+The primary documentation can be found in L<App::Yath>.
 
 =head1 SOURCE
 

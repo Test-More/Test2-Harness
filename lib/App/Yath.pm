@@ -265,6 +265,27 @@ using C<$ yath help> and C<$ yath help COMMAND>.
 
 This document is mainly an overview of C<yath> usage and common recipes.
 
+L<App::Yath> is an alternative to L<App::Prove>, and L<Test2::Harness> is an alternative to L<Test::Harness>. It is not designed to
+replace L<Test::Harness>/prove. L<Test2::Harness> is designed to take full
+advantage of the rich data L<Test2> can provide. L<Test2::Harness> is also able to
+use non-core modules and provide more functionality than prove can achieve with
+its restrictions.
+
+=head1 PLATFORM SUPPORT
+
+L<Test2::Harness>/L<App::Yath> is is focused on unix-like platforms. Most
+development happens on linux, but bsd, macos, etc should work fine as well.
+
+Patches are welcome for any/all platforms, but the primary author (Chad
+'Exodist' Granum) does not directly develop against non-unix platforms.
+
+=head2 WINDOWS
+
+Currently windows is not supported, and it is known that the package will not
+install on windows. Patches are be welcome, and it would be great if someone
+wanted to take on the windows-support role, but it is not a primary goal for
+the project.
+
 =head1 OVERVIEW
 
 To use L<Test2::Harness>, you use the C<yath> command. Yath will find the tests

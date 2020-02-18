@@ -9,11 +9,12 @@ use Importer 'Importer' => 'import';
 our @EXPORT_OK = qw{
     parse_stdout_tap
     parse_stderr_tap
+    parse_tap_line
 };
 
 sub parse_stdout_tap {
     my ($line) = @_;
-    my $facet_data = __PACKAGE__->parse_tap_line($line) or return undef;
+    my $facet_data = __PACKAGE__->_parse_tap_line($line) or return undef;
     $facet_data->{from_tap} = { source => 'STDOUT', details => $line };
     return $facet_data;
 }
@@ -25,7 +26,7 @@ sub parse_stderr_tap {
     # STDERR only has comments
     return unless $line =~ m/^\s*#/;
 
-    my $facet_data = __PACKAGE__->parse_tap_line($line) or return undef;
+    my $facet_data = __PACKAGE__->_parse_tap_line($line) or return undef;
     $facet_data->{info}->[-1]->{tag} = 'DIAG';
     $facet_data->{info}->[-1]->{debug} = 1;
     $facet_data->{from_tap} = { source => 'STDERR', details => $line };
@@ -34,6 +35,11 @@ sub parse_stderr_tap {
 }
 
 sub parse_tap_line {
+    my ($line) = @_;
+    return __PACKAGE__->_parse_tap_line($line);
+}
+
+sub _parse_tap_line {
     my $class = shift;
     my ($line) = @_;
     chomp($line);
@@ -264,6 +270,85 @@ __END__
 Test2::Harness::Collector::TapParser - Produce EventFacets from a line of TAP.
 
 =head1 DESCRIPTION
+
+This module is responsible for reading and processing any TAP output from
+tests. Lines of TAP output are processed into L<Test2::Event> facet data. Note
+that C<< Test2 -> TAP -> Test2 >> is lossy at the C<< Test2 -> TAP >> step.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Collector::TapParser qw/parse_tap_line/;
+
+    my $facet_data = parse_tap_line("1..1");
+    is(
+        $facet_data,
+        {
+            trace => {nested => 0},
+            hubs  => [{nested => 0}],
+            plan  => {
+                details => '',
+                count   => 1,
+                skip    => 0,
+            },
+        },
+        "Parsed the plan"
+    );
+
+    $facet_data = parse_tap_line("# foo");
+    is(
+        $facet_data,
+    {
+              trace => { nested => 0 },
+              hubs => [ { nested => 0 } ],
+              info => [
+                          {
+                            tag => 'NOTE',
+                            details => 'foo',
+                            debug => 0,
+                          },
+                        ],
+            },
+
+        "Parsed the note"
+    );
+
+    $facet_data = parse_tap_line("ok 1");
+    is(
+        $facet_data,
+        {
+            trace  => {nested => 0},
+            hubs   => [{nested => 0}],
+            assert => {
+                no_debug => 1,
+                pass     => 1,
+                number   => '1',
+                details  => '',
+            },
+        },
+        "Parsed the assertion"
+    );
+
+=head1 EXPORTS
+
+=over 4
+
+=item $facet_data = parse_tap_line($line)
+
+Parse a line of TAP. It is assumed to be STDOUT thus all comments are turned
+into notes. Using this export will B<NOT> add the usual C<from_tap> facet. It
+is better to use one of the other 2 exports.
+
+=item $facet_data = parse_stdout_tap($line)
+
+Parse a line of TAP from stdout.
+
+=item $facet_data = parse_stderr_tap($line)
+
+Parse a line of TAP from stderr. This will B<ONLY> parse comment lines (ones
+that start with a C<#>, which may be indented). All comments will be treated as
+diag's, all other lines will be ignored.
+
+=back
 
 =head1 SOURCE
 

@@ -12,6 +12,27 @@ using `$ yath help` and `$ yath help COMMAND`.
 
 This document is mainly an overview of `yath` usage and common recipes.
 
+[App::Yath](https://metacpan.org/pod/App%3A%3AYath) is an alternative to [App::Prove](https://metacpan.org/pod/App%3A%3AProve), and [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness) is an alternative to [Test::Harness](https://metacpan.org/pod/Test%3A%3AHarness). It is not designed to
+replace [Test::Harness](https://metacpan.org/pod/Test%3A%3AHarness)/prove. [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness) is designed to take full
+advantage of the rich data [Test2](https://metacpan.org/pod/Test2) can provide. [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness) is also able to
+use non-core modules and provide more functionality than prove can achieve with
+its restrictions.
+
+# PLATFORM SUPPORT
+
+[Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness)/[App::Yath](https://metacpan.org/pod/App%3A%3AYath) is is focused on unix-like platforms. Most
+development happens on linux, but bsd, macos, etc should work fine as well.
+
+Patches are welcome for any/all platforms, but the primary author (Chad
+'Exodist' Granum) does not directly develop against non-unix platforms.
+
+## WINDOWS
+
+Currently windows is not supported, and it is known that the package will not
+install on windows. Patches are be welcome, and it would be great if someone
+wanted to take on the windows-support role, but it is not a primary goal for
+the project.
+
 # OVERVIEW
 
 To use [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness), you use the `yath` command. Yath will find the tests

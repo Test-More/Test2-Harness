@@ -597,6 +597,21 @@ Test2::Formatter::Test2 - An alternative to TAP, used by Test2::Harness.
 
 =head1 DESCRIPTION
 
+This formatter is the primary formatter used for final result rendering when
+you use Test2::Harness. This formatter is NOT designed to have its output
+consumed by code/machine/harnesses. The goal of this formatter is to have
+output that is easily read by humans.
+
+=head1 SYNOPSIS
+
+If you are running a test directly with perl and want to use this formatter:
+
+    $ perl -MTest2::Formatter::Test2 path/to/test.t
+
+You could also use the module directly in your test, but that is not
+recommended as your test would then be unable to be run via prove or other
+harnesses.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

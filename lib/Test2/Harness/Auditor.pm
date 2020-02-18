@@ -138,8 +138,10 @@ event stream.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+The auditor is responsible for taking a stream of events and determining what
+is passing or failing. An L<Test2::Harness::Auditor::Watcher> instance is
+created for every job_id seen, and events for each job are passed to the proper
+watcher for state management.
 
 =head1 SOURCE
 

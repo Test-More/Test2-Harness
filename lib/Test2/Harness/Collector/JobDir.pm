@@ -651,6 +651,13 @@ jobs output directory.
 
 =head1 DESCRIPTION
 
+This module is responsible for reading and parsing a running jobs output
+directory. The result is an event stream.
+
+This module is not intended for external use, it is an implementation detail
+and can change at any time. Currently instances of this module are not passed
+to any plugins or callbacks.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

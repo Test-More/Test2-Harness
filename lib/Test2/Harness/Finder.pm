@@ -266,8 +266,167 @@ Test2::Harness::Finder - Library that searches for test files
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+The finder is responsible for locating test files that should be run. You can
+subclass the finder and instruct yath to use your subclass.
+
+=head1 SYNOPSIS
+
+=head2 USING A CUSTOM FINDER
+
+To use Test2::Harness::Finder::MyFinder:
+
+    $ yath test --finder MyFinder
+
+To use Another::Finder
+
+    $ yath test --finder +Another::Finder
+
+By default C<Test2::Harness::Finder::> is prefixed onto your custom finder, use
+'+' before the class name or prevent this.
+
+=head2 SUBCLASSING
+
+    use parent 'Test2::Harness::Finder';
+    use Test2::Harness::TestFile;
+
+    # Custom finders may provide their own options if desired.
+    # This is optional.
+    use App::Yath::Options;
+    option foo => (
+        ...
+    );
+
+    # This is the main method to override.
+    sub find_project_files {
+        my $self = shift;
+        my ($plugins, $settings, $search) = @_;
+
+        return [
+            Test2::Harness::TestFile->new(...),
+            Test2::Harness::TestFile->new(...),
+            ...,
+        ];
+    }
+
+=head1 METHODS
+
+These are important state methods, as well as utility methods for use in your
+subclasses.
+
+=over 4
+
+=item $bool = $finder->multi_project
+
+True if the C<yath projects> command was used.
+
+=item $arrayref = $finder->find_files($plugins, $settings)
+
+This is the main method. This method returns an arrayref of
+L<Test2::Harness::TestFile> instances, each one representing a single test to
+run.
+
+$plugins is a list of plugins, some may be class names, others may be
+instances.
+
+$settings is an L<Test2::Harness::Settings> instance.
+
+B<Note:> In many cases it is better to override C<find_project_files()> in your
+subclasses.
+
+=item $durations = $finder->duration_data
+
+This will fetch the durations data if ant was provided. This is a hashref of
+relative test paths as keys where the value is the duration of the file (SHORT,
+MEDIUM or LONG).
+
+B<Note:> The result is cached, see L<pull_durations()> to refresh the data.
+
+=item @reasons = $finder->exclude_file($test)
+
+The input argument should be an L<Test2::Harness::Test> instance. This will
+return a list of human readible reasons a test file should be excluded. If the
+file should not be excluded the list will be empty.
+
+This is a utility method that verifies the file is not in ant exclude
+list/pattern. The reasons are provided back in case you need to inform the
+user.
+
+=item $bool = $finder->include_file($test)
+
+The input argument should be an L<Test2::Harness::Test> instance. This is a
+convenience method around C<exclude_file()>, it will return true when
+C<exclude_file()> returns an empty list.
+
+=item $arrayref = $finder->find_multi_project_files($plugins, $settings)
+
+=item $arrayref = $finder->find_project_files($plugins, $settings, $search)
+
+These do the heavy lifting for C<find_files>
+
+The default C<find_files()> implementation is this:
+
+    sub find_files {
+        my $self = shift;
+        my ($plugins, $settings) = @_;
+
+        return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
+        return $self->find_project_files($plugins, $settings, $self->search);
+    }
+
+Each one returns an arrayref of L<Test2::Harness::TestFile> instances.
+
+Note that C<find_multi_project_files()> uses C<find_project_files()> internall,
+once per project directory.
+
+$plugins is a list of plugins, some may be class names, others may be
+instances.
+
+$settings is an L<Test2::Harness::Settings> instance.
+
+$search is an arrayref of search paths.
+
+=item $finder->munge_settings($settings, $options)
+
+A callback that lets you munge settings and options.
+
+=item $finder->pull_durations
+
+This will fetch the durations data if ant was provided. This is a hashref of
+relative test paths as keys where the value is the duration of the file (SHORT,
+MEDIUM or LONG).
+
+L<duration_data()> is a cached version of this. This method will refresh the
+cache for the other.
+
+=back
+
+=head2 FROM SETTINGS
+
+See L<App::Yath::Options::Finder> for up to date documentation on these.
+
+=over 4
+
+=item $finder->default_search
+
+=item $finder->default_at_search
+
+=item $finder->durations
+
+=item $finder->maybe_durations
+
+=item $finder->exclude_files
+
+=item $finder->exclude_patterns
+
+=item $finder->no_long
+
+=item $finder->only_long
+
+=item $finder->search
+
+=item $finder->extensions
+
+=back
 
 =head1 SOURCE
 

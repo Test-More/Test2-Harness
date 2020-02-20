@@ -240,7 +240,7 @@ tools.
 =head1 DESCRIPTION
 
 L<Test2::Harness> allows you to preload libraries for a performance boost. This
-module provides tools that let you go beyong that and build a more complex
+module provides tools that let you go beyond that and build a more complex
 preload. In addition you can build multiple preload I<stages>, each stage will
 be its own process and tests can run from a specific stage. This allows for
 multiple different preload states from which to run tests.

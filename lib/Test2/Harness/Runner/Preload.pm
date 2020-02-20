@@ -334,6 +334,28 @@ operate. Once the coderef returns the I<active> stage is cleared.
 
 You may nest stages by calling this function again inside the codeblock.
 
+B<NOTE:> stage names B<ARE> case sensitive. This can be confusing when you
+consider that most harness directives are all-caps. In the following case the
+stage requested by the test and the stage defined in
+the library are NOT the same.
+
+In a test file:
+
+    # HARNESS-STAGE-FOO
+
+In a preload library:
+
+    stage foo { ... }
+
+Harness directives are all-caps, however the user data portion need not be,
+this is fine:
+
+    # HARNESS-STAGE-foo
+
+However it is very easy to make the mistake of thinking it is case insensitive.
+It is also easy to assume the 'foo' part of the harness directive must be all
+caps. In many cases it is smart to make your stage names all-caps.
+
 =item preload $module_name
 
 =item preload @module_names

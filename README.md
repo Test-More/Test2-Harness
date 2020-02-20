@@ -299,6 +299,18 @@ This implies HARNESS-NO-PRELOAD.
 Some tests depend on using a TAP formatter. This option will make `yath` use
 [Test2::Formatter::TAP](https://metacpan.org/pod/Test2%3A%3AFormatter%3A%3ATAP) or [Test::Builder::Formatter](https://metacpan.org/pod/Test%3A%3ABuilder%3A%3AFormatter).
 
+### HARNESS-NO-IO-EVENTS
+
+`yath` usually uses the [Test2::Plugin::IOEvents](https://metacpan.org/pod/Test2%3A%3APlugin%3A%3AIOEvents) plugin. This plugin
+replaces STDERR and STDOUT in your test with tied handles that fire off proper
+[Test2::Event](https://metacpan.org/pod/Test2%3A%3AEvent)'s when they are printed to. Most of the time this is not an
+issue, but any fancy tests or modules which do anything with STDERR or STDOUT
+other than print may have really messy errors.
+
+This directive will disable the plugin on a per-test basis. Alternatively you
+can use the `--no-io-events` option when running yath to disable it globally
+for your test suite.
+
 ### HARNESS-NO-TIMEOUT
 
 `yath` will usually kill a test if no events occur within a timeout (default

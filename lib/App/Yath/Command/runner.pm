@@ -196,6 +196,12 @@ sub test2_state {
         Test2::API::test2_post_preload_reset();
     }
 
+    if ($job->use_stream) {
+        $ENV{T2_FORMATTER} = 'Stream';
+        require Test2::Formatter::Stream;
+        Test2::Formatter::Stream->import(dir => $job->event_dir, job_id => $job->job_id);
+    }
+
     if ($job->event_uuids) {
         require Test2::Plugin::UUID;
         Test2::Plugin::UUID->import();
@@ -206,10 +212,9 @@ sub test2_state {
         Test2::Plugin::MemUsage->import();
     }
 
-    if ($job->use_stream) {
-        $ENV{T2_FORMATTER} = 'Stream';
-        require Test2::Formatter::Stream;
-        Test2::Formatter::Stream->import(dir => $job->event_dir, job_id => $job->job_id);
+    if ($job->io_events) {
+        require Test2::Plugin::IOEvents;
+        Test2::Plugin::IOEvents->import();
     }
 
     return;

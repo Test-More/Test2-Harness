@@ -119,6 +119,11 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         description => 'Use Test2::Plugin::MemUsage inside tests (default: on)',
     );
 
+    option io_events => (
+        default => 1,
+        description => 'Use Test2::Plugin::IOEvents inside tests to turn all prints into test2 events (default: on)',
+    );
+
     option retry => (
         default => 0,
         short => 'r',

@@ -71,6 +71,7 @@ my %DEFAULTS = (
     run       => 1,
     isolation => 0,
     smoke     => 0,
+    io_events => 1,
 );
 
 sub check_feature {
@@ -237,8 +238,7 @@ sub _scan {
         }
 
         if ($dir eq 'no') {
-            my ($feature) = @args;
-            $feature = lc($feature);
+            my $feature = lc(join '_' => @args);
             $headers{features}->{$feature} = 0;
         }
         elsif ($dir eq 'smoke') {
@@ -260,8 +260,7 @@ sub _scan {
             }
         }
         elsif ($dir eq 'yes' || $dir eq 'use') {
-            my ($feature) = @args;
-            $feature = lc($feature);
+            my $feature = lc(join '_' => @args);
             $headers{features}->{$feature} = 1;
         }
         elsif ($dir eq 'stage') {
@@ -363,11 +362,12 @@ sub queue_item {
     my $duration = $self->check_duration;
     my $stage    = $self->check_stage;
 
-    my $smoke   = $self->check_feature(smoke   => 0);
-    my $fork    = $self->check_feature(fork    => 1);
-    my $preload = $self->check_feature(preload => 1);
-    my $timeout = $self->check_feature(timeout => 1);
-    my $stream  = $self->check_feature(stream  => 1);
+    my $smoke     = $self->check_feature(smoke     => 0);
+    my $fork      = $self->check_feature(fork      => 1);
+    my $preload   = $self->check_feature(preload   => 1);
+    my $timeout   = $self->check_feature(timeout   => 1);
+    my $stream    = $self->check_feature(stream    => 1);
+    my $io_events = $self->check_feature(io_events => 1);
 
     my $retry          = $self->{+_HEADERS}->{retry};
     my $retry_isolated = $self->{+_HEADERS}->{retry_isolated};
@@ -398,6 +398,7 @@ sub queue_item {
         use_stream  => $stream,
         use_timeout => $timeout,
         smoke       => $smoke,
+        io_events   => $io_events,
         rank        => $self->rank,
 
         defined($job_class)      ? (job_class         => $job_class)               : (),

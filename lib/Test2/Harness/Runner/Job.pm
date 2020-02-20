@@ -46,7 +46,7 @@ use Test2::Harness::Util::HashBase(
 
         +load +load_import
 
-        +event_uuids +mem_usage
+        +event_uuids +mem_usage +io_events
 
         +env_vars
 
@@ -247,16 +247,18 @@ sub output_changed {
     return $self->{+OUTPUT_CHANGED} //= time();
 }
 
-sub is_try      { $_[0]->{+IS_TRY}      //= $_[0]->{+TASK}->{is_try} // 0 }
-sub ch_dir      { $_[0]->{+CH_DIR}      //= $_[0]->{+TASK}->{ch_dir} // '' }
+sub is_try { $_[0]->{+IS_TRY} //= $_[0]->{+TASK}->{is_try} // 0 }
+sub ch_dir { $_[0]->{+CH_DIR} //= $_[0]->{+TASK}->{ch_dir} // '' }
 sub unsafe_inc  { $_[0]->{+UNSAFE_INC}  //= $_[0]->{+RUNNER}->unsafe_inc }
 sub event_uuids { $_[0]->{+EVENT_UUIDS} //= $_[0]->run->event_uuids }
 sub mem_usage   { $_[0]->{+MEM_USAGE}   //= $_[0]->run->mem_usage }
 
-sub smoke             { $_[0]->{+SMOKE}             //= $_[0]->_fallback(smoke             => 0,  qw/task/) }
-sub retry_isolated    { $_[0]->{+RETRY_ISOLATED}    //= $_[0]->_fallback(retry_isolated    => 0,  qw/task run/) }
-sub use_stream        { $_[0]->{+USE_STREAM}        //= $_[0]->_fallback(use_stream        => 1,  qw/task run/) }
-sub use_timeout       { $_[0]->{+USE_TIMEOUT}       //= $_[0]->_fallback(use_timeout       => 1,  qw/task/) }
+sub io_events { $_[0]->{+IO_EVENTS} //= $_[0]->_fallback(io_events => 1, qw/task run/) }
+
+sub smoke             { $_[0]->{+SMOKE}             //= $_[0]->_fallback(smoke             => 0,     qw/task/) }
+sub retry_isolated    { $_[0]->{+RETRY_ISOLATED}    //= $_[0]->_fallback(retry_isolated    => 0,     qw/task run/) }
+sub use_stream        { $_[0]->{+USE_STREAM}        //= $_[0]->_fallback(use_stream        => 1,     qw/task run/) }
+sub use_timeout       { $_[0]->{+USE_TIMEOUT}       //= $_[0]->_fallback(use_timeout       => 1,     qw/task/) }
 sub retry             { $_[0]->{+RETRY}             //= $_[0]->_fallback(retry             => undef, qw/task run/) }
 sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_timeout     => undef, qw/task runner/) }
 sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => undef, qw/task runner/) }
@@ -394,6 +396,7 @@ sub cli_options {
         $self->use_stream  ? ("-MTest2::Formatter::Stream=dir,$event_dir,job_id,$job_id") : (),
         $self->event_uuids ? ('-MTest2::Plugin::UUID')                     : (),
         $self->mem_usage   ? ('-MTest2::Plugin::MemUsage')                 : (),
+        $self->io_events   ? ('-MTest2::Plugin::IOEvents')                 : (),
         (map { @{$_->[1]} ? "-M$_->[0]=" . join(',' => @{$_->[1]}) : "-M$_->[0]" } $self->load_import),
         (map { "-m$_" } $self->load),
     );

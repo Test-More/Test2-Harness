@@ -306,6 +306,18 @@ RECIPES
     TAP. Some tests depend on using a TAP formatter. This option will make
     yath use Test2::Formatter::TAP or Test::Builder::Formatter.
 
+  HARNESS-NO-IO-EVENTS
+
+    yath usually uses the Test2::Plugin::IOEvents plugin. This plugin
+    replaces STDERR and STDOUT in your test with tied handles that fire off
+    proper Test2::Event's when they are printed to. Most of the time this
+    is not an issue, but any fancy tests or modules which do anything with
+    STDERR or STDOUT other than print may have really messy errors.
+
+    This directive will disable the plugin on a per-test basis.
+    Alternatively you can use the --no-io-events option when running yath
+    to disable it globally for your test suite.
+
   HARNESS-NO-TIMEOUT
 
     yath will usually kill a test if no events occur within a timeout

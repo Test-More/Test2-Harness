@@ -556,6 +556,18 @@ C<yath> usually uses the L<Test2::Formatter::Stream> formatter instead of TAP.
 Some tests depend on using a TAP formatter. This option will make C<yath> use
 L<Test2::Formatter::TAP> or L<Test::Builder::Formatter>.
 
+=head3 HARNESS-NO-IO-EVENTS
+
+C<yath> usually uses the L<Test2::Plugin::IOEvents> plugin. This plugin
+replaces STDERR and STDOUT in your test with tied handles that fire off proper
+L<Test2::Event>'s when they are printed to. Most of the time this is not an
+issue, but any fancy tests or modules which do anything with STDERR or STDOUT
+other than print may have really messy errors.
+
+This directive will disable the plugin on a per-test basis. Alternatively you
+can use the C<--no-io-events> option when running yath to disable it globally
+for your test suite.
+
 =head3 HARNESS-NO-TIMEOUT
 
 C<yath> will usually kill a test if no events occur within a timeout (default

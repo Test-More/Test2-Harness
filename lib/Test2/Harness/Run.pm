@@ -18,6 +18,7 @@ use Test2::Harness::Util::HashBase qw{
     <event_uuids
     <use_stream
     <mem_usage
+    <io_events
 
     <input <input_file <test_args
 

@@ -107,8 +107,9 @@ Test2::Harness::Runner::Preload::Stage - Abstraction of a preload stage.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This is an implementation detail. You are not intended to directly use/modify
+instances of this class. See L<Test2::Harness::Runner::Preload> for
+documentation on how to write a custom preload library.
 
 =head1 SOURCE
 

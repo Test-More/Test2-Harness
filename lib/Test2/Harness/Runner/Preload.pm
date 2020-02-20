@@ -239,8 +239,175 @@ tools.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+L<Test2::Harness> allows you to preload libraries for a performance boost. This
+module provides tools that let you go beyong that and build a more complex
+preload. In addition you can build multiple preload I<stages>, each stage will
+be its own process and tests can run from a specific stage. This allows for
+multiple different preload states from which to run tests.
+
+=head1 SYNOPSIS
+
+=head2 USING YOUR PRELOAD
+
+The C<-P> or C<--preload> options work for custom preload modules just as they
+do regular modules. Yath will know the difference and act accordingly.
+
+    yath test -PMy::Preload
+
+=head2 WRITING YOUR PRELOAD
+
+    package My::Preload;
+    use strict;
+    use warnings;
+
+    # This imports several useful tools, and puts the necessary meta-data in
+    # your package to identify it as a special preload.
+    use Test2::Harness::Runner::Preload;
+
+    # You must specify at least one stage.
+    stage Moose => sub {
+        # Preload can be called multiple times, and can load multiple modules
+        # per call. Order is preserved.
+        preload 'Moose', 'Moose::Role';
+        preload 'Scalar::Util', 'List::Util';
+
+        # preload can also be given a sub if you have some custom code to run
+        # at a specific point in the load order
+        preload sub {
+            # Do something before loading Try::Tiny
+            ...
+        };
+
+        preload 'Try::Tiny';
+
+        # Eager means tests from nested stages can be run in this stage as
+        # well, this is useful if the nested stage takes a long time to load as
+        # it allows yath to start running tests sooner instead of waiting for
+        # the stage to finish loading. Once the nested stage is loaded tests
+        # intended for it will start running from it instead.
+        eager();
+
+        # default means this stage is the one to use if the test does not
+        # specify a stage.
+        default();
+
+        # These are hooks that let you run arbitrary code at specific points in
+        # the process. pre_fork happens just before forking to run a test.
+        # post_fork happens just after forking for a test. pre_launch happens
+        # as late as possible before the test starts executing (post fork,
+        # after $0 and other special state are reset).
+        pre_fork sub { ... };
+        post_fork sub { ... };
+        pre_launch sub { ... };
+
+        # Stages can be nested, nested ones build off the previous stage, but
+        # are in a forked process to avoid contaminating the parent.
+        stage Types => sub {
+            preload 'MooseX::Types';
+        };
+    };
+
+    # Alternative stage that loads Moo instead of Moose
+    stage Moo => sub {
+        preload 'Moo';
+
+        ...
+    };
+
+=head1 EXPORTS
+
+=over 4
+
+=item $meta = TEST2_HARNESS_PRELOAD()
+
+=item $meta = $class->TEST2_HARNESS_PRELOAD()
+
+This export provides the meta object, which is an instance of this class. This
+method being present is how Test2::Harness differentiates between a regular
+module and a special preload library.
+
+=item stage NAME => sub { ... }
+
+This creates a new stage with the given C<NAME>, and then runs the coderef with
+the new stage set as the I<active> one upon which the other function here will
+operate. Once the coderef returns the I<active> stage is cleared.
+
+You may nest stages by calling this function again inside the codeblock.
+
+=item preload $module_name
+
+=item preload @module_names
+
+=item preload sub { ... }
+
+This B<MUST> be called inside a C<stage()> builder coderef.
+
+This adds modules to the list of libraries to preload. Order is preserved. You
+can also add coderefs to execute arbitrary code between module loads.
+
+The coderef is called with no arguments, and its return is ignored.
+
+=item eager()
+
+This B<MUST> be called inside a C<stage()> builder coderef.
+
+This marks the I<active> stage as being I<eager>. An eager stage will start
+running tests for nested stages if it finds itself with no tests of its own to
+run before the nested stage can finish loading. The idea here is to avoid
+unused test slots when possible allowing for tests to complete sooner.
+
+=item default()
+
+This B<MUST> be called inside a C<stage()> builder coderef.
+
+This B<MUST> be called only once across C<ALL> stages in a given library.
+
+If multiple preload libraries are loaded then the I<first> default set (based
+on load order) will be the default, others will notbe honored.
+
+=item $stage_name = file_stage($test_file)
+
+This is optional. If defined this callback will have a chance to look at all
+files that are going to be run and assign them a stage. This may return undef
+or an empty list if it does not have a stage to assign.
+
+If multiple preload libraries define file_stage callbacks they will be called
+in order, the first one to return a stage name will win.
+
+If no file_stage callbacks provide a stage for a file then any harness
+directives declaring a stage will be honored. If no stage is ever assigned then
+the test will be run int he default stage.
+
+=item pre_fork sub { ... }
+
+This B<MUST> be called inside a C<stage()> builder coderef.
+
+Add a callback to be run just before the preload-stage process forks to run the
+test. Note that any state changes here can effect future tests to be run.
+
+=item post_fork sub { ... }
+
+This B<MUST> be called inside a C<stage()> builder coderef.
+
+Add a callback to be run just after the preload-stage process forks to run the
+test. This is run as early as possible, things like C<$0> may not be set
+properly yet.
+
+=item pre_launch sub { ... }
+
+This B<MUST> be called inside a C<stage()> builder coderef.
+
+Add a callback to be run just before control of the test process is turned over
+to the test file itself. This is run as late as possible, so things like C<$0>
+should be set properly.
+
+=back
+
+=head1 META-OBJECT
+
+This class is also the meta-object used to construct a preload library. The
+methods are left undocumented as this is an implementation detail and you are
+not intended to directly use this object.
 
 =head1 SOURCE
 

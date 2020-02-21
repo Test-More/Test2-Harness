@@ -13,7 +13,6 @@ use Importer Importer => 'import';
 
 our @EXPORT_OK = qw{
     find_libraries
-    fit_to_width
     clean_path
 
     parse_exit
@@ -299,8 +298,198 @@ Test2::Harness::Util - General utiliy functions.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+=head1 METHODS
+
+=head2 MISC
+
+=over 4
+
+=item apply_encoding($fh, $enc)
+
+Apply the specified encoding to the filehandle.
+
+B<Justification>:
+L<PERLBUG 31923|https://rt.perl.org/Public/Bug/Display.html?id=31923>
+If utf8 is requested we use ':utf8' instead of ':encoding(utf8)' in
+order to avoid the thread segfault.
+
+This is a reusable implementation of this:
+
+    sub apply_encoding {
+        my ($fh, $enc) = @_;
+        return unless $enc;
+        return binmode($fh, ":utf8") if $enc =~ m/^utf-?8$/i;
+        binmode($fh, ":encoding($enc)");
+    }
+
+=item $clean = clean_path($path)
+
+Take a file path and clean it up to a minimal absolute path if possible. Always
+returns a path, but if it cannot be cleaned up it is unchanged.
+
+=item $hashref = find_libraries($search)
+
+=item $hashref = find_libraries($search, @paths)
+
+C<@INC> is used if no C<@paths> are provided.
+
+C<$search> should be a module name with C<*> wildcards replacing sections.
+
+    find_libraries('Foo::*::Baz')
+    find_libraries('*::Bar::Baz')
+    find_libraries('Foo::Bar::*')
+
+These all look for modules matching the search, this is a good way to find
+plugins, or similar patterns.
+
+The result is a hashref of C<< { $module => $path } >>. If a module exists in
+more than 1 search path the first is used.
+
+=item $mod = fqmod($prefix, $mod)
+
+This will automatically add C<$prefix> to C<$mod> with C<'::'> to join them. If
+C<$mod> starts with the C<'+'> character the character will be removed and the
+result returned without prepending C<$prefix>.
+
+=item hub_truth
+
+This is an internal implementation detail, do not use it.
+
+=item $hashref = parse_exit($?)
+
+This parses the exit value as typically stored in C<$?>.
+
+Resulting hash:
+
+    {
+        sig => ($? & 127), # Signal value if the exit was caused by a signal
+        err => ($? >> 8),  # Actual exit code, if any.
+        dmp => ($? & 128), # Was there a core dump?
+        all => $?,         # Original exit value, unchanged
+    }
+
+
+=item @list = process_includes(%PARAMS)
+
+This method will build up a list of include dirs fit for C<@INC>. The returned
+list should contain only unique values, in proper order.
+
+Params:
+
+=over 4
+
+=item list => \@START
+
+Paths to start the new list.
+
+Optional.
+
+=item ch_dir => $path
+
+Prefix to prepend to all paths in the C<list> param. No effect without an
+initial list.
+
+=item include_current => $bool
+
+This will add all paths from C<@INC> to the output, after the initial list.
+Note that '.', if in C<@INC> will be moved to the end of the final output.
+
+=item clean => $bool
+
+If included all paths except C<'.'> will be cleaned using C<clean_path()>.
+
+=item include_dot => $bool
+
+If true C<'.'> will be appended to the end of the output.
+
+B<Note> even if this is set to false C<'.'> may still be included if it was in
+the initial list, or if it was in C<@INC> and C<@INC> was included using the
+C<include_current> parameter.
+
+=back
+
+=back
+
+=head2 FOR DEALING WITH MODULE <-> FILE CONVERSION
+
+These convert between module names like C<Foo::Bar> and filenames like
+C<Foo/Bar.pm>.
+
+=over 4
+
+=item $file = mod2file($mod)
+
+=item $mod = file2mod($file)
+
+=back
+
+=head2 FOR READING/WRITING FILES
+
+=over 4
+
+=item $fh = open_file($path, $mode)
+
+=item $fh = open_file($path)
+
+If no mode is provided C<< '<' >> is assumed.
+
+This will open the file at C<$path> and return a filehandle.
+
+An exception will be thrown if the file cannot be opened.
+
+B<NOTE:> This will automatically use L<IO::Uncompress::Bunzip2> or
+L<IO::Uncompress::Gunzip> to uncompress the file if it has a .bz2 or .gz
+extension.
+
+=item $text = read_file($file)
+
+This will open the file at C<$path> and return all its contents.
+
+An exception will be thrown if the file cannot be opened.
+
+B<NOTE:> This will automatically use L<IO::Uncompress::Bunzip2> or
+L<IO::Uncompress::Gunzip> to uncompress the file if it has a .bz2 or .gz
+extension.
+
+=item $fh = maybe_open_file($path)
+
+=item $fh = maybe_open_file($path, $mode)
+
+If no mode is provided C<< '<' >> is assumed.
+
+This will open the file at C<$path> and return a filehandle.
+
+C<undef> is returned if the file cannot be opened.
+
+B<NOTE:> This will automatically use L<IO::Uncompress::Bunzip2> or
+L<IO::Uncompress::Gunzip> to uncompress the file if it has a .bz2 or .gz
+extension.
+
+=item $text = maybe_read_file($path)
+
+This will open the file at C<$path> and return all its contents.
+
+This will return C<undef> if the file cannot be opened.
+
+B<NOTE:> This will automatically use L<IO::Uncompress::Bunzip2> or
+L<IO::Uncompress::Gunzip> to uncompress the file if it has a .bz2 or .gz
+extension.
+
+=item @content = write_file($path, @content)
+
+Write content to the specified file. This will open the file with mode
+C<< '>' >>, write the content, then close the file.
+
+An exception will be thrown if any part fails.
+
+=item @content = write_file_atomic($path, @content)
+
+This will open a temporary file, write the content, close the file, then rename
+the file to the desired C<$path>. This is essentially an atomic write in that
+C<$file> will not exist until all content is written, preventing other
+processes from doing a partial read while C<@content> is being written.
+
+=back
 
 =head1 SOURCE
 

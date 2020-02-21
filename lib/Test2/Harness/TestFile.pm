@@ -442,9 +442,157 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::TestFile - Logic to scan a test file.
+Test2::Harness::TestFile - Abstraction of a test file and its meta-data.
 
 =head1 DESCRIPTION
+
+When Test2::Harness finds test files to run each one gets an instance of this
+class to represent it. This class will scan test files to find important meta
+data (binary vs script, inline harness directives, etc). The meta-data this
+class can find helps yath decide when and how to run the test.
+
+If you write a custom L<Test2::Harness::Finder> or use some
+L<Test2::Harness::Plugin> callbacks you may have to use, or even construct
+instances of this class.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::TestFile;
+
+    my $tf = Test2::Harness::TestFile->new(file => "path/to/file.t");
+
+    # For an example 1, 1 works, but normally they are job_name and run_id.
+    my $meta_data = $tf->queue_item(1, 1);
+
+
+=head1 ATTRIBUTES
+
+=over 4
+
+=item $filename = $tf->file
+
+Set during object construction, and cannot be changed.
+
+=item $bool = $tf->is_binary
+
+Automatically set during construction, cannot be changed or set manually.
+
+=item $bool = $tf->non_perl
+
+Automatically set during construction, cannot be changed or set manually.
+
+=item $string = $tf->comment
+
+=item $tf->set_comment($string)
+
+Defaults to '#' can be set during construction, or changed if needed.
+
+This is used to tell yath what character(s) are used to denote a comment. This
+is necessary for finding harness directives. In perl the '#' character is used,
+and that is the default value. This is here to support non-perl tests.
+
+=item $class = $tf->job_class
+
+=item $tf->set_job_class($class)
+
+Default it undef (let the runner pick). You can change this if you want the
+test to run with a custom job subclass.
+
+=item $arrayref = $tf->queue_args
+
+=item $tf->set_queue_args(\@ARGS)
+
+Key/Value pairs to append to the queue_item() data.
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item $cat = $tf->check_category()
+
+=item $tf->set_category($cat)
+
+This is how you find the category for a file. You canuse C<set_category()> to
+assign/override a category.
+
+=item $dur = $tf->check_duration()
+
+=item $tf->set_duration($dur)
+
+Get the duration of the test file ('LONG', 'MEDIUM', 'SHORT'). You can override
+with C<set_duration()>.
+
+=item $stage = $tf->check_stage()
+
+=item $tf->set_stage($stage)
+
+Get the preload stage the test file thinks it should be run in. You can
+override with C<set_stage()>.
+
+=item $bool = $tf->check_feature($name)
+
+This checks for the C<# HARNESS-NO-NAME> or C<# HARNESS-USE-NAME> or
+C<# HARNESS-YES-NAME> directives. C<NO> will result in a false boolean. C<YES>
+and C<USE> will result in a ture boolean. If no directive is found then
+C<undef> will be returned.
+
+=item $arrayref = $tf->conflicts_list()
+
+Get a list of conflict markers.
+
+=item $seconds = $tf->event_timeout()
+
+If they test specifies an event timeout this will return it.
+
+=item %headers = $tf->headers()
+
+This returns the header data from the test file.
+
+=item $bool = $tf->is_executable()
+
+Check if the test file is executable or not.
+
+=item $data = $tf->meta($key)
+
+Get the meta-data for the specific key.
+
+=item $seconds = $tf->post_exit_timeout()
+
+If the test file has a custom post-exit timeout, this will return it.
+
+=item $hashref = $tf->queue_item($job_name, $run_id)
+
+This returns the data used to add the test file to the runner queue.
+
+=item $int = $tf->rank()
+
+Returns an integer value used to sort tests into an efficient run order.
+
+=item $path = $tf->relative()
+
+Relative path to the test file.
+
+=item $tf->scan()
+
+Scan the file and populate the header data. Return nothing, takes no arguments.
+Automatically run by things that require the scan data. Results are cached.
+
+=item $tf->set_smoke($bool)
+
+Set smoke status. Smoke tests go to the front of the line when tests are
+sorted.
+
+=item $hashref = $tf->shbang()
+
+Get data gathered from parsing the tests shbang line.
+
+=item $arrayref = $tf->switches()
+
+A list of switches passed to perl, usually from the shbang line.
+
+=back
 
 =head1 SOURCE
 

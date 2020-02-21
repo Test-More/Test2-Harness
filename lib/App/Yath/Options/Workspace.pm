@@ -52,7 +52,7 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
         }
 
         my $project = $settings->harness->project;
-        my $template = join '-' => ( "yath", $project // "test", $$, "XXXXXXXX");
+        my $template = join '-' => ( "yath", $$, "XXXXXX");
 
         my $tmpdir = tempdir(
             $template,

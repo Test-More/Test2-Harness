@@ -55,6 +55,7 @@ use Test2::Harness::Util::HashBase(
         +last_timeout_check
         +dispatch_lock_file
         +can_stage
+        <tmp_dir
     },
 );
 
@@ -79,6 +80,12 @@ sub init {
         print STDERR "$$ $0 ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
         $self->{+SIGNAL} = $sig;
     };
+
+    my $tmp_dir = File::Spec->catdir($self->{+DIR}, 'tmp');
+    unless (-d $tmp_dir) {
+        mkdir($tmp_dir) or die "Could not create temp dir: $!";
+    }
+    $self->{+TMP_DIR} = $tmp_dir;
 
     $self->SUPER::init();
 }

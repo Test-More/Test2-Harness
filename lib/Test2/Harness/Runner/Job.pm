@@ -11,6 +11,7 @@ use Test2::Util qw/CAN_REALLY_FORK/;
 use Time::HiRes qw/time/;
 
 use File::Spec();
+use File::Temp();
 
 use Test2::Harness::Util qw/fqmod clean_path write_file_atomic write_file mod2file open_file parse_exit process_includes/;
 use Test2::Harness::IPC;
@@ -312,11 +313,12 @@ sub job_dir {
 
 sub tmp_dir {
     my $self = shift;
+
     return $self->{+TMP_DIR} if $self->{+TMP_DIR};
 
-    my $tmp_dir = File::Spec->catdir($self->job_dir, 'tmp');
-    mkdir($tmp_dir) or die "$$ $0 Could not create temp directory '$tmp_dir': $!";
-    $self->{+TMP_DIR} = $tmp_dir;
+    my $tmp_dir = File::Temp::tempdir("XXXXXX", DIR => $self->runner->tmp_dir);
+
+    $self->{+TMP_DIR} = clean_path($tmp_dir);
 }
 
 sub make_event_dir { $_[0]->event_dir }

@@ -2,12 +2,13 @@
 use strict;
 use warnings;
 
-require App::Yath::Command;
 
 die "No directory specified" unless @ARGV;
 chdir($ARGV[0]) or die "Could not chdir to $ARGV[0]";
 
 unshift @INC => './lib';
+
+require App::Yath::Command;
 
 for my $base ('./lib/App/Yath/Options', './lib/App/Yath/Plugin') {
     opendir(my $dh, $base) or die "Could not open dir '$base': $!";

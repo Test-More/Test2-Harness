@@ -2,7 +2,7 @@ package Test2::Harness::Auditor;
 use strict;
 use warnings;
 
-our $VERSION = '1.000000';
+our $VERSION = '0.999000';
 
 use File::Spec;
 use Time::HiRes qw/time/;

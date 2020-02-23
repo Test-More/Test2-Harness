@@ -1,5 +1,6 @@
 use Test2::V0;
 
+use Config qw/%Config/;
 use File::Temp qw/tempdir/;
 use File::Spec;
 
@@ -201,7 +202,7 @@ if ("$]" >= 5.026) {
     note q[Checking %INC and @INC setup];
 
     local @INC =  map { clean_path( $_ ) } grep { $_ ne '.' } @INC;
-    local $ENV{PERL5LIB} = join ':', map { clean_path( $_ ) } grep { $_ ne '.' } split( ':', $ENV{PERL5LIB} );
+    local $ENV{PERL5LIB} = join $Config{path_sep}, map { clean_path( $_ ) } grep { $_ ne '.' } split( $Config{path_sep}, $ENV{PERL5LIB} );
     local $ENV{PERL_USE_UNSAFE_INC};
     delete $ENV{PERL_USE_UNSAFE_INC};
 

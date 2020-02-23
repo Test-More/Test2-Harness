@@ -25,7 +25,7 @@ like(
         File::Spec->catdir($path, 'blib', 'lib'),
         File::Spec->catdir($path, 'blib', 'arch'),
     ],
-    "When running non-perl the libs were aded via PERL5LIB"
+    "When running non-perl the libs were added via PERL5LIB"
 );
 
 done_testing;

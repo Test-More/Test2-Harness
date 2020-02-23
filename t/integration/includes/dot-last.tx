@@ -19,6 +19,6 @@ like(
 
 is($INC[-1], '.', "Dot added last");
 
-is($ENV{PERL5LIB}, "foo", "PERL5LIB has not been modified");
+is($ENV{PERL5LIB}, $ENV{OLD_PERL5LIB}, "PERL5LIB has not been modified");
 
 done_testing;

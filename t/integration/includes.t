@@ -12,8 +12,7 @@ my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 
 chdir($dir);
-$ENV{PERL5LIB} = "foo";
-
+$ENV{OLD_PERL5LIB} = $ENV{PERL5LIB};
 
 yath(
     command => 'test',

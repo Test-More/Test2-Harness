@@ -2,7 +2,7 @@ package Test2::Harness::Auditor::Watcher;
 use strict;
 use warnings;
 
-our $VERSION = '0.999001';
+our $VERSION = '0.999002';
 
 use Carp qw/croak confess/;
 use Scalar::Util qw/blessed/;

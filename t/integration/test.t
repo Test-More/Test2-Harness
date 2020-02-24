@@ -210,9 +210,8 @@ if ("$]" >= 5.026) {
 
     yath(
         command => 'test',
-        args => [ '-v', '--ext=tx', '--no-unsafe-inc', $sdir ],
+        args => ['--ext=tx', '--no-unsafe-inc', $sdir],
         exit => 0,
-        debug => 2,
         test => sub {
             my $out = shift;
 

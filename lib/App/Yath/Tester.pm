@@ -23,9 +23,7 @@ our @EXPORT = qw/yath make_example_dir/;
 my $pdir = tempdir(CLEANUP => 1);
 
 require App::Yath;
-my $apppath = $INC{'App/Yath.pm'};
-$apppath =~ s{App\S+Yath\.pm$}{}g;
-$apppath = clean_path($apppath);
+my $apppath = App::Yath->app_path;
 
 sub cover {
     return unless $ENV{T2_DEVEL_COVER};
@@ -59,14 +57,14 @@ sub yath {
         croak "Unexpected parameters: " . join (', ', sort keys %params);
     }
 
-    my @inc;
+    my (@inc, @dev);
     if ($inc) {
         my ($pkg, $file) = caller();
         my $dir = $file;
         $dir =~ s/\.t2?$//g;
 
         my $inc = File::Spec->catdir($dir, 'lib');
-        push @inc => "-D$inc" if -d $inc;
+        push @dev => "-D$inc" if -d $inc;
     }
 
     my ($rh, $wh);
@@ -83,12 +81,15 @@ sub yath {
         print "DEBUG: log file = '$logfile'\n" if $debug;
     }
 
-    unshift @inc => "-D$apppath" unless $no_app_path;
+    unless ($no_app_path) {
+        push @inc => "-I$apppath" if $cmd =~ m/^(test|start|projects)$/;
+        push @dev => "-D$apppath";
+    }
 
     my @cover = cover();
 
     my $yath = find_yath;
-    my @cmd = ($^X, @$lib, @cover, $yath, @$pre, @inc, $cmd ? ($cmd) : (), @log, @$cli);
+    my @cmd = ($^X, @$lib, @cover, $yath, @$pre, @dev, $cmd ? ($cmd) : (), @inc, @log, @$cli);
 
     print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $debug;
 

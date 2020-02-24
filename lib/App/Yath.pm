@@ -20,6 +20,11 @@ use App::Yath::Util qw/find_pfile/;
 use Test2::Harness::Util qw/find_libraries clean_path/;
 use App::Yath::Options();
 
+my $APP_PATH = __FILE__;
+$APP_PATH =~ s{App\S+Yath\.pm$}{}g;
+$APP_PATH = clean_path($APP_PATH);
+sub app_path { $APP_PATH }
+
 sub init {
     my $self = shift;
 

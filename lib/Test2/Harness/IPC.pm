@@ -26,7 +26,7 @@ BEGIN {
 }
 
 use Test2::Harness::Util::HashBase qw{
-    <pid <root_pid
+    <pid
     <handlers
     <procs
     <procs_by_cat
@@ -40,7 +40,6 @@ sub init {
     my $self = shift;
 
     $self->{+PID} = $$;
-    $self->{+ROOT_PID} = $$;
 
     $self->{+PROCS} //= {};
     $self->{+PROCS_BY_CAT} //= {};
@@ -94,13 +93,7 @@ sub handle_sig {
     return $self->{+HANDLERS}->{$sig}->($sig) if $self->{+HANDLERS}->{$sig};
 
     $self->stop();
-    exit($self->sig_exit_code($sig));
-}
-
-sub sig_exit_code {
-    my $self = shift;
-    my ($sig) = @_;
-    return 128 + SIG_MAP->{$sig};
+    exit(SIG_MAP->{$sig});
 }
 
 sub killall {
@@ -217,7 +210,7 @@ sub wait {
         $found += $self->_bring_out_yer_dead();
         $found += $self->_check_if_dead_yet();
 
-        return $found if $self->wait_done($found, $start, \%params);
+        return $found if $self->_wait_done($found, $start, \%params);
 
         if (my $cat = $params{cat}) {
             my $cur_total = keys %{$cat_procs->{$cat}};
@@ -240,7 +233,7 @@ sub wait {
     return $found;
 }
 
-sub wait_done {
+sub _wait_done {
     my $self = shift;
     my ($found, $start, $params) = @_;
 
@@ -319,6 +312,166 @@ Test2::Harness::IPC - Base class for modules that control child processes.
 
 B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
 time. Documentation and tests have not been written yet!
+
+=head1 ATTRIBUTES
+
+=over 4
+
+=item $pid = $ipc->pid
+
+The root PID of the IPC object.
+
+=item $hashref = $ipc->handlers
+
+Custom signal handlers specific to the IPC object.
+
+=item $hashref = $ipc->procs
+
+Hashref of C<< $pid => $proc >> where $proc is an instance of
+L<Test2::Harness::IPC::Proc>.
+
+=item $hashref = $ipc->procs_by_cat
+
+Hashref of C<< $category => { $pid => $proc } >>.
+
+=item $hashref = $ipc->waiting
+
+Hashref of processes that have finished, but have not been handled yet.
+
+This is an implementation detail you should not rely on.
+
+=item $float = $ipc->wait_time
+
+How long to sleep between loops when in a wait cycle.
+
+=item $bool = $ipc->started
+
+True if the IPC process has started.
+
+=item $ipc->sig_count
+
+Implementation detail, used to break wait loops when signals are received.
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item $ipc->start
+
+Start the IPC management (Insert signal handlers).
+
+=item $ipc->stop
+
+Stop the IPC management (Remove signal handlers).
+
+=item $ipc->set_sig_handler($sig, sub { ... })
+
+Set a custom signal handler. This is a safer version of
+C<< local %SIG{$sig} >> for use with IPC.
+
+The callback will get exactly one argument, the name of the signal that was
+recieved.
+
+=item $ipc->handle_sig($sig)
+
+Handle the specified signal. Will cause process exit if the signal has no
+handler.
+
+=item $ipc->killall()
+
+=item $ipc->killall($sig)
+
+Kill all tracked child process with the given signal. C<TERM> is used if no
+signal is specified.
+
+This will not wait on the processes, you must call C<< $ipc->wait() >>.
+
+=item $ipc->check_timeouts
+
+This is a no-op on the IPC base class. This is called every loop of
+C<< $ipc->wait >>. If you subclass the IPC class you can fill this in to make
+processes timeout if needed.
+
+=item $ipc->check_for_fork
+
+This is used a lot internally to check if this is a forked process. If this is
+a forked process the IPC object is completely reset with no remaining internal
+state (except signal handlers).
+
+=item $ipc->set_proc_exit($proc, @args)
+
+Calls C<< $proc->set_exit(@args) >>. This is called by C<< $ipc->wait >>. You
+can override it to add custom tasks when a process exits.
+
+=item $int = $ipc->wait()
+
+=item $int = $ipc->wait(%params)
+
+Wait on processes, return the number found.
+
+Default is non-blocking.
+
+Options:
+
+=over 4
+
+=item timeout => $float
+
+If a blocking paremeter is provided this can be used to break the wait after a
+timeout. L<Time::HiRes> is used, so timeout is in seconds with decimals.
+
+=item all => $bool
+
+Block until B<ALL> processes are done.
+
+=item cat => $category
+
+Block until at least 1 process from the category is complete.
+
+=item all_cat => $category
+
+Block until B<ALL> processes from the category are complete.
+
+=item block => $bool
+
+Block until at least 1 process is complete.
+
+=back
+
+=item $ipc->watch($proc)
+
+Add a process to be monitored.
+
+=item $proc = $ipc->spawn($proc)
+
+=item $proc = $ipc->spawn(%params)
+
+In the first form $proc is an instance of L<Test2::Harness::IPC::Proc> that
+provides C<spawn_params()>.
+
+In the second form the following params are allowed:
+
+Anything supported by C<run_cmd()> in L<Test2::Harness::Util::IPC>.
+
+=over 4
+
+=item process_class => $CLASS
+
+Default is L<Test2::Harness::IPC::Process>.
+
+=item command => $command
+
+Program command to call. This is required.
+
+=item env_vars => { ... }
+
+Specify custom environment variables for the new process.
+
+=back
+
+=back
 
 =head1 SOURCE
 

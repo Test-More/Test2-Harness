@@ -734,6 +734,10 @@ App::Yath does not provide many methods to use externally.
 This tells App::Yath to generate a subroutine at the specified symbol name
 which can be run and be expected to return an exit value.
 
+=item $lib_path = $app->app_path()
+
+Get the include directory App::Yath was loaded from.
+
 =back
 
 =head1 SOURCE

@@ -55,8 +55,51 @@ Test2::Harness::IPC.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+All processes controlled by L<Test2::Harness::IPC> should subclass this one.
+
+=head1 ATTRIBUTES
+
+=over 4
+
+=item $int = $proc->exit
+
+Exit value, if set. Otherwise C<undef>.
+
+=item $stamp = $proc->exit_time
+
+Timestamp of the process exit, if set, otherwise C<undef>.
+
+=item $pid = $proc->pid
+
+Pid of the process, if it has been started.
+
+=item $cat = $proc->category
+
+Set at construction, C<'default'> if not provided.
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item $opt->set_pid($pid)
+
+Set the process id.
+
+=item $opt->set_exit($ipc, $exit, $time)
+
+Set the process as complete. $exit should be the exit value. $time should be a
+timestamp. $ipc is an instance of L<Test2::Harness::IPC>.
+
+=item $hashref = $opt->spawn_params()
+
+Used when spawning the process, args go to C<run_cmd()> from
+L<Test2::Harness::Util::IPC>.
+
+The base class throws an exception if this method is called.
+
+=back
 
 =head1 SOURCE
 

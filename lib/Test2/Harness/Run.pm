@@ -77,8 +77,75 @@ options.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+=head1 ATTRIBUTES
+
+These are set at construction time and cannot be modified.
+
+See L<App::Yath::Options::Run> for more documentation on these.
+
+=head2 FROM OPTIONS
+
+=over 4
+
+=item $bool = $run->author_testing
+
+=item $hashref = $run->env_vars
+
+=item $bool = $run->event_uuids
+
+=item $arrayref = $run->fields
+
+=item $string = $run->input
+
+=item $path = $run->input_file
+
+=item $bool = $run->io_events
+
+=item $arrayref = $run->links
+
+=item $arrayref = $run->load
+
+=item $hashref = $run->load_import
+
+=item $bool = $run->mem_usage
+
+=item $int = $run->retry
+
+=item $bool = $run->retry_isolated
+
+=item $string = $run->run_id
+
+=item $arrayref = $run->test_args
+
+=item $bool = $run->unsafe_inc
+
+=item $bool = $run->use_stream
+
+=back
+
+=head2 OTHER
+
+=over 4
+
+=item $hashref = $run->meta
+
+meta-data plugins may have attached.
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item $path = $run->run_dir($workdir)
+
+Returns the path C<"$workdir/$run_id">.
+
+=item $hashref = $run->queue_item(\@PLUGINS)
+
+Gets the queue item that represents this object.
+
+=back
 
 =head1 SOURCE
 

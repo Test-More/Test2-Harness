@@ -458,6 +458,10 @@ App::Yath does not provide many methods to use externally.
     This tells App::Yath to generate a subroutine at the specified symbol name
     which can be run and be expected to return an exit value.
 
+- $lib\_path = $app->app\_path()
+
+    Get the include directory App::Yath was loaded from.
+
 # SOURCE
 
 The source code repository for Test2-Harness can be found at

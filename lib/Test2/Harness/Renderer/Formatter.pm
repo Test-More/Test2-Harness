@@ -163,6 +163,10 @@ for rendering.
 
 =head1 DESCRIPTION
 
+This renderer simply acts as a communication layer between the harness and any
+Test2 formatter that you wish to use to display results. Not all formatters
+will produce useful output for harness events.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

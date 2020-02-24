@@ -475,6 +475,10 @@ MODULE DOCS
       This tells App::Yath to generate a subroutine at the specified symbol
       name which can be run and be expected to return an exit value.
 
+    $lib_path = $app->app_path()
+
+      Get the include directory App::Yath was loaded from.
+
 SOURCE
 
     The source code repository for Test2-Harness can be found at

@@ -99,7 +99,7 @@ This is what arguments are recieved:
     )
 
 The final_data looks like this, note that some data may not be present if it is
-not applicable. The data structure can be as simpel as
+not applicable. The data structure can be as simple as
 C<< { pass => $bool } >>.
 
     {

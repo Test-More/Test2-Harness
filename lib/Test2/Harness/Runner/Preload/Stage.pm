@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Preload::Stage;
 use strict;
 use warnings;
 
-our $VERSION = '0.999002';
+our $VERSION = '0.999003';
 
 use Carp qw/croak/;
 

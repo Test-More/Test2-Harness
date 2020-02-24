@@ -2,11 +2,13 @@ use Test2::V0;
 
 use File::Temp qw/tempdir/;
 use File::Spec;
+use Cwd qw/cwd/;
 
 use App::Yath::Tester qw/yath/;
 use App::Yath::Util qw/find_yath/;
 find_yath();    # cache result before we chdir
 
+my $orig = cwd();
 my $dir = tempdir(CLEANUP => 1);
 chdir($dir);
 
@@ -30,5 +32,7 @@ yath(
         ok($found, "Found generated note");
     },
 );
+
+chdir($orig);
 
 done_testing;

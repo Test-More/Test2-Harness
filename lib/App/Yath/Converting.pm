@@ -2,7 +2,7 @@ package App::Yath::Converting;
 use strict;
 use warnings;
 
-our $VERSION = '0.999003';
+our $VERSION = '0.999004';
 
 1;
 

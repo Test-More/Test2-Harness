@@ -4,12 +4,12 @@ use warnings;
 
 use parent 'App::Yath::Command';
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
 use Test2::Harness::Util qw/open_file/;
 use App::Yath::Util qw/is_generated_test_pl/;
 
-sub show_bench { 0 }
+sub group { 'zinit' }
 
 sub summary { "Create/update test.pl to run tests via Test2::Harness" }
 
@@ -39,9 +39,10 @@ sub run {
 use strict;
 use warnings;
 
+use lib 'lib';
 use App::Yath::Util qw/find_yath/;
 
-system($^X, '-Ilib', find_yath(), 'test', '--default-search' => './t', '--default-search' => './t2', @ARGV);
+system($^X, find_yath(), '-D', 'test', '--default-search' => './t', '--default-search' => './t2', @ARGV);
 my $exit = $?;
 
 # This makes sure it works with prove.
@@ -61,48 +62,5 @@ exit($exit ? 255 : 0);
 
 __END__
 
-=pod
+=head1 POD IS AUTO-GENERATED
 
-=encoding UTF-8
-
-=head1 NAME
-
-=head1 DESCRIPTION
-
-=head1 SYNOPSIS
-
-=head1 COMMAND LINE USAGE
-
-B<THIS SECTION IS AUTO-GENERATED AT BUILD>
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

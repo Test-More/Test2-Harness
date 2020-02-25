@@ -1,0 +1,27 @@
+use Test2::V0;
+
+use File::Spec;
+
+my @parts = File::Spec->splitpath(File::Spec->rel2abs(__FILE__));
+pop @parts;
+my $path = File::Spec->catpath(@parts);
+
+require App::Yath;
+
+like(
+    \@INC,
+    [
+        App::Yath->app_path,
+        File::Spec->catdir($path, 'xyz'),
+        File::Spec->catdir($path, 'lib'),
+        File::Spec->catdir($path, 'blib', 'lib'),
+        File::Spec->catdir($path, 'blib', 'arch'),
+    ],
+    "Added all via cli, in order"
+);
+
+is($INC[-1], '.', "Dot added last");
+
+is($ENV{PERL5LIB}, $ENV{OLD_PERL5LIB}, "PERL5LIB has not been modified");
+
+done_testing;

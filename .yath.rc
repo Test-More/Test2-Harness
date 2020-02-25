@@ -1,3 +1,7 @@
+-D
+-D=rel(t2/lib)
+;-pSelfTest
+--project Test2-Harness
+
 [test]
--It2/lib
--pSelfTest
+-Irel(t2/lib)

@@ -2,7 +2,7 @@ package Test2::Formatter::QVF;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
 BEGIN { require Test2::Formatter::Test2; our @ISA = qw(Test2::Formatter::Test2) }
 
@@ -36,6 +36,7 @@ sub write {
             $self->SUPER::write(@{$_}) for @$buffer;
         }
         else {
+            $f->{info} = [grep { $_->{tag} ne 'TIME' } @{$f->{info}}] if $f->{info};
             $self->SUPER::write($e, $num, $f)
         }
     }
@@ -65,3 +66,58 @@ sub write {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Formatter::QVF - Test2 formatter that is [Q]uiet but [V]erbose on
+[F]ailure.
+
+=head1 DESCRIPTION
+
+This formatter is a subclass of L<Test2::Formatter::Test2>. This one will
+buffer all output from a test file and only show it to you if there is a
+failure. Most of the time it willonly show you the completion notifications for
+each test.
+
+=head1 SYNOPSIS
+
+    $ yath test --qvf ...
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut
+

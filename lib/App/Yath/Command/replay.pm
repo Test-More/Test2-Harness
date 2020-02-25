@@ -2,24 +2,24 @@ package App::Yath::Command::replay;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
-use Test2::Util qw/pkg_to_file/;
+use App::Yath::Options;
+require App::Yath::Command::test;
 
-use Test2::Harness::Feeder::JSONL;
-use Test2::Harness::Run;
-use Test2::Harness;
+use parent 'App::Yath::Command';
+use Test2::Harness::Util::HashBase qw/+renderers <final_data <log_file <tests_seen <asserts_seen/;
 
-use parent 'App::Yath::Command::test';
-use Test2::Harness::Util::HashBase;
+include_options(
+    'App::Yath::Options::Debug',
+    'App::Yath::Options::Display',
+    'App::Yath::Options::PreCommand',
+);
+
+
+sub group { 'log' }
 
 sub summary { "Replay a test run from an event log" }
-
-sub group { ' test' }
-
-sub has_runner  { 0 }
-sub has_logger  { 0 }
-sub has_display { 1 }
 
 sub cli_args { "[--] event_log.jsonl[.gz|.bz2] [job1, job2, ...]" }
 
@@ -35,82 +35,63 @@ command accepts.
     EOT
 }
 
-sub handle_list_args {
+sub init {
     my $self = shift;
-    my ($list) = @_;
+    $self->SUPER::init() if $self->can('SUPER::init');
 
-    my $settings = $self->{+SETTINGS};
-
-    my ($log, @jobs) = @$list;
-
-    $settings->{log_file} = $log;
-    $settings->{jobs} = { map { $_ => 1 } @jobs} if @jobs;
-
-    die "You must specify a log file.\n"
-        unless $log;
-
-    die "Invalid log file: '$log'"
-        unless -f $log;
+    $self->{+TESTS_SEEN}   //= 0;
+    $self->{+ASSERTS_SEEN} //= 0;
 }
 
-sub feeder {
+sub run {
     my $self = shift;
 
-    my $settings = $self->{+SETTINGS};
+    my $args      = $self->args;
+    my $settings  = $self->settings;
+    my $renderers = $self->App::Yath::Command::test::renderers;
 
-    my $feeder = Test2::Harness::Feeder::JSONL->new(file => $settings->{log_file});
+    shift @$args if @$args && $args->[0] eq '--';
 
-    return ($feeder);
+    $self->{+LOG_FILE} = shift @$args or die "You must specify a log file";
+    die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
+    die "'$self->{+LOG_FILE}' does not look like a log file" unless $self->{+LOG_FILE} =~ m/\.jsonl(\.(gz|bz2))?$/;
+
+    my $jobs = @$args ? {map {$_ => 1} @$args} : undef;
+
+    my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
+
+    while (1) {
+        my @events = $stream->poll(max => 1000) or last;
+
+        for my $e (@events) {
+            last unless defined $e;
+
+            $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
+            $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
+
+            if (my $final = $e->{facet_data}->{harness_final}) {
+                $self->{+FINAL_DATA} = $final;
+            }
+            else {
+                next if $jobs && !$jobs->{$e->{job_id}};
+                $_->render_event($e) for @$renderers;
+            }
+        }
+    }
+
+    $_->finish() for @$renderers;
+
+    my $final_data = $self->{+FINAL_DATA} or die "Log did not contain final data!\n";
+
+    $self->App::Yath::Command::test::render_final_data($final_data);
+    $self->App::Yath::Command::test::render_summary($final_data->{pass});
+
+    return $final_data->{pass} ? 0 : 1;
 }
 
 1;
 
 __END__
 
-=pod
+=head1 POD IS AUTO-GENERATED
 
-=encoding UTF-8
-
-=head1 NAME
-
-App::Yath::Command::replay - Command to replay a test run from an event log.
-
-=head1 DESCRIPTION
-
-=head1 SYNOPSIS
-
-=head1 COMMAND LINE USAGE
-
-B<THIS SECTION IS AUTO-GENERATED AT BUILD>
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

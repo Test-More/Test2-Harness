@@ -2,7 +2,7 @@ package Test2::Formatter::Stream;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
 use Carp qw/croak confess/;
 use Time::HiRes qw/time/;
@@ -11,18 +11,19 @@ use File::Spec();
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON JSON_IS_XS/;
-use Test2::Harness::Util qw/hub_truth/;
+use Test2::Harness::Util qw/hub_truth apply_encoding/;
 
 use Test2::Util qw/get_tid ipc_separator/;
 
 use base qw/Test2::Formatter/;
-use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh/;
+use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id/;
 
 BEGIN {
     my $J = JSON->new;
     $J->indent(0);
     $J->convert_blessed(1);
     $J->allow_blessed(1);
+    $J->utf8(1);
 
     require constant;
     constant->import(ENCODER => $J);
@@ -33,12 +34,13 @@ BEGIN {
         $JPP->indent(0);
         $JPP->convert_blessed(1);
         $JPP->allow_blessed(1);
+        $JPP->utf8(1);
 
         constant->import(ENCODER_PP => $JPP);
     }
 }
 
-my ($ROOT_TID, $ROOT_PID, $ROOT_DIR);
+my ($ROOT_TID, $ROOT_PID, $ROOT_DIR, $ROOT_JOB_ID);
 sub import {
     my $class = shift;
     my %params = @_;
@@ -51,6 +53,7 @@ sub import {
     $ROOT_PID  = $$;
     $ROOT_TID  = get_tid();
     $ROOT_DIR = $params{dir} if $params{dir};
+    $ROOT_JOB_ID = $params{job_id} if $params{job_id};
 }
 
 sub hide_buffered { 0 }
@@ -84,8 +87,11 @@ sub fh {
 
     mkdir($dir) or die "Could not make dir '$dir': $!" unless -d $dir;
     confess "File '$file' already exists!" if -f $file;
-    open(my $fh, '>:utf8', $file) or die "Could not open file: $file";
+    open(my $fh, '>', $file) or die "Could not open file: $file";
     $fh->autoflush(1);
+
+    # Do not apply encoding to the UTF8 output, we let the utf8 formatter
+    # handle that. This means do not apply encoding to $self->{+_FH}.
 
     return $self->{+_FH} = $fh;
 }
@@ -97,25 +103,20 @@ sub init {
 
     for (@{$self->{+IO}}) {
         $_->autoflush(1);
-        binmode($_, ":utf8") for @{$self->{+IO}};
     }
 
     STDOUT->autoflush(1);
-    binmode(STDOUT, ":utf8");
     STDERR->autoflush(1);
-    binmode(STDERR, ":utf8");
 
     if ($INC{'Test2/API.pm'}) {
         Test2::API::test2_stdout()->autoflush(1);
         Test2::API::test2_stderr()->autoflush(1);
-        binmode($_, ":utf8") for (Test2::API::test2_stdout(), Test2::API::test2_stderr());
     }
 
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;
         $self->{+TB} = Test::Builder::Formatter->new();
         $self->{+TB_HANDLES} = [@{$self->{+TB}->handles}];
-        binmode($_, ":utf8") for @{$self->{+TB_HANDLES}};
     }
 }
 
@@ -140,9 +141,12 @@ sub new_root {
         if exists $ENV{T2_STREAM_FILE};
 
     $params{+DIR} ||= $ENV{T2_STREAM_DIR} || $ROOT_DIR;
+    $params{+JOB_ID} ||= $ENV{T2_STREAM_JOB_ID} || $ROOT_JOB_ID || 1;
 
     # DO NOT REOPEN THEM!
+    delete $ENV{T2_FORMATTER} if $ENV{T2_FORMATTER} && $ENV{T2_FORMATTER} eq 'Stream';
     delete $ENV{T2_STREAM_DIR};
+    delete $ENV{T2_STREAM_JOB_ID};
     $ROOT_DIR = undef;
 
     $params{check_tb} = 1 if $INC{'Test/Builder.pm'};
@@ -164,6 +168,19 @@ sub record {
     unless($fh) {
         $leader = 1;
         $fh = shift @sync;
+    }
+
+    if ($facets->{control}->{halt}) {
+        my $reason = $facets->{control}->{details} || "";
+
+        if ($leader) {
+            print $fh "\nBail out!  $reason\n";
+        }
+        else {
+            open(my $bh, '>', File::Spec->catfile($self->{+DIR}, 'bail')) or die "Could not create bail file: $!";
+            print $bh $reason;
+            close($bh);
+        }
     }
 
     my $tid = get_tid();
@@ -223,9 +240,11 @@ sub record {
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
 
-    print $fh $leader ? ("T2-HARNESS-EVENT: ", $json, "\n") : ($json, "\n");
+    my $job_id = $self->{+JOB_ID};
 
-    print $_ "T2-HARNESS-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
+    print $fh $leader ? ("T2-HARNESS-$job_id-EVENT: ", $json, "\n") : ($json, "\n");
+
+    print $_ "T2-HARNESS-$job_id-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
 }
 
 sub encoding {
@@ -233,7 +252,6 @@ sub encoding {
 
     if (@_) {
         my ($enc) = @_;
-        confess "Stream formatter only supports utf8" unless $enc =~ m/^utf-?8$/i;
         $self->record({control => {encoding => $enc}});
         $self->_set_encoding($enc);
         $self->{+TB}->encoding($enc) if $self->{+TB};
@@ -248,11 +266,17 @@ sub _set_encoding {
     if (@_) {
         my ($enc) = @_;
 
-        # https://rt.perl.org/Public/Bug/Display.html?id=31923
-        # If utf8 is requested we use ':utf8' instead of ':encoding(utf8)' in
-        # order to avoid the thread segfault.
-        confess "Stream formatter only supports utf8" unless $enc =~ m/^utf-?8$/i;
-        binmode($_, ":utf8") for @{$self->{+IO}};
+        # Do not apply encoding to the UTF8 output, we let the utf8 formatter
+        # handle that. This means do not apply encoding to $self->{+_FH}.
+
+        apply_encoding(\*STDOUT, $enc);
+        apply_encoding(\*STDERR, $enc);
+
+        my $job_id = $self->{+JOB_ID};
+        for my $fh (@{$self->{+IO}}) {
+            print $fh "T2-HARNESS-$job_id-ENCODING: $enc\n";
+            apply_encoding($fh, $enc);
+        }
     }
 
     return $self->{+_ENCODING};
@@ -388,6 +412,27 @@ Test2::Formatter::Stream - Test2 Formatter that directly writes events.
 
 =head1 DESCRIPTION
 
+This formatter writes all test2 events to event files (one per process/thread)
+instead of writing them to STDERR/STDOUT. It will output synchronization
+messages to STDERR/STDOUT every time an event is written. From this data the
+test output can be properly reconstructed in order with STDERR/STDOUT and
+events mostly synced so that they appear in the correct order.
+
+This formatter is not usually useful to humans. This formatter is used by
+L<Test2::Harness> when possible to prevent the loss of data that normally
+occurs when TAP is used.
+
+=head1 SYNOPSIS
+
+If you really want your test to output this:
+
+    use Test2::Formatter::Stream;
+    use Test2::V0;
+    ...
+
+Otherwise just use L<App::Yath> without the C<--no-stream> argument and this
+formatter will be used when possible.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at
@@ -411,7 +456,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 COPYRIGHT
 
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

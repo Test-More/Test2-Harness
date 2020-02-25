@@ -2,7 +2,7 @@ package Test2::Harness::Util::JSON;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
 BEGIN {
     local $@ = undef;
@@ -43,7 +43,7 @@ BEGIN {
 
 }
 
-our @EXPORT = qw{JSON encode_json decode_json encode_pretty_json encode_canon_json};
+our @EXPORT = qw{JSON encode_json decode_json decode_json_non_utf8 encode_pretty_json encode_canon_json};
 our @EXPORT_OK = qw{JSON_IS_PP JSON_IS_XS JSON_IS_CPANEL JSON_IS_CPANEL_OR_XS};
 BEGIN { require Exporter; our @ISA = qw(Exporter) }
 
@@ -71,7 +71,26 @@ sub decode_json {
     };
     $error ||= $@;
     return $data if $ok;
-    die "JSON decode error: $error$input\n";
+    my $mess = Carp::longmess("JSON decode error: $error");
+    die "$mess\n=======\n$input\n=======\n";
+}
+
+# This is here because Test2::Formatter::Stream's JSON encoder
+# doesn't encode as UTF-8 (i.e., its utf8() mode is not enabled).
+# Thus, we need the logic that decodes that JSON not to decode UTF-8.
+sub decode_json_non_utf8 {
+    my ($input) = @_;
+    my $data;
+
+    local $@;
+    my $error;
+
+    eval { $data = $json_non_utf8->decode($input); 1 } or do {
+        my $mess = Carp::longmess("JSON decode error: $@");
+        die "$mess\n=======\n$input\n=======\n";
+    };
+
+    return $data;
 }
 
 1;
@@ -112,7 +131,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 COPYRIGHT
 
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

@@ -2,32 +2,22 @@ package App::Yath::Command::stop;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
-
-use File::Path qw/remove_tree/;
+our $VERSION = '0.999004';
 
 use Time::HiRes qw/sleep/;
 
 use File::Spec();
 
 use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Run::Runner;
+use Test2::Harness::Util::Queue();
 
-use App::Yath::Util qw/find_pfile PFILE_NAME/;
 use Test2::Harness::Util qw/open_file/;
+use File::Path qw/remove_tree/;
 
-use parent 'App::Yath::Command';
+use parent 'App::Yath::Command::run';
 use Test2::Harness::Util::HashBase;
 
 sub group { 'persist' }
-
-sub show_bench      { 0 }
-sub has_jobs        { 0 }
-sub has_runner      { 0 }
-sub has_logger      { 0 }
-sub has_display     { 0 }
-sub always_keep_dir { 0 }
-sub manage_runner   { 0 }
 
 sub summary { "Stop the persistent test runner" }
 sub cli_args { "" }
@@ -41,44 +31,18 @@ This command will stop a persistent instance, and output any log contents.
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile()
-        or die "Could not find " . PFILE_NAME() . " in current directory, or any parent directories.\n";
+    $self->App::Yath::Command::test::terminate_queue();
 
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+    $_->teardown($self->settings) for @{$self->settings->harness->plugins};
 
-    my $runner = Test2::Harness::Run::Runner->new(
-        dir    => $data->{dir},
-        pid    => $data->{pid},
-        remote => 1,
-    );
+    sleep(0.02) while kill(0, $self->pfile_data->{pid});
 
-    my $queue = $runner->queue;
-    $queue->end;
-
-    sleep(0.02) while kill(0, $data->{pid});
-
+    my $pfile = $self->pfile;
     unlink($pfile) if -f $pfile;
 
-    my $stdout = open_file(File::Spec->catfile($data->{dir}, 'output.log'));
-    my $stderr = open_file(File::Spec->catfile($data->{dir}, 'error.log'));
+    remove_tree($self->workdir, {safe => 1, keep_root => 0}) if -d $self->workdir;
 
-    print "\nSTDOUT LOG:\n";
-    print "========================\n";
-    while( my $line = <$stdout> ) {
-        print $line;
-    }
-    print "\n========================\n";
-
-    print "\nSTDERR LOG:\n";
-    print "========================\n";
-    while (my $line = <$stderr>) {
-        print $line;
-    }
-    print "\n========================\n";
-
-    remove_tree($data->{dir}, {safe => 1, keep_root => 0});
-
-    print "\n";
+    print "\n\nRunner stopped\n\n" unless $self->settings->display->quiet;
     return 0;
 }
 
@@ -86,48 +50,5 @@ sub run {
 
 __END__
 
-=pod
+=head1 POD IS AUTO-GENERATED
 
-=encoding UTF-8
-
-=head1 NAME
-
-=head1 DESCRIPTION
-
-=head1 SYNOPSIS
-
-=head1 COMMAND LINE USAGE
-
-B<THIS SECTION IS AUTO-GENERATED AT BUILD>
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

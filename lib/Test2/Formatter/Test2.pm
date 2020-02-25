@@ -2,19 +2,19 @@ package Test2::Formatter::Test2;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
 use Test2::Util::Term qw/term_size/;
-use Test2::Harness::Util qw/hub_truth/;
+use Test2::Harness::Util qw/hub_truth apply_encoding/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32 clone_io/;
-use Time::HiRes;
+use Time::HiRes qw/time/;
 use IO::Handle;
 
 use File::Spec();
 use Test2::Formatter::Test2::Composer;
 
-BEGIN { require Test2::Formatter; our @ISA = qw(Test2::Formatter) }
+use parent 'Test2::Formatter';
 
 sub import {
     my $class = shift;
@@ -26,12 +26,15 @@ use Test2::Util::HashBase qw{
     -composer
     -last_depth
     -_buffered
-    -io
+    <job_io
+    +io
+    <enc_io
     -_encoding
     -show_buffer
     -color
     -progress
     -tty
+    -no_wrap
     -verbose
     -job_length
     -ecount
@@ -65,11 +68,12 @@ sub DEFAULT_TAG_COLOR() {
         'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
         'RETRY'    => Term::ANSIColor::color('bold bright_white'),
         'PASSED'   => Term::ANSIColor::color('bold bright_green'),
+        'TO RETRY' => Term::ANSIColor::color('bold bright_yellow'),
         'FAILED'   => Term::ANSIColor::color('bold bright_red'),
         'REASON'   => Term::ANSIColor::color('magenta'),
         'TIMEOUT'  => Term::ANSIColor::color('magenta'),
         'TIME'     => Term::ANSIColor::color('blue'),
-        'MEMORY'     => Term::ANSIColor::color('blue'),
+        'MEMORY'   => Term::ANSIColor::color('blue'),
     );
 }
 
@@ -90,12 +94,12 @@ sub DEFAULT_FACET_COLOR() {
 }
 
 # These colors all look decent enough to use, ordered to avoid putting similar ones together
-sub DEFAULT_JOB_COLOR() {
-    return map { Term::ANSIColor::color($_) } (
+use constant DEFAULT_JOB_COLOR_NAMES => (
         'bold green on_blue',
         'bold blue on_white',
         'bold black on_cyan',
         'bold green on_bright_black',
+        'bold dark blue on_white',
         'bold black on_green',
         'bold cyan on_blue',
         'bold black on_white',
@@ -111,17 +115,30 @@ sub DEFAULT_JOB_COLOR() {
         'bold bright_green on_blue',
         'bold bright_blue on_white',
         'bold bright_white on_bright_black',
+        'bold yellow on_blue',
         'bold bright_black on_cyan',
         'bold bright_green on_bright_black',
         'bold blue on_green',
         'bold bright_cyan on_blue',
         'bold bright_blue on_cyan',
+        'bold dark bright_white on_bright_black',
         'bold bright_blue on_green',
+        'bold dark bright_blue on_white',
         'bold bright_white on_blue',
         'bold bright_cyan on_bright_black',
         'bold bright_white on_cyan',
         'bold bright_white on_green',
-    );
+        'bold bright_yellow on_blue',
+        #'bold magenta on_white',
+        #'bold dark magenta on_white',
+        #'bold dark cyan on_white',
+        'bold dark bright_cyan on_bright_black',
+        #'bold dark bright_green on_black',
+        #'bold dark bright_yellow on_black',
+);
+
+sub DEFAULT_JOB_COLOR() {
+    return map { Term::ANSIColor::color($_) } DEFAULT_JOB_COLOR_NAMES;
 }
 
 sub DEFAULT_COLOR() {
@@ -179,20 +196,31 @@ sub init {
     }
 }
 
+sub io {
+    my $self = shift;
+    my ($job_id) = @_;
+    return $self->{+IO} unless defined $job_id;
+    return $self->{+JOB_IO}->{$job_id} // $self->{+IO};
+}
+
 sub encoding {
     my $self = shift;
 
     if (@_) {
-        my ($enc) = @_;
+        my ($enc, $job_id) = @_;
+        if (defined $job_id) {
+            my $io;
 
-        # https://rt.perl.org/Public/Bug/Display.html?id=31923
-        # If utf8 is requested we use ':utf8' instead of ':encoding(utf8)' in
-        # order to avoid the thread segfault.
-        if ($enc =~ m/^utf-?8$/i) {
-            binmode($self->{+IO}, ":utf8");
+            unless ($io = $self->{+ENC_IO}->{$enc}) {
+                $io = $self->{+ENC_IO}->{$enc} = clone_io($self->{+IO} || \*STDOUT) or die "Cannot get a filehandle: $!";
+                $io->autoflush(1);
+                apply_encoding($io, $enc);
+            }
+
+            $self->{+JOB_IO}->{$job_id} = $io;
         }
         else {
-            binmode($self->{+IO}, ":encoding($enc)");
+            apply_encoding($self->{+IO}, $enc);
         }
         $self->{+_ENCODING} = $enc;
     }
@@ -212,7 +240,8 @@ sub write {
 
     $self->{+ECOUNT}++;
 
-    $self->encoding($f->{control}->{encoding}) if $f->{control}->{encoding};
+    my $job_id = $f->{harness}->{job_id};
+    $self->encoding($f->{control}->{encoding}, $job_id) if $f->{control}->{encoding};
 
     my $hf = hub_truth($f);
     my $depth = $hf->{nested} || 0;
@@ -248,14 +277,13 @@ sub write {
         }
     }
 
-    my $job_id = $f->{harness}->{job_id};
     push @{$self->{+JOB_COLORS}->{free}} => delete $self->{+JOB_COLORS}->{used}->{$job_id}
         if $job_id && $f->{harness_job_end};
 
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
 
-    my $io = $self->{+IO};
+    my $io = $self->io($job_id);
     if ($self->{+_BUFFERED}) {
         print $io "\r\e[K";
         $self->{+_BUFFERED} = 0;
@@ -275,6 +303,17 @@ sub write {
     else {
         print $io $_, "\n" for @$lines;
     }
+
+    delete $self->{+JOB_IO}->{$job_id} if $job_id && $f->{harness_job_end};
+}
+
+sub finalize {
+    my $self = shift;
+
+    my $io = $self->{+IO};
+    print $io "\r\e[K" if $self->{+_BUFFERED};
+
+    return;
 }
 
 sub update_active_disp {
@@ -283,11 +322,14 @@ sub update_active_disp {
 
     my $should_show = 0;
 
+    if (my $task = $f->{harness_job_queued}) {
+        $self->{+JOB_NAMES}->{$task->{job_id}} = $task->{job_name} || $task->{job_id};
+    }
+
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
         $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_name} || $job->{job_id};
         $should_show = 1;
-        $self->{+JOB_NAMES}->{$job->{job_id}} = $job->{job_name} || $job->{job_id};
     }
 
     if ($f->{harness_job_end}) {
@@ -432,7 +474,7 @@ sub build_line {
 
     $tag = substr($tag, 0 - TAG_WIDTH, TAG_WIDTH) if length($tag) > TAG_WIDTH;
 
-    my $max = $self->{+TTY} ? (term_size() || 80) : undef;
+    my $max = $self->{+TTY} && !$self->{+NO_WRAP} ? (term_size() || 80) : undef;
     my $color = $self->{+COLOR};
     my $reset = $color ? $color->{reset} || '' : '';
     my $tcolor = $color ? $color->{TAGS}->{$tag} || $color->{FACETS}->{$facet} || '' : '';
@@ -555,6 +597,21 @@ Test2::Formatter::Test2 - An alternative to TAP, used by Test2::Harness.
 
 =head1 DESCRIPTION
 
+This formatter is the primary formatter used for final result rendering when
+you use Test2::Harness. This formatter is NOT designed to have its output
+consumed by code/machine/harnesses. The goal of this formatter is to have
+output that is easily read by humans.
+
+=head1 SYNOPSIS
+
+If you are running a test directly with perl and want to use this formatter:
+
+    $ perl -MTest2::Formatter::Test2 path/to/test.t
+
+You could also use the module directly in your test, but that is not
+recommended as your test would then be unable to be run via prove or other
+harnesses.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at
@@ -578,7 +635,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 COPYRIGHT
 
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

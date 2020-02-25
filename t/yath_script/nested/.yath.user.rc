@@ -1,0 +1,26 @@
+
+; comment!
+
+-Dpre_user_lib; comment!
+-D=rel(pre/xxx/user/lib)    ;comment!
+-D=rel( pre/yyy/user/lib )
+-pUSER_XXX
+-p USER_YYY
+
+[test]
+-Itest_user_lib; comment!
+-I=rel(test/xxx/user/lib)    ;comment!
+-I rel( test/yyy/user/lib )
+-user_xxxx;comment!
+user_foo
+user_bar
+user_baz user_bat
+
+[run]
+-Irun_user_lib
+-I=rel(run/xxx/user/lib)
+-I rel( run/yyy/user/lib )
+-user_xxxx
+user_foo
+user_bar
+

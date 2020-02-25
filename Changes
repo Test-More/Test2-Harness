@@ -1,5 +1,22 @@
 {{$NEXT}}
 
+0.999003  2020-02-24 14:51:18-08:00 America/Los_Angeles (TRIAL RELEASE)
+
+    - Fix older perls (down to 5.10)
+
+0.999002  2020-02-24 08:56:06-08:00 America/Los_Angeles (TRIAL RELEASE)
+
+    - Fix installation when an old yath is installed
+
+0.999001  2020-02-23 15:42:47-08:00 America/Los_Angeles (TRIAL RELEASE)
+
+    - Attempt to fix includes integration test
+
+0.999000  2020-02-23 10:19:36-08:00 America/Los_Angeles (TRIAL RELEASE)
+
+    - Huge refactor
+    - Fix signal restoration for forked tests
+
 0.001099  2019-09-09 21:12:15-07:00 America/Los_Angeles
 
     - Add --durations and --maybe_durations options

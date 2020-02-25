@@ -2,20 +2,31 @@ package App::Yath;
 use strict;
 use warnings;
 
-use App::Yath::Util qw/read_config find_pfile/;
-use File::Spec;
-use Test2::Util qw/IS_WIN32/;
+our $VERSION = '0.999004';
 
-our $VERSION = '0.001100';
+use Test2::Harness::Util::HashBase qw{
+    -config
+    -settings
 
-our $SCRIPT;
+    -_options -options_loaded
+    -_argv   -argv_processed
 
-sub import {
-    # Do not let anything mess with our $.
-    local $.;
+    -_command_class
+};
 
-    my $class = shift;
-    my ($argv, $runref) = @_ or return;
+use Time::HiRes qw/time/;
+
+use App::Yath::Util qw/find_pfile/;
+use Test2::Harness::Util qw/find_libraries clean_path/;
+use App::Yath::Options();
+
+my $APP_PATH = __FILE__;
+$APP_PATH =~ s{App\S+Yath\.pm$}{}g;
+$APP_PATH = clean_path($APP_PATH);
+sub app_path { $APP_PATH }
+
+sub init {
+    my $self = shift;
 
     my $old = select STDOUT;
     $| = 1;
@@ -23,219 +34,223 @@ sub import {
     $| = 1;
     select $old;
 
-    my ($pkg, $file, $line) = caller;
+    my @caller = caller(1);
 
-    $SCRIPT ||= $file;
+    $self->{+SETTINGS} //= Test2::Harness::Settings->new;
 
-    my $cmd_name = $class->command_from_argv($argv);
-    my $pp_argv  = $class->pre_parse_args(
-        [
-            read_config($cmd_name, file => '.yath.rc',      search => 1),
-            read_config($cmd_name, file => '.yath.user.rc', search => 1),
-            @$argv
-        ]
-    );
+    ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('script')}          //= clean_path($caller[1]);
+    ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('start')}           //= time();
+    ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('no_scan_plugins')} //= 0;
 
-    unless (IS_WIN32) {
-        my %have = map {( $_ => 1, File::Spec->rel2abs($_) => 1 )} @INC;
-        my @missing = grep { !$have{$_} && !$have{File::Spec->rel2abs($_)} } @{$pp_argv->{inc}};
-
-        $class->do_exec($^X, (map {('-I' => File::Spec->rel2abs($_))} @{$pp_argv->{inc}}, @INC), $SCRIPT, $cmd_name, @$argv)
-            if @missing;
-    }
-
-    my $cmd_class = $class->load_command($cmd_name);
-    $cmd_class->import($argv, $runref);
-
-    $$runref ||= sub { $class->run_command($cmd_class, $cmd_name, $pp_argv) };
+    $self->{+_ARGV}  //= delete($self->{argv}) // [];
+    $self->{+CONFIG} //= {};
 }
 
-sub do_exec {
-    my $class = shift;
-    exec(@_);
-}
+sub generate_run_sub {
+    my $self = shift;
+    my ($symbol) = @_;
 
-sub pre_parse_args {
-    my $class = shift;
-    my ($args) = @_;
+    my $options = $self->load_options();
+    my $argv    = $self->process_argv();
 
-    my (@opts, @list, @pass, @plugins, @inc);
+    my $cmd_class = $self->command_class();
 
-    my %lib = (lib => 1, blib => 1, tlib => 0);
+    return $cmd_class->generate_run_sub($symbol, $argv, $self->{+SETTINGS}) if $cmd_class->can('generate_run_sub');
 
-    my $last_mark = '';
-    for my $arg (@$args) {
-        if ($last_mark eq '::') {
-            push @pass => $arg;
-        }
-        elsif ($last_mark eq '--') {
-            if ($arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            push @list => $arg;
-        }
-        elsif ($last_mark eq 'plugin') {
-            $last_mark = '';
-            push @plugins => $arg;
-        }
-        elsif ($last_mark eq 'inc') {
-            $last_mark = '';
-            push @inc => $arg;
-            push @opts => $arg;
-        }
-        else {
-            if ($arg eq '--' || $arg eq '::') {
-                $last_mark = $arg;
-                next;
-            }
-            if ($arg eq '-p' || $arg eq '--plugin') {
-                $last_mark = 'plugin';
-                next;
-            }
-            if ($arg =~ m/^(?:-p=?|--plugin=)(.*)$/) {
-                push @plugins => $1;
-                next;
-            }
-            if ($arg eq '--no-plugins') {
-                # clear plugins
-                @plugins = ();
-                next;
-            }
+    my $cmd = $cmd_class->new(settings => $options->settings, args => $argv);
 
-            if ($arg eq '-I' || $arg eq '--include') {
-                $last_mark = 'inc';
-                # No 'next' here.
-            }
-            elsif ($arg =~ m/^(-I|--include)=(.*)$/) {
-                push @inc => $2;
-                # No 'next' here.
-            }
-            elsif($arg =~ m/^-I(.*)$/) {
-                push @inc => $1;
-            }
-            elsif ($arg =~ m/^--(no-)?(lib|blib|tlib)$/) {
-                $lib{$2} = $1 ? 0 : 1;
-            }
+    $options->process_option_post_actions($cmd);
 
-            push @opts => $arg;
-        }
+    my $run = sub { $self->run_command($cmd) };
+
+    {
+        no strict 'refs';
+        *{$symbol} = $run;
     }
 
-    push @inc => File::Spec->rel2abs('lib') if $lib{lib};
-    if ($lib{blib}) {
-        push @inc => File::Spec->rel2abs('blib/lib');
-        push @inc => File::Spec->rel2abs('blib/arch');
-    }
-    push @inc => File::Spec->rel2abs('t/lib') if $lib{tlib};
-
-    return {
-        opts    => \@opts,
-        list    => \@list,
-        pass    => \@pass,
-        plugins => \@plugins,
-        inc     => \@inc,
-    };
-}
-
-sub info {
-    my $class = shift;
-    print STDOUT @_;
+    return;
 }
 
 sub run_command {
-    my $class = shift;
-    my ($cmd_class, $cmd_name, $argv) = @_;
+    my $self = shift;
+    my ($cmd) = @_;
 
-    my $cmd = $cmd_class->new(args => $argv);
+    my $exit = $cmd->run;
 
-    require Time::HiRes;
-    my $start = Time::HiRes::time();
-    my $exit  = $cmd->run;
-
-    die "Command '$cmd_name' did not return an exit value.\n"
+    die "Command '" . $cmd->name() . "' did not return an exit value.\n"
         unless defined $exit;
-
-    if ($cmd->show_bench && !$cmd->settings->{quiet}) {
-        require Test2::Util::Times;
-        my $end = Time::HiRes::time();
-        my $bench = Test2::Util::Times::render_bench($start, $end, times);
-        $class->info($bench, "\n\n");
-    }
 
     return $exit;
 }
 
-sub command_from_argv {
-    my $class = shift;
-    my ($argv) = @_;
+sub load_options {
+    my $self = shift;
 
-    if (@$argv) {
-        my $arg = $argv->[0];
+    my $settings = $self->{+SETTINGS} = $self->{+SETTINGS};
+
+    my $options = $self->{+_OPTIONS} //= App::Yath::Options->new(settings => $settings);
+
+    return $options if $self->{+OPTIONS_LOADED}++;
+
+    $options->include_from(
+        'App::Yath::Options::Debug',
+        'App::Yath::Options::PreCommand',
+    );
+
+    return $options if $self->{+SETTINGS}->harness->no_scan_plugins;
+
+    my $option_libs = find_libraries('App::Yath::Plugin::*');
+    for my $lib (sort keys %$option_libs) {
+        my $ok = eval { require $option_libs->{$lib}; 1 };
+        unless ($ok) {
+            warn "Failed to load plugin '$option_libs->{$lib}': $@";
+            next;
+        }
+
+        next unless $lib->can('options');
+        $options->include_from($lib);
+    }
+
+    return $options;
+}
+
+sub process_argv {
+    my $self = shift;
+
+    return $self->{+_ARGV} if $self->{+ARGV_PROCESSED}++;
+
+    my $options = $self->load_options();
+    my $settings = $self->settings;
+
+    my $config_pre_args = $self->{+CONFIG}->{'~'};
+    $options->grab_pre_command_opts(args => $config_pre_args, stop_at_non_opt => 0, passthrough => 0, die_at_non_opt => 1)
+        if $config_pre_args;
+
+    $options->set_args($self->{+_ARGV});
+    $options->grab_pre_command_opts();
+
+    $options->process_pre_command_opts();
+
+    my $cmd_name  = $self->_command_from_argv();
+    my $cmd_class = $self->load_command($cmd_name);
+    $options->set_command_class($cmd_class);
+    $self->{+_COMMAND_CLASS} = $cmd_class;
+
+    $options->grab_pre_command_opts(stop_at_non_opt => 1, passthrough => 1, die_at_non_opt => 0);
+
+    my $config_cmd_args = $self->{+CONFIG}->{$cmd_name};
+
+    $options->grab_pre_command_opts(args => $config_cmd_args, stop_at_non_opt => 1, passthrough => 1, die_at_non_opt => 0)
+        if $config_cmd_args;
+
+    $options->process_pre_command_opts();
+
+    $options->grab_command_opts(args => $config_cmd_args, die_at_non_opt => 1, stop_at_non_opt => 0, passthrough => 0)
+        if $config_cmd_args;
+
+    $options->grab_command_opts();
+    $options->process_command_opts();
+
+    $options->clear_env();
+
+    $self->clear_env();
+
+    my %seen = map {((ref($_) || $_) => 1)} @{$settings->harness->plugins};
+    for my $plugin (@{$options->used_plugins}) {
+        next if $seen{$plugin}++;
+        push @{$settings->harness->plugins} => $plugin->can('new') ? $plugin->new() : $plugin;
+    }
+
+    return $self->{+_ARGV};
+}
+
+sub clear_env {
+    delete $ENV{T2_FORMATTER};
+    delete $ENV{T2_HARNESS_FORKED};
+    delete $ENV{T2_HARNESS_JOB_IS_TRY};
+    delete $ENV{T2_HARNESS_JOB_NAME};
+    delete $ENV{T2_HARNESS_PRELOAD};
+    delete $ENV{T2_STREAM_DIR};
+    delete $ENV{T2_STREAM_FILE};
+    delete $ENV{T2_STREAM_JOB_ID};
+    delete $ENV{TEST2_ACTIVE};
+    delete $ENV{TEST2_JOB_DIR};
+    delete $ENV{TEST2_RUN_DIR};
+    delete $ENV{TEST_ACTIVE};
+}
+
+sub command_class {
+    my $self = shift;
+
+    $self->process_argv() unless $self->{+_COMMAND_CLASS};
+
+    return $self->{+_COMMAND_CLASS};
+}
+
+sub _command_from_argv {
+    my $self = shift;
+
+    my $argv = $self->{+_ARGV};
+
+    for (my $idx = 0; $idx < @$argv; $idx++) {
+        my $arg = $argv->[$idx];
 
         if ($arg =~ m/^-*h(elp)?$/i) {
-            shift @$argv;
+            splice(@$argv, $idx, 1);
             return 'help';
         }
 
+        next if $arg =~ /^-/;
+
         if ($arg =~ m/\.jsonl(\.bz2|\.gz)?$/) {
-            $class->info("\n** First argument is a log file, defaulting to the 'replay' command **\n\n");
+            warn "\n** First argument is a log file, defaulting to the 'replay' command **\n\n";
             return 'replay';
         }
 
-        return shift @$argv if $class->load_command($arg, check_only => 1);
+        return splice(@$argv, $idx, 1) if $self->load_command($arg, check_only => 1);
 
-        my $is_opt_or_file = 0;
-        $is_opt_or_file ||= -f $arg;
-        $is_opt_or_file ||= -d $arg;
-        $is_opt_or_file ||= $arg =~ m/^-/;
+        my $is_path = 0;
+        $is_path ||= -f $arg;
+        $is_path ||= -d $arg;
 
         # Assume it is a command, but an invalid one.
-        return shift @$argv unless $is_opt_or_file;
+        return splice(@$argv, $idx, 1) unless $is_path;
     }
 
-    if (find_pfile()) {
-        $class->info("\n** Persistent runner detected, defaulting to the 'run' command **\n\n");
+    if (find_pfile($self->settings)) {
+        warn "\n** Persistent runner detected, defaulting to the 'run' command **\n\n";
         return 'run';
     }
 
-    $class->info("\n** Defaulting to the 'test' command **\n\n");
+    warn "\n** Defaulting to the 'test' command **\n\n";
     return 'test';
 }
 
 sub load_command {
-    my $class = shift;
+    my $self = shift;
     my ($cmd_name, %params) = @_;
 
-    my $cmd_class  = "App::Yath::Command::$cmd_name";
-    my $cmd_file   = "App/Yath/Command/$cmd_name.pm";
+    my $cmd_class = "App::Yath::Command::$cmd_name";
+    my $cmd_file  = "App/Yath/Command/$cmd_name.pm";
 
-    my ($found, $error);
-    {
-        local $@;
-        $found = eval { require $cmd_file; 1 };
-        $error = $@;
-    }
+    return $cmd_class if eval { require $cmd_file; 1 };
+    my $error = $@ || 'unknown error';
 
-    if (!$found) {
-        $error ||= 'unknown error';
+    my $not_found = $error =~ m{Can't locate \Q$cmd_file\E in \@INC};
 
-        my $not_found = $error =~ m{Can't locate \Q$cmd_file\E in \@INC};
+    return undef if $params{check_only} && $not_found;
 
-        return undef if $params{check_only} && $not_found;
+    die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
+        if $not_found;
 
-        die "yath command '$cmd_name' not found. (did you forget to install $cmd_class?)\n"
-            if $not_found;
-
-        die $error;
-    }
-
-    return $cmd_class;
+    die $error;
 }
+
 
 1;
 
 __END__
+
 
 =pod
 
@@ -248,15 +263,33 @@ App::Yath - Yet Another Test Harness (Test2-Harness) Command Line Interface
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
-
 This is the primary documentation for C<yath>, L<App::Yath>, L<Test2::Harness>.
 
 The canonical source of up-to-date command options are the help output when
 using C<$ yath help> and C<$ yath help COMMAND>.
 
 This document is mainly an overview of C<yath> usage and common recipes.
+
+L<App::Yath> is an alternative to L<App::Prove>, and L<Test2::Harness> is an alternative to L<Test::Harness>. It is not designed to
+replace L<Test::Harness>/prove. L<Test2::Harness> is designed to take full
+advantage of the rich data L<Test2> can provide. L<Test2::Harness> is also able to
+use non-core modules and provide more functionality than prove can achieve with
+its restrictions.
+
+=head1 PLATFORM SUPPORT
+
+L<Test2::Harness>/L<App::Yath> is is focused on unix-like platforms. Most
+development happens on linux, but bsd, macos, etc should work fine as well.
+
+Patches are welcome for any/all platforms, but the primary author (Chad
+'Exodist' Granum) does not directly develop against non-unix platforms.
+
+=head2 WINDOWS
+
+Currently windows is not supported, and it is known that the package will not
+install on windows. Patches are be welcome, and it would be great if someone
+wanted to take on the windows-support role, but it is not a primary goal for
+the project.
 
 =head1 OVERVIEW
 
@@ -305,8 +338,8 @@ You can preload as many modules as you want:
 
 =head3 COMPLEX PRELOAD
 
-If your preload is a subclass of L<Test2::Harness::Preload> then more complex
-preload behavior is possible. See those docs for more info.
+If your preload is a subclass of L<Test2::Harness::Runner::Preload> then more
+complex preload behavior is possible. See those docs for more info.
 
 =head2 LOGGING
 
@@ -346,7 +379,7 @@ harness.
 You can change display options and limit rendering/processing to specific test
 jobs from the run:
 
-    $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v 5 10
+    $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v [TEST UUID(S)]
 
 Note: This is done using the C<$ yath replay ...> command. The C<replay>
 command is implied if the first argument is a log file.
@@ -357,8 +390,8 @@ The C<-T> option will cause each test file to report how long it took to run.
 
     $ yath -T
 
-    ( PASSED )  job  1    t/App/Yath.t
-    (  TIME  )  job  1    0.06942s on wallclock (0.07 usr 0.01 sys + 0.00 cusr 0.00 csys = 0.08 CPU)
+    ( PASSED )  job  1    t/yath_script.t
+    (  TIME  )  job  1    Startup: 0.07692s | Events: 0.01170s | Cleanup: 0.00190s | Total: 0.09052s
 
 =head2 PERSISTENT RUNNER
 
@@ -426,9 +459,14 @@ provide any options normally allowed by it. When C<yath> is run inside your
 project, it will use the config specified in the rc file, unless overridden
 by command line options.
 
+B<Note:> You can also add pre-command options by placing them at the top of
+your config file I<BEFORE> any C<[cmd]> markers.
+
 Comments start with a semi-colon.
 
 Example .yath.rc:
+
+    -pFoo ; Load the 'foo' plugin before dealing with commands.
 
     [test]
     -B ;Always write a bzip2-compressed log
@@ -522,6 +560,18 @@ This implies HARNESS-NO-PRELOAD.
 C<yath> usually uses the L<Test2::Formatter::Stream> formatter instead of TAP.
 Some tests depend on using a TAP formatter. This option will make C<yath> use
 L<Test2::Formatter::TAP> or L<Test::Builder::Formatter>.
+
+=head3 HARNESS-NO-IO-EVENTS
+
+C<yath> usually uses the L<Test2::Plugin::IOEvents> plugin. This plugin
+replaces STDERR and STDOUT in your test with tied handles that fire off proper
+L<Test2::Event>'s when they are printed to. Most of the time this is not an
+issue, but any fancy tests or modules which do anything with STDERR or STDOUT
+other than print may have really messy errors.
+
+This directive will disable the plugin on a per-test basis. Alternatively you
+can use the C<--no-io-events> option when running yath to disable it globally
+for your test suite.
 
 =head3 HARNESS-NO-TIMEOUT
 
@@ -622,43 +672,71 @@ This section documents the L<App::Yath> module itself.
 
 =head2 SYNOPSIS
 
-This is the entire C<yath> script, comments removed.
+In practice you should never need to write your own yath script, or construct
+an L<App::Yath> instance, or even access themain instance when yath is running.
+However some aspects of doing so are documented here for completeness.
 
-    #!/usr/bin/env perl
-    use App::Yath(\@ARGV, \$App::Yath::RUN);
-    exit($App::Yath::RUN->());
+A minimum yath script looks like this:
 
-=head2 METHODS
+    BEGIN {
+        package App::Yath:Script;
+
+        require Time::HiRes;
+        require App::Yath;
+        require Test2::Harness::Settings;
+
+        my $settings = Test2::Harness::Settings->new(
+            harness => {
+                orig_argv       => [@ARGV],
+                orig_inc        => [@INC],
+                script          => __FILE__,
+                start           => Time::HiRes::time(),
+                version         => $App::Yath::VERSION,
+            },
+        );
+
+        my $app = App::Yath->new(
+            argv    => \@ARGV,
+            config  => {},
+            settings => $settings,
+        );
+
+        $app->generate_run_sub('App::Yath::Script::run');
+    }
+
+    exit(App::Yath::Script::run());
+
+It is important that most logic live in a BEGIN block. This is so that
+L<goto::file> can be used post-fork to execute a test script.
+
+The actual yath script is significantly more complicated with the following behaviors:
 
 =over 4
 
-=item $class->import(\@argv, \$runref)
+=item pre-process essential arguments such as -D and no-scan-plugins
 
-This will find, load, and process the command as found via C<@argv> processing.
-It will set C<$runref> to a coderef that should be executed at runtime (IE not
-in the C<BEGIN> block implied by C<use>.
+=item re-exec with a different yath script if in developer mode and a local copy is found
 
-Please note that statements after the import may never be reached. A source
-filter may be used to rewrite the rest of the file to be the source of a
-running test.
+=item Parse the yath-rc config files
 
-=item $class->info("Message")
+=item gather and store essential startup information
 
-Print a message to STDOUT.
+=back
 
-=item $class->run_command($cmd_class, $cmd_name, \@argv)
+=head2 METHODS
 
-Run a command identified by C<$cmd_class> and C<$cmd_name>, using C<\@argv> as
-input.
+App::Yath does not provide many methods to use externally.
 
-=item $cmd_name = $class->parse_argv(\@argv)
+=over 4
 
-Determine what command should be used based on C<\@argv>. C<\@argv> may be
-modified depending on what it contains.
+=item $app->generate_run_sub($symbol_name)
 
-=item $cmd_class = $class->load_command($cmd_name)
+This tells App::Yath to generate a subroutine at the specified symbol name
+which can be run and be expected to return an exit value.
 
-Load a command by name, returns the class of the command.
+=item $lib_path = $app->app_path()
+
+Get the include directory App::Yath was loaded from.
 
 =back
 
@@ -685,7 +763,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 COPYRIGHT
 
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

@@ -5,25 +5,43 @@ App::Yath - Yet Another Test Harness (Test2-Harness) Command Line Interface
 
 # DESCRIPTION
 
-**PLEASE NOTE:** Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
-
-This is the primary documentation for `yath`, [App::Yath](https://metacpan.org/pod/App::Yath), [Test2::Harness](https://metacpan.org/pod/Test2::Harness).
+This is the primary documentation for `yath`, [App::Yath](https://metacpan.org/pod/App%3A%3AYath), [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness).
 
 The canonical source of up-to-date command options are the help output when
 using `$ yath help` and `$ yath help COMMAND`.
 
 This document is mainly an overview of `yath` usage and common recipes.
 
+[App::Yath](https://metacpan.org/pod/App%3A%3AYath) is an alternative to [App::Prove](https://metacpan.org/pod/App%3A%3AProve), and [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness) is an alternative to [Test::Harness](https://metacpan.org/pod/Test%3A%3AHarness). It is not designed to
+replace [Test::Harness](https://metacpan.org/pod/Test%3A%3AHarness)/prove. [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness) is designed to take full
+advantage of the rich data [Test2](https://metacpan.org/pod/Test2) can provide. [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness) is also able to
+use non-core modules and provide more functionality than prove can achieve with
+its restrictions.
+
+# PLATFORM SUPPORT
+
+[Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness)/[App::Yath](https://metacpan.org/pod/App%3A%3AYath) is is focused on unix-like platforms. Most
+development happens on linux, but bsd, macos, etc should work fine as well.
+
+Patches are welcome for any/all platforms, but the primary author (Chad
+'Exodist' Granum) does not directly develop against non-unix platforms.
+
+## WINDOWS
+
+Currently windows is not supported, and it is known that the package will not
+install on windows. Patches are be welcome, and it would be great if someone
+wanted to take on the windows-support role, but it is not a primary goal for
+the project.
+
 # OVERVIEW
 
-To use [Test2::Harness](https://metacpan.org/pod/Test2::Harness), you use the `yath` command. Yath will find the tests
+To use [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness), you use the `yath` command. Yath will find the tests
 (or use the ones you specify) and run them. As it runs, it will output
 diagnostic information such as failures. At the end, yath will print a summary
 of the test run.
 
 `yath` can be thought of as a more powerful alternative to `prove`
-([Test::Harness](https://metacpan.org/pod/Test::Harness))
+([Test::Harness](https://metacpan.org/pod/Test%3A%3AHarness))
 
 # RECIPES
 
@@ -62,8 +80,8 @@ You can preload as many modules as you want:
 
 ### COMPLEX PRELOAD
 
-If your preload is a subclass of [Test2::Harness::Preload](https://metacpan.org/pod/Test2::Harness::Preload) then more complex
-preload behavior is possible. See those docs for more info.
+If your preload is a subclass of [Test2::Harness::Runner::Preload](https://metacpan.org/pod/Test2%3A%3AHarness%3A%3ARunner%3A%3APreload) then more
+complex preload behavior is possible. See those docs for more info.
 
 ## LOGGING
 
@@ -103,7 +121,7 @@ harness.
 You can change display options and limit rendering/processing to specific test
 jobs from the run:
 
-    $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v 5 10
+    $ yath test-logs/2017-09-12~22:44:34~1505281474~25709.jsonl.bz2 -v [TEST UUID(S)]
 
 Note: This is done using the `$ yath replay ...` command. The `replay`
 command is implied if the first argument is a log file.
@@ -114,8 +132,8 @@ The `-T` option will cause each test file to report how long it took to run.
 
     $ yath -T
 
-    ( PASSED )  job  1    t/App/Yath.t
-    (  TIME  )  job  1    0.06942s on wallclock (0.07 usr 0.01 sys + 0.00 cusr 0.00 csys = 0.08 CPU)
+    ( PASSED )  job  1    t/yath_script.t
+    (  TIME  )  job  1    Startup: 0.07692s | Events: 0.01170s | Cleanup: 0.00190s | Total: 0.09052s
 
 ## PERSISTENT RUNNER
 
@@ -183,9 +201,14 @@ provide any options normally allowed by it. When `yath` is run inside your
 project, it will use the config specified in the rc file, unless overridden
 by command line options.
 
+**Note:** You can also add pre-command options by placing them at the top of
+your config file _BEFORE_ any `[cmd]` markers.
+
 Comments start with a semi-colon.
 
 Example .yath.rc:
+
+    -pFoo ; Load the 'foo' plugin before dealing with commands.
 
     [test]
     -B ;Always write a bzip2-compressed log
@@ -272,9 +295,21 @@ This implies HARNESS-NO-PRELOAD.
 
 ### HARNESS-NO-STREAM
 
-`yath` usually uses the [Test2::Formatter::Stream](https://metacpan.org/pod/Test2::Formatter::Stream) formatter instead of TAP.
+`yath` usually uses the [Test2::Formatter::Stream](https://metacpan.org/pod/Test2%3A%3AFormatter%3A%3AStream) formatter instead of TAP.
 Some tests depend on using a TAP formatter. This option will make `yath` use
-[Test2::Formatter::TAP](https://metacpan.org/pod/Test2::Formatter::TAP) or [Test::Builder::Formatter](https://metacpan.org/pod/Test::Builder::Formatter).
+[Test2::Formatter::TAP](https://metacpan.org/pod/Test2%3A%3AFormatter%3A%3ATAP) or [Test::Builder::Formatter](https://metacpan.org/pod/Test%3A%3ABuilder%3A%3AFormatter).
+
+### HARNESS-NO-IO-EVENTS
+
+`yath` usually uses the [Test2::Plugin::IOEvents](https://metacpan.org/pod/Test2%3A%3APlugin%3A%3AIOEvents) plugin. This plugin
+replaces STDERR and STDOUT in your test with tied handles that fire off proper
+[Test2::Event](https://metacpan.org/pod/Test2%3A%3AEvent)'s when they are printed to. Most of the time this is not an
+issue, but any fancy tests or modules which do anything with STDERR or STDOUT
+other than print may have really messy errors.
+
+This directive will disable the plugin on a per-test basis. Alternatively you
+can use the `--no-io-events` option when running yath to disable it globally
+for your test suite.
 
 ### HARNESS-NO-TIMEOUT
 
@@ -366,45 +401,66 @@ to mark the test with LONG or MEDIUM in addition to this marker.
 
 # MODULE DOCS
 
-This section documents the [App::Yath](https://metacpan.org/pod/App::Yath) module itself.
+This section documents the [App::Yath](https://metacpan.org/pod/App%3A%3AYath) module itself.
 
 ## SYNOPSIS
 
-This is the entire `yath` script, comments removed.
+In practice you should never need to write your own yath script, or construct
+an [App::Yath](https://metacpan.org/pod/App%3A%3AYath) instance, or even access themain instance when yath is running.
+However some aspects of doing so are documented here for completeness.
 
-    #!/usr/bin/env perl
-    use App::Yath(\@ARGV, \$App::Yath::RUN);
-    exit($App::Yath::RUN->());
+A minimum yath script looks like this:
+
+    BEGIN {
+        package App::Yath:Script;
+
+        require Time::HiRes;
+        require App::Yath;
+        require Test2::Harness::Settings;
+
+        my $settings = Test2::Harness::Settings->new(
+            harness => {
+                orig_argv       => [@ARGV],
+                orig_inc        => [@INC],
+                script          => __FILE__,
+                start           => Time::HiRes::time(),
+                version         => $App::Yath::VERSION,
+            },
+        );
+
+        my $app = App::Yath->new(
+            argv    => \@ARGV,
+            config  => {},
+            settings => $settings,
+        );
+
+        $app->generate_run_sub('App::Yath::Script::run');
+    }
+
+    exit(App::Yath::Script::run());
+
+It is important that most logic live in a BEGIN block. This is so that
+[goto::file](https://metacpan.org/pod/goto%3A%3Afile) can be used post-fork to execute a test script.
+
+The actual yath script is significantly more complicated with the following behaviors:
+
+- pre-process essential arguments such as -D and no-scan-plugins
+- re-exec with a different yath script if in developer mode and a local copy is found
+- Parse the yath-rc config files
+- gather and store essential startup information
 
 ## METHODS
 
-- $class->import(\\@argv, \\$runref)
+App::Yath does not provide many methods to use externally.
 
-    This will find, load, and process the command as found via `@argv` processing.
-    It will set `$runref` to a coderef that should be executed at runtime (IE not
-    in the `BEGIN` block implied by `use`.
+- $app->generate\_run\_sub($symbol\_name)
 
-    Please note that statements after the import may never be reached. A source
-    filter may be used to rewrite the rest of the file to be the source of a
-    running test.
+    This tells App::Yath to generate a subroutine at the specified symbol name
+    which can be run and be expected to return an exit value.
 
-- $class->info("Message")
+- $lib\_path = $app->app\_path()
 
-    Print a message to STDOUT.
-
-- $class->run\_command($cmd\_class, $cmd\_name, \\@argv)
-
-    Run a command identified by `$cmd_class` and `$cmd_name`, using `\@argv` as
-    input.
-
-- $cmd\_name = $class->parse\_argv(\\@argv)
-
-    Determine what command should be used based on `\@argv`. `\@argv` may be
-    modified depending on what it contains.
-
-- $cmd\_class = $class->load\_command($cmd\_name)
-
-    Load a command by name, returns the class of the command.
+    Get the include directory App::Yath was loaded from.
 
 # SOURCE
 
@@ -421,7 +477,7 @@ The source code repository for Test2-Harness can be found at
 
 # COPYRIGHT
 
-Copyright 2019 Chad Granum <exodist7@gmail.com>.
+Copyright 2020 Chad Granum <exodist7@gmail.com>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

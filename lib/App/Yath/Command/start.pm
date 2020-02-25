@@ -2,37 +2,55 @@ package App::Yath::Command::start;
 use strict;
 use warnings;
 
-use vars qw/$DTRACE/;
+our $VERSION = '0.999004';
 
-BEGIN {
-    require Test2::Harness::Util::DepTracer;
-    $DTRACE = Test2::Harness::Util::DepTracer->new;
-}
+use App::Yath::Util qw/find_pfile/;
+use App::Yath::Options;
 
-our $VERSION = '0.001100';
+use Test2::Harness::Run;
+use Test2::Harness::Util::Queue;
+use Test2::Harness::Util::File::JSON;
+use Test2::Harness::IPC;
 
-use File::Spec();
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::Util qw/mod2file open_file parse_exit/;
+use Test2::Util::Table qw/table/;
 
-use POSIX ":sys_wait_h";
+use Test2::Harness::Util::IPC qw/run_cmd USE_P_GROUPS/;
+
+use POSIX;
+use File::Spec;
+
 use Time::HiRes qw/sleep/;
 
-use App::Yath::Util qw/find_pfile PFILE_NAME find_yath/;
-use Test2::Harness::Util qw/open_file parse_exit/;
-
-use Test2::Harness::Run::Runner::Persist;
-use Test2::Harness::Util::File::JSON;
+use Carp qw/croak/;
+use File::Path qw/remove_tree/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
+include_options(
+    'App::Yath::Options::Debug',
+    'App::Yath::Options::PreCommand',
+    'App::Yath::Options::Runner',
+    'App::Yath::Options::Workspace',
+    'App::Yath::Options::Persist',
+);
+
+option_group {prefix => 'runner', category => "Persistent Runner Options"} => sub {
+    option quiet => (
+        short       => 'q',
+        type        => 'c',
+        description => "Be very quiet.",
+        default     => 0,
+    );
+};
+
+sub MAX_ATTACH() { 1_048_576 }
+
 sub group { 'persist' }
 
-sub has_jobs    { 1 }
-sub has_runner  { 1 }
-sub has_logger  { 0 }
-sub has_display { 0 }
 sub always_keep_dir { 1 }
-sub manage_runner { 0 }
 
 sub summary { "Start the persistent test runner" }
 sub cli_args { "" }
@@ -53,137 +71,88 @@ file over and over again.
 sub run {
     my $self = shift;
 
-    $self->pre_run();
+    my $settings = $self->settings;
+    my $dir      = $settings->workspace->workdir;
 
-    if (my $exists = find_pfile()) {
-        die "Persistent harness appears to be running, found $exists\n"
+    my $pfile = find_pfile($settings, vivify => 1);
+
+    if (-f $pfile) {
+        remove_tree($dir, {safe => 1, keep_root => 0});
+        die "Persistent harness appears to be running, found $pfile\n";
     }
 
-    my $settings = $self->{+SETTINGS};
-    my $pfile = File::Spec->rel2abs(PFILE_NAME(),$ENV{YATH_PERSISTENCE_DIR}||'./');
+    $self->write_settings_to($dir, 'settings.json');
 
-    my ($exit, $runner, $pid, $stat);
-    my $ok = eval {
-        my $run = $self->make_run_from_settings(finite => 0, keep_dir => 1);
+    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
+    $run_queue->start();
 
-        $runner = Test2::Harness::Run::Runner::Persist->new(
-            dir => $settings->{dir},
-            run => $run,
-            script => find_yath(),
-            dtrace => $DTRACE,
-        );
+    $_->setup($self->settings) for @{$self->settings->harness->plugins};
 
-        my $queue = $runner->queue;
-        $queue->start;
+    my $stderr = File::Spec->catfile($dir, 'error.log');
+    my $stdout = File::Spec->catfile($dir, 'output.log');
 
-        $pid = $runner->spawn(setsid => 1, pfile => $pfile);
+    my $pid = run_cmd(
+        stderr => $stderr,
+        stdout => $stdout,
 
-        1;
-    };
-    my $err = $@;
+        no_set_pgrp => $settings->runner->daemon,
 
-    my $sig = $self->{+SIGNAL};
+        command => [
+            $^X, $settings->harness->script,
+            (map { "-D$_" } @{$settings->harness->dev_libs}),
+            '--no-scan-plugins',    # Do not preload any plugin modules
+            runner           => $dir,
+            monitor_preloads => 1,
+            persist          => $pfile,
+            jobs_todo        => 0,
+        ],
+    );
 
-    print STDERR $err if !$ok && !$sig;
-    print STDERR "Received SIG$sig\n" if $sig;
-
-    print "Waiting for runner...\n";
-
-    my $stdout = open_file($runner->out_log);
-    my $stderr = open_file($runner->err_log);
-
-    my $check = waitpid($pid, WNOHANG);
-    until($runner->ready || $check) {
-        while(my $line = <$stdout>) {
-            print STDOUT $line;
-        }
-        while (my $line = <$stderr>) {
-            print STDERR $line;
-        }
-        sleep 0.02;
-        $check = waitpid($pid, WNOHANG);
-    }
-
-    if ($check != 0) {
-        my $exit = parse_exit($?);
-        print STDERR "\nProblem with runner ($pid), waitpid returned $check, exit value: $exit->{err} Signal: $exit->{sig}\n";
-
-        while( my $line = <$stdout> ) {
-            print STDOUT $line;
-        }
-        while (my $line = <$stderr>) {
-            print STDERR $line;
-        }
-    }
-    else {
+    unless ($settings->runner->quiet) {
         print "\nPersistent runner started!\n";
 
         print "Runner PID: $pid\n";
-        print "Runner dir: $settings->{dir}\n";
-        print "Runner logs:\n";
-        print "  standard output: " . $runner->out_log. "\n";
-        print "  standard  error: " . $runner->err_log. "\n";
-        print "\nUse `yath watch` to monitor the persistent runner\n\n";
-
-        my $data = {
-            pid => $pid,
-            dir => $settings->{dir},
-        };
-
-        Test2::Harness::Util::File::JSON->new(name => $pfile)->write($data);
+        print "Runner dir: $dir\n";
+        print "\nUse `yath watch` to monitor the persistent runner\n\n" if $settings->runner->daemon;
     }
 
-    return $sig ? 255 : ($exit || 0);
+    Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir, version => $VERSION});
+
+    return 0 if $settings->runner->daemon;
+
+    $SIG{TERM} = sub { kill(TERM => $pid) };
+    $SIG{INT}  = sub { kill(INT  => $pid) };
+
+    my $err_fh = open_file($stderr, '<');
+    my $out_fh = open_file($stdout, '<');
+
+    while (1) {
+        my $out = waitpid($pid, WNOHANG);
+        my $wstat = $?;
+
+        my $count = 0;
+        while (my $line = <$out_fh>) {
+            $count++;
+            print STDOUT $line;
+        }
+        while (my $line = <$err_fh>) {
+            $count++;
+            print STDERR $line;
+        }
+
+        sleep(0.02) unless $out || $count;
+
+        next if $out == 0;
+        return 255 if $out < 0;
+
+        my $exit = parse_exit($?);
+        return $exit->{err} || $exit->{sig} || 0;
+    }
 }
 
 1;
 
 __END__
 
-=pod
+=head1 POD IS AUTO-GENERATED
 
-=encoding UTF-8
-
-=head1 NAME
-
-App::Yath::Command::start
-
-=head1 DESCRIPTION
-
-=head1 SYNOPSIS
-
-=head1 COMMAND LINE USAGE
-
-B<THIS SECTION IS AUTO-GENERATED AT BUILD>
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

@@ -2,7 +2,7 @@ package App::Yath::Plugin::SysInfo;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
 use Sys::Hostname qw/hostname/;
 use Test2::Util qw/CAN_THREAD CAN_REALLY_FORK CAN_FORK CAN_SIGSYS/;
@@ -66,3 +66,50 @@ sub inject_run_data {
 sub TO_JSON { ref($_[0]) }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Plugin::SysInfo - Plugin to attach system information to a run.
+
+=head1 DESCRIPTION
+
+This plugin attaches a lot of system information to the yath log. This is
+mainly useful if you intend to view the log in L<Test2::Harness::UI>.
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

@@ -20,6 +20,7 @@ sub GET_CALLS {
     return { %CALLS }
 }
 
-die "Should not see this";
+use Carp qw/confess/;
+confess "Should not see this";
 
 1;

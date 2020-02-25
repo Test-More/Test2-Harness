@@ -2,102 +2,14 @@ package Test2::Tools::HarnessTester;
 use strict;
 use warnings;
 
-our $VERSION = '0.001100';
+our $VERSION = '0.999004';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
-use Test2::Harness::Util qw/open_file/;
-use Test2::Harness::Util::IPC qw/run_cmd/;
-use List::Util qw/first/;
-use File::Temp qw/tempdir/;
-use File::Spec;
 
-our @EXPORT_OK = qw/run_yath_command run_command make_example_dir yath_script summarize_events/;
+use App::Yath::Tester qw/make_example_dir/;
 
-my $YATH;
-
-sub yath_script { $YATH }
-
-sub import {
-    my $class = shift;
-
-    my @imports;
-    my %params;
-    while (@_) {
-        my $arg = shift @_;
-        if ($arg =~ m/^-(.*)/) {
-            $params{$1} = shift @_;
-        }
-        else {
-            push @imports => $arg;
-        }
-    }
-
-    $YATH = File::Spec->rel2abs($params{yath_script}) if $params{yath_script};
-
-    Importer->import_into($class, scalar(caller), @imports);
-}
-
-sub run_command {
-    my (@cmd) = @_;
-
-    my $dir = tempdir(CLEANUP => 1);
-    open(my $w_out, '>', "$dir/stdout") or die "Could not create file: $!";
-    open(my $w_err, '>', "$dir/stderr") or die "Could not create file: $!";
-
-    my $pid = run_cmd(stdout => $w_out, stderr => $w_err, command => \@cmd);
-    close($w_out);
-    close($w_err);
-
-    my $ret = waitpid($pid, 0);
-    my $exit = $?;
-
-    die "Error waiting on child process" unless $ret == $pid;
-
-    open(my $r_out, '<', "$dir/stdout") or die "Could not read file: $!";
-    open(my $r_err, '<', "$dir/stderr") or die "Could not read file: $!";
-
-    return {
-        exit => $exit,
-        stdout => join("" => <$r_out>),
-        stderr => join("" => <$r_err>),
-    };
-}
-
-sub run_yath_command {
-    unless($YATH) {
-        require App::Yath::Util;
-        $YATH = File::Spec->rel2abs(App::Yath::Util::find_yath());
-    }
-
-    my @libs = map {( '-I' => File::Spec->rel2abs($_) )} @INC;
-    return run_command($^X, @libs, $YATH, @_);
-}
-
-sub _gen_passing_test {
-    my ($dir, $subdir, $file) = @_;
-
-    my $path = File::Spec->catdir($dir, $subdir);
-    my $full = File::Spec->catfile($path, $file);
-
-    mkdir($path) or die "Could not make $subdir subdir: $!"
-        unless -d $path;
-
-    open(my $fh, '>', $full);
-    print $fh "use Test2::Tools::Tiny;\nok(1, 'a passing test');\ndone_testing\n";
-    close($fh);
-
-    return $full;
-}
-
-sub make_example_dir {
-    my $dir = tempdir(CLEANUP => 1, TMP => 1);
-
-    _gen_passing_test($dir, 't', 'test.t');
-    _gen_passing_test($dir, 't2', 't2_test.t');
-    _gen_passing_test($dir, 'xt', 'xt_test.t');
-
-    return $dir;
-}
+use Importer Importer => qw/import/;
+our @EXPORT_OK = qw/make_example_dir summarize_events/;
 
 my $HARNESS_ID = 1;
 sub summarize_events {
@@ -109,14 +21,8 @@ sub summarize_events {
     my $run_id = "run-$id";
     my $job_id = "job-$id";
 
-    require Test2::Harness::Job;
-    my $job = Test2::Harness::Job->new(
-        file   => $caller[1],
-        job_id => $job_id,
-    );
-
-    require Test2::Harness::Watcher;
-    my $watcher = Test2::Harness::Watcher->new(job => $job, live => 0);
+    require Test2::Harness::Auditor::Watcher;
+    my $watcher = Test2::Harness::Auditor::Watcher->new(job => 1, try => 0);
 
     require Test2::Harness::Event;
     for my $e (@$events) {
@@ -127,17 +33,16 @@ sub summarize_events {
             run_id     => $run_id,
             job_id     => $job_id,
             stamp      => time,
+            job_try    => 0,
         );
 
         $watcher->process($he);
     }
 
-    $watcher->set_complete(1);
-
     return {
         plan       => $watcher->plan,
-        pass       => $watcher->pass,
-        fail       => $watcher->fail,
+        pass       => $watcher->pass ? 1 : 0,
+        fail       => $watcher->fail ? 1 : 0,
         errors     => $watcher->_errors,
         failures   => $watcher->_failures,
         assertions => $watcher->assertion_count,
@@ -145,3 +50,130 @@ sub summarize_events {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Tools::HarnessTester - Run events through a harness for a summary
+
+=head1 DESCRIPTION
+
+This tool allows you to process events through the L<Test2::Harness> auditor.
+The main benefit here is to get a pass/fail result, as well as counts for
+assertions, failures, and errors.
+
+=head1 SYNOPSIS
+
+    use Test2::V0;
+    use Test2::API qw/intercept/;
+    use Test2::Tools::HarnessTester qw/summarize_events/;
+
+    my $events = intercept {
+        ok(1, "pass");
+        ok(2, "pass gain");
+        done_testing;
+    };
+
+    is(
+        summarize_events($events),
+        {
+            # Each of these is the negation of the other, no need to check both
+            pass       => 1,
+            fail       => 0,
+
+            # The plan facet, see Test2::EventFacet::Plan
+            plan       => {count => 2},
+
+            # Statistics
+            assertions => 2,
+            errors     => 0,
+            failures   => 0,
+        }
+    );
+
+=head1 EXPORTS
+
+=head2 $summary = summarize_events($events)
+
+This takes an arrayref of events, such as that produced by C<intercept {...}>
+from L<Test2::API>. The result is a hashref that summarizes the results of the
+events as processed by L<Test2::Harness>, specifically the
+L<Test2::Harness::Auditor::Watcher> module.
+
+Fields in the summary hash:
+
+=over 4
+
+=item pass => $BOOL
+
+=item fail => $BOOL
+
+These are negatives of eachother. These represent the pass/fail state after
+processing the events. When one is true the other should be false. These are
+normalized to C<1> and C<0>.
+
+=item plan => $HASHREF
+
+If a plan was provided this will have the L<Test2::EventFacet::Plan> facet, but
+as a hashref, not a blessed instance.
+
+B<Note:> This is reference to the original data, not a copy, if you modify it
+you will modify the event as well.
+
+=item assertions => $INT
+
+Count of assertions made.
+
+=item errors => $INT
+
+Count of errors seen.
+
+=item failures => $INT
+
+Count of failures seen.
+
+=back
+
+=head2 $path = make_example_dir()
+
+This will create a temporary directory with 't', 't2', and 'xt' subdirectories
+each of which will contain a single passing test.
+
+This is re-exported from L<App::Yath::Tester>.
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+F<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See F<http://dev.perl.org/licenses/>
+
+=cut

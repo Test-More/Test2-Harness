@@ -89,9 +89,95 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Util::Queue - Logic for a runner queue
+Test2::Harness::Util::Queue - Representation of a queue.
 
 =head1 DESCRIPTION
+
+This module represents a queue, stored as a jsonl file.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Util::Queue;
+
+    my $queue = Test2::Harness::Util::Queue->new(file => '/path/to/queue.jsonl');
+
+    $queue->start(); # Create the queue
+
+    $queue->enqueue({foo => 'bar', baz => 'bat'});
+    $queue->enqueue({foo => 'bar2', baz => 'bat2'});
+    ...
+
+    $queue->end();
+
+Then in another processs:
+
+    use Test2::Harness::Util::Queue;
+
+    my $queue = Test2::Harness::Util::Queue->new(file => '/path/to/queue.jsonl');
+
+    my @items;
+    while (1) {
+        @items = $queue->poll();
+        while (@items) {
+            my $item = shift @items or last;
+
+            ... process $item
+        }
+
+        # Queue ends with an 'undef' entry
+        last if @items && !defined($items[0]);
+    }
+
+=head1 METHODS
+
+=over 4
+
+=item $path = $queue->file
+
+The filename used for the queue
+
+=back
+
+=head2 READING
+
+=over 4
+
+=item $queue->reset()
+
+Restart reading the queue.
+
+=item @items = $queue->poll()
+
+Get more items from the queue. May need to call it multiple times, specially if
+another process is still writing to the queue.
+
+Returns an empty list if no items are available yet.
+
+Returns 'undef' to terminate the list.
+
+=item $bool = $queue->ended()
+
+Check if the queue has ended.
+
+=back
+
+=head1 WRITING
+
+=over 4
+
+=item $queue->start()
+
+Open the queue file for writing.
+
+=item $queue->enqueue(\%HASHREF)
+
+Add an item to the queue.
+
+=item $queue->end()
+
+Terminate the queue.
+
+=back
 
 =head1 SOURCE
 

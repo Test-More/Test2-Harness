@@ -26,8 +26,23 @@ Test2::Harness::Util::UUID - Utils for generating UUIDs.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This module provides a consistent UUID source for all of Test2::Harness.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Util::UUID qw/gen_uuid/;
+
+    my $uuid = gen_uuid;
+
+=head1 EXPORTS
+
+=over 4
+
+=item $uuid = gen_uuid()
+
+Generate a UUID.
+
+=back
 
 =head1 SOURCE
 

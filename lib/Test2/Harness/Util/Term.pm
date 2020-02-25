@@ -7,7 +7,7 @@ our $VERSION = '0.999005';
 use Test2::Util qw/IS_WIN32/;
 
 use Importer Importer => 'import';
-our @EXPORT_OK = qw/USE_ANSI_COLOR window_size_changed/;
+our @EXPORT_OK = qw/USE_ANSI_COLOR/;
 
 {
     my $use = 0;
@@ -46,6 +46,30 @@ __END__
 Test2::Harness::Util::Term - Terminal utilities for Test2::Harness
 
 =head1 DESCRIPTION
+
+This module provides information about the terminal in which the harness is
+running.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
+
+    if (USE_ANSI_COLOR) {
+        ...
+    }
+    else {
+        ...
+    }
+
+=head1 EXPORTS
+
+=over 4
+
+=item $bool = USE_ANSI_COLOR()
+
+True if L<Term::ANSIColor> is available and usable.
+
+=back
 
 =head1 SOURCE
 

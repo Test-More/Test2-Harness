@@ -43,8 +43,10 @@ jobs:
       - uses: actions/checkout@v1
       - name: perl -V
         run: perl -V
+      - name: Install Dependencies CI
+        run: cpm install -g --show-build-log-on-failure --cpanfile cpanfile.ci
       - name: Install Dependencies
-        run: curl -sL https://git.io/cpm | perl - install -g --show-build-log-on-failure
+        run: cpm install -g --show-build-log-on-failure --cpanfile cpanfile
       - name: perl Makefile.PL
         run: perl Makefile.PL
       # test are looping on linux containers # need investigation

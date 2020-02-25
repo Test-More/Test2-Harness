@@ -310,8 +310,8 @@ Test2::Harness::IPC - Base class for modules that control child processes.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This module is the base class for all parts of L<Test2::Harness> that have to
+do process management.
 
 =head1 ATTRIBUTES
 

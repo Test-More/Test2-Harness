@@ -7,6 +7,8 @@ use App::Yath::Util qw/find_yath/;
 
 use File::Spec;
 
+$ENV{'YATH_SELF_TEST'} = 1;
+
 my $dir = first { -d $_ } 't/integration/failure_cases', 'integration/failure_cases', 'failure_cases';
 
 my $yath = first { -f $_ } 'scripts/yath', '../scripts/yath';

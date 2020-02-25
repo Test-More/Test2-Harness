@@ -113,7 +113,8 @@ sub load_options {
         next unless $add;
 
         unless (blessed($add) && $add->isa('App::Yath::Options')) {
-            warn "Plugin '$option_libs->{$lib}' is outdated, not loading options.\n";
+            warn "Plugin '$option_libs->{$lib}' is outdated, not loading options.\n"
+                unless $ENV{'YATH_SELF_TEST'};
             next;
         }
 

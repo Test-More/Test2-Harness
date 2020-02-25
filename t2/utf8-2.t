@@ -11,15 +11,15 @@ use Test2::Util qw/get_tid ipc_separator/;
 # HARNESS-DURATION-SHORT
 # HARNESS-NO-IO-EVENTS
 
-print STDOUT "STDOUT: Mākaha\n";
-note "NOTE: Mākaha";
-ok(1, "ASSERT: Mākaha");
-
 test2_stack()->top;
 my ($hub) = test2_stack()->all();
 my $fmt = $hub->format;
 skip_all "This test requires the stream formatter"
     unless $fmt && $fmt->isa('Test2::Formatter::Stream');
+
+print STDOUT "STDOUT: Mākaha\n";
+note "NOTE: Mākaha";
+ok(1, "ASSERT: Mākaha");
 
 my $file = File::Spec->catfile($fmt->dir, join(ipc_separator() => 'events', $$, 0) . ".jsonl");
 open(my $events_fh, '<:utf8', $file) or die "Could not open events file: $!";

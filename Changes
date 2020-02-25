@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Remove blib from tarball
+    - Fix tests when outdated plugins are present
+
 0.999004  2020-02-25 07:48:30-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Warn+Skip when auto-loading outdated plugins

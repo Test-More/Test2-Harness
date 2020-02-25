@@ -97,6 +97,7 @@ sub yath {
     $ENV{YATH_PERSISTENCE_DIR} = $pdir;
     $ENV{YATH_CMD} = $cmd;
     $ENV{NESTED_YATH} = 1;
+    $ENV{'YATH_SELF_TEST'} = 1;
     $ENV{$_} = $env->{$_} for keys %$env;
     my $pid = run_cmd(
         no_set_pgrp => 1,

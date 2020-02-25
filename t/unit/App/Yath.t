@@ -6,6 +6,8 @@ use App::Yath;
 
 use Test2::Harness::Util qw/clean_path/;
 
+$ENV{'YATH_SELF_TEST'} = 1;
+
 subtest init => sub {
     my $one = $CLASS->new(argv => [foo => 'bar']);
     isa_ok($one, $CLASS);

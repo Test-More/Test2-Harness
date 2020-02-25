@@ -1,0 +1,5 @@
+# modules required for Continuous Integrations
+#   outside of Dist::Zilla vision
+
+requires "Devel::AssertOS" => "0";
+

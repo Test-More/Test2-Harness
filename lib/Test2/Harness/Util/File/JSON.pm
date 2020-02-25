@@ -30,6 +30,22 @@ Test2::Harness::Util::File::JSON - Utility class for a JSON file.
 
 =head1 DESCRIPTION
 
+Subclass of L<Test2::Harness::Util::File> which automatically handles
+encoding/decoding JSON data.
+
+=head1 SYNOPSIS
+
+    require Test2::Harness::Util::File::JSON;
+    my $file = Test2::Harness::Util::File::JSON->new(name => '/path/to/file.json');
+
+    $hash = $file->read;
+    # or
+    $$file->write({...});
+
+=head1 SEE ALSO
+
+See the base class L<Test2::Harness::Util::File> for methods.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

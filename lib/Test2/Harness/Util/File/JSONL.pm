@@ -27,6 +27,37 @@ Test2::Harness::Util::File::JSONL - Utility class for a JSONL file (stream)
 
 =head1 DESCRIPTION
 
+Subclass of L<Test2::Harness::Util::File> and
+L<Test2::Harness::Util::File::Stream> which automatically handles
+encoding/decoding JSONL data.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Util::File::JSONL;
+
+    my $jsonl = Test2::Harness::Util::File::JSONL->new(name => '/path/to/file.jsonl');
+
+    while (1) {
+        my @items = $jsonl->poll(max => 1000) or last;
+        for my $item (@items) {
+            ... handle $item ...
+        }
+    }
+
+or
+
+    use Test2::Harness::Util::File::JSONL;
+
+    my $jsonl = Test2::Harness::Util::File::JSONL->new(name => '/path/to/file.jsonl');
+
+    $jsonl->write({my => 'item', ... });
+    ...
+
+=head1 SEE ALSO
+
+See the base classes L<Test2::Harness::Util::File> and
+L<Test2::Harness::Util::File::Stream> for methods.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

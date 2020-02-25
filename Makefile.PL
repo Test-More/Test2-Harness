@@ -80,7 +80,7 @@ my %WriteMakefileArgs = (
   "TEST_REQUIRES" => {
     "File::Copy" => 0
   },
-  "VERSION" => "0.999005",
+  "VERSION" => "0.999006",
   "test" => {
     "TESTS" => "t/*.t t/integration/*.t t/integration/signals/*.t t/unit/App/*.t t/unit/App/Yath/*.t t/unit/App/Yath/Command/*.t t/unit/App/Yath/Options/*.t t/unit/App/Yath/Plugin/*.t t/unit/Test2/*.t t/unit/Test2/Formatter/*.t t/unit/Test2/Formatter/Test2/*.t t/unit/Test2/Harness/*.t t/unit/Test2/Harness/Auditor/*.t t/unit/Test2/Harness/Collector/*.t t/unit/Test2/Harness/IPC/*.t t/unit/Test2/Harness/Renderer/*.t t/unit/Test2/Harness/Runner/*.t t/unit/Test2/Harness/Runner/Preload/*.t t/unit/Test2/Harness/Runner/Preloader/*.t t/unit/Test2/Harness/Runner/Staged/*.t t/unit/Test2/Harness/Settings/*.t t/unit/Test2/Harness/Util/*.t t/unit/Test2/Harness/Util/File/*.t t/unit/Test2/Tools/*.t"
   }

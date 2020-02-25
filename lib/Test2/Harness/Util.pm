@@ -7,7 +7,7 @@ use Cwd qw/realpath/;
 use Test2::Util qw/try_sig_mask do_rename/;
 use File::Spec;
 
-our $VERSION = '0.999005';
+our $VERSION = '0.999006';
 
 use Importer Importer => 'import';
 

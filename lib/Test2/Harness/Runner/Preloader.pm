@@ -458,8 +458,10 @@ Test2::Harness::Runner::Preloader - Preload logic.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This module is responsible for preloading libraries before running tests. This
+entire module is considered an "Implementation Detail". Please do not rely on
+it always staying the same, or even existing in the future. Do not use this
+directly.
 
 =head1 SOURCE
 

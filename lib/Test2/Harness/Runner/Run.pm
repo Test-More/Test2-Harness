@@ -13,10 +13,6 @@ use parent 'Test2::Harness::Run';
 use Test2::Harness::Util::HashBase qw{
     <workdir
 
-    +queue
-    >queue_ended
-    +queue_pid
-
     +run_dir
     +jobs_file
     +jobs
@@ -34,35 +30,6 @@ sub run_dir   { $_[0]->{+RUN_DIR}   //= $_[0]->SUPER::run_dir($_[0]->{+WORKDIR})
 sub jobs_file { $_[0]->{+JOBS_FILE} //= File::Spec->catfile($_[0]->run_dir, 'jobs.jsonl') }
 sub jobs      { $_[0]->{+JOBS}      //= Test2::Harness::Util::File::JSONL->new(name => $_[0]->jobs_file, use_write_lock => 1) }
 
-sub _check_queue {
-    my $self = shift;
-
-    my $queue = $self->{+QUEUE} or return;
-
-    return if $self->{+QUEUE_PID} && $self->{+QUEUE_PID} == $$;
-
-    delete $self->{+QUEUE_ENDED};
-    $queue->reset;
-    $self->{+QUEUE_PID} = $$;
-}
-
-sub queue {
-    my $self = shift;
-
-    $self->_check_queue();
-
-    return $self->{+QUEUE} if $self->{+QUEUE};
-
-    $self->{+QUEUE_PID} = $$;
-    return $self->{+QUEUE} = $self->SUPER::queue($self->run_dir);
-}
-
-sub queue_ended {
-    my $self = shift;
-    $self->_check_queue();
-    return $self->{+QUEUE_ENDED};
-}
-
 1;
 
 __END__
@@ -78,8 +45,31 @@ Test2::Harness::Runner::Run - Runner specific subclass of a test run.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+Runner subclass of L<Test2::Harness::Run> for use inside the runner.
+
+=head1 METHODS
+
+In addition to the methods provided by L<Test2::Harness::Run>, these are provided.
+
+=over 4
+
+=item $dir = $run->workdir
+
+Runner directory.
+
+=item $dir = $run->run_dir
+
+Directory specific to this run.
+
+=item $path = $run->jobs_file
+
+Path to the C<jobs.jsonl> file.
+
+=item $fh = $run->jobs
+
+Filehandle to C<jobs.jsonl>.
+
+=back
 
 =head1 SOURCE
 

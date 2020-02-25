@@ -147,8 +147,63 @@ they are loaded.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+This tool is used by Test2::Harness to build a graph of dependancies which can
+then be used to blacklist modified modules (and anything thatuses them) when
+they change under a preloaded runner.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Runner::DepTracer;
+
+    my $dt = Test2::Harness::Runner::DepTracer->new();
+
+    $dt->start();
+
+    require Some::Thing;
+
+    $dt->stop();
+
+    my $dep_map = $dt->dep_map;
+
+    my $loaded_by = $dep_map->{'Some/Thing.pm'};
+    print "Some::Thing was directly or indirectly loaded by:\n" . join("\n" => @$loaded_by) . "\n";
+
+=head1 ATTRIBUTES
+
+These can be specified at construction, and will be populated during use.
+
+=over 4
+
+=item $hashref = $dt->exclude
+
+A hashref of files/modules to exclude from dep tracking. By default C<strict>
+and C<warnings> are excluded.
+
+=item $hashref = $dt->dep_map
+
+Every file which is loaded while the tool is started will have an entry in this
+hash, each value is an array of all files which loaded the key file directly or
+indirectly.
+
+=item $hashref = $dt->loaded
+
+How many times each file was directly loaded.
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item $dt->start
+
+Start tracking modules which are loaded.
+
+=item $dt->stop
+
+Stop tracking moduels that are loaded.
+
+=back
 
 =head1 SOURCE
 

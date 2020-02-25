@@ -519,6 +519,202 @@ Test2::Harness::Runner::Job - Representation of a test job.
 
 =head1 DESCRIPTION
 
+This module takes all the data from a test file queue item, a run, and runner
+settings, and mashes them together to figure out what is actually needed to run
+a job.
+
+=head1 METHODS
+
+Note, this object subclasses L<Test2::Harness::IPC::Process>.
+
+=over 4
+
+=item $arrayref = $job->args
+
+Get the arguments for the test either formt he queue item, or from the run.
+
+=item $path = $job->bail_file
+
+Path to the events-file used in case of a bail-out
+
+=item $bool = $job->bailed_out
+
+True if the test job bailed out.
+
+=item $cat $job->category
+
+Process category, always 'job' unless overriden in a subclass.
+
+=item $path = $job->ch_dir
+
+If this job first requires a change in directory before running, this will
+return the path.
+
+=item @list = $job->cli_includes
+
+List of includes for a command line launch of this job.
+
+=item @list = $job->cli_options
+
+List of options for a command line launch of this job.
+
+=item $hashref = $job->env_vars
+
+Get environment variables to set when launching this job.
+
+=item $path = $job->out_file
+
+File to which all STDOUT for the job will be written.
+
+=item $path = $job->err_file
+
+File to which all STDERR for the job will be written.
+
+=item $path = $job->et_file
+
+File to which event timeout notifications will be written.
+
+=item $path = $job->pet_file
+
+File to which post exit timeout events will be written.
+
+=item $path = $job->event_dir
+
+Directory to which L<Test2::Formatter::Stream> events will be written.
+
+=item $time = $job->event_timeout
+
+Event timeout specification, if any, first from test queue item, then from
+runner.
+
+=item $time = $job->post_exit_timeout
+
+Post exit timeout specification, if any, first from test queue item, then from
+runner.
+
+=item $bool = $job->event_uuids
+
+Use L<Test2::Plugin::UUID> inside the test.
+
+=item $path = $job->file
+
+Test file the job will be running.
+
+=item $coderef = $job->fork_callback
+
+If the job is to be launched via fork, use this callback.
+
+=item $path = $job->in_file
+
+File containing STDIN to be provided to the test.
+
+=item @list = $job->includes
+
+Paths to add to @INC for the test.
+
+=item $bool = $job->io_events
+
+True if L<Test2::Plugin::IOEvents> should be used.
+
+=item $int = $job->is_try
+
+This starts at 0 and will be incremented for every retry of the job.
+
+=item $path = $job->job_dir
+
+Temporary directory housing all files related to this job when it runs.
+
+=item $uuid = $job->job_id
+
+UUID for this job.
+
+=item @list = $job->load
+
+Modules to load when starting this job.
+
+=item @list = $job->load_import
+
+Modules to load and import when starting this job.
+
+=item $bool = $job->mem_usage
+
+True if the L<Test2::Plugin::MemUsage> plugin should be used.
+
+=item $path = $job->rel_file
+
+Relative path to the file.
+
+=item $int = $job->retry
+
+How many times the test should be retried if it fails.
+
+=item $bool = $job->retry_isolated
+
+True if the test should be retried in isolation if it fails.
+
+=item $run = $job->run
+
+The L<Test2::Harness::Runner::Run> instance.
+
+=item $path = $job->run_dir
+
+Path to the temporary directory housing all the data about the run.
+
+=item $runner = $job->runner
+
+The L<Test2::Harness::Runner> instance.
+
+=item @list = $job->runner_includes
+
+Search path includes provided directly by the runner.
+
+=item $settings = $job->settings
+
+The L<Test2::Harness::Settings> instance.
+
+=item $bool = $job->smoke
+
+True if the test is a priority smoke test.
+
+=item $hashref = $job->spawn_params
+
+Parameters for C<run_cmd()> in L<Test2::Harness::Util::IPC> when launching this
+job.
+
+=item @list = $job->switches
+
+Command line switches for perl when running this test.
+
+=item $hashref = $job->task
+
+Task data from the queue.
+
+=item $path = $job->tmp_dir
+
+Temp dir created specifically for this job.
+
+=item $bool = $job->unsafe_inc
+
+True if '.' should be added to C<@INC>.
+
+=item $bool = $job->use_fork
+
+True if this job should be launched via fork.
+
+=item $bool = $job->use_stream
+
+True if this job should use L<Test2::Formatter::Stream>.
+
+=item $bool = $job->use_timeout
+
+True if this job should timeout due to lack of activity.
+
+=item $bool = $job->use_w_switch
+
+True if the C<-w> switch should be used for this test.
+
+=back
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

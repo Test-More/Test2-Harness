@@ -26,8 +26,18 @@ modules.
 
 =head1 DESCRIPTION
 
-B<PLEASE NOTE:> Test2::Harness is still experimental, it can all change at any
-time. Documentation and tests have not been written yet!
+Export some common structures.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Runner::Constants qw/CATEGORIES DURATIONS/;
+
+    if (CATEGORIES->{$cat}) {
+        print "$cat is valid\n";
+    }
+    else {
+        print "$cat is not valid\n";
+    }
 
 =head1 SOURCE
 

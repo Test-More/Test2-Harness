@@ -19,6 +19,7 @@ use Time::HiRes qw/time/;
 use App::Yath::Util qw/find_pfile/;
 use Test2::Harness::Util qw/find_libraries clean_path/;
 use App::Yath::Options();
+use Scalar::Util qw/blessed/;
 
 my $APP_PATH = __FILE__;
 $APP_PATH =~ s{App\S+Yath\.pm$}{}g;
@@ -108,6 +109,14 @@ sub load_options {
         }
 
         next unless $lib->can('options');
+        my $add = $lib->options;
+        next unless $add;
+
+        unless (blessed($add) && $add->isa('App::Yath::Options')) {
+            warn "Plugin '$option_libs->{$lib}' is outdated, not loading options.\n";
+            next;
+        }
+
         $options->include_from($lib);
     }
 

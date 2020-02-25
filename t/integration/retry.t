@@ -10,10 +10,18 @@ run_tests('test');
 
 my $project = "asgadfgds";
 
-my $out = yath(command => 'start', pre => ['--project', $project], args => [], exit => 0, test => sub {
-    run_tests('run');
-    yath(command => 'stop', args => [], exit => 0);
-});
+unless ($ENV{AUTOMATED_TESTING}) {
+    my $out = yath(
+        command => 'start',
+        pre     => ['--project', $project],
+        args    => [],
+        exit    => 0,
+        test    => sub {
+            run_tests('run');
+            yath(command => 'stop', args => [], exit => 0);
+        }
+    );
+}
 
 sub run_tests {
     my ($cmd) = @_;

@@ -49,9 +49,6 @@ jobs:
         run: cpm install -g --show-build-log-on-failure --cpanfile cpanfile
       - name: perl Makefile.PL
         run: perl Makefile.PL
-      # test are looping on linux containers # need investigation
-      - name: remove integration tests
-        run: rm -rf t/integration
       - name: make
         run: make
       - name: Run Tests

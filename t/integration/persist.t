@@ -8,6 +8,9 @@ use Test2::Harness::Util::File::JSONL;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 
+skip_all "This test is not run under automated testing"
+    if $ENV{AUTOMATED_TESTING};
+
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 

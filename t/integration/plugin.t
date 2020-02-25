@@ -68,12 +68,14 @@ yath(
     test    => \&verify,
 );
 
-subtest persist => sub {
-    verify(
-        yath(command => 'start', args => ['--no-plugins', '-pTestPlugin'], exit => 0),
-        yath(command => 'run', args => ['--no-plugins', '-pTestPlugin', exit => 0, $dir, '--ext=tx', '-A']),
-        yath(command => 'stop', args => ['--no-plugins', '-pTestPlugin'], exit => 0),
-    );
-};
+unless ($ENV{AUTOMATED_TESTING}) {
+    subtest persist => sub {
+        verify(
+            yath(command => 'start', args => ['--no-plugins', '-pTestPlugin'], exit => 0),
+            yath(command => 'run', args => ['--no-plugins', '-pTestPlugin', exit => 0, $dir, '--ext=tx', '-A']),
+            yath(command => 'stop', args => ['--no-plugins', '-pTestPlugin'], exit => 0),
+        );
+    };
+}
 
 done_testing;

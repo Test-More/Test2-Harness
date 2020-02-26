@@ -68,6 +68,63 @@ sub run_tests {
             is($status, 'NO', "Never passed");
         },
     );
+
+    {
+        note q[Retrying a symlink];
+
+        my $sdir = $dir . '-symlinks';
+        my $symlink = "$sdir/symlink.tl";
+
+        unlink $symlink if -e $symlink;
+        if ( eval{ symlink('retry.tx', $symlink); 1 } ) {
+            yath(
+                command => 'test',
+                args => [$sdir, '--ext=tl', '--retry' => 1, '--env-var' => "FAIL_ONCE=1", '-v' ],
+                log  => 1,
+                exit => 0,
+                test => sub {
+                    my $out = shift;
+
+                    my $final      = ($out->{log}->poll())[-2];
+                    my $retry_data = $final->{facet_data}->{harness_final}->{retried}->[0];
+                    my ($uuid, $tries, $file, $status) = @$retry_data;
+
+                    is $tries, 2, 'retried a broken symlink';
+                    is $file, 't/integration/retry-symlinks/symlink.tl', "using symlink name";
+                    is $status, 'YES', 'Succeded Eventually: YES';
+
+                    unlike($out->{output}, qr{FAILED}, q[no failures]);
+                },
+            );
+        }
+    }
+
+    {
+        note q[Retrying a test failing due to a timeout];
+
+        my $sdir = $dir . '-timeout';
+        yath(
+            command => 'test',
+            args => [$sdir, '--ext=tx', '--retry' => 1, '--env-var' => "FAIL_ONCE=1", '-v' ],
+            log  => 1,
+            exit => 0,
+            test => sub {
+                my $out = shift;
+
+                my $final      = ($out->{log}->poll())[-2];
+                my $retry_data = $final->{facet_data}->{harness_final}->{retried}->[0];
+                my ($uuid, $tries, $file, $status) = @$retry_data;
+
+                #note $out->{output};
+
+                is $tries, 2, 'retried a test when failing due to a timeout';
+                is $file, 't/integration/retry-timeout/retry.tx', "retry.txt test";
+                is $status, 'YES', 'Succeded Eventually: YES';
+
+                unlike($out->{output}, qr{FAILED}, q[no failures]);
+            },
+        );
+    }
 };
 
 done_testing;

@@ -34,7 +34,6 @@ requires "Test2::Bundle::Extended" => "0.000127";
 requires "Test2::Event" => "1.302170";
 requires "Test2::Event::V2" => "1.302170";
 requires "Test2::Formatter" => "1.302170";
-requires "Test2::Plugin::IOEvents" => "0.001001";
 requires "Test2::Plugin::MemUsage" => "0.002003";
 requires "Test2::Plugin::UUID" => "0.002001";
 requires "Test2::Require::Module" => "0.000127";
@@ -58,6 +57,7 @@ suggests "HTTP::Tiny" => "0.070";
 suggests "IO::Pager" => "1.00";
 suggests "JSON::MaybeXS" => "0";
 suggests "Term::ANSIColor" => "4.03";
+suggests "Test2::Plugin::IOEvents" => "0.001001";
 
 on 'test' => sub {
   requires "File::Copy" => "0";

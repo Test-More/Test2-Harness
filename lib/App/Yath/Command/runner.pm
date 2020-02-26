@@ -2,7 +2,7 @@ package App::Yath::Command::runner;
 use strict;
 use warnings;
 
-our $VERSION = '0.999006';
+our $VERSION = '0.999007';
 
 use Config qw/%Config/;
 use File::Spec;

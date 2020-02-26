@@ -156,15 +156,9 @@ sub check_timeouts {
 
         print STDERR "$$ $0 " . $job->file . " did not respond to SIGTERM, sending SIGKILL to $pid...\n" if $kill;
 
-        # trying to get the jobid... probably an easier way?
-        if ( my $jdir = $job->{job_dir} ) {
-            my @path = split( '/', $jdir );
-            my ( $jid ) = split( /\+/, $path[-1] );
-
-            # storing the jobid we had to stop
-            $self->{run_reached_timeout} //= {};
-            $self->{run_reached_timeout}->{$jid} = $pid;
-        }
+        # storing the jobid we had to stop
+        $self->{run_reached_timeout} //= {};
+        $self->{run_reached_timeout}->{$job->task->{job_id}} = $pid;
 
         kill($sig, $pid);
     }
@@ -435,13 +429,13 @@ sub set_proc_exit {
     if ($proc->isa('Test2::Harness::Runner::Job')) {
         my $task = $proc->task;
 
+        my $timed_out = 0;
         if ( !$exit && ref $self->{run_reached_timeout} && $self->{run_reached_timeout}->{ $task->{job_id} } ) {
             delete $self->{run_reached_timeout}->{ $task->{job_id} };
-            # let's lie about the exit code... we have aborted it earlier
-            $exit = 999999;
+            $timed_out = 1;
         }
 
-        if ($exit && $proc->is_try < $proc->retry ) {
+        if (($exit || $timed_out) && $proc->is_try < $proc->retry ) {
             $self->state->retry_task($task->{job_id});
             push @args => 'will-retry';
         }

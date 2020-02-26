@@ -43,7 +43,7 @@ BEGIN {
 
 }
 
-our @EXPORT = qw{JSON encode_json decode_json decode_json_non_utf8 encode_pretty_json encode_canon_json};
+our @EXPORT = qw{JSON encode_json decode_json encode_pretty_json encode_canon_json};
 our @EXPORT_OK = qw{JSON_IS_PP JSON_IS_XS JSON_IS_CPANEL JSON_IS_CPANEL_OR_XS};
 BEGIN { require Exporter; our @ISA = qw(Exporter) }
 
@@ -75,24 +75,6 @@ sub decode_json {
     die "$mess\n=======\n$input\n=======\n";
 }
 
-# This is here because Test2::Formatter::Stream's JSON encoder
-# doesn't encode as UTF-8 (i.e., its utf8() mode is not enabled).
-# Thus, we need the logic that decodes that JSON not to decode UTF-8.
-sub decode_json_non_utf8 {
-    my ($input) = @_;
-    my $data;
-
-    local $@;
-    my $error;
-
-    eval { $data = $json_non_utf8->decode($input); 1 } or do {
-        my $mess = Carp::longmess("JSON decode error: $@");
-        die "$mess\n=======\n$input\n=======\n";
-    };
-
-    return $data;
-}
-
 1;
 
 __END__
@@ -107,6 +89,59 @@ Test2::Harness::Util::JSON - Utility class to help Test2::Harness pick the best
 JSON implementation.
 
 =head1 DESCRIPTION
+
+This package provides functions for encoding/decoding json, and uses the best
+json tools available.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+
+    my $data = { foo => 1 };
+    my $json = encode_json($data);
+    my $copy = decode_json($json);
+
+=head1 EXPORTS
+
+=over 4
+
+=item $package = JSON()
+
+This returns the JSON package being used by yath.
+
+=item $bool = JSON_IS_PP()
+
+True if yath is using L<JSON::PP>.
+
+=item $bool = JSON_IS_XS()
+
+True if yath is using L<JSON::XS>.
+
+=item $bool = JSON_IS_CPANEL()
+
+True if yath is using L<Cpanel::JSON::XS>.
+
+=item $bool = JSON_IS_CPANEL_OR_XS()
+
+True if either L<JSON::XS> or L<Cpanel::JSON::XS> are being used.
+
+=item $string = encode_json($data)
+
+Encode data into json. String will be 1-line.
+
+=item $data = decode_json($string)
+
+Decode json data from the string.
+
+=item $string = encode_pretty_json($data)
+
+Encode into human-friendly json.
+
+=item $string = encode_canon_json($data)
+
+Encode into canon-json.
+
+=back
 
 =head1 SOURCE
 

@@ -120,8 +120,8 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     );
 
     option io_events => (
-        default => 1,
-        description => 'Use Test2::Plugin::IOEvents inside tests to turn all prints into test2 events (default: on)',
+        default => 0,
+        description => 'Use Test2::Plugin::IOEvents inside tests to turn all prints into test2 events (default: off)',
     );
 
     option retry => (

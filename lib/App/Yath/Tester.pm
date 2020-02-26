@@ -70,12 +70,14 @@ sub yath {
     my ($rh, $wh);
     if ($capture) {
         pipe($rh, $wh) or die "Could not open pipe: $!";
+        apply_encoding($rh, $enc) if $enc;
+        $rh->blocking(0);
     }
 
     my (@log, $logfile);
     if ($log) {
         my $fh;
-        ($fh, $logfile) = tempfile(CLEANUP => 1, SUFFIX => '.jsonl');
+        ($fh, $logfile) = tempfile("yathlog-$$-XXXXXXXX", CLEANUP => 1, SUFFIX => '.jsonl');
         close($fh);
         @log = ('-F' => $logfile);
         print "DEBUG: log file = '$logfile'\n" if $debug;
@@ -103,15 +105,12 @@ sub yath {
         no_set_pgrp => 1,
         $capture ? (stderr => $wh, stdout => $wh) : (),
         command => \@cmd,
+        run_in_parent => [sub { close($wh) }],
+        run_in_child  => [sub { close($rh) }],
     );
 
     my (@lines, $exit);
     if ($capture) {
-        close($wh);
-
-        apply_encoding($rh, $enc) if $enc;
-
-        $rh->blocking(0);
         while (1) {
             my @new = <$rh>;
             push @lines => @new;
@@ -122,9 +121,10 @@ sub yath {
             last;
         }
 
-        my @new = <$rh>;
-        push @lines => @new;
-        print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;
+        while (my @new = <$rh>) {
+            push @lines => @new;
+            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;
+        }
     }
     else {
         print "DEBUG: Waiting for $pid\n" if $debug;

@@ -72,7 +72,13 @@ sub _run_cmd_fork {
 
     my $pid = fork;
     die "Failed to fork" unless defined $pid;
-    return $pid if $pid;
+    if ($pid) {
+        $_->() for @{$params{run_in_parent} // []};
+        return $pid;
+    }
+    else {
+        $_->() for @{$params{run_in_child} // []};
+    }
     %ENV = (%ENV, %{$params{env}}) if $params{env};
     setpgrp(0, 0) if USE_P_GROUPS && !$params{no_set_pgrp};
 

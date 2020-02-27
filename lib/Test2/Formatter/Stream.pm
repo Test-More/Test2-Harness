@@ -8,6 +8,7 @@ use Carp qw/croak confess/;
 use Time::HiRes qw/time/;
 use IO::Handle;
 use File::Spec();
+use List::Util qw/first/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON JSON_IS_XS/;
@@ -16,7 +17,7 @@ use Test2::Harness::Util qw/hub_truth apply_encoding/;
 use Test2::Util qw/get_tid ipc_separator/;
 
 use base qw/Test2::Formatter/;
-use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id -egid/;
+use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id -ugids/;
 
 BEGIN {
     my $J = JSON->new;
@@ -40,7 +41,7 @@ BEGIN {
     }
 }
 
-my ($ROOT_TID, $ROOT_PID, $ROOT_DIR, $ROOT_JOB_ID, $ROOT_EGID);
+my ($ROOT_TID, $ROOT_PID, $ROOT_DIR, $ROOT_JOB_ID, $ROOT_UGIDS);
 sub import {
     my $class = shift;
     my %params = @_;
@@ -54,7 +55,7 @@ sub import {
     $ROOT_TID  = get_tid();
     $ROOT_DIR = $params{dir} if $params{dir};
     $ROOT_JOB_ID = $params{job_id} if $params{job_id};
-    $ROOT_EGID = $>;
+    $ROOT_UGIDS = [$<, $>, $(, $)];
 
     if ($ROOT_DIR && ! -d $ROOT_DIR) {
         mkdir($ROOT_DIR) or die "Could not make root dir: $!";
@@ -90,7 +91,8 @@ sub fh {
 
     my $file = File::Spec->catfile($dir, join(ipc_separator() => 'events', $pid, $tid) . ".jsonl");
 
-    local $> = $self->{+EGID} if $self->{+EGID} && $self->{+EGID} ne $>;
+    my @now = ($<, $>, $(, $));
+    local ($<, $>, $(, $)) = @{$self->{+UGIDS}} if $self->{+UGIDS} && first { $self->{+UGIDS}->[$_] ne $now[$_] } 0 .. $#now;
 
     mkdir($dir) or die "Could not make dir '$dir': $!" unless -d $dir;
     confess "File '$file' already exists!" if -f $file;
@@ -107,7 +109,7 @@ sub init {
     my $self = shift;
 
     $self->{+STREAM_ID} = 1;
-    $self->{+EGID} //= $>;
+    $self->{+UGIDS} //= [$<, $>, $(, $)];
 
     # To create necessary directories as soon as possible
     $self->fh();
@@ -162,7 +164,7 @@ sub new_root {
 
     $params{check_tb} = 1 if $INC{'Test/Builder.pm'};
 
-    $params{egid} = $ROOT_EGID;
+    $params{+UGIDS} = $ROOT_UGIDS if $ROOT_UGIDS;
 
     return $class->new(%params);
 }

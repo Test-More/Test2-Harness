@@ -12,8 +12,6 @@ $dir =~ s{\.t$}{}g;
 sub verify {
     my (@outputs) = @_;
 
-    my $ctx = context();
-
     my $text = '';
     for my $out (@outputs) {
         $text .= $out->{output};
@@ -61,8 +59,6 @@ sub verify {
 
     my %jobs = reverse($text =~ m{job\s+(\d+)\s+.*\W(\w+)\.tx}g);
     is(\%jobs, \%rank, "Ran jobs in specified order");
-
-    $ctx->release;
 }
 
 yath(

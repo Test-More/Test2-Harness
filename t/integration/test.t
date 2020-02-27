@@ -150,7 +150,11 @@ yath(
         test => sub {
             my $out = shift;
 
-            my @lines = grep { m/\Q( PASSED )\E/ } split /\n/, $out->{output};
+            my @lines = sort {
+                my ($aj) = ($a =~ m/job\s+(\d+)/) or return 0;
+                my ($bj) = ($b =~ m/job\s+(\d+)/) or return 0;
+                return $aj <=> $bj;
+            } grep { m/\Q( PASSED )\E/ } split /\n/, $out->{output};
 
             is \@lines, array {
 
@@ -181,7 +185,11 @@ yath(
         test => sub {
             my $out = shift;
 
-            my @lines = grep { m/\Q( PASSED )\E/ } split /\n/, $out->{output};
+            my @lines = sort {
+                my ($aj) = ($a =~ m/job\s+(\d+)/) or return 0;
+                my ($bj) = ($b =~ m/job\s+(\d+)/) or return 0;
+                return $aj <=> $bj;
+            } grep { m/\Q( PASSED )\E/ } split /\n/, $out->{output};
 
             is \@lines, array {
 

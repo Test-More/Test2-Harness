@@ -1,4 +1,5 @@
 use Test2::V0;
+use Test2::Require::AuthorTesting;
 
 use File::Temp qw/tempdir/;
 use File::Spec;
@@ -13,9 +14,10 @@ for ( 1..10 ) {
     # the tests are flapping when using something like '%INC = %INC'....
     #   make sure the issue is fixed by running them a few times
     my $out = yath(
+        prefix => "Try $_: ",
         command => 'test',
         args    => [$dir],
-        log     => 1,
+        log     => 0,
         exit    => 0,
     );
 }

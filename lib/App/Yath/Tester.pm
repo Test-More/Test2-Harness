@@ -41,6 +41,7 @@ sub yath {
     my $pre = delete $params{pre} // delete $params{pre_command} // [];
     my $env = delete $params{env} // {};
     my $enc = delete $params{encoding};
+    my $prefix = delete $params{prefix};
 
     my $subtest  = delete $params{test} // delete $params{tests} // delete $params{subtest};
     my $exittest = delete $params{exit};
@@ -140,7 +141,7 @@ sub yath {
         $log ? (log => Test2::Harness::Util::File::JSONL->new(name => $logfile)) : (),
     };
 
-    my $name = join(' ', map { length($_) < 30 ? $_ : substr($_, 0, 10) . "[...]" . substr($_, -10) } 'yath', grep { defined($_) } @$pre, $cmd ? ($cmd) : (), @$cli);
+    my $name = join(' ', map { length($_) < 30 ? $_ : substr($_, 0, 10) . "[...]" . substr($_, -10) } grep { defined($_) } $prefix, 'yath', @$pre, $cmd ? ($cmd) : (), @$cli);
     run_subtest(
         $name,
         sub {

@@ -11,7 +11,7 @@ use Test2::Harness::Util();
 use Carp qw/croak confess/;
 use Fcntl qw/SEEK_SET SEEK_CUR/;
 
-use Test2::Harness::Util::HashBase qw{ -name -_fh -_init_fh done -stamped -line_pos };
+use Test2::Harness::Util::HashBase qw{ -name -_fh -_init_fh done -line_pos };
 
 sub exists { -e $_[0]->{+NAME} }
 
@@ -117,6 +117,98 @@ __END__
 Test2::Harness::Util::File - Utility class for manipulating a file.
 
 =head1 DESCRIPTION
+
+This is a utility class for file operations. This also serves as a base class
+for several file helpers.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Util::File;
+
+    my $f = Test2::Harness::Util::File->new(name => '/path/to/file');
+
+    $f->write($content);
+
+    my $fh = $f->open_file('<');
+
+    # Read, throw exception if it cannot read
+    my $content = $f->read();
+
+    # Try to read, but do not throw an exception if it cannot be read.
+    my $content_or_undef = $f->maybe_read();
+
+    my $line1 = $f->read_line();
+    my $line2 = $f->read_line();
+    ...
+
+=head1 ATTRIBUTES
+
+=over 4
+
+=item $filename = $f->name;
+
+Get the filename. Must also be provided during construction.
+
+=item $bool = $f->done;
+
+True if read_line() has read every line.
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item $decoded = $f->decode($encoded)
+
+This is a no-op, it returns the argument unchanged. This is called by C<read>
+and C<read_line>. Subclasses can override this if the file contains encoded
+data.
+
+=item $encoded = $f->encode($decoded)
+
+This is a no-op, it returns the argument unchanged. This is called by C<write>.
+Subclasses can override this if the file contains encoded data.
+
+=item $bool = $f->exists()
+
+Check if the file exists
+
+=item $content = $f->maybe_read()
+
+This will read the file if it can and return the content (all lines joined
+together as a single string). If the file cannot be read, or does not exist
+this will return undef.
+
+=item $fh = $f->open_file()
+
+=item $fh = $f->open_file($mode)
+
+Open a handle to the file. If no $mode is provided C<< '<' >> is used.
+
+=item $content = $f->read()
+
+This will read the file if it can and return the content (all lines joined
+together as a single string). If the file cannot be read, or does not exist
+this will throw an exception.
+
+=item $line = $f->read_line()
+
+Read a single line from the file, subsequent calls will read the next line and
+so on until the end of the file is reached. Reset with the C<reset()> method.
+
+=item $f->reset()
+
+Reset the internal line iterator used by C<read_line()>.
+
+=item $f->write($content)
+
+This is an atomic-write. First $content will be written to a temporary file
+using C<< '>' >> mode. Then the temporary file will be renamed to the desired
+file name. Under the hood this uses C<write_file_atomic()> from
+L<Test2::Harness::Util>.
+
+=back
 
 =head1 SOURCE
 

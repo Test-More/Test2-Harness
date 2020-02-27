@@ -16,47 +16,18 @@ __END__
 
 App::Yath::Converting - Things you may need to change in your tests before you can use yath.
 
-=head1 UTF8 STDERR/STDOUT THAT POINT AT FILES
+=head1 NON-TAP FORMATTER
 
 By default yath tells any L<Test2> or L<Test::Builder> tests to use
 L<Test2::Formatter::Stream> instead of L<Test2::Formatter::TAP>. This is done
 in order to make sure as much data as possible makes it to yath, TAP is a lossy
-formater by comparison. A consequence of this is that STDOUT and STDERR are
-redirected to files, and the ':utf8' encoding is set.
+formater by comparison.
 
-=head2 GOTCHAS / CAVEATS
-
-=head3 syswrite
-
-If your test uses C<syswrite> on STDERR/STDOUT you will be hit by a warning in
-some perl versions, and it will be fatal in 5.30+. This is because syswrite on
-utf8 filehandle is a bad thing.
-
-=head3 print
-
-If you print non-utf8 characters to STDERR/STDOUT you will get
-C<wide character in print> warnings under yath.
-
-=head3 is / is_deeply / diag
-
-If you compare non-utf8 strings in testing tools like C<is`> they will report
-diagnostics which include the non-utf8 characters, which will result in wide
-character warnings.
+This is not normally a problem, but tests that do strange things with
+STDERR/STDOUT, or try to intercept output from the regular TAP formatter can
+have issues with this.
 
 =head2 SOLUTIONS
-
-=head3 Update your test
-
-Update your test to use UTF8. In many cases this is as simple as importing
-C<Test2::Plugin::UTF8>.
-
-    #!/usr/bin/perl
-    use Test2::Plugin::UTF8;
-    ...
-
-This sets all output handles (STDERR/STDOUT) including those of any
-L<Test2::Formatter> subclasses to use utf8. This will also import the L<utf8>
-pragma for you to read your test fiel source as utf8.
 
 =head3 HARNESS-NO-STREAM
 

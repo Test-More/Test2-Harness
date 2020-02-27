@@ -2,7 +2,7 @@ package App::Yath::Command::reload;
 use strict;
 use warnings;
 
-our $VERSION = '0.999007';
+our $VERSION = '0.999008';
 
 use File::Spec();
 use Test2::Harness::Util::File::JSON;

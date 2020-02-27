@@ -4,7 +4,7 @@ use warnings;
 
 use parent 'App::Yath::Command';
 
-our $VERSION = '0.999008';
+our $VERSION = '0.999009';
 
 use Test2::Harness::Util qw/open_file/;
 use App::Yath::Util qw/is_generated_test_pl/;

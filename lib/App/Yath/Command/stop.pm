@@ -2,7 +2,7 @@ package App::Yath::Command::stop;
 use strict;
 use warnings;
 
-our $VERSION = '0.999008';
+our $VERSION = '0.999009';
 
 use Time::HiRes qw/sleep/;
 

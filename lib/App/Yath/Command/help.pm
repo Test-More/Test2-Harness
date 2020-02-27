@@ -4,7 +4,7 @@ use warnings;
 
 use Test2::Util qw/pkg_to_file/;
 
-our $VERSION = '0.999008';
+our $VERSION = '0.999009';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/<_command_info_hash/;

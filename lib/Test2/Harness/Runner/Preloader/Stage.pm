@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Preloader::Stage;
 use strict;
 use warnings;
 
-our $VERSION = '0.999008';
+our $VERSION = '0.999009';
 
 use parent 'Test2::Harness::IPC::Process';
 use Test2::Harness::Util::HashBase qw{ <name eager };

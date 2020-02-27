@@ -2,7 +2,7 @@ package Test2::Formatter::Test2::Composer;
 use strict;
 use warnings;
 
-our $VERSION = '0.999008';
+our $VERSION = '0.999009';
 
 use Scalar::Util qw/blessed/;
 use List::Util qw/first/;

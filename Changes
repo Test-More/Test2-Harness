@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix IOStream permissions issues
+
 0.999006  2020-02-26 15:39:28-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Do not use IOEvents by default

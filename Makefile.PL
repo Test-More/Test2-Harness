@@ -9,7 +9,7 @@ use 5.010000;
 use ExtUtils::MakeMaker;
 
 use Config qw/%Config/;
-die "Test2-Harness currently only works on systems that support true forking.\n"
+die "OS unsupported\nTest2-Harness currently only works on systems that support true forking.\n"
     unless $Config{d_fork};
 
 my %WriteMakefileArgs = (

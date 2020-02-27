@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Fix sorting in ordering tests
+    - Fix incorrect line numbers in plugin.t errors
+    - Less fragile fork check in Makefile.PL
+
 0.999008  2020-02-26 20:25:34-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Only officially support systems with true fork().

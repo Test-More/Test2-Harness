@@ -2,7 +2,7 @@ package App::Yath::Plugin::SysInfo;
 use strict;
 use warnings;
 
-our $VERSION = '0.999009';
+our $VERSION = '0.999010';
 
 use Sys::Hostname qw/hostname/;
 use Test2::Util qw/CAN_THREAD CAN_REALLY_FORK CAN_FORK CAN_SIGSYS/;

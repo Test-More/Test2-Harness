@@ -41,6 +41,32 @@ exactly 1 value.
 
 =head1 DESCRIPTION
 
+This is a subclass of L<Test2::Harness::Util::File> for files expected to have
+exactly 1 value stored in them.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness::Util::File::Value;
+
+    my $vf = Test2::Harness::Util::File::Value->new(name => 'path/to/file');
+    my $val = $vf->read;
+
+=head1 METHODS
+
+=over 4
+
+=item $val = $vf->read()
+
+Read all contents from the file, C<chomp()> it, and return it.
+
+=item $val = $vf->read_line()
+
+Read the first line from the file, C<chomp()> it, and return it. Note, this
+may not return anything if the value in the file does not terminate with a
+newline.
+
+=back
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

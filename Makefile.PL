@@ -8,11 +8,9 @@ use warnings;
 use 5.010000;
 use ExtUtils::MakeMaker;
 
-{
-    require Test2::Util;
-    die "Test2-Harness currently only works on systems that support true forking.\n"
-        unless Test2::Util::CAN_REALLY_FORK();
-}
+use Config qw/%Config/;
+die "Test2-Harness currently only works on systems that support true forking.\n"
+    unless $Config{d_fork};
 
 my %WriteMakefileArgs = (
   "ABSTRACT" => "A new and improved test harness with better L<Test2> integration.",

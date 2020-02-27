@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Only officially support systems with true fork().
+
 0.999007  2020-02-26 16:52:46-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Fix IOStream permissions issues

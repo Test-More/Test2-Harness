@@ -16,7 +16,7 @@ use Test2::Harness::Util qw/hub_truth apply_encoding/;
 use Test2::Util qw/get_tid ipc_separator/;
 
 use base qw/Test2::Formatter/;
-use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id/;
+use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id -egid/;
 
 BEGIN {
     my $J = JSON->new;
@@ -40,7 +40,7 @@ BEGIN {
     }
 }
 
-my ($ROOT_TID, $ROOT_PID, $ROOT_DIR, $ROOT_JOB_ID);
+my ($ROOT_TID, $ROOT_PID, $ROOT_DIR, $ROOT_JOB_ID, $ROOT_EGID);
 sub import {
     my $class = shift;
     my %params = @_;
@@ -54,6 +54,11 @@ sub import {
     $ROOT_TID  = get_tid();
     $ROOT_DIR = $params{dir} if $params{dir};
     $ROOT_JOB_ID = $params{job_id} if $params{job_id};
+    $ROOT_EGID = $>;
+
+    if ($ROOT_DIR && ! -d $ROOT_DIR) {
+        mkdir($ROOT_DIR) or die "Could not make root dir: $!";
+    }
 }
 
 sub hide_buffered { 0 }
@@ -85,6 +90,8 @@ sub fh {
 
     my $file = File::Spec->catfile($dir, join(ipc_separator() => 'events', $pid, $tid) . ".jsonl");
 
+    local $> = $self->{+EGID} if $self->{+EGID} && $self->{+EGID} ne $>;
+
     mkdir($dir) or die "Could not make dir '$dir': $!" unless -d $dir;
     confess "File '$file' already exists!" if -f $file;
     open(my $fh, '>', $file) or die "Could not open file: $file";
@@ -100,6 +107,10 @@ sub init {
     my $self = shift;
 
     $self->{+STREAM_ID} = 1;
+    $self->{+EGID} //= $>;
+
+    # To create necessary directories as soon as possible
+    $self->fh();
 
     for (@{$self->{+IO}}) {
         $_->autoflush(1);
@@ -150,6 +161,8 @@ sub new_root {
     $ROOT_DIR = undef;
 
     $params{check_tb} = 1 if $INC{'Test/Builder.pm'};
+
+    $params{egid} = $ROOT_EGID;
 
     return $class->new(%params);
 }

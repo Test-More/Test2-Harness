@@ -146,8 +146,8 @@ sub check_timeouts {
 
         my $kill = -f $job->et_file || -f $job->pet_file;
 
-        write_file_atomic($job->et_file,  $now) if $e_to  && !-f $job->et_file;
-        write_file_atomic($job->pet_file, $now) if $pe_to && !-f $job->pet_file;
+        write_file_atomic($job->et_file,  "$now $delta") if $e_to  && !-f $job->et_file;
+        write_file_atomic($job->pet_file, "$now $delta") if $pe_to && !-f $job->pet_file;
 
         my $sigmap = $self->SIG_MAP;
         my $sig = $kill ? $sigmap->{'KILL'} : $sigmap->{'TERM'};

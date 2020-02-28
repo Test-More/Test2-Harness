@@ -602,9 +602,12 @@ sub _process_exit_line {
 
 sub _process_timeout_line {
     my $self = shift;
-    my ($type, $stamp, $reason) = @_;
+    my ($type, $buffer, $reason) = @_;
 
-    chomp($stamp //= '');
+    chomp($buffer //= '');
+    my ($stamp, $delta) = split /\s+/, $buffer;
+    $stamp //= time();
+    $delta = defined($delta) ? sprintf('%.4f', $delta) : '??';
 
     my $event_id = gen_uuid();
 
@@ -620,7 +623,7 @@ sub _process_timeout_line {
             errors => [
                 {
                     tag     => 'TIMEOUT',
-                    details => "A timeout ($type) has occured, job was forcefully killed",
+                    details => "A timeout ($type) has occured (after $delta seconds), job was forcefully killed",
                     fail    => 1,
                 },
             ],

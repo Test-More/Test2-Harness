@@ -8,13 +8,14 @@ use warnings;
 our $VERSION = '1.000000';
 
 # This is used frequently during development to determine what different events look like so we can determine how to capture test data.
-use Data::Dumper; $Data::Dumper::Sortkeys = 1;
+use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;
 
 use File::Spec;
 use POSIX ();
 use Storable qw/dclone/;
 use XML::Generator ();
-use Carp ();
+use Carp           ();
 
 BEGIN { require Test2::Harness::Renderer; our @ISA = ('Test2::Harness::Renderer') }
 use Test2::Harness::Util::HashBase qw{
@@ -58,9 +59,7 @@ sub render_event {
 
     if ( !defined $stamp ) {
         $f //= 'unknown facet_data';
-        die "No time stamp found for event '$f' ?!?!?!? ...\n"
-            . "Event:\n" . Dumper( $event ) . "\n"
-            . Carp::longmess();
+        die "No time stamp found for event '$f' ?!?!?!? ...\n" . "Event:\n" . Dumper($event) . "\n" . Carp::longmess();
     }
 
     # At job launch we need to start collecting a new junit testdata section.
@@ -71,7 +70,7 @@ sub render_event {
 
         $self->{'tests'}->{$job_id} = {
             'name'           => $job->{'file'},
-            'file'           => _squeaky_clean( $test_file ),
+            'file'           => _squeaky_clean($test_file),
             'job_id'         => $job_id,
             'job_name'       => $f->{'harness_job'}->{'job_name'},
             'testcase'       => [],
@@ -84,7 +83,7 @@ sub render_event {
                 'failures' => 0,
                 'tests'    => 0,
                 'name'     => _get_testsuite_name($test_file),
-                'id'       => $job_id, # add a UID in the XML output
+                'id'       => $job_id,                           # add a UID in the XML output
             },
         };
 
@@ -96,13 +95,14 @@ sub render_event {
     # We have all the data. Print the XML.
     if ( $f->{'harness_job_end'} ) {
         $self->close_open_failure_testcase( $test, -1 );
-        $test->{'stop'} = $event->{'stamp'};
-        $test->{'testsuite'}->{'time'} = $test->{'stop'} - $test->{'start'};
+        $test->{'stop'}                     = $event->{'stamp'};
+        $test->{'testsuite'}->{'time'}      = $test->{'stop'} - $test->{'start'};
         $test->{'testsuite'}->{'timestamp'} = _timestamp( $test->{'start'} );
 
         push @{ $test->{'testcase'} }, $self->xml->testcase(
             { 'name' => "Tear down.", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'file'} },
-            "" );
+            ""
+        );
 
         if ( $f->{'errors'} ) {
             $test->{'error-msg'} //= '';
@@ -163,7 +163,7 @@ sub render_event {
 
         if ( $f->{'amnesty'} && grep { ( $_->{'tag'} // '' ) eq 'TODO' } @{ $f->{'amnesty'} } ) {    # All TODO Tests
             if ( !$f->{'assert'}->{'pass'} ) {                                                       # Failing TODO
-                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (TODO)",  'time' => $run_time, 'classname' => $test->{'file'} }, "" );
+                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (TODO)", 'time' => $run_time, 'classname' => $test->{'file'} }, "" );
             }
             elsif ( $self->{'allow_passing_todos'} ) {                                               # junit parsers don't like passing TODO tests. Let's just not tell them about it if $ENV{ALLOW_PASSING_TODOS} is set.
                 push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (PASSING TODO)", 'time' => $run_time, 'classname' => $test->{'file'} }, "" );
@@ -189,7 +189,8 @@ sub render_event {
         elsif ( $f->{'assert'}->{'pass'} ) {    # Passing test
             push @{ $test->{'testcase'} }, $self->xml->testcase(
                 { 'name' => "$test_string", 'time' => $run_time, 'classname' => $test->{'file'} },
-                "" );
+                ""
+            );
         }
         else {                                  # Failing Test.
             $test->{'testsuite'}->{'failures'}++;
@@ -234,13 +235,13 @@ sub finish {
     print {$fh} "<testsuites>\n";
     my @jobs = sort { $a->{'job_name'} <=> $b->{'job_name'} } values %{ $self->{'tests'} };
     foreach my $job (@jobs) {
-      print {$fh} $xml->testsuite(
-                $job->{'testsuite'},
-                @{ $job->{'testcase'} },
-                $xml->$out_method( $self->_cdata( $job->{$out_method} ) ),
-                $xml->$err_method( $self->_cdata( $job->{$err_method} ) ),
-                $job->{'error-msg'} ? $xml->error( { 'message' => $job->{'error-msg'} } ) : (),
-              ) . "\n";
+        print {$fh} $xml->testsuite(
+            $job->{'testsuite'},
+            @{ $job->{'testcase'} },
+            $xml->$out_method( $self->_cdata( $job->{$out_method} ) ),
+            $xml->$err_method( $self->_cdata( $job->{$err_method} ) ),
+            $job->{'error-msg'} ? $xml->error( { 'message' => $job->{'error-msg'} } ) : (),
+        ) . "\n";
     }
 
     print {$fh} "</testsuites>\n";
@@ -329,9 +330,9 @@ sub _squeaky_clean {
 }
 
 sub _timestamp {
-     my $time = shift;
-     return POSIX::strftime('%Y-%m-%dT%H:%M:%S', localtime(int($time)));
- }
+    my $time = shift;
+    return POSIX::strftime( '%Y-%m-%dT%H:%M:%S', localtime( int($time) ) );
+}
 
 1;
 

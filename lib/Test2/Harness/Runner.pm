@@ -2,7 +2,7 @@ package Test2::Harness::Runner;
 use strict;
 use warnings;
 
-our $VERSION = '0.999011';
+our $VERSION = '1.000000';
 
 use File::Spec();
 

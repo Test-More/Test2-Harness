@@ -2,7 +2,7 @@ package App::Yath::Command::replay;
 use strict;
 use warnings;
 
-our $VERSION = '0.999011';
+our $VERSION = '1.000000';
 
 use App::Yath::Options;
 require App::Yath::Command::test;

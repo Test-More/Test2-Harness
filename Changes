@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - No changes since last trial release
+    - This is the first stable release
+    - Huge changes/refactor from the alpha versions
+
 0.999010  2020-02-27 21:52:25-08:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Make signals.t author-testing

@@ -2,7 +2,7 @@ package App::Yath::Options;
 use strict;
 use warnings;
 
-our $VERSION = '0.999010';
+our $VERSION = '0.999011';
 
 use Carp qw/croak confess/;
 use Scalar::Util qw/blessed/;

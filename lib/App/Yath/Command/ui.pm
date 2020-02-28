@@ -8,11 +8,9 @@ use Test2::Util qw/pkg_to_file/;
 
 use Test2::Harness::UI::Util qw/share_dir share_file/;
 
-use Test2::Harness::Feeder::JSONL;
 use Test2::Harness::UI::Config;
 use Test2::Harness::UI::Importer;
 use Test2::Harness::UI;
-use Test2::Harness;
 
 use DBIx::QuickDB;
 use Plack::Builder;
@@ -20,16 +18,18 @@ use Plack::App::Directory;
 use Plack::App::File;
 use Plack::Runner;
 
-use parent 'App::Yath::Command::test';
-use Test2::Harness::Util::HashBase;
+use parent 'App::Yath::Command';
+use Test2::Harness::Util::HashBase qw/<log_file/;
+
+use App::Yath::Options;
+
+include_options(
+    'App::Yath::Options::PreCommand',
+);
 
 sub summary { "Launch a standalone Test2-Harness-UI server for a log file" }
 
 sub group { 'log' }
-
-sub has_runner  { 0 }
-sub has_logger  { 0 }
-sub has_display { 0 }
 
 sub cli_args { "[--] event_log.jsonl[.gz|.bz2]" }
 
@@ -38,27 +38,16 @@ sub description {
     EOT
 }
 
-sub handle_list_args {
-    my $self = shift;
-    my ($list) = @_;
-
-    my $settings = $self->{+SETTINGS};
-
-    my ($log, @jobs) = @$list;
-
-    $settings->{log_file} = $log;
-
-    die "You must specify a log file.\n"
-        unless $log;
-
-    die "Invalid log file: '$log'"
-        unless -f $log;
-}
-
-sub run_command {
+sub run {
     my $self = shift;
 
-    my $settings = $self->{+SETTINGS};
+    my $args     = $self->args;
+
+    shift @$args if @$args && $args->[0] eq '--';
+
+    $self->{+LOG_FILE} = shift @$args or die "You must specify a log file";
+    die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
+    die "'$self->{+LOG_FILE}' does not look like a log file" unless $self->{+LOG_FILE} =~ m/\.jsonl(\.(gz|bz2))?$/;
 
     my $db = DBIx::QuickDB->build_db(harness_ui => {driver => 'PostgreSQL'});
 
@@ -82,7 +71,7 @@ sub run_command {
     my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
     my $proj = $config->schema->resultset('Project')->create({name => 'default'});
 
-    open(my $lf, '<', $settings->{log_file}) or die "Could no open log file: $!";
+    open(my $lf, '<', $self->{+LOG_FILE}) or die "Could no open log file: $!";
     $config->schema->resultset('Run')->create(
         {
             user_id    => $user->user_id,
@@ -91,7 +80,7 @@ sub run_command {
             project_id => $proj->project_id,
 
             log_file => {
-                name => $settings->{log_file},
+                name => $self->{+LOG_FILE},
                 data => do { local $/; <$lf> },
             },
         }
@@ -114,58 +103,7 @@ sub run_command {
     $r->parse_options("--server", "Starman");
     $r->run($app);
 
-    return 1;
+    return 0;
 }
 
-
 1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-App::Yath::Command::ui - Command to view a test log via a web UI.
-
-=head1 COMMAND LINE USAGE
-
-    yath ui path/to/log/file.jsonl.gz
-    yath ui path/to/log/file.jsonl.bz2
-
-The command will give you a portnumberon your localhost to visit in your web
-browser.
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness-UI can be found at
-F<http://github.com/Test-More/Test2-Harness-UI/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2019 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

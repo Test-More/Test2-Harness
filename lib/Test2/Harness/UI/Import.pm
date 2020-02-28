@@ -313,7 +313,7 @@ sub update_other {
         clean($run_data);
         $run->update({parameters => $run_data});
 
-        if (my $fields = $run_data->{harness_run_fields}) {
+        if (my $fields = $run_data->{harness_run_fields} // $run_data->{fields}) {
             my $run_id = $run->run_id;
             my $old = $run->fields;
             my @new = map { { %{$_}, run_id => $run_id } } @$fields;

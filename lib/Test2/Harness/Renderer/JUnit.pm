@@ -122,7 +122,7 @@ sub render_event {
             }
             if ($test_error_messages) {
                 push @{ $test->{'testcase'} }, $self->xml->testcase(
-                    { 'name' => "Unit Test Plan Failure $job_id", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'testsuite'}->{'name'} },
+                    { 'name' => "Test Plan Failure", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'testsuite'}->{'name'} },
                     $self->xml->failure($test_error_messages)
                 );
             }

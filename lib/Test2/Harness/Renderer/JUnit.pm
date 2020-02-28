@@ -52,18 +52,23 @@ sub render_event {
     # We modify the event, which would be bad if there were multiple renderers,
     # so we deep clone it.
     $event = dclone($event);
-    my $f      = $event->{facet_data};
-    my $job    = $f->{harness_job};
-    my $job_id = $event->{'job_id'} or return;
-    my $stamp  = $event->{'stamp'};
+    my $f       = $event->{facet_data};
+    my $job     = $f->{harness_job};
+    my $job_id  = $f->{'harness'}->{'job_id'} or return;
+    my $job_try = $f->{'harness'}->{'job_try'} // 0;
+    my $stamp   = $event->{'stamp'};
 
     if ( !defined $stamp ) {
         $f //= 'unknown facet_data';
         die "No time stamp found for event '$f' ?!?!?!? ...\n" . "Event:\n" . Dumper($event) . "\n" . Carp::longmess();
     }
 
+    # Throw out job events if they are for a previous run and we've already started collecting job
+    # information for a successive run.
+    return if $self->{'tests'}->{$job_id} && $job_try < ( $self->{'tests'}->{$job_id}->{'job_try'} // 0 );
+
     # At job launch we need to start collecting a new junit testdata section.
-    # We throw out anything we've collected to date.
+    # We throw out anything we've collected to date on a previous run.
     if ( $f->{'harness_job_launch'} ) {
         my $full_test_name = $job->{'file'};
         my $test_file      = File::Spec->abs2rel($full_test_name);
@@ -72,6 +77,7 @@ sub render_event {
             'name'           => $job->{'file'},
             'file'           => _squeaky_clean($test_file),
             'job_id'         => $job_id,
+            'job_try'        => $job_try,
             'job_name'       => $f->{'harness_job'}->{'job_name'},
             'testcase'       => [],
             'system-out'     => '',

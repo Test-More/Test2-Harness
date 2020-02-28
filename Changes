@@ -1,6 +1,8 @@
 {{$NEXT}}
 
     - Make signals.t author-testing
+    - Cleanup failure-test
+    - Show timeout delta when timing out a test
 
 0.999009  2020-02-27 07:27:29-08:00 America/Los_Angeles (TRIAL RELEASE)
 

@@ -99,24 +99,32 @@ sub render_event {
         $test->{'testsuite'}->{'time'}      = $test->{'stop'} - $test->{'start'};
         $test->{'testsuite'}->{'timestamp'} = _timestamp( $test->{'start'} );
 
-        push @{ $test->{'testcase'} }, $self->xml->testcase(
-            { 'name' => "Tear down.", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'testsuite'}->{'name'} },
-            ""
-        );
-
         if ( $f->{'errors'} ) {
-            $test->{'error-msg'} //= '';
+            my $test_error_messages = '';
             foreach my $msg ( @{ $f->{'errors'} } ) {
                 next unless $msg->{'from_harness'};
                 next unless $msg->{'tag'} // '' eq 'REASON';
 
                 if ( $msg->{details} =~ m/^Planned for ([0-9]+) assertions?, but saw ([0-9]+)/ ) {
-                    $test->{'testsuite'}->{'errors'} += $1 - $2;
+                    $test->{'testsuite'}->{'errors'} += abs( $1 - $2 );
                 }
+                next if $msg->{details} =~ m/Test script returned error/;
+                next if $msg->{details} =~ m/Assertion failures were encountered/;
+                next if $msg->{details} =~ m/Subtest failures were encountered/;
 
-                $test->{'error-msg'} .= "$msg->{details}\n";
+                $test_error_messages .= "$msg->{details}\n";
+            }
+            if ($test_error_messages) {
+                push @{ $test->{'testcase'} }, $self->xml->testcase(
+                    { 'name' => "Unit Test Plan Failure $job_id", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'testsuite'}->{'name'} },
+                    $self->xml->failure($test_error_messages)
+                );
             }
         }
+
+        push @{ $test->{'testcase'} }, $self->xml->testcase(
+            { 'name' => "Tear down.", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'testsuite'}->{'name'} },
+        );
 
         return;
     }
@@ -240,7 +248,6 @@ sub finish {
             @{ $job->{'testcase'} },
             $xml->$out_method( $self->_cdata( $job->{$out_method} ) ),
             $xml->$err_method( $self->_cdata( $job->{$err_method} ) ),
-            $job->{'error-msg'} ? $xml->error( { 'message' => $job->{'error-msg'} } ) : (),
         ) . "\n";
     }
 

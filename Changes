@@ -1,6 +1,6 @@
 Revision history for Test2-Harness-Renderer-JUnit
 
-1.000000 2020-02-08 - Todd Rinaldo
+1.000000 2020-02-28 - Todd Rinaldo
  - Release to conform with major_refactor branch of Test2::Harness
  - Add missing --renderer options to SYNOPSIS example
  - Always load Data::Dumper for error handling
@@ -15,9 +15,10 @@ Revision history for Test2-Harness-Renderer-JUnit
  - Job ID are reused on rerun now with major_refactor
  - Add the job ID to the XML output
  - Add a timestamp for each testsuite entry
- - Add classname to every testcase
+ - Add classname to every testcase based on a munged test file name.
  - Add extra debug information when time stamps are missing. This is considered fatal now in the major_refactor branch.
  - Bump version requirement for Test2::Harness 1.000000 to require the major_refactor changes.
+ - Address issue with retry output coming before ordering.
 
 0.001077 2019-05-24 - Todd Rinaldo
  - First version based on unreleased Upstream Test2::Harness.

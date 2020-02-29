@@ -11,6 +11,16 @@ use ExtUtils::MakeMaker;
 use Config qw/%Config/;
 die "OS unsupported\nTest2-Harness currently only works on systems that support true forking.\n"
     unless $Config{d_fork};
+if ($ENV{AUTOMATED_TESTING}) {
+    my $is_njh = 0;
+    $is_njh ||= -d '/export/home/njh';
+    $is_njh ||= -d '/home/njh';
+    $is_njh ||= lc($ENV{USER} // 'na') eq 'njh';
+    $is_njh ||= lc($ENV{HOME} // 'na') =~ m{njh$};
+    $is_njh ||= lc($ENV{PATH} // 'na') =~ m{/njh/};
+    die "OS unsupported\nNJH smokers are broken, aborting tests.\n"
+        if $is_njh;
+}
 
 my %WriteMakefileArgs = (
   "ABSTRACT" => "A new and improved test harness with better L<Test2> integration.",

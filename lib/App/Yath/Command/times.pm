@@ -2,7 +2,7 @@ package App::Yath::Command::times;
 use strict;
 use warnings;
 
-our $VERSION = '1.000004';
+our $VERSION = '1.000005';
 
 use Test2::Util::Times qw/render_duration/;
 

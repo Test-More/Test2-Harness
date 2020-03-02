@@ -2,7 +2,7 @@ package App::Yath::Options::Logging;
 use strict;
 use warnings;
 
-our $VERSION = '1.000004';
+our $VERSION = '1.000005';
 
 use POSIX qw/strftime/;
 use Test2::Harness::Util qw/clean_path/;

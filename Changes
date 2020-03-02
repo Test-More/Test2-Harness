@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Use --qvf in test.pl for better output
+    - Use -r1 in test.pl temporarily for some cpantesters
+
 1.000004  2020-03-02 10:05:10-08:00 America/Los_Angeles
 
     - Switch away from sys-io in Util::File::Stream

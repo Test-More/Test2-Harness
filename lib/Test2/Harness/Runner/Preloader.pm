@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Preloader;
 use strict;
 use warnings;
 
-our $VERSION = '1.000002';
+our $VERSION = '1.000003';
 
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN/;

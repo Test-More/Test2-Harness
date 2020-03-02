@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Do not run persistent tests in AUTOMATED_TESTING
+
 1.000002  2020-03-01 21:19:04-08:00 America/Los_Angeles
 
     - Fix integration tests IO issues

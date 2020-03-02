@@ -35,7 +35,6 @@ requires "Test2" => "1.302164";
 requires "Test2::API" => "1.302166";
 requires "Test2::Formatter::Test2::Composer" => "0";
 requires "Test2::Harness" => "1.000000";
-requires "Test2::Harness::Feeder::JSONL" => "0";
 requires "Test2::Harness::Util::HashBase" => "0";
 requires "Test2::Harness::Util::JSON" => "0";
 requires "Test2::Harness::Util::UUID" => "0";

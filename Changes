@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix integration tests IO issues
+
 1.000001  2020-02-29 10:49:11-08:00 America/Los_Angeles
 
     - Do not run tests on broken NJH smokers

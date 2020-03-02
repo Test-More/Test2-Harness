@@ -11,6 +11,7 @@ use Carp qw/croak/;
 use File::Spec;
 use File::Temp qw/tempfile tempdir/;
 use POSIX;
+use Fcntl qw/SEEK_CUR/;
 
 use App::Yath::Util qw/find_yath/;
 use Test2::Harness::Util qw/clean_path apply_encoding/;
@@ -68,17 +69,16 @@ sub yath {
         push @dev => "-D$inc" if -d $inc;
     }
 
-    my ($rh, $wh);
+    my ($wh, $cfile);
     if ($capture) {
-        pipe($rh, $wh) or die "Could not open pipe: $!";
-        apply_encoding($rh, $enc) if $enc;
-        $rh->blocking(0);
+        ($wh, $cfile) = tempfile("yath-$$-XXXXXXXX", TMPDIR => 1, CLEANUP => 1, SUFFIX => '.out');
+        $wh->autoflush(1);
     }
 
     my (@log, $logfile);
     if ($log) {
         my $fh;
-        ($fh, $logfile) = tempfile("yathlog-$$-XXXXXXXX", CLEANUP => 1, SUFFIX => '.jsonl');
+        ($fh, $logfile) = tempfile("yathlog-$$-XXXXXXXX", TMPDIR => 1, CLEANUP => 1, SUFFIX => '.jsonl');
         close($fh);
         @log = ('-F' => $logfile);
         print "DEBUG: log file = '$logfile'\n" if $debug;
@@ -107,12 +107,15 @@ sub yath {
         $capture ? (stderr => $wh, stdout => $wh) : (),
         command => \@cmd,
         run_in_parent => [sub { close($wh) }],
-        run_in_child  => [sub { close($rh) }],
     );
 
     my (@lines, $exit);
     if ($capture) {
+        open(my $rh, '<', $cfile) or die "Could not open output file: $!";
+        apply_encoding($rh, $enc) if $enc;
+        $rh->blocking(0);
         while (1) {
+            seek($rh, 0, SEEK_CUR); # CLEAR EOF
             my @new = <$rh>;
             push @lines => @new;
             print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;

@@ -97,6 +97,7 @@ sub run {
     push @rows => [map { '--' } @fields];
     push @rows => $self->build_row($totals);
 
+    require Term::Table;
     my $table = Term::Table->new(
         header => [map { ucfirst($_) } @fields],
         rows   => \@rows,

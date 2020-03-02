@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Switch away from sys-io in Util::File::Stream
+    - Properly wrap FLOCK to handle interrupted syscalls
 
 1.000003  2020-03-01 21:50:08-08:00 America/Los_Angeles
 

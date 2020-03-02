@@ -5,6 +5,7 @@ use warnings;
 use Carp qw/confess/;
 use Cwd qw/realpath/;
 use Test2::Util qw/try_sig_mask do_rename/;
+use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET/;
 use File::Spec;
 
 our $VERSION = '1.000004';
@@ -26,6 +27,8 @@ our @EXPORT_OK = qw{
     read_file
     write_file
     write_file_atomic
+    lock_file
+    unlock_file
 
     hub_truth
 
@@ -188,6 +191,39 @@ sub write_file_atomic {
     die $err unless $ok;
 
     return @content;
+}
+
+sub lock_file {
+    my ($file, $mode) = @_;
+
+    my $fh;
+    if (ref $file) {
+        $fh = $file;
+    }
+    else {
+        open($fh, $mode // '>>', $file) or die "Could not open file '$file': $!";
+    }
+
+    for (1 .. 21) {
+        flock($fh, LOCK_EX) and last;
+        die "Could not lock file (try $_): $!" if $_ >= 20;
+        next if $!{EINTR} || $!{ERESTART};
+        die "Could not lock file: $!";
+    }
+
+    return $fh;
+}
+
+sub unlock_file {
+    my ($fh) = @_;
+    for (1 .. 21) {
+        flock($fh, LOCK_UN) and last;
+        die "Could not unlock file (try $_): $!" if $_ >= 20;
+        next if $!{EINTR} || $!{ERESTART};
+        die "Could not unlock file: $!";
+    }
+
+    return $fh;
 }
 
 sub clean_path {

@@ -7,7 +7,7 @@ our $VERSION = '1.000004';
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN/;
 use Time::HiRes qw/time/;
-use Test2::Harness::Util qw/open_file file2mod mod2file/;
+use Test2::Harness::Util qw/open_file file2mod mod2file lock_file unlock_file/;
 
 use Test2::Harness::Runner::Preloader::Stage;
 
@@ -424,8 +424,7 @@ sub _lock_blacklist {
 
     return $self->{+BLACKLIST_LOCK} if $self->{+BLACKLIST_LOCK};
 
-    my $bl = open_file($self->{+BLACKLIST_FILE}, '>>');
-    flock($bl, LOCK_EX) or die "Could not lock blacklist: $!";
+    my $bl = lock_file($self->{+BLACKLIST_FILE}, '>>');
     seek($bl,2,0);
 
     return $self->{+BLACKLIST_LOCK} = $bl;
@@ -437,7 +436,7 @@ sub _unlock_blacklist {
     my $bl = delete $self->{+BLACKLIST_LOCK} or return;
 
     $bl->flush;
-    flock($bl, LOCK_UN) or die "Could not unlock blacklist: $!";
+    unlock_file($bl);
     close($bl);
 
     return;

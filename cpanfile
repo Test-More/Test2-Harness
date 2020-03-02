@@ -20,7 +20,6 @@ requires "Importer" => "0.025";
 requires "JSON::PP" => "0";
 requires "List::Util" => "1.44";
 requires "Long::Jump" => "0.000001";
-requires "Module::Pluggable" => "5.2";
 requires "POSIX" => "0";
 requires "Scalar::Util" => "0";
 requires "Scope::Guard" => "0";

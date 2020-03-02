@@ -16,7 +16,6 @@ requires "IO::Handle" => "1.27";
 requires "IO::Uncompress::Bunzip2" => "0";
 requires "IO::Uncompress::Gunzip" => "0";
 requires "IPC::Cmd" => "0";
-requires "IPC::Open3" => "0";
 requires "Importer" => "0.025";
 requires "JSON::PP" => "0";
 requires "List::Util" => "1.44";

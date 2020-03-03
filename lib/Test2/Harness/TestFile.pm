@@ -29,6 +29,26 @@ sub set_category { $_[0]->set__category(lc($_[1])) }
 
 sub set_stage { $_[0]->set__stage($_[1]) }
 
+sub retry { $_[0]->headers->{retry} }
+sub set_retry {
+    my $self = shift;
+    my $val = @_ ? $_[0] : 1;
+
+    $self->scan;
+
+    $self->{+_HEADERS}->{retry} = $val;
+}
+
+sub retry_isolated { $_[0]->headers->{retry_isolated} }
+sub set_retry_isolated {
+    my $self = shift;
+    my $val = @_ ? $_[0] : 1;
+
+    $self->scan;
+
+    $self->{+_HEADERS}->{retry_isolated} = $val;
+}
+
 sub set_smoke {
     my $self = shift;
     my $val = @_ ? $_[0] : 1;
@@ -369,8 +389,8 @@ sub queue_item {
     my $stream    = $self->check_feature(stream    => 1);
     my $io_events = $self->check_feature(io_events => 1);
 
-    my $retry          = $self->{+_HEADERS}->{retry};
-    my $retry_isolated = $self->{+_HEADERS}->{retry_isolated};
+    my $retry          = $self->retry;
+    my $retry_isolated = $self->retry_isolated;
 
     my $binary   = $self->{+IS_BINARY} ? 1 : 0;
     my $non_perl = $self->{+NON_PERL}  ? 1 : 0;

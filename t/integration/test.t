@@ -82,7 +82,7 @@ yath(
     my $symlink = "$sdir/symlink_to_base.xt";
 
     unlink $symlink if -e $symlink;
-    if ( eval{ symlink('_base.xt', $symlink); 1 } ) {
+    if ( eval{ symlink('_base.xt', $symlink) } ) {
 
         yath(
             command => 'test',
@@ -120,7 +120,7 @@ yath(
     my $symlink = "$sdir/broken-symlink.tx";
 
     unlink $symlink if -e $symlink;
-    if ( eval{ symlink('nothing-there', $symlink); 1 } ) {
+    if ( eval{ symlink('nothing-there', $symlink) } ) {
 
         yath(
             command => 'test',

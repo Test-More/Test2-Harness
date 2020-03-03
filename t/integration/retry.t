@@ -84,7 +84,7 @@ sub run_tests {
         my $symlink = "$sdir/symlink.tl";
 
         unlink $symlink if -e $symlink;
-        if ( eval{ symlink('retry.tx', $symlink); 1 } ) {
+        if ( eval{ symlink('retry.tx', $symlink) } ) {
             yath(
                 command => 'test',
                 args => [$sdir, '--ext=tl', '--retry' => 1, '--env-var' => "FAIL_ONCE=1", '-v' ],

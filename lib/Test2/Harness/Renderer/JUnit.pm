@@ -107,23 +107,36 @@ sub render_event {
 
         if ( $f->{'errors'} ) {
             my $test_error_messages = '';
+            my $alternative_error   = '';
             foreach my $msg ( @{ $f->{'errors'} } ) {
                 next unless $msg->{'from_harness'};
                 next unless $msg->{'tag'} // '' eq 'REASON';
 
-                if ( $msg->{details} =~ m/^Planned for ([0-9]+) assertions?, but saw ([0-9]+)/ ) {
+                my $details = $msg->{details};
+                if ( $details =~ m/^Planned for ([0-9]+) assertions?, but saw ([0-9]+)/ ) {
                     $test->{'testsuite'}->{'errors'} += abs( $1 - $2 );
                 }
-                next if $msg->{details} =~ m/Test script returned error/;
-                next if $msg->{details} =~ m/Assertion failures were encountered/;
-                next if $msg->{details} =~ m/Subtest failures were encountered/;
-
-                $test_error_messages .= "$msg->{details}\n";
+                if ( $details =~ m/Test script returned error|Assertion failures were encountered|Subtest failures were encountered/ ) {
+                    $alternative_error .= "$details\n";
+                }
+                else {
+                    $test_error_messages .= "$details\n";
+                }
             }
+
             if ($test_error_messages) {
                 push @{ $test->{'testcase'} }, $self->xml->testcase(
                     { 'name' => "Test Plan Failure", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'testsuite'}->{'name'} },
                     $self->xml->failure($test_error_messages)
+                );
+            }
+
+            # We only want to show this alternative error if all of the tests passed but the program still exited non-zero.
+            elsif (!$test->{'testsuite'}->{'errors'} && $alternative_error) {
+                $test->{'testsuite'}->{'errors'}++;
+                push @{ $test->{'testcase'} }, $self->xml->testcase(
+                    { 'name' => "Program Ended Unexpectedly", 'time' => $stamp - $test->{'last_job_start'}, 'classname' => $test->{'testsuite'}->{'name'} },
+                    $self->xml->failure($alternative_error)
                 );
             }
         }

@@ -1,0 +1,9 @@
+use Test2::V0;
+
+plan 4;
+
+# plan ok one test fail
+
+pass("pass");
+pass("another success");
+

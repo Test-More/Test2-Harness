@@ -108,6 +108,9 @@ sub generate_run_sub {
 
     die "Invalid action: $action" if $action ne 'run_test';
 
+    if (my $chdir = $job->ch_dir) {
+        chdir($chdir) or die "Could not chdir: $!";
+    }
     goto::file->import($job->rel_file);
     $class->cleanup_process($job, $stage);
 }
@@ -269,10 +272,6 @@ sub { $_[0]->import(@{$_[1]}) }
 sub build_init_state {
     my $class = shift;
     my ($job) = @_;
-
-    if (my $chdir = $job->ch_dir) {
-        chdir($chdir) or die "Could not chdir: $!";
-    }
 
     $0 = $job->rel_file;
     $class->_reset_DATA();

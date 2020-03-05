@@ -1,6 +1,8 @@
 use Test2::V0;
 use Bar;
 
+is(__FILE__, 't/pass.tx', "__FILE__ is set correctly");
+
 like(dies { require Foo }, qr{Loaded Foo.pm from the wrong project}, "Using our own libs (Foo)");
 like(dies { require Baz }, qr{Loaded Baz.pm from the wrong project}, "Using our own libs (Baz)");
 

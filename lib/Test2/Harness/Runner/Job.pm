@@ -111,10 +111,9 @@ sub spawn_params {
 
     my $task = $self->{+TASK};
 
-    my $file = $self->ch_dir ? $self->file : $self->rel_file;
-
     my $command;
     if ($task->{binary} || $task->{non_perl}) {
+        my $file = $self->ch_dir ? $self->file : $self->rel_file;
         $command = [clean_path($file), $self->args];
     }
     else {
@@ -124,7 +123,7 @@ sub spawn_params {
             $self->switches,
             $self->cli_options,
 
-            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : ($file),
+            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : (sub { $self->rel_file }),
 
             $self->args,
         ];
@@ -381,7 +380,7 @@ sub includes {
             include_dot     => $self->unsafe_inc,
             include_current => 1,
             clean           => 1,
-            $self->{+CH_DIR} ? (ch_dir => $self->{+CH_DIR}) : (),
+            $self->ch_dir ? (ch_dir => $self->ch_dir) : (),
         )
     ];
 

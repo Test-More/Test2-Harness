@@ -107,6 +107,8 @@ sub _run_cmd_fork {
     swap_io(\*STDOUT, $stdout, $die) if $stdout;
     $stdin ? swap_io(\*STDIN,  $stdin,  $die) : close(STDIN);
 
+    @$cmd = map { ref($_) eq 'CODE' ? $_->() : $_ } @$cmd;
+
     exec(@$cmd) or $die->("Failed to exec!");
 }
 
@@ -147,7 +149,7 @@ sub _run_cmd_spwn {
 
     local $?;
     my $pid;
-    my $ok = eval { $pid = system 1, @$cmd };
+    my $ok = eval { $pid = system 1, map { ref($_) eq 'CODE' ? $_->() : $_ } @$cmd };
     my $bad = $?;
     my $err = $@;
 
@@ -232,7 +234,7 @@ Parameters:
 
 =over 4
 
-=item command => [$command, @args]
+=item command => [$command, sub { ... }, @args]
 
 =item command => sub { return ($command, @args) }
 
@@ -240,6 +242,10 @@ This parameter is required. This should either be an arrayref of arguments for
 C<exec()>, or a coderef that returns a list of arguments for C<exec()>. On
 systems without fork/exec the arguments will be passed to
 C<system(1, $command, @args)> instead.
+
+If the command arrayref has a coderef in it, the coderef will be run and its
+return value(s) will be inserted in its place. This replacement happens
+post-chroot
 
 =item run_in_parent => [sub { ... }, sub { ... }]
 

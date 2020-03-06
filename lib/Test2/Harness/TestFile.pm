@@ -259,13 +259,17 @@ sub _scan {
 
         if ($dir eq 'no') {
             my $feature = lc(join '_' => @args);
-            $headers{features}->{$feature} = 0;
+            if ($feature eq 'retry') {
+                $headers{retry} = 0
+            } else {
+                $headers{features}->{$feature} = 0;
+            }
         }
         elsif ($dir eq 'smoke') {
             $headers{features}->{smoke} = 1;
         }
         elsif ($dir eq 'retry') {
-            $headers{retry} = 1 unless @args;
+            $headers{retry} = 1 unless @args || defined $headers{retry};
             for my $arg (@args) {
                 if ($arg =~ m/^\d+$/) {
                     $headers{retry} = int $arg;

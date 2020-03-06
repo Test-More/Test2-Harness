@@ -676,6 +676,16 @@ to mark the test with LONG or MEDIUM in addition to this marker.
 
 =back
 
+=head3 HARNESS-RETRY-n
+
+This lets you specify a number (minimum n=1) of retries on test failure
+for a specific test. HARNESS-RETRY-1 means a failing test will be run twice
+and is equivalent to HARNESS-RETRY.
+
+=head3 HARNESS-NO-RETRY
+
+Use this to avoid this test being retried regardless of your retry settings.
+
 =head1 MODULE DOCS
 
 This section documents the L<App::Yath> module itself.

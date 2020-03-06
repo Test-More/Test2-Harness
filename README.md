@@ -399,6 +399,16 @@ to mark the test with LONG or MEDIUM in addition to this marker.
 
         ...
 
+### HARNESS-RETRY-n
+
+This lets you specify a number (minimum n=1) of retries on test failure
+for a specific test. HARNESS-RETRY-1 means a failing test will be run twice
+and is equivalent to HARNESS-RETRY.
+
+### HARNESS-NO-RETRY
+
+Use this to avoid this test being retried regardless of your retry settings.
+
 # MODULE DOCS
 
 This section documents the [App::Yath](https://metacpan.org/pod/App%3A%3AYath) module itself.

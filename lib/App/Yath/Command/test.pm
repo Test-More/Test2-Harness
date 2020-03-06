@@ -72,7 +72,7 @@ sub description {
     return <<"    EOT";
 This yath command (which is also the default command) will run all the test
 files for the current project. If no test files are specified this command will
-look for the 't', and 't2' dirctories, as well as the 'test.pl' file.
+look for the 't', and 't2' directories, as well as the 'test.pl' file.
 
 This command is always recursive when given directories.
 

@@ -61,16 +61,6 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         description => "Point at a json file or url which has a hash of relative test filenames as keys, and 'SHORT', 'MEDIUM', or 'LONG' as values. This will override durations listed in the file headers. An exception will be thrown if the durations file or url does not work.",
     );
 
-    option exclude_list => (
-        field => 'exclude_lists',
-        type => 'm',
-
-        long_examples  => [' file.txt', ' http://example.com/exclusions.txt'],
-        short_examples => [' file.txt', ' http://example.com/exclusions.txt'],
-
-        description => "Point at a file or url which has a new line separated list of relative test filenames to exclude from testing",
-    );
-
     option exclude_file => (
         field => 'exclude_files',
         type  => 'm',
@@ -89,6 +79,16 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         short_examples => [' t/nope.t'],
 
         description => "Exclude a pattern from testing, matched using m/\$PATTERN/",
+    );
+
+    option exclude_list => (
+        field => 'exclude_lists',
+        type => 'm',
+
+        long_examples  => [' file.txt', ' http://example.com/exclusions.txt'],
+        short_examples => [' file.txt', ' http://example.com/exclusions.txt'],
+
+        description => "Point at a file or url which has a new line separated list of test file names to exclude from testing. Starting a line with a '#' will comment it out (for compatibility with Test2::Aggregate list files).",
     );
 
     option default_search => (

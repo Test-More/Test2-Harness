@@ -24,7 +24,7 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
 
     option test_args => (
         type => 'm',
-        description => 'Arguments to pass in as @ARGV for all tests that are run. These can be provided easier using the \'::\' argument seperator.'
+        description => 'Arguments to pass in as @ARGV for all tests that are run. These can be provided easier using the \'::\' argument separator.'
     );
 
     option input => (
@@ -63,7 +63,7 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         field       => 'use_stream',
         alt         => ['TAP', '--no-stream'],
         normalize   => sub { $_[0] ? 0 : 1 },
-        description => "The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to receive test results. There are old/legacy tests wh    ere this causes problems, in which case setting --TAP or --no-stream can help."
+        description => "The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to receive test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help."
     );
 
     option fields => (

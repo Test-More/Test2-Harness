@@ -107,7 +107,7 @@ sub add_exclusions_from_lists {
         next unless $content;
 
         for (split(/\r?\n\r?/, $content)) {
-            $self->{+EXCLUDE_FILES}->{$_} = 1 if /^\s*#/;
+            $self->{+EXCLUDE_FILES}->{$_} = 1 unless /^\s*#/;
         };
     }
 }

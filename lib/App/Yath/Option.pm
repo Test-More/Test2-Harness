@@ -500,7 +500,7 @@ Real world example from the debug options (simplified for doc purposes):
 
     option summary => (
         type        => 'd',
-        description => "Write out a summary json file, if no path is provided 'summary.json' will be used. The .json extention is added automatically if omitted.",
+        description => "Write out a summary json file, if no path is provided 'summary.json' will be used. The .json extension is added automatically if omitted.",
 
         long_examples => ['', '=/path/to/summary.json'],
 

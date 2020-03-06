@@ -22,7 +22,7 @@ option_group {prefix => 'speedtag', category => 'speedtag options'} => sub {
     option generate_durations_file => (
         type => 'd',
         alt         => ['durations', 'duration'],
-        description => "Write out a duration json file, if no path is provided 'duration.json' will be used. The .json extention is added automatically if omitted.",
+        description => "Write out a duration json file, if no path is provided 'duration.json' will be used. The .json extension is added automatically if omitted.",
 
         long_examples  => ['', '=/path/to/durations.json'],
 

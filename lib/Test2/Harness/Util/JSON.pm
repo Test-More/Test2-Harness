@@ -2,7 +2,7 @@ package Test2::Harness::Util::JSON;
 use strict;
 use warnings;
 
-our $VERSION = '1.000008';
+our $VERSION = '1.000009';
 
 BEGIN {
     local $@ = undef;

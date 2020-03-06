@@ -36,6 +36,7 @@ my $tmp = gen_temp(
     retry5     => "#HARNESS-RETRY 5\n",
     retry_iso  => "#HARNESS-RETRY-ISO\n",
     retry_iso3 => "#HARNESS-RETRY-ISO 3\n",
+    no_retry   => "#HARNESS-NO-RETRY\n",
 
     not_perl     => "#!/usr/bin/bash\n",
     not_env_perl => "#!/usr/bin/env bash\n",
@@ -668,6 +669,11 @@ subtest smoke => sub {
     $task = $retry->queue_item(42);
     is($task->{retry}, 3, "Enabled retry, 1 initital + 3 retries");
     is($task->{retry_isolated}, T(), "isolated retry");
+
+    $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'no_retry'));
+    $task = $retry->queue_item(42);
+    is($task->{retry}, 0, "Retry set to 0");
+    ok(!exists($task->{retry_isolated}), "not isolated");
 };
 
 done_testing;

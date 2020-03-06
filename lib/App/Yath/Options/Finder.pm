@@ -81,6 +81,16 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         description => "Exclude a pattern from testing, matched using m/\$PATTERN/",
     );
 
+    option exclude_list => (
+        field => 'exclude_lists',
+        type => 'm',
+
+        long_examples  => [' file.txt', ' http://example.com/exclusions.txt'],
+        short_examples => [' file.txt', ' http://example.com/exclusions.txt'],
+
+        description => "Point at a file or url which has a new line separated list of test file names to exclude from testing. Starting a line with a '#' will comment it out (for compatibility with Test2::Aggregate list files).",
+    );
+
     option default_search => (
         type => 'm',
 

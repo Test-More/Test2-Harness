@@ -1,7 +1,7 @@
 use Test2::V0;
 
 use Config qw/%Config/;
-use File::Temp qw/tempdir/;
+use File::Temp qw/tempfile/;
 use File::Spec;
 
 use App::Yath::Tester qw/yath/;
@@ -70,6 +70,24 @@ yath(
         my $out = shift;
 
         unlike($out->{output}, qr{FAILED.*fail\.tx}, "'fail.tx' was excluded using '--exclude-file' option");
+        like($out->{output}, qr{PASSED.*pass\.tx}, "'pass.tx' was not seen as a failure when reading the output");
+    },
+);
+
+note q[Checking --exclude-list option when a file is provided on the command line];
+
+my ($fh, $list_name) = tempfile(CLEANUP => 1);
+print $fh "# GENERATED YATH TEST EXCLUSION LIST\n#$dir/pass.tx\n$dir/fail.txx";
+close($fh);
+
+yath(
+    command => 'test',
+    args    => ["--exclude-list=$list_name", "$dir/pass.tx", "$dir/fail.txx"],
+    exit    => 0,
+    test    => sub {
+        my $out = shift;
+
+        unlike($out->{output}, qr{FAILED.*fail\.tx}, "'fail.tx' was excluded using '--exclude-list' option with a file");
         like($out->{output}, qr{PASSED.*pass\.tx}, "'pass.tx' was not seen as a failure when reading the output");
     },
 );

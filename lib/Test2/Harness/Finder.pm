@@ -16,7 +16,7 @@ use Test2::Harness::Util::HashBase qw{
 
     <durations <maybe_durations +duration_data
 
-    <exclude_files  <exclude_patterns
+    <exclude_files  <exclude_patterns <exclude_lists
 
     <no_long <only_long
 
@@ -83,9 +83,40 @@ sub _pull_durations {
     die "Invalid duration specification: $in";
 }
 
+sub add_exclusions_from_lists {
+    my $self = shift;
+
+    my @lists = ref($self->{+EXCLUDE_LISTS}) eq 'ARRAY' ? @{$self->{+EXCLUDE_LISTS}} : ($self->{+EXCLUDE_LISTS});
+
+    for my $path (@lists) {
+        my $content;
+        if ($path =~ m{^https?://}) {
+            require HTTP::Tiny;
+            my $res = HTTP::Tiny->new()->get($path);
+
+            die "Could not get exclusion lists from '$path'\n$res->{status}: $res->{reason}\n$res->{content}"
+                unless $res->{success};
+
+            $content = $res->{content};
+        }
+        elsif (-f $path) {
+            require Test2::Harness::Util::File;
+            my $f = Test2::Harness::Util::File->new(name => $path);
+            $content = $f->read();
+        }
+        next unless $content;
+
+        for (split(/\r?\n\r?/, $content)) {
+            $self->{+EXCLUDE_FILES}->{$_} = 1 unless /^\s*#/;
+        };
+    }
+}
+
 sub find_files {
     my $self = shift;
     my ($plugins, $settings) = @_;
+
+    $self->add_exclusions_from_lists() if $self->{+EXCLUDE_LISTS};
 
     return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
     return $self->find_project_files($plugins, $settings, $self->search);
@@ -347,7 +378,7 @@ The input argument should be an L<Test2::Harness::Test> instance. This will
 return a list of human readible reasons a test file should be excluded. If the
 file should not be excluded the list will be empty.
 
-This is a utility method that verifies the file is not in ant exclude
+This is a utility method that verifies the file is not in an exclude
 list/pattern. The reasons are provided back in case you need to inform the
 user.
 

@@ -377,7 +377,7 @@ sub _parse_shbang {
 
 sub queue_item {
     my $self = shift;
-    my ($job_name, $run_id) = @_;
+    my ($job_name, $run_id, %inject) = @_;
 
     die "The '$self->{+FILE}' test specifies that it should not be run by Test2::Harness.\n"
         unless $self->check_feature(run => 1);
@@ -432,6 +432,8 @@ sub queue_item {
         defined($pet)            ? (post_exit_timeout => $self->post_exit_timeout) : (),
 
         @{$self->{+QUEUE_ARGS}},
+
+        %inject,
     };
 }
 

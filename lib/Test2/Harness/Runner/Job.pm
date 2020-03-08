@@ -24,6 +24,8 @@ use Test2::Harness::Util::HashBase(
         <last_output_size
         +output_changed
 
+        +verbose
+
         +via
 
         +run_dir +job_dir +tmp_dir +event_dir
@@ -247,8 +249,9 @@ sub output_changed {
     return $self->{+OUTPUT_CHANGED} //= time();
 }
 
-sub is_try { $_[0]->{+IS_TRY} //= $_[0]->{+TASK}->{is_try} // 0 }
-sub ch_dir { $_[0]->{+CH_DIR} //= $_[0]->{+TASK}->{ch_dir} // '' }
+sub verbose { $_[0]->{+VERBOSE} //= $_[0]->{+TASK}->{verbose} // 0 }
+sub is_try  { $_[0]->{+IS_TRY}  //= $_[0]->{+TASK}->{is_try}  // 0 }
+sub ch_dir  { $_[0]->{+CH_DIR}  //= $_[0]->{+TASK}->{ch_dir}  // '' }
 sub unsafe_inc  { $_[0]->{+UNSAFE_INC}  //= $_[0]->{+RUNNER}->unsafe_inc }
 sub event_uuids { $_[0]->{+EVENT_UUIDS} //= $_[0]->run->event_uuids }
 sub mem_usage   { $_[0]->{+MEM_USAGE}   //= $_[0]->run->mem_usage }
@@ -448,6 +451,8 @@ sub env_vars {
     push @p5l => $ENV{PERL5LIB} if $ENV{PERL5LIB};
     my $p5l = join $Config{path_sep} => grep { defined $_ && $_ ne '.' } @p5l;
 
+    my $verbose = $self->verbose;
+
     return $self->{+ENV_VARS} = {
         $from_run  ? (%$from_run)  : (),
         $from_task ? (%$from_task) : (),
@@ -460,6 +465,9 @@ sub env_vars {
         TEST2_RUN_DIR       => $self->run_dir,
         TMPDIR              => $self->tmp_dir,
         TEMPDIR             => $self->tmp_dir,
+
+        HARNESS_IS_VERBOSE    => $verbose,
+        T2_HARNESS_IS_VERBOSE => $verbose,
 
         HARNESS_ACTIVE       => 1,
         TEST2_HARNESS_ACTIVE => 1,

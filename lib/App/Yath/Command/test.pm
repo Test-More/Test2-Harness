@@ -378,7 +378,7 @@ sub populate_queue {
 
     my $state = $self->state;
     my $tasks_queue = $self->tasks_queue;
-    my $plugins = $self->settings->harness->plugins;
+    my $plugins = $settings->harness->plugins;
 
     $state->queue_run($run->queue_item($plugins));
 
@@ -391,7 +391,9 @@ sub populate_queue {
 
     my $job_count = 0;
     for my $file (@files) {
-        my $task = $file->queue_item(++$job_count, $run->run_id);
+        my $task = $file->queue_item(++$job_count, $run->run_id,
+            $settings->check_prefix('display') ? (verbose => $settings->display->verbose) : (),
+        );
         $state->queue_task($task);
         $tasks_queue->enqueue($task);
     }

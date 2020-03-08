@@ -175,8 +175,10 @@ sub process_argv {
 }
 
 sub clear_env {
+    delete $ENV{HARNESS_IS_VERBOSE};
     delete $ENV{T2_FORMATTER};
     delete $ENV{T2_HARNESS_FORKED};
+    delete $ENV{T2_HARNESS_IS_VERBOSE};
     delete $ENV{T2_HARNESS_JOB_IS_TRY};
     delete $ENV{T2_HARNESS_JOB_NAME};
     delete $ENV{T2_HARNESS_PRELOAD};

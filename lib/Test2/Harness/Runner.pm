@@ -405,6 +405,7 @@ sub next {
 
     my $state = $self->state;
 
+    OUTER:
     while (1) {
         if(my $task = $state->next_task()) {
             next unless $task->{stage} eq $self->{+STAGE};
@@ -413,7 +414,7 @@ sub next {
 
         if (my $lock = $self->lock_dispatch) {
             while (1) {
-                next if $state->advance();
+                next OUTER if $state->advance();
                 last;
             }
         }

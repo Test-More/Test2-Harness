@@ -2,7 +2,7 @@ package Test2::Formatter::QVF;
 use strict;
 use warnings;
 
-our $VERSION = '1.000011';
+our $VERSION = '1.000012';
 
 BEGIN { require Test2::Formatter::Test2; our @ISA = qw(Test2::Formatter::Test2) }
 

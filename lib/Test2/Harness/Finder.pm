@@ -2,7 +2,7 @@ package Test2::Harness::Finder;
 use strict;
 use warnings;
 
-our $VERSION = '1.000011';
+our $VERSION = '1.000012';
 
 use Test2::Harness::Util qw/clean_path/;
 use List::Util qw/first/;

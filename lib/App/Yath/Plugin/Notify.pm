@@ -294,7 +294,7 @@ sub send_run_notification_slack {
         for my $set (@{$final->{failed}}) {
             my $file = $set->[1];
 
-            $files = $files ? "\n$file" : $file;
+            $files = $files ? "$files\n$file" : $file;
 
             next unless $settings->notify->slack_owner;
             my $tf = Test2::Harness::TestFile->new(file => $file);
@@ -330,7 +330,7 @@ sub send_run_notification_email {
         for my $set (@{$final->{failed}}) {
             my $file = $set->[1];
 
-            $files = $files ? "\n$file" : $file;
+            $files = $files ? "$files\n$file" : $file;
 
             next unless $settings->notify->email_owner;
             my $tf = Test2::Harness::TestFile->new(file => $file);

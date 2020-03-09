@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000011  2020-03-09 09:12:25-07:00 America/Los_Angeles
+
     - Fix notifications so that all failed tests are shown
 
 1.000010  2020-03-08 15:15:24-07:00 America/Los_Angeles

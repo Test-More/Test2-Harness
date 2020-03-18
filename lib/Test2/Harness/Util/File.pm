@@ -2,7 +2,7 @@ package Test2::Harness::Util::File;
 use strict;
 use warnings;
 
-our $VERSION = '1.000013';
+our $VERSION = '1.000014';
 
 use IO::Handle;
 

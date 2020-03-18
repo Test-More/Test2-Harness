@@ -31,29 +31,35 @@ option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
     );
 
     option 'show-opts' => (
-        description         => 'Exit after showing what yath thinks your options mean',
-        pre_command         => 1,
+        description => 'Exit after showing what yath thinks your options mean',
+        pre_command => 1,
     );
 
     option version => (
-        short        => 'V',
-        description  => "Exit after showing a helpful usage message",
-        pre_command  => 1,
+        short       => 'V',
+        description => "Exit after showing a helpful usage message",
+        pre_command => 1,
     );
 
     option help => (
-        short        => 'h',
-        description  => "exit after showing help information",
+        short       => 'h',
+        description => "exit after showing help information",
     );
 
     option summary => (
-        type => 'd',
+        type        => 'd',
         description => "Write out a summary json file, if no path is provided 'summary.json' will be used. The .json extension is added automatically if omitted.",
 
-        long_examples  => ['', '=/path/to/summary.json'],
+        long_examples => ['', '=/path/to/summary.json'],
 
-        normalize => \&normalize_summary,
-        action    => \&summary_action,
+        normalize  => \&normalize_summary,
+        action     => \&summary_action,
+        applicable => sub {
+            my ($option, $options) = @_;
+
+            return 1 if $options->included->{'App::Yath::Options::Run'};
+            return 0;
+        },
     );
 };
 

@@ -4,6 +4,7 @@
     - Fix #169 log path in 'run' command
     - Fix #168 - :: mistaken for command name
     - Fix #171 summary should only be shown when applicable
+    - Fix #171 Add --brief option to 'failed' command
 
 1.000011  2020-03-09 09:12:25-07:00 America/Los_Angeles
 

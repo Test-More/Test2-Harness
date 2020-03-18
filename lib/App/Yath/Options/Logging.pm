@@ -6,6 +6,7 @@ our $VERSION = '1.000012';
 
 use POSIX qw/strftime/;
 use Test2::Harness::Util qw/clean_path/;
+use File::Spec;
 
 use App::Yath::Options;
 
@@ -67,7 +68,7 @@ sub post_process {
     $logging->field(log => 1);
 
     unless ($logging->log_file) {
-        my $log_dir = $logging->log_dir // $settings->workspace->tmp_dir;
+        my $log_dir = $logging->log_dir // $settings->check_prefix('workspace') ? $settings->workspace->tmp_dir : File::Spec->tmpdir;
 
         mkdir($log_dir) or die "Could not create dir '$log_dir': $!"
             unless -d $log_dir;

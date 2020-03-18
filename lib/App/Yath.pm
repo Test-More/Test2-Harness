@@ -212,6 +212,7 @@ sub _command_from_argv {
             return 'help';
         }
 
+        last if $arg eq '::';
         next if $arg =~ /^-/;
 
         if ($arg =~ m/\.jsonl(\.bz2|\.gz)?$/) {

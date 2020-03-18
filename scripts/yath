@@ -236,6 +236,8 @@ yath - Primary Command Line Interface (CLI) for Test2::Harness
 
 This is the primary command line interface for App::Yath/Test2::Harness. Yath
 is essentially a shell around the components of L<Test2::Harness>.
+For usage instructions and examples,
+see L<App::Yath>.
 
 =head1 SOURCE
 

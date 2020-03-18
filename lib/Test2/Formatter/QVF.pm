@@ -8,16 +8,23 @@ BEGIN { require Test2::Formatter::Test2; our @ISA = qw(Test2::Formatter::Test2) 
 
 use Test2::Util::HashBase qw{
     -job_buffers
+    -real_verbose
 };
 
 sub init {
     my $self = shift;
     $self->SUPER::init();
-    $self->{+VERBOSE} = 100;
+
+    $self->{+REAL_VERBOSE} = $self->{+VERBOSE};
+
+    $self->{+VERBOSE} ||= 100;
 }
 
 sub write {
     my ($self, $e, $num, $f) = @_;
+
+    return $self->SUPER::write($e, $num, $f) if $self->{+REAL_VERBOSE};
+
     $f ||= $e->facet_data;
 
     my $job_id = $f->{harness}->{job_id};

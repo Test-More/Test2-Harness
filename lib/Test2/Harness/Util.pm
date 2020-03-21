@@ -122,9 +122,9 @@ sub maybe_read_file {
 }
 
 sub read_file {
-    my ($file) = @_;
+    my ($file, @args) = @_;
 
-    my $fh = open_file($file);
+    my $fh = open_file($file, '<', @args);
     local $/;
     my $out = <$fh>;
     close_file($fh, $file);
@@ -147,10 +147,10 @@ my %COMPRESSION = (
     gz  => {module => 'IO::Uncompress::Gunzip',  errors => \$IO::Uncompress::Gunzip::GunzipError},
 );
 sub open_file {
-    my ($file, $mode) = @_;
+    my ($file, $mode, %opts) = @_;
     $mode ||= '<';
 
-    if ($mode eq '<' && $file =~ m/\.(gz|bz2)$/i) {
+    if ($mode eq '<' && $file =~ m/\.(gz|bz2)$/i && !$opts{no_decompress}) {
         my $ext = lc($1);
         my $spec = $COMPRESSION{$ext} or die "Unknown compression: $ext";
         my $mod = $spec->{module};
@@ -237,6 +237,7 @@ sub clean_path {
 
 sub mod2file {
     my ($mod) = @_;
+    confess "No module name provided" unless $mod;
     my $file = $mod;
     $file =~ s{::}{/}g;
     $file .= ".pm";

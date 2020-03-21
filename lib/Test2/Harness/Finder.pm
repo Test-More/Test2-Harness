@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '1.000014';
 
 use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util::JSON qw/decode_json/;
 use List::Util qw/first/;
 use Cwd qw/getcwd/;
 
@@ -41,16 +42,17 @@ sub duration_data {
 sub pull_durations {
     my $self = shift;
 
-    my $primary  = delete $self->{+MAYBE_DURATIONS} || [];
+    my $primary  = delete $self->{+MAYBE_DURATIONS};
     my $fallback = delete $self->{+DURATIONS};
 
-    for my $path (@$primary) {
+    if ($primary) {
+        my $path = $primary;
         local $@;
         my $durations = eval { $self->_pull_durations($path) } or print "Could not fetch optional durations '$path', ignoring...\n";
-        next unless $durations;
-
-        print "Found durations: $path\n";
-        return $self->{+DURATION_DATA} = $durations;
+        if ($durations) {
+            print "Found durations: $path\n";
+            return $self->{+DURATION_DATA} = $durations;
+        }
     }
 
     return $self->{+DURATION_DATA} = $self->_pull_durations($fallback)

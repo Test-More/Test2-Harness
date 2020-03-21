@@ -15,14 +15,14 @@ DESCRIPTION
 SYNOPSIS
 
     The easiest thing to do is use the yath ui path/to/logfile command,
-    which will create a temporary postgresql db, load your lgo into it,
+    which will create a temporary postgresql db, load your log into it,
     then launch the app in starman on a local port that you can visit in
     your browser.
 
 SOURCE
 
     The source code repository for Test2-Harness-UI can be found at
-    http://github.com/Test-More/Test2-Harness-UI/.
+    https://github.com/Test-More/Test2-Harness-UI/.
 
 MAINTAINERS
 

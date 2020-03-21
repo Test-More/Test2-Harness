@@ -15,6 +15,7 @@ use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
 use Test2::Harness::UI::Controller::Job;
+use Test2::Harness::UI::Controller::Download;
 
 use Test2::Harness::UI::Controller::Query;
 use Test2::Harness::UI::Controller::Runs;
@@ -65,6 +66,8 @@ sub init {
     $router->connect('/durations/:project'                          => {controller => 'Test2::Harness::UI::Controller::Durations'});
     $router->connect('/durations/:project/:short/:medium'           => {controller => 'Test2::Harness::UI::Controller::Durations'});
     $router->connect('/durations/:project/:short/:medium/:state_id' => {controller => 'Test2::Harness::UI::Controller::Durations'});
+
+    $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
 }
 
 sub to_app {

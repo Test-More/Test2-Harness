@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix upload form
+    - Add download log tool
+
 0.000023  2020-03-02 14:39:13-08:00 America/Los_Angeles
 
     - Fix deps issue

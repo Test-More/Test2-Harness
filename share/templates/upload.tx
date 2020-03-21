@@ -12,33 +12,6 @@
                 <small>Required</small>
             </dd>
 
-            <dt><label for="version">Version</label></dt>
-            <dd>
-                <input type="text" name="version" id="version" list="versions">
-                <datalist id="versions"></datalist>
-                <small>Optional</small>
-            </dd>
-
-            <dt><label for="category">Category</label></dt>
-            <dd>
-                <input type="text" name="category" id="category" list="categories">
-                <datalist id="categories"></datalist>
-                <small>Optional</small>
-            </dd>
-
-            <dt><label for="tier">Tier</label></dt>
-            <dd>
-                <input type="text" name="tier" id="tier" list="tiers">
-                <datalist id="tiers"></datalist>
-                <small>Optional</small>
-            </dd>
-
-            <dt><label for="build">Build</label></dt>
-            <dd>
-                <input type="text" name="build" id="build">
-                <small>Optional</small>
-            </dd>
-
             <dt><label for="log_file">Log File</label></dt>
             <dd><input type="file" name="log_file" id="log_file" accept=".jsonl.bz2,.jsonl.gz" required></dd>
 

@@ -176,6 +176,7 @@ dl.form > dt, dl.form > .wrapper > dt {
     margin-top: 12px;
     margin-right: -160px;
     padding-top: 4px;
+    clear: both;
 }
 
 dl.form > dd, dl.form > .wrapper > dd {

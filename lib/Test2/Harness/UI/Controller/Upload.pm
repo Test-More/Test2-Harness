@@ -23,13 +23,19 @@ sub handle {
     my $req = $self->request;
 
     my $res = resp(200);
-    $res->add_css('upload.css');
-    $res->add_js('upload.js');
 
     $self->process_form($res) if $req->parameters->{action};
 
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
     my $user = $req->user;
+
+    if ($req->parameters->{json}) {
+        $res->as_json;
+        return $res;
+    }
+
+    $res->add_css('upload.css');
+    $res->add_js('upload.js');
 
     my $content = $tx->render(
         'upload.tx',
@@ -57,7 +63,8 @@ sub process_form {
         return $res->add_error('Invalid Action');
     }
 
-    my $user = $self->{+CONFIG}->single_user || $req->user || $self->api_user($req->parameters->{api_key});
+    my $user = $req->user || $self->api_user($req->parameters->{api_key});
+
     die error(401) unless $user;
 
     my $file = $req->uploads->{log_file}->filename;
@@ -65,11 +72,6 @@ sub process_form {
 
     my $project_name = $req->parameters->{project} || return $res->add_error('project is required');
     my $project = $self->schema->resultset('Project')->find_or_create({name => $project_name});
-
-    my $version  = $req->parameters->{version};
-    my $category = $req->parameters->{category};
-    my $tier     = $req->parameters->{tier};
-    my $build    = $req->parameters->{build};
 
     my $mode  = $req->parameters->{mode}        || 'qvfd';
 
@@ -80,13 +82,9 @@ sub process_form {
 
     my $run = $self->schema->resultset('Run')->create(
         {
-            user_id       => $user->user_id,
+            user_id       => ref($user) ? $user->user_id : 1,
             project_id    => $project->project_id,
             mode          => $mode,
-            version       => $version,
-            category      => $category,
-            tier          => $tier,
-            build         => $build,
             status        => 'pending',
 
             log_file => {

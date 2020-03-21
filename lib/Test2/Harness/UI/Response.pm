@@ -157,6 +157,18 @@ sub add_error {
     return;
 }
 
+sub as_json {
+    my $self = shift;
+    $self->content_type('application/json');
+
+    my $data = {
+        messages => $self->{messages},
+        errors => $self->{errors},
+    };
+
+    $self->raw_body($data);
+}
+
 sub add_css {
     my $self = shift;
 

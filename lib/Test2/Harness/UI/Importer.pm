@@ -67,8 +67,6 @@ sub process {
     };
     my $err = $@;
 
-    unlink($run->log_file);
-
     my $total = time - $start;
 
     if ($ok && !$status->{errors}) {

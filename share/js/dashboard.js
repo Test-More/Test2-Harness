@@ -110,6 +110,7 @@ t2hui.dashboard.build_retry = function(item, col) {
 
 t2hui.dashboard.tool_builder = function(item, tools, data) {
     var link = base_uri + 'run/' + item.run_id;
+    var downlink = base_uri + 'download/' + item.run_id;
 
     var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
@@ -132,6 +133,9 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
         var go = $('<a class="tool etoggle" title="Open Run" href="' + link + '"><img src="/img/goto.png" /></a>');
         tools.append(go);
     }
+
+    var download = $('<a class="tool etoggle" title="Download Log" href="' + downlink + '"><img src="/img/download.png" /></a>');
+    tools.append(download);
 
     var pin = $('<img />');
     var pintool = $('<a class="tool etoggle"></a>');

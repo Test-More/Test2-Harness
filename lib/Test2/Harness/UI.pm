@@ -180,13 +180,13 @@ This package provides a web UI for yath logs.
 =head1 SYNOPSIS
 
 The easiest thing to do is use the C<yath ui path/to/logfile> command, which
-will create a temporary postgresql db, load your lgo into it, then launch the
+will create a temporary postgresql db, load your log into it, then launch the
 app in starman on a local port that you can visit in your browser.
 
 =head1 SOURCE
 
 The source code repository for Test2-Harness-UI can be found at
-F<http://github.com/Test-More/Test2-Harness-UI/>.
+F<https://github.com/Test-More/Test2-Harness-UI/>.
 
 =head1 MAINTAINERS
 

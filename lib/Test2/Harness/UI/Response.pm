@@ -159,11 +159,13 @@ sub add_error {
 
 sub as_json {
     my $self = shift;
+    my (%inject) = @_;
     $self->content_type('application/json');
 
     my $data = {
+        %inject,
         messages => $self->{messages},
-        errors => $self->{errors},
+        errors   => $self->{errors},
     };
 
     $self->raw_body($data);

@@ -13,7 +13,7 @@ my $config = Test2::Harness::UI::Config->new(
     dbi_dsn     => $ENV{HARNESS_UI_DSN},
     dbi_user    => '',
     dbi_pass    => '',
-    single_user => 0,
+    single_user => 1,
     email       => 'exodist7@gmail.com',
 );
 

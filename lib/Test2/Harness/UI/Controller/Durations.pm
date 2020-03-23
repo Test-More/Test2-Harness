@@ -31,48 +31,51 @@ sub handle {
     my $state_id     = $route->{state_id};
 
     my $schema  = $self->{+CONFIG}->schema;
-    my $project = $schema->resultset('Project')->find({name => $project_name}) or return [];
+    my $project = $schema->resultset('Project')->find({name => $project_name});
 
     my $data;
-    if (my $state = $schema->resultset('DurationsState')->find({state_id => $state_id, project_id => $project->project_id})) {
-        $data = $state->durations();
-    }
-    else {
-        my $dbh = $self->{+CONFIG}->connect;
+    if ($project) {
+        if (my $state = $schema->resultset('DurationsState')->find({state_id => $state_id, project_id => $project->project_id})) {
+            $data = $state->durations();
+        }
+        else {
+            my $dbh = $self->{+CONFIG}->connect;
 
-        my $sth = $dbh->prepare(<<"        EOT");
+            my $sth = $dbh->prepare(<<"        EOT");
             SELECT rel_file AS file, AVG(duration)
                 FROM durations
                WHERE project_id = ?
             GROUP BY file
         EOT
 
-        $sth->execute($project->project_id) or die $sth->errstr;
-        my $rows = $sth->fetchall_arrayref;
+            $sth->execute($project->project_id) or die $sth->errstr;
+            my $rows = $sth->fetchall_arrayref;
 
-        $data = {};
-        for my $row (@$rows) {
-            my ($file, $time) = @$row;
-            if ($time < $short) {
-                $data->{$file} = 'SHORT';
+            $data = {};
+            for my $row (@$rows) {
+                my ($file, $time) = @$row;
+                if ($time < $short) {
+                    $data->{$file} = 'SHORT';
+                }
+                elsif ($time < $medium) {
+                    $data->{$file} = 'MEDIUM';
+                }
+                else {
+                    $data->{$file} = 'LONG';
+                }
             }
-            elsif ($time < $medium) {
-                $data->{$file} = 'MEDIUM';
-            }
-            else {
-                $data->{$file} = 'LONG';
-            }
-        }
 
-        if ($state_id) {
-            $schema->resultset('DurationsState')->create(
-                {
+            if ($state_id) {
+                $schema->resultset('DurationsState')->create({
                     state_id   => $state_id,
                     durations  => $data,
                     project_id => $project->project_id,
-                }
-            ) or die "Could not create durations state";
+                }) or die "Could not create durations state";
+            }
         }
+    }
+    else {
+        $data = {};
     }
 
     my $ct ||= lc($req->headers->{'content-type'} || $req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');

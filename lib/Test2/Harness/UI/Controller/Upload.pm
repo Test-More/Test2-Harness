@@ -6,6 +6,9 @@ our $VERSION = '0.000025';
 
 use Text::Xslate();
 
+use Test2::Harness::Util::JSON qw/decode_json/;
+use Test2::Harness::Util qw/open_file/;
+
 use Test2::Harness::UI::Import();
 use Test2::Harness::UI::Queries();
 
@@ -24,13 +27,13 @@ sub handle {
 
     my $res = resp(200);
 
-    $self->process_form($res) if $req->parameters->{action};
+    my $run_id = $self->process_form($res) if $req->parameters->{action};
 
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
     my $user = $req->user;
 
     if ($req->parameters->{json}) {
-        $res->as_json;
+        $res->as_json($run_id ? (run_id => $run_id) : ());
         return $res;
     }
 
@@ -76,25 +79,36 @@ sub process_form {
     my $mode  = $req->parameters->{mode}        || 'qvfd';
 
     return $res->add_error("Unsupported file type, must be .jsonl.bz2, or .jsonl.gz")
-        unless $file =~ m/\.jsonl\.(bz2|gz)$/;
+        unless $file =~ m/\.jsonl\.(bz2|gz)$/i;
+    my $ext = lc($1);
+
+    my ($run_id);
+    my $ok = eval {
+        my $fh = open_file($tmp, '<', ext => $ext);
+        my $header = <$fh>;
+        close($fh);
+
+        $run_id = decode_json($header)->{facet_data}->{harness_run}->{run_id};
+    };
+    return $res->add_error("Error decoding json: $@") unless $ok;
 
     open(my $fh, '<:raw', $tmp) or die "Could not open uploaded file '$tmp': $!";
 
-    my $run = $self->schema->resultset('Run')->create(
-        {
-            user_id       => ref($user) ? $user->user_id : 1,
-            project_id    => $project->project_id,
-            mode          => $mode,
-            status        => 'pending',
+    my $run = $self->schema->resultset('Run')->create({
+        $run_id ? (run_id => $run_id) : (),
+        user_id    => ref($user) ? $user->user_id : 1,
+        project_id => $project->project_id,
+        mode       => $mode,
+        status     => 'pending',
 
-            log_file => {
-                name => $file,
-                data => do { local $/; <$fh> },
-            },
-        }
-    );
+        log_file => {
+            name => $file,
+            data => do { local $/; <$fh> },
+        },
+    });
 
-    return $res->add_message("Upload Success, added import to queue");
+    $res->add_message("Upload Success, added import to queue");
+    return $run->run_id;
 }
 
 sub api_user {

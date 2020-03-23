@@ -2,7 +2,7 @@ package Test2::Harness::UI::Import;
 use strict;
 use warnings;
 
-our $VERSION = '0.000025';
+our $VERSION = '0.000026';
 
 use DateTime;
 use Data::GUID;

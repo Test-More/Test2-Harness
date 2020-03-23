@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000015  2020-03-23 11:49:38-07:00 America/Los_Angeles
+
     - YathUI plugin improvements (show url, show errors)
     - Add more compression options to open_file
 

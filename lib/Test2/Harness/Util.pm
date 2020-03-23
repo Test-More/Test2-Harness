@@ -150,14 +150,24 @@ sub open_file {
     my ($file, $mode, %opts) = @_;
     $mode ||= '<';
 
-    if ($mode eq '<' && $file =~ m/\.(gz|bz2)$/i && !$opts{no_decompress}) {
-        my $ext = lc($1);
-        my $spec = $COMPRESSION{$ext} or die "Unknown compression: $ext";
-        my $mod = $spec->{module};
-        require(mod2file($mod));
+    unless ($opts{no_decompress}) {
+        if (my $ext = $opts{ext}) {
+            $opts{compression} //= $COMPRESSION{$ext} or die "Unknown compression: $ext";
+        }
 
-        my $fh = $mod->new($file) or die "Could not open $ext file '$file' ($mode): ${$spec->{errors}}";
-        return $fh;
+        if ($file =~ m/\.(gz|bz2)$/i) {
+            my $ext = lc($1);
+            $opts{compression} //= $COMPRESSION{$ext} or die "Unknown compression: $ext";
+        }
+
+        if ($mode eq '<' && $opts{compression}) {
+            my $spec = $opts{compression};
+            my $mod  = $spec->{module};
+            require(mod2file($mod));
+
+            my $fh = $mod->new($file) or die "Could not open file '$file' ($mode): ${$spec->{errors}}";
+            return $fh;
+        }
     }
 
     open(my $fh, $mode, $file) or confess "Could not open file '$file' ($mode): $!";

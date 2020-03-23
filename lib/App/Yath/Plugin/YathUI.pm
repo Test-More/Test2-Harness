@@ -186,15 +186,23 @@ sub finish {
         $ok = eval { $data = decode_json($res->{content}); 1 };
         if ($ok) {
             if ($data->{errors} && @{$data->{errors}}) {
-                $ok = 0;
+                $ok  = 0;
+                $msg = join "\n" => (@{$data->{errors}});
             }
             elsif ($data->{messages}) {
                 $ok = 1;
-                $msg = join "\n" => @{$data->{messages}};
+
+                my $url = $settings->yathui->url;
+                $url =~ s{/+$}{}g;
+
+                $msg = join "\n" => (
+                    @{$data->{messages}},
+                    $data->{run_id} ? ("YathUI run url: " . join '/' => ($url, 'run', $data->{run_id})) : (),
+                );
             }
             else {
-                $ok = 0;
-                $msg = "No messages recieved"
+                $ok  = 0;
+                $msg = "No messages recieved";
             }
         }
         else {

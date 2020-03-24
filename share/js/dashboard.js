@@ -119,6 +119,9 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
         $('#free_modal').slideDown();
     });
 
+    var download = $('<a class="tool etoggle" title="Download Log" href="' + downlink + '"><img src="/img/download.png" /></a>');
+    tools.append(download);
+
     if (item.error) {
         var err = $('<div class="tool etoggle error" title="See Error Message"><img src="/img/error.png"/></div>');
         tools.append(err);
@@ -133,9 +136,6 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
         var go = $('<a class="tool etoggle" title="Open Run" href="' + link + '"><img src="/img/goto.png" /></a>');
         tools.append(go);
     }
-
-    var download = $('<a class="tool etoggle" title="Download Log" href="' + downlink + '"><img src="/img/download.png" /></a>');
-    tools.append(download);
 
     var pin = $('<img />');
     var pintool = $('<a class="tool etoggle"></a>');

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Run;
 use strict;
 use warnings;
 
-our $VERSION = '0.000026';
+our $VERSION = '0.000027';
 
 use Data::GUID;
 use List::Util qw/max/;

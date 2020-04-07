@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix log_dir test on macos
+
 1.000016  2020-04-07 15:14:00-07:00 America/Los_Angeles
 
     - Fix #! in yath script

@@ -23,7 +23,7 @@ if ($ENV{AUTOMATED_TESTING}) {
 }
 
 my %WriteMakefileArgs = (
-  "ABSTRACT" => "A new and improved test harness with better L<Test2> integration.",
+  "ABSTRACT" => "A new and improved test harness with better Test2 integration.",
   "AUTHOR" => "Chad Granum <exodist\@cpan.org>",
   "CONFIGURE_REQUIRES" => {
     "ExtUtils::MakeMaker" => 0
@@ -150,7 +150,7 @@ my %FallbackPrereqs = (
   "parent" => 0
 );
 
-# inserted by Dist::Zilla::Plugin::DynamicPrereqs 0.036
+# inserted by Dist::Zilla::Plugin::DynamicPrereqs 0.037
 if ($^O eq 'Win32') {
     $WriteMakefileArgs{META_MERGE}{'meta-spec'} = { version => 2 };
     $WriteMakefileArgs{META_MERGE}{prereqs}{runtime}{suggests}{'Win32::Console::ANSI'} = 0;

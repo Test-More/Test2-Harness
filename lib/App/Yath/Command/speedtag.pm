@@ -2,7 +2,7 @@ package App::Yath::Command::speedtag;
 use strict;
 use warnings;
 
-our $VERSION = '1.000016';
+our $VERSION = '1.000017';
 
 use Test2::Harness::Util::File::JSONL;
 

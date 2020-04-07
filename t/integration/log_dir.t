@@ -14,10 +14,8 @@ yath(
     command => 'test',
     args    => ["--log-dir=$tmpdir", '-L', '--ext=tx', $dir],
     exit    => 0,
-    debug => 2,
     test    => sub {
         my $out = shift;
-        like($out->{output}, qr{Wrote log file: \Q$tmpdir\E}, "Found log dir listed in output");
 
         opendir(my $dh, $tmpdir) or die "Could not open dir $tmpdir: $!";
         my @files;

@@ -2,7 +2,7 @@ package App::Yath::Plugin::YathUI;
 use strict;
 use warnings;
 
-our $VERSION = '1.000017';
+our $VERSION = '1.000018';
 
 use File::Spec;
 use Test2::Harness::Util qw/read_file mod2file/;

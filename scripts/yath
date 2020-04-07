@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # Do not use warnings/strict, we want to avoid contamination of the
 
 # '-D' and '--dev-lib' MUST be handled well in advance of loading ANYTHING.

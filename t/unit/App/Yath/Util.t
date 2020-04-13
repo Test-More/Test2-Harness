@@ -109,7 +109,7 @@ tests isolate_stdout => sub {
 subtest is_generated_test_pl => sub {
     ok(!is_generated_test_pl(__FILE__), "This is not a generated test file");
 
-    my ($fh, $name) = tempfile(CLEANUP => 1);
+    my ($fh, $name) = tempfile(UNLINK => 1);
     print $fh "use strict;\nuse warnings;\n# THIS IS A GENERATED YATH RUNNER TEST\ndfasdafas\n";
     close($fh);
     ok(is_generated_test_pl($name), "Found a generated file");

@@ -40,7 +40,7 @@ is(
     "Instance is composed as expected"
 );
 
-my ($fh, $name) = tempfile(CLEANUP => 1);
+my ($fh, $name) = tempfile(UNLINK => 1);
 print $fh encode_json($one);
 close($fh);
 

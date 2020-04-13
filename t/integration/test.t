@@ -76,7 +76,7 @@ yath(
 
 note q[Checking --exclude-list option when a file is provided on the command line];
 
-my ($fh, $list_name) = tempfile(CLEANUP => 1);
+my ($fh, $list_name) = tempfile(UNLINK => 1);
 print $fh "# GENERATED YATH TEST EXCLUSION LIST\n#$dir/pass.tx\n$dir/fail.txx";
 close($fh);
 

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Stop leaving leftover files in /tmp
+
 1.000017  2020-04-07 15:47:42-07:00 America/Los_Angeles
 
     - Fix log_dir test on macos

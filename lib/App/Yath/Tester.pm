@@ -71,14 +71,14 @@ sub yath {
 
     my ($wh, $cfile);
     if ($capture) {
-        ($wh, $cfile) = tempfile("yath-$$-XXXXXXXX", TMPDIR => 1, CLEANUP => 1, SUFFIX => '.out');
+        ($wh, $cfile) = tempfile("yath-$$-XXXXXXXX", TMPDIR => 1, UNLINK => 1, SUFFIX => '.out');
         $wh->autoflush(1);
     }
 
     my (@log, $logfile);
     if ($log) {
         my $fh;
-        ($fh, $logfile) = tempfile("yathlog-$$-XXXXXXXX", TMPDIR => 1, CLEANUP => 1, SUFFIX => '.jsonl');
+        ($fh, $logfile) = tempfile("yathlog-$$-XXXXXXXX", TMPDIR => 1, UNLINK => 1, SUFFIX => '.jsonl');
         close($fh);
         @log = ('-F' => $logfile);
         print "DEBUG: log file = '$logfile'\n" if $debug;

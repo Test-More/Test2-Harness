@@ -79,6 +79,11 @@ sub run {
 
     return 0 if $settings->display->brief;
 
+    unless (@$rows) {
+        print "\nNo jobs failed!\n";
+        return 0;
+    }
+
     print "\nThe following jobs failed at least once:\n";
     print join "\n" => table(
         header => ['Job ID', 'Times Run', 'Test File', "Succeded Eventually?"],

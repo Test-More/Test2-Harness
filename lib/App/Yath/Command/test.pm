@@ -153,7 +153,7 @@ sub handle_sig {
     my $self = shift;
     my ($sig) = @_;
 
-    print STDERR "\nCought SIG$sig, forwarding signal to child processes...\n";
+    print STDERR "\nCaught SIG$sig, forwarding signal to child processes...\n";
     $self->ipc->killall($sig);
 
     if ($self->{+SIGNAL}) {

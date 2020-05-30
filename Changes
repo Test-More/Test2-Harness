@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Typo Fix in error message
+    - Do not die on 0 failures
+
 1.000018  2020-04-13 13:35:34-07:00 America/Los_Angeles
 
     - Stop leaving leftover files in /tmp

@@ -118,6 +118,11 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         },
     );
 
+    option cover_files => (
+        type => 'b',
+        description => "Use Test2::Plugin::Cover to collect coverage data for what files are touched by what tests. Unlike Devel::Cover this has very little performance impact (About 4% difference)",
+    );
+
     option switch => (
         field        => 'switches',
         short        => 'S',
@@ -154,6 +159,11 @@ sub cover_post_process {
 
     if ($ENV{T2_DEVEL_COVER} && !$settings->runner->cover) {
         $settings->runner->field(cover => $ENV{T2_DEVEL_COVER} eq '1' ? $ENV{T2_DEVEL_COVER} : $DEFAULT_COVER_ARGS);
+    }
+
+    if ($settings->runner->cover_files) {
+        push @{$settings->run->load_import->{'@'}} => 'Test2::Plugin::Cover';
+        $settings->run->load_import->{'Test2::Plugin::Cover'} = [];
     }
 
     return unless $settings->runner->cover;

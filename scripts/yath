@@ -10,6 +10,7 @@ BEGIN {
 
     package App::Yath::Script;
 
+    my $ORIG_TMP;
     my %ORIG_SIG = map { defined($SIG{$_}) ? ($_ => $SIG{$_}) : ()} keys %SIG;
     my @ORIG_ARGV = @ARGV;
     my @ORIG_INC = @INC;
@@ -157,6 +158,7 @@ BEGIN {
     require Cwd;
     require File::Spec;
 
+    $ORIG_TMP = File::Spec->tmpdir();
     $SCRIPT = Cwd::realpath(__FILE__) // File::Spec->rel2abs(__FILE__);
 
     if ($maybe_exec && -e 'scripts/yath') {
@@ -198,6 +200,7 @@ BEGIN {
     require Test2::Harness::Settings;
     my $settings = Test2::Harness::Settings->new(
         harness => {
+            orig_tmp        => $ORIG_TMP,
             orig_sig        => \%ORIG_SIG,
             orig_argv       => \@ORIG_ARGV,
             orig_inc        => \@ORIG_INC,

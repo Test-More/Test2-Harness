@@ -333,6 +333,7 @@ sub build_run {
     my $run = $settings->build(run => 'Test2::Harness::Run');
 
     mkdir($run->run_dir($dir)) or die "Could not make run dir: $!";
+    chmod(1777, $dir) or warn "Could not chmod run dir: $!\n";
 
     return $self->{+RUN} = $run;
 }

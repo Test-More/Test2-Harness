@@ -84,6 +84,7 @@ sub init {
     my $tmp_dir = File::Spec->catdir($self->{+DIR}, 'tmp');
     unless (-d $tmp_dir) {
         mkdir($tmp_dir) or die "Could not create temp dir: $!";
+        chmod(1777, $tmp_dir) or warn "Could not chmod temp dir: $!\n";
     }
     $self->{+TMP_DIR} = $tmp_dir;
 

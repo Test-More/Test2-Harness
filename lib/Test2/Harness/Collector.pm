@@ -76,7 +76,14 @@ sub process {
             my $done = $jdir->done or next;
 
             delete $jobs->{$job_try};
-            remove_tree($jdir->job_root, {safe => 1, keep_root => 0}) unless $self->settings->debug->keep_dirs;
+            unless ($self->settings->debug->keep_dirs) {
+                my $job_path = $jdir->job_root;
+                # Needed because we set the perms so that a tmpdir under it can be used.
+                # This is the only remove_tree that needs it because it is the
+                # only one in a process that did not initially create the dir.
+                chmod(0700, $job_path);
+                remove_tree($job_path, {safe => 1, keep_root => 0});
+            }
 
             delete $self->{+PENDING}->{$jdir->job_id} unless $done->{retry};
         }

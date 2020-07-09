@@ -8,12 +8,15 @@ sub mode { ((stat($_[0]))[2] & 07777) }
 
 is(mode($path), 1777, "tempdir '$path' has mode 1777");
 
-my $system_tmp = $ENV{SYSTEM_TMPDIR};
+my $system_tmp = clean_path($ENV{SYSTEM_TMPDIR});
 
 my $last = $path;
+my $cnt = 0;
 while ($system_tmp) {
     my $next = clean_path(File::Spec->catdir($last, File::Spec->updir()));
-    last if $next eq $system_tmp;
+    last if $next eq $system_tmp;    # We hit system temp, we can stop
+    last if $next eq $last;          # We probably hit root
+    last if $cnt++ > 10;             # Something went wrong, no need to loop forever
     $last = $next;
 
     my @mode = split //, mode($next);

@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - reduce version of Data::UUID required
+    - Allow filenames in replay
+    - Add 'cover_files' shortcut for Test2::Plugin::Cover
+
 1.000019  2020-05-30 11:07:09-07:00 America/Los_Angeles
 
     - Typo Fix in error message

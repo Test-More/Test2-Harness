@@ -103,36 +103,6 @@ __PACKAGE__->add_unique_constraint("projects_name_key", ["name"]);
 
 =head1 RELATIONS
 
-=head2 durations
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::Duration>
-
-=cut
-
-__PACKAGE__->has_many(
-  "durations",
-  "Test2::Harness::UI::Schema::Result::Duration",
-  { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
-=head2 durations_states
-
-Type: has_many
-
-Related object: L<Test2::Harness::UI::Schema::Result::DurationsState>
-
-=cut
-
-__PACKAGE__->has_many(
-  "durations_states",
-  "Test2::Harness::UI::Schema::Result::DurationsState",
-  { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-
 =head2 permissions
 
 Type: has_many
@@ -164,8 +134,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-09-10 11:27:39
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:H5PzsrHeABiCxXJoEgzEjA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2020-07-09 22:24:56
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:A0aOG9K6shqb+/244tmiBw
 
 our $VERSION = '0.000028';
 

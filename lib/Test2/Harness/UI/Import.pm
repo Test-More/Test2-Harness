@@ -24,7 +24,7 @@ use Test2::Harness::UI::Util::HashBase qw{
     -config -run -mode -fh
     -passed -failed -retried
     -job0_id -job_ord -job_buffer -ready_jobs
-    -durations
+    -coverage
 };
 
 my %MODES = (
@@ -70,7 +70,7 @@ sub init {
         },
     };
 
-    $self->{+DURATIONS} = [];
+    $self->{+COVERAGE} = [];
 }
 
 sub process {
@@ -103,21 +103,21 @@ sub process {
     }
 
     $self->flush_all_jobs();
-    $self->flush_durations();
+    $self->flush_coverage();
 
     return {success => 1, passed => $self->{+PASSED}, failed => $self->{+FAILED}, retried => $self->{+RETRIED}};
 }
 
-sub flush_durations {
+sub flush_coverage {
     my $self = shift;
-    my $durs = $self->{+DURATIONS} or return;
-    return unless @$durs;
+    my $coverage = $self->{+COVERAGE} or return;
+    return unless @$coverage;
 
     my $schema = $self->{+CONFIG}->schema;
     $schema->txn_begin;
     my $ok = eval {
         local $ENV{DBIC_DT_SEARCH_OK} = 1;
-        $schema->resultset('Duration')->populate($durs);
+        $schema->resultset('Coverage')->populate($coverage);
         1;
     };
     my $err = $@;
@@ -324,6 +324,14 @@ sub update_other {
         }
     }
 
+    # Handle coverage
+    if (my $coverage = $f->{coverage}) {
+       push @{$self->{+COVERAGE}} => {
+           job_key => $job->{job_key},
+           file    => $_,
+       } for @{$coverage->{files} // []};
+    }
+
     # Handle job events
     if (my $job_data = $f->{harness_job}) {
         $job->{file} ||= $job_data->{file};
@@ -349,6 +357,7 @@ sub update_other {
         $job->{stdout} = clean_output(delete $job_exit->{stdout});
     }
     if (my $job_start = $f->{harness_job_start}) {
+        $job->{file} = $job_start->{rel_file} if $job_start->{rel_file};
         $job->{file} ||= $job_start->{file};
         $job->{start} = format_stamp($job_start->{stamp});
     }
@@ -367,11 +376,8 @@ sub update_other {
         push @{$self->{+READY_JOBS}} => delete $self->{+JOB_BUFFER}->{$job->{job_id}}->{$job->{job_try}};
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
-            push @{$self->{+DURATIONS}} => {
-                project_id => $self->{+RUN}->project_id,
-                rel_file   => $job_end->{rel_file},
-                duration   => $job_end->{times}->{totals}->{total},
-            };
+            $job->{file} = $job_end->{rel_file} if $job_end->{rel_file};
+            $job->{duration} = $job_end->{times}->{totals}->{total};
         }
     }
     if (my $job_fields = $f->{harness_job_fields}) {

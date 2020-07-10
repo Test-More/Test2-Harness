@@ -1,4 +1,4 @@
-package Test2::Harness::UI::Controller::Durations;
+package Test2::Harness::UI::Controller::Coverage;
 use strict;
 use warnings;
 
@@ -7,18 +7,23 @@ our $VERSION = '0.000028';
 use Data::GUID;
 use List::Util qw/max/;
 use Test2::Harness::UI::Response qw/resp error/;
-use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
+use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
 
-sub title { 'Durations' }
+sub title { 'Coverage' }
 
 sub handle {
     my $self = shift;
     my ($route) = @_;
 
     my $req = $self->{+REQUEST};
+    die error(405) unless $req->method eq 'POST';
+
+    my $files;
+    eval { $files = decode_json($req->content); 1 } or warn $@;
+    die error(400 => 'POST content must be a JSON array (list of filenames)') unless $files && ref($files) eq 'ARRAY';
 
     my $res = resp(200);
 
@@ -26,45 +31,30 @@ sub handle {
 
     die error(404 => 'Missing route') unless $route;
     my $project_name = $route->{project} or die error(404 => 'No project');
-    my $short        = $route->{short} || 15;
-    my $medium       = $route->{medium} || 30;
 
     my $schema  = $self->{+CONFIG}->schema;
     my $project = $schema->resultset('Project')->find({name => $project_name});
 
     my $data;
-    if ($project) {
+    if ($project && @$files) {
         my $dbh = $self->{+CONFIG}->connect;
 
+        my $placeholders = join ',' => map { '?' } @$files;
         my $sth = $dbh->prepare(<<"        EOT");
-            SELECT jobs.file, AVG(jobs.duration)
-              FROM jobs
-              JOIN runs USING(run_id)
-             WHERE runs.project_id = ?
-               AND jobs.duration IS NOT NULL
-               AND jobs.file IS NOT NULL
-            GROUP BY file
+            SELECT DISTINCT(jobs.file) AS file FROM jobs
+              JOIN coverage USING(job_key)
+              JOIN runs using(run_id)
+             WHERE project_id = ?
+               AND coverage.file IN ($placeholders)
         EOT
 
-        $sth->execute($project->project_id) or die $sth->errstr;
+        $sth->execute($project->project_id, @$files) or die $sth->errstr;
         my $rows = $sth->fetchall_arrayref;
 
-        $data = {};
-        for my $row (@$rows) {
-            my ($file, $time) = @$row;
-            if ($time < $short) {
-                $data->{$file} = 'SHORT';
-            }
-            elsif ($time < $medium) {
-                $data->{$file} = 'MEDIUM';
-            }
-            else {
-                $data->{$file} = 'LONG';
-            }
-        }
+        $data = [map { $_->[0] } @$rows];
     }
     else {
-        $data = {};
+        $data = [];
     }
 
     my $ct ||= lc($req->headers->{'content-type'} || $req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');
@@ -90,7 +80,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Controller::Durations
+Test2::Harness::UI::Controller::Coverage
 
 =head1 DESCRIPTION
 

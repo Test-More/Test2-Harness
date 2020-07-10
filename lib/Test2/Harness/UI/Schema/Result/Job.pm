@@ -129,6 +129,11 @@ __PACKAGE__->table("jobs");
   data_type: 'timestamp'
   is_nullable: 1
 
+=head2 duration
+
+  data_type: 'double precision'
+  is_nullable: 1
+
 =head2 pass_count
 
   data_type: 'bigint'
@@ -182,6 +187,8 @@ __PACKAGE__->add_columns(
   { data_type => "timestamp", is_nullable => 1 },
   "ended",
   { data_type => "timestamp", is_nullable => 1 },
+  "duration",
+  { data_type => "double precision", is_nullable => 1 },
   "pass_count",
   { data_type => "bigint", is_nullable => 1 },
   "fail_count",
@@ -222,6 +229,21 @@ __PACKAGE__->add_unique_constraint("jobs_job_id_job_try_key", ["job_id", "job_tr
 
 =head1 RELATIONS
 
+=head2 coverages
+
+Type: has_many
+
+Related object: L<Test2::Harness::UI::Schema::Result::Coverage>
+
+=cut
+
+__PACKAGE__->has_many(
+  "coverages",
+  "Test2::Harness::UI::Schema::Result::Coverage",
+  { "foreign.job_key" => "self.job_key" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 events
 
 Type: has_many
@@ -253,8 +275,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2019-12-16 15:09:13
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:gQnNADemfICyuaQ77kjPFw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2020-07-09 22:41:50
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:v6GE+/wuAhWW4zZ1SMhB5g
 
 our $VERSION = '0.000028';
 

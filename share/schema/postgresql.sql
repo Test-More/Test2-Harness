@@ -157,22 +157,6 @@ CREATE TRIGGER status_changed
   FOR EACH ROW
   EXECUTE PROCEDURE update_status_changed();
 
-CREATE TABLE durations (
-    project_id  UUID                NOT NULL REFERENCES projects(project_id),
-    rel_file    TEXT                NOT NULL,
-    duration    DOUBLE PRECISION    NOT NULL,
-    added       TIMESTAMP           NOT NULL DEFAULT now()
-);
-
-CREATE TABLE durations_state (
-    state_id    TEXT        NOT NULL,
-    project_id  UUID        NOT NULL REFERENCES projects(project_id),
-    durations   JSONB       NOT NULL,
-    added       TIMESTAMP   NOT NULL DEFAULT now(),
-
-    UNIQUE(project_id, state_id)
-);
-
 CREATE TABLE jobs (
     job_key         UUID        NOT NULL PRIMARY KEY,
 
@@ -194,6 +178,8 @@ CREATE TABLE jobs (
     start           TIMESTAMP       DEFAULT NULL,
     ended           TIMESTAMP       DEFAULT NULL,
 
+    duration        DOUBLE PRECISION    DEFAULT NULL,
+
     pass_count      BIGINT          DEFAULT NULL,
     fail_count      BIGINT          DEFAULT NULL,
 
@@ -207,6 +193,13 @@ CREATE INDEX IF NOT EXISTS job_look ON jobs(job_id, job_try);
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
+
+CREATE TABLE coverage (
+    job_key     UUID    NOT NULL REFERENCES jobs(job_key),
+    file        TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS coverage_files ON coverage(file);
+CREATE INDEX IF NOT EXISTS coverage_jobs  ON coverage(job_key);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,

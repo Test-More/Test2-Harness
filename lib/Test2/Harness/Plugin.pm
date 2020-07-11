@@ -4,6 +4,9 @@ use warnings;
 
 our $VERSION = '1.000021';
 
+# Document, but do not implement
+#sub changed_files {}
+
 sub munge_search {}
 
 sub claim_file {}
@@ -113,6 +116,12 @@ C<run> command against the persistent runner.
 This is a callback that lets you run teardown logic when the runner stops. Note
 that in a persistent runner this is run once on termination, it is not run for
 each C<run> command against the persistent runner.
+
+=item @files = $plugin->changed_files($settings)
+
+Get a list of files that have changed. Plugins are free to define what
+"changed" means. This may be used by the finder to determine what tests to run
+based on coverage data collected in previous runs.
 
 =item $plugin->TO_JSON
 

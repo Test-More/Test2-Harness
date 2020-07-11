@@ -8,6 +8,39 @@ use IPC::Cmd qw/can_run/;
 use Test2::Harness::Util::IPC qw/run_cmd/;
 use parent 'App::Yath::Plugin';
 
+use App::Yath::Options;
+
+option_group {prefix => 'git', category => "Git Options"} => sub {
+    option change_base => (
+        type => 's',
+        description => "Find files changed by all commits in the current branch from most recent stopping when a commit is found that is also present in the history of the branch/commit specified as the change base.",
+        long_examples  => [" master", " HEAD^", " df22abe4"],
+    );
+};
+
+my $GIT_CMD = can_run('git');
+sub git_cmd { $ENV{GIT_COMMAND} || $GIT_CMD }
+
+sub git_output {
+    my $class = shift;
+    my (@args) = @_;
+
+    my $cmd = $class->git_cmd or return;
+
+    my ($rh, $wh, $irh, $iwh);
+    pipe($rh, $wh) or die "No pipe: $!";
+    pipe($irh, $iwh) or die "No pipe: $!";
+    my $pid = run_cmd(stderr => $iwh, stdout => $wh, command => [$cmd, @args]);
+    waitpid($pid, 0);
+    return if $?;
+
+    close($wh);
+    close($iwh);
+    close($irh);
+
+    return <$rh>;
+}
+
 sub inject_run_data {
     my $class  = shift;
     my %params = @_;
@@ -20,7 +53,6 @@ sub inject_run_data {
     my $status    = $ENV{GIT_STATUS};
     my $branch    = $ENV{GIT_BRANCH};
 
-    if (my $cmd = $ENV{GIT_COMMAND} || can_run('git')) {
         my @sets = (
             [\$long_sha, 'rev-parse', 'HEAD'],
             [\$short_sha, 'rev-parse', '--short', 'HEAD'],
@@ -31,17 +63,8 @@ sub inject_run_data {
         for my $set (@sets) {
             my ($var, @args) = @$set;
             next if $$var; # Already set
-
-            my ($rh, $wh, $irh, $iwh);
-            pipe($rh, $wh) or die "No pipe: $!";
-            pipe($irh, $iwh) or die "No pipe: $!";
-            my $pid = run_cmd(stderr => $iwh, stdout => $wh, command => [$cmd, @args]);
-            waitpid($pid, 0);
-            next if $?;
-            close($wh);
-            chomp($$var = join "\n" => <$rh>);
+            chomp($$var = join "\n" => $class->git_output(@args));
         }
-    }
 
     return unless $long_sha;
 
@@ -61,6 +84,27 @@ sub inject_run_data {
     }
 
     return;
+}
+
+sub changed_files {
+    my $class = shift;
+    my ($settings) = @_;
+    my $cmd = $class->git_cmd or return;
+
+    if (my $base = $settings->git->change_base) {
+        my $from = 'HEAD';
+
+        $from .= "^" while system($cmd => 'merge-base', '--is-ancestor', $from, $base);
+
+        return map { chomp($_); $_ } $class->git_output('diff', $from, '--name-only');
+    }
+
+    my @files = map { chomp($_); $_ } $class->git_output('diff', 'HEAD', '--name-only');
+
+    @files = map { chomp($_); $_ } $class->git_output('diff', 'HEAD^', '--name-only')
+        unless @files;
+
+    return @files;
 }
 
 1;
@@ -90,6 +134,8 @@ directly in the json data. The data is also easily accessible with
 L<Test2::Harness::UI>.
 
 The data will include the long sha, short sha, branch name, and a brief status.
+
+=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 
 =head1 SOURCE
 

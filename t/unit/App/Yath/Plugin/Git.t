@@ -2,10 +2,13 @@ use Test2::V0 -target => 'App::Yath::Plugin::Git';
 use Test2::Util qw/CAN_THREAD CAN_REALLY_FORK CAN_FORK CAN_SIGSYS/;
 # HARNESS-DURATION-SHORT
 
+use Test2::Harness::Settings;
+
 subtest NOTHING => sub {
     my $control = mock $CLASS => (
         override => [
-            can_run => sub { undef },
+            can_run => sub { undef  },
+            git_cmd => sub { return },
         ],
     );
 
@@ -137,6 +140,29 @@ subtest MIX => sub {
             }
         ],
         "Added git field",
+    );
+};
+
+subtest changed_files => sub {
+    my $settings = Test2::Harness::Settings->new();
+    $settings->define_prefix('git');
+    $settings->git->vivify_field('change_base');
+
+    my $script = __FILE__;
+    $script =~ s/\.t$/\.script/;
+    local $ENV{GIT_COMMAND} = $script;
+
+    is(
+        [$CLASS->changed_files($settings)],
+        ['a.file'],
+        "Got changed file"
+    );
+
+    $settings->git->field(change_base => 'master');
+    is(
+        [$CLASS->changed_files($settings)],
+        ['a.file', 'b.file', 'c.file'],
+        "Got changed files from change_base"
     );
 };
 

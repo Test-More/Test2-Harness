@@ -19,15 +19,7 @@ sub handle {
     my ($route) = @_;
 
     my $req = $self->{+REQUEST};
-    die error(405) unless $req->method eq 'POST';
-
-    my $files;
-    eval { $files = decode_json($req->content); 1 } or warn $@;
-    die error(400 => 'POST content must be a JSON array (list of filenames)') unless $files && ref($files) eq 'ARRAY';
-
     my $res = resp(200);
-
-    my $user = $req->user;
 
     die error(404 => 'Missing route') unless $route;
     my $project_name = $route->{project} or die error(404 => 'No project');
@@ -36,15 +28,18 @@ sub handle {
     my $project = $schema->resultset('Project')->find({name => $project_name});
 
     my $data;
-    if ($project && @$files) {
+    if ($req->method eq 'POST') {
+        my $files;
+        eval { $files = decode_json($req->content); 1 } or warn $@;
+        die error(400 => 'POST content must be a JSON array (list of filenames)') unless $files && ref($files) eq 'ARRAY';
         my $dbh = $self->{+CONFIG}->connect;
 
         my $placeholders = join ',' => map { '?' } @$files;
         my $sth = $dbh->prepare(<<"        EOT");
             SELECT DISTINCT(jobs.file) AS file FROM jobs
               JOIN coverage USING(job_key)
-              JOIN runs using(run_id)
-             WHERE project_id = ?
+              JOIN runs     USING(run_id)
+             WHERE runs.project_id = ?
                AND coverage.file IN ($placeholders)
         EOT
 
@@ -53,8 +48,27 @@ sub handle {
 
         $data = [map { $_->[0] } @$rows];
     }
+    elsif ($req->method eq 'GET') {
+        my $dbh = $self->{+CONFIG}->connect;
+
+        my $sth = $dbh->prepare(<<"        EOT");
+            SELECT DISTINCT
+                   coverage.file AS source,
+                   jobs.file     AS test
+              FROM coverage
+              JOIN jobs USING(job_key)
+              JOIN runs USING(run_id)
+             WHERE runs.project_id = ?
+        EOT
+
+        $data = {};
+        $sth->execute($project->project_id) or die $sth->errstr;
+        for my $row (@{$sth->fetchall_arrayref}) {
+            push @{$data->{$row->[0]}} => $row->[1];
+        }
+    }
     else {
-        $data = [];
+        die error(405);
     }
 
     my $ct ||= lc($req->headers->{'content-type'} || $req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');

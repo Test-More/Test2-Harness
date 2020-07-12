@@ -43,6 +43,38 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         description => "Only run tests that have their duration flag set to 'LONG'",
     );
 
+    option changed_only => (
+        description => "Only run tests for changed files (Requires --coverage_from, also requires a list of changes either from the --changed option, or a plugin that implements changed_files())",
+    );
+
+    option changed => (
+        type => 'm',
+        description => "Specify one or more files as having been changed",
+        long_examples => [' path/to/file'],
+    );
+
+    option changes_plugin => (
+        type => 's',
+        description => "What plugin should be used to detect changed files",
+        long_examples => [' Git', ' +App::Yath::Plugin::Git'],
+    );
+
+    option coverage_from => (
+        type => 's',
+        description => "Where to fetch coverage data. Can be a url (POST with a json-array of changed files as the POST body). Can be a path to a .jsonl(.bz|.gz)? log file. Can be a path to a json file containing a hash where source files are key, and value is a list of tests to run.",
+        long_examples => [' http://example.com/coverage', ' path/to/log.jsonl', ' path/to/coverage.json']
+    );
+
+    option maybe_coverage_from => (
+        type => 's',
+        description => "Where to fetch coverage data. Can be a url (POST with a json-array of changed files as the POST body). Can be a path to a .jsonl(.bz|.gz)? log file. Can be a path to a json file containing a hash where source files are key, and value is a list of tests to run.",
+        long_examples => [' http://example.com/coverage', ' path/to/log.jsonl', ' path/to/coverage.json']
+    );
+
+    option coverage_url_use_post => (
+        description => 'If coverage_from is a url, use the http POST method with a list of changed files. This allows the server to tell us what tests to run instead of downloading all the coverage data and determining what tests to run from that.',
+    );
+
     option durations => (
         type => 's',
 

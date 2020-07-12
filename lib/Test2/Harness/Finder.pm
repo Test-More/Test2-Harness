@@ -24,6 +24,9 @@ use Test2::Harness::Util::HashBase qw{
     <search <extensions
 
     <multi_project
+
+    <changed <changed_only <changes_plugin
+    <coverage_from <maybe_coverage_from <coverage_url_use_post
 };
 
 sub munge_settings {}

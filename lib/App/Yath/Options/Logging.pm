@@ -62,7 +62,7 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
 
             $settings->runner->field('cover_files' => 1) if $settings->check_prefix('runner');
 
-            return $$slot = "coverage.json" if $norm eq '1';
+            return $$slot = clean_path("coverage.json") if $raw eq '1';
             return $$slot = $norm;
         },
     );

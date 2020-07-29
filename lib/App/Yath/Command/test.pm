@@ -48,6 +48,8 @@ use Test2::Harness::Util::HashBase qw/
     +state
 
     <final_data
+
+    <coverage_data
 /;
 
 include_options(
@@ -239,6 +241,8 @@ sub render {
     my $logger    = $self->logger;
     my $plugins = $self->settings->harness->plugins;
 
+    my $cover = $settings->logging->write_coverage;
+
     $plugins = [grep {$_->can('handle_event')} @$plugins];
 
     # render results from log
@@ -277,6 +281,12 @@ sub render {
         }
         else {
             $_->render_event($e) for @$renderers;
+
+            $self->coverage($e) if $cover && (
+                $e->{facet_data}->{coverage} ||
+                $e->{facet_data}->{harness_job_end} ||
+                $e->{facet_data}->{harness_job_start}
+            );
         }
 
         $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
@@ -285,6 +295,26 @@ sub render {
         $_->handle_event($e, $settings) for @$plugins;
 
         $ipc->wait() if $ipc;
+    }
+}
+
+sub coverage {
+    my $self = shift;
+    my ($e) = @_;
+
+    my $job_id = $e->{job_id};
+    my $set = $self->{+COVERAGE_DATA}->{$job_id} //= {};
+
+    if ($e->{facet_data}->{coverage}) {
+        push @{$set->{files}} => @{$e->{facet_data}->{coverage}->{files}};
+    }
+
+    if (my $end = $e->{facet_data}->{harness_job_end}) {
+        $set->{test} //= $end->{rel_file};
+    }
+
+    if (my $start = $e->{facet_data}->{harness_job_start}) {
+        $set->{test} //= $start->{rel_file};
     }
 }
 
@@ -305,13 +335,38 @@ sub stop {
     $ipc->wait(all => 1);
     $ipc->stop;
 
+    my $cover = $settings->logging->write_coverage;
+    if ($cover) {
+        my $coverage = {};
+        for my $job (values %{$self->{+COVERAGE_DATA} // {}}) {
+            my $test = $job->{test} or next;
+            my $files = $job->{files} or next;
+            next unless @$files;
+
+            my %seen;
+            $coverage->{$test} = [ sort grep { !$seen{$_}++ } @$files ];
+        }
+
+        if (open(my $fh, '>', $cover)) {
+            print $fh encode_json($coverage);
+            close($fh);
+        }
+        else {
+            warn "Could not write coverage file '$cover': $!";
+        }
+    }
+
     unless ($settings->display->quiet > 2) {
         printf STDERR "\nNo tests were seen!\n" unless $self->{+TESTS_SEEN};
 
-        printf("\nKeeping work dir: %s\n", $self->workdir) if $settings->debug->keep_dirs;
+        printf("\nKeeping work dir: %s\n", $self->workdir)
+            if $settings->debug->keep_dirs;
 
         print "\nWrote log file: " . $settings->logging->log_file . "\n"
             if $settings->logging->log;
+
+        print "\nWrote coverage file: $cover\n"
+            if $cover;
     }
 }
 

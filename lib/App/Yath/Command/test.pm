@@ -49,7 +49,7 @@ use Test2::Harness::Util::HashBase qw/
 
     <final_data
 
-    <coverage_data
+    <coverage_aggregator
 /;
 
 include_options(
@@ -242,6 +242,10 @@ sub render {
     my $plugins = $self->settings->harness->plugins;
 
     my $cover = $settings->logging->write_coverage;
+    if ($cover) {
+        require Test2::Harness::Log::CoverageAggregator;
+        $self->{+COVERAGE_AGGREGATOR} //= Test2::Harness::Log::CoverageAggregator->new();
+    }
 
     $plugins = [grep {$_->can('handle_event')} @$plugins];
 
@@ -282,7 +286,7 @@ sub render {
         else {
             $_->render_event($e) for @$renderers;
 
-            $self->coverage($e) if $cover && (
+            $self->{+COVERAGE_AGGREGATOR}->process_event($e) if $cover && (
                 $e->{facet_data}->{coverage} ||
                 $e->{facet_data}->{harness_job_end} ||
                 $e->{facet_data}->{harness_job_start}
@@ -298,25 +302,6 @@ sub render {
     }
 }
 
-sub coverage {
-    my $self = shift;
-    my ($e) = @_;
-
-    my $job_id = $e->{job_id};
-    my $set = $self->{+COVERAGE_DATA}->{$job_id} //= {};
-
-    if ($e->{facet_data}->{coverage}) {
-        push @{$set->{files}} => @{$e->{facet_data}->{coverage}->{files}};
-    }
-
-    if (my $end = $e->{facet_data}->{harness_job_end}) {
-        $set->{test} //= $end->{rel_file};
-    }
-
-    if (my $start = $e->{facet_data}->{harness_job_start}) {
-        $set->{test} //= $start->{rel_file};
-    }
-}
 
 sub stop {
     my $self = shift;
@@ -337,15 +322,7 @@ sub stop {
 
     my $cover = $settings->logging->write_coverage;
     if ($cover) {
-        my $coverage = {};
-        for my $job (values %{$self->{+COVERAGE_DATA} // {}}) {
-            my $test = $job->{test} or next;
-            my $files = $job->{files} or next;
-            next unless @$files;
-
-            my %seen;
-            $coverage->{$test} = [ sort grep { !$seen{$_}++ } @$files ];
-        }
+        my $coverage = $self->{+COVERAGE_AGGREGATOR}->coverage;
 
         if (open(my $fh, '>', $cover)) {
             print $fh encode_json($coverage);

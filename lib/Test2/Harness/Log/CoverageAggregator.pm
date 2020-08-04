@@ -2,13 +2,18 @@ package Test2::Harness::Log::CoverageAggregator;
 use strict;
 use warnings;
 
+our $VERSION = '1.000021';
+
 use Test2::Harness::Util::HashBase qw/<coverage_data/;
 
 sub process_event {
     my $self = shift;
     my ($e) = @_;
 
-    my $job_id = $e->{job_id};
+    return unless $e;
+    return unless keys %$e;
+
+    my $job_id = $e->{job_id} // 0;
     my $set = $self->{+COVERAGE_DATA}->{$job_id} //= {};
 
     if ($e->{facet_data}->{coverage}) {
@@ -34,8 +39,7 @@ sub coverage {
         my $files = $job->{files} or next;
         next unless @$files;
 
-        my %seen;
-        $coverage->{$test} = [sort grep { !$seen{$_}++ } @$files];
+        push @{$coverage->{$_}} => $test for @$files;
     }
 
     return $coverage;

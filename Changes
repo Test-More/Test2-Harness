@@ -7,6 +7,7 @@
     - Add coverage aggregator tool
     - Add ability to run tests that cover changed files
     - Add dbi-profiling option
+    - Fix permissions on temp dirs (may still have some issues)
 
 1.000020  2020-07-08 22:25:23-07:00 America/Los_Angeles
 

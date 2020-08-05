@@ -1,5 +1,13 @@
 {{$NEXT}}
 
+    - Add changed_files plugin hook
+    - Make git plugin support changed_files hook
+    - Add Test2::Harness::Log docs
+    - Add 'cover-files' option using Test2::Plugin::Cover
+    - Add coverage aggregator tool
+    - Add ability to run tests that cover changed files
+    - Add dbi-profiling option
+
 1.000020  2020-07-08 22:25:23-07:00 America/Los_Angeles
 
     - reduce version of Data::UUID required

@@ -48,6 +48,8 @@ use Test2::Harness::Util::HashBase qw/
     +state
 
     <final_data
+
+    <coverage_aggregator
 /;
 
 include_options(
@@ -239,6 +241,12 @@ sub render {
     my $logger    = $self->logger;
     my $plugins = $self->settings->harness->plugins;
 
+    my $cover = $settings->logging->write_coverage;
+    if ($cover) {
+        require Test2::Harness::Log::CoverageAggregator;
+        $self->{+COVERAGE_AGGREGATOR} //= Test2::Harness::Log::CoverageAggregator->new();
+    }
+
     $plugins = [grep {$_->can('handle_event')} @$plugins];
 
     # render results from log
@@ -277,6 +285,12 @@ sub render {
         }
         else {
             $_->render_event($e) for @$renderers;
+
+            $self->{+COVERAGE_AGGREGATOR}->process_event($e) if $cover && (
+                $e->{facet_data}->{coverage} ||
+                $e->{facet_data}->{harness_job_end} ||
+                $e->{facet_data}->{harness_job_start}
+            );
         }
 
         $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
@@ -287,6 +301,7 @@ sub render {
         $ipc->wait() if $ipc;
     }
 }
+
 
 sub stop {
     my $self = shift;
@@ -305,13 +320,30 @@ sub stop {
     $ipc->wait(all => 1);
     $ipc->stop;
 
+    my $cover = $settings->logging->write_coverage;
+    if ($cover) {
+        my $coverage = $self->{+COVERAGE_AGGREGATOR}->coverage;
+
+        if (open(my $fh, '>', $cover)) {
+            print $fh encode_json($coverage);
+            close($fh);
+        }
+        else {
+            warn "Could not write coverage file '$cover': $!";
+        }
+    }
+
     unless ($settings->display->quiet > 2) {
         printf STDERR "\nNo tests were seen!\n" unless $self->{+TESTS_SEEN};
 
-        printf("\nKeeping work dir: %s\n", $self->workdir) if $settings->debug->keep_dirs;
+        printf("\nKeeping work dir: %s\n", $self->workdir)
+            if $settings->debug->keep_dirs;
 
         print "\nWrote log file: " . $settings->logging->log_file . "\n"
             if $settings->logging->log;
+
+        print "\nWrote coverage file: $cover\n"
+            if $cover;
     }
 }
 

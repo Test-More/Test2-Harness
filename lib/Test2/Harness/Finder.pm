@@ -4,10 +4,11 @@ use warnings;
 
 our $VERSION = '1.000021';
 
-use Test2::Harness::Util qw/clean_path/;
-use Test2::Harness::Util::JSON qw/decode_json/;
+use Test2::Harness::Util qw/clean_path mod2file/;
+use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 use List::Util qw/first/;
 use Cwd qw/getcwd/;
+use Carp qw/croak/;
 
 use Test2::Harness::TestFile;
 use File::Spec;
@@ -21,9 +22,12 @@ use Test2::Harness::Util::HashBase qw{
 
     <no_long <only_long
 
-    <search <extensions
+    search <extensions
 
     <multi_project
+
+    <changed <changed_only <changes_plugin <show_changed_files
+    +coverage_data <coverage_from <maybe_coverage_from <coverage_url_use_post
 };
 
 sub munge_settings {}
@@ -39,50 +43,90 @@ sub duration_data {
     return $self->{+DURATION_DATA} //= $self->pull_durations() // {};
 }
 
+sub coverage_data {
+    my $self = shift;
+    my ($changed) = @_;
+    return $self->{+COVERAGE_DATA} //= $self->pull_coverage($changed);
+}
+
 sub pull_durations {
     my $self = shift;
 
     my $primary  = delete $self->{+MAYBE_DURATIONS};
     my $fallback = delete $self->{+DURATIONS};
 
+    my @args = (
+        name      => 'durations',
+        is_json   => 1,
+        http_args => [{headers => {'Content-Type' => 'application/json'}}],
+    );
+
     if ($primary) {
-        my $path = $primary;
         local $@;
-        my $durations = eval { $self->_pull_durations($path) } or print "Could not fetch optional durations '$path', ignoring...\n";
+
+        my $durations = eval { $self->_pull_from_file_or_url(source => $primary, @args) }
+            or print "Could not fetch optional durations '$primary', ignoring...\n";
+
         if ($durations) {
-            print "Found durations: $path\n";
-            return $self->{+DURATION_DATA} = $durations;
+            print "Found durations: $primary\n";
+            return $durations;
         }
     }
 
-    return $self->{+DURATION_DATA} = $self->_pull_durations($fallback)
+    return $self->_pull_from_file_or_url(source => $fallback, @args)
         if $fallback;
 }
 
-sub _pull_durations {
+sub pull_coverage {
     my $self = shift;
-    my ($in) = @_;
+    my ($changed) = @_;
 
-    if (my $type = ref($in)) {
-        return $self->{+DURATIONS} = $in if $type eq 'HASH';
+    my $primary  = delete $self->{+MAYBE_COVERAGE_FROM};
+    my $fallback = delete $self->{+COVERAGE_FROM};
+
+    my $aggregator;
+
+    my %args = (
+        name      => 'coverage',
+        is_json   => 1,
+        http_args => [{headers => {'Content-Type' => 'application/json'}}],
+
+        log_event_handler => sub {
+            my ($event) = @_;
+
+            unless ($aggregator) {
+                require Test2::Harness::Log::CoverageAggregator;
+                $aggregator = Test2::Harness::Log::CoverageAggregator->new();
+            }
+
+            $aggregator->process_event($event);
+        },
+
+        log_return_builder => sub {
+            return unless $aggregator;
+            return $aggregator->coverage;
+        },
+    );
+
+    if ($self->{+COVERAGE_URL_USE_POST}) {
+        $args{http_method} = 'post';
+        $args{http_args}->[0]->{content} = encode_json($changed);
     }
-    elsif ($in =~ m{^https?://}) {
-        require HTTP::Tiny;
-        my $ht = HTTP::Tiny->new();
-        my $res = $ht->get($in, {headers => {'Content-Type' => 'application/json'}});
 
-        die "Could not query durations from '$in'\n$res->{status}: $res->{reason}\n$res->{content}"
-            unless $res->{success};
+    if ($primary) {
+        local $@;
 
-        return $self->{+DURATIONS} = decode_json($res->{content});
-    }
-    elsif(-f $in) {
-        require Test2::Harness::Util::File::JSON;
-        my $file = Test2::Harness::Util::File::JSON->new(name => $in);
-        return $self->{+DURATIONS} = $file->read();
+        my $coverage = eval { $self->_pull_from_log_or_file_or_url(source => $primary, %args) }
+            or print "Could not fetch optional coverage '$primary', ignoring...\n";
+
+        if ($coverage) {
+            print "Found coverage: $primary\n";
+            return $coverage;
+        }
     }
 
-    die "Invalid duration specification: $in";
+    return $self->_pull_from_log_or_file_or_url(source => $fallback, %args)
+        if $fallback;
 }
 
 sub add_exclusions_from_lists {
@@ -91,21 +135,11 @@ sub add_exclusions_from_lists {
     my @lists = ref($self->{+EXCLUDE_LISTS}) eq 'ARRAY' ? @{$self->{+EXCLUDE_LISTS}} : ($self->{+EXCLUDE_LISTS});
 
     for my $path (@lists) {
-        my $content;
-        if ($path =~ m{^https?://}) {
-            require HTTP::Tiny;
-            my $res = HTTP::Tiny->new()->get($path);
+        my $content = $self->_pull_from_file_or_url(
+            source => $path,
+            name => 'exclusion lists',
+        );
 
-            die "Could not get exclusion lists from '$path'\n$res->{status}: $res->{reason}\n$res->{content}"
-                unless $res->{success};
-
-            $content = $res->{content};
-        }
-        elsif (-f $path) {
-            require Test2::Harness::Util::File;
-            my $f = Test2::Harness::Util::File->new(name => $path);
-            $content = $f->read();
-        }
         next unless $content;
 
         for (split(/\r?\n\r?/, $content)) {
@@ -114,14 +148,136 @@ sub add_exclusions_from_lists {
     }
 }
 
+sub _pull_from_log_or_file_or_url {
+    my $self = shift;
+    my %params = @_;
+
+    my $in = $params{source} // croak "No file or url provided";
+
+    return $self->_pull_from_file_or_url(%params)
+        unless $in =~ m/\.jsonl(?:\.(?:gz|bz2))?$/;
+
+    require Test2::Harness::Util::File::JSONL;
+    my $jsonl = Test2::Harness::Util::File::JSONL->new(name => $in);
+
+    while (1) {
+        my @items = $jsonl->poll(max => 1000) or last;
+        $params{log_event_handler}->($_) for @items;
+    }
+
+    return $params{log_return_builder}->();
+}
+
+sub _pull_from_file_or_url {
+    my $self = shift;
+    my %params = @_;
+
+    my $in   = $params{source} // croak "No file or url provided";
+    my $name = $params{name}   // croak "No name provided";
+
+    my $is_json = $params{is_json};
+
+    if (my $type = ref($in)) {
+        return $in if $is_json && ($type eq 'HASH' || $type eq 'ARRAY');
+    }
+    elsif (-f $in) {
+        if ($is_json) {
+            require Test2::Harness::Util::File::JSON;
+            my $file = Test2::Harness::Util::File::JSON->new(name => $in);
+            return $file->read();
+        }
+        else {
+            require Test2::Harness::Util::File;
+            my $f = Test2::Harness::Util::File->new(name => $in);
+            return $f->read();
+        }
+    }
+    elsif ($in =~ m{^https?://}) {
+        my $meth = $params{http_method} // 'get';
+        my $args = $params{http_args};
+
+        require HTTP::Tiny;
+        my $ht = HTTP::Tiny->new();
+        my $res = $ht->$meth($in, $args ? (@$args) : ());
+
+        die "Could not query $name from '$in'\n$res->{status}: $res->{reason}\n$res->{content}\n"
+            unless $res->{success};
+
+        return $is_json ? decode_json($res->{content}) : $res->{content};
+    }
+
+    die "Invalid $name specification: $in";
+}
+
 sub find_files {
     my $self = shift;
     my ($plugins, $settings) = @_;
 
     $self->add_exclusions_from_lists() if $self->{+EXCLUDE_LISTS};
 
+    $self->add_changed_to_search($plugins, $settings)
+        if $self->{+CHANGED} || $self->{+CHANGED_ONLY} || $self->{+CHANGES_PLUGIN};
+
     return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
+
     return $self->find_project_files($plugins, $settings, $self->search);
+}
+
+sub add_changed_to_search {
+    my $self = shift;
+    my ($plugins, $settings) = @_;
+
+    my $search = $self->search;
+    unless ($search) {
+        $search = [];
+        $self->set_search($search);
+    }
+
+    my @changed;
+    push @changed => @{$self->{+CHANGED}} if $self->{+CHANGED};
+
+    my $check_plugins = $plugins;
+    if (my $plugin = $self->{+CHANGES_PLUGIN}) {
+        $check_plugins = [$plugin];
+    }
+
+    for my $plugin (@$plugins) {
+        push @changed => $plugin->changed_files($settings)
+            if $plugin->can('changed_files');
+    }
+
+    die "Could not find any changed files.\n" if $self->{+CHANGED_ONLY} && !@changed;
+    return unless @changed;
+
+    if ($self->{+SHOW_CHANGED_FILES}) {
+        print "Found the following changed files:\n";
+        print "  $_\n" for @changed;
+    }
+
+    my $coverage_data = $self->coverage_data(\@changed);
+    my $type = ref($coverage_data);
+
+    # We must have posted the changes and got a list of tests back.
+    if ($type eq 'ARRAY') {
+        push @$search => @$coverage_data;
+        return;
+    }
+
+    die "Could not get any coverage data, no way to map changed files to tests.\n"
+        if $self->{+CHANGED_ONLY} && !$coverage_data;
+
+    my %tests;
+    for my $file (@changed) {
+        my $tests = $coverage_data->{$file} or next;
+        $tests{$_} = 1 for @$tests;
+    }
+
+    my $new = push @$search => sort keys %tests;
+    if ($self->{+SHOW_CHANGED_FILES}) {
+        print "Found $new test files to run based on changed files.\n\n";
+    }
+
+    return;
 }
 
 sub find_multi_project_files {
@@ -178,7 +334,7 @@ sub find_project_files {
 
     $_->munge_search($input, $default_search, $settings) for @$plugins;
 
-    my $search = @$input ? $input : $default_search;
+    my $search = @$input ? $input : $self->{+CHANGED_ONLY} ? [] : $default_search;
 
     die "No tests to run, search is empty\n" unless @$search;
 

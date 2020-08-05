@@ -5,15 +5,28 @@ use warnings;
 my $args = join ' ' => @ARGV;
 
 my %out = (
-    'rev-parse HEAD'              => "4570988f2c2bd26a1691a82766d5bf5c7524bcea\n",
-    'rev-parse --short HEAD'      => "4570988\n",
-    'status -s'                   => " M lib/App/Yath/Plugin/Git.pm\n",
-    'rev-parse --abbrev-ref HEAD' => "my.branch.foo\n",
+    'rev-parse HEAD'              => [0, "4570988f2c2bd26a1691a82766d5bf5c7524bcea\n"],
+    'rev-parse --short HEAD'      => [0, "4570988\n"],
+    'status -s'                   => [0, " M lib/App/Yath/Plugin/Git.pm\n"],
+    'rev-parse --abbrev-ref HEAD' => [0, "my.branch.foo\n"],
+
+    'merge-base --is-ancestor HEAD master' => [1, ""],
+    'diff HEAD --name-only'                => [0, ""],
+
+    'merge-base --is-ancestor HEAD^ master' => [1, ""],
+    'diff HEAD^ --name-only'                => [0, "a.file\n"],
+
+    'merge-base --is-ancestor HEAD^^ master' => [1, ""],
+    'diff HEAD^^ --name-only'                => [0, "a.file\nb.file\n"],
+
+    'merge-base --is-ancestor HEAD^^^ master' => [0, ""],
+    'diff HEAD^^^ --name-only'                => [0, "a.file\nb.file\nc.file\n"],
 );
 
-if (my $text = $out{$args}) {
+if (my $res = $out{$args}) {
+    my ($exit, $text) = @$res;
     print $text;
-    exit 0;
+    exit $exit;
 }
 
 print STDERR "Invalid args: $args\n";

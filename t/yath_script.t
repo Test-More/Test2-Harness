@@ -332,7 +332,7 @@ sub test_exec {
 
     my @ORIG_ARGV = ('-xyz');
     my $SCRIPT;
-    my ($exec, $die, @warn);
+    my ($exec, $die, @warn, $ORIG_TMP);
     my $maybe_exec = '-D';
 
     my $res;
@@ -380,7 +380,7 @@ sub test_create_app {
         )
     );
 
-    my (%ORIG_SIG, @ORIG_ARGV, @ORIG_INC, @DEVLIBS, @ARGV, %CONFIG, $NO_PLUGINS);
+    my (%ORIG_SIG, @ORIG_ARGV, @ORIG_INC, @DEVLIBS, @ARGV, %CONFIG, $NO_PLUGINS, $ORIG_TMP);
     $NO_PLUGINS = 2;
     my $SCRIPT = "foobar";
     eval $code or die $@;

@@ -310,6 +310,7 @@ sub job_dir {
 
     my $job_dir = File::Spec->catdir($self->run_dir, $self->{+TASK}->{job_id} . '+' . $self->is_try);
     mkdir($job_dir) or die "$$ $0 Could not create job directory '$job_dir': $!";
+    chmod(1777, $job_dir) or warn "Could not chmod job dir: $!\n";
     $self->{+JOB_DIR} = $job_dir;
 }
 
@@ -319,6 +320,7 @@ sub tmp_dir {
     return $self->{+TMP_DIR} if $self->{+TMP_DIR};
 
     my $tmp_dir = File::Temp::tempdir("XXXXXX", DIR => $self->runner->tmp_dir);
+    chmod(1777, $tmp_dir) or warn "Could not chmod temp dir: $!\n";
 
     $self->{+TMP_DIR} = clean_path($tmp_dir);
 }
@@ -465,6 +467,7 @@ sub env_vars {
         TEST2_RUN_DIR       => $self->run_dir,
         TMPDIR              => $self->tmp_dir,
         TEMPDIR             => $self->tmp_dir,
+        SYSTEM_TMPDIR       => $self->{+SETTINGS}->harness->orig_tmp,
 
         HARNESS_IS_VERBOSE    => $verbose,
         T2_HARNESS_IS_VERBOSE => $verbose,

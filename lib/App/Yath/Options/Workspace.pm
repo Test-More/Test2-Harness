@@ -46,6 +46,7 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
             }
             else {
                 mkdir($workdir) or die "Could not create workdir: $!";
+                chmod(1777, $workdir) or warn "Could not chmod work dir: $!\n";
             }
 
             return;
@@ -59,6 +60,7 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
             DIR     => $settings->workspace->tmp_dir,
             CLEANUP => !($settings->debug->keep_dirs || $params{command}->always_keep_dir),
         );
+        chmod(1777, $tmpdir) or warn "Could not chmod temp dir: $!\n";
 
         $settings->workspace->field(workdir => $tmpdir);
     };

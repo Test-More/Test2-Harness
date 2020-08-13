@@ -11,6 +11,7 @@ BEGIN {
     package App::Yath::Script;
 
     my $ORIG_TMP;
+    my $ORIG_TMP_PERMS;
     my %ORIG_SIG = map { defined($SIG{$_}) ? ($_ => $SIG{$_}) : ()} keys %SIG;
     my @ORIG_ARGV = @ARGV;
     my @ORIG_INC = @INC;
@@ -159,6 +160,7 @@ BEGIN {
     require File::Spec;
 
     $ORIG_TMP = File::Spec->tmpdir();
+    $ORIG_TMP_PERMS = ((stat($ORIG_TMP))[2] & 07777);
     $SCRIPT = Cwd::realpath(__FILE__) // File::Spec->rel2abs(__FILE__);
 
     if ($maybe_exec && -e 'scripts/yath') {
@@ -201,6 +203,7 @@ BEGIN {
     my $settings = Test2::Harness::Settings->new(
         harness => {
             orig_tmp        => $ORIG_TMP,
+            orig_tmp_perms  => $ORIG_TMP_PERMS,
             orig_sig        => \%ORIG_SIG,
             orig_argv       => \@ORIG_ARGV,
             orig_inc        => \@ORIG_INC,

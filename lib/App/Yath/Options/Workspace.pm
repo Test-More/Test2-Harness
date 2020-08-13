@@ -8,7 +8,7 @@ use File::Spec();
 use File::Path qw/remove_tree/;
 use File::Temp qw/tempdir/;
 
-use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util qw/clean_path chmod_tmp/;
 
 use App::Yath::Options;
 
@@ -46,7 +46,7 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
             }
             else {
                 mkdir($workdir) or die "Could not create workdir: $!";
-                chmod(1777, $workdir) or warn "Could not chmod work dir: $!\n";
+                chmod_tmp($workdir);
             }
 
             return;
@@ -60,7 +60,7 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
             DIR     => $settings->workspace->tmp_dir,
             CLEANUP => !($settings->debug->keep_dirs || $params{command}->always_keep_dir),
         );
-        chmod(1777, $tmpdir) or warn "Could not chmod temp dir: $!\n";
+        chmod_tmp($tmpdir);
 
         $settings->workspace->field(workdir => $tmpdir);
     };

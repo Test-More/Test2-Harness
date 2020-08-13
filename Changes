@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Make failure to chmod things non-fatal to fix bsd testing
+    - Fix spelling issues
+    - Make chmod stuff more correct
+
 1.000021  2020-08-04 21:03:28-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Add changed_files plugin hook

@@ -15,7 +15,7 @@ use Test2::Harness::IPC;
 use Test2::Harness::Runner::State;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json JSON/;
-use Test2::Harness::Util qw/mod2file open_file/;
+use Test2::Harness::Util qw/mod2file open_file chmod_tmp/;
 use Test2::Util::Table qw/table/;
 
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
@@ -365,7 +365,7 @@ sub build_run {
     my $run = $settings->build(run => 'Test2::Harness::Run');
 
     mkdir($run->run_dir($dir)) or die "Could not make run dir: $!";
-    chmod(1777, $dir) or warn "Could not chmod run dir: $!\n";
+    chmod_tmp($dir);
 
     return $self->{+RUN} = $run;
 }
@@ -542,7 +542,7 @@ sub render_final_data {
     if (my $rows = $final_data->{retried}) {
         print "\nThe following jobs failed at least once:\n";
         print join "\n" => table(
-            header => ['Job ID', 'Times Run', 'Test File', "Succeded Eventually?"],
+            header => ['Job ID', 'Times Run', 'Test File', "Succeeded Eventually?"],
             rows   => $rows,
         );
         print "\n";

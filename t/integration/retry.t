@@ -99,7 +99,7 @@ sub run_tests {
 
                     is $tries, 2, 'retried a broken symlink';
                     is $file, 't/integration/retry-symlinks/symlink.tl', "using symlink name";
-                    is $status, 'YES', 'Succeded Eventually: YES';
+                    is $status, 'YES', 'Succeeded Eventually: YES';
 
                     unlike($out->{output}, qr{FAILED}, q[no failures]);
                 },
@@ -127,7 +127,7 @@ sub run_tests {
 
                 is $tries, 2, 'retried a test when failing due to a timeout';
                 is $file, 't/integration/retry-timeout/retry.tx', "retry.txt test";
-                is $status, 'YES', 'Succeded Eventually: YES';
+                is $status, 'YES', 'Succeeded Eventually: YES';
 
                 unlike($out->{output}, qr{FAILED}, q[no failures]);
             },

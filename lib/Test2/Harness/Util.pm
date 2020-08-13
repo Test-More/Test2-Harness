@@ -5,7 +5,7 @@ use warnings;
 use Carp qw/confess/;
 use Cwd qw/realpath/;
 use Test2::Util qw/try_sig_mask do_rename/;
-use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET/;
+use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET :mode/;
 use File::Spec;
 
 our $VERSION = '1.000022';
@@ -35,7 +35,17 @@ our @EXPORT_OK = qw{
     apply_encoding
 
     process_includes
+
+    chmod_tmp
 };
+
+sub chmod_tmp {
+    my $file = shift;
+
+    my $mode = S_ISVTX | S_IRWXU | S_IRWXG | S_IRWXO;
+
+    chmod($mode, $file);
+}
 
 sub process_includes {
     my %params = @_;

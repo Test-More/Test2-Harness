@@ -1,14 +1,28 @@
 use Test2::V0;
 use File::Spec;
 use Test2::Harness::Util qw/clean_path/;
+use Fcntl ':mode';
 
-my $path = $ENV{TMPDIR};
+sub check_perms {
+    my $file = shift;
+    my $mode = (stat($file))[2];
 
-sub mode { ((stat($_[0]))[2] & 07777) }
+    my @bad;
+    $mode & S_ISVTX or push @bad => "$file does not have sticky-bit";
+    $mode & S_IRWXU or push @bad => "$file is not user RWX";
+    $mode & S_IRWXG or push @bad => "$file is not group RWX";
+    $mode & S_IRWXO or push @bad => "$file is not other RWX";
 
-is(mode($path), 1777, "tempdir '$path' has mode 1777");
+    return \@bad;
+}
 
 my $system_tmp = clean_path($ENV{SYSTEM_TMPDIR});
+
+my $problems = check_perms($system_tmp);
+skip_all join ", " => @$problems if @$problems;
+
+my $path = $ENV{TMPDIR};
+is(check_perms($path), [], "tempdir has correct permissions");
 
 my $last = $path;
 my $cnt = 0;
@@ -19,14 +33,7 @@ while ($system_tmp) {
     last if $cnt++ > 10;             # Something went wrong, no need to loop forever
     $last = $next;
 
-    my @mode = split //, mode($next);
-
-    shift (@mode) while @mode > 3;
-    subtest "parent '$next'" => sub {
-        ok($mode[0] >= 5, "Owner permission is 5+");
-        ok($mode[1] >= 5, "Group permission is 5+");
-        ok($mode[2] >= 5, "World permission is 5+");
-    };
+    is(check_perms($next), [], "$next has correct permissions");
 }
 
 done_testing;

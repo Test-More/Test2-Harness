@@ -86,7 +86,7 @@ sub run {
 
     print "\nThe following jobs failed at least once:\n";
     print join "\n" => table(
-        header => ['Job ID', 'Times Run', 'Test File', "Succeded Eventually?"],
+        header => ['Job ID', 'Times Run', 'Test File', "Succeeded Eventually?"],
         rows   => $rows,
     );
     print "\n";

@@ -142,7 +142,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Runner::DepTracer - Tool for tracing module dependancies as
+Test2::Harness::Runner::DepTracer - Tool for tracing module dependencies as
 they are loaded.
 
 =head1 DESCRIPTION

@@ -23,6 +23,7 @@ use Test2::Harness::Util::HashBase(
         <workdir
         <preloader
         <no_poll
+        <resources
     },
 
     qw{
@@ -256,6 +257,7 @@ sub _start_task {
 
     my $job_id    = $spec->{job_id} or die "No job_id provided";
     my $run_stage = $spec->{stage}  or die "No stage provided";
+    my $res       = $spec->{res}    or die "No res provided";
 
     my $task = $self->{+TASK_LOOKUP}->{$job_id} or die "Could not find task to start";
 
@@ -270,6 +272,15 @@ sub _start_task {
 
     # Set the stage, new task hashref
     $task = {%$task, stage => $run_stage} unless $task->{stage} && $task->{stage} eq $run_stage;
+
+    $task->{env_vars}->{$_} = $res->{env_vars}->{$_} for keys %{$res->{env_vars}};
+    push @{$task->{test_args}} => @{$res->{args}};
+
+    for my $resource (@{$self->{+RESOURCES}}) {
+        my $class = ref($resource);
+        my $val = $res->{record}->{$class} // next;
+        $resource->record($task->{job_id}, $val);
+    }
 
     die "Already running task $job_id" if $self->{+RUNNING_TASKS}->{$job_id};
     $self->{+RUNNING_TASKS}->{$job_id} = $task;
@@ -302,6 +313,8 @@ sub _stop_task {
     my $task = delete $self->{+TASK_LOOKUP}->{$job_id} or die "Could not find task to stop ($job_id)";
 
     delete $self->{+RUNNING_TASKS}->{$job_id} or die "Task is not running, cannot stop it ($job_id)";
+
+    $_->release($job_id) for @{$self->{+RESOURCES}};
 
     my ($run_id, $smoke, $stage, $cat, $dur) = $self->task_fields($task);
     $self->{+RUNNING}--;
@@ -468,11 +481,11 @@ sub advance_tasks {
 
     return 0 if $cur >= $max;
 
-    my ($run_stage, $task) = $self->_next();
+    my ($run_stage, $task, $res) = $self->_next();
 
     return 0 unless $task;
 
-    $self->start_task({job_id => $task->{job_id}, stage => $run_stage});
+    $self->start_task({job_id => $task->{job_id}, stage => $run_stage, res => $res});
 
     return 1;
 }
@@ -555,6 +568,7 @@ sub _next {
     my $cat_order = $self->_cat_order;
     my $dur_order = $self->_dur_order;
     my $stages    = $self->_stage_order();
+    my $resources = $self->{+RESOURCES};
 
     # Ugly....
     my $search = $pending;
@@ -575,7 +589,25 @@ sub _next {
                         # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.
                         next if first { $conflicts->{$_} } @{$task->{conflicts}};
 
-                        return ($run_by_stage => $task);
+                        my $ok = 1;
+                        for my $resource (@$resources) {
+                            $ok &&= $resource->available($task);
+                            last unless $ok;
+                        }
+
+                        # Some resource is not available
+                        next unless $ok;
+
+                        my $outres = {args => [], env_vars => {}, record => {}};
+                        for my $resource (@$resources) {
+                            my $res = {args => [], env_vars => {}};
+                            $resource->assign($task, $res);
+                            push @{$outres->{args}} => @{$res->{args}};
+                            $outres->{env_vars}->{$_} = $res->{env_vars}->{$_} for keys %{$res->{env_vars}};
+                            $outres->{record}->{ref($resource)} = $res->{record};
+                        }
+
+                        return ($run_by_stage => $task, $outres);
                     }
                 }
             }

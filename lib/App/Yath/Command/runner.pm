@@ -88,6 +88,10 @@ sub generate_run_sub {
 
         my $exit = $runner->process();
 
+        if ($$ == $runner_pid) {
+            $_->cleanup() for @{$runner->state->resources};
+        }
+
         my $complete = File::Spec->catfile($dir, 'complete');
         write_file_atomic($complete, '1');
 

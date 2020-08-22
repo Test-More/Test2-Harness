@@ -38,6 +38,8 @@ use Test2::Harness::Util::HashBase(
         <cover
 
         <event_timeout <post_exit_timeout
+
+        <resources
     },
     # From Construction
     qw{
@@ -88,6 +90,11 @@ sub init {
     }
     $self->{+TMP_DIR} = $tmp_dir;
 
+    for my $res (@{$self->{+RESOURCES}}) {
+        next if ref($res);
+        require(mod2file($res));
+    }
+
     $self->SUPER::init();
 }
 
@@ -111,6 +118,7 @@ sub state {
         workdir   => $self->{+DIR},
         eager_stages => $self->preloader->eager_stages // {},
         preloader => $self->preloader,
+        resources => [ map { $_->new } @{$self->{+RESOURCES}} ],
     );
 }
 

@@ -46,6 +46,24 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         description => "Add a directory to your include paths",
     );
 
+    option resources => (
+        name => 'resource',
+        short => 'R',
+        type => 'm',
+        description => "Use a resource module to assign resource assignments to individual tests",
+        long_examples  => [' Port', ' +Test2::Harness::Runner::Resource::Port'],
+        short_examples => [' Port'],
+
+        normalize => sub {
+            my $val = shift;
+
+            $val = "Test2::Harness::Runner::Resource::$val"
+            unless $val =~ s/^\+//;
+
+            return $val;
+        },
+    );
+
     option tlib => (
         description => "(Default: off) Include 't/lib' in your module path",
         default     => 0,

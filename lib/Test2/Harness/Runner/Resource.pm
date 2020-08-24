@@ -2,7 +2,12 @@ package Test2::Harness::Runner::Resource;
 use strict;
 use warnings;
 
-sub new { bless({}, $_[0]) }
+our $VERSION = '1.000024';
+
+sub new {
+    my $class = shift;
+    return bless({@_}, $class);
+}
 
 sub available { 1 }
 
@@ -242,11 +247,10 @@ There are no guarentees about what order resources will be released in.
 
 =over 4
 
-=item $res = $class->new();
+=item $res = $class->new(settings => $settings);
 
-The default new() method returns a blessed empty hash. All arguments are
-ignored. The harness itself will never pass in any arguments. You may override
-this method if you wish.
+A default new method, returns a blessed hashref with the settings key set to
+the L<Test2::Harness::Settings> instance.
 
 =item $bool = $res->available(\%task)
 
@@ -278,6 +282,9 @@ JSON before being used as an argument to C<record()>.
 
     $state->{record} = $id;
 
+If you do not set the 'record' key, or set it to undef, then the C<record()>
+method will not be called.
+
 If your tests need to know what resources to use, you may set environment
 variables and/or command line arguments to pass into the test (C<@ARGV>).
 
@@ -294,8 +301,7 @@ you in this method.
 B<NOTE: THIS MAY BE CALLED IN MUTLIPLE PROCESSES CONCURRENTLY>.
 
 This will be called in all processes so that your instance can update any
-internal state. if your resource was not needed for this test then
-C<$record_arg_from_assign> will be C<undef> and you can simply return.
+internal state.
 
 The C<$job_id> variable contains the id for the job to which the resource was
 assigned. You should use this to record any internal state. The $job_id will be

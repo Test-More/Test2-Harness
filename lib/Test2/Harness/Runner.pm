@@ -114,11 +114,11 @@ sub state {
     my $self = shift;
 
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
-        job_count => $self->{+JOB_COUNT},
-        workdir   => $self->{+DIR},
+        job_count    => $self->{+JOB_COUNT},
+        workdir      => $self->{+DIR},
         eager_stages => $self->preloader->eager_stages // {},
-        preloader => $self->preloader,
-        resources => [ map { $_->new } @{$self->{+RESOURCES}} ],
+        preloader    => $self->preloader,
+        resources    => [map { $_->new(settings => $self->settings) } @{$self->{+RESOURCES}}],
     );
 }
 

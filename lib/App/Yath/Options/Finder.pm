@@ -2,7 +2,7 @@ package App::Yath::Options::Finder;
 use strict;
 use warnings;
 
-our $VERSION = '1.000024';
+our $VERSION = '1.000025';
 
 use Test2::Harness::Util qw/mod2file/;
 

@@ -338,9 +338,9 @@ sub update_io {
         POSIX::_exit(127);
     };
 
-    swap_io(\*STDIN,  $in_fh,  $die);
-    swap_io(\*STDOUT, $out_fh, $die);
-    swap_io(\*STDERR, $err_fh, $die);
+    swap_io(\*STDIN,  $in_fh,  $die, '<&');
+    swap_io(\*STDOUT, $out_fh, $die, '>&');
+    swap_io(\*STDERR, $err_fh, $die, '>&');
 
     return;
 }

@@ -91,6 +91,11 @@ sub run {
     my $stderr = File::Spec->catfile($dir, 'error.log');
     my $stdout = File::Spec->catfile($dir, 'output.log');
 
+    my @prof;
+    if ($settings->runner->nytprof) {
+        push @prof => '-d:NYTProf';
+    }
+
     my $pid = run_cmd(
         stderr => $stderr,
         stdout => $stdout,
@@ -98,7 +103,7 @@ sub run {
         no_set_pgrp => $settings->runner->daemon,
 
         command => [
-            $^X, $settings->harness->script,
+            $^X, @prof, $settings->harness->script,
             (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             runner           => $dir,

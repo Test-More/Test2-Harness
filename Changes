@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Make nytprof work in persistent mode
+
 1.000025  2020-09-08 11:29:07-07:00 America/Los_Angeles
 
     - Fix edge case where STDIN was opened for writing

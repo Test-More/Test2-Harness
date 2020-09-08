@@ -117,6 +117,7 @@ sub generate_run_sub {
     }
     goto::file->import($job->rel_file);
     $class->cleanup_process($job, $stage);
+    DB::enable_profile() if $settings->runner->nytprof;
 }
 
 sub cleanup {

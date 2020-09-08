@@ -123,6 +123,12 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         description => "Only do preload if at least N tests are going to be run. In some cases a full preload takes longer than simply running the tests, this lets you specify a minimum number of test jobs that will be run for preload to happen. This has no effect for a persistent runner. The default is 0, and it means always preload."
     );
 
+    option nytprof => (
+        type => 'b',
+        description => "Use Devel::NYTProf on tests. This will set addpid=1 for you. This works with or without fork.",
+        long_examples => [''],
+    );
+
     post \&cover_post_process;
     option cover => (
         type        => 'd',

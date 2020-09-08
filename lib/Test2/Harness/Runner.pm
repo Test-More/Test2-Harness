@@ -40,6 +40,8 @@ use Test2::Harness::Util::HashBase(
         <event_timeout <post_exit_timeout
 
         <resources
+
+        <nytprof
     },
     # From Construction
     qw{

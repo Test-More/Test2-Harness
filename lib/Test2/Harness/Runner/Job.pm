@@ -122,6 +122,7 @@ sub spawn_params {
         $command = [
             $^X,
             $self->cli_includes,
+            $self->{+SETTINGS}->runner->nytprof ? ('-d:NYTProf') : (),
             $self->switches,
             $self->cli_options,
 
@@ -440,6 +441,16 @@ sub switches {
     return @{$self->{+SWITCHES} = \@switches};
 }
 
+sub prof_file {
+    my $self = shift;
+    my $file =$self->rel_file;
+
+    $file =~ s{/}{-}g;
+    $file =~ s{\.[^\.]+$}{.nytprof}g;
+
+    return $file;
+}
+
 sub env_vars {
     my $self = shift;
 
@@ -460,6 +471,8 @@ sub env_vars {
         $from_task ? (%$from_task) : (),
 
         $self->use_stream ? (T2_FORMATTER => 'Stream', T2_STREAM_DIR => $self->event_dir, T2_STREAM_JOB_ID => $self->job_id) : (),
+
+        $self->{+SETTINGS}->runner->nytprof ? (NYTPROF => "addpid=1:start=begin") : (),
 
         PERL5LIB            => $p5l,
         PERL_USE_UNSAFE_INC => $self->unsafe_inc,

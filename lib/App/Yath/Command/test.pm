@@ -686,13 +686,19 @@ sub start_runner {
     my $settings = $self->settings;
     my $dir = $settings->workspace->workdir;
 
+    my @prof;
+    if ($settings->runner->nytprof) {
+        push @prof => '-d:NYTProf';
+    }
+
     my $ipc = $self->ipc;
     my $proc = $ipc->spawn(
         stderr => File::Spec->catfile($dir, 'error.log'),
         stdout => File::Spec->catfile($dir, 'output.log'),
+        env_vars => { @prof ? (NYTPROF => 'start=no:addpid=1') : () },
         no_set_pgrp => 1,
         command => [
-            $^X, cover(), $settings->harness->script,
+            $^X, @prof, cover(), $settings->harness->script,
             (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins', # Do not preload any plugin modules
             runner => $dir,

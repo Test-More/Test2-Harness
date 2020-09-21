@@ -20,6 +20,9 @@ use Test2::Harness::Util::HashBase qw{
     <mem_usage
     <io_events
 
+    <dbi_profiling
+    <cover_files
+
     <input <input_file <test_args
 
     <load <load_import

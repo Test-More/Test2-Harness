@@ -48,6 +48,16 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
         },
     );
 
+    option dbi_profiling => (
+        type => 'b',
+        description => "Use Test2::Plugin::DBIProfile to collect database profiling data",
+    );
+
+    option cover_files => (
+        type => 'b',
+        description => "Use Test2::Plugin::Cover to collect coverage data for what files are touched by what tests. Unlike Devel::Cover this has very little performance impact (About 4% difference)",
+    );
+
     option author_testing => (
         short        => 'A',
         description  => 'This will set the AUTHOR_TESTING environment to true',
@@ -144,6 +154,18 @@ sub post_process {
     my $settings = $params{settings};
 
     $settings->run->env_vars->{AUTHOR_TESTING} = 1 if $settings->run->author_testing;
+
+    if ($settings->run->cover_files) {
+        eval { require Test2::Plugin::Cover; 1 } or die "Could not enable file coverage, could not load 'Test2::Plugin::Cover': $@";
+        push @{$settings->run->load_import->{'@'}} => 'Test2::Plugin::Cover';
+        $settings->run->load_import->{'Test2::Plugin::Cover'} = [];
+    }
+
+    if ($settings->run->dbi_profiling) {
+        eval { require Test2::Plugin::DBIProfile; 1 } or die "Could not enable DBI profiling, could not load 'Test2::Plugin::DBIProfile': $@";
+        push @{$settings->run->load_import->{'@'}} => 'Test2::Plugin::DBIProfile';
+        $settings->run->load_import->{'Test2::Plugin::DBIProfile'} = [];
+    }
 }
 
 sub fields_action {

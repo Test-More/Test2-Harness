@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000028  2020-09-25 08:43:43-07:00 America/Los_Angeles
+
     - Fix issue where args after :: were ignored (#195)
 
 1.000027  2020-09-21 11:46:43-07:00 America/Los_Angeles

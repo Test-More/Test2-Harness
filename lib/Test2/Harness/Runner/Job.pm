@@ -268,7 +268,7 @@ sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_t
 sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => undef, qw/task runner/) }
 
 
-sub args { @{$_[0]->{+ARGS} //= $_[0]->_fallback(test_args => [], qw/task run/)} }
+sub args { @{$_[0]->{+ARGS} //= $_[0]->_merge_sources(test_args => qw/task run/)} }
 sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }
 
 sub cli_includes {
@@ -281,6 +281,22 @@ sub cli_includes {
 }
 
 sub runner_includes { @{$_[0]->{+RUNNER_INCLUDES} //= [$_[0]->{+RUNNER}->all_libs]} }
+
+sub _merge_sources {
+    my $self = shift;
+    my ($name, @from) = @_;
+
+    my @vals;
+    for my $from (@from) {
+        my $source = $self->$from;
+        my $val = blessed($source) ? $source->$name : $source->{$name};
+        next unless defined $val;
+        next unless @$val;
+        push @vals => @$val;
+    }
+
+    return \@vals;
+}
 
 sub _fallback {
     my $self = shift;

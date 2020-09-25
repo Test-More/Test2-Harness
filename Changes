@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix issue where args after :: were ignored (#195)
+
 1.000027  2020-09-21 11:46:43-07:00 America/Los_Angeles
 
     - Move dbi_profile and cover_Files to run

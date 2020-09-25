@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Resource;
 use strict;
 use warnings;
 
-our $VERSION = '1.000028';
+our $VERSION = '1.000029';
 
 sub new {
     my $class = shift;

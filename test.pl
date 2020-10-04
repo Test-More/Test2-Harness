@@ -6,7 +6,7 @@ use warnings;
 use lib 'lib';
 use App::Yath::Util qw/find_yath/;
 
-print "1..1\n";
+print "1..2\n";
 
 $ENV{'YATH_SELF_TEST'} = 1;
 system($^X, find_yath(), '-D', 'test', '--qvf', '-r1', '--default-search' => './t', '--default-search' => './t2', @ARGV);

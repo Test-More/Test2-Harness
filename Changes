@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix plan in test.pl
+
 1.000028  2020-09-25 08:43:43-07:00 America/Los_Angeles
 
     - Fix issue where args after :: were ignored (#195)

@@ -83,6 +83,7 @@ sub generate_run_sub {
             settings => $settings,
 
             fork_job_callback       => sub { $class->launch_via_fork(@_) },
+            fork_spawn_callback     => sub { $class->launch_spawn(@_) },
             respawn_runner_callback => sub { return unless $$ == $runner_pid; longjump "Test-Runner" => 'respawn' },
         );
 
@@ -147,6 +148,42 @@ sub get_stage {
     my $p          = $preloader->staged or return;
 
     return $p->stage_lookup->{$stage_name};
+}
+
+sub launch_spawn {
+    my $class = shift;
+    my ($runner, $spawn) = @_;
+
+    my $pid = fork() // die $!;
+    if ($pid) {
+        waitpid($pid, 0);
+        return;
+    }
+
+    require POSIX;
+    POSIX::setsid or die "setsid: $!";
+
+    $pid = fork // die $!;
+    exit 0 if $pid;
+
+    eval {
+        my ($wh);
+        pipe(STDIN, $wh) or die "Could not create pipe: $!";
+        $pid = $class->launch_via_fork($runner, $spawn);
+
+        if ($pid) {
+            open(my $fh, '>>', $spawn->{task}->{ipcfile}) or die "Could not open pidfile: $!";
+            print $fh "$$\n$pid\n" . fileno($wh) . "\n";
+            $fh->flush();
+            waitpid($pid, 0);
+            print $fh "$?\n";
+            close($fh);
+        }
+
+        exit(0);
+    };
+    warn "Unknown problem daemonizing: $@";
+    exit(1);
 }
 
 sub launch_via_fork {
@@ -322,7 +359,8 @@ sub update_io {
 
     my $out_fh = open_file($job->out_file, '>');
     my $err_fh = open_file($job->err_file, '>');
-    my $in_fh  = open_file($job->in_file,  '<');
+    my $in_file = $job->in_file;
+    my $in_fh = open_file($in_file,  '<') if $in_file;
 
     $out_fh->autoflush(1);
     $err_fh->autoflush(1);
@@ -339,7 +377,7 @@ sub update_io {
         POSIX::_exit(127);
     };
 
-    swap_io(\*STDIN,  $in_fh,  $die, '<&');
+    swap_io(\*STDIN,  $in_fh,  $die, '<&') if $in_file;
     swap_io(\*STDOUT, $out_fh, $die, '>&');
     swap_io(\*STDERR, $err_fh, $die, '>&');
 

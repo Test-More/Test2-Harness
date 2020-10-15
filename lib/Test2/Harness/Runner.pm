@@ -18,6 +18,7 @@ use Test2::Harness::Runner::Constants;
 
 use Test2::Harness::Runner::Run();
 use Test2::Harness::Runner::Job();
+use Test2::Harness::Runner::Spawn();
 use Test2::Harness::Runner::State();
 use Test2::Harness::Runner::Preload();
 use Test2::Harness::Runner::Preloader();
@@ -45,7 +46,7 @@ use Test2::Harness::Util::HashBase(
     },
     # From Construction
     qw{
-        <dir <settings <fork_job_callback <respawn_runner_callback <monitor_preloads
+        <dir <settings <fork_job_callback <fork_spawn_callback <respawn_runner_callback <monitor_preloads
         <jobs_todo
     },
     # Other
@@ -331,6 +332,19 @@ sub run_job {
     my $self = shift;
 
     my $task = $self->next() or return 0;
+
+    if ($task->{spawn}) {
+        my $job = Test2::Harness::Runner::Spawn->new(
+            runner        => $self,
+            task          => $task,
+            settings      => $self->settings,
+            fork_callback => $self->{+FORK_SPAWN_CALLBACK},
+        );
+
+        $self->{+FORK_SPAWN_CALLBACK}->($self, $job);
+        return 1;
+    }
+
     my $run = $self->state->run();
     return 1 unless $run;
 

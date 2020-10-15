@@ -32,6 +32,7 @@ use Test2::Harness::Util::HashBase(
 
         <pending_tasks <task_lookup
         <pending_runs  +run <stopped_runs
+        <pending_spawns
 
         <running
         <running_categories
@@ -89,6 +90,7 @@ sub next_task {
     $self->poll();
 
     while(1) {
+        return shift @{$self->{+PENDING_SPAWNS}} if @{$self->{+PENDING_SPAWNS} //= []};
         my $task = shift @{$self->{+TASK_LIST}} or return undef;
 
         # If we are replaying a state then the task may have already completed,
@@ -112,6 +114,7 @@ sub advance {
 my %ACTIONS = (
     queue_run   => '_queue_run',
     queue_task  => '_queue_task',
+    queue_spawn => '_queue_spawn',
     start_run   => '_start_run',
     start_task  => '_start_task',
     stop_run    => '_stop_run',
@@ -214,6 +217,28 @@ sub _stop_run {
     my ($run_id) = @_;
 
     $self->{+STOPPED_RUNS}->{$run_id} = 1;
+
+    return;
+}
+
+sub queue_spawn {
+    my $self = shift;
+    my ($spawn) = @_;
+    $spawn->{spawn} //= 1;
+    $self->_enqueue(queue_spawn => $spawn);
+}
+
+sub _queue_spawn {
+    my $self = shift;
+    my ($spawn) = @_;
+
+    $spawn->{spawn} //= 1;
+    $spawn->{use_preload} //= 1;
+
+    $spawn->{stage} //= 'default';
+    $spawn->{stage} = $self->task_stage($spawn);
+
+    push @{$self->{+PENDING_SPAWNS}} => $spawn;
 
     return;
 }

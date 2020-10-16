@@ -1,5 +1,8 @@
 Revision history for Test2-Harness-Renderer-JUnit
 
+1.000002 2020-10-16 - Todd Rinaldo
+- Add unit tests from atoomic
+
 1.000001 2020-02-28 - Todd Rinaldo
 - Fix JUnit bug where the test exits non-zero but all tests pass.
   We weren't generating a error in the XML when that happened.

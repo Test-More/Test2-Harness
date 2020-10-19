@@ -1,5 +1,8 @@
 Revision history for Test2-Harness-Renderer-JUnit
 
+1.000003 2020-10-19 - Todd Rinaldo
+- Fix missing deps introduced in 1.02
+
 1.000002 2020-10-16 - Todd Rinaldo
 - Add unit tests from atoomic
 

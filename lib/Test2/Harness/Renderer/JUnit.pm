@@ -5,7 +5,7 @@ use 5.010000;
 use strict;
 use warnings;
 
-our $VERSION = '1.000002';
+our $VERSION = '1.000003';
 
 # This is used frequently during development to determine what different events look like so we can determine how to capture test data.
 use Data::Dumper;

@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Add environment variable management to spawn command
+    - Move spawn logic to overridable methods
+
 1.000029  2020-10-15 13:57:36-07:00 America/Los_Angeles
 
     - Add 'spawn' command

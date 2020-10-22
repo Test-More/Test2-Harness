@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000030  2020-10-21 19:34:45-07:00 America/Los_Angeles
+
     - Add environment variable management to spawn command
     - Move spawn logic to overridable methods
 

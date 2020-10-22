@@ -17,7 +17,7 @@ sub out_file { sprintf('/proc/%i/fd/1', $_[0]->{+TASK}->{owner}) }
 sub err_file { sprintf('/proc/%i/fd/2', $_[0]->{+TASK}->{owner}) }
 sub in_file  { undef }
 
-sub args { $_[0]->{+TASK}->{args} //= [] }
+sub args { @{$_[0]->{+TASK}->{args} //= []} }
 
 sub job_dir { "" }
 sub run_dir { "" }

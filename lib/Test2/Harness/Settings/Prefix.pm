@@ -2,7 +2,7 @@ package Test2::Harness::Settings::Prefix;
 use strict;
 use warnings;
 
-our $VERSION = '1.000032';
+our $VERSION = '1.000033';
 
 use Carp();
 use Test2::Harness::Util();

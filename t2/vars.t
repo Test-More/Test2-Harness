@@ -9,6 +9,7 @@ ok(defined($ENV{$_}), "env var $_ is set") for qw{
     TEST2_JOB_DIR
     T2_HARNESS_JOB_IS_TRY
     T2_HARNESS_JOB_NAME
+    T2_HARNESS_JOB_FILE
 };
 
 done_testing;

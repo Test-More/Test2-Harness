@@ -43,7 +43,7 @@ use Test2::Harness::Util::HashBase(
         +smoke
         +retry +retry_isolated +is_try
 
-        +args +file
+        +args +file +run_file
 
         +out_file +err_file +in_file +bail_file
 
@@ -126,7 +126,7 @@ sub spawn_params {
             $self->switches,
             $self->cli_options,
 
-            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : (sub { $self->rel_file }),
+            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : (sub { $self->run_file }),
 
             $self->args,
         ];
@@ -197,6 +197,11 @@ sub TO_JSON {
     $out->{abs_file} = clean_path($self->file);
 
     return $out;
+}
+
+sub run_file  {
+    my $self = shift;
+    return $self->{+RUN_FILE} //= $self->rel_file;
 }
 
 sub rel_file  { File::Spec->abs2rel($_[0]->file) }
@@ -505,6 +510,7 @@ sub env_vars {
         HARNESS_ACTIVE       => 1,
         TEST2_HARNESS_ACTIVE => 1,
 
+        T2_HARNESS_JOB_FILE   => $self->rel_file,
         T2_HARNESS_JOB_NAME   => $self->{+TASK}->{job_name},
         T2_HARNESS_JOB_IS_TRY => $self->{+IS_TRY} // 0,
     };
@@ -679,6 +685,11 @@ Modules to load and import when starting this job.
 =item $bool = $job->mem_usage
 
 True if the L<Test2::Plugin::MemUsage> plugin should be used.
+
+=item $path = $job->run_file
+
+Usually the same as rel_file, but you can specify an alternative file to
+actually run.
 
 =item $path = $job->rel_file
 

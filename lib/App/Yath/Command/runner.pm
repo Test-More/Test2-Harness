@@ -116,7 +116,7 @@ sub generate_run_sub {
     if (my $chdir = $job->ch_dir) {
         chdir($chdir) or die "Could not chdir: $!";
     }
-    goto::file->import($job->rel_file);
+    goto::file->import($job->run_file);
     $class->cleanup_process($job, $stage);
     DB::enable_profile() if $settings->runner->nytprof;
 }

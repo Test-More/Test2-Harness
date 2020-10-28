@@ -41,6 +41,7 @@ use Test2::Util::HashBase qw{
     -job_colors
     -active_files
     -_active_disp
+    -_file_stats
     -job_names
 };
 
@@ -163,7 +164,14 @@ sub init {
 
     $self->{+COMPOSER} ||= Test2::Formatter::Test2::Composer->new;
 
-    $self->{+_ACTIVE_DISP} = '';
+    $self->{+_ACTIVE_DISP} = ['', ''];
+    $self->{+_FILE_STATS}  = {
+        passed  => 0,
+        failed  => 0,
+        running => 0,
+        todo    => 0,
+        total   => 0,
+    };
 
     $self->{+VERBOSE} = 1 unless defined $self->{+VERBOSE};
 
@@ -292,7 +300,7 @@ sub write {
     if (!$self->{+VERBOSE}) {
         print $io $_, "\n" for @$lines;
         if ($self->{+TTY} && $self->{+PROGRESS}) {
-            print $io $self->render_ecount($f);
+            print $io $self->render_status($f);
             $self->{+_BUFFERED} = 1;
         }
     }
@@ -322,47 +330,97 @@ sub update_active_disp {
 
     my $should_show = 0;
 
+    my $stats = $self->{+_FILE_STATS};
+
     if (my $task = $f->{harness_job_queued}) {
         $self->{+JOB_NAMES}->{$task->{job_id}} = $task->{job_name} || $task->{job_id};
+        $stats->{total}++;
+        $stats->{todo}++;
     }
 
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
         $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_name} || $job->{job_id};
         $should_show = 1;
+        $stats->{running}++;
+        $stats->{todo}--;
     }
 
     if ($f->{harness_job_end}) {
         my $file = $f->{harness_job_end}->{file};
         delete $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($file)};
         $should_show = 1;
+        $stats->{running}--;
+
+        if ($f->{harness_job_end}->{fail}) {
+            $stats->{failed}++;
+        }
+        else {
+            $stats->{passed}++;
+        }
     }
 
     return 0 unless $should_show;
 
+    my $statline = join '|' => (
+        $self->_highlight($stats->{passed},  'P', 'green'),
+        $self->_highlight($stats->{failed},  'F', 'red'),
+        $self->_highlight($stats->{running}, 'R', 'cyan'),
+        $self->_highlight($stats->{todo},    'T', 'yellow'),
+    );
+
+    $statline = "[$statline]";
+
     my $active = $self->{+ACTIVE_FILES};
 
-    return $self->{+_ACTIVE_DISP} = '' unless $active && keys %$active;
+    return $self->{+_ACTIVE_DISP} = [$statline, ''] unless $active && keys %$active;
 
-    my $str .= " (";
+    my $reset = $self->reset;
+
+    my $str .= "(";
     {
         no warnings 'numeric';
-        $str .= join('  ' => map { m{([^/]+)$}; "$active->{$_}:$1" || "$active->{$_}:$_" } sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
+        $str .= join(' ' => map { m{([^/]+)$}; "$active->{$_}:$1" } sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
     }
     $str .= ")";
 
-    $self->{+_ACTIVE_DISP} = $str;
+    $self->{+_ACTIVE_DISP} = [$statline, $str];
 
     return 1;
 }
 
-sub render_ecount {
+sub _highlight {
+    my $self = shift;
+    my ($val, $label, $color) = @_;
+
+    return "${label}:${val}" unless $val && $self->{+COLOR};
+    return sprintf('%s%s:%d%s', Term::ANSIColor::color($color), $label, $val, $self->{+COLOR}->{reset});
+}
+
+
+sub colorstrip {
+    my $self = shift;
+    my ($str) = @_;
+
+    return $str unless USE_ANSI_COLOR;
+    return Term::ANSIColor::colorstrip($str);
+}
+
+sub render_status {
     my $self = shift;
 
-    my $str = "Events seen: $self->{+ECOUNT} $self->{+_ACTIVE_DISP}";
+    my $reset = $self->reset;
+    my $cyan = $self->{+COLOR} ? Term::ANSIColor::color('cyan') : '';
+    my $str = "$self->{+_ACTIVE_DISP}->[0] Events: $self->{+ECOUNT} ${cyan}$self->{+_ACTIVE_DISP}->[1]${reset}";
 
     my $max = term_size() || 80;
-    $str = substr($str, 0, $max - 8) . " ...)" if length($str) > $max;
+
+    if (length($str) > $max) {
+        my $nocolor = $self->colorstrip($str);
+        $str = substr($nocolor, 0, $max - 8) . " ...)$reset" if length($nocolor) > $max;
+        $str =~ s/\(/$cyan(/;
+        $str =~ s/^\[[^\]]+\]/$self->{+_ACTIVE_DISP}->[0]/;
+    }
 
     return $str;
 }
@@ -427,6 +485,19 @@ sub render_quiet {
     return \@out;
 }
 
+sub reset {
+    my $self = shift;
+    return $self->{+COLOR} ? $self->{+COLOR}->{reset} : '';
+}
+
+sub job_color {
+    my $self = shift;
+    my ($id, $set) = @_;
+    return '' unless $self->{+JOB_COLORS};
+    return $self->{+JOB_COLORS}->{used}->{$id} || '' unless $set;
+    return $self->{+JOB_COLORS}->{used}->{$id} ||= shift @{$self->{+JOB_COLORS}->{free}} || '';
+}
+
 sub render_tree {
     my $self = shift;
     my ($f, $char) = @_;
@@ -437,9 +508,9 @@ sub render_tree {
         my $id = $f->{harness}->{job_id};
         my $name = $self->{+JOB_NAMES}->{$id};
 
-        my ($color, $reset) = (''. '');
+        my ($color, $reset) = ('', '');
         if ($self->{+JOB_COLORS}) {
-            $color = $self->{+JOB_COLORS}->{used}->{$id} ||= shift @{$self->{+JOB_COLORS}->{free}} || '';
+            $color = $self->job_color($id, 'set');
             $reset = $self->{+COLOR}->{reset};
         }
 

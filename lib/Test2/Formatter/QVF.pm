@@ -20,6 +20,15 @@ sub init {
     $self->{+VERBOSE} ||= 100;
 }
 
+sub update_active_disp {
+    my $self = shift;
+    my ($f) = @_;
+
+    return if $f->{__RENDER__}->{update_active_disp}++;
+
+    $self->SUPER::update_active_disp($f);
+}
+
 sub write {
     my ($self, $e, $num, $f) = @_;
 
@@ -65,7 +74,7 @@ sub write {
             $self->{+_BUFFERED} = 0;
         }
 
-        print $io $self->render_ecount($f);
+        print $io $self->render_status($f);
         $self->{+_BUFFERED} = 1;
     }
 

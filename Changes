@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Better status line while tests are running
+    - Do not use --START-- and --END-- on long single-lines
+
 1.000032  2020-10-23 11:59:34-07:00 America/Los_Angeles
 
     - Make it possible to run an alternate file to the one specified

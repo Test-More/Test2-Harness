@@ -588,7 +588,7 @@ sub build_line {
 
     my @out;
     for my $line (@lines) {
-        if($max && length("$ps$tag$pe  $tree$line") > $max) {
+        if(@lines > 1 && $max && length("$ps$tag$pe  $tree$line") > $max) {
             @out = ();
             last;
         }

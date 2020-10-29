@@ -394,7 +394,7 @@ sub _highlight {
     my ($val, $label, $color) = @_;
 
     return "${label}:${val}" unless $val && $self->{+COLOR};
-    return sprintf('%s%s:%d%s', Term::ANSIColor::color($color), $label, $val, $self->{+COLOR}->{reset});
+    return sprintf('%s%s:%d%s', Term::ANSIColor::color($color), $label, $val, $self->reset);
 }
 
 
@@ -511,7 +511,7 @@ sub render_tree {
         my ($color, $reset) = ('', '');
         if ($self->{+JOB_COLORS}) {
             $color = $self->job_color($id, 'set');
-            $reset = $self->{+COLOR}->{reset};
+            $reset = $self->reset;
         }
 
         my $len = length($name);
@@ -547,7 +547,7 @@ sub build_line {
 
     my $max = $self->{+TTY} && !$self->{+NO_WRAP} ? (term_size() || 80) : undef;
     my $color = $self->{+COLOR};
-    my $reset = $color ? $color->{reset} || '' : '';
+    my $reset = $self->reset;
     my $tcolor = $color ? $color->{TAGS}->{$tag} || $color->{FACETS}->{$facet} || '' : '';
 
     my ($ps, $pe) = @{$FACET_TAG_BORDERS{$facet} || $FACET_TAG_BORDERS{default}};

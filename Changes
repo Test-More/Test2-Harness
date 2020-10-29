@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000035  2020-10-29 15:00:33-07:00 America/Los_Angeles
+
     - Add glob() and relgob() .yath.rc pseudo-functions
     - Document rel() .yath.rc pseudo-function
 

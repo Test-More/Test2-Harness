@@ -489,6 +489,40 @@ Example .yath.rc:
 
 This file is normally committed into the project's repo.
 
+=head3 SPECIAL PATH PSEUDO-FUNCTIONS
+
+Sometimes you want to specify files relative to the .yath.rc so that the config
+option works from any subdirectory of the project. Other times you may wish to
+use a shell expansion. Sometimes you want both!
+
+=over 4
+
+=item rel(path/to/file)
+
+    -I rel(path/to/extra_lib)
+    -I=rel(path/to/extra_lib)
+
+This will take the path to C<.yath.rc> and prefix it to the path inside
+C<rel(...)>. If for example you have C</project/.yath.rc> then the path would
+become C</project/path/to/extra_lib>.
+
+=item glob(path/*/file)
+
+    --default-search glob(subprojects/*/t)
+    --default-search=glob(subprojects/*/t)
+
+This will add a C<--default-search $_> for every item found in the glob. This
+uses the perl builtin function C<glob()> under the hood.
+
+=item relglob(path/*/file)
+
+    --default-search relglob(subprojects/*/t)
+    --default-search=relglob(subprojects/*/t)
+
+Same as C<glob()> except paths are relative to the C<.yath.rc> file.
+
+=back
+
 =head2 PROJECT-SPECIFIC YATH CONFIG USER OVERRIDES
 
 You can add a C<.yath.user.rc> file. Format is the same as the regular

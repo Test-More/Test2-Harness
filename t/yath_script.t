@@ -46,6 +46,9 @@ sub is($$;$)   { push @RESULTS => ['is',   [@_], [caller()]] }
 sub like($$;$) { push @RESULTS => ['like', [@_], [caller()]] }
 sub ok($;$)    { push @RESULTS => ['ok',   [@_], [caller()]] }
 
+our %T;
+sub T() { \%T }
+
 test_find_config_files();
 sub test_find_config_files {
     my ($config, $user_config);
@@ -121,6 +124,7 @@ $code
                 '-Itest_lib',
                 '-I=./../test/xxx/lib',
                 '-I' => './../test/yyy/lib',
+                (map {('--default-search' => $_)} glob('./../../*.t')),
                 '-xxxx',
                 'foo',
                 'bar',
@@ -151,20 +155,23 @@ $code
         "Parsed all command args properly"
     );
 
+
     is(
         $to_clean,
         [
-            ['test', 1, '-I', '=', './../test/xxx/lib'],
-            ['test', 3, '-I', ' ', './../test/yyy/lib'],
+            ['test', T, '-I', '=', './../test/xxx/lib'],
+            ['test', T, '-I', ' ', './../test/yyy/lib'],
 
-            ['run', 1, '-I', '=', './../run/xxx/lib'],
-            ['run', 3, '-I', ' ', './../run/yyy/lib'],
+            (map { ['test', T, '--default-search', ' ', $_] } glob('./../../*.t')),
 
-            ['test', 10, '-I', '=', './test/xxx/user/lib'],
-            ['test', 12, '-I', ' ', './test/yyy/user/lib'],
+            ['run', T, '-I', '=', './../run/xxx/lib'],
+            ['run', T, '-I', ' ', './../run/yyy/lib'],
 
-            ['run', 8, '-I', '=', './run/xxx/user/lib'],
-            ['run', 10, '-I', ' ', './run/yyy/user/lib'],
+            ['test', T, '-I', '=', './test/xxx/user/lib'],
+            ['test', T, '-I', ' ', './test/yyy/user/lib'],
+
+            ['run', T, '-I', '=', './run/xxx/user/lib'],
+            ['run', T, '-I', ' ', './run/yyy/user/lib'],
         ],
         "Will come back and clean these later"
     );
@@ -268,6 +275,12 @@ sub test_pre_parse_d_args {
 
 is({%INC}, {%ORIG_INC}, "Did not load anything.");
 require Test2::V0;
+
+# such a dirty hack!
+# Turn %T into an instance of the T check.
+my $t = Test2::V0::T();
+%T = %$t;
+bless(\%T, ref($t));
 
 for my $res (@RESULTS) {
     my ($func, $args, $caller) = @$res;

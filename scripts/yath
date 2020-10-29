@@ -66,7 +66,7 @@ BEGIN {
             next unless length($line);
 
             my ($key, $eq, $val);
-            if ($line =~ m/^(-\S)(rel\(.*\))$/) {   # Handle things like -Irel(...)
+            if ($line =~ m/^(-\S)((?:rel|glob|relglob)\(.*\))$/) {   # Handle things like -Irel(...)
                 $key = $1;
                 $eq  = '';
                 $val = $2;
@@ -94,16 +94,42 @@ BEGIN {
                 $need_to_clean = 1;
             }
 
-            $eq //= '';
-            my @parts = $eq eq '=' ? ("${key}${eq}${val}") : (grep { defined $_ } $key, $val);
+            my @all;
 
-            if ($is_pre) {
-                push @CONFIG_ARGS => @parts;
+            if ($val && $val =~ s/(^|=)\s*(rel)?glob\(\s*//) {
+                my $rel = $2;
+
+                die "Syntax error in $file line $.: Expected ')'\n" unless $val =~ s/\s*\)$//;
+
+                my $path = '';
+                if ($rel) {
+                    $path = $file;
+                    $path =~ s{[^/]*$}{}g;
+                }
+
+                # Avoid loading File::Glob in this process...
+                my $out = `$^X -e 'print join "\\n" => glob("${path}${val}")'`;
+                my @vals = split /\n/, $out;
+                @all = map {[$key, $eq, $_, 1]} @vals;
             }
             else {
-                $cmd //= '~';
-                push @{$CONFIG{$cmd}} => @parts;
-                push @TO_CLEAN => [$cmd, $#{$CONFIG{$cmd}}, $key, $eq, $val] if $need_to_clean;
+                @all = ([$key, $eq, $val, $need_to_clean]);
+            }
+
+            for my $set (@all) {
+                my ($key, $eq, $val, $need_to_clean) = @$set;
+                $eq //= '';
+
+                my @parts = $eq eq '=' ? ("${key}${eq}${val}") : (grep { defined $_ } $key, $val);
+
+                if ($is_pre) {
+                    push @CONFIG_ARGS => @parts;
+                }
+                else {
+                    $cmd //= '~';
+                    push @{$CONFIG{$cmd}} => @parts;
+                    push @TO_CLEAN => [$cmd, $#{$CONFIG{$cmd}}, $key, $eq, $val] if $need_to_clean;
+                }
             }
         }
         close($fh);

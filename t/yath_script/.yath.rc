@@ -13,6 +13,7 @@
 -Itest_lib; comment!
 -I=rel(test/xxx/lib)    ;comment!
 -I rel( test/yyy/lib )
+--default-search relglob(../*.t)
 -xxxx;comment!
 foo
 bar

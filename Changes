@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Add glob() and relgob() .yath.rc pseudo-functions
+    - Document rel() .yath.rc pseudo-function
+
 1.000034  2020-10-29 07:51:19-07:00 America/Los_Angeles
 
     - Fix warning when output is not a terminal

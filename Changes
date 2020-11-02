@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix conflict between process management and resource management
+
 1.000036  2020-11-01 20:34:19-08:00 America/Los_Angeles
 
     - Add initializing status line

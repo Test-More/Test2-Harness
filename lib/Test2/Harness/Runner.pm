@@ -312,7 +312,7 @@ sub run_stage {
     while (1) {
         next if $self->run_job();
 
-        next if $self->wait(cat => $self->job_class->category);
+        next if $self->wait();
 
         last if $self->end_test_loop();
 

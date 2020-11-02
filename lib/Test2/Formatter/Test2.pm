@@ -164,15 +164,6 @@ sub init {
 
     $self->{+COMPOSER} ||= Test2::Formatter::Test2::Composer->new;
 
-    $self->{+_ACTIVE_DISP} = ['', ''];
-    $self->{+_FILE_STATS}  = {
-        passed  => 0,
-        failed  => 0,
-        running => 0,
-        todo    => 0,
-        total   => 0,
-    };
-
     $self->{+VERBOSE} = 1 unless defined $self->{+VERBOSE};
 
     $self->{+JOB_LENGTH} ||= 2;
@@ -202,6 +193,19 @@ sub init {
     else {
         $self->{+SHOW_BUFFER} = 0 unless defined $self->{+SHOW_BUFFER};
     }
+
+    my $reset = $use_color ? Term::ANSIColor::color('reset') : '';
+    my $cyan  = $use_color ? Term::ANSIColor::color('cyan')  : '';
+    $self->{+_ACTIVE_DISP} = ["[${cyan}INITIALIZING${reset}]", ''];
+    $self->{+_FILE_STATS}  = {
+        passed  => 0,
+        failed  => 0,
+        running => 0,
+        todo    => 0,
+        total   => 0,
+    };
+
+
 }
 
 sub io {

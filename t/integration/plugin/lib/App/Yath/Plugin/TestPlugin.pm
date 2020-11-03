@@ -115,6 +115,13 @@ sub setup {
     die "self is not an instance! ($self)" unless blessed($self);
     my ($settings) = @_;
     print "TEST PLUGIN: setup " . ref($settings) . "\n";
+
+    $self->shellcall(
+        $settings,
+        'testplug',
+        $^X, '-e', 'print STDERR "STDERR WRITE\n"; print STDOUT "STDOUT WRITE\n";',
+    );
+
     return;
 }
 

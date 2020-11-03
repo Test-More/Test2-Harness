@@ -28,6 +28,9 @@ sub verify {
     like($text, qr/TEST PLUGIN: setup Test2::Harness::Settings/,     "setup() was called with settings");
     like($text, qr/TEST PLUGIN: teardown Test2::Harness::Settings/,  "teardown() was called with settings");
 
+    like($text, qr/\(TESTPLUG\)\s+STDERR WRITE$/m, "Got the STDERR write from the shellcall");
+    like($text, qr/\(TESTPLUG\)\s+STDOUT WRITE$/m, "Got the STDOUT write from the shellcall");
+
     like(
         $text,
         qr/TEST PLUGIN: finish asserts_seen => 5, final_data => HASH, pass => 1, settings => Test2::Harness::Settings, tests_seen => 5/,

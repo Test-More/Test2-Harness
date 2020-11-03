@@ -24,7 +24,7 @@ use Test2::Harness::Util::HashBase qw{
     <run_dir
     <runner_pid +runner_exited
 
-    +runner_stdout +runner_stderr
+    +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles
 
     +task_file +task_queue +tasks_done +tasks
     +jobs_file +jobs_queue +jobs_done  +jobs
@@ -123,7 +123,8 @@ sub runner_exited {
 sub process_runner_output {
     my $self = shift;
 
-    return unless $self->{+SHOW_RUNNER_OUTPUT};
+    my $out = 0;
+    return $out unless $self->{+SHOW_RUNNER_OUTPUT};
 
     my $stdout = $self->{+RUNNER_STDOUT} //= Test2::Harness::Util::File::Stream->new(
         name => File::Spec->catfile($self->{+WORKDIR}, 'output.log'),
@@ -133,6 +134,7 @@ sub process_runner_output {
         chomp($line);
         my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => 'INTERNAL', important => 1}]);
         $self->{+ACTION}->($e);
+        $out++;
     }
 
     my $stderr = $self->{+RUNNER_STDERR} //= Test2::Harness::Util::File::Stream->new(
@@ -143,7 +145,45 @@ sub process_runner_output {
         chomp($line);
         my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => 'INTERNAL', debug => 1, important => 1}]);
         $self->{+ACTION}->($e);
+        $out++;
     }
+
+    my $auxdir = $self->{+RUNNER_AUX_DIR} //= File::Spec->catdir($self->{+WORKDIR}, 'aux_logs');
+    return $out unless -d $auxdir;
+
+    opendir(my $dh, $auxdir) or die "Could not open aux_logs dir: $!";
+    for my $path (readdir($dh)) {
+        next if $path =~ m/^\.+$/;
+        next if $self->{+RUNNER_AUX_HANDLES}->{$path};
+
+        my $tag = uc($path);
+        next unless $tag =~ s/\.LOG$//;
+
+        my $debug = 0;
+        if ($tag =~ s/\W*(STDERR|STDOUT)\W*//g) {
+            $debug = 1 if $1 && uc($1) eq 'STDERR';
+        }
+
+        $self->{+RUNNER_AUX_HANDLES}->{$path} = {
+            tag    => $tag,
+            debug  => $debug,
+            stream => Test2::Harness::Util::File::Stream->new(name => File::Spec->catfile($auxdir, $path)),
+        };
+    }
+
+    for my $file (sort keys %{$self->{+RUNNER_AUX_HANDLES}}) {
+        my $data   = $self->{+RUNNER_AUX_HANDLES}->{$file};
+        my $stream = $data->{stream};
+
+        for my $line ($stream->poll()) {
+            chomp($line);
+            my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => $data->{tag}, debug => $data->{debug}, important => 1}]);
+            $self->{+ACTION}->($e);
+            $out++;
+        }
+    }
+
+    return $out;
 }
 
 sub process_tasks {

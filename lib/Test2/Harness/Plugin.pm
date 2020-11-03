@@ -21,6 +21,64 @@ sub teardown {}
 
 sub TO_JSON { ref($_[0]) || "$_[0]" }
 
+sub redirect_io {
+    my $this = shift;
+    my ($settings, $name) = @_;
+
+    my @caller = caller();
+    my $at = "at $caller[1] line $caller[2].\n";
+    die "Invalid settings ($settings) $at" unless $settings && ref($settings) eq 'Test2::Harness::Settings';
+    die "No name provided $at"             unless $name;
+    die "This cannot be used without a workspace $at" unless $settings->check_prefix('workspace');
+
+    require File::Spec;
+    require Test2::Harness::Util::IPC;
+
+    my $dir = $settings->workspace->workdir;
+    my $aux = File::Spec->catdir($dir, 'aux_logs');
+    mkdir($aux) unless -d $aux;
+
+    Test2::Harness::Util::IPC::swap_io(\*STDOUT, File::Spec->catfile($aux, "${name}-STDOUT.log"));
+    Test2::Harness::Util::IPC::swap_io(\*STDERR, File::Spec->catfile($aux, "${name}-STDERR.log"));
+
+    return;
+}
+
+sub shellcall {
+    my $this = shift;
+    my ($settings, $name, @cmd) = @_;
+
+    require POSIX;
+
+    my @caller = caller();
+    my $at = "at $caller[1] line $caller[2].\n";
+    die "Invalid settings ($settings) $at" unless $settings && ref($settings) eq 'Test2::Harness::Settings';
+    die "No name provided $at" unless $name;
+    die "No command provided $at" unless @cmd && length($cmd[0]);
+
+    my $pid = fork // die "Could not fork: $!";
+    if ($pid) {
+        waitpid($pid, 0);
+        return $?;
+    }
+    else {
+        local $@;
+
+        eval {
+            if ($settings->check_prefix('workspace')) {
+                $this->redirect_io($settings, $name);
+            }
+            exec(@cmd) if @cmd > 1;
+            exec($cmd[0]);
+        };
+
+        chomp(my $err = $@ // "unknown error");
+
+        warn "Could not run command ($@) $at";
+        POSIX::_exit(1);
+    }
+}
+
 1;
 
 __END__
@@ -122,6 +180,36 @@ each C<run> command against the persistent runner.
 Get a list of files that have changed. Plugins are free to define what
 "changed" means. This may be used by the finder to determine what tests to run
 based on coverage data collected in previous runs.
+
+=item $exit = $plugin->shellcall($settings, $name, $cmd)
+
+=item $exit = $plugin->shellcall($settings, $name, @cmd)
+
+This is essentially the same as C<system()> except that STDERR and STDOUT are
+redirected to files that the yath collector will pick up so that any output
+from the command will be seen as events and will be part of the yath log. If no
+workspace is available this will not redirect IO and it will be identical to
+calling C<system()>.
+
+This is particularily useful in C<setup()> and C<teardown()> when running
+external commands, specially any that daemonize and continue to produce output
+after the setup/teardown method has completed.
+
+$name is required because it will be used for filenames, and will be used as
+the output tag (best to limit it to 8 characters).
+
+=item $plugin->redirect_io($settings, $name)
+
+B<WARNING:> This must NEVER be called in a primary yath process. Only use this
+in forked processes that you control. If this is used in a main process it
+could hide ALL output.
+
+This will redirect STDERR and STDOUT to files that will be picked up by the
+yath collector so that any output appears as proper yath events and will be
+included in the yath log.
+
+$name is required because it will be used for filenames, and will be used as
+the output tag (best to limit it to 8 characters).
 
 =item $plugin->TO_JSON
 

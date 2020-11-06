@@ -170,6 +170,7 @@ sub process_runner_output {
             stream => Test2::Harness::Util::File::Stream->new(name => File::Spec->catfile($auxdir, $path)),
         };
     }
+    closedir($dh);
 
     for my $file (sort keys %{$self->{+RUNNER_AUX_HANDLES}}) {
         my $data   = $self->{+RUNNER_AUX_HANDLES}->{$file};

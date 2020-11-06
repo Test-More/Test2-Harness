@@ -374,6 +374,9 @@ sub update_io {
         my $msg = "$_[0] at $caller[1] line $caller[2] ($caller2[1] line $caller2[2]).\n";
         print $stderr $msg;
         print STDERR $msg;
+        close($out_fh);
+        close($err_fh);
+        close($in_fh) if $in_fh;
         POSIX::_exit(127);
     };
 

@@ -129,6 +129,7 @@ sub yath {
             push @lines => @new;
             print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;
         }
+        close($rh);
     }
     else {
         print "DEBUG: Waiting for $pid\n" if $debug;

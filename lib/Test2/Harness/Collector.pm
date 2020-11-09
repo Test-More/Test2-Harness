@@ -221,9 +221,19 @@ sub jobs {
 
     return $jobs if $self->{+JOBS_DONE};
 
+    # Don't monitor more than 'max_jobs_to_process' or we might have too many open file handles and crash
+    # Max open files handles on a process applies. Usually this is 1024 so we can't have everything open at once when we're behind.
+    my $max_jobs_to_process = $self->settings->collector->max_jobs_to_process // 1024;
+    my $additional_jobs_to_parse = $max_jobs_to_process - scalar keys %$jobs;
+    if($additional_jobs_to_parse <= 0) {
+        # This is an unlikely code path. If we're here, it means the last loop couldn't process any results.
+        print "WARN: max jobs still exceded. Continuing to process jobs\n";
+        return $jobs;
+    }
+
     my $queue = $self->jobs_queue or return $jobs;
 
-    for my $item ($queue->poll) {
+    for my $item ($queue->poll($additional_jobs_to_parse)) {
         my ($spos, $epos, $job) = @$item;
 
         unless ($job) {
@@ -269,6 +279,11 @@ sub jobs {
             runner_pid => $self->{+RUNNER_PID},
             job_root   => File::Spec->catdir($self->{+RUN_DIR}, $job_try),
         );
+    }
+
+    # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the stream know we're behind.
+    if( scalar keys %$jobs >= $max_jobs_to_process ) {
+        print STDERR "WARN: The Yath Collector is running behind. More than $max_jobs_to_process test results have not been processed.\n";
     }
 
     return $jobs;

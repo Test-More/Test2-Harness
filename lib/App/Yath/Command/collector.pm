@@ -6,6 +6,7 @@ our $VERSION = '1.000039';
 
 use File::Spec;
 
+use App::Yath::Options;
 use App::Yath::Util qw/isolate_stdout/;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
@@ -15,6 +16,12 @@ use Test2::Harness::Run;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
+
+include_options(
+    'App::Yath::Options::Debug',
+    'App::Yath::Options::PreCommand',
+    'App::Yath::Options::Collector',
+);
 
 sub internal_only   { 1 }
 sub summary         { "For internal use only" }
@@ -28,7 +35,7 @@ sub run {
 
     my $fh = isolate_stdout();
 
-    my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+    my $settings = $self->settings;
 
     require(mod2file($collector_class));
 

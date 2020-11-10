@@ -246,4 +246,14 @@ if ("$]" >= 5.026) {
     );
 }
 
+yath(
+    command => 'test',
+    args    => [$dir, '--ext=txxx', '::', 'foobar', 'baz' ],
+    exit    => 0,
+    test    => sub {
+        my $out = shift;
+        like($out->{output}, qr{PASSED}, 'Args after arisdottle are added to @ARGV');
+    },
+);
+
 done_testing;

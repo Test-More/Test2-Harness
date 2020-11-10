@@ -69,10 +69,11 @@ sub process {
         }
 
         while(my ($job_try, $jdir) = each %$jobs) {
+            $count++;
             my $e_count = 0;
             for my $event ($jdir->poll($self->settings->collector->max_poll_events // 1000)) {
                 $self->{+ACTION}->($event);
-                $count++;
+                $e_count++;
             }
 
             $count += $e_count;

@@ -7,9 +7,20 @@ our $VERSION = '1.000039';
 use App::Yath::Options;
 
 option_group {prefix => 'collector', category => "Collector Options"} => sub {
-    option max_jobs_to_process => (
-        description => 'The maximum number of jobs that the collector can process each loop (Default: 300)',
+    option max_open_jobs => (
+        type => 's',
+        description => 'Maximum number of jobs a collector can process at a time, if more jobs are pending their output will be delayed until the earlier jobs have been processed. (Default: 300)',
         default => 300,
+        long_examples  => [' 300'],
+        short_examples => [' 300'],
+    );
+
+    option max_poll_events => (
+        type => 's',
+        description => 'Maximum number of events to poll from a job before jumping to the next job. (Default: 1000)',
+        default => 1000,
+        long_examples  => [' 1000'],
+        short_examples => [' 1000'],
     );
 };
 

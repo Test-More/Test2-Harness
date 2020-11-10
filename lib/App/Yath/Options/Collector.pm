@@ -15,6 +15,12 @@ option_group {prefix => 'collector', category => "Collector Options"} => sub {
         short_examples => [' 300'],
     );
 
+    option spawn_worker_at_max => (
+        type => 'b',
+        description => 'Spawn an extra collector whenever we hit max_open_jobs. (Default: off)',
+        default => 0,
+    );
+
     option max_poll_events => (
         type => 's',
         description => 'Maximum number of events to poll from a job before jumping to the next job. (Default: 1000)',

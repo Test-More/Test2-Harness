@@ -12,6 +12,7 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::Queue;
 use Time::HiRes qw/sleep time/;
 use File::Spec;
+use POSIX qw/:sys_wait_h/;
 
 use File::Path qw/remove_tree/;
 
@@ -24,7 +25,8 @@ use Test2::Harness::Util::HashBase qw{
     <run_dir
     <runner_pid +runner_exited
 
-    <backed_up
+    <output_fh
+    <backed_up <workers <worker <jobs_buffer
 
     +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles
 
@@ -48,7 +50,98 @@ sub init {
 
     $self->{+WAIT_TIME} //= 0.02;
 
-    $self->{+ACTION}->($self->_harness_event(0, undef, time, harness_run => $self->{+RUN}, harness_settings => $self->settings, about => {no_display => 1}));
+    $self->{+WORKERS} = [];
+}
+
+sub spawn_worker {
+    my $self = shift;
+
+    my $workers = $self->{+WORKERS} //= [];
+
+    my ($rh, $wh);
+    pipe($rh, $wh) or die "Could not open pipe: $!";
+
+    my $pid = fork // die "Could not fork: $!";
+    if ($pid) {
+        close($wh);
+        $rh->blocking(0);
+        my $buffer = "";
+        push @$workers => [$pid, $rh, \$buffer];
+
+        # Child will process the jobs we had, we start from scratch;
+        $self->{+JOBS} = {};
+
+        return $pid;
+    }
+
+    # State Management
+    $self->{+WORKER} = 1;
+    $self->{+JOBS_DONE} = 1;
+    $self->{+TASKS_DONE} = 1;
+    $self->{+WORKERS} = [];
+
+    close($rh);
+
+    $wh->autoflush(1);
+    $self->{+OUTPUT_FH} = $wh;
+
+    return;
+}
+
+sub process_workers {
+    my $self = shift;
+
+    my $workers = $self->{+WORKERS} or return 0;
+    my $count = 0;
+
+    my $max_poll_events = $self->settings->collector->max_poll_events;
+
+    for my $worker (@$workers) {
+        my ($pid, $rh, $buffer) = @$worker;
+        $count++;
+
+        my $check = waitpid($pid, WNOHANG);
+        my $exit = $?;
+        my $done = $check < 0 || $check == $pid;
+
+        if ($done) {
+            my $e = $self->_harness_event(0, undef, time, info => [{details => "Collector $pid complete ($exit)", tag => "INTERNAL", debug => 0, important => 0}]);
+            $self->{+ACTION}->($e);
+
+
+            @$workers = grep { "$worker" ne "$_" } @$workers;
+
+            $rh->blocking(1);
+            for my $line (<$rh>) {
+                $$buffer .= $line;
+            }
+        }
+        else {
+            my $lcount = 0;
+            for my $line (<$rh>) {
+                $$buffer .= $line;
+                last if $lcount++ >= $max_poll_events;
+            }
+        }
+
+        my $oldbuf = $$buffer;
+        $$buffer = "";
+
+        for my $line (split /^/, $oldbuf) {
+            unless ($done || substr($line, -1, 1) eq "\n") {
+                $$buffer = $line;
+                last;
+            }
+
+            $count++;
+            $self->{+ACTION}->($line);
+        }
+
+        # Do this here to make sure all events from the collector are received
+        die "Collector worker ($pid) did not exit properly (check: $check, exit: $exit)" if $done && $exit || $check < 0;
+    }
+
+    return $count;
 }
 
 sub process {
@@ -56,14 +149,17 @@ sub process {
 
     my $settings = $self->settings;
 
+    $self->{+ACTION}->($self->_harness_event(0, undef, time, harness_run => $self->{+RUN}, harness_settings => $settings, about => {no_display => 1}));
+
     while (1) {
         my $count = 0;
+        $count += $self->process_workers if $self->{+WORKERS};
         $count += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
         $count += $self->process_tasks();
 
         my $jobs = $self->jobs;
 
-        unless (keys %$jobs) {
+        unless (keys %$jobs || @{$self->{+WORKERS}}) {
             last if $self->{+JOBS_DONE};
             last if $self->runner_done;
         }
@@ -71,7 +167,7 @@ sub process {
         while(my ($job_try, $jdir) = each %$jobs) {
             $count++;
             my $e_count = 0;
-            for my $event ($jdir->poll($self->settings->collector->max_poll_events // 1000)) {
+            for my $event ($jdir->poll($settings->collector->max_poll_events)) {
                 $self->{+ACTION}->($event);
                 $e_count++;
             }
@@ -93,9 +189,11 @@ sub process {
             delete $self->{+PENDING}->{$jdir->job_id} unless $done->{retry};
         }
 
-        last if !$count && $self->runner_exited;
+        last if !$count && !@{$self->{+WORKERS}} && ($self->runner_exited || $self->{+WORKER});
         sleep $self->{+WAIT_TIME} unless $count;
     }
+
+    exit(0) if $self->{+WORKER};
 
     # One last slurp
     $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
@@ -127,6 +225,8 @@ sub runner_exited {
 
 sub process_runner_output {
     my $self = shift;
+
+    return 0 if $self->{+WORKER};
 
     my $out = 0;
     return $out unless $self->{+SHOW_RUNNER_OUTPUT};
@@ -194,6 +294,7 @@ sub process_runner_output {
 sub process_tasks {
     my $self = shift;
 
+    return 0 if $self->{+WORKER};
     return 0 if $self->{+TASKS_DONE};
 
     my $queue = $self->tasks_queue or return 0;
@@ -219,8 +320,16 @@ sub process_tasks {
     return $count;
 }
 
-sub send_backed_up {
+sub handle_backed_up {
     my $self = shift;
+
+    if ($self->settings->collector->spawn_worker_at_max) {
+        my $pid = $self->spawn_worker() or return;
+        my $e = $self->_harness_event(0, undef, time, info => [{details => "Spawned an extra collector: $pid", tag => "INTERNAL", debug => 0, important => 0}]);
+        $self->{+ACTION}->($e);
+        return;
+    }
+
     return if $self->{+BACKED_UP}++;
 
     # This is an unlikely code path. If we're here, it means the last loop couldn't process any results.
@@ -246,22 +355,31 @@ sub jobs {
     my $self = shift;
 
     my $jobs = $self->{+JOBS} //= {};
+    my $buffer = $self->{+JOBS_BUFFER} //= [];
 
-    return $jobs if $self->{+JOBS_DONE};
-
-    # Don't monitor more than 'max_open_jobs' or we might have too many open file handles and crash
-    # Max open files handles on a process applies. Usually this is 1024 so we
-    # can't have everything open at once when we're behind.
-    my $max_open_jobs = $self->settings->collector->max_open_jobs // 1024;
-    my $additional_jobs_to_parse = $max_open_jobs - keys %$jobs;
-    if($additional_jobs_to_parse <= 0) {
-        $self->send_backed_up;
-        return $jobs;
-    }
+    return $jobs if $self->{+WORKER};
+    return $jobs if $self->{+JOBS_DONE} && !@{$self->{+JOBS_BUFFER}};
 
     my $queue = $self->jobs_queue or return $jobs;
 
-    for my $item ($queue->poll($additional_jobs_to_parse)) {
+    my $max_open_jobs = $self->settings->collector->max_open_jobs // 1024;
+    push @$buffer => $queue->poll();
+
+    while (my $item = shift @$buffer) {
+        if (keys(%$jobs) >= $max_open_jobs) {
+            $self->handle_backed_up;
+
+            # This may have changed
+            $jobs = $self->{+JOBS};
+
+            return $jobs if $self->{+WORKER};
+
+            if (keys %$jobs) {
+                unshift @$buffer => $item;
+                return $jobs;
+            }
+        }
+
         my ($spos, $epos, $job) = @$item;
 
         unless ($job) {
@@ -308,9 +426,6 @@ sub jobs {
             job_root   => File::Spec->catdir($self->{+RUN_DIR}, $job_try),
         );
     }
-
-    # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the stream know we're behind.
-    $self->send_backed_up if $max_open_jobs <= keys %$jobs;
 
     return $jobs;
 }

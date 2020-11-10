@@ -3,6 +3,7 @@
     - Make collector options configurable
     - Add collector option for max poll events
     - Add collector option for max open jobs
+    - Add option to allow multiple collectors
 
 1.000038  2020-11-02 20:49:12-08:00 America/Los_Angeles
 

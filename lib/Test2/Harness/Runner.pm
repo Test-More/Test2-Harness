@@ -8,6 +8,7 @@ use File::Spec();
 
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
+use POSIX qw/:sys_wait_h/;
 use Long::Jump qw/setjump longjump/;
 use Time::HiRes qw/sleep time/;
 
@@ -193,7 +194,6 @@ sub stop {
     # Time to get serious
     if (keys %{$self->{+PROCS}}) {
         print STDERR "$$ $0 Some child processes are refusing to exit, sending KILL signal...\n";
-        use POSIX;
         print("$$ $0 == $_ " . waitpid($_, WNOHANG) . "\n") for keys %{$self->{+PROCS}};
         $self->killall('KILL');
     }

@@ -9,7 +9,7 @@ use App::Yath::Options;
 option_group {prefix => 'collector', category => "Collector Options"} => sub {
     option max_open_jobs => (
         type => 's',
-        description => 'Maximum number of jobs a collector can process at a time, if more jobs are pending their output will be delayed until the earlier jobs have been processed. (Default: 300)',
+        description => 'Maximum number of jobs a collector can process at a time. If more jobs are pending, their output will be delayed until the earlier jobs have been processed. Note that each job needs roughly 2 file descriptors and the standard UNIX process only has access to 1024 descriptors. Exceeding file descriptors will crash this process. You can find your max file handles by running "ulimit -n" (Default: 300)',
         default => 300,
         long_examples  => [' 300'],
         short_examples => [' 300'],

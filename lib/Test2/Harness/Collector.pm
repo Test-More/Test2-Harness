@@ -230,15 +230,15 @@ sub send_backed_up {
  * Testing will continue, but some tests may be running or even complete before they are rendered.
  * All tests and events will eventually be displayed, and your final results will not be effected.
 
-Set a higher --max-open-jobs collector setting to prevent this problem in the
-future, but be advised that could result in too many open filehandles on some
-systems.
+You may have set '-jX' too high. This can cause the system load to slow down the processing of
+results. It is also possible to set a higher '--max-open-jobs' collector setting, but be advised
+that could result in the run crashing with too many open filehandles.
 
 This message will only be shown once.
     EOT
 
     $self->{+ACTION}->($e);
-    return;
+    return 0;
 }
 
 sub jobs {
@@ -308,8 +308,11 @@ sub jobs {
         );
     }
 
-    # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the stream know we're behind.
-    $self->send_backed_up if $max_open_jobs <= keys %$jobs;
+    # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the harness output know we're behind.
+    if( $max_open_jobs <= scalar keys %$jobs ) {
+        my $msg = "The Yath Collector is running behind. More than $max_open_jobs test results have not been processed.";
+        $self->send_backed_up or $self->{+ACTION}->( $self->_harness_event(0, undef, time, info => [{details => $msg, tag => "INTERNAL", debug => 1, important => 1}]) );
+    }
 
     return $jobs;
 }

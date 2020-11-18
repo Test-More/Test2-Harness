@@ -281,8 +281,8 @@ sub write {
     $should_show ||= $lines && @$lines;
     unless ($should_show || $self->{+VERBOSE}) {
         if (my $last = $self->{last_rendered}) {
-            $self->{last_rendered} = time;
             return if time - $last < 0.2;
+            $self->{last_rendered} = time;
         }
         else {
             $self->{last_rendered} = time;

@@ -48,6 +48,9 @@ sub run {
     my $err_fh = open_file($err_f, '<');
     my $out_fh = open_file($out_f, '<');
 
+    my $auxdir = File::Spec->catdir($data->{dir}, 'aux_logs');
+    my %aux;
+
     while (1) {
         my $count = 0;
         while (my $line = <$out_fh>) {
@@ -57,6 +60,26 @@ sub run {
         while (my $line = <$err_fh>) {
             $count++;
             print STDERR $line;
+        }
+
+        if (-d $auxdir) {
+            opendir(my $dh, $auxdir) or die "Could not open auxdir: $!";
+            for my $file (readdir($dh)) {
+                next if $aux{$file};
+                next unless $file =~ m/\.log$/;
+                my $full = File::Spec->catfile($auxdir, $file);
+                next unless -f $full;
+                $aux{$file} = open_file($full, '<');
+                $count++;
+            }
+        }
+
+        for my $file (sort keys %aux) {
+            my $fh = $aux{$file};
+            my $ofh = $file =~ m/STDERR/ ? \*STDERR : \*STDOUT;
+            while (my $line = <$fh>) {
+                print $ofh $line;
+            }
         }
 
         next if $count;

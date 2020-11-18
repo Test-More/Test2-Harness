@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - yath watch shows aux output
     - Minor no-op code improvement in Runner.pm
 
 1.000038  2020-11-02 20:49:12-08:00 America/Los_Angeles

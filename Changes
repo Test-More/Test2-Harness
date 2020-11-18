@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000040  2020-11-17 21:59:41-08:00 America/Los_Angeles
+
     - Fix bug in collector that made it marginally less efficient
     - Fix bug that prevented no-max from working in JobDir poll
     - Fix bug that prevented the active status display from updating

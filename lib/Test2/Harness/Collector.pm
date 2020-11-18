@@ -68,7 +68,7 @@ sub process {
             my $e_count = 0;
             for my $event ($jdir->poll(1000)) {
                 $self->{+ACTION}->($event);
-                $count++;
+                $e_count++;
             }
 
             $count += $e_count;

@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix pipe size setting to actually use the value we want
+    - Fix pipe size setting code for older perls
+
 1.000041  2020-11-17 22:28:55-08:00 America/Los_Angeles
 
     - When possible use a larger pipe buffer

@@ -125,7 +125,7 @@ sub _resize_pipe {
         $size = min($size, $val);
     }
 
-    fcntl($fh, Fcntl::F_SETPIPE_SZ, (1048576));
+    fcntl($fh, Fcntl::F_SETPIPE_SZ(), $size);
 }
 
 sub auditor_reader {

@@ -2,7 +2,7 @@ package App::Yath::Options::Workspace;
 use strict;
 use warnings;
 
-our $VERSION = '1.000040';
+our $VERSION = '1.000041';
 
 use File::Spec();
 use File::Path qw/remove_tree/;

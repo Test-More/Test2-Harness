@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - When possible use a larger pipe buffer
+
 1.000040  2020-11-17 21:59:41-08:00 America/Los_Angeles
 
     - Fix bug in collector that made it marginally less efficient

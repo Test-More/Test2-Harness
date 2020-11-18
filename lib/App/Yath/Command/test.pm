@@ -21,9 +21,10 @@ use Test2::Util::Table qw/table/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use File::Spec;
+use Fcntl();
 
 use Time::HiRes qw/sleep time/;
-use List::Util qw/sum max/;
+use List::Util qw/sum max min/;
 use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
@@ -108,10 +109,30 @@ sub init {
     $self->{+ASSERTS_SEEN} //= 0;
 }
 
+sub _resize_pipe {
+    return unless defined &Fcntl::F_SETPIPE_SZ;
+    my ($fh) = @_;
+
+    # 1mb if we can
+    my $size = 1024 * 1024 * 1;
+
+    # On linux systems lets go for the smaller of the two between 1mb and
+    # system max.
+    if (-e '/proc/sys/fs/pipe-max-size') {
+        open(my $max, '<', '/proc/sys/fs/pipe-max-size');
+        chomp(my $val = <$max>);
+        close($max);
+        $size = min($size, $val);
+    }
+
+    fcntl($fh, Fcntl::F_SETPIPE_SZ, (1048576));
+}
+
 sub auditor_reader {
     my $self = shift;
     return $self->{+AUDITOR_READER} if $self->{+AUDITOR_READER};
     pipe($self->{+AUDITOR_READER}, $self->{+COLLECTOR_WRITER}) or die "Could not create pipe: $!";
+    _resize_pipe($self->{+COLLECTOR_WRITER});
     return $self->{+AUDITOR_READER};
 }
 
@@ -119,6 +140,7 @@ sub collector_writer {
     my $self = shift;
     return $self->{+COLLECTOR_WRITER} if $self->{+COLLECTOR_WRITER};
     pipe($self->{+AUDITOR_READER}, $self->{+COLLECTOR_WRITER}) or die "Could not create pipe: $!";
+    _resize_pipe($self->{+COLLECTOR_WRITER});
     return $self->{+COLLECTOR_WRITER};
 }
 
@@ -126,6 +148,7 @@ sub renderer_reader {
     my $self = shift;
     return $self->{+RENDERER_READER} if $self->{+RENDERER_READER};
     pipe($self->{+RENDERER_READER}, $self->{+AUDITOR_WRITER}) or die "Could not create pipe: $!";
+    _resize_pipe($self->{+AUDITOR_WRITER});
     return $self->{+RENDERER_READER};
 }
 
@@ -133,6 +156,7 @@ sub auditor_writer {
     my $self = shift;
     return $self->{+AUDITOR_WRITER} if $self->{+AUDITOR_WRITER};
     pipe($self->{+RENDERER_READER}, $self->{+AUDITOR_WRITER}) or die "Could not create pipe: $!";
+    _resize_pipe($self->{+AUDITOR_WRITER});
     return $self->{+AUDITOR_WRITER};
 }
 

@@ -610,15 +610,14 @@ L<Test2::Formatter::TAP> or L<Test::Builder::Formatter>.
 
 =head3 HARNESS-NO-IO-EVENTS
 
-C<yath> usually uses the L<Test2::Plugin::IOEvents> plugin. This plugin
-replaces STDERR and STDOUT in your test with tied handles that fire off proper
-L<Test2::Event>'s when they are printed to. Most of the time this is not an
-issue, but any fancy tests or modules which do anything with STDERR or STDOUT
-other than print may have really messy errors.
+C<yath> can be configured to use the L<Test2::Plugin::IOEvents> plugin. This
+plugin replaces STDERR and STDOUT in your test with tied handles that fire off
+proper L<Test2::Event>'s when they are printed to. Most of the time this is not
+an issue, but any fancy tests or modules which do anything with STDERR or
+STDOUT other than print may have really messy errors.
 
-This directive will disable the plugin on a per-test basis. Alternatively you
-can use the C<--no-io-events> option when running yath to disable it globally
-for your test suite.
+B<Note:> This plugin is disabled by default, so you only need this directive if
+you enable it globally but need to turn it back off for select tests.
 
 =head3 HARNESS-NO-TIMEOUT
 

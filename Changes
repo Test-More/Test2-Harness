@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Minor documentation correction
+
 1.000042  2020-11-17 22:44:35-08:00 America/Los_Angeles
 
     - Fix pipe size setting to actually use the value we want

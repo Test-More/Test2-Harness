@@ -37,18 +37,29 @@ sub process {
         last unless defined $data;
         my $e = Test2::Harness::Event->new($data);
 
-        # If process_event does not return anything we need to record just this
-        # event. If it does return then we want to record what it returns.
-        if (my @events = $self->process_event($e)) {
-            $self->{+ACTION}->($_) for @events;
-        }
-        else {
-            $self->{+ACTION}->($e);
-        }
+        $self->process_event($e);
     }
 }
 
 sub process_event {
+    my $self = shift;
+    my ($e) = @_;
+
+    return unless defined $e;
+
+    # If process_event does not return anything we need to record just this
+    # event. If it does return then we want to record what it returns.
+    if (my @events = $self->_process_event($e)) {
+        $self->{+ACTION}->($_) for @events;
+    }
+    else {
+        $self->{+ACTION}->($e);
+    }
+
+    return;
+}
+
+sub _process_event {
     my $self = shift;
     my ($e) = @_;
 
@@ -97,7 +108,7 @@ sub finish {
         my $file = File::Spec->abs2rel($self->{+QUEUED}->{$job_id}->{file});
 
         if (@$watchers) {
-            push @{$final_data->{failed}} => [$job_id, $file] if $watchers->[-1]->fail;
+            push @{$final_data->{failed}} => [$job_id, $file] if $watchers->[-1]->fail && !$watchers->[-1]->will_retry;
             push @{$final_data->{retried}} => [$job_id, scalar(@$watchers), $file, $watchers->[-1]->pass ? 'YES' : 'NO'] if @$watchers > 1;
 
             if (my $halt = $watchers->[-1]->halt) {

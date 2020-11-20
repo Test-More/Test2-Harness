@@ -13,7 +13,9 @@ use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
 use Test2::Harness::Runner::State;
+use Test2::Harness::Util::Queue;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json JSON/;
 use Test2::Harness::Util qw/mod2file open_file chmod_tmp/;
 use Test2::Util::Table qw/table/;
@@ -25,6 +27,7 @@ use Fcntl();
 
 use Time::HiRes qw/sleep time/;
 use List::Util qw/sum max min/;
+use File::Path qw/remove_tree/;
 use Carp qw/croak/;
 
 use parent 'App::Yath::Command';
@@ -48,9 +51,16 @@ use Test2::Harness::Util::HashBase qw/
     +tasks_queue
     +state
 
+    <sources
+
     <final_data
 
     <coverage_aggregator
+
+    +jobs_file +jobs_queue +jobs_queue_done
+
+    +ptp_collector
+    +ptp_events
 /;
 
 include_options(
@@ -240,8 +250,11 @@ sub start {
     $self->setup_plugins();
 
     $self->start_runner(jobs_todo => $pop);
-    $self->start_collector();
-    $self->start_auditor();
+
+    unless ($self->settings->run->per_test_processors) {
+        $self->start_collector();
+        $self->start_auditor();
+    }
 
     return 1;
 }
@@ -256,9 +269,64 @@ sub teardown_plugins {
     $_->teardown($self->settings) for @{$self->settings->harness->plugins};
 }
 
+sub jobs_queue {
+    my $self = shift;
+
+    return $self->{+JOBS_QUEUE} if $self->{+JOBS_QUEUE};
+
+    my $run_dir = File::Spec->catdir($self->workdir, $self->build_run->run_id);
+    my $jobs_file = $self->{+JOBS_FILE} //= File::Spec->catfile($run_dir, 'jobs.jsonl');
+
+    return unless -f $jobs_file;
+
+    return $self->{+JOBS_QUEUE} = Test2::Harness::Util::Queue->new(file => $jobs_file);
+}
+
+sub ptp_iteration {
+    my $self = shift;
+
+    $self->{+PTP_COLLECTOR} //= do {
+        $self->{+SOURCES}->{main} = [undef, undef, undef, $self->{+PTP_EVENTS} //= []];
+
+        require Test2::Harness::Collector;
+        Test2::Harness::Collector->new(
+            settings   => $self->settings,
+            workdir    => $self->workdir,
+            run_id     => $self->build_run->run_id,
+            runner_pid => $self->runner_pid,
+            run        => $self->build_run,
+
+            show_runner_output => 1,
+
+            action => sub { push @{$self->{+PTP_EVENTS}} => @_ },
+        );
+    };
+
+    $self->{+PTP_COLLECTOR}->process_runner_output();
+
+    # Return 1 if the file is not ready yet.
+    my $queue = $self->jobs_queue or return 1;
+
+    return 0 if $self->{+JOBS_QUEUE_DONE};
+
+    for my $item ($queue->poll) {
+        my ($spos, $epos, $job) = @$item;
+
+        unless ($job) {
+            $self->{+JOBS_QUEUE_DONE} = 1;
+            last;
+        }
+
+        $self->start_processor($job);
+    }
+
+    return 1;
+}
+
 sub render {
     my $self = shift;
 
+    my $run       = $self->build_run;
     my $ipc       = $self->ipc;
     my $settings  = $self->settings;
     my $renderers = $self->renderers;
@@ -273,59 +341,152 @@ sub render {
 
     $plugins = [grep {$_->can('handle_event')} @$plugins];
 
-    # render results from log
-    my $reader = $self->renderer_reader();
-    $reader->blocking(0);
-    my $buffer;
-    while (1) {
-        return if $self->{+SIGNAL};
+    my $ptp = $self->settings->run->per_test_processors;
 
-        my $line = <$reader>;
-        unless(defined $line) {
-            $ipc->wait() if $ipc;
-            sleep 0.02;
-            next;
-        }
+    my $sources = $self->{+SOURCES} //= {};
 
-        if ($buffer) {
-            $line = $buffer . $line;
-            $buffer = undef;
-        }
-
-        unless (substr($line, -1, 1) eq "\n") {
-            $buffer //= "";
-            $buffer .= $line;
-            next;
-        }
-
-        print $logger $line if $logger;
-        my $e = decode_json($line);
-        last unless defined $e;
-
-        bless($e, 'Test2::Harness::Event');
-
-        if (my $final = $e->{facet_data}->{harness_final}) {
-            $self->{+FINAL_DATA} = $final;
-        }
-        else {
-            $_->render_event($e) for @$renderers;
-
-            $self->{+COVERAGE_AGGREGATOR}->process_event($e) if $cover && (
-                $e->{facet_data}->{coverage} ||
-                $e->{facet_data}->{harness_job_end} ||
-                $e->{facet_data}->{harness_job_start}
-            );
-        }
-
-        $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
-        $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
-
-        $_->handle_event($e, $settings) for @$plugins;
-
-        $ipc->wait() if $ipc;
+    unless ($ptp) {
+        # render results from log
+        my $reader = $self->renderer_reader();
+        $reader->blocking(0);
+        my $buffer;
+        $sources->{main} = [$reader, \$buffer];
     }
+
+    while (1) {
+        last if $self->{+SIGNAL};
+        $ipc->wait() if $ipc;
+
+        my $done = 0;
+        my $keys = 0;
+        if ($ptp) {
+            $done = !$self->ptp_iteration;
+            $keys = keys %$sources;
+            last if $done && !$keys;
+        }
+        elsif (!keys %$sources) {
+            last;
+        }
+
+        my $count = 0;
+        my %seen;
+        # Make sure main comes first, and earlier attempts before later
+        for my $key (sort { $a eq 'main' ? -1 : $b eq 'main' ? 1 : $sources->{$a}->[0]->{stamp} <=> $sources->{$b}->[0]->{stamp} || $a cmp $b } keys %$sources) {
+            # This is to make sure no events from a retry come before we finish processing the original.
+            next if $key =~ m/^(.+)\+\d+$/ && $seen{$1}++;
+
+            my $data = $sources->{$key};
+            my ($job, $reader, $buffer, $events) = @$data;
+
+            while (1) {
+                my $e;
+                if ($events) {
+                    unless (@$events) {
+                        last unless $done && $keys == 1;
+                        $e = undef;
+                    }
+
+                    $e = shift @$events;
+                    print $logger encode_json($e) . "\n" if $logger && defined $e;
+                }
+                else {
+                    my $line = <$reader> // last;
+                    $count++;
+
+                    if ($$buffer) {
+                        $line = $buffer . $line;
+                        $$buffer = undef;
+                    }
+
+                    unless (substr($line, -1, 1) eq "\n") {
+                        $$buffer //= "";
+                        $$buffer .= $line;
+                        last;
+                    }
+
+                    $e = decode_json($line);
+                    print $logger $line if $logger && defined $e;
+                }
+
+                unless(defined $e) {
+                    delete $sources->{$key};
+                    last;
+                }
+
+                bless($e, 'Test2::Harness::Event');
+
+                $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
+                $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
+
+                if (my $final = $e->{facet_data}->{harness_final}) {
+                    $self->add_final_data($final);
+                    last;
+                }
+
+                $_->render_event($e) for @$renderers;
+
+                $self->{+COVERAGE_AGGREGATOR}->process_event($e) if $cover && (
+                    $e->{facet_data}->{coverage} ||
+                    $e->{facet_data}->{harness_job_end} ||
+                    $e->{facet_data}->{harness_job_start}
+                );
+
+                $_->handle_event($e, $settings) for @$plugins;
+            }
+        }
+
+        sleep 0.2 unless $count;
+    }
+
+    if ($ptp) {
+        if (my $final = $self->{+FINAL_DATA}) {
+            my %seen;
+            $final->{failed} = [grep { !$seen{$_->[0]}++ } @{$final->{failed}}] if $final->{failed};
+
+            %seen = ();
+            $final->{halted} = [grep { !$seen{$_->[0]}++ } @{$final->{halted}}] if $final->{halted};
+
+            %seen = ();
+            $final->{unseen} = [grep { !$seen{$_->[0]}++ } @{$final->{unseen}}] if $final->{unseen};
+
+            %seen = ();
+            $final->{retried} = [reverse grep { !$seen{$_->[0]}++ } reverse @{$final->{retried}}] if $final->{retried};
+
+            my $e = Test2::Harness::Event->new(
+                job_id     => 0,
+                stamp      => time,
+                event_id   => gen_uuid(),
+                run_id     => $run->run_id,
+                facet_data => {harness_final => $final},
+            );
+
+            print $logger encode_json($e) . "\n" if $logger;
+            $_->render_event($e) for @$renderers;
+            $_->handle_event($e, $settings) for @$plugins;
+        }
+
+        remove_tree($self->build_run->run_dir($self->workdir), {safe => 1, keep_root => 0})
+            unless $self->settings->debug->keep_dirs;
+    }
+
+    print $logger "null\n" if $logger;
+    return;
 }
 
+sub add_final_data {
+    my $self = shift;
+    my ($new) = @_;
+
+    my $data = $self->{+FINAL_DATA} //= {pass => 1};
+
+    $data->{pass} &&= $new->{pass};
+    push @{$data->{failed}}  => @{$new->{failed}}  if $new->{failed};
+    push @{$data->{retried}} => @{$new->{retried}} if $new->{retried};
+    push @{$data->{halted}}  => @{$new->{halted}}  if $new->{halted};
+    push @{$data->{unseen}}  => @{$new->{unseen}}  if $new->{unseen};
+
+    return $data;
+}
 
 sub stop {
     my $self = shift;
@@ -643,6 +804,52 @@ sub renderers {
     }
 
     return $self->{+RENDERERS} = \@renderers;
+}
+
+sub start_processor {
+    my $self = shift;
+    my ($job) = @_;
+
+    my $dir        = $self->workdir;
+    my $ipc        = $self->ipc;
+    my $run        = $self->build_run();
+    my $runner_pid = $self->runner_pid;
+    my $settings   = $self->settings;
+
+    my ($from_processor, $to_renderer);
+    pipe($from_processor, $to_renderer) or die "Could not open pipe: $!";
+    _resize_pipe($to_renderer);
+
+    my ($from_renderer, $to_processor);
+    pipe($from_renderer, $to_processor) or die "Could not open pipe: $!";
+    _resize_pipe($to_processor);
+
+    $ipc->spawn(
+        stdout      => $to_renderer,
+        stdin       => $from_renderer,
+        no_set_pgrp => 1,
+        command     => [
+            $^X, cover(), $settings->harness->script,
+            (map { "-D$_" } @{$settings->harness->dev_libs}),
+            '--no-scan-plugins',    # Do not preload any plugin modules
+            processor => 'Test2::Harness::Processor',
+            $dir, $run->run_id, $runner_pid,
+            show_runner_output => 1,
+        ],
+    );
+
+    close($to_renderer);
+    close($from_renderer);
+    print $to_processor encode_json($run) . "\n";
+    print $to_processor encode_json($job) . "\n";
+    close($to_processor);
+
+    my $job_id = $job->{job_id} or die "No job id!";
+    my $job_try = $job_id . '+' . $job->{is_try};
+
+    $from_processor->blocking(0);
+    my $buffer;
+    $self->{+SOURCES}->{$job_try} = [$job, $from_processor, \$buffer];
 }
 
 sub start_auditor {

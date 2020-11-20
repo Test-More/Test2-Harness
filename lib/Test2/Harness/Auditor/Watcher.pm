@@ -18,6 +18,8 @@ use Test2::Harness::Util::HashBase qw{
     -job
     -try
 
+    -will_retry
+
     -assertion_count
     -exit
     -plan
@@ -232,6 +234,8 @@ sub subtest_process {
             fail     => $self->fail(),
             stamp    => $f->{harness_job_exit}->{stamp},
         };
+
+        $self->{+WILL_RETRY} = 1 if $f->{harness_job_exit}->{retry};
 
         my $plan = $self->plan;
         $end->{skip} = $plan->{details} || "No reason given" if $plan && !$plan->{count};

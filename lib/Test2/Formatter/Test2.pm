@@ -510,7 +510,7 @@ sub render_tree {
     my $job = '';
     if ($f->{harness} && $f->{harness}->{job_id}) {
         my $id = $f->{harness}->{job_id};
-        my $name = $self->{+JOB_NAMES}->{$id};
+        my $name = $self->{+JOB_NAMES}->{$id} // "N/A";
 
         my ($color, $reset) = ('', '');
         if ($self->{+JOB_COLORS}) {

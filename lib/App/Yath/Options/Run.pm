@@ -11,6 +11,13 @@ use App::Yath::Options;
 option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harness::Run'} => sub {
     post \&post_process;
 
+    option per_test_processors => (
+        builds => undef,
+        type => 'b',
+        default => 1,
+        description => "When enabled (default) each test process will have an additional process spawned to collect and audit results. When disabled a single collector and auditor will be used for all tests.",
+    );
+
     option link => (
         field => 'links',
         type => 'm',

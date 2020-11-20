@@ -495,6 +495,8 @@ sub clear_finished_run {
 
     delete $self->{+RUN};
 
+    $run->jobs->write(undef);
+
     return 1;
 }
 

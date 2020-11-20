@@ -51,6 +51,7 @@ sub init {
 
 sub process {
     my $self = shift;
+    my (%params) = @_;
 
     while (1) {
         my $count = 0;
@@ -97,7 +98,7 @@ sub process {
 
     $self->{+ACTION}->(undef) if $self->{+JOBS_DONE} && $self->{+TASKS_DONE};
 
-    remove_tree($self->{+RUN_DIR}, {safe => 1, keep_root => 0}) unless $self->settings->debug->keep_dirs;
+    remove_tree($self->{+RUN_DIR}, {safe => 1, keep_root => 0}) unless $params{keep_run_dir} || $self->settings->debug->keep_dirs;
 
     return;
 }
@@ -188,12 +189,14 @@ sub process_runner_output {
 
 sub process_tasks {
     my $self = shift;
+    my (%params) = @_;
 
     return 0 if $self->{+TASKS_DONE};
 
     my $queue = $self->tasks_queue or return 0;
 
     my $count = 0;
+    my $found = 0;
     for my $item ($queue->poll) {
         $count++;
         my ($spos, $epos, $task) = @$item;
@@ -207,8 +210,15 @@ sub process_tasks {
         $self->{+TASKS}->{$job_id} = $task;
         $self->{+PENDING}->{$job_id} = 1 + ($task->{retry} || $self->run->retry || 0);
 
+        if (my $want = $params{only_job_id}) {
+            my $got = $job_id;
+            next unless $want && $got && $want eq $got;
+            $found++;
+        }
+
         my $e = $self->_harness_event($job_id, $task->{is_try} // 0, $task->{stamp}, 'harness_job_queued' => $task);
         $self->{+ACTION}->($e);
+        last if $found;
     }
 
     return $count;
@@ -231,47 +241,55 @@ sub jobs {
             last;
         }
 
-        my $job_id = $job->{job_id} or die "No job id!";
-
-        die "Found job without a task!" unless $self->{+TASKS}->{$job_id};
-
-        $self->{+PENDING}->{$job_id}--;
-        delete $self->{+PENDING}->{$job_id} if $self->{+PENDING}->{$job_id} < 1;
-
-        my $file = $job->{file};
-        my $e = $self->_harness_event(
-            $job_id,
-            $job->{is_try},
-            $job->{stamp},
-            harness_job        => $job,
-            harness_job_start  => {
-                details => "Job $job_id started at $job->{stamp}",
-                job_id  => $job_id,
-                stamp   => $job->{stamp},
-                file    => $file,
-                rel_file => File::Spec->abs2rel($file),
-                abs_file => File::Spec->rel2abs($file),
-            },
-            harness_job_launch => {
-                stamp => $job->{stamp},
-                retry => $job->{is_try},
-            },
-        );
-
-        $self->{+ACTION}->($e);
-
-        my $job_try = $job_id . '+' . $job->{is_try};
-
-        $jobs->{$job_try} = Test2::Harness::Collector::JobDir->new(
-            job_try    => $job->{is_try} // 0,
-            job_id     => $job_id,
-            run_id     => $self->{+RUN_ID},
-            runner_pid => $self->{+RUNNER_PID},
-            job_root   => File::Spec->catdir($self->{+RUN_DIR}, $job_try),
-        );
+        $self->add_job($job);
     }
 
     return $jobs;
+}
+
+sub add_job {
+    my $self = shift;
+    my ($job, %params) = @_;
+
+    my $jobs = $self->{+JOBS} //= {};
+
+    my $job_id = $job->{job_id} or die "No job id!";
+    die "Found job without a task!" unless $self->{+TASKS}->{$job_id} || $params{no_task};
+
+    $self->{+PENDING}->{$job_id}--;
+    delete $self->{+PENDING}->{$job_id} if $self->{+PENDING}->{$job_id} < 1;
+
+    my $file = $job->{file};
+    my $e    = $self->_harness_event(
+        $job_id,
+        $job->{is_try},
+        $job->{stamp},
+        harness_job       => $job,
+        harness_job_start => {
+            details  => "Job $job_id started at $job->{stamp}",
+            job_id   => $job_id,
+            stamp    => $job->{stamp},
+            file     => $file,
+            rel_file => File::Spec->abs2rel($file),
+            abs_file => File::Spec->rel2abs($file),
+        },
+        harness_job_launch => {
+            stamp => $job->{stamp},
+            retry => $job->{is_try},
+        },
+    );
+
+    $self->{+ACTION}->($e);
+
+    my $job_try = $job_id . '+' . $job->{is_try};
+
+    $jobs->{$job_try} = Test2::Harness::Collector::JobDir->new(
+        job_try    => $job->{is_try} // 0,
+        job_id     => $job_id,
+        run_id     => $self->{+RUN_ID},
+        runner_pid => $self->{+RUNNER_PID},
+        job_root   => File::Spec->catdir($self->{+RUN_DIR}, $job_try),
+    );
 }
 
 sub _harness_event {

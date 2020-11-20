@@ -6,9 +6,9 @@ use App::Yath::Tester qw/yath/;
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 
-run_tests('test');
-
 my $project = "asgadfgds";
+
+run_tests('test');
 
 unless ($ENV{AUTOMATED_TESTING}) {
     my $out = yath(

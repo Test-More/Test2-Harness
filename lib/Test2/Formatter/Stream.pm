@@ -17,7 +17,26 @@ use Test2::Harness::Util qw/hub_truth apply_encoding/;
 use Test2::Util qw/get_tid ipc_separator/;
 
 use base qw/Test2::Formatter/;
-use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id -ugids/;
+use Test2::Util::HashBase qw{
+    <io
+
+    _encoding
+    _no_header
+    _no_numbers
+    _no_diag
+
+    <stream_id
+
+    <tb <tb_handles
+
+    <pid <tid
+
+    +fh <fd
+
+    <job_id
+};
+
+sub hide_buffered { $_[0]->{+PID} == $$ }
 
 BEGIN {
     my $J = JSON->new;
@@ -25,6 +44,7 @@ BEGIN {
     $J->convert_blessed(1);
     $J->allow_blessed(1);
     $J->utf8(1);
+    $J->ascii(1);
 
     require constant;
     constant->import(ENCODER => $J);
@@ -36,87 +56,56 @@ BEGIN {
         $JPP->convert_blessed(1);
         $JPP->allow_blessed(1);
         $JPP->utf8(1);
+        $JPP->ascii(1);
 
         constant->import(ENCODER_PP => $JPP);
     }
 }
 
-my ($ROOT_TID, $ROOT_PID, $ROOT_DIR, $ROOT_JOB_ID, $ROOT_UGIDS);
+my ($ROOT_TID, $ROOT_PID, $ROOT_FD, $ROOT_JOB_ID);
 sub import {
     my $class = shift;
     my %params = @_;
 
-    confess "$class no longer accept the 'file' argument, it now takes a 'dir' argument"
-        if exists $params{file};
-
     $class->SUPER::import();
 
-    $ROOT_PID  = $$;
-    $ROOT_TID  = get_tid();
-    $ROOT_DIR = $params{dir} if $params{dir};
+    $ROOT_PID    = $$;
+    $ROOT_TID    = get_tid();
+    $ROOT_FD     = $params{fd}     if $params{fd};
     $ROOT_JOB_ID = $params{job_id} if $params{job_id};
-    $ROOT_UGIDS = [$<, $>, $(, $)];
-
-    if ($ROOT_DIR && ! -d $ROOT_DIR) {
-        mkdir($ROOT_DIR) or die "Could not make root dir: $!";
-    }
 }
-
-sub hide_buffered { 0 }
 
 sub fh {
     my $self = shift;
 
-    my $dir = $self->{+DIR} or return undef;
+    my $pid = $self->{+PID};
+    my $tid = $self->{+TID};
 
-    my $pid = $self->{+_PID};
-    my $tid = $self->{+_TID};
+    my $bad = 0;
+    $bad ||= $pid && $pid != $$;
+    $bad ||= $tid && $tid != get_tid();
 
-    if ($pid && $pid != $$) {
-        delete $self->{+_PID};
-        delete $self->{+_FH};
-    }
+    confess "The stream filehandle should not be used in any child process or thread"
+        if $bad;
 
-    if ($tid && $tid != get_tid()) {
-        delete $self->{+_TID};
-        delete $self->{+_FH};
-    }
-
-    return $self->{+_FH} if $self->{+_FH};
-
-    $self->{+STREAM_ID} = 1;
-
-    $pid = $self->{+_PID} = $$;
-    $tid = $self->{+_TID} = get_tid();
-
-    my $file = File::Spec->catfile($dir, join(ipc_separator() => 'events', $pid, $tid) . ".jsonl");
-
-    my @now = ($<, $>, $(, $));
-    local ($<, $>, $(, $)) = @{$self->{+UGIDS}} if $self->{+UGIDS} && first { $self->{+UGIDS}->[$_] ne $now[$_] } 0 .. $#now;
-
-    mkdir($dir) or die "Could not make dir '$dir': $!" unless -d $dir;
-    confess "File '$file' already exists!" if -f $file;
-    open(my $fh, '>', $file) or die "Could not open file: $file";
-    $fh->autoflush(1);
-
-    # Do not apply encoding to the UTF8 output, we let the utf8 formatter
-    # handle that. This means do not apply encoding to $self->{+_FH}.
-
-    return $self->{+_FH} = $fh;
+    return $self->{+FH};
 }
 
 sub init {
     my $self = shift;
 
     $self->{+STREAM_ID} = 1;
-    $self->{+UGIDS} //= [$<, $>, $(, $)];
 
-    # To create necessary directories as soon as possible
-    $self->fh();
+    $self->{+PID} = $$;
+    $self->{+TID} = get_tid();
 
-    for (@{$self->{+IO}}) {
-        $_->autoflush(1);
+    if (my $fd = $self->{+FD}) {
+        open(my $fh, '>>&=', $fd) or die "Could not open fd(${fd}): $!";
+        $fh->autoflush(1);
+        $self->{+FH} = $fh;
     }
+
+    $_->autoflush(1) for @{$self->{+IO}};
 
     STDOUT->autoflush(1);
     STDERR->autoflush(1);
@@ -137,8 +126,8 @@ sub new_root {
     my $class = shift;
     my %params = @_;
 
-    $ROOT_PID = $$ unless defined $ROOT_PID;
-    $ROOT_TID = get_tid() unless defined $ROOT_TID;
+    $ROOT_PID //= $$;
+    $ROOT_TID //= get_tid();
 
     confess "new_root called from child process!"
         if $ROOT_PID != $$;
@@ -150,21 +139,16 @@ sub new_root {
     my $io = $params{+IO} = [Test2::API::test2_stdout(), Test2::API::test2_stderr()];
     $_->autoflush(1) for @$io;
 
-    confess "T2_STREAM_FILE is no longer used, see T2_STREAM_DIR"
-        if exists $ENV{T2_STREAM_FILE};
-
-    $params{+DIR} ||= $ENV{T2_STREAM_DIR} || $ROOT_DIR;
-    $params{+JOB_ID} ||= $ENV{T2_STREAM_JOB_ID} || $ROOT_JOB_ID || 1;
+    $params{+FD}     //= $ENV{T2_STREAM_FD}     // $ROOT_FD;
+    $params{+JOB_ID} //= $ENV{T2_STREAM_JOB_ID} // $ROOT_JOB_ID // 1;
 
     # DO NOT REOPEN THEM!
     delete $ENV{T2_FORMATTER} if $ENV{T2_FORMATTER} && $ENV{T2_FORMATTER} eq 'Stream';
-    delete $ENV{T2_STREAM_DIR};
+    delete $ENV{T2_STREAM_FD};
     delete $ENV{T2_STREAM_JOB_ID};
-    $ROOT_DIR = undef;
+    $ROOT_FD = undef;
 
     $params{check_tb} = 1 if $INC{'Test/Builder.pm'};
-
-    $params{+UGIDS} = $ROOT_UGIDS if $ROOT_UGIDS;
 
     return $class->new(%params);
 }
@@ -185,21 +169,8 @@ sub record {
         $fh = shift @sync;
     }
 
-    if ($facets->{control}->{halt}) {
-        my $reason = $facets->{control}->{details} || "";
-
-        if ($leader) {
-            print $fh "\nBail out!  $reason\n";
-        }
-        else {
-            open(my $bh, '>', File::Spec->catfile($self->{+DIR}, 'bail')) or die "Could not create bail file: $!";
-            print $bh $reason;
-            close($bh);
-        }
-    }
-
     my $tid = get_tid();
-    my $id = $self->{+STREAM_ID}++;
+    my $id  = $self->{+STREAM_ID}++;
 
     my $json;
     {
@@ -257,9 +228,10 @@ sub record {
 
     my $job_id = $self->{+JOB_ID};
 
-    print $fh $leader ? ("T2-HARNESS-$job_id-EVENT: ", $json, "\n") : ($json, "\n");
+    print $fh $leader ? ("T2-HARNESS-$job_id-EVENT: " . $json . "\n") : ($json, "\n");
 
-    print $_ "T2-HARNESS-$job_id-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
+    my $esync = "T2-HARNESS-$job_id-ESYNC: " . join(ipc_separator() => $$, $tid, $id) . "\n";
+    print $_ $esync for @sync;
 }
 
 sub encoding {

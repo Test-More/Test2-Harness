@@ -14,7 +14,11 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON JSON_IS_XS/;
 use Test2::Harness::Util qw/hub_truth apply_encoding/;
 
+use Test2::Plugin::UUID;
+
 use Test2::Util qw/get_tid ipc_separator/;
+
+use Atomic::Pipe;
 
 use base qw/Test2::Formatter/;
 use Test2::Util::HashBase qw{
@@ -25,18 +29,14 @@ use Test2::Util::HashBase qw{
     _no_numbers
     _no_diag
 
-    <stream_id
-
     <tb <tb_handles
 
     <pid <tid
 
-    +fh <fd
-
     <job_id
 };
 
-sub hide_buffered { $_[0]->{+PID} == $$ }
+sub hide_buffered { 0 }
 
 BEGIN {
     my $J = JSON->new;
@@ -62,7 +62,7 @@ BEGIN {
     }
 }
 
-my ($ROOT_TID, $ROOT_PID, $ROOT_FD, $ROOT_JOB_ID);
+my ($ROOT_TID, $ROOT_PID, $ROOT_JOB_ID);
 sub import {
     my $class = shift;
     my %params = @_;
@@ -71,49 +71,14 @@ sub import {
 
     $ROOT_PID    = $$;
     $ROOT_TID    = get_tid();
-    $ROOT_FD     = $params{fd}     if $params{fd};
     $ROOT_JOB_ID = $params{job_id} if $params{job_id};
-}
-
-sub fh {
-    my $self = shift;
-
-    my $pid = $self->{+PID};
-    my $tid = $self->{+TID};
-
-    my $bad = 0;
-    $bad ||= $pid && $pid != $$;
-    $bad ||= $tid && $tid != get_tid();
-
-    confess "The stream filehandle should not be used in any child process or thread"
-        if $bad;
-
-    return $self->{+FH};
 }
 
 sub init {
     my $self = shift;
 
-    $self->{+STREAM_ID} = 1;
-
     $self->{+PID} = $$;
     $self->{+TID} = get_tid();
-
-    if (my $fd = $self->{+FD}) {
-        open(my $fh, '>>&=', $fd) or die "Could not open fd(${fd}): $!";
-        $fh->autoflush(1);
-        $self->{+FH} = $fh;
-    }
-
-    $_->autoflush(1) for @{$self->{+IO}};
-
-    STDOUT->autoflush(1);
-    STDERR->autoflush(1);
-
-    if ($INC{'Test2/API.pm'}) {
-        Test2::API::test2_stdout()->autoflush(1);
-        Test2::API::test2_stderr()->autoflush(1);
-    }
 
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;
@@ -135,18 +100,39 @@ sub new_root {
     confess "new_root called from child thread!"
         if $ROOT_TID != get_tid();
 
-    require Test2::API;
-    my $io = $params{+IO} = [Test2::API::test2_stdout(), Test2::API::test2_stderr()];
-    $_->autoflush(1) for @$io;
+    STDOUT->autoflush(1);
+    STDERR->autoflush(1);
 
-    $params{+FD}     //= $ENV{T2_STREAM_FD}     // $ROOT_FD;
-    $params{+JOB_ID} //= $ENV{T2_STREAM_JOB_ID} // $ROOT_JOB_ID // 1;
+    require Test2::API;
+    Test2::API::test2_stdout()->autoflush(1);
+    Test2::API::test2_stderr()->autoflush(1);
+
+    die "STDOUT is not connected to a pipe" unless -p STDOUT;
+    die "STDERR is not connected to a pipe" unless -p STDERR;
+
+    my $io = $params{+IO} = [
+        Atomic::Pipe->from_fh('>&', \*STDOUT),
+        Atomic::Pipe->from_fh('>&', \*STDERR),
+    ];
+
+    my $job_id = $params{+JOB_ID} //= $ENV{T2_STREAM_JOB_ID} // $ROOT_JOB_ID // 1;
+
+    my $esync = "STREAM-ESYNC $job_id " . time . " 0";
+    for my $fh (@$io) {
+        $fh->set_mixed_data_mode;
+
+        # Set the read size to the DEFAULT pipe size (before resizing) it seems
+        # to be the fastest (optimizations in the kernel? memory boundary?).
+        if (my $size = $fh->size) {
+            $fh->read_size($size);
+        }
+
+        $fh->write_message($esync);
+    }
 
     # DO NOT REOPEN THEM!
     delete $ENV{T2_FORMATTER} if $ENV{T2_FORMATTER} && $ENV{T2_FORMATTER} eq 'Stream';
-    delete $ENV{T2_STREAM_FD};
     delete $ENV{T2_STREAM_JOB_ID};
-    $ROOT_FD = undef;
 
     $params{check_tb} = 1 if $INC{'Test/Builder.pm'};
 
@@ -158,45 +144,33 @@ sub record {
     my ($facets, $num) = @_;
 
     my $stamp = time;
-    my $times = [times];
 
-    my @sync = @{$self->{+IO}};
-    my $leader = 0;
-
-    my $fh = $self->fh;
-    unless($fh) {
-        $leader = 1;
-        $fh = shift @sync;
-    }
-
+    my ($es, @sync) = @{$self->{+IO}};
     my $tid = get_tid();
-    my $id  = $self->{+STREAM_ID}++;
 
+    my $event_id;
     my $json;
     {
         no warnings 'once';
         local *UNIVERSAL::TO_JSON = sub { "$_[0]" };
 
-        my $event_id = $facets->{about}->{uuid} ||= gen_uuid();
+        $event_id = $facets->{about}->{uuid} //= gen_uuid();
+
+        confess "'stream' facet already exists in event before Stream could tag it" if $facets->{stream};
+
+        $facets->{stream} = {
+            pid       => $$,
+            tid       => $tid,
+            stamp     => $stamp,
+            event_id  => $event_id,
+        };
+
+        $facets->{stream}->{assert_count} = $num unless $self->{+_NO_NUMBERS};
 
         if (JSON_IS_XS) {
             for my $encoder (ENCODER, ENCODER_PP) {
                 local $@;
-                my $ok = eval {
-                    $json = $encoder->encode(
-                        {
-                            stamp        => $stamp,
-                            times        => $times,
-                            stream_id    => $id,
-                            tid          => $tid,
-                            pid          => $$,
-                            event_id     => $event_id,
-                            facet_data   => $facets,
-                            assert_count => $self->{+_NO_NUMBERS} ? undef : $num,
-                        }
-                    );
-                    1;
-                };
+                my $ok  = eval { $json = $encoder->encode($facets); 1 };
                 my $err = $@;
                 last if $ok;
 
@@ -208,30 +182,18 @@ sub record {
             }
         }
         else {
-            $json = ENCODER->encode(
-                {
-                    stamp        => $stamp,
-                    times        => $times,
-                    stream_id    => $id,
-                    tid          => $tid,
-                    pid          => $$,
-                    event_id     => $event_id,
-                    facet_data   => $facets,
-                    assert_count => $self->{+_NO_NUMBERS} ? undef : $num,
-                }
-            );
+            $json = ENCODER->encode($facets);
         }
     }
 
-    # Local is expensive! Only do it if we really need to.
-    local($\, $,) = (undef, '') if $\ || $,;
-
     my $job_id = $self->{+JOB_ID};
 
-    print $fh $leader ? ("T2-HARNESS-$job_id-EVENT: " . $json . "\n") : ($json, "\n");
+    my $esync = "STREAM-ESYNC $job_id $stamp $event_id";
 
-    my $esync = "T2-HARNESS-$job_id-ESYNC: " . join(ipc_separator() => $$, $tid, $id) . "\n";
-    print $_ $esync for @sync;
+    # Write the event
+    $es->write_message("STREAM-EVENT $job_id $stamp " . $json);
+
+    $_->write_message($esync) for @sync;
 }
 
 sub encoding {
@@ -253,17 +215,13 @@ sub _set_encoding {
     if (@_) {
         my ($enc) = @_;
 
-        # Do not apply encoding to the UTF8 output, we let the utf8 formatter
-        # handle that. This means do not apply encoding to $self->{+_FH}.
-
         apply_encoding(\*STDOUT, $enc);
         apply_encoding(\*STDERR, $enc);
 
         my $job_id = $self->{+JOB_ID};
-        for my $fh (@{$self->{+IO}}) {
-            print $fh "T2-HARNESS-$job_id-ENCODING: $enc\n";
-            apply_encoding($fh, $enc);
-        }
+
+        my $msg = "STREAM-ENCODING $job_id " . time . " $enc";
+        $_->write_message($msg) for @{$self->{+IO}};
     }
 
     return $self->{+_ENCODING};
@@ -277,6 +235,15 @@ if ($^C) {
 sub write {
     my ($self, $e, $num, $f) = @_;
     $f ||= $e->facet_data;
+
+    # Do not write nested events in a child process/thread
+    # These happen if you fork inside a subtest, start a new subtest and fork
+    # again inside it.
+    my $hf = hub_truth($f);
+    if ($hf->{nested}) {
+        return if $self->{+PID} && $self->{+PID} != $$;
+        return if $self->{+TID} && $self->{+TID} != get_tid();
+    }
 
     $self->_set_encoding($f->{control}->{encoding}) if $f->{control}->{encoding};
 
@@ -295,7 +262,7 @@ sub write {
         $tb_only ||= !$todo_match;
 
         if ($tb_only) {
-            my $buffered = hub_truth($f)->{buffered};
+            my $buffered = $hf->{buffered};
             $self->{+TB}->write($e, $num, $f) if $self->{+TB} && !$buffered;
             return;
         }

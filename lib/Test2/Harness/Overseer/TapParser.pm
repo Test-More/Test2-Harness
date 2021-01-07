@@ -1,26 +1,18 @@
-package Test2::Harness::Collector::TapParser;
+package Test2::Harness::Overseer::TapParser;
 use strict;
 use warnings;
 
 our $VERSION = '1.000043';
 
-use Importer 'Importer' => 'import';
-
-our @EXPORT_OK = qw{
-    parse_stdout_tap
-    parse_stderr_tap
-    parse_tap_line
-};
-
 sub parse_stdout_tap {
+    my $class = shift;
     my ($line) = @_;
     my $facet_data = __PACKAGE__->_parse_tap_line($line) or return undef;
-    $facet_data->{from_tap} = { source => 'STDOUT', details => $line };
     return $facet_data;
 }
 
-
 sub parse_stderr_tap {
+    my $class = shift;
     my ($line) = @_;
 
     # STDERR only has comments
@@ -29,7 +21,6 @@ sub parse_stderr_tap {
     my $facet_data = __PACKAGE__->_parse_tap_line($line) or return undef;
     $facet_data->{info}->[-1]->{tag} = 'DIAG';
     $facet_data->{info}->[-1]->{debug} = 1;
-    $facet_data->{from_tap} = { source => 'STDERR', details => $line };
 
     return $facet_data;
 }
@@ -55,7 +46,7 @@ sub _parse_tap_line {
         # indentation other than 0 or a multiple of 4 spaces... not an event
         return undef if $lead_len % 4;
 
-        $nest = $lead_len / 4;
+        $nest = int($lead_len / 4);
     }
 
     my @types = qw/buffered_subtest comment plan bail version/;
@@ -267,7 +258,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Collector::TapParser - Produce EventFacets from a line of TAP.
+Test2::Harness::Overseer::TapParser - Produce EventFacets from a line of TAP.
 
 =head1 DESCRIPTION
 
@@ -277,7 +268,7 @@ that C<< Test2 -> TAP -> Test2 >> is lossy at the C<< Test2 -> TAP >> step.
 
 =head1 SYNOPSIS
 
-    use Test2::Harness::Collector::TapParser qw/parse_tap_line/;
+    use Test2::Harness::Overseer::TapParser qw/parse_tap_line/;
 
     my $facet_data = parse_tap_line("1..1");
     is(
@@ -335,8 +326,7 @@ that C<< Test2 -> TAP -> Test2 >> is lossy at the C<< Test2 -> TAP >> step.
 =item $facet_data = parse_tap_line($line)
 
 Parse a line of TAP. It is assumed to be STDOUT thus all comments are turned
-into notes. Using this export will B<NOT> add the usual C<from_tap> facet. It
-is better to use one of the other 2 exports.
+into notes. It is better to use one of the other 2 exports.
 
 =item $facet_data = parse_stdout_tap($line)
 

@@ -1,4 +1,4 @@
-package Test2::Harness::Auditor::TimeTracker;
+package Test2::Harness::Overseer::Auditor::TimeTracker;
 use strict;
 use warnings;
 
@@ -6,63 +6,56 @@ our $VERSION = '1.000043';
 
 use Test2::Harness::Util qw/hub_truth/;
 use Test2::Util::Times qw/render_duration/;
+use Importer 'List::Util' => (first => {-as => 'lu_first'});
 
 use Test2::Harness::Util::HashBase qw{
-    -start -start_id
-    -stop  -stop_id
-    -first -first_id
-    -last  -last_id
-    -complete_id
+    <start
+    <first
+    <last
+    <exit
+    stop
 
-    -_source
-    -_totals
+    +source
+    +totals
 };
 
 sub process {
     my $self = shift;
-    my ($event, $f, $assertion_count) = @_;
+    my ($event, $f) = @_;
 
     # Invalidate cache
-    delete $self->{+_TOTALS};
-    delete $self->{+_SOURCE};
+    delete $self->{+TOTALS};
+    delete $self->{+SOURCE};
 
-    my $stamp = $event->{stamp} or return;
-    my $id    = $event->{event_id} // 'N/A';
+    my $stamp = $event->stamp or return;
 
-    $f  //= $event->{facet_data};
+    $f //= $event->facet_data;
 
     if ($f->{harness_job_exit}) {
-        $self->{+STOP}    = $stamp;
-        $self->{+STOP_ID} = $id;
-    }
+        $self->{+EXIT} = $stamp;
 
-    return if $self->{+COMPLETE_ID};
+        # Sanity check
+        $self->{+LAST} = $stamp if $self->{+LAST} && $self->{+LAST} > $stamp;
+
+        return;
+    }
 
     if ($f->{harness_job_start}) {
-        $self->{+START}    = $stamp;
-        $self->{+START_ID} = $id;
+        $self->{+START} = $stamp;
+        return;
     }
 
-    # These events absolutely end the events phase, and do not count as part of
-    # it.
-    $self->{+COMPLETE_ID} //= $event->{event_id} if $f->{harness_job_exit};
-    $self->{+COMPLETE_ID} //= $event->{event_id} if $f->{control} && $f->{control}->{phase} && $f->{control}->{phase} eq 'END';
+    # Sanity checks
+    return if $self->{+START} && $stamp < $self->{+START};
+    return if $self->{+EXIT}  && $stamp > $self->{+EXIT};
 
-    return if $self->{+COMPLETE_ID};
+    # Only stamps from messages count
+    return unless $f->{harness}->{from_message};
 
-    # Plan still counts as 'event' phase, so do not return if we are setting this now
-    $self->{+COMPLETE_ID} //= $event->{event_id} if $assertion_count && $f->{plan} && !$f->{plan}->{none};
+    return unless lu_first { exists $f->{$_} } qw/assert info parent parent amnesty render plan/;
 
-    return unless $f->{trace}; # Events with traces are "event" phase.
-
-    # Always replace the last, if we got this far.
-    $self->{+LAST} = $stamp;
-    $self->{+LAST_ID} = $id;
-
-    # Only set the first one once
-    return if $self->{+FIRST};
-    $self->{+FIRST} = $stamp;
-    $self->{+FIRST_ID} = $id;
+    $self->{+FIRST} = $stamp unless $self->{+FIRST} && $self->{+FIRST} < $stamp;
+    $self->{+LAST}  = $stamp unless $self->{+LAST}  && $self->{+LAST}  > $stamp;
 
     return;
 }
@@ -70,28 +63,30 @@ sub process {
 sub useful {
     my $self = shift;
 
-    my @got = grep { defined $self->{$_} } START, FIRST, LAST, STOP;
+    my @got = grep { defined $self->{$_} } START, FIRST, LAST, STOP, EXIT;
     return @got > 1;
 }
 
-my @TOTAL_FIELDS = qw/startup events cleanup total/;
+my @TOTAL_FIELDS = qw/startup events cleanup process total/;
 my %TOTAL_SOURCES = (
     startup => [FIRST, START],
     events  => [LAST,  FIRST],
-    cleanup => [STOP,  LAST],
+    cleanup => [EXIT,  LAST],
+    process => [STOP,  EXIT],
     total   => [STOP,  START]
 );
 my %TOTAL_DESC = (
     startup => "Time from launch to first test event.",
     events  => "Time spent generating test events.",
     cleanup => "Time from last test event to test exit.",
+    process => "Time spent processing results after test exit.",
     total   => "Total time",
 );
 
 sub totals {
     my $self = shift;
 
-    return $self->{+_TOTALS} if $self->{+_TOTALS};
+    return $self->{+TOTALS} if $self->{+TOTALS};
 
     my $out = {};
 
@@ -105,26 +100,20 @@ sub totals {
         $out->{"h_$field"} = render_duration($delta);
     }
 
-    return $self->{+_TOTALS} = $out;
+    return $self->{+TOTALS} = $out;
 }
 
 sub source {
     my $self = shift;
 
-    return $self->{+_SOURCE} if $self->{+_SOURCE};
+    return $self->{+SOURCE} if $self->{+SOURCE};
 
-    my @fields = (
-        START, START_ID,
-        STOP,  STOP_ID,
-        FIRST, FIRST_ID,
-        LAST,  LAST_ID,
-        COMPLETE_ID,
-    );
+    my @fields = (START, STOP, FIRST, LAST, EXIT);
 
     my %out;
     @out{@fields} = @{$self}{@fields};
 
-    return $self->{+_SOURCE} = \%out;
+    return $self->{+SOURCE} = \%out;
 }
 
 sub data_dump {
@@ -187,7 +176,6 @@ sub job_fields {
         for my $source (@$sources) {
             $data->{$source} = {
                 stamp => $self->{$source},
-                event_id => $self->{"${source}_id"},
             };
         }
 
@@ -207,7 +195,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Auditor::TimeTracker - Module that tracks timing data while an
+Test2::Harness::Overseer::Auditor::TimeTracker - Module that tracks timing data while an
 event stream is processed.
 
 =head1 DESCRIPTION
@@ -224,15 +212,17 @@ long the test took in each of several stages.
 
 =item cleanup - Time from last test event to test exit.
 
+=item cleanup - Time from test exit to when the harness was done processing the results.
+
 =item total - Total time.
 
 =back
 
 =head1 SYNOPSIS
 
-    use Test2::Harness::Auditor::TimeTracker;
+    use Test2::Harness::Overseer::Auditor::TimeTracker;
 
-    my $tracker = Test2::Harness::Auditor::TimeTracker->new();
+    my $tracker = Test2::Harness::Overseer::Auditor::TimeTracker->new();
 
     my $assert_count = 0;
     for my $event (@events) {

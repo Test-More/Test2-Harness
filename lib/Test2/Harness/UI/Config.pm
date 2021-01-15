@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '0.000029';
 
-use Test2::Util qw/get_tid/;
+use Test2::Util qw/get_tid pkg_to_file/;
 
 use Carp qw/croak/;
 
@@ -45,6 +45,11 @@ sub schema {
     my $self = shift;
 
     return $self->{+_SCHEMA} if $self->{+_SCHEMA};
+
+    unless ($Test2::Harness::UI::Schema::LOADED) {
+        my $schema = $ENV{YATH_UI_SCHEMA} //= 'PostgreSQL';
+        require(pkg_to_file("Test2::Harness::UI::Schema::$schema"));
+    }
 
     require Test2::Harness::UI::Schema;
 

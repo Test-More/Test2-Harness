@@ -82,10 +82,10 @@ sub process {
     unless ($fh) {
         my $log = $run->log_file or die "No log file";
         if ($log->name =~ m/\.bz2$/) {
-            $fh = IO::Uncompress::Bunzip2->new(\($log->data)) or die "Could not open bz2 data: $Bunzip2Error";
+            $fh = IO::Uncompress::Bunzip2->new($log->local_file || \($log->data)) or die "Could not open bz2 data: $Bunzip2Error";
         }
         else {
-            $fh = IO::Uncompress::Gunzip->new(\($log->data)) or die "Could not open gz data: $GunzipError";
+            $fh = IO::Uncompress::Gunzip->new($log->local_file || \($log->data)) or die "Could not open gz data: $GunzipError";
         }
     }
 
@@ -342,7 +342,7 @@ sub update_other {
     }
     if (my $job_exit = $f->{harness_job_exit}) {
         $job->{file} ||= $job_exit->{file};
-        $job->{exit} = $job_exit->{exit};
+        $job->{exit_code} = $job_exit->{exit};
 
         if ($job_exit->{retry} && $job_exit->{retry} eq 'will-retry') {
             $job->{retry} = 1;

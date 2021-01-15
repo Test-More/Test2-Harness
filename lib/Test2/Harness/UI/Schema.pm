@@ -1,23 +1,23 @@
-use utf8;
 package Test2::Harness::UI::Schema;
-
-# Created by DBIx::Class::Schema::Loader
-# DO NOT MODIFY THE FIRST PART OF THIS FILE
-
+use utf8;
 use strict;
 use warnings;
-
-use base 'DBIx::Class::Schema';
-
-__PACKAGE__->load_namespaces;
-
-
-# Created by DBIx::Class::Schema::Loader v0.07048 @ 2018-02-02 15:01:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:yHwMZID2mykj7TNRoqEZAA
+use Carp qw/confess/;
 
 our $VERSION = '0.000029';
 
-# You can replace this text with custom code or comments, and it will be preserved on regeneration
+use base 'DBIx::Class::Schema';
+
+confess "You must first load a Test2::Harness::UI::Schema::NAME module"
+    unless $Test2::Harness::UI::Schema::LOADED;
+
+__PACKAGE__->load_namespaces;
+
+require Test2::Harness::UI::Schema::Result::Event;
+require Test2::Harness::UI::Schema::Result::Job;
+require Test2::Harness::UI::Schema::Result::Run;
+require Test2::Harness::UI::Schema::Result::User;
+
 1;
 
 __END__

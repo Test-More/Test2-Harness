@@ -10,7 +10,39 @@ use File::ShareDir();
 
 use Importer Importer => 'import';
 
-our @EXPORT = qw/share_dir share_file/;
+our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver/;
+
+my %SCHEMA_TO_QDB_DRIVER = (
+    mariadb => 'MySQL',
+    mysql => 'MySQL',
+    postgresql => 'PostgreSQL',
+);
+
+my %SCHEMA_TO_DBD_DRIVER = (
+    mariadb    => 'DBD::MariaDB',
+    mysql      => 'DBD::mysql',
+    postgresql => 'DBD::postgresql',
+);
+
+sub base_name {
+    my ($in) = @_;
+
+    my $out = lc($in);
+    $out =~ s/\.sql$//;
+    $out =~ s/\d+$//g;
+
+    return $out;
+}
+
+sub qdb_driver {
+    my $base = base_name(@_);
+    return $SCHEMA_TO_QDB_DRIVER{$base};
+}
+
+sub dbd_driver {
+    my $base = base_name(@_);
+    return $SCHEMA_TO_DBD_DRIVER{$base};
+}
 
 sub share_file {
     my ($file) = @_;

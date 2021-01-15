@@ -95,7 +95,8 @@ CREATE INDEX IF NOT EXISTS api_key_user ON api_keys(user_id);
 CREATE TABLE log_files (
     log_file_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     name            TEXT            NOT NULL,
-    data            BYTEA           NOT NULL
+    local_file      TEXT,
+    data            BYTEA
 );
 
 CREATE TABLE projects (
@@ -120,6 +121,7 @@ CREATE TABLE runs (
     run_id          UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     user_id         UUID            NOT NULL REFERENCES users(user_id),
     status          queue_status    NOT NULL DEFAULT 'pending',
+    worker_id       TEXT            DEFAULT NULL,
     error           TEXT            DEFAULT NULL,
     project_id      UUID            NOT NULL REFERENCES projects(project_id),
 
@@ -173,7 +175,7 @@ CREATE TABLE jobs (
     file            TEXT            DEFAULT NULL,
     fail            BOOL            DEFAULT NULL,
     retry           BOOL            DEFAULT NULL,
-    exit            INT             DEFAULT NULL,
+    exit_code       INT             DEFAULT NULL,
     launch          TIMESTAMP       DEFAULT NULL,
     start           TIMESTAMP       DEFAULT NULL,
     ended           TIMESTAMP       DEFAULT NULL,

@@ -1,0 +1,234 @@
+CREATE TABLE users (
+    user_id         CHAR(36)        NOT NULL PRIMARY KEY,
+    username        VARCHAR(64)     NOT NULL,
+    pw_hash         VARCHAR(31)     NOT NULL,
+    pw_salt         VARCHAR(22)     NOT NULL,
+    realname        VARCHAR(64)     NOT NULL,
+    role ENUM(
+        'admin',    -- Can add users and set permissions
+        'user'      -- Can manage reports for their projects
+    ) NOT NULL,
+
+    UNIQUE(username)
+);
+
+CREATE TABLE email (
+    email_id        CHAR(36)        NOT NULL PRIMARY KEY,
+    user_id         CHAR(36)        NOT NULL,
+    local           VARCHAR(128)    NOT NULL,
+    domain          VARCHAR(128)    NOT NULL,
+    verified        BOOL            NOT NULL DEFAULT FALSE,
+
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    UNIQUE(local, domain)
+);
+
+CREATE TABLE primary_email (
+    user_id         CHAR(36)        NOT NULL PRIMARY KEY,
+    email_id        CHAR(36)        NOT NULL,
+
+    FOREIGN KEY (user_id)  REFERENCES users(user_id),
+    FOREIGN KEY (email_id) REFERENCES email(email_id),
+    unique(email_id)
+);
+
+CREATE TABLE email_verification_codes (
+    evcode_id       CHAR(36)        NOT NULL PRIMARY KEY,
+    email_id        CHAR(36)        NOT NULL,
+
+    FOREIGN KEY (email_id) REFERENCES email(email_id),
+
+    unique(email_id)
+);
+
+CREATE TABLE sessions (
+    session_id      CHAR(36) NOT NULL PRIMARY KEY,
+    active          BOOL     DEFAULT TRUE
+);
+
+CREATE TABLE session_hosts (
+    session_host_id     CHAR(36)    NOT NULL PRIMARY KEY,
+    session_id          CHAR(36)    NOT NULL,
+    user_id             CHAR(36),
+
+    created             TIMESTAMP   NOT NULL DEFAULT now(),
+    accessed            TIMESTAMP   NOT NULL DEFAULT now(),
+
+    address             VARCHAR(128)    NOT NULL,
+    agent               VARCHAR(128)    NOT NULL,
+
+    FOREIGN KEY (user_id)    REFERENCES users(user_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id),
+
+    UNIQUE(session_id, address, agent)
+);
+CREATE INDEX session_hosts_session ON session_hosts(session_id);
+
+CREATE TABLE api_keys (
+    api_key_id      CHAR(36)        NOT NULL PRIMARY KEY,
+    user_id         CHAR(36)        NOT NULL,
+    name            VARCHAR(128)    NOT NULL,
+    value           VARCHAR(36)     NOT NULL,
+
+    status ENUM( 'active', 'disabled', 'revoked') NOT NULL,
+
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+
+    UNIQUE(value)
+);
+CREATE INDEX api_key_user ON api_keys(user_id);
+
+CREATE TABLE log_files (
+    log_file_id     CHAR(36)        NOT NULL PRIMARY KEY,
+    name            TEXT            NOT NULL,
+
+    local_file      TEXT,
+    data            LONGBLOB
+);
+
+CREATE TABLE projects (
+    project_id      CHAR(36)        NOT NULL PRIMARY KEY,
+    name            VARCHAR(128)    NOT NULL,
+
+    UNIQUE(name)
+);
+
+CREATE TABLE permissions (
+    permission_id   CHAR(36)        NOT NULL PRIMARY KEY,
+    project_id      CHAR(36)        NOT NULL REFERENCES projects(project_id),
+    user_id         CHAR(36)        NOT NULL REFERENCES users(user_id),
+    updated         TIMESTAMP       NOT NULL DEFAULT now(),
+
+    cpan_batch      BIGINT          DEFAULT NULL,
+
+    FOREIGN KEY (user_id)    REFERENCES users(user_id),
+    FOREIGN KEY (project_id) REFERENCES projects(project_id),
+    UNIQUE(project_id, user_id)
+);
+
+CREATE TABLE runs (
+    run_id          CHAR(36)        NOT NULL PRIMARY KEY,
+    user_id         CHAR(36)        NOT NULL,
+
+    status ENUM('pending', 'running', 'complete', 'broken') NOT NULL,
+    worker_id       TEXT            DEFAULT NULL,
+
+    error           TEXT            DEFAULT NULL,
+    project_id      CHAR(36)        NOT NULL,
+
+    pinned          BOOL            NOT NULL DEFAULT FALSE,
+
+    -- User Input
+    added           TIMESTAMP       NOT NULL DEFAULT now(),
+    status_changed  TIMESTAMP       NOT NULL DEFAULT now(),
+    log_file_id     CHAR(36)        DEFAULT NULL,
+
+    mode ENUM('qvfd', 'qvf', 'summary', 'complete') NOT NULL,
+
+    -- From Log
+    passed          INTEGER         DEFAULT NULL,
+    failed          INTEGER         DEFAULT NULL,
+    retried         INTEGER         DEFAULT NULL,
+    fields          MEDIUMTEXT      DEFAULT NULL,
+    parameters      MEDIUMTEXT      DEFAULT NULL,
+
+    FOREIGN KEY (user_id)     REFERENCES users(user_id),
+    FOREIGN KEY (project_id)  REFERENCES projects(project_id),
+    FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id)
+);
+CREATE INDEX run_projects ON runs(project_id);
+CREATE INDEX run_status ON runs(status);
+CREATE INDEX run_user ON runs(user_id);
+
+-- CREATE OR REPLACE FUNCTION update_status_changed() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+-- BEGIN
+--     IF (NEW.status != OLD.status) THEN
+--         NEW.status_changed = now();
+--     END IF;
+--     RETURN NEW;
+-- END;
+-- $$;
+delimiter //
+CREATE TRIGGER status_changed
+  BEFORE UPDATE
+  ON runs
+  FOR EACH ROW
+  BEGIN
+    IF NEW.status != OLD.status THEN
+        SET NEW.status_changed = now();
+    END IF;
+  END;//
+delimiter ;
+
+CREATE TABLE jobs (
+    job_key         CHAR(36)    NOT NULL PRIMARY KEY,
+
+    job_id          CHAR(36)    NOT NULL,
+    job_try         INT         NOT NULL DEFAULT 0,
+    job_ord         BIGINT      NOT NULL,
+    run_id          CHAR(36)    NOT NULL,
+
+    parameters      TEXT        DEFAULT NULL,
+    fields          TEXT        DEFAULT NULL,
+
+    -- Summaries
+    name            TEXT            DEFAULT NULL,
+    file            VARCHAR(512)    DEFAULT NULL,
+    fail            BOOL            DEFAULT NULL,
+    retry           BOOL            DEFAULT NULL,
+    exit_code       INT             DEFAULT NULL,
+    launch          TIMESTAMP,
+    start           TIMESTAMP,
+    ended           TIMESTAMP,
+
+    duration        DOUBLE PRECISION    DEFAULT NULL,
+
+    pass_count      BIGINT          DEFAULT NULL,
+    fail_count      BIGINT          DEFAULT NULL,
+
+    -- Output data
+    stdout          LONGTEXT        DEFAULT NULL,
+    stderr          LONGTEXT        DEFAULT NULL,
+
+    FOREIGN KEY (run_id) REFERENCES runs(run_id),
+
+    UNIQUE(job_id, job_try)
+);
+CREATE INDEX job_look ON jobs(job_id, job_try);
+CREATE INDEX job_runs ON jobs(run_id);
+CREATE INDEX job_fail ON jobs(fail);
+CREATE INDEX job_file ON jobs(file);
+
+CREATE TABLE coverage (
+    job_key     CHAR(36)        NOT NULL,
+    file        varchar(512)    NOT NULL,
+
+    FOREIGN KEY (job_key) REFERENCES jobs(job_key)
+);
+CREATE INDEX coverage_files ON coverage(file);
+CREATE INDEX coverage_jobs  ON coverage(job_key);
+
+CREATE TABLE events (
+    event_id        CHAR(36)    NOT NULL PRIMARY KEY,
+
+    job_key         CHAR(36)    NOT NULL REFERENCES jobs(job_key),
+
+    event_ord       BIGINT      NOT NULL,
+
+    stamp           TIMESTAMP,
+
+    parent_id       CHAR(36)    DEFAULT NULL,
+    trace_id        CHAR(36)    DEFAULT NULL,
+    nested          INT         DEFAULT 0,
+
+    facets          MEDIUMTEXT  DEFAULT NULL,
+    facets_line     BIGINT      DEFAULT NULL,
+
+    orphan          MEDIUMTEXT  DEFAULT NULL,
+    orphan_line     BIGINT      DEFAULT NULL,
+
+    FOREIGN KEY (job_key) REFERENCES jobs(job_key)
+);
+CREATE INDEX event_job    ON events(job_key);
+CREATE INDEX event_trace  ON events(trace_id);
+CREATE INDEX event_parent ON events(parent_id);

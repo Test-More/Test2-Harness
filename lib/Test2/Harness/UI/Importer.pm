@@ -8,7 +8,9 @@ use Carp qw/croak/;
 
 use Test2::Harness::UI::Import;
 
-use Test2::Harness::UI::Util::HashBase qw/-config/;
+use Test2::Harness::UI::Util::HashBase qw/-config -worker_id/;
+
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 sub init {
     my $self = shift;
@@ -23,20 +25,18 @@ sub run {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my $worker_id = $self->{+WORKER_ID} //= gen_uuid();
 
     while (!defined($max) || $max--) {
-        my $run = $schema->txn_do(
-            sub {
-                my $run = $schema->resultset('Run')->search(
-                    {status => 'pending', log_file_id => {'is not' => undef}},
-                    {order_by => {-asc => 'added'}, limit => 1, for => \'update skip locked'},
-                )->first;
-                return unless $run;
+        $schema->resultset('Run')->search(
+            {status   => 'pending', log_file_id => {'is not' => undef}},
+            {order_by => {-asc => 'added'}, limit => 1},
+        )->update({status => 'running', worker_id => $worker_id});
 
-                $run->update({status => 'running'});
-                return $run;
-            }
-        );
+        my $run = $schema->resultset('Run')->search(
+            {status   => 'running',         worker_id => $worker_id},
+            {order_by => {-asc => 'added'}, limit     => 1},
+        )->first;
 
         unless ($run) {
             sleep 1;

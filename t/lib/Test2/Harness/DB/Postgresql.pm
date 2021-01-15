@@ -4,6 +4,7 @@ use warnings;
 
 use Test2::API qw/context/;
 use Test2::Tools::QuickDB;
+use Test2::Harness::UI::Schema::PostgreSQL;
 use Test2::Harness::UI::Schema;
 
 sub new {
@@ -11,7 +12,7 @@ sub new {
 
     my $ctx = context();
 
-    my $db = get_db_or_skipall({driver => 'PostgreSQL', load_sql => [quickdb => 'schema/postgresql.sql', quickdb => 'schema/postgresql_demo.sql']});
+    my $db = get_db_or_skipall({driver => 'PostgreSQL', load_sql => [quickdb => 'schema/PostgreSQL.sql', quickdb => 'schema/postgresql_demo.sql']});
     my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
     my $schema = Test2::Harness::UI::Schema->connect({dbh_maker => sub { $dbh }});
 

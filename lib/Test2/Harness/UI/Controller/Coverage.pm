@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Coverage;
 use strict;
 use warnings;
 
-our $VERSION = '0.000029';
+our $VERSION = '0.000030';
 
 use Data::GUID;
 use List::Util qw/max/;

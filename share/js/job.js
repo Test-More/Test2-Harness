@@ -91,7 +91,7 @@ t2hui.job.message_builder = function(item, dest, data) {
     var indent = '' + ((item.item.nested + 1) * 2) + 'ch';
     dest.css('padding-left', indent);
 
-    if (!item.item.is_parent) { return }
+    if (item.item.is_parent == false) { return }
 
     var expand = $('<div class="stoggle">+</div>');
     dest.prepend(expand);

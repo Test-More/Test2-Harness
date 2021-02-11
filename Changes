@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix more JS issues where "0" is true in some cases
+
 0.000032  2021-02-11 08:54:03-08:00 America/Los_Angeles
 
     - Fix bug where sometimes jobs would show as retried

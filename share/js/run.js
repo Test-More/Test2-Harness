@@ -125,7 +125,7 @@ t2hui.run.modify_row = function(row, item) {
             row.addClass('iffy_set');
             row.addClass('retry_txt');
         }
-        else if (item.fail) {
+        else if (item.fail == true) {
             row.addClass('error_set');
         }
         else {
@@ -164,7 +164,7 @@ t2hui.run.place_row = function(row, item, table, state) {
         return true;
     }
 
-    if (item.fail && !item.retry) {
+    if (item.fail == true && item.retry == false) {
         if (state['fail']) {
             state['fail'].after(row);
         }

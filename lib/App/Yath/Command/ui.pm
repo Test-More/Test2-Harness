@@ -33,6 +33,20 @@ option_group {prefix => 'ui', category => "UI Options"} => sub {
     option schema => (
         type => 's',
         default => 'PostgreSQL',
+        long_examples => [' PostgreSQL', ' MySQL', ' MySQL56'],
+        description => "What type of DB/schema to use",
+    );
+
+    option port => (
+        type => 's',
+        long_examples => [' 8080'],
+        description => 'Port to use',
+    );
+
+    option port_command => (
+        type => 's',
+        long_examples => [' get_port.sh', ' get_port.sh --pid $$'],
+        description => 'Use a command to get a port number. "$$" will be replaced with the PID of the yath process',
     );
 };
 
@@ -111,8 +125,18 @@ sub run {
         };
     };
 
+    my $port = $settings->ui->port;
+    if (my $cmd = $settings->ui->port_command) {
+        $cmd =~ s/\$\$/$$/;
+        chomp($port = `$cmd`);
+    }
+
     my $r = Plack::Runner->new;
-    $r->parse_options("--server", "Starman");
+    my @options = ("--server", "Starman");
+
+    push @options => ('--listen' => ":$port") if $port;
+
+    $r->parse_options(@options);
     $r->run($app);
 
     return 0;

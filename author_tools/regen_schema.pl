@@ -63,6 +63,29 @@ Carp::confess("Already loaded schema '\$Test2::Harness::UI::Schema::LOADED'") if
     opendir(my $dh, "tmp/$schema/Test2/Harness/UI/Schema/Result/") or die "Could not open dir: $!";
     for my $file (sort readdir($dh)) {
         next unless $file =~ m/\.pm$/;
+        my $override = "lib/Test2/Harness/UI/Schema/Result/$file";
+        unless (-e $override) {
+            print "Adding 'override' file '$override'\n";
+            open(my $oh, '>', $override) or die "Could not open override file: $!\n";
+            my $pkg = $file;
+            $pkg =~ s/\.pm$//;
+            my $ver = Test2::Harness::UI::Util->VERSION;
+            print $oh <<"            EOT";
+package Test2::Harness::UI::Schema::Result::$pkg;
+use utf8;
+use strict;
+use warnings;
+
+use Carp qw/confess/;
+confess "You must first load a Test2::Harness::UI::Schema::NAME module"
+    unless \$Test2::Harness::UI::Schema::LOADED;
+
+our \$VERSION = '$ver';
+
+1;
+            EOT
+            close($oh);
+        }
         print "Appending ${file} to ${schema}.pm\n";
         open(my $rh, '<', "tmp/$schema/Test2/Harness/UI/Schema/Result/$file") or die "Could not open $file: $!";
         print {$fh} "{\n";

@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-our $VERSION = '0.000033';
+our $VERSION = '0.000034';
 
 use Test2::Harness::UI;
 use Test2::Harness::UI::Config;

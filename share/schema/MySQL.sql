@@ -10,7 +10,7 @@ CREATE TABLE users (
     ) NOT NULL,
 
     UNIQUE(username)
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE email (
     email_id        CHAR(36)        NOT NULL PRIMARY KEY,
@@ -21,7 +21,7 @@ CREATE TABLE email (
 
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     UNIQUE(local, domain)
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE primary_email (
     user_id         CHAR(36)        NOT NULL PRIMARY KEY,
@@ -30,7 +30,7 @@ CREATE TABLE primary_email (
     FOREIGN KEY (user_id)  REFERENCES users(user_id),
     FOREIGN KEY (email_id) REFERENCES email(email_id),
     unique(email_id)
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE email_verification_codes (
     evcode_id       CHAR(36)        NOT NULL PRIMARY KEY,
@@ -39,12 +39,12 @@ CREATE TABLE email_verification_codes (
     FOREIGN KEY (email_id) REFERENCES email(email_id),
 
     unique(email_id)
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE sessions (
     session_id      CHAR(36) NOT NULL PRIMARY KEY,
     active          BOOL     DEFAULT TRUE
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE session_hosts (
     session_host_id     CHAR(36)    NOT NULL PRIMARY KEY,
@@ -61,7 +61,7 @@ CREATE TABLE session_hosts (
     FOREIGN KEY (session_id) REFERENCES sessions(session_id),
 
     UNIQUE(session_id, address, agent)
-);
+) ROW_FORMAT=COMPRESSED;
 CREATE INDEX session_hosts_session ON session_hosts(session_id);
 
 CREATE TABLE api_keys (
@@ -75,7 +75,7 @@ CREATE TABLE api_keys (
     FOREIGN KEY (user_id) REFERENCES users(user_id),
 
     UNIQUE(value)
-);
+) ROW_FORMAT=COMPRESSED;
 CREATE INDEX api_key_user ON api_keys(user_id);
 
 CREATE TABLE log_files (
@@ -84,14 +84,14 @@ CREATE TABLE log_files (
 
     local_file      TEXT,
     data            LONGBLOB
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE projects (
     project_id      CHAR(36)        NOT NULL PRIMARY KEY,
     name            VARCHAR(128)    NOT NULL,
 
     UNIQUE(name)
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE permissions (
     permission_id   CHAR(36)        NOT NULL PRIMARY KEY,
@@ -104,7 +104,7 @@ CREATE TABLE permissions (
     FOREIGN KEY (user_id)    REFERENCES users(user_id),
     FOREIGN KEY (project_id) REFERENCES projects(project_id),
     UNIQUE(project_id, user_id)
-);
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE runs (
     run_id          CHAR(36)        NOT NULL PRIMARY KEY,
@@ -135,7 +135,7 @@ CREATE TABLE runs (
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
     FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id)
-);
+) ROW_FORMAT=COMPRESSED;
 CREATE INDEX run_projects ON runs(project_id);
 CREATE INDEX run_status ON runs(status);
 CREATE INDEX run_user ON runs(user_id);
@@ -193,7 +193,7 @@ CREATE TABLE jobs (
     FOREIGN KEY (run_id) REFERENCES runs(run_id),
 
     UNIQUE(job_id, job_try)
-);
+) ROW_FORMAT=COMPRESSED;
 CREATE INDEX job_look ON jobs(job_id, job_try);
 CREATE INDEX job_runs ON jobs(run_id);
 CREATE INDEX job_fail ON jobs(fail);
@@ -204,7 +204,7 @@ CREATE TABLE coverage (
     file        varchar(512)    NOT NULL,
 
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)
-);
+) ROW_FORMAT=COMPRESSED;
 CREATE INDEX coverage_files ON coverage(file);
 CREATE INDEX coverage_jobs  ON coverage(job_key);
 
@@ -228,7 +228,7 @@ CREATE TABLE events (
     orphan_line     BIGINT      DEFAULT NULL,
 
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)
-);
+) ROW_FORMAT=COMPRESSED;
 CREATE INDEX event_job    ON events(job_key);
 CREATE INDEX event_trace  ON events(trace_id);
 CREATE INDEX event_parent ON events(parent_id);

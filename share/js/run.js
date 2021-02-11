@@ -121,7 +121,7 @@ t2hui.run.tool_builder = function(item, tools, data) {
 
 t2hui.run.modify_row = function(row, item) {
     if (item.short_file) {
-        if (item.retry) {
+        if (item.retry == true) {
             row.addClass('iffy_set');
             row.addClass('retry_txt');
         }
@@ -146,8 +146,8 @@ t2hui.run.field_builder = function(data, name) {
     return it;
 };
 
-t2hui.run.field_fetch = function(field_data) {
-    return base_uri + 'job/' + field_data.job_key;
+t2hui.run.field_fetch = function(field_data, item) {
+    return base_uri + 'job/' + item.job_key;
 };
 
 t2hui.run.build_jobs = function(run_id) {

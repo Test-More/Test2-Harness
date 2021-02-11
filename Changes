@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix bug where sometimes jobs would show as retried
+    - Fix bug where external data for jobs could not be loaded
+
 0.000031  2021-02-10 16:34:16-08:00 America/Los_Angeles
 
     - Add custom port capabilities to `yath ui`

@@ -231,7 +231,7 @@ function FieldTable(spec) {
         var attr = me.spec.dynamic_field_attribute;
         if (attr && item[attr]) {
             item[attr].forEach(function(field) {
-                var col = me.render_dynamic_col(field, field.name);
+                var col = me.render_dynamic_col(field, field.name, item);
                 if (me.hidden_columns[field.name]) {
                     col.hide();
                 }
@@ -261,7 +261,7 @@ function FieldTable(spec) {
         return row;
     }
 
-    me.render_dynamic_col = function(field, name) {
+    me.render_dynamic_col = function(field, name, item) {
         var tooltable = $('<table class="tool_table"></table>');
         var toolrow = $('<tr></tr>');
         tooltable.append(toolrow);
@@ -289,7 +289,7 @@ function FieldTable(spec) {
                 $('#modal_body').text("loading...");
                 $('#free_modal').slideDown();
 
-                var uri = me.spec.dynamic_field_fetch(field);
+                var uri = me.spec.dynamic_field_fetch(field, item);
 
                 $.ajax(uri, {
                     'data': { 'content-type': 'application/json' },

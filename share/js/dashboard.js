@@ -190,7 +190,7 @@ t2hui.dashboard.redraw_fetch = function(item) {
     return base_uri + 'run/' + item.run_id;
 };
 
-t2hui.dashboard.field_fetch = function(field_data) {
+t2hui.dashboard.field_fetch = function(field_data, item) {
     return base_uri + 'run/' + field_data.run_id;
 };
 

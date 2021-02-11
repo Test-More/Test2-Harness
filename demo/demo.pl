@@ -16,7 +16,6 @@ use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 my ($schema) = @ARGV;
-print "XXX: $schema\n";
 
 $schema //= 'PostgreSQL';
 require(pkg_to_file("Test2::Harness::UI::Schema::$schema"));

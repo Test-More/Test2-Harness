@@ -315,6 +315,10 @@ sub finish {
         $f->{harness_job_end}->{skip} = $plan->{details} || "No reason given" unless $plan->{count};
     }
 
+    if (my $halt = $st->halt) {
+        $f->{harness_job_end}->{halt} = $halt;
+    }
+
     if (my $times = $self->times) {
         $times->set_stop(time);
         if ($times->useful) {

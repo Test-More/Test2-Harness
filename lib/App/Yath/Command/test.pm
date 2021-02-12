@@ -7,7 +7,6 @@ our $VERSION = '1.000043';
 use App::Yath::Options;
 
 use Test2::Harness::Run;
-use Test2::Harness::Event;
 use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
@@ -27,28 +26,37 @@ use Time::HiRes qw/sleep time/;
 use List::Util qw/sum max min/;
 use Carp qw/croak/;
 
+use Test2::Harness::Event qw{
+    EFLAG_TERMINATOR
+    EFLAG_SUMMARY
+    EFLAG_HARNESS
+    EFLAG_ASSERT
+    EFLAG_EMINENT
+    EFLAG_STATE
+    EFLAG_PEEK
+    EFLAG_COVERAGE
+};
+
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/
     <runner_pid +ipc +signal
 
     +run
 
-    +auditor_reader
-    +collector_writer
-    +renderer_reader
-    +auditor_writer
+    +fifo +fifo_rh
 
     +renderers
     +logger
 
-    +tests_seen
     +asserts_seen
 
     +run_queue
     +tasks_queue
     +state
+    +jobs
 
-    <final_data
+    <summaries
+    +final_data
 
     <coverage_aggregator
 /;
@@ -105,59 +113,7 @@ sub init {
     my $self = shift;
     $self->SUPER::init() if $self->can('SUPER::init');
 
-    $self->{+TESTS_SEEN}   //= 0;
     $self->{+ASSERTS_SEEN} //= 0;
-}
-
-sub _resize_pipe {
-    return unless defined &Fcntl::F_SETPIPE_SZ;
-    my ($fh) = @_;
-
-    # 1mb if we can
-    my $size = 1024 * 1024 * 1;
-
-    # On linux systems lets go for the smaller of the two between 1mb and
-    # system max.
-    if (-e '/proc/sys/fs/pipe-max-size') {
-        open(my $max, '<', '/proc/sys/fs/pipe-max-size');
-        chomp(my $val = <$max>);
-        close($max);
-        $size = min($size, $val);
-    }
-
-    fcntl($fh, Fcntl::F_SETPIPE_SZ(), $size);
-}
-
-sub auditor_reader {
-    my $self = shift;
-    return $self->{+AUDITOR_READER} if $self->{+AUDITOR_READER};
-    pipe($self->{+AUDITOR_READER}, $self->{+COLLECTOR_WRITER}) or die "Could not create pipe: $!";
-    _resize_pipe($self->{+COLLECTOR_WRITER});
-    return $self->{+AUDITOR_READER};
-}
-
-sub collector_writer {
-    my $self = shift;
-    return $self->{+COLLECTOR_WRITER} if $self->{+COLLECTOR_WRITER};
-    pipe($self->{+AUDITOR_READER}, $self->{+COLLECTOR_WRITER}) or die "Could not create pipe: $!";
-    _resize_pipe($self->{+COLLECTOR_WRITER});
-    return $self->{+COLLECTOR_WRITER};
-}
-
-sub renderer_reader {
-    my $self = shift;
-    return $self->{+RENDERER_READER} if $self->{+RENDERER_READER};
-    pipe($self->{+RENDERER_READER}, $self->{+AUDITOR_WRITER}) or die "Could not create pipe: $!";
-    _resize_pipe($self->{+AUDITOR_WRITER});
-    return $self->{+RENDERER_READER};
-}
-
-sub auditor_writer {
-    my $self = shift;
-    return $self->{+AUDITOR_WRITER} if $self->{+AUDITOR_WRITER};
-    pipe($self->{+RENDERER_READER}, $self->{+AUDITOR_WRITER}) or die "Could not create pipe: $!";
-    _resize_pipe($self->{+AUDITOR_WRITER});
-    return $self->{+AUDITOR_WRITER};
 }
 
 sub workdir {
@@ -202,8 +158,8 @@ sub run {
         $self->render();
         $self->stop();
 
-        my $final_data = $self->{+FINAL_DATA} or die "Final data never received from auditor!\n";
-        my $pass = $self->{+TESTS_SEEN} && $final_data->{pass};
+        my $final_data = $self->final_data;
+        my $pass = $final_data->{pass};
         $self->render_final_data($final_data);
         $self->produce_summary($pass);
 
@@ -212,7 +168,7 @@ sub run {
                 settings     => $settings,
                 final_data   => $final_data,
                 pass         => $pass ? 1 : 0,
-                tests_seen   => $self->{+TESTS_SEEN} // 0,
+                tests_seen   => scalar(@{$self->{+SUMMARIES} // []}),
                 asserts_seen => $self->{+ASSERTS_SEEN} // 0,
             );
             $_->finish(%args) for @$plugins;
@@ -240,8 +196,6 @@ sub start {
     $self->setup_plugins();
 
     $self->start_runner(jobs_todo => $pop);
-    $self->start_collector();
-    $self->start_auditor();
 
     return 1;
 }
@@ -273,57 +227,52 @@ sub render {
 
     $plugins = [grep {$_->can('handle_event')} @$plugins];
 
+    my $warned = 0;
+
     # render results from log
-    my $reader = $self->renderer_reader();
-    $reader->blocking(0);
-    my $buffer;
+    my $reader = $self->fifo_rh;
     while (1) {
         return if $self->{+SIGNAL};
 
-        my $line = <$reader>;
-        unless(defined $line) {
-            $ipc->wait() if $ipc;
-            sleep 0.02;
-            next;
-        }
+        my $line = $reader->read_message // last;
 
-        if ($buffer) {
-            $line = $buffer . $line;
-            $buffer = undef;
-        }
+        my $flags = substr($line, 0, 1, '');
+        print $logger $line, "\n" if $logger;
 
-        unless (substr($line, -1, 1) eq "\n") {
-            $buffer //= "";
-            $buffer .= $line;
-            next;
-        }
+        # All done
+        last if $flags & EFLAG_TERMINATOR && $line =~ m/^null$/i;
 
-        print $logger $line if $logger;
-        my $e = decode_json($line);
-        last unless defined $e;
+        my $e = Test2::Harness::Event->new(json => $line, flags => $flags);
 
-        bless($e, 'Test2::Harness::Event');
+        push @{$self->{+SUMMARIES}->{$e->job_id}} => $e if $flags & EFLAG_SUMMARY;
 
-        if (my $final = $e->{facet_data}->{harness_final}) {
-            $self->{+FINAL_DATA} = $final;
-        }
-        else {
-            $_->render_event($e) for @$renderers;
+        $self->{+COVERAGE_AGGREGATOR}->process_event($e) if $cover && $flags & EFLAG_COVERAGE;
 
-            $self->{+COVERAGE_AGGREGATOR}->process_event($e) if $cover && (
-                $e->{facet_data}->{coverage} ||
-                $e->{facet_data}->{harness_job_end} ||
-                $e->{facet_data}->{harness_job_start}
-            );
-        }
+        $self->{+ASSERTS_SEEN}++ if $flags & EFLAG_ASSERT;
 
-        $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
-        $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
-
+        $_->render_event($e) for @$renderers;
         $_->handle_event($e, $settings) for @$plugins;
 
         $ipc->wait() if $ipc;
     }
+
+    my $e = Test2::Harness::Event->new(
+        facet_data => {
+            harness => {
+                job_id        => 0,
+                job_try       => 0,
+                run_id        => $self->{+RUN}->run_id,
+                event_id      => gen_uuid(),
+                stamp         => time,
+                harness_final => $self->final_data,
+                from_stream   => 'harness',
+            },
+        },
+    );
+
+    print $logger encode_json($e), "\n" if $logger;
+    $_->render_event($e) for @$renderers;
+    $_->handle_event($e, $settings) for @$plugins;
 }
 
 
@@ -358,7 +307,7 @@ sub stop {
     }
 
     unless ($settings->display->quiet > 2) {
-        printf STDERR "\nNo tests were seen!\n" unless $self->{+TESTS_SEEN};
+        printf STDERR "\nNo tests were completed!\n" unless $self->{+SUMMARIES} && @{$self->{+SUMMARIES}};
 
         printf("\nKeeping work dir: %s\n", $self->workdir)
             if $settings->debug->keep_dirs;
@@ -369,6 +318,52 @@ sub stop {
         print "\nWrote coverage file: $cover\n"
             if $cover;
     }
+}
+
+sub final_data {
+    my $self = shift;
+
+    return $self->{+FINAL_DATA} if $self->{+FINAL_DATA};
+
+    my $final_data = {pass => 1};
+    my $summaries  = $self->{+SUMMARIES} //= {};
+    my $jobs       = $self->{+JOBS}      //= {};
+
+    my %seen;
+    for my $job_id (keys(%$jobs), keys(%$summaries)) {
+        next if $seen{$job_id}++;
+
+        my $results = $summaries->{$job_id};
+        my $task    = $jobs->{$job_id} // {file => '??? MISSING TASK ???'};
+
+        unless ($results && @$results) {
+            $final_data->{pass} = 0;
+            push @{$final_data->{unseen}} => [$job_id, $task->{file}];
+            next;
+        }
+
+        my $f     = $results->[-1]->facet_data;
+        my $end   = $f->{harness_job_end};
+        my $file  = $end->{rel_file};
+        my $fail  = $end->{fail};
+        my $halt  = $end->{halt};
+        my $count = scalar(@$results);
+        my $pass  = $fail ? 'NO' : 'YES';
+
+        $final_data->{pass} = 0 if $fail || $halt;
+
+        if ($results && !$task) {
+            $final_data->{pass} = 0;
+            push @{$final_data->{extra}} => [$job_id, $file];
+            next;
+        }
+
+        push @{$final_data->{failed}}  => [$job_id, $file]                if $fail;
+        push @{$final_data->{halted}}  => [$job_id, $file, $halt]         if $halt;
+        push @{$final_data->{retried}} => [$job_id, $count, $file, $pass] if $count > 1;
+    }
+
+    return $self->{+FINAL_DATA} = $final_data;
 }
 
 sub terminate_queue {
@@ -453,6 +448,7 @@ sub populate_queue {
         );
         $state->queue_task($task);
         $tasks_queue->enqueue($task);
+        $self->{+JOBS}->{$task->{job_id}} = $task;
     }
 
     $state->stop_run($run->run_id);
@@ -489,7 +485,7 @@ sub write_summary {
 
     my $file = $self->settings->debug->summary or return;
 
-    my $final_data = $self->{+FINAL_DATA};
+    my $final_data = $self->final_data;
 
     my $failures = @{$final_data->{failed} // []};
 
@@ -499,8 +495,8 @@ sub write_summary {
         pass => $pass ? JSON->true : JSON->false,
 
         total_failures => $failures              // 0,
-        total_tests    => $self->{+TESTS_SEEN}   // 0,
         total_asserts  => $self->{+ASSERTS_SEEN} // 0,
+        total_tests    => scalar(@{$self->{+SUMMARIES} //= []}),
 
         cpu_usage => $cpu_usage,
 
@@ -522,12 +518,12 @@ sub render_summary {
 
     return if $self->settings->display->quiet > 1;
 
-    my $final_data = $self->{+FINAL_DATA};
+    my $final_data = $self->final_data;
     my $failures = @{$final_data->{failed} // []};
 
     my @summary = (
         $failures ? ("     Fail Count: $failures") : (),
-        "     File Count: $self->{+TESTS_SEEN}",
+        "     File Count: " . scalar(@{$self->{+SUMMARIES} // []}),
         "Assertion Count: $self->{+ASSERTS_SEEN}",
         $time_data ? (
             sprintf("      Wall Time: %.2f seconds", $time_data->{wall}),
@@ -598,6 +594,15 @@ sub render_final_data {
         );
         print "\n";
     }
+
+    if (my $rows = $final_data->{extra}) {
+        print "\nThe following extra(?) jobs ran:\n";
+        print join "\n" => table(
+            header => ['Job ID', 'Test File'],
+            rows   => $rows,
+        );
+        print "\n";
+    }
 }
 
 sub logger {
@@ -643,62 +648,6 @@ sub renderers {
     }
 
     return $self->{+RENDERERS} = \@renderers;
-}
-
-sub start_auditor {
-    my $self = shift;
-
-    my $run = $self->build_run();
-    my $settings = $self->settings;
-
-    my $ipc = $self->ipc;
-    $ipc->spawn(
-        stdin       => $self->auditor_reader(),
-        stdout      => $self->auditor_writer(),
-        no_set_pgrp => 1,
-        command     => [
-            $^X, cover(), $settings->harness->script,
-            (map { "-D$_" } @{$settings->harness->dev_libs}),
-            '--no-scan-plugins',    # Do not preload any plugin modules
-            auditor => 'Test2::Harness::Auditor',
-            $run->run_id,
-        ],
-    );
-
-    close($self->auditor_writer());
-}
-
-sub start_collector {
-    my $self = shift;
-
-    my $dir        = $self->workdir;
-    my $run        = $self->build_run();
-    my $settings   = $self->settings;
-    my $runner_pid = $self->runner_pid;
-
-    my ($rh, $wh);
-    pipe($rh, $wh) or die "Could not create pipe";
-
-    my $ipc = $self->ipc;
-    $ipc->spawn(
-        stdout      => $self->collector_writer,
-        stdin       => $rh,
-        no_set_pgrp => 1,
-        command     => [
-            $^X, cover(), $settings->harness->script,
-            (map { "-D$_" } @{$settings->harness->dev_libs}),
-            '--no-scan-plugins',    # Do not preload any plugin modules
-            collector => 'Test2::Harness::Collector',
-            $dir, $run->run_id, $runner_pid,
-            show_runner_output => 1,
-        ],
-    );
-
-    close($rh);
-    print $wh encode_json($run) . "\n";
-    close($wh);
-
-    close($self->collector_writer());
 }
 
 sub start_runner {

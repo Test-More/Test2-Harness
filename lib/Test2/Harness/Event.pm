@@ -9,21 +9,25 @@ use List::Util qw/first/;
 use Scalar::Util qw/reftype/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
-use constant TERMINATOR => 0;    # NULL terminator
-use constant SUMMARY    => 1;    # Final State
-use constant STATUS     => 2;    # Process start/stop times
-use constant EMINENT    => 3;    # STDERR, Failures, etc, exit-false
-use constant STATE      => 4;    # Passing Assertions, exit-true, things that effect state
-use constant INFO       => 5;    # Any other messages
-use constant PEEK       => 6;    # Early look at events that will be seen inside subtests later
+use constant EFLAG_TERMINATOR => 1;   # Not a real event
+use constant EFLAG_SUMMARY    => 2;   # Contains a final summary of a job
+use constant EFLAG_HARNESS    => 4;   # Contains harness_*
+use constant EFLAG_ASSERT     => 8;   # Contains an assertion
+use constant EFLAG_EMINENT    => 16;  # Contains critical info that may cause or explain failures
+use constant EFLAG_STATE      => 32;  # Things that effect state, plans, asserts, etc
+use constant EFLAG_PEEK       => 64;  # Early look at events that will be seen inside subtests later
+use constant EFLAG_COVERAGE   => 128; # Coverage data
+
+my %FLAGMAP = map {my $c = "EFLAG_$_"; $_ => __PACKAGE__->$c()} qw/TERMINATOR SUMMARY HARNESS ASSERT EMINENT STATE PEEK COVERAGE/;
 
 use Importer Importer => 'import';
 
-our @EXPORT_OK = qw{ TERMINATOR SUMMARY STATUS EMINENT STATE INFO };
+our @EXPORT_OK = qw{ EFLAG_TERMINATOR EFLAG_SUMMARY EFLAG_HARNESS EFLAG_ASSERT EFLAG_EMINENT EFLAG_STATE EFLAG_PEEK EFLAG_COVERAGE };
 
 use Test2::Harness::Util::HashBase qw{
     +json
     +facet_data
+    +flags
 };
 
 my @REQUIRED_HARNESS_FIELDS = qw{
@@ -95,57 +99,50 @@ for (@REQUIRED_HARNESS_FIELDS) {
     *$field = $sub;
 }
 
-sub level {
+sub has_flag {
     my $self = shift;
-    return $self->facet_data->{harness}->{level} //= $self->_calculate_level;
+    my ($flag) = @_;
+
+    my $fbit = $FLAGMAP{uc($flag)} // croak "Invalid flag: '$flag'";
+
+    my $flags = $self->flags;
+
+    return $flags & $flag;
 }
 
-sub set_level {
+sub flags {
     my $self = shift;
-    my ($set) = @_;
-
-    croak "You cannot clear the level" unless @_;
-    croak "You cannot set an undefined level" unless defined $set;
-
-    {
-        no warnings 'numeric';
-        my $int = int($set);
-        croak "Level must be an integer (got $set)" unless $set == $int && "$set" eq "$int";
-    }
-
-    my $level = $self->level;
-    croak "You cannot increase the level value (from $level to $set), you can only lower it" if $set > $self->level;
-    croak "You cannot set a level lower than 1 (attempted $set)" if $set < 1;
-
-    $self->{harness}->{level} = $set;
+    return $self->{+FLAGS} if exists $self->{+FLAGS} && !$self->{+FACET_DATA};
+    return $self->facet_data->{harness}->{+FLAGS} //= $self->{+FLAGS} // $self->_calculate_flags;
 }
 
-sub _calculate_level {
+sub _calculate_flags {
     my $self = shift;
-    my $fd = $self->facet_data;
+    my $fd   = $self->facet_data;
 
-    return PEEK if $fd->{harness}->{buffered};
+    my $flags = 0;
 
-    return SUMMARY if exists $fd->{harness_job_end};
+    $flags |= EFLAG_PEEK     if $fd->{harness}->{buffered};
+    $flags |= EFLAG_SUMMARY  if exists $fd->{harness_job_end};
+    $flags |= EFLAG_STATE    if exists $fd->{plan};
+    $flags |= EFLAG_COVERAGE if exists $fd->{coverage};
+    $flags |= EFLAG_EMINENT  if exists($fd->{info}) && first { $_->{debug} || $_->{important} || lc($_->{tag}) eq 'STDERR' } @{$fd->{info}};
 
-    for my $f (keys %$fd) {
-        return STATUS if $f =~ m/^harness_/; # Any event with a harness_ is STATUS level or lower
+    $flags |= EFLAG_HARNESS if first { m/^harness_/ } keys %$fd;
+
+    $flags |= EFLAG_EMINENT | EFLAG_STATE if exists($fd->{control}) && ($fd->{control}->{terminate} || $fd->{control}->{halt});
+
+    if (exists($fd->{errors}) && @{$fd->{errors}}) {
+        $flags |= EFLAG_EMINENT;
+        $flags |= EFLAG_STATE if first { $_->{fail} } @{$fd->{errors}};
     }
 
-    return EMINENT if exists($fd->{errors}) && @{$fd->{errors}};
-    return EMINENT if exists($fd->{info}) && first { $_->{debug} || $_->{important} || lc($_->{tag}) eq 'STDERR' } @{$fd->{info}};
-    return EMINENT if exists($fd->{control}) && ($fd->{control}->{terminate} || $fd->{control}->{halt});
-
-    if (exists $fd->{assert}) {
-        my $assert = $fd->{assert};
-        return EMINENT unless $assert->{pass} || $fd->{amnesty} && @{$fd->{amnesty}};
-        return STATE;
+    if (my $assert = $fd->{assert}) {
+        $flags |= EFLAG_STATE;
+        $flags |= EFLAG_EMINENT unless $assert->{pass} || $fd->{amnesty} && @{$fd->{amnesty}};
     }
 
-    return STATE if exists $fd->{plan};
-
-    # Everything else
-    return INFO;
+    return $flags;
 }
 
 sub as_json { $_[0]->{+JSON} //= encode_json($_[0]) }
@@ -154,7 +151,7 @@ sub TO_JSON {
     my $self = shift;
 
     my $fd = $self->facet_data;
-    $fd->{harness}->{level} //= $self->_calculate_level();
+    $fd->{harness}->{+FLAGS} //= $self->{+FLAGS} // $self->_calculate_flags();
 
     $self->_prune($fd);
 
@@ -246,49 +243,81 @@ If you are planning to modify the event, or have already done so, you should
 call this to clear the cached copy of the json data. If you fail to call this
 none of your changes will show up if the event gets serialized to json again.
 
-=item $int = $event->level
+=item $bool = $event->has_flag($FLAG)
 
-This will tell you what 'level' the event is. This is mainly useful to
-renderers as it makes it easy to skip "noise" events you might not care about.
-This can even be used to avoid deserializing the event from JSON if nothing
-cares about the content.
+=item $bits = $event->flags
+
+These are used to get/check the event flags. Flags are meta-data about events
+that can tell you what type of info the event conveys without actually needing
+to look at the event.
+
+This is mainly useful for renderers which can choose to skip or render an event
+based on flags. Using flags when possible can improve performance as flags are
+transmitted between processes seperate from the json data, if everything simply
+checks the flags and ignores unnecessary events those events may never even be
+decoded from json.
+
+In other words, flags make it easy to skip "noise" events you might not care
+about.  This can even be used to avoid deserializing the event from JSON if
+nothing cares about the content.
 
 You can import these constants from L<Test2::Harness::Util::Constants>.
 
-B<NOTE:> The level indicates the lowest level the event carries, it may also
-contain data that on its own would be at a higher level.
+B<NOTE>: when using C<< $e->has_flag($FLAG) >> $FLAG must be a string like
+'terminator', the 'EFLAG_' prefix must not be included.
 
 =over 4
 
-=item TERMINATOR => 0
+=item EFLAG_TERMINATOR or 'terminator'
 
-This is used to indicate a NULL terminator... You should never actually see an
-event of this level as it is for internal-use only.
+This is set when the event is not actually an event, but rather the json 'null'
+indicating the end of the event stream. DO NOT try to use an event with this
+flag set. Generally only the harness itself will see these, so renderers and
+plugins can assume they will never see it. If a renderer or plugin gets an
+event with the 'terminator' flag set that would be a bug in the harness.
 
-=item SUMMARY => 1
+=item EFLAG_SUMMARY or 'summary'
 
-This indicates that the event contains a final summary of an entire test job or
-run.
+This is set if the event contains a final job summary, also known as the
+'harness_job_end' facet.
 
-=item STATUS => 2
+=item EFLAG_HARNESS or 'harness'
 
-This indicates that the event contains job status events such as job start, job
-end, etc.
+This is set for any event with a facet matching C< m/^harness_/ >. Events with
+harness_ facets usually have essential information such as job start and end.
 
-=item EMINENT => 3
+=item EFLAG_ASSERT or 'assert'
 
-This indicates the event contains important information such as a failed
-assertion, diagnostics, STDERR output, etc.
+Any event which has an assertion has this flag set. Assertions are the bread
+and butter of testing so they get their own flag.
 
-=item STATE => 4
+=item EFLAG_EMINENT or 'eminent'
 
-This indicates that the event produces a state change, such as a passing
-assertion, a plan, etc.
+This is set if the event contains eminent info such as a failing test, and
+error, diagnostcis, prints to STDERR. In short nearly all renderers will
+absolutely want to show this event. This WILL be set for any event that causes
+a failure. It is also USUALLY set for events that explain a failure.
 
-=item INFO => 5
+=item EFLAG_STATE or 'state'
 
-This is the catch-all for everything else. This includes prints to STDOUT,
-NOTE's, and other things that are typically only shown in verbose mode.
+This is set if the event modifies state in any way. Assertions, plans,
+fatal errors, etc.
+
+=item EFLAG_PEEK or 'peek'
+
+This is set if the event is "Buffered" which means the event belongs in a
+subtest and will be seen again later inside that subtest. These are essentially
+orphaned or ephemeral events that can be ignored, however some renderers may
+like to display them to indicate a running subtest that has not completed yet.
+The actual final form of the event will come later though nested inside a
+subtest event.
+
+=item EFLAG_COVERAGE or 'coverage'
+
+This is set if the event contains a 'coverage' facet. These are typically
+produced by L<Test2::Plugin::Cover>. These get a special flag because the
+harness and several plugins may want to process coverage events, without this
+flag all events would need to be decoded to find this info.
 
 =back
 

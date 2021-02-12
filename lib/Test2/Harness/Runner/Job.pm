@@ -481,7 +481,7 @@ sub env_vars {
     my $from_task = $self->{+TASK}->{env_vars};
 
     my @p5l = ($from_task->{PERL5LIB}, $from_run->{PERL5LIB});
-    push @p5l => $self->includes if $self->{+TASK}->{binary} || $self->{+TASK}->{non_perl};
+    push @p5l => $self->includes unless $self->{+TASK}->{binary} || $self->{+TASK}->{non_perl};
     push @p5l => $ENV{PERL5LIB} if $ENV{PERL5LIB};
     my $p5l = join $Config{path_sep} => grep { defined $_ && $_ ne '.' } @p5l;
 

@@ -1,9 +1,9 @@
 CREATE TABLE users (
     user_id         CHAR(36)        NOT NULL PRIMARY KEY,
     username        VARCHAR(64)     NOT NULL,
-    pw_hash         VARCHAR(31)     NOT NULL,
-    pw_salt         VARCHAR(22)     NOT NULL,
-    realname        VARCHAR(64)     NOT NULL,
+    pw_hash         VARCHAR(31)     DEFAULT NULL,
+    pw_salt         VARCHAR(22)     DEFAULT NULL,
+    realname        VARCHAR(64)     DEFAULT NULL,
     role ENUM(
         'admin',    -- Can add users and set permissions
         'user'      -- Can manage reports for their projects
@@ -110,7 +110,9 @@ CREATE TABLE runs (
     run_id          CHAR(36)        NOT NULL PRIMARY KEY,
     user_id         CHAR(36)        NOT NULL,
 
-    status ENUM('pending', 'running', 'complete', 'broken') NOT NULL,
+    run_ord         BIGINT          NOT NULL AUTO_INCREMENT,
+
+    status ENUM('pending', 'running', 'complete', 'broken', 'canceled') NOT NULL,
     worker_id       TEXT            DEFAULT NULL,
 
     error           TEXT            DEFAULT NULL,
@@ -134,7 +136,8 @@ CREATE TABLE runs (
 
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
-    FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id)
+    FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id),
+    UNIQUE(run_ord)
 ) ROW_FORMAT=COMPRESSED;
 CREATE INDEX run_projects ON runs(project_id);
 CREATE INDEX run_status ON runs(status);
@@ -167,6 +170,10 @@ CREATE TABLE jobs (
     job_try         INT         NOT NULL DEFAULT 0,
     job_ord         BIGINT      NOT NULL,
     run_id          CHAR(36)    NOT NULL,
+
+    is_harness_out  BOOL        NOT NULL DEFAULT 0,
+
+    status ENUM('pending', 'running', 'complete', 'broken', 'canceled') NOT NULL,
 
     parameters      TEXT        DEFAULT NULL,
     fields          TEXT        DEFAULT NULL,
@@ -214,6 +221,10 @@ CREATE TABLE events (
     job_key         CHAR(36)    NOT NULL REFERENCES jobs(job_key),
 
     event_ord       BIGINT      NOT NULL,
+
+    is_diag         BOOL        NOT NULL DEFAULT FALSE,
+    is_harness      BOOL        NOT NULL DEFAULT FALSE,
+    is_time         BOOL        NOT NULL DEFAULT FALSE,
 
     stamp           TIMESTAMP,
 

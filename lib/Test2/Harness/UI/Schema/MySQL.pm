@@ -178,6 +178,12 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36},
         "event_ord",
         {data_type => "bigint", is_nullable => 0},
+        "is_diag",
+        {data_type => "tinyint", default_value => 0, is_nullable => 0},
+        "is_harness",
+        {data_type => "tinyint", default_value => 0, is_nullable => 0},
+        "is_time",
+        {data_type => "tinyint", default_value => 0, is_nullable => 0},
         "stamp",
         {
             data_type                 => "timestamp",
@@ -233,6 +239,16 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "bigint", is_nullable => 0},
         "run_id",
         {data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36},
+        "is_harness_out",
+        {data_type => "tinyint", default_value => 0, is_nullable => 0},
+        "status",
+        {
+            data_type => "enum",
+            extra     => {
+                list => ["pending", "running", "complete", "broken", "canceled"],
+            },
+            is_nullable => 0,
+        },
         "parameters",
         {data_type => "text", is_nullable => 1},
         "fields",
@@ -469,10 +485,14 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "char", is_nullable => 0, size => 36},
         "user_id",
         {data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36},
+        "run_ord",
+        {data_type => "bigint", is_auto_increment => 1, is_nullable => 0},
         "status",
         {
-            data_type   => "enum",
-            extra       => {list => ["pending", "running", "complete", "broken"]},
+            data_type => "enum",
+            extra     => {
+                list => ["pending", "running", "complete", "broken", "canceled"],
+            },
             is_nullable => 0,
         },
         "worker_id",
@@ -517,6 +537,7 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "json", is_nullable => 1},
     );
     __PACKAGE__->set_primary_key("run_id");
+    __PACKAGE__->add_unique_constraint("run_ord", ["run_ord"]);
     __PACKAGE__->has_many(
         "jobs",
         "Test2::Harness::UI::Schema::Result::Job",
@@ -658,11 +679,11 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         "username",
         {data_type => "varchar", is_nullable => 0, size => 64},
         "pw_hash",
-        {data_type => "varchar", is_nullable => 0, size => 31},
+        {data_type => "varchar", is_nullable => 1, size => 31},
         "pw_salt",
-        {data_type => "varchar", is_nullable => 0, size => 22},
+        {data_type => "varchar", is_nullable => 1, size => 22},
         "realname",
-        {data_type => "varchar", is_nullable => 0, size => 64},
+        {data_type => "varchar", is_nullable => 1, size => 64},
         "role",
         {
             data_type   => "enum",

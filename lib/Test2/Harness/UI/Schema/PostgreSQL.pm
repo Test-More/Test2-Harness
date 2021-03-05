@@ -197,6 +197,12 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         {data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16},
         "event_ord",
         {data_type => "bigint", is_nullable => 0},
+        "is_diag",
+        {data_type => "boolean", default_value => \"false", is_nullable => 0},
+        "is_harness",
+        {data_type => "boolean", default_value => \"false", is_nullable => 0},
+        "is_time",
+        {data_type => "boolean", default_value => \"false", is_nullable => 0},
         "stamp",
         {data_type => "timestamp", is_nullable => 1},
         "parent_id",
@@ -248,6 +254,18 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         {data_type => "bigint", is_nullable => 0},
         "run_id",
         {data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16},
+        "is_harness_out",
+        {data_type => "boolean", default_value => \"false", is_nullable => 0},
+        "status",
+        {
+            data_type     => "enum",
+            default_value => "pending",
+            extra         => {
+                custom_type_name => "queue_status",
+                list             => ["pending", "running", "complete", "broken", "canceled"],
+            },
+            is_nullable => 0,
+        },
         "parameters",
         {data_type => "jsonb", is_nullable => 1},
         "fields",
@@ -493,6 +511,13 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
             is_nullable   => 0,
             size          => 16,
         },
+        "run_ord",
+        {
+            data_type         => "bigint",
+            is_auto_increment => 1,
+            is_nullable       => 0,
+            sequence          => "runs_run_ord_seq",
+        },
         "user_id",
         {data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16},
         "status",
@@ -501,7 +526,7 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
             default_value => "pending",
             extra         => {
                 custom_type_name => "queue_status",
-                list             => ["pending", "running", "complete", "broken"],
+                list             => ["pending", "running", "complete", "broken", "canceled"],
             },
             is_nullable => 0,
         },
@@ -551,6 +576,7 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         {data_type => "jsonb", is_nullable => 1},
     );
     __PACKAGE__->set_primary_key("run_id");
+    __PACKAGE__->add_unique_constraint("runs_run_ord_key", ["run_ord"]);
     __PACKAGE__->has_many(
         "jobs",
         "Test2::Harness::UI::Schema::Result::Job",
@@ -710,11 +736,21 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         "username",
         {data_type => "citext", is_nullable => 0},
         "pw_hash",
-        {data_type => "varchar", is_nullable => 0, size => 31},
+        {
+            data_type     => "varchar",
+            default_value => \"null",
+            is_nullable   => 1,
+            size          => 31,
+        },
         "pw_salt",
-        {data_type => "varchar", is_nullable => 0, size => 22},
+        {
+            data_type     => "varchar",
+            default_value => \"null",
+            is_nullable   => 1,
+            size          => 22,
+        },
         "realname",
-        {data_type => "text", is_nullable => 0},
+        {data_type => "text", is_nullable => 1},
         "role",
         {
             data_type     => "enum",

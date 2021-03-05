@@ -5,7 +5,8 @@ CREATE TYPE queue_status AS ENUM(
     'pending',
     'running',
     'complete',
-    'broken'
+    'broken',
+    'canceled'
 );
 
 CREATE TYPE api_key_status AS ENUM(
@@ -29,9 +30,9 @@ CREATE TYPE user_type AS ENUM(
 CREATE TABLE users (
     user_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     username        CITEXT          NOT NULL,
-    pw_hash         VARCHAR(31)     NOT NULL,
-    pw_salt         VARCHAR(22)     NOT NULL,
-    realname        TEXT            NOT NULL,
+    pw_hash         VARCHAR(31)     DEFAULT NULL,
+    pw_salt         VARCHAR(22)     DEFAULT NULL,
+    realname        TEXT            DEFAULT NULL,
     role            user_type       NOT NULL DEFAULT 'user',
 
     UNIQUE(username)
@@ -119,6 +120,7 @@ CREATE TABLE permissions (
 
 CREATE TABLE runs (
     run_id          UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    run_ord         BIGSERIAL       NOT NULL,
     user_id         UUID            NOT NULL REFERENCES users(user_id),
     status          queue_status    NOT NULL DEFAULT 'pending',
     worker_id       TEXT            DEFAULT NULL,
@@ -138,7 +140,9 @@ CREATE TABLE runs (
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
     fields          JSONB           DEFAULT NULL,
-    parameters      JSONB           DEFAULT NULL
+    parameters      JSONB           DEFAULT NULL,
+
+    UNIQUE(run_ord)
 );
 CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
@@ -166,6 +170,10 @@ CREATE TABLE jobs (
     job_try         INT         NOT NULL DEFAULT 0,
     job_ord         BIGINT      NOT NULL,
     run_id          UUID        NOT NULL REFERENCES runs(run_id),
+
+    is_harness_out  BOOL        NOT NULL DEFAULT FALSE,
+
+    status          queue_status    NOT NULL DEFAULT 'pending',
 
     parameters      JSONB       DEFAULT NULL,
     fields          JSONB       DEFAULT NULL,
@@ -209,6 +217,10 @@ CREATE TABLE events (
     job_key         UUID        NOT NULL REFERENCES jobs(job_key),
 
     event_ord       BIGINT      NOT NULL,
+
+    is_diag         BOOL        NOT NULL DEFAULT FALSE,
+    is_harness      BOOL        NOT NULL DEFAULT FALSE,
+    is_time         BOOL        NOT NULL DEFAULT FALSE,
 
     stamp           TIMESTAMP   DEFAULT NULL,
 

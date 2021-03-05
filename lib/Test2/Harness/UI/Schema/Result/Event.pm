@@ -39,14 +39,25 @@ sub TO_JSON {
     return \%cols;
 }
 
+sub st_line_data {
+    my $self = shift;
+
+    my $out = $self->line_data;
+
+    $out->{loading_subtest} = 1;
+
+    return $out;
+}
+
 sub line_data {
     my $self = shift;
     my %cols = $self->get_columns;
     my %out;
 
     # Inflate
-    $cols{facets} = $self->facets;
-    $out{lines}   = Test2::Formatter::Test2::Composer->render_super_verbose($cols{facets});
+    $cols{facets} = $self->facets if $cols{facets};
+
+    $out{lines} = Test2::Formatter::Test2::Composer->render_super_verbose($cols{facets} // $self->orphan);
 
     $out{facets} = $cols{facets} ? 1 : 0;
     $out{orphan} = $cols{orphan} ? 1 : 0;

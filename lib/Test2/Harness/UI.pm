@@ -42,12 +42,13 @@ sub init {
         $router->connect('/' => {controller => 'Test2::Harness::UI::Controller::Run'});
     }
     else {
-        $router->connect('/'                 => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-        $router->connect('/dashboard'        => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-        $router->connect('/runs'             => {controller => 'Test2::Harness::UI::Controller::Runs'});
-        $router->connect('/runs/:page'       => {controller => 'Test2::Harness::UI::Controller::Runs'});
-        $router->connect('/runs/:page/:size' => {controller => 'Test2::Harness::UI::Controller::Runs'});
-        $router->connect('/upload'           => {controller => 'Test2::Harness::UI::Controller::Upload'});
+        $router->connect('/'                        => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+        $router->connect('/dashboard'               => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
+        $router->connect('/runs'                    => {controller => 'Test2::Harness::UI::Controller::Runs'});
+        $router->connect('/runs/:page'              => {controller => 'Test2::Harness::UI::Controller::Runs'});
+        $router->connect('/runs/:page/:size'        => {controller => 'Test2::Harness::UI::Controller::Runs'});
+        $router->connect('/runs/:page/:size/:after' => {controller => 'Test2::Harness::UI::Controller::Runs'});
+        $router->connect('/upload'                  => {controller => 'Test2::Harness::UI::Controller::Upload'});
     }
 
     $router->connect('/user' => {controller => 'Test2::Harness::UI::Controller::User'})

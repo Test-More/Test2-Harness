@@ -45,6 +45,8 @@ sub complete {
 
     return 1 if $status eq 'complete';
     return 1 if $status eq 'failed';
+    return 1 if $status eq 'canceled';
+    return 1 if $status eq 'broken';
     return 0;
 }
 

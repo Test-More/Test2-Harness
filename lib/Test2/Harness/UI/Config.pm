@@ -12,6 +12,7 @@ use Test2::Harness::UI::Util::HashBase qw{
     -_schema
     -dbi_dsn -dbi_user -dbi_pass
     -single_user -single_run -no_upload
+    -show_user
     -email
 };
 
@@ -26,6 +27,8 @@ sub init {
 
     croak "'dbi_pass' is a required attribute"
         unless defined $self->{+DBI_PASS};
+
+    $self->{+SHOW_USER} //= 0;
 }
 
 sub connect {

@@ -115,7 +115,7 @@ sub stream {
                     $seen++;
                 }
 
-                sleep $wait unless $seen;
+                sleep $wait unless $seen || $done;
             }
 
             $cleanup->() if $cleanup;

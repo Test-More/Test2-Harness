@@ -26,12 +26,19 @@ sub handle {
 
     my $page = $route->{page} || 1;
     my $size = $route->{size} || 100;
+    my $after = $route->{after};
 
     my $p = $req->parameters;
 
-    my $a = {order_by => { -desc => [qw/added status project_id/]}};
+    my $a = {order_by => { -desc => [qw/run_ord/]}};
 
-    my $runs = $schema->resultset('Run')->search(undef, {page => $page, rows => $size, order_by => { -desc => 'added'}});
+    my $runs;
+    if ($after && $page == 1) {
+        $runs = $schema->resultset('Run')->search({run_ord => {'>' => $after}}, {order_by => { -desc => 'run_ord'}});
+    }
+    else {
+        $runs = $schema->resultset('Run')->search(undef, {page => $page, rows => $size, order_by => { -desc => 'run_ord'}});
+    }
 
     $res->stream(
         env          => $req->env,

@@ -29,7 +29,7 @@ sub handle {
     my $p = $req->parameters;
     my (%query, %attrs, $rs, $meth);
 
-    $attrs{order_by} = {-asc => ['event_ord', 'event_id']};
+    $attrs{order_by} = {-asc => 'event_ord'};
 
     if ($route->{from} eq 'job') {
         my $job_key = $it;
@@ -37,9 +37,66 @@ sub handle {
             or die error(404 => 'Invalid Job');
 
         $query{job_key} = $job_key;
-        $query{parent_id} = undef unless $p->{load_subtests} && lc($p->{load_subtests}) ne 'false';
 
         $meth = 'line_data';
+
+        unless ($job->complete || $p->{load_subtests}) {
+            my @events;
+            my $flush = 0;
+            my $offset = 0;
+            my $nested_offset = 0;
+
+            $res->stream(
+                env          => $req->env,
+                content_type => 'application/x-jsonl; charset=utf-8',
+
+                done => sub {
+                    return 0 if @events;
+
+                    unless ($flush) {
+                        $job->discard_changes;
+                        return 0;
+                    }
+
+                    return $job->complete;
+                },
+                fetch => sub {
+                    $flush = 1 if $job->complete;
+
+                    # Get main events
+                    my @new = $schema->resultset('Event')->search(
+                        {%query, nested => 0, event_ord => {'>', $offset}},
+                        \%attrs,
+                    )->all;
+
+                    if (@new) {
+                        $offset = $new[-1]->event_ord;
+                        push @events => @new;
+                    }
+
+                    unless (@events) {
+                        # Fallback to an orphan for progress
+                        my $nest = $schema->resultset('Event')->search(
+                            {%query, nested => 1, event_ord => {'>', max($offset, $nested_offset)}},
+                            {order_by => {-desc => 'event_ord'}, limit => 1},
+                        )->first;
+
+                        if ($nest) {
+                            $nested_offset = $nest->event_ord;
+                            push @events => $nest;
+                        }
+                    }
+
+                    return unless @events;
+                    return encode_json(shift(@events)->$meth) . "\n";
+                },
+
+            );
+
+            return $res;
+        }
+
+        $query{parent_id} = undef unless $p->{load_subtests} && lc($p->{load_subtests}) ne 'false';
         $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }
     elsif ($route->{from} eq 'single_event') {
@@ -75,7 +132,7 @@ sub handle {
             $query{'parent_id'} = $event_id;
         }
 
-        $meth = 'line_data';
+        $meth = 'st_line_data';
         $rs = $schema->resultset('Event')->search(\%query, \%attrs);
     }
     else {

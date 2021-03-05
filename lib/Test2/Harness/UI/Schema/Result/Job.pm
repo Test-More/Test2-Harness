@@ -40,6 +40,18 @@ sub short_file {
     return $file;
 }
 
+sub complete {
+    my $self = shift;
+
+    my $status = $self->status;
+
+    return 1 if $status eq 'complete';
+    return 1 if $status eq 'failed';
+    return 1 if $status eq 'canceled';
+    return 1 if $status eq 'broken';
+    return 0;
+}
+
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_columns;
@@ -54,7 +66,7 @@ sub TO_JSON {
     return \%cols;
 }
 
-my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file };
+my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file status job_ord };
 
 sub glance_data {
     my $self = shift;

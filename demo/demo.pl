@@ -39,6 +39,7 @@ my $config = Test2::Harness::UI::Config->new(
     dbi_user    => '',
     dbi_pass    => '',
     single_user => 1,
+    show_user   => 1,
     email       => 'exodist7@gmail.com',
 );
 
@@ -66,7 +67,7 @@ for my $file (qw/fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2
     my $run = $config->schema->resultset('Run')->create({
         run_id     => gen_uuid(),
         user_id    => $user->user_id,
-        mode       => 'qvfd',
+        mode       => 'complete',
         status     => 'pending',
         project_id => $projects{$project}->project_id,
 
@@ -92,7 +93,7 @@ for my $file (qw/fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2
 $ENV{YATH_UI_SCHEMA} = $schema;
 my @commands = (
     [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
-    ['starman', '-Ilib', '-r', '--port', 8081, './demo/demo.psgi'],
+    ['starman', '-Ilib', '-r', '--port', 8081, '--workers', 20, './demo/demo.psgi'],
 );
 
 my $start = $$;

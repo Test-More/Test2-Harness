@@ -14,6 +14,7 @@ my $config = Test2::Harness::UI::Config->new(
     dbi_user    => '',
     dbi_pass    => '',
     single_user => 1,
+    show_user   => 1,
     email       => 'exodist7@gmail.com',
 );
 

@@ -28,6 +28,27 @@
 .tag_TIME     { color: #12539e;                     }
 .tag_MEMORY   { color: #12539e;                     }
 
+tr.job_index {
+    display: none !important;
+}
+
+html {
+    scroll-snap-type: y proximity;
+    scroll-padding-bottom: 50px;
+}
+
+div.live {
+    scroll-snap-align: end;
+}
+
+tr.temp_orphan {
+    background: #C0E0FF;
+}
+
+tr.first_orphan {
+    border-top: 5px dashed #000000 !important;
+}
+
 div.event_controls {
     background: #FFFFFF;
     border-radius: 6px;

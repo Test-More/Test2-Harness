@@ -1,3 +1,11 @@
+t2hui.job = {
+    'filters': {
+        seen: {},
+        state: {},
+        hide: {}
+    },
+};
+
 $(function() {
     $("div.job").each(function() {
         var root = $(this);
@@ -6,9 +14,27 @@ $(function() {
         var job_uri = base_uri + 'job/' + job_key;
         $.ajax(job_uri, {
             'data': { 'content-type': 'application/json' },
-            'success': function(item) {
-                var dash = t2hui.run.build_table([item]);
-                root.prepend($('<h3>Job: ' + (item.short_file || item.name) + '</h3>'), dash, $('<hr />'));
+            'success': function(job) {
+                if (job.status == 'running' || job.status == 'pending') {
+                    root.addClass('live');
+                }
+                else {
+                    t2hui.job.filters.hide = {
+                        'PASS': true,
+                        'PLAN': true,
+                        'HARNESS': true,
+                    };
+                }
+
+                var run_uri = base_uri + 'run/' + job.run_id;
+                $.ajax(run_uri, {
+                    'data': { 'content-type': 'application/json' },
+                    'success': function(run) {
+                        var rundash = t2hui.dashboard.build_table([run]);
+                        var jobdash = t2hui.run.build_table([job]);
+                        root.prepend($('<h3>Job: ' + (job.short_file || job.name) + '</h3>'), rundash, $('<p>'), jobdash, $('<hr />'));
+                    },
+                });
             },
         });
 
@@ -23,18 +49,6 @@ $(function() {
         root.append(table);
     });
 });
-
-t2hui.job = {
-    'filters': {
-        seen: {},
-        state: {},
-        hide: {
-            'PASS': true,
-            'PLAN': true,
-            'HARNESS': true,
-        }
-    },
-};
 
 t2hui.job.build_table = function(uri) {
     var columns = [
@@ -52,6 +66,8 @@ t2hui.job.build_table = function(uri) {
 
         'place_row': t2hui.job.place_row,
         'modify_row_hook': t2hui.job.modify_row,
+
+        'done': function() { $('.temp_orphan').detach() },
 
         'columns': columns,
     });
@@ -111,12 +127,34 @@ t2hui.job.message_builder = function(item, dest, data) {
 }
 
 t2hui.job.place_row = function(row, item, table, state) {
-    if (!item.item.parent_id) { return false }
 
-    var pid = item.item.parent_id;
-    if (!state[pid]) {
-        state[pid] = table.find('tr[data-event-id="' + item.item.parent_id + '"]').last();
+    if (!item.item['loading_subtest']) {
+        if (item.item.orphan) {
+            row.addClass('temp_orphan');
+            if (!state['orphan']) {
+                state['orphan'] = row;
+                row.addClass('first_orphan');
+            }
+            state['body'].append(row);
+            return true;
+        }
     }
+
+    if (!item.item['parent_id']) {
+        state['orphan'] = null;
+        $('.temp_orphan').detach();
+        state['body'].append(row);
+        return true;
+    }
+
+    var pid = item.item['parent_id'];
+    if (!state[pid]) {
+        var got = table.find('tr[data-event-id="' + item.item.parent_id + '"]');
+        console.log(item, got);
+        state[pid] = got.last();
+    }
+
+//    console.log('Placing', pid, state[pid]);
 
     state[pid].after(row);
     state[pid] = row;
@@ -214,6 +252,7 @@ t2hui.job.modify_row = function(row, item) {
     var tag = item.tag;
     var ctag = t2hui.job.clean_tag(tag);
 
+    row.addClass('event_line');
     row.addClass('facet_' + item.facet);
     row.addClass('tag_' + ctag);
 

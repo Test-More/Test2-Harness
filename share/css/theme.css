@@ -21,6 +21,16 @@
     100% { background-color: #F0F0FF }
 }
 
+.running.error, .running_box.error_box, .running_set.error_set {
+    animation: running_failing_pulse 2s infinite !important;
+}
+
+@keyframes running_failing_pulse {
+    0%   { background-color: #FFF0F0 }
+    50%  { background-color: #F0C0C0 }
+    100% { background-color: #FFF0F0 }
+}
+
 .error_box   { border: 1px solid #FF0000; background: #FFF0F0; }
 .success_box { border: 1px solid #00C000; background: #F0FFF0; }
 .broken_box  { border: 1px solid #902090; }

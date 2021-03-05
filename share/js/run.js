@@ -9,18 +9,19 @@ $(function() {
             'success': function(item) {
                 var dash = t2hui.dashboard.build_table([item]);
                 root.prepend($('<h3>Run: ' + run_id + '</h3>'), dash, $('<hr />'));
+
+                var jobs_uri = run_uri + '/jobs';
+                var table = t2hui.run.build_table(jobs_uri, item);
+                root.append(table);
             },
         });
 
-        var jobs_uri = run_uri + '/jobs';
-        var table = t2hui.run.build_table(jobs_uri);
-        root.append(table);
     });
 });
 
 t2hui.run = {};
 
-t2hui.run.build_table = function(uri) {
+t2hui.run.build_table = function(uri, run) {
     var columns = [
         { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.run.tool_builder },
 
@@ -38,7 +39,9 @@ t2hui.run.build_table = function(uri) {
         'class': 'run_table',
         'id': 'run_jobs',
         'fetch': uri,
-        'sortable': true,
+        'sortable': run.status == 'running' ? false : true,
+
+        'init': t2hui.run.init_table,
 
         'modify_row_hook': t2hui.run.modify_row,
         'place_row': t2hui.run.place_row,
@@ -47,10 +50,39 @@ t2hui.run.build_table = function(uri) {
         'dynamic_field_fetch': t2hui.run.field_fetch,
         'dynamic_field_builder': t2hui.run.field_builder,
 
+        'row_redraw_reposition': t2hui.run.redraw_reposition,
+        'row_redraw_compare': t2hui.run.redraw_compare,
+        'row_redraw_check': t2hui.run.redraw_check,
+        'row_redraw_fetch': t2hui.run.redraw_fetch,
+        'row_redraw_interval': 1 * 1000,
+
         'columns': columns,
     });
 
     return table.render();
+};
+
+t2hui.run.redraw_reposition = function(old, item) {
+    if (old.status != item.status) { return true }
+    if (old.fail_count == 0 && item.fail_count > 0) { return true }
+    return false;
+}
+
+t2hui.run.redraw_compare = function(old, item) {
+    if (old.status != item.status) { return false }
+    if (old.pass_count != item.pass_count) { return false }
+    if (old.fail_count != item.fail_count) { return false }
+    return true;
+}
+
+t2hui.run.redraw_check = function(item) {
+    if (item.status == 'pending') { return true }
+    if (item.status == 'running') { return true }
+    return false;
+};
+
+t2hui.run.redraw_fetch = function(item) {
+    return base_uri + 'job/' + item.job_key;
 };
 
 t2hui.run.build_pass = function(item, col, data) {
@@ -72,7 +104,7 @@ t2hui.run.build_try = function(item, col, data) {
 };
 
 t2hui.run.build_exit = function(item, col, data) {
-    var val = item.exit != null ? item.exit : 'N/A';
+    var val = item.exit_code != null ? item.exit_code : 'N/A';
     col.text(val);
 };
 
@@ -125,6 +157,18 @@ t2hui.run.modify_row = function(row, item) {
             row.addClass('iffy_set');
             row.addClass('retry_txt');
         }
+        else if (item.status == 'canceled') {
+            row.addClass('iffy_set');
+        }
+        else if (item.status == 'pending') {
+            row.addClass('pending_set');
+        }
+        else if (item.status == 'running') {
+            row.addClass('running_set');
+            if (item.fail_count > 0) {
+                row.addClass('error_set');
+            }
+        }
         else if (item.fail == true) {
             row.addClass('error_set');
         }
@@ -158,23 +202,57 @@ t2hui.run.build_jobs = function(run_id) {
     return root;
 };
 
+t2hui.run.init_table = function(table, state) {
+    var body = state['body'];
+
+    state['fail'] = $('<tr class="job_index fail"></tr>');
+    body.append(state['fail']);
+
+    state['running'] = $('<tr class="job_index running"></tr>');
+    body.append(state['running']);
+
+    state['pending'] = $('<tr class="job_index pending"></tr>');
+    body.append(state['pending']);
+
+    state['other'] = $('<tr class="job_index other"></tr>');
+    body.append(state['other']);
+
+    state['retry'] = $('<tr class="job_index retry"></tr>');
+    body.append(state['retry']);
+}
+
 t2hui.run.place_row = function(row, item, table, state) {
+    console.log(item);
     if (!item.short_file) {
         state['header'].after(row);
         return true;
     }
 
-    if (item.fail == true && item.retry == false) {
-        if (state['fail']) {
-            state['fail'].after(row);
-        }
-        else {
-            state['body'].prepend(row);
-        }
-
-        state['fail'] = row;
+    if (item.retry) {
+        state['retry'].before(row);
         return true;
     }
 
-    return false;
+    if (item.fail_count > 0 && item.status == 'running') {
+        state['fail'].after(row);
+        return true;
+    }
+
+    if (item.fail_count > 0) {
+        state['fail'].before(row);
+        return true;
+    }
+
+    if (item.status == 'running') {
+        state['running'].before(row);
+        return true;
+    }
+
+    if (item.status == 'pending') {
+        state['pending'].before(row);
+        return true;
+    }
+
+    state['other'].before(row);
+    return true;
 };

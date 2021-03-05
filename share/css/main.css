@@ -291,6 +291,20 @@ div#messages {
     padding-right: 1px;
 }
 
+.etoggle.inactive {
+    cursor: not-allowed;
+    position: relative;
+}
+.etoggle.inactive:after {
+    content: '';
+    position: absolute;
+    left: 0px;
+    right: 0px;
+    width: 100%;
+    height: 100%;
+    background: rgba(190, 190, 190, 0.9);
+}
+
 .grid {
     display: grid;
     grid-gap: 0px;

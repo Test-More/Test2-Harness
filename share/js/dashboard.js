@@ -22,7 +22,7 @@ t2hui.dashboard.build_table = function(uri) {
         { 'name': 'status',  'label': 'status',  'class': 'status'}
     ];
 
-    if (!single_user) {
+    if (show_user || !single_user) {
         columns.push({ 'name': 'user', 'label': 'user', 'class': 'user'});
     }
 
@@ -32,11 +32,16 @@ t2hui.dashboard.build_table = function(uri) {
         'fetch': uri,
         'sortable': true,
 
-        'modify_row_hook': t2hui.dashboard.modify_row,
+        'update_offset_field': 'run_ord',
+        'update_interval':     1 * 1000,
 
+        'modify_row_hook': t2hui.dashboard.modify_row,
+        'place_row': t2hui.dashboard.place_row,
+
+        'row_redraw_compare': t2hui.dashboard.redraw_compare,
         'row_redraw_check': t2hui.dashboard.redraw_check,
         'row_redraw_fetch': t2hui.dashboard.redraw_fetch,
-        'row_redraw_interval': 5 * 1000,
+        'row_redraw_interval': 1 * 1000,
 
         'dynamic_field_attribute': 'fields',
         'dynamic_field_fetch': t2hui.dashboard.field_fetch,
@@ -49,6 +54,22 @@ t2hui.dashboard.build_table = function(uri) {
     });
 
     return table.render();
+}
+
+t2hui.dashboard.place_row = function(row, item, table, state) {
+    if (!state['biggest']) {
+        state['biggest'] = {'row': row, 'ord': item.run_ord};
+        return false;
+    }
+
+    if (item.run_ord > state.biggest.ord) {
+        var old = state.biggest.row;
+        state['biggest'] = {'row': row, 'ord': item.run_ord};
+        old.before(row);
+        return true;
+    }
+
+    return false;
 }
 
 t2hui.dashboard.build_controls = function(count) {
@@ -119,8 +140,23 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
         $('#free_modal').slideDown();
     });
 
-    var download = $('<a class="tool etoggle" title="Download Log" href="' + downlink + '"><img src="/img/download.png" /></a>');
-    tools.append(download);
+    if (item.log_file_id) {
+        var download = $('<a class="tool etoggle" title="Download Log" href="' + downlink + '"><img src="/img/download.png" /></a>');
+        tools.append(download);
+    }
+    else {
+        var download = $('<a class="tool etoggle inactive" title="No Log To Download"><img src="/img/download.png" /></a>');
+        tools.append(download);
+    }
+
+    if (item.status == 'broken') {
+        var go = $('<a class="tool etoggle inactive" title="Cannot Open Run"><img src="/img/goto.png" /></a>');
+        tools.append(go);
+    }
+    else {
+        var go = $('<a class="tool etoggle" title="Open Run" href="' + link + '"><img src="/img/goto.png" /></a>');
+        tools.append(go);
+    }
 
     if (item.error) {
         var err = $('<div class="tool etoggle error" title="See Error Message"><img src="/img/error.png"/></div>');
@@ -131,10 +167,6 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
             $('#modal_body').append(pre);
             $('#free_modal').slideDown();
         });
-    }
-    else {
-        var go = $('<a class="tool etoggle" title="Open Run" href="' + link + '"><img src="/img/goto.png" /></a>');
-        tools.append(go);
     }
 
     var pin = $('<img />');
@@ -180,6 +212,11 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
     });
 };
 
+t2hui.dashboard.redraw_compare = function(old, item) {
+    if (old.status == item.status) { return true }
+    return false;
+}
+
 t2hui.dashboard.redraw_check = function(item) {
     if (item.status == 'pending') { return true }
     if (item.status == 'running') { return true }
@@ -207,10 +244,15 @@ t2hui.dashboard.field_builder = function(data, name) {
 };
 
 t2hui.dashboard.modify_row = function(row, item) {
-    if (item.failed == true) {
+    if (item.status == 'canceled') {
+        row.addClass('iffy_set');
+        return;
+    }
+
+    if (item.failed > 0) {
         row.addClass('error_set');
     }
-    else if(item.passed == true) {
+    else if(item.passed > 0) {
         row.addClass('success_set');
     }
 

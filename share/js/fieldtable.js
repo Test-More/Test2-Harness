@@ -33,10 +33,12 @@ function FieldTable(spec) {
     me.postfix_columns = [];
     me.dynamic_columns = [];
     me.dynamic_column_lookup = {};
-    me.redraw = {};
+    me.redraw = [];
     me.redraw_id = 1;
     me.row_state = {};
     me.hidden_columns = {};
+    me.update_offset_field = spec.update_offset_field;
+    me.update_offset = 0;
 
     me.render = function() {
         me.table = $('<table class="field-table ' + spec.class + '"></table>');
@@ -52,17 +54,28 @@ function FieldTable(spec) {
         me.row_state.body = me.body;
         me.row_state.header = me.header;
 
+        if (me.spec.init) {
+            me.spec.init(me.table, me.row_state);
+        }
+
         if (me.spec.row_redraw_interval) {
             setInterval(function() {
-                Object.keys(me.redraw).forEach(function (redraw_id) {
-                    var old = me.redraw[redraw_id];
-                    delete me.redraw[redraw_id];
+                var oldlist = me.redraw;
+                me.redraw = [];
 
+                oldlist.forEach(function (old) {
                     var uri = me.spec.row_redraw_fetch(old.item);
                     $.ajax(uri, {
                         'data': { 'content-type': 'application/json' },
-                        'error': function(a, b, c) { me.redraw[redraw_id] = old },
+                        'error': function(a, b, c) { me.redraw.push(old) },
                         'success': function(item) {
+                            if (me.spec.row_redraw_compare) {
+                                if (me.spec.row_redraw_compare(old.item, item)) {
+                                    me.redraw.push(old);
+                                    return;
+                                }
+                            }
+
                             var row = me.render_row(item);
                             row.index = old.index;
 
@@ -71,20 +84,55 @@ function FieldTable(spec) {
                             }
 
                             if (me.spec.row_redraw_check(item)) {
-                                me.redraw[row.redraw_id] = row;
+                                me.redraw.push(row);
                             }
 
                             me.rows[old.index] = row;
+
+                            var replace = true;
+                            if (me.spec.row_redraw_reposition) {
+                                replace = me.spec.row_redraw_reposition(old.item, item);
+                            }
+
+                            if (replace && me.spec.place_row) {
+                                if (me.spec.place_row(row.html, item, me.table, me.row_state)) {
+                                    old.html.detach();
+                                    return;
+                                }
+                            }
+
                             old.html.replaceWith(row.html);
-                            old.html.remove();
                         },
                     });
                 });
             }, me.spec.row_redraw_interval);
         }
 
+        if (me.spec.update_interval) {
+            setInterval(function() {
+                if (!me.loaded) {
+                    return;
+                }
+
+                // Fetch new items
+                if (me.update_offset_field && me.update_offset) {
+                    if (typeof(me.spec.fetch) === 'string') {
+                        t2hui.fetch(me.spec.fetch + "/" + me.update_offset, {'no_throb': 1}, me.render_item);
+                    }
+                }
+
+            }, me.spec.update_interval);
+        }
+
         if (typeof(me.spec.fetch) === 'string') {
-            t2hui.fetch(me.spec.fetch, {done: me.make_sortable}, me.render_item);
+            t2hui.fetch(
+                me.spec.fetch,
+                {done: function() {
+                    if (me.spec.done) { me.spec.done() };
+                    me.make_sortable();
+                }},
+                me.render_item
+            );
         }
         else if (typeof(me.spec.fetch) === 'object') {
             me.spec.fetch.forEach(me.render_item);
@@ -92,6 +140,8 @@ function FieldTable(spec) {
                 me.make_sortable();
             }
         }
+
+        me.loaded = 1;
 
         var wrapper = $('<div id="' + spec.id + '" class="field-table-wrapper ' + spec.class + '"></div>');
         wrapper.append(me.table);
@@ -162,6 +212,11 @@ function FieldTable(spec) {
     }
 
     me._render_item = function(item) {
+        if (me.update_offset_field) {
+            var id = item[me.update_offset_field];
+            me.update_offset = Math.max(me.update_offset, id);
+        }
+
         var row = me.render_row(item);
 
         if (me.spec.modify_row_hook) {
@@ -179,8 +234,7 @@ function FieldTable(spec) {
 
         if (me.spec.row_redraw_check) {
             if (me.spec.row_redraw_check(item)) {
-                row.redraw_id = me.redraw_id++;
-                me.redraw[row.redraw_id] = row;
+                me.redraw.push(row);
             }
         }
 

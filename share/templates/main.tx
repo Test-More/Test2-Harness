@@ -36,6 +36,7 @@
 
 <script>base_uri = '<: $base_uri :>';</script>
 <script>single_user = <: $config.single_user :>;</script>
+<script>show_user = <: $config.show_user :>;</script>
 <script>time_zone = '<: $time_zone :>';</script>
 
 <div id="free_modal" style="display: none">

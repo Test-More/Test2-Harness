@@ -10,7 +10,7 @@ use Test2::Harness::UI::RunProcessor;
 
 use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util qw/mod2file/;
-use Test2::Harness::UI::Util qw/share_dir dbd_driver qdb_driver/;
+use Test2::Harness::UI::Util qw/share_dir share_file dbd_driver qdb_driver/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
@@ -55,7 +55,7 @@ sub init {
     my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
     $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
 
-    $db->load_sql(harness_ui => 'share/schema/' . $schema . '.sql');
+    $db->load_sql(harness_ui =>  share_file('schema/' . $schema . '.sql'));
 
     my $dsn = $db->connect_string('harness_ui');
 

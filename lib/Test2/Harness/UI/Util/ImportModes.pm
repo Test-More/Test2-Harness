@@ -78,9 +78,9 @@ sub event_in_mode {
 
     my $cols = _get_event_columns($event);
 
-    return 1 if $event->{is_diag};
-    return 1 if $event->{is_harness};
-    return 1 if $event->{is_time};
+    return 1 if $cols->{is_diag};
+    return 1 if $cols->{is_harness};
+    return 1 if $cols->{is_time};
 
     return 0;
 }

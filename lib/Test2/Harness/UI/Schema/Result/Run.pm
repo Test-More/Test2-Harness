@@ -3,6 +3,7 @@ use utf8;
 use strict;
 use warnings;
 
+use Test2::Harness::UI::Util::ImportModes qw/event_in_mode/;
 use Carp qw/confess/;
 
 our $VERSION = '0.000036';
@@ -73,6 +74,25 @@ sub TO_JSON {
     $cols{added} = $dt->strftime("%Y-%m-%d %I:%M%P");
 
     return \%cols;
+}
+
+sub normalize_to_mode {
+    my $self = shift;
+    my ($mode) = @_;
+
+    if ($mode) {
+        $self->update({mode => $mode});
+    }
+    else {
+        $mode = $self->mode;
+    }
+
+    for my $job ($self->jobs->all) {
+        for my $event ($job->events->all) {
+            next if event_in_mode(event => $event, mode => $mode, job => $job);
+            $event->delete();
+        }
+    }
 }
 
 1;

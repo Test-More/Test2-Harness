@@ -1,6 +1,11 @@
 {{$NEXT}}
 
+    - Fix bug when using non-complete imports
+    - Fix but where share -file wa snot found
+
 0.000035  2021-03-05 09:04:25-08:00 America/Los_Angeles
+
+    - Add live watching of tests
 
 0.000034  2021-02-11 10:15:50-08:00 America/Los_Angeles
 

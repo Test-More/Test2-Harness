@@ -86,6 +86,18 @@ sub glance_data {
     return \%data;
 }
 
+sub normalize_to_mode {
+    my $self = shift;
+    my %params = @_;
+
+    my $mode = $params{mode} // $self->run->mode;
+
+    for my $event ($self->events->all) {
+        next if $event->in_mode(mode => $mode, job => $self);
+        $event->delete();
+    }
+}
+
 1;
 
 __END__

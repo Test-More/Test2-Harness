@@ -238,8 +238,6 @@ sub finish {
 
     $run->update($status);
 
-    $run->normalize_to_mode() unless $self->{+BUFFER} || $run->mode eq 'complete';
-
     return $status;
 }
 
@@ -493,9 +491,9 @@ sub update_other {
     my $self = shift;
     my ($job, $f) = @_;
 
-    if (my $run_data = $f->{harness_run}) {
-        my $run = $self->{+RUN};
+    my $run = $self->{+RUN};
 
+    if (my $run_data = $f->{harness_run}) {
         clean($run_data);
         $run->update({parameters => $run_data});
 
@@ -555,7 +553,13 @@ sub update_other {
 
         # All done
         delete $self->{+JOBS}->{$cols{job_id}}->{$cols{job_try}};
-        push @{$self->{+READY_JOBS}} => $job if $self->{+BUFFER};
+
+        if ($self->{+BUFFER}) {
+            push @{$self->{+READY_JOBS}} => $job;
+        }
+        elsif ($run->mode ne 'complete') {
+            $job_result->normalize_to_mode();
+        }
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
             $cols{file} = $job_end->{rel_file} if $job_end->{rel_file};

@@ -2,6 +2,7 @@
 
     - Clean up unnecessary events as soon as a job finishes in live mode
     - Add --yathui-only-db and yathui-db options
+    - Put quick-db for renderer into the yath workdir
 
 0.000036  2021-03-05 10:34:32-08:00 America/Los_Angeles
 

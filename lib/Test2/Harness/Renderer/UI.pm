@@ -31,16 +31,6 @@ use Test2::Harness::Util::HashBase qw{
     port
 };
 
-#qw{
-#    <run
-#    <processor
-#    <config
-#    <dbh
-#    <project
-#    <user
-#    <finished
-#};
-
 sub init {
     my $self = shift;
 
@@ -48,6 +38,9 @@ sub init {
 
     my $schema = $settings->yathui->schema // 'PostgreSQL';
     require(pkg_to_file("Test2::Harness::UI::Schema::$schema"));
+
+    my $tmp = $settings->check_prefix('workspace') ? $settings->workspace->workdir : undef;
+    local $ENV{TMPDIR} = $tmp if $tmp;
 
     my $db = DBIx::QuickDB->build_db(harness_ui => {driver => qdb_driver($schema), dbd_driver => dbd_driver($schema)});
     $self->{+QDB} = $db;

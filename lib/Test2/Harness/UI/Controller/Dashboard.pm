@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Dashboard;
 use strict;
 use warnings;
 
-our $VERSION = '0.000036';
+our $VERSION = '0.000037';
 
 use Data::GUID;
 use Text::Xslate(qw/mark_raw/);

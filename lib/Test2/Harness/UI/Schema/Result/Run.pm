@@ -6,7 +6,7 @@ use warnings;
 use Test2::Harness::UI::Util::ImportModes qw/event_in_mode/;
 use Carp qw/confess/;
 
-our $VERSION = '0.000036';
+our $VERSION = '0.000037';
 
 BEGIN {
     confess "You must first load a Test2::Harness::UI::Schema::NAME module"

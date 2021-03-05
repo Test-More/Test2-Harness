@@ -331,15 +331,14 @@ Some tests depend on using a TAP formatter. This option will make `yath` use
 
 ### HARNESS-NO-IO-EVENTS
 
-`yath` usually uses the [Test2::Plugin::IOEvents](https://metacpan.org/pod/Test2%3A%3APlugin%3A%3AIOEvents) plugin. This plugin
-replaces STDERR and STDOUT in your test with tied handles that fire off proper
-[Test2::Event](https://metacpan.org/pod/Test2%3A%3AEvent)'s when they are printed to. Most of the time this is not an
-issue, but any fancy tests or modules which do anything with STDERR or STDOUT
-other than print may have really messy errors.
+`yath` can be configured to use the [Test2::Plugin::IOEvents](https://metacpan.org/pod/Test2%3A%3APlugin%3A%3AIOEvents) plugin. This
+plugin replaces STDERR and STDOUT in your test with tied handles that fire off
+proper [Test2::Event](https://metacpan.org/pod/Test2%3A%3AEvent)'s when they are printed to. Most of the time this is not
+an issue, but any fancy tests or modules which do anything with STDERR or
+STDOUT other than print may have really messy errors.
 
-This directive will disable the plugin on a per-test basis. Alternatively you
-can use the `--no-io-events` option when running yath to disable it globally
-for your test suite.
+**Note:** This plugin is disabled by default, so you only need this directive if
+you enable it globally but need to turn it back off for select tests.
 
 ### HARNESS-NO-TIMEOUT
 

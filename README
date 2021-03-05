@@ -338,15 +338,16 @@ RECIPES
 
   HARNESS-NO-IO-EVENTS
 
-    yath usually uses the Test2::Plugin::IOEvents plugin. This plugin
-    replaces STDERR and STDOUT in your test with tied handles that fire off
-    proper Test2::Event's when they are printed to. Most of the time this
-    is not an issue, but any fancy tests or modules which do anything with
-    STDERR or STDOUT other than print may have really messy errors.
+    yath can be configured to use the Test2::Plugin::IOEvents plugin. This
+    plugin replaces STDERR and STDOUT in your test with tied handles that
+    fire off proper Test2::Event's when they are printed to. Most of the
+    time this is not an issue, but any fancy tests or modules which do
+    anything with STDERR or STDOUT other than print may have really messy
+    errors.
 
-    This directive will disable the plugin on a per-test basis.
-    Alternatively you can use the --no-io-events option when running yath
-    to disable it globally for your test suite.
+    Note: This plugin is disabled by default, so you only need this
+    directive if you enable it globally but need to turn it back off for
+    select tests.
 
   HARNESS-NO-TIMEOUT
 

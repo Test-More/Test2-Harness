@@ -6,11 +6,15 @@ our $VERSION = '0.000035';
 
 use Carp qw/croak/;
 
-use Test2::Harness::UI::Import;
+use Test2::Harness::UI::RunProcessor;
 
 use Test2::Harness::UI::Util::HashBase qw/-config -worker_id/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::Util::JSON qw/decode_json/;
+
+use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
+use IO::Uncompress::Gunzip  qw($GunzipError);
 
 sub init {
     my $self = shift;
@@ -55,16 +59,7 @@ sub process {
     syswrite(\*STDOUT, "Starting run " . $run->run_id . " (" . $run->log_file->name . ")\n");
 
     my $status;
-    my $ok = eval {
-        my $import = Test2::Harness::UI::Import->new(
-            config => $self->{+CONFIG},
-            run    => $run,
-        );
-
-        $status = $import->process;
-
-        1;
-    };
+    my $ok = eval { $status = $self->process_log($run); 1 };
     my $err = $@;
 
     my $total = time - $start;
@@ -80,6 +75,57 @@ sub process {
     }
 
     return;
+}
+
+sub process_log {
+    my $self = shift;
+    my ($run, $fh) = @_;
+
+    unless ($fh) {
+        my $log = $run->log_file or die "No log file";
+        if ($log->name =~ m/\.bz2$/) {
+            $fh = IO::Uncompress::Bunzip2->new($log->local_file || \($log->data)) or die "Could not open bz2 data: $Bunzip2Error";
+        }
+        else {
+            $fh = IO::Uncompress::Gunzip->new($log->local_file || \($log->data)) or die "Could not open gz data: $GunzipError";
+        }
+    }
+
+    my $processor = Test2::Harness::UI::RunProcessor->new(
+        run => $run,
+        config => $self->{+CONFIG},
+        buffer => 1,
+    );
+
+    $processor->start();
+
+    my $schema = $self->{+CONFIG}->schema;
+
+    local $| = 1;
+    while (my $line = <$fh>) {
+        next if $line =~ m/^null$/ims;
+        my $ln = $.;
+
+        my $error = $self->process_event_json($processor, $ln => $line);
+
+        return {errors => ["error processing line number $ln: $error"]} if $error;
+    }
+
+    my $status = $processor->finish();
+    return $status;
+}
+
+sub process_event_json {
+    my $self = shift;
+    my ($processor, $ln, $json) = @_;
+
+    my $ok = eval {
+        my $event = decode_json($json);
+        $processor->process_event($event, undef, line => $ln);
+        1;
+    };
+    my $err = $@;
+    return $ok ? undef : $err;
 }
 
 1;

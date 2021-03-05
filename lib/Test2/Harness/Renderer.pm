@@ -12,6 +12,8 @@ sub render_event { croak "$_[0] forgot to override 'render_event()'" }
 
 sub finish { }
 
+sub signal { }
+
 1;
 
 __END__
@@ -63,6 +65,12 @@ Called for every event. Return is ignored.
 Called once after testing is done.
 
 C<%ARGS>:
+
+=item $renderer->signal($signal)
+
+Called when the rendering process receives a signal. This is your chance to do
+any cleanup or report the signal. This is not an event, you can ignore it. Do
+not exit or throw any exceptions here please.
 
 =over 4
 

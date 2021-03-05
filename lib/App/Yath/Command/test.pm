@@ -179,6 +179,8 @@ sub handle_sig {
     my $self = shift;
     my ($sig) = @_;
 
+    eval { $_->signal($sig) } for grep { $_->can('signal') } @{$self->renderers};
+
     print STDERR "\nCaught SIG$sig, forwarding signal to child processes...\n";
     $self->ipc->killall($sig);
 

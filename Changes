@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Minor documentation correction
+    - Add 'signal()' method to Renderer base class
 
 1.000042  2020-11-17 22:44:35-08:00 America/Los_Angeles
 

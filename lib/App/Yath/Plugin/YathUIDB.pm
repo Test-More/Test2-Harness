@@ -39,6 +39,16 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
         description => 'Only use the YathUI renderer',
     );
 
+    option db => (
+        type => 'b',
+        description => 'Add the YathUI DB renderer in addition to other renderers',
+    );
+
+    option only_db => (
+        type => 'b',
+        description => 'Only use the YathUI DB renderer',
+    );
+
     option render => (
         type => 'b',
         description => 'Add the YathUI renderer in addition to other renderers',
@@ -58,10 +68,22 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
                     'Test2::Harness::Renderer::UI' => [],
                 }
             }
+            elsif ($yathui->only_db) {
+                $display->renderers = {
+                    '@' => ['Test2::Harness::Renderer::UIDB'],
+                    'Test2::Harness::Renderer::UIDB' => [],
+                }
+            }
             elsif ($yathui->render) {
                 unless ($display->renderers->{'Test2::Harness::Renderer::UI'}) {
                     push @{$display->renderers->{'@'}} => 'Test2::Harness::Renderer::UI';
                     $display->renderers->{'Test2::Harness::Renderer::UI'} = [];
+                }
+            }
+            elsif ($yathui->db) {
+                unless ($display->renderers->{'Test2::Harness::Renderer::UIDB'}) {
+                    push @{$display->renderers->{'@'}} => 'Test2::Harness::Renderer::UIDB';
+                    $display->renderers->{'Test2::Harness::Renderer::UIDB'} = [];
                 }
             }
         }

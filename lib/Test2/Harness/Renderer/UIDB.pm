@@ -22,6 +22,7 @@ use Test2::Harness::Util::HashBase qw{
     <project
     <user
     <finished
+    +links
 };
 
 sub init {
@@ -84,6 +85,20 @@ sub init {
     }
 
     $config->connect // die "Could not connect to the db";
+
+    STDOUT->autoflush(1);
+    print $self->links;
+}
+
+sub links {
+    my $self = shift;
+    return $self->{+LINKS} if defined $self->{+LINKS};
+
+    if (my $url = $self->settings->yathui->url) {
+        $self->{+LINKS} = "\nThis run can be reviewed at: $url/run/" . $self->settings->run->run_id . "\n\n";
+    }
+
+    return $self->{+LINKS} //= "";
 }
 
 sub signal {
@@ -141,6 +156,8 @@ sub finish {
     $self->{+PROCESSOR}->finish();
 
     $self->{+FINISHED} = 1;
+
+    print $self->links;
 }
 
 sub DESTROY {

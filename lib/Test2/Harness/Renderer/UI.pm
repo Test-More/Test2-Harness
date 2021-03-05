@@ -27,7 +27,6 @@ use parent 'Test2::Harness::Renderer::UIDB';
 use Test2::Harness::Util::HashBase qw{
     qdb
     app
-    links
     port
 };
 
@@ -78,18 +77,27 @@ sub init {
     $port //= 8080;
     $self->{+PORT} = $port;
 
+    $self->{+APP} = $self->start_app();
+
+    $self->SUPER::init();
+}
+
+sub links {
+    my $self = shift;
+
+    return $self->{+LINKS} if defined $self->{+LINKS};
+
+    my $port = $self->{+PORT};
+
     $self->{+LINKS} = "\nYathUI:\n  local: http://127.0.0.1:$port\n";
     if (my $fqdn = hostfqdn()) {
         $self->{+LINKS} .= "  host:  http://$fqdn:$port\n";
     }
+
+    my $dsn = $self->{+QDB}->connect_string('harness_ui');
     $self->{+LINKS} .= "  DSN:   $dsn\n\n";
 
-    STDOUT->autoflush(1);
-    print $self->{+LINKS};
-
-    $self->{+APP} = $self->start_app();
-
-    $self->SUPER::init();
+    return $self->{+LINKS};
 }
 
 sub start_app {
@@ -134,9 +142,6 @@ sub finish {
     my $out = $self->SUPER::finish();
 
     return $out unless kill(0, $self->{+APP});
-
-    my $dsn = $self->{+QDB}->connect_string('harness_ui');
-    print $self->{+LINKS};
 
     print "Leaving yathui server open, press enter to stop it...\n";
     my $in = <STDIN>;

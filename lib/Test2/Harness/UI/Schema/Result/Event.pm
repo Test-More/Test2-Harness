@@ -9,7 +9,7 @@ use Carp qw/confess/;
 confess "You must first load a Test2::Harness::UI::Schema::NAME module"
     unless $Test2::Harness::UI::Schema::LOADED;
 
-our $VERSION = '0.000037';
+our $VERSION = '0.000038';
 
 __PACKAGE__->parent_column('parent_id');
 

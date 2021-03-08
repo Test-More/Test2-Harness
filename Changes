@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix bug in --yathui-db-config option
+
 0.000037  2021-03-08 07:53:10-08:00 America/Los_Angeles
 
     - Clean up unnecessary events as soon as a job finishes in live mode

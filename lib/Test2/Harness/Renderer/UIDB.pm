@@ -43,7 +43,7 @@ sub init {
             my $file = mod2file($cmod);
             require $file;
 
-            $config = $cmod->yath_ui_config(%$db);
+            $config = $cmod->yath_ui_config(%$$db);
         }
         else {
             my $dsn = $db->dsn;

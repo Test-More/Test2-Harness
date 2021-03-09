@@ -37,6 +37,17 @@
 .pending_box { border: 1px solid #0000C0; }
 .running_box { border: 1px solid #009090; }
 
+.important_note {
+    background: #fcfc03;
+    margin: 0;
+    padding: 6px;
+    border-top: 1px solid;
+    margin-left: -5px;
+    margin-right: -5px;
+    margin-bottom: -5px;
+    font-style: italic;
+}
+
 .etoggle {
     color: black;
 }

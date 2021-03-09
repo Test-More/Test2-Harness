@@ -11,6 +11,12 @@ $(function() {
         var root = $(this);
         var job_key = root.attr('data-job-key');
 
+        var controls = $('<div class="event_controls"></div>');
+        var filters = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
+        controls.append(filters);
+        root.append(controls);
+        t2hui.job.filters.dom = filters;
+
         var job_uri = base_uri + 'job/' + job_key;
         $.ajax(job_uri, {
             'data': { 'content-type': 'application/json' },
@@ -31,18 +37,18 @@ $(function() {
                     'data': { 'content-type': 'application/json' },
                     'success': function(run) {
                         var rundash = t2hui.dashboard.build_table([run]);
-                        var jobdash = t2hui.run.build_table([job]);
+                        var jobdash = t2hui.run.build_table([job], run);
                         root.prepend($('<h3>Job: ' + (job.short_file || job.name) + '</h3>'), rundash, $('<p>'), jobdash, $('<hr />'));
+
+                        if (job.status == 'running' || job.status == 'pending') {
+                            if (run.mode == 'qvfd') {
+                                controls.append('<div class="important_note">Note: Mode is "qvfd", if an error is encountered it will switch to verbose, however events from before the verbosity increases will not be shown without a page reload.</div>');
+                            }
+                        }
                     },
                 });
             },
         });
-
-        var controls = $('<div class="event_controls"></div>');
-        var filters = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
-        controls.append(filters);
-        root.append(controls);
-        t2hui.job.filters.dom = filters;
 
         var events_uri = job_uri + '/events';
         var table = t2hui.job.build_table(events_uri);

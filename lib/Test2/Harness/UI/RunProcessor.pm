@@ -118,14 +118,12 @@ sub flush {
     # Always update if needed
     $self->run->insert_or_update();
 
-    if ($res->is_column_changed('status') || $res->is_column_changed('fail')) {
-        $res->update();
-    }
-
     my $flush = $params{force} ? 'force' : 0;
     $flush ||= 'always' if $bmode eq 'none';
     $flush ||= 'diag' if $bmode eq 'diag' && $res->fail && $params{is_diag};
-    $flush ||= 'job' if $job->{done} && $bmode ne 'run';
+    $flush ||= 'job' if $job->{done};
+    $flush ||= 'status' if $res->is_column_changed('status');
+    $flush ||= 'fail' if $res->is_column_changed('fail');
 
     if ($int && !$flush) {
         my $last = $self->{+LAST_FLUSH};
@@ -565,8 +563,6 @@ sub update_other {
         $cols{launch} = format_stamp($job_launch->{stamp});
     }
     if (my $job_end = $f->{harness_job_end}) {
-        $cols{status} = $self->{+SIGNAL} ? 'canceled' : 'complete';
-
         $cols{file} ||= $job_end->{file};
         $cols{fail} ||= $job_end->{fail} ? 1 : 0;
         $cols{ended} = format_stamp($job_end->{stamp});

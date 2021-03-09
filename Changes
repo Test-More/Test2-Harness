@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Insert optimization
+
 0.000039  2021-03-09 13:17:07-08:00 America/Los_Angeles
 
     - Add control over buffering mode on import

@@ -21,6 +21,7 @@ use Test2::Harness::UI::Util::ImportModes qw{
     %MODES
     record_all_events
     event_in_mode
+    mode_check
 };
 
 use Test2::Harness::UI::Util::HashBase qw{
@@ -30,7 +31,7 @@ use Test2::Harness::UI::Util::HashBase qw{
 
     signal
 
-    <coverage <events <orphans <new_jobs
+    <coverage <new_jobs
 
     <mode
     <interval <last_flush
@@ -87,8 +88,6 @@ sub init {
     $self->{+JOB0_ID} = gen_uuid();
 
     $self->{+COVERAGE} = [];
-    $self->{+EVENTS}   = [];
-    $self->{+ORPHANS}  = {};
 }
 
 sub flush_all {
@@ -101,6 +100,9 @@ sub flush_all {
             $self->flush(job => $job);
         }
     }
+
+    $self->flush_events();
+    $self->flush_coverage();
 }
 
 sub flush {
@@ -123,7 +125,7 @@ sub flush {
     my $flush = $params{force} ? 'force' : 0;
     $flush ||= 'always' if $bmode eq 'none';
     $flush ||= 'diag' if $bmode eq 'diag' && $res->fail && $params{is_diag};
-    $flush ||= 'job' if $job->{done};
+    $flush ||= 'job' if $job->{done} && $bmode ne 'run';
 
     if ($int && !$flush) {
         my $last = $self->{+LAST_FLUSH};
@@ -135,23 +137,7 @@ sub flush {
 
     $res->update();
 
-    my $schema = $self->schema;
-
-    my $events = $self->{+EVENTS};
-    if (@$events) {
-        $flush .= " EVENTS: " . scalar(@$events);;
-        local $ENV{DBIC_DT_SEARCH_OK} = 1;
-        $schema->resultset('Event')->populate($events);
-        @$events = ();
-    }
-
-    my $coverage = $self->{+COVERAGE};
-    if (@$coverage) {
-        $flush .= " COVER: " . scalar(@$events);;
-        local $ENV{DBIC_DT_SEARCH_OK} = 1;
-        $schema->resultset('Coverage')->populate($coverage);
-        @$coverage = ();
-    }
+    $self->flush_events();
 
     if ($job->{done}) {
         # Last time we need to write this, so clear it.
@@ -169,6 +155,57 @@ sub flush {
     $res->update;
 
     return $flush;
+}
+
+sub flush_coverage {
+    my $self = shift;
+
+    my $coverage = $self->{+COVERAGE};
+    if (@$coverage) {
+        local $ENV{DBIC_DT_SEARCH_OK} = 1;
+        $self->schema->resultset('Coverage')->populate($coverage);
+        @$coverage = ();
+    }
+}
+
+my $total = 0;
+sub flush_events {
+    my $self = shift;
+
+    return if mode_check($self->{+MODE}, 'summary');
+
+    my @write;
+
+    my $jobs = $self->{+JOBS};
+    for my $tries (values %$jobs) {
+        for my $job (values %$tries) {
+            my $events = $job->{events};
+            my $deferred = $job->{deffered_events} //= [];
+
+            if (record_all_events(mode => $self->{+MODE}, job => $job->{result})) {
+                push @write => (@$deferred, @$events);
+                @$deferred = ();
+            }
+            else {
+                for my $event (@$events) {
+                    if (event_in_mode(event => $event, record_all_event => 0, mode => $self->{+MODE}, job => $job->{result})) {
+                        push @write => $event;
+                    }
+                    else {
+                        push @$deferred => $event;
+                    }
+                }
+            }
+
+            @$events = ();
+        }
+    }
+
+    return unless @write;
+
+    local $ENV{DBIC_DT_SEARCH_OK} = 1;
+    $self->schema->resultset('Event')->populate(\@write);
+    $total += scalar(@write);
 }
 
 sub user {
@@ -269,12 +306,15 @@ sub get_job {
     $result->coverages->delete_all();
 
     $job = {
-        job_key    => $key,
-        job_id     => $job_id,
-        job_try    => $job_try,
+        job_key => $key,
+        job_id  => $job_id,
+        job_try => $job_try,
+
+        events  => [],
+        orphans => {},
 
         event_ord => 1,
-        result => $result,
+        result    => $result,
     };
 
     return $self->{+JOBS}->{$job_id}->{$job_try} = $job;
@@ -294,14 +334,14 @@ sub process_event {
     clean($e);
 
     if (my $od = $e->{orphan}) {
-        $self->{+ORPHANS}->{$e->{event_id}} = $e;
+        $job->{orphans}->{$e->{event_id}} = $e;
     }
     else {
-        if (my $o = delete $self->{+ORPHANS}->{$e->{event_id}}) {
+        if (my $o = delete $job->{orphans}->{$e->{event_id}}) {
             $e->{orphan} = $o->{orphan};
             $e->{orphan_line} = $o->{orphan_line} if defined $o->{orphan_line};
         }
-        push @{$self->{+EVENTS}} => $e;
+        push @{$job->{events}} => $e;
     }
 
     $self->flush(job => $job, is_diag => $e->{is_diag});

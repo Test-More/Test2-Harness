@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add control over buffering mode on import
+
 0.000038  2021-03-08 13:21:44-08:00 America/Los_Angeles
 
     - Fix bug in --yathui-db-config option

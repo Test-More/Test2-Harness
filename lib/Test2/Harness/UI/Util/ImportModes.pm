@@ -14,11 +14,28 @@ my %MODES = (
     complete => 20,
 );
 
-our @EXPORT_OK = qw/event_in_mode record_all_events/;
+%MODES = (
+    %MODES,
+    map {$_ => $_} values %MODES,
+);
+
+our @EXPORT_OK = qw/event_in_mode record_all_events mode_check/;
 
 our %EXPORT_ANON = (
     '%MODES' => \%MODES,
 );
+
+sub mode_check {
+    my ($got, @want) = @_;
+    my $g = $MODES{$got} // croak "Invalid mode: $got";
+
+    for my $want (@want) {
+        my $w = $MODES{$want} // croak "Invalid mode: $want";
+        return 1 if $g == $w;
+    }
+
+    return 0;
+}
 
 sub _get_mode {
     my %params = @_;

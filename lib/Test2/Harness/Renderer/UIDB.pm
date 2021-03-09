@@ -125,9 +125,11 @@ sub render_event {
         my $p = $config->schema->resultset('Project')->find_or_create({name => $self->{+PROJECT}, project_id => gen_uuid()});
         my $u = $config->schema->resultset('User')->find_or_create({username => $self->{+USER}, user_id => gen_uuid(), role => 'user'});
 
+        my $ydb = $self->settings->prefix('yathui-db') or die "No DB settings";
         my $run = $config->schema->resultset('Run')->create({
             run_id     => $run_id,
             mode       => $self->settings->yathui->mode,
+            buffer     => $ydb->buffering,
             status     => 'pending',
             user_id    => $u->user_id,
             project_id => $p->project_id,
@@ -138,6 +140,7 @@ sub render_event {
         my $processor = Test2::Harness::UI::RunProcessor->new(
             config => $config,
             run => $run,
+            interval => $ydb->flush_interval,
         );
 
         $self->{+PROCESSOR} = $processor;

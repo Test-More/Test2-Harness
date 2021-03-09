@@ -22,6 +22,13 @@ CREATE TYPE run_modes AS ENUM(
     'complete'
 );
 
+CREATE TYPE run_buffering AS ENUM(
+    'none',
+    'diag',
+    'job',
+    'run'
+);
+
 CREATE TYPE user_type AS ENUM(
     'admin',    -- Can add users and set permissions
     'user'     -- Can manage reports for their projects
@@ -133,6 +140,7 @@ CREATE TABLE runs (
     added           TIMESTAMP       NOT NULL DEFAULT now(),
     status_changed  TIMESTAMP       NOT NULL DEFAULT now(),
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
+    buffer          run_buffering   NOT NULL DEFAULT 'job',
     log_file_id     UUID            DEFAULT NULL REFERENCES log_files(log_file_id),
 
     -- From Log

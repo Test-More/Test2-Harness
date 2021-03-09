@@ -30,12 +30,13 @@ use Test2::Harness::UI::Util::HashBase qw{
 
     signal
 
+    <coverage <events <orphans <new_jobs
+
     <mode
+    <interval <last_flush
     <run <run_id
     +user +user_id
     +project +project_id
-
-    <buffer <ready_jobs <coverage
 
     <passed <failed <retried
     <job0_id <job_ord
@@ -59,6 +60,8 @@ sub init {
     if ($run = $self->{+RUN}) {
         $self->{+RUN_ID} = $run->run_id;
         $self->{+MODE}   = $MODES{$run->mode};
+
+        $run->update({status => 'pending'});
     }
     else {
         my $run_id = $self->{+RUN_ID} // croak "either 'run' or 'run_id' must be provided";
@@ -83,7 +86,89 @@ sub init {
     $self->{+JOB_ORD} = 1;
     $self->{+JOB0_ID} = gen_uuid();
 
-    $self->{+COVERAGE} = $self->{+BUFFER} ? [] : undef;
+    $self->{+COVERAGE} = [];
+    $self->{+EVENTS}   = [];
+    $self->{+ORPHANS}  = {};
+}
+
+sub flush_all {
+    my $self = shift;
+
+    my $all = $self->{+JOBS};
+    for my $jobs (values %$all) {
+        for my $job (values %$jobs) {
+            $job->{done} = 1;
+            $self->flush(job => $job);
+        }
+    }
+}
+
+sub flush {
+    my $self = shift;
+    my %params = @_;
+
+    my $job = $params{job} or croak "job is required";
+    my $res = $job->{result};
+
+    my $bmode = $self->run->buffer;
+    my $int = $self->{+INTERVAL};
+
+    # Always update if needed
+    $self->run->insert_or_update();
+
+    if ($res->is_column_changed('status') || $res->is_column_changed('fail')) {
+        $res->update();
+    }
+
+    my $flush = $params{force} ? 'force' : 0;
+    $flush ||= 'always' if $bmode eq 'none';
+    $flush ||= 'diag' if $bmode eq 'diag' && $res->fail && $params{is_diag};
+    $flush ||= 'job' if $job->{done};
+
+    if ($int && !$flush) {
+        my $last = $self->{+LAST_FLUSH};
+        $flush = 'interval' if !$last || $int < time - $last;
+    }
+
+    return "" unless $flush;
+    $self->{+LAST_FLUSH} = time;
+
+    $res->update();
+
+    my $schema = $self->schema;
+
+    my $events = $self->{+EVENTS};
+    if (@$events) {
+        $flush .= " EVENTS: " . scalar(@$events);;
+        local $ENV{DBIC_DT_SEARCH_OK} = 1;
+        $schema->resultset('Event')->populate($events);
+        @$events = ();
+    }
+
+    my $coverage = $self->{+COVERAGE};
+    if (@$coverage) {
+        $flush .= " COVER: " . scalar(@$events);;
+        local $ENV{DBIC_DT_SEARCH_OK} = 1;
+        $schema->resultset('Coverage')->populate($coverage);
+        @$coverage = ();
+    }
+
+    if ($job->{done}) {
+        # Last time we need to write this, so clear it.
+        delete $self->{+JOBS}->{$job->{job_id}}->{$job->{job_try}};
+
+        $res->status($self->{+SIGNAL} ? 'canceled' : 'broken') unless $res->status eq 'complete';
+
+        # Normalize the fail/pass
+        my $fail = $res->fail ? 1 : 0;
+        $res->fail($fail);
+
+        $res->normalize_to_mode(mode => $self->{+MODE});
+    }
+
+    $res->update;
+
+    return $flush;
 }
 
 sub user {
@@ -158,14 +243,12 @@ sub get_job {
 
     my $key = gen_uuid();
 
-    my $meth = $self->{+BUFFER} ? 'new_result' : 'update_or_create';
-
     my %inject;
     if (my $queue = $params{queue}) {
         $inject{file} = $queue->{file};
     }
 
-    my $result = $self->schema->resultset('Job')->$meth({
+    my $result = $self->schema->resultset('Job')->update_or_create({
         status         => 'pending',
         job_key        => $key,
         job_id         => $job_id,
@@ -181,13 +264,16 @@ sub get_job {
         %inject,
     });
 
+    # In case we are resuming.
+    $result->events->delete_all();
+    $result->coverages->delete_all();
+
     $job = {
         job_key    => $key,
         job_id     => $job_id,
         job_try    => $job_try,
 
         event_ord => 1,
-        events    => {},
         result => $result,
     };
 
@@ -207,21 +293,27 @@ sub process_event {
     my $e = $self->_process_event($event, $f, %params, job => $job);
     clean($e);
 
-    if ($self->{+BUFFER}) {
-        $job->{events}->{$e->{event_id}} = $e;
-        $self->flush_ready_jobs();
+    if (my $od = $e->{orphan}) {
+        $self->{+ORPHANS}->{$e->{event_id}} = $e;
     }
     else {
-        $self->schema->resultset('Event')->update_or_create($e);
+        if (my $o = delete $self->{+ORPHANS}->{$e->{event_id}}) {
+            $e->{orphan} = $o->{orphan};
+            $e->{orphan_line} = $o->{orphan_line} if defined $o->{orphan_line};
+        }
+        push @{$self->{+EVENTS}} => $e;
     }
+
+    $self->flush(job => $job, is_diag => $e->{is_diag});
+
+    return;
 }
 
 sub finish {
     my $self = shift;
     my (@errors) = @_;
 
-    $self->flush_coverage();
-    $self->flush_all_jobs();
+    $self->flush_all();
 
     my $run = $self->run;
 
@@ -239,102 +331,6 @@ sub finish {
     $run->update($status);
 
     return $status;
-}
-
-sub flush_coverage {
-    my $self = shift;
-    my $coverage = $self->{+COVERAGE} or return;
-    return unless @$coverage;
-
-    my $schema = $self->schema;
-    $schema->txn_begin;
-    my $ok = eval {
-        local $ENV{DBIC_DT_SEARCH_OK} = 1;
-        $schema->resultset('Coverage')->populate($coverage);
-        1;
-    };
-    my $err = $@;
-
-    if ($ok) {
-        $schema->txn_commit;
-        return;
-    }
-
-    $schema->txn_rollback;
-    die $err;
-}
-
-sub flush_ready_jobs {
-    my $self = shift;
-
-    my $jobs = delete $self->{+READY_JOBS};
-    return unless $jobs && @$jobs;
-
-    my (@events);
-
-    my $mode = $self->{+MODE};
-
-    for my $job (@$jobs) {
-        my $res  = $job->{result};
-        $res->status($self->{+SIGNAL} ? 'canceled' : 'broken') unless $res->status eq 'complete';
-
-        # Normalize the fail/pass
-        my $fail = $res->fail ? 1 : 0;
-        $res->fail($fail);
-
-        my $is_harness_out = $res->is_harness_out;
-
-        my $events = delete $job->{events} // [];
-        next if $mode <= $MODES{summary};
-
-        my %record_check_params = (
-            job            => $res,
-            run            => $self->{+RUN},
-            mode           => $mode,
-            fail           => $fail,
-            is_harness_out => $is_harness_out,
-        );
-
-        my $record_all_events = record_all_events(%record_check_params);
-        $record_check_params{record_all_events} = $record_all_events;
-
-        my @unsorted = values %$events;
-
-        @unsorted = grep { event_in_mode(event => $_, %record_check_params) } @unsorted
-            unless $record_all_events;
-
-        push @events => sort { $a->{event_ord} <=> $b->{event_ord} } @unsorted;
-    }
-
-    my $schema = $self->{+CONFIG}->schema;
-    $schema->txn_begin;
-    my $ok = eval {
-        my $start = time;
-        local $ENV{DBIC_DT_SEARCH_OK} = 1;
-        $_->{result}->insert_or_update() for @$jobs;
-        $schema->resultset('Event')->populate(\@events) if @events;
-        1;
-    };
-    my $err = $@;
-
-    if ($ok) {
-        $schema->txn_commit;
-        return;
-    }
-
-    $schema->txn_rollback;
-    die $err;
-}
-
-sub flush_all_jobs {
-    my $self = shift;
-
-    my $all = delete $self->{+JOBS};
-    for my $jobs (values %$all) {
-        push @{$self->{+READY_JOBS}} => values %$jobs;
-    }
-
-    $self->flush_ready_jobs();
 }
 
 sub _process_event {
@@ -388,7 +384,7 @@ sub _process_event {
     else {
         # Handle coverage
         if (my $coverage = $f->{coverage}) {
-            $self->add_coverage($job, $coverage);
+            push @{$self->{+COVERAGE}} => map { +{file => $_, job_key => $job->{job_key}} } @{$coverage->{files}};
         }
 
         $e->{facets}      = $fjson;
@@ -401,12 +397,13 @@ sub _process_event {
 
         unless ($nested) {
             my $res = $job->{result};
-            $res->fail_count($res->fail_count + 1) if $fail;
+            if ($fail) {
+                $res->fail_count($res->fail_count + 1);
+                $res->fail(1);
+            }
             $res->pass_count($res->pass_count + 1) if $f->{assert} && !$fail;
 
             $self->update_other($job, $f) if $e->{is_harness};
-
-            $res->update() unless $self->{+BUFFER};
         }
     }
 
@@ -459,21 +456,6 @@ sub clean_array {
     return 0;
 }
 
-sub add_coverage {
-    my $self = shift;
-    my ($job, $coverage) = @_;
-
-    my @rows = map { +{file => $_, job_key => $job->{job_key}} } @{$coverage->{files}};
-
-    if ($self->{+BUFFER}) {
-        push @{$self->{+COVERAGE}} => @rows;
-    }
-    else {
-        local $ENV{DBIC_DT_SEARCH_OK} = 1;
-        $self->schema->resultset('Coverage')->populate(\@rows);
-    }
-}
-
 sub merge_fields {
     my $self = shift;
     my ($existing, $new) = @_;
@@ -495,12 +477,12 @@ sub update_other {
 
     if (my $run_data = $f->{harness_run}) {
         clean($run_data);
-        $run->update({parameters => $run_data});
+        $run->parameters($run_data);
 
         if (my $fields = $run_data->{harness_run_fields} // $run_data->{fields}) {
             my $run_id = $run->run_id;
             my @new = map { { %{$_}, run_id => $run_id } } @$fields;
-            $self->{+RUN}->update({fields => $self->merge_fields($run->fields, \@new)});
+            $self->{+RUN}->fields($self->merge_fields($run->fields, \@new));
         }
     }
 
@@ -546,20 +528,13 @@ sub update_other {
         $cols{status} = $self->{+SIGNAL} ? 'canceled' : 'complete';
 
         $cols{file} ||= $job_end->{file};
-        $cols{fail}  = $job_end->{fail} ? 1 : 0;
+        $cols{fail} ||= $job_end->{fail} ? 1 : 0;
         $cols{ended} = format_stamp($job_end->{stamp});
 
         $cols{fail} ? $self->{+FAILED}++ : $self->{+PASSED}++;
 
         # All done
-        delete $self->{+JOBS}->{$cols{job_id}}->{$cols{job_try}};
-
-        if ($self->{+BUFFER}) {
-            push @{$self->{+READY_JOBS}} => $job;
-        }
-        elsif ($run->mode ne 'complete') {
-            $job_result->normalize_to_mode();
-        }
+        $job->{done} = 1;
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
             $cols{file} = $job_end->{rel_file} if $job_end->{rel_file};

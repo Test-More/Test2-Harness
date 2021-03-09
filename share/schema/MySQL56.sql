@@ -126,6 +126,7 @@ CREATE TABLE runs (
     log_file_id     CHAR(36)        DEFAULT NULL,
 
     mode ENUM('qvfd', 'qvf', 'summary', 'complete') NOT NULL,
+    buffer ENUM('none', 'diag', 'job', 'run') DEFAULT 'job' NOT NULL,
 
     -- From Log
     passed          INTEGER         DEFAULT NULL,

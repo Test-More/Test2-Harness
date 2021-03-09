@@ -525,6 +525,13 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
             extra       => {list => ["qvfd", "qvf", "summary", "complete"]},
             is_nullable => 0,
         },
+        "buffer",
+        {
+            data_type     => "enum",
+            default_value => "job",
+            extra         => {list => ["none", "diag", "job", "run"]},
+            is_nullable   => 0,
+        },
         "passed",
         {data_type => "integer", is_nullable => 1},
         "failed",

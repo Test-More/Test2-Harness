@@ -3,6 +3,8 @@ use utf8;
 use strict;
 use warnings;
 
+use Test2::Harness::UI::Util::ImportModes qw/record_all_events mode_check/;
+
 use Carp qw/confess/;
 confess "You must first load a Test2::Harness::UI::Schema::NAME module"
     unless $Test2::Harness::UI::Schema::LOADED;
@@ -92,10 +94,18 @@ sub normalize_to_mode {
 
     my $mode = $params{mode} // $self->run->mode;
 
-    for my $event ($self->events->all) {
-        next if $event->in_mode(mode => $mode, job => $self);
-        $event->delete();
+    # No need to purge anything
+    return if record_all_events(mode => $mode, job => $self);
+    return if mode_check($mode, 'complete');
+
+    if (mode_check($mode, 'summary', 'qvf')) {
+        $self->events->delete_all;
+        return;
     }
+
+    die "Unknown mode '$mode'" unless mode_check($mode, 'qvfd');
+
+    $self->events->search({is_diag => 0, is_harness => 0, is_time => 0})->delete_all();
 }
 
 1;

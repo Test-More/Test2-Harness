@@ -562,6 +562,16 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
             },
             is_nullable => 0,
         },
+        "buffer",
+        {
+            data_type     => "enum",
+            default_value => "job",
+            extra         => {
+                custom_type_name => "run_buffering",
+                list             => ["none", "diag", "job", "run"],
+            },
+            is_nullable => 0,
+        },
         "log_file_id",
         {data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16},
         "passed",

@@ -156,11 +156,8 @@ t2hui.job.place_row = function(row, item, table, state) {
     var pid = item.item['parent_id'];
     if (!state[pid]) {
         var got = table.find('tr[data-event-id="' + item.item.parent_id + '"]');
-        console.log(item, got);
         state[pid] = got.last();
     }
-
-//    console.log('Placing', pid, state[pid]);
 
     state[pid].after(row);
     state[pid] = row;

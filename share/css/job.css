@@ -28,10 +28,6 @@
 .tag_TIME     { color: #12539e;                     }
 .tag_MEMORY   { color: #12539e;                     }
 
-tr.job_index {
-    display: none !important;
-}
-
 html {
     scroll-snap-type: y proximity;
     scroll-padding-bottom: 50px;

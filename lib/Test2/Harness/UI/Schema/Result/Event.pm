@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Test2::Harness::UI::Util::ImportModes();
+use Test2::Formatter::Test2::Composer();
 
 use Carp qw/confess/;
 confess "You must first load a Test2::Harness::UI::Schema::NAME module"

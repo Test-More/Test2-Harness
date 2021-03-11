@@ -37,6 +37,10 @@
 .pending_box { border: 1px solid #0000C0; }
 .running_box { border: 1px solid #009090; }
 
+.job_index {
+    display: none !important;
+}
+
 .important_note {
     background: #fcfc03;
     margin: 0;

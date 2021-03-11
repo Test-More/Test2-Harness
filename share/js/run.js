@@ -39,7 +39,7 @@ t2hui.run.build_table = function(uri, run) {
         'class': 'run_table',
         'id': 'run_jobs',
         'fetch': uri,
-        'sortable': run.status == 'running' ? false : true,
+        'sortable': run.status == 'complete' ? true : false,
 
         'init': t2hui.run.init_table,
 
@@ -205,24 +205,23 @@ t2hui.run.build_jobs = function(run_id) {
 t2hui.run.init_table = function(table, state) {
     var body = state['body'];
 
-    state['fail'] = $('<tr class="job_index fail"></tr>');
+    state['fail'] = $('<span class="job_index fail"></span>');
     body.append(state['fail']);
 
-    state['running'] = $('<tr class="job_index running"></tr>');
+    state['running'] = $('<span class="job_index running"></span>');
     body.append(state['running']);
 
-    state['pending'] = $('<tr class="job_index pending"></tr>');
+    state['pending'] = $('<span class="job_index pending"></span>');
     body.append(state['pending']);
 
-    state['other'] = $('<tr class="job_index other"></tr>');
+    state['other'] = $('<span class="job_index other"></span>');
     body.append(state['other']);
 
-    state['retry'] = $('<tr class="job_index retry"></tr>');
+    state['retry'] = $('<span class="job_index retry"></span>');
     body.append(state['retry']);
 }
 
 t2hui.run.place_row = function(row, item, table, state) {
-    console.log(item);
     if (!item.short_file) {
         state['header'].after(row);
         return true;

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Carp qw/confess/;
 
-our $VERSION = '0.000043';
+our $VERSION = '0.000044';
 
 use base 'DBIx::Class::Schema';
 

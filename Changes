@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix '! PASS !' filtering
+    - Change order of jobs (passing before pending)
+
 0.000045  2021-03-12 09:55:13-08:00 America/Los_Angeles
 
     - Better caching of the DB handle

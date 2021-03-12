@@ -29,6 +29,7 @@ $(function() {
                         'PASS': true,
                         'PLAN': true,
                         'HARNESS': true,
+                        'STDOUT': true,
                     };
                 }
 
@@ -247,7 +248,7 @@ t2hui.job.tool_builder = function(item, tools, data) {
 }
 
 t2hui.job.clean_tag = function(tag) {
-    var clean = tag.replace(' ', '_');
+    var clean = tag.replace(/[\W]+/g, "_");
     return clean;
 }
 

@@ -10,4 +10,8 @@ subtest foo => sub {
     ok(1, "sub-pass");
 };
 
+todo "broken" => sub {
+    ok(0, "blah");
+};
+
 done_testing;

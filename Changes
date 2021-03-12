@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000044  2021-03-11 20:08:54-08:00 America/Los_Angeles
+
     - Add plugin support for providing coverage/duration data
     - Fix running t/integration tests with ./ in path (#215)
     - Add a fixme/todo test for #216 (Tap subtest parsing)

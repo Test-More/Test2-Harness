@@ -211,11 +211,11 @@ t2hui.run.init_table = function(table, state) {
     state['running'] = $('<span class="job_index running"></span>');
     body.append(state['running']);
 
-    state['pending'] = $('<span class="job_index pending"></span>');
-    body.append(state['pending']);
-
     state['other'] = $('<span class="job_index other"></span>');
     body.append(state['other']);
+
+    state['pending'] = $('<span class="job_index pending"></span>');
+    body.append(state['pending']);
 
     state['retry'] = $('<span class="job_index retry"></span>');
     body.append(state['retry']);

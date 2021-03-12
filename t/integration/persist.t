@@ -13,6 +13,7 @@ skip_all "This test is not run under automated testing"
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 yath(command => 'start', exit => 0);
 

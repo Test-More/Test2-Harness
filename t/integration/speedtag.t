@@ -15,6 +15,7 @@ my $tmp = tempdir(CLEANUP => 1);
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 my $pass  = File::Spec->catfile($tmp, 'pass.tx');
 my $pass2 = File::Spec->catfile($tmp, 'pass2.tx');

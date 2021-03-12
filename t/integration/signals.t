@@ -9,6 +9,7 @@ use App::Yath::Tester qw/yath/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 for ( 1..10 ) {
     # the tests are flapping when using something like '%INC = %INC'....

@@ -6,6 +6,7 @@ use App::Yath::Tester qw/yath/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 my %CUSTOM = (
     "timeout.tx"           => ['--et',  2],

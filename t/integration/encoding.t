@@ -8,6 +8,7 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 my $want = <<"EOT";
 (  NOTE  )  job  1    valid note [\x{201c}\x{201d}\x{ff}\x{ff}]

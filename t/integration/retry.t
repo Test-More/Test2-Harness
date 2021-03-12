@@ -5,6 +5,7 @@ use App::Yath::Tester qw/yath/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 run_tests('test');
 

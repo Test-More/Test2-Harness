@@ -7,6 +7,7 @@ use File::Spec;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 my $tmpdir = tempdir(CLEANUP => 1);
 

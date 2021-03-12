@@ -10,6 +10,7 @@ find_yath();    # cache result before we chdir
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 chdir($dir);
 $ENV{OLD_PERL5LIB} = $ENV{PERL5LIB};

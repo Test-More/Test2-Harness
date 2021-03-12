@@ -8,6 +8,7 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
+$dir =~ s{^\./}{};
 
 sub verify {
     my (@outputs) = @_;

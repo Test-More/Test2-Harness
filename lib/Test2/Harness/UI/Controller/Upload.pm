@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Upload;
 use strict;
 use warnings;
 
-our $VERSION = '0.000044';
+our $VERSION = '0.000045';
 
 use Text::Xslate();
 

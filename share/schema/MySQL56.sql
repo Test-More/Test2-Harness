@@ -132,8 +132,8 @@ CREATE TABLE runs (
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
-    fields          MEDIUMTEXT      DEFAULT NULL,
-    parameters      MEDIUMTEXT      DEFAULT NULL,
+    fields          LONGTEXT        DEFAULT NULL,
+    parameters      LONGTEXT        DEFAULT NULL,
 
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
@@ -176,8 +176,8 @@ CREATE TABLE jobs (
 
     status ENUM('pending', 'running', 'complete', 'broken', 'canceled') NOT NULL,
 
-    parameters      TEXT        DEFAULT NULL,
-    fields          TEXT        DEFAULT NULL,
+    parameters      LONGTEXT        DEFAULT NULL,
+    fields          LONGTEXT        DEFAULT NULL,
 
     -- Summaries
     name            TEXT            DEFAULT NULL,
@@ -233,10 +233,10 @@ CREATE TABLE events (
     trace_id        CHAR(36)    DEFAULT NULL,
     nested          INT         DEFAULT 0,
 
-    facets          MEDIUMTEXT  DEFAULT NULL,
+    facets          LONGTEXT  DEFAULT NULL,
     facets_line     BIGINT      DEFAULT NULL,
 
-    orphan          MEDIUMTEXT  DEFAULT NULL,
+    orphan          LONGTEXT  DEFAULT NULL,
     orphan_line     BIGINT      DEFAULT NULL,
 
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)

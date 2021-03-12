@@ -197,11 +197,11 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
         "nested",
         {data_type => "integer", default_value => 0, is_nullable => 1},
         "facets",
-        {data_type => "mediumtext", is_nullable => 1},
+        {data_type => "longtext", is_nullable => 1},
         "facets_line",
         {data_type => "bigint", is_nullable => 1},
         "orphan",
-        {data_type => "mediumtext", is_nullable => 1},
+        {data_type => "longtext", is_nullable => 1},
         "orphan_line",
         {data_type => "bigint", is_nullable => 1},
     );
@@ -250,9 +250,9 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
             is_nullable => 0,
         },
         "parameters",
-        {data_type => "text", is_nullable => 1},
+        {data_type => "longtext", is_nullable => 1},
         "fields",
-        {data_type => "text", is_nullable => 1},
+        {data_type => "longtext", is_nullable => 1},
         "name",
         {data_type => "text", is_nullable => 1},
         "file",
@@ -539,9 +539,9 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
         "retried",
         {data_type => "integer", is_nullable => 1},
         "fields",
-        {data_type => "mediumtext", is_nullable => 1},
+        {data_type => "longtext", is_nullable => 1},
         "parameters",
-        {data_type => "mediumtext", is_nullable => 1},
+        {data_type => "longtext", is_nullable => 1},
     );
     __PACKAGE__->set_primary_key("run_id");
     __PACKAGE__->add_unique_constraint("run_ord", ["run_ord"]);

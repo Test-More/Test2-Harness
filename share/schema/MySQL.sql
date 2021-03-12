@@ -177,8 +177,8 @@ CREATE TABLE jobs (
 
     status ENUM('pending', 'running', 'complete', 'broken', 'canceled') NOT NULL,
 
-    parameters      TEXT        DEFAULT NULL,
-    fields          TEXT        DEFAULT NULL,
+    parameters      JSON        DEFAULT NULL,
+    fields          JSON        DEFAULT NULL,
 
     -- Summaries
     name            TEXT            DEFAULT NULL,

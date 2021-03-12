@@ -11,6 +11,53 @@ use parent 'App::Yath::Plugin';
 
 print "TEST PLUGIN: Loaded Plugin\n";
 
+sub duration_data {
+    my $self = shift;
+
+    print "TEST PLUGIN: duration_data\n";
+
+    return {
+        't/integration/plugin/a.tx'    => 'short',
+        't/integration/plugin/b.tx'    => 'medium',
+        't/integration/plugin/c.tx'    => 'medium',
+        't/integration/plugin/d.tx'    => 'medium',
+        't/integration/plugin/test.tx' => 'long',
+    };
+}
+
+sub coverage_data {
+    my $self = shift;
+    my ($changes) = @_;
+
+    my $type = ref($changes);
+
+    print "TEST PLUGIN: coverage_data($type:[" . join(",", sort @$changes) . "])\n";
+
+    return [
+        't/integration/plugin/a.tx',
+        't/integration/plugin/b.tx',
+        't/integration/plugin/c.tx',
+        't/integration/plugin/d.tx',
+        't/integration/plugin/test.tx',
+    ];
+}
+
+sub changed_files {
+    my $self = shift;
+    my ($settings) = @_;
+    my $type = ref($settings);
+
+    print "TEST PLUGIN: changed_files($type)\n";
+
+    return (
+        't/integration/plugin/a.tx',
+        't/integration/plugin/b.tx',
+        't/integration/plugin/c.tx',
+        't/integration/plugin/d.tx',
+        't/integration/plugin/test.tx',
+    );
+}
+
 sub sort_files {
     my $self = shift;
 

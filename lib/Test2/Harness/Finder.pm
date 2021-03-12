@@ -40,13 +40,35 @@ sub init {
 
 sub duration_data {
     my $self = shift;
-    return $self->{+DURATION_DATA} //= $self->pull_durations() // {};
+    my ($plugins) = @_;
+
+    $self->{+DURATION_DATA} //= $self->pull_durations();
+
+    return $self->{+DURATION_DATA} if $self->{+DURATION_DATA};
+
+    for my $plugin (@$plugins) {
+        next unless $plugin->can('duration_data');
+        $self->{+DURATION_DATA} = $plugin->duration_data() or next;
+        last;
+    }
+
+    return $self->{+DURATION_DATA} //= {};
 }
 
 sub coverage_data {
     my $self = shift;
-    my ($changed) = @_;
-    return $self->{+COVERAGE_DATA} //= $self->pull_coverage($changed);
+    my ($plugins, $changed) = @_;
+
+    $self->{+COVERAGE_DATA} //= $self->pull_coverage($changed);
+    return $self->{+COVERAGE_DATA} if $self->{+COVERAGE_DATA};
+
+    for my $plugin (@$plugins) {
+        next unless $plugin->can('coverage_data');
+        $self->{+COVERAGE_DATA} = $plugin->coverage_data($changed) or next;
+        last;
+    }
+
+    return $self->{+COVERAGE_DATA} //= {};
 }
 
 sub pull_durations {
@@ -75,6 +97,8 @@ sub pull_durations {
 
     return $self->_pull_from_file_or_url(source => $fallback, @args)
         if $fallback;
+
+    return;
 }
 
 sub pull_coverage {
@@ -127,6 +151,8 @@ sub pull_coverage {
 
     return $self->_pull_from_log_or_file_or_url(source => $fallback, %args)
         if $fallback;
+
+    return;
 }
 
 sub add_exclusions_from_lists {
@@ -254,7 +280,7 @@ sub add_changed_to_search {
         print "  $_\n" for @changed;
     }
 
-    my $coverage_data = $self->coverage_data(\@changed);
+    my $coverage_data = $self->coverage_data($plugins, \@changed);
     my $type = ref($coverage_data);
 
     # We must have posted the changes and got a list of tests back.
@@ -338,7 +364,7 @@ sub find_project_files {
 
     die "No tests to run, search is empty\n" unless @$search;
 
-    my $durations = $self->duration_data;
+    my $durations = $self->duration_data($plugins);
 
     my (%seen, @tests, @dirs);
     for my $path (@$search) {

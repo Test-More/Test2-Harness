@@ -18,6 +18,11 @@ sub verify {
     }
 
     like($text, qr/TEST PLUGIN: Loaded Plugin/,   "Yath loaded the plugin");
+    like($text, qr/TEST PLUGIN: duration_data/,   "duration_data() was called");
+
+    like($text, qr/TEST PLUGIN: changed_files\(Test2::Harness::Settings\)/,   "changed_files() was called");
+    like($text, qr/TEST PLUGIN: coverage_data\(ARRAY:\[.+a\.tx,.+b\.tx,.+c\.tx,.*d\.tx,.*test\.tx\]\)/,   "coverage_data() was called");
+
     like($text, qr/TEST PLUGIN: munge_files/,     "munge_files() was called");
     like($text, qr/TEST PLUGIN: munge_search/,    "munge_search() was called");
     like($text, qr/TEST PLUGIN: inject_run_data/, "inject_run_data() was called");
@@ -33,7 +38,7 @@ sub verify {
 
     like(
         $text,
-        qr/TEST PLUGIN: finish asserts_seen => 5, final_data => HASH, pass => 1, settings => Test2::Harness::Settings, tests_seen => 5/,
+        qr/TEST PLUGIN: finish asserts_seen => 10, final_data => HASH, pass => 1, settings => Test2::Harness::Settings, tests_seen => 5/,
         "finish() was called with necessary args"
     );
 
@@ -66,7 +71,7 @@ sub verify {
 
 yath(
     command => 'test',
-    args    => [$dir, '--ext=tx', '-A', '--no-plugins', '-pTestPlugin'],
+    args    => [$dir, '--ext=tx', '-A', '--no-plugins', '-pTestPlugin', '--changes-plugin', 'TestPlugin'],
     exit    => 0,
     test    => \&verify,
 );

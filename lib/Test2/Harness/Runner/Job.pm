@@ -510,9 +510,10 @@ sub env_vars {
         HARNESS_ACTIVE       => 1,
         TEST2_HARNESS_ACTIVE => 1,
 
-        T2_HARNESS_JOB_FILE   => $self->rel_file,
-        T2_HARNESS_JOB_NAME   => $self->{+TASK}->{job_name},
-        T2_HARNESS_JOB_IS_TRY => $self->{+IS_TRY} // 0,
+        T2_HARNESS_JOB_FILE     => $self->rel_file,
+        T2_HARNESS_JOB_NAME     => $self->{+TASK}->{job_name},
+        T2_HARNESS_JOB_IS_TRY   => $self->{+IS_TRY}           // 0,
+        T2_HARNESS_JOB_DURATION => $self->{+TASK}->{duration} // '',
     };
 }
 

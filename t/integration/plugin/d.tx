@@ -1,3 +1,6 @@
 use Test2::V0;
 ok(1);
+
+is($ENV{T2_HARNESS_JOB_DURATION}, 'medium');
+
 done_testing;

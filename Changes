@@ -2,6 +2,7 @@
 
     - Add plugin support for providing coverage/duration data
     - Fix running t/integration tests with ./ in path (#215)
+    - Add a fixme/todo test for #216 (Tap subtest parsing)
 
 1.000043  2021-03-05 07:47:04-08:00 America/Los_Angeles
 

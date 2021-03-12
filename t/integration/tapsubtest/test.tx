@@ -1,0 +1,9 @@
+# HARNESS-NO-STREAM
+use Test2::V0;
+use Test2::Tools::Subtest qw/subtest_buffered/;
+
+subtest_buffered buffered => sub {
+    ok(1, "buffered ok");
+};
+
+done_testing;

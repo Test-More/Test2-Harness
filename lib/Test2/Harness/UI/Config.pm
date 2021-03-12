@@ -31,12 +31,22 @@ sub init {
     $self->{+SHOW_USER} //= 0;
 }
 
+my $DB_CACHE;
+my $DB_CACHE_PID;
 sub connect {
     my $self = shift;
 
+    if ($DB_CACHE_PID && $DB_CACHE_PID != $$) {
+        $DB_CACHE->disconnect if $DB_CACHE;
+        $DB_CACHE = undef;
+        $DB_CACHE_PID = undef;
+    }
+
+    return $DB_CACHE if $DB_CACHE;
+
     require DBI;
 
-    return DBI->connect(
+    return $DB_CACHE = DBI->connect(
         $self->{+DBI_DSN},
         $self->{+DBI_USER},
         $self->{+DBI_PASS},

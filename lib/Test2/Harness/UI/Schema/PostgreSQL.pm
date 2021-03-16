@@ -545,13 +545,6 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
             is_nullable   => 0,
             original      => {default_value => \"now()"},
         },
-        "status_changed",
-        {
-            data_type     => "timestamp",
-            default_value => \"current_timestamp",
-            is_nullable   => 0,
-            original      => {default_value => \"now()"},
-        },
         "mode",
         {
             data_type     => "enum",

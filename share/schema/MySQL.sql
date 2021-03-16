@@ -122,7 +122,6 @@ CREATE TABLE runs (
 
     -- User Input
     added           TIMESTAMP       NOT NULL DEFAULT now(),
-    status_changed  TIMESTAMP       NOT NULL DEFAULT now(),
     log_file_id     CHAR(36)        DEFAULT NULL,
 
     mode ENUM('qvfd', 'qvf', 'summary', 'complete') NOT NULL,
@@ -144,26 +143,6 @@ CREATE TABLE runs (
 CREATE INDEX run_projects ON runs(project_id);
 CREATE INDEX run_status ON runs(status);
 CREATE INDEX run_user ON runs(user_id);
-
--- CREATE OR REPLACE FUNCTION update_status_changed() RETURNS TRIGGER LANGUAGE plpgsql AS $$
--- BEGIN
---     IF (NEW.status != OLD.status) THEN
---         NEW.status_changed = now();
---     END IF;
---     RETURN NEW;
--- END;
--- $$;
-delimiter //
-CREATE TRIGGER status_changed
-  BEFORE UPDATE
-  ON runs
-  FOR EACH ROW
-  BEGIN
-    IF NEW.status != OLD.status THEN
-        SET NEW.status_changed = now();
-    END IF;
-  END;//
-delimiter ;
 
 CREATE TABLE jobs (
     job_key         CHAR(36)    NOT NULL PRIMARY KEY,

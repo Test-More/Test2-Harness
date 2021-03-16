@@ -510,13 +510,6 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
             default_value             => \"current_timestamp",
             is_nullable               => 0,
         },
-        "status_changed",
-        {
-            data_type                 => "timestamp",
-            datetime_undef_if_invalid => 1,
-            default_value             => \"current_timestamp",
-            is_nullable               => 0,
-        },
         "log_file_id",
         {data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36},
         "mode",

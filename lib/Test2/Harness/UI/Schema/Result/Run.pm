@@ -50,6 +50,15 @@ sub complete {
     return 0;
 }
 
+sub sig {
+    my $self = shift;
+
+    return join ";" => (
+        (map {$self->$_ // ''} qw/status pinned passed failed retried/),
+        (map {length($self->$_ // '')} qw/fields parameters/),
+    );
+}
+
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_columns;

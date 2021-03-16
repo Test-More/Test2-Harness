@@ -54,6 +54,15 @@ sub complete {
     return 0;
 }
 
+sub sig {
+    my $self = shift;
+
+    return join ";" => (
+        (map {$self->$_ // ''} qw/status pass_count fail_count name file fail/),
+        (map {length($self->$_ // '')} qw/fields parameters/),
+    );
+}
+
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_columns;

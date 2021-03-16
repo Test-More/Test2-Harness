@@ -107,15 +107,14 @@ sub stream {
             while (!$end) {
                 $end = $done->();
 
-                last unless $env->{'psgix.io'}->connected;
-
                 my $seen = 0;
                 for my $item ($fetch->()) {
                     $writer->write($item);
+                    last unless $env->{'psgix.io'}->connected;
                     $seen++;
                 }
 
-                sleep $wait unless $seen || $done;
+                sleep $wait unless $seen || $end;
             }
 
             $cleanup->() if $cleanup;

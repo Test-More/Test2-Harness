@@ -16,6 +16,7 @@ use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
 use Test2::Harness::UI::Controller::Job;
 use Test2::Harness::UI::Controller::Download;
+use Test2::Harness::UI::Controller::Stream;
 
 use Test2::Harness::UI::Controller::Query;
 use Test2::Harness::UI::Controller::Runs;
@@ -71,6 +72,10 @@ sub init {
     $router->connect('/coverage/:project' => {controller => 'Test2::Harness::UI::Controller::Coverage'});
 
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
+
+    $router->connect('/stream'                  => {controller => 'Test2::Harness::UI::Controller::Stream'});
+    $router->connect('/stream/:run_id'          => {controller => 'Test2::Harness::UI::Controller::Stream'});
+    $router->connect('/stream/:run_id/:job_key' => {controller => 'Test2::Harness::UI::Controller::Stream'});
 }
 
 sub to_app {

@@ -2,7 +2,7 @@ div.field-table-wrapper {
     border: 4px solid #C0C0C0;
     border-radius: 10px;
     display: block;
-    width: fit-content;
+    width: max-content;
     padding: 0px;
 }
 
@@ -51,7 +51,7 @@ div.field-table-header-col-inner {
     padding: 2px;
     padding-left: 1px;
     padding-right: 1px;
-    height: 100%;
+/*    height: 100%; */
     display: flex;
     align-items: center;
     text-align: center;

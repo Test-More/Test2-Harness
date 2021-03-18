@@ -281,7 +281,7 @@ div#messages {
     text-align: center;
     font-weight: bold;
     font-size: 14px;
-    width: fit-content;
+    width: max-content;
     min-width: 1.5ch;
     text-align: center;
     vertical-align: middle;

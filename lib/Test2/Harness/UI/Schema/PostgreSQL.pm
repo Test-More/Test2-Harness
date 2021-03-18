@@ -197,6 +197,13 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         {data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16},
         "event_ord",
         {data_type => "bigint", is_nullable => 0},
+        "insert_ord",
+        {
+            data_type         => "bigint",
+            is_auto_increment => 1,
+            is_nullable       => 0,
+            sequence          => "events_insert_ord_seq",
+        },
         "is_diag",
         {data_type => "boolean", default_value => \"false", is_nullable => 0},
         "is_harness",

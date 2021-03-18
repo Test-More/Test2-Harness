@@ -21,9 +21,6 @@ sub handle {
     my $req = $self->{+REQUEST};
 
     my $res = resp(200);
-    $res->add_js('dashboard.js');
-    $res->add_js('run.js');
-
     my $user = $req->user;
 
     die error(404 => 'Missing route') unless $route;
@@ -39,32 +36,12 @@ sub handle {
         $run = $schema->resultset('Run')->search({run_id => $it})->first or die error(404 => 'Invalid Run');
     }
 
-    $self->{+TITLE} = 'Run: ' . $run->project . ' - ' . $run->run_id;
-
-    my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html');
-
     if ($route->{action} && $route->{action} eq 'pin_toggle') {
         $run->update({pinned => $run->pinned ? 0 : 1});
     }
 
-    if ($ct eq 'application/json') {
-        $res->content_type($ct);
-        $res->raw_body($run);
-        return $res;
-    }
-
-    my $tx      = Text::Xslate->new(path => [share_dir('templates')]);
-    my $content = $tx->render(
-        'run.tx',
-        {
-            base_uri => $req->base->as_string,
-            user     => $user,
-            run      => encode_json($run),
-            run_id   => $run->run_id,
-        }
-    );
-
-    $res->raw_body($content);
+    $res->content_type('application/json');
+    $res->raw_body($run);
     return $res;
 }
 

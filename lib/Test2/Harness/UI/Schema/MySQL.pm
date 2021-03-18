@@ -178,6 +178,8 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36},
         "event_ord",
         {data_type => "bigint", is_nullable => 0},
+        "insert_ord",
+        {data_type => "bigint", is_auto_increment => 1, is_nullable => 0},
         "is_diag",
         {data_type => "tinyint", default_value => 0, is_nullable => 0},
         "is_harness",
@@ -206,6 +208,7 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "bigint", is_nullable => 1},
     );
     __PACKAGE__->set_primary_key("event_id");
+    __PACKAGE__->add_unique_constraint("insert_ord", ["insert_ord"]);
     __PACKAGE__->belongs_to(
         "job_key",
         "Test2::Harness::UI::Schema::Result::Job",

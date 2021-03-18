@@ -1,92 +1,69 @@
-t2hui.job = {
-    'filters': {
+t2hui.eventtable = {};
+
+t2hui.eventtable.build_controls = function(run, job) {
+    var filters = {
         seen: {},
         state: {},
         hide: {}
-    },
+    };
+
+    var controls = $('<div class="event_controls"></div>');
+    var filter_dom = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
+    controls.append(filter_dom);
+
+    if (!(job.status == 'running' || job.status == 'pending')) {
+        filters.hide = {
+            'PASS': true,
+            'PLAN': true,
+            'HARNESS': true,
+            'STDOUT': true,
+        };
+    }
+
+    filters.dom = filter_dom;
+
+    return {
+        "filters":    filters,
+        "dom":        controls,
+        "filter_dom": filter_dom,
+    };
 };
 
-$(function() {
-    $("div.job").each(function() {
-        var root = $(this);
-        var job_key = root.attr('data-job-key');
+t2hui.eventtable.build_table = function(run, job, controls) {
+    var table;
 
-        var controls = $('<div class="event_controls"></div>');
-        var filters = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
-        controls.append(filters);
-        root.append(controls);
-        t2hui.job.filters.dom = filters;
-
-        var job_uri = base_uri + 'job/' + job_key;
-        $.ajax(job_uri, {
-            'data': { 'content-type': 'application/json' },
-            'success': function(job) {
-                if (job.status == 'running' || job.status == 'pending') {
-                    root.addClass('live');
-                }
-                else {
-                    t2hui.job.filters.hide = {
-                        'PASS': true,
-                        'PLAN': true,
-                        'HARNESS': true,
-                        'STDOUT': true,
-                    };
-                }
-
-                var run_uri = base_uri + 'run/' + job.run_id;
-                $.ajax(run_uri, {
-                    'data': { 'content-type': 'application/json' },
-                    'success': function(run) {
-                        var rundash = t2hui.dashboard.build_table([run]);
-                        var jobdash = t2hui.run.build_table([job], run);
-                        root.prepend($('<h3>Job: ' + (job.short_file || job.name) + '</h3>'), rundash, $('<p>'), jobdash, $('<hr />'));
-
-                        if (job.status == 'running' || job.status == 'pending') {
-                            if (run.mode == 'qvfd') {
-                                controls.append('<div class="important_note">Note: Mode is "qvfd", if an error is encountered it will switch to verbose, however events from before the verbosity increases will not be shown without a page reload.</div>');
-                            }
-                        }
-                    },
-                });
-            },
-        });
-
-        var events_uri = job_uri + '/events';
-        var table = t2hui.job.build_table(events_uri);
-        root.append(table);
-    });
-});
-
-t2hui.job.build_table = function(uri) {
     var columns = [
-        { 'name': 'tools',   'label': 'tools',   'class': 'tools', 'builder': t2hui.job.tool_builder },
+        { 'name': 'tools',   'label': 'tools',   'class': 'tools', 'builder': t2hui.eventtable.tool_builder },
         { 'name': 'tag',     'label': 'tag',     'class': 'tag' },
-        { 'name': 'message', 'label': 'message', 'class': 'message', 'builder': t2hui.job.message_builder },
+        {
+            'name': 'message',
+            'label': 'message',
+            'class': 'message',
+            'builder': function(item, dest, data) {
+                t2hui.eventtable.message_builder(item, dest, data, table);
+            },
+        },
     ];
 
-    var table = new FieldTable({
+    table = new FieldTable({
         'class': 'job_table',
         'id': 'jobs_events',
-        'fetch': uri,
-        'sortable': false,
-        'expand_item': t2hui.job.expand_item,
+        'updatable': false,
 
-        'place_row': t2hui.job.place_row,
-        'modify_row_hook': t2hui.job.modify_row,
+        'expand_item': t2hui.eventtable.expand_lines,
+
+        'place_row': t2hui.eventtable.place_row,
+        'modify_row_hook': function(row, item, table) { t2hui.eventtable.modify_row(row, item, table, controls) },
 
         'done': function() { $('.temp_orphan').detach() },
 
         'columns': columns,
     });
 
-    var dom = table.render();
-
-    t2hui.job.table = table;
-
-    return dom;
+    return table;
 };
 
-t2hui.job.expand_item = function(item) {
+t2hui.eventtable.expand_lines = function(item) {
     var out = [];
 
     var tools = true;
@@ -108,8 +85,8 @@ t2hui.job.expand_item = function(item) {
     return out;
 }
 
-t2hui.job.message_builder = function(item, dest, data) {
-    t2hui.job.message_inner_builder(item, dest, data);
+t2hui.eventtable.message_builder = function(item, dest, data, table) {
+    t2hui.eventtable.message_inner_builder(item, dest, data);
 
     var indent = '' + ((item.item.nested + 1) * 2) + 'ch';
     dest.css('padding-left', indent);
@@ -128,13 +105,12 @@ t2hui.job.message_builder = function(item, dest, data) {
         t2hui.fetch(
             events_uri,
             {done: function() { expand.removeClass('running') } },
-            t2hui.job.table.render_item,
+            table.render_item,
         )
     });
 }
 
-t2hui.job.place_row = function(row, item, table, state) {
-
+t2hui.eventtable.place_row = function(row, item, table, state) {
     if (!item.item['loading_subtest']) {
         if (item.item.orphan) {
             row.addClass('temp_orphan');
@@ -156,7 +132,7 @@ t2hui.job.place_row = function(row, item, table, state) {
 
     var pid = item.item['parent_id'];
     if (!state[pid]) {
-        var got = table.find('tr[data-event-id="' + item.item.parent_id + '"]');
+        var got = table.table.find('tr[data-event-id="' + item.item.parent_id + '"]');
         state[pid] = got.last();
     }
 
@@ -166,7 +142,7 @@ t2hui.job.place_row = function(row, item, table, state) {
     return true;
 }
 
-t2hui.job.message_inner_builder = function(item, dest, data) {
+t2hui.eventtable.message_inner_builder = function(item, dest, data) {
     if (!item.table) {
         var pre = $('<pre class="testout"></pre>');
         pre.text(item.message);
@@ -201,7 +177,7 @@ t2hui.job.message_inner_builder = function(item, dest, data) {
     dest.append(table);
 }
 
-t2hui.job.tool_builder = function(item, tools, data) {
+t2hui.eventtable.tool_builder = function(item, tools, data) {
     if (!item.tools) { tools.hide(); return }
 
     tools.attr('rowspan', item.tools);
@@ -247,14 +223,14 @@ t2hui.job.tool_builder = function(item, tools, data) {
     }
 }
 
-t2hui.job.clean_tag = function(tag) {
+t2hui.eventtable.clean_tag = function(tag) {
     var clean = tag.replace(/[\W]+/g, "_");
     return clean;
 }
 
-t2hui.job.modify_row = function(row, item) {
+t2hui.eventtable.modify_row = function(row, item, table, controls) {
     var tag = item.tag;
-    var ctag = t2hui.job.clean_tag(tag);
+    var ctag = t2hui.eventtable.clean_tag(tag);
 
     row.addClass('event_line');
     row.addClass('facet_' + item.facet);
@@ -262,13 +238,13 @@ t2hui.job.modify_row = function(row, item) {
 
     row.attr('data-event-id', item.item.event_id);
 
-    if (!t2hui.job.filters.seen[tag]) {
-        t2hui.job.filters.state[tag] = !t2hui.job.filters.hide[tag];
-        t2hui.job.filters.seen[tag] = 1;
+    if (!controls.filters.seen[tag]) {
+        controls.filters.state[tag] = !controls.filters.hide[tag];
+        controls.filters.seen[tag] = 1;
 
         var filter = $('<li class="filter">' + tag + '</li>');
         var added = false;
-        t2hui.job.filters.dom.children('.filter').each(function() {
+        controls.filters.dom.children('.filter').each(function() {
             if (added) { return false };
 
             var it = $(this);
@@ -278,27 +254,27 @@ t2hui.job.modify_row = function(row, item) {
                 return false;
             }
         });
-        if (!added) { t2hui.job.filters.dom.append(filter) }
+        if (!added) { controls.filters.dom.append(filter) }
 
-        if (!t2hui.job.filters.state[tag]) {
+        if (!controls.filters.state[tag]) {
             filter.addClass('off');
         }
 
         filter.click(function() {
-            if (t2hui.job.filters.state[tag]) {
-                t2hui.job.filters.state[tag] = false;
+            if (controls.filters.state[tag]) {
+                controls.filters.state[tag] = false;
                 $(this).addClass('off');
-                t2hui.job.table.table.find('tr.tag_' + ctag).addClass('hidden_row');
+                table.table.find('tr.tag_' + ctag).addClass('hidden_row');
             }
             else {
-                t2hui.job.filters.state[tag] = true;
+                controls.filters.state[tag] = true;
                 $(this).removeClass('off');
-                t2hui.job.table.table.find('tr.tag_' + ctag).removeClass('hidden_row');
+                table.table.find('tr.tag_' + ctag).removeClass('hidden_row');
             }
         })
     }
 
-    if (!t2hui.job.filters.state[tag]) {
+    if (!controls.filters.state[tag]) {
         row.addClass('hidden_row');
     }
 }

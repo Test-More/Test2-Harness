@@ -1,4 +1,4 @@
-package Test2::Harness::UI::Controller::Dashboard;
+package Test2::Harness::UI::Controller::View;
 use strict;
 use warnings;
 
@@ -16,30 +16,50 @@ sub handle {
     my $self = shift;
     my ($route) = @_;
 
-    $self->{+TITLE} = 'Dashboard';
+    $self->{+TITLE} = 'YathUI';
 
     my $req = $self->{+REQUEST};
 
     my $res = resp(200);
-    $res->add_js('dashboard.js');
-    $res->add_css('dashboard.css');
+    $res->add_css('view.css');
+    $res->add_js('runtable.js');
+    $res->add_js('jobtable.js');
+    $res->add_js('eventtable.js');
+    $res->add_js('view.js');
 
     my $user = $req->user;
 
-    my $tx      = Text::Xslate->new(path => [share_dir('templates')]);
+    my $schema = $self->{+CONFIG}->schema;
+
+    my $run_id = $route->{run_id};
+    if($run_id) {
+        my $run = $schema->resultset('Run')->search({run_id => $run_id})->first or die error(404 => 'Invalid Run');
+        $self->{+TITLE} .= ">" . $run->project->name;
+    }
+
+    my $job_key = $route->{job_key};
+    if ($job_key) {
+        my $job = $schema->resultset('Job')->search({job_key => $job_key})->first or die error(404 => 'Invalid Job');
+        $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
+    }
+
+    my $tx = Text::Xslate->new(path => [share_dir('templates')]);
+
+    my $base_uri   = $req->base->as_string;
+    my $stream_uri = join '/' => $base_uri . 'stream', grep {$_} $run_id, $job_key;
+
     my $content = $tx->render(
-        'dashboard.tx',
+        'view.tx',
         {
-            base_uri => $req->base->as_string,
-            user     => $user,
+            base_uri   => $req->base->as_string,
+            user       => $user,
+            stream_uri => $stream_uri,
         }
     );
 
     $res->raw_body($content);
     return $res;
 }
-
-1;
 
 __END__
 
@@ -49,7 +69,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Controller::Dashboard
+Test2::Harness::UI::Controller::View
 
 =head1 DESCRIPTION
 

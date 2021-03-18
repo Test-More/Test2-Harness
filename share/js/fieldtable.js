@@ -2,14 +2,8 @@
 //  class => TableClass,
 //  id => ID (for wrapper)
 //
-//  fetch => URL_FOR_ITEMS,
-//
 //  place_row => function(row_html, item, table) { return bool } // true means function placed row, false means append row
 //  modify_row_hook => function(row_html, item) { return null },
-//
-//  row_redraw_check => function(item) { return bool },
-//  row_redraw_fetch => function(item) { return uri },
-//  row_redraw_interval => integer,
 //
 //  dynamic_field_attribute => FIELD_NAME,
 //  dynamic_field_fetch     => function(field_data) { return uri },
@@ -28,17 +22,13 @@
 function FieldTable(spec) {
     var me = this;
     me.spec = spec;
-    me.rows = [];
+    me.rows = {};
     me.columns = [];
     me.postfix_columns = [];
     me.dynamic_columns = [];
     me.dynamic_column_lookup = {};
-    me.redraw = [];
-    me.redraw_id = 1;
     me.row_state = {};
     me.hidden_columns = {};
-    me.update_offset_field = spec.update_offset_field;
-    me.update_offset = 0;
 
     me.render = function() {
         me.table = $('<table class="field-table ' + spec.class + '"></table>');
@@ -58,91 +48,6 @@ function FieldTable(spec) {
             me.spec.init(me.table, me.row_state);
         }
 
-        if (me.spec.row_redraw_interval) {
-            setInterval(function() {
-                var oldlist = me.redraw;
-                me.redraw = [];
-
-                oldlist.forEach(function (old) {
-                    var uri = me.spec.row_redraw_fetch(old.item);
-                    $.ajax(uri, {
-                        'data': { 'content-type': 'application/json' },
-                        'error': function(a, b, c) { me.redraw.push(old) },
-                        'success': function(item) {
-                            if (me.spec.row_redraw_compare) {
-                                if (me.spec.row_redraw_compare(old.item, item)) {
-                                    me.redraw.push(old);
-                                    return;
-                                }
-                            }
-
-                            var row = me.render_row(item);
-                            row.index = old.index;
-
-                            if (me.spec.modify_row_hook) {
-                                me.spec.modify_row_hook(row.html, item);
-                            }
-
-                            if (me.spec.row_redraw_check(item)) {
-                                me.redraw.push(row);
-                            }
-
-                            me.rows[old.index] = row;
-
-                            var replace = true;
-                            if (me.spec.row_redraw_reposition) {
-                                replace = me.spec.row_redraw_reposition(old.item, item);
-                            }
-
-                            if (replace && me.spec.place_row) {
-                                if (me.spec.place_row(row.html, item, me.table, me.row_state)) {
-                                    old.html.detach();
-                                    return;
-                                }
-                            }
-
-                            old.html.replaceWith(row.html);
-                        },
-                    });
-                });
-            }, me.spec.row_redraw_interval);
-        }
-
-        if (me.spec.update_interval) {
-            setInterval(function() {
-                if (!me.loaded) {
-                    return;
-                }
-
-                // Fetch new items
-                if (me.update_offset_field && me.update_offset) {
-                    if (typeof(me.spec.fetch) === 'string') {
-                        t2hui.fetch(me.spec.fetch + "/" + me.update_offset, {'no_throb': 1}, me.render_item);
-                    }
-                }
-
-            }, me.spec.update_interval);
-        }
-
-        if (typeof(me.spec.fetch) === 'string') {
-            t2hui.fetch(
-                me.spec.fetch,
-                {done: function() {
-                    if (me.spec.done) { me.spec.done() };
-                    me.make_sortable();
-                }},
-                me.render_item
-            );
-        }
-        else if (typeof(me.spec.fetch) === 'object') {
-            me.spec.fetch.forEach(me.render_item);
-            if (me.spec.fetch.length > 1) {
-                me.make_sortable();
-            }
-        }
-
-        me.loaded = 1;
-
         var wrapper = $('<div id="' + spec.id + '" class="field-table-wrapper ' + spec.class + '"></div>');
         wrapper.append(me.table);
 
@@ -150,101 +55,60 @@ function FieldTable(spec) {
     }
 
     me.make_sortable = function() {
-        if (!me.spec.sortable) { return }
-
         me.table.DataTable({
             paging: false,
             searching: false,
             info: false,
             orderCellsTop: true,
         });
-
-//        var them = me.table.children('thead').children('tr').first().children('th');
-
-//        them.click(function() {
-//            $(this).addClass('sorting');
-//        });
-//
-//        var x = me.table.tablesort({
-//            'compare': function(a, b) {
-//                var an = parseFloat(a);
-//                var bn = parseFloat(b);
-//
-//                if (!isNaN(an) && !isNaN(bn)) {
-//                    if (an > bn) {
-//                        return 1;
-//                    } else if (an < bn) {
-//                        return -1;
-//                    } else {
-//                        return 0;
-//                    }
-//                }
-//                if (!isNaN(an)) {
-//                    return 1;
-//                }
-//                if (!isNaN(bn)) {
-//                    return -1;
-//                }
-//
-//                if (a > b) {
-//                    return 1;
-//                } else if (a < b) {
-//                    return -1;
-//                } else {
-//                    return 0;
-//                }
-//            }
-//        });
-//
-//        me.table.on('tablesort:complete', function() {
-//            them.removeClass('sorting');
-//        })
     }
 
-    me.render_item = function(item) {
+    me.render_item = function(item, id, update) {
         if (me.spec.expand_item) {
             var list = me.spec.expand_item(item);
-            list.forEach(me._render_item);
+            list.forEach(function(subitem) {
+                me._render_item(subitem, id, update);
+            });
         }
         else {
-            me._render_item(item);
+            return me._render_item(item, id, update);
         }
-    }
+    },
 
-    me._render_item = function(item) {
-        if (me.update_offset_field) {
-            var id = item[me.update_offset_field];
-            me.update_offset = Math.max(me.update_offset, id);
-        }
-
-        var row = me.render_row(item);
+    me._render_item = function(item, id, update) {
+        var row = me.render_row(item, id);
 
         if (me.spec.modify_row_hook) {
-            me.spec.modify_row_hook(row.html, item);
+            me.spec.modify_row_hook(row.html, item, me);
         }
 
+        var placed = false;
         if (me.spec.place_row) {
-            if (!me.spec.place_row(row.html, item, me.table, me.row_state)) {
+            placed = me.spec.place_row(row.html, item, me, me.row_state, me.rows[id]);
+        }
+
+        if (placed) {
+            if (me.rows[id]) {
+                me.rows[id].html.detach();
+            }
+        }
+        else {
+            if (me.rows[id]) {
+                me.rows[id].html.replaceWith(row.html);
+            }
+            else {
                 me.body.append(row.html);
             }
         }
-        else {
-            me.body.append(row.html);
-        }
 
-        if (me.spec.row_redraw_check) {
-            if (me.spec.row_redraw_check(item)) {
-                me.redraw.push(row);
-            }
+        if (me.spec.updatable || me.spec.dynamic_field_attribute) {
+            me.rows[id] = row;
         }
-
-        row.index = me.rows.length;
-        me.rows.push(row);
     }
 
-    me.render_row = function(item) {
+    me.render_row = function(item, id) {
         var row = {
-            'html': $('<tr></tr>'),
+            'html': $('<tr id="' + id + '"></tr>'),
             'columns': [],
             'dynamic_columns': [],
             'postfix_columns': [],
@@ -449,7 +313,7 @@ function FieldTable(spec) {
         if (me.dynamic_columns.length) {
             me.dynamic_columns[me.dynamic_columns.length - 1].after(col);
 
-            me.rows.forEach(function(row) {
+            Object.values(me.rows).forEach(function(row) {
                 var td = $('<td class="' + cclass + '"></td>');
                 row.dynamic_columns[row.dynamic_columns.length - 1].after(td);
                 row.dynamic_columns.push(td);
@@ -458,7 +322,7 @@ function FieldTable(spec) {
         else if (me.columns.length) {
             me.columns[me.columns.length - 1].after(col);
 
-            me.rows.forEach(function(row) {
+            Object.values(me.rows).forEach(function(row) {
                 var td = $('<td class="' + cclass + '"></td>');
                 row.columns[row.columns.length - 1].after(td);
                 row.dynamic_columns.push(td);
@@ -468,7 +332,7 @@ function FieldTable(spec) {
             me.header.prepend(col);
 
             var row;
-            me.rows.forEach(function(row) {
+            Object.values(me.rows).forEach(function(row) {
                 var td = $('<td class="' + cclass + '"></td>');
                 row.append(td);
                 row.dynamic_columns.push(td);

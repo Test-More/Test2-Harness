@@ -209,6 +209,7 @@ CREATE TABLE events (
     job_key         UUID        NOT NULL REFERENCES jobs(job_key),
 
     event_ord       BIGINT      NOT NULL,
+    insert_ord      BIGSERIAL   NOT NULL,
 
     is_diag         BOOL        NOT NULL DEFAULT FALSE,
     is_harness      BOOL        NOT NULL DEFAULT FALSE,

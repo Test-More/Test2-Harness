@@ -1,22 +1,12 @@
-$(function() {
-    $("div.dashboard").each(function() {
-        var root = $('<div class="dashboard"></div>');
-        root.append(t2hui.dashboard.build_controls(100));
-        root.append(t2hui.dashboard.build_table(base_uri + 'runs/1/100'));
+t2hui.runtable = {};
 
-        $(this).replaceWith(root);
-    });
-});
-
-t2hui.dashboard = {};
-
-t2hui.dashboard.build_table = function(uri) {
+t2hui.runtable.build_table = function() {
     var columns = [
-        { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.dashboard.tool_builder },
+        { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.runtable.tool_builder },
 
-        { 'name': 'passed',  'label': 'P', 'class': 'count', 'builder': t2hui.dashboard.build_pass },
-        { 'name': 'failed',  'label': 'F', 'class': 'count', 'builder': t2hui.dashboard.build_fail },
-        { 'name': 'retried', 'label': 'R', 'class': 'count', 'builder': t2hui.dashboard.build_retry },
+        { 'name': 'passed',  'label': 'P', 'class': 'count', 'builder': t2hui.runtable.build_pass },
+        { 'name': 'failed',  'label': 'F', 'class': 'count', 'builder': t2hui.runtable.build_fail },
+        { 'name': 'retried', 'label': 'R', 'class': 'count', 'builder': t2hui.runtable.build_retry },
 
         { 'name': 'project', 'label': 'project', 'class': 'project'},
         { 'name': 'status',  'label': 'status',  'class': 'status'}
@@ -27,25 +17,17 @@ t2hui.dashboard.build_table = function(uri) {
     }
 
     var table = new FieldTable({
-        'class': 'dashboard_table',
-        'id': 'dashboard_runs',
-        'fetch': uri,
-        'sortable': true,
+        'class': 'run_table',
+        'id': 'runs',
 
-        'update_offset_field': 'run_ord',
-        'update_interval':     1 * 1000,
+        'updatable': true,
 
-        'modify_row_hook': t2hui.dashboard.modify_row,
-        'place_row': t2hui.dashboard.place_row,
-
-        'row_redraw_compare': t2hui.dashboard.redraw_compare,
-        'row_redraw_check': t2hui.dashboard.redraw_check,
-        'row_redraw_fetch': t2hui.dashboard.redraw_fetch,
-        'row_redraw_interval': 1 * 1000,
+        'modify_row_hook': t2hui.runtable.modify_row,
+        'place_row': t2hui.runtable.place_row,
 
         'dynamic_field_attribute': 'fields',
-        'dynamic_field_fetch': t2hui.dashboard.field_fetch,
-        'dynamic_field_builder': t2hui.dashboard.field_builder,
+        'dynamic_field_fetch': t2hui.runtable.field_fetch,
+        'dynamic_field_builder': t2hui.runtable.field_builder,
 
         'columns': columns,
         'postfix_columns': [
@@ -53,67 +35,36 @@ t2hui.dashboard.build_table = function(uri) {
         ]
     });
 
-    return table.render();
+    return table;
 }
 
-t2hui.dashboard.place_row = function(row, item, table, state) {
-    if (!state['biggest']) {
-        state['biggest'] = {'row': row, 'ord': item.run_ord};
+t2hui.runtable.place_row = function(row, item, table, state, existing) {
+    if (existing) {
         return false;
     }
 
-    if (item.run_ord > state.biggest.ord) {
-        var old = state.biggest.row;
-        state['biggest'] = {'row': row, 'ord': item.run_ord};
-        old.before(row);
+    if (!state['biggest']) {
+        state['biggest'] = item.run_ord;
+        return false;
+    }
+
+    if (item.run_ord > state.biggest) {
+        state['biggest'] = item.run_ord;
+        table.body.prepend(row);
         return true;
     }
 
     return false;
 }
 
-t2hui.dashboard.build_controls = function(count) {
-    var page = 1;
-
-    var controls = $('<div class="dashboard_controls"></div>');
-
-    var pn = $('<span>' + page + '</span>');
-    var dp = $('<div class="dashboard_page">Page </div>');
-    dp.append(pn);
-
-    var prev = $('<div class="dashboard_pager">&lt;&lt;</div>');
-    prev.click(function() {
-        page--;
-        $("div#dashboard_runs").each(function() { $(this).replaceWith(t2hui.dashboard.build_table(base_uri + 'runs/' + page + '/' + count)) });
-        if (page < 2) { prev.addClass('hide') }
-        pn.text(page);
-    });
-    controls.append(prev);
-    if (page < 2) { prev.addClass('hide') }
-
-    controls.append(dp);
-
-
-    var next = $('<div class="dashboard_pager">&gt;&gt;</div>');
-    next.click(function() {
-        page++;
-        $("div#dashboard_runs").each(function() { $(this).replaceWith(t2hui.dashboard.build_table(base_uri + 'runs/' + page + '/' + count)) });
-        if (page > 1) { prev.removeClass('hide') }
-        pn.text(page);
-    });
-    controls.append(next);
-
-    return controls;
-}
-
-t2hui.dashboard.build_pass = function(item, col) {
+t2hui.runtable.build_pass = function(item, col) {
     var val = item.passed;
     if (val === null) { return };
     if (val === undefined) { return };
     col.text(val);
 };
 
-t2hui.dashboard.build_fail = function(item, col) {
+t2hui.runtable.build_fail = function(item, col) {
     var val = item.failed;
     if (val === null) { return };
     if (val === undefined) { return };
@@ -121,7 +72,7 @@ t2hui.dashboard.build_fail = function(item, col) {
     else { col.text(val) }
 };
 
-t2hui.dashboard.build_retry = function(item, col) {
+t2hui.runtable.build_retry = function(item, col) {
     var val = item.retried;
     if (val === null) { return };
     if (val === undefined) { return };
@@ -129,8 +80,8 @@ t2hui.dashboard.build_retry = function(item, col) {
     else { col.append($('<div class="iffy_txt">' + val + '</div>')) }
 };
 
-t2hui.dashboard.tool_builder = function(item, tools, data) {
-    var link = base_uri + 'run/' + item.run_id;
+t2hui.runtable.tool_builder = function(item, tools, data) {
+    var link = base_uri + 'view/' + item.run_id;
     var downlink = base_uri + 'download/' + item.run_id;
 
     var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
@@ -212,26 +163,11 @@ t2hui.dashboard.tool_builder = function(item, tools, data) {
     });
 };
 
-t2hui.dashboard.redraw_compare = function(old, item) {
-    if (old.status == item.status) { return true }
-    return false;
-}
-
-t2hui.dashboard.redraw_check = function(item) {
-    if (item.status == 'pending') { return true }
-    if (item.status == 'running') { return true }
-    return false;
-};
-
-t2hui.dashboard.redraw_fetch = function(item) {
-    return base_uri + 'run/' + item.run_id;
-};
-
-t2hui.dashboard.field_fetch = function(field_data, item) {
+t2hui.runtable.field_fetch = function(field_data, item) {
     return base_uri + 'run/' + field_data.run_id;
 };
 
-t2hui.dashboard.field_builder = function(data, name) {
+t2hui.runtable.field_builder = function(data, name) {
     var it;
     data.fields.forEach(function(field) {
         if (field.name === name) {
@@ -243,7 +179,7 @@ t2hui.dashboard.field_builder = function(data, name) {
     return it;
 };
 
-t2hui.dashboard.modify_row = function(row, item) {
+t2hui.runtable.modify_row = function(row, item) {
     if (item.status == 'canceled') {
         row.addClass('iffy_set');
         return;

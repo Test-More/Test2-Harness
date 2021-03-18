@@ -10,17 +10,16 @@ use Scalar::Util qw/blessed/;
 use DateTime;
 
 use Test2::Harness::UI::Request;
-use Test2::Harness::UI::Controller::Dashboard;
 use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
 use Test2::Harness::UI::Controller::Job;
 use Test2::Harness::UI::Controller::Download;
+
 use Test2::Harness::UI::Controller::Stream;
+use Test2::Harness::UI::Controller::View;
 
 use Test2::Harness::UI::Controller::Query;
-use Test2::Harness::UI::Controller::Runs;
-use Test2::Harness::UI::Controller::Jobs;
 use Test2::Harness::UI::Controller::Events;
 
 use Test2::Harness::UI::Controller::Durations;
@@ -39,18 +38,10 @@ sub init {
     my $router = $self->{+ROUTER} ||= Router::Simple->new;
     my $config = $self->{+CONFIG};
 
-    if ($config->single_run) {
-        $router->connect('/' => {controller => 'Test2::Harness::UI::Controller::Run'});
-    }
-    else {
-        $router->connect('/'                        => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-        $router->connect('/dashboard'               => {controller => 'Test2::Harness::UI::Controller::Dashboard'});
-        $router->connect('/runs'                    => {controller => 'Test2::Harness::UI::Controller::Runs'});
-        $router->connect('/runs/:page'              => {controller => 'Test2::Harness::UI::Controller::Runs'});
-        $router->connect('/runs/:page/:size'        => {controller => 'Test2::Harness::UI::Controller::Runs'});
-        $router->connect('/runs/:page/:size/:after' => {controller => 'Test2::Harness::UI::Controller::Runs'});
-        $router->connect('/upload'                  => {controller => 'Test2::Harness::UI::Controller::Upload'});
-    }
+    $router->connect('/' => {controller => 'Test2::Harness::UI::Controller::View'});
+
+    $router->connect('/upload' => {controller => 'Test2::Harness::UI::Controller::Upload'})
+        unless $config->single_run;
 
     $router->connect('/user' => {controller => 'Test2::Harness::UI::Controller::User'})
         unless $config->single_user;
@@ -61,8 +52,6 @@ sub init {
     $router->connect('/run/:id'          => {controller => 'Test2::Harness::UI::Controller::Run'});
     $router->connect('/run/:id/pin'      => {controller => 'Test2::Harness::UI::Controller::Run', action => 'pin_toggle'});
     $router->connect('/job/:id'          => {controller => 'Test2::Harness::UI::Controller::Job'});
-    $router->connect('/run/:id/jobs'     => {controller => 'Test2::Harness::UI::Controller::Jobs',   from => 'run'});
-    $router->connect('/job/:id/events'   => {controller => 'Test2::Harness::UI::Controller::Events', from => 'job'});
     $router->connect('/event/:id'        => {controller => 'Test2::Harness::UI::Controller::Events', from => 'single_event'});
     $router->connect('/event/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
 
@@ -72,6 +61,10 @@ sub init {
     $router->connect('/coverage/:project' => {controller => 'Test2::Harness::UI::Controller::Coverage'});
 
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
+
+    $router->connect('/view'                  => {controller => 'Test2::Harness::UI::Controller::View'});
+    $router->connect('/view/:run_id'          => {controller => 'Test2::Harness::UI::Controller::View'});
+    $router->connect('/view/:run_id/:job_key' => {controller => 'Test2::Harness::UI::Controller::View'});
 
     $router->connect('/stream'                  => {controller => 'Test2::Harness::UI::Controller::Stream'});
     $router->connect('/stream/:run_id'          => {controller => 'Test2::Harness::UI::Controller::Stream'});

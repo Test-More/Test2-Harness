@@ -35,8 +35,7 @@ sub handle {
 
     $res->stream(
         env          => $req->env,
-        #content_type => 'application/x-jsonl; charset=utf-8',
-        content_type => 'text/plain; charset=utf-8',
+        content_type => 'application/x-jsonl; charset=utf-8',
 
         done => sub {
             my @keep;
@@ -71,6 +70,7 @@ sub stream_runs {
         track_status  => 1,
         id_field      => 'run_id',
         ord_field     => 'run_ord',
+        sort_field    => 'run_ord',
         search_base   => $schema->resultset('Run'),
         initial_limit => RUN_LIMIT,
 
@@ -97,6 +97,7 @@ sub stream_jobs {
         track_status => 1,
         id_field     => 'job_key',
         ord_field    => 'job_ord',
+        sort_field   => 'job_ord',
         method       => 'glance_data',
         search_base  => scalar($run->jobs),
     );
@@ -123,7 +124,9 @@ sub stream_events {
 
         track_status => 0,
         id_field     => 'event_id',
-        ord_field    => 'event_ord',
+        ord_field    => 'insert_ord',
+        sort_field   => 'event_ord',
+        sort_dir     => '-asc',
         method       => 'line_data',
         custom_query => $query,
         search_base  => scalar($job->events),
@@ -145,7 +148,7 @@ sub stream_single {
 
     my $sig;
     return [
-        sub { $it->complete ? 1 : 0 },
+        sub { $sig && $it->complete ? 1 : 0 },
         sub {
             my $update = JSON::PP::false;
             if ($sig) {
@@ -176,11 +179,13 @@ sub stream_set {
     my $ord_field    = $params{ord_field};
     my $parent       = $params{parent};
     my $search_base  = $params{search_base};
+    my $sort_field   = $params{sort_field};
+    my $sort_dir     = $params{sort_dir} // '-desc';
     my $timeout      = $params{timeout};
     my $track        = $params{track_status};
     my $type         = $params{type};
 
-    my $items = $search_base->search($custom_query, {order_by => {-desc => $ord_field}, $limit ? (rows => $limit) : ()});
+    my $items = $search_base->search($custom_query, {order_by => {$sort_dir => $sort_field}, $limit ? (rows => $limit) : ()});
 
     my $start = time;
     my $ord = 0;
@@ -212,7 +217,7 @@ sub stream_set {
 
                 $items = $search_base->search(
                     $query,
-                    {order_by => {-desc => $ord_field}}
+                    {order_by => {$sort_dir => $sort_field}}
                 );
             }
 
@@ -241,7 +246,6 @@ sub stream_set {
             }
 
             $items = undef;
-
             return @out;
         },
     ];

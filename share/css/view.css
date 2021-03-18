@@ -1,0 +1,165 @@
+#run_list, #job_list, #event_list {
+    margin-bottom: 10px;
+}
+
+.facet_time    {  color: #12539e; }
+.facet_about   {  color: #000000; }
+.facet_amnesty {  color: #0f6989; }
+.facet_assert  {  color: #000000; }
+.facet_control {  color: #b26521; }
+.facet_error   {  color: #af0c0c; }
+.facet_info    {  color: #000000; }
+.facet_meta    {  color: #000000; }
+.facet_parent  {  color: #000000; }
+.facet_trace   {  color: #b26521; }
+.facet_plan    {  color: #3d6011; }
+
+.tag_DEBUG    { color: #b26521;                     }
+.tag_DIAG     { color: #b23721;                     }
+.tag_ERROR    { color: #af0c0c;                     }
+.tag_FATAL    { color: #c10000;                     }
+.tag_FAIL     { color: #c10000;                     }
+.tag_HALT     { color: #c10000;                     }
+.tag_PASS     { color: #266d39;                     }
+.tag_N-PASS-N { color: #1d756d;                     }
+.tag_TODO     { color: #521d93;                     }
+.tag_NO--PLAN { color: #d17c32;                     }
+.tag_SKIP     { color: #67156d;                     }
+.tag_SKIP-ALL { color: #FFFFFF; background: #026b09 }
+.tag_STDERR   { color: #bc7d16;                     }
+.tag_REASON   { color: #b26521;                     }
+.tag_TIMEOUT  { color: #b26521;                     }
+.tag_TIME     { color: #12539e;                     }
+.tag_MEMORY   { color: #12539e;                     }
+
+html {
+    scroll-snap-type: y proximity;
+    scroll-padding-bottom: 50px;
+}
+
+div.live {
+    scroll-snap-align: end;
+}
+
+tr.temp_orphan {
+    background: #C0E0FF;
+}
+
+tr.first_orphan {
+    border-top: 5px dashed #000000 !important;
+}
+
+div.event_controls {
+    background: #FFFFFF;
+    border-radius: 6px;
+    border: 1px solid black;
+    display: block;
+    margin-bottom: 6px;
+    margin-top: 6px;
+    padding: 4px;
+    overflow: hidden;
+    position: sticky;
+    top: 40px;
+    left: 0px;
+    z-index: 18;
+}
+
+div.event_controls ul {
+    display: block;
+    list-style: none;
+    overflow: hidden;
+    margin: 0;
+    padding: 0px;
+}
+
+div.event_controls ul li {
+    display: block;
+    margin: 0;
+    padding: 4px;
+    float: left;
+    margin: 4px;
+}
+
+div.event_controls ul li.filter {
+    border: 1px solid black;
+    border-radius: 4px;
+    background: #AAEECC;
+    cursor: pointer;
+}
+
+div.event_controls ul li.filter:hover, div.event_controls ul li.filter.off:hover {
+    border-color: #0010FF;
+    background: #99CCEE;
+}
+
+div.event_controls ul li.filter.off {
+    background: #CCCCCC;
+}
+
+table.field-table.job_table > * > tr.field-table-header > th {
+    top: 84px;
+}
+
+@media only screen and (max-height: 500px) {
+    div.event_controls {
+        top: 0px;
+    }
+
+    table.field-table.job_table > * > tr.field-table-header > th {
+        top: 44px !important;
+    }
+}
+
+pre.testout {
+    margin: 0;
+    padding: 0px;
+    border-left: 1px dotted #B0B0B0;
+    padding-left: 4px;
+    height: 100%;
+    display: block;
+    font-size: 16px;
+}
+
+table.testtable {
+    border: 1px solid black;
+    border-collapse: collapse;
+    margin: 4px;
+}
+
+table.testtable th.header {
+    background: #AAAAAA;
+}
+
+table.testtable td, table.testtable th {
+    border: 1px solid black;
+    padding: 4px;
+}
+
+div.stoggle {
+    display: block;
+    float: left;
+    padding-left: 0.5ch;
+    cursor: pointer;
+    margin-left: -2ch;
+    margin-right: -2ch;
+}
+
+div.stoggle:hover {
+    color: #1010FF;
+}
+
+div.stoggle.expanded:hover {
+    color: inherit;
+    cursor: inherit;
+}
+
+div.stoggle.running {
+    border-radius: 15px;
+}
+
+.hidden_row {
+    visibility: collapse;
+    line-height:0;
+    height: 0;
+    overflow: hidden;
+}

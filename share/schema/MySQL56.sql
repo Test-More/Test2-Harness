@@ -201,6 +201,7 @@ CREATE TABLE events (
     job_key         CHAR(36)    NOT NULL REFERENCES jobs(job_key),
 
     event_ord       BIGINT      NOT NULL,
+    insert_ord      BIGINT      NOT NULL AUTO_INCREMENT,
 
     is_diag         BOOL        NOT NULL DEFAULT FALSE,
     is_harness      BOOL        NOT NULL DEFAULT FALSE,
@@ -218,6 +219,7 @@ CREATE TABLE events (
     orphan          LONGTEXT  DEFAULT NULL,
     orphan_line     BIGINT      DEFAULT NULL,
 
+    UNIQUE(insert_ord),
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)
 ) ROW_FORMAT=COMPRESSED;
 CREATE INDEX event_job    ON events(job_key);

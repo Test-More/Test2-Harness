@@ -95,7 +95,7 @@ sub links {
     return $self->{+LINKS} if defined $self->{+LINKS};
 
     if (my $url = $self->settings->yathui->url) {
-        $self->{+LINKS} = "\nThis run can be reviewed at: $url/run/" . $self->settings->run->run_id . "\n\n";
+        $self->{+LINKS} = "\nThis run can be reviewed at: $url/view/" . $self->settings->run->run_id . "\n\n";
     }
 
     return $self->{+LINKS} //= "";

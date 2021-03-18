@@ -21,12 +21,6 @@ sub handle {
     my $req = $self->{+REQUEST};
 
     my $res = resp(200);
-    $res->add_css('dashboard.css');
-    $res->add_css('job.css');
-    $res->add_js('dashboard.js');
-    $res->add_js('run.js');
-    $res->add_js('job.js');
-
 
     my $schema = $self->{+CONFIG}->schema;
     my $user = $req->user;
@@ -38,26 +32,8 @@ sub handle {
 
     $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id . '+' . $job->job_try;
 
-    my $ct = lc($req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');
-
-    if ($ct eq 'application/json') {
-        $res->content_type($ct);
-        $res->raw_body($job);
-        return $res;
-    }
-
-    my $tx = Text::Xslate->new(path => [share_dir('templates')]);
-    my $content = $tx->render(
-        'job.tx',
-        {
-            base_uri => $req->base->as_string,
-            user     => $user,
-            job      => encode_json($job),
-            job_key   => $job->job_key,
-        }
-    );
-
-    $res->raw_body($content);
+    $res->content_type('application/json');
+    $res->raw_body($job);
     return $res;
 }
 

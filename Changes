@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix MySQL timeout issue
+
 0.000049  2021-03-18 11:25:52-07:00 America/Los_Angeles
 
     - Fix cache issue on streamed data

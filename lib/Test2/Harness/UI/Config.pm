@@ -46,11 +46,19 @@ sub connect {
 
     require DBI;
 
+    my %params = (
+        AutoCommit => 1,
+        RaiseError => 1,
+    );
+
+    my $schema = $ENV{YATH_UI_SCHEMA} //= 'PostgreSQL';
+    $params{mysql_auto_reconnect} = 1 if $schema =~ m/mysql/i;
+
     return $DB_CACHE = DBI->connect(
         $self->{+DBI_DSN},
         $self->{+DBI_USER},
         $self->{+DBI_PASS},
-        {AutoCommit => 1, RaiseError => 1}
+        \%params,
     );
 }
 

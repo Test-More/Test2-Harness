@@ -38,17 +38,8 @@ __PACKAGE__->inflate_column(
     },
 );
 
-sub complete {
-    my $self = shift;
-
-    my $status = $self->status;
-
-    return 1 if $status eq 'complete';
-    return 1 if $status eq 'failed';
-    return 1 if $status eq 'canceled';
-    return 1 if $status eq 'broken';
-    return 0;
-}
+my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
+sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 
 sub sig {
     my $self = shift;

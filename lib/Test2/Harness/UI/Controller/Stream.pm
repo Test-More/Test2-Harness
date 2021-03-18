@@ -34,9 +34,18 @@ sub handle {
         $self->stream_events($route),
     );
 
+    my $cache = 1;
+    for my $it ($self->{+RUN}, $self->{+JOB}) {
+        next unless $it;
+        next if $it->complete;
+        $cache = 0;
+        last;
+    }
+
     $res->stream(
         env          => $req->env,
         content_type => 'application/x-jsonl; charset=utf-8',
+        cache => $cache,
 
         done => sub {
             my @keep;

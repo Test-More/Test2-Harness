@@ -98,10 +98,14 @@ sub stream {
         my $cleanup = $params{cleanup};
 
         my $ct = $params{content_type} || $params{'content-type'} || $params{'Content-Type'} or croak "'content_type' is a required attribute";
+        my $cache = $params{cache} // 1;
+
+        my @headers = ('Content-Type' => $ct);
+        push @headers => ('Cache-Control' => 'no-store') unless $cache;
 
         $self->{stream} = sub {
             my $responder = shift;
-            my $writer = $responder->([200, ['Content-Type' => $ct]]);
+            my $writer = $responder->([200, \@headers]);
 
             my $end = 0;
             while (!$end) {

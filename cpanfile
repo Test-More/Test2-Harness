@@ -30,6 +30,7 @@ requires "Plack::App::Directory" => "0";
 requires "Plack::App::File" => "0";
 requires "Plack::Builder" => "0";
 requires "Plack::Handler::Starman" => "0";
+requires "Plack::Middleware::DBIx::DisconnectAll" => "0";
 requires "Plack::Runner" => "0";
 requires "Router::Simple" => "0";
 requires "Scalar::Util" => "0";

@@ -14,6 +14,7 @@ use Test2::Harness::UI::Util::HashBase qw{
     -single_user -single_run -no_upload
     -show_user
     -email
+    -no_cache <db_cache <db_cache_pid
 };
 
 sub init {
@@ -31,18 +32,29 @@ sub init {
     $self->{+SHOW_USER} //= 0;
 }
 
-my $DB_CACHE;
-my $DB_CACHE_PID;
+sub disconnect {
+    my $self = shift;
+    delete $self->{+_SCHEMA};
+
+    if ($self->{+DB_CACHE_PID}) {
+        if ($self->{+DB_CACHE_PID} == $$) {
+            $self->{+DB_CACHE}->disconnect();
+        }
+
+        delete $self->{+DB_CACHE_PID};
+    }
+
+    delete $self->{+DB_CACHE};
+    return;
+}
+
 sub connect {
     my $self = shift;
 
-    if ($DB_CACHE_PID && $DB_CACHE_PID != $$) {
-        $DB_CACHE->disconnect if $DB_CACHE;
-        $DB_CACHE = undef;
-        $DB_CACHE_PID = undef;
+    unless ($self->{+NO_CACHE}) {
+        $self->disconnect if $self->{+DB_CACHE_PID} && $self->{+DB_CACHE_PID} != $$;
+        return $self->{+DB_CACHE} if $self->{+DB_CACHE};
     }
-
-    return $DB_CACHE if $DB_CACHE;
 
     require DBI;
 
@@ -54,12 +66,20 @@ sub connect {
     my $schema = $ENV{YATH_UI_SCHEMA} //= 'PostgreSQL';
     $params{mysql_auto_reconnect} = 1 if $schema =~ m/mysql/i;
 
-    return $DB_CACHE = DBI->connect(
+
+    my $db = DBI->connect(
         $self->{+DBI_DSN},
         $self->{+DBI_USER},
         $self->{+DBI_PASS},
         \%params,
     );
+
+    unless ($self->{+NO_CACHE}) {
+        $self->{+DB_CACHE}     = $db;
+        $self->{+DB_CACHE_PID} = $$;
+    }
+
+    return $db;
 }
 
 sub schema {

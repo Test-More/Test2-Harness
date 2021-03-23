@@ -7,18 +7,9 @@ use Plack::Builder;
 use Plack::App::Directory;
 use Plack::App::File;
 
-require Test2::Harness::UI::Config;
-
-my $config = Test2::Harness::UI::Config->new(
-    dbi_dsn     => $ENV{HARNESS_UI_DSN},
-    dbi_user    => '',
-    dbi_pass    => '',
-    single_user => 1,
-    show_user   => 1,
-    email       => 'exodist7@gmail.com',
-);
 
 builder {
+    enable "DBIx::DisconnectAll";
     mount '/js'  => Plack::App::Directory->new({root => 'share/js'})->to_app;
     mount '/css' => Plack::App::Directory->new({root => 'share/css'})->to_app;
     mount '/img' => Plack::App::Directory->new({root => 'share/img'})->to_app;
@@ -26,6 +17,16 @@ builder {
 
     mount '/' => sub {
         require Test2::Harness::UI;
+        require Test2::Harness::UI::Config;
+
+        my $config = Test2::Harness::UI::Config->new(
+            dbi_dsn     => $ENV{HARNESS_UI_DSN},
+            dbi_user    => '',
+            dbi_pass    => '',
+            single_user => 1,
+            show_user   => 1,
+            email       => 'exodist7@gmail.com',
+        );
 
         Test2::Harness::UI->new(config => $config)->to_app->(@_);
     }

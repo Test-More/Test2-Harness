@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '0.000051';
 
 use Carp qw/croak/;
-use Time::HiRes qw/sleep/;
+use Time::HiRes qw/sleep time/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
 use parent 'Plack::Response';
@@ -103,6 +103,7 @@ sub stream {
         my @headers = ('Content-Type' => $ct);
         push @headers => ('Cache-Control' => 'no-store') unless $cache;
 
+        my $last_write = time;
         $self->{stream} = sub {
             my $responder = shift;
             my $writer = $responder->([200, \@headers]);
@@ -115,10 +116,17 @@ sub stream {
                 for my $item ($fetch->()) {
                     $writer->write($item);
                     last unless $env->{'psgix.io'}->connected;
+                    $last_write = time;
                     $seen++;
                 }
 
-                sleep $wait unless $seen || $end;
+                unless ($seen || $end) {
+                    if (time - $last_write > 1) {
+                        $writer->write("\n");
+                        last unless $env->{'psgix.io'}->connected;
+                    }
+                    sleep $wait;
+                }
             }
 
             $cleanup->() if $cleanup;

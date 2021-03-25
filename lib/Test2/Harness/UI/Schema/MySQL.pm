@@ -536,6 +536,8 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "integer", is_nullable => 1},
         "retried",
         {data_type => "integer", is_nullable => 1},
+        "concurrency",
+        {data_type => "integer", is_nullable => 1},
         "fields",
         {data_type => "json", is_nullable => 1},
         "parameters",

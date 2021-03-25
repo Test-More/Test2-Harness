@@ -582,6 +582,8 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         {data_type => "integer", is_nullable => 1},
         "retried",
         {data_type => "integer", is_nullable => 1},
+        "concurrency",
+        {data_type => "integer", is_nullable => 1},
         "fields",
         {data_type => "jsonb", is_nullable => 1},
         "parameters",

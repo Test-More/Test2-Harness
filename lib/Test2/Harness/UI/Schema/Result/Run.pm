@@ -45,7 +45,7 @@ sub sig {
     my $self = shift;
 
     return join ";" => (
-        (map {$self->$_ // ''} qw/status pinned passed failed retried/),
+        (map {$self->$_ // ''} qw/status pinned passed failed retried concurrency/),
         (map {length($self->$_ // '')} qw/fields parameters/),
     );
 }

@@ -147,6 +147,7 @@ CREATE TABLE runs (
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
+    concurrency     INTEGER         DEFAULT NULL,
     fields          JSONB           DEFAULT NULL,
     parameters      JSONB           DEFAULT NULL,
 

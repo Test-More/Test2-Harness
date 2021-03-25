@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix run settings recording
+    - Add field for concurrency to be shown
+
 0.000052  2021-03-25 12:45:11-07:00 America/Los_Angeles
 
     - Fix pinning of runs

@@ -549,6 +549,12 @@ sub update_other {
     my $run = $self->{+RUN};
 
     if (my $run_data = $f->{harness_run}) {
+        $run_data = $f->{harness_settings} // $run_data;
+
+        if (my $j = $run_data->{runner}->{job_count}) {
+            $run->concurrency($j);
+        }
+
         clean($run_data);
         $run->parameters($run_data);
 

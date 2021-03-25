@@ -132,6 +132,7 @@ CREATE TABLE runs (
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
+    concurrency     INTEGER         DEFAULT NULL,
     fields          JSON            DEFAULT NULL,
     parameters      JSON            DEFAULT NULL,
 

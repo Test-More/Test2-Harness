@@ -4,6 +4,7 @@ t2hui.runtable.build_table = function() {
     var columns = [
         { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.runtable.tool_builder },
 
+        { 'name': 'concurrency',  'label': 'C', 'class': 'count', 'builder': t2hui.runtable.build_concurrency },
         { 'name': 'passed',  'label': 'P', 'class': 'count', 'builder': t2hui.runtable.build_pass },
         { 'name': 'failed',  'label': 'F', 'class': 'count', 'builder': t2hui.runtable.build_fail },
         { 'name': 'retried', 'label': 'R', 'class': 'count', 'builder': t2hui.runtable.build_retry },
@@ -57,6 +58,13 @@ t2hui.runtable.place_row = function(row, item, table, state, existing) {
 
     return false;
 }
+
+t2hui.runtable.build_concurrency = function(item, col) {
+    var val = item.concurrency;
+    if (val === null) { return };
+    if (val === undefined) { return };
+    col.text("-j" + val);
+};
 
 t2hui.runtable.build_pass = function(item, col) {
     var val = item.passed;

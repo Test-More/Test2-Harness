@@ -2,6 +2,7 @@
 
     - Fix pinning of runs
     - Fix timezone settings
+    - Track test run duration
 
 0.000051  2021-03-23 11:32:46-07:00 America/Los_Angeles
 

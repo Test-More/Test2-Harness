@@ -552,6 +552,8 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
             is_nullable   => 0,
             original      => {default_value => \"now()"},
         },
+        "duration",
+        {data_type => "text", is_nullable => 1},
         "mode",
         {
             data_type     => "enum",

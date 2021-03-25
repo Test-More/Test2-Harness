@@ -9,7 +9,8 @@ t2hui.runtable.build_table = function() {
         { 'name': 'retried', 'label': 'R', 'class': 'count', 'builder': t2hui.runtable.build_retry },
 
         { 'name': 'project', 'label': 'project', 'class': 'project'},
-        { 'name': 'status',  'label': 'status',  'class': 'status'}
+        { 'name': 'status',  'label': 'status',  'class': 'status'},
+        { 'name': 'duration', 'label': 'duration', 'class': 'duration' },
     ];
 
     if (show_user || !single_user) {

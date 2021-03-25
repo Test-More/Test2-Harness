@@ -7,7 +7,7 @@ our $VERSION = '0.000052';
 use DateTime;
 use Data::GUID;
 use Time::HiRes qw/time/;
-use List::Util qw/first/;
+use List::Util qw/first min max/;
 
 use Carp qw/croak confess/;
 
@@ -38,13 +38,22 @@ use Test2::Harness::UI::Util::HashBase qw{
     +user +user_id
     +project +project_id
 
+    <first_stamp <last_stamp
+
     <passed <failed <retried
     <job0_id <job_ord
 };
 
 sub format_stamp {
+    my $self = shift;
     my $stamp = shift;
     return undef unless $stamp;
+
+    unless (ref($stamp)) {
+        $self->{+FIRST_STAMP} = $self->{+FIRST_STAMP} ? min($self->{+FIRST_STAMP}, $stamp) : $stamp;
+        $self->{+LAST_STAMP}  = $self->{+LAST_STAMP}  ? max($self->{+LAST_STAMP}, $stamp)  : $stamp;
+    }
+
     return DateTime->from_epoch(epoch => $stamp, time_zone => 'local');
 }
 
@@ -346,6 +355,29 @@ sub process_event {
     return;
 }
 
+sub format_duration {
+    my $seconds = shift;
+
+    my $minutes = int($seconds / 60);
+    my $hours   = int($minutes / 60);
+    my $days    = int($hours / 24);
+
+    $minutes %= 60;
+    $hours   %= 24;
+
+    $seconds -= $minutes * 60;
+    $seconds -= $hours * 60 * 60;
+    $seconds -= $days * 60 * 60 * 24;
+
+    my @dur;
+    push @dur => sprintf("%02dd", $days) if $days;
+    push @dur => sprintf("%02dh", $hours) if @dur || $hours;
+    push @dur => sprintf("%02dm", $minutes) if @dur || $minutes;
+    push @dur => sprintf("%07.4fs", $seconds);
+
+    return join ':' => @dur;
+}
+
 sub finish {
     my $self = shift;
     my (@errors) = @_;
@@ -363,6 +395,10 @@ sub finish {
     else {
         my $stat = $self->{+SIGNAL} ? 'canceled' : 'complete';
         $status = {status => $stat, passed => $self->{+PASSED}, failed => $self->{+FAILED}, retried => $self->{+RETRIED}};
+    }
+
+    if ($self->{+FIRST_STAMP} && $self->{+LAST_STAMP}) {
+        $status->{duration} = format_duration($self->{+LAST_STAMP} - $self->{+FIRST_STAMP});
     }
 
     $run->update($status);
@@ -405,7 +441,7 @@ sub _process_event {
         trace_id   => $trace->{uuid},
         job_key    => $job->{job_key},
         event_ord  => $job->{event_ord}++,
-        stamp      => format_stamp($harness->{stamp} || $event->{stamp} || $params{stamp} || time),
+        stamp      => $self->format_stamp($harness->{stamp} || $event->{stamp} || $params{stamp}),
     };
 
     my $orphan = $nested ? 1 : 0;
@@ -553,18 +589,18 @@ sub update_other {
     if (my $job_start = $f->{harness_job_start}) {
         $cols{file} = $job_start->{rel_file} if $job_start->{rel_file};
         $cols{file} ||= $job_start->{file};
-        $cols{start} = format_stamp($job_start->{stamp});
+        $cols{start} = $self->format_stamp($job_start->{stamp});
     }
     if (my $job_launch = $f->{harness_job_launch}) {
         $cols{status} = 'running';
 
         $cols{file} ||= $job_launch->{file};
-        $cols{launch} = format_stamp($job_launch->{stamp});
+        $cols{launch} = $self->format_stamp($job_launch->{stamp});
     }
     if (my $job_end = $f->{harness_job_end}) {
         $cols{file} ||= $job_end->{file};
         $cols{fail} ||= $job_end->{fail} ? 1 : 0;
-        $cols{ended} = format_stamp($job_end->{stamp});
+        $cols{ended} = $self->format_stamp($job_end->{stamp});
 
         $cols{fail} ? $self->{+FAILED}++ : $self->{+PASSED}++;
 

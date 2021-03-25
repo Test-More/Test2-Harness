@@ -67,8 +67,8 @@ sub TO_JSON {
     my $dt = DTF()->parse_datetime( $cols{added} );
 
     # Convert from UTC to localtime
-    $dt->set_time_zone('UTC');
-    $dt->set_time_zone('local');
+#    $dt->set_time_zone('UTC');
+#    $dt->set_time_zone('local');
 
     $cols{added} = $dt->strftime("%Y-%m-%d %I:%M%P");
 

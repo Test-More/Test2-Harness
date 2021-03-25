@@ -45,7 +45,7 @@ use Test2::Harness::UI::Util::HashBase qw{
 sub format_stamp {
     my $stamp = shift;
     return undef unless $stamp;
-    return DateTime->from_epoch(epoch => $stamp, time_zone => 'UTC');
+    return DateTime->from_epoch(epoch => $stamp, time_zone => 'local');
 }
 
 sub schema { $_[0]->{+CONFIG}->schema }

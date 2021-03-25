@@ -139,7 +139,7 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
     tools.prepend(pintool);
 
     pintool.click(function() {
-        var url = link + '/pin';
+        var url = base_uri + 'run/' + item.run_id + '/pin';
         $.ajax(url, {
             'data': { 'content-type': 'application/json' },
             'error': function(a, b, c) { alert("Failed to pin run") },

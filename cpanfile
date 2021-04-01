@@ -34,6 +34,7 @@ requires "Plack::Middleware::DBIx::DisconnectAll" => "0";
 requires "Plack::Runner" => "0";
 requires "Router::Simple" => "0";
 requires "Scalar::Util" => "0";
+requires "Statistics::Basic" => "0";
 requires "Test2" => "1.302164";
 requires "Test2::API" => "1.302166";
 requires "Test2::Formatter::Test2::Composer" => "0";

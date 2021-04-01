@@ -21,7 +21,8 @@ my %WriteMakefileArgs = (
   },
   "DISTNAME" => "Test2-Harness-UI",
   "EXE_FILES" => [
-    "scripts/yath-ui-importer.pl"
+    "scripts/yath-ui-importer.pl",
+    "scripts/yath-ui-sweeper.pl"
   ],
   "LICENSE" => "perl",
   "MIN_PERL_VERSION" => "5.008009",
@@ -60,6 +61,7 @@ my %WriteMakefileArgs = (
     "Plack::Runner" => 0,
     "Router::Simple" => 0,
     "Scalar::Util" => 0,
+    "Statistics::Basic" => 0,
     "Test2" => "1.302164",
     "Test2::API" => "1.302166",
     "Test2::Formatter::Test2::Composer" => 0,
@@ -120,6 +122,7 @@ my %FallbackPrereqs = (
   "Plack::Runner" => 0,
   "Router::Simple" => 0,
   "Scalar::Util" => 0,
+  "Statistics::Basic" => 0,
   "Test2" => "1.302164",
   "Test2::API" => "1.302166",
   "Test2::Formatter::Test2::Composer" => 0,

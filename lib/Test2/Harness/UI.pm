@@ -56,6 +56,7 @@ sub init {
     $router->connect('/event/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});
 
     $router->connect('/durations/:project'                => {controller => 'Test2::Harness::UI::Controller::Durations'});
+    $router->connect('/durations/:project/median'         => {controller => 'Test2::Harness::UI::Controller::Durations', median => 1});
     $router->connect('/durations/:project/:short/:medium' => {controller => 'Test2::Harness::UI::Controller::Durations'});
 
     $router->connect('/coverage/:project' => {controller => 'Test2::Harness::UI::Controller::Coverage'});

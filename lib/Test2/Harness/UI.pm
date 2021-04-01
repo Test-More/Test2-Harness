@@ -15,6 +15,7 @@ use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
 use Test2::Harness::UI::Controller::Job;
 use Test2::Harness::UI::Controller::Download;
+use Test2::Harness::UI::Controller::Sweeper;
 
 use Test2::Harness::UI::Controller::Stream;
 use Test2::Harness::UI::Controller::View;
@@ -70,6 +71,11 @@ sub init {
     $router->connect('/stream'                  => {controller => 'Test2::Harness::UI::Controller::Stream'});
     $router->connect('/stream/:run_id'          => {controller => 'Test2::Harness::UI::Controller::Stream'});
     $router->connect('/stream/:run_id/:job_key' => {controller => 'Test2::Harness::UI::Controller::Stream'});
+
+    $router->connect('/sweeper/:count/days'    => {controller => 'Test2::Harness::UI::Controller::Sweeper', units => 'day'});
+    $router->connect('/sweeper/:count/hours'   => {controller => 'Test2::Harness::UI::Controller::Sweeper', units => 'hour'});
+    $router->connect('/sweeper/:count/minutes' => {controller => 'Test2::Harness::UI::Controller::Sweeper', units => 'minute'});
+    $router->connect('/sweeper/:count/seconds' => {controller => 'Test2::Harness::UI::Controller::Sweeper', units => 'second'});
 }
 
 sub to_app {

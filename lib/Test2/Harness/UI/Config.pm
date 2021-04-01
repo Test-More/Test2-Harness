@@ -48,6 +48,14 @@ sub disconnect {
     return;
 }
 
+sub guess_db_driver {
+    my $self = shift;
+
+    return 'MySQL' if $self->{+DBI_DSN} =~ m/(mysql|maria|percona)/i;
+    return 'PostgreSQL' if $self->{+DBI_DSN} =~ m/(pg|postgre)/i;
+    return 'PostgreSQL'; # Default
+}
+
 sub connect {
     my $self = shift;
 
@@ -63,7 +71,7 @@ sub connect {
         RaiseError => 1,
     );
 
-    my $schema = $ENV{YATH_UI_SCHEMA} //= 'PostgreSQL';
+    my $schema = $ENV{YATH_UI_SCHEMA} //= $self->guess_db_driver();
     $params{mysql_auto_reconnect} = 1 if $schema =~ m/mysql/i;
 
 
@@ -88,7 +96,7 @@ sub schema {
     return $self->{+_SCHEMA} if $self->{+_SCHEMA};
 
     unless ($Test2::Harness::UI::Schema::LOADED) {
-        my $schema = $ENV{YATH_UI_SCHEMA} //= 'PostgreSQL';
+        my $schema = $ENV{YATH_UI_SCHEMA} //= $self->guess_db_driver;
         require(pkg_to_file("Test2::Harness::UI::Schema::$schema"));
     }
 

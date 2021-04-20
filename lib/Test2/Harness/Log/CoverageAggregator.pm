@@ -84,11 +84,6 @@ sub add_coverage {
             }
         }
     }
-
-    # Add anything missing after the above
-    if (my $files = $data->{files}) {
-        $submap->{$_} //= {'*' => {$test => ['+']}} for @$files;
-    }
 }
 
 

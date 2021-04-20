@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix versioning issue
+
 0.000057  2021-04-20 14:03:04-07:00 America/Los_Angeles
 
     - Change from json-view to json-formatter

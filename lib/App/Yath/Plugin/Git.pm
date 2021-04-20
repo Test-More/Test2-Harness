@@ -31,14 +31,24 @@ sub git_output {
     pipe($rh, $wh) or die "No pipe: $!";
     pipe($irh, $iwh) or die "No pipe: $!";
     my $pid = run_cmd(stderr => $iwh, stdout => $wh, command => [$cmd, @args]);
-    waitpid($pid, 0);
-    return if $?;
 
     close($wh);
     close($iwh);
+
+    $rh->blocking(1);
+    my @out = <$rh>;
+
+    waitpid($pid, 0);
+    if($?) {
+        print STDERR <$irh>;
+        return;
+    }
+
+    push @out => <$rh>;
+
     close($irh);
 
-    return <$rh>;
+    return @out;
 }
 
 sub inject_run_data {
@@ -86,25 +96,91 @@ sub inject_run_data {
     return;
 }
 
+sub _subs_from {
+    my $class = shift;
+    my ($from) = @_;
+    my $cmd = $class->git_cmd or return;
+
+    my %changed;
+
+    # Only perl can parse perl, and nothing can parse perl diff. What this does
+    # is take a diff of every file with 100% context so we see the entire file
+    # with the +, minus, or space prefix. As we scan it we look for subs. We
+    # track what files and subs we are in. When we see a change we
+    # {$file}{$sub}++.
+    #
+    # This of course is broken if you make a change between
+    # subs as it will attribute it to the previous sub, however tracking
+    # indentation is equally flawed as things like heredocs and other special
+    # perl things can also trigger that to prematurely think we are out of a
+    # sub.
+    #
+    # PPI and similar do a better job parsing perl, but using them and also
+    # tracking changes from the diff, or even asking them to parse a diff where
+    # some lines are added and others removed is also a huge hassle.
+    #
+    # The current algorith is "good enough", not perfect.
+    my ($file, $sub, $indent);
+    for my $line ($class->git_output('diff', '-U1000000', '-W', '--minimal', $from)) {
+        chomp($line);
+        if ($line =~ m{^(?:---|\+\+\+) [ab]/(.*)$}) {
+            $file = $1;
+            $sub  = '*'; # Wildcard, changes to the code outside of a sub potentially effects all subs
+            $changed{$file} //= {};
+            next;
+        }
+
+        $line =~ m/^( |-|\+)(.*)$/ or next;
+        my ($prefix, $statement) = ($1, $2, $3);
+        my $changed = $prefix eq ' ' ? 0 : 1;
+
+        if ($statement =~ m/^(\s*)sub\s+(\w+)/) {
+            $indent = $1 // '';
+            $sub = $2;
+
+            # 1-line sub: sub foo { ... }
+            if ($statement =~ m/}/) {
+                $changed{$file}{$sub}++ if $changed;
+                $sub = '*';
+                $indent = undef;
+                next;
+            }
+        }
+        elsif(defined($indent) && $statement =~ m/^$indent\}/) {
+            $indent = undef;
+            $sub = "*";
+        }
+
+        $changed{$file}{$sub}++ if $changed;
+    }
+
+    return map {([$_ => sort keys %{$changed{$_}}])} sort keys %changed;
+}
+
 sub changed_files {
     my $class = shift;
     my ($settings) = @_;
+
+    $class->_changed_files($settings->git->change_base);
+}
+
+sub _changed_files {
+    my $class = shift;
+    my ($base) = @_;
+
     my $cmd = $class->git_cmd or return;
 
-    if (my $base = $settings->git->change_base) {
-        my $from = 'HEAD';
+    my $from = 'HEAD';
 
+    if ($base) {
         $from .= "^" while system($cmd => 'merge-base', '--is-ancestor', $from, $base);
-
-        return map { chomp($_); $_ } $class->git_output('diff', $from, '--name-only');
+        return $class->_subs_from($from);
     }
 
-    my @files = map { chomp($_); $_ } $class->git_output('diff', 'HEAD', '--name-only');
+    my @files = $class->_subs_from($from);
+    return @files if @files;
 
-    @files = map { chomp($_); $_ } $class->git_output('diff', 'HEAD^', '--name-only')
-        unless @files;
-
-    return @files;
+    return $class->_subs_from("${from}^");
 }
 
 1;

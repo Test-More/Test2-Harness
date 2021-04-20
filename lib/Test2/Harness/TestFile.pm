@@ -18,6 +18,7 @@ use File::Spec;
 
 use Test2::Harness::Util::HashBase qw{
     <file +relative <_scanned <_headers +_shbang <is_binary <non_perl
+    input env_vars test_args
     queue_args
     job_class
     comment
@@ -404,6 +405,15 @@ sub queue_item {
 
     my $job_class = $self->job_class;
 
+    my $input     = $self->input;
+    my $test_args = $self->test_args;
+
+    my $env_vars = $self->env_vars;
+    if ($env_vars) {
+        my $mix = delete $inject{env_vars};
+        $env_vars = {%$mix, %$env_vars} if $mix;
+    }
+
     return {
         binary      => $binary,
         category    => $category,
@@ -425,6 +435,9 @@ sub queue_item {
         io_events   => $io_events,
         rank        => $self->rank,
 
+        defined($input)          ? (input             => $input)                   : (),
+        defined($env_vars)       ? (env_vars          => $env_vars)                : (),
+        defined($test_args)      ? (test_args         => $test_args)               : (),
         defined($job_class)      ? (job_class         => $job_class)               : (),
         defined($retry)          ? (retry             => $retry)                   : (),
         defined($retry_isolated) ? (retry_isolated    => $retry_isolated)          : (),

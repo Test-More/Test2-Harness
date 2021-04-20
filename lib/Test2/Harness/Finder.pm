@@ -27,7 +27,7 @@ use Test2::Harness::Util::HashBase qw{
     <multi_project
 
     <changed <changed_only <changes_plugin <show_changed_files
-    +coverage_data <coverage_from <maybe_coverage_from <coverage_url_use_post
+    +coverage_data <coverage_from <maybe_coverage_from
 };
 
 sub munge_settings {}
@@ -131,11 +131,6 @@ sub pull_coverage {
             return $aggregator->coverage;
         },
     );
-
-    if ($self->{+COVERAGE_URL_USE_POST}) {
-        $args{http_method} = 'post';
-        $args{http_args}->[0]->{content} = encode_json($changed);
-    }
 
     if ($primary) {
         local $@;
@@ -264,10 +259,13 @@ sub add_changed_to_search {
 
     my $check_plugins = $plugins;
     if (my $plugin = $self->{+CHANGES_PLUGIN}) {
+        $plugin = "App::Yath::Plugin::$plugin"
+            unless $plugin =~ s/^\+//;
+
         $check_plugins = [$plugin];
     }
 
-    for my $plugin (@$plugins) {
+    for my $plugin (@$check_plugins) {
         push @changed => $plugin->changed_files($settings)
             if $plugin->can('changed_files');
     }
@@ -277,7 +275,11 @@ sub add_changed_to_search {
 
     if ($self->{+SHOW_CHANGED_FILES}) {
         print "Found the following changed files:\n";
-        print "  $_\n" for @changed;
+        for my $change (@changed) {
+            my ($file, @parts) = ref($change) ? @$change : ($change, '*');
+            @parts = ('*') unless @parts;
+            print "  $file: ", join(", ", @parts), "\n";
+        }
     }
 
     my $coverage_data = $self->coverage_data($plugins, \@changed);
@@ -289,18 +291,90 @@ sub add_changed_to_search {
         return;
     }
 
-    die "Could not get any coverage data, no way to map changed files to tests.\n"
-        if $self->{+CHANGED_ONLY} && !$coverage_data;
+    if ($self->{+CHANGED_ONLY}) {
+        die "Could not get any coverage data, no way to map changed files to tests.\n"
+            unless $coverage_data;
 
-    my %tests;
-    for my $file (@changed) {
-        my $tests = $coverage_data->{$file} or next;
-        $tests{$_} = 1 for @$tests;
+        die "Can not add test or directory names when using --changed-only (saw: " . join(", " => @$search) . ")\n"
+            if @$search;
     }
 
-    my $new = push @$search => sort keys %tests;
+    my $openmap  = $coverage_data->{openmap}  // {};
+    my $submap   = $coverage_data->{submap}   // {};
+    my $loadmap  = $coverage_data->{loadmap}  // {};
+    my $testmeta = $coverage_data->{testmeta} // {};
+
+    my %tests;
+    for my $change (@changed) {
+        my ($file, @parts) = ref($change) ? @$change : ($change, '*');
+
+        if (!@parts || grep {$_ eq '*'} @parts) {
+            @parts = keys %{$submap->{$file}};
+        }
+
+        my %seen;
+        for my $part (@parts) {
+            next if $seen{$part}++;
+            my $ctests = $submap->{$file}->{$part} or next;
+            for my $test (keys %$ctests) {
+                push @{$tests{$test}->{subs}} => @{$ctests->{$test}};
+            }
+        }
+
+        if (my $ltests = $loadmap->{$file}) {
+            for my $test (keys %$ltests) {
+                push @{$tests{$test}->{loads}} => @{$ltests->{$test}};
+            }
+        }
+
+        if (my $otests = $openmap->{$file}) {
+            for my $test (keys %$otests) {
+                push @{$tests{$test}->{opens}} => @{$otests->{$test}};
+            }
+        }
+    }
+
+    my $count = 0;
+    for my $test (sort keys %tests) {
+        my $meta = $testmeta->{$test} // {type => 'flat'};
+        my $type = $meta->{type};
+        my $manager = $meta->{manager};
+
+        # In these cases we have no choice but to run the entire file
+        if ($type eq 'flat' || !$manager) {
+            $count++;
+            push @$search => $test;
+            next;
+        }
+
+        die "Invalid test type: $type" unless $type eq 'split';
+
+        my $froms = $tests{$test} // [];
+        my $ok = eval {
+            require(mod2file($manager));
+            my $specs = $manager->test_parameters($test, $froms);
+
+            $specs = { run => $specs } unless ref $specs;
+
+            # Intentional skip
+            return 1 if defined $specs->{run} && !$specs->{run};
+
+            $count++;
+            push @$search => [$test, $specs];
+
+            1;
+        };
+        my $err = $@;
+
+        next if $ok;
+
+        $count++;
+        warn "Error processing coverage data for '$test' using manager '$manager'. Running entire test to be safe.\nError:\n====\n$@\n====\n";
+        push @$search => $test;
+    }
+
     if ($self->{+SHOW_CHANGED_FILES}) {
-        print "Found $new test files to run based on changed files.\n\n";
+        print "Found $count test files to run based on changed files.\n\n";
     }
 
     return;
@@ -367,7 +441,29 @@ sub find_project_files {
     my $durations = $self->duration_data($plugins);
 
     my (%seen, @tests, @dirs);
-    for my $path (@$search) {
+    for my $item (@$search) {
+        my ($path, $test_params);
+
+        if (ref $item) {
+            ($path, $test_params) = @$item;
+        }
+        else {
+            my ($type, $data);
+            ($path, $type, $data) = split /(:<|:@|:=)/, $item, 2;
+            if ($type && $data) {
+                $test_params = {};
+                if ($type eq ':<') {
+                    $test_params->{stdin} = $data;
+                }
+                elsif ($type eq ':@') {
+                    $test_params->{argv} = decode_json($data);
+                }
+                elsif ($type eq ':=') {
+                    $test_params->{env} = decode_json($data);
+                }
+            }
+        }
+
         push @dirs => $path and next if -d $path;
 
         unless(-f $path) {
@@ -392,6 +488,12 @@ sub find_project_files {
             }
 
             next;
+        }
+
+        if ($test_params) {
+            $test->set_input($test_params->{stdin})    if $test_params->{stdin};
+            $test->set_test_args($test_params->{argv}) if $test_params->{argv};
+            $test->set_env_vars($test_params->{env})   if $test_params->{env};
         }
 
         push @tests => $test;

@@ -4,6 +4,76 @@ use warnings;
 
 my $args = join ' ' => @ARGV;
 
+my $afile = <<'EOT';
+diff --git a/a.file b/a.file
+index a7175683..7646fa7b 100644
+--- a/a.file
++++ b/a.file
+@@ garbage @@
+ package A;
+ sub sub1 {
+-    my ($self) = @_;
++    my $self = shift;
+     ...
+ }
+ 
+ sub sub2 {
+     ...
+ }
+ 
++my @foo = ("X", "Y");
+ 
+- sub sub3 { ... }
+ 
+-my @foo = ("X", "Y");
+ 
+  1;
+EOT
+
+my $bfile = <<'EOT';
+diff --git a/b.file b/b.file
+index a7175683..7646fa7b 100644
+--- a/b.file
++++ b/b.file
+@@ garbage @@
+ package B;
+ 
++our $global = "yes";
+ 
+ sub sub1 {
+-    my ($self) = @_;
++    my $self = shift;
+     ...
+ }
+ 
+ sub sub2 {
+     ...
+ }
+ 
+  1;
+EOT
+
+my $cfile = <<'EOT';
+diff --git a/c.file b/c.file
+index a7175683..7646fa7b 100644
+--- a/c.file
++++ b/c.file
+@@ garbage @@
+ package C;
+ 
+ sub sub1 {
+-    my ($self) = @_;
++    my $self = shift;
+     ...
+ }
+ 
+ sub sub2 {
+     ...
+ }
+ 
+  1;
+EOT
+
 my %out = (
     'rev-parse HEAD'              => [0, "4570988f2c2bd26a1691a82766d5bf5c7524bcea\n"],
     'rev-parse --short HEAD'      => [0, "4570988\n"],
@@ -12,15 +82,19 @@ my %out = (
 
     'merge-base --is-ancestor HEAD master' => [1, ""],
     'diff HEAD --name-only'                => [0, ""],
+    'diff -U1000000 -W --minimal HEAD'     => [0, ""],
 
     'merge-base --is-ancestor HEAD^ master' => [1, ""],
     'diff HEAD^ --name-only'                => [0, "a.file\n"],
+    'diff -U1000000 -W --minimal HEAD^'     => [0, $afile],
 
     'merge-base --is-ancestor HEAD^^ master' => [1, ""],
     'diff HEAD^^ --name-only'                => [0, "a.file\nb.file\n"],
+    'diff -U1000000 -W --minimal HEAD^^'     => [0, $afile . $bfile],
 
     'merge-base --is-ancestor HEAD^^^ master' => [0, ""],
     'diff HEAD^^^ --name-only'                => [0, "a.file\nb.file\nc.file\n"],
+    'diff -U1000000 -W --minimal HEAD^^^'     => [0, $afile . $bfile . $cfile],
 );
 
 if (my $res = $out{$args}) {
@@ -31,3 +105,74 @@ if (my $res = $out{$args}) {
 
 print STDERR "Invalid args: $args\n";
 exit 1;
+
+__END__
+
+diff --git a/lib/App/Yath/Plugin/Git.pm b/lib/App/Yath/Plugin/Git.pm
+index a7175683..7646fa7b 100644
+--- a/lib/App/Yath/Plugin/Git.pm
++++ b/lib/App/Yath/Plugin/Git.pm
+@@ -1,170 +1,218 @@
+ package App::Yath::Plugin::Git;
+ use strict;
+ use warnings;
+ 
+ our $VERSION = '1.000045';
+ 
+ use IPC::Cmd qw/can_run/;
+ use Test2::Harness::Util::IPC qw/run_cmd/;
+ use parent 'App::Yath::Plugin';
+ 
+ use App::Yath::Options;
+ 
+ option_group {prefix => 'git', category => "Git Options"} => sub {
+     option change_base => (
+         type => 's',
+         description => "Find files changed by all commits in the current branch from most recent stopping when a commit is found that is also present in the history of 
+the branch/commit specified as the change base.",
+         long_examples  => [" master", " HEAD^", " df22abe4"],
+     );
+ };
+ 
+ my $GIT_CMD = can_run('git');
+ sub git_cmd { $ENV{GIT_COMMAND} || $GIT_CMD }
+ 
+ sub git_output {
+     my $class = shift;
+     my (@args) = @_;
+ 
+     my $cmd = $class->git_cmd or return;
+ 
+     my ($rh, $wh, $irh, $iwh);
+     pipe($rh, $wh) or die "No pipe: $!";
+     pipe($irh, $iwh) or die "No pipe: $!";
+     my $pid = run_cmd(stderr => $iwh, stdout => $wh, command => [$cmd, @args]);
+-    waitpid($pid, 0);
+-    return if $?;
+ 
+     close($wh);
+     close($iwh);
++
++    waitpid($pid, 0);
++    if($?) {
++        print STDERR <$irh>;
++        return;
++    }
++
+     close($irh);
+ 
+     return <$rh>;
+ }
+ 
+ sub inject_run_data {
+     my $class  = shift;
+     my %params = @_;
+ 
+     my $meta   = $params{meta};
+     my $fields = $params{fields};
+ 
+     my $long_sha  = $ENV{GIT_LONG_SHA};
+     my $short_sha = $ENV{GIT_SHORT_SHA};
+     my $status    = $ENV{GIT_STATUS};
+     my $branch    = $ENV{GIT_BRANCH};
+

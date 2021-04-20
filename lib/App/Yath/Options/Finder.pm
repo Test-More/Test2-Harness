@@ -79,10 +79,6 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.json']
     );
 
-    option coverage_url_use_post => (
-        description => 'If coverage_from is a url, use the http POST method with a list of changed files. This allows the server to tell us what tests to run instead of downloading all the coverage data and determining what tests to run from that.',
-    );
-
     option durations => (
         type => 's',
 

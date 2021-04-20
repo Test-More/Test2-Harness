@@ -6,7 +6,23 @@ our $VERSION = '1.000045';
 
 use Config qw/%Config/;
 use File::Spec;
-use goto::file();
+
+# For some reason Filter::Util::Class breaks the STDIN filehandle. This works
+# around that.
+my $FIX_STDIN;
+BEGIN {
+    require goto::file;
+    no strict 'refs';
+    no warnings 'redefine';
+
+    my $orig = goto::file->can('filter');
+    *goto::file::filter = sub {
+        my $out = $orig->(@_);
+        seek(STDIN, 0, 0) if $FIX_STDIN;
+        return $out;
+    };
+}
+
 use Test2::Harness::IPC();
 
 use Carp qw/confess/;
@@ -359,8 +375,9 @@ sub update_io {
 
     my $out_fh = open_file($job->out_file, '>');
     my $err_fh = open_file($job->err_file, '>');
+
     my $in_file = $job->in_file;
-    my $in_fh = open_file($in_file,  '<') if $in_file;
+    my $in_fh = open_file($in_file, '<') if $in_file;
 
     $out_fh->autoflush(1);
     $err_fh->autoflush(1);
@@ -380,6 +397,8 @@ sub update_io {
     swap_io(\*STDIN,  $in_fh,  $die, '<&') if $in_file;
     swap_io(\*STDOUT, $out_fh, $die, '>&');
     swap_io(\*STDERR, $err_fh, $die, '>&');
+
+    $FIX_STDIN = 1 if $in_file;
 
     return;
 }

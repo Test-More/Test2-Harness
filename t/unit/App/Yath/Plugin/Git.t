@@ -154,14 +154,18 @@ subtest changed_files => sub {
 
     is(
         [$CLASS->changed_files($settings)],
-        ['a.file'],
+        [['a.file', '*', 'sub1', 'sub3']],
         "Got changed file"
     );
 
     $settings->git->field(change_base => 'master');
     is(
         [$CLASS->changed_files($settings)],
-        ['a.file', 'b.file', 'c.file'],
+        [
+            ['a.file', '*', 'sub1', 'sub3'],
+            ['b.file', '*', 'sub1'],
+            ['c.file', 'sub1'],
+        ],
         "Got changed files from change_base"
     );
 };

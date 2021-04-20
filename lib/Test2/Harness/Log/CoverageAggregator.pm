@@ -4,7 +4,13 @@ use warnings;
 
 our $VERSION = '1.000045';
 
-use Test2::Harness::Util::HashBase qw/<coverage_data/;
+use Test2::Harness::Util::HashBase qw/<coverage <job_map/;
+
+sub init {
+    my $self = shift;
+    $self->{+COVERAGE} //= {};
+    $self->{+JOB_MAP}  //= {};
+}
 
 sub process_event {
     my $self = shift;
@@ -13,37 +19,80 @@ sub process_event {
     return unless $e;
     return unless keys %$e;
 
+    my $job_map = $self->{+JOB_MAP} //= {};
     my $job_id = $e->{job_id} // 0;
-    my $set = $self->{+COVERAGE_DATA}->{$job_id} //= {};
 
-    if ($e->{facet_data}->{coverage}) {
-        push @{$set->{files}} => @{$e->{facet_data}->{coverage}->{files}};
+    my $test = $job_map->{$job_id};
+    unless ($test) {
+        if (my $start = $e->{facet_data}->{harness_job_start}) {
+            $test = $start->{rel_file};
+        }
+        elsif (my $end = $e->{facet_data}->{harness_job_end}) {
+            $test = $end->{rel_file};
+        }
+
+        $job_map->{$job_id} = $test if $test;
     }
 
-    if (my $end = $e->{facet_data}->{harness_job_end}) {
-        $set->{test} //= $end->{rel_file};
-    }
-
-    if (my $start = $e->{facet_data}->{harness_job_start}) {
-        $set->{test} //= $start->{rel_file};
+    if (my $c = $e->{facet_data}->{coverage}) {
+        die "Got coverage data before test start! (Weird event order?)" unless $test;
+        $self->add_coverage($test, $c);
     }
 }
 
-sub coverage {
+sub add_coverage {
     my $self = shift;
+    my ($test, $data) = @_;
+    use Data::Dumper;
+    print Dumper($test, $data);
 
-    my $coverage = {};
+    my $coverage    = $self->{+COVERAGE}    //= {};
+    my $submap      = $coverage->{submap}   //= {};
+    my $openmap     = $coverage->{openmap}  //= {};
+    my $loadmap     = $coverage->{loadmap}  //= {};
+    my $alltestmeta = $coverage->{testmeta} //= {};
+    my $testmeta    = $alltestmeta->{$test} //= {};
 
-    for my $job (values %{$self->{+COVERAGE_DATA} // {}}) {
-        my $test  = $job->{test}  or next;
-        my $files = $job->{files} or next;
-        next unless @$files;
-
-        push @{$coverage->{$_}} => $test for @$files;
+    if (my $type = $data->{test_type}) {
+        $testmeta->{type} = $type;
     }
 
-    return $coverage;
+    if (my $manager = $data->{from_manager}) {
+        $testmeta->{manager} = $manager;
+    }
+
+    if (my $omap = $data->{openmap}) {
+        for my $source (keys %$omap) {
+            my $froms = $omap->{$source} || next;
+            push @{$openmap->{$source}->{$test}} => @$froms;
+        }
+    }
+
+    if (my $smap = $data->{submap}) {
+        for my $source (keys %$smap) {
+            my $subs = $smap->{$source} || next;
+            for my $sub (keys %$subs) {
+                my $froms = $subs->{$sub} || next;
+                # The sub being '*' *almost* always means the file was used/required
+                # The other cases for this are similar magic, so lump them in
+                if ($sub eq '*') {
+                    push @{$loadmap->{$source}->{$test}} => @$froms;
+                }
+                else {
+                    my $clean = $sub;
+                    $clean =~ s/(?<!^)\b.*$//;
+                    push @{$submap->{$source}->{$clean}->{$test}} => @$froms;
+                }
+            }
+        }
+    }
+
+    # Add anything missing after the above
+    if (my $files = $data->{files}) {
+        $submap->{$_} //= {'*' => {$test => ['+']}} for @$files;
+    }
 }
+
 
 1;
 
@@ -57,7 +106,7 @@ __END__
 =head1 NAME
 
 Test2::Harness::Log::CoverageAggregator - Module for aggregating coverage data
-from a strema of events.
+from a stream of events.
 
 =head1 DESCRIPTION
 

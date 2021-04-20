@@ -43,8 +43,6 @@ sub process_event {
 sub add_coverage {
     my $self = shift;
     my ($test, $data) = @_;
-    use Data::Dumper;
-    print Dumper($test, $data);
 
     my $coverage    = $self->{+COVERAGE}    //= {};
     my $submap      = $coverage->{submap}   //= {};

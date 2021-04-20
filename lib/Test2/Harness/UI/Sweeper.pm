@@ -2,7 +2,7 @@ package Test2::Harness::UI::Sweeper;
 use strict;
 use warnings;
 
-our $VERSION = '0.000058';
+our $VERSION = '0.000059';
 
 use Test2::Harness::UI::Util::HashBase qw{
     <config

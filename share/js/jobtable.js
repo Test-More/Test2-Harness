@@ -90,8 +90,8 @@ t2hui.jobtable.tool_builder = function(item, tools, data) {
         $.ajax(uri, {
             'data': { 'content-type': 'application/json' },
             'success': function(job) {
-                $('#modal_body').empty();
-                $('#modal_body').jsonView(job.parameters, {collapsed: true});
+                var formatter = new JSONFormatter(job.parameters, 2);
+                $('#modal_body').html(formatter.render());
             },
         });
     });

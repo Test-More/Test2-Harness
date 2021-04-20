@@ -96,7 +96,8 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
     var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
     params.click(function() {
-        $('#modal_body').jsonView(item.parameters, {collapsed: true});
+        var formatter = new JSONFormatter(item.parameters, 2);
+        $('#modal_body').html(formatter.render());
         $('#free_modal').slideDown();
     });
 

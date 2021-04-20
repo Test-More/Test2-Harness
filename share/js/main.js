@@ -8,7 +8,8 @@ $(function() {
     $("div.json-view").each(function() {
         var div = $(this);
         var data = div.attr('data');
-        div.jsonView(data, {collapsed: true});
+        var formatter = new JSONFormatter(JSON.parse(data));
+        div.append(formatter.render());
     });
 
     var modal = $("div#free_modal");

@@ -214,7 +214,8 @@ function FieldTable(spec) {
                     'success': function(field) {
                         var data = me.spec.dynamic_field_builder ? me.spec.dynamic_field_builder(field, name) : field;
                         $('#modal_body').empty();
-                        $('#modal_body').jsonView(data, {collapsed: true});
+                        var formatter = new JSONFormatter(data, 2);
+                        $('#modal_body').html(formatter.render());
                     },
                 });
             });

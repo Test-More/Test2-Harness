@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Change from json-vie to json-formatter
+
 0.000056  2021-04-01 13:41:43-07:00 America/Los_Angeles
 
     - Add sweeper controller

@@ -196,7 +196,8 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
                 'data': { 'content-type': 'application/json' },
                 'success': function(event) {
                     $('#modal_body').empty();
-                    $('#modal_body').jsonView(event.facets, {collapsed: true});
+                    var formatter = new JSONFormatter(event.facets, 2);
+                    $('#modal_body').html(formatter.render());
                 },
             });
         });
@@ -216,7 +217,8 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
                 'data': { 'content-type': 'application/json' },
                 'success': function(event) {
                     $('#modal_body').empty();
-                    $('#modal_body').jsonView(event.orphan, {collapsed: true});
+                    var formatter = new JSONFormatter(event.orphan, 2);
+                    $('#modal_body').html(formatter.render());
                 },
             });
         });

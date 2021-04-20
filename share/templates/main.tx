@@ -11,8 +11,8 @@
 <script src="<: $base_uri :>js/datatables.min.js"></script>
 <!-- <link rel="stylesheet" type="text/css" href="<: $base_uri :>css/datatables.min.css"> -->
 
-<script src="<: $base_uri :>js/jquery.json-view.min.js"></script>
-<link rel="stylesheet" type="text/css" href="<: $base_uri :>css/jquery.json-view.min.css">
+<script src="<: $base_uri :>js/json-formatter.umd.js"></script>
+<link rel="stylesheet" type="text/css" href="<: $base_uri :>css/json-formatter.css">
 
 <script src="<: $base_uri :>js/main.js"></script>
 <script src="<: $base_uri :>js/fieldtable.js"></script>

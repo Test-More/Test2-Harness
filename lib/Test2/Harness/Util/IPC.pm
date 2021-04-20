@@ -2,7 +2,7 @@ package Test2::Harness::Util::IPC;
 use strict;
 use warnings;
 
-our $VERSION = '1.000045';
+our $VERSION = '1.000046';
 
 use Cwd qw/getcwd/;
 use Config qw/%Config/;

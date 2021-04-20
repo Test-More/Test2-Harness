@@ -1,4 +1,5 @@
 use Test2::V0;
+use Test2::Plugin::Cover;
 
 subtest outer => sub {
     ok(1, "pass");

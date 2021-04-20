@@ -47,7 +47,7 @@ my $user = $config->schema->resultset('User')->create({username => 'root', passw
 
 my %projects;
 my @runs;
-for my $file (qw/fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2 timing.jsonl.bz2 fail_once.jsonl.bz2/) {
+for my $file (qw/coverage.jsonl.bz2 fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2 timing.jsonl.bz2 fail_once.jsonl.bz2/) {
     my ($project, $version);
     if ($file =~ m/moose/) {
         $project = 'Moose';

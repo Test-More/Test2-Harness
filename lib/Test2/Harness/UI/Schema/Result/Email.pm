@@ -7,6 +7,6 @@ use Carp qw/confess/;
 confess "You must first load a Test2::Harness::UI::Schema::NAME module"
     unless $Test2::Harness::UI::Schema::LOADED;
 
-our $VERSION = '0.000057';
+our $VERSION = '0.000058';
 
 1;

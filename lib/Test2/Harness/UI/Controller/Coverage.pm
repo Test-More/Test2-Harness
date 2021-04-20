@@ -22,64 +22,24 @@ sub handle {
     my $res = resp(200);
 
     die error(404 => 'Missing route') unless $route;
-    my $project_name = $route->{project} or die error(404 => 'No project');
+    my $source = $route->{source} or die error(404 => 'No source');
 
-    my $schema  = $self->{+CONFIG}->schema;
-    my $project = $schema->resultset('Project')->find({name => $project_name});
+    my $schema = $self->{+CONFIG}->schema;
 
     my $data;
-    if ($req->method eq 'POST') {
-        my $files;
-        eval { $files = decode_json($req->content); 1 } or warn $@;
-        die error(400 => 'POST content must be a JSON array (list of filenames)') unless $files && ref($files) eq 'ARRAY';
-        my $dbh = $self->{+CONFIG}->connect;
-
-        my $placeholders = join ',' => map { '?' } @$files;
-        my $sth = $dbh->prepare(<<"        EOT");
-            SELECT DISTINCT(jobs.file) AS file FROM jobs
-              JOIN coverage USING(job_key)
-              JOIN runs     USING(run_id)
-             WHERE runs.project_id = ?
-               AND coverage.file IN ($placeholders)
-        EOT
-
-        $sth->execute($project->project_id, @$files) or die $sth->errstr;
-        my $rows = $sth->fetchall_arrayref;
-
-        $data = [map { $_->[0] } @$rows];
+    if (my $project = $schema->resultset('Project')->find({name => $source})) {
+        my $run = $project->runs->search({coverage => {'IS NOT' => undef}}, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first;
+        $data = $run ? $run->coverage // {} : {};
     }
-    elsif ($req->method eq 'GET') {
-        my $dbh = $self->{+CONFIG}->connect;
-
-        my $sth = $dbh->prepare(<<"        EOT");
-            SELECT DISTINCT
-                   coverage.file AS source,
-                   jobs.file     AS test
-              FROM coverage
-              JOIN jobs USING(job_key)
-              JOIN runs USING(run_id)
-             WHERE runs.project_id = ?
-        EOT
-
-        $data = {};
-        $sth->execute($project->project_id) or die $sth->errstr;
-        for my $row (@{$sth->fetchall_arrayref}) {
-            push @{$data->{$row->[0]}} => $row->[1];
-        }
+    elsif (my $run = $schema->resultset('Run')->find({run_id => $source})) {
+        $data = $run->coverage // {};
     }
     else {
         die error(405);
     }
 
-    my $ct ||= lc($req->headers->{'content-type'} || $req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');
-    $res->content_type($ct);
-
-    if ($ct eq 'application/json') {
-        $res->raw_body($data);
-    }
-    else {
-        $res->raw_body("<pre>" . encode_pretty_json($data) . "</pre>");
-    }
+    $res->content_type('application/json');
+    $res->raw_body($data);
 
     return $res;
 }

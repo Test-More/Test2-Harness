@@ -54,34 +54,6 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
 
 {
     package    #
-        Test2::Harness::UI::Schema::Result::Coverage;
-
-    use base 'DBIx::Class::Core';
-    __PACKAGE__->load_components(
-        "InflateColumn::DateTime",
-        "InflateColumn::Serializer",
-        "InflateColumn::Serializer::JSON",
-        "Tree::AdjacencyList",
-        "UUIDColumns",
-    );
-    __PACKAGE__->table("coverage");
-    __PACKAGE__->add_columns(
-        "job_key",
-        {data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36},
-        "file",
-        {data_type => "varchar", is_nullable => 0, size => 512},
-    );
-    __PACKAGE__->belongs_to(
-        "job_key",
-        "Test2::Harness::UI::Schema::Result::Job",
-        {job_key       => "job_key"},
-        {is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT"},
-    );
-
-}
-
-{
-    package    #
         Test2::Harness::UI::Schema::Result::Email;
 
     use base 'DBIx::Class::Core';
@@ -297,12 +269,6 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
     );
     __PACKAGE__->set_primary_key("job_key");
     __PACKAGE__->add_unique_constraint("job_id", ["job_id", "job_try"]);
-    __PACKAGE__->has_many(
-        "coverages",
-        "Test2::Harness::UI::Schema::Result::Coverage",
-        {"foreign.job_key" => "self.job_key"},
-        {cascade_copy      => 0, cascade_delete => 0},
-    );
     __PACKAGE__->has_many(
         "events",
         "Test2::Harness::UI::Schema::Result::Event",
@@ -541,6 +507,8 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
         "fields",
         {data_type => "longtext", is_nullable => 1},
         "parameters",
+        {data_type => "longtext", is_nullable => 1},
+        "coverage",
         {data_type => "longtext", is_nullable => 1},
     );
     __PACKAGE__->set_primary_key("run_id");

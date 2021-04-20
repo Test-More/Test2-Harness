@@ -63,34 +63,6 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
 
 {
     package    #
-        Test2::Harness::UI::Schema::Result::Coverage;
-
-    use base 'DBIx::Class::Core';
-    __PACKAGE__->load_components(
-        "InflateColumn::DateTime",
-        "InflateColumn::Serializer",
-        "InflateColumn::Serializer::JSON",
-        "Tree::AdjacencyList",
-        "UUIDColumns",
-    );
-    __PACKAGE__->table("coverage");
-    __PACKAGE__->add_columns(
-        "job_key",
-        {data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16},
-        "file",
-        {data_type => "text", is_nullable => 0},
-    );
-    __PACKAGE__->belongs_to(
-        "job_key",
-        "Test2::Harness::UI::Schema::Result::Job",
-        {job_key       => "job_key"},
-        {is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION"},
-    );
-
-}
-
-{
-    package    #
         Test2::Harness::UI::Schema::Result::Email;
 
     use base 'DBIx::Class::Core';
@@ -306,12 +278,6 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
     );
     __PACKAGE__->set_primary_key("job_key");
     __PACKAGE__->add_unique_constraint("jobs_job_id_job_try_key", ["job_id", "job_try"]);
-    __PACKAGE__->has_many(
-        "coverages",
-        "Test2::Harness::UI::Schema::Result::Coverage",
-        {"foreign.job_key" => "self.job_key"},
-        {cascade_copy      => 0, cascade_delete => 0},
-    );
     __PACKAGE__->has_many(
         "events",
         "Test2::Harness::UI::Schema::Result::Event",
@@ -587,6 +553,8 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         "fields",
         {data_type => "jsonb", is_nullable => 1},
         "parameters",
+        {data_type => "jsonb", is_nullable => 1},
+        "coverage",
         {data_type => "jsonb", is_nullable => 1},
     );
     __PACKAGE__->set_primary_key("run_id");

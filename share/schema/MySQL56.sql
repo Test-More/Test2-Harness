@@ -135,6 +135,7 @@ CREATE TABLE runs (
     concurrency     INTEGER         DEFAULT NULL,
     fields          LONGTEXT        DEFAULT NULL,
     parameters      LONGTEXT        DEFAULT NULL,
+    coverage        LONGTEXT        DEFAULT NULL,
 
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
@@ -187,15 +188,6 @@ CREATE INDEX job_look ON jobs(job_id, job_try);
 CREATE INDEX job_runs ON jobs(run_id);
 CREATE INDEX job_fail ON jobs(fail);
 CREATE INDEX job_file ON jobs(file);
-
-CREATE TABLE coverage (
-    job_key     CHAR(36)        NOT NULL,
-    file        varchar(512)    NOT NULL,
-
-    FOREIGN KEY (job_key) REFERENCES jobs(job_key)
-) ROW_FORMAT=COMPRESSED;
-CREATE INDEX coverage_files ON coverage(file);
-CREATE INDEX coverage_jobs  ON coverage(job_key);
 
 CREATE TABLE events (
     event_id        CHAR(36)    NOT NULL PRIMARY KEY,

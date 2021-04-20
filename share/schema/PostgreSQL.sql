@@ -150,6 +150,7 @@ CREATE TABLE runs (
     concurrency     INTEGER         DEFAULT NULL,
     fields          JSONB           DEFAULT NULL,
     parameters      JSONB           DEFAULT NULL,
+    coverage        JSONB           DEFAULT NULL,
 
     UNIQUE(run_ord)
 );
@@ -197,13 +198,6 @@ CREATE INDEX IF NOT EXISTS job_look ON jobs(job_id, job_try);
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
-
-CREATE TABLE coverage (
-    job_key     UUID    NOT NULL REFERENCES jobs(job_key),
-    file        TEXT    NOT NULL
-);
-CREATE INDEX IF NOT EXISTS coverage_files ON coverage(file);
-CREATE INDEX IF NOT EXISTS coverage_jobs  ON coverage(job_key);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,

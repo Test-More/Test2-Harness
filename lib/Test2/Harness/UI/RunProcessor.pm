@@ -15,6 +15,9 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use JSON::PP();
+
+use Test2::Harness::Log::CoverageAggregator;
 
 use Test2::Harness::UI::Util::ImportModes qw{
     %MODES
@@ -94,8 +97,6 @@ sub init {
 
     $self->{+JOB_ORD} = 1;
     $self->{+JOB0_ID} = gen_uuid();
-
-    $self->{+COVERAGE} = [];
 }
 
 sub flush_all {
@@ -163,15 +164,24 @@ sub flush {
     return $flush;
 }
 
+sub add_coverage {
+    my $self = shift;
+    my ($test, $data) = @_;
+
+    my $ca = $self->{+COVERAGE} //= Test2::Harness::Log::CoverageAggregator->new();
+
+    $ca->add_coverage($test, $data);
+
+    return;
+}
+
 sub flush_coverage {
     my $self = shift;
 
-    my $coverage = $self->{+COVERAGE};
-    if (@$coverage) {
-        local $ENV{DBIC_DT_SEARCH_OK} = 1;
-        $self->schema->resultset('Coverage')->populate($coverage);
-        @$coverage = ();
-    }
+    my $ca = $self->{+COVERAGE} or return;
+    my $run = $self->run;
+
+    $run->update({coverage => encode_json($ca->coverage)});
 }
 
 my $total = 0;
@@ -309,7 +319,6 @@ sub get_job {
 
     # In case we are resuming.
     $result->events->delete_all();
-    $result->coverages->delete_all();
 
     $job = {
         job_key => $key,
@@ -457,7 +466,7 @@ sub _process_event {
     else {
         # Handle coverage
         if (my $coverage = $f->{coverage}) {
-            push @{$self->{+COVERAGE}} => map { +{file => $_, job_key => $job->{job_key}} } @{$coverage->{files}};
+            $self->add_coverage($job->{result}->file, $coverage);
         }
 
         $e->{facets}      = $fjson;

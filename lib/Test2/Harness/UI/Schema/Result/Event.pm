@@ -42,6 +42,7 @@ sub TO_JSON {
 
     # Inflate
     $cols{facets} = $self->facets;
+    $cols{orphan} = $self->orphan;
     $cols{lines}  = Test2::Formatter::Test2::Composer->render_super_verbose($cols{facets});
 
     return \%cols;

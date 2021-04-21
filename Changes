@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Require updated Test2::Plugin::Cover
+
 1.000047  2021-04-20 11:42:49-07:00 America/Los_Angeles
 
     - Remove some coverage data that was nto intended to be present (false data)

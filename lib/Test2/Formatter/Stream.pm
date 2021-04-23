@@ -16,7 +16,7 @@ use Test2::Harness::Util qw/hub_truth apply_encoding/;
 
 use Test2::Util qw/get_tid ipc_separator/;
 
-use base qw/Test2::Formatter/;
+use parent qw/Test2::Formatter/;
 use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id -ugids/;
 
 BEGIN {

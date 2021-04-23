@@ -4,7 +4,7 @@ use Test2::API qw/context/;
 {
     $INC{'My/Event.pm'} = 1;
     package My::Event;
-    use base 'Test2::Event';
+    use parent 'Test2::Event';
 
     use Test2::Util::Facets2Legacy ':ALL';
 

@@ -5,7 +5,7 @@ use warnings;
 
 use Carp qw/confess/;
 
-our $VERSION = '0.000059';
+our $VERSION = '0.000060';
 
 BEGIN {
     confess "You must first load a Test2::Harness::UI::Schema::NAME module"

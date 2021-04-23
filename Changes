@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Update coverage tools
+
 0.000058  2021-04-20 14:14:50-07:00 America/Los_Angeles
 
     - Fix versioning issue

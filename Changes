@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000048  2021-04-23 11:54:37-07:00 America/Los_Angeles
+
     - Require updated Test2::Plugin::Cover
     - Better coverage handling, sync with newer Test2::Plguin::Cover
 

@@ -299,9 +299,7 @@ sub add_changed_to_search {
             if @$search;
     }
 
-    my $openmap  = $coverage_data->{openmap}  // {};
-    my $submap   = $coverage_data->{submap}   // {};
-    my $loadmap  = $coverage_data->{loadmap}  // {};
+    my $filemap  = $coverage_data->{files}    // {};
     my $testmeta = $coverage_data->{testmeta} // {};
 
     my %tests;
@@ -309,25 +307,25 @@ sub add_changed_to_search {
         my ($file, @parts) = ref($change) ? @$change : ($change, '*');
 
         if (!@parts || grep {$_ eq '*'} @parts) {
-            @parts = keys %{$submap->{$file}};
+            @parts = keys %{$filemap->{$file}};
         }
 
         my %seen;
         for my $part (@parts) {
             next if $seen{$part}++;
-            my $ctests = $submap->{$file}->{$part} or next;
+            my $ctests = $filemap->{$file}->{$part} or next;
             for my $test (keys %$ctests) {
                 push @{$tests{$test}->{subs}} => @{$ctests->{$test}};
             }
         }
 
-        if (my $ltests = $loadmap->{$file}) {
+        if (my $ltests = $filemap->{$file}->{'*'}) {
             for my $test (keys %$ltests) {
                 push @{$tests{$test}->{loads}} => @{$ltests->{$test}};
             }
         }
 
-        if (my $otests = $openmap->{$file}) {
+        if (my $otests = $filemap->{$file}->{'<>'}) {
             for my $test (keys %$otests) {
                 push @{$tests{$test}->{opens}} => @{$otests->{$test}};
             }

@@ -45,9 +45,7 @@ sub add_coverage {
     my ($test, $data) = @_;
 
     my $coverage    = $self->{+COVERAGE}    //= {};
-    my $submap      = $coverage->{submap}   //= {};
-    my $openmap     = $coverage->{openmap}  //= {};
-    my $loadmap     = $coverage->{loadmap}  //= {};
+    my $files       = $coverage->{files}    //= {};
     my $alltestmeta = $coverage->{testmeta} //= {};
     my $testmeta    = $alltestmeta->{$test} //= {};
 
@@ -59,27 +57,19 @@ sub add_coverage {
         $testmeta->{manager} = $manager;
     }
 
-    if (my $omap = $data->{openmap}) {
-        for my $source (keys %$omap) {
-            my $froms = $omap->{$source} || next;
-            push @{$openmap->{$source}->{$test}} => @$froms;
-        }
-    }
+    if (my $new = $data->{files}) {
+        for my $file (keys %$new) {
+            my $ndata = $new->{$file} // next;
+            my $fdata = $files->{$file} //= {};
 
-    if (my $smap = $data->{submap}) {
-        for my $source (keys %$smap) {
-            my $subs = $smap->{$source} || next;
-            for my $sub (keys %$subs) {
-                my $froms = $subs->{$sub} || next;
-                # The sub being '*' *almost* always means the file was used/required
-                # The other cases for this are similar magic, so lump them in
-                if ($sub eq '*') {
-                    push @{$loadmap->{$source}->{$test}} => @$froms;
+            for my $sub (keys %$ndata) {
+                my $nsub = $ndata->{$sub} // next;
+                my $fsub = $fdata->{$sub} //= {};
+                if ($fsub->{$test}) {
+                    $fsub->{$test} = [@{$fsub->{$test}}, @$nsub];
                 }
                 else {
-                    my $clean = $sub;
-                    $clean =~ s/(?<!^)\b.*$//;
-                    push @{$submap->{$source}->{$clean}->{$test}} => @$froms;
+                    $fsub->{$test} = $nsub;
                 }
             }
         }

@@ -15,7 +15,7 @@ close($fh);
 
 yath(
     command => 'test',
-    args    => ["-I$dir/lib", $dir, '--ext=tx', "--write-coverage=$cfile"],
+    args    => ["-I$dir/lib", $dir, '--ext=tx', "--write-coverage=$cfile", '-v'],
     exit    => 0,
 );
 
@@ -27,53 +27,61 @@ is(
     $coverage,
     {
         'testmeta' => {
-            't/integration/coverage/a.tx'    => {type => 'split', manager => 'Manager'},
-            't/integration/coverage/b.tx'    => {type => 'flat'},
-            't/integration/coverage/c.tx'    => {type => 'split', manager => 'Manager'},
-            't/integration/coverage/open.tx' => {type => 'flat'},
-            't/integration/coverage/x.tx'    => {type => 'flat'},
-            't/integration/coverage/once.tx' => {type => 'flat'},
+            't/integration/coverage/a.tx'    => {'manager' => 'Manager', 'type' => 'split'},
+            't/integration/coverage/b.tx'    => {'type'    => 'flat'},
+            't/integration/coverage/c.tx'    => {'manager' => 'Manager', 'type' => 'split'},
+            't/integration/coverage/once.tx' => {'type'    => 'flat'},
+            't/integration/coverage/open.tx' => {'type'    => 'flat'},
+            't/integration/coverage/x.tx'    => {'type'    => 'flat'},
         },
-        'loadmap' => {
+        'files' => {
             'Ax.pm' => {
-                't/integration/coverage/a.tx' => ['*'],
-                't/integration/coverage/c.tx' => [{'subtest' => 'a'}],
-            },
-            'Bx.pm' => {
-                't/integration/coverage/b.tx' => ['*'],
-                't/integration/coverage/a.tx' => ['*'],
-                't/integration/coverage/x.tx' => ['*'],
-            },
-            'Cx.pm' => {
-                't/integration/coverage/a.tx' => ['*'],
-                't/integration/coverage/c.tx' => [{'subtest' => 'c'}],
-            },
-        },
-        'openmap' => {
-            'Bx.pm' => {
-                't/integration/coverage/open.tx' => ['*'],
-            },
-        },
-        'submap' => {
-            'Ax.pm' => {
+                '*' => {
+                    't/integration/coverage/a.tx' => ['*'],
+                    't/integration/coverage/c.tx' => [{'subtest' => 'a'}],
+                },
                 'a' => {
-                    't/integration/coverage/a.tx' => [{'subtest' => 'a'}, {'subtest' => 'b'}, {'subtest' => 'c'}],
-                    't/integration/coverage/c.tx' => [{'subtest' => 'a'}, {'subtest' => 'c'}],
+                    't/integration/coverage/a.tx' => bag {
+                        item {'subtest' => 'c'};
+                        item {'subtest' => 'b'};
+                        item {'subtest' => 'a'};
+                        end;
+                    },
+                    't/integration/coverage/c.tx' => bag {
+                        item {'subtest' => 'c'};
+                        item {'subtest' => 'a'};
+                        end;
+                    },
                 },
-                'aa' => {
-                    't/integration/coverage/a.tx' => [{'subtest' => 'a'}],
-                },
+                'aa' => {'t/integration/coverage/a.tx' => [{'subtest' => 'a'}]},
             },
             'Bx.pm' => {
-                'b' => {
-                    't/integration/coverage/a.tx' => [{'subtest' => 'b'}, {'subtest' => 'c'}],
+                '*' => {
+                    't/integration/coverage/a.tx' => ['*'],
+                    't/integration/coverage/b.tx' => ['*'],
+                    't/integration/coverage/x.tx' => ['*'],
+                },
+                '<>' => {'t/integration/coverage/open.tx' => ['*']},
+                'b'  => {
+                    't/integration/coverage/a.tx' => bag {
+                        item {'subtest' => 'c'};
+                        item {'subtest' => 'b'};
+                        end;
+                    },
                     't/integration/coverage/b.tx' => ['*'],
                 },
             },
             'Cx.pm' => {
-                'c' => {
-                    't/integration/coverage/a.tx' => ['*', {'subtest' => 'c'}],
+                '*' => {
+                    't/integration/coverage/a.tx' => ['*'],
                     't/integration/coverage/c.tx' => [{'subtest' => 'c'}],
+                },
+                'c' => {
+                    't/integration/coverage/a.tx' => [
+                        '*',
+                        {'subtest' => 'c'},
+                    ],
+                    't/integration/coverage/c.tx' => [{'subtest' => 'c'}]
                 },
             },
         },

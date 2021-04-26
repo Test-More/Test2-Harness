@@ -67,16 +67,13 @@ sub TO_JSON {
     # Inflate
     $cols{parameters} = $self->parameters;
     $cols{fields}     = $self->fields;
-    $cols{coverage}   = $self->coverage;
+
+    $cols{coverage} = $cols{coverage} ? 1 : 0;
 
     $cols{user} = $self->user->username;
     $cols{project} = $self->project->name;
 
     my $dt = DTF()->parse_datetime( $cols{added} );
-
-    # Convert from UTC to localtime
-#    $dt->set_time_zone('UTC');
-#    $dt->set_time_zone('local');
 
     $cols{added} = $dt->strftime("%Y-%m-%d %I:%M%P");
 

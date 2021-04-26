@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Do not trasnfer all coverage data when viewing runs
+
 0.000059  2021-04-23 11:59:30-07:00 America/Los_Angeles
 
     - Update coverage tools

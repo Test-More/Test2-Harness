@@ -92,7 +92,7 @@ t2hui.runtable.build_retry = function(item, col) {
 t2hui.runtable.tool_builder = function(item, tools, data) {
     var link = base_uri + 'view/' + item.run_id;
     var downlink = base_uri + 'download/' + item.run_id;
-    var cover_link = link + '/coverage';
+    var cover_link = base_uri + 'coverage/' + item.run_id;
 
     var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
@@ -121,14 +121,7 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
     }
 
     if (item.coverage) {
-        var cover = $('<a class="tool etoggle" title="Coverage Data"><img src="/img/coverage.png" /></a>');
-
-        cover.click(function() {
-            var formatter = new JSONFormatter(item.coverage, 2);
-            $('#modal_body').html(formatter.render());
-            $('#free_modal').slideDown();
-        });
-
+        var cover = $('<a class="tool etoggle" title="Coverage Data" href="' + cover_link + '"><img src="/img/coverage.png" /></a>');
         tools.append(cover);
     }
     else {

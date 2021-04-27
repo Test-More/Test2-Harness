@@ -67,6 +67,13 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         applicable => \&changes_applicable,
     );
 
+    option coverage_manager => (
+        type => 's',
+        description => "Coverage 'from' manager to use when coverage data does not provide one",
+        long_examples => [ ' My::Coverage::Manager'],
+        applicable => \&changes_applicable,
+    );
+
     option coverage_from => (
         type => 's',
         description => "Where to fetch coverage data. Can be a path to a .jsonl(.bz|.gz)? log file. Can be a path or url to a json file containing a hash where source files are key, and value is a list of tests to run.",

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Allow a default coverage manager to be provided
+
 1.000049  2021-04-26 08:08:05-07:00 America/Los_Angeles
 
     - Fully require Test2::Plugin::Cover at a sufficient version

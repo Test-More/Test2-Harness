@@ -8,7 +8,7 @@ use Test2::Util qw/try_sig_mask do_rename/;
 use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET :mode/;
 use File::Spec;
 
-our $VERSION = '1.000050';
+our $VERSION = '1.000051';
 
 use Importer Importer => 'import';
 

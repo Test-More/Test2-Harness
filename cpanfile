@@ -38,7 +38,6 @@ requires "Test2::Formatter" => "1.302170";
 requires "Test2::Plugin::Cover" => "0.000022";
 requires "Test2::Plugin::MemUsage" => "0.002003";
 requires "Test2::Plugin::UUID" => "0.002001";
-requires "Test2::Require::Module" => "0.000127";
 requires "Test2::Tools::AsyncSubtest" => "0.000127";
 requires "Test2::Tools::Subtest" => "0.000127";
 requires "Test2::Util" => "1.302170";
@@ -72,6 +71,7 @@ on 'configure' => sub {
 };
 
 on 'develop' => sub {
+  requires "Test2::Require::Module" => "0.000127";
   requires "Test::Pod" => "1.41";
   requires "Test::Spelling" => "0.12";
 };

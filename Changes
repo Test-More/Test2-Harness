@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000050  2021-04-27 09:22:25-07:00 America/Los_Angeles
+
     - Allow a default coverage manager to be provided
     - Move Test2::Require::Module to dev requirements
     - Update some modules from 'base' to 'parent'

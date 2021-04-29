@@ -124,11 +124,15 @@ sub _subs_from {
     for my $line ($class->git_output('diff', '-U1000000', '-W', '--minimal', $from)) {
         chomp($line);
         if ($line =~ m{^(?:---|\+\+\+) [ab]/(.*)$}) {
-            $file = $1;
+            my $maybe_file = $1;
+            next if $maybe_file =~ m{/dev/null};
+            $file = $maybe_file;
             $sub  = '*'; # Wildcard, changes to the code outside of a sub potentially effects all subs
             $changed{$file} //= {};
             next;
         }
+
+        next unless $file;
 
         $line =~ m/^( |-|\+)(.*)$/ or next;
         my ($prefix, $statement) = ($1, $2, $3);
@@ -150,6 +154,8 @@ sub _subs_from {
             $indent = undef;
             $sub = "*";
         }
+
+        next unless $sub;
 
         $changed{$file}{$sub}++ if $changed;
     }

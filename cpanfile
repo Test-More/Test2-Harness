@@ -35,7 +35,6 @@ requires "Test2::Bundle::Extended" => "0.000127";
 requires "Test2::Event" => "1.302170";
 requires "Test2::Event::V2" => "1.302170";
 requires "Test2::Formatter" => "1.302170";
-requires "Test2::Plugin::Cover" => "0.000022";
 requires "Test2::Plugin::MemUsage" => "0.002003";
 requires "Test2::Plugin::UUID" => "0.002001";
 requires "Test2::Tools::AsyncSubtest" => "0.000127";
@@ -59,6 +58,7 @@ suggests "HTTP::Tiny::Multipart" => "0.08";
 suggests "IO::Pager" => "1.00";
 suggests "JSON::MaybeXS" => "0";
 suggests "Term::ANSIColor" => "4.03";
+suggests "Test2::Plugin::Cover" => "0.000022";
 suggests "Test2::Plugin::DBIProfile" => "0.002002";
 suggests "Test2::Plugin::IOEvents" => "0.001001";
 

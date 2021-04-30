@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Be smarter about what can or cannot be reloaded in 'reload' mode
+
 1.000052  2021-04-30 10:37:56-07:00 America/Los_Angeles
 
     - Add --reload option to 'start' command to reload moduels in-place when possible

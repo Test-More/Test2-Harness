@@ -8,8 +8,9 @@ BEGIN {
     $PRELOAD::EB++;
 }
 
-use parent 'Exporter';
-our @EXPORT_OK = 'EB';
+our @EXPORT_OK = ('EB');
+
+sub import { 1 }
 
 sub EB { $PRELOAD::EB }
 

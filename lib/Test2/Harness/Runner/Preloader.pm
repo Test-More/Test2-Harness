@@ -213,6 +213,25 @@ sub start_stage {
     $self->_monitor() if $self->{+MONITOR};
 }
 
+sub can_reload {
+    my $self = shift;
+    my ($mod) = @_;
+
+    return 0 if $mod->can('TEST2_HARNESS_PRELOAD');
+
+    return 1 unless $mod->can('import');
+
+    return 0 if $mod->can('IMPORTER_MENU');
+
+    {
+        no strict 'refs';
+        return 0 if @{"$mod\::EXPORT"};
+        return 0 if @{"$mod\::EXPORT_OK"};
+    }
+
+    return 1;
+}
+
 sub check {
     my $self = shift;
 
@@ -236,8 +255,7 @@ sub check {
             next;
         }
 
-        # Cannot reload in place :-(
-        if ($mod->can('import') || $mod->can('TEST2_HARNESS_PRELOAD')) {
+        unless ($self->can_reload($mod)) {
             print "$$ $0 - Changed file '$file' cannot be reloaded in place...\n";
             push @todo => [$mod, $file];
             next;

@@ -44,6 +44,8 @@ use Test2::Harness::Util::HashBase(
         <resources
 
         <nytprof
+
+        <reload
     },
     # From Construction
     qw{
@@ -83,7 +85,7 @@ sub init {
 
     $self->{+HANDLERS}->{HUP} = sub {
         my $sig = shift;
-        print STDERR "$$ $0 ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
+        print "$$ $0 ($self->{+STAGE}) Runner caught SIG$sig, reloading...\n";
         $self->{+SIGNAL} = $sig;
     };
 
@@ -109,6 +111,7 @@ sub preloader {
         dir      => $self->{+DIR},
         preloads => $self->preloads,
         monitor  => $self->{+MONITOR_PRELOADS},
+        reload   => $self->{+RELOAD},
 
         below_threshold => ($self->{+PRELOAD_THRESHOLD} && $self->{+JOBS_TODO} && $self->{+PRELOAD_THRESHOLD} > $self->{+JOBS_TODO}) ? 1 : 0,
     );

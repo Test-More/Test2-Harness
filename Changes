@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add --reload option to 'start' command to reload moduels in-place when possible
+
 1.000051  2021-04-29 07:40:33-07:00 America/Los_Angeles
 
     - Fix an edge-case warning from git plugin

@@ -38,6 +38,13 @@ include_options(
 );
 
 option_group {prefix => 'runner', category => "Persistent Runner Options"} => sub {
+    option reload => (
+        short => 'r',
+        type  => 'b',
+        description => "Attempt to reload modified modules in-place, restarting entire stages only when necessary.",
+        default => 0,
+    );
+
     option quiet => (
         short       => 'q',
         type        => 'c',

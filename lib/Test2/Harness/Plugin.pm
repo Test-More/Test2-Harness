@@ -2,7 +2,7 @@ package Test2::Harness::Plugin;
 use strict;
 use warnings;
 
-our $VERSION = '1.000053';
+our $VERSION = '1.000054';
 
 # Document, but do not implement
 #sub changed_files {}

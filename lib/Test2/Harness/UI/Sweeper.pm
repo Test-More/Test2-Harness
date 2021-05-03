@@ -39,7 +39,6 @@ sub sweep {
 
         while (my $job = $jobs->next()) {
             $counts{jobs}++;
-            $job->coverages->delete;
             $job->events->delete;
             $job->delete;
         }

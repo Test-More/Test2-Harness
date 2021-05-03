@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix 'sweeper' that was still using the old coverage model
+
 0.000062  2021-05-03 11:07:48-07:00 America/Los_Angeles
 
     - Fix 'failed' controller to only show results for 'complete' runs

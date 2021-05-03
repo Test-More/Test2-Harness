@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix 'failed' controller to only show results for 'complete' runs
+
 0.000061  2021-05-03 10:59:52-07:00 America/Los_Angeles
 
     - Add controller that returns a text list of test files that failed

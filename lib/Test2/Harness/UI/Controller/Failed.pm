@@ -28,13 +28,13 @@ sub handle {
 
     my $run;
     if (my $project = $schema->resultset('Project')->find({name => $source})) {
-        $run = $project->runs->search({}, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first;
+        $run = $project->runs->search({status => 'complete'}, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first;
     }
     else {
         $run = $schema->resultset('Run')->find({run_id => $source});
     }
 
-    die error(405) unless $run;
+    die error(404 => 'No Data') unless $run;
 
     my $failed = $run->jobs->search({fail => 1, retry => 0});
 

@@ -25,6 +25,7 @@ use Test2::Harness::UI::Controller::Events;
 
 use Test2::Harness::UI::Controller::Durations;
 use Test2::Harness::UI::Controller::Coverage;
+use Test2::Harness::UI::Controller::Failed;
 
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -61,6 +62,7 @@ sub init {
     $router->connect('/durations/:project/:short/:medium' => {controller => 'Test2::Harness::UI::Controller::Durations'});
 
     $router->connect('/coverage/:source' => {controller => 'Test2::Harness::UI::Controller::Coverage'});
+    $router->connect('/failed/:source'   => {controller => 'Test2::Harness::UI::Controller::Failed'});
 
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
 

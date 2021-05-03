@@ -37,6 +37,17 @@
 .pending_box { border: 1px solid #0000C0; }
 .running_box { border: 1px solid #009090; }
 
+.error_set .count a {
+    color: #FF4040;
+    text-decoration: none;
+    border: 1px solid #F05050;
+    border-radius: 6px;
+}
+
+.error_set .count a:hover {
+    background: #F0A0A0;
+}
+
 .job_index {
     display: none !important;
 }

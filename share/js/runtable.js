@@ -78,7 +78,7 @@ t2hui.runtable.build_fail = function(item, col) {
     if (val === null) { return };
     if (val === undefined) { return };
     if (val == 0) { col.append($('<div class="success_txt">' + val + '</div>')) }
-    else { col.text(val) }
+    else { col.append($('<a href="' + base_uri  + 'failed/' + item.run_id + '">' + val + '</a>')) }
 };
 
 t2hui.runtable.build_retry = function(item, col) {

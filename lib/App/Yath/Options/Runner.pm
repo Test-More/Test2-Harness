@@ -39,6 +39,12 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         default        => 1,
     );
 
+    option dump_depmap => (
+        type => 'b',
+        description => "When using staged preload, dump the depmap for each stage as json files",
+        default => 0,
+    );
+
     option includes => (
         name        => 'include',
         short       => 'I',

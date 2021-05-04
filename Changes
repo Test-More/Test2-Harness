@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add option to dump depmaps
+
 1.000053  2021-04-30 11:22:30-07:00 America/Los_Angeles
 
     - Be smarter about what can or cannot be reloaded in 'reload' mode

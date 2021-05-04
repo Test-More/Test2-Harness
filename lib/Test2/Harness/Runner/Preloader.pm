@@ -44,6 +44,7 @@ use Test2::Harness::Util::HashBase(
 
         <staged <started_stages
 
+        <dump_depmap
         <monitor
         <monitored
         <changed
@@ -64,7 +65,7 @@ sub init {
 
     return if $self->{+BELOW_THRESHOLD};
 
-    if ($self->{+MONITOR}) {
+    if ($self->{+MONITOR} || $self->{+DUMP_DEPMAP}) {
         require Test2::Harness::Runner::DepTracer;
         $self->{+DTRACE} //= Test2::Harness::Runner::DepTracer->new();
 
@@ -114,7 +115,7 @@ sub preload {
 
     # Not loading blacklist yet because any preloads in this list need to
     # happen regardless of the blacklist.
-    if ($self->{+MONITOR}) {
+    if ($self->{+MONITOR} || $self->{+DTRACE}) {
         $self->_monitor_preload($preloads);
     }
     else {
@@ -206,7 +207,7 @@ sub start_stage {
 
     my $preloads = $stage ? $stage->load_sequence : [];
 
-    my $meth = $self->{+MONITOR} ? '_monitor_preload' : '_preload';
+    my $meth = $self->{+MONITOR} || $self->{+DTRACE} ? '_monitor_preload' : '_preload';
 
     $self->$meth($preloads) if $preloads && @$preloads;
 

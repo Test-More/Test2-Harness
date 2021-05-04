@@ -12,8 +12,9 @@ use POSIX qw/:sys_wait_h/;
 use Long::Jump qw/setjump longjump/;
 use Time::HiRes qw/sleep time/;
 
-use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes chmod_tmp/;
+use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes chmod_tmp write_file/;
 use Test2::Harness::Util::Queue();
+use Test2::Harness::Util::JSON(qw/encode_json/);
 
 use Test2::Harness::Runner::Constants;
 
@@ -50,7 +51,7 @@ use Test2::Harness::Util::HashBase(
     # From Construction
     qw{
         <dir <settings <fork_job_callback <fork_spawn_callback <respawn_runner_callback <monitor_preloads
-        <jobs_todo
+        <jobs_todo <dump_depmap
     },
     # Other
     qw {
@@ -111,6 +112,7 @@ sub preloader {
         dir      => $self->{+DIR},
         preloads => $self->preloads,
         monitor  => $self->{+MONITOR_PRELOADS},
+        dump_depmap => $self->{+DUMP_DEPMAP},
         reload   => $self->{+RELOAD},
 
         below_threshold => ($self->{+PRELOAD_THRESHOLD} && $self->{+JOBS_TODO} && $self->{+PRELOAD_THRESHOLD} > $self->{+JOBS_TODO}) ? 1 : 0,
@@ -268,7 +270,17 @@ sub process {
 sub run_tests {
     my $self = shift;
 
-    my ($stage, @procs) = $self->preloader->preload();
+    my $preloader = $self->preloader;
+    my ($stage, @procs) = $preloader->preload();
+
+    if ($self->dump_depmap) {
+        if (my $dtrace = $preloader->dtrace) {
+            if (my $depmap = $dtrace->dep_map) {
+                my $file = "depmap-$stage.json";
+                write_file($file, encode_json($depmap));
+            }
+        }
+    }
 
     $self->watch($_) for @procs;
 

@@ -53,6 +53,9 @@ sub init {
 
     $router->connect('/run/:id'          => {controller => 'Test2::Harness::UI::Controller::Run'});
     $router->connect('/run/:id/pin'      => {controller => 'Test2::Harness::UI::Controller::Run', action => 'pin_toggle'});
+    $router->connect('/run/:id/delete'   => {controller => 'Test2::Harness::UI::Controller::Run', action => 'delete'});
+    $router->connect('/run/:id/cancel'   => {controller => 'Test2::Harness::UI::Controller::Run', action => 'cancel'});
+
     $router->connect('/job/:id'          => {controller => 'Test2::Harness::UI::Controller::Job'});
     $router->connect('/event/:id'        => {controller => 'Test2::Harness::UI::Controller::Events', from => 'single_event'});
     $router->connect('/event/:id/events' => {controller => 'Test2::Harness::UI::Controller::Events', from => 'event'});

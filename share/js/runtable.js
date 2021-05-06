@@ -129,6 +129,62 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
         tools.append(cover);
     }
 
+    var del = $('<div class="tool etoggle" title="delete"><img src="/img/close.png"/></div>');
+    var pin = $('<img />');
+    var pintool = $('<a class="tool etoggle"></a>');
+
+    var pinstate;
+    if (item.pinned == true) {
+        pintool.prop('title', 'unpin');
+        pinstate = true;
+        pin.attr('src', '/img/locked.png');
+        del.addClass('inactive');
+    }
+    else {
+        pintool.prop('title', 'pin');
+        pinstate = false;
+        pin.attr('src', '/img/unlocked.png');
+        del.removeClass('inactive');
+    }
+
+    if (item.status == 'running' || item.status == 'pending') {
+        var cancel = $('<div class="tool etoggle error" title="cancel"><img src="/img/close.png"/></div>');
+        tools.append(cancel);
+        cancel.click(function() {
+            var ok = confirm("Are you sure you wish to cancel this run? This action cannot be undone!\nNote: This only changes the runs status, it will not stop a running test. This is used to 'fix' an aborted run that is still set to 'running'");
+            if (!ok) { return; }
+
+            var url = base_uri + 'run/' + item.run_id + '/cancel';
+            $.ajax(url, {
+                'data': { 'content-type': 'application/json' },
+                'error': function(a, b, c) { alert("Failed to cancel run") },
+                'success': function() { return },
+            });
+        });
+    }
+    else {
+        tools.append(del);
+
+        del.click(function() {
+            if (pinstate) {
+                alert("Pinned runs cannot be deleted");
+                return;
+            }
+
+            var ok = confirm("Are you sure you wish to delete this run? This action cannot be undone!");
+            if (!ok) { return; }
+
+            var url = base_uri + 'run/' + item.run_id + '/delete';
+            $.ajax(url, {
+                'data': { 'content-type': 'application/json' },
+                'error': function(a, b, c) { alert("Could not delete run") },
+                'success': function() {
+                    $('tr#' + item.run_id).remove();
+                },
+            });
+        });
+    }
+
     if (item.error) {
         var err = $('<div class="tool etoggle error" title="See Error Message"><img src="/img/error.png"/></div>');
         tools.append(err);
@@ -138,21 +194,6 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
             $('#modal_body').append(pre);
             $('#free_modal').slideDown();
         });
-    }
-
-    var pin = $('<img />');
-    var pintool = $('<a class="tool etoggle"></a>');
-
-    var pinstate;
-    if (item.pinned == true) {
-        pintool.prop('title', 'unpin');
-        pinstate = true;
-        pin.attr('src', '/img/locked.png');
-    }
-    else {
-        pintool.prop('title', 'pin');
-        pinstate = false;
-        pin.attr('src', '/img/unlocked.png');
     }
 
     pintool.append(pin);
@@ -171,10 +212,12 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
                 if (pinstate) {
                     pintool.prop('title', 'unpin');
                     pin.attr('src', '/img/locked.png');
+                    del.addClass('inactive');
                 }
                 else {
                     pintool.prop('title', 'pin');
                     pin.attr('src', '/img/unlocked.png');
+                    del.removeClass('inactive');
                 }
 
                 pintool.append(pin);

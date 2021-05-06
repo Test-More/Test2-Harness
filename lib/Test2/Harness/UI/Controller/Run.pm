@@ -36,8 +36,24 @@ sub handle {
         $run = $schema->resultset('Run')->search({run_id => $it})->first or die error(404 => 'Invalid Run');
     }
 
-    if ($route->{action} && $route->{action} eq 'pin_toggle') {
-        $run->update({pinned => $run->pinned ? 0 : 1});
+    if (my $act = $route->{action}) {
+        if ($act eq 'pin_toggle') {
+            $run->update({pinned => $run->pinned ? 0 : 1});
+        }
+        elsif ($act eq 'cancel') {
+            $run->update({status => 'canceled'});
+        }
+        elsif ($act eq 'delete') {
+            die error(400 => "Cannot delete a pinned run") if $run->pinned;
+            my $jobs = $run->jobs;
+
+            while (my $job = $jobs->next()) {
+                $job->events->delete;
+                $job->delete;
+            }
+
+            $run->delete;
+        }
     }
 
     $res->content_type('application/json');

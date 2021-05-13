@@ -1,5 +1,9 @@
 Revision history for Test2-Harness-Renderer-JUnit
 
+1.000004 2021-05-13 - Todd Rinaldo
+- Don't fail the whole run when you see a duplicate test. Just ammend the failure message.
+- Update CI test suite.
+
 1.000003 2020-10-19 - Todd Rinaldo
 - Fix missing deps introduced in 1.02
 

@@ -2,7 +2,7 @@ package App::Yath::Options::Persist;
 use strict;
 use warnings;
 
-our $VERSION = '1.000055';
+our $VERSION = '1.000056';
 
 use Test2::Util qw/IS_WIN32/;
 use Test2::Harness::Util qw/clean_path/;

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Run 'conficting' tests sooner
+
 1.000054  2021-05-04 08:58:25-07:00 America/Los_Angeles
 
     - Add option to dump depmaps

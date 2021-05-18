@@ -443,6 +443,8 @@ sub task_fields {
     die "Invalid category: $cat" unless CATEGORIES->{$cat};
     die "Invalid duration: $dur" unless DURATIONS->{$dur};
 
+    $cat = 'conflicts' if $cat eq 'general' && $task->{conflicts} && @{$task->{conflicts}};
+
     return ($run_id, $smoke, $stage, $cat, $dur);
 }
 
@@ -518,7 +520,7 @@ sub advance_tasks {
 sub _cat_order {
     my $self = shift;
 
-    my @cat_order = ('general');
+    my @cat_order = ('conflicts', 'general');
 
     # Only search immiscible if we have no immiscible running
     # put them first if no others are running so we can churn through them

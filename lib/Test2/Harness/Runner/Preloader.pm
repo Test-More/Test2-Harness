@@ -12,6 +12,7 @@ use Test2::Harness::Util qw/open_file file2mod mod2file lock_file unlock_file/;
 use Test2::Harness::Runner::Preloader::Stage;
 
 use File::Spec();
+use List::Util qw/pairgrep/;
 
 BEGIN {
     local $@;
@@ -245,7 +246,7 @@ sub check {
 
     print "$$ $0 - Runner detected a change in one or more preloaded modules...\n";
 
-    my %CNI = reverse %INC;
+    my %CNI = reverse pairgrep { $b } %INC;
     my @todo;
     for my $file (keys %$changed) {
         my $rel = $CNI{$file};

@@ -8,6 +8,7 @@ use DateTime;
 use Data::GUID;
 use Time::HiRes qw/time/;
 use List::Util qw/first min max/;
+use Data::Dumper qw/Dumper/;
 
 use Carp qw/croak confess/;
 
@@ -73,7 +74,7 @@ sub init {
         $self->{+RUN_ID} = $run->run_id;
         $self->{+MODE}   = $MODES{$run->mode};
 
-        $run->update({status => 'pending'});
+        eval { $run->update({status => 'pending'}); 1 } || warn "Failed to update status for run '$self->{+RUN_ID}': $@";
     }
     else {
         my $run_id = $self->{+RUN_ID} // croak "either 'run' or 'run_id' must be provided";
@@ -125,7 +126,7 @@ sub flush {
     my $int = $self->{+INTERVAL};
 
     # Always update if needed
-    $self->run->insert_or_update();
+    eval { $self->run->insert_or_update(); 1} or warn "Failed to update run: $@";
 
     my $flush = $params{force} ? 'force' : 0;
     $flush ||= 'always' if $bmode eq 'none';
@@ -142,7 +143,7 @@ sub flush {
     return "" unless $flush;
     $self->{+LAST_FLUSH} = time;
 
-    $res->update();
+    eval { $res->update(); 1 } or warn "Failed to update job result: $@";
 
     $self->flush_events();
 
@@ -159,7 +160,7 @@ sub flush {
         $res->normalize_to_mode(mode => $self->{+MODE});
     }
 
-    $res->update;
+    eval { $res->update(); 1 } or warn "Failed to update job result: $@";
 
     return $flush;
 }
@@ -181,7 +182,7 @@ sub flush_coverage {
     my $ca = $self->{+COVERAGE} or return;
     my $run = $self->run;
 
-    $run->update({coverage => encode_json($ca->coverage)});
+    eval { $run->update({coverage => encode_json($ca->coverage)}); 1 } or warn "Failed to update coverage for run: $@";
 }
 
 my $total = 0;
@@ -220,7 +221,9 @@ sub flush_events {
     return unless @write;
 
     local $ENV{DBIC_DT_SEARCH_OK} = 1;
-    $self->schema->resultset('Event')->populate(\@write);
+    unless (eval { $self->schema->resultset('Event')->populate(\@write); 1 }) {
+        warn "Failed to populate events!\n$@\n" . Dumper(\@write);
+    }
     $total += scalar(@write);
 }
 
@@ -272,7 +275,7 @@ sub start {
     my $self = shift;
     return if $self->{+RUNNING};
 
-    $self->{+RUN}->update({status => 'running'});
+    eval {$self->{+RUN}->update({status => 'running'}); 1 } or warn "Failed to update status: $@";
 
     $self->{+RUNNING} = 1;
 }
@@ -410,7 +413,7 @@ sub finish {
         $status->{duration} = format_duration($self->{+LAST_STAMP} - $self->{+FIRST_STAMP});
     }
 
-    $run->update($status);
+    eval { $run->update($status); 1 } or warn "Failed to update run status: $@";
 
     return $status;
 }

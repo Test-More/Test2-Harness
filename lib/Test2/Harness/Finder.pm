@@ -26,7 +26,8 @@ use Test2::Harness::Util::HashBase qw{
 
     <multi_project
 
-    <changed <changed_only <changes_plugin <show_changed_files
+    <changed <changed_only <changes_plugin <show_changed_files <changes_diff
+    <changes_filter_file <changes_filter_pattern
     +coverage_data <coverage_from <maybe_coverage_from
     <coverage_manager
 };
@@ -238,7 +239,7 @@ sub find_files {
     $self->add_exclusions_from_lists() if $self->{+EXCLUDE_LISTS};
 
     $self->add_changed_to_search($plugins, $settings)
-        if $self->{+CHANGED} || $self->{+CHANGED_ONLY} || $self->{+CHANGES_PLUGIN};
+        if $self->{+CHANGED} || $self->{+CHANGED_ONLY} || $self->{+CHANGES_PLUGIN} || $self->{+CHANGES_DIFF};
 
     return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
 
@@ -255,8 +256,7 @@ sub add_changed_to_search {
         $self->set_search($search);
     }
 
-    my @changed;
-    push @changed => @{$self->{+CHANGED}} if $self->{+CHANGED};
+    my @listed_changes = @{$self->{+CHANGED}} if $self->{+CHANGED};
 
     my $check_plugins = $plugins;
     if (my $plugin = $self->{+CHANGES_PLUGIN}) {
@@ -266,9 +266,53 @@ sub add_changed_to_search {
         $check_plugins = [$plugin];
     }
 
-    for my $plugin (@$check_plugins) {
-        push @changed => $plugin->changed_files($settings)
-            if $plugin->can('changed_files');
+    my (@diff_changes, @found_changes);
+    if (my $diff = $self->{+CHANGES_DIFF}) {
+        @found_changes = $self->_changes_from_diff(file => $diff, $settings);
+    }
+    else {
+        for my $plugin (@$check_plugins) {
+            if ($plugin->can('changed_diff')) {
+                my ($type, $data) = $plugin->changed_diff($settings);
+                next unless $type && $data;
+
+                @found_changes = $self->_changes_from_diff($type, $data, $settings);
+
+                # Only use a diff from the first plugin to have one.
+                last if @found_changes;
+            }
+            elsif ($plugin->can('changed_files')) {
+                push @found_changes => $plugin->changed_files($settings)
+            }
+        }
+    }
+
+    # listed changes always included, diff changes OR found changes, not both.
+    my @changed = (@listed_changes, @diff_changes ? @diff_changes : @found_changes);
+
+    my $filter_files    = $self->{+CHANGES_FILTER_FILE};
+    my $filter_patterns = $self->{+CHANGES_FILTER_PATTERN};
+
+    if (($filter_files && @$filter_files) || ($filter_patterns && @$filter_patterns)) {
+        my %files = map {$_ => 1} @{$self->{+CHANGES_FILTER_FILE} || []};
+        my @keep;
+        for my $set (@changed) {
+            my ($file) = @$set;
+
+            if ($files{$file}) {
+                push @keep => $set;
+                next;
+            }
+
+            my $patterns = $self->{+CHANGES_FILTER_PATTERN} // next;
+            for my $pattern (@$patterns) {
+                next unless $file =~ m/$pattern/;
+                push @keep => $set;
+                last;
+            }
+        }
+
+        @changed = @keep;
     }
 
     die "Could not find any changed files.\n" if $self->{+CHANGED_ONLY} && !@changed;
@@ -378,6 +422,100 @@ sub add_changed_to_search {
 
     return;
 }
+
+sub _changes_from_diff {
+    my $self = shift;
+    my ($type, $data, $settings) = @_;
+
+    my $next;
+    if ($type eq 'lines') {
+        $next = sub { shift @$data };
+    }
+    elsif ($type eq 'diff') {
+        my $lines = [split /\n/, $data];
+        $next = sub { shift @$lines };
+    }
+    elsif ($type eq 'file') {
+        die "'$data' is not a valid diff file.\n" unless -f $data;
+        open(my $fh, '<', $data) or die "Could not open diff file '$data': $!";
+        $next = sub {
+            my $line = <$fh>;
+            close($fh) unless defined $line;
+            return $line;
+        };
+    }
+    elsif ($type eq 'line_sub') {
+        $next = $data;
+    }
+    elsif ($type eq 'handle') {
+        $next = sub { scalar <$data> };
+    }
+    else {
+        die "Invalid diff type '$type'";
+    }
+
+    my %changed;
+
+    # Only perl can parse perl, and nothing can parse perl diff. What this does
+    # is take a diff of every file with 100% context so we see the entire file
+    # with the +, minus, or space prefix. As we scan it we look for subs. We
+    # track what files and subs we are in. When we see a change we
+    # {$file}{$sub}++.
+    #
+    # This of course is broken if you make a change between
+    # subs as it will attribute it to the previous sub, however tracking
+    # indentation is equally flawed as things like heredocs and other special
+    # perl things can also trigger that to prematurely think we are out of a
+    # sub.
+    #
+    # PPI and similar do a better job parsing perl, but using them and also
+    # tracking changes from the diff, or even asking them to parse a diff where
+    # some lines are added and others removed is also a huge hassle.
+    #
+    # The current algorith is "good enough", not perfect.
+    my ($file, $sub, $indent);
+    while (my $line = $next->()) {
+        chomp($line);
+        if ($line =~ m{^(?:---|\+\+\+) [ab]/(.*)$}) {
+            my $maybe_file = $1;
+            next if $maybe_file =~ m{/dev/null};
+            $file = $maybe_file;
+            $sub  = '*'; # Wildcard, changes to the code outside of a sub potentially effects all subs
+            $changed{$file} //= {};
+            next;
+        }
+
+        next unless $file;
+
+        $line =~ m/^( |-|\+)(.*)$/ or next;
+        my ($prefix, $statement) = ($1, $2, $3);
+        my $changed = $prefix eq ' ' ? 0 : 1;
+
+        if ($statement =~ m/^(\s*)sub\s+(\w+)/) {
+            $indent = $1 // '';
+            $sub = $2;
+
+            # 1-line sub: sub foo { ... }
+            if ($statement =~ m/}/) {
+                $changed{$file}{$sub}++ if $changed;
+                $sub = '*';
+                $indent = undef;
+                next;
+            }
+        }
+        elsif(defined($indent) && $statement =~ m/^$indent\}/) {
+            $indent = undef;
+            $sub = "*";
+        }
+
+        next unless $sub;
+
+        $changed{$file}{$sub}++ if $changed;
+    }
+
+    return map {([$_ => sort keys %{$changed{$_}}])} sort keys %changed;
+}
+
 
 sub find_multi_project_files {
     my $self = shift;

@@ -25,7 +25,7 @@ sub git_output {
     my $class = shift;
     my (@args) = @_;
 
-    my $cmd = $class->git_cmd or return;
+    my $cmd = $class->git_cmd or return sub {()};
 
     my ($rh, $wh, $irh, $iwh);
     pipe($rh, $wh) or die "No pipe: $!";
@@ -36,19 +36,27 @@ sub git_output {
     close($iwh);
 
     $rh->blocking(1);
-    my @out = <$rh>;
+    $irh->blocking(0);
 
-    waitpid($pid, 0);
-    if($?) {
-        print STDERR <$irh>;
+    my $waited = 0;
+    return sub {
+        my $line = <$rh>;
+        return $line if defined $line;
+
+        unless ($waited++) {
+            local $?;
+            waitpid($pid, 0);
+            print STDERR <$irh> if $?;
+            close($irh);
+
+            # Try again
+            $line = <$rh>;
+            return $line if defined $line;
+        }
+
+        close($rh);
         return;
-    }
-
-    push @out => <$rh>;
-
-    close($irh);
-
-    return @out;
+    };
 }
 
 sub inject_run_data {
@@ -73,7 +81,14 @@ sub inject_run_data {
         for my $set (@sets) {
             my ($var, @args) = @$set;
             next if $$var; # Already set
-            chomp($$var = join "\n" => $class->git_output(@args));
+            my $output = $class->git_output(@args);
+
+            my @lines;
+            while (my $line = $output->()) {
+                push @lines => $line;
+            }
+
+            chomp($$var = join "\n" => @lines);
         }
 
     return unless $long_sha;
@@ -96,81 +111,14 @@ sub inject_run_data {
     return;
 }
 
-sub _subs_from {
-    my $class = shift;
-    my ($from) = @_;
-    my $cmd = $class->git_cmd or return;
-
-    my %changed;
-
-    # Only perl can parse perl, and nothing can parse perl diff. What this does
-    # is take a diff of every file with 100% context so we see the entire file
-    # with the +, minus, or space prefix. As we scan it we look for subs. We
-    # track what files and subs we are in. When we see a change we
-    # {$file}{$sub}++.
-    #
-    # This of course is broken if you make a change between
-    # subs as it will attribute it to the previous sub, however tracking
-    # indentation is equally flawed as things like heredocs and other special
-    # perl things can also trigger that to prematurely think we are out of a
-    # sub.
-    #
-    # PPI and similar do a better job parsing perl, but using them and also
-    # tracking changes from the diff, or even asking them to parse a diff where
-    # some lines are added and others removed is also a huge hassle.
-    #
-    # The current algorith is "good enough", not perfect.
-    my ($file, $sub, $indent);
-    for my $line ($class->git_output('diff', '-U1000000', '-W', '--minimal', $from)) {
-        chomp($line);
-        if ($line =~ m{^(?:---|\+\+\+) [ab]/(.*)$}) {
-            my $maybe_file = $1;
-            next if $maybe_file =~ m{/dev/null};
-            $file = $maybe_file;
-            $sub  = '*'; # Wildcard, changes to the code outside of a sub potentially effects all subs
-            $changed{$file} //= {};
-            next;
-        }
-
-        next unless $file;
-
-        $line =~ m/^( |-|\+)(.*)$/ or next;
-        my ($prefix, $statement) = ($1, $2, $3);
-        my $changed = $prefix eq ' ' ? 0 : 1;
-
-        if ($statement =~ m/^(\s*)sub\s+(\w+)/) {
-            $indent = $1 // '';
-            $sub = $2;
-
-            # 1-line sub: sub foo { ... }
-            if ($statement =~ m/}/) {
-                $changed{$file}{$sub}++ if $changed;
-                $sub = '*';
-                $indent = undef;
-                next;
-            }
-        }
-        elsif(defined($indent) && $statement =~ m/^$indent\}/) {
-            $indent = undef;
-            $sub = "*";
-        }
-
-        next unless $sub;
-
-        $changed{$file}{$sub}++ if $changed;
-    }
-
-    return map {([$_ => sort keys %{$changed{$_}}])} sort keys %changed;
-}
-
-sub changed_files {
+sub changed_diff {
     my $class = shift;
     my ($settings) = @_;
 
-    $class->_changed_files($settings->git->change_base);
+    $class->_changed_diff($settings->git->change_base);
 }
 
-sub _changed_files {
+sub _changed_diff {
     my $class = shift;
     my ($base) = @_;
 
@@ -180,13 +128,21 @@ sub _changed_files {
 
     if ($base) {
         $from .= "^" while system($cmd => 'merge-base', '--is-ancestor', $from, $base);
-        return $class->_subs_from($from);
+        return $class->_diff_from($from);
     }
 
-    my @files = $class->_subs_from($from);
+    my @files = $class->_diff_from($from);
     return @files if @files;
 
-    return $class->_subs_from("${from}^");
+    return $class->_diff_from("${from}^");
+}
+
+sub _diff_from {
+    my $class = shift;
+    my ($from) = @_;
+    my $cmd = $class->git_cmd or return;
+
+    return (line_sub => $class->git_output('diff', '-U1000000', '-W', '--minimal', $from));
 }
 
 1;

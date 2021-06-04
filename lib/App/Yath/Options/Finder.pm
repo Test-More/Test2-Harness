@@ -49,7 +49,7 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
     );
 
     option changed_only => (
-        description => "Only search for tests for changed files (Requires --coverage-from, also requires a list of changes either from the --changed option, or a plugin that implements changed_files())",
+        description => "Only search for tests for changed files (Requires --coverage-from, also requires a list of changes either from the --changed option, or a plugin that implements changed_files() or changed_diff())",
         applicable => \&changes_applicable,
     );
 
@@ -57,6 +57,27 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         type => 'm',
         description => "Specify one or more files as having been changed.",
         long_examples => [' path/to/file'],
+        applicable => \&changes_applicable,
+    );
+
+    option changes_filter_file => (
+        type => 'm',
+        description => 'Specify one or more files to check for changes. Changes to other files will be ignored',
+        long_examples => [' path/to/file'],
+        applicable => \&changes_applicable,
+    );
+
+    option changes_filter_pattern => (
+        type => 'm',
+        description => 'Specify a pattern for change checking. When only running tests for changed files this will limit which files are checked for changes. Only files that match this pattern will be checked. Your pattern will be inserted unmodified into a `$file =~ m/$pattern/` check.',
+        long_examples => [" '(apple|pear|orange)'"],
+        applicable => \&changes_applicable,
+    );
+
+    option changes_diff => (
+        type => 's',
+        description => "Path to a diff file that should be used to find changed files for use with --changed-only. This must be in the same format as `git diff -W --minimal -U1000000`",
+        long_examples => [' path/to/diff.diff'],
         applicable => \&changes_applicable,
     );
 

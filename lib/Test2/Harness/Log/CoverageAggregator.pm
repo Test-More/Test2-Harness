@@ -2,7 +2,7 @@ package Test2::Harness::Log::CoverageAggregator;
 use strict;
 use warnings;
 
-our $VERSION = '1.000057';
+our $VERSION = '1.000058';
 
 use Test2::Harness::Util::HashBase qw/<coverage <job_map/;
 

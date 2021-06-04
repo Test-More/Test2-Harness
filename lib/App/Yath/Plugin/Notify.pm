@@ -2,7 +2,7 @@ package App::Yath::Plugin::Notify;
 use strict;
 use warnings;
 
-our $VERSION = '1.000057';
+our $VERSION = '1.000058';
 
 use Test2::Harness::Util::JSON qw/encode_json/;
 

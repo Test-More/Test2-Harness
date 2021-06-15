@@ -2,6 +2,9 @@ package App::Yath::Plugin::YathUIDB;
 use strict;
 use warnings;
 
+use Test2::Harness::UI::Util qw/config_from_settings/;
+use Test2::Harness::Util::JSON qw/decode_json/;
+
 use App::Yath::Options;
 use parent 'App::Yath::Plugin';
 
@@ -147,6 +150,58 @@ option_group {prefix => 'yathui-db', category => "YathUI Options"} => sub {
         description => 'Type of buffering to use, if "none" then events are written to the db one at a time, which is SLOW',
         default => 'diag',
     );
+
+    option coverage => (
+        type => 'b',
+        description => 'Pull coverage data directly from the database (default: off)',
+        default => 0,
+    );
+
+    option durations => (
+        type => 'b',
+        description => 'Pull duration data directly from the database (default: off)',
+        default => 0,
+    );
+
+    option publisher => (
+        type => 's',
+        description => 'When using coverage or duration data, only use data uploaded by this user',
+    );
 };
+
+sub coverage_data {
+    my ($plugin, $changed, $settings) = @_;
+    my $ydb = $settings->prefix('yathui-db') or return;
+    return unless $ydb->coverage;
+
+    my $config = config_from_settings($settings);
+    my $schema = $config->schema;
+    my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
+    my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
+
+    my $cover = $project->coverage(user => $ydb->publisher) // return;
+    return decode_json($cover->coverage);
+}
+
+sub duration_data {
+    my ($plugin, $settings) = @_;
+    my $ydb = $settings->prefix('yathui-db') or return;
+    return unless $ydb->durations;
+
+    my $config = config_from_settings($settings);
+    my $schema = $config->schema;
+    my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
+    my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
+
+    my %args = (user => $ydb->publisher);
+    if (my $yui = $settings->prefix('yathui')) {
+        $args{short}  = $yui->medium_duration;
+        $args{medium} = $yui->long_duration;
+        # TODO
+        #$args{median} = $yui->median_durations;
+    }
+
+    return $project->durations(%args);
+}
 
 1;

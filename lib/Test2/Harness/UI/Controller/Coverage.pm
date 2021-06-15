@@ -29,23 +29,14 @@ sub handle {
 
     my $delete = $route->{delete};
 
-    my $user;
-    if ($username) {
-        if ($username eq 'delete') {
-            $delete = 1;
-        }
-        else {
-            $user = $schema->resultset('User')->find({username => $username})
-                or die error(404 => 'Invalid Username');
-        }
+    if ($username && $username eq 'delete') {
+        $delete = 1;
+        $username = undef;
     }
 
     my $cover;
     if (my $project = $schema->resultset('Project')->find({name => $source})) {
-        my $query = {coverage_id => {'IS NOT' => undef}};
-        $query->{user_id} = $user->user_id if $user;
-        my $run = $project->runs->search($query, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first;
-        $cover = $run ? $run->coverage : undef;
+        $cover = $project->coverage(user => $username);
     }
     elsif ($cover = $schema->resultset('Coverage')->find({coverage_id => $source})) {
     }

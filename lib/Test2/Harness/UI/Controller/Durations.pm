@@ -5,8 +5,6 @@ use warnings;
 our $VERSION = '0.000066';
 
 use Data::GUID;
-use List::Util qw/max/;
-use Statistics::Basic qw/median/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
 
@@ -34,52 +32,13 @@ sub handle {
     my $schema  = $self->{+CONFIG}->schema;
     my $project = $schema->resultset('Project')->find({name => $project_name});
 
-    my $data;
+    my $data = {};
     if ($project) {
-        my $dbh = $self->{+CONFIG}->connect;
-
-        my $sth = $dbh->prepare(<<"        EOT");
-            SELECT jobs.file, jobs.duration
-              FROM jobs
-              JOIN runs USING(run_id)
-             WHERE runs.project_id = ?
-               AND jobs.duration IS NOT NULL
-               AND jobs.file IS NOT NULL
-        EOT
-
-        $sth->execute($project->project_id) or die $sth->errstr;
-        my $rows = $sth->fetchall_arrayref;
-
-        $data = {};
-        for my $row (@$rows) {
-            my ($file, $time) = @$row;
-            push @{$data->{$file}} => $time;
-        }
-
-        for my $file (keys %$data) {
-            my $set = delete $data->{$file} or next;
-            my $time = median($set);
-            $data->{$file} = median($set);
-        }
-
-        if ($median) {
-            my $sorted = [ sort { $data->{$b} <=> $data->{$a} } keys %$data ];
-            $data = { lookup => $data, sorted => $sorted };
-        }
-        else {
-            for my $file (keys %$data) {
-                my $time = $data->{$file};
-                my $summary;
-                if    ($time < $short)  { $summary = 'SHORT' }
-                elsif ($time < $medium) { $summary = 'MEDIUM' }
-                else                    { $summary = 'LONG' }
-
-                $data->{$file} = $summary;
-            }
-        }
-    }
-    else {
-        $data = {};
+        $data = $project->durations(
+            short  => $short,
+            medium => $medium,
+            median => $median,
+        );
     }
 
     my $ct ||= lc($req->headers->{'content-type'} || $req->parameters->{'Content-Type'} || $req->parameters->{'content-type'} || 'text/html; charset=utf-8');

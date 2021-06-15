@@ -6,6 +6,7 @@ use Carp qw/croak/;
 
 use Test2::Harness::UI::Config;
 use Test2::Harness::UI::RunProcessor;
+use Test2::Harness::UI::Util qw/config_from_settings/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
@@ -34,55 +35,7 @@ sub init {
     $self->{+PROJECT} //= $yath->project || die "The yathui-project option is required.\n";
     $self->{+USER} //= $yath->user || die "The yathui-user option is required.\n";
 
-    my $config = $self->{+CONFIG};
-
-    unless ($config) {
-        my $db = $settings->prefix('yathui-db') or die "No DB settings";
-
-        if (my $cmod = $db->config) {
-            my $file = mod2file($cmod);
-            require $file;
-
-            $config = $cmod->yath_ui_config(%$$db);
-        }
-        else {
-            my $dsn = $db->dsn;
-
-            unless ($dsn) {
-                $dsn = "";
-
-                my $driver = $db->driver;
-                my $name   = $db->name;
-
-                $dsn .= "dbi:$driver"  if $driver;
-                $dsn .= ":dname=$name" if $name;
-
-                if (my $socket = $db->socket) {
-                    my $ld = lc($driver);
-                    if ($ld eq 'pg') {
-                        $dsn .= ";host=$socket";
-                    }
-                    else {
-                        $dsn .= ";${ld}_socket=$socket";
-                    }
-                }
-                else {
-                    my $host = $db->host;
-                    my $port = $db->port;
-
-                    $dsn .= ";host=$host" if $host;
-                    $dsn .= ";port=$port" if $port;
-                }
-            }
-
-            $config = Test2::Harness::UI::Config->new(
-                dbi_dsn  => $dsn,
-                dbi_user => $db->user // '',
-                dbi_pass => $db->pass // '',
-            );
-        }
-        $self->{+CONFIG} = $config;
-    }
+    my $config = $self->{+CONFIG} //= config_from_settings($settings);
 
     $config->connect // die "Could not connect to the db";
 

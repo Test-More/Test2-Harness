@@ -10,7 +10,7 @@ use File::ShareDir();
 
 use Importer Importer => 'import';
 
-our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver/;
+our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver config_from_settings/;
 
 my %SCHEMA_TO_QDB_DRIVER = (
     mariadb => 'MySQL',
@@ -72,6 +72,55 @@ sub share_dir {
     croak "Could not find '$dir'" unless -d $path;
 
     return $path;
+}
+
+sub config_from_settings {
+    my ($settings) = @_;
+
+    my $db = $settings->prefix('yathui-db') or die "No DB settings";
+
+    if (my $cmod = $db->config) {
+        my $file = mod2file($cmod);
+        require $file;
+
+        return $cmod->yath_ui_config(%$$db);
+    }
+
+    my $dsn = $db->dsn;
+
+    unless ($dsn) {
+        $dsn = "";
+
+        my $driver = $db->driver;
+        my $name   = $db->name;
+
+        $dsn .= "dbi:$driver"  if $driver;
+        $dsn .= ":dbname=$name" if $name;
+
+        if (my $socket = $db->socket) {
+            my $ld = lc($driver);
+            if ($ld eq 'pg') {
+                $dsn .= ";host=$socket";
+            }
+            else {
+                $dsn .= ";${ld}_socket=$socket";
+            }
+        }
+        else {
+            my $host = $db->host;
+            my $port = $db->port;
+
+            $dsn .= ";host=$host" if $host;
+            $dsn .= ";port=$port" if $port;
+        }
+    }
+
+    require Test2::Harness::UI::Config;
+    return Test2::Harness::UI::Config->new(
+        dbi_dsn  => $dsn,
+        dbi_user => $db->user // '',
+        dbi_pass => $db->pass // '',
+    );
 }
 
 1;

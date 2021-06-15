@@ -491,8 +491,11 @@ sub set_proc_exit {
         }
 
         if(my $bail = $exit ? $proc->bailed_out : 0) {
-            print "$$ $0 BAIL-OUT detected: $bail\nAborting the test run...\n";
-            $self->state->halt_run($task->{run_id});
+            print "$$ $0 BAIL-OUT detected: $bail\n";
+            if ($self->settings->runner->abort_on_bail) {
+                print "$$ $0 Aborting the test run...\n";
+                $self->state->halt_run($task->{run_id});
+            }
         }
     }
     elsif ($proc->isa('Test2::Harness::Runner::Preloader::Stage')) {

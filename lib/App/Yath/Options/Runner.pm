@@ -23,6 +23,12 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         },
     );
 
+    option abort_on_bail => (
+        type => 'b',
+        default => 1,
+        description => "Abort all testing if a bail-out is encountered (default: on)",
+    );
+
     option use_timeout => (
         alt         => ['timeout'],
         description => "(default: on) Enable/disable timeouts",

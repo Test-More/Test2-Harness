@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Move coverage back to its own table for performance reasons
+    - Add UI widget for deleting coverage
+
 0.000065  2021-05-25 09:15:03-07:00 America/Los_Angeles
 
     - Make the processor a bit more forgiving of errors

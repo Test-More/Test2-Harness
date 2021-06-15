@@ -125,6 +125,11 @@ CREATE TABLE permissions (
     UNIQUE(project_id, user_id)
 );
 
+CREATE TABLE coverage (
+    coverage_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    coverage        JSONB           DEFAULT NULL
+);
+
 CREATE TABLE runs (
     run_id          UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     run_ord         BIGSERIAL       NOT NULL,
@@ -150,7 +155,8 @@ CREATE TABLE runs (
     concurrency     INTEGER         DEFAULT NULL,
     fields          JSONB           DEFAULT NULL,
     parameters      JSONB           DEFAULT NULL,
-    coverage        JSONB           DEFAULT NULL,
+
+    coverage_id     UUID            DEFAULT NULL REFERENCES coverage(coverage_id),
 
     UNIQUE(run_ord)
 );

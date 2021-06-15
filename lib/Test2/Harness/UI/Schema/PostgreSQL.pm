@@ -63,6 +63,40 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
 
 {
     package    #
+        Test2::Harness::UI::Schema::Result::Coverage;
+
+    use base 'DBIx::Class::Core';
+    __PACKAGE__->load_components(
+        "InflateColumn::DateTime",
+        "InflateColumn::Serializer",
+        "InflateColumn::Serializer::JSON",
+        "Tree::AdjacencyList",
+        "UUIDColumns",
+    );
+    __PACKAGE__->table("coverage");
+    __PACKAGE__->add_columns(
+        "coverage_id",
+        {
+            data_type     => "uuid",
+            default_value => \"uuid_generate_v4()",
+            is_nullable   => 0,
+            size          => 16,
+        },
+        "coverage",
+        {data_type => "jsonb", is_nullable => 1},
+    );
+    __PACKAGE__->set_primary_key("coverage_id");
+    __PACKAGE__->has_many(
+        "runs",
+        "Test2::Harness::UI::Schema::Result::Run",
+        {"foreign.coverage_id" => "self.coverage_id"},
+        {cascade_copy          => 0, cascade_delete => 0},
+    );
+
+}
+
+{
+    package    #
         Test2::Harness::UI::Schema::Result::Email;
 
     use base 'DBIx::Class::Core';
@@ -554,11 +588,22 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
         {data_type => "jsonb", is_nullable => 1},
         "parameters",
         {data_type => "jsonb", is_nullable => 1},
-        "coverage",
-        {data_type => "jsonb", is_nullable => 1},
+        "coverage_id",
+        {data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16},
     );
     __PACKAGE__->set_primary_key("run_id");
     __PACKAGE__->add_unique_constraint("runs_run_ord_key", ["run_ord"]);
+    __PACKAGE__->belongs_to(
+        "coverage",
+        "Test2::Harness::UI::Schema::Result::Coverage",
+        {coverage_id => "coverage_id"},
+        {
+            is_deferrable => 0,
+            join_type     => "LEFT",
+            on_delete     => "NO ACTION",
+            on_update     => "NO ACTION",
+        },
+    );
     __PACKAGE__->has_many(
         "jobs",
         "Test2::Harness::UI::Schema::Result::Job",

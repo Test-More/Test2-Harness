@@ -181,8 +181,18 @@ sub flush_coverage {
 
     my $ca = $self->{+COVERAGE} or return;
     my $run = $self->run;
+    my $uuid = gen_uuid();
 
-    eval { $run->update({coverage => encode_json($ca->coverage)}); 1 } or warn "Failed to update coverage for run: $@";
+    eval {
+        $self->schema->resultset('Coverage')->create({
+            coverage_id => $uuid,
+            coverage    => encode_json($ca->coverage),
+        });
+
+        $run->update({coverage_id => $uuid});
+
+        1;
+    } or warn "Failed to update coverage for run: $@";
 }
 
 my $total = 0;

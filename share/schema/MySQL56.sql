@@ -106,6 +106,11 @@ CREATE TABLE permissions (
     UNIQUE(project_id, user_id)
 ) ROW_FORMAT=COMPRESSED;
 
+CREATE TABLE coverage (
+    coverage_id     CHAR(36)        NOT NULL PRIMARY KEY,
+    coverage        LONGTEXT        DEFAULT NULL
+);
+
 CREATE TABLE runs (
     run_id          CHAR(36)        NOT NULL PRIMARY KEY,
     user_id         CHAR(36)        NOT NULL,
@@ -135,8 +140,10 @@ CREATE TABLE runs (
     concurrency     INTEGER         DEFAULT NULL,
     fields          LONGTEXT        DEFAULT NULL,
     parameters      LONGTEXT        DEFAULT NULL,
-    coverage        LONGTEXT        DEFAULT NULL,
 
+    coverage_id     CHAR(36)        DEFAULT NULL,
+
+    FOREIGN KEY (coverage_id) REFERENCES coverage(coverage_id),
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
     FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id),

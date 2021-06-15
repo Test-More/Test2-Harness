@@ -21,21 +21,47 @@ sub handle {
     my $req = $self->{+REQUEST};
     my $res = resp(200);
 
-    die error(404 => 'Missing route') unless $route;
-    my $source = $route->{source} or die error(404 => 'No source');
-
     my $schema = $self->{+CONFIG}->schema;
 
-    my $data;
-    if (my $project = $schema->resultset('Project')->find({name => $source})) {
-        my $run = $project->runs->search({coverage => {'IS NOT' => undef}}, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first;
-        $data = $run ? $run->coverage // {} : {};
+    die error(404 => 'Missing route') unless $route;
+    my $source = $route->{source} or die error(404 => 'No source');
+    my $username = $route->{user};
+
+    my $delete = $route->{delete};
+
+    my $user;
+    if ($username) {
+        if ($username eq 'delete') {
+            $delete = 1;
+        }
+        else {
+            $user = $schema->resultset('User')->find({username => $username})
+                or die error(404 => 'Invalid Username');
+        }
     }
-    elsif (my $run = $schema->resultset('Run')->find({run_id => $source})) {
-        $data = $run->coverage // {};
+
+    my $cover;
+    if (my $project = $schema->resultset('Project')->find({name => $source})) {
+        my $query = {coverage_id => {'IS NOT' => undef}};
+        $query->{user_id} = $user->user_id if $user;
+        my $run = $project->runs->search($query, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first;
+        $cover = $run ? $run->coverage : undef;
+    }
+    elsif ($cover = $schema->resultset('Coverage')->find({coverage_id => $source})) {
     }
     else {
         die error(405);
+    }
+
+    my $data;
+
+    if ($delete && $cover) {
+        $cover->runs->first->update({coverage_id => undef});
+        $cover->delete;
+        $data = {};
+    }
+    elsif ($cover) {
+        $data = $cover ? $cover->coverage : {};
     }
 
     $res->content_type('application/json');

@@ -92,7 +92,6 @@ t2hui.runtable.build_retry = function(item, col) {
 t2hui.runtable.tool_builder = function(item, tools, data) {
     var link = base_uri + 'view/' + item.run_id;
     var downlink = base_uri + 'download/' + item.run_id;
-    var cover_link = base_uri + 'coverage/' + item.run_id;
 
     var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
@@ -120,13 +119,40 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
         tools.append(go);
     }
 
-    if (item.coverage) {
+    if (item.coverage_id) {
+        var cover_link = base_uri + 'coverage/' + item.coverage_id;
         var cover = $('<a class="tool etoggle" title="Coverage Data" href="' + cover_link + '"><img src="/img/coverage.png" /></a>');
         tools.append(cover);
+
+        if (item.pinned) {
+            var cover = $('<a class="tool etoggle inactive" title="Cannot delete locked coverage data"><img src="/img/coveragedel.png" /></a>');
+            tools.append(cover);
+        }
+        else {
+            var coverdel = $('<a class="tool etoggle" title="Delete Coverage Data"><img src="/img/coveragedel.png" /></a>');
+            tools.append(coverdel);
+
+            coverdel.click(function() {
+                var ok = confirm("Are your sure you want to delete this coverage data? This cannot be undone!");
+                if (!ok) { return; }
+
+                cover.replaceWith($('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coverage.png" /></a>'));
+                coverdel.replaceWith($('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coveragedel.png" /></a>'));
+
+                $.ajax(cover_link + '/delete', {
+                    'data': { 'content-type': 'application/json' },
+                    'error': function(a, b, c) { alert("Failed to delete coverage") },
+                    'success': function() { return },
+                });
+            });
+        }
     }
     else {
         var cover = $('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coverage.png" /></a>');
         tools.append(cover);
+
+        var coverdel = $('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coveragedel.png" /></a>');
+        tools.append(coverdel);
     }
 
     var del = $('<div class="tool etoggle" title="delete"><img src="/img/close.png"/></div>');

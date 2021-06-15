@@ -78,6 +78,13 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
         applicable => \&can_finder,
     );
 
+#    TODO
+#    option median_durations => (
+#        type => 'b',
+#        description => "Get median duration data",
+#        default => 0,
+#    );
+
     option medium_duration => (
         type => 's',
         description => "Minimum duration length (seconds) before a test goes from SHORT to MEDIUM",

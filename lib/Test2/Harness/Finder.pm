@@ -42,7 +42,7 @@ sub init {
 
 sub duration_data {
     my $self = shift;
-    my ($plugins) = @_;
+    my ($plugins, $settings) = @_;
 
     $self->{+DURATION_DATA} //= $self->pull_durations();
 
@@ -50,7 +50,7 @@ sub duration_data {
 
     for my $plugin (@$plugins) {
         next unless $plugin->can('duration_data');
-        $self->{+DURATION_DATA} = $plugin->duration_data() or next;
+        $self->{+DURATION_DATA} = $plugin->duration_data($settings) or next;
         last;
     }
 
@@ -59,14 +59,14 @@ sub duration_data {
 
 sub coverage_data {
     my $self = shift;
-    my ($plugins, $changed) = @_;
+    my ($plugins, $changed, $settings) = @_;
 
     $self->{+COVERAGE_DATA} //= $self->pull_coverage($changed);
     return $self->{+COVERAGE_DATA} if $self->{+COVERAGE_DATA};
 
     for my $plugin (@$plugins) {
         next unless $plugin->can('coverage_data');
-        $self->{+COVERAGE_DATA} = $plugin->coverage_data($changed) or next;
+        $self->{+COVERAGE_DATA} = $plugin->coverage_data($changed, $settings) or next;
         last;
     }
 
@@ -327,7 +327,7 @@ sub add_changed_to_search {
         }
     }
 
-    my $coverage_data = $self->coverage_data($plugins, \@changed);
+    my $coverage_data = $self->coverage_data($plugins, \@changed, $settings);
     my $type = ref($coverage_data);
 
     # We must have posted the changes and got a list of tests back.
@@ -575,7 +575,7 @@ sub find_project_files {
 
     die "No tests to run, search is empty\n" unless @$search;
 
-    my $durations = $self->duration_data($plugins);
+    my $durations = $self->duration_data($plugins, $settings);
 
     my (%seen, @tests, @dirs);
     for my $item (@$search) {
@@ -789,7 +789,7 @@ subclasses.
 
 =item $durations = $finder->duration_data
 
-This will fetch the durations data if ant was provided. This is a hashref of
+This will fetch the durations data if any was provided. This is a hashref of
 relative test paths as keys where the value is the duration of the file (SHORT,
 MEDIUM or LONG).
 

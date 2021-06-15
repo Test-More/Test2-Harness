@@ -185,12 +185,6 @@ sub _post_process {
         unless @{$settings->finder->extensions};
 
     s/^\.//g for @{$settings->finder->extensions};
-
-    unless ($options->command_class && $options->command_class->isa('App::Yath::Command::projects')) {
-        die "--changed-only, --changed, and --changes-plugin require --coverage_from or --maybe-coverage-from.\n"
-            if $settings->finder->changed_only
-            && !($settings->finder->coverage_from || $settings->finder->maybe_coverage_from);
-    }
 }
 
 sub normalize_class {

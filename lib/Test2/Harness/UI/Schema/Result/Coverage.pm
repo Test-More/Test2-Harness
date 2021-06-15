@@ -3,7 +3,7 @@ use utf8;
 use strict;
 use warnings;
 
-our $VERSION = '0.000066';
+our $VERSION = '0.000067';
 @Test2::Harness::UI::Schema::Result::Coverage::ISA = ('DBIx::Class::Core');
 
 use Carp qw/confess/;

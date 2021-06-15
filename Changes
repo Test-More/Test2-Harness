@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000058  2021-06-15 15:38:16-07:00 America/Los_Angeles
+
     - Add support for new yathui direct db coverage/duration plugin
     - Add option to disable bail-out abortion
 

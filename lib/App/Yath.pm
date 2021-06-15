@@ -2,7 +2,7 @@ package App::Yath;
 use strict;
 use warnings;
 
-our $VERSION = '1.000058';
+our $VERSION = '1.000059';
 
 use Test2::Harness::Util::HashBase qw{
     -config

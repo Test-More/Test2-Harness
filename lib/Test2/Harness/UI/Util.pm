@@ -8,6 +8,8 @@ use Carp qw/croak/;
 
 use File::ShareDir();
 
+use Test2::Harness::Util qw/mod2file/;
+
 use Importer Importer => 'import';
 
 our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver config_from_settings/;

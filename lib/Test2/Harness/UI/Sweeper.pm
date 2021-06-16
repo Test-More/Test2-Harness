@@ -37,7 +37,11 @@ sub sweep {
         $counts{runs}++;
         my $jobs = $run->jobs;
 
-        $run->coverage->delete if $run->coverage_id;
+        if ($run->coverage_id) {
+            my $coverage = $run->coverage;
+            $run->update({coverage_id => undef});
+            $coverage->delete;
+        }
 
         while (my $job = $jobs->next()) {
             $counts{jobs}++;

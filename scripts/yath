@@ -33,6 +33,7 @@ BEGIN {
         if ($no_stat{lc($^O)}) {
             opendir(my $dh, $dir) or die "$!";
             my $key = join ':' => sort readdir($dh);
+            closedir($dh);
             last if $seen{$key}++;
         }
         else {

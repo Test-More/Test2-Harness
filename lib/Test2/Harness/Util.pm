@@ -318,6 +318,7 @@ sub find_libraries {
                 next unless -f $path && $path =~ m/\.pm$/;
                 push @found => [$path, $prefix];
             }
+            closedir($dh);
         }
 
         push @bases => $new_base if @$new_base;

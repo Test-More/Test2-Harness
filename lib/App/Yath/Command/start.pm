@@ -35,6 +35,7 @@ include_options(
     'App::Yath::Options::Runner',
     'App::Yath::Options::Workspace',
     'App::Yath::Options::Persist',
+    'App::Yath::Options::Collector',
 );
 
 option_group {prefix => 'runner', category => "Persistent Runner Options"} => sub {

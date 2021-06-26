@@ -24,6 +24,8 @@ use Test2::Harness::Util::HashBase qw{
     <run_dir
     <runner_pid +runner_exited
 
+    <backed_up
+
     +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles
 
     +task_file +task_queue +tasks_done +tasks
@@ -52,6 +54,8 @@ sub init {
 sub process {
     my $self = shift;
 
+    my $settings = $self->settings;
+
     while (1) {
         my $count = 0;
         $count += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
@@ -66,7 +70,7 @@ sub process {
 
         while(my ($job_try, $jdir) = each %$jobs) {
             my $e_count = 0;
-            for my $event ($jdir->poll(1000)) {
+            for my $event ($jdir->poll($self->settings->collector->max_poll_events // 1000)) {
                 $self->{+ACTION}->($event);
                 $e_count++;
             }
@@ -76,7 +80,7 @@ sub process {
             my $done = $jdir->done or next;
 
             delete $jobs->{$job_try};
-            unless ($self->settings->debug->keep_dirs) {
+            unless ($settings->debug->keep_dirs) {
                 my $job_path = $jdir->job_root;
                 # Needed because we set the perms so that a tmpdir under it can be used.
                 # This is the only remove_tree that needs it because it is the
@@ -97,7 +101,7 @@ sub process {
 
     $self->{+ACTION}->(undef) if $self->{+JOBS_DONE} && $self->{+TASKS_DONE};
 
-    remove_tree($self->{+RUN_DIR}, {safe => 1, keep_root => 0}) unless $self->settings->debug->keep_dirs;
+    remove_tree($self->{+RUN_DIR}, {safe => 1, keep_root => 0}) unless $settings->debug->keep_dirs;
 
     return;
 }
@@ -214,6 +218,29 @@ sub process_tasks {
     return $count;
 }
 
+sub send_backed_up {
+    my $self = shift;
+    return if $self->{+BACKED_UP}++;
+
+    # This is an unlikely code path. If we're here, it means the last loop couldn't process any results.
+    my $e = $self->_harness_event(0, undef, time, info => [{details => <<"    EOT", tag => "INTERNAL", debug => 1, important => 1}]);
+*** THIS IS NOT FATAL ***
+
+ * The collector has reached the maximum number of concurrent jobs to process.
+ * Testing will continue, but some tests may be running or even complete before they are rendered.
+ * All tests and events will eventually be displayed, and your final results will not be effected.
+
+You may have set '-jX' too high. This can cause the system load to slow down the processing of
+results. It is also possible to set a higher '--max-open-jobs' collector setting, but be advised
+that could result in the run crashing with too many open filehandles.
+
+This message will only be shown once.
+    EOT
+
+    $self->{+ACTION}->($e);
+    return 0;
+}
+
 sub jobs {
     my $self = shift;
 
@@ -221,9 +248,19 @@ sub jobs {
 
     return $jobs if $self->{+JOBS_DONE};
 
+    # Don't monitor more than 'max_open_jobs' or we might have too many open file handles and crash
+    # Max open files handles on a process applies. Usually this is 1024 so we
+    # can't have everything open at once when we're behind.
+    my $max_open_jobs = $self->settings->collector->max_open_jobs // 1024;
+    my $additional_jobs_to_parse = $max_open_jobs - keys %$jobs;
+    if($additional_jobs_to_parse <= 0) {
+        $self->send_backed_up;
+        return $jobs;
+    }
+
     my $queue = $self->jobs_queue or return $jobs;
 
-    for my $item ($queue->poll) {
+    for my $item ($queue->poll($additional_jobs_to_parse)) {
         my ($spos, $epos, $job) = @$item;
 
         unless ($job) {
@@ -269,6 +306,12 @@ sub jobs {
             runner_pid => $self->{+RUNNER_PID},
             job_root   => File::Spec->catdir($self->{+RUN_DIR}, $job_try),
         );
+    }
+
+    # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the harness output know we're behind.
+    if( $max_open_jobs <= scalar keys %$jobs ) {
+        my $msg = "The Yath Collector is running behind. More than $max_open_jobs test results have not been processed.";
+        $self->send_backed_up or $self->{+ACTION}->( $self->_harness_event(0, undef, time, info => [{details => $msg, tag => "INTERNAL", debug => 1, important => 1}]) );
     }
 
     return $jobs;

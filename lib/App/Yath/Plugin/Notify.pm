@@ -5,13 +5,16 @@ use warnings;
 our $VERSION = '1.000059';
 
 use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::Util qw/mod2file/;
 
 use Sys::Hostname qw/hostname/;
+
+use Carp qw/croak confess/;
 
 use App::Yath::Options;
 
 use parent 'App::Yath::Plugin';
-use Test2::Harness::Util::HashBase qw/-final -tries/;
+use Test2::Harness::Util::HashBase qw/-final -tries -problems/;
 
 # Notifications only apply to commands which build a run.
 sub applicable {
@@ -93,6 +96,12 @@ option_group {prefix => 'notify', category => "Notification Options", applicable
         description => "Add a custom text snippet to email/slack notifications",
     );
 
+    option text_module => (
+        type => 's',
+        alt => ['message_module'],
+        description => "Use the specified module to generate messages for emails and/or slack.",
+    );
+
     post sub {
         my %params = @_;
 
@@ -134,10 +143,53 @@ sub handle_event {
 
     my $f = $e->facet_data;
 
+    $self->record_problem($f);
+
     return $self->handle_job_end($e, $f, $settings) if $f->{harness_job_end};
     return $self->handle_final($e, $f, $settings) if $f->{harness_final};
 
     return;
+}
+
+sub record_problem {
+    my $self = shift;
+    my ($f) = @_;
+
+    return unless $self->has_fail_or_error($f);
+
+    my $job_id  = $f->{harness}->{job_id};
+    my $job_try = $f->{harness}->{job_try} // 0;
+
+    push @{$self->{+PROBLEMS}->{$job_id}->{$job_try}} => $self->prune_subtests($f);
+}
+
+sub has_fail_or_error {
+    my $self = shift;
+    my ($f, %params) = @_;
+
+    return 0 if $f->{trace}->{nested} && !$params{allow_nested};
+    return 0 if $f->{amnesty} && @{$f->{amnesty}};
+
+    return 1 if $f->{errors} && @{$f->{errors}};
+    return 1 if $f->{assert} && !$f->{assert}->{pass};
+
+    return 0;
+}
+
+sub prune_subtests {
+    my $self = shift;
+    my ($f) = @_;
+
+    my $p = $f->{parent}   // return $f;
+    my $c = $p->{children} // return $f;
+
+    return $f unless @$c;
+
+    my $out = {};
+    $out->{$_} = $f->{$_} for grep { $f->{$_} } qw/assert about trace errors info harness control/;
+    $out->{parent} = {%$p, children => [map { $self->prune_subtests($_) } grep { $self->has_fail_or_error($_, allow_nested => 1) } @$c]};
+
+    return $out;
 }
 
 sub handle_final {
@@ -181,14 +233,18 @@ sub send_job_notification_slack {
 
     return unless @slack;
 
-    my $text = $self->_gen_slack_text($settings, $tf, $tries);
+    my $text = $self->gen_text(scope => 'job', service => 'slack', settings => $settings, file => $tf, tries => $tries);
 
     $self->_send_slack($text, $settings, @slack);
 }
 
-sub _gen_slack_text {
+sub gen_slack_job_text {
     my $self = shift;
-    my ($settings, $tf, $tries) = @_;
+    my %params = @_;
+
+    my $settings = $params{settings} // croak "'settings' is required";
+    my $tf       = $params{file}     // croak "'file' is required";
+    my $tries    = $params{tries}    // 0;
 
     my $host = hostname();
     my $file = $tf->relative;
@@ -233,15 +289,19 @@ sub send_job_notification_email {
     push @to => @{$settings->notify->email_fail};
     return unless @to;
 
-    my $text = $self->_gen_email_text($settings, $tf, $tries);
+    my $text = $self->gen_text(scope => 'job', service => 'email', settings => $settings, file => $tf, tries => $tries);
     my $subject = "Failed test on " . hostname() . ": '" . $tf->relative . "'.";
 
     $self->_send_email($subject, $text, $settings, @to);
 }
 
-sub _gen_email_text {
+sub gen_email_job_text {
     my $self = shift;
-    my ($settings, $tf, $tries) = @_;
+    my %params = @_;
+
+    my $settings = $params{settings} // croak "'settings' is required";
+    my $tf       = $params{file}     // croak "'file' is required";
+    my $tries    = $params{tries}    // 0;
 
     my $host = hostname();
     my $file = $tf->relative;
@@ -282,8 +342,6 @@ sub send_run_notification_slack {
     my $self = shift;
     my ($final, $settings) = @_;
 
-    my $host = hostname();
-
     return if $settings->notify->no_batch_slack;
 
     my @to = @{$settings->notify->slack};
@@ -304,21 +362,38 @@ sub send_run_notification_slack {
 
     return unless @to;
 
-    my $text = join "\n\n" => grep { $_ } (
-        $settings->notify->text,
-        ($final->{pass} ? "Tests passed on $host" : "Tests failed on $host"),
-        ($files ? $files : ()),
-        join("\n" => map {"> <$_|$_>"} @{$settings->run->links}),
+    my $text = $self->gen_text(
+        scope    => 'run',
+        service  => 'slack',
+        settings => $settings,
+        final    => $final,
+        files    => $files,
     );
 
     $self->_send_slack($text, $settings, @to);
 }
 
+sub gen_slack_run_text {
+    my $self = shift;
+    my %params = @_;
+
+    my $settings = $params{settings} // croak "'settings' is required";
+    my $final    = $params{final}    // croak "'final' is required";
+    my $files    = $params{files}    // '';
+
+    my $host = hostname();
+
+    return join "\n\n" => grep { $_ } (
+        $settings->notify->text,
+        ($final->{pass} ? "Tests passed on $host" : "Tests failed on $host"),
+        ($files ? $files : ()),
+        join("\n" => map {"> <$_|$_>"} @{$settings->run->links}),
+    );
+}
+
 sub send_run_notification_email {
     my $self = shift;
     my ($final, $settings) = @_;
-
-    my $host = hostname();
 
     return if $settings->notify->no_batch_email;
 
@@ -340,16 +415,74 @@ sub send_run_notification_email {
 
     return unless @to;
 
-    my $subject = $final->{pass} ? "Tests passed on $host" : "Tests failed on $host";
+    my $subject = $self->gen_text(
+        scope    => 'run',
+        service  => 'email_subject',
+        settings => $settings,
+        final    => $final,
+        files    => $files,
+    );
 
-    my $text = join "\n\n" => grep { $_ } (
+    my $text = $self->gen_text(
+        scope    => 'run',
+        service  => 'email',
+        settings => $settings,
+        final    => $final,
+        files    => $files,
+        subject  => $subject,
+    );
+
+    $self->_send_email($subject, $text, $settings, @to);
+}
+
+sub gen_email_subject_run_text {
+    my $self = shift;
+    my %params = @_;
+
+    my $final = $params{final} // croak "'final' is required";
+    my $host  = hostname();
+
+    return $final->{pass} ? "Tests passed on $host" : "Tests failed on $host";
+}
+
+sub gen_email_run_text {
+    my $self = shift;
+    my %params = @_;
+
+    my $subject  = $params{subject}  // $self->gen_text(%params, service => 'email_subject');
+    my $settings = $params{settings} // croak "'settings' is required";
+    my $final    = $params{final}    // croak "'final' is required";
+    my $files    = $params{files}    // '';
+
+    return join "\n\n" => grep { $_ } (
         $settings->notify->text,
         $subject,
         ($files ? $files : ()),
         join("\n" => @{$settings->run->links}),
     );
+}
 
-    $self->_send_email($subject, $text, $settings, @to);
+sub gen_text {
+    my $self   = shift;
+    my %params = @_;
+
+    my $scope    = $params{scope}    or croak "'scope' is required";
+    my $service  = $params{service}  or croak "'service' is required";
+    my $settings = $params{settings} or croak "'settings' is required";
+
+    my $meth = "gen_${service}_${scope}_text";
+
+    if (my $tm = $settings->notify->text_module) {
+        my $file = mod2file($tm);
+        require $file;
+        return $tm->$meth(%params, notify => $self)
+            if $tm->can($meth);
+    }
+
+    return $self->$meth(%params)
+        if $self->can($meth);
+
+    confess "No notification text method '$meth'";
 }
 
 1;

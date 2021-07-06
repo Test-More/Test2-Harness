@@ -320,7 +320,19 @@ sub _send_email {
     my $mail = Email::Stuffer->to(@to);
     $mail->from($settings->notify->email_from);
     $mail->subject($subject);
-    $mail->text_body($text);
+
+    my $rtype = ref($text) // '';
+
+    if (!$rtype) {
+        $mail->text_body($text);
+    }
+    elsif ($rtype eq 'HASH') {
+        $mail->text_body($text->{text}) if $text->{text};
+        $mail->html_body($text->{html}) if $text->{html};
+    }
+    else {
+        warn "Invalid text type: '$rtype'";
+    }
 
     eval { $mail->send_or_die; 1 } or warn $@;
 }

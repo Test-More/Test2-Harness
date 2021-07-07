@@ -612,7 +612,7 @@ sub find_project_files {
         $seen{$path}++;
 
         my $test;
-        unless (first { $test = $_->claim_file($path, $settings) } @$plugins) {
+        unless (first { $test = $_->claim_file($path, $settings, from => 'listed') } @$plugins) {
             $test = Test2::Harness::TestFile->new(file => $path);
         }
 
@@ -650,7 +650,7 @@ sub find_project_files {
                     return unless -f $file;
 
                     my $test;
-                    unless(first { $test = $_->claim_file($file, $settings) } @$plugins) {
+                    unless(first { $test = $_->claim_file($file, $settings, from => 'search') } @$plugins) {
                         for my $ext (@{$self->extensions}) {
                             next unless m/\.\Q$ext\E$/;
                             $test = Test2::Harness::TestFile->new(file => $file);

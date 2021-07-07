@@ -14,7 +14,7 @@ use Carp qw/croak confess/;
 use App::Yath::Options;
 
 use parent 'App::Yath::Plugin';
-use Test2::Harness::Util::HashBase qw/-final -tries -problems/;
+use Test2::Harness::Util::HashBase qw/-final -tries -problems +text_mod +text_mod_handles_events +text_mod_fail/;
 
 # Notifications only apply to commands which build a run.
 sub applicable {
@@ -137,6 +137,32 @@ option_group {prefix => 'notify', category => "Notification Options", applicable
     };
 };
 
+sub text_mod {
+    my $self = shift;
+    my ($settings) = @_;
+
+    croak 'settings is a required argument' unless $settings;
+
+    return $self->{+TEXT_MOD} if exists $self->{+TEXT_MOD};
+
+    if (my $tm = $settings->notify->text_module) {
+        my $file = mod2file($tm);
+        if (eval { require $file; 1 }) {
+            my $inst = $tm->can('new') ? $tm->new() : $tm;
+            $self->{+TEXT_MOD_HANDLES_EVENTS} = $inst->can('handle_event') ? 1 : 0;
+            return $self->{+TEXT_MOD} = $inst;
+        }
+        else {
+            my $err = $@;
+            warn "Cannot use module '$tm' for notification text generation: $err";
+            chomp($self->{+TEXT_MOD_FAIL} = $err);
+        }
+    }
+
+    $self->{+TEXT_MOD_HANDLES_EVENTS} = 0;
+    return $self->{+TEXT_MOD} = undef;
+}
+
 sub handle_event {
     my $self = shift;
     my ($e, $settings) = @_;
@@ -144,6 +170,11 @@ sub handle_event {
     my $f = $e->facet_data;
 
     $self->record_problem($f);
+
+    my $tm = $self->text_mod($settings);
+    if ($tm && $self->{+TEXT_MOD_HANDLES_EVENTS}) {
+        $tm->handle_event($e, $f, settings => $settings, notify => $self);
+    }
 
     return $self->handle_job_end($e, $f, $settings) if $f->{harness_job_end};
     return $self->handle_final($e, $f, $settings) if $f->{harness_final};
@@ -484,15 +515,29 @@ sub gen_text {
 
     my $meth = "gen_${service}_${scope}_text";
 
-    if (my $tm = $settings->notify->text_module) {
-        my $file = mod2file($tm);
-        require $file;
+    if (my $tm = $self->text_mod($settings)) {
         return $tm->$meth(%params, notify => $self)
             if $tm->can($meth);
     }
 
-    return $self->$meth(%params)
-        if $self->can($meth);
+    if ($self->can($meth)) {
+        my $text = $self->$meth(%params);
+
+        my $mod = $settings->notify->text_module;
+        $text = <<"        EOT" if $self->{+TEXT_MOD_FAIL} && $service !~ m/subject/i;
+*******************************************************************************
+There was an error loading the text generation module '$mod'.
+Because of this error the default notification text has been used.
+
+The error encountered was:
+$self->{+TEXT_MOD_FAIL}
+*******************************************************************************
+
+$text
+        EOT
+
+        return $text;
+    }
 
     confess "No notification text method '$meth'";
 }

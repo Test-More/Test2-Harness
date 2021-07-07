@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add even more support for notification plugins
+
 1.000060  2021-07-06 09:51:45-07:00 America/Los_Angeles
 
     - Add support for html email

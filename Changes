@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add diags/notes to notification problem-capture
+
 1.000062  2021-07-07 15:34:34-07:00 America/Los_Angeles
 
     - Add info on where/why 'claim_file' was called

@@ -14,7 +14,7 @@ use Carp qw/croak confess/;
 use App::Yath::Options;
 
 use parent 'App::Yath::Plugin';
-use Test2::Harness::Util::HashBase qw/-final -tries -problems +text_mod +text_mod_handles_events +text_mod_fail/;
+use Test2::Harness::Util::HashBase qw/-final -tries -problems -problem_cids +text_mod +text_mod_handles_events +text_mod_fail/;
 
 # Notifications only apply to commands which build a run.
 sub applicable {
@@ -201,10 +201,16 @@ sub has_fail_or_error {
     return 0 if $f->{trace}->{nested} && !$params{allow_nested};
     return 0 if $f->{amnesty} && @{$f->{amnesty}};
 
-    return 1 if $f->{errors} && @{$f->{errors}};
-    return 1 if $f->{assert} && !$f->{assert}->{pass};
+    my $out = 0;
 
-    return 0;
+    my $cid = $f->{trace}->{cid};
+    $out = 1 if $cid && $self->{+PROBLEM_CIDS}->{$cid} && $f->{info} && @{$f->{info}};
+    $out = 1 if $f->{errors} && @{$f->{errors}};
+    $out = 1 if $f->{assert} && !$f->{assert}->{pass};
+
+    $self->{+PROBLEM_CIDS}->{$cid} = 1 if $cid && $out;
+
+    return $out;
 }
 
 sub prune_subtests {

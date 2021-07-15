@@ -1,5 +1,12 @@
 {{$NEXT}}
 
+0.000069  2021-07-15 15:54:51-07:00 America/Los_Angeles
+
+    - Fix bug where child data was stored in json
+    - Make it possible to link to jobs by job-id+try
+    - Make it possible to highlight subtests
+    - Make failing subtests auto-expand
+
 0.000068  2021-06-16 13:25:20-07:00 America/Los_Angeles
 
     - Fix sweeper so it can delete coverage

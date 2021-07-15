@@ -7,7 +7,7 @@ our $VERSION = '0.000069';
 use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
-use Test2::Harness::UI::Util qw/share_dir/;
+use Test2::Harness::UI::Util qw/share_dir find_job/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
@@ -26,9 +26,10 @@ sub handle {
     my $user = $req->user;
 
     die error(404 => 'Missing route') unless $route;
-    my $it = $route->{id} or die error(404 => 'No id');
+    my $it = $route->{job} or die error(404 => 'No job uuid');
+    my $try = $route->{try};
 
-    my $job = $schema->resultset('Job')->search({job_key => $it})->first or die error(404 => 'Invalid Job');
+    my $job = find_job($schema, $it, $try) // die error(404 => 'Invalid Job');
 
     $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id . '+' . $job->job_try;
 

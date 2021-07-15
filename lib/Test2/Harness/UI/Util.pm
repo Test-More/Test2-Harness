@@ -12,7 +12,7 @@ use Test2::Harness::Util qw/mod2file/;
 
 use Importer Importer => 'import';
 
-our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver config_from_settings/;
+our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver config_from_settings find_job/;
 
 my %SCHEMA_TO_QDB_DRIVER = (
     mariadb => 'MySQL',
@@ -25,6 +25,22 @@ my %SCHEMA_TO_DBD_DRIVER = (
     mysql      => 'DBD::mysql',
     postgresql => 'DBD::postgresql',
 );
+
+sub find_job {
+    my ($schema, $uuid, $try) = @_;
+
+    my $jobs = $schema->resultset('Job');
+
+    if (length $try) {
+        return $jobs->search({job_id => $uuid}, {order_by => {'-desc' => 'job_try'}, limit => 1})->first
+            if $try == -1;
+
+        return $jobs->search({job_id => $uuid, job_try => $try})->first;
+    }
+
+    return $jobs->search({job_key => $uuid})->first
+        || $jobs->search({job_id  => $uuid}, {order_by => {'-desc' => 'job_try'}, limit => 1})->first;
+}
 
 sub base_name {
     my ($in) = @_;

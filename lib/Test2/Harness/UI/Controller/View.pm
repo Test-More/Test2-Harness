@@ -6,7 +6,7 @@ our $VERSION = '0.000069';
 
 use Data::GUID;
 use Text::Xslate(qw/mark_raw/);
-use Test2::Harness::UI::Util qw/share_dir/;
+use Test2::Harness::UI::Util qw/share_dir find_job/;
 use Test2::Harness::UI::Response qw/resp error/;
 
 use parent 'Test2::Harness::UI::Controller';
@@ -37,16 +37,18 @@ sub handle {
         $self->{+TITLE} .= ">" . $run->project->name;
     }
 
-    my $job_key = $route->{job_key};
-    if ($job_key) {
-        my $job = $schema->resultset('Job')->search({job_key => $job_key})->first or die error(404 => 'Invalid Job');
+    my $job_uuid = $route->{job};
+    my $job_try  = $route->{try};
+
+    if ($job_uuid) {
+        my $job = find_job($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
         $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
     }
 
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
 
     my $base_uri   = $req->base->as_string;
-    my $stream_uri = join '/' => $base_uri . 'stream', grep {$_} $run_id, $job_key;
+    my $stream_uri = join '/' => $base_uri . 'stream', grep {length $_} $run_id, $job_uuid, $job_try;
 
     my $content = $tx->render(
         'view.tx',

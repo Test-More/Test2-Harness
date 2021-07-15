@@ -6,6 +6,7 @@ our $VERSION = '0.000069';
 
 use Data::GUID;
 use List::Util qw/max/;
+use Test2::Harness::UI::Util qw/find_job/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 use JSON::PP();
@@ -29,9 +30,9 @@ sub handle {
     my $res = resp(200);
 
     my @sets = (
-        $self->stream_runs($route),
-        $self->stream_jobs($route),
-        $self->stream_events($route),
+        $self->stream_runs($req, $route),
+        $self->stream_jobs($req, $route),
+        $self->stream_events($req, $route),
     );
 
     my $cache = 1;
@@ -70,12 +71,14 @@ sub handle {
 
 sub stream_runs {
     my $self = shift;
-    my ($route) = @_;
+    my ($req, $route) = @_;
 
     my $schema = $self->{+CONFIG}->schema;
 
     my %params = (
         type => 'run',
+
+        req => $req,
 
         track_status  => 1,
         id_field      => 'run_id',
@@ -96,13 +99,15 @@ sub stream_runs {
 
 sub stream_jobs {
     my $self = shift;
-    my ($route) = @_;
+    my ($req, $route) = @_;
 
     my $run = $self->{+RUN} // return;
 
     my %params = (
         type   => 'job',
         parent => $run,
+
+        req => $req,
 
         track_status => 1,
         id_field     => 'job_key',
@@ -113,8 +118,9 @@ sub stream_jobs {
         order_by => [{'-desc' => 'status'}, {'-asc' => [qw/file/]}, {'-desc' => [qw/job_try job_ord name/]}],
     );
 
-    if (my $job_key = $route->{job_key}) {
-        return $self->stream_single(%params, id => $job_key);
+    if (my $job_uuid = $route->{job}) {
+        my $schema = $self->{+CONFIG}->schema;
+        return $self->stream_single(%params, item => find_job($schema, $job_uuid, $route->{try}));
     }
 
     return $self->stream_set(%params);
@@ -122,7 +128,7 @@ sub stream_jobs {
 
 sub stream_events {
     my $self = shift;
-    my ($route) = @_;
+    my ($req, $route) = @_;
 
     my $job = $self->{+JOB} // return;
 
@@ -132,6 +138,8 @@ sub stream_events {
     return $self->stream_set(
         type   => 'event',
         parent => $job,
+
+        req => $req,
 
         track_status => 0,
         id_field     => 'event_id',
@@ -154,7 +162,13 @@ sub stream_single {
     my $type        = $params{type};
     my $id          = $params{id};
 
-    my $it = $search_base->search({$id_field => $id})->first or die error(404 => "Invalid $type");
+    my $it;
+    if (exists $params{item}) {
+        $it = $params{item} or die error(404 => "Invalid Item");
+    }
+    else {
+        $it = $search_base->search({$id_field => $id})->first or die error(404 => "Invalid $type");
+    }
     $self->{$type} = $it;
 
     my $sig;

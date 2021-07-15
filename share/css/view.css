@@ -139,7 +139,7 @@ div.stoggle {
     display: block;
     float: left;
     padding-left: 0.5ch;
-    cursor: pointer;
+    cursor: crosshair;
     margin-left: -2ch;
     margin-right: -2ch;
 }
@@ -162,4 +162,27 @@ div.stoggle.running {
     line-height:0;
     height: 0;
     overflow: hidden;
+}
+
+.hidden_row.highlight {
+    visibility: visible;
+    line-height: normal;
+    height: auto;
+    overflow: visible;
+}
+
+.toggle_highlight {
+    cursor: crosshair !important;
+}
+
+tr .toggle_highlight:hover {
+    background: #E0FAFF;
+}
+
+tr.highlight .toggle_highlight:hover {
+    background: #FFFFFF;
+}
+
+table.job_table > * > tr.highlight {
+    background: #E0FAFF;
 }

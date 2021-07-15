@@ -78,6 +78,7 @@ t2hui.eventtable.expand_lines = function(item) {
             'item': item,
             'set_ord': count++,
             'set_total': item.lines.length,
+            'id': item.event_id,
         });
         tools = false;
     });
@@ -93,21 +94,67 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 
     if (item.item.is_parent == false) { return }
 
-    var expand = $('<div class="stoggle">+</div>');
-    dest.prepend(expand);
+    var events_uri = base_uri + 'event/' + item.item.event_id + '/events';
 
-    expand.one('click', function() {
+    var jumpto = window.location.hash.substr(1);
+    var highlight = item.item.event_id === jumpto ? true : false;
+
+    var expand = $('<div class="stoggle">+</div>');
+
+    var load_subtest = function() {
         expand.text('~');
         expand.addClass('running');
         expand.addClass('expanded');
-        var events_uri = base_uri + 'event/' + item.item.event_id + '/events';
+        expand.addClass('toggle_highlight');
 
         t2hui.fetch(
             events_uri,
-            {done: function() { expand.removeClass('running') } },
-            table.render_item,
+            {
+                done: function() {
+                    var row = dest.parent();
+
+                    expand.removeClass('running');
+                    if (highlight) {
+                        $('html, body').animate({
+                              scrollTop: expand.offset().top - 120
+                        });
+                        row.addClass('highlight');
+                    }
+
+                    expand.click(function() {
+                        highlight = !highlight;
+                        console.log('click!', row, highlight);
+
+                        if (highlight) {
+                            row.addClass('highlight');
+                            $('[data-parent-id="' + item.item.event_id + '"]').addClass('highlight');
+                        }
+                        else {
+                            row.removeClass('highlight');
+                            $('[data-parent-id="' + item.item.event_id + '"]').removeClass('highlight');
+                        }
+                    });
+                }
+            },
+            function(e) {
+                var params = {"data": {"parent-id": item.item.event_id}};
+                if (highlight) {
+                    params.class = "highlight";
+                }
+                table.render_item(e, null, params);
+            }
         )
-    });
+    }
+
+    if (item.item.is_fail || highlight) {
+        load_subtest();
+    }
+    else {
+        expand = $('<div class="stoggle">+</div>');
+        expand.one('click', load_subtest);
+    }
+
+    dest.prepend(expand);
 }
 
 t2hui.eventtable.place_row = function(row, item, table, state) {

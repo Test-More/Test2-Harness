@@ -8,8 +8,6 @@ $(function() {
     t2hui.fetch(
         stream_uri,
         {done: function() {
-            console.log("done");
-
             if (state.run_table) {
                 state.run_table.make_sortable();
             }
@@ -38,7 +36,7 @@ $(function() {
                     }
                 }
 
-                state.event_table.render_item(item.data, item.data.event_id, item.update);
+                state.event_table.render_item(item.data, item.data.event_id);
             }
             else if (item.type === 'job') {
                 item.data.run_id = state.run.run_id;
@@ -48,7 +46,7 @@ $(function() {
                     jobs.append(job_table.render());
                     state.job_table = job_table;
                 }
-                state.job_table.render_item(item.data, item.data.job_key, item.update);
+                state.job_table.render_item(item.data, item.data.job_key);
             }
             else if (item.type === 'run') {
                 state.run = item.data;
@@ -57,7 +55,7 @@ $(function() {
                     runs.append(run_table.render());
                     state.run_table = run_table;
                 }
-                state.run_table.render_item(item.data, item.data.run_id, item.update);
+                state.run_table.render_item(item.data, item.data.run_id);
             }
         }
     );

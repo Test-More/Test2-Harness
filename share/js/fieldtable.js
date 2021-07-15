@@ -63,20 +63,20 @@ function FieldTable(spec) {
         });
     }
 
-    me.render_item = function(item, id, update) {
+    me.render_item = function(item, id, params) {
         if (me.spec.expand_item) {
-            var list = me.spec.expand_item(item);
+            var list = me.spec.expand_item(item, params);
             list.forEach(function(subitem) {
-                me._render_item(subitem, id, update);
+                me._render_item(subitem, subitem.id, params);
             });
         }
         else {
-            return me._render_item(item, id, update);
+            return me._render_item(item, id, params);
         }
     },
 
-    me._render_item = function(item, id, update) {
-        var row = me.render_row(item, id);
+    me._render_item = function(item, id, params) {
+        var row = me.render_row(item, id, params);
 
         if (me.spec.modify_row_hook) {
             me.spec.modify_row_hook(row.html, item, me);
@@ -106,9 +106,32 @@ function FieldTable(spec) {
         }
     }
 
-    me.render_row = function(item, id) {
+    me.render_row = function(item, id, params) {
+        var html;
+        if (id) {
+            html = $('<tr id="' + id + '"></tr>')
+        }
+        else {
+            html = $('<tr></tr>')
+        }
+
+        if (params) {
+            console.log(params);
+            if (params.class) {
+                html.addClass(params.class);
+            }
+            if (params.data) {
+                for(var field in params.data) {
+                    var attr = "data-" + field;
+                    var val = params.data[field];
+                    console.log(field, attr, val);
+                    html.attr(attr, val);
+                }
+            }
+        }
+
         var row = {
-            'html': $('<tr id="' + id + '"></tr>'),
+            'html': html,
             'columns': [],
             'dynamic_columns': [],
             'postfix_columns': [],

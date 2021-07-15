@@ -77,6 +77,7 @@ sub line_data {
     $out{event_id} = $cols{event_id};
 
     $out{is_parent} = $cols{facets}{parent} ? 1 : 0;
+    $out{is_fail} = $cols{facets}{assert} ? $cols{facets}{assert}{pass} ? 0 : 1 : undef;
 
     return \%out;
 }

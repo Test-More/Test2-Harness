@@ -437,8 +437,6 @@ sub _process_event {
     my ($event, $f, %params) = @_;
     my $job = $params{job};
 
-    clean($f);
-    my $fjson = encode_json($f);
 
     my $harness = $f->{harness} // {};
     my $trace   = $f->{trace}   // {};
@@ -477,7 +475,13 @@ sub _process_event {
     }
 
     if ($orphan) {
-        $e->{orphan}      = $fjson;
+        clean($f);
+
+        if ($f->{parent} && $f->{parent}->{children}) {
+            $f->{parent}->{children} = "Removed";
+        }
+
+        $e->{orphan}      = encode_json($f);
         $e->{orphan_line} = $params{line} if $params{line};
     }
     else {
@@ -485,9 +489,6 @@ sub _process_event {
         if (my $coverage = $f->{coverage}) {
             $self->add_coverage($job->{result}->file, $coverage);
         }
-
-        $e->{facets}      = $fjson;
-        $e->{facets_line} = $params{line} if $params{line};
 
         if ($f->{parent} && $f->{parent}->{children}) {
             $self->process_event({}, $_, job => $job, parent_id => $e_id, line => $params{line}) for @{$f->{parent}->{children}};
@@ -504,6 +505,10 @@ sub _process_event {
 
             $self->update_other($job, $f) if $e->{is_harness};
         }
+
+        clean($f);
+        $e->{facets}      = encode_json($f);
+        $e->{facets_line} = $params{line} if $params{line};
     }
 
     return $e;

@@ -29,6 +29,7 @@ my %WriteMakefileArgs = (
   "NAME" => "Test2::Harness::UI",
   "PREREQ_PM" => {
     "Carp" => 0,
+    "Clone" => 0,
     "Crypt::Eksblowfish::Bcrypt" => 0,
     "DBI" => 0,
     "DBIx::Class::InflateColumn::DateTime" => 0,
@@ -90,6 +91,7 @@ my %WriteMakefileArgs = (
 
 my %FallbackPrereqs = (
   "Carp" => 0,
+  "Clone" => 0,
   "Crypt::Eksblowfish::Bcrypt" => 0,
   "DBI" => 0,
   "DBIx::Class::InflateColumn::DateTime" => 0,

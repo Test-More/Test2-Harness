@@ -10,6 +10,7 @@ use Time::HiRes qw/time/;
 use List::Util qw/first min max/;
 use Data::Dumper qw/Dumper/;
 
+use Clone qw/clone/;
 use Carp qw/croak confess/;
 
 use Test2::Util::Facets2Legacy qw/causes_fail/;
@@ -356,7 +357,8 @@ sub process_event {
     my $self = shift;
     my ($event, $f, %params) = @_;
 
-    $f //= $event->{facet_data} // {};
+    $f //= $event->{facet_data};
+    $f = $f ? clone($f) : {};
 
     $self->start unless $self->{+RUNNING};
 

@@ -23,6 +23,7 @@ sub handle {
 
     die error(404 => 'Missing route') unless $route;
     my $source = $route->{source} or die error(404 => 'No source');
+    my $json   = $route->{json};
 
     my $schema = $self->{+CONFIG}->schema;
 
@@ -38,9 +39,27 @@ sub handle {
 
     my $failed = $run->jobs->search({fail => 1, retry => 0});
 
-    $res->content_type('text/plain');
-    my $body = join "\n" => map { $_->file } $failed->all;
-    $res->body("$body\n");
+
+    if ($json) {
+        $res->content_type('application/json');
+
+        my $run_id = $run->run_id;
+        my $run_uri = $req->base . "view/$run_id";
+
+        my $data = {
+            last_run_stamp => $run->added->epoch,
+            run_id         => $run_id,
+            failures       => {map { ($_->file => {uri => "$run_uri/" . $_->job_id, job_id => $_->job_id}) } $failed->all},
+            run_uri        => $req->base . "view/" . $run->run_id,
+        };
+
+        $res->raw_body($data);
+    }
+    else {
+        $res->content_type('text/plain');
+        my $body = join "\n" => map { $_->file } $failed->all;
+        $res->body("$body\n");
+    }
 
     return $res;
 }

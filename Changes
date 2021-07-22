@@ -1,6 +1,7 @@
 {{$NEXT}}
 
-    - s/http/hhtps/ in some docs and szil build files
+    - s/http/https/ in some docs and dzil build files
+    - Add /failed/PROJECT/json API to get more details about failures
 
 0.000070  2021-07-16 13:43:35-07:00 America/Los_Angeles
 

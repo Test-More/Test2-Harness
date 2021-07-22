@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - s/http/hhtps/ in some docs and szil build files
+
 0.000070  2021-07-16 13:43:35-07:00 America/Los_Angeles
 
     - Use clone to copy facet data before any modifications

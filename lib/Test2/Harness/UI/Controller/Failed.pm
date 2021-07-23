@@ -20,47 +20,102 @@ sub handle {
 
     my $req = $self->{+REQUEST};
     my $res = resp(200);
+    $res->header('Cache-Control' => 'no-store');
 
     die error(404 => 'Missing route') unless $route;
-    my $source = $route->{source} or die error(404 => 'No source');
-    my $json   = $route->{json};
+    my $idx          = $route->{idx} //= 0;
+    my $json         = $route->{json};
+    my $project_name = $route->{project};
+    my $source       = $route->{source};
+    my $username     = $route->{username};
 
+    error(404 => 'No source') unless $source || $project_name;
     my $schema = $self->{+CONFIG}->schema;
 
     my $run;
-    if (my $project = $schema->resultset('Project')->find({name => $source})) {
-        $run = $project->runs->search({status => 'complete'}, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first;
+
+    my $query = {status => 'complete'};
+    my $attrs = {order_by => {'-desc' => 'run_ord'}, rows => 1};
+
+    if ($source) {
+        if (my $project = $schema->resultset('Project')->find({name => $source})) {
+            $run = $project->runs->search($query, $attrs)->first;
+        }
+        else {
+            $run = $schema->resultset('Run')->find({run_id => $source});
+        }
     }
-    else {
-        $run = $schema->resultset('Run')->find({run_id => $source});
+    elsif ($project_name) {
+        my $project = $schema->resultset('Project')->find({name => $project_name}) || die error(404 => 'Invalid Project');
+
+        if ($username) {
+            my $user = $schema->resultset('User')->find({username => $username}) || die error(404 => 'Invalid Username');
+            $query->{user_id} = $user->user_id;
+        }
+
+        $attrs->{offset} = $idx if $idx;
+
+        $run = $project->runs->search($query, $attrs)->first;
     }
 
     die error(404 => 'No Data') unless $run;
 
-    my $failed = $run->jobs->search({fail => 1, retry => 0});
+    my $failed = $run->jobs->search({fail => 1, retry => 0}, {order_by => 'file'});
 
-
-    if ($json) {
-        $res->content_type('application/json');
-
-        my $run_id = $run->run_id;
-        my $run_uri = $req->base . "view/$run_id";
-
-        my $data = {
-            last_run_stamp => $run->added->epoch,
-            run_id         => $run_id,
-            failures       => {map { ($_->file => {uri => "$run_uri/" . $_->job_id, job_id => $_->job_id}) } $failed->all},
-            run_uri        => $req->base . "view/" . $run->run_id,
-        };
-
-        $res->raw_body($data);
-    }
-    else {
+    unless($json) {
         $res->content_type('text/plain');
         my $body = join "\n" => map { $_->file } $failed->all;
         $res->body("$body\n");
+        return $res;
     }
 
+    my $run_id = $run->run_id;
+    my $run_uri = $req->base . "view/$run_id";
+
+    my $data = {
+        last_run_stamp => $run->added->epoch,
+        run_id         => $run_id,
+        run_uri        => $req->base . "view/" . $run->run_id,
+        fields         => $run->fields || [],
+        failures       => [],
+    };
+
+    my $failures = $data->{failures};
+
+    while (my $fail = $failed->next) {
+        my $job_key = $fail->job_key;
+        my $job_id  = $fail->job_id;
+
+        my $subtests = {};
+
+        my $event_rs = $fail->events({nested => 0});
+        while (my $event = $event_rs->next) {
+            my $f = $event->facets;
+            next unless $f->{assert};
+            next if $f->{assert}->{pass};
+
+            if ($f->{parent}) {
+                my $name = $f->{parent}->{details} || $f->{assert}->{details} || $f->{about}->{details} || 'unnamed subtest';
+                $subtests->{$name}++;
+            }
+            else {
+                $subtests->{'~'}++;
+            }
+        }
+
+        my $row = {
+            file     => $fail->file,
+            job_id   => $job_id,
+            job_key  => $job_key,
+            uri      => "$run_uri/$job_key",
+            subtests => [sort keys %$subtests],
+        };
+
+        push @$failures => $row;
+    }
+
+    $res->content_type('application/json');
+    $res->raw_body($data);
     return $res;
 }
 

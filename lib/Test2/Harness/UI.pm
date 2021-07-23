@@ -72,7 +72,6 @@ sub init {
     $router->connect('/failed/:source'                 => {controller => 'Test2::Harness::UI::Controller::Failed'});
     $router->connect('/failed/:source/json'            => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
     $router->connect('/failed/:project/:idx'           => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
-    $router->connect('/failed/:project/:username'      => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
     $router->connect('/failed/:project/:username/:idx' => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
 
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});

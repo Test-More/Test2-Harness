@@ -105,6 +105,7 @@ sub handle {
 
         my $row = {
             file     => $fail->file,
+            fields   => $fail->fields || [],
             job_id   => $job_id,
             job_key  => $job_key,
             uri      => "$run_uri/$job_key",

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Allow control over what sweeper deletes
+
 0.000073  2021-07-23 11:54:06-07:00 America/Los_Angeles
 
     - Fix 'failed' controller

@@ -11,15 +11,27 @@ use Test2::Harness::UI::Util::HashBase qw{
 
 sub sweep {
     my $self = shift;
+    my %params = @_;
+
+    $params{runs}     //= 1;
+    $params{jobs}     //= 1;
+    $params{coverage} //= 1;
+    $params{events}   //= 1;
+
+    # Cannot remove jobs if we keep events
+    $params{jobs} = 0 unless $params{events};
+
+    # Cannot delete runs if we save jobs or coverage
+    $params{runs} = 0 unless $params{jobs} && $params{coverage};
 
     my $db_type = $self->config->guess_db_driver;
 
-    my $interval;
+    my $interval = $params{interval} || $self->{+INTERVAL};
     if ($db_type eq 'PostgreSQL') {
-        $interval = "< NOW() - INTERVAL '$self->{+INTERVAL}'";
+        $interval = "< NOW() - INTERVAL '$interval'";
     }
     elsif ($db_type =~ m/mysql/i) {
-        $interval = "< NOW() - INTERVAL $self->{+INTERVAL}";
+        $interval = "< NOW() - INTERVAL $interval";
     }
     else {
         die "Not sure how to format interval for '$db_type'";
@@ -37,7 +49,7 @@ sub sweep {
         $counts{runs}++;
         my $jobs = $run->jobs;
 
-        if ($run->coverage_id) {
+        if ($params{coverage} && $run->coverage_id) {
             my $coverage = $run->coverage;
             $run->update({coverage_id => undef});
             $coverage->delete;
@@ -45,11 +57,11 @@ sub sweep {
 
         while (my $job = $jobs->next()) {
             $counts{jobs}++;
-            $job->events->delete;
-            $job->delete;
+            $job->events->delete if $params{events};
+            $job->delete if $params{jobs};
         }
 
-        $run->delete;
+        $run->delete if $params{runs};
     }
 
     return \%counts;

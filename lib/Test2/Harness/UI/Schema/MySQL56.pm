@@ -181,6 +181,8 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
         {data_type => "bigint", is_nullable => 0},
         "insert_ord",
         {data_type => "bigint", is_auto_increment => 1, is_nullable => 0},
+        "is_subtest",
+        {data_type => "tinyint", default_value => 0, is_nullable => 0},
         "is_diag",
         {data_type => "tinyint", default_value => 0, is_nullable => 0},
         "is_harness",
@@ -515,7 +517,7 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
         "mode",
         {
             data_type   => "enum",
-            extra       => {list => ["qvfd", "qvf", "summary", "complete"]},
+            extra       => {list => ["qvfds", "qvfd", "qvf", "summary", "complete"]},
             is_nullable => 0,
         },
         "buffer",

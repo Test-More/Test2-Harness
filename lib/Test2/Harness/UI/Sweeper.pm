@@ -17,9 +17,10 @@ sub sweep {
     $params{jobs}     //= 1;
     $params{coverage} //= 1;
     $params{events}   //= 1;
+    $params{subtests} //= 1;
 
     # Cannot remove jobs if we keep events
-    $params{jobs} = 0 unless $params{events};
+    $params{jobs} = 0 unless $params{events} && $params{subtests};
 
     # Cannot delete runs if we save jobs or coverage
     $params{runs} = 0 unless $params{jobs} && $params{coverage};
@@ -57,7 +58,14 @@ sub sweep {
 
         while (my $job = $jobs->next()) {
             $counts{jobs}++;
-            $job->events->delete if $params{events};
+            if ($params{events}) {
+                if ($params{subtests}) {
+                    $job->events->delete;
+                }
+                else {
+                    $job->events->search({'-not' => {is_subtest => 1, nested => 0}})->delete;
+                }
+            }
             $job->delete if $params{jobs};
         }
 

@@ -130,7 +130,7 @@ CREATE TABLE runs (
     duration        TEXT            DEFAULT NULL,
     log_file_id     CHAR(36)        DEFAULT NULL,
 
-    mode ENUM('qvfd', 'qvf', 'summary', 'complete') NOT NULL,
+    mode ENUM('qvfds', 'qvfd', 'qvf', 'summary', 'complete') NOT NULL,
     buffer ENUM('none', 'diag', 'job', 'run') DEFAULT 'job' NOT NULL,
 
     -- From Log
@@ -205,6 +205,7 @@ CREATE TABLE events (
     event_ord       BIGINT      NOT NULL,
     insert_ord      BIGINT      NOT NULL AUTO_INCREMENT,
 
+    is_subtest      BOOL        NOT NULL DEFAULT FALSE,
     is_diag         BOOL        NOT NULL DEFAULT FALSE,
     is_harness      BOOL        NOT NULL DEFAULT FALSE,
     is_time         BOOL        NOT NULL DEFAULT FALSE,

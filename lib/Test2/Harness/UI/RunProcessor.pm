@@ -458,9 +458,12 @@ sub _process_event {
 
     my $is_time = $f->{harness_job_end} ? ($f->{harness_job_end}->{times} ? 1 : 0) : 0;
 
+    my $is_subtest = $f->{parent} ? 1 : 0;
+
     my $e = {
         event_id   => $e_id,
         nested     => $nested,
+        is_subtest => $is_subtest,
         is_diag    => $is_diag,
         is_harness => $is_harness,
         is_time    => $is_time,

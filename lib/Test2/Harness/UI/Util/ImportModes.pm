@@ -11,6 +11,7 @@ my %MODES = (
     summary  => 5,
     qvf      => 10,
     qvfd     => 15,
+    qvfds    => 17,
     complete => 20,
 );
 
@@ -95,6 +96,7 @@ sub event_in_mode {
 
     my $cols = _get_event_columns($event);
 
+    return 1 if $mode == $MODES{qvfds} && $cols->{is_subtest} && $cols->{nested} == 0;
     return 1 if $cols->{is_diag};
     return 1 if $cols->{is_harness};
     return 1 if $cols->{is_time};

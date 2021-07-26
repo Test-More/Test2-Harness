@@ -17,6 +17,7 @@ CREATE TYPE api_key_status AS ENUM(
 
 CREATE TYPE run_modes AS ENUM(
     'summary',
+    'qvfds',
     'qvfd',
     'qvf',
     'complete'
@@ -213,6 +214,7 @@ CREATE TABLE events (
     event_ord       BIGINT      NOT NULL,
     insert_ord      BIGSERIAL   NOT NULL,
 
+    is_subtest      BOOL        NOT NULL DEFAULT FALSE,
     is_diag         BOOL        NOT NULL DEFAULT FALSE,
     is_harness      BOOL        NOT NULL DEFAULT FALSE,
     is_time         BOOL        NOT NULL DEFAULT FALSE,

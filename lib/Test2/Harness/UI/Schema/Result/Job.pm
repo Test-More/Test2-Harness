@@ -99,13 +99,24 @@ sub normalize_to_mode {
     return if mode_check($mode, 'complete');
 
     if (mode_check($mode, 'summary', 'qvf')) {
-        $self->events->delete_all;
+        $self->events->delete;
         return;
     }
 
-    die "Unknown mode '$mode'" unless mode_check($mode, 'qvfd');
+    my $query = {
+        is_diag => 0,
+        is_harness => 0,
+        is_time => 0,
+    };
 
-    $self->events->search({is_diag => 0, is_harness => 0, is_time => 0})->delete_all();
+    if (mode_check($mode, 'qvfds')) {
+        $query->{'-not'} = {is_subtest => 1, nested => 0};
+    }
+    elsif(!mode_check($mode, 'qvfd')) {
+        die "Unknown mode '$mode'";
+    }
+
+    $self->events->search($query)->delete();
 }
 
 1;

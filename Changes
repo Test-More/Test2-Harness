@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Add qvfds, same as qvfd but includes subtests (main event only)
+    - Add option to keep subtests when sweeping
+    - Add 'is_subtest' field to events
+
 0.000074  2021-07-23 14:54:03-07:00 America/Los_Angeles
 
     - Allow control over what sweeper deletes

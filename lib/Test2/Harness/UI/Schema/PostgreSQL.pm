@@ -210,6 +210,8 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
             is_nullable       => 0,
             sequence          => "events_insert_ord_seq",
         },
+        "is_subtest",
+        {data_type => "boolean", default_value => \"false", is_nullable => 0},
         "is_diag",
         {data_type => "boolean", default_value => \"false", is_nullable => 0},
         "is_harness",
@@ -560,7 +562,7 @@ $Test2::Harness::UI::Schema::LOADED = "PostgreSQL";
             default_value => "qvfd",
             extra         => {
                 custom_type_name => "run_modes",
-                list             => ["summary", "qvfd", "qvf", "complete"],
+                list             => ["summary", "qvfds", "qvfd", "qvf", "complete"],
             },
             is_nullable => 0,
         },

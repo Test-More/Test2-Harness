@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000064  2021-08-02 15:23:04-07:00 America/Los_Angeles
+
     - Add more capabilities for plugins
     - Add the 'Cover' plugin to handle coverage in a better way
 

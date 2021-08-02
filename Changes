@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Add more capabilities for plugins
+    - Add the 'Cover' plugin to handle coverage in a better way
+
 1.000063  2021-07-14 09:44:17-07:00 America/Los_Angeles
 
     - Add diags/notes to notification problem-capture

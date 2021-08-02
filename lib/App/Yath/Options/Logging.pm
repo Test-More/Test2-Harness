@@ -52,21 +52,6 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
         description  => "Specify the name of the log file. This option implies -L.",
     );
 
-    option write_coverage => (
-        type => 'd',
-        normalize => \&clean_path,
-        long_examples => ['', '=coverage.json'],
-        description => "Create a json file of all coverage data seen during the run (This implies --cover-files).",
-        action      => sub {
-            my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
-
-            $settings->run->field('cover_files' => 1) if $settings->check_prefix('runner');
-
-            return $$slot = clean_path("coverage.json") if $raw eq '1';
-            return $$slot = $norm;
-        },
-    );
-
     post \&post_process;
 };
 

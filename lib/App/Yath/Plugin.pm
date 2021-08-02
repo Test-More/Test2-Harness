@@ -12,6 +12,8 @@ use parent 'Test2::Harness::Plugin';
 
 sub finish {}
 
+sub finalize {}
+
 1;
 
 __END__
@@ -120,6 +122,12 @@ C<< { pass => $bool } >>.
             [$job_id2, $file2, $halt_reason2],
         ],
     }
+
+=item $plugin->finalize($settings)
+
+This is called as late as possible before exit. This is mainly useful for
+outputting messages such as "Extra log file written to ..." which are best put
+at the end of output.
 
 =back
 

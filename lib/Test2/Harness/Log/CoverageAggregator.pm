@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '1.000064';
 
+use File::Find qw/find/;
 use Test2::Harness::Util::HashBase qw/<coverage <job_map/;
 
 sub init {
@@ -76,11 +77,116 @@ sub add_coverage {
     }
 }
 
+my %PERL_TYPES = (
+    pl  => 1,
+    pm  => 1,
+    t   => 1,
+    tx  => 1,
+    t2  => 1,
+    pmc => 1,
+);
+
+sub build_metrics {
+    my $self = shift;
+    my %params = @_;
+
+    my $private = $params{exclude_private};
+
+    my $dirs     = $params{dirs}  // ['lib'];
+    my $types    = $params{types} // ['pm', 'pl'];
+    my $coverage = $self->{+COVERAGE} //= {};
+    my $untested = $coverage->{untested} = {files => [], subs => {}};
+
+    my $metrics  = $coverage->{metrics}  = {
+        files => {total => 0, tested => 0},
+        subs  => {total => 0, tested => 0},
+    };
+
+    my %type_check = map { m/\.?([^\.]+)$/g; (lc($1) => 1) } @$types;
+
+    my $raw_untested = {};
+    find(
+        {
+            no_chdir => 1,
+            wanted   => sub {
+                my $type = lc($_);
+                $type =~ s/^.*\.([^\.]+)$/$1/;
+                return unless $type_check{$type};
+                $metrics->{files}->{total}++;
+
+                my $file  = $File::Find::name;
+                my $cfile = $coverage->{files}->{$file};
+
+                $metrics->{files}->{tested}++ if $cfile;
+
+                for my $sub ($PERL_TYPES{$type} ? $self->scan_subs($file) : ('<>')) {
+                    next if $sub =~ m/^_/ && $private;
+
+                    my $special_sub = $sub !~ m/^\w/;
+
+                    $metrics->{subs}->{total}++ unless $special_sub;
+
+                    if ($cfile && $cfile->{$sub}) {
+                        $metrics->{subs}->{tested}++ unless $special_sub;
+                    }
+                    else {
+                        $raw_untested->{$file}->{$sub} = 1;
+                    }
+                }
+            },
+        },
+        @$dirs
+    );
+
+    for my $file (keys %$raw_untested) {
+        my @val = keys %{$raw_untested->{$file}};
+        next unless @val;
+
+        if (@val == 1 && $val[0] eq '<>') {
+            push @{$untested->{files}} => $file;
+        }
+        else {
+            $untested->{subs}->{$file} = \@val;
+        }
+    }
+
+    return $metrics;
+}
+
+sub scan_subs {
+    my $self = shift;
+    my ($file) = @_;
+
+    my @subs;
+
+    my $fh;
+    unless (open($fh, '<', $file)) {
+        warn "Could not open file '$file': $!";
+        return;
+    }
+
+    my $in_pod = 0;
+    while (my $line = <$fh>) {
+        $in_pod = 1 if $line =~ m/^=\w/;
+
+        if ($in_pod) {
+            next unless $line =~ m/^=cut/i;
+            $in_pod = 0;
+            next;
+        }
+
+        last if $line =~ m/^__(END|DATA)__$/;
+
+        next unless $line =~ m/^\s*sub\s+(\w+)/;
+        push @subs => $1;
+    }
+
+    return @subs;
+}
 
 1;
 
 __END__
-
 
 =pod
 
@@ -120,11 +226,29 @@ This module takes a stream of events and produces aggregated coverage data.
 
 Process the event, aggregating any coverage info it may contain.
 
-=item $haashref = $agg->coverage()
+=item $metrics = $agg->build_metrics()
+
+=item $metrics = $agg->build_metrics(exclude_private => $BOOL)
+
+Will build metrics, and include them in the output from C<< $agg->coverage() >>
+next time it is called.
+
+The C<exclude_private> option, when set to true, will exclude any method that
+beings with an underscore from the coverage metrics and untested sub list.
+
+Metrics:
+
+    {
+        files => {total => 20, tested => 18},
+        subs  => {total => 80, tested => 70},
+    }
+
+=item $hashref = $agg->coverage()
 
 Produce a hashref of all aggregated coverage data:
 
     {
+        files => {
         'test_file_a.t' => [
             'lib/MyModule1.pm',
             'lib/MyModule2.pm',
@@ -136,6 +260,25 @@ Produce a hashref of all aggregated coverage data:
             ...
         ],
         ...,
+        },
+        testmeta => {
+            'test_file_a.t' => {...},
+        },
+
+        # If you called ->build_metrics this will also be present
+        metrics => {
+            files => {total => 20, tested => 18},
+            subs  => {total => 80, tested => 70},
+        },
+
+        # If you called ->build_metrics this will also be present
+        untested => {
+            files => ['lib/untested.pm', ...],
+            subs => {
+                'lib/untested.pm' => [ 'foo', 'bar', ... ],
+                ...,
+            },
+        },
     }
 
 =back

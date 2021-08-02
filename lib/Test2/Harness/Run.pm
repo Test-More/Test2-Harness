@@ -21,7 +21,6 @@ use Test2::Harness::Util::HashBase qw{
     <io_events
 
     <dbi_profiling
-    <cover_files
 
     <input <input_file <test_args
 

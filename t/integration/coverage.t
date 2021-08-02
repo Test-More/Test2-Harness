@@ -15,7 +15,7 @@ close($fh);
 
 yath(
     command => 'test',
-    args    => ["-I$dir/lib", $dir, '--ext=tx', "--write-coverage=$cfile", '-v'],
+    args    => ["-I$dir/lib", $dir, '--ext=tx', "--cover-write=$cfile", '-v'],
     exit    => 0,
 );
 

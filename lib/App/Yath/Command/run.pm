@@ -13,7 +13,6 @@ use Test2::Harness::IPC;
 
 use App::Yath::Util qw/find_pfile/;
 use Test2::Harness::Util qw/open_file/;
-use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Harness::Util qw/mod2file open_file/;
 use Test2::Util::Table qw/table/;
 
@@ -49,6 +48,7 @@ sub terminate_queue {}
 sub write_settings_to {}
 sub setup_plugins {}
 sub teardown_plugins {}
+sub finalize_plugins {}
 
 sub monitor_preloads { 1 }
 sub job_count { 1 }

@@ -78,10 +78,11 @@ sub handle_event {
     my ($e, $settings) = @_;
 
     unless ($self->{+AGGREGATOR}) {
+        my $do_cover = $settings->cover->files;
         my $file = $settings->cover->write;
         my $metrics = $settings->cover->metrics;
 
-        unless ($file || $metrics) {
+        unless ($file || $metrics || $do_cover) {
             $self->{+NO_AGGREGATE} = 1;
             return;
         }
@@ -126,7 +127,7 @@ sub _percentages {
     for my $metric (sort keys %$metrics) {
         my $data = $metrics->{$metric} or next;
         my ($total, $tested) = @{$data}{qw/total tested/};
-        push @out => [$metric, $total, $tested, int(($tested / $total) * 100) . '%'];
+        push @out => [$metric, $total, $tested, $total ? (int(($tested / $total) * 100) . '%') : '100%'];
     }
 
     return \@out;
@@ -137,12 +138,15 @@ sub teardown {
     my ($settings, $renderers, $logger) = @_;
 
     my $cover      = $settings->cover;
-    my $aggregator = $self->{+AGGREGATOR};
+    my $aggregator = $self->{+AGGREGATOR} or return;
     my $metrics    = $self->metrics($settings) if $cover->metrics;
     my $coverage   = $aggregator->coverage;
 
     my $percentages = $self->_percentages($metrics);
-    my $details = join "\n", map { "$_->[0]: $_->[2]/$_->[1] ($_->[3])" } @$percentages;
+    my $raw         = join ", ", map { "$_->[0]: $_->[2]/$_->[1] ($_->[3])" } @$percentages;
+    my $details     = join ", ", map { "$_->[0] $_->[3]" } @$percentages;
+
+    $details = "coverage" unless length $details;
 
     require Test2::Harness::Event;
     my $e = Test2::Harness::Event->new(
@@ -153,7 +157,7 @@ sub teardown {
         facet_data => {
             about => { details => 'Aggregated Coverage Data' },
             run_fields => [
-                {name => 'coverage', details => $details, data => $coverage},
+                {name => 'coverage', details => $details, data => $coverage, $raw ? (raw => $raw) : ()},
             ],
         },
     );

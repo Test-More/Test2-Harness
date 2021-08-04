@@ -1,4 +1,4 @@
-package Test2::Harness::UI::Controller::Coverage;
+package Test2::Harness::UI::Controller::RunField;
 use strict;
 use warnings;
 
@@ -6,58 +6,37 @@ our $VERSION = '0.000076';
 
 use Data::GUID;
 use List::Util qw/max/;
+use Text::Xslate(qw/mark_raw/);
+use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
-use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use parent 'Test2::Harness::UI::Controller';
-use Test2::Harness::UI::Util::HashBase;
-
-sub title { 'Coverage' }
+use Test2::Harness::UI::Util::HashBase qw/-title/;
 
 sub handle {
     my $self = shift;
     my ($route) = @_;
 
     my $req = $self->{+REQUEST};
-    my $res = resp(200);
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $res = resp(200);
+    my $user = $req->user;
 
     die error(404 => 'Missing route') unless $route;
-    my $source = $route->{source} or die error(404 => 'No source');
-    my $username = $route->{user};
 
-    my $delete = $route->{delete};
+    my $it = $route->{id} or die error(404 => 'No id');
+    my $schema = $self->{+CONFIG}->schema;
+    my $field = $schema->resultset('RunField')->search({run_field_id => $it})->first or die error(404 => 'Invalid Field');
 
-    if ($username && $username eq 'delete') {
-        $delete = 1;
-        $username = undef;
-    }
-
-    my $field;
-    if (my $project = $schema->resultset('Project')->find({name => $source})) {
-        $field = $project->coverage(user => $username);
-    }
-    elsif ($field = $schema->resultset('RunField')->find({name => 'coverage', run_field_id => $source})) {
-    }
-    else {
-        die error(405);
-    }
-
-    my $data;
-
-    if ($field) {
-        if ($delete) {
+    if (my $act = $route->{action}) {
+        if ($act eq 'delete') {
             $field->delete;
-        }
-        else {
-            $data = $field->data;
         }
     }
 
     $res->content_type('application/json');
-    $res->raw_body($data ||= {});
-
+    $res->raw_body($field);
     return $res;
 }
 
@@ -71,7 +50,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Controller::Coverage
+Test2::Harness::UI::Controller::Run
 
 =head1 DESCRIPTION
 

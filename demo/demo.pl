@@ -82,10 +82,10 @@ for my $file (qw/coverage.jsonl.bz2 fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl
 
     if ($version) {
         $run->run_fields->create({
-            field_id => gen_uuid,
-            run_id   => $run->run_id,
-            name     => 'version',
-            details  => $version,
+            run_field_id => gen_uuid,
+            run_id       => $run->run_id,
+            name         => 'version',
+            details      => $version,
         });
     }
 

@@ -31,13 +31,6 @@ __PACKAGE__->inflate_column(
     },
 );
 
-__PACKAGE__->inflate_column(
-    fields => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('fields', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('fields', {}),
-    },
-);
-
 my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
 sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 
@@ -46,7 +39,8 @@ sub sig {
 
     return join ";" => (
         (map {$self->$_ // ''} qw/status pinned passed failed retried concurrency/),
-        (map {length($self->$_ // '')} qw/fields parameters/),
+        (map {length($self->$_ // '')} qw/parameters/),
+        ($self->run_fields->count),
     );
 }
 
@@ -59,7 +53,8 @@ sub TO_JSON {
 
     # Inflate
     $cols{parameters} = $self->parameters;
-    $cols{fields}     = $self->fields;
+
+    $cols{fields} = [ map { my $d = $_->TO_JSON; $d->{data} = $d->{data} ? \"1" : \"0" ; $d } $self->run_fields->all ];
 
     $cols{user} = $self->user->username;
     $cols{project} = $self->project->name;

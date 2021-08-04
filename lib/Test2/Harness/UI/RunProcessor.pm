@@ -19,8 +19,6 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use JSON::PP();
 
-use Test2::Harness::Log::CoverageAggregator;
-
 use Test2::Harness::UI::Util::ImportModes qw{
     %MODES
     record_all_events
@@ -170,28 +168,17 @@ sub flush {
     return $flush;
 }
 
-sub add_coverage {
-    my $self = shift;
-    my ($test, $data) = @_;
-
-    my $ca = $self->{+COVERAGE} //= Test2::Harness::Log::CoverageAggregator->new();
-
-    $ca->add_coverage($test, $data);
-
-    return;
-}
-
 sub flush_coverage {
     my $self = shift;
 
-    my $ca = $self->{+COVERAGE} or return;
-    my $run = $self->run;
+    my $c    = $self->{+COVERAGE} or return;
+    my $run  = $self->run;
     my $uuid = gen_uuid();
 
     eval {
         $self->schema->resultset('Coverage')->create({
             coverage_id => $uuid,
-            coverage    => encode_json($ca->coverage),
+            coverage    => encode_json($c),
         });
 
         $run->update({coverage_id => $uuid});
@@ -490,9 +477,8 @@ sub _process_event {
         $e->{orphan_line} = $params{line} if $params{line};
     }
     else {
-        # Handle coverage
-        if (my $coverage = $f->{coverage}) {
-            $self->add_coverage($job->{result}->file, $coverage);
+        if (my $fields = $f->{run_fields}) {
+            $self->add_run_fields($fields);
         }
 
         if ($f->{parent} && $f->{parent}->{children}) {
@@ -517,6 +503,37 @@ sub _process_event {
     }
 
     return $e;
+}
+
+sub add_run_fields {
+    my $self = shift;
+    my ($fields) = @_;
+
+    my $run    = $self->{+RUN};
+    my $run_id = $run->run_id;
+
+    my @add;
+    for my $field (@$fields) {
+        my $id  = gen_uuid;
+        my $new = {run_field_id => $id, run_id => $run_id};
+
+        $new->{name}    = $field->{name}    || 'unknown';
+        $new->{details} = $field->{details} || $new->{name};
+        $new->{raw}     = $field->{raw}               if $field->{raw};
+        $new->{link}    = $field->{link}              if $field->{link};
+        $new->{data}    = encode_json($field->{data}) if $field->{data};
+
+        if ($new->{name} eq 'coverage' && !$new->{link}) {
+            $new->{link} = "/coverage/$id";
+        }
+
+        push @add => $new;
+
+        # Replace the item in the $fields array with the id
+        $field = $id;
+    }
+
+    $self->schema->resultset('RunField')->populate(\@add);
 }
 
 sub clean_output {
@@ -595,9 +612,7 @@ sub update_other {
         $run->parameters($run_data);
 
         if (my $fields = $run_data->{harness_run_fields} // $run_data->{fields}) {
-            my $run_id = $run->run_id;
-            my @new = map { { %{$_}, run_id => $run_id } } @$fields;
-            $self->{+RUN}->fields($self->merge_fields($run->fields, \@new));
+            $self->add_run_fields($fields);
         }
     }
 

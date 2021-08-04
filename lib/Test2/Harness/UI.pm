@@ -13,6 +13,7 @@ use Test2::Harness::UI::Request;
 use Test2::Harness::UI::Controller::Upload;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
+use Test2::Harness::UI::Controller::RunField;
 use Test2::Harness::UI::Controller::Job;
 use Test2::Harness::UI::Controller::Download;
 use Test2::Harness::UI::Controller::Sweeper;
@@ -55,6 +56,9 @@ sub init {
     $router->connect('/run/:id/pin'      => {controller => 'Test2::Harness::UI::Controller::Run', action => 'pin_toggle'});
     $router->connect('/run/:id/delete'   => {controller => 'Test2::Harness::UI::Controller::Run', action => 'delete'});
     $router->connect('/run/:id/cancel'   => {controller => 'Test2::Harness::UI::Controller::Run', action => 'cancel'});
+
+    $router->connect('/run/field/:id'        => {controller => 'Test2::Harness::UI::Controller::RunField'});
+    $router->connect('/run/field/:id/delete' => {controller => 'Test2::Harness::UI::Controller::RunField', action => 'delete'});
 
     $router->connect('/job/:job'         => {controller => 'Test2::Harness::UI::Controller::Job'});
     $router->connect('/job/:job/:try'    => {controller => 'Test2::Harness::UI::Controller::Job'});
@@ -174,7 +178,9 @@ sub wrap {
         $res->body($wrapped);
     }
     elsif($ct eq 'application/json') {
-        $res->body(encode_json($res->raw_body));
+        if (my $data = $res->raw_body) {
+            $res->body(ref($data) ? encode_json($data) : $data);
+        }
     }
 
     $res->cookies->{id} = {value => $session->session_id, httponly => 1, expires => '+1M'}

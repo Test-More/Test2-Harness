@@ -54,35 +54,6 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
 
 {
     package    #
-        Test2::Harness::UI::Schema::Result::Coverage;
-
-    use base 'DBIx::Class::Core';
-    __PACKAGE__->load_components(
-        "InflateColumn::DateTime",
-        "InflateColumn::Serializer",
-        "InflateColumn::Serializer::JSON",
-        "Tree::AdjacencyList",
-        "UUIDColumns",
-    );
-    __PACKAGE__->table("coverage");
-    __PACKAGE__->add_columns(
-        "coverage_id",
-        {data_type => "char", is_nullable => 0, size => 36},
-        "coverage",
-        {data_type => "json", is_nullable => 1},
-    );
-    __PACKAGE__->set_primary_key("coverage_id");
-    __PACKAGE__->has_many(
-        "runs",
-        "Test2::Harness::UI::Schema::Result::Run",
-        {"foreign.coverage_id" => "self.coverage_id"},
-        {cascade_copy          => 0, cascade_delete => 0},
-    );
-
-}
-
-{
-    package    #
         Test2::Harness::UI::Schema::Result::Email;
 
     use base 'DBIx::Class::Core';
@@ -535,26 +506,11 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {data_type => "integer", is_nullable => 1},
         "concurrency",
         {data_type => "integer", is_nullable => 1},
-        "fields",
-        {data_type => "json", is_nullable => 1},
         "parameters",
         {data_type => "json", is_nullable => 1},
-        "coverage_id",
-        {data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36},
     );
     __PACKAGE__->set_primary_key("run_id");
     __PACKAGE__->add_unique_constraint("run_ord", ["run_ord"]);
-    __PACKAGE__->belongs_to(
-        "coverage",
-        "Test2::Harness::UI::Schema::Result::Coverage",
-        {coverage_id => "coverage_id"},
-        {
-            is_deferrable => 1,
-            join_type     => "LEFT",
-            on_delete     => "RESTRICT",
-            on_update     => "RESTRICT",
-        },
-    );
     __PACKAGE__->has_many(
         "jobs",
         "Test2::Harness::UI::Schema::Result::Job",
@@ -584,6 +540,40 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {user_id       => "user_id"},
         {is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT"},
     );
+
+}
+
+{
+    package    #
+        Test2::Harness::UI::Schema::Result::RunField;
+
+    use base 'DBIx::Class::Core';
+    __PACKAGE__->load_components(
+        "InflateColumn::DateTime",
+        "InflateColumn::Serializer",
+        "InflateColumn::Serializer::JSON",
+        "Tree::AdjacencyList",
+        "UUIDColumns",
+    );
+    __PACKAGE__->table("run_fields");
+    __PACKAGE__->add_columns(
+        "run_field_id",
+        {data_type => "char", is_nullable => 0, size => 36},
+        "run_id",
+        {data_type => "char", is_nullable => 0, size => 36},
+        "name",
+        {data_type => "varchar", is_nullable => 0, size => 255},
+        "data",
+        {data_type => "json", is_nullable => 0},
+        "details",
+        {data_type => "text", is_nullable => 1},
+        "raw",
+        {data_type => "text", is_nullable => 1},
+        "link",
+        {data_type => "text", is_nullable => 1},
+    );
+    __PACKAGE__->set_primary_key("run_field_id");
+    __PACKAGE__->add_unique_constraint("run_id", ["run_id", "name"]);
 
 }
 

@@ -13,17 +13,18 @@ sub sweep {
     my $self = shift;
     my %params = @_;
 
-    $params{runs}     //= 1;
-    $params{jobs}     //= 1;
-    $params{coverage} //= 1;
-    $params{events}   //= 1;
-    $params{subtests} //= 1;
+    $params{runs}       //= 1;
+    $params{jobs}       //= 1;
+    $params{coverage}   //= 1;
+    $params{events}     //= 1;
+    $params{subtests}   //= 1;
+    $params{run_fields} //= 1;
 
     # Cannot remove jobs if we keep events
     $params{jobs} = 0 unless $params{events} && $params{subtests};
 
     # Cannot delete runs if we save jobs or coverage
-    $params{runs} = 0 unless $params{jobs} && $params{coverage};
+    $params{runs} = 0 unless $params{jobs} && $params{coverage} && $params{run_fields};
 
     my $db_type = $self->config->guess_db_driver;
 
@@ -50,12 +51,6 @@ sub sweep {
         $counts{runs}++;
         my $jobs = $run->jobs;
 
-        if ($params{coverage} && $run->coverage_id) {
-            my $coverage = $run->coverage;
-            $run->update({coverage_id => undef});
-            $coverage->delete;
-        }
-
         while (my $job = $jobs->next()) {
             $counts{jobs}++;
             if ($params{events}) {
@@ -67,6 +62,15 @@ sub sweep {
                 }
             }
             $job->delete if $params{jobs};
+        }
+
+        if ($params{run_fields}) {
+            if ($params{coverage}) {
+                $run->run_fields->delete;
+            }
+            else {
+                $run->run_fields->search({name => {'!=' => 'coverage'}})->delete;
+            }
         }
 
         $run->delete if $params{runs};

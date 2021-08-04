@@ -124,6 +124,7 @@ table.tool_table {
 
 table.tool_table > tr > td {
     position: relative;
+    white-space: no-wrap;
 }
 
 table.tool_table > tr > td > div.tooltip {

@@ -27,9 +27,9 @@ t2hui.runtable.build_table = function() {
         'modify_row_hook': t2hui.runtable.modify_row,
         'place_row': t2hui.runtable.place_row,
 
+        'dynamic_field_preprocess': t2hui.runtable.field_preprocess,
         'dynamic_field_attribute': 'fields',
         'dynamic_field_fetch': t2hui.runtable.field_fetch,
-        'dynamic_field_builder': t2hui.runtable.field_builder,
 
         'columns': columns,
         'postfix_columns': [
@@ -119,43 +119,7 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
         tools.append(go);
     }
 
-    if (item.coverage_id) {
-        var cover_link = base_uri + 'coverage/' + item.coverage_id;
-        var cover = $('<a class="tool etoggle" title="Coverage Data" href="' + cover_link + '"><img src="/img/coverage.png" /></a>');
-        tools.append(cover);
-
-        if (item.pinned) {
-            var cover = $('<a class="tool etoggle inactive" title="Cannot delete locked coverage data"><img src="/img/coveragedel.png" /></a>');
-            tools.append(cover);
-        }
-        else {
-            var coverdel = $('<a class="tool etoggle" title="Delete Coverage Data"><img src="/img/coveragedel.png" /></a>');
-            tools.append(coverdel);
-
-            coverdel.click(function() {
-                var ok = confirm("Are your sure you want to delete this coverage data? This cannot be undone!");
-                if (!ok) { return; }
-
-                cover.replaceWith($('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coverage.png" /></a>'));
-                coverdel.replaceWith($('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coveragedel.png" /></a>'));
-
-                $.ajax(cover_link + '/delete', {
-                    'data': { 'content-type': 'application/json' },
-                    'error': function(a, b, c) { alert("Failed to delete coverage") },
-                    'success': function() { return },
-                });
-            });
-        }
-    }
-    else {
-        var cover = $('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coverage.png" /></a>');
-        tools.append(cover);
-
-        var coverdel = $('<a class="tool etoggle inactive" title="No Coverage Data"><img src="/img/coveragedel.png" /></a>');
-        tools.append(coverdel);
-    }
-
-    var del = $('<div class="tool etoggle" title="delete"><img src="/img/close.png"/></div>');
+    var del = $('<div class="tool etoggle" title="delete"><img src="/img/delete.png"/></div>');
     var pin = $('<img />');
     var pintool = $('<a class="tool etoggle"></a>');
 
@@ -252,20 +216,12 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
     });
 };
 
-t2hui.runtable.field_fetch = function(field_data, item) {
-    return base_uri + 'run/' + field_data.run_id;
+t2hui.runtable.field_preprocess = function(field_data) {
+    field_data.delete = base_uri + 'run/field/' + field_data.run_field_id + '/delete';
 };
 
-t2hui.runtable.field_builder = function(data, name) {
-    var it;
-    data.fields.forEach(function(field) {
-        if (field.name === name) {
-            it = field.data;
-            return false;
-        }
-    });
-
-    return it;
+t2hui.runtable.field_fetch = function(field_data, item) {
+    return base_uri + 'run/field/' + field_data.run_field_id;
 };
 
 t2hui.runtable.modify_row = function(row, item) {

@@ -31,6 +31,7 @@ require Test2::Harness::UI::Schema::Result::Permission;
 require Test2::Harness::UI::Schema::Result::PrimaryEmail;
 require Test2::Harness::UI::Schema::Result::Project;
 require Test2::Harness::UI::Schema::Result::Run;
+require Test2::Harness::UI::Schema::Result::RunField;
 require Test2::Harness::UI::Schema::Result::SessionHost;
 require Test2::Harness::UI::Schema::Result::Session;
 require Test2::Harness::UI::Schema::Result::User;

@@ -174,13 +174,13 @@ sub coverage_data {
     my $ydb = $settings->prefix('yathui-db') or return;
     return unless $ydb->coverage;
 
-    my $config = config_from_settings($settings);
-    my $schema = $config->schema;
+    my $config  = config_from_settings($settings);
+    my $schema  = $config->schema;
     my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
 
-    my $cover = $project->coverage(user => $ydb->publisher) // return;
-    return decode_json($cover->coverage);
+    my $field = $project->coverage(user => $ydb->publisher) // return;
+    return $field->data;
 }
 
 sub duration_data {

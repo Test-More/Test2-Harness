@@ -106,11 +106,6 @@ CREATE TABLE permissions (
     UNIQUE(project_id, user_id)
 ) ROW_FORMAT=COMPRESSED;
 
-CREATE TABLE coverage (
-    coverage_id     CHAR(36)        NOT NULL PRIMARY KEY,
-    coverage        JSON            DEFAULT NULL
-);
-
 CREATE TABLE runs (
     run_id          CHAR(36)        NOT NULL PRIMARY KEY,
     user_id         CHAR(36)        NOT NULL,
@@ -138,12 +133,8 @@ CREATE TABLE runs (
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
     concurrency     INTEGER         DEFAULT NULL,
-    fields          JSON            DEFAULT NULL,
     parameters      JSON            DEFAULT NULL,
 
-    coverage_id     CHAR(36)        DEFAULT NULL,
-
-    FOREIGN KEY (coverage_id) REFERENCES coverage(coverage_id),
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
     FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id),
@@ -153,6 +144,18 @@ CREATE TABLE runs (
 CREATE INDEX run_projects ON runs(project_id);
 CREATE INDEX run_status ON runs(status);
 CREATE INDEX run_user ON runs(user_id);
+
+CREATE TABLE run_fields (
+    run_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
+    run_id          CHAR(36)        NOT NULL REFERENCES runs(run_id),
+    name            VARCHAR(255)    NOT NULL,
+    data            JSON            NOT NULL,
+    details         TEXT,
+    raw             TEXT,
+    link            TEXT,
+
+    UNIQUE(run_id, name)
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE jobs (
     job_key         CHAR(36)    NOT NULL PRIMARY KEY,

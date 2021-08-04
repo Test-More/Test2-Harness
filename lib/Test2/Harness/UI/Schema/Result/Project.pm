@@ -15,18 +15,27 @@ sub coverage {
     my $self = shift;
     my %params = @_;
 
-    my $query = {coverage_id => {'IS NOT' => undef}};
+    my $query = {
+        name => 'coverage',
+        data => {'IS NOT' => undef},
+        'run.project_id' => $self->project_id,
+    };
+    my $attrs = {
+        join => 'run',
+        order_by => {'-desc' => 'run.run_ord'},
+        rows => 1,
+    };
 
+    my $schema = $self->result_source->schema;
     if (my $publisher = $params{user}) {
-        my $schema = $self->result_source->schema;
         my $user = $schema->resultset('User')->find({username => $publisher}) or confess "Invalid publisher '$publisher'.\n";
-        $query->{user_id} = $user->user_id;
+        $query->{'runs.user_id'} = $user->user_id;
     }
 
-    my $run = $self->runs->search($query, {order_by => {'-desc' => 'run_ord'}, limit => 1})->first
+    my $field = $schema->resultset('RunField')->find($query, $attrs)
         or return;
 
-    return $run->coverage;
+    return $field;
 }
 
 sub durations {

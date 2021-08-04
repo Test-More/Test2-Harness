@@ -116,7 +116,6 @@ function FieldTable(spec) {
         }
 
         if (params) {
-            console.log(params);
             if (params.class) {
                 html.addClass(params.class);
             }
@@ -124,7 +123,6 @@ function FieldTable(spec) {
                 for(var field in params.data) {
                     var attr = "data-" + field;
                     var val = params.data[field];
-                    console.log(field, attr, val);
                     html.attr(attr, val);
                 }
             }
@@ -203,6 +201,9 @@ function FieldTable(spec) {
     }
 
     me.render_dynamic_col = function(field, name, item) {
+        if (me.spec.dynamic_field_preprocess) {
+            me.spec.dynamic_field_preprocess(field);
+        }
         var tooltable = $('<table class="tool_table"></table>');
         var toolrow = $('<tr></tr>');
         tooltable.append(toolrow);
@@ -246,6 +247,25 @@ function FieldTable(spec) {
 
         if (field.link) {
             var link = $('<td><a class="tool etoggle" title="Link" href="' + field.link + '"><img src="/img/link.png" /></a></td>');
+            toolrow.prepend(link);
+        }
+
+        if (field.delete) {
+            var link = $('<td><a class="tool etoggle" title="Delete"><img src="/img/delete.png" /></a></td>');
+
+            link.click(function() {
+                var ok = confirm("Are your sure you want to delete this '" + field.name + "' data? This cannot be undone!");
+                if (!ok) { return; }
+
+                link.detach();
+
+                $.ajax(field.delete, {
+                    'data': { 'content-type': 'application/json' },
+                    'error': function(a, b, c) { alert("Failed to delete " + field.name) },
+                    'success': function() { return },
+                });
+            });
+
             toolrow.prepend(link);
         }
 

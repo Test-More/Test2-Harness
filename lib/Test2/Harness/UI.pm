@@ -15,6 +15,7 @@ use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
 use Test2::Harness::UI::Controller::RunField;
 use Test2::Harness::UI::Controller::Job;
+use Test2::Harness::UI::Controller::JobField;
 use Test2::Harness::UI::Controller::Download;
 use Test2::Harness::UI::Controller::Sweeper;
 
@@ -59,6 +60,9 @@ sub init {
 
     $router->connect('/run/field/:id'        => {controller => 'Test2::Harness::UI::Controller::RunField'});
     $router->connect('/run/field/:id/delete' => {controller => 'Test2::Harness::UI::Controller::RunField', action => 'delete'});
+
+    $router->connect('/job/field/:id'        => {controller => 'Test2::Harness::UI::Controller::JobField'});
+    $router->connect('/job/field/:id/delete' => {controller => 'Test2::Harness::UI::Controller::JobField', action => 'delete'});
 
     $router->connect('/job/:job'         => {controller => 'Test2::Harness::UI::Controller::Job'});
     $router->connect('/job/:job/:try'    => {controller => 'Test2::Harness::UI::Controller::Job'});

@@ -26,6 +26,7 @@ require Test2::Harness::UI::Schema::Result::Email;
 require Test2::Harness::UI::Schema::Result::EmailVerificationCode;
 require Test2::Harness::UI::Schema::Result::Event;
 require Test2::Harness::UI::Schema::Result::Job;
+require Test2::Harness::UI::Schema::Result::JobField;
 require Test2::Harness::UI::Schema::Result::LogFile;
 require Test2::Harness::UI::Schema::Result::Permission;
 require Test2::Harness::UI::Schema::Result::PrimaryEmail;

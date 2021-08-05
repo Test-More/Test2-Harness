@@ -19,9 +19,10 @@ sub sweep {
     $params{events}     //= 1;
     $params{subtests}   //= 1;
     $params{run_fields} //= 1;
+    $params{job_fields} //= 1;
 
     # Cannot remove jobs if we keep events
-    $params{jobs} = 0 unless $params{events} && $params{subtests};
+    $params{jobs} = 0 unless $params{events} && $params{subtests} && $params{job_fields};
 
     # Cannot delete runs if we save jobs or coverage
     $params{runs} = 0 unless $params{jobs} && $params{coverage} && $params{run_fields};
@@ -61,6 +62,11 @@ sub sweep {
                     $job->events->search({'-not' => {is_subtest => 1, nested => 0}})->delete;
                 }
             }
+
+            if ($params{job_fields}) {
+                $job->job_fields->delete;
+            }
+
             $job->delete if $params{jobs};
         }
 

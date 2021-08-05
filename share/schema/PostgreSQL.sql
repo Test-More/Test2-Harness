@@ -182,7 +182,6 @@ CREATE TABLE jobs (
     status          queue_status    NOT NULL DEFAULT 'pending',
 
     parameters      JSONB       DEFAULT NULL,
-    fields          JSONB       DEFAULT NULL,
 
     -- Summaries
     name            TEXT            DEFAULT NULL,
@@ -209,6 +208,18 @@ CREATE INDEX IF NOT EXISTS job_look ON jobs(job_id, job_try);
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
+
+CREATE TABLE job_fields (
+    job_field_id    UUID            NOT NULL PRIMARY KEY,
+    job_key         UUID            NOT NULL REFERENCES jobs(job_key),
+    name            VARCHAR(255)    NOT NULL,
+    data            JSONB,
+    details         TEXT,
+    raw             TEXT,
+    link            TEXT,
+
+    UNIQUE(job_key, name)
+);
 
 CREATE TABLE events (
     event_id        UUID        NOT NULL PRIMARY KEY,

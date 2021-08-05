@@ -288,6 +288,40 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL56";
 
 {
     package    #
+        Test2::Harness::UI::Schema::Result::JobField;
+
+    use base 'DBIx::Class::Core';
+    __PACKAGE__->load_components(
+        "InflateColumn::DateTime",
+        "InflateColumn::Serializer",
+        "InflateColumn::Serializer::JSON",
+        "Tree::AdjacencyList",
+        "UUIDColumns",
+    );
+    __PACKAGE__->table("job_fields");
+    __PACKAGE__->add_columns(
+        "job_field_id",
+        {data_type => "char", is_nullable => 0, size => 36},
+        "job_key",
+        {data_type => "char", is_nullable => 0, size => 36},
+        "name",
+        {data_type => "varchar", is_nullable => 0, size => 255},
+        "data",
+        {data_type => "longtext", is_nullable => 1},
+        "details",
+        {data_type => "text", is_nullable => 1},
+        "raw",
+        {data_type => "text", is_nullable => 1},
+        "link",
+        {data_type => "text", is_nullable => 1},
+    );
+    __PACKAGE__->set_primary_key("job_field_id");
+    __PACKAGE__->add_unique_constraint("job_key", ["job_key", "name"]);
+
+}
+
+{
+    package    #
         Test2::Harness::UI::Schema::Result::LogFile;
 
     use base 'DBIx::Class::Core';

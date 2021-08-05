@@ -512,10 +512,41 @@ sub add_run_fields {
     my $run    = $self->{+RUN};
     my $run_id = $run->run_id;
 
+    return $self->_add_fields(
+        fields    => $fields,
+        type      => 'RunField',
+        key_field => 'run_field_id',
+        attrs     => {run_id => $run_id},
+    );
+}
+
+sub add_job_fields {
+    my $self = shift;
+    my ($job, $fields) = @_;
+
+    my $job_key = $job->job_key;
+
+    return $self->_add_fields(
+        fields    => $fields,
+        type      => 'JobField',
+        key_field => 'job_field_id',
+        attrs     => {job_key => $job_key},
+    );
+}
+
+sub _add_fields {
+    my $self = shift;
+    my %params = @_;
+
+    my $fields    = $params{fields};
+    my $type      = $params{type};
+    my $key_field = $params{key_field};
+    my $attrs     = $params{attrs} // {};
+
     my @add;
     for my $field (@$fields) {
         my $id  = gen_uuid;
-        my $new = {run_field_id => $id, run_id => $run_id};
+        my $new = {%$attrs, $key_field => $id};
 
         $new->{name}    = $field->{name}    || 'unknown';
         $new->{details} = $field->{details} || $new->{name};
@@ -523,7 +554,7 @@ sub add_run_fields {
         $new->{link}    = $field->{link}              if $field->{link};
         $new->{data}    = encode_json($field->{data}) if $field->{data};
 
-        if ($new->{name} eq 'coverage' && !$new->{link}) {
+        if ($new->{name} eq 'coverage' && !$new->{link} && $type eq 'RunField') {
             $new->{link} = "/coverage/$id";
         }
 
@@ -533,7 +564,7 @@ sub add_run_fields {
         $field = $id;
     }
 
-    $self->schema->resultset('RunField')->populate(\@add);
+    $self->schema->resultset($type)->populate(\@add);
 }
 
 sub clean_output {
@@ -580,19 +611,6 @@ sub clean_array {
 
     $_[0] = undef;
     return 0;
-}
-
-sub merge_fields {
-    my $self = shift;
-    my ($existing, $new) = @_;
-
-    $existing = decode_json($existing) if $existing && !ref($existing);
-    $new      = decode_json($new)      if $new      && !ref($new);
-
-    my @merged;
-    push @merged => @$existing if $existing && @$existing;
-    push @merged => @$new if $new && @$new;
-    return encode_json(\@merged);
 }
 
 sub update_other {
@@ -670,8 +688,7 @@ sub update_other {
         }
     }
     if (my $job_fields = $f->{harness_job_fields}) {
-        my @new = map { {%{$_}} } @$job_fields;
-        $cols{fields} = $self->merge_fields($cols{fields}, \@new)
+        $self->add_job_fields($job_result, $job_fields);
     }
 
     $job_result->set_columns(\%cols);

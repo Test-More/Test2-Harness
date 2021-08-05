@@ -200,6 +200,19 @@ CREATE INDEX job_runs ON jobs(run_id);
 CREATE INDEX job_fail ON jobs(fail);
 CREATE INDEX job_file ON jobs(file);
 
+CREATE TABLE job_fields (
+    job_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
+    job_key         CHAR(36)        NOT NULL REFERENCES runs(job_key),
+    name            VARCHAR(255)    NOT NULL,
+    data            JSON            NOT NULL,
+    details         TEXT,
+    raw             TEXT,
+    link            TEXT,
+
+    UNIQUE(job_key, name)
+) ROW_FORMAT=COMPRESSED;
+
+
 CREATE TABLE events (
     event_id        CHAR(36)    NOT NULL PRIMARY KEY,
 

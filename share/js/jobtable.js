@@ -25,9 +25,9 @@ t2hui.jobtable.build_table = function() {
         'modify_row_hook': t2hui.jobtable.modify_row,
         'place_row': t2hui.jobtable.place_row,
 
+        'dynamic_field_preprocess': t2hui.jobtable.field_preprocess,
         'dynamic_field_attribute': 'fields',
         'dynamic_field_fetch': t2hui.jobtable.field_fetch,
-        'dynamic_field_builder': t2hui.jobtable.field_builder,
 
         'columns': columns,
     });
@@ -128,21 +128,14 @@ t2hui.jobtable.modify_row = function(row, item) {
     }
 };
 
-t2hui.jobtable.field_builder = function(data, name) {
-    var it;
-    data.fields.forEach(function(field) {
-        if (field.name === name) {
-            it = field.data;
-            return false;
-        }
-    });
-
-    return it;
+t2hui.jobtable.field_preprocess = function(field_data) {
+    field_data.delete = base_uri + 'job/field/' + field_data.job_field_id + '/delete';
 };
 
 t2hui.jobtable.field_fetch = function(field_data, item) {
-    return base_uri + 'job/' + item.job_key;
+    return base_uri + 'job/field/' + field_data.job_field_id;
 };
+
 
 t2hui.jobtable.init_table = function(table, state) {
     var body = state['body'];

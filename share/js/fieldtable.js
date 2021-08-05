@@ -211,7 +211,7 @@ function FieldTable(spec) {
         var col = $('<td class="col-' + name + '"></td>');
         col.append(tooltable);
 
-        toolrow.append('<td>' + field.details + '</td>');
+        toolrow.append('<td class="details">' + field.details + '</td>');
 
         if (field.raw) {
             col.attr('data-order', field.raw);
@@ -257,12 +257,14 @@ function FieldTable(spec) {
                 var ok = confirm("Are your sure you want to delete this '" + field.name + "' data? This cannot be undone!");
                 if (!ok) { return; }
 
-                link.detach();
 
                 $.ajax(field.delete, {
                     'data': { 'content-type': 'application/json' },
                     'error': function(a, b, c) { alert("Failed to delete " + field.name) },
-                    'success': function() { return },
+                    'success': function() {
+                        col.empty();
+                        return;
+                    },
                 });
             });
 

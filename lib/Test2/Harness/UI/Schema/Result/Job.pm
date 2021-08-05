@@ -18,13 +18,6 @@ __PACKAGE__->inflate_column(
     },
 );
 
-__PACKAGE__->inflate_column(
-    fields => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('fields', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('fields', {}),
-    },
-);
-
 sub shortest_file {
     my $self = shift;
     my $file = $self->file or return undef;
@@ -80,10 +73,7 @@ sub glance_data {
     $data{short_file}    = $self->short_file;
     $data{shortest_file} = $self->shortest_file;
 
-    # Inflate
-    if ($data{fields} = $self->fields) {
-        $_->{data} = !!$_->{data} for @{$data{fields}};
-    }
+    $data{fields} = [ map { my $d = $_->TO_JSON; $d->{data} = $d->{data} ? \"1" : \"0" ; $d } $self->job_fields->all ];
 
     return \%data;
 }

@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Move coverage and event fields to a fields table
+    - Move job fields to a field table
+
 0.000075  2021-07-26 14:12:59-07:00 America/Los_Angeles
 
     - Add qvfds, same as qvfd but includes subtests (main event only)

@@ -72,6 +72,10 @@ table.tool_table {
     display: inline;
 }
 
+table.tool_table > tr > td.details {
+    padding-left: 4px;
+}
+
 table.tool_table tr {
     padding: 0;
 }

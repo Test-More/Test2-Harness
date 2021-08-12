@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix 'Cover' plugin to record untested perl files
+
 1.000065  2021-08-04 15:11:59-07:00 America/Los_Angeles
 
     - Fix 'Cover' plugin bugs and edge cases

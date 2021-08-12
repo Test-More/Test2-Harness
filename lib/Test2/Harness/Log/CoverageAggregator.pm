@@ -117,7 +117,12 @@ sub build_metrics {
                 my $file  = $File::Find::name;
                 my $cfile = $coverage->{files}->{$file};
 
-                $metrics->{files}->{tested}++ if $cfile;
+                if ($cfile) {
+                    $metrics->{files}->{tested}++
+                }
+                else {
+                    push @{$untested->{files}} => $file;
+                }
 
                 for my $sub ($PERL_TYPES{$type} ? $self->scan_subs($file) : ('<>')) {
                     next if $sub =~ m/^_/ && $private;
@@ -146,9 +151,12 @@ sub build_metrics {
             push @{$untested->{files}} => $file;
         }
         else {
-            $untested->{subs}->{$file} = \@val;
+            $untested->{subs}->{$file} = [sort @val];
         }
     }
+
+    my %seen;
+    @{$untested->{files}} = sort grep { !$seen{$_}++ } @{$untested->{files}};
 
     return $metrics;
 }

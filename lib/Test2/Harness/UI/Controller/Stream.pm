@@ -90,7 +90,24 @@ sub stream_runs {
         timeout => 60 * 30,    # 30 min.
     );
 
-    if (my $run_id = $route->{run_id}) {
+    my $id     = $route->{id};
+    my $run_id = $route->{run_id};
+    my $project;
+
+    if ($id) {
+        my $p_rs = $schema->resultset('Project');
+        $project //= eval { $p_rs->search({project_id => $id})->first };
+        $project //= eval { $p_rs->search({name => $id})->first };
+
+        if ($project) {
+            $params{search_base} = $params{search_base}->search_rs({project_id => $project->project_id});
+        }
+        else {
+            $run_id //= $id;
+        }
+    }
+
+    if($run_id) {
         return $self->stream_single(%params, id => $run_id);
     }
 

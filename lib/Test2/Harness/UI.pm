@@ -18,6 +18,7 @@ use Test2::Harness::UI::Controller::Job;
 use Test2::Harness::UI::Controller::JobField;
 use Test2::Harness::UI::Controller::Download;
 use Test2::Harness::UI::Controller::Sweeper;
+use Test2::Harness::UI::Controller::Project;
 
 use Test2::Harness::UI::Controller::Stream;
 use Test2::Harness::UI::Controller::View;
@@ -49,6 +50,11 @@ sub init {
 
     $router->connect('/user' => {controller => 'Test2::Harness::UI::Controller::User'})
         unless $config->single_user;
+
+    $router->connect('/project/:id'           => {controller => 'Test2::Harness::UI::Controller::Project'});
+    $router->connect('/project/:id/stats'     => {controller => 'Test2::Harness::UI::Controller::Project', stats => 1});
+    $router->connect('/project/:id/:n'        => {controller => 'Test2::Harness::UI::Controller::Project'});
+    $router->connect('/project/:id/:n/:count' => {controller => 'Test2::Harness::UI::Controller::Project'});
 
     $router->connect('/query/:name'      => {controller => 'Test2::Harness::UI::Controller::Query'});
     $router->connect('/query/:name/:arg' => {controller => 'Test2::Harness::UI::Controller::Query'});
@@ -85,12 +91,12 @@ sub init {
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
 
     $router->connect('/view'                   => {controller => 'Test2::Harness::UI::Controller::View'});
-    $router->connect('/view/:run_id'           => {controller => 'Test2::Harness::UI::Controller::View'});
+    $router->connect('/view/:id'               => {controller => 'Test2::Harness::UI::Controller::View'});
     $router->connect('/view/:run_id/:job'      => {controller => 'Test2::Harness::UI::Controller::View'});
     $router->connect('/view/:run_id/:job/:try' => {controller => 'Test2::Harness::UI::Controller::View'});
 
     $router->connect('/stream'                   => {controller => 'Test2::Harness::UI::Controller::Stream'});
-    $router->connect('/stream/:run_id'           => {controller => 'Test2::Harness::UI::Controller::Stream'});
+    $router->connect('/stream/:id'               => {controller => 'Test2::Harness::UI::Controller::Stream'});
     $router->connect('/stream/:run_id/:job'      => {controller => 'Test2::Harness::UI::Controller::Stream'});
     $router->connect('/stream/:run_id/:job/:try' => {controller => 'Test2::Harness::UI::Controller::Stream'});
 

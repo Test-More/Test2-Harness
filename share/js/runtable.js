@@ -9,7 +9,7 @@ t2hui.runtable.build_table = function() {
         { 'name': 'failed',  'label': 'F', 'class': 'count', 'builder': t2hui.runtable.build_fail },
         { 'name': 'retried', 'label': 'R', 'class': 'count', 'builder': t2hui.runtable.build_retry },
 
-        { 'name': 'project', 'label': 'project', 'class': 'project'},
+        { 'name': 'project', 'label': 'project', 'class': 'project', 'builder': t2hui.runtable.build_project },
         { 'name': 'status',  'label': 'status',  'class': 'status'},
         { 'name': 'duration', 'label': 'duration', 'class': 'duration' },
     ];
@@ -58,6 +58,21 @@ t2hui.runtable.place_row = function(row, item, table, state, existing) {
 
     return false;
 }
+
+t2hui.runtable.build_project = function(item, col) {
+    var val = item.project;
+    if (val === null) { return };
+    if (val === undefined) { return };
+
+    var vlink = base_uri  + 'view/' + item.project_id;
+    var slink = base_uri  + 'project/' + item.project_id;
+
+    var stats = $('<a class="tool etoggle" title="Project Stats" href="' + slink + '"><img src="/img/stats.png" /></a>');
+    var proj  = $('<a title="See runs for ' + val + '" href="' + vlink + '">' + val + '</a>');
+    col.append(stats);
+    col.append('&nbsp;');
+    col.append(proj);
+};
 
 t2hui.runtable.build_concurrency = function(item, col) {
     var val = item.concurrency;

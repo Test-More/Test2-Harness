@@ -1,0 +1,226 @@
+div#project {
+    padding-left: 20px;
+    padding-right: 20px;
+    margin-top: -40px;
+    margin: 0;
+    width: 96%;
+    width: -webkit-fill-available;
+    overflow: hidden;
+    padding-bottom: 40px;
+}
+
+div.stats_set {
+    overflow: hidden;
+    border: 1px dotted #C0C0C0;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    margin-right: 8px;
+    display: block;
+    overflow: hidden;
+    margin: 8px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+}
+
+div.stats_set > h2 {
+    background-color: #F0F0FF;
+    cursor: s-resize;
+    text-align: center;
+    margin: 0;
+    padding: 4px;
+}
+
+div.stats_set > h2:before, div.stats_set > h2:after {
+    display: block;
+    color: #70A0F0;
+}
+
+div.stats_set > h2:before {
+    content: "▼";
+    float: left;
+    margin-right: -20px;
+}
+
+div.stats_set > h2:after {
+    content: "▼";
+    float: right;
+    margin-left: -20px;
+}
+
+div.stats_set.active > h2:after {
+    content: "▲";
+}
+
+div.stats_set.active > h2:before {
+    content: "▲";
+}
+
+div.stats_set.active > h2 {
+    white-space: nowrap;
+    cursor: n-resize;
+}
+
+div.stats_set div.stats {
+    padding: 0px;
+    border-top: 1px dotted #E0E0E0;
+    margin: 0;
+    display: none;
+}
+
+div.stats_set.active div.stats {
+    display: block;
+}
+
+div.stat.chart {
+    resize: both;
+}
+
+div.stats h3 {
+    margin: 4px;
+}
+
+div.stat {
+    margin-left: -4px;
+    margin-right: -4px;
+    margin-bottom: -4px;
+    padding: 8px;
+    padding-bottom: 16px;
+    overflow: auto;
+}
+
+div.controls {
+    overflow: hidden;
+    display: block;
+    border: 1px dotted #8080F0;
+    border-radius: 16px;
+    margin: 20px;
+    width: fit-content;
+    padding: 8px;
+    padding-left: 20px;
+    padding-right: 20px;
+
+    top: 78px;
+    background-color: #FAFAFF;
+    z-index: 1;
+
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div.controls div.control {
+    overflow: hidden;
+    display: block;
+    float: left;
+}
+
+div.controls div.control.jump {
+    margin-left: 20px;
+}
+
+div.controls div.control.jump label {
+    float: left;
+    padding-left: 4px;
+    padding-right: 4px;
+    font-weight: bold;
+}
+
+div.controls div.control.jump li {
+    float: left;
+    padding-left: 4px;
+    padding-right: 4px;
+    margin: 0;
+    border-left: 1px dotted #505050;
+}
+
+div.controls div.control.jump li:first-child {
+    border-left: none;
+}
+
+div.controls div.control.jump li a {
+    text-decoration: none;
+    color: inherit;
+}
+
+div.controls div.control.jump li a:hover {
+    color: blue;
+}
+
+div.controls div.control ul {
+    list-style: none;
+    padding: 0px;
+    margin: 0;
+    overflow: hidden;
+    display: block;
+    float: left;
+    width: auto;
+}
+div.controls div.control ul li {
+    margin: 0;
+    padding: 0px;
+    display: block;
+    margin-right: 4px;
+}
+
+div.controls div.control ul li input {
+    width: 3em;
+    text-align: right;
+}
+
+div.controls div.control button {
+    float: left;
+    display: block;
+}
+
+table.uncovered th, table.uncovered td {
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px dotted #505050;
+}
+
+table.uncovered tr td:first-child, table.uncovered tr th:first-child {
+    width: 1px;
+    overflow: hidden;
+}
+
+div.stats.failures div.stat table th, div.stats.failures div.stat table td {
+    padding-right: 8px;
+    padding-left: 8px;
+    text-align: left;
+}
+
+div.stats.durations div.stat table th, div.stats.durations div.stat table td {
+    padding-right: 8px;
+    padding-left: 8px;
+    text-align: left;
+}
+
+span.show {
+    display: block;
+    margin: 8px;
+    margin-right: 18px;
+    cursor: pointer;
+    color: #5050FF;
+    float: right;
+}
+
+span.show:hover {
+    color: #0000FF;
+}
+
+div#project a.download {
+    display: block;
+    float: right;
+    margin-right: 20px;
+    cursor: pointer;
+    color: #5050FF;
+    text-decoration: none;
+}
+
+div#project a.download:hover {
+    color: #0000FF;
+}
+
+div.stat > table th, div.stat > table td {
+    white-space: nowrap;
+}

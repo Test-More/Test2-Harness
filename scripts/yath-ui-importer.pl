@@ -21,4 +21,4 @@ my $config = Test2::Harness::UI::Config->new(
 $SIG{INT} = sub { exit 0 };
 $SIG{TERM} = sub { exit 0 };
 
-Test2::Harness::UI::Importer->new(config => $config, max => 2)->run;
+Test2::Harness::UI::Importer->new(config => $config)->run;

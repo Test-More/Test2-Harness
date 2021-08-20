@@ -34,12 +34,12 @@ sub run {
     while (!defined($max) || $max--) {
         $schema->resultset('Run')->search(
             {status   => 'pending', log_file_id => {'is not' => undef}},
-            {order_by => {-asc => 'added'}, limit => 1},
+            {order_by => {-asc => 'added'}, rows => 1},
         )->update({status => 'running', worker_id => $worker_id});
 
         my $run = $schema->resultset('Run')->search(
             {status   => 'running',         worker_id => $worker_id},
-            {order_by => {-asc => 'added'}, limit     => 1},
+            {order_by => {-asc => 'added'}, rows      => 1},
         )->first;
 
         unless ($run) {
@@ -56,7 +56,7 @@ sub process {
     my ($run) = @_;
 
     my $start = time;
-    syswrite(\*STDOUT, "Starting run " . $run->run_id . " (" . $run->log_file->name . ")\n");
+    syswrite(\*STDOUT, '[' . $run->worker_id . "] Starting run " . $run->run_id . " (" . $run->log_file->name . ")\n");
 
     my $status;
     my $ok = eval { $status = $self->process_log($run); 1 };

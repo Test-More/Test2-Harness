@@ -78,6 +78,8 @@ t2hui.fetch = function(url, args, cb) {
     $.ajax(url + '?content-type=application/x-jsonl', {
         async: true,
         data: args.data,
+        dataType: args.dataType,
+        type: args.type,
         xhr: function () {
             var xhr = new window.XMLHttpRequest();
 

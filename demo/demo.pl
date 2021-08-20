@@ -15,6 +15,8 @@ use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
+use POSIX ":sys_wait_h";
+
 my ($schema) = @ARGV;
 
 $schema //= 'PostgreSQL';
@@ -46,19 +48,26 @@ my $config = Test2::Harness::UI::Config->new(
 my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root', user_id => gen_uuid()});
 
 my %projects;
-my @runs;
 #for my $file (qw/coverage.jsonl.bz2/) {
-for my $file (qw/coverage.jsonl.bz2 fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl.bz2 tiny.jsonl.bz2 tap.jsonl.bz2 subtests.jsonl.bz2 simple-fail.jsonl.bz2 simple-pass.jsonl.bz2 fake.jsonl.bz2 large.jsonl.bz2 timing.jsonl.bz2 fail_once.jsonl.bz2/) {
-    my ($project, $version);
-    if ($file =~ m/moose/) {
+opendir(my $dh, 'demo') or die "Could not open demo dir";
+for my $file (sort readdir($dh)) {
+    next unless $file =~ m/\.bz2$/;
+
+    load_file($file);
+}
+
+sub load_file {
+    my ($file) = @_;
+
+    my $project;
+    if ($file =~ m/moose/i) {
         $project = 'Moose';
-        $version = '2.2009';
     }
     else {
-        $project = $1     if $file =~ m/^([\w\d]+)/;
-        $version = 'fail' if $file =~ m/fail/;
-        $version = 'pass' if $file =~ m/pass/;
+        $project = $1 if $file =~ m/^([\w\d]+)/;
     }
+
+    $project //= "oops";
 
     unless ($projects{$project}) {
         my $p = $config->schema->resultset('Project')->create({name => $project, project_id => gen_uuid()});
@@ -80,41 +89,86 @@ for my $file (qw/coverage.jsonl.bz2 fields.jsonl.bz2 table.jsonl.bz2 moose.jsonl
         },
     });
 
-    if ($version) {
-        $run->run_fields->create({
-            run_field_id => gen_uuid,
-            run_id       => $run->run_id,
-            name         => 'version',
-            details      => $version,
-        });
-    }
-
-    push @runs => $run;
+    return $run;
 }
 
 $ENV{YATH_UI_SCHEMA} = $schema;
-my @commands = (
-    [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
-    ['starman', '-Ilib', '-r', '--port', 8081, '--workers', 20, './demo/demo.psgi'],
+my %commands = (
+    importer1 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
+    importer2 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
+    importer3 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
+    importer4 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
+    importer5 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
+    starman  => ['starman', '-Ilib', '--port', 8081, '--workers', 20, './demo/demo.psgi'],
 );
-
 my $start = $$;
-my @pids;
-for my $cmd (@commands) {
+my %pids;
+
+launch($_) for keys %commands;
+
+sub launch {
+    my $cmd = shift;
+
     last unless $start == $$;
 
     my $pid = fork();
     die "Failed to fork" unless defined $pid;
 
     if ($pid) {
-        push @pids => $pid;
-        next;
+        $pids{$cmd} = $pid;
+        return;
     }
     else {
-        exec(@$cmd);
+        my $run = $commands{$cmd};
+        exec(@$run);
     }
+
+    exit 255;
 }
 
-waitpid($_, 0) for @pids;
+while (1) {
+    last unless $start == $$;
+
+    print "DBI_DSN: $dsn\n";
+
+
+    chomp(my $in = <>);
+    $in ||= 'starman';
+
+    exit 0 if $in eq 'exit' || $in eq 'q';
+
+    if ($in =~ m/^ls\+(.*)$/) {
+        load_file($1);
+        next;
+    }
+
+    if ($in eq 'db') {
+        $db->shell('harness_ui');
+        next;
+    }
+
+    if (my $pid = delete $pids{$in}) {
+        print "Restarting $in...\n";
+        kill('TERM', $pid);
+        waitpid($pid, 0);
+        launch($in);
+        next;
+    }
+
+    warn "Invalid command '$in'\n" unless $in eq 'h' || $in eq 'help' || $in eq '?';
+    print <<"    EOT";
+Valid Commands:
+    [enter]  - restart starman
+    starman  - restart starman
+    importer - restart the importer
+    db       - launch db shell
+    l <file> - load a log file
+    exit     - exit
+    q        - exit
+    help     - this help
+    h        - this help
+    ?        - this help
+    EOT
+}
 
 exit 0;

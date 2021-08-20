@@ -43,7 +43,8 @@ sub sig {
 
     return join ";" => (
         (map {$self->$_ // ''} qw/status pass_count fail_count name file fail/),
-        (map {length($self->$_ // '')} qw/fields parameters/),
+        (map {length($self->$_ // '')} qw/parameters/),
+        ($self->job_fields->count),
     );
 }
 
@@ -56,7 +57,8 @@ sub TO_JSON {
 
     # Inflate
     $cols{parameters} = $self->parameters;
-    $cols{fields}     = $self->fields;
+
+    $cols{fields} = [ map { my $d = $_->TO_JSON; $d->{data} = $d->{data} ? \"1" : \"0" ; $d } $self->job_fields->all ];
 
     return \%cols;
 }

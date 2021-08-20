@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix MySQL problems
+
 0.000076  2021-08-20 09:54:09-07:00 America/Los_Angeles
 
     - Move coverage and event fields to a fields table

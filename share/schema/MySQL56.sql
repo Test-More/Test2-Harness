@@ -146,12 +146,14 @@ CREATE INDEX run_user ON runs(user_id);
 
 CREATE TABLE run_fields (
     run_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
-    run_id          CHAR(36)        NOT NULL REFERENCES runs(run_id),
+    run_id          CHAR(36)        NOT NULL,
     name            VARCHAR(255)    NOT NULL,
-    data            LONGTEXT,
-    details         TEXT,
-    raw             TEXT,
-    link            TEXT,
+    data            LONGTEXT        DEFAULT NULL,
+    details         TEXT            DEFAULT NULL,
+    raw             TEXT            DEFAULT NULL,
+    link            TEXT            DEFAULT NULL,
+
+    FOREIGN KEY (run_id) REFERENCES runs(run_id),
 
     UNIQUE(run_id, name)
 ) ROW_FORMAT=COMPRESSED;
@@ -202,12 +204,14 @@ CREATE INDEX job_file ON jobs(file);
 
 CREATE TABLE job_fields (
     job_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
-    job_key         CHAR(36)        NOT NULL REFERENCES jobs(job_key),
+    job_key         CHAR(36)        NOT NULL,
     name            VARCHAR(255)    NOT NULL,
-    data            LONGTEXT,
-    details         TEXT,
-    raw             TEXT,
-    link            TEXT,
+    data            LONGTEXT        DEFAULT NULL,
+    details         TEXT            DEFAULT NULL,
+    raw             TEXT            DEFAULT NULL,
+    link            TEXT            DEFAULT NULL,
+
+    FOREIGN KEY (job_key) REFERENCES jobs(job_key),
 
     UNIQUE(job_key, name)
 ) ROW_FORMAT=COMPRESSED;
@@ -215,7 +219,7 @@ CREATE TABLE job_fields (
 CREATE TABLE events (
     event_id        CHAR(36)    NOT NULL PRIMARY KEY,
 
-    job_key         CHAR(36)    NOT NULL REFERENCES jobs(job_key),
+    job_key         CHAR(36)    NOT NULL,
 
     event_ord       BIGINT      NOT NULL,
     insert_ord      BIGINT      NOT NULL AUTO_INCREMENT,

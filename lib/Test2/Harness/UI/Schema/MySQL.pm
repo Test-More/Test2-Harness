@@ -277,6 +277,12 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {"foreign.job_key" => "self.job_key"},
         {cascade_copy      => 0, cascade_delete => 0},
     );
+    __PACKAGE__->has_many(
+        "job_fields",
+        "Test2::Harness::UI::Schema::Result::JobField",
+        {"foreign.job_key" => "self.job_key"},
+        {cascade_copy      => 0, cascade_delete => 0},
+    );
     __PACKAGE__->belongs_to(
         "run",
         "Test2::Harness::UI::Schema::Result::Run",
@@ -303,11 +309,11 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         "job_field_id",
         {data_type => "char", is_nullable => 0, size => 36},
         "job_key",
-        {data_type => "char", is_nullable => 0, size => 36},
+        {data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36},
         "name",
         {data_type => "varchar", is_nullable => 0, size => 255},
         "data",
-        {data_type => "json", is_nullable => 0},
+        {data_type => "json", is_nullable => 1},
         "details",
         {data_type => "text", is_nullable => 1},
         "raw",
@@ -317,6 +323,12 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
     );
     __PACKAGE__->set_primary_key("job_field_id");
     __PACKAGE__->add_unique_constraint("job_key", ["job_key", "name"]);
+    __PACKAGE__->belongs_to(
+        "job_key",
+        "Test2::Harness::UI::Schema::Result::Job",
+        {job_key       => "job_key"},
+        {is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT"},
+    );
 
 }
 
@@ -568,6 +580,12 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         {project_id    => "project_id"},
         {is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT"},
     );
+    __PACKAGE__->has_many(
+        "run_fields",
+        "Test2::Harness::UI::Schema::Result::RunField",
+        {"foreign.run_id" => "self.run_id"},
+        {cascade_copy     => 0, cascade_delete => 0},
+    );
     __PACKAGE__->belongs_to(
         "user",
         "Test2::Harness::UI::Schema::Result::User",
@@ -594,11 +612,11 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
         "run_field_id",
         {data_type => "char", is_nullable => 0, size => 36},
         "run_id",
-        {data_type => "char", is_nullable => 0, size => 36},
+        {data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36},
         "name",
         {data_type => "varchar", is_nullable => 0, size => 255},
         "data",
-        {data_type => "json", is_nullable => 0},
+        {data_type => "json", is_nullable => 1},
         "details",
         {data_type => "text", is_nullable => 1},
         "raw",
@@ -608,6 +626,12 @@ $Test2::Harness::UI::Schema::LOADED = "MySQL";
     );
     __PACKAGE__->set_primary_key("run_field_id");
     __PACKAGE__->add_unique_constraint("run_id", ["run_id", "name"]);
+    __PACKAGE__->belongs_to(
+        "run",
+        "Test2::Harness::UI::Schema::Result::Run",
+        {run_id        => "run_id"},
+        {is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT"},
+    );
 
 }
 

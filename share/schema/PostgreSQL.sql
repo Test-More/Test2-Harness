@@ -161,10 +161,10 @@ CREATE TABLE run_fields (
     run_field_id    UUID            NOT NULL PRIMARY KEY,
     run_id          UUID            NOT NULL REFERENCES runs(run_id),
     name            VARCHAR(255)    NOT NULL,
-    data            JSONB,
-    details         TEXT,
-    raw             TEXT,
-    link            TEXT,
+    data            JSONB           DEFAULT NULL,
+    details         TEXT            DEFAULT NULL,
+    raw             TEXT            DEFAULT NULL,
+    link            TEXT            DEFAULT NULL,
 
     UNIQUE(run_id, name)
 );
@@ -213,10 +213,10 @@ CREATE TABLE job_fields (
     job_field_id    UUID            NOT NULL PRIMARY KEY,
     job_key         UUID            NOT NULL REFERENCES jobs(job_key),
     name            VARCHAR(255)    NOT NULL,
-    data            JSONB,
-    details         TEXT,
-    raw             TEXT,
-    link            TEXT,
+    data            JSONB           DEFAULT NULL,
+    details         TEXT            DEFAULT NULL,
+    raw             TEXT            DEFAULT NULL,
+    link            TEXT            DEFAULT NULL,
 
     UNIQUE(job_key, name)
 );

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Response;
 use strict;
 use warnings;
 
-our $VERSION = '0.000078';
+our $VERSION = '0.000079';
 
 use Carp qw/croak/;
 use Time::HiRes qw/sleep time/;

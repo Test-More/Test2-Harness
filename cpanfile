@@ -5,6 +5,7 @@ requires "Carp" => "0";
 requires "Clone" => "0";
 requires "Crypt::Eksblowfish::Bcrypt" => "0";
 requires "DBI" => "0";
+requires "DBIx::Class::Helper::ResultSet::RemoveColumns" => "0";
 requires "DBIx::Class::InflateColumn::DateTime" => "0";
 requires "DBIx::Class::InflateColumn::Serializer" => "0";
 requires "DBIx::Class::InflateColumn::Serializer::JSON" => "0";

@@ -48,6 +48,16 @@ sub sig {
     );
 }
 
+sub short_job_fields {
+    my $self = shift;
+
+    return [ map { my $d = +{$_->get_columns}; $d->{data} = $d->{data} ? \'1' : \'0'; $d } $self->job_fields->search(undef, {
+        remove_columns => ['data'],
+        '+select' => ['data IS NOT NULL AS data'],
+        '+as' => ['data'],
+    })->all ];
+}
+
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_columns;
@@ -58,7 +68,7 @@ sub TO_JSON {
     # Inflate
     $cols{parameters} = $self->parameters;
 
-    $cols{fields} = [ map { my $d = $_->TO_JSON; $d->{data} = $d->{data} ? \"1" : \"0" ; $d } $self->job_fields->all ];
+    $cols{fields} = $self->short_job_fields;
 
     return \%cols;
 }
@@ -75,7 +85,7 @@ sub glance_data {
     $data{short_file}    = $self->short_file;
     $data{shortest_file} = $self->shortest_file;
 
-    $data{fields} = [ map { my $d = $_->TO_JSON; $d->{data} = $d->{data} ? \"1" : \"0" ; $d } $self->job_fields->all ];
+    $data{fields} = $self->short_job_fields;
 
     return \%data;
 }

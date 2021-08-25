@@ -44,6 +44,16 @@ sub sig {
     );
 }
 
+sub short_run_fields {
+    my $self = shift;
+
+    return [ map { my $d = +{$_->get_columns}; $d->{data} = $d->{data} ? \'1' : \'0'; $d } $self->run_fields->search(undef, {
+        remove_columns => ['data'],
+        '+select' => ['data IS NOT NULL AS data'],
+        '+as' => ['data'],
+    })->all ];
+}
+
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_columns;
@@ -53,11 +63,9 @@ sub TO_JSON {
 
     # Inflate
     $cols{parameters} = $self->parameters;
-
-    $cols{fields} = [ map { my $d = $_->TO_JSON; $d->{data} = $d->{data} ? \"1" : \"0" ; $d } $self->run_fields->all ];
-
-    $cols{user} = $self->user->username;
-    $cols{project} = $self->project->name;
+    $cols{fields}     = $self->short_run_fields;
+    $cols{user}       = $self->user->username;
+    $cols{project}    = $self->project->name;
 
     my $dt = DTF()->parse_datetime( $cols{added} );
 

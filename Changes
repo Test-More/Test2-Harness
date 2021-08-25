@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix performance issue rendering pages with lots of field data
+
 0.000077  2021-08-20 14:07:36-07:00 America/Los_Angeles
 
     - Fix MySQL problems

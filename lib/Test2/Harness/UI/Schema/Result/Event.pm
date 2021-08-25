@@ -63,21 +63,23 @@ sub line_data {
     my %cols = $self->get_columns;
     my %out;
 
-    # Inflate
-    $cols{facets} = $self->facets if $cols{facets};
+    my $has_facets = ($cols{has_facets} || $cols{facets}) ? 1 : 0;
+    my $has_orphan = ($cols{has_orphan} || $cols{orphan}) ? 1 : 0;
 
-    $out{lines} = Test2::Formatter::Test2::Composer->render_super_verbose($cols{facets} // $self->orphan);
+    $cols{facets} = $self->facets if $has_facets;
 
-    $out{facets} = $cols{facets} ? 1 : 0;
-    $out{orphan} = $cols{orphan} ? 1 : 0;
+    $out{lines} = Test2::Formatter::Test2::Composer->render_super_verbose($has_facets ? $self->facets : $self->orphan);
+
+    $out{facets} = $has_facets;
+    $out{orphan} = $has_orphan;
 
     $out{parent_id} = $cols{parent_id} if $cols{parent_id};
     $out{nested}    = $cols{nested} // 0;
 
     $out{event_id} = $cols{event_id};
 
-    $out{is_parent} = $cols{facets}{parent} ? 1 : 0;
-    $out{is_fail} = $cols{facets}{assert} ? $cols{facets}{assert}{pass} ? 0 : 1 : undef;
+    $out{is_parent} = ($has_facets && $cols{facets}{parent}) ? 1 : 0;
+    $out{is_fail}   = ($has_facets && $cols{facets}{assert}) ? $cols{facets}{assert}{pass} ? 0 : 1 : undef;
 
     return \%out;
 }

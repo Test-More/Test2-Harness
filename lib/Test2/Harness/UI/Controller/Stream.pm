@@ -152,6 +152,18 @@ sub stream_events {
     # we only stream nested events when the job is still running
     my $query = $job->complete ? {nested => 0} : undef;
 
+    my $opts = {
+        remove_columns => ['orphan'],
+        '+select' => [
+            'facets IS NOT NULL AS has_facets',
+            'orphan IS NOT NULL AS has_orphan',
+        ],
+        '+as' => [
+            'has_facets',
+            'has_orphan',
+        ],
+    };
+
     return $self->stream_set(
         type   => 'event',
         parent => $job,
@@ -165,6 +177,7 @@ sub stream_events {
         sort_dir     => '-asc',
         method       => 'line_data',
         custom_query => $query,
+        custom_opts  => $opts,
         search_base  => scalar($job->events),
     );
 }
@@ -214,6 +227,7 @@ sub stream_set {
     my $self = shift;
     my (%params) = @_;
 
+    my $custom_opts  = $params{custom_opts} // {};
     my $custom_query = $params{custom_query} // undef;
     my $id_field     = $params{id_field};
     my $limit        = $params{initial_limit};
@@ -229,7 +243,7 @@ sub stream_set {
 
     my $order_by = $params{order_by} // $sort_field ? {$sort_dir => $sort_field} : croak "Must specify either 'order_by' or 'sort_field'";
 
-    my $items = $search_base->search($custom_query, {order_by => $order_by, $limit ? (rows => $limit) : ()});
+    my $items = $search_base->search($custom_query, {%$custom_opts, order_by => $order_by, $limit ? (rows => $limit) : ()});
 
     my $start = time;
     my $ord = 0;

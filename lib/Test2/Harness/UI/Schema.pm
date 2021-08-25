@@ -19,7 +19,10 @@ BEGIN {
     __PACKAGE__->table("coverage");
 }
 
-__PACKAGE__->load_namespaces;
+require Test2::Harness::UI::Schema::ResultSet;
+__PACKAGE__->load_namespaces(
+    default_resultset_class => 'ResultSet',
+);
 
 require Test2::Harness::UI::Schema::Result::ApiKey;
 require Test2::Harness::UI::Schema::Result::Email;

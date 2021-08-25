@@ -49,9 +49,11 @@ sub handle {
 
             while (my $job = $jobs->next()) {
                 $job->events->delete;
+                $job->job_fields->delete;
                 $job->delete;
             }
 
+            $run->run_fields->delete;
             $run->delete;
         }
     }

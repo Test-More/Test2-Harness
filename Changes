@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix job delete icon
+
 0.000078  2021-08-25 13:50:30-07:00 America/Los_Angeles
 
     - Fix performance issue rendering pages with lots of field data

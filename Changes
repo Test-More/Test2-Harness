@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix minor css bug
+
 0.000081  2021-08-26 10:52:03-07:00 America/Los_Angeles
 
     - Fix SQL error when getting coverage for a specific user

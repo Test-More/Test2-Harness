@@ -115,7 +115,7 @@ div.tooltip {
 
     padding: 3px;
 
-    white-space: no-wrap;
+    white-space: nowrap;
 }
 
 table.tool_table {
@@ -124,11 +124,11 @@ table.tool_table {
 
 table.tool_table > tr > td {
     position: relative;
-    white-space: no-wrap;
+    white-space: nowrap;
 }
 
 table.tool_table > tr > td > div.tooltip {
     top: -5px;
     left: 18px;
-    white-space: no-wrap;
+    white-space: nowrap;
 }

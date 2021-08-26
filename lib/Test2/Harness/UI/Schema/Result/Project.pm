@@ -29,7 +29,7 @@ sub coverage {
     my $schema = $self->result_source->schema;
     if (my $publisher = $params{user}) {
         my $user = $schema->resultset('User')->find({username => $publisher}) or confess "Invalid publisher '$publisher'.\n";
-        $query->{'runs.user_id'} = $user->user_id;
+        $query->{'run.user_id'} = $user->user_id;
     }
 
     my $field = $schema->resultset('RunField')->find($query, $attrs)

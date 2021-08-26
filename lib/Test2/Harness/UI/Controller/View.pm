@@ -27,13 +27,11 @@ sub handle {
     $res->add_js('eventtable.js');
     $res->add_js('view.js');
 
-    my $user = $req->user;
-
     my $schema = $self->{+CONFIG}->schema;
 
     my $id     = $route->{id};
     my $run_id = $route->{run_id};
-    my $project;
+    my ($project, $user);
 
     if ($id) {
         my $p_rs = $schema->resultset('Project');
@@ -44,12 +42,21 @@ sub handle {
             $self->{+TITLE} .= ">" . $project->name;
         }
         else {
-            $run_id //= $id;
+            my $u_rs = $schema->resultset('User');
+            $user //= eval { $u_rs->search({user_id => $id})->first };
+            $user //= eval { $u_rs->search({username => $id})->first };
+
+            if ($user) {
+                $self->{+TITLE} .= ">" . $user->username;
+            }
+            else {
+                $run_id //= $id;
+            }
         }
     }
 
     if($run_id) {
-        my $run = $schema->resultset('Run')->search({run_id => $run_id})->first or die error(404 => 'Invalid Run');
+        my $run = eval { $schema->resultset('Run')->search({run_id => $run_id})->first } or die error(404 => 'Invalid Run');
         $self->{+TITLE} .= ">" . $run->project->name;
     }
 
@@ -70,7 +77,7 @@ sub handle {
         'view.tx',
         {
             base_uri   => $req->base->as_string,
-            user       => $user,
+            user       => $req->user,
             stream_uri => $stream_uri,
         }
     );

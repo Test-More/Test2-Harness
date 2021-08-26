@@ -15,7 +15,7 @@ t2hui.runtable.build_table = function() {
     ];
 
     if (show_user || !single_user) {
-        columns.push({ 'name': 'user', 'label': 'user', 'class': 'user'});
+        columns.push({ 'name': 'user', 'label': 'user', 'class': 'user', builder: t2hui.runtable.build_user});
     }
 
     var table = new FieldTable({
@@ -71,6 +71,17 @@ t2hui.runtable.build_project = function(item, col) {
     var proj  = $('<a title="See runs for ' + val + '" href="' + vlink + '">' + val + '</a>');
     col.append(stats);
     col.append('&nbsp;');
+    col.append(proj);
+};
+
+t2hui.runtable.build_user = function(item, col) {
+    var val = item.user;
+    if (val === null) { return };
+    if (val === undefined) { return };
+
+    var vlink = base_uri  + 'view/' + item.user_id;
+
+    var proj  = $('<a title="See runs for ' + val + '" href="' + vlink + '">' + val + '</a>');
     col.append(proj);
 };
 

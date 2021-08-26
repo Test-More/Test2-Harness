@@ -187,11 +187,17 @@ table.job_table > * > tr.highlight {
     background: #E0FAFF;
 }
 
-td.project a {
+td.project a, td.user a {
     color: inherit;
     text-decoration: none;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    padding: 1px;
 }
 
-td.project a:hover {
-    font-weight: bold;
+td.project a:hover, td.user a:hover {
+    border: 2px solid #8080FF;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #EEEEFF;
 }

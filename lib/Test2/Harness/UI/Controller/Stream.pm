@@ -92,7 +92,7 @@ sub stream_runs {
 
     my $id     = $route->{id};
     my $run_id = $route->{run_id};
-    my $project;
+    my ($project, $user);
 
     if ($id) {
         my $p_rs = $schema->resultset('Project');
@@ -103,7 +103,16 @@ sub stream_runs {
             $params{search_base} = $params{search_base}->search_rs({project_id => $project->project_id});
         }
         else {
-            $run_id //= $id;
+            my $u_rs = $schema->resultset('User');
+            $user //= eval { $u_rs->search({user_id => $id})->first };
+            $user //= eval { $u_rs->search({username => $id})->first };
+
+            if ($user) {
+                $params{search_base} = $params{search_base}->search_rs({user_id => $user->user_id});
+            }
+            else {
+                $run_id //= $id;
+            }
         }
     }
 

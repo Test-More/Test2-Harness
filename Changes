@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix SQL error when getting coverage for a specific user
+    - Make it possible to view runs from a specific user
+
 0.000080  2021-08-26 08:15:59-07:00 America/Los_Angeles
 
     - Fix ISE in stats when data is not availavble

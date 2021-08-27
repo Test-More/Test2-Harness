@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix big in 'failed' controller from new fields schema
+
 0.000082  2021-08-26 10:57:54-07:00 America/Los_Angeles
 
     - Fix minor css bug

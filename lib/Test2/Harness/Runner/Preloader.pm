@@ -7,7 +7,7 @@ our $VERSION = '1.000067';
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN/;
 use Time::HiRes qw/time/;
-use Test2::Harness::Util qw/open_file file2mod mod2file lock_file unlock_file/;
+use Test2::Harness::Util qw/open_file file2mod mod2file lock_file unlock_file clean_path/;
 
 use Test2::Harness::Runner::Preloader::Stage;
 
@@ -50,6 +50,7 @@ use Test2::Harness::Util::HashBase(
         <monitored
         <changed
         <reload
+        <restrict_reload
 
         <blacklist_file
         <blacklist_lock
@@ -413,6 +414,20 @@ sub _monitor {
     return $self->_monitor_hardway();
 }
 
+sub _should_watch {
+    my $self = shift;
+    my ($file) = @_;
+
+    my $dirs = $self->{+RESTRICT_RELOAD};
+    return 1 unless $dirs && @$dirs;
+
+    for my $dir (@$dirs) {
+        return 1 if 0 == index($file, $dir);
+    }
+
+    return 0;
+}
+
 sub _monitor_inotify {
     my $self = shift;
 
@@ -427,6 +442,7 @@ sub _monitor_inotify {
 
     for my $file (keys %{$dtrace->loaded}) {
         $file = $INC{$file} || $file;
+        next unless $self->_should_watch($file);
         next if $stats->{$file}++;
         next unless -e $file;
         $inotify->watch($file, INOTIFY_MASK());
@@ -443,6 +459,7 @@ sub _monitor_hardway {
 
     for my $file (keys %{$dtrace->loaded}) {
         $file = $INC{$file} || $file;
+        next unless $self->_should_watch($file);
         next if $stats->{$file};
         next unless -e $file;
         my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);

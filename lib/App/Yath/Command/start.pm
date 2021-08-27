@@ -13,7 +13,7 @@ use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use Test2::Harness::Util qw/mod2file open_file parse_exit/;
+use Test2::Harness::Util qw/mod2file open_file parse_exit clean_path/;
 use Test2::Util::Table qw/table/;
 
 use Test2::Harness::Util::IPC qw/run_cmd USE_P_GROUPS/;
@@ -45,6 +45,16 @@ option_group {prefix => 'runner', category => "Persistent Runner Options"} => su
         default => 0,
     );
 
+    option restrict_reload => (
+        type => 'D',
+        long_examples  => ['', '=path'],
+        short_examples => ['', '=path'],
+        description => "Only reload modules under the specified path, if no path is specified look at anything under the .yath.rc path, or the current working directory.",
+
+        normalize => sub { $_[0] eq '1' ? $_[0] : clean_path($_[0]) },
+        action    => \&restrict_action,
+    );
+
     option quiet => (
         short       => 'q',
         type        => 'c',
@@ -52,6 +62,21 @@ option_group {prefix => 'runner', category => "Persistent Runner Options"} => su
         default     => 0,
     );
 };
+
+sub restrict_action {
+    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+
+    if ($norm eq '1') {
+        my $hset = $settings->harness;
+        my $path = $hset->config_file || $hset->cwd;
+        $path //= do { require Cwd; Cwd::getcwd() };
+        $path =~ s{\.yath\.rc$}{}g;
+        push @{$$slot} => $path;
+    }
+    else {
+        push @{$$slot} => $norm;
+    }
+}
 
 sub MAX_ATTACH() { 1_048_576 }
 

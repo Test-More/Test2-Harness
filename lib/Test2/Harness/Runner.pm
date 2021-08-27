@@ -37,6 +37,7 @@ use Test2::Harness::Util::HashBase(
         <unsafe_inc
 
         <use_fork <preloads <preload_threshold <switches
+        <restrict_reload
 
         <cover
 
@@ -109,11 +110,12 @@ sub preloader {
     my $self = shift;
 
     $self->{+PRELOADER} //= Test2::Harness::Runner::Preloader->new(
-        dir      => $self->{+DIR},
-        preloads => $self->preloads,
-        monitor  => $self->{+MONITOR_PRELOADS},
-        dump_depmap => $self->{+DUMP_DEPMAP},
-        reload   => $self->{+RELOAD},
+        dir             => $self->{+DIR},
+        preloads        => $self->preloads,
+        monitor         => $self->{+MONITOR_PRELOADS},
+        restrict_reload => $self->{+RESTRICT_RELOAD},
+        dump_depmap     => $self->{+DUMP_DEPMAP},
+        reload          => $self->{+RELOAD},
 
         below_threshold => ($self->{+PRELOAD_THRESHOLD} && $self->{+JOBS_TODO} && $self->{+PRELOAD_THRESHOLD} > $self->{+JOBS_TODO}) ? 1 : 0,
     );

@@ -226,18 +226,25 @@ BEGIN {
     require App::Yath;
     require Time::HiRes;
     require Test2::Harness::Settings;
+
+    my %mixin = (config_file => '', user_config_file => '');
+    $mixin{config_file}      = Cwd::realpath($config_file)      // File::Spec->rel2abs($config_file)      if $config_file;
+    $mixin{user_config_file} = Cwd::realpath($user_config_file) // File::Spec->rel2abs($user_config_file) if $user_config_file;
+
     my $settings = Test2::Harness::Settings->new(
         harness => {
-            orig_tmp        => $ORIG_TMP,
-            orig_tmp_perms  => $ORIG_TMP_PERMS,
-            orig_sig        => \%ORIG_SIG,
-            orig_argv       => \@ORIG_ARGV,
-            orig_inc        => \@ORIG_INC,
-            script          => $SCRIPT,
-            no_scan_plugins => $NO_PLUGINS,
-            dev_libs        => \@DEVLIBS,
-            start           => Time::HiRes::time(),
-            version         => $App::Yath::VERSION,
+            orig_tmp         => $ORIG_TMP,
+            orig_tmp_perms   => $ORIG_TMP_PERMS,
+            orig_sig         => \%ORIG_SIG,
+            orig_argv        => \@ORIG_ARGV,
+            orig_inc         => \@ORIG_INC,
+            script           => $SCRIPT,
+            no_scan_plugins  => $NO_PLUGINS,
+            dev_libs         => \@DEVLIBS,
+            start            => Time::HiRes::time(),
+            version          => $App::Yath::VERSION,
+            cwd              => Cwd::getcwd(),
+            %mixin,
         },
     );
 

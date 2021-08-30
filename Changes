@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000068  2021-08-30 09:52:12-07:00 America/Los_Angeles
+
     - Expand --cover-dir options with glob()
 
 1.000067  2021-08-27 11:32:10-07:00 America/Los_Angeles

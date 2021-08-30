@@ -26,6 +26,11 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
         alt => ['cover-dir'],
         type => 'm',
         default => sub { ['lib'] },
+
+        action => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+            push @$$slot => glob($norm);
+        },
     );
 
     option exclude_private => (

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add interactive mode!
+
 1.000068  2021-08-30 09:52:12-07:00 America/Los_Angeles
 
     - Expand --cover-dir options with glob()

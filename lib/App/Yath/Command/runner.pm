@@ -15,10 +15,47 @@ BEGIN {
     no strict 'refs';
     no warnings 'redefine';
 
+    my $int_done;
     my $orig = goto::file->can('filter');
     *goto::file::filter = sub {
         my $out = $orig->(@_);
         seek(STDIN, 0, 0) if $FIX_STDIN;
+
+        unless ($int_done++) {
+            if (my $fifo = $ENV{YATH_INTERACTIVE}) {
+                open(STDIN, '<', $fifo) or die "Could not open fifo ($fifo): $!";
+                print STDERR <<'                EOT';
+
+*******************************************************************************
+*                   YATH IS RUNNING IN INTERACTIVE MODE                       *
+*                                                                             *
+* STDIN is comming from a fifo pipe, not a TTY!                               *
+*                                                                             *
+* The $ENV{YATH_INTERACTIVE} var is set to the FIFO being used.               *
+*                                                                             *
+* VERBOSE mode has been turned on for you                                     *
+*                                                                             *
+* Only 1 test will run at a time                                              *
+*                                                                             *
+* The main yath process no longer has STDIN, so yath plugins that wait for    *
+* input WILL BREAK.                                                           *
+*                                                                             *
+* Prompts that do not end with a newline may have a 1 second delay before     *
+* they are displayed, they will be prefixed with [INTERACTIVE]                *
+*                                                                             *
+* Any stdin/stdout that is printed in 2 parts without a newline and more than *
+* a 1 second delay will be printed with the [INTERACTIVE] prefix, if they are *
+* not actually a prompt you can safely ignore them.                           *
+*                                                                             *
+* It is possible that a prompt was displayed before this message, please      *
+* check above if your prompt appears missing. This is an IO fluke, not a bug. *
+*                                                                             *
+*******************************************************************************
+
+                EOT
+            }
+        }
+
         return $out;
     };
 }

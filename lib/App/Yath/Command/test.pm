@@ -431,6 +431,9 @@ sub populate_queue {
         my $task = $file->queue_item(++$job_count, $run->run_id,
             $settings->check_prefix('display') ? (verbose => $settings->display->verbose) : (),
         );
+
+        $task->{category} = 'isolation' if $settings->debug->interactive;
+
         $state->queue_task($task);
         $tasks_queue->enqueue($task);
     }

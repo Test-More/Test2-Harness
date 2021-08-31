@@ -12,6 +12,7 @@ use App::Yath::Options;
 
 option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
     post 99999 => \&_post_process_show_opts;
+    post 99998 => \&_post_process_interactive;
     post \&_post_process_version;
     post \&_post_process_help;
 
@@ -44,6 +45,11 @@ option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
     option help => (
         short       => 'h',
         description => "exit after showing help information",
+    );
+
+    option interactive => (
+        short => 'i',
+        description => 'Use interactive mode, 1 test at a time, stdin forwarded to it',
     );
 
     option summary => (
@@ -127,6 +133,76 @@ sub _post_process_show_opts {
     print "$out\n";
 
     exit 0;
+}
+
+my $RAN = 0;
+sub _post_process_interactive {
+    return if $RAN++;
+    my %params = @_;
+
+    return unless $params{settings}->debug->interactive;
+
+    my $settings = $params{settings};
+
+    my ($fifo);
+    if ($settings->check_prefix('workspace')) {
+        my $dir = $settings->workspace->workdir;
+        $fifo = "$dir/fifo-$$";
+    }
+    else {
+        require File::Temp;
+        my $fh;
+        ($fh, $fifo) = File::Temp::tempfile("YATH-FIFO-$$-XXXXXX");
+        close($fh);
+        unlink($fifo);
+    }
+
+    ${$settings->debug->vivify_field('fifo')} = $fifo;
+
+    if ($settings->check_prefix('display')) {
+        $settings->display->field(quiet => 0);
+        $settings->display->field(verbose => 1) unless $settings->display->verbose;
+    }
+
+    if ($settings->check_prefix('formatter')) {
+        $settings->formatter->field(qvf => 0);
+    }
+
+    if ($settings->check_prefix('run')) {
+        $settings->run->env_vars->{YATH_INTERACTIVE} = $fifo;
+        $ENV{YATH_INTERACTIVE} = $fifo;
+    }
+
+    my $pid = fork() // die "Could not fork: $!";
+    if ($pid) {
+        require Time::HiRes;
+        require POSIX;
+        POSIX::mkfifo($fifo, 0700) or die "Failed to make fifo ($fifo): $!";
+
+        open(my $fh, '>', $fifo) or die "Could not open fifo ($fifo): $!";
+        $fh->autoflush(1);
+
+        STDIN->blocking(0);
+
+        while(1) {
+            $SIG{PIPE} = sub { exit 0 };
+            exit 0 if waitpid($pid, POSIX::WNOHANG);
+            exit 0 unless kill(0, $pid);
+            my $data = <STDIN>;
+            if (defined($data) && length($data)) {
+                print $fh $data;
+            }
+            else {
+                Time::HiRes::sleep(0.05);
+            }
+        }
+    }
+
+    close(STDIN);
+    open(STDIN, '<', '/dev/null');
+
+    require Time::HiRes;
+    while (! -e $fifo) { Time::HiRes::sleep(0.1) };
 }
 
 sub _post_process_version {

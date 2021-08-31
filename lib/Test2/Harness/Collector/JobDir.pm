@@ -35,8 +35,8 @@ use Test2::Harness::Util::HashBase qw{
 
     -_events_files -_events_buffer -_events_indexes -events_dir -_events_seen
 
-    -stderr_file -_stderr_buffer -_stderr_index -_stderr_cg
-    -stdout_file -_stdout_buffer -_stdout_index -_stdout_cg
+    -stderr_file -_stderr_buffer -_stderr_index -_stderr_cg -_stderr_state
+    -stdout_file -_stdout_buffer -_stdout_index -_stdout_cg -_stdout_state
 
     -exit_file   -_exit_done     -_exit_buffer
 
@@ -382,6 +382,9 @@ sub _fill_stream_buffers {
     my $self = shift;
     my ($max) = @_;
 
+    my $stdout_state = $self->{+_STDOUT_STATE} //= {};
+    my $stderr_state = $self->{+_STDERR_STATE} //= {};
+
     my $stdout_buff = $self->{+_STDOUT_BUFFER} ||= [];
     my $stderr_buff = $self->{+_STDERR_BUFFER} ||= [];
 
@@ -389,8 +392,8 @@ sub _fill_stream_buffers {
     my $stderr_file = $self->{+STDERR_FILE} || $self->_open_file('stderr');
 
     my @sets = grep { defined $_->[0] } (
-        [$stdout_file, $stdout_buff, 'io'],
-        [$stderr_file, $stderr_buff, 'io'],
+        [$stdout_file, $stdout_buff, 'io', 'STDOUT', $stdout_state],
+        [$stderr_file, $stderr_buff, 'io', 'STDERR', $stderr_state],
     );
 
     return unless @sets;
@@ -401,12 +404,14 @@ sub _fill_stream_buffers {
         my $added        = 0;
         my @events_files = $self->events_files();
         for my $set (@events_files, @sets) {
-            my ($file, $buff, $type) = @$set;
+            my ($file, $buff, $type, $name, $state) = @$set;
             next if $max && @$buff > $max;
 
             my $pos  = tell($file);
             my $line = <$file>;
             if (defined($line) && ($self->{+_EXIT_DONE} || substr($line, -1) eq "\n")) {
+                print "\n" if $state && delete $state->{$pos};
+
                 my $job_id = $self->{+JOB_ID};
                 if ($type eq 'io' && $line =~ s/T2-HARNESS-\Q$job_id\E-ENCODING: (.+)\n$//) {
                     apply_encoding($file, $1);
@@ -417,6 +422,42 @@ sub _fill_stream_buffers {
                 $added++;
             }
             else {
+                if ($name && defined($line) && $ENV{YATH_INTERACTIVE}) {
+                    my ($fh);
+
+                    if ($name eq 'STDOUT') {
+                        $fh = \*STDOUT;
+                    }
+                    elsif ($name eq 'STDERR') {
+                        $fh = \*STDERR;
+                    }
+
+                    my $len = length($line);
+                    if (my $check = $state->{$pos}->{len}) {
+                        if ($len != $check) {
+                            delete $state->{$pos}->{done};
+                            $line = substr($line, $check);
+                        }
+                        else {
+                            $line = "\n[INTERACTIVE] $line";
+                        }
+                    }
+                    else {
+                        $line = "\n[INTERACTIVE] $line";
+                    }
+
+                    $state->{$pos}->{len} = $len;
+
+                    my $stamp = $state->{$pos}->{stamp} //= time;
+                    my $delta = time - $stamp;
+
+                    if($delta >= 1 && !$state->{$pos}->{done}) {
+                        $fh->autoflush(1);
+
+                        $state->{$pos}->{done} = 1;
+                        print $fh $line;
+                    }
+                }
                 seek($file, $pos, 0);
             }
         }

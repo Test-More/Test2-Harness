@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Improve reload inotify logic
+
 1.000069  2021-08-31 14:07:54-07:00 America/Los_Angeles
 
     - Add interactive mode!

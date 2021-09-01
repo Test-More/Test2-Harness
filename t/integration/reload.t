@@ -189,7 +189,7 @@ subtest no_in_place => sub {
     yath(command => 'stop', exit => 0);
 };
 
-subtest no_in_place => sub {
+subtest in_place => sub {
     unlink("$tmpdir/Preload/IncChange.pm") if -e "$tmpdir/Preload/IncChange.pm";
 
     yath(

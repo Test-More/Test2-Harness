@@ -249,6 +249,10 @@ sub check {
 
     my %CNI = reverse pairgrep { $b } %INC;
     my @todo;
+
+    my $dtrace = $self->dtrace;
+    $dtrace->start if $self->{+RELOAD};
+
     for my $file (keys %$changed) {
         my $rel = $CNI{$file};
         my $mod = file2mod($rel);
@@ -284,12 +288,22 @@ sub check {
             1;
         };
         my $err = $@;
+
         next if $ok && !@warnings;
         print "$$ $0 - Failed to reload '$file' in place...\n", map { "  $$ $0 - $_\n"  } map { split /\n/, $_ } grep { $_ } @warnings, $ok ? () : ($err);
         push @todo => [$mod, $file];
     }
 
-    return 0 unless @todo;
+    if ($self->{+RELOAD}) {
+        $dtrace->stop;
+
+        unless (@todo) {
+            delete $self->{+MONITORED};
+            $self->_monitor();
+            return 0;
+        }
+    }
+
     $self->{+CHANGED} = 1;
     print "$$ $0 - blacklisting changed files and reloading stage...\n";
 
@@ -408,7 +422,7 @@ sub _monitor {
     $self->{+MONITORED} = [$$, $0, Carp::longmess()];
 
     my $dtrace = $self->dtrace;
-    my $stats = $self->{+STATS} ||= {};
+    $self->{+STATS} //= {};
 
     return $self->_monitor_inotify() if USE_INOTIFY();
     return $self->_monitor_hardway();
@@ -432,18 +446,13 @@ sub _monitor_inotify {
     my $self = shift;
 
     my $dtrace = $self->dtrace;
-    my $stats = $self->{+STATS} ||= {};
 
-    my $inotify = $self->{+INOTIFY} //= do {
-        my $in = Linux::Inotify2->new;
-        $in->blocking(0);
-        $in;
-    };
+    my $inotify = $self->{+INOTIFY} = Linux::Inotify2->new;
+    $inotify->blocking(0);
 
     for my $file (keys %{$dtrace->loaded}) {
         $file = $INC{$file} || $file;
         next unless $self->_should_watch($file);
-        next if $stats->{$file}++;
         next unless -e $file;
         $inotify->watch($file, INOTIFY_MASK());
     }

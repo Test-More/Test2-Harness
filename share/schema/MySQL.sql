@@ -197,7 +197,6 @@ CREATE TABLE jobs (
 
     UNIQUE(job_id, job_try)
 ) ROW_FORMAT=COMPRESSED;
-CREATE INDEX job_look ON jobs(job_id, job_try);
 CREATE INDEX job_runs ON jobs(run_id);
 CREATE INDEX job_fail ON jobs(fail);
 CREATE INDEX job_file ON jobs(file);
@@ -248,3 +247,4 @@ CREATE TABLE events (
 CREATE INDEX event_job    ON events(job_key);
 CREATE INDEX event_trace  ON events(trace_id);
 CREATE INDEX event_parent ON events(parent_id);
+CREATE INDEX is_subtest   ON events(is_subtest);

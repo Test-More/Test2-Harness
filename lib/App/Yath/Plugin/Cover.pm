@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '1.000071';
 
-use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util qw/clean_path mod2file/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
@@ -62,6 +62,17 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
         },
     );
 
+    option aggregator => (
+        type => 's',
+        description => 'Choose an aggregator (default Test2::Harness::Log::CoverageAggregator)',
+        default => 'Test2::Harness::Log::CoverageAggregator',
+    );
+
+    option class => (
+        type => 's',
+        description => 'Choose a Test2::Plugin::Cover subclass',
+        default => 'Test2::Plugin::Cover',
+    );
 };
 
 sub post_process {
@@ -71,9 +82,11 @@ sub post_process {
     my $cover = $settings->cover;
 
     if ($cover->files || $cover->write || $cover->metrics) {
-        eval { require Test2::Plugin::Cover; 1 } or die "Could not enable file coverage, could not load 'Test2::Plugin::Cover': $@";
-        push @{$settings->run->load_import->{'@'}} => 'Test2::Plugin::Cover';
-        $settings->run->load_import->{'Test2::Plugin::Cover'} = [];
+        my $cover_class = $cover->class // 'Test2::Plugin::Cover';
+
+        eval { require(mod2file($cover_class)); 1 } or die "Could not enable file coverage, could not load '$cover_class': $@";
+        push @{$settings->run->load_import->{'@'}} => $cover_class;
+        $settings->run->load_import->{$cover_class} = [];
     }
 }
 
@@ -92,8 +105,9 @@ sub handle_event {
             return;
         }
 
-        require Test2::Harness::Log::CoverageAggregator;
-        $self->{+AGGREGATOR} = Test2::Harness::Log::CoverageAggregator->new();
+        my $agg = $settings->cover->aggregator // 'Test2::Harness::Log::CoverageAggregator';
+        require(mod2file($agg));
+        $self->{+AGGREGATOR} = $agg->new();
     }
 
     my $fd = $e->{facet_data};

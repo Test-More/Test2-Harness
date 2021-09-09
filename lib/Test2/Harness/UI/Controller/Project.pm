@@ -29,8 +29,8 @@ sub handle {
     my $schema = $self->{+CONFIG}->schema;
 
     my $project;
-    $project = $schema->resultset('Project')->find({name => $it}, {rows => 1});
-    $project //= $schema->resultset('Project')->find({project_id => $it}, {rows => 1});
+    $project = $schema->resultset('Project')->single({name => $it});
+    $project //= $schema->resultset('Project')->single({project_id => $it});
     error(404 => 'Invalid Project') unless $project;
 
     return $self->html($req, $project, $n)
@@ -125,23 +125,27 @@ sub _build_stat_file_durations {
 
     my $n = $stat->{n};
 
-    my @runs = reverse $project->runs->search(
-        {status => 'complete'},
-        {
-            order_by => {'-DESC' => 'added'},
-            $n ? (rows => $n) : (),
-        },
-    )->all;
+    my $schema = $self->{+CONFIG}->schema;
 
+    my $fields_rs = $schema->resultset('JobField')->search(
+        { 'me.name'        => 'time_total',
+          'run.status'     => 'complete',
+          'run.project_id' => $project->project_id,
+        },
+        { join     => { job_key => 'run' },
+          order_by => {'-DESC'  => 'run.added'},
+          prefetch => 'job_key' },
+    );
+
+    my %runs;
     my %files;
-    for my $run (@runs) {
-        my $jobs = $run->jobs;
-        while (my $job = $jobs->next) {
-            my $file = $job->file or next;
-            my $field = $job->job_fields->search({name => 'time_total'})->first or next;
-            my $val = $field->raw or next;
-            push @{$files{$file}} => $val;
-        }
+    while (my $field = $fields_rs->next) {
+        $runs{$field->job_key->run_id} = 1;
+        last if $n && keys %runs > $n;
+
+        my $file = $field->job_key->file or next;
+        my $val = $field->raw or next;
+        push @{$files{$file}} => $val;
     }
 
     for my $file (keys %files) {
@@ -187,34 +191,37 @@ sub _build_stat_sub_durations {
 
     my $n = $stat->{n};
 
-    my @runs = reverse $project->runs->search(
-        {status => 'complete'},
-        {
-            order_by => {'-DESC' => 'added'},
-            $n ? (rows => $n) : (),
+    my $schema = $self->{+CONFIG}->schema;
+
+    my $events_rs = $schema->resultset('Event')->search(
+        { 'me.is_subtest'  => 1,
+          'run.status'     => 'complete',
+          'run.project_id' => $project->project_id,
         },
-    )->all;
+        { join     => { job_key => 'run' },
+          order_by => {'-DESC'  => 'run.added'},
+          prefetch => 'job_key' },
+    );
 
+    my %runs;
     my %files;
-    for my $run (@runs) {
-        my $jobs = $run->jobs;
-        while (my $job = $jobs->next) {
-            my $file = $job->file or next;
+    while (my $event = $events_rs->next) {
+        $runs{$event->job_key->run_id} = 1;
+        last if $n && keys %runs > $n;
 
-            my $sts = $job->events->search({is_subtest => 1, nested => 0});
-            while (my $st = $sts->next) {
-                my $facets = $st->facets or next;
-                my $assert = $facets->{assert} // next;
-                my $parent = $facets->{parent} // next;
-                my $name = $assert->{details} || next;
-                next if $BAD_ST_NAME{$name};
+        next if $event->nested;
+        my $file = $event->job_key->file or next;
 
-                my $start = $parent->{start_stamp} // next;
-                my $stop  = $parent->{stop_stamp}  // next;
+        my $facets = $event->facets or next;
+        my $assert = $facets->{assert} // next;
+        my $parent = $facets->{parent} // next;
+        my $name = $assert->{details} || next;
+        next if $BAD_ST_NAME{$name};
 
-                push @{$files{$file}->{$name}} => ($stop - $start);
-            }
-        }
+        my $start = $parent->{start_stamp} // next;
+        my $stop  = $parent->{stop_stamp}  // next;
+
+        push @{$files{$file}->{$name}} => ($stop - $start);
     }
 
     my @stats;
@@ -260,37 +267,39 @@ sub _build_stat_sub_failures {
 
     my $n = $stat->{n};
 
-    my @runs = reverse $project->runs->search(
-        {status => 'complete'},
-        {
-            order_by => {'-DESC' => 'added'},
-            $n ? (rows => $n) : (),
-        },
-    )->all;
+    my $schema = $self->{+CONFIG}->schema;
 
+    my $events_rs = $schema->resultset('Event')->search(
+        { 'me.is_subtest'  => 1,
+          'run.status'     => 'complete',
+          'run.project_id' => $project->project_id,
+        },
+        { join     => { job_key => 'run' },
+          order_by => {'-DESC'  => 'run.added'},
+          prefetch => 'job_key' },
+    );
+
+    my %runs;
     my %files;
     my $rc = 0;
-    for my $run (@runs) {
-        $rc++;
-        my $jobs = $run->jobs;
-        while (my $job = $jobs->next) {
-            my $file = $job->file or next;
+    while (my $event = $events_rs->next) {
+        $runs{$event->job_key->run_id} = 1;
+        last if $n && keys %runs > $n;
+        $rc = scalar keys %runs;
 
-            my $sts = $job->events->search({is_subtest => 1, nested => 0});
-            while (my $st = $sts->next) {
-                my $facets = $st->facets or next;
-                my $assert = $facets->{assert} // next;
-                my $name = $assert->{details} || next;
-                next if $BAD_ST_NAME{$name};
+        next if $event->nested;
+        my $file = $event->job_key->file or next;
 
-                $files{$file}->{$name}->{total}++;
-                next if $assert->{pass};
+        my $facets = $event->facets or next;
+        my $assert = $facets->{assert} // next;
+        my $name = $assert->{details} || next;
+        next if $BAD_ST_NAME{$name};
 
+        $files{$file}->{$name}->{total}++;
+        next if $assert->{pass};
 
-                $files{$file}->{$name}->{fails}++;
-                $files{$file}->{$name}->{last_fail} = $rc;
-            }
-        }
+        $files{$file}->{$name}->{fails}++;
+        $files{$file}->{$name}->{last_fail} ||= $rc;
     }
 
     my @stats;
@@ -335,28 +344,32 @@ sub _build_stat_file_failures {
 
     my $n = $stat->{n};
 
-    my @runs = reverse $project->runs->search(
-        {status => 'complete'},
-        {
-            order_by => {'-DESC' => 'added'},
-            $n ? (rows => $n) : (),
-        },
-    )->all;
+    my $schema = $self->{+CONFIG}->schema;
 
+    my $jobs_rs = $schema->resultset('Job')->search(
+        { 'run.status'     => 'complete',
+          'run.project_id' => $project->project_id,
+        },
+        { join     => 'run',
+          order_by => {'-DESC'  => 'run.added'},
+    );
+
+    my %runs;
     my %files;
     my $rc = 0;
-    for my $run (@runs) {
+    while (my $job = $jobs_rs->next) {
+        $runs{$job->run_id} = 1;
+        last if $n && keys %runs > $n;
+        $rc = scalar keys %runs;
+
         $rc++;
-        my $jobs = $run->jobs;
-        while (my $job = $jobs->next) {
-            my $file = $job->file or next;
+        my $file = $job->file or next;
 
-            $files{$file}->{total}++;
+        $files{$file}->{total}++;
 
-            next unless $job->fail;
-            $files{$file}->{fails}++;
-            $files{$file}->{last_fail} = $rc;
-        }
+        next unless $job->fail;
+        $files{$file}->{fails}++;
+        $files{$file}->{last_fail} ||= $rc;
     }
 
     for my $file (keys %files) {
@@ -393,15 +406,14 @@ sub _build_stat_uncovered {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $runs = $project->runs->search(
-        {},
-        {order_by => {'-DESC' => 'added'}},
-    );
+    my $schema = $self->{+CONFIG}->schema;
 
-    my $field = $runs->search_related(
-        'run_fields',
-        {name => 'coverage'},
-        {rows => 1},
+    my $field = $schema->resultset('RunField')->search(
+        { 'me.name'        => 'coverage',
+          'run.project_id' => $project->project_id },
+        { join             => 'run',
+          order_by         => {'-DESC' => 'run.added'},
+          rows             => 1 } ,
     )->first;
 
     return $stat->{text} = "No coverage data."
@@ -428,19 +440,16 @@ sub _build_stat_coverage {
 
     my $n = $stat->{n};
 
-    my $runs = $project->runs->search(
-        {},
-        {order_by => {'-DESC' => 'added'}},
-    );
+    my $schema = $self->{+CONFIG}->schema;
 
-    my $opts = {};
-    $opts->{rows} = $n if $n;
-
-    my @items = reverse $runs->search_related(
-        'run_fields',
-        {name => 'coverage'},
-        $opts,
-    );
+    my @items = reverse $schema->resultset('RunField')->search(
+        { 'me.name'        => 'coverage',
+          'run.project_id' => $project->project_id },
+        { join             => 'run',
+          order_by         => {'-DESC' => 'run.added'},
+                $n ? (rows => $n) : (),
+        } ,
+    )->all;
 
     my $labels = [];
     my $subs   = [];

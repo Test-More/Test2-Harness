@@ -351,7 +351,7 @@ sub _build_stat_file_failures {
           'run.project_id' => $project->project_id,
         },
         { join     => 'run',
-          order_by => {'-DESC'  => 'run.added'},
+          order_by => {'-DESC'  => 'run.added'}},
     );
 
     my %runs;

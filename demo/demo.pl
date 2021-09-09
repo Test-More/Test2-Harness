@@ -7,7 +7,6 @@ use Test2::Harness::UI::Util qw/dbd_driver qdb_driver/;
 
 use lib 'lib';
 use DBIx::QuickDB;
-use Test2::Harness::UI::Import;
 use Test2::Harness::UI::Config;
 use IO::Compress::Bzip2     qw($Bzip2Error bzip2);
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);

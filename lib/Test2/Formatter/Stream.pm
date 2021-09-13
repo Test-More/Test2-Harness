@@ -2,7 +2,7 @@ package Test2::Formatter::Stream;
 use strict;
 use warnings;
 
-our $VERSION = '1.000072';
+our $VERSION = '1.000073';
 
 use Carp qw/croak confess/;
 use Time::HiRes qw/time/;

@@ -23,7 +23,16 @@ BEGIN {
 
         unless ($int_done++) {
             if (my $fifo = $ENV{YATH_INTERACTIVE}) {
-                open(STDIN, '<', $fifo) or die "Could not open fifo ($fifo): $!";
+                my $ok;
+                for (1 .. 10) {
+                    $ok = open(STDIN, '<', $fifo);
+                    last if $ok;
+                    die "Could not open fifo ($fifo): $!";
+                    sleep 1;
+                }
+
+                die "Could not open fifo ($fifo): $!" unless $ok;
+
                 print STDERR <<'                EOT';
 
 *******************************************************************************

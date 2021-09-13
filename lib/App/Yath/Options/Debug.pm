@@ -8,6 +8,8 @@ use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 use Test2::Util::Table qw/table/;
 use Test2::Harness::Util qw/find_libraries mod2file clean_path/;
 
+use Errno qw/EINTR/;
+
 use App::Yath::Options;
 
 option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
@@ -179,7 +181,14 @@ sub _post_process_interactive {
         require POSIX;
         POSIX::mkfifo($fifo, 0700) or die "Failed to make fifo ($fifo): $!";
 
-        open(my $fh, '>', $fifo) or die "Could not open fifo ($fifo): $!";
+        my $fh;
+        for (1 .. 10) {
+            last if open($fh, '>', $fifo);
+            die "Could not open fifo ($fifo): $!" unless $! == EINTR;
+            sleep 1;
+        }
+        die "Could not open fifo ($fifo): $!" unless $fh;
+
         $fh->autoflush(1);
 
         STDIN->blocking(0);

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000073  2021-09-21 10:25:42-07:00 America/Los_Angeles
+
     - Load coverage module EARLY in the runner spawn process
     - Add ability to for plugins to inject CLI options for the runner
 

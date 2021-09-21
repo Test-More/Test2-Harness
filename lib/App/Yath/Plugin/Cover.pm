@@ -75,6 +75,16 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
     );
 };
 
+sub spawn_args {
+    my $self = shift;
+    my ($settings) = @_;
+
+    return () unless $settings->cover->files || $settings->cover->metrics || $settings->cover->write;
+
+    my $class = $settings->cover->class;
+    return ('-M' . $class . '=disabled,1');
+}
+
 sub post_process {
     my %params   = @_;
     my $settings = $params{settings};

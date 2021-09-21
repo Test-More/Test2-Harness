@@ -93,10 +93,22 @@ get the same ARGV.
     EOT
 }
 
-sub cover {
-    return unless $ENV{T2_DEVEL_COVER};
-    return unless $ENV{T2_COVER_SELF};
-    return '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+sub spawn_args {
+    my $self = shift;
+    my ($settings) = @_;
+
+    my @out;
+
+    if ($ENV{T2_DEVEL_COVER} && $ENV{T2_COVER_SELF}) {
+        push @out => '-MDevel::Cover=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+    }
+
+    my $plugins = $settings->harness->plugins;
+    if (@$plugins) {
+        push @out => $_->spawn_args($settings) for grep { $_->can('spawn_args') } @$plugins;
+    }
+
+    return @out;
 }
 
 sub init {
@@ -640,7 +652,7 @@ sub start_auditor {
         stdout      => $self->auditor_writer(),
         no_set_pgrp => 1,
         command     => [
-            $^X, cover(), $settings->harness->script,
+            $^X, $self->spawn_args($settings), $settings->harness->script,
             (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             auditor => 'Test2::Harness::Auditor',
@@ -668,7 +680,7 @@ sub start_collector {
         stdin       => $rh,
         no_set_pgrp => 1,
         command     => [
-            $^X, cover(), $settings->harness->script,
+            $^X, $self->spawn_args($settings), $settings->harness->script,
             (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins',    # Do not preload any plugin modules
             collector => 'Test2::Harness::Collector',
@@ -705,7 +717,7 @@ sub start_runner {
         env_vars => { @prof ? (NYTPROF => 'start=no:addpid=1') : () },
         no_set_pgrp => 1,
         command => [
-            $^X, @prof, cover(), $settings->harness->script,
+            $^X, @prof, $self->spawn_args($settings), $settings->harness->script,
             (map { "-D$_" } @{$settings->harness->dev_libs}),
             '--no-scan-plugins', # Do not preload any plugin modules
             runner => $dir,

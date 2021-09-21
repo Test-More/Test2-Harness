@@ -58,7 +58,7 @@ suggests "HTTP::Tiny::Multipart" => "0.08";
 suggests "IO::Pager" => "1.00";
 suggests "JSON::MaybeXS" => "0";
 suggests "Term::ANSIColor" => "4.03";
-suggests "Test2::Plugin::Cover" => "0.000024";
+suggests "Test2::Plugin::Cover" => "0.000025";
 suggests "Test2::Plugin::DBIProfile" => "0.002002";
 suggests "Test2::Plugin::IOEvents" => "0.001001";
 

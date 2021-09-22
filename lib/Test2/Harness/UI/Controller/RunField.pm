@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::RunField;
 use strict;
 use warnings;
 
-our $VERSION = '0.000085';
+our $VERSION = '0.000086';
 
 use Data::GUID;
 use List::Util qw/max/;

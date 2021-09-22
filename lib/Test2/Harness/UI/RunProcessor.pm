@@ -2,7 +2,7 @@ package Test2::Harness::UI::RunProcessor;
 use strict;
 use warnings;
 
-our $VERSION = '0.000085';
+our $VERSION = '0.000086';
 
 use DateTime;
 use Data::GUID;

@@ -1,5 +1,5 @@
 package Test2::Harness::UI::Schema::Result::Coverage;
-our $VERSION = '0.000085';
+our $VERSION = '0.000086';
 @Test2::Harness::UI::Schema::Result::Coverage::ISA = ('DBIx::Class::Core');
 __PACKAGE__->table("coverage");
 

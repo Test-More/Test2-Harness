@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.000086  2021-09-22 10:24:05-07:00 America/Los_Angeles
+
     - Stream results faster
     - Analyze tables after sweep in mysql
 

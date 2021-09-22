@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Stream results faster
+    - Analyze tables after sweep in mysql
+
 0.000085  2021-09-22 09:34:55-07:00 America/Los_Angeles
 
     - Fix bug that inverted "runs since last failure" values

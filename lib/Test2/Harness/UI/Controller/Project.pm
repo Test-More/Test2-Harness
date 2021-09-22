@@ -322,7 +322,7 @@ sub _build_stat_sub_failures {
                 fails => $fails,
                 percent => $p,
                 rate => "$fails/$total ($p\%)",
-                last_fail => $rc - $last_fail,
+                last_fail => $last_fail,
             };
         }
     }
@@ -396,7 +396,7 @@ sub _build_stat_file_failures {
         rows => [
             map {
                 my $set = $files{$_};
-                [{}, $set->{rate}, $_, $rc - $set->{last_fail}]
+                [{}, $set->{rate}, $_, $set->{last_fail}]
             } grep { $_ } @sorted,
         ],
     };

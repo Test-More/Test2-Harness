@@ -82,6 +82,11 @@ sub sweep {
         $run->delete if $params{runs};
     }
 
+    if ($db_type =~ m/mysql/i) {
+        my $dbh = $self->config->schema->storage->dbh;
+        $dbh->do('ANALYZE TABLE runs, run_fields, jobs, job_fields, events');
+    }
+
     return \%counts;
 }
 

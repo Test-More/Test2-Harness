@@ -132,7 +132,7 @@ sub run {
         stderr => $stderr,
         stdout => $stdout,
 
-        no_set_pgrp => $settings->runner->daemon,
+        no_set_pgrp => !$settings->runner->daemon,
 
         command => [
             $^X, @prof, $settings->harness->script,

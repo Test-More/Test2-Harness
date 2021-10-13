@@ -95,8 +95,8 @@ CREATE TABLE projects (
 
 CREATE TABLE permissions (
     permission_id   CHAR(36)        NOT NULL PRIMARY KEY,
-    project_id      CHAR(36)        NOT NULL REFERENCES projects(project_id),
-    user_id         CHAR(36)        NOT NULL REFERENCES users(user_id),
+    project_id      CHAR(36)        NOT NULL,
+    user_id         CHAR(36)        NOT NULL,
     updated         TIMESTAMP       NOT NULL DEFAULT now(),
 
     cpan_batch      BIGINT          DEFAULT NULL,
@@ -158,6 +158,12 @@ CREATE TABLE run_fields (
     UNIQUE(run_id, name)
 ) ROW_FORMAT=COMPRESSED;
 
+CREATE TABLE test_files (
+    test_file_id    CHAR(36)        NOT NULL PRIMARY KEY,
+    filename        VARCHAR(512)    NOT NULL,
+
+    UNIQUE(filename)
+) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE jobs (
     job_key         CHAR(36)    NOT NULL PRIMARY KEY,
@@ -174,9 +180,10 @@ CREATE TABLE jobs (
     parameters      LONGTEXT        DEFAULT NULL,
     fields          LONGTEXT        DEFAULT NULL,
 
+    test_file_id    CHAR(36)    DEFAULT NULL,
+
     -- Summaries
     name            TEXT            DEFAULT NULL,
-    file            VARCHAR(512)    DEFAULT NULL,
     fail            BOOL            DEFAULT NULL,
     retry           BOOL            DEFAULT NULL,
     exit_code       INT             DEFAULT NULL,
@@ -189,17 +196,21 @@ CREATE TABLE jobs (
     pass_count      BIGINT          DEFAULT NULL,
     fail_count      BIGINT          DEFAULT NULL,
 
+    -- Coverage
+    coverage_manager    TEXT        DEFAULT NULL,
+
     -- Output data
     stdout          LONGTEXT        DEFAULT NULL,
     stderr          LONGTEXT        DEFAULT NULL,
 
-    FOREIGN KEY (run_id) REFERENCES runs(run_id),
+    FOREIGN KEY (run_id)       REFERENCES runs(run_id),
+    FOREIGN KEY (test_file_id) REFERENCES test_files(test_file_id),
 
     UNIQUE(job_id, job_try)
 ) ROW_FORMAT=COMPRESSED;
 CREATE INDEX job_runs ON jobs(run_id);
 CREATE INDEX job_fail ON jobs(fail);
-CREATE INDEX job_file ON jobs(file);
+CREATE INDEX job_file ON jobs(test_file_id);
 
 CREATE TABLE job_fields (
     job_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
@@ -234,16 +245,59 @@ CREATE TABLE events (
     trace_id        CHAR(36)    DEFAULT NULL,
     nested          INT         DEFAULT 0,
 
-    facets          LONGTEXT  DEFAULT NULL,
+    facets          LONGTEXT    DEFAULT NULL,
     facets_line     BIGINT      DEFAULT NULL,
 
-    orphan          LONGTEXT  DEFAULT NULL,
+    orphan          LONGTEXT    DEFAULT NULL,
     orphan_line     BIGINT      DEFAULT NULL,
 
-    UNIQUE(insert_ord),
+    UNIQUE(insert_ord, job_key),
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)
 ) ROW_FORMAT=COMPRESSED;
 CREATE INDEX event_job    ON events(job_key);
 CREATE INDEX event_trace  ON events(trace_id);
 CREATE INDEX event_parent ON events(parent_id);
 CREATE INDEX is_subtest   ON events(is_subtest);
+
+CREATE TABLE source_files (
+    source_file_id  CHAR(36)            NOT NULL PRIMARY KEY,
+    filename        VARCHAR(512)    NOT NULL,
+
+    UNIQUE(filename)
+) ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE source_subs (
+    source_sub_id   CHAR(36)            NOT NULL PRIMARY KEY,
+    subname         VARCHAR(512)    NOT NULL,
+
+    UNIQUE(subname)
+) ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE coverage_manager (
+    coverage_manager_id   CHAR(36)          NOT NULL PRIMARY KEY,
+    package               VARCHAR(256)  NOT NULL,
+
+    UNIQUE(package)
+) ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE coverage (
+    coverage_id     CHAR(36)    NOT NULL PRIMARY KEY,
+
+    run_id              CHAR(36)    NOT NULL,
+    test_file_id        CHAR(36)    NOT NULL,
+    source_file_id      CHAR(36)    NOT NULL,
+    source_sub_id       CHAR(36)    NOT NULL,
+    coverage_manager_id CHAR(36)    DEFAULT NULL,
+
+    metadata    LONGTEXT    DEFAULT NULL,
+
+    FOREIGN KEY (run_id)              REFERENCES runs(run_id),
+    FOREIGN KEY (test_file_id)        REFERENCES test_files(test_file_id),
+    FOREIGN KEY (source_file_id)      REFERENCES source_files(source_file_id),
+    FOREIGN KEY (source_sub_id)       REFERENCES source_subs(source_sub_id),
+    FOREIGN KEY (coverage_manager_id) REFERENCES coverage_manager(coverage_manager_id),
+
+    UNIQUE(run_id, test_file_id, source_file_id, source_sub_id)
+) ROW_FORMAT=COMPRESSED;
+CREATE INDEX coverage_from_source ON coverage(source_file_id, source_sub_id);
+CREATE INDEX coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);

@@ -43,7 +43,9 @@ for my $schema_file (sort readdir($dh)) {
         ''
     ) and die "Error";
 
-    open(my $fh, '>', "tmp/${schema}.pm") or die "Could not open file: $!";
+    system("rm -rf lib/Test2/Harness/UI/Schema/${schema}");
+    mkdir "lib/Test2/Harness/UI/Schema/${schema}";
+    open(my $fh, '>', "lib/Test2/Harness/UI/Schema/${schema}.pm") or die "Could not open file: $!";
     print {$fh} <<"    EOT";
 package Test2::Harness::UI::Schema::${schema};
 use utf8;
@@ -59,11 +61,48 @@ Carp::confess("Already loaded schema '\$Test2::Harness::UI::Schema::LOADED'") if
 
 \$Test2::Harness::UI::Schema::LOADED = "${schema}";
 
+require Test2::Harness::UI::Schema;
+
+1;
     EOT
+    close($fh);
+
     opendir(my $dh, "tmp/$schema/Test2/Harness/UI/Schema/Result/") or die "Could not open dir: $!";
     for my $file (sort readdir($dh)) {
         next unless $file =~ m/\.pm$/;
-        my $override = "lib/Test2/Harness/UI/Schema/Result/$file";
+
+        my $dest = "lib/Test2/Harness/UI/Schema/${schema}/$file";
+        print "Found ${file}\n";
+        rename("tmp/$schema/Test2/Harness/UI/Schema/Result/$file", $dest) or die "Could not move ${file}: $!";
+
+        my $result = "lib/Test2/Harness/UI/Schema/Result/$file";
+        unless (-e $result) {
+            print "Adding 'result' file '$result'\n";
+            open(my $oh, '>', $result) or die "Could not open result file: $!\n";
+            my $pkg = $file;
+            $pkg =~ s/\.pm$//;
+            my $ver = Test2::Harness::UI::Util->VERSION;
+            print $oh <<"            EOT";
+package Test2::Harness::UI::Schema::Result::$pkg;
+use utf8;
+use strict;
+use warnings;
+
+use Carp qw/confess/;
+confess "You must first load a Test2::Harness::UI::Schema::NAME module"
+    unless \$Test2::Harness::UI::Schema::LOADED;
+
+our \$VERSION = '$ver';
+
+require "Test2/Harness/UI/Schema/\${Test2::Harness::UI::Schema::LOADED}/${pkg}.pm";
+require "Test2/Harness/UI/Schema/Overlay/${pkg}.pm";
+
+1;
+            EOT
+            close($oh);
+        }
+
+        my $override = "lib/Test2/Harness/UI/Schema/Overlay/$file";
         unless (-e $override) {
             print "Adding 'override' file '$override'\n";
             open(my $oh, '>', $override) or die "Could not open override file: $!\n";
@@ -86,23 +125,7 @@ our \$VERSION = '$ver';
             EOT
             close($oh);
         }
-        print "Appending ${file} to ${schema}.pm\n";
-        open(my $rh, '<', "tmp/$schema/Test2/Harness/UI/Schema/Result/$file") or die "Could not open $file: $!";
-        print {$fh} "{\n";
-        for my $line (<$rh>) {
-            next if $line =~ m/^\s*#/;
-            next if $line =~ m/^use (utf8|strict|warnings);/;
-            next if $line =~ m/^\s*1;\n?$/;
-            $line =~ s/package\s+(\S+)/package #\n    $1/;
-            print {$fh} $line;
-        }
-        print {$fh} "}\n\n";
     }
-
-    print {$fh} "\n1;\n";
-
-    close($fh);
-    system('perltidy', '-se', "-pro=./.perltidyrc", "tmp/${schema}.pm", "-o=lib/Test2/Harness/UI/Schema/${schema}.pm") and die "perltidy failed";
 }
 
 system('rm -rf ./tmp');

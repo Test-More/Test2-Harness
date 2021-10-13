@@ -169,6 +169,13 @@ CREATE TABLE run_fields (
     UNIQUE(run_id, name)
 );
 
+CREATE TABLE test_files (
+    test_file_id    UUID            NOT NULL PRIMARY KEY,
+    filename        VARCHAR(255)    NOT NULL,
+
+    UNIQUE(filename)
+);
+
 CREATE TABLE jobs (
     job_key         UUID        NOT NULL PRIMARY KEY,
 
@@ -180,12 +187,12 @@ CREATE TABLE jobs (
     is_harness_out  BOOL        NOT NULL DEFAULT FALSE,
 
     status          queue_status    NOT NULL DEFAULT 'pending',
+    parameters      JSONB           DEFAULT NULL,
 
-    parameters      JSONB       DEFAULT NULL,
+    test_file_id    UUID            DEFAULT NULL REFERENCES test_files(test_file_id),
 
     -- Summaries
     name            TEXT            DEFAULT NULL,
-    file            TEXT            DEFAULT NULL,
     fail            BOOL            DEFAULT NULL,
     retry           BOOL            DEFAULT NULL,
     exit_code       INT             DEFAULT NULL,
@@ -206,12 +213,12 @@ CREATE TABLE jobs (
 );
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
-CREATE INDEX IF NOT EXISTS job_file ON jobs(file);
+CREATE INDEX IF NOT EXISTS job_file ON jobs(test_file_id);
 
 CREATE TABLE job_fields (
     job_field_id    UUID            NOT NULL PRIMARY KEY,
     job_key         UUID            NOT NULL REFERENCES jobs(job_key),
-    name            VARCHAR(255)    NOT NULL,
+    name            VARCHAR(512)    NOT NULL,
     data            JSONB           DEFAULT NULL,
     details         TEXT            DEFAULT NULL,
     raw             TEXT            DEFAULT NULL,
@@ -249,3 +256,40 @@ CREATE INDEX IF NOT EXISTS event_job    ON events(job_key);
 CREATE INDEX IF NOT EXISTS event_trace  ON events(trace_id);
 CREATE INDEX IF NOT EXISTS event_parent ON events(parent_id);
 CREATE INDEX IF NOT EXISTS is_subtest   ON events(is_subtest);
+
+CREATE TABLE source_files (
+    source_file_id  UUID            NOT NULL PRIMARY KEY,
+    filename        VARCHAR(512)    NOT NULL,
+
+    UNIQUE(filename)
+);
+
+CREATE TABLE source_subs (
+    source_sub_id   UUID            NOT NULL PRIMARY KEY,
+    subname         VARCHAR(512)    NOT NULL,
+
+    UNIQUE(subname)
+);
+
+CREATE TABLE coverage_manager (
+    coverage_manager_id   UUID          NOT NULL PRIMARY KEY,
+    package               VARCHAR(256)  NOT NULL,
+
+    UNIQUE(package)
+);
+
+CREATE TABLE coverage (
+    coverage_id     UUID    NOT NULL PRIMARY KEY,
+
+    run_id              UUID    NOT NULL REFERENCES runs(run_id),
+    test_file_id        UUID    NOT NULL REFERENCES test_files(test_file_id),
+    source_file_id      UUID    NOT NULL REFERENCES source_files(source_file_id),
+    source_sub_id       UUID    NOT NULL REFERENCES source_subs(source_sub_id),
+    coverage_manager_id UUID    DEFAULT NULL REFERENCES coverage_manager(coverage_manager_id),
+
+    metadata    JSONB   DEFAULT NULL,
+
+    UNIQUE(run_id, test_file_id, source_file_id, source_sub_id)
+);
+CREATE INDEX IF NOT EXISTS coverage_from_source ON coverage(source_file_id, source_sub_id);
+CREATE INDEX IF NOT EXISTS coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);

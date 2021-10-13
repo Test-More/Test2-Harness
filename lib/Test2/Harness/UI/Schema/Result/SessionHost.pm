@@ -9,4 +9,7 @@ confess "You must first load a Test2::Harness::UI::Schema::NAME module"
 
 our $VERSION = '0.000087';
 
+require "Test2/Harness/UI/Schema/${Test2::Harness::UI::Schema::LOADED}/SessionHost.pm";
+require "Test2/Harness/UI/Schema/Overlay/SessionHost.pm";
+
 1;

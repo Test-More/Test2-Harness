@@ -31,7 +31,7 @@ sub handle {
 
     my $event_id = $it;
 
-    my $event = $schema->resultset('Event')->find({event_id => $event_id})
+    my $event = $schema->resultset('Event')->find({event_id => $event_id}, {remove_columns => [qw/orphan facets/]})
         or die error(404 => 'Invalid Event');
 
     $attrs{order_by} = {-asc => 'event_ord'};
@@ -49,7 +49,10 @@ sub handle {
         # them (in the same job);
         my $end_at = $schema->resultset('Event')->find(
             {%query, nested => $event->nested, event_ord => {'>' => $event->event_ord}},
-            {%attrs},
+            {
+                columns => [qw/event_ord/],
+                %attrs,
+            },
         );
 
         $query{event_ord} = {'>' => $event->event_ord, '<' => $end_at->event_ord};
@@ -59,7 +62,22 @@ sub handle {
         $query{'parent_id'} = $event_id;
     }
 
-    $rs = $schema->resultset('Event')->search(\%query, \%attrs);
+    $rs = $schema->resultset('Event')->search(
+        \%query,
+        {
+            remove_columns => ['orphan'],
+            '+select'      => [
+                'facets IS NOT NULL AS has_facets',
+                'orphan IS NOT NULL AS has_orphan',
+            ],
+            '+as' => [
+                'has_facets',
+                'has_orphan',
+            ],
+
+            %attrs
+        },
+    );
 
     $res->stream(
         env          => $req->env,

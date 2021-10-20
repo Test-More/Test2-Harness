@@ -456,7 +456,7 @@ sub _build_stat_coverage {
     my $files  = [];
     for my $item (@items) {
         push @$labels => '';
-        my $metrics = $item->data->{metrics};
+        my $metrics = $item->data->{metrics} // $item->data;
         push @$files => int($metrics->{files}->{tested} / $metrics->{files}->{total} * 100) if $metrics->{files}->{total};
         push @$subs  => int($metrics->{subs}->{tested} / $metrics->{subs}->{total} * 100) if $metrics->{subs}->{total};
     }

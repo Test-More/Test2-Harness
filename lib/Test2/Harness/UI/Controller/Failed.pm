@@ -60,7 +60,11 @@ sub handle {
 
     die error(404 => 'No Data') unless $run;
 
-    my $failed = $run->jobs->search({fail => 1, retry => 0}, {order_by => 'file'});
+    my $failed = $run->jobs->search(
+        {fail => 1, retry => 0},
+        {join => 'test_file', order_by => 'test_file.filename'},
+
+    );
 
     unless($json) {
         $res->content_type('text/plain');
@@ -72,11 +76,19 @@ sub handle {
     my $run_id = $run->run_id;
     my $run_uri = $req->base . "view/$run_id";
 
+    my $field_exclusions = {
+        -and => [
+            {name => {'-not_in'   => [qw/coverage files_covered/]}},
+            {name => {'-not_like' => 'time_%'}},
+            {name => {'-not_like' => 'mem_%'}},
+        ]
+    };
+
     my $data = {
         last_run_stamp => $run->added->epoch,
         run_id         => $run_id,
         run_uri        => $req->base . "view/" . $run->run_id,
-        fields         => [$run->run_fields->search({name => {-not_in => ['coverage']}})->all],
+        fields         => [$run->run_fields->search($field_exclusions)->all],
         failures       => [],
     };
 
@@ -105,7 +117,7 @@ sub handle {
 
         my $row = {
             file     => $fail->file,
-            fields   => [$fail->job_fields],
+            fields   => [$fail->job_fields->search($field_exclusions)->all],
             job_id   => $job_id,
             job_key  => $job_key,
             uri      => "$run_uri/$job_key",

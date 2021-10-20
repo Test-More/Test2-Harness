@@ -11,31 +11,31 @@ confess "You must first load a Test2::Harness::UI::Schema::NAME module"
 
 our $VERSION = '0.000087';
 
-sub coverage {
+sub last_covered_run {
     my $self = shift;
     my %params = @_;
 
     my $query = {
-        name => 'coverage',
-        data => {'IS NOT' => undef},
-        'run.project_id' => $self->project_id,
+        status => 'complete',
+        project_id => $self->project_id,
+        'coverages.run_id' => { 'IS NOT' => undef },
     };
+
     my $attrs = {
-        join => 'run',
-        order_by => {'-desc' => 'run.run_ord'},
+        join => ['coverages'],
+        order_by => {'-desc' => 'run_ord'},
         rows => 1,
     };
 
-    my $schema = $self->result_source->schema;
-    if (my $publisher = $params{user}) {
-        my $user = $schema->resultset('User')->find({username => $publisher}) or confess "Invalid publisher '$publisher'.\n";
-        $query->{'run.user_id'} = $user->user_id;
+    if ($params{user}) {
+        $query->{'user.username'} = $params{user};
+        push @{$attrs->{join} //= []} => 'user';
     }
 
-    my $field = $schema->resultset('RunField')->find($query, $attrs)
-        or return;
+    my $schema = $self->result_source->schema;
 
-    return $field;
+    my $run = $schema->resultset('Run')->find($query, $attrs);
+    return $run;
 }
 
 sub durations {

@@ -33,7 +33,7 @@ use Test2::Harness::UI::Util::HashBase qw{
 
     signal
 
-    <coverage <new_jobs
+    <coverage <new_jobs <id_cache
 
     <mode
     <interval <last_flush
@@ -92,6 +92,9 @@ sub init {
         $self->{+RUN} = $run;
     }
 
+    $self->{+ID_CACHE} = {};
+    $self->{+COVERAGE} = [];
+
     $self->{+PASSED} = 0;
     $self->{+FAILED} = 0;
 
@@ -111,7 +114,6 @@ sub flush_all {
     }
 
     $self->flush_events();
-    $self->flush_coverage();
 }
 
 sub flush {
@@ -166,25 +168,6 @@ sub flush {
     eval { $res->update(); 1 } or warn "Failed to update job result: $@";
 
     return $flush;
-}
-
-sub flush_coverage {
-    my $self = shift;
-
-    my $c    = $self->{+COVERAGE} or return;
-    my $run  = $self->run;
-    my $uuid = gen_uuid();
-
-    eval {
-        $self->schema->resultset('Coverage')->create({
-            coverage_id => $uuid,
-            coverage    => encode_json($c),
-        });
-
-        $run->update({coverage_id => $uuid});
-
-        1;
-    } or warn "Failed to update coverage for run: $@";
 }
 
 my $total = 0;
@@ -301,11 +284,6 @@ sub get_job {
 
     my $key = gen_uuid();
 
-    my %inject;
-    if (my $queue = $params{queue}) {
-        $inject{file} = $queue->{file};
-    }
-
     my $result = $self->schema->resultset('Job')->update_or_create({
         status         => 'pending',
         job_key        => $key,
@@ -318,8 +296,6 @@ sub get_job {
         pass_count     => 0,
 
         $is_harness_out ? (name => "HARNESS INTERNAL LOG") : (),
-
-        %inject,
     });
 
     # In case we are resuming.
@@ -426,7 +402,6 @@ sub _process_event {
     my ($event, $f, %params) = @_;
     my $job = $params{job};
 
-
     my $harness = $f->{harness} // {};
     my $trace   = $f->{trace}   // {};
 
@@ -481,6 +456,16 @@ sub _process_event {
             $self->add_run_fields($fields);
         }
 
+        if (my $job_coverage = $f->{job_coverage}) {
+            $self->add_job_coverage($job_coverage);
+            $f->{job_coverage} = "Removed, used to populate the job_coverage table";
+        }
+
+        if (my $run_coverage = $f->{run_coverage}) {
+            $f->{run_coverage} = "Removed, used to populate the run_coverage table";
+            $self->add_run_coverage($run_coverage);
+        }
+
         if ($f->{parent} && $f->{parent}->{children}) {
             $self->process_event({}, $_, job => $job, parent_id => $e_id, line => $params{line}) for @{$f->{parent}->{children}};
             $f->{parent}->{children} = "Removed, used to populate events table";
@@ -503,6 +488,114 @@ sub _process_event {
     }
 
     return $e;
+}
+
+sub add_job_coverage {
+    my $self = shift;
+    my ($job_coverage) = @_;
+
+    for my $source (keys %{$job_coverage->{files}}) {
+        my $subs = $job_coverage->{files}->{$source};
+        for my $sub (keys %$subs) {
+            $self->_add_coverage(
+                test    => $job_coverage->{test},
+                source  => $source,
+                sub     => $sub,
+                manager => $job_coverage->{manager},
+                meta    => $subs->{$sub},
+            );
+        }
+    }
+
+    $self->flush_coverage;
+}
+
+sub add_run_coverage {
+    my $self = shift;
+    my ($run_coverage) = @_;
+
+    my $files = $run_coverage->{files};
+    my $meta  = $run_coverage->{testmeta};
+
+    for my $source (keys %$files) {
+        my $subs = $files->{$source};
+        for my $sub (keys %$subs) {
+            my $tests = $subs->{$sub};
+            for my $test (keys %$tests) {
+                $self->_add_coverage(
+                    test    => $test,
+                    source  => $source,
+                    sub     => $sub,
+                    manager => $meta->{$test}->{manager},
+                    meta    => $tests->{$test}
+                );
+            }
+        }
+    }
+
+    $self->flush_coverage;
+}
+
+sub _add_coverage {
+    my $self = shift;
+    my %params = @_;
+
+    my $test_id = $self->get_test_file_id($params{test}) or die "Could not get test id";
+
+    my $source_id  = $self->_get__id(SourceFile      => 'source_file_id',      filename => $params{source}) or die "Could not get source id";
+    my $sub_id     = $self->_get__id(SourceSub       => 'source_sub_id',       subname  => $params{sub})    or die "Could not get sub id";
+    my $manager_id = $self->_get__id(CoverageManager => 'coverage_manager_id', package  => $params{manager});
+
+    my $meta = $manager_id ? encode_json($params{meta}) : undef;
+
+    my $coverage = $self->{+COVERAGE} //= [];
+
+    push @$coverage => {
+        coverage_id         => gen_uuid(),
+        run_id              => $self->{+RUN_ID},
+        test_file_id        => $test_id,
+        source_file_id      => $source_id,
+        source_sub_id       => $sub_id,
+        coverage_manager_id => $manager_id,
+        metadata            => $meta,
+    };
+}
+
+sub flush_coverage {
+    my $self = shift;
+
+    my $coverage = $self->{+COVERAGE} or return;
+    return unless @$coverage;
+
+    $self->schema->resultset('Coverage')->populate($coverage);
+
+    @$coverage = ();
+
+    return;
+}
+
+sub _get__id {
+    my $self = shift;
+    my ($type, $id_field, $field, $id) = @_;
+
+    return undef unless $id;
+
+    return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id}
+        if $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id};
+
+    my $spec = {$field => $id, $id_field => gen_uuid()};
+    my $result = $self->schema->resultset($type)->find_or_create($spec);
+
+    return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id} = $result->$id_field;
+}
+
+sub get_test_file_id {
+    my $self = shift;
+    my ($file) = @_;
+
+    return undef unless $file;
+
+    return $self->_get__id('TestFile' => 'test_file_id', filename => $file);
 }
 
 sub add_run_fields {
@@ -554,9 +647,6 @@ sub _add_fields {
         $new->{link}    = $field->{link}              if $field->{link};
         $new->{data}    = encode_json($field->{data}) if $field->{data};
 
-        if ($new->{name} eq 'coverage' && !$new->{link} && $type eq 'RunField') {
-            $new->{link} = "/coverage/$id";
-        }
 
         push @add => $new;
 
@@ -639,14 +729,14 @@ sub update_other {
 
     # Handle job events
     if (my $job_data = $f->{harness_job}) {
-        $cols{file} ||= $job_data->{file};
+        #$cols{test_file_id} ||= $self->get_test_file_id($job_data->{file});
         $cols{name} ||= $job_data->{job_name};
         clean($job_data);
         $cols{parameters} = encode_json($job_data);
         $f->{harness_job}  = "Removed, see job with job_key $cols{job_key}";
     }
     if (my $job_exit = $f->{harness_job_exit}) {
-        $cols{file} ||= $job_exit->{file};
+        #$cols{test_file_id} ||= $self->get_test_file_id($job_exit->{file});
         $cols{exit_code} = $job_exit->{exit};
 
         if ($job_exit->{retry} && $job_exit->{retry} eq 'will-retry') {
@@ -662,18 +752,18 @@ sub update_other {
         $cols{stdout} = clean_output(delete $job_exit->{stdout});
     }
     if (my $job_start = $f->{harness_job_start}) {
-        $cols{file} = $job_start->{rel_file} if $job_start->{rel_file};
-        $cols{file} ||= $job_start->{file};
+        $cols{test_file_id} ||= $self->get_test_file_id($job_start->{rel_file}) if $job_start->{rel_file};
+        $cols{test_file_id} ||= $self->get_test_file_id($job_start->{file});
         $cols{start} = $self->format_stamp($job_start->{stamp});
     }
     if (my $job_launch = $f->{harness_job_launch}) {
         $cols{status} = 'running';
 
-        $cols{file} ||= $job_launch->{file};
+        $cols{test_file_id} ||= $self->get_test_file_id($job_launch->{file});
         $cols{launch} = $self->format_stamp($job_launch->{stamp});
     }
     if (my $job_end = $f->{harness_job_end}) {
-        $cols{file} ||= $job_end->{file};
+        #$cols{test_file_id} ||= $self->get_test_file_id($job_end->{file});
         $cols{fail} ||= $job_end->{fail} ? 1 : 0;
         $cols{ended} = $self->format_stamp($job_end->{stamp});
 
@@ -683,7 +773,7 @@ sub update_other {
         $job->{done} = 1;
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
-            $cols{file} = $job_end->{rel_file} if $job_end->{rel_file};
+            $cols{test_file_id} ||= $self->get_test_file_id($job_end->{rel_file}) if $job_end->{rel_file};
             $cols{duration} = $job_end->{times}->{totals}->{total};
         }
     }
@@ -700,6 +790,10 @@ sub update_other {
 
 __END__
 
+
+        if ($new->{name} eq 'coverage' && !$new->{link} && $type eq 'RunField') {
+            $new->{link} = "/coverage/$id";
+        }
 =pod
 
 =encoding UTF-8

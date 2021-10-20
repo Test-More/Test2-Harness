@@ -63,6 +63,10 @@ suggests "DBD::mysql" => "0";
 suggests "DateTime::Format::MySQL" => "0";
 suggests "DateTime::Format::Pg" => "0";
 
+on 'test' => sub {
+  requires "HTTP::Tiny::UNIX" => "0";
+};
+
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "0";
   requires "File::ShareDir::Install" => "0.06";

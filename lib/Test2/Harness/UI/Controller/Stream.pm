@@ -79,16 +79,18 @@ sub stream_runs {
         collapse       => 1,
         remove_columns => [qw/log_data/],
 
-        join       => [qw/user_join project run_fields/],
+        join       => [qw/user_join project run_fields coverages/],
         '+columns' => {
-            'prefetched_fields'    => \'1',
-            'run_fields.name'      => 'run_fields.name',
-            'run_fields.details'   => 'run_fields.details',
-            'run_fields.raw'       => 'run_fields.raw',
-            'run_fields.link'      => 'run_fields.link',
-            'run_fields.has_data', => \"run_fields.data IS NOT NULL",
-            'user'                 => \'user_join.username',
-            'project'              => \'project.name',
+            'prefetched_fields'       => \'1',
+            'run_fields.run_field_id' => 'run_fields.run_field_id',
+            'run_fields.name'         => 'run_fields.name',
+            'run_fields.details'      => 'run_fields.details',
+            'run_fields.raw'          => 'run_fields.raw',
+            'run_fields.link'         => 'run_fields.link',
+            'run_fields.data',        => \"run_fields.data IS NOT NULL",
+            'user'                    => \'user_join.username',
+            'project'                 => \'project.name',
+            'has_coverage'            => \'coverages.run_id IS NOT NULL',
         },
     };
 
@@ -231,13 +233,15 @@ sub stream_single {
     my $search_base = $params{search_base};
     my $type        = $params{type};
     my $id          = $params{id};
+    my $custom_opts  = $params{custom_opts} // {};
+    my $custom_query = $params{custom_query} // {};
 
     my $it;
     if (exists $params{item}) {
         $it = $params{item} or die error(404 => "Invalid Item");
     }
     else {
-        $it = $search_base->search({$id_field => $id})->first or die error(404 => "Invalid $type");
+        $it = $search_base->search({%$custom_query, "me.$id_field" => $id}, $custom_opts)->first or die error(404 => "Invalid $type");
     }
     $self->{$type} = $it;
 
@@ -309,7 +313,7 @@ sub stream_set {
                 };
 
                 my @ids = $track ? keys %$incomplete : ();
-                $query = [$query, {$id_field => {'IN' => \@ids}}] if @ids;
+                $query = [$query, {"me.$id_field" => {'IN' => \@ids}}] if @ids;
 
                 $items = $search_base->search(
                     $query,

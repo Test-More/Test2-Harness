@@ -123,7 +123,6 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 
                     expand.click(function() {
                         highlight = !highlight;
-                        console.log('click!', row, highlight);
 
                         if (highlight) {
                             row.addClass('highlight');

@@ -100,7 +100,8 @@ sub stream {
         my $ct = $params{content_type} || $params{'content-type'} || $params{'Content-Type'} or croak "'content_type' is a required attribute";
         my $cache = $params{cache} // 1;
 
-        my @headers = ('Content-Type' => $ct);
+        my @headers = @{$params{headers} // []};
+        push @headers => ('Content-Type' => $ct);
         push @headers => ('Cache-Control' => 'no-store') unless $cache;
 
         my $last_write = time;

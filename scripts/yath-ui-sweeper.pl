@@ -31,4 +31,4 @@ my $sweeper = Test2::Harness::UI::Sweeper->new(
     interval => $interval,
 );
 
-$sweeper->sweep();
+$sweeper->sweep(coverage => 0);

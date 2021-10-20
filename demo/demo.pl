@@ -84,7 +84,7 @@ sub load_file {
         log_file => {
             log_file_id => gen_uuid(),
             name        => $file,
-            local_file  => "./demo/$file",
+            local_file  => $file =~ m{^/} ? $file : "./demo/$file",
         },
     });
 
@@ -136,7 +136,7 @@ while (1) {
 
     exit 0 if $in eq 'exit' || $in eq 'q';
 
-    if ($in =~ m/^ls\+(.*)$/) {
+    if ($in =~ m/^l\s+(.*)$/) {
         load_file($1);
         next;
     }

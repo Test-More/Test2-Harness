@@ -27,12 +27,18 @@ sub handle {
     my $it = $route->{id} or die error(404 => 'No name or id');
 
     my $p = $req->parameters;
-    my (%query, %attrs, $rs, $meth);
+    my (%query, %attrs, $rs, $meth, $event);
 
     my $event_id = $it;
 
-    my $event = $schema->resultset('Event')->find({event_id => $event_id}, {remove_columns => [qw/orphan facets/]})
-        or die error(404 => 'Invalid Event');
+    if ($route->{from} eq 'single_event') {
+        $event = $schema->resultset('Event')->find({event_id => $event_id}, {remove_columns => [qw/orphan/]})
+            or die error(404 => 'Invalid Event');
+    }
+    else {
+        $event = $schema->resultset('Event')->find({event_id => $event_id}, {remove_columns => [qw/orphan facets/]})
+            or die error(404 => 'Invalid Event');
+    }
 
     $attrs{order_by} = {-asc => 'event_ord'};
 

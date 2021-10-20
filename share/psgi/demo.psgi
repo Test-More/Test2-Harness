@@ -7,13 +7,14 @@ use Plack::Builder;
 use Plack::App::Directory;
 use Plack::App::File;
 
+use Test2::Harness::UI::Util qw/share_dir share_file/;
 
 builder {
     enable "DBIx::DisconnectAll";
-    mount '/js'  => Plack::App::Directory->new({root => 'share/js'})->to_app;
-    mount '/css' => Plack::App::Directory->new({root => 'share/css'})->to_app;
-    mount '/img' => Plack::App::Directory->new({root => 'share/img'})->to_app;
-    mount '/favicon.ico' => Plack::App::File->new({file => 'share/img/favicon.ico'})->to_app;
+    mount '/js'  => Plack::App::Directory->new({root => share_dir('js')})->to_app;
+    mount '/css' => Plack::App::Directory->new({root => share_dir('css')})->to_app;
+    mount '/img' => Plack::App::Directory->new({root => share_dir('img')})->to_app;
+    mount '/favicon.ico' => Plack::App::File->new({file => share_file('img/favicon.ico')})->to_app;
 
     mount '/' => sub {
         require Test2::Harness::UI;

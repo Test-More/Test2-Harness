@@ -201,6 +201,46 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
         });
     }
 
+    var cimg = $('<img src="/img/coverage.png"/>');
+    var dcimg = $('<img src="/img/coveragedel.png"/>');
+    var cover = $('<div class="tool etoggle" title="coverage"></div>');
+    var dcover = $('<div class="tool etoggle" title="delete coverage"></div>');
+    dcover.append(dcimg);
+
+    if (item.has_coverage && item.status === 'complete') {
+        var curl = base_uri + 'coverage/' + item.run_id;
+        var clink = $('<a href="' + curl + '">');
+        clink.append(cimg);
+        cover.append(clink);
+
+        var dcurl = curl + '/delete';
+        dcover.click(function() {
+            var ok = confirm("Are you sure you wish to delete this coverage data? This action cannot be undone!");
+            if (!ok) { return; }
+
+            $.ajax(curl + '/delete', {
+                'data': { 'content-type': 'application/json' },
+                'error': function(a, b, c) { alert("Could not delete coverage") },
+                'success': function() {
+                    cover.addClass('inactive');
+                    cover.click(function() { false });
+                    dcover.addClass('inactive');
+                    dcover.off('click');
+                    dcover.click(function() { false });
+                },
+            });
+
+        });
+    }
+    else {
+        cover.append(cimg);
+        cover.addClass('inactive');
+        dcover.addClass('inactive');
+    }
+
+    tools.append(cover);
+    tools.append(dcover);
+
     if (item.error) {
         var err = $('<div class="tool etoggle error" title="See Error Message"><img src="/img/error.png"/></div>');
         tools.append(err);

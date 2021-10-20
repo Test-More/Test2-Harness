@@ -4,6 +4,7 @@ use warnings;
 
 use Test2::Harness::UI::Util qw/config_from_settings/;
 use Test2::Harness::Util::JSON qw/decode_json/;
+use Test2::Harness::Util qw/mod2file/;
 
 use App::Yath::Options;
 use parent 'App::Yath::Plugin';
@@ -169,8 +170,13 @@ option_group {prefix => 'yathui-db', category => "YathUI Options"} => sub {
     );
 };
 
-sub coverage_data {
-    my ($plugin, $changed, $settings) = @_;
+my %CATEGORIES = (
+    '*'  => 'loads',
+    '<>' => 'opens',
+);
+sub get_coverage_tests {
+    my ($plugin, $settings, $changes) = @_;
+
     my $ydb = $settings->prefix('yathui-db') or return;
     return unless $ydb->coverage;
 
@@ -179,8 +185,66 @@ sub coverage_data {
     my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
 
-    my $field = $project->coverage(user => $ydb->publisher) // return;
-    return $field->data;
+    my $run = $project->last_covered_run(user => $ydb->publisher) or return;
+
+    my @searches;
+    for my $source_file (keys %$changes) {
+        my $changed_sub_map = $changes->{$source_file};
+        my @changed_subs = keys %$changed_sub_map;
+
+        my $search = {'source_file.filename' => $source_file};
+        unless ($changed_sub_map->{'*'} || !@changed_subs) {
+            my %seen;
+            $search->{'source_sub.subname'} = {'IN' => [grep { !$seen{$_}++} '*', '<>', @changed_subs]};
+        }
+
+        push @searches => $search;
+    }
+
+    my $coverages = $run->expanded_coverages({'-or' => \@searches});
+
+    my %tests;
+    while (my $cover = $coverages->next()) {
+        my $test = $cover->test_filename or next;
+
+        if (my $man = $cover->coverage_manager) {
+            my $manager = $man->package;
+            unless ($tests{$test}) {
+                if (eval { require(mod2file($manager)); 1 }) {
+                    $tests{$test} = {manager => $manager, subs => [], loads => [], opens => []};
+                }
+                else {
+                    warn "Error loading manager '$manager'. Running entire test '$test'.\nError:\n====\n$@\n====\n";
+                    $tests{$test} = 0;
+                    next;
+                }
+            }
+
+            my $cat = $CATEGORIES{$cover->source_subname} // 'subs';
+            push @{$tests{$test}->{$cat}} => @{$cover->metadata};
+        }
+        else {
+            $tests{$test} //= 0;
+        }
+    }
+
+    my @out;
+    for my $test (keys %tests) {
+        my $meta = $tests{$test};
+        my $manager = $meta ? delete $meta->{manager} : undef;
+
+        unless ($meta && $manager) {
+            push @out => $test;
+            next;
+        }
+
+        unless (eval { push @out => [ $test, $manager->test_parameters($test, $meta) ]; 1 }) {
+            warn "Error processing coverage data for '$test' using manager '$manager'. Running entire test to be safe.\nError:\n====\n$@\n====\n";
+            push @out => $test;
+        }
+    }
+
+    return @out;
 }
 
 sub duration_data {

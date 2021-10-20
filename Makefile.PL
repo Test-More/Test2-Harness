@@ -84,9 +84,12 @@ my %WriteMakefileArgs = (
     "constant" => 0,
     "parent" => 0
   },
+  "TEST_REQUIRES" => {
+    "HTTP::Tiny::UNIX" => 0
+  },
   "VERSION" => "0.000087",
   "test" => {
-    "TESTS" => "t/*.t t/UI/*.t"
+    "TESTS" => "t/*.t t/UI/*.t t/integration/*.t"
   }
 );
 
@@ -112,6 +115,7 @@ my %FallbackPrereqs = (
   "File::ShareDir" => 0,
   "File::Temp" => 0,
   "HTTP::Tiny" => 0,
+  "HTTP::Tiny::UNIX" => 0,
   "IO::Compress::Bzip2" => 0,
   "IO::Uncompress::Bunzip2" => 0,
   "IO::Uncompress::Gunzip" => 0,

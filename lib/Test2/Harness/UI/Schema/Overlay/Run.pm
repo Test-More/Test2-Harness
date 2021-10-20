@@ -8,6 +8,7 @@ use Carp qw/confess/;
 our $VERSION = '0.000087';
 
 BEGIN {
+    return if $^C;
     confess "You must first load a Test2::Harness::UI::Schema::NAME module"
         unless $Test2::Harness::UI::Schema::LOADED;
 
@@ -38,7 +39,6 @@ __PACKAGE__->belongs_to(
   { user_id => "user_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
-
 
 my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
 sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
@@ -103,6 +103,87 @@ sub normalize_to_mode {
     }
 
     $_->normalize_to_mode(mode => $mode) for $self->jobs->all;
+}
+
+sub expanded_coverages {
+    my $self = shift;
+    my ($query) = @_;
+
+    $self->coverages->search(
+        $query,
+        {
+            order_by   => [qw/test_file_id source_file_id source_sub_id/],
+            join       => [qw/test_file source_file source_sub coverage_manager/],
+            '+columns' => {
+                test_file   => 'test_file.filename',
+                source_file => 'source_file.filename',
+                source_sub  => 'source_sub.subname',
+                manager     => 'coverage_manager.package',
+            },
+        },
+    );
+}
+
+sub coverage_data {
+    my $self = shift;
+    my (%params) = @_;
+
+    my $query = $params{query};
+    my $rs = $self->expanded_coverages($query);
+
+    my $curr_test;
+    my $data;
+    my $end = 0;
+
+    my $iterator = sub {
+        while (1) {
+            return undef if $end;
+
+            my $out;
+
+            my $item = $rs->next;
+            if (!$item) {
+                $end  = 1;
+                $out  = $data;
+                $data = undef;
+                return $out;
+            }
+
+            my $fields = $item->human_fields;
+            my $test   = $fields->{test_file};
+            if (!$curr_test || $curr_test ne $test) {
+                $out  = $data;
+                $data = undef;
+
+                $curr_test = $test;
+
+                $data = {
+                    test       => $test,
+                    aggregator => 'Test2::Harness::Log::CoverageAggregator::ByTest',
+                    files      => {},
+                };
+
+                $data->{manager} = $fields->{manager} if $fields->{manager};
+            }
+
+            my $source = $fields->{source_file};
+            my $sub    = $fields->{source_sub};
+            my $meta   = $fields->{metadata};
+
+            $data->{files}->{$source}->{$sub} = $meta;
+
+            return $out if $out;
+        }
+    };
+
+    return $iterator if $params{iterator};
+
+    my @out;
+    while (my $item = $iterator->()) {
+        push @out => $item;
+    }
+
+    return @out;
 }
 
 1;

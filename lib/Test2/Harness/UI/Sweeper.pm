@@ -79,6 +79,7 @@ sub sweep {
             }
         }
 
+        $run->coverages->delete if $params{coverage};
         $run->delete if $params{runs};
     }
 

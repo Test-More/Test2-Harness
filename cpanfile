@@ -61,6 +61,7 @@ suggests "Term::ANSIColor" => "4.03";
 suggests "Test2::Plugin::Cover" => "0.000025";
 suggests "Test2::Plugin::DBIProfile" => "0.002002";
 suggests "Test2::Plugin::IOEvents" => "0.001001";
+suggests "Win32::Console::ANSI" => "0";
 
 on 'test' => sub {
   requires "File::Copy" => "0";

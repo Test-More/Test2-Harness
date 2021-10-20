@@ -50,12 +50,13 @@ sub durations {
     my $dbh = $schema->storage->dbh;
 
     my $sth = $dbh->prepare(<<"    EOT");
-        SELECT jobs.file, jobs.duration
+        SELECT test_files.filename, jobs.duration
           FROM jobs
           JOIN runs USING(run_id)
+          JOIN test_files USING(test_file_id)
          WHERE runs.project_id = ?
            AND jobs.duration IS NOT NULL
-           AND jobs.file IS NOT NULL
+           AND test_files.filename IS NOT NULL
     EOT
 
     $sth->execute($self->project_id) or die $sth->errstr;

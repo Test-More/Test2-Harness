@@ -5,12 +5,41 @@ use warnings;
 our $VERSION = '1.000074';
 
 use File::Find qw/find/;
-use Test2::Harness::Util::HashBase qw/<coverage <job_map/;
+use Test2::Harness::Util::HashBase qw/<touched <job_map +can_touch +can_start_test +can_stop_test +can_record_coverage <file +io <encode/;
 
 sub init {
     my $self = shift;
-    $self->{+COVERAGE} //= {};
-    $self->{+JOB_MAP}  //= {};
+    $self->{+TOUCHED} //= {};
+    $self->{+JOB_MAP} //= {};
+
+    $self->{+CAN_TOUCH}           = !!$self->can('touch');
+    $self->{+CAN_START_TEST}      = !!$self->can('start_test');
+    $self->{+CAN_STOP_TEST}       = !!$self->can('stop_test');
+    $self->{+CAN_RECORD_COVERAGE} = !!$self->can('record_coverage');
+
+    if (my $file = $self->{+FILE}) {
+        open(my $fh, '>', $file) or die "Could not open file '$file' for writing: $!";
+        $self->{+IO} = $fh;
+    }
+}
+
+sub flush    { }
+sub finalize { $_[0]->write }
+sub record_metrics { }
+
+sub write {
+    my $self = shift;
+
+    my $list = $self->flush() or return;
+    my $io = $self->{+IO} or return $list;
+
+    my $encode = $self->{+ENCODE};
+    for my $item (@$list) {
+        my $encoded = $encode ? $encode->($item) : $item;
+        print $io $encoded;
+    }
+
+    return $list;
 }
 
 sub process_event {
@@ -21,57 +50,45 @@ sub process_event {
     return unless keys %$e;
 
     my $job_map = $self->{+JOB_MAP} //= {};
-    my $job_id = $e->{job_id} // 0;
+    my $job_id  = $e->{job_id} // 0;
 
     my $test = $job_map->{$job_id};
-    unless ($test) {
-        if (my $start = $e->{facet_data}->{harness_job_start}) {
-            $test = $start->{rel_file};
-        }
-        elsif (my $end = $e->{facet_data}->{harness_job_end}) {
-            $test = $end->{rel_file};
-        }
 
-        $job_map->{$job_id} = $test if $test;
+    if (my $start = $e->{facet_data}->{harness_job_start}) {
+        $test //= $start->{rel_file};
+
+        $self->start_test($test, $e) if $self->{+CAN_START_TEST};
     }
+
+    if (my $end = $e->{facet_data}->{harness_job_end}) {
+        $test //= $end->{rel_file};
+
+        $self->stop_test($test, $e) if $self->{+CAN_STOP_TEST};
+    }
+
+    $job_map->{$job_id} //= $test if $test;
 
     if (my $c = $e->{facet_data}->{coverage}) {
         die "Got coverage data before test start! (Weird event order?)" unless $test;
-        $self->add_coverage($test, $c);
+        $self->_touch_coverage($test, $c, $e);
+        $self->record_coverage($test, $c, $e) if $self->{+CAN_RECORD_COVERAGE};
     }
+
+    return $self->write();
 }
 
-sub add_coverage {
+sub _touch_coverage {
     my $self = shift;
-    my ($test, $data) = @_;
-
-    my $coverage    = $self->{+COVERAGE}    //= {};
-    my $files       = $coverage->{files}    //= {};
-    my $alltestmeta = $coverage->{testmeta} //= {};
-    my $testmeta    = $alltestmeta->{$test} //= {};
-
-    if (my $type = $data->{test_type}) {
-        $testmeta->{type} = $type;
-    }
-
-    if (my $manager = $data->{from_manager}) {
-        $testmeta->{manager} = $manager;
-    }
+    my ($test, $data, $e) = @_;
 
     if (my $new = $data->{files}) {
         for my $file (keys %$new) {
             my $ndata = $new->{$file} // next;
-            my $fdata = $files->{$file} //= {};
-
             for my $sub (keys %$ndata) {
-                my $nsub = $ndata->{$sub} // next;
-                my $fsub = $fdata->{$sub} //= {};
-                if ($fsub->{$test}) {
-                    $fsub->{$test} = [@{$fsub->{$test}}, @$nsub];
-                }
-                else {
-                    $fsub->{$test} = $nsub;
-                }
+                $self->{+TOUCHED}->{$file}->{$sub}++;
+
+                next unless $self->{+CAN_TOUCH};
+                $self->touch(source => $file, sub => $sub, test => $test, manager_data => $ndata->{$sub}, event => $e);
             }
         }
     }
@@ -94,13 +111,15 @@ sub build_metrics {
 
     my $dirs     = $params{dirs}  // ['lib'];
     my $types    = $params{types} // ['pm', 'pl'];
-    my $coverage = $self->{+COVERAGE} //= {};
-    my $untested = $coverage->{untested} = {files => [], subs => {}};
+    my $touched  = $self->{+TOUCHED} //= {};
 
-    my $metrics  = $coverage->{metrics}  = {
-        files => {total => 0, tested => 0},
-        subs  => {total => 0, tested => 0},
+    my $metrics = {
+        files    => {total => 0,  tested => 0},
+        subs     => {total => 0,  tested => 0},
+        untested => {files => [], subs   => {}},
     };
+
+    my $untested = $metrics->{untested};
 
     my %type_check = map { m/\.?([^\.]+)$/g; (lc($1) => 1) } @$types;
 
@@ -115,7 +134,7 @@ sub build_metrics {
                 $metrics->{files}->{total}++;
 
                 my $file  = $File::Find::name;
-                my $cfile = $coverage->{files}->{$file};
+                my $cfile = $touched->{$file};
 
                 if ($cfile) {
                     $metrics->{files}->{tested}++
@@ -157,6 +176,8 @@ sub build_metrics {
 
     my %seen;
     @{$untested->{files}} = sort grep { !$seen{$_}++ } @{$untested->{files}};
+
+    $self->record_metrics($metrics);
 
     return $metrics;
 }
@@ -219,20 +240,110 @@ This module takes a stream of events and produces aggregated coverage data.
         $agg->process_event($e);
     }
 
-    my $coverage = $agg->coverage;
+    # Get a structure like { source_file => { source_method => $touched_count, ... }, ...}
+    my $touched_source = $agg->touched;
 
-    use Test2::Harness::Util::JSON qw/encode_json/;
-    open(my $fh, '>', "coverage.json") or die "$!";
-    print $fh encode_json($coverage);
-    close($fh);
+    # Get a structure like
+    # {
+    #     files => {total => 5,  tested => 2},
+    #     subs  => {total => 20, tested => 12},
+    #     untested => {files => \@file_list, subs => {file => \@sub_list, ...}},
+    # }
+    my $metrics = $agg->metrics;
+
 
 =head1 METHODS
+
+=head2 IMPLEMENTABLE IN SUBLCASSES
+
+If you implement these in a subclass they will be called for you at the proper
+times, making subclassing much easier. In most cases you can avoid overriding
+process_event().
+
+=over 4
+
+=item $agg->start_test($test, $event)
+
+This is called once per test when it starts.
+
+B<Note:> If a test is run more than once (re-run) it will start and stop again
+for each re-run. The event is also provided as an argument so that you can
+check for a try-id or similar in the event that re-runs matter to you.
+
+=item $agg->stop_test($test, $event)
+
+This is called once per test when it stops.
+
+B<Note:> If a test is run more than once (re-run) it will start and stop again
+for each re-run. The event is also provided as an argument so that you can
+check for a try-id or similar in the event that re-runs matter to you.
+
+=item $agg->record_coverage($test, $coverage_data, $event)
+
+This is called once per coverage event (there can be several in a test,
+specially if it forks or uses threads).
+
+In most cases you probably want to leave this unimplemented and implement the
+C<touch()> method instead of iterating over the coverage structure yourself.
+
+=item $agg->touch(source => $file, sub => $sub, test => $test, manager_data => $mdata, event => $event)
+
+Every touch applied to a source file (and sub) will trigger this method call.
+
+=over 4
+
+=item source => $file
+
+The source file that was touched
+
+=item sub => $sub
+
+The source subroutine that was touched. B<Note:> This may be '<>' if the source
+file was opened via C<open()> or '*' if code outside of a subroutine was
+executed by the test.
+
+=item test => $test
+
+The test file that did the touching.
+
+=item manager_data => $mdata
+
+If the test file makes use of a source manager to attach extra data to
+coverage, this is where that data will be. A good example would be test suites
+that use tools similar to Test::Class or Test::Class::Moose where all tests are
+run in methods and you want to track what test method does the touching. Please
+note that this level of coverage tracking is not automatic.
+
+=item event => $event
+
+The full event being processed.
+
+=back
+
+=back
+
+=head2 PUBLIC API
 
 =over 4
 
 =item $agg->process_event($event)
 
 Process the event, aggregating any coverage info it may contain.
+
+=item $touched = $add->touched()
+
+Returns the following structure, which tells you how many times a specific
+source file's subroutines were called. There are also "special" subroutines
+'<>' and '*' which mean "file was opened via open" and "code outside of a
+subroutine".
+
+    {
+        source_file => {
+            source_method => $touched_count,
+            ...
+        },
+        ...
+    }
 
 =item $metrics = $agg->build_metrics()
 
@@ -249,43 +360,13 @@ Metrics:
     {
         files => {total => 20, tested => 18},
         subs  => {total => 80, tested => 70},
-    }
 
-=item $hashref = $agg->coverage()
-
-Produce a hashref of all aggregated coverage data:
-
-    {
-        files => {
-        'test_file_a.t' => [
-            'lib/MyModule1.pm',
-            'lib/MyModule2.pm',
-            ...,
-        ],
-        'test_file_b.t' => [
-            'share/css/foo.css',
-            'lib/AnotherModule.pm',
-            ...
-        ],
-        ...,
-        },
-        testmeta => {
-            'test_file_a.t' => {...},
-        },
-
-        # If you called ->build_metrics this will also be present
-        metrics => {
-            files => {total => 20, tested => 18},
-            subs  => {total => 80, tested => 70},
-        },
-
-        # If you called ->build_metrics this will also be present
         untested => {
-            files => ['lib/untested.pm', ...],
+            files => \@file_list,
             subs => {
-                'lib/untested.pm' => [ 'foo', 'bar', ... ],
-                ...,
-            },
+                file => \@sub_list,
+                ...
+            }
         },
     }
 

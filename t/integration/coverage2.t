@@ -9,8 +9,9 @@ use File::Temp qw/tempfile/;
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
+$dir =~ s/\d+$//;
 
-my ($fh, $cfile) = tempfile(SUFFIX => '.json');
+my ($fh, $cfile) = tempfile(SUFFIX => '.jsonl');
 close($fh);
 
 yath(
@@ -19,73 +20,81 @@ yath(
     exit    => 0,
 );
 
+my @coverage;
 open($fh, '<', $cfile);
-my $json = join '' => <$fh>;
-my $coverage = decode_json($json);
+for my $line (<$fh>) {
+    next unless $line;
+    push @coverage => decode_json($line);
+}
 
 is(
-    $coverage,
-    {
-        'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByRun',
-        'testmeta' => {
-            't/integration/coverage/a.tx'    => {'manager' => 'Manager', 'type' => 'split'},
-            't/integration/coverage/b.tx'    => {'type'    => 'flat'},
-            't/integration/coverage/c.tx'    => {'manager' => 'Manager', 'type' => 'split'},
-            't/integration/coverage/once.tx' => {'type'    => 'flat'},
-            't/integration/coverage/open.tx' => {'type'    => 'flat'},
-            't/integration/coverage/x.tx'    => {'type'    => 'flat'},
-        },
-        'files' => {
-            'Ax.pm' => {
-                '*' => {
-                    't/integration/coverage/a.tx' => ['*'],
-                    't/integration/coverage/c.tx' => [{'subtest' => 'a'}],
+    \@coverage,
+    bag {
+        item {
+            'test'       => 't/integration/coverage/a.tx',
+            'manager'    => 'Manager',
+            'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByTest',
+            'files'      => {
+                'Ax.pm' => {
+                    '*'  => ['*'],
+                    'a'  => bag { item {'subtest' => 'b'}; item {'subtest' => 'c'}; item {'subtest' => 'a'} },
+                    'aa' => [{'subtest' => 'a'}],
                 },
-                'a' => {
-                    't/integration/coverage/a.tx' => bag {
-                        item {'subtest' => 'c'};
-                        item {'subtest' => 'b'};
-                        item {'subtest' => 'a'};
-                        end;
-                    },
-                    't/integration/coverage/c.tx' => bag {
-                        item {'subtest' => 'c'};
-                        item {'subtest' => 'a'};
-                        end;
-                    },
+                'Bx.pm' => {
+                    'b' => bag { item {'subtest' => 'b'}; item {'subtest' => 'c'} },
+                    '*' => ['*'],
                 },
-                'aa' => {'t/integration/coverage/a.tx' => [{'subtest' => 'a'}]},
-            },
-            'Bx.pm' => {
-                '*' => {
-                    't/integration/coverage/a.tx' => ['*'],
-                    't/integration/coverage/b.tx' => ['*'],
-                    't/integration/coverage/x.tx' => ['*'],
-                },
-                '<>' => {'t/integration/coverage/open.tx' => ['*']},
-                'b'  => {
-                    't/integration/coverage/a.tx' => bag {
-                        item {'subtest' => 'c'};
-                        item {'subtest' => 'b'};
-                        end;
-                    },
-                    't/integration/coverage/b.tx' => ['*'],
+                'Cx.pm' => {
+                    'c' => bag { item '*'; item {'subtest' => 'c'} },
+                    '*' => ['*'],
                 },
             },
-            'Cx.pm' => {
-                '*' => {
-                    't/integration/coverage/a.tx' => ['*'],
-                    't/integration/coverage/c.tx' => [{'subtest' => 'c'}],
-                },
-                'c' => {
-                    't/integration/coverage/a.tx' => [
-                        '*',
-                        {'subtest' => 'c'},
-                    ],
-                    't/integration/coverage/c.tx' => [{'subtest' => 'c'}]
+        };
+
+        item {
+            'test'       => 't/integration/coverage/b.tx',
+            'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByTest',
+            'files'      => {
+                'Bx.pm' => {
+                    'b' => ['*'],
+                    '*' => ['*'],
                 },
             },
-        },
+        };
+
+        item {
+            'test'       => 't/integration/coverage/c.tx',
+            'manager'    => 'Manager',
+            'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByTest',
+            'files'      => {
+                'Ax.pm' => {
+                    'a' => bag { item {'subtest' => 'c'}; item {'subtest' => 'a'} },
+                    '*' => [{'subtest' => 'a'}],
+                },
+                'Cx.pm' => {
+                    'c' => [{'subtest' => 'c'}],
+                    '*' => [{'subtest' => 'c'}],
+                }
+            }
+        };
+
+        item {
+            'test'       => 't/integration/coverage/once.tx',
+            'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByTest',
+            'files'      => {},
+        };
+
+        item {
+            'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByTest',
+            'test'       => 't/integration/coverage/open.tx',
+            'files'      => {'Bx.pm' => {'<>' => ['*']}},
+        };
+
+        item {
+            'test'       => 't/integration/coverage/x.tx',
+            'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByTest',
+            'files'      => {'Bx.pm' => {'*' => ['*']}},
+        };
     },
     "Got predicted coverage data",
 );

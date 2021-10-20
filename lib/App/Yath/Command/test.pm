@@ -281,9 +281,10 @@ sub render {
     my $settings  = $self->settings;
     my $renderers = $self->renderers;
     my $logger    = $self->logger;
-    my $plugins = $self->settings->harness->plugins;
+    my $plugins   = $self->settings->harness->plugins;
 
-    $plugins = [grep {$_->can('handle_event')} @$plugins];
+    my $handle_plugins   = [grep { $_->can('handle_event') } @$plugins];
+    my $annotate_plugins = [grep { $_->can('annotate_event') } @$plugins];
 
     # render results from log
     my $reader = $self->renderer_reader();
@@ -310,23 +311,61 @@ sub render {
             next;
         }
 
-        print $logger $line if $logger;
         my $e = decode_json($line);
-        last unless defined $e;
 
-        bless($e, 'Test2::Harness::Event');
+        if (defined $e) {
+            bless($e, 'Test2::Harness::Event');
+            my $fd = $e->{facet_data} //= {};
+
+            my $changed = 0;
+            for my $p (@$annotate_plugins) {
+                my %inject = $p->annotate_event($e, $settings);
+                next unless keys %inject;
+                $changed++;
+
+                # Can add new facets, but not modify existing ones.
+                # Someone could force the issue by modifying the event directly
+                # inside 'annotate_event', this is not supported, but also not
+                # forbidden, user beware.
+                for my $f (keys %inject) {
+                    if (exists $fd->{$f}) {
+                        if ('ARRAY' eq ref($fd->{$f})) {
+                            push @{$fd->{$f}} => @{$inject{$f}};
+                        }
+                        else {
+                            warn "Plugin '$p' tried to add facet '$f' via 'annotate_event()', but it is already present and not a list, ignoring plugin annotation.\n";
+                        }
+                    }
+                    else {
+                        $fd->{$f} = $inject{$f};
+                    }
+                }
+
+            }
+
+            if ($logger) {
+                if ($changed) {
+                    my $newline = $e->as_json;
+                    print $logger $newline, "\n";
+                }
+                else {
+                    print $logger $line;
+                }
+            }
+        }
+        else {
+            last;
+        }
 
         if (my $final = $e->{facet_data}->{harness_final}) {
             $self->{+FINAL_DATA} = $final;
         }
-        else {
-            $_->render_event($e) for @$renderers;
-        }
+        $_->render_event($e) for @$renderers;
 
         $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
         $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
 
-        $_->handle_event($e, $settings) for @$plugins;
+        $_->handle_event($e, $settings) for @$handle_plugins;
 
         $ipc->wait() if $ipc;
     }
@@ -341,7 +380,10 @@ sub stop {
     my $logger    = $self->logger;
 
     $self->teardown_plugins($renderers, $logger);
-    close($logger) if $logger;
+    if ($logger) {
+        print $logger "null\n";
+        close($logger);
+    }
 
     $_->finish() for @$renderers;
 

@@ -49,7 +49,7 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
     );
 
     option changed_only => (
-        description => "Only search for tests for changed files (Requires --coverage-from, also requires a list of changes either from the --changed option, or a plugin that implements changed_files() or changed_diff())",
+        description => "Only search for tests for changed files (Requires a coverage data source, also requires a list of changes either from the --changed option, or a plugin that implements changed_files() or changed_diff())",
         applicable => \&changes_applicable,
     );
 
@@ -86,25 +86,6 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         description => "What plugin should be used to detect changed files.",
         long_examples => [' Git', ' +App::Yath::Plugin::Git'],
         applicable => \&changes_applicable,
-    );
-
-    option coverage_manager => (
-        type => 's',
-        description => "Coverage 'from' manager to use when coverage data does not provide one",
-        long_examples => [ ' My::Coverage::Manager'],
-        applicable => \&changes_applicable,
-    );
-
-    option coverage_from => (
-        type => 's',
-        description => "Where to fetch coverage data. Can be a path to a .jsonl(.bz|.gz)? log file. Can be a path or url to a json file containing a hash where source files are key, and value is a list of tests to run.",
-        long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.json']
-    );
-
-    option maybe_coverage_from => (
-        type => 's',
-        description => "Where to fetch coverage data. Can be a path to a .jsonl(.bz|.gz)? log file. Can be a path or url to a json file containing a hash where source files are key, and value is a list of tests to run.",
-        long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.json']
     );
 
     option durations => (

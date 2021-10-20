@@ -9,90 +9,20 @@ use File::Temp qw/tempfile/;
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
+$dir =~ s/\d+$//;
 
-my ($fh, $cfile) = tempfile(SUFFIX => '.json');
+my ($fh, $logfile) = tempfile("yathlog-$$-XXXXXXXX", TMPDIR => 1, UNLINK => 1, SUFFIX => '.jsonl.bz2');
 close($fh);
 
 yath(
     command => 'test',
-    args    => ["-I$dir/lib", $dir, '--ext=tx', "--cover-write=$cfile", '-v'],
+    args    => ["-I$dir/lib", $dir, '--ext=tx', '-v', '-B', '-F' => $logfile, '--cover-files', '--cover-agg' => 'ByRun'],
     exit    => 0,
-);
-
-open($fh, '<', $cfile);
-my $json = join '' => <$fh>;
-my $coverage = decode_json($json);
-
-is(
-    $coverage,
-    {
-        'aggregator' => 'Test2::Harness::Log::CoverageAggregator::ByRun',
-        'testmeta' => {
-            't/integration/coverage/a.tx'    => {'manager' => 'Manager', 'type' => 'split'},
-            't/integration/coverage/b.tx'    => {'type'    => 'flat'},
-            't/integration/coverage/c.tx'    => {'manager' => 'Manager', 'type' => 'split'},
-            't/integration/coverage/once.tx' => {'type'    => 'flat'},
-            't/integration/coverage/open.tx' => {'type'    => 'flat'},
-            't/integration/coverage/x.tx'    => {'type'    => 'flat'},
-        },
-        'files' => {
-            'Ax.pm' => {
-                '*' => {
-                    't/integration/coverage/a.tx' => ['*'],
-                    't/integration/coverage/c.tx' => [{'subtest' => 'a'}],
-                },
-                'a' => {
-                    't/integration/coverage/a.tx' => bag {
-                        item {'subtest' => 'c'};
-                        item {'subtest' => 'b'};
-                        item {'subtest' => 'a'};
-                        end;
-                    },
-                    't/integration/coverage/c.tx' => bag {
-                        item {'subtest' => 'c'};
-                        item {'subtest' => 'a'};
-                        end;
-                    },
-                },
-                'aa' => {'t/integration/coverage/a.tx' => [{'subtest' => 'a'}]},
-            },
-            'Bx.pm' => {
-                '*' => {
-                    't/integration/coverage/a.tx' => ['*'],
-                    't/integration/coverage/b.tx' => ['*'],
-                    't/integration/coverage/x.tx' => ['*'],
-                },
-                '<>' => {'t/integration/coverage/open.tx' => ['*']},
-                'b'  => {
-                    't/integration/coverage/a.tx' => bag {
-                        item {'subtest' => 'c'};
-                        item {'subtest' => 'b'};
-                        end;
-                    },
-                    't/integration/coverage/b.tx' => ['*'],
-                },
-            },
-            'Cx.pm' => {
-                '*' => {
-                    't/integration/coverage/a.tx' => ['*'],
-                    't/integration/coverage/c.tx' => [{'subtest' => 'c'}],
-                },
-                'c' => {
-                    't/integration/coverage/a.tx' => [
-                        '*',
-                        {'subtest' => 'c'},
-                    ],
-                    't/integration/coverage/c.tx' => [{'subtest' => 'c'}]
-                },
-            },
-        },
-    },
-    "Got predicted coverage data",
 );
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Ax'},
     test    => sub {
@@ -112,7 +42,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Bx'},
     test    => sub {
@@ -137,7 +67,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Cx'},
     test    => sub {
@@ -157,7 +87,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Bxb'},
     test    => sub {
@@ -180,7 +110,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Cxc'},
     test    => sub {
@@ -200,7 +130,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Ax*'},
     test    => sub {
@@ -220,7 +150,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Axa'},
     test    => sub {
@@ -240,7 +170,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Axaa'},
     test    => sub {
@@ -260,7 +190,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Axaaa'},
     test    => sub {
@@ -280,7 +210,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$logfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'AxCx'},
     test    => sub {

@@ -28,8 +28,6 @@ use Test2::Harness::Util::HashBase qw{
 
     <changed <changed_only <changes_plugin <show_changed_files <changes_diff
     <changes_filter_file <changes_filter_pattern
-    +coverage_data <coverage_from <maybe_coverage_from
-    <coverage_manager
 };
 
 sub munge_settings {}
@@ -55,22 +53,6 @@ sub duration_data {
     }
 
     return $self->{+DURATION_DATA} //= {};
-}
-
-sub coverage_data {
-    my $self = shift;
-    my ($plugins, $changed, $settings) = @_;
-
-    $self->{+COVERAGE_DATA} //= $self->pull_coverage($changed);
-    return $self->{+COVERAGE_DATA} if $self->{+COVERAGE_DATA};
-
-    for my $plugin (@$plugins) {
-        next unless $plugin->can('coverage_data');
-        $self->{+COVERAGE_DATA} = $plugin->coverage_data($changed, $settings) or next;
-        last;
-    }
-
-    return $self->{+COVERAGE_DATA} //= {};
 }
 
 sub pull_durations {
@@ -103,55 +85,6 @@ sub pull_durations {
     return;
 }
 
-sub pull_coverage {
-    my $self = shift;
-    my ($changed) = @_;
-
-    my $primary  = delete $self->{+MAYBE_COVERAGE_FROM};
-    my $fallback = delete $self->{+COVERAGE_FROM};
-
-    my $aggregator;
-
-    my %args = (
-        name      => 'coverage',
-        is_json   => 1,
-        http_args => [{headers => {'Content-Type' => 'application/json'}}],
-
-        log_event_handler => sub {
-            my ($event) = @_;
-
-            unless ($aggregator) {
-                require Test2::Harness::Log::CoverageAggregator;
-                $aggregator = Test2::Harness::Log::CoverageAggregator->new();
-            }
-
-            $aggregator->process_event($event);
-        },
-
-        log_return_builder => sub {
-            return unless $aggregator;
-            return $aggregator->coverage;
-        },
-    );
-
-    if ($primary) {
-        local $@;
-
-        my $coverage = eval { $self->_pull_from_log_or_file_or_url(source => $primary, %args) }
-            or print "Could not fetch optional coverage '$primary', ignoring...\n";
-
-        if ($coverage) {
-            print "Found coverage: $primary\n";
-            return $coverage;
-        }
-    }
-
-    return $self->_pull_from_log_or_file_or_url(source => $fallback, %args)
-        if $fallback;
-
-    return;
-}
-
 sub add_exclusions_from_lists {
     my $self = shift;
 
@@ -169,26 +102,6 @@ sub add_exclusions_from_lists {
             $self->{+EXCLUDE_FILES}->{$_} = 1 unless /^\s*#/;
         };
     }
-}
-
-sub _pull_from_log_or_file_or_url {
-    my $self = shift;
-    my %params = @_;
-
-    my $in = $params{source} // croak "No file or url provided";
-
-    return $self->_pull_from_file_or_url(%params)
-        unless $in =~ m/\.jsonl(?:\.(?:gz|bz2))?$/;
-
-    require Test2::Harness::Util::File::JSONL;
-    my $jsonl = Test2::Harness::Util::File::JSONL->new(name => $in);
-
-    while (1) {
-        my @items = $jsonl->poll(max => 1000) or last;
-        $params{log_event_handler}->($_) for @items;
-    }
-
-    return $params{log_return_builder}->();
 }
 
 sub _pull_from_file_or_url {
@@ -259,10 +172,9 @@ sub add_changed_to_search {
     my @listed_changes = @{$self->{+CHANGED}} if $self->{+CHANGED};
 
     my $check_plugins = $plugins;
-    if (my $plugin = $self->{+CHANGES_PLUGIN}) {
-        $plugin = "App::Yath::Plugin::$plugin"
-            unless $plugin =~ s/^\+//;
-
+    my $plugin;
+    if (my $p = $self->{+CHANGES_PLUGIN}) {
+        $plugin = $p =~ s/^\+// ? $p : "App::Yath::Plugin::$p";
         $check_plugins = [$plugin];
     }
 
@@ -288,137 +200,54 @@ sub add_changed_to_search {
     }
 
     # listed changes always included, diff changes OR found changes, not both.
-    my @changed = (@listed_changes, @diff_changes ? @diff_changes : @found_changes);
+    my @changed_list = (@listed_changes, @diff_changes ? @diff_changes : @found_changes);
+    my %changed_map;
 
-    my $filter_files    = $self->{+CHANGES_FILTER_FILE};
-    my $filter_patterns = $self->{+CHANGES_FILTER_PATTERN};
+    my $filter_patterns = @{$self->{+CHANGES_FILTER_PATTERN}} ? $self->{+CHANGES_FILTER_PATTERN} : undef;
+    my $filter_files    = @{$self->{+CHANGES_FILTER_FILE}} ? {map { $_ => 1 } @{$self->{+CHANGES_FILTER_FILE}}} : undef;
 
-    if (($filter_files && @$filter_files) || ($filter_patterns && @$filter_patterns)) {
-        my %files = map {$_ => 1} @{$self->{+CHANGES_FILTER_FILE} || []};
-        my @keep;
-        for my $set (@changed) {
-            my ($file) = @$set;
+    for my $change (@changed_list) {
+        my ($file, @parts) = ref($change) ? @$change : ($change);
 
-            if ($files{$file}) {
-                push @keep => $set;
-                next;
-            }
+        next if $filter_files && !$filter_files->{$file};
+        next if $filter_patterns && !first { $file =~ m/$_/ } @$filter_patterns;
 
-            my $patterns = $self->{+CHANGES_FILTER_PATTERN} // next;
-            for my $pattern (@$patterns) {
-                next unless $file =~ m/$pattern/;
-                push @keep => $set;
-                last;
-            }
-        }
-
-        @changed = @keep;
+        @parts = ('*') unless @parts;
+        $changed_map{$file}{$_} = 1 for @parts;
     }
 
-    die "Could not find any changed files.\n" if $self->{+CHANGED_ONLY} && !@changed;
-    return unless @changed;
+    my $found_changed = keys %changed_map;
 
-    if ($self->{+SHOW_CHANGED_FILES}) {
-        print "Found the following changed files:\n";
-        for my $change (@changed) {
-            my ($file, @parts) = ref($change) ? @$change : ($change, '*');
-            @parts = ('*') unless @parts;
-            print "  $file: ", join(", ", @parts), "\n";
-        }
-    }
-
-    my $coverage_data = $self->coverage_data($plugins, \@changed, $settings);
-    my $type = ref($coverage_data);
-
-    # We must have posted the changes and got a list of tests back.
-    if ($type eq 'ARRAY') {
-        push @$search => @$coverage_data;
-        return;
-    }
+    die "Could not find any changed files.\n" if $self->{+CHANGED_ONLY} && !$found_changed;
 
     if ($self->{+CHANGED_ONLY}) {
-        die "Could not get any coverage data, no way to map changed files to tests.\n"
-            unless $coverage_data;
-
         die "Can not add test or directory names when using --changed-only (saw: " . join(", " => @$search) . ")\n"
             if @$search;
     }
 
-    my $filemap  = $coverage_data->{files}    // {};
-    my $testmeta = $coverage_data->{testmeta} // {};
-
-    my %tests;
-    for my $change (@changed) {
-        my ($file, @parts) = ref($change) ? @$change : ($change, '*');
-
-        if (!@parts || grep {$_ eq '*'} @parts) {
-            @parts = keys %{$filemap->{$file}};
-        }
-
-        my %seen;
-        for my $part (@parts) {
-            next if $seen{$part}++;
-            my $ctests = $filemap->{$file}->{$part} or next;
-            for my $test (keys %$ctests) {
-                push @{$tests{$test}->{subs}} => @{$ctests->{$test}};
-            }
-        }
-
-        if (my $ltests = $filemap->{$file}->{'*'}) {
-            for my $test (keys %$ltests) {
-                push @{$tests{$test}->{loads}} => @{$ltests->{$test}};
-            }
-        }
-
-        if (my $otests = $filemap->{$file}->{'<>'}) {
-            for my $test (keys %$otests) {
-                push @{$tests{$test}->{opens}} => @{$otests->{$test}};
-            }
+    if ($self->{+SHOW_CHANGED_FILES} && $found_changed) {
+        print "Found the following changed files:\n";
+        for my $file (keys %changed_map) {
+            print "  $file: ", join(", ", sort keys %{$changed_map{$file}}), "\n";
         }
     }
 
-    my $count = 0;
-    for my $test (sort keys %tests) {
-        my $meta = $testmeta->{$test} // {type => 'flat'};
-        my $type = $meta->{type};
-        my $manager = $meta->{manager} // $self->coverage_manager;
-
-        # In these cases we have no choice but to run the entire file
-        if ($type eq 'flat' || !$manager) {
-            $count++;
-            push @$search => $test;
-            next;
-        }
-
-        die "Invalid test type: $type" unless $type eq 'split';
-
-        my $froms = $tests{$test} // [];
-        my $ok = eval {
-            require(mod2file($manager));
-            my $specs = $manager->test_parameters($test, $froms);
-
-            $specs = { run => $specs } unless ref $specs;
-
-            # Intentional skip
-            return 1 if defined $specs->{run} && !$specs->{run};
-
-            $count++;
-            push @$search => [$test, $specs];
-
-            1;
-        };
-        my $err = $@;
-
-        next if $ok;
-
-        $count++;
-        warn "Error processing coverage data for '$test' using manager '$manager'. Running entire test to be safe.\nError:\n====\n$@\n====\n";
-        push @$search => $test;
+    my (@add, %seen1, %seen2);
+    for my $p ($plugin, @$plugins) {
+        next unless $p;
+        next if $seen1{$p}++;
+        next unless $p;
+        next unless $p->can('get_coverage_tests');
+        push @add => grep { !$seen2{$_}++ } $p->get_coverage_tests($settings, \%changed_map);
     }
 
-    if ($self->{+SHOW_CHANGED_FILES}) {
-        print "Found $count test files to run based on changed files.\n\n";
+    if ($self->{+SHOW_CHANGED_FILES} && @add) {
+        print "Found " . scalar(@add) . " test files to run based on changed files.\n";
+        print "  $_\n" for @add;
+        print "\n";
     }
+
+    push @$search => @add;
 
     return;
 }
@@ -578,6 +407,7 @@ sub find_project_files {
     my $durations = $self->duration_data($plugins, $settings);
 
     my (%seen, @tests, @dirs);
+
     for my $item (@$search) {
         my ($path, $test_params);
 

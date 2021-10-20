@@ -5,11 +5,11 @@ use warnings;
 our $VERSION = '1.000074';
 
 use Test2::Harness::Util qw/clean_path mod2file/;
-use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::Util::JSON qw/encode_json stream_json_l/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use parent 'App::Yath::Plugin';
-use Test2::Harness::Util::HashBase qw/-aggregator -no_aggregate +metrics/;
+use Test2::Harness::Util::HashBase qw/-aggregator -no_aggregate +metrics +outfile/;
 
 use App::Yath::Options;
 
@@ -52,20 +52,26 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
     option write => (
         type => 'd',
         normalize => \&clean_path,
-        long_examples => ['', '=coverage.json'],
-        description => "Create a json file of all coverage data seen during the run (This implies --cover-files).",
+        long_examples => ['', '=coverage.jsonl', '=coverage.json'],
+        description => "Create a json or jsonl file of all coverage data seen during the run (This implies --cover-files).",
         action      => sub {
             my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
 
-            return $$slot = clean_path("coverage.json") if $raw eq '1';
+            return $$slot = clean_path("coverage.jsonl") if $raw eq '1';
             return $$slot = $norm;
         },
     );
 
     option aggregator => (
+        alt => ['cover-agg'],
         type => 's',
-        description => 'Choose an aggregator (default Test2::Harness::Log::CoverageAggregator)',
-        default => 'Test2::Harness::Log::CoverageAggregator',
+        long_examples => [' ByTest', ' ByRun', ' +Custom::Aggregator'],
+        description => 'Choose a custom aggregator subclass',
+        normalize => sub {
+            my ($agg) = @_;
+            return $agg if $agg =~ s/^\+//;
+            return "Test2::Harness::Log::CoverageAggregator::$agg";
+        },
     );
 
     option class => (
@@ -73,7 +79,46 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
         description => 'Choose a Test2::Plugin::Cover subclass',
         default => 'Test2::Plugin::Cover',
     );
+
+    option manager => (
+        type => 's',
+        description => "Coverage 'from' manager to use when coverage data does not provide one",
+        long_examples => [ ' My::Coverage::Manager'],
+        applicable => \&changes_applicable,
+    );
+
+    option from_type => (
+        type => 's',
+        description => 'File type for coverage source. Usually it can be detected, but when it cannot be you should specify. "json" is old style single-blob coverage data, "jsonl" is the new by-test style, "log" is a logfile from a previous run.',
+        long_examples => [' json', ' jsonl', ' log' ],
+    );
+
+    option maybe_from_type => (
+        type => 's',
+        'description' => 'Same as "from_type" but for "maybe_from". Defaults to "from_type" if that is specified, otherwise auto-detect',
+        long_examples => [' json', ' jsonl', ' log' ],
+    );
+
+    option from => (
+        type => 's',
+        description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will not be run if the file/url is invalid.",
+        long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.jsonl']
+    );
+
+    option maybe_from => (
+        type => 's',
+        description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will coninue if even if the coverage file/url is invalid.",
+        long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.jsonl']
+    );
 };
+
+sub changes_applicable {
+    my ($option, $options) = @_;
+
+    # Cannot use this options with projects
+    return 0 if $options->command_class && $options->command_class->isa('App::Yath::Command::projects');
+    return 1;
+}
 
 sub spawn_args {
     my $self = shift;
@@ -100,7 +145,7 @@ sub post_process {
     }
 }
 
-sub handle_event {
+sub annotate_event {
     my $self = shift;
     return if $self->{+NO_AGGREGATE};
     my ($e, $settings) = @_;
@@ -115,17 +160,76 @@ sub handle_event {
             return;
         }
 
-        my $agg = $settings->cover->aggregator // 'Test2::Harness::Log::CoverageAggregator';
+        my $agg = $settings->cover->aggregator;
+        if (!$agg) {
+            if ($file) {
+                if ($file =~ m/\.json$/) {
+                    $agg = 'Test2::Harness::Log::CoverageAggregator::ByRun';
+                }
+                elsif ($file =~ m/\.jsonl$/) {
+                    $agg = 'Test2::Harness::Log::CoverageAggregator::ByTest';
+                }
+            }
+            else {
+                $agg = 'Test2::Harness::Log::CoverageAggregator::ByTest';
+            }
+        }
+
+        my $encode;
+        if ($agg eq 'Test2::Harness::Log::CoverageAggregator::ByRun') {
+            $encode = \&encode_json;
+        }
+        elsif ($agg eq 'Test2::Harness::Log::CoverageAggregator::ByTest') {
+            $encode = sub { encode_json($_[0]) . "\n" };
+        }
+
         require(mod2file($agg));
-        $self->{+AGGREGATOR} = $agg->new();
+        $self->{+AGGREGATOR} = $agg->new(
+            $file   ? (file   => $file)   : (),
+            $encode ? (encode => $encode) : (),
+        );
     }
 
     my $fd = $e->{facet_data};
 
-    $self->{+AGGREGATOR}->process_event($e)
-        if $fd->{coverage} || $fd->{harness_job_end} || $fd->{harness_job_start};
+    my @out;
 
-    return;
+    if ($fd->{coverage} || $fd->{harness_job_end} || $fd->{harness_job_start}) {
+        if (my $list = $self->{+AGGREGATOR}->process_event($e)) {
+            die "Aggregator flushed without a job end!" unless $fd->{harness_job_end};
+            die "Aggregator flushed more than 1 job!" unless @$list == 1;
+            push @out => (job_coverage => {details => 'Job Coverage', manager => $list->[0]->{manager}, files => $list->[0]->{files}, test => $list->[0]->{test}});
+        }
+    }
+
+    if ($fd->{harness_final}) {
+        my $cover      = $settings->cover;
+        my $aggregator = $self->{+AGGREGATOR} or return;
+        my $metrics    = $self->metrics($settings) if $cover->metrics;
+        my $final      = $aggregator->finalize();
+
+        my $percentages = $self->_percentages($metrics);
+        my $raw         = join ", ", map { "$_->[0]: $_->[2]/$_->[1] ($_->[3])" } @$percentages;
+        my $details     = join ", ", map { "$_->[0] $_->[3]" } @$percentages;
+
+        $details = "coverage metrics" unless length $details;
+
+        push @out => (
+            run_fields => [
+                {name => 'coverage', details => $details, data => $metrics, $raw ? (raw => $raw) : ()},
+            ],
+        );
+
+        push @out => (
+            run_coverage => {
+                details  => 'Run Coverage',
+                files    => $final->[0]->{files},
+                testmeta => $final->[0]->{testmeta},
+            },
+        ) if $final && @$final;
+    }
+
+    return @out;
 }
 
 sub metrics {
@@ -154,6 +258,7 @@ sub _percentages {
     my @out;
 
     for my $metric (sort keys %$metrics) {
+        next if $metric eq 'untested';
         my $data = $metrics->{$metric} or next;
         my ($total, $tested) = @{$data}{qw/total tested/};
         push @out => [$metric, $total, $tested, $total ? (int(($tested / $total) * 100) . '%') : '100%'];
@@ -162,46 +267,12 @@ sub _percentages {
     return \@out;
 }
 
-sub teardown {
-    my $self = shift;
-    my ($settings, $renderers, $logger) = @_;
-
-    my $cover      = $settings->cover;
-    my $aggregator = $self->{+AGGREGATOR} or return;
-    my $metrics    = $self->metrics($settings) if $cover->metrics;
-    my $coverage   = $aggregator->coverage;
-
-    my $percentages = $self->_percentages($metrics);
-    my $raw         = join ", ", map { "$_->[0]: $_->[2]/$_->[1] ($_->[3])" } @$percentages;
-    my $details     = join ", ", map { "$_->[0] $_->[3]" } @$percentages;
-
-    $details = "coverage" unless length $details;
-
-    require Test2::Harness::Event;
-    my $e = Test2::Harness::Event->new(
-        job_id     => 0,
-        stamp      => time,
-        event_id   => gen_uuid(),
-        run_id     => $settings->run->run_id,
-        facet_data => {
-            about => { details => 'Aggregated Coverage Data' },
-            run_fields => [
-                {name => 'coverage', details => $details, data => $coverage, $raw ? (raw => $raw) : ()},
-            ],
-        },
-    );
-
-    print $logger $e->as_json, "\n" if $logger;
-
-    $_->render_event($e) for @$renderers;
-}
-
 sub finalize {
     my $self = shift;
     my ($settings) = @_;
 
-    my $cover     = $settings->cover;
-    my $file      = $cover->write;
+    my $cover   = $settings->cover;
+    my $file    = $cover->write;
     my $metrics = $cover->metrics;
 
     return unless $file || $metrics;
@@ -220,25 +291,124 @@ sub finalize {
         print map { "$_\n" } $table->render;
     }
 
-    if ($file) {
-        my $coverage = $aggregator->coverage;
+    print "Wrote coverage file: $file\n" if $file;
 
-        if (open(my $fh, '>', $file)) {
-            print $fh encode_json($coverage);
-            close($fh);
-            print "Wrote coverage file: $file\n";
+    print "\n";
+}
+
+sub _deduce_content_type {
+    my ($path, $type) = @_;
+
+    if ($type) {
+        if ($type eq 'json') {
+            return {
+                content_type => 'application/json',
+                parser       => 'json',
+                format       => $type,
+            };
         }
-        else {
-            warn "Could not write coverage file '$file': $!";
+        elsif ($type eq 'jsonl' || $type eq 'log') {
+            return {
+                content_type => 'application/jsonl',
+                parser       => 'jsonl',
+                format       => $type,
+            };
         }
     }
 
-    print "\n";
+    if ($path =~ m/\.jsonl/) {
+        return {
+            content_type => 'application/jsonl',
+            parser       => 'jsonl',
+            format       => undef,
+        };
+    }
+
+    if ($path =~ m/\.json/) {
+        return {
+            content_type => 'application/json',
+            parser       => 'json',
+            format       => undef,
+        };
+    }
+
+    return {};
+}
+
+sub get_coverage_tests {
+    my $self = shift;
+    my ($settings, $changes) = @_;
+
+    my $cover = $settings->cover;
+    my $from  = $cover->from;
+    my $maybe = $cover->maybe_from;
+
+    return unless $from || $maybe;
+
+    if ($maybe) {
+        my $type_data = $self->_deduce_content_type($maybe, $cover->maybe_from_type);
+
+        my @out;
+        my $ok = eval { @out = $self->_get_coverage_tests($settings, $changes, $maybe, $type_data); 1 };
+        my $err = $@;
+        return @out if $ok;
+        warn "Could not get coverage from '$maybe', continuing anyway... error was: $err";
+    }
+
+    return $self->_get_coverage_tests($settings, $changes, $from)
+        if $from;
+
+    return;
+}
+
+sub _get_coverage_tests {
+    my $self = shift;
+    my ($settings, $changes, $source, $type_data) = @_;
+
+    my @out;
+
+    stream_json_l(
+        $source => sub { push @out => $self->coverage_handler($settings, $changes, $type_data, @_) },
+        $type_data->{content_type} ? (http_args => [{headers => {'Content-Type' => $type_data->{content_type}}}]) : (),
+    );
+
+    return @out;
+}
+
+sub coverage_handler {
+    my $self = shift;
+    my ($settings, $changes, $type_data, $set, $res) = @_;
+
+    return unless $set;
+
+    my ($agg, $data);
+    if (my $fd = $set->{facet_data}) {
+        if ($data = $fd->{job_coverage}) {
+            require 'Test2/Harness/Log/CoverageAggregator/ByTest.pm' unless $INC{'Test2/Harness/Log/CoverageAggregator/ByTest.pm'};
+            $agg = 'Test2::Harness::Log::CoverageAggregator::ByTest';
+        }
+        elsif($data = $fd->{run_coverage}) {
+            require 'Test2/Harness/Log/CoverageAggregator/ByRun.pm' unless $INC{'Test2/Harness/Log/CoverageAggregator/ByRun.pm'};
+            $agg = 'Test2::Harness::Log::CoverageAggregator::ByRun';
+        }
+        else {
+            return;
+        }
+    }
+    else {
+        $data = $set;
+        $agg  = $set->{aggregator} // return;
+        my $aggfile = mod2file($agg);
+        require($aggfile) unless $INC{$aggfile};
+    }
+
+    return $agg->get_coverage_tests($settings, $changes, $data);
 }
 
 1;
 
 __END__
+
 
 =pod
 

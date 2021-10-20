@@ -133,7 +133,7 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
 
         if ($has_coverage) {
             my $curl = join '/' => ($url, 'coverage', $project);
-            $settings->finder->field(($grace ? 'maybe_coverage_from' : 'coverage_from'), $curl);
+            $settings->cover->field(($grace ? 'maybe_from' : 'from'), $curl);
         }
 
         if ($has_durations) {

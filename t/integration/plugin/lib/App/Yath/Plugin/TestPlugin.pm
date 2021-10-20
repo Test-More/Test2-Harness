@@ -25,13 +25,15 @@ sub duration_data {
     };
 }
 
-sub coverage_data {
+sub get_coverage_tests {
     my $self = shift;
-    my ($changes) = @_;
+    my ($settings, $changes) = @_;
 
+    my $stype = ref($settings);
     my $type = ref($changes);
+    my $count = keys %$changes;
 
-    print "TEST PLUGIN: coverage_data($type:[" . join(",", sort @$changes) . "])\n";
+    print "TEST PLUGIN: get_coverage_tests($stype, $type($count))\n";
 
     return [
         't/integration/plugin/a.tx',

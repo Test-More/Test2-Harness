@@ -18,21 +18,21 @@ sub verify {
         $text .= $out->{output};
     }
 
-    like($text, qr/TEST PLUGIN: Loaded Plugin/,   "Yath loaded the plugin");
-    like($text, qr/TEST PLUGIN: duration_data/,   "duration_data() was called");
+    like($text, qr/TEST PLUGIN: Loaded Plugin/, "Yath loaded the plugin");
+    like($text, qr/TEST PLUGIN: duration_data/, "duration_data() was called");
 
-    like($text, qr/TEST PLUGIN: changed_files\(Test2::Harness::Settings\)/,   "changed_files() was called");
-    like($text, qr/TEST PLUGIN: coverage_data\(ARRAY:\[.+a\.tx,.+b\.tx,.+c\.tx,.*d\.tx,.*test\.tx\]\)/,   "coverage_data() was called");
+    like($text, qr/TEST PLUGIN: changed_files\(Test2::Harness::Settings\)/,               "changed_files() was called");
+    like($text, qr/TEST PLUGIN: get_coverage_tests\(Test2::Harness::Settings, HASH\(5\)\)/, "get_coverage_tests() was called");
 
     like($text, qr/TEST PLUGIN: munge_files/,     "munge_files() was called");
     like($text, qr/TEST PLUGIN: munge_search/,    "munge_search() was called");
     like($text, qr/TEST PLUGIN: inject_run_data/, "inject_run_data() was called");
     like($text, qr/TEST PLUGIN: handle_event/,    "handle_event() was called");
 
-    like($text, qr/TEST PLUGIN: claim_file .*test\.tx$/m,       "claim_file(test.tx) was called");
-    like($text, qr/TEST PLUGIN: claim_file .*TestPlugin\.pm$/m, "claim_file(TestPlugin.pm) was called");
-    like($text, qr/TEST PLUGIN: setup Test2::Harness::Settings/,     "setup() was called with settings");
-    like($text, qr/TEST PLUGIN: teardown Test2::Harness::Settings/,  "teardown() was called with settings");
+    like($text, qr/TEST PLUGIN: claim_file .*test\.tx$/m,           "claim_file(test.tx) was called");
+    like($text, qr/TEST PLUGIN: claim_file .*TestPlugin\.pm$/m,     "claim_file(TestPlugin.pm) was called");
+    like($text, qr/TEST PLUGIN: setup Test2::Harness::Settings/,    "setup() was called with settings");
+    like($text, qr/TEST PLUGIN: teardown Test2::Harness::Settings/, "teardown() was called with settings");
 
     like($text, qr/\(TESTPLUG\)\s+STDERR WRITE$/m, "Got the STDERR write from the shellcall");
     like($text, qr/\(TESTPLUG\)\s+STDOUT WRITE$/m, "Got the STDOUT write from the shellcall");

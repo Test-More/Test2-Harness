@@ -54,6 +54,7 @@ sub handle {
             }
 
             $run->run_fields->delete;
+            $run->coverages->delete;
             $run->delete;
         }
     }

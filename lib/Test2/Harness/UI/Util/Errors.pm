@@ -2,7 +2,7 @@ package Test2::Harness::UI::Util::Errors;
 use strict;
 use warnings;
 
-our $VERSION = '0.000089';
+our $VERSION = '0.000090';
 
 use Scalar::Util qw/blessed/;
 

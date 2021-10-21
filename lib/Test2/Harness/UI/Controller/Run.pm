@@ -45,6 +45,9 @@ sub handle {
         }
         elsif ($act eq 'delete') {
             die error(400 => "Cannot delete a pinned run") if $run->pinned;
+
+            $run->coverages->delete;
+
             my $jobs = $run->jobs;
 
             while (my $job = $jobs->next()) {
@@ -54,7 +57,6 @@ sub handle {
             }
 
             $run->run_fields->delete;
-            $run->coverages->delete;
             $run->delete;
         }
     }

@@ -286,6 +286,7 @@ CREATE TABLE coverage (
     source_file_id      UUID    NOT NULL REFERENCES source_files(source_file_id),
     source_sub_id       UUID    NOT NULL REFERENCES source_subs(source_sub_id),
     coverage_manager_id UUID    DEFAULT NULL REFERENCES coverage_manager(coverage_manager_id),
+    job_key             UUID    DEFAULT NULL REFERENCES jobs(job_key),
 
     metadata    JSONB   DEFAULT NULL,
 
@@ -293,3 +294,4 @@ CREATE TABLE coverage (
 );
 CREATE INDEX IF NOT EXISTS coverage_from_source ON coverage(source_file_id, source_sub_id);
 CREATE INDEX IF NOT EXISTS coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);
+CREATE INDEX IF NOT EXISTS coverage_from_job ON coverage(job_key);

@@ -288,6 +288,7 @@ CREATE TABLE coverage (
     source_file_id      CHAR(36)    NOT NULL,
     source_sub_id       CHAR(36)    NOT NULL,
     coverage_manager_id CHAR(36)    DEFAULT NULL,
+    job_key             CHAR(36)    DEFAULT NULL,
 
     metadata    LONGTEXT    DEFAULT NULL,
 
@@ -296,8 +297,10 @@ CREATE TABLE coverage (
     FOREIGN KEY (source_file_id)      REFERENCES source_files(source_file_id),
     FOREIGN KEY (source_sub_id)       REFERENCES source_subs(source_sub_id),
     FOREIGN KEY (coverage_manager_id) REFERENCES coverage_manager(coverage_manager_id),
+    FOREIGN KEY (job_key)             REFERENCES jobs(job_key),
 
     UNIQUE(run_id, test_file_id, source_file_id, source_sub_id)
 ) ROW_FORMAT=COMPRESSED;
 CREATE INDEX coverage_from_source ON coverage(source_file_id, source_sub_id);
 CREATE INDEX coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);
+CREATE INDEX coverage_from_job ON coverage(job_key);

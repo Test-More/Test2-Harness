@@ -29,6 +29,8 @@ __PACKAGE__->add_columns(
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "coverage_manager_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  "job_key",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
   "metadata",
   { data_type => "jsonb", is_nullable => 1 },
 );
@@ -41,6 +43,17 @@ __PACKAGE__->belongs_to(
   "coverage_manager",
   "Test2::Harness::UI::Schema::Result::CoverageManager",
   { coverage_manager_id => "coverage_manager_id" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "NO ACTION",
+    on_update     => "NO ACTION",
+  },
+);
+__PACKAGE__->belongs_to(
+  "job_key",
+  "Test2::Harness::UI::Schema::Result::Job",
+  { job_key => "job_key" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -74,8 +87,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-20 08:42:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:jn7pKhOqQEfejTbsEqQEIA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-21 12:56:40
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:tDrgh324PGrHyqv/LwnqBg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

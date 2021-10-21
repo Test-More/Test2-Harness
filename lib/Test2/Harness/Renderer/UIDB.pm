@@ -24,6 +24,7 @@ use Test2::Harness::Util::HashBase qw{
     <user
     <finished
     +links
+    <error_count
 };
 
 sub init {
@@ -34,6 +35,8 @@ sub init {
     my $yath = $settings->yathui;
     $self->{+PROJECT} //= $yath->project || die "The yathui-project option is required.\n";
     $self->{+USER} //= $yath->user || die "The yathui-user option is required.\n";
+
+    $self->{+ERROR_COUNT} = 0;
 
     my $config = $self->{+CONFIG} //= config_from_settings($settings);
 
@@ -65,6 +68,22 @@ sub signal {
 }
 
 sub render_event {
+    my $self = shift;
+    my @args = @_;
+
+    return if $self->{+ERROR_COUNT} >= 10;
+
+    my $out;
+    eval { $out = $self->_render_event(@args); 1 } and return $out;
+    warn "YathUI-DB Renderer error:\n====\n$@\n====\n";
+
+    $self->{+ERROR_COUNT}++;
+
+    return unless $self->{+ERROR_COUNT} >= 10;
+    warn "\n\n*************************\nThe YathUI-DB renderer has encountered 10+ errors, disabling...\n*************************\n\n";
+}
+
+sub _render_event {
     my $self = shift;
     my ($event) = @_;
 

@@ -85,6 +85,12 @@ __PACKAGE__->add_columns(
 __PACKAGE__->set_primary_key("job_key");
 __PACKAGE__->add_unique_constraint("job_id", ["job_id", "job_try"]);
 __PACKAGE__->has_many(
+  "coverages",
+  "Test2::Harness::UI::Schema::Result::Coverage",
+  { "foreign.job_key" => "self.job_key" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+__PACKAGE__->has_many(
   "events",
   "Test2::Harness::UI::Schema::Result::Event",
   { "foreign.job_key" => "self.job_key" },
@@ -115,8 +121,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-20 08:42:30
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:X6sKgcp8K2CxzCMf3yPYxw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-21 12:56:35
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:DZIondAPOz9fgW+Achsy1Q
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

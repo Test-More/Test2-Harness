@@ -24,6 +24,9 @@ my @yathdb_args = (
 
 yath(
     command => 'test',
+    pre     => ['-D./lib'],
+    exit    => 0,
+    env     => {A_FAIL_ONCE => 1},
     args    => [
         "-D",
         "-I$dir/lib",
@@ -33,8 +36,13 @@ yath(
         @yathdb_args,
         '--cover-files',
         '--cover-metrics',
+        '--retry' => 1,
     ],
-    exit    => 0,
+    test => sub {
+        my $out = shift;
+        ok($out->{output} !~ m/YathUI-DB Renderer error/, "No database error");
+        ok($out->{output} =~ m{RETRY.*t/integration/coverage/a\.tx}, "retried a.tx");
+    },
 );
 
 my $coverage_data = [

@@ -301,6 +301,9 @@ sub get_job {
     # In case we are resuming.
     $result->events->delete_all();
 
+    # Prevent duplicate coverage when --retry is used
+    $self->schema->resultset('Coverage')->search({'job_key.job_id' => $job_id}, {join => 'job_key'})->delete if $job_try;
+
     $job = {
         job_key => $key,
         job_id  => $job_id,
@@ -457,7 +460,7 @@ sub _process_event {
         }
 
         if (my $job_coverage = $f->{job_coverage}) {
-            $self->add_job_coverage($job_coverage);
+            $self->add_job_coverage($job->{job_key}, $job_coverage);
             $f->{job_coverage} = "Removed, used to populate the job_coverage table";
         }
 
@@ -492,12 +495,13 @@ sub _process_event {
 
 sub add_job_coverage {
     my $self = shift;
-    my ($job_coverage) = @_;
+    my ($job_key, $job_coverage) = @_;
 
     for my $source (keys %{$job_coverage->{files}}) {
         my $subs = $job_coverage->{files}->{$source};
         for my $sub (keys %$subs) {
             $self->_add_coverage(
+                job_key => $job_key,
                 test    => $job_coverage->{test},
                 source  => $source,
                 sub     => $sub,
@@ -558,6 +562,7 @@ sub _add_coverage {
         source_sub_id       => $sub_id,
         coverage_manager_id => $manager_id,
         metadata            => $meta,
+        job_key             => $params{job_key},
     };
 }
 

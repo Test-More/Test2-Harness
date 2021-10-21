@@ -29,6 +29,8 @@ __PACKAGE__->add_columns(
   { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
   "coverage_manager_id",
   { data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36 },
+  "job_key",
+  { data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36 },
   "metadata",
   { data_type => "json", is_nullable => 1 },
 );
@@ -41,6 +43,17 @@ __PACKAGE__->belongs_to(
   "coverage_manager",
   "Test2::Harness::UI::Schema::Result::CoverageManager",
   { coverage_manager_id => "coverage_manager_id" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "RESTRICT",
+    on_update     => "RESTRICT",
+  },
+);
+__PACKAGE__->belongs_to(
+  "job_key",
+  "Test2::Harness::UI::Schema::Result::Job",
+  { job_key => "job_key" },
   {
     is_deferrable => 1,
     join_type     => "LEFT",
@@ -74,8 +87,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-20 08:42:30
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:1Ls2B6UJR2o4LFP/dCBj7g
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-21 12:56:35
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:7CE0ZuR+d36djh1svmjO0Q
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

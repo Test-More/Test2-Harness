@@ -1,6 +1,10 @@
 {{$NEXT}}
 
+    - Fix missing Changes entry for last release
+
 1.000074  2021-10-20 09:58:05-07:00 America/Los_Angeles
+
+    - Better coverage aggregation and plugin capabilities
 
 1.000073  2021-09-21 10:25:42-07:00 America/Los_Angeles
 

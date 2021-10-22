@@ -420,6 +420,7 @@ sub queue_item {
         conflicts   => $self->conflicts_list,
         duration    => $duration,
         file        => $self->file,
+        rel_file    => $self->relative,
         job_id      => gen_uuid(),
         job_name    => $job_name,
         run_id      => $run_id,

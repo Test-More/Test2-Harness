@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add relative filename to the queued task
+
 1.000075  2021-10-21 14:05:27-07:00 America/Los_Angeles
 
     - Fix missing Changes entry for last release

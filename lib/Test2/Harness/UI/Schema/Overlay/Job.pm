@@ -9,7 +9,7 @@ use Carp qw/confess/;
 confess "You must first load a Test2::Harness::UI::Schema::NAME module"
     unless $Test2::Harness::UI::Schema::LOADED;
 
-our $VERSION = '0.000091';
+our $VERSION = '0.000092';
 
 __PACKAGE__->inflate_column(
     parameters => {

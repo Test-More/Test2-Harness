@@ -59,10 +59,11 @@ sub init {
     $router->connect('/query/:name'      => {controller => 'Test2::Harness::UI::Controller::Query'});
     $router->connect('/query/:name/:arg' => {controller => 'Test2::Harness::UI::Controller::Query'});
 
-    $router->connect('/run/:id'          => {controller => 'Test2::Harness::UI::Controller::Run'});
-    $router->connect('/run/:id/pin'      => {controller => 'Test2::Harness::UI::Controller::Run', action => 'pin_toggle'});
-    $router->connect('/run/:id/delete'   => {controller => 'Test2::Harness::UI::Controller::Run', action => 'delete'});
-    $router->connect('/run/:id/cancel'   => {controller => 'Test2::Harness::UI::Controller::Run', action => 'cancel'});
+    $router->connect('/run/:id'            => {controller => 'Test2::Harness::UI::Controller::Run'});
+    $router->connect('/run/:id/pin'        => {controller => 'Test2::Harness::UI::Controller::Run', action => 'pin_toggle'});
+    $router->connect('/run/:id/delete'     => {controller => 'Test2::Harness::UI::Controller::Run', action => 'delete'});
+    $router->connect('/run/:id/cancel'     => {controller => 'Test2::Harness::UI::Controller::Run', action => 'cancel'});
+    $router->connect('/run/:id/parameters' => {controller => 'Test2::Harness::UI::Controller::Run', action => 'parameters'});
 
     $router->connect('/run/field/:id'        => {controller => 'Test2::Harness::UI::Controller::RunField'});
     $router->connect('/run/field/:id/delete' => {controller => 'Test2::Harness::UI::Controller::RunField', action => 'delete'});

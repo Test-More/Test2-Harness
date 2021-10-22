@@ -77,9 +77,9 @@ sub stream_runs {
 
     my $opts = {
         collapse       => 1,
-        remove_columns => [qw/log_data/],
+        remove_columns => [qw/log_data run_fields.data parameters/],
 
-        join       => [qw/user_join project run_fields coverages/],
+        join       => [qw/user_join project run_fields/],
         '+columns' => {
             'prefetched_fields'       => \'1',
             'run_fields.run_field_id' => 'run_fields.run_field_id',
@@ -90,7 +90,6 @@ sub stream_runs {
             'run_fields.data',        => \"run_fields.data IS NOT NULL",
             'user'                    => \'user_join.username',
             'project'                 => \'project.name',
-            'has_coverage'            => \'coverages.run_id IS NOT NULL',
         },
     };
 

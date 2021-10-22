@@ -40,6 +40,11 @@ sub handle {
         if ($act eq 'pin_toggle') {
             $run->update({pinned => $run->pinned ? 0 : 1});
         }
+        elsif ($act eq 'parameters') {
+            $res->content_type('application/json');
+            $res->raw_body($run->parameters);
+            return $res;
+        }
         elsif ($act eq 'cancel') {
             $run->update({status => 'canceled'});
         }

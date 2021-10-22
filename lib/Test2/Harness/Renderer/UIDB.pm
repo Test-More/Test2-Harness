@@ -128,7 +128,7 @@ sub _render_event {
 sub finish {
     my $self = shift;
 
-    $self->{+PROCESSOR}->finish();
+    eval { $self->{+PROCESSOR}->finish(); 1 } or warn "YathUI-DB finish error:\n====\n$@\n====\n";
 
     $self->{+FINISHED} = 1;
 

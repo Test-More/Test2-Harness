@@ -122,9 +122,18 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
     var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
     params.click(function() {
-        var formatter = new JSONFormatter(item.parameters, 2);
-        $('#modal_body').html(formatter.render());
+        $('#modal_body').html("Loading...");
         $('#free_modal').slideDown();
+
+        var url = base_uri + 'run/' + item.run_id + '/parameters';
+        $.ajax(url, {
+            'data': { 'content-type': 'application/json' },
+            'error': function(a, b, c) { alert("Failed to load run paramaters") },
+            'success': function(data) {
+                var formatter = new JSONFormatter(data, 2);
+                $('#modal_body').html(formatter.render());
+            },
+        });
     });
 
     if (item.log_file_id) {

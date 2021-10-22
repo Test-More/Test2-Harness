@@ -48,6 +48,7 @@ sub handle {
 
     if ($delete) {
         $run->coverages->delete;
+        $run->update({has_coverage => 0});
     }
     else {
         my $iter = $run->coverage_data(iterator => 1);

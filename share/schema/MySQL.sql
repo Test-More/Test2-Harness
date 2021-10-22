@@ -119,6 +119,7 @@ CREATE TABLE runs (
     project_id      CHAR(36)        NOT NULL,
 
     pinned          BOOL            NOT NULL DEFAULT FALSE,
+    has_coverage    BOOL            NOT NULL DEFAULT FALSE,
 
     -- User Input
     added           TIMESTAMP       NOT NULL DEFAULT now(),

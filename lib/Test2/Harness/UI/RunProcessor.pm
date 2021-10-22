@@ -284,6 +284,12 @@ sub get_job {
 
     my $key = gen_uuid();
 
+    my $test_file_id = undef;
+    if (my $queue = $params{queue}) {
+        my $file = $queue->{rel_file} // $queue->{file};
+        $test_file_id = $self->get_test_file_id($file) if $file;
+    }
+
     my $result = $self->schema->resultset('Job')->update_or_create({
         status         => 'pending',
         job_key        => $key,
@@ -294,6 +300,7 @@ sub get_job {
         run_id         => $self->{+RUN}->run_id,
         fail_count     => 0,
         pass_count     => 0,
+        test_file_id   => $test_file_id,
 
         $is_harness_out ? (name => "HARNESS INTERNAL LOG") : (),
     });
@@ -572,6 +579,7 @@ sub flush_coverage {
     my $coverage = $self->{+COVERAGE} or return;
     return unless @$coverage;
 
+    $self->{+RUN}->update({has_coverage => 1}) unless $self->{+RUN}->has_coverage;
     $self->schema->resultset('Coverage')->populate($coverage);
 
     @$coverage = ();

@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Fix perofrmance of loading runs with lots of coverage
+    - Fix queued jobs having no filename
+    - Other misc fixes
+
 0.000090  2021-10-21 14:36:55-07:00 America/Los_Angeles
 
     - Fix deleting covered runs again in light of new foreign key...

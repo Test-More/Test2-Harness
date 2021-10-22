@@ -71,15 +71,13 @@ sub sweep {
         }
 
         if ($params{run_fields}) {
-            if ($params{coverage}) {
-                $run->run_fields->delete;
-            }
-            else {
-                $run->run_fields->search({name => {'!=' => 'coverage'}})->delete;
-            }
+            $run->run_fields->delete;
         }
 
-        $run->coverages->delete if $params{coverage};
+        if ($params{coverage}) {
+            $run->coverages->delete;
+            $run->update({has_coverage => 0}) unless $params{runs};
+        }
         $run->delete if $params{runs};
     }
 

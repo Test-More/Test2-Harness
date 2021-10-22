@@ -136,6 +136,7 @@ CREATE TABLE runs (
     project_id      UUID            NOT NULL REFERENCES projects(project_id),
 
     pinned          BOOL            NOT NULL DEFAULT FALSE,
+    has_coverage    BOOL            NOT NULL DEFAULT FALSE,
 
     -- User Input
     added           TIMESTAMP       NOT NULL DEFAULT now(),

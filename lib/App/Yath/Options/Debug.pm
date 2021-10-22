@@ -2,7 +2,7 @@ package App::Yath::Options::Debug;
 use strict;
 use warnings;
 
-our $VERSION = '1.000076';
+our $VERSION = '1.000077';
 
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 use Test2::Util::Table qw/table/;

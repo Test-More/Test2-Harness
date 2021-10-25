@@ -15,6 +15,8 @@ requires "DBIx::Class::UUIDColumns" => "0";
 requires "DBIx::QuickDB" => "0.000020";
 requires "Data::GUID" => "0";
 requires "DateTime" => "0";
+requires "DateTime::Format::MySQL" => "0";
+requires "DateTime::Format::Pg" => "0";
 requires "Email::Sender::Simple" => "0";
 requires "Email::Simple" => "0";
 requires "Email::Simple::Creator" => "0";
@@ -60,8 +62,6 @@ requires "perl" => "5.008009";
 suggests "Cpanel::JSON::XS" => "0";
 suggests "DBD::Pg" => "0";
 suggests "DBD::mysql" => "0";
-suggests "DateTime::Format::MySQL" => "0";
-suggests "DateTime::Format::Pg" => "0";
 
 on 'test' => sub {
   requires "HTTP::Tiny::UNIX" => "0";

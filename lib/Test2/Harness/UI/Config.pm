@@ -14,8 +14,10 @@ use Test2::Harness::UI::Util::HashBase qw{
     -single_user -single_run -no_upload
     -show_user
     -email
-    -no_cache <db_cache <db_cache_pid
 };
+
+sub disconnect { shift->schema->storage->disconnect }
+sub connect    { shift->schema->storage->dbh }
 
 sub init {
     my $self = shift;
@@ -32,62 +34,12 @@ sub init {
     $self->{+SHOW_USER} //= 0;
 }
 
-sub disconnect {
-    my $self = shift;
-    delete $self->{+_SCHEMA};
-
-    if ($self->{+DB_CACHE_PID}) {
-        if ($self->{+DB_CACHE_PID} == $$) {
-            $self->{+DB_CACHE}->disconnect();
-        }
-
-        delete $self->{+DB_CACHE_PID};
-    }
-
-    delete $self->{+DB_CACHE};
-    return;
-}
-
 sub guess_db_driver {
     my $self = shift;
 
     return 'MySQL' if $self->{+DBI_DSN} =~ m/(mysql|maria|percona)/i;
     return 'PostgreSQL' if $self->{+DBI_DSN} =~ m/(pg|postgre)/i;
     return 'PostgreSQL'; # Default
-}
-
-sub connect {
-    my $self = shift;
-
-    unless ($self->{+NO_CACHE}) {
-        $self->disconnect if $self->{+DB_CACHE_PID} && $self->{+DB_CACHE_PID} != $$;
-        return $self->{+DB_CACHE} if $self->{+DB_CACHE};
-    }
-
-    require DBI;
-
-    my %params = (
-        AutoCommit => 1,
-        RaiseError => 1,
-    );
-
-    my $schema = $ENV{YATH_UI_SCHEMA} //= $self->guess_db_driver();
-    $params{mysql_auto_reconnect} = 1 if $schema =~ m/mysql/i;
-
-
-    my $db = DBI->connect(
-        $self->{+DBI_DSN},
-        $self->{+DBI_USER},
-        $self->{+DBI_PASS},
-        \%params,
-    );
-
-    unless ($self->{+NO_CACHE}) {
-        $self->{+DB_CACHE}     = $db;
-        $self->{+DB_CACHE_PID} = $$;
-    }
-
-    return $db;
 }
 
 sub schema {
@@ -102,7 +54,12 @@ sub schema {
 
     require Test2::Harness::UI::Schema;
 
-    return $self->{+_SCHEMA} = Test2::Harness::UI::Schema->connect({dbh_maker => sub { $self->connect }});
+    return $self->{+_SCHEMA} = Test2::Harness::UI::Schema->connect(
+        $self->dbi_dsn,
+        $self->dbi_user,
+        $self->dbi_pass,
+        {AutoCommit => 1, RaiseError => 1},
+    );
 }
 
 1;

@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Fix bad db initialization stuff
+    - Fix #27 - datetime formats
 
 0.000091  2021-10-22 11:09:08-07:00 America/Los_Angeles
 

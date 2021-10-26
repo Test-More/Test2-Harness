@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.000094  2021-10-26 13:59:04-07:00 America/Los_Angeles
+
     - Fix coverage collation in mysql
 
 0.000093  2021-10-26 10:06:37-07:00 America/Los_Angeles

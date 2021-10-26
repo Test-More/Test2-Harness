@@ -33,7 +33,7 @@ use Test2::Harness::UI::Util::HashBase qw{
 
     signal
 
-    <coverage <new_jobs <id_cache
+    <coverage <uncover <new_jobs <id_cache
 
     <mode
     <interval <last_flush
@@ -310,6 +310,9 @@ sub get_job {
 
     # Prevent duplicate coverage when --retry is used
     $self->schema->resultset('Coverage')->search({'job_key.job_id' => $job_id}, {join => 'job_key'})->delete if $job_try;
+    if (my $old = $self->{+JOBS}->{$job_id}->{$job_try - 1}) {
+        $self->{+UNCOVER}->{$old->{job_key}}++;
+    }
 
     $job = {
         job_key => $key,
@@ -467,7 +470,7 @@ sub _process_event {
         }
 
         if (my $job_coverage = $f->{job_coverage}) {
-            $self->add_job_coverage($job->{job_key}, $job_coverage);
+            $self->add_job_coverage($job, $job_coverage);
             $f->{job_coverage} = "Removed, used to populate the job_coverage table";
         }
 
@@ -502,14 +505,20 @@ sub _process_event {
 
 sub add_job_coverage {
     my $self = shift;
-    my ($job_key, $job_coverage) = @_;
+    my ($job, $job_coverage) = @_;
+
+    my $job_id  = $job->{job_id};
+    my $job_try = $job->{job_try} // 0;
+
+    # Do not add coverage if a retry has already started. Events could be out of order.
+    return if $self->{+JOBS}->{$job_id}->{$job_try + 1};
 
     for my $source (keys %{$job_coverage->{files}}) {
         my $subs = $job_coverage->{files}->{$source};
         for my $sub (keys %$subs) {
             $self->_add_coverage(
-                job_key => $job_key,
-                test    => $job_coverage->{test},
+                job_key => $job->{job_key},
+                test    => $job_coverage->{test} // $job->{result}->file,
                 source  => $source,
                 sub     => $sub,
                 manager => $job_coverage->{manager},
@@ -551,7 +560,7 @@ sub _add_coverage {
     my $self = shift;
     my %params = @_;
 
-    my $test_id = $self->get_test_file_id($params{test}) or die "Could not get test id";
+    my $test_id = $self->get_test_file_id($params{test}) or confess("Could not get test id (for '$params{test}')");
 
     my $source_id  = $self->_get__id(SourceFile      => 'source_file_id',      filename => $params{source}) or die "Could not get source id";
     my $sub_id     = $self->_get__id(SourceSub       => 'source_sub_id',       subname  => $params{sub})    or die "Could not get sub id";
@@ -578,6 +587,10 @@ sub flush_coverage {
 
     my $coverage = $self->{+COVERAGE} or return;
     return unless @$coverage;
+
+    if (my $uncover = $self->{+UNCOVER}) {
+        @$coverage = grep { !$uncover->{$_->{job_key}} } @$coverage;
+    }
 
     $self->{+RUN}->update({has_coverage => 1}) unless $self->{+RUN}->has_coverage;
     $self->schema->resultset('Coverage')->populate($coverage);

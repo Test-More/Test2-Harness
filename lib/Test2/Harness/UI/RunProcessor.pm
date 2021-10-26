@@ -512,6 +512,7 @@ sub add_job_coverage {
 
     # Do not add coverage if a retry has already started. Events could be out of order.
     return if $self->{+JOBS}->{$job_id}->{$job_try + 1};
+    return if $self->{+UNCOVER} && $self->{+UNCOVER}->{$job->{job_key}};
 
     for my $source (keys %{$job_coverage->{files}}) {
         my $subs = $job_coverage->{files}->{$source};
@@ -587,10 +588,6 @@ sub flush_coverage {
 
     my $coverage = $self->{+COVERAGE} or return;
     return unless @$coverage;
-
-    if (my $uncover = $self->{+UNCOVER}) {
-        @$coverage = grep { !$uncover->{$_->{job_key}} } @$coverage;
-    }
 
     $self->{+RUN}->update({has_coverage => 1}) unless $self->{+RUN}->has_coverage;
     $self->schema->resultset('Coverage')->populate($coverage);

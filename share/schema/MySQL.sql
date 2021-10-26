@@ -161,8 +161,8 @@ CREATE TABLE run_fields (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE test_files (
-    test_file_id    CHAR(36)        NOT NULL PRIMARY KEY,
-    filename        VARCHAR(512)    NOT NULL,
+    test_file_id    CHAR(36)                                            NOT NULL PRIMARY KEY,
+    filename        VARCHAR(512)    CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(filename)
 ) ROW_FORMAT=COMPRESSED;
@@ -263,22 +263,22 @@ CREATE INDEX event_parent ON events(parent_id);
 CREATE INDEX is_subtest   ON events(is_subtest);
 
 CREATE TABLE source_files (
-    source_file_id  CHAR(36)            NOT NULL PRIMARY KEY,
-    filename        VARCHAR(512)    NOT NULL,
+    source_file_id  CHAR(36)                                            NOT NULL PRIMARY KEY,
+    filename        VARCHAR(512)    CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(filename)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE source_subs (
-    source_sub_id   CHAR(36)            NOT NULL PRIMARY KEY,
-    subname         VARCHAR(512)    NOT NULL,
+    source_sub_id   CHAR(36)                                            NOT NULL PRIMARY KEY,
+    subname         VARCHAR(512)    CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(subname)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE coverage_manager (
-    coverage_manager_id   CHAR(36)          NOT NULL PRIMARY KEY,
-    package               VARCHAR(256)  NOT NULL,
+    coverage_manager_id   CHAR(36)                                          NOT NULL PRIMARY KEY,
+    package               VARCHAR(256)  CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(package)
 ) ROW_FORMAT=COMPRESSED;

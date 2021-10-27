@@ -33,7 +33,7 @@ use Test2::Harness::UI::Util::HashBase qw{
 
     signal
 
-    <coverage <uncover <new_jobs <id_cache
+    <coverage <uncover <new_jobs <id_cache <file_cache
 
     <mode
     <interval <last_flush
@@ -288,7 +288,10 @@ sub get_job {
     if (my $queue = $params{queue}) {
         my $file = $queue->{rel_file} // $queue->{file};
         $test_file_id = $self->get_test_file_id($file) if $file;
+        $self->{+FILE_CACHE}->{$job_id} //= $test_file_id if $test_file_id;
     }
+
+    $test_file_id //= $self->{+FILE_CACHE}->{$job_id};
 
     my $result = $self->schema->resultset('Job')->update_or_create({
         status         => 'pending',

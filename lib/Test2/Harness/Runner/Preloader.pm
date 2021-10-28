@@ -280,15 +280,13 @@ sub check {
                 next if $sym =~ m/::$/;
 
                 # Make sure the changed file and the file that defined the sub are the same.
-                if (my $sub = $mod->can($sym)) {
-                    if (my $cobj = B::svref_2object($sub)) {
-                        if (my $subfile = $cobj->FILE) {
-                            my $clean1 = clean_path($subfile);
-                            my $clean2 = clean_path($file);
-                            next unless clean_path($subfile) eq clean_path($file);
-                        }
-                    }
-                }
+#                if (my $sub = $mod->can($sym)) {
+#                    if (my $cobj = B::svref_2object($sub)) {
+#                        if (my $subfile = $cobj->FILE) {
+#                            next unless clean_path($subfile) eq clean_path($file);
+#                        }
+#                    }
+#                }
 
                 delete $stash->{$sym};
             }

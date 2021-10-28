@@ -11,7 +11,5 @@ BEGIN {
 
 sub ExB { $PRELOAD::ExB }
 
-die "PreDefined sub is missing!" unless __PACKAGE__->can('PreDefined');
-
 1;
 

@@ -14,7 +14,5 @@ sub import { 1 }
 
 sub EB { $PRELOAD::EB }
 
-die "PreDefined sub is missing!" unless __PACKAGE__->can('PreDefined');
-
 1;
 

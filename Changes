@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Disable the feature from the last commit, it needs rethinking thanks to
+      things like Moose.
+
 1.000077  2021-10-28 15:14:09-07:00 America/Los_Angeles
 
     - Make reloader smarter, do not delete subs from other files when reloading a file

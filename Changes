@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Make reloader smarter, do not delete subs from other files when reloading a file
+
 1.000076  2021-10-22 10:29:22-07:00 America/Los_Angeles
 
     - Add relative filename to the queued task

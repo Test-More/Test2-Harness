@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '1.000079';
 
-use B();
+#use B();
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN/;
 use Time::HiRes qw/time/;

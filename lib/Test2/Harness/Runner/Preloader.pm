@@ -44,7 +44,7 @@ use Test2::Harness::Util::HashBase(
         <inotify <stats <last_checked
         <dtrace
 
-        <staged <started_stages
+        <staged <started_stages <stage
 
         <dump_depmap
         <monitor
@@ -201,6 +201,8 @@ sub start_stage {
         $stage = undef;
     }
 
+    $self->{+STAGE} = $stage;
+
     $self->load_blacklist if $self->{+MONITOR};
 
     # Localize these in case something we preload tries to modify them.
@@ -219,9 +221,14 @@ sub start_stage {
 
 sub can_reload {
     my $self = shift;
-    my ($mod) = @_;
+    my ($mod, $file) = @_;
 
     return 0 if $mod->can('TEST2_HARNESS_PRELOAD');
+
+    if (my $cb = $self->get_stage_callback('reload_inplace_check')) {
+        my $res = $cb->(module => $mod, file => $file);
+        return $res if defined $res;
+    }
 
     return 1 unless $mod->can('import');
 
@@ -263,7 +270,7 @@ sub check {
             next;
         }
 
-        unless ($self->can_reload($mod)) {
+        unless ($self->can_reload($mod, $file)) {
             print "$$ $0 - Changed file '$file' cannot be reloaded in place...\n";
             push @todo => [$mod, $file];
             next;
@@ -280,13 +287,21 @@ sub check {
                 next if $sym =~ m/::$/;
 
                 # Make sure the changed file and the file that defined the sub are the same.
-#                if (my $sub = $mod->can($sym)) {
-#                    if (my $cobj = B::svref_2object($sub)) {
-#                        if (my $subfile = $cobj->FILE) {
-#                            next unless clean_path($subfile) eq clean_path($file);
-#                        }
-#                    }
-#                }
+                if (my $cb = $self->get_stage_callback('reload_remove_check')) {
+                    if (my $sub = $mod->can($sym)) {
+                        if (my $cobj = B::svref_2object($sub)) {
+                            if (my $subfile = $cobj->FILE) {
+                                next unless $cb->(
+                                    mod         => $mod,
+                                    sym         => $sym,
+                                    sub         => $sub,
+                                    from_file   => -f $subfile ? clean_path($subfile) : $subfile,
+                                    reload_file => -f $file    ? clean_path($file)    : $file,
+                                );
+                            }
+                        }
+                    }
+                }
 
                 delete $stash->{$sym};
             }
@@ -337,6 +352,15 @@ sub check {
     $self->_unlock_blacklist();
 
     return 1;
+}
+
+sub get_stage_callback {
+    my $self   = shift;
+    my ($name) = @_;
+
+    my $stage = $self->{+STAGE} or return undef;
+    return undef unless ref $stage;
+    return $stage->$name;
 }
 
 sub _monitor_preload {

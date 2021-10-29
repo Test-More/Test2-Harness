@@ -63,6 +63,18 @@ sub import {
         $stage->add_to_load_sequence(@_);
     };
 
+    $exports{reload_remove_check} = sub {
+        croak "No current stage" unless @{$instance->stack};
+        my $stage = $instance->stack->[-1];
+        $stage->set_reload_remove_check(@_);
+    };
+
+    $exports{reload_inplace_check} = sub {
+        croak "No current stage" unless @{$instance->stack};
+        my $stage = $instance->stack->[-1];
+        $stage->set_reload_inplace_check(@_);
+    };
+
     for my $name (keys %exports) {
         no strict 'refs';
         *{"$caller\::$name"} = $exports{$name};

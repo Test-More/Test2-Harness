@@ -16,6 +16,16 @@ stage A => sub {
 };
 
 stage B => sub {
+    reload_remove_check sub {
+        my %params = @_;
+        return 1 if $params{reload_file} eq $params{from_file};
+        return 0;
+    };
+
+    preload sub {
+        *Preload::B::PreDefined = sub { 'yes' };
+    };
+
     preload 'Preload::A';
     preload 'Preload::WarningA';
     preload 'Preload::ExceptionA';

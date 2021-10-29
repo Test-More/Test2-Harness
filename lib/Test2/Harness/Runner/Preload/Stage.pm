@@ -15,6 +15,8 @@ use Test2::Harness::Util::HashBase qw{
     <pre_launch_callbacks
     <load_sequence
     eager
+    reload_remove_check
+    reload_inplace_check
 };
 
 sub init {

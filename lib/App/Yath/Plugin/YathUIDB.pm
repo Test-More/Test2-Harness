@@ -207,8 +207,7 @@ sub get_coverage_tests {
     while (my $cover = $coverages->next()) {
         my $test = $cover->test_filename or next;
 
-        if (my $man = $cover->coverage_manager) {
-            my $manager = $man->package;
+        if (my $manager = $cover->manager_package) {
             unless ($tests{$test}) {
                 if (eval { require(mod2file($manager)); 1 }) {
                     $tests{$test} = {manager => $manager, subs => [], loads => [], opens => []};

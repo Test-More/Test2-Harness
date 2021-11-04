@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix coverage code to reduce the number of queries used
+
 0.000095  2021-10-27 14:40:06-07:00 America/Los_Angeles
 
     - Fix issue where retried jobs had a null filename for part of processing

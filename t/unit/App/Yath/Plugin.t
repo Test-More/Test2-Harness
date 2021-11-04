@@ -7,6 +7,7 @@ is([$CLASS->finish], [], "finish returns an empty list in list context");
 is($CLASS->finish, undef, "finish returns undef in scalar context");
 
 ok(!$CLASS->can('sort_files'), "sort_files is not defined by default");
+ok(!$CLASS->can('sort_files_2'), "sort_files_2 is not defined by default");
 ok(!$CLASS->can('handle_event'), "handle_event is not defined by default");
 
 done_testing;

@@ -476,8 +476,12 @@ sub populate_queue {
     my @files = @{$finder->find_files($plugins, $self->settings)};
 
     for my $plugin (@$plugins) {
-        next unless $plugin->can('sort_files');
-        @files = $plugin->sort_files(@files);
+        if ($plugin->can('sort_files_2')) {
+            @files = $plugin->sort_files_2(settings => $settings, files => \@files);
+        }
+        elsif ($plugin->can('sort_files')) {
+            @files = $plugin->sort_files(@files);
+        }
     }
 
     my $job_count = 0;

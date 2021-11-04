@@ -60,12 +60,14 @@ sub changed_files {
     );
 }
 
-sub sort_files {
+sub sort_files_2 {
     my $self = shift;
+    my %params = @_;
 
     die "self is not an instance! ($self)" unless blessed($self);
 
-    my (@files) = @_;
+    my $settings = $params{settings} or die "NO SETTINGS!";
+    my $files = $params{files};
 
     my %rank = (
         test => 1,
@@ -75,13 +77,13 @@ sub sort_files {
         d    => 5,
     );
 
-    @files = sort {
+    my @files = sort {
         my $an = $a->file;
         my $bn = $b->file;
         $an =~ s/^.*\W(\w+)\.tx$/$1/;
         $bn =~ s/^.*\W(\w+)\.tx$/$1/;
         $rank{$an} <=> $rank{$bn};
-    } @files;
+    } @$files;
 
     return @files;
 };

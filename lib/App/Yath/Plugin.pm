@@ -9,6 +9,7 @@ use parent 'Test2::Harness::Plugin';
 # We do not want this defined by default, but it should be documented
 #sub handle_event {}
 #sub sort_files {}
+#sub sort_files_2 {}
 
 sub finish {}
 
@@ -77,7 +78,22 @@ Called for every single event that yath sees. Note that this method is not
 defined by default for performance reasons, however it will be called if you
 define it.
 
+=item @sorted = $plugin->sort_files_2(settings => $settings, files => \@unsorted)
+
+This gives your plugin a chance to sort the files before they are added to the
+queue. Other things are done later to re-order the files optimally based on
+length or category, so this sort is just for initial job numbering, and to
+define a base order before optimization takes place.
+
+All files to sort will be instances of L<Test2::Harness::TestFile>.
+
+This method is normally left undefined, but will be called if you define it.
+
+If this is present then C<sort_files()> will be ignored.
+
 =item @sorted = $plugin->sort_files(@unsorted)
+
+B<DEPRECATED> Use C<sort_files_2()> instead.
 
 This gives your plugin a chance to sort the files before they are added to the
 queue. Other things are done later to re-order the files optimally based on

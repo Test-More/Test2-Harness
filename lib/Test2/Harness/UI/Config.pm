@@ -2,7 +2,7 @@ package Test2::Harness::UI::Config;
 use strict;
 use warnings;
 
-our $VERSION = '0.000096';
+our $VERSION = '0.000097';
 
 use Test2::Util qw/get_tid pkg_to_file/;
 

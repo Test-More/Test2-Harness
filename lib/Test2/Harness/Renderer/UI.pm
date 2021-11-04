@@ -21,7 +21,7 @@ use Plack::Runner;
 
 use Net::Domain qw/hostfqdn/;
 
-our $VERSION = '0.000096';
+our $VERSION = '0.000097';
 
 use parent 'Test2::Harness::Renderer::UIDB';
 use Test2::Harness::Util::HashBase qw{

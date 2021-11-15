@@ -6,6 +6,8 @@ our $VERSION = '1.000081';
 
 use File::Spec();
 
+use Errno qw/EMFILE ENFILE/;
+
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use List::Util qw/first/;
@@ -44,6 +46,8 @@ use Test2::Harness::Util::HashBase qw{
     -pet_file -pet_buffer -pet_done
 
     -last_stamp
+
+    -open_errors -open_error_seen
 };
 
 sub init {
@@ -73,6 +77,8 @@ sub poll {
     my ($max) = @_;
 
     $self->_fill_buffers($max);
+
+    return if $self->{+OPEN_ERRORS};
 
     my (@out, @new);
 
@@ -371,11 +377,12 @@ sub _open_file {
     my $path = File::Spec->catfile($self->{+JOB_ROOT}, $file);
     my $out;
 
-    return $self->{$key} = $type->new(name => $path)
-        unless ref $type;
+    if (ref $type) {
+        return undef unless -e $path;
+        return $self->{$key} = $self->try_open($path => sub { $type->($path, '<') });
+    }
 
-    return undef unless -e $path;
-    return $self->{$key} = $type->($path, '<');
+    return $self->{$key} = $self->try_open($path => sub { $type->new(name => $path) });
 }
 
 sub _fill_stream_buffers {
@@ -390,6 +397,8 @@ sub _fill_stream_buffers {
 
     my $stdout_file = $self->{+STDOUT_FILE} || $self->_open_file('stdout');
     my $stderr_file = $self->{+STDERR_FILE} || $self->_open_file('stderr');
+
+    return unless $stdout_file && $stderr_file;
 
     my @sets = grep { defined $_->[0] } (
         [$stdout_file, $stdout_buff, 'io', 'STDOUT', $stdout_state],
@@ -474,16 +483,54 @@ sub events_files {
     my $dir = File::Spec->catdir($self->{+JOB_ROOT}, 'events');
     return unless -d $dir;
 
-    opendir(my $dh, $dir) or die "Could not open events dir: $!";
-    for my $file (readdir($dh)) {
-        next unless '.jsonl' eq substr($file, -6);
-        $files->{$file} ||= [
-            split(ipc_separator() => substr(substr($file, 6 + length(ipc_separator())), 0, -6)),
-            open_file(File::Spec->catfile($dir, $file), '<'),
-        ];
+    my $dh;
+    if ($self->try_open($dir => sub { opendir($dh, $dir) or die $! })) {
+        for my $file (readdir($dh)) {
+            next unless '.jsonl' eq substr($file, -6);
+
+            next if $files->{$file};
+
+            my $path = File::Spec->catfile($dir, $file);
+
+            next if $files->{$file};
+
+            my $fh = $self->try_open(
+                $path => sub { [
+                    split(ipc_separator() => substr(substr($file, 6 + length(ipc_separator())), 0, -6)),
+                    open_file($path, '<'),
+                ] }
+            );
+
+            $files->{$file} = $fh if $fh;
+        }
     }
 
     return map { [$_->[2] => $buff->{$_->[0]}->{$_->[1]} ||= [], 'jsonl'] } values %$files;
+}
+
+sub try_open {
+    my $self = shift;
+    my ($path, $callback) = @_;
+
+    local ($@, $?, $!);
+
+    my $out;
+    my $ok = eval {
+        $out = $callback->();
+        1;
+    };
+    my $errno = $!;
+    my $err = $@;
+
+    return $out if $ok;
+
+    die $@ unless $errno == ENFILE || $errno == EMFILE;
+
+    $self->{+OPEN_ERRORS}++;
+    warn "Could not open '$path', this is NOT FATAL as yath will try again. Errno is '$errno', Exception was: $err"
+        unless $self->{+OPEN_ERROR_SEEN}->{$path}++;
+
+    return undef;
 }
 
 sub _fill_buffers {
@@ -501,6 +548,8 @@ sub _fill_buffers {
 
     # Wait for the directory
     return unless -d $self->{+JOB_ROOT};
+
+    $self->{+OPEN_ERRORS} = 0;
 
     $self->_fill_stream_buffers($max);
 
@@ -521,8 +570,10 @@ sub _fill_buffers {
 
     return if $found_timeout;
 
+    return if $self->{+OPEN_ERRORS};
+
     my $ended = 0;
-    my $exit_file = $self->{+EXIT_FILE} || $self->_open_file('exit');
+    my $exit_file = $self->{+EXIT_FILE} || $self->_open_file('exit') || return;
 
     if ($exit_file->exists) {
         my $line = $exit_file->read_line;

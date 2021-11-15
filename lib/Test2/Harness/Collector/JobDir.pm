@@ -105,6 +105,7 @@ sub poll {
         # Micro-optimization, 'exit' only ever has 1 thing, so do
         # not enter the subs if we do not need to.
         push @new => $self->_poll_exit($check->() // last) if !@new && defined $self->{+_EXIT_BUFFER};
+            # We need to check if the runner exited BEFORE trying to check the exit value.
 
         last unless @new;
 
@@ -573,7 +574,11 @@ sub _fill_buffers {
     return if $self->{+OPEN_ERRORS};
 
     my $ended = 0;
+
+    # We need to check if the runner exited BEFORE trying to check the exit value.
+    my $runner_exited = $self->{+RUNNER_PID} && !kill(0, $self->{+RUNNER_PID});
     my $exit_file = $self->{+EXIT_FILE} || $self->_open_file('exit') || return;
+    return if $self->{+OPEN_ERRORS};
 
     if ($exit_file->exists) {
         my $line = $exit_file->read_line;
@@ -583,7 +588,7 @@ sub _fill_buffers {
             $ended++;
         }
     }
-    elsif ($self->{+RUNNER_PID} && !kill(0, $self->{+RUNNER_PID})) {
+    elsif ($runner_exited) {
         $self->{+_EXIT_BUFFER} = '-1';
         $self->{+_EXIT_DONE}   = 1;
         $ended++;

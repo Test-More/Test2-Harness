@@ -73,7 +73,11 @@ sub process {
 
             $count += $e_count;
             next if $e_count;
-            my $done = $jdir->done or next;
+            my $done = $jdir->done;
+            unless ($done) {
+                $count++;
+                next;
+            }
 
             delete $jobs->{$job_try};
             unless ($self->settings->debug->keep_dirs) {

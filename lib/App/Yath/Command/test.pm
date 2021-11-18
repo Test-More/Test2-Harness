@@ -60,6 +60,7 @@ include_options(
     'App::Yath::Options::Run',
     'App::Yath::Options::Runner',
     'App::Yath::Options::Workspace',
+    'App::Yath::Options::Collector',
 );
 
 sub MAX_ATTACH() { 1_048_576 }

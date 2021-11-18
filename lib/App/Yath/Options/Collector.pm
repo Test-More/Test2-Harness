@@ -2,17 +2,16 @@ package App::Yath::Options::Collector;
 use strict;
 use warnings;
 
-our $VERSION = '1.000039';
+our $VERSION = '1.000082';
 
 use App::Yath::Options;
 
 option_group {prefix => 'collector', category => "Collector Options"} => sub {
     option max_open_jobs => (
         type => 's',
-        description => 'Maximum number of jobs a collector can process at a time, if more jobs are pending their output will be delayed until the earlier jobs have been processed. (Default: 300)',
-        default => 300,
-        long_examples  => [' 300'],
-        short_examples => [' 300'],
+        description => 'Maximum number of jobs a collector can process at a time, if more jobs are pending their output will be delayed until the earlier jobs have been processed. (Default: double the -j value)',
+        long_examples  => [' 18'],
+        short_examples => [' 18'],
     );
 
     option max_poll_events => (
@@ -22,7 +21,21 @@ option_group {prefix => 'collector', category => "Collector Options"} => sub {
         long_examples  => [' 1000'],
         short_examples => [' 1000'],
     );
+
+    post \&collector_post;
 };
+
+sub collector_post {
+    my %params   = @_;
+    my $settings = $params{settings};
+
+    unless ($settings->collector->max_open_jobs) {
+        my $j = $settings->runner->job_count;
+        my $max_open = 2 * $j;
+        $settings->collector->field(max_open_jobs => $max_open);
+    }
+}
+
 
 1;
 

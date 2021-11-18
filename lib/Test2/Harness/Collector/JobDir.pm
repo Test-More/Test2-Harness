@@ -76,9 +76,11 @@ sub poll {
     my $self = shift;
     my ($max) = @_;
 
+    delete $self->{+OPEN_ERRORS};
+
     $self->_fill_buffers($max);
 
-    return if $self->{+OPEN_ERRORS};
+    return @{delete $self->{+OPEN_ERRORS}} if $self->{+OPEN_ERRORS};
 
     my (@out, @new);
 
@@ -513,7 +515,7 @@ sub try_open {
     my $self = shift;
     my ($path, $callback) = @_;
 
-    local ($@, $?, $!);
+    local ($@, $?, $!, $.);
 
     my $out;
     my $ok = eval {
@@ -527,9 +529,24 @@ sub try_open {
 
     die $@ unless $errno == ENFILE || $errno == EMFILE;
 
-    $self->{+OPEN_ERRORS}++;
-    warn "Could not open '$path', this is NOT FATAL as yath will try again. Errno is '$errno', Exception was: $err"
-        unless $self->{+OPEN_ERROR_SEEN}->{$path}++;
+    my $errors = $self->{+OPEN_ERRORS} //= [];
+
+    unless ($self->{+OPEN_ERROR_SEEN}->{$path}++) {
+        push @$errors => Test2::Harness::Event->new(
+            stamp      => time,
+            job_id     => 0,
+            job_try    => undef,
+            event_id   => gen_uuid(),
+            run_id     => $self->{+RUN_ID},
+            facet_data => {
+                info => [{
+                    details   => "Could not open '$path', this is NOT FATAL as yath will try again. Errno is '$errno', Exception was: $err",
+                    tag       => 'INTERNAL',
+                    important => 1,
+                }],
+            }
+        );
+    }
 
     return undef;
 }
@@ -549,8 +566,6 @@ sub _fill_buffers {
 
     # Wait for the directory
     return unless -d $self->{+JOB_ROOT};
-
-    $self->{+OPEN_ERRORS} = 0;
 
     $self->_fill_stream_buffers($max);
 

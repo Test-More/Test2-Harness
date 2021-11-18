@@ -99,7 +99,11 @@ sub process {
                 my $err = $@;
                 unless ($ok) {
                     $count++;
-                    warn "NON-FATAL Error deleting job dir ($job_path): $@" unless $warning_seen{$job_path}++;;
+                    unless ($warning_seen{$job_path}++) {
+                        my $msg = "NON-FATAL Error deleting job dir ($job_path) will try again...: $err";
+                        my $e = $self->_harness_event(0, undef, time, info => [{details => $msg, tag => "INTERNAL", debug => 1, important => 1}]);
+                        $self->{+ACTION}->($e);
+                    }
                     next;
                 }
             }

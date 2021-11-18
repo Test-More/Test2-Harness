@@ -3,6 +3,7 @@
     - Make collector options configurable
     - Add collector option for max poll events
     - Add collector option for max open jobs
+    - Turn warnings about too many open files into proper events
 
 1.000081  2021-11-15 13:27:48-08:00 America/Los_Angeles
 

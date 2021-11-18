@@ -52,6 +52,7 @@ sub init {
 sub process {
     my $self = shift;
 
+    my %warning_seen;
     while (1) {
         my $count = 0;
         $count += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
@@ -79,16 +80,25 @@ sub process {
                 next;
             }
 
-            delete $jobs->{$job_try};
             unless ($self->settings->debug->keep_dirs) {
                 my $job_path = $jdir->job_root;
                 # Needed because we set the perms so that a tmpdir under it can be used.
                 # This is the only remove_tree that needs it because it is the
                 # only one in a process that did not initially create the dir.
-                chmod(0700, $job_path);
-                remove_tree($job_path, {safe => 1, keep_root => 0});
+                my $ok = eval {
+                    chmod(0700, $job_path);
+                    remove_tree($job_path, {safe => 1, keep_root => 0});
+                    1;
+                };
+                my $err = $@;
+                unless ($ok) {
+                    $count++;
+                    warn "NON-FATAL Error deleting job dir ($job_path): $@" unless $warning_seen{$job_path}++;;
+                    next;
+                }
             }
 
+            delete $jobs->{$job_try};
             delete $self->{+PENDING}->{$jdir->job_id} unless $done->{retry};
         }
 

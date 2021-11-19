@@ -9,6 +9,12 @@ use Test2::Harness::UI::Util::HashBase qw{
     <interval
 };
 
+my @TABLES = qw{
+    api_keys coverage coverage_manager email email_verification_codes events
+    job_fields jobs log_files permissions primary_email projects run_fields
+    runs session_hosts sessions source_files source_subs test_files users
+};
+
 sub sweep {
     my $self = shift;
     my %params = @_;
@@ -83,10 +89,12 @@ sub sweep {
 
     if ($db_type =~ m/mysql/i) {
         my $dbh = $self->config->schema->storage->dbh;
-        $dbh->do('ANALYZE TABLE runs, run_fields, jobs, job_fields, events');
+        $dbh->do('ANALYZE TABLE ' . join ', ' => @TABLES);
     }
 
     return \%counts;
 }
 
 1;
+
+

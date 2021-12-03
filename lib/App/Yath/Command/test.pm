@@ -721,6 +721,12 @@ sub start_collector {
     my ($rh, $wh);
     pipe($rh, $wh) or die "Could not create pipe";
 
+    my %options = (show_runner_output => 1);
+    if ($settings->check_prefix('display')) {
+        $options{show_runner_output}     = $settings->display->hide_runner_output ? 0 : 1;
+        $options{truncate_runner_output} = $settings->display->truncate_runner_output;
+    }
+
     my $ipc = $self->ipc;
     $ipc->spawn(
         stdout      => $self->collector_writer,
@@ -732,7 +738,7 @@ sub start_collector {
             '--no-scan-plugins',    # Do not preload any plugin modules
             collector => 'Test2::Harness::Collector',
             $dir, $run->run_id, $runner_pid,
-            show_runner_output => 1,
+            %options,
         ],
     );
 

@@ -39,6 +39,16 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
         description => 'Show the timing data for each job',
     );
 
+    option hide_runner_output => (
+        description => 'Hide output from the runner, showing only test output. (See Also truncate_runner_output)',
+        default     => 0,
+    );
+
+    option truncate_runner_output => (
+        description => 'Only show runner output that was generated after the current command. This is only useful with a persistent runner.',
+        default     => 0,
+    );
+
     option term_width => (
         type          => 's',
         alt           => ['term-size'],

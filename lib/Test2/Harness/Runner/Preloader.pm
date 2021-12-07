@@ -243,6 +243,40 @@ sub can_reload {
     return 1;
 }
 
+sub find_churn {
+    my $self = shift;
+    my ($file) = @_;
+
+    open(my $fh, '<', $file) or die "Could not open file '$file': $!";
+
+    my $active = 0;
+    my @out;
+
+    my $line_no = 0;
+    while (my $line = <$fh>) {
+        $line_no++;
+
+        if ($active) {
+            if ($line =~ m/^\s*#\s*HARNESS-CHURN-STOP\s*$/) {
+                push @{$out[-1]} => $line_no;
+                $active = 0;
+                next;
+            }
+            else {
+                $out[-1][-1] .= $line;
+                next;
+            }
+        }
+
+        if ($line =~ m/^\s*#\s*HARNESS-CHURN-START\s*$/) {
+            $active = 1;
+            push @out => [$line_no, ''];
+        }
+    }
+
+    return @out;
+}
+
 sub check {
     my $self = shift;
 
@@ -267,6 +301,23 @@ sub check {
 
         unless ($self->{+RELOAD}) {
             push @todo => [$mod, $file];
+            next;
+        }
+
+        if (my @churn = $self->find_churn($file)) {
+            print "$$ $0 - Changed file '$file' contains churn sections, running them instead of a full reload...\n";
+
+            for my $churn (@churn) {
+                my ($start, $code, $end) = @$churn;
+                my $sline = $start + 1;
+                if (eval "package $mod;\nuse strict;\nuse warnings;\nno warnings 'redefine';\n#line $sline $file\n$code\n ;1;") {
+                    print "$$ $0 - Success reloading churn block ($file lines $start -> $end)\n";
+                }
+                else {
+                    print "$$ $0 - Error reloading churn block ($file lines $start -> $end): $@\n";
+                }
+            }
+
             next;
         }
 

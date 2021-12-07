@@ -326,6 +326,60 @@ do regular modules. Yath will know the difference and act accordingly.
         ...
     };
 
+=head2 HARNESS DIRECTIVES IN PRELOADS
+
+If you use a staged preload, and the --reload option, you can add 'CHURN'
+directives to files in order to only reload sections you are working on. This
+is particularly useful when a file cannot be reloaded in full, or when doing so
+is expensive. You can wrap subroutines in the churn directives to have yath
+reload only those subroutines.
+
+    sub do_not_reload_this { ... {
+
+    # HARNESS-CHURN-START
+
+    sub reload_this_one {
+        ...
+    }
+
+    sub reload_this_one_too {
+        ...
+    }
+
+    # HARNESS-CHURN-STOP
+
+    sub this_is_not_reloaded { ... }
+
+You can put as many churn sections you want in as many preloaded modules as you
+want. If a change is detected then only the churn sections will be reloaded.
+The churn sections are reloaded by taking the source between the start and stop
+markers, and running them in an eval like this:
+
+    eval <<EOT
+    package MODULE_FROM_FILENAME;
+    use strict;
+    use warnings;
+    no warnings 'redefine';
+    #line $line_number $file
+    $YOUR_CODE
+    ;1;
+    EOT
+
+In most cases this is sufficient to replace the old sub with the new one. If
+the automatically determined package is not correct you can add a C<package
+FOO;> statement inside the markers. If the strict/warnings settings are not to
+your specifications you can add overrides inside the markers. Any valid perl
+code can go into the markers.
+
+B<CAVEATS:> Be aware they do not have their original scope, and that can lead
+to problems if you are not paying attention. Variables outside your markers are
+not accessible, and lexical variables put inside your markers will be "new" on
+each reload, this can cause confusion if you have lexicals used by multiple
+subs where some are inside churn blocks and others are not, so best not to do
+that. Package variables work a bit better, but any assignment lines are re-run.
+So C<our $FOO;> is fine (it does not change the value if it is set) but
+C<our $FOO = ...> will reset the var on each reload.
+
 =head1 EXPORTS
 
 =over 4

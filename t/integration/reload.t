@@ -25,7 +25,7 @@ mkdir("$tmpdir/Preload") or die "($tmpdir/Preload) $!";
 sub touch_files {
     note "About to touch files with a delay between each, this will take a while";
 
-    for my $file (qw/A B A B ExceptionA ExceptionB WarningA WarningB ExporterA ExporterB IncChange/) {
+    for my $file (qw/A B A B ExceptionA ExceptionB WarningA WarningB ExporterA ExporterB IncChange Churn/) {
         my $path = "$dir/lib/Preload/${file}.pm";
         note "Touching $file...";
         sleep 2;
@@ -59,8 +59,9 @@ sub parse_output {
 
     my %by_proc;
     for my $line (split /\n/, $output) {
-        next unless $line =~ m/^\s*\d+ yath-nested-runner(?:-(\S+))? - (.+)$/;
-        my ($proc, $text) = ($1, $2);
+        next unless $line =~ m/^\s*(\d+) yath-nested-runner(?:-(\S+))? - (.+)$/;
+        my ($pid, $proc, $text) = ($1, $2, $3);
+        $text =~ s/$pid yath-nested-runner-$proc(\s*-\s*)//g;
         $text =~ s{(\Q$fqdir\E|\Q$dir\E|\Q$pdir\E)/*}{}g;
         $text =~ s{\Q$tmpdir\E(/)?}{TEMP$1}g;
         $text =~ s{ line \d+.*$}{}g;
@@ -89,8 +90,9 @@ subtest no_in_place => sub {
         test    => sub {
             my $out = shift;
 
+            my $parsed = parse_output($out->{output});
             is(
-                parse_output($out->{output}),
+                $parsed,
                 {
                     'default' => [
                         'Loaded Preload',
@@ -100,20 +102,42 @@ subtest no_in_place => sub {
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExceptionA',
                         'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'blacklisting changed files and reloading stage...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExceptionA',
                         'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'blacklisting changed files and reloading stage...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'blacklisting changed files and reloading stage...',
                         'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'blacklisting changed files and reloading stage...',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
+                        'Runner detected a change in one or more preloaded modules...',
+                        'blacklisting changed files and reloading stage...'
                     ],
                     'B' => [
                         'Loaded Preload::A',
@@ -208,8 +232,9 @@ subtest in_place => sub {
         test    => sub {
             my $out = shift;
 
+            my $parsed = parse_output($out->{output});
             is(
-                parse_output($out->{output}),
+                $parsed,
                 {
                     'default' => [
                         'Loaded Preload',
@@ -219,6 +244,10 @@ subtest in_place => sub {
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExceptionA',
                         'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Attempting to reload \'lib/Preload/A.pm\' in place...',
                         'Loaded Preload::A',
@@ -236,6 +265,10 @@ subtest in_place => sub {
                         'Loaded Preload::A',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Attempting to reload \'lib/Preload/WarningA.pm\' in place...',
                         'Loaded Preload::WarningA',
@@ -244,10 +277,26 @@ subtest in_place => sub {
                         'blacklisting changed files and reloading stage...',
                         'Loaded Preload::A',
                         'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Changed file \'lib/Preload/ExporterA.pm\' cannot be reloaded in place...',
                         'blacklisting changed files and reloading stage...',
                         'Loaded Preload::A',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Changed file \'lib/Preload/Churn.pm\' contains churn sections, running them instead of a full reload...',
+                        'Churn 1',
+                        'FOO: foo 2',
+                        'Success reloading churn block (lib/Preload/Churn.pm lines 8 -> 16)',
+                        'Churn 2',
+                        'Success reloading churn block (lib/Preload/Churn.pm lines 18 -> 20)',
+                        'Error reloading churn block (lib/Preload/Churn.pm lines 22 -> 28): Died on count 3'
                     ],
                     'B' => [
                         'Loaded Preload::A',

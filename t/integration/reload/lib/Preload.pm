@@ -13,6 +13,7 @@ stage A => sub {
     preload 'Preload::WarningA';
     preload 'Preload::ExceptionA';
     preload 'Preload::ExporterA';
+    preload 'Preload::Churn';
 };
 
 stage B => sub {

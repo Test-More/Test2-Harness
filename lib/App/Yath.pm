@@ -213,7 +213,11 @@ sub _command_from_argv {
             return 'help';
         }
 
-        last if $arg eq 'do';
+        if ($arg eq 'do') {
+            splice(@$argv, $idx, 1);
+            last;
+        }
+
         last if $arg eq '::';
         next if $arg =~ /^-/;
 

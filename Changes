@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Make 'do' actually work
+
 1.000084  2021-12-06 15:59:23-08:00 America/Los_Angeles
 
     - Add 'do' command that has the magic of picking run or test as needed

@@ -24,7 +24,9 @@ sub run {
     my $self = shift;
     my ($collector_class, $dir, $run_id, $runner_pid, %args) = @{$self->{+ARGS}};
 
-    $0 = 'yath-collector';
+    my $name = 'yath-collector';
+    $name = "$args{procname_prefix}-${name}" if $args{procname_prefix};
+    $0 = $name;
 
     my $fh = isolate_stdout();
 

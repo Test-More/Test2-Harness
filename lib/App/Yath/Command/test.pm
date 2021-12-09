@@ -704,6 +704,7 @@ sub start_auditor {
             '--no-scan-plugins',    # Do not preload any plugin modules
             auditor => 'Test2::Harness::Auditor',
             $run->run_id,
+            procname_prefix => $settings->debug->procname_prefix,
         ],
     );
 

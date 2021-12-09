@@ -25,7 +25,9 @@ sub run {
     my $self = shift;
     my ($auditor_class, $run_id, %args) = @{$self->{+ARGS}};
 
-    $0 = 'yath-auditor';
+    my $name = 'yath-auditor';
+    $name = "$args{procname_prefix}-${name}" if $args{procname_prefix};
+    $0 = $name;
 
     my $fh = isolate_stdout();
 

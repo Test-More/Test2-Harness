@@ -112,9 +112,11 @@ sub generate_run_sub {
     my ($symbol, $argv, $spawn_settings) = @_;
     my ($dir, %args) = @$argv;
 
-    $0 = $ENV{NESTED_YATH} ? 'yath-nested-runner' : 'yath-runner';
-
     my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+
+    my $name = $ENV{NESTED_YATH} ? 'yath-nested-runner' : 'yath-runner';
+    $name = $settings->debug->procname_prefix . "-${name}" if $settings->debug->procname_prefix;
+    $0 = $name;
 
     my $cleanup = $class->cleanup($settings, \%args, $dir);
 

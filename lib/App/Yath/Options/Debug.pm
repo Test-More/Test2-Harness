@@ -26,6 +26,12 @@ option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
         default        => 0,
     );
 
+    option procname_prefix => (
+        type => 's',
+        default => '',
+        description => 'Add a prefix to all proc names (as seen by ps).',
+    );
+
     option keep_dirs => (
         short       => 'k',
         alt         => ['keep_dir'],

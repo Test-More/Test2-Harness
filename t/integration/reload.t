@@ -61,6 +61,7 @@ sub parse_output {
     for my $line (split /\n/, $output) {
         next unless $line =~ m/^\s*(\d+) yath-nested-runner(?:-(\S+))? - (.+)$/;
         my ($pid, $proc, $text) = ($1, $2, $3);
+        $proc //= '';
         $text =~ s/$pid yath-nested-runner-$proc(\s*-\s*)//g;
         $text =~ s{(\Q$fqdir\E|\Q$dir\E|\Q$pdir\E)/*}{}g;
         $text =~ s{\Q$tmpdir\E(/)?}{TEMP$1}g;

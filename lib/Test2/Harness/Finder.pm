@@ -238,7 +238,17 @@ sub add_changed_to_search {
         next if $seen1{$p}++;
         next unless $p;
         next unless $p->can('get_coverage_tests');
-        push @add => grep { !$seen2{$_}++ } $p->get_coverage_tests($settings, \%changed_map);
+
+        for my $set ($p->get_coverage_tests($settings, \%changed_map)) {
+            my $test = ref($set) ? $set->[0] : $set;
+            next if $seen2{$test}++;
+            unless (-e $test) {
+                print STDERR "Coverage wants to run test '$test', but it does not exist, skipping...\n";
+                next;
+            }
+
+            push @add => $set;
+        }
     }
 
     if ($self->{+SHOW_CHANGED_FILES} && @add) {

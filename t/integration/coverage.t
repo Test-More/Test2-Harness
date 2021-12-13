@@ -298,4 +298,48 @@ yath(
     },
 );
 
+# Add some tests that do not exist, coverage testing shoudl warn and should skip them.
+$coverage->{testmeta}->{'t/integration/coverage/mia1.tx'} = $coverage->{testmeta}->{'t/integration/coverage/a.tx'};
+$coverage->{testmeta}->{'t/integration/coverage/mia2.tx'} = $coverage->{testmeta}->{'t/integration/coverage/b.tx'};
+
+$coverage->{files}->{'Ax.pm'}->{'*'}->{'t/integration/coverage/mia1.tx'} = ['*'];
+$coverage->{files}->{'Ax.pm'}->{'*'}->{'t/integration/coverage/mia2.tx'} = ['*'];
+
+open($fh, '>', $cfile) or die "Could not open file: $!";
+my $njson = encode_json($coverage);
+print $fh $njson;
+close($fh);
+
+yath(
+    command => 'test',
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', "--cover-from=$cfile", '--plugin' => '+Plugin', '--changed-only', '-v'],
+    exit    => 0,
+    env     => {TEST_CASE => 'Ax'},
+    test    => sub {
+        my $out   = shift;
+        my $input = +{$out->{output} =~ m/INPUT (\S+): (\{.+\})$/gm};
+        $_ = decode_json($_) for values %$input;
+        is(
+            $input,
+            {
+                't/integration/coverage/a.tx' => {env => {COVER_TEST_SUBTESTS => 'a, b, c'}, stdin => "a\nb\nc\n", argv => ['a', 'b', 'c']},
+                't/integration/coverage/c.tx' => {env => {COVER_TEST_SUBTESTS => 'a, c'},    stdin => "a\nc\n",    argv => ['a', 'c']},
+            },
+            "Test got the correct input about what subtests to run",
+        );
+
+        like(
+            $out->{output},
+            qr{Coverage wants to run test 't/integration/coverage/mia1\.tx', but it does not exist, skipping\.\.\.},
+            "Skipped mia1 because it does not exist",
+        );
+
+        like(
+            $out->{output},
+            qr{Coverage wants to run test 't/integration/coverage/mia2\.tx', but it does not exist, skipping\.\.\.},
+            "Skipped mia2 because it does not exist",
+        );
+    },
+);
+
 done_testing;

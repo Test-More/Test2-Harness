@@ -53,6 +53,17 @@ sub finalize_plugins {}
 sub monitor_preloads { 1 }
 sub job_count { 1 }
 
+#sub render {
+#    my $self = shift;
+#
+#    local $SIG{INT} = sub {
+#        print "Canceling testing...\n";
+#        $self->state->halt_run($self->run->run_id);
+#    };
+#
+#    return $self->SUPER::render(@_);
+#}
+
 sub pfile {
     my $self = shift;
     $self->{+PFILE} //= find_pfile($self->settings) or die "No persistent harness was found for the current path.\n";

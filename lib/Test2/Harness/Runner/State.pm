@@ -124,6 +124,7 @@ my %ACTIONS = (
     stage_down  => '_stage_down',
     end_queue   => '_end_queue',
     halt_run    => '_halt_run',
+    truncate    => '_truncate',
 );
 
 sub poll {
@@ -137,10 +138,11 @@ sub poll {
         my $data   = $item->[-1];
         my $item   = $data->{item};
         my $action = $data->{action};
+        my $pid    = $data->{pid};
 
         my $sub = $ACTIONS{$action} or die "Invalid action '$action'";
 
-        $self->$sub($item);
+        $self->$sub($item, $pid);
     }
 }
 
@@ -151,6 +153,15 @@ sub _enqueue {
     $self->poll;
 }
 
+sub truncate {
+    my $self = shift;
+    $self->halt_run($_) for keys %{$self->{+PENDING_TASKS} // {}};
+    $self->_enqueue(truncate => $$);
+    $self->poll;
+}
+
+sub _truncate { }
+
 sub end_queue  { $_[0]->_enqueue('end_queue' => 1) }
 sub _end_queue { $_[0]->{+QUEUE_ENDED} = 1 }
 
@@ -158,6 +169,14 @@ sub halt_run {
     my $self = shift;
     my ($run_id) = @_;
     $self->_enqueue(halt_run => $run_id);
+
+    my $dir = File::Spec->catdir($self->{+WORKDIR}, $run_id);
+    my $file = File::Spec->catfile($dir, 'jobs.jsonl');
+
+    if (-f $file) {
+        my $queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'jobs.jsonl'));
+        $queue->end;
+    }
 }
 
 sub _halt_run {
@@ -386,9 +405,9 @@ sub stage_ready {
 
 sub _stage_ready {
     my $self = shift;
-    my ($stage) = @_;
+    my ($stage, $pid) = @_;
 
-    $self->{+STAGE_READINESS}->{$stage} = 1;
+    $self->{+STAGE_READINESS}->{$stage} = $pid // 1;
 
     return;
 }
@@ -417,6 +436,7 @@ sub task_stage {
 
     return $wants if $self->{+NO_POLL};
 
+    return $wants // 'DEFAULT' unless $self->preloader;
     return $self->preloader->task_stage($task->{file}, $wants);
 }
 

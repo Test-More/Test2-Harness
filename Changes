@@ -1,5 +1,12 @@
 {{$NEXT}}
 
+    - Add several commands for managing persisten runners
+        - yath kill     - Kill the runner and all tests (stop NOW)
+        - yath ps       - Show running yath process list
+        - yath status   - Show processes and health status
+        - yath abort    - Cancel any running or queued test, but do not kill runner
+    - Control+C in `yath run` does a better job of cleaning up
+
 1.000088  2021-12-13 11:29:24-08:00 America/Los_Angeles
 
     - Skip tests that do not exists when running coverage tests

@@ -31,7 +31,7 @@ use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/
     <runner_pid +ipc +signal
 
-    +run
+    +run <run_id
 
     +auditor_reader
     +collector_writer
@@ -372,6 +372,29 @@ sub render {
     }
 }
 
+sub get_job_pid {
+    my $self = shift;
+    my ($run_id, $job_id) = @_;
+
+    return undef unless $run_id && $job_id;
+
+    my $run_dir = File::Spec->catdir($self->workdir, $run_id);
+    my $jobs_file = File::Spec->catfile($run_dir, 'jobs.jsonl');
+
+    return undef unless -f $jobs_file;
+    my $queue = Test2::Harness::Util::Queue->new(file => $jobs_file);
+
+    my $found;
+    for my $item ($queue->poll) {
+        my $task = $item->[-1];
+        next unless $task->{job_id} && $task->{job_id} eq $job_id;
+        $found = $task;
+    }
+
+    return undef unless $found;
+
+    return $found->{pid} // undef;
+}
 
 sub stop {
     my $self = shift;
@@ -390,6 +413,23 @@ sub stop {
 
     my $ipc = $self->ipc;
     print STDERR "Waiting for child processes to exit...\n" if $self->{+SIGNAL};
+
+    if ($self->{+SIGNAL}) {
+        my $state = $self->state;
+        delete $state->{no_poll};
+        $state->poll;
+        my $running = $state->running_tasks;
+        $state->halt_run($self->{+RUN_ID});
+
+        for my $task (values %$running) {
+            next unless $task->{run_id} && $task->{run_id} eq $self->{+RUN_ID};
+            my $pid = $self->get_job_pid($task->{run_id}, $task->{job_id}) // next;
+            my $file = $task->{rel_file};
+            print "Killing test $pid - $file...\n";
+            kill('INT', $pid);
+        }
+    }
+
     $ipc->wait(all => 1);
     $ipc->stop;
 
@@ -465,6 +505,7 @@ sub populate_queue {
     my $self = shift;
 
     my $run = $self->build_run();
+    $self->{+RUN_ID} = $run->run_id;
     my $settings = $self->settings;
     my $finder = $settings->build(finder => $settings->finder->finder, $self->finder_args);
 

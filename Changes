@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix bug in status command when only 1 run is present
+
 1.000089  2021-12-14 12:12:05-08:00 America/Los_Angeles
 
     - Add several commands for managing persisten runners

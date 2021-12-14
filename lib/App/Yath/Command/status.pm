@@ -47,7 +47,7 @@ sub run {
 
     print "\n**** Pending tests: ****\n";
     my $pending = $state->pending_tasks;
-    for my $run ($state->run, @{$state->pending_runs}) {
+    for my $run ($state->run, @{$state->pending_runs // []}) {
         next unless $run;
         my $run_id =$run->{run_id} or next;
 

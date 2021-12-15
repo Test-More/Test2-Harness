@@ -214,7 +214,7 @@ sub start_stage {
 
     my $meth = $self->{+MONITOR} || $self->{+DTRACE} ? '_monitor_preload' : '_preload';
 
-    $self->$meth($preloads) if $preloads && @$preloads;
+    $self->$meth($preloads, $stage->watches) if $preloads && @$preloads;
 
     $self->_monitor() if $self->{+MONITOR};
 }
@@ -294,11 +294,18 @@ sub check {
 
     my $dtrace = $self->dtrace;
     $dtrace->start if $self->{+RELOAD};
+    my $callbacks = $dtrace->callbacks // {};
 
     for my $file (keys %$changed) {
-        my $rel = $CNI{$file};
-        my $mod = file2mod($rel);
+        if (my $cb = $callbacks->{$file}) {
+            my $rel = File::Spec->abs2rel($file);
+            print "$$ $0 - Changed file '$rel' has a reload callback, executing it instead of regular reloading...\n";
+            $cb->();
+            next;
+        }
 
+        my $rel = $CNI{$file} // $file;
+        my $mod = file2mod($rel);
         unless ($self->{+RELOAD}) {
             push @todo => [$mod, $file];
             next;
@@ -371,14 +378,12 @@ sub check {
         push @todo => [$mod, $file];
     }
 
-    if ($self->{+RELOAD}) {
-        $dtrace->stop;
+    $dtrace->stop if $self->{+RELOAD};
 
-        unless (@todo) {
-            delete $self->{+MONITORED};
-            $self->_monitor();
-            return 0;
-        }
+    unless (@todo) {
+        delete $self->{+MONITORED};
+        $self->_monitor();
+        return 0;
     }
 
     $self->{+CHANGED} = 1;
@@ -416,13 +421,14 @@ sub get_stage_callback {
 
 sub _monitor_preload {
     my $self = shift;
-    my ($preloads) = @_;
+    my ($preloads, $watch) = @_;
 
     my $block  = {%{$self->blacklist}};
     my $dtrace = $self->dtrace;
 
     $dtrace->start;
     $self->_preload($preloads, $block, $dtrace->my_require);
+    $dtrace->add_callbacks(%$watch) if $watch;
     $dtrace->stop;
 
     return;
@@ -550,7 +556,7 @@ sub _monitor_hardway {
     my $self = shift;
 
     my $dtrace = $self->dtrace;
-    my $stats  = $self->{+STATS} ||= {};
+    my $stats  = $self->{+STATS} = {};
 
     for my $file (keys %{$dtrace->loaded}) {
         $file = $INC{$file} || $file;

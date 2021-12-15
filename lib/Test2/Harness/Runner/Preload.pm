@@ -57,6 +57,21 @@ sub import {
         };
     }
 
+    $exports{watch} = sub {
+        if (@{$instance->stack}) {
+            my $stage = $instance->stack->[-1];
+            return $stage->watch(@_);
+        }
+
+        if ($INC{'Test2/Harness/Runner/DepTracer.pm'}) {
+            if (my $active = Test2::Harness::Runner::DepTracer->ACTIVE) {
+                return $active->add_callback(@_);
+            }
+        }
+
+        croak "No current stage, and no active deptracer";
+    };
+
     $exports{preload} = sub {
         croak "No current stage" unless @{$instance->stack};
         my $stage = $instance->stack->[-1];
@@ -291,6 +306,30 @@ do regular modules. Yath will know the difference and act accordingly.
         };
 
         preload 'Try::Tiny';
+
+        # Tell the runner to watch this file for changes, if it does change run
+        # the sub instead of the usual reload process. This lets you reload
+        # configs and other non-perl files, or allows you to use a custom
+        # reload sub for perl files.
+        watch 'path/to/file' => sub { ... };
+
+        # You can also use watch inside preload subs:
+        preload sub {
+            watch 'path/to/file' => sub { ... };
+        };
+
+        # In app code you can add watches dynamically when applicable:
+        preload sub {
+            ... # inside app code
+
+            if ($INC{'Test2/Harness/Runner/DepTracer.pm'}) {
+                if (my $active = Test2::Harness::Runner::DepTracer->ACTIVE) {
+                    $active->add_callback('path/to/file' => sub { ... });
+                }
+            }
+
+            ...
+        };
 
         # Eager means tests from nested stages can be run in this stage as
         # well, this is useful if the nested stage takes a long time to load as

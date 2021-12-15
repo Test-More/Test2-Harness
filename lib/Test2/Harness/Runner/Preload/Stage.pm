@@ -14,6 +14,7 @@ use Test2::Harness::Util::HashBase qw{
     <post_fork_callbacks
     <pre_launch_callbacks
     <load_sequence
+    <watches
     eager
     reload_remove_check
     reload_inplace_check
@@ -36,6 +37,18 @@ sub init {
     $self->{+PRE_LAUNCH_CALLBACKS} //= [];
 
     $self->{+LOAD_SEQUENCE} //= [];
+    $self->{+WATCHES} //= {};
+}
+
+sub watch {
+    my $self = shift;
+    my ($file, $callback) = @_;
+    croak "The first argument must be a file" unless $file && -f $file;
+    croak "The callback argument is required" unless $callback && ref($callback) eq 'CODE';
+    croak "There is already a watch on file '$file'" if $self->{+WATCHES}->{$file};
+
+    $self->{+WATCHES}->{$file} = $callback;
+    return;
 }
 
 sub all_children {

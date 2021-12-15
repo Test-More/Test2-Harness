@@ -6,8 +6,19 @@ use Test2::Harness::Runner::Preload;
 
 print "$$ $0 - Loaded ${ \__PACKAGE__ }\n";
 
+my $path = __FILE__;
+$path =~ s{\.pm$}{};
+use Data::Dumper;
+print Dumper($path);
+
 stage A => sub {
     default();
+
+    watch "$path/nonperl1" => sub { print "$$ $0 - RELOAD CALLBACK nonperl1\n" };
+
+    preload sub {
+        watch "$path/nonperl2" => sub { print "$$ $0 - RELOAD CALLBACK nonperl2\n" };
+    };
 
     preload 'Preload::A';
     preload 'Preload::WarningA';

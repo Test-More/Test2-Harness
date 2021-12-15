@@ -2,6 +2,8 @@ package Test2::Harness::Runner::DepTracer;
 use strict;
 use warnings;
 
+use Carp qw/croak/;
+
 our $VERSION = '1.000091';
 
 use Test2::Harness::Util::HashBase qw/
@@ -12,6 +14,7 @@ use Test2::Harness::Util::HashBase qw/
     -my_require
     -real_require
     -_my_inc
+    -callbacks
 /;
 
 my %DEFAULT_EXCLUDE = (
@@ -19,8 +22,16 @@ my %DEFAULT_EXCLUDE = (
     'strict.pm'   => 1,
 );
 
+my $ACTIVE;
+
+sub ACTIVE { $ACTIVE }
+
 sub start {
     my $self = shift;
+
+    croak "There is already an active DepTracer" if $ACTIVE;
+
+    $ACTIVE = $self;
 
     unshift @INC => $self->my_inc;
 
@@ -29,6 +40,10 @@ sub start {
 
 sub stop {
     my $self = shift;
+
+    croak "DepTracer is not active" unless $ACTIVE;
+    croak "Different DepTracer is active" unless "$ACTIVE" eq "$self";
+    $ACTIVE = undef;
 
     $self->{+_ON} = 0;
 
@@ -66,6 +81,22 @@ sub clear_loaded { %{$_[0]->{+LOADED}} = () }
 
 my %REQUIRE_CACHE;
 
+sub add_callbacks {
+    my $self = shift;
+    my %watch = @_;
+    for my $file (keys %watch) {
+        my $cb = $watch{$file};
+        $self->add_callback($file => $cb);
+    }
+}
+
+sub add_callback {
+    my $self = shift;
+    my ($file, $cb) = @_;
+    $self->{+LOADED}->{$file}++;
+    $self->{+CALLBACKS}->{$file} = $cb;
+}
+
 sub init {
     my $self = shift;
 
@@ -76,6 +107,7 @@ sub init {
     # being auto-vivified by the compiler.
     $self->{+REAL_REQUIRE} = exists $stash->{require} ? \&{'CORE::GLOBAL::require'} : undef;
 
+    $self->{+CALLBACKS} //= {};
     my $dep_map = $self->{+DEP_MAP} ||= {};
     my $loaded  = $self->{+LOADED} ||= {};
     my $inc = $self->my_inc;
@@ -161,6 +193,9 @@ they change under a preloaded runner.
 
     require Some::Thing;
 
+    # You can always check for and retrieve an active DepTrace this way:
+    my $dt_reference = Test2::Harness::Runner::DepTracer->ACTIVE;
+
     $dt->stop();
 
     my $dep_map = $dt->dep_map;
@@ -202,6 +237,16 @@ Start tracking modules which are loaded.
 =item $dt->stop
 
 Stop tracking moduels that are loaded.
+
+=back
+
+=head1 CLASS METHODS
+
+=over 4
+
+=item $dt_or_undef = Test2::Harness::Runner::DepTracer->ACTIVE();
+
+Get the currently active DepTracer, if any.
 
 =back
 

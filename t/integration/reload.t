@@ -25,8 +25,9 @@ mkdir("$tmpdir/Preload") or die "($tmpdir/Preload) $!";
 sub touch_files {
     note "About to touch files with a delay between each, this will take a while";
 
-    for my $file (qw/A B A B ExceptionA ExceptionB WarningA WarningB ExporterA ExporterB IncChange Churn/) {
-        my $path = "$dir/lib/Preload/${file}.pm";
+    for my $file (qw/A B A B ExceptionA ExceptionB WarningA WarningB ExporterA ExporterB IncChange Churn nonperl1 nonperl2/) {
+        my $path = "$dir/lib/Preload/${file}";
+        $path .= '.pm' unless $file =~ m/nonperl/;
         note "Touching $file...";
         sleep 2;
 
@@ -138,7 +139,13 @@ subtest no_in_place => sub {
                         'Churn 2',
                         'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
-                        'blacklisting changed files and reloading stage...'
+                        'blacklisting changed files and reloading stage...',
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Changed file \'lib/Preload/nonperl1\' has a reload callback, executing it instead of regular reloading...',
+                        'RELOAD CALLBACK nonperl1',
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Changed file \'lib/Preload/nonperl2\' has a reload callback, executing it instead of regular reloading...',
+                        'RELOAD CALLBACK nonperl2',
                     ],
                     'B' => [
                         'Loaded Preload::A',
@@ -297,7 +304,13 @@ subtest in_place => sub {
                         'Success reloading churn block (lib/Preload/Churn.pm lines 8 -> 16)',
                         'Churn 2',
                         'Success reloading churn block (lib/Preload/Churn.pm lines 18 -> 20)',
-                        'Error reloading churn block (lib/Preload/Churn.pm lines 22 -> 28): Died on count 3'
+                        'Error reloading churn block (lib/Preload/Churn.pm lines 22 -> 28): Died on count 3',
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Changed file \'lib/Preload/nonperl1\' has a reload callback, executing it instead of regular reloading...',
+                        'RELOAD CALLBACK nonperl1',
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Changed file \'lib/Preload/nonperl2\' has a reload callback, executing it instead of regular reloading...',
+                        'RELOAD CALLBACK nonperl2',
                     ],
                     'B' => [
                         'Loaded Preload::A',

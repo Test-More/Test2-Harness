@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add more reload capabilities (non-perl reloading, callbacks)
+
 1.000090  2021-12-14 12:43:11-08:00 America/Los_Angeles
 
     - Fix bug in status command when only 1 run is present

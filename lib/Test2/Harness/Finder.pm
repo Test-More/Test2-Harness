@@ -251,6 +251,12 @@ sub add_changed_to_search {
         }
     }
 
+    for my $p ($plugin, @$plugins) {
+        next unless $p;
+        next unless $p->can('post_process_coverage_tests');
+        $p->post_process_coverage_tests($settings, \@add);
+    }
+
     if ($self->{+SHOW_CHANGED_FILES} && @add) {
         print "Found " . scalar(@add) . " test files to run based on changed files.\n";
         print "  $_\n" for @add;

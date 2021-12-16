@@ -170,22 +170,8 @@ option_group {prefix => 'yathui-db', category => "YathUI Options"} => sub {
     );
 };
 
-my %CATEGORIES = (
-    '*'  => 'loads',
-    '<>' => 'opens',
-);
-sub get_coverage_tests {
+sub get_coverage_searches {
     my ($plugin, $settings, $changes) = @_;
-
-    my $ydb = $settings->prefix('yathui-db') or return;
-    return unless $ydb->coverage;
-
-    my $config  = config_from_settings($settings);
-    my $schema  = $config->schema;
-    my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
-    my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
-
-    my $run = $project->last_covered_run(user => $ydb->publisher) or return;
 
     my @searches;
     for my $source_file (keys %$changes) {
@@ -201,7 +187,31 @@ sub get_coverage_tests {
         push @searches => $search;
     }
 
-    my $coverages = $run->expanded_coverages({'-or' => \@searches});
+    return @searches;
+}
+
+sub get_coverage_rows {
+    my ($plugin, $settings, $changes) = @_;
+
+    my $ydb = $settings->prefix('yathui-db') or return;
+    return unless $ydb->coverage;
+
+    my $config  = config_from_settings($settings);
+    my $schema  = $config->schema;
+    my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
+    my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
+    my $run = $project->last_covered_run(user => $ydb->publisher) or return;
+
+    my @searches = $plugin->get_coverage_searches($settings, $changes);
+    return $run->expanded_coverages({'-or' => \@searches});
+}
+
+my %CATEGORIES = (
+    '*'  => 'loads',
+    '<>' => 'opens',
+);
+sub test_map_from_coverage_rows {
+    my ($plugin, $coverages) = @_;
 
     my %tests;
     while (my $cover = $coverages->next()) {
@@ -227,9 +237,28 @@ sub get_coverage_tests {
         }
     }
 
+    return \%tests;
+}
+
+sub get_coverage_tests {
+    my ($plugin, $settings, $changes) = @_;
+
+    my $ydb = $settings->prefix('yathui-db') or return;
+    return unless $ydb->coverage;
+
+    my $coverages = $plugin->get_coverage_rows($settings, $changes);
+
+    my $tests = $plugin->test_map_from_coverage_rows($coverages);
+
+    return $plugin->search_entries_from_test_map($tests);
+}
+
+sub search_entries_from_test_map {
+    my ($plugin, $tests) = @_;
+
     my @out;
-    for my $test (keys %tests) {
-        my $meta = $tests{$test};
+    for my $test (keys %$tests) {
+        my $meta = $tests->{$test};
         my $manager = $meta ? delete $meta->{manager} : undef;
 
         unless ($meta && $manager) {

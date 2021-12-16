@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000092  2021-12-16 10:39:37-08:00 America/Los_Angeles
+
     - Add plugin hook for post-processing of coverage data.
 
 1.000091  2021-12-15 12:09:09-08:00 America/Los_Angeles

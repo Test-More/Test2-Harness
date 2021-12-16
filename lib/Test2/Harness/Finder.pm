@@ -159,6 +159,90 @@ sub find_files {
     return $self->find_project_files($plugins, $settings, $self->search);
 }
 
+sub check_plugins {
+    my $self = shift;
+    my ($plugins, $settings) = @_;
+
+    my $check_plugins = $plugins;
+    my $plugin;
+    if (my $p = $self->{+CHANGES_PLUGIN}) {
+        $plugin = $p =~ s/^\+// ? $p : "App::Yath::Plugin::$p";
+        $check_plugins = [$plugin];
+    }
+
+    return $check_plugins // [];
+}
+
+sub get_diff {
+    my $self = shift;
+    my ($plugins, $settings) = @_;
+
+    return (file => $self->{+CHANGES_DIFF}) if $self->{+CHANGES_DIFF};
+
+    my $check_plugins = $self->check_plugins($plugins, $settings);
+
+    for my $plugin (@$check_plugins) {
+        if ($plugin->can('changed_diff')) {
+            my ($type, $data) = $plugin->changed_diff($settings);
+            next unless $type && $data;
+
+            return ($type => $data);
+        }
+    }
+
+    return ();
+}
+
+sub find_changes {
+    my $self = shift;
+    my ($plugins, $settings) = @_;
+
+    my @listed_changes = @{$self->{+CHANGED}} if $self->{+CHANGED};
+
+    my ($type, $diff) = $self->get_diff($plugins, $settings);
+
+    my (@found_changes);
+    if ($type && $diff) {
+        @found_changes = $self->changes_from_diff($type => $diff, $settings);
+    }
+
+    unless (@found_changes) {
+        my $check_plugins = $self->check_plugins($plugins, $settings);
+
+        for my $plugin (@$check_plugins) {
+            next unless $plugin->can('changed_files');
+
+            push @found_changes => $plugin->changed_files($settings);
+            last if @found_changes;
+        }
+    }
+
+    my $filter_patterns = @{$self->{+CHANGES_FILTER_PATTERN}} ? $self->{+CHANGES_FILTER_PATTERN} : undef;
+    my $filter_files    = @{$self->{+CHANGES_FILTER_FILE}} ? {map { $_ => 1 } @{$self->{+CHANGES_FILTER_FILE}}} : undef;
+
+    my %changed_map;
+    for my $change (@listed_changes, @found_changes) {
+        next unless $change;
+        my ($file, @parts) = ref($change) ? @$change : ($change);
+
+        next if $filter_files && !$filter_files->{$file};
+        next if $filter_patterns && !first { $file =~ m/$_/ } @$filter_patterns;
+
+        @parts = ('*') unless @parts;
+        $changed_map{$file}{$_} = 1 for @parts;
+    }
+
+    return \%changed_map;
+}
+
+sub get_capable_plugins {
+    my $self = shift;
+    my ($method, $plugins) = @_;
+
+    my %seen;
+    return grep { $_ && !$seen{$_}++ && $_->can($method) } @$plugins;
+}
+
 sub add_changed_to_search {
     my $self = shift;
     my ($plugins, $settings) = @_;
@@ -169,54 +253,8 @@ sub add_changed_to_search {
         $self->set_search($search);
     }
 
-    my @listed_changes = @{$self->{+CHANGED}} if $self->{+CHANGED};
-
-    my $check_plugins = $plugins;
-    my $plugin;
-    if (my $p = $self->{+CHANGES_PLUGIN}) {
-        $plugin = $p =~ s/^\+// ? $p : "App::Yath::Plugin::$p";
-        $check_plugins = [$plugin];
-    }
-
-    my (@diff_changes, @found_changes);
-    if (my $diff = $self->{+CHANGES_DIFF}) {
-        @found_changes = $self->_changes_from_diff(file => $diff, $settings);
-    }
-    else {
-        for my $plugin (@$check_plugins) {
-            if ($plugin->can('changed_diff')) {
-                my ($type, $data) = $plugin->changed_diff($settings);
-                next unless $type && $data;
-
-                @found_changes = $self->_changes_from_diff($type, $data, $settings);
-
-                # Only use a diff from the first plugin to have one.
-                last if @found_changes;
-            }
-            elsif ($plugin->can('changed_files')) {
-                push @found_changes => $plugin->changed_files($settings)
-            }
-        }
-    }
-
-    # listed changes always included, diff changes OR found changes, not both.
-    my @changed_list = (@listed_changes, @diff_changes ? @diff_changes : @found_changes);
-    my %changed_map;
-
-    my $filter_patterns = @{$self->{+CHANGES_FILTER_PATTERN}} ? $self->{+CHANGES_FILTER_PATTERN} : undef;
-    my $filter_files    = @{$self->{+CHANGES_FILTER_FILE}} ? {map { $_ => 1 } @{$self->{+CHANGES_FILTER_FILE}}} : undef;
-
-    for my $change (@changed_list) {
-        my ($file, @parts) = ref($change) ? @$change : ($change);
-
-        next if $filter_files && !$filter_files->{$file};
-        next if $filter_patterns && !first { $file =~ m/$_/ } @$filter_patterns;
-
-        @parts = ('*') unless @parts;
-        $changed_map{$file}{$_} = 1 for @parts;
-    }
-
-    my $found_changed = keys %changed_map;
+    my $changed_map = $self->find_changes($plugins, $settings);
+    my $found_changed = keys %$changed_map;
 
     die "Could not find any changed files.\n" if $self->{+CHANGED_ONLY} && !$found_changed;
 
@@ -227,21 +265,16 @@ sub add_changed_to_search {
 
     if ($self->{+SHOW_CHANGED_FILES} && $found_changed) {
         print "Found the following changed files:\n";
-        for my $file (keys %changed_map) {
-            print "  $file: ", join(", ", sort keys %{$changed_map{$file}}), "\n";
+        for my $file (keys %$changed_map) {
+            print "  $file: ", join(", ", sort keys %{$changed_map->{$file}}), "\n";
         }
     }
 
-    my (@add, %seen1, %seen2);
-    for my $p ($plugin, @$plugins) {
-        next unless $p;
-        next if $seen1{$p}++;
-        next unless $p;
-        next unless $p->can('get_coverage_tests');
-
-        for my $set ($p->get_coverage_tests($settings, \%changed_map)) {
+    my @add;
+    for my $p ($self->get_capable_plugins(get_coverage_tests => $plugins)) {
+        for my $set ($p->get_coverage_tests($settings, $changed_map)) {
             my $test = ref($set) ? $set->[0] : $set;
-            next if $seen2{$test}++;
+
             unless (-e $test) {
                 print STDERR "Coverage wants to run test '$test', but it does not exist, skipping...\n";
                 next;
@@ -251,15 +284,13 @@ sub add_changed_to_search {
         }
     }
 
-    for my $p ($plugin, @$plugins) {
-        next unless $p;
-        next unless $p->can('post_process_coverage_tests');
+    for my $p ($self->get_capable_plugins(post_process_coverage_tests => $plugins)) {
         $p->post_process_coverage_tests($settings, \@add);
     }
 
     if ($self->{+SHOW_CHANGED_FILES} && @add) {
         print "Found " . scalar(@add) . " test files to run based on changed files.\n";
-        print "  $_\n" for @add;
+        print ref($_) ? "  $_->[0]" : "  $_\n" for @add;
         print "\n";
     }
 
@@ -268,7 +299,7 @@ sub add_changed_to_search {
     return;
 }
 
-sub _changes_from_diff {
+sub changes_from_diff {
     my $self = shift;
     my ($type, $data, $settings) = @_;
 

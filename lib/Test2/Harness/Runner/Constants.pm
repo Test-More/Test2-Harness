@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Constants;
 use strict;
 use warnings;
 
-our $VERSION = '1.000092';
+our $VERSION = '1.000093';
 
 use Importer Importer => 'import';
 

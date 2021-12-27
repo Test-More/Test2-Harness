@@ -5,7 +5,6 @@
 # These will get re-processed later, but they MUST come even before App::Yath
 # is loaded.
 BEGIN {
-    local ($., $?, $@);
     return if $^C;
 
     package App::Yath::Script;

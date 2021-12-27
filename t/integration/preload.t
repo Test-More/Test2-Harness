@@ -51,6 +51,17 @@ yath(
     },
 );
 
+yath(
+    command => 'test',
+    args    => [$dir, '--ext=tx', '-A', '-PTestBadPreload' ],
+    exit    => T(),
+    test    => sub {
+        my $out = shift;
+
+        like($out->{output}, qr{Child stage 'BAD' did not exit cleanly}, "Reported the error");
+    },
+);
+
 unless ($ENV{AUTOMATED_TESTING}) {
     yath(
         command => 'start',

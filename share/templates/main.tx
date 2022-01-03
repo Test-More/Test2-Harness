@@ -63,6 +63,15 @@
                 <li class="split">&nbsp;</li>
                 <li><a href="<: $base_uri :>user">User Settings</a></li>
             : }
+
+            <li class="split">&nbsp;</li>
+            <li class="form">
+                <form action="<: $base_uri :>lookup">
+                    <label>UUID lookup: </label>
+                    <input id="lookup" name="lookup" type="text" />
+                    <input type="submit" value="Lookup">
+                </form>
+            </li>
         </ul>
 
         : if !$config.single_user {
@@ -75,6 +84,8 @@
             : }
             </div>
         : }
+
+
         <div id="progress_bar"></div>
     </div>
 </div>

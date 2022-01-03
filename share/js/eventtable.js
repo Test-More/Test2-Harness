@@ -11,7 +11,7 @@ t2hui.eventtable.build_controls = function(run, job) {
     var filter_dom = $('<ul class="event_filter"><li>Filter Tags:</li></ul>');
     controls.append(filter_dom);
 
-    if (!(job.status == 'running' || job.status == 'pending')) {
+    if (job && !(job.status == 'running' || job.status == 'pending')) {
         filters.hide = {
             'PASS': true,
             'PLAN': true,

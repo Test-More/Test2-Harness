@@ -137,6 +137,14 @@ div#header ul#nav_main li a {
     color: #000080;
 }
 
+div#header ul#nav_main li.form:hover {
+    border-bottom: none;
+}
+
+div#header ul#nav_main li form {
+    margin: 0;
+}
+
 div#content {
     padding-left: 0px;
     padding-right: 0px;

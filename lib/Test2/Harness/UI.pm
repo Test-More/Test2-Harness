@@ -22,6 +22,7 @@ use Test2::Harness::UI::Controller::Project;
 
 use Test2::Harness::UI::Controller::Stream;
 use Test2::Harness::UI::Controller::View;
+use Test2::Harness::UI::Controller::Lookup;
 
 use Test2::Harness::UI::Controller::Query;
 use Test2::Harness::UI::Controller::Events;
@@ -90,6 +91,10 @@ sub init {
     $router->connect('/failed/:project/:username/:idx' => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
 
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
+
+    $router->connect('/lookup'              => {controller => 'Test2::Harness::UI::Controller::Lookup'});
+    $router->connect('/lookup/:lookup'      => {controller => 'Test2::Harness::UI::Controller::Lookup'});
+    $router->connect('/lookup/data/:lookup' => {controller => 'Test2::Harness::UI::Controller::Lookup', data => 1});
 
     $router->connect('/view'                   => {controller => 'Test2::Harness::UI::Controller::View'});
     $router->connect('/view/:id'               => {controller => 'Test2::Harness::UI::Controller::View'});

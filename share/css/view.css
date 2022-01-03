@@ -2,6 +2,10 @@
     margin-bottom: 10px;
 }
 
+#run_list h3, #job_list h3, #event_list h3 {
+    padding-top: 20px;
+}
+
 .facet_time    {  color: #12539e; }
 .facet_about   {  color: #000000; }
 .facet_amnesty {  color: #0f6989; }

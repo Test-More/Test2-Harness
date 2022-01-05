@@ -151,8 +151,13 @@ sub find_files {
 
     $self->add_exclusions_from_lists() if $self->{+EXCLUDE_LISTS};
 
-    $self->add_changed_to_search($plugins, $settings)
-        if $self->{+CHANGED} || $self->{+CHANGED_ONLY} || $self->{+CHANGES_PLUGIN} || $self->{+CHANGES_DIFF};
+    my $add_changes = 0;
+    $add_changes ||= $self->{+CHANGED} && @{$self->{+CHANGED}};
+    $add_changes ||= $self->{+CHANGED_ONLY};
+    $add_changes ||= $self->{+CHANGES_PLUGIN};
+    $add_changes ||= $self->{+CHANGES_DIFF};
+
+    $self->add_changed_to_search($plugins, $settings) if $add_changes;
 
     return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
 

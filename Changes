@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix logic so that tests for changed files are only added when requested
+    - Pass all changes to the coverage managers
+
 1.000093  2021-12-16 15:19:47-08:00 America/Los_Angeles
 
     - Split out 'get_coverage_tests' logic for reuse

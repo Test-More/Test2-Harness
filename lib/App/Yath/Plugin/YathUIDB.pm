@@ -250,11 +250,11 @@ sub get_coverage_tests {
 
     my $tests = $plugin->test_map_from_coverage_rows($coverages);
 
-    return $plugin->search_entries_from_test_map($tests);
+    return $plugin->search_entries_from_test_map($tests, $changes);
 }
 
 sub search_entries_from_test_map {
-    my ($plugin, $tests) = @_;
+    my ($plugin, $tests, $changes) = @_;
 
     my @out;
     for my $test (keys %$tests) {
@@ -266,7 +266,7 @@ sub search_entries_from_test_map {
             next;
         }
 
-        unless (eval { push @out => [ $test, $manager->test_parameters($test, $meta) ]; 1 }) {
+        unless (eval { push @out => [ $test, $manager->test_parameters($test, $meta, $changes) ]; 1 }) {
             warn "Error processing coverage data for '$test' using manager '$manager'. Running entire test to be safe.\nError:\n====\n$@\n====\n";
             push @out => $test;
         }

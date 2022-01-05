@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000094  2022-01-05 13:51:40-08:00 America/Los_Angeles
+
     - Fix logic so that tests for changed files are only added when requested
     - Pass all changes to the coverage managers
 

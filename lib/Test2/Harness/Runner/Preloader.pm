@@ -543,7 +543,7 @@ sub _monitor_inotify {
     $inotify->blocking(0);
 
     for my $file (keys %{$dtrace->loaded}) {
-        $file = $INC{$file} || $file;
+        $file = $INC{$file} || $self->find_file_in_inc($file) || $file;
         next unless $self->_should_watch($file);
         next unless -e $file;
         $inotify->watch($file, INOTIFY_MASK());
@@ -559,7 +559,7 @@ sub _monitor_hardway {
     my $stats  = $self->{+STATS} = {};
 
     for my $file (keys %{$dtrace->loaded}) {
-        $file = $INC{$file} || $file;
+        $file = $INC{$file} || $self->find_file_in_inc($file) || $file;
         next unless $self->_should_watch($file);
         next if $stats->{$file};
         next unless -e $file;
@@ -570,6 +570,18 @@ sub _monitor_hardway {
     return;
 }
 
+sub find_file_in_inc {
+    my $self = shift;
+    my ($file) = @_;
+
+    for my $dir (@INC) {
+        next if ref($dir);
+        my $path = File::Spec->catfile($dir, $file);
+        return $path if -f $path;
+    }
+
+    return;
+}
 
 sub _check_monitored_inotify {
     my $self    = shift;

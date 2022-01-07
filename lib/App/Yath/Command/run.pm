@@ -2,7 +2,7 @@ package App::Yath::Command::run;
 use strict;
 use warnings;
 
-our $VERSION = '1.000095';
+our $VERSION = '1.000096';
 
 use App::Yath::Options;
 

@@ -158,13 +158,14 @@ sub subtest_in_context {
     my $self = shift;
     my ($event, $stamp, $context) = @_;
 
-    my $f      = $event->{facet_data}   or return 1;
+    my $f = $event->facets or return 1;
+
     my $parent = $f->{parent}           or return 1;
     my $start  = $parent->{start_stamp} or return 1;
     my $stop   = $parent->{stop_stamp}  or return 1;
 
-    $start = DateTime->from_epoch(epoch => $start);
-    $stop = DateTime->from_epoch(epoch => $stop);
+    $start = DateTime->from_epoch(epoch => $start, time_zone => 'local');
+    $stop  = DateTime->from_epoch(epoch => $stop,  time_zone => 'local');
 
     # Need an extra nanosecond because is_between does not check for >= or <= just > or <.
     $start->subtract(seconds => $context, nanoseconds => 1);

@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '0.000103';
 
+use DateTime;
 use Data::GUID;
 use Scalar::Util qw/blessed/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -98,13 +99,17 @@ sub data {
         return 0 if @out;
 
         while ($event_rs) {
-            if (my $event = $event_rs->next) {
+            if (my $e = $event_rs->next) {
+                if ($e->is_subtest) {
+                    next unless $self->subtest_in_context($e, $event->stamp, $context);
+                }
+
                 # If event is in a subtest show the whole subtest, top level subtest
-                $event = $event->parent while $event->nested;
+                $e = $e->parent while $e->nested;
 
-                next if $seen_events{$event->event_id}++;
+                next if $seen_events{$e->event_id}++;
 
-                push @out => {type => 'event', data => $event->line_data};
+                push @out => {type => 'event', data => $e->line_data};
                 return 0;
             }
 
@@ -116,9 +121,14 @@ sub data {
 
             $event_rs = $job->events(
                 {
-                    '-and' => [
-                        {stamp => {'<=' => $self->interval($stamp, '+', $context)}},
-                        {stamp => {'>=' => $self->interval($stamp, '-', $context)}},
+                    '-or' => [
+                        {is_subtest => 1, nested => 0},
+                        {
+                            '-and' => [
+                                {stamp => {'<=' => $self->interval($stamp, '+', $context)}},
+                                {stamp => {'>=' => $self->interval($stamp, '-', $context)}},
+                            ],
+                        },
                     ],
                 },
                 {order_by => 'event_ord'},
@@ -142,6 +152,25 @@ sub data {
     );
 
     return $res;
+}
+
+sub subtest_in_context {
+    my $self = shift;
+    my ($event, $stamp, $context) = @_;
+
+    my $f      = $event->{facet_data}   or return 1;
+    my $parent = $f->{parent}           or return 1;
+    my $start  = $parent->{start_stamp} or return 1;
+    my $stop   = $parent->{stop_stamp}  or return 1;
+
+    $start = DateTime->from_epoch(epoch => $start);
+    $stop = DateTime->from_epoch(epoch => $stop);
+
+    # Need an extra nanosecond because is_between does not check for >= or <= just > or <.
+    $start->subtract(seconds => $context, nanoseconds => 1);
+    $stop->add(seconds => $context, nanoseconds => 1);
+
+    return $stamp->is_between($start, $stop) ? 1 : 0;
 }
 
 sub interval {

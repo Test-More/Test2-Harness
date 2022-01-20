@@ -353,6 +353,7 @@ sub process_event {
         if (my $o = delete $job->{orphans}->{$e->{event_id}}) {
             $e->{orphan} = $o->{orphan};
             $e->{orphan_line} = $o->{orphan_line} if defined $o->{orphan_line};
+            $e->{stamp} //= $o->{stamp};
         }
         push @{$job->{events}} => $e;
     }

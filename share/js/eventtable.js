@@ -228,6 +228,11 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
 
     tools.attr('rowspan', item.tools);
 
+    if (item.id) {
+        var einter = $('<div class="tool etoggle" title="See possible test interactions"><a href="/interactions/' + item.id + '"><img src="/img/interactions.png" /></a></div>');
+        tools.append(einter);
+    }
+
     if (item.item.facets) {
         var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><img src="/img/data.png" /></div>');
         tools.append(efacet);

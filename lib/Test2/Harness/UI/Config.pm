@@ -42,6 +42,11 @@ sub guess_db_driver {
     return 'PostgreSQL'; # Default
 }
 
+sub db_driver {
+    my $self = shift;
+    return $ENV{YATH_UI_SCHEMA} //= $self->guess_db_driver;
+}
+
 sub schema {
     my $self = shift;
 

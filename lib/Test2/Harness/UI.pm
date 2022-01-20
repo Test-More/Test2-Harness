@@ -31,6 +31,8 @@ use Test2::Harness::UI::Controller::Durations;
 use Test2::Harness::UI::Controller::Coverage;
 use Test2::Harness::UI::Controller::Failed;
 
+use Test2::Harness::UI::Controller::Interactions;
+
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
 
@@ -51,6 +53,11 @@ sub init {
 
     $router->connect('/user' => {controller => 'Test2::Harness::UI::Controller::User'})
         unless $config->single_user;
+
+    $router->connect('/interactions/:id'               => {controller => 'Test2::Harness::UI::Controller::Interactions'});
+    $router->connect('/interactions/:id/:context'      => {controller => 'Test2::Harness::UI::Controller::Interactions'});
+    $router->connect('/interactions/data/:id'          => {controller => 'Test2::Harness::UI::Controller::Interactions', data => 1});
+    $router->connect('/interactions/data/:id/:context' => {controller => 'Test2::Harness::UI::Controller::Interactions', data => 1});
 
     $router->connect('/project/:id'           => {controller => 'Test2::Harness::UI::Controller::Project'});
     $router->connect('/project/:id/stats'     => {controller => 'Test2::Harness::UI::Controller::Project', stats => 1});

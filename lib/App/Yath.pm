@@ -186,10 +186,12 @@ sub clear_env {
     delete $ENV{T2_STREAM_DIR};
     delete $ENV{T2_STREAM_FILE};
     delete $ENV{T2_STREAM_JOB_ID};
-    delete $ENV{TEST2_ACTIVE};
     delete $ENV{TEST2_JOB_DIR};
     delete $ENV{TEST2_RUN_DIR};
-    delete $ENV{TEST_ACTIVE};
+
+    # If Test2::API is already loaded then we need to keep these.
+    delete $ENV{TEST2_ACTIVE} unless $INC{'Test2/API.pm'};
+    delete $ENV{TEST_ACTIVE}  unless $INC{'Test2/API.pm'};
 }
 
 sub command_class {

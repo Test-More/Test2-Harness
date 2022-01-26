@@ -27,11 +27,13 @@ use Test2::Harness::Util::HashBase qw{
     -_plans
     -_info
     -_sub_info
+    -_subtest_id
     -nested
     -subtests
     -numbers
     -times
     -halt
+    -failed_subtest_tree
 };
 
 sub init {
@@ -171,6 +173,8 @@ sub subtest_process {
         if $f->{assert} && $f->{assert}->{number};
 
     if ($f->{parent} && $f->{assert}) {
+        my $name = $f->{assert}->{details} // "unnamed subtest ($f->{trace}->{frame}->[1] line $f->{trace}->{frame}->[2])";
+
         my $subwatcher = blessed($self)->new(nested => $self->{+NESTED} + 1, job => $self->{+JOB}, try => $self->{+TRY});
 
         my $id = 1;
@@ -188,16 +192,23 @@ sub subtest_process {
                 unless $closer && $closer->{facet_data}->{harness}->{subtest_end};
         }
 
+        my $fail = 0;
         if (@errors) {
-            $self->{+_SUB_FAILURES}++;
             push @{$f->{errors}} => @errors;
+            $fail = 1;
         }
         else {
-            my $fail = $f->{assert} && !$f->{assert}->{pass} && !($f->{amnesty} && @{$f->{amnesty}});
+            $fail ||= $f->{assert} && !$f->{assert}->{pass} && !($f->{amnesty} && @{$f->{amnesty}});
             $fail ||= $f->{control} && ($f->{control}->{halt} || $f->{control}->{terminate});
             $fail ||= $f->{errors} && first { $_->{fail} } @{$f->{errors}};
+        }
 
-            $self->{+_SUB_FAILURES}++ if $fail;
+        if ($fail) {
+            $self->{+_SUB_FAILURES}++;
+
+            # Populate the tree up to this subtest
+            my $tree = $self->{+FAILED_SUBTEST_TREE} //= [];
+            push @$tree => [$name, $subwatcher->{+FAILED_SUBTEST_TREE} // []];
         }
     }
 

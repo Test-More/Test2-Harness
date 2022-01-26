@@ -658,8 +658,9 @@ sub render_final_data {
     if (my $rows = $final_data->{failed}) {
         print "\nThe following jobs failed:\n";
         print join "\n" => table(
-            header => ['Job ID', 'Test File'],
-            rows   => $rows,
+            collapse => 1,
+            header => ['Job ID', 'Test File', 'Subtests'],
+            rows   => [map { my $r = [@{$_}]; $r->[2] = $self->stringify_subtest_map($r->[2]) if $r->[2]; $r} @$rows],
         );
         print "\n";
     }
@@ -681,6 +682,26 @@ sub render_final_data {
         );
         print "\n";
     }
+}
+
+sub stringify_subtest_map {
+    my $self = shift;
+    my ($map) = @_;
+
+    my $out = "";
+    my @todo = @$map;
+    my @state;
+    while (my $st = shift @todo) {
+        if (!ref($st)) {
+            pop @state if $st eq 'pop';
+            next;
+        }
+        push @state => $st->[0];
+        $out .= join(' -> ' => @state) . "\n";
+        unshift @todo => (@{$st->[1]}, 'pop');
+    }
+
+    return $out;
 }
 
 sub logger {

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000096  2022-01-26 14:42:43-08:00 America/Los_Angeles
+
     - Show failed subtests in final summary
     - Fix bug where env vars get removed when we preload Test2::API too early (#241)
     - Fix bug where replay with test filename has uninitialized warnings (#242)

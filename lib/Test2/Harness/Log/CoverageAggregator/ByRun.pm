@@ -2,7 +2,7 @@ package Test2::Harness::Log::CoverageAggregator::ByRun;
 use strict;
 use warnings;
 
-our $VERSION = '1.000099';
+our $VERSION = '1.000100';
 
 use Scalar::Util qw/blessed/;
 use Test2::Harness::Util qw/mod2file/;

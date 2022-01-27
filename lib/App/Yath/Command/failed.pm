@@ -60,20 +60,27 @@ sub run {
             my $job_id = $event->{job_id}     or next;
             my $f      = $event->{facet_data} or next;
 
+            push @{$failed{$job_id}->{subtests}} => $self->subtests($f) if $f->{parent} && !$f->{trace}->{nested};
+
             next unless $f->{harness_job_end};
             next unless $f->{harness_job_end}->{fail} || $failed{$job_id};
 
-            push @{$failed{$job_id}} => $f->{harness_job_end};
+            push @{$failed{$job_id}->{ends}} => $f->{harness_job_end};
         }
     }
 
     my $rows = [];
-    while (my ($job_id, $ends) = each %failed) {
+    while (my ($job_id, $data) = each %failed) {
+        my $ends = $data->{ends} // [];
+
+        my %seen;
+        my $subtests = join "\n" => grep { !$seen{$_}++ } sort @{$data->{subtests} // []};
+
         if ($settings->display->brief) {
             print $ends->[-1]->{rel_file}, "\n" if $ends->[-1]->{fail};
         }
         else {
-            push @$rows => [$job_id, scalar(@$ends), $ends->[-1]->{rel_file}, $ends->[-1]->{fail} ? "NO" : "YES"];
+            push @$rows => [$job_id, scalar(@$ends), $ends->[-1]->{rel_file}, $subtests, $ends->[-1]->{fail} ? "NO" : "YES"];
         }
     }
 
@@ -86,13 +93,36 @@ sub run {
 
     print "\nThe following jobs failed at least once:\n";
     print join "\n" => table(
-        header => ['Job ID', 'Times Run', 'Test File', "Succeeded Eventually?"],
+        collapse => 1,
+        header => ['Job ID', 'Times Run', 'Test File', "Subtests", "Succeeded Eventually?"],
         rows   => $rows,
     );
     print "\n";
 
     return 0;
 }
+
+sub subtests {
+    my $self = shift;
+    my ($f, $prefix) = @_;
+
+    return unless $f->{parent};
+    return if $f->{assert}->{pass};
+
+    my $frame = $f->{trace}->{frame};
+    my $name = $f->{assert}->{details} // "Unnamed Subtest ($frame->[1] line $frame->[2])";
+    $name = "$prefix -> $name" if $prefix;
+
+    my @out;
+    push @out => $name;
+    for my $child (@{$f->{parent}->{children}}) {
+        next unless $child->{parent};
+        push @out => $self->subtests($child, $name);
+    }
+
+    return @out;
+}
+
 
 1;
 

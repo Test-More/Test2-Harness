@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Show subtest failures in 'failed' command
+
 1.000096  2022-01-26 14:42:43-08:00 America/Los_Angeles
 
     - Show failed subtests in final summary

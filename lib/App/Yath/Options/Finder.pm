@@ -60,6 +60,20 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         applicable => \&changes_applicable,
     );
 
+    option changes_exclude_file => (
+        type => 'm',
+        description => 'Specify one or more files to ignore when looking at changes',
+        long_examples => [' path/to/file'],
+        applicable => \&changes_applicable,
+    );
+
+    option changes_exclude_pattern => (
+        type => 'm',
+        description => 'Ignore files matching this pattern when looking for changes. Your pattern will be inserted unmodified into a `$file =~ m/$pattern/` check.',
+        long_examples => [" '(apple|pear|orange)'"],
+        applicable => \&changes_applicable,
+    );
+
     option changes_filter_file => (
         type => 'm',
         description => 'Specify one or more files to check for changes. Changes to other files will be ignored',

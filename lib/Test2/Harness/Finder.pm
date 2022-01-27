@@ -28,6 +28,7 @@ use Test2::Harness::Util::HashBase qw{
 
     <changed <changed_only <changes_plugin <show_changed_files <changes_diff
     <changes_filter_file <changes_filter_pattern
+    <changes_exclude_file <changes_exclude_pattern
 };
 
 sub munge_settings {}
@@ -225,13 +226,18 @@ sub find_changes {
     my $filter_patterns = @{$self->{+CHANGES_FILTER_PATTERN}} ? $self->{+CHANGES_FILTER_PATTERN} : undef;
     my $filter_files    = @{$self->{+CHANGES_FILTER_FILE}} ? {map { $_ => 1 } @{$self->{+CHANGES_FILTER_FILE}}} : undef;
 
+    my $exclude_patterns = @{$self->{+CHANGES_EXCLUDE_PATTERN}} ? $self->{+CHANGES_EXCLUDE_PATTERN} : undef;
+    my $exclude_files    = @{$self->{+CHANGES_EXCLUDE_FILE}} ? {map { $_ => 1 } @{$self->{+CHANGES_EXCLUDE_FILE}}} : undef;
+
     my %changed_map;
     for my $change (@listed_changes, @found_changes) {
         next unless $change;
         my ($file, @parts) = ref($change) ? @$change : ($change);
 
         next if $filter_files && !$filter_files->{$file};
+        next if $exclude_files && $exclude_files->{$file};
         next if $filter_patterns && !first { $file =~ m/$_/ } @$filter_patterns;
+        next if $exclude_patterns && first { $file =~ m/$_/ } @$exclude_patterns;
 
         @parts = ('*') unless @parts;
         $changed_map{$file}{$_} = 1 for @parts;

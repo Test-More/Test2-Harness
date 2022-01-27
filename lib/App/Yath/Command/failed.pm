@@ -60,7 +60,8 @@ sub run {
             my $job_id = $event->{job_id}     or next;
             my $f      = $event->{facet_data} or next;
 
-            push @{$failed{$job_id}->{subtests}} => $self->subtests($f) if $f->{parent} && !$f->{trace}->{nested};
+            push @{$failed{$job_id}->{subtests}} => $self->subtests($f)
+                if $f->{parent} && !$f->{trace}->{nested} && $self->include_subtest($f);
 
             next unless $f->{harness_job_end};
             next unless $f->{harness_job_end}->{fail} || $failed{$job_id};
@@ -102,15 +103,29 @@ sub run {
     return 0;
 }
 
+sub include_subtest {
+    my $self = shift;
+    my ($f) = @_;
+
+    return 0 unless $f->{parent} && keys %{$f->{parent}};
+    return 0 if $f->{assert}->{pass} || !keys %{$f->{assert}};
+    return 0 if $f->{amnesty} && @{$f->{amnesty}};
+    return 1;
+}
+
 sub subtests {
     my $self = shift;
     my ($f, $prefix) = @_;
 
-    return unless $f->{parent};
-    return if $f->{assert}->{pass};
+    return unless $self->include_subtest($f);
 
-    my $frame = $f->{trace}->{frame};
-    my $name = $f->{assert}->{details} // "Unnamed Subtest ($frame->[1] line $frame->[2])";
+    my $name = $f->{assert}->{details};
+    unless ($name) {
+        my $frame = $f->{trace}->{frame};
+        $name = "Unnamed Subtest";
+        $name .= " ($frame->[1] line $frame->[2])" if $frame->[1] && $frame->[2];
+    }
+
     $name = "$prefix -> $name" if $prefix;
 
     my @out;

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000098  2022-01-27 09:36:24-08:00 America/Los_Angeles
+
     - Fix bugs in 'failed' command after adding subtests
 
 1.000097  2022-01-27 08:31:46-08:00 America/Los_Angeles

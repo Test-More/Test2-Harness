@@ -9,6 +9,7 @@ use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 use List::Util qw/first/;
 use Cwd qw/getcwd/;
 use Carp qw/croak/;
+use Time::HiRes qw/time/;
 
 use Test2::Harness::TestFile;
 use File::Spec;
@@ -16,7 +17,7 @@ use File::Spec;
 use Test2::Harness::Util::HashBase qw{
     <default_search <default_at_search
 
-    <durations <maybe_durations +duration_data
+    <durations <maybe_durations +duration_data <durations_threshold
 
     <exclude_files  <exclude_patterns <exclude_lists
 
@@ -41,7 +42,7 @@ sub init {
 
 sub duration_data {
     my $self = shift;
-    my ($plugins, $settings) = @_;
+    my ($plugins, $settings, $test_files) = @_;
 
     $self->{+DURATION_DATA} //= $self->pull_durations();
 
@@ -49,7 +50,7 @@ sub duration_data {
 
     for my $plugin (@$plugins) {
         next unless $plugin->can('duration_data');
-        $self->{+DURATION_DATA} = $plugin->duration_data($settings) or next;
+        $self->{+DURATION_DATA} = $plugin->duration_data($settings, $test_files) or next;
         last;
     }
 
@@ -462,7 +463,6 @@ sub find_project_files {
 
     die "No tests to run, search is empty\n" unless @$search;
 
-    my $durations = $self->duration_data($plugins, $settings);
 
     my (%seen, @tests, @dirs);
 
@@ -504,8 +504,6 @@ sub find_project_files {
             $test = Test2::Harness::TestFile->new(file => $path);
         }
 
-        my $rel = $test->relative;
-        $test->set_duration($durations->{$rel}) if $durations->{$rel};
         if (my @exclude = $self->exclude_file($test)) {
             if (@$input) {
                 print STDERR "File '$path' was listed on the command line, but has been exluded for the following reasons:\n";
@@ -547,14 +545,27 @@ sub find_project_files {
                     }
 
                     return unless $test;
-                    my $rel = $test->relative;
-                    $test->set_duration($durations->{$rel}) if $durations->{$rel};
                     return unless $self->include_file($test);
                     push @tests => $test;
                 },
             },
             @dirs
         );
+    }
+
+    my $test_count = @tests;
+    my $threshold = $settings->finder->durations_threshold // 0;
+    if ($threshold && $test_count >= $threshold) {
+        my $start = time;
+        my $durations = $self->duration_data($plugins, $settings, [map { $_->relative } @tests]);
+        my $end = time;
+        if ($durations && keys %$durations) {
+            printf("Fetched duration data (Took %0.2f seconds)\n", $end - $start);
+            for my $test (@tests) {
+                my $rel = $test->relative;
+                $test->set_duration($durations->{$rel}) if $durations->{$rel};
+            }
+        }
     }
 
     $_->munge_files(\@tests, $settings) for @$plugins;

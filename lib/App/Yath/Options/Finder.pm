@@ -120,6 +120,13 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         description => "Point at a json file or url which has a hash of relative test filenames as keys, and 'SHORT', 'MEDIUM', or 'LONG' as values. This will override durations listed in the file headers. An exception will be thrown if the durations file or url does not work.",
     );
 
+    option durations_threshold => (
+        alt => ['Dt'],
+        type => 's',
+        default => undef,
+        description => "Only fetch duration data if running at least this number of tests. Default (-j value + 1)"
+    );
+
     option exclude_file => (
         field => 'exclude_files',
         type  => 'm',
@@ -169,6 +176,18 @@ sub _post_process {
     my %params   = @_;
     my $settings = $params{settings};
     my $options  = $params{options};
+
+    if (!defined($settings->finder->durations_threshold)) {
+        my $jc = 1;
+        if ($settings->check_prefix('runner')) {
+            $jc = $settings->runner->job_count // 1;
+        }
+        else {
+            warn "The 'runner' prefix is not present";
+        }
+
+        $settings->finder->field(durations_threshold => $jc + 1);
+    }
 
     $settings->finder->field(default_search => ['./t', './t2', 'test.pl'])
         unless $settings->finder->default_search && @{$settings->finder->default_search};

@@ -15,6 +15,7 @@ $dir =~ s{^\./}{};
 sub clean_output {
     my $out = shift;
 
+    $out->{output} =~ s/^.*duration.*$//m;
     $out->{output} =~ s/^.*Wrote log file:.*$//m;
     $out->{output} =~ s/^\s*Wall Time:.*seconds//m;
     $out->{output} =~ s/^\s*CPU Time:.*s\)//m;

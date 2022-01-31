@@ -72,12 +72,12 @@ sub verify {
 
 yath(
     command => 'test',
-    args    => [$dir, '--ext=tx', '-A', '--no-plugins', '-pTestPlugin', '--changes-plugin', 'TestPlugin'],
+    args    => [$dir, '--ext=tx', '-A', '--durations-threshold' => 1, '--no-plugins', '-pTestPlugin', '--changes-plugin', 'TestPlugin'],
     exit    => 0,
     test    => \&verify,
 );
 
-unless ($ENV{AUTOMATED_TESTING}) {
+unless ($ENV{AUTOMATED_TESTING} || $ENV{AUTHOR_TESTING}) {
     subtest persist => sub {
         verify(
             yath(command => 'start', args => ['--no-plugins', '-pTestPlugin'], exit => 0),

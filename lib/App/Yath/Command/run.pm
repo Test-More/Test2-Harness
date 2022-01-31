@@ -53,16 +53,21 @@ sub finalize_plugins {}
 sub monitor_preloads { 1 }
 sub job_count { 1 }
 
-#sub render {
-#    my $self = shift;
-#
-#    local $SIG{INT} = sub {
-#        print "Canceling testing...\n";
-#        $self->state->halt_run($self->run->run_id);
-#    };
-#
-#    return $self->SUPER::render(@_);
-#}
+sub init {
+    my $self = shift;
+
+    my $settings = $self->settings;
+    my $pdata = $self->pfile_data;
+
+    my $runner_settings = Test2::Harness::Util::File::JSON->new(name => $pdata->{dir} . '/settings.json')->read();
+    my $runner = $settings->define_prefix('runner');
+    for my $key (keys %{$runner_settings->{runner}}) {
+        ${$runner->vivify_field($key)} = $runner_settings->{runner}->{$key};
+    }
+
+    return $self->SUPER::init(@_);
+}
+
 
 sub pfile {
     my $self = shift;

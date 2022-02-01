@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Use 'user' properly when getting durations
+
 0.000104  2022-01-20 14:47:30-08:00 America/Los_Angeles
 
     - Fix date math and other errors in subtest handling

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Durations;
 use strict;
 use warnings;
 
-our $VERSION = '0.000105';
+our $VERSION = '0.000106';
 
 use Data::GUID;
 use Test2::Harness::UI::Response qw/resp error/;

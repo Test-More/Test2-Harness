@@ -1,4 +1,5 @@
 use Test2::V0;
+use Test2::Require::AuthorTesting;
 
 use File::Temp qw/tempdir/;
 use File::Spec;

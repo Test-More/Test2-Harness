@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000100  2022-02-01 09:49:52-08:00 America/Los_Angeles
+
     - Mark reload_syntax_error.t as AUTHOR_TESTING only (#243)
     - Add threshold for duration data fetching, this saves time when duration data is large
 

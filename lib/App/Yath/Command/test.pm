@@ -660,7 +660,7 @@ sub render_final_data {
         print join "\n" => table(
             collapse => 1,
             header => ['Job ID', 'Test File', 'Subtests'],
-            rows   => [map { my $r = [@{$_}]; $r->[2] = $self->stringify_subtest_map($r->[2]) if $r->[2]; $r} @$rows],
+            rows   => [map { my $r = [@{$_}]; $r->[2] = stringify_subtest_map($r->[2]) if $r->[2]; $r} @$rows],
         );
         print "\n";
     }
@@ -685,7 +685,6 @@ sub render_final_data {
 }
 
 sub stringify_subtest_map {
-    my $self = shift;
     my ($map) = @_;
 
     my $out = "";

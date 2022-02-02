@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000101  2022-02-02 13:26:35-08:00 America/Los_Angeles
+
     - Fix 'replay' output of subtests
 
 1.000100  2022-02-01 09:49:52-08:00 America/Los_Angeles

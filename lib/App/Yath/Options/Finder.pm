@@ -178,15 +178,12 @@ sub _post_process {
     my $options  = $params{options};
 
     if (!defined($settings->finder->durations_threshold)) {
-        my $jc = 1;
         if ($settings->check_prefix('runner')) {
-            $jc = $settings->runner->job_count // 1;
-        }
-        else {
-            warn "The 'runner' prefix is not present";
+            my $jc = $settings->runner->job_count // 1;
+            $settings->finder->field(durations_threshold => $jc + 1);
         }
 
-        $settings->finder->field(durations_threshold => $jc + 1);
+        $settings->finder->field(durations_threshold => 1);
     }
 
     $settings->finder->field(default_search => ['./t', './t2', 'test.pl'])

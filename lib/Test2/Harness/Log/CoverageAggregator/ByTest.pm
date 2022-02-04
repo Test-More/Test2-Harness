@@ -150,7 +150,7 @@ sub get_coverage_tests {
     my @out;
     my $ok = eval {
         require(mod2file($manager));
-        my $specs = $manager->test_parameters($test, \%froms, $changes, $coverage_data);
+        my $specs = $manager->test_parameters($test, \%froms, $changes, $coverage_data, $settings);
 
         $specs = { run => $specs } unless ref $specs;
 

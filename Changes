@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add settings ot paremeter list for coverage managers
+
 1.000103  2022-02-04 10:20:32-08:00 America/Los_Angeles
 
     - Add options to for whitespace and non-subs in change data

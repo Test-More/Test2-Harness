@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Honor changes_exclude_loads and changes_exclude_opens
+
 0.000106  2022-02-04 11:35:42-08:00 America/Los_Angeles
 
     - Add settings to manager's test_parameters argument list

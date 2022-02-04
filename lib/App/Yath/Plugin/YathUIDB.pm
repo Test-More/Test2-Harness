@@ -173,6 +173,13 @@ option_group {prefix => 'yathui-db', category => "YathUI Options"} => sub {
 sub get_coverage_searches {
     my ($plugin, $settings, $changes) = @_;
 
+    my ($changes_exclude_loads, $changes_exclude_opens);
+    if ($settings->check_prefix('finder')) {
+        my $finder = $settings->finder;
+        $changes_exclude_loads = $finder->changes_exclude_loads;
+        $changes_exclude_opens = $finder->changes_exclude_opens;
+    }
+
     my @searches;
     for my $source_file (keys %$changes) {
         my $changed_sub_map = $changes->{$source_file};
@@ -181,7 +188,12 @@ sub get_coverage_searches {
         my $search = {'source_file.filename' => $source_file};
         unless ($changed_sub_map->{'*'} || !@changed_subs) {
             my %seen;
-            $search->{'source_sub.subname'} = {'IN' => [grep { !$seen{$_}++} '*', '<>', @changed_subs]};
+
+            my @inject;
+            push @inject => '*'  unless $changes_exclude_loads;
+            push @inject => '<>' unless $changes_exclude_opens;
+
+            $search->{'source_sub.subname'} = {'IN' => [grep { !$seen{$_}++} @inject, @changed_subs]};
         }
 
         push @searches => $search;

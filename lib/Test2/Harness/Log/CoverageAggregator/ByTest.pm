@@ -101,6 +101,13 @@ sub get_coverage_tests {
     my $filemap = $coverage_data->{files}   // {};
     my $manager = $coverage_data->{manager} // undef;
 
+    my ($changes_exclude_loads, $changes_exclude_opens);
+    if ($settings->check_prefix('finder')) {
+        my $finder = $settings->finder;
+        $changes_exclude_loads = $finder->changes_exclude_loads;
+        $changes_exclude_opens = $finder->changes_exclude_opens;
+    }
+
     my %froms;
     for my $file (keys %$changes) {
         my $parts_map  = $changes->{$file};
@@ -121,12 +128,16 @@ sub get_coverage_tests {
             push @{$froms{subs}} => @{$cfroms};
         }
 
-        if (my $lfroms = $filemap->{$file}->{'*'}) {
-            push @{$froms{loads}} => @{$lfroms};
+        unless ($changes_exclude_loads) {
+            if (my $lfroms = $filemap->{$file}->{'*'}) {
+                push @{$froms{loads}} => @{$lfroms};
+            }
         }
 
-        if (my $ofroms = $filemap->{$file}->{'<>'}) {
-            push @{$froms{opens}} => @{$ofroms};
+        unless ($changes_exclude_opens) {
+            if (my $ofroms = $filemap->{$file}->{'<>'}) {
+                push @{$froms{opens}} => @{$ofroms};
+            }
         }
     }
 

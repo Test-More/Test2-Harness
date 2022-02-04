@@ -31,6 +31,7 @@ use Test2::Harness::Util::HashBase qw{
     <changes_filter_file <changes_filter_pattern
     <changes_exclude_file <changes_exclude_pattern
     <changes_include_whitespace <changes_exclude_nonsub
+    <changes_exclude_loads <changes_exclude_opens
 };
 
 sub munge_settings {}

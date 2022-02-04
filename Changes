@@ -2,7 +2,9 @@
 
     - Add options to for whitespace and non-subs in change data
         --changes-include-whitespace - Include whitespace lines for change data
-        --changes-exclude-nonsub     - Do not include non-sub chsanges in perl files
+        --changes-exclude-nonsub     - Do not include non-sub changes in perl files
+        --changes-exclude-opens      - Do not include tests that only open() changed files
+        --changes-exclude-loads      - Do not include tests that only load changed files without running subs
 
 1.000102  2022-02-03 15:28:54-08:00 America/Los_Angeles
 

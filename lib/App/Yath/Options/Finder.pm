@@ -116,6 +116,20 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         default => 0,
     );
 
+    option changes_exclude_loads => (
+        type => 'b',
+        description => "Exclude coverage tests which only load changed files, but never call code from them. (default: off)",
+        applicable => \&changes_applicable,
+        default => 0,
+    );
+
+    option changes_exclude_opens => (
+        type => 'b',
+        description => "Exclude coverage tests which only open() changed files, but never call code from them. (default: off)",
+        applicable => \&changes_applicable,
+        default => 0,
+    );
+
     option durations => (
         type => 's',
 

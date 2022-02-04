@@ -86,6 +86,13 @@ sub get_coverage_tests {
     my $filemap  = $coverage_data->{files}    // {};
     my $testmeta = $coverage_data->{testmeta} // {};
 
+    my ($changes_exclude_loads, $changes_exclude_opens);
+    if ($settings->check_prefix('finder')) {
+        my $finder = $settings->finder;
+        $changes_exclude_loads = $finder->changes_exclude_loads;
+        $changes_exclude_opens = $finder->changes_exclude_opens;
+    }
+
     my %tests;
     for my $file (keys %$changes) {
         my $parts_map  = $changes->{$file};
@@ -108,15 +115,19 @@ sub get_coverage_tests {
             }
         }
 
-        if (my $ltests = $filemap->{$file}->{'*'}) {
-            for my $test (keys %$ltests) {
-                push @{$tests{$test}->{loads}} => @{$ltests->{$test}};
+        unless ($changes_exclude_opens) {
+            if (my $ltests = $filemap->{$file}->{'*'}) {
+                for my $test (keys %$ltests) {
+                    push @{$tests{$test}->{loads}} => @{$ltests->{$test}};
+                }
             }
         }
 
-        if (my $otests = $filemap->{$file}->{'<>'}) {
-            for my $test (keys %$otests) {
-                push @{$tests{$test}->{opens}} => @{$otests->{$test}};
+        unless ($changes_exclude_loads) {
+            if (my $otests = $filemap->{$file}->{'<>'}) {
+                for my $test (keys %$otests) {
+                    push @{$tests{$test}->{opens}} => @{$otests->{$test}};
+                }
             }
         }
     }

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::JobField;
 use strict;
 use warnings;
 
-our $VERSION = '0.000107';
+our $VERSION = '0.000108';
 
 use Data::GUID;
 use List::Util qw/max/;

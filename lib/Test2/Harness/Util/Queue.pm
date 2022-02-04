@@ -2,7 +2,7 @@ package Test2::Harness::Util::Queue;
 use strict;
 use warnings;
 
-our $VERSION = '1.000103';
+our $VERSION = '1.000104';
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;

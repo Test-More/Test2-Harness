@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add settings to manager's test_parameters argument list
+
 0.000105  2022-02-01 10:23:22-08:00 America/Los_Angeles
 
     - Use 'user' properly when getting durations

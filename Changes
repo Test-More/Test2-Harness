@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Add options to for whitespace and non-subs in change data
+        --changes-include-whitespace - Include whitespace lines for change data
+        --changes-exclude-nonsub     - Do not include non-sub chsanges in perl files
+
 1.000102  2022-02-03 15:28:54-08:00 America/Los_Angeles
 
     - Remove warning that can trigger in valid (not warn-worthy) cases.

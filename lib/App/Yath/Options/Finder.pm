@@ -102,6 +102,20 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         applicable => \&changes_applicable,
     );
 
+    option changes_include_whitespace => (
+        type => 'b',
+        description => "Include changed lines that are whitespace only (default: off)",
+        applicable => \&changes_applicable,
+        default => 0,
+    );
+
+    option changes_exclude_nonsub => (
+        type => 'b',
+        description => "Exclude changes outside of subroutines (perl files only) (default: off)",
+        applicable => \&changes_applicable,
+        default => 0,
+    );
+
     option durations => (
         type => 's',
 

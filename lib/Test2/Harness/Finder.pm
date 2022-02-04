@@ -30,6 +30,7 @@ use Test2::Harness::Util::HashBase qw{
     <changed <changed_only <changes_plugin <show_changed_files <changes_diff
     <changes_filter_file <changes_filter_pattern
     <changes_exclude_file <changes_exclude_pattern
+    <changes_include_whitespace <changes_exclude_nonsub
 };
 
 sub munge_settings {}
@@ -361,23 +362,25 @@ sub changes_from_diff {
     # some lines are added and others removed is also a huge hassle.
     #
     # The current algorith is "good enough", not perfect.
-    my ($file, $sub, $indent);
+    my ($file, $sub, $indent, $is_perl);
     while (my $line = $next->()) {
         chomp($line);
         if ($line =~ m{^(?:---|\+\+\+) [ab]/(.*)$}) {
             my $maybe_file = $1;
             next if $maybe_file =~ m{/dev/null};
             $file = $maybe_file;
+            $is_perl = 1 if $file =~ m/\.(pl|pm|t2?)$/;
             $sub  = '*'; # Wildcard, changes to the code outside of a sub potentially effects all subs
-            $changed{$file} //= {};
             next;
         }
 
         next unless $file;
 
         $line =~ m/^( |-|\+)(.*)$/ or next;
-        my ($prefix, $statement) = ($1, $2, $3);
+        my ($prefix, $statement) = ($1, $2);
         my $changed = $prefix eq ' ' ? 0 : 1;
+
+        $is_perl = 1 if $statement =~ m/^#!.*perl/;
 
         if ($statement =~ m/^(\s*)sub\s+(\w+)/) {
             $indent = $1 // '';
@@ -394,11 +397,21 @@ sub changes_from_diff {
         elsif(defined($indent) && $statement =~ m/^$indent\}/) {
             $indent = undef;
             $sub = "*";
+
+            # If this is nothing but whitespace and a closing paren we can skip it.
+            next if $statement =~ m/^\s*\}?\s*$/ && !$self->{+CHANGES_INCLUDE_WHITESPACE};
         }
 
-        next unless $sub;
+        next unless $sub;   # If sub is empty then we are not even in a file yet
+        next unless $changed; # If we are not on a changed line no need to add it
+        unless ($self->{+CHANGES_INCLUDE_WHITESPACE}) {
+            next if !length($statement); # If there is no statement length then this is whitespace only
+            next if $statement =~ m/^\s+$/; # Do not care about whitespace only changes
+        }
 
-        $changed{$file}{$sub}++ if $changed;
+        next if $is_perl && $self->{+CHANGES_EXCLUDE_NONSUB} && $sub eq '*';
+
+        $changed{$file}{$sub}++;
     }
 
     return map {([$_ => sort keys %{$changed{$_}}])} sort keys %changed;

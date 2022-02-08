@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Make changes_diff work with or without prefixes in the filenames
+
 1.000104  2022-02-04 11:00:29-08:00 America/Los_Angeles
 
     - Add settings ot paremeter list for coverage managers

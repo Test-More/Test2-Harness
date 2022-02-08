@@ -214,7 +214,7 @@ sub get_coverage_rows {
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
     my $run = $project->last_covered_run(user => $ydb->publisher) or return;
 
-    my @searches = $plugin->get_coverage_searches($settings, $changes);
+    my @searches = $plugin->get_coverage_searches($settings, $changes) or return;
     return $run->expanded_coverages({'-or' => \@searches});
 }
 
@@ -258,7 +258,7 @@ sub get_coverage_tests {
     my $ydb = $settings->prefix('yathui-db') or return;
     return unless $ydb->coverage;
 
-    my $coverages = $plugin->get_coverage_rows($settings, $changes);
+    my $coverages = $plugin->get_coverage_rows($settings, $changes) or return;
 
     my $tests = $plugin->test_map_from_coverage_rows($coverages);
 

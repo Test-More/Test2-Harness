@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Do not return all coverage data when there are no changed files
+
 0.000107  2022-02-04 11:59:34-08:00 America/Los_Angeles
 
     - Honor changes_exclude_loads and changes_exclude_opens

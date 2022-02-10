@@ -160,7 +160,7 @@ sub _post_process_interactive {
     else {
         require File::Temp;
         my $fh;
-        ($fh, $fifo) = File::Temp::tempfile("YATH-FIFO-$$-XXXXXX");
+        ($fh, $fifo) = File::Temp::tempfile("YATH-FIFO-$$-XXXXXX", TMPDIR => 1);
         close($fh);
         unlink($fifo);
     }
@@ -195,9 +195,18 @@ sub _post_process_interactive {
         }
         die "Could not open fifo ($fifo): $!" unless $fh;
 
+        my $cleanup      = sub { close($fh); unlink($fifo) if -e $fifo };
+        my $int_handler  = $SIG{INT};
+        my $term_handler = $SIG{TERM};
+        $SIG{INT}  = sub { $cleanup->(); $int_handler->()  if ref $int_handler;  exit 0; };
+        $SIG{TERM} = sub { $cleanup->(); $term_handler->() if ref $term_handler; exit 0; };
+
         $fh->autoflush(1);
 
         STDIN->blocking(0);
+
+        require Scope::Guard;
+        my $guard = Scope::Guard->new($cleanup);
 
         while(1) {
             $SIG{PIPE} = sub { exit 0 };

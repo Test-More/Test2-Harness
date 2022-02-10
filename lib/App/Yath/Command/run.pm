@@ -60,9 +60,14 @@ sub init {
     my $pdata = $self->pfile_data;
 
     my $runner_settings = Test2::Harness::Util::File::JSON->new(name => $pdata->{dir} . '/settings.json')->read();
-    my $runner = $settings->define_prefix('runner');
-    for my $key (keys %{$runner_settings->{runner}}) {
-        ${$runner->vivify_field($key)} = $runner_settings->{runner}->{$key};
+
+    for my $prefix (sort keys %{$runner_settings}) {
+        next if $settings->check_prefix($prefix);
+
+        my $new = $settings->define_prefix($prefix);
+        for my $key (sort keys %{$runner_settings->{$prefix}}) {
+            ${$new->vivify_field($key)} = $runner_settings->{$prefix}->{$key};
+        }
     }
 
     return $self->SUPER::init(@_);

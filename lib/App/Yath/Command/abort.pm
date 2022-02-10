@@ -2,7 +2,7 @@ package App::Yath::Command::abort;
 use strict;
 use warnings;
 
-our $VERSION = '1.000107';
+our $VERSION = '1.000108';
 
 use Time::HiRes qw/sleep/;
 use Term::Table;

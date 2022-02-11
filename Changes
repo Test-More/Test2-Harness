@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000108  2022-02-11 15:23:10-08:00 America/Los_Angeles
+
     - Add ability for resource managers to report resources as unavailable ot skip tests
     - Add setup method for resource managers
 

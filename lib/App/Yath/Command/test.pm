@@ -251,28 +251,13 @@ sub start {
     return unless $pop;
 
     $self->setup_plugins();
+    $self->setup_resources();
 
     $self->start_runner(jobs_todo => $pop);
     $self->start_collector();
     $self->start_auditor();
 
     return 1;
-}
-
-sub setup_plugins {
-    my $self = shift;
-    $_->setup($self->settings) for @{$self->settings->harness->plugins};
-}
-
-sub teardown_plugins {
-    my $self = shift;
-    my ($renderers, $logger) = @_;
-    $_->teardown($self->settings, $renderers, $logger) for @{$self->settings->harness->plugins};
-}
-
-sub finalize_plugins {
-    my $self = shift;
-    $_->finalize($self->settings) for @{$self->settings->harness->plugins};
 }
 
 sub render {

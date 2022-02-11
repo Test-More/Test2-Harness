@@ -97,6 +97,7 @@ sub via {
     my $self = shift;
 
     return undef if $self->{+SETTINGS}->debug->dummy;
+    return undef if $self->{+TASK}->{resource_skip};
 
     return $self->{+VIA} if exists $self->{+VIA};
 
@@ -113,8 +114,12 @@ sub spawn_params {
 
     my $task = $self->{+TASK};
 
+    my $skip;
+    $skip = 'dummy mode' if $self->{+SETTINGS}->debug->dummy;
+    $skip = "Some resources are not available: " . join(', ' => @{$self->{+TASK}->{resource_skip}}) if $self->{+TASK}->{resource_skip};
+
     my $command;
-    if ($task->{binary} || $task->{non_perl}) {
+    if (!$skip && $task->{binary} || $task->{non_perl}) {
         my $file = $self->ch_dir ? $self->file : $self->rel_file;
         $command = [clean_path($file), $self->args];
     }
@@ -126,7 +131,7 @@ sub spawn_params {
             $self->switches,
             $self->cli_options,
 
-            $self->{+SETTINGS}->debug->dummy ? ('-e', 'print "1..0 # SKIP dummy mode"') : (sub { $self->run_file }),
+            $skip ? ('-e', "print \"1..0 # SKIP $skip\"") : (sub { $self->run_file }),
 
             $self->args,
         ];

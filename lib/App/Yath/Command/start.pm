@@ -119,7 +119,8 @@ sub run {
     my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
     $run_queue->start();
 
-    $_->setup($self->settings) for @{$self->settings->harness->plugins};
+    $self->setup_plugins();
+    $self->setup_resources();
 
     my $stderr = File::Spec->catfile($dir, 'error.log');
     my $stdout = File::Spec->catfile($dir, 'output.log');

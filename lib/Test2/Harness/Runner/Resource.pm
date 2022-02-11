@@ -4,12 +4,14 @@ use warnings;
 
 our $VERSION = '1.000108';
 
+sub setup {}
+
 sub new {
     my $class = shift;
     return bless({@_}, $class);
 }
 
-sub available { 1 }
+sub available { -1 }
 
 sub record { }
 
@@ -48,6 +50,11 @@ example is kept simple and just always grabs the next one.
     use warnings;
 
     use parent 'Test2::Harness::Runner::Resource';
+
+    sub setup {
+        my $class = shift; # NOT AN INSTANCE
+        ...
+    }
 
     sub available {
         my $self = shift;
@@ -247,21 +254,35 @@ There are no guarentees about what order resources will be released in.
 
 =over 4
 
+=item $class->setup($settings)
+
+This will be called once before the runner forks or initialized per-process
+instances. If you have any "setup once" tasks to initialize resources before
+tests run this is a good place to do it.
+
+This runs immedietly after plugin setup() methods are called.
+
+B<NOTE:> Do not rely on recording any global state here, the runner and
+per-process instances may not be forked from the process that calls setup().
+
 =item $res = $class->new(settings => $settings);
 
 A default new method, returns a blessed hashref with the settings key set to
 the L<Test2::Harness::Settings> instance.
 
-=item $bool = $res->available(\%task)
+=item $val = $res->available(\%task)
 
 B<DO NOT MODIFY ANY INTERNAL STATE IN THIS METHOD>
 
 B<DO NOT MODIFY THE TASK HASHREF>
 
-Return true if the resource is available, or if the task does not require the
-resource.
+Returns a positive true value if the resource is available.
 
-Return false if the resource is not available, but is needed.
+Returns false if the resource is not available, but will be in the future (IE
+in use by another test, but will be free when that test is done).
+
+Returns a negative value if the resource is not available and never will be.
+This will cause any tests dependent on the resource to be skipped.
 
 The only key in C<\%task> hashref that most resources will care about is the
 C<'file'> key, which contains the test file to be run.

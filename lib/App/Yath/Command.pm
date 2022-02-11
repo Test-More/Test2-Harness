@@ -6,6 +6,7 @@ our $VERSION = '1.000108';
 
 use File::Spec;
 use Carp qw/croak/;
+use Test2::Harness::Util qw/mod2file/;
 
 use Test2::Harness::Util::HashBase qw/-settings -args/;
 
@@ -161,6 +162,38 @@ sub write_settings_to {
     $settings_file->write($settings);
     return $settings_file->name;
 }
+
+sub setup_resources {
+    my $self = shift;
+    my $settings = $self->settings;
+
+    return unless $settings->check_prefix('runner');
+    my $runner = $settings->runner;
+    my $res = $runner->resources or return;
+    return unless @$res;
+
+    for my $res (@$res) {
+        require(mod2file($res)) unless ref $res;
+        $res->setup($settings);
+    }
+}
+
+sub setup_plugins {
+    my $self = shift;
+    $_->setup($self->settings) for @{$self->settings->harness->plugins};
+}
+
+sub teardown_plugins {
+    my $self = shift;
+    my ($renderers, $logger) = @_;
+    $_->teardown($self->settings, $renderers, $logger) for @{$self->settings->harness->plugins};
+}
+
+sub finalize_plugins {
+    my $self = shift;
+    $_->finalize($self->settings) for @{$self->settings->harness->plugins};
+}
+
 
 1;
 

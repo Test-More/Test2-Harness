@@ -350,7 +350,7 @@ sub run_job {
 
     my $task = $self->next() or return 0;
 
-    if ($task->{spawn}) {
+    if ($task->{spawn} && !$task->{resource_skip}) {
         my $job = Test2::Harness::Runner::Spawn->new(
             runner        => $self,
             task          => $task,

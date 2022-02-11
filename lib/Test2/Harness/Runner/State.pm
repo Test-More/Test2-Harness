@@ -290,8 +290,6 @@ sub _queue_task {
 sub start_task {
     my $self = shift;
     my ($spec) = @_;
-    my $job_id = $spec->{job_id};
-    my $task = $self->{+TASK_LOOKUP}->{$job_id};
     $self->_enqueue(start_task => $spec);
 }
 
@@ -302,6 +300,7 @@ sub _start_task {
     my $job_id    = $spec->{job_id} or die "No job_id provided";
     my $run_stage = $spec->{stage}  or die "No stage provided";
     my $res       = $spec->{res}    or die "No res provided";
+    my $res_skip  = $spec->{resource_skip};
 
     my $task = $self->{+TASK_LOOKUP}->{$job_id} or die "Could not find task to start";
 
@@ -328,6 +327,8 @@ sub _start_task {
 
     die "Already running task $job_id" if $self->{+RUNNING_TASKS}->{$job_id};
     $self->{+RUNNING_TASKS}->{$job_id} = $task;
+
+    $task->{resource_skip} = $res_skip if $res_skip;
 
     push @{$self->{+TASK_LIST}} => $task;
 
@@ -528,11 +529,11 @@ sub advance_tasks {
 
     return 0 if $cur >= $max;
 
-    my ($run_stage, $task, $res) = $self->_next();
+    my ($run_stage, $task, $res, %params) = $self->_next();
 
     return 0 unless $task;
 
-    $self->start_task({job_id => $task->{job_id}, stage => $run_stage, res => $res});
+    $self->start_task({job_id => $task->{job_id}, stage => $run_stage, res => $res, %params});
 
     return 1;
 }
@@ -637,24 +638,42 @@ sub _next {
                         next if first { $conflicts->{$_} } @{$task->{conflicts}};
 
                         my $ok = 1;
+                        my @resource_skip;
                         for my $resource (@$resources) {
-                            $ok &&= $resource->available($task);
-                            last unless $ok;
+                            my $out = $resource->available($task) || 0; # normalize false to 0
+
+                            push @resource_skip => ref($resource) || $resource if $out < 0;
+
+                            $ok &&= $out;
+
+                            # If we have a temporarily unavailable resource we
+                            # skip, but if any resource is never avilable
+                            # (skip) we want to finish the loop to add them all
+                            # for the skip message.
+                            last if !$ok && !@resource_skip;
                         }
 
-                        # Some resource is not available
+                        # Some resource is temporarily not available
                         next unless $ok;
 
                         my $outres = {args => [], env_vars => {}, record => {}};
-                        for my $resource (@$resources) {
-                            my $res = {args => [], env_vars => {}};
-                            $resource->assign($task, $res);
-                            push @{$outres->{args}} => @{$res->{args}};
-                            $outres->{env_vars}->{$_} = $res->{env_vars}->{$_} for keys %{$res->{env_vars}};
-                            $outres->{record}->{ref($resource)} = $res->{record};
+
+                        my @out = ($run_by_stage => $task, $outres);
+
+                        if (@resource_skip) {
+                            push @out => (resource_skip => \@resource_skip);
+                        }
+                        else {
+                            for my $resource (@$resources) {
+                                my $res = {args => [], env_vars => {}};
+                                $resource->assign($task, $res);
+                                push @{$outres->{args}} => @{$res->{args}};
+                                $outres->{env_vars}->{$_} = $res->{env_vars}->{$_} for keys %{$res->{env_vars}};
+                                $outres->{record}->{ref($resource)} = $res->{record};
+                            }
                         }
 
-                        return ($run_by_stage => $task, $outres);
+                        return @out;
                     }
                 }
             }

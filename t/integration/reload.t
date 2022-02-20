@@ -58,6 +58,22 @@ BEGIN {
 sub parse_output {
     my ($output) = @_;
 
+    # On macOS, these days, /var is actually a symlink to /private/var.
+    # Somewhere along the lines, something is turning /var into /private/var in
+    # the runner, which makes the "strip out the tmpdir" code (marked below)
+    # leave behind a /private.  This fix is inelegant, but probably fixes the
+    # overwhelming majority of macOS test failures without introducing any
+    # further problems.  A better fix might be to track down and eliminate the
+    # rewriting of the path, or to uniformly make this check match the behavior
+    # under the hood.  For now: let's just let macOS users install
+    # TAP2::Harness! -- rjbs, 2022-02-20
+    my $safe_tmpdir = $tmpdir;
+    if ($safe_tmpdir =~ m{\A/var/} && -l '/var') {
+      my $target = File::Spec->rel2abs(readlink('/var'), '/');
+      $target =~ s{/\z}{};
+      $safe_tmpdir =~ s{\A/var}{$target};
+    }
+
     my %by_proc;
     for my $line (split /\n/, $output) {
         next unless $line =~ m/^\s*(\d+) yath-nested-runner(?:-(\S+))? - (.+)$/;
@@ -65,7 +81,9 @@ sub parse_output {
         $proc //= '';
         $text =~ s/$pid yath-nested-runner-$proc(\s*-\s*)//g;
         $text =~ s{(\Q$fqdir\E|\Q$dir\E|\Q$pdir\E)/*}{}g;
-        $text =~ s{\Q$tmpdir\E(/)?}{TEMP$1}g;
+
+        $text =~ s{\Q$safe_tmpdir\E(/)?}{TEMP$1}g; # <-- strip out the tmpdir
+
         $text =~ s{ line \d+.*$}{}g;
         push @{$by_proc{$proc || 'default'}} => $text;
     }

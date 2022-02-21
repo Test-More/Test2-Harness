@@ -176,7 +176,7 @@ sub init {
     my $use_color = ref($self->{+COLOR}) ? 1 : delete($self->{+COLOR});
     $use_color = $self->{+TTY} unless defined $use_color;
 
-    if ($self->{+TTY} && USE_ANSI_COLOR) {
+    if ($use_color && USE_ANSI_COLOR) {
         $self->{+SHOW_BUFFER} = 1 unless defined $self->{+SHOW_BUFFER};
 
         if ($use_color) {

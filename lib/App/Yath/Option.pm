@@ -2,7 +2,7 @@ package App::Yath::Option;
 use strict;
 use warnings;
 
-our $VERSION = '1.000109';
+our $VERSION = '1.000110';
 
 use Carp qw/confess/;
 

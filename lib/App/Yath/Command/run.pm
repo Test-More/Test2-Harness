@@ -47,6 +47,7 @@ the start command for details on how to launch a persistant instance.
 sub terminate_queue {}
 sub write_settings_to {}
 sub setup_plugins {}
+sub setup_resources {}
 sub teardown_plugins {}
 sub finalize_plugins {}
 
@@ -65,6 +66,7 @@ sub init {
         next if $settings->check_prefix($prefix);
 
         my $new = $settings->define_prefix($prefix);
+        ${$new->vivify_field('from_runner')} = 1;
         for my $key (sort keys %{$runner_settings->{$prefix}}) {
             ${$new->vivify_field($key)} = $runner_settings->{$prefix}->{$key};
         }

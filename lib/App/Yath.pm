@@ -55,6 +55,7 @@ sub generate_run_sub {
     my $argv    = $self->process_argv();
 
     my $cmd_class = $self->command_class();
+    ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('command')} //= $cmd_class;
 
     return $cmd_class->generate_run_sub($symbol, $argv, $self->{+SETTINGS}) if $cmd_class->can('generate_run_sub');
 

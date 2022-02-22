@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+    - Do not initialize resources in `yath run`
+    - Add command to settings->harness
+    - Add from_runner to settings included from a persistent runner
+    - Fix temp dir issue in macos
+
 1.000108  2022-02-11 15:23:10-08:00 America/Los_Angeles
 
     - Add ability for resource managers to report resources as unavailable ot skip tests

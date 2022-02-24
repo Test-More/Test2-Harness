@@ -105,6 +105,8 @@ sub advance {
     my $self = shift;
     $self->poll();
 
+    $_->tick() for @{$self->{+RESOURCES} //= []};
+
     $self->advance_run();
     return 0 unless $self->{+RUN};
     return 1 if $self->advance_tasks();

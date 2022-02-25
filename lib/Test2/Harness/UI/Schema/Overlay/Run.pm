@@ -109,7 +109,17 @@ sub expanded_coverages {
     my $self = shift;
     my ($query) = @_;
 
-    $self->coverages->search(
+    my $pick_me = {run_id => $self->run_id};
+
+    if ($query) {
+        $query = {'-and' => [$query, $pick_me]};
+    }
+    else {
+        $query = $pick_me;
+    }
+
+    my $schema = $self->result_source->schema;
+    $schema->resultset('Coverage')->search(
         $query,
         {
             order_by   => [qw/test_file_id source_file_id source_sub_id/],
@@ -135,6 +145,7 @@ sub coverage_data {
     my $data;
     my $end = 0;
 
+    my $run_id;
     my $iterator = sub {
         while (1) {
             return undef if $end;
@@ -148,6 +159,9 @@ sub coverage_data {
                 $data = undef;
                 return $out;
             }
+
+            $run_id //= $item->run_id;
+            die "Different run id!" if $run_id ne $item->run_id;
 
             my $fields = $item->human_fields;
             my $test   = $fields->{test_file};

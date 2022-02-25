@@ -22,28 +22,31 @@ my @yathdb_args = (
     '--yathui-mode'    => 'complete',
 );
 
-yath(
-    command => 'test',
-    pre     => ['-D./lib'],
-    exit    => 0,
-    env     => {A_FAIL_ONCE => 1},
-    args    => [
-        "-D",
-        "-I$dir/lib",
-        $dir,
-        '--ext=tx',
-        '-v',
-        @yathdb_args,
-        '--cover-files',
-        '--cover-metrics',
-        '--retry' => 1,
-    ],
-    test => sub {
-        my $out = shift;
-        ok($out->{output} !~ m/YathUI-DB Renderer error/, "No database error");
-        ok($out->{output} =~ m{RETRY.*t/integration/coverage/a\.tx}, "retried a.tx");
-    },
-);
+# Run twice so we have extra coverage data
+for (1 .. 2) {
+    yath(
+        command => 'test',
+        pre     => ['-D./lib'],
+        exit    => 0,
+        env     => {A_FAIL_ONCE => 1},
+        args    => [
+            "-D",
+            "-I$dir/lib",
+            $dir,
+            '--ext=tx',
+            '-v',
+            @yathdb_args,
+            '--cover-files',
+            '--cover-metrics',
+            '--retry' => 1,
+        ],
+        test => sub {
+            my $out = shift;
+            ok($out->{output} !~ m/YathUI-DB Renderer error/, "No database error");
+            ok($out->{output} =~ m{RETRY.*t/integration/coverage/a\.tx}, "retried a.tx");
+        },
+    );
+}
 
 my $coverage_data = [
     {

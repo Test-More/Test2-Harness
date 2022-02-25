@@ -18,11 +18,10 @@ sub last_covered_run {
     my $query = {
         status => 'complete',
         project_id => $self->project_id,
-        'coverages.run_id' => { 'IS NOT' => undef },
+        has_coverage => 1,
     };
 
     my $attrs = {
-        join => ['coverages'],
         order_by => {'-desc' => 'run_ord'},
         rows => 1,
     };

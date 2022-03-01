@@ -26,9 +26,22 @@ __PACKAGE__->add_columns(
   },
   "name",
   { data_type => "citext", is_nullable => 0 },
+  "owner",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
 );
 __PACKAGE__->set_primary_key("project_id");
 __PACKAGE__->add_unique_constraint("projects_name_key", ["name"]);
+__PACKAGE__->belongs_to(
+  "owner",
+  "Test2::Harness::UI::Schema::Result::User",
+  { user_id => "owner" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "NO ACTION",
+    on_update     => "NO ACTION",
+  },
+);
 __PACKAGE__->has_many(
   "permissions",
   "Test2::Harness::UI::Schema::Result::Permission",
@@ -43,8 +56,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-26 13:48:36
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:zcCjxYe236A6YKGjgQpf/Q
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-01 08:57:16
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:S4fZpJ4u0T9R+64NMQKr2A
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

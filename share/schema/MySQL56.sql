@@ -89,7 +89,9 @@ CREATE TABLE log_files (
 CREATE TABLE projects (
     project_id      CHAR(36)        NOT NULL PRIMARY KEY,
     name            VARCHAR(128)    NOT NULL,
+    owner           CHAR(36)        DEFAULT NULL,
 
+    FOREIGN KEY (owner) REFERENCES users(user_id),
     UNIQUE(name)
 ) ROW_FORMAT=COMPRESSED;
 

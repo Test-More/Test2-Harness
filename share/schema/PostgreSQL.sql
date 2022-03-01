@@ -111,6 +111,7 @@ CREATE TABLE log_files (
 CREATE TABLE projects (
     project_id      UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     name            CITEXT          NOT NULL,
+    owner           UUID            DEFAULT NULL REFERENCES users(user_id),
 
     UNIQUE(name)
 );

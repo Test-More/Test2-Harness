@@ -15,6 +15,8 @@ use Carp qw/croak confess/;
 
 use Test2::Util::Facets2Legacy qw/causes_fail/;
 
+use Test2::Harness::UI::Util qw/format_duration/;
+
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use JSON::PP();
@@ -361,29 +363,6 @@ sub process_event {
     $self->flush(job => $job, is_diag => $e->{is_diag});
 
     return;
-}
-
-sub format_duration {
-    my $seconds = shift;
-
-    my $minutes = int($seconds / 60);
-    my $hours   = int($minutes / 60);
-    my $days    = int($hours / 24);
-
-    $minutes %= 60;
-    $hours   %= 24;
-
-    $seconds -= $minutes * 60;
-    $seconds -= $hours * 60 * 60;
-    $seconds -= $days * 60 * 60 * 24;
-
-    my @dur;
-    push @dur => sprintf("%02dd", $days) if $days;
-    push @dur => sprintf("%02dh", $hours) if @dur || $hours;
-    push @dur => sprintf("%02dm", $minutes) if @dur || $minutes;
-    push @dur => sprintf("%07.4fs", $seconds);
-
-    return join ':' => @dur;
 }
 
 sub finish {

@@ -12,7 +12,7 @@ use Test2::Harness::Util qw/mod2file/;
 
 use Importer Importer => 'import';
 
-our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver config_from_settings find_job/;
+our @EXPORT = qw/share_dir share_file qdb_driver dbd_driver config_from_settings find_job format_duration parse_duration/;
 
 my %SCHEMA_TO_QDB_DRIVER = (
     mariadb => 'MySQL',
@@ -140,6 +140,61 @@ sub config_from_settings {
         dbi_pass => $db->pass // '',
     );
 }
+
+sub format_duration {
+    my $seconds = shift;
+
+    my $minutes = int($seconds / 60);
+    my $hours   = int($minutes / 60);
+    my $days    = int($hours / 24);
+
+    $minutes %= 60;
+    $hours   %= 24;
+
+    $seconds -= $minutes * 60;
+    $seconds -= $hours * 60 * 60;
+    $seconds -= $days * 60 * 60 * 24;
+
+    my @dur;
+    push @dur => sprintf("%02dd", $days) if $days;
+    push @dur => sprintf("%02dh", $hours) if @dur || $hours;
+    push @dur => sprintf("%02dm", $minutes) if @dur || $minutes;
+    push @dur => sprintf("%07.4fs", $seconds);
+
+    return join ':' => @dur;
+}
+
+sub parse_duration {
+    my $duration = shift;
+
+    my $out = 0;
+
+    my (@parts) = split ':' => $duration;
+    for my $part (@parts) {
+        my ($num, $type) = ($part =~ m/^([0-9\.]+)([dhms])$/);
+
+        unless ($num && $type) {
+            warn "invalid duration section '$part'";
+            next;
+        }
+
+        if ($type eq 'd') {
+            $out .= ($num * 60 * 60 * 24);
+        }
+        elsif ($type eq 'h') {
+            $out .= ($num * 60 * 60);
+        }
+        elsif ($type eq 'm') {
+            $out .= ($num * 60);
+        }
+        else {
+            $out += $num;
+        }
+    }
+
+    return $out;
+}
+
 
 1;
 

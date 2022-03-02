@@ -7,14 +7,54 @@ our $VERSION = '0.000111';
 use Time::Elapsed qw/elapsed/;
 use List::Util qw/sum/;
 use Text::Xslate();
-use Test2::Harness::UI::Util qw/share_dir/;
+use Test2::Harness::UI::Util qw/share_dir format_duration parse_duration/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
 
+my %BAD_ST_NAME = (
+    '__ANON__'            => 1,
+    'unnamed'             => 1,
+    'unnamed subtest'     => 1,
+    'unnamed summary'     => 1,
+    '<UNNAMED ASSERTION>' => 1,
+);
+
 sub title { 'Project Stats' }
+
+sub users {
+    my $self = shift;
+    my ($project) = @_;
+
+    my $schema = $self->{+CONFIG}->schema;
+    my $dbh = $schema->storage->dbh;
+
+    my $query = <<"    EOT";
+        SELECT users.user_id AS user_id, users.username AS username
+          FROM users
+          JOIN runs USING(user_id)
+         WHERE runs.project_id = ?
+         GROUP BY user_id
+    EOT
+
+    my $sth = $dbh->prepare($query);
+    $sth->execute($project->project_id) or die $sth->errstr;
+
+    my $owner = $project->owner;
+    my @out;
+    for my $row (@{$sth->fetchall_arrayref // []}) {
+        my ($user_id, $username) = @$row;
+        my $is_owner = ($owner && $user_id eq $owner->user_id) ? 1 : 0;
+        push @out => {user_id => $user_id, username => $username, owner => $is_owner};
+    }
+
+    @out = sort { $b->{owner} cmp $a->{owner} || $a->{username} cmp $b->{username} } @out;
+
+    return \@out;
+}
+
 
 sub handle {
     my $self = shift;
@@ -56,6 +96,7 @@ sub html {
             project  => $project,
             base_uri => $req->base->as_string,
             n        => $n,
+            users    => $self->users($project),
         }
     );
 
@@ -92,12 +133,16 @@ sub stats {
 }
 
 my %VALID_TYPES = (
-    coverage       => 1,
-    uncovered      => 1,
-    file_failures  => 1,
-    sub_failures   => 1,
-    file_durations => 1,
-    sub_durations  => 1,
+    coverage           => 1,
+    uncovered          => 1,
+    file_failures      => 1,
+    sub_failures       => 1,
+    file_durations     => 1,
+    sub_durations      => 1,
+    user_summary       => 1,
+    expensive_users    => 1,
+    expensive_files    => 1,
+    expensive_subtests => 1,
 );
 
 sub build_stat {
@@ -110,6 +155,8 @@ sub build_stat {
 
     return {%$stat, error => "Invalid type '$type'"} unless $VALID_TYPES{$type};
 
+    $stat->{users} //= [];
+
     eval {
         my $meth = "_build_stat_$type";
         $self->$meth($project => $stat);
@@ -119,22 +166,324 @@ sub build_stat {
     return $stat;
 }
 
+sub _build_stat_expensive_files {
+    my $self = shift;
+    my ($project, $stat) = @_;
+
+    my $n = $stat->{n};
+    my $users = $stat->{users};
+
+    my $schema = $self->{+CONFIG}->schema;
+    my $dbh = $schema->storage->dbh;
+
+    my $user_query = @$users ? 'AND runs.user_id in (' . join(',' => map { '?' } @$users ) . ')' : '';
+
+    my $query = <<"    EOT";
+        SELECT users.username,
+               test_files.filename,
+               jobs.run_id, jobs.duration, jobs.fail, jobs.retry
+          FROM jobs
+          JOIN runs       USING(run_id)
+          JOIN test_files USING(test_file_id)
+          JOIN users      USING(user_id)
+         WHERE runs.project_id = ?
+           AND runs.status in ('complete', 'canceled')
+           $user_query
+      ORDER BY runs.added, runs.run_ord
+    EOT
+
+    my $sth = $dbh->prepare($query);
+    $sth->execute($project->project_id, @$users) or die $sth->errstr;
+
+    my %runs;
+    my %data;
+    while (my $row = $sth->fetchrow_hashref) {
+        my ($user, $file, $run_id, $duration, $fail, $retry) = @$row{qw/username filename run_id duration fail retry/};
+        if ($n) {
+            $runs{$run_id} //= 1;
+            last if scalar(keys %runs) > $n;
+        }
+
+        my $fdata = $data{$file} //= {file => $file, users => {}, runs => {}, duration => 0, fail => 0, retry => 0, pass => 0};
+        $fdata->{users}->{$user}++;
+        $fdata->{runs}->{$run_id}++;
+        $fdata->{duration} += $duration;
+        $fdata->{retry}++ if $retry;
+        $fdata->{$fail ? 'fail' : 'pass'}++;
+    }
+
+    my @rows;
+    for my $row (sort {$b->{duration} <=> $a->{duration}} values %data) {
+        $row->{runs}    = keys(%{$row->{runs}})  || 1;
+        $row->{users}   = keys(%{$row->{users}}) || 1;
+        $row->{average} = ($row->{duration} / $row->{runs});
+
+        push @rows => [
+            {},
+            @$row{qw/file/},
+            {formatted => format_duration($row->{duration}), raw => $row->{duration}},
+            {formatted => format_duration($row->{average}), raw => $row->{average}},
+            @$row{qw/runs users pass fail retry/},
+        ];
+    }
+
+    $stat->{table} = {
+        class => 'expense',
+        sortable => 1,
+        header => ['Test File', 'Total Time', 'Average Job Time', 'Total Jobs', 'Users Effected', 'Passes', 'Fails', 'Retries'],
+        rows => \@rows,
+    };
+}
+
+sub _build_stat_expensive_subtests {
+    my $self = shift;
+    my ($project, $stat) = @_;
+
+    my $n = $stat->{n};
+    my $users = $stat->{users};
+
+    my $schema = $self->{+CONFIG}->schema;
+    my $dbh = $schema->storage->dbh;
+
+    my $user_query = @$users ? 'AND runs.user_id in (' . join(',' => map { '?' } @$users ) . ')' : '';
+
+
+    my $query = <<"    EOT";
+        SELECT users.username,
+               test_files.filename,
+               jobs.run_id,
+               events.facets
+          FROM events
+          JOIN jobs       USING(job_key)
+          JOIN runs       USING(run_id)
+          JOIN test_files USING(test_file_id)
+          JOIN users      USING(user_id)
+         WHERE events.is_subtest = TRUE
+           AND events.nested = 0
+           AND events.facets IS NOT NULL
+           AND runs.project_id = ?
+           AND runs.status in ('complete', 'canceled')
+           $user_query
+      ORDER BY runs.added, runs.run_ord
+    EOT
+
+    my $sth = $dbh->prepare($query);
+    $sth->execute($project->project_id, @$users) or die $sth->errstr;
+
+    my %runs;
+    my %data;
+    while (my $row = $sth->fetchrow_hashref) {
+        my ($user, $file, $run_id, $facets) = @$row{qw/username filename run_id facets/};
+        if ($n) {
+            $runs{$run_id} //= 1;
+            last if scalar(keys %runs) > $n;
+        }
+
+        $facets = decode_json($facets) unless ref $facets;
+        my $assert = $facets->{assert} // next;
+        my $parent = $facets->{parent} // next;
+        my $st = $assert->{details} || next;
+        next if $BAD_ST_NAME{$st};
+
+        my $start = $parent->{start_stamp} // next;
+        my $stop  = $parent->{stop_stamp}  // next;
+        my $duration = $stop - $start;
+
+        my $fdata = $data{$file}->{$st} //= {file => $file, subtest => $st, duration => 0, average => 0, users => {}, runs => {}, pass => 0, fail => 0};
+        $fdata->{users}->{$user}++;
+        $fdata->{runs}->{$run_id}++;
+        $fdata->{duration} += $duration;
+        $fdata->{$assert->{pass}? 'pass' : 'fail'}++;
+    }
+
+    my @rows;
+    for my $row (sort {$b->{duration} <=> $a->{duration}} map { values %{$_} } values %data) {
+        $row->{runs}    = keys(%{$row->{runs}})  || 1;
+        $row->{users}   = keys(%{$row->{users}}) || 1;
+        $row->{average} = ($row->{duration} / $row->{runs});
+
+        push @rows => [
+            {},
+            @$row{qw/file subtest/},
+            {formatted => format_duration($row->{duration}), raw => $row->{duration}},
+            {formatted => format_duration($row->{average}), raw => $row->{average}},
+            @$row{qw/runs users pass fail/},
+        ];
+    }
+
+    $stat->{table} = {
+        class => 'expense',
+        sortable => 1,
+        header => ['Test File', 'Subtest', 'Total Time', 'Average Subtest Time', 'Times Executed', 'Users Effected', 'Passes', 'Fails'],
+        rows => \@rows,
+    };
+
+    #FILENAME/USER | [SUBTEST] |  TOTAL TIME | TOTAL RUNS | [USER COUNT] | AVERAGE RUN TIME | PASSES | FAILS | RETRIES
+}
+
+sub _build_stat_expensive_users {
+    my $self = shift;
+    my ($project, $stat) = @_;
+
+    my $fetch = $self->_get_n_runs_expense_data($project, $stat);
+
+    my %data;
+    while (my $row = $fetch->()) {
+        my ($status, $duration, $passed, $failed, $retried, $username) = @$row{qw/status duration passed failed retried username/};
+        my $udata = $data{$username} //= {user => $username, total_time => 0, total_runs => 0, passes => 0, fails => 0, cancels => 0};
+
+        $udata->{total_runs}++;
+
+        $duration = parse_duration($duration);
+        $udata->{total_time} += $duration;
+
+        if ($status ne 'complete') {
+            $udata->{cancels}++;
+        }
+        elsif ($failed) {
+            $udata->{fails}++;
+        }
+        else {
+            $udata->{passes}++;
+        }
+    }
+
+    my @rows;
+    for my $row (sort { $b->{total_time} <=> $a->{total_time} } values %data) {
+        $row->{average_time} = $row->{total_time} / $row->{total_runs};
+        $row->{total_time} = $row->{total_time};
+
+        push @rows => [
+            {},
+            $row->{user},
+            {formatted => format_duration($row->{total_time}), raw => $row->{total_time}},
+            $row->{total_runs},
+            {formatted => format_duration($row->{average_time}), raw => $row->{average_time}},
+            $row->{passes},
+            $row->{fails},
+            $row->{cancels},
+        ];
+    }
+
+    $stat->{table} = {
+        class => 'expense',
+        sortable => 1,
+        header => ['User', 'Total Time', 'Total Runs', 'Average Run Time', 'Passed', 'Fails', 'Cancels'],
+        rows => \@rows,
+    };
+}
+
+sub _get_n_runs_expense_data {
+    my $self = shift;
+    my ($project, $stat) = @_;
+
+    my $n = $stat->{n};
+    my $users = $stat->{users};
+
+    my $schema = $self->{+CONFIG}->schema;
+    my $dbh = $schema->storage->dbh;
+
+    my $user_query = @$users ? 'AND run.user_id in (' . join(',' => map { '?' } @$users ) . ')' : '';
+    my $limit_query = $n ? 'LIMIT ?' : '';
+
+    my $query = <<"    EOT";
+        SELECT run.status, run.duration, run.passed, run.failed, run.retried, users.username
+          FROM runs AS run
+          JOIN users USING(user_id)
+         WHERE run.project_id = ?
+           AND run.status in ('complete', 'canceled')
+           $user_query
+      ORDER BY run.added, run.run_ord
+           $limit_query
+    EOT
+
+    my $sth = $dbh->prepare($query);
+    $sth->execute($project->project_id, @$users, $n ? ($n) : ()) or die $sth->errstr;
+
+    return sub { $sth->fetchrow_hashref };
+}
+
+sub _build_stat_user_summary {
+    my $self = shift;
+    my ($project, $stat) = @_;
+
+    my $fetch = $self->_get_n_runs_expense_data($project, $stat);
+
+    my $data = {};
+    while (my $row = $fetch->()) {
+        my ($status, $duration, $passed, $failed, $retried, $username) = @$row{qw/status duration passed failed retried username/};
+
+        $data->{runs}++;
+        unless ($data->{users}->{$username}++) {
+            $data->{unique_users}++;
+        }
+
+        $duration = parse_duration($duration);
+        $data->{total_durations} += $duration;
+        push @{$data->{durations}} => $duration;
+
+        $data->{passed_files}  += $passed  if $passed;
+        $data->{failed_files}  += $failed  if $failed;
+        $data->{retried_files} += $retried if $retried;
+
+        if ($status ne 'complete') {
+            $data->{incomplete_runs}++;
+        }
+        elsif ($failed) {
+            $data->{failed_runs}++;
+        }
+        else {
+            $data->{passed_runs}++;
+        }
+    }
+
+    $data->{runs} //= 1;            # Avoid divide by 0
+    $data->{unique_users} ||= 1;    # Avoid divide by 0
+    $data->{total_durations} //= 0;
+
+    $data->{run_average_time}  = $data->{total_durations} / $data->{unique_users};
+    $data->{user_average_time} = $data->{total_durations} / $data->{runs};
+    $data->{file_average_time} = $data->{total_durations} / (sum($data->{passed_files} //= 0, $data->{failed_files} //= 0, $data->{retried_files} //= 0) || 1);
+    $data->{user_average_runs} = $data->{runs} / $data->{unique_users};
+
+    $stat->{pairs} = [
+        ["Total time spent running tests" => format_duration($data->{total_durations}    // 0)],
+        ["Average time per test run"      => format_duration($data->{run_average_time}   // 0)],
+        ["Average time per user"          => format_duration($data->{user_average_time}  // 0)],
+        ["Average time per file"          => format_duration($data->{file_average_time}  // 0)],
+        ["Average runs per user"          => sprintf("%0.2f", $data->{user_average_runs} // 0)],
+        ["Total unique users"             => scalar(keys %{$data->{users} // {}}) // 0],
+        ["Total runs"                     => $data->{runs}                        // 0],
+        ["Total incomplete runs"          => $data->{incomplete_runs}             // 0],
+        ["Total passed runs"              => $data->{passed_runs}                 // 0],
+        ["Total failed runs"              => $data->{failed_runs}                 // 0],
+        ["Total passed files"             => $data->{passed_files}                // 0],
+        ["Total failed files"             => $data->{failed_files}                // 0],
+        ["Total retried files"            => $data->{retried_files}               // 0],
+    ];
+}
+
 sub _build_stat_file_durations {
     my $self = shift;
     my ($project, $stat) = @_;
 
     my $n = $stat->{n};
+    my $users = $stat->{users};
 
     my $schema = $self->{+CONFIG}->schema;
 
     my $fields_rs = $schema->resultset('JobField')->search(
-        { 'me.name'        => 'time_total',
-          'run.status'     => 'complete',
-          'run.project_id' => $project->project_id,
+        {
+            'me.name'        => 'time_total',
+            'run.status'     => 'complete',
+            'run.project_id' => $project->project_id,
+            @$users ? (user_id => {'-in' => $users}) : ()
         },
-        { join     => { job_key => 'run' },
-          order_by => {'-DESC'  => 'run.added'},
-          prefetch => 'job_key' },
+        {
+            join     => {job_key => 'run'},
+            order_by => {'-DESC' => 'run.added'},
+            prefetch => 'job_key'
+        },
     );
 
     my %runs;
@@ -177,14 +526,6 @@ sub _build_stat_file_durations {
     };
 }
 
-my %BAD_ST_NAME = (
-    '__ANON__'            => 1,
-    'unnamed'             => 1,
-    'unnamed subtest'     => 1,
-    'unnamed summary'     => 1,
-    '<UNNAMED ASSERTION>' => 1,
-);
-
 sub _build_stat_sub_durations {
     my $self = shift;
     my ($project, $stat) = @_;
@@ -193,14 +534,19 @@ sub _build_stat_sub_durations {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my $users     = $stat->{users};
     my $events_rs = $schema->resultset('Event')->search(
-        { 'me.is_subtest'  => 1,
-          'run.status'     => 'complete',
-          'run.project_id' => $project->project_id,
+        {
+            'me.is_subtest'  => 1,
+            'run.status'     => 'complete',
+            'run.project_id' => $project->project_id,
+            @$users ? (user_id => {'-in' => $users}) : ()
         },
-        { join     => { job_key => 'run' },
-          order_by => {'-DESC'  => 'run.added'},
-          prefetch => 'job_key' },
+        {
+            join     => {job_key => 'run'},
+            order_by => {'-DESC' => 'run.added'},
+            prefetch => 'job_key'
+        },
     );
 
     my %runs;
@@ -269,14 +615,19 @@ sub _build_stat_sub_failures {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my $users     = $stat->{users};
     my $events_rs = $schema->resultset('Event')->search(
-        { 'me.is_subtest'  => 1,
-          'run.status'     => 'complete',
-          'run.project_id' => $project->project_id,
+        {
+            'me.is_subtest'  => 1,
+            'run.status'     => 'complete',
+            'run.project_id' => $project->project_id,
+            @$users ? (user_id => {'-in' => $users}) : ()
         },
-        { join     => { job_key => 'run' },
-          order_by => {'-DESC'  => 'run.added'},
-          prefetch => 'job_key' },
+        {
+            join     => {job_key => 'run'},
+            order_by => {'-DESC' => 'run.added'},
+            prefetch => 'job_key'
+        },
     );
 
     my %runs;
@@ -346,12 +697,17 @@ sub _build_stat_file_failures {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my $users   = $stat->{users};
     my $jobs_rs = $schema->resultset('Job')->search(
-        { 'run.status'     => 'complete',
-          'run.project_id' => $project->project_id,
+        {
+            'run.status'     => 'complete',
+            'run.project_id' => $project->project_id,
+            @$users ? (user_id => {'-in' => $users}) : ()
         },
-        { join     => 'run',
-          order_by => {'-DESC'  => 'run.added'}},
+        {
+            join     => 'run',
+            order_by => {'-DESC' => 'run.added'}
+        },
     );
 
     my %runs;
@@ -408,12 +764,20 @@ sub _build_stat_uncovered {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my $users = $stat->{users};
     my $field = $schema->resultset('RunField')->search(
-        { 'me.name'        => 'coverage',
-          'run.project_id' => $project->project_id },
-        { join             => 'run',
-          order_by         => {'-DESC' => 'run.added'},
-          rows             => 1 } ,
+        {
+            'me.name'        => 'coverage',
+            'me.data'        => \'IS NOT NULL',
+            'run.project_id' => $project->project_id,
+            'run.has_coverage' => 1,
+            @$users ? (user_id => {'-in' => $users}) : ()
+        },
+        {
+            join     => 'run',
+            order_by => {'-DESC' => 'run.added'},
+            rows     => 1
+        },
     )->first;
 
     return $stat->{text} = "No coverage data."
@@ -442,19 +806,27 @@ sub _build_stat_coverage {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my $users = $stat->{users};
     my @items = reverse $schema->resultset('RunField')->search(
-        { 'me.name'        => 'coverage',
-          'run.project_id' => $project->project_id },
-        { join             => 'run',
-          order_by         => {'-DESC' => 'run.added'},
-                $n ? (rows => $n) : (),
-        } ,
+        {
+            'me.name'        => 'coverage',
+            'me.data'        => \'IS NOT NULL',
+            'run.project_id' => $project->project_id,
+            'run.has_coverage' => 1,
+            @$users ? (user_id => {'-in' => $users}) : ()
+        },
+        {
+            join     => 'run',
+            order_by => {'-DESC' => 'run.added'},
+            $n ? (rows => $n) : (),
+        },
     )->all;
 
     my $labels = [];
     my $subs   = [];
     my $files  = [];
     for my $item (@items) {
+        next unless $item->data;
         push @$labels => '';
         my $metrics = $item->data->{metrics} // $item->data;
         push @$files => int($metrics->{files}->{tested} / $metrics->{files}->{total} * 100) if $metrics->{files}->{total};
@@ -485,7 +857,7 @@ sub _build_stat_coverage {
         },
         options => {
             elements => {
-                point => { radius => 1 },
+                point => { radius => 3 },
                 line =>  { borderWidth => 1 },
             },
             scales => {

@@ -9,6 +9,25 @@ div#project {
     padding-bottom: 40px;
 }
 
+select#users {
+    min-width: 250px;
+}
+
+table.pairs th {
+    text-align: right;
+    padding-right: 12px;
+    white-space: nowrap;
+}
+
+table.expense td, table.expense th {
+    padding-right: 12px;
+    white-space: nowrap;
+}
+
+div.controls div.control ul li.maybe_selector, li.maybe_selector {
+    display: none;
+}
+
 div.stats_set {
     overflow: hidden;
     border: 1px dotted #C0C0C0;

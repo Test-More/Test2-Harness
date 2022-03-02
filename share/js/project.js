@@ -9,12 +9,56 @@ $(function() {
         h2.parent().toggleClass('active');
         t2hui.project_stats.reload(0);
     });
+
+    $('input[name="run_selector"]').change(function() {
+        if ($(this).val() === 'limited') {
+            $('li#run_selector').show();
+        }
+        else {
+            $('li#run_selector').hide();
+        }
+    });
+
+    $('input[name="user_selector"]').change(function() {
+        if ($(this).val() === 'select') {
+            $('li#user_selector').show();
+        }
+        else {
+            $('li#user_selector').hide();
+        }
+    });
+
 });
 
 var id = 1;
 t2hui.project_stats.reload = function(all) {
-    var n = $('input#n').val();
+    var n = 0;
+    if ($('input[name="run_selector"]:checked').val() === 'limited') {
+        n = $('input#n').val();
+    }
+
     var p = $('input#project').val();
+
+    var user_sel = $('input[name="user_selector"]:checked').val();
+
+    var users = [];
+    if (user_sel === 'owner') {
+        users = [$('select#users option').first().val()];
+    }
+    else if (user_sel === 'other') {
+        var first = 0;
+        $('select#users option').each(function() {
+            if (!first) {
+                first = 1;
+                return;
+            }
+
+            users.push($(this).val());
+        });
+    }
+    else if (user_sel === 'select') {
+        users = $('select#users').val();
+    }
 
     var count = 10;
 
@@ -41,7 +85,7 @@ t2hui.project_stats.reload = function(all) {
         if (!it_n) it_n = n;
 
         if (it.parent().parent().hasClass('active')) {
-            request.push({"id": it_id, "type": it_type, "n": it_n});
+            request.push({"id": it_id, "type": it_type, "n": it_n, "users": users});
             it.text('Loading...');
             it.addClass('running');
         }
@@ -102,6 +146,19 @@ t2hui.project_stats.reload = function(all) {
                 div.prepend(download);
             }
 
+            if (item.pairs) {
+                var table = $('<table class="pairs"></table>');
+                div.html(table);
+
+                item.pairs.forEach(function(row) {
+                    var html_row = $('<tr></tr>');
+                    var header = $('<th>' + row[0] + ':</th>');
+                    var value  = $('<td>' + row[1] + '</td>');
+                    html_row.append(header, value);
+                    table.append(html_row);
+                });
+            }
+
             if (item.table) {
                 var table = $('<table></table>');
                 div.html(table);
@@ -109,18 +166,22 @@ t2hui.project_stats.reload = function(all) {
                 if (item.table.class) table.addClass(item.table.class);
 
                 if (item.table.header) {
-                    var header = $('<tr></tr>');
+                    var header = $('<thead></thead>');
                     table.append(header);
+                    var tr = $('<tr></tr>');
+                    header.append(tr);
 
                     item.table.header.forEach(function(head) {
                         var col = $('<th>' + head + '</th>');
-                        header.append(col);
+                        tr.append(col);
                     });
                 }
 
                 var set_id = 1;
                 var item_c = 0;
                 var showing_set = 1;
+                var tbody = $('<tbody></tbody>');
+                table.append(tbody);
                 item.table.rows.forEach(function(row) {
                     item_c++;
                     if (item_c > count) {
@@ -154,7 +215,7 @@ t2hui.project_stats.reload = function(all) {
                     var tr = $('<tr class="set_id_' + set_id + '"></tr>');
                     if (set_id > showing_set) tr.hide();
 
-                    table.append(tr);
+                    tbody.append(tr);
                     if (meta.class) tr.addClass(meta.class);
                     row.forEach(function(col) {
                         var td = $('<td></td>');
@@ -169,11 +230,25 @@ t2hui.project_stats.reload = function(all) {
                                 ul.append(li);
                             });
                         }
+                        if (typeof col === "object") {
+                            td.text(col.formatted);
+                            td.attr('data-order', col.raw);
+                        }
                         else {
                             td.text(col);
                         }
                     });
                 });
+
+                if (item.table.sortable) {
+                    table.DataTable({
+                        paging: false,
+                        searching: false,
+                        info: false,
+                        orderCellsTop: true,
+                        aaSorting: []
+                    });
+                }
             }
         }
     );

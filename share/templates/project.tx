@@ -4,12 +4,67 @@
     <div class="controls">
         <div class="data control">
             <ul>
-                <li><input id="n" name="n" type="text" value="<: $n :>" /> Runs to include <small>(0 for all)</small></li>
+                <li>
+                    <input type="radio" id="n_all" name="run_selector" value="all" checked /> <label for="n_all">All Runs</label>
+                    <input type="radio" id="n_lim" name="run_selector" value="limited" />     <label for="n_lim">Limit Runs</label>
+                </li>
+                <li class="maybe_selector" id="run_selector">
+                    <input id="n" name="n" type="text" value="<: $n :>" /><label for="n">&nbsp;Runs</label>
+                </li>
+                <li>
+                    <input type="radio" id="users_all" name="user_selector" value="all" checked /> <label for="users_all">All Users</label>
+
+                    : if $users[0].owner {
+                        <input type="radio" id="users_owner"  name="user_selector" value="owner" /> <label for="users_owner">Owner (<: $users[0].username :>)</label>
+                        <input type="radio" id="users_other"  name="user_selector" value="other" /> <label for="users_other">Other (not <: $users[0].username :>)</label>
+                    : }
+
+                    <input type="radio" id="users_select" name="user_selector" value="select" /> <label for="users_select">Select From List</label>
+                </li>
+                <li class="maybe_selector" id="user_selector">
+                    <select id="users" name="users" multiple>
+                        : for $users -> $user {
+                            <option value="<: $user.user_id :>"> <: $user.username :> </option>
+                        : }
+                    </select>
+                </li>
+                <li><button id="update_stats">Update</button></li>
             </ul>
             <input id="project", name="project" type="hidden" value="<: $project.name :>" />
-            <button id="update_stats">Update</button>
         </div>
         <p>
+    </div>
+
+    <div class="stats_set">
+        <h2 id="summary">Dataset Summary For Selected Runs and Users</h2>
+
+        <div class="stats summary">
+            <div class="stat running" data-stat-type="user_summary">Loading...</div>
+        </div>
+    </div>
+
+    <div class="stats_set">
+        <h2 id="expensive_users">Users Most Impacted By Test Expense (In Time)</h2>
+
+        <div class="stats expensive_users">
+            <div class="stat running" data-stat-type="expensive_users">Loading...</div>
+        </div>
+    </div>
+
+    <div class="stats_set">
+        <h2 id="expensive_files">Most Expensive Test Files (In Time)</h2>
+
+        <div class="stats expensive_files">
+            <div class="stat running" data-stat-type="expensive_files">Loading...</div>
+        </div>
+    </div>
+
+    <div class="stats_set">
+        <h2 id="expensive_subtests">Most Expensive Subtests (In Time)</h2>
+
+        <div class="stats expensive_subtests">
+            <div class="stat running" data-stat-type="expensive_subtests">Loading...</div>
+        </div>
     </div>
 
     <div class="stats_set">

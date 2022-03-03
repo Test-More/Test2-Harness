@@ -167,6 +167,10 @@ sub format_duration {
 sub parse_duration {
     my $duration = shift;
 
+    return 0 unless $duration;
+
+    return $duration unless $duration =~ m/:?.*[dhms]$/i;
+
     my $out = 0;
 
     my (@parts) = split ':' => $duration;
@@ -179,13 +183,13 @@ sub parse_duration {
         }
 
         if ($type eq 'd') {
-            $out .= ($num * 60 * 60 * 24);
+            $out += ($num * 60 * 60 * 24);
         }
         elsif ($type eq 'h') {
-            $out .= ($num * 60 * 60);
+            $out += ($num * 60 * 60);
         }
         elsif ($type eq 'm') {
-            $out .= ($num * 60);
+            $out += ($num * 60);
         }
         else {
             $out += $num;

@@ -187,7 +187,8 @@ sub _build_stat_expensive_files {
           JOIN test_files USING(test_file_id)
           JOIN users      USING(user_id)
          WHERE runs.project_id = ?
-           AND runs.status in ('complete', 'canceled')
+           AND runs.status IN ('complete', 'canceled')
+           AND jobs.duration IS NOT NULL
            $user_query
       ORDER BY runs.added, runs.run_ord
     EOT
@@ -199,6 +200,8 @@ sub _build_stat_expensive_files {
     my %data;
     while (my $row = $sth->fetchrow_hashref) {
         my ($user, $file, $run_id, $duration, $fail, $retry) = @$row{qw/username filename run_id duration fail retry/};
+        next unless $duration;
+
         if ($n) {
             $runs{$run_id} //= 1;
             last if scalar(keys %runs) > $n;
@@ -391,7 +394,8 @@ sub _get_n_runs_expense_data {
           FROM runs AS run
           JOIN users USING(user_id)
          WHERE run.project_id = ?
-           AND run.status in ('complete', 'canceled')
+           AND run.status IN ('complete', 'canceled')
+           AND run.duration IS NOT NULL
            $user_query
       ORDER BY run.added, run.run_ord
            $limit_query
@@ -412,6 +416,7 @@ sub _build_stat_user_summary {
     my $data = {};
     while (my $row = $fetch->()) {
         my ($status, $duration, $passed, $failed, $retried, $username) = @$row{qw/status duration passed failed retried username/};
+        next unless $duration;
 
         $data->{runs}++;
         unless ($data->{users}->{$username}++) {

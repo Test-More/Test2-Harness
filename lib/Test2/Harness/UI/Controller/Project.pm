@@ -182,11 +182,11 @@ sub get_add_query {
     my $dbh = $schema->storage->dbh;
 
     my $query = <<"    EOT";
-        SELECT run_ord, MAX(run_id)
+        SELECT run_ord, run_id
           FROM reporting
          WHERE project_id = ?
            AND $user_query
-      GROUP BY run_ord
+      GROUP BY run_ord, run_id
       ORDER BY run_ord DESC
          LIMIT ?
     EOT
@@ -443,41 +443,44 @@ sub _build_stat_user_summary {
     my $jobs = $sth->fetchrow_hashref;
     my $subs = $sth->fetchrow_hashref;
 
-    $stat->{pair_sets} = [
-        [
-            ['User Summary'],
-            ["Total unique users"    => $runs->{users} // 0],
-            ["Average time per user" => display_duration(($runs->{total_duration} // 0) / $runs->{users})],
-            ["Average runs per user" => $runs->{runs} / $runs->{users}],
-        ],
-        [
-            ['Run Summary'],
-            ["Total time spent running tests" => display_duration($runs->{total_duration}   // 0)],
-            ["Average time per test run"      => display_duration($runs->{average_duration} // 0)],
-            ["Total runs"            => $runs->{runs}  // 0],
-            ["Total incomplete runs" => $runs->{abort} // 0],
-            ["Total passed runs"     => $runs->{pass}  // 0],
-            ["Total failed runs"     => $runs->{fail}  // 0],
-        ],
-        [
-            ['Job Summary'],
-            ["Average time per job"    => display_duration($runs->{total_duration} / $jobs->{total_test_files})],
-            ["Total unique test files" => $jobs->{unique_test_files} // 0],
-            ["Total jobs executed"     => $jobs->{total_test_files}  // 0],
-            ["Total passed files"      => $jobs->{pass}              // 0],
-            ["Total failed files"      => $jobs->{fail}              // 0],
-            ["Total retried files"     => $jobs->{retry}             // 0],
-        ],
-        [
-            ['Subtest Summary'],
-            ["Average time per subtest" => display_duration($subs->{total_duration} / $subs->{total_subtests})],
-            ["Total unique subtests"    => $subs->{unique_subtests} // 0],
-            ["Total subtests executed"  => $subs->{total_subtests}  // 0],
-            ["Total passed subtests"    => $subs->{pass}            // 0],
-            ["Total failed sustests"    => $subs->{fail}            // 0],
-            ["Total retried subtests"   => $subs->{retry}           // 0],
-        ],
-    ];
+    $stat->{pair_sets} = [];
+
+    push @{$stat->{pair_sets}} => [
+        ['User Summary'],
+        ["Total unique users"    => $runs->{users} // 0],
+        ["Average time per user" => display_duration(($runs->{total_duration} // 0) / $runs->{users})],
+        ["Average runs per user" => $runs->{runs} / $runs->{users}],
+    ] if $runs->{runs} && $runs->{users};
+
+    push @{$stat->{pair_sets}} => [
+        ['Run Summary'],
+        ["Total time spent running tests" => display_duration($runs->{total_duration}   // 0)],
+        ["Average time per test run"      => display_duration($runs->{average_duration} // 0)],
+        ["Total runs"            => $runs->{runs}  // 0],
+        ["Total incomplete runs" => $runs->{abort} // 0],
+        ["Total passed runs"     => $runs->{pass}  // 0],
+        ["Total failed runs"     => $runs->{fail}  // 0],
+    ] if $runs->{runs};
+
+    push @{$stat->{pair_sets}} => [
+        ['Job Summary'],
+        ["Average time per job"    => display_duration($runs->{total_duration} / $jobs->{total_test_files})],
+        ["Total unique test files" => $jobs->{unique_test_files} // 0],
+        ["Total jobs executed"     => $jobs->{total_test_files}  // 0],
+        ["Total passed files"      => $jobs->{pass}              // 0],
+        ["Total failed files"      => $jobs->{fail}              // 0],
+        ["Total retried files"     => $jobs->{retry}             // 0],
+    ] if $jobs->{total_test_files};
+
+    push @{$stat->{pair_sets}} => [
+        ['Subtest Summary'],
+        ["Average time per subtest" => display_duration($subs->{total_duration} / $subs->{total_subtests})],
+        ["Total unique subtests"    => $subs->{unique_subtests} // 0],
+        ["Total subtests executed"  => $subs->{total_subtests}  // 0],
+        ["Total passed subtests"    => $subs->{pass}            // 0],
+        ["Total failed sustests"    => $subs->{fail}            // 0],
+        ["Total retried subtests"   => $subs->{retry}           // 0],
+    ] if $subs->{total_subtests};
 }
 
 sub _build_stat_uncovered {

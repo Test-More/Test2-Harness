@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix aggregate function for UUID for reporting
+
 0.000113  2022-03-07 16:28:26-08:00 America/Los_Angeles
 
     - Add reporting table, backfill script, and update reports

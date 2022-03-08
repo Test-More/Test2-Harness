@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix expensive users report
+
 0.000114  2022-03-08 08:10:16-08:00 America/Los_Angeles
 
     - Fix aggregate function for UUID for reporting

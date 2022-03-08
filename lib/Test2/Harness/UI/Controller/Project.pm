@@ -309,7 +309,6 @@ sub _build_stat_expensive_subtests {
                COUNT(DISTINCT(user_id)) AS users,
                SUM(pass)                AS pass,
                SUM(fail)                AS fail,
-               SUM(retry)               AS retry,
                SUM(abort)               AS abort
           FROM reporting
      LEFT JOIN test_files USING(test_file_id)
@@ -339,7 +338,7 @@ sub _build_stat_expensive_subtests {
     $stat->{table} = {
         class => 'expense',
         sortable => 1,
-        header => ['Test File', 'Subtest', 'Total Time', 'Average Time', 'Runs', 'Jobs', 'Users', 'Pass Rate', 'Failure Rate', 'Passes', 'Fails', 'Retries', 'Aborts'],
+        header => ['Test File', 'Subtest', 'Total Time', 'Average Time', 'Runs', 'Jobs', 'Users', 'Pass Rate', 'Failure Rate', 'Passes', 'Fails', 'Aborts'],
         rows => \@rows,
     };
 }
@@ -357,20 +356,18 @@ sub _build_stat_expensive_users {
     my ($add_query, @add_vals) = $self->get_add_query($project, $n, $users);
 
     my $query = <<"    EOT";
-        SELECT users.username           AS username,
-               SUM(duration)            AS total_duration,
-               AVG(duration)            AS average_duration,
-               COUNT(DISTINCT(run_ord)) AS runs,
-               COUNT(duration)          AS tries,
-               SUM(pass)                AS pass,
-               SUM(fail)                AS fail,
-               SUM(retry)               AS retry,
-               SUM(abort)               AS abort
+        SELECT users.username  AS username,
+               SUM(duration)   AS total_duration,
+               AVG(duration)   AS average_duration,
+               COUNT(duration) AS runs,
+               SUM(pass)       AS pass,
+               SUM(fail)       AS fail,
+               SUM(abort)      AS abort
           FROM reporting
      LEFT JOIN users USING(user_id)
-         WHERE project_id    = ?
-           AND subtest      IS NULL
-           AND test_file_id IS NULL
+         WHERE project_id = ?
+           AND job_key    IS NULL
+           AND subtest    IS NULL
            $add_query
       GROUP BY username
     EOT
@@ -381,9 +378,9 @@ sub _build_stat_expensive_users {
     my @rows;
     for my $row (sort { $b->[1] <=> $a->[1] } @{$sth->fetchall_arrayref}) {
         splice(
-            @$row, 5, 0,
-            int($row->[5] / $row->[4] * 100) . '%',
-            int($row->[6] / $row->[4] * 100) . '%',
+            @$row, 4, 0,
+            int($row->[4] / $row->[3] * 100) . '%',
+            int($row->[5] / $row->[3] * 100) . '%',
         );
         $row->[1] = {formatted => display_duration($row->[1]), raw => $row->[1]};
         $row->[2] = {formatted => display_duration($row->[2]), raw => $row->[2]};
@@ -394,7 +391,7 @@ sub _build_stat_expensive_users {
     $stat->{table} = {
         class => 'expense',
         sortable => 1,
-        header => ['User', 'Total Time', 'Average Time', 'Runs', 'Jobs', 'Pass Rate', 'Fail Rate', 'Passes', 'Fails', 'Retries', 'Aborts'],
+        header => ['User', 'Total Time', 'Average Time', 'Runs', 'Pass Rate', 'Fail Rate', 'Passes', 'Fails', 'Aborts'],
         rows => \@rows,
     };
 }

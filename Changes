@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add reporting table, backfill script, and update reports
+
 0.000112  2022-03-03 08:23:04-08:00 America/Los_Angeles
 
     - Fix reports

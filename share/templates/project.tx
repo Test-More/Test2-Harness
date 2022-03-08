@@ -52,7 +52,7 @@
     </div>
 
     <div class="stats_set">
-        <h2 id="expensive_files">Most Expensive Test Files (In Time)</h2>
+        <h2 id="expensive_files">Test Files</h2>
 
         <div class="stats expensive_files">
             <div class="stat running" data-stat-type="expensive_files">Loading...</div>
@@ -60,7 +60,7 @@
     </div>
 
     <div class="stats_set">
-        <h2 id="expensive_subtests">Most Expensive Subtests (In Time)</h2>
+        <h2 id="expensive_subtests">Subtests</h2>
 
         <div class="stats expensive_subtests">
             <div class="stat running" data-stat-type="expensive_subtests">Loading...</div>
@@ -68,7 +68,7 @@
     </div>
 
     <div class="stats_set">
-        <h2 id="coverage">Coverage Chart</h2>
+        <h2 id="coverage_chart">Coverage Chart</h2>
 
         <div class="stats coverage">
             <div id="coverage_chart" class="stat running" data-stat-type="coverage">Loading...</div>
@@ -76,57 +76,17 @@
     </div>
 
     <div class="stats_set">
-        <h2 id="coverage">Uncovered Files And/Or Subs (Latest)</h2>
+        <h2 id="coverage_missing">Uncovered Files And/Or Subs (Only looks at most recent run in data selection)</h2>
         <div class="stats coverage">
             <div class="stat running" data-stat-type="uncovered" data-stat-n="1">Loading...</div>
         </div>
     </div>
 
     <div class="stats_set">
-        <h2 id="failures">Files Most Likely Fail</h2>
-
-        <div class="stats failures">
-            <div class="stat running" data-stat-type="file_failures">Loading...</div>
-        </div>
-    </div>
-
-    <div class="stats_set">
-        <h2 id="failures">Subtests Most Likely Fail</h2>
-
-        <div class="stats failures">
-            <div class="stat running" data-stat-type="sub_failures">Loading...</div>
-        </div>
-    </div>
-
-    <div class="stats_set">
-        <h2 id="longest">Longest Running Test Files (Latest)</h2>
+        <h2 id="run_list">See Selected Runs</h2>
 
         <div class="stats durations">
-            <div class="stat running" data-stat-type="file_durations" data-stat-n="1">Loading...</div>
-        </div>
-    </div>
-
-    <div class="stats_set">
-        <h2 id="longest">Longest Running Test Files (Average)</h2>
-
-        <div class="stats durations">
-            <div class="stat running" data-stat-type="file_durations">Loading...</div>
-        </div>
-    </div>
-
-    <div class="stats_set">
-        <h2 id="longest">Longest Running Subtests (Latest)</h2>
-
-        <div class="stats durations">
-            <div class="stat running" data-stat-type="sub_durations" data-stat-n="1">Loading...</div>
-        </div>
-    </div>
-
-    <div class="stats_set">
-        <h2 id="longest">Longest Running Subtests (Average)</h2>
-
-        <div class="stats durations">
-            <div class="stat running" data-stat-type="sub_durations">Loading...</div>
+            <div class="stat running" data-stat-type="run_list">Loading...</div>
         </div>
     </div>
 

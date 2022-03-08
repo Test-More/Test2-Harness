@@ -60,7 +60,8 @@ t2hui.project_stats.reload = function(all) {
         users = $('select#users').val();
     }
 
-    var count = 10;
+    // Disabling for now
+    var count = 100000;
 
     $('span.n').text(n);
 
@@ -110,6 +111,8 @@ t2hui.project_stats.reload = function(all) {
 
             var div =  $('div#' + item.id);
             div.removeClass('running');
+            div.removeClass('error_set');
+            div.removeClass('success_set');
             div.addClass('loaded');
 
             if (item.error) {
@@ -146,17 +149,45 @@ t2hui.project_stats.reload = function(all) {
                 div.prepend(download);
             }
 
-            if (item.pairs) {
+            var build_pair_table = function(pairs) {
                 var table = $('<table class="pairs"></table>');
-                div.html(table);
-
-                item.pairs.forEach(function(row) {
+                pairs.forEach(function(row) {
                     var html_row = $('<tr></tr>');
-                    var header = $('<th>' + row[0] + ':</th>');
-                    var value  = $('<td>' + row[1] + '</td>');
-                    html_row.append(header, value);
+                    var header = $('<th>' + row[0] + '</th>');
+                    html_row.append(header);
+                    if (row.length === 1) {
+                        header.attr('colspan', 2);
+                        header.addClass('title');
+                    }
+                    else {
+                        header.append(':');
+                        var value  = $('<td>' + row[1] + '</td>');
+                        html_row.append(value);
+                    }
                     table.append(html_row);
                 });
+                return table;
+            }
+
+            if (item.runs) {
+                var run_table = t2hui.runtable.build_table();
+                div.html(run_table.render());
+                item.runs.forEach(function(run) {
+                    run_table.render_item(run, run.run_id);
+                })
+            }
+
+            if (item.pair_sets) {
+                div.empty();
+                item.pair_sets.forEach(function(pairs) {
+                    var table = build_pair_table(pairs);
+                    div.append(table);
+                });
+            }
+
+            if (item.pairs) {
+                var table = build_pair_table(item.pairs);
+                div.html(table);
             }
 
             if (item.table) {
@@ -241,6 +272,7 @@ t2hui.project_stats.reload = function(all) {
                 });
 
                 if (item.table.sortable) {
+                    table.before('<small><B>Note:</B> Click on a column title to sort by that column</small><br />');
                     table.DataTable({
                         paging: false,
                         searching: false,

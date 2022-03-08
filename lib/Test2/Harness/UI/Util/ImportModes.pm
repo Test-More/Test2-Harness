@@ -20,7 +20,7 @@ my %MODES = (
     map {$_ => $_} values %MODES,
 );
 
-our @EXPORT_OK = qw/event_in_mode record_all_events mode_check/;
+our @EXPORT_OK = qw/event_in_mode record_all_events mode_check record_subtest_events/;
 
 our %EXPORT_ANON = (
     '%MODES' => \%MODES,
@@ -82,12 +82,23 @@ sub record_all_events {
     return 0;
 }
 
+sub record_subtest_events {
+    my %params = @_;
+
+    return 1 if $params{record_all_events} //= record_all_events(%params);
+
+    my $mode = _get_mode(%params);
+    return 1 if $mode >= $MODES{qvfds};
+
+    return 0;
+}
+
 sub event_in_mode {
     my %params = @_;
 
     my $event = $params{event} or croak "'event' is required";
 
-    my $record_all = $params{record_all_events} // record_all_events(%params);
+    my $record_all = $params{record_all_events} //= record_all_events(%params);
     return 1 if $record_all;
 
     # Only look for diag and similar for QVFD and higher

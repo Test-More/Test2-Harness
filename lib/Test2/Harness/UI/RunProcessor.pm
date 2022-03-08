@@ -15,7 +15,7 @@ use Carp qw/croak confess/;
 
 use Test2::Util::Facets2Legacy qw/causes_fail/;
 
-use Test2::Harness::UI::Util qw/format_duration/;
+use Test2::Harness::UI::Util qw/format_duration is_invalid_subtest_name/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
@@ -26,6 +26,7 @@ use Test2::Harness::UI::Util::ImportModes qw{
     record_all_events
     event_in_mode
     mode_check
+    record_subtest_events
 };
 
 use Test2::Harness::UI::Util::HashBase qw{
@@ -94,6 +95,10 @@ sub init {
         $self->{+RUN} = $run;
     }
 
+    $run->discard_changes;
+
+    $self->{+PROJECT_ID} //= $run->project_id;
+
     $self->{+ID_CACHE} = {};
     $self->{+COVERAGE} = [];
 
@@ -116,6 +121,7 @@ sub flush_all {
     }
 
     $self->flush_events();
+    $self->flush_reporting();
 }
 
 sub flush {
@@ -149,6 +155,7 @@ sub flush {
     eval { $res->update(); 1 } or warn "Failed to update job result: $@";
 
     $self->flush_events();
+    $self->flush_reporting();
 
     if (my $done = $job->{done}) {
         # Last time we need to write this, so clear it.
@@ -172,7 +179,6 @@ sub flush {
     return $flush;
 }
 
-my $total = 0;
 sub flush_events {
     my $self = shift;
 
@@ -211,7 +217,82 @@ sub flush_events {
     unless (eval { $self->schema->resultset('Event')->populate(\@write); 1 }) {
         warn "Failed to populate events!\n$@\n" . Dumper(\@write);
     }
-    $total += scalar(@write);
+}
+
+sub flush_reporting {
+    my $self = shift;
+
+    my @write;
+
+    my %mixin_run = (
+        user_id    => $self->user_id,
+        run_id     => $self->{+RUN_ID},
+        run_ord    => $self->run->run_ord(),
+        project_id => $self->{+PROJECT_ID},
+    );
+
+    my $jobs = $self->{+JOBS};
+    for my $tries (values %$jobs) {
+        for my $job (values %$tries) {
+            my $strip_event_id = 0;
+
+            $strip_event_id = 1 unless record_subtest_events(
+                job  => $job->{result},
+                fail => $job->{result}->fail,
+                mode => $self->{+MODE},
+
+                is_harness_out => 0,
+            );
+
+            my %mixin = (
+                %mixin_run,
+                job_try      => $job->{job_try} // 0,
+                job_key      => $job->{job_key},
+                test_file_id => $job->{result}->test_file_id,
+            );
+
+            if (my $duration = $job->{duration}) {
+                my $fail  = $job->{result}->fail // 0;
+                my $pass  = $fail ? 0 : 1;
+                my $retry = $job->{result}->retry // 0;
+                my $abort = (defined($fail) || defined($retry)) ? 0 : 1;
+
+                push @write => {
+                    reporting_id => gen_uuid(),
+                    duration     => $duration,
+                    pass         => $pass,
+                    fail         => $fail,
+                    abort        => $abort,
+                    retry        => $retry,
+                    %mixin,
+                };
+            }
+
+            my $reporting = delete $job->{reporting};
+
+            for my $rep (@$reporting) {
+                next unless defined $rep->{duration};
+                next unless defined $rep->{subtest};
+
+                delete $rep->{event_id} if $strip_event_id;
+
+                %$rep = (
+                    reporting_id => gen_uuid(),
+                    %mixin,
+                    %$rep,
+                );
+
+                push @write => $rep;
+            }
+        }
+    }
+
+    return unless @write;
+
+    local $ENV{DBIC_DT_SEARCH_OK} = 1;
+    unless (eval { $self->schema->resultset('Reporting')->populate(\@write); 1 }) {
+        warn "Failed to populate reporting!\n$@\n" . Dumper(\@write);
+    }
 }
 
 sub user {
@@ -324,8 +405,9 @@ sub get_job {
         job_id  => $job_id,
         job_try => $job_try,
 
-        events  => [],
-        orphans => {},
+        events    => [],
+        orphans   => {},
+        reporting => [],
 
         event_ord => 1,
         result    => $result,
@@ -374,18 +456,51 @@ sub finish {
     my $run = $self->run;
 
     my $status;
+    my $dur_stat;
+    my $aborted = 0;
 
     if (@errors) {
         my $error = join "\n" => @errors;
         $status = {status => 'broken', error => $error};
+        $dur_stat = 'abort';
     }
     else {
-        my $stat = $self->{+SIGNAL} ? 'canceled' : 'complete';
+        my $stat;
+        if ($self->{+SIGNAL}) {
+            $stat = 'canceled';
+            $dur_stat = 'abort';
+            $aborted = 1;
+        }
+        else {
+            $stat = 'complete';
+            $dur_stat = $self->{+FAILED} ? 'fail' : 'pass';
+        }
+
         $status = {status => $stat, passed => $self->{+PASSED}, failed => $self->{+FAILED}, retried => $self->{+RETRIED}};
     }
 
     if ($self->{+FIRST_STAMP} && $self->{+LAST_STAMP}) {
-        $status->{duration} = format_duration($self->{+LAST_STAMP} - $self->{+FIRST_STAMP});
+        my $duration = $self->{+LAST_STAMP} - $self->{+FIRST_STAMP};
+        $status->{duration} = format_duration($duration);
+
+        eval {
+            my $fail = $aborted ? 0 : $self->{+FAILED} ? 1 : 0;
+            my $pass = ($fail || $aborted) ? 0 : 1;
+            $self->schema->resultset('Reporting')->create({
+                reporting_id => gen_uuid(),
+                user_id      => $self->user_id,
+                run_id       => $self->{+RUN_ID},
+                project_id   => $self->{+PROJECT_ID},
+                run_ord      => $self->run->run_ord(),
+                duration     => $duration,
+                retry        => 0,
+                pass         => $pass,
+                fail         => $fail,
+                abort        => $aborted,
+            });
+
+            1;
+        } or warn "Faield to insert duration row: $@";
     }
 
     eval { $run->update($status); 1 } or warn "Failed to update run status: $@";
@@ -465,6 +580,8 @@ sub _process_event {
         if ($f->{parent} && $f->{parent}->{children}) {
             $self->process_event({}, $_, job => $job, parent_id => $e_id, line => $params{line}) for @{$f->{parent}->{children}};
             $f->{parent}->{children} = "Removed, used to populate events table";
+
+            $self->add_subtest_duration($job, $e, $f) unless $nested;
         }
 
         unless ($nested) {
@@ -484,6 +601,31 @@ sub _process_event {
     }
 
     return $e;
+}
+
+sub add_subtest_duration {
+    my $self = shift;
+    my ($job, $e, $f) = @_;
+
+    return if $f->{hubs}->[0]->{nested};
+
+    my $parent = $f->{parent}       // return;
+    my $assert = $f->{assert}       // return;
+    my $st     = $assert->{details} // return;
+    return if is_invalid_subtest_name($st);
+
+    my $start    = $parent->{start_stamp} // return;
+    my $stop     = $parent->{stop_stamp}  // return;
+    my $duration = $stop - $start         // return;
+
+    push @{$job->{reporting}} => {
+        duration => $duration,
+        subtest  => $st,
+        event_id => $e->{event_id},
+        abort => 0,
+        retry => 0,
+        $assert->{pass} ? (pass => 1, fail => 0) : (fail => 1, pass => 0),
+    };
 }
 
 sub add_job_coverage {
@@ -779,8 +921,12 @@ sub update_other {
         $job->{done} = 1;
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
-            $cols{test_file_id} ||= $self->get_test_file_id($job_end->{rel_file}) if $job_end->{rel_file};
-            $cols{duration} = $job_end->{times}->{totals}->{total};
+            my $tfile_id = $cols{test_file_id} ||= $self->get_test_file_id($job_end->{rel_file}) if $job_end->{rel_file};
+
+            if (my $duration = $job_end->{times}->{totals}->{total}) {
+                $job->{duration} = $duration;
+                $cols{duration} = $duration;
+            }
         }
     }
     if (my $job_fields = $f->{harness_job_fields}) {

@@ -13,6 +13,24 @@ select#users {
     min-width: 250px;
 }
 
+table.pairs {
+    display: block;
+    float: left;
+    padding-left: 30px;
+    padding-right: 30px;
+    border-right: 1px dotted #AAAAAA;
+    min-height: 180px;
+    min-width: 380px;
+    margin: none;
+}
+
+table.pairs th.title {
+    text-align: center;
+    min-width: 190px;
+    padding-bottom: 8px;
+    font-size: x-large;
+}
+
 table.pairs th {
     text-align: right;
     padding-right: 12px;
@@ -24,18 +42,58 @@ table.expense td, table.expense th {
     white-space: nowrap;
 }
 
+table.expense {
+    border-collapse: collapse;
+}
+
+div.summary {
+    overflow: hidden;
+}
+
+table.expense > thead > tr {
+    border-bottom: 1px solid #000000;
+    position: sticky;
+    top: 80px;
+    left: 0;
+}
+
+table.expense td, table.expense th {
+    border: 1px solid #FFFFFF;
+    padding: 5px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+table.expense th {
+    border-bottom: 1px solid #000000;
+}
+
+table.expense tr  {
+    background: #D0D0D0;
+}
+
+table.expense th:hover  {
+    background: #E0E0E0;
+    cursor: pointer;
+}
+
+table.expense tr.even {
+    background: #F0F0F0;
+}
+table.expense tr.odd {
+    background: #E0E0E0;
+}
+
 div.controls div.control ul li.maybe_selector, li.maybe_selector {
     display: none;
 }
 
 div.stats_set {
-    overflow: hidden;
     border: 1px dotted #C0C0C0;
     border-radius: 12px;
     margin-bottom: 8px;
     margin-right: 8px;
     display: block;
-    overflow: hidden;
     margin: 8px;
     margin-left: auto;
     margin-right: auto;
@@ -105,7 +163,6 @@ div.stat {
     margin-bottom: -4px;
     padding: 8px;
     padding-bottom: 16px;
-    overflow: auto;
 }
 
 div.controls {
@@ -225,6 +282,10 @@ span.show {
 
 span.show:hover {
     color: #0000FF;
+}
+
+div#project {
+    overflow: unset;
 }
 
 div#project a.download {

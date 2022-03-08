@@ -5,7 +5,7 @@ use warnings;
 
 use Carp qw/confess/;
 
-our $VERSION = '0.000115';
+our $VERSION = '0.000116';
 
 BEGIN {
     return if $^C;

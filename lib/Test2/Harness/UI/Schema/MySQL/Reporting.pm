@@ -1,5 +1,5 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::Coverage;
+package Test2::Harness::UI::Schema::Result::Reporting;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
@@ -15,34 +15,44 @@ __PACKAGE__->load_components(
   "Tree::AdjacencyList",
   "UUIDColumns",
 );
-__PACKAGE__->table("coverage");
+__PACKAGE__->table("reporting");
 __PACKAGE__->add_columns(
-  "coverage_id",
+  "reporting_id",
   { data_type => "char", is_nullable => 0, size => 36 },
+  "run_ord",
+  { data_type => "bigint", is_nullable => 0 },
+  "job_try",
+  { data_type => "integer", is_nullable => 1 },
+  "subtest",
+  { data_type => "varchar", is_nullable => 1, size => 512 },
+  "duration",
+  { data_type => "double precision", is_nullable => 0 },
+  "fail",
+  { data_type => "smallint", default_value => 0, is_nullable => 0 },
+  "pass",
+  { data_type => "smallint", default_value => 0, is_nullable => 0 },
+  "retry",
+  { data_type => "smallint", default_value => 0, is_nullable => 0 },
+  "abort",
+  { data_type => "smallint", default_value => 0, is_nullable => 0 },
+  "project_id",
+  { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
   "run_id",
   { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
-  "test_file_id",
+  "user_id",
   { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
-  "source_file_id",
-  { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
-  "source_sub_id",
-  { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
-  "coverage_manager_id",
-  { data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36 },
   "job_key",
   { data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36 },
-  "metadata",
-  { data_type => "json", is_nullable => 1 },
+  "test_file_id",
+  { data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36 },
+  "event_id",
+  { data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36 },
 );
-__PACKAGE__->set_primary_key("coverage_id");
-__PACKAGE__->add_unique_constraint(
-  "run_id",
-  ["run_id", "test_file_id", "source_file_id", "source_sub_id"],
-);
+__PACKAGE__->set_primary_key("reporting_id");
 __PACKAGE__->belongs_to(
-  "coverage_manager",
-  "Test2::Harness::UI::Schema::Result::CoverageManager",
-  { coverage_manager_id => "coverage_manager_id" },
+  "event",
+  "Test2::Harness::UI::Schema::Result::Event",
+  { event_id => "event_id" },
   {
     is_deferrable => 1,
     join_type     => "LEFT",
@@ -62,33 +72,38 @@ __PACKAGE__->belongs_to(
   },
 );
 __PACKAGE__->belongs_to(
+  "project",
+  "Test2::Harness::UI::Schema::Result::Project",
+  { project_id => "project_id" },
+  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+);
+__PACKAGE__->belongs_to(
   "run",
   "Test2::Harness::UI::Schema::Result::Run",
   { run_id => "run_id" },
   { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
 );
 __PACKAGE__->belongs_to(
-  "source_file",
-  "Test2::Harness::UI::Schema::Result::SourceFile",
-  { source_file_id => "source_file_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
-);
-__PACKAGE__->belongs_to(
-  "source_sub",
-  "Test2::Harness::UI::Schema::Result::SourceSub",
-  { source_sub_id => "source_sub_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
-);
-__PACKAGE__->belongs_to(
   "test_file",
   "Test2::Harness::UI::Schema::Result::TestFile",
   { test_file_id => "test_file_id" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "RESTRICT",
+    on_update     => "RESTRICT",
+  },
+);
+__PACKAGE__->belongs_to(
+  "user",
+  "Test2::Harness::UI::Schema::Result::User",
+  { user_id => "user_id" },
   { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
 );
 
 
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-07 16:22:57
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:xUHK9DbgSgAxVs/D1w4heA
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:t209iR4s9sX0+WciS6GZ+A
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

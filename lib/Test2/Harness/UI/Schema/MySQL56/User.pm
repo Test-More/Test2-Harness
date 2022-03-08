@@ -67,6 +67,12 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 __PACKAGE__->has_many(
+  "reportings",
+  "Test2::Harness::UI::Schema::Result::Reporting",
+  { "foreign.user_id" => "self.user_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+__PACKAGE__->has_many(
   "runs",
   "Test2::Harness::UI::Schema::Result::Run",
   { "foreign.user_id" => "self.user_id" },
@@ -80,8 +86,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-01 08:57:14
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:ETrfv1z3kpGZSbBXanm/NQ
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-07 16:23:01
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:TRJtQt8hkcrYuovpA8+lzA
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

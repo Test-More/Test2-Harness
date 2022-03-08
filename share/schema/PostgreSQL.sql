@@ -297,3 +297,29 @@ CREATE TABLE coverage (
 CREATE INDEX IF NOT EXISTS coverage_from_source ON coverage(source_file_id, source_sub_id);
 CREATE INDEX IF NOT EXISTS coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);
 CREATE INDEX IF NOT EXISTS coverage_from_job ON coverage(job_key);
+
+CREATE TABLE reporting (
+    reporting_id    UUID                DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    run_ord         BIGINT              NOT NULL,
+    job_try         INT                 DEFAULT NULL,
+    subtest         VARCHAR(512)        DEFAULT NULL,
+    duration        DOUBLE PRECISION    NOT NULL,
+
+    fail            SMALLINT    NOT NULL DEFAULT 0,
+    pass            SMALLINT    NOT NULL DEFAULT 0,
+    retry           SMALLINT    NOT NULL DEFAULT 0,
+    abort           SMALLINT    NOT NULL DEFAULT 0,
+
+    project_id      UUID    NOT NULL     REFERENCES projects(project_id),
+    run_id          UUID    NOT NULL     REFERENCES runs(run_id),
+    user_id         UUID    NOT NULL     REFERENCES users(user_id),
+    job_key         UUID    DEFAULT NULL REFERENCES jobs(job_key),
+    test_file_id    UUID    DEFAULT NULL REFERENCES test_files(test_file_id),
+    event_id        UUID    DEFAULT NULL REFERENCES events(event_id)
+);
+CREATE INDEX IF NOT EXISTS reporting_user ON reporting(user_id);
+CREATE INDEX IF NOT EXISTS reporting_a    ON reporting(project_id);
+CREATE INDEX IF NOT EXISTS reporting_b    ON reporting(project_id, user_id);
+CREATE INDEX IF NOT EXISTS reporting_c    ON reporting(project_id, test_file_id, subtest);
+CREATE INDEX IF NOT EXISTS reporting_d    ON reporting(project_id, test_file_id, subtest, user_id);
+CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);

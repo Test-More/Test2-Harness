@@ -102,6 +102,12 @@ __PACKAGE__->has_many(
   { "foreign.job_key" => "self.job_key" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
+__PACKAGE__->has_many(
+  "reportings",
+  "Test2::Harness::UI::Schema::Result::Reporting",
+  { "foreign.job_key" => "self.job_key" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 __PACKAGE__->belongs_to(
   "run",
   "Test2::Harness::UI::Schema::Result::Run",
@@ -121,8 +127,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-01 08:57:14
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5HDOA9vXQ9VZACAEIAnU6Q
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-07 16:23:01
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:3rBiI+zB6ioYIgAyLsNoMQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

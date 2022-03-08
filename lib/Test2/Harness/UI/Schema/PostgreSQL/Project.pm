@@ -49,6 +49,12 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 __PACKAGE__->has_many(
+  "reportings",
+  "Test2::Harness::UI::Schema::Result::Reporting",
+  { "foreign.project_id" => "self.project_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+__PACKAGE__->has_many(
   "runs",
   "Test2::Harness::UI::Schema::Result::Run",
   { "foreign.project_id" => "self.project_id" },
@@ -56,8 +62,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-01 08:57:16
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:S4fZpJ4u0T9R+64NMQKr2A
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-07 16:23:02
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:v2NFBMB+8z6JTbD2qr+kIQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

@@ -307,3 +307,36 @@ CREATE TABLE coverage (
 CREATE INDEX coverage_from_source ON coverage(source_file_id, source_sub_id);
 CREATE INDEX coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);
 CREATE INDEX coverage_from_job ON coverage(job_key);
+
+CREATE TABLE reporting (
+    reporting_id    CHAR(36)            NOT NULL PRIMARY KEY,
+    run_ord         BIGINT              NOT NULL,
+    job_try         INT                 DEFAULT NULL,
+    subtest         VARCHAR(512)        DEFAULT NULL,
+    duration        DOUBLE PRECISION    NOT NULL,
+
+    fail            SMALLINT    NOT NULL DEFAULT 0,
+    pass            SMALLINT    NOT NULL DEFAULT 0,
+    retry           SMALLINT    NOT NULL DEFAULT 0,
+    abort           SMALLINT    NOT NULL DEFAULT 0,
+
+    project_id      CHAR(36)    NOT NULL,
+    run_id          CHAR(36)    NOT NULL,
+    user_id         CHAR(36)    NOT NULL,
+    job_key         CHAR(36)    DEFAULT NULL,
+    test_file_id    CHAR(36)    DEFAULT NULL,
+    event_id        CHAR(36)    DEFAULT NULL,
+
+    FOREIGN KEY (project_id)      REFERENCES projects(project_id),
+    FOREIGN KEY (run_id)          REFERENCES runs(run_id),
+    FOREIGN KEY (user_id)         REFERENCES users(user_id),
+    FOREIGN KEY (job_key)         REFERENCES jobs(job_key),
+    FOREIGN KEY (test_file_id)    REFERENCES test_files(test_file_id),
+    FOREIGN KEY (event_id)        REFERENCES events(event_id)
+);
+CREATE INDEX reporting_user ON reporting(user_id);
+CREATE INDEX reporting_a    ON reporting(project_id);
+CREATE INDEX reporting_b    ON reporting(project_id, user_id);
+CREATE INDEX reporting_c    ON reporting(project_id, test_file_id, subtest);
+CREATE INDEX reporting_d    ON reporting(project_id, test_file_id, subtest, user_id);
+CREATE INDEX reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);

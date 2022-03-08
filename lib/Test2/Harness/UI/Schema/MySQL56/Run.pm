@@ -108,6 +108,12 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
 );
 __PACKAGE__->has_many(
+  "reportings",
+  "Test2::Harness::UI::Schema::Result::Reporting",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+__PACKAGE__->has_many(
   "run_fields",
   "Test2::Harness::UI::Schema::Result::RunField",
   { "foreign.run_id" => "self.run_id" },
@@ -121,8 +127,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-01 08:57:14
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:51KBtJ8MmVq8s/GLRFGpng
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-07 16:23:01
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:2Ld6uRQyd7IodgA+icQoNw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

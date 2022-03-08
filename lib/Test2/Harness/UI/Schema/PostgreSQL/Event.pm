@@ -62,10 +62,16 @@ __PACKAGE__->belongs_to(
   { job_key => "job_key" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
+__PACKAGE__->has_many(
+  "reportings",
+  "Test2::Harness::UI::Schema::Result::Reporting",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-01 08:57:16
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BgkERN4O0G1SdvigFNBFfQ
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-03-07 16:23:02
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:kt5obaaMv+VbhJgnP5SSqg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

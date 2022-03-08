@@ -21,6 +21,7 @@ my %WriteMakefileArgs = (
   },
   "DISTNAME" => "Test2-Harness-UI",
   "EXE_FILES" => [
+    "scripts/yath-ui-backfill.pl",
     "scripts/yath-ui-importer.pl",
     "scripts/yath-ui-sweeper.pl"
   ],

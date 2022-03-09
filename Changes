@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Better handling and checking of persistence files
+
 1.000110  2022-02-24 11:50:52-08:00 America/Los_Angeles
 
     - Add 'tick()' method to resource classes

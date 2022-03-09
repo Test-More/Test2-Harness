@@ -100,10 +100,6 @@ sub start_runner {
 
     my $data = $self->pfile_data;
 
-    if ($data->{version} ne $VERSION) {
-        die "Version mismatch, persistent runner is version $data->{version}, runner is version $VERSION.\n";
-    }
-
     $self->{+RUNNER_PID} = $data->{pid};
 }
 

@@ -20,6 +20,7 @@ use Test2::Harness::Util::IPC qw/run_cmd USE_P_GROUPS/;
 
 use POSIX;
 use File::Spec;
+use Sys::Hostname qw/hostname/;
 
 use Time::HiRes qw/sleep/;
 
@@ -155,7 +156,13 @@ sub run {
         print "\nUse `yath watch` to monitor the persistent runner\n\n" if $settings->runner->daemon;
     }
 
-    Test2::Harness::Util::File::JSON->new(name => $pfile)->write({pid => $pid, dir => $dir, version => $VERSION});
+    Test2::Harness::Util::File::JSON->new(name => $pfile)->write({
+        pid      => $pid,
+        dir      => $dir,
+        version  => $VERSION,
+        user     => $ENV{USER},
+        hostname => hostname(),
+    });
 
     return 0 if $settings->runner->daemon;
 

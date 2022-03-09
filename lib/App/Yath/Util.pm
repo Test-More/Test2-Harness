@@ -5,8 +5,10 @@ use warnings;
 our $VERSION = '1.000111';
 
 use File::Spec;
+use Sys::Hostname qw/hostname/;
 
 use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util::File::JSON;
 
 use Cwd qw/realpath/;
 use Importer Importer => 'import';
@@ -103,6 +105,62 @@ sub find_in_updir {
 }
 
 sub find_pfile {
+    my $pfile = _find_pfile(@_) or return;
+
+    return $pfile unless -e $pfile;
+
+    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+
+    $data->{version}  //= '';
+    $data->{hostname} //= '';
+    $data->{user}     //= '';
+    $data->{pid}      //= '';
+    $data->{dir}      //= '';
+
+    my $hostname = hostname();
+    my $user = $ENV{USER};
+
+    my @bad;
+
+    push @bad => "** Version mismatch, persistent runner is version $data->{version}, current is version $VERSION. **"
+        if $data->{version} ne $VERSION;
+
+    push @bad => "** Hostname mismatch, persistent runner hostname is '$data->{hostname}', current hostname is '$hostname'. **"
+        if $data->{hostname} ne $hostname;
+
+    push @bad => "** User mismatch, persistent runner user is '$data->{user}', current user is '$user'. **"
+        if $data->{user} ne $user;
+
+    push @bad => "** Workdir missing, persistent runner is supposed to be at '$data->{dir}', but it does not exist. **"
+        unless -d $data->{dir};
+
+    push @bad => "** PID not running, persistent runner is supposed to be running with PID '$data->{pid}', but it is not. **"
+        unless kill(0, $data->{pid});
+
+    return $pfile unless @bad;
+
+    die join "\n" => @bad, <<"    EOT";
+
+Errors like this usually indicate that the persistent runner has gone away.
+Maybe the system was shut down improperly, or maybe the process was killed too
+quickly to clean up after itself.
+
+Here is the information indicated by the persistence file:
+  Runner PID:  $data->{pid}
+  Runner Vers: $data->{version}
+  Runner user: $data->{user}
+  Runner host: $data->{hostname}
+  Working dir: $data->{dir}
+
+If the persistent runner is truly gone you should delete the following file to
+continue:
+
+$pfile
+
+    EOT
+}
+
+sub _find_pfile {
     my ($settings, %params) = @_;
 
     croak "Settings is a required argument" unless $settings;
@@ -121,26 +179,39 @@ sub find_pfile {
         return; # Specified, but not found and no vivify
     }
 
-    my $project = $yath->project;
-    my $name = $project ? "$project-yath-persist.json" : "yath-persist.json";
+    my $basename = "yath-persist.json";
+    my $user     = $ENV{USER};
+    my $hostname = hostname();
+    my $project  = $yath->project;
+
+    my @names = ($basename);
+    @names = (@names, map { "$project-$_" } @names) if $project;
+    @names = (@names, map { "$hostname-$_" } @names) if $hostname;
+    @names = (@names, map { "$user-$_" } @names) if $user;
+    @names = reverse map { ".$_" } @names;
+
     my $set_dir = $yath->persist_dir // $ENV{YATH_PERSISTENCE_DIR};
     my $dir = $set_dir // $ENV{TMPDIR} // $ENV{TEMPDIR} // File::Spec->tmpdir;
 
     # If a dir was specified, or if the current dir is not writable then we must use $dir/$name
     if ($project || $set_dir || !-w '.') {
-        my $pfile = clean_path(File::Spec->catfile($dir, $name));
-        return $pfile if -f $pfile || $params{vivify};
+        for my $name (@names) {
+            my $pfile = clean_path(File::Spec->catfile($dir, $name));
+            return $pfile if -f $pfile;
+        }
 
-        return; # Not found, no vivify
+        return clean_path(File::Spec->catfile($dir, $names[0])) if $params{vivify};
+        return; # Not found
     }
 
     # Fall back to using the current dir (which must be writable)
-    $name = ".yath-persist.json";
-    my $pfile = find_in_updir($name);
-    return $pfile if $pfile && -f $pfile;
+    for my $name (@names) {
+        my $pfile = find_in_updir($name);
+        return $pfile if $pfile && -f $pfile;
+    }
 
     # Creating it here!
-    return $name if $params{vivify};
+    return clean_path(File::Spec->catfile('.', $names[0])) if $params{vivify};
 
     # Nope, nothing.
     return;

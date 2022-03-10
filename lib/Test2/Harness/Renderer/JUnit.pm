@@ -459,7 +459,7 @@ F<https://github.com/CpanelInc/Test2-Harness-Renderer-JUnit>.
 
 =head1 COPYRIGHT
 
-Copyright 2019 Todd Rinaldo<lt>toddr@cpanel.netE<gt>.
+Copyright 2019 Todd Rinaldo E<lt>toddr@cpanel.netE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

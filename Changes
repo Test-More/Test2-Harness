@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+0.000116  2022-03-14 12:47:49-07:00 America/Los_Angeles
+
+    - Fix run deleting with reporting table
+    - Add `yath upload` command
+
 0.000115  2022-03-08 13:41:28-08:00 America/Los_Angeles
 
     - Fix expensive users report

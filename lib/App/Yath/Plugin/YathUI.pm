@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '1.000112';
 
 use File::Spec;
-use Test2::Harness::Util qw/read_file mod2file/;
+use Test2::Harness::Util qw/read_file mod2file looks_like_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use App::Yath::Options;
@@ -148,20 +148,66 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
     };
 };
 
-sub finish {
+sub grab_rerun {
     my $this = shift;
-    my %params = @_;
+    my ($rerun, %params) = @_;
 
-    my $settings = $params{settings};
+    return (0) if $rerun =~ m/\.jsonl(\.gz|\.bz2)?/;
 
-    return unless $settings->yathui->upload;
+    my $settings    = $params{settings};
+    my $only_failed = $params{only_failed};
 
-    my $log_file = $settings->logging->log_file;
-    my ($filename) = reverse File::Spec->splitpath($log_file);
+    my $path;
+    if ($rerun eq '1') {
+        my $project = $settings->yathui->project or return (0);
+        my $user = $settings->yathui->user // $ENV{USER};
+
+        $path = "$project/$user";
+
+        print "Re-run requested with no paremeters, ${ \__PACKAGE__ } querying YathUI (web request) for last run matching $path...\n";
+
+        # API Qwerk :-/
+        $path .= '/0';
+    }
+    elsif (looks_like_uuid($rerun)) {
+        $path = "$rerun/json";
+        print "Re-run requested with UUID, ${ \__PACKAGE__ } querying YathUI (web request) for matching run, or latest run from project or user matching the UUID\n";
+    }
+    else {
+        return (0);
+    }
+
+    $path = $only_failed ? "failed/$path" : "files/$path";
+
+    my ($ok, $res, $data) = $this->_request($settings, $path, {json => 1});
+
+    if (!$ok) {
+        print "Error getting a re-run data from yathui: $data...\n";
+        return (1);
+    }
+
+    my %files;
+    for my $key (qw/failures passes/) {
+        my $set = $data->{$key} or next;
+        for my $item (@$set) {
+            $files{$item->{file}}++;
+        }
+    }
+
+    my @files = sort keys %files;
+
+    return (1) unless @files;
+
+    return (1, @files);
+}
+
+sub _request {
+    my $this = shift;
+    my ($settings, $path, $payload) = @_;
 
     my $url = $settings->yathui->url;
     $url =~ s{/+$}{}g;
-    $url = join "/" => ($url, 'upload');
+    $url = join "/" => ($url, $path);
 
     my %fields;
 
@@ -171,7 +217,7 @@ sub finish {
     }
 
     require HTTP::Tiny;
-    eval { require HTTP::Tiny::Multipart; 1 } or die "To use --yathui-upload you must install HTTP::Tiny::Multipart.\n";
+    eval { require HTTP::Tiny::Multipart; 1 } or die "To use --yathui-* you must install HTTP::Tiny::Multipart.\n";
 
     my $res;
     for (0 .. $settings->yathui->retry) {
@@ -179,17 +225,8 @@ sub finish {
         $res  = $http->post_multipart(
             $url => {
                 headers => {'Content-Type' => 'application/json'},
-
-                log_file => {
-                    filename => $filename,
-                    content  => read_file($log_file, no_decompress => 1),
-                    content_type  => 'application/x-bzip2',
-                },
-
-                action => 'Upload Log',
-                json => 1,
-
                 %fields,
+                %$payload,
             },
         );
 
@@ -202,25 +239,7 @@ sub finish {
         my $data;
         $ok = eval { $data = decode_json($res->{content}); 1 };
         if ($ok) {
-            if ($data->{errors} && @{$data->{errors}}) {
-                $ok  = 0;
-                $msg = join "\n" => (@{$data->{errors}});
-            }
-            elsif ($data->{messages}) {
-                $ok = 1;
-
-                my $url = $settings->yathui->url;
-                $url =~ s{/+$}{}g;
-
-                $msg = join "\n" => (
-                    @{$data->{messages}},
-                    $data->{run_id} ? ("YathUI run url: " . join '/' => ($url, 'run', $data->{run_id})) : (),
-                );
-            }
-            else {
-                $ok  = 0;
-                $msg = "No messages recieved";
-            }
+            return (1, $res, $data);
         }
         else {
             $msg = $@;
@@ -233,6 +252,57 @@ sub finish {
         else {
             $msg = "Failed to upload yathui log, no response object";
         }
+    }
+
+    return (0, $res, $msg);
+}
+
+sub finish {
+    my $this = shift;
+    my %params = @_;
+
+    my $settings = $params{settings};
+
+    return unless $settings->yathui->upload;
+
+    my $log_file = $settings->logging->log_file;
+    my ($filename) = reverse File::Spec->splitpath($log_file);
+
+    my ($ok, $res, $data) = $this->_request(
+        'upload', {
+            log_file => {
+                filename     => $filename,
+                content      => read_file($log_file, no_decompress => 1),
+                content_type => 'application/x-bzip2',
+            },
+
+            action => 'Upload Log',
+            json   => 1,
+        }
+    );
+
+    die "Error connecting to YathUI: $data\n"
+        unless $ok;
+
+    my $msg;
+    if ($data->{errors} && @{$data->{errors}}) {
+        $ok  = 0;
+        $msg = join "\n" => (@{$data->{errors}});
+    }
+    elsif ($data->{messages}) {
+        $ok = 1;
+
+        my $url = $settings->yathui->url;
+        $url =~ s{/+$}{}g;
+
+        $msg = join "\n" => (
+            @{$data->{messages}},
+            $data->{run_id} ? ("YathUI run url: " . join '/' => ($url, 'run', $data->{run_id})) : (),
+        );
+    }
+    else {
+        $ok  = 0;
+        $msg = "No messages recieved";
     }
 
     chomp($msg);

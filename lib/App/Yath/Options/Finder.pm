@@ -53,6 +53,24 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         applicable => \&changes_applicable,
     );
 
+    option rerun => (
+        type => 'd',
+        description => "Re-Run tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+        long_examples => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
+    );
+
+    option rerun_failed => (
+        type => 'd',
+        description => "Re-Run failed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+        long_examples => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
+    );
+
+    option rerun_plugin => (
+        type => 'm',
+        description => "What plugin(s) should be used for rerun (will fallback to other plugins if the listed ones decline the value, this is just used ot set an order of priority)",
+        long_examples => [' Foo', ' +App::Yath::Plugin::Foo'],
+    );
+
     option changed => (
         type => 'm',
         description => "Specify one or more files as having been changed.",

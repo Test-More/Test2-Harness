@@ -23,6 +23,8 @@ use Test2::Harness::Util::HashBase qw{
 
     <no_long <only_long
 
+    <rerun <rerun_failed <rerun_plugin
+
     search <extensions
 
     <multi_project
@@ -40,6 +42,14 @@ sub init {
     my $self = shift;
 
     $self->{+EXCLUDE_FILES} = { map {( $_ => 1 )} @{$self->{+EXCLUDE_FILES}} } if ref($self->{+EXCLUDE_FILES}) eq 'ARRAY';
+
+    if (my $plugins = $self->{+RERUN_PLUGIN}) {
+        for (@$plugins) {
+            $_ = "App::Yath::Plugin::$_" unless s/^\+// or m/^(App::Yath|Test2::Harness)::Plugin::/;
+            my $file = mod2file($_);
+            require $file;
+        }
+    }
 }
 
 sub duration_data {
@@ -163,6 +173,9 @@ sub find_files {
 
     $self->add_changed_to_search($plugins, $settings) if $add_changes;
 
+    my $add_rerun = $self->{+RERUN_FAILED} // $self->{+RERUN};
+    $self->add_rerun_to_search($plugins, $settings, $add_rerun) if $add_rerun;
+
     return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
 
     return $self->find_project_files($plugins, $settings, $self->search);
@@ -255,6 +268,66 @@ sub get_capable_plugins {
 
     my %seen;
     return grep { $_ && !$seen{$_}++ && $_->can($method) } @$plugins;
+}
+
+sub add_rerun_to_search {
+    my $self = shift;
+    my ($plugins, $settings, $rerun) = @_;
+
+    my $search = $self->search;
+    unless ($search) {
+        $search = [];
+        $self->set_search($search);
+    }
+
+    my $only_failed = $self->{+RERUN_FAILED};
+
+    for my $p ($self->get_capable_plugins(grab_rerun => [@{$self->{+RERUN_PLUGIN} // []}, @$plugins])) {
+        my ($grabbed, @add) = $p->grab_rerun($rerun, only_failed => $only_failed, settings => $settings);
+        next unless $grabbed;
+
+        unless (@add) {
+            print "No files found to rerun.\n";
+            exit 0;
+        }
+
+        push @$search => @add;
+        return;
+    }
+
+    if ($rerun eq '1') {
+        $rerun = first { -e $_ } qw{ ./lastlog.jsonl ./lastlog.jsonl.bz2 ./lastlog.jsonl.gz };
+
+        die "Could not find a lastlog.jsonl(.bz2|.gz) file for re-running, you may need to provide a full path to --rerun=... or --rerun-failed=..."
+            unless $rerun;
+    }
+
+    die "'$rerun' is not a valid log file, and no plugin intercepted it.\n" unless -f $rerun;
+
+    my $stream = Test2::Harness::Util::File::JSONL->new(name => $rerun);
+
+    my @files;
+    while(1) {
+        my @events = $stream->poll(max => 1000) or last;
+
+        for my $event (@events) {
+            my $f = $event->{facet_data} or next;
+
+            my $end = $f->{harness_job_end} or next;
+            next if $only_failed && !$end->{fail};
+
+            my $file = $end->{rel_file} // $end->{file} // $end->{abs_file};
+            next unless $file;
+            push @files => $file;
+        }
+    }
+
+    unless (@files) {
+        print "No files found to rerun.\n";
+        exit 0;
+    }
+
+    push @$search => @files;
 }
 
 sub add_changed_to_search {

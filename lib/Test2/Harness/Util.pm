@@ -37,7 +37,18 @@ our @EXPORT_OK = qw{
     process_includes
 
     chmod_tmp
+
+    looks_like_uuid
 };
+
+sub looks_like_uuid {
+    my ($in) = @_;
+
+    return undef unless defined $in;
+    return undef unless length($in) == 36;
+    return undef unless $in =~ m/^[0-9A-F\-]+$/i;
+    return $in;
+}
 
 sub chmod_tmp {
     my $file = shift;

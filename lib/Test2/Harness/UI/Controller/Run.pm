@@ -52,6 +52,7 @@ sub handle {
             die error(400 => "Cannot delete a pinned run") if $run->pinned;
 
             $run->coverages->delete;
+            $run->reportings->delete;
 
             my $jobs = $run->jobs;
 

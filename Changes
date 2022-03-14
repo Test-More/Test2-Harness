@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add lastlog.jsonl.* symlink creation to auto-link to the last log produced
+
 1.000111  2022-03-09 15:07:10-08:00 America/Los_Angeles
 
     - Better handling and checking of persistence files

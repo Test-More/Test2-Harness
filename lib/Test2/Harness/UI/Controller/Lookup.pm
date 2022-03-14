@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Lookup;
 use strict;
 use warnings;
 
-our $VERSION = '0.000116';
+our $VERSION = '0.000117';
 
 use Data::GUID;
 use Scalar::Util qw/blessed/;

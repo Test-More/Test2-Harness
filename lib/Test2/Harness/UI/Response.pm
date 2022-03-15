@@ -145,9 +145,10 @@ sub error {
     $msg ||= $DEFAULT_ERRORS{$code} || 'Error';
 
     my $self = $class->new($code);
-    $self->body($msg);
+    $self->add_error($msg);
     $self->is_error(1);
     $self->title($msg ? "error: $code - $msg" : "error: $code");
+    $self->body($msg);
 
     return $self;
 }

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add rerun capabilities to plugins, and add necessary api endpoints for yathui plugin
+
 0.000116  2022-03-14 12:47:49-07:00 America/Los_Angeles
 
     - Fix run deleting with reporting table

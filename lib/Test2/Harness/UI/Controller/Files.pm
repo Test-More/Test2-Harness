@@ -1,4 +1,4 @@
-package Test2::Harness::UI::Controller::Failed;
+package Test2::Harness::UI::Controller::Files;
 use strict;
 use warnings;
 
@@ -12,7 +12,7 @@ use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
 
-sub title { 'Failed' }
+sub title { 'Files' }
 
 sub handle {
     my $self = shift;
@@ -28,47 +28,41 @@ sub handle {
     my $project_name = $route->{project};
     my $source       = $route->{source};
     my $username     = $route->{username};
+    my $failed       = $route->{failed};
 
     error(404 => 'No source') unless $source || $project_name;
     my $schema = $self->{+CONFIG}->schema;
 
-    my $run;
-
     my $query = {status => 'complete'};
     my $attrs = {order_by => {'-desc' => 'run_ord'}, rows => 1};
 
-    if ($source) {
-        if (my $project = $schema->resultset('Project')->find({name => $source})) {
-            $run = $project->runs->search($query, $attrs)->first;
-        }
-        else {
-            $run = $schema->resultset('Run')->find({run_id => $source});
-        }
-    }
-    elsif ($project_name) {
-        my $project = $schema->resultset('Project')->find({name => $project_name}) || die error(404 => 'Invalid Project');
+    $attrs->{offset} = $idx if $idx;
 
-        if ($username) {
-            my $user = $schema->resultset('User')->find({username => $username}) || die error(404 => 'Invalid Username');
-            $query->{user_id} = $user->user_id;
-        }
+    my $run;
+    my $ok = eval {
+        $run = $schema->vague_run_search(
+            username     => $username,
+            project_name => $project_name,
+            source       => $source,
+            idx          => $idx,
+        );
+        1;
+    };
+    my $err = $@;
+    die error(400 => "Invalid Request: $err") unless $ok;
+    die error(404 => 'No Data')               unless $run;
 
-        $attrs->{offset} = $idx if $idx;
+    my $search = {retry => 0};
+    $search->{fail} = 1 if $failed;
 
-        $run = $project->runs->search($query, $attrs)->first;
-    }
-
-    die error(404 => 'No Data') unless $run;
-
-    my $failed = $run->jobs->search(
-        {fail => 1, retry => 0},
+    my $files = $run->jobs->search(
+        $search,
         {join => 'test_file', order_by => 'test_file.filename'},
-
     );
 
     unless($json) {
         $res->content_type('text/plain');
-        my $body = join "\n" => map { $_->file } $failed->all;
+        my $body = join "\n" => map { $_->file } $files->all;
         $res->body("$body\n");
         return $res;
     }
@@ -90,41 +84,49 @@ sub handle {
         run_uri        => $req->base . "view/" . $run->run_id,
         fields         => [$run->run_fields->search($field_exclusions)->all],
         failures       => [],
+        passes         => [],
     };
 
     my $failures = $data->{failures};
+    my $passes   = $data->{passes};
 
-    while (my $fail = $failed->next) {
-        my $job_key = $fail->job_key;
-        my $job_id  = $fail->job_id;
-
-        my $subtests = {};
-
-        my $event_rs = $fail->events({nested => 0});
-        while (my $event = $event_rs->next) {
-            my $f = $event->facets;
-            next unless $f->{assert};
-            next if $f->{assert}->{pass};
-
-            if ($f->{parent}) {
-                my $name = $f->{parent}->{details} || $f->{assert}->{details} || $f->{about}->{details} || 'unnamed subtest';
-                $subtests->{$name}++;
-            }
-            else {
-                $subtests->{'~'}++;
-            }
-        }
+    while (my $file = $files->next) {
+        my $job_key = $file->job_key;
+        my $job_id  = $file->job_id;
 
         my $row = {
-            file     => $fail->file,
-            fields   => [$fail->job_fields->search($field_exclusions)->all],
+            file     => $file->file,
+            fields   => [$file->job_fields->search($field_exclusions)->all],
             job_id   => $job_id,
             job_key  => $job_key,
             uri      => "$run_uri/$job_key",
-            subtests => [sort keys %$subtests],
         };
 
-        push @$failures => $row;
+        if ($file->fail) {
+            my $subtests = {};
+
+            my $event_rs = $file->events({nested => 0, is_subtest => 1});
+            while (my $event = $event_rs->next) {
+                my $f = $event->facets;
+                next unless $f->{assert};
+                next if $f->{assert}->{pass};
+
+                if ($f->{parent}) {
+                    my $name = $f->{parent}->{details} || $f->{assert}->{details} || $f->{about}->{details} || 'unnamed subtest';
+                    $subtests->{$name}++;
+                }
+                else {
+                    $subtests->{'~'}++;
+                }
+            }
+
+            $row->{subtests} = [sort keys %$subtests];
+
+            push @$failures => $row;
+        }
+        else {
+            push @$passes => $row;
+        }
     }
 
     $res->content_type('application/json');
@@ -142,7 +144,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Controller::Failed
+Test2::Harness::UI::Controller::Files
 
 =head1 DESCRIPTION
 

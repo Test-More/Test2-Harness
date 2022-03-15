@@ -29,7 +29,7 @@ use Test2::Harness::UI::Controller::Events;
 
 use Test2::Harness::UI::Controller::Durations;
 use Test2::Harness::UI::Controller::Coverage;
-use Test2::Harness::UI::Controller::Failed;
+use Test2::Harness::UI::Controller::Files;
 
 use Test2::Harness::UI::Controller::Interactions;
 
@@ -93,10 +93,15 @@ sub init {
     $router->connect('/coverage/:source/:user'  => {controller => 'Test2::Harness::UI::Controller::Coverage'});
     $router->connect('/coverage/:source/delete' => {controller => 'Test2::Harness::UI::Controller::Coverage', delete => 1});
 
-    $router->connect('/failed/:source'                 => {controller => 'Test2::Harness::UI::Controller::Failed'});
-    $router->connect('/failed/:source/json'            => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
-    $router->connect('/failed/:project/:idx'           => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
-    $router->connect('/failed/:project/:username/:idx' => {controller => 'Test2::Harness::UI::Controller::Failed', json => 1});
+    $router->connect('/failed/:source'                 => {controller => 'Test2::Harness::UI::Controller::Files', failed => 1});
+    $router->connect('/failed/:source/json'            => {controller => 'Test2::Harness::UI::Controller::Files', failed => 1, json => 1});
+    $router->connect('/failed/:project/:idx'           => {controller => 'Test2::Harness::UI::Controller::Files', failed => 1, json => 1});
+    $router->connect('/failed/:project/:username/:idx' => {controller => 'Test2::Harness::UI::Controller::Files', failed => 1, json => 1});
+
+    $router->connect('/files/:source'                 => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0});
+    $router->connect('/files/:source/json'            => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
+    $router->connect('/files/:project/:idx'           => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
+    $router->connect('/files/:project/:username/:idx' => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
 
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
 
@@ -167,7 +172,7 @@ sub wrap {
         }
     }
 
-    my $ct = blessed($res) ? $res->content_type() : 'text/html';
+    my $ct = $r->{json} ? 'application/json' : blessed($res) ? $res->content_type() : 'text/html';
     $ct ||= 'text/html';
     $ct = lc($ct);
     $res->content_type($ct) if blessed($res);
@@ -204,6 +209,9 @@ sub wrap {
     elsif($ct eq 'application/json') {
         if (my $data = $res->raw_body) {
             $res->body(ref($data) ? encode_json($data) : $data);
+        }
+        elsif (my $errors = $res->errors) {
+            $res->body(encode_json({errors => $errors}));
         }
     }
 

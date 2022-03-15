@@ -6,7 +6,7 @@ our $VERSION = '0.000117';
 
 use Test2::Harness::UI::Util qw/config_from_settings/;
 use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::Util qw/mod2file looks_like_uuid/;
 
 use App::Yath::Options;
 use parent 'App::Yath::Plugin';
@@ -308,6 +308,58 @@ sub duration_data {
     }
 
     return $project->durations(%args);
+}
+
+sub grab_rerun {
+    my $this = shift;
+    my ($rerun, %params) = @_;
+
+    return (0) if $rerun =~ m/\.jsonl(\.gz|\.bz2)?/;
+
+    my $settings    = $params{settings};
+    my $only_failed = $params{only_failed};
+
+    my $config  = config_from_settings($settings);
+    my $schema  = $config->schema;
+
+    my ($ok, $err, $run);
+    if ($rerun eq '1') {
+        my $project_name = $settings->yathui->project;
+        my $username = $settings->yathui->user // $ENV{USER};
+        $ok = eval { $run = $schema->vague_run_search(project_name => $project_name, username => $username); 1 };
+        $err = $@;
+    }
+    elsif (looks_like_uuid($rerun)) {
+        $ok = eval { $run = $schema->vague_run_search(source => $rerun); 1 };
+        $err = $@;
+    }
+    else {
+        return (0);
+    }
+
+    unless ($run) {
+        print $ok ? "No previous run found\n" : "Error getting rerun data from yathui database: $err\n";
+        return (1);
+    }
+
+    print "Re-Running " . ($only_failed ? "failed" : "all") . " tests from run id: " . $run->run_id . "\n";
+
+    my $search = {retry => 0};
+    $search->{fail} = 1 if $only_failed;
+
+    my $files = $run->jobs->search(
+        $search,
+        {join => 'test_file', order_by => 'test_file.filename'},
+    );
+
+    my @files;
+    while (my $file = $files->next) {
+        push @files => $file->file;
+    }
+
+    return (1) unless @files;
+
+    return (1, @files);
 }
 
 1;

@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Spawn;
 use strict;
 use warnings;
 
-our $VERSION = '1.000112';
+our $VERSION = '1.000113';
 
 use parent 'Test2::Harness::Runner::Job';
 use Test2::Harness::Util::HashBase;

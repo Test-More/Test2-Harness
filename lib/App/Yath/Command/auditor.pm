@@ -2,7 +2,7 @@ package App::Yath::Command::auditor;
 use strict;
 use warnings;
 
-our $VERSION = '1.000113';
+our $VERSION = '1.000114';
 
 use File::Spec;
 use Scalar::Util qw/blessed/;

@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Refactor preloader into preloader and reloader
+    - Honor churn blocks during relead events even if --reload is disabled
+
 1.000112  2022-03-15 14:21:29-07:00 America/Los_Angeles
 
     - Add --rerun and --rerun-failed options to test/run command

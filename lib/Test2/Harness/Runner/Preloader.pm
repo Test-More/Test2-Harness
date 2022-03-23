@@ -10,29 +10,11 @@ use Fcntl qw/LOCK_EX LOCK_UN/;
 use Time::HiRes qw/time/;
 use Test2::Harness::Util qw/open_file file2mod mod2file lock_file unlock_file clean_path/;
 
+use Test2::Harness::Runner::Reloader;
 use Test2::Harness::Runner::Preloader::Stage;
 
 use File::Spec();
 use List::Util qw/pairgrep/;
-
-BEGIN {
-    local $@;
-    my $inotify = eval { require Linux::Inotify2; 1 };
-    if ($inotify) {
-        my $MASK = Linux::Inotify2::IN_MODIFY();
-        $MASK |= Linux::Inotify2::IN_ATTRIB();
-        $MASK |= Linux::Inotify2::IN_DELETE_SELF();
-        $MASK |= Linux::Inotify2::IN_MOVE_SELF();
-
-        *USE_INOTIFY = sub() { 1 };
-        require constant;
-        constant->import(INOTIFY_MASK => $MASK);
-    }
-    else {
-        *USE_INOTIFY = sub() { 0 };
-        *INOTIFY_MASK = sub() { 0 };
-    }
-}
 
 use Test2::Harness::Util::HashBase(
     qw{
@@ -41,22 +23,23 @@ use Test2::Harness::Util::HashBase(
         <done
         <below_threshold
 
-        <inotify <stats <last_checked
-        <dtrace
+        <dtrace <reloader
 
         <staged <started_stages <stage
 
         <dump_depmap
-        <monitor
-        <monitored
         <changed
-        <reload
         <restrict_reload
 
         <blacklist_file
         <blacklist_lock
         <blacklist
-    }
+
+        <monitored
+    },
+
+    '<monitor', # This means watch for changes, restart stage if any found
+    '<reload',  # Try to reload in place instead of restart stage
 );
 
 sub init {
@@ -68,13 +51,29 @@ sub init {
 
     return if $self->{+BELOW_THRESHOLD};
 
-    if ($self->{+MONITOR} || $self->{+DUMP_DEPMAP}) {
+    $self->{+MONITOR} = 1 if $self->{+RELOAD};
+
+    my $need_depmap = $self->{+RELOAD} || $self->{+MONITOR} || $self->{+DUMP_DEPMAP};
+
+    if ($need_depmap) {
         require Test2::Harness::Runner::DepTracer;
         $self->{+DTRACE} //= Test2::Harness::Runner::DepTracer->new();
+    }
 
+    if ($self->{+MONITOR} || $self->{+RELOAD}) {
         $self->{+BLACKLIST}      //= {};
         $self->{+BLACKLIST_FILE} //= File::Spec->catfile($self->{+DIR}, 'BLACKLIST');
     }
+
+    $self->{+RELOADER} = Test2::Harness::Runner::Reloader->new(
+        stat_min_gap     => 2,
+        notify_cb        => sub { $self->_reload_cb_notify(@_) },
+        find_loaded_cb   => sub { $self->_reload_cb_find_loaded(@_) },
+        should_watch_cb  => sub { $self->_reload_cb_should_watch(@_) },
+        can_reload_cb    => sub { $self->_reload_cb_can_reload(@_) },
+        reload_cb        => sub { $self->_reload_cb_reload(@_) },
+        delete_symbol_cb => sub { $self->_reload_cb_delete_symbol(@_) },
+    );
 }
 
 sub stage_check {
@@ -219,197 +218,6 @@ sub start_stage {
     $self->_monitor() if $self->{+MONITOR};
 }
 
-sub can_reload {
-    my $self = shift;
-    my ($mod, $file) = @_;
-
-    return 0 if $mod->can('TEST2_HARNESS_PRELOAD');
-
-    if (my $cb = $self->get_stage_callback('reload_inplace_check')) {
-        my $res = $cb->(module => $mod, file => $file);
-        return $res if defined $res;
-    }
-
-    return 1 unless $mod->can('import');
-
-    return 0 if $mod->can('IMPORTER_MENU');
-
-    {
-        no strict 'refs';
-        return 0 if @{"$mod\::EXPORT"};
-        return 0 if @{"$mod\::EXPORT_OK"};
-    }
-
-    return 1;
-}
-
-sub find_churn {
-    my $self = shift;
-    my ($file) = @_;
-
-    open(my $fh, '<', $file) or die "Could not open file '$file': $!";
-
-    my $active = 0;
-    my @out;
-
-    my $line_no = 0;
-    while (my $line = <$fh>) {
-        $line_no++;
-
-        if ($active) {
-            if ($line =~ m/^\s*#\s*HARNESS-CHURN-STOP\s*$/) {
-                push @{$out[-1]} => $line_no;
-                $active = 0;
-                next;
-            }
-            else {
-                $out[-1][-1] .= $line;
-                next;
-            }
-        }
-
-        if ($line =~ m/^\s*#\s*HARNESS-CHURN-START\s*$/) {
-            $active = 1;
-            push @out => [$line_no, ''];
-        }
-    }
-
-    return @out;
-}
-
-sub check {
-    my $self = shift;
-
-    return 1 if $self->{+CHANGED};
-
-    return 0 unless $self->{+MONITOR};
-
-    my $changed = USE_INOTIFY ? $self->_check_monitored_inotify : $self->_check_monitored_hardway;
-    return 0 unless $changed;
-
-    print "$$ $0 - Runner detected a change in one or more preloaded modules...\n";
-
-    my %CNI = reverse pairgrep { $b } %INC;
-    my @todo;
-
-    my $dtrace = $self->dtrace;
-    $dtrace->start if $self->{+RELOAD};
-    my $callbacks = $dtrace->callbacks // {};
-
-    for my $file (keys %$changed) {
-        if (my $cb = $callbacks->{$file}) {
-            my $rel = File::Spec->abs2rel($file);
-            print "$$ $0 - Changed file '$rel' has a reload callback, executing it instead of regular reloading...\n";
-            $cb->();
-            next;
-        }
-
-        my $rel = $CNI{$file} // $file;
-        my $mod = file2mod($rel);
-        unless ($self->{+RELOAD}) {
-            push @todo => [$mod, $file];
-            next;
-        }
-
-        if (my @churn = $self->find_churn($file)) {
-            print "$$ $0 - Changed file '$file' contains churn sections, running them instead of a full reload...\n";
-
-            for my $churn (@churn) {
-                my ($start, $code, $end) = @$churn;
-                my $sline = $start + 1;
-                if (eval "package $mod;\nuse strict;\nuse warnings;\nno warnings 'redefine';\n#line $sline $file\n$code\n ;1;") {
-                    print "$$ $0 - Success reloading churn block ($file lines $start -> $end)\n";
-                }
-                else {
-                    print "$$ $0 - Error reloading churn block ($file lines $start -> $end): $@\n";
-                }
-            }
-
-            next;
-        }
-
-        unless ($self->can_reload($mod, $file)) {
-            print "$$ $0 - Changed file '$file' cannot be reloaded in place...\n";
-            push @todo => [$mod, $file];
-            next;
-        }
-
-        print "$$ $0 - Attempting to reload '$file' in place...\n";
-
-        my @warnings;
-        my $ok = eval {
-            local $SIG{__WARN__} = sub { push @warnings => @_ };
-
-            my $stash = do { no strict 'refs'; \%{"${mod}\::"} };
-            for my $sym (keys %$stash) {
-                next if $sym =~ m/::$/;
-
-                # Make sure the changed file and the file that defined the sub are the same.
-                if (my $cb = $self->get_stage_callback('reload_remove_check')) {
-                    if (my $sub = $mod->can($sym)) {
-                        if (my $cobj = B::svref_2object($sub)) {
-                            if (my $subfile = $cobj->FILE) {
-                                next unless $cb->(
-                                    mod         => $mod,
-                                    sym         => $sym,
-                                    sub         => $sub,
-                                    from_file   => -f $subfile ? clean_path($subfile) : $subfile,
-                                    reload_file => -f $file    ? clean_path($file)    : $file,
-                                );
-                            }
-                        }
-                    }
-                }
-
-                delete $stash->{$sym};
-            }
-
-            delete $INC{$rel};
-            local $.;
-            require $rel;
-            die "Reloading '$rel' loaded $INC{$rel} instead, \@INC must have been altered" if $INC{$rel} ne $file;
-
-            1;
-        };
-        my $err = $@;
-
-        next if $ok && !@warnings;
-        print "$$ $0 - Failed to reload '$file' in place...\n", map { "  $$ $0 - $_\n"  } map { split /\n/, $_ } grep { $_ } @warnings, $ok ? () : ($err);
-        push @todo => [$mod, $file];
-    }
-
-    $dtrace->stop if $self->{+RELOAD};
-
-    unless (@todo) {
-        delete $self->{+MONITORED};
-        $self->_monitor();
-        return 0;
-    }
-
-    $self->{+CHANGED} = 1;
-    print "$$ $0 - blacklisting changed files and reloading stage...\n";
-
-    my $bl = $self->_lock_blacklist();
-
-    my $dep_map = $self->dtrace->dep_map;
-
-    my %seen;
-    while (@todo) {
-        my $set = shift @todo;
-        my ($pkg, $full) = @$set;
-        my $file = $CNI{$full} || $full;
-        next if $seen{$file}++;
-        next if $pkg->can('TEST2_HARNESS_PRELOAD');
-        print $bl "$pkg\n";
-        my $next = $dep_map->{$file} or next;
-        push @todo => @$next;
-    }
-
-    $self->_unlock_blacklist();
-
-    return 1;
-}
-
 sub get_stage_callback {
     my $self   = shift;
     my ($name) = @_;
@@ -503,117 +311,6 @@ sub load_blacklist {
     }
 }
 
-sub _monitor {
-    my $self = shift;
-
-    if ($self->{+MONITORED} && $self->{+MONITORED}->[0] == $$) {
-        die "Monitor already starated\n" . "\n=======\n$0\n" . Carp::longmess() . "\n=====\n" . $self->{+MONITORED}->[1] . "\n" . $self->{+MONITORED}->[2] . "\n=======\n";
-    }
-
-    delete $self->{+INOTIFY};
-    $self->{+MONITORED} = [$$, $0, Carp::longmess()];
-
-    my $dtrace = $self->dtrace;
-    $self->{+STATS} //= {};
-
-    return $self->_monitor_inotify() if USE_INOTIFY();
-    return $self->_monitor_hardway();
-}
-
-sub _should_watch {
-    my $self = shift;
-    my ($file) = @_;
-
-    my $dirs = $self->{+RESTRICT_RELOAD};
-    return 1 unless $dirs && @$dirs;
-
-    for my $dir (@$dirs) {
-        return 1 if 0 == index($file, $dir);
-    }
-
-    return 0;
-}
-
-sub _monitor_inotify {
-    my $self = shift;
-
-    my $dtrace = $self->dtrace;
-
-    my $inotify = $self->{+INOTIFY} = Linux::Inotify2->new;
-    $inotify->blocking(0);
-
-    for my $file (keys %{$dtrace->loaded}) {
-        $file = $INC{$file} || $self->find_file_in_inc($file) || $file;
-        next unless $self->_should_watch($file);
-        next unless -e $file;
-        $inotify->watch($file, INOTIFY_MASK());
-    }
-
-    return;
-}
-
-sub _monitor_hardway {
-    my $self = shift;
-
-    my $dtrace = $self->dtrace;
-    my $stats  = $self->{+STATS} = {};
-
-    for my $file (keys %{$dtrace->loaded}) {
-        $file = $INC{$file} || $self->find_file_in_inc($file) || $file;
-        next unless $self->_should_watch($file);
-        next if $stats->{$file};
-        next unless -e $file;
-        my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);
-        $stats->{$file} = [$mtime, $ctime];
-    }
-
-    return;
-}
-
-sub find_file_in_inc {
-    my $self = shift;
-    my ($file) = @_;
-
-    for my $dir (@INC) {
-        next if ref($dir);
-        my $path = File::Spec->catfile($dir, $file);
-        return $path if -f $path;
-    }
-
-    return;
-}
-
-sub _check_monitored_inotify {
-    my $self    = shift;
-    my $inotify = $self->{+INOTIFY} or return;
-
-    my @todo = $inotify->read or return;
-
-    return {map { ($_->fullname() => 1) } @todo};
-}
-
-sub _check_monitored_hardway {
-    my $self = shift;
-
-    # Only check once every 2 seconds
-    return if $self->{+LAST_CHECKED} && 2 > (time - $self->{+LAST_CHECKED});
-
-    my (%changed, $found);
-    for my $file (keys %{$self->{+STATS}}) {
-        my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);
-        my $times = $self->{+STATS}->{$file};
-        next if $mtime == $times->[0] && $ctime == $times->[1];
-        $self->{+STATS}->{$file} = [$mtime, $ctime];
-        $found++;
-        $changed{$file}++;
-    }
-
-    $self->{+LAST_CHECKED} = time;
-
-    return unless $found;
-    return \%changed;
-}
-
 sub _lock_blacklist {
     my $self = shift;
 
@@ -637,8 +334,271 @@ sub _unlock_blacklist {
     return;
 }
 
-1;
+sub _notify {
+    my $self = shift;
+    for my $msg (@_) {
+        print "$$ $0 - $msg\n";
+    }
+}
 
+sub _reload_cb_notify {
+    my $self = shift;
+    my ($type, $info) = @_;
+
+    return $self->_notify("Runner detected a change in one or more preloaded modules...")
+        if $type eq 'changes_detected';
+
+    return $self->_notify("Runner detected changes in file '$info'...")
+        if $type eq 'file_changed';
+
+    return $self->_notify("Runner attempting to reload '$info->{file}' in place...")
+        if $type eq 'reload_inplace';
+
+    return $self->_notify(
+        "Runner failed to reload '$info->{file}' in place...",
+        map { split /\n/, $_ } grep { $_ } @{$info->{warnings} // []}, $info->{error},
+    ) if $type eq 'reload_fail';
+
+    require Data::Dumper;
+    local $Data::Dumper::Sortkeys = 1;
+    local $Data::Dumper::Maxdepth = 2;
+    return $self->_notify("Runner notification $type: " . (ref($info) ? Data::Dumper::Dumper($info) : $info) . "...");
+}
+
+sub _reload_cb_find_loaded { keys %{$_[0]->dtrace->loaded} }
+
+sub _reload_cb_should_watch {
+    my $self = shift;
+    my ($file) = @_;
+
+    my $dirs = $self->{+RESTRICT_RELOAD};
+    return 1 unless $dirs && @$dirs;
+
+    for my $dir (@$dirs) {
+        return 1 if 0 == index($file, $dir);
+    }
+
+    return 0;
+}
+
+sub _reload_cb_can_reload {
+    my $self = shift;
+    my %params = @_;
+
+    my $mod  = $params{module};
+    my $file = $params{file};
+
+    return (0, reason => 'File is a yath preload module') if $mod->can('TEST2_HARNESS_PRELOAD');
+
+    if (my $cb = $self->get_stage_callback('reload_inplace_check')) {
+        my ($res, %fields) = $cb->(module => $mod, file => $file);
+        return ($res, %fields) if defined $res;
+    }
+
+    return (1) unless $mod->can('import');
+
+    return (0, reason => 'File is an importer') if $mod->can('IMPORTER_MENU');
+
+    {
+        no strict 'refs';
+        return (0, reason => 'File is an importer') if @{"$mod\::EXPORT"};
+        return (0, reason => 'File is an importer') if @{"$mod\::EXPORT_OK"};
+    }
+
+    return (1);
+}
+
+sub find_churn {
+    my $self = shift;
+    my ($file) = @_;
+
+    open(my $fh, '<', $file) or die "Could not open file '$file': $!";
+
+    my $active = 0;
+    my @out;
+
+    my $line_no = 0;
+    while (my $line = <$fh>) {
+        $line_no++;
+
+        if ($active) {
+            if ($line =~ m/^\s*#\s*HARNESS-CHURN-STOP\s*$/) {
+                push @{$out[-1]} => $line_no;
+                $active = 0;
+                next;
+            }
+            else {
+                $out[-1][-1] .= $line;
+                next;
+            }
+        }
+
+        if ($line =~ m/^\s*#\s*HARNESS-CHURN-START\s*$/) {
+            $active = 1;
+            push @out => [$line_no, ''];
+        }
+    }
+
+    return @out;
+}
+
+sub _reload_cb_reload {
+    my $self = shift;
+    my %params = @_;
+
+    my ($file, $rel, $mod) = @params{qw/file relative module/};
+
+    my $callbacks;
+    if (my $dtrace = $self->dtrace) {
+        $callbacks = $dtrace->callbacks;
+    }
+    $callbacks //= {};
+
+    if (my $cb = $callbacks->{$file} // $callbacks->{$rel}) {
+        $self->_notify("Changed file '$rel' has a reload callback, executing it instead of regular reloading...");
+        my $ret = $cb->();
+        return (1, callback_return => $ret);
+    }
+
+    if (my @churn = $self->find_churn($file)) {
+        $self->_notify("Changed file '$rel' contains churn sections, running them instead of a full reload...");
+
+        for my $churn (@churn) {
+            my ($start, $code, $end) = @$churn;
+            my $sline = $start + 1;
+            if (eval "package $mod;\nuse strict;\nuse warnings;\nno warnings 'redefine';\n#line $sline $file\n$code\n ;1;") {
+                $self->_notify("Success reloading churn block ($file lines $start -> $end)");
+            }
+            else {
+                $self->_notify("Error reloading churn block ($file lines $start -> $end): $@");
+            }
+        }
+
+        return (1);
+    }
+
+    return (0, reason => 'reloading disabled') unless $self->{+RELOAD};
+
+    return undef;
+}
+
+sub _reload_cb_delete_symbol {
+    my $self = shift;
+    my %params = @_;
+
+    my $sym = $params{symbol};
+    my $mod = $params{module};
+    my $file = $params{file};
+
+    # Make sure the changed file and the file that defined the sub are the same.
+    my $cb      = $self->get_stage_callback('reload_remove_check') or return 0;
+    my $sub     = $mod->can($sym)                                  or return 0;
+    my $cobj    = B::svref_2object($sub)                           or return 0;
+    my $subfile = $cobj->FILE                                      or return 0;
+
+    my $res = $cb->(
+        mod         => $mod,
+        sym         => $sym,
+        sub         => $sub,
+        from_file   => -f $subfile ? clean_path($subfile) : $subfile,
+        reload_file => -f $file    ? clean_path($file)    : $file,
+    );
+
+    # 0 means do not skip, so if the cb returned true we do not skip
+    return 0 if $res;
+    return 1;
+}
+
+sub _monitor {
+    my $self = shift;
+
+    if ($self->{+MONITORED} && $self->{+MONITORED}->[0] == $$) {
+        die "Monitor already starated\n" . "\n=======\n$0\n" . Carp::longmess() . "\n=====\n" . $self->{+MONITORED}->[1] . "\n" . $self->{+MONITORED}->[2] . "\n=======\n";
+    }
+
+    $self->{+MONITORED} = [$$, $0, Carp::longmess()];
+
+    my $reloader = $self->{+RELOADER};
+    $reloader->reset();
+    $reloader->refresh();
+
+    return $self->{+MONITORED};
+}
+
+sub check {
+    my $self = shift;
+
+    return 1 if $self->{+CHANGED};
+
+    return 0 unless $self->{+MONITOR};
+
+    my $dtrace = $self->dtrace;
+    $dtrace->start if $self->{+RELOAD};
+
+    my $results = $self->{+RELOADER}->reload_changes();
+
+    $dtrace->stop if $self->{+RELOAD};
+
+    my (@todo, @fails);
+    for my $item (values %$results) {
+        my $rel = $item->{reloaded};
+
+        next if $rel; # Reload success
+
+        if (defined $rel) { # Not reloaded, but no error
+            push @todo => $item;
+            next;
+        }
+
+        # Reload encountered an error
+        # TODO - Capture this state and make `yath run` explain that the reload is broken, and what files need to be fixed
+    }
+
+    unless (@todo) {
+        $self->{+RELOADER}->refresh();
+        return 0;
+    }
+
+    $self->{+CHANGED} = 1;
+    $self->_notify("blacklisting changed files and reloading stage...");
+
+    my $bl = $self->_lock_blacklist();
+
+    my $dep_map = $self->dtrace->dep_map;
+
+    my %CNI = reverse pairgrep { $b } %INC;
+
+    my %seen;
+    while (@todo) {
+        my $item = shift @todo;
+        my $ref = ref($item);
+
+        my ($mod, $abs, $rel);
+        if ($ref eq 'HASH') {
+            ($mod, $abs, $rel) = @{$item}{qw/module file relative/};
+        }
+        elsif ($ref eq 'ARRAY') {
+            ($mod, $abs) = @$item;
+            $rel = $CNI{$abs} || $abs;
+        }
+        else {
+            die "Invalid ref type: $ref";
+        }
+
+        next if $seen{$abs}++;
+        next if $mod->can('TEST2_HARNESS_PRELOAD');
+        $self->_notify("Blacklisting $mod...");
+        print $bl "$mod\n";
+        my $next = $dep_map->{$abs} or next;
+        push @todo => @$next;
+    }
+
+    $self->_unlock_blacklist();
+
+    return 1;
+}
+
+1;
 
 __END__
 

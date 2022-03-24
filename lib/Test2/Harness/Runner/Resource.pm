@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Resource;
 use strict;
 use warnings;
 
-our $VERSION = '1.000114';
+our $VERSION = '1.000115';
 
 sub setup {}
 

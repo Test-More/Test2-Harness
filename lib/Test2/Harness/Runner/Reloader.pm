@@ -65,8 +65,12 @@ sub reset {
     delete $self->{+PID};
     $self->{+MONITORED} = {};
     $self->{+MONITOR_LOOKUP} = {};
-    $self->{+WATCHER} = USE_INOTIFY ? Linux::Inotify2->new : {};
-    $self->{+WATCHER}->blocking(0);
+    if (USE_INOTIFY) {
+        $self->{+WATCHER} = Linux::Inotify2->new;
+        $self->{+WATCHER}->blocking(0);
+    } else {
+        $self->{+WATCHER} = {};
+    }
     delete $self->{+STAT_LAST_CHECKED};
 }
 

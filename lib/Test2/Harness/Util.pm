@@ -39,7 +39,28 @@ our @EXPORT_OK = qw{
     chmod_tmp
 
     looks_like_uuid
+    is_same_file
 };
+
+sub is_same_file {
+    my ($file1, $file2) = @_;
+
+    return 0 unless defined $file1;
+    return 0 unless defined $file2;
+
+    return 1 if "$file1" eq "$file2";
+    return 1 if clean_path($file1) eq clean_path($file2);
+
+    return 0 unless -e $file1;
+    return 0 unless -e $file2;
+
+    my ($dev1, $inode1) = stat($file1);
+    my ($dev2, $inode2) = stat($file2);
+
+    return 0 unless $dev1 == $dev2;
+    return 0 unless $inode1 == $inode2;
+    return 1;
+}
 
 sub looks_like_uuid {
     my ($in) = @_;

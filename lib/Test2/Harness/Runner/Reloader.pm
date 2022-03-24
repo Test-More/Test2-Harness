@@ -6,7 +6,7 @@ our $VERSION = '1.000114';
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
-use Test2::Harness::Util qw/file2mod/;
+use Test2::Harness::Util qw/file2mod is_same_file/;
 
 use File::Spec();
 
@@ -271,7 +271,8 @@ sub _reload_file {
         delete $INC{$rel};
         local $.;
         require $rel;
-        die "Reloading '$rel' loaded '$INC{$rel}' instead of '$file', \@INC must have been altered" if $INC{$rel} ne $file;
+        die "Reloading '$rel' loaded '$INC{$rel}' instead of '$file', \@INC must have been altered"
+            unless is_same_file($file, $INC{$rel});
 
         1;
     };

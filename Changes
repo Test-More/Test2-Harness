@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000115  2022-03-31 10:28:14-07:00 America/Los_Angeles
+
     - Fix reload bug when using restricted reload
     - Fix bug where inotify would only report changes once
 

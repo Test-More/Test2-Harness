@@ -328,13 +328,81 @@ sub finalize {
     return;
 }
 
+sub step {
+    my $self = shift;
+
+    return unless $self->update_active_disp;
+
+    my $io = $self->io(0);
+    if ($self->{+_BUFFERED}) {
+        print $io "\r\e[K";
+        $self->{+_BUFFERED} = 0;
+    }
+
+    if ($self->{+TTY} && $self->{+PROGRESS}) {
+        print $io $self->render_status();
+        $self->{+_BUFFERED} = 1;
+    }
+}
+
 sub update_active_disp {
     my $self = shift;
     my ($f) = @_;
-
     my $should_show = 0;
 
     my $stats = $self->{+_FILE_STATS};
+
+    if ($f) {
+        $stats->{is_persistent} //= $f->{'harness_settings'}->{'harness'}->{'persist_file'} ? 1 : 0;
+    }
+    elsif ($stats->{is_persistent} && !$stats->{started}) {
+        $stats->{spinner} //= '|';
+        $stats->{spinner_time} //= time - 1;
+        $stats->{blink_time} //= time - 1;
+        $stats->{blink} //= '';
+
+        if (time - $stats->{spinner_time} > 0.1) {
+            $stats->{spinner_time} = time;
+            my $start = substr($stats->{spinner}, 0, 1);
+            $stats->{spinner} = '\\' if $start eq '-';
+            $stats->{spinner} = '-'  if $start eq '/';
+            $stats->{spinner} = '/'  if $start eq '|';
+            $stats->{spinner} = '|'  if $start eq '\\';
+        }
+        elsif(time - $stats->{blink_time} > 0.5) {
+            $stats->{blink_time} = time;
+            $stats->{blink} = $stats->{blink} ? '' : 'bold bright_';
+        }
+        else {
+            return 0;
+        }
+
+        my $yellow = $self->{+COLOR} ? Term::ANSIColor::color($stats->{blink} . 'yellow') : '';
+        my $cyan   = $self->{+COLOR} ? Term::ANSIColor::color('cyan')                     : '';
+        my $green  = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_green')        : '';
+        my $bold   = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_white')        : '';
+        my $reset  = $self->reset;
+
+        $self->{+_ACTIVE_DISP} = [
+            join(
+                '' => (
+                    $bold,   "[ ",                                                     $reset,
+                    $green,  $stats->{spinner},                                        $reset,
+                    $yellow, " Tests have not started yet. Waiting for busy runner.",  $reset,
+                    $reset,  " (run ",                                                 $reset,
+                    $cyan,   "yath status",                                            $reset,
+                    $reset,  " for more info) ",                                       $reset,
+                    $green,  $stats->{spinner},                                        $reset,
+                    $bold,   " ]",                                                     $reset,
+                )
+            ),
+            '',
+        ];
+
+        return 1;
+    }
+
+    return unless $f;
 
     if (my $task = $f->{harness_job_queued}) {
         $self->{+JOB_NAMES}->{$task->{job_id}} = $task->{job_name} || $task->{job_id};
@@ -348,6 +416,7 @@ sub update_active_disp {
         $should_show = 1;
         $stats->{running}++;
         $stats->{todo}--;
+        $stats->{started} //= 1;
     }
 
     if ($f->{harness_job_end}) {
@@ -392,6 +461,8 @@ sub update_active_disp {
 
     return 1;
 }
+
+
 
 sub _highlight {
     my $self = shift;

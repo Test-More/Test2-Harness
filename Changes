@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Better handling of version mismatches in the persistent runner
+    - Better info when a `run` command is waiting on a busy runner
 
 1.000115  2022-03-31 10:28:14-07:00 America/Los_Angeles
 

@@ -279,6 +279,7 @@ sub render {
     my $buffer;
     while (1) {
         return if $self->{+SIGNAL};
+        $_->step for @{$renderers};
 
         my $line = <$reader>;
         unless(defined $line) {

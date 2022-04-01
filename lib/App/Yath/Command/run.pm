@@ -50,6 +50,8 @@ sub setup_plugins {}
 sub setup_resources {}
 sub teardown_plugins {}
 sub finalize_plugins {}
+sub pfile_params { () }
+
 
 sub monitor_preloads { 1 }
 sub job_count { 1 }
@@ -75,10 +77,9 @@ sub init {
     return $self->SUPER::init(@_);
 }
 
-
 sub pfile {
     my $self = shift;
-    $self->{+PFILE} //= find_pfile($self->settings) or die "No persistent harness was found for the current path.\n";
+    $self->{+PFILE} //= find_pfile($self->settings, $self->pfile_params) or die "No persistent harness was found for the current path.\n";
 }
 
 sub pfile_data {
@@ -87,7 +88,14 @@ sub pfile_data {
 
     my $pfile = $self->pfile;
 
-    return $self->{+PFILE_DATA} = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+    $data->{pfile_path} //= $pfile;
+
+    print "\nFound: $data->{pfile_path}\n";
+    print "  PID: $data->{pid}\n";
+    print "  Dir: $data->{dir}\n";
+
+    return $self->{+PFILE_DATA} = $data;
 }
 
 sub workdir {

@@ -104,62 +104,6 @@ sub find_in_updir {
     return;
 }
 
-sub find_pfile {
-    my $pfile = _find_pfile(@_) or return;
-
-    return $pfile unless -e $pfile;
-
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-
-    $data->{version}  //= '';
-    $data->{hostname} //= '';
-    $data->{user}     //= '';
-    $data->{pid}      //= '';
-    $data->{dir}      //= '';
-
-    my $hostname = hostname();
-    my $user = $ENV{USER};
-
-    my @bad;
-
-    push @bad => "** Version mismatch, persistent runner is version $data->{version}, current is version $VERSION. **"
-        if $data->{version} ne $VERSION;
-
-    push @bad => "** Hostname mismatch, persistent runner hostname is '$data->{hostname}', current hostname is '$hostname'. **"
-        if $data->{hostname} ne $hostname;
-
-    push @bad => "** User mismatch, persistent runner user is '$data->{user}', current user is '$user'. **"
-        if $data->{user} ne $user;
-
-    push @bad => "** Workdir missing, persistent runner is supposed to be at '$data->{dir}', but it does not exist. **"
-        unless -d $data->{dir};
-
-    push @bad => "** PID not running, persistent runner is supposed to be running with PID '$data->{pid}', but it is not. **"
-        unless kill(0, $data->{pid});
-
-    return $pfile unless @bad;
-
-    die join "\n" => @bad, <<"    EOT";
-
-Errors like this usually indicate that the persistent runner has gone away.
-Maybe the system was shut down improperly, or maybe the process was killed too
-quickly to clean up after itself.
-
-Here is the information indicated by the persistence file:
-  Runner PID:  $data->{pid}
-  Runner Vers: $data->{version}
-  Runner user: $data->{user}
-  Runner host: $data->{hostname}
-  Working dir: $data->{dir}
-
-If the persistent runner is truly gone you should delete the following file to
-continue:
-
-$pfile
-
-    EOT
-}
-
 sub _find_pfile {
     my ($settings, %params) = @_;
 
@@ -241,6 +185,70 @@ sub fit_to_width {
     return join "\n" => @out;
 }
 
+my $SEEN_ERROR = 0;
+sub find_pfile {
+    my ($settings, %params) = @_;
+    my $pfile = _find_pfile($settings, %params) or return;
+
+    return $pfile unless -e $pfile;
+    return $pfile if $params{no_checks};
+    return $pfile if $SEEN_ERROR;
+
+    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+
+    $data->{version}  //= '';
+    $data->{hostname} //= '';
+    $data->{user}     //= '';
+    $data->{pid}      //= '';
+    $data->{dir}      //= '';
+
+    my $hostname = hostname();
+    my $user = $ENV{USER};
+
+    my @bad;
+
+    push @bad => "** Version mismatch, persistent runner is version $data->{version}, current is version $VERSION. **"
+        if $data->{version} ne $VERSION;
+
+    push @bad => "** Hostname mismatch, persistent runner hostname is '$data->{hostname}', current hostname is '$hostname'. **"
+        if $data->{hostname} ne $hostname;
+
+    push @bad => "** User mismatch, persistent runner user is '$data->{user}', current user is '$user'. **"
+        if $data->{user} ne $user;
+
+    push @bad => "** Workdir missing, persistent runner is supposed to be at '$data->{dir}', but it does not exist. **"
+        unless -d $data->{dir};
+
+    push @bad => "** PID not running, persistent runner is supposed to be running with PID '$data->{pid}', but it is not. **"
+        unless kill(0, $data->{pid});
+
+    return $pfile unless @bad;
+
+    my $break = ('=' x 120) . "\n";
+    my $msg = join "\n" => $break, @bad, <<"    EOT", $break;
+
+Errors like this usually indicate that the persistent runner has gone away.
+Maybe the system was shut down improperly, or maybe the process was killed too
+quickly to clean up after itself.
+
+Here is the information indicated by the persistence file:
+  Runner PID:  $data->{pid}
+  Runner Vers: $data->{version}
+  Runner user: $data->{user}
+  Runner host: $data->{hostname}
+  Working dir: $data->{dir}
+
+If the persistent runner is truly gone you should delete the following file to
+continue:
+
+$pfile
+    EOT
+
+    $SEEN_ERROR = 1;
+    die $msg unless $params{no_fatal};
+    warn $msg unless $params{no_warn};
+    return $pfile;
+}
 
 1;
 

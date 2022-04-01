@@ -24,13 +24,13 @@ This command will kill the active yath runner and any running or pending tests.
     EOT
 }
 
+sub pfile_params { (no_checks => 1) }
+
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile($self->settings)
-        or die "No persistent harness was found for the current path.\n";
-
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+    my $data = $self->pfile_data();
+    my $pfile = $data->{pfile_path};
 
     $self->App::Yath::Command::test::terminate_queue();
 

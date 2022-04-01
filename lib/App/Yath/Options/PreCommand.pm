@@ -121,7 +121,7 @@ sub post_process {
     my %params   = @_;
     my $settings = $params{settings};
 
-    $settings->harness->field(persist_file => find_pfile($settings, vivify => 1))
+    $settings->harness->field(persist_file => find_pfile($settings, vivify => 1, no_checks => 1))
         unless defined $settings->harness->persist_file;
 }
 

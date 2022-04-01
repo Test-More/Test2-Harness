@@ -12,6 +12,7 @@ use Test2::Harness::Util::File::JSON();
 use Test2::Harness::Util::Queue();
 
 use Test2::Harness::Util qw/open_file/;
+use App::Yath::Util qw/find_pfile/;
 use File::Path qw/remove_tree/;
 
 use parent 'App::Yath::Command::run';
@@ -27,6 +28,8 @@ sub description {
 This command will stop a persistent instance, and output any log contents.
     EOT
 }
+
+sub pfile_params { (no_fatal => 1) }
 
 sub run {
     my $self = shift;

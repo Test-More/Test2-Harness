@@ -7,8 +7,6 @@ our $VERSION = '1.000116';
 use Term::Table();
 use File::Spec();
 
-use App::Yath::Util qw/find_pfile/;
-
 use Test2::Harness::Runner::State;
 use Test2::Harness::Util::File::JSON();
 use Test2::Harness::Util::Queue();
@@ -27,16 +25,12 @@ This command will provide health details and a process list for the runner.
     EOT
 }
 
+sub pfile_params { (no_fatal => 1) }
+
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile($self->settings)
-        or die "No persistent harness was found for the current path.\n";
-
-    print "\nFound: $pfile\n";
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-    print "  PID: $data->{pid}\n";
-    print "  Dir: $data->{dir}\n";
+    my $data = $self->pfile_data();
 
     my $state = Test2::Harness::Runner::State->new(
         job_count    => 1,

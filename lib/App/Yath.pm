@@ -239,7 +239,7 @@ sub _command_from_argv {
         return splice(@$argv, $idx, 1) unless $is_path;
     }
 
-    if (my $pfile = find_pfile($self->settings)) {
+    if (my $pfile = find_pfile($self->settings, no_checks => 1)) {
         warn "\n** Persistent runner detected, defaulting to the 'run' command **\n\n";
         return 'run';
     }

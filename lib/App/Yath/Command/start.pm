@@ -108,7 +108,7 @@ sub run {
     my $settings = $self->settings;
     my $dir      = $settings->workspace->workdir;
 
-    my $pfile = find_pfile($settings, vivify => 1);
+    my $pfile = find_pfile($settings, vivify => 1, no_checks => 1);
 
     if (-f $pfile) {
         remove_tree($dir, {safe => 1, keep_root => 0});

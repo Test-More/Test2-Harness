@@ -25,7 +25,7 @@ This will tell you about any persistent runners it can find.
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile($self->settings);
+    my $pfile = find_pfile($self->settings, no_fatal => 1);
 
     unless ($pfile) {
         print "\nNo persistent harness was found for the current path.\n\n";

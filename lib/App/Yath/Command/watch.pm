@@ -33,7 +33,7 @@ sub run {
     shift @$args if @$args && $args->[0] eq '--';
     my $stop = 1 if @$args && $args->[0] eq 'STOP';
 
-    my $pfile = find_pfile($self->settings)
+    my $pfile = find_pfile($self->settings, no_fatal => 1)
         or die "No persistent harness was found for the current path.\n";
 
     print "\nFound: $pfile\n";

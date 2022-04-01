@@ -31,16 +31,13 @@ This command will kill all running tests and clear the queue, but will not close
     EOT
 }
 
+sub pfile_params { (no_fatal => 1) }
+
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile($self->settings)
-        or die "No persistent harness was found for the current path.\n";
-
-    print "\nFound: $pfile\n";
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-    print "  PID: $data->{pid}\n";
-    print "  Dir: $data->{dir}\n";
+    # Get the output from finding the pfile
+    $self->pfile_data();
 
     my $state = Test2::Harness::Runner::State->new(
         job_count    => 1,

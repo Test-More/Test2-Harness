@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000116  2022-04-01 15:29:40-07:00 America/Los_Angeles
+
     - Better handling of version mismatches in the persistent runner
     - Better info when a `run` command is waiting on a busy runner
 

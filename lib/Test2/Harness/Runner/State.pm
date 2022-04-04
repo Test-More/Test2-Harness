@@ -45,6 +45,8 @@ use Test2::Harness::Util::HashBase(
         <task_list
 
         <halted_runs
+
+        <reload_state
     },
 );
 
@@ -58,6 +60,8 @@ sub init {
         unless defined $self->{+WORKDIR};
 
     $self->{+DISPATCH_FILE} = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+WORKDIR}, 'dispatch.jsonl'));
+
+    $self->{+RELOAD_STATE} //= {};
 
     $self->poll;
 }
@@ -127,6 +131,7 @@ my %ACTIONS = (
     end_queue   => '_end_queue',
     halt_run    => '_halt_run',
     truncate    => '_truncate',
+    reload      => '_reload',
 );
 
 sub poll {
@@ -426,6 +431,47 @@ sub _stage_down {
     my ($stage) = @_;
 
     $self->{+STAGE_READINESS}->{$stage} = 0;
+
+    return;
+}
+
+sub reload {
+    my $self = shift;
+    my ($stage, $data) = @_;
+    $stage //= 'default';
+    $self->_enqueue(reload => {%$data, stage => $stage});
+    return;
+}
+
+sub _reload {
+    my $self = shift;
+    my ($data) = @_;
+
+    my $stage    = $data->{stage};
+    my $file     = $data->{file};
+    my $success  = $data->{reloaded};
+    my $error    = $data->{error};
+    my $warnings = $data->{warnings};
+
+    my $reload_state = $self->{+RELOAD_STATE} //= {};
+    my $stage_state = $reload_state->{$stage} //= {};
+
+    # It either succeeded, or the stage will be reloaded, no need to track brokenness
+    if (defined $success) {
+        delete $stage_state->{$file};
+    }
+    else {
+        my $fields = {};
+        $fields->{error} = $error if defined($error) && length($error);
+        $fields->{warnings} = $warnings if $warnings && @{$warnings};
+
+        if (keys %$fields) {
+            $stage_state->{$file} = $fields;
+        }
+        else {
+            delete $stage_state->{$file};
+        }
+    }
 
     return;
 }

@@ -32,6 +32,15 @@ include_options(
     'App::Yath::Options::Run',
 );
 
+option_group {prefix => 'run'} => sub {
+    option check_reload_state => (
+        type => 'b',
+        description => 'Abort the run if there are unfixes reload errors and show a confirmation dialogue for unfixed reload warnings.',
+        default => 1,
+    );
+};
+
+
 sub group { 'persist' }
 
 sub summary { "Run tests using the persistent test runner" }
@@ -55,6 +64,102 @@ sub pfile_params { () }
 
 sub monitor_preloads { 1 }
 sub job_count { 1 }
+
+sub run {
+    my $self = shift;
+
+    my $settings = $self->settings;
+
+    if ($settings->run->check_reload_state) {
+        return 255 unless $self->check_reload_state;
+    }
+
+    return $self->SUPER::run(@_);
+}
+
+sub check_reload_state {
+    my $self = shift;
+
+    my $state = Test2::Harness::Runner::State->new(
+        job_count    => 1,
+        workdir      => $self->workdir,
+    );
+
+    $state->poll;
+
+    my $reload_status = $state->reload_state // {};
+
+    my (@out, $errors, $warnings);
+    for my $stage (sort keys %$reload_status) {
+        for my $file (keys %{$reload_status->{$stage}}) {
+            my $data = $reload_status->{$stage}->{$file} or next;
+
+            push @out => "\n==== SOURCE FILE: $file ====\n";
+            if ($data->{error}) {
+                $errors++;
+                push @out => $data->{error};
+            }
+
+            for (@{$data->{warnings} // []}) {
+                push @out => $_;
+                $warnings++;
+            }
+        }
+    }
+    $errors //= 0;
+    $warnings //= 0;
+
+    return 1 unless @out || $errors || $warnings;
+
+    print <<"    EOT", @out;
+*******************************************************************************
+* Some source files were reloaded with errors or warnings
+* Errors: $errors
+* Warnings: $warnings
+*******************************************************************************
+
+    EOT
+
+    if ($errors) {
+        print <<"        EOT";
+
+*******************************************************************************
+Aborting due to reload errors. Please fix the errors so that the modules reload
+cleanly, then try the run again. In most cases you will not need to reload the
+runner, simply fix the problem with the source file(s) and the runner will
+reload them automatically.
+
+        EOT
+
+        return 0;
+    }
+    elsif ($warnings) {
+        print <<"        EOT";
+
+*******************************************************************************
+Warnings were encountered when reloading source files, please see the output
+above. If these warnings are a problem you should abort this run (control+c)
+and correct them before trying again. In most cases you will not need to reload
+the runner, simply fix the problem with the source file(s) and the runner will
+reload them automatically.
+
+If these warnings are not indicitive of a problem you may continue by pressing
+enter/return.
+
+        EOT
+
+        if (-t STDIN) {
+            my $ignore = <STDIN>;
+            return 1;
+        }
+        else {
+            print STDERR "No TTY detected, aborting run due to warnings...\n";
+            return 0;
+        }
+    }
+
+    return 0;
+}
 
 sub init {
     my $self = shift;

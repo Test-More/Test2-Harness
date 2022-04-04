@@ -415,20 +415,22 @@ sub run_job {
 sub end_test_loop {
     my $self = shift;
 
+    my $state = $self->state;
+
     no warnings 'uninitialized';
     if (!$self->{+STAGE} || $self->{+STAGE} eq 'default' || $self->{+STAGE} eq 'base') {
         $self->{+RESPAWN_RUNNER_CALLBACK}->()
-            if $self->preloader->check || ($self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP');
+            if $self->preloader->check($state) || ($self->{+SIGNAL} && $self->{+SIGNAL} eq 'HUP');
     }
 
-    if ($self->preloader->check) {
+    if ($self->preloader->check($state)) {
         $self->{+SIGNAL} //= 'HUP';
         return 1;
     }
 
     return 1 if $self->{+SIGNAL};
 
-    return 1 if $self->state->done;
+    return 1 if $state->done;
 
     return 0;
 }

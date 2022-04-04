@@ -85,12 +85,43 @@ sub run {
 
     print "\n**** Runner Stages: ****\n";
     my $stage_status = $state->stage_readiness // {};
+    my $reload_status = $state->reload_state // {};
+    my $reload_issues = 0;
+
+    my $rows = [];
+    for my $stage (keys %$stage_status) {
+        my $pid = $stage_status->{$stage} ||= '';
+        my $ready = $pid ? 'YES' : 'NO';
+        $pid = 'N/A' if $pid && $pid == 1;
+
+        my $issues = keys %{$reload_status->{$stage}};
+        my $reload = $issues ? 'YES' : 'NO';
+        $reload_issues += $issues;
+
+        push @$rows => [$pid, $stage, $ready, $reload];
+    }
+
+    @$rows = sort { $a->[0] <=> $b->[0] } @$rows;
+
     my $stage_table = Term::Table->new(
         collapse => 1,
-        header => [qw/pid stage ready/],
-        rows => [ sort { $a->[0] <=> $b->[0] } map {my $pid = $stage_status->{$_}; my $ready = $pid ? 'YES' : 'NO'; $pid ||= ''; $pid = 'N/A' if $pid && $pid == 1; [$pid, $_, $ready]} keys %$stage_status ],
+        header => [qw/pid stage ready/, 'reload issues'],
+        rows => $rows,
     );
     print "$_\n" for $stage_table->render;
+
+    if ($reload_issues) {
+        print "\n**** Reload issues: ****\n";
+        for my $stage (sort keys %$reload_status) {
+            for my $file (keys %{$reload_status->{$stage}}) {
+                my $data = $reload_status->{$stage}->{$file} or next;
+                print "\n==== SOURCE FILE: $file ====\n";
+                print $data->{error} if $data->{error};
+                print $_ for @{$data->{warnings} // []};
+            }
+        }
+        print "\n";
+    }
 
     print "\n**** Running tests: ****\n";
     my $running = $state->running_tasks;

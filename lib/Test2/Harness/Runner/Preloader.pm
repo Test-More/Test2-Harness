@@ -7,7 +7,7 @@ our $VERSION = '1.000117';
 use B();
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN/;
-use Time::HiRes qw/time/;
+use Time::HiRes qw/time sleep/;
 use Test2::Harness::Util qw/open_file file2mod mod2file lock_file unlock_file clean_path/;
 
 use Test2::Harness::Runner::Reloader;
@@ -412,7 +412,17 @@ sub find_churn {
     my $self = shift;
     my ($file) = @_;
 
-    open(my $fh, '<', $file) or die "Could not open file '$file': $!";
+    # When a file is saved to disk it seems it can vanish temporarily. Use this loop to wait for it...
+    my ($fh, $ok, $error);
+    for (1 .. 50) {
+        local $@;
+        $ok = eval { $fh = open_file($file) };
+        $error = "LOOP $_: $@";
+        last if $ok;
+        sleep 0.2;
+    }
+
+    die $error // "Unknown error opening file '$file'" unless $fh;
 
     my $active = 0;
     my @out;
@@ -527,6 +537,7 @@ sub _monitor {
 
 sub check {
     my $self = shift;
+    my ($state) = @_;
 
     return 1 if $self->{+CHANGED};
 
@@ -541,6 +552,8 @@ sub check {
 
     my (@todo, @fails);
     for my $item (values %$results) {
+        my $stage = $self->{+STAGE} ? $self->{+STAGE}->name : 'default';
+        $state->reload($stage => $item);
         my $rel = $item->{reloaded};
 
         next if $rel; # Reload success
@@ -549,9 +562,6 @@ sub check {
             push @todo => $item;
             next;
         }
-
-        # Reload encountered an error
-        # TODO - Capture this state and make `yath run` explain that the reload is broken, and what files need to be fixed
     }
 
     unless (@todo) {

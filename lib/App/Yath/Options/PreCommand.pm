@@ -2,7 +2,7 @@ package App::Yath::Options::PreCommand;
 use strict;
 use warnings;
 
-our $VERSION = '1.000117';
+our $VERSION = '1.000118';
 
 use App::Yath::Util qw/find_pfile/;
 use Test2::Harness::Util qw/mod2file clean_path/;

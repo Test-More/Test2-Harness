@@ -89,9 +89,10 @@ sub check_reload_state {
 
     my $reload_status = $state->reload_state // {};
 
-    my (@out, $errors, $warnings);
+    my (@out, $errors, $warnings, %seen);
     for my $stage (sort keys %$reload_status) {
         for my $file (keys %{$reload_status->{$stage}}) {
+            next if $seen{$file}++;
             my $data = $reload_status->{$stage}->{$file} or next;
 
             push @out => "\n==== SOURCE FILE: $file ====\n";

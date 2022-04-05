@@ -10,6 +10,7 @@ use List::Util qw/first/;
 use Cwd qw/getcwd/;
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
+use Text::ParseWords qw/quotewords/;
 
 use Test2::Harness::TestFile;
 use File::Spec;
@@ -585,8 +586,15 @@ sub find_project_files {
         push @dirs => $path and next if -d $path;
 
         unless(-f $path) {
-            die "'$path' is not a valid file or directory.\n" if @$input;
-            next;
+            my ($actual, $args) = split /=/, $path, 2;
+            if (-f $actual) {
+                $path = $actual;
+                $test_params = {%{$test_params // {}}, argv => [quotewords('\s+', 0, $args)]};
+            }
+            else {
+                die "'$path' is not a valid file or directory.\n" if @$input;
+                next;
+            }
         }
 
         $path = clean_path($path, 0);

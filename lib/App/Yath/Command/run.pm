@@ -44,7 +44,7 @@ option_group {prefix => 'run'} => sub {
 sub group { 'persist' }
 
 sub summary { "Run tests using the persistent test runner" }
-sub cli_args { "[--] [test files/dirs] [::] [arguments to test scripts]" }
+sub cli_args { '[--] [test files/dirs] [::] [arguments to test scripts] [test_file.t] [test_file2.t="--arg1 --arg2 --param=\'foo bar\'"] [:: --argv-for-all-tests]' }
 
 sub description {
     return <<"    EOT";

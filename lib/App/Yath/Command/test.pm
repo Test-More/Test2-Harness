@@ -69,7 +69,7 @@ sub MAX_ATTACH() { 1_048_576 }
 sub group { ' test' }
 
 sub summary  { "Run tests" }
-sub cli_args { "[--] [test files/dirs] [::] [arguments to test scripts]" }
+sub cli_args { '[--] [test files/dirs] [::] [arguments to test scripts] [test_file.t] [test_file2.t="--arg1 --arg2 --param=\'foo bar\'"] [:: --argv-for-all-tests]' }
 
 sub description {
     return <<"    EOT";

@@ -45,6 +45,7 @@ requires "Test2::V0" => "0.000127";
 requires "Test::Builder" => "1.302170";
 requires "Test::Builder::Formatter" => "1.302170";
 requires "Test::More" => "1.302170";
+requires "Text::ParseWords" => "0";
 requires "Time::HiRes" => "0";
 requires "base" => "0";
 requires "constant" => "0";

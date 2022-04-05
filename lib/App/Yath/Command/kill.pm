@@ -2,7 +2,7 @@ package App::Yath::Command::kill;
 use strict;
 use warnings;
 
-our $VERSION = '1.000119';
+our $VERSION = '1.000120';
 
 use Time::HiRes qw/sleep/;
 use App::Yath::Util qw/find_pfile/;

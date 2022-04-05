@@ -2,7 +2,7 @@ package App::Yath::Plugin::Git;
 use strict;
 use warnings;
 
-our $VERSION = '1.000119';
+our $VERSION = '1.000120';
 
 use IPC::Cmd qw/can_run/;
 use Test2::Harness::Util::IPC qw/run_cmd/;

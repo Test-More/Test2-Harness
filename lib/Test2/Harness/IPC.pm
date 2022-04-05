@@ -2,7 +2,7 @@ package Test2::Harness::IPC;
 use strict;
 use warnings;
 
-our $VERSION = '1.000119';
+our $VERSION = '1.000120';
 
 use POSIX;
 

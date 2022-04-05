@@ -2,7 +2,7 @@ package Test2::Harness::Finder;
 use strict;
 use warnings;
 
-our $VERSION = '1.000119';
+our $VERSION = '1.000120';
 
 use Test2::Harness::Util qw/clean_path mod2file/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;

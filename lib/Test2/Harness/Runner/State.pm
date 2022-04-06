@@ -291,7 +291,7 @@ sub _start_spawn {
 
     my $uuid = $spec->{id} or die "Could not find UUID for spawn";
 
-    @{$self->{+PENDING_SPAWNS}} = grep { $_->{uuid} ne $uuid } @{$self->{+PENDING_SPAWNS}};
+    @{$self->{+PENDING_SPAWNS}} = grep { $_->{id} ne $uuid } @{$self->{+PENDING_SPAWNS}};
 
     return;
 }

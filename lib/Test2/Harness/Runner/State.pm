@@ -93,11 +93,14 @@ sub done {
 
 sub next_task {
     my $self = shift;
+    my ($stage) = @_;
+
     $self->poll();
 
     while(1) {
         if (@{$self->{+PENDING_SPAWNS} //= []}) {
             my $spawn = shift @{$self->{+PENDING_SPAWNS}};
+            next unless $spawn->{stage} eq $stage;
             $self->start_spawn($spawn);
             return $spawn;
         }
@@ -107,6 +110,7 @@ sub next_task {
         # If we are replaying a state then the task may have already completed,
         # so skip it if it is not in the running lookup.
         next unless $self->{+RUNNING_TASKS}->{$task->{job_id}};
+        next unless $task->{stage} eq $stage;
 
         return $task;
     }

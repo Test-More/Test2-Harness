@@ -450,8 +450,7 @@ sub next {
     my $state = $self->state;
 
     while (1) {
-        if(my $task = $state->next_task()) {
-            next unless $task->{stage} eq $self->{+STAGE};
+        if(my $task = $state->next_task($self->{+STAGE})) {
             return $task;
         }
 

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000124  2022-04-08 12:26:14-07:00 America/Los_Angeles
+
     - Fix bug where see `yath status` was being shown for non-persistent runs
     - Make 'busy' message shorter so it is less likely to be truncated
 

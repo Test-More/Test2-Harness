@@ -750,7 +750,7 @@ sub renderers {
     for my $class (@{$settings->display->renderers->{'@'}}) {
         require(mod2file($class));
         my $args     = $settings->display->renderers->{$class};
-        my $renderer = $class->new(@$args, settings => $settings);
+        my $renderer = $class->new(@$args, settings => $settings, command_class => ref($self));
         push @renderers => $renderer;
     }
 

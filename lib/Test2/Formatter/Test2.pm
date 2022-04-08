@@ -43,6 +43,7 @@ use Test2::Util::HashBase qw{
     -_active_disp
     -_file_stats
     -job_names
+    -is_persistent
 };
 
 sub TAG_WIDTH() { 8 }
@@ -193,6 +194,8 @@ sub init {
     else {
         $self->{+SHOW_BUFFER} = 0 unless defined $self->{+SHOW_BUFFER};
     }
+
+    $self->{+ECOUNT} //= 0;
 
     my $reset = $use_color ? Term::ANSIColor::color('reset') : '';
     my $cyan  = $use_color ? Term::ANSIColor::color('cyan')  : '';
@@ -352,57 +355,10 @@ sub update_active_disp {
 
     my $stats = $self->{+_FILE_STATS};
 
-    if ($f) {
-        $stats->{is_persistent} //= $f->{'harness_settings'}->{'harness'}->{'persist_file'} ? 1 : 0;
-    }
-    elsif ($stats->{is_persistent} && !$stats->{started}) {
-        $stats->{spinner} //= '|';
-        $stats->{spinner_time} //= time - 1;
-        $stats->{blink_time} //= time - 1;
-        $stats->{blink} //= '';
+    my $out = 0;
+    $out = $self->update_spinner($stats) unless $stats->{started};
 
-        if (time - $stats->{spinner_time} > 0.1) {
-            $stats->{spinner_time} = time;
-            my $start = substr($stats->{spinner}, 0, 1);
-            $stats->{spinner} = '\\' if $start eq '-';
-            $stats->{spinner} = '-'  if $start eq '/';
-            $stats->{spinner} = '/'  if $start eq '|';
-            $stats->{spinner} = '|'  if $start eq '\\';
-        }
-        elsif(time - $stats->{blink_time} > 0.5) {
-            $stats->{blink_time} = time;
-            $stats->{blink} = $stats->{blink} ? '' : 'bold bright_';
-        }
-        else {
-            return 0;
-        }
-
-        my $yellow = $self->{+COLOR} ? Term::ANSIColor::color($stats->{blink} . 'yellow') : '';
-        my $cyan   = $self->{+COLOR} ? Term::ANSIColor::color('cyan')                     : '';
-        my $green  = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_green')        : '';
-        my $bold   = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_white')        : '';
-        my $reset  = $self->reset;
-
-        $self->{+_ACTIVE_DISP} = [
-            join(
-                '' => (
-                    $bold,   "[ ",                                                     $reset,
-                    $green,  $stats->{spinner},                                        $reset,
-                    $yellow, " Tests have not started yet. Waiting for busy runner.",  $reset,
-                    $reset,  " (run ",                                                 $reset,
-                    $cyan,   "yath status",                                            $reset,
-                    $reset,  " for more info) ",                                       $reset,
-                    $green,  $stats->{spinner},                                        $reset,
-                    $bold,   " ]",                                                     $reset,
-                )
-            ),
-            '',
-        ];
-
-        return 1;
-    }
-
-    return unless $f;
+    return $out unless $f;
 
     if (my $task = $f->{harness_job_queued}) {
         $self->{+JOB_NAMES}->{$task->{job_id}} = $task->{job_name} || $task->{job_id};
@@ -433,7 +389,7 @@ sub update_active_disp {
         }
     }
 
-    return 0 unless $should_show;
+    return $out unless $should_show;
 
     my $statline = join '|' => (
         $self->_highlight($stats->{passed},  'P', 'green'),
@@ -462,7 +418,62 @@ sub update_active_disp {
     return 1;
 }
 
+sub update_spinner {
+    my $self = shift;
+    my ($stats) = @_;
 
+    $stats->{spinner} //= '|';
+    $stats->{spinner_time} //= time - 1;
+    $stats->{blink_time} //= time - 1;
+    $stats->{blink} //= '';
+
+    if (time - $stats->{spinner_time} > 0.1) {
+        $stats->{spinner_time} = time;
+        my $start = substr($stats->{spinner}, 0, 1);
+        $stats->{spinner} = '\\' if $start eq '-';
+        $stats->{spinner} = '-'  if $start eq '/';
+        $stats->{spinner} = '/'  if $start eq '|';
+        $stats->{spinner} = '|'  if $start eq '\\';
+    }
+    elsif(time - $stats->{blink_time} > 0.5) {
+        $stats->{blink_time} = time;
+        $stats->{blink} = $stats->{blink} ? '' : 'bold bright_';
+    }
+    else {
+        return 0;
+    }
+
+    my $yellow = $self->{+COLOR} ? Term::ANSIColor::color($stats->{blink} . 'yellow') : '';
+    my $cyan   = $self->{+COLOR} ? Term::ANSIColor::color('cyan')                     : '';
+    my $green  = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_green')        : '';
+    my $bold   = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_white')        : '';
+    my $reset  = $self->reset;
+
+    $self->{+_ACTIVE_DISP} = [
+        join(
+            '' => (
+                $bold  => "[ ",              $reset,
+                $green => $stats->{spinner}, $reset,
+                ''     => " ",
+                $self->{+IS_PERSISTENT}
+                ? (
+                    $yellow => "Waiting for busy runner", $reset,
+                    ''      => " ",
+                    $reset  => "(see ",       $reset,
+                    $cyan   => "yath status", $reset,
+                    $reset  => ")",           $reset,
+                    )
+                : ($yellow => "INITIALIZING", $reset),
+                ''     => " ",
+                $green => $stats->{spinner}, $reset,
+                $bold  => " ]",              $reset,
+            )
+        ),
+        '',
+    ];
+
+    return 1;
+}
 
 sub _highlight {
     my $self = shift;
@@ -486,6 +497,7 @@ sub render_status {
 
     my $reset = $self->reset;
     my $cyan = $self->{+COLOR} ? Term::ANSIColor::color('cyan') : '';
+
     my $str = "$self->{+_ACTIVE_DISP}->[0] Events: $self->{+ECOUNT} ${cyan}$self->{+_ACTIVE_DISP}->[1]${reset}";
 
     my $max = term_size() || 80;

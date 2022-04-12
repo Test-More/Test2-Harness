@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix date range + user selection in reports
+
 0.000118  2022-04-12 10:36:13-07:00 America/Los_Angeles
 
     - Add date range option to project reports

@@ -212,10 +212,10 @@ sub get_add_query {
 
         my $ords = $sth->fetchrow_hashref;
 
-        my $ord_query = "AND run_ord >= ? AND run_ord <= ?";
+        my $ord_query = "run_ord >= ? AND run_ord <= ?";
         push @add_vals => ($ords->{min}, $ords->{max});
-        return ("$user_query\n$ord_query", @add_vals) if @$users;
-        return ("$ord_query", @add_vals);
+        return ("AND $user_query AND $ord_query", @add_vals) if @$users;
+        return ("AND $ord_query", @add_vals);
     }
 
     my $query = <<"    EOT";

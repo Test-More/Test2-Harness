@@ -5,8 +5,13 @@
         <div class="data control">
             <ul>
                 <li>
-                    <input type="radio" id="n_all" name="run_selector" value="all" checked /> <label for="n_all">All Runs</label>
-                    <input type="radio" id="n_lim" name="run_selector" value="limited" />     <label for="n_lim">Limit Runs</label>
+                    <input type="radio" id="n_all"  name="run_selector" value="all" checked /> <label for="n_all">All Runs</label>
+                    <input type="radio" id="n_lim"  name="run_selector" value="limited" />     <label for="n_lim">Limit Runs</label>
+                    <input type="radio" id="n_date" name="run_selector" value="date" />        <label for="n_lim">Date Range</label>
+                </li>
+                <li class="maybe_selector" id="date_selector">
+                    <label for="start_date">Start&nbsp;Date <small>(inclusive)</small></label>&nbsp;<input id="start_date" name="start_date" class="date_picker" type="text" />
+                    <label for="end_date">End&nbsp;Date     <small>(exclusive)</small></label>&nbsp;<input id="end_date"   name="end_date"   class="date_picker" type="text" />
                 </li>
                 <li class="maybe_selector" id="run_selector">
                     <input id="n" name="n" type="text" value="<: $n :>" /><label for="n">&nbsp;Runs</label>

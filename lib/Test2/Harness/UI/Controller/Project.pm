@@ -162,24 +162,61 @@ sub build_stat {
     return $stat;
 }
 
+sub parse_date {
+    my $raw = shift;
+
+    my ($m, $d, $y) = split '/', $raw;
+    return sprintf("%04d-%02d-%02d", $y, $m, $d);
+}
+
 sub get_add_query {
     my $self = shift;
-    my ($project, $n, $users) = @_;
+    my ($project, $stat, %overrides) = @_;
 
-    return ('') unless $n || @$users;
+    my $n     = $overrides{n}          // $stat->{n};
+    my $users = $overrides{users}      // $stat->{users};
+    my $start = $overrides{start_date} // $stat->{start_date};
+    my $end   = $overrides{end_date}   // $stat->{end_date};
+
+    my $range = $start && $end;
+
+    return ('') unless $n || @$users || $range;
 
     return ("AND run_ord > (SELECT MAX(run_ord) - ? FROM runs)\n", $n)
-        unless @$users;
+        unless @$users || $range;
 
     my @add_vals;
 
     my $user_query = 'user_id in (' . join(',' => map { '?' } @$users) . ')';
     push @add_vals => @$users;
 
-    return ("AND $user_query\n", @add_vals) unless $n;
+    return ("AND $user_query\n", @add_vals) unless $n || $range;
 
     my $schema = $self->{+CONFIG}->schema;
     my $dbh = $schema->storage->dbh;
+
+    if ($range) {
+        my $query = <<"        EOT";
+            SELECT min(run_ord) AS min, max(run_ord) AS max
+              FROM runs
+             WHERE project_id = ?
+               AND added >= ?
+               AND added <= ?
+        EOT
+
+        $start = parse_date($start);
+        $end   = parse_date($end);
+
+        my $sth = $dbh->prepare($query);
+        $sth->execute($project->project_id, $start, $end) or die $sth->errstr;
+
+        my $ords = $sth->fetchrow_hashref;
+
+        my $ord_query = "AND run_ord >= ? AND run_ord <= ?";
+        push @add_vals => ($ords->{min}, $ords->{max});
+        return ("$user_query\n$ord_query", @add_vals) if @$users;
+        return ("$ord_query", @add_vals);
+    }
 
     my $query = <<"    EOT";
         SELECT run_ord, run_id
@@ -205,13 +242,10 @@ sub _build_stat_run_list {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $n = $stat->{n};
-    my $users = $stat->{users};
-
     my $schema = $self->{+CONFIG}->schema;
     my $dbh = $schema->storage->dbh;
 
-    my ($add_query, @add_vals) = $self->get_add_query($project, $n, $users);
+    my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
 
     my $query = <<"    EOT";
         SELECT run_id
@@ -235,13 +269,10 @@ sub _build_stat_expensive_files {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $n = $stat->{n};
-    my $users = $stat->{users};
-
     my $schema = $self->{+CONFIG}->schema;
     my $dbh = $schema->storage->dbh;
 
-    my ($add_query, @add_vals) = $self->get_add_query($project, $n, $users);
+    my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
 
     my $query = <<"    EOT";
         SELECT test_files.filename      AS filename,
@@ -291,13 +322,10 @@ sub _build_stat_expensive_subtests {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $n = $stat->{n};
-    my $users = $stat->{users};
-
     my $schema = $self->{+CONFIG}->schema;
     my $dbh = $schema->storage->dbh;
 
-    my ($add_query, @add_vals) = $self->get_add_query($project, $n, $users);
+    my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
 
     my $query = <<"    EOT";
         SELECT test_files.filename      AS filename,
@@ -347,13 +375,10 @@ sub _build_stat_expensive_users {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $n = $stat->{n};
-    my $users = $stat->{users};
-
     my $schema = $self->{+CONFIG}->schema;
     my $dbh = $schema->storage->dbh;
 
-    my ($add_query, @add_vals) = $self->get_add_query($project, $n, $users);
+    my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
 
     my $query = <<"    EOT";
         SELECT users.username  AS username,
@@ -400,13 +425,10 @@ sub _build_stat_user_summary {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $n = $stat->{n};
-    my $users = $stat->{users};
-
     my $schema = $self->{+CONFIG}->schema;
     my $dbh = $schema->storage->dbh;
 
-    my ($add_query, @add_vals) = $self->get_add_query($project, $n, $users);
+    my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
 
     my $query = <<"    EOT";
         SELECT SUM(duration)            AS total_duration,

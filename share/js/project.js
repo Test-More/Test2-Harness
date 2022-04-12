@@ -10,12 +10,21 @@ $(function() {
         t2hui.project_stats.reload(0);
     });
 
+    $('input.date_picker').datepicker();
+
     $('input[name="run_selector"]').change(function() {
         if ($(this).val() === 'limited') {
             $('li#run_selector').show();
         }
         else {
             $('li#run_selector').hide();
+        }
+
+        if ($(this).val() === 'date') {
+            $('li#date_selector').show();
+        }
+        else {
+            $('li#date_selector').hide();
         }
     });
 
@@ -33,8 +42,16 @@ $(function() {
 var id = 1;
 t2hui.project_stats.reload = function(all) {
     var n = 0;
-    if ($('input[name="run_selector"]:checked').val() === 'limited') {
+    var start;
+    var end;
+
+    var run_sel = $('input[name="run_selector"]:checked').val();
+    if (run_sel === 'limited') {
         n = $('input#n').val();
+    }
+    else if (run_sel === 'date') {
+        start = $('input#start_date').val();
+        end = $('input#end_date').val();
     }
 
     var p = $('input#project').val();
@@ -86,7 +103,7 @@ t2hui.project_stats.reload = function(all) {
         if (!it_n) it_n = n;
 
         if (it.parent().parent().hasClass('active')) {
-            request.push({"id": it_id, "type": it_type, "n": it_n, "users": users});
+            request.push({"id": it_id, "type": it_type, "n": it_n, "users": users, start_date: start, end_date: end});
             it.text('Loading...');
             it.addClass('running');
         }
@@ -116,7 +133,9 @@ t2hui.project_stats.reload = function(all) {
             div.addClass('loaded');
 
             if (item.error) {
-                div.text(item.error);
+                var pre = $('<pre></pre>');
+                pre.text(item.error);
+                div.html(pre);
                 div.addClass('error_set');
                 return;
             }

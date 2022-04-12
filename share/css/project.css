@@ -304,3 +304,7 @@ div#project a.download:hover {
 div.stat > table th, div.stat > table td {
     white-space: nowrap;
 }
+
+input.date_picker, div.controls div.control ul li input.date_picker {
+    width: 100px;
+}

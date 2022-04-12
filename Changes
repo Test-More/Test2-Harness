@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Update Jquery-UI
+
 0.000117  2022-03-15 14:22:35-07:00 America/Los_Angeles
 
     - Add rerun capabilities to plugins, and add necessary api endpoints for yathui plugin

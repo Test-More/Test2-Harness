@@ -83,7 +83,6 @@ sub init {
         unless -d $dir;
 
     $self->{+DIR} = $dir;
-    $self->{+JOB_COUNT} //= 1;
 
     $self->{+HANDLERS}->{HUP} = sub {
         my $sig = shift;
@@ -98,9 +97,15 @@ sub init {
     }
     $self->{+TMP_DIR} = $tmp_dir;
 
+    my $have_job_limiter = 0;
     for my $res (@{$self->{+RESOURCES}}) {
-        next if ref($res);
-        require(mod2file($res));
+        require(mod2file($res)) unless ref($res);
+        $have_job_limiter++ if $res->job_limiter;
+    }
+
+    unless ($have_job_limiter) {
+        require Test2::Harness::Runner::Resource::JobCount;
+        unshift @{$self->{+RESOURCES}} => 'Test2::Harness::Runner::Resource::JobCount';
     }
 
     $self->SUPER::init();
@@ -125,7 +130,6 @@ sub state {
     my $self = shift;
 
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
-        job_count    => $self->{+JOB_COUNT},
         workdir      => $self->{+DIR},
         eager_stages => $self->preloader->eager_stages // {},
         preloader    => $self->preloader,
@@ -551,8 +555,6 @@ See L<App::Yath::Options::Runner> for the most up to date documentation on
 these.
 
 =over 4
-
-=item $runner->job_count
 
 =item $runner->includes
 

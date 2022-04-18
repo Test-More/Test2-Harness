@@ -13,6 +13,14 @@ sub new {
 
 sub tick { }
 
+sub refresh { }
+
+sub job_limiter { 0 }
+
+sub job_limiter_max { }
+
+sub job_limiter_at_max { 0 }
+
 sub available { -1 }
 
 sub record { }
@@ -376,6 +384,37 @@ very end.
 This will be called once by the parent runner process just before it exits.
 This is your chance to do any final cleanup tasks such as deleting databases
 that are no longer going to be used by tests as no more will be run.
+
+=item $inst->tick()
+
+This is called by only 1 process at a time and gives you a way to do extra
+stuff at a regular interval without other processes trying to do the same work
+at the same time.
+
+For example, if a database is left in a dirty state after it is released, you
+can fire off a cleanup action here knowing no other process will run it at the
+same time. You can also be sure no record messages will be sent while this sub
+is running as the process it runs in has a lock.
+
+=item $inst->refresh()
+
+Called once before each resource-request loop. This is your chance to do things
+between each set of requests for resources.
+
+=item $bool = $inst->job_limiter()
+
+True if your resource is intended as a job limiter (IE alternative to
+specifying -jN at the command line).
+
+=item $int = $inst->job_limiter_max()
+
+Max number of jobs this will allow at the moment, if this resource is a job
+limiter.
+
+=item $bool = $inst->job_limiter_at_max()
+
+True if the limiter has reached its maximum number of running jobs. This is
+used to avoid a resource-allocation loop as an optimization.
 
 =back
 

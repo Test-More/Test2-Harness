@@ -39,10 +39,20 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         type           => 's',
         short          => 'j',
         alt            => ['jobs'],
-        description    => 'Set the number of concurrent jobs to run (Default: 1)',
+        description    => 'Set the number of concurrent jobs to run',
         env_vars       => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
         clear_env_vars => 1,
-        default        => 1,
+        default        => undef,
+
+        action => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
+
+            $$slot = $norm;
+
+            require Test2::Harness::Runner::Resource::JobCount;
+            unshift @{$settings->runner->resources} => ('Test2::Harness::Runner::Resource::JobCount')
+                unless grep { $_ eq 'Test2::Harness::Runner::Resource::JobCount' } @{$settings->runner->resources};
+        },
     );
 
     option dump_depmap => (

@@ -21,7 +21,6 @@ use Test2::Harness::Util::HashBase(
     # These are construction arguments
     qw{
         <eager_stages
-        <job_count
         <workdir
         <preloader
         <no_poll
@@ -55,11 +54,13 @@ use Test2::Harness::Util::HashBase(
 sub init {
     my $self = shift;
 
-    croak "You must specify a 'job_count' (1 or greater)"
-        unless $self->{+JOB_COUNT};
-
     croak "You must specify a workdir"
         unless defined $self->{+WORKDIR};
+
+    unless (grep { $_->job_limiter } @{$self->{+RESOURCES}}) {
+        require Test2::Harness::Runner::Resource::JobCount;
+        unshift @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => 1);
+    }
 
     $self->{+DISPATCH_FILE} = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+WORKDIR}, 'dispatch.jsonl'));
 
@@ -603,10 +604,12 @@ sub clear_finished_run {
 sub advance_tasks {
     my $self = shift;
 
-    my $max = $self->{+JOB_COUNT} // 0;
-    my $cur = $self->{+RUNNING}   // 0;
+    for my $resource (@{$self->{+RESOURCES}}) {
+        $resource->refresh();
 
-    return 0 if $cur >= $max;
+        next unless $resource->job_limiter;
+        return 0 if $resource->job_limiter_at_max();
+    }
 
     my ($run_stage, $task, $res, %params) = $self->_next();
 
@@ -636,7 +639,14 @@ sub _cat_order {
 sub _dur_order {
     my $self = shift;
 
-    my $max = $self->{+JOB_COUNT};
+    my $max = 0;
+    for my $resource (@{$self->resources}) {
+        next unless $resource->job_limiter;
+        my $val = $resource->job_limiter_max;
+        $max = $val if !$max || $val < $max;
+    }
+    $max //= 1;
+
     my $maxm1 = $max - 1;
 
     my $durs = $self->{+RUNNING_DURATIONS};

@@ -30,7 +30,7 @@ sub collector_post {
     my $settings = $params{settings};
 
     unless ($settings->collector->max_open_jobs) {
-        my $j = $settings->runner->job_count;
+        my $j = $settings->runner->job_count // 1;
         my $max_open = 2 * $j;
         $settings->collector->field(max_open_jobs => $max_open);
     }

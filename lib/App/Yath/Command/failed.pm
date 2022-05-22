@@ -15,7 +15,7 @@ use App::Yath::Options;
 option brief => (
     prefix => 'display',
     category => 'Display Options',
-    description => 'Show only files that failed, newline separated, no other output. If a file dailed once but passed on a retry it will NOT be shown.',
+    description => 'Show only the files that failed, newline separated, no other output. If a file failed once but passed on a retry it will NOT be shown.',
 );
 
 sub summary { "Replay a test run from an event log" }

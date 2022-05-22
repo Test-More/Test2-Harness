@@ -27,7 +27,7 @@ option_group {prefix => 'harness', pre_command => 1} => sub {
         type => 'b',
 
         category => 'Plugins',
-        description => 'Normally yath scans for and loads all App::Yath::Plugin::* modules in order to bring in command-line options they may provide. This flag will disable that. This is useful if you have a naughty plugin that it loading other modules when it should not.',
+        description => 'Normally yath scans for and loads all App::Yath::Plugin::* modules in order to bring in command-line options they may provide. This flag will disable that. This is useful if you have a naughty plugin that is loading other modules when it should not.',
     );
 
     option project => (

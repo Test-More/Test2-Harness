@@ -18,7 +18,7 @@ option brief => (
     description => 'Show only the files that failed, newline separated, no other output. If a file failed once but passed on a retry it will NOT be shown.',
 );
 
-sub summary { "Replay a test run from an event log" }
+sub summary { "Show the failed tests from an event log" }
 
 sub group { 'log' }
 
@@ -26,10 +26,10 @@ sub cli_args { "[--] event_log.jsonl[.gz|.bz2] [job1, job2, ...]" }
 
 sub description {
     return <<"    EOT";
-This yath command will re-run the harness against an event log produced by a
-previous test run. The only required argument is the path to the log file,
-which maybe compressed. Any extra arguments are assumed to be job id's. If you
-list any jobs, only listed jobs will be processed.
+This yath command will list the test scripts from an event log that have failed.
+The only required argument is the path to the log file, which may be compressed.
+Any extra arguments are assumed to be job id's. If you list any jobs,
+only the listed jobs will be processed.
 
 This command accepts all the same renderer/formatter options that the 'test'
 command accepts.

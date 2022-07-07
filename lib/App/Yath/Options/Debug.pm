@@ -210,7 +210,7 @@ sub _post_process_interactive {
 
         while(1) {
             $SIG{PIPE} = sub { exit 0 };
-            exit 0 if waitpid($pid, POSIX::WNOHANG);
+            exit 0 if waitpid($pid, &POSIX::WNOHANG);
             exit 0 unless kill(0, $pid);
             my $data = <STDIN>;
             if (defined($data) && length($data)) {

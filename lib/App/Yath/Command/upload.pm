@@ -2,7 +2,7 @@ package App::Yath::Command::upload;
 use strict;
 use warnings;
 
-our $VERSION = '0.000120';
+our $VERSION = '0.000121';
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip  qw($GunzipError);

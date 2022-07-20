@@ -62,6 +62,7 @@ requires "perl" => "5.008009";
 suggests "Cpanel::JSON::XS" => "0";
 suggests "DBD::Pg" => "0";
 suggests "DBD::mysql" => "0";
+suggests "DBIx::Class::Storage::DBI::mysql::Retryable" => "0";
 
 on 'test' => sub {
   requires "HTTP::Tiny::UNIX" => "0";

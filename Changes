@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+0.000121  2022-07-22 15:26:05-07:00 America/Los_Angeles
+
     - Do not disable join optimizer for retry
     - Fix a delete that did not work with retry
 

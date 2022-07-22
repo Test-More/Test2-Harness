@@ -395,7 +395,26 @@ sub get_job {
     $result->events->delete_all();
 
     # Prevent duplicate coverage when --retry is used
-    $self->schema->resultset('Coverage')->search({'job_key.job_id' => $job_id}, {join => 'job_key'})->delete if $job_try;
+    if ($job_try) {
+        if ($Test2::Harness::UI::Schema::LOADED =~ m/mysql/i) {
+            my $schema = $self->schema;
+            my $dbh    = $schema->storage->dbh;
+
+            my $query = <<"            EOT";
+            DELETE coverage
+              FROM coverage
+              JOIN jobs USING(job_key)
+             WHERE job_id = ?
+            EOT
+
+            my $sth = $dbh->prepare($query);
+            $sth->execute($job_id) or die $sth->errstr;
+        }
+        else {
+            $self->schema->resultset('Coverage')->search({'job_key.job_id' => $job_id}, {join => 'job_key'})->delete;
+        }
+    }
+
     if (my $old = $self->{+JOBS}->{$job_id}->{$job_try - 1}) {
         $self->{+UNCOVER}->{$old->{job_key}}++;
     }

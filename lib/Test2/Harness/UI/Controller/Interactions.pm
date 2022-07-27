@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Interactions;
 use strict;
 use warnings;
 
-our $VERSION = '0.000124';
+our $VERSION = '0.000125';
 
 use DateTime;
 use Data::GUID;

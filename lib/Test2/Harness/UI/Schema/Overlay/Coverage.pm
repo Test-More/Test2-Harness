@@ -7,7 +7,7 @@ use Carp qw/confess/;
 confess "You must first load a Test2::Harness::UI::Schema::NAME module"
     unless $Test2::Harness::UI::Schema::LOADED;
 
-our $VERSION = '0.000124';
+our $VERSION = '0.000125';
 
 __PACKAGE__->inflate_column(
     metadata => {

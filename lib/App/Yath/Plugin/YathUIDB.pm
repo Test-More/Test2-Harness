@@ -169,7 +169,7 @@ option_group {prefix => 'yathui-db', category => "YathUI Options"} => sub {
     option duration_limit => (
         type => 's',
         description => 'Limit the number of runs to look at for durations data (default: 10)',
-        default => 10,
+        default => 25,
     );
 
     option publisher => (
@@ -305,9 +305,8 @@ sub duration_data {
     my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
 
-    my %args = (user => $ydb->publisher);
+    my %args = (user => $ydb->publisher, $ydb->duration_limit);
     if (my $yui = $settings->prefix('yathui')) {
-        $args{limit}  = $yui->duration_limit;
         $args{short}  = $yui->medium_duration;
         $args{medium} = $yui->long_duration;
 

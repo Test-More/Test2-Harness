@@ -71,7 +71,7 @@ sub durations {
 
     if ($limit) {
         my $where = $username ? "WHERE $user_append" : "";
-        my $subselect = <<"        EOT";
+        my $sth   = $dbh->prepare(<<"        EOT");
             SELECT run_id
               FROM runs
               JOIN users USING(user_id)
@@ -80,8 +80,12 @@ sub durations {
              LIMIT ?
         EOT
 
-        $query .= "AND run_id IN ($subselect)";
-        push @vals => (@user_args, $limit);
+        $sth->execute(@user_args, $limit) or die $sth->errstr;
+
+        my @ids = map { $_->[0] } @{$sth->fetchall_arrayref};
+
+        $query .= "AND run_id IN (" . ('?' x scalar @ids) . ")\n";
+        push @vals => (@ids);
     }
 
     my $sth = $dbh->prepare($query);

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix typo from last fix
+
 0.000123  2022-07-27 14:30:23-07:00 America/Los_Angeles
 
     - Fix bug in duration limit specification

@@ -305,7 +305,7 @@ sub duration_data {
     my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
 
-    my %args = (user => $ydb->publisher, $ydb->duration_limit);
+    my %args = (user => $ydb->publisher, limit => $ydb->duration_limit);
     if (my $yui = $settings->prefix('yathui')) {
         $args{short}  = $yui->medium_duration;
         $args{medium} = $yui->long_duration;

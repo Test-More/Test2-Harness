@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add limit options for number of runs to look at for duration data
+
 0.000121  2022-07-22 15:26:05-07:00 America/Los_Angeles
 
     - Do not disable join optimizer for retry

@@ -166,6 +166,12 @@ option_group {prefix => 'yathui-db', category => "YathUI Options"} => sub {
         default => 0,
     );
 
+    option duration_limit => (
+        type => 's',
+        description => 'Limit the number of runs to look at for durations data (default: 10)',
+        default => 10,
+    );
+
     option publisher => (
         type => 's',
         description => 'When using coverage or duration data, only use data uploaded by this user',
@@ -301,8 +307,10 @@ sub duration_data {
 
     my %args = (user => $ydb->publisher);
     if (my $yui = $settings->prefix('yathui')) {
+        $args{limit}  = $yui->duration_limit;
         $args{short}  = $yui->medium_duration;
         $args{medium} = $yui->long_duration;
+
         # TODO
         #$args{median} = $yui->median_durations;
     }

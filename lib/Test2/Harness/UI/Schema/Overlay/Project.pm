@@ -41,9 +41,11 @@ sub durations {
     my $self   = shift;
     my %params = @_;
 
-    my $median = $params{median} || 0;
-    my $short  = $params{short}  || 15;
-    my $medium = $params{medium} || 30;
+    my $median   = $params{median} || 0;
+    my $short    = $params{short}  || 15;
+    my $medium   = $params{medium} || 30;
+    my $username = $params{user};
+    my $limit    = $params{limit};
 
     my $schema = $self->result_source->schema;
     my $dbh = $schema->storage->dbh;
@@ -60,9 +62,26 @@ sub durations {
     EOT
     my @vals = ($self->project_id);
 
-    if (my $username = $params{user}) {
-        $query .= "AND users.username = ?";
-        push @vals => $username;
+    my ($user_append, @user_args) = $username ? ("users.username = ?", $username) : ();
+
+    if ($username) {
+        $query .= "AND $user_append";
+        push @vals => @user_args;
+    }
+
+    if ($limit) {
+        my $where = $username ? "WHERE $user_append" : "";
+        my $subselect = <<"        EOT";
+            SELECT run_id
+              FROM runs
+              JOIN users USING(user_id)
+              $where
+             ORDER BY run_ord DESC
+             LIMIT ?
+        EOT
+
+        $query .= "AND run_id IN ($subselect)";
+        push @vals => (@user_args, $limit);
     }
 
     my $sth = $dbh->prepare($query);

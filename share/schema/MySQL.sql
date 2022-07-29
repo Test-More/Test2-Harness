@@ -32,6 +32,14 @@ CREATE TABLE primary_email (
     unique(email_id)
 ) ROW_FORMAT=COMPRESSED;
 
+CREATE TABLE hosts (
+    host_id     CHAR(36)        NOT NULL PRIMARY KEY,
+    hostname    VARCHAR(512)    NOT NULL,
+    test_slots  INT             NOT NULL,
+
+    unique(hostname)
+) ROW_FORMAT=COMPRESSED;
+
 CREATE TABLE email_verification_codes (
     evcode_id       CHAR(36)        NOT NULL PRIMARY KEY,
     email_id        CHAR(36)        NOT NULL,

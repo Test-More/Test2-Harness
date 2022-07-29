@@ -1,5 +1,5 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::SourceSub;
+package Test2::Harness::UI::Schema::Result::Host;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
@@ -15,25 +15,26 @@ __PACKAGE__->load_components(
   "Tree::AdjacencyList",
   "UUIDColumns",
 );
-__PACKAGE__->table("source_subs");
+__PACKAGE__->table("hosts");
 __PACKAGE__->add_columns(
-  "source_sub_id",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
-  "subname",
+  "host_id",
+  {
+    data_type => "uuid",
+    default_value => \"uuid_generate_v4()",
+    is_nullable => 0,
+    size => 16,
+  },
+  "hostname",
   { data_type => "varchar", is_nullable => 0, size => 512 },
+  "test_slots",
+  { data_type => "integer", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("source_sub_id");
-__PACKAGE__->add_unique_constraint("source_subs_subname_key", ["subname"]);
-__PACKAGE__->has_many(
-  "coverages",
-  "Test2::Harness::UI::Schema::Result::Coverage",
-  { "foreign.source_sub_id" => "self.source_sub_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
+__PACKAGE__->set_primary_key("host_id");
+__PACKAGE__->add_unique_constraint("hosts_hostname_key", ["hostname"]);
 
 
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-07-29 08:37:23
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:urcWrmu05wC+aYng/qxIpQ
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:huk1coGgcGrA0NNvocAeqw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

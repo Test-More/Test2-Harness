@@ -63,6 +63,14 @@ CREATE TABLE primary_email (
     unique(email_id)
 );
 
+CREATE TABLE hosts (
+    host_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    hostname    VARCHAR(512)    NOT NULL,
+    test_slots  INT             NOT NULL,
+
+    unique(hostname)
+);
+
 CREATE TABLE email_verification_codes (
     evcode_id       UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     email_id        UUID            NOT NULL REFERENCES email(email_id),

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Sweeper;
 use strict;
 use warnings;
 
-our $VERSION = '0.000125';
+our $VERSION = '0.000126';
 
 use Test2::Harness::UI::Sweeper;
 use Test2::Harness::UI::Response qw/resp error/;

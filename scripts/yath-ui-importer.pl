@@ -7,10 +7,12 @@ use Test2::Harness::UI;
 use Test2::Harness::UI::Config;
 use Test2::Harness::UI::Importer;
 
-my ($dsn, $user, $pass) = @ARGV;
+my ($dsn, $user, $pass, $seed) = @ARGV;
 
 $user ||= '';
 $pass ||= '';
+
+srand($seed) if $seed;
 
 my $config = Test2::Harness::UI::Config->new(
     dbi_dsn    => $dsn,

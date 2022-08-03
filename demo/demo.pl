@@ -93,11 +93,11 @@ sub load_file {
 
 $ENV{YATH_UI_SCHEMA} = $schema;
 my %commands = (
-    importer1 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
-    importer2 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
-    importer3 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
-    importer4 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
-    importer5 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn],
+    importer1 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn, "", "", int(rand(1000))],
+    importer2 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn, "", "", int(rand(1000))],
+    importer3 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn, "", "", int(rand(1000))],
+    importer4 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn, "", "", int(rand(1000))],
+    importer5 => [$^X, '-Ilib', 'scripts/yath-ui-importer.pl', $dsn, "", "", int(rand(1000))],
     starman  => ['starman', '-Ilib', '--port', 8081, '--workers', 20, './demo/demo.psgi'],
 );
 my $start = $$;

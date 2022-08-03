@@ -8,7 +8,6 @@ use DateTime;
 use Data::GUID;
 use Time::HiRes qw/time/;
 use List::Util qw/first min max/;
-use Data::Dumper qw/Dumper/;
 
 use Clone qw/clone/;
 use Carp qw/croak confess/;
@@ -48,7 +47,45 @@ use Test2::Harness::UI::Util::HashBase qw{
 
     <passed <failed <retried
     <job0_id <job_ord
+
+    <disconnect_retry
 };
+
+sub trim_error {
+    my ($msg, $err) = @_;
+
+    my @lines;
+    if ($ENV{TEST2_HARNESS_IMPORT_VERBOSE}) {
+        @lines = ($err);
+    }
+    else {
+        @lines = split /\n/, $err;
+        @lines = (@lines[1 .. 5], "\n[... TRIMMED, set the TEST2_HARNESS_IMPORT_VERBOSE=1 env var to see the entire error ...]\n", @lines[-5 .. -1]) if @lines > 12;
+    }
+
+    return join("\n" => $msg, @lines) . "\n";
+}
+
+sub retry_on_disconnect {
+    my $self = shift;
+    my ($description, $callback) = @_;
+
+    my ($attempt, $err);
+    for my $i (0 .. ($self->{+DISCONNECT_RETRY} - 1)) {
+        $attempt = $i;
+        return 1 if eval { $callback->(); 1 };
+        $err = $@;
+
+        # Try to fix the connection
+        for (1 .. 10) {
+            $self->schema->storage->disconnect;
+            last if $self->schema->storage->connected;
+            sleep 1;
+        }
+    }
+
+    die trim_error(qq{Failed "$description" (attempt $attempt)}, $err);
+}
 
 sub format_stamp {
     my $self = shift;
@@ -71,12 +108,14 @@ sub init {
     croak "'config' is a required attribute"
         unless $self->{+CONFIG};
 
+    $self->{+DISCONNECT_RETRY} //= 15;
+
     my $run;
     if ($run = $self->{+RUN}) {
         $self->{+RUN_ID} = $run->run_id;
         $self->{+MODE}   = $MODES{$run->mode};
 
-        eval { $run->update({status => 'pending'}); 1 } || warn "Failed to update status for run '$self->{+RUN_ID}': $@";
+        $self->retry_on_disconnect("update status for run '$self->{+RUN_ID}'" => sub { $run->update({status => 'pending'}) });
     }
     else {
         my $run_id = $self->{+RUN_ID} // croak "either 'run' or 'run_id' must be provided";
@@ -135,7 +174,7 @@ sub flush {
     my $int = $self->{+INTERVAL};
 
     # Always update if needed
-    eval { $self->run->insert_or_update(); 1} or warn "Failed to update run: $@";
+    $self->retry_on_disconnect("update run" => sub { $self->run->insert_or_update() });
 
     my $flush = $params{force} ? 'force' : 0;
     $flush ||= 'always' if $bmode eq 'none';
@@ -152,7 +191,7 @@ sub flush {
     return "" unless $flush;
     $self->{+LAST_FLUSH} = time;
 
-    eval { $res->update(); 1 } or warn "Failed to update job result: $@";
+    $self->retry_on_disconnect("update job result" => sub { $res->update() });
 
     $self->flush_events();
     $self->flush_reporting();
@@ -174,7 +213,7 @@ sub flush {
         $res->normalize_to_mode(mode => $self->{+MODE});
     }
 
-    eval { $res->update(); 1 } or warn "Failed to update job result: $@";
+    $self->retry_on_disconnect("update job result" => sub { $res->update() });
 
     return $flush;
 }
@@ -214,9 +253,7 @@ sub flush_events {
     return unless @write;
 
     local $ENV{DBIC_DT_SEARCH_OK} = 1;
-    unless (eval { $self->schema->resultset('Event')->populate(\@write); 1 }) {
-        warn "Failed to populate events!\n$@\n" . Dumper(\@write);
-    }
+    $self->retry_on_disconnect("populate events" => sub { $self->schema->resultset('Event')->populate(\@write) });
 }
 
 sub flush_reporting {
@@ -290,9 +327,8 @@ sub flush_reporting {
     return unless @write;
 
     local $ENV{DBIC_DT_SEARCH_OK} = 1;
-    unless (eval { $self->schema->resultset('Reporting')->populate(\@write); 1 }) {
-        warn "Failed to populate reporting!\n$@\n" . Dumper(\@write);
-    }
+
+    $self->retry_on_disconnect("populate reporting" => sub { $self->schema->resultset('Reporting')->populate(\@write) });
 }
 
 sub user {
@@ -343,7 +379,7 @@ sub start {
     my $self = shift;
     return if $self->{+RUNNING};
 
-    eval {$self->{+RUN}->update({status => 'running'}); 1 } or warn "Failed to update status: $@";
+    $self->retry_on_disconnect("update status" => sub { $self->{+RUN}->update({status => 'running'}) });
 
     $self->{+RUNNING} = 1;
 }
@@ -376,28 +412,34 @@ sub get_job {
 
     $test_file_id //= $self->{+FILE_CACHE}->{$job_id};
 
-    my $result = $self->schema->resultset('Job')->update_or_create({
-        status         => 'pending',
-        job_key        => $key,
-        job_id         => $job_id,
-        job_try        => $job_try,
-        is_harness_out => $is_harness_out,
-        job_ord        => $self->{+JOB_ORD}++,
-        run_id         => $self->{+RUN}->run_id,
-        fail_count     => 0,
-        pass_count     => 0,
-        test_file_id   => $test_file_id,
+    my $result;
+    $self->retry_on_disconnect(
+        "vivify job" => sub {
+            $result = $self->schema->resultset('Job')->update_or_create({
+                status         => 'pending',
+                job_key        => $key,
+                job_id         => $job_id,
+                job_try        => $job_try,
+                is_harness_out => $is_harness_out,
+                job_ord        => $self->{+JOB_ORD}++,
+                run_id         => $self->{+RUN}->run_id,
+                fail_count     => 0,
+                pass_count     => 0,
+                test_file_id   => $test_file_id,
 
-        $is_harness_out ? (name => "HARNESS INTERNAL LOG") : (),
-    });
+                $is_harness_out ? (name => "HARNESS INTERNAL LOG") : (),
+            });
+        }
+    );
 
     # In case we are resuming.
-    $result->events->delete_all();
+    $self->retry_on_disconnect("delete old events" => sub { $result->events->delete_all() });
 
     # Prevent duplicate coverage when --retry is used
     if ($job_try) {
         if ($Test2::Harness::UI::Schema::LOADED =~ m/mysql/i) {
             my $schema = $self->schema;
+            $schema->storage->connected; # Make sure we are connected
             my $dbh    = $schema->storage->dbh;
 
             my $query = <<"            EOT";
@@ -411,7 +453,11 @@ sub get_job {
             $sth->execute($job_id) or die $sth->errstr;
         }
         else {
-            $self->schema->resultset('Coverage')->search({'job_key.job_id' => $job_id}, {join => 'job_key'})->delete;
+            $self->retry_on_disconnect(
+                "delete old coverage" => sub {
+                    $self->schema->resultset('Coverage')->search({'job_key.job_id' => $job_id}, {join => 'job_key'})->delete;
+                }
+            );
         }
     }
 
@@ -502,7 +548,7 @@ sub finish {
         my $duration = $self->{+LAST_STAMP} - $self->{+FIRST_STAMP};
         $status->{duration} = format_duration($duration);
 
-        eval {
+        $self->retry_on_disconnect("insert duration row" => sub {
             my $fail = $aborted ? 0 : $self->{+FAILED} ? 1 : 0;
             my $pass = ($fail || $aborted) ? 0 : 1;
             $self->schema->resultset('Reporting')->create({
@@ -517,12 +563,10 @@ sub finish {
                 fail         => $fail,
                 abort        => $aborted,
             });
-
-            1;
-        } or warn "Faield to insert duration row: $@";
+        });
     }
 
-    eval { $run->update($status); 1 } or warn "Failed to update run status: $@";
+    $self->retry_on_disconnect("update run status" => sub { $run->update($status) });
 
     return $status;
 }
@@ -733,8 +777,10 @@ sub flush_coverage {
     my $coverage = $self->{+COVERAGE} or return;
     return unless @$coverage;
 
-    $self->{+RUN}->update({has_coverage => 1}) unless $self->{+RUN}->has_coverage;
-    $self->schema->resultset('Coverage')->populate($coverage);
+    $self->retry_on_disconnect("update has_coverage" => sub { $self->{+RUN}->update({has_coverage => 1}) })
+        unless $self->{+RUN}->has_coverage;
+
+    $self->retry_on_disconnect("populate coverage" => sub { $self->schema->resultset('Coverage')->populate($coverage) });
 
     @$coverage = ();
 
@@ -821,7 +867,7 @@ sub _add_fields {
         $field = $id;
     }
 
-    $self->schema->resultset($type)->populate(\@add);
+    $self->retry_on_disconnect("populate fields" => sub { $self->schema->resultset($type)->populate(\@add) });
 }
 
 sub clean_output {

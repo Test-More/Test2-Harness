@@ -31,6 +31,8 @@ sub release { }
 
 sub cleanup { }
 
+sub status_lines {()}
+
 1;
 
 __END__

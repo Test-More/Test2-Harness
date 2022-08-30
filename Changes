@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add 'yath resources' command to view resource usage
+
 1.000125  2022-07-08 15:50:11-07:00 America/Los_Angeles
 
     - Change -jN to use a resource class instead of hard-coding it into State.pm

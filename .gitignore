@@ -29,3 +29,4 @@ t2/non_perl/test.binary
 t/integration/test-broken-symlinks/broken-symlink.tx
 coverage.json
 lastlog.*
+*.test_info.json

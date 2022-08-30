@@ -56,6 +56,12 @@ sub release {
     $self->{+USED}--;
 }
 
+sub status_lines {
+    my $self = shift;
+
+    return ("using $self->{+USED}/$self->{+JOB_COUNT} job slot(s).");
+}
+
 1;
 
 __END__

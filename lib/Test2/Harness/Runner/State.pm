@@ -25,6 +25,7 @@ use Test2::Harness::Util::HashBase(
         <preloader
         <no_poll
         <resources
+        job_count
     },
 
     qw{
@@ -57,9 +58,10 @@ sub init {
     croak "You must specify a workdir"
         unless defined $self->{+WORKDIR};
 
+    $self->{+JOB_COUNT} //= 1;
     unless (grep { $_->job_limiter } @{$self->{+RESOURCES}}) {
         require Test2::Harness::Runner::Resource::JobCount;
-        unshift @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => 1);
+        unshift @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => $self->{+JOB_COUNT});
     }
 
     $self->{+DISPATCH_FILE} = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+WORKDIR}, 'dispatch.jsonl'));
@@ -152,7 +154,7 @@ sub poll {
 
     return if $self->{+NO_POLL};
 
-    my $queue = $self->{+DISPATCH_FILE};
+    my $queue = $self->dispatch_file;
 
     for my $item ($queue->poll) {
         my $data   = $item->[-1];

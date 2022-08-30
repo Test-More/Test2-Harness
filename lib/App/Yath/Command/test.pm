@@ -246,6 +246,15 @@ sub start {
     $self->parse_args;
     $self->write_settings_to($self->workdir, 'settings.json');
 
+    unless ($ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO}) {
+        Test2::Harness::Util::File::JSON->new(name => './.test_info.json')->write({
+            workdir   => $self->workdir,
+            job_count => $self->job_count,
+        });
+
+        $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} = 1;
+    }
+
     my $pop = $self->populate_queue();
     $self->terminate_queue();
 

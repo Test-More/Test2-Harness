@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '1.000127';
 
-use Carp::Always;
 use Term::Table();
 use File::Spec();
 

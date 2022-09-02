@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000128  2022-09-02 13:01:09-07:00 America/Los_Angeles
+
     - Fix issue where yath might exit before all output is rendered
     - Add scheduler process
     - Fix --color flag (Thanks James Raspass, #246)

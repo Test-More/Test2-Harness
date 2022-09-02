@@ -257,6 +257,15 @@ sub _wait_done {
     return 1;
 }
 
+sub watch_pid {
+    my $self = shift;
+    my ($pid) = @_;
+
+    my $proc = Test2::Harness::IPC::Process->new(pid => $pid);
+
+    return $self->watch($proc);
+}
+
 sub watch {
     my $self = shift;
     my ($proc) = @_;

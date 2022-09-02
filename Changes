@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix issue where yath might exit before all output is rendered
+    - Add scheduler process
     - Fix --color flag (Thanks James Raspass, #246)
     - Fix spelling mistakes (Thanks bernhard, #249)
 

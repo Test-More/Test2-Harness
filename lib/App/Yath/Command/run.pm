@@ -63,7 +63,9 @@ sub pfile_params { () }
 
 
 sub monitor_preloads { 1 }
-sub job_count { 1 }
+sub job_count        { 1 }
+
+sub collector_options { (persistent_runner => 1) }
 
 sub run {
     my $self = shift;

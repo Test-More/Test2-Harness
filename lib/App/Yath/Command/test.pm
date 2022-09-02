@@ -790,6 +790,8 @@ sub start_auditor {
     close($self->auditor_writer());
 }
 
+sub collector_options { () }
+
 sub start_collector {
     my $self = shift;
 
@@ -806,6 +808,11 @@ sub start_collector {
         $options{show_runner_output}     = $settings->display->hide_runner_output ? 0 : 1;
         $options{truncate_runner_output} = $settings->display->truncate_runner_output;
     }
+
+    %options = (
+        %options,
+        $self->collector_options(),
+    );
 
     my $ipc = $self->ipc;
     $ipc->spawn(

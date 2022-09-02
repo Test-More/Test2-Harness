@@ -99,6 +99,7 @@ sub next_task {
     my ($stage) = @_;
 
     $self->poll();
+    $self->clear_finished_run();
 
     while(1) {
         if (@{$self->{+PENDING_SPAWNS} //= []}) {
@@ -239,8 +240,8 @@ sub _start_run {
     my ($run_id) = @_;
 
     my $run = shift @{$self->{+PENDING_RUNS}};
-    die "Run stack mismatch, run start requested, but no pending runs to start" unless $run;
-    die "Run stack mismatch, run-id does not match next pending run" unless $run->run_id eq $run_id;
+    die "$0 - Run stack mismatch, run start requested, but no pending runs to start" unless $run;
+    die "$0 - Run stack mismatch, run-id does not match next pending run" unless $run->run_id eq $run_id;
 
     $self->{+RUN} = $run;
 
@@ -711,6 +712,7 @@ sub _next {
 
     # Ugly....
     my $search = $pending;
+
     for my $smoke (qw/smoke main/) {
         my $search = $search->{$smoke} or next;
 

@@ -22,7 +22,7 @@ use Test2::Harness::Util::HashBase qw{
     <show_runner_output <truncate_runner_output <truncated_runner_output
     <settings
     <run_dir
-    <runner_pid +runner_exited
+    <runner_pid +runner_exited <persistent_runner
 
     <backed_up
 
@@ -65,8 +65,14 @@ sub process {
         my $jobs = $self->jobs;
 
         unless (keys %$jobs) {
-            last if $self->{+JOBS_DONE};
-            last if $self->runner_done;
+            next if $count;
+
+            if ($self->persistent_runner) {
+                last if $self->{+JOBS_DONE};
+                last if $self->runner_done;
+            }
+
+            last if $self->runner_exited;
         }
 
         while(my ($job_try, $jdir) = each %$jobs) {

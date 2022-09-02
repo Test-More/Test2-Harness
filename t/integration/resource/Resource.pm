@@ -15,7 +15,7 @@ sub available {
         return 1 unless defined $self->{$slot};
     }
 
-    print "No Slots\n" unless $no_slots_msg++;
+    $self->message("No Slots") unless $no_slots_msg++;
     return 0;
 }
 
@@ -26,7 +26,7 @@ sub assign {
     for my $slot (1 .. $limit) {
         next if defined $self->{$slot};
 
-        print "Assigned: $task->{job_id} - $slot\n";
+        $self->message("Assigned: $task->{job_id} - $slot");
         $state->{record} = $slot;
         $state->{env_vars}->{RESOURCE_TEST} = $slot;
         push @{$state->{args}} => $slot;
@@ -41,7 +41,7 @@ sub record {
     my $self = shift;
     my ($job_id, $slot) = @_;
 
-    print "Record: $job_id - $slot\n";
+    $self->message("Record: $job_id - $slot");
     $self->{$slot} = $job_id;
     $self->{$job_id} = $slot;
 }
@@ -52,13 +52,27 @@ sub release {
 
     my $slot = delete $self->{$job_id};
     delete $self->{$slot};
-    print "Release: $job_id - $slot\n";
+    $self->message("Release: $job_id - $slot");
 }
 
 sub cleanup {
     my $self = shift;
 
-    print "RESOURCE CLEANUP\n";
+    $self->message("RESOURCE CLEANUP");
+}
+
+my $pid;
+sub message {
+    my $self = shift;
+    my ($msg) = @_;
+
+    if (!$pid || $$ != $pid) {
+        $pid = $$;
+
+        print "$$ - $0\n";
+    }
+
+    print "$$ - $msg\n";
 }
 
 1;

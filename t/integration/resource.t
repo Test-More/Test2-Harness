@@ -23,58 +23,77 @@ yath(
 
         my @events = $log->poll();
 
-        my @msgs;
+        my %pids;
+        my %msgs;
         for my $event (@events) {
             my $f = $event->{facet_data};
             my $info = $f->{info} or next;
             for my $i (@$info) {
                 next unless $i->{tag} eq 'INTERNAL';
-                push @msgs => $i->{details};
+                if ($i->{details} =~ m/^(\S+) - (yath-\S+)$/) {
+                    $pids{$1} = $2;
+                    next;
+                }
+
+                next unless $i->{details} =~ m/^(\S+) - (?:(\S+): \S+ - (\d)|(.+))$/;
+                my ($pid, $action, $res_id) = ($1, ($2 || $4), $3);
+
+                $pid = $pids{$pid} // $pid;
+
+                if ($res_id) {
+                    push @{$msgs{$pid}->{$res_id}} => $action;
+                }
+                else {
+                    push @{$msgs{$pid}->{$_}} => $action for keys %{$msgs{$pid}};
+                }
             }
         }
 
-        is(pop @msgs, "RESOURCE CLEANUP", "Cleaned up resources at the end");
-
-        like(
-            [splice(@msgs, 0, 5)],
-            [
-                qr/Assigned: \S+ - 1/,
-                qr/Record: \S+ - 1/,
-                qr/Assigned: \S+ - 2/,
-                qr/Record: \S+ - 2/,
-                "No Slots",
-            ],
-            "Assigned both slots, then ran out of slots"
+        is(
+            $msgs{"yath-nested-runner"},
+            {
+                1 => [
+                    'Record',
+                    'Release',
+                    'Record',
+                    'Release',
+                    'RESOURCE CLEANUP',
+                ],
+                2 => [
+                    'Record',
+                    'Release',
+                    'Record',
+                    'Release',
+                    'RESOURCE CLEANUP',
+                ],
+            },
+            "The nested runner saw the records and releases, and then cleaned up at the end."
         );
 
-        my (@id1, @id2);
-        for my $msg (@msgs) {
-            $msg =~ m/- ([12])$/;
-            my $into = $1 eq '1' ? \@id1 : \@id2;
-            push @$into => $msg;
-        }
-
-        my $id = 0;
-        for my $set (\@id1, \@id2) {
-            $id++;
-
-            like(
-                shift @$set,
-                qr/Release: \S+ - $id$/,
-                "Released the resource $id"
-            );
-
-            my ($job) = ($set->[0] =~ m/\S+: (\S+) - $id$/);
-            like(
-                $set,
-                [
-                    qr/Assigned: $job - $id$/,
-                    qr/Record: $job - $id$/,
-                    qr/Release: $job - $id$/,
+        is(
+            $msgs{'yath-nested-scheduler'},
+            {
+                1 => [
+                    'Assigned',
+                    'Record',
+                    'No Slots',
+                    'Release',
+                    'Assigned',
+                    'Record',
+                    'Release',
                 ],
-                "Full Cycle $id"
-            );
-        }
+                2 => [
+                    'Assigned',
+                    'Record',
+                    'No Slots',
+                    'Release',
+                    'Assigned',
+                    'Record',
+                    'Release',
+                ],
+            },
+            "The scheduler handled assigning slots, knew when it was out, then knew when more were ready",
+        );
     },
 );
 

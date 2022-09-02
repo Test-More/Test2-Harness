@@ -7,10 +7,11 @@ our $VERSION = '1.000128';
 use File::Spec();
 
 use Carp qw/confess croak/;
-use Fcntl qw/LOCK_EX LOCK_UN LOCK_NB/;
+use Fcntl qw/LOCK_EX LOCK_UN/;
 use POSIX qw/:sys_wait_h/;
 use Long::Jump qw/setjump longjump/;
 use Time::HiRes qw/sleep time/;
+use Scope::Guard;
 
 use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes chmod_tmp write_file/;
 use Test2::Harness::Util::Queue();
@@ -66,6 +67,8 @@ use Test2::Harness::Util::HashBase(
         +dispatch_lock_file
         +can_stage
         <tmp_dir
+
+        <rootpid
     },
 );
 
@@ -73,6 +76,8 @@ sub job_class  { 'Test2::Harness::Runner::Job' }
 
 sub init {
     my $self = shift;
+
+    $self->{+ROOTPID} = $$;
 
     croak "'dir' is a required attribute"      unless $self->{+DIR};
     croak "'settings' is a required attribute" unless $self->{+SETTINGS};
@@ -129,10 +134,12 @@ sub preloader {
 sub state {
     my $self = shift;
 
+    my $preloader = $self->preloader;
+
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
         workdir      => $self->{+DIR},
-        eager_stages => $self->preloader->eager_stages // {},
-        preloader    => $self->preloader,
+        eager_stages => $preloader->eager_stages // {},
+        preloader    => $preloader,
         resources    => [map { $_->new(settings => $self->settings) } @{$self->{+RESOURCES}}],
     );
 }
@@ -273,11 +280,58 @@ sub process {
     return $self->{+SIGNAL} ? 128 + $self->SIG_MAP->{$self->{+SIGNAL}} : $ok ? 0 : 1;
 }
 
+sub spawn_scheduler {
+    my $self = shift;
+
+    return unless $self->{+ROOTPID} == $$;
+
+    my $pid = fork // die "Could not fork: $!";
+    return $self->watch_pid($pid) if $pid;
+
+    my $guard = Scope::Guard->new(sub {
+        print STDERR "\n\nEscaped Scope!!!!\n\n";
+        exit 255;
+    });
+
+    $0 =~ s/-runner/-scheduler/i;
+
+    my $state = $self->state;
+
+    my $lock = open_file($self->dispatch_lock_file, '>>');
+
+    while (1) {
+        $state->poll;
+
+        flock($lock, LOCK_EX) or die "Could not get scheduler lock: $!";
+
+        while (1) {
+            next if $state->advance;
+            last;
+        }
+
+        flock($lock, LOCK_UN) or die "Could not release scheduler lock: $!";
+
+        if ($self->end_test_loop()) {
+            $guard->dismiss;
+            exit(0);
+        }
+
+        sleep($self->{+WAIT_TIME}) if $self->{+WAIT_TIME};
+    }
+
+    warn "Escaped scheduler loop";
+    exit 255;
+}
+
 sub run_tests {
     my $self = shift;
 
     my $preloader = $self->preloader;
-    my ($stage, @procs) = $preloader->preload();
+    $preloader->preload();
+
+    $self->spawn_scheduler();
+
+    my ($stage, @procs) = $preloader->preload_stages();
 
     if ($self->dump_depmap) {
         if (my $dtrace = $preloader->dtrace) {
@@ -352,7 +406,7 @@ sub run_stage {
 sub run_job {
     my $self = shift;
 
-    my $task = $self->next() or return 0;
+    my $task = $self->state->next_task($self->{+STAGE}) or return 0;
 
     if ($task->{spawn} && !$task->{resource_skip}) {
         my $job = Test2::Harness::Runner::Spawn->new(
@@ -439,43 +493,6 @@ sub end_test_loop {
     return 0;
 }
 
-sub lock_dispatch {
-    my $self = shift;
-
-    my $lock = open_file($self->dispatch_lock_file, '>>');
-    flock($lock, LOCK_EX | LOCK_NB) or return undef;
-
-    return $lock;
-}
-
-sub next {
-    my $self = shift;
-
-    my $state = $self->state;
-
-    while (1) {
-        if(my $task = $state->next_task($self->{+STAGE})) {
-            return $task;
-        }
-
-        if (my $lock = $self->lock_dispatch) {
-            my $count = 0;
-
-            while (1) {
-                if ($state->advance) {
-                    $count++;
-                    next;
-                }
-                last;
-            }
-
-            next if $count;
-        }
-
-        return undef;
-    }
-}
-
 sub set_proc_exit {
     my $self = shift;
     my ($proc, $exit, $time, @args) = @_;
@@ -516,7 +533,7 @@ sub set_proc_exit {
 
         if ($self->{+MONITOR_PRELOADS} && $self->{+CAN_STAGE} && !$self->end_test_loop) {
             my $pid = $$;
-            my ($name, @procs) = $self->preloader->preload_stages($stage);
+            my ($name, @procs) = $self->preloader->_preload_stages($stage);
             $self->watch($_) for @procs;
             longjump "Stage-Runner" => $name unless $pid == $$;
         }

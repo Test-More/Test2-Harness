@@ -92,6 +92,8 @@ sub task_stage {
     my $self = shift;
     my ($file, $wants) = @_;
 
+    $wants //= "";
+
     return 'default' if $self->{+BELOW_THRESHOLD};
     return 'default' unless $self->{+STAGED};
 
@@ -125,13 +127,15 @@ sub preload {
     }
 
     $self->{+DONE} = 1;
-
-    return 'default' unless $self->{+STAGED};
-
-    return $self->preload_stages('NOPRELOAD', @{$self->{+STAGED}->stage_list});
 }
 
 sub preload_stages {
+    my $self = shift;
+    return 'default' unless $self->{+STAGED};
+    return $self->_preload_stages('NOPRELOAD', @{$self->{+STAGED}->stage_list});
+}
+
+sub _preload_stages {
     my $self = shift;
     my @stages = @_;
 
@@ -170,10 +174,13 @@ sub launch_stage {
     my $self = shift;
     my ($stage) = @_;
 
+    use Carp qw/longmess/;
+
     $stage = $self->{+STAGED}->stage_lookup->{$stage} unless ref $stage || $stage eq 'NOPRELOAD';
 
     my $name = ref($stage) ? $stage->name : $stage;
 
+    use Carp qw/longmess/;
     my $pid = fork();
 
     return Test2::Harness::Runner::Preloader::Stage->new(

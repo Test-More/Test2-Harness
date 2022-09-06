@@ -10,6 +10,8 @@ use File::Spec;
 use Time::HiRes qw/time/;
 use List::Util qw/first/;
 
+use Test2::Harness::Util qw/mod2file/;
+
 use Test2::Harness::Settings;
 use Test2::Harness::Runner::Constants;
 
@@ -27,6 +29,7 @@ use Test2::Harness::Util::HashBase(
         <no_poll
         <resources
         job_count
+        +settings
     },
 
     qw{
@@ -59,14 +62,20 @@ sub init {
     croak "You must specify a workdir"
         unless defined $self->{+WORKDIR};
 
-    unless ($self->{+JOB_COUNT}) {
-        my $settings = Test2::Harness::Settings->new(File::Spec->catfile($self->{+WORKDIR}, 'settings.json'));
-        $self->{+JOB_COUNT} = $settings->runner->job_count // 1;
+    $self->{+JOB_COUNT} //= $self->settings->runner->job_count // 1;
+
+    if (!$self->{+RESOURCES} || !@{$self->{+RESOURCES}}) {
+        my $settings = $self->settings;
+        my $resources = $self->{+RESOURCES} //= [];
+        for my $res (@{$self->settings->runner->resources}) {
+            require(mod2file($res));
+            push @$resources => $res->new(settings => $self->settings);
+        }
     }
 
     unless (grep { $_->job_limiter } @{$self->{+RESOURCES}}) {
         require Test2::Harness::Runner::Resource::JobCount;
-        unshift @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => $self->{+JOB_COUNT});
+        unshift @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => $self->{+JOB_COUNT}, settings => $self->settings);
     }
 
     $self->{+DISPATCH_FILE} = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+WORKDIR}, 'dispatch.jsonl'));
@@ -74,6 +83,11 @@ sub init {
     $self->{+RELOAD_STATE} //= {};
 
     $self->poll;
+}
+
+sub settings {
+    my $self = shift;
+    return $self->{+SETTINGS} //= Test2::Harness::Settings->new(File::Spec->catfile($self->{+WORKDIR}, 'settings.json'));
 }
 
 sub run {

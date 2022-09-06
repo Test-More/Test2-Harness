@@ -49,6 +49,8 @@ use Test2::Harness::Util::HashBase qw/
     +tasks_queue
     +state
 
+    <cleanup_subs
+
     <final_data
 /;
 
@@ -119,6 +121,8 @@ sub init {
 
     $self->{+TESTS_SEEN}   //= 0;
     $self->{+ASSERTS_SEEN} //= 0;
+
+    $self->{+CLEANUP_SUBS} = [];
 }
 
 sub _resize_pipe {
@@ -236,7 +240,19 @@ sub run {
     }
 
     $self->stop();
+
     return 1;
+}
+
+sub DESTROY {
+    my $self = shift;
+
+    local ($?, $!, $@, $_);
+
+    my $cleanup = delete $self->{+CLEANUP_SUBS} or return;
+    for my $sub (@$cleanup) {
+        eval { $sub->(); 1 } or warn $@;
+    }
 }
 
 sub start {
@@ -251,6 +267,8 @@ sub start {
             workdir   => $self->workdir,
             job_count => $self->job_count,
         });
+
+        push @{$self->{+CLEANUP_SUBS}} => sub { unlink('./.test_info.json') or warn "Could not unlink: $!" };
 
         $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} = 1;
     }

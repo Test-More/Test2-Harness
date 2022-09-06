@@ -136,11 +136,13 @@ sub state {
 
     my $preloader = $self->preloader;
 
+    my $settings = $self->settings;
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
         workdir      => $self->{+DIR},
         eager_stages => $preloader->eager_stages // {},
         preloader    => $preloader,
-        resources    => [map { $_->new(settings => $self->settings) } @{$self->{+RESOURCES}}],
+        resources    => [map { $_->new(settings => $settings) } @{$self->{+RESOURCES}}],
+        settings     => $settings,
     );
 }
 

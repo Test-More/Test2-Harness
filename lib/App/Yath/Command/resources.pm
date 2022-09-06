@@ -34,20 +34,21 @@ sub state {
 
     return $self->{+STATE} if $self->{+STATE};
 
-    if( my $pfile = find_pfile($self->settings, no_fatal => 1)) {
-        my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-        my $workdir = $data->{dir};
-        my $settings = Test2::Harness::Util::File::JSON->new(name => "$workdir/settings.json")->read();
-
-        return $self->{+STATE} = Test2::Harness::Runner::State->new(
-            job_count    => $settings->{runner}->{job_count} // 1,
-            workdir      => $data->{dir},
-        );
-    }
-
     if (-e './.test_info.json') {
         my $data = Test2::Harness::Util::File::JSON->new(name => './.test_info.json')->read;
         return $self->{+STATE} = Test2::Harness::Runner::State->new(%$data);
+    }
+
+    if (my $pfile = find_pfile($self->settings, no_fatal => 1)) {
+        my $data     = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+        my $workdir  = $data->{dir};
+        my $settings = Test2::Harness::Util::File::JSON->new(name => "$workdir/settings.json")->read();
+
+        return $self->{+STATE} = Test2::Harness::Runner::State->new(
+            job_count => $settings->{runner}->{job_count} // 1,
+            workdir   => $data->{dir},
+            settings  => $settings,
+        );
     }
 
     die "No persistent runner, and no running test found.\n";
@@ -67,6 +68,8 @@ sub run {
         print join "\n" => @lines;
     }
     print "\n\n";
+
+    return 0;
 }
 
 1;

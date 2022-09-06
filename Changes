@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Better resource display
+    - Fix #255 (.test_info.json being left behind)
+    - Fix issue where not all resources will be loaded by resource command
+
 1.000129  2022-09-06 11:20:38-07:00 America/Los_Angeles
 
     - Fix issue with job slots sometimes being doubled when tests are skipped

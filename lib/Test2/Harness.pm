@@ -2,7 +2,7 @@ package Test2::Harness;
 use strict;
 use warnings;
 
-our $VERSION = '1.000130';
+our $VERSION = '1.000131';
 
 1;
 

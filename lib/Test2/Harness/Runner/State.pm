@@ -10,6 +10,7 @@ use File::Spec;
 use Time::HiRes qw/time/;
 use List::Util qw/first/;
 
+use Test2::Harness::Settings;
 use Test2::Harness::Runner::Constants;
 
 use Test2::Harness::Runner::Run;
@@ -58,7 +59,11 @@ sub init {
     croak "You must specify a workdir"
         unless defined $self->{+WORKDIR};
 
-    $self->{+JOB_COUNT} //= 1;
+    unless ($self->{+JOB_COUNT}) {
+        my $settings = Test2::Harness::Settings->new(File::Spec->catfile($self->{+WORKDIR}, 'settings.json'));
+        $self->{+JOB_COUNT} = $settings->runner->job_count // 1;
+    }
+
     unless (grep { $_->job_limiter } @{$self->{+RESOURCES}}) {
         require Test2::Harness::Runner::Resource::JobCount;
         unshift @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => $self->{+JOB_COUNT});
@@ -753,17 +758,21 @@ sub _next {
 
                         my @out = ($run_by_stage => $task, $outres);
 
+                        my @record = @$resources;
+
                         if (@resource_skip) {
                             push @out => (resource_skip => \@resource_skip);
+
+                            # Only the job limiter resources need to be recorded.
+                            @record = grep { $_->job_limiter } @record;
                         }
-                        else {
-                            for my $resource (@$resources) {
-                                my $res = {args => [], env_vars => {}};
-                                $resource->assign($task, $res);
-                                push @{$outres->{args}} => @{$res->{args}};
-                                $outres->{env_vars}->{$_} = $res->{env_vars}->{$_} for keys %{$res->{env_vars}};
-                                $outres->{record}->{ref($resource)} = $res->{record};
-                            }
+
+                        for my $resource (@record) {
+                            my $res = {args => [], env_vars => {}};
+                            $resource->assign($task, $res);
+                            push @{$outres->{args}} => @{$res->{args}};
+                            $outres->{env_vars}->{$_} = $res->{env_vars}->{$_} for keys %{$res->{env_vars}};
+                            $outres->{record}->{ref($resource)} = $res->{record};
                         }
 
                         return @out;

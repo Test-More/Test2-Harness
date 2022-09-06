@@ -83,7 +83,6 @@ sub check_reload_state {
     my $self = shift;
 
     my $state = Test2::Harness::Runner::State->new(
-        job_count    => 1,
         workdir      => $self->workdir,
     );
 

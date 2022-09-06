@@ -40,7 +40,6 @@ sub run {
     $self->pfile_data();
 
     my $state = Test2::Harness::Runner::State->new(
-        job_count    => 1,
         workdir      => $self->workdir,
     );
 

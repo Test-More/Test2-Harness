@@ -47,7 +47,7 @@ sub assign {
     my ($task, $state) = @_;
     $state->{record} = {
         slot => $self->{+FREE}->[0],
-        file => $task->{file},
+        file => $task->{rel_file},
         stamp => time,
     };
 }

@@ -22,6 +22,7 @@ use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use File::Spec;
 use Fcntl();
+use POSIX();
 
 use Time::HiRes qw/sleep time/;
 use List::Util qw/sum max min/;
@@ -268,7 +269,7 @@ sub start {
             job_count => $self->job_count,
         });
 
-        push @{$self->{+CLEANUP_SUBS}} => sub { unlink('./.test_info.json') or warn "Could not unlink: $!" };
+        push @{$self->{+CLEANUP_SUBS}} => sub { unlink('./.test_info.json') or $! == POSIX::ENOENT or warn "Could not unlink: $!" };
 
         $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} = 1;
     }

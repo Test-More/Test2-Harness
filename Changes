@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Further improve resource command and file
+
 1.000131  2022-09-06 15:53:55-07:00 America/Los_Angeles
 
     - Use relative file paths for job slot display

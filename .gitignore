@@ -30,3 +30,4 @@ t/integration/test-broken-symlinks/broken-symlink.tx
 coverage.json
 lastlog.*
 *.test_info.json
+*.test_info.*.json

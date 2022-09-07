@@ -255,6 +255,28 @@ sub DESTROY {
     }
 }
 
+sub write_test_info {
+    my $self = shift;
+
+    return if $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO};
+
+    my $info_file = "./.test_info.$$.json";
+
+    my $workdir = $self->workdir;
+    Test2::Harness::Util::File::JSON->new(name => $info_file)->write({
+        workdir   => $self->workdir,
+        job_count => $self->job_count,
+    });
+
+    push @{$self->{+CLEANUP_SUBS}} => sub {
+        return unless -e $info_file;
+        return unless Test2::Harness::Util::File::JSON->new(name => $info_file)->read->{workdir} eq $workdir;
+        unlink($info_file) or die "Could not unlink info file: $!";
+    };
+
+    $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} = 1;
+}
+
 sub start {
     my $self = shift;
 
@@ -262,17 +284,7 @@ sub start {
     $self->parse_args;
     $self->write_settings_to($self->workdir, 'settings.json');
 
-    unless ($ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO}) {
-        Test2::Harness::Util::File::JSON->new(name => './.test_info.json')->write({
-            workdir   => $self->workdir,
-            job_count => $self->job_count,
-        });
-
-        push @{$self->{+CLEANUP_SUBS}} => sub { unlink('./.test_info.json') or warn "Could not unlink: $!" };
-
-        $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} = 1;
-    }
-
+    $self->write_test_info();
     my $pop = $self->populate_queue();
     $self->terminate_queue();
 

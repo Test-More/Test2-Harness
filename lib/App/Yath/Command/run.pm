@@ -79,6 +79,10 @@ sub run {
     return $self->SUPER::run(@_);
 }
 
+sub write_test_info {
+    $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} //= 1;
+}
+
 sub check_reload_state {
     my $self = shift;
 

@@ -2,7 +2,7 @@ package App::Yath::Command;
 use strict;
 use warnings;
 
-our $VERSION = '1.000133';
+our $VERSION = '1.000134';
 
 use File::Spec;
 use Carp qw/croak/;

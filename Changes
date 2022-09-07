@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Order tests with conflicts earlier than others
+
 1.000132  2022-09-07 09:42:06-07:00 America/Los_Angeles
 
     - Further improve resource command and file

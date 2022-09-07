@@ -715,6 +715,7 @@ sub _stage_order {
     return \@stages;
 }
 
+my %SORTED;
 sub _next {
     my $self = shift;
 
@@ -744,6 +745,11 @@ sub _next {
 
                 for my $ldur (@$dur_order) {
                     my $search = $search->{$ldur} or next;
+
+                    # Make sure anything with conflicts runs early.
+                    unless ($SORTED{$search}++) {
+                        @$search = sort { scalar(@{$b->{conflicts}}) <=> scalar(@{$a->{conflicts}}) } @$search;
+                    }
 
                     for my $task (@$search) {
                         # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.

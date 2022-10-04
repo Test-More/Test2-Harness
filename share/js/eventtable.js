@@ -73,7 +73,7 @@ t2hui.eventtable.expand_lines = function(item) {
             'tools': tools ? item.lines.length : false,
             'tag': line[1],
             'message': line[2],
-            'table': line[3],
+            'extra': line[3],
             'facet': line[0],
             'item': item,
             'set_ord': count++,
@@ -189,14 +189,29 @@ t2hui.eventtable.place_row = function(row, item, table, state) {
 }
 
 t2hui.eventtable.message_inner_builder = function(item, dest, data) {
-    if (!item.table) {
+    if (!item.extra) {
         var pre = $('<pre class="testout"></pre>');
         pre.text(item.message);
         dest.append(pre);
         return;
     }
 
-    var data = item.table;
+    if (typeof(item.extra) === "string") {
+        var out = $('<div class="binary"></div>');
+        var link = $('<a href="/binary/' + item.extra + '">' + item.message + '</a>');
+        out.append(link);
+
+        if (item.tag === 'IMAGE') {
+            var img = $('<br /><img src="/binary/' + item.extra + '">');
+            out.append(img);
+        }
+
+        dest.append(out);
+
+        return;
+    }
+
+    var data = item.extra;
 
     var table = $('<table class="testtable"></table>');
     var header = $('<tr></tr>');

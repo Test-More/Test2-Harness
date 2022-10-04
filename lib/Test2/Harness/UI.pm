@@ -32,6 +32,7 @@ use Test2::Harness::UI::Controller::Coverage;
 use Test2::Harness::UI::Controller::Files;
 
 use Test2::Harness::UI::Controller::Interactions;
+use Test2::Harness::UI::Controller::Binary;
 
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -102,6 +103,8 @@ sub init {
     $router->connect('/files/:source/json'            => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
     $router->connect('/files/:project/:idx'           => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
     $router->connect('/files/:project/:username/:idx' => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
+
+    $router->connect('/binary/:binary_id' => {controller => 'Test2::Harness::UI::Controller::Binary'});
 
     $router->connect('/download/:id' => {controller => 'Test2::Harness::UI::Controller::Download'});
 

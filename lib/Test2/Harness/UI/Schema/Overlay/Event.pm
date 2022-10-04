@@ -65,10 +65,24 @@ sub line_data {
 
     my $has_facets = ($cols{has_facets} || $cols{facets}) ? 1 : 0;
     my $has_orphan = ($cols{has_orphan} || $cols{orphan}) ? 1 : 0;
+    my $has_binary = $cols{has_binary} ? 1 : 0;
 
     $cols{facets} = $self->facets if $has_facets;
 
     $out{lines} = Test2::Formatter::Test2::Composer->render_super_verbose($has_facets ? $self->facets : $self->orphan);
+
+    if ($has_binary) {
+        for my $binary ($self->binaries) {
+            my $filename = $binary->filename;
+
+            push @{$out{lines}} => [
+                'binary',
+                $binary->is_image ? 'IMAGE' : 'BINARY',
+                $filename,
+                $binary->binary_id,
+            ];
+        }
+    }
 
     $out{facets} = $has_facets;
     $out{orphan} = $has_orphan;

@@ -47,7 +47,7 @@ my $config = Test2::Harness::UI::Config->new(
 my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root', user_id => gen_uuid()});
 
 my %projects;
-#for my $file (qw/coverage.jsonl.bz2/) {
+#for my $file (qw/image.jsonl.bz2/) {
 opendir(my $dh, 'demo') or die "Could not open demo dir";
 for my $file (sort readdir($dh)) {
     next unless $file =~ m/\.bz2$/;

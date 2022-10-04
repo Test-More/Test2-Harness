@@ -8,6 +8,7 @@ use DateTime;
 use Data::GUID;
 use Time::HiRes qw/time/;
 use List::Util qw/first min max/;
+use MIME::Base64 qw/decode_base64/;
 
 use Clone qw/clone/;
 use Carp qw/croak confess/;
@@ -31,7 +32,7 @@ use Test2::Harness::UI::Util::ImportModes qw{
 use Test2::Harness::UI::Util::HashBase qw{
     <config
 
-    <running <jobs
+    <running <jobs <binaries
 
     signal
 
@@ -252,8 +253,24 @@ sub flush_events {
 
     return unless @write;
 
+    my @write_bin;
+    for my $e (@write) {
+        my $list = delete $e->{has_binary};
+
+        $e->{has_binary} = $list && @$list ? 1 : 0;
+        next unless $e->{has_binary};
+
+        $e->{has_binary} = 1;
+        for my $uuid (@$list) {
+            push @write_bin => delete $self->{+BINARIES}->{$uuid};
+        }
+    }
+
     local $ENV{DBIC_DT_SEARCH_OK} = 1;
     $self->retry_on_disconnect("populate events" => sub { $self->schema->resultset('Event')->populate(\@write) });
+
+    return unless @write_bin;
+    $self->retry_on_disconnect("populate binaries" => sub { $self->schema->resultset('Binary')->populate(\@write_bin) });
 }
 
 sub flush_reporting {
@@ -571,6 +588,20 @@ sub finish {
     return $status;
 }
 
+sub add_binary {
+    my $self = shift;
+    my $file = {@_};
+
+    my $uuid = $file->{binary_id} //= gen_uuid();
+    $file->{is_image} //= $file->{filename} =~ m/\.(a?png|gif|jpe?g|svg|bmp|ico)$/ ? 1 : 0;
+    $file->{data} = decode_base64($file->{data});
+
+    my $bins = $self->{+BINARIES} //= {};
+    $bins->{$uuid} = $file;
+
+    return $uuid;
+}
+
 sub _process_event {
     my $self = shift;
     my ($event, $f, %params) = @_;
@@ -581,6 +612,16 @@ sub _process_event {
 
     my $e_id   = $harness->{event_id} // $event->{event_id} // die "No event id!";
     my $nested = $f->{hubs}->[0]->{nested} || 0;
+
+    my @has_binary;
+    if ($f->{binary} && @{$f->{binary}}) {
+        for my $file (@{$f->{binary}}) {
+            my $data = delete $file->{data};
+            $file->{data}    = 'removed';
+            my $binary_id = $self->add_binary(event_id => $e_id, filename => $file->{filename}, description => $file->{details}, data => $data, is_image => $file->{is_image});
+            push @has_binary => $binary_id;
+        }
+    }
 
     my $fail = causes_fail($f) ? 1 : 0;
 
@@ -607,6 +648,7 @@ sub _process_event {
         job_key    => $job->{job_key},
         event_ord  => $job->{event_ord}++,
         stamp      => $self->format_stamp($harness->{stamp} || $event->{stamp} || $params{stamp}),
+        has_binary => \@has_binary,
     };
 
     my $orphan = $nested ? 1 : 0;

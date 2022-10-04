@@ -28,8 +28,8 @@ __PACKAGE__->set_primary_key("host_id");
 __PACKAGE__->add_unique_constraint("hostname", ["hostname"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-07-29 08:37:22
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:gvy/qPJlPE1xs+xfLRd28Q
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-10-04 15:02:38
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Zb8j9tgFmscARoo6EfiNFA
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

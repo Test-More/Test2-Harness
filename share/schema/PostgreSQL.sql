@@ -249,6 +249,7 @@ CREATE TABLE events (
     is_diag         BOOL        NOT NULL DEFAULT FALSE,
     is_harness      BOOL        NOT NULL DEFAULT FALSE,
     is_time         BOOL        NOT NULL DEFAULT FALSE,
+    has_binary      BOOL        NOT NULL DEFAULT FALSE,
 
     stamp           TIMESTAMP   DEFAULT NULL,
 
@@ -266,6 +267,15 @@ CREATE INDEX IF NOT EXISTS event_job    ON events(job_key);
 CREATE INDEX IF NOT EXISTS event_trace  ON events(trace_id);
 CREATE INDEX IF NOT EXISTS event_parent ON events(parent_id);
 CREATE INDEX IF NOT EXISTS is_subtest   ON events(is_subtest);
+
+CREATE TABLE binaries (
+    binary_id       UUID            NOT NULL PRIMARY KEY,
+    event_id        UUID            NOT NULL REFERENCES events(event_id),
+    filename        VARCHAR(512)    NOT NULL,
+    description     TEXT            DEFAULT NULL,
+    is_image        BOOL            NOT NULL DEFAULT FALSE,
+    data            BYTEA           NOT NULL
+);
 
 CREATE TABLE source_files (
     source_file_id  UUID            NOT NULL PRIMARY KEY,

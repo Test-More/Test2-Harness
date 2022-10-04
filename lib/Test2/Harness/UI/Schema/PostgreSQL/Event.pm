@@ -38,6 +38,8 @@ __PACKAGE__->add_columns(
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "is_time",
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  "has_binary",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "stamp",
   { data_type => "timestamp", is_nullable => 1 },
   "parent_id",
@@ -56,6 +58,12 @@ __PACKAGE__->add_columns(
   { data_type => "bigint", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("event_id");
+__PACKAGE__->has_many(
+  "binaries",
+  "Test2::Harness::UI::Schema::Result::Binary",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 __PACKAGE__->belongs_to(
   "job_key",
   "Test2::Harness::UI::Schema::Result::Job",
@@ -70,8 +78,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-07-29 08:37:23
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:+RDHZASmcJkscK3i4a5e6g
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-10-04 15:02:39
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:LHbJk19Y5gV3iytgcVnAEw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

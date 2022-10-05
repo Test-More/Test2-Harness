@@ -6,7 +6,7 @@ use Carp qw/confess/;
 
 use Test2::Harness::Util qw/looks_like_uuid/;
 
-our $VERSION = '0.000127';
+our $VERSION = '0.000128';
 
 use base 'DBIx::Class::Schema';
 

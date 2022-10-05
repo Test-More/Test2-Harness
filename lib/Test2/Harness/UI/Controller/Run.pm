@@ -57,6 +57,12 @@ sub handle {
             my $jobs = $run->jobs;
 
             while (my $job = $jobs->next()) {
+                my $has_binary = $job->events->search({has_binary => 1});
+                while (my $e = $has_binary->next()) {
+                    $has_binary->binaries->delete;
+                    $e->Delete;
+                }
+
                 $job->events->delete;
                 $job->job_fields->delete;
                 $job->delete;

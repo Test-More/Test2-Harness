@@ -15,6 +15,8 @@ sub tick { }
 
 sub refresh { }
 
+sub discharge { }
+
 sub job_limiter { 0 }
 
 sub job_limiter_max { }

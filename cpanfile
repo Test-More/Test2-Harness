@@ -47,6 +47,7 @@ requires "Test::Builder::Formatter" => "1.302170";
 requires "Test::More" => "1.302170";
 requires "Text::ParseWords" => "0";
 requires "Time::HiRes" => "0";
+requires "YAML::Tiny" => "0";
 requires "base" => "0";
 requires "constant" => "0";
 requires "goto::file" => "0.005";

@@ -32,7 +32,7 @@ use parent 'Test2::Harness::IPC';
 use Test2::Harness::Util::HashBase(
     # Fields from settings
     qw{
-        <job_count
+        <job_count <slots_per_job
 
         <includes <tlib <lib <blib
         <unsafe_inc
@@ -74,10 +74,12 @@ use Test2::Harness::Util::HashBase(
 
 sub job_class  { 'Test2::Harness::Runner::Job' }
 
+our $RUNNER_PID;
 sub init {
     my $self = shift;
 
     $self->{+ROOTPID} = $$;
+    $RUNNER_PID = $$;
 
     croak "'dir' is a required attribute"      unless $self->{+DIR};
     croak "'settings' is a required attribute" unless $self->{+SETTINGS};
@@ -468,6 +470,8 @@ sub run_job {
     my $json_data = $job->TO_JSON();
     $json_data->{stamp} = $spawn_time;
     $run->jobs->write($json_data);
+
+    
 
     return $pid;
 }

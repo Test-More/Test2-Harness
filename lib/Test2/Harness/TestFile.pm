@@ -22,13 +22,14 @@ use Test2::Harness::Util::HashBase qw{
     queue_args
     job_class
     comment
-    _category _stage _duration
+    _category _stage _duration _slots_per_job
 };
 
 sub set_duration { $_[0]->set__duration(lc($_[1])) }
 sub set_category { $_[0]->set__category(lc($_[1])) }
 
-sub set_stage { $_[0]->set__stage($_[1]) }
+sub set_slots_per_job { $_[0]->set__slots_per_job($_[1]) }
+sub set_stage         { $_[0]->set__stage($_[1]) }
 
 sub retry { $_[0]->headers->{retry} }
 sub set_retry {
@@ -113,6 +114,15 @@ sub check_stage {
 
     $self->_scan unless $self->{+_SCANNED};
     return $self->{+_HEADERS}->{stage} || undef;
+}
+
+sub check_slots_per_job {
+    my $self = shift;
+
+    return $self->{+_SLOTS_PER_JOB} if $self->{+_SLOTS_PER_JOB};
+
+    $self->_scan unless $self->{+_SCANNED};
+    return $self->{+_HEADERS}->{slots_per_job} // undef;
 }
 
 sub meta {
@@ -338,6 +348,9 @@ sub _scan {
 
             $headers{timeout}->{$type} = $num;
         }
+        elsif ($dir eq 'job' && $rest =~ m/SLOTS\s+(\d+)$/) {
+            $headers{slots_per_job} = $1;
+        }
         else {
             warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
         }
@@ -383,9 +396,10 @@ sub queue_item {
     die "The '$self->{+FILE}' test specifies that it should not be run by Test2::Harness.\n"
         unless $self->check_feature(run => 1);
 
-    my $category = $self->check_category;
-    my $duration = $self->check_duration;
-    my $stage    = $self->check_stage;
+    my $category      = $self->check_category;
+    my $duration      = $self->check_duration;
+    my $stage         = $self->check_stage;
+    my $slots_per_job = $self->check_slots_per_job;
 
     my $smoke     = $self->check_feature(smoke     => 0);
     my $fork      = $self->check_feature(fork      => 1);
@@ -444,6 +458,7 @@ sub queue_item {
         defined($retry_isolated) ? (retry_isolated    => $retry_isolated)          : (),
         defined($et)             ? (event_timeout     => $et)                      : (),
         defined($pet)            ? (post_exit_timeout => $self->post_exit_timeout) : (),
+        defined($slots_per_job)  ? (slots_per_job     => $slots_per_job)           : (),
 
         @{$self->{+QUEUE_ARGS}},
 

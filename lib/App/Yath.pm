@@ -101,11 +101,14 @@ sub load_options {
 
     return $options if $self->{+SETTINGS}->harness->no_scan_plugins;
 
-    my $option_libs = find_libraries('App::Yath::Plugin::*');
+    my $option_libs = {
+        %{find_libraries('App::Yath::Plugin::*')},
+        %{find_libraries('Test2::Harness::Runner::Resource::*')},
+    };
     for my $lib (sort keys %$option_libs) {
         my $ok = eval { require $option_libs->{$lib}; 1 };
         unless ($ok) {
-            warn "Failed to load plugin '$option_libs->{$lib}': $@";
+            warn "Failed to load module '$option_libs->{$lib}': $@";
             next;
         }
 
@@ -114,7 +117,7 @@ sub load_options {
         next unless $add;
 
         unless (blessed($add) && $add->isa('App::Yath::Options')) {
-            warn "Plugin '$option_libs->{$lib}' is outdated, not loading options.\n"
+            warn "Module '$option_libs->{$lib}' is outdated, not loading options.\n"
                 unless $ENV{'YATH_SELF_TEST'};
             next;
         }

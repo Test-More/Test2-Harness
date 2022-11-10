@@ -4,8 +4,11 @@ use warnings;
 
 our $VERSION = '1.000134';
 
+use List::Util qw/min/;
 use Test2::Util qw/IS_WIN32/;
-use Test2::Harness::Util qw/clean_path/;
+use App::Yath::Util qw/find_in_updir/;
+use Test2::Harness::Util qw/clean_path mod2file/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use File::Spec;
 
 use App::Yath::Options;
@@ -35,24 +38,47 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         default     => 1,
     );
 
+    option shared_jobs_config => (
+        type => 's',
+        description => 'Where to look for a shared slot config file. If a filename with no path is provided yath will search the current and all parent directories for the name.',
+        default => '.sharedjobslots.yml',
+        long_examples => [ ' .sharedjobslots.yml', ' relative/path/.sharedjobslots.yml', ' /absolute/path/.sharedjobslots.yml' ],
+    );
+
+    post \&jobs_post_process;
     option job_count => (
         type           => 's',
         short          => 'j',
         alt            => ['jobs'],
-        description    => 'Set the number of concurrent jobs to run',
+        description    => 'Set the number of concurrent jobs to run. Add a :# if you also wish to designate multiple slots per test. 8:2 means 8 slots, but each test gets 2 slots, so 4 tests run concurrently. Tests can find their concurrency assignemnt in the "T2_HARNESS_MY_JOB_CONCURRENCY" environment variable.',
         env_vars       => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
         clear_env_vars => 1,
-        default        => undef,
+#        default        => 1,
+        long_examples  => [' 4', ' 8:2'],
+        short_examples => ['4', '8:2'],
 
         action => sub {
             my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
 
-            $$slot = $norm;
+            my ($jobs, $slots) = split /:/, $norm;
 
-            require Test2::Harness::Runner::Resource::JobCount;
-            unshift @{$settings->runner->resources} => ('Test2::Harness::Runner::Resource::JobCount')
-                unless grep { $_ eq 'Test2::Harness::Runner::Resource::JobCount' } @{$settings->runner->resources};
+            $$slot = $jobs;
+
+            $settings->runner->slots_per_job($slots) if defined $slots;
+
+            fix_job_resources($settings);
         },
+    );
+
+    option slots_per_job => (
+        type => 's',
+        short => 'x',
+        description => "This sets the number of slots each job will use (default 1). This is normally set by the ':#' in '-j#:#'.",
+        env_vars => ['T2_HARNESS_JOB_CONCURRENCY'],
+        clear_env_vars => 1,
+        default => 1,
+        long_examples => [' 2'],
+        short_examples => ['2'],
     );
 
     option dump_depmap => (
@@ -192,7 +218,81 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         short_examples => [' SECONDS'],
         description    => 'Stop waiting post-exit after the timeout period. (Default: 15 seconds) Some tests fork and allow the parent to exit before writing all their output. If Test2::Harness detects an incomplete plan after the test exits it will monitor for more events until the timeout period. Add the "# HARNESS-NO-TIMEOUT" comment to the top of a test file to disable timeouts on a per-test basis.'
     );
+
+    option runner_id => (
+        type => 's',
+        default => sub { gen_uuid() },
+        description => 'Runner ID (usually a generated uuid)',
+    );
 };
+
+sub jobs_post_process {
+    my %params   = @_;
+    my $settings = $params{settings};
+
+    my $runner = $settings->runner or return;
+
+    fix_job_resources($settings);
+
+    $ENV{T2_HARNESS_MY_JOB_COUNT} = $runner->job_count;
+}
+
+sub fix_job_resources {
+    my ($settings) = @_;
+
+    my $runner = $settings->runner;
+
+    my $config_path = $runner->shared_jobs_config;
+    my ($config_file, $host, $conf) = Test2::Harness::Runner::Resource::SharedJobSlots->get_config($config_path);
+
+    my %found;
+    for my $r (@{$settings->runner->resources}) {
+        require(mod2file($r));
+        next unless $r->job_limiter;
+        $found{$r}++;
+    }
+
+    if ($config_file && !$found{'Test2::Harness::Runner::Resource::SharedJobSlots'}) {
+        if (delete $found{'Test2::Harness::Runner::Resource::JobCount'}) {
+            @{$settings->runner->resources} = grep { $_ ne 'Test2::Harness::Runner::Resource::JobCount' } @{$settings->runner->resources};
+        }
+
+        if (!keys %found) {
+            require Test2::Harness::Runner::Resource::SharedJobSlots;
+            unshift @{$settings->runner->resources} => 'Test2::Harness::Runner::Resource::SharedJobSlots';
+            $found{'Test2::Harness::Runner::Resource::SharedJobSlots'}++;
+        }
+    }
+    elsif (!keys %found) {
+        require Test2::Harness::Runner::Resource::JobCount;
+        unshift @{$settings->runner->resources} => 'Test2::Harness::Runner::Resource::JobCount';
+    }
+
+    if ($found{'Test2::Harness::Runner::Resource::SharedJobSlots'} && $conf) {
+        $runner->field(job_count => $conf->{max_slots_per_run}) if $runner && !$runner->job_count;
+
+        my $run_slots = $runner->job_count;
+        my $job_slots = $runner->slots_per_job;
+
+        die "Requested job count ($run_slots) exceeds the system shared limit ($conf->{max_slots_per_run}).\n"
+            if $run_slots > $conf->{max_slots_per_run};
+
+        die "Requested job concurrency ($job_slots) exceeds the system shared limit ($conf->{max_slots_per_job}).\n"
+            if $job_slots > $conf->{max_slots_per_job};
+    }
+
+    $runner->field(job_count     => 1) if $runner && !$runner->job_count;
+    $runner->field(slots_per_job => 1) if $runner && !$runner->slots_per_job;
+
+    my $run_slots = $runner->job_count;
+    my $job_slots = $runner->slots_per_job;
+
+    die "The slots_per_job (set to $job_slots) must not be larger than the job_count (set to $run_slots).\n" if $job_slots > $run_slots;
+
+    if (my $rem = $run_slots % $job_slots) {
+        warn "The slots_per_job (set to $job_slots) is not a divisor of job_count (set to $run_slots), this may leave $rem slot(s) unusable.\n";
+    }
+}
 
 sub cover_post_process {
     my %params   = @_;

@@ -35,7 +35,8 @@ sub run {
     my $data = $self->pfile_data();
 
     my $state = Test2::Harness::Runner::State->new(
-        workdir      => $self->workdir,
+        workdir => $self->workdir,
+        observe => 1,
     );
 
     $state->poll;

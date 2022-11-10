@@ -6,6 +6,7 @@ our $VERSION = '1.000134';
 
 use Carp qw/confess croak/;
 use Config qw/%Config/;
+use List::Util qw/min/;
 use Scalar::Util qw/weaken blessed/;
 use Test2::Util qw/CAN_REALLY_FORK/;
 use Time::HiRes qw/time/;
@@ -58,6 +59,8 @@ use Test2::Harness::Util::HashBase(
         +switches_from_env
 
         +et_file +pet_file
+
+        +slots_per_job
     }
 );
 
@@ -277,6 +280,7 @@ sub retry             { $_[0]->{+RETRY}             //= $_[0]->_fallback(retry  
 sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_timeout     => undef, qw/task runner/) }
 sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => undef, qw/task runner/) }
 
+sub slots_per_job { $_[0]->{+SLOTS_PER_JOB} //= $_[0]->_fallback_non_bool(slots_per_job => 1, qw/task runner/) }
 
 sub args { @{$_[0]->{+ARGS} //= $_[0]->_merge_sources(test_args => qw/task run/)} }
 sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }
@@ -306,6 +310,19 @@ sub _merge_sources {
     }
 
     return \@vals;
+}
+
+sub _fallback_non_bool {
+    my $self = shift;
+    my ($name, $default, @from) = @_;
+
+    for my $from (@from) {
+        my $source = $self->$from;
+        my $val = blessed($source) ? $source->$name : $source->{$name};
+        return $val if defined $val;
+    }
+
+    return $default;
 }
 
 sub _fallback {
@@ -523,6 +540,8 @@ sub env_vars {
         T2_HARNESS_JOB_NAME     => $self->{+TASK}->{job_name},
         T2_HARNESS_JOB_IS_TRY   => $self->{+IS_TRY}           // 0,
         T2_HARNESS_JOB_DURATION => $self->{+TASK}->{duration} // '',
+
+        T2_HARNESS_MY_JOB_CONCURRENCY => $self->slots_per_job,
     };
 }
 

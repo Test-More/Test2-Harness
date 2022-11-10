@@ -82,6 +82,7 @@ my %WriteMakefileArgs = (
     "Test::More" => "1.302170",
     "Text::ParseWords" => 0,
     "Time::HiRes" => 0,
+    "YAML::Tiny" => 0,
     "base" => 0,
     "constant" => 0,
     "goto::file" => "0.005",
@@ -92,7 +93,7 @@ my %WriteMakefileArgs = (
   },
   "VERSION" => "1.000134",
   "test" => {
-    "TESTS" => "t/*.t t/integration/*.t t/integration/signals/*.t t/unit/App/*.t t/unit/App/Yath/*.t t/unit/App/Yath/Command/*.t t/unit/App/Yath/Plugin/*.t t/unit/Test2/Harness/*.t t/unit/Test2/Harness/Runner/*.t t/unit/Test2/Harness/Settings/*.t t/unit/Test2/Harness/Util/*.t t/unit/Test2/Harness/Util/File/*.t t/unit/Test2/Tools/*.t"
+    "TESTS" => "t/*.t t/integration/*.t t/integration/signals/*.t t/unit/App/*.t t/unit/App/Yath/*.t t/unit/App/Yath/Command/*.t t/unit/App/Yath/Plugin/*.t t/unit/Test2/Harness/*.t t/unit/Test2/Harness/Runner/*.t t/unit/Test2/Harness/Runner/Resource/SharedJobSlots/*.t t/unit/Test2/Harness/Settings/*.t t/unit/Test2/Harness/Util/*.t t/unit/Test2/Harness/Util/File/*.t t/unit/Test2/Tools/*.t"
   }
 );
 
@@ -144,6 +145,7 @@ my %FallbackPrereqs = (
   "Test::More" => "1.302170",
   "Text::ParseWords" => 0,
   "Time::HiRes" => 0,
+  "YAML::Tiny" => 0,
   "base" => 0,
   "constant" => 0,
   "goto::file" => "0.005",

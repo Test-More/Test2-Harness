@@ -1,6 +1,0 @@
----
-abydos:
-  state_file: /tmp/yath-state
-  max_slots:  13
-  max_slots_per_job: 3
-  max_slots_per_run: 13

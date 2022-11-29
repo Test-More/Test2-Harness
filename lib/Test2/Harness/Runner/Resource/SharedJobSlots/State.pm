@@ -14,6 +14,7 @@ use Errno qw/EINTR EAGAIN ESRCH/;
 
 use Test2::Harness::Util::HashBase qw{
     <state_file <state_fh
+    <state_umask
     <runner_id <name <dir <runner_pid
     <max_slots
     <max_slots_per_job
@@ -48,6 +49,8 @@ sub init {
     croak "'max_slots' is a required attribute"         unless $self->{+MAX_SLOTS};
     croak "'max_slots_per_job' is a required attribute" unless $self->{+MAX_SLOTS_PER_JOB};
     croak "'max_slots_per_run' is a required attribute" unless $self->{+MAX_SLOTS_PER_RUN};
+
+    $self->{+STATE_UMASK} //= 0007;
 
     $self->{+NAME} //= $self->{+RUNNER_ID};
 
@@ -89,23 +92,33 @@ sub transaction {
             if $write && !$local->{write};
     }
     else {
-        my $lockf = "$self->{+STATE_FILE}.LOCK";
+        my $oldmask = umask($self->{+STATE_UMASK});
 
-        open($lock, '>>', $lockf)                or die "Could not open lock file '$lockf': $!";
-        while (1) {
-            last if flock($lock, $write ? LOCK_EX : LOCK_SH);
-            next if $! == EINTR || $! == EAGAIN;
-            warn "Could not get lock: $!";
-        }
+        my $ok = eval {
+            my $lockf = "$self->{+STATE_FILE}.LOCK";
 
-        $state = $self->_read_state();
-        $local = $state->{+LOCAL} = {
-            lock  => $lock,
-            mode  => $mode,
-            write => $write,
-            stack => [{cb => $cb, args => \@args}],
+            open($lock, '>>', $lockf) or die "Could not open lock file '$lockf': $!";
+            while (1) {
+                last if flock($lock, $write ? LOCK_EX : LOCK_SH);
+                next if $! == EINTR || $! == EAGAIN;
+                warn "Could not get lock: $!";
+            }
+
+            $state = $self->_read_state();
+            $local = $state->{+LOCAL} = {
+                lock  => $lock,
+                mode  => $mode,
+                write => $write,
+                stack => [{cb => $cb, args => \@args}],
+            };
+
+            weaken($state->{+LOCAL}->{lock});
+
+            1;
         };
-        weaken($state->{+LOCAL}->{lock});
+        my $err = $@;
+        umask($oldmask);
+        die $err unless $ok;
     }
 
     local @{$local}{qw/write mode stack/} = ($write, $mode, [@{$local->{stack}}, {cb => $cb, args => \@args}])
@@ -158,8 +171,17 @@ sub _write_state {
     confess "Attempted write with no lock" unless $local->{lock};
     confess "Attempted write with a read-only lock" unless $local->{write};
 
-    my $file = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
-    $file->write($state_copy);
+    my $oldmask = umask($self->{+STATE_UMASK});
+    my $ok = eval {
+        my $file = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
+        $file->write($state_copy);
+        1;
+    };
+    my $err = $@;
+
+    umask($oldmask);
+
+    die $err unless $ok;
 }
 
 sub status {

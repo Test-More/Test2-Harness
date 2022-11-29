@@ -119,6 +119,7 @@ Config file: $config_file
         name              => $name,
         runner_id         => $runner_id,
         runner_pid        => $runner_pid,
+        state_umask       => $host_conf->{state_umask} // 0007,
         state_file        => $host_conf->{state_file} // die("'state_file' not set in '$config_file' for host '$host'.\n"),
         max_slots         => $max_slots,
         max_slots_per_job => $max_per_job,
@@ -304,6 +305,11 @@ B<REQUIRED>
 
 This specifies the path to the shared state file. All yath processes by all
 users who are sharing slots need read+write access to this file.
+
+=item state_umask: 0007
+
+Defaults to C<0007>. Used to set the umask of the state file as well as the
+lock file.
 
 =item max_slots: 8
 

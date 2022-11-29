@@ -77,8 +77,10 @@ sub init {
 
     unless (grep { $_->job_limiter } @{$self->{+RESOURCES}}) {
         require Test2::Harness::Runner::Resource::JobCount;
-        unshift @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => $self->{+JOB_COUNT}, settings => $self->settings);
+        push @{$self->{+RESOURCES}} => Test2::Harness::Runner::Resource::JobCount->new(job_count => $self->{+JOB_COUNT}, settings => $self->settings);
     }
+
+    @{$self->{+RESOURCES}} = sort { $a->sort_weight <=> $b->sort_weight } @{$self->{+RESOURCES}};
 
     $self->{+DISPATCH_FILE} = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($self->{+WORKDIR}, 'dispatch.jsonl'));
 

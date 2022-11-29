@@ -4,7 +4,7 @@ use warnings;
 
 use Carp qw/croak/;
 
-our $VERSION = '1.000136';
+our $VERSION = '1.000137';
 
 use Test2::Harness::Util::HashBase qw/
     -_on

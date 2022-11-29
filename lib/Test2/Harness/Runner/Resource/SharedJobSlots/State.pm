@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Resource::SharedJobSlots::State;
 use strict;
 use warnings;
 
-our $VERSION = '1.000136';
+our $VERSION = '1.000137';
 
 use Test2::Harness::Util::File::JSON;
 use Scalar::Util qw/weaken/;

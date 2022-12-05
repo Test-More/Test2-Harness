@@ -294,6 +294,7 @@ sub spawn_scheduler {
 
     my $guard = Scope::Guard->new(sub {
         print STDERR "\n\nEscaped Scope!!!!\n\n";
+        print STDERR $@;
         exit 255;
     });
 

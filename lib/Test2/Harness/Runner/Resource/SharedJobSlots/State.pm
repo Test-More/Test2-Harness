@@ -7,7 +7,7 @@ our $VERSION = '1.000137';
 use Test2::Harness::Util::File::JSON;
 use Scalar::Util qw/weaken/;
 use Time::HiRes qw/time/;
-use List::Util qw/first/;
+use List::Util qw/first min sum0 max/;
 use Carp qw/croak confess carp/;
 use Fcntl qw/:flock SEEK_END/;
 use Errno qw/EINTR EAGAIN ESRCH/;
@@ -19,8 +19,12 @@ use Test2::Harness::Util::HashBase qw{
     <max_slots
     <max_slots_per_job
     <max_slots_per_run
+    <min_slots_per_run
 
-    <request_sort
+    <my_max_slots
+    <my_max_slots_per_job
+
+    <algorithm
 
     <ready_assignments
     +transaction
@@ -30,7 +34,7 @@ use Test2::Harness::Util::HashBase qw{
 };
 
 BEGIN {
-    for my $term (qw/runners assigned queue pending local ords/) {
+    for my $term (qw/runners local/) {
         my $val   = "$term";
         my $const = uc($term);
         no strict 'refs';
@@ -39,8 +43,6 @@ BEGIN {
 }
 
 sub TIMEOUT() { 300 }         # Timeout runs if they do not update at least every 5 min
-sub RELEASE() { 'release' }
-sub REQUEST() { 'request' }
 
 sub init {
     my $self = shift;
@@ -50,23 +52,21 @@ sub init {
     croak "'max_slots_per_job' is a required attribute" unless $self->{+MAX_SLOTS_PER_JOB};
     croak "'max_slots_per_run' is a required attribute" unless $self->{+MAX_SLOTS_PER_RUN};
 
+    $self->{+MY_MAX_SLOTS}         //= $self->{+MAX_SLOTS};
+    $self->{+MY_MAX_SLOTS_PER_JOB} //= $self->{+MAX_SLOTS_PER_JOB};
+
+    $self->{+MIN_SLOTS_PER_RUN} //= 0;
+
     $self->{+STATE_UMASK} //= 0007;
 
     $self->{+NAME} //= $self->{+RUNNER_ID};
 
-    $self->{+REQUEST_SORT} //= 'request_sort_fair';
+    $self->{+ALGORITHM} //= '_redistribute_fair';
 }
 
 sub init_state {
     my $self = shift;
-
-    return {
-        RUNNERS()  => {},                             # Lookup for runner specific info
-        ASSIGNED() => {},                             # Active slot assignments
-        QUEUE()    => {},                             # Assignments ready to be made, awaiting runner to acknowledge it has grabbed them
-        PENDING()  => [],                             # Slot requests that have been made, but slots are not yet available
-        ORDS()     => {runners => 1, pending => 1},
-    };
+    return { RUNNERS() => {} };
 }
 
 sub state { shift->transaction('r') }
@@ -126,7 +126,14 @@ sub transaction {
 
     local $self->{+TRANSACTION} = $state;
 
-    $self->_verify_registration($state) if $write && $self->{+REGISTERED};
+    if ($write) {
+        if ($self->{+REGISTERED}) {
+            $self->_verify_registration($state);
+        }
+        else {
+            $self->_update_registration($state);
+        }
+    }
     $self->_clear_old_registrations($state);
 
     my $out;
@@ -136,7 +143,6 @@ sub transaction {
     if ($ok && $write) {
         $self->_clear_old_registrations($state);
         $self->_update_registration($state) unless $self->{+UNREGISTERED};
-        $self->_advance($state);
         $self->_write_state($state);
     }
 
@@ -184,29 +190,6 @@ sub _write_state {
     die $err unless $ok;
 }
 
-sub status {
-    my $self = shift;
-    my ($mode) = @_;
-    $mode //= 'ro';
-
-    my $state = $self->transaction($mode);
-    my ($used, $available, $pend) = $self->_status($state);
-
-    $used = {%$used};
-    $pend = {%$pend};
-
-    return {
-        state   => $state,
-        used    => $used,
-        pending => $pend,
-
-        available_count => $available               // 0,
-        used_count      => delete $used->{__ALL__}  // 0,
-        request_count   => delete $pend->{+REQUEST} // 0,
-        release_count   => delete $pend->{+RELEASE} // 0,
-    };
-}
-
 sub update_registration { $_[0]->transaction(rw => '_update_registration') }
 sub remove_registration { $_[0]->transaction(rw => '_update_registration', remove => 1) }
 
@@ -222,7 +205,15 @@ sub _update_registration {
         name       => $self->{+NAME},
         dir        => $self->{+DIR},
         user       => $ENV{USER},
-        ord        => $state->{+ORDS}->{runners}++,
+        added      => time,
+
+        todo      => 0,
+        allocated => 0,
+        allotment => 0,
+        assigned  => {},
+
+        max_slots         => $self->{+MY_MAX_SLOTS},
+        max_slots_per_job => $self->{+MY_MAX_SLOTS_PER_JOB},
     };
 
     # Update our last checking time
@@ -255,132 +246,6 @@ sub _verify_registration {
     confess "Shared slot registration expired";
 }
 
-sub release_slots {
-    my $self = shift;
-    my ($job_id) = @_;
-
-    croak "'job_id' must be specified" unless $job_id;
-
-    my $entry = $self->transaction(rw => '_release_slots', $job_id);
-
-    return { %$entry };
-}
-
-sub _release_slots {
-    my $self = shift;
-    my ($state, $job_id) = @_;
-
-    confess "'job_id' must be specified" unless $job_id;
-
-    my $runner_id = $self->{+RUNNER_ID};
-
-    my $entry = {
-        type   => RELEASE(),
-        user   => $ENV{USER},
-        runner_id => $runner_id,
-        job_id => $job_id,
-        ord    => 0,
-    };
-
-    # Releases are added to the start
-    unshift @{$state->{+PENDING}} => $entry;
-    return $entry;
-}
-
-sub ready_request_list {
-    my $self = shift;
-    return keys %{$self->state->{+QUEUE}->{$self->{+RUNNER_ID}}};
-}
-
-sub check_ready_request {
-    my $self = shift;
-    my ($job_id) = @_;
-    return $self->state->{+QUEUE}->{$self->{+RUNNER_ID}}->{$job_id} ? 1 : 0;
-}
-
-sub get_ready_request {
-    my $self = shift;
-    my ($job_id) = @_;
-
-    return $self->transaction('rw' => '_get_ready_request', $job_id);
-}
-
-sub _get_ready_request {
-    my $self = shift;
-    my ($state, $job_id) = @_;
-
-    for (0 .. 1) {
-        $self->_advance($state) if $_;
-
-        my $runner_id = $self->{+RUNNER_ID};
-
-        next unless $state->{+QUEUE}->{$runner_id};
-        my $entry = delete $state->{+QUEUE}->{$runner_id}->{$job_id} or next;
-
-        delete $state->{+QUEUE}->{$runner_id} unless keys %{$state->{+QUEUE}->{$runner_id}};
-
-        $entry->{assign_stamp} = time;
-        $entry->{stage} = ASSIGNED();
-        $state->{+ASSIGNED}->{$runner_id}->{$job_id} = $entry;
-
-        return { %$entry };
-    }
-
-    return undef;
-}
-
-sub request_slots {
-    my $self   = shift;
-    my %params = @_;
-
-    my $job_id = $params{job_id} or croak "'job_id' must be specified";
-    my $count  = $params{count} or croak "'count' must be specified";
-
-    carp "Too many slots requested ($count > $self->{+MAX_SLOTS_PER_JOB})"
-        if $count > $self->{+MAX_SLOTS_PER_JOB};
-
-    my $state = $self->transaction(rw => '_request_slots', %params, runner_id => $self->{+RUNNER_ID});
-
-    return $state->{+QUEUE}->{$self->{+RUNNER_ID}}->{$job_id} ? 1 : 0;
-}
-
-sub _request_slots {
-    my $self = shift;
-    my ($state, %params) = @_;
-
-    confess "'count' must be specified" unless $params{count};
-
-    my $job_id = $params{job_id} or confess "'job_id' must be specified";
-    my $runner_id = $self->{+RUNNER_ID};
-
-    return $state if $state->{+QUEUE}->{$runner_id}
-                  && $state->{+QUEUE}->{$runner_id}->{$job_id};
-
-    my $common = {
-        %params,
-        type   => REQUEST(),
-        user   => $ENV{USER},
-        runner_id => $runner_id,
-    };
-
-    # See if we already have a pending request to modify.
-    # Only 1 pending request is allowed per run+job at a time
-    my $req = first { $_->{type} eq REQUEST() && $_->{job_id} eq $job_id && $_->{runner_id} eq $runner_id } @{$state->{pending}};
-
-    if ($req) {
-        %$req = (%$req, %$common);
-    }
-    else {
-        push @{$state->{pending}} => {
-            %$common,
-            ord    => $state->{+ORDS}->{pending}++,
-            stage  => PENDING(),
-        };
-    }
-
-    return $state;
-}
-
 sub _entry_expired {
     my $self = shift;
     my ($entry) = @_;
@@ -407,9 +272,6 @@ sub _clear_old_registrations {
     my ($state) = @_;
 
     my $runners  = $state->{+RUNNERS}     //= {};
-    my $pending  = $state->{+PENDING}     //= [];
-    my $queue    = $state->{+QUEUE}       //= {};
-    my $assigned = $state->{+ASSIGNED}    //= {};
 
     my (%removed);
     for my $entry (values %$runners) {
@@ -421,163 +283,265 @@ sub _clear_old_registrations {
         $self->{+UNREGISTERED} = 1 if $runner_id eq $self->{+RUNNER_ID};
 
         delete $runners->{$runner_id};
-        delete $queue->{$runner_id};
-        delete $assigned->{$runner_id};
 
         $removed{$runner_id}++;
     }
 
-    @$pending = grep { !$removed{$_->{runner_id}} } @$pending;
-
     return \%removed;
 }
 
-sub _status {
+sub allocate_slots {
+    my $self = shift;
+    my (%params) = @_;
+
+    my $count  = $params{count}  or croak "'count' is required";
+    my $job_id = $params{job_id} or croak "'job_id' is required";
+
+    confess "Slot request exceeds max slots per job ($count vs ($self->{+MAX_SLOTS_PER_JOB} || $self->{+MY_MAX_SLOTS_PER_JOB} || $self->{+MAX_SLOTS}))"
+        if $count > $self->{+MAX_SLOTS_PER_JOB} || $count > $self->{+MY_MAX_SLOTS_PER_JOB} || $count > $self->{+MAX_SLOTS};
+
+    return $self->transaction(rw => '_allocate_slots', count => $count, job_id => $job_id);
+}
+
+sub assign_slots {
+    my $self = shift;
+    my (%params) = @_;
+
+    my $job = $params{job} or croak "'job' is required";
+
+    return $self->transaction(rw => '_assign_slots', job => $job);
+}
+
+sub release_slots {
+    my $self = shift;
+    my (%params) = @_;
+
+    my $job_id = $params{job_id} or croak "'job_id' is required";
+
+    return $self->transaction(rw => '_release_slots', job_id => $job_id);
+}
+
+sub _allocate_slots {
     my $self = shift;
     my ($state, %params) = @_;
 
-    my $pend      = $state->{+LOCAL}->{pending};
-    my $used      = $state->{+LOCAL}->{used};
-    my $available = $state->{+LOCAL}->{available};
+    my $entry = $state->{runners}->{$self->{+RUNNER_ID}};
+    delete $entry->{_calc_cache};
 
-    return ($used, $available, $pend)
-        if !$params{refresh} && $pend && $used && $available;
+    my $count  = $params{count};
+    my $job_id = $params{job_id};
+    $self->_runner_todo($entry, $job_id => $count);
 
-    my $queue    = $state->{+QUEUE}       //= {};
-    my $assigned = $state->{+ASSIGNED}    //= {};
+    my $allocated = $entry->{allocated};
 
-    $used = {__ALL__ => 0};
-    for my $entry (map { values(%$_) } values(%$queue), values(%$assigned)) {
-        $used->{__ALL__} += $entry->{count};
-        $used->{$entry->{runner_id}} += $entry->{count};
+    # We have what we need alreadt allocated
+    return $entry->{allocated} = $count
+        if $count <= $allocated;
+
+    # Our allocation, if any, is not big enough, free it so we do not have a
+    # deadlock with all runner holding an insufficient allocation.
+    $allocated = $entry->{allocated} = 0;
+
+    my $calcs = $self->_runner_calcs($entry);
+
+    for (0 .. 1) {
+        $self->_redistribute($state) if $_; # Only run on second loop
+
+        # Cannot do anything if we have no allotment or no available slots.
+        # This will go to the next loop for a redistribution, or end the loop.
+        my $allotment = $entry->{allotment}             or next;
+        my $available = $allotment - $calcs->{assigned} or next;
+
+        # If our allotment is lower than the count we may end up never getting
+        # enough, so we forcefully reduce the count.
+        # We do this for busy systems where the pool is too small to meet the
+        # request. But we do not reduce the count to the available level,
+        # availability can change to match the allotment.
+        my $c = min($allotment, $count);
+
+        next unless $available >= $c;
+        return $entry->{allocated} = $c;
     }
 
-    $pend = {REQUEST() => 0, RELEASE() => 0};
-    for my $item (@{$state->{+PENDING} //= []}) {
-        my $c = abs($item->{count});
-        $pend->{$item->{type}} += $c;
-        $pend->{$item->{runner_id}} += $c if $item->{type} eq REQUEST();
-    }
-
-    $available = $self->{+MAX_SLOTS} - $used->{__ALL__};
-
-    $state->{+LOCAL}->{pending}   = $pend;
-    $state->{+LOCAL}->{used}      = $used;
-    $state->{+LOCAL}->{available} = $available;
-
-    return ($used, $available, $pend);
-}
-
-sub _advance {
-    my $self = shift;
-    my ($state) = @_;
-
-    my $pending  = $state->{+PENDING}     //= [];
-    my $queue    = $state->{+QUEUE}       //= {};
-    my $assigned = $state->{+ASSIGNED}    //= {};
-
-    # Clear free slot(s)
-    # Free slots are always unshifted onto the start of the pending array
-    while (@$pending && $pending->[0]->{type} eq RELEASE()) {
-        my $item = shift @$pending;
-
-        my $runner_id = $item->{runner_id};
-        my $job_id    = $item->{job_id};
-
-        # Might be releasing something that has only been queued, not assigned
-        delete $queue->{$runner_id}->{$job_id} if $queue->{$runner_id};
-        delete $queue->{$runner_id} unless keys %{$queue->{$runner_id}};
-
-        # Might be releasing something that is pending, not even queued yet.
-        @$pending = grep { !($_->{runner_id} eq $runner_id && $_->{job_id} eq $job_id) } @$pending;
-
-        delete $assigned->{$runner_id}->{$job_id} if $assigned->{$runner_id};
-    }
-
-    my ($used, $available) = $self->_status($state, refresh => 1);
-    my @order = @$pending;
-
-    # Pick the next slot assignment(s)
-    while (@order && $available && $available > 0) {
-        my $item;
-
-        # Sort the current requests, but first filter out any that need more slots than are available, or where the run is at or over the per run limit.
-        # We need to re-calculate this every iteration because the numbewr of available slots changes.
-        my $sort = $self->{+REQUEST_SORT};
-        ($item, @order) = sort { $self->$sort($state, $a, $b) } grep { $_->{count} <= $available && ($used->{$_->{runner_id}} //= 0) < $self->{+MAX_SLOTS_PER_RUN} } @order;
-        last unless $item;
-
-        delete $item->{type};
-        $item->{stage} = QUEUE();
-        my $runner_id = $item->{runner_id};
-
-        $queue->{$runner_id}->{$item->{job_id}} = $item;
-
-        my $count = $item->{count};
-        $available       -= $count;
-        $used->{__ALL__} += $count;
-        $used->{$runner_id} += $count;
-    }
-
-    # Clean up the pending
-    @$pending = grep { $_->{stage} eq PENDING() } @$pending;
-
-    return $state;
-}
-
-sub request_sort_fair {
-    my $self = shift;
-    my ($state, $a, $b) = @_;
-
-    return $self->_request_sort_by_used_slots(@_) || $self->_request_sort_by_run_order(@_) || $self->_request_sort_by_request_order(@_) || $self->_our_request_first(@_);
-}
-
-sub request_sort_first {
-    my $self = shift;
-    my ($state, $a, $b) = @_;
-
-    return $self->_request_sort_by_run_order(@_) || $self->_request_sort_by_used_slots(@_) || $self->_request_sort_by_request_order(@_) || $self->_our_request_first(@_);
-}
-
-sub request_sort_greedy {
-    my $self = shift;
-    my ($state, $a, $b) = @_;
-
-    return $self->_our_request_first(@_) || $self->_request_sort_by_request_order(@_) || $self->_request_sort_by_run_order(@_) || $self->_request_sort_by_used_slots(@_);
-}
-
-sub _our_request_first {
-    my $self = shift;
-    my ($state, $a, $b) = @_;
-
-    return 0  if $a->{runner_id} eq $b->{runner_id};
-    return -1 if $a->{runner_id} eq $self->{+RUNNER_ID};
-    return 1  if $b->{runner_id} eq $self->{+RUNNER_ID};
     return 0;
 }
 
-sub _request_sort_by_used_slots {
+sub _assign_slots {
     my $self = shift;
-    my ($state, $a, $b) = @_;
+    my ($state, %params) = @_;
 
-    # Runs with the least assigned slots come first
-    my $used = $state->{+LOCAL}->{used} or confess "No slot usage data!";
-    return ($used->{$a->{runner_id}} //= 0) <=> ($used->{$b->{runner_id}} //= 0);
+    my $entry = $state->{runners}->{$self->{+RUNNER_ID}};
+    delete $entry->{_calc_cache};
+
+    my $job       = $params{job};
+    my $job_id    = $job->{job_id};
+    my $allocated = $entry->{allocated};
+
+    my $count = $self->_runner_todo($entry, $job_id => -1);
+
+    $job->{count} = $count;
+    $job->{started} = time;
+
+    $entry->{allocated} = 0;
+
+    $entry->{assigned}->{$job->{job_id}} = $job;
+
+    return $job;
 }
 
-sub _request_sort_by_run_order {
+sub _release_slots {
     my $self = shift;
-    my ($state, $a, $b) = @_;
+    my ($state, %params) = @_;
 
-    my $runners = $state->{+RUNNERS}       or confess "No runner data!";
-    return $runners->{$a->{runner_id}}->{ord} <=> $runners->{$b->{runner_id}}->{ord};
+    my $entry = $state->{runners}->{$self->{+RUNNER_ID}};
+
+    my $job_id = $params{job_id};
+
+    delete $entry->{assigned}->{$job_id};
+    delete $entry->{_calc_cache};
+
+    $self->_runner_todo($entry, $job_id => -1);
+
+    # Reduce our allotment if it makes sense to do so.
+    my $calcs = $self->_runner_calcs($entry);
+    $entry->{allotment} = $calcs->{total} if $entry->{allotment} > $calcs->{total};
 }
 
-sub _request_sort_by_request_order {
-    my $self = shift;
-    my ($state, $a, $b) = @_;
+sub _runner_todo {
+    my $sef = shift;
+    my ($entry, $job_id, $count) = @_;
 
-    return $a->{ord} <=> $b->{ord};
+    my $jobs = $entry->{jobs} //= {};
+
+    if ($count) {
+        if ($count < 0) {
+            $count = delete $jobs->{$job_id};
+        }
+        else {
+            $jobs->{$job_id} = $count;
+        }
+    }
+    elsif ($job_id) {
+        $count = $jobs->{$job_id};
+    }
+
+    $entry->{todo} = sum0(values %$jobs);
+
+    return $count;
+}
+
+sub _runner_calcs {
+    my $self = shift;
+    my ($runner) = @_;
+
+    return $runner->{_calc_cache} if $runner->{_calc_cache};
+
+    my $max      = min(grep {$_} $self->{+MAX_SLOTS_PER_RUN}, $runner->{max_slots});
+    my $assigned = sum0(map { $_->{count} } values %{$runner->{assigned} //= {}});
+    my $active   = $runner->{allocated} + $assigned;
+    my $total    = $runner->{todo} + $active;
+    my $wants    = ($total >= $max) ? max($max, $active) : max($total, $active);
+
+    return $runner->{_calc_cache} = {
+        max      => $max,
+        assigned => $assigned,
+        active   => $active,
+        total    => $total,
+        wants    => $wants,
+    };
+}
+
+sub _redistribute {
+    my $self = shift;
+    my ($state) = @_;
+
+    my $max_run = $self->{+MAX_SLOTS_PER_RUN};
+
+    my $wanted = 0;
+    for my $runner (values %{$state->{+RUNNERS}}) {
+        my $calcs = $self->_runner_calcs($runner);
+        $runner->{allotment} = $calcs->{wants};
+        $wanted += $calcs->{wants};
+    }
+
+    # Everyone gets what they want!
+    my $max = $self->{+MAX_SLOTS};
+    return if $wanted <= $max;
+
+    my $meth = $self->{+ALGORITHM};
+
+    return $self->$meth($state);
+}
+
+sub _redistribute_first {
+    my $self = shift;
+    my ($state) = @_;
+
+    my $min = $self->{+MIN_SLOTS_PER_RUN};
+    my $max = $self->{+MAX_SLOTS};
+
+    my $c = 0;
+    for my $runner (sort { $a->{added} <=> $b->{added} } values %{$state->{+RUNNERS}}) {
+        my $calcs = $self->_runner_calcs($runner);
+        my $wants = $calcs->{wants};
+
+        if ($max >= $wants) {
+            $runner->{allotment} = $wants;
+        }
+        else {
+            $runner->{allotment} = max($max, $min, 0);
+        }
+
+        $max -= $runner->{allotment};
+
+        $c++;
+    }
+
+    return;
+}
+
+sub _redistribute_fair {
+    my $self = shift;
+    my ($state) = @_;
+
+    my $runs = scalar keys %{$state->{+RUNNERS}};
+
+    # Avoid a divide by 0 below.
+    return unless $runs;
+
+    my $total = $self->{+MAX_SLOTS};
+    my $min   = $self->{+MIN_SLOTS_PER_RUN};
+
+    my $used = 0;
+    for my $runner (values %{$state->{+RUNNERS}}) {
+        my $calcs = $self->_runner_calcs($runner);
+
+        # We never want less than the 'active' number
+        my $set = $calcs->{active};
+
+        # If min is greater than the active number and there are todo tests, we
+        # use the min instead.
+        $set = $min if $set < $min && $runner->todo;
+
+        $runner->{allotment} = $set;
+        $used += $set;
+    }
+
+    my $free = $total - $used;
+    return unless $free >= 1;
+
+    # Is there a more efficient way to do this? Yikes!
+    my @runners = values %{$state->{+RUNNERS}};
+    while ($free > 0) {
+        @runners = sort { $a->{allotment} <=> $b->{allotment} || $a->{added} <=> $b->{added} }
+                   grep { my $c = $self->_runner_calcs($_); $c->{wants} > $_->{allotment} }
+                   @runners;
+
+        $free--;
+        $runners[0]->{allotment}++;
+    }
+
+    return;
 }
 
 1;

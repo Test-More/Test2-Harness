@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Rework shared slots logic
+
 1.000136  2022-11-29 13:56:37-08:00 America/Los_Angeles
 
     - Add ability to sort resource plugins to get them in order.

@@ -10,7 +10,7 @@ use Test2::Harness::Runner::Resource::SharedJobSlots::State;
 use App::Yath::Util qw/find_in_updir/;
 use Sys::Hostname qw/hostname/;
 use Time::HiRes qw/time/;
-use List::Util qw/min sum0/;
+use List::Util qw/min/;
 use Carp qw/confess/;
 
 use parent 'Test2::Harness::Runner::Resource';
@@ -74,16 +74,16 @@ Config file: $config_file
         EOT
     }
 
-    my $sort = $host_conf->{algorithm} // 'fair';
-    if ($sort =~ m/^(.*)::([^:]+)$/) {
+    my $algorithm = $host_conf->{algorithm} // 'fair';
+    if ($algorithm =~ m/^(.*)::([^:]+)$/) {
         my ($mod, $sub) = ($1, $2);
         require(mod2file($mod));
     }
     else {
-        my $short = $sort;
-        $sort = "request_sort_$sort";
-        die "'$short' is not a valid algorith (in file '$config_file' under hist '$host' key 'algorithm'). Must be 'fair', 'first', 'greedy', or a Fully::Qualified::Module::function_name."
-            unless Test2::Harness::Runner::Resource::SharedJobSlots::State->can($sort);
+        my $short = $algorithm;
+        $algorithm = "_redistribute_$algorithm";
+        die "'$short' is not a valid algorith (in file '$config_file' under hist '$host' key 'algorithm'). Must be 'fair', 'first', or a Fully::Qualified::Module::function_name."
+            unless Test2::Harness::Runner::Resource::SharedJobSlots::State->can($algorithm);
     }
 
     my $runner_id  = $self->{+RUNNER_ID}  //= $settings->runner->runner_id if $settings->check_prefix('runner');
@@ -110,9 +110,10 @@ Config file: $config_file
 
     $self->{+JOB_LIMITER_MAX} = min(grep { $_ } $host_conf->{max_slots_per_run}, $settings->runner->job_count);
 
-    my $max_slots   = min($self->settings->runner->job_count,     $host_conf->{max_slots}         // die("'max_slots' not set in '$config_file' for host '$host'.\n"));
-    my $max_per_run = min($self->settings->runner->job_count,     $host_conf->{max_slots_per_run} // die("'max_slots_per_run' not set in '$config_file' for host '$host'.\n"));
-    my $max_per_job = min($self->settings->runner->slots_per_job, $host_conf->{max_slots_per_job} // die("'max_slots_per_job' not set in '$config_file' for host '$host'.\n"));
+    my $max_slots   = $host_conf->{max_slots}         // die("'max_slots' not set in '$config_file' for host '$host'.\n");
+    my $max_per_run = $host_conf->{max_slots_per_run} // die("'max_slots_per_run' not set in '$config_file' for host '$host'.\n");
+    my $max_per_job = $host_conf->{max_slots_per_job} // die("'max_slots_per_job' not set in '$config_file' for host '$host'.\n");
+    my $min_per_run = $host_conf->{min_slots_per_run} // 0;
 
     $self->{+STATE} = Test2::Harness::Runner::Resource::SharedJobSlots::State->new(
         dir               => $dir,
@@ -120,11 +121,15 @@ Config file: $config_file
         runner_id         => $runner_id,
         runner_pid        => $runner_pid,
         state_umask       => $host_conf->{state_umask} // 0007,
-        state_file        => $host_conf->{state_file} // die("'state_file' not set in '$config_file' for host '$host'.\n"),
+        state_file        => $host_conf->{state_file}  // die("'state_file' not set in '$config_file' for host '$host'.\n"),
         max_slots         => $max_slots,
         max_slots_per_job => $max_per_job,
         max_slots_per_run => $max_per_run,
-        request_sort      => $sort,
+        min_slots_per_run => $min_per_run,
+        algorithm         => $algorithm,
+
+        my_max_slots         => min($self->settings->runner->job_count,     $max_slots),
+        my_max_slots_per_job => min($self->settings->runner->slots_per_job, $max_per_job),
     );
 
     $self->{+CONFIG} = $host_conf;
@@ -137,19 +142,27 @@ sub job_limiter_at_max { 0 }
 
 sub refresh { $_[0]->{+STATE}->update_registration }
 
-sub available {
+sub _job_concurrency {
     my $self = shift;
     my ($task) = @_;
 
     my $concurrency = min(grep { $_ } ($task->{slots_per_job} // 1), @{$self->{+CONFIG}}{qw/max_slots_per_run max_slots_per_job/}, $self->settings->runner->slots_per_job, $self->settings->runner->job_count);
     $concurrency ||= 1;
 
-    # Make or update a request, then tell us if the request is ready
-    return $self->{+STATE}->request_slots(
-        job_id => $task->{job_id},
-        file   => $task->{rel_file} // $task->{file} // $task->{job_name},
-        count  => $concurrency,
-    );
+    return $concurrency;
+}
+
+sub available {
+    my $self = shift;
+    my ($task) = @_;
+
+    my $count = $self->_job_concurrency($task);
+
+    my $granted = $self->{+STATE}->allocate_slots(count => $count, job_id => $task->{job_id}, count => $count);
+
+    return unless $granted;
+
+    return $granted
 }
 
 sub assign {
@@ -158,9 +171,12 @@ sub assign {
 
     return if $self->{+OBSERVE};
 
-    # Grab the reservation
-    my $info = $self->{+STATE}->get_ready_request($task->{job_id})
-        or die "Could not get requested slots!\n";
+    my $info = $self->{+STATE}->assign_slots(
+        job => {
+            job_id => $task->{job_id},
+            file   => $task->{rel_file} // $task->{file} // $task->{job_name},
+        },
+     );
 
     $state->{env_vars}->{T2_HARNESS_MY_JOB_CONCURRENCY} = $info->{count};
 
@@ -175,66 +191,54 @@ sub release {
 
     return if $self->{+OBSERVE};
 
-    $self->{+STATE}->release_slots($job_id);
+    $self->{+STATE}->release_slots(job_id => $job_id);
+
     return;
 }
 
 sub status_lines {
     my $self = shift;
 
-    my $state     = $self->state;
-    my $status    = $state->status;
-    my $runner_id = $state->runner_id;
+    my $runners = $self->state->state->{runners};
 
-    my $used  = $status->{used_count}      // 0;
-    my $free  = $status->{available_count} // 0;
-    my $pend  = $status->{request_count}   // 0;
-    my $total = $used + $free;
-
-    my $our_assigned = $status->{used}->{$runner_id}    // 0;
-    my $our_pending  = $status->{pending}->{$runner_id} // 0;
-
+    my $used = 0;
+    my $pending = 0;
     my $details = "";
-    for my $runner (sort { $a->{ord} <=> $b->{ord} } values %{$status->{state}->{runners}}) {
+    for my $runner (sort { $a->{added} <=> $b->{added} } values %$runners) {
+        my $job_count = 0;
         my $jobs = "";
-        my $count = 0;
-
-        for my $set ($status->{state}->{assigned}, $status->{state}->{queue}) {
-            next unless $set;
-            my $set2 = $set->{$runner->{runner_id}} or next;
-
-            for my $job (sort { $a->{ord} <=> $b->{ord} } values %$set2) {
-                $count += $job->{count};
-                my $stamp = $job->{assign_stamp};
-                my $runtime = $stamp ? sprintf("%8.2fs", time - $stamp) : '   --   ';
-                $jobs .= "     $runtime | Slots: $job->{count} | " . ($job->{file} // $job->{job_id}) . "\n";
-            }
+        for my $job (sort { $a->{started} <=> $b->{started} } values %{$runner->{assigned}}) {
+            $used++;
+            $job_count++;
+            my $stamp = $job->{started};
+            my $runtime = $stamp ? sprintf("%8.2fs", time - $stamp) : '   --   ';
+            $jobs .= "     $runtime | Slots: $job->{count} | " . ($job->{file} // $job->{job_id}) . "\n";
         }
 
-        my $pend = $status->{pending}->{$runner->{runner_id}} // 0;
+        $pending += $runner->{allocated};
 
-        next unless $pend || $count;
-
-        $details .= <<"        EOT"
-      ** $runner->{ord}: $runner->{user} - $runner->{name} **
-         Pending: $pend
-        Assigned: $count
+        $details .= <<"        EOT";
+      ** $runner->{user} - $runner->{name} - $runner->{runner_id} **
+             Todo: $runner->{todo}
+        Allotment: $runner->{allotment}
+        Allocated: $runner->{allocated}
+         Assigned: $job_count
 $jobs
 
         EOT
     }
+
+    my $total = $self->state->{max_slots};
+    my $free  = $total - $pending - $used;
+
+    $free = "$free (Minimum per-run overrides max slot count in some cases)" if $free < 0;
 
     my $out = <<"    EOT";
    ** System Wide Summary **
     Total Shared Slots: $total
      Used Shared Slots: $used
      Free Shared Slots: $free
-  Pending Shared Slots: $pend
-  ---------------------------
-
-   ** Our Summary **
-  Assigned Slots: $our_assigned
-   Pending Slots: $our_pending
+  Pending Shared Slots: $pending
   ---------------------------
 
    ** Runners **
@@ -319,6 +323,15 @@ Max slots system-wide for all users to share.
 
 Max slots a specific test run can use.
 
+=item min_slots_per_run: 0
+
+Minimum slots per run.
+
+Set this if you want to make sure that all runs get at least N slots,
+B<EVEN IF IT MEANS GOING OVER THE SYSTEM-WIDE MAXIMUM!>.
+
+This defaults to 0.
+
 =item max_slots_per_job: 2
 
 Max slots a specific test job (test file) can use.
@@ -326,8 +339,6 @@ Max slots a specific test job (test file) can use.
 =item algorithm: fair
 
 =item algorithm: first
-
-=item algorithm: greedy
 
 =item algorithm: Fully::Qualified::Module::function_name
 
@@ -362,12 +373,6 @@ spare slots.
 
 Use this with ordered test runs where you do not want a purely serial run
 order.
-
-=item greedy
-
-Not recommended, no known good use cases. This algorithm has each run
-prioritize its own tests, this is an unpredictable algorithm that can lead to
-one runner gobbling up the maximum allowed slots as fast as possible.
 
 =item Fully::Qualified::Module::function_name
 

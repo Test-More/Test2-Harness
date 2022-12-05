@@ -31,3 +31,4 @@ coverage.json
 lastlog.*
 *.test_info.json
 *.test_info.*.json
+.testsharedjobslots.yml

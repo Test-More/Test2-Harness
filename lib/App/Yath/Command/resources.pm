@@ -131,15 +131,20 @@ sub run {
         unless $res;
 
     while (1) {
-        print "\r\e[2J\r\e[1;1H";
-        print "\n==== Resource state ====\n";
+        my @out = (
+            "\r\e[2J\r\e[1;1H",
+            "\n==== Resource state ====\n",
+        );
         while (my $resource = $res->()) {
             my @lines = $resource->status_lines;
             next unless @lines;
-            print "\nResource: " . ref($resource) . "\n";
-            print join "\n" => @lines;
+            push @out => (
+                "\nResource: " . ref($resource) . "\n",
+                 join "\n" => @lines,
+            );
         }
-        print "\n\n";
+        push @out => "\n\n";
+        print @out;
         sleep 0.1;
     }
 

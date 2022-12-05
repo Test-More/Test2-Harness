@@ -201,44 +201,58 @@ sub status_lines {
 
     my $runners = $self->state->state->{runners};
 
-    my $used = 0;
-    my $pending = 0;
+    my $global_status = {
+        todo     => 0,
+        allotted  => 0,
+        assigned => 0,
+        pending  => 0,
+    };
     my $details = "";
     for my $runner (sort { $a->{added} <=> $b->{added} } values %$runners) {
-        my $job_count = 0;
+        my $run_status = {
+            todo     => $runner->{todo},
+            allotted  => $runner->{allotment},
+            assigned => 0,
+            pending  => 0,
+        };
+
         my $jobs = "";
         for my $job (sort { $a->{started} <=> $b->{started} } values %{$runner->{assigned}}) {
-            $used++;
-            $job_count++;
-            my $stamp = $job->{started};
+            $run_status->{assigned} += $job->{count};
+            my $stamp   = $job->{started};
             my $runtime = $stamp ? sprintf("%8.2fs", time - $stamp) : '   --   ';
-            $jobs .= "     $runtime | Slots: $job->{count} | " . ($job->{file} // $job->{job_id}) . "\n";
+            my $slots   = sprintf("%-3d", $job->{count});
+            $jobs .= "     $runtime | Slots: $slots | " . ($job->{file} // $job->{job_id}) . "\n";
         }
 
-        $pending += $runner->{allocated};
+        $run_status->{pending} = $runner->{allotment} - $run_status->{assigned};
+
+        $global_status->{$_} += $run_status->{$_} for keys %$global_status;
 
         $details .= <<"        EOT";
       ** $runner->{user} - $runner->{name} - $runner->{runner_id} **
-             Todo: $runner->{todo}
-        Allotment: $runner->{allotment}
-        Allocated: $runner->{allocated}
-         Assigned: $job_count
+            Todo: $run_status->{todo}
+        Allotted: $run_status->{allotted}
+        Assigned: $run_status->{assigned}
+         Pending: $run_status->{pending}
+
 $jobs
 
         EOT
     }
 
-    my $total = $self->state->{max_slots};
-    my $free  = $total - $pending - $used;
-
-    $free = "$free (Minimum per-run overrides max slot count in some cases)" if $free < 0;
+    $global_status->{total} = $self->state->{max_slots};
+    $global_status->{free} = $global_status->{total} - ($global_status->{assigned} + $global_status->{pending});
+    $global_status->{free} = "$global_status->{free} (Minimum per-run overrides max slot count in some cases)" if $global_status->{free} < 0;
 
     my $out = <<"    EOT";
    ** System Wide Summary **
-    Total Shared Slots: $total
-     Used Shared Slots: $used
-     Free Shared Slots: $free
-  Pending Shared Slots: $pending
+                  TODO: $global_status->{todo}
+    Total Shared Slots: $global_status->{total}
+ Allotted Shared Slots: $global_status->{allotted}
+ Assigned Shared Slots: $global_status->{assigned}
+  Pending Shared Slots: $global_status->{pending}
+     Free Shared Slots: $global_status->{free}
   ---------------------------
 
    ** Runners **

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix resources output for shared slots
+
 1.000137  2022-12-05 13:15:45-08:00 America/Los_Angeles
 
     - Rework shared slots logic

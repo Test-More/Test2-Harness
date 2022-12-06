@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000138  2022-12-06 06:52:55-08:00 America/Los_Angeles
+
     - Fix resources output for shared slots
     - Make slots a range, not a single value
 

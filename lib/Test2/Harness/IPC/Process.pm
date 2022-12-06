@@ -2,7 +2,7 @@ package Test2::Harness::IPC::Process;
 use strict;
 use warnings;
 
-our $VERSION = '1.000138';
+our $VERSION = '1.000139';
 
 use Carp qw/croak/;
 

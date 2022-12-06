@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Reloader;
 use strict;
 use warnings;
 
-our $VERSION = '1.000138';
+our $VERSION = '1.000139';
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;

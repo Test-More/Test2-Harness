@@ -22,14 +22,15 @@ use Test2::Harness::Util::HashBase qw{
     queue_args
     job_class
     comment
-    _category _stage _duration _slots_per_job
+    _category _stage _duration _min_slots _max_slots
 };
 
 sub set_duration { $_[0]->set__duration(lc($_[1])) }
 sub set_category { $_[0]->set__category(lc($_[1])) }
 
-sub set_slots_per_job { $_[0]->set__slots_per_job($_[1]) }
-sub set_stage         { $_[0]->set__stage($_[1]) }
+sub set_stage     { $_[0]->set__stage($_[1]) }
+sub set_min_slots { $_[0]->set__min_slots($_[1]) }
+sub set_max_slots { $_[0]->set__max_slots($_[1]) }
 
 sub retry { $_[0]->headers->{retry} }
 sub set_retry {
@@ -116,13 +117,22 @@ sub check_stage {
     return $self->{+_HEADERS}->{stage} || undef;
 }
 
-sub check_slots_per_job {
+sub check_min_slots {
     my $self = shift;
 
-    return $self->{+_SLOTS_PER_JOB} if $self->{+_SLOTS_PER_JOB};
+    return $self->{+_MIN_SLOTS} if $self->{+_MIN_SLOTS};
 
     $self->_scan unless $self->{+_SCANNED};
-    return $self->{+_HEADERS}->{slots_per_job} // undef;
+    return $self->{+_HEADERS}->{min_slots} // undef;
+}
+
+sub check_max_slots {
+    my $self = shift;
+
+    return $self->{+_MAX_SLOTS} if $self->{+_MAX_SLOTS};
+
+    $self->_scan unless $self->{+_SCANNED};
+    return $self->{+_HEADERS}->{max_slots} // undef;
 }
 
 sub meta {
@@ -348,8 +358,9 @@ sub _scan {
 
             $headers{timeout}->{$type} = $num;
         }
-        elsif ($dir eq 'job' && $rest =~ m/SLOTS\s+(\d+)$/) {
-            $headers{slots_per_job} = $1;
+        elsif ($dir eq 'job' && $rest =~ m/slots\s+(\d+)(?:\s+(\d+))?$/i) {
+            $headers{min_slots} //= $1;
+            $headers{max_slots} //= $2 ? $2 : $1;
         }
         else {
             warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
@@ -399,7 +410,8 @@ sub queue_item {
     my $category      = $self->check_category;
     my $duration      = $self->check_duration;
     my $stage         = $self->check_stage;
-    my $slots_per_job = $self->check_slots_per_job;
+    my $min_slots     = $self->check_min_slots;
+    my $max_slots     = $self->check_max_slots;
 
     my $smoke     = $self->check_feature(smoke     => 0);
     my $fork      = $self->check_feature(fork      => 1);
@@ -458,7 +470,8 @@ sub queue_item {
         defined($retry_isolated) ? (retry_isolated    => $retry_isolated)          : (),
         defined($et)             ? (event_timeout     => $et)                      : (),
         defined($pet)            ? (post_exit_timeout => $self->post_exit_timeout) : (),
-        defined($slots_per_job)  ? (slots_per_job     => $slots_per_job)           : (),
+        defined($min_slots)      ? (min_slots         => $min_slots)               : (),
+        defined($max_slots)      ? (max_slots         => $max_slots)               : (),
 
         @{$self->{+QUEUE_ARGS}},
 

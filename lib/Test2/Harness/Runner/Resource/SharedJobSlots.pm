@@ -146,19 +146,31 @@ sub _job_concurrency {
     my $self = shift;
     my ($task) = @_;
 
-    my $concurrency = min(grep { $_ } ($task->{slots_per_job} // 1), @{$self->{+CONFIG}}{qw/max_slots_per_run max_slots_per_job/}, $self->settings->runner->slots_per_job, $self->settings->runner->job_count);
-    $concurrency ||= 1;
+    my $rmax = $self->settings->runner->job_count;
+    my $jmax = $self->settings->runner->slots_per_job;
+    my $srmax = $self->{+CONFIG}->{max_slots_per_run};
+    my $sjmax = $self->{+CONFIG}->{max_slots_per_job};
 
-    return $concurrency;
+    my $tmin = $task->{min_slots} // 1;
+    my $tmax = $task->{max_slots} // $tmin;
+
+    my $max = min($tmax, $sjmax, $srmax, $jmax, $rmax);
+
+    # Invalid condition, minimum is more than our maximim
+    return if $tmin > $max;
+    $max = $tmin if $max < $tmin;
+
+    return [$tmin, $max];
 }
 
 sub available {
     my $self = shift;
     my ($task) = @_;
 
-    my $count = $self->_job_concurrency($task);
+    my $con = $self->_job_concurrency($task);
+    return -1 unless $con;
 
-    my $granted = $self->{+STATE}->allocate_slots(count => $count, job_id => $task->{job_id}, count => $count);
+    my $granted = $self->{+STATE}->allocate_slots(con => $con, job_id => $task->{job_id});
 
     return unless $granted;
 

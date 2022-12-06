@@ -703,6 +703,14 @@ XXX can be replaced with any type of your choosing.
 NOTE: This directive does not alter the category of your test. You are free
 to mark the test with LONG or MEDIUM in addition to this marker.
 
+=head3 HARNESS-JOB-SLOTS 2
+
+=head3 HARNESS-JOB-SLOTS 1 10
+
+Specify a range of job slots needed for the test to run. If set to a single
+value then the test will only run if it can have the specified number of slots.
+If given a range the test will require at least the lower number of slots, and
+use up to the maximum number of slots.
 
 =over 4
 

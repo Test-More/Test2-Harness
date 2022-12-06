@@ -419,25 +419,25 @@ subtest _runner_calcs => sub {
 subtest allocate_slots => sub {
     my $one = inst(runner_id => 'one');
 
-    like(dies { $one->allocate_slots(todo => 1) }, qr/'count' is required/, "count must be specified");
+    like(dies { $one->allocate_slots(todo => 1) }, qr/'con' is required/, "con must be specified");
 
     $one->{max_slots_per_job} = 10; $one->{my_max_slots_per_job} = 11; $one->{max_slots} = 11;
     like(
-        dies { $one->allocate_slots(count => 11, todo => 100) },
+        dies { $one->allocate_slots(con => [11, 11], todo => 100) },
         qr/Slot request exceeds max slots per job \(11 vs \(10 || 11 || 11\)\)/,
         "Cannot exceed slot limits A"
     );
 
     $one->{max_slots_per_job} = 11; $one->{my_max_slots_per_job} = 10; $one->{max_slots} = 11;
     like(
-        dies { $one->allocate_slots(count => 11, todo => 100) },
+        dies { $one->allocate_slots(con => [11, 11], todo => 100) },
         qr/Slot request exceeds max slots per job \(11 vs \(11 || 10 || 11\)\)/,
         "Cannot exceed slot limits B"
     );
 
     $one->{max_slots_per_job} = 11; $one->{my_max_slots_per_job} = 11; $one->{max_slots} = 10;
     like(
-        dies { $one->allocate_slots(count => 11, todo => 100) },
+        dies { $one->allocate_slots(con => [11, 11], todo => 100) },
         qr/Slot request exceeds max slots per job \(11 vs \(11 || 11 || 10\)\)/,
         "Cannot exceed slot limits C"
     );
@@ -456,7 +456,7 @@ subtest allocate_slots => sub {
 
     ok($one->state->{runners}->{one}->{_calc_cache}->{CACHED}, "runner calc cache is as expected", $one->state->{runners}->{one}->{_calc_cache});
     is($one->state->{runners}->{one}->{allocated}, 5, "Allocation is 5");
-    is($one->allocate_slots(count => 4, job_id => '123'), 4, "We got 4 slots!");
+    is($one->allocate_slots(con => [4, 4], job_id => '123'), 4, "We got 4 slots!");
     ok(!$one->state->{runners}->{one}->{_calc_cache}->{CACHED}, "Allocating slots reset runner calc cache", $one->state->{runners}->{one}->{_calc_cache});
     is($one->state->{runners}->{one}->{allocated}, 4, "Allocation updated to 4");
 };

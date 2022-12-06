@@ -41,7 +41,14 @@ sub available {
     my $self = shift;
     my ($task) = @_;
 
-    my $concurrency = min(grep { $_ } ($task->{slots_per_job} // 1), $self->settings->runner->slots_per_job);
+    my $rmin = $self->settings->runner->slots_per_job;
+    my $tmin = $task->{min_slots} // 1;
+    my $tmax = $task->{max_slots} // $tmin;
+
+    return -1 if $self->{+JOB_COUNT} < $tmin;
+    return -1 if $rmin < $tmin;
+
+    my $concurrency = min(grep { $_ } $tmax, $rmin);
     $concurrency ||= 1;
 
     return 1 if @{$self->{+FREE}} >= $concurrency;
@@ -52,7 +59,10 @@ sub assign {
     my $self = shift;
     my ($task, $state) = @_;
 
-    my $concurrency = min(grep { $_ } ($task->{slots_per_job} // 1), $self->settings->runner->slots_per_job);
+    my $rmin = $self->settings->runner->slots_per_job;
+    my $tmin = $task->{min_slots} // 1;
+    my $tmax = $task->{max_slots} // $tmin;
+    my $concurrency = min(grep { $_ } $tmax, $rmin);
     $concurrency ||= 1;
 
     $state->{record} = {

@@ -60,7 +60,8 @@ use Test2::Harness::Util::HashBase(
 
         +et_file +pet_file
 
-        +slots_per_job
+        +min_slots
+        +max_slots
     }
 );
 
@@ -280,7 +281,8 @@ sub retry             { $_[0]->{+RETRY}             //= $_[0]->_fallback(retry  
 sub event_timeout     { $_[0]->{+EVENT_TIMEOUT}     //= $_[0]->_fallback(event_timeout     => undef, qw/task runner/) }
 sub post_exit_timeout { $_[0]->{+POST_EXIT_TIMEOUT} //= $_[0]->_fallback(post_exit_timeout => undef, qw/task runner/) }
 
-sub slots_per_job { $_[0]->{+SLOTS_PER_JOB} //= $_[0]->_fallback_non_bool(slots_per_job => 1, qw/task runner/) }
+sub min_slots { $_[0]->{+MIN_SLOTS} //= $_[0]->_fallback_non_bool(min_slots => 1, qw/task/) }
+sub max_slots { $_[0]->{+MAX_SLOTS} //= $_[0]->_fallback_non_bool(max_slots => 1, qw/task/) }
 
 sub args { @{$_[0]->{+ARGS} //= $_[0]->_merge_sources(test_args => qw/task run/)} }
 sub load { @{$_[0]->{+LOAD} //= [@{$_[0]->run->load // []}]} }

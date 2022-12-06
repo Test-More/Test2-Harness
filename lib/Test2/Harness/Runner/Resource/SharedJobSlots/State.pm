@@ -294,13 +294,10 @@ sub allocate_slots {
     my $self = shift;
     my (%params) = @_;
 
-    my $count  = $params{count}  or croak "'count' is required";
+    my $con    = $params{con}    or croak "'con' is required";
     my $job_id = $params{job_id} or croak "'job_id' is required";
 
-    confess "Slot request exceeds max slots per job ($count vs ($self->{+MAX_SLOTS_PER_JOB} || $self->{+MY_MAX_SLOTS_PER_JOB} || $self->{+MAX_SLOTS}))"
-        if $count > $self->{+MAX_SLOTS_PER_JOB} || $count > $self->{+MY_MAX_SLOTS_PER_JOB} || $count > $self->{+MAX_SLOTS};
-
-    return $self->transaction(rw => '_allocate_slots', count => $count, job_id => $job_id);
+    return $self->transaction(rw => '_allocate_slots', con => $con, job_id => $job_id);
 }
 
 sub assign_slots {
@@ -328,15 +325,19 @@ sub _allocate_slots {
     my $entry = $state->{runners}->{$self->{+RUNNER_ID}};
     delete $entry->{_calc_cache};
 
-    my $count  = $params{count};
     my $job_id = $params{job_id};
-    $self->_runner_todo($entry, $job_id => $count);
+    my $con    = $params{con};
+    my ($min, $max) = @$con;
+    $self->_runner_todo($entry, $job_id => $max);
 
     my $allocated = $entry->{allocated};
 
-    # We have what we need alreadt allocated
-    return $entry->{allocated} = $count
-        if $count <= $allocated;
+    # We have what we need already allocated
+    return $entry->{allocated} = $max
+        if $max <= $allocated;
+
+    return $entry->{allocated}
+        if $entry->{allocated} >= $min;
 
     # Our allocation, if any, is not big enough, free it so we do not have a
     # deadlock with all runner holding an insufficient allocation.
@@ -352,15 +353,13 @@ sub _allocate_slots {
         my $allotment = $entry->{allotment}             or next;
         my $available = $allotment - $calcs->{assigned} or next;
 
-        # If our allotment is lower than the count we may end up never getting
-        # enough, so we forcefully reduce the count.
-        # We do this for busy systems where the pool is too small to meet the
-        # request. But we do not reduce the count to the available level,
-        # availability can change to match the allotment.
-        my $c = min($allotment, $count);
+        # If we get here we have an allotment (not 0) but it does not mean the
+        # minimum, so we have to skip the test.
+        return -1 if $allotment < $min;
 
-        next unless $available >= $c;
-        return $entry->{allocated} = $c;
+        next unless $available >= $min;
+
+        return $entry->{allocated} = min($available, $max);
     }
 
     return 0;
@@ -377,9 +376,9 @@ sub _assign_slots {
     my $job_id    = $job->{job_id};
     my $allocated = $entry->{allocated};
 
-    my $count = $self->_runner_todo($entry, $job_id => -1);
+    $self->_runner_todo($entry, $job_id => -1);
 
-    $job->{count} = $count;
+    $job->{count} = $allocated;
     $job->{started} = time;
 
     $entry->{allocated} = 0;

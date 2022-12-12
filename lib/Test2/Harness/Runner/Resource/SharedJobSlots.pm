@@ -113,20 +113,24 @@ Config file: $config_file
     my $max_slots   = $host_conf->{max_slots}         // die("'max_slots' not set in '$config_file' for host '$host'.\n");
     my $max_per_run = $host_conf->{max_slots_per_run} // die("'max_slots_per_run' not set in '$config_file' for host '$host'.\n");
     my $max_per_job = $host_conf->{max_slots_per_job} // die("'max_slots_per_job' not set in '$config_file' for host '$host'.\n");
+    my $def_per_run = $host_conf->{default_slots_per_run} // $max_per_run;
+    my $def_per_job = $host_conf->{default_slots_per_job} // $max_per_job;
     my $min_per_run = $host_conf->{min_slots_per_run} // 0;
 
     $self->{+STATE} = Test2::Harness::Runner::Resource::SharedJobSlots::State->new(
-        dir               => $dir,
-        name              => $name,
-        runner_id         => $runner_id,
-        runner_pid        => $runner_pid,
-        state_umask       => $host_conf->{state_umask} // 0007,
-        state_file        => $host_conf->{state_file}  // die("'state_file' not set in '$config_file' for host '$host'.\n"),
-        max_slots         => $max_slots,
-        max_slots_per_job => $max_per_job,
-        max_slots_per_run => $max_per_run,
-        min_slots_per_run => $min_per_run,
-        algorithm         => $algorithm,
+        dir                   => $dir,
+        name                  => $name,
+        runner_id             => $runner_id,
+        runner_pid            => $runner_pid,
+        state_umask           => $host_conf->{state_umask} // 0007,
+        state_file            => $host_conf->{state_file}  // die("'state_file' not set in '$config_file' for host '$host'.\n"),
+        max_slots             => $max_slots,
+        max_slots_per_job     => $max_per_job,
+        max_slots_per_run     => $max_per_run,
+        min_slots_per_run     => $min_per_run,
+        default_slots_per_run => $def_per_run,
+        default_slots_per_job => $def_per_job,
+        algorithm             => $algorithm,
 
         my_max_slots         => min($self->settings->runner->job_count,     $max_slots),
         my_max_slots_per_job => min($self->settings->runner->slots_per_job, $max_per_job),
@@ -361,6 +365,14 @@ This defaults to 0.
 =item max_slots_per_job: 2
 
 Max slots a specific test job (test file) can use.
+
+=item default_slots_per_run: 4
+
+If the user does not specify a number of slots, use this as the default.
+
+=item default_slots_per_job: 2
+
+If the user does not specify a number of job slots, use this as the default.
 
 =item algorithm: fair
 

@@ -268,8 +268,8 @@ sub fix_job_resources {
     }
 
     if ($found{'Test2::Harness::Runner::Resource::SharedJobSlots'} && $conf) {
-        $runner->field(job_count     => $conf->{max_slots_per_run}) if $runner && !$runner->job_count;
-        $runner->field(slots_per_job => $conf->{max_slots_per_job}) if $runner && !$runner->slots_per_job;
+        $runner->field(job_count     => $conf->{default_slots_per_run} || $conf->{max_slots_per_run}) if $runner && !$runner->job_count;
+        $runner->field(slots_per_job => $conf->{default_slots_per_job} || $conf->{max_slots_per_job}) if $runner && !$runner->slots_per_job;
 
         my $run_slots = $runner->job_count;
         my $job_slots = $runner->slots_per_job;

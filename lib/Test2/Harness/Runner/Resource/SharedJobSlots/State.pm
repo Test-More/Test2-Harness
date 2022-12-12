@@ -20,6 +20,8 @@ use Test2::Harness::Util::HashBase qw{
     <max_slots_per_job
     <max_slots_per_run
     <min_slots_per_run
+    <default_slots_per_job
+    <default_slots_per_run
 
     <my_max_slots
     <my_max_slots_per_job

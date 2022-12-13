@@ -6,9 +6,8 @@ our $VERSION = '1.000139';
 
 use YAML::Tiny;
 use Test2::Harness::Runner::Resource::SharedJobSlots::State;
+use Test2::Harness::Runner::Resource::SharedJobSlots::Config;
 
-use App::Yath::Util qw/find_in_updir/;
-use Sys::Hostname qw/hostname/;
 use Time::HiRes qw/time/;
 use List::Util qw/min/;
 use Carp qw/confess/;
@@ -33,58 +32,13 @@ sub new {
     return $self;
 }
 
-sub get_config {
-    my $class = shift;
-    my ($config_file) = @_;
-
-    return () unless $config_file;
-
-    $config_file = find_in_updir($config_file) if $config_file !~ m{(/|\\)} && ! -e $config_file;
-
-    return () unless $config_file && -e $config_file;
-
-    my $config = YAML::Tiny->read($config_file) or die "Could not read '$config_file'";
-    $config = $config->[0]; # First doc only
-    for my $host (hostname(), 'DEFAULT') {
-        my $host_conf = $config->{$host} or next;
-        return ($config_file, $host, $host_conf);
-    }
-
-    return ();
-}
-
 sub init {
     my $self     = shift;
     my $settings = $self->{+SETTINGS};
 
-    my $config_path = $settings->runner->shared_jobs_config;
-    my ($config_file, $host, $host_conf) = $self->get_config($config_path);
-    die "Could not find shared jobs config '$config_path'.\n"
-        unless $config_file;
-
-    die "Could not find '" . hostname() ."' or 'DEFAULT' settings in '$config_file'.\n"
-        unless $host && $host_conf;
-
-    if ($host eq 'DEFAULT' && !$host_conf->{no_warning}) {
-        warn <<"        EOT";
-Using the 'DEFAULT' shared-slots host config.
-You may want to add the current host to the config file.
-To silence this warning, set the 'no_warning' key to true in the DEFAULT host config.
-Config file: $config_file
-        EOT
-    }
-
-    my $algorithm = $host_conf->{algorithm} // 'fair';
-    if ($algorithm =~ m/^(.*)::([^:]+)$/) {
-        my ($mod, $sub) = ($1, $2);
-        require(mod2file($mod));
-    }
-    else {
-        my $short = $algorithm;
-        $algorithm = "_redistribute_$algorithm";
-        die "'$short' is not a valid algorith (in file '$config_file' under hist '$host' key 'algorithm'). Must be 'fair', 'first', or a Fully::Qualified::Module::function_name."
-            unless Test2::Harness::Runner::Resource::SharedJobSlots::State->can($algorithm);
-    }
+    my $sconf = Test2::Harness::Runner::Resource::SharedJobSlots::Config->find(settings => $settings);
+    die "Could not find shared jobs config.\n"
+        unless $sconf;
 
     my $runner_id  = $self->{+RUNNER_ID}  //= $settings->runner->runner_id if $settings->check_prefix('runner');
     my $runner_pid = $self->{+RUNNER_PID} //= $Test2::Harness::Runner::RUNNER_PID // $App::Yath::Command::runner::RUNNER_PID;
@@ -108,35 +62,29 @@ Config file: $config_file
 
     $name = "$prefix-$name" if $prefix;
 
-    $self->{+JOB_LIMITER_MAX} = min(grep { $_ } $host_conf->{max_slots_per_run}, $settings->runner->job_count);
-
-    my $max_slots   = $host_conf->{max_slots}         // die("'max_slots' not set in '$config_file' for host '$host'.\n");
-    my $max_per_run = $host_conf->{max_slots_per_run} // die("'max_slots_per_run' not set in '$config_file' for host '$host'.\n");
-    my $max_per_job = $host_conf->{max_slots_per_job} // die("'max_slots_per_job' not set in '$config_file' for host '$host'.\n");
-    my $def_per_run = $host_conf->{default_slots_per_run} // $max_per_run;
-    my $def_per_job = $host_conf->{default_slots_per_job} // $max_per_job;
-    my $min_per_run = $host_conf->{min_slots_per_run} // 0;
+    $self->{+JOB_LIMITER_MAX} = min(grep { $_ } $sconf->max_slots_per_run, $settings->runner->job_count);
 
     $self->{+STATE} = Test2::Harness::Runner::Resource::SharedJobSlots::State->new(
-        dir                   => $dir,
-        name                  => $name,
-        runner_id             => $runner_id,
-        runner_pid            => $runner_pid,
-        state_umask           => $host_conf->{state_umask} // 0007,
-        state_file            => $host_conf->{state_file}  // die("'state_file' not set in '$config_file' for host '$host'.\n"),
-        max_slots             => $max_slots,
-        max_slots_per_job     => $max_per_job,
-        max_slots_per_run     => $max_per_run,
-        min_slots_per_run     => $min_per_run,
-        default_slots_per_run => $def_per_run,
-        default_slots_per_job => $def_per_job,
-        algorithm             => $algorithm,
+        dir        => $dir,
+        name       => $name,
+        runner_id  => $runner_id,
+        runner_pid => $runner_pid,
 
-        my_max_slots         => min($self->settings->runner->job_count,     $max_slots),
-        my_max_slots_per_job => min($self->settings->runner->slots_per_job, $max_per_job),
+        state_umask           => $sconf->state_umask,
+        state_file            => $sconf->state_file,
+        algorithm             => $sconf->algorithm,
+        max_slots             => $sconf->max_slots,
+        max_slots_per_job     => $sconf->max_slots_per_job,
+        max_slots_per_run     => $sconf->max_slots_per_run,
+        min_slots_per_run     => $sconf->min_slots_per_run,
+        default_slots_per_run => $sconf->default_slots_per_run,
+        default_slots_per_job => $sconf->default_slots_per_job,
+
+        my_max_slots         => min($self->settings->runner->job_count,     $sconf->max_slots),
+        my_max_slots_per_job => min($self->settings->runner->slots_per_job, $sconf->max_slots_per_job),
     );
 
-    $self->{+CONFIG} = $host_conf;
+    $self->{+CONFIG} = $sconf;
 
     return;
 }
@@ -152,8 +100,8 @@ sub _job_concurrency {
 
     my $rmax = $self->settings->runner->job_count;
     my $jmax = $self->settings->runner->slots_per_job;
-    my $srmax = $self->{+CONFIG}->{max_slots_per_run};
-    my $sjmax = $self->{+CONFIG}->{max_slots_per_job};
+    my $srmax = $self->{+CONFIG}->max_slots_per_run;
+    my $sjmax = $self->{+CONFIG}->max_slots_per_job;
 
     my $tmin = $task->{min_slots} // 1;
     my $tmax = $task->{max_slots} // $tmin;

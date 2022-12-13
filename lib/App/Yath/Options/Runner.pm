@@ -241,44 +241,44 @@ sub fix_job_resources {
 
     my $runner = $settings->runner;
 
-    my $config_path = $runner->shared_jobs_config;
-    my ($config_file, $host, $conf) = Test2::Harness::Runner::Resource::SharedJobSlots->get_config($config_path);
+    require Test2::Harness::Runner::Resource::SharedJobSlots::Config;
+    my $sconf = Test2::Harness::Runner::Resource::SharedJobSlots::Config->find(settings => $settings);
 
     my %found;
-    for my $r (@{$settings->runner->resources}) {
+    for my $r (@{$runner->resources}) {
         require(mod2file($r));
         next unless $r->job_limiter;
         $found{$r}++;
     }
 
-    if ($config_file && !$found{'Test2::Harness::Runner::Resource::SharedJobSlots'}) {
+    if ($sconf && !$found{'Test2::Harness::Runner::Resource::SharedJobSlots'}) {
         if (delete $found{'Test2::Harness::Runner::Resource::JobCount'}) {
-            @{$settings->runner->resources} = grep { $_ ne 'Test2::Harness::Runner::Resource::JobCount' } @{$settings->runner->resources};
+            @{$settings->runner->resources} = grep { $_ ne 'Test2::Harness::Runner::Resource::JobCount' } @{$runner->resources};
         }
 
         if (!keys %found) {
             require Test2::Harness::Runner::Resource::SharedJobSlots;
-            unshift @{$settings->runner->resources} => 'Test2::Harness::Runner::Resource::SharedJobSlots';
+            unshift @{$runner->resources} => 'Test2::Harness::Runner::Resource::SharedJobSlots';
             $found{'Test2::Harness::Runner::Resource::SharedJobSlots'}++;
         }
     }
     elsif (!keys %found) {
         require Test2::Harness::Runner::Resource::JobCount;
-        unshift @{$settings->runner->resources} => 'Test2::Harness::Runner::Resource::JobCount';
+        unshift @{$runner->resources} => 'Test2::Harness::Runner::Resource::JobCount';
     }
 
-    if ($found{'Test2::Harness::Runner::Resource::SharedJobSlots'} && $conf) {
-        $runner->field(job_count     => $conf->{default_slots_per_run} || $conf->{max_slots_per_run}) if $runner && !$runner->job_count;
-        $runner->field(slots_per_job => $conf->{default_slots_per_job} || $conf->{max_slots_per_job}) if $runner && !$runner->slots_per_job;
+    if ($found{'Test2::Harness::Runner::Resource::SharedJobSlots'} && $sconf) {
+        $runner->field(job_count     => $sconf->default_slots_per_run || $sconf->max_slots_per_run) if $runner && !$runner->job_count;
+        $runner->field(slots_per_job => $sconf->default_slots_per_job || $sconf->max_slots_per_job) if $runner && !$runner->slots_per_job;
 
         my $run_slots = $runner->job_count;
         my $job_slots = $runner->slots_per_job;
 
-        die "Requested job count ($run_slots) exceeds the system shared limit ($conf->{max_slots_per_run}).\n"
-            if $run_slots > $conf->{max_slots_per_run};
+        die "Requested job count ($run_slots) exceeds the system shared limit (" . $sconf->max_slots_per_run . ").\n"
+            if $run_slots > $sconf->max_slots_per_run;
 
-        die "Requested job concurrency ($job_slots) exceeds the system shared limit ($conf->{max_slots_per_job}).\n"
-            if $job_slots > $conf->{max_slots_per_job};
+        die "Requested job concurrency ($job_slots) exceeds the system shared limit (" . $sconf->max_slots_per_job . ").\n"
+            if $job_slots > $sconf->max_slots_per_job;
     }
 
     $runner->field(job_count     => 1) if $runner && !$runner->job_count;

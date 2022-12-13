@@ -472,8 +472,6 @@ sub run_job {
     $json_data->{stamp} = $spawn_time;
     $run->jobs->write($json_data);
 
-    
-
     return $pid;
 }
 

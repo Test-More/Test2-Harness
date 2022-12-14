@@ -162,10 +162,22 @@ sub _read_state {
 
     return $self->init_state unless -e $self->{+STATE_FILE};
 
-    my $file  = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
-    my $state = $file->maybe_read() || $self->init_state;
+    my $file = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
 
-    return $state;
+    my ($ok, $err);
+    for (1 .. 5) {
+        my $state;
+        $ok = eval { $state = $file->maybe_read(); 1};
+        $err = $@;
+
+        return $state ||= $self->init_state if $ok;
+
+        sleep 0.2;
+    }
+
+    warn "Corrupted state? Resetting state to initial. Error that caused this was:\n======\n$err\n======\n";
+
+    return $self->init_state;
 }
 
 sub _write_state {
@@ -182,7 +194,7 @@ sub _write_state {
     my $oldmask = umask($self->{+STATE_UMASK});
     my $ok = eval {
         my $file = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
-        $file->write($state_copy);
+        $file->rewrite($state_copy);
         1;
     };
     my $err = $@;

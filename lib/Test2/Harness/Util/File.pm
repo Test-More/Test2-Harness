@@ -45,6 +45,11 @@ sub read {
     return $out;
 }
 
+sub rewrite {
+    my $self = shift;
+    return Test2::Harness::Util::write_file($self->{+NAME}, $self->encode(@_));
+}
+
 sub write {
     my $self = shift;
     return Test2::Harness::Util::write_file_atomic($self->{+NAME}, $self->encode(@_));

@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix typo in rare conditional
+
 1.000140  2022-12-13 18:11:36-08:00 America/Los_Angeles
 
     - Fix permissions issue with state files

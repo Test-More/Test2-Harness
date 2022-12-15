@@ -534,7 +534,7 @@ sub _redistribute_fair {
 
         # If min is greater than the active number and there are todo tests, we
         # use the min instead.
-        $set = $min if $set < $min && $runner->todo;
+        $set = $min if $set < $min && $runner->{todo};
 
         $runner->{allotment} = $set;
         $used += $set;

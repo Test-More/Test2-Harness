@@ -2,7 +2,7 @@ package App::Yath::Plugin::YathUIDB;
 use strict;
 use warnings;
 
-our $VERSION = '0.000128';
+our $VERSION = '0.000129';
 
 use Test2::Harness::UI::Util qw/config_from_settings/;
 use Test2::Harness::Util::JSON qw/decode_json/;

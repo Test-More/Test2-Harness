@@ -66,14 +66,18 @@ sub sweep {
 
                     my $has_binary = $job->events->search({has_binary => 1});
                     while (my $e = $has_binary->next()) {
-                        $has_binary->binaries->delete;
-                        $e->Delete;
+                        $e->binaries->delete;
+                        $e->delete;
                     }
 
                     $job->events->delete;
                 }
                 else {
-                    $job->events->search({'-not' => {is_subtest => 1, nested => 0}})->delete;
+                    my $events = $job->events->search({'-not' => {is_subtest => 1, nested => 0}});
+                    while (my $e = $events->next()) {
+                        $e->binaries->delete;
+                        $e->delete;
+                    }
                 }
             }
 

@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Add concurrency to sweeper
+    - Add ability to track what sweeps (by name) have been done to runs
+    - Fix some 'Delete' -> 'delete' typos
+
 0.000128  2022-12-16 10:16:50-08:00 America/Los_Angeles
 
     - Fix deleting/sweeping with binary files again

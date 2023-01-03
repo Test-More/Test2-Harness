@@ -60,7 +60,7 @@ sub handle {
                 my $has_binary = $job->events->search({has_binary => 1});
                 while (my $e = $has_binary->next()) {
                     $has_binary->binaries->delete;
-                    $e->Delete;
+                    $e->delete;
                 }
 
                 $job->events->delete;
@@ -69,6 +69,7 @@ sub handle {
             }
 
             $run->run_fields->delete;
+            $run->sweeps->delete;
             $run->delete;
         }
     }

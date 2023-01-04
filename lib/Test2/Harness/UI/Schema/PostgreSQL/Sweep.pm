@@ -1,5 +1,5 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::EmailVerificationCode;
+package Test2::Harness::UI::Schema::Result::Sweep;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
@@ -15,30 +15,27 @@ __PACKAGE__->load_components(
   "Tree::AdjacencyList",
   "UUIDColumns",
 );
-__PACKAGE__->table("email_verification_codes");
+__PACKAGE__->table("sweeps");
 __PACKAGE__->add_columns(
-  "evcode_id",
-  {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    size => 16,
-  },
-  "email_id",
+  "sweep_id",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
+  "run_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "name",
+  { data_type => "varchar", is_nullable => 0, size => 255 },
 );
-__PACKAGE__->set_primary_key("evcode_id");
-__PACKAGE__->add_unique_constraint("email_verification_codes_email_id_key", ["email_id"]);
+__PACKAGE__->set_primary_key("sweep_id");
+__PACKAGE__->add_unique_constraint("sweeps_name_run_id_key", ["name", "run_id"]);
 __PACKAGE__->belongs_to(
-  "email",
-  "Test2::Harness::UI::Schema::Result::Email",
-  { email_id => "email_id" },
+  "run",
+  "Test2::Harness::UI::Schema::Result::Run",
+  { run_id => "run_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-01-04 09:07:20
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:t+GyDUID7KavjfYfZEggVA
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:hI5lSd1FEWQw0ZbYt2APLQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

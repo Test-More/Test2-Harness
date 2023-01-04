@@ -167,6 +167,15 @@ CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
 CREATE INDEX IF NOT EXISTS run_status ON runs(status);
 CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
 
+CREATE TABLE sweeps (
+    sweep_id        UUID            NOT NULL PRIMARY KEY,
+    run_id          UUID            NOT NULL REFERENCES runs(run_id),
+    name            VARCHAR(255)    NOT NULL,
+
+    UNIQUE(name, run_id)
+);
+CREATE INDEX IF NOT EXISTS sweep_runs ON sweeps(run_id);
+
 CREATE TABLE run_fields (
     run_field_id    UUID            NOT NULL PRIMARY KEY,
     run_id          UUID            NOT NULL REFERENCES runs(run_id),

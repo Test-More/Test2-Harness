@@ -156,6 +156,17 @@ CREATE INDEX run_projects ON runs(project_id);
 CREATE INDEX run_status ON runs(status);
 CREATE INDEX run_user ON runs(user_id);
 
+CREATE TABLE sweeps (
+    sweep_id        CHAR(36)        NOT NULL PRIMARY KEY,
+    run_id          CHAR(36)        NOT NULL,
+    name            VARCHAR(255)    NOT NULL,
+
+    FOREIGN KEY (run_id) REFERENCES runs(run_id),
+
+    UNIQUE(run_id, name)
+) ROW_FORMAT=COMPRESSED;
+CREATE INDEX sweep_runs ON sweeps(run_id);
+
 CREATE TABLE run_fields (
     run_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
     run_id          CHAR(36)        NOT NULL,

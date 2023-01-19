@@ -328,7 +328,7 @@ sub _handle_long_option {
             $val //= shift(@$args) // die "Option --$full requires an argument.\n";
         }
         elsif($opt->allows_arg) {
-            $val //= 1;
+            $val //= $opt->autofill // 1;
         }
         else {
             die "Option --$full does not take an argument\n" if defined $val;
@@ -352,9 +352,8 @@ sub _handle_short_option {
     my ($main, $remain, $assign) = $self->_parse_short_option($arg);
 
     if (my $opt = $lookup->{short}->{$main}) {
-        my $val = 1;
         if ($opt->allows_arg) {
-            $val = $remain;
+            my $val = $remain;
 
             $val //= '' if $assign;
 
@@ -362,9 +361,10 @@ sub _handle_short_option {
                 $val //= shift(@$args) // die "Option -$main requires an argument.\n";
             }
             else {
-                $val //= 1;
+                $val //= $opt->autofill // 1;
             }
 
+            $val //= 1;
             return [$opt, 'handle', $val];
         }
         elsif ($assign) {
@@ -374,7 +374,7 @@ sub _handle_short_option {
             unshift @$args => "-$remain";
         }
 
-        return [$opt, 'handle', $val];
+        return [$opt, 'handle', 1];
     }
 
     return undef;

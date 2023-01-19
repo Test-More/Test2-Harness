@@ -17,7 +17,7 @@ use Test2::Harness::Util::HashBase qw{
     <pre_process
     <adds_options
 
-    <default <normalize <action <negate
+    <default <normalize <action <negate <autofill
     <env_vars <clear_env_vars
 
     +applicable
@@ -104,6 +104,13 @@ sub init {
     $self->{+TYPE} //= 'b';
     $self->{+TYPE} = $self->canon_type($self->{+TYPE}) // $self->{+TYPE} if length($self->{+TYPE}) > 1;
     confess "Invalid type '$self->{+TYPE}'" unless $self->valid_type($self->{+TYPE});
+
+    if ($self->{+TYPE} eq 'd' || $self->{+TYPE} eq 'D') {
+        $self->{+AUTOFILL} //= 1;
+    }
+    elsif(defined $self->{+AUTOFILL}) {
+        confess "'autofill' not supported for this type ('$self->{+TYPE}')";
+    }
 
     if (my $def = $self->{+DEFAULT}) {
         my $ref = ref($def);
@@ -210,8 +217,8 @@ sub get_normalized {
 
 my %HANDLERS = (
     c => sub { ${$_[0]}++ },
-    m => sub { push @{${$_[0]} //= []} => $_[1] },
-    D => sub { push @{${$_[0]} //= []} => $_[1] },
+    m => sub { push @{${$_[0]} //= []} => $_[1] && ref($_[1]) eq 'ARRAY' ? @{$_[1]} : $_[1] },
+    D => sub { push @{${$_[0]} //= []} => $_[1] && ref($_[1]) eq 'ARRAY' ? @{$_[1]} : $_[1] },
     h => sub {
         my $hash = ${$_[0]} //= {};
         my $key = $_[1]->[0];
@@ -504,6 +511,14 @@ Real world example from the debug options (simplified for doc purposes):
 
         long_examples => ['', '=/path/to/summary.json'],
 
+        # New way to specify an auto-fill value for when no =VAL is provided.
+        # If you do not specify this the default autofill is '1' for legacy support.
+        autofill => 'VALUE',
+
+        # Old way to autofill a value (default is 1 for auto-fill)
+        # Using autofill is significantly better.
+        # You can also use action for additional behavior along with autofill,
+        # but the default will be your auto-fill value, not '1'.
         action => sub {
             my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
 
@@ -542,6 +557,11 @@ Real world example (simplified for doc purposes):
         long_examples  => ['', '=lib'],
         short_examples => ['', '=lib', 'lib'],
 
+        # New way to specify the auto-fill values. This may be a single scalar,
+        # or an arrayref.
+        autofill => [ 'lib', 'blib/lib', 'blib/arch' ],
+
+        # Old way to specify the auto-fill values.
         action => sub {
             my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
 

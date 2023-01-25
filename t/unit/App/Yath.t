@@ -63,6 +63,7 @@ subtest generate_run_sub => sub {
             'main::RUNSUB',
             [],
             exact_ref($one->settings),
+            ['GEN'],
         ],
         "Ran command generate_run_sub with correct args"
     );

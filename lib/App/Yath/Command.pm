@@ -20,6 +20,11 @@ sub summary         { "No Summary" }
 sub description     { "No Description" }
 sub group           { "Z-UNFINISHED" }
 sub doc_args        { () }
+sub only_cmd_opts   { 0 }
+
+sub handle_invalid_option { 0 }
+
+sub munge_opts { }
 
 sub name { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
 

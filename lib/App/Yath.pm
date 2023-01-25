@@ -9,9 +9,9 @@ use Test2::Harness::Util::HashBase qw{
     -settings
 
     -_options -options_loaded
-    -_argv   -argv_processed
+    -_argv   -argv_processed <_orig_argv
 
-    -_command_class
+    -_command_class -_command_name -_early_command
 };
 
 use Time::HiRes qw/time/;
@@ -44,6 +44,7 @@ sub init {
     ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('no_scan_plugins')} //= 0;
 
     $self->{+_ARGV}  //= delete($self->{argv}) // [];
+    $self->{+_ORIG_ARGV} = [@{$self->{+_ARGV}}];
     $self->{+CONFIG} //= {};
 }
 
@@ -51,15 +52,38 @@ sub generate_run_sub {
     my $self = shift;
     my ($symbol) = @_;
 
-    my $options = $self->load_options();
-    my $argv    = $self->process_argv();
+    my $cmd_class;
+    my ($options, $argv);
 
-    my $cmd_class = $self->command_class();
+    if (my $cmd = $self->_command_from_argv(no_default => 1, valid_only => 1)) {
+        $cmd_class = $self->load_command($cmd);
+
+        $self->{+_COMMAND_NAME}  = $cmd;
+        $self->{+_COMMAND_CLASS} = $cmd_class;
+
+        if ($cmd_class->only_cmd_opts) {
+            $self->{+_EARLY_COMMAND} = 1;
+            my $settings = $self->{+SETTINGS};
+
+            $options = App::Yath::Options->new(settings => $settings);
+            $options->set_command_class($cmd_class);
+            $options->set_args($self->{+_ARGV});
+
+            $argv = $self->{+_ARGV};
+            $cmd_class->munge_opts($options, $argv, $settings);
+        }
+    }
+
+    $options //= $self->load_options();
+
+    $cmd_class //= $self->command_class();
     ${$self->{+SETTINGS}->define_prefix('harness')->vivify_field('command')} //= $cmd_class;
 
-    return $cmd_class->generate_run_sub($symbol, $argv, $self->{+SETTINGS}) if $cmd_class->can('generate_run_sub');
+    $argv = $self->process_argv();
 
-    my $cmd = $cmd_class->new(settings => $options->settings, args => $argv);
+    return $cmd_class->generate_run_sub($symbol, $argv, $self->{+SETTINGS}, $self->{+_ORIG_ARGV}) if $cmd_class->can('generate_run_sub');
+
+    my $cmd = $cmd_class->new(settings => $options->settings, args => $argv, orig_args => $self->{+_ORIG_ARGV});
 
     $options->process_option_post_actions($cmd);
 
@@ -147,9 +171,9 @@ sub process_argv {
 
     my $cmd_name  = $self->_command_from_argv();
     my $cmd_class = $self->load_command($cmd_name);
+    die "Command '$cmd_name' needs to be specified earlier in the command line arguments to yath.\n" if $cmd_class->only_cmd_opts && !$self->{+_EARLY_COMMAND};
     $options->set_command_class($cmd_class);
     $self->{+_COMMAND_CLASS} = $cmd_class;
-
 
     $options->grab_pre_command_opts(stop_at_non_opt => 1, passthrough => 1, die_at_non_opt => 0);
 
@@ -208,6 +232,9 @@ sub command_class {
 
 sub _command_from_argv {
     my $self = shift;
+    my %params = @_;
+
+    return $self->{+_COMMAND_NAME} if $self->{+_COMMAND_NAME};
 
     my $argv = $self->{+_ARGV};
 
@@ -233,6 +260,7 @@ sub _command_from_argv {
         }
 
         return splice(@$argv, $idx, 1) if $self->load_command($arg, check_only => 1);
+        return if $params{valid_only};
 
         my $is_path = 0;
         $is_path ||= -f $arg;
@@ -241,6 +269,8 @@ sub _command_from_argv {
         # Assume it is a command, but an invalid one.
         return splice(@$argv, $idx, 1) unless $is_path;
     }
+
+    return if $params{no_default};
 
     if (my $pfile = find_pfile($self->settings, no_checks => 1)) {
         warn "\n** Persistent runner detected, defaulting to the 'run' command **\n\n";

@@ -425,11 +425,17 @@ sub _grab_opts {
                 next;
             }
             elsif (!$config{passthrough}) {
-                die "Invalid $type option: $arg\n";
+                my $err = "Invalid $type option: $arg";
+                my $handled = $self->{+COMMAND_CLASS} && $self->{+COMMAND_CLASS}->handle_invalid_option($type, $arg, $err);
+                die "$err\n" unless $handled;
             }
         }
 
-        die "Invalid $type option: $arg" if $config{die_at_non_opt};
+        if ($config{die_at_non_opt}) {
+            my $err = "Invalid $type option: $arg";
+            my $handled = $self->{+COMMAND_CLASS} && $self->{+COMMAND_CLASS}->handle_invalid_option($type, $arg, $err);
+            die "$err\n" unless $handled;
+        }
 
         push @keep_args => $arg;
 

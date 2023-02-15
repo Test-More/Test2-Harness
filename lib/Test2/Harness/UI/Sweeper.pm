@@ -4,7 +4,7 @@ use warnings;
 use Time::HiRes qw/time/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
-our $VERSION = '0.000130';
+our $VERSION = '0.000131';
 
 use Test2::Harness::UI::Util::HashBase qw{
     <config

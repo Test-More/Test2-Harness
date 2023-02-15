@@ -5,7 +5,7 @@ use warnings;
 
 use Carp qw/confess/;
 
-our $VERSION = '0.000130';
+our $VERSION = '0.000131';
 
 use Test2::Harness::UI::Util::DateTimeFormat qw/DTF/;
 

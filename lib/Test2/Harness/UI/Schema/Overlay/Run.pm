@@ -7,23 +7,7 @@ use Carp qw/confess/;
 
 our $VERSION = '0.000130';
 
-BEGIN {
-    return if $^C;
-    confess "You must first load a Test2::Harness::UI::Schema::NAME module"
-        unless $Test2::Harness::UI::Schema::LOADED;
-
-    if ($Test2::Harness::UI::Schema::LOADED =~ m/postgresql/i) {
-        require DateTime::Format::Pg;
-        *DTF = sub() { 'DateTime::Format::Pg' };
-    }
-    elsif ($Test2::Harness::UI::Schema::LOADED =~ m/mysql/i) {
-        require DateTime::Format::MySQL;
-        *DTF = sub() { 'DateTime::Format::MySQL' };
-    }
-    else {
-        die "Not sure what DateTime::Formatter to use";
-    }
-}
+use Test2::Harness::UI::Util::DateTimeFormat qw/DTF/;
 
 __PACKAGE__->inflate_column(
     parameters => {

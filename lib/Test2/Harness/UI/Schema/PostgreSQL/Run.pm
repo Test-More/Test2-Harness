@@ -133,6 +133,12 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 __PACKAGE__->has_many(
+  "resources",
+  "Test2::Harness::UI::Schema::Result::Resource",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+__PACKAGE__->has_many(
   "run_fields",
   "Test2::Harness::UI::Schema::Result::RunField",
   { "foreign.run_id" => "self.run_id" },
@@ -152,8 +158,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-01-04 09:07:20
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:7e+0k2CqQZwFFgA+qGVXCw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-14 17:04:45
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:gGtbrXNs5hHk1Jopzk07IA
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

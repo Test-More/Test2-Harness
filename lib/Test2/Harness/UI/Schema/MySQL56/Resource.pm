@@ -1,5 +1,5 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::Binary;
+package Test2::Harness::UI::Schema::Result::Resource;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
@@ -15,32 +15,39 @@ __PACKAGE__->load_components(
   "Tree::AdjacencyList",
   "UUIDColumns",
 );
-__PACKAGE__->table("binaries");
+__PACKAGE__->table("resources");
 __PACKAGE__->add_columns(
-  "binary_id",
+  "resource_id",
   { data_type => "char", is_nullable => 0, size => 36 },
-  "event_id",
-  { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
-  "filename",
+  "run_id",
+  { data_type => "char", is_foreign_key => 1, is_nullable => 1, size => 36 },
+  "module",
   { data_type => "varchar", is_nullable => 0, size => 512 },
-  "description",
-  { data_type => "text", is_nullable => 1 },
-  "is_image",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
+  "stamp",
+  {
+    data_type => "timestamp",
+    datetime_undef_if_invalid => 1,
+    is_nullable => 0,
+  },
   "data",
-  { data_type => "longblob", is_nullable => 0 },
+  { data_type => "longtext", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("binary_id");
+__PACKAGE__->set_primary_key("resource_id");
 __PACKAGE__->belongs_to(
-  "event",
-  "Test2::Harness::UI::Schema::Result::Event",
-  { event_id => "event_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  "run",
+  "Test2::Harness::UI::Schema::Result::Run",
+  { run_id => "run_id" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "RESTRICT",
+    on_update     => "RESTRICT",
+  },
 );
 
 
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-14 17:04:43
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:q2x4Qz2VMpX19mshF02VjQ
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:tHy2vS+g3bEMTxppN0sVUA
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

@@ -66,7 +66,6 @@ CREATE TABLE primary_email (
 CREATE TABLE hosts (
     host_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     hostname    VARCHAR(512)    NOT NULL,
-    test_slots  INT             NOT NULL,
 
     unique(hostname)
 );
@@ -350,3 +349,11 @@ CREATE INDEX IF NOT EXISTS reporting_b    ON reporting(project_id, user_id);
 CREATE INDEX IF NOT EXISTS reporting_c    ON reporting(project_id, test_file_id, subtest);
 CREATE INDEX IF NOT EXISTS reporting_d    ON reporting(project_id, test_file_id, subtest, user_id);
 CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);
+
+CREATE TABLE resources (
+    resource_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    run_id          UUID            DEFAULT NULL REFERENCES runs(run_id),
+    module          VARCHAR(512)    NOT NULL,
+    stamp           TIMESTAMP(4)    NOT NULL,
+    data            JSONB           NOT NULL
+);

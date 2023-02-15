@@ -210,6 +210,9 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
         });
     }
 
+    var resources = $('<a class="tool etoggle unicode" title="resources" href="' + base_uri + 'resources/' + item.run_id + '">&#9851;</a>');
+    tools.append(resources);
+
     var cimg = $('<img src="/img/coverage.png"/>');
     var dcimg = $('<img src="/img/coveragedel.png"/>');
     var cover = $('<div class="tool etoggle" title="coverage"></div>');

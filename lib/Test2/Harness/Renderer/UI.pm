@@ -88,16 +88,27 @@ sub links {
     return $self->{+LINKS} if defined $self->{+LINKS};
 
     my $port = $self->{+PORT};
+    my $fqdn = hostfqdn();
 
     $self->{+LINKS} = "\nYathUI:\n  local: http://127.0.0.1:$port\n";
-    if (my $fqdn = hostfqdn()) {
+    if ($fqdn) {
         $self->{+LINKS} .= "  host:  http://$fqdn:$port\n";
     }
 
     my $dsn = $self->{+QDB}->connect_string('harness_ui');
-    $self->{+LINKS} .= "  DSN:   $dsn\n\n";
+    $self->{+LINKS} .= "  DSN:   $dsn\n";
 
-    return $self->{+LINKS};
+    if ($self->settings->yathui->resources) {
+        $self->{+LINKS} .= "\nResource Links:\n";
+        my $run_id = $self->settings->run->run_id;
+
+        $self->{+LINKS} .= "  local: http://127.0.0.1:$port/resources/$run_id\n";
+        if (my $fqdn = hostfqdn()) {
+            $self->{+LINKS} .= "  host:  http://$fqdn:$port/resources/$run_id\n";
+        }
+    }
+
+    return $self->{+LINKS} .= "\n";
 }
 
 sub start_app {

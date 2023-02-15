@@ -19,6 +19,7 @@ use Test2::Harness::UI::Controller::JobField;
 use Test2::Harness::UI::Controller::Download;
 use Test2::Harness::UI::Controller::Sweeper;
 use Test2::Harness::UI::Controller::Project;
+use Test2::Harness::UI::Controller::Resources;
 
 use Test2::Harness::UI::Controller::Stream;
 use Test2::Harness::UI::Controller::View;
@@ -54,6 +55,13 @@ sub init {
 
     $router->connect('/user' => {controller => 'Test2::Harness::UI::Controller::User'})
         unless $config->single_user;
+
+    $router->connect('/resources/data/:id'      => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
+    $router->connect('/resources/data/:id/'     => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
+    $router->connect('/resources/data/:id/:rid' => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
+    $router->connect('/resources/:id'           => {controller => 'Test2::Harness::UI::Controller::Resources'});
+    $router->connect('/resources/:id/'          => {controller => 'Test2::Harness::UI::Controller::Resources'});
+    $router->connect('/resources/:id/:rid'      => {controller => 'Test2::Harness::UI::Controller::Resources'});
 
     $router->connect('/interactions/:id'               => {controller => 'Test2::Harness::UI::Controller::Interactions'});
     $router->connect('/interactions/:id/:context'      => {controller => 'Test2::Harness::UI::Controller::Interactions'});
@@ -117,6 +125,7 @@ sub init {
     $router->connect('/view/:run_id/:job'      => {controller => 'Test2::Harness::UI::Controller::View'});
     $router->connect('/view/:run_id/:job/:try' => {controller => 'Test2::Harness::UI::Controller::View'});
 
+    $router->connect('/stream/run/:run_id'       => {controller => 'Test2::Harness::UI::Controller::Stream', run_only => 1});
     $router->connect('/stream'                   => {controller => 'Test2::Harness::UI::Controller::Stream'});
     $router->connect('/stream/:id'               => {controller => 'Test2::Harness::UI::Controller::Stream'});
     $router->connect('/stream/:run_id/:job'      => {controller => 'Test2::Harness::UI::Controller::Stream'});

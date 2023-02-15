@@ -71,6 +71,22 @@
     color:  #0000A0;
 }
 
+.etoggle.unicode,
+.etoggle.unicode:link,
+.etoggle.unicode:visited,
+.etoggle.unicode:active,
+.etoggle.unicode:hover {
+    text-decoration: none;
+    font-size: 18px;
+    margin: 0;
+    padding: 0px;
+    padding-top: 2px;
+    padding-right: 2px;
+    margin-left: -2px;
+    margin-bottom: -2px;
+    color: black;
+}
+
 .etoggle.clicked {
     border: 1px solid #AABBFF;
     background: #DDEEFF;

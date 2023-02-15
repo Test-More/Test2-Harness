@@ -38,6 +38,13 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
         description => 'Use a command to get a port number. "$$" will be replaced with the PID of the yath process',
     );
 
+    option resources => (
+        type => 'd',
+        description => 'Send resource info (for supported resources) to yathui at the specified interval in seconds (5 if not specified)',
+        long_examples => ['', '=5'],
+        autofill => 5,
+    );
+
     option only => (
         type => 'b',
         description => 'Only use the YathUI renderer',

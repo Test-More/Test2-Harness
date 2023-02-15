@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add tracking of resources
+
 0.000129  2023-01-04 13:45:06-08:00 America/Los_Angeles
 
     - Add concurrency to sweeper

@@ -3,10 +3,16 @@ use strict;
 use warnings;
 
 use Carp qw/croak/;
+use Sys::Hostname qw/hostname/;
 
+use DateTime;
+
+use Time::HiRes qw/time/;
 use Test2::Harness::UI::Config;
 use Test2::Harness::UI::RunProcessor;
+use Test2::Harness::Runner::State;
 use Test2::Harness::UI::Util qw/config_from_settings/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
@@ -25,6 +31,10 @@ use Test2::Harness::Util::HashBase qw{
     <finished
     +links
     <error_count
+
+    +resources +resource_interval +state +host
+
+    <last_resource_stamp
 };
 
 sub init {
@@ -45,6 +55,103 @@ sub init {
 
     STDOUT->autoflush(1);
     print $self->links;
+}
+
+sub step {
+    my $self = shift;
+
+    $self->send_resources();
+}
+
+sub resource_interval {
+    my $self = shift;
+    return $self->{+RESOURCE_INTERVAL} //= $self->settings->yathui->resources;
+}
+
+sub state {
+    my $self = shift;
+
+    return $self->{+STATE} if $self->{+STATE};
+
+    my $settings = $self->settings;
+
+    return $self->{+STATE} = Test2::Harness::Runner::State->new(
+        observe   => 1,
+        job_count => $settings->runner->job_count // 1,
+        workdir   => $settings->workspace->workdir,
+    );
+}
+
+sub resources {
+    my $self = shift;
+    return $self->{+RESOURCES} if $self->{+RESOURCES};
+
+    my $state = $self->state;
+    $state->poll;
+
+    return $self->{+RESOURCES} = [grep { $_ && $_->can('status_data') } @{$state->resources}];
+}
+
+sub send_resources {
+    my $self = shift;
+
+    return unless $self->{+RUN};
+
+    my $interval = $self->resource_interval or return;
+    my $resources = $self->resources or return;
+    return unless @$resources;
+
+    my $stamp = time;
+
+    if (my $last = $self->{+LAST_RESOURCE_STAMP}) {
+        my $delta = $stamp - $last;
+        return unless $delta >= $interval;
+    }
+
+    unless(eval { $self->_send_resources($stamp => $resources); 1 }) {
+        my $err = $@;
+        warn "Non fatal error, could not send resource info to YathUI: $err";
+        return;
+    }
+
+    return $self->{+LAST_RESOURCE_STAMP} = $stamp;
+}
+
+sub host {
+    my $self = shift;
+    return $self->{+HOST} //= $self->{+CONFIG}->schema->resultset('Host')->find_or_create({hostname => hostname(), host_id => gen_uuid()});
+}
+
+sub _send_resources {
+    my $self = shift;
+    my ($stamp, $resources) = @_;
+
+    my $config = $self->{+CONFIG};
+
+    my $run_id = $self->settings->run->run_id;
+    my $host_id = $self->host->host_id;
+
+    my $res_rs = $config->schema->resultset('Resource');
+
+    $self->state->poll;
+
+    my $dt_stamp = DateTime->from_epoch(epoch => $stamp, time_zone => 'local');
+
+    for my $res (@$resources) {
+        my $data = $res->status_data or next;
+
+        my $item = {
+            resource_id => gen_uuid,
+            run_id      => $run_id,
+            module      => ref($res) || $res,
+            stamp       => $dt_stamp,
+            data        => encode_json($data),
+        };
+
+        my $res = $res_rs->create($item);
+    }
+
+    return;
 }
 
 sub links {

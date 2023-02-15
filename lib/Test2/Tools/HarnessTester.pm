@@ -2,7 +2,7 @@ package Test2::Tools::HarnessTester;
 use strict;
 use warnings;
 
-our $VERSION = '1.000143';
+our $VERSION = '1.000144';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 

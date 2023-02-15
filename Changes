@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Add 'autofill' to simplify 'd' and 'D' option types
+    - Better resource management
 
 1.000142  2023-01-25 14:38:31-08:00 America/Los_Angeles
 

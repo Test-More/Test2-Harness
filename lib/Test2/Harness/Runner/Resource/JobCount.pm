@@ -96,22 +96,31 @@ sub release {
     push @{$self->{+FREE}} => @$slots;
 }
 
-sub status_lines {
+sub status_data {
     my $self = shift;
 
-    my $out = "  Job Slots:\n";
+    my @rows;
+
+    my $time = time;
 
     for my $info (sort { $a->{stamp} <=> $b->{stamp} } values %{$self->{+USED}}) {
-        my $slots = $info->{slots};
-        my $slot_list = join ',' => sort { $a <=> $b } @$slots;
-        $out .= sprintf("%12s: %8.2fs | %s\n", $slot_list, time - $info->{stamp}, $info->{file});
+        my $count = @{$info->{slots} || []};
+        push @rows => [$time - $info->{stamp}, $count, $info->{file}];
     }
 
-    for my $slot (sort { $a <=> $b } @{$self->{+FREE}}) {
-        $out .= sprintf("%12s: FREE\n", $slot);
-    }
+    push @rows => [undef, scalar(@{$self->{+FREE}}), '** FREE **'];
 
-    return $out;
+    return [
+        {
+            tables => [
+                {
+                    headers => [qw/Runtime Slots Name/],
+                    format => ['duration'],
+                    rows => \@rows,
+                },
+            ],
+        },
+    ],
 }
 
 1;

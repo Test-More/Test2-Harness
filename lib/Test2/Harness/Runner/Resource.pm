@@ -2,7 +2,15 @@ package Test2::Harness::Runner::Resource;
 use strict;
 use warnings;
 
+use Term::Table;
+use Time::HiRes qw/time/;
+use Test2::Util::Times qw/render_duration/;
+
 our $VERSION = '1.000143';
+
+sub scope_global { 0 }
+sub scope_host   { 0 }
+sub scope_run    { 1 }
 
 sub setup {}
 
@@ -39,7 +47,64 @@ sub release { }
 
 sub cleanup { }
 
-sub status_lines {()}
+sub status_data {()}
+
+sub status_lines {
+    my $self = shift;
+
+    my $data = $self->status_data || return;
+    return unless @$data;
+
+    my $out = "";
+
+    for my $group (@$data) {
+        my $gout = "\n";
+        $gout .= "**** $group->{title} ****\n\n" if defined $group->{title};
+
+        for my $table (@{$group->{tables} || []}) {
+            my $rows = $table->{rows};
+
+            if (my $format = $table->{format}) {
+                my $rows2 = [];
+
+                for my $row (@$rows) {
+                    my $row2 = [];
+                    for (my $i = 0; $i < @$row; $i++) {
+                        my $val = $row->[$i];
+                        my $fmt = $format->[$i];
+
+                        $val = defined($val) ? render_duration($val) : '--'
+                            if $fmt && $fmt eq 'duration';
+
+                        push @$row2 => $val;
+                    }
+                    push @$rows2 => $row2;
+                }
+
+                $rows = $rows2;
+            }
+
+            my $tt = Term::Table->new(
+                header => $table->{header},
+                rows   => $rows,
+
+                sanitize     => 1,
+                collapse     => 1,
+                auto_columns => 1,
+
+                %{$table->{term_table_opts} || {}},
+            );
+
+            $gout .= "** $table->{title} **\n" if defined $table->{title};
+            $gout .= "$_\n" for $tt->render;
+            $gout .= "\n";
+        }
+
+        $out .= $gout;
+    }
+
+    return $out;
+}
 
 1;
 
@@ -439,6 +504,56 @@ other resources are not available.
 Most of the time order will not matter, however with Shared job slots we have a
 race with other test runs to get slots, and checking availability is enough to
 consume a slot, even if other resources are not available.
+
+=item $string = $inst->status_lines()
+
+Get a (multi-line) string with status info for this resource. This is used to
+populate the output for the C<yath resources> command.
+
+The default implementation will build a string from the data provided by the
+C<status_data()> method.
+
+=item $arrayref = $inst->status_data()
+
+The default implementation returns an empty list.
+
+This should return status data that looks like this:
+
+    return [
+        {
+            title  => "Resource Group Title",
+            tables => [
+                {
+                    header => \@columns,
+                    rows   => [
+                        \@row1,
+                        \@row2,
+                    ],
+
+                    # Optional fields
+                    ##################
+
+                    # formatting for fields in rows
+                    format => [undef, undef, 'duration', ...],
+
+                    # Title for the table
+                    title => "Table Title",
+
+                    # Options to pass to Term::Table if/when it the data is used in Term::Table
+                    term_table_opts => {...},
+                },
+
+                # Any number of tables is ok
+                {...},
+            ],
+        },
+
+        # Any number of groups is ok
+        {...},
+    ];
+
+Currently the only supported formats are 'default' (undef), and 'duration'.
+Duration takes a stamp and tells you how much time has passed since the stamp.
 
 =back
 

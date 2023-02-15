@@ -25,6 +25,8 @@ use Test2::Harness::Util::HashBase qw{
 
 sub job_limiter { 1 }
 
+sub scope_host { 1 }
+
 sub new {
     my $class = shift;
     my $self = bless {@_}, $class;
@@ -160,70 +162,77 @@ sub release {
     return;
 }
 
-sub status_lines {
+sub status_data {
     my $self = shift;
+
+    my @groups;
 
     my $runners = $self->state->state->{runners};
 
     my $global_status = {
         todo     => 0,
-        allotted  => 0,
+        allotted => 0,
         assigned => 0,
         pending  => 0,
     };
-    my $details = "";
+
+    my $time = time;
+
     for my $runner (sort { $a->{added} <=> $b->{added} } values %$runners) {
         my $run_status = {
             todo     => $runner->{todo},
-            allotted  => $runner->{allotment},
+            allotted => $runner->{allotment},
             assigned => 0,
             pending  => 0,
         };
 
-        my $jobs = "";
+        my $job_table = {
+            header => [qw/Runtime Slots Name/],
+            format => ['duration', undef, undef],
+            rows   => [],
+        };
+
         for my $job (sort { $a->{started} <=> $b->{started} } values %{$runner->{assigned}}) {
             $run_status->{assigned} += $job->{count};
-            my $stamp   = $job->{started};
-            my $runtime = $stamp ? sprintf("%8.2fs", time - $stamp) : '   --   ';
-            my $slots   = sprintf("%-3d", $job->{count});
-            $jobs .= "     $runtime | Slots: $slots | " . ($job->{file} // $job->{job_id}) . "\n";
+            my $stamp = $job->{started};
+            my $slots = $job->{count};
+
+            push @{$job_table->{rows}} => [$time - $stamp, $slots, $job->{file} // $job->{job_id}];
         }
 
         $run_status->{pending} = $runner->{allotment} - $run_status->{assigned};
 
         $global_status->{$_} += $run_status->{$_} for keys %$global_status;
 
-        $details .= <<"        EOT";
-      ** $runner->{user} - $runner->{name} - $runner->{runner_id} **
-            Todo: $run_status->{todo}
-        Allotted: $run_status->{allotted}
-        Assigned: $run_status->{assigned}
-         Pending: $run_status->{pending}
+        my $run_table = {
+            header => [qw/Todo Allotted Assigned Pending/],
+            rows   => [[$run_status->{todo}, $run_status->{allotted}, $run_status->{assigned}, $run_status->{pending}]],
+        };
 
-$jobs
-
-        EOT
+        push @groups => {
+            title  => "$runner->{user} - $runner->{name} - $runner->{runner_id}",
+            tables => [
+                $run_table,
+                $job_table,
+            ],
+        };
     }
 
     $global_status->{total} = $self->state->{max_slots};
-    $global_status->{free} = $global_status->{total} - ($global_status->{assigned} + $global_status->{pending});
-    $global_status->{free} = "$global_status->{free} (Minimum per-run overrides max slot count in some cases)" if $global_status->{free} < 0;
+    $global_status->{free}  = $global_status->{total} - ($global_status->{assigned} + $global_status->{pending});
+    $global_status->{free}  = "$global_status->{free} (Minimum per-run overrides max slot count in some cases)" if $global_status->{free} < 0;
 
-    my $out = <<"    EOT";
-   ** System Wide Summary **
-                  TODO: $global_status->{todo}
-    Total Shared Slots: $global_status->{total}
- Allotted Shared Slots: $global_status->{allotted}
- Assigned Shared Slots: $global_status->{assigned}
-  Pending Shared Slots: $global_status->{pending}
-     Free Shared Slots: $global_status->{free}
-  ---------------------------
+    unshift @groups => {
+        title => 'System Wide Summary',
+        tables => [
+            {
+                header => ['Todo', 'Total Shared Slots', 'Allotted Shared Slots', 'Assigned Shared Slots', 'Pending Shared Slots', 'Free Shared Slots'],
+                rows   => [[ @{$global_status}{qw/todo total allotted assigned pending free/} ]],
+            }
+        ],
+    };
 
-   ** Runners **
-$details
-    EOT
-
-    return $out;
+    return \@groups;
 }
 
 1;

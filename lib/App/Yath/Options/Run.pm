@@ -2,7 +2,7 @@ package App::Yath::Options::Run;
 use strict;
 use warnings;
 
-our $VERSION = '1.000144';
+our $VERSION = '1.000145';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 

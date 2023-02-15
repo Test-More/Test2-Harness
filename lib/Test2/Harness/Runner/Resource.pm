@@ -84,6 +84,8 @@ sub status_lines {
                 $rows = $rows2;
             }
 
+            next unless $rows && @$rows;
+
             my $tt = Term::Table->new(
                 header => $table->{header},
                 rows   => $rows,

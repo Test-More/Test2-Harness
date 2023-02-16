@@ -102,6 +102,11 @@ sub status_lines {
             $gout .= "\n";
         }
 
+        if ($group->{lines} && @{$group->{lines}}) {
+            $gout .= "$_\n" for @{$group->{lines}};
+            $gout .= "\n";
+        }
+
         $out .= $gout;
     }
 

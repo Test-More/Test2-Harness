@@ -114,8 +114,8 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 __PACKAGE__->has_many(
-  "resources",
-  "Test2::Harness::UI::Schema::Result::Resource",
+  "resource_batches",
+  "Test2::Harness::UI::Schema::Result::ResourceBatch",
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 0 },
 );
@@ -139,8 +139,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-14 17:04:39
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:rHCSbDYja7ahfead/AUJig
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-15 17:15:50
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:U7bwveBQYXoGKnhOJmLygw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

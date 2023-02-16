@@ -24,31 +24,30 @@ __PACKAGE__->add_columns(
     is_nullable => 0,
     size => 16,
   },
-  "run_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  "resource_batch_id",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "batch_ord",
+  { data_type => "integer", is_nullable => 0 },
   "module",
   { data_type => "varchar", is_nullable => 0, size => 512 },
-  "stamp",
-  { data_type => "timestamp", is_nullable => 0, size => 4 },
   "data",
   { data_type => "jsonb", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("resource_id");
+__PACKAGE__->add_unique_constraint(
+  "resources_resource_batch_id_batch_ord_key",
+  ["resource_batch_id", "batch_ord"],
+);
 __PACKAGE__->belongs_to(
-  "run",
-  "Test2::Harness::UI::Schema::Result::Run",
-  { run_id => "run_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "NO ACTION",
-    on_update     => "NO ACTION",
-  },
+  "resource_batch",
+  "Test2::Harness::UI::Schema::Result::ResourceBatch",
+  { resource_batch_id => "resource_batch_id" },
+  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-14 17:04:45
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:5TE7epwpCticqoZJt7jixg
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-15 17:15:56
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:NLjcI8OTndKAtI7jzowKVg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

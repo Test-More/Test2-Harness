@@ -1,5 +1,5 @@
 use utf8;
-package Test2::Harness::UI::Schema::Result::Permission;
+package Test2::Harness::UI::Schema::Result::ResourceBatch;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
@@ -15,50 +15,45 @@ __PACKAGE__->load_components(
   "Tree::AdjacencyList",
   "UUIDColumns",
 );
-__PACKAGE__->table("permissions");
+__PACKAGE__->table("resource_batch");
 __PACKAGE__->add_columns(
-  "permission_id",
+  "resource_batch_id",
   {
     data_type => "uuid",
     default_value => \"uuid_generate_v4()",
     is_nullable => 0,
     size => 16,
   },
-  "project_id",
+  "run_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "user_id",
+  "host_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "updated",
-  {
-    data_type     => "timestamp",
-    default_value => \"current_timestamp",
-    is_nullable   => 0,
-    original      => { default_value => \"now()" },
-  },
-  "cpan_batch",
-  { data_type => "bigint", is_nullable => 1 },
+  "stamp",
+  { data_type => "timestamp", is_nullable => 0, size => 4 },
 );
-__PACKAGE__->set_primary_key("permission_id");
-__PACKAGE__->add_unique_constraint(
-  "permissions_project_id_user_id_key",
-  ["project_id", "user_id"],
-);
+__PACKAGE__->set_primary_key("resource_batch_id");
 __PACKAGE__->belongs_to(
-  "project",
-  "Test2::Harness::UI::Schema::Result::Project",
-  { project_id => "project_id" },
+  "host",
+  "Test2::Harness::UI::Schema::Result::Host",
+  { host_id => "host_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
+__PACKAGE__->has_many(
+  "resources",
+  "Test2::Harness::UI::Schema::Result::Resource",
+  { "foreign.resource_batch_id" => "self.resource_batch_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 __PACKAGE__->belongs_to(
-  "user",
-  "Test2::Harness::UI::Schema::Result::User",
-  { user_id => "user_id" },
+  "run",
+  "Test2::Harness::UI::Schema::Result::Run",
+  { run_id => "run_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-15 17:15:56
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:zFc7Nvb2Lf/BiIKAKL3emg
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:eY2NA3XbuGIfCzfoVWLWig
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

@@ -24,10 +24,16 @@ __PACKAGE__->add_columns(
 );
 __PACKAGE__->set_primary_key("host_id");
 __PACKAGE__->add_unique_constraint("hostname", ["hostname"]);
+__PACKAGE__->has_many(
+  "resource_batches",
+  "Test2::Harness::UI::Schema::Result::ResourceBatch",
+  { "foreign.host_id" => "self.host_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-14 17:04:39
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:BJFVx6UDz8dOCZ9Na4jN9Q
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-15 17:15:50
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:kuarGRi4o+ypz0c+EcVesQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

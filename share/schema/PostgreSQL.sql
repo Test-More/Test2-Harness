@@ -350,10 +350,19 @@ CREATE INDEX IF NOT EXISTS reporting_c    ON reporting(project_id, test_file_id,
 CREATE INDEX IF NOT EXISTS reporting_d    ON reporting(project_id, test_file_id, subtest, user_id);
 CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);
 
+CREATE TABLE resource_batch (
+    resource_batch_id   UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    run_id              UUID            NOT NULL REFERENCES runs(run_id),
+    host_id             UUID            NOT NULL REFERENCES hosts(host_id),
+    stamp               TIMESTAMP(4)    NOT NULL
+);
+
 CREATE TABLE resources (
-    resource_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    run_id          UUID            DEFAULT NULL REFERENCES runs(run_id),
-    module          VARCHAR(512)    NOT NULL,
-    stamp           TIMESTAMP(4)    NOT NULL,
-    data            JSONB           NOT NULL
+    resource_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    resource_batch_id   UUID            NOT NULL REFERENCES resource_batch(resource_batch_id),
+    batch_ord           INT             NOT NULL,
+    module              VARCHAR(512)    NOT NULL,
+    data                JSONB           NOT NULL,
+
+    UNIQUE(resource_batch_id, batch_ord)
 );

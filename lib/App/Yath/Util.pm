@@ -2,7 +2,7 @@ package App::Yath::Util;
 use strict;
 use warnings;
 
-our $VERSION = '1.000145';
+our $VERSION = '1.000146';
 
 use File::Spec;
 use Sys::Hostname qw/hostname/;

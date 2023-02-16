@@ -56,12 +56,12 @@ sub init {
     $router->connect('/user' => {controller => 'Test2::Harness::UI::Controller::User'})
         unless $config->single_user;
 
-    $router->connect('/resources/data/:id'      => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
-    $router->connect('/resources/data/:id/'     => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
-    $router->connect('/resources/data/:id/:rid' => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
-    $router->connect('/resources/:id'           => {controller => 'Test2::Harness::UI::Controller::Resources'});
-    $router->connect('/resources/:id/'          => {controller => 'Test2::Harness::UI::Controller::Resources'});
-    $router->connect('/resources/:id/:rid'      => {controller => 'Test2::Harness::UI::Controller::Resources'});
+    $router->connect('/resources/data/:id'        => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
+    $router->connect('/resources/data/:id/'       => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
+    $router->connect('/resources/data/:id/:batch' => {controller => 'Test2::Harness::UI::Controller::Resources', data => 1});
+    $router->connect('/resources/:id'             => {controller => 'Test2::Harness::UI::Controller::Resources'});
+    $router->connect('/resources/:id/'            => {controller => 'Test2::Harness::UI::Controller::Resources'});
+    $router->connect('/resources/:id/:batch'      => {controller => 'Test2::Harness::UI::Controller::Resources'});
 
     $router->connect('/interactions/:id'               => {controller => 'Test2::Harness::UI::Controller::Interactions'});
     $router->connect('/interactions/:id/:context'      => {controller => 'Test2::Harness::UI::Controller::Interactions'});

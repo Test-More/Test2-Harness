@@ -135,6 +135,13 @@ sub sweep_run {
 
     if ($params{runs}) {
         $run->reportings->delete;
+
+        my $batches = $run->resource_batches;
+        while (my $batch = $batches->next) {
+            $batch->resources->delete;
+            $batch->delete;
+        }
+
         $run->sweeps->delete;
         $run->delete;
     }

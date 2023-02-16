@@ -132,24 +132,38 @@ sub _send_resources {
     my $host_id = $self->host->host_id;
 
     my $res_rs = $config->schema->resultset('Resource');
+    my $batch_rs = $config->schema->resultset('ResourceBatch');
 
     $self->state->poll;
 
     my $dt_stamp = DateTime->from_epoch(epoch => $stamp, time_zone => 'local');
 
+    my $batch_id = gen_uuid();
+    my $batch = $batch_rs->create({
+        resource_batch_id  => $batch_id,
+        run_id             => $run_id,
+        host_id            => $host_id,
+        stamp              => $dt_stamp,
+    });
+
+    my $ord = 0;
+
+    my @items;
     for my $res (@$resources) {
         my $data = $res->status_data or next;
 
         my $item = {
-            resource_id => gen_uuid,
-            run_id      => $run_id,
-            module      => ref($res) || $res,
-            stamp       => $dt_stamp,
-            data        => encode_json($data),
+            resource_id       => gen_uuid(),
+            resource_batch_id => $batch_id,
+            batch_ord         => $ord++,
+            module            => ref($res) || $res,
+            data              => encode_json($data),
         };
 
-        my $res = $res_rs->create($item);
+        push @items => $item;
     }
+
+    $res_rs->populate(\@items);
 
     return;
 }

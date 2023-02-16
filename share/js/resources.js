@@ -15,9 +15,17 @@ function build_resource(cont, item) {
 function build_group(res, group) {
     if (group.title) { res.append('<h2>' + group.title + '</h2>') }
 
-    group.tables.forEach(function(table) {
-        build_table(res, table);
-    });
+    if (group.tables) {
+        group.tables.forEach(function(table) {
+            build_table(res, table);
+        });
+    }
+
+    if (group.lines) {
+        group.lines.forEach(function(line) {
+            res.append('<div class="group_line">' + line + '</div>');
+        });
+    }
 }
 
 function build_table(res, table) {
@@ -77,7 +85,6 @@ function load_resource(stamp) {
         'success': function(item) {
             var resources = [];
 
-            console.log(stamp, item);
             item.resources.forEach(function(res) {
                 var res = build_resource( content, res );
                 resources.push(res);
@@ -109,7 +116,7 @@ $(function() {
         {
             "done": function() {
                 if (complete) { return }
-                content.prepend('<div class="timeout">Connection has timed out, reload page or click "tail" to get updates.</div>');
+                content.prepend('<div class="timeout">Connection has timed out, reload page to get updates.</div>');
             }
         },
         function(item) {

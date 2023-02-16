@@ -54,6 +54,12 @@ sub handle {
             $run->coverages->delete;
             $run->reportings->delete;
 
+            my $batches = $run->resource_batches;
+            while (my $batch = $batches->next) {
+                $batch->resources->delete;
+                $batch->delete;
+            }
+
             my $jobs = $run->jobs;
 
             while (my $job = $jobs->next()) {

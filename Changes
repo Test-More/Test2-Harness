@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Better manage resources
+
 0.000131  2023-02-15 08:34:30-08:00 America/Los_Angeles
 
     - Require proper Test2::Harness version

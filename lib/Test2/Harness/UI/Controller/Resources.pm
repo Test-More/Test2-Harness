@@ -27,12 +27,12 @@ sub handle {
     # Test run, Host, or resource instance
     my $id = $route->{id} or die error(404 => 'No id provided');
 
-    # Specific instance
-    my $rid = $route->{rid};
+    # Specific instant
+    my $batch = $route->{batch};
 
     if ($route->{data}) {
-        return $self->data_stamps($req, $id) unless $rid;
-        return $self->data($req, $id, $rid);
+        return $self->data_stamps($req, $id) unless $batch;
+        return $self->data($req, $id, $batch);
     }
 
     my $res = resp(200);
@@ -56,8 +56,8 @@ sub handle {
             base_uri  => $req->base->as_string,
             stamp_uri => $stamp_uri,
             res_uri   => $res_uri,
-            tailing   => $rid ? 0    : 1,
-            selected  => $rid ? $rid : undef,
+            tailing   => $batch ? 0      : 1,
+            selected  => $batch ? $batch : undef,
         }
     );
 
@@ -122,16 +122,13 @@ sub get_stamps {
         $fields = "host_id = ?";
         push @vals => $search_args->{host_id};
     }
-    elsif ($search_args->{global}) {
-        $fields = "global IS TRUE";
-    }
 
     if ($$start) {
         $fields .= " AND stamp > ?";
         push @vals => $$start;
     }
 
-    my $sth = $dbh->prepare("SELECT resource_id, stamp FROM resources WHERE " . $fields . " ORDER BY stamp ASC");
+    my $sth = $dbh->prepare("SELECT resource_batch_id, stamp FROM resource_batch WHERE " . $fields . " ORDER BY stamp ASC");
     $sth->execute(@vals) or die $sth->errstr;
     my $rows = $sth->fetchall_arrayref;
 
@@ -154,6 +151,9 @@ sub data_stamps {
     if (my $run_id = $search_args->{run_id}) {
         push @out => { run_id => $run_id };
     }
+    if (my $host_id = $search_args->{host_id}) {
+        push @out => { host_id => $host_id };
+    }
 
     my $start   = time;
     my $advance = sub {
@@ -161,7 +161,7 @@ sub data_stamps {
         return 1 if $complete;
         return 1 if (time - $start) > 600;
 
-        if ($thing && !$search_args->{resource_id}) {
+        if ($thing) {
             if (my $stamps = $self->get_stamps(%$stamp_args, search_args => $search_args)) {
                 push @out => {stamps => $stamps};
             }
@@ -200,14 +200,14 @@ sub data_stamps {
 
 sub data {
     my $self = shift;
-    my ($req, $id, $rid) = @_;
+    my ($req, $id, $batch) = @_;
 
     my $res = resp(200);
     my ($thing, $search_args, $stamp_args, $done_check) = $self->get_thing($id);
 
     $res->content_type('application/json');
     $res->raw_body({
-        resources => $self->render_stamp_resources(search_args => $search_args, rid => $rid),
+        resources => $self->render_stamp_resources(search_args => $search_args, batch => $batch),
     });
 
     return $res;
@@ -218,13 +218,13 @@ sub render_stamp_resources {
     my %params = @_;
 
     my $search_args = $params{search_args};
-    my $res_id      = $params{rid};
+    my $batch_id    = $params{batch};
 
     my $schema = $self->{+CONFIG}->schema;
     my $res_rs = $schema->resultset('Resource');
 
     my @res_list;
-    my $resources = $res_rs->search({%$search_args, resource_id => $res_id});
+    my $resources = $res_rs->search({resource_batch_id => $batch_id}, {order_by => {'-asc' => 'batch_ord'}});
     while (my $res = $resources->next) {
         push @res_list => $self->render_resource($res);
     }

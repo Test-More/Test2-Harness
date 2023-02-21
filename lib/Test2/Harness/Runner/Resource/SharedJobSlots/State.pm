@@ -4,18 +4,12 @@ use warnings;
 
 our $VERSION = '1.000152';
 
-use Test2::Harness::Util::File::JSON;
-use Scalar::Util qw/weaken/;
 use Time::HiRes qw/time/;
-use List::Util qw/first min sum0 max/;
-use Carp qw/croak confess carp/;
-use Fcntl qw/:flock SEEK_END/;
-use Errno qw/EINTR EAGAIN ESRCH/;
+use List::Util qw/min sum0 max/;
+use Carp qw/croak/;
 
+use parent 'Test2::Harness::IPC::SharedState';
 use Test2::Harness::Util::HashBase qw{
-    <state_file <state_fh
-    <state_umask
-    <runner_id <name <dir <runner_pid
     <max_slots
     <max_slots_per_job
     <max_slots_per_run
@@ -29,27 +23,16 @@ use Test2::Harness::Util::HashBase qw{
     <algorithm
 
     <ready_assignments
-    +transaction
-
-    <registered
-    <unregistered
 };
 
-BEGIN {
-    for my $term (qw/runners local/) {
-        my $val   = "$term";
-        my $const = uc($term);
-        no strict 'refs';
-        *{$const} = sub() { $val };
-    }
-}
-
-sub TIMEOUT() { 300 }         # Timeout runs if they do not update at least every 5 min
+use constant RUNNERS => 'runners';
+use constant RUNNER_ID => 'access_id';
 
 sub init {
     my $self = shift;
 
-    croak "'state_file' is a required attribute"        unless $self->{+STATE_FILE};
+    $self->SUPER::init();
+
     croak "'max_slots' is a required attribute"         unless $self->{+MAX_SLOTS};
     croak "'max_slots_per_job' is a required attribute" unless $self->{+MAX_SLOTS_PER_JOB};
     croak "'max_slots_per_run' is a required attribute" unless $self->{+MAX_SLOTS_PER_RUN};
@@ -59,249 +42,28 @@ sub init {
 
     $self->{+MIN_SLOTS_PER_RUN} //= 0;
 
-    $self->{+STATE_UMASK} //= 0007;
-
-    $self->{+NAME} //= $self->{+RUNNER_ID};
+    $self->{+ACCESS_META}->{name} //= $self->{+ACCESS_ID};
 
     $self->{+ALGORITHM} //= '_redistribute_fair';
 }
 
 sub init_state {
     my $self = shift;
-    return { RUNNERS() => {} };
-}
-
-sub state { shift->transaction('r') }
-
-sub transaction {
-    my $self = shift;
-    my ($mode, $cb, @args) = @_;
-
-    $mode //= 'r';
-
-    my $write = $mode eq 'w' || $mode eq 'rw';
-    my $read  = $mode eq 'ro' || $mode eq 'r';
-    croak "mode must be 'w', 'rw', 'r', or 'ro', got '$mode'" unless $write || $read;
-
-    confess "Write mode requires a 'runner_id'"  if $write && !$self->{+RUNNER_ID};
-    confess "Write mode requires a 'runner_pid'" if $write && !$self->{+RUNNER_PID};
-
-    my ($lock, $state, $local);
-    if ($state = $self->{+TRANSACTION}) {
-        $local = $state->{+LOCAL};
-
-        confess "Attempted a 'write' transaction inside of a read-only transaction"
-            if $write && !$local->{write};
-    }
-    else {
-        my $oldmask = umask($self->{+STATE_UMASK});
-
-        my $ok = eval {
-            my $lockf = "$self->{+STATE_FILE}.LOCK";
-
-            open($lock, '>>', $lockf) or die "Could not open lock file '$lockf': $!";
-            while (1) {
-                last if flock($lock, $write ? LOCK_EX : LOCK_SH);
-                next if $! == EINTR || $! == EAGAIN;
-                warn "Could not get lock: $!";
-            }
-
-            $state = $self->_read_state();
-            $local = $state->{+LOCAL} = {
-                lock  => $lock,
-                mode  => $mode,
-                write => $write,
-                stack => [{cb => $cb, args => \@args}],
-            };
-
-            weaken($state->{+LOCAL}->{lock});
-
-            1;
-        };
-        my $err = $@;
-        umask($oldmask);
-        die $err unless $ok;
-    }
-
-    local @{$local}{qw/write mode stack/} = ($write, $mode, [@{$local->{stack}}, {cb => $cb, args => \@args}])
-        if $self->{+TRANSACTION};
-
-    local $self->{+TRANSACTION} = $state;
-
-    if ($write) {
-        if ($self->{+REGISTERED}) {
-            $self->_verify_registration($state);
-        }
-        else {
-            $self->_update_registration($state);
-        }
-    }
-    $self->_clear_old_registrations($state);
-
-    my $out;
-    my $ok  = eval { $out = $cb ? $self->$cb($state, @args) : $state; 1 };
-    my $err = $@;
-
-    if ($ok && $write) {
-        $self->_clear_old_registrations($state);
-        $self->_update_registration($state) unless $self->{+UNREGISTERED};
-        $self->_write_state($state);
-    }
-
-    if ($lock) {
-        flock($lock, LOCK_UN) or die "Could not release lock: $!";
-    }
-
-    die $err unless $ok;
-
-    return $out;
-}
-
-sub _read_state {
-    my $self = shift;
-
-    return $self->init_state unless -e $self->{+STATE_FILE};
-
-    my $file = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
-
-    my ($ok, $err);
-    for (1 .. 5) {
-        my $state;
-        $ok = eval { $state = $file->maybe_read(); 1};
-        $err = $@;
-
-        return $state ||= $self->init_state if $ok;
-
-        sleep 0.2;
-    }
-
-    warn "Corrupted state? Resetting state to initial. Error that caused this was:\n======\n$err\n======\n";
-
-    return $self->init_state;
-}
-
-sub _write_state {
-    my $self = shift;
-    my ($state) = @_;
-
-    my $state_copy = {%$state};
-
-    my $local = delete $state_copy->{+LOCAL};
-
-    confess "Attempted write with no lock" unless $local->{lock};
-    confess "Attempted write with a read-only lock" unless $local->{write};
-
-    my $oldmask = umask($self->{+STATE_UMASK});
-    my $ok = eval {
-        my $file = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
-        $file->rewrite($state_copy);
-        1;
-    };
-    my $err = $@;
-
-    umask($oldmask);
-
-    die $err unless $ok;
-}
-
-sub update_registration { $_[0]->transaction(rw => '_update_registration') }
-sub remove_registration { $_[0]->transaction(rw => '_update_registration', remove => 1) }
-
-sub _update_registration {
-    my $self = shift;
-    my ($state, %params) = @_;
-
-    my $runner_id  = $self->{+RUNNER_ID};
-    my $runner_pid = $self->{+RUNNER_PID};
-    my $entry      = $state->{runners}->{$runner_id} //= $state->{runners}->{$runner_id} = {
-        runner_id  => $runner_id,
-        runner_pid => $runner_pid,
-        name       => $self->{+NAME},
-        dir        => $self->{+DIR},
-        user       => $ENV{USER},
-        added      => time,
-
-        todo      => 0,
-        allocated => 0,
-        allotment => 0,
-        assigned  => {},
-
-        max_slots         => $self->{+MY_MAX_SLOTS},
-        max_slots_per_job => $self->{+MY_MAX_SLOTS_PER_JOB},
-    };
-
-    # Update our last checking time
-    $entry->{seen} = time;
-
-    $self->{+REGISTERED} = 1;
-
-    return $state unless $params{remove};
-
-    $self->{+UNREGISTERED} = 1;
-    $entry->{remove} = 1;
-
+    my $state = $self->SUPER::init_state();
+    $state->{+RUNNERS} = {};
     return $state;
-}
-
-sub _verify_registration {
-    my $self = shift;
-    my ($state) = @_;
-
-    return unless $self->{+REGISTERED};
-
-    my $runner_id = $self->{+RUNNER_ID};
-    my $entry  = $state->{+RUNNERS}->{$runner_id};
-
-    # Do not allow for a new expiration. If the state has already expired us we will see it.
-    $entry->{seen} = time if $entry;
-
-    return unless $self->{+UNREGISTERED} //= $self->_entry_expired($entry);
-
-    confess "Shared slot registration expired";
-}
-
-sub _entry_expired {
-    my $self = shift;
-    my ($entry) = @_;
-
-    return 1 unless $entry;
-    return 1 if $entry->{remove};
-
-    if (my $pid = $entry->{runner_pid}) {
-        my $ret = kill(0, $pid);
-        my $err = $!;
-        return 1 if $ret == 0 && $! == ESRCH;
-    }
-
-    my $seen  = $entry->{seen} or return 1;
-    my $delta = time - $seen;
-
-    return 1 if $delta > TIMEOUT();
-
-    return 0;
 }
 
 sub _clear_old_registrations {
     my $self = shift;
     my ($state) = @_;
 
-    my $runners  = $state->{+RUNNERS}     //= {};
+    my $removed = $self->SUPER::_clear_old_registrations(@_);
 
-    my (%removed);
-    for my $entry (values %$runners) {
-        $entry->{remove} = 1 if $self->_entry_expired($entry);
-        next unless $entry->{remove};
+    my $runners = $state->{+RUNNERS};
+    delete $runners->{$_} for @$removed;
 
-        my $runner_id = $entry->{runner_id};
-
-        $self->{+UNREGISTERED} = 1 if $runner_id eq $self->{+RUNNER_ID};
-
-        delete $runners->{$runner_id};
-
-        $removed{$runner_id}++;
-    }
-
-    return \%removed;
+    return $removed;
 }
 
 sub allocate_slots {
@@ -332,11 +94,31 @@ sub release_slots {
     return $self->transaction(rw => '_release_slots', job_id => $job_id);
 }
 
+sub _get_runner_entry {
+    my $self = shift;
+    my ($state, $runner_id) = @_;
+
+    $runner_id //= $self->{+RUNNER_ID};
+
+    return $state->{+RUNNERS}->{$runner_id} //= {
+        runner_id => $runner_id,
+        added     => time,
+
+        todo      => 0,
+        allocated => 0,
+        allotment => 0,
+        assigned  => {},
+
+        max_slots         => $self->{+MY_MAX_SLOTS},
+        max_slots_per_job => $self->{+MY_MAX_SLOTS_PER_JOB},
+    };
+}
+
 sub _allocate_slots {
     my $self = shift;
     my ($state, %params) = @_;
 
-    my $entry = $state->{runners}->{$self->{+RUNNER_ID}};
+    my $entry = $self->_get_runner_entry($state);
     delete $entry->{_calc_cache};
 
     my $job_id = $params{job_id};
@@ -344,7 +126,7 @@ sub _allocate_slots {
     my ($min, $max) = @$con;
     $self->_runner_todo($entry, $job_id => $max);
 
-    my $allocated = $entry->{allocated};
+    my $allocated = $entry->{allocated} //= 0;
 
     # We have what we need already allocated
     return $entry->{allocated} = $max
@@ -383,7 +165,7 @@ sub _assign_slots {
     my $self = shift;
     my ($state, %params) = @_;
 
-    my $entry = $state->{runners}->{$self->{+RUNNER_ID}};
+    my $entry = $self->_get_runner_entry($state);
     delete $entry->{_calc_cache};
 
     my $job       = $params{job};
@@ -406,7 +188,7 @@ sub _release_slots {
     my $self = shift;
     my ($state, %params) = @_;
 
-    my $entry = $state->{runners}->{$self->{+RUNNER_ID}};
+    my $entry = $self->_get_runner_entry($state);
 
     my $job_id = $params{job_id};
 

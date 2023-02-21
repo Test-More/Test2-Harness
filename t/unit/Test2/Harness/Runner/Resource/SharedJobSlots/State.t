@@ -19,7 +19,7 @@ sub inst {
         max_slots         => 10,
         max_slots_per_job => 3,
         max_slots_per_run => 9,
-        runner_pid        => $$,
+        access_pid        => $$,
         %params,
     );
 }
@@ -47,286 +47,8 @@ subtest init_checks => sub {
     isa_ok($one, [$CLASS], "Created an instance");
 };
 
-subtest init_state => sub {
-    my $one   = inst(runner_id => 'one');
-    my $state = $one->transaction('w');
-    like(
-        $state,
-        {
-            runners => {
-                one => {runner_id => 'one'},    # The runner added for our transacton
-            },
-        },
-        "Got initial state"
-    );
-
-    # Remove the local data (not stored)
-    my $local = delete $state->{local};
-    like(
-        $local,
-        {
-            lock      => FDNE,                            # The lock should not be present anymore (it is weakened inside the transaction, gone after)
-            write     => T,                               # This was a write transaction
-        },
-        "Local data is as expected",
-    );
-
-    my $stored = Test2::Harness::Util::File::JSON->new(name => $one->state_file)->read;
-    is($state, $stored, "state and stored match");
-};
-
-subtest transaction => sub {
-    my $one = inst(runner_id => 'one');
-
-    my $end_state = $one->transaction(
-        w => sub {
-            my ($the_one, $state, @args) = @_;
-
-            ref_is($the_one, $one, "Got the instance first");
-            ref_ok($state, 'HASH', "got a hash");
-            is(\@args, [qw/arg1 arg2/], "Got additional args");
-
-            my $local_check = {
-                lock  => T(),
-                write => T(),
-                mode  => 'w',
-                stack => [
-                    {cb => T(), args => ['arg1', 'arg2']},
-                ]
-            };
-
-            is($state->{local}, $local_check, "Got accurate state");
-
-            subtest nested_transaction => sub {
-                $one->transaction(
-                    'r' => sub {
-                        my ($also_the_one, $also_state) = @_;
-
-                        ref_is($also_the_one, $one,   "got the same instance");
-                        ref_is($also_state,   $state, "Got the same state object");
-
-                        is(
-                            $state->{local},
-                            {
-                                lock  => T(),
-                                write => F(),
-                                mode  => 'r',
-                                stack => [
-                                    {cb => T(), args => ['arg1', 'arg2']},
-                                    {cb => T(), args => []},
-                                ]
-                            },
-                            "State temporarily modified"
-                        );
-                    },
-                );
-            };
-
-            is($one->transaction(), $state, "transaction with no callback returns state");
-
-            is($state->{local}, $local_check, "State restored");
-
-            return $state;
-        },
-        'arg1',
-        'arg2'
-    );
-
-    like(
-        $end_state,
-        {
-            local   => {lock => FDNE},    # Lock released
-            runners => {
-                one => {                  # Added runner
-                    user      => $ENV{USER},
-                    seen      => T(),
-                    added     => T(),
-                    runner_id => 'one',
-                },
-            },
-        },
-        "Got correct end state"
-    );
-
-    my $two   = inst(runner_id => 'two', state_file => $one->{state_file});
-    my $state = $two->update_registration;
-
-    ok($state->{runners}->{two}, "Got registration");
-
-    $two->transaction(
-        rw => sub {
-            my ($me, $state) = @_;
-            $state->{runners}->{two}->{remove} = 1;
-        }
-    );
-
-    $state = $one->transaction(
-        ro => sub {
-            my ($me, $state) = @_;
-            ok(!$state->{runners}->{two}, "Two is not registered anymore");
-        }
-    );
-
-    like(
-        dies { $two->transaction('rw') },
-        qr/Shared slot registration expired/,
-        "Cannot proceed if our registration expired",
-    );
-
-    my $three = inst(runner_id => 'three', state_file => $one->{state_file});
-    $state = $three->update_registration;
-
-    ok($state->{runners}->{three}, "Got registration");
-
-    $one->transaction(
-        rw => sub {
-            my ($me, $state) = @_;
-            $state->{runners}->{three}->{seen} = 1;    # Very long time ago.
-        }
-    );
-
-    # Make sure RO mode is aware, even though it does not write the update
-    $state = $one->transaction(
-        ro => sub {
-            my ($me, $state) = @_;
-            ok(!$state->{runners}->{three}, "Three is not registered anymore (timed out)");
-            ok(!$state->{runners}->{two},   "Two is not registered anymore");
-        }
-    );
-
-    $state = $one->transaction(
-        rw => sub {
-            my ($me, $state) = @_;
-            ok(!$state->{runners}->{three}, "Three is not registered anymore (timed out)");
-            ok(!$state->{runners}->{two},   "Two is not registered anymore");
-            return $state;
-        }
-    );
-
-    delete $state->{local};
-
-    my $stored = Test2::Harness::Util::File::JSON->new(name => $one->state_file)->read;
-    is($state, $stored, "state and stored match");
-};
-
-sub consistent_state {
-    my ($insts, $state_check) = @_;
-
-    my $ctx = context();
-
-    my $state;
-    subtest "consistent state" => sub {
-        my $base  = $state = shift(@$insts);
-        my $state = $base->state;
-
-        my $idx = 1;
-        while (my $i = shift @$insts) {
-            my $st2 = $i->state;
-            is($st2, $state, "state [" . $idx++ . "] matches state [0]");
-        }
-
-        use Data::Dumper;
-        is($state, $state_check, "State matches expectations", Dumper($state)) if $state_check;
-    };
-
-    $ctx->release;
-
-    return $state;
-}
-
-subtest registration => sub {
-    my $one   = inst(runner_id => 'one');
-    my $two   = inst(runner_id => 'two',   state_file => $one->{state_file});
-    my $three = inst(runner_id => 'three', state_file => $one->{state_file});
-
-    $one->update_registration;
-    consistent_state(
-        [$one, $two, $three],
-        hash {
-            field runners => {
-                one => T(),
-            };
-            etc;
-        },
-    );
-
-    $two->update_registration;
-    consistent_state(
-        [$one, $two, $three],
-        hash {
-            field runners => {
-                one => T(),
-                two => T(),
-            };
-            etc;
-        },
-    );
-
-    $three->update_registration;
-    consistent_state(
-        [$one, $two, $three],
-        hash {
-            field runners => {
-                one   => T(),
-                two   => T(),
-                three => T(),
-            };
-            etc;
-        },
-    );
-
-    $two->remove_registration;
-    consistent_state(
-        [$one, $two, $three],
-        hash {
-            field runners => {
-                one   => T(),
-                two   => DNE(),
-                three => T(),
-            };
-            etc;
-        },
-    );
-
-    # Emulate 'three' timing out.
-    my $file = Test2::Harness::Util::File::JSON->new(name => $one->{state_file});
-    my $data = $file->read;
-    $data->{runners}->{three}->{seen} -= 100 + $one->TIMEOUT;
-    $file->write($data);
-
-    consistent_state(
-        [$one, $two, $three],
-        hash {
-            field runners => {
-                one   => T(),
-                two   => DNE(),
-                three => DNE(),
-            };
-            etc;
-        },
-    );
-
-    like(
-        dies { $three->update_registration },
-        qr/Shared slot registration expired/,
-        "Cannot write after timing out"
-    );
-};
-
-subtest _entry_expired => sub {
-    my $one = inst(runner_id => 'one');
-
-    ok($one->_entry_expired(undef),         "Invalid entry is expired");
-    ok($one->_entry_expired({remove => 1}), "Entry to be removed is expired");
-    ok($one->_entry_expired({}),            "no 'seen' field expired");
-
-    ok(!$one->_entry_expired({seen => time}), "Recently seen, not expired");
-
-    ok($one->_entry_expired({seen => (time - (10 + $one->TIMEOUT))}), "Old is expired");
-};
-
 subtest runner_todo => sub {
-    my $one = inst(runner_id => 'one');
+    my $one = inst(access_id => 'one');
 
     my $entry = {};
     is($one->_runner_todo($entry), undef, "Nothing to do");
@@ -349,7 +71,7 @@ subtest runner_todo => sub {
 };
 
 subtest _runner_calcs => sub {
-    my $one = inst(runner_id => 'one');
+    my $one = inst(access_id => 'one');
 
     my $r = {
         _calc_cache => "cache!",
@@ -417,7 +139,7 @@ subtest _runner_calcs => sub {
 };
 
 subtest allocate_slots => sub {
-    my $one = inst(runner_id => 'one');
+    my $one = inst(access_id => 'one');
 
     like(dies { $one->allocate_slots(todo => 1) }, qr/'con' is required/, "con must be specified");
 
@@ -446,6 +168,7 @@ subtest allocate_slots => sub {
         my ($self, $state) = @_;
 
         # Make sure we have an allocation so we do not trigger a redistribute.
+        $state->{runners}->{one}->{todo} = 0; # To silence a warning
         $state->{runners}->{one}->{allocated} = 5;
         $state->{runners}->{one}->{allotment} = 2;
 

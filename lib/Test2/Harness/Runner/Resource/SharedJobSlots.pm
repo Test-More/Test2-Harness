@@ -42,8 +42,8 @@ sub init {
     die "Could not find shared jobs config.\n"
         unless $sconf;
 
-    my $runner_id  = $self->{+RUNNER_ID}  //= $settings->runner->runner_id if $settings->check_prefix('runner');
-    my $runner_pid = $self->{+RUNNER_PID} //= $Test2::Harness::Runner::RUNNER_PID // $App::Yath::Command::runner::RUNNER_PID;
+    my $access_id  = $self->{+RUNNER_ID}  //= $settings->runner->runner_id if $settings->check_prefix('runner');
+    my $access_pid = $self->{+RUNNER_PID} //= $Test2::Harness::Runner::RUNNER_PID // $App::Yath::Command::runner::RUNNER_PID;
 
     my $prefix = $settings->debug->procname_prefix // '';
     my $name   = $settings->harness->project       // '';
@@ -67,13 +67,17 @@ sub init {
     $self->{+JOB_LIMITER_MAX} = min(grep { $_ } $sconf->max_slots_per_run, $settings->runner->job_count);
 
     $self->{+STATE} = Test2::Harness::Runner::Resource::SharedJobSlots::State->new(
-        dir        => $dir,
-        name       => $name,
-        runner_id  => $runner_id,
-        runner_pid => $runner_pid,
+        state_umask => $sconf->state_umask,
+        state_file  => $sconf->state_file,
+        access_id   => $access_id,
+        access_pid  => $access_pid,
+        access_meta => {
+            dir        => $dir,
+            name       => $name,
+            runner_id  => $access_id,
+            runner_pid => $access_pid,
+        },
 
-        state_umask           => $sconf->state_umask,
-        state_file            => $sconf->state_file,
         algorithm             => $sconf->algorithm,
         max_slots             => $sconf->max_slots,
         max_slots_per_job     => $sconf->max_slots_per_job,
@@ -167,7 +171,9 @@ sub status_data {
 
     my @groups;
 
-    my $runners = $self->state->state->{runners};
+    my $state = $self->state->state;
+    my $runners = $state->{runners};
+    my $access  = $state->{access};
 
     my $global_status = {
         todo     => 0,
@@ -209,8 +215,9 @@ sub status_data {
             rows   => [[$run_status->{todo}, $run_status->{allotted}, $run_status->{assigned}, $run_status->{pending}]],
         };
 
+        my $acc = $access->{$runner->{runner_id}};
         push @groups => {
-            title  => "$runner->{user} - $runner->{name} - $runner->{runner_id}",
+            title  => "$acc->{user} - $acc->{name} - $acc->{access_id}",
             tables => [
                 $run_table,
                 $job_table,

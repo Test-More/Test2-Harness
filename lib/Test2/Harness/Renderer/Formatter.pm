@@ -22,6 +22,7 @@ use Test2::Harness::Util::HashBase qw{
     -show_job_launch
     -show_job_end
     -do_step
+    -interactive
 };
 
 sub init {
@@ -46,6 +47,9 @@ sub init {
         $self->{+IO_ERR} = $fh;
     }
 
+    $self->{+INTERACTIVE} = 1 if $settings->debug->interactive;
+    $self->{+INTERACTIVE} //= 1 if $ENV{YATH_INTERACTIVE};
+
     $self->{+FORMATTER} = $f_class->new(
         io            => $self->{+IO},
         progress      => $self->{+PROGRESS},
@@ -53,6 +57,7 @@ sub init {
         verbose       => $settings->display->verbose,
         color         => $settings->display->color,
         no_wrap       => $settings->display->no_wrap,
+        interactive   => $self->{+INTERACTIVE},
         is_persistent => $self->{+COMMAND_CLASS}->group eq 'persist' ? 1 : 0,
     );
 

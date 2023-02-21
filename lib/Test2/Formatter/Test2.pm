@@ -44,6 +44,7 @@ use Test2::Util::HashBase qw{
     -_file_stats
     -job_names
     -is_persistent
+    -interactive
 };
 
 sub TAG_WIDTH() { 8 }
@@ -311,7 +312,7 @@ sub write {
             $self->{+_BUFFERED} = 1;
         }
     }
-    elsif ($depth && $lines && @$lines) {
+    elsif ($depth && $lines && @$lines && !$self->{+INTERACTIVE}) {
         print $io $lines->[0];
         $self->{+_BUFFERED} = 1;
     }

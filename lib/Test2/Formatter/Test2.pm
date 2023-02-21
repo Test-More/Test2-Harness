@@ -2,7 +2,7 @@ package Test2::Formatter::Test2;
 use strict;
 use warnings;
 
-our $VERSION = '1.000146';
+our $VERSION = '1.000147';
 
 use Test2::Util::Term qw/term_size/;
 use Test2::Harness::Util qw/hub_truth apply_encoding/;

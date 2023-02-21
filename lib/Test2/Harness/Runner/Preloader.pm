@@ -174,13 +174,10 @@ sub launch_stage {
     my $self = shift;
     my ($stage) = @_;
 
-    use Carp qw/longmess/;
-
     $stage = $self->{+STAGED}->stage_lookup->{$stage} unless ref $stage || $stage eq 'NOPRELOAD';
 
     my $name = ref($stage) ? $stage->name : $stage;
 
-    use Carp qw/longmess/;
     my $pid = fork();
 
     return Test2::Harness::Runner::Preloader::Stage->new(

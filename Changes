@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix infinite hang in bad preload (#240)
+
 1.000145  2023-02-15 17:31:10-08:00 America/Los_Angeles
 
     - Add ability to inject lines in resource output

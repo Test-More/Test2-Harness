@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Resource::SharedJobSlots::Config;
 use strict;
 use warnings;
 
-our $VERSION = '1.000147';
+our $VERSION = '1.000148';
 
 use YAML::Tiny;
 use Sys::Hostname qw/hostname/;

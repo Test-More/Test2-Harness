@@ -18,6 +18,7 @@ BEGIN {
     my $int_done;
     my $orig = goto::file->can('filter');
     *goto::file::filter = sub {
+        local $.;
         my $out = $orig->(@_);
         seek(STDIN, 0, 0) if $FIX_STDIN;
 

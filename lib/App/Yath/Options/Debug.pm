@@ -183,11 +183,34 @@ sub _post_process_interactive {
 
     my $pid = fork() // die "Could not fork: $!";
     if ($pid) {
-        require Time::HiRes;
+        require Scope::Guard;
         require POSIX;
         POSIX::mkfifo($fifo, 0700) or die "Failed to make fifo ($fifo): $!";
-
         my $fh;
+
+        my $cleanup = sub {
+            close($fh)    if $fh;
+            unlink($fifo) if -e $fifo;
+        };
+
+        my $old_int_handler  = $SIG{INT};
+        my $old_term_handler = $SIG{TERM};
+
+        $SIG{INT}  = sub { $cleanup->('INT');  $old_int_handler->()  if ref $old_int_handler;  exit 1; };
+        $SIG{TERM} = sub { $cleanup->('TERM'); $old_term_handler->() if ref $old_term_handler; exit 1; };
+        $SIG{PIPE} = sub { exit 1 };
+
+        $SIG{CHLD} = sub {
+            my $res = waitpid($pid, 0);
+            my $exit = ($? >> 8);
+
+            close($fh) if $fh;
+            unlink($fifo) if -e $fifo;
+
+            # Forward the exit code from our child
+            exit($exit);
+        };
+
         for (1 .. 10) {
             last if open($fh, '>', $fifo);
             die "Could not open fifo ($fifo): $!" unless $! == EINTR;
@@ -195,30 +218,22 @@ sub _post_process_interactive {
         }
         die "Could not open fifo ($fifo): $!" unless $fh;
 
-        my $cleanup      = sub { close($fh); unlink($fifo) if -e $fifo };
-        my $int_handler  = $SIG{INT};
-        my $term_handler = $SIG{TERM};
-        $SIG{INT}  = sub { $cleanup->(); $int_handler->()  if ref $int_handler;  exit 0; };
-        $SIG{TERM} = sub { $cleanup->(); $term_handler->() if ref $term_handler; exit 0; };
-
         $fh->autoflush(1);
-
-        STDIN->blocking(0);
-
-        require Scope::Guard;
         my $guard = Scope::Guard->new($cleanup);
 
         while(1) {
-            $SIG{PIPE} = sub { exit 0 };
-            exit 0 if waitpid($pid, &POSIX::WNOHANG);
-            exit 0 unless kill(0, $pid);
             my $data = <STDIN>;
             if (defined($data) && length($data)) {
                 print $fh $data;
+                next;
             }
-            else {
-                Time::HiRes::sleep(0.05);
-            }
+
+            next if defined($data);
+
+            next if kill(0, $pid);
+            print STDERR "Lost child process $pid\n";
+            $cleanup->();
+            exit 255;
         }
     }
 

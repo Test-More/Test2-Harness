@@ -273,7 +273,7 @@ sub render_info {
     my ($f) = @_;
 
     return map {
-        my $details = $_->{details} || '';
+        my $details = $_->{details} // '';
 
         my $msg;
         if (ref($details)) {

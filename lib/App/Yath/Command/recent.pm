@@ -61,11 +61,13 @@ sub run {
     my $user    = $yui->user    // $ENV{USER};
     my $count   = $yui->max || 10;
 
-    print "\nProject: $user\n   User: $user\n  Count: $count\n\n";
+    print "\nProject: $project\n   User: $user\n  Count: $count\n\n";
 
     my $data = $config->dbi_dsn
         ? $self->get_from_db($settings, $config, $project, $user, $count)
         : $self->get_from_http($settings, $yui, $project, $user, $count);
+
+    @$data = reverse @$data;
 
     my $url = $yui->url;
     $url =~ s{/$}{}g if $url;

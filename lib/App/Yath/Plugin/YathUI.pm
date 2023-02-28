@@ -154,8 +154,8 @@ sub grab_rerun {
 
     return (0) if $rerun =~ m/\.jsonl(\.gz|\.bz2)?/;
 
-    my $settings    = $params{settings};
-    my $only_failed = $params{only_failed};
+    my $settings  = $params{settings};
+    my $mode_hash = $params{mode_hash};
 
     my $path;
     if ($rerun eq '1') {
@@ -170,14 +170,14 @@ sub grab_rerun {
         $path .= '/0';
     }
     elsif (looks_like_uuid($rerun)) {
-        $path = "$rerun/json";
+        $path = "$rerun";
         print "Re-run requested with UUID, ${ \__PACKAGE__ } querying YathUI (web request) for matching run, or latest run from project or user matching the UUID\n";
     }
     else {
         return (0);
     }
 
-    $path = $only_failed ? "failed/$path" : "files/$path";
+    $path = "rerun/$path";
 
     my ($ok, $res, $data) = $this->_request($settings, $path, {json => 1});
 
@@ -186,19 +186,7 @@ sub grab_rerun {
         return (1);
     }
 
-    my %files;
-    for my $key (qw/failures passes/) {
-        my $set = $data->{$key} or next;
-        for my $item (@$set) {
-            $files{$item->{file}}++;
-        }
-    }
-
-    my @files = sort keys %files;
-
-    return (1) unless @files;
-
-    return (1, @files);
+    return (1, $data);
 }
 
 sub _request {

@@ -40,11 +40,11 @@ sub poll_with_index {
 
     my @out;
     while (!$max || @out < $max) {
-        my ($spos, $epos, $line) = $self->read_line(%params, from => $pos);
-        last unless defined($line) || defined($spos) || defined($epos);
+        my ($spos, $epos, $line, $err) = $self->read_line(%params, from => $pos);
+        last unless defined($line) || defined($spos) || defined($epos) || $err;
 
         $self->{+LINE_POS} = $epos unless $params{peek} || defined $params{from};
-        push @out => [$spos, $epos, $line];
+        push @out => [$spos, $epos, $line] unless $err;
         $pos = $epos;
     }
 

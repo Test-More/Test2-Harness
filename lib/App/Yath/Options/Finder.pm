@@ -8,6 +8,14 @@ use Test2::Harness::Util qw/mod2file/;
 
 use App::Yath::Options;
 
+my %RERUN_MODES = (
+    all     => "Re-Run all tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+    failed  => "Re-Run failed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+    retried => "Re-Run retried tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+    passed  => "Re-Run passed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+    missed  => "Run missed tests from a previously aborted/stopped run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+);
+
 option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2::Harness::Finder'} => sub {
     option finder => (
         type          => 's',
@@ -59,17 +67,27 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         long_examples => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
     );
 
-    option rerun_failed => (
-        type => 'd',
-        description => "Re-Run failed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
-        long_examples => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
-    );
-
     option rerun_plugin => (
         type => 'm',
         description => "What plugin(s) should be used for rerun (will fallback to other plugins if the listed ones decline the value, this is just used ot set an order of priority)",
         long_examples => [' Foo', ' +App::Yath::Plugin::Foo'],
     );
+
+    option rerun_modes => (
+        alt => ['rerun-mode'],
+        type => 'm',
+        description => "Pick which test categories to run",
+        long_examples => [' failed,missed,...', map {" $_"} sort keys %RERUN_MODES],
+    );
+
+    for my $mode (keys %RERUN_MODES) {
+        option "rerun_$mode" => (
+            type             => 'd',
+            description      => $RERUN_MODES{$mode},
+            long_examples    => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
+            ignore_for_build => 1,
+        );
+    }
 
     option changed => (
         type => 'm',
@@ -222,6 +240,35 @@ sub _post_process {
     my %params   = @_;
     my $settings = $params{settings};
     my $options  = $params{options};
+
+    my $finder = $settings->finder;
+
+    my $rerun = $finder->rerun;
+
+    for my $mode (sort keys %RERUN_MODES) {
+        my $val = $finder->remove_field("rerun_$mode") or next;
+
+        push @{$finder->rerun_modes} => $mode;
+
+        next if $val eq '1';
+
+        $rerun //= $val;
+        $rerun = $val if $rerun eq '1';
+
+        die "Multiple runs specified for rerun ($val and $rerun). Please pick one.\n" if $val ne $rerun;
+    }
+
+    $finder->field(rerun => $rerun);
+
+    my (%seen, @keep);
+    for my $mode (sort map { split /,/ } @{$finder->rerun_modes}) {
+        next if $seen{$mode}++;
+        die "Invalid rerun-mode '$mode'.\n" unless $RERUN_MODES{$mode};
+        push @keep => $mode;
+    }
+    push @keep => 'all' unless @keep;
+
+    @{$finder->rerun_modes} = @keep;
 
     if (!defined($settings->finder->durations_threshold)) {
         if ($settings->check_prefix('runner')) {

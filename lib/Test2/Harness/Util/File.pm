@@ -11,7 +11,7 @@ use Test2::Harness::Util();
 use Carp qw/croak confess/;
 use Fcntl qw/SEEK_SET SEEK_CUR/;
 
-use Test2::Harness::Util::HashBase qw{ -name -_fh -_init_fh done -line_pos };
+use Test2::Harness::Util::HashBase qw{ -name -_fh -_init_fh done -line_pos <skip_bad_decode };
 
 sub exists { -e $_[0]->{+NAME} }
 
@@ -103,10 +103,18 @@ sub read_line {
     my $new_pos = tell($fh);
     die "Failed to 'tell': $!" if $new_pos == -1;
 
-    eval { $line = $self->decode($line); 1 } or confess "$self->{+NAME} ($pos -> $new_pos): $@";
+    my $err = 0;
+    local $@;
+    unless (eval { $line = $self->decode($line); 1 }) {
+        $err = $@ // 'error';
+        confess "$self->{+NAME} ($pos -> $new_pos): $err" unless $self->{+SKIP_BAD_DECODE};
+        warn "Skipping line that failed to decode: $err\n" if $self->{+SKIP_BAD_DECODE} > 1;
+        $line = undef;
+    }
 
     $self->{+LINE_POS} = $new_pos unless defined $params{peek} || defined $params{from};
-    return ($pos, $new_pos, $line);
+    return $line unless wantarray;
+    return ($pos, $new_pos, $line, $err);
 }
 
 1;

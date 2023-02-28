@@ -9,6 +9,7 @@ use Carp qw/confess/;
 use Test2::Harness::Util::HashBase qw{
     <title
     <field <name <type <trace
+    <ignore_for_build
 
     <prefix <short <alt
 
@@ -98,7 +99,7 @@ sub init {
 
     if (my $class = $self->{+BUILDS}) {
         confess "class '$class' does not have a '$self->{+FIELD}' method"
-            unless $class->can($self->{+FIELD});
+            unless $class->can($self->{+FIELD}) || $self->{+IGNORE_FOR_BUILD};
     }
 
     $self->{+TYPE} //= 'b';

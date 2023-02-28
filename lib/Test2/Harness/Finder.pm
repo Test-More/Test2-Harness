@@ -24,7 +24,7 @@ use Test2::Harness::Util::HashBase qw{
 
     <no_long <only_long
 
-    <rerun <rerun_failed <rerun_plugin
+    <rerun <rerun_modes <rerun_plugin
 
     search <extensions
 
@@ -174,7 +174,7 @@ sub find_files {
 
     $self->add_changed_to_search($plugins, $settings) if $add_changes;
 
-    my $add_rerun = $self->{+RERUN_FAILED} // $self->{+RERUN};
+    my $add_rerun = $self->{+RERUN};
     $self->add_rerun_to_search($plugins, $settings, $add_rerun) if $add_rerun;
 
     return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
@@ -281,54 +281,79 @@ sub add_rerun_to_search {
         $self->set_search($search);
     }
 
-    my $only_failed = $self->{+RERUN_FAILED};
+    my $modes = $self->{+RERUN_MODES};
+    my $mode_hash = { map {$_ => 1} @$modes };
 
+    my ($grabbed, $data);
     for my $p ($self->get_capable_plugins(grab_rerun => [@{$self->{+RERUN_PLUGIN} // []}, @$plugins])) {
-        my ($grabbed, @add) = $p->grab_rerun($rerun, only_failed => $only_failed, settings => $settings);
+        ($grabbed, $data) = $p->grab_rerun($rerun, modes => $modes, mode_hash => $mode_hash, settings => $settings);
         next unless $grabbed;
 
-        unless (@add) {
+        unless ($data && keys %$data) {
             print "No files found to rerun.\n";
             exit 0;
         }
 
-        push @$search => @add;
-        return;
+        last if $grabbed;
     }
 
-    if ($rerun eq '1') {
-        $rerun = first { -e $_ } qw{ ./lastlog.jsonl ./lastlog.jsonl.bz2 ./lastlog.jsonl.gz };
+    unless ($grabbed) {
+        if ($rerun eq '1') {
+            $rerun = first { -e $_ } qw{ ./lastlog.jsonl ./lastlog.jsonl.bz2 ./lastlog.jsonl.gz };
 
-        die "Could not find a lastlog.jsonl(.bz2|.gz) file for re-running, you may need to provide a full path to --rerun=... or --rerun-failed=..."
-            unless $rerun;
-    }
-
-    die "'$rerun' is not a valid log file, and no plugin intercepted it.\n" unless -f $rerun;
-
-    my $stream = Test2::Harness::Util::File::JSONL->new(name => $rerun);
-
-    my @files;
-    while(1) {
-        my @events = $stream->poll(max => 1000) or last;
-
-        for my $event (@events) {
-            my $f = $event->{facet_data} or next;
-
-            my $end = $f->{harness_job_end} or next;
-            next if $only_failed && !$end->{fail};
-
-            my $file = $end->{rel_file} // $end->{file} // $end->{abs_file};
-            next unless $file;
-            push @files => $file;
+            die "Could not find a lastlog.jsonl(.bz2|.gz) file for re-running, you may need to provide a full path to --rerun=... or --rerun-failed=..."
+                unless $rerun;
         }
+
+        die "'$rerun' is not a valid log file, and no plugin intercepted it.\n" unless -f $rerun;
+
+        my $stream = Test2::Harness::Util::File::JSONL->new(name => $rerun, skip_bad_decode => 1);
+
+        my %files;
+        while (1) {
+            my @events = $stream->poll(max => 1000) or last;
+
+            for my $event (@events) {
+                my $f = $event->{facet_data} or next;
+
+                for my $type (qw/seen queued start end/) {
+                    my $field = $type eq 'seen' ? "harness_job" : "harness_job_$type";
+
+                    my $data = $f->{$field} or next;
+
+                    my $file = $data->{rel_file} // $data->{run_file} // $data->{file} // $data->{abs_file};
+                    next unless $file;
+
+                    my $ref = $files{$file} //= {};
+                    $ref->{$type}++;
+
+                    $ref->{$data->{fail} ? 'fail' : 'pass'}++ if $type eq 'end';
+                    $ref->{retry}++                           if $data->{is_try};
+                }
+            }
+        }
+
+        $data = \%files;
     }
 
-    unless (@files) {
+    my @add = grep {
+        my $entry = $data->{$_};
+
+        my $keep = $mode_hash->{all} ? 1 : 0;
+        $keep ||= 1 if $mode_hash->{failed}  && $entry->{fail} && !$entry->{pass};
+        $keep ||= 1 if $mode_hash->{retried} && $entry->{retry};
+        $keep ||= 1 if $mode_hash->{passed}  && $entry->{pass};
+        $keep ||= 1 if $mode_hash->{missed}  && !$entry->{end};
+
+        $keep
+    } sort keys %$data;
+
+    unless (@add) {
         print "No files found to rerun.\n";
         exit 0;
     }
 
-    push @$search => @files;
+    push @$search => @add;
 }
 
 sub add_changed_to_search {

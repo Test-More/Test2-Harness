@@ -39,6 +39,12 @@ sub field : lvalue {
     return ${$self}->{$field};
 }
 
+sub remove_field {
+    my $self = shift;
+    my ($field) = @_;
+    delete ${$self}->{$field};
+}
+
 our $AUTOLOAD;
 sub AUTOLOAD : lvalue {
     my $this = shift;

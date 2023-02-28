@@ -2,7 +2,7 @@ package Test2::Harness::Settings;
 use strict;
 use warnings;
 
-our $VERSION = '1.000149';
+our $VERSION = '1.000150';
 
 use Carp();
 use Scalar::Util();

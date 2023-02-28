@@ -7,7 +7,7 @@ use Carp qw/confess/;
 confess "You must first load a Test2::Harness::UI::Schema::NAME module"
     unless $Test2::Harness::UI::Schema::LOADED;
 
-our $VERSION = '0.000135';
+our $VERSION = '0.000136';
 
 require "Test2/Harness/UI/Schema/${Test2::Harness::UI::Schema::LOADED}/Resource.pm";
 require "Test2/Harness/UI/Schema/Overlay/Resource.pm";

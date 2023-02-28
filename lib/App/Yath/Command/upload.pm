@@ -21,7 +21,7 @@ include_options(
     'App::Yath::Options::PreCommand',
 );
 
-sub summary { "Use the YathUIDB pluginto upload a log file" }
+sub summary { "Use the YathUIDB plugin to upload a log file" }
 
 sub group { 'log' }
 

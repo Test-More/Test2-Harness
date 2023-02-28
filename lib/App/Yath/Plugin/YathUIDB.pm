@@ -330,8 +330,8 @@ sub grab_rerun {
 
     return (0) if $rerun =~ m/\.jsonl(\.gz|\.bz2)?/;
 
-    my $settings    = $params{settings};
-    my $only_failed = $params{only_failed};
+    my $settings  = $params{settings};
+    my $mode_hash = $params{mode_hash} //= {all => 1};
 
     my $config  = config_from_settings($settings);
     my $schema  = $config->schema;
@@ -340,11 +340,11 @@ sub grab_rerun {
     if ($rerun eq '1') {
         my $project_name = $settings->yathui->project;
         my $username = $settings->yathui->user // $ENV{USER};
-        $ok = eval { $run = $schema->vague_run_search(project_name => $project_name, username => $username); 1 };
+        $ok = eval { $run = $schema->vague_run_search(query => {}, project_name => $project_name, username => $username); 1 };
         $err = $@;
     }
     elsif (looks_like_uuid($rerun)) {
-        $ok = eval { $run = $schema->vague_run_search(source => $rerun); 1 };
+        $ok = eval { $run = $schema->vague_run_search(query => {}, source => $rerun); 1 };
         $err = $@;
     }
     else {
@@ -356,24 +356,11 @@ sub grab_rerun {
         return (1);
     }
 
-    print "Re-Running " . ($only_failed ? "failed" : "all") . " tests from run id: " . $run->run_id . "\n";
+    print "Re-Running " . join(', ', sort keys %$mode_hash) . " tests from run id: " . $run->run_id . "\n";
 
-    my $search = {retry => 0};
-    $search->{fail} = 1 if $only_failed;
+    my $data = $run->rerun_data;
 
-    my $files = $run->jobs->search(
-        $search,
-        {join => 'test_file', order_by => 'test_file.filename'},
-    );
-
-    my @files;
-    while (my $file = $files->next) {
-        push @files => $file->file;
-    }
-
-    return (1) unless @files;
-
-    return (1, @files);
+    return (1, $data);
 }
 
 1;

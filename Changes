@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Enhance rerun capabilities
+    - Added `yath recent` command
+
 0.000133  2023-02-16 08:22:45-08:00 America/Los_Angeles
 
     - Add "resource" category to sweeper

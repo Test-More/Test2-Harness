@@ -11,6 +11,7 @@ use DateTime;
 
 use Test2::Harness::UI::Request;
 use Test2::Harness::UI::Controller::Upload;
+use Test2::Harness::UI::Controller::Recent;
 use Test2::Harness::UI::Controller::User;
 use Test2::Harness::UI::Controller::Run;
 use Test2::Harness::UI::Controller::RunField;
@@ -31,6 +32,7 @@ use Test2::Harness::UI::Controller::Events;
 use Test2::Harness::UI::Controller::Durations;
 use Test2::Harness::UI::Controller::Coverage;
 use Test2::Harness::UI::Controller::Files;
+use Test2::Harness::UI::Controller::ReRun;
 
 use Test2::Harness::UI::Controller::Interactions;
 use Test2::Harness::UI::Controller::Binary;
@@ -73,6 +75,9 @@ sub init {
     $router->connect('/project/:id/:n'        => {controller => 'Test2::Harness::UI::Controller::Project'});
     $router->connect('/project/:id/:n/:count' => {controller => 'Test2::Harness::UI::Controller::Project'});
 
+    $router->connect('/recent/:project/:user/:count' => {controller => 'Test2::Harness::UI::Controller::Recent'});
+    $router->connect('/recent/:project/:user'        => {controller => 'Test2::Harness::UI::Controller::Recent'});
+
     $router->connect('/query/:name'      => {controller => 'Test2::Harness::UI::Controller::Query'});
     $router->connect('/query/:name/:arg' => {controller => 'Test2::Harness::UI::Controller::Query'});
 
@@ -111,6 +116,9 @@ sub init {
     $router->connect('/files/:source/json'            => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
     $router->connect('/files/:project/:idx'           => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
     $router->connect('/files/:project/:username/:idx' => {controller => 'Test2::Harness::UI::Controller::Files', failed => 0, json => 1});
+
+    $router->connect('/rerun/:run_id'            => {controller => 'Test2::Harness::UI::Controller::ReRun'});
+    $router->connect('/rerun/:project/:username' => {controller => 'Test2::Harness::UI::Controller::ReRun'});
 
     $router->connect('/binary/:binary_id' => {controller => 'Test2::Harness::UI::Controller::Binary'});
 

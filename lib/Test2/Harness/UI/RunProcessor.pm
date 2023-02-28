@@ -204,7 +204,7 @@ sub flush {
         unless ($res->status eq 'complete') {
             my $status = $self->{+SIGNAL} ? 'canceled' : 'broken';
             $status = 'canceled' if $done eq 'end';
-            $res->status($status)
+            $res->status($status);
         }
 
         # Normalize the fail/pass
@@ -1026,6 +1026,7 @@ sub update_other {
 
         # All done
         $job->{done} = 1;
+        $cols{status} = 'complete';
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
             my $tfile_id = $cols{test_file_id} ||= $self->get_test_file_id($job_end->{rel_file}) if $job_end->{rel_file};

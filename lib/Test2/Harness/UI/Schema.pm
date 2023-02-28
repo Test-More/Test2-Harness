@@ -69,6 +69,9 @@ sub vague_run_search {
         }
     }
 
+    return $self->resultset('Run')->search($query, $attrs)
+        if $params{list};
+
     $run = $self->resultset('Run')->find($query, $attrs);
     return $run;
 }

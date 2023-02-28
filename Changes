@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Add more 'rerun' capabilities
+    - Fix diagnostcis replacing '0' with an empty string
 
 1.000148  2023-02-22 17:17:49-08:00 America/Los_Angeles
 

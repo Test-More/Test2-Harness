@@ -2,7 +2,7 @@ package Test2::Harness::Util::File::JSON;
 use strict;
 use warnings;
 
-our $VERSION = '1.000150';
+our $VERSION = '1.000151';
 
 use Carp qw/croak confess/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json encode_pretty_json/;

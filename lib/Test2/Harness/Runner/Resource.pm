@@ -6,7 +6,7 @@ use Term::Table;
 use Time::HiRes qw/time/;
 use Test2::Util::Times qw/render_duration/;
 
-our $VERSION = '1.000150';
+our $VERSION = '1.000151';
 
 sub scope_global { 0 }
 sub scope_host   { 0 }

@@ -336,7 +336,7 @@ sub add_rerun_to_search {
         $data = \%files;
     }
 
-    my @add = grep {
+    my @add = map { $data->{$_}->{add} // $_ } grep {
         my $entry = $data->{$_};
 
         my $keep = $mode_hash->{all} ? 1 : 0;

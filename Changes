@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add ability to override 'add' value in rerun grabbing
+
 1.000149  2023-02-28 09:13:50-08:00 America/Los_Angeles
 
     - Add more 'rerun' capabilities

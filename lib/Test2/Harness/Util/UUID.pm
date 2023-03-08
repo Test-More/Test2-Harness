@@ -8,9 +8,17 @@ use Data::UUID;
 use Importer 'Importer' => 'import';
 
 our @EXPORT = qw/gen_uuid/;
+our @EXPORT_OK = qw/UG gen_uuid/;
 
-my $UG = Data::UUID->new;
-sub gen_uuid() { $UG->create_str() }
+my ($UG, $UG_PID);
+sub UG {
+    return $UG if $UG && $UG_PID && $UG_PID == $$;
+
+    $UG_PID = $$;
+    return $UG = Data::UUID->new;
+}
+
+sub gen_uuid { UG()->create_str() }
 
 1;
 

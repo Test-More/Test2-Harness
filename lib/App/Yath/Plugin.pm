@@ -2,7 +2,7 @@ package App::Yath::Plugin;
 use strict;
 use warnings;
 
-our $VERSION = '1.000151';
+our $VERSION = '1.000152';
 
 use parent 'Test2::Harness::Plugin';
 

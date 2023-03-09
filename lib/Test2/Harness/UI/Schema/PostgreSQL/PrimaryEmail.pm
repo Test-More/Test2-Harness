@@ -2,12 +2,12 @@ use utf8;
 package Test2::Harness::UI::Schema::Result::PrimaryEmail;
 
 # Created by DBIx::Class::Schema::Loader
-# DO NOT MODIFY THE FIRST PART OF THIS FILE
+# DO NOT MODIFY ANY PART OF THIS FILE
 
 use strict;
 use warnings;
 
-use base 'DBIx::Class::Core';
+use base 'Test2::Harness::UI::Schema::ResultBase';
 __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
@@ -38,9 +38,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-15 17:15:56
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:rg7PmzR2escAr+ZhKLLqUg
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-03-02 16:05:20
+# DO NOT MODIFY ANY PART OF THIS FILE
 
-
-# You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

@@ -1062,10 +1062,6 @@ sub update_other {
 
 __END__
 
-
-        if ($new->{name} eq 'coverage' && !$new->{link} && $type eq 'RunField') {
-            $new->{link} = "/coverage/$id";
-        }
 =pod
 
 =encoding UTF-8

@@ -169,7 +169,6 @@ sub lookup_event {
     );
 }
 
-
 __END__
 
 =pod

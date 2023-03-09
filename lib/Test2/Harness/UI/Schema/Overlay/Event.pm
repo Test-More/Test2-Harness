@@ -38,7 +38,7 @@ sub in_mode {
 
 sub TO_JSON {
     my $self = shift;
-    my %cols = $self->get_columns;
+    my %cols = $self->get_all_fields;
 
     # Inflate
     $cols{facets} = $self->facets;
@@ -60,7 +60,7 @@ sub st_line_data {
 
 sub line_data {
     my $self = shift;
-    my %cols = $self->get_columns;
+    my %cols = $self->get_all_fields;
     my %out;
 
     my $has_facets = ($cols{has_facets} || $cols{facets}) ? 1 : 0;

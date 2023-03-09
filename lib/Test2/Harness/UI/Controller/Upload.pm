@@ -6,6 +6,7 @@ our $VERSION = '0.000136';
 
 use Text::Xslate();
 
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/open_file/;
 
@@ -117,7 +118,7 @@ sub api_user {
     return unless $key_val;
 
     my $schema = $self->schema;
-    my $key = $schema->resultset('ApiKey')->find({value => $key_val})
+    my $key = $schema->resultset('ApiKey')->find({value => uuid_inflate($key_val)})
         or return undef;
 
     return undef unless $key->status eq 'active';

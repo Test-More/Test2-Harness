@@ -7,6 +7,7 @@ our $VERSION = '0.000136';
 use Data::GUID;
 use List::Util qw/max/;
 use Test2::Harness::UI::Util qw/find_job/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 use JSON::PP();
@@ -111,12 +112,13 @@ sub stream_runs {
     );
 
     my $id     = $route->{id};
+    my $uuid   = uuid_inflate($id);
     my $run_id = $route->{run_id};
     my ($project, $user);
 
     if ($id) {
         my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->search({project_id => $id})->first };
+        $project //= eval { $p_rs->search({project_id => $uuid})->first };
         $project //= eval { $p_rs->search({name => $id})->first };
 
         if ($project) {
@@ -124,19 +126,20 @@ sub stream_runs {
         }
         else {
             my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->search({user_id  => $id})->first };
+            $user //= eval { $u_rs->search({user_id  => $uuid})->first };
             $user //= eval { $u_rs->search({username => $id})->first };
 
             if ($user) {
                 $params{search_base} = $params{search_base}->search_rs({'me.user_id' => $user->user_id});
             }
             else {
-                $run_id //= $id;
+                $run_id //= $uuid;
             }
         }
     }
 
     if($run_id) {
+        $run_id = uuid_inflate($run_id) or die error(404 => "Invalid run id");
         return $self->stream_single(%params, id => $run_id);
     }
 
@@ -177,6 +180,8 @@ sub stream_jobs {
     );
 
     if (my $job_uuid = $route->{job}) {
+        $job_uuid = uuid_inflate($job_uuid) or die error(404 => "Invalid job id");
+
         my $schema = $self->{+CONFIG}->schema;
         return $self->stream_single(%params, item => find_job($schema, $job_uuid, $route->{try}));
     }

@@ -8,6 +8,7 @@ use Data::GUID;
 use List::Util qw/max/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
@@ -38,10 +39,10 @@ sub handle {
     if (my $project = $schema->resultset('Project')->find({name => $source})) {
         $run = $project->last_covered_run(user => $username);
     }
-    elsif ($run = eval { $schema->resultset('Run')->find({run_id => $source}) } or warn $@) {
-    }
     else {
-        die error(405);
+        $source = uuid_inflate($source) or die error(404 => 'Invalid Run');
+        $run = eval { $schema->resultset('Run')->find({run_id => $source}) } or warn $@;
+        die error(405) unless $run;
     }
 
     die error(404) unless $run;

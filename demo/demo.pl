@@ -12,7 +12,7 @@ use IO::Compress::Bzip2     qw($Bzip2Error bzip2);
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Util qw/pkg_to_file/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::UI::UUID qw/gen_uuid/;
 
 use POSIX ":sys_wait_h";
 
@@ -73,6 +73,12 @@ sub load_file {
         $projects{$project} = $p;
     }
 
+    my $logfile = $config->schema->resultset('LogFile')->create({
+        log_file_id => gen_uuid(),
+        name        => $file,
+        local_file  => $file =~ m{^/} ? $file : "./demo/$file",
+    });
+
     my $run = $config->schema->resultset('Run')->create({
         run_id     => gen_uuid(),
         user_id    => $user->user_id,
@@ -81,11 +87,7 @@ sub load_file {
         status     => 'pending',
         project_id => $projects{$project}->project_id,
 
-        log_file => {
-            log_file_id => gen_uuid(),
-            name        => $file,
-            local_file  => $file =~ m{^/} ? $file : "./demo/$file",
-        },
+        log_file_id => $logfile->log_file_id,
     });
 
     return $run;

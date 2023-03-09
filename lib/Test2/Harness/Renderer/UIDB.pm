@@ -14,7 +14,7 @@ use Test2::Harness::Runner::State;
 use Test2::Harness::UI::Util qw/config_from_settings/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::UI::UUID qw/gen_uuid uuid_inflate/;
 
 use Test2::Harness::Util qw/mod2file/;
 
@@ -141,8 +141,8 @@ sub _send_resources {
     my $batch_id = gen_uuid();
     my $batch = $batch_rs->create({
         resource_batch_id  => $batch_id,
-        run_id             => $run_id,
-        host_id            => $host_id,
+        run_id             => uuid_inflate($run_id),
+        host_id            => uuid_inflate($host_id),
         stamp              => $dt_stamp,
     });
 
@@ -212,7 +212,7 @@ sub _render_event {
     my $f = $event->{facet_data};
 
     if (my $runf = $f->{harness_run}) {
-        my $run_id = $runf->{run_id} or die "No run-id?";
+        my $run_id = uuid_inflate($runf->{run_id}) or die "No run-id?";
 
         my $config = $self->{+CONFIG};
 

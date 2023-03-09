@@ -20,7 +20,7 @@ __PACKAGE__->inflate_column(
 
 sub file {
     my $self = shift;
-    my %cols = $self->get_columns;
+    my %cols = $self->get_all_fields;
 
     return $cols{file}     if exists $cols{file};
     return $cols{filename} if exists $cols{filename};
@@ -62,16 +62,16 @@ sub sig {
 sub short_job_fields {
     my $self = shift;
 
-    return [ map { my $d = +{$_->get_columns}; $d->{data} = $d->{data} ? \'1' : \'0'; $d } $self->job_fields->search(undef, {
+    return [ map { my $d = +{$_->get_all_fields}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->job_fields->search(undef, {
         remove_columns => ['data'],
-        '+select' => ['data IS NOT NULL AS data'],
-        '+as' => ['data'],
+        '+select' => ['data IS NOT NULL AS has_data'],
+        '+as' => ['has_data'],
     })->all ];
 }
 
 sub TO_JSON {
     my $self = shift;
-    my %cols = $self->get_columns;
+    my %cols = $self->get_all_fields;
 
     $cols{short_file}    = $self->short_file;
     $cols{shortest_file} = $self->shortest_file;
@@ -88,7 +88,7 @@ my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pas
 
 sub glance_data {
     my $self = shift;
-    my %cols = $self->get_columns;
+    my %cols = $self->get_all_fields;
 
     my %data;
     @data{@GLANCE_FIELDS} = @cols{@GLANCE_FIELDS};

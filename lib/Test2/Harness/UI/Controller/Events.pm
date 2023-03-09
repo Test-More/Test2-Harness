@@ -4,10 +4,10 @@ use warnings;
 
 our $VERSION = '0.000136';
 
-use Data::GUID;
 use List::Util qw/max/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
@@ -29,7 +29,7 @@ sub handle {
     my $p = $req->parameters;
     my (%query, %attrs, $rs, $meth, $event);
 
-    my $event_id = $it;
+    my $event_id = uuid_inflate($it) or die error(404 => "Invalid event id");
 
     if ($route->{from} eq 'single_event') {
         $event = $schema->resultset('Event')->find({event_id => $event_id}, {remove_columns => [qw/orphan/]})

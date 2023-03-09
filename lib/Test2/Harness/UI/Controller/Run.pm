@@ -10,6 +10,7 @@ use Text::Xslate(qw/mark_raw/);
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase qw/-title/;
@@ -32,6 +33,7 @@ sub handle {
     }
     else {
         my $it = $route->{id} or die error(404 => 'No id');
+        $it = uuid_inflate($it) or die error(404 => "Invalid run id");
         my $schema = $self->{+CONFIG}->schema;
         $run = $schema->resultset('Run')->search({run_id => $it})->first or die error(404 => 'Invalid Run');
     }

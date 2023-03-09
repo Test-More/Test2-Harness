@@ -5,13 +5,13 @@ use warnings;
 our $VERSION = '0.000136';
 
 use DateTime;
-use Data::GUID;
 use Scalar::Util qw/blessed/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::UI::Util qw/share_dir find_job/;
 use Test2::Harness::UI::Util::DateTimeFormat qw/DTF/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Util::Times qw/render_duration/;
+use Test2::Harness::UI::UUID qw/uuid_inflate uuid_deflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase qw/-title/;
@@ -28,7 +28,7 @@ sub handle {
     my $id = $route->{id} or die error(404 => 'No id provided');
 
     # Specific instant
-    my $batch = $route->{batch};
+    my $batch = uuid_inflate($route->{batch});
 
     if ($route->{data}) {
         return $self->data_stamps($req, $id) unless $batch;
@@ -84,15 +84,16 @@ sub get_thing {
         $search_args->{global} = 1;
     }
     else {
-        if ($thing = eval { $run_rs->search({run_id => $id})->first }) {
-            $search_args->{run_id} = $id;
+        my $uuid = uuid_inflate($id);
+        if ($uuid && eval { $thing = $run_rs->search({run_id => $uuid})->first }) {
+            $search_args->{run_id} = $uuid;
             $done_check = sub {
                 return 1 if $thing->complete;
                 return 0;
             };
         }
-        elsif ($thing = eval { $host_rs->search({host_id => $id})->first } || eval { $host_rs->search({hostname => $id})->first }) {
-            $search_args->{host_id} = $id;
+        elsif (($uuid && eval { $thing = $host_rs->search({host_id => $uuid})->first }) || eval { $thing = $host_rs->search({hostname => $id})->first }) {
+            $search_args->{host_id} = $thing->host_id;
         }
         else {
             die error(404 => 'Invalid Job ID or Host ID');
@@ -116,11 +117,11 @@ sub get_stamps {
     my @vals;
     if ($search_args->{run_id}) {
         $fields = "run_id = ?";
-        push @vals => $search_args->{run_id};
+        push @vals => uuid_deflate($search_args->{run_id});
     }
     elsif ($search_args->{host_id}) {
         $fields = "host_id = ?";
-        push @vals => $search_args->{host_id};
+        push @vals => uuid_deflate($search_args->{host_id});
     }
 
     if ($$start) {
@@ -133,6 +134,8 @@ sub get_stamps {
     my $rows = $sth->fetchall_arrayref;
 
     return unless @$rows;
+
+    $_->[0] = uuid_inflate($_->[0]) for @$rows;
 
     $$start = $rows->[-1]->[1];
 
@@ -218,7 +221,7 @@ sub render_stamp_resources {
     my %params = @_;
 
     my $search_args = $params{search_args};
-    my $batch_id    = $params{batch};
+    my $batch_id    = uuid_inflate($params{batch});
 
     my $schema = $self->{+CONFIG}->schema;
     my $res_rs = $schema->resultset('Resource');

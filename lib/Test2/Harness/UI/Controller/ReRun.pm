@@ -6,6 +6,7 @@ our $VERSION = '0.000136';
 
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
@@ -24,6 +25,10 @@ sub handle {
     my $run_id       = $route->{run_id};
     my $project_name = $route->{project};
     my $username     = $route->{username};
+
+    if ($run_id) {
+        $run_id = uuid_inflate($run_id) or die error(404 => "Invalid run id");
+    }
 
     error(404 => 'No source') unless $run_id || ($project_name && $username);
     my $schema = $self->{+CONFIG}->schema;

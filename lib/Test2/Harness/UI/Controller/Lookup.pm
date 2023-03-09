@@ -90,7 +90,12 @@ sub lookup_run {
     my ($lookup, $state) = @_;
 
     return unless $lookup;
-    $lookup = $lookup->run_id if blessed($lookup);
+    if (blessed($lookup)) {
+        $lookup = $lookup->run_id;
+    }
+    else {
+        $lookup = uuid_inflate($lookup);
+    }
 
     return if $state->{run}->{$lookup}++;
 
@@ -110,7 +115,12 @@ sub lookup_jobs {
     my ($lookup, $state) = @_;
 
     return unless $lookup;
-    $lookup = $lookup->job_key if blessed($lookup);
+    if (blessed($lookup)) {
+        $lookup = $lookup->job_key;
+    }
+    else {
+        $lookup = uuid_inflate($lookup);
+    }
 
     return if $state->{job}->{$lookup}++;
 
@@ -137,7 +147,12 @@ sub lookup_event {
     my ($lookup, $state) = @_;
 
     return unless $lookup;
-    $lookup = $lookup->event_id if blessed($lookup);
+    if (blessed($lookup)) {
+        $lookup = $lookup->event_id;
+    }
+    else {
+        $lookup = uuid_inflate($lookup);
+    }
 
     return if $state->{event}->{$lookup}++;
 

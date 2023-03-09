@@ -9,6 +9,7 @@ use Carp qw/croak/;
 use File::ShareDir();
 
 use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use Importer Importer => 'import';
 
@@ -41,6 +42,8 @@ sub is_invalid_subtest_name {
 
 sub find_job {
     my ($schema, $uuid, $try) = @_;
+
+    $uuid = uuid_inflate($uuid) or croak "Invalid job identifier";
 
     my $jobs = $schema->resultset('Job');
 

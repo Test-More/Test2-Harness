@@ -8,6 +8,8 @@ use Carp qw/croak/;
 
 use Test2::Harness::UI::Util::HashBase qw/-config/;
 
+use Test2::Harness::UI::UUID qw/uuid_deflate/;
+
 sub init {
     my $self = shift;
 
@@ -44,7 +46,7 @@ sub _from_project {
     my $project = $schema->resultset('Project')->find({name => $project_name}) or return [];
 
     my $sth = $dbh->prepare("SELECT distinct($field) FROM runs WHERE project_id = ? ORDER BY $field ASC");
-    $sth->execute($project->project_id) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id)) or die $sth->errstr;
     my $rows = $sth->fetchall_arrayref;
     return [map { $_->[0] } @$rows];
 }

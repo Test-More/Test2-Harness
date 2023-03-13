@@ -22,7 +22,9 @@ my %WriteMakefileArgs = (
   "DISTNAME" => "Test2-Harness-UI",
   "EXE_FILES" => [
     "scripts/yath-ui-backfill.pl",
+    "scripts/yath-ui-dumper.pl",
     "scripts/yath-ui-importer.pl",
+    "scripts/yath-ui-loader.pl",
     "scripts/yath-ui-sweeper.pl"
   ],
   "LICENSE" => "perl",
@@ -71,7 +73,7 @@ my %WriteMakefileArgs = (
     "Test2" => "1.302164",
     "Test2::API" => "1.302166",
     "Test2::Formatter::Test2::Composer" => 0,
-    "Test2::Harness" => "1.000149",
+    "Test2::Harness" => "1.000151",
     "Test2::Harness::Util::HashBase" => 0,
     "Test2::Harness::Util::JSON" => 0,
     "Test2::Harness::Util::UUID" => 0,
@@ -142,7 +144,7 @@ my %FallbackPrereqs = (
   "Test2" => "1.302164",
   "Test2::API" => "1.302166",
   "Test2::Formatter::Test2::Composer" => 0,
-  "Test2::Harness" => "1.000149",
+  "Test2::Harness" => "1.000151",
   "Test2::Harness::Util::HashBase" => 0,
   "Test2::Harness::Util::JSON" => 0,
   "Test2::Harness::Util::UUID" => 0,

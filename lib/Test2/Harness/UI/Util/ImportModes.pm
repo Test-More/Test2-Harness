@@ -118,7 +118,7 @@ sub event_in_mode {
 sub _get_event_columns {
     my ($event) = @_;
 
-    return { $event->get_columns } if blessed($event) && $event->can('get_columns');
+    return { $event->get_all_fields } if blessed($event) && $event->can('get_columns');
     return $event if (reftype($event) // '') eq 'HASH';
 
     croak "Invalid event: $event";

@@ -40,16 +40,16 @@ sub sig {
 sub short_run_fields {
     my $self = shift;
 
-    return [ map { my $d = +{$_->get_columns}; $d->{data} = $d->{data} ? \'1' : \'0'; $d } $self->run_fields->search(undef, {
+    return [ map { my $d = +{$_->get_all_fields}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->run_fields->search(undef, {
         remove_columns => ['data'],
-        '+select' => ['data IS NOT NULL AS data'],
-        '+as' => ['data'],
+        '+select' => ['data IS NOT NULL AS has_data'],
+        '+as' => ['has_data'],
     })->all ];
 }
 
 sub TO_JSON {
     my $self = shift;
-    my %cols = $self->get_columns;
+    my %cols = $self->get_all_fields;
 
     # Just No.
     delete $cols{log_data};
@@ -60,7 +60,7 @@ sub TO_JSON {
     $cols{project}    //= $self->project->name;
 
     if ($cols{prefetched_fields}) {
-        $cols{fields} = [ map { {$_->get_columns} } $self->run_fields ];
+        $cols{fields} = [ map { {$_->get_all_fields} } $self->run_fields ];
     }
     else {
         $cols{fields} = $self->short_run_fields;

@@ -11,7 +11,7 @@ use Test2::Harness::UI::RunProcessor;
 use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util qw/mod2file/;
 use Test2::Harness::UI::Util qw/share_dir share_file dbd_driver qdb_driver/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::UI::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
 use Plack::Builder;

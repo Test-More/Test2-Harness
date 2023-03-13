@@ -11,6 +11,7 @@ use File::Temp qw/tempdir/;
 use IO::Uncompress::Gunzip qw/gunzip/;
 
 use Test2::Harness::UI::Util::HashBase qw/-config -dir/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 sub init {
     my $self = shift;
@@ -65,9 +66,9 @@ sub run {
             my $project = $schema->resultset('Project')->find_or_create({name => $project_name});
 
             $schema->resultset('Permission')->update_or_create({
-                project_id => $project->project_id,
-                user_id => $user->user_id,
-                updated => \'NOW()',
+                project_id => uuid_inflate($project->project_id),
+                user_id    => uuid_inflate($user->user_id),
+                updated    => \'NOW()',
                 cpan_batch => $batch,
             }) or die "Could not add permissions for $id on $project";
         }

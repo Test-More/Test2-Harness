@@ -10,7 +10,7 @@ use Test2::Harness::UI::RunProcessor;
 
 use Test2::Harness::UI::Util::HashBase qw/-config -worker_id/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::UI::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
@@ -35,10 +35,10 @@ sub run {
         $schema->resultset('Run')->search(
             {status   => 'pending', log_file_id => {'is not' => undef}},
             {order_by => {-asc => 'added'}, rows => 1},
-        )->update({status => 'running', worker_id => $worker_id});
+        )->update({status => 'running', worker_id => $worker_id->{string}});
 
         my $run = $schema->resultset('Run')->search(
-            {status   => 'running',         worker_id => $worker_id},
+            {status   => 'running',         worker_id => $worker_id->{string}},
             {order_by => {-asc => 'added'}, rows      => 1},
         )->first;
 

@@ -7,6 +7,7 @@ our $VERSION = '0.000136';
 use Text::Xslate();
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use Email::Sender::Simple qw(sendmail);
 use Email::Simple;
@@ -71,7 +72,7 @@ sub process_form {
         my $evcode_id = $p->{verification_code}
             or return $res->add_error("Invalid verification code");
 
-        my $code = $schema->resultset('EmailVerificationCode')->find({evcode_id => $evcode_id})
+        my $code = $schema->resultset('EmailVerificationCode')->find({evcode_id => uuid_inflate($evcode_id)})
             or return $res->add_error("Invalid verification code");
 
         my $email = $code->email;
@@ -145,7 +146,7 @@ sub process_form {
     }
 
     if ($p->{api_key_id} && $KEY_ACTION_MAP{$action}) {
-        my $key_id = $p->{api_key_id};
+        my $key_id = uuid_inflate($p->{api_key_id});
         my $user = $req->user or return $res->add_error("You must be logged in");
 
         my $key = $schema->resultset('ApiKey')->find({api_key_id => $key_id, user_id => $user->user_id});
@@ -155,13 +156,14 @@ sub process_form {
         return $res->add_msg("Key status changed.");
     }
 
-    if ($p->{email_id}) {
+    if (my $email_id = $p->{email_id}) {
+        $email_id = uuid_inflate($email_id) or return $res->add_error("Invalid email id");
         my $user = $req->user or return $res->add_error("You must be logged in");
-        my $email = $schema->resultset('Email')->find({email_id => $p->{email_id}, user_id => $user->user_id});
+        my $email = $schema->resultset('Email')->find({email_id => $email_id, user_id => $user->user_id});
         return $res->add_error("Invalid Email") unless $email;
 
         if ($action eq 'make primary') {
-            my $pri = $schema->resultset('PrimaryEmail')->update_or_create({user_id => $user->user_id, email_id => $p->{email_id}});
+            my $pri = $schema->resultset('PrimaryEmail')->update_or_create({user_id => $user->user_id, email_id => $email_id});
             return $res->add_error("Could not make email primary: $@") unless $pri;
             return $res->add_msg("Set primary email address.");
         }

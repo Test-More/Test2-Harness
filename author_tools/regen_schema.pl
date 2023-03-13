@@ -73,6 +73,7 @@ require Test2::Harness::UI::Schema;
 
         my $dest = "lib/Test2/Harness/UI/Schema/${schema}/$file";
         print "Found ${file}\n";
+        process_uuid("tmp/$schema/Test2/Harness/UI/Schema/Result/$file");
         rename("tmp/$schema/Test2/Harness/UI/Schema/Result/$file", $dest) or die "Could not move ${file}: $!";
 
         my $result = "lib/Test2/Harness/UI/Schema/Result/$file";
@@ -96,6 +97,8 @@ our \$VERSION = '$ver';
 
 require "Test2/Harness/UI/Schema/\${Test2::Harness::UI::Schema::LOADED}/${pkg}.pm";
 require "Test2/Harness/UI/Schema/Overlay/${pkg}.pm";
+
+with 'Test2::Harness::UI::Schema::Roles::Columns';
 
 1;
             EOT
@@ -126,6 +129,77 @@ our \$VERSION = '$ver';
             close($oh);
         }
     }
+}
+
+sub process_uuid {
+    my ($file) = @_;
+
+    open(my $fh, "<", $file) or die "Could not open file '$file': $!";
+
+    my ($found, $end) = (0, 0);
+    my $columns = '';
+    my @lines;
+    while (my $line = <$fh>) {
+        if ($line =~ m/DO NOT MODIFY THE FIRST PART OF THIS FILE/) {
+            push @lines => "# DO NOT MODIFY ANY PART OF THIS FILE\n";
+            next;
+        }
+
+        if ($line =~ m/DO NOT MODIFY THIS OR ANYTHING ABOVE/) {
+            last;
+        }
+
+        if ($line =~ m/use base 'DBIx::Class::Core';/) {
+            push @lines => "use base 'Test2::Harness::UI::Schema::ResultBase';\n";
+            next;
+        }
+
+        push @lines => $line;
+
+        if ($line =~ m/^__PACKAGE__->add_columns\(/) {
+            $found ||= $.;
+            next;
+        }
+
+        next if $end;
+        next unless $found;
+
+        if ($line =~ m/^\);/) {
+            $end = 1;
+            next;
+        }
+
+        $columns .= $line;
+    }
+    close($fh);
+
+    $columns = "(\n#line $found $file\n$columns)";
+    my %cols = eval $columns or die $@;
+
+    my @uuids;
+    for my $col (keys %cols) {
+        my $data = $cols{$col} or next;
+        next unless $col eq 'owner' || $col =~ m/_(id|key)$/;
+        next unless $data->{data_type} eq 'binary';
+        next unless $data->{size} == 16;
+        push @uuids => $col;
+    };
+
+    open($fh, '>', $file) or die "Could not open file '$file': $!";
+    print $fh @lines;
+
+    if (@uuids) {
+        my $specs = join "\n" => map { "__PACKAGE__->inflate_column('$_' => { inflate => \\&uuid_inflate, deflate => \\&uuid_deflate });" } @uuids;
+
+        print $fh <<"        EOT";
+use Test2::Harness::UI::UUID qw/uuid_inflate uuid_deflate/;
+$specs
+        EOT
+    }
+
+    print $fh "# DO NOT MODIFY ANY PART OF THIS FILE\n";
+    print $fh "\n1;\n";
+    close($fh);
 }
 
 system('rm -rf ./tmp');

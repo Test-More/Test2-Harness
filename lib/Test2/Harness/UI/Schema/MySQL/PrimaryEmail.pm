@@ -2,12 +2,12 @@ use utf8;
 package Test2::Harness::UI::Schema::Result::PrimaryEmail;
 
 # Created by DBIx::Class::Schema::Loader
-# DO NOT MODIFY THE FIRST PART OF THIS FILE
+# DO NOT MODIFY ANY PART OF THIS FILE
 
 use strict;
 use warnings;
 
-use base 'DBIx::Class::Core';
+use base 'Test2::Harness::UI::Schema::ResultBase';
 __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
@@ -18,9 +18,9 @@ __PACKAGE__->load_components(
 __PACKAGE__->table("primary_email");
 __PACKAGE__->add_columns(
   "user_id",
-  { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
+  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "email_id",
-  { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
+  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
 );
 __PACKAGE__->set_primary_key("user_id");
 __PACKAGE__->add_unique_constraint("email_id", ["email_id"]);
@@ -38,9 +38,10 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-15 17:15:50
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:G7s6LOvnUIJ+4qlNu4Vs1w
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-03-02 16:05:14
+use Test2::Harness::UI::UUID qw/uuid_inflate uuid_deflate/;
+__PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+__PACKAGE__->inflate_column('email_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# DO NOT MODIFY ANY PART OF THIS FILE
 
-
-# You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

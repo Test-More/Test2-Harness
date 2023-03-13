@@ -12,7 +12,7 @@ use Test2::Harness::UI::Config;
 use Test2::Harness::UI::Importer;
 use Test2::Harness::UI;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::UI::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
 use Plack::Builder;

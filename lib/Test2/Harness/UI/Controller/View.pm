@@ -8,6 +8,7 @@ use Data::GUID;
 use Text::Xslate(qw/mark_raw/);
 use Test2::Harness::UI::Util qw/share_dir find_job/;
 use Test2::Harness::UI::Response qw/resp error/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase qw/-title/;
@@ -30,12 +31,13 @@ sub handle {
     my $schema = $self->{+CONFIG}->schema;
 
     my $id     = $route->{id};
+    my $uuid   = uuid_inflate($id);
     my $run_id = $route->{run_id};
     my ($project, $user);
 
     if ($id) {
         my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->search({project_id => $id})->first };
+        $project //= eval { $p_rs->search({project_id => $uuid})->first };
         $project //= eval { $p_rs->search({name => $id})->first };
 
         if ($project) {
@@ -43,19 +45,21 @@ sub handle {
         }
         else {
             my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->search({user_id => $id})->first };
+            $user //= eval { $u_rs->search({user_id => $uuid})->first };
             $user //= eval { $u_rs->search({username => $id})->first };
 
             if ($user) {
                 $self->{+TITLE} .= ">" . $user->username;
             }
             else {
-                $run_id //= $id;
+                $run_id //= $uuid;
             }
         }
     }
 
     if($run_id) {
+        $run_id = uuid_inflate($run_id) or die error(404 => 'Invalid Run');
+
         my $run = eval { $schema->resultset('Run')->search({run_id => $run_id})->first } or die error(404 => 'Invalid Run');
         $self->{+TITLE} .= ">" . $run->project->name;
     }
@@ -64,6 +68,7 @@ sub handle {
     my $job_try  = $route->{try};
 
     if ($job_uuid) {
+        $job_uuid = uuid_inflate($job_uuid) or die error(404 => 'Invalid Job');
         my $job = find_job($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
         $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
     }
@@ -71,7 +76,7 @@ sub handle {
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
 
     my $base_uri   = $req->base->as_string;
-    my $stream_uri = join '/' => $base_uri . 'stream', grep {length $_} ($id // $run_id), $job_uuid, $job_try;
+    my $stream_uri = join '/' => $base_uri . 'stream', grep {length $_} ($uuid // $run_id), $job_uuid, $job_try;
 
     my $content = $tx->render(
         'view.tx',

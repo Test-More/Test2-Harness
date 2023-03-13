@@ -10,6 +10,7 @@ use Scalar::Util qw/blessed/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::UI::Util qw/share_dir find_job/;
 use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase qw/-title/;
@@ -22,7 +23,7 @@ sub handle {
 
     my $req = $self->{+REQUEST};
 
-    my $id      = $route->{id}      or die error(404 => 'No event id provided');
+    my $id      = uuid_inflate($route->{id}) or die error(404 => 'No event id provided');
     my $context = $route->{context} // 1;
     return $self->data($id, $context) if $route->{data};
 

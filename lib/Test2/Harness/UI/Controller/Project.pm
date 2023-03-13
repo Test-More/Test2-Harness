@@ -10,6 +10,7 @@ use Text::Xslate();
 use Test2::Harness::UI::Util qw/share_dir format_duration parse_duration is_invalid_subtest_name/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::UI::UUID qw/uuid_deflate uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase;
@@ -37,12 +38,13 @@ sub users {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute($project->project_id) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id)) or die $sth->errstr;
 
     my $owner = $project->owner;
     my @out;
     for my $row (@{$sth->fetchall_arrayref // []}) {
         my ($user_id, $username) = @$row;
+        $user_id = uuid_inflate($user_id);
         my $is_owner = ($owner && $user_id eq $owner->user_id) ? 1 : 0;
         push @out => {user_id => $user_id, username => $username, owner => $is_owner};
     }
@@ -67,7 +69,9 @@ sub handle {
 
     my $project;
     $project = $schema->resultset('Project')->single({name => $it});
-    $project //= $schema->resultset('Project')->single({project_id => $it});
+    if (my $uuid = uuid_inflate($it)) {
+        $project //= $schema->resultset('Project')->single({project_id => $uuid});
+    }
     error(404 => 'Invalid Project') unless $project;
 
     return $self->html($req, $project, $n)
@@ -188,7 +192,7 @@ sub get_add_query {
     my @add_vals;
 
     my $user_query = 'user_id in (' . join(',' => map { '?' } @$users) . ')';
-    push @add_vals => @$users;
+    push @add_vals => map { uuid_deflate($_) } @$users;
 
     return ("AND $user_query\n", @add_vals) unless $n || $range;
 
@@ -208,7 +212,7 @@ sub get_add_query {
         $end   = parse_date($end);
 
         my $sth = $dbh->prepare($query);
-        $sth->execute($project->project_id, $start, $end) or die $sth->errstr;
+        $sth->execute(uuid_deflate($project->project_id), $start, $end) or die $sth->errstr;
 
         my $ords = $sth->fetchrow_hashref;
 
@@ -229,12 +233,12 @@ sub get_add_query {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute($project->project_id, @add_vals, $n) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id), @add_vals, $n) or die $sth->errstr;
 
     my @ids = map { $_->[1] } @{$sth->fetchall_arrayref};
     return ('') unless @ids;
 
-    return ("AND run_id IN (" . join(',' => map { '?' } @ids)  . ")\n", @ids);
+    return ("AND run_id IN (" . join(',' => map { '?' } @ids)  . ")\n", map { $_ } @ids);
 }
 
 
@@ -256,9 +260,9 @@ sub _build_stat_run_list {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute($project->project_id, @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
 
-    my @ids = map { $_->[0] } @{$sth->fetchall_arrayref};
+    my @ids = map { uuid_inflate($_->[0]) } @{$sth->fetchall_arrayref};
 
     my @items = map { $_->TO_JSON } $schema->resultset('Run')->search({run_id => {'-in' => \@ids}}, {order_by => {'-DESC' => 'run_ord'}})->all;
 
@@ -295,7 +299,7 @@ sub _build_stat_expensive_files {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute($project->project_id, @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
 
     my @rows;
     for my $row (sort { $b->[1] <=> $a->[1] } @{$sth->fetchall_arrayref}) {
@@ -348,7 +352,7 @@ sub _build_stat_expensive_subtests {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute($project->project_id, @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
 
     my @rows;
     for my $row (sort { $b->[2] <=> $a->[2] } @{$sth->fetchall_arrayref}) {
@@ -398,7 +402,7 @@ sub _build_stat_expensive_users {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute($project->project_id, @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
 
     my @rows;
     for my $row (sort { $b->[1] <=> $a->[1] } @{$sth->fetchall_arrayref}) {
@@ -453,7 +457,7 @@ sub _build_stat_user_summary {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute($project->project_id, @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
 
     my $runs = $sth->fetchrow_hashref;
 
@@ -515,7 +519,7 @@ sub _build_stat_uncovered {
             'me.data'        => \'IS NOT NULL',
             'run.project_id' => $project->project_id,
             'run.has_coverage' => 1,
-            @$users ? (user_id => {'-in' => $users}) : ()
+            @$users ? (user_id => {'-in' => [map { uuid_deflate($_) } @$users]}) : ()
         },
         {
             join     => 'run',
@@ -557,7 +561,7 @@ sub _build_stat_coverage {
             'me.data'        => \'IS NOT NULL',
             'run.project_id' => $project->project_id,
             'run.has_coverage' => 1,
-            @$users ? (user_id => {'-in' => $users}) : ()
+            @$users ? (user_id => {'-in' => [map { uuid_deflate($_) } @$users]}) : ()
         },
         {
             join     => 'run',

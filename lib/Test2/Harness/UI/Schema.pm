@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Carp qw/confess/;
 
-use Test2::Harness::Util qw/looks_like_uuid/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 our $VERSION = '0.000136';
 
@@ -44,7 +44,7 @@ sub vague_run_search {
     }
 
     if (my $source = $params{source}) {
-        my $uuid = looks_like_uuid($source);
+        my $uuid = uuid_inflate($source);
 
         if ($uuid) {
             $run = $self->resultset('Run')->find({%$query, run_id => $uuid}, $attrs);

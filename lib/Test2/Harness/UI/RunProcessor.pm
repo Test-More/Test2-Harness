@@ -17,7 +17,7 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 
 use Test2::Harness::UI::Util qw/format_duration is_invalid_subtest_name/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::UI::UUID qw/gen_uuid uuid_inflate/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use JSON::PP();
 
@@ -138,6 +138,10 @@ sub init {
     $run->discard_changes;
 
     $self->{+PROJECT_ID} //= $run->project_id;
+
+    $self->{+RUN_ID}     = uuid_inflate($self->{+RUN_ID});
+    $self->{+USER_ID}    = uuid_inflate($self->{+USER_ID});
+    $self->{+PROJECT_ID} = uuid_inflate($self->{+PROJECT_ID});
 
     $self->{+ID_CACHE} = {};
     $self->{+COVERAGE} = [];
@@ -413,6 +417,7 @@ sub get_job {
         $is_harness_out = 1;
     }
 
+    $job_id = uuid_inflate($job_id);
     my $job_try = $params{job_try} // 0;
 
     my $job = $self->{+JOBS}->{$job_id}->{$job_try};
@@ -610,7 +615,7 @@ sub _process_event {
     my $harness = $f->{harness} // {};
     my $trace   = $f->{trace}   // {};
 
-    my $e_id   = $harness->{event_id} // $event->{event_id} // die "No event id!";
+    my $e_id   = uuid_inflate($harness->{event_id} // $event->{event_id} // die "No event id!");
     my $nested = $f->{hubs}->[0]->{nested} || 0;
 
     my @has_binary;
@@ -831,6 +836,13 @@ sub flush_coverage {
 
 sub _get__id {
     my $self = shift;
+    my $id = $self->_get___id(@_);
+    return $id unless defined $id;
+    return uuid_inflate($id);
+}
+
+sub _get___id {
+    my $self = shift;
     my ($type, $id_field, $field, $id) = @_;
 
     return undef unless $id;
@@ -1050,10 +1062,6 @@ sub update_other {
 
 __END__
 
-
-        if ($new->{name} eq 'coverage' && !$new->{link} && $type eq 'RunField') {
-            $new->{link} = "/coverage/$id";
-        }
 =pod
 
 =encoding UTF-8

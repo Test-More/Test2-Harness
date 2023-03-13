@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '0.000136';
 
+use Test2::Harness::UI::UUID qw/gen_uuid uuid_inflate/;
 use Data::GUID;
 use Carp qw/croak/;
 
@@ -33,13 +34,13 @@ sub session {
     my $session;
     my $cookies = $self->cookies;
 
-    if (my $id = $cookies->{id}) {
+    if (my $id = uuid_inflate($cookies->{id})) {
         $session = $schema->resultset('Session')->find({session_id => $id});
         $session = undef unless $session && $session->active;
     }
 
     $session ||= $self->schema->resultset('Session')->create(
-        {session_id => Data::GUID->new->as_string},
+        {session_id => gen_uuid},
     );
 
     $self->{session} = $session;
@@ -70,7 +71,7 @@ sub session_host {
     );
 
     $host //= $schema->resultset('SessionHost')->create({
-        session_host_id => Data::GUID->new->as_string,
+        session_host_id => gen_uuid,
         session_id      => $session->session_id,
         address         => $self->address // 'SOCKET',
         agent           => $self->user_agent,

@@ -9,7 +9,7 @@ confess "You must first load a Test2::Harness::UI::Schema::NAME module"
 
 our $VERSION = '0.000136';
 
-use Data::GUID;
+use Test2::Harness::UI::UUID qw/gen_uuid/;
 use Carp qw/croak/;
 
 use constant COST => 8;
@@ -64,13 +64,10 @@ sub gen_api_key {
     croak "Must provide a key name"
         unless defined($name);
 
-    my $guid = Data::GUID->new;
-    my $val  = $guid->as_string;
-
     return $self->result_source->schema->resultset('ApiKey')->create(
         {
             user_id => $self->user_id,
-            value   => $val,
+            value   => gen_uuid(),
             status  => 'active',
             name    => $name,
         }

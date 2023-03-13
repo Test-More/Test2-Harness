@@ -20,7 +20,7 @@ __PACKAGE__->inflate_column(
 
 sub TO_JSON {
     my $self = shift;
-    my %cols = $self->get_columns;
+    my %cols = $self->get_all_fields;
     $cols{data} = decode_json($cols{data}) if $cols{data} && !ref($cols{data});
     return \%cols;
 }

@@ -1,5 +1,5 @@
 CREATE TABLE users (
-    user_id         CHAR(36)        NOT NULL PRIMARY KEY,
+    user_id         BINARY(16)      NOT NULL PRIMARY KEY,
     username        VARCHAR(64)     NOT NULL,
     pw_hash         VARCHAR(31)     DEFAULT NULL,
     pw_salt         VARCHAR(22)     DEFAULT NULL,
@@ -13,8 +13,8 @@ CREATE TABLE users (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE email (
-    email_id        CHAR(36)        NOT NULL PRIMARY KEY,
-    user_id         CHAR(36)        NOT NULL,
+    email_id        BINARY(16)      NOT NULL PRIMARY KEY,
+    user_id         BINARY(16)      NOT NULL,
     local           VARCHAR(128)    NOT NULL,
     domain          VARCHAR(128)    NOT NULL,
     verified        BOOL            NOT NULL DEFAULT FALSE,
@@ -24,8 +24,8 @@ CREATE TABLE email (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE primary_email (
-    user_id         CHAR(36)        NOT NULL PRIMARY KEY,
-    email_id        CHAR(36)        NOT NULL,
+    user_id         BINARY(16)      NOT NULL PRIMARY KEY,
+    email_id        BINARY(16)      NOT NULL,
 
     FOREIGN KEY (user_id)  REFERENCES users(user_id),
     FOREIGN KEY (email_id) REFERENCES email(email_id),
@@ -33,15 +33,15 @@ CREATE TABLE primary_email (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE hosts (
-    host_id     CHAR(36)        NOT NULL PRIMARY KEY,
+    host_id     BINARY(16)      NOT NULL PRIMARY KEY,
     hostname    VARCHAR(512)    NOT NULL,
 
     unique(hostname)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE email_verification_codes (
-    evcode_id       CHAR(36)        NOT NULL PRIMARY KEY,
-    email_id        CHAR(36)        NOT NULL,
+    evcode_id       BINARY(16)      NOT NULL PRIMARY KEY,
+    email_id        BINARY(16)      NOT NULL,
 
     FOREIGN KEY (email_id) REFERENCES email(email_id),
 
@@ -49,14 +49,14 @@ CREATE TABLE email_verification_codes (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE sessions (
-    session_id      CHAR(36) NOT NULL PRIMARY KEY,
-    active          BOOL     DEFAULT TRUE
+    session_id      BINARY(16)  NOT NULL PRIMARY KEY,
+    active          BOOL        DEFAULT TRUE
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE session_hosts (
-    session_host_id     CHAR(36)    NOT NULL PRIMARY KEY,
-    session_id          CHAR(36)    NOT NULL,
-    user_id             CHAR(36),
+    session_host_id     BINARY(16)  NOT NULL PRIMARY KEY,
+    session_id          BINARY(16)  NOT NULL,
+    user_id             BINARY(16),
 
     created             TIMESTAMP   NOT NULL DEFAULT now(),
     accessed            TIMESTAMP   NOT NULL DEFAULT now(),
@@ -72,10 +72,10 @@ CREATE TABLE session_hosts (
 CREATE INDEX session_hosts_session ON session_hosts(session_id);
 
 CREATE TABLE api_keys (
-    api_key_id      CHAR(36)        NOT NULL PRIMARY KEY,
-    user_id         CHAR(36)        NOT NULL,
+    api_key_id      BINARY(16)      NOT NULL PRIMARY KEY,
+    user_id         BINARY(16)      NOT NULL,
     name            VARCHAR(128)    NOT NULL,
-    value           VARCHAR(36)     NOT NULL,
+    value           VARCHAR(16)     NOT NULL,
 
     status ENUM( 'active', 'disabled', 'revoked') NOT NULL,
 
@@ -86,7 +86,7 @@ CREATE TABLE api_keys (
 CREATE INDEX api_key_user ON api_keys(user_id);
 
 CREATE TABLE log_files (
-    log_file_id     CHAR(36)        NOT NULL PRIMARY KEY,
+    log_file_id     BINARY(16)      NOT NULL PRIMARY KEY,
     name            TEXT            NOT NULL,
 
     local_file      TEXT,
@@ -94,18 +94,18 @@ CREATE TABLE log_files (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE projects (
-    project_id      CHAR(36)        NOT NULL PRIMARY KEY,
+    project_id      BINARY(16)      NOT NULL PRIMARY KEY,
     name            VARCHAR(128)    NOT NULL,
-    owner           CHAR(36)        DEFAULT NULL,
+    owner           BINARY(16)      DEFAULT NULL,
 
     FOREIGN KEY (owner) REFERENCES users(user_id),
     UNIQUE(name)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE permissions (
-    permission_id   CHAR(36)        NOT NULL PRIMARY KEY,
-    project_id      CHAR(36)        NOT NULL,
-    user_id         CHAR(36)        NOT NULL,
+    permission_id   BINARY(16)      NOT NULL PRIMARY KEY,
+    project_id      BINARY(16)      NOT NULL,
+    user_id         BINARY(16)      NOT NULL,
     updated         TIMESTAMP       NOT NULL DEFAULT now(),
 
     cpan_batch      BIGINT          DEFAULT NULL,
@@ -116,8 +116,8 @@ CREATE TABLE permissions (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE runs (
-    run_id          CHAR(36)        NOT NULL PRIMARY KEY,
-    user_id         CHAR(36)        NOT NULL,
+    run_id          BINARY(16)      NOT NULL PRIMARY KEY,
+    user_id         BINARY(16)      NOT NULL,
 
     run_ord         BIGINT          NOT NULL AUTO_INCREMENT,
 
@@ -125,7 +125,7 @@ CREATE TABLE runs (
     worker_id       TEXT            DEFAULT NULL,
 
     error           TEXT            DEFAULT NULL,
-    project_id      CHAR(36)        NOT NULL,
+    project_id      BINARY(16)      NOT NULL,
 
     pinned          BOOL            NOT NULL DEFAULT FALSE,
     has_coverage    BOOL            NOT NULL DEFAULT FALSE,
@@ -133,7 +133,7 @@ CREATE TABLE runs (
     -- User Input
     added           TIMESTAMP       NOT NULL DEFAULT now(),
     duration        TEXT            DEFAULT NULL,
-    log_file_id     CHAR(36)        DEFAULT NULL,
+    log_file_id     BINARY(16)      DEFAULT NULL,
 
     mode ENUM('qvfds', 'qvfd', 'qvf', 'summary', 'complete') NOT NULL,
     buffer ENUM('none', 'diag', 'job', 'run') DEFAULT 'job' NOT NULL,
@@ -155,8 +155,8 @@ CREATE INDEX run_status ON runs(status);
 CREATE INDEX run_user ON runs(user_id);
 
 CREATE TABLE sweeps (
-    sweep_id        CHAR(36)        NOT NULL PRIMARY KEY,
-    run_id          CHAR(36)        NOT NULL,
+    sweep_id        BINARY(16)      NOT NULL PRIMARY KEY,
+    run_id          BINARY(16)      NOT NULL,
     name            VARCHAR(255)    NOT NULL,
 
     FOREIGN KEY (run_id) REFERENCES runs(run_id),
@@ -166,8 +166,8 @@ CREATE TABLE sweeps (
 CREATE INDEX sweep_runs ON sweeps(run_id);
 
 CREATE TABLE run_fields (
-    run_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
-    run_id          CHAR(36)        NOT NULL,
+    run_field_id    BINARY(16)      NOT NULL PRIMARY KEY,
+    run_id          BINARY(16)      NOT NULL,
     name            VARCHAR(255)    NOT NULL,
     data            LONGTEXT        DEFAULT NULL,
     details         TEXT            DEFAULT NULL,
@@ -180,19 +180,19 @@ CREATE TABLE run_fields (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE test_files (
-    test_file_id    CHAR(36)                                            NOT NULL PRIMARY KEY,
+    test_file_id    BINARY(16)                                          NOT NULL PRIMARY KEY,
     filename        VARCHAR(512)    CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(filename)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE jobs (
-    job_key         CHAR(36)    NOT NULL PRIMARY KEY,
+    job_key         BINARY(16)  NOT NULL PRIMARY KEY,
 
-    job_id          CHAR(36)    NOT NULL,
+    job_id          BINARY(16)  NOT NULL,
     job_try         INT         NOT NULL DEFAULT 0,
     job_ord         BIGINT      NOT NULL,
-    run_id          CHAR(36)    NOT NULL,
+    run_id          BINARY(16)  NOT NULL,
 
     is_harness_out  BOOL        NOT NULL DEFAULT 0,
 
@@ -201,7 +201,7 @@ CREATE TABLE jobs (
     parameters      LONGTEXT        DEFAULT NULL,
     fields          LONGTEXT        DEFAULT NULL,
 
-    test_file_id    CHAR(36)    DEFAULT NULL,
+    test_file_id    BINARY(16)  DEFAULT NULL,
 
     -- Summaries
     name            TEXT            DEFAULT NULL,
@@ -234,8 +234,8 @@ CREATE INDEX job_fail ON jobs(fail);
 CREATE INDEX job_file ON jobs(test_file_id);
 
 CREATE TABLE job_fields (
-    job_field_id    CHAR(36)        NOT NULL PRIMARY KEY,
-    job_key         CHAR(36)        NOT NULL,
+    job_field_id    BINARY(16)      NOT NULL PRIMARY KEY,
+    job_key         BINARY(16)      NOT NULL,
     name            VARCHAR(255)    NOT NULL,
     data            LONGTEXT        DEFAULT NULL,
     details         TEXT            DEFAULT NULL,
@@ -248,9 +248,9 @@ CREATE TABLE job_fields (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE events (
-    event_id        CHAR(36)    NOT NULL PRIMARY KEY,
+    event_id        BINARY(16)  NOT NULL PRIMARY KEY,
 
-    job_key         CHAR(36)    NOT NULL,
+    job_key         BINARY(16)  NOT NULL,
 
     event_ord       BIGINT      NOT NULL,
     insert_ord      BIGINT      NOT NULL AUTO_INCREMENT,
@@ -263,7 +263,7 @@ CREATE TABLE events (
 
     stamp           TIMESTAMP,
 
-    parent_id       CHAR(36)    DEFAULT NULL,
+    parent_id       BINARY(16)  DEFAULT NULL,
     trace_id        CHAR(36)    DEFAULT NULL,
     nested          INT         DEFAULT 0,
 
@@ -282,8 +282,8 @@ CREATE INDEX event_parent ON events(parent_id);
 CREATE INDEX is_subtest   ON events(is_subtest);
 
 CREATE TABLE binaries (
-    binary_id       CHAR(36)        NOT NULL PRIMARY KEY,
-    event_id        CHAR(36)        NOT NULL,
+    binary_id       BINARY(16)      NOT NULL PRIMARY KEY,
+    event_id        BINARY(16)      NOT NULL,
     filename        VARCHAR(512)    NOT NULL,
     description     TEXT            DEFAULT NULL,
     is_image        BOOL            NOT NULL DEFAULT FALSE,
@@ -293,35 +293,35 @@ CREATE TABLE binaries (
 );
 
 CREATE TABLE source_files (
-    source_file_id  CHAR(36)                                            NOT NULL PRIMARY KEY,
+    source_file_id  BINARY(16)                                          NOT NULL PRIMARY KEY,
     filename        VARCHAR(512)    CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(filename)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE source_subs (
-    source_sub_id   CHAR(36)                                            NOT NULL PRIMARY KEY,
+    source_sub_id   BINARY(16)                                          NOT NULL PRIMARY KEY,
     subname         VARCHAR(512)    CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(subname)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE coverage_manager (
-    coverage_manager_id   CHAR(36)                                          NOT NULL PRIMARY KEY,
+    coverage_manager_id   BINARY(16)                                        NOT NULL PRIMARY KEY,
     package               VARCHAR(256)  CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
 
     UNIQUE(package)
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE coverage (
-    coverage_id     CHAR(36)    NOT NULL PRIMARY KEY,
+    coverage_id     BINARY(16)  NOT NULL PRIMARY KEY,
 
-    run_id              CHAR(36)    NOT NULL,
-    test_file_id        CHAR(36)    NOT NULL,
-    source_file_id      CHAR(36)    NOT NULL,
-    source_sub_id       CHAR(36)    NOT NULL,
-    coverage_manager_id CHAR(36)    DEFAULT NULL,
-    job_key             CHAR(36)    DEFAULT NULL,
+    run_id              BINARY(16)  NOT NULL,
+    test_file_id        BINARY(16)  NOT NULL,
+    source_file_id      BINARY(16)  NOT NULL,
+    source_sub_id       BINARY(16)  NOT NULL,
+    coverage_manager_id BINARY(16)  DEFAULT NULL,
+    job_key             BINARY(16)  DEFAULT NULL,
 
     metadata    LONGTEXT    DEFAULT NULL,
 
@@ -339,7 +339,7 @@ CREATE INDEX coverage_from_run_source ON coverage(run_id, source_file_id, source
 CREATE INDEX coverage_from_job ON coverage(job_key);
 
 CREATE TABLE reporting (
-    reporting_id    CHAR(36)            NOT NULL PRIMARY KEY,
+    reporting_id    BINARY(16)          NOT NULL PRIMARY KEY,
     run_ord         BIGINT              NOT NULL,
     job_try         INT                 DEFAULT NULL,
     subtest         VARCHAR(512)        DEFAULT NULL,
@@ -350,12 +350,12 @@ CREATE TABLE reporting (
     retry           SMALLINT    NOT NULL DEFAULT 0,
     abort           SMALLINT    NOT NULL DEFAULT 0,
 
-    project_id      CHAR(36)    NOT NULL,
-    run_id          CHAR(36)    NOT NULL,
-    user_id         CHAR(36)    NOT NULL,
-    job_key         CHAR(36)    DEFAULT NULL,
-    test_file_id    CHAR(36)    DEFAULT NULL,
-    event_id        CHAR(36)    DEFAULT NULL,
+    project_id      BINARY(16)  NOT NULL,
+    run_id          BINARY(16)  NOT NULL,
+    user_id         BINARY(16)  NOT NULL,
+    job_key         BINARY(16)  DEFAULT NULL,
+    test_file_id    BINARY(16)  DEFAULT NULL,
+    event_id        BINARY(16)  DEFAULT NULL,
 
     FOREIGN KEY (project_id)      REFERENCES projects(project_id),
     FOREIGN KEY (run_id)          REFERENCES runs(run_id),
@@ -372,9 +372,9 @@ CREATE INDEX reporting_d    ON reporting(project_id, test_file_id, subtest, user
 CREATE INDEX reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);
 
 CREATE TABLE resource_batch (
-    resource_batch_id   CHAR(36)        NOT NULL PRIMARY KEY,
-    run_id              CHAR(36)        NOT NULL,
-    host_id             CHAR(36)        NOT NULL,
+    resource_batch_id   BINARY(16)      NOT NULL PRIMARY KEY,
+    run_id              BINARY(16)      NOT NULL,
+    host_id             BINARY(16)      NOT NULL,
     stamp               TIMESTAMP(4)    NOT NULL,
 
     FOREIGN KEY (run_id)  REFERENCES runs(run_id),
@@ -382,8 +382,8 @@ CREATE TABLE resource_batch (
 ) ROW_FORMAT=COMPRESSED;
 
 CREATE TABLE resources (
-    resource_id         CHAR(36)        NOT NULL PRIMARY KEY,
-    resource_batch_id   CHAR(36)        NOT NULL,
+    resource_id         BINARY(16)      NOT NULL PRIMARY KEY,
+    resource_batch_id   BINARY(16)      NOT NULL,
     batch_ord           INT             NOT NULL,
     module              VARCHAR(512)    NOT NULL,
     data                LONGTEXT        NOT NULL,

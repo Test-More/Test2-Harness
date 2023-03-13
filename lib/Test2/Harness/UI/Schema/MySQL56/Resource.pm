@@ -2,12 +2,12 @@ use utf8;
 package Test2::Harness::UI::Schema::Result::Resource;
 
 # Created by DBIx::Class::Schema::Loader
-# DO NOT MODIFY THE FIRST PART OF THIS FILE
+# DO NOT MODIFY ANY PART OF THIS FILE
 
 use strict;
 use warnings;
 
-use base 'DBIx::Class::Core';
+use base 'Test2::Harness::UI::Schema::ResultBase';
 __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
@@ -18,9 +18,9 @@ __PACKAGE__->load_components(
 __PACKAGE__->table("resources");
 __PACKAGE__->add_columns(
   "resource_id",
-  { data_type => "char", is_nullable => 0, size => 36 },
+  { data_type => "binary", is_nullable => 0, size => 16 },
   "resource_batch_id",
-  { data_type => "char", is_foreign_key => 1, is_nullable => 0, size => 36 },
+  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "batch_ord",
   { data_type => "integer", is_nullable => 0 },
   "module",
@@ -38,9 +38,10 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-02-15 17:15:55
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:NI0cSJXrLye9Pe/USJ+sTw
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-03-02 16:05:19
+use Test2::Harness::UI::UUID qw/uuid_inflate uuid_deflate/;
+__PACKAGE__->inflate_column('resource_batch_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+__PACKAGE__->inflate_column('resource_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# DO NOT MODIFY ANY PART OF THIS FILE
 
-
-# You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

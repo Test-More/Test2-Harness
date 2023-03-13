@@ -10,6 +10,7 @@ use Text::Xslate(qw/mark_raw/);
 use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
 use Test2::Harness::UI::Util::HashBase qw/-title/;
@@ -25,7 +26,7 @@ sub handle {
 
     die error(404 => 'Missing route') unless $route;
 
-    my $it = $route->{id} or die error(404 => 'No id');
+    my $it = uuid_inflate($route->{id}) or die error(404 => 'No id');
     my $schema = $self->{+CONFIG}->schema;
     my $field = $schema->resultset('RunField')->search({run_field_id => $it})->first or die error(404 => 'Invalid Field');
 

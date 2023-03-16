@@ -20,10 +20,14 @@ use Test2::Harness::Util::HashBase qw{
     +transaction
 
     <registered <unregistered
+
+    +cache +no_cache
 };
 
 use constant LOCAL  => 'local';
 use constant ACCESS => 'access';
+
+sub state_class {}
 
 sub init {
     my $self = shift;
@@ -34,8 +38,20 @@ sub init {
     $self->{+STATE_UMASK} //= 0007;
 }
 
-sub init_state { {} }
-sub state      { shift->transaction('r') }
+sub state { shift->transaction('r') }
+sub data  { shift->transaction('r') }
+
+sub init_state {
+    my $self = shift;
+    return {timeout => $self->{+TIMEOUT}};
+}
+
+sub _times {
+    my $self = shift;
+    my $file = $self->{+STATE_FILE};
+    my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);
+    return [$mtime, $ctime];
+}
 
 sub transaction {
     my $self = shift;
@@ -47,44 +63,62 @@ sub transaction {
     my $read  = $mode eq 'ro' || $mode eq 'r';
     croak "mode must be 'w', 'rw', 'r', or 'ro', got '$mode'" unless $write || $read;
 
-    confess "Write mode requires a 'access_id'"  if $write && !$self->{+ACCESS_ID};
-    confess "Write mode requires a 'access_pid'" if $write && !$self->{+ACCESS_PID};
+    if ($write) {
+        confess "Write mode requires a 'access_id'"  unless $self->access_id;
+        my $pid = $self->access_pid or confess "Write mode requires a 'access_pid'";
+        confess "Access PID mismatch ($pid vs $$)" unless $$ == $pid;
+    }
 
-    my ($lock, $state, $local);
+    my ($lock, $state, $local, $new);
     if ($state = $self->{+TRANSACTION}) {
+        $new = 0;
         $local = $state->{+LOCAL};
 
         confess "Attempted a 'write' transaction inside of a read-only transaction"
             if $write && !$local->{write};
     }
     else {
+        my $cache = $self->{+CACHE};
+        if ($read && $cache) {
+            my $times = $self->_times();
+            if ($cache->[0] eq $times->[0] && $cache->[1] eq $times->[1]) {
+                $state = $cache->[2];
+            }
+            else {
+                delete $self->{+CACHE};
+            }
+        }
+
+        $new = 1;
         my $oldmask = umask($self->{+STATE_UMASK});
 
-        my $ok = eval {
-            my $lockf = "$self->{+STATE_FILE}.LOCK";
+        unless ($state) {
+            my $ok = eval {
+                my $lockf = "$self->{+STATE_FILE}.LOCK";
 
-            open($lock, '>>', $lockf) or die "Could not open lock file '$lockf': $!";
-            while (1) {
-                last if flock($lock, $write ? LOCK_EX : LOCK_SH);
-                next if $! == EINTR || $! == EAGAIN;
-                warn "Could not get lock: $!";
-            }
+                open($lock, '>>', $lockf) or die "Could not open lock file '$lockf': $!";
+                while (1) {
+                    last if flock($lock, $write ? LOCK_EX : LOCK_SH);
+                    next if $! == EINTR || $! == EAGAIN;
+                    warn "Could not get lock: $!";
+                }
 
-            $state = $self->_read_state();
-            $local = $state->{+LOCAL} = {
-                lock  => $lock,
-                mode  => $mode,
-                write => $write,
-                stack => [{cb => $cb, args => \@args}],
+                $state = $self->_read_state();
+                1;
             };
+            my $err = $@;
+            umask($oldmask);
+            die $err unless $ok;
+        }
 
-            weaken($state->{+LOCAL}->{lock});
-
-            1;
+        $local = $state->{+LOCAL} = {
+            lock  => $lock,
+            mode  => $mode,
+            write => $write,
+            stack => [{cb => $cb, args => \@args}],
         };
-        my $err = $@;
-        umask($oldmask);
-        die $err unless $ok;
+
+        weaken($state->{+LOCAL}->{lock});
     }
 
     local @{$local}{qw/write mode stack/} = ($write, $mode, [@{$local->{stack}}, {cb => $cb, args => \@args}])
@@ -92,27 +126,30 @@ sub transaction {
 
     local $self->{+TRANSACTION} = $state;
 
-    if ($write) {
-        if ($self->{+REGISTERED}) {
-            $self->_verify_registration($state);
+    if ($new) {
+        if ($write) {
+            if ($self->{+REGISTERED}) {
+                $self->_verify_registration($state);
+            }
+            else {
+                $self->_update_registration($state);
+            }
         }
-        else {
-            $self->_update_registration($state);
-        }
+        $self->_clear_old_registrations($state);
     }
-    $self->_clear_old_registrations($state);
 
     my $out;
     my $ok  = eval { $out = $cb ? $self->$cb($state, @args) : $state; 1 };
     my $err = $@;
 
-    if ($ok && $write) {
+    if ($ok && $write && $new) {
         $self->_clear_old_registrations($state);
         $self->_update_registration($state) unless $self->{+UNREGISTERED};
         $self->_write_state($state);
     }
 
     if ($lock) {
+        $self->{+CACHE} //= [@{$self->_times}, $state] unless $self->{+NO_CACHE};
         flock($lock, LOCK_UN) or die "Could not release lock: $!";
     }
 

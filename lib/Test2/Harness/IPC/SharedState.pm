@@ -212,11 +212,11 @@ sub _update_registration {
     my $self = shift;
     my ($state, %params) = @_;
 
-    my $access_id = $self->{+ACCESS_ID};
+    my $access_id = $self->access_id;
     my $entry     = $state->{+ACCESS}->{$access_id} //= {
         %{$self->{+ACCESS_META} // {}},
         access_id  => $access_id,
-        access_pid => $self->{+ACCESS_PID},
+        access_pid => $self->access_pid,
         user       => $ENV{USER},
         added      => time,
     };
@@ -240,7 +240,7 @@ sub _verify_registration {
 
     return unless $self->{+REGISTERED};
 
-    my $access_id = $self->{+ACCESS_ID};
+    my $access_id = $self->access_id;
     my $entry     = $state->{+ACCESS}->{$access_id};
 
     # Do not allow for a new expiration. If the state has already expired us we will see it.
@@ -285,7 +285,7 @@ sub _clear_old_registrations {
 
         my $access_id = $entry->{access_id};
 
-        $self->{+UNREGISTERED} = 1 if $access_id eq $self->{+ACCESS_ID};
+        $self->{+UNREGISTERED} = 1 if $access_id eq $self->access_id;
 
         delete $access->{$access_id};
 

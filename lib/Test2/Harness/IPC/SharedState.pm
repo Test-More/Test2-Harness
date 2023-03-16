@@ -165,20 +165,33 @@ sub _read_state {
 
     my $file = Test2::Harness::Util::File::JSON->new(name => $self->{+STATE_FILE});
 
-    my ($ok, $err);
+    my ($ok, $err, $state);
     for (1 .. 5) {
-        my $state;
         $ok  = eval { $state = $file->maybe_read(); 1 };
         $err = $@;
 
-        return $state ||= $self->init_state if $ok;
+        last if $ok;
 
         sleep 0.2;
     }
 
-    warn "Corrupted state? Resetting state to initial. Error that caused this was:\n======\n$err\n======\n";
+    warn "Corrupted state? Resetting state to initial. Error that caused this was:\n======\n$err\n======\n"
+        unless $ok;
 
-    return $self->init_state;
+    $state ||= $self->init_state;
+
+    $self->sync_from_state($state);
+
+    my $class = $self->state_class or return $state;
+    return $state if blessed($state);
+    return bless($state, $class);
+}
+
+sub sync_from_state {
+    my $self = shift;
+    my ($state) = @_;
+
+    $self->{+TIMEOUT} = $state->{timeout};
 }
 
 sub _write_state {
@@ -267,7 +280,7 @@ sub _entry_expired {
     my $seen  = $entry->{seen} or return 1;
     my $delta = time - $seen;
 
-    return 1 if $delta > $self->{+TIMEOUT};
+    return 1 if $self->{+TIMEOUT} && $delta > $self->{+TIMEOUT};
 
     return 0;
 }

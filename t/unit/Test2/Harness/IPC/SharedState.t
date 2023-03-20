@@ -21,7 +21,6 @@ sub inst {
         max_slots_per_job => 3,
         max_slots_per_run => 9,
         access_pid        => $$,
-        no_cache          => 1,
         %params,
     );
 }

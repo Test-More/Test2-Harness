@@ -4,6 +4,7 @@ use warnings;
 
 use Carp qw/confess/;
 use Cwd qw/realpath/;
+use List::Util qw/min/;
 use Test2::Util qw/try_sig_mask do_rename/;
 use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET :mode/;
 use File::Spec;
@@ -40,7 +41,28 @@ our @EXPORT_OK = qw{
 
     looks_like_uuid
     is_same_file
+
+    resize_pipe
 };
+
+sub resize_pipe {
+    return unless defined &Fcntl::F_SETPIPE_SZ;
+    my ($fh, $size) = @_;
+
+    # 1mb if we can
+    $size //= 1024 * 1024 * 1;
+
+    # On linux systems lets go for the smaller of the two between 1mb and
+    # system max.
+    if (-e '/proc/sys/fs/pipe-max-size') {
+        open(my $max, '<', '/proc/sys/fs/pipe-max-size');
+        chomp(my $val = <$max>);
+        close($max);
+        $size = min($size, $val);
+    }
+
+    fcntl($fh, Fcntl::F_SETPIPE_SZ(), $size);
+}
 
 sub is_same_file {
     my ($file1, $file2) = @_;

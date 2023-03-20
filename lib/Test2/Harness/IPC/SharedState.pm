@@ -5,8 +5,8 @@ use warnings;
 our $VERSION = '1.000146';
 
 use Test2::Harness::Util::File::JSON;
-use Scalar::Util qw/weaken/;
-use Time::HiRes qw/time/;
+use Scalar::Util qw/weaken blessed/;
+use Time::HiRes qw/time stat/;
 use Carp qw/croak confess/;
 use Fcntl qw/:flock/;
 use Errno qw/EINTR EAGAIN ESRCH/;
@@ -20,8 +20,6 @@ use Test2::Harness::Util::HashBase qw{
     +transaction
 
     <registered <unregistered
-
-    +cache +no_cache
 };
 
 use constant LOCAL  => 'local';
@@ -44,13 +42,6 @@ sub data  { shift->transaction('r') }
 sub init_state {
     my $self = shift;
     return {timeout => $self->{+TIMEOUT}};
-}
-
-sub _times {
-    my $self = shift;
-    my $file = $self->{+STATE_FILE};
-    my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);
-    return [$mtime, $ctime];
 }
 
 sub transaction {
@@ -78,38 +69,25 @@ sub transaction {
             if $write && !$local->{write};
     }
     else {
-        my $cache = $self->{+CACHE};
-        if ($read && $cache) {
-            my $times = $self->_times();
-            if ($cache->[0] eq $times->[0] && $cache->[1] eq $times->[1]) {
-                $state = $cache->[2];
-            }
-            else {
-                delete $self->{+CACHE};
-            }
-        }
-
         $new = 1;
+
         my $oldmask = umask($self->{+STATE_UMASK});
+        my $ok = eval {
+            my $lockf = "$self->{+STATE_FILE}.LOCK";
 
-        unless ($state) {
-            my $ok = eval {
-                my $lockf = "$self->{+STATE_FILE}.LOCK";
+            open($lock, '>>', $lockf) or die "Could not open lock file '$lockf': $!";
+            while (1) {
+                last if flock($lock, $write ? LOCK_EX : LOCK_SH);
+                next if $! == EINTR || $! == EAGAIN;
+                warn "Could not get lock: $!";
+            }
 
-                open($lock, '>>', $lockf) or die "Could not open lock file '$lockf': $!";
-                while (1) {
-                    last if flock($lock, $write ? LOCK_EX : LOCK_SH);
-                    next if $! == EINTR || $! == EAGAIN;
-                    warn "Could not get lock: $!";
-                }
-
-                $state = $self->_read_state();
-                1;
-            };
-            my $err = $@;
-            umask($oldmask);
-            die $err unless $ok;
-        }
+            $state = $self->_read_state();
+            1;
+        };
+        my $err = $@;
+        umask($oldmask);
+        die $err unless $ok;
 
         $local = $state->{+LOCAL} = {
             lock  => $lock,
@@ -128,7 +106,7 @@ sub transaction {
 
     if ($new) {
         if ($write) {
-            if ($self->{+REGISTERED}) {
+            if ($self->registered) {
                 $self->_verify_registration($state);
             }
             else {
@@ -149,7 +127,6 @@ sub transaction {
     }
 
     if ($lock) {
-        $self->{+CACHE} //= [@{$self->_times}, $state] unless $self->{+NO_CACHE};
         flock($lock, LOCK_UN) or die "Could not release lock: $!";
     }
 
@@ -237,7 +214,7 @@ sub _update_registration {
     # Update our last checkin time
     $entry->{seen} = time;
 
-    $self->{+REGISTERED} = 1;
+    $self->{+REGISTERED} = $$;
 
     return $state unless $params{remove};
 
@@ -251,7 +228,7 @@ sub _verify_registration {
     my $self = shift;
     my ($state) = @_;
 
-    return unless $self->{+REGISTERED};
+    return unless $self->registered;
 
     my $access_id = $self->access_id;
     my $entry     = $state->{+ACCESS}->{$access_id};

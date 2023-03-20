@@ -118,7 +118,7 @@ sub init_state {
 
     $state->{workdir} //= $self->{+WORKDIR};
 
-    my $settings = $state->{settings} //= $self->{+SETTINGS} //= Test2::Harness::Settings->new(File::Spec->catfile($self->{+WORKDIR}, 'settings.json'));
+    my $settings = $state->{settings} //= $self->{+SETTINGS} // die "No settings";
     $state->{job_count} //= $self->{+JOB_COUNT} //= $settings->check_prefix('runner') ? $settings->runner->job_count // 1 : 1;
 
     for my $type (qw/resource plugin renderer/) {
@@ -132,6 +132,7 @@ sub init_state {
         }
         else {
             next unless $settings->check_prefix('harness');
+            next unless $settings->harness->check_field($plural);
             $raw = $settings->harness->$plural // [];
         }
 
@@ -150,12 +151,12 @@ sub init_state {
 
 sub settings {
     my $self = shift;
-    return $self->{+SETTINGS} //= $self->transaction(r => sub { Test2::Harness::Settings->new(%{$_[0]->settings}) });
+    return $self->{+SETTINGS} //= $self->transaction(r => sub { Test2::Harness::Settings->new(%{$_[1]->settings}) });
 }
 
 sub job_count {
     my $self = shift;
-    return $self->{+JOB_COUNT} //= $self->transaction(r => sub { $_[0]->job_count });
+    return $self->{+JOB_COUNT} //= $self->transaction(r => sub { $_[1]->job_count });
 }
 
 sub _init_resources {
@@ -167,11 +168,18 @@ sub _init_resources {
     my $has_limiter = undef;
 
     for my $res (@$list) {
-        require(mod2file($res));
-        my $inst = $res->new(settings => $settings, observe => $self->{+OBSERVE});
+        my ($type, $inst);
+        if ($type = ref($res)) {
+            $inst = $res;
+        }
+        else {
+            $type = $res;
+            require(mod2file($res));
+            $inst = $res->new(settings => $settings, observe => $self->{+OBSERVE});
+        }
 
-        push @inst => $inst;
-        push @store => $res;
+        push @inst  => $inst;
+        push @store => $type;
 
         $has_limiter ||= $inst->job_limiter;
     }
@@ -220,13 +228,18 @@ sub _init_plugins {
     my (@store, @inst);
 
     for my $p (@$list) {
-        require(mod2file($p));
-        push @store => $p;
+        my ($type, $inst);
+        if ($type = ref($p)) {
+            $inst = $p;
+        }
+        else {
+            $type = $p;
+            require(mod2file($p));
+            $inst = $p->new(settings => $settings) if $p->can('new');
+        }
 
-        next unless $p->can('new');
-
-        my $inst = $p->new(settings => $settings);
-        push @inst => $inst;
+        push @store => $type;
+        push @inst  => $inst;
     }
 
     return (\@store, \@inst);

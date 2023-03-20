@@ -155,19 +155,6 @@ sub generate_pod {
     return join("\n\n" => grep { $_ } @out);
 }
 
-sub write_settings_to {
-    my $self = shift;
-    my ($dir, $file) = @_;
-
-    croak "'directory' is a required parameter" unless $dir;
-    croak "'filename' is a required parameter" unless $file;
-
-    my $settings = $self->settings;
-    my $settings_file = Test2::Harness::Util::File::JSON->new(name => File::Spec->catfile($dir, $file));
-    $settings_file->write($settings);
-    return $settings_file->name;
-}
-
 sub setup_resources {
     my $self = shift;
     my $settings = $self->settings;

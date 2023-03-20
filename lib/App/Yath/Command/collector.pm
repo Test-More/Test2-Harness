@@ -12,6 +12,7 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/mod2file/;
 
 use Test2::Harness::Run;
+use Test2::Harness::State;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
@@ -30,7 +31,8 @@ sub run {
 
     my $fh = isolate_stdout();
 
-    my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+    my $all_state = Test2::Harness::State->new(workdir => $dir);
+    my $settings = $all_state->settings;
 
     require(mod2file($collector_class));
 

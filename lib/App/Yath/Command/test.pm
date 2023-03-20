@@ -6,6 +6,7 @@ our $VERSION = '1.000152';
 
 use App::Yath::Options;
 
+use Test2::Harness::State;
 use Test2::Harness::Run;
 use Test2::Harness::Event;
 use Test2::Harness::Util::Queue;
@@ -47,7 +48,7 @@ use Test2::Harness::Util::HashBase qw/
 
     +run_queue
     +tasks_queue
-    +state
+    +state +all_state
 
     <cleanup_subs
 
@@ -280,9 +281,10 @@ sub write_test_info {
 sub start {
     my $self = shift;
 
+    $self->all_state->transaction(w => sub { 1 });
+
     $self->ipc->start();
     $self->parse_args;
-    $self->write_settings_to($self->workdir, 'settings.json');
 
     $self->write_test_info();
     my $pop = $self->populate_queue();
@@ -498,10 +500,23 @@ sub build_run {
     return $self->{+RUN} = $run;
 }
 
+sub all_state {
+    my $self = shift;
+
+    $self->{+ALL_STATE} //= Test2::Harness::State->new(
+        workdir   => $self->workdir,
+        job_count => $self->job_count,
+        settings  => $self->settings,
+    );
+}
+
 sub state {
     my $self = shift;
 
+    my $all_state = $self->all_state;
+
     $self->{+STATE} //= Test2::Harness::Runner::State->new(
+        state     => $all_state,
         workdir   => $self->workdir,
         job_count => $self->job_count,
         no_poll   => 1,

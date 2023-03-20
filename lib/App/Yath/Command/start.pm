@@ -7,6 +7,7 @@ our $VERSION = '1.000152';
 use App::Yath::Util qw/find_pfile/;
 use App::Yath::Options;
 
+use Test2::Harness::State;
 use Test2::Harness::Run;
 use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
@@ -117,7 +118,11 @@ sub run {
         die "Persistent harness appears to be running, found $pfile\n";
     }
 
-    $self->write_settings_to($dir, 'settings.json');
+    my $all_state = Test2::Harness::State->new(
+        workdir => $dir,
+        settings => $settings,
+    );
+    $all_state->transaction(w => sub { 1 });
 
     my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
     $run_queue->start();

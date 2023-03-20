@@ -171,9 +171,6 @@ is(
 
 is(@{$state->data->ipc_model->{render_files}->{1}}, 2, "2 render files");
 
-use Data::Dumper;
-print Dumper($state->data);
-
 is([$reader1->()], [], "Got nothing, did not block");
 
 $one->finish();

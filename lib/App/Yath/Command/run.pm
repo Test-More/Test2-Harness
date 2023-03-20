@@ -6,6 +6,7 @@ our $VERSION = '1.000152';
 
 use App::Yath::Options;
 
+use Test2::Harness::State;
 use Test2::Harness::Run;
 use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
@@ -174,7 +175,8 @@ sub init {
     my $settings = $self->settings;
     my $pdata = $self->pfile_data;
 
-    my $runner_settings = Test2::Harness::Util::File::JSON->new(name => $pdata->{dir} . '/settings.json')->read();
+    my $all_state = Test2::Harness::State->new(workdir => $pdata->{dir});
+    my $runner_settings = $all_state->data->settings;
 
     for my $prefix (sort keys %{$runner_settings}) {
         next if $settings->check_prefix($prefix);

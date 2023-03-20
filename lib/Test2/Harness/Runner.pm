@@ -53,7 +53,7 @@ use Test2::Harness::Util::HashBase(
     # From Construction
     qw{
         <dir <settings <fork_job_callback <fork_spawn_callback <respawn_runner_callback <monitor_preloads
-        <jobs_todo <dump_depmap
+        <jobs_todo <dump_depmap <all_state
     },
     # Other
     qw {

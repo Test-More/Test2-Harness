@@ -71,6 +71,7 @@ BEGIN {
 }
 
 use Test2::Harness::IPC();
+use Test2::Harness::State;
 
 use Carp qw/confess/;
 use Scalar::Util qw/openhandle/;
@@ -116,7 +117,8 @@ sub generate_run_sub {
 
     $RUNNER_PID = $$;
     my $runner_pid = $$;
-    my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+    my $all_state = Test2::Harness::State->new(workdir => $dir);
+    my $settings = $all_state->settings;
 
     my $name = $ENV{NESTED_YATH} ? 'yath-nested-runner' : 'yath-runner';
     $name = $settings->debug->procname_prefix . "-${name}" if $settings->debug->procname_prefix;
@@ -146,8 +148,9 @@ sub generate_run_sub {
 
             %args,
 
-            dir      => $dir,
-            settings => $settings,
+            dir       => $dir,
+            settings  => $settings,
+            all_state => $all_state,
 
             fork_job_callback       => sub { $class->launch_via_fork(@_) },
             fork_spawn_callback     => sub { $class->launch_spawn(@_) },

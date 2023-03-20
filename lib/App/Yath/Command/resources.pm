@@ -11,6 +11,7 @@ use Time::HiRes qw/sleep/;
 use App::Yath::Util qw/find_pfile/;
 
 use App::Yath::Options;
+use Test2::Harness::State;
 use Test2::Harness::Runner::State;
 use Test2::Harness::Util::File::JSON();
 use Test2::Harness::Util::Queue();
@@ -68,13 +69,14 @@ sub state {
         }
 
         if (my $pfile = find_pfile($self->settings, no_fatal => 1)) {
-            my $data     = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-            my $workdir  = $data->{dir};
-            my $settings = Test2::Harness::Util::File::JSON->new(name => "$workdir/settings.json")->read();
+            my $data      = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+            my $workdir   = $data->{dir};
+            my $all_state = Test2::Harness::State->new(workdir => $workdir);
 
             return $self->{+STATE} = Test2::Harness::Runner::State->new(
-                observe  => 1,
-                job_count => $settings->{runner}->{job_count} // 1,
+                all_state => $all_state,
+                observe   => 1,
+                job_count => $all_state->job_count // 1,
                 workdir   => $data->{dir},
             );
         }

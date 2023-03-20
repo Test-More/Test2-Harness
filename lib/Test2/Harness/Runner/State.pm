@@ -12,6 +12,8 @@ use List::Util qw/first/;
 
 use Test2::Harness::Util qw/mod2file/;
 
+use Test2::Harness::State;
+
 use Test2::Harness::Settings;
 use Test2::Harness::Runner::Constants;
 
@@ -24,6 +26,7 @@ use Test2::Harness::Util::HashBase(
     # These are construction arguments
     qw{
         <eager_stages
+        <state
         <workdir
         <preloader
         <no_poll
@@ -61,8 +64,11 @@ use Test2::Harness::Util::HashBase(
 sub init {
     my $self = shift;
 
-    croak "You must specify a workdir"
-        unless defined $self->{+WORKDIR};
+    croak "You must specify a workdir or provide state"
+        unless $self->{+STATE} || defined $self->{+WORKDIR};
+
+    $self->{+WORKDIR} //= $self->{+STATE}->workdir;
+    $self->{+STATE}   //= Test2::Harness::State->new(workdir => $self->{+WORKDIR});
 
     $self->{+JOB_COUNT} //= $self->settings->runner->job_count // 1;
 
@@ -91,7 +97,7 @@ sub init {
 
 sub settings {
     my $self = shift;
-    return $self->{+SETTINGS} //= Test2::Harness::Settings->new(File::Spec->catfile($self->{+WORKDIR}, 'settings.json'));
+    return $self->{+SETTINGS} //= $self->state->settings;
 }
 
 sub run {

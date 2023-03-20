@@ -222,6 +222,12 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         default => sub { gen_uuid() },
         description => 'Runner ID (usually a generated uuid)',
     );
+
+    option taint => (
+        type => 'b',
+        default => 0,
+        description => '(Default: off) Enable taint mode for the runner. This is very useful when combined with preload and tests that contain a taint flag in their shebang.',
+    );
 };
 
 sub jobs_post_process {

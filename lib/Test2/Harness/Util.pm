@@ -40,6 +40,8 @@ our @EXPORT_OK = qw{
 
     looks_like_uuid
     is_same_file
+
+    untaint
 };
 
 sub is_same_file {
@@ -115,7 +117,7 @@ sub process_includes {
 
     confess "Invalid parameters: " . join(', ' => sort keys %params) if keys %params;
 
-    return @list;
+    return map { untaint($_) } @list;
 }
 
 sub apply_encoding {
@@ -212,7 +214,7 @@ sub open_file {
         }
     }
 
-    open(my $fh, $mode, $file) or confess "Could not open file '$file' ($mode): $!";
+    open(my $fh, $mode, untaint($file)) or confess "Could not open file '$file' ($mode): $!";
     return $fh;
 }
 
@@ -232,6 +234,7 @@ sub close_file {
 sub write_file_atomic {
     my ($file, @content) = @_;
 
+    $file = untaint($file);
     my $pend = "$file.pend";
 
     my ($ok, $err) = try_sig_mask {
@@ -253,7 +256,7 @@ sub lock_file {
         $fh = $file;
     }
     else {
-        open($fh, $mode // '>>', $file) or die "Could not open file '$file': $!";
+        open($fh, $mode // '>>', untaint($file)) or die "Could not open file '$file': $!";
     }
 
     for (1 .. 21) {
@@ -293,7 +296,7 @@ sub mod2file {
     my $file = $mod;
     $file =~ s{::}{/}g;
     $file .= ".pm";
-    return $file;
+    return untaint($file);
 }
 
 sub file2mod {
@@ -371,6 +374,8 @@ sub find_libraries {
 
     return \%out;
 }
+
+*untaint = ${^TAINT} ? sub { $_[0] =~ /(.*)/; $1 } : sub { $_[0] };
 
 1;
 

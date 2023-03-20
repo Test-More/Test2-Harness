@@ -14,7 +14,7 @@ use Time::HiRes qw/time/;
 use File::Spec();
 use File::Temp();
 
-use Test2::Harness::Util qw/fqmod clean_path write_file_atomic write_file mod2file open_file parse_exit process_includes chmod_tmp/;
+use Test2::Harness::Util qw/fqmod clean_path write_file_atomic write_file mod2file open_file parse_exit process_includes chmod_tmp untaint/;
 use Test2::Harness::IPC;
 
 use parent 'Test2::Harness::IPC::Process';
@@ -356,7 +356,7 @@ sub job_dir {
     my $self = shift;
     return $self->{+JOB_DIR} if $self->{+JOB_DIR};
 
-    my $job_dir = File::Spec->catdir($self->run_dir, $self->{+TASK}->{job_id} . '+' . $self->is_try);
+    my $job_dir = untaint(File::Spec->catdir($self->run_dir, $self->{+TASK}->{job_id} . '+' . $self->is_try));
     mkdir($job_dir) or die "$$ $0 Could not create job directory '$job_dir': $!";
     chmod_tmp($job_dir);
     $self->{+JOB_DIR} = $job_dir;
@@ -417,8 +417,22 @@ sub use_fork {
     return $self->{+USE_FORK} = 0 if defined($task->{use_fork}) && !$task->{use_fork};
     return $self->{+USE_FORK} = 0 if defined($task->{use_preload}) && !$task->{use_preload};
 
-    # -w switch is ok, otherwise it is a no-go
-    return $self->{+USE_FORK} = 0 if grep { !m/\s*-w\s*/ } $self->switches;
+    # Ugh I hate this logic!!!
+
+    # This approach won't scale if we allow even more swiches.
+    my @allowed_switches = '-w';
+
+    # Allow taint and taint + warnings if we're a tainted runner.
+    push @allowed_switches => qw/-T -wT -Tw -t -wt -tw/ if ${^TAINT};
+
+    my $allowed_switches     = join '|', map { quotemeta } @allowed_switches;
+    my $allowed_switches_re  = qr/\s*(?:$allowed_switches)\s*/;
+
+    return $self->{+USE_FORK} = 0 if grep { $_ !~ $allowed_switches_re } $self->switches;
+
+    # We're running under the taint but the test hasn't requested taint.
+    # TODO This doesn't support "-t" yet.
+    return $self->{+USE_FORK} = 0 if ${^TAINT} && !grep { /\s*-w?Tw?\s*/ } $self->switches;
 
     my $runner = $self->{+RUNNER};
     return $self->{+USE_FORK} = 0 unless $runner->use_fork;

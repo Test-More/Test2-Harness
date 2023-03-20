@@ -13,7 +13,7 @@ use Long::Jump qw/setjump longjump/;
 use Time::HiRes qw/sleep time/;
 use Scope::Guard;
 
-use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes chmod_tmp write_file/;
+use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes chmod_tmp write_file untaint/;
 use Test2::Harness::Util::Queue();
 use Test2::Harness::Util::JSON(qw/encode_json/);
 
@@ -97,7 +97,7 @@ sub init {
         $self->{+SIGNAL} = $sig;
     };
 
-    my $tmp_dir = File::Spec->catdir($self->{+DIR}, 'tmp');
+    my $tmp_dir = untaint(File::Spec->catdir($self->{+DIR}, 'tmp'));
     unless (-d $tmp_dir) {
         mkdir($tmp_dir) or die "Could not create temp dir: $!";
         chmod_tmp($tmp_dir);

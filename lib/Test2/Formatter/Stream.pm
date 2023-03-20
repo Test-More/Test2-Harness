@@ -12,7 +12,7 @@ use List::Util qw/first/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/JSON JSON_IS_XS/;
-use Test2::Harness::Util qw/hub_truth apply_encoding/;
+use Test2::Harness::Util qw/hub_truth apply_encoding untaint/;
 
 use Test2::Util qw/get_tid ipc_separator/;
 
@@ -89,7 +89,7 @@ sub fh {
     $pid = $self->{+_PID} = $$;
     $tid = $self->{+_TID} = get_tid();
 
-    my $file = File::Spec->catfile($dir, join(ipc_separator() => 'events', $pid, $tid) . ".jsonl");
+    my $file = untaint(File::Spec->catfile($dir, join(ipc_separator() => 'events', $pid, $tid) . ".jsonl"));
 
     my @now = ($<, $>, $(, $));
     local ($<, $>, $(, $)) = @{$self->{+UGIDS}} if $self->{+UGIDS} && first { $self->{+UGIDS}->[$_] ne $now[$_] } 0 .. $#now;

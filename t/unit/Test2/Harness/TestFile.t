@@ -13,6 +13,7 @@ my $tmp = gen_temp(
     notime => "#HARNESS-NO-TIMEOUT\n",
     warn   => "#!/usr/bin/perl -w\n",
     taint  => "#!/usr/bin/env perl -t -w\n",
+    bundle => "#!perl -Tw\n",
     foo    => "#HARNESS-CATEGORY-FOO\n#HARNESS-STAGE-FoO",
     meta   => "#HARNESS-META-mykey-myval\n# HARNESS-META-otherkey-otherval\n# HARNESS-META mykey my-val2\n# HARNESS-META slack #my-val # comment after harness statement\n",
 
@@ -94,6 +95,11 @@ subtest foo => sub {
 subtest package => sub {
     my $one = $CLASS->new(file => File::Spec->catfile($tmp, 'package'));
     is($one->queue_item(42)->{use_preload}, 0, "No preload");
+};
+
+subtest bundle => sub {
+    my $bundle = $CLASS->new(file => File::Spec->catfile($tmp, 'bundle'));
+    is($bundle->switches, ['-Tw'], "Bundled switches");
 };
 
 subtest taint => sub {

@@ -9,7 +9,7 @@ use Test2::Harness::Util qw/lock_file unlock_file/;
 use Fcntl qw/SEEK_SET/;
 
 use parent 'Test2::Harness::Util::File';
-use Test2::Harness::Util::HashBase qw/use_write_lock -tail/;
+use Test2::Harness::Util::HashBase qw/use_write_lock -tail +_wfh +_wpid/;
 
 sub init {
     my $self = shift;
@@ -71,18 +71,29 @@ sub write {
     my $fh;
     if ($self->{+USE_WRITE_LOCK}) {
         $fh = lock_file($self->name, '>>');
+        $fh->autoflush(1);
     }
     else {
-        $fh = Test2::Harness::Util::open_file($self->name, '>>');
+        unless ($self->{+_WPID} && $self->{+_WPID} == $$) {
+            delete $self->{+_WFH};
+            $self->{+_WPID} = $$;
+        }
+
+        if ($fh = $self->{+_WFH}) {
+            seek($fh, 2, 0);
+        }
+        else {
+            $fh = $self->{+_WFH} = Test2::Harness::Util::open_file($self->name, '>>');
+            $fh->autoflush(1);
+        }
     }
 
-    $fh->autoflush(1);
-    seek($fh,2,0);
     print {$fh} $self->encode($_) for @_;
 
-    unlock_file($fh) if $self->{+USE_WRITE_LOCK};
-
-    close($fh) or die "Could not close file '$name': $!";
+    if ($self->{+USE_WRITE_LOCK}) {
+        unlock_file($fh);
+        close($fh) or die "Could not close file '$name': $!";
+    }
 
     return @_;
 }

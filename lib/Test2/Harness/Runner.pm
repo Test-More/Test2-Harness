@@ -14,7 +14,6 @@ use Time::HiRes qw/sleep time/;
 use Scope::Guard;
 
 use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes chmod_tmp write_file/;
-use Test2::Harness::Util::Queue();
 use Test2::Harness::Util::JSON(qw/encode_json/);
 
 use Test2::Harness::Runner::Constants;
@@ -468,9 +467,7 @@ sub run_job {
         $pid = $job->pid;
     }
 
-    my $json_data = $job->TO_JSON();
-    $json_data->{stamp} = $spawn_time;
-    $run->jobs->write($json_data);
+    $run->add_job($job, $spawn_time);
 
     return $pid;
 }

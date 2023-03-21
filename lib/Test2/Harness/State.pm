@@ -31,15 +31,6 @@ use Test2::Harness::Util::HashBase(
 
 sub state_class { 'Test2::Harness::State::Instance' }
 
-sub clone {
-    my $self = shift;
-    my $copy = {%$self};
-    delete $copy->{access_id};
-    delete $copy->{access_pid};
-    %$copy = (%$copy, @_) if @_;
-    return bless($copy, blessed($self));
-}
-
 sub access_id  { $_[0]->_access->[0] }
 sub access_pid { $_[0]->_access->[1] }
 sub registered { $_[0]->_access->[2] }
@@ -116,35 +107,7 @@ sub init_state {
 
     my $state = $self->SUPER::init_state();
 
-    $state->{workdir} //= $self->{+WORKDIR};
-
-    my $settings = $state->{settings} //= $self->{+SETTINGS} // die "No settings";
-    $state->{job_count} //= $self->{+JOB_COUNT} //= $settings->check_prefix('runner') ? $settings->runner->job_count // 1 : 1;
-
-    for my $type (qw/resource plugin renderer/) {
-        my $plural = "${type}s";
-        my $raw;
-
-        if ($type eq 'resource') {
-            next unless $settings->check_prefix('runner');
-            $raw  = $settings->runner->$plural // [];
-            @$raw = sort { $a->sort_weight <=> $b->sort_weight } @$raw;
-        }
-        else {
-            next unless $settings->check_prefix('harness');
-            next unless $settings->harness->check_field($plural);
-            $raw = $settings->harness->$plural // [];
-        }
-
-        my $init_meth = "_init_${plural}";
-        my ($list, $inst) = $self->$init_meth($settings, $raw);
-
-        $state->{$plural}       = $list;
-        $self->{"${type}_list"} = $list;
-        $self->{$plural}        = $inst;
-    }
-
-    $state->{ipc_model} //= {};
+    $state = $self->state_class->init_state($self, $state);
 
     return $state;
 }

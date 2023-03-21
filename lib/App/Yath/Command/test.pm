@@ -406,17 +406,14 @@ sub get_job_pid {
 
     return undef unless $run_id && $job_id;
 
-    my $run_dir = File::Spec->catdir($self->workdir, $run_id);
-    my $jobs_file = File::Spec->catfile($run_dir, 'jobs.jsonl');
-
-    return undef unless -f $jobs_file;
-    my $queue = Test2::Harness::Util::Queue->new(file => $jobs_file);
+    my $jdata = $self->{+ALL_STATE}->data->jobs->{$self->{+RUN_ID}} or return undef;
+    my $list  = $jdata->{list}                                       or return undef;
 
     my $found;
-    for my $item ($queue->poll) {
-        my $task = $item->[-1];
+    for my $task (@$list) {
         next unless $task->{job_id} && $task->{job_id} eq $job_id;
         $found = $task;
+        # Do not end loop early, we want the last matching entry in cases of re-run
     }
 
     return undef unless $found;

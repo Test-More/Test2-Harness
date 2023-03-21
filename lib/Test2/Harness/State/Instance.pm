@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '1.000152';
 
+use Carp qw/confess/;
+
 use parent 'Test2::Harness::IPC::SharedState';
 use Test2::Harness::Util::HashBase(
     qw{
@@ -14,9 +16,42 @@ use Test2::Harness::Util::HashBase(
         <plugins
         <runs
         <ipc_model
+        <jobs
     },
 );
 
+sub init_state {
+    my $class = shift;
+    my ($state, $data) = @_;
+
+    $data->{+WORKDIR}  //= $state->{workdir}  // confess "No workdir";
+    $data->{+SETTINGS} //= $state->{settings} // confess "No settings";
+    my $settings = $data->{settings};
+
+    $data->{+JOBS}     //= {};
+    $data->{+IPC_MODEL} //= {};
+    $data->{+JOB_COUNT} //= $state->{job_count} // $settings->check_prefix('runner') ? $settings->runner->job_count // 1 : 1;
+
+    for my $type (qw/resource plugin renderer/) {
+        my $plural = "${type}s";
+        my $raw;
+
+        if ($type eq 'resource') {
+            next unless $settings->check_prefix('runner');
+            $raw  = $settings->runner->$plural // [];
+            @$raw = sort { $a->sort_weight <=> $b->sort_weight } @$raw;
+        }
+        else {
+            next unless $settings->check_prefix('harness');
+            next unless $settings->harness->check_field($plural);
+            $raw = $settings->harness->$plural // [];
+        }
+
+        $data->{$plural} = [map { ref($_) || $_ } @$raw];
+    }
+
+    return bless($data, $class);
+}
 
 1;
 

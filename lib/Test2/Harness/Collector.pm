@@ -7,6 +7,7 @@ our $VERSION = '1.000152';
 use Carp qw/croak/;
 
 use Test2::Harness::Collector::JobDir;
+use Test2::Harness::State;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::Queue;
@@ -29,11 +30,12 @@ use Test2::Harness::Util::HashBase qw{
     +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles
 
     +task_file +task_queue +tasks_done +tasks
-    +jobs_file +jobs_queue +jobs_done  +jobs
+    +jobs_file +jobs_idx   +jobs_done  +jobs
     +pending
 
     <wait_time
     <action
+    <state
 };
 
 sub init {
@@ -41,6 +43,8 @@ sub init {
 
     croak "'run' is required"
         unless $self->{+RUN};
+
+    $self->{+STATE} //= Test2::Harness::State->new(workdir => $self->{+WORKDIR});
 
     my $run_dir = File::Spec->catdir($self->{+WORKDIR}, $self->{+RUN_ID});
     die "Could not find run dir" unless -d $run_dir;
@@ -290,15 +294,12 @@ sub jobs {
         return $jobs;
     }
 
-    my $queue = $self->jobs_queue or return $jobs;
+    my $idx   = $self->{+JOBS_IDX} //= 0;
+    my $jdata = $self->{+STATE}->data->jobs->{$self->{+RUN_ID}} or return $jobs;
+    my $list  = $jdata->{list}                                  or return $jobs;
 
-    for my $item ($queue->poll($additional_jobs_to_parse)) {
-        my ($spos, $epos, $job) = @$item;
-
-        unless ($job) {
-            $self->{+JOBS_DONE} = 1;
-            last;
-        }
+    while (@$list > $idx) {
+        my $job = $list->[$idx++];
 
         my $job_id = $job->{job_id} or die "No job id!";
 
@@ -340,6 +341,9 @@ sub jobs {
         );
     }
 
+    $self->{+JOBS_IDX} = $idx;
+    $self->{+JOBS_DONE} = 1 if $jdata->{closed};
+
     # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the stream know we're behind.
     $self->send_backed_up if $max_open_jobs <= keys %$jobs;
 
@@ -361,18 +365,6 @@ sub _harness_event {
         run_id     => $self->{+RUN_ID},
         facet_data => \%args,
     );
-}
-
-sub jobs_queue {
-    my $self = shift;
-
-    return $self->{+JOBS_QUEUE} if $self->{+JOBS_QUEUE};
-
-    my $jobs_file = $self->{+JOBS_FILE} //= File::Spec->catfile($self->{+RUN_DIR}, 'jobs.jsonl');
-
-    return unless -f $jobs_file;
-
-    return $self->{+JOBS_QUEUE} = Test2::Harness::Util::Queue->new(file => $jobs_file);
 }
 
 sub tasks_queue {

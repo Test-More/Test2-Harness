@@ -222,13 +222,10 @@ sub halt_run {
     my ($run_id) = @_;
     $self->_enqueue(halt_run => $run_id);
 
-    my $dir = File::Spec->catdir($self->{+WORKDIR}, $run_id);
-    my $file = File::Spec->catfile($dir, 'jobs.jsonl');
-
-    if (-f $file) {
-        my $queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'jobs.jsonl'));
-        $queue->end;
-    }
+    $self->state->transaction(w => sub {
+        my ($state, $data) = @_;
+        $data->jobs->{$run_id}->{closed} = 1;
+    });
 }
 
 sub _halt_run {
@@ -253,6 +250,7 @@ sub _queue_run {
     push @{$self->{+PENDING_RUNS}} => Test2::Harness::Runner::Run->new(
         %$run,
         workdir => $self->{+WORKDIR},
+        state   => $self->{+STATE},
     );
 
     return;

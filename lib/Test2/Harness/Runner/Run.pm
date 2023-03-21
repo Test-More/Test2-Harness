@@ -12,10 +12,10 @@ use Test2::Harness::Util::File::JSONL;
 use parent 'Test2::Harness::Run';
 use Test2::Harness::Util::HashBase qw{
     <workdir
+    <state
+    <run_id
 
     +run_dir
-    +jobs_file
-    +jobs
 };
 
 sub init {
@@ -24,11 +24,37 @@ sub init {
     $self->SUPER::init();
 
     croak "'workdir' is a required attribute" unless $self->{+WORKDIR};
+    croak "'state' is a required attribute"   unless $self->{+STATE};
+    croak "'run_id' is a required attribute"  unless $self->{+RUN_ID};
 }
 
-sub run_dir   { $_[0]->{+RUN_DIR}   //= $_[0]->SUPER::run_dir($_[0]->{+WORKDIR}) }
-sub jobs_file { $_[0]->{+JOBS_FILE} //= File::Spec->catfile($_[0]->run_dir, 'jobs.jsonl') }
-sub jobs      { $_[0]->{+JOBS}      //= Test2::Harness::Util::File::JSONL->new(name => $_[0]->jobs_file, use_write_lock => 1) }
+sub run_dir { $_[0]->{+RUN_DIR} //= $_[0]->SUPER::run_dir($_[0]->{+WORKDIR}) }
+
+sub jobs {
+    my $self = shift;
+    my $data = $self->state->data->queue->{$self->{+RUN_ID}} or return [];
+    return $data->{list};
+}
+
+sub add_job {
+    my $self = shift;
+    my ($job, $spawn_time) = @_;
+
+    my $json_data = $job->TO_JSON();
+    $json_data->{stamp} = $spawn_time;
+
+    $self->state->transaction(w => sub {
+        my ($state, $data) = @_;
+        my $jobs = $data->jobs->{$self->{+RUN_ID}} //= {
+            closed => 0,
+            list => [],
+        };
+
+        push @{$jobs->{list}} => $json_data,
+    });
+
+    return $json_data;
+}
 
 1;
 

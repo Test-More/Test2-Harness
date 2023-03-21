@@ -14,7 +14,6 @@ use App::Yath::Options;
 use Test2::Harness::State;
 use Test2::Harness::Runner::State;
 use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::Queue();
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/+state/;

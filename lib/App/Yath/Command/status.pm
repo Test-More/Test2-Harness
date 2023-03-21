@@ -9,7 +9,6 @@ use File::Spec();
 
 use Test2::Harness::Runner::State;
 use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::Queue();
 
 use parent 'App::Yath::Command::run';
 use Test2::Harness::Util::HashBase;

@@ -224,6 +224,7 @@ sub halt_run {
 
     $self->state->transaction(w => sub {
         my ($state, $data) = @_;
+        return unless exists $data->jobs->{$run_id};
         $data->jobs->{$run_id}->{closed} = 1;
     });
 }
@@ -627,6 +628,11 @@ sub clear_finished_run {
     return 0 if $self->{+RUNNING};
 
     delete $self->{+RUN};
+    $self->{+STATE}->transaction(w => sub {
+        my ($state, $data) = @_;
+        return unless exists $data->jobs->{$run->run_id};
+        $data->jobs->{$run->run_id}->{closed} = 1;
+    });
 
     return 1;
 }

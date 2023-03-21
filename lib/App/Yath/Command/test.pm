@@ -9,7 +9,6 @@ use App::Yath::Options;
 use Test2::Harness::State;
 use Test2::Harness::Run;
 use Test2::Harness::Event;
-use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
@@ -46,8 +45,6 @@ use Test2::Harness::Util::HashBase qw/
     +tests_seen
     +asserts_seen
 
-    +run_queue
-    +tasks_queue
     +state +all_state
 
     <cleanup_subs
@@ -477,7 +474,12 @@ sub stop {
 sub terminate_queue {
     my $self = shift;
 
-    $self->tasks_queue->end();
+    $self->all_state->transaction(w => sub {
+        my ($state, $data) = @_;
+        my $queue = $data->queue;
+        $queue->{$_}->{closed} = 1 for keys %$queue;
+    });
+
     $self->state->end_queue();
 }
 
@@ -526,20 +528,6 @@ sub job_count {
     return $self->settings->runner->job_count;
 }
 
-sub run_queue {
-    my $self = shift;
-    my $dir = $self->workdir;
-    return $self->{+RUN_QUEUE} //= Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
-}
-
-sub tasks_queue {
-    my $self = shift;
-
-    $self->{+TASKS_QUEUE} //= Test2::Harness::Util::Queue->new(
-        file => File::Spec->catfile($self->build_run->run_dir($self->workdir), 'queue.jsonl'),
-    );
-}
-
 sub finder_args {()}
 
 sub populate_queue {
@@ -551,7 +539,6 @@ sub populate_queue {
     my $finder = $settings->build(finder => $settings->finder->finder, $self->finder_args);
 
     my $state = $self->state;
-    my $tasks_queue = $self->tasks_queue;
     my $plugins = $settings->harness->plugins;
 
     $state->queue_run($run->queue_item($plugins));
@@ -567,6 +554,8 @@ sub populate_queue {
         }
     }
 
+    my @add_to_queue;
+
     my $job_count = 0;
     for my $file (@files) {
         my $task = $file->queue_item(++$job_count, $run->run_id,
@@ -576,8 +565,15 @@ sub populate_queue {
         $task->{category} = 'isolation' if $settings->debug->interactive;
 
         $state->queue_task($task);
-        $tasks_queue->enqueue($task);
+
+        push @add_to_queue => $task;
     }
+
+    $self->all_state->transaction(w => sub {
+        my ($state, $data) = @_;
+        my $queue = $data->queue;
+        push @{$queue->{$self->{+RUN_ID}}->{list} //= []} => @add_to_queue;
+    });
 
     $state->stop_run($run->run_id);
 

@@ -9,7 +9,6 @@ use App::Yath::Options;
 
 use Test2::Harness::State;
 use Test2::Harness::Run;
-use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
@@ -123,9 +122,6 @@ sub run {
         settings => $settings,
     );
     $all_state->transaction(w => sub { 1 });
-
-    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
-    $run_queue->start();
 
     $self->setup_plugins();
     $self->setup_resources();

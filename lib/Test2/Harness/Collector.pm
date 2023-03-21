@@ -10,7 +10,6 @@ use Test2::Harness::Collector::JobDir;
 use Test2::Harness::State;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
-use Test2::Harness::Util::Queue;
 use Time::HiRes qw/sleep time/;
 use File::Spec;
 
@@ -29,8 +28,8 @@ use Test2::Harness::Util::HashBase qw{
 
     +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles
 
-    +task_file +task_queue +tasks_done +tasks
-    +jobs_file +jobs_idx   +jobs_done  +jobs
+    +tasks_idx +tasks_done +tasks
+    +jobs_idx  +jobs_done  +jobs
     +pending
 
     <wait_time
@@ -231,17 +230,14 @@ sub process_tasks {
 
     return 0 if $self->{+TASKS_DONE};
 
-    my $queue = $self->tasks_queue or return 0;
+    my $queue = $self->state->data->queue->{$self->{+RUN_ID}} or return 0;
+    my $idx   = $self->{+TASKS_IDX} //= 0;
+    my $list  = $queue->{list} // [];
 
     my $count = 0;
-    for my $item ($queue->poll) {
+    while (@$list > $idx) {
+        my $task = $list->[$idx++];
         $count++;
-        my ($spos, $epos, $task) = @$item;
-
-        unless ($task) {
-            $self->{+TASKS_DONE} = 1;
-            last;
-        }
 
         my $job_id = $task->{job_id} or die "No job id!";
         $self->{+TASKS}->{$job_id} = $task;
@@ -249,6 +245,15 @@ sub process_tasks {
 
         my $e = $self->_harness_event($job_id, $task->{is_try} // 0, $task->{stamp}, 'harness_job_queued' => $task);
         $self->{+ACTION}->($e);
+    }
+
+    $self->{+TASKS_IDX} = $idx;
+    if ($queue->{closed}) {
+        $self->{+TASKS_DONE} = 1;
+        $self->{+STATE}->transaction(w => sub {
+            my ($state, $data) = @_;
+            delete $data->queue->{$self->{+RUN_ID}};
+        });
     }
 
     return $count;
@@ -342,7 +347,14 @@ sub jobs {
     }
 
     $self->{+JOBS_IDX} = $idx;
-    $self->{+JOBS_DONE} = 1 if $jdata->{closed};
+
+    if ($jdata->{closed}) {
+        $self->{+JOBS_DONE} = 1;
+        $self->{+STATE}->transaction(w => sub {
+            my ($state, $data) = @_;
+            delete $data->jobs->{$self->{+RUN_ID}};
+        });
+    }
 
     # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the stream know we're behind.
     $self->send_backed_up if $max_open_jobs <= keys %$jobs;
@@ -365,18 +377,6 @@ sub _harness_event {
         run_id     => $self->{+RUN_ID},
         facet_data => \%args,
     );
-}
-
-sub tasks_queue {
-    my $self = shift;
-
-    return $self->{+TASK_QUEUE} if $self->{+TASK_QUEUE};
-
-    my $tasks_file = $self->{+TASK_FILE} //= File::Spec->catfile($self->{+RUN_DIR}, 'queue.jsonl');
-
-    return unless -f $tasks_file;
-
-    return $self->{+TASK_QUEUE} = Test2::Harness::Util::Queue->new(file => $tasks_file);
 }
 
 1;

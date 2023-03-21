@@ -9,7 +9,6 @@ use Time::HiRes qw/sleep/;
 use File::Spec();
 
 use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::Queue();
 
 use Test2::Harness::Util qw/open_file/;
 use App::Yath::Util qw/find_pfile/;

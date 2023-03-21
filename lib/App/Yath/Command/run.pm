@@ -8,7 +8,6 @@ use App::Yath::Options;
 
 use Test2::Harness::State;
 use Test2::Harness::Run;
-use Test2::Harness::Util::Queue;
 use Test2::Harness::Util::File::JSON;
 use Test2::Harness::IPC;
 
@@ -54,7 +53,6 @@ the start command for details on how to launch a persistant instance.
     EOT
 }
 
-sub terminate_queue {}
 sub write_settings_to {}
 sub setup_plugins {}
 sub setup_resources {}
@@ -67,6 +65,17 @@ sub monitor_preloads { 1 }
 sub job_count        { 1 }
 
 sub collector_options { (persistent_runner => 1) }
+
+sub terminate_queue {
+    my $self = shift;
+
+    $self->all_state->transaction(w => sub {
+        my ($state, $data) = @_;
+        my $queue = $data->queue;
+        return unless exists $queue->{$self->{+RUN_ID}};
+        $queue->{$self->{+RUN_ID}}->{closed} = 1;
+    });
+}
 
 sub run {
     my $self = shift;

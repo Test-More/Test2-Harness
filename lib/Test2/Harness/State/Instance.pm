@@ -17,6 +17,7 @@ use Test2::Harness::Util::HashBase(
         <runs
         <ipc_model
         <jobs
+        <queue
     },
 );
 
@@ -28,7 +29,8 @@ sub init_state {
     $data->{+SETTINGS} //= $state->{settings} // confess "No settings";
     my $settings = $data->{settings};
 
-    $data->{+JOBS}     //= {};
+    $data->{+JOBS}      //= {};
+    $data->{+QUEUE}     //= {};
     $data->{+IPC_MODEL} //= {};
     $data->{+JOB_COUNT} //= $state->{job_count} // $settings->check_prefix('runner') ? $settings->runner->job_count // 1 : 1;
 

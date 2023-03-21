@@ -13,7 +13,6 @@ use App::Yath::Util qw/find_pfile/;
 
 use Test2::Harness::Runner::State;
 use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::Queue();
 
 use Test2::Harness::Util qw/open_file/;
 

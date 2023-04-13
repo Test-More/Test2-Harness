@@ -2,439 +2,343 @@ package Test2::Harness::Collector;
 use strict;
 use warnings;
 
-our $VERSION = '1.000152';
-
-use Carp qw/croak/;
-
-use Test2::Harness::Collector::JobDir;
-use Test2::Harness::State;
-
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Carp qw/croak cluck/;
+use POSIX ":sys_wait_h";
 use Time::HiRes qw/sleep time/;
-use File::Spec;
+use Scalar::Util qw/reftype/;
 
-use File::Path qw/remove_tree/;
+use Test2::Harness::Util qw/parse_exit apply_encoding/;
+use Test2::Harness::Util::IPC qw/swap_io/;
+use Test2::Harness::Util::JSON qw/decode_json encode_json/;
+
+use Scope::Guard;
+use Atomic::Pipe;
+
+our $VERSION = '2.000000';
 
 use Test2::Harness::Util::HashBase qw{
-    <run
-    <workdir
-    <run_id
-    <show_runner_output <truncate_runner_output <truncated_runner_output
-    <settings
-    <run_dir
-    <runner_pid +runner_exited <persistent_runner
-
-    <backed_up
-
-    +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles
-
-    +tasks_idx +tasks_done +tasks
-    +jobs_idx  +jobs_done  +jobs
-    +pending
-
-    <wait_time
-    <action
-    <state
+    event_cb
+    merge_outputs
+    buffer
+    state
+    children
 };
 
 sub init {
     my $self = shift;
 
-    croak "'run' is required"
-        unless $self->{+RUN};
+    croak "'state' is a required attribute"
+        unless $self->{+STATE};
 
-    $self->{+STATE} //= Test2::Harness::State->new(workdir => $self->{+WORKDIR});
+    croak "'event_cb' is a required attribute"
+        unless $self->{+EVENT_CB};
 
-    my $run_dir = File::Spec->catdir($self->{+WORKDIR}, $self->{+RUN_ID});
-    die "Could not find run dir" unless -d $run_dir;
-    $self->{+RUN_DIR} = $run_dir;
+    my $type = reftype($self->{+EVENT_CB}) // '';
+    croak "'event_cb' must be a coderef, got '$self->{+EVENT_CB}'"
+        unless $type eq 'CODE';
 
-    $self->{+WAIT_TIME} //= 0.02;
-
-    $self->{+ACTION}->($self->_harness_event(0, undef, time, harness_run => $self->{+RUN}, harness_settings => $self->settings, about => {no_display => 1}));
+    $self->{+CHILDREN}      //= {};
+    $self->{+MERGE_OUTPUTS} //= 0;
 }
 
-sub process {
+sub DESTROY {
     my $self = shift;
 
-    my %warning_seen;
-    my $settings = $self->settings;
+    return unless $self->{+CHILDREN};
+    for my $pid (keys %{$self->{+CHILDREN}}) {
+        next unless $$ == $self->{+CHILDREN}->{$pid};
+        cluck("Failed to reap children parent process $$ when collector instance was destroyed");
+        return $self->reap;
+    }
+}
 
-    while (1) {
-        my $count = 0;
-        $count += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
-        $count += $self->process_tasks();
+sub reap {
+    my $self = shift;
+    my (@pids) = @_;
 
-        my $jobs = $self->jobs;
+    unless (@pids) {
+        @pids = grep {$$ == $self->{+CHILDREN}->{$_}} keys %{$self->{+CHILDREN} // {}};
+    }
+    return unless @pids;
 
-        unless (keys %$jobs) {
-            next if $count;
+    my @out;
 
-            if ($self->persistent_runner) {
-                last if $self->{+JOBS_DONE};
-                last if $self->runner_done;
-            }
+    for my $pid (@pids) {
+        croak "$pid is not owned by this collector"
+            unless $self->{+CHILDREN}->{$pid} && $$ == $self->{+CHILDREN}->{$pid};
 
-            last if $self->runner_exited;
+        delete $self->{+CHILDREN}->{$pid};
+
+        my $check = waitpid($pid, 0);
+        my $exit = parse_exit($? // 0);
+        if ($check == $pid) {
+            push @out => $exit;
+            warn "Collector exited with a non-zero status (ERR: $exit->{err}, SIG: $exit->{sig})" if $exit->{all};
+            $self->{+STATE}->transaction(
+                w => sub {
+                    my ($state, $data) = @_;
+                    delete $data->processes->{$pid};
+                }
+            );
+        }
+        else {
+            die("waitpid returned $check");
+        }
+    }
+
+    return @out;
+}
+
+sub _warn {
+    my $self = shift;
+    my ($msg) = @_;
+
+    my @caller = caller();
+    $msg .= " at $caller[1] line $caller[2].\n" unless $msg =~ m/\n$/;
+
+    my $cb = $self->{+EVENT_CB};
+    $self->_pre_event(frame => \@caller, facets => {info => [{tag => 'WARNING', details => $msg, debug => 1}]});
+}
+
+sub _die {
+    my $self = shift;
+    my ($msg) = @_;
+
+    my @caller = caller();
+    $msg .= " at $caller[1] line $caller[2].\n" unless $msg =~ m/\n$/;
+
+    $self->_pre_event(frame => \@caller, facets => {errors => [{tag => 'ERROR', details => $msg, fail => 1}]});
+
+    exit(255);
+}
+
+sub run {
+    my $self = shift;
+    my %params = @_;
+
+    my $name       = $params{name}      or croak "'name' is a required argument";
+    my $type       = $params{type}      or croak "'type' is a required argument";
+    my $launch_cb  = $params{launch_cb} or croak "'launch_cb' is a required argument";
+
+    my $parent = $params{parent_pid};
+
+    if (!$parent) {
+        $parent = $$;
+        my $collector_pid = fork // CORE::die("Could not fork: $!");
+
+        if ($collector_pid) {
+            $self->{+CHILDREN}->{$collector_pid} = $$;
+            return $collector_pid;
+        }
+    }
+
+    $self->{+STATE}->transaction(w => sub {
+        my ($state, $data) = @_;
+        $data->processes->{$$} = {type => 'collector', parent => $parent, pid => $$, name => $name};
+    });
+
+    my ($out_r, $out_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    my ($err_r, $err_w) = $self->{+MERGE_OUTPUTS} ? ($out_r, $out_w) : Atomic::Pipe->pair(mixed_data_mode => 1);
+
+    my $child_pid = fork // CORE::die("Could not fork: $!");
+
+    if (!$child_pid) {
+        swap_io(\*STDOUT, $out_w->wh, sub { $self->_die(@_) });
+        swap_io(\*STDERR, $err_w->wh, sub { $self->_die(@_) });
+
+        $ENV{T2_HARNESS_USE_ATOMIC_PIPE} = $self->{+MERGE_OUTPUTS} ? 1 : 2;
+        {
+            no warnings 'once';
+            $Test2::Harness::STDOUT_APIPE = $out_w;
+            $Test2::Harness::STDERR_APIPE = $err_w unless $self->{+MERGE_OUTPUTS};
         }
 
-        while(my ($job_try, $jdir) = each %$jobs) {
-            $count++;
-            my $e_count = 0;
-            for my $event ($jdir->poll($self->settings->collector->max_poll_events // 1000)) {
-                $self->{+ACTION}->($event);
-                $e_count++;
-            }
+        eval { $launch_cb->(); 1 } or $self->_die($@ // "launch exception");
 
-            $count += $e_count;
-            next if $e_count;
-            my $done = $jdir->done;
-            unless ($done) {
-                $count++;
-                next;
-            }
+        $self->_die("launch-cb returned, it should not do that!");
+    }
 
-            delete $jobs->{$job_try};
-            unless ($settings->debug->keep_dirs) {
-                my $job_path = $jdir->job_root;
-                # Needed because we set the perms so that a tmpdir under it can be used.
-                # This is the only remove_tree that needs it because it is the
-                # only one in a process that did not initially create the dir.
-                my $ok = eval {
-                    chmod(0700, $job_path);
-                    remove_tree($job_path, {safe => 1, keep_root => 0});
-                    1;
-                };
-                my $err = $@;
-                unless ($ok) {
-                    $count++;
-                    unless ($warning_seen{$job_path}++) {
-                        my $msg = "NON-FATAL Error deleting job dir ($job_path) will try again...: $err";
-                        my $e = $self->_harness_event(0, undef, time, info => [{details => $msg, tag => "INTERNAL", debug => 1, important => 1}]);
-                        $self->{+ACTION}->($e);
-                    }
-                    next;
+    $self->_die("Failed to launch child '$type': '$name'") unless $child_pid;
+
+    $self->{+CHILDREN}->{$child_pid} = $$;
+
+    $self->{+STATE}->transaction(w => sub {
+        my ($state, $data) = @_;
+        $data->processes->{$$}->{children}->{$child_pid} = $child_pid;
+        $data->processes->{$child_pid} = {type => $type, parent => $$, pid => $child_pid, name => $name};
+    });
+
+    $self->_die("Did not get a PID from launch callback (Did callback fail to exit when done?)")
+        unless $child_pid;
+
+    my $stamp = time;
+    $self->_pre_event(stamp => $stamp, frame => [__PACKAGE__, __FILE__, __LINE__], process_launch => $child_pid);
+
+    $SIG{INT} = sub {
+        $self->_warn("$$: Got SIGINT, forwarding to child process $child_pid.\n");
+        kill('INT', $child_pid);
+        $SIG{INT} = 'DEFAULT';
+    };
+    $SIG{TERM} = sub {
+        $self->_warn("$$: Got SIGTERM, forwarding to child process $child_pid.\n");
+        kill('TERM', $child_pid);
+        $SIG{TERM} = 'DEFAULT';
+    };
+    $SIG{PIPE} = 'IGNORE';
+
+    my $guard = Scope::Guard->new(sub {
+        eval { $self->_die("Scope Leak inside collector post-fork!") };
+        exit(255);
+    });
+
+    $out_w->close;
+    $err_w->close;
+
+    unless (eval { $self->_run(pid => $child_pid, stdout => $out_r, stderr => $err_r); 1 }) {
+        my $err = $@;
+        eval {
+            $guard->dismiss();
+            $self->_die($err);
+        };
+        exit(255);
+    }
+
+    $guard->dismiss();
+    exit(0);
+}
+
+sub _run {
+    my $self = shift;
+    my %params = @_;
+
+    $self->{+BUFFER} = {seen => {}, stderr => [], stdout => []};
+
+    my $pid    = $params{pid};
+    my $stdout = $params{stdout};
+    my $stderr = $params{stderr};
+
+    $stdout->blocking(0);
+    $stderr->blocking(0);
+
+    my @sets = (['stdout', $stdout]);
+    push @sets => ['stderr', $stderr] unless $self->{+MERGE_OUTPUTS};
+
+    my ($exited, $exit);
+    while (1) {
+        my $did_work = 0;
+
+        unless ($exited) {
+            if (my $check = waitpid($pid, WNOHANG)) {
+                $exit = parse_exit($? // 0);
+
+                delete $self->{+CHILDREN}->{$pid};
+                if ($check == $pid) {
+                    $exited = time;
+                    $did_work++;
+
+                    $self->{+STATE}->transaction(w => sub {
+                        my ($state, $data) = @_;
+                        delete $data->processes->{$$}->{children}->{$pid};
+                        delete $data->processes->{$pid};
+                    });
+                }
+                else {
+                    die("waitpid returned $check");
                 }
             }
-
-            delete $jobs->{$job_try};
-            delete $self->{+PENDING}->{$jdir->job_id} unless $done->{retry};
         }
 
-        last if !$count && $self->runner_exited;
-        sleep $self->{+WAIT_TIME} unless $count;
+        my $enc;
+
+        for my $set (@sets) {
+            my ($name, $fh) = @$set;
+
+            my ($type, $val) = $fh->get_line_burst_or_data;
+            last unless $type;
+            $did_work++;
+
+            if ($type eq 'message') {
+                my $decoded = decode_json($val);
+                $self->_add_item($name => $decoded);
+            }
+            elsif ($type eq 'line') {
+                chomp($val);
+                $self->_add_item($name => $val);
+            }
+            else {
+                chomp($val);
+                die("Invalid type '$type': $val");
+            }
+        }
+
+        next if $did_work;
+        last if $exited;
+
+        sleep(0.02);
     }
 
-    # One last slurp
-    $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
+    $self->_flush();
 
-    $self->{+ACTION}->(undef) if $self->{+JOBS_DONE} && $self->{+TASKS_DONE};
-
-    remove_tree($self->{+RUN_DIR}, {safe => 1, keep_root => 0}) unless $settings->debug->keep_dirs;
+    $self->_pre_event(stamp => $exited, frame => [__PACKAGE__, __FILE__, __LINE__], process_exit => $exit);
 
     return;
 }
 
-sub runner_done {
+sub _add_item {
     my $self = shift;
+    my ($stream, $val) = @_;
 
-    return 0 if keys %{$self->{+PENDING}};
-    return 1;
+    my $buffer = $self->{+BUFFER} //= {};
+    my $seen   = $buffer->{seen}  //= {};
+
+    push @{$buffer->{$stream}} => $val;
+
+    $self->_flush() unless keys(%$seen);
+
+    return unless ref($val);
+
+    my $event_id = $val->{event_id} or die "Event has no ID!";
+
+    my $count = ++($seen->{$event_id});
+    return unless $count >= ($self->{+MERGE_OUTPUTS} ? 1 : 2);
+
+    $self->_flush(to => $event_id);
 }
 
-sub runner_exited {
+sub _flush {
     my $self = shift;
-    my $pid = $self->{+RUNNER_PID} or return undef;
+    my %params = @_;
 
-    return $self->{+RUNNER_EXITED} if $self->{+RUNNER_EXITED};
+    my $to = $params{to};
 
-    return 0 if kill(0, $pid);
+    my $buffer = $self->{+BUFFER} //= {};
+    my $seen   = $buffer->{seen}  //= {};
 
-    return $self->{+RUNNER_EXITED} = 1;
-}
+    for my $stream (qw/stderr stdout/) {
+        while (1) {
+            my $val = shift(@{$buffer->{$stream}}) or last;
+            if (ref($val)) {
+                # Send the event, unless it came via STDERR in which case it should only be a hashref with an event_id
+                $self->_pre_event(stream => $stream, data => $val)
+                    unless $stream eq 'stderr';
 
-sub process_runner_output {
-    my $self = shift;
-
-    my $out = 0;
-    return $out unless $self->{+SHOW_RUNNER_OUTPUT};
-
-    my $action = $self->{+ACTION};
-    if ($self->{+TRUNCATE_RUNNER_OUTPUT} && !$self->{+TRUNCATED_RUNNER_OUTPUT}) {
-        $action = sub {};
-        $self->{+TRUNCATED_RUNNER_OUTPUT} = 1;
-    }
-
-    my $stdout = $self->{+RUNNER_STDOUT} //= Test2::Harness::Util::File::Stream->new(
-        name => File::Spec->catfile($self->{+WORKDIR}, 'output.log'),
-    );
-
-    for my $line ($stdout->poll()) {
-        chomp($line);
-        my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => 'INTERNAL', important => 1}]);
-        $action->($e);
-        $out++;
-    }
-
-    my $stderr = $self->{+RUNNER_STDERR} //= Test2::Harness::Util::File::Stream->new(
-        name => File::Spec->catfile($self->{+WORKDIR}, 'error.log'),
-    );
-
-    for my $line ($stderr->poll()) {
-        chomp($line);
-        my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => 'INTERNAL', debug => 1, important => 1}]);
-        $action->($e);
-        $out++;
-    }
-
-    my $auxdir = $self->{+RUNNER_AUX_DIR} //= File::Spec->catdir($self->{+WORKDIR}, 'aux_logs');
-    return $out unless -d $auxdir;
-
-    opendir(my $dh, $auxdir) or die "Could not open aux_logs dir: $!";
-    for my $path (readdir($dh)) {
-        next if $path =~ m/^\.+$/;
-        next if $self->{+RUNNER_AUX_HANDLES}->{$path};
-
-        my $tag = uc($path);
-        next unless $tag =~ s/\.LOG$//;
-
-        my $debug = 0;
-        if ($tag =~ s/\W*(STDERR|STDOUT)\W*//g) {
-            $debug = 1 if $1 && uc($1) eq 'STDERR';
-        }
-
-        $self->{+RUNNER_AUX_HANDLES}->{$path} = {
-            tag    => $tag,
-            debug  => $debug,
-            stream => Test2::Harness::Util::File::Stream->new(name => File::Spec->catfile($auxdir, $path)),
-        };
-    }
-
-    for my $file (sort keys %{$self->{+RUNNER_AUX_HANDLES}}) {
-        my $data   = $self->{+RUNNER_AUX_HANDLES}->{$file};
-        my $stream = $data->{stream};
-
-        for my $line ($stream->poll()) {
-            chomp($line);
-            my $e = $self->_harness_event(0, undef, time, info => [{details => $line, tag => $data->{tag}, debug => $data->{debug}, important => 1}]);
-            $action->($e);
-            $out++;
+                last if $to && $val->{event_id} eq $to;
+            }
+            else {
+                $self->_pre_event(stream => $stream, line => $val);
+            }
         }
     }
-
-    return $out;
 }
 
-sub process_tasks {
+sub _pre_event {
     my $self = shift;
+    my (%data) = @_;
 
-    return 0 if $self->{+TASKS_DONE};
+    $data{stamp} //= time;
 
-    my $queue = $self->state->data->queue->{$self->{+RUN_ID}} or return 0;
-    my $idx   = $self->{+TASKS_IDX} //= 0;
-    my $list  = $queue->{list} // [];
-
-    my $count = 0;
-    while (@$list > $idx) {
-        my $task = $list->[$idx++];
-        $count++;
-
-        my $job_id = $task->{job_id} or die "No job id!";
-        $self->{+TASKS}->{$job_id} = $task;
-        $self->{+PENDING}->{$job_id} = 1 + ($task->{retry} || $self->run->retry || 0);
-
-        my $e = $self->_harness_event($job_id, $task->{is_try} // 0, $task->{stamp}, 'harness_job_queued' => $task);
-        $self->{+ACTION}->($e);
-    }
-
-    $self->{+TASKS_IDX} = $idx;
-    if ($queue->{closed}) {
-        $self->{+TASKS_DONE} = 1;
-        $self->{+STATE}->transaction(w => sub {
-            my ($state, $data) = @_;
-            delete $data->queue->{$self->{+RUN_ID}};
-        });
-    }
-
-    return $count;
-}
-
-sub send_backed_up {
-    my $self = shift;
-    return if $self->{+BACKED_UP}++;
-
-    # This is an unlikely code path. If we're here, it means the last loop couldn't process any results.
-    my $e = $self->_harness_event(0, undef, time, info => [{details => <<"    EOT", tag => "INTERNAL", debug => 1, important => 1}]);
-*** THIS IS NOT FATAL ***
-
- * The collector has reached the maximum number of concurrent jobs to process.
- * Testing will continue, but some tests may be running or even complete before they are rendered.
- * All tests and events will eventually be displayed, and your final results will not be effected.
-
-Set a higher --max-open-jobs collector setting to prevent this problem in the
-future, but be advised that could result in too many open filehandles on some
-systems.
-
-This message will only be shown once.
-    EOT
-
-    $self->{+ACTION}->($e);
-    return;
-}
-
-sub jobs {
-    my $self = shift;
-
-    my $jobs = $self->{+JOBS} //= {};
-
-    return $jobs if $self->{+JOBS_DONE};
-
-    # Don't monitor more than 'max_open_jobs' or we might have too many open file handles and crash
-    # Max open files handles on a process applies. Usually this is 1024 so we
-    # can't have everything open at once when we're behind.
-    my $max_open_jobs = $self->settings->collector->max_open_jobs // 1024;
-    my $additional_jobs_to_parse = $max_open_jobs - keys %$jobs;
-    if($additional_jobs_to_parse <= 0) {
-        $self->send_backed_up;
-        return $jobs;
-    }
-
-    my $idx   = $self->{+JOBS_IDX} //= 0;
-    my $jdata = $self->{+STATE}->data->jobs->{$self->{+RUN_ID}} or return $jobs;
-    my $list  = $jdata->{list}                                  or return $jobs;
-
-    while (@$list > $idx) {
-        my $job = $list->[$idx++];
-
-        my $job_id = $job->{job_id} or die "No job id!";
-
-        die "Found job without a task!" unless $self->{+TASKS}->{$job_id};
-
-        $self->{+PENDING}->{$job_id}--;
-        delete $self->{+PENDING}->{$job_id} if $self->{+PENDING}->{$job_id} < 1;
-
-        my $file = $job->{file};
-        my $e = $self->_harness_event(
-            $job_id,
-            $job->{is_try},
-            $job->{stamp},
-            harness_job        => $job,
-            harness_job_start  => {
-                details => "Job $job_id started at $job->{stamp}",
-                job_id  => $job_id,
-                stamp   => $job->{stamp},
-                file    => $file,
-                rel_file => File::Spec->abs2rel($file),
-                abs_file => File::Spec->rel2abs($file),
-            },
-            harness_job_launch => {
-                stamp => $job->{stamp},
-                retry => $job->{is_try},
-            },
-        );
-
-        $self->{+ACTION}->($e);
-
-        my $job_try = $job_id . '+' . $job->{is_try};
-
-        $jobs->{$job_try} = Test2::Harness::Collector::JobDir->new(
-            job_try    => $job->{is_try} // 0,
-            job_id     => $job_id,
-            run_id     => $self->{+RUN_ID},
-            runner_pid => $self->{+RUNNER_PID},
-            job_root   => File::Spec->catdir($self->{+RUN_DIR}, $job_try),
-        );
-    }
-
-    $self->{+JOBS_IDX} = $idx;
-
-    if ($jdata->{closed}) {
-        $self->{+JOBS_DONE} = 1;
-        $self->{+STATE}->transaction(w => sub {
-            my ($state, $data) = @_;
-            delete $data->jobs->{$self->{+RUN_ID}};
-        });
-    }
-
-    # The collector didn't read in all the jobs because it'd run out of file handles. We need to let the stream know we're behind.
-    $self->send_backed_up if $max_open_jobs <= keys %$jobs;
-
-    return $jobs;
-}
-
-sub _harness_event {
-    my $self = shift;
-    my ($job_id, $job_try, $stamp, %args) = @_;
-
-    croak "Job id is required" unless defined $job_id;
-    croak "Stamp is required" unless defined $stamp;
-
-    return Test2::Harness::Event->new(
-        stamp      => $stamp,
-        job_id     => $job_id,
-        job_try    => $job_try,
-        event_id   => gen_uuid(),
-        run_id     => $self->{+RUN_ID},
-        facet_data => \%args,
-    );
+    my $cb = $self->{+EVENT_CB};
+    $self->$cb(\%data);
 }
 
 1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::Collector - Module that collects test output and provides it as
-an event stream.
-
-=head1 DESCRIPTION
-
-This module is responsible for reading and parsing the output produced by
-multiple jobs running under yath.
-
-This module is not intended for external use, it is an implementation detail
-and can change at any time. Currently instances of this module are not passed
-to any plugins or callbacks.
-
-If you need a collector for a third-party command you should look at
-L<App::Yath::Command::collector>. When a command needs a collector (such as
-L<App::Yath::Command::test> does) it normally spawns a collector process by
-execuing C<yath collector>. The C<start_collector()> subroutine in
-L<App::Yath::Command::test> is a good place to look for more details.
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

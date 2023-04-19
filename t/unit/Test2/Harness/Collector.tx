@@ -1,0 +1,12 @@
+use Test2::V0;
+
+ok(1, "Assertion A");
+print "STDOUT! A\n";
+print STDERR "STDERR! A\n";
+ok(0, "Assertion B");
+print "STDOUT! B\n";
+print STDERR "STDERR! B\n";
+diag("A diag");
+note("UTF8: ще трохи");
+
+done_testing;

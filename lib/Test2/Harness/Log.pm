@@ -184,7 +184,7 @@ stored in this hash when the original object does not directly store them.
     }
 
 The C<times> field is populated by calling C<data_dump()> on an
-L<Test2::Harness::Auditor::TimeTracker> Object.
+L<Test2::Harness::Log::TimeTracker> Object.
 
 =item harness_job_exit
 

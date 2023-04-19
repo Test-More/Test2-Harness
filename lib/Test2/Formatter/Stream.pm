@@ -20,11 +20,40 @@ use parent qw/Test2::Formatter/;
 use Test2::Util::HashBase qw/-io _encoding _no_header _no_numbers _no_diag -stream_id -tb -tb_handles -dir -_pid -_tid -_fh <job_id -ugids/;
 
 BEGIN {
+    no warnings 'once';
+
+    if (my $use_pipe = $ENV{T2_HARNESS_USE_ATOMIC_PIPE}) {
+        require Atomic::Pipe;
+        *USE_PIPE = sub() { 1 };
+        $Test2::Harness::STDOUT_APIPE //= Atomic::Pipe->from_fh('>&=', \*STDOUT);
+        $Test2::Harness::STDOUT_APIPE->set_mixed_data_mode();
+
+        if ($use_pipe > 1) {
+            *USE_PIPE_STDERR = sub() { 1 };
+            $Test2::Harness::STDERR_APIPE //= Atomic::Pipe->from_fh('>&=', \*STDERR);
+            $Test2::Harness::STDERR_APIPE->set_mixed_data_mode();
+        }
+        else {
+            *USE_PIPE_STDERR = sub() { 0 };
+        }
+    }
+    else {
+        *USE_PIPE = sub() { 0 };
+        *USE_PIPE_STDERR = sub() { 0 };
+        $Test2::Harness::STDOUT_APIPE = undef;
+        $Test2::Harness::STDERR_APIPE = undef;
+    }
+}
+
+
+
+BEGIN {
     my $J = JSON->new;
     $J->indent(0);
     $J->convert_blessed(1);
     $J->allow_blessed(1);
     $J->utf8(1);
+    $J->ascii(1);
 
     require constant;
     constant->import(ENCODER => $J);
@@ -36,6 +65,7 @@ BEGIN {
         $JPP->convert_blessed(1);
         $JPP->allow_blessed(1);
         $JPP->utf8(1);
+        $JPP->ascii(1);
 
         constant->import(ENCODER_PP => $JPP);
     }
@@ -200,13 +230,13 @@ sub record {
 
     my $tid = get_tid();
     my $id = $self->{+STREAM_ID}++;
+    my $event_id = $facets->{about}->{uuid} ||= gen_uuid();
 
     my $json;
     {
         no warnings 'once';
         local *UNIVERSAL::TO_JSON = sub { "$_[0]" };
 
-        my $event_id = $facets->{about}->{uuid} ||= gen_uuid();
 
         if (JSON_IS_XS) {
             for my $encoder (ENCODER, ENCODER_PP) {
@@ -257,9 +287,14 @@ sub record {
 
     my $job_id = $self->{+JOB_ID};
 
-    print $fh $leader ? ("T2-HARNESS-$job_id-EVENT: ", $json, "\n") : ($json, "\n");
-
-    print $_ "T2-HARNESS-$job_id-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
+    if (USE_PIPE) {
+        $Test2::Harness::STDOUT_APIPE->write_message($json);
+        $Test2::Harness::STDERR_APIPE->write_message(qq/{"event_id":"$event_id"}/) if USE_PIPE_STDERR;
+    }
+    else {
+        print $fh $leader ? ("T2-HARNESS-$job_id-EVENT: ", $json, "\n") : ($json, "\n");
+        print $_ "T2-HARNESS-$job_id-ESYNC: ", join(ipc_separator() => $$, $tid, $id) . "\n" for @sync;
+    }
 }
 
 sub encoding {
@@ -287,10 +322,12 @@ sub _set_encoding {
         apply_encoding(\*STDOUT, $enc);
         apply_encoding(\*STDERR, $enc);
 
-        my $job_id = $self->{+JOB_ID};
-        for my $fh (@{$self->{+IO}}) {
-            print $fh "T2-HARNESS-$job_id-ENCODING: $enc\n";
-            apply_encoding($fh, $enc);
+        if (!USE_PIPE) {
+            my $job_id = $self->{+JOB_ID};
+            for my $fh (@{$self->{+IO}}) {
+                print $fh "T2-HARNESS-$job_id-ENCODING: $enc\n";
+                apply_encoding($fh, $enc);
+            }
         }
     }
 

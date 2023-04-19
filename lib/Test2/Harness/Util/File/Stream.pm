@@ -29,6 +29,7 @@ sub init {
     }
 }
 
+my $seen_warn = 0;
 sub poll_with_index {
     my $self = shift;
     my %params = @_;
@@ -37,6 +38,9 @@ sub poll_with_index {
 
     my $pos = $params{from};
     $pos = $self->{+LINE_POS} ||= 0 unless defined $pos;
+
+    warn "Test This!!!" unless $seen_warn++; # Added for 2.0
+    return unless $pos < -s $self->name;
 
     my @out;
     while (!$max || @out < $max) {

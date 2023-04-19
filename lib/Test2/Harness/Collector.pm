@@ -4,13 +4,14 @@ use warnings;
 
 use Carp qw/croak cluck/;
 use POSIX ":sys_wait_h";
-use Time::HiRes qw/sleep time/;
+use Time::HiRes qw/time/;
 use Scalar::Util qw/reftype/;
 
 use Test2::Harness::Util qw/parse_exit apply_encoding/;
 use Test2::Harness::Util::IPC qw/swap_io/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 
+use IO::Select;
 use Scope::Guard;
 use Atomic::Pipe;
 
@@ -19,9 +20,15 @@ our $VERSION = '2.000000';
 use Test2::Harness::Util::HashBase qw{
     event_cb
     merge_outputs
-    buffer
+    +buffer
     state
     children
+
+    -run_id
+    -job_id
+    -job_try
+
+    +clean
 };
 
 sub init {
@@ -39,10 +46,16 @@ sub init {
 
     $self->{+CHILDREN}      //= {};
     $self->{+MERGE_OUTPUTS} //= 0;
+
+    $self->{+RUN_ID} //= 0;
+    $self->{+JOB_ID} //= 0;
+    $self->{+JOB_TRY} //= 0;
 }
 
 sub DESTROY {
     my $self = shift;
+
+    $self->cleanup_proc;
 
     return unless $self->{+CHILDREN};
     for my $pid (keys %{$self->{+CHILDREN}}) {
@@ -97,7 +110,16 @@ sub _warn {
     $msg .= " at $caller[1] line $caller[2].\n" unless $msg =~ m/\n$/;
 
     my $cb = $self->{+EVENT_CB};
-    $self->_pre_event(frame => \@caller, facets => {info => [{tag => 'WARNING', details => $msg, debug => 1}]});
+    $self->_pre_event(
+        stream => 'process',
+        stamp  => time,
+        event  => {
+            facet_data => {
+                info  => [{tag => 'WARNING', details => $msg, debug => 1}],
+                trace => {frame => \@caller}
+            },
+        },
+    );
 }
 
 sub _die {
@@ -107,7 +129,16 @@ sub _die {
     my @caller = caller();
     $msg .= " at $caller[1] line $caller[2].\n" unless $msg =~ m/\n$/;
 
-    $self->_pre_event(frame => \@caller, facets => {errors => [{tag => 'ERROR', details => $msg, fail => 1}]});
+    $self->_pre_event(
+        stream => 'process',
+        stamp  => time,
+        event  => {
+            facet_data => {
+                errors => [{tag => 'ERROR', details => $msg, fail => 1}],
+                trace  => {frame => \@caller},
+            },
+        },
+    );
 
     exit(255);
 }
@@ -119,6 +150,7 @@ sub run {
     my $name       = $params{name}      or croak "'name' is a required argument";
     my $type       = $params{type}      or croak "'type' is a required argument";
     my $launch_cb  = $params{launch_cb} or croak "'launch_cb' is a required argument";
+    my $env        = $params{env};
 
     my $parent = $params{parent_pid};
 
@@ -130,7 +162,10 @@ sub run {
             $self->{+CHILDREN}->{$collector_pid} = $$;
             return $collector_pid;
         }
+
     }
+
+    $0 = "Yath-Collector $name";
 
     $self->{+STATE}->transaction(w => sub {
         my ($state, $data) = @_;
@@ -143,6 +178,7 @@ sub run {
     my $child_pid = fork // CORE::die("Could not fork: $!");
 
     if (!$child_pid) {
+        $0 = $name;
         swap_io(\*STDOUT, $out_w->wh, sub { $self->_die(@_) });
         swap_io(\*STDERR, $err_w->wh, sub { $self->_die(@_) });
 
@@ -151,6 +187,10 @@ sub run {
             no warnings 'once';
             $Test2::Harness::STDOUT_APIPE = $out_w;
             $Test2::Harness::STDERR_APIPE = $err_w unless $self->{+MERGE_OUTPUTS};
+        }
+
+        if ($env) {
+            $ENV{$_} = $env->{$_} for keys %$env;
         }
 
         eval { $launch_cb->(); 1 } or $self->_die($@ // "launch exception");
@@ -172,7 +212,17 @@ sub run {
         unless $child_pid;
 
     my $stamp = time;
-    $self->_pre_event(stamp => $stamp, frame => [__PACKAGE__, __FILE__, __LINE__], process_launch => $child_pid);
+    $self->_pre_event(
+        stream => 'process',
+        stamp => $stamp,
+        action => 'launch',
+        launch => { stamp => $stamp, pid => $child_pid },
+        event => {
+            facet_data => {
+                trace => {frame => [__PACKAGE__, __FILE__, __LINE__]},
+            },
+        },
+    );
 
     $SIG{INT} = sub {
         $self->_warn("$$: Got SIGINT, forwarding to child process $child_pid.\n");
@@ -196,15 +246,33 @@ sub run {
 
     unless (eval { $self->_run(pid => $child_pid, stdout => $out_r, stderr => $err_r); 1 }) {
         my $err = $@;
+
+        $self->cleanup_proc;
+
         eval {
             $guard->dismiss();
             $self->_die($err);
         };
+
         exit(255);
     }
 
+    $self->cleanup_proc;
     $guard->dismiss();
     exit(0);
+}
+
+sub cleanup_proc {
+    my $self = shift;
+
+    return 1 if $self->{+CLEAN};
+
+    $self->{+STATE}->transaction(w => sub {
+        my ($state, $data) = @_;
+        delete $data->processes->{$$} if $data->processes->{$$} && $data->processes->{$$}->{type} eq 'collector';
+    });
+
+    return $self->{+CLEAN} = 1;
 }
 
 sub _run {
@@ -220,8 +288,15 @@ sub _run {
     $stdout->blocking(0);
     $stderr->blocking(0);
 
-    my @sets = (['stdout', $stdout]);
-    push @sets => ['stderr', $stderr] unless $self->{+MERGE_OUTPUTS};
+    my $ios = IO::Select->new;
+
+    my %sets = ($stdout->rh => ['stdout', $stdout]);
+    $ios->add($stdout->rh);
+
+    unless ($self->{+MERGE_OUTPUTS}) {
+        $sets{$stderr->rh} = ['stderr', $stderr];
+        $ios->add($stderr->rh);
+    }
 
     my ($exited, $exit);
     while (1) {
@@ -250,36 +325,52 @@ sub _run {
 
         my $enc;
 
-        for my $set (@sets) {
-            my ($name, $fh) = @$set;
+        my @sets = $ios->can_read();
 
-            my ($type, $val) = $fh->get_line_burst_or_data;
-            last unless $type;
-            $did_work++;
+        while (@sets) {
+            for my $io (@sets) {
+                my ($name, $fh) = @{$sets{$io}};
 
-            if ($type eq 'message') {
-                my $decoded = decode_json($val);
-                $self->_add_item($name => $decoded);
-            }
-            elsif ($type eq 'line') {
-                chomp($val);
-                $self->_add_item($name => $val);
-            }
-            else {
-                chomp($val);
-                die("Invalid type '$type': $val");
+                my ($type, $val) = $fh->get_line_burst_or_data;
+                unless ($type) {
+                    @sets = grep { $_ ne $io } @sets;
+                    next;
+                }
+
+                $did_work++;
+
+                if ($type eq 'message') {
+                    my $decoded = decode_json($val);
+                    $self->_add_item($name => $decoded);
+                }
+                elsif ($type eq 'line') {
+                    chomp($val);
+                    $self->_add_item($name => $val);
+                }
+                else {
+                    chomp($val);
+                    die("Invalid type '$type': $val");
+                }
             }
         }
 
         next if $did_work;
         last if $exited;
-
-        sleep(0.02);
     }
 
     $self->_flush();
 
-    $self->_pre_event(stamp => $exited, frame => [__PACKAGE__, __FILE__, __LINE__], process_exit => $exit);
+    $self->_pre_event(
+        stream => 'process',
+        stamp  => $exited,
+        action => 'exit',
+        exit   => {exit => $exit, stamp => $exited},
+        event  => {
+            facet_data => {
+                trace => {frame => [__PACKAGE__, __FILE__, __LINE__]},
+            },
+        },
+    );
 
     return;
 }
@@ -291,7 +382,7 @@ sub _add_item {
     my $buffer = $self->{+BUFFER} //= {};
     my $seen   = $buffer->{seen}  //= {};
 
-    push @{$buffer->{$stream}} => $val;
+    push @{$buffer->{$stream}} => [time, $val];
 
     $self->_flush() unless keys(%$seen);
 
@@ -316,16 +407,17 @@ sub _flush {
 
     for my $stream (qw/stderr stdout/) {
         while (1) {
-            my $val = shift(@{$buffer->{$stream}}) or last;
+            my $set = shift(@{$buffer->{$stream}}) or last;
+            my ($stamp, $val) = @$set;
             if (ref($val)) {
                 # Send the event, unless it came via STDERR in which case it should only be a hashref with an event_id
-                $self->_pre_event(stream => $stream, data => $val)
+                $self->_pre_event(stream => $stream, data => $val, stamp => $stamp)
                     unless $stream eq 'stderr';
 
                 last if $to && $val->{event_id} eq $to;
             }
             else {
-                $self->_pre_event(stream => $stream, line => $val);
+                $self->_pre_event(stream => $stream, line => $val, stamp => $stamp);
             }
         }
     }

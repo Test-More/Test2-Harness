@@ -18,6 +18,9 @@ use Test2::Harness::Util::HashBase(
         <ipc_model
         <jobs
         <queue
+
+        <processes
+        <aggregators
     },
 );
 
@@ -33,6 +36,9 @@ sub init_state {
     $data->{+QUEUE}     //= {};
     $data->{+IPC_MODEL} //= {};
     $data->{+JOB_COUNT} //= $state->{job_count} // $settings->check_prefix('runner') ? $settings->runner->job_count // 1 : 1;
+
+    $data->{+PROCESSES}   //= {};
+    $data->{+AGGREGATORS} //= {};
 
     for my $type (qw/resource plugin renderer/) {
         my $plural = "${type}s";

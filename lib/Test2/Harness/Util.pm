@@ -9,6 +9,15 @@ use Test2::Util qw/try_sig_mask do_rename/;
 use Fcntl qw/LOCK_EX LOCK_UN SEEK_SET :mode/;
 use File::Spec;
 
+use List::Util qw/zip/;
+use Config qw/%Config/;
+
+my @SIGNUMS  = split(' ', $Config{sig_num});
+my @SIGNAMES = split(' ', $Config{sig_name});
+
+my %SIG_NUM_LOOKUP = map { @$_ } zip(\@SIGNAMES, \@SIGNUMS);
+my %SIG_NAME_LOOKUP = map { @$_ } zip(\@SIGNUMS,  \@SIGNAMES);
+
 our $VERSION = '1.000152';
 
 use Importer Importer => 'import';
@@ -17,6 +26,8 @@ our @EXPORT_OK = qw{
     find_libraries
     clean_path
 
+    sig_name_to_num
+    sig_num_to_name
     parse_exit
     mod2file
     file2mod
@@ -151,6 +162,9 @@ sub apply_encoding {
     binmode($fh, ":encoding($enc)");
 }
 
+sub sig_name_to_num { $SIG_NUM_LOOKUP{$_} }
+sub sig_num_to_name { $SIG_NAME_LOOKUP{$_} }
+
 sub parse_exit {
     my ($exit) = @_;
 
@@ -158,10 +172,11 @@ sub parse_exit {
     my $dmp = $exit & 128;
 
     return {
-        sig => $sig,
-        err => ($exit >> 8),
-        dmp => $dmp,
-        all => $exit,
+        $sig ? (signame => $SIG_NAME_LOOKUP{$sig} // 'N/A') : (),
+        sig     => $sig,
+        err     => ($exit >> 8),
+        dmp     => $dmp,
+        all     => $exit,
     };
 }
 

@@ -1,4 +1,4 @@
-package Test2::Harness::Auditor::Watcher;
+package Test2::Harness::Collector::Auditor;
 use strict;
 use warnings;
 
@@ -9,25 +9,30 @@ use Scalar::Util qw/blessed/;
 use List::Util qw/first max/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::Util::File::JSON;
 
 use Test2::Harness::Util qw/hub_truth parse_exit/;
 
-use Test2::Harness::Auditor::TimeTracker;
+use Test2::Harness::Log::TimeTracker;
+
+use Test2::Harness::Event;
 
 use Test2::Harness::Util::HashBase qw{
-    -job
-    -try
+    -file
+    -job_try
+    -summary_file <previous_summary
+    -state
+    -run_id
+    -job_id
 
     -assertion_count
     -exit
     -plan
+    +fail
     -_errors
     -_failures
     -_sub_failures
     -_plans
-    -_info
-    -_sub_info
-    -_subtest_id
     -nested
     -subtests
     -numbers
@@ -39,30 +44,108 @@ use Test2::Harness::Util::HashBase qw{
 sub init {
     my $self = shift;
 
-    croak "'job' is a required attribute"
-        unless $self->{+JOB};
-
     croak "'try' is a required attribute"
-        unless defined $self->{+TRY};
+        unless defined $self->{+JOB_TRY};
+
+    croak "'file' is a required attribute"
+        unless defined $self->{+FILE};
 
     $self->{+_FAILURES}       = 0;
     $self->{+_ERRORS}         = 0;
     $self->{+ASSERTION_COUNT} = 0;
 
     $self->{+NUMBERS} = {};
-    $self->{+TIMES} = Test2::Harness::Auditor::TimeTracker->new();
+    $self->{+TIMES} = Test2::Harness::Log::TimeTracker->new();
 
     $self->{+NESTED} = 0 unless defined $self->{+NESTED};
 }
 
 sub pass { !$_[0]->fail }
-sub file { $_[0]->{+JOB}->{file} }
-sub fail { !!$_[0]->fail_error_facet_list }
+sub fail {
+    my $self = shift;
+    return $self->{+FAIL} if $self->{+FAIL};
+    return $self->{+FAIL} = 1 if $self->fail_error_facet_list;
+    return 0;
+}
 
 sub has_exit { defined $_[0]->{+EXIT} }
 sub has_plan { defined $_[0]->{+PLAN} }
 
-sub process {
+sub audit {
+    my $self = shift;
+    my @out = $self->_audit(@_);
+
+    $self->update_summary() if $self->{+SUMMARY_FILE};
+
+    return @out;
+}
+
+sub update_summary {
+    my $self = shift;
+
+    my $done = defined($self->{+EXIT}) || defined($self->{halt});
+    my $fail = $self->{+_ERRORS} || $self->{+_FAILURES} || $self->{+_SUB_FAILURES} || $self->{+EXIT} || $self->{+HALT};
+    $fail ||= $done && $self->fail_error_facet_list;
+
+    $fail = $fail ? 1 : 0;
+    $done = $done ? 1 : 0;
+
+    my $new;
+    if ($done) {
+        $new = {
+            fail             => $fail,
+            done             => $done,
+            file             => $self->{+FILE},
+            run_id           => $self->{+RUN_ID},
+            job_try          => $self->{+JOB_TRY},
+            job_id           => $self->{+JOB_ID},
+            exit             => $self->{+EXIT},
+            halt             => $self->{+HALT},
+            plan             => $self->{+PLAN},
+            assertions       => $self->{+ASSERTION_COUNT} // 0,
+            errors           => $self->{+_ERRORS}         // 0,
+            failures         => $self->{+_FAILURES}       // 0,
+            subtest_failures => $self->{+_SUB_FAILURES}   // 0
+        };
+    }
+    else {
+        $new = {
+            file    => $self->{+FILE},
+            run_id  => $self->{+RUN_ID},
+            job_try => $self->{+JOB_TRY},
+            job_id  => $self->{+JOB_ID},
+            fail    => $fail,
+            done    => $done,
+        };
+    }
+
+    my $old = $self->{+PREVIOUS_SUMMARY};
+
+    my $diff = $old ? keys(%$new) != keys(%$old) : 1;
+    if ($old && !$diff) {
+        for my $key (qw/fail done/) {
+            next if defined($old->{$key}) && $new->{$key} == $old->{$key};
+            $diff++;
+            last;
+        }
+    }
+
+    return if $old && !$diff;
+    $self->{+PREVIOUS_SUMMARY} = $new;
+
+    if (my $file = $self->{+SUMMARY_FILE}) {
+        Test2::Harness::Util::File::JSON->new(name => $file)->write($new);
+    }
+
+    if (my $state = $self->state) {
+        $state->transaction(w => sub {
+            my ($this, $data) = @_;
+            $data->{jobs}->{$self->{+RUN_ID}}->{$self->{+JOB_ID}}->{$self->{+JOB_TRY}} = $new;
+        });
+    }
+}
+
+sub _audit {
     my $self = shift;
     my ($event) = @_;
 
@@ -83,7 +166,7 @@ sub process {
     if ($f->{harness} && $f->{harness}->{subtest_start}) {
         my $st = $self->{+SUBTESTS}->{$nested + 1} ||= {};
         $st->{event} = $event;
-        $f->{harness_watcher}->{no_render} = 1;
+        $f->{harness_auditor}->{no_render} = 1;
         return;
     }
 
@@ -92,12 +175,12 @@ sub process {
     # Not actually a subtest end, someone printed to STDOUT
     if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}})) {
         # Alter $f so that this incorrect event is not sent to the renderer.
-        $f->{harness_watcher}->{no_render} = 1;
+        $f->{harness_auditor}->{no_render} = 1;
 
         # Make a new $f and $event for the rest of the processing.
         $f = {
             %{$f},
-            harness_watcher => {added_by_watcher => 1},
+            harness_auditor => {added_by_auditor => 1},
             parent          => undef,
             trace           => undef,
             harness         => {
@@ -114,7 +197,7 @@ sub process {
             ],
         };
 
-        $event = Test2::Harness::Event->new(stamp => time, job_try => $self->{+TRY}, facet_data => $f);
+        $event = Test2::Harness::Event->new(stamp => time, job_try => $self->{+JOB_TRY}, facet_data => $f);
     }
 
     push @out => $event;
@@ -128,7 +211,7 @@ sub process {
             my $se = $st->{event} || $event;
 
             my $fd = $se->{facet_data};
-            delete $fd->{harness_watcher}->{no_render};
+            delete $fd->{harness_auditor}->{no_render};
             $fd->{parent}->{hid} ||= $n;
             $fd->{parent}->{children} ||= $st->{children};
             $fd->{harness}->{closed_by}     = $event;
@@ -167,7 +250,7 @@ sub subtest_process {
     my ($f, $event) = @_;
 
     my $closer = delete $f->{harness}->{closed_by};
-    $event ||= Test2::Harness::Event->new(facet_data => $f, job_try => $self->{+TRY});
+    $event ||= Test2::Harness::Event->new(facet_data => $f, job_try => $self->{+JOB_TRY});
 
     $self->{+NUMBERS}->{$f->{assert}->{number}}++
         if $f->{assert} && $f->{assert}->{number};
@@ -175,17 +258,17 @@ sub subtest_process {
     if ($f->{parent} && $f->{assert}) {
         my $name = $f->{assert}->{details} // "unnamed subtest ($f->{trace}->{frame}->[1] line $f->{trace}->{frame}->[2])";
 
-        my $subwatcher = blessed($self)->new(nested => $self->{+NESTED} + 1, job => $self->{+JOB}, try => $self->{+TRY});
+        my $subauditor = blessed($self)->new(nested => $self->{+NESTED} + 1, file => $self->{+FILE}, job_try => $self->{+JOB_TRY});
 
         my $id = 1;
         for my $sf (@{$f->{parent}->{children}}) {
             $sf->{harness}->{job_id}   ||= $f->{harness}->{job_id};
             $sf->{harness}->{run_id}   ||= $f->{harness}->{run_id};
             $sf->{harness}->{event_id} ||= $sf->{about}->{uuid} ||= gen_uuid();
-            $subwatcher->subtest_process($sf);
+            $subauditor->subtest_process($sf);
         }
 
-        my @errors = $subwatcher->subtest_fail_error_facet_list();
+        my @errors = $subauditor->subtest_fail_error_facet_list();
 
         if ($f->{harness}->{subtest_start}) {
             push @{$f->{errors}} => {tag => 'REASON', fail => 1, from_harness => 1, details => "Buffered subtest ended abruptly (missing closing brace event)"}
@@ -208,7 +291,7 @@ sub subtest_process {
 
             # Populate the tree up to this subtest
             my $tree = $self->{+FAILED_SUBTEST_TREE} //= [];
-            push @$tree => [$name, $subwatcher->{+FAILED_SUBTEST_TREE} // []];
+            push @$tree => [$name, $subauditor->{+FAILED_SUBTEST_TREE} // []];
         }
     }
 
@@ -233,13 +316,16 @@ sub subtest_process {
     if ($f->{harness_job_exit}) {
         $self->{+EXIT} = $f->{harness_job_exit}->{exit};
 
-        my $file = $self->file();
+        my $file = $self->{+FILE};
 
+        warn "checking if the job will retry can not be done here!";
         my $end = $f->{harness_job_end} = {
+            # This has to happen somewhere else.
+            #retry    => $f->{harness_job_exit}->{retry},
+
             file     => $file,
             rel_file => File::Spec->abs2rel($file),
             abs_file => File::Spec->rel2abs($file),
-            retry    => $f->{harness_job_exit}->{retry},
             fail     => $self->fail(),
             stamp    => $f->{harness_job_exit}->{stamp},
         };
@@ -262,8 +348,6 @@ sub subtest_process {
 
 sub subtest_fail_error_facet_list {
     my $self = shift;
-
-    return @{$self->{+_SUB_INFO}} if $self->{+_SUB_INFO};
 
     my @out;
 
@@ -307,8 +391,6 @@ sub subtest_fail_error_facet_list {
 sub fail_error_facet_list {
     my $self = shift;
 
-    return @{$self->{+_INFO}} if $self->{+_INFO};
-
     my @out;
 
     my $incomplete_subtests = values %{$self->{+SUBTESTS}};
@@ -351,8 +433,8 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Auditor::Watcher - Class to monitor events for a single job and
-pass judgement on the result.
+Test2::Harness::Collector::Auditor - Class to monitor events for a single job
+and pass judgement on the result .
 
 =head1 DESCRIPTION
 
@@ -362,93 +444,93 @@ job passed or failed, and why.
 
 =head1 SYNOPSIS
 
-    use Test2::Harness::Auditor::Watcher;
+    use Test2::Harness::Collector::Auditor;
 
-    my $watcher = Test2::Harness::Auditor::Watcher->new();
+    my $auditor = Test2::Harness::Collector::Auditor->new();
 
     for my $event (@events) {
-        $watcher->process($event);
+        $auditor->process($event);
     }
 
-    print "Pass!" if $watcher->pass;
-    print "Fail!" if $watcher->fail;
+    print "Pass!" if $auditor->pass;
+    print "Fail!" if $auditor->fail;
 
 =head1 METHODS
 
 =over 4
 
-=item $int = $watcher->assertion_count()
+=item $int = $auditor->assertion_count()
 
 Number of assertions that have been seen.
 
-=item $exit = $watcher->exit()
+=item $exit = $auditor->exit()
 
 If the job has exited this will return the exit value (integer, 0 or greater).
-If the job has not exited yet (or at least if the watcher has not seen the exit
+If the job has not exited yet (or at least if the auditor has not seen the exit
 event yet) this will return undef.
 
-=item $bool = $watcher->fail()
+=item $bool = $auditor->fail()
 
 Returns true if the job has failed/is failing.
 
-=item @error_facets = $watcher->fail_error_facet_list
+=item @error_facets = $auditor->fail_error_facet_list
 
 Used internally to get a list of 'error' facets to inject into the
 harness_job_exit event.
 
-=item $file = $watcher->file
+=item $file = $auditor->file
 
 If the test file is known this will return it (string). This will return undef
 if the file is not yet known.
 
-=item $string = $watcher->halt
+=item $string = $auditor->halt
 
 If the test was halted (bail-out) this will contain the human readible reason.
 
-=item $bool = $watcher->has_exit
+=item $bool = $auditor->has_exit
 
 Check if the exit value is known.
 
-=item $bool = $watcher->has_plan
+=item $bool = $auditor->has_plan
 
 Check if a plan has been seen.
 
-=item $job = $watcher->job
+=item $file = $auditor->file
 
-If the job is known this will return the detailed structure of the job.
+file that is running
 
-=item $int = $watcher->nested
+=item $int = $auditor->nested
 
-If this watcher represents a subtest this will be an integer greater than 0,
+If this auditor represents a subtest this will be an integer greater than 0,
 the top-level test is 0.
 
-=item $hash = $watcher->numbers
+=item $hash = $auditor->numbers
 
 This is an internal state tracking what test numbers have been seen. This is
 really only applicable in tests that produced TAP.
 
-=item $bool = $watcher->pass
+=item $bool = $auditor->pass
 
 Check if the test job is passing.
 
-=item $plan_facet = $watcher->plan()
+=item $plan_facet = $auditor->plan()
 
 If the plan facet has been seen this will return it.
 
-=item $watcher->process($event);
+=item $auditor->process($event);
 
 Modify the state based on the provided event.
 
-=item $watcher->subtest_fail_error_facet_list
+=item $auditor->subtest_fail_error_facet_list
 
 Used internally to get a list of 'error' facets to inject into the
 harness_job_exit event.
 
-=item $times = $watcher->times()
+=item $times = $auditor->times()
 
-Retuns the L<Test2::Harness::Auditor::TimeTracker> instance.
+Retuns the L<Test2::Harness::Log::TimeTracker> instance.
 
-=item $int = $watcher->try()
+=item $int = $auditor->try()
 
 Sometimes a job is run more than once, in those cases this will be an integer
 greater than 0 representing the try. 0 is used for the first try.

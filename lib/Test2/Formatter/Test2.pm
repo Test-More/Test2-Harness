@@ -45,6 +45,7 @@ use Test2::Util::HashBase qw{
     -job_names
     -is_persistent
     -interactive
+    +noname_counter
 };
 
 sub TAG_WIDTH() { 8 }
@@ -163,6 +164,8 @@ my %FACET_TAG_BORDERS = (
 
 sub init {
     my $self = shift;
+
+    $self->{+NONAME_COUNTER} //= 1;
 
     $self->{+COMPOSER} ||= Test2::Formatter::Test2::Composer->new;
 
@@ -594,7 +597,7 @@ sub render_tree {
     my $job = '';
     if ($f->{harness} && $f->{harness}->{job_id}) {
         my $id = $f->{harness}->{job_id};
-        my $name = $self->{+JOB_NAMES}->{$id};
+        my $name = $self->{+JOB_NAMES}->{$id} //= "^" . $self->{+NONAME_COUNTER};
 
         my ($color, $reset) = ('', '');
         if ($self->{+JOB_COLORS}) {
@@ -602,7 +605,7 @@ sub render_tree {
             $reset = $self->reset;
         }
 
-        my $len = length($name);
+        my $len = length($name) // 0;
         if (!$self->{+JOB_LENGTH} || $len > $self->{+JOB_LENGTH}) {
             $self->{+JOB_LENGTH} = $len;
         }

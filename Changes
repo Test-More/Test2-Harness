@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Do not require non-perl script tests to be executable
+
 1.000151  2023-03-08 07:11:31-08:00 America/Los_Angeles
 
     - Fix issue where rarely some UUIDs could be duplicated with IPC

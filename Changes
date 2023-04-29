@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Do not require non-perl script tests to be executable
+    - Fix issue where Carp::Always being loaded by PERL5OPT or similar does not crash
 
 1.000151  2023-03-08 07:11:31-08:00 America/Los_Angeles
 

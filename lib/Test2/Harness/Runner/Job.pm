@@ -125,7 +125,9 @@ sub spawn_params {
     my $command;
     if (!$skip && $task->{binary} || $task->{non_perl}) {
         my $file = $self->ch_dir ? $self->file : $self->rel_file;
-        $command = [clean_path($file), $self->args];
+        $file = clean_path($file);
+        $command = [$file, $self->args];
+        unshift @$command => $^X if $task->{non_perl} && !(-x $file)  && !$task->{binary};
     }
     else {
         $command = [

@@ -532,18 +532,6 @@ subtest binary => sub {
 subtest not_perl => sub {
     my $path = File::Spec->catfile($tmp, 'not_perl');
 
-    like(
-        dies { my $not_perl = $CLASS->new(file => $path); $not_perl->shbang },
-        qr{Cannot run non-perl test file '[^']*\Q$path\E': file is not executable\.},
-        "File must be executable",
-    );
-
-    my $control = mock $CLASS => (
-        override => [
-            is_executable => sub { 1 },
-        ],
-    );
-
     my $not_perl = $CLASS->new(file => File::Spec->catfile($tmp, 'not_perl'));
 
     is($not_perl->switches, [], "No SHBANG switches");
@@ -580,18 +568,6 @@ subtest not_perl => sub {
 
 subtest not_env_perl => sub {
     my $path = File::Spec->catfile($tmp, 'not_env_perl');
-
-    like(
-        dies { my $not_env_perl = $CLASS->new(file => $path); $not_env_perl->shbang },
-        qr{Cannot run non-perl test file '[^']*\Q$path\E': file is not executable\.},
-        "File must be executable",
-    );
-
-    my $control = mock $CLASS => (
-        override => [
-            is_executable => sub { 1 },
-        ],
-    );
 
     my $not_env_perl = $CLASS->new(file => File::Spec->catfile($tmp, 'not_env_perl'));
 

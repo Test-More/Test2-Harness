@@ -246,9 +246,6 @@ sub _scan {
 
                 if ($shbang->{non_perl}) {
                     $self->{+NON_PERL} = 1;
-
-                    die "Cannot run non-perl test file '" . $self->{+FILE} . "': file is not executable.\n"
-                        unless $self->is_executable;
                 }
 
                 next;

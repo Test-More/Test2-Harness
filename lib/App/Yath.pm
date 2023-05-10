@@ -17,7 +17,7 @@ use Test2::Harness::Util::HashBase qw{
 use Time::HiRes qw/time/;
 
 use App::Yath::Util qw/find_pfile/;
-use Test2::Harness::Util qw/find_libraries clean_path/;
+use Test2::Harness::Util qw/find_libraries clean_path mod2file/;
 use App::Yath::Options();
 use Scalar::Util qw/blessed/;
 
@@ -286,7 +286,7 @@ sub load_command {
     my ($cmd_name, %params) = @_;
 
     my $cmd_class = "App::Yath::Command::$cmd_name";
-    my $cmd_file  = "App/Yath/Command/$cmd_name.pm";
+    my $cmd_file  = mod2file($cmd_class);
 
     return $cmd_class if eval { require $cmd_file; 1 };
     my $error = $@ || 'unknown error';

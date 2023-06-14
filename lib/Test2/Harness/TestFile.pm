@@ -385,12 +385,13 @@ sub _parse_shbang {
     }xi;
 
     if ($line =~ $shbang_re) {
-        my @switches = grep { m/\S/ } split /\s+/, $1 if defined $1;
+        my @switches;
+        @switches         = grep { m/\S/ } split /\s+/, $1 if defined $1;
         $shbang{switches} = \@switches;
         $shbang{line}     = $line;
     }
     elsif ($line =~ m/^#!/ && $line !~ m/perl/i) {
-        $shbang{line} = $line;
+        $shbang{line}     = $line;
         $shbang{non_perl} = 1;
     }
 

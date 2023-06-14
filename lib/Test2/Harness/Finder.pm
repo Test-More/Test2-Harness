@@ -220,7 +220,8 @@ sub find_changes {
     my $self = shift;
     my ($plugins, $settings) = @_;
 
-    my @listed_changes = @{$self->{+CHANGED}} if $self->{+CHANGED};
+    my @listed_changes;
+    @listed_changes = @{$self->{+CHANGED}} if $self->{+CHANGED};
 
     my ($type, $diff) = $self->get_diff($plugins, $settings);
 

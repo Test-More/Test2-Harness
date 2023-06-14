@@ -428,7 +428,8 @@ sub update_io {
     my $err_fh = open_file($job->err_file, '>');
 
     my $in_file = $job->in_file;
-    my $in_fh = open_file($in_file, '<') if $in_file;
+    my $in_fh;
+    $in_fh = open_file($in_file, '<') if $in_file;
 
     $out_fh->autoflush(1);
     $err_fh->autoflush(1);

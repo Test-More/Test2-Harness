@@ -205,8 +205,9 @@ sub annotate_event {
     if ($fd->{harness_final}) {
         my $cover      = $settings->cover;
         my $aggregator = $self->{+AGGREGATOR} or return;
-        my $metrics    = $self->metrics($settings) if $cover->metrics;
-        my $final      = $aggregator->finalize();
+        my $metrics;
+        $metrics = $self->metrics($settings) if $cover->metrics;
+        my $final = $aggregator->finalize();
 
         my $percentages = $self->_percentages($metrics);
         my $raw         = join ", ", map { "$_->[0]: $_->[2]/$_->[1] ($_->[3])" } @$percentages;

@@ -55,6 +55,7 @@ jobs:
        AUTOMATED_TESTING: 1
        RELEASE_TESTING: 1
        PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
+       T2_NO_FORK: 1
 
     strategy:
       fail-fast: false

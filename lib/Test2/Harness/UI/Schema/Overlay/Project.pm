@@ -66,7 +66,7 @@ sub durations {
     my ($user_append, @user_args) = $username ? ("users.username = ?", $username) : ();
 
     if ($username) {
-        $query .= "AND $user_append";
+        $query .= "AND $user_append\n";
         push @vals => @user_args;
     }
 
@@ -85,8 +85,10 @@ sub durations {
 
         my @ids = map { $_->[0] } @{$sth->fetchall_arrayref};
 
-        $query .= "AND run_id IN (" . ('?' x scalar @ids) . ")\n";
-        push @vals => (@ids);
+        if (@ids) {
+            $query .= "AND run_id IN (" . ('?' x scalar @ids) . ")\n";
+            push @vals => (@ids);
+        }
     }
 
     my $sth = $dbh->prepare($query);

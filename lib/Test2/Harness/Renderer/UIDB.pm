@@ -18,7 +18,7 @@ use Test2::Harness::UI::UUID qw/gen_uuid uuid_inflate/;
 
 use Test2::Harness::Util qw/mod2file/;
 
-our $VERSION = '0.000138';
+our $VERSION = '0.000139';
 
 use parent 'Test2::Harness::Renderer';
 use Test2::Harness::Util::HashBase qw{

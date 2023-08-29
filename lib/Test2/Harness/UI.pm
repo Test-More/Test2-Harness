@@ -2,7 +2,7 @@ package Test2::Harness::UI;
 use strict;
 use warnings;
 
-our $VERSION = '0.000138';
+our $VERSION = '0.000139';
 
 use Router::Simple;
 use Text::Xslate(qw/mark_raw/);

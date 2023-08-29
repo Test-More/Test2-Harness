@@ -77,6 +77,8 @@ sub retry_on_disconnect {
         return 1 if eval { $callback->(); 1 };
         $err = $@;
 
+        last unless $err =~ m/(gone away|connect|timeout)/i;
+
         # Try to fix the connection
         for (1 .. 10) {
             $self->schema->storage->disconnect;
@@ -86,6 +88,39 @@ sub retry_on_disconnect {
     }
 
     die trim_error(qq{Failed "$description" (attempt $attempt)}, $err);
+}
+
+sub populate {
+    my $self = shift;
+    my ($type, $data) = @_;
+
+    return unless $data && @$data;
+
+    $self->retry_on_disconnect(
+        "Populate '$type'",
+        sub {
+            my $rs = $self->schema->resultset($type);
+            my $ok = eval { $rs->populate($data); 1 };
+            my $err = $@;
+            return 1 if $ok;
+
+            die $err unless $err =~ m/duplicate/i;
+
+            warn "Duplicate found:\n====\n$err\n====\n\nPopulating '$type' 1 at a time.\n";
+            for my $item (@$data) {
+                next if eval { $rs->find_or_create($item); 1 };
+                my $err = $@;
+
+                # I need to track down why we still get duplicates (Coverage mainly) for now skip them.
+                next if $err =~ m/duplicate/i;
+
+                # Actual error
+                die $err;
+            }
+
+            return 1;
+        }
+    );
 }
 
 sub format_stamp {
@@ -271,10 +306,8 @@ sub flush_events {
     }
 
     local $ENV{DBIC_DT_SEARCH_OK} = 1;
-    $self->retry_on_disconnect("populate events" => sub { $self->schema->resultset('Event')->populate(\@write) });
-
-    return unless @write_bin;
-    $self->retry_on_disconnect("populate binaries" => sub { $self->schema->resultset('Binary')->populate(\@write_bin) });
+    $self->populate(Event => \@write);
+    $self->populate(Binary => \@write_bin);
 }
 
 sub flush_reporting {
@@ -349,7 +382,7 @@ sub flush_reporting {
 
     local $ENV{DBIC_DT_SEARCH_OK} = 1;
 
-    $self->retry_on_disconnect("populate reporting" => sub { $self->schema->resultset('Reporting')->populate(\@write) });
+    $self->populate(Reporting => \@write);
 }
 
 sub user {
@@ -752,9 +785,11 @@ sub add_job_coverage {
     for my $source (keys %{$job_coverage->{files}}) {
         my $subs = $job_coverage->{files}->{$source};
         for my $sub (keys %$subs) {
+            my $test = $job_coverage->{test} // $job->{result}->file;
+
             $self->_add_coverage(
                 job_key => $job->{job_key},
-                test    => $job_coverage->{test} // $job->{result}->file,
+                test    => $test,
                 source  => $source,
                 sub     => $sub,
                 manager => $job_coverage->{manager},
@@ -827,7 +862,7 @@ sub flush_coverage {
     $self->retry_on_disconnect("update has_coverage" => sub { $self->{+RUN}->update({has_coverage => 1}) })
         unless $self->{+RUN}->has_coverage;
 
-    $self->retry_on_disconnect("populate coverage" => sub { $self->schema->resultset('Coverage')->populate($coverage) });
+    $self->populate(Coverage => $coverage);
 
     @$coverage = ();
 
@@ -921,7 +956,7 @@ sub _add_fields {
         $field = $id;
     }
 
-    $self->retry_on_disconnect("populate fields" => sub { $self->schema->resultset($type)->populate(\@add) });
+    $self->populate($type => \@add);
 }
 
 sub clean_output {

@@ -332,7 +332,7 @@ CREATE TABLE coverage (
     FOREIGN KEY (coverage_manager_id) REFERENCES coverage_manager(coverage_manager_id),
     FOREIGN KEY (job_key)             REFERENCES jobs(job_key),
 
-    UNIQUE(run_id, test_file_id, source_file_id, source_sub_id)
+    UNIQUE(run_id, test_file_id, source_file_id, source_sub_id, job_key)
 ) ROW_FORMAT=COMPRESSED;
 CREATE INDEX coverage_from_source ON coverage(source_file_id, source_sub_id);
 CREATE INDEX coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);

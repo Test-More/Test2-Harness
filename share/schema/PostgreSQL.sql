@@ -318,7 +318,7 @@ CREATE TABLE coverage (
 
     metadata    JSONB   DEFAULT NULL,
 
-    UNIQUE(run_id, test_file_id, source_file_id, source_sub_id)
+    UNIQUE(run_id, test_file_id, source_file_id, source_sub_id, job_key)
 );
 CREATE INDEX IF NOT EXISTS coverage_from_source ON coverage(source_file_id, source_sub_id);
 CREATE INDEX IF NOT EXISTS coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);

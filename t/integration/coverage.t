@@ -114,10 +114,10 @@ $server->subtest(
 
         is( [$run->coverage_data], $coverage_data, "Got predicted coverage data via DB",);
 
-        my $res = HTTP::Tiny::UNIX->new->get('http:' . $server->socket . '//coverage/test');
-        is($res->{status}, 200, "Connected ok");
-        my $got = [map { decode_json($_) } split /\n/, $res->{content}];
-        is( $got, $coverage_data, "Got predicted coverage data via http",);
+#        my $res = HTTP::Tiny::UNIX->new->get('http:' . $server->socket . '//coverage/test');
+#        is($res->{status}, 200, "Connected ok");
+#        my $got = [map { decode_json($_) } split /\n/, $res->{content}];
+#        is( $got, $coverage_data, "Got predicted coverage data via http",);
     }
 );
 

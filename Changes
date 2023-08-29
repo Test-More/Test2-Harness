@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix issue where duplication occurs on disconnect/reconnect
+
 0.000137  2023-08-28 13:32:08-07:00 America/Los_Angeles
 
     - Fix issues with project durations query

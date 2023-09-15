@@ -1,0 +1,14 @@
+use Test2::V0;
+
+sub pass_ok {
+    my $ctx = context();
+    $ctx->hub->format->set_no_numbers(1);
+
+    pass("pass");
+
+    $ctx->release;
+}
+
+pass_ok();
+
+done_testing;

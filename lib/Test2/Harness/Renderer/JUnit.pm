@@ -176,9 +176,10 @@ sub render_event {
         # Ignore subtests
         return if ( $f->{'hubs'} && $f->{'hubs'}->[0]->{'nested'} );
 
-        my $test_num    = sprintf( "%04d", $event->{'assert_count'} || $f->{'assert'}->{'number'} || die Dumper $event);
+        my $test_num    = $event->{'assert_count'} || $f->{'assert'}->{'number'};
+        $test_num = sprintf "%04d", $test_num if defined $test_num;
         my $test_name   = _squeaky_clean( $f->{'assert'}->{'details'} // 'UNKNOWN_TEST?' );
-        my $test_string = defined $test_name ? "$test_num - $test_name" : $test_num;
+        $test_name = join " - ", grep { defined } $test_num, $test_name;
         $test->{'testsuite'}->{'tests'}++;
 
         $self->close_open_failure_testcase( $test, $test_num );
@@ -190,10 +191,10 @@ sub render_event {
 
         if ( $f->{'amnesty'} && grep { ( $_->{'tag'} // '' ) eq 'TODO' } @{ $f->{'amnesty'} } ) {    # All TODO Tests
             if ( !$f->{'assert'}->{'pass'} ) {                                                       # Failing TODO
-                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (TODO)", 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} }, "" );
+                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_name (TODO)", 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} }, "" );
             }
             elsif ( $self->{'allow_passing_todos'} ) {                                               # junit parsers don't like passing TODO tests. Let's just not tell them about it if $ENV{ALLOW_PASSING_TODOS} is set.
-                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_string (PASSING TODO)", 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} }, "" );
+                push @{ $test->{'testcase'} }, $self->xml->testcase( { 'name' => "$test_name (PASSING TODO)", 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} }, "" );
             }
             else {                                                                                   # Passing TODO (Failure) when not allowed.
 
@@ -204,10 +205,10 @@ sub render_event {
                 my ($todo_message) = map { $_->{'details'} } grep { $_->{'tag'} // '' eq 'TODO' } @{ $f->{'amnesty'} };
 
                 push @{ $test->{'testcase'} }, $self->xml->testcase(
-                    { 'name' => "$test_string (TODO)", 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} },
+                    { 'name' => "$test_name (TODO)", 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} },
                     $self->xml->error(
                         { 'message' => $todo_message, 'type' => "TodoTestSucceeded" },
-                        $self->_cdata("ok $test_string")
+                        $self->_cdata("ok $test_name")
                     )
                 );
 
@@ -215,7 +216,7 @@ sub render_event {
         }
         elsif ( $f->{'assert'}->{'pass'} ) {    # Passing test
             push @{ $test->{'testcase'} }, $self->xml->testcase(
-                { 'name' => "$test_string", 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} },
+                { 'name' => $test_name, 'time' => $run_time, 'classname' => $test->{'testsuite'}->{'name'} },
                 ""
             );
         }
@@ -223,12 +224,15 @@ sub render_event {
             $test->{'testsuite'}->{'failures'}++;
             $test->{'testsuite'}->{'errors'}++;
 
+            my $message = "not ok" . ( $test_name ? " $test_name" : "" );
+
             # Trap the test information. We can't generate the XML for this test until we get all the diag information.
             $test->{'last_failure'} = {
-                'test_num'  => $test_num,
-                'test_name' => $test_name,
-                'time'      => $run_time,
-                'message'   => "not ok $test_string\n",
+                'test_num'     => $test_num,
+                'test_name'    => $test_name,
+                'time'         => $run_time,
+                'message'      => $message,
+                'full_message' => "$message\n",
             };
         }
 
@@ -240,7 +244,7 @@ sub render_event {
         foreach my $line ( @{ $f->{'info'} } ) {
             next unless $line->{'details'};
             chomp $line->{'details'};
-            $test->{'last_failure'}->{'message'} .= "# $line->{details}\n";
+            $test->{'last_failure'}->{'full_message'} .= "# $line->{details}\n";
         }
         return;
     }
@@ -293,17 +297,20 @@ sub close_open_failure_testcase {
     # This causes the entire suite to choke. We don't want this.
     # If we're here already, we've already failed the test. let's just make sure the person reviewing
     # it knows the test count was messed up.
-    if ( $fail->{'test_num'} == $new_test_number ) {
-        $fail->{'message'} .= "# WARNING This test number has already been seen. Duplicate TEST # in output!\n";
+    if (   defined $fail->{'test_num'}
+        && defined $new_test_number
+        && $fail->{'test_num'} == $new_test_number )
+    {
+        $fail->{'message'}
+            .= "# WARNING This test number has already been seen. Duplicate TEST # in output!\n";
     }
 
     my $xml = $self->xml;
     push @{ $test->{'testcase'} }, $xml->testcase(
-        { 'name' => "$fail->{test_num} - $fail->{test_name}", 'time' => $fail->{'time'}, 'classname' => $test->{'testsuite'}->{'name'} },
+        { 'name' => $fail->{'test_name'}, 'time' => $fail->{'time'}, 'classname' => $test->{'testsuite'}->{'name'} },
         $xml->failure(
-            { 'message' => "not ok $fail->{test_num} - $fail->{test_name}", 'type' => 'TestFailed' },
-            $self->_cdata( $fail->{'message'} )
-        )
+            { 'message' => $fail->{message}, 'type' => 'TestFailed' },
+            $self->_cdata( $fail->{'full_message'} ) )
     );
 
     delete $test->{'last_failure'};

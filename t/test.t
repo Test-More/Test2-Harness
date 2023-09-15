@@ -212,6 +212,72 @@ my $env = {                      # env passed to yath
 }
 
 {
+    note "all tests are ok without numbers";
+
+    my $sdir = $dir . '-no-numbers';
+
+    $env->{JUNIT_TEST_FILE} = "$tmpdir/no-numbers.xml";
+
+    yath(
+        command => 'test',
+        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit    => 0,
+        env     => $env,
+        test    => sub {
+            my $out = shift;
+
+            like(
+                $out->{output},
+                qr{\Q( PASSED )\E.*\Qt/test-no-numbers/pass-1.tx\E},
+                "t/test-no-numbers/pass-1.tx"
+            );
+
+            like( $out->{output}, qr/Result: PASSED/, "Result: PASSED" );
+        },
+    );
+
+    # checking xml file
+    ok -e $env->{JUNIT_TEST_FILE}, 'junit file exists';
+
+    my $junit = XML::Simple::XMLin( $env->{JUNIT_TEST_FILE} );
+    like $junit => hash {
+        field testsuite => hash {
+            field errors   => 0;
+            field failures => 0;
+            field id       => D();
+            field name     => 'test-no-numbers_pass-1_tx';
+
+            field 'system-err' => hash { end; };
+            field 'system-out' => hash { end; };
+
+            field 'testcase' => hash {
+                field 'pass' => hash {
+                    field classname => 'test-no-numbers_pass-1_tx';
+                    field time      => D();
+                    end;
+                };
+                field 'Tear down.' => hash {
+                    field classname => 'test-no-numbers_pass-1_tx';
+                    field time      => D();
+                    end;
+                };
+
+                end;
+            };
+
+            field tests     => 1;
+            field time      => D();
+            field timestamp => D();
+
+            end;
+        };
+
+        end;
+
+    }, 'junit output' or diag explain $junit;
+}
+
+{
     note "plan ok - one failure";
 
     my $sdir = $dir . '-fail';

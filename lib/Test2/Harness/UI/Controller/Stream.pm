@@ -6,6 +6,7 @@ our $VERSION = '0.000139';
 
 use Data::GUID;
 use List::Util qw/max/;
+use Scalar::Util qw/blessed/;
 use Test2::Harness::UI::Util qw/find_job/;
 use Test2::Harness::UI::UUID qw/uuid_inflate/;
 use Test2::Harness::UI::Response qw/resp error/;
@@ -77,7 +78,6 @@ sub stream_runs {
     my $schema = $self->{+CONFIG}->schema;
 
     my $opts = {
-        collapse       => 1,
         remove_columns => [qw/log_data run_fields.data parameters/],
 
         join       => [qw/user_join project run_fields/],
@@ -101,8 +101,8 @@ sub stream_runs {
 
         track_status  => 1,
         id_field      => 'run_id',
-        ord_field     => 'run_ord',
-        sort_field    => 'run_ord',
+        ord_field     => 'added',
+        sort_field    => 'added',
         search_base   => $schema->resultset('Run'),
         initial_limit => RUN_LIMIT,
 
@@ -118,18 +118,20 @@ sub stream_runs {
 
     if ($id) {
         my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->search({project_id => $uuid})->first };
         $project //= eval { $p_rs->search({name => $id})->first };
+        $project //= eval { $p_rs->search({project_id => $uuid})->first };
 
         if ($project) {
-            $params{search_base} = $params{search_base}->search_rs({project_id => $project->project_id});
+            $uuid = uuid_inflate($project->project_id);
+            $params{search_base} = $params{search_base}->search_rs({'me.project_id' => $project->project_id});
         }
         else {
             my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->search({user_id  => $uuid})->first };
             $user //= eval { $u_rs->search({username => $id})->first };
+            $user //= eval { $u_rs->search({user_id  => $uuid})->first };
 
             if ($user) {
+                $uuid = uuid_inflate($user->user_id);
                 $params{search_base} = $params{search_base}->search_rs({'me.user_id' => $user->user_id});
             }
             else {
@@ -294,7 +296,7 @@ sub stream_set {
     my $items = $search_base->search($custom_query, {%$custom_opts, order_by => $order_by, $limit ? (rows => $limit) : ()});
 
     my $start = time;
-    my $ord = 0;
+    my $ord;
     my $incomplete = {};
 
     return [
@@ -311,9 +313,19 @@ sub stream_set {
         },
         sub {
             unless ($items) {
+                my $val;
+                if (blessed($ord) && $ord->isa('DateTime')) {
+                    my $schema = $self->{+CONFIG}->schema;
+                    my $dtf = $schema->storage->datetime_parser;
+                    $val = $dtf->format_datetime($ord);
+                }
+                else {
+                    $val = $ord;
+                }
+
                 my $query = {
                     ($custom_query ? %$custom_query : ()),
-                    $ord_field => {'>' => $ord},
+                    $ord_field => {'>' => $val},
                 };
 
                 my @ids = $track ? keys %$incomplete : ();
@@ -326,7 +338,7 @@ sub stream_set {
             }
 
             while (my $item = $items->next()) {
-                $ord = max($ord, $item->$ord_field);
+                $ord = $item->$ord_field;
 
                 my $update = JSON::PP::false;
                 if ($track) {

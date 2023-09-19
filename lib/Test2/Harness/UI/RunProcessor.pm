@@ -1103,7 +1103,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Import
+Test2::Harness::UI::RunProcessor
 
 =head1 DESCRIPTION
 

@@ -1,6 +1,12 @@
 {{$NEXT}}
 
+    - Fix Changes file
+
 0.000139  2023-09-19 10:08:29-07:00 America/Los_Angeles
+
+    - Fix some typos and docs
+    - Fix /view/username and similar urls
+    - Fix sort order on runs
 
 0.000138  2023-08-29 14:39:30-07:00 America/Los_Angeles
 

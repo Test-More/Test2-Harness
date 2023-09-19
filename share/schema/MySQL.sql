@@ -119,7 +119,7 @@ CREATE TABLE runs (
     run_id          BINARY(16)      NOT NULL PRIMARY KEY,
     user_id         BINARY(16)      NOT NULL,
 
-    run_ord         BIGINT      NOT NULL AUTO_INCREMENT,
+    run_ord         BIGINT          NOT NULL AUTO_INCREMENT,
 
     status ENUM('pending', 'running', 'complete', 'broken', 'canceled') NOT NULL,
     worker_id       TEXT            DEFAULT NULL,

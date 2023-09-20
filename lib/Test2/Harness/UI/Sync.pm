@@ -222,6 +222,7 @@ sub read_sync {
     my $total = @$run_ids;
     my $counter = 0;
     my $last_run_id;
+    my $broken;
     while (my $line = <$rh>) {
         my $data = decode_json($line);
 
@@ -232,9 +233,16 @@ sub read_sync {
             $dbh->commit();
             $dbh->{AutoCommit} = 0;
 
-            print "Imported run $counter/$total: $last_run_id\n"
-                if $debug && $last_run_id;
+            if ($debug && $last_run_id) {
+                if ($broken) {
+                    print "  BROKEN run $counter/$total: $last_run_id\n";
+                }
+                else {
+                    print "Imported run $counter/$total: $last_run_id\n";
+                }
+            }
 
+            $broken = undef;
             my $new_run_id = $data->{$type}->{run_id};
 
             if ($new_run_id && !$include{$new_run_id}) {
@@ -246,10 +254,18 @@ sub read_sync {
             $counter++;
         }
 
+        next if $broken;
         next unless $last_run_id;
 
         my $method = "import_$type";
-        $self->$method(dbh => $dbh, item => $data->{$type}, uuidf => $uuidf, cache => $cache);
+
+        next if eval {
+            $self->$method(dbh => $dbh, item => $data->{$type}, uuidf => $uuidf, cache => $cache);
+            1;
+        };
+
+        $dbh->rollback();
+        $broken = $last_run_id;
     }
 
     $dbh->commit();

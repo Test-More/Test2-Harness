@@ -2,7 +2,7 @@ package Test2::EventFacet::Binary;
 use strict;
 use warnings;
 
-our $VERSION = '0.000141';
+our $VERSION = '0.000142';
 
 sub is_list { 1 }
 

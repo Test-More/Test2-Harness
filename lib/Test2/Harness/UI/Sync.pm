@@ -8,7 +8,7 @@ use Carp qw/croak/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Harness::UI::UUID qw/uuid_inflate gen_uuid/;
 
-our $VERSION = '0.000141';
+our $VERSION = '0.000142';
 
 use Test2::Harness::UI::Util::HashBase;
 

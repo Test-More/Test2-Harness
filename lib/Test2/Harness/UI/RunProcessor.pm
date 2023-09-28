@@ -17,7 +17,7 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 
 use Test2::Harness::UI::Util qw/format_duration is_invalid_subtest_name/;
 
-use Test2::Harness::UI::UUID qw/gen_uuid uuid_inflate/;
+use Test2::Harness::UI::UUID qw/gen_uuid uuid_inflate uuid_mass_deflate/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use JSON::PP();
 
@@ -108,14 +108,15 @@ sub populate {
 
             warn "Duplicate found:\n====\n$err\n====\n\nPopulating '$type' 1 at a time.\n";
             for my $item (@$data) {
-                next if eval { $rs->find_or_create($item); 1 };
+                uuid_mass_deflate($item);
+                next if eval { $rs->create($item); 1 };
                 my $err = $@;
 
                 # I need to track down why we still get duplicates (Coverage mainly) for now skip them.
                 next if $err =~ m/duplicate/i;
 
                 # Actual error
-                die $err;
+                warn $err;
             }
 
             return 1;

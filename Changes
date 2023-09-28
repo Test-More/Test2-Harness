@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Work harder at uploading results
+
 0.000141  2023-09-20 13:21:43-07:00 America/Los_Angeles
 
     - Make it so sync will skip bad runs on import, allowing the process to continue

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Schema::ResultSet;
 use strict;
 use warnings;
 
-our $VERSION = '0.000142';
+our $VERSION = '0.000143';
 
 use parent 'DBIx::Class::ResultSet';
 

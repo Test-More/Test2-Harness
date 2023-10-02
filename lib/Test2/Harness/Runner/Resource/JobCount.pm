@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Resource::JobCount;
 use strict;
 use warnings;
 
-our $VERSION = '1.000154';
+our $VERSION = '1.000155';
 
 use parent 'Test2::Harness::Runner::Resource';
 use Test2::Harness::Util::HashBase qw/<settings <job_count <used <free/;

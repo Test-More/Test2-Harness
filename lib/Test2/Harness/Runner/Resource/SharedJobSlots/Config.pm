@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     +min_slots_per_run
     +default_slots_per_job
     +default_slots_per_run
+    +disabled
 };
 
 sub find {
@@ -96,6 +97,7 @@ sub max_slots_per_job     { $_[0]->{+MAX_SLOTS_PER_JOB}     //= $_[0]->_get_conf
 sub max_slots_per_run     { $_[0]->{+MAX_SLOTS_PER_RUN}     //= $_[0]->_get_config_option(+MAX_SLOTS_PER_RUN,     default  => $_[0]->max_slots) }
 sub default_slots_per_job { $_[0]->{+DEFAULT_SLOTS_PER_JOB} //= $_[0]->_get_config_option(+DEFAULT_SLOTS_PER_JOB, default  => $_[0]->max_slots_per_job) }
 sub default_slots_per_run { $_[0]->{+DEFAULT_SLOTS_PER_RUN} //= $_[0]->_get_config_option(+DEFAULT_SLOTS_PER_RUN, default  => $_[0]->max_slots_per_run) }
+sub disabled              { $_[0]->{+DISABLED}              //= $_[0]->_get_config_option(+DISABLED,              default  => 0) }
 
 sub _get_config_option {
     my $self = shift;

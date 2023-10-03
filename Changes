@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Fix sleep that is often interrupted
+
 1.000154  2023-10-02 08:40:50-07:00 America/Los_Angeles
 
     - Make it possible to disable shared slots on specific hosts

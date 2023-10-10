@@ -2,7 +2,7 @@ package Test2::Harness::UI::Loader;
 use strict;
 use warnings;
 
-our $VERSION = '0.000144';
+our $VERSION = '0.000145';
 
 use Test2::Harness::UI::Util qw/format_duration/;
 use Test2::Harness::Util::JSON qw/decode_json/;

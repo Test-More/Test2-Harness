@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::ReRun;
 use strict;
 use warnings;
 
-our $VERSION = '0.000144';
+our $VERSION = '0.000145';
 
 use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;

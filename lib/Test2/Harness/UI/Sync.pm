@@ -385,6 +385,10 @@ sub render_runs {
             run_id, status, worker_id, error, added, duration, mode, buffer,
             passed, failed, retried, concurrency, parameters, has_coverage,
             users.username, projects.name as project_name
+        FROM runs
+        JOIN users    USING(user_id)
+        JOIN projects USING(project_id)
+        WHERE run_id = ?
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;

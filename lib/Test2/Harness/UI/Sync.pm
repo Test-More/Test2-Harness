@@ -185,7 +185,7 @@ sub write_sync {
     my $subcount = 0;
     for my $run_id (@$run_ids) {
         my $run_uuid = uuid_inflate($run_id)->$uuidf;
-        my @args = ($dbh, $run_uuid);
+        my @args = ($dbh, $run_uuid, $skip);
 
         for my $meth (@to_dump) {
             for my $item ($self->$meth(@args)) {
@@ -378,22 +378,20 @@ sub _fix_uuids {
 
 sub render_runs {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_id, $skip) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-            run_id, status, worker_id, error, added, duration,
-            mode, buffer, passed, failed, retried, concurrency, parameters,
+            run_id, status, worker_id, error, added, duration, mode, buffer,
+            passed, failed, retried, concurrency, parameters, has_coverage,
             users.username, projects.name as project_name
-        FROM runs
-        JOIN users    USING(user_id)
-        JOIN projects USING(project_id)
-        WHERE run_id = ?
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
 
     my $run = stringify_uuids($sth->fetchrow_hashref());
+    delete $run->{has_coverage} if $skip->{coverage};
+
     return {run => $run};
 }
 

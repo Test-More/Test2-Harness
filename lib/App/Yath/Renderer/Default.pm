@@ -1,38 +1,41 @@
-package Test2::Harness::Renderer::Formatter;
+package App::Yath::Renderer::Default;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
-use Carp qw/croak/;
-
-use File::Spec;
-
+use Test2::Harness::Util::JSON qw/encode_pretty_json/;
+use Test2::Harness::Util qw/mod2file/;
 use Storable qw/dclone/;
 
-use Test2::Harness::Util qw/fqmod mod2file/;
-use Test2::Harness::Util::JSON qw/encode_pretty_json/;
-
-BEGIN { require Test2::Harness::Renderer; our @ISA = ('Test2::Harness::Renderer') }
+use parent 'App::Yath::Renderer';
 use Test2::Harness::Util::HashBase qw{
-    -io -io_err
-    -formatter
-    -show_run_info
-    -show_job_info
-    -show_job_launch
-    -show_job_end
-    -do_step
-    -interactive
+    <formatter
+    <io <io_err
+    <do_step
 };
+
+sub step {
+    my $self = shift;
+    return unless $self->{+DO_STEP};
+    $self->{+FORMATTER}->step;
+}
+
+sub finish {
+    my $self = shift;
+
+    $self->{+FORMATTER}->finalize();
+
+    $self->SUPER::finish(@_);
+}
 
 sub init {
     my $self = shift;
 
-    my $settings = $self->{+SETTINGS};
+    my $f_class = $self->formatter // 'Test2::Formatter::Test2';
+    die "Invalid formatter class: $f_class" if ref($f_class);
 
-    my $formatter = $self->{+FORMATTER} //= 'Test2';
-    my $f_class   = fqmod('Test2::Formatter', $formatter);
-    my $f_file    = mod2file($f_class);
+    my $f_file  = mod2file($f_class);
     require $f_file;
 
     my $io = $self->{+IO} || $self->{output} || \*STDOUT;
@@ -47,29 +50,22 @@ sub init {
         $self->{+IO_ERR} = $fh;
     }
 
-    $self->{+INTERACTIVE} = 1 if $settings->debug->interactive;
     $self->{+INTERACTIVE} //= 1 if $ENV{YATH_INTERACTIVE};
 
     $self->{+FORMATTER} = $f_class->new(
-        io            => $self->{+IO},
-        progress      => $self->{+PROGRESS},
-        handles       => [$self->{+IO}, $self->{+IO_ERR}, $self->{+IO}],
-        verbose       => $settings->display->verbose,
-        color         => $settings->display->color,
-        no_wrap       => $settings->display->no_wrap,
-        interactive   => $self->{+INTERACTIVE},
-        is_persistent => $self->{+COMMAND_CLASS}->group eq 'persist' ? 1 : 0,
+        io            => $io,
+        handles       => [$io, $io_err, $io],
+        color         => $self->color,
+        interactive   => $self->interactive,
+        is_persistent => $self->is_persistent,
+        no_wrap       => $self->wrap ? 0 : 1,
+        progress      => $self->progress,
+        verbose       => $self->verbose,
     );
 
     $self->{+DO_STEP} = $self->{+FORMATTER}->can('step') ? 1 : 0;
 
     $self->{+SHOW_JOB_END} = 1 unless defined $self->{+SHOW_JOB_END};
-}
-
-sub step {
-    my $self = shift;
-    return unless $self->{+DO_STEP};
-    $self->{+FORMATTER}->step;
 }
 
 sub render_event {
@@ -79,8 +75,6 @@ sub render_event {
     # We modify the event, which would be bad if there were multiple renderers,
     # so we deep clone it.
     $event = dclone($event);
-
-    my $settings = $self->{+SETTINGS};
 
     my $f = $event->{facet_data}; # Optimization
 
@@ -106,7 +100,7 @@ sub render_event {
                 tag       => $f->{harness_job_launch}->{retry} ? 'RETRY' : 'LAUNCH',
                 debug     => 0,
                 important => 1,
-                details   => File::Spec->abs2rel($job->{file}),
+                details   => File::Spec->abs2rel($job->{test_file}->{file}),
             };
         }
 
@@ -128,7 +122,7 @@ sub render_event {
         my $job_id = $f->{harness}->{job_id} ||= $job->{job_id};
 
         # Make the times important if they were requested
-        if ($settings->display->show_times && $f->{info}) {
+        if ($self->show_times && $f->{info}) {
             for my $info (@{$f->{info}}) {
                 next unless $info->{tag} eq 'TIME';
                 $info->{important} = 1;
@@ -156,60 +150,17 @@ sub render_event {
     my $num = $f->{assert} && $f->{assert}->{number} ? $f->{assert}->{number} : undef;
 
     $self->{+FORMATTER}->write($event, $num, $f);
+
+    $self->render_final_data($f->{final_data}) if $f->{final_data};
 }
 
-sub finish {
+sub TO_JSON {
     my $self = shift;
-    $self->{+FORMATTER}->finalize();
+
+    my $data = $self->SUPER::TO_JSON();
+    delete $data->{+FORMATTER};
+
+    return $data;
 }
 
 1;
-
-__END__
-
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Test2::Harness::Renderer::Formatter - Renderer that uses any Test2::Formatter
-for rendering.
-
-=head1 DESCRIPTION
-
-This renderer simply acts as a communication layer between the harness and any
-Test2 formatter that you wish to use to display results. Not all formatters
-will produce useful output for harness events.
-
-=head1 SOURCE
-
-The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
-
-=head1 MAINTAINERS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 AUTHORS
-
-=over 4
-
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
-
-=back
-
-=head1 COPYRIGHT
-
-Copyright 2020 Chad Granum E<lt>exodist7@gmail.comE<gt>.
-
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-See F<http://dev.perl.org/licenses/>
-
-=cut

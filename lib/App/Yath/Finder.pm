@@ -1,10 +1,11 @@
-package Test2::Harness::Finder;
+package App::Yath::Finder;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Test2::Harness::Util qw/clean_path mod2file/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 use List::Util qw/first/;
 use Cwd qw/getcwd/;
@@ -16,46 +17,51 @@ use Test2::Harness::TestFile;
 use File::Spec;
 
 use Test2::Harness::Util::HashBase qw{
-    <default_search <default_at_search
+    +duration_data
+    search
 
-    <durations <maybe_durations +duration_data <durations_threshold
+    <settings
 
-    <exclude_files  <exclude_patterns <exclude_lists
+    <changed <changed_only <changes_diff <changes_exclude_files
+    <changes_exclude_loads <changes_exclude_nonsub <changes_exclude_opens
+    <changes_exclude_patterns <changes_filter_files <changes_filter_patterns
+    <changes_include_whitespace <changes_plugin <show_changed_files
 
+    <durations <maybe_durations <durations_threshold
     <no_long <only_long
 
-    <rerun <rerun_modes <rerun_plugin
+    <default_at_search <default_search
 
-    search <extensions
+    <exclude_files <exclude_lists <exclude_patterns
 
-    <multi_project
+    <extensions
 
-    <changed <changed_only <changes_plugin <show_changed_files <changes_diff
-    <changes_filter_file <changes_filter_pattern
-    <changes_exclude_file <changes_exclude_pattern
-    <changes_include_whitespace <changes_exclude_nonsub
-    <changes_exclude_loads <changes_exclude_opens
+    <rerun <rerun_modes <rerun_plugins
 };
-
-sub munge_settings {}
 
 sub init {
     my $self = shift;
 
+    delete $self->{class};
+
     $self->{+EXCLUDE_FILES} = { map {( $_ => 1 )} @{$self->{+EXCLUDE_FILES}} } if ref($self->{+EXCLUDE_FILES}) eq 'ARRAY';
 
-    if (my $plugins = $self->{+RERUN_PLUGIN}) {
+    if (my $plugins = $self->{+RERUN_PLUGINS}) {
         for (@$plugins) {
             $_ = "App::Yath::Plugin::$_" unless s/^\+// or m/^(App::Yath|Test2::Harness)::Plugin::/;
             my $file = mod2file($_);
             require $file;
         }
     }
+
+    my @bad = grep { !$self->can(uc($_)) } keys %$self;
+
+    croak "Invalid keys provided to constructor: " . join(", " => @bad) if @bad;
 }
 
 sub duration_data {
     my $self = shift;
-    my ($plugins, $settings, $test_files) = @_;
+    my ($plugins, $test_files) = @_;
 
     $self->{+DURATION_DATA} //= $self->pull_durations();
 
@@ -63,7 +69,7 @@ sub duration_data {
 
     for my $plugin (@$plugins) {
         next unless $plugin->can('duration_data');
-        $self->{+DURATION_DATA} = $plugin->duration_data($settings, $test_files) or next;
+        $self->{+DURATION_DATA} = $plugin->duration_data($self->settings, $test_files) or next;
         last;
     }
 
@@ -162,7 +168,7 @@ sub _pull_from_file_or_url {
 
 sub find_files {
     my $self = shift;
-    my ($plugins, $settings) = @_;
+    my ($plugins) = @_;
 
     $self->add_exclusions_from_lists() if $self->{+EXCLUDE_LISTS};
 
@@ -172,19 +178,17 @@ sub find_files {
     $add_changes ||= $self->{+CHANGES_PLUGIN};
     $add_changes ||= $self->{+CHANGES_DIFF};
 
-    $self->add_changed_to_search($plugins, $settings) if $add_changes;
+    $self->add_changed_to_search($plugins) if $add_changes;
 
     my $add_rerun = $self->{+RERUN};
-    $self->add_rerun_to_search($plugins, $settings, $add_rerun) if $add_rerun;
+    $self->add_rerun_to_search($plugins, $add_rerun) if $add_rerun;
 
-    return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
-
-    return $self->find_project_files($plugins, $settings, $self->search);
+    return $self->find_project_files($plugins, $self->search);
 }
 
 sub check_plugins {
     my $self = shift;
-    my ($plugins, $settings) = @_;
+    my ($plugins) = @_;
 
     my $check_plugins = $plugins;
     my $plugin;
@@ -198,15 +202,15 @@ sub check_plugins {
 
 sub get_diff {
     my $self = shift;
-    my ($plugins, $settings) = @_;
+    my ($plugins) = @_;
 
     return (file => $self->{+CHANGES_DIFF}) if $self->{+CHANGES_DIFF};
 
-    my $check_plugins = $self->check_plugins($plugins, $settings);
+    my $check_plugins = $self->check_plugins($plugins);
 
     for my $plugin (@$check_plugins) {
         if ($plugin->can('changed_diff')) {
-            my ($type, $data) = $plugin->changed_diff($settings);
+            my ($type, $data) = $plugin->changed_diff($self->settings);
             next unless $type && $data;
 
             return ($type => $data);
@@ -218,34 +222,34 @@ sub get_diff {
 
 sub find_changes {
     my $self = shift;
-    my ($plugins, $settings) = @_;
+    my ($plugins) = @_;
 
     my @listed_changes;
     @listed_changes = @{$self->{+CHANGED}} if $self->{+CHANGED};
 
-    my ($type, $diff) = $self->get_diff($plugins, $settings);
+    my ($type, $diff) = $self->get_diff($plugins);
 
     my (@found_changes);
     if ($type && $diff) {
-        @found_changes = $self->changes_from_diff($type => $diff, $settings);
+        @found_changes = $self->changes_from_diff($type => $diff);
     }
 
     unless (@found_changes) {
-        my $check_plugins = $self->check_plugins($plugins, $settings);
+        my $check_plugins = $self->check_plugins($plugins);
 
         for my $plugin (@$check_plugins) {
             next unless $plugin->can('changed_files');
 
-            push @found_changes => $plugin->changed_files($settings);
+            push @found_changes => $plugin->changed_files($self->settings);
             last if @found_changes;
         }
     }
 
-    my $filter_patterns = @{$self->{+CHANGES_FILTER_PATTERN}} ? $self->{+CHANGES_FILTER_PATTERN} : undef;
-    my $filter_files    = @{$self->{+CHANGES_FILTER_FILE}} ? {map { $_ => 1 } @{$self->{+CHANGES_FILTER_FILE}}} : undef;
+    my $filter_patterns = @{$self->{+CHANGES_FILTER_PATTERNS}} ? $self->{+CHANGES_FILTER_PATTERNS} : undef;
+    my $filter_files    = @{$self->{+CHANGES_FILTER_FILES}} ? {map { $_ => 1 } @{$self->{+CHANGES_FILTER_FILES}}} : undef;
 
-    my $exclude_patterns = @{$self->{+CHANGES_EXCLUDE_PATTERN}} ? $self->{+CHANGES_EXCLUDE_PATTERN} : undef;
-    my $exclude_files    = @{$self->{+CHANGES_EXCLUDE_FILE}} ? {map { $_ => 1 } @{$self->{+CHANGES_EXCLUDE_FILE}}} : undef;
+    my $exclude_patterns = @{$self->{+CHANGES_EXCLUDE_PATTERNS}} ? $self->{+CHANGES_EXCLUDE_PATTERNS} : undef;
+    my $exclude_files    = @{$self->{+CHANGES_EXCLUDE_FILES}} ? {map { $_ => 1 } @{$self->{+CHANGES_EXCLUDE_FILES}}} : undef;
 
     my %changed_map;
     for my $change (@listed_changes, @found_changes) {
@@ -274,7 +278,7 @@ sub get_capable_plugins {
 
 sub add_rerun_to_search {
     my $self = shift;
-    my ($plugins, $settings, $rerun) = @_;
+    my ($plugins, $rerun) = @_;
 
     my $search = $self->search;
     unless ($search) {
@@ -286,8 +290,8 @@ sub add_rerun_to_search {
     my $mode_hash = { map {$_ => 1} @$modes };
 
     my ($grabbed, $data);
-    for my $p ($self->get_capable_plugins(grab_rerun => [@{$self->{+RERUN_PLUGIN} // []}, @$plugins])) {
-        ($grabbed, $data) = $p->grab_rerun($rerun, modes => $modes, mode_hash => $mode_hash, settings => $settings);
+    for my $p ($self->get_capable_plugins(grab_rerun => [@{$self->{+RERUN_PLUGINS} // []}, @$plugins])) {
+        ($grabbed, $data) = $p->grab_rerun($rerun, modes => $modes, mode_hash => $mode_hash, settings => $self->settings);
         next unless $grabbed;
 
         unless ($data && keys %$data) {
@@ -359,7 +363,7 @@ sub add_rerun_to_search {
 
 sub add_changed_to_search {
     my $self = shift;
-    my ($plugins, $settings) = @_;
+    my ($plugins) = @_;
 
     my $search = $self->search;
     unless ($search) {
@@ -367,7 +371,7 @@ sub add_changed_to_search {
         $self->set_search($search);
     }
 
-    my $changed_map = $self->find_changes($plugins, $settings);
+    my $changed_map = $self->find_changes($plugins);
     my $found_changed = keys %$changed_map;
 
     die "Could not find any changed files.\n" if $self->{+CHANGED_ONLY} && !$found_changed;
@@ -386,7 +390,7 @@ sub add_changed_to_search {
 
     my @add;
     for my $p ($self->get_capable_plugins(get_coverage_tests => $plugins)) {
-        for my $set ($p->get_coverage_tests($settings, $changed_map)) {
+        for my $set ($p->get_coverage_tests($self->settings, $changed_map)) {
             my $test = ref($set) ? $set->[0] : $set;
 
             unless (-e $test) {
@@ -399,7 +403,7 @@ sub add_changed_to_search {
     }
 
     for my $p ($self->get_capable_plugins(post_process_coverage_tests => $plugins)) {
-        $p->post_process_coverage_tests($settings, \@add);
+        $p->post_process_coverage_tests($self->settings, \@add);
     }
 
     if ($self->{+SHOW_CHANGED_FILES} && @add) {
@@ -415,7 +419,7 @@ sub add_changed_to_search {
 
 sub changes_from_diff {
     my $self = shift;
-    my ($type, $data, $settings) = @_;
+    my ($type, $data) = @_;
 
     my $next;
     if ($type eq 'lines') {
@@ -524,65 +528,22 @@ sub changes_from_diff {
     return map {([$_ => sort keys %{$changed{$_}}])} sort keys %changed;
 }
 
-
-sub find_multi_project_files {
-    my $self = shift;
-    my ($plugins, $settings) = @_;
-
-    my $search = $self->search // [];
-
-    die "multi-project search must be a single directory, or the current directory" if @$search > 1;
-    my ($pdir) = @$search;
-    my $dir = clean_path(getcwd());
-
-    my $out = [];
-    my $ok = eval {
-        chdir($pdir) if defined $pdir;
-        my $ret = clean_path(getcwd());
-
-        opendir(my $dh, '.') or die "Could not open project dir: $!";
-        for my $subdir (readdir($dh)) {
-            chdir($ret);
-
-            next if $subdir =~ m/^\./;
-            my $path = clean_path(File::Spec->catdir($ret, $subdir));
-            next unless -d $path;
-
-            chdir($path) or die "Could not chdir to $path: $!\n";
-
-            for my $item (@{$self->find_project_files($plugins, $settings, [])}) {
-                push @{$item->queue_args} => ('ch_dir' => $path);
-                push @$out => $item;
-            }
-        }
-
-        chdir($ret);
-        1;
-    };
-    my $err = $@;
-
-    chdir($dir);
-    die $err unless $ok;
-
-    return $out;
-}
-
 sub find_project_files {
     my $self = shift;
-    my ($plugins, $settings, $input) = @_;
+    my ($plugins, $input) = @_;
 
     $input   //= [];
     $plugins //= [];
 
+    my $settings = $self->settings;
     my $default_search = [@{$self->default_search}];
-    push @$default_search => @{$self->default_at_search} if $settings->check_prefix('run') && $settings->run->author_testing;
+    push @$default_search => @{$self->default_at_search} if $settings->check_group('run') && $settings->run->author_testing;
 
     $_->munge_search($input, $default_search, $settings) for @$plugins;
 
     my $search = @$input ? $input : $self->{+CHANGED_ONLY} ? [] : $default_search;
 
     die "No tests to run, search is empty\n" unless @$search;
-
 
     my (%seen, @tests, @dirs);
 
@@ -666,7 +627,9 @@ sub find_project_files {
                     unless(first { $test = $_->claim_file($file, $settings, from => 'search') } @$plugins) {
                         for my $ext (@{$self->extensions}) {
                             next unless m/\.\Q$ext\E$/;
+
                             $test = Test2::Harness::TestFile->new(file => $file);
+
                             last;
                         }
                     }
@@ -681,7 +644,7 @@ sub find_project_files {
     }
 
     my $test_count = @tests;
-    my $threshold = $settings->finder->durations_threshold // 0;
+    my $threshold = $self->durations_threshold // 0;
     if ($threshold && $test_count >= $threshold) {
         my $start = time;
         my $durations = $self->duration_data($plugins, $settings, [map { $_->relative } @tests]);
@@ -697,6 +660,8 @@ sub find_project_files {
 
     $_->munge_files(\@tests, $settings) for @$plugins;
 
+    warn "FIXME";
+    return \@tests;
     return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
 }
 
@@ -709,9 +674,13 @@ sub include_file {
     return !@exclude;
 }
 
+my $warning = 0;
 sub exclude_file {
     my $self = shift;
     my ($test) = @_;
+
+    warn "FIXME" unless $warning++;
+    return;
 
     my @out;
 
@@ -742,7 +711,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Finder - Library that searches for test files
+App::Yath::Finder - Library that searches for test files
 
 =head1 DESCRIPTION
 
@@ -753,7 +722,7 @@ subclass the finder and instruct yath to use your subclass.
 
 =head2 USING A CUSTOM FINDER
 
-To use Test2::Harness::Finder::MyFinder:
+To use App::Yath::Finder::MyFinder:
 
     $ yath test --finder MyFinder
 
@@ -761,12 +730,12 @@ To use Another::Finder
 
     $ yath test --finder +Another::Finder
 
-By default C<Test2::Harness::Finder::> is prefixed onto your custom finder, use
+By default C<App::Yath::Finder::> is prefixed onto your custom finder, use
 '+' before the class name or prevent this.
 
 =head2 SUBCLASSING
 
-    use parent 'Test2::Harness::Finder';
+    use parent 'App::Yath::Finder';
     use Test2::Harness::TestFile;
 
     # Custom finders may provide their own options if desired.
@@ -779,7 +748,7 @@ By default C<Test2::Harness::Finder::> is prefixed onto your custom finder, use
     # This is the main method to override.
     sub find_project_files {
         my $self = shift;
-        my ($plugins, $settings, $search) = @_;
+        my ($plugins, $search) = @_;
 
         return [
             Test2::Harness::TestFile->new(...),
@@ -795,11 +764,7 @@ subclasses.
 
 =over 4
 
-=item $bool = $finder->multi_project
-
-True if the C<yath projects> command was used.
-
-=item $arrayref = $finder->find_files($plugins, $settings)
+=item $arrayref = $finder->find_files($plugins)
 
 This is the main method. This method returns an arrayref of
 L<Test2::Harness::TestFile> instances, each one representing a single test to
@@ -807,8 +772,6 @@ run.
 
 $plugins is a list of plugins, some may be class names, others may be
 instances.
-
-$settings is an L<Test2::Harness::Settings> instance.
 
 B<Note:> In many cases it is better to override C<find_project_files()> in your
 subclasses.
@@ -837,9 +800,7 @@ The input argument should be an L<Test2::Harness::Test> instance. This is a
 convenience method around C<exclude_file()>, it will return true when
 C<exclude_file()> returns an empty list.
 
-=item $arrayref = $finder->find_multi_project_files($plugins, $settings)
-
-=item $arrayref = $finder->find_project_files($plugins, $settings, $search)
+=item $arrayref = $finder->find_project_files($plugins, $search)
 
 These do the heavy lifting for C<find_files>
 
@@ -847,27 +808,17 @@ The default C<find_files()> implementation is this:
 
     sub find_files {
         my $self = shift;
-        my ($plugins, $settings) = @_;
+        my ($plugins) = @_;
 
-        return $self->find_multi_project_files($plugins, $settings) if $self->multi_project;
-        return $self->find_project_files($plugins, $settings, $self->search);
+        return $self->find_project_files($plugins, $self->search);
     }
 
 Each one returns an arrayref of L<Test2::Harness::TestFile> instances.
 
-Note that C<find_multi_project_files()> uses C<find_project_files()> internall,
-once per project directory.
-
 $plugins is a list of plugins, some may be class names, others may be
 instances.
 
-$settings is an L<Test2::Harness::Settings> instance.
-
 $search is an arrayref of search paths.
-
-=item $finder->munge_settings($settings, $options)
-
-A callback that lets you munge settings and options.
 
 =item $finder->pull_durations
 

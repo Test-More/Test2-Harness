@@ -1,0 +1,190 @@
+package Test2::Harness::IPC::Protocol::AtomicPipe::Connection;
+use strict;
+use warnings;
+
+use IO::Select;
+use Atomic::Pipe;
+
+use Carp qw/confess croak/;
+use Errno qw/EINTR/;
+use Scalar::Util qw/weaken blessed/;
+
+use Test2::Harness::IPC::Util qw/check_pipe ipc_warn pid_is_running/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::Util::JSON qw/encode_json/;
+
+use Test2::Harness::Instance::Message;
+use Test2::Harness::Instance::Request;
+use Test2::Harness::Instance::Response;
+
+use parent 'Test2::Harness::IPC::Connection';
+use Test2::Harness::Util::HashBase qw{
+    <active
+    <fifo
+    <pipe
+    <reader
+    <requests
+    <peer_pid
+};
+
+my %CACHE;
+
+sub init {
+    my $self = shift;
+
+    weaken($self->{+READER});
+    $self->{+PROTOCOL} //= 'Test2::Harness::IPC::Protocol::AtomicPipe';
+
+    $self->SUPER::init();
+
+    my $fifo = $self->{+FIFO} or croak "'fifo' is a required attribute";
+    confess "'$fifo' is not a valid fifo" unless -e $fifo && -p $fifo;
+
+    if ($CACHE{$fifo}) {
+        $self->{+PIPE} = $CACHE{$fifo};
+    }
+    else {
+        my $p = Atomic::Pipe->write_fifo($fifo);
+        $p->blocking(0);
+        $p->resize_or_max($p->max_size) if $p->max_size;
+
+        $self->{+PIPE} = $p;
+
+        $CACHE{$fifo} = $p;
+        weaken($CACHE{$fifo});
+    }
+
+    $self->{+ACTIVE} = 1;
+}
+
+sub handles_for_select { $_[0]->{+READER}->handles_for_select }
+sub callback           { $_[0]->{+READER}->callback }
+
+sub health_check {
+    my $self = shift;
+
+    return 0 unless $self->{+ACTIVE};
+
+    my $ok = 1;
+    $ok &&= check_pipe($self->{+PIPE}, $self->{+FIFO});
+    $ok &&= pid_is_running($self->{+PEER_PID}) if $self->{+PEER_PID};
+
+    return 1 if $ok;
+
+    $self->terminate();
+
+    return 0;
+}
+
+sub send_message {
+    my $self = shift;
+    my ($msg) = @_;
+
+    croak "Disconnected pipe" unless $self->{+ACTIVE};
+
+    $msg = Test2::Harness::Instance::Message->new(%$msg)
+        unless blessed($msg) && $msg->isa('Test2::Harness::Instance::Message');
+
+    $msg->set_ipc_meta({return_fifo => $self->{+READER}->read_file});
+
+    my $json = encode_json($msg);
+
+    my $ok;
+    while (1) {
+        $! = 0;
+        last if eval { local $SIG{PIPE} = 'IGNORE'; $self->{+PIPE}->write_message($json); 1 };
+        next if $! == EINTR;
+        $self->terminate();
+        croak "Disconnected pipe";
+    }
+
+    return $json;
+}
+
+sub send_request {
+    my $self = shift;
+    my ($api_call, $args, %params) = @_;
+
+    croak "Communication is currently one-way, (did you forget to call start() on the main pipe object?)" unless $self->{+READER} && $self->{+READER}->active;
+
+    my $id = gen_uuid();
+
+    my $req = Test2::Harness::Instance::Request->new(
+        request_id     => $id,
+        api_call       => $api_call,
+        args           => $args,
+        do_not_respond => $params{do_not_respond},
+    );
+
+    my $json = $self->send_message($req);
+
+    $self->{+REQUESTS}->{$id} = undef
+        unless $req->do_not_respond;
+
+    return $params{return_request} ? $req : $id;
+}
+
+sub get_response {
+    my $self = shift;
+    my ($id, %params) = @_;
+
+    croak "Invalid request id $id" unless exists $self->{+REQUESTS}->{$id};
+
+    my $blocking = $params{blocking} //= 0;
+    my $timeout  = $params{timeout};
+
+    while (1) {
+        return delete $self->{+REQUESTS}->{$id}
+            if defined $self->{+REQUESTS}->{$id};
+
+        return unless $self->{+READER} && $self->{+READER}->active;
+
+        my $new = $self->{+READER}->_read_messages(%params);
+        croak "Connection error: $!" if $new < 0;
+        next if $new;
+
+        return unless $blocking || defined($timeout);
+    }
+}
+
+sub send_response {
+    my $self = shift;
+    my ($req, $res) = @_;
+
+    $res = Test2::Harness::Instance::Response->new(%$req, response_id => $req->request_id)
+        unless blessed($res) && $res->isa('Test2::Harness::Instance::Response');
+
+    return $self->send_message($res);
+}
+
+sub handle_response {
+    my $self = shift;
+    my ($res) = @_;
+
+    my $id = $res->response_id;
+
+    croak "'$id' is not a valid request/response id" unless exists $self->{+REQUESTS}->{$id};
+    croak "'$id' already has a response" if defined $self->{+REQUESTS}->{$id};
+
+    $self->{+REQUESTS}->{$id} = $res;
+}
+
+sub terminate {
+    my $self = shift;
+
+    $self->{+ACTIVE} = 0;
+
+    delete $self->{+PIPE};
+    delete $self->{+READER};
+}
+
+sub TO_JSON {
+    my $self = shift;
+
+    return {
+        protocol => $self->protocol,
+        connect  => [$self->{+FIFO}, undef],
+    };
+}
+
+1;

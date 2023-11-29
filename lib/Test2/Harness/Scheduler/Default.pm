@@ -216,7 +216,7 @@ sub job_update {
     my $run = $self->{+RUNS}->{$run_id} or die "Invalid run!";
     my $job = $run->job_lookup->{$job_id} or die "Invalid job!";
 
-    if (defined $update->{halt}) {
+    if (defined($update->{halt}) && $run->abort_on_bail) {
         $run->set_halt($update->{halt} || 'halted');
     }
 

@@ -88,6 +88,8 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
 dev-lib '$_' added to \@INC late, it is possible some yath libraries were already loaded from other paths.
 (Maybe you need to move the -D or --dev-lib argument(s) to be earlier in your command line or config file?)
             EOT
+
+            die "Some dev-lib paths were added too late.\n";
         },
 
         notes => 'This is parsed early in the argument processing sequence, before options that may be earlier in your argument list.',

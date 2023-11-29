@@ -2,14 +2,12 @@ package App::Yath::Command::help;
 use strict;
 use warnings;
 
-use Test2::Util qw/pkg_to_file/;
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/<_command_info_hash/;
 
-use Test2::Harness::Util qw/open_file find_libraries/;
+use Test2::Harness::Util qw/find_libraries mod2file/;
 use List::Util ();
 
 sub options {};
@@ -61,7 +59,7 @@ sub run {
 
     return $self->command_help($args->[0]) if @$args;
 
-    my $script = $self->settings->harness->script // $0;
+    my $script = $self->settings->yath->script // $0;
     my $maxlen = List::Util::max(map length, $self->command_list);
 
     print "\nUsage: $script COMMAND [options]\n\nAvailable Commands:\n";
@@ -82,8 +80,12 @@ sub command_help {
     my ($command) = @_;
 
     require App::Yath;
-    my $cmd_class = App::Yath->load_command($command);
-    print $cmd_class->cli_help(settings => $self->{+SETTINGS});
+    my $cmd_class = "App::Yath::Command::$command";
+    require(mod2file($cmd_class));
+
+    my $app = App::Yath->new(command => $cmd_class, settings => $self->settings);
+    $app->options->include($cmd_class->options);
+    print $app->cli_help();
 
     return 0;
 }

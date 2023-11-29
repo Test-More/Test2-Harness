@@ -2,230 +2,173 @@ package App::Yath::Command::run;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
-use App::Yath::Options;
+use List::Util qw/first/;
+use Time::HiRes qw/sleep/;
 
+use Scope::Guard;
+
+use App::Yath::Client;
+
+use Test2::Harness::Event;
 use Test2::Harness::Run;
-use Test2::Harness::Util::Queue;
-use Test2::Harness::Util::File::JSON;
-use Test2::Harness::IPC;
+use Test2::Harness::Run::Job;
+use Test2::Harness::Run::Auditor;
+use Test2::Harness::Util::LogFile;
 
-use App::Yath::Util qw/find_pfile/;
-use Test2::Harness::Util qw/open_file/;
-use Test2::Harness::Util qw/mod2file open_file/;
-use Test2::Util::Table qw/table/;
+use Test2::Harness::Util qw/mod2file write_file_atomic/;
+use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
-use File::Spec;
-
-use Carp qw/croak/;
-
-use parent 'App::Yath::Command::test';
-use Test2::Harness::Util::HashBase qw/+pfile_data +pfile/;
-
-include_options(
-    'App::Yath::Options::Debug',
-    'App::Yath::Options::Display',
-    'App::Yath::Options::Finder',
-    'App::Yath::Options::Logging',
-    'App::Yath::Options::PreCommand',
-    'App::Yath::Options::Run',
-);
-
-option_group {prefix => 'run'} => sub {
-    option check_reload_state => (
-        type => 'b',
-        description => 'Abort the run if there are unfixes reload errors and show a confirmation dialogue for unfixed reload warnings.',
-        default => 1,
-    );
+use parent 'App::Yath::Command';
+use Test2::Harness::Util::HashBase qw{
+    +plugins
+    +find_tests
 };
 
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::IPC',
+    'App::Yath::Options::Finder',
+    'App::Yath::Options::Renderer',
+    'App::Yath::Options::Run',
+    'App::Yath::Options::Tests',
+    'App::Yath::Options::Yath',
+);
 
-sub group { 'persist' }
+sub args_include_tests { 1 }
 
-sub summary { "Run tests using the persistent test runner" }
-sub cli_args { '[--] [test files/dirs] [::] [arguments to test scripts] [test_file.t] [test_file2.t="--arg1 --arg2 --param=\'foo bar\'"] [:: --argv-for-all-tests]' }
+sub group { 'daemon' }
+
+sub summary { "Run tests" }
+
+warn "FIXME";
 
 sub description {
     return <<"    EOT";
-This command will run tests through an already started persistent instance. See
-the start command for details on how to launch a persistant instance.
+    FIXME
     EOT
 }
-
-sub terminate_queue {}
-sub write_settings_to {}
-sub setup_plugins {}
-sub setup_resources {}
-sub teardown_plugins {}
-sub finalize_plugins {}
-sub pfile_params { () }
-
-
-sub monitor_preloads { 1 }
-sub job_count        { 1 }
-
-sub collector_options { (persistent_runner => 1) }
 
 sub run {
     my $self = shift;
 
+    warn "Fix this";
+    $0 = "yath run";
+
     my $settings = $self->settings;
 
-    if ($settings->run->check_reload_state) {
-        return 255 unless $self->check_reload_state;
-    }
-
-    return $self->SUPER::run(@_);
-}
-
-sub write_test_info {
-    $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} //= 1;
-}
-
-sub check_reload_state {
-    my $self = shift;
-
-    my $state = Test2::Harness::Runner::State->new(
-        workdir => $self->workdir,
-        observe => 1,
-    );
-
-    $state->poll;
-
-    my $reload_status = $state->reload_state // {};
-
-    my (@out, $errors, $warnings, %seen);
-    for my $stage (sort keys %$reload_status) {
-        for my $file (keys %{$reload_status->{$stage}}) {
-            next if $seen{$file}++;
-            my $data = $reload_status->{$stage}->{$file} or next;
-
-            push @out => "\n==== SOURCE FILE: $file ====\n";
-            if ($data->{error}) {
-                $errors++;
-                push @out => $data->{error};
-            }
-
-            for (@{$data->{warnings} // []}) {
-                push @out => $_;
-                $warnings++;
-            }
+    my (@tests, @test_args);
+    my $list = \@tests;
+    for my $arg (@{$self->{+ARGS} // []}) {
+        if ($arg eq '::') {
+            $list = \@test_args;
+            next;
         }
+
+        push @$list => $arg;
     }
-    $errors //= 0;
-    $warnings //= 0;
 
-    return 1 unless @out || $errors || $warnings;
+    $settings->tests->option(args => \@test_args) if @test_args;
 
-    print <<"    EOT", @out;
-*******************************************************************************
-* Some source files were reloaded with errors or warnings
-* Errors: $errors
-* Warnings: $warnings
-*******************************************************************************
+    # Get list of tests to run
+    my $tests = $self->find_tests(@tests);
 
-    EOT
-
-    if ($errors) {
-        print <<"        EOT";
-
-*******************************************************************************
-Aborting due to reload errors. Please fix the errors so that the modules reload
-cleanly, then try the run again. In most cases you will not need to reload the
-runner, simply fix the problem with the source file(s) and the runner will
-reload them automatically.
-
-        EOT
-
+    if (!$tests || !@$tests) {
+        print "Nothing to do, no tests to run!\n";
         return 0;
     }
-    elsif ($warnings) {
-        print <<"        EOT";
 
-*******************************************************************************
-Warnings were encountered when reloading source files, please see the output
-above. If these warnings are a problem you should abort this run (control+c)
-and correct them before trying again. In most cases you will not need to reload
-the runner, simply fix the problem with the source file(s) and the runner will
-reload them automatically.
+    my $renderers = App::Yath::Options::Renderer->init_renderers($settings);
 
-If these warnings are not indicitive of a problem you may continue by pressing
-enter/return.
+    my $client = App::Yath::Client->new(settings => $settings);
 
-        EOT
+    my $run_id = $settings->run->run_id;
 
-        if (-t STDIN) {
-            my $ignore = <STDIN>;
-            return 1;
+    my $jobs = [map { Test2::Harness::Run::Job->new(test_file => $_) } @$tests];
+
+    my $ts = Test2::Harness::TestSettings->new($settings->tests->all, clear => $self->{+OPTION_STATE}->{cleared}->{tests});
+
+    my $run = Test2::Harness::Run->new(
+        $settings->run->all,
+        aggregator_ipc => $client->connect->callback,
+        test_settings  => $ts,
+        jobs           => $jobs,
+    );
+
+    my $res = $client->queue_run($run);
+
+    my $guard = Scope::Guard->new(sub { $client->send_and_get(abort => $run_id) });
+
+    for my $sig (qw/INT TERM HUP/) {
+        $SIG{$sig} = sub {
+            $SIG{$sig} = 'DEFAULT';
+            print STDERR "\nCought SIG$sig, shutting down...\n";
+            $client->send_and_get(abort => $run_id);
+            $guard->dismiss();
+            kill($sig, $$);
+        };
+    }
+
+    die "API Failure: " . encode_pretty_json($res->{api})
+        unless $res->{api}->{success};
+
+    my $lf = Test2::Harness::Util::LogFile->new(client => $client);
+
+    my $auditor = Test2::Harness::Run::Auditor->new();
+    my $run_complete;
+    while (!$run_complete) {
+        $run_complete //= 1 unless $client->active;
+
+        for my $event ($lf->poll) {
+            $auditor->audit($event);
+            $_->render_event($event) for @$renderers;
         }
-        else {
-            print STDERR "No TTY detected, aborting run due to warnings...\n";
-            return 0;
+
+        while (my $msg = $client->get_message(blocking => !$run_complete, timeout => 0.2)) {
+            if ($msg->terminate || $msg->run_complete) {
+                $run_complete //= 1;
+                $client->refuse_new_connections();
+            }
+
+            my $event = $msg->event or next;
+
+            $auditor->audit($event);
+            $_->render_event($event) for @$renderers;
         }
     }
 
-    return 0;
-}
+    $guard->dismiss();
 
-sub init {
-    my $self = shift;
-
-    my $settings = $self->settings;
-    my $pdata = $self->pfile_data;
-
-    my $runner_settings = Test2::Harness::Util::File::JSON->new(name => $pdata->{dir} . '/settings.json')->read();
-
-    for my $prefix (sort keys %{$runner_settings}) {
-        next if $settings->check_prefix($prefix);
-
-        my $new = $settings->define_prefix($prefix);
-        ${$new->vivify_field('from_runner')} = 1;
-        for my $key (sort keys %{$runner_settings->{$prefix}}) {
-            ${$new->vivify_field($key)} = $runner_settings->{$prefix}->{$key};
-        }
+    for my $r (@$renderers) {
+        $r->finish($auditor);
     }
 
-    return $self->SUPER::init(@_);
+    return $auditor->exit_value;
 }
 
-sub pfile {
+sub plugins {
     my $self = shift;
-    $self->{+PFILE} //= find_pfile($self->settings, $self->pfile_params) or die "No persistent harness was found for the current path.\n";
+
+    warn "init plugins plz...";
+
+    return $self->{+PLUGINS} //= [];
 }
 
-sub pfile_data {
-    my $self = shift;
-    return $self->{+PFILE_DATA} if $self->{+PFILE_DATA};
+sub find_tests {
+    my $self  = shift;
+    my @tests = @_;
 
-    my $pfile = $self->pfile;
+    return $self->{+FIND_TESTS} if $self->{+FIND_TESTS};
 
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-    $data->{pfile_path} //= $pfile;
+    my $settings     = $self->settings;
+    my $finder_class = $settings->finder->class;
 
-    print "\nFound: $data->{pfile_path}\n";
-    print "  PID: $data->{pid}\n";
-    print "  Dir: $data->{dir}\n";
+    require(mod2file($finder_class));
 
-    return $self->{+PFILE_DATA} = $data;
-}
-
-sub workdir {
-    my $self = shift;
-    return $self->pfile_data->{dir};
-}
-
-sub start_runner {
-    my $self = shift;
-
-    my $data = $self->pfile_data;
-
-    $self->{+RUNNER_PID} = $data->{pid};
+    my $finder = $finder_class->new($settings->finder->all, settings => $settings, search => \@tests);
+    return $self->{+FIND_TESTS} = $finder->find_files($self->plugins);
 }
 
 1;
-
-__END__
-
-=head1 POD IS AUTO-GENERATED
-

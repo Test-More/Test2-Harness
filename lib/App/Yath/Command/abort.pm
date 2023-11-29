@@ -2,68 +2,37 @@ package App::Yath::Command::abort;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Time::HiRes qw/sleep/;
-use Term::Table;
 
-use File::Spec();
+use App::Yath::Client;
 
-use App::Yath::Util qw/find_pfile/;
+use Test2::Harness::IPC::Util qw/pid_is_running/;
+use Test2::Harness::Util::JSON qw/decode_json/;
 
-use Test2::Harness::Runner::State;
-use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::Queue();
-
-use Test2::Harness::Util qw/open_file/;
-
-use parent 'App::Yath::Command::status';
+use parent 'App::Yath::Command::watch';
 use Test2::Harness::Util::HashBase;
 
-sub group { 'persist' }
+sub summary { "Abort running tests without killing the runner" }
 
-sub summary { "Abort all currently running or queued tests without killing the runner" }
-sub cli_args { "" }
+sub process_name { 'yath-abort' }
 
+warn "FIXME";
 sub description {
     return <<"    EOT";
-This command will kill all running tests and clear the queue, but will not close the runner.
+    FIXME
     EOT
 }
-
-sub pfile_params { (no_fatal => 1) }
 
 sub run {
     my $self = shift;
 
-    # Get the output from finding the pfile
-    $self->pfile_data();
+    $0 = $self->process_name;
 
-    my $state = Test2::Harness::Runner::State->new(
-        workdir => $self->workdir,
-        observe => 1,
-    );
+    $self->client->send_and_get('abort');
 
-    $state->poll;
-    print "\nTruncating Queue...\n\n";
-    $state->truncate;
-    $state->poll;
-
-    my $running = $state->running_tasks;
-    for my $task (values %$running) {
-        my $pid = $self->get_job_pid($task->{run_id}, $task->{job_id}) // next;;
-        my $file = $task->{rel_file};
-        print "Killing test $pid - $file...\n";
-        kill('INT', $pid);
-    }
-
-    print "\n";
     return 0;
 }
 
 1;
-
-__END__
-
-=head1 POD IS AUTO-GENERATED
-

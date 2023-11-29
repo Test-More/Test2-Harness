@@ -2,100 +2,100 @@ package App::Yath::Command::watch;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Time::HiRes qw/sleep/;
 
-use Test2::Harness::Util::File::JSON;
+use App::Yath::Client;
 
-use App::Yath::Util qw/find_pfile/;
-use Test2::Harness::Util qw/open_file/;
+use Test2::Harness::Util::LogFile;
+
+use Test2::Harness::IPC::Util qw/pid_is_running/;
+use Test2::Harness::Util::JSON qw/decode_json/;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase;
+use Test2::Harness::Util::HashBase qw{
+    +client
+    +renderers
+};
 
-sub group { 'persist' }
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::Yath',
+    'App::Yath::Options::IPC',
+    'App::Yath::Options::Renderer',
+);
 
-sub summary { "Monitor the persistent test runner" }
-sub cli_args { "" }
+sub starts_runner            { 0 }
+sub starts_persistent_runner { 0 }
 
+sub args_include_tests { 0 }
+
+sub group { 'daemon' }
+
+sub summary { "Watch/Tail a test runner" }
+
+warn "FIXME";
 sub description {
     return <<"    EOT";
-This command will tail the logs from a persistent instance of yath. STDOUT and
-STDERR will be printed as seen, so may not be in proper order.
+    FIXME
     EOT
+}
+
+sub process_name { "yath-watcher" }
+
+sub client {
+    my $self = shift;
+    return $self->{+CLIENT} //= App::Yath::Client->new(settings => $self->settings);
+}
+
+sub renderers {
+    my $self = shift;
+
+    return $self->{+RENDERERS} if $self->{+RENDERERS};
+
+    my $settings = $self->settings;
+
+    my $verbose = 2;
+    $verbose = 0 if $settings->renderer->quiet;
+    return $self->{+RENDERERS} //= App::Yath::Options::Renderer->init_renderers($settings, verbose => $verbose, progress => 0);
 }
 
 sub run {
     my $self = shift;
 
-    my $args     = $self->args;
-    shift @$args if @$args && $args->[0] eq '--';
-    my $stop;
-    $stop = 1 if @$args && $args->[0] eq 'STOP';
+    $0 = $self->process_name;
 
-    my $pfile = find_pfile($self->settings, no_fatal => 1)
-        or die "No persistent harness was found for the current path.\n";
+    return $self->render_log();
+}
 
-    print "\nFound: $pfile\n";
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-    print "  PID: $data->{pid}\n";
-    print "  Dir: $data->{dir}\n";
-    print "\n";
+sub render_log {
+    my $self = shift;
+    my ($cb) = @_;
 
-    my $err_f = File::Spec->catfile($data->{dir}, 'error.log');
-    my $out_f = File::Spec->catfile($data->{dir}, 'output.log');
+    my $renderers = $self->renderers;
+    my $client    = $self->client;
+    my $pid       = $client->send_and_get('pid');
 
-    my $err_fh = open_file($err_f, '<');
-    my $out_fh = open_file($out_f, '<');
+    my $lf = Test2::Harness::Util::LogFile->new(client => $client);
 
-    my $auxdir = File::Spec->catdir($data->{dir}, 'aux_logs');
-    my %aux;
+    my $sig = 0;
+    $SIG{INT} = sub { $sig++ };
 
-    while (1) {
-        my $count = 0;
-        while (my $line = <$out_fh>) {
-            $count++;
-            print STDOUT $line;
-        }
-        while (my $line = <$err_fh>) {
-            $count++;
-            print STDERR $line;
+    while (!$sig && pid_is_running($pid)) {
+        $cb->() if $cb;
+
+        my @events = $lf->poll;
+        for my $event (@events) {
+            $_->render_event($event) for @$renderers;
         }
 
-        if (-d $auxdir) {
-            opendir(my $dh, $auxdir) or die "Could not open auxdir: $!";
-            for my $file (readdir($dh)) {
-                next if $aux{$file};
-                next unless $file =~ m/\.log$/;
-                my $full = File::Spec->catfile($auxdir, $file);
-                next unless -f $full;
-                $aux{$file} = open_file($full, '<');
-                $count++;
-            }
-        }
+        next if @events;
 
-        for my $file (sort keys %aux) {
-            my $fh = $aux{$file};
-            my $ofh = $file =~ m/STDERR/ ? \*STDERR : \*STDOUT;
-            while (my $line = <$fh>) {
-                print $ofh $line;
-            }
-        }
-
-        next if $count;
-        last if $stop;
-        last unless -f $pfile;
-        sleep 0.02;
+        sleep(0.2);
     }
 
     return 0;
 }
 
-
 1;
-
-__END__
-
-=head1 POD IS AUTO-GENERATED
-

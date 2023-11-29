@@ -2,12 +2,12 @@ package Test2::Formatter::Test2;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
-use Test2::Util::Term qw/term_size/;
+use Getopt::Yath::Term qw/term_size USE_COLOR color/;
 use Test2::Harness::Util qw/hub_truth apply_encoding/;
-use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32 clone_io/;
+use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use IO::Handle;
 
@@ -31,7 +31,7 @@ use Test2::Util::HashBase qw{
     <enc_io
     -_encoding
     -show_buffer
-    -color
+    +color
     -progress
     -tty
     -no_wrap
@@ -42,9 +42,11 @@ use Test2::Util::HashBase qw{
     -active_files
     -_active_disp
     -_file_stats
-    -job_names
+    -job_numbers
     -is_persistent
     -interactive
+    +jobnum_counter
+    <start_time
 };
 
 sub TAG_WIDTH() { 8 }
@@ -53,46 +55,46 @@ sub hide_buffered() { 0 }
 
 sub DEFAULT_TAG_COLOR() {
     return (
-        'DEBUG'    => Term::ANSIColor::color('red'),
-        'DIAG'     => Term::ANSIColor::color('yellow'),
-        'ERROR'    => Term::ANSIColor::color('red'),
-        'FATAL'    => Term::ANSIColor::color('bold red'),
-        'FAIL'     => Term::ANSIColor::color('red'),
-        'HALT'     => Term::ANSIColor::color('bold red'),
-        'PASS'     => Term::ANSIColor::color('green'),
-        '! PASS !' => Term::ANSIColor::color('cyan'),
-        'TODO'     => Term::ANSIColor::color('cyan'),
-        'NO  PLAN' => Term::ANSIColor::color('yellow'),
-        'SKIP'     => Term::ANSIColor::color('bold cyan'),
-        'SKIP ALL' => Term::ANSIColor::color('bold white on_blue'),
-        'STDERR'   => Term::ANSIColor::color('yellow'),
-        'RUN INFO' => Term::ANSIColor::color('bold bright_blue'),
-        'JOB INFO' => Term::ANSIColor::color('bold bright_blue'),
-        'LAUNCH'   => Term::ANSIColor::color('bold bright_white'),
-        'RETRY'    => Term::ANSIColor::color('bold bright_white'),
-        'PASSED'   => Term::ANSIColor::color('bold bright_green'),
-        'TO RETRY' => Term::ANSIColor::color('bold bright_yellow'),
-        'FAILED'   => Term::ANSIColor::color('bold bright_red'),
-        'REASON'   => Term::ANSIColor::color('magenta'),
-        'TIMEOUT'  => Term::ANSIColor::color('magenta'),
-        'TIME'     => Term::ANSIColor::color('blue'),
-        'MEMORY'   => Term::ANSIColor::color('blue'),
+        'DEBUG'    => color('red'),
+        'DIAG'     => color('yellow'),
+        'ERROR'    => color('red'),
+        'FATAL'    => color('bold red'),
+        'FAIL'     => color('red'),
+        'HALT'     => color('bold red'),
+        'PASS'     => color('green'),
+        '! PASS !' => color('cyan'),
+        'TODO'     => color('cyan'),
+        'NO  PLAN' => color('yellow'),
+        'SKIP'     => color('bold cyan'),
+        'SKIP ALL' => color('bold white on_blue'),
+        'STDERR'   => color('yellow'),
+        'RUN INFO' => color('bold bright_blue'),
+        'JOB INFO' => color('bold bright_blue'),
+        'LAUNCH'   => color('bold bright_white'),
+        'RETRY'    => color('bold bright_white'),
+        'PASSED'   => color('bold bright_green'),
+        'TO RETRY' => color('bold bright_yellow'),
+        'FAILED'   => color('bold bright_red'),
+        'REASON'   => color('magenta'),
+        'TIMEOUT'  => color('magenta'),
+        'TIME'     => color('blue'),
+        'MEMORY'   => color('blue'),
     );
 }
 
 sub DEFAULT_FACET_COLOR() {
     return (
-        time    => Term::ANSIColor::color('blue'),
-        memory  => Term::ANSIColor::color('blue'),
-        about   => Term::ANSIColor::color('magenta'),
-        amnesty => Term::ANSIColor::color('cyan'),
-        assert  => Term::ANSIColor::color('bold bright_white'),
-        control => Term::ANSIColor::color('bold red'),
-        error   => Term::ANSIColor::color('yellow'),
-        info    => Term::ANSIColor::color('yellow'),
-        meta    => Term::ANSIColor::color('magenta'),
-        parent  => Term::ANSIColor::color('magenta'),
-        trace   => Term::ANSIColor::color('bold red'),
+        time    => color('blue'),
+        memory  => color('blue'),
+        about   => color('magenta'),
+        amnesty => color('cyan'),
+        assert  => color('bold bright_white'),
+        control => color('bold red'),
+        error   => color('yellow'),
+        info    => color('yellow'),
+        meta    => color('magenta'),
+        parent  => color('magenta'),
+        trace   => color('bold red'),
     );
 }
 
@@ -141,15 +143,15 @@ use constant DEFAULT_JOB_COLOR_NAMES => (
 );
 
 sub DEFAULT_JOB_COLOR() {
-    return map { Term::ANSIColor::color($_) } DEFAULT_JOB_COLOR_NAMES;
+    return map { color($_) } DEFAULT_JOB_COLOR_NAMES;
 }
 
 sub DEFAULT_COLOR() {
     return (
-        reset      => Term::ANSIColor::color('reset'),
-        blob       => Term::ANSIColor::color('bold bright_black on_white'),
-        tree       => Term::ANSIColor::color('bold bright_white'),
-        tag_border => Term::ANSIColor::color('bold bright_white'),
+        reset      => color('reset'),
+        blob       => color('bold bright_black on_white'),
+        tree       => color('bold bright_white'),
+        tag_border => color('bold bright_white'),
     );
 }
 
@@ -163,6 +165,10 @@ my %FACET_TAG_BORDERS = (
 
 sub init {
     my $self = shift;
+
+    $self->{+START_TIME} = time;
+
+    $self->{+JOBNUM_COUNTER} //= 1;
 
     $self->{+COMPOSER} ||= Test2::Formatter::Test2::Composer->new;
 
@@ -178,7 +184,7 @@ sub init {
     my $use_color = ref($self->{+COLOR}) ? 1 : delete($self->{+COLOR});
     $use_color = $self->{+TTY} unless defined $use_color;
 
-    if ($use_color && USE_ANSI_COLOR) {
+    if ($use_color && USE_COLOR) {
         $self->{+SHOW_BUFFER} = 1 unless defined $self->{+SHOW_BUFFER};
 
         if ($use_color) {
@@ -198,8 +204,8 @@ sub init {
 
     $self->{+ECOUNT} //= 0;
 
-    my $reset = $use_color ? Term::ANSIColor::color('reset') : '';
-    my $cyan  = $use_color ? Term::ANSIColor::color('cyan')  : '';
+    my $reset = $use_color ? color('reset') : '';
+    my $cyan  = $use_color ? color('cyan')  : '';
     $self->{+_ACTIVE_DISP} = ["[${cyan}INITIALIZING${reset}]", ''];
     $self->{+_FILE_STATS}  = {
         passed  => 0,
@@ -250,7 +256,7 @@ if ($^C) {
 }
 sub write {
     my ($self, $e, $num, $f) = @_;
-    $f ||= $e->facet_data;
+    $f ||= blessed($e) ? $e->facet_data : $e->{facet_data};
 
     my $should_show = $self->update_active_disp($f);
 
@@ -362,14 +368,14 @@ sub update_active_disp {
     return $out unless $f;
 
     if (my $task = $f->{harness_job_queued}) {
-        $self->{+JOB_NAMES}->{$task->{job_id}} = $task->{job_name} || $task->{job_id};
+        $self->{+JOB_NUMBERS}->{$task->{job_id}} //= $self->{+JOBNUM_COUNTER}++;
         $stats->{total}++;
         $stats->{todo}++;
     }
 
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
-        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_name} || $job->{job_id};
+        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $self->{+JOB_NUMBERS}->{$job->{job_id}} //= $self->{+JOBNUM_COUNTER}++;
         $should_show = 1;
         $stats->{running}++;
         $stats->{todo}--;
@@ -444,10 +450,10 @@ sub update_spinner {
         return 0;
     }
 
-    my $yellow = $self->{+COLOR} ? Term::ANSIColor::color($stats->{blink} . 'yellow') : '';
-    my $cyan   = $self->{+COLOR} ? Term::ANSIColor::color('cyan')                     : '';
-    my $green  = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_green')        : '';
-    my $bold   = $self->{+COLOR} ? Term::ANSIColor::color('bold bright_white')        : '';
+    my $yellow = $self->{+COLOR} ? color($stats->{blink} . 'yellow') : '';
+    my $cyan   = $self->{+COLOR} ? color('cyan')                     : '';
+    my $green  = $self->{+COLOR} ? color('bold bright_green')        : '';
+    my $bold   = $self->{+COLOR} ? color('bold bright_white')        : '';
     my $reset  = $self->reset;
 
     $self->{+_ACTIVE_DISP} = [
@@ -481,7 +487,7 @@ sub _highlight {
     my ($val, $label, $color) = @_;
 
     return "${label}:${val}" unless $val && $self->{+COLOR};
-    return sprintf('%s%s:%d%s', Term::ANSIColor::color($color), $label, $val, $self->reset);
+    return sprintf('%s%s:%d%s', color($color), $label, $val, $self->reset);
 }
 
 
@@ -489,7 +495,8 @@ sub colorstrip {
     my $self = shift;
     my ($str) = @_;
 
-    return $str unless USE_ANSI_COLOR;
+    return $str unless USE_COLOR;
+    require Term::ANSIColor;
     return Term::ANSIColor::colorstrip($str);
 }
 
@@ -497,7 +504,7 @@ sub render_status {
     my $self = shift;
 
     my $reset = $self->reset;
-    my $cyan = $self->{+COLOR} ? Term::ANSIColor::color('cyan') : '';
+    my $cyan = $self->{+COLOR} ? color('cyan') : '';
 
     my $str = "$self->{+_ACTIVE_DISP}->[0] Events: $self->{+ECOUNT} ${cyan}$self->{+_ACTIVE_DISP}->[1]${reset}";
 
@@ -592,9 +599,9 @@ sub render_tree {
     $char ||= '|';
 
     my $job = '';
-    if ($f->{harness} && $f->{harness}->{job_id}) {
-        my $id = $f->{harness}->{job_id};
-        my $name = $self->{+JOB_NAMES}->{$id};
+    if ($f->{harness}) {
+        my $id = $f->{harness}->{job_id} // 0;
+        my $number = $id ? $self->{+JOB_NUMBERS}->{$id} //= $self->{+JOBNUM_COUNTER}++ : $id;
 
         my ($color, $reset) = ('', '');
         if ($self->{+JOB_COLORS}) {
@@ -602,7 +609,7 @@ sub render_tree {
             $reset = $self->reset;
         }
 
-        my $len = length($name);
+        my $len = length($number) // 0;
         if (!$self->{+JOB_LENGTH} || $len > $self->{+JOB_LENGTH}) {
             $self->{+JOB_LENGTH} = $len;
         }
@@ -610,14 +617,19 @@ sub render_tree {
             $len = $self->{+JOB_LENGTH};
         }
 
-        $job = sprintf("%sjob %${len}s%s ", $color, $name, $reset || '');
+        if ($id) {
+            $job = sprintf("%sjob %${len}s%s ", $color, $number, $reset || '');
+        }
+        else {
+            $job = sprintf("%sRUNNER%s ", $color, $reset || '');
+        }
     }
 
     my $hf = hub_truth($f);
     my $depth = $hf->{nested} || 0;
 
     my @pipes = (' ', map $char, 1 .. $depth);
-    return join(' ' => $job, @pipes) . ' ';
+    return join(' ' => $job, @pipes);
 }
 
 sub build_line {
@@ -659,7 +671,8 @@ sub build_line {
     else {
         $start = "${ps}${tag}${pe}";
     }
-    $start .= "  ";
+
+    $start .= " ";
 
     if ($tree) {
         if ($color) {
@@ -676,7 +689,7 @@ sub build_line {
 
     my @out;
     for my $line (@lines) {
-        if(@lines > 1 && $max && length("$ps$tag$pe  $tree$line") > $max) {
+        if(@lines > 1 && $max && length("$ps$tag$pe $tree$line") > $max) {
             @out = ();
             last;
         }
@@ -736,8 +749,7 @@ sub DESTROY {
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
 
-    print $io Term::ANSIColor::color('reset')
-        if USE_ANSI_COLOR;
+    print $io color('reset') if USE_COLOR;
 
     print $io "\n";
 }

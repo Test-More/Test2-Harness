@@ -2,205 +2,196 @@ package App::Yath::Command::start;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
-use App::Yath::Util qw/find_pfile/;
-use App::Yath::Options;
+use POSIX();
 
-use Test2::Harness::Run;
-use Test2::Harness::Util::Queue;
-use Test2::Harness::Util::File::JSON;
-use Test2::Harness::IPC;
+use Test2::Harness::Instance;
+use Test2::Harness::TestSettings;
+use Test2::Harness::IPC::Protocol;
+use Test2::Harness::Collector;
+use Test2::Harness::Collector::IOParser;
+use App::Yath::Renderer::Default;
 
-use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use Test2::Harness::Util qw/mod2file open_file parse_exit clean_path/;
-use Test2::Util::Table qw/table/;
+use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::IPC::Util qw/pid_is_running/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
-use Test2::Harness::Util::IPC qw/run_cmd USE_P_GROUPS/;
-
-use POSIX;
-use File::Spec;
-use Sys::Hostname qw/hostname/;
-
-use Time::HiRes qw/sleep/;
-
-use Carp qw/croak/;
 use File::Path qw/remove_tree/;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase;
+use Test2::Harness::Util::HashBase qw{
+    +log_file
+};
 
+use Getopt::Yath;
 include_options(
-    'App::Yath::Options::Debug',
-    'App::Yath::Options::PreCommand',
+    'App::Yath::Options::IPC',
+    'App::Yath::Options::Harness',
+    'App::Yath::Options::Resource',
     'App::Yath::Options::Runner',
-    'App::Yath::Options::Workspace',
-    'App::Yath::Options::Persist',
-    'App::Yath::Options::Collector',
+    'App::Yath::Options::Scheduler',
+    'App::Yath::Options::Yath',
+    'App::Yath::Options::Renderer',
+    'App::Yath::Options::Tests',
 );
 
-option_group {prefix => 'runner', category => "Persistent Runner Options"} => sub {
-    option reload => (
-        short => 'r',
-        type  => 'b',
-        description => "Attempt to reload modified modules in-place, restarting entire stages only when necessary.",
-        default => 0,
-    );
-
-    option restrict_reload => (
-        type => 'D',
-        long_examples  => ['', '=path'],
-        short_examples => ['', '=path'],
-        description => "Only reload modules under the specified path, if no path is specified look at anything under the .yath.rc path, or the current working directory.",
-
-        normalize => sub { $_[0] eq '1' ? $_[0] : clean_path($_[0]) },
-        action    => \&restrict_action,
-    );
-
-    option quiet => (
-        short       => 'q',
-        type        => 'c',
-        description => "Be very quiet.",
-        default     => 0,
+option_group {group => 'start', category => "Start Options"} => sub {
+    option daemon => (
+        type => 'Bool',
+        description => "Daemonize and return to console",
+        default     => 1,
     );
 };
 
-sub restrict_action {
-    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
+sub starts_runner            { 1 }
+sub starts_persistent_runner { 1 }
 
-    if ($norm eq '1') {
-        my $hset = $settings->harness;
-        my $path = $hset->config_file || $hset->cwd;
-        $path //= do { require Cwd; Cwd::getcwd() };
-        $path =~ s{\.yath\.rc$}{}g;
-        push @{$$slot} => $path;
-    }
-    else {
-        push @{$$slot} => $norm;
-    }
-}
+sub args_include_tests { 0 }
 
-sub MAX_ATTACH() { 1_048_576 }
+sub group { 'daemon' }
 
-sub group { 'persist' }
+sub summary  { "Start a test runner" }
 
-sub always_keep_dir { 1 }
-
-sub summary { "Start the persistent test runner" }
-sub cli_args { "" }
-
+warn "FIXME";
 sub description {
     return <<"    EOT";
-This command is used to start a persistant instance of yath. A persistant
-instance is useful because it allows you to preload modules in advance,
-reducing start time for any tests you decide to run as you work.
-
-A running instance will watch for changes to any preloaded files, and restart
-itself if anything changes. Changed files are blacklisted for subsequent
-reloads so that reloading is not a frequent occurence when editing the same
-file over and over again.
+    FIXME
     EOT
 }
 
 sub run {
     my $self = shift;
 
-    $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO} //= 1;
+    $0 = "yath-daemon-launcher";
 
     my $settings = $self->settings;
-    my $dir      = $settings->workspace->workdir;
 
-    my $pfile = find_pfile($settings, vivify => 1, no_checks => 1);
-
-    if (-f $pfile) {
-        remove_tree($dir, {safe => 1, keep_root => 0});
-        die "Persistent harness appears to be running, found $pfile\n";
+    if ($settings->start->daemon) {
+        close(STDIN);
+        open(STDIN, '<', "/dev/null") or die "Could not open devnull: $!";
+        POSIX::setsid();
+        my $pid = fork // die "Could not fork";
+        if ($pid) {
+            sleep 2;
+            kill('HUP', $pid);
+            exit(0);
+        }
     }
 
-    $self->write_settings_to($dir, 'settings.json');
+    my $collector = $self->init_collector();
 
-    my $run_queue = Test2::Harness::Util::Queue->new(file => File::Spec->catfile($dir, 'run_queue.jsonl'));
-    $run_queue->start();
+    my $pid = fork // die "Could not fork: $!";
+    if ($pid) {
+        $0 = "yath-daemon-collector";
 
-    $self->setup_plugins();
-    $self->setup_resources();
+        my $exit = $collector->process($pid);
 
-    my $stderr = File::Spec->catfile($dir, 'error.log');
-    my $stdout = File::Spec->catfile($dir, 'output.log');
+        remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0})
+            unless $settings->harness->keep_dirs;
 
-    my @prof;
-    if ($settings->runner->nytprof) {
-        push @prof => '-d:NYTProf';
+        return $exit;
+    }
+    else {
+        $0 = "yath-daemon";
+        $collector->setup_child_output();
+        return $self->start_instance();
     }
 
-    my $pid = run_cmd(
-        stderr => $stderr,
-        stdout => $stdout,
+    return 0;
+}
 
-        no_set_pgrp => !$settings->runner->daemon,
+sub log_file {
+    my $self = shift;
+    return $self->{+LOG_FILE} //= File::Spec->catfile($self->settings->harness->workdir, 'log.jsonl');
+}
 
-        command => [
-            $^X, @prof, $settings->harness->script,
-            (map { "-D$_" } @{$settings->harness->dev_libs}),
-            '--no-scan-plugins',    # Do not preload any plugin modules
-            runner           => $dir,
-            monitor_preloads => 1,
-            persist          => $pfile,
-            jobs_todo        => 0,
-        ],
+sub init_collector {
+    my $self = shift;
+    my $settings = $self->settings;
+
+    my $out_file = $self->log_file;
+
+    my $verbose = 2;
+    $verbose = 0 if $settings->start->daemon;
+    $verbose = 0 if $settings->renderer->quiet;
+    my $renderers = App::Yath::Options::Renderer->init_renderers($settings, verbose => $verbose, progress => 0);
+
+    $SIG{HUP} = sub { $renderers = undef };
+
+    open(my $log, '>', $out_file) or die "Could not open '$out_file' for writing: $!";
+    $log->autoflush(1);
+
+    my $parser    = Test2::Harness::Collector::IOParser->new(job_id => 0, job_try => 0, run_id => 0, type => 'runner');
+    my $collector = Test2::Harness::Collector->new(
+        parser  => $parser,
+        job_id  => 0,
+        job_try => 0,
+        run_id  => 0,
+        output => sub {
+            for my $e (@_) {
+                print $log encode_json($e), "\n";
+                return unless $renderers;
+                $_->render_event($e) for @$renderers;
+            }
+        }
+    );
+}
+
+sub start_instance {
+    my $self = shift;
+
+    my $settings = $self->settings;
+
+    my $ipc = $self->build_ipc();
+    my $runner = $self->build_runner();
+    my $scheduler = $self->build_scheduler(runner => $runner);
+
+    my $instance = Test2::Harness::Instance->new(
+        ipc       => $ipc,
+        scheduler => $scheduler,
+        runner    => $runner,
+        log_file  => $self->log_file,
     );
 
-    unless ($settings->runner->quiet) {
-        print "\nPersistent runner started!\n";
+    $instance->run;
 
-        print "Runner PID: $pid\n";
-        print "Runner dir: $dir\n";
-        print "\nUse `yath watch` to monitor the persistent runner\n\n" if $settings->runner->daemon;
-    }
+    return 0;
+}
 
-    Test2::Harness::Util::File::JSON->new(name => $pfile)->write({
-        pid      => $pid,
-        dir      => $dir,
-        version  => $VERSION,
-        user     => $ENV{USER},
-        hostname => hostname(),
-    });
+sub build_ipc {
+    my $self = shift;
 
-    return 0 if $settings->runner->daemon;
+    my $ipc_s = App::Yath::Options::IPC->vivify_ipc($self->settings);
+    my $ipc = Test2::Harness::IPC::Protocol->new(protocol => $ipc_s->{protocol});
+    $ipc->start($ipc_s->{address}, $ipc_s->{port});
 
-    $SIG{TERM} = sub { kill(TERM => $pid) };
-    $SIG{INT}  = sub { kill(INT  => $pid) };
+    return $ipc;
+}
 
-    my $err_fh = open_file($stderr, '<');
-    my $out_fh = open_file($stdout, '<');
+sub build_scheduler {
+    my $self = shift;
+    my %params = @_;
 
-    while (1) {
-        my $out = waitpid($pid, WNOHANG);
-        my $wstat = $?;
+    my $scheduler_s = $self->settings->scheduler;
+    my $class = $scheduler_s->class;
+    require(mod2file($class));
 
-        my $count = 0;
-        while (my $line = <$out_fh>) {
-            $count++;
-            print STDOUT $line;
-        }
-        while (my $line = <$err_fh>) {
-            $count++;
-            print STDERR $line;
-        }
+    return $class->new($scheduler_s->all, %params);
+}
 
-        sleep(0.02) unless $out || $count;
+sub build_runner {
+    my $self = shift;
+    my %params = @_;
 
-        next if $out == 0;
-        return 255 if $out < 0;
+    my $settings = $self->settings;
+    my $runner_s = $settings->runner;
+    my $class = $runner_s->class;
+    require(mod2file($class));
 
-        my $exit = parse_exit($?);
-        return $exit->{err} || $exit->{sig} || 0;
-    }
+    my $ts = Test2::Harness::TestSettings->new($settings->tests->all);
+
+    return $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir, %params);
 }
 
 1;
-
-__END__
-
-=head1 POD IS AUTO-GENERATED
-

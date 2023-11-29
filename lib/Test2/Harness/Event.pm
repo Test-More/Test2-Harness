@@ -2,7 +2,7 @@ package Test2::Harness::Event;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Carp qw/confess/;
 use Time::HiRes qw/time/;
@@ -45,7 +45,9 @@ sub init {
 
     my $data = $self->{+FACET_DATA} || confess "'facet_data' is a required attribute";
 
-    for my $field (RUN_ID(), JOB_ID(), JOB_TRY(), EVENT_ID()) {
+    $self->{+JOB_ID} //= 0;
+
+    for my $field (RUN_ID(), JOB_ID(), JOB_TRY(), EVENT_ID(), STAMP()) {
         my $v1 = $self->{$field};
         my $v2 = $data->{harness}->{$field};
 
@@ -53,9 +55,9 @@ sub init {
         my $d2 = defined($v2);
 
         confess "'$field' is a required attribute"
-            unless $d1 || $d2 || ($field eq +JOB_TRY && !$self->{+JOB_ID});
+            unless $d1 || $d2 || ($field eq +JOB_TRY && !$self->{+JOB_ID}) || ($field eq +STAMP);
 
-        confess "'$field' has different values between attribute and facet data"
+        confess "'$field' has different values between attribute and facet data (\n  $v1 (defined: $d1)\n  $v2 (defined: $d2)\n)"
             if $d1 && $d2 && $v1 ne $v2;
 
         $self->{$field} = $data->{harness}->{$field} = $v1 // $v2;

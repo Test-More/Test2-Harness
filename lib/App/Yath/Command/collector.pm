@@ -2,66 +2,143 @@ package App::Yath::Command::collector;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
-
-use File::Spec;
-
-use App::Yath::Util qw/isolate_stdout/;
-
-use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util qw/mod2file/;
-
-use Test2::Harness::Run;
+our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub internal_only   { 1 }
-sub summary         { "For internal use only" }
-sub name            { 'collector' }
+use Test2::Harness::Collector;
+use Test2::Harness::IPC::Protocol;
+use Test2::Harness::Collector::Auditor;
+use Test2::Harness::Collector::IOParser::Stream;
 
+use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::IPC::Util qw/start_process ipc_connect/;
+use Test2::Harness::Util::JSON qw/decode_json encode_json/;
+
+use Time::HiRes qw/time/;
+
+use Getopt::Yath;
+include_options('App::Yath::Options::Yath');
+
+sub args_include_tests { 0 }
+
+sub group { 'internal' }
+
+sub summary  { "Run a test" }
+
+warn "fixme";
+sub description {
+    return <<"    EOT";
+    fixme
+    EOT
+}
+
+my $warned = 0;
 sub run {
     my $self = shift;
-    my ($collector_class, $dir, $run_id, $runner_pid, %args) = @{$self->{+ARGS}};
+    my $settings = $self->settings;
 
-    my $name = 'yath-collector';
-    $name = "$args{procname_prefix}-${name}" if $args{procname_prefix};
-    $0 = $name;
+    $0 = 'yath-collector';
 
-    my $fh = isolate_stdout();
+    my ($json) = @{$self->{+ARGS}};
+    my $data = decode_json($json);
 
-    my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+    warn "Make run an object";
+    my $run = $data->{run} or die "No run provided";
 
-    require(mod2file($collector_class));
+    my $job = $data->{job} or die "No job provided";
+    my $jclass = $job->{job_class} // 'Test2::Harnes::Job';
+    require(mod2file($jclass));
+    $job = $jclass->new($job);
 
-    my $run = Test2::Harness::Run->new(%{decode_json(<STDIN>)});
+    my $inst_ipc_data = $run->{instance_ipc};
+    my ($inst_ipc, $inst_con);
+    my ($agg_ipc,  $agg_con)  = ipc_connect($run->{aggregator_ipc});
 
-    my $collector = $collector_class->new(
-        %args,
-        settings   => $settings,
-        workdir    => $dir,
-        run_id     => $run_id,
-        runner_pid => $runner_pid,
-        run        => $run,
-        # as_json may already have the json form of the event cached, if so
-        # we can avoid doing an extra call to encode_json
-        action => sub { print $fh defined($_[0]) ? $_[0]->as_json . "\n" : "null\n"; },
+    my $handler;
+    if ($inst_ipc_data) {
+        if ($agg_con) {
+            $handler = sub {
+                for my $e (@_) {
+                    $agg_con->send_message($e);
+
+                    warn "Forward important events like timeout and bailout to instance" unless $warned++;
+                    next;
+                    ($inst_ipc, $inst_con) = ipc_connect($inst_ipc_data) unless $inst_con;
+                }
+            };
+        }
+        else {
+            $handler = sub {
+                for my $e (@_) {
+                    print STDOUT encode_json($e), "\n";
+
+                    warn "Forward important events like timeout and bailout to instance" unless $warned++;
+                    next;
+                    ($inst_ipc, $inst_con) = ipc_connect($inst_ipc_data) unless $inst_con;
+                }
+            };
+        }
+    }
+    else {
+        if ($agg_con) {
+            $handler = sub { $agg_con->send_message($_) for @_ };
+        }
+        else {
+            $handler = \*STDOUT;
+        }
+    }
+
+    my $auditor = Test2::Harness::Collector::Auditor->new(%$job);
+    my $parser  = Test2::Harness::Collector::IOParser::Stream->new(%$job, type => 'test');
+
+    my $collector = Test2::Harness::Collector->new(
+        %$job,
+        parser  => $parser,
+        auditor => $auditor,
+        output  => $handler,
     );
 
-    local $SIG{PIPE} = 'IGNORE';
-    my $ok = eval { $collector->process(); 1 };
+    warn "FIXME";
+    $ENV{T2_FORMATTER} = 'Stream';
+
+    open(our $stderr, '>&', \*STDERR) or die "Could not clone STDERR";
+
+    $SIG{__WARN__} = sub { print $stderr @_ };
+
+    my $exit = 0;
+    my $ok = eval {
+        $collector->setup_child();
+
+        my $pid = start_process($job->launch_command($run));
+
+        $exit = $collector->process($pid);
+
+        1;
+    };
     my $err = $@;
 
-    eval { print $fh "null\n"; 1 } or warn $@;
+    if (!$ok) {
+        print $stderr $err;
+        print STDERR "Test2 Harness Collector Error: $err";
+        exit(255);
+    }
 
-    die $err unless $ok;
-
-    return 0;
+    return $exit;
 }
 
 1;
-
 __END__
 
-=head1 POD IS AUTO-GENERATED
+    my $auditor = Test2::Harness::Collector::Auditor->new(run_id => 'FAKE', job_id => 'FAKE', job_try => 0, file => 't/fake.t');
+
+    my $renderer = App::Yath::Renderer::Default->new;
+    $renderer->start();
+
+    my $collector = Test2::Harness::Collector->new(
+        run_id => 'FAKE', job_id => 'FAKE', job_try => 0,
+        parser  => Test2::Harness::Collector::IOParser::Stream->new(type => 'test', name => 't/fake.t', job_id => 'FAKE', run_id => 'FAKE', job_try => 0),
+        auditor => $auditor,
+        output  => sub { $renderer->render_event($_) for @_ },
 

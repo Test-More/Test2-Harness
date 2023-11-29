@@ -2,7 +2,7 @@ package Test2::Harness::Util::HashBase;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 #################################################################
 #                                                               #
@@ -16,7 +16,7 @@ our $VERSION = '1.000156';
 
 {
     no warnings 'once';
-    $Test2::Harness::Util::HashBase::HB_VERSION = '0.008';
+    $Test2::Harness::Util::HashBase::HB_VERSION = '0.010';
     *Test2::Harness::Util::HashBase::ATTR_SUBS = \%Object::HashBase::ATTR_SUBS;
     *Test2::Harness::Util::HashBase::ATTR_LIST = \%Object::HashBase::ATTR_LIST;
     *Test2::Harness::Util::HashBase::VERSION   = \%Object::HashBase::VERSION;
@@ -52,9 +52,17 @@ my %SPEC = (
     '+' => {reader => 0, writer => 0, dep_writer => 0, read_only => 0, strip => 1},
 );
 
+sub spec { \%SPEC }
+
 sub import {
     my $class = shift;
     my $into  = caller;
+    $class->do_import($into, @_);
+}
+
+sub do_import {
+    my $class = shift;
+    my $into  = shift;
 
     # Make sure we list the OLDEST version used to create this class.
     my $ver = $Test2::Harness::Util::HashBase::HB_VERSION || $Test2::Harness::Util::HashBase::VERSION;
@@ -65,34 +73,49 @@ sub import {
     my $attr_subs = $Test2::Harness::Util::HashBase::ATTR_SUBS{$into} ||= {};
 
     my %subs = (
-        ($into->can('new') ? () : (new => \&_new)),
+        ($into->can('new') ? () : (new => $class->can('_new'))),
         (map %{$Test2::Harness::Util::HashBase::ATTR_SUBS{$_} || {}}, @{$isa}[1 .. $#$isa]),
-        (
-            map {
-                my $p = substr($_, 0, 1);
-                my $x = $_;
-
-                my $spec = $SPEC{$p} || {reader => 1, writer => 1};
-
-                substr($x, 0, 1) = '' if $spec->{strip};
-                push @$attr_list => $x;
-                my ($sub, $attr) = (uc $x, $x);
-
-                $attr_subs->{$sub} = sub() { $attr };
-                my %out = ($sub => $attr_subs->{$sub});
-
-                $out{$attr}       = sub { $_[0]->{$attr} }                                                  if $spec->{reader};
-                $out{"set_$attr"} = sub { $_[0]->{$attr} = $_[1] }                                          if $spec->{writer};
-                $out{"set_$attr"} = sub { Carp::croak("'$attr' is read-only") }                             if $spec->{read_only};
-                $out{"set_$attr"} = sub { Carp::carp("set_$attr() is deprecated"); $_[0]->{$attr} = $_[1] } if $spec->{dep_writer};
-
-                %out;
-            } @_
-        ),
+        ($class->args_to_subs($attr_list, $attr_subs, \@_)),
     );
 
     no strict 'refs';
     *{"$into\::$_"} = $subs{$_} for keys %subs;
+}
+
+sub args_to_subs {
+    my $class = shift;
+    my ($attr_list, $attr_subs, $args) = @_;
+
+    my $use_gen = $class->can('gen_accessor') ;
+
+    my %out;
+
+    while (@$args) {
+        my $x = shift @$args;
+        my $p = substr($x, 0, 1);
+
+        my $spec = $class->spec->{$p} || {reader => 1, writer => 1};
+        substr($x, 0, 1) = '' if $spec->{strip};
+
+        push @$attr_list => $x;
+        my ($sub, $attr) = (uc $x, $x);
+
+        $attr_subs->{$sub} = sub() { $attr };
+        $out{$sub} = $attr_subs->{$sub};
+
+        my $copy = "$attr";
+        $out{$attr}       = $use_gen ? $class->gen_accessor(reader => $copy,     $spec, $args) : sub { $_[0]->{$attr} }                                                  if $spec->{reader};
+        $out{"set_$attr"} = $use_gen ? $class->gen_accessor(writer => $copy,     $spec, $args) : sub { $_[0]->{$attr} = $_[1] }                                          if $spec->{writer};
+        $out{"set_$attr"} = $use_gen ? $class->gen_accessor(read_only => $copy,  $spec, $args) : sub { Carp::croak("'$attr' is read-only") }                             if $spec->{read_only};
+        $out{"set_$attr"} = $use_gen ? $class->gen_accessor(dep_writer => $copy, $spec, $args) : sub { Carp::carp("set_$attr() is deprecated"); $_[0]->{$attr} = $_[1] } if $spec->{dep_writer};
+
+        if ($spec->{custom}) {
+            my %add = $class->gen_accessor(custom => $copy, $spec, $args);
+            $out{$_} = $add{$_} for keys %add;
+        }
+    }
+
+    return %out;
 }
 
 sub attr_list {

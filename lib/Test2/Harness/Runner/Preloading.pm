@@ -177,8 +177,8 @@ sub launch_job {
     my $self = shift;
     my ($stage, $run, $job) = @_;
 
-    my $job_launch_data = $self->job_launch_data($run, $job);
-    my $ts = $job_launch_data->{test_settings};
+    my %job_launch_data = $self->job_launch_data($run, $job);
+    my $ts = $job_launch_data{test_settings};
 
     my $can_fork = 1;
     $can_fork &&= $stage ne 'NONE';
@@ -189,7 +189,7 @@ sub launch_job {
 
     my $stage_data = $self->{+STAGES}->{$stage} or confess "Invalid stage: '$stage'";
 
-    my $res = $stage_data->{ready}->{con}->send_and_get(launch_job => $job_launch_data);
+    my $res = $stage_data->{ready}->{con}->send_and_get(launch_job => \%job_launch_data);
     return 1 if $res->success;
 }
 

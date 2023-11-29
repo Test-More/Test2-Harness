@@ -14,7 +14,7 @@ use Scalar::Util qw/blessed/;
 use POSIX();
 use IO::Select();
 
-use Test2::Harness::Util::JSON qw/encode_pretty_json/;
+use Test2::Harness::Util::JSON qw/encode_pretty_json encode_json/;
 
 use Importer Importer => 'import';
 
@@ -27,6 +27,8 @@ our @EXPORT_OK = qw{
     ipc_warn
     ipc_connect
     ipc_loop
+
+    start_collected_process
 };
 
 BEGIN {
@@ -81,6 +83,31 @@ sub swap_io {
     return if fileno($fh) == $orig_fd;
 
     $die->("New handle does not have the desired fd!");
+}
+
+sub start_collected_process {
+    my %params = @_;
+
+    my %seen;
+    my $pid = start_process(
+        $^X,                                                             # Call current perl
+        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),          # Use the dev libs specified
+        '-mTest2::Harness::Collector',                                   # Load Collector
+        '-e' => 'exit(Test2::Harness::Collector->collect($ARGV[0]))',    # Run it.
+        encode_json(\%params),                                           # json data for what to do
+    );
+
+    return $pid unless $params{setsid};
+
+    local $? = 0;
+    my $check = waitpid($pid, 0);
+    my $exit  = $?;
+    if ($exit || $check != $pid) {
+        my $x = parse_exit($exit);
+        die "Collector failed ($check vs $pid) (Exit code: $x->{err}, Signal: $x->{sig})";
+    }
+
+    return;
 }
 
 sub start_process {

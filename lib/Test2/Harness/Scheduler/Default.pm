@@ -154,7 +154,7 @@ sub wait_on_kids {
         last if $pid < 1;
 
         my $cb = delete $self->{+CHILDREN}->{$pid} or die "Reaped untracked process!";
-        $cb->(exit => $exit, scheduler => $self) if $cb && ref($cb) eq 'CODE';
+        $cb->(pid => $pid, exit => $exit, scheduler => $self) if $cb && ref($cb) eq 'CODE';
     }
 }
 

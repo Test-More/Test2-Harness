@@ -101,19 +101,18 @@ sub init {
 my $warned = 0;
 sub collect {
     my $class = shift;
-    my (%params) = @_;
-    my $data = $params{data} //= decode_json($params{json});
+    my %params = (@_ == 1) ? (%{decode_json($_[0])}) : (@_);
 
-    my $root_pid = $data->{root_pid} or die "No root pid";
+    my $root_pid = $params{root_pid} or die "No root pid";
 
     # Disconnect from parent group so that a test cannot kill the harness.
-    unless ($params{no_setsid}) {
+    if ($params{setsid}) {
         POSIX::setsid() or die "Could not setsid: $!";
         my $pid = fork // die "Could not fork: $!";
         exit(0) if $pid;
     }
 
-    my $ts = $data->{test_settings} or die "No test_settings provided";
+    my $ts = $params{test_settings} or die "No test_settings provided";
     unless (blessed($ts)) {
         my $tsclass = $ts->{class} // 'Test2::Harness::TestSettings';
         require(mod2file($tsclass));
@@ -121,7 +120,7 @@ sub collect {
         $params{test_settings} = $ts;
     }
 
-    my $run = $data->{run} or die "No run provided";
+    my $run = $params{run} or die "No run provided";
     unless(blessed($run)) {
         my $rclass = $run->{run_class} // 'Test2::Harness::Run';
         require(mod2file($rclass));
@@ -129,7 +128,7 @@ sub collect {
         $params{run} = $run;
     }
 
-    my $job = $data->{job} or die "No job provided";
+    my $job = $params{job} or die "No job provided";
     unless(blessed($job)) {
         my $jclass = $job->{job_class} // 'Test2::Harness::Run::Job';
         require(mod2file($jclass));
@@ -137,7 +136,7 @@ sub collect {
         $params{job} = $job;
     }
 
-    $params{workdir} = $data->{workdir} // die "No workdir provided";
+    die "No workdir provided" unless $params{workdir};
     $params{tempdir} = File::Temp::tempdir(DIR => $params{workdir}, CLEANUP => 1, TEMPLATE => "tmp-$$-XXXX");
 
     my ($inst_ipc, $inst_con) = ipc_connect($run->{instance_ipc});

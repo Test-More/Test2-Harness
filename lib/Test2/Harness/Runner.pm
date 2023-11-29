@@ -8,8 +8,7 @@ use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
 
 use Test2::Harness::Util qw/parse_exit/;
-use Test2::Harness::IPC::Util qw/start_process/;
-use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::IPC::Util qw/start_collected_process/;
 
 use Test2::Harness::TestSettings;
 
@@ -59,13 +58,14 @@ sub job_launch_data {
 
     my $workdir = $self->{+WORKDIR};
 
-    return {
+    return (
         workdir       => $self->{+WORKDIR},
         run           => $run->data_no_jobs,
         job           => $job,
         test_settings => $ts,
         root_pid      => $$,
-    };
+        setsid        => 1,
+    );
 }
 
 sub launch_job {
@@ -74,25 +74,9 @@ sub launch_job {
 
     croak "Invalid stage '$stage'" unless $stage eq 'NONE';
 
-    my %seen;
-    my $pid = start_process(
-        $^X,                                                                     # Call current perl
-        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),                  # Use the dev libs specified
-        '-mTest2::Harness::Collector',                                           # Load Collector
-        '-e' => 'exit(Test2::Harness::Collector->collect(json => $ARGV[0]))',    # Run it.
-        encode_json($self->job_launch_data($run, $job)),                         # json data for job
-    );
-
-    local $? = 0;
-    my $check = waitpid($pid, 0);
-    my $exit  = $?;
-    if ($exit || $check != $pid) {
-        my $x = parse_exit($exit);
-        warn "Collector failed ($check vs $pid) (Exit code: $x->{err}, Signal: $x->{sig})";
-        return -1;
-    }
-
-    return 1;
+    return 1 if eval { start_collected_process($self->job_launch_data($run, $job)); 1 };
+    warn $@;
+    return 0;
 }
 
 sub terminate {

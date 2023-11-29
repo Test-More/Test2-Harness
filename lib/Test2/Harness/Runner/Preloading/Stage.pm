@@ -66,7 +66,7 @@ sub import {
             $EXIT = $got->{exit} if exists $got->{exit};
 
             if (my $test = $got->{run_test}) {
-                $EXIT = Test2::Harness::Collector::Preloaded->collect(data => $test, orig_sig => \%ORIG_SIG, stage => $self, root_pid => $self->{+ROOT_PID});
+                $EXIT = Test2::Harness::Collector::Preloaded->collect(%$test, orig_sig => \%ORIG_SIG, stage => $self, root_pid => $self->{+ROOT_PID});
             }
 
             1;

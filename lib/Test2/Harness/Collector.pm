@@ -274,8 +274,6 @@ sub _pre_event {
     my $self = shift;
     my (%data) = @_;
 
-    $data{stamp} //= time;
-
     my @events = $self->{+PARSER}->parse_io(\%data);
     @events = $self->{+AUDITOR}->audit(@events) if $self->{+AUDITOR};
 
@@ -291,15 +289,16 @@ sub _die {
     my @caller = caller();
     $msg .= " at $caller[1] line $caller[2].\n" unless $msg =~ m/\n$/;
 
+    my $stamp = time;
     $self->_pre_event(
         %{$params{event_data} // {}},
         stream => 'process',
-        stamp  => time,
+        stamp  => $stamp,
         event  => {
             facet_data => {
                 %{$params{facets} // {}},
                 errors => [{tag => 'ERROR', details => $msg, fail => 1}],
-                trace  => {frame => \@caller},
+                trace  => {frame => \@caller, stamp => $stamp},
             },
         },
     );
@@ -314,15 +313,16 @@ sub _warn {
     my @caller = caller();
     $msg .= " at $caller[1] line $caller[2].\n" unless $msg =~ m/\n$/;
 
+    my $stamp = time;
     $self->_pre_event(
         %{$params{event_data} // {}},
         stream => 'process',
-        stamp  => time,
+        stamp  => $stamp,
         event  => {
             facet_data => {
                 %{$params{facets} // {}},
                 info  => [{tag => 'WARNING', details => $msg, debug => 1}],
-                trace => {frame => \@caller}
+                trace => {frame => \@caller, stamp => $stamp}
             },
         },
     );
@@ -386,6 +386,7 @@ sub setup_child_env_vars {
     my $ts = $self->{+TEST_SETTINGS};
 
     $ENV{TMPDIR} = $self->tempdir;
+    $ENV{T2_TRACE_STAMPS} = 1;
 
     my $env = $ts->env_vars;
     {
@@ -424,7 +425,7 @@ sub process {
             stamp  => $stamp,
             event  => {
                 facet_data => {
-                    trace => {frame => [__PACKAGE__, __FILE__, __LINE__]},
+                    trace => {frame => [__PACKAGE__, __FILE__, __LINE__], stamp => $stamp},
 
                     harness_job => {
                         %{$job->process_info},
@@ -714,7 +715,7 @@ sub _process {
         stamp  => $exited,
         event  => {
             facet_data => {
-                trace => {frame => [__PACKAGE__, __FILE__, __LINE__]},
+                trace => {frame => [__PACKAGE__, __FILE__, __LINE__], stamp => $exited},
 
                 harness_job_exit => {
                     job_id => $self->job_id,

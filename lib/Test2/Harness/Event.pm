@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Carp qw/confess/;
+use List::Util qw/min/;
 use Time::HiRes qw/time/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
@@ -47,28 +48,44 @@ sub init {
 
     $self->{+JOB_ID} //= 0;
 
+    # Original trace wins.
+    if (my $trace = delete $self->{+TRACE}) {
+        $data->{trace} //= $trace;
+    }
+
+    my $other = {stamp => $data->{trace}->{stamp} // time};
+
     for my $field (RUN_ID(), JOB_ID(), JOB_TRY(), EVENT_ID(), STAMP()) {
         my $v1 = $self->{$field};
         my $v2 = $data->{harness}->{$field};
+        my $v3 = $other->{$field};
 
-        my $d1 = defined($v1);
-        my $d2 = defined($v2);
+        my %seen;
+        for my $v ($v1, $v2, $v3) {
+            next unless defined($v);
+            $seen{$v}++;
+        }
+
+        my $count = keys %seen;
 
         confess "'$field' is a required attribute"
-            unless $d1 || $d2 || ($field eq +JOB_TRY && !$self->{+JOB_ID}) || ($field eq +STAMP);
+            unless $count || ($field eq +JOB_TRY && !$self->{+JOB_ID});
 
-        confess "'$field' has different values between attribute and facet data (\n  $v1 (defined: $d1)\n  $v2 (defined: $d2)\n)"
-            if $d1 && $d2 && $v1 ne $v2;
+        if ($count > 1) {
+            # Some things maybe overzelous in enforcing a stamp, if that happens just take the lowest one.
+            if ($field eq +STAMP) {
+                my ($stamp) = min(keys %seen);
+                $data->{trace}->{stamp} = $stamp;
+            }
+            else {
+                confess "'$field' has different values between attribute and facet data: " . join(', ' => map { "'$_'" } keys %seen);
+            }
+        }
 
-        $self->{$field} = $data->{harness}->{$field} = $v1 // $v2;
+        $self->{$field} = $data->{harness}->{$field} = $v1 // $v2 // $v3;
     }
 
     delete $data->{facet_data};
-
-    # Original trace wins.
-    if (my $trace = delete $self->{+TRACE}) {
-        $self->{+FACET_DATA}->{trace} //= $trace;
-    }
 }
 
 sub as_json { $_[0]->{+JSON} //= encode_json($_[0]) }

@@ -159,8 +159,10 @@ sub do_preload {
 
     my $preload;
 
+    $ENV{T2_TRACE_STAMPS} = 1;
     require Test2::API;
     Test2::API::test2_start_preload();
+    Test2::API::test2_enable_trace_stamps();
 
     for my $mod (@$preloads) {
         require(mod2file($mod));

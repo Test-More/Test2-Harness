@@ -253,6 +253,7 @@ sub test2_state {
     if ($INC{'Test2/API.pm'}) {
         Test2::API::test2_stop_preload();
         Test2::API::test2_post_preload_reset();
+        Test2::API::test2_enable_trace_stamps();
     }
 
     if ($ts->use_stream) {

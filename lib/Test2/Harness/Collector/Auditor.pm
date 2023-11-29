@@ -177,7 +177,7 @@ sub _audit {
         # Alter $f so that this incorrect event is not sent to the renderer.
         $f->{harness_auditor}->{no_render} = 1;
 
-        my $stamp = $f->{stamp} // $f->{harness}->{stamp} // time;
+        my $stamp = $f->{trace}->{stamp} // $f->{stamp} // $f->{harness}->{stamp} // time;
 
         # Make a new $f and $event for the rest of the processing.
         $f = {
@@ -256,9 +256,9 @@ sub subtest_process {
 
     $event ||= Test2::Harness::Event->new(
         facet_data => $f,
-        job_try => $self->{+JOB_TRY},
-        job_id => $self->{+JOB_ID},
-        run_id => $self->{+RUN_ID},
+        job_try    => $self->{+JOB_TRY},
+        job_id     => $self->{+JOB_ID},
+        run_id     => $self->{+RUN_ID},
     );
 
     $self->{+NUMBERS}->{$f->{assert}->{number}}++

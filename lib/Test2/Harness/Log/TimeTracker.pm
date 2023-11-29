@@ -1,8 +1,8 @@
-package Test2::Harness::Auditor::TimeTracker;
+package Test2::Harness::Log::TimeTracker;
 use strict;
 use warnings;
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Test2::Harness::Util qw/hub_truth/;
 use Test2::Util::Times qw/render_duration/;
@@ -207,7 +207,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Auditor::TimeTracker - Module that tracks timing data while an
+Test2::Harness::Log::TimeTracker - Module that tracks timing data while an
 event stream is processed.
 
 =head1 DESCRIPTION
@@ -230,9 +230,9 @@ long the test took in each of several stages.
 
 =head1 SYNOPSIS
 
-    use Test2::Harness::Auditor::TimeTracker;
+    use Test2::Harness::Log::TimeTracker;
 
-    my $tracker = Test2::Harness::Auditor::TimeTracker->new();
+    my $tracker = Test2::Harness::Log::TimeTracker->new();
 
     my $assert_count = 0;
     for my $event (@events) {

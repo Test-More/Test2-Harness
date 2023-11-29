@@ -20,7 +20,8 @@ my $config_file      = find_in_updir('.yath.rc');
 my $user_config_file = find_in_updir('.yath.user.rc');
 
 # This will set up @INC for us
-my $DEV_LIBS = pre_process_args($_) for \@ARGV, map { scan_config($_) } grep { $_ && -e $_ } $user_config_file, $config_file;
+my $DEV_LIBS = [];
+push @$DEV_LIBS => pre_process_args($_) for \@ARGV, map { scan_config($_) } grep { $_ && -e $_ } $user_config_file, $config_file;
 
 require Time::HiRes;
 require Getopt::Yath::Settings;

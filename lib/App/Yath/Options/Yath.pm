@@ -80,7 +80,7 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
             my $ref = $params{ref};
             my $val = $params{val};
             my %seen = map { $_ => 1 } @{$$ref};
-            my @new = grep { !$seen{$_}++ } @$val;
+            my @new = grep { !$seen{$_} } @$val;
 
             return unless @new;
 

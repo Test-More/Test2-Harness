@@ -168,7 +168,21 @@ sub process_args {
     for my $opt (@$options) {
         my $group = $settings->group($opt->group, 1);
         my $ref   = $group->option_ref($opt->field, 1);
-        ${$ref} //= $opt->get_initial_value($settings);
+        unless(defined ${$ref}) {
+            my $val = $opt->get_initial_value($settings);
+            my $rt = ref($val);
+            if (!defined($val)) {
+                $val = [];
+            }
+            elsif ($rt) {
+                $val = [ $rt eq 'ARRAY' ? @$val : %$val ];
+            }
+            else {
+                $val = [$val];
+            }
+            $opt->trigger(action => 'initialize', ref => $ref, val => $val, state => $state, options => $self, settings => $settings, group => $group);
+            $opt->add_value($ref, @$val);
+        }
         $opt->init_settings($state, $settings, $group, $ref);
     }
 

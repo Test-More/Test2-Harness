@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 
-use Test2::Harness::Util qw/mod2file fqmod/;
+use Test2::Harness::Util qw/mod2file/;
 
 use Getopt::Yath::Option;
 use Getopt::Yath::Settings;

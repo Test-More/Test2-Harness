@@ -2,6 +2,8 @@ package App::Yath::Options::Scheduler;
 use strict;
 use warnings;
 
+use Test2::Harness::Util qw/fqmod/;
+
 our $VERSION = '2.000000';
 
 use Getopt::Yath;
@@ -20,7 +22,7 @@ option_group {group => 'scheduler', category => 'Scheduler Options'} => sub {
         long_examples    => [' MyScheduler', ' +Test2::Harness::MyScheduler'],
         description      => 'Specify what Scheduler subclass to use. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Scheduler::XXX namespace is assumed.',
 
-        normalize => sub { fqmod('Test2::Harness::Scheduler', $_[0]) },
+        normalize => sub { fqmod($_[0], 'Test2::Harness::Scheduler') },
     );
 
     option shared_jobs_config => (

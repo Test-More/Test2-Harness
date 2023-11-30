@@ -20,7 +20,7 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
         long_examples  => [' +My::Resource', ' MyResource,MyOtherResource', ' MyResource=opt1,opt2', ' :{ MyResource :{ opt1 opt2 }: }:', '=:{ MyResource opt1,opt2,... }:'],
         short_examples => ['MyResource',     ' +My::Resource', ' MyResource,MyOtherResource', ' MyResource=opt1,opt2', ' :{ MyResource :{ opt1 opt2 }: }:', '=:{ MyResource opt1,opt2,... }:'],
 
-        normalize => sub { fqmod('App::Yath::Resource', $_[0]), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
+        normalize => sub { fqmod($_[0], 'App::Yath::Resource'), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
 
         mod_adds_options => 1,
     );

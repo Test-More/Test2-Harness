@@ -115,9 +115,7 @@ dev-lib '$_' added to \@INC late, it is possible some yath libraries were alread
         normalize => sub {
             my ($class, $args) = @_;
 
-            $class = fqmod('App::Yath::Plugin', $class);
-            my $file = mod2file($class);
-            require $file;
+            $class = fqmod($class, 'App::Yath::Plugin');
 
             $args = $args ? [split ',', $args] : [];
 

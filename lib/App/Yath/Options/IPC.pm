@@ -56,7 +56,7 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
         long_examples => [' AtomicPipe', ' +Test2::Harness::IPC::Protocol::AtomicPipe', ' UnixSocket', ' IPSocket'],
         description   => 'Specify what IPC Protocol to use. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::IPC::Protocol::XXX namespace is assumed.',
 
-        normalize => sub { fqmod('Test2::Harness::IPC::Protocol', $_[0]) },
+        normalize => sub { fqmod($_[0], 'Test2::Harness::IPC::Protocol') },
     );
 
     option address => (
@@ -168,8 +168,10 @@ sub vivify_ipc {
     ($discovered) = @{$found{p}};
     @ipc{qw/address protocol port peer_pid/} = @$discovered;
     $ipc{address} = clean_path($ipc{address});
-    $ipc{protocol} = fqmod('Test2::Harness::IPC::Protocol', $ipc{protocol});
-    eval { require(mod2file($ipc{protocol})); 1 } or die "\nFailed to load IPC protocol ($ipc{protocol}) specified by IPC file ($ipc{address}): $@\n";
+
+    eval { $ipc{protocol} = fqmod($ipc{protocol}, 'Test2::Harness::IPC::Protocol'); 1 }
+        or die "\nFailed to load IPC protocol ($ipc{protocol}) specified by IPC file ($ipc{address}): $@\n";
+
     print "Found instance FIFO: $ipc{address}\n";
     return {%ipc};
 }

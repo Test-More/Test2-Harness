@@ -74,8 +74,7 @@ sub create {
 
     my $type = delete $params{type} or croak "No 'type' specified";
 
-    my $new_class = fqmod(__PACKAGE__, $type);
-    require(mod2file($new_class));
+    my $new_class = fqmod($type, __PACKAGE__);
     return $new_class->new(%params);
 }
 

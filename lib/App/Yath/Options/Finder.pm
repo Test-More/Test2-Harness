@@ -26,7 +26,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
         long_examples    => [' MyFinder', ' +App::Yath::Finder::MyFinder'],
         description      => 'Specify what Finder subclass to use when searching for files/processing the file list. Use the "+" prefix to specify a fully qualified namespace, otherwise App::Yath::Finder::XXX namespace is assumed.',
 
-        normalize => sub { fqmod('App::Yath::Finder', $_[0]) },
+        normalize => sub { fqmod($_[0], 'App::Yath::Finder') },
     );
 
     option extensions => (
@@ -83,7 +83,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
         long_examples => [' Foo', ' +App::Yath::Plugin::Foo'],
 
         mod_adds_options => 1,
-        normalize => sub { fqmod('App::Yath::Plugin', $_[0]) },
+        normalize => sub { fqmod($_[0], 'App::Yath::Plugin') },
     );
 
     my $modes = join '|' => sort keys %RERUN_MODES;

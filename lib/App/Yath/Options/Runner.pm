@@ -46,7 +46,7 @@ option_group {group => 'runner', category => "Runner Options"} => sub {
         long_examples    => [' MyRunner', ' +Test2::Harness::Runner::MyRunner'],
         description      => 'Specify what Runner subclass to use. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Runner::XXX namespace is assumed.',
 
-        normalize => sub { fqmod('Test2::Harness::Runner', $_[0]) },
+        normalize => sub { fqmod($_[0], 'Test2::Harness::Runner') },
     );
 
     option dump_depmap => (
@@ -59,7 +59,7 @@ option_group {group => 'runner', category => "Runner Options"} => sub {
         type => 'Auto',
         alt => ['reload'],
         autofill => 'Test2::Harness::Reloader',
-        normalize => sub { fqmod('Test2::Harness::Reloader', $_[0]) },
+        normalize => sub { fqmod($_[0], 'Test2::Harness::Reloader') },
 
         description => "Use a reloader (default Test2::Harness::Reloader) to reload modules in place. This is discouraged as there are too many gotchas",
     );

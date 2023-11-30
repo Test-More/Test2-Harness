@@ -123,9 +123,35 @@ sub hub_truth {
 }
 
 sub fqmod {
-    my ($prefix, $input) = @_;
-    return $1 if $input =~ m/^\+(.*)$/;
-    return "$prefix\::$input";
+    my ($input, $prefixes, %options) = @_;
+
+    croak "At least 1 prefix is required" unless $prefixes;
+
+    $prefixes = [$prefixes] unless ref($prefixes) eq 'ARRAY';
+
+    croak "At least 1 prefix is required" unless @$prefixes;
+    croak "Cannot use no_require when providing multiple prefixes" if $options{no_require} && @$prefixes > 1;
+
+    if ($input =~ m/^\+(.*)$/) {
+        my $mod = $1;
+        return $mod if $options{no_require};
+        return $mod if eval { require(mod2file($mod)); 1 };
+        confess($@);
+    }
+
+    for my $pre (@$prefixes) {
+        my $mod = "$pre\::$input";
+
+        if ($options{no_require}) {
+            return $mod;
+        }
+        else {
+            return $mod if eval { require(mod2file($mod)); 1 };
+            confess($@) unless @$prefixes > 1;
+        }
+    }
+
+    croak "Could not find a module with the given input in the given prefixes";
 }
 
 sub file2mod {

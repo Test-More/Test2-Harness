@@ -28,7 +28,7 @@ my %PROPOGATE_FALSE = (
 );
 
 my %DEFAULTS = (
-    allow_retry       => 0,
+    allow_retry       => 1,
     args              => [],
     blib              => 1,
     cover             => undef,

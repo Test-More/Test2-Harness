@@ -226,10 +226,6 @@ sub job_update {
 
     if (my $res = $update->{result}) {
         push @{$job->{results}} => $res;
-
-        warn "FIXME: retry";
-        push @{$run->complete} => $job;
-
         my $info = delete $run->running->{$job->job_id};
         $info->{cleanup}->($self) if $info->{cleanup};
     }
@@ -296,6 +292,7 @@ sub advance {
 
     my ($run, $job, $stage, $cat, $dur, $confl, $job_set, $skip, $resources) = $self->next_job() or return;
 
+    $job->set_running(1);
     my $res_id = $job->resource_id;
 
     my $ok;
@@ -314,17 +311,19 @@ sub advance {
     # If the job could not be started
     unless ($ok) {
         $_->release($res_id, $job) for @$resources;
-        $job_set->{$job->job_id} = $job;
+        $job->set_running(0);
+        $job_set->{$job->job_id} //= $job;
         return 1;
     }
 
-    my $info = {
+    my $info;
+    $info = {
         job => $job,
         run => $run,
         pid     => undef,
         start   => time,
         cleanup => sub {
-            my $scheduler = shift;
+            my ($scheduler) = @_;
 
             $_->release($res_id, $job) for @{$resources};
 
@@ -332,6 +331,14 @@ sub advance {
             $scheduler->{+RUNNING}->{durations}->{$dur}--;
             $scheduler->{+RUNNING}->{conflicts}->{$_}-- for @{$confl || []};
             $scheduler->{+RUNNING}->{total}--;
+
+            $job->set_running(0);
+
+            my ($res) = reverse(@{$job->{results}});
+            unless ($res->{fail} && $res->{retry}) {
+                delete $job_set->{$job->job_id};
+                push @{$run->complete} => $job;
+            }
 
             # The next several bits are to avoid memory leaks
             my $info1 = delete $run->running->{$job->job_id};
@@ -344,6 +351,9 @@ sub advance {
             $job = undef;
             $run = undef;
             $resources = undef;
+
+            delete $info->{cleanup};
+            $info = undef;
         },
     };
 
@@ -411,6 +421,7 @@ sub next_job {
 
                             JOB: for my $job_id (keys %$search) {
                                 my $job = $search->{$job_id};
+                                next if $job->running;
 
                                 # Skip if conflicting tests are running
                                 my $confl = $job->test_file->conflicts_list;
@@ -437,7 +448,6 @@ sub next_job {
                                     push @use_resources => $res;
                                 }
 
-                                delete $search->{$job_id};
                                 return ($run, $job, $run_by_stage, $cat, $dur, $confl, $search, $skip, \@use_resources);
                             }
                         }

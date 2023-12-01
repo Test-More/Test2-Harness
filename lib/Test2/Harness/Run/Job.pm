@@ -15,10 +15,13 @@ use Test2::Harness::Util::HashBase qw{
     <test_file
     <job_id
     <results
+    running
 };
 
 sub init {
     my $self = shift;
+
+    $self->{+RUNNING} = 0;
 
     $self->{+JOB_ID} //= gen_uuid();
 

@@ -56,34 +56,36 @@ sub audit {
 
     my $f = $e->facet_data;
     my $job_id = $f->{harness}->{job_id} or return;
+    my $job_try = $f->{harness}->{job_try} // 0;
 
-    my $jobs = $self->{+JOBS};
+    my $tries = $self->{+JOBS}->{$job_id} //= [];
+    my $job   = $tries->[$job_try]        //= {};
 
     if ($f->{assert}) {
         $self->{+ASSERTS}++;
     }
 
     if ($f->{parent} && !$f->{assert}->{pass}) {
-        push @{$jobs->{$job_id}->{failed_subtests} //= []} => $self->list_nested_subtests($f);
+        push @{$job->{failed_subtests} //= []} => $self->list_nested_subtests($f);
     }
 
     if (my $j = $f->{harness_job}) {
         my $file = $j->{file};
-        $jobs->{$job_id}->{file} = $file;
+        $job->{file} = $file;
     }
 
     if ($f->{harness_job_launch}) {
-        $jobs->{$job_id}->{launched}++;
+        $job->{launched}++;
         $self->{+LAUNCHES}++;
     }
 
     if (my $end = $f->{harness_job_end}) {
-        $jobs->{$job_id}->{end}++;
-        push @{$jobs->{$job_id}->{results} //= []} => $end->{fail} ? 0 : 1;
+        $job->{end}++;
+        $job->{result} = $end->{fail} ? 0 : 1;
     }
 
     if (my $x = $f->{harness_job_exit}) {
-        push @{$jobs->{$job_id}->{exits} //= []} => $x->{exit};
+        $job->{exit} = $x->{exit};
 
         if (my $times = $x->{times}) {
             for my $i (0 .. 3) {
@@ -94,7 +96,7 @@ sub audit {
 
     if (my $c = $f->{control}) {
         if ($c->{halt}) {
-            $jobs->{$job_id}->{halt} = $c->{details} || 'halt';
+            $job->{halt} = $c->{details} || 'halt';
         }
     }
 }
@@ -121,14 +123,15 @@ sub final_data {
 
     my $passing = 1;
     for my $job_id (keys %$jobs) {
-        my $job = $jobs->{$job_id};
+        my $tries = $jobs->{$job_id};
+        my $job = $tries->[-1];
 
         if ($job->{halt}) {
             $passing = 0;
             push @{$out->{halted}} => [$job_id, $job->{file}, $job->{halt}];
         }
 
-        my $count = @{$job->{results} // []};
+        my $count = @$tries;
 
         if ($count < 1) {
             $passing = 0;
@@ -136,7 +139,7 @@ sub final_data {
             next;
         }
 
-        my $pass = $job->{results}->[-1];
+        my $pass = $job->{result};
 
         if ($count > 1) {
             push @{$out->{retried}} => [$job_id, $count, $job->{file}, $pass ? 'YES' : 'NO'];

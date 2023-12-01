@@ -359,8 +359,8 @@ sub _allocate_slots {
 
     my $calcs = $self->_runner_calcs($entry);
 
-    for (0 .. 1) {
-        $self->_redistribute($state) if $_; # Only run on second loop
+    for my $try (0 .. 1) {
+        $self->_redistribute($state) if $try; # Only run on second loop
 
         # Cannot do anything if we have no allotment or no available slots.
         # This will go to the next loop for a redistribution, or end the loop.
@@ -369,7 +369,9 @@ sub _allocate_slots {
 
         # If we get here we have an allotment (not 0) but it does not mean the
         # minimum, so we have to skip the test.
-        return -1 if $allotment < $min;
+        if ($try && $allotment < $min) {
+            return -1;
+        }
 
         next unless $available >= $min;
 
@@ -410,6 +412,7 @@ sub _release_slots {
 
     my $job_id = $params{job_id};
 
+
     delete $entry->{assigned}->{$job_id};
     delete $entry->{_calc_cache};
 
@@ -418,6 +421,8 @@ sub _release_slots {
     # Reduce our allotment if it makes sense to do so.
     my $calcs = $self->_runner_calcs($entry);
     $entry->{allotment} = $calcs->{total} if $entry->{allotment} > $calcs->{total};
+
+    return;
 }
 
 sub _runner_todo {

@@ -164,9 +164,7 @@ sub available {
     my $con = $self->_job_concurrency($job);
     return -1 unless $con;
 
-    my $granted = $self->{+STATE}->allocate_slots(con => $con, job_id => $id);
-
-    return $granted;
+    return $self->{+STATE}->allocate_slots(con => $con, job_id => $id);
 }
 
 sub assign {

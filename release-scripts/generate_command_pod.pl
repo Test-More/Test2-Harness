@@ -1,4 +1,6 @@
 #!/usr/bin/env perl
+use strict;
+use warnings;
 
 die "No directory specified" unless @ARGV;
 chdir($ARGV[0]) or die "Could not chdir to $ARGV[0]";
@@ -22,7 +24,7 @@ for my $file (readdir($dh)) {
 
     require $rel;
 
-    my $pod = $pkg->generate_pod or die "Could not get usage POD!";
+    my $pod = generate_pod($pkg) or die "Could not get usage POD!";
 
     $pod = join "\n\n" => start(), $pod, ending();
 
@@ -46,6 +48,58 @@ for my $file (readdir($dh)) {
     print $fh @lines;
     close($fh);
 }
+
+sub generate_pod {
+    my $class = shift;
+
+    die "FIXME";
+
+    my $cmd = $class->name;
+    my (@args) = $class->doc_args;
+
+    my $options = App::Yath::Options->new();
+    require App::Yath;
+    my $ay = App::Yath->new();
+    $options->include($ay->load_options);
+    $options->set_command_class($class);
+    my $pre_opts = $options->pre_docs('pod', head => 3);
+    my $cmd_opts = $options->cmd_docs('pod', head => 3);
+
+    my $usage = "    \$ yath [YATH OPTIONS] $cmd";
+
+    my @head2s;
+
+    push @head2s => ("=head2 YATH OPTIONS",    $pre_opts) if $pre_opts;
+
+    if ($cmd_opts) {
+        $usage .= " [COMMAND OPTIONS]";
+        push @head2s => ("=head2 COMMAND OPTIONS", $cmd_opts);
+    }
+
+    if (@args) {
+        $usage .= " [COMMAND ARGUMENTS]";
+
+        push @head2s => (
+            "=head2 COMMAND ARGUMENTS",
+            "=over 4",
+            (map { ref($_) ? ( "=item $_->[0]", $_->[1] ) : ("=item $_") } @args),
+            "=back"
+        );
+    }
+
+    my @out = (
+        "=head1 NAME",
+        "$class - " . $class->summary,
+        "=head1 DESCRIPTION",
+        $class->description,
+        "=head1 USAGE",
+        $usage,
+        @head2s
+    );
+
+    return join("\n\n" => grep { $_ } @out);
+}
+
 
 sub start {
     return ("=pod", "=encoding UTF-8");

@@ -2,6 +2,8 @@ package App::Yath::Plugin::Cover;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use Test2::Harness::Util qw/clean_path mod2file/;

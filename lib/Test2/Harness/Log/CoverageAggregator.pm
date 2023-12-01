@@ -2,6 +2,8 @@ package Test2::Harness::Log::CoverageAggregator;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use File::Find qw/find/;

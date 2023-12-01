@@ -2,6 +2,8 @@ package App::Yath::Plugin;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use parent 'Test2::Harness::Plugin';

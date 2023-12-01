@@ -11,6 +11,8 @@ my $astA = async_subtest 'ast A';
 
 $astA->run(sub { ok(1, "ast A 1") });
 
+ok(0);
+
 subtest out => sub {
     ok(1, "pass");
     ok(1, "pass");

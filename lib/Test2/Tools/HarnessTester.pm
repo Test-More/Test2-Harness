@@ -2,6 +2,8 @@ package Test2::Tools::HarnessTester;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;

@@ -1,2 +1,0 @@
-package AAA;
-1;

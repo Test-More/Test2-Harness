@@ -9,8 +9,8 @@ print STDOUT "STDOUT Before any events";
 
 ok(1, "pass");
 
-print STDERR "STDERR Between events";
-print STDOUT "STDOUT Between events";
+print STDERR " STDERR Between events ";
+print STDOUT " STDOUT Between events ";
 
 ok(1, "pass");
 

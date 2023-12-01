@@ -1,3 +1,0 @@
-package Bar;
-
-1;

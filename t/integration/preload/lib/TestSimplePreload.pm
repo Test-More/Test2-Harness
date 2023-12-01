@@ -1,3 +1,0 @@
-package TestSimplePreload;
-
-1;

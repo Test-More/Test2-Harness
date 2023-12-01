@@ -2,6 +2,8 @@ package App::Yath::Tester;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use Test2::API qw/context run_subtest/;

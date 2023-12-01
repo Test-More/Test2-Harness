@@ -2,6 +2,8 @@ package App::Yath::Plugin::Notify;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use Test2::Harness::Util::JSON qw/encode_json/;

@@ -1,2 +1,0 @@
-package BBB;
-1;

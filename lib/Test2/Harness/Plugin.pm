@@ -2,6 +2,8 @@ package Test2::Harness::Plugin;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 # Document, but do not implement

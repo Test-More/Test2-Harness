@@ -2,6 +2,8 @@ package Test2::Harness::Settings;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use Carp();

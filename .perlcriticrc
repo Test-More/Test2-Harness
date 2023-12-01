@@ -1,0 +1,13 @@
+color = 1
+include = Variables::ProhibitConditionalDeclarations
+exclude = Modules::RequireFilenameMatchesPackage Subroutines::ProhibitSubroutinePrototypes BuiltinFunctions::ProhibitStringyEval InputOutput::RequireEncodingWithUTF8Layer InputOutput::ProhibitInteractiveTest TestingAndDebugging::ProhibitNoStrict TestingAndDebugging::ProhibitNoWarnings ValuesAndExpressions::ProhibitLeadingZeros Subroutines::ProhibitExplicitReturnUndef
+criticism-fatal = 1
+
+[Variables::ProhibitConditionalDeclarations]
+severity = 5
+
+[TestingAndDebugging::RequireUseStrict]
+equivalent_modules = Test2::V0
+
+[TestingAndDebugging::RequireUseWarnings]
+equivalent_modules = Test2::V0

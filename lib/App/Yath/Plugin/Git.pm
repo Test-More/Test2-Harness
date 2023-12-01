@@ -2,6 +2,8 @@ package App::Yath::Plugin::Git;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use IPC::Cmd qw/can_run/;

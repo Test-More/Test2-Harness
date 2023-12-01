@@ -2,6 +2,8 @@ package App::Yath::Command::init;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 use parent 'App::Yath::Command';
 
 our $VERSION = '1.000156';

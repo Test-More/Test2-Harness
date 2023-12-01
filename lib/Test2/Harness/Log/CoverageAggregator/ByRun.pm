@@ -2,6 +2,8 @@ package Test2::Harness::Log::CoverageAggregator::ByRun;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use Scalar::Util qw/blessed/;

@@ -2,6 +2,8 @@ package App::Yath::Command::stop;
 use strict;
 use warnings;
 
+BEGIN { die "Fix or deprecate me" }
+
 our $VERSION = '1.000156';
 
 use Time::HiRes qw/sleep/;

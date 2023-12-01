@@ -46,7 +46,7 @@ sub job_update { }
 
 sub job_launch_data {
     my $self = shift;
-    my ($run, $job) = @_;
+    my ($run, $job, $env, $skip) = @_;
 
     my $run_id = $run->{run_id};
 
@@ -56,11 +56,15 @@ sub job_launch_data {
         $job->test_file->test_settings
     );
 
+    my $env_ref = $ts->env_vars;
+    %$env_ref = (%$env_ref, %$env);
+
     my $workdir = $self->{+WORKDIR};
 
     return (
         workdir       => $self->{+WORKDIR},
         run           => $run->data_no_jobs,
+        skip          => $skip,
         job           => $job,
         test_settings => $ts,
         root_pid      => $$,
@@ -68,13 +72,24 @@ sub job_launch_data {
     );
 }
 
+sub skip_job {
+    my $self = shift;
+    my ($run, $job, $env, $skip) = @_;
+
+    $skip //= "Unknown reason";
+
+    return 1 if eval { start_collected_process($self->job_launch_data($run, $job, $env, $skip)); 1 };
+    warn $@;
+    return 0;
+}
+
 sub launch_job {
     my $self = shift;
-    my ($stage, $run, $job) = @_;
+    my ($stage, $run, $job, $env) = @_;
 
     croak "Invalid stage '$stage'" unless $stage eq 'NONE';
 
-    return 1 if eval { start_collected_process($self->job_launch_data($run, $job)); 1 };
+    return 1 if eval { start_collected_process($self->job_launch_data($run, $job, $env)); 1 };
     warn $@;
     return 0;
 }

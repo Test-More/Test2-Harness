@@ -8,6 +8,7 @@ use Carp qw/confess/;
 
 use Test2::Harness::Util::HashBase qw{
     runner
+    resources
 };
 
 sub init { }

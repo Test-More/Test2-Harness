@@ -35,6 +35,13 @@ sub try {
     return scalar(@{$self->{+RESULTS}});
 }
 
+sub resource_id {
+    my $self = shift;
+    my $job_id = $self->{+JOB_ID};
+    my $try = $self->try // 0;
+    return "${job_id}:${try}";
+}
+
 sub launch_command {
     my $self = shift;
     my ($run, $ts) = @_;

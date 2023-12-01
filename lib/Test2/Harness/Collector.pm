@@ -37,6 +37,7 @@ use Test2::Harness::Util::HashBase qw{
     <run
     <job
     <test_settings
+    <command
 
     <workdir
 
@@ -45,6 +46,7 @@ use Test2::Harness::Util::HashBase qw{
     <run_id
     <job_id
     <job_try
+    <skip
 
     +clean
     +buffer
@@ -52,6 +54,7 @@ use Test2::Harness::Util::HashBase qw{
     <tempdir
 
     <interactive
+    <always_flush
 };
 
 sub init {
@@ -103,14 +106,106 @@ sub collect {
     my $class = shift;
     my %params = (@_ == 1) ? (%{decode_json($_[0])}) : (@_);
 
-    my $root_pid = $params{root_pid} or die "No root pid";
+    die "No root pid" unless $params{root_pid};
+    $class->setsid if $params{setsid};
 
-    # Disconnect from parent group so that a test cannot kill the harness.
-    if ($params{setsid}) {
-        POSIX::setsid() or die "Could not setsid: $!";
-        my $pid = fork // die "Could not fork: $!";
-        exit(0) if $pid;
+    my ($self, $cb, @ipc);
+    if ($params{job}) {
+        ($self, $cb, @ipc) = $class->collect_job(%params);
     }
+    elsif ($params{command}) {
+        ($self, $cb, @ipc) = $class->collect_command(%params);
+    }
+    else {
+        die "Was not given either a 'job' or 'command' to collect";
+    }
+
+    $self->{+SKIP} = $params{skip} if $params{skip};
+
+    open(my $stderr, '>&', \*STDERR) or die "Could not clone STDERR";
+    local $SIG{__WARN__} = sub { print $stderr @_ };
+
+    my $exit;
+    my $ok = eval { $exit = $self->launch_and_process($cb); 1 } // 0;
+
+    my $err = $@;
+
+    if (!$ok) {
+        $self->_die($err, no_exit => 1);
+        print $stderr $err;
+        print STDERR "Test2 Harness Collector Error: $err";
+        return 255;
+    }
+
+    return 0 unless $params{forward_exit};
+
+    if ($exit->{sig}) {
+        delete $SIG{$_} for grep { $SIG{$_} } keys %SIG;
+        kill($exit->{sig}, $$);
+        sleep 1;
+        exit(255); # In case signal cannot be forwarded
+    }
+
+    exit($exit->{err} // 0);
+}
+
+sub setsid {
+    POSIX::setsid() or die "Could not setsid: $!";
+    my $pid = fork // die "Could not fork: $!";
+    exit(0) if $pid;
+}
+
+sub collect_command {
+    my $class = shift;
+    my %params = @_;
+
+    my $root_pid = $params{root_pid} or die "No root pid";
+    my $io_pipes = $params{io_pipes} or die "IO pipes are required";
+
+    my ($stdout, $stderr);
+    $stdout = Atomic::Pipe->from_fh('>&=', \*STDOUT);
+    $stdout->set_mixed_data_mode();
+
+    if ($io_pipes > 1) {
+        $stderr = Atomic::Pipe->from_fh('>&=', \*STDERR);
+        $stderr->set_mixed_data_mode();
+    }
+
+    my $handler = sub {
+        for my $e (@_) {
+            $stdout->write_message(encode_json($e));
+            next unless $stderr;
+            my $event_id = $e->{event_id} or next;
+            $stderr->write_message(qq/{"event_id":"$event_id"}/);
+        }
+    };
+
+    my $parser = Test2::Harness::Collector::IOParser->new(
+        job_id  => 0,
+        job_try => 0,
+        run_id  => 0,
+        type    => $params{type} // 'unknown',
+        name    => $params{name} // 'unknown',
+        tag     => $params{tag}  // $params{name} // $params{type} // 'unknown',
+    );
+
+    return $class->new(
+        parser   => $parser,
+        job_id   => 0,
+        job_try  => 0,
+        run_id   => 0,
+        root_pid => $root_pid,
+        output   => $handler,
+        command  => $params{command},
+        always_flush => 1,
+    );
+}
+
+sub collect_job {
+    my $class = shift;
+    my %params = @_;
+
+    my $root_pid = $params{root_pid} or die "No root pid";
 
     my $ts = $params{test_settings} or die "No test_settings provided";
     unless (blessed($ts)) {
@@ -206,7 +301,7 @@ sub collect {
     my $auditor = Test2::Harness::Collector::Auditor->new(%create_params);
     my $parser  = Test2::Harness::Collector::IOParser::Stream->new(%create_params, type => 'test');
 
-    my $collector = $class->new(
+    my $self = $class->new(
         %create_params,
         %params,
         parser   => $parser,
@@ -215,12 +310,9 @@ sub collect {
         root_pid => $root_pid,
     );
 
-    open(our $stderr, '>&', \*STDERR) or die "Could not clone STDERR";
-
-    $SIG{__WARN__} = sub { print $stderr @_ };
-
-    my $ok = eval {
-        $collector->launch_and_process(sub {
+    return (
+        $self,
+        sub {
             my $pid = shift;
 
             $child_pid = $pid;
@@ -232,41 +324,43 @@ sub collect {
                     pid    => $pid,
                 },
             );
-        });
-
-        1;
-    };
-
-    my $err = $@;
-
-    if (!$ok) {
-        $collector->_die($err, no_exit => 1);
-        print $stderr $err;
-        print STDERR "Test2 Harness Collector Error: $err";
-        return 255;
-    }
-
-    return 0;
+        },
+        $inst_ipc => $inst_con,
+        $agg_ipc =>  $agg_con,
+    );
 }
 
 sub event_timeout     { my $ts = shift->test_settings or return; $ts->event_timeout }
 sub post_exit_timeout { my $ts = shift->test_settings or return; $ts->post_exit_timeout }
 
+sub launch_command {
+    my $self = shift;
+
+    return [$^X, '-e', "print \"1..0 # SKIP $self->{+SKIP}\\n\""]
+        if $self->{+SKIP};
+
+    if(my $job = $self->{+JOB}) {
+        my $run = $self->{+RUN};
+        my $ts  = $self->{+TEST_SETTINGS};
+
+        return $job->launch_command($run, $ts);
+    }
+
+    return $self->{+COMMAND} if $self->{+COMMAND};
+
+    die "No command!";
+}
+
 sub launch_and_process {
     my $self = shift;
     my ($parent_cb) = @_;
 
-    my $run = $self->{+RUN};
-    my $ts  = $self->{+TEST_SETTINGS};
-    my $job = $self->{+JOB};
-
-    $self->setup_child();
-    my $pid = start_process(@{$job->launch_command($run, $ts)});
+    my $pid = start_process($self->launch_command, sub { $self->setup_child() });
 
     $0 = "yath-collector $pid";
 
     $parent_cb->($pid) if $parent_cb;
-    $self->process($pid);
+    return $self->process($pid);
 }
 
 sub _pre_event {
@@ -361,7 +455,7 @@ sub setup_child_output {
 sub setup_child_input {
     my $self = shift;
 
-    my $ts = $self->{+TEST_SETTINGS};
+    my $ts = $self->{+TEST_SETTINGS} or return;
 
     if (my $in_file = $ts->input_file) {
         my $in_fh = open_file($in_file, '<') if $in_file;
@@ -382,7 +476,9 @@ sub setup_child_input {
 sub setup_child_env_vars {
     my $self = shift;
 
-    my $ts = $self->{+TEST_SETTINGS};
+    my $ts = $self->{+TEST_SETTINGS} or return;
+
+    delete $ENV{T2_HARNESS_PIPE_COUNT};
 
     $ENV{TMPDIR} = $self->tempdir;
     $ENV{T2_TRACE_STAMPS} = 1;
@@ -483,7 +579,7 @@ sub process {
 
     $SIG{PIPE} = 'IGNORE';
 
-    my $exit = 0;
+    my $exit;
     my $ok = eval { $exit = $self->_process($child_pid); 1 };
     my $err = $@;
 
@@ -632,7 +728,7 @@ sub _process {
                 }
             }
 
-            $self->_flush() if $self->{+INTERACTIVE};
+            $self->_flush() if $self->{+INTERACTIVE} || $self->{+ALWAYS_FLUSH};
         }
 
         next if $did_work;
@@ -678,6 +774,7 @@ sub _process {
 
     $self->_flush();
 
+
     $SIG{CHLD} = 'IGNORE';
     unless (defined($exit // $exited) || $reap->(WNOHANG)) {
         $self->_die("Sending 'TERM' signal to process...\n", no_exit => 1);
@@ -709,6 +806,8 @@ sub _process {
         push @$times => shift(@$end_times) - shift(@$start_times);
     }
 
+    my $ret = parse_exit($exit);
+
     $self->_pre_event(
         stream => 'process',
         stamp  => $exited,
@@ -719,7 +818,7 @@ sub _process {
                 harness_job_exit => {
                     job_id => $self->job_id,
                     exit   => $exit,
-                    codes  => parse_exit($exit),
+                    codes  => $ret,
                     stamp  => $exited,
                     retry  => $self->should_retry($exit),
                     times  => $times,
@@ -728,7 +827,7 @@ sub _process {
         },
     );
 
-    return $exit ? 1 : 0;
+    return $ret;
 }
 
 sub should_retry {

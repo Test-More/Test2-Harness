@@ -39,6 +39,8 @@ sub launch_and_process {
     my $self = shift;
     my ($parent_cb, $child_cb) = @_;
 
+    return $self->SUPER::launch_and_process(@_) if $self->{+SKIP};
+
     my $run   = $self->{+RUN};
     my $job   = $self->{+JOB};
     my $ts    = $self->{+TEST_SETTINGS};

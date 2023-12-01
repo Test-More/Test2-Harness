@@ -22,6 +22,13 @@ use File::Path qw/remove_tree/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw{
     +log_file
+
+    +ipc
+    +runner
+    +scheduler
+    +resources
+    +instance
+    +collector
 };
 
 use Getopt::Yath;
@@ -79,7 +86,7 @@ sub run {
         }
     }
 
-    my $collector = $self->init_collector();
+    my $collector = $self->collector();
 
     my $pid = fork // die "Could not fork: $!";
     if ($pid) {
@@ -95,7 +102,7 @@ sub run {
     else {
         $0 = "yath-daemon";
         $collector->setup_child_output();
-        return $self->start_instance();
+        $self->instance->run;
     }
 
     return 0;
@@ -106,8 +113,11 @@ sub log_file {
     return $self->{+LOG_FILE} //= File::Spec->catfile($self->settings->harness->workdir, 'log.jsonl');
 }
 
-sub init_collector {
+sub collector {
     my $self = shift;
+
+    return $self->{+COLLECTOR} if $self->{+COLLECTOR};
+
     my $settings = $self->settings;
 
     my $out_file = $self->log_file;
@@ -122,13 +132,14 @@ sub init_collector {
     open(my $log, '>', $out_file) or die "Could not open '$out_file' for writing: $!";
     $log->autoflush(1);
 
-    my $parser    = Test2::Harness::Collector::IOParser->new(job_id => 0, job_try => 0, run_id => 0, type => 'runner');
-    my $collector = Test2::Harness::Collector->new(
-        parser  => $parser,
-        job_id  => 0,
-        job_try => 0,
-        run_id  => 0,
-        output => sub {
+    my $parser = Test2::Harness::Collector::IOParser->new(job_id => 0, job_try => 0, run_id => 0, type => 'runner');
+    return $self->{+COLLECTOR} = Test2::Harness::Collector->new(
+        parser       => $parser,
+        job_id       => 0,
+        job_try      => 0,
+        run_id       => 0,
+        always_flush => 1,
+        output       => sub {
             for my $e (@_) {
                 print $log encode_json($e), "\n";
                 return unless $renderers;
@@ -138,51 +149,58 @@ sub init_collector {
     );
 }
 
-sub start_instance {
+sub instance {
     my $self = shift;
+
+    return $self->{+INSTANCE} if $self->{+INSTANCE};
 
     my $settings = $self->settings;
 
-    my $ipc = $self->build_ipc();
-    my $runner = $self->build_runner();
-    my $scheduler = $self->build_scheduler(runner => $runner);
+    my $ipc       = $self->ipc();
+    my $runner    = $self->runner();
+    my $scheduler = $self->scheduler();
+    my $resources = $self->resources();
 
-    my $instance = Test2::Harness::Instance->new(
+    return $self->{+INSTANCE} = Test2::Harness::Instance->new(
         ipc       => $ipc,
         scheduler => $scheduler,
         runner    => $runner,
+        resources => $resources,
         log_file  => $self->log_file,
     );
-
-    $instance->run;
-
-    return 0;
 }
 
-sub build_ipc {
+sub ipc {
     my $self = shift;
+
+    return $self->{+IPC} if $self->{+IPC};
 
     my $ipc_s = App::Yath::Options::IPC->vivify_ipc($self->settings);
     my $ipc = Test2::Harness::IPC::Protocol->new(protocol => $ipc_s->{protocol});
     $ipc->start($ipc_s->{address}, $ipc_s->{port});
 
-    return $ipc;
+    return $self->{+IPC} = $ipc;
 }
 
-sub build_scheduler {
+sub scheduler {
     my $self = shift;
-    my %params = @_;
+
+    return $self->{+SCHEDULER} if $self->{+SCHEDULER};
+
+    my $runner    = $self->runner;
+    my $resources = $self->resources;
 
     my $scheduler_s = $self->settings->scheduler;
     my $class = $scheduler_s->class;
     require(mod2file($class));
 
-    return $class->new($scheduler_s->all, %params);
+    return $self->{+SCHEDULER} = $class->new($scheduler_s->all, runner => $runner, resources => $resources);
 }
 
-sub build_runner {
+sub runner {
     my $self = shift;
-    my %params = @_;
+
+    return $self->{+RUNNER} if $self->{+RUNNER};
 
     my $settings = $self->settings;
     my $runner_s = $settings->runner;
@@ -191,7 +209,29 @@ sub build_runner {
 
     my $ts = Test2::Harness::TestSettings->new($settings->tests->all);
 
-    return $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir, %params);
+    return $self->{+RUNNER} = $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir);
+}
+
+sub resources {
+    my $self = shift;
+
+    return $self->{+RESOURCES} if $self->{+RESOURCES};
+
+    my $settings = $self->settings;
+    my $res_s    = $settings->resource;
+    my $res_classes = $res_s->classes;
+
+    my @res_class_list = keys %$res_classes;
+    require(mod2file($_)) for @res_class_list;
+
+    @res_class_list = sort { $a->sort_weight <=> $b->sort_weight } @res_class_list;
+
+    my @resources;
+    for my $mod (@res_class_list) {
+        push @resources => $mod->new(@{$res_classes->{$mod}});
+    }
+
+    return $self->{+RESOURCES} = \@resources;
 }
 
 1;

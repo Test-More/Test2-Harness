@@ -10,7 +10,6 @@ use Scalar::Util qw/blessed/;
 use Test2::Util qw/IS_WIN32/;
 
 use Test2::Harness::Util qw/parse_exit mod2file/;
-use Test2::Harness::IPC::Util qw/start_process/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
 use Test2::Harness::Preload();
@@ -175,9 +174,9 @@ sub start_base_stage {
 
 sub launch_job {
     my $self = shift;
-    my ($stage, $run, $job) = @_;
+    my ($stage, $run, $job, $env) = @_;
 
-    my %job_launch_data = $self->job_launch_data($run, $job);
+    my %job_launch_data = $self->job_launch_data($run, $job, $env);
     my $ts = $job_launch_data{test_settings};
 
     my $can_fork = 1;

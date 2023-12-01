@@ -294,12 +294,26 @@ sub advance {
 
     return unless $self->runner->ready;
 
-    my ($run, $job, $stage, $cat, $dur, $confl, $job_set) = $self->next_job() or return;
+    my ($run, $job, $stage, $cat, $dur, $confl, $job_set, $skip, $resources) = $self->next_job() or return;
 
-    my $ok = $self->runner->launch_job($stage, $run, $job);
+    my $res_id = $job->resource_id;
+
+    my $ok;
+    if ($skip) {
+        @$resources = grep { $_->is_job_limiter } @$resources;
+        my $env = {};
+        $_->assign($res_id, $job, $env) for @$resources;
+        $ok = $self->runner->skip_job($run, $job, $env, $skip);
+    }
+    else {
+        my $env = {};
+        $_->assign($res_id, $job, $env) for @$resources;
+        $ok = $self->runner->launch_job($stage, $run, $job, $env);
+    }
 
     # If the job could not be started
     unless ($ok) {
+        $_->release($res_id, $job) for @$resources;
         $job_set->{$job->job_id} = $job;
         return 1;
     }
@@ -311,6 +325,8 @@ sub advance {
         start   => time,
         cleanup => sub {
             my $scheduler = shift;
+
+            $_->release($res_id, $job) for @{$resources};
 
             $scheduler->{+RUNNING}->{categories}->{$cat}--;
             $scheduler->{+RUNNING}->{durations}->{$dur}--;
@@ -327,6 +343,7 @@ sub advance {
             }
             $job = undef;
             $run = undef;
+            $resources = undef;
         },
     };
 
@@ -364,7 +381,8 @@ sub duration_order { [qw/long medium short/] }
 sub next_job {
     my $self = shift;
 
-    my $running = $self->{+RUNNING};
+    my $resources = $self->{+RESOURCES};
+    my $running   = $self->{+RUNNING};
 
     my $stages = $self->runner->stage_sets;
     my $cat_order = $self->category_order;
@@ -391,15 +409,37 @@ sub next_job {
                         for my $confl (qw/conflict none/) {
                             my $search = $search->{$confl} or next;
 
-                            for my $job_id (keys %$search) {
+                            JOB: for my $job_id (keys %$search) {
                                 my $job = $search->{$job_id};
 
                                 # Skip if conflicting tests are running
                                 my $confl = $job->test_file->conflicts_list;
                                 next if first { $running->{conflicts}->{$_} } @$confl;
 
+                                my $res_id = $job->resource_id;
+
+                                my $skip;
+                                my @use_resources;
+                                for my $res (@$resources) {
+                                    next unless $res->applicable($res_id, $job);
+                                    my $av = $res->available($res_id, $job);
+
+                                    warn "FIXME: skip test";
+                                    if ($av < 0) {
+                                        my $comma = $skip ? 1 : 0;
+                                        $skip //= "The following resources are permanently unavailable: ";
+                                        $skip .= ', ' if $comma;
+                                        $skip .= $res->resource_name;
+                                        next;
+                                    }
+
+                                    next JOB unless $av || $skip;
+
+                                    push @use_resources => $res;
+                                }
+
                                 delete $search->{$job_id};
-                                return ($run, $job, $run_by_stage, $cat, $dur, $confl, $search);
+                                return ($run, $job, $run_by_stage, $cat, $dur, $confl, $search, $skip, \@use_resources);
                             }
                         }
                     }

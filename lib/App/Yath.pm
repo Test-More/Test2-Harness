@@ -214,12 +214,13 @@ sub process_args {
     $self->{+ENV_VARS} = $env;
     $self->{+OPTION_STATE} = $state;
 
-    for my $module (keys %$modules) {
-        $settings->yath->{plugins}->{$module}     //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Plugin');
-        $settings->renderer->{classes}->{$module} //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Renderer');
-        $settings->resource->{classes}->{$module} //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Resource');
-        warn "FIXME renderers and resources (if applicable)";
-    }
+    warn "FIXME renderers and resources (if applicable)";
+    # This is probably not needed.
+    #for my $module (keys %$modules) {
+    #    $settings->yath->{plugins}->{$module}     //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Plugin');
+    #    $settings->renderer->{classes}->{$module} //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Renderer');
+    #    $settings->resource->{classes}->{$module} //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Resource');
+    #}
 }
 
 sub run {

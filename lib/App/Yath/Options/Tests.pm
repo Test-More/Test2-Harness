@@ -157,6 +157,7 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
         description => 'Use the specified file as standard input to ALL tests',
 
         trigger => sub {
+            my $opt = shift;
             my %params = @_;
             return unless $params{action} eq 'set';
 

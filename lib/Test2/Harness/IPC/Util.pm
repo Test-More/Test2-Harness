@@ -88,13 +88,18 @@ sub swap_io {
 sub start_collected_process {
     my %params = @_;
 
+    my $post_fork = delete $params{post_fork};
+
     my %seen;
     my $pid = start_process(
-        $^X,                                                             # Call current perl
-        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),          # Use the dev libs specified
-        '-mTest2::Harness::Collector',                                   # Load Collector
-        '-e' => 'exit(Test2::Harness::Collector->collect($ARGV[0]))',    # Run it.
-        encode_json(\%params),                                           # json data for what to do
+        [
+            $^X,                                                             # Call current perl
+            (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),          # Use the dev libs specified
+            '-mTest2::Harness::Collector',                                   # Load Collector
+            '-e' => 'exit(Test2::Harness::Collector->collect($ARGV[0]))',    # Run it.
+            encode_json(\%params),                                           # json data for what to do
+        ],
+        $post_fork,
     );
 
     return $pid unless $params{setsid};
@@ -111,13 +116,15 @@ sub start_collected_process {
 }
 
 sub start_process {
-    my @cmd = @_;
+    my ($cmd, $post_fork) = @_;
 
     my $pid = fork // die "Could not fork: $!";
     return $pid if $pid;
 
+    $post_fork->() if $post_fork;
+
     no warnings "exec";
-    my $ok = eval { exec(@cmd); 1 };
+    my $ok = eval { exec(@$cmd); 1 };
     my $err = $@;
     print STDERR "Failed to exec ($!) $@\n";
     POSIX::_exit(255);

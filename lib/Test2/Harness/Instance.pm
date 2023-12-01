@@ -19,10 +19,10 @@ use Test2::Harness::Instance::Request;
 use Test2::Harness::Instance::Response;
 
 use Test2::Harness::Util::HashBase qw{
-    <scheduler
-    <runner
-
     <ipc
+    <runner
+    <scheduler
+    <resources
 
     <log_file
 
@@ -52,7 +52,13 @@ sub run {
     my $self = shift;
     my ($cb) = @_;
 
-    $self->scheduler->start($self->{+IPC});
+    my $scheduler = $self->scheduler;
+    $scheduler->start($self->{+IPC});
+
+    for my $res (@{$self->{+RESOURCES} //= []}) {
+        next unless $res->spawns_process;
+        $res->spawn_process(instance => $self, scheduler => $scheduler);
+    }
 
     ipc_loop(
         ipcs      => $self->{+IPC},

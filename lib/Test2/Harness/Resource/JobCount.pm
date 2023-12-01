@@ -19,9 +19,6 @@ sub is_job_limiter { 1 }
 sub resource_name   { 'jobcount' }
 sub resource_io_tag { 'JOBCOUNT' }
 
-sub job_limiter_max    { $_[0]->{+SLOTS} }
-sub job_limiter_at_max { $_[0]->{+SLOTS} <= $_[0]->{+USED} ? 1 : 0 }
-
 sub init {
     my $self = shift;
     $self->SUPER::init();

@@ -228,7 +228,7 @@ sub resources {
 
     my @resources;
     for my $mod (@res_class_list) {
-        push @resources => $mod->new(@{$res_classes->{$mod}});
+        push @resources => $mod->new($res_s->all, @{$res_classes->{$mod}}, $mod->isa('App::Yath::Resource') ? (settings => $settings) : ());
     }
 
     return $self->{+RESOURCES} = \@resources;

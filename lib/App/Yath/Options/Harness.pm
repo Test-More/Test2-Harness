@@ -19,6 +19,7 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
         default        => 0,
     );
 
+    warn "Prefix";
     option procname_prefix => (
         type        => 'Scalar',
         default     => '',

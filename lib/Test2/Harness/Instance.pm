@@ -56,8 +56,8 @@ sub run {
     $scheduler->start($self->{+IPC});
 
     for my $res (@{$self->{+RESOURCES} //= []}) {
-        next unless $res->spawns_process;
-        $res->spawn_process(instance => $self, scheduler => $scheduler);
+        $res->setup(instance => $self, scheduler => $scheduler, runner => $self->runner);
+        $res->spawn_process(instance => $self, scheduler => $scheduler) if $res->spawns_process;
     }
 
     ipc_loop(
@@ -66,7 +66,7 @@ sub run {
 
         signals => sub { $self->terminate("SIG" . $_[0]) },
 
-        iteration_start => $cb,
+        iteration_start => sub { $_->tick() for @{$self->{+RESOURCES} // []}; $cb->(@_) if $cb },
         iteration_end   => sub { $self->{+SCHEDULER}->advance() ? 1 : 0 },
         end_check       => sub { $self->{+TERMINATED}           ? 1 : 0 },
 
@@ -76,6 +76,7 @@ sub run {
 
     $self->{+RUNNER}->terminate();
     $self->{+SCHEDULER}->terminate();
+    $_->cleanup() for @{$self->{+RESOURCES} // []};
 
     return;
 }

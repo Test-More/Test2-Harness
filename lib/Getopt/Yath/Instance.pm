@@ -360,10 +360,12 @@ sub process_args {
         $opt->add_value($ref, $opt->get_default_value($settings));
     }
 
-    for my $weight (sort { $a <=> $b } keys %{$self->{+POSTS}}) {
-        for my $set (@{$self->{+POSTS}->{$weight}}) {
-            next if $set->{applicable} && !$set->{applicable}->($self);
-            $set->{callback}->($self, $state);
+    unless ($params{skip_posts}) {
+        for my $weight (sort { $a <=> $b } keys %{$self->{+POSTS}}) {
+            for my $set (@{$self->{+POSTS}->{$weight}}) {
+                next if $set->{applicable} && !$set->{applicable}->($self);
+                $set->{callback}->($self, $state);
+            }
         }
     }
 

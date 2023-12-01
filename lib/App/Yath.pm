@@ -146,6 +146,7 @@ sub process_args {
         stops    => ['--', '::'],
         groups   => {':{' => '}:'},
 
+        skip_posts => 1,
         stop_at_non_opts => 1,
 
         invalid_opt_callback => sub {

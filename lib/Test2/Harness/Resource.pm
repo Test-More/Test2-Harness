@@ -25,26 +25,22 @@ sub init {
 }
 
 sub spawns_process { 0 }
-
 sub is_job_limiter { 0 }
 
-sub setup     { }
-sub tick      { }
-sub refresh   { }
-sub discharge { }
-sub cleanup   { }
+sub setup   { }
+sub tick    { }
+sub cleanup { }
 
 sub subprocess_args { () }
 
 sub resource_name { 'Resource' }
 sub resource_io_tag { 'RESOURCE' }
 
-sub job_limiter_max    { croak "'$_[0]' does not implement 'job_limiter_max'" }
-sub job_limiter_at_max { croak "'$_[0]' does not implement 'job_limiter_at_max'" }
-sub available          { croak "'$_[0]' does not implement 'available'" }
-sub assign             { croak "'$_[0]' does not implement 'assign'" }
-sub release            { croak "'$_[0]' does not implement 'release'" }
-sub subprocess_run     { croak "'$_[0]' does not implement 'subprocess_run'" }
+sub applicable     { croak "'$_[0]' does not implement 'applicable'" }
+sub available      { croak "'$_[0]' does not implement 'available'" }
+sub assign         { croak "'$_[0]' does not implement 'assign'" }
+sub release        { croak "'$_[0]' does not implement 'release'" }
+sub subprocess_run { croak "'$_[0]' does not implement 'subprocess_run'" }
 
 sub sort_weight {
     my $class = shift;

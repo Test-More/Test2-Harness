@@ -25,13 +25,6 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
         mod_adds_options => 1,
     );
 
-    option shared_jobs_config => (
-        type          => 'Scalar',
-        default       => '.sharedjobslots.yml',
-        long_examples => [' .sharedjobslots.yml', ' relative/path/.sharedjobslots.yml', ' /absolute/path/.sharedjobslots.yml'],
-        description   => 'Where to look for a shared slot config file. If a filename with no path is provided yath will search the current and all parent directories for the name.',
-    );
-
     option slots => (
         type           => 'Scalar',
         short          => 'j',
@@ -74,7 +67,7 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
         },
     );
 
-    option_post_process \&jobs_post_process;
+    option_post_process 50 => \&jobs_post_process;
 };
 
 sub jobs_post_process {
@@ -88,11 +81,6 @@ sub jobs_post_process {
     my $slots     = $resource->slots;
     my $job_slots = $resource->job_slots;
 
-    my @args = (
-        slots     => $slots,
-        job_slots => $job_slots,
-    );
-
     die "The slots per job (set to $job_slots) must not be larger than the total number of slots (set to $slots).\n" if $job_slots > $slots;
 
     my %found;
@@ -102,72 +90,10 @@ sub jobs_post_process {
         $found{$r}++;
     }
 
-    warn "Fix shared slots";
-
-    if (keys %found) {
-        unshift @{$resource->classes->{$_} //= []} => @args;
-    }
-    else {
+    unless (keys %found) {
         require Test2::Harness::Resource::JobCount;
-        $resource->classes->{'Test2::Harness::Resource::JobCount'} = [@args];
+        $resource->classes->{'Test2::Harness::Resource::JobCount'} //= [];
     }
-}
-
-1;
-
-__END__
-sub jobs_post_process {
-    my ($settings) = @_;
-
-    my $resource = $settings->resource;
-
-    require Test2::Harness::Runner::Resource::SharedJobSlots::Config;
-    my $sconf = Test2::Harness::Runner::Resource::SharedJobSlots::Config->find(settings => $settings);
-
-    my %found;
-    for my $r (@{$runner->resources}) {
-        require(mod2file($r));
-        next unless $r->job_limiter;
-        $found{$r}++;
-    }
-
-    if ($sconf && !$found{'Test2::Harness::Runner::Resource::SharedJobSlots'}) {
-        if (delete $found{'Test2::Harness::Runner::Resource::JobCount'}) {
-            @{$settings->runner->resources} = grep { $_ ne 'Test2::Harness::Runner::Resource::JobCount' } @{$runner->resources};
-        }
-
-        if (!keys %found) {
-            require Test2::Harness::Runner::Resource::SharedJobSlots;
-            unshift @{$runner->resources} => 'Test2::Harness::Runner::Resource::SharedJobSlots';
-            $found{'Test2::Harness::Runner::Resource::SharedJobSlots'}++;
-        }
-    }
-    elsif (!keys %found) {
-        require Test2::Harness::Runner::Resource::JobCount;
-        unshift @{$runner->resources} => 'Test2::Harness::Runner::Resource::JobCount';
-    }
-
-    if ($found{'Test2::Harness::Runner::Resource::SharedJobSlots'} && $sconf) {
-        $runner->field(job_count     => $sconf->default_slots_per_run || $sconf->max_slots_per_run) if $runner && !$runner->job_count;
-        $runner->field(slots_per_job => $sconf->default_slots_per_job || $sconf->max_slots_per_job) if $runner && !$runner->slots_per_job;
-
-        my $run_slots = $runner->job_count;
-        my $job_slots = $runner->slots_per_job;
-
-        die "Requested job count ($run_slots) exceeds the system shared limit (" . $sconf->max_slots_per_run . ").\n"
-            if $run_slots > $sconf->max_slots_per_run;
-
-        die "Requested job concurrency ($job_slots) exceeds the system shared limit (" . $sconf->max_slots_per_job . ").\n"
-            if $job_slots > $sconf->max_slots_per_job;
-    }
-
-    $runner->field(job_count     => 1) if $runner && !$runner->job_count;
-    $runner->field(slots_per_job => 1) if $runner && !$runner->slots_per_job;
-
-    my $run_slots = $runner->job_count;
-    my $job_slots = $runner->slots_per_job;
-
-    die "The slots_per_job (set to $job_slots) must not be larger than the job_count (set to $run_slots).\n" if $job_slots > $run_slots;
 }
 
 1;

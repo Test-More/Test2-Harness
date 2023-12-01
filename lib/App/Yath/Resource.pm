@@ -1,13 +1,19 @@
 package App::Yath::Resource;
-use stricgt;
+use strict;
 use warnings;
 
-use parent 'Test2::Harnes::Resource';
-use Test2::Harness::Util::HashBase;
+use Carp qw/croak/;
+
+use parent 'Test2::Harness::Resource';
+use Test2::Harness::Util::HashBase qw{
+    <settings
+};
 
 sub init {
     my $self = shift;
     $self->SUPER::init();
+
+    croak "'settings' is a required attribute" unless $self->{+SETTINGS};
 }
 
 1;

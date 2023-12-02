@@ -2,6 +2,8 @@ package Test2::Harness::IPC::Protocol;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use Carp qw/confess croak/;
 use Scalar::Util qw/blessed/;
 use Test2::Harness::Util qw/mod2file/;

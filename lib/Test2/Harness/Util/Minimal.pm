@@ -2,6 +2,8 @@ package Test2::Harness::Util::Minimal;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 ###############################################################################
 #                                                                             #
 #                 !!!!!!!!   READ THIS FIRST    !!!!!!!!                      #

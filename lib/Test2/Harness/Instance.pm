@@ -2,6 +2,8 @@ package Test2::Harness::Instance;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use IO::Select;
 
 use Carp qw/croak/;

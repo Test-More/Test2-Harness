@@ -2,6 +2,8 @@ package Test2::Harness::Resource;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use Carp qw/croak/;
 
 use Term::Table;

@@ -2,6 +2,8 @@ package App::Yath::Resource;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use Carp qw/croak/;
 
 use parent 'Test2::Harness::Resource';

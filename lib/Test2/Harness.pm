@@ -2,6 +2,8 @@ package Test2::Harness;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use Carp qw/croak/;
 
 use Test2::Harness::Util::HashBase;

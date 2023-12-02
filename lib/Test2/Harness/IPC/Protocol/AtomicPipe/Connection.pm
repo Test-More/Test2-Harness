@@ -2,6 +2,8 @@ package Test2::Harness::IPC::Protocol::AtomicPipe::Connection;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use IO::Select;
 use Atomic::Pipe;
 

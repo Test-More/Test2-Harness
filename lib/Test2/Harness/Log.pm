@@ -2,9 +2,9 @@ package Test2::Harness::Log;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+warn "FIXME: Make sure this is still accurate";
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 1;
 

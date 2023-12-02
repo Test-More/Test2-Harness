@@ -2,7 +2,7 @@ package Test2::Harness::Runner::DepTracer;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+BEGIN { die "FIXME" }
 
 use Carp qw/croak/;
 

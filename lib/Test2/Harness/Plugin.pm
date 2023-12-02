@@ -2,7 +2,7 @@ package Test2::Harness::Plugin;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+BEGIN { die "FIXME" }
 
 our $VERSION = '1.000156';
 

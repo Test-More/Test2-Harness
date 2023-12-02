@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Constants;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+BEGIN { die "FIXME: Is this still useful?" }
 
 our $VERSION = '1.000156';
 

@@ -2,7 +2,7 @@ package Test2::Harness::Log::CoverageAggregator::ByTest;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+BEGIN { die "FIXME" }
 
 our $VERSION = '1.000156';
 

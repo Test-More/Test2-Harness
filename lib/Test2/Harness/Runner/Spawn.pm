@@ -2,7 +2,8 @@ package Test2::Harness::Runner::Spawn;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+# NOTE This should move to Test2::Harness::Run::Spawn
+BEGIN { die "FIXME" }
 
 our $VERSION = '1.000156';
 

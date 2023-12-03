@@ -8,7 +8,7 @@ use Carp qw/croak confess/;
 use Errno qw/ESRCH EINTR/;
 use Config qw/%Config/;
 use IPC::Open3 qw/open3/;
-use Time::HiRes qw/time/;
+use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
 
 use POSIX();
@@ -178,7 +178,14 @@ sub ipc_loop {
     my $caller = [caller];
     my $trace = "$caller->[1] line $caller->[2]";
 
-    my $ipcs = $params{ipcs} // croak "'ipcs' required";
+    my $ipcs    = $params{ipcs};
+    my $handles = $params{handles};
+
+    croak "'ipcs' or 'handles' or 'apipes' required" unless $ipcs || $handles;
+
+    $ipcs    //= [];
+    $handles //= [];
+
     my $wait_time = $params{wait_time} // 0.2;
 
     my $iteration_start = $params{iteration_start};
@@ -211,14 +218,7 @@ sub ipc_loop {
             $signal->('TERM');
             $sig_cnt++;
 
-            if ($sig_cnt >= 5) {
-                die "$0: Got $sig_cnt signals, shutting down more forcefully...\n";
-            }
-
-            unless ($params{quiet_signals}) {
-                print "\n";
-                warn "$0: Cought SIGTERM, shutting down...\n";
-            }
+            die "$0: Got SIGTERM, shutting down forcefully...\n";
         };
     }
 
@@ -228,31 +228,53 @@ sub ipc_loop {
     my $ipc_map;
     my $ios;
     my $reset_ios = sub {
+        $ios = IO::Select->new();
+
         $ipc_map = {};
-        $ios     = IO::Select->new();
+
+        for my $set (@$handles) {
+            my ($h) = @$set;
+            $ios->add($h);
+            $ipc_map->{$h} = $set;
+            $ipc_map->{$set} = $set;
+        }
+
         for my $ipc (@$ipcs) {
             for my $h ($ipc->handles_for_select) {
                 $ios->add($h);
-                $ipc_map->{$h} = $ipc;
+                $ipc_map->{$h}   = $ipc;
                 $ipc_map->{$ipc} = $ipc;
             }
         }
     };
     $reset_ios->();
 
-    # This is used to interrupt a select below.
-    local $SIG{CHLD} = sub { 1 };
+    # This is used to interrupt a select below. The var and ++ are to prevent the sub from being optimized away
+    my $sigchild = 0;
+    local $SIG{CHLD} = $params{sigchild} // sub { $sigchild++ };
 
     my $last_ipc_count = 1;
     my $last_health_check = 0;
     my $did_work = 1;
 
-    IPC_LOOP: while (1) {
-        print "LOOP ($caller->[1] line $caller->[2]): " . sprintf('%-02.4f', time) . "\n" if $debug;
+    my $wait_time_is_code = ref($wait_time) eq 'CODE' ? 1 : 0;
+    my $get_wait_time = sub {
+        my $ready = shift;
+        return 0 if $did_work && !@$ready;
+        return $wait_time unless $wait_time_is_code;
+        return $wait_time->();
+    };
 
+    IPC_LOOP: while (1) {
+        sleep(0.2) if $debug;
+        print "$$ $0 - LOOP ($caller->[1] line $caller->[2]): " . sprintf('%-02.4f', time) . "\n" if $debug;
+
+        print "iteration_start A: $did_work\n" if $debug;
         $did_work++ if $iteration_start && $iteration_start->();
+        print "iteration_start B: $did_work\n" if $debug;
 
         if (time - $last_health_check > 4) {
+            print "Health Check\n" if $debug;
             $last_ipc_count = 0;
 
             for my $ipc (@$ipcs) {
@@ -261,18 +283,32 @@ sub ipc_loop {
                 $last_ipc_count++ if $ipc->active;
             }
 
+            for my $set (@$handles) {
+                my ($h, $cb, %params) = @$set;
+                my $eof = $params{eof} // sub { eof($h) };
+                if ($eof->()) {
+                    print "EOF\n" if $debug;
+                }
+                else {
+                    $last_ipc_count++;
+                }
+            }
+
             $last_health_check = time;
+            print "New IPC Count: $last_ipc_count\n" if $debug;
         }
 
         # Some handles may already have messages read, which means can_read()
         # might skip these.
-        my @ready = grep { $_->have_requests || $_->have_messages } @$ipcs;
+        my @ready;
+        push @ready => grep { $_->have_requests || $_->have_messages } @$ipcs;
+        push @ready => grep { my ($h, $cb, %p) = @{$_}; $p{ready} ? $p{ready}->() : 0 } @$handles;
 
         while (1) {
             $! = 0;
 
             # Add any handles that have things to read.
-            push @ready => $ios->can_read(($did_work && !@ready) ? 0 : $wait_time);
+            push @ready => $ios->can_read($get_wait_time->(\@ready));
             last if @ready || $! == 0;
 
             # If the system call was interrupted it could mean a child process
@@ -285,12 +321,21 @@ sub ipc_loop {
             last unless keys %$ipc_map;
         }
 
+        print "Ready: " . @ready . "\n" if $debug;
+
         $did_work = 0;
 
         my %seen;
         for my $h (@ready) {
             my $ipc = $ipc_map->{$h} or next;
             next if $seen{$ipc}++;
+
+            if(ref($ipc) eq 'ARRAY') {
+                print "Read A: $did_work\n" if $debug;
+                $did_work++ if $ipc->[1]->();
+                print "Read B: $did_work\n" if $debug;
+                next;
+            }
 
             while (my $msg = $ipc->get_message) {
                 $did_work++;
@@ -310,13 +355,21 @@ sub ipc_loop {
             }
         }
 
+        print "iteration_end A: $did_work\n" if $debug;
         $did_work++ if $iteration_end && $iteration_end->();
+        print "iteration_end B: $did_work\n" if $debug;
+        print "Did Work: $did_work\n" if $debug;
 
         # No IPC means nothing to do
+        print "IPC Map: " . (keys %$ipc_map) . "\n" if $debug;
         last unless keys %$ipc_map;
+        print "IPC Count: $last_ipc_count\n" if $debug;
         last unless $last_ipc_count;
 
-        last if $end_check && $end_check->();
+        if ($end_check && $end_check->(did_work => $did_work)) {
+            print "End Check TRUE\n" if $debug;
+            last;
+        }
     }
 }
 

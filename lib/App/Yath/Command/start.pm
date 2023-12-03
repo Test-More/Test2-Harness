@@ -69,7 +69,7 @@ sub description {
     EOT
 }
 
-sub process_base_name { shift->should_daemonize ? "yath-daemon" : "yath-runner" }
+sub process_base_name { shift->should_daemonize ? "yath-daemon" : "yath-instance" }
 sub process_collector_name { shift->process_base_name . "-collector" }
 
 sub run {

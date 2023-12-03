@@ -16,7 +16,7 @@ use Test2::Harness::Collector::IOParser::Stream;
 
 use Test2::Harness::Util qw/mod2file parse_exit open_file/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
-use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect/;
+use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop/;
 
 our $VERSION = '2.000000';
 
@@ -282,7 +282,7 @@ sub collect_job {
             }
         };
     }
-    elsif ($agg_use_io) {
+    elsif ($agg_use_io && $run->stdio_pipe) {
         my $stdout = $run->stdio_pipe;
         $handler = sub {
             for my $e (@_) {
@@ -631,6 +631,7 @@ sub _process {
     my $self = shift;
     my ($pid) = @_;
 
+    # Some initial signal handlers to make sure the child is killed if we die.
     my $sig_stamp;
     for my $sigtype (qw/INT TERM/) {
         my $sig = $sigtype;
@@ -647,24 +648,10 @@ sub _process {
     }
 
     local $SIG{PIPE} = 'IGNORE';
-
     $self->{+BUFFER} = {seen => {}, stderr => [], stdout => []};
 
     my $stdout = $self->handles->{out_r};
     my $stderr = $self->handles->{err_r};
-
-    $stdout->blocking(0);
-    $stderr->blocking(0);
-
-    my $ios = IO::Select->new;
-
-    my %sets = ($stdout->rh => ['stdout', $stdout]);
-    $ios->add($stdout->rh);
-
-    unless ($self->{+MERGE_OUTPUTS}) {
-        $sets{$stderr->rh} = ['stderr', $stderr];
-        $ios->add($stderr->rh);
-    }
 
     my $last_event = time;
 
@@ -672,15 +659,15 @@ sub _process {
     my $reap = sub {
         my ($flags) = @_;
 
-        return 1 if $exited;
-        return 1 if defined $exit;
+        return -1 if $exited;
+        return -1 if defined $exit;
 
         local ($!, $?);
 
         my $check = waitpid($pid, $flags);
         my $code = $?;
 
-        return 1 if $check < 0;
+        return -1 if $check < 0;
         return 0 if $check == 0 && $flags == WNOHANG;
 
         die("waitpid returned $check, expected $pid") if $check != $pid;
@@ -692,88 +679,77 @@ sub _process {
         return 1;
     };
 
-    local $SIG{CHLD} = sub { $reap->(0) };
-
     my $auditor = $self->{+AUDITOR};
     my $ev_timeout = $self->event_timeout;
     my $pe_timeout = $self->post_exit_timeout;
 
-    while (1) {
-        my @sets = $ios->can_read($sig_stamp ? 0 : 0.2);
+    my $handles = [];
+    push @$handles => [$stdout->rh, sub { $last_event = time; $self->handle_event(stdout => $stdout) }, eof => sub { $stdout->eof }, name => 'stdout'];
+    push @$handles => [$stderr->rh, sub { $last_event = time; $self->handle_event(stderr => $stderr) }, eof => sub { $stderr->eof }, name => 'stderr']
+        unless $self->{+MERGE_OUTPUTS};
 
-        my $did_work = 0;
+    ipc_loop(
+        handles   => $handles,
+        sigchild  => sub { $reap->(0) },
+        wait_time => sub { $sig_stamp ? 0 : 0.2 },
+        signals   => sub { $sig_stamp //= time; kill($_[0], $pid) },
 
-        while (@sets) {
-            for my $io (@sets) {
-                my ($name, $fh) = @{$sets{$io}};
+        iteration_end => sub {
+            my $out = 0;
+            $self->_flush() if $self->{+INTERACTIVE} || $self->{+ALWAYS_FLUSH};
+            $out++ if $reap->(WNOHANG) > 0;
+            return $out;
+        },
 
-                my ($type, $val) = $fh->get_line_burst_or_data;
-                unless ($type) {
-                    @sets = grep { $_ ne $io } @sets;
-                    next;
-                }
+        end_check => sub {
+            my %params = @_;
+            return 1 if $sig_stamp;
 
-                $last_event = time;
-                $did_work++;
+            # Wait for all output
+            return 0 if $params{did_work};
 
-                if ($type eq 'message') {
-                    my $decoded = decode_json($val);
-                    $self->_add_item($name => $decoded);
-                }
-                elsif ($type eq 'line') {
-                    chomp($val);
-                    $self->_add_item($name => $val);
-                }
-                else {
-                    chomp($val);
-                    die("Invalid type '$type': $val");
+            if ($self->{+ROOT_PID} && !pid_is_running($self->{+ROOT_PID})) {
+                $self->_warn("Yath exited, killing process.");
+                kill('TERM', $pid);
+                return 1;
+            }
+
+            if (defined $exited) {
+                return 1 if !$auditor;
+                return 1 if $auditor->has_plan;
+                return 1 if $exit;                # If the exit value is not true we do not wait for post-exit timeout
+                return 1 unless $pe_timeout;
+
+                my $delta = int(time - $last_event);
+                if ($delta > $pe_timeout) {
+
+                    $self->_die(
+                        "Post-exit timeout after $delta seconds. This means your test exited without a issuing plan, but STDOUT remained open, possibly in a child process. At timestamp '$last_event' the output stopped and the test has since timed out.\n",
+                        facets  => {harness => {timeout => {post_exit => $delta}}},
+                        no_exit => 1,
+                    );
+
+                    return 1;
                 }
             }
 
-            $self->_flush() if $self->{+INTERACTIVE} || $self->{+ALWAYS_FLUSH};
-        }
+            if ($ev_timeout) {
+                my $delta = int(time - $last_event);
 
-        next if $did_work;
-        last if $sig_stamp;
+                if ($delta > $ev_timeout) {
+                    $self->_die(
+                        "Event timeout after $delta seconds. This means your test stopped producing output too long and will be terminated forcefully.\n",
+                        facets  => {harness => {timeout => {events => $delta}}},
+                        no_exit => 1,
+                    );
 
-        $reap->(WNOHANG);
+                    return 1;
+                }
+            }
 
-        if ($self->{+ROOT_PID} && !pid_is_running($self->{+ROOT_PID})) {
-            $self->_warn("Yath exited, killing process.");
-            kill('TERM', $pid);
-            last;
-        }
-
-        if (defined $exited) {
-            last if !$auditor;
-            last if $auditor->has_plan;
-            last if $exit; # If the exit value is not true we do not wait for post-exit timeout
-            last unless $pe_timeout;
-            my $delta = int(time - $last_event);
-            next unless $delta > $pe_timeout;
-
-            $self->_die(
-                "Post-exit timeout after $delta seconds. This means your test exited without a issuing plan, but STDOUT remained open, possibly in a child process. At timestamp '$last_event' the output stopped and the test has since timed out.\n",
-                facets  => {harness => {timeout => {post_exit => $delta}}},
-                no_exit => 1,
-            );
-
-            last;
-        }
-
-        if ($ev_timeout) {
-            my $delta = int(time - $last_event);
-            next unless $delta > $ev_timeout;
-
-            $self->_die(
-                "Event timeout after $delta seconds. This means your test stopped producing output too long and will be terminated forcefully.\n",
-                facets  => {harness => {timeout => {events => $delta}}},
-                no_exit => 1,
-            );
-
-            last;
-        }
-    }
+            return 0;
+        },
+    );
 
     $self->_flush();
 
@@ -833,6 +809,34 @@ sub _process {
     );
 
     return $ret;
+}
+
+sub handle_event {
+    my $self = shift;
+    my ($name, $fh) = @_;
+
+    my $out = 0;
+    while (1) {
+        my ($type, $val) = $fh->get_line_burst_or_data;
+        unless ($type) {
+            return $out;
+        }
+
+        if ($type eq 'message') {
+            my $decoded = decode_json($val);
+            $self->_add_item($name => $decoded);
+        }
+        elsif ($type eq 'line') {
+            chomp($val);
+            $self->_add_item($name => $val);
+        }
+        else {
+            chomp($val);
+            die("Invalid type '$type': $val");
+        }
+    }
+
+    return $out++;
 }
 
 sub should_retry {

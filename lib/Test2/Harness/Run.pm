@@ -104,6 +104,7 @@ sub connect {
 
 sub stdio_pipe {
     my $self = shift;
+    return unless -p STDOUT;
     return $self->{+STDIO_PIPE} if $self->{+STDIO_PIPE};
 
     croak "This run does not use an STDIO pipe" unless $self->{+AGGREGATOR_USE_IO};

@@ -77,33 +77,9 @@ sub queue_run {
     push @{$self->{+RUN_ORDER}} => $run_id;
     $run = $self->{+RUNS}->{$run_id} = Test2::Harness::Scheduler::Default::Run->new(%$run);
 
-    my $stamp = time;
-
-    my $con = $run->connect;
-    $con->send_message({
-        stamp    => time,
-        event_id   => gen_uuid,
-        run_id     => $run->run_id,
-        facet_data => {harness_run => $run->data_no_jobs},
-    });
+    $run->send_initial_events();
 
     for my $job (@{$run->jobs}) {
-        $con->send_message(Test2::Harness::Event->new(
-            event_id => gen_uuid,
-            run_id   => $run->run_id,
-            job_id   => $job->job_id,
-            job_try  => $job->try,
-            stamp    => time,
-
-            facet_data => {
-                harness_job_queued => {
-                    file   => $job->test_file->file,
-                    job_id => $job->job_id,
-                    stamp  => $stamp,
-                }
-            },
-        ));
-
         $self->job_container($run->todo, $job, vivify => 1)->{$job->{job_id}} = $job;
     }
 
@@ -191,6 +167,10 @@ sub finalize_run {
     my ($run_id) = @_;
 
     my $run = delete $self->{+RUNS}->{$run_id} or return;
+
+    $self->terminate(1) if $self->single_run;
+
+    return if $run->aggregator_use_io;
 
     return if eval {
         $run->connect->send_message({

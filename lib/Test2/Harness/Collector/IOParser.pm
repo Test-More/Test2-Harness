@@ -42,10 +42,16 @@ sub normalize_event {
     my %fields = (
         stamp    => $stamp,
         event_id => $event_id,
-        run_id   => $self->{+RUN_ID},
-        job_id   => $self->{+JOB_ID},
-        job_try  => $self->{+JOB_TRY},
     );
+
+    if ($self->{+JOB_ID}) {
+        %fields = (
+            %fields,
+            run_id   => $self->{+RUN_ID},
+            job_id   => $self->{+JOB_ID},
+            job_try  => $self->{+JOB_TRY},
+        );
+    }
 
     for my $field (keys %fields) {
         if (defined $event->{$field}) {

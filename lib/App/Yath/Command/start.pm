@@ -4,8 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use POSIX();
-
 use Test2::Harness::Instance;
 use Test2::Harness::TestSettings;
 use Test2::Harness::IPC::Protocol;
@@ -31,17 +29,21 @@ use Test2::Harness::Util::HashBase qw{
     +collector
 };
 
+sub option_modules {
+    return (
+        'App::Yath::Options::IPC',
+        'App::Yath::Options::Harness',
+        'App::Yath::Options::Resource',
+        'App::Yath::Options::Runner',
+        'App::Yath::Options::Scheduler',
+        'App::Yath::Options::Yath',
+        'App::Yath::Options::Renderer',
+        'App::Yath::Options::Tests',
+    );
+}
+
 use Getopt::Yath;
-include_options(
-    'App::Yath::Options::IPC',
-    'App::Yath::Options::Harness',
-    'App::Yath::Options::Resource',
-    'App::Yath::Options::Runner',
-    'App::Yath::Options::Scheduler',
-    'App::Yath::Options::Yath',
-    'App::Yath::Options::Renderer',
-    'App::Yath::Options::Tests',
-);
+include_options(__PACKAGE__->option_modules);
 
 option_group {group => 'start', category => "Start Options"} => sub {
     option daemon => (
@@ -67,45 +69,78 @@ sub description {
     EOT
 }
 
+sub process_base_name { shift->should_daemonize ? "yath-daemon" : "yath-runner" }
+sub process_collector_name { shift->process_base_name . "-collector" }
+
 sub run {
     my $self = shift;
 
-    $0 = "yath-daemon-launcher";
+    $0 = $self->process_base_name . "-launcher";
 
-    my $settings = $self->settings;
+    $self->become_daemon if $self->should_daemonize();
 
-    if ($settings->start->daemon) {
-        close(STDIN);
-        open(STDIN, '<', "/dev/null") or die "Could not open devnull: $!";
-        POSIX::setsid();
-        my $pid = fork // die "Could not fork";
-        if ($pid) {
-            sleep 2;
-            kill('HUP', $pid);
-            exit(0);
-        }
-    }
-
+    # Need to get this pre-fork
     my $collector = $self->collector();
 
     my $pid = fork // die "Could not fork: $!";
+    return $self->become_collector($pid) if $pid;
+    return $self->become_instance();
+}
+
+sub should_daemonize {
+    my $self = shift;
+
+    my $settings = $self->settings;
+
+    return 0 unless $settings->check_group('start');
+    return 1 if $settings->start->daemon;
+    return 0;
+}
+
+sub become_daemon {
+    my $self = shift;
+
+    require POSIX;
+
+    close(STDIN);
+    open(STDIN, '<', "/dev/null") or die "Could not open devnull: $!";
+
+    POSIX::setsid();
+
+    my $pid = fork // die "Could not fork";
     if ($pid) {
-        $0 = "yath-daemon-collector";
-
-        my $exit = $collector->process($pid);
-
-        remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0})
-            unless $settings->harness->keep_dirs;
-
-        return $exit;
+        sleep 2;
+        kill('HUP', $pid);
+        exit(0);
     }
-    else {
-        $0 = "yath-daemon";
-        $collector->setup_child_output();
-        $self->instance->run;
-    }
+}
+
+sub become_instance {
+    my $self = shift;
+
+    $0 = $self->process_base_name;
+    my $collector = $self->collector();
+    $collector->setup_child_output();
+    $self->instance->run;
 
     return 0;
+}
+
+sub become_collector {
+    my $self = shift;
+    my ($pid) = @_;
+
+    my $settings = $self->settings;
+
+    $0 = $self->process_collector_name;
+
+    my $collector = $self->collector();
+    my $exit = $collector->process($pid);
+
+    remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0})
+        unless $settings->harness->keep_dirs;
+
+    return $exit;
 }
 
 sub log_file {
@@ -162,11 +197,12 @@ sub instance {
     my $resources = $self->resources();
 
     return $self->{+INSTANCE} = Test2::Harness::Instance->new(
-        ipc       => $ipc,
-        scheduler => $scheduler,
-        runner    => $runner,
-        resources => $resources,
-        log_file  => $self->log_file,
+        ipc        => $ipc,
+        scheduler  => $scheduler,
+        runner     => $runner,
+        resources  => $resources,
+        log_file   => $self->log_file,
+        single_run => 1,
     );
 }
 

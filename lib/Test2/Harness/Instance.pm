@@ -62,6 +62,8 @@ sub run {
         $res->spawn_process(instance => $self, scheduler => $scheduler) if $res->spawns_process;
     }
 
+    my $runner = $self->{+RUNNER};
+
     ipc_loop(
         ipcs      => $self->{+IPC},
         wait_time => $self->{+WAIT_TIME},
@@ -70,14 +72,21 @@ sub run {
 
         iteration_start => sub { $_->tick() for @{$self->{+RESOURCES} // []}; $cb->(@_) if $cb },
         iteration_end   => sub { $self->{+SCHEDULER}->advance() ? 1 : 0 },
-        end_check       => sub { $self->{+TERMINATED}           ? 1 : 0 },
+
+        end_check => sub {
+            return 1 if $self->{+TERMINATED};
+            return 1 if $runner->terminated;
+            return 1 if $scheduler->terminated;
+            return 0;
+        },
 
         handle_request => sub { $self->handle_request(@_) },
         handle_message => sub { },                             # Intentionally do nothing.
     );
 
-    $self->{+RUNNER}->terminate();
-    $self->{+SCHEDULER}->terminate();
+    $runner->terminate();
+    $scheduler->terminate();
+
     $_->cleanup() for @{$self->{+RESOURCES} // []};
 
     return;

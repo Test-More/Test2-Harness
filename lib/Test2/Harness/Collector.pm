@@ -234,8 +234,9 @@ sub collect_job {
     die "No workdir provided" unless $params{workdir};
     $params{tempdir} = File::Temp::tempdir(DIR => $params{workdir}, CLEANUP => 1, TEMPLATE => "tmp-$$-XXXX");
 
-    my ($inst_ipc, $inst_con) = ipc_connect($run->{instance_ipc});
-    my ($agg_ipc,  $agg_con)  = ipc_connect($run->{aggregator_ipc});
+    my ($inst_ipc, $inst_con) = ipc_connect($run->instance_ipc);
+    my ($agg_ipc,  $agg_con)  = ipc_connect($run->aggregator_ipc);
+    my $agg_use_io            = $run->aggregator_use_io;
 
     my $inst_handler = sub {
         my ($e) = @_;
@@ -277,6 +278,15 @@ sub collect_job {
                     exit(255);
                 }
 
+                $inst_handler->($e) if $inst_con;
+            }
+        };
+    }
+    elsif ($agg_use_io) {
+        my $stdout = $run->stdio_pipe;
+        $handler = sub {
+            for my $e (@_) {
+                $stdout->write_message(encode_json($e) . "\n");
                 $inst_handler->($e) if $inst_con;
             }
         };
@@ -554,31 +564,6 @@ sub process {
         );
     }
 
-    my $sig_stamp;
-    $SIG{INT} = sub {
-        $sig_stamp //= time;
-        $self->_warn("$$: Got SIGINT, forwarding to child process $child_pid.\n");
-        kill('INT', $child_pid);
-
-        if (time - $sig_stamp > 5) {
-            $SIG{INT} = 'DEFAULT';
-            kill('INT', $$);
-        }
-    };
-
-    $SIG{TERM} = sub {
-        $sig_stamp //= time;
-        $self->_warn("$$: Got SIGTERM, forwarding to child process $child_pid.\n");
-        kill('TERM', $child_pid);
-
-        if (time - $sig_stamp > 5) {
-            $SIG{TERM} = 'DEFAULT';
-            kill('TERM', $$);
-        }
-    };
-
-    $SIG{PIPE} = 'IGNORE';
-
     my $exit;
     my $ok = eval { $exit = $self->_process($child_pid); 1 };
     my $err = $@;
@@ -646,6 +631,23 @@ sub _process {
     my $self = shift;
     my ($pid) = @_;
 
+    my $sig_stamp;
+    for my $sigtype (qw/INT TERM/) {
+        my $sig = $sigtype;
+        $SIG{$sig} = sub {
+            $sig_stamp //= time;
+            $self->_warn("$$: Got SIG${sig}, forwarding to child process $pid.\n");
+            kill($sigtype, $pid);
+
+            if (time - $sig_stamp > 5) {
+                $SIG{$sig} = 'DEFAULT';
+                kill($sig, $$);
+            }
+        };
+    }
+
+    local $SIG{PIPE} = 'IGNORE';
+
     $self->{+BUFFER} = {seen => {}, stderr => [], stdout => []};
 
     my $stdout = $self->handles->{out_r};
@@ -678,7 +680,7 @@ sub _process {
         my $check = waitpid($pid, $flags);
         my $code = $?;
 
-        return 0 if $check < 0;
+        return 1 if $check < 0;
         return 0 if $check == 0 && $flags == WNOHANG;
 
         die("waitpid returned $check, expected $pid") if $check != $pid;
@@ -697,7 +699,7 @@ sub _process {
     my $pe_timeout = $self->post_exit_timeout;
 
     while (1) {
-        my @sets = $ios->can_read(0.2);
+        my @sets = $ios->can_read($sig_stamp ? 0 : 0.2);
 
         my $did_work = 0;
 
@@ -732,6 +734,7 @@ sub _process {
         }
 
         next if $did_work;
+        last if $sig_stamp;
 
         $reap->(WNOHANG);
 
@@ -774,8 +777,7 @@ sub _process {
 
     $self->_flush();
 
-
-    $SIG{CHLD} = 'IGNORE';
+    local $SIG{CHLD} = 'IGNORE';
     unless (defined($exit // $exited) || $reap->(WNOHANG)) {
         $self->_die("Sending 'TERM' signal to process...\n", no_exit => 1);
         my $did_kill = kill('TERM', $pid);
@@ -805,6 +807,9 @@ sub _process {
     while (@$start_times) {
         push @$times => shift(@$end_times) - shift(@$start_times);
     }
+
+    # This can be undef if the test was killed by a signal the interrupts sigchild
+    $exit //= 65280; # 255 << 8, the number it would have from an exit(255)
 
     my $ret = parse_exit($exit);
 

@@ -59,26 +59,10 @@ sub run {
 
     my $settings = $self->settings;
 
-    my (@tests, @test_args);
-    my $list = \@tests;
-    for my $arg (@{$self->{+ARGS} // []}) {
-        if ($arg eq '::') {
-            $list = \@test_args;
-            next;
-        }
-
-        push @$list => $arg;
-    }
-
-    $settings->tests->option(args => \@test_args) if @test_args;
+    my $search = $self->fix_test_args();
 
     # Get list of tests to run
-    my $tests = $self->find_tests(@tests);
-
-    if (!$tests || !@$tests) {
-        print "Nothing to do, no tests to run!\n";
-        return 0;
-    }
+    my $tests = $self->find_tests(@$search) || return $self->no_tests;
 
     my $renderers = App::Yath::Options::Renderer->init_renderers($settings);
 
@@ -148,12 +132,39 @@ sub run {
     return $auditor->exit_value;
 }
 
+sub no_tests {
+    my $self = shift;
+    print "Nothing to do, no tests to run!\n";
+    return 0;
+}
+
 sub plugins {
     my $self = shift;
 
     warn "init plugins plz...";
 
     return $self->{+PLUGINS} //= [];
+}
+
+sub fix_test_args {
+    my $self = shift;
+
+    my $settings = $self->settings;
+
+    my (@tests, @test_args);
+    my $list = \@tests;
+    for my $arg (@{$self->{+ARGS} // []}) {
+        if ($arg eq '::') {
+            $list = \@test_args;
+            next;
+        }
+
+        push @$list => $arg;
+    }
+
+    $settings->tests->option(args => \@test_args) if @test_args;
+
+    return \@tests;
 }
 
 sub find_tests {
@@ -168,7 +179,10 @@ sub find_tests {
     require(mod2file($finder_class));
 
     my $finder = $finder_class->new($settings->finder->all, settings => $settings, search => \@tests);
-    return $self->{+FIND_TESTS} = $finder->find_files($self->plugins);
+    my $tests = $finder->find_files($self->plugins);
+
+    return unless $tests && @$tests;
+    return $self->{+FIND_TESTS} = $tests;
 }
 
 1;

@@ -4,11 +4,13 @@ use warnings;
 
 use Carp qw/croak confess/;
 use Scalar::Util qw/blessed/;
+use Time::HiRes qw/time/;
 
 use Test2::Harness::TestSettings;
 use Test2::Harness::IPC::Protocol;
 
 use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 
@@ -17,6 +19,7 @@ BEGIN {
     @NO_JSON = qw{
         ipc
         connect
+        stdio_pipe
     };
 
     sub no_json { @NO_JSON }
@@ -45,6 +48,7 @@ use Test2::Harness::Util::HashBase(
     qw{
         instance_ipc
         <aggregator_ipc
+        <aggregator_use_io
         <jobs
         <job_lookup
         <test_settings
@@ -77,7 +81,7 @@ sub init {
         $self->{+JOB_LOOKUP} = \%jobs;
     }
 
-    croak "'aggregator_ipc' is a required attribute" unless $self->{+AGGREGATOR_IPC};
+    croak "'aggregator_ipc' or 'aggregator_use_io' must be specified" unless $self->{+AGGREGATOR_IPC} || $self->{+AGGREGATOR_USE_IO};
 }
 
 sub set_ipc { $_[0]->{+IPC} = $_[1] }
@@ -85,7 +89,7 @@ sub ipc {
     my $self = shift;
     return $self->{+IPC} if $self->{+IPC};
 
-    my $agg_ipc = $self->{+AGGREGATOR_IPC};
+    my $agg_ipc = $self->{+AGGREGATOR_IPC} // croak "This run does not use standard IPC";
     return $self->{+IPC} = Test2::Harness::IPC::Protocol->new(protocol => $agg_ipc->{protocol});
 }
 
@@ -94,8 +98,65 @@ sub connect {
     my $self = shift;
     return $self->{+CONNECT} if $self->{+CONNECT};
 
-    my $agg_ipc = $self->{+AGGREGATOR_IPC};
+    my $agg_ipc = $self->{+AGGREGATOR_IPC} // croak "This run does not use standard IPC";
     return $self->{+CONNECT} = $self->ipc->connect(@{$agg_ipc->{connect}});
+}
+
+sub stdio_pipe {
+    my $self = shift;
+    return $self->{+STDIO_PIPE} if $self->{+STDIO_PIPE};
+
+    croak "This run does not use an STDIO pipe" unless $self->{+AGGREGATOR_USE_IO};
+
+    require Atomic::Pipe;
+    my $stdout = Atomic::Pipe->from_fh('>&=', \*STDOUT);
+    $stdout->set_mixed_data_mode;
+
+    return $self->{+STDIO_PIPE} = $stdout;
+}
+
+sub send_initial_events {
+    my $self = shift;
+
+    my $stamp = time;
+
+    $self->send_event(stamp => $stamp, facet_data => {harness_run => $self->data_no_jobs});
+
+    for my $job (@{$self->jobs}) {
+        $self->send_event(
+            job_id  => $job->job_id,
+            job_try => $job->try,
+            stamp   => $stamp,
+
+            facet_data => {
+                harness_job_queued => {
+                    file   => $job->test_file->file,
+                    job_id => $job->job_id,
+                    stamp  => $stamp,
+                }
+            },
+        );
+    }
+}
+
+sub send_event {
+    my $self = shift;
+    my $event = @_ == 1 ? shift : {@_};
+
+    $event->{stamp} //= time;
+    $event->{event_id} //= gen_uuid;
+    $event->{run_id} //= $self->run_id;
+
+    $event = Test2::Harness::Event->new($event)
+        unless blessed($event);
+
+    if ($self->{+AGGREGATOR_IPC}) {
+        my $con = $self->connect;
+        $con->send_message($event);
+    }
+    elsif ($self->{AGGREGATOR_USE_IO}) {
+
+    }
 }
 
 sub data_no_jobs {

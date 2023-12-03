@@ -51,10 +51,13 @@ sub audit {
     my $self = shift;
     my ($e) = @_;
 
-    $self->{+START} = $self->{+START} ? min($self->{+START}, $e->stamp) : $e->stamp;
-    $self->{+STOP}  = $self->{+STOP}  ? max($self->{+STOP}, $e->stamp)  : $e->stamp;
+    use Data::Dumper;
+    print Dumper($e) unless $e->{stamp};
 
-    my $f = $e->facet_data;
+    $self->{+START} = $self->{+START} ? min($self->{+START}, $e->{stamp}) : $e->{stamp};
+    $self->{+STOP}  = $self->{+STOP}  ? max($self->{+STOP}, $e->{stamp})  : $e->{stamp};
+
+    my $f = $e->{facet_data};
     my $job_id = $f->{harness}->{job_id} or return;
     my $job_try = $f->{harness}->{job_try} // 0;
 

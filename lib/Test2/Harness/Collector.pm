@@ -11,7 +11,7 @@ use File::Temp qw/tempfile/;
 use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
 
-use Test2::Harness::Collector::Auditor;
+use Test2::Harness::Collector::Auditor::Job;
 use Test2::Harness::Collector::IOParser::Stream;
 
 use Test2::Harness::Util qw/mod2file parse_exit open_file/;
@@ -308,7 +308,7 @@ sub collect_job {
         name    => $job->test_file->relative,
     );
 
-    my $auditor = Test2::Harness::Collector::Auditor->new(%create_params);
+    my $auditor = Test2::Harness::Collector::Auditor::Job->new(%create_params);
     my $parser  = Test2::Harness::Collector::IOParser::Stream->new(%create_params, type => 'test');
 
     my $self = $class->new(
@@ -447,8 +447,8 @@ sub setup_child_output {
     swap_io(\*STDOUT, $handles->{out_w}->wh, sub { $self->_die(@_) });
     swap_io(\*STDERR, $handles->{err_w}->wh, sub { $self->_die(@_) });
 
-    STDOUT->autoflush();
-    STDERR->autoflush();
+    STDOUT->autoflush(1);
+    STDERR->autoflush(1);
 
     select STDOUT;
 

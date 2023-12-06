@@ -42,7 +42,7 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
 
             if ($params{action} eq 'set' || $params{action} eq 'initialize') {
                 my ($val) = @{$params{val}};
-                return unless $val =~ m/:/;
+                return unless $val && $val =~ m/:/;
                 my ($jobs, $slots) = split /:/, $val;
                 @{$params{val}} = ($jobs);
                 $params{group}->{job_slots} = $slots;

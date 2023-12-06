@@ -44,29 +44,24 @@ sub normalize_event {
         event_id => $event_id,
     );
 
-    if ($self->{+JOB_ID}) {
-        %fields = (
-            %fields,
-            run_id   => $self->{+RUN_ID},
-            job_id   => $self->{+JOB_ID},
-            job_try  => $self->{+JOB_TRY},
-        );
-    }
+    %fields = (
+        %fields,
+        run_id   => $self->{+RUN_ID},
+        job_id   => $self->{+JOB_ID},
+        job_try  => $self->{+JOB_TRY},
+    );
 
     for my $field (keys %fields) {
-        if (defined $event->{$field}) {
-            die "'$field' mismatch, internal inconsistency." unless $event->{$field} eq $fields{$field};
-        }
-        else {
-            $event->{$field} = $fields{$field};
-        }
+        my $val1 = $event->{$field};
+        my $val2 = $event->{facet_data}->{harness}->{$field};
 
-        if (defined $event->{facet_data}->{harness}->{$field}) {
-            die "'$field' mismatch, internal inconsistency." unless $event->{facet_data}->{harness}->{$field} eq $fields{$field};
-        }
-        else {
-            $event->{facet_data}->{harness}->{$field} = $fields{$field};
-        }
+        die "'$field' mismatch ($val1 vs $val2), internal inconsistency."
+            if defined($val1) && defined($val2) && "$val1" ne "$val2";
+
+        my $val = $val1 // $val2 // $fields{$field} // 0;
+
+        $event->{$field} = $val;
+        $event->{facet_data}->{harness}->{$field} = $val;
     }
 }
 

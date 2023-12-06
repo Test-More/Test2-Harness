@@ -1,4 +1,4 @@
-package Test2::Harness::Run::Auditor;
+package Test2::Harness::Collector::Auditor::Run;
 use strict;
 use warnings;
 
@@ -7,6 +7,7 @@ our $VERSION = '2.000000';
 use Time::HiRes qw/time/;
 use List::Util qw/min max sum0/;
 
+use parent 'Test2::Harness::Collector::Auditor';
 use Test2::Harness::Util::HashBase qw{
     <jobs
     <launches
@@ -23,12 +24,38 @@ use Test2::Harness::Util::HashBase qw{
 sub init {
     my $self = shift;
 
+    $self->SUPER::init();
+
     $self->{+LAUNCHES} = 0;
     $self->{+ASSERTS}  = 0;
 
     $self->{+TIMES} //= [0, 0, 0, 0];
 
     $self->{+JOBS} = {};
+}
+
+sub has_plan { undef }
+sub has_exit { undef }
+
+sub pass { !$_[0]->fail }
+
+sub fail {
+    my $self = shift;
+
+    my $final = $self->final_data;
+
+    my $count = @{$final->{failed} // []};
+
+    return $count;
+}
+
+sub exit_value {
+    my $self = shift;
+
+    my $count = $self->fail;
+
+    $count = 255 if $count > 255;
+    return $count;
 }
 
 sub subtest_name {
@@ -49,16 +76,25 @@ sub list_nested_subtests {
 
 sub audit {
     my $self = shift;
+    my @out;
+
+    push @out => $self->_audit($_) for @_;
+
+    return @out;
+}
+
+sub _audit {
+    my $self = shift;
     my ($e) = @_;
 
-    use Data::Dumper;
-    print Dumper($e) unless $e->{stamp};
+    delete $self->{+FINAL_DATA};
+    delete $self->{+SUMMARY};
 
     $self->{+START} = $self->{+START} ? min($self->{+START}, $e->{stamp}) : $e->{stamp};
     $self->{+STOP}  = $self->{+STOP}  ? max($self->{+STOP}, $e->{stamp})  : $e->{stamp};
 
     my $f = $e->{facet_data};
-    my $job_id = $f->{harness}->{job_id} or return;
+    my $job_id = $f->{harness}->{job_id} or return $e;
     my $job_try = $f->{harness}->{job_try} // 0;
 
     my $tries = $self->{+JOBS}->{$job_id} //= [];
@@ -102,17 +138,8 @@ sub audit {
             $job->{halt} = $c->{details} || 'halt';
         }
     }
-}
 
-sub exit_value {
-    my $self = shift;
-
-    my $final = $self->final_data;
-
-    my $count = @{$final->{failed} // []};
-
-    $count = 255 if $count > 255;
-    return $count;
+    return $e;
 }
 
 sub final_data {

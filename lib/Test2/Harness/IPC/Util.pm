@@ -269,9 +269,7 @@ sub ipc_loop {
         sleep(0.2) if $debug;
         print "$$ $0 - LOOP ($caller->[1] line $caller->[2]): " . sprintf('%-02.4f', time) . "\n" if $debug;
 
-        print "iteration_start A: $did_work\n" if $debug;
         $did_work++ if $iteration_start && $iteration_start->();
-        print "iteration_start B: $did_work\n" if $debug;
 
         if (time - $last_health_check > 4) {
             print "Health Check\n" if $debug;
@@ -331,9 +329,7 @@ sub ipc_loop {
             next if $seen{$ipc}++;
 
             if(ref($ipc) eq 'ARRAY') {
-                print "Read A: $did_work\n" if $debug;
                 $did_work++ if $ipc->[1]->();
-                print "Read B: $did_work\n" if $debug;
                 next;
             }
 
@@ -355,9 +351,7 @@ sub ipc_loop {
             }
         }
 
-        print "iteration_end A: $did_work\n" if $debug;
         $did_work++ if $iteration_end && $iteration_end->();
-        print "iteration_end B: $did_work\n" if $debug;
         print "Did Work: $did_work\n" if $debug;
 
         # No IPC means nothing to do

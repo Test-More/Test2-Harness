@@ -18,7 +18,7 @@ use Test2::Harness::Runner::Preloading::Stage;
 
 use parent 'Test2::Harness::Runner';
 use Test2::Harness::Util::HashBase qw{
-    stages
+    +stages
     <preloads
     <default_stage
     <preload_retry_delay
@@ -33,16 +33,34 @@ sub init {
 
     $self->SUPER::init();
 
-    $self->{+STAGES} = {};
+    $self->{+STAGES} = undef;
 
     $self->{+PRELOAD_RETRY_DELAY} //= 5;
+}
+
+sub ready { $_[0]->{+STAGES} ? 1 : 0 }
+
+sub set_stages {
+    my $self = shift;
+    my ($data) = @_;
+
+    $data->{NONE}->{ready} = {pid => undef, con => undef};
+    $data->{NONE}->{can_run} //= [];
+
+    $self->{+STAGES} = $data;
+}
+
+sub stages {
+    my $self = shift;
+
+    return $self->{+STAGES} // confess "No stage data yet";
 }
 
 sub set_stage_up {
     my $self = shift;
     my ($stage, $pid, $con) = @_;
 
-    my $stage_data = $self->{+STAGES}->{$stage} // die "Invalid stage '$stage'";
+    my $stage_data = $self->stages->{$stage} // die "Invalid stage '$stage'";
     $stage_data->{ready} = {pid => $pid, con => $con};
 
     return $pid;
@@ -52,7 +70,7 @@ sub set_stage_down {
     my $self = shift;
     my ($stage, $pid) = @_;
 
-    my $stage_data = $self->{+STAGES}->{$stage} // die "Invalid stage '$stage'";
+    my $stage_data = $self->stages->{$stage} // die "Invalid stage '$stage'";
     my $ready = $stage_data->{ready} // die "Stage not ready '$stage'";
 
     if ($pid && $ready->{pid}) {
@@ -71,7 +89,7 @@ sub set_stage_down {
 sub stage_sets {
     my $self = shift;
 
-    my $stages = $self->{+STAGES};
+    my $stages = $self->stages;
 
     my %sets;
 
@@ -97,7 +115,7 @@ sub terminate {
 
     $self->SUPER::terminate(@_);
 
-    kill('TERM', grep { $_ } map { $_->{ready}->{pid} } values %{$self->{+STAGES}});
+    kill('TERM', grep { $_ } map { $_->{ready}->{pid} // () } values %{$self->stages});
 }
 
 sub kill {
@@ -109,11 +127,13 @@ sub job_stage {
     my $self = shift;
     my ($job, $stage_request) = @_;
 
+    my $stages = $self->stages;
+
     return 'NONE' unless $self->{+PRELOADS} && @{$self->{+PRELOADS}};
 
     for my $s ($stage_request, $self->default_stage, 'BASE') {
         next unless $s;
-        next unless $self->{+STAGES}->{$s};
+        next unless $stages->{$s};
         return $s;
     }
 
@@ -125,8 +145,6 @@ sub start {
     my ($scheduler, $ipc) = @_;
 
     my $ts = $self->{+TEST_SETTINGS};
-
-    $self->{+STAGES}->{NONE} = {ready => 1, can_run => []};
 
     my $preloads = $self->{+PRELOADS} or return;
     return unless @$preloads;
@@ -186,7 +204,7 @@ sub launch_job {
 
     return $self->SUPER::launch_job('NONE', $run, $job) unless $can_fork;
 
-    my $stage_data = $self->{+STAGES}->{$stage} or confess "Invalid stage: '$stage'";
+    my $stage_data = $self->stages->{$stage} or confess "Invalid stage: '$stage'";
 
     my $res = $stage_data->{ready}->{con}->send_and_get(launch_job => \%job_launch_data);
     return 1 if $res->success;

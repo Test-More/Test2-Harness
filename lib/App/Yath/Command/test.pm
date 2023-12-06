@@ -8,6 +8,7 @@ use Time::HiRes qw/sleep/;
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
+use Test2::Harness::Collector::Auditor::Run;
 use App::Yath::Command::start;
 use App::Yath::Command::run;
 
@@ -100,7 +101,7 @@ sub become_instance {
 
 sub auditor {
     my $self = shift;
-    return $self->{+AUDITOR} //= Test2::Harness::Run::Auditor->new();
+    return $self->{+AUDITOR} //= Test2::Harness::Collector::Auditor::Run->new();
 }
 
 sub renderers {
@@ -134,7 +135,7 @@ sub collector {
     my $parser    = Test2::Harness::Collector::IOParser->new(job_id => 0, job_try => 0, run_id => $run_id, type => 'runner');
 
     return $self->{+COLLECTOR} = Test2::Harness::Collector->new(
-#        auditor => $auditor,
+        auditor      => $auditor,
         parser       => $parser,
         job_id       => 0,
         job_try      => 0,
@@ -142,7 +143,6 @@ sub collector {
         always_flush => 1,
         output       => sub {
             for my $e (@_) {
-                $auditor->audit($e);
                 $_->render_event($e) for @$renderers;
             }
         }

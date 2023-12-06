@@ -28,6 +28,8 @@ use Test2::Harness::Util::HashBase qw{
     <terminated
 
     <children
+
+    <run_jobs_added
 };
 
 sub init {
@@ -43,6 +45,8 @@ sub init {
     $self->{+RUNS}      = {};    # { run_id => {..., jobs => \@COMPLETE_LIST, jobs_todo => ..., jobs_complete => {}} }
     $self->{+RUNNING}   = {};
     $self->{+CHILDREN}  = {};    # pid => ...?
+
+    $self->{+RUN_JOBS_ADDED} = {};
 }
 
 sub terminate {
@@ -78,12 +82,25 @@ sub queue_run {
     $run = $self->{+RUNS}->{$run_id} = Test2::Harness::Scheduler::Default::Run->new(%$run);
 
     $run->send_initial_events();
+    $self->add_jobs_for_run($run);
+
+    return $run_id;
+}
+
+sub add_jobs_for_run {
+    my $self = shift;
+    my ($run) = @_;
+
+    my $run_id = $run->run_id;
+
+    return if $self->{+RUN_JOBS_ADDED}->{$run_id};
+    return unless $self->runner->ready;
 
     for my $job (@{$run->jobs}) {
         $self->job_container($run->todo, $job, vivify => 1)->{$job->{job_id}} = $job;
     }
 
-    return $run_id;
+    $self->{+RUN_JOBS_ADDED}->{$run_id} = 1;
 }
 
 sub job_container {
@@ -147,6 +164,7 @@ sub finalize_completed_runs {
         my $keep = 0;
         unless ($run->halt) {
             $keep ||= keys %$todo;
+            $keep ||= !$self->{+RUN_JOBS_ADDED}->{$run_id};
         }
 
         $keep ||= keys %{$run->running};
@@ -167,6 +185,7 @@ sub finalize_run {
     my ($run_id) = @_;
 
     my $run = delete $self->{+RUNS}->{$run_id} or return;
+    delete $self->{+RUN_JOBS_ADDED}->{$run_id};
 
     $self->terminate(1) if $self->single_run;
 
@@ -381,6 +400,9 @@ sub next_job {
     for my $run_id (@{$self->{+RUN_ORDER}}) {
         my $run = $self->{+RUNS}->{$run_id};
         next if $run->halt;
+
+        $self->add_jobs_for_run($run);
+
         my $search = $run->todo or next;
 
         for my $smoke (qw/smoke main/) {

@@ -14,7 +14,7 @@ use App::Yath::Client;
 use Test2::Harness::Event;
 use Test2::Harness::Run;
 use Test2::Harness::Run::Job;
-use Test2::Harness::Run::Auditor;
+use Test2::Harness::Collector::Auditor::Run;
 use Test2::Harness::Util::LogFile;
 
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
@@ -100,7 +100,7 @@ sub run {
 
     my $lf = Test2::Harness::Util::LogFile->new(client => $client);
 
-    my $auditor = Test2::Harness::Run::Auditor->new();
+    my $auditor = Test2::Harness::Collector::Auditor::Run->new();
     my $run_complete;
     while (!$run_complete) {
         $run_complete //= 1 unless $client->active;

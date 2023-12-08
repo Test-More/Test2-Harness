@@ -282,11 +282,11 @@ sub collect_job {
             }
         };
     }
-    elsif ($agg_use_io && $run->stdio_pipe) {
-        my $stdout = $run->stdio_pipe;
+    elsif ($agg_use_io && $run->send_event_cb) {
+        my $send_event = $run->send_event_cb;
         $handler = sub {
             for my $e (@_) {
-                $stdout->write_message(encode_json($e) . "\n");
+                $send_event->($e);
                 $inst_handler->($e) if $inst_con;
             }
         };
@@ -453,11 +453,9 @@ sub setup_child_output {
     select STDOUT;
 
     $ENV{T2_HARNESS_PIPE_COUNT} = $self->{+MERGE_OUTPUTS} ? 1 : 2;
-    {
-        no warnings 'once';
-        $Test2::Harness::STDOUT_APIPE = $handles->{out_w};
-        $Test2::Harness::STDERR_APIPE = $handles->{err_w} unless $self->{+MERGE_OUTPUTS};
-    }
+    require Test2::Harness::Collector::Child;
+    $Test2::Harness::Collector::Child::STDOUT_APIPE = $handles->{out_w};
+    $Test2::Harness::Collector::Child::STDERR_APIPE = $handles->{err_w} if $self->{+MERGE_OUTPUTS};
 
     return;
 }

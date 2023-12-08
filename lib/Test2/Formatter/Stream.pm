@@ -12,8 +12,9 @@ use Time::HiRes qw/time/;
 use Test2::Util qw/get_tid/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
-use Test2::Harness::Util::JSON qw/encode_ascii_json/;
 use Test2::Harness::Util qw/hub_truth apply_encoding/;
+
+use Test2::Harness::Collector::Child qw/send_event/;
 
 use parent qw/Test2::Formatter/;
 use Test2::Util::HashBase qw{
@@ -25,29 +26,6 @@ use Test2::Util::HashBase qw{
     <tb
     <tb_handles
 };
-
-BEGIN {
-    no warnings 'once';
-
-    if ($^C) {
-        *USE_PIPE_STDERR = sub() { 0 };
-        return;
-    }
-
-    my $use_pipe = $ENV{T2_HARNESS_PIPE_COUNT} || die "T2_HARNESS_PIPE_COUNT env var was not set";
-
-    $Test2::Harness::STDOUT_APIPE //= Atomic::Pipe->from_fh('>&=', \*STDOUT);
-    $Test2::Harness::STDOUT_APIPE->set_mixed_data_mode();
-
-    if ($use_pipe > 1) {
-        *USE_PIPE_STDERR = sub() { 1 };
-        $Test2::Harness::STDERR_APIPE //= Atomic::Pipe->from_fh('>&=', \*STDERR);
-        $Test2::Harness::STDERR_APIPE->set_mixed_data_mode();
-    }
-    else {
-        *USE_PIPE_STDERR = sub() { 0 };
-    }
-}
 
 sub hide_buffered { 0 }
 
@@ -75,39 +53,15 @@ sub record {
     my $self = shift;
     my ($facets, $num) = @_;
 
-    my $stamp = time;
-
-    if ($facets->{control}->{halt}) {
-        my $reason = $facets->{control}->{details} || "";
-    }
-
-    my $tid = get_tid();
-    my $id = $self->{+STREAM_ID}++;
-    my $event_id = $facets->{about}->{uuid} ||= gen_uuid();
-
-    my $json;
-    {
-        no warnings 'once';
-        local *UNIVERSAL::TO_JSON = sub { "$_[0]" };
-
-        $json = encode_ascii_json(
-            {
-                stamp        => $stamp,
-                stream_id    => $id,
-                tid          => $tid,
-                pid          => $$,
-                event_id     => $event_id,
-                facet_data   => $facets,
-                assert_count => $self->{+NO_NUMBERS} ? undef : $num,
-            }
-        );
-    }
-
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
 
-    $Test2::Harness::STDOUT_APIPE->write_message($json);
-    $Test2::Harness::STDERR_APIPE->write_message(qq/{"event_id":"$event_id"}/) if USE_PIPE_STDERR;
+    my $id = $self->{+STREAM_ID}++;
+    send_event(
+        $facets,
+        stream_id    => $id,
+        assert_count => $self->{+NO_NUMBERS} ? undef : $num,
+    );
 }
 
 sub encoding {

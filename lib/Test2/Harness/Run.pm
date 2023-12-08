@@ -19,7 +19,7 @@ BEGIN {
     @NO_JSON = qw{
         ipc
         connect
-        stdio_pipe
+        send_event_cb
     };
 
     sub no_json { @NO_JSON }
@@ -102,20 +102,6 @@ sub connect {
     return $self->{+CONNECT} = $self->ipc->connect(@{$agg_ipc->{connect}});
 }
 
-sub stdio_pipe {
-    my $self = shift;
-    return unless -p STDOUT;
-    return $self->{+STDIO_PIPE} if $self->{+STDIO_PIPE};
-
-    croak "This run does not use an STDIO pipe" unless $self->{+AGGREGATOR_USE_IO};
-
-    require Atomic::Pipe;
-    my $stdout = Atomic::Pipe->from_fh('>&=', \*STDOUT);
-    $stdout->set_mixed_data_mode;
-
-    return $self->{+STDIO_PIPE} = $stdout;
-}
-
 sub send_initial_events {
     my $self = shift;
 
@@ -140,13 +126,26 @@ sub send_initial_events {
     }
 }
 
-sub send_event {
+sub send_event_cb {
     my $self = shift;
+
+    return unless -p STDOUT;
+
+    croak "This run does not use an STDIO pipe" unless $self->{+AGGREGATOR_USE_IO};
+
+    require Test2::Harness::Collector::Child;
+    $self->{+SEND_EVENT_CB} //= Test2::Harness::Collector::Child->send_event();
+}
+
+sub send_event {
+    my $self  = shift;
     my $event = @_ == 1 ? shift : {@_};
 
-    $event->{stamp} //= time;
+    $event->{stamp}    //= time;
     $event->{event_id} //= gen_uuid;
-    $event->{run_id} //= $self->run_id;
+    $event->{run_id}   //= $self->run_id;
+    $event->{job_id}   //= 0;
+    $event->{job_try}  //= 0;
 
     $event = Test2::Harness::Event->new($event)
         unless blessed($event);
@@ -155,8 +154,11 @@ sub send_event {
         my $con = $self->connect;
         $con->send_message($event);
     }
-    elsif ($self->{AGGREGATOR_USE_IO}) {
-
+    elsif ($self->{+AGGREGATOR_USE_IO}) {
+        $self->send_event_cb->($event);
+    }
+    else {
+        confess "Could not send event";
     }
 }
 

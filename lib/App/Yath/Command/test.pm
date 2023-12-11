@@ -129,9 +129,11 @@ sub collector {
 
     return $self->{+COLLECTOR} if $self->{+COLLECTOR};
 
+    my $settings  = $self->settings;
     my $run_id    = $self->settings->run->run_id;
     my $auditor   = $self->auditor;
     my $renderers = $self->renderers;
+    my $plugins   = $self->plugins;
     my $parser    = Test2::Harness::Collector::IOParser->new(job_id => 0, job_try => 0, run_id => $run_id, type => 'runner');
 
     return $self->{+COLLECTOR} = Test2::Harness::Collector->new(

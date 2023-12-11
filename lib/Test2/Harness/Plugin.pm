@@ -2,84 +2,73 @@ package Test2::Harness::Plugin;
 use strict;
 use warnings;
 
-BEGIN { die "FIXME" }
+use feature 'state';
+use Carp();
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
-# Document, but do not implement
-#sub changed_files {}
-#sub changed_diff {}
-
-sub munge_search {}
-
-sub claim_file {}
-
-sub munge_files {}
-
-sub inject_run_data {}
-
-sub setup {}
-
-sub teardown {}
+sub setup        { }
+sub teardown     { }
+sub finalize     { }
+sub run_queued   { }
+sub run_complete { }
+sub run_halted   { }
 
 sub TO_JSON { ref($_[0]) || "$_[0]" }
 
-sub redirect_io {
-    my $this = shift;
-    my ($settings, $name) = @_;
+sub redirect_io { Carp::confess("redirect_io() is deprecated") }
+sub shellcall   { Carp::confess("shellcall() is deprecated, use shell_call() instead, note that arguments have changed") }
 
-    my @caller = caller();
-    my $at = "at $caller[1] line $caller[2].\n";
-    die "Invalid settings ($settings) $at" unless $settings && ref($settings) eq 'Test2::Harness::Settings';
-    die "No name provided $at"             unless $name;
-    die "This cannot be used without a workspace $at" unless $settings->check_prefix('workspace');
+sub insane_methods { qw/handle_event inject_run_data/ }
 
-    require File::Spec;
-    require Test2::Harness::Util::IPC;
+sub sanity_checks {
+    my $class = shift;
 
-    my $dir = $settings->workspace->workdir;
-    my $aux = File::Spec->catdir($dir, 'aux_logs');
-    mkdir($aux) unless -d $aux;
-
-    Test2::Harness::Util::IPC::swap_io(\*STDOUT, File::Spec->catfile($aux, "${name}-STDOUT.log"));
-    Test2::Harness::Util::IPC::swap_io(\*STDERR, File::Spec->catfile($aux, "${name}-STDERR.log"));
-
-    return;
+    for my $meth ($class->insane_methods) {
+        next unless $class->can($meth);
+        warn "Plugin '$class' implementes ${meth}\() which is no longer used, the module needs to be updated.\n";
+    }
 }
 
-sub shellcall {
-    my $this = shift;
-    my ($settings, $name, @cmd) = @_;
+sub send_event {
+    my $class = shift;
 
-    require POSIX;
+    state($SEND_EVENT, $SEND_EVENT_PID);
 
-    my @caller = caller();
-    my $at = "at $caller[1] line $caller[2].\n";
-    die "Invalid settings ($settings) $at" unless $settings && ref($settings) eq 'Test2::Harness::Settings';
-    die "No name provided $at" unless $name;
-    die "No command provided $at" unless @cmd && length($cmd[0]);
+    $SEND_EVENT = undef unless $SEND_EVENT_PID && $$ == $SEND_EVENT_PID;
 
-    my $pid = fork // die "Could not fork: $!";
-    if ($pid) {
-        waitpid($pid, 0);
-        return $?;
-    }
-    else {
+    unless ($SEND_EVENT) {
+        require Test2::Harness::Collector::Child;
         local $@;
-
-        eval {
-            if ($settings->check_prefix('workspace')) {
-                $this->redirect_io($settings, $name);
-            }
-            exec(@cmd) if @cmd > 1;
-            exec($cmd[0]);
-        };
-
-        chomp(my $err = $@ // "unknown error");
-
-        warn "Could not run command ($@) $at";
-        POSIX::_exit(1);
+        $SEND_EVENT = eval { Test2::Harness::Collector::Child->send_event } or Carp::confess("Cannot send an event from here: $@");
+        $SEND_EVENT_PID = $$;
     }
+
+    return $SEND_EVENT->(@_);
+}
+
+sub shell_call {
+    my $this = shift;
+    my ($name, @cmd) = @_;
+
+    Carp::croak("No name provided")    unless $name;
+    Carp::croak("No command provided") unless @cmd && length($cmd[0]);
+
+    require Test2::Harness::IPC::Util;
+    my $pid = Test2::Harness::IPC::Util::start_collected_process(
+        io_pipes     => $ENV{T2_HARNESS_PIPE_COUNT},
+        command      => \@cmd,
+        root_pid     => $$,
+        type         => 'plugin',
+        name         => $name,
+        tag          => $name,
+        setsid       => 0,
+        forward_exit => 1,
+    );
+
+    local $? = 0;
+    waitpid($pid, 0);
+    return $?;
 }
 
 1;
@@ -197,29 +186,6 @@ Plugins may implement this without implementing coverage_data(), making this
 useful if you want to use a pre-existing coverage module and want to do
 post-processing on what it provides.
 
-=item $plugin->inject_run_data(meta => $meta, fields => $fields, run => $run)
-
-This is a callback that lets your plugin add meta-data or custom fields to the
-run event. The meta-data and fields are available in the event log, and are
-particularily useful to L<App::Yath::UI>.
-
-    sub inject_run_data {
-        my $class  = shift;
-        my %params = @_;
-
-        my $meta   = $params{meta};
-        my $fields = $params{fields};
-
-        # Meta-data is a hash, each plugin should define its own key, and put
-        # data under that key
-        $meta->{MyPlugin}->{stuff} = "Stuff!";
-
-        # Fields is an array of fields that a UI might want to display when showing the run.
-        push @$fields => {name => 'MyPlugin', details => "Human Friendly Stuff", raw => "Less human friendly stuff", data => $all_the_stuff};
-
-        return;
-    }
-
 =item $plugin->setup($settings)
 
 This is a callback that lets you run setup logic when the runner starts. Note
@@ -281,9 +247,9 @@ A filehandle to the diff
 
 =back
 
-=item $exit = $plugin->shellcall($settings, $name, $cmd)
+=item $exit = $plugin->shell_call($name, $cmd)
 
-=item $exit = $plugin->shellcall($settings, $name, @cmd)
+=item $exit = $plugin->shell_call($name, @cmd)
 
 This is essentially the same as C<system()> except that STDERR and STDOUT are
 redirected to files that the yath collector will pick up so that any output
@@ -294,19 +260,6 @@ calling C<system()>.
 This is particularily useful in C<setup()> and C<teardown()> when running
 external commands, specially any that daemonize and continue to produce output
 after the setup/teardown method has completed.
-
-$name is required because it will be used for filenames, and will be used as
-the output tag (best to limit it to 8 characters).
-
-=item $plugin->redirect_io($settings, $name)
-
-B<WARNING:> This must NEVER be called in a primary yath process. Only use this
-in forked processes that you control. If this is used in a main process it
-could hide ALL output.
-
-This will redirect STDERR and STDOUT to files that will be picked up by the
-yath collector so that any output appears as proper yath events and will be
-included in the yath log.
 
 $name is required because it will be used for filenames, and will be used as
 the output tag (best to limit it to 8 characters).

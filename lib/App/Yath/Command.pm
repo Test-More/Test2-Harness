@@ -8,7 +8,7 @@ use File::Spec;
 use Carp qw/croak/;
 use Test2::Harness::Util qw/mod2file/;
 
-use Test2::Harness::Util::HashBase qw/<settings <args <env_vars <option_state/;
+use Test2::Harness::Util::HashBase qw/<settings <args <env_vars <option_state <plugins/;
 
 sub starts_runner            { 0 }
 sub starts_persistent_runner { 0 }

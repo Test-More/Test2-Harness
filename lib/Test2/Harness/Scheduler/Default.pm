@@ -30,6 +30,8 @@ use Test2::Harness::Util::HashBase qw{
     <children
 
     <run_jobs_added
+
+    <plugins
 };
 
 sub init {
@@ -82,6 +84,7 @@ sub queue_run {
     $run = $self->{+RUNS}->{$run_id} = Test2::Harness::Scheduler::Default::Run->new(%$run);
 
     $run->send_initial_events();
+    $_->run_queued($run) for @{$self->plugins // []};
     $self->add_jobs_for_run($run);
 
     return $run_id;
@@ -187,6 +190,8 @@ sub finalize_run {
     my $run = delete $self->{+RUNS}->{$run_id} or return;
     delete $self->{+RUN_JOBS_ADDED}->{$run_id};
 
+    $_->run_complete($run) for @{$self->plugins // []};
+
     $self->terminate(1) if $self->single_run;
 
     return if $run->aggregator_use_io;
@@ -217,6 +222,7 @@ sub job_update {
 
     if (defined($update->{halt}) && $run->abort_on_bail) {
         $run->set_halt($update->{halt} || 'halted');
+        $_->run_halted($run) for @{$self->plugins // []};
     }
 
     if (my $pid = $update->{pid}) {
@@ -238,6 +244,7 @@ sub abort {
 
     for my $run (values %runs) {
         $run->set_halt('aborted');
+        $_->run_halted($run) for @{$self->plugins // []};
     }
 
     for my $job (values %{$self->{+RUNNING}->{jobs} // {}}) {

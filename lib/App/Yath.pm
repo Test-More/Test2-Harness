@@ -215,13 +215,15 @@ sub process_args {
     $self->{+ENV_VARS} = $env;
     $self->{+OPTION_STATE} = $state;
 
-    warn "FIXME renderers and resources (if applicable)";
-    # This is probably not needed.
-    #for my $module (keys %$modules) {
-    #    $settings->yath->{plugins}->{$module}     //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Plugin');
-    #    $settings->renderer->{classes}->{$module} //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Renderer');
-    #    $settings->resource->{classes}->{$module} //= [$module->can('args_from_settings') ? $module->args_from_settings($settings) : ()] if $module->isa('App::Yath::Resource');
-    #}
+    for my $module (keys %$modules) {
+        for my $set (['yath', 'plugins', 'App::Yath::Plugin'], ['renderer', 'classes', 'App::Yath::Renderer'], ['resource', 'classes', 'App::Yath::Resource']) {
+            my ($group, $field, $type) = @$set;
+            next unless $module->isa($type);
+            next unless $module->can('args_from_settings');
+            my $args = $settings->$group->$field->{$module} //= [];
+            push @$args => $module->args_from_settings(settings => $settings, args => $args, group => $group, field => $field, type => $type);
+        }
+    }
 }
 
 sub run {
@@ -231,12 +233,42 @@ sub run {
 
     my $settings = $self->{+SETTINGS};
 
+    my $plugins = [];
+    my $plugin_specs = $settings->yath->plugins;
+    for my $pclass (keys %$plugin_specs) {
+        require(mod2file($pclass));
+
+        $pclass->sanity_checks();
+
+        my $new_args = $plugin_specs->{$pclass};
+        my $has_new  = $pclass->can('new');
+
+        if ($new_args && @$new_args) {
+            die "Plugin $pclass does not accept construction args.\n"          unless $has_new;
+            die "Plugin $pclass args need to be an arrayref, got $new_args.\n" unless ref($new_args) eq 'ARRAY';
+        }
+
+        if ($has_new) {
+            $new_args //= [];
+            push @$plugins => $pclass->new(@$new_args);
+        }
+        else {
+            push @$plugins => $pclass;
+        }
+    }
+
     my $cmd_class = $self->command;
     $settings->yath->create_option(command => $cmd_class) if $cmd_class;
 
     $self->handle_debug();
 
-    my $cmd = $cmd_class->new(settings => $settings, args => $self->argv, env_vars => $self->{+ENV_VARS}, option_state => $self->{+OPTION_STATE});
+    my $cmd = $cmd_class->new(
+        settings     => $settings,
+        args         => $self->argv,
+        env_vars     => $self->{+ENV_VARS},
+        option_state => $self->{+OPTION_STATE},
+        plugins      => $plugins
+    );
 
     warn "generate_run_dub found in '$cmd', this is no longer supported" if $cmd->can('generate_run_sub');
 

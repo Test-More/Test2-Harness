@@ -121,7 +121,17 @@ sub become_instance {
     $0 = $self->process_base_name;
     my $collector = $self->collector();
     $collector->setup_child_output();
+
+    my $settings  = $self->settings;
+    my $plugins   = $self->plugins;
+    my $resources = $self->resources;
+
+    $_->setup($settings) for @$plugins, @$resources;
+
     $self->instance->run;
+
+    $_->teardown($settings) for reverse(@$plugins, @$resources);
+    $_->finalize($settings) for @$plugins, @$resources;
 
     return 0;
 }
@@ -195,12 +205,14 @@ sub instance {
     my $runner    = $self->runner();
     my $scheduler = $self->scheduler();
     my $resources = $self->resources();
+    my $plugins = $self->plugins();
 
     return $self->{+INSTANCE} = Test2::Harness::Instance->new(
         ipc        => $ipc,
         scheduler  => $scheduler,
         runner     => $runner,
         resources  => $resources,
+        plugins    => $plugins,
         log_file   => $self->log_file,
         single_run => 1,
     );
@@ -225,12 +237,13 @@ sub scheduler {
 
     my $runner    = $self->runner;
     my $resources = $self->resources;
+    my $plugins   = $self->plugins;
 
     my $scheduler_s = $self->settings->scheduler;
-    my $class = $scheduler_s->class;
+    my $class       = $scheduler_s->class;
     require(mod2file($class));
 
-    return $self->{+SCHEDULER} = $class->new($scheduler_s->all, runner => $runner, resources => $resources);
+    return $self->{+SCHEDULER} = $class->new($scheduler_s->all, runner => $runner, resources => $resources, plugins => $plugins);
 }
 
 sub runner {
@@ -238,14 +251,15 @@ sub runner {
 
     return $self->{+RUNNER} if $self->{+RUNNER};
 
+    my $plugins  = $self->plugins;
     my $settings = $self->settings;
     my $runner_s = $settings->runner;
-    my $class = $runner_s->class;
+    my $class    = $runner_s->class;
     require(mod2file($class));
 
     my $ts = Test2::Harness::TestSettings->new($settings->tests->all);
 
-    return $self->{+RUNNER} = $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir);
+    return $self->{+RUNNER} = $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir, plugins => $plugins);
 }
 
 sub resources {

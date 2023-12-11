@@ -201,7 +201,7 @@ This represents when the test job exited.
 =item harness_job_fields
 
 Extra data attached to the harness job, usually from an
-L<Test2::Harness::Plugin> via C<inject_run_data()>.
+L<Test2::Harness::Plugin>.
 
 =item harness_job_launch
 

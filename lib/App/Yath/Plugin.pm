@@ -2,20 +2,28 @@ package App::Yath::Plugin;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use parent 'Test2::Harness::Plugin';
 
-# We do not want this defined by default, but it should be documented
-#sub handle_event {}
+# We do not want these defined by default, but it should be documented
 #sub sort_files {}
 #sub sort_files_2 {}
+#sub changed_files {}
+#sub changed_diff {}
+warn "Document this!";
+#sub args_from_settings($settings) { }
 
+# Superclass should not get the $settings argument that the App::Yath subclass
+# does.
+sub setup    { shift->SUPER::setup() }
+sub teardown { shift->SUPER::teardown() }
+sub finalize { shift->SUPER::finalize() }
+
+sub claim_file {}
+sub munge_search {}
+sub munge_files {}
 sub finish {}
-
-sub finalize {}
 
 1;
 
@@ -73,12 +81,6 @@ get passed around.
 B<Note:> See L<Test2::Harness::Plugin> for additional method you can implement/override
 
 =over 4
-
-=item $plugin->handle_event($event, $settings)
-
-Called for every single event that yath sees. Note that this method is not
-defined by default for performance reasons, however it will be called if you
-define it.
 
 =item @sorted = $plugin->sort_files_2(settings => $settings, files => \@unsorted)
 

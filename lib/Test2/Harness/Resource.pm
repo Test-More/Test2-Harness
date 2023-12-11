@@ -29,9 +29,10 @@ sub init {
 sub spawns_process { 0 }
 sub is_job_limiter { 0 }
 
-sub setup   { }
-sub tick    { }
-sub cleanup { }
+sub setup    { }
+sub teardown { }
+sub tick     { }
+sub cleanup  { }
 
 sub subprocess_args { () }
 

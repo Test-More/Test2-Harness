@@ -104,7 +104,7 @@ sub render_final_data {
         print "\nThe following jobs failed at least once:\n";
         print join "\n" => table(
             header => ['Job ID', 'Times Run', 'Test File', "Succeeded Eventually?"],
-            rows   => $rows,
+            rows   => [sort { $a->[2] cmp $b->[2] } @$rows],
         );
         print "\n";
     }
@@ -114,7 +114,7 @@ sub render_final_data {
         print join "\n" => table(
             collapse => 1,
             header   => ['Job ID', 'Test File', 'Subtests'],
-            rows     => [map { my $r = [@{$_}]; $r->[2] = join("\n", @{$r->[2]}) if $r->[2]; $r } @$rows],
+            rows     => [map { my $r = [@{$_}]; $r->[2] = join("\n", @{$r->[2]}) if $r->[2]; $r } sort { $a->[1] cmp $b->[1] } @$rows],
         );
         print "\n";
     }
@@ -123,7 +123,7 @@ sub render_final_data {
         print "\nThe following jobs requested all testing be halted:\n";
         print join "\n" => table(
             header => ['Job ID', 'Test File', "Reason"],
-            rows   => $rows,
+            rows   => [sort { $a->[1] cmp $b->[1] } @$rows],
         );
         print "\n";
     }
@@ -132,7 +132,7 @@ sub render_final_data {
         print "\nThe following jobs never ran:\n";
         print join "\n" => table(
             header => ['Job ID', 'Test File'],
-            rows   => $rows,
+            rows   => [sort { $a->[1] cmp $b->[1] } @$rows],
         );
         print "\n";
     }

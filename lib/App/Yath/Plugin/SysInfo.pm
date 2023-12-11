@@ -2,9 +2,7 @@ package App::Yath::Plugin::SysInfo;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Sys::Hostname qw/hostname/;
 use Test2::Util qw/CAN_THREAD CAN_REALLY_FORK CAN_FORK CAN_SIGSYS/;
@@ -13,12 +11,9 @@ use Config qw/%Config/;
 use parent 'App::Yath::Plugin';
 use Test2::Harness::Util::HashBase qw/-host_short_pattern/;
 
-sub inject_run_data {
-    my $self  = shift;
-    my %params = @_;
-
-    my $meta   = $params{meta};
-    my $fields = $params{fields};
+sub run_queued {
+    my $self = shift;
+    my ($run) = @_;
 
     my %data = (
         env => {
@@ -57,12 +52,18 @@ sub inject_run_data {
     my @fields = qw/uselongdouble use64bitall version use64bitint usemultiplicity osname useperlio useithreads archname/;
     @{$data{config}}{@fields} = @Config{@fields};
 
-    push @$fields => {
-        name    => 'sys',
-        details => $short,
-        raw     => $raw,
-        data    => \%data,
-    };
+    $run->send_event(
+        facet_data => {
+            harness_run_fields => [
+                {
+                    name    => 'sys',
+                    details => $short,
+                    raw     => $raw,
+                    data    => \%data,
+                },
+            ],
+        }
+    );
 }
 
 sub TO_JSON { ref($_[0]) }

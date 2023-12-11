@@ -13,7 +13,7 @@ use Getopt::Yath::Settings;
 use Getopt::Yath::Term qw/USE_COLOR color/;
 
 use Test2::Harness::Util::HashBase qw{
-    +options <included
+    <options <included
     <posts
     <stops
 
@@ -93,11 +93,6 @@ sub _option {
     push @{$options} => $option;
 }
 
-sub options {
-    my $self = shift;
-    return [grep { $_->is_applicable($self) } @{$self->{+OPTIONS}}];
-}
-
 sub option_map {
     my $self = shift;
     my ($options) = @_;
@@ -152,7 +147,7 @@ sub process_args {
     my $groups = $params{groups} // {};
     $stops = { map { ($_ => 1) } @$stops } if $stops && ref($stops) eq 'ARRAY';
 
-    my $options = $self->options;
+    my $options = [ grep { $_->is_applicable($self, $settings) } @{$self->options // []} ];
 
     my @skip;
     my $state = {
@@ -430,7 +425,8 @@ sub docs {
     my $self = shift;
     my ($format, %params) = @_;
 
-    my $opts = $self->options;
+    my $settings = $params{settings};
+    my $opts = [ grep { $_->is_applicable($self, $settings) } @{$self->options // []} ];
 
     $format //= "UNDEFINED";
     my $fset = $DOC_FORMATS{$format} or croak "Invalid documentation format '$format'";

@@ -136,10 +136,10 @@ sub clear_field {
 }
 
 sub is_applicable {
-    my $self      = shift;
-    my ($options) = @_;
-    my $cb        = $self->{+APPLICABLE} or return 1;
-    return $self->$cb($options);
+    my $self = shift;
+    my ($options, $settings) = @_;
+    my $cb = $self->{+APPLICABLE} or return 1;
+    return $self->$cb($options, $settings);
 }
 
 sub long_args {

@@ -52,6 +52,7 @@ sub cli_help {
     my $self = shift;
     my ($options, %params) = @_;
 
+    my $settings = $self->{+SETTINGS};
     my $cmd_class = $self->command;
 
     $options //= $self->options;
@@ -76,7 +77,7 @@ sub cli_help {
         $help .= join "\n\n" => @desc;
     }
 
-    my $opts = $options->docs('cli', groups => {':{' => '}:'}, category => $params{category});
+    my $opts = $options->docs('cli', groups => {':{' => '}:'}, category => $params{category}, settings => $settings);
 
     my $usage = '';
     my $append = '';

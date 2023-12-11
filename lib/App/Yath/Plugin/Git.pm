@@ -2,19 +2,18 @@ package App::Yath::Plugin::Git;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use IPC::Cmd qw/can_run/;
-use Test2::Harness::Util::IPC qw/run_cmd/;
+use Capture::Tiny qw/capture/;
+
 use parent 'App::Yath::Plugin';
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'git', category => "Git Options"} => sub {
+option_group {group => 'git', category => "Git Options"} => sub {
     option change_base => (
-        type => 's',
+        type => 'Scalar',
         description => "Find files changed by all commits in the current branch from most recent stopping when a commit is found that is also present in the history of the branch/commit specified as the change base.",
         long_examples  => [" master", " HEAD^", " df22abe4"],
     );
@@ -29,86 +28,60 @@ sub git_output {
 
     my $cmd = $class->git_cmd or return sub {()};
 
-    my ($rh, $wh, $irh, $iwh);
-    pipe($rh, $wh) or die "No pipe: $!";
-    pipe($irh, $iwh) or die "No pipe: $!";
-    my $pid = run_cmd(stderr => $iwh, stdout => $wh, command => [$cmd, @args]);
+    my ($stdout, $stderr, $exit) = capture { system($cmd, @args) };
+    die "git command failed: $stderr\n" if $exit;
 
-    close($wh);
-    close($iwh);
-
-    $rh->blocking(1);
-    $irh->blocking(0);
-
-    my $waited = 0;
-    return sub {
-        my $line = <$rh>;
-        return $line if defined $line;
-
-        unless ($waited++) {
-            local $?;
-            waitpid($pid, 0);
-            print STDERR <$irh> if $?;
-            close($irh);
-
-            # Try again
-            $line = <$rh>;
-            return $line if defined $line;
-        }
-
-        close($rh);
-        return;
-    };
+    return $stdout;
 }
 
-sub inject_run_data {
-    my $class  = shift;
-    my %params = @_;
-
-    my $meta   = $params{meta};
-    my $fields = $params{fields};
+sub run_queued {
+    my $class = shift;
+    my ($run) = @_;
 
     my $long_sha  = $ENV{GIT_LONG_SHA};
     my $short_sha = $ENV{GIT_SHORT_SHA};
     my $status    = $ENV{GIT_STATUS};
     my $branch    = $ENV{GIT_BRANCH};
 
-        my @sets = (
-            [\$long_sha, 'rev-parse', 'HEAD'],
-            [\$short_sha, 'rev-parse', '--short', 'HEAD'],
-            [\$status, 'status', '-s'],
-            [\$branch, 'rev-parse', '--abbrev-ref', 'HEAD'],
-        );
+    my @sets = (
+        [\$long_sha,  'rev-parse', 'HEAD'],
+        [\$short_sha, 'rev-parse', '--short', 'HEAD'],
+        [\$status,    'status',    '-s'],
+        [\$branch,    'rev-parse', '--abbrev-ref', 'HEAD'],
+    );
 
-        for my $set (@sets) {
-            my ($var, @args) = @$set;
-            next if $$var; # Already set
-            my $output = $class->git_output(@args);
-
-            my @lines;
-            while (my $line = $output->()) {
-                push @lines => $line;
-            }
-
-            chomp($$var = join "\n" => @lines);
-        }
+    for my $set (@sets) {
+        my ($var, @args) = @$set;
+        next if $$var;    # Already set
+        chomp($$var = $class->git_output(@args));
+    }
 
     return unless $long_sha;
 
-    $meta->{git}->{sha}    = $long_sha;
-    $meta->{git}->{status} = $status if $status;
+    my %data;
+    $data{sha}    = $long_sha;
+    $data{status} = $status if $status;
+
+    my $field = {
+        name => 'git',
+        data => \%data,
+    };
 
     if ($branch) {
-        $meta->{git}->{branch} = $branch;
+        $data{branch} = $branch;
 
         my $short = length($branch) > 20 ? substr($branch, 0, 20) : $branch;
 
-        push @$fields => {name => 'git', details => $short, raw => $branch, data => $meta->{git}};
+        $field->{details} = $short;
+        $field->{raw} = $branch;
     }
     else {
         $short_sha ||= substr($long_sha, 0, 16);
-        push @$fields => {name => 'git', details => $short_sha, raw => $long_sha, data => $meta->{git}};
+        $field->{details} = $short_sha;
+        $field->{raw} = $long_sha;
     }
+
+    $run->send_event(facet_data => {harness_run_fields => [$field]});
 
     return;
 }

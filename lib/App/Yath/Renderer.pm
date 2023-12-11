@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     <show_job_info
     <show_job_launch
     <show_run_info
+    <show_run_fields
 };
 
 sub init {}

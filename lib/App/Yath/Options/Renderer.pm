@@ -112,6 +112,13 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
 
         description => 'Show the run configuration when a run starts. (Default: off, unless -vv)',
     );
+
+    option show_run_fields => (
+        type    => 'Bool',
+        default => sub { my $v = $_[1]->renderer->verbose // 0; $v > 1 ? 1 : 0 },
+
+        description => 'Show run fields. (Default: off, unless -vv)',
+    );
 };
 
 sub init_renderers {

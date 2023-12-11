@@ -70,6 +70,7 @@ sub DEFAULT_TAG_COLOR() {
         'STDERR'   => color('yellow'),
         'RUN INFO' => color('bold bright_blue'),
         'JOB INFO' => color('bold bright_blue'),
+        'RUN  FLD' => color('bold bright_blue'),
         'LAUNCH'   => color('bold bright_white'),
         'RETRY'    => color('bold bright_white'),
         'PASSED'   => color('bold bright_green'),

@@ -90,6 +90,17 @@ sub render_event {
         };
     }
 
+    if ($self->{+SHOW_RUN_FIELDS}) {
+        if (my $fields = $f->{harness_run_fields}) {
+            for my $field (@$fields) {
+                push @{$f->{info}} => {
+                    tag     => 'RUN  FLD',
+                    details => encode_pretty_json($field),
+                };
+            }
+        }
+    }
+
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
 

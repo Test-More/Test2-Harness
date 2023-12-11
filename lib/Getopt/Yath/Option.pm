@@ -351,7 +351,7 @@ sub cli_docs {
         );
     }
     else {
-        my @out = (
+        @out = (
             "[$self->{+NAME}]",
             @{$forms       // []},
             @{$no_forms    // []},

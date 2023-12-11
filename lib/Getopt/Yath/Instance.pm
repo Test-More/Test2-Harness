@@ -339,7 +339,7 @@ sub process_args {
             require(mod2file($class));
             if ($class->can('options')) {
                 if (my $add = $class->options) {
-                    $options->include($add);
+                    $self->include($add);
                 }
             }
         }

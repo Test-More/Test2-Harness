@@ -22,12 +22,12 @@ our @EXPORT_OK = qw{
     USE_P_GROUPS
     swap_io
     pid_is_running
-    start_process
     check_pipe
     ipc_warn
     ipc_connect
     ipc_loop
 
+    start_process
     start_collected_process
 };
 

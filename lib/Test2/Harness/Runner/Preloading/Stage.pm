@@ -85,17 +85,19 @@ sub launch {
     $params{parent} //= $$;
 
     my $ts = $params{test_settings};
+    my $early = $params{preload_early};
 
     my $pkg = __PACKAGE__;
 
     my %seen;
     my $pid = start_process([
-        $^X,                                                                                 # Call current perl
-        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),                              # Use the dev libs specified
-        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @{$ts->includes}),                  # Use the test libs
-        "-m${class}=start",                                                                  # Load Stage
-        '-e' => "\$${pkg}\::ERROR ? die \$${pkg}\::ERROR : exit(\$${pkg}\::EXIT // 255)",    # Run it.
-        encode_json(\%params),                                                               # json data for job
+        $^X,                                                                                      # Call current perl
+        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),                                   # Use the dev libs specified
+        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @{$ts->includes}),                       # Use the test libs
+        (map { my $args = $early->{$_}; "-m$_=" . join(',', @$args) } @{$early->{'@'} // []}),    # Early preloads
+        "-m${class}=start",                                                                       # Load Stage
+        '-e' => "\$${pkg}\::ERROR ? die \$${pkg}\::ERROR : exit(\$${pkg}\::EXIT // 255)",         # Run it.
+        encode_json(\%params),                                                                    # json data for job
     ]);
 
     return $pid;

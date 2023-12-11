@@ -20,6 +20,7 @@ use parent 'Test2::Harness::Runner';
 use Test2::Harness::Util::HashBase qw{
     +stages
     <preloads
+    <preload_early
     <default_stage
     <preload_retry_delay
     <reloader
@@ -162,6 +163,7 @@ sub start_base_stage {
         name            => 'BASE',
         test_settings   => $self->{+TEST_SETTINGS},
         ipc_info        => $ipc->[0]->callback,
+        preload_early   => $self->preload_early,
         preloads        => $self->preloads,
         retry_delay     => $self->{+PRELOAD_RETRY_DELAY},
         last_launch     => $last_launch,

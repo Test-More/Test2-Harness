@@ -15,6 +15,11 @@ include_options(
 );
 
 option_group {group => 'runner', category => "Runner Options"} => sub {
+    option preload_early => (
+        type => 'Map',
+        description => 'Preload a module when spawning perl to launch the preload stages, before any other preload.',
+    );
+
     option preloads => (
         type  => 'List',
         alt   => ['preload'],

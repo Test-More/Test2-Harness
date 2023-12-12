@@ -25,6 +25,7 @@ use Test2::Harness::Util::HashBase qw{
     <runner
     <scheduler
     <resources
+    <plugins
 
     <log_file
 
@@ -54,24 +55,29 @@ sub run {
     my $self = shift;
     my ($cb) = @_;
 
+    my $runner    = $self->runner;
     my $scheduler = $self->scheduler;
     $scheduler->start($self->{+IPC});
 
-    for my $res (@{$self->{+RESOURCES} //= []}) {
-        $res->setup(instance => $self, scheduler => $scheduler, runner => $self->runner);
-        $res->spawn_process(instance => $self, scheduler => $scheduler) if $res->spawns_process;
-    }
+    my $plugins   = $self->plugins   // [];
+    my $resources = $self->resources // [];
 
-    my $runner = $self->{+RUNNER};
+    my %args = (instance => $self, scheduler => $scheduler, runner => $runner);
+    $_->instance_setup(%args) for @$plugins;
+
+    for my $res (@$resources) {
+        $res->setup(%args);
+        $res->spawn_process(%args) if $res->spawns_process;
+    }
 
     ipc_loop(
         ipcs      => $self->{+IPC},
         wait_time => $self->{+WAIT_TIME},
 
-        signals => sub { $self->terminate("SIG" . $_[0]) },
-
-        iteration_start => sub { $_->tick() for @{$self->{+RESOURCES} // []}; $cb->(@_) if $cb },
-        iteration_end   => sub { $self->{+SCHEDULER}->advance() ? 1 : 0 },
+        iteration_start => sub {
+            $_->tick(type => 'instance') for @$plugins, @$resources;
+            $cb->(@_) if $cb;
+        },
 
         end_check => sub {
             return 1 if $self->{+TERMINATED};
@@ -80,14 +86,21 @@ sub run {
             return 0;
         },
 
+        signals        => sub { $self->terminate("SIG" . $_[0]) },
+        iteration_end  => sub { $self->{+SCHEDULER}->advance() ? 1 : 0 },
         handle_request => sub { $self->handle_request(@_) },
-        handle_message => sub { },                             # Intentionally do nothing.
+
+        handle_message => sub { },    # Intentionally do nothing.
     );
+
+    $_->teardown(%args)          for reverse @$resources;
+    $_->instance_teardown(%args) for reverse @$plugins;
 
     $runner->terminate();
     $scheduler->terminate();
 
-    $_->cleanup() for @{$self->{+RESOURCES} // []};
+    $_->cleanup(%args)           for @$resources;
+    $_->instance_finalize(%args) for @$plugins;
 
     return;
 }

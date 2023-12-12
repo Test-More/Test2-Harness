@@ -45,6 +45,11 @@ sub assign         { croak "'$_[0]' does not implement 'assign'" }
 sub release        { croak "'$_[0]' does not implement 'release'" }
 sub subprocess_run { croak "'$_[0]' does not implement 'subprocess_run'" }
 
+sub DESTROY {
+    my $self = shift;
+    $self->cleanup();
+}
+
 sub sort_weight {
     my $class = shift;
     return 100 if $class->is_job_limiter;
@@ -195,3 +200,7 @@ sub status_lines {
 }
 
 1;
+
+__END__
+
+Document: cleanup() should be able to be run multiple times, it is called by destroy

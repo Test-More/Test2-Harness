@@ -121,16 +121,7 @@ sub become_instance {
     my $collector = $self->collector();
     $collector->setup_child_output();
 
-    my $settings  = $self->settings;
-    my $plugins   = $self->plugins;
-    my $resources = $self->resources;
-
-    $_->setup($settings) for @$plugins, @$resources;
-
     $self->instance->run;
-
-    $_->teardown($settings) for reverse(@$plugins, @$resources);
-    $_->finalize($settings) for @$plugins, @$resources;
 
     return 0;
 }

@@ -7,19 +7,22 @@ use Carp();
 
 our $VERSION = '2.000000';
 
-sub setup        { }
-sub teardown     { }
-sub finalize     { }
-sub run_queued   { }
-sub run_complete { }
-sub run_halted   { }
+sub run_queued        { }
+sub run_complete      { }
+sub run_halted        { }
+sub client_setup      { }
+sub client_teardown   { }
+sub client_finalize   { }
+sub instance_setup    { }
+sub instance_teardown { }
+sub instance_finalize { }
 
 sub TO_JSON { ref($_[0]) || "$_[0]" }
 
 sub redirect_io { Carp::confess("redirect_io() is deprecated") }
 sub shellcall   { Carp::confess("shellcall() is deprecated, use shell_call() instead, note that arguments have changed") }
 
-sub insane_methods { qw/handle_event inject_run_data spawn_args/ }
+sub insane_methods { qw/handle_event inject_run_data spawn_args setup teardown finalize/ }
 
 sub sanity_checks {
     my $class = shift;

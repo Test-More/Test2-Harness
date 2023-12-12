@@ -106,15 +106,11 @@ sub become_collector {
     my $self = shift;
     my ($pid) = @_;
 
-    my $auditor = $self->auditor;
+    $self->start_plugins_and_renderers();
 
     my $exit = $self->SUPER::become_collector($pid);
 
-    for my $r (@{$self->renderers}) {
-        $r->finish($auditor);
-    }
-
-    return $auditor->exit_value || $exit;
+    return $self->stop_plugins_and_renderers($exit);
 }
 
 sub collector {

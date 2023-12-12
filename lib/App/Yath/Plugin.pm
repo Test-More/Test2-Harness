@@ -5,6 +5,19 @@ use warnings;
 our $VERSION = '2.000000';
 
 use parent 'Test2::Harness::Plugin';
+use Test2::Harness::Util::HashBase qw{
+    <settings
+};
+
+warn "Document this!";
+sub args_from_settings {
+    my $class = shift;
+    my %params = @_;
+
+    my $settings = $params{settings};
+
+    return (settings => $settings);
+}
 
 # We do not want these defined by default, but it should be documented
 #sub sort_files {}
@@ -12,19 +25,11 @@ use parent 'Test2::Harness::Plugin';
 #sub changed_files {}
 #sub changed_diff {}
 warn "Document this!";
-#sub args_from_settings($settings) { }
 #sub annotate_event();
-
-# Superclass should not get the $settings argument that the App::Yath subclass
-# does.
-sub setup    { shift->SUPER::setup() }
-sub teardown { shift->SUPER::teardown() }
-sub finalize { shift->SUPER::finalize() }
 
 sub claim_file {}
 sub munge_search {}
 sub munge_files {}
-sub finish {}
 
 1;
 

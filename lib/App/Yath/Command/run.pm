@@ -60,12 +60,11 @@ sub run {
 
     my $settings = $self->settings;
 
-    my $search = $self->fix_test_args();
+    $self->start_plugins_and_renderers();
 
     # Get list of tests to run
-    my $tests = $self->find_tests(@$search) || return $self->no_tests;
-
-    my $renderers = $self->renderers;
+    my $search = $self->fix_test_args();
+    my $tests  = $self->find_tests(@$search) || return $self->no_tests;
 
     my $client = App::Yath::Client->new(settings => $settings);
 
@@ -86,6 +85,9 @@ sub run {
 
     my $guard = Scope::Guard->new(sub { $client->send_and_get(abort => $run_id) });
 
+    my $plugins   = $self->plugins   // [];
+    my $renderers = $self->renderers // [];
+
     my @sig_render = grep { $_->can('signal') } @$renderers;
     for my $sig (qw/INT TERM HUP/) {
         $SIG{$sig} = sub {
@@ -103,12 +105,13 @@ sub run {
 
     my $lf = Test2::Harness::Util::LogFile->new(client => $client);
 
-    my $annotate_plugins = [ grep { $_->can('annotate_event') } @{$self->plugins // []} ];
+    my $annotate_plugins = [grep { $_->can('annotate_event') } @$plugins];
 
     my $auditor = $self->auditor;
     my $run_complete;
     while (!$run_complete) {
         $_->step() for @$renderers;
+        $_->tick(type => 'client') for @$plugins;
 
         $run_complete //= 1 unless $client->active;
 
@@ -135,18 +138,46 @@ sub run {
         }
     }
 
+    my $exit = $self->stop_plugins_and_renderers();
+
     $guard->dismiss();
 
-    for my $r (@$renderers) {
-        $r->finish($auditor);
-    }
-
-    return $auditor->exit_value;
+    return $exit;
 }
 
 sub renderers {
     my $self = shift;
     $self->{+RENDERERS} //= App::Yath::Options::Renderer->init_renderers($self->settings);
+}
+
+sub start_plugins_and_renderers {
+    my $self = shift;
+
+    my $settings  = $self->settings;
+    my $renderers = $self->renderers;
+    my $plugins   = $self->plugins;
+
+    $_->client_setup(settings => $settings) for @$plugins;
+    $_->start() for @$renderers;
+}
+
+sub stop_plugins_and_renderers {
+    my $self = shift;
+    my ($alt_exit) = $@;
+    $alt_exit ||= 0;
+
+    my $settings  = $self->settings;
+    my $auditor   = $self->auditor;
+    my $plugins   = $self->plugins;
+    my $renderers = $self->renderers;
+
+    $_->client_teardown(settings => $settings, auditor => $auditor) for reverse @$plugins;
+    $_->finish($auditor) for reverse @$renderers;
+
+    my $exit ||= $auditor->exit_value;
+    $_->client_finalize(settings => $settings, auditor => $auditor, exit => \$exit) for @$plugins;
+
+    return $exit || $alt_exit;
 }
 
 sub annotate {

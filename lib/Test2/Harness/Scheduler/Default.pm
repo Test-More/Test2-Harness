@@ -207,7 +207,7 @@ sub finalize_run {
         1;
     };
 
-    ipc_warn(error => $@);
+    ipc_warn(error => $@) unless $@ =~ m/Disconnected pipe/;
 }
 
 sub job_update {

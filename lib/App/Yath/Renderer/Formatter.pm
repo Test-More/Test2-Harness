@@ -1,12 +1,24 @@
-package App::Yath::Renderer::Default;
+package App::Yath::Renderer::Formatter;
 use strict;
 use warnings;
 
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
-use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::Util qw/mod2file fqmod/;
 use Storable qw/dclone/;
+
+use Getopt::Yath;
+
+option_group {group => 'formatter', category => "Formatter Options"} => sub {
+    option formatter => (
+        type => 'Scalar',
+
+        default     => 'Test2::Formatter::Test2',
+        normalize   => sub { fqmod($_[0], 'Test2::Formatter') },
+        description => "The Test2::Formatter to use",
+    );
+};
 
 use parent 'App::Yath::Renderer';
 use Test2::Harness::Util::HashBase qw{
@@ -32,10 +44,12 @@ sub finish {
 sub init {
     my $self = shift;
 
-    my $f_class = $self->formatter // 'Test2::Formatter::Test2';
+    $self->SUPER::init();
+
+    my $f_class = $self->formatter // $self->settings->formatter->formatter // 'Test2::Formatter::Test2';
     die "Invalid formatter class: $f_class" if ref($f_class);
 
-    my $f_file  = mod2file($f_class);
+    my $f_file = mod2file($f_class);
     require $f_file;
 
     my $io = $self->{+IO} || $self->{output} || \*STDOUT;

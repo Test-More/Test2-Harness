@@ -27,9 +27,14 @@ use Test2::Harness::Util::HashBase qw{
     <show_job_launch
     <show_run_info
     <show_run_fields
+    <settings
 };
 
-sub init {}
+sub init {
+    my $self = shift;
+
+    croak "'settings' is required" unless $self->{+SETTINGS};
+}
 
 sub render_event { croak "$_[0] forgot to override 'render_event()'" }
 

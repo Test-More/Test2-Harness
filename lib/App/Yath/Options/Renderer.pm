@@ -78,9 +78,9 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
 
         long_examples  => [' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
         short_examples => ['MyRenderer',     ' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
-        initialize     => sub { {'App::Yath::Renderer::Default' => []} },
+        initialize     => sub { {'App::Yath::Renderer::Formatter' => []} },
 
-        normalize => sub { fqmod($_[0], 'App::Yath::Renderer'), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
+        normalize => sub { fqmod($_[0], ['App::Yath::Renderer', 'Test2::Harness::Renderer']), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
 
         mod_adds_options => 1,
     );
@@ -131,7 +131,7 @@ sub init_renderers {
     for my $class (keys %$r_classes) {
         my $params = $r_classes->{$class};
         require(mod2file($class));
-        my $r = $class->new($settings->renderer->all, $settings->term->all, @$params, %params);
+        my $r = $class->new($settings->renderer->all, $settings->term->all, @$params, %params, settings => $settings);
         $r->start();
         push @renderers => $r;
     }

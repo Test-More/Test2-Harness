@@ -124,6 +124,7 @@ sub options {
     warn "Verify plugin options are included";
     $self->include_options('plugins' => 'App::Yath::Plugin::*');
     $self->include_options('resource' => 'App::Yath::Resource::*');
+    $self->include_options('renderer' => 'App::Yath::Renderer::*');
 
     return $self->{+OPTIONS};
 }

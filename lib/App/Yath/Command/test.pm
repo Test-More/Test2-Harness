@@ -8,14 +8,12 @@ use Time::HiRes qw/sleep/;
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
-use Test2::Harness::Collector::Auditor::Run;
 use App::Yath::Command::start;
 use App::Yath::Command::run;
 
 use parent 'App::Yath::Command::start';
 use parent 'App::Yath::Command::run';
 use Test2::Harness::Util::HashBase qw{
-    +auditor
     +renderers
 };
 
@@ -99,11 +97,6 @@ sub become_instance {
     return 0;
 }
 
-sub auditor {
-    my $self = shift;
-    return $self->{+AUDITOR} //= Test2::Harness::Collector::Auditor::Run->new();
-}
-
 sub renderers {
     my $self = shift;
     return $self->{+RENDERERS} //= App::Yath::Options::Renderer->init_renderers($self->settings);
@@ -136,6 +129,8 @@ sub collector {
     my $plugins   = $self->plugins;
     my $parser    = Test2::Harness::Collector::IOParser->new(job_id => 0, job_try => 0, run_id => $run_id, type => 'runner');
 
+    my $annotate_plugins = [ grep { $_->can('annotate_event') } @$plugins ];
+
     return $self->{+COLLECTOR} = Test2::Harness::Collector->new(
         auditor      => $auditor,
         parser       => $parser,
@@ -145,6 +140,7 @@ sub collector {
         always_flush => 1,
         output       => sub {
             for my $e (@_) {
+                $self->annotate($annotate_plugins, $e) if @$annotate_plugins;
                 $_->render_event($e) for @$renderers;
             }
         }

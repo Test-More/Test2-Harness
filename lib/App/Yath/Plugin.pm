@@ -13,6 +13,7 @@ use parent 'Test2::Harness::Plugin';
 #sub changed_diff {}
 warn "Document this!";
 #sub args_from_settings($settings) { }
+#sub annotate_event();
 
 # Superclass should not get the $settings argument that the App::Yath subclass
 # does.

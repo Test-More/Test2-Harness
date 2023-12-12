@@ -23,8 +23,8 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw{
-    +plugins
     +find_tests
+    +auditor
 };
 
 use Getopt::Yath;
@@ -100,14 +100,18 @@ sub run {
 
     my $lf = Test2::Harness::Util::LogFile->new(client => $client);
 
-    my $auditor = Test2::Harness::Collector::Auditor::Run->new();
+    my $annotate_plugins = [ grep { $_->can('annotate_event') } @{$self->plugins // []} ];
+
+    my $auditor = $self->auditor;
     my $run_complete;
     while (!$run_complete) {
         $run_complete //= 1 unless $client->active;
 
         for my $event ($lf->poll) {
-            $auditor->audit($event);
-            $_->render_event($event) for @$renderers;
+            $self->annotate($annotate_plugins, $event) if @$annotate_plugins;
+            for my $e ($auditor->audit($event)) {
+                $_->render_event($e) for @$renderers;
+            }
         }
 
         while (my $msg = $client->get_message(blocking => !$run_complete, timeout => 0.2)) {
@@ -118,8 +122,11 @@ sub run {
 
             my $event = $msg->event or next;
 
-            $auditor->audit($event);
-            $_->render_event($event) for @$renderers;
+            $self->annotate($annotate_plugins, $event) if @$annotate_plugins;
+
+            for my $e ($auditor->audit($event)) {
+                $_->render_event($e) for @$renderers;
+            }
         }
     }
 
@@ -132,18 +139,52 @@ sub run {
     return $auditor->exit_value;
 }
 
+sub annotate {
+    my $self = shift;
+    my ($plugins, $event) = @_;
+
+    my $settings = $self->{+SETTINGS};
+
+    my $fd = $event->{facet_data};
+    for my $p (@$plugins) {
+        my %inject = $p->annotate_event($event, $settings);
+        next unless keys %inject;
+
+        # Can add new facets, but not modify existing ones.
+        # Someone could force the issue by modifying the event directly
+        # inside 'annotate_event', this is not supported, but also not
+        # forbidden, user beware.
+        for my $f (keys %inject) {
+            if (exists $fd->{$f}) {
+                if ('ARRAY' eq ref($fd->{$f})) {
+                    push @{$fd->{$f}} => @{$inject{$f}};
+                }
+                else {
+                    warn "Plugin '$p' tried to add facet '$f' via 'annotate_event()', but it is already present and not a list, ignoring plugin annotation.\n";
+                }
+            }
+            else {
+                $fd->{$f} = $inject{$f};
+            }
+        }
+    }
+}
+
+sub auditor {
+    my $self = shift;
+
+    my $settings = $self->settings;
+    my $run = $settings->run;
+    my $class = $run->run_auditor;
+    require(mod2file($class));
+
+    return $self->{+AUDITOR} //= $class->new();
+}
+
 sub no_tests {
     my $self = shift;
     print "Nothing to do, no tests to run!\n";
     return 0;
-}
-
-sub plugins {
-    my $self = shift;
-
-    warn "init plugins plz...";
-
-    return $self->{+PLUGINS} //= [];
 }
 
 sub fix_test_args {

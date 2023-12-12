@@ -6,6 +6,7 @@ our $VERSION = '2.000000';
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::Util qw/fqmod/;
 use List::Util qw/mesh/;
 
 use Getopt::Yath;
@@ -102,6 +103,13 @@ option_group {group => 'run', category => "Run Options"} => sub {
         type => 'Bool',
         description => "Use Devel::NYTProf on tests. This will set addpid=1 for you. This works with or without fork.",
         long_examples => [''],
+    );
+
+    option run_auditor => (
+        type => 'Scalar',
+        default => 'Test2::Harness::Collector::Auditor::Run',
+        normalize => sub { fqmod($_[0], 'Test2::Harness::Collector::Auditor::Run') },
+        description => 'Auditor class to use when auditing the overall test run',
     );
 
     warn "Fix interactive mode";

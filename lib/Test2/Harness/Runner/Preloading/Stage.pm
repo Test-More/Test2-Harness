@@ -399,7 +399,13 @@ sub run_stage {
         },
 
         # Intentionally do nothing.
-        handle_message => sub { },
+        handle_message => sub {
+            my ($msg) = @_;
+            if (my $reason = $msg->{terminate}) {
+                $self->terminate($reason);
+                POSIX::_exit(0);
+            }
+        },
     );
 
     return {run_stage => $run_stage} if $run_stage;

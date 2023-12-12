@@ -11,6 +11,7 @@ use Test2::Util qw/IS_WIN32/;
 
 use Test2::Harness::Util qw/parse_exit mod2file/;
 use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::IPC::Util qw/pid_is_running/;
 
 use Test2::Harness::Preload();
 use Test2::Harness::TestSettings;
@@ -109,14 +110,24 @@ sub stage_sets {
     return [ map { [$_ => $sets{$_}] } keys %sets ];
 }
 
-sub DESTROY { shift->terminate }
+sub DESTROY {
+    my $self = shift;
+
+    $self->terminate unless $self->{+TERMINATED};
+
+    kill('TERM', grep { $_ && pid_is_running($_) } map { $_->{ready}->{pid} // () } values %{$self->stages});
+}
 
 sub terminate {
     my $self = shift;
+    my ($reason) = @_;
+    $reason //= 1;
 
     $self->SUPER::terminate(@_);
-
-    kill('TERM', grep { $_ } map { $_->{ready}->{pid} // () } values %{$self->stages});
+    for my $stage (values %{$self->stages}) {
+        next unless $stage->{ready} && $stage->{ready}->{con};
+        $stage->{ready}->{con}->send_message({terminate => $reason});
+    }
 }
 
 sub kill {

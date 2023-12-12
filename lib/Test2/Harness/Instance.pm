@@ -279,8 +279,8 @@ sub terminate {
 
     unless ($self->{+TERMINATED}) {
         $self->{+TERMINATED} ||= 1;
-        $self->scheduler->terminate($self->{+TERMINATED});
-        $self->runner->terminate($self->{+TERMINATED});
+        $self->scheduler->terminate($self->{+TERMINATED}) if $self->scheduler;
+        $self->runner->terminate($self->{+TERMINATED})    if $self->runner;
     }
 
     return $self->{+TERMINATED};

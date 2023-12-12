@@ -25,6 +25,7 @@ use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw{
     +find_tests
     +auditor
+    +renderers
 };
 
 use Getopt::Yath;
@@ -64,7 +65,7 @@ sub run {
     # Get list of tests to run
     my $tests = $self->find_tests(@$search) || return $self->no_tests;
 
-    my $renderers = App::Yath::Options::Renderer->init_renderers($settings);
+    my $renderers = $self->renderers;
 
     my $client = App::Yath::Client->new(settings => $settings);
 
@@ -85,9 +86,11 @@ sub run {
 
     my $guard = Scope::Guard->new(sub { $client->send_and_get(abort => $run_id) });
 
+    my @sig_render = grep { $_->can('signal') } @$renderers;
     for my $sig (qw/INT TERM HUP/) {
         $SIG{$sig} = sub {
             $SIG{$sig} = 'DEFAULT';
+            eval { $_->($sig) } for @sig_render;
             print STDERR "\nCought SIG$sig, shutting down...\n";
             $client->send_and_get(abort => $run_id);
             $guard->dismiss();
@@ -105,6 +108,8 @@ sub run {
     my $auditor = $self->auditor;
     my $run_complete;
     while (!$run_complete) {
+        $_->step() for @$renderers;
+
         $run_complete //= 1 unless $client->active;
 
         for my $event ($lf->poll) {
@@ -137,6 +142,11 @@ sub run {
     }
 
     return $auditor->exit_value;
+}
+
+sub renderers {
+    my $self = shift;
+    $self->{+RENDERERS} //= App::Yath::Options::Renderer->init_renderers($self->settings);
 }
 
 sub annotate {

@@ -154,13 +154,14 @@ sub get_message {
     my %params = @_;
 
     my $blocking = $params{blocking} //= 0;
+    my $timeout  = $params{timeout};
 
     while (1) {
         return shift(@{$self->{+MESSAGES}}) if @{$self->{+MESSAGES}};
         my $count = $self->_read_messages(%params);
         return if $count < 0;
         next if $count;
-        return unless $blocking;
+        return unless $blocking && !$timeout;
     }
 }
 

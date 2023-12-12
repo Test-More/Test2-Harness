@@ -27,6 +27,7 @@ use Test2::Harness::Util::HashBase qw{
 
     <end_callback
 
+    <step
     <parser
     <auditor
     <output
@@ -691,6 +692,8 @@ sub _process {
         sigchild  => sub { $reap->(0) },
         wait_time => sub { $sig_stamp ? 0 : 0.2 },
         signals   => sub { $sig_stamp //= time; kill($_[0], $pid) },
+
+        iteration_start => $self->{+STEP},
 
         iteration_end => sub {
             my $out = 0;

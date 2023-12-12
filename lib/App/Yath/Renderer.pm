@@ -40,6 +40,8 @@ sub render_event { croak "$_[0] forgot to override 'render_event()'" }
 
 sub start  { }
 sub step   { }
+sub signal { }
+
 sub finish {
     my $self = shift;
     my ($auditor) = @_;

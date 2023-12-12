@@ -9,7 +9,6 @@ use Test2::Harness::TestSettings;
 use Test2::Harness::IPC::Protocol;
 use Test2::Harness::Collector;
 use Test2::Harness::Collector::IOParser;
-use App::Yath::Renderer::Default;
 
 use Test2::Harness::Util qw/mod2file/;
 use Test2::Harness::IPC::Util qw/pid_is_running/;

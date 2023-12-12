@@ -138,6 +138,7 @@ sub collector {
         job_try      => 0,
         run_id       => $run_id,
         always_flush => 1,
+        tick         => sub { $_->step() for @$renderers },
         output       => sub {
             for my $e (@_) {
                 $self->annotate($annotate_plugins, $e) if @$annotate_plugins;

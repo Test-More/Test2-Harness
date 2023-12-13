@@ -16,7 +16,7 @@ option_group {group => 'scheduler', category => 'Scheduler Options'} => sub {
         name    => 'scheduler',
         field   => 'class',
         type    => 'Scalar',
-        default => 'Test2::Harness::Scheduler::Default',
+        default => 'Test2::Harness::Scheduler',
 
         mod_adds_options => 1,
         long_examples    => [' MyScheduler', ' +Test2::Harness::MyScheduler'],

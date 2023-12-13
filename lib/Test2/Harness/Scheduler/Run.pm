@@ -1,4 +1,4 @@
-package Test2::Harness::Scheduler::Default::Run;
+package Test2::Harness::Scheduler::Run;
 use strict;
 use warnings;
 

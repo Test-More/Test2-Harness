@@ -11,6 +11,15 @@ use Config qw/%Config/;
 use parent 'App::Yath::Plugin';
 use Test2::Harness::Util::HashBase qw/-host_short_pattern/;
 
+use Getopt::Yath;
+option_group {prefix => 'sysinfo', group => 'sysinfo', category => "SysInfo Options"} => sub {
+    option 'sysinfo' => (
+        type => 'Bool',
+        prefix => undef,
+        description => "Enable the SysInfo plugin",
+    );
+};
+
 sub run_queued {
     my $self = shift;
     my ($run) = @_;

@@ -11,7 +11,13 @@ use parent 'App::Yath::Plugin';
 
 use Getopt::Yath;
 
-option_group {group => 'git', category => "Git Options"} => sub {
+option_group {prefix => 'git', group => 'git', category => "Git Options"} => sub {
+    option 'git' => (
+        type => 'Bool',
+        prefix => undef,
+        description => "Enable the git plugin",
+    );
+
     option change_base => (
         type => 'Scalar',
         description => "Find files changed by all commits in the current branch from most recent stopping when a commit is found that is also present in the history of the branch/commit specified as the change base.",

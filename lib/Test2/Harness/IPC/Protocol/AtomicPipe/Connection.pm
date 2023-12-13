@@ -9,6 +9,7 @@ use Atomic::Pipe;
 
 use Carp qw/confess croak/;
 use Errno qw/EINTR/;
+use Time::HiRes qw/sleep/;
 use Scalar::Util qw/weaken blessed/;
 
 use Test2::Harness::IPC::Util qw/check_pipe ipc_warn pid_is_running/;
@@ -40,7 +41,15 @@ sub init {
     $self->SUPER::init();
 
     my $fifo = $self->{+FIFO} or croak "'fifo' is a required attribute";
-    confess "'$fifo' is not a valid fifo" unless -e $fifo && -p $fifo;
+
+    my $valid_fifo = 0;
+    for (1 .. 10) {
+        $valid_fifo ||= -e $fifo && -p $fifo;
+        last if $valid_fifo;
+        sleep 0.1;
+    }
+
+    confess "'$fifo' is not a valid fifo" unless $valid_fifo;
 
     if ($CACHE{$fifo}) {
         $self->{+PIPE} = $CACHE{$fifo};

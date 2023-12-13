@@ -7,6 +7,7 @@ use Carp();
 
 our $VERSION = '2.000000';
 
+sub tick              { }
 sub run_queued        { }
 sub run_complete      { }
 sub run_halted        { }

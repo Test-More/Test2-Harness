@@ -10,6 +10,7 @@ use Test2::Harness::Util::JSON qw/encode_json/;
 
 use App::Yath::Command::start;
 use App::Yath::Command::run;
+use Test2::Harness::Event;
 
 use parent 'App::Yath::Command::start';
 use parent 'App::Yath::Command::run';
@@ -119,13 +120,13 @@ sub collector {
     return $self->{+COLLECTOR} if $self->{+COLLECTOR};
 
     my $settings  = $self->settings;
-    my $run_id    = $self->settings->run->run_id;
     my $auditor   = $self->auditor;
-    my $renderers = $self->renderers;
     my $plugins   = $self->plugins;
+    my $renderers = $self->renderers;
+    my $run_id    = $settings->run->run_id;
     my $parser    = Test2::Harness::Collector::IOParser->new(job_id => 0, job_try => 0, run_id => $run_id, type => 'runner');
 
-    my $annotate_plugins = [ grep { $_->can('annotate_event') } @$plugins ];
+    my $annotate_plugins = [grep { $_->can('annotate_event') } @$plugins];
 
     return $self->{+COLLECTOR} = Test2::Harness::Collector->new(
         auditor      => $auditor,
@@ -134,16 +135,26 @@ sub collector {
         job_try      => 0,
         run_id       => $run_id,
         always_flush => 1,
-        tick         => sub { $_->step() for @$renderers },
-        output       => sub {
-            for my $e (@_) {
-                $self->annotate($annotate_plugins, $e) if @$annotate_plugins;
-                $_->render_event($e) for @$renderers;
-            }
-        }
+        output       => sub { $self->handle_event($_) for @_ },
+
+        tick => sub {
+            $_->step() for @$renderers;
+            $_->tick(type => 'client') for @$plugins;
+        },
     );
 }
 
+sub handle_event {
+    my $self = shift;
+    my ($event) = @_;
+
+    bless($event, 'Test2::Harness::Event');
+
+    $self->annotate($event);
+    $_->render_event($event) for @{$self->renderers // []};
+
+    return ($event);
+}
 
 1;
 

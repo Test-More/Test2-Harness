@@ -100,8 +100,8 @@ dev-lib '$_' added to \@INC late, it is possible some yath libraries were alread
         autofill       => 1,
         short          => 'h',
         description    => "exit after showing help information",
-        short_examples => ['', '=Category', '="Category with space"'],
-        long_examples  => ['', '=Category', '="Category with space"'],
+        short_examples => ['', '=Group'],
+        long_examples  => ['', '=Group'],
     );
 
     option plugins => (

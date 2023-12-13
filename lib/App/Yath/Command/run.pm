@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use List::Util qw/first/;
-use Time::HiRes qw/sleep/;
+use Time::HiRes qw/sleep time/;
 
 use Scope::Guard;
 
@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     +find_tests
     +auditor
     +renderers
+    +annotate_plugins
 };
 
 use Getopt::Yath;
@@ -105,9 +106,6 @@ sub run {
 
     my $lf = Test2::Harness::Util::LogFile->new(client => $client);
 
-    my $annotate_plugins = [grep { $_->can('annotate_event') } @$plugins];
-
-    my $auditor = $self->auditor;
     my $run_complete;
     while (!$run_complete) {
         $_->step() for @$renderers;
@@ -115,12 +113,7 @@ sub run {
 
         $run_complete //= 1 unless $client->active;
 
-        for my $event ($lf->poll) {
-            $self->annotate($annotate_plugins, $event) if @$annotate_plugins;
-            for my $e ($auditor->audit($event)) {
-                $_->render_event($e) for @$renderers;
-            }
-        }
+        $self->handle_event($_) for $lf->poll;
 
         while (my $msg = $client->get_message(blocking => !$run_complete, timeout => 0.2)) {
             if ($msg->terminate || $msg->run_complete) {
@@ -129,12 +122,7 @@ sub run {
             }
 
             my $event = $msg->event or next;
-
-            $self->annotate($annotate_plugins, $event) if @$annotate_plugins;
-
-            for my $e ($auditor->audit($event)) {
-                $_->render_event($e) for @$renderers;
-            }
+            $self->handle_event($event);
         }
     }
 
@@ -150,6 +138,11 @@ sub renderers {
     $self->{+RENDERERS} //= App::Yath::Options::Renderer->init_renderers($self->settings);
 }
 
+sub annotate_plugins {
+    my $self = shift;
+    return $self->{+ANNOTATE_PLUGINS} //= [grep { $_->can('annotate_event') } @{$self->plugins // []}];
+}
+
 sub start_plugins_and_renderers {
     my $self = shift;
 
@@ -159,6 +152,22 @@ sub start_plugins_and_renderers {
 
     $_->client_setup(settings => $settings) for @$plugins;
     $_->start() for @$renderers;
+}
+
+sub handle_event {
+    my $self = shift;
+    my ($event) = @_;
+
+    my $renderers = $self->renderers;
+
+    $self->annotate($event);
+
+    my @events = $self->auditor->audit($event);
+    for my $e (@events) {
+        $_->render_event($e) for @$renderers;
+    }
+
+    return @events;
 }
 
 sub stop_plugins_and_renderers {
@@ -171,7 +180,20 @@ sub stop_plugins_and_renderers {
     my $plugins   = $self->plugins;
     my $renderers = $self->renderers;
 
-    $_->client_teardown(settings => $settings, auditor => $auditor) for reverse @$plugins;
+    for my $plugin (reverse @$plugins) {
+        my @events = $plugin->client_teardown(settings => $settings, auditor => $auditor);
+        $self->handle_event($_) for @events;
+    }
+
+    $self->handle_event(Test2::Harness::Event->new(
+        run_id     => $settings->run->run_id,
+        job_id     => 0,
+        job_try    => 0,
+        event_id   => gen_uuid(),
+        stamp      => time,
+        facet_data => {harness_final => $auditor->final_data},
+    ));
+
     $_->finish($auditor) for reverse @$renderers;
 
     my $exit ||= $auditor->exit_value;
@@ -182,7 +204,10 @@ sub stop_plugins_and_renderers {
 
 sub annotate {
     my $self = shift;
-    my ($plugins, $event) = @_;
+    my ($event) = @_;
+
+    my $plugins = $self->annotate_plugins or return;
+    return unless @$plugins;
 
     my $settings = $self->{+SETTINGS};
 

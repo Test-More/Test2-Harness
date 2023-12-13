@@ -21,7 +21,9 @@ use Test2::Harness::Util::HashBase qw{
 
     +dedup
 
-    +options_map_cache +options_map_cache_key
+    +options_groups_cache
+    +options_map_cache
+    +cache_key
 
     category_sort_map
 };
@@ -81,6 +83,8 @@ sub include {
             $self->_post(@{$post}{qw/caller weight applicable callback/});
         }
     }
+
+    $self->clear_cache;
 }
 
 sub _option {
@@ -93,22 +97,73 @@ sub _option {
     push @{$options} => $option;
 }
 
+sub clear_cache {
+    my $self = shift;
+
+    delete $self->{+OPTIONS_GROUPS_CACHE};
+    delete $self->{+OPTIONS_MAP_CACHE};
+    delete $self->{+CACHE_KEY};
+}
+
+sub check_cache {
+    my $self = shift;
+
+    my $options = $self->options;
+    my $new_key = @$options;
+    my $old_key = $self->{+CACHE_KEY} //= 0;
+
+    return 1 if $old_key == $new_key;
+
+    $self->clear_cache();
+
+    $self->{+CACHE_KEY} = $new_key;
+
+    return 0;
+}
+
+sub have_group {
+    my $self = shift;
+    my ($name) = @_;
+    return 1 if $self->option_groups->{$name};
+    return 0;
+}
+
+sub option_groups {
+    my $self = shift;
+    my ($in_options) = @_;
+
+    my $options;
+    if ($in_options) {
+        $options = $in_options;
+    }
+    else {
+        $options = $self->options;
+
+        return $self->{+OPTIONS_GROUPS_CACHE}
+            if $self->{+OPTIONS_GROUPS_CACHE}
+            && $self->check_cache();
+    }
+
+    my $groups = { map {($_->group() => 1)} @$options };
+
+    return $groups if $in_options;
+    return $self->{+OPTIONS_GROUPS_CACHE} = $groups;
+}
+
 sub option_map {
     my $self = shift;
-    my ($options) = @_;
+    my ($in_options) = @_;
 
-    $options //= $self->options;
-
-    my $new_key = @$options;
-
-    if (my $old_key = $self->{+OPTIONS_MAP_CACHE_KEY}) {
-        if ($old_key != $new_key) {
-            delete $self->{+OPTIONS_MAP_CACHE};
-            delete $self->{+OPTIONS_MAP_CACHE_KEY};
-        }
+    my $options;
+    if ($in_options) {
+        $options = $in_options;
+    }
+    else {
+        $options = $self->options;
 
         return $self->{+OPTIONS_MAP_CACHE}
-            if $self->{+OPTIONS_MAP_CACHE};
+            if $self->{+OPTIONS_MAP_CACHE}
+            && $self->check_cache();
     }
 
     my $map = {
@@ -130,7 +185,7 @@ sub option_map {
         }
     }
 
-    $self->{+OPTIONS_MAP_CACHE_KEY} = $new_key;
+    return $map if $in_options;
     return $self->{+OPTIONS_MAP_CACHE} = $map;
 }
 
@@ -178,6 +233,7 @@ sub process_args {
             $opt->trigger(action => 'initialize', ref => $ref, val => $val, state => $state, options => $self, settings => $settings, group => $group);
             $opt->add_value($ref, @$val);
         }
+
         $opt->init_settings($state, $settings, $group, $ref);
     }
 
@@ -358,7 +414,7 @@ sub process_args {
     unless ($params{skip_posts}) {
         for my $weight (sort { $a <=> $b } keys %{$self->{+POSTS}}) {
             for my $set (@{$self->{+POSTS}->{$weight}}) {
-                next if $set->{applicable} && !$set->{applicable}->($self);
+                next if $set->{applicable} && !$set->{applicable}->($set, $self, $settings);
                 $set->{callback}->($self, $state);
             }
         }
@@ -406,18 +462,18 @@ sub process_args {
 
 my %DOC_FORMATS = (
     'cli' => [
-        'cli_docs',                                                                                         # Method to call on opt
-        "\n",                                                                                               # how to join lines
-        sub { USE_COLOR() ? "\n" . color('bold underline white') . $_[1] . color('reset') : "\n$_[1]" },    # how to render the category
-        sub { $_[0] =~ s/^/  /mg; "$_[0]\n" },                                                              # transform the value from the opt
-        sub { },                                                                                            # add this at the end
+        'cli_docs',                                                                                                               # Method to call on opt
+        "\n",                                                                                                                     # how to join lines
+        sub { USE_COLOR() ? "\n" . color('bold underline white') . $_[1] . color('reset') . " ($_[3])" : "\n$_[1]  ($_[3])" },    # how to render the category
+        sub { $_[0] =~ s/^/  /mg; "$_[0]\n" },                                                                                    # transform the value from the opt
+        sub { },                                                                                                                  # add this at the end
     ],
     'pod' => [
-        'pod_docs',                                                                                         # Method to call on opt
-        "\n\n",                                                                                             # how to join lines
-        sub { ($_[0] ? ("=back") : (), "=head$_[2] $_[1]", "=over 4") },                                    # how to render the category
-        sub { $_[0] },                                                                                      # transform the value from the opt
-        sub { $_[0] ? ("=back\n") : () },                                                                   # add this at the end
+        'pod_docs',                                                                                                               # Method to call on opt
+        "\n\n",                                                                                                                   # how to join lines
+        sub { ($_[0] ? ("=back") : (), "=head$_[2] $_[1]", "=over 4") },                                                          # how to render the category
+        sub { $_[0] },                                                                                                            # transform the value from the opt
+        sub { $_[0] ? ("=back\n") : () },                                                                                         # add this at the end
     ],
 );
 
@@ -437,9 +493,9 @@ sub docs {
 
     my @render = @$opts;
 
-    @render = grep { $_->category eq $params{category} } @render if $params{category};
+    @render = grep { $_->group eq $params{group} } @render if $params{group};
 
-    return "\n\n!! Invalid option category: $params{category} !!"
+    return "\n\n!! Invalid option group: $params{group} !!"
         unless @render;
 
     @render = sort { $self->_doc_sort_ops($a, $b) } @render;
@@ -449,7 +505,7 @@ sub docs {
     my $cat;
     for my $opt (@render) {
         if (!$cat || $opt->category ne $cat) {
-            push @out => $fcat->($cat, $opt->category, $params{head});
+            push @out => $fcat->($cat, $opt->category, $params{head}, $opt->group);
             $cat = $opt->category;
         }
 

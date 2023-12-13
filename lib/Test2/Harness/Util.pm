@@ -139,6 +139,7 @@ sub fqmod {
         confess($@);
     }
 
+    my %tried;
     for my $pre (@$prefixes) {
         my $mod = "$pre\::$input";
 
@@ -147,11 +148,14 @@ sub fqmod {
         }
         else {
             return $mod if eval { require(mod2file($mod)); 1 };
-            confess($@) unless @$prefixes > 1;
+            ($tried{$mod}) = split /\n/, $@;
+            $tried{$mod} =~ s{^(Can't locate \S+ in \@INC).*$}{$1.};
         }
     }
 
-    croak "Could not find a module with the given input in the given prefixes";
+    my @caller = caller;
+
+    die "Could not locate a module matching '$input' at $caller[1] line $caller[2], the following were checked:\n" . join("\n", map { " * $_: $tried{$_}" } sort keys %tried) . "\n";
 }
 
 sub file2mod {

@@ -306,12 +306,13 @@ sub doc_forms {
     my %params = @_;
 
     my $name = $self->{+NAME};
+    my $prefix = $self->{+PREFIX} ? "$self->{+PREFIX}-" : "";
 
     my @long_examples = $self->long_examples(%params);
-    my @forms = (map { "--${name}${_}" } @long_examples );
+    my @forms = (map { "--${prefix}${name}${_}" } @long_examples );
 
     for my $alt (@{$self->{+ALT} || []}) {
-        push @forms => (map { "--${alt}${_}" } @long_examples);
+        push @forms => (map { "--${prefix}${alt}${_}" } @long_examples);
     }
 
     if (my $short = $self->{+SHORT}) {
@@ -328,7 +329,7 @@ sub doc_forms {
     } @forms;
 
     my @no_forms;
-    push @no_forms => "--no-${name}";
+    push @no_forms => "--no-${prefix}${name}";
     push @no_forms => map { "--$_" } @{$self->{+ALT_NO} // []};
 
     return \@forms, \@no_forms;

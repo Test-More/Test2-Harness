@@ -44,7 +44,7 @@ sub get_initial_value {
 sub add_value {
     my $self = shift;
     my ($ref, @val) = @_;
-    return unless @val;
+    return if $self->maybe && !@val;
     push @{$$ref} => @val;
 }
 

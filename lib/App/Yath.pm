@@ -77,7 +77,7 @@ sub cli_help {
         $help .= join "\n\n" => @desc;
     }
 
-    my $opts = $options->docs('cli', groups => {':{' => '}:'}, category => $params{category}, settings => $settings);
+    my $opts = $options->docs('cli', groups => {':{' => '}:'}, group => $params{group}, settings => $settings);
 
     my $usage = '';
     my $append = '';
@@ -121,7 +121,6 @@ sub options {
     );
     $self->{+OPTIONS}->include(App::Yath::Options::Yath->options);
 
-    warn "Verify plugin options are included";
     $self->include_options('plugins' => 'App::Yath::Plugin::*');
     $self->include_options('resource' => 'App::Yath::Resource::*');
     $self->include_options('renderer' => 'App::Yath::Renderer::*');
@@ -221,8 +220,8 @@ sub process_args {
         for my $set (['yath', 'plugins', 'App::Yath::Plugin'], ['renderer', 'classes', 'App::Yath::Renderer'], ['resource', 'classes', 'App::Yath::Resource']) {
             my ($group, $field, $type) = @$set;
             next unless $module->isa($type);
-            next unless $module->can('args_from_settings');
             my $args = $settings->$group->$field->{$module} //= [];
+            next unless $module->can('args_from_settings');
             push @$args => $module->args_from_settings(settings => $settings, args => $args, group => $group, field => $field, type => $type);
         }
     }
@@ -354,9 +353,9 @@ sub handle_debug {
             $help .= "No command specified!\n\n";
         }
 
-        my $cat = $settings->yath->help;
+        my $group = $settings->yath->help;
         my %cli_params;
-        $cli_params{category} = $cat if $cat && $cat ne '1';
+        $cli_params{group} = $group if $group && $group ne '1';
         $help .= $self->cli_help($yath_options, %cli_params);
 
         if (eval { require IO::Pager; 1 }) {

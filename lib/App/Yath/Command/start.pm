@@ -162,7 +162,12 @@ sub collector {
     $verbose = 0 if $settings->renderer->quiet;
     my $renderers = App::Yath::Options::Renderer->init_renderers($settings, verbose => $verbose, progress => 0);
 
-    $SIG{HUP} = sub { $renderers = undef };
+    $SIG{HUP} = sub {
+        $renderers = undef;
+        close(STDIN);
+        close(STDOUT);
+        close(STDERR);
+    };
 
     open(my $log, '>', $out_file) or die "Could not open '$out_file' for writing: $!";
     $log->autoflush(1);

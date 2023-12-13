@@ -303,6 +303,7 @@ sub include_options {
     my $option_libs = find_libraries($namespace);
 
     for my $lib (sort keys %$option_libs) {
+        next if $lib eq 'App::Yath::Plugin::Notify';
         my $ok = eval { require $option_libs->{$lib}; 1 };
         unless ($ok) {
             chomp($@);
@@ -317,6 +318,7 @@ sub include_options {
         unless (blessed($add) && $add->isa('Getopt::Yath::Instance')) {
             warn "Module '$option_libs->{$lib}' is outdated, not loading options.\n"
                 unless $ENV{'YATH_SELF_TEST'};
+
             next;
         }
 

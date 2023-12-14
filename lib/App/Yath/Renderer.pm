@@ -42,6 +42,8 @@ sub start  { }
 sub step   { }
 sub signal { }
 
+sub weight { 0 }
+
 sub finish {
     my $self = shift;
     my ($auditor) = @_;

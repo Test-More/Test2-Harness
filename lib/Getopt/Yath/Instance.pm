@@ -374,14 +374,18 @@ sub process_args {
             die "Option '$base' cannot take multiple values, got: [" . join(', ' => @$arg) . "].\n";
         }
 
+        my $from = '';
         my @val;
         if (defined $arg) {
+            $from = 'arg';
             @val = $opt->normalize_value(ref($arg) ? @$arg : $arg);
         }
         elsif ($opt->allows_autofill) {
+            $from = 'autofill';
             @val = $opt->get_autofill_value($settings);
         }
         else {
+            $from = 'no_arg';
             @val = $opt->no_arg_value($settings);
         }
 
@@ -395,7 +399,7 @@ sub process_args {
             }
         }
 
-        $opt->trigger(action => 'set', ref => $ref, val => \@val, state => $state, options => $self, settings => $settings, group => $group);
+        $opt->trigger(action => 'set', ref => $ref, val => \@val, state => $state, options => $self, settings => $settings, group => $group, set_from => $from);
         $opt->add_value($ref, @val);
     }
 

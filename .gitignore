@@ -29,6 +29,7 @@ t2/non_perl/test.binary
 t/integration/test-broken-symlinks/broken-symlink.tx
 coverage.json
 lastlog.*
+lastlog-1.*
 *.test_info.json
 *.test_info.*.json
 .testsharedjobslots.yml

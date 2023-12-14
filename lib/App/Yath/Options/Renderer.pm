@@ -128,11 +128,10 @@ sub init_renderers {
     my $rs = $settings->renderer;
     my $r_classes = $rs->classes;
     my @renderers;
-    for my $class (keys %$r_classes) {
+    for my $class (sort { $a->weight <=> $b->weight || $a cmp $b } keys %$r_classes) {
         my $params = $r_classes->{$class};
         require(mod2file($class));
         my $r = $class->new($settings->renderer->all, $settings->term->all, @$params, %params, settings => $settings);
-        $r->start();
         push @renderers => $r;
     }
 

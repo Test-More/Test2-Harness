@@ -88,7 +88,7 @@ option_group {group => 'run', category => "Run Options"} => sub {
     option run_id => (
         type    => 'Scalar',
         alt     => ['id'],
-        default => \&gen_uuid,
+        initialize => \&gen_uuid,
 
         description => 'Set a specific run-id. (Default: a UUID)',
     );

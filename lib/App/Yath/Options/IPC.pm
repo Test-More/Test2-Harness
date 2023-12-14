@@ -90,7 +90,7 @@ sub vivify_ipc {
     my $class = shift;
     my ($settings) = @_;
 
-    my $discovered;
+    state $discovered;
     state %ipc;
     return {%ipc} if $discovered;
 

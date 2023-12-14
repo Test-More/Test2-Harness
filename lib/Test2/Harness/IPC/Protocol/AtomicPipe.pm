@@ -316,7 +316,7 @@ sub refuse_new_connections {
 sub terminate {
     my $self = shift;
 
-    return unless $$ == $self->{+MY_PID};
+    return if $self->{+MY_PID} && $$ != $self->{+MY_PID};
 
     return unless $self->{+ACTIVE};
     unlink($self->{+READ_FILE}) if -e $self->{+READ_FILE};

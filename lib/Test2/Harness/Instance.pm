@@ -175,12 +175,22 @@ sub api_ping { "pong" }
 
 sub api_pid { $$ }
 
+sub api_spawn {
+    my $self = shift;
+    my ($req, %spawn) = @_;
+
+    my $runner = $self->runner;
+    die "Runner is not capable of spawning.\n" unless $runner->can('spawn');
+
+    return $runner->spawn(\%spawn);
+}
+
 sub api_kill {
     my $self = shift;
 
     $self->scheduler->kill();
     $self->runner->kill();
-    $self->Terminate('KILL');
+    $self->terminate('KILL');
 
     return 1;
 }

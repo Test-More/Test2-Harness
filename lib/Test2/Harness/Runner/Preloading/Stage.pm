@@ -13,7 +13,7 @@ use Scope::Guard;
 use POSIX qw/:sys_wait_h/;
 
 use Test2::Harness::Util qw/mod2file parse_exit/;
-use Test2::Harness::IPC::Util qw/start_process ipc_connect ipc_warn ipc_loop pid_is_running/;
+use Test2::Harness::IPC::Util qw/start_process ipc_connect ipc_warn ipc_loop pid_is_running inflate/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 
 use Test2::Harness::Collector::Preloaded;
@@ -370,6 +370,32 @@ sub run_stage {
         handle_request => sub {
             my $req = shift;
 
+            my %prefork_args;
+            my $api_call = $req->api_call;
+
+            if ($api_call eq 'launch_job') {
+                my $args = $req->args;
+
+                my $ts  = inflate($args->{test_settings}, 'Test2::Harness::TestSettings') or die "No test_settings provided";
+                my $run = inflate($args->{run},           'Test2::Harness::Run')          or die "No run provided";
+                my $job = inflate($args->{job},           'Test2::Harness::Run::Job')     or die "No job provided";
+
+                %prefork_args = (
+                    run           => $run,
+                    job           => $job,
+                    test_settings => $ts,
+                );
+            }
+            else {
+                return Test2::Harness::Instance::Response->new(
+                    api         => {success => 0, error => "Invalid API call: $api_call."},
+                    response_id => $req->request_id,
+                    response    => 0,
+                );
+            }
+
+            $self->do_pre_fork(%prefork_args);
+
             my $pid = fork // die "Could not fork: $!";
 
             if ($pid) {
@@ -392,7 +418,12 @@ sub run_stage {
                 }
             }
 
-            $run_test = $req->args;
+            if ($api_call eq 'launch_job') {
+                $run_test = $req->args;
+            }
+            else {
+                die "Invalid API call: $api_call.\n";
+            }
 
             no warnings 'exiting';
             last IPC_LOOP;

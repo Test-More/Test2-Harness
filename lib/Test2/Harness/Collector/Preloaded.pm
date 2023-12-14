@@ -46,12 +46,6 @@ sub launch_and_process {
     my $ts    = $self->{+TEST_SETTINGS};
     my $stage = $self->{+STAGE};
 
-    $stage->do_pre_fork(
-        run => $run,
-        job => $job,
-        test_settings => $ts,
-    );
-
     my $parent_pid = $$;
     my $pid        = fork // die "Could not fork: $!";
     if ($pid) {

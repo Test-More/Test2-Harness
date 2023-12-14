@@ -9,14 +9,13 @@ use Carp qw/croak/;
 use POSIX ":sys_wait_h";
 use File::Temp qw/tempfile/;
 use Time::HiRes qw/time sleep/;
-use Scalar::Util qw/blessed/;
 
 use Test2::Harness::Collector::Auditor::Job;
 use Test2::Harness::Collector::IOParser::Stream;
 
 use Test2::Harness::Util qw/mod2file parse_exit open_file/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
-use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop/;
+use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate/;
 
 our $VERSION = '2.000000';
 
@@ -208,29 +207,9 @@ sub collect_job {
 
     my $root_pid = $params{root_pid} or die "No root pid";
 
-    my $ts = $params{test_settings} or die "No test_settings provided";
-    unless (blessed($ts)) {
-        my $tsclass = $ts->{class} // 'Test2::Harness::TestSettings';
-        require(mod2file($tsclass));
-        $ts = $tsclass->new($ts);
-        $params{test_settings} = $ts;
-    }
-
-    my $run = $params{run} or die "No run provided";
-    unless(blessed($run)) {
-        my $rclass = $run->{run_class} // 'Test2::Harness::Run';
-        require(mod2file($rclass));
-        $run = $rclass->new($run);
-        $params{run} = $run;
-    }
-
-    my $job = $params{job} or die "No job provided";
-    unless(blessed($job)) {
-        my $jclass = $job->{job_class} // 'Test2::Harness::Run::Job';
-        require(mod2file($jclass));
-        $job = $jclass->new($job);
-        $params{job} = $job;
-    }
+    my $ts  = inflate($params{test_settings}, 'Test2::Harness::TestSettings') or die "No test_settings provided";
+    my $run = inflate($params{run},           'Test2::Harness::Run')          or die "No run provided";
+    my $job = inflate($params{job},           'Test2::Harness::Run::Job')     or die "No job provided";
 
     die "No workdir provided" unless $params{workdir};
     $params{tempdir} = File::Temp::tempdir(DIR => $params{workdir}, CLEANUP => 1, TEMPLATE => "tmp-$$-XXXX");
@@ -455,8 +434,11 @@ sub setup_child_output {
 
     $ENV{T2_HARNESS_PIPE_COUNT} = $self->{+MERGE_OUTPUTS} ? 1 : 2;
     require Test2::Harness::Collector::Child;
-    $Test2::Harness::Collector::Child::STDOUT_APIPE = $handles->{out_w};
-    $Test2::Harness::Collector::Child::STDERR_APIPE = $handles->{err_w} if $self->{+MERGE_OUTPUTS};
+    {
+        no warnings 'once';
+        $Test2::Harness::Collector::Child::STDOUT_APIPE = $handles->{out_w};
+        $Test2::Harness::Collector::Child::STDERR_APIPE = $handles->{err_w} if $self->{+MERGE_OUTPUTS};
+    }
 
     return;
 }

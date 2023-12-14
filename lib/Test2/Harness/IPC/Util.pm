@@ -15,6 +15,7 @@ use POSIX();
 use IO::Select();
 
 use Test2::Harness::Util::JSON qw/encode_pretty_json encode_json/;
+use Test2::Harness::Util qw/mod2file/;
 
 use Importer Importer => 'import';
 
@@ -27,6 +28,8 @@ our @EXPORT_OK = qw{
     ipc_connect
     ipc_loop
 
+    inflate
+
     start_process
     start_collected_process
 };
@@ -38,6 +41,18 @@ BEGIN {
     else {
         *USE_P_GROUPS = sub() { 0 };
     }
+}
+
+sub inflate {
+    my ($ref, $fallback_class) = @_;
+
+    return unless $ref;
+    return $ref if blessed($ref);
+
+    my $class = $ref->{class} // $fallback_class // croak "No class to inflate, provide a 'class' key or as second argument to inflate()";
+    require(mod2file($class));
+
+    $_[0] = $class->new($ref);
 }
 
 sub pid_is_running {

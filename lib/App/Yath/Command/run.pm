@@ -41,6 +41,10 @@ include_options(
 
 sub args_include_tests { 1 }
 
+sub load_plugins   { 1 }
+sub load_resources { 0 }
+sub load_renderers { 1 }
+
 sub group { 'daemon' }
 
 sub summary { "Run tests" }

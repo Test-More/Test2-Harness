@@ -53,6 +53,10 @@ sub process_collector_name { 'yath' }
 
 sub check_argv { 1 }
 
+sub load_plugins   { 1 }
+sub load_resources { 1 }
+sub load_renderers { 1 }
+
 sub run {
     my $self = shift;
 

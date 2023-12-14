@@ -55,6 +55,10 @@ option_group {group => 'start', category => "Start Options"} => sub {
 sub starts_runner            { 1 }
 sub starts_persistent_runner { 1 }
 
+sub load_plugins   { 1 }
+sub load_resources { 1 }
+sub load_renderers { 1 }
+
 sub args_include_tests { 0 }
 
 sub group { 'daemon' }

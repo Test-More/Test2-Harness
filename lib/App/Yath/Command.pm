@@ -18,6 +18,10 @@ sub summary                  { "No Summary" }
 sub description              { "No Description" }
 sub group                    { "Z-FIXME" }
 
+sub load_plugins   { 0 }
+sub load_resources { 0 }
+sub load_renderers { 0 }
+
 sub name { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
 
 sub run {

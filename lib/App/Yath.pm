@@ -121,10 +121,6 @@ sub options {
     );
     $self->{+OPTIONS}->include(App::Yath::Options::Yath->options);
 
-    $self->include_options('plugins' => 'App::Yath::Plugin::*');
-    $self->include_options('resource' => 'App::Yath::Resource::*');
-    $self->include_options('renderer' => 'App::Yath::Renderer::*');
-
     return $self->{+OPTIONS};
 }
 
@@ -171,6 +167,10 @@ sub process_args {
         $yath_options->include($cmd_class->options) if $cmd_class->can('options');
         $settings->yath->create_option(command => $cmd_class);
         $self->{+COMMAND} = $cmd_class;
+
+        $self->include_options('plugins'  => 'App::Yath::Plugin::*')   if $cmd_class->load_plugins();
+        $self->include_options('resource' => 'App::Yath::Resource::*') if $cmd_class->load_resources();
+        $self->include_options('renderer' => 'App::Yath::Renderer::*') if $cmd_class->load_renderers();
     };
 
     if (my $file = $settings->yath->load_settings) {

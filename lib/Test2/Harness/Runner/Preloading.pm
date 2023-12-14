@@ -223,4 +223,16 @@ sub launch_job {
     return 1 if $res->success;
 }
 
+sub spawn {
+    my $self = shift;
+    my ($spawn) = @_;
+
+    my $stage = $spawn->{stage} // 'BASE';
+    my $stage_data = $self->stages->{$stage} or die "Invalid stage: '$stage'.\n";
+
+    die "Stage '$stage' is not ready.\n" unless $stage_data->{ready} && $stage_data->{ready}->{con};
+
+    my $res = $stage_data->{ready}->{con}->send_and_get(spawn => $spawn);
+}
+
 1;

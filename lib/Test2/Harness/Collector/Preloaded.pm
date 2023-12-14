@@ -16,7 +16,8 @@ use Config qw/%Config/;
 use List::Util qw/first/;
 use Scalar::Util qw/openhandle/;
 
-use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::Util qw/mod2file parse_exit/;
+use Test2::Harness::IPC::Util qw/ipc_connect/;
 
 my @SIGNALS = grep { $_ ne 'ZERO' } split /\s+/, $Config{sig_name};
 
@@ -33,6 +34,81 @@ sub init {
 
     croak "'orig_sig' is a required attribute" unless $self->{+ORIG_SIG};
     croak "'stage' is a required attribute"    unless $self->{+STAGE};
+}
+
+sub spawn {
+    my $self = shift;
+    my %params = @_;
+
+    $self->setsid;
+
+    my $io_pid = $params{io_pid};
+    close(STDIN);
+    open(STDIN, "<", "/proc/$io_pid/fd/0") or die "Could not connect to STDIN from pid $io_pid: $!";
+
+    close(STDOUT);
+    open(STDOUT, '>>', "/proc/$io_pid/fd/1") or die "Could not connect to STDOUT from pid $io_pid: $!";
+
+    close(STDERR);
+    open(STDERR, '>>', "/proc/$io_pid/fd/2") or die "Could not connect to STDOUT from pid $io_pid: $!";
+
+    my ($ipc, $con) = ipc_connect($params{ipc});
+
+    my $pid = fork // die "Could not fork";
+    if ($pid) {
+        $con->send_message({pid => $pid});
+
+        my $check = waitpid($pid, 0);
+        my $exit = $?;
+        die "(Yath Collector) waitpid returned $check" unless $check == $pid;
+        my $x = parse_exit($exit);
+
+        $con->send_message({exit => $x});
+        exit(0);
+    }
+
+    undef($con);
+    undef($ipc);
+
+    my $stage = $params{stage};
+
+    $stage->do_post_fork(spawn => \%params);
+
+    $0 = $params{script};
+
+    require goto::file;
+    goto::file->import($params{script});
+
+    $self->restore_signals();
+
+    my $env = $params{env} // {};
+    for my $var (keys %$env) {
+        no warnings 'uninitialized';
+        $ENV{$var} = $env->{$var}
+    }
+
+    $self->build_init_state();
+    $self->test2_state();
+
+    $stage->do_pre_launch(spawn => \%params);
+
+    @ARGV = @{$params{argv} // []};
+
+    # toggle -w switch late
+    open(my $fh, '<', $params{script}) or die "Could not open script '$params{script}': $!";
+    my $shbang = <$fh>;
+    $^W = 1 if $shbang =~ m/^#!.*\b-w\b/;
+    close($fh);
+
+    # reset the state of empty pattern matches, so that they have the same
+    # behavior as running in a clean process.
+    # see "The empty pattern //" in perlop.
+    # note that this has to be dynamically scoped and can't go to other subs
+    "" =~ /^/;
+
+    $@ = undef;
+
+    return;
 }
 
 sub launch_and_process {
@@ -142,9 +218,6 @@ sub setup_child_input {
 sub build_init_state {
     my $self = shift;
 
-    my $job = $self->{+JOB};
-
-    $0 = $job->test_file->relative;
     $self->_reset_DATA();
     @ARGV = ();
 

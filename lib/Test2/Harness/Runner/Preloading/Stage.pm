@@ -68,6 +68,9 @@ sub import {
             if (my $test = $got->{run_test}) {
                 $EXIT = Test2::Harness::Collector::Preloaded->collect(%$test, orig_sig => \%ORIG_SIG, stage => $self, root_pid => $self->{+ROOT_PID});
             }
+            elsif (my $spawn = $got->{run_spawn}) {
+                $EXIT = Test2::Harness::Collector::Preloaded->spawn(%$spawn, orig_sig => \%ORIG_SIG, stage => $self);
+            }
 
             1;
         };
@@ -329,12 +332,11 @@ sub run_stage {
     $ios->add($_) for $ipc->handles_for_select;
 
     my $exit = 0;
+    my $run_spawn;
     my $run_test;
     my $run_stage;
 
     ipc_loop(
-#        debug => 1,
-
         ipcs      => [$ipc],
         wait_time => 0.2,
 
@@ -362,7 +364,7 @@ sub run_stage {
         },
 
         end_check => sub {
-            return 1 if $run_test;
+            return 1 if $run_test || $run_spawn;
             return 1 if $self->{+TERMINATED};
             return 0;
         },
@@ -384,6 +386,11 @@ sub run_stage {
                     run           => $run,
                     job           => $job,
                     test_settings => $ts,
+                );
+            }
+            elsif ($api_call eq 'spawn') {
+                %prefork_args = (
+                    spawn => $req->args,
                 );
             }
             else {
@@ -421,6 +428,9 @@ sub run_stage {
             if ($api_call eq 'launch_job') {
                 $run_test = $req->args;
             }
+            elsif ($api_call eq 'spawn') {
+                $run_spawn = $req->args;
+            }
             else {
                 die "Invalid API call: $api_call.\n";
             }
@@ -441,6 +451,7 @@ sub run_stage {
 
     return {run_stage => $run_stage} if $run_stage;
     return {run_test  => $run_test}  if $run_test;
+    return {run_spawn => $run_spawn} if $run_spawn;
     return {exit      => $exit};
 }
 

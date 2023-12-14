@@ -28,6 +28,15 @@ sub queue_run {
     return $self->connect->send_and_get(queue_run => $run);
 }
 
+sub spawn {
+    my $self = shift;
+    my (%params) = @_;
+
+    $params{ipc} = $self->connect->callback;
+
+    return $self->connect->send_and_get(spawn => \%params);
+}
+
 sub active                 { shift->ipc->active }
 sub refuse_new_connections { shift->ipc->refuse_new_connections }
 sub get_message            { shift->ipc->get_message(@_) }

@@ -71,8 +71,18 @@ sub description {
 sub process_base_name { shift->should_daemonize ? "yath-daemon" : "yath-instance" }
 sub process_collector_name { shift->process_base_name . "-collector" }
 
+sub check_argv {
+    my $self = shift;
+
+    return unless @{$self->{+ARGS} // []};
+
+    die "Invalid arguments to 'start' command: " . join(", " => @{$self->{+ARGS} // []}) . "\n";
+}
+
 sub run {
     my $self = shift;
+
+    $self->check_argv();
 
     $0 = $self->process_base_name . "-launcher";
 

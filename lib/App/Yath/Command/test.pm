@@ -51,6 +51,8 @@ If you wish to specify the ARGV for tests you may append them after '::'. This i
 
 sub process_collector_name { 'yath' }
 
+sub check_argv { 1 }
+
 sub run {
     my $self = shift;
 
@@ -59,7 +61,7 @@ sub run {
     # Get list of tests to run
     $self->find_tests(@$search) || return $self->no_tests;
 
-    return $self->SUPER::run();
+    return $self->App::Yath::Command::start::run();
 }
 
 sub become_instance {

@@ -2,22 +2,20 @@ package Test2::Formatter::QVF;
 use strict;
 use warnings;
 
-BEGIN { die "FIXME" }
+our $VERSION = '2.000000';
 
-our $VERSION = '1.000156';
-
-BEGIN { require Test2::Formatter::Test2; our @ISA = qw(Test2::Formatter::Test2) }
-
+use parent 'Test2::Formatter::Test2';
 use Test2::Util::HashBase qw{
-    -job_buffers
-    -real_verbose
+    <job_buffers
+    <real_verbose
+    <quiet
 };
 
 sub init {
     my $self = shift;
     $self->SUPER::init();
 
-    $self->{+REAL_VERBOSE} = $self->{+VERBOSE};
+    $self->{+REAL_VERBOSE} = $self->{+VERBOSE} || 0;
 
     $self->{+VERBOSE} ||= 100;
 }
@@ -34,7 +32,9 @@ sub update_active_disp {
 sub write {
     my ($self, $e, $num, $f) = @_;
 
-    return $self->SUPER::write($e, $num, $f) if $self->{+REAL_VERBOSE};
+    return $self->SUPER::write($e, $num, $f)
+        if ($self->{+REAL_VERBOSE} > 1)
+        || ($self->{+REAL_VERBOSE} && !$self->{+QUIET});
 
     $f ||= $e->facet_data;
 

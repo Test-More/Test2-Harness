@@ -26,24 +26,6 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
         initialize  => 0,
     );
 
-    option qvf => (
-        type        => 'Bool',
-        default     => 0,
-        description => "Toggles both 'quiet' and 'verbose' which a renderer should accept to mean 'quiet on success, verbose on failure'.",
-        trigger     => sub {
-            my $opt    = shift;
-            my %params = @_;
-            if ($params{action} eq 'set') {
-                $params{group}->{quiet}   ||= 1;
-                $params{group}->{verbose} ||= 1;
-            }
-            else {
-                $params{group}->{quiet}   = 0;
-                $params{group}->{verbose} = 0;
-            }
-        },
-    );
-
     option wrap => (
         type => 'Bool',
         default => 1,

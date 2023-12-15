@@ -85,7 +85,6 @@ sub parse_stream_line {
     my $self = shift;
     my ($io, $event) = @_;
 
-
     my $stream   = $io->{stream};
     my $ucstream = uc($stream);
 
@@ -96,6 +95,7 @@ sub parse_stream_line {
         details => $text,
         tag     => $tag,
         debug   => ($ucstream eq 'STDERR' ? 1 : 0),
+        peek    => $io->{peek},
     };
 }
 

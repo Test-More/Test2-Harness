@@ -289,6 +289,8 @@ sub write {
         $lines = $self->render_event($f, $tree);
     }
 
+    my ($peek) = map { $_->{peek} } grep { $_->{peek} } @{$f->{info} // []};
+
     $should_show ||= $lines && @$lines;
     unless ($should_show || $self->{+VERBOSE}) {
         if (my $last = $self->{last_rendered}) {
@@ -307,21 +309,36 @@ sub write {
     local($\, $,) = (undef, '') if $\ || $,;
 
     my $io = $self->io($job_id);
-    if ($self->{+_BUFFERED}) {
-        print $io "\r\e[K";
-        $self->{+_BUFFERED} = 0;
+    if (my $buffered = delete $self->{+_BUFFERED}) {
+        print $io "\r";
+
+        print $io "\e[K" unless $buffered eq 'peek';
     }
 
-    if (!$self->{+VERBOSE}) {
+    if ($peek) {
+        my $last = pop(@$lines);
+        print $io $_, "\n" for @$lines;
+        print $io $last;
+
+        if ($peek eq 'peek_end') {
+            print $io "\n";
+        }
+        else {
+            $self->{+_BUFFERED} = $peek;
+        }
+
+        $io->flush();
+    }
+    elsif (!$self->{+VERBOSE}) {
         print $io $_, "\n" for @$lines;
         if ($self->{+TTY} && $self->{+PROGRESS}) {
             print $io $self->render_status($f);
-            $self->{+_BUFFERED} = 1;
+            $self->{+_BUFFERED} = 'progress';
         }
     }
-    elsif ($depth && $lines && @$lines && !$self->{+INTERACTIVE}) {
+    elsif ($depth && $lines && @$lines) {
         print $io $lines->[0];
-        $self->{+_BUFFERED} = 1;
+        $self->{+_BUFFERED} = 'subtest';
     }
     else {
         print $io $_, "\n" for @$lines;
@@ -703,20 +720,26 @@ sub build_line {
         }
     }
 
-    return @out if @out;
+    unless (@out) {
+        if ($color) {
+            my $blob = $color->{blob} || '';
+            @out = (
+                "$start${blob}----- START -----$reset",
+                "${tcolor}${text}${reset}",
+                "$start${blob}------ END ------$reset",
+            );
 
-    return (
-        "$start----- START -----",
-        $text,
-        "$start------ END ------",
-    ) unless $color;
+        }
+        else {
+            @out = (
+                "$start----- START -----",
+                $text,
+                "$start------ END ------",
+            );
+        }
+    }
 
-    my $blob = $color->{blob} || '';
-    return (
-        "$start${blob}----- START -----$reset",
-        "${tcolor}${text}${reset}",
-        "$start${blob}------ END ------$reset",
-    );
+    return @out;
 }
 
 sub render_parent {

@@ -112,7 +112,6 @@ option_group {group => 'run', category => "Run Options"} => sub {
         description => 'Auditor class to use when auditing the overall test run',
     );
 
-    warn "Fix interactive mode";
     option interactive => (
         type  => 'Bool',
         short => 'i',
@@ -121,6 +120,26 @@ option_group {group => 'run', category => "Run Options"} => sub {
         set_env_vars  => ['YATH_INTERACTIVE'],
         from_env_vars => ['YATH_INTERACTIVE'],
     );
+};
+
+option_post_process 0 => sub {
+    my ($options, $state) = @_;
+
+    my $settings = $state->{settings};
+    my $run   = $settings->run;
+
+    return unless $run->interactive;
+
+    if ($settings->check_group('renderer')) {
+        my $r = $settings->renderer;
+        $r->verbose(1) unless $r->verbose;
+    }
+
+    if ($settings->check_group('resource')) {
+        my $r = $settings->resource;
+        $r->job_slots(1);
+        $r->slots(1);
+    }
 };
 
 1;

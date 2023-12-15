@@ -43,9 +43,11 @@ use Test2::Harness::Util::HashBase(
         <retry_isolated
         <abort_on_bail
         <nytprof
+        <interactive
     },
 
     qw{
+        <interactive_pid
         instance_ipc
         <aggregator_ipc
         <aggregator_use_io
@@ -61,6 +63,8 @@ sub init {
     my $self = shift;
 
     croak "'run_id' is a required attribute" unless $self->{+RUN_ID};
+
+    $self->{+INTERACTIVE_PID} //= $$ if $self->{+INTERACTIVE};
 
     my $ts = $self->{+TEST_SETTINGS} or croak "'test_settings' is a required attribute";
     unless (blessed($ts)) {

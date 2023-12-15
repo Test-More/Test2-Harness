@@ -192,7 +192,7 @@ sub render_brief {
     }
 
     if ($f->{info}) {
-        my $if = {%$f, info => [grep { $_->{debug} || $_->{important} } @{$f->{info}}]};
+        my $if = {%$f, info => [grep { $_->{debug} || $_->{important} || $_->{peek} } @{$f->{info}}]};
         push @out => $class->render_info($if) if @{$if->{info}};
     }
 

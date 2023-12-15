@@ -17,12 +17,22 @@ use Test2::Harness::Util qw/mod2file parse_exit open_file/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate/;
 
+BEGIN {
+    if (eval { require Linux::Inotify2; 1 }) {
+        *USE_INOTIFY = sub() { 1 };
+    }
+    else {
+        *USE_INOTIFY = sub() { 0 };
+    }
+}
+
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util::HashBase qw{
     merge_outputs
 
     <handles
+    <peeks
 
     <end_callback
 
@@ -446,6 +456,15 @@ sub setup_child_output {
 sub setup_child_input {
     my $self = shift;
 
+    my $run = $self->{+RUN};
+    if ($run && $run->interactive) {
+        my $pid = $run->interactive_pid;
+
+        close(STDIN);
+        open(STDIN, "<", "/proc/$pid/fd/0") or die "Could not connect to STDIN from pid $pid: $!";
+        return;
+    }
+
     my $ts = $self->{+TEST_SETTINGS} or return;
 
     if (my $in_file = $ts->input_file) {
@@ -562,12 +581,12 @@ sub process {
 
 sub _add_item {
     my $self = shift;
-    my ($stream, $val) = @_;
+    my ($stream, $val, $peek) = @_;
 
     my $buffer = $self->{+BUFFER} //= {};
     my $seen   = $buffer->{seen}  //= {};
 
-    push @{$buffer->{$stream}} => [time, $val];
+    push @{$buffer->{$stream}} => [time, $val, $peek];
 
     $self->_flush() unless keys(%$seen);
 
@@ -586,6 +605,7 @@ sub _flush {
     my %params = @_;
 
     my $to = $params{to};
+    my $age = $params{age};
 
     my $buffer = $self->{+BUFFER} //= {};
     my $seen   = $buffer->{seen}  //= {};
@@ -593,7 +613,13 @@ sub _flush {
     for my $stream (qw/stderr stdout/) {
         while (1) {
             my $set = shift(@{$buffer->{$stream}}) or last;
-            my ($stamp, $val) = @$set;
+            my ($stamp, $val, $peek) = @$set;
+
+            if ($age && (time - $stamp) < $age) {
+                unshift @{$buffer->{$stream}} => $set;
+                last;
+            }
+
             if (ref($val)) {
                 # Send the event, unless it came via STDERR in which case it should only be a hashref with an event_id
                 $self->_pre_event(stream => $stream, data => $val, stamp => $stamp)
@@ -602,7 +628,7 @@ sub _flush {
                 last if $to && $val->{event_id} eq $to;
             }
             else {
-                $self->_pre_event(stream => $stream, line => $val, stamp => $stamp);
+                $self->_pre_event(stream => $stream, line => $val, stamp => $stamp, peek => $peek);
             }
         }
     }
@@ -675,11 +701,22 @@ sub _process {
         wait_time => sub { $sig_stamp ? 0 : 0.2 },
         signals   => sub { $sig_stamp //= time; kill($_[0], $pid) },
 
-        iteration_start => $self->{+STEP},
+        iteration_start => sub {
+            $self->{+STEP}->() if $self->{+STEP};
+            $self->peek_event($pid, stderr => $stderr);
+            $self->peek_event($pid, stdout => $stdout);
+            $self->_flush(age => 0.5);
+        },
 
         iteration_end => sub {
             my $out = 0;
-            $self->_flush() if $self->{+INTERACTIVE} || $self->{+ALWAYS_FLUSH};
+            if ($self->{+INTERACTIVE} || $self->{+ALWAYS_FLUSH}) {
+                $self->_flush();
+            }
+            else {
+                # Anything that has been sitting in the buffer for more than half a second should probably get rendered
+                $self->_flush(age => 0.5);
+            }
             $out++ if $reap->(WNOHANG) > 0;
             return $out;
         },
@@ -794,32 +831,78 @@ sub _process {
     return $ret;
 }
 
+sub peek_event {
+    my $self = shift;
+    my ($pid, $name, $fh) = @_;
+
+    my $last_peek = $self->{+PEEKS}->{$name} // ['', 0];
+
+    my ($type, $val) = $fh->get_line_burst_or_data(peek_line => 1);
+    return unless $type;
+
+    if ($type eq 'peek') {
+        return if $val =~ m/[\n\r]+$/;
+        return if $val eq $last_peek->[0];
+
+        my $inotify;
+        if (USE_INOTIFY) {
+            if (-e "/proc/$pid/fd/0") {
+                $inotify = Linux::Inotify2->new();
+                $inotify->blocking(0);
+                $inotify->watch("/proc/$pid/fd/0", Linux::Inotify2::IN_ACCESS());
+            }
+        }
+
+        $self->{+PEEKS}->{$name} = [$val, $inotify];
+        $self->_add_item($name => $val, 'peek');
+        return;
+    }
+
+    # If we get an item and it is not a peek we need to handle it.
+    $self->_handle_event($name, $type, $val);
+
+    return;
+}
+
 sub handle_event {
     my $self = shift;
     my ($name, $fh) = @_;
 
     my $out = 0;
     while (1) {
-        my ($type, $val) = $fh->get_line_burst_or_data;
-        unless ($type) {
-            return $out;
-        }
+        my ($type, $val) = $fh->get_line_burst_or_data();
+        last unless $type;
 
-        if ($type eq 'message') {
-            my $decoded = decode_json($val);
-            $self->_add_item($name => $decoded);
-        }
-        elsif ($type eq 'line') {
-            chomp($val);
-            $self->_add_item($name => $val);
-        }
-        else {
-            chomp($val);
-            die("Invalid type '$type': $val");
-        }
+        $out .= $self->_handle_event($name, $type, $val);
     }
 
     return $out++;
+}
+
+sub _handle_event {
+    my $self = shift;
+    my ($name, $type, $val) = @_;
+
+    if ($type eq 'message') {
+        my $decoded = decode_json($val);
+        $self->_add_item($name => $decoded);
+        return 1;
+    }
+
+    if ($type eq 'line') {
+        my $chomp = chomp($val);
+        my $peek = $self->{+PEEKS}->{$name};
+        if ($peek) {
+            my $ref = delete $self->{+PEEKS}->{$name};
+            $peek = 'peek_end';
+            $val =~ s/^\Q$ref->[0]\E// if $ref->[1] && $ref->[1]->poll;
+        }
+        $self->_add_item($name => $val, $peek);
+        return 1;
+    }
+
+    chomp($val);
+    die("Invalid type '$type': $val");
 }
 
 sub should_retry {

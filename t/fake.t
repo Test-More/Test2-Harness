@@ -2,8 +2,8 @@
 use Test2::V0;
 # HARNESS-SMOKE
 # HARNESS-STAGE-theone
-# HARNESS-JOB-MIN-SLOTS 2
-# HARNESS-JOB-MAX-SLOTS 5
+
+STDOUT->autoflush(1);
 
 use Carp qw/longmess/;
 
@@ -23,16 +23,25 @@ print "Trace: " . longmess();
 
 print "STAGE: $ENV{T2_HARNESS_STAGE}\n";
 
-print STDOUT  "Enter Text:";
-STDOUT->flush();
-my $got = <STDIN> // '<UNDEF>';
-print "Got: $got\n";
-
 warn "This is a warning";
 
 print "AAA\n";
 #bail_out "foo";
 print "AAB\n";
+
+for (1 .. 5) {
+    sleep 1;
+    print STDOUT " $_";
+    STDOUT->flush();
+}
+print "\n";
+
+print STDOUT "Enter Text: ";
+STDOUT->flush();
+my $got = <STDIN> // '<UNDEF>';
+chomp($got);
+print "Got: $got\n";
+
 
 subtest subtest_a => sub {
     print "***** " . Test2::API::test2_trace_stamps_enabled . " | $ENV{T2_TRACE_STAMPS} *****\n";

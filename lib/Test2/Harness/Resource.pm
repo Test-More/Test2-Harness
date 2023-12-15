@@ -112,7 +112,7 @@ sub spawn_process {
         forward_exit => 1,
     );
 
-    $scheduler->register_child($pid => sub { $self->subprocess_exited(@_) });
+    $scheduler->register_child($pid, 'resource', $self->resourse_name, sub { $self->subprocess_exited(@_) });
 
     return $pid;
 }

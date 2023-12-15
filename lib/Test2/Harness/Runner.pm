@@ -32,15 +32,18 @@ sub init {
     }
 }
 
+sub process_list {}
+
 sub stages { ['NONE'] }
 sub stage_sets { [['NONE', 'NONE']] }
 
 sub job_stage { 'NONE' }
 
 sub start { }
+sub stop  { }
+sub abort { }
 
-sub abort {}
-sub kill {}
+sub kill { $_[0]->terminate('kill') }
 
 sub job_update { }
 

@@ -233,7 +233,7 @@ sub ipc_loop {
             $signal->('TERM');
             $sig_cnt++;
 
-            die "$0: Got SIGTERM, shutting down forcefully...\n";
+            die "$0: Got SIGTERM, shutting down...\n";
         };
     }
 

@@ -4,35 +4,41 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Time::HiRes qw/sleep/;
-
 use App::Yath::Client;
 
-use Test2::Harness::IPC::Util qw/pid_is_running/;
-use Test2::Harness::Util::JSON qw/decode_json/;
-
-use parent 'App::Yath::Command::watch';
+use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub summary { "Abort running tests without killing the runner" }
+sub group { 'persist' }
 
-sub process_name { 'yath-abort' }
+sub summary { "Kill the runner and any running or pending tests" }
+sub cli_args { "" }
 
-warn "FIXME";
 sub description {
     return <<"    EOT";
-    FIXME
+This command will kill the active yath runner and any running or pending tests.
     EOT
 }
+
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::IPC',
+    'App::Yath::Options::Yath',
+);
 
 sub run {
     my $self = shift;
 
-    $0 = $self->process_name;
+    my $settings = $self->settings;
+    my $client = App::Yath::Client->new(settings => $settings);
 
-    $self->client->send_and_get('abort');
-
-    return 0;
+    $client->abort();
 }
 
 1;
+
+__END__
+
+=head1 POD IS AUTO-GENERATED
+
+

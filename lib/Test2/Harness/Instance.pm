@@ -21,6 +21,8 @@ use Test2::Harness::Instance::Request;
 use Test2::Harness::Instance::Response;
 
 use Test2::Harness::Util::HashBase qw{
+    +started
+    +stop
     <ipc
     <runner
     <scheduler
@@ -35,8 +37,12 @@ use Test2::Harness::Util::HashBase qw{
     <wait_time
 };
 
+sub stop { $_[0]->{+STOP} = 1 }
+
 sub init {
     my $self = shift;
+
+    $self->{+STARTED} = time;
 
     $self->{+WAIT_TIME} //= 0.2;
 
@@ -175,6 +181,25 @@ sub api_ping { "pong" }
 
 sub api_pid { $$ }
 
+sub api_process_list {
+    my $self = shift;
+    my ($req, %spawn) = @_;
+
+    my @list = $self->process_list();
+
+    return \@list;
+}
+
+sub process_list {
+    my $self = shift;
+
+    return (
+        {pid => $$, type => 'instance', name => 'instance', stamp => $self->{+STARTED}},
+        $self->runner->process_list,
+        $self->scheduler->process_list,
+    );
+}
+
 sub api_spawn {
     my $self = shift;
     my ($req, %spawn) = @_;
@@ -200,6 +225,16 @@ sub api_abort {
 
     $self->scheduler->abort();
     $self->runner->abort();
+
+    return 1;
+}
+
+sub api_stop {
+    my $self = shift;
+
+    $self->scheduler->stop();
+    $self->runner->stop();
+    $self->stop();
 
     return 1;
 }
@@ -240,6 +275,9 @@ sub api_set_stage_down {
 sub api_queue_run {
     my $self = shift;
     my ($req, %run_data) = @_;
+
+    die "This runner has been terminated" if $self->{+TERMINATED};
+    die "This runner has been stopped"    if $self->{+STOP};
 
     my $run = Test2::Harness::Run->new(%run_data);
 

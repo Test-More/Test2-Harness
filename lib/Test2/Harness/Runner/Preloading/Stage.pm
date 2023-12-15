@@ -315,7 +315,8 @@ sub run_stage {
 
     my $guard = Scope::Guard->new(sub {
         return unless $pid == $$;
-        $con->send_and_get(set_stage_down => {stage => $self->{+NAME}, pid => $pid}, do_not_respond => 1) if $con && $con->active;
+        my $ok = eval { $con->send_and_get(set_stage_down => {stage => $self->{+NAME}, pid => $pid}, do_not_respond => 1) if $con && $con->active; 1 };
+        die $@ unless $ok || $@ =~ m/Disconnected pipe/;
         print "Stage '$self->{+NAME}' is down.\n";
     });
 

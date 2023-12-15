@@ -19,6 +19,7 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 
 use Test2::Harness::Util::HashBase qw{
+    +stop
     runner
     single_run
 
@@ -38,6 +39,8 @@ use Test2::Harness::Util::HashBase qw{
 
 };
 
+sub stop { $_[0]->{+STOP} = 1 }
+
 sub init {
     my $self = shift;
 
@@ -51,6 +54,23 @@ sub init {
     $self->{+CHILDREN}  = {};    # pid => ...?
 
     $self->{+RUN_JOBS_ADDED} = {};
+}
+
+sub process_list {
+    my $self = shift;
+
+    my @out;
+
+    for my $child (values %{$self->{+CHILDREN} // {}}) {
+        push @out => {pid => $child->{pid}, type => $child->{type}, name => $child->{name}, stamp => $child->{stamp}};
+    }
+
+    my $jobs = $self->{+RUNNING}->{jobs};
+    for my $info (values %$jobs) {
+        push @out => {pid => $info->{pid} // 'PENDING', type => 'job', name => $info->{job}->test_file->relative, stamp => $info->{start}};
+    }
+
+    return @out;
 }
 
 sub terminate {
@@ -70,8 +90,16 @@ sub start {
 
 sub register_child {
     my $self = shift;
-    my ($pid, $callback) = @_;
-    $self->{+CHILDREN}->{$pid} = $callback;
+    my ($pid, $type, $name, $callback, %params) = @_;
+
+    $self->{+CHILDREN}->{$pid} = {
+        %params,
+        type     => $type,
+        pid      => $pid,
+        name     => $name,
+        callback => $callback,
+        stamp    => time,
+    };
 }
 
 sub queue_run {
@@ -151,7 +179,8 @@ sub wait_on_kids {
 
         last if $pid < 1;
 
-        my $cb = delete $self->{+CHILDREN}->{$pid} or die "Reaped untracked process!";
+        my $proc = delete $self->{+CHILDREN}->{$pid} or die "Reaped untracked process!";
+        my $cb = $proc->{callback};
         $cb->(pid => $pid, exit => $exit, scheduler => $self) if $cb && ref($cb) eq 'CODE';
     }
 }
@@ -181,6 +210,8 @@ sub finalize_completed_runs {
 
         $self->finalize_run($run_id);
     }
+
+    $self->terminate(1) if $self->{+STOP} && !@run_order;
 
     @{$self->{+RUN_ORDER}} = @run_order;
 }

@@ -37,6 +37,12 @@ sub spawn {
     return $self->connect->send_and_get(spawn => \%params);
 }
 
+sub kill  { shift->send_and_get('kill') }
+sub stop  { shift->send_and_get('stop') }
+sub abort { shift->send_and_get('abort') }
+
+sub process_list { shift->send_and_get('process_list') }
+
 sub active                 { shift->ipc->active }
 sub refuse_new_connections { shift->ipc->refuse_new_connections }
 sub get_message            { shift->ipc->get_message(@_) }

@@ -2,21 +2,16 @@ package App::Yath::Command::ps;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+our $VERSION = '2.000000';
 
-our $VERSION = '1.000156';
-
+use Time::HiRes qw/time/;
+use App::Yath::Client;
 use Term::Table();
-use File::Spec();
 
-use App::Yath::Util qw/find_pfile/;
+use Test2::Util::Times qw/render_duration/;
 
-use Test2::Harness::Runner::State;
-use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::Queue();
-
-use parent 'App::Yath::Command::status';
-use Test2::Harness::Util::HashBase qw/queue/;
+use parent 'App::Yath::Command';
+use Test2::Harness::Util::HashBase;
 
 sub group { 'persist' }
 
@@ -29,46 +24,35 @@ List all running processes and runner stages.
     EOT
 }
 
-sub pfile_params { (no_fatal => 1) }
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::IPC',
+    'App::Yath::Options::Yath',
+);
 
 sub run {
     my $self = shift;
 
-    my $data = $self->pfile_data();
+    my $settings = $self->settings;
+    my $client = App::Yath::Client->new(settings => $settings);
 
-    my $state = Test2::Harness::Runner::State->new(
-        workdir => $self->workdir,
-        observe => 1,
-    );
+    my $procs = $client->process_list();
 
-    $state->poll;
-
-    my @jobs;
-
-    my $stage_status = $state->stage_readiness // {};
-    for my $stage (keys %$stage_status) {
-        my $pid = $stage_status->{$stage} // next;
-        $pid = 'N/A' if $pid == 1;
-        push @jobs => [$pid, "Runner Stage", $stage];
-    }
-
-    my $running = $state->running_tasks;
-    for my $task (values %$running) {
-        my $pid = $self->get_job_pid($task->{run_id}, $task->{job_id}) // 'N/A';
-        my $file = $task->{rel_file};
-        push @jobs => [$pid, "Running Test", $file];
+    my @rows;
+    my %seen;
+    for my $proc (sort { $a->{stamp} <=> $b->{stamp} } @$procs) {
+        next if $seen{$proc->{pid}}++;
+        push @rows => [@{$proc}{qw/pid type name/}, render_duration(time - $proc->{stamp})];
     }
 
     my $process_table = Term::Table->new(
         collapse => 1,
-        header => [qw/pid type name/],
-        rows => [sort { $a->[0] <=> $b->[0] } @jobs],
+        header => [qw/pid type name age/],
+        rows => \@rows,
     );
 
     print "\n**** Running Processes ****\n";
     print "$_\n" for $process_table->render;
-
-    return 0;
 }
 
 1;

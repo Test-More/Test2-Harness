@@ -6,6 +6,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak confess/;
 use Scalar::Util qw/blessed/;
+use Time::HiRes qw/time/;
 
 use Test2::Util qw/IS_WIN32/;
 
@@ -40,6 +41,22 @@ sub init {
     $self->{+PRELOAD_RETRY_DELAY} //= 5;
 }
 
+sub process_list {
+    my $self = shift;
+    my $stages = $self->stages or return;
+
+    my @out;
+
+    for my $stage_name (keys %$stages) {
+        next if $stage_name eq 'NONE';
+        my $stage = $stages->{$stage_name};
+        my $ready = $stage->{ready} or next;
+        push @out => {pid => $ready->{pid} // 'PENDING', type => 'stage', name => $stage_name, stamp => $ready->{stamp}};
+    }
+
+    return @out;
+}
+
 sub ready { $_[0]->{+STAGES} ? 1 : 0 }
 
 sub set_stages {
@@ -63,7 +80,7 @@ sub set_stage_up {
     my ($stage, $pid, $con) = @_;
 
     my $stage_data = $self->stages->{$stage} // die "Invalid stage '$stage'";
-    $stage_data->{ready} = {pid => $pid, con => $con};
+    $stage_data->{ready} = {pid => $pid, con => $con, stamp => time};
 
     return $pid;
 }
@@ -132,7 +149,7 @@ sub terminate {
 
 sub kill {
     my $self = shift;
-    $self->terminate;
+    $self->terminate('kill');
 }
 
 sub job_stage {
@@ -187,7 +204,9 @@ sub start_base_stage {
 
     my $launched = time;
     $scheduler->register_child(
-        $pid => sub {
+        $pid,
+        stage => 'BASE',
+        sub {
             my %params = @_;
 
             my $exit      = $params{exit};

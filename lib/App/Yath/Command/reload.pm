@@ -15,7 +15,7 @@ use Test2::Harness::Util qw/open_file/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub group { 'persist' }
+sub group { 'daemon' }
 
 sub summary { "Reload the persistent test runner" }
 sub cli_args { "" }

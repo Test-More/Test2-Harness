@@ -16,7 +16,7 @@ use Test2::Harness::Util::Queue();
 use parent 'App::Yath::Command::run';
 use Test2::Harness::Util::HashBase;
 
-sub group { 'persist' }
+sub group { 'daemon' }
 
 sub summary { "Status info and process lists for the runner" }
 sub cli_args { "" }

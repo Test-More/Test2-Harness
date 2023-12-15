@@ -2,6 +2,8 @@ package App::Yath::Command::help;
 use strict;
 use warnings;
 
+use Term::Table();
+
 our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command';
@@ -10,8 +12,7 @@ use Test2::Harness::Util::HashBase qw/<_command_info_hash/;
 use Test2::Harness::Util qw/find_libraries mod2file/;
 use List::Util ();
 
-sub options {};
-sub group { '' }
+sub group { ' main' }
 sub summary { 'Show the list of commands' }
 
 sub description {
@@ -22,35 +23,54 @@ command.
     EOT
 }
 
+use Getopt::Yath;
+option_group {group => 'help', category => "Help Options"} => sub {
+    option verbose => (
+        type => 'Count',
+        short => 'v',
+        description => "Show commands that would normally be omitted such as internal and deprecated",
+    );
+};
+
 sub command_info_hash {
     my $self = shift;
 
     return $self->{+_COMMAND_INFO_HASH} if $self->{+_COMMAND_INFO_HASH};
 
+    my $settings = $self->{+SETTINGS};
+    my $hs = $settings->help;
+
     my %commands;
     my $command_libs = find_libraries('App::Yath::Command::*');
     for my $lib (sort keys %$command_libs) {
-        my $ok = eval { require $command_libs->{$lib}; 1 };
+        my $ok = eval {
+            local $SIG{__WARN__} = sub { 1 };
+            require $command_libs->{$lib};
+            1
+        };
         unless ($ok) {
-            warn "Failed to load command '$command_libs->{$lib}': $@";
+            my ($err) = split /\n/, $@;
+            my $short = $lib;
+            $short =~ s/^App::Yath::Command:://;
+
+            if ($err =~ m/Module '\Q$lib\E' has been deprecated/) {
+                push @{$commands{'z  deprecated'}} => [$short, "This command is deprecated"] if $hs->verbose;
+                next;
+            }
+
+            push @{$commands{'z  failed to load'}} => [$short, $err];
             next;
         }
 
-        next if $lib->internal_only;
+        next unless $lib->isa('App::Yath::Command');
+        my $internal = $lib->internal_only;
+        next if $internal && !$hs->verbose;
         my $name = $lib->name;
-        my $group = $lib->group;
-        $commands{$group}->{$name} = $lib->summary;
+        my $group = $internal ? 'z  internal only' : $lib->group;
+        push @{$commands{$group}} => [$name, $lib->summary];
     }
 
     return $self->{+_COMMAND_INFO_HASH} = \%commands;
-}
-
-sub command_list {
-    my $self = shift;
-
-    my $command_hash = $self->command_info_hash();
-    my @commands = map keys %$_, values %$command_hash;
-    return @commands;
 }
 
 sub run {
@@ -60,16 +80,23 @@ sub run {
     return $self->command_help($args->[0]) if @$args;
 
     my $script = $self->settings->yath->script // $0;
-    my $maxlen = List::Util::max(map length, $self->command_list);
 
-    print "\nUsage: $script COMMAND [options]\n\nAvailable Commands:\n";
+    print "\nUsage: $script help [-v] [COMMAND]\n";
 
     my $command_info_hash = $self->command_info_hash;
     for my $group (sort keys %$command_info_hash) {
         my $set = $command_info_hash->{$group};
 
-        printf("    %${maxlen}s:  %s\n", $_, $set->{$_}) for sort keys %$set;
-        print "\n";
+        my $printable = $group;
+        $printable =~ s/^\s+//g;
+        $printable =~ s/\s+$//g;
+        $printable =~ s/^z\s+//g;
+        print "\n\n" . ucfirst($printable) . " commands:\n";
+
+        my $table = Term::Table->new(
+            rows   => [ sort { $a->[0] cmp $b->[0] } @$set ],
+        );
+        print map { "$_\n" } $table->render;
     }
 
     return 0;

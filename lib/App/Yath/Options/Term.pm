@@ -7,7 +7,6 @@ our $VERSION = '2.000000';
 use Getopt::Yath;
 
 option_group {group => 'term', category => "Terminal Options"} => sub {
-    warn "Help does not seem to show what env vars set this?";
     option color => (
         type => 'Bool',
         short => 'c',
@@ -23,15 +22,27 @@ option_group {group => 'term', category => "Terminal Options"} => sub {
         description => "Toggle progress indicators. On by default if STDOUT is a TTY. You can use --no-progress to disable the 'events seen' counter and buffered event pre-display",
     );
 
-    warn "FIXME make sure env var is set for tests too";
     option term_width => (
         type          => 'Scalar',
+        field         => 'width',
         alt           => ['term-size'],
         description   => 'Alternative to setting $TABLE_TERM_SIZE. Setting this will override the terminal width detection to the number of characters specified.',
         long_examples => [' 80', ' 200'],
         set_env_vars  => ['TABLE_TERM_SIZE'],
         from_env_vars => ['TABLE_TERM_SIZE'],
     );
+};
+
+option_post_process sub {
+    my ($options, $state) = @_;
+    my $settings = $state->{settings};
+
+    my $term = $settings->term;
+
+    if ($settings->check_group('tests')) {
+        my $tests = $settings->tests;
+        $tests->env_vars->{TABLE_TERM_SIZE} = $term->width if defined $term->width;
+    }
 };
 
 1;

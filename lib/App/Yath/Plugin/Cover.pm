@@ -29,11 +29,10 @@ option_group {prefix => 'cover', group => 'cover', category => "Cover Options"} 
         normalize => sub { glob($_[0]) },
     );
 
-    warn "FIXME: Missing Description";
     option exclude_private => (
         type => 'Bool',
         default => 0,
-        description => "",
+        description => "Exclude subs prefixed with '_' from coverage metrics",
     );
 
     option files => (
@@ -41,10 +40,9 @@ option_group {prefix => 'cover', group => 'cover', category => "Cover Options"} 
         description => "Use Test2::Plugin::Cover to collect coverage data for what files are touched by what tests. Unlike Devel::Cover this has very little performance impact (About 4% difference)",
     );
 
-    warn "FIXME: Missing Description";
     option metrics => (
         type => 'Bool',
-        description => '',
+        description => 'Build the metrics data',
     );
 
     option write => (

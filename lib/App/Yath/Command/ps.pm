@@ -13,7 +13,7 @@ use Test2::Util::Times qw/render_duration/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub group { 'persist' }
+sub group { 'daemon' }
 
 sub summary { "Process list for the runner" }
 sub cli_args { "" }

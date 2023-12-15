@@ -26,18 +26,14 @@ sub group { 'daemon' }
 
 sub summary  { "Ping the test runner" }
 
-warn "FIXME";
 sub description {
     return <<"    EOT";
-    FIXME
+This command can be used to test communication with a persistent runner
     EOT
 }
 
 sub run {
     my $self = shift;
-
-    warn "Fix this";
-    $0 = "yath";
 
     my $client = App::Yath::Client->new(settings => $self->{+SETTINGS});
 

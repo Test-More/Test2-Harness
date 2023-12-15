@@ -13,7 +13,7 @@ use Test2::Harness::Util qw/open_file/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub group { '' }
+sub group { ' main' }
 
 sub summary { "Run tests using 'run' or 'test', same as the default command, but explicit." }
 sub cli_args { "[run or test args]" }

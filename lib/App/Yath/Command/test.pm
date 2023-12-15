@@ -31,7 +31,7 @@ sub starts_persistent_runner { 0 }
 
 sub args_include_tests { 1 }
 
-sub group { ' test' }
+sub group { ' main' }
 
 sub summary  { "Run tests with a clean temporary runner" }
 

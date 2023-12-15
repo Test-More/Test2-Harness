@@ -14,7 +14,7 @@ use App::Yath::Client;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub group { 'persist' }
+sub group { 'daemon' }
 
 sub summary { "Launch a perl script from the preloaded environment" }
 sub cli_args { "[--] path/to/script.pl [options and args]" }

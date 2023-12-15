@@ -2,9 +2,7 @@ package App::Yath::Converting;
 use strict;
 use warnings;
 
-BEGIN { die "FIXME: Update this" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 1;
 

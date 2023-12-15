@@ -660,8 +660,6 @@ sub find_project_files {
 
     $_->munge_files(\@tests, $settings) for @$plugins;
 
-    warn "FIXME";
-    return \@tests;
     return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
 }
 
@@ -674,13 +672,9 @@ sub include_file {
     return !@exclude;
 }
 
-my $warning = 0;
 sub exclude_file {
     my $self = shift;
     my ($test) = @_;
-
-    warn "FIXME" unless $warning++;
-    return;
 
     my @out;
 

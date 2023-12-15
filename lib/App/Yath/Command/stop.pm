@@ -9,7 +9,7 @@ use App::Yath::Client;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub group { 'persist' }
+sub group { 'daemon' }
 
 sub summary { "Kill the runner and any running or pending tests" }
 sub cli_args { "" }

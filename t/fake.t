@@ -42,6 +42,12 @@ my $got = <STDIN> // '<UNDEF>';
 chomp($got);
 print "Got: $got\n";
 
+print STDOUT "Enter a key: ";
+#require Term::ReadKey;
+#Term::ReadKey::ReadMode(3);
+#`stty echo`;
+my $x = getc(STDIN);
+print "\nGot Key: |$x|\n";
 
 subtest subtest_a => sub {
     print "***** " . Test2::API::test2_trace_stamps_enabled . " | $ENV{T2_TRACE_STAMPS} *****\n";

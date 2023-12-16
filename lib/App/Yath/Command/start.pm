@@ -45,9 +45,12 @@ use Getopt::Yath;
 include_options(__PACKAGE__->option_modules);
 
 option_group {group => 'start', category => "Start Options"} => sub {
-    option daemon => (
+    option foreground => (
+        short => 'f',
+        alt => ['no-daemon'],
+        alt_no => ['daemon'],
         type => 'Bool',
-        description => "Daemonize and return to console",
+        description => "Keep yath in the forground instead of daemonizing and returning you to the shell",
         default     => 1,
     );
 };
@@ -65,10 +68,10 @@ sub group { 'daemon' }
 
 sub summary  { "Start a test runner" }
 
-warn "FIXME";
 sub description {
     return <<"    EOT";
-    FIXME
+This command is used to start a yath daemon that will load up and run tests on demand.
+(Use --no-daemon or -f to start one and keep it in the foreground)
     EOT
 }
 
@@ -106,8 +109,8 @@ sub should_daemonize {
     my $settings = $self->settings;
 
     return 0 unless $settings->check_group('start');
-    return 1 if $settings->start->daemon;
-    return 0;
+    return 0 if $settings->start->foreground;
+    return 1;
 }
 
 sub become_daemon {
@@ -172,7 +175,7 @@ sub collector {
     my $out_file = $self->log_file;
 
     my $verbose = 2;
-    $verbose = 0 if $settings->start->daemon;
+    $verbose = 0 unless $settings->start->foreground;
     $verbose = 0 if $settings->renderer->quiet;
     my $renderers = App::Yath::Options::Renderer->init_renderers($settings, verbose => $verbose, progress => 0);
 

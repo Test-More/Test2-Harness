@@ -10,7 +10,7 @@ use App::Yath::Client;
 
 use Test2::Harness::Util::LogFile;
 
-use Test2::Harness::IPC::Util qw/pid_is_running/;
+use Test2::Harness::IPC::Util qw/pid_is_running set_procname/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use parent 'App::Yath::Command';
@@ -41,7 +41,7 @@ Tails the log from a running yath daemon
     EOT
 }
 
-sub process_name { "yath-watcher" }
+sub process_name { "watcher" }
 
 sub client {
     my $self = shift;
@@ -63,7 +63,10 @@ sub renderers {
 sub run {
     my $self = shift;
 
-    $0 = $self->process_name;
+    set_procname(
+        set => [$self->process_name],
+        prefix => $self->{+SETTINGS}->harness->procname_prefix,
+    );
 
     return $self->render_log();
 }

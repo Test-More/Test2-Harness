@@ -17,7 +17,7 @@ use List::Util qw/first/;
 use Scalar::Util qw/openhandle/;
 
 use Test2::Harness::Util qw/mod2file parse_exit/;
-use Test2::Harness::IPC::Util qw/ipc_connect/;
+use Test2::Harness::IPC::Util qw/ipc_connect set_procname/;
 
 my @SIGNALS = grep { $_ ne 'ZERO' } split /\s+/, $Config{sig_name};
 
@@ -125,7 +125,7 @@ sub launch_and_process {
     my $parent_pid = $$;
     my $pid        = fork // die "Could not fork: $!";
     if ($pid) {
-        $0 = "yath-collector $pid";
+        set_procname(set => ['collector', $pid]);
         $parent_cb->($pid) if $parent_cb;
         return $self->process($pid);
     }

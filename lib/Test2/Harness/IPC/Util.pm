@@ -30,6 +30,8 @@ our @EXPORT_OK = qw{
 
     inflate
 
+    set_procname
+
     start_process
     start_collected_process
 };
@@ -41,6 +43,23 @@ BEGIN {
     else {
         *USE_P_GROUPS = sub() { 0 };
     }
+}
+
+sub set_procname {
+    my %params = @_;
+
+    my $prefix = $params{prefix} // $ENV{T2_HARNESS_PROC_PREFIX} // 'Test2-Harness';
+    my $append = $params{append} // [];
+    my $set    = $params{set}    // [];
+
+    $append = [$append] unless ref($append);
+    $set    = [$set]    unless ref($set);
+
+    my $name = join('-', (@$set ? @$set : $0), @$append);
+
+    $name = "${prefix}-${name}" unless $name =~ m/^\Q$prefix\E-/;
+
+    $0 = $name;
 }
 
 sub inflate {

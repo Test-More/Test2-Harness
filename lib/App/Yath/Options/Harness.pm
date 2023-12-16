@@ -19,11 +19,28 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
         default        => 0,
     );
 
-    warn "Prefix";
     option procname_prefix => (
         type        => 'Scalar',
-        default     => '',
+        default     => 'yath',
         description => 'Add a prefix to all proc names (as seen by ps).',
+        set_env_vars => [qw/T2_HARNESS_PROC_PREFIX/],
+        trigger => sub {
+            my $opt    = shift;
+            my %params = @_;
+
+            if ($params{action} eq 'set') {
+                my $val = $params{val} or return;
+                my ($prefix) = @$val;
+
+                $prefix .= "-yath" unless $prefix =~ m/(-|\b)yath(-|\b)/;
+
+                $val->[0] = $prefix;
+            }
+
+            if ($params{action} eq 'clear') {
+                $opt->add_value($params{ref}, 'yath');
+            }
+        }
     );
 
     option keep_dirs => (
@@ -65,7 +82,7 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
 
             chmod_tmp($workdir);
 
-            return $workdir;
+            return;
         },
 
         default => sub {

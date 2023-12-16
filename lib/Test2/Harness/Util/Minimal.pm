@@ -87,17 +87,25 @@ sub pre_process_args {
 
     my $defaults = 0;
     my @add_paths;
-    for my $arg (@$args) {
-        next unless $arg =~ m/^(?:-D|--dev-lib)(?:=?(.+))?$/;
-        if ($1) { push @add_paths => clean_path($1) ; next};
-        next if $defaults++;
-        push @add_paths => map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch';
+    my $prefix;
+
+    my @todo = @$args;
+    while (my $arg = shift @todo) {
+        if ($arg =~ m/^(?:-D|--dev-lib)(?:=?(.+))?$/) {
+            if ($1) { push @add_paths => clean_path($1); next }
+            next if $defaults++;
+            push @add_paths => map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch';
+        }
+        elsif ($arg =~ m/^--procname_prefix(?:=(.+))?$/) {
+            if   ($1) { $prefix = $1 }
+            else      { $prefix = shift(@todo) }
+        }
     }
 
-    my %seen;
-    unshift @INC => grep { !$seen{$_}++ } @add_paths;
-
-    return @add_paths
+    return {
+        dev_libs => \@add_paths,
+        prefix   => $prefix,
+    };
 }
 
 

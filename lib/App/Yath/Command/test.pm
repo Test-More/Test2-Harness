@@ -7,6 +7,7 @@ our $VERSION = '2.000000';
 use Time::HiRes qw/sleep/;
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
 use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::IPC::Util qw/set_procname/;
 
 use App::Yath::Command::start;
 use App::Yath::Command::run;
@@ -58,7 +59,7 @@ If you wish to specify the ARGV for tests you may append them after '::'. This i
     EOT
 }
 
-sub process_collector_name { 'yath' }
+sub process_collector_name { }
 
 sub check_argv { 1 }
 
@@ -92,7 +93,10 @@ sub run {
 sub become_instance {
     my $self = shift;
 
-    $0 = $self->process_base_name;
+    set_procname(
+        set => [$self->process_base_name],
+        prefix => $self->{+SETTINGS}->harness->procname_prefix,
+    );
 
     my $collector = $self->collector();
     $collector->setup_child_output();

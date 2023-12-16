@@ -11,7 +11,7 @@ use Term::Table;
 use Test2::Util::Times qw/render_duration/;
 
 use Test2::Harness::Util qw/parse_exit/;
-use Test2::Harness::IPC::Util qw/start_collected_process ipc_connect/;
+use Test2::Harness::IPC::Util qw/start_collected_process ipc_connect set_procname/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
@@ -126,7 +126,7 @@ sub _subprocess_run {
 
     my $params = decode_json($json);
 
-    $0 = "yath-resource-" . $class->resourse_name(%$params);
+    set_procname(set => ['resource', $class->resourse_name(%$params)]);
 
     $class->subprocess_run(%$params);
 

@@ -13,7 +13,7 @@ use Scope::Guard;
 use POSIX qw/:sys_wait_h/;
 
 use Test2::Harness::Util qw/mod2file parse_exit/;
-use Test2::Harness::IPC::Util qw/start_process ipc_connect ipc_warn ipc_loop pid_is_running inflate/;
+use Test2::Harness::IPC::Util qw/start_process ipc_connect ipc_warn ipc_loop pid_is_running inflate set_procname/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 
 use Test2::Harness::Collector::Preloaded;
@@ -111,7 +111,7 @@ sub start {
 
     $self->{+PID} = $$;
 
-    $0 = "yath-runner-$self->{+NAME}";
+    set_procname(set => ['runner', $self->{+NAME}]);
 
     $self->check_delay(
         'BASE',
@@ -145,7 +145,7 @@ sub check_delay {
     return 0 unless $delta < $self->{+RETRY_DELAY};
     my $wait = $self->{+RETRY_DELAY} - $delta;
 
-    $0 = "yath-runner-$name-DELAYED";
+    set_procname(set => ['runner', $self->{+NAME}, 'DELAYED']);
     print "Stage '$name' reload attempt came too soon, waiting $wait seconds before reloading...\n";
     sleep($wait);
 }
@@ -278,7 +278,7 @@ sub start_stage {
     $self->{+STAGE} = $stage;
     $self->{+NAME} = $name;
     my $tree = $self->{+TREE} = $self->{+TREE} ? "$self->{+TREE}-$name" : $name;
-    $0 = "yath-runner-$tree";
+    set_procname(set => ['runner', $tree]);
 
     $ENV{T2_HARNESS_STAGE} = $name;
 

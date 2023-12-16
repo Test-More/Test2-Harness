@@ -11,7 +11,7 @@ use Test2::Harness::Collector;
 use Test2::Harness::Collector::IOParser;
 
 use Test2::Harness::Util qw/mod2file/;
-use Test2::Harness::IPC::Util qw/pid_is_running/;
+use Test2::Harness::IPC::Util qw/pid_is_running set_procname/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
 use File::Path qw/remove_tree/;
@@ -75,8 +75,8 @@ This command is used to start a yath daemon that will load up and run tests on d
     EOT
 }
 
-sub process_base_name { shift->should_daemonize ? "yath-daemon" : "yath-instance" }
-sub process_collector_name { shift->process_base_name . "-collector" }
+sub process_base_name { shift->should_daemonize ? "daemon" : "instance" }
+sub process_collector_name { "collector" }
 
 sub check_argv {
     my $self = shift;
@@ -91,7 +91,10 @@ sub run {
 
     $self->check_argv();
 
-    $0 = $self->process_base_name . "-launcher";
+    set_procname(
+        set => [$self->process_base_name, "launcher"],
+        prefix => $self->{+SETTINGS}->harness->procname_prefix,
+    );
 
     $self->become_daemon if $self->should_daemonize();
 
@@ -134,7 +137,11 @@ sub become_daemon {
 sub become_instance {
     my $self = shift;
 
-    $0 = $self->process_base_name;
+    set_procname(
+        set => [$self->process_base_name],
+        prefix => $self->{+SETTINGS}->harness->procname_prefix,
+    );
+
     my $collector = $self->collector();
     $collector->setup_child_output();
 
@@ -149,7 +156,11 @@ sub become_collector {
 
     my $settings = $self->settings;
 
-    $0 = $self->process_collector_name;
+    set_procname(
+        set    => [$self->process_base_name],
+        append => [$self->process_collector_name],
+        prefix => $self->{+SETTINGS}->harness->procname_prefix,
+    );
 
     my $collector = $self->collector();
     my $exit = $collector->process($pid);

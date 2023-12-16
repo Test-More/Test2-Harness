@@ -19,15 +19,26 @@ my %ORIG_SIG  = %SIG;
 my $config_file      = find_in_updir('.yath.rc');
 my $user_config_file = find_in_updir('.yath.user.rc');
 
-# This will set up @INC for us
 my $DEV_LIBS = [];
-push @$DEV_LIBS => pre_process_args($_) for \@ARGV, map { scan_config($_) } grep { $_ && -e $_ } $user_config_file, $config_file;
+my $PREFIX;
+
+for my $list (\@ARGV, map { scan_config($_) } grep { $_ && -e $_ } $user_config_file, $config_file) {
+    my $parsed = pre_process_args($list);
+    push @{$DEV_LIBS} => @{$parsed->{dev_libs}};
+    $PREFIX = $parsed->{prefix} if defined($parsed->{prefix}) && length($parsed->{prefix});
+}
+
+$PREFIX //= 'yath';
+$PREFIX .= "-yath" unless $PREFIX =~ m/(-|\b)yath(-|\b)/;
+$ENV{T2_HARNESS_PROC_PREFIX} = $PREFIX;
+
+my %seen;
+unshift @INC => grep { !$seen{$_}++ } @$DEV_LIBS;
 
 require Time::HiRes;
 require Getopt::Yath::Settings;
 require App::Yath;
 
-my %seen = map { $_ => 1 } @$DEV_LIBS;
 push @$DEV_LIBS => grep { !$seen{$_}++ } map { $INC{$_} =~ m{^(.*)\Q$_\E$} ? clean_path($1) : () } 'App/Yath.pm', 'Getopt/Yath/Settings.pm';
 
 my $cwd = clean_path(Cwd::getcwd());
@@ -65,6 +76,9 @@ my $settings = Getopt::Yath::Settings->new(
         dev_libs       => $DEV_LIBS,
 
         start => Time::HiRes::time(),
+    },
+    harness => {
+        procname_prefix => $PREFIX,
     },
 );
 

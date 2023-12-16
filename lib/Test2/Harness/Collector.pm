@@ -15,7 +15,7 @@ use Test2::Harness::Collector::IOParser::Stream;
 
 use Test2::Harness::Util qw/mod2file parse_exit open_file/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
-use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate/;
+use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate set_procname/;
 
 BEGIN {
     if (eval { require Linux::Inotify2; 1 }) {
@@ -357,7 +357,7 @@ sub launch_and_process {
 
     my $pid = start_process($self->launch_command, sub { $self->setup_child() });
 
-    $0 = "yath-collector $pid";
+    set_procname(set => ['collector', $pid]);
 
     $parent_cb->($pid) if $parent_cb;
     return $self->process($pid);

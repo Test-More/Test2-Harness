@@ -20,6 +20,7 @@ use Test2::Harness::Util::LogFile;
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::IPC::Util qw/set_procname/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw{
@@ -58,10 +59,13 @@ Run a set of tests on an existing yath daemon.
 sub run {
     my $self = shift;
 
-    warn "Fix this";
-    $0 = "yath run";
-
     my $settings = $self->settings;
+
+    set_procname(
+        set => ['run ' . $settings->run->run_id],
+        prefix => $self->{+SETTINGS}->harness->procname_prefix,
+    );
+
 
     $self->start_plugins_and_renderers();
 

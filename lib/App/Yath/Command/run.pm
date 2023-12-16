@@ -47,13 +47,11 @@ sub load_renderers { 1 }
 
 sub group { 'daemon' }
 
-sub summary { "Run tests" }
-
-warn "FIXME";
+sub summary { "Run tests on an existing daemon" }
 
 sub description {
     return <<"    EOT";
-    FIXME
+Run a set of tests on an existing yath daemon.
     EOT
 }
 

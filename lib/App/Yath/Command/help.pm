@@ -10,7 +10,8 @@ use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/<_command_info_hash/;
 
 use Test2::Harness::Util qw/find_libraries mod2file/;
-use List::Util ();
+use List::Util();
+use File::Spec();
 
 sub group { ' main' }
 sub summary { 'Show the list of commands' }
@@ -79,7 +80,7 @@ sub run {
 
     return $self->command_help($args->[0]) if @$args;
 
-    my $script = $self->settings->yath->script // $0;
+    my $script = File::Spec->abs2rel($self->settings->yath->script // $0);
 
     print "\nUsage: $script help [-v] [COMMAND]\n";
 

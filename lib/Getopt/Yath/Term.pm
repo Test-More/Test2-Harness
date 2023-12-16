@@ -12,7 +12,7 @@ BEGIN {
         *term_size = sub() { 80 };
     }
 
-    if (eval { require Term::ANSIColor; ($ENV{CLICOLOR_FORCE} || $ENV{YATH_COLOR} || -t STDOUT) ? 1 : 0 }) {
+    if (eval { require Term::ANSIColor; 1 }) {
         *USE_COLOR = sub() { 1 };
         *color = \&Term::ANSIColor::color;
     }

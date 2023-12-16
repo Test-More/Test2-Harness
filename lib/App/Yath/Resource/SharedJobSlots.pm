@@ -18,7 +18,7 @@ use Test2::Harness::Util::Minimal qw/find_in_updir/;
 
 use Getopt::Yath;
 
-option_group {group => 'shared_slots', category => "Resource Options"} => sub {
+option_group {group => 'shared_slots', category => "Shared Slot Options"} => sub {
     option shared_jobs => (
         type => 'Bool',
         maybe => 1,

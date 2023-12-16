@@ -15,6 +15,7 @@ use Test2::Harness::Util::HashBase qw{
     <option_state
 
     <command
+    +color
 };
 
 use Getopt::Yath();
@@ -25,6 +26,8 @@ use App::Yath::Options::Yath;
 
 use Time::HiRes qw/time/;
 use Scalar::Util qw/blessed/;
+use File::Spec;
+use Term::Table;
 
 use Test2::Util::Table qw/table/;
 use Test2::Harness::Util qw/find_libraries clean_path mod2file read_file/;
@@ -34,6 +37,13 @@ my $APP_PATH = __FILE__;
 $APP_PATH =~ s{App\S+Yath\.pm$}{}g;
 $APP_PATH = clean_path($APP_PATH);
 sub app_path { $APP_PATH }
+
+sub use_color {
+    my $self = shift;
+    return $self->{+COLOR} if defined $self->{+COLOR};
+    return $self->{+COLOR} = 0 unless USE_COLOR;
+    return $self->{+COLOR} = $self->{+SETTINGS}->term->color ? 1 : 0;
+}
 
 sub init {
     my $self = shift;
@@ -60,7 +70,7 @@ sub cli_help {
 
     my $help = "";
     if ($cmd_class) {
-        if (USE_COLOR()) {
+        if ($self->use_color) {
             $help .= "\n";
             $help .= color('bold white') . "Command selected: ";
             $help .= color('reset');
@@ -77,33 +87,115 @@ sub cli_help {
         $help .= join "\n\n" => @desc;
     }
 
-    my $opts = $options->docs('cli', groups => {':{' => '}:'}, group => $params{group}, settings => $settings);
+    my $opts = $options->docs('cli', groups => {':{' => '}:'}, group => $params{group}, settings => $settings, color => $self->use_color);
 
+    my $script = File::Spec->abs2rel($settings->yath->script // $0);
     my $usage = '';
     my $append = '';
-    if (USE_COLOR()) {
+    if ($self->use_color) {
         $usage = join ' ' => (
             color('bold white') . "USAGE:" . color('reset'),
-            color('white') . $0,
+            color('white') . $script,
             color('cyan') . "[YATH OPTIONS]",
             color('bold green') . $cmd . color('reset'),
             color('cyan') . "[OPTIONS FOR COMMAND AND/OR YATH]",
             color('yellow') . "[--]",
         );
 
-        $append = $cmd_class->args_include_tests ? ' ' . join " " => (
+        $append = ($cmd_class && $cmd_class->args_include_tests) ? ' ' . join " " => (
             color('white') . "[ARGUMENTS/TESTS]",
             color('green') . "[TEST :{ ARGS TO PASS TO TEST }:]",
             color('magenta') . "[:: PASS-THROUGH]" . color('reset')
         ) : color('white') . " [ARGUMENTS]";
     }
     else {
-        $usage = "USAGE: $0 [YATH OPTIONS] $cmd [OPTIONS FOR COMMAND AND/OR YATH] [--]";
-        $append = $cmd_class->args_include_tests ? " [ARGUMENTS/TESTS] [TEST :{ ARGS TO PASS TO TEST }:] [:: PASS-THROUGH]" : " [ARGUMENTS]";
+        $usage = "USAGE: $script [YATH OPTIONS] $cmd [OPTIONS FOR COMMAND AND/OR YATH] [--]";
+        $append = ($cmd_class && $cmd_class->args_include_tests) ? " [ARGUMENTS/TESTS] [TEST :{ ARGS TO PASS TO TEST }:] [:: PASS-THROUGH]" : " [ARGUMENTS]";
     }
 
+    my $end = "";
+    if ($settings->yath->help && !$params{group}) {
+        $end = $self->_render_groups(
+            title => 'If the above help output is too much, you can limit it to specific option groups',
+            param => '--help=GROUP_NAME',
+        );
+    }
 
-    return "${usage}${append}\n${help}\n${opts}\n";
+    return "${usage}${append}\n${help}\n${opts}\n${end}";
+}
+
+sub _strip_color {
+    my $self = shift;
+    my ($colors, $line) = @_;
+    return $line unless $self->use_color;
+
+    my $pattern = join '|' => map { "\Q$_\E"} values %$colors;
+    $line =~ s/($pattern)//g;
+
+    return $line;
+}
+
+sub _render_groups {
+    my $self = shift;
+    my %params = @_;
+
+    my $title = $params{title};
+    my $param = $params{param};
+
+    my $settings = $self->settings;
+    my $script = File::Spec->abs2rel($settings->yath->script // $0);
+
+    my %color;
+    if ($self->use_color) {
+        $color{$_}    = color("bold $_") for qw/red green yellow/;
+        $color{bold}  = color('bold white');
+        $color{reset} = color('reset');
+    }
+    else {
+        $color{$_} = '' for qw/bold red green yellow reset/;
+    }
+
+    my %seen;
+    my $options = $self->options;
+    my $groups = [grep { !$seen{$_->[0]}++ } map { [$_->group, $_->category] } sort { $options->doc_sort_ops($a, $b, group_first => 1) } @{$options->options}];
+    my ($h1, $h2, $h3, @g) = Term::Table->new(rows => $groups, header => ["Group Name", "Description"])->render;
+
+    if ($self->use_color) {
+        $h2 =~ s/([^\s\|]+)/$color{bold}$1$color{reset}/g;
+        s/^\| ([^\|]+)/| $color{green}$1$color{reset}/ for @g;
+    }
+
+    my $tline = "$color{red}***$color{reset} $color{bold}${title}$color{reset} $color{red}***$color{reset}";
+    my $tstrip = $self->_strip_color(\%color, $tline);
+    my $border = $color{red} . ('*' x length($tstrip)) . $color{reset};
+    my $line   = "$color{red}*$color{reset}" . (' ' x (length($tstrip) - 2)) . "$color{red}*$color{reset}";
+
+    my @inside = (
+        "$script [...] $color{green}${param}$color{reset}",
+        "",
+        "$color{yellow}The following groups can be selected:$color{reset}",
+        ($h1, $h2, $h3, @g),
+    );
+
+    for my $i (@inside) {
+        my $stripped = $self->_strip_color(\%color, $i);
+        my $new = $line;
+        substr($new, length("$color{red}*$color{reset}    "), length($stripped), $i);
+        $i = $new;
+    }
+
+    my $inside = join "\n" => @inside;
+
+    return <<"    EOT";
+${border}
+${tline}
+${border}
+${line}
+${inside}
+${line}
+${border}
+
+    EOT
 }
 
 sub options {
@@ -382,6 +474,12 @@ sub handle_debug {
 
         print "\nCurrent command line and config options result in these settings:\n";
         print "$out\n";
+
+        print $self->_render_groups(
+            title => 'If the above output is too much, you can limit it to specific option groups',
+            param => '--show-opts=GROUP_NAME',
+        ) if $group eq '1';
+
 
         $exit //= 0;
     }

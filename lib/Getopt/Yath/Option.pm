@@ -339,11 +339,12 @@ sub cli_docs {
     my $self = shift;
     my %params = @_;
 
+    $params{color} //= USE_COLOR && -t STDOUT;
+
     my ($forms, $no_forms, $other_forms) = $self->doc_forms(%params);
 
-
     my @out;
-    if (USE_COLOR) {
+    if ($params{color}) {
         @out = (
             color('underline white') . $self->{+NAME} . color('reset'),
             (map { color('green') . $_ . color('reset') } @{$forms      // []}),

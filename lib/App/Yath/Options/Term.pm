@@ -2,6 +2,8 @@ package App::Yath::Options::Term;
 use strict;
 use warnings;
 
+use Getopt::Yath::Term qw/USE_COLOR/;
+
 our $VERSION = '2.000000';
 
 use Getopt::Yath;
@@ -11,7 +13,7 @@ option_group {group => 'term', category => "Terminal Options"} => sub {
         type => 'Bool',
         short => 'c',
         description => "Turn color on, default is true if STDOUT is a TTY.",
-        default     => sub { -t STDOUT ? 1 : 0 },
+        default     => sub { USE_COLOR() && -t STDOUT ? 1 : 0 },
         set_env_vars  => ['YATH_COLOR'],
         from_env_vars => ['YATH_COLOR', 'CLICOLOR_FORCE'],
     );

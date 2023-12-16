@@ -466,24 +466,26 @@ sub process_args {
 
 my %DOC_FORMATS = (
     'cli' => [
-        'cli_docs',                                                                                                               # Method to call on opt
-        "\n",                                                                                                                     # how to join lines
-        sub { USE_COLOR() ? "\n" . color('bold underline white') . $_[1] . color('reset') . " ($_[3])" : "\n$_[1]  ($_[3])" },    # how to render the category
-        sub { $_[0] =~ s/^/  /mg; "$_[0]\n" },                                                                                    # transform the value from the opt
-        sub { },                                                                                                                  # add this at the end
+        'cli_docs',                                                                                                         # Method to call on opt
+        "\n",                                                                                                               # how to join lines
+        sub { $_[4] ? "\n" . color('bold underline white') . $_[1] . color('reset') . " ($_[3])" : "\n$_[1]  ($_[3])" },    # how to render the category
+        sub { $_[0] =~ s/^/  /mg; "$_[0]\n" },                                                                              # transform the value from the opt
+        sub { },                                                                                                            # add this at the end
     ],
     'pod' => [
-        'pod_docs',                                                                                                               # Method to call on opt
-        "\n\n",                                                                                                                   # how to join lines
-        sub { ($_[0] ? ("=back") : (), "=head$_[2] $_[1]", "=over 4") },                                                          # how to render the category
-        sub { $_[0] },                                                                                                            # transform the value from the opt
-        sub { $_[0] ? ("=back\n") : () },                                                                                         # add this at the end
+        'pod_docs',                                                                                                         # Method to call on opt
+        "\n\n",                                                                                                             # how to join lines
+        sub { ($_[0] ? ("=back") : (), "=head$_[2] $_[1]", "=over 4") },                                                    # how to render the category
+        sub { $_[0] },                                                                                                      # transform the value from the opt
+        sub { $_[0] ? ("=back\n") : () },                                                                                   # add this at the end
     ],
 );
 
 sub docs {
     my $self = shift;
     my ($format, %params) = @_;
+
+    $params{color} //= USE_COLOR() && -t STDOUT;
 
     my $settings = $params{settings};
     my $opts = [ grep { $_->is_applicable($self, $settings) } @{$self->options // []} ];
@@ -502,14 +504,14 @@ sub docs {
     return "\n\n!! Invalid option group: $params{group} !!"
         unless @render;
 
-    @render = sort { $self->_doc_sort_ops($a, $b) } @render;
+    @render = sort { $self->doc_sort_ops($a, $b) } @render;
 
     my @out;
 
     my $cat;
     for my $opt (@render) {
         if (!$cat || $opt->category ne $cat) {
-            push @out => $fcat->($cat, $opt->category, $params{head}, $opt->group);
+            push @out => $fcat->($cat, $opt->category, $params{head}, $opt->group, $params{color});
             $cat = $opt->category;
         }
 
@@ -523,16 +525,23 @@ sub docs {
     return join $join => @out;
 }
 
-sub _doc_sort_ops {
+sub doc_sort_ops {
     my $self = shift;
-    my ($a, $b) = @_;
+    my ($a, $b, %params) = @_;
 
     my $map = $self->{+CATEGORY_SORT_MAP};
     my $aw = $map->{$a->category} || 0;
     my $bw = $map->{$b->category} || 0;
 
     my $ret = $aw <=> $bw;
-    $ret ||= $a->category cmp $b->category;
+    if ($params{group_first}) {
+        $ret ||= $a->group cmp $b->group;
+        $ret ||= $a->category cmp $b->category;
+    }
+    else {
+        $ret ||= $a->category cmp $b->category;
+        $ret ||= $a->group cmp $b->group;
+    }
     $ret ||= ($a->prefix || '') cmp ($b->prefix || '');
     $ret ||= $a->name cmp $b->name;
 

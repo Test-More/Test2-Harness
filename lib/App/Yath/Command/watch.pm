@@ -35,10 +35,9 @@ sub group { 'daemon' }
 
 sub summary { "Watch/Tail a test runner" }
 
-warn "FIXME";
 sub description {
     return <<"    EOT";
-    FIXME
+Tails the log from a running yath daemon
     EOT
 }
 

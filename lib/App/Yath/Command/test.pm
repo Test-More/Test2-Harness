@@ -24,7 +24,16 @@ include_options(
     'App::Yath::Command::run',
 );
 
-warn "FIXME: preload threshold";
+option_group {group => 'runner', category => "Runner Options"} => sub {
+    option preload_threshold => (
+        type    => 'Scalar',
+        short   => 'W',
+        alt     => ['Pt'],
+        default => 0,
+
+        description => "Only do preload if at least N tests are going to be run. In some cases a full preload takes longer than simply running the tests, this lets you specify a minimum number of test jobs that will be run for preload to happen. The default is 0, and it means always preload."
+    );
+};
 
 sub starts_runner            { 1 }
 sub starts_persistent_runner { 0 }
@@ -63,7 +72,19 @@ sub run {
     my $search = $self->fix_test_args();
 
     # Get list of tests to run
-    $self->find_tests(@$search) || return $self->no_tests;
+    my $tests = $self->find_tests(@$search) or return $self->no_tests;
+
+    my $settings = $self->settings;
+
+    if (my $pt = $settings->runner->preload_threshold) {
+        my $tc = @$tests;
+        if ($tc < $pt) {
+            print "\n** Test count '$tc' is below the threshold of '$pt', skipping preload. **\n\n";
+            $settings->runner->class('Test2::Harness::Runner');
+            $settings->runner->preloads([]);
+            $settings->runner->preload_early(undef);
+        }
+    }
 
     return $self->App::Yath::Command::start::run();
 }
@@ -188,12 +209,4 @@ __END__
     return 0;
 
 
-    option preload_threshold => (
-        type    => 'Scalar',
-        short   => 'W',
-        alt     => ['Pt'],
-        default => 0,
-
-        description => "Only do preload if at least N tests are going to be run. In some cases a full preload takes longer than simply running the tests, this lets you specify a minimum number of test jobs that will be run for preload to happen. The default is 0, and it means always preload."
-    );
 

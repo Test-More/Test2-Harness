@@ -2,37 +2,53 @@ package App::Yath::Command::speedtag;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+our $VERSION = '2.000000';
 
-our $VERSION = '1.000156';
-
+use Test2::Harness::Util qw/clean_path/;
 use Test2::Harness::Util::File::JSONL;
-
-use App::Yath::Options;
+use Test2::Harness::Util::File::JSON;
 
 use Cwd qw/getcwd/;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw/-log_file -max_short -max_medium/;
-use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util::HashBase qw{
+    <log_file
+    <max_short
+    <max_medium
+};
 
+use Getopt::Yath;
 include_options(
-    'App::Yath::Options::Debug',
+    'App::Yath::Options::Yath',
 );
 
-option_group {prefix => 'speedtag', category => 'speedtag options'} => sub {
+option_group {group => 'speedtag', category => 'Speedtag Options'} => sub {
+    option dummy => (
+        type    => 'Bool',
+        default => 0,
+
+        description => "Do not actually tag files",
+    );
+
     option generate_durations_file => (
-        type => 'd',
-        alt         => ['durations', 'duration'],
+        type => 'Auto',
+        alt  => ['durations', 'duration'],
+
         description => "Write out a duration json file, if no path is provided 'duration.json' will be used. The .json extension is added automatically if omitted.",
 
-        long_examples  => ['', '=/path/to/durations.json'],
+        long_examples => ['', '=/path/to/durations.json'],
 
-        normalize => \&normalize_duration,
-        action    => \&duration_action,
+        autofill => sub { clean_path('durations.json') },
+
+        normalize => sub {
+            my $val = shift;
+            $val .= '.json' unless $val =~ m/\.json$/;
+            return clean_path($val);
+        },
     );
 
     option pretty => (
+        type        => 'Bool',
         description => "Generate a pretty 'durations.json' file when combined with --generate-durations-file. (sorted and multilines)",
         default     => 0,
     );
@@ -58,27 +74,6 @@ sub init {
     $self->{+MAX_MEDIUM} //= 30;
 }
 
-sub normalize_duration {
-    my $val = shift;
-
-    return $val if $val eq '1';
-
-    $val =~ s/\.json$//g;
-    $val .= '.json';
-
-    return clean_path($val);
-}
-
-sub duration_action {
-    my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
-
-    return $$slot = clean_path($norm)
-        unless $norm eq '1';
-
-    return if $$slot;
-    return $$slot = clean_path('durations.json');
-}
-
 sub run {
     my $self = shift;
 
@@ -90,13 +85,13 @@ sub run {
     my $initial_dir = clean_path(getcwd());
 
     $self->{+LOG_FILE} = shift @$args or die "You must specify a log file";
-    die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
+    die "'$self->{+LOG_FILE}' is not a valid log file"       unless -f $self->{+LOG_FILE};
     die "'$self->{+LOG_FILE}' does not look like a log file" unless $self->{+LOG_FILE} =~ m/\.jsonl(\.(gz|bz2))?$/;
 
     $self->{+MAX_SHORT}  = shift @$args if @$args;
     $self->{+MAX_MEDIUM} = shift @$args if @$args;
 
-    die "max short duration must be an integer, got '$self->{+MAX_SHORT}'"  unless $self->{+MAX_SHORT}  && $self->{+MAX_SHORT} =~ m/^\d+$/;
+    die "max short duration must be an integer, got '$self->{+MAX_SHORT}'"  unless $self->{+MAX_SHORT}  && $self->{+MAX_SHORT}  =~ m/^\d+$/;
     die "max short duration must be an integer, got '$self->{+MAX_MEDIUM}'" unless $self->{+MAX_MEDIUM} && $self->{+MAX_MEDIUM} =~ m/^\d+$/;
 
     my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
@@ -104,7 +99,7 @@ sub run {
     my $durations_file = $self->settings->speedtag->generate_durations_file;
     my %durations;
 
-    while(1) {
+    while (1) {
         my @events = $stream->poll(max => 1000) or last;
 
         for my $event (@events) {
@@ -115,7 +110,7 @@ sub run {
             next unless $f->{harness_job_end};
 
             my $job = {};
-            $job->{file} = clean_path( $f->{harness_job_end}->{file} ) if $f->{harness_job_end} && $f->{harness_job_end}->{file};
+            $job->{file} = clean_path($f->{harness_job_end}->{file})         if $f->{harness_job_end} && $f->{harness_job_end}->{file};
             $job->{time} = $f->{harness_job_end}->{times}->{totals}->{total} if $f->{harness_job_end} && $f->{harness_job_end}->{times};
 
             next unless $job->{file} && $job->{time};
@@ -139,13 +134,17 @@ sub run {
 
             my @lines;
             my $injected;
+            my ($old, $new);
             for my $line (<$fh>) {
                 if ($line =~ m/^(\s*)#(\s*)HARNESS-(CAT(EGORY)?|DUR(ATION))-(LONG|MEDIUM|SHORT)$/i) {
                     next if $injected++;
+                    $old  = $line;
                     $line = "${1}#${2}HARNESS-DURATION-" . uc($dur) . "\n";
+                    $new  = $line;
                 }
                 push @lines => $line;
             }
+
             unless ($injected) {
                 my $new_line = "# HARNESS-DURATION-" . uc($dur) . "\n";
                 my @header;
@@ -154,9 +153,27 @@ sub run {
                 }
 
                 unshift @lines => (@header, $new_line);
+
+                $old = "<NO TAG FOUND>";
+                $new = $new_line;
             }
 
             close($fh);
+
+            if ($durations_file) {
+                my $tfile = $job->{file};
+                $tfile =~ s{^\Q$initial_dir\E/+}{};
+                $durations{$tfile} = uc($dur);
+            }
+
+            if ($settings->speedtag->dummy) {
+                print "Would tag (dummy) file $job->{file} with duration '$dur'\n";
+                chomp($old);
+                chomp($new);
+                print "Old Header: $old\nNew Header: $new\n\n";
+                next;
+            }
+
             unless (open($fh, '>', $job->{file})) {
                 warn "Could not open file $job->{file} for writing\n";
                 next;
@@ -165,19 +182,13 @@ sub run {
             print $fh @lines;
             close($fh);
 
-            if ( $durations_file ) {
-                my $tfile = $job->{file};
-                $tfile =~ s{^\Q$initial_dir\E/+}{};
-                $durations{ $tfile } = uc( $dur );
-            }
-
             print "Tagged '$dur': $job->{file}\n";
         }
     }
 
-    if ( $durations_file ) {
-        my $jfile = Test2::Harness::Util::File::JSON->new(name => $durations_file, pretty => $self->settings->speedtag->pretty );
-        $jfile->write( \%durations );
+    if ($durations_file) {
+        my $jfile = Test2::Harness::Util::File::JSON->new(name => $durations_file, pretty => $self->settings->speedtag->pretty);
+        $jfile->write(\%durations);
     }
 
     return 0;

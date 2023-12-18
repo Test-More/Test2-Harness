@@ -2,22 +2,40 @@ package App::Yath::Command::replay;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
+our $VERSION = '2.000000';
 
-our $VERSION = '1.000156';
+use Test2::Harness::Util::File::JSONL;
+use Carp::Always;
 
-use App::Yath::Options;
-require App::Yath::Command::test;
+use parent 'App::Yath::Command::run';
+use Test2::Harness::Util::HashBase qw{
+    +renderers
+    <final_data
+    <log_file
+    <tests_seen
+    <asserts_seen
+};
 
-use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw/+renderers <final_data <log_file <tests_seen <asserts_seen/;
-
+use Getopt::Yath;
 include_options(
-    'App::Yath::Options::Debug',
-    'App::Yath::Options::Display',
-    'App::Yath::Options::PreCommand',
+    'App::Yath::Options::Renderer',
 );
 
+option_group {group => 'run', category => "Run Options"} => sub {
+    option run_auditor => (
+        type => 'Scalar',
+        default => 'Test2::Harness::Collector::Auditor::Run',
+        normalize => sub { fqmod($_[0], 'Test2::Harness::Collector::Auditor::Run') },
+        description => 'Auditor class to use when auditing the overall test run',
+    );
+};
+
+sub load_renderers           { 1 }
+sub load_plugins             { 0 }
+sub load_resources           { 0 }
+sub starts_runner            { 0 }
+sub starts_persistent_runner { 0 }
+sub args_include_tests       { 0 }
 
 sub group { 'log' }
 
@@ -37,20 +55,11 @@ command accepts.
     EOT
 }
 
-sub init {
-    my $self = shift;
-    $self->SUPER::init() if $self->can('SUPER::init');
-
-    $self->{+TESTS_SEEN}   //= 0;
-    $self->{+ASSERTS_SEEN} //= 0;
-}
-
 sub run {
     my $self = shift;
 
-    my $args      = $self->args;
-    my $settings  = $self->settings;
-    my $renderers = $self->App::Yath::Command::test::renderers;
+    my $args     = $self->args;
+    my $settings = $self->settings;
 
     shift @$args if @$args && $args->[0] eq '--';
 
@@ -58,18 +67,29 @@ sub run {
     die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
     die "'$self->{+LOG_FILE}' does not look like a log file" unless $self->{+LOG_FILE} =~ m/\.jsonl(\.(gz|bz2))?$/;
 
-    my $jobs = @$args ? {map {$_ => 1} @$args} : undef;
-
     my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
+    while (1) {
+        my ($e) = $stream->poll(max => 1);
+        die "Could not find run_id in log.\n" unless $e;
+
+        my $run_id = Test2::Harness::Event->new($e)->run_id or next;
+
+        $settings->run->create_option(run_id => $run_id);
+        last;
+    }
+
+    # Reset the stream
+    $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
+
+    $self->start_plugins_and_renderers();
+
+    my $jobs = @$args ? {map {$_ => 1} @$args} : undef;
 
     while (1) {
         my @events = $stream->poll(max => 1000) or last;
 
         for my $e (@events) {
             last unless defined $e;
-
-            $self->{+TESTS_SEEN}++   if $e->{facet_data}->{harness_job_launch};
-            $self->{+ASSERTS_SEEN}++ if $e->{facet_data}->{assert};
 
             if ($jobs) {
                 my $f = $e->{facet_data}->{harness_job_start} // $e->{facet_data}->{harness_job_queued};
@@ -81,26 +101,16 @@ sub run {
                         last;
                     }
                 }
+
+                next unless $jobs->{$e->{job_id}};
             }
 
-            if (my $final = $e->{facet_data}->{harness_final}) {
-                $self->{+FINAL_DATA} = $final;
-            }
-            else {
-                next if $jobs && !$jobs->{$e->{job_id}};
-                $_->render_event($e) for @$renderers;
-            }
+            $self->handle_event($e);
         }
     }
 
-    $_->finish() for @$renderers;
-
-    my $final_data = $self->{+FINAL_DATA} or die "Log did not contain final data!\n";
-
-    $self->App::Yath::Command::test::render_final_data($final_data);
-    $self->App::Yath::Command::test::render_summary($final_data->{pass});
-
-    return $final_data->{pass} ? 0 : 1;
+    my $exit = $self->stop_plugins_and_renderers();
+    return $exit;
 }
 
 1;

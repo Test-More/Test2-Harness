@@ -18,6 +18,19 @@ sub new {
     return $self;
 }
 
+sub maybe {
+    my $self = shift;
+    my ($group, $opt, $default) = @_;
+
+    return $default unless $self->check_group($group);
+
+    my $g = $self->$group;
+
+    return $default unless $g->check_option($opt);
+
+    return $g->$opt // $default;
+}
+
 sub check_group { $_[0]->{$_[1]} ? 1 : 0 }
 
 sub group {

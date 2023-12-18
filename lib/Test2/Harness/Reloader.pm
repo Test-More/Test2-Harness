@@ -235,8 +235,6 @@ sub do_reload {
     my $info = $self->file_info($file);
     my $mod = $info->{module};
 
-    warn "Get delete symbol callback";
-
     my @warnings;
     my $ok = eval {
         local $SIG{__WARN__} = sub { push @warnings => @_ };
@@ -245,9 +243,6 @@ sub do_reload {
             my $stash = do { no strict 'refs'; \%{"${mod}\::"} };
             for my $sym (keys %$stash) {
                 next if $sym =~ m/::$/;
-
-                # FIXME
-                #next if $del_cb && $del_cb->(%params, symbol => $sym, stash => $stash);
 
                 delete $stash->{$sym};
             }

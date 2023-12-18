@@ -214,7 +214,7 @@ sub expand_log_file_format {
 sub expand {
     my ($letter, $settings) = @_;
     # This could be driven by a hash, but for now if-else is easiest
-    if    ($letter eq "U") { return $settings->run->run_id }
+    if    ($letter eq "U") { return $settings->maybe(run => 'run_id', 'NO_RUN_ID') }
     elsif ($letter eq "u") { return $ENV{USER} }
     elsif ($letter eq "p") { return $$ }
     elsif ($letter eq "P") {

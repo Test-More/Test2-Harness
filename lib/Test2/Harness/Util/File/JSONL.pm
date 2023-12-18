@@ -2,9 +2,7 @@ package Test2::Harness::Util::File::JSONL;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;

@@ -120,9 +120,9 @@ sub post_process {
     my $settings = $state->{settings};
 
     my $cover = $settings->cover;
-    my $tests = $settings->tests;
 
     if ($cover->files || $cover->write || $cover->metrics) {
+        my $tests = $settings->tests;
         my $cover_class = $cover->class // 'Test2::Plugin::Cover';
 
         eval { require(mod2file($cover_class)); 1 } or die "Could not enable file coverage, could not load '$cover_class': $@";

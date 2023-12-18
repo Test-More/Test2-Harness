@@ -2,39 +2,35 @@ package App::Yath::Command::failed;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Test2::Util::Table qw/table/;
 use Test2::Harness::Util::File::JSONL;
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw{<log_file};
+use Test2::Harness::Util::HashBase qw{
+    <log_file
+};
 
-use App::Yath::Options;
-
-option brief => (
-    prefix => 'display',
-    category => 'Display Options',
-    description => 'Show only the files that failed, newline separated, no other output. If a file failed once but passed on a retry it will NOT be shown.',
-);
+use Getopt::Yath;
+option_group {group => 'failed', category => 'Command Options'} => sub {
+    option brief => (
+        type        => 'Bool',
+        default     => 0,
+        description => 'Show only the files that failed, newline separated, no other output. If a file failed once but passed on a retry it will NOT be shown.',
+    );
+};
 
 sub summary { "Show the failed tests from an event log" }
 
 sub group { 'log' }
 
-sub cli_args { "[--] event_log.jsonl[.gz|.bz2] [job1, job2, ...]" }
+sub cli_args { "[--] event_log.jsonl[.gz|.bz2]" }
 
 sub description {
     return <<"    EOT";
 This yath command will list the test scripts from an event log that have failed.
 The only required argument is the path to the log file, which may be compressed.
-Any extra arguments are assumed to be job id's. If you list any jobs,
-only the listed jobs will be processed.
-
-This command accepts all the same renderer/formatter options that the 'test'
-command accepts.
     EOT
 }
 
@@ -79,7 +75,7 @@ sub run {
         my %seen;
         my $subtests = join "\n" => grep { !$seen{$_}++ } sort @{$data->{subtests} // []};
 
-        if ($settings->display->brief) {
+        if ($settings->failed->brief) {
             print $ends->[-1]->{rel_file}, "\n" if $ends->[-1]->{fail};
         }
         else {
@@ -87,7 +83,7 @@ sub run {
         }
     }
 
-    return 0 if $settings->display->brief;
+    return 0 if $settings->failed->brief;
 
     unless (@$rows) {
         print "\nNo jobs failed!\n";

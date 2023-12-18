@@ -42,7 +42,12 @@ sub use_color {
     my $self = shift;
     return $self->{+COLOR} if defined $self->{+COLOR};
     return $self->{+COLOR} = 0 unless USE_COLOR;
-    return $self->{+COLOR} = $self->{+SETTINGS}->term->color ? 1 : 0;
+
+    if ($self->{+SETTINGS}->check_group('term')) {
+        return $self->{+COLOR} = $self->{+SETTINGS}->term->color ? 1 : 0;
+    }
+
+    return $self->{+COLOR} = -t STDOUT ? 1 : 0;
 }
 
 sub init {
@@ -240,7 +245,7 @@ sub process_args {
 
         invalid_opt_callback => sub {
             my ($opt) = @_;
-            print STDERR "\nERROR: '$opt' is not a valid yath option.\n       (Command specific options must come after the command, did you forget to specify a command?)\n\n" . $self->cli_help($yath_options);
+            print STDERR "\nERROR: '$opt' is not a valid yath option.\nSee `yath --help` for a list of available options.\n(Command specific options must come after the command, did you forget to specify a command?)\n\n";
             exit 255;
         },
     );
@@ -277,7 +282,7 @@ sub process_args {
 
     if (my $cmd = $state->{stop}) {
         if ($cmd eq '--' || $cmd eq '::') {
-            print STDERR "\nERROR: '$cmd' must be used after the yath sub-command.\n\n" . $self->cli_help($yath_options);
+            print STDERR "\nERROR: '$cmd' must be used after the yath sub-command.\nSee `yath help` for a list of available sub-commands.\n\n";
             exit 255;
         }
 
@@ -297,7 +302,7 @@ sub process_args {
 
             invalid_opt_callback => sub {
                 my ($opt) = @_;
-                print STDERR "\nERROR: '$opt' is not a valid yath or '$cmd' command option.\n\n" . $self->cli_help($yath_options);
+                print STDERR "\nERROR: '$opt' is not a valid yath or '$cmd' command option.\nSee `yath $cmd --help` for available options.\n\n";
                 exit 255;
             },
         );
@@ -395,6 +400,7 @@ sub include_options {
     my $option_libs = find_libraries($namespace);
 
     for my $lib (sort keys %$option_libs) {
+        print "Checking.... $lib\n";
         next if $lib eq 'App::Yath::Plugin::Notify';
         my $ok = eval { require $option_libs->{$lib}; 1 };
         unless ($ok) {

@@ -17,6 +17,9 @@ our @EXPORT_OK = qw{
     stream_json_l
     stream_json_l_url
     stream_json_l_file
+
+    json_true
+    json_false
 };
 
 my $json   = Cpanel::JSON::XS->new->utf8(1)->convert_blessed(1)->allow_nonref(1);
@@ -29,6 +32,9 @@ sub encode_json        { my $out; eval { $out = $json->encode(@_);   1} // confe
 sub encode_ascii_json  { my $out; eval { $out = $ascii->encode(@_);  1} // confess($@); $out }
 sub encode_canon_json  { my $out; eval { $out = $canon->encode(@_);  1} // confess($@); $out }
 sub encode_pretty_json { my $out; eval { $out = $pretty->encode(@_); 1} // confess($@); $out }
+
+sub json_true  { Cpanel::JSON::XS->true }
+sub json_false { Cpanel::JSON::XS->false }
 
 sub stream_json_l {
     my ($path, $handler, %params) = @_;

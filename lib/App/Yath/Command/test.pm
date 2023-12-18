@@ -188,29 +188,3 @@ sub handle_event {
 }
 
 1;
-
-__END__
-
-    die "Qeueue run";
-    die "Fix guard";
-    my $guard = Scope::Guard->new(sub { $client->send_and_get(abort => $run_id) });
-
-    die "fix the signal handler to not use the client";
-    for my $sig (qw/INT TERM HUP/) {
-        $SIG{$sig} = sub {
-            $SIG{$sig} = 'DEFAULT';
-            print STDERR "\nCought SIG$sig, shutting down...\n";
-            $client->send_and_get(abort => $run_id);
-            $guard->dismiss();
-            kill($sig, $$);
-        };
-    }
-
-
-
-    $guard->dismiss();
-
-    return 0;
-
-
-

@@ -5,10 +5,12 @@ use warnings;
 our $VERSION = '2.000000';
 
 use File::Spec();
-use Test2::Harness::Util qw/find_libraries mod2file clean_path chmod_tmp/;
-use File::Temp qw/tempdir/;
-use Getopt::Yath;
 
+use Test2::Harness::Util qw/find_libraries mod2file clean_path chmod_tmp/;
+use File::Path qw/remove_tree/;
+use File::Temp qw/tempdir/;
+
+use Getopt::Yath;
 option_group {group => 'harness', category => 'Harness Options'} => sub {
     option dummy => (
         type           => 'Bool',
@@ -60,6 +62,12 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
         default        => sub { File::Spec->tmpdir },
     );
 
+    option clear => (
+        type    => 'Bool',
+        short       => 'C',
+        description => 'Clear the work directory if it is not already empty',
+    );
+
     option workdir => (
         type           => 'Scalar',
         description    => 'Set the work directory (Default: new temp directory)',
@@ -102,6 +110,14 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
             return $workdir;
         },
     );
+};
+
+option_post_process sub {
+    my ($options, $state) = @_;
+
+    my $settings = $state->{settings};
+
+    remove_tree($settings->harness->workdir, {safe => 1, keep_root => 1}) if $settings->harness->clear;
 };
 
 1;

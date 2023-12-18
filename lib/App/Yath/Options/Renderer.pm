@@ -60,7 +60,7 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
 
         long_examples  => [' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
         short_examples => ['MyRenderer',     ' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
-        initialize     => sub { {'App::Yath::Renderer::Formatter' => []} },
+        initialize     => sub { {'App::Yath::Renderer::Formatter' => [], 'App::Yath::Renderer::Summary' => []} },
 
         normalize => sub { fqmod($_[0], ['App::Yath::Renderer', 'Test2::Harness::Renderer']), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
 
@@ -110,9 +110,8 @@ sub init_renderers {
     my $rs = $settings->renderer;
     my $r_classes = $rs->classes;
     my @renderers;
-    for my $class (sort { $a->weight <=> $b->weight || $a cmp $b } keys %$r_classes) {
+    for my $class (sort { $a->weight <=> $b->weight || $a cmp $b } map { require(mod2file($_)); $_ } keys %$r_classes) {
         my $params = $r_classes->{$class};
-        require(mod2file($class));
         my $r = $class->new($settings->renderer->all, $settings->term->all, @$params, %params, settings => $settings);
         push @renderers => $r;
     }

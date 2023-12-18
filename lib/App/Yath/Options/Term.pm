@@ -10,10 +10,10 @@ use Getopt::Yath;
 
 option_group {group => 'term', category => "Terminal Options"} => sub {
     option color => (
-        type => 'Bool',
-        short => 'c',
-        description => "Turn color on, default is true if STDOUT is a TTY.",
-        default     => sub { USE_COLOR() && -t STDOUT ? 1 : 0 },
+        type          => 'Bool',
+        short         => 'c',
+        description   => "Turn color on, default is true if STDOUT is a TTY.",
+        initialize    => sub { USE_COLOR() && -t STDOUT ? 1 : 0 },
         set_env_vars  => ['YATH_COLOR'],
         from_env_vars => ['YATH_COLOR', 'CLICOLOR_FORCE'],
     );

@@ -2,13 +2,7 @@ package App::Yath::Command::which;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
-
-use App::Yath::Util qw/find_pfile/;
-
-use Test2::Harness::Util::File::JSON;
+our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
@@ -24,20 +18,23 @@ This will tell you about any persistent runners it can find.
     EOT
 }
 
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::IPC',
+);
+
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile($self->settings, no_fatal => 1);
+    my $ipc = App::Yath::Options::IPC->find_persistent_runner($self->{+SETTINGS});
 
-    unless ($pfile) {
-        print "\nNo persistent harness was found for the current path.\n\n";
+    unless ($ipc) {
+        print "\nNo persistent harness was found for the current project.\n\n";
         return 0;
     }
 
-    print "\nFound: $pfile\n";
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
-    print "  PID: $data->{pid}\n";
-    print "  Dir: $data->{dir}\n";
+    print "\nFound a persistent runner:\n";
+    print "  $_: $ipc->{$_}\n" for reverse sort grep { defined $ipc->{$_} } keys %$ipc;
     print "\n";
 
     return 0;

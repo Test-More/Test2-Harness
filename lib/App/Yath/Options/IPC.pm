@@ -125,8 +125,12 @@ sub find_persistent_runner {
     my $dirs = $class->find_ipc_dirs($settings);
     my $found = $class->find_ipc($settings, $dirs);
 
-    return 1 if @{$found->{p} // []};
-    return 0;
+    my ($one) = @{$found->{p} // []};
+    return undef unless $one;
+
+    my %ipc;
+    @ipc{qw/address protocol port peer_pid/} = @$one;
+    return \%ipc;
 }
 
 sub find_ipc_dirs {

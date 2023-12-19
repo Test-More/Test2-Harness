@@ -70,7 +70,7 @@ sub load_renderers { 1 }
 sub run {
     my $self = shift;
 
-    my $search = $self->fix_test_args();
+    my $search = $self->{+ARGS} // [];
 
     # Get list of tests to run
     my $tests = $self->find_tests(@$search) or return $self->no_tests;

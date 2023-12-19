@@ -122,11 +122,6 @@ dev-lib '$_' added to \@INC late, it is possible some yath libraries were alread
             return $class => $args;
         },
     );
-
-    option load_settings => (
-        type => 'Scalar',
-        description => 'This is used internally to pass settings to sub-commands',
-    );
 };
 
 1;

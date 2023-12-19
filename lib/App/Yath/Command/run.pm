@@ -70,7 +70,7 @@ sub run {
     $self->start_plugins_and_renderers();
 
     # Get list of tests to run
-    my $search = $self->fix_test_args();
+    my $search = $self->{+ARGS} // [];
     my $tests  = $self->find_tests(@$search) || return $self->no_tests;
 
     my $client = App::Yath::Client->new(settings => $settings);
@@ -257,27 +257,6 @@ sub no_tests {
     my $self = shift;
     print "Nothing to do, no tests to run!\n";
     return 0;
-}
-
-sub fix_test_args {
-    my $self = shift;
-
-    my $settings = $self->settings;
-
-    my (@tests, @test_args);
-    my $list = \@tests;
-    for my $arg (@{$self->{+ARGS} // []}) {
-        if ($arg eq '::') {
-            $list = \@test_args;
-            next;
-        }
-
-        push @$list => $arg;
-    }
-
-    $settings->tests->option(args => \@test_args) if @test_args;
-
-    return \@tests;
 }
 
 sub find_tests {

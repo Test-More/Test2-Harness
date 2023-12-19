@@ -2,6 +2,8 @@ package App::Yath;
 use strict;
 use warnings;
 
+use feature 'state';
+
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util::HashBase qw{
@@ -16,6 +18,11 @@ use Test2::Harness::Util::HashBase qw{
 
     <command
     +color
+
+
+    <state_env
+    <state_cleared
+    <state_modules
 };
 
 use Getopt::Yath();
@@ -24,6 +31,7 @@ use Getopt::Yath::Term qw/USE_COLOR color fit_to_width/;
 
 use App::Yath::Options::Yath;
 
+use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Scalar::Util qw/blessed/;
 use File::Spec;
@@ -221,24 +229,34 @@ sub options {
     return $self->{+OPTIONS};
 }
 
-sub process_args {
+sub _groups_and_stops {
     my $self = shift;
 
-    my $settings = $self->{+SETTINGS};
-
-    # First process the global yath args
-    my $yath_options = $self->options;
-
-    my ($env, $cleared, $modules) = ({}, {}, {});
-    my $state = $yath_options->process_args(
-        $self->argv,
-
-        env      => $env,
-        cleared  => $cleared,
-        modules  => $modules,
-        settings => $settings,
+    return (
         stops    => ['--', '::'],
         groups   => {':{' => '}:'},
+    );
+}
+
+sub _default_process_arg_fields {
+    my $self = shift;
+
+    return (
+        env      => $self->{+STATE_ENV}     //= {},
+        cleared  => $self->{+STATE_CLEARED} //= {},
+        modules  => $self->{+STATE_MODULES} //= {},
+        settings => $self->{+SETTINGS},
+        $self->_groups_and_stops,
+    );
+}
+
+sub _process_global_args {
+    my $self = shift;
+    my ($args, %params) = @_;
+
+    return $self->_process_args(
+        $args,
+        %params,
 
         skip_posts => 1,
         stop_at_non_opts => 1,
@@ -249,71 +267,170 @@ sub process_args {
             exit 255;
         },
     );
+}
 
-    my $load_cmd = sub {
-        my ($cmd) = @_;
+sub _process_command_args {
+    my $self = shift;
+    my ($args, %params) = @_;
 
-        my $cmd_class = "App::Yath::Command::$cmd";
-        my $cmd_file = mod2file($cmd_class);
-        unless (eval { require $cmd_file; die "$cmd_class does not subclass App::Yath::Command.\n" unless $cmd_class->isa('App::Yath::Command'); 1 }) {
-            my $eq80 = '=' x 80;
-            print STDERR "\nERROR: '$cmd' ($cmd_class) does not look like a valid command:\n${eq80}\n$@${eq80}\n";
+    my $cmd = delete $params{cmd} or croak "'cmd' arg missing";
+
+    return $self->_process_args(
+        $args,
+        %params,
+
+        skip_non_opts => 1,
+
+        invalid_opt_callback => sub {
+            my ($opt) = @_;
+            print STDERR "\nERROR: '$opt' is not a valid yath or '$cmd' command option.\nSee `yath $cmd --help` for available options.\n\n";
             exit 255;
-        }
+        },
+    );
+}
 
-        $yath_options->include($cmd_class->options) if $cmd_class->can('options');
-        $settings->yath->create_option(command => $cmd_class);
-        $self->{+COMMAND} = $cmd_class;
+sub _process_args {
+    my $self = shift;
+    my ($args, %params) = @_;
 
-        $self->include_options('plugins'  => 'App::Yath::Plugin::*')   if $cmd_class->load_plugins();
-        $self->include_options('resource' => 'App::Yath::Resource::*') if $cmd_class->load_resources();
-        $self->include_options('renderer' => 'App::Yath::Renderer::*') if $cmd_class->load_renderers();
-    };
+    return $self->options->process_args(
+        $args,
+        $self->_default_process_arg_fields,
+        %params,
+    );
+}
 
-    if (my $file = $settings->yath->load_settings) {
-        my $json = read_file($file);
-        my $raw = decode_json($json);
-        $raw->{yath} = { %{$settings->yath->TO_JSON}, dev_libs => $raw->{yath}->{dev_libs},  };
-        $settings = $self->{+SETTINGS} = Getopt::Yath::Settings->new(%$raw);
+sub check_command {
+    my $self = shift;
+    my ($cmd) = @_;
 
-        my $cmd = $state->{stop} or die "No command provided.\n";
-        $load_cmd->($cmd);
+    state %check_cache;
+
+    return @{$check_cache{$cmd}} if $check_cache{$cmd};
+
+    my $cmd_class = "App::Yath::Command::$cmd";
+    my $cmd_file = mod2file($cmd_class);
+
+    unless (eval { require $cmd_file; die "$cmd_class does not subclass App::Yath::Command.\n" unless $cmd_class->isa('App::Yath::Command'); 1 }) {
+        return @{$check_cache{$cmd} = [0, $@]};
     }
 
-    if (my $cmd = $state->{stop}) {
-        if ($cmd eq '--' || $cmd eq '::') {
-            print STDERR "\nERROR: '$cmd' must be used after the yath sub-command.\nSee `yath help` for a list of available sub-commands.\n\n";
-            exit 255;
-        }
+    return @{$check_cache{$cmd} = [1, undef]};
+}
 
-        $load_cmd->($cmd);
+sub load_command {
+    my $self = shift;
+    my ($cmd) = @_;
 
-        $state = $yath_options->process_args(
-            $state->{remains},
+    my $cmd_class = "App::Yath::Command::$cmd";
+    my $cmd_file = mod2file($cmd_class);
 
-            env      => $env,
-            cleared  => $cleared,
-            modules  => $modules,
-            settings => $settings,
-            stops    => ['--', '::'],
-            groups   => {':{' => '}:'},
-
-            skip_non_opts => 1,
-
-            invalid_opt_callback => sub {
-                my ($opt) = @_;
-                print STDERR "\nERROR: '$opt' is not a valid yath or '$cmd' command option.\nSee `yath $cmd --help` for available options.\n\n";
-                exit 255;
-            },
-        );
+    my ($ok, $err) = $self->check_command($cmd);
+    unless ($ok) {
+        my $eq80 = '=' x 80;
+        print STDERR "\nERROR: '$cmd' ($cmd_class) does not look like a valid command:\n${eq80}\n$err${eq80}\n";
+        exit 255;
     }
 
-    $self->{argv} = [@{$state->{skipped}}, $state->{stop} ? $state->{stop} : (), @{$state->{remains}}];
+    my $settings = $self->{+SETTINGS};
+    my $opts = $self->options;
 
-    $self->{+ENV_VARS} = $env;
+    $opts->include($cmd_class->options) if $cmd_class->can('options');
+    $settings->yath->create_option(command => $cmd_class);
+    $self->{+COMMAND} = $cmd_class;
+
+    $self->include_options('plugins'  => 'App::Yath::Plugin::*')   if $cmd_class->load_plugins();
+    $self->include_options('resource' => 'App::Yath::Resource::*') if $cmd_class->load_resources();
+    $self->include_options('renderer' => 'App::Yath::Renderer::*') if $cmd_class->load_renderers();
+}
+
+sub process_args {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS};
+
+    my $state = $self->_process_global_args($self->argv);
+
+    my $cmd;
+
+    if (my $stop = $state->{stop}) {
+        my @cmd_args;
+
+        my $is_do   = $stop eq 'do';
+        my $is_stop = (!$is_do)   && ($stop eq '--' || $stop eq '::');
+        my $is_cmd  = (!$is_stop) && ($self->check_command($stop))[0];
+        my $is_path = -e $stop    && !($is_do || $is_stop || $is_cmd);
+
+        @cmd_args = @{$state->{skipped}};
+
+        if ($is_do || $is_stop || $is_path) {
+            print STDERR "\n** Note: You should use the `do`, `run` or `test` commands, relying on the default behavior when no command is specified is discouraged. **\n\n"
+                unless $is_do;
+
+            push @cmd_args => $stop unless $is_do;
+
+            require App::Yath::Options::IPC;
+            my $ipc_state = App::Yath::Options::IPC->options->process_args(
+                [@cmd_args],
+                $self->_groups_and_stops,
+                skip_posts    => 1,
+                skip_non_opts => 1,
+            );
+
+            if (App::Yath::Options::IPC->find_persistent_runner($ipc_state->{settings})) {
+                print "Found a persistent runner, defaulting to the 'run' command.\n";
+                $cmd = 'run';
+            }
+            else {
+                print "No persistent runner, defaulting to the 'test' command.\n";
+                $cmd = 'test';
+            }
+        }
+        else {
+            $cmd = $stop;
+        }
+
+        push @cmd_args => @{$state->{remains} // []};
+
+        $self->load_command($cmd) if $cmd;
+
+        $state = $self->_process_command_args(\@cmd_args, cmd => $cmd);
+    }
+
+    $cmd //= 'do';
+
+    my $test_args;
+    my $argv = [@{$state->{skipped}}];
+    if (my $stop = $state->{stop}) {
+        if ($stop eq '--') {
+            for my $arg (@{$state->{remains}}) {
+                if    ($test_args)   { push @$test_args => $arg }
+                elsif ($arg eq '::') { $test_args //= [] }
+                else                 { push @$argv => $arg }
+            }
+        }
+        elsif ($stop eq '::') {
+            $test_args = [@{$state->{remains}}];
+        }
+        else {
+            push @$argv => ($stop, @{$state->{remains}});
+        }
+    }
+    else {
+        push @$argv => @{$state->{remains}};
+    }
+
+    if ($test_args) {
+        die "'::' cannot be used with the '$cmd' command" unless $settings->check_group('tests');
+        $settings->tests->option(args => $test_args);
+    }
+
+    $self->{argv} = $argv;
+
+    $self->{+ENV_VARS} = $self->{+STATE_ENV};
     $self->{+OPTION_STATE} = $state;
 
-    for my $module (keys %$modules) {
+    for my $module (keys %{$self->{+STATE_MODULES}}) {
         for my $set (['yath', 'plugins', 'App::Yath::Plugin'], ['renderer', 'classes', 'App::Yath::Renderer'], ['resource', 'classes', 'App::Yath::Resource']) {
             my ($group, $field, $type) = @$set;
             next unless $module->isa($type);
@@ -400,7 +517,6 @@ sub include_options {
     my $option_libs = find_libraries($namespace);
 
     for my $lib (sort keys %$option_libs) {
-        print "Checking.... $lib\n";
         next if $lib eq 'App::Yath::Plugin::Notify';
         my $ok = eval { require $option_libs->{$lib}; 1 };
         unless ($ok) {

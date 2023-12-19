@@ -2,8 +2,6 @@ package App::Yath::Renderer::Summary;
 use strict;
 use warnings;
 
-use Carp::Always;
-
 use Test2::Util::Table qw/table/;
 use Getopt::Yath::Term qw/USE_COLOR/;
 use Test2::Harness::Util qw/clean_path/;

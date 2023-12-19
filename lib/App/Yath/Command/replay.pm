@@ -5,7 +5,6 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util::File::JSONL;
-use Carp::Always;
 
 use parent 'App::Yath::Command::run';
 use Test2::Harness::Util::HashBase qw{

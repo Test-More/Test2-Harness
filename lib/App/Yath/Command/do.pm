@@ -2,13 +2,7 @@ package App::Yath::Command::do;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
-
-use Test2::Harness::Util::File::JSON;
-
-use Test2::Harness::Util qw/open_file/;
+our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;

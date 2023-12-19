@@ -86,29 +86,17 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
     );
 };
 
-sub vivify_ipc {
+sub find_ipc {
     my $class = shift;
-    my ($settings) = @_;
+    my ($settings, $dirs) = @_;
 
-    state $discovered;
-    state %ipc;
-    return {%ipc} if $discovered;
+    $dirs //= $class->find_ipc_dirs($settings);
 
     my $pre = $settings->ipc->prefix;
 
-    my $starts  = 0;
-    my $persist = 0;
-    if (my $command = $settings->yath->command) {
-        $starts  = 1 if $command->starts_runner;
-        $persist = 1 if $command->starts_persistent_runner;
-    }
-
     my %found;
-    my $ipc_dir = $settings->ipc->dir;
-    my %search = ipc_dirs($settings);
-    my @dirs = $ipc_dir ? ($ipc_dir) : (map { $search{$_} // die "'$_' is not a valid ipc dir to check.\n" } @{$settings->ipc->dir_order});
 
-    for my $dir (@dirs) {
+    for my $dir (@$dirs) {
         opendir(my $dh, $dir) or next;
         for my $file (readdir($dh)) {
             #                                TYPE   PID  PROT      PORT
@@ -127,6 +115,50 @@ sub vivify_ipc {
         closedir($dh);
     }
 
+    return \%found;
+}
+
+sub find_persistent_runner {
+    my $class = shift;
+    my ($settings) = @_;
+
+    my $dirs = $class->find_ipc_dirs($settings);
+    my $found = $class->find_ipc($settings, $dirs);
+
+    return 1 if @{$found->{p} // []};
+    return 0;
+}
+
+sub find_ipc_dirs {
+    my $class = shift;
+    my ($settings) = @_;
+
+    my $ipc_dir = $settings->ipc->dir;
+    my %search  = ipc_dirs($settings);
+    my @dirs    = $ipc_dir ? ($ipc_dir) : (map { $search{$_} // die "'$_' is not a valid ipc dir to check.\n" } @{$settings->ipc->dir_order});
+
+    return \@dirs;
+}
+
+sub vivify_ipc {
+    my $class = shift;
+    my ($settings) = @_;
+
+    state $discovered;
+    state %ipc;
+    return {%ipc} if $discovered;
+
+    my $pre = $settings->ipc->prefix;
+
+    my $starts  = 0;
+    my $persist = 0;
+    if (my $command = $settings->maybe(yath => 'command')) {
+        $starts  = 1 if $command->starts_runner;
+        $persist = 1 if $command->starts_persistent_runner;
+    }
+
+    my $dirs = $class->find_ipc_dirs($settings);
+    my %found = %{$class->find_ipc($settings, $dirs)};
     my $found_persist = scalar @{$found{p} // []};
 
     if ($starts){
@@ -144,7 +176,7 @@ sub vivify_ipc {
         $ipc{address} = join "-" => ($pre, $persist ? 'p' : 't', $$, $short);
         $ipc{address} .= ":$ipc{port}" if length($ipc{port});
 
-        my ($dir) = @dirs;
+        my ($dir) = @$dirs;
         unless (-d $dir) {
             make_path($dir) or die "Could not make path '$dir'";
         }

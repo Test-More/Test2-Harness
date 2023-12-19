@@ -2,11 +2,9 @@ package App::Yath::Command::init;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
 use parent 'App::Yath::Command';
 
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Test2::Harness::Util qw/open_file/;
 use App::Yath::Util qw/is_generated_test_pl/;

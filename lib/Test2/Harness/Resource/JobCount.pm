@@ -6,6 +6,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 use List::Util qw/max min/;
+use Time::HiRes qw/time/;
 
 use parent 'Test2::Harness::Resource';
 use Test2::Harness::Util::HashBase qw{
@@ -65,6 +66,7 @@ sub assign {
     $self->{+ASSIGNMENTS}->{$id} = {
         job   => $job,
         count => $count,
+        stamp => time,
     };
 
     $env->{T2_HARNESS_MY_JOB_CONCURRENCY} = $count;
@@ -84,70 +86,29 @@ sub release {
     return $id;
 }
 
-sub status_data { () }
+sub status_data {
+    my $self = shift;
 
-sub status_lines {
-#    my $self = shift;
-#
-#    my $data = $self->status_data || return;
-#    return unless @$data;
-#
-#    my $out = "";
-#
-#    for my $group (@$data) {
-#        my $gout = "\n";
-#        $gout .= "**** $group->{title} ****\n\n" if defined $group->{title};
-#
-#        for my $table (@{$group->{tables} || []}) {
-#            my $rows = $table->{rows};
-#
-#            if (my $format = $table->{format}) {
-#                my $rows2 = [];
-#
-#                for my $row (@$rows) {
-#                    my $row2 = [];
-#                    for (my $i = 0; $i < @$row; $i++) {
-#                        my $val = $row->[$i];
-#                        my $fmt = $format->[$i];
-#
-#                        $val = defined($val) ? render_duration($val) : '--'
-#                            if $fmt && $fmt eq 'duration';
-#
-#                        push @$row2 => $val;
-#                    }
-#                    push @$rows2 => $row2;
-#                }
-#
-#                $rows = $rows2;
-#            }
-#
-#            next unless $rows && @$rows;
-#
-#            my $tt = Term::Table->new(
-#                header => $table->{header},
-#                rows   => $rows,
-#
-#                sanitize     => 1,
-#                collapse     => 1,
-#                auto_columns => 1,
-#
-#                %{$table->{term_table_opts} || {}},
-#            );
-#
-#            $gout .= "** $table->{title} **\n" if defined $table->{title};
-#            $gout .= "$_\n" for $tt->render;
-#            $gout .= "\n";
-#        }
-#
-#        if ($group->{lines} && @{$group->{lines}}) {
-#            $gout .= "$_\n" for @{$group->{lines}};
-#            $gout .= "\n";
-#        }
-#
-#        $out .= $gout;
-#    }
-#
-#    return $out;
+    return [
+        {
+            title => "Job Slot Assignments",
+            tables => [
+                {
+                    header => [qw/Total Used Free/],
+                    rows => [[$self->{+SLOTS}, $self->{+USED}, ($self->{+SLOTS} - $self->{+USED})]],
+                },
+                {
+                    header => [qw/Runtime Slots Name/],
+                    format => [qw/duration/, undef, undef],
+                    rows => [
+                        (map {[(time - $_->{stamp}), $_->{count}, $_->{job}->test_file->relative]} values %{$self->{+ASSIGNMENTS} // {}}),
+                    ],
+                }
+            ],
+        }
+    ];
 }
 
 1;
+
+__END__

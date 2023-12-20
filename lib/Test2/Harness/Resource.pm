@@ -136,9 +136,10 @@ sub _subprocess_run {
 sub status_data { () }
 
 sub status_lines {
-    my $self = shift;
+    my $class = shift;
+    croak "must pass in a data array or undef" unless @_;
+    my ($data) = @_;
 
-    my $data = $self->status_data || return;
     return unless @$data;
 
     my $out = "";

@@ -161,9 +161,10 @@ sub vivify_ipc {
         $persist = 1 if $command->starts_persistent_runner;
     }
 
-    my $dirs = $class->find_ipc_dirs($settings);
-    my %found = %{$class->find_ipc($settings, $dirs)};
+    my $dirs          = $class->find_ipc_dirs($settings);
+    my %found         = %{$class->find_ipc($settings, $dirs)};
     my $found_persist = scalar @{$found{p} // []};
+    my $found_temp    = scalar @{$found{t} // []};
 
     if ($starts){
         die "\nExisting persistent runner(s) detected, and --ipc-allow-multiple was not specified:\n" . join("\n", map {"  PID $_->[3]: $_->[0]"} @{$found{p}}) . "\n\n"
@@ -197,18 +198,25 @@ sub vivify_ipc {
     if ($found_persist > 1) {
         die "\nMultiple persistent runners detected, please select one using one of the following options:\n" . join("\n", map {"  --ipc-file '$_->[0]'"} @{$found{p}}) . "\n\n";
     }
-    elsif (!$found_persist) {
-        die "\nNo persistent runners detected, please use the `yath start` command to launch one.\n\n"
+    elsif ($found_persist) {
+        ($discovered) = @{$found{p}};
+    }
+    elsif ($found_temp && $settings->ipc->check_option('non_daemon') && $settings->ipc->non_daemon) {
+        ($discovered) = @{$found{t}};
+    }
+    else {
+        die "\nNo persistent runners detected, please use the `yath start` command to launch one.\n\n";
     }
 
-    ($discovered) = @{$found{p}};
+    die "\nNo yath instances found.\n\n" unless $discovered;
+
     @ipc{qw/address protocol port peer_pid/} = @$discovered;
     $ipc{address} = clean_path($ipc{address});
 
     eval { $ipc{protocol} = fqmod($ipc{protocol}, 'Test2::Harness::IPC::Protocol'); 1 }
         or die "\nFailed to load IPC protocol ($ipc{protocol}) specified by IPC file ($ipc{address}): $@\n";
 
-    print "Found instance FIFO: $ipc{address}\n";
+    print "Found $ipc{protocol} instance pid $ipc{pid} at $ipc{address}" . ($ipc{port} ? ":$ipc{port}" : "") . " \n";
     return {%ipc};
 }
 

@@ -26,6 +26,32 @@ sub init {
     $self->SUPER::init();
 }
 
+sub ipc_text {
+    my $self = shift;
+
+    my $settings = $self->{+SETTINGS};
+    my $ipc_s = App::Yath::Options::IPC->vivify_ipc($settings);
+    use Data::Dumper;
+    print Dumper($ipc_s);
+
+    my $out = "Harness instance pid " . $ipc_s->{peer_pid};
+    if (my $prot = $ipc_s->{protocol}) {
+        $prot =~ s/^Test2::Harness::IPC::Protocol:://;
+        $out .= " $prot";
+
+        if (my $addr = $ipc_s->{address}) {
+            $addr = File::Spec->abs2rel($addr) if -e $addr;
+            $out .= " $addr";
+
+            if (my $port = $ipc_s->{port}) {
+                $out .= ":$port";
+            }
+        }
+    }
+
+    return $out;
+}
+
 sub ipc {
     my $self = shift;
 

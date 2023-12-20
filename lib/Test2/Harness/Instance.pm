@@ -200,6 +200,19 @@ sub process_list {
     );
 }
 
+sub api_resources {
+    my $self = shift;
+
+    my @out;
+
+    for my $resource (@{$self->{+RESOURCES} // []}) {
+        my $status_data = $resource->status_data or next;
+        push @out => [ref($resource), $status_data],
+    }
+
+    return \@out;
+}
+
 sub api_spawn {
     my $self = shift;
     my ($req, %spawn) = @_;

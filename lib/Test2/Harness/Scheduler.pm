@@ -49,9 +49,9 @@ sub init {
     delete $self->{+TERMINATED};
 
     $self->{+RUN_ORDER} = [];    # run-id's in order they should be run
-    $self->{+RUNS}      = {};    # { run_id => {..., jobs => \@COMPLETE_LIST, jobs_todo => ..., jobs_complete => {}} }
+    $self->{+RUNS}      = {};
     $self->{+RUNNING}   = {};
-    $self->{+CHILDREN}  = {};    # pid => ...?
+    $self->{+CHILDREN}  = {};
 
     $self->{+RUN_JOBS_ADDED} = {};
 }

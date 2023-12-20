@@ -7,6 +7,7 @@ our $VERSION = '2.000000';
 use Carp qw/croak confess/;
 use Scalar::Util qw/blessed/;
 use List::Util qw/first max/;
+use Time::HiRes qw/time/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 

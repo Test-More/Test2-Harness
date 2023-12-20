@@ -210,7 +210,6 @@ sub setup_child_input {
     my $self = shift;
 
     $self->SUPER::setup_child_input();
-    #$FIX_STDIN = 1 if $in_file;
 
     return;
 }

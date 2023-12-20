@@ -10,6 +10,7 @@ BEGIN { %ORIG_SIG = %SIG }
 use goto::file();
 use Scope::Guard;
 
+use Time::HiRes qw/time/;
 use POSIX qw/:sys_wait_h/;
 
 use Test2::Harness::Util qw/mod2file parse_exit/;

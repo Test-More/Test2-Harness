@@ -2,21 +2,21 @@ package App::Yath::Command::times;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Test2::Util::Times qw/render_duration/;
 
 use Test2::Harness::Util::File::JSONL;
 
-use App::Yath::Options;
-
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase qw/-log_file <fields/;
+use Test2::Harness::Util::HashBase qw{
+    <log_file
+    <fields
+};
 
+use Getopt::Yath;
 include_options(
-    'App::Yath::Options::Debug',
+    'App::Yath::Options::Yath',
 );
 
 sub summary { "Get times from a test log" }

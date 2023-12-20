@@ -84,6 +84,7 @@ sub audit {
     my @out;
 
     push @out => $self->_audit($_) for @_;
+    $self->subtest_process($_->{facet_data}, $_) for @out;
 
     $self->update_summary() if $self->{+SUMMARY_FILE};
 
@@ -248,7 +249,6 @@ sub _audit {
         return @out;
     }
 
-    $self->subtest_process($f, $event);
     return @out;
 }
 

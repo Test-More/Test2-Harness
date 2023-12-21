@@ -118,7 +118,10 @@ sub run {
 
         $run_complete //= 1 unless $client->active;
 
-        $self->handle_event($_) for $lf->poll;
+        for my $event ($lf->poll) {
+            $run_complete = 1 unless defined $event;
+            $self->handle_event($event);
+        }
 
         while (my $msg = $client->get_message(blocking => !$run_complete, timeout => 0.2)) {
             if ($msg->terminate || $msg->run_complete) {
@@ -162,6 +165,8 @@ sub start_plugins_and_renderers {
 sub handle_event {
     my $self = shift;
     my ($event) = @_;
+
+    return unless defined $event;
 
     my $renderers = $self->renderers;
 

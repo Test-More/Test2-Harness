@@ -57,6 +57,43 @@ sub process_list {
     return @out;
 }
 
+sub overall_status {
+    my $self = shift;
+
+    my $stages = $self->stages or return;
+
+    my @rows;
+
+    for my $stage_name (sort { $a cmp $b } keys %$stages) {
+        next if $stage_name eq 'NONE';
+
+        my $stage  = $stages->{$stage_name};
+        my $ready  = $stage->{ready};
+        my $err    = $stage->{error};
+
+        my $status = $ready ? 'UP' : 'DOWN';
+        my $pid    = $ready ? $ready->{pid}   // 'PENDING' : '';
+        my $stamp  = $ready ? $ready->{stamp} // undef     : undef;
+        my $age = $stamp ? time - $stamp : undef;
+
+        push @rows => [$age, $pid, $stage_name, $status, $err];
+    }
+
+    return {
+        title  => "Runner Status",
+        tables => [
+            {
+                title    => "Stages",
+                collapse => 1,
+                format   => [qw/duration/, undef, undef,   undef,    undef],
+                header   => ['age',        'pid', 'stage', 'status', 'error'],
+                rows     => \@rows,
+            },
+        ],
+    };
+}
+
+
 sub ready { $_[0]->{+STAGES} ? 1 : 0 }
 
 sub set_stages {
@@ -81,25 +118,31 @@ sub set_stage_up {
 
     my $stage_data = $self->stages->{$stage} // die "Invalid stage '$stage'";
     $stage_data->{ready} = {pid => $pid, con => $con, stamp => time};
+    delete $stage_data->{error};
 
     return $pid;
 }
 
 sub set_stage_down {
     my $self = shift;
-    my ($stage, $pid) = @_;
+    my ($stage, $pid, $err) = @_;
 
     my $stage_data = $self->stages->{$stage} // die "Invalid stage '$stage'";
-    my $ready = $stage_data->{ready} // die "Stage not ready '$stage'";
 
-    if ($pid && $ready->{pid}) {
-        # It is possible we got the 'down' after a new 'up'
-        if ($ready->{pid} == $pid) {
+    if(my $ready = $stage_data->{ready}) {
+        if ($pid && $ready->{pid}) {
+            # It is possible we got the 'down' after a new 'up'
+            if ($ready->{pid} == $pid) {
+                delete $stage_data->{ready};
+            }
+        }
+        else {
             delete $stage_data->{ready};
         }
     }
-    else {
-        delete $stage_data->{ready};
+
+    if ($err) {
+        $stage_data->{error} = $err;
     }
 
     return 1;

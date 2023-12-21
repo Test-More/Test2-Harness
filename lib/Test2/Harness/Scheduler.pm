@@ -56,6 +56,27 @@ sub init {
     $self->{+RUN_JOBS_ADDED} = {};
 }
 
+sub overall_status {
+    my $self = shift;
+
+    return {
+        title => "Scheduler Status",
+        tables => [
+            {
+                title => "Runs",
+                header => ['run_id', 'running jobs', 'total jobs'],
+                rows => [map { my $r = $self->{+RUNS}->{$_}; [$_, scalar(keys %{$r->{running}}), scalar(@{$r->{jobs}})] } @{$self->{+RUN_ORDER}}],
+            },
+            {
+                title => "Children",
+                format => [qw/duration/, undef, undef, undef],
+                header => ['age', 'name', 'type', 'pid'],
+                rows => [map { [ time - $_->{stamp}, @{$_}{qw/name type pid/} ] } sort { $a->{name} cmp $b->{name} } values %{$self->{+CHILDREN}}],
+            }
+        ],
+    }
+}
+
 sub process_list {
     my $self = shift;
 

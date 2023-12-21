@@ -32,6 +32,7 @@ sub init {
     }
 }
 
+sub overall_status {}
 sub process_list {}
 
 sub stages { ['NONE'] }

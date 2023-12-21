@@ -9,7 +9,7 @@ use File::Spec();
 use Time::HiRes qw/sleep/;
 
 use App::Yath::Client;
-use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::Util qw/mod2file render_status_data/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
@@ -67,9 +67,7 @@ sub render {
         my ($class, $data) = @$resource;
         next unless $data;
 
-        require(mod2file($class));
-
-        my $text = $class->status_lines($data);
+        my $text = render_status_data($data);
         push @out => "\nResource: $class\n$text\n";
     }
 

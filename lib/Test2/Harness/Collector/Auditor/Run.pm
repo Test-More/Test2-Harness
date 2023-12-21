@@ -87,6 +87,8 @@ sub _audit {
     my $self = shift;
     my ($e) = @_;
 
+    return undef unless defined $e;
+
     delete $self->{+FINAL_DATA};
     delete $self->{+SUMMARY};
 

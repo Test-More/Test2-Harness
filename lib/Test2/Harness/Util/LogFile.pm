@@ -46,7 +46,7 @@ sub poll {
 
     my @out;
 
-    my $new_size = -s $log_file;
+    my $new_size = -s $log_file // return undef;
 
     if ($new_size != $self->{+OLD_SIZE}) {
         $self->{+OLD_SIZE} = $new_size;

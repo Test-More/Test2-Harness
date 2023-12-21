@@ -11,7 +11,7 @@ use goto::file();
 use Scope::Guard;
 
 use Time::HiRes qw/time/;
-use POSIX qw/:sys_wait_h/;
+use POSIX qw/:sys_wait_h ceil/;
 
 use Test2::Harness::Util qw/mod2file parse_exit/;
 use Test2::Harness::IPC::Util qw/start_process ipc_connect ipc_warn ipc_loop pid_is_running inflate set_procname/;
@@ -124,6 +124,8 @@ sub start {
 
     $self->do_preload($ipc, $con);
 
+    my $count = 0;
+    my ($ok, $err) = (1, '');
     while (1) {
         unless ($$ == $pid) {
             $con = undef;
@@ -131,7 +133,16 @@ sub start {
             ($ipc, $con) = ipc_connect($self->{+IPC_INFO});
         }
 
-        my $out = $self->run_stage($ipc, $con);
+        unless($ok) {
+            eval { $con->send_and_get(set_stage_down => {stage => $self->{+NAME}, pid => $$, error => $err}); 1 } or warn $@;
+            die $err;
+        }
+
+        my $out;
+        $ok = eval { $out = $self->run_stage($ipc, $con); 1 };
+        chomp($err = $@);
+
+        next unless $ok;
         return $out unless $out && $out->{run_stage};
     }
 }
@@ -147,7 +158,7 @@ sub check_delay {
     my $wait = $self->{+RETRY_DELAY} - $delta;
 
     set_procname(set => ['runner', $self->{+NAME}, 'DELAYED']);
-    print "Stage '$name' reload attempt came too soon, waiting $wait seconds before reloading...\n";
+    print "Stage '$name' reload attempt came too soon, waiting " . ceil($wait) . " seconds before reloading...\n";
     sleep($wait);
 }
 
@@ -206,15 +217,20 @@ sub do_preload {
 
 sub fork_stage {
     my $self = shift;
-    my ($stage) = @_;
+    my ($stage, $check_delay) = @_;
 
     my $parent = $$;
     my $pid = fork // die "Could not fork: $!";
 
     if ($pid) {
-        $self->{+CHILDREN}->{$pid} = [time, $stage];
+        my $time = time;
+        $time += $self->{+RETRY_DELAY} if $check_delay;
+        $self->{+CHILDREN}->{$pid} = [$time, $stage];
         return 0;
     }
+
+    $self->check_delay($stage->{name}, $check_delay)
+        if defined $check_delay;
 
     $self->{+PID} = $$;
     $self->{+PARENT} = $parent;
@@ -233,6 +249,8 @@ sub check_children {
 
     local ($?, $!);
 
+    my @todo;
+
     while (1) {
         my $pid = waitpid(-1, WNOHANG);
         my $exit = $?;
@@ -240,14 +258,15 @@ sub check_children {
         last if $pid < 1;
 
         my $set = delete $self->{+CHILDREN}->{$pid} or die "Reaped untracked process!";
+        push @todo => $set;
+    }
+
+    for my $set (@todo) {
         my ($time, $stage) = @$set;
 
         print "Stage $stage->{name} ended, restarting...\n";
 
-        if ($self->fork_stage($stage)) {
-            $self->check_delay($stage->{name}, $time);
-            return 1;
-        }
+        return 1 if $self->fork_stage($stage, $time);
     }
 
     return 0;

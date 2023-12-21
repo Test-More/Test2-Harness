@@ -29,12 +29,14 @@ print "AAA\n";
 #bail_out "foo";
 print "AAB\n";
 
+for (1 .. 100) {
 for (1 .. 5) {
     sleep 1;
     print STDOUT " $_";
     STDOUT->flush();
 }
 print "\n";
+}
 
 print STDOUT "Enter Text: ";
 STDOUT->flush();

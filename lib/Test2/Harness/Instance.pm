@@ -181,6 +181,16 @@ sub api_ping { "pong" }
 
 sub api_pid { $$ }
 
+sub api_overall_status {
+    my $self = shift;
+    my ($req, %spawn) = @_;
+
+    return [
+        $self->runner->overall_status,
+        $self->scheduler->overall_status,
+    ];
+}
+
 sub api_process_list {
     my $self = shift;
     my ($req, %spawn) = @_;
@@ -281,8 +291,9 @@ sub api_set_stage_down {
 
     my $stage = $params{stage} // die "'stage' is required";
     my $pid   = $params{pid} // die "'pid' is required";
+    my $err   = $params{error};
 
-    $self->runner->set_stage_down($stage, $pid);
+    $self->runner->set_stage_down($stage, $pid, $err);
 }
 
 sub api_queue_run {

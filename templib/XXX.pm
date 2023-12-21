@@ -16,6 +16,7 @@ stage foo => sub {
 
     stage bar => sub {
         preload "List::Util";
+        preload 'ZZZ';
         1;
     };
 

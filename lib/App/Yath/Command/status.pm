@@ -2,21 +2,22 @@ package App::Yath::Command::status;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Term::Table();
-use File::Spec();
 
-use Test2::Harness::Runner::State;
-use Test2::Harness::Util::File::JSON();
-use Test2::Harness::Util::Queue();
+use Test2::Harness::Util qw/render_status_data/;
 
-use parent 'App::Yath::Command::run';
+use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-sub group { 'daemon' }
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::IPCAll',
+    'App::Yath::Options::Yath',
+);
+
+sub group { 'state' }
 
 sub summary { "Status info and process lists for the runner" }
 sub cli_args { "" }
@@ -27,7 +28,23 @@ This command will provide health details and a process list for the runner.
     EOT
 }
 
-sub pfile_params { (no_fatal => 1) }
+sub run {
+    my $self = shift;
+
+    my $settings = $self->settings;
+
+    require App::Yath::Client;
+    my $client = App::Yath::Client->new(settings => $settings);
+
+    my $data = $client->overall_status;
+    my $text = render_status_data($data);
+    print "\n$text\n";
+}
+
+1;
+
+__END__
+
 
 sub run {
     my $self = shift;

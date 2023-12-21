@@ -12,6 +12,9 @@ use Importer Importer => 'import';
 
 use Importer 'Test2::Harness::Util::Minimal';
 
+use Importer 'Test2::Util::Times' => qw/render_duration/;
+
+
 our @EXPORT_OK = (
     @Test2::Harness::Util::Minimal::EXPORT,
     qw{
@@ -36,6 +39,8 @@ our @EXPORT_OK = (
         hash_purge
 
         is_same_file
+
+        render_status_data
     },
 );
 
@@ -364,6 +369,71 @@ sub unlock_file {
 
     return $fh;
 }
+
+sub render_status_data {
+    my ($data) = @_;
+    croak "must pass in a data array or undef" unless @_;
+
+    return unless @$data;
+
+    my $out = "";
+
+    for my $group (@$data) {
+        my $gout = "\n";
+        $gout .= "**** $group->{title} ****\n\n" if defined $group->{title};
+
+        for my $table (@{$group->{tables} || []}) {
+            my $rows = $table->{rows};
+
+            if (my $format = $table->{format}) {
+                my $rows2 = [];
+
+                for my $row (@$rows) {
+                    my $row2 = [];
+                    for (my $i = 0; $i < @$row; $i++) {
+                        my $val = $row->[$i];
+                        my $fmt = $format->[$i];
+
+                        $val = defined($val) ? render_duration($val) : '--'
+                            if $fmt && $fmt eq 'duration';
+
+                        push @$row2 => $val;
+                    }
+                    push @$rows2 => $row2;
+                }
+
+                $rows = $rows2;
+            }
+
+            next unless $rows && @$rows;
+
+            my $tt = Term::Table->new(
+                header => $table->{header},
+                rows   => $rows,
+
+                sanitize     => 1,
+                collapse     => 1,
+                auto_columns => 1,
+
+                %{$table->{term_table_opts} || {}},
+            );
+
+            $gout .= "** $table->{title} **\n" if defined $table->{title};
+            $gout .= "$_\n" for $tt->render;
+            $gout .= "\n";
+        }
+
+        if ($group->{lines} && @{$group->{lines}}) {
+            $gout .= "$_\n" for @{$group->{lines}};
+            $gout .= "\n";
+        }
+
+        $out .= $gout;
+    }
+
+    return $out;
+}
+
 
 
 1;

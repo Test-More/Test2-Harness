@@ -6,7 +6,6 @@ our $VERSION = '2.000000';
 
 use Time::HiRes qw/sleep/;
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
-use Test2::Harness::Util::JSON qw/encode_json/;
 use Test2::Harness::IPC::Util qw/set_procname/;
 
 use App::Yath::Command::start;

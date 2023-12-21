@@ -14,7 +14,7 @@ use Test2::Harness::Collector::Auditor::Job;
 use Test2::Harness::Collector::IOParser::Stream;
 
 use Test2::Harness::Util qw/mod2file parse_exit open_file/;
-use Test2::Harness::Util::JSON qw/decode_json encode_json/;
+use Test2::Harness::Util::JSON qw/decode_json encode_ascii_json/;
 use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate set_procname/;
 
 BEGIN {
@@ -31,6 +31,7 @@ our $VERSION = '2.000000';
 use Test2::Harness::Util::HashBase qw{
     merge_outputs
 
+    <encoding
     <handles
     <peeks
 
@@ -83,11 +84,11 @@ sub init {
     }
     elsif ($ref eq 'GLOB') {
         my $fh = $self->{+OUTPUT};
-        $self->{+OUTPUT_CB} = sub { print $fh encode_json($_) . "\n" for @_ };
+        $self->{+OUTPUT_CB} = sub { print $fh encode_ascii_json($_) . "\n" for @_ };
     }
     elsif ($self->{+OUTPUT}->isa('Atomic::Pipe')) {
         my $wp = $self->{+OUTPUT};
-        $self->{+OUTPUT_CB} = sub { $wp->write_message(encode_json($_)) for @_ };
+        $self->{+OUTPUT_CB} = sub { $wp->write_message(encode_ascii_json($_)) for @_ };
     }
     else {
         croak "Unknown output type: $self->{+OUTPUT} ($ref)";
@@ -183,7 +184,7 @@ sub collect_command {
 
     my $handler = sub {
         for my $e (@_) {
-            $stdout->write_message(encode_json($e));
+            $stdout->write_message(encode_ascii_json($e));
             next unless $stderr;
             my $event_id = $e->{event_id} or next;
             $stderr->write_message(qq/{"event_id":"$event_id"}/);
@@ -284,7 +285,7 @@ sub collect_job {
     else {
         $handler = sub {
             for my $e (@_) {
-                print STDOUT encode_json($e), "\n";
+                print STDOUT encode_ascii_json($e), "\n";
                 $inst_handler->($e) if $inst_con;
             }
         };
@@ -591,6 +592,11 @@ sub _add_item {
     my $self = shift;
     my ($stream, $val, $peek) = @_;
 
+    if(ref($val) && $val->{facet_data}->{control}->{encoding}) {
+        require Encode;
+        $self->{+ENCODING} = $val->{facet_data}->{control}->{encoding};
+    }
+
     my $buffer = $self->{+BUFFER} //= {};
     my $seen   = $buffer->{seen}  //= {};
 
@@ -849,6 +855,7 @@ sub peek_event {
     return unless $type;
 
     if ($type eq 'peek') {
+        $val = $self->decode_line($val) if $self->{+ENCODING};
         return if $val =~ m/[\n\r]+$/;
         return if $val eq $last_peek->[0];
 
@@ -898,6 +905,8 @@ sub _handle_event {
     }
 
     if ($type eq 'line') {
+        $val = $self->decode_line($val) if $self->{+ENCODING};
+
         my $chomp = chomp($val);
         my $peek = $self->{+PEEKS}->{$name};
         if ($peek) {
@@ -905,12 +914,22 @@ sub _handle_event {
             $peek = 'peek_end';
             $val =~ s/^\Q$ref->[0]\E// if $ref->[1] && $ref->[1]->poll;
         }
+
         $self->_add_item($name => $val, $peek);
         return 1;
     }
 
     chomp($val);
     die("Invalid type '$type': $val");
+}
+
+sub decode_line {
+    my $self = shift;
+    my ($val) = @_;
+
+    my $encoding = $self->{+ENCODING} or return $val;
+
+    return Encode::decode($encoding, $val);
 }
 
 sub should_retry {

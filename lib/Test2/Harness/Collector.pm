@@ -291,6 +291,21 @@ sub collect_job {
         };
     }
 
+    if ($job->test_file->check_feature('collector_echo')) {
+        my $tmpdir = $params{tempdir};
+        my $file   = File::Spec->catfile($tmpdir, 'COLLECTOR-ECHO');
+        $ENV{TEST2_HARNESS_COLLECTOR_ECHO_FILE} = $file;
+
+        open(my $fh, '>', $file) or die "Could not open file $file: $!";
+
+        my $old_handler = $handler;
+        $handler = sub {
+            print $fh encode_ascii_json($_), "\n" for @_;
+            $fh->flush();
+            $old_handler->(@_);
+        };
+    }
+
     my %create_params = (
         run_id  => $run->run_id,
         job_id  => $job->job_id,
@@ -376,10 +391,28 @@ sub _pre_event {
     my $self = shift;
     my (%data) = @_;
 
-    my @events = $self->{+PARSER}->parse_io(\%data);
-    @events = $self->{+AUDITOR}->audit(@events) if $self->{+AUDITOR};
+    my $peek = $data{peek};
+    my $canon = !$peek || $peek eq 'peek_end';
 
-    $self->{+OUTPUT_CB}->(@events);
+    my @events = $self->{+PARSER}->parse_io(\%data);
+
+    if ($canon) {
+        @events = $self->{+AUDITOR}->audit(@events) if $self->{+AUDITOR};
+        $self->{+OUTPUT_CB}->(@events);
+    }
+    else {
+        for my $event (@events) {
+            my $fd = $event->{facet_data};
+
+            # Only info (stderr/stdout) should be peeked.
+            next unless $fd->{info} && @{$fd->{info}};
+            $event->{facet_data}->{harness}->{peek} = 1;
+
+            my %keep = (harness => 1, info => 1, trace => 1, hubs => 1, from_tap => 1);
+            delete $fd->{$_} for grep { !$keep{$_} } keys %$fd;
+            $self->{+OUTPUT_CB}->($event);
+        }
+    }
 
     return;
 }
@@ -501,6 +534,16 @@ sub setup_child_env_vars {
 
     $ENV{TMPDIR} = $self->tempdir;
     $ENV{T2_TRACE_STAMPS} = 1;
+
+    $ENV{HARNESS_ACTIVE}       = 1;
+    $ENV{TEST2_HARNESS_ACTIVE} = $VERSION;
+    $ENV{T2_HARNESS_RUN_ID}    = $self->run_id;
+
+    if (my $job = $self->{+JOB}) {
+        $ENV{T2_HARNESS_JOB_ID}     = $job->job_id;
+        $ENV{T2_HARNESS_JOB_IS_TRY} = @{$job->results // []};
+        $ENV{T2_HARNESS_JOB_FILE}   = $job->test_file->file;
+    }
 
     my $env = $ts->env_vars;
     {
@@ -908,6 +951,7 @@ sub _handle_event {
         $val = $self->decode_line($val) if $self->{+ENCODING};
 
         my $chomp = chomp($val);
+
         my $peek = $self->{+PEEKS}->{$name};
         if ($peek) {
             my $ref = delete $self->{+PEEKS}->{$name};

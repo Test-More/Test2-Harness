@@ -3,4 +3,4 @@ use strict;
 use warnings;
 # HARNESS-DURATION-SHORT
 
-print "1..2\nok\nok";
+print "1..2\nok - A\nok - B";

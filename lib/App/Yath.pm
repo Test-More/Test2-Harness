@@ -494,6 +494,8 @@ sub run_command {
     my $self = shift;
     my ($cmd) = @_;
 
+    $self->clear_env();
+
     my $exit = $cmd->run($self);
 
     die "Command '" . $cmd->name() . "' did not return an exit value.\n"
@@ -648,6 +650,23 @@ Extended Version Info
     return $out;
 }
 
-warn "Clear Env used to be done...";
+sub clear_env {
+    delete $ENV{HARNESS_IS_VERBOSE};
+    delete $ENV{T2_FORMATTER};
+    delete $ENV{T2_HARNESS_FORKED};
+    delete $ENV{T2_HARNESS_IS_VERBOSE};
+    delete $ENV{T2_HARNESS_JOB_IS_TRY};
+    delete $ENV{T2_HARNESS_JOB_NAME};
+    delete $ENV{T2_HARNESS_PRELOAD};
+    delete $ENV{T2_STREAM_DIR};
+    delete $ENV{T2_STREAM_FILE};
+    delete $ENV{T2_STREAM_JOB_ID};
+    delete $ENV{TEST2_JOB_DIR};
+    delete $ENV{TEST2_RUN_DIR};
+
+    # If Test2::API is already loaded then we need to keep these.
+    delete $ENV{TEST2_ACTIVE} unless $INC{'Test2/API.pm'};
+    delete $ENV{TEST_ACTIVE}  unless $INC{'Test2/API.pm'};
+}
 
 1;

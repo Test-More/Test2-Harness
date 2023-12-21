@@ -50,8 +50,10 @@ sub launch_command {
     my $self = shift;
     my ($run, $ts) = @_;
 
+    my $run_file = $ts->ch_dir ? $self->test_file->file : $self->test_file->relative;
+
     if ($self->test_file->non_perl) {
-        return [$self->test_file->file, @{$ts->args // []}];
+        return [$run_file, @{$ts->args // []}];
     }
 
     my @includes = map { "-I" . clean_path($_) } @{$ts->includes};
@@ -76,7 +78,7 @@ sub launch_command {
         @includes,
         @imports,
         @loads,
-        $self->test_file->file,
+        $run_file,
         @{$ts->args // []},
     ];
 }

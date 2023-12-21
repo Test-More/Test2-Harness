@@ -9,7 +9,7 @@ use Test2::Harness::Util::HashBase qw{
     <settings
 };
 
-warn "Document this!";
+#FIXME Document this!
 sub args_from_settings {
     my $class = shift;
     my %params = @_;
@@ -24,7 +24,7 @@ sub args_from_settings {
 #sub sort_files_2 {}
 #sub changed_files {}
 #sub changed_diff {}
-warn "Document this!";
+#FIXME Document this!
 #sub annotate_event();
 
 sub claim_file {}

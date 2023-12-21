@@ -2,8 +2,6 @@ package Test2::Harness::Log;
 use strict;
 use warnings;
 
-warn "FIXME: Make sure this is still accurate";
-
 our $VERSION = '2.000000';
 
 1;
@@ -157,10 +155,6 @@ This will contain the final summary data from the end of the test run.
             ...
         ],
     }
-
-=item harness_watcher
-
-Internal use only, subject to change, do not rely on it.
 
 =item harness_job
 

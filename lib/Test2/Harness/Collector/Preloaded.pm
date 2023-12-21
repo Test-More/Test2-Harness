@@ -141,7 +141,7 @@ sub launch_and_process {
     $child_cb->($parent_pid) if $child_cb;
 
     require goto::file;
-    goto::file->import($job->test_file->file);
+    goto::file->import($job->test_file->relative);
 
     unless (eval { $self->cleanup_process($parent_pid); 1 }) {
         print STDERR $@;

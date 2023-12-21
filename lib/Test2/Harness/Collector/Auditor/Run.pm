@@ -61,7 +61,7 @@ sub exit_value {
 sub subtest_name {
     my $self = shift;
     my ($f) = @_;
-    return $f->{assert}->{details} // ($f->{trace}->{frame}->[1] . ' line ' . $f->{trace}->{frame}->[2]);
+    return $f->{assert}->{details} // $f->{trace}->{frame} ? ($f->{trace}->{frame}->[1] . ' line ' . $f->{trace}->{frame}->[2]) : "Unknown Subtest";
 }
 
 sub list_nested_subtests {

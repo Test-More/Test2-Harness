@@ -10,6 +10,13 @@ use File::Spec;
 use Test2::Util qw/get_tid ipc_separator/;
 # HARNESS-DURATION-SHORT
 # HARNESS-NO-IO-EVENTS
+# HARNESS-USE-COLLECTOR-ECHO
+
+skip_all "This test must run under Test2::Harness"
+    unless $ENV{TEST2_HARNESS_ACTIVE};
+
+skip_all "No echo file set"
+    unless $ENV{TEST2_HARNESS_COLLECTOR_ECHO_FILE};
 
 test2_stack()->top;
 my ($hub) = test2_stack()->all();
@@ -17,20 +24,27 @@ my $fmt = $hub->format;
 skip_all "This test requires the stream formatter"
     unless $fmt && $fmt->isa('Test2::Formatter::Stream');
 
-print STDOUT "STDOUT: Mākaha\n";
-note "NOTE: Mākaha";
-ok(1, "ASSERT: Mākaha");
+print STDOUT "THIS-STDOUT: Mākaha\n";
+note "THIS-NOTE: Mākaha";
+ok(1, "THIS-ASSERT: Mākaha");
 
-my $file = File::Spec->catfile($fmt->dir, join(ipc_separator() => 'events', $$, 0) . ".jsonl");
-open(my $events_fh, '<:utf8', $file) or die "Could not open events file: $!";
-open(my $stdout_fh, '<:utf8', File::Spec->catfile($ENV{TEST2_JOB_DIR}, 'stdout')) or die "Could not open STDOUT for reading: $!";
+open(my $fh, '<', $ENV{TEST2_HARNESS_COLLECTOR_ECHO_FILE}) or die "Could not open file '$ENV{TEST2_HARNESS_COLLECTOR_ECHO_FILE}': $!";
 
-my @events = map { decode_json($_) } grep m/(NOTE|DIAG|ASSERT): /, <$events_fh>;
-my ($stdout) = grep m/STDOUT: /, <$stdout_fh>;
+my %found;
+FOUND: while (1) {
+    seek($fh, 0, 1);
+    while (my $line = <$fh>) {
+        next unless $line =~ m/THIS-(STDOUT|NOTE|ASSERT)/;
+        $found{$1} = decode_json($line);
+    }
 
-is($stdout, "STDOUT: Mākaha\n", "Round trip STDOUT encoding/decoding");
+    last if $found{STDOUT} && $found{NOTE} && $found{ASSERT};
 
-is($events[0]->{facet_data}->{info}->[0]->{details}, "NOTE: Mākaha", "Round trip encoding/decoding a note");
-is($events[1]->{facet_data}->{assert}->{details}, "ASSERT: Mākaha", "Round trip encoding/decoding an assert");
+    sleep 0.2;
+}
+
+like($found{STDOUT}->{facet_data}->{info}->[0]->{details}, qr/\QMākaha\E/, "STDOUT looks correct");
+like($found{NOTE}->{facet_data}->{info}->[0]->{details},   qr/\QMākaha\E/, "NOTE looks correct");
+like($found{ASSERT}->{facet_data}->{assert}->{details},    qr/\QMākaha\E/, "NOTE looks correct");
 
 done_testing;

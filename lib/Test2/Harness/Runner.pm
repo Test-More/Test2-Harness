@@ -40,9 +40,10 @@ sub stage_sets { [['NONE', 'NONE']] }
 
 sub job_stage { 'NONE' }
 
-sub start { }
-sub stop  { }
-sub abort { }
+sub start  { }
+sub stop   { }
+sub abort  { }
+sub reload { 0 }
 
 sub kill { $_[0]->terminate('kill') }
 

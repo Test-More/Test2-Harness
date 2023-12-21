@@ -181,6 +181,13 @@ sub api_ping { "pong" }
 
 sub api_pid { $$ }
 
+sub api_reload {
+    my $self = shift;
+    my ($req, %spawn) = @_;
+
+    return $self->runner->reload;
+}
+
 sub api_overall_status {
     my $self = shift;
     my ($req, %spawn) = @_;

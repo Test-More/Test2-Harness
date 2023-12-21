@@ -41,6 +41,7 @@ sub kill      { shift->send_and_get('kill') }
 sub stop      { shift->send_and_get('stop') }
 sub abort     { shift->send_and_get('abort') }
 sub resources { shift->send_and_get('resources') }
+sub reload    { shift->send_and_get('reload') }
 
 sub process_list   { shift->send_and_get('process_list') }
 sub overall_status { shift->send_and_get('overall_status') }

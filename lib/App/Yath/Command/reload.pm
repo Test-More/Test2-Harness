@@ -2,18 +2,16 @@ package App::Yath::Command::reload;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
-
-use File::Spec();
-use Test2::Harness::Util::File::JSON;
-
-use App::Yath::Util qw/find_pfile/;
-use Test2::Harness::Util qw/open_file/;
+our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
+
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::IPCAll',
+    'App::Yath::Options::Yath',
+);
 
 sub group { 'daemon' }
 
@@ -22,27 +20,22 @@ sub cli_args { "" }
 
 sub description {
     return <<"    EOT";
-This will send a SIGHUP to the persistent runner, forcing it to reload. This
-will also clear the blacklist allowing all preloads to load as normal.
+Reload the persistent test runner.
     EOT
 }
 
 sub run {
     my $self = shift;
 
-    my $pfile = find_pfile($self->settings, no_fatal => 1)
-        or die "Could not find a persistent yath running.\n";
+    my $settings = $self->settings;
 
-    my $data = Test2::Harness::Util::File::JSON->new(name => $pfile)->read();
+    require App::Yath::Client;
+    my $client = App::Yath::Client->new(settings => $settings);
 
-    my $blacklist = File::Spec->catfile($data->{dir}, 'BLACKLIST');
-    if (-e $blacklist) {
-        print "Deleting module blacklist...\n";
-        unlink($blacklist) or warn "Could not delete blacklist file!";
-    }
+    print "Requesting reload...\n";
+    $client->reload;
+    print "Request sent.\n";
 
-    print "\nSending SIGHUP to $data->{pid}\n\n";
-    kill('HUP', $data->{pid}) or die "Could not send signal!\n";
     return 0;
 }
 

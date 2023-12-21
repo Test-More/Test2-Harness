@@ -178,6 +178,11 @@ sub DESTROY {
     kill('TERM', grep { $_ && pid_is_running($_) } map { $_->{ready}->{pid} // () } values %{$self->stages});
 }
 
+sub reload {
+    my $self = shift;
+    kill('HUP', grep { $_ && pid_is_running($_) } map { $_->{ready}->{pid} // () } values %{$self->stages});
+}
+
 sub terminate {
     my $self = shift;
     my ($reason) = @_;

@@ -11,8 +11,8 @@ include_options(
 );
 
 option_group {group => 'ipc', category => 'IPC Options'} => sub {
-    option non_daemon => (
-        name => 'ipc-non-daemon',
+    option allow_non_daemon => (
+        name => 'ipc-allow-non-daemon',
         type => 'Bool',
         default => 1,
         description => 'Normally yath commands will only connect to daemons, but some like "resources" can work on non-daemon instances',

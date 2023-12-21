@@ -48,6 +48,12 @@ sub callback {
     };
 }
 
+sub get_address {
+    my $class = shift;
+    my ($file) = @_;
+    return $file;
+}
+
 sub init {
     my $self = shift;
 

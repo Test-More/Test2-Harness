@@ -46,7 +46,7 @@ sub run {
 
     die $@ unless $@ =~ m/Disconnected pipe/;
 
-    print "\n*** Disconnected from persistent runner ***\n\n";
+    print "\n*** Disconnected from harness ***\n\n";
 
     return 0;
 }

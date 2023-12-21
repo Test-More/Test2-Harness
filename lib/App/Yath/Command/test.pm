@@ -36,9 +36,6 @@ option_group {group => 'runner', category => "Runner Options"} => sub {
     );
 };
 
-sub starts_runner            { 1 }
-sub starts_persistent_runner { 0 }
-
 sub args_include_tests { 1 }
 
 sub group { ' main' }
@@ -66,6 +63,8 @@ sub check_argv { 1 }
 sub load_plugins   { 1 }
 sub load_resources { 1 }
 sub load_renderers { 1 }
+
+sub start_daemon_runner { 0 }
 
 sub run {
     my $self = shift;

@@ -143,7 +143,7 @@ sub fqmod {
 
     my %tried;
     for my $pre (@$prefixes) {
-        my $mod = "$pre\::$input";
+        my $mod = $input =~ m/^\Q$pre\E/ ? $input : "$pre\::$input";
 
         if ($options{no_require}) {
             return $mod;

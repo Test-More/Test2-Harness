@@ -66,7 +66,6 @@ sub run {
         prefix => $self->{+SETTINGS}->harness->procname_prefix,
     );
 
-
     $self->start_plugins_and_renderers();
 
     # Get list of tests to run

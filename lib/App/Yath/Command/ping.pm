@@ -17,9 +17,6 @@ include_options(
     'App::Yath::Options::Yath',
 );
 
-sub starts_runner            { 0 }
-sub starts_persistent_runner { 0 }
-
 sub args_include_tests { 0 }
 
 sub group { 'daemon' }

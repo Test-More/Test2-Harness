@@ -29,12 +29,10 @@ option_group {group => 'run', category => "Run Options"} => sub {
     );
 };
 
-sub load_renderers           { 1 }
-sub load_plugins             { 0 }
-sub load_resources           { 0 }
-sub starts_runner            { 0 }
-sub starts_persistent_runner { 0 }
-sub args_include_tests       { 0 }
+sub load_renderers     { 1 }
+sub load_plugins       { 0 }
+sub load_resources     { 0 }
+sub args_include_tests { 0 }
 
 sub group { 'log' }
 

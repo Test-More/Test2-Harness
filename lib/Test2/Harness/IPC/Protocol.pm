@@ -31,6 +31,8 @@ sub init {
     $self->{+PROTOCOL} = $protocol //= $type;
 }
 
+sub get_address { confess "\nProtocol $_[0] does not implement get_address()" }
+
 sub callback { confess "\nProtocol $_[0] does not implement callback()" }
 
 sub handles_for_select { }

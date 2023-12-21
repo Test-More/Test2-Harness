@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '2.000000';
 
+use App::Yath::IPC;
+
 use Test2::Harness::Instance;
 use Test2::Harness::TestSettings;
 use Test2::Harness::IPC::Protocol;
@@ -21,6 +23,7 @@ use Test2::Harness::Util::HashBase qw{
     +log_file
 
     +ipc
+    +yath_ipc
     +runner
     +scheduler
     +resources
@@ -55,9 +58,6 @@ option_group {group => 'start', category => "Start Options"} => sub {
     );
 };
 
-sub starts_runner            { 1 }
-sub starts_persistent_runner { 1 }
-
 sub load_plugins   { 1 }
 sub load_resources { 1 }
 sub load_renderers { 1 }
@@ -90,6 +90,9 @@ sub run {
     my $self = shift;
 
     $self->check_argv();
+
+    my $ipc_specs = $self->yath_ipc->validate_ipc() if $self->start_daemon_runner;
+    print "Creating ipc file: $ipc_specs->{file}\n";
 
     set_procname(
         set => [$self->process_base_name, "launcher"],
@@ -241,16 +244,16 @@ sub instance {
     );
 }
 
+sub start_daemon_runner { 1 }
+
+sub yath_ipc {
+    my $self = shift;
+    return $self->{+YATH_IPC} //= App::Yath::IPC->new(settings => $self->settings);
+}
+
 sub ipc {
     my $self = shift;
-
-    return $self->{+IPC} if $self->{+IPC};
-
-    my $ipc_s = App::Yath::Options::IPC->vivify_ipc($self->settings);
-    my $ipc = Test2::Harness::IPC::Protocol->new(protocol => $ipc_s->{protocol});
-    $ipc->start($ipc_s->{address}, $ipc_s->{port});
-
-    return $self->{+IPC} = $ipc;
+    return $self->{+IPC} //= $self->yath_ipc->start(daemon => $self->start_daemon_runner);
 }
 
 sub scheduler {

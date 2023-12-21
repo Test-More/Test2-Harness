@@ -62,7 +62,7 @@ sub job_launch_data {
     );
 
     my $env_ref = $ts->env_vars;
-    %$env_ref = (%$env_ref, %$env);
+    %$env_ref = (%{$env_ref // {}}, %{$env // {}});
 
     my $workdir = $self->{+WORKDIR};
 

@@ -91,8 +91,10 @@ sub run {
 
     $self->check_argv();
 
-    my $ipc_specs = $self->yath_ipc->validate_ipc() if $self->start_daemon_runner;
-    print "Creating ipc file: $ipc_specs->{file}\n";
+    if ($self->start_daemon_runner) {
+        my $ipc_specs = $self->yath_ipc->validate_ipc();
+        print "Creating ipc file: $ipc_specs->{file}\n";
+    }
 
     set_procname(
         set => [$self->process_base_name, "launcher"],

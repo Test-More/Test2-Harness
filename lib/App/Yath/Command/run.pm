@@ -263,6 +263,8 @@ sub no_tests {
     return 0;
 }
 
+sub finder_args {}
+
 sub find_tests {
     my $self  = shift;
     my @tests = @_;
@@ -274,7 +276,7 @@ sub find_tests {
 
     require(mod2file($finder_class));
 
-    my $finder = $finder_class->new($settings->finder->all, settings => $settings, search => \@tests);
+    my $finder = $finder_class->new($settings->finder->all, settings => $settings, search => \@tests, $self->finder_args);
     my $tests = $finder->find_files($self->plugins);
 
     return unless $tests && @$tests;

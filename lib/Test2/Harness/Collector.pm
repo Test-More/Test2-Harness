@@ -343,10 +343,17 @@ sub launch_command {
         my $run = $self->{+RUN};
         my $ts  = $self->{+TEST_SETTINGS};
 
-        return $job->launch_command($run, $ts);
+        my $cmd = $job->launch_command($run, $ts);
+
+        my $cb;
+        if (my $dir = $ts->ch_dir) {
+            $cb = sub { chdir($dir) };
+        }
+
+        return ($cmd, $cb);
     }
 
-    return $self->{+COMMAND} if $self->{+COMMAND};
+    return ($self->{+COMMAND}) if $self->{+COMMAND};
 
     die "No command!";
 }
@@ -355,7 +362,8 @@ sub launch_and_process {
     my $self = shift;
     my ($parent_cb) = @_;
 
-    my $pid = start_process($self->launch_command, sub { $self->setup_child() });
+    my ($cmd, $cb) = $self->launch_command;
+    my $pid = start_process($cmd, sub { $self->setup_child(); $cb->() if $cb });
 
     set_procname(set => ['collector', $pid]);
 

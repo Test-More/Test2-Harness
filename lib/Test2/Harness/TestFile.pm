@@ -17,6 +17,8 @@ use Test2::Harness::Util::HashBase qw{
     comment
     _category _stage _duration _min_slots _max_slots
     +test_settings
+
+    ch_dir
 };
 
 sub set_duration { $_[0]->set__duration(lc($_[1])) }
@@ -419,12 +421,19 @@ sub test_settings {
         $features{preload} = 0;
     }
 
+    # No forking/preloading if non-perl
+    if ($self->non_perl || $self->is_binary) {
+        $features{fork} = 0;
+        $features{preload} = 0;
+    }
+
     return $self->{+TEST_SETTINGS} = Test2::Harness::TestSettings->new(
         use_fork    => ($features{fork}    // $self->check_feature(fork    => 1)),
         use_preload => ($features{preload} // $self->check_feature(preload => 1)),
         use_stream  => ($features{stream}  // $self->check_feature(stream  => 1)),
         use_timeout => ($features{timeout} // $self->check_feature(timeout => 1)),
 
+        ch_dir            => $self->ch_dir,
         event_timeout     => $self->event_timeout,
         post_exit_timeout => $self->post_exit_timeout,
         retry_isolated    => $self->retry_isolated,

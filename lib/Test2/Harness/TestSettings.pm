@@ -16,7 +16,7 @@ my (@BOOL, @SCALAR, @HASH, @ARRAY);
 
 BEGIN {
     @BOOL   = qw{ use_preload use_stream use_fork use_timeout tlib lib blib unsafe_inc retry_isolated allow_retry event_uuids mem_usage};
-    @SCALAR = qw{ event_timeout post_exit_timeout cover retry input input_file };
+    @SCALAR = qw{ event_timeout post_exit_timeout cover retry input input_file ch_dir};
     @HASH   = qw{ env_vars load_import };
     @ARRAY  = qw{ switches load includes args };
 }

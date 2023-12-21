@@ -9,6 +9,7 @@ use Scalar::Util qw/blessed/;
 
 use Test2::Harness::TestFile;
 
+use Test2::Harness::Util qw/clean_path/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
@@ -49,7 +50,11 @@ sub launch_command {
     my $self = shift;
     my ($run, $ts) = @_;
 
-    my @includes = map { "-I$_" } @{$ts->includes};
+    if ($self->test_file->non_perl) {
+        return [$self->test_file->file, @{$ts->args // []}];
+    }
+
+    my @includes = map { "-I" . clean_path($_) } @{$ts->includes};
     my @loads = map { "-m$_" } @{$ts->load};
 
     my $load_import = $ts->load_import;

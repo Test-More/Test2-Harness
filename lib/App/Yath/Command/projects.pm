@@ -2,9 +2,7 @@ package App::Yath::Command::projects;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command::test';
 use Test2::Harness::Util::HashBase;

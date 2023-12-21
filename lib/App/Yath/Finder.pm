@@ -34,6 +34,8 @@ use Test2::Harness::Util::HashBase qw{
 
     <exclude_files <exclude_lists <exclude_patterns
 
+    <multi_project
+
     <extensions
 
     <rerun <rerun_modes <rerun_plugins
@@ -182,6 +184,8 @@ sub find_files {
 
     my $add_rerun = $self->{+RERUN};
     $self->add_rerun_to_search($plugins, $add_rerun) if $add_rerun;
+
+    return $self->find_multi_project_files($plugins) if $self->multi_project;
 
     return $self->find_project_files($plugins, $self->search);
 }
@@ -527,6 +531,51 @@ sub changes_from_diff {
 
     return map {([$_ => sort keys %{$changed{$_}}])} sort keys %changed;
 }
+
+sub find_multi_project_files {
+    my $self = shift;
+    my ($plugins) = @_;
+
+    my $settings = $self->{+SETTINGS};
+    my $search = $self->search // [];
+
+    die "multi-project search must be a single directory, or the current directory" if @$search > 1;
+    my ($pdir) = @$search;
+    my $dir = clean_path(getcwd());
+
+    my $out = [];
+    my $ok = eval {
+        chdir($pdir) if defined $pdir;
+        my $ret = clean_path(getcwd());
+
+        opendir(my $dh, '.') or die "Could not open project dir: $!";
+        for my $subdir (readdir($dh)) {
+            chdir($ret);
+
+            next if $subdir =~ m/^\./;
+            my $path = clean_path(File::Spec->catdir($ret, $subdir));
+            next unless -d $path;
+
+            chdir($path) or die "Could not chdir to $path: $!\n";
+
+            for my $item (@{$self->find_project_files($plugins, [])}) {
+                $item->set_ch_dir($path);
+                delete $item->{relative}; # Reset this
+                push @$out => $item;
+            }
+        }
+
+        chdir($ret);
+        1;
+    };
+    my $err = $@;
+
+    chdir($dir);
+    die $err unless $ok;
+
+    return $out;
+}
+
 
 sub find_project_files {
     my $self = shift;

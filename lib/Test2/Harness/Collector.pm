@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use IO::Select;
+use File::Spec;
 use Atomic::Pipe;
 
 use Carp qw/croak/;
@@ -13,7 +14,7 @@ use Time::HiRes qw/time sleep/;
 use Test2::Harness::Collector::Auditor::Job;
 use Test2::Harness::Collector::IOParser::Stream;
 
-use Test2::Harness::Util qw/mod2file parse_exit open_file/;
+use Test2::Harness::Util qw/mod2file parse_exit open_file chmod_tmp/;
 use Test2::Harness::Util::JSON qw/decode_json encode_ascii_json/;
 use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate set_procname/;
 
@@ -224,6 +225,7 @@ sub collect_job {
 
     die "No workdir provided" unless $params{workdir};
     $params{tempdir} = File::Temp::tempdir(DIR => $params{workdir}, CLEANUP => 1, TEMPLATE => "tmp-$$-XXXX");
+    chmod_tmp($params{tempdir});
 
     my ($inst_ipc, $inst_con) = ipc_connect($run->instance_ipc);
     my ($agg_ipc,  $agg_con)  = ipc_connect($run->aggregator_ipc);

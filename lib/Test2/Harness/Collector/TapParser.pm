@@ -26,7 +26,7 @@ sub parse_stderr_tap {
     # STDERR only has comments
     return unless $line =~ m/^\s*#/;
 
-    my $facet_data = __PACKAGE__->_parse_tap_line($line) or return undef;
+    my $facet_data = __PACKAGE__->parse_tap_comment($line, no_nest => 1) or return undef;
     $facet_data->{info}->[-1]->{tag} = 'DIAG';
     $facet_data->{info}->[-1]->{debug} = 1;
     $facet_data->{from_tap} = { source => 'STDERR', details => $line };
@@ -240,11 +240,11 @@ sub parse_tap_bail {
 
 sub parse_tap_comment {
     my $class = shift;
-    my ($line) = @_;
+    my ($line, %params) = @_;
 
     return undef unless $line =~ m/^\s*#/;
 
-    $line =~ s/^\s*# ?//msg;
+    $line =~ s/^\s*# ?//msg unless $params{no_nest};
 
     return {
         info => [

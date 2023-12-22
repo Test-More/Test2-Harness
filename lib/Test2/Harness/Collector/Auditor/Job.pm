@@ -83,8 +83,12 @@ sub audit {
     my $self = shift;
     my @out;
 
-    push @out => $self->_audit($_) for @_;
-    $self->subtest_process($_->{facet_data}, $_) for @out;
+    for my $e (@_) {
+        for my $se ($self->_audit($e)) {
+            delete $se->{facet_data}->{harness}->{closed_by};
+            push @out => $se;
+        }
+    }
 
     $self->update_summary() if $self->{+SUMMARY_FILE};
 
@@ -161,11 +165,14 @@ sub _audit {
 
     $self->times->process($event, $f, $self->{+ASSERTION_COUNT}) unless $nested;
 
-    return if $hf->{buffered};
+    return $event if $hf->{buffered};
 
     my $is_ours = $nested == $self->{+NESTED};
 
-    return unless $is_ours || $f->{from_tap};
+    return $event unless $is_ours || $f->{from_tap};
+
+    return $event if $f->{from_tap} && $f->{from_tap}->{source} eq 'STDERR';
+    return $event if $f->{from_stream} && $f->{from_stream}->{source} eq 'STDERR';
 
     # Add parent if we start a buffered subtest
     if ($f->{harness} && $f->{harness}->{subtest_start}) {
@@ -205,10 +212,10 @@ sub _audit {
             ],
         };
 
-        $event = Test2::Harness::Event->new(stamp => $stamp, job_try => $self->{+JOB_TRY}, facet_data => $f);
+        $event = Test2::Harness::Event->new(stamp => $stamp, job_id => $self->{+JOB_ID}, job_try => $self->{+JOB_TRY}, facet_data => $f);
     }
 
-    push @out => $event;
+    push @out => $event unless $f->{harness}->{subtest_end};
 
     # Close any deeper subtests
     if (my $sts = $self->{+SUBTESTS}) {
@@ -249,6 +256,7 @@ sub _audit {
         return @out;
     }
 
+    $self->subtest_process($f, $event);
     return @out;
 }
 
@@ -290,8 +298,12 @@ sub subtest_process {
         my @errors = $subauditor->subtest_fail_error_facet_list();
 
         if ($f->{harness}->{subtest_start}) {
-            push @{$f->{errors}} => {tag => 'REASON', fail => 1, from_harness => 1, details => "Buffered subtest ended abruptly (missing closing brace event)"}
-                unless $closer && $closer->{facet_data}->{harness}->{subtest_end};
+            if ($closer && $closer->{facet_data}->{harness}->{subtest_end}) {
+                $f->{harness}->{subtest_closed} = 1;
+            }
+            elsif (!$f->{harness}->{subtest_closed}) {
+                push @{$f->{errors}} => {tag => 'REASON', fail => 1, from_harness => 1, details => "Buffered subtest ended abruptly (missing closing brace event)"}
+            }
         }
 
         my $fail = 0;

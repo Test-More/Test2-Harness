@@ -647,7 +647,7 @@ sub render_tree {
     my $depth = $hf->{nested} || 0;
 
     my @pipes = (' ', map $char, 1 .. $depth);
-    return join(' ' => $job, @pipes);
+    return join(' ' => $job, @pipes) . " ";
 }
 
 sub build_line {
@@ -658,6 +658,8 @@ sub build_line {
     $tag  ||= '';
     $text ||= '';
     chomp($text);
+
+    $tree = "$tree";
 
     substr($tree, -2, 1, '+') if $facet eq 'assert';
 

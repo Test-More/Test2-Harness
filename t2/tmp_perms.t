@@ -22,7 +22,7 @@ my $problems = check_perms($system_tmp);
 skip_all join ", " => @$problems if @$problems;
 
 my $path = $ENV{TMPDIR};
-is(check_perms($path), [], "tempdir has correct permissions");
+is(check_perms($path), [], "$path has correct permissions");
 
 my $last = $path;
 my $cnt = 0;

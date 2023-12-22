@@ -91,6 +91,8 @@ sub parse_stream_line {
     my $text = delete $io->{line};
     my $tag = $self->{+TAG} // $stream // $$;
 
+    $event->{facet_data}->{from_stream} = { source => $ucstream, details => $text };
+
     push @{$event->{facet_data}->{info}} => {
         details => $text,
         tag     => $tag,

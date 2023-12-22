@@ -11,6 +11,7 @@ use Test2::Harness::Util::Minimal qw/pre_process_args find_in_updir scan_config 
 
 our $SCRIPT = clean_path(__FILE__);
 my $ORIG_TMP = File::Spec->tmpdir();
+$ENV{SYSTEM_TMPDIR} //= $ORIG_TMP;
 my $ORIG_TMP_PERMS = ((stat($ORIG_TMP))[2] & 07777);
 my @ORIG_ARGV = @ARGV;
 my @ORIG_INC  = @INC;

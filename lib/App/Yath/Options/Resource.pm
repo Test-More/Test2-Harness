@@ -11,6 +11,7 @@ use Getopt::Yath;
 option_group {group => 'resource', category => "Resource Options"} => sub {
     option classes => (
         type  => 'Map',
+        short => 'R',
         name  => 'resources',
         field => 'classes',
         alt   => ['resource'],

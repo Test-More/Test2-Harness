@@ -61,8 +61,7 @@ sub job_launch_data {
         $job->test_file->test_settings
     );
 
-    my $env_ref = $ts->env_vars;
-    %$env_ref = (%{$env_ref // {}}, %{$env // {}});
+    $ts->set_env_vars(%$env) if keys %$env;
 
     my $workdir = $self->{+WORKDIR};
 

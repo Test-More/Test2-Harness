@@ -77,7 +77,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
 
     option rerun_plugins => (
         type => 'List',
-        alt => ['rerun_plugin'],
+        alt => ['rerun-plugin'],
 
         description   => "What plugin(s) should be used for rerun (will fallback to other plugins if the listed ones decline the value, this is just used to set an order of priority)",
         long_examples => [' Foo', ' +App::Yath::Plugin::Foo'],
@@ -140,7 +140,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option changes_exclude_files => (
-        alt           => ['changes_exclude_file'],
+        alt           => ['changes-exclude-file'],
         type          => 'List',
         split_on      => ',',
         description   => 'Specify one or more files to ignore when looking at changes',
@@ -148,7 +148,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option changes_exclude_patterns => (
-        alt           => ['changes_exclude_pattern'],
+        alt           => ['changes-exclude-pattern'],
         type          => 'List',
         split_on      => ',',
         description   => 'Ignore files matching this pattern when looking for changes. Your pattern will be inserted unmodified into a `$file =~ m/$pattern/` check.',
@@ -156,7 +156,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option changes_filter_files => (
-        alt           => ['changes_filter_file'],
+        alt           => ['changes-filter-file'],
         type          => 'List',
         split_on      => ',',
         description   => 'Specify one or more files to check for changes. Changes to other files will be ignored',
@@ -164,7 +164,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option changes_filter_patterns => (
-        alt           => ['changes_filter_pattern'],
+        alt           => ['changes-filter-pattern'],
         type          => 'List',
         split_on      => ',',
         description   => 'Specify a pattern for change checking. When only running tests for changed files this will limit which files are checked for changes. Only files that match this pattern will be checked. Your pattern will be inserted unmodified into a `$file =~ m/$pattern/` check.',
@@ -233,9 +233,9 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option exclude_files => (
-        alt => ['exclude_file'],
+        alt => ['exclude-file'],
         type  => 'List',
-        field => 'exclude_files',
+        field => 'exclude-files',
 
         long_examples  => [' t/nope.t'],
         short_examples => [' t/nope.t'],
@@ -244,9 +244,9 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option exclude_patterns => (
-        alt => ['exclude_pattern'],
+        alt => ['exclude-pattern'],
         type  => 'List',
-        field => 'exclude_patterns',
+        field => 'exclude-patterns',
 
         long_examples  => [' t/nope.t'],
         short_examples => [' t/nope.t'],
@@ -255,7 +255,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option exclude_lists => (
-        alt  => ['exclude_list'],
+        alt  => ['exclude-list'],
         type => 'List',
 
         long_examples  => [' file.txt', ' http://example.com/exclusions.txt'],

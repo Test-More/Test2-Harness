@@ -23,6 +23,7 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
         name => 'ipc-dir',
         type => 'Scalar',
         description => "Directory for ipc files",
+        from_env_vars => [qw/T2_HARNESS_IPC_DIR YATH_IPC_DIR/],
     );
 
     option prefix => (

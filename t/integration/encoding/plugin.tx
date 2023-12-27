@@ -1,0 +1,29 @@
+use strict;
+use warnings;
+
+use Test::More;
+use Test2::Plugin::UTF8;
+
+note "valid note [“”\xff\xff]";
+note "valid note [“”]";
+
+diag "valid diag [“”\xff\xff]";
+diag "valid diag [“”]";
+
+print "valid stdout [“”\xff\xff]\n";
+print "valid stdout [“”]\n";
+
+print STDERR "valid stderr [“”\xff\xff]\n";
+print STDERR "valid stderr [“”]\n";
+
+ok 1, "valid ok [“”\xff\xff]";
+ok 1, "valid ok [“”]";
+
+print STDOUT "STDOUT: Mākaha\n";
+print STDERR "STDERR: Mākaha\n";
+diag "DIAG: Mākaha";
+note "NOTE: Mākaha";
+ok(1, "ASSERT: Mākaha");
+ok(1, "І ще трохи");
+
+done_testing();

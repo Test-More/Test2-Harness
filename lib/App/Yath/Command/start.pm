@@ -54,7 +54,7 @@ option_group {group => 'start', category => "Start Options"} => sub {
         alt_no => ['daemon'],
         type => 'Bool',
         description => "Keep yath in the forground instead of daemonizing and returning you to the shell",
-        default     => 1,
+        default     => 0,
     );
 };
 
@@ -91,17 +91,17 @@ sub run {
 
     $self->check_argv();
 
-    if ($self->start_daemon_runner) {
-        my $ipc_specs = $self->yath_ipc->validate_ipc();
-        print "Creating ipc file: $ipc_specs->{file}\n";
-    }
-
     set_procname(
         set => [$self->process_base_name, "launcher"],
         prefix => $self->{+SETTINGS}->harness->procname_prefix,
     );
 
     $self->become_daemon if $self->should_daemonize();
+
+    if ($self->start_daemon_runner) {
+        my $ipc_specs = $self->yath_ipc->validate_ipc();
+        print "Creating ipc file: $ipc_specs->{file}\n";
+    }
 
     # Need to get this pre-fork
     my $collector = $self->collector();

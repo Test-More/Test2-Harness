@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '2.000000';
 
+use App::Yath::IPC;
+
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
@@ -26,15 +28,16 @@ include_options(
 sub run {
     my $self = shift;
 
-    my $ipc = App::Yath::Options::IPC->find_persistent_runner($self->{+SETTINGS});
+    my $ipc = App::Yath::IPC->new(settings => $self->settings);
+    my ($found) = $ipc->find('daemon');
 
-    unless ($ipc) {
+    unless ($found) {
         print "\nNo persistent harness was found for the current project.\n\n";
         return 0;
     }
 
     print "\nFound a persistent runner:\n";
-    print "  $_: $ipc->{$_}\n" for reverse sort grep { defined $ipc->{$_} } keys %$ipc;
+    print "  $_: $found->{$_}\n" for reverse sort grep { defined $found->{$_} } keys %$found;
     print "\n";
 
     return 0;

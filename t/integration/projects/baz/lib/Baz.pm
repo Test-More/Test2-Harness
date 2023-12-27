@@ -1,0 +1,3 @@
+package Baz;
+
+1;

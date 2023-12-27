@@ -1,0 +1,45 @@
+---
+COMMON:
+  state_file: /tmp/yath-state-config-test
+  algorithm: fair
+  max_slots:  4
+  max_slots_per_job: 2
+  max_slots_per_run: 4
+  default_slots_per_run: 2
+  default_slots_per_job: 2
+
+DEFAULT:
+  default_slots_per_run: 1
+  default_slots_per_job: 1
+
+foo:
+  max_slots:  13
+  max_slots_per_job: 5
+  max_slots_per_run: 13
+  default_slots_per_run: 3
+  default_slots_per_job: 2
+
+bar:
+  max_slots:  8
+  max_slots_per_job: 2
+  max_slots_per_run: 6
+  default_slots_per_run: 4
+  default_slots_per_job: 2
+  state_umask: 0077
+
+baz:
+  max_slots:  64
+  max_slots_per_job: 32
+  max_slots_per_run: 64
+  default_slots_per_run: 64
+  default_slots_per_job: 32
+  algorithm: first
+
+bat:
+
+ban:
+  use_common: 0
+
+baf:
+  max_slots:  7
+  use_common: 0

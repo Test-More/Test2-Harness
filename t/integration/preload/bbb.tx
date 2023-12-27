@@ -1,0 +1,6 @@
+use Test2::V0;
+
+is($ENV{T2_HARNESS_STAGE}, 'BBB', "Running in stage 'BBB'");
+ok($INC{'BBB.pm'}, "Preloaded BBB");
+
+done_testing;

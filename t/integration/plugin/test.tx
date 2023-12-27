@@ -1,0 +1,7 @@
+use Test2::V0;
+
+ok(!$INC{'App/Yath/Plugin/TestPlugin.pm'}, "Plugin is not loaded for test processes");
+
+is($ENV{T2_HARNESS_JOB_DURATION}, 'long');
+
+done_testing();

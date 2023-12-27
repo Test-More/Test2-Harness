@@ -694,7 +694,7 @@ sub find_project_files {
 
     my $test_count = @tests;
     my $threshold = $self->durations_threshold // 0;
-    if ($threshold && $test_count >= $threshold) {
+    if ($test_count >= $threshold) {
         my $start = time;
         my $durations = $self->duration_data($plugins, $settings, [map { $_->relative } @tests]);
         my $end = time;

@@ -1,0 +1,6 @@
+use Test2::V0;
+# HARNESS-NO-PRELOAD
+
+is($ENV{T2_HARNESS_STAGE}, 'NOPRELOAD', "Running in 'NOPRELOAD' stage");
+
+done_testing;

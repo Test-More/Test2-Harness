@@ -260,7 +260,7 @@ sub auditor {
 sub no_tests {
     my $self = shift;
     print "Nothing to do, no tests to run!\n";
-    return 0;
+    return 1;
 }
 
 sub finder_args {}

@@ -1,0 +1,6 @@
+use Test2::V0;
+#HARNESS-RETRY
+
+ok($ENV{T2_HARNESS_JOB_IS_TRY}, "This is a retry");
+
+done_testing;

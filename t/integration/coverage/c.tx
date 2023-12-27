@@ -1,0 +1,34 @@
+use Test2::V0;
+use Test2::Plugin::Cover;
+use Path::Tiny;
+
+use Test2::Harness::Util::JSON qw/encode_json/;
+
+Test2::Plugin::Cover->set_from_manager('Manager');
+Test2::Plugin::Cover->set_root(path('t/integration/coverage/lib')->realpath);
+
+STDIN->blocking(0);
+
+print "INPUT ${ \__FILE__ }: " . encode_json({
+    env   => {map { ($_ => $ENV{$_}) } grep { m/^COVER_TEST_/ } keys %ENV},
+    argv  => [@ARGV],
+    stdin => join('' => <STDIN>),
+}) . "\n";
+
+subtest a => sub {
+    Test2::Plugin::Cover->set_from({subtest => 'a'});
+    require Ax;
+    is(Ax->a, 'a', "Got a");
+    Test2::Plugin::Cover->clear_from();
+};
+
+subtest c => sub {
+    Test2::Plugin::Cover->set_from({subtest => 'c'});
+    require Ax;
+    require Cx;
+    is(Ax->a, 'a', "Got a");
+    is(Cx->c, 'c', "Got c");
+    Test2::Plugin::Cover->clear_from();
+};
+
+done_testing;

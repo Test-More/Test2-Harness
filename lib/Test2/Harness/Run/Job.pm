@@ -17,6 +17,7 @@ use Test2::Harness::Util::HashBase qw{
     <job_id
     <results
     running
+    <args
 };
 
 sub init {
@@ -29,6 +30,8 @@ sub init {
     my $tf = $self->{+TEST_FILE} or croak "'test_file' is a required field";
 
     $self->{+RESULTS} //= [];
+
+    $self->{+ARGS} //= [];
 
     $self->{+TEST_FILE} = Test2::Harness::TestFile->new($tf)
         unless blessed($tf);
@@ -50,7 +53,12 @@ sub launch_command {
     my $self = shift;
     my ($run, $ts) = @_;
 
-    my $run_file = $ts->ch_dir ? $self->test_file->file : $self->test_file->relative;
+    my $run_file = $self->test_file->relative;
+
+    if (my $ch_dir = $ts->ch_dir) {
+        $run_file = $self->test_file->file;
+        $run_file =~ s{^$ch_dir/?}{}g;
+    }
 
     if ($self->test_file->non_perl) {
         return [$run_file, @{$ts->args // []}];
@@ -79,6 +87,7 @@ sub launch_command {
         @imports,
         @loads,
         $run_file,
+        @{$self->args // []},
         @{$ts->args // []},
     ];
 }

@@ -1,0 +1,21 @@
+use Test2::V0;
+use Test2::Plugin::Cover;
+use Path::Tiny;
+
+use Test2::Harness::Util::JSON qw/encode_json/;
+
+STDIN->blocking(0);
+
+Test2::Plugin::Cover->set_root(path('t/integration/coverage/lib')->realpath);
+
+print "INPUT ${ \__FILE__ }: " . encode_json({
+    env   => {map { ($_ => $ENV{$_}) } grep { m/^COVER_TEST_/ } keys %ENV},
+    argv  => [@ARGV],
+    stdin => join('' => <STDIN>),
+}) . "\n";
+
+require Bx;
+
+ok(1);
+
+done_testing;

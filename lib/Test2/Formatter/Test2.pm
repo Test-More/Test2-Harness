@@ -692,7 +692,7 @@ sub build_line {
         $start = "${ps}${tag}${pe}";
     }
 
-    $start .= " ";
+    $start .= "  ";
 
     if ($tree) {
         if ($color) {

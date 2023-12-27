@@ -1,0 +1,6 @@
+use Test2::V0;
+
+ok($INC{'FAST.pm'}, "Preloaded fast");
+is($ENV{T2_HARNESS_STAGE}, 'FAST', "Running in 'FAST' stage");
+
+done_testing;

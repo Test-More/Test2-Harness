@@ -120,6 +120,10 @@ sub includes {
 
     push @$out => '.' if $self->{+UNSAFE_INC};
 
+    if (my $ch_dir = $self->{+CH_DIR}) {
+        push @$out => map { File::Spec->catdir($ch_dir, $_) } @$out;
+    }
+
     my %seen;
     return [grep { !$seen{$_}++ } @$out];
 }
@@ -178,9 +182,22 @@ sub load {
     return [ grep { !$seen{$_}++ } @$array ];
 }
 
+*set_env_var = \&set_env_vars;
+sub set_env_vars {
+    my $self = shift;
+    my %params = @_;
+
+    $self->{+ENV_VARS} //= { %{$DEFAULTS{+ENV_VARS}} };
+
+    for my $key (keys %params) {
+        $self->{+ENV_VARS}->{$key} = $params{$key};
+    }
+}
+
 sub env_vars {
     my $self = shift;
-    my $hash = {%{$self->{+ENV_VARS} // $DEFAULTS{+ENV_VARS}}};
+
+    my $hash = { %{$self->{+ENV_VARS} //= { %{$DEFAULTS{+ENV_VARS}} }} };
 
     if (my $cover = $self->cover) {
         $hash->{T2_NO_FORK} = 1;

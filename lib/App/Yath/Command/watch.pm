@@ -28,6 +28,8 @@ include_options(
 
 sub args_include_tests { 0 }
 
+sub load_renderers { 1 }
+
 sub group { 'daemon' }
 
 sub summary { "Watch/Tail a test runner" }
@@ -91,6 +93,7 @@ sub render_log {
 
         next if @events;
 
+        last if $self->{+ARGS} && grep { m/STOP/i } @{$self->{+ARGS}};
         sleep(0.2);
     }
 

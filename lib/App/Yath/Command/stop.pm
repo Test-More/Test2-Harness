@@ -33,6 +33,8 @@ sub run {
     my $client = App::Yath::Client->new(settings => $settings);
 
     $client->stop();
+
+    return 0;
 }
 
 1;

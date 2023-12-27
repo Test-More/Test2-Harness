@@ -2,9 +2,7 @@ package App::Yath::Tester;
 use strict;
 use warnings;
 
-BEGIN { die "FIXME" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Test2::API qw/context run_subtest/;
 use Test2::Tools::Compare qw/is/;
@@ -17,8 +15,9 @@ use Fcntl qw/SEEK_CUR/;
 
 use App::Yath::Util qw/find_yath/;
 use Test2::Harness::Util qw/clean_path apply_encoding/;
-use Test2::Harness::Util::IPC qw/run_cmd/;
 use Test2::Harness::Util::File::JSONL;
+
+use Test2::Harness::IPC::Util qw/start_process swap_io/;
 
 use Importer Importer => 'import';
 our @EXPORT = qw/yath make_example_dir/;
@@ -56,6 +55,8 @@ sub yath {
 
     my $no_app_path = delete $params{no_app_path};
     my $lib = delete $params{lib} // [];
+
+    push @$lib => map { "-I$_" } @INC;
 
     if (keys %params) {
         croak "Unexpected parameters: " . join (', ', sort keys %params);
@@ -99,17 +100,24 @@ sub yath {
     print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $debug;
 
     local %ENV = %ENV;
+    $ENV{YATH_IPC_DIR} = $pdir;
     $ENV{YATH_PERSISTENCE_DIR} = $pdir;
     $ENV{YATH_CMD} = $cmd;
     $ENV{NESTED_YATH} = 1;
+    $ENV{T2_HARNESS_PROC_PREFIX} = "nested";
     $ENV{'YATH_SELF_TEST'} = 1;
     $ENV{$_} = $env->{$_} for keys %$env;
-    my $pid = run_cmd(
-        no_set_pgrp => 1,
-        $capture ? (stderr => $wh, stdout => $wh) : (),
-        command => \@cmd,
-        run_in_parent => [sub { close($wh) }],
-    );
+    $ENV{YATH_COLOR} = 0;
+    my $pid = start_process \@cmd => sub {
+        return unless $capture;
+        swap_io(\*STDOUT, $wh);
+        swap_io(\*STDERR, $wh);
+    };
+
+    my $our_pid = $$;
+    eval "END{ kill('TERM', \$pid) if \$pid && \$\$ == $our_pid }; 1" or die $@;
+
+    close($wh);
 
     my (@lines, $exit);
     if ($capture) {
@@ -137,6 +145,8 @@ sub yath {
         waitpid($pid, 0);
         $exit = $?;
     }
+
+    $pid = undef;
 
     print "DEBUG: Exit: $exit\n" if $debug;
 

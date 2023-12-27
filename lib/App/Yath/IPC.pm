@@ -47,7 +47,7 @@ sub dirs {
         temp => File::Spec->catdir(File::Spec->tmpdir(), join('-' => 'yath-ipc', $ENV{USER}, @stat[0, 1])),
     );
 
-    my @dirs = grep { -w $_ } map { $search{$_} // die "'$_' is not a valid ipc dir to check.\n" } @{$settings->ipc->dir_order // ['base', 'temp']};
+    my @dirs = grep { -e $_ ? -w $_ : make_path($_) } map { $search{$_} // die "'$_' is not a valid ipc dir to check.\n" } @{$settings->ipc->dir_order // ['base', 'temp']};
     die "Could not find any writable IPC directories.\n" unless @dirs;
 
     return $self->{+DIRS} = \@dirs;

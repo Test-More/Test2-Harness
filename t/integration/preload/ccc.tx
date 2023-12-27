@@ -1,0 +1,31 @@
+use Test2::V0;
+#HARNESS-STAGE-CCC
+
+is($ENV{T2_HARNESS_STAGE}, 'CCC', "Running in stage 'CCC'");
+ok($INC{'CCC.pm'}, "Preloaded CCC");
+
+is(
+    [sort { $TestPreload::HOOKS{$a}->[0] <=> $TestPreload::HOOKS{$b}->[0] } keys %TestPreload::HOOKS],
+    [qw/INIT PRE_FORK POST_FORK PRE_LAUNCH/],
+    "Hooks happened in order"
+);
+
+is(
+    $TestPreload::HOOKS{POST_FORK}->[1],
+    $TestPreload::HOOKS{PRE_LAUNCH}->[1],
+    "POST_FORK and PRE_LAUNCH happened in the same PID"
+);
+
+isnt(
+    $TestPreload::HOOKS{POST_FORK}->[1],
+    $TestPreload::HOOKS{INIT}->[1],
+    "POST_FORK and INIT are not in the same PID"
+);
+
+isnt(
+    $TestPreload::HOOKS{POST_FORK}->[1],
+    $TestPreload::HOOKS{PRE_FORK}->[1],
+    "POST_FORK and PRE_FORK are not in the same PID"
+);
+
+done_testing;

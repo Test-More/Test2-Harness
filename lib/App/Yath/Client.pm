@@ -17,6 +17,7 @@ use Test2::Harness::Util::HashBase qw{
     <ipc <connect
     <yath_ipc
     <ipc_type
+    <types
 };
 
 sub init {
@@ -26,8 +27,10 @@ sub init {
     croak "'ipc' is not set, and there is no 'ipc' category in the settings"
         unless $self->{+IPC} or $settings->ipc;
 
+    my $types = $self->{+TYPES} //= ['daemon'];
+
     my $yipc = $self->{+YATH_IPC} //= App::Yath::IPC->new(settings => $settings);
-    my ($ipc, $con) = $yipc->connect();
+    my ($ipc, $con) = $yipc->connect(@$types);
 
     $self->{+IPC} = $ipc;
     $self->{+CONNECT} = $con;

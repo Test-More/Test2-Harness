@@ -101,7 +101,23 @@ sub _audit {
     $self->{+STOP}  = $self->{+STOP}  ? max($self->{+STOP}, $e->{stamp})  : $e->{stamp};
 
     my $f = $e->{facet_data};
+
+    if (my $run = $f->{harness_run}) {
+        my $jobs = $run->{job_lookup} // {};
+        for my $job_id (keys %$jobs) {
+            my $data = $jobs->{$job_id};
+
+            my $job_try = 0;
+
+            my $tries = $self->{+JOBS}->{$job_id} //= [];
+            my $job   = $tries->[$job_try]        //= {};
+
+            $job->{file} = $data->{test_file}->{relative} // $data->{test_file}->{file};
+        }
+    }
+
     my $job_id = $f->{harness}->{job_id} or return $e;
+
     my $job_try = $f->{harness}->{job_try} // 0;
 
     my $tries = $self->{+JOBS}->{$job_id} //= [];

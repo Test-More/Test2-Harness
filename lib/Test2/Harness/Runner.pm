@@ -16,6 +16,7 @@ use Test2::Harness::Util::HashBase qw{
     <test_settings
     <terminated
     <workdir
+    <is_daemon
 };
 
 sub ready { 1 }

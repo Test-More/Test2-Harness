@@ -39,6 +39,8 @@ use Test2::Harness::Util::HashBase qw{
 
     <children
     <terminated
+    <is_daemon
+    <bad
 };
 
 our ($ERROR, $EXIT, $DO);
@@ -182,7 +184,12 @@ sub do_preload {
     Test2::API::test2_enable_trace_stamps();
 
     for my $mod (@$preloads) {
-        require(mod2file($mod));
+        unless (eval { require(mod2file($mod)); 1 }) {
+            die $@ unless $self->is_daemon;
+            print STDERR "Base stage failed to load $mod: $@";
+            $self->{+BAD} = time;
+            next;
+        }
         next unless $mod->can('TEST2_HARNESS_PRELOAD');
 
         $preload //= Test2::Harness::Preload->new();
@@ -194,10 +201,12 @@ sub do_preload {
     if ($preload) {
         my $eager  = $preload->eager_stages;
         my $lookup = $preload->stage_lookup;
+        my $default = $preload->default_stage // '';
 
         for my $stage (keys %$lookup) {
             $stage_data->{$stage} = {
                 can_run => $eager->{$stage} // [],
+                default => $stage eq $default ? 1 : 0,
             };
         }
     }
@@ -264,9 +273,14 @@ sub check_children {
     for my $set (@todo) {
         my ($time, $stage) = @$set;
 
-        print "Stage $stage->{name} ended, restarting...\n";
-
-        return 1 if $self->fork_stage($stage, $time);
+        if ($self->is_daemon) {
+            print "Stage $stage->{name} ended, restarting...\n";
+            return 1 if $self->fork_stage($stage, $time);
+        }
+        else {
+            print "Stage $stage->{name} ended...\n";
+            exit(1);
+        }
     }
 
     return 0;
@@ -385,6 +399,11 @@ sub run_stage {
         },
 
         end_check => sub {
+            if ($self->{+BAD} && (time - $self->{+BAD}) > 60) {
+                print STDERR "60 seconds have elapsed since preload failure, exiting for reload...\n";
+                $exit = 255;
+                return 1;
+            }
             return 1 if $run_test || $run_spawn;
             return 1 if $self->{+TERMINATED};
             return 0;

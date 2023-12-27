@@ -287,7 +287,7 @@ sub runner {
 
     my $ts = Test2::Harness::TestSettings->new($settings->tests->all);
 
-    return $self->{+RUNNER} = $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir, plugins => $plugins);
+    return $self->{+RUNNER} = $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir, plugins => $plugins, is_daemon => $self->start_daemon_runner);
 }
 
 sub resources {

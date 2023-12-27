@@ -23,7 +23,7 @@ use Test2::Harness::Util::HashBase qw{
     +stages
     <preloads
     <preload_early
-    <default_stage
+    default_stage
     <preload_retry_delay
     <reloader
     <restrict_reload
@@ -103,13 +103,19 @@ sub set_stages {
     $data->{NONE}->{ready} = {pid => undef, con => undef};
     $data->{NONE}->{can_run} //= [];
 
+    for my $stage_name (keys %$data) {
+        my $stage = $data->{$stage_name};
+        next unless $stage->{default};
+        $self->set_default_stage($stage_name);
+    }
+
     $self->{+STAGES} = $data;
 }
 
 sub stages {
     my $self = shift;
 
-    return $self->{+STAGES} // confess "No stage data yet";
+    return $self->{+STAGES} // confess "No stage data";
 }
 
 sub set_stage_up {
@@ -248,6 +254,7 @@ sub start_base_stage {
         reloader        => $self->{+RELOADER},
         restrict_reload => $self->{+RESTRICT_RELOAD},
         root_pid        => $$,
+        is_daemon       => $self->{+IS_DAEMON},
     );
 
     my $launched = time;
@@ -261,11 +268,17 @@ sub start_base_stage {
             my $scheduler = $params{scheduler};
 
             my $x = parse_exit($exit);
-            print "Stage 'BASE' exited(sig: $x->{sig}, code: $x->{err}).\n";
+            print "Stage 'BASE' exited (sig: $x->{sig}, code: $x->{err}).\n";
 
             return if $scheduler->terminated || $scheduler->runner->terminated;
 
-            $scheduler->runner->start_base_stage($scheduler, $ipc, $launched, time, $x->{err});
+            if ($self->is_daemon) {
+                $scheduler->runner->start_base_stage($scheduler, $ipc, $launched, time, $x->{err});
+            }
+            else {
+                $self->terminate('Stage Ended');
+                $scheduler->terminate('Stage Ended');
+            }
         },
     );
 }

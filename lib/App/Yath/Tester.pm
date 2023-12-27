@@ -99,7 +99,7 @@ sub yath {
 
     print "DEBUG: Command = " . join(' ' => @cmd) . "\n" if $debug;
 
-    local %ENV = %ENV;
+#    local %ENV = %ENV;
     $ENV{YATH_IPC_DIR} = $pdir;
     $ENV{YATH_PERSISTENCE_DIR} = $pdir;
     $ENV{YATH_CMD} = $cmd;

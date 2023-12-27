@@ -5,18 +5,10 @@ use Time::HiRes qw/sleep time/;
 use File::Temp qw/tempdir/;
 use File::Spec;
 
-use Test2::Harness::Runner::Preload;
+use Test2::Harness::Preload;
 
 my $dir = tempdir(CLEANUP => 1);
 my $TRIGGER = File::Spec->catfile($dir, 'trigger');
-
-file_stage sub {
-    my ($file) = @_;
-
-    return uc($1) if $file =~ m/(AAA|BBB)\.tx$/i;
-
-    return;
-};
 
 stage AAA => sub {
     preload 'AAA';

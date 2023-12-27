@@ -21,70 +21,78 @@ $dir =~ s{^\./}{};
 
 yath(
     command => 'test',
-    args    => [$dir, '--ext=tx', '-A', '-PTestSimplePreload', '-PTestPreload'],
+    args    => [$dir, '--ext=tx', '-v', '-A', '-PTestSimplePreload', '-PTestPreload', '-p+TestPlugin'],
     exit    => 0,
     test    => sub {
         my $out = shift;
 
-        like($out->{output}, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
-        like($out->{output}, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
-        like($out->{output}, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
-        like($out->{output}, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
-        like($out->{output}, qr{PASSED.*simple_test\.tx},  'Ran file "simple_test.tx"');
-        like($out->{output}, qr{PASSED.*preload_test\.tx}, 'Ran file "preload_test.tx"');
-        like($out->{output}, qr{PASSED.*fast\.tx},         'Ran file "fast.tx"');
-        like($out->{output}, qr{PASSED.*slow\.tx},         'Ran file "slow.tx"');
-        like($out->{output}, qr{TO RETRY.*retry\.tx},      'Ran file "retry.tx" with a failure');
-        like($out->{output}, qr{PASSED.*retry\.tx},        'Ran file "retry.tx" again with a pass');
+        my $filtered = join "\n" => grep { m/(PASSED|FAILED|RETRY).*\.tx/ } split /\n/, $out->{output};
+
+        like($filtered, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
+        like($filtered, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
+        like($filtered, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
+        like($filtered, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
+        like($filtered, qr{PASSED.*simple_test\.tx},  'Ran file "simple_test.tx"');
+        like($filtered, qr{PASSED.*preload_test\.tx}, 'Ran file "preload_test.tx"');
+        like($filtered, qr{PASSED.*fast\.tx},         'Ran file "fast.tx"');
+        like($filtered, qr{PASSED.*slow\.tx},         'Ran file "slow.tx"');
+        like($filtered, qr{TO RETRY.*retry\.tx},      'Ran file "retry.tx" with a failure');
+        like($filtered, qr{PASSED.*retry\.tx},        'Ran file "retry.tx" again with a pass');
     },
 );
 
 yath(
     command => 'test',
-    args    => [$dir, '--ext=tx', '-A', '-PTestSimplePreload', '-PTestPreload', '-PBroken'],
+    args    => [$dir, '--ext=tx', '-A', '-PTestSimplePreload', '-PTestPreload', '-PBroken', '-p+TestPlugin'],
     exit    => T(),
+    env     => {TABLE_TERM_SIZE => 200},
     test    => sub {
         my $out = shift;
 
-        like($out->{output}, qr{This is broken},      "Reported the error");
-        like($out->{output}, qr{No tests were seen!}, "No tests were run");
+        like($out->{output}, qr{This is broken}, "Reported the error");
+
+        my $found_point = 0;
+        my $failed = join "\n" => grep { $found_point ||= m/The following jobs failed:/ } split /\n/, $out->{output};
+        like($failed, qr{\Q$_\E}, "$_ failed") for qw/no_preload.tx aaa.tx bbb.tx ccc.tx simple_test.tx preload_test.tx fast.tx slow.tx retry.tx retry.tx/;
     },
 );
 
 yath(
     command => 'test',
-    args    => [$dir, '--ext=tx', '-A', '-PTestBadPreload' ],
+    args    => [$dir, '--ext=tx', '-A', '-PTestBadPreload', '-p+TestPlugin' ],
     exit    => T(),
     test    => sub {
         my $out = shift;
 
-        like($out->{output}, qr{Child stage 'BAD' did not exit cleanly}, "Reported the error");
+        like($out->{output}, qr{Can't locate Test2/Harness/Preload/Does/Not/Exist\.pm}, "Reported the error");
     },
 );
 
 unless ($ENV{AUTOMATED_TESTING}) {
     yath(
         command => 'start',
-        args    => ['-PTestSimplePreload', '-PTestPreload'],
+        args    => ['-PTestSimplePreload', '-PTestPreload', '-p+TestPlugin'],
         exit    => 0,
         test    => sub {
             yath(
                 command => 'run',
-                args    => [$dir, '--ext=tx', '-A'],
+                args    => [$dir, '--ext=tx', '-A', '-p+TestPlugin'],
                 exit    => 0,
                 test    => sub {
                     my $out = shift;
 
-                    like($out->{output}, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
-                    like($out->{output}, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
-                    like($out->{output}, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
-                    like($out->{output}, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
-                    like($out->{output}, qr{PASSED.*simple_test\.tx},  'Ran file "simple_test.tx"');
-                    like($out->{output}, qr{PASSED.*preload_test\.tx}, 'Ran file "preload_test.tx"');
-                    like($out->{output}, qr{PASSED.*fast\.tx},         'Ran file "fast.tx"');
-                    like($out->{output}, qr{PASSED.*slow\.tx},         'Ran file "slow.tx"');
-                    like($out->{output}, qr{TO RETRY.*retry\.tx},      'Ran file "retry.tx" with a failure');
-                    like($out->{output}, qr{PASSED.*retry\.tx},        'Ran file "retry.tx" again with a pass');
+                    my $filtered = join "\n" => grep { m/(PASSED|FAILED|RETRY).*\.tx/ } split /\n/, $out->{output};
+
+                    like($filtered, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
+                    like($filtered, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
+                    like($filtered, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
+                    like($filtered, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
+                    like($filtered, qr{PASSED.*simple_test\.tx},  'Ran file "simple_test.tx"');
+                    like($filtered, qr{PASSED.*preload_test\.tx}, 'Ran file "preload_test.tx"');
+                    like($filtered, qr{PASSED.*fast\.tx},         'Ran file "fast.tx"');
+                    like($filtered, qr{PASSED.*slow\.tx},         'Ran file "slow.tx"');
+                    like($filtered, qr{TO RETRY.*retry\.tx},      'Ran file "retry.tx" with a failure');
+                    like($filtered, qr{PASSED.*retry\.tx},        'Ran file "retry.tx" again with a pass');
                 },
             );
 
@@ -95,27 +103,29 @@ unless ($ENV{AUTOMATED_TESTING}) {
     # Persistent mode ignored broken preloads as they may be under active development
     yath(
         command => 'start',
-        args    => ['-PTestSimplePreload', '-PTestPreload', '-PBroken'],
+        args    => ['-PTestSimplePreload', '-PTestPreload', '-PBroken', '-p+TestPlugin'],
         exit    => 0,
         test    => sub {
             yath(
                 command => 'run',
-                args    => [$dir, '--ext=tx', '-A'],
+                args    => [$dir, '--ext=tx', '-A', '-p+TestPlugin'],
                 exit    => 0,
                 test    => sub {
                     my $out = shift;
 
-                    like($out->{output}, qr{This is broken},           "Reported the error");
-                    like($out->{output}, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
-                    like($out->{output}, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
-                    like($out->{output}, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
-                    like($out->{output}, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
-                    like($out->{output}, qr{PASSED.*simple_test\.tx},  'Ran file "simple_test.tx"');
-                    like($out->{output}, qr{PASSED.*preload_test\.tx}, 'Ran file "preload_test.tx"');
-                    like($out->{output}, qr{PASSED.*fast\.tx},         'Ran file "fast.tx"');
-                    like($out->{output}, qr{PASSED.*slow\.tx},         'Ran file "slow.tx"');
-                    like($out->{output}, qr{TO RETRY.*retry\.tx},      'Ran file "retry.tx" with a failure');
-                    like($out->{output}, qr{PASSED.*retry\.tx},        'Ran file "retry.tx" again with a pass');
+                    my $filtered = join "\n" => grep { m/(?:broken|(?:PASSED|FAILED|RETRY).*\.tx)/ } split /\n/, $out->{output};
+
+                    like($filtered, qr{This is broken},           "Reported the error");
+                    like($filtered, qr{PASSED.*no_preload\.tx},   'Ran file "no_preload.tx"');
+                    like($filtered, qr{PASSED.*aaa\.tx},          'Ran file "aaa.tx"');
+                    like($filtered, qr{PASSED.*bbb\.tx},          'Ran file "bbb.tx"');
+                    like($filtered, qr{PASSED.*ccc\.tx},          'Ran file "ccc.tx"');
+                    like($filtered, qr{PASSED.*simple_test\.tx},  'Ran file "simple_test.tx"');
+                    like($filtered, qr{PASSED.*preload_test\.tx}, 'Ran file "preload_test.tx"');
+                    like($filtered, qr{PASSED.*fast\.tx},         'Ran file "fast.tx"');
+                    like($filtered, qr{PASSED.*slow\.tx},         'Ran file "slow.tx"');
+                    like($filtered, qr{TO RETRY.*retry\.tx},      'Ran file "retry.tx" with a failure');
+                    like($filtered, qr{PASSED.*retry\.tx},        'Ran file "retry.tx" again with a pass');
                 },
             );
 

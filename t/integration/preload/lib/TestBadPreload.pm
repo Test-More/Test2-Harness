@@ -2,7 +2,7 @@ package TestBadPreload;
 use strict;
 use warnings;
 
-use Test2::Harness::Runner::Preload;
+use Test2::Harness::Preload;
 
 stage BAD => sub {
   default;

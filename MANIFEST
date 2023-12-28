@@ -9,6 +9,7 @@ t/pod-coverage.t
 t/pod.t
 t/test-die/die.tx
 t/test-fail/fail.tx
+t/test-no-numbers/pass-1.tx
 t/test-ok/pass-1.tx
 t/test-ok/pass-2.tx
 t/test-plan/plan.tx

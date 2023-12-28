@@ -3,6 +3,7 @@ Revision history for Test2-Harness-Renderer-JUnit
 1.000005 2023-12-28 - Todd Rinaldo
 - #15 - Fix POD Control sequence
 - #17 - Allow for set_no_numbers format
+- Stabilize tests by injecting no_app_path => 1 into yath() test runs.
 
 1.000004 2021-05-13 - Todd Rinaldo
 - Don't fail the whole run when you see a duplicate test. Just ammend the failure message.

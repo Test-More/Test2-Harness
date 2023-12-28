@@ -10,7 +10,7 @@ use App::Yath::Tester qw/yath/;
 use Test2::Harness::Util::File::JSONL ();
 use Test2::Harness::Renderer::JUnit   ();
 
-use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util       qw/clean_path/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 #use Test2::Bundle::Extended;
@@ -43,11 +43,12 @@ my $env = {                      # env passed to yath
     unlink $default_junit_xml if -e $default_junit_xml;
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
-        exit    => 0,
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit        => 0,
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like(
@@ -72,19 +73,19 @@ my $env = {                      # env passed to yath
 }
 
 {
-    note
-        "all tests are ok - JUNIT_TEST_FILE not reachable - No such file or directory";
+    note "all tests are ok - JUNIT_TEST_FILE not reachable - No such file or directory";
 
     my $sdir = $dir . '-ok';
 
     $env->{JUNIT_TEST_FILE} = "$tmpdir/x/y/z/ok.xml";
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
-        exit    => T(),
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit        => T(),
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like(
@@ -115,11 +116,12 @@ my $env = {                      # env passed to yath
     $env->{JUNIT_TEST_FILE} = "$tmpdir/ok.xml";
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
-        exit    => 0,
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit        => 0,
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like(
@@ -219,11 +221,12 @@ my $env = {                      # env passed to yath
     $env->{JUNIT_TEST_FILE} = "$tmpdir/no-numbers.xml";
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
-        exit    => 0,
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit        => 0,
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like(
@@ -285,11 +288,12 @@ my $env = {                      # env passed to yath
     $env->{JUNIT_TEST_FILE} = "$tmpdir/failure.xml";
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
-        exit    => T(),
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit        => T(),
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like(
@@ -326,8 +330,7 @@ my $env = {                      # env passed to yath
                     field classname => 'test-fail_fail_tx';
                     field time      => D();
                     field failure   => hash {
-                        field content => match
-                            qr{not ok 0002 - this is a failure};
+                        field content => match qr{not ok 0002 - this is a failure};
                         field message => 'not ok 0002 - this is a failure';
                         field type    => 'TestFailed';
                     };
@@ -363,11 +366,12 @@ my $env = {                      # env passed to yath
     $env->{JUNIT_TEST_FILE} = "$tmpdir/plan.xml";
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
-        exit    => T(),
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit        => T(),
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like(
@@ -414,8 +418,7 @@ my $env = {                      # env passed to yath
                 field 'Test Plan Failure' => hash {
                     field classname => 'test-plan_plan_tx';
                     field time      => D();
-                    field failure   => match
-                        q[Planned for 4 assertions, but saw 2];
+                    field failure   => match q[Planned for 4 assertions, but saw 2];
                     end;
                 };
 
@@ -443,11 +446,12 @@ my $env = {                      # env passed to yath
     $env->{JUNIT_TEST_FILE} = "$tmpdir/die.xml";
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v' ],
-        exit    => T(),
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v' ],
+        exit        => T(),
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like(
@@ -522,11 +526,12 @@ my $env = {                      # env passed to yath
     $env->{FAIL_ONCE}       = 1;
 
     yath(
-        command => 'test',
-        args    => [ $sdir, '--ext=tx', @renderers, '-v', '--retry=1', ],
-        exit    => 0,
-        env     => $env,
-        test    => sub {
+        command     => 'test',
+        args        => [ $sdir, '--ext=tx', @renderers, '-v', '--retry=1', ],
+        exit        => 0,
+        env         => $env,
+        no_app_path => 1,
+        test        => sub {
             my $out = shift;
 
             like( $out->{output}, qr{FAIL.*Should fail once}, "one failure" );

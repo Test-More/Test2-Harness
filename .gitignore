@@ -4,6 +4,8 @@
 *.o
 *.pm.tdy
 *.bs
+*.ERR
+*.bak
 
 # Devel::Cover
 cover_db/

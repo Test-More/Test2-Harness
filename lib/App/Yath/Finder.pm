@@ -651,9 +651,10 @@ sub find_project_files {
         }
 
         if ($test_params) {
-            $test->set_input($test_params->{stdin})    if $test_params->{stdin};
-            $test->set_test_args($test_params->{argv}) if $test_params->{argv};
-            $test->set_env_vars($test_params->{env})   if $test_params->{env};
+            my $ts = $test->test_settings;
+            $ts->set_input($test_params->{stdin})  if $test_params->{stdin};
+            $ts->set_args($test_params->{argv})    if $test_params->{argv};
+            $ts->set_env_vars(%{$test_params->{env}}) if $test_params->{env};
         }
 
         push @tests => $test;

@@ -87,7 +87,7 @@ sub get_coverage_tests {
     my $testmeta = $coverage_data->{testmeta} // {};
 
     my ($changes_exclude_loads, $changes_exclude_opens);
-    if ($settings->check_prefix('finder')) {
+    if ($settings->check_group('finder')) {
         my $finder = $settings->finder;
         $changes_exclude_loads = $finder->changes_exclude_loads;
         $changes_exclude_opens = $finder->changes_exclude_opens;

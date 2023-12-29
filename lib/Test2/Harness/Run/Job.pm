@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Carp qw/croak/;
+use Config qw/%Config/;
 use Scalar::Util qw/blessed/;
 
 use Test2::Harness::TestFile;
@@ -60,11 +61,14 @@ sub launch_command {
         $run_file =~ s{^$ch_dir/?}{}g;
     }
 
+    my @includes = map { $_ eq '.' ? $_ : clean_path($_) } @{$ts->includes};
+
     if ($self->test_file->non_perl) {
-        return [$run_file, @{$ts->args // []}];
+        $run_file = "./$run_file" unless $run_file =~ m{^[/\.]};
+        return ([$run_file, @{$ts->args // []}], {PERL5LIB => join $Config{path_sep} => @includes});
     }
 
-    my @includes = map { "-I" . clean_path($_) } @{$ts->includes};
+    @includes = map { "-I$_" } @includes;
     my @loads = map { "-m$_" } @{$ts->load};
 
     my $load_import = $ts->load_import;

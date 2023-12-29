@@ -23,7 +23,7 @@ sub TO_JSON { ref($_[0]) || "$_[0]" }
 sub redirect_io { Carp::confess("redirect_io() is deprecated") }
 sub shellcall   { Carp::confess("shellcall() is deprecated, use shell_call() instead, note that arguments have changed") }
 
-sub insane_methods { qw/handle_event inject_run_data spawn_args setup teardown finalize/ }
+sub insane_methods { qw/handle_event inject_run_data spawn_args setup teardown finalize finish/ }
 
 sub sanity_checks {
     my $class = shift;

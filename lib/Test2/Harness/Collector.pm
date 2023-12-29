@@ -354,18 +354,22 @@ sub post_exit_timeout { my $ts = shift->test_settings or return; $ts->post_exit_
 sub launch_command {
     my $self = shift;
 
-    return [$^X, '-e', "print \"1..0 # SKIP $self->{+SKIP}\\n\""]
+    return ([$^X, '-e', "print \"1..0 # SKIP $self->{+SKIP}\\n\""])
         if $self->{+SKIP};
 
     if(my $job = $self->{+JOB}) {
         my $run = $self->{+RUN};
         my $ts  = $self->{+TEST_SETTINGS};
 
-        my $cmd = $job->launch_command($run, $ts);
+        my ($cmd, $env) = $job->launch_command($run, $ts);
 
         my $cb;
-        if (my $dir = $ts->ch_dir) {
-            $cb = sub { chdir($dir) };
+        my $dir = $ts->ch_dir;
+        if($dir || $env) {
+            $cb = sub {
+                chdir($dir) if $dir;
+                $ENV{$_} = $env->{$_} for keys %{$env //= {}};
+            };
         }
 
         return ($cmd, $cb);

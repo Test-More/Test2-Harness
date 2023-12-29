@@ -102,7 +102,7 @@ sub get_coverage_tests {
     my $manager = $coverage_data->{manager} // undef;
 
     my ($changes_exclude_loads, $changes_exclude_opens);
-    if ($settings->check_prefix('finder')) {
+    if ($settings->check_group('finder')) {
         my $finder = $settings->finder;
         $changes_exclude_loads = $finder->changes_exclude_loads;
         $changes_exclude_opens = $finder->changes_exclude_opens;

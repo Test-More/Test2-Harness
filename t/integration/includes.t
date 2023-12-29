@@ -13,7 +13,7 @@ $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
 chdir($dir);
-$ENV{OLD_PERL5LIB} = $ENV{PERL5LIB};
+$ENV{OLD_PERL5LIB} = $ENV{PERL5LIB} if defined $ENV{PERL5LIB};
 
 yath(
     command => 'test',
@@ -27,12 +27,20 @@ yath(
     exit    => 0,
 );
 
+# Note: This used to test that order was preserved between all flags, that is
+# not really viable anymore. If order is that important then specify everything
+# with -I in the desired order.
+# Now this is just a test that everything is added in a consistent order
 yath(
     command => 'test',
     args    => ['-Ia', '-b', '-Ib', '-l', '-Ic', 'order-ibili.tx'],
     exit    => 0,
 );
 
+# Note: This used to test that order was preserved between all flags, that is
+# not really viable anymore. If order is that important then specify everything
+# with -I in the desired order.
+# Now this is just a test that everything is added in a consistent order
 yath(
     command => 'test',
     args    => ['-Ia', '-l', '-Ib', '-b', '-Ic', 'order-ilibi.tx'],
@@ -48,7 +56,7 @@ yath(
 $ENV{YATH_PERL} = $^X;
 yath(
     command => 'test',
-    args    => ['-Ixyz', './not-perl.sh'],
+    args    => ['-Ixyz', 'not-perl.sh'],
     exit    => 0,
 ) if can_run('bash');
 

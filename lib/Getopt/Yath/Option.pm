@@ -237,19 +237,16 @@ sub forms {
 
     $forms->{'-' . $self->{+SHORT}} = 1 if $self->{+SHORT};
 
-    $forms->{$_} = 1  for map { "--$_" } @{$self->{+ALT}    // []};
-    $forms->{$_} = -1 for map { "--no-$_" } @{$self->{+ALT} // []};
-    $forms->{$_} = -1 for map { "--$_" } @{$self->{+ALT_NO} // []};
+    my $prefix = $self->prefix // '';
+    $prefix .= '-' if length $prefix;
+
+    $forms->{$_} = 1  for map { "--${prefix}$_" } @{$self->{+ALT}    // []};
+    $forms->{$_} = -1 for map { "--no-${prefix}$_" } @{$self->{+ALT} // []};
+    $forms->{$_} = -1 for map { "--${prefix}$_" } @{$self->{+ALT_NO} // []};
 
     my $name = $self->name;
-    if (my $prefix = $self->prefix) {
-        $forms->{"--${prefix}-${name}"} = 1;
-        $forms->{"--no-${prefix}-${name}"} = -1;
-    }
-    else {
-        $forms->{"--${name}"} = 1;
-        $forms->{"--no-${name}"} = -1;
-    }
+    $forms->{"--${prefix}${name}"}    = 1;
+    $forms->{"--no-${prefix}${name}"} = -1;
 
     return $forms;
 }
@@ -381,9 +378,7 @@ sub pod_docs {
 
     my ($forms, $no_forms, $other_forms) = $self->doc_forms(%params);
 
-    use Data::Dumper;
-    print Dumper($forms, $no_forms, $other_forms);
-    my @out = map { "=item $_" } map { @{$_} } grep { $_ } @$forms, @$no_forms, @$other_forms;
+    my @out = map { "=item $_" } grep { $_ } @$forms, @$no_forms, @$other_forms;
 
     push @out => $self->description;
 

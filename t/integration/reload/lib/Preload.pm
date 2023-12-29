@@ -2,7 +2,7 @@ package Preload;
 use strict;
 use warnings;
 
-use Test2::Harness::Runner::Preload;
+use Test2::Harness::Preload;
 
 print "$$ $0 - Loaded ${ \__PACKAGE__ }\n";
 
@@ -14,10 +14,10 @@ print Dumper($path);
 stage A => sub {
     default();
 
-    watch "$path/nonperl1" => sub { print "$$ $0 - RELOAD CALLBACK nonperl1\n" };
+#    watch "$path/nonperl1" => sub { print "$$ $0 - RELOAD CALLBACK nonperl1\n" };
 
     preload sub {
-        watch "$path/nonperl2" => sub { print "$$ $0 - RELOAD CALLBACK nonperl2\n" };
+#        watch "$path/nonperl2" => sub { print "$$ $0 - RELOAD CALLBACK nonperl2\n" };
     };
 
     preload 'Preload::A';

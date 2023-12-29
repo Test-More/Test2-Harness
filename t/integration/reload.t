@@ -76,10 +76,10 @@ sub parse_output {
 
     my %by_proc;
     for my $line (split /\n/, $output) {
-        next unless $line =~ m/^\s*(\d+) yath-nested-runner(?:-(\S+))? - (.+)$/;
+        next unless $line =~ m/(\d+) yath-runner-BASE(?:-(\S+))? - (.+)$/i;
         my ($pid, $proc, $text) = ($1, $2, $3);
         $proc //= '';
-        $text =~ s/$pid yath-nested-runner-$proc(\s*-\s*)//g;
+        $text =~ s/$pid yath-runner-$proc(\s*-\s*)//g;
         $text =~ s{(\Q$fqdir\E|\Q$dir\E|\Q$pdir\E)/*}{}g;
 
         $text =~ s{\Q$safe_tmpdir\E(/)?}{TEMP$1}g; # <-- strip out the tmpdir

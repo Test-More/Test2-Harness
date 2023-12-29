@@ -75,19 +75,19 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
 
     option tlib => (
         type        => 'Bool',
-        description => "(Default: off) Include 't/lib' in your module path",
+        description => "(Default: off) Include 't/lib' in your module path (These will come after paths you specify with -D or -I)",
     );
 
     option lib => (
         type        => 'Bool',
         short       => 'l',
-        description => "(Default: include if it exists) Include 'lib' in your module path",
+        description => "(Default: include if it exists) Include 'lib' in your module path (These will come after paths you specify with -D or -I)",
     );
 
     option blib => (
         type        => 'Bool',
         short       => 'b',
-        description => "(Default: include if it exists) Include 'blib/lib' and 'blib/arch' in your module path",
+        description => "(Default: include if it exists) Include 'blib/lib' and 'blib/arch' in your module path (These will come after paths you specify with -D or -I)",
     );
 
     option cover => (
@@ -127,6 +127,7 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
     option unsafe_inc => (
         type          => 'Bool',
         from_env_vars => [qw/PERL_USE_UNSAFE_INC/],
+        set_env_vars  => [qw/PERL_USE_UNSAFE_INC/],
         description   => "perl is removing '.' from \@INC as a security concern. This option keeps things from breaking for now.",
     );
 

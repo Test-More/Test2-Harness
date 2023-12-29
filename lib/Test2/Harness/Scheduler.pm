@@ -364,6 +364,7 @@ sub advance {
     }
     else {
         my $env = {};
+        $env->{T2_HARNESS_JOB_DURATION} = $dur;
         $_->assign($res_id, $job, $env) for @$resources;
         $ok = $self->runner->launch_job($stage, $run, $job, $env);
     }

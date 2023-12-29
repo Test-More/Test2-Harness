@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Carp qw/croak confess/;
+use Carp qw/croak confess longmess/;
 use Errno qw/ESRCH EINTR/;
 use Config qw/%Config/;
 use IPC::Open3 qw/open3/;
@@ -160,7 +160,7 @@ sub start_process {
     no warnings "exec";
     my $ok = eval { exec(@$cmd); 1 };
     my $err = $@;
-    print STDERR "Failed to exec ($!) $@\n";
+    print STDERR longmess("Failed to exec ($!) $@\n");
     POSIX::_exit(255);
 }
 

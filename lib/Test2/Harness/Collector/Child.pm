@@ -2,6 +2,8 @@ package Test2::Harness::Collector::Child;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use Import::Into();
 use Atomic::Pipe();
 use constant();

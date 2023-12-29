@@ -14,17 +14,14 @@ like(
         App::Yath->app_path,
 
         File::Spec->catdir($path, 'a'),
+        File::Spec->catdir($path, 'b'),
+        File::Spec->catdir($path, 'c'),
 
         File::Spec->catdir($path, 'lib'),
-
-        File::Spec->catdir($path, 'b'),
-
         File::Spec->catdir($path, 'blib', 'lib'),
         File::Spec->catdir($path, 'blib', 'arch'),
-
-        File::Spec->catdir($path, 'c'),
     ],
-    "Added all via cli, in order"
+    "Added all via cli"
 );
 
 is($ENV{PERL5LIB}, $ENV{OLD_PERL5LIB}, "PERL5LIB has not been modified");

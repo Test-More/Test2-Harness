@@ -27,12 +27,14 @@ yath(
             if (my $event = shift @events) {
                 my $f = $event->{facet_data};
 
+                next unless $f->{harness}->{job_id};
+
                 if (my $e = $f->{harness_job_exit}) {
-                    push @order => [exit => $e->{stamp}];
+                    push @order => [exit => $e->{stamp}, $f];
                 }
 
                 if (my $l = $f->{harness_job_start}) {
-                    push @order => [start => $l->{stamp}];
+                    push @order => [start => $l->{stamp}, $f];
                 }
             }
 
@@ -44,7 +46,10 @@ yath(
 # We care about the order in which events happened based on time stamp, not the
 # order in which they were collected, which may be different. Here we will sort
 # based on stamp.
+
         @order = map { $_->[0] } sort { $a->[1] <=> $b->[1] } @order;
+
+
 
 # The first 4 events should be starts since we have 4 concurrent jobs
 # After they start we MUST see an exit before any more can start
@@ -61,6 +66,7 @@ yath(
             },
             "Got one more start, and 4 more exits"
         );
+
     },
 );
 

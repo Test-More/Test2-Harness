@@ -147,7 +147,7 @@ sub start {
         my $n1 = "lastlog-1.${ext}";
 
         if (-e $n1 || -l $n1) {
-            unlink(clean_path($n1));
+#            unlink(clean_path($n1));
             unlink($n1);
         }
 

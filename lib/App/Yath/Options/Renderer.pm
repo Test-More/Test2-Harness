@@ -20,10 +20,11 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
     );
 
     option verbose => (
-        type        => 'Count',
-        short       => 'v',
-        description => "Be more verbose",
-        initialize  => 0,
+        type         => 'Count',
+        short        => 'v',
+        description  => "Be more verbose",
+        initialize   => 0,
+        set_env_vars => [qw/T2_HARNESS_IS_VERBOSE HARNESS_IS_VERBOSE/],
     );
 
     option wrap => (

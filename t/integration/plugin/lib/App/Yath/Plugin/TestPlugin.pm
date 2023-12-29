@@ -126,62 +126,12 @@ sub claim_file {
     return;
 }
 
-sub inject_run_data {
-    my $self = shift;
-    die "self is not an instance! ($self)" unless blessed($self);
-    my %params = @_;
-    print "TEST PLUGIN: inject_run_data\n";
 
-    my $fields = $params{fields};
-    push @$fields => {name => 'test_plugin', details => 'foo', raw => 'bar', data => 'baz'};
-
-    return;
-}
-
-my $seen = 0;
-sub handle_event {
-    my $self = shift;
-    die "self is not an instance! ($self)" unless blessed($self);
-    my ($event) = @_;
-    print "TEST PLUGIN: handle_event\n" unless $seen++;
-
-    if(my $run = $event->facet_data->{harness_run}) {
-        print "FIELDS: " . encode_json($run->{fields}) . "\n";
-    }
-
-    return;
-}
-
-sub finish {
-    my $self = shift;
-    die "self is not an instance! ($self)" unless blessed($self);
-    my %args = @_;
-
-    print "TEST PLUGIN: finish " . join(', ' => map { "$_ => " . (ref($args{$_}) || $args{$_} // '?') } sort keys %args) . "\n";
-    return;
-}
-
-sub setup {
-    my $self = shift;
-    die "self is not an instance! ($self)" unless blessed($self);
-    my ($settings) = @_;
-    print "TEST PLUGIN: setup " . ref($settings) . "\n";
-
-    $self->shellcall(
-        $settings,
-        'testplug',
-        $^X, '-e', 'print STDERR "STDERR WRITE\n"; print STDOUT "STDOUT WRITE\n";',
-    );
-
-    return;
-}
-
-sub teardown {
-    my $self = shift;
-    die "self is not an instance! ($self)" unless blessed($self);
-    my ($settings) = @_;
-    print "TEST PLUGIN: teardown " . ref($settings) . "\n";
-    return;
-}
+sub finish          { die "Should not be called" }
+sub finalize        { die "Should not be called" }
+sub inject_run_data { die "Should not be called" }
+sub handle_event    { die "Should not be called" }
+sub setup           { die "Should not be called" }
+sub teardown        { die "Should not be called" }
 
 1;

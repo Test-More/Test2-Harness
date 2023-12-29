@@ -34,31 +34,31 @@ option_group {category => 'This is the category', group => 'foo', no_module => 1
             {settings => {foo => {foo => 1}}},
             "A bool with a default of 1 and nothing provided"
         );
-        is($trigger, 0, "Not triggered"); $trigger = 0;
+        ok($trigger, "Triggered"); $trigger = 0;
         like(
             parse_options(['--foo']),
             {settings => {foo => {foo => 1}}},
             "Parsed a bool with a default of 1 turned on"
         );
-        is($trigger, 1, "triggered"); $trigger = 0;
+        ok($trigger, "triggered"); $trigger = 0;
         like(
             parse_options(['-f']),
             {settings => {foo => {foo => 1}}},
             "Parsed a bool with a default of 1 turned on"
         );
-        is($trigger, 1, "triggered"); $trigger = 0;
+        ok($trigger, "triggered"); $trigger = 0;
         like(
             dies { parse_options(['-f=0']) },
             qr/Use of 'arg=val' form is not allowed in option '-f=0'\. Arguments are not allowed for this option type\./,
             "Boolean types do not allow an argument"
         );
-        is($trigger, 0, "not triggered"); $trigger = 0;
+        ok($trigger, "triggered"); $trigger = 0;
         like(
             parse_options(['--no-foo']),
             {settings => {foo => {foo => 0}}},
             "Parsed a bool with a default of 1 turned off"
         );
-        is($trigger, 1, "triggered"); $trigger = 0;
+        ok($trigger, "triggered"); $trigger = 0;
 
         option bar => (
             type    => 'Bool',
@@ -502,38 +502,83 @@ option_group {category => 'This is the category', group => 'foo', no_module => 1
 
     subtest cli_docs => sub {
         local $ENV{TABLE_TERM_SIZE} = 120;
+
+        # Note this was done by printing the value and spot-checking it, so it
+        # is a test that the doc output does not accidentally change, there
+        # could be bugs that need to be fixed that mean this needs to change.
         is(options->docs('cli'), <<"        EOT", "Got expected docs");
 
-This is the category
-  --aut,  --aut ARG,  --aut=ARG,  --auto,  --auto ARG,  --auto=ARG,  -a,  -aARG,  -a ARG,  -a=ARG
+This is the category  (foo)
+  [aut]
+  -a
+  -aARG
+  -a=ARG
+  --aut
+  --auto
+  --aut=ARG
+  --auto=ARG
   --no-aut
     An auto-field
 
-  --aut2,  --aut2 ARG,  --aut2=ARG,  --no-aut2
+  [aut2]
+  --aut2
+  --aut2=ARG
+  --no-aut2
     NO DESCRIPTION - FIX ME
 
-  --auto-list,  --auto-list ARG,  --auto-list=ARG,  -L,  -LARG,  -L ARG,  -L=ARG,  --no-auto-list
+  [auto-list]
+  -L
+  -L=ARG
+  -L '["json","list"]'
+  -L='["json","list"]'
+  --auto-list
+  --auto-list=ARG
+  --auto-list '["json","list"]'
+  --auto-list='["json","list"]'
+  --no-auto-list
     an auto list
 
     Note: Can be specified multiple times
 
-  --auto-map,  --auto-map=key=val,  -A,  -Akey=val,  -A=key=val,  --no-auto-map
+  [auto-map]
+  -A
+  -Akey=val
+  -A=key=val
+  --auto-map
+  --auto-map=key=val
+  --no-auto-map
     An Auto map
 
     Note: Can be specified multiple times
 
-  --bar,  --no-bar
+  [bar]
+  --bar
+  --no-bar
     bar boolean
 
-  --baz,  --no-baz
+  [baz]
+  --baz
+  --no-baz
     baz boolean
 
-  --cnt,  --cnt=COUNT,  --count,  --count=COUNT,  -c,  -cc,  -ccc..,  -c=COUNT,  --no-cnt
+  [cnt]
+  -c
+  -cc
+  -ccc..
+  -c=COUNT
+  --cnt
+  --count
+  --cnt=COUNT
+  --count=COUNT
+  --no-cnt
     A counter
 
     Note: Can be specified multiple times, counter bumps each time it is used.
 
-  --env ARG,  --env=ARG,  --no-env
+  [env]
+  --env ARG
+  --env=ARG
+  --no-env
     NO DESCRIPTION - FIX ME
 
     Can also be set with the following environment variables: EXAMPLEA, EXAMPLEB, EXAMPLEC
@@ -542,54 +587,97 @@ This is the category
 
     The following environment variables will be set after arguments are processed: EXAMPLEC
 
-  --foo,  -f,  --no-foo
+  [env-neg]
+  --env-neg ARG
+  --env-neg=ARG
+  --no-env-neg
+    NO DESCRIPTION - FIX ME
+
+    Can also be set with the following environment variables: !EXAMPLEA
+
+    The following environment variables will be cleared after arguments are processed: EXAMPLEA
+
+    The following environment variables will be set after arguments are processed: !EXAMPLEX
+
+  [foo]
+  -f
+  --foo
+  --no-foo
     foo boolean
 
-  --list ARG,  --list=ARG,  -lARG,  -l ARG,  -l=ARG,  --no-list
+  [list]
+  -l ARG
+  -l=ARG
+  -l '["json","list"]'
+  -l='["json","list"]'
+  --list ARG
+  --list=ARG
+  --list '["json","list"]'
+  --list='["json","list"]'
+  --no-list
     a list
 
     Note: Can be specified multiple times
 
-  --map key=val,  --map=key=val,  -m key=val,  -mkey=value,  -m=key=val,  --no-map
+  [map]
+  -m key=val
+  -m=key=val
+  -mkey=value
+  -m '{"json":"hash"}'
+  -m='{"json":"hash"}'
+  --map key=val
+  --map=key=val
+  --map '{"json":"hash"}'
+  --map='{"json":"hash"}'
+  --no-map
     A map
 
     Note: Can be specified multiple times
 
-  --scl ARG,  --scl=ARG,  --scalar ARG,  --scalar=ARG,  -sARG,  -s ARG,  -s=ARG,  --no-scl
+  [scl]
+  -sARG
+  -s ARG
+  -s=ARG
+  --scl ARG
+  --scl=ARG
+  --scalar ARG
+  --scalar=ARG
+  --no-scl
     A scalar
 
-  --scl2 ARG,  --scl2=ARG,  --no-scl2
+  [scl2]
+  --scl2 ARG
+  --scl2=ARG
+  --no-scl2
     Another scalar
         EOT
     };
 
 
-    subtest cli_docs => sub {
+    subtest pod_docs => sub {
         local $ENV{TABLE_TERM_SIZE} = 120;
+
+        # Note this was done by printing the value and spot-checking it, so it
+        # is a test that the doc output does not accidentally change, there
+        # could be bugs that need to be fixed that mean this needs to change.
         is(options->docs('pod', groups => {':{' => '}:'}, category => 'foo', head => 3), <<"        EOT", "Got expected docs");
 =head3 This is the category
 
 =over 4
 
-=item --aut
-
-=item --aut ARG
-
-=item --aut=ARG
-
-=item --auto
-
-=item --auto ARG
-
-=item --auto=ARG
-
 =item -a
 
 =item -aARG
 
-=item -a ARG
-
 =item -a=ARG
+
+=item --aut
+
+=item --auto
+
+=item --aut=ARG
+
+=item --auto=ARG
 
 =item --no-aut
 
@@ -598,8 +686,6 @@ An auto-field
 
 =item --aut2
 
-=item --aut2 ARG
-
 =item --aut2=ARG
 
 =item --no-aut2
@@ -607,30 +693,32 @@ An auto-field
 NO DESCRIPTION - FIX ME
 
 
-=item --auto-list
+=item -L
 
-=item --auto-list ARG
+=item -L=ARG
+
+=item -L '["json","list"]'
+
+=item -L='["json","list"]'
+
+=item -L=:{ ARG1 ARG2 ... }:
+
+=item --auto-list
 
 =item --auto-list=ARG
 
-=item -L
+=item --auto-list '["json","list"]'
 
-=item -LARG
+=item --auto-list='["json","list"]'
 
-=item -L ARG
-
-=item -L=ARG
+=item --auto-list=:{ ARG1 ARG2 ... }:
 
 =item --no-auto-list
 
 an auto list
 
-Can be specified multiple times
+Note: Can be specified multiple times
 
-
-=item --auto-map
-
-=item --auto-map=key=val
 
 =item -A
 
@@ -638,11 +726,15 @@ Can be specified multiple times
 
 =item -A=key=val
 
+=item --auto-map
+
+=item --auto-map=key=val
+
 =item --no-auto-map
 
 An Auto map
 
-Can be specified multiple times
+Note: Can be specified multiple times
 
 
 =item --bar
@@ -659,14 +751,6 @@ bar boolean
 baz boolean
 
 
-=item --cnt
-
-=item --cnt=COUNT
-
-=item --count
-
-=item --count=COUNT
-
 =item -c
 
 =item -cc
@@ -675,11 +759,19 @@ baz boolean
 
 =item -c=COUNT
 
+=item --cnt
+
+=item --count
+
+=item --cnt=COUNT
+
+=item --count=COUNT
+
 =item --no-cnt
 
 A counter
 
-Can be specified multiple times, counter bumps each time it is used.
+Note: Can be specified multiple times, counter bumps each time it is used.
 
 
 =item --env ARG
@@ -697,48 +789,101 @@ The following environment variables will be cleared after arguments are processe
 The following environment variables will be set after arguments are processed: C<EXAMPLEC>
 
 
-=item --foo
+=item --env-neg ARG
+
+=item --env-neg=ARG
+
+=item --no-env-neg
+
+NO DESCRIPTION - FIX ME
+
+Can also be set with the following environment variables: C<!EXAMPLEA>
+
+The following environment variables will be cleared after arguments are processed: C<EXAMPLEA>
+
+The following environment variables will be set after arguments are processed: C<!EXAMPLEX>
+
 
 =item -f
+
+=item --foo
 
 =item --no-foo
 
 foo boolean
 
 
+=item -l ARG
+
+=item -l=ARG
+
+=item -l '["json","list"]'
+
+=item -l='["json","list"]'
+
+=item -l :{ ARG1 ARG2 ... }:
+
+=item -l=:{ ARG1 ARG2 ... }:
+
 =item --list ARG
 
 =item --list=ARG
 
-=item -lARG
+=item --list '["json","list"]'
 
-=item -l ARG
+=item --list='["json","list"]'
 
-=item -l=ARG
+=item --list :{ ARG1 ARG2 ... }:
+
+=item --list=:{ ARG1 ARG2 ... }:
 
 =item --no-list
 
 a list
 
-Can be specified multiple times
+Note: Can be specified multiple times
 
+
+=item -m key=val
+
+=item -m=key=val
+
+=item -mkey=value
+
+=item -m '{"json":"hash"}'
+
+=item -m='{"json":"hash"}'
+
+=item -m:{ KEY1 VAL KEY2 :{ VAL1 VAL2 ... }: ... }:
+
+=item -m :{ KEY1 VAL KEY2 :{ VAL1 VAL2 ... }: ... }:
+
+=item -m=:{ KEY1 VAL KEY2 :{ VAL1 VAL2 ... }: ... }:
 
 =item --map key=val
 
 =item --map=key=val
 
-=item -m key=val
+=item --map '{"json":"hash"}'
 
-=item -mkey=value
+=item --map='{"json":"hash"}'
 
-=item -m=key=val
+=item --map :{ KEY1 VAL KEY2 :{ VAL1 VAL2 ... }: ... }:
+
+=item --map=:{ KEY1 VAL KEY2 :{ VAL1 VAL2 ... }: ... }:
 
 =item --no-map
 
 A map
 
-Can be specified multiple times
+Note: Can be specified multiple times
 
+
+=item -sARG
+
+=item -s ARG
+
+=item -s=ARG
 
 =item --scl ARG
 
@@ -747,12 +892,6 @@ Can be specified multiple times
 =item --scalar ARG
 
 =item --scalar=ARG
-
-=item -sARG
-
-=item -s ARG
-
-=item -s=ARG
 
 =item --no-scl
 

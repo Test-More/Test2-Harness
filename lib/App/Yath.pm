@@ -444,6 +444,8 @@ sub process_args {
 sub run {
     my $self = shift;
 
+    $self->clear_env();
+
     $self->process_args();
 
     my $settings = $self->{+SETTINGS};
@@ -493,8 +495,6 @@ sub run {
 sub run_command {
     my $self = shift;
     my ($cmd) = @_;
-
-    $self->clear_env();
 
     my $exit = $cmd->run($self);
 

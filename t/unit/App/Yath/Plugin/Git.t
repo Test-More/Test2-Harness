@@ -2,7 +2,7 @@ use Test2::V0 -target => 'App::Yath::Plugin::Git';
 use Test2::Util qw/CAN_THREAD CAN_REALLY_FORK CAN_FORK CAN_SIGSYS/;
 # HARNESS-DURATION-SHORT
 
-use Test2::Harness::Settings;
+#use Getopt::Yath::Settings;
 
 subtest NOTHING => sub {
     my $control = mock $CLASS => (

@@ -1,5 +1,5 @@
-use Test2::V0 -target => 'Test2::Harness::Runner::Resource::SharedJobSlots::Config';
-use Test2::Harness::Runner::Resource::SharedJobSlots::Config;
+use Test2::V0 -target => 'App::Yath::Resource::SharedJobSlots::Config';
+use App::Yath::Resource::SharedJobSlots::Config;
 
 my $dir = __FILE__;
 $dir =~ s{Config\.t$}{}g;

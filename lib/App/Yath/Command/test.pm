@@ -65,6 +65,8 @@ sub load_renderers { 1 }
 
 sub start_daemon_runner { 0 }
 
+sub munge_settings {}
+
 sub run {
     my $self = shift;
 

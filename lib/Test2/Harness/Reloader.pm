@@ -5,7 +5,7 @@ use warnings;
 use Carp qw/croak/;
 use Scalar::Util qw/weaken/;
 
-use Test2::Harness::Util qw/clean_path file2mod/;
+use Test2::Harness::Util qw/clean_path file2mod open_file/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
 
 our $VERSION = '2.000000';
@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     <stage
     <stage_name
     +file_info
+    <in_place
 };
 
 my $ACTIVE;
@@ -125,14 +126,20 @@ sub check_reload {
     my $changed = $self->changed_files or return 0;
     return 0 unless @$changed;
 
+    print STDERR "$$ $0 - Runner detected a change in one or more preloaded modules...\n";
     my @to_reload;
 
-    for my $file (@$changed) {
+    for my $file (sort @$changed) {
+        print STDERR "$$ $0 - Runner detected changes in file '$file'...\n";
+
         # Force a restart
         my ($status, %fields) = $self->can_reload_file($file);
-        unless ($status) {
+        if (!$status) {
             $fields{reason} //= "No reason given";
-            print STDERR "Cannot reload file '$file' in place: $fields{reason}\n  Restarting Stage '$self->{+STAGE_NAME}'...\n";
+            print STDERR "$$ $0 - Cannot reload file '$file' in place: $fields{reason}\n  Restarting Stage '$self->{+STAGE_NAME}'...\n";
+            return 1;
+        }
+        if ($status < 0) {
             return 1;
         }
 
@@ -148,7 +155,7 @@ sub check_reload {
 
         unless ($status) {
             $fields{reason} //= "No reason given";
-            print STDERR "Cannot reload file '$file' in place: $fields{reason}\n  Restarting Stage '$self->{+STAGE_NAME}'...\n";
+            print STDERR "$$ $0 - Cannot reload file '$file' in place: $fields{reason}\n  Restarting Stage '$self->{+STAGE_NAME}'...\n";
             return 1;
         }
     }
@@ -166,7 +173,6 @@ sub file_info {
 
     my $info = {file => $file};
 
-    warn "TODO: Check for churn";
     warn "TODO: Check for stage in-place check";
 
     $info->{callback} = $self->file_has_callback($file);
@@ -188,6 +194,10 @@ sub file_info {
             $info->{has_import} = $mod->can('import');
             $info->{t2_preload} = $mod->can('TEST2_HARNESS_PRELOAD');
         }
+
+        if (my @churn = $self->find_churn($file)) {
+            $info->{churn} = \@churn;
+        }
     }
     else {
         $info->{perl} = 0;
@@ -202,7 +212,10 @@ sub can_reload_file {
 
     my $info = $self->file_info($file);
 
+    return (1) if $info->{churn};
     return (1) if $info->{callback};
+
+    return (-1, reason => "In-place reloading is disabled (enable with --reload)") unless $self->{+IN_PLACE};
 
     return (0, reason => "$file is not a perl module, and no callback was provided for reloading it") unless $info->{perl};
 
@@ -218,7 +231,25 @@ sub reload_file {
     my $self = shift;
     my ($file) = @_;
 
-    warn "TODO: check plugin/preload callbacks";
+    my $info = $self->file_info($file);
+    if (my $churn = $info->{churn}) {
+        print STDERR "$$ $0 - Changed file '$file' contains churn sections, running them instead of a full reload...\n";
+
+        my $mod = $info->{module};
+
+        for my $item (@$churn) {
+            my ($start, $code, $end) = @$item;
+            my $sline = $start + 1;
+            if (eval "package $mod;\nuse strict;\nuse warnings;\nno warnings 'redefine';\n#line $sline $file\n$code\n ;1;") {
+                print "$$ $0 - Success reloading churn block ($file lines $start -> $end)\n";
+            }
+            else {
+                print "$$ $0 - Error reloading churn block ($file lines $start -> $end): $@\n";
+            }
+        }
+
+        return(1);
+    }
 
     if (my $cb = $self->file_has_callback($file)) {
         my ($status, %fields) = $cb->($file);
@@ -260,5 +291,50 @@ sub do_reload {
     return (0, reason => "Got warnings: " . encode_pretty_json(\@warnings)) if @warnings;
     return (1);
 }
+
+sub find_churn {
+    my $self = shift;
+    my ($file) = @_;
+
+    # When a file is saved to disk it seems it can vanish temporarily. Use this loop to wait for it...
+    my ($fh, $ok, $error);
+    for (1 .. 50) {
+        local $@;
+        $ok = eval { $fh = open_file($file) };
+        $error = "LOOP $_: $@";
+        last if $ok;
+        sleep 0.2;
+    }
+
+    die $error // "Unknown error opening file '$file'" unless $fh;
+
+    my $active = 0;
+    my @out;
+
+    my $line_no = 0;
+    while (my $line = <$fh>) {
+        $line_no++;
+
+        if ($active) {
+            if ($line =~ m/^\s*#\s*HARNESS-CHURN-STOP\s*$/) {
+                push @{$out[-1]} => $line_no;
+                $active = 0;
+                next;
+            }
+            else {
+                $out[-1][-1] .= $line;
+                next;
+            }
+        }
+
+        if ($line =~ m/^\s*#\s*HARNESS-CHURN-START\s*$/) {
+            $active = 1;
+            push @out => [$line_no, ''];
+        }
+    }
+
+    return @out;
+}
+
 
 1;

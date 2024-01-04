@@ -29,6 +29,7 @@ use Test2::Harness::Util::HashBase qw{
     <stage
 
     <reloader
+    <reload_in_place
     <restrict_reload
 
     <pid <parent <root_pid
@@ -357,7 +358,7 @@ sub run_stage {
     my $reloader;
     if (my $reloader_class = $self->{+RELOADER}) {
         require(mod2file($reloader_class));
-        $reloader = $reloader_class->new(restrict => $self->{+RESTRICT_RELOAD}, stage => $self->{+STAGE});
+        $reloader = $reloader_class->new(restrict => $self->{+RESTRICT_RELOAD}, stage => $self->{+STAGE}, in_place => $self->{+RELOAD_IN_PLACE});
 
         $reloader->set_active();
         $reloader->start();

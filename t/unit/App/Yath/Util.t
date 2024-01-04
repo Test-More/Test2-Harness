@@ -10,7 +10,6 @@ use Cwd qw/cwd/;
 use File::Spec;
 
 use App::Yath::Util qw{
-    find_pfile
     is_generated_test_pl
     fit_to_width
     isolate_stdout
@@ -19,7 +18,6 @@ use App::Yath::Util qw{
 };
 
 imported_ok qw{
-    find_pfile
     is_generated_test_pl
     fit_to_width
     isolate_stdout

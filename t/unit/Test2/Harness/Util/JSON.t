@@ -2,16 +2,12 @@ use Test2::Bundle::Extended -target => 'Test2::Harness::Util::JSON';
 # HARNESS-DURATION-SHORT
 
 use ok $CLASS;
+$CLASS->import(qw/encode_json decode_json encode_pretty_json encode_canon_json/);
 
 imported_ok(qw{
-    JSON
     encode_json decode_json
     encode_pretty_json encode_canon_json
 });
-
-ok(JSON(), "Have JSON constant");
-
-can_ok(JSON(), ['new'], "JSON returns a class (" . JSON() . ")");
 
 my $struct = { a => 1, b => 2 };
 for my $encode_name (qw/encode_json encode_pretty_json encode_canon_json/) {

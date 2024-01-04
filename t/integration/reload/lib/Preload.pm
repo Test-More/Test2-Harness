@@ -8,8 +8,6 @@ print "$$ $0 - Loaded ${ \__PACKAGE__ }\n";
 
 my $path = __FILE__;
 $path =~ s{\.pm$}{};
-use Data::Dumper;
-print Dumper($path);
 
 stage A => sub {
     default();

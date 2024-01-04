@@ -86,6 +86,14 @@ sub check_argv {
     die "Invalid arguments to 'start' command: " . join(", " => @{$self->{+ARGS} // []}) . "\n";
 }
 
+sub munge_settings {
+    my $self = shift;
+
+    my $settings = $self->settings;
+    $settings->runner->reloader('Test2::Harness::Reloader')
+        unless $settings->runner->reloader;
+}
+
 sub run {
     my $self = shift;
 
@@ -95,6 +103,8 @@ sub run {
         set => [$self->process_base_name, "launcher"],
         prefix => $self->{+SETTINGS}->harness->procname_prefix,
     );
+
+    $self->munge_settings();
 
     $self->become_daemon if $self->should_daemonize();
 

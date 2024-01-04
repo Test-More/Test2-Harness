@@ -1,4 +1,4 @@
-use Test2::V0 -target => 'Test2::Harness::Runner::Resource::SharedJobSlots::State';
+use Test2::V0 -target => 'App::Yath::Resource::SharedJobSlots::State';
 use File::Temp qw/tempfile/;
 
 use ok $CLASS;

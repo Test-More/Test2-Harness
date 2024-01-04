@@ -60,13 +60,20 @@ option_group {group => 'runner', category => "Runner Options"} => sub {
         description => "When using staged preload, dump the depmap for each stage as json files",
     );
 
+    option reload_in_place => (
+        type        => 'Bool',
+        alt         => ['reload'],
+        default     => 0,
+        description => "Reload modules in-place when possible (Not recommended)",
+    );
+
     option reloader => (
         type => 'Auto',
-        alt => ['reload'],
-        autofill => 'Test2::Harness::Reloader',
+
+        autofill  => 'Test2::Harness::Reloader',
         normalize => sub { fqmod($_[0], 'Test2::Harness::Reloader') },
 
-        description => "Use a reloader (default Test2::Harness::Reloader) to reload modules in place. This is discouraged as there are too many gotchas",
+        description => "Use a reloader (default Test2::Harness::Reloader) to detect module changes, and reload stages as necessary.",
     );
 
     option restrict_reload => (

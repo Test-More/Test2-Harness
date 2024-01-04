@@ -26,6 +26,7 @@ use Test2::Harness::Util::HashBase qw{
     default_stage
     <preload_retry_delay
     <reloader
+    <reload_in_place
     <restrict_reload
 };
 
@@ -251,7 +252,8 @@ sub start_base_stage {
         last_launch     => $last_launch,
         last_exit       => $last_exit,
         last_exit_code  => $exit_code,
-        reloader        => $self->{+RELOADER},
+        reloader        => $self->reloader,
+        reload_in_place => $self->reload_in_place,
         restrict_reload => $self->{+RESTRICT_RELOAD},
         root_pid        => $$,
         is_daemon       => $self->{+IS_DAEMON},

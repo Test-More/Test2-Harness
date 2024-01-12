@@ -1,91 +1,13 @@
 #!/usr/bin/perl
-package App::Yath::Script;
-use strict;
-use warnings;
 
-our $VERSION = '2.000000';
+# Avoid contaminating the 'main' namespace, and the current scope (which could
+# be re-rused by goto_alt_script()!)
+# Do not use strict or warnings. Keep this file as tiny as possible
 
-use Cwd;
-use File::Spec;
-use Test2::Harness::Util::Minimal qw/pre_process_args find_in_updir scan_config clean_path/;
-
-our $SCRIPT = clean_path(__FILE__);
-my $ORIG_TMP = File::Spec->tmpdir();
-$ENV{SYSTEM_TMPDIR} //= $ORIG_TMP;
-my $ORIG_TMP_PERMS = ((stat($ORIG_TMP))[2] & 07777);
-my @ORIG_ARGV = @ARGV;
-my @ORIG_INC  = @INC;
-my %ORIG_SIG  = %SIG;
-
-my $config_file      = find_in_updir('.yath.rc');
-my $user_config_file = find_in_updir('.yath.user.rc');
-
-my $DEV_LIBS = [];
-my $PREFIX;
-
-for my $list (\@ARGV, map { scan_config($_) } grep { $_ && -e $_ } $user_config_file, $config_file) {
-    my $parsed = pre_process_args($list);
-    push @{$DEV_LIBS} => @{$parsed->{dev_libs}};
-    $PREFIX = $parsed->{prefix} if defined($parsed->{prefix}) && length($parsed->{prefix});
+BEGIN {
+    return if $^C;
+    require App::Yath::Script;
+    App::Yath::Script::goto_alt_script('yath', __FILE__, './scripts/yath');
 }
 
-$PREFIX //= 'yath';
-$PREFIX .= "-yath" unless $PREFIX =~ m/(-|\b)yath(-|\b)/;
-$ENV{T2_HARNESS_PROC_PREFIX} = $PREFIX;
-
-my %seen;
-unshift @INC => grep { !$seen{$_}++ } @$DEV_LIBS;
-
-require Time::HiRes;
-require Getopt::Yath::Settings;
-require App::Yath;
-
-push @$DEV_LIBS => grep { !$seen{$_}++ } map { $INC{$_} =~ m{^(.*)\Q$_\E$} ? clean_path($1) : () } 'App/Yath.pm', 'Getopt/Yath/Settings.pm';
-
-my $cwd = clean_path(Cwd::getcwd());
-my $base_file = $config_file || $user_config_file;
-unless ($base_file) {
-    for my $scm ('.git', '.svn', '.cvs') {
-        $base_file = find_in_updir($scm);
-        last if $base_file;
-    }
-}
-
-my $base_dir = $cwd;
-if ($base_file) {
-    my ($v, $d) = File::Spec->splitpath($base_file);
-    $base_dir = clean_path(File::Spec->catpath($v, $d));
-}
-
-my $settings = Getopt::Yath::Settings->new(
-    yath => {
-        script         => clean_path(__FILE__),
-        script_version => $VERSION,
-
-        scan_options => {},
-
-        config_file      => $config_file      || '',
-        user_config_file => $user_config_file || '',
-
-        cwd      => $cwd,
-        base_dir => $base_dir,
-
-        orig_tmp       => $ORIG_TMP,
-        orig_tmp_perms => $ORIG_TMP_PERMS,
-        orig_argv      => \@ORIG_ARGV,
-        orig_inc       => \@ORIG_INC,
-        dev_libs       => $DEV_LIBS,
-
-        start => Time::HiRes::time(),
-    },
-    harness => {
-        procname_prefix => $PREFIX,
-    },
-);
-
-my $app = App::Yath->new(
-    settings => $settings,
-    argv => [@ARGV],
-);
-
-exit($app->run());
+exit(App::Yath::Script::run(__FILE__, \@ARGV));

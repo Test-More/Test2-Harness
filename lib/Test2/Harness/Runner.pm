@@ -33,6 +33,7 @@ sub init {
     }
 }
 
+sub blacklist {}
 sub overall_status {}
 sub process_list {}
 

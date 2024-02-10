@@ -11,72 +11,33 @@ use Test2::Harness::Util qw/clean_path/;
 
 use parent 'Test2::Harness::Reloader';
 use Test2::Harness::Util::HashBase qw{
-    <watches
     <last_check_stamp
+    <times
 };
 
 sub init {
     my $self = shift;
 
+    $self->{+TIMES} //= {};
+    $self->{+LAST_CHECK_STAMP} //= 0;
+
     $self->SUPER::init();
 }
 
-sub start {
+sub do_watch {
     my $self = shift;
+    my ($file, $val) = @_;
 
-    my $to_watch = $self->find_files_to_watch;
+    $self->{+TIMES}->{$file} //= $self->_get_file_times($file);
 
-    my %watches;
-    for my $f (keys %$to_watch) {
-        my $file = clean_path($f);
-
-        my $cb = $to_watch->{$f};
-        $cb = ref($cb) ? $cb : undef;
-
-        my $times = $self->_get_file_times($file);
-
-        $watches{$file} = {callback => $cb, times => $times};
-    }
-
-    $self->{+WATCHES} = \%watches;
+    return $val;
 }
 
 sub _get_file_times {
     my $self = shift;
     my ($file) = @_;
-    my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat($file);
+    my (undef, undef, undef, undef, undef, undef, undef, undef, undef, $mtime, $ctime) = stat(clean_path($file));
     return [$mtime, $ctime];
-}
-
-sub stop {
-    my $self = shift;
-    delete $self->{+WATCHES};
-    return;
-}
-
-sub watch {
-    my $self = shift;
-    my ($file, $cb) = @_;
-
-    my $watches = $self->{+WATCHES} // croak "Reloader has no watches";
-
-    croak "The first argument must be a file" unless $file && -f $file;
-    $file = clean_path($file);
-
-    my $watch = $watches->{$file} //= {times => $self->_get_file_times($file)};
-    $watch->{callback} = $cb;
-
-    return;
-}
-
-sub file_has_callback {
-    my $self = shift;
-    my ($file) = @_;
-
-    my $watches = $self->{+WATCHES} // croak "Reloader has no watches";
-
-    my $watch = $watches->{$file} or return undef;
-    return $watches->{callback};
 }
 
 sub changed_files {
@@ -89,18 +50,17 @@ sub changed_files {
     return if $delta < 1;
     $self->{+LAST_CHECK_STAMP} = $time;
 
-    my $watches = $self->{+WATCHES} // croak "Reloader is not started yet";
+    my $watched = $self->{+WATCHED} // croak "Reloader is not started yet";
 
     my @out;
-    for my $file (keys %$watches) {
-        my $watch = $watches->{$file};
+    for my $file (keys %$watched) {
         my $new_times = $self->_get_file_times($file);
-        my $old_times = $watch->{times} //= $new_times;
+        my $old_times = $self->{+TIMES}->{$file} //= $new_times;
 
         next if $old_times->[0] == $new_times->[0] && $old_times->[1] == $new_times->[1];
 
         # Update so we do not reload twice for the same change
-        $watch->{times} = $new_times;
+        $self->{+TIMES}->{$file} = $new_times;
 
         push @out => $file;
     }

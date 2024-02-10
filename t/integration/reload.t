@@ -10,6 +10,8 @@ use Test2::Harness::Util qw/clean_path/;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 
+BEGIN { $ENV{TS_MAX_DELTA} = 500 }
+
 skip_all "This test is not run under automated testing"
     if $ENV{AUTOMATED_TESTING};
 
@@ -79,8 +81,9 @@ sub parse_output {
     for my $line (split /\n/, $output) {
         next unless $line =~ m/(\d+) yath-runner-BASE(?:-(\S+))? - (.+)$/i;
         my ($pid, $proc, $text) = ($1, $2, $3);
+
         $proc //= '';
-        $text =~ s/$pid yath-runner-$proc(\s*-\s*)//g;
+        $text =~ s/$pid yath-runner-(BASE-)?$proc(\s*-\s*)//g;
         $text =~ s{(\Q$fqdir\E|\Q$dir\E|\Q$pdir\E)/*}{}g;
 
         $text =~ s{\Q$safe_tmpdir\E(/)?}{TEMP$1}g; # <-- strip out the tmpdir
@@ -95,9 +98,11 @@ sub parse_output {
 subtest no_in_place => sub {
     unlink("$tmpdir/Preload/IncChange.pm") if -e "$tmpdir/Preload/IncChange.pm";
 
+    local $ENV{TABLE_TERM_SIZE} = 200;
+
     yath(
         command => 'start',
-        args    => ['-PPreload'],
+        args    => ['-PPreload', '--preload-retry-delay' => 0],
         pre     => ["-D$tmpdir"],
         exit    => 0,
     );
@@ -107,7 +112,6 @@ subtest no_in_place => sub {
     yath(
         command => 'watch',
         args    => ['STOP', '-v'],
-        debug => 3,
         exit    => 0,
         test    => sub {
             my $out = shift;
@@ -130,8 +134,7 @@ subtest no_in_place => sub {
                         'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/A.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::A...',
+                        'Blacklisting Preload::A...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExceptionA',
                         'Loaded Preload::ExporterA',
@@ -141,8 +144,7 @@ subtest no_in_place => sub {
                         'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExceptionA.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::ExceptionA...',
+                        'Blacklisting Preload::ExceptionA...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExporterA',
                         'Churn 1',
@@ -151,8 +153,7 @@ subtest no_in_place => sub {
                         'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/WarningA.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::WarningA...',
+                        'Blacklisting Preload::WarningA...',
                         'Loaded Preload::ExporterA',
                         'Churn 1',
                         'FOO: foo 1',
@@ -160,15 +161,14 @@ subtest no_in_place => sub {
                         'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExporterA.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::ExporterA...',
+                        'Blacklisting Preload::ExporterA...',
                         'Churn 1',
                         'FOO: foo 1',
                         'Churn 2',
                         'Churn 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/Churn.pm\'...',
-                        'Changed file \'Preload/Churn.pm\' contains churn sections, running them instead of a full reload...',
+                        'Changed file \'lib/Preload/Churn.pm\' contains churn sections, running them instead of a full reload...',
                         'Churn 1',
                         'FOO: foo 2',
                         'Success reloading churn block (lib/Preload/Churn.pm lines 8 -> 16)',
@@ -177,11 +177,9 @@ subtest no_in_place => sub {
                         'Error reloading churn block (lib/Preload/Churn.pm lines 22 -> 28): Died on count 3',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/nonperl1\'...',
-                        'Changed file \'lib/Preload/nonperl1\' has a reload callback, executing it instead of regular reloading...',
                         'RELOAD CALLBACK nonperl1',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/nonperl2\'...',
-                        'Changed file \'lib/Preload/nonperl2\' has a reload callback, executing it instead of regular reloading...',
                         'RELOAD CALLBACK nonperl2',
                     ],
                     'B' => [
@@ -196,8 +194,7 @@ subtest no_in_place => sub {
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/A.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::A...',
+                        'Blacklisting Preload::A...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExceptionA',
                         'Loaded Preload::ExporterA',
@@ -208,8 +205,7 @@ subtest no_in_place => sub {
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/B.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::B...',
+                        'Blacklisting Preload::B...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExceptionA',
                         'Loaded Preload::ExporterA',
@@ -219,8 +215,7 @@ subtest no_in_place => sub {
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExceptionA.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::ExceptionA...',
+                        'Blacklisting Preload::ExceptionA...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExporterA',
                         'Loaded Preload::WarningB',
@@ -229,8 +224,7 @@ subtest no_in_place => sub {
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExceptionB.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::ExceptionB...',
+                        'Blacklisting Preload::ExceptionB...',
                         'Loaded Preload::WarningA',
                         'Loaded Preload::ExporterA',
                         'Loaded Preload::WarningB',
@@ -238,34 +232,29 @@ subtest no_in_place => sub {
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/WarningA.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::WarningA...',
+                        'Blacklisting Preload::WarningA...',
                         'Loaded Preload::ExporterA',
                         'Loaded Preload::WarningB',
                         'Loaded Preload::ExporterB',
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/WarningB.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::WarningB...',
+                        'Blacklisting Preload::WarningB...',
                         'Loaded Preload::ExporterA',
                         'Loaded Preload::ExporterB',
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExporterA.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::ExporterA...',
+                        'Blacklisting Preload::ExporterA...',
                         'Loaded Preload::ExporterB',
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExporterB.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::ExporterB...',
+                        'Blacklisting Preload::ExporterB...',
                         'Loaded Preload::IncChange',
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/IncChange.pm\'...',
-                        #'blacklisting changed files and reloading stage...',
-                        #'Blacklisting Preload::IncChange...',
+                        'Blacklisting Preload::IncChange...',
                     ],
                 },
                 "Reload happened as expected",
@@ -276,13 +265,14 @@ subtest no_in_place => sub {
     yath(command => 'stop', exit => 0);
 };
 
-exit;
 subtest in_place => sub {
     unlink("$tmpdir/Preload/IncChange.pm") if -e "$tmpdir/Preload/IncChange.pm";
 
+    local $ENV{TABLE_TERM_SIZE} = 240;
+
     yath(
         command => 'start',
-        args    => ['-PPreload', '--reload'],
+        args    => ['-PPreload', '--reload', '--preload-retry-delay' => 0],
         pre     => ["-D$tmpdir"],
         exit    => 0,
     );
@@ -312,55 +302,84 @@ subtest in_place => sub {
                         'FOO: foo 1',
                         'Churn 2',
                         'Churn 3',
+
+                        # Change A.pm
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/A.pm\'...',
                         'Runner attempting to reload \'lib/Preload/A.pm\' in place...',
                         'Loaded Preload::A',
+
+                        # Change A.pm
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/A.pm\'...',
                         'Runner attempting to reload \'lib/Preload/A.pm\' in place...',
                         'Loaded Preload::A',
+
+                        # Change ExceptionA.pm
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExceptionA.pm\'...',
                         'Runner attempting to reload \'lib/Preload/ExceptionA.pm\' in place...',
                         'Loaded Preload::ExceptionA',
-                        'Runner failed to reload \'lib/Preload/ExceptionA.pm\' in place...',
-                        'Loaded Preload::ExceptionA again.',
-                        'BEGIN failed--compilation aborted at lib/Preload/ExceptionA.pm',
-                        'Compilation failed in require at lib/Test2/Harness/Runner/Reloader.pm',
-                        'Runner detected a change in one or more preloaded modules...',
-                        'Runner detected changes in file \'lib/Preload/WarningA.pm\'...',
-                        'Runner attempting to reload \'lib/Preload/WarningA.pm\' in place...',
-                        'Loaded Preload::WarningA',
-                        'Runner failed to reload \'lib/Preload/WarningA.pm\' in place...',
-                        'Loaded Preload::WarningA again.',
-                        'Runner detected a change in one or more preloaded modules...',
-                        'Runner detected changes in file \'lib/Preload/ExporterA.pm\'...',
-                        'blacklisting changed files and reloading stage...',
-                        'Blacklisting Preload::ExporterA...',
+                        'Cannot reload file \'lib/Preload/ExceptionA.pm\' in place: Loaded Preload::ExceptionA again.',
+                        'Blacklisting Preload::ExceptionA...',
+
+                        # Restart
                         'Loaded Preload::A',
                         'Loaded Preload::WarningA',
-                        'Loaded Preload::ExceptionA',
+                        'Loaded Preload::ExporterA',
                         'Churn 1',
                         'FOO: foo 1',
                         'Churn 2',
                         'Churn 3',
+
+                        # Change WarningA.pm
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Runner detected changes in file \'lib/Preload/WarningA.pm\'...',
+                        'Runner attempting to reload \'lib/Preload/WarningA.pm\' in place...',
+                        'Loaded Preload::WarningA',
+                        'Cannot reload file \'lib/Preload/WarningA.pm\' in place: Got warnings: [',
+                        'Blacklisting Preload::WarningA...',
+
+                        # Restart
+                        'Loaded Preload::A',
+                        'Loaded Preload::ExporterA',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
+
+                        # Change ExporterA.pm
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Runner detected changes in file \'lib/Preload/ExporterA.pm\'...',
+                        'Cannot reload file \'lib/Preload/ExporterA.pm\' in place: Module Preload::ExporterA has an import() method',
+                        'Blacklisting Preload::ExporterA...',
+
+                        # Restart
+                        'Loaded Preload::A',
+                        'Churn 1',
+                        'FOO: foo 1',
+                        'Churn 2',
+                        'Churn 3',
+
+                        # Change Churn.pm
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/Churn.pm\'...',
-                        'Changed file \'Preload/Churn.pm\' contains churn sections, running them instead of a full reload...',
+                        'Changed file \'lib/Preload/Churn.pm\' contains churn sections, running them instead of a full reload...',
                         'Churn 1',
                         'FOO: foo 2',
                         'Success reloading churn block (lib/Preload/Churn.pm lines 8 -> 16)',
                         'Churn 2',
                         'Success reloading churn block (lib/Preload/Churn.pm lines 18 -> 20)',
                         'Error reloading churn block (lib/Preload/Churn.pm lines 22 -> 28): Died on count 3',
+
+                        # Change nonperl1
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/nonperl1\'...',
-                        'Changed file \'lib/Preload/nonperl1\' has a reload callback, executing it instead of regular reloading...',
                         'RELOAD CALLBACK nonperl1',
+
+                        # Change nonperl2
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/nonperl2\'...',
-                        'Changed file \'lib/Preload/nonperl2\' has a reload callback, executing it instead of regular reloading...',
                         'RELOAD CALLBACK nonperl2'
                     ],
                     'B' => [
@@ -373,78 +392,127 @@ subtest in_place => sub {
                         'Loaded Preload::ExceptionB',
                         'Loaded Preload::ExporterB',
                         'Loaded Preload::IncChange',
+
+                        # Change A.pm
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/A.pm\'...',
+                        'INPLACE CHECK CALLED: lib/Preload/A.pm - Preload::A',
                         'Runner attempting to reload \'lib/Preload/A.pm\' in place...',
                         'Loaded Preload::A',
+
+                        # Change B.pm
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/B.pm\'...',
                         'Runner attempting to reload \'lib/Preload/B.pm\' in place...',
                         'Loaded Preload::B',
+
+                        # Change A.pm again
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/A.pm\'...',
+                        'INPLACE CHECK CALLED: lib/Preload/A.pm - Preload::A',
                         'Runner attempting to reload \'lib/Preload/A.pm\' in place...',
                         'Loaded Preload::A',
+
+                        # Change B.pm again
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/B.pm\'...',
                         'Runner attempting to reload \'lib/Preload/B.pm\' in place...',
                         'Loaded Preload::B',
+
+                        # Change ExceptionA
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/ExceptionA.pm\'...',
                         'Runner attempting to reload \'lib/Preload/ExceptionA.pm\' in place...',
                         'Loaded Preload::ExceptionA',
-                        'Runner failed to reload \'lib/Preload/ExceptionA.pm\' in place...',
-                        'Loaded Preload::ExceptionA again.',
-                        'BEGIN failed--compilation aborted at lib/Preload/ExceptionA.pm',
-                        'Compilation failed in require at lib/Test2/Harness/Runner/Reloader.pm',
-                        'Runner detected a change in one or more preloaded modules...',
-                        'Runner detected changes in file \'lib/Preload/ExceptionB.pm\'...',
-                        'Runner attempting to reload \'lib/Preload/ExceptionB.pm\' in place...',
-                        'Loaded Preload::ExceptionB',
-                        'Runner failed to reload \'lib/Preload/ExceptionB.pm\' in place...',
-                        'Loaded Preload::ExceptionB again.',
-                        'BEGIN failed--compilation aborted at lib/Preload/ExceptionB.pm',
-                        'Compilation failed in require at lib/Test2/Harness/Runner/Reloader.pm',
-                        'Runner detected a change in one or more preloaded modules...',
-                        'Runner detected changes in file \'lib/Preload/WarningA.pm\'...',
-                        'Runner attempting to reload \'lib/Preload/WarningA.pm\' in place...',
-                        'Loaded Preload::WarningA',
-                        'Runner failed to reload \'lib/Preload/WarningA.pm\' in place...',
-                        'Loaded Preload::WarningA again.',
-                        'Runner detected a change in one or more preloaded modules...',
-                        'Runner detected changes in file \'lib/Preload/WarningB.pm\'...',
-                        'Runner attempting to reload \'lib/Preload/WarningB.pm\' in place...',
-                        'Loaded Preload::WarningB',
-                        'Runner failed to reload \'lib/Preload/WarningB.pm\' in place...',
-                        'Loaded Preload::WarningB again.',
-                        'Runner detected a change in one or more preloaded modules...',
-                        'Runner detected changes in file \'lib/Preload/ExporterA.pm\'...',
-                        'blacklisting changed files and reloading stage...',
-                        'Blacklisting Preload::ExporterA...',
+                        'Cannot reload file \'lib/Preload/ExceptionA.pm\' in place: Loaded Preload::ExceptionA again.',
+                        'Blacklisting Preload::ExceptionA...',
+
+                        # Reload
                         'Loaded Preload::A',
                         'Loaded Preload::WarningA',
-                        'Loaded Preload::ExceptionA',
+                        'Loaded Preload::ExporterA',
                         'Loaded Preload::B',
                         'Loaded Preload::WarningB',
                         'Loaded Preload::ExceptionB',
                         'Loaded Preload::ExporterB',
                         'Loaded Preload::IncChange',
+
+                        # Change ExceptionB
                         'Runner detected a change in one or more preloaded modules...',
-                        'Runner detected changes in file \'lib/Preload/ExporterB.pm\'...',
-                        'blacklisting changed files and reloading stage...',
-                        'Blacklisting Preload::ExporterB...',
+                        'Runner detected changes in file \'lib/Preload/ExceptionB.pm\'...',
+                        'Runner attempting to reload \'lib/Preload/ExceptionB.pm\' in place...',
+                        'Loaded Preload::ExceptionB',
+                        'Cannot reload file \'lib/Preload/ExceptionB.pm\' in place: Loaded Preload::ExceptionB again.',
+                        'Blacklisting Preload::ExceptionB...',
+
+                        # Reload
                         'Loaded Preload::A',
                         'Loaded Preload::WarningA',
-                        'Loaded Preload::ExceptionA',
+                        'Loaded Preload::ExporterA',
                         'Loaded Preload::B',
                         'Loaded Preload::WarningB',
-                        'Loaded Preload::ExceptionB',
+                        'Loaded Preload::ExporterB',
                         'Loaded Preload::IncChange',
+
+                        # Change WarningA
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Runner detected changes in file \'lib/Preload/WarningA.pm\'...',
+                        'Runner attempting to reload \'lib/Preload/WarningA.pm\' in place...',
+                        'Loaded Preload::WarningA',
+                        'Cannot reload file \'lib/Preload/WarningA.pm\' in place: Got warnings: [',
+                        'Blacklisting Preload::WarningA...',
+
+                        # Reload
+                        'Loaded Preload::A',
+                        'Loaded Preload::ExporterA',
+                        'Loaded Preload::B',
+                        'Loaded Preload::WarningB',
+                        'Loaded Preload::ExporterB',
+                        'Loaded Preload::IncChange',
+
+                        # Change WarningB
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Runner detected changes in file \'lib/Preload/WarningB.pm\'...',
+                        'Runner attempting to reload \'lib/Preload/WarningB.pm\' in place...',
+                        'Loaded Preload::WarningB',
+                        'Cannot reload file \'lib/Preload/WarningB.pm\' in place: Got warnings: [',
+                        'Blacklisting Preload::WarningB...',
+
+                        # Reload
+                        'Loaded Preload::A',
+                        'Loaded Preload::ExporterA',
+                        'Loaded Preload::B',
+                        'Loaded Preload::ExporterB',
+                        'Loaded Preload::IncChange',
+
+                        # Change ExporterA
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Runner detected changes in file \'lib/Preload/ExporterA.pm\'...',
+                        'Cannot reload file \'lib/Preload/ExporterA.pm\' in place: Module Preload::ExporterA has an import() method',
+                        'Blacklisting Preload::ExporterA...',
+
+                        # Reload
+                        'Loaded Preload::A',
+                        'Loaded Preload::B',
+                        'Loaded Preload::ExporterB',
+                        'Loaded Preload::IncChange',
+
+                        # Change ExporterB
+                        'Runner detected a change in one or more preloaded modules...',
+                        'Runner detected changes in file \'lib/Preload/ExporterB.pm\'...',
+                        'Cannot reload file \'lib/Preload/ExporterB.pm\' in place: Module Preload::ExporterB has an import() method',
+                        'Blacklisting Preload::ExporterB...',
+
+                        # Reload
+                        'Loaded Preload::A',
+                        'Loaded Preload::B',
+                        'Loaded Preload::IncChange',
+
+                        # Change IncChange
                         'Runner detected a change in one or more preloaded modules...',
                         'Runner detected changes in file \'lib/Preload/IncChange.pm\'...',
                         'Runner attempting to reload \'lib/Preload/IncChange.pm\' in place...',
-                        'Runner failed to reload \'lib/Preload/IncChange.pm\' in place...',
-                        'Reloading \'Preload/IncChange.pm\' loaded \'TEMP/Preload/IncChange.pm\' instead of \'lib/Preload/IncChange.pm\', @INC must have been altered at lib/Test2/Harness/Runner/Reloader.pm'
+                        'Loaded Preload::IncChange', # Did not try to load from the new @INC location
                     ],
                 },
                 "Reload happened as expected",

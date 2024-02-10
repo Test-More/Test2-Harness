@@ -17,7 +17,6 @@ use Test2::Harness::Util::HashBase qw{
     <load_sequence
     <watches
     eager
-    reload_remove_check
     reload_inplace_check
 };
 
@@ -48,11 +47,14 @@ sub watch {
 
     croak "The callback argument is required" unless $callback && ref($callback) eq 'CODE';
 
+    my $np = $file =~ m/nonperl/;
+
     $file = clean_path($file);
 
     croak "There is already a watch on file '$file'" if $self->{+WATCHES}->{$file};
 
     $self->{+WATCHES}->{$file} = $callback;
+
     return;
 }
 

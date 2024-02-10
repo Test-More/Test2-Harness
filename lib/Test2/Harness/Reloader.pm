@@ -27,10 +27,20 @@ use Test2::Harness::Util::HashBase qw{
     <stage_name
     +file_info
     <in_place
+
+    <watches
+    <watched
 };
 
 my $ACTIVE;
-sub ACTIVE { $ACTIVE }
+sub ACTIVE {
+    return unless $ACTIVE;
+
+    return $ACTIVE->[1] if $ACTIVE->[1] && $ACTIVE->[0] == $$;
+    $ACTIVE = undef;
+
+    return;
+}
 
 {
     no warnings 'redefine';
@@ -55,10 +65,14 @@ sub ACTIVE { $ACTIVE }
     };
 }
 
+sub changed_files { croak "$_[0] does not implement 'changed_files'" }
+
 sub init {
     my $self = shift;
 
     $self->{+RESTRICT} //= [];
+    $self->{+WATCHES}  //= {};
+    $self->{+WATCHED}  //= {};
 
     my $stage = delete $self->{+STAGE};
     if (ref $stage) {
@@ -72,12 +86,52 @@ sub init {
     $self->{+STAGE_NAME} //= $ENV{T2_HARNESS_STAGE} // "Unknown stage";
 }
 
-sub start             { croak "$_[0] does not implement 'start'" }
-sub stop              { croak "$_[0] does not implement 'stop'" }
-sub watch             { croak "$_[0] does not implement 'watch'" }
-sub changed_files     { croak "$_[0] does not implement 'changed_files'" }
+sub start {
+    my $self = shift;
 
-sub file_has_callback { undef }
+    my $watches = $self->find_files_to_watch;
+    my $watched = $self->{+WATCHED} //= {};
+
+    for my $file (keys %$watches) {
+        $watched->{$file} //= $self->do_watch($file, $watches->{$file});
+    }
+}
+
+sub stop {
+    my $self = shift;
+    $self->{+WATCHED} = {};
+    return;
+}
+
+sub watch {
+    my $self = shift;
+    my ($file, $cb) = @_;
+
+    my $watches = $self->{+WATCHES} //= {};
+    my $watched = $self->{+WATCHED} //= {};
+
+    croak "The first argument must be a file (got: $file)" unless $file && -f $file;
+    $file = clean_path($file);
+
+    my $val = $cb // $watches->{$file} // 1;
+
+    $watched->{$file} //= $self->do_watch($file, $val);
+    $watches->{$file} = $val;
+
+    return $val;
+}
+
+sub file_has_callback {
+    my $self = shift;
+    my ($file) = @_;
+
+    my $watched = $self->{+WATCHED} //= {};
+
+    my $cb = $watched->{$file} or return undef;
+    my $ref = ref($cb) or return undef;
+    return $cb if $ref eq 'CODE';
+    return undef;
+}
 
 sub find_files_to_watch {
     my $self = shift;
@@ -88,6 +142,8 @@ sub find_files_to_watch {
     }
 
     for my $file (map { clean_path($_) } values %INC) {
+        next if ref $file;
+        next unless -e $file;
         next unless $self->should_watch($file);
         $watches{$file} //= 1;
     }
@@ -98,17 +154,17 @@ sub find_files_to_watch {
 sub set_active {
     my $self = shift;
 
-    return if $ACTIVE && $ACTIVE == $self;
+    croak "There is already an active reloader" if $self->ACTIVE;
 
-    croak "There is already an active reloader" if $ACTIVE;
-
-    $ACTIVE = $self;
-    weaken($ACTIVE);
+    $ACTIVE = [$$, $self];
+    weaken($ACTIVE->[1]);
 }
 
 sub should_watch {
     my $self = shift;
     my ($file) = @_;
+
+    return 0 unless $file;
 
     my $restrict = $self->{+RESTRICT} or return 1;
     return 1 unless @$restrict;
@@ -124,31 +180,38 @@ sub check_reload {
     my $self = shift;
 
     my $changed = $self->changed_files or return 0;
-    return 0 unless @$changed;
+    return unless @$changed;
 
     print STDERR "$$ $0 - Runner detected a change in one or more preloaded modules...\n";
     my @to_reload;
+    my @cannot_reload;
+    my $bad = 0;
 
     for my $file (sort @$changed) {
         print STDERR "$$ $0 - Runner detected changes in file '$file'...\n";
 
-        # Force a restart
-        my ($status, %fields) = $self->can_reload_file($file);
+        my $info = $self->file_info($file);
+
+        my ($status, %fields) = $self->can_reload_file($file, $info);
         if (!$status) {
             $fields{reason} //= "No reason given";
             print STDERR "$$ $0 - Cannot reload file '$file' in place: $fields{reason}\n  Restarting Stage '$self->{+STAGE_NAME}'...\n";
-            return 1;
+            push @cannot_reload => $info->{module} if $info->{module};
+            $bad++;
         }
-        if ($status < 0) {
-            return 1;
+        elsif ($status < 0) {
+            push @cannot_reload => $info->{module} if $info->{module};
+            $bad++;
         }
-
-        push @to_reload => $file;
+        else {
+            push @to_reload => [$file, $info];
+        }
     }
 
-    for my $file (@to_reload) {
+    for my $set (@to_reload) {
+        my ($file, $info) = @$set;
         my ($status, %fields);
-        unless(eval { ($status, %fields) = $self->reload_file($file); 1 }) {
+        unless(eval { ($status, %fields) = $self->reload_file($file, $info); 1 }) {
             %fields = (reason => $@);
             $status = 0;
         }
@@ -156,11 +219,13 @@ sub check_reload {
         unless ($status) {
             $fields{reason} //= "No reason given";
             print STDERR "$$ $0 - Cannot reload file '$file' in place: $fields{reason}\n  Restarting Stage '$self->{+STAGE_NAME}'...\n";
-            return 1;
+            push @cannot_reload => $info->{module} if $info->{module};
+            $bad++;
         }
     }
 
-    return 0;
+    return unless $bad || @cannot_reload;
+    return \@cannot_reload;
 }
 
 sub file_info {
@@ -173,9 +238,8 @@ sub file_info {
 
     my $info = {file => $file};
 
-    warn "TODO: Check for stage in-place check";
-
-    $info->{callback} = $self->file_has_callback($file);
+    $info->{reload_inplace_check} = $self->stage->reload_inplace_check();
+    $info->{callback}             = $self->file_has_callback($file);
 
     if ($file =~ m/\.(pl|pm|t)$/i) {
         $info->{perl} = 1;
@@ -208,14 +272,19 @@ sub file_info {
 
 sub can_reload_file {
     my $self = shift;
-    my ($file) = @_;
+    my ($file, $info) = @_;
 
-    my $info = $self->file_info($file);
+    $info //= $self->file_info($file);
 
     return (1) if $info->{churn};
     return (1) if $info->{callback};
 
     return (-1, reason => "In-place reloading is disabled (enable with --reload)") unless $self->{+IN_PLACE};
+
+    if (my $cb = $info->{reload_inplace_check}) {
+        my ($res, %fields) = $cb->(%$info);
+        return ($res, %fields) if defined $res;
+    }
 
     return (0, reason => "$file is not a perl module, and no callback was provided for reloading it") unless $info->{perl};
 
@@ -229,9 +298,9 @@ sub can_reload_file {
 
 sub reload_file {
     my $self = shift;
-    my ($file) = @_;
+    my ($file, $info) = @_;
 
-    my $info = $self->file_info($file);
+    $info //= $self->file_info($file);
     if (my $churn = $info->{churn}) {
         print STDERR "$$ $0 - Changed file '$file' contains churn sections, running them instead of a full reload...\n";
 
@@ -241,17 +310,17 @@ sub reload_file {
             my ($start, $code, $end) = @$item;
             my $sline = $start + 1;
             if (eval "package $mod;\nuse strict;\nuse warnings;\nno warnings 'redefine';\n#line $sline $file\n$code\n ;1;") {
-                print "$$ $0 - Success reloading churn block ($file lines $start -> $end)\n";
+                print STDERR "$$ $0 - Success reloading churn block ($file lines $start -> $end)\n";
             }
             else {
-                print "$$ $0 - Error reloading churn block ($file lines $start -> $end): $@\n";
+                print STDERR "$$ $0 - Error reloading churn block ($file lines $start -> $end): $@\n";
             }
         }
 
         return(1);
     }
 
-    if (my $cb = $self->file_has_callback($file)) {
+    if (my $cb = $info->{callback}) {
         my ($status, %fields) = $cb->($file);
         return ($status, %fields) if defined $status;
     }
@@ -266,6 +335,8 @@ sub do_reload {
     my $info = $self->file_info($file);
     my $mod = $info->{module};
 
+    print STDERR "$$ $0 - Runner attempting to reload '$file' in place...\n";
+
     my @warnings;
     my $ok = eval {
         local $SIG{__WARN__} = sub { push @warnings => @_ };
@@ -279,9 +350,17 @@ sub do_reload {
             }
         }
 
+        # A reload using require of the absolute path means we need to clear
+        # both the normal inc entry and an inc entry for the full path.
         delete $INC{$info->{inc_entry}};
+        delete $INC{$file};
+
         local $.;
         require $file;
+
+        # Make sure BOTH inc entries are set
+        $INC{$file} //= $file;
+        $INC{$info->{inc_entry}} //= $file;
 
         1;
     };

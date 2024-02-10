@@ -175,6 +175,13 @@ sub get_api_sub {
     return $self->can($meth) // die "'$api_call' is not a valid api call";
 }
 
+sub api_preload_blacklist {
+    my $self = shift;
+    my ($req, @mods) = @_;
+
+    return $self->runner->blacklist(@mods);
+}
+
 sub api_log_file { shift->{+LOG_FILE} }
 
 sub api_ping { "pong" }
@@ -183,14 +190,14 @@ sub api_pid { $$ }
 
 sub api_reload {
     my $self = shift;
-    my ($req, %spawn) = @_;
+    my ($req) = @_;
 
     return $self->runner->reload;
 }
 
 sub api_overall_status {
     my $self = shift;
-    my ($req, %spawn) = @_;
+    my ($req) = @_;
 
     return [
         $self->runner->overall_status,
@@ -200,7 +207,7 @@ sub api_overall_status {
 
 sub api_process_list {
     my $self = shift;
-    my ($req, %spawn) = @_;
+    my ($req) = @_;
 
     my @list = $self->process_list();
 

@@ -12,10 +12,10 @@ $path =~ s{\.pm$}{};
 stage A => sub {
     default();
 
-#    watch "$path/nonperl1" => sub { print "$$ $0 - RELOAD CALLBACK nonperl1\n" };
+    watch "$path/nonperl1" => sub { print STDERR "$$ $0 - RELOAD CALLBACK nonperl1\n" };
 
     preload sub {
-#        watch "$path/nonperl2" => sub { print "$$ $0 - RELOAD CALLBACK nonperl2\n" };
+        watch "$path/nonperl2" => sub { print STDERR "$$ $0 - RELOAD CALLBACK nonperl2\n" };
     };
 
     preload 'Preload::A';
@@ -26,14 +26,18 @@ stage A => sub {
 };
 
 stage B => sub {
-    reload_remove_check sub {
+    reload_inplace_check sub {
         my %params = @_;
-        return 1 if $params{reload_file} eq $params{from_file};
-        return 0;
+
+        print STDERR "$$ $0 - INPLACE CHECK CALLED: $params{file} - $params{module}\n"
+            if $params{module} eq 'Preload::A';
+
+        return;
     };
 
     preload sub {
-        *Preload::B::PreDefined = sub { 'yes' };
+        no warnings 'once';
+        *Preload::X::PreDefined = sub { 'yes' };
     };
 
     preload 'Preload::A';

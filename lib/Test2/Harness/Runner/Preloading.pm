@@ -28,6 +28,7 @@ use Test2::Harness::Util::HashBase qw{
     <reloader
     <reload_in_place
     <restrict_reload
+    +blacklist
 };
 
 sub init {
@@ -40,6 +41,18 @@ sub init {
     $self->{+STAGES} = undef;
 
     $self->{+PRELOAD_RETRY_DELAY} //= 5;
+
+    $self->{+BLACKLIST} //= {};
+}
+
+sub blacklist {
+    my $self = shift;
+
+    for my $mod (@_) {
+        $self->{+BLACKLIST}->{$mod}++;
+    }
+
+    return $self->{+BLACKLIST} // {};
 }
 
 sub process_list {

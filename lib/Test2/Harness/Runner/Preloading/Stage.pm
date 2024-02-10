@@ -23,7 +23,6 @@ use Test2::Harness::Util::HashBase qw{
     <test_settings
     <name
     <tree
-    <ipc_info
     <preloads
     <retry_delay
     <stage
@@ -42,6 +41,9 @@ use Test2::Harness::Util::HashBase qw{
     <terminated
     <is_daemon
     <bad
+
+    <ipc_info
+    +ipc +ipc_con +ipc_pid
 };
 
 our ($ERROR, $EXIT, $DO);
@@ -110,6 +112,27 @@ sub launch {
     return $pid;
 }
 
+sub ipc {
+    my $self = shift;
+
+    return unless $self->{+IPC_INFO};
+
+    if (my $ipc_pid = $self->{+IPC_PID}) {
+        if ($ipc_pid != $$) {
+            delete $self->{+IPC};
+            delete $self->{+IPC_CON};
+            delete $self->{+IPC_PID};
+        }
+    }
+
+    unless ($self->{+IPC} && $self->{+IPC_CON} && $self->{+IPC_PID}) {
+        $self->{+IPC_PID} = $$;
+        ($self->{+IPC}, $self->{+IPC_CON}) = ipc_connect($self->{+IPC_INFO});
+    }
+
+    return ($self->{+IPC}, $self->{+IPC_CON});
+}
+
 sub start {
     my $self = shift;
 
@@ -122,19 +145,14 @@ sub start {
         $self->{+LAST_EXIT_CODE} ? $self->{+LAST_EXIT} : $self->{+LAST_LAUNCH},
     );
 
-    my $pid = $$;
-    my ($ipc, $con) = ipc_connect($self->{+IPC_INFO});
+    my ($ipc, $con) = $self->ipc;
 
-    $self->do_preload($ipc, $con);
+    $self->do_preload();
 
     my $count = 0;
     my ($ok, $err) = (1, '');
     while (1) {
-        unless ($$ == $pid) {
-            $con = undef;
-            $ipc = undef;
-            ($ipc, $con) = ipc_connect($self->{+IPC_INFO});
-        }
+        ($ipc, $con) = $self->ipc;
 
         unless($ok) {
             eval { $con->send_and_get(set_stage_down => {stage => $self->{+NAME}, pid => $$, error => $err}); 1 } or warn $@;
@@ -142,7 +160,7 @@ sub start {
         }
 
         my $out;
-        $ok = eval { $out = $self->run_stage($ipc, $con); 1 };
+        $ok = eval { $out = $self->run_stage; 1 };
         chomp($err = $@);
 
         next unless $ok;
@@ -173,7 +191,7 @@ sub init {
 
 sub do_preload {
     my $self = shift;
-    my ($ipc, $con) = @_;
+    my ($ipc, $con) = $self->ipc;
 
     my $preloads = $self->{+PRELOADS};
 
@@ -268,18 +286,18 @@ sub check_children {
         last if $pid < 1;
 
         my $set = delete $self->{+CHILDREN}->{$pid} or die "Reaped untracked process!";
-        push @todo => $set;
+        push @todo => [$pid, @$set];
     }
 
     for my $set (@todo) {
-        my ($time, $stage) = @$set;
+        my ($pid, $time, $stage) = @$set;
 
         if ($self->is_daemon) {
-            print "Stage $stage->{name} ended, restarting...\n";
+            print "[$pid] Stage '$stage->{name}' ended, restarting...\n";
             return 1 if $self->fork_stage($stage, $time);
         }
         else {
-            print "Stage $stage->{name} ended...\n";
+            print "[$pid] Stage '$stage->{name}' ended...\n";
             exit(1);
         }
     }
@@ -301,9 +319,12 @@ sub start_stage {
 
     $self->{+PARENT} = $parent;
 
+    local $Test2::Harness::Runner::Preloading::Stage::ACTIVE;
+
     my $stage_ref = ref($stage);
     my ($name);
     if ($stage_ref) {
+        $Test2::Harness::Runner::Preloading::Stage::ACTIVE = $stage;
         $name = $stage->name;
     }
     else {
@@ -319,7 +340,8 @@ sub start_stage {
 
     return unless $stage_ref;
 
-    warn "Blacklist, custom require";
+    my ($ipc, $con) = $self->ipc;
+    my $blacklist = $con->send_and_get('preload_blacklist')->response;
 
     for my $item (@{$stage->load_sequence}) {
         my $type = ref($item);
@@ -327,6 +349,7 @@ sub start_stage {
             $item->();
         }
         else {
+            next if $blacklist->{$item};
             require(mod2file($item));
             die "Cannot load one custom preloader within another" if $item->can('TEST2_HARNESS_PRELOAD');
         }
@@ -341,18 +364,18 @@ sub terminate {
 
 sub run_stage {
     my $self = shift;
-    my ($ipc, $con) = @_;
 
     my $pid = $$;
+    my ($ipc, $con) = $self->ipc;
 
     $con->send_and_get(set_stage_up => {stage => $self->{+NAME}, pid => $pid});
-    print "Stage '$self->{+NAME}' is up.\n";
+    print "[$$] Stage '$self->{+NAME}' is up.\n";
 
     my $guard = Scope::Guard->new(sub {
         return unless $pid == $$;
         my $ok = eval { $con->send_and_get(set_stage_down => {stage => $self->{+NAME}, pid => $pid}, do_not_respond => 1) if $con && $con->active; 1 };
         die $@ unless $ok || $@ =~ m/Disconnected pipe/;
-        print "Stage '$self->{+NAME}' is down.\n";
+        print "[$$] Stage '$self->{+NAME}' is down.\n";
     });
 
     my $reloader;
@@ -383,11 +406,23 @@ sub run_stage {
             exit(0) unless pid_is_running($self->{+PARENT});
 
             # check reload
-            if ($reloader && $reloader->check_reload()) {
-                $exit = 0;
+            if ($reloader) {
+                # Returns undef if all is good
+                # Returns an arrayref if there is an issue
+                # Arrayref is a list of failed modules, but may be empty if it is a non-module that needs reload.
+                my $cannot_load = $reloader->check_reload();
 
-                no warnings 'exiting';
-                last IPC_LOOP;
+                if ($cannot_load) {
+                    $exit = 0;
+
+                    if (@$cannot_load) {
+                        print STDERR "$$ $0 - Blacklisting $_...\n" for @$cannot_load;
+                        $con->send_and_get(preload_blacklist => $cannot_load)
+                    }
+
+                    no warnings 'exiting';
+                    last IPC_LOOP;
+                }
             }
 
             # Check kids

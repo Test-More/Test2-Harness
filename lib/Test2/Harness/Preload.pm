@@ -58,23 +58,21 @@ sub import {
 
         if ($INC{'Test2/Harness/Reloader.pm'}) {
             if (my $active = Test2::Harness::Reloader->ACTIVE) {
-                $active->watch(@_);
+                return $active->watch(@_);
             }
         }
 
-        croak "No current stage, and no active reloader";
+        if (my $stage = $Test2::Harness::Runner::Preloading::Stage::ACTIVE) {
+            return $stage->watch(@_);
+        }
+
+        croak "$$ $0 - No current stage, and no active reloader";
     };
 
     $exports{preload} = sub {
         croak "No current stage" unless @{$instance->stack};
         my $stage = $instance->stack->[-1];
         $stage->add_to_load_sequence(@_);
-    };
-
-    $exports{reload_remove_check} = sub {
-        croak "No current stage" unless @{$instance->stack};
-        my $stage = $instance->stack->[-1];
-        $stage->set_reload_remove_check(@_);
     };
 
     $exports{reload_inplace_check} = sub {

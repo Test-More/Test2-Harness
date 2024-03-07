@@ -62,10 +62,10 @@ is(
     "maybe_open_file is undef when file does not exist"
 );
 
-is(fqmod('Foo::Bar', 'Baz'),       'Foo::Bar::Baz',      "fqmod on postfix");
-is(fqmod('Foo::Bar', 'Baz::Bat'),  'Foo::Bar::Baz::Bat', "fqmod on longer postfix");
-is(fqmod('Foo::Bar', '+Baz'),      'Baz',                "fqmod on fq");
-is(fqmod('Foo::Bar', '+Baz::Bat'), 'Baz::Bat',           "fqmod on longer fq");
+is(fqmod('Baz',       'Foo::Bar', no_require => 1), 'Foo::Bar::Baz',      "fqmod on postfix");
+is(fqmod('Baz::Bat',  'Foo::Bar', no_require => 1), 'Foo::Bar::Baz::Bat', "fqmod on longer postfix");
+is(fqmod('+Baz',      'Foo::Bar', no_require => 1), 'Baz',                "fqmod on fq");
+is(fqmod('+Baz::Bat', 'Foo::Bar', no_require => 1), 'Baz::Bat',           "fqmod on longer fq");
 
 my $tmp = tempdir(CLEANUP => 1, TMPDIR => 1);
 write_file_atomic(File::Spec->canonpath("$tmp/xxx"), "data");

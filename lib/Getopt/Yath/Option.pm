@@ -358,15 +358,15 @@ sub cli_docs {
         );
     }
 
-    push @out => Getopt::Yath::Term::fit_to_width(" ", $self->{+DESCRIPTION}, "  ");
+    push @out => Getopt::Yath::Term::fit_to_width(" ", $self->{+DESCRIPTION}, prefix => "  ");
 
-    push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "Can also be set with the following environment variables: " . join(", ", @{$self->{+FROM_ENV_VARS}}),                           "  ") if $self->{+FROM_ENV_VARS};
-    push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "The following environment variables will be cleared after arguments are processed: " . join(", ", @{$self->{+CLEAR_ENV_VARS}}), "  ") if $self->{+CLEAR_ENV_VARS};
-    push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "The following environment variables will be set after arguments are processed: " . join(", ", @{$self->{+SET_ENV_VARS}}),       "  ") if $self->{+SET_ENV_VARS};
+    push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "Can also be set with the following environment variables: " . join(", ", @{$self->{+FROM_ENV_VARS}}),                           prefix => "  ") if $self->{+FROM_ENV_VARS};
+    push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "The following environment variables will be cleared after arguments are processed: " . join(", ", @{$self->{+CLEAR_ENV_VARS}}), prefix => "  ") if $self->{+CLEAR_ENV_VARS};
+    push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "The following environment variables will be set after arguments are processed: " . join(", ", @{$self->{+SET_ENV_VARS}}),       prefix => "  ") if $self->{+SET_ENV_VARS};
 
     if (my @notes = $self->notes) {
         my %seen;
-        push @out => map { "\n" . Getopt::Yath::Term::fit_to_width(" ", "Note: $_", "  ") } grep { $_ && !$seen{$_}++ } @notes;
+        push @out => map { "\n" . Getopt::Yath::Term::fit_to_width(" ", "Note: $_", prefix => "  ") } grep { $_ && !$seen{$_}++ } @notes;
     }
 
     return join "\n" => @out;

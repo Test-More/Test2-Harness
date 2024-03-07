@@ -7,11 +7,9 @@ our $VERSION = '2.000000';
 our @EXPORT = qw/color USE_COLOR term_size fit_to_width/;
 use Importer Importer => 'import';
 
-BEGIN {
-    unless (eval { require Term::Table::Util; Term::Table::Util->import(qw/term_size/); 1 }) {
-        *term_size = sub() { 80 };
-    }
+use Term::Table::Util qw/term_size/;
 
+BEGIN {
     if (eval { require Term::ANSIColor; 1 }) {
         *USE_COLOR = sub() { 1 };
         *color = \&Term::ANSIColor::color;
@@ -23,10 +21,14 @@ BEGIN {
 }
 
 sub fit_to_width {
-    my ($join, $text, $prefix) = @_;
+    my ($join, $text, %params) = @_;
 
-    my $width = term_size() - 20;
-    $width = 80 unless $width && $width >= 80;
+    my $prefix = $params{prefix};
+    my $width  = $params{width};
+    unless (defined $width) {
+        $width = term_size() - 20;
+        $width = 80 unless $width && $width >= 80;
+    }
 
     my @parts = ref($text) ? @$text : split /\s+/, $text;
 

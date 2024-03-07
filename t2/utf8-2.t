@@ -33,7 +33,12 @@ open(my $fh, '<', $ENV{TEST2_HARNESS_COLLECTOR_ECHO_FILE}) or die "Could not ope
 my %found;
 FOUND: while (1) {
     seek($fh, 0, 1);
+    my $pos = tell($fh);
     while (my $line = <$fh>) {
+        unless ($line =~ m/\n/) {
+            seek($fh, $pos, 0);
+            last;
+        }
         next unless $line =~ m/THIS-(STDOUT|NOTE|ASSERT)/;
         $found{$1} = decode_json($line);
     }

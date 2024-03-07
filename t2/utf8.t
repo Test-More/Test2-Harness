@@ -24,7 +24,13 @@ open(my $fh, '<', $ENV{TEST2_HARNESS_COLLECTOR_ECHO_FILE}) or die "Could not ope
 my $event;
 FOUND: while (1) {
     seek($fh, 0, 1);
+    my $pos = tell($fh);
     while (my $line = <$fh>) {
+        unless ($line =~ m/\n/) {
+            seek($fh, $pos, 0);
+            last;
+        }
+
         $event = decode_json($line);
         last FOUND if $event->{facet_data}->{assert};
     }

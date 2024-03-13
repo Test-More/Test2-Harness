@@ -48,9 +48,9 @@ subtest timeouts => sub {
     is($one->event_timeout,    90, "set event timeout");
     is($one->post_exit_timeout, 85, "set event timeout");
 
-    my $task = $one->queue_item(42);
-    is($task->{event_timeout},     90, "event timeout made it to task");
-    is($task->{post_exit_timeout}, 85, "post-exit timeout made it to task");
+    my $ts = $one->test_settings;
+    is($ts->event_timeout,     90, "event timeout made it to task");
+    is($ts->post_exit_timeout, 85, "post-exit timeout made it to task");
 
     my $two = $CLASS->new(file => File::Spec->catfile($tmp, 'timeout2'));
     is($two->event_timeout,     90, "set event timeout");
@@ -93,41 +93,26 @@ subtest foo => sub {
 
 subtest package => sub {
     my $one = $CLASS->new(file => File::Spec->catfile($tmp, 'package'));
-    is($one->queue_item(42)->{use_preload}, 0, "No preload");
+    is($one->test_settings->use_preload, 0, "No preload");
 };
 
 subtest taint => sub {
-    my $taint = $CLASS->new(file => File::Spec->catfile($tmp, 'taint'), queue_args => [via => ['xxx']]);
+    my $taint = $CLASS->new(file => File::Spec->catfile($tmp, 'taint'));
 
     is($taint->switches, ['-t', '-w'], "No SHBANG switches");
     is($taint->shbang, {switches => ['-t', '-w'], line => "#!/usr/bin/env perl -t -w"}, "Parsed shbang");
 
     is(
-        $taint->queue_item(42),
-        {
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => $taint->file,
-            rel_file    => $taint->relative,
-            job_name    => 42,
-            job_id      => T(),
-            stamp       => T(),
-            switches    => ['-t', '-w'],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 0,
-            conflicts   => [],
-            via         => ['xxx'],
-            rank        => T(),
-            run_id      => FDNE(),
+        $taint->test_settings,
+        hash {
+            field switches    => ['-t', '-w'];
+            field use_fork    => 0; # Cannot use taint mode with fork
+            field use_preload => 0; # Cannot use preload with fork
+            field use_stream  => 1;
+            field use_timeout => 1;
+            end();
         },
-        "Got queue item data",
+        "Got settings"
     );
 };
 
@@ -138,30 +123,16 @@ subtest warn => sub {
     is($warn->shbang, {switches => ['-w'], line => "#!/usr/bin/perl -w"}, "Parsed shbang");
 
     is(
-        $warn->queue_item(42),
-        {
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => $warn->file,
-            rel_file    => $warn->relative,
-            job_name    => 42,
-            job_id      => T(),
-            stamp       => T(),
-            rank        => T(),
-            switches    => ['-w'],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 0,
-            conflicts   => [],
-            run_id      => FDNE(),
+        $warn->test_settings,
+        hash {
+            field switches    => ['-w'];
+            field use_fork    => 1;
+            field use_preload => 1;
+            field use_stream  => 1;
+            field use_timeout => 1;
+            end();
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
@@ -178,30 +149,16 @@ subtest notime => sub {
     is($notime->shbang, {}, "No shbang");
 
     is(
-        $notime->queue_item(42),
-        {
-            category    => 'general',
-            duration    => 'long',
-            stage       => undef,
-            file        => $notime->file,
-            rel_file    => $notime->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 0,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 0,
-            conflicts   => [],
-            run_id      => FDNE(),
+        $notime->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 1;
+            field use_preload => 1;
+            field use_stream  => 1;
+            field use_timeout => 0;
+            end();
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
@@ -229,80 +186,52 @@ subtest all => sub {
     is($all->shbang, {}, "No shbang");
 
     is(
-        $all->queue_item(42),
-        {
-            category    => 'isolation',
-            duration    => 'long',
-            stage       => undef,
-            file        => $all->file,
-            rel_file    => $all->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 0,
-            use_preload => 0,
-            use_stream  => 0,
-            io_events   => 1,
-            use_timeout => 0,
-            smoke       => 0,
-            conflicts   => [],
-            binary      => 0,
-            non_perl    => 0,
-            run_id      => FDNE(),
+        $all->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 0;
+            field use_preload => 0;
+            field use_stream  => 0;
+            field use_timeout => 0;
+            end();
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
 subtest med2 => sub {
     my $med2 = $CLASS->new(file => File::Spec->catfile($tmp, 'med2'));
 
-    is($med2->check_feature('timeout'), 1, "Timeouts turned on");
+    is($med2->check_feature('timeout'),    1, "Timeouts turned on");
     is($med2->check_feature('timeout', 0), 0, "Timeouts turned off with default 0");
 
-    is($med2->check_feature('fork'), 0, "Forking is off");
+    is($med2->check_feature('fork'),    0, "Forking is off");
     is($med2->check_feature('fork', 1), 0, "Checking fork with different default");
 
-    is($med2->check_feature('preload'), 1, "Preload is on");
+    is($med2->check_feature('preload'),    1, "Preload is on");
     is($med2->check_feature('preload', 0), 0, "Checking preload with different default");
 
-    is($med2->check_feature('isolation'), 0, "No isolation");
+    is($med2->check_feature('isolation'),    0, "No isolation");
     is($med2->check_feature('isolation', 1), 1, "Use isolation with a default of true");
 
-    is($med2->check_feature('stream'), 1, "Use stream");
+    is($med2->check_feature('stream'),    1, "Use stream");
     is($med2->check_feature('stream', 0), 0, "no stream with a default of false");
 
     is($med2->check_category, 'general', "Category is general");
-    is($med2->check_duration, 'medium', "duration is medium");
+    is($med2->check_duration, 'medium',  "duration is medium");
 
     is($med2->switches, [], "No SHBANG switches");
-    is($med2->shbang, {}, "No shbang");
+    is($med2->shbang,   {}, "No shbang");
 
     is(
-        $med2->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => $med2->file,
-            rel_file    => $med2->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 0,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 0,
-            conflicts   => [],
+        $med2->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 0;
+            field use_preload => 1;
+            field use_stream  => 1;
+            field use_timeout => 1;
+            end();
         },
         "Got queue item data",
     );
@@ -333,30 +262,16 @@ subtest med1 => sub {
     is($med1->shbang, {}, "No shbang");
 
     is(
-        $med1->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => $med1->file,
-            rel_file    => $med1->relative,
-            job_name    => 42,
-            stamp       => T(),
-            rank        => T(),
-            job_id      => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 0,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 0,
-            conflicts   => [],
+        $med1->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 1;
+            field use_preload => 0;
+            field use_stream  => 1;
+            field use_timeout => 1;
+            end();
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
@@ -387,30 +302,16 @@ subtest long => sub {
     is($long->shbang, {switches => [], line => "#!/usr/bin/perl"}, "got shbang");
 
     is(
-        $long->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'isolation',
-            duration    => 'long',
-            stage       => undef,
-            file        => $long->file,
-            rel_file    => $long->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 0,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 0,
-            conflicts   => [],
+        $long->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 1;
+            field use_preload => 1;
+            field use_stream  => 1;
+            field use_timeout => 0;
+            end();
         },
-        "Got queue item data",
+        "Got Test Settings",
     );
 };
 
@@ -439,30 +340,16 @@ subtest extra_comments => sub {
     is($long->shbang, {switches => [], line => "#!/usr/bin/perl"}, "got shbang");
 
     is(
-        $long->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'isolation',
-            duration    => 'long',
-            stage       => undef,
-            file        => $long->file,
-            rel_file    => $long->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 0,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 0,
-            conflicts   => [],
+        $long->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 1;
+            field use_preload => 1;
+            field use_stream  => 1;
+            field use_timeout => 0;
+            end();
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
@@ -498,34 +385,21 @@ subtest binary => sub {
     );
 
     my $binary = $CLASS->new(file => $path);
-    is($binary->switches, [], "No SHBANG switches");
-    is($binary->shbang, {}, "No shbang");
+    is($binary->switches,  [],  "No SHBANG switches");
+    is($binary->shbang,    {},  "No shbang");
+    is($binary->is_binary, T(), "is binary");
 
     is(
-        $binary->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => match qr{\Q$path\E$},
-            rel_file    => $binary->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            conflicts   => [],
-            binary      => 1,
-            non_perl    => 1,
-            smoke       => 0,
+        $binary->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 0;
+            field use_preload => 0;
+            field use_stream  => 1;
+            field use_timeout => 1;
+            end();
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
@@ -536,32 +410,19 @@ subtest not_perl => sub {
 
     is($not_perl->switches, [], "No SHBANG switches");
     is($not_perl->shbang, {line => "#!/usr/bin/bash", non_perl => 1}, "Non-perl shbang");
+    is($not_perl->non_perl, T(), "not perl");
 
     is(
-        $not_perl->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => match qr{\Q$path\E$},
-            rel_file    => $not_perl->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            conflicts   => [],
-            binary      => 0,
-            non_perl    => 1,
-            smoke       => 0,
+        $not_perl->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 0;
+            field use_preload => 0;
+            field use_stream  => 1;
+            field use_timeout => 1;
+            end();
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
@@ -573,32 +434,18 @@ subtest not_env_perl => sub {
 
     is($not_env_perl->switches, [], "No SHBANG switches");
     is($not_env_perl->shbang, {line => "#!/usr/bin/env bash", non_perl => 1}, "Non-perl shbang");
+    is($not_env_perl->non_perl, T(), "Not perl");
 
     is(
-        $not_env_perl->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => match qr{\Q$path\E$},
-            rel_file    => $not_env_perl->relative,
-            job_name    => 42,
-            job_id      => T(),
-            rank        => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            conflicts   => [],
-            smoke       => 0,
-            binary      => 0,
-            non_perl    => 1,
+        $not_env_perl->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 0;
+            field use_preload => 0;
+            field use_stream  => 1;
+            field use_timeout => 1;
         },
-        "Got queue item data",
+        "Got test settings",
     );
 };
 
@@ -607,61 +454,42 @@ subtest smoke => sub {
     my $smoke1 = $CLASS->new(file => $path);
     is($smoke1->check_feature(smoke => 0), 1, "Turned smoke on");
     is(
-        $smoke1->queue_item(42),
-        {
-            run_id      => FDNE(),
-            category    => 'general',
-            duration    => 'medium',
-            stage       => undef,
-            file        => match qr{\Q$path\E$},
-            rel_file    => $smoke1->relative,
-            job_name    => 42,
-            rank        => T(),
-            job_id      => T(),
-            stamp       => T(),
-            switches    => [],
-            use_fork    => 1,
-            use_preload => 1,
-            use_stream  => 1,
-            io_events   => 1,
-            use_timeout => 1,
-            binary      => 0,
-            non_perl    => 0,
-            smoke       => 1,
-            conflicts   => [],
+        $smoke1->test_settings,
+        hash {
+            field switches    => [];
+            field use_fork    => 1;
+            field use_preload => 1;
+            field use_stream  => 1;
+            field use_timeout => 1;
+            end();
         },
-        "Got queue item data",
+        "Test Settings",
     );
 
     my $smoke2 = $CLASS->new(file => File::Spec->catfile($tmp, 'smoke2'));
     is($smoke2->check_feature(smoke => 0), 1, "Turned smoke on");
 };
 
-subtest smoke => sub {
+subtest smoke2 => sub {
     my $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry'));
-    my $task = $retry->queue_item(42);
-    is($task->{retry}, 1, "Enabled retry");
-    ok(!exists($task->{retry_isolated}), "not isolated");
+    is($retry->retry, 1, "Enabled retry");
+    is($retry->retry_isolated, undef, "not isolated");
 
     $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry5'));
-    $task = $retry->queue_item(42);
-    is($task->{retry}, 5, "Enabled retry, value of 5 results in '6' because of initial try");
-    ok(!exists($task->{retry_isolated}), "not isolated");
+    is($retry->retry, 5, "Enabled retry, value of 5 results in '6' because of initial try");
+    is($retry->retry_isolated, undef, "not isolated");
 
     $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry_iso'));
-    $task = $retry->queue_item(42);
-    is($task->{retry}, 1, "Enabled retry");
-    is($task->{retry_isolated}, T(), "isolated retry");
+    is($retry->retry, 1, "Enabled retry");
+    is($retry->retry_isolated, T(), "isolated retry");
 
     $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'retry_iso3'));
-    $task = $retry->queue_item(42);
-    is($task->{retry}, 3, "Enabled retry, 1 initital + 3 retries");
-    is($task->{retry_isolated}, T(), "isolated retry");
+    is($retry->retry, 3, "Enabled retry, 1 initital + 3 retries");
+    is($retry->retry_isolated, T(), "isolated retry");
 
     $retry = $CLASS->new(file => File::Spec->catfile($tmp, 'no_retry'));
-    $task = $retry->queue_item(42);
-    is($task->{retry}, 0, "Retry set to 0");
-    ok(!exists($task->{retry_isolated}), "not isolated");
+    is($retry->retry, 0, "Retry set to 0");
+    is($retry->retry_isolated, undef, "not isolated");
 };
 
 done_testing;

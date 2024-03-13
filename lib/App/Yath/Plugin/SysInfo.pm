@@ -20,9 +20,8 @@ option_group {prefix => 'sysinfo', group => 'sysinfo', category => "SysInfo Opti
     );
 };
 
-sub run_queued {
+sub run_fields {
     my $self = shift;
-    my ($run) = @_;
 
     my %data = (
         env => {
@@ -42,9 +41,9 @@ sub run_queued {
     my ($short, $raw) = ('sys', 'system info');
 
     if (my $hostname = hostname()) {
-        $short = undef;
+        $short          = undef;
         $data{hostname} = $hostname;
-        $raw = $hostname;
+        $raw            = $hostname;
 
         if (my $pattern = $self->{+HOST_SHORT_PATTERN}) {
             if ($hostname =~ /($pattern)/) {
@@ -61,18 +60,22 @@ sub run_queued {
     my @fields = qw/uselongdouble use64bitall version use64bitint usemultiplicity osname useperlio useithreads archname/;
     @{$data{config}}{@fields} = @Config{@fields};
 
-    $run->send_event(
-        facet_data => {
-            harness_run_fields => [
-                {
-                    name    => 'sys',
-                    details => $short,
-                    raw     => $raw,
-                    data    => \%data,
-                },
-            ],
-        }
-    );
+    return ({
+        name    => 'sys',
+        details => $short,
+        raw     => $raw,
+        data    => \%data,
+    });
+}
+
+sub run_queued {
+    my $self = shift;
+    my ($run) = @_;
+
+    my @fields = $self->run_fields;
+    return unless @fields;
+
+    $run->send_event(facet_data => {harness_run_fields => \@fields});
 }
 
 sub TO_JSON { ref($_[0]) }

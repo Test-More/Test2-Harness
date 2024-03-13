@@ -41,8 +41,19 @@ our @EXPORT_OK = (
         is_same_file
 
         render_status_data
+
+        looks_like_uuid
     },
 );
+
+sub looks_like_uuid {
+    my ($in) = @_;
+
+    return undef unless defined $in;
+    return undef unless length($in) == 36;
+    return undef unless $in =~ m/^[0-9A-F\-]+$/i;
+    return $in;
+}
 
 sub is_same_file {
     my ($file1, $file2) = @_;

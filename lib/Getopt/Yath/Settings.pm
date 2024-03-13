@@ -9,7 +9,7 @@ use Carp();
 
 sub new {
     my $class = shift;
-    my $self = @_ > 1 ? { @_ } : $_[0];
+    my $self = @_ == 1 ? $_[0] : { @_ };
 
     bless($self, $class);
 
@@ -49,7 +49,7 @@ sub create_group {
     my $self = shift;
     my ($name, @vals) = @_;
 
-    return $self->{$name} = Getopt::Yath::Settings::Group->new(@vals > 1 ? { @vals } : $vals[0]);
+    return $self->{$name} = Getopt::Yath::Settings::Group->new(@vals == 1 ? $vals[0] : { @vals });
 }
 
 sub delete_group {

@@ -10,6 +10,8 @@ use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use List::Util 1.45 qw/uniq/;
 
+use Test2::Harness::TestSettings;
+
 use Test2::Harness::Util qw/open_file clean_path/;
 
 use Test2::Harness::Util::HashBase qw{

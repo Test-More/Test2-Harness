@@ -32,7 +32,7 @@ sub git_output {
     my $class = shift;
     my (@args) = @_;
 
-    my $cmd = $class->git_cmd or return sub {()};
+    my $cmd = $class->git_cmd or return undef;
 
     my ($stdout, $stderr, $exit) = capture { system($cmd, @args) };
     die "git command failed: $stderr\n" if $exit;
@@ -40,9 +40,8 @@ sub git_output {
     return $stdout;
 }
 
-sub run_queued {
+sub run_fields {
     my $class = shift;
-    my ($run) = @_;
 
     my $long_sha  = $ENV{GIT_LONG_SHA};
     my $short_sha = $ENV{GIT_SHORT_SHA};
@@ -59,7 +58,8 @@ sub run_queued {
     for my $set (@sets) {
         my ($var, @args) = @$set;
         next if $$var;    # Already set
-        chomp($$var = $class->git_output(@args));
+        $$var = $class->git_output(@args) or next;
+        chomp($$var);
     }
 
     return unless $long_sha;
@@ -87,7 +87,16 @@ sub run_queued {
         $field->{raw} = $long_sha;
     }
 
-    $run->send_event(facet_data => {harness_run_fields => [$field]});
+    return ($field);
+}
+
+sub run_queued {
+    my $class = shift;
+    my ($run) = @_;
+
+    my @fields = $class->run_fields();
+
+    $run->send_event(facet_data => {harness_run_fields => \@fields}) if @fields;
 
     return;
 }
@@ -123,7 +132,7 @@ sub _diff_from {
     my ($from) = @_;
     my $cmd = $class->git_cmd or return;
 
-    return (line_sub => $class->git_output('diff', '-U1000000', '-W', '--minimal', $from));
+    return (diff => $class->git_output('diff', '-U1000000', '-W', '--minimal', $from));
 }
 
 1;

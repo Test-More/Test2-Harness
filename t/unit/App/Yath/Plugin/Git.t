@@ -2,7 +2,7 @@ use Test2::V0 -target => 'App::Yath::Plugin::Git';
 use Test2::Util qw/CAN_THREAD CAN_REALLY_FORK CAN_FORK CAN_SIGSYS/;
 # HARNESS-DURATION-SHORT
 
-#use Getopt::Yath::Settings;
+use Getopt::Yath::Settings;
 
 subtest NOTHING => sub {
     my $control = mock $CLASS => (
@@ -18,12 +18,8 @@ subtest NOTHING => sub {
     local $ENV{GIT_STATUS};
     local $ENV{GIT_BRANCH};
 
-    my $meta   = {};
-    my $fields = [];
-    $CLASS->inject_run_data(meta => $meta, fields => $fields);
-
-    ok(!$meta->{git}, "no git added to meta");
-    is(@$fields, 0, "No fields added");
+    my @fields = $CLASS->run_fields();
+    is(@fields, 0, "No fields added");
 };
 
 subtest ENV => sub {
@@ -35,32 +31,20 @@ subtest ENV => sub {
     local $ENV{GIT_STATUS}    = " M lib/App/Yath/Command.pm";
     local $ENV{GIT_BRANCH}    = "my.super-long-branch-name-needs-to-be-trimmed";
 
-    my $meta   = {};
-    my $fields = [];
-    $CLASS->inject_run_data(meta => $meta, fields => $fields);
+    my @fields = $CLASS->run_fields();
 
     is(
-        $meta,
-        {
-            git => {
+        \@fields,
+        [{
+            data => {
                 branch => 'my.super-long-branch-name-needs-to-be-trimmed',
                 sha    => '1230988f2c2bd26a1691a82766d5bf5c7524b123',
                 status => ' M lib/App/Yath/Command.pm',
             },
-        },
-        "Added git info to meta-data"
-    );
-
-    is(
-        $fields,
-        [
-            {
-                data    => $meta->{git},
-                details => 'my.super-long-branch',
-                name    => 'git',
-                raw     => 'my.super-long-branch-name-needs-to-be-trimmed',
-            }
-        ],
+            details => 'my.super-long-branch',
+            name    => 'git',
+            raw     => 'my.super-long-branch-name-needs-to-be-trimmed',
+        }],
         "Added git field",
     );
 };
@@ -74,32 +58,20 @@ subtest CMD => sub {
     local $ENV{GIT_STATUS};
     local $ENV{GIT_BRANCH};
 
-    my $meta   = {};
-    my $fields = [];
-    $CLASS->inject_run_data(meta => $meta, fields => $fields);
+    my @fields = $CLASS->run_fields();
 
     is(
-        $meta,
-        {
-            git => {
+        \@fields,
+        [{
+            data => {
                 branch => 'my.branch.foo',
                 sha    => '4570988f2c2bd26a1691a82766d5bf5c7524bcea',
                 status => ' M lib/App/Yath/Plugin/Git.pm',
             },
-        },
-        "Added git info to meta-data"
-    );
-
-    is(
-        $fields,
-        [
-            {
-                data    => $meta->{git},
-                details => 'my.branch.foo',
-                name    => 'git',
-                raw     => 'my.branch.foo',
-            }
-        ],
+            details => 'my.branch.foo',
+            name    => 'git',
+            raw     => 'my.branch.foo',
+        }],
         "Added git field",
     );
 };
@@ -107,67 +79,60 @@ subtest CMD => sub {
 subtest MIX => sub {
     my $script = __FILE__;
     $script =~ s/\.t$/\.script/;
-    local $ENV{GIT_COMMAND} = $script;
+    local $ENV{GIT_COMMAND}  = $script;
     local $ENV{GIT_LONG_SHA} = "1230988f2c2bd26a1691a82766d5bf5c7524b123";
     local $ENV{GIT_SHORT_SHA};
     local $ENV{GIT_STATUS};
     local $ENV{GIT_BRANCH};
 
-    my $meta   = {};
-    my $fields = [];
-    $CLASS->inject_run_data(meta => $meta, fields => $fields);
+    my @fields = $CLASS->run_fields();
 
     is(
-        $meta,
-        {
-            git => {
+        \@fields,
+        [{
+            data => {
                 branch => 'my.branch.foo',
                 sha    => '1230988f2c2bd26a1691a82766d5bf5c7524b123',
                 status => ' M lib/App/Yath/Plugin/Git.pm',
             },
-        },
-        "Added git info to meta-data"
-    );
-
-    is(
-        $fields,
-        [
-            {
-                data    => $meta->{git},
-                details => 'my.branch.foo',
-                name    => 'git',
-                raw     => 'my.branch.foo',
-            }
-        ],
+            details => 'my.branch.foo',
+            name    => 'git',
+            raw     => 'my.branch.foo',
+        }],
         "Added git field",
     );
 };
 
-#subtest changed_files => sub {
-#    my $settings = Test2::Harness::Settings->new();
-#    $settings->define_prefix('git');
-#    $settings->git->vivify_field('change_base');
-#
-#    my $script = __FILE__;
-#    $script =~ s/\.t$/\.script/;
-#    local $ENV{GIT_COMMAND} = $script;
-#
-#    is(
-#        [$CLASS->changed_files($settings)],
-#        [['a.file', '*', 'sub1', 'sub3']],
-#        "Got changed file"
-#    );
-#
-#    $settings->git->field(change_base => 'master');
-#    is(
-#        [$CLASS->changed_files($settings)],
-#        [
-#            ['a.file', '*', 'sub1', 'sub3'],
-#            ['b.file', '*', 'sub1'],
-#            ['c.file', 'sub1'],
-#        ],
-#        "Got changed files from change_base"
-#    );
-#};
+subtest changed_files => sub {
+    my $settings = Getopt::Yath::Settings->new();
+    $settings->create_group('git');
+    $settings->git->create_option('change_base');
+
+    my $script = __FILE__;
+    $script =~ s/\.t$/\.script/;
+    local $ENV{GIT_COMMAND} = $script;
+
+    require App::Yath::Finder;
+    my $finder = App::Yath::Finder->new();
+
+    my ($type, $data) = $CLASS->changed_diff($settings);
+    is(
+        [$finder->changes_from_diff($type, $data)],
+        [],
+        "No Changes"
+    );
+
+    $settings->git->option(change_base => 'master');
+    ($type, $data) = $CLASS->changed_diff($settings);
+    is(
+        [$finder->changes_from_diff($type, $data)],
+        [
+            ['a.file', '*', 'sub1', 'sub3'],
+            ['b.file', '*', 'sub1'],
+            ['c.file', 'sub1'],
+        ],
+        "Got changed files from change_base"
+    );
+};
 
 done_testing;

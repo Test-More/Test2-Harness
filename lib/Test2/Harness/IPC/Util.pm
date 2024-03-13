@@ -10,6 +10,7 @@ use Config qw/%Config/;
 use IPC::Open3 qw/open3/;
 use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
+use Data::Dumper qw/Dumper/;
 
 use POSIX();
 use IO::Select();
@@ -151,6 +152,9 @@ sub start_collected_process {
 
 sub start_process {
     my ($cmd, $post_fork) = @_;
+
+    confess "cmd is required, and must be populated" unless $cmd && @$cmd;
+    confess "cmd may not contain undefined values: " . Dumper($cmd) if grep { !defined($_)} @$cmd;
 
     my $pid = fork // die "Could not fork: $!";
     return $pid if $pid;

@@ -24,9 +24,11 @@ sub wanted {
 
     subtest $file => sub {
         $file =~ s{^.*lib/}{}g;
-        my $ok = eval { require($file); 1 };
+        my @warnings;
+        my $ok = eval { local $SIG{__WARN__} = sub { push @warnings => @_ }; require($file); 1 };
         my $err = $@;
         ok($ok, "require $file", $ok ? () : $err);
+        ok(!@warnings, "No Warnings", @warnings);
 
         my $mod = file2mod($file);
         my $sym = "$mod\::VERSION";

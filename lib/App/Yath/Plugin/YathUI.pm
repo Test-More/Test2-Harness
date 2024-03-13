@@ -2,15 +2,13 @@ package App::Yath::Plugin::YathUI;
 use strict;
 use warnings;
 
-BEGIN { die "Fix or deprecate me" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use File::Spec;
 use Test2::Harness::Util qw/read_file mod2file looks_like_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 use parent 'App::Yath::Plugin';
 
 sub can_log {
@@ -27,26 +25,26 @@ sub can_finder {
     return 0;
 }
 
-option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
+option_group {prefix => 'yathui', group => 'yathui', category => "YathUI Options"} => sub {
     option url => (
-        type => 's',
+        type => 'Scalar',
         alt => ['uri'],
         description => "Yath-UI url",
         long_examples  => [" http://my-yath-ui.com/..."],
     );
 
     option api_key => (
-        type => 's',
+        type => 'Scalar',
         description => "Yath-UI API key. This is not necessary if your Yath-UI instance is set to single-user"
     );
 
     option project => (
-        type => 's',
+        type => 'Scalar',
         description => "The Yath-UI project for your test results",
     );
 
     option mode => (
-        type => 's',
+        type => 'Scalar',
         default => 'qvfd',
         description => "Set the upload mode (default 'qvfd')",
         long_examples => [
@@ -58,23 +56,26 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
     );
 
     option retry => (
-        type => 'c',
+        type => 'Count',
         description => "How many times to try an operation before giving up",
         default => 0,
     );
 
     option grace => (
+        type => 'Bool',
         description => "If yath cannot connect to yath-ui it normally throws an error, use this to make it fail gracefully. You get a warning, but things keep going.",
         default => 0,
     );
 
     option durations => (
+        type => 'Bool',
         description => "Poll duration data from Yath-UI to help order tests efficiently",
         default => 0,
         applicable => \&can_finder,
     );
 
     option coverage => (
+        type => 'Bool',
         description => "Poll coverage data from Yath-UI to determine what tests should be run for changed files",
         default => 0,
         applicable => \&can_finder,
@@ -88,30 +89,30 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
 #    );
 
     option medium_duration => (
-        type => 's',
+        type => 'Scalar',
         description => "Minimum duration length (seconds) before a test goes from SHORT to MEDIUM",
         long_examples => [' 5'],
         default => 5,
     );
 
     option long_duration => (
-        type => 's',
+        type => 'Scalar',
         description => "Minimum duration length (seconds) before a test goes from MEDIUM to LONG",
         long_examples => [' 10'],
         default => 10,
     );
 
     option upload => (
+        type => 'Bool',
         description => "Upload the log to Yath-UI",
         default => 0,
         applicable => \&can_log,
     );
 
-    post -1 => sub {
-        my %params = @_;
+    option_post_process -1 => sub {
+        my ($options, %params) = @_;
 
         my $settings = $params{settings};
-        my $options  = $params{options};
 
         my $has_finder = $options->included->{'App::Yath::Options::Finder'};
         my $has_logger = $options->included->{'App::Yath::Options::Logging'};
@@ -129,13 +130,13 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
         $url =~ s{/+$}{}g;
 
         if ($has_upload) {
-            $settings->logging->field(log => 1);
-            $settings->logging->field(bzip2 => 1);
+            $settings->logging->option(log => 1);
+            $settings->logging->option(bzip2 => 1);
         }
 
         if ($has_coverage) {
             my $curl = join '/' => ($url, 'coverage', $project);
-            $settings->cover->field(($grace ? 'maybe_from' : 'from'), $curl);
+            $settings->cover->option(($grace ? 'maybe_from' : 'from'), $curl);
         }
 
         if ($has_durations) {
@@ -143,7 +144,7 @@ option_group {prefix => 'yathui', category => "YathUI Options"} => sub {
             my $long = $settings->yathui->long_duration;
 
             my $durl = join '/' => ($url, 'durations', $project, $med, $long);
-            $settings->finder->field(($grace ? 'maybe_durations' : 'durations'), $durl);
+            $settings->finder->option(($grace ? 'maybe_durations' : 'durations'), $durl);
         }
 
         return;

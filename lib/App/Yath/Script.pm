@@ -38,11 +38,12 @@ sub goto_alt_script {
 sub run {
     my ($script, $argv) = @_;
 
-    $App::Yath::Script::SCRIPT //= clean_path($script);
+    $script = clean_path($script);
+    $App::Yath::Script::SCRIPT //= $script;
 
     $argv //= [];
 
-    my $settings_data = args_to_settings_data($argv);
+    my $settings_data = args_to_settings_data($script, $argv);
 
     setup_env(
         sys_tmp => $settings_data->{yath}->{orig_tmp},
@@ -68,7 +69,7 @@ sub run {
 }
 
 sub args_to_settings_data {
-    my ($argv) = @_;
+    my ($script, $argv) = @_;
 
     my $orig_argv      = [@$argv];
     my $orig_tmp       = File::Spec->tmpdir();
@@ -109,7 +110,7 @@ sub args_to_settings_data {
 
     return {
         yath => {
-            script => clean_path(__FILE__),
+            script => $script,
 
             script_version => $VERSION,
 

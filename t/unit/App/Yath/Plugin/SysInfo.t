@@ -24,14 +24,11 @@ local $ENV{USER} = 'bob';
 local $ENV{SHELL} = '/bin/shell';
 local $ENV{TERM} = 'myterm';
 
-my $meta = {};
-my $fields = [];
-
 my $one = $CLASS->new();
-$one->inject_run_data(meta => $meta, fields => $fields);
+my @fields = $one->run_fields();
 
 is(
-    $fields,
+    \@fields,
     [
         {
             name    => 'sys',
@@ -69,13 +66,11 @@ is(
     "Got expected fields"
 );
 
-$meta = {};
-$fields = [];
 $one = $CLASS->new(host_short_pattern => "bar\\.baz-\\d+");
-$one->inject_run_data(meta => $meta, fields => $fields);
+@fields = $one->run_fields();
 
 is(
-    $fields,
+    \@fields,
     [
         {
             name    => 'sys',

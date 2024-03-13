@@ -7,9 +7,9 @@ my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
-run_tests('test');
-
 my $project = "asgadfgds";
+
+run_tests('test');
 
 unless ($ENV{AUTOMATED_TESTING}) {
     my $out = yath(

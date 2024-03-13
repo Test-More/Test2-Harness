@@ -2,9 +2,7 @@ package Test2::Tools::HarnessTester;
 use strict;
 use warnings;
 
-BEGIN { die "FIXME" }
-
-our $VERSION = '1.000156';
+our $VERSION = '2.000000';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
@@ -23,8 +21,13 @@ sub summarize_events {
     my $run_id = "run-$id";
     my $job_id = "job-$id";
 
-    require Test2::Harness::Auditor::Watcher;
-    my $watcher = Test2::Harness::Auditor::Watcher->new(job => 1, try => 0);
+    require Test2::Harness::Collector::Auditor::Job;
+    my $watcher = Test2::Harness::Collector::Auditor::Job->new(
+        run_id  => $run_id,
+        job_id  => $job_id,
+        job_try => 0,
+        file    => $id,
+    );
 
     require Test2::Harness::Event;
     for my $e (@$events) {
@@ -38,7 +41,7 @@ sub summarize_events {
             job_try    => 0,
         );
 
-        $watcher->process($he);
+        $watcher->audit($he);
     }
 
     return {

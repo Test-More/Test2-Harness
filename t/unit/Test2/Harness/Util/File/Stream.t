@@ -1,4 +1,4 @@
-use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File::Stream';
+use Test2::V0 -target => 'Test2::Harness::Util::File::Stream';
 use File::Temp qw/tempfile/;
 # HARNESS-DURATION-SHORT
 

@@ -516,7 +516,7 @@ sub setup_child_input {
     my $ts = $self->{+TEST_SETTINGS} or return;
 
     if (my $in_file = $ts->input_file) {
-        my $in_fh = open_file($in_file, '<') if $in_file;
+        my $in_fh = open_file($in_file, '<');
         swap_io(\*STDIN, $in_fh, sub { $self->_die(@_) });
     }
     else {

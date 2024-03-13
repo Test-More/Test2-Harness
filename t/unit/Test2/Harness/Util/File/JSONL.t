@@ -1,4 +1,4 @@
-use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File::JSONL';
+use Test2::V0 -target => 'Test2::Harness::Util::File::JSONL';
 # HARNESS-DURATION-SHORT
 
 use ok $CLASS;

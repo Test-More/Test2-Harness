@@ -128,7 +128,7 @@ sub yath {
             seek($rh, 0, SEEK_CUR); # CLEAR EOF
             my @new = <$rh>;
             push @lines => @new;
-            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;
+            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1; ## no critic
 
             waitpid($pid, WNOHANG) or next;
             $exit = $?;
@@ -137,7 +137,7 @@ sub yath {
 
         while (my @new = <$rh>) {
             push @lines => @new;
-            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1;
+            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1; ## no critic
         }
     }
     else {

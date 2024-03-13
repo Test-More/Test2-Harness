@@ -1,4 +1,6 @@
 package TestPlugin;
+use strict;
+use warnings;
 
 use parent 'App::Yath::Plugin';
 

@@ -378,11 +378,11 @@ sub coverage_handler {
     my ($agg, $data);
     if (my $fd = $set->{facet_data}) {
         if ($data = $fd->{job_coverage}) {
-            require 'Test2/Harness/Log/CoverageAggregator/ByTest.pm' unless $INC{'Test2/Harness/Log/CoverageAggregator/ByTest.pm'};
+            require Test2::Harness::Log::CoverageAggregator::ByTest unless $INC{'Test2/Harness/Log/CoverageAggregator/ByTest.pm'};
             $agg = 'Test2::Harness::Log::CoverageAggregator::ByTest';
         }
         elsif($data = $fd->{run_coverage}) {
-            require 'Test2/Harness/Log/CoverageAggregator/ByRun.pm' unless $INC{'Test2/Harness/Log/CoverageAggregator/ByRun.pm'};
+            require Test2::Harness::Log::CoverageAggregator::ByRun unless $INC{'Test2/Harness/Log/CoverageAggregator/ByRun.pm'};
             $agg = 'Test2::Harness::Log::CoverageAggregator::ByRun';
         }
         else {

@@ -1,4 +1,6 @@
 package Preload::Churn;
+use strict;
+use warnings;
 
 our $counter;
 $counter //= 0;

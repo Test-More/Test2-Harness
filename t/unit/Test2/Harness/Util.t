@@ -1,4 +1,4 @@
-use Test2::Bundle::Extended -target => 'Test2::Harness::Util';
+use Test2::V0 -target => 'Test2::Harness::Util';
 #BEGIN { skip_all 'TODO' }
 
 use ok $CLASS => ':ALL';
@@ -20,7 +20,7 @@ imported_ok qw{
 my ($line) = split /\n/, read_file(__FILE__), 2;
 like(
     $line,
-    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util';},
+    q{use Test2::V0 -target => 'Test2::Harness::Util';},
     "Read file (only checking first line)"
 );
 

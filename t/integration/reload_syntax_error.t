@@ -26,7 +26,7 @@ package Preload;
 use strict;
 use warnings;
 
-use Test2::Harness::Runner::Preload;
+use Test2::Harness::Preload;
 
 stage A => sub {
     default();
@@ -43,7 +43,6 @@ sub touch {
     my ($inject) = @_;
     my $path = "$tmpdir/Preload/Flux.pm";
     note "Touching $path...";
-    sleep 2;
 
     open(my $fh, '>', $path) or die $!;
 
@@ -60,6 +59,8 @@ $inject
     EOT
 
     close($fh);
+
+    sleep 2;
 }
 
 touch('$Preload::Flux::VAR = "initial";');
@@ -68,8 +69,19 @@ yath(
     command => 'start',
     pre     => ["-D$tmpdir"],
     args    => ["-I$tmpdir", '-PPreload'],
-    debug   => 2,
     exit    => 0,
+);
+
+yath(
+    command => 'status',
+    test    => sub {
+        my $out = shift;
+        like(
+            $out->{output},
+            qr{A\s*\|\s*UP},
+            "Stage A is UP"
+        );
+    },
 );
 
 yath(
@@ -81,12 +93,30 @@ yath(
 touch('$Preload::Flux::VAR = "Syntax Error $bob";');
 
 yath(
-    command => 'run',
-    args => [$tx], # no arg, so undef
-    exit => 0,
+    command => 'status',
+    test    => sub {
+        my $out = shift;
+        like(
+            $out->{output},
+            qr{A\s*\|\s*DOWN},
+            "Stage A is DOWN"
+        );
+    },
 );
 
 touch('$Preload::Flux::VAR = "fixed";');
+
+yath(
+    command => 'status',
+    test    => sub {
+        my $out = shift;
+        like(
+            $out->{output},
+            qr{A\s*\|\s*UP},
+            "Stage A is UP"
+        );
+    },
+);
 
 yath(
     command => 'run',

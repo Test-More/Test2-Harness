@@ -1,4 +1,4 @@
-use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';
+use Test2::V0 -target => 'Test2::Harness::Util::File';
 # HARNESS-DURATION-SHORT
 
 use ok $CLASS;
@@ -31,7 +31,7 @@ ok(dies { $two->open_file }, "Cannot open file (for reading)");
 my ($line) = split /\n/, $one->maybe_read, 2;
 like(
     $line,
-    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';},
+    q{use Test2::V0 -target => 'Test2::Harness::Util::File';},
     "Can read file (using maybe_read)"
 );
 
@@ -44,7 +44,7 @@ is(
 ($line) = split /\n/, $one->read, 2;
 like(
     $line,
-    q{use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';},
+    q{use Test2::V0 -target => 'Test2::Harness::Util::File';},
     "Can read file"
 );
 
@@ -71,7 +71,7 @@ is($two->read_line, undef, "cannot read lines from missing file");
 
 is(
     $one->read_line,
-    "use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';\n",
+    "use Test2::V0 -target => 'Test2::Harness::Util::File';\n",
     "Got first line"
 );
 
@@ -89,7 +89,7 @@ is(
 $one->reset;
 is(
     $one->read_line,
-    "use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File';\n",
+    "use Test2::V0 -target => 'Test2::Harness::Util::File';\n",
     "Got first line again after reset"
 );
 

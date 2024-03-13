@@ -1,4 +1,4 @@
-use Test2::Bundle::Extended -target => 'Test2::Harness::Util::File::JSON';
+use Test2::V0 -target => 'Test2::Harness::Util::File::JSON';
 # HARNESS-DURATION-SHORT
 
 use ok $CLASS;

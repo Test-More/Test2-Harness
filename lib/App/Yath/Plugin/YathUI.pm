@@ -110,9 +110,9 @@ option_group {prefix => 'yathui', group => 'yathui', category => "YathUI Options
     );
 
     option_post_process -1 => sub {
-        my ($options, %params) = @_;
+        my ($options, $state) = @_;
 
-        my $settings = $params{settings};
+        my $settings = $state->{settings};
 
         my $has_finder = $options->included->{'App::Yath::Options::Finder'};
         my $has_logger = $options->included->{'App::Yath::Options::Logging'};

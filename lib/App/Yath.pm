@@ -642,9 +642,10 @@ Extended Version Info
         ),
     );
 
+
     $out .= join "\n" => table(
         header => [qw/COMPONENT VERSION/],
-        rows   => \@vers,
+        rows   => [ grep { $_ } @vers ],
     );
 
     return $out;

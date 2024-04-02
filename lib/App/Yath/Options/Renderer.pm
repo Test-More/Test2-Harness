@@ -27,6 +27,14 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
         set_env_vars => [qw/T2_HARNESS_IS_VERBOSE HARNESS_IS_VERBOSE/],
     );
 
+    option theme => (
+        type => 'Scalar',
+        short => 't',
+        description => "Select a theme for the renderer (not all renderers use this)",
+        default     => 'App::Yath::Theme::Default',
+        normalize   => sub { fqmod($_[0], 'App::Yath::Theme') },
+    );
+
     option wrap => (
         type => 'Bool',
         default => 1,

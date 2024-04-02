@@ -98,6 +98,9 @@ sub init {
 
     $self->{+INTERACTIVE} //= 1 if $ENV{YATH_INTERACTIVE};
 
+    require(mod2file($self->theme));
+    my $theme = $self->theme->new(use_color => $self->color);
+
     $self->{+FORMATTER} = $f_class->new(
         io            => $io,
         handles       => [$io, $io_err, $io],
@@ -108,6 +111,7 @@ sub init {
         progress      => $self->progress,
         verbose       => $self->verbose,
         quiet         => $self->quiet,
+        theme         => $theme,
     );
 
     $self->{+DO_STEP} = $self->{+FORMATTER}->can('step') ? 1 : 0;

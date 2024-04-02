@@ -12,7 +12,7 @@ use Time::HiRes qw/time/;
 use IO::Handle;
 
 use File::Spec();
-use Test2::Formatter::Test2::Composer;
+use Test2::Formatter::Test2::Composer();
 
 use parent 'Test2::Formatter';
 
@@ -38,7 +38,6 @@ use Test2::Util::HashBase qw{
     -verbose
     -job_length
     -ecount
-    -job_colors
     -active_files
     -_active_disp
     -_file_stats
@@ -47,122 +46,12 @@ use Test2::Util::HashBase qw{
     -interactive
     +jobnum_counter
     <start_time
+    <theme
 };
 
 sub TAG_WIDTH() { 8 }
 
 sub hide_buffered() { 0 }
-
-sub DEFAULT_TAG_COLOR() {
-    return (
-        'DEBUG'    => color('red'),
-        'DIAG'     => color('yellow'),
-        'ERROR'    => color('red'),
-        'FATAL'    => color('bold red'),
-        'FAIL'     => color('red'),
-        'HALT'     => color('bold red'),
-        'PASS'     => color('green'),
-        '! PASS !' => color('cyan'),
-        'TODO'     => color('cyan'),
-        'NO  PLAN' => color('yellow'),
-        'SKIP'     => color('bold cyan'),
-        'SKIP ALL' => color('bold white on_blue'),
-        'STDERR'   => color('yellow'),
-        'RUN INFO' => color('bold bright_blue'),
-        'JOB INFO' => color('bold bright_blue'),
-        'RUN  FLD' => color('bold bright_blue'),
-        'LAUNCH'   => color('bold bright_white'),
-        'RETRY'    => color('bold bright_white'),
-        'PASSED'   => color('bold bright_green'),
-        'TO RETRY' => color('bold bright_yellow'),
-        'FAILED'   => color('bold bright_red'),
-        'REASON'   => color('magenta'),
-        'TIMEOUT'  => color('magenta'),
-        'TIME'     => color('blue'),
-        'MEMORY'   => color('blue'),
-    );
-}
-
-sub DEFAULT_FACET_COLOR() {
-    return (
-        time    => color('blue'),
-        memory  => color('blue'),
-        about   => color('magenta'),
-        amnesty => color('cyan'),
-        assert  => color('bold bright_white'),
-        control => color('bold red'),
-        error   => color('yellow'),
-        info    => color('yellow'),
-        meta    => color('magenta'),
-        parent  => color('magenta'),
-        trace   => color('bold red'),
-    );
-}
-
-# These colors all look decent enough to use, ordered to avoid putting similar ones together
-use constant DEFAULT_JOB_COLOR_NAMES => (
-        'bold green on_blue',
-        'bold blue on_white',
-        'bold black on_cyan',
-        'bold green on_bright_black',
-        'bold dark blue on_white',
-        'bold black on_green',
-        'bold cyan on_blue',
-        'bold black on_white',
-        'bold white on_cyan',
-        'bold cyan on_bright_black',
-        'bold white on_green',
-        'bold bright_black on_white',
-        'bold white on_blue',
-        'bold bright_cyan on_green',
-        'bold blue on_cyan',
-        'bold white on_bright_black',
-        'bold bright_black on_green',
-        'bold bright_green on_blue',
-        'bold bright_blue on_white',
-        'bold bright_white on_bright_black',
-        'bold yellow on_blue',
-        'bold bright_black on_cyan',
-        'bold bright_green on_bright_black',
-        'bold blue on_green',
-        'bold bright_cyan on_blue',
-        'bold bright_blue on_cyan',
-        'bold dark bright_white on_bright_black',
-        'bold bright_blue on_green',
-        'bold dark bright_blue on_white',
-        'bold bright_white on_blue',
-        'bold bright_cyan on_bright_black',
-        'bold bright_white on_cyan',
-        'bold bright_white on_green',
-        'bold bright_yellow on_blue',
-        #'bold magenta on_white',
-        #'bold dark magenta on_white',
-        #'bold dark cyan on_white',
-        'bold dark bright_cyan on_bright_black',
-        #'bold dark bright_green on_black',
-        #'bold dark bright_yellow on_black',
-);
-
-sub DEFAULT_JOB_COLOR() {
-    return map { color($_) } DEFAULT_JOB_COLOR_NAMES;
-}
-
-sub DEFAULT_COLOR() {
-    return (
-        reset      => color('reset'),
-        blob       => color('bold bright_black on_white'),
-        tree       => color('bold bright_white'),
-        tag_border => color('bold bright_white'),
-    );
-}
-
-my %FACET_TAG_BORDERS = (
-    'default' => ['[', ']'],
-    'amnesty' => ['{', '}'],
-    'info'    => ['(', ')'],
-    'error'   => ['<', '>'],
-    'parent'  => [' ', ' '],
-);
 
 sub init {
     my $self = shift;
@@ -182,32 +71,24 @@ sub init {
 
     $self->{+TTY} = -t $io unless defined $self->{+TTY};
 
-    my $use_color = ref($self->{+COLOR}) ? 1 : delete($self->{+COLOR});
+    my $use_color = $self->{+COLOR} ? 1 : 0;
     $use_color = $self->{+TTY} unless defined $use_color;
+    $self->{+COLOR} = $use_color;
 
-    if ($use_color && USE_COLOR) {
-        $self->{+SHOW_BUFFER} = 1 unless defined $self->{+SHOW_BUFFER};
-
-        if ($use_color) {
-            $self->{+COLOR} = {
-                DEFAULT_COLOR(),
-                TAGS   => {DEFAULT_TAG_COLOR()},
-                FACETS => {DEFAULT_FACET_COLOR()},
-                JOBS   => [DEFAULT_JOB_COLOR()],
-            } unless defined $self->{+COLOR};
-
-            $self->{+JOB_COLORS} = {free => [@{$self->{+COLOR}->{JOBS}}]};
-        }
-    }
-    else {
-        $self->{+SHOW_BUFFER} = 0 unless defined $self->{+SHOW_BUFFER};
-    }
+    $self->{+SHOW_BUFFER} //= $use_color && USE_COLOR;
 
     $self->{+ECOUNT} //= 0;
 
-    my $reset = $use_color ? color('reset') : '';
-    my $cyan  = $use_color ? color('cyan')  : '';
-    $self->{+_ACTIVE_DISP} = ["[${cyan}INITIALIZING${reset}]", ''];
+    unless ($self->{+THEME}) {
+        require App::Yath::Theme::Default;
+        $self->{+THEME} = App::Yath::Theme::Default->new(use_color => $use_color);
+    }
+
+    my $theme = $self->{+THEME};
+
+    my $reset = $theme->get_term_color('reset');
+    my $msg  = $theme->get_term_color(status => 'message_a');
+    $self->{+_ACTIVE_DISP} = ["[${msg}INITIALIZING${reset}]", ''];
     $self->{+_FILE_STATS}  = {
         passed  => 0,
         failed  => 0,
@@ -215,8 +96,6 @@ sub init {
         todo    => 0,
         total   => 0,
     };
-
-
 }
 
 sub io {
@@ -302,8 +181,7 @@ sub write {
         }
     }
 
-    push @{$self->{+JOB_COLORS}->{free}} => delete $self->{+JOB_COLORS}->{used}->{$job_id}
-        if $job_id && $f->{harness_job_end};
+    $self->{+THEME}->free_job_color($job_id) if $job_id && $f->{harness_job_end};
 
     # Local is expensive! Only do it if we really need to.
     local($\, $,) = (undef, '') if $\ || $,;
@@ -416,11 +294,12 @@ sub update_active_disp {
 
     return $out unless $should_show;
 
+    my $theme = $self->{+THEME};
     my $statline = join '|' => (
-        $self->_highlight($stats->{passed},  'P', 'green'),
-        $self->_highlight($stats->{failed},  'F', 'red'),
-        $self->_highlight($stats->{running}, 'R', 'cyan'),
-        $self->_highlight($stats->{todo},    'T', 'yellow'),
+        $self->_highlight($stats->{passed},  'P', $theme->get_term_color(state => 'passed')),
+        $self->_highlight($stats->{failed},  'F', $theme->get_term_color(state => 'failed')),
+        $self->_highlight($stats->{running}, 'R', $theme->get_term_color(state => 'running')),
+        $self->_highlight($stats->{todo},    'T', $theme->get_term_color(state => 'todo')),
     );
 
     $statline = "[$statline]";
@@ -447,10 +326,19 @@ sub update_spinner {
     my $self = shift;
     my ($stats) = @_;
 
+    my $theme = $self->{+THEME};
+
     $stats->{spinner} //= '|';
     $stats->{spinner_time} //= time - 1;
     $stats->{blink_time} //= time - 1;
     $stats->{blink} //= '';
+
+    my $msg     = $theme->get_term_color(status => 'message_a');
+    my $cmd     = $theme->get_term_color(status => 'command');
+    my $spin    = $theme->get_term_color(status => 'spinner');
+    my $border  = $theme->get_term_color(status => 'border');
+    my $sub_msg = $theme->get_term_color(status => 'sub_message');
+    my $reset   = $theme->get_term_color('reset');
 
     if (time - $stats->{spinner_time} > 0.1) {
         $stats->{spinner_time} = time;
@@ -462,36 +350,30 @@ sub update_spinner {
     }
     elsif(time - $stats->{blink_time} > 0.5) {
         $stats->{blink_time} = time;
-        $stats->{blink} = $stats->{blink} ? '' : 'bold bright_';
+        $msg = $theme->get_term_color(status => 'message_b') if $stats->{blink};
     }
     else {
         return 0;
     }
 
-    my $yellow = $self->{+COLOR} ? color($stats->{blink} . 'yellow') : '';
-    my $cyan   = $self->{+COLOR} ? color('cyan')                     : '';
-    my $green  = $self->{+COLOR} ? color('bold bright_green')        : '';
-    my $bold   = $self->{+COLOR} ? color('bold bright_white')        : '';
-    my $reset  = $self->reset;
-
     $self->{+_ACTIVE_DISP} = [
         join(
             '' => (
-                $bold  => "[ ",              $reset,
-                $green => $stats->{spinner}, $reset,
-                ''     => " ",
+                $border => "[ ",              $reset,
+                $spin   => $stats->{spinner}, $reset,
+                ''      => " ",
                 $self->{+IS_PERSISTENT}
                 ? (
-                    $yellow => "Waiting for busy runner", $reset,
-                    ''      => " ",
-                    $reset  => "(see ",       $reset,
-                    $cyan   => "yath status", $reset,
-                    $reset  => ")",           $reset,
+                    $msg     => "Waiting for busy runner", $reset,
+                    ''       => " ",
+                    $sub_msg => "(see ",       $reset,
+                    $cmd     => "yath status", $reset,
+                    $sub_msg => ")",           $reset,
                     )
-                : ($yellow => "INITIALIZING", $reset),
-                ''     => " ",
-                $green => $stats->{spinner}, $reset,
-                $bold  => " ]",              $reset,
+                : ($msg => "INITIALIZING", $reset),
+                ''      => " ",
+                $spin   => $stats->{spinner}, $reset,
+                $border => " ]",              $reset,
             )
         ),
         '',
@@ -505,7 +387,7 @@ sub _highlight {
     my ($val, $label, $color) = @_;
 
     return "${label}:${val}" unless $val && $self->{+COLOR};
-    return sprintf('%s%s:%d%s', color($color), $label, $val, $self->reset);
+    return sprintf('%s%s:%d%s', $color, $label, $val, $self->reset);
 }
 
 
@@ -521,17 +403,19 @@ sub colorstrip {
 sub render_status {
     my $self = shift;
 
-    my $reset = $self->reset;
-    my $cyan = $self->{+COLOR} ? color('cyan') : '';
+    my $theme = $self->theme;
 
-    my $str = "$self->{+_ACTIVE_DISP}->[0] Events: $self->{+ECOUNT} ${cyan}$self->{+_ACTIVE_DISP}->[1]${reset}";
+    my $reset = $self->reset;
+    my $message = $theme->get_term_color(status => 'default') || '';
+
+    my $str = "$self->{+_ACTIVE_DISP}->[0] Events: $self->{+ECOUNT} ${message}$self->{+_ACTIVE_DISP}->[1]${reset}";
 
     my $max = term_size() || 80;
 
     if (length($str) > $max) {
         my $nocolor = $self->colorstrip($str);
         $str = substr($nocolor, 0, $max - 8) . " ...)$reset" if length($nocolor) > $max;
-        $str =~ s/\(/$cyan(/;
+        $str =~ s/\(/$message(/;
         $str =~ s/^\[[^\]]+\]/$self->{+_ACTIVE_DISP}->[0]/;
     }
 
@@ -600,15 +484,7 @@ sub render_quiet {
 
 sub reset {
     my $self = shift;
-    return $self->{+COLOR} ? $self->{+COLOR}->{reset} : '';
-}
-
-sub job_color {
-    my $self = shift;
-    my ($id, $set) = @_;
-    return '' unless $self->{+JOB_COLORS};
-    return $self->{+JOB_COLORS}->{used}->{$id} || '' unless $set;
-    return $self->{+JOB_COLORS}->{used}->{$id} ||= shift @{$self->{+JOB_COLORS}->{free}} || '';
+    return $self->{+THEME}->get_term_color('reset');
 }
 
 sub render_tree {
@@ -621,11 +497,9 @@ sub render_tree {
         my $id = $f->{harness}->{job_id} // 0;
         my $number = $id ? $self->{+JOB_NUMBERS}->{$id} //= $self->{+JOBNUM_COUNTER}++ : $id;
 
-        my ($color, $reset) = ('', '');
-        if ($self->{+JOB_COLORS}) {
-            $color = $self->job_color($id, 'set');
-            $reset = $self->reset;
-        }
+        my $theme = $self->{+THEME};
+        my $color = $theme->get_term_color(job => $id);
+        my $reset = $theme->get_term_color('reset');
 
         my $len = length($number) // 0;
         if (!$self->{+JOB_LENGTH} || $len > $self->{+JOB_LENGTH}) {
@@ -665,12 +539,13 @@ sub build_line {
 
     $tag = substr($tag, 0 - TAG_WIDTH, TAG_WIDTH) if length($tag) > TAG_WIDTH;
 
+    my $use_color = $self->{+COLOR};
     my $max = $self->{+TTY} && !$self->{+NO_WRAP} ? (term_size() || 80) : undef;
-    my $color = $self->{+COLOR};
+    my $theme = $self->{+THEME};
     my $reset = $self->reset;
-    my $tcolor = $color ? $color->{TAGS}->{$tag} || $color->{FACETS}->{$facet} || '' : '';
+    my $tcolor = $theme->get_term_color(tag => $tag) || $theme->get_term_color(facet => $facet) || '';
 
-    my ($ps, $pe) = @{$FACET_TAG_BORDERS{$facet} || $FACET_TAG_BORDERS{default}};
+    my ($ps, $pe) = @{$theme->get_borders($facet)};
 
     $tag = uc($tag);
     my $length = length($tag);
@@ -684,8 +559,8 @@ sub build_line {
     }
 
     my $start;
-    if ($color) {
-        my $border = $color->{tag_border} || '';
+    if ($use_color) {
+        my $border = $theme->get_term_color(base => 'tag_border') || '';
         $start = "${reset}${border}${ps}${reset}${tcolor}${tag}${reset}${border}${pe}${reset}";
     }
     else {
@@ -695,8 +570,8 @@ sub build_line {
     $start .= "  ";
 
     if ($tree) {
-        if ($color) {
-            my $trcolor = $color->{tree} || '';
+        if ($use_color) {
+            my $trcolor = $theme->get_term_color(base => 'tree') || '';
             $start .= $trcolor . $tree . $reset;
         }
         else {
@@ -714,7 +589,7 @@ sub build_line {
             last;
         }
 
-        if ($color) {
+        if ($use_color) {
             push @out => "${start}${tcolor}${line}$reset";
         }
         else {
@@ -723,8 +598,8 @@ sub build_line {
     }
 
     unless (@out) {
-        if ($color) {
-            my $blob = $color->{blob} || '';
+        if ($use_color) {
+            my $blob = $theme->get_term_color(base => 'blob') || '';
             @out = (
                 "$start${blob}----- START -----$reset",
                 "${tcolor}${text}${reset}",

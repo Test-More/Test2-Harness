@@ -24,6 +24,7 @@ use Test2::Harness::Util::HashBase qw{
     <show_run_info
     <show_run_fields
     <settings
+    <theme
 };
 
 sub init {

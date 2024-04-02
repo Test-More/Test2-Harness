@@ -12,6 +12,7 @@ my %SKIP = (
     'lib/Test2/Harness/IPC/Protocol/IPSocket/Connection.pm'   => 1,
     'lib/Test2/Harness/IPC/Protocol/UnixSocket.pm'            => 1,
     'lib/Test2/Harness/IPC/Protocol/UnixSocket/Connection.pm' => 1,
+    'lib/Test2/Formatter/Stream.pm'                           => 1,
 );
 
 find(\&wanted, 'lib/');

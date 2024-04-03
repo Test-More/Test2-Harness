@@ -93,9 +93,8 @@ sub render_summary {
 
     my $res = "    -->  Result: " . ($pass ? 'PASSED' : 'FAILED') . "  <--";
     if ($self->color && USE_COLOR) {
-        require Term::ANSIColor;
-        my $color = $pass ? Term::ANSIColor::color('bold bright_green') : Term::ANSIColor::color('bold bright_red');
-        my $reset = Term::ANSIColor::color('reset');
+        my $color = $self->theme->get_term_color(tag => $pass ? 'passed' : 'failed');
+        my $reset = $self->theme->get_term_color('reset');
         $res = "$color$res$reset";
     }
     push @summary => $res;

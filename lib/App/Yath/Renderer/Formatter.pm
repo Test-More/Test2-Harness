@@ -13,42 +13,9 @@ use Getopt::Yath;
 option_group {group => 'formatter', category => "Formatter Options"} => sub {
     option formatter => (
         type => 'Scalar',
-
-        default     => 'Test2::Formatter::Test2',
+        default     => 'Test2::Formatter::TAP',
         normalize   => sub { fqmod($_[0], 'Test2::Formatter') },
         description => "The Test2::Formatter to use",
-    );
-
-    option qvf => (
-        type        => 'Bool',
-        default     => 0,
-        description => "Toggles both 'quiet' and 'verbose' which a renderer should accept to mean 'quiet on success, verbose on failure'.",
-
-        applicable  => sub {
-            my ($option, $options) = @_;
-
-            return 1 if $options->have_group('renderer');
-            return 0;
-        },
-
-        trigger => sub {
-            my $opt    = shift;
-            my %params = @_;
-
-            my $settings = $params{settings};
-            my $rg = $settings->group('renderer', 1);
-
-            if ($params{action} eq 'set') {
-                $rg->create_option(quiet => 1);
-                $rg->create_option(verbose => 1);
-                $params{group}->formatter('Test2::Formatter::QVF');
-            }
-            else {
-                $rg->create_option(quiet => 0);
-                $rg->create_option(verbose => 0);
-                $params{group}->formatter('Test2::Formatter::Test2') if $params{group}->formatter && $params{group}->formatter eq 'Test2::Formatter::QVF';
-            }
-        },
     );
 };
 
@@ -98,9 +65,6 @@ sub init {
 
     $self->{+INTERACTIVE} //= 1 if $ENV{YATH_INTERACTIVE};
 
-    require(mod2file($self->theme));
-    my $theme = $self->theme->new(use_color => $self->color);
-
     $self->{+FORMATTER} = $f_class->new(
         io            => $io,
         handles       => [$io, $io_err, $io],
@@ -111,7 +75,7 @@ sub init {
         progress      => $self->progress,
         verbose       => $self->verbose,
         quiet         => $self->quiet,
-        theme         => $theme,
+        theme         => $self->theme,
     );
 
     $self->{+DO_STEP} = $self->{+FORMATTER}->can('step') ? 1 : 0;

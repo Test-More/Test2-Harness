@@ -27,6 +27,12 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
         set_env_vars => [qw/T2_HARNESS_IS_VERBOSE HARNESS_IS_VERBOSE/],
     );
 
+    option qvf => (
+        type        => 'Bool',
+        default     => 0,
+        description => "Replaces App::Yath::Theme::Default with App::Yath::Theme::QVF which is quiet for passing tests and verbose for failing ones.",
+    );
+
     option theme => (
         type => 'Scalar',
         short => 't',
@@ -69,7 +75,7 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
 
         long_examples  => [' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
         short_examples => ['MyRenderer',     ' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
-        initialize     => sub { {'App::Yath::Renderer::Formatter' => [], 'App::Yath::Renderer::Summary' => []} },
+        initialize     => sub { {'App::Yath::Renderer::Default' => [], 'App::Yath::Renderer::Summary' => []} },
 
         normalize => sub { fqmod($_[0], ['App::Yath::Renderer', 'Test2::Harness::Renderer']), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
 
@@ -117,11 +123,21 @@ sub init_renderers {
     my ($settings, %params) = @_;
 
     my $rs = $settings->renderer;
+
+    my $theme_class = $rs->theme;
+    require(mod2file($theme_class));
+    my $theme = $theme_class->new(use_color => $settings->term->color);
+
+    my $is_qvf = $rs->qvf || ($rs->verbose && $rs->quiet);
     my $r_classes = $rs->classes;
+
     my @renderers;
     for my $class (sort { $a->weight <=> $b->weight || $a cmp $b } map { require(mod2file($_)); $_ } keys %$r_classes) {
+        $class = 'App::Yath::Theme::QVF'     if $is_qvf  && $class eq 'App::Yath::Theme::Default';
+        $class = 'App::Yath::Theme::Default' if !$is_qvf && $class eq 'App::Yath::Theme::QVF';
+
         my $params = $r_classes->{$class};
-        my $r = $class->new($settings->renderer->all, $settings->term->all, @$params, %params, settings => $settings);
+        my $r = $class->new($settings->renderer->all, $settings->term->all, @$params, %params, settings => $settings, theme => $theme);
         push @renderers => $r;
     }
 

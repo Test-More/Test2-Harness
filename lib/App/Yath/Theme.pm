@@ -1,6 +1,7 @@
 package App::Yath::Theme;
 use strict;
 use warnings;
+use Carp::Always;
 
 use Getopt::Yath::Term qw/color/;
 use List::Util qw/shuffle/;

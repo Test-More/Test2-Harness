@@ -33,3 +33,4 @@ lastlog-1.*
 *.test_info.json
 *.test_info.*.json
 .testsharedjobslots.yml
+xxx

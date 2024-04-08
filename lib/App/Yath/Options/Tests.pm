@@ -216,11 +216,11 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Runner - Runner options for Yath.
+App::Yath::Options::Tests - Options common to all commands that run tests.
 
 =head1 DESCRIPTION
 
-This is where command line options for the runner are defined.
+Options common to all commands that run tests.
 
 =head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 

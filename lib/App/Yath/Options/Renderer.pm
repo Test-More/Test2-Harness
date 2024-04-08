@@ -158,13 +158,7 @@ App::Yath::Options::Renderer - FIXME
 
 =head1 DESCRIPTION
 
-=head1 SYNOPSIS
-
-=head1 EXPORTS
-
-=over 4
-
-=back
+=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 
 =head1 SOURCE
 

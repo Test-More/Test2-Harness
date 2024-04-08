@@ -23,11 +23,6 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
 
 __END__
 
-
-
-
-__END__
-
 =pod
 
 =encoding UTF-8
@@ -38,13 +33,7 @@ App::Yath::Options::IPCAll - FIXME
 
 =head1 DESCRIPTION
 
-=head1 SYNOPSIS
-
-=head1 EXPORTS
-
-=over 4
-
-=back
+=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 
 =head1 SOURCE
 

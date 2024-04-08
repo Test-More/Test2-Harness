@@ -18,17 +18,11 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Persist - FIXME
+App::Yath::Options::Persist - DEPRECATED
 
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS
-
-=head1 EXPORTS
-
-=over 4
-
-=back
 
 =head1 SOURCE
 

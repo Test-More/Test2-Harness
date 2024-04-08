@@ -16,7 +16,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Collector - FIXME
+App::Yath::Options::Collector - DEPRECATED
 
 =head1 DESCRIPTION
 

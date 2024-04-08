@@ -560,11 +560,11 @@ __END__
 
 =head1 NAME
 
-App::Yath::Plugin::Notify - Plugin to send email and/or slack notifications
+App::Yath::Renderer::Notify - Renderer to send email and/or slack notifications
 
 =head1 DESCRIPTION
 
-This plugin is used for sending email and/or slack notifications from yath.
+This renderer is used for sending email and/or slack notifications from yath.
 
 =head1 SYNOPSIS
 
@@ -582,11 +582,10 @@ a slack user or channel that owns the test.
 
 =head2 RUNNING WITH NOTIFICATIONS ENABLED
 
-    $ yath test -pNotify ...
+    $ yath test --renderer Notify ...
 
 Also of note, most of the time you can just specify the notification options
-you want and the plugin will load as needed as long as C<--no-scan-plugins> was
-not specified.
+you want and the renderer will load as needed.
 
 =head3 EMAIL
 

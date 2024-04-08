@@ -18,7 +18,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Debug - FIXME
+App::Yath::Options::Debug - DEPRECATED
 
 =head1 DESCRIPTION
 

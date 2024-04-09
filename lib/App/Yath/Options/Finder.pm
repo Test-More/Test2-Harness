@@ -102,7 +102,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
             map { die "'$_' is not a valid run mode" unless $RERUN_MODES{$_}; $_ => 1 } split /[\s,]+/, $_[0];
         },
 
-        description => ["Pick which test categories to run.", map { sprintf("%-8s %s", "$_:", $RERUN_MODES{$_}) } sort keys %RERUN_MODES],
+        description => join(" " => "Pick which test categories to run.", map { sprintf("%-8s %s", "$_:", $RERUN_MODES{$_}) } sort keys %RERUN_MODES),
 
         trigger => sub {
             my $opt = shift;

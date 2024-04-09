@@ -16,6 +16,8 @@ sub summary            { "No Summary" }
 sub description        { "No Description" }
 sub group              { "Z-FIXME" }
 
+sub cli_args {  }
+
 sub load_plugins   { 0 }
 sub load_resources { 0 }
 sub load_renderers { 0 }

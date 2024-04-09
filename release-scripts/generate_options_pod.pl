@@ -24,31 +24,15 @@ for my $base ('./lib/App/Yath/Options', './lib/App/Yath/Plugin') {
         $pkg =~ s{/}{::}g;
         $pkg =~ s{\.pm$}{}g;
 
-        require $rel;
+        unless (eval { require $rel; 1 }) {
+            next if $@ =~ m/deprecated/i;
+            die $@;
+        }
 
         next unless $pkg->can('options');
         my $options = $pkg->options or next;
-        delete $_->{applicable} for @{$options->all};
-        $options->set_command_class('App::Yath::Command');
-        my $pre_opts = $options->pre_docs('pod', 3);
-        my $cmd_opts = $options->cmd_docs('pod', 3);
-        die "No option docs for $file?" unless $pre_opts || $cmd_opts;
-
-        my $pod = "=head1 PROVIDED OPTIONS\n\n";
-
-        if ($pre_opts) {
-            $pod .= "=head2 YATH OPTIONS (PRE-COMMAND)\n\n";
-            $pod .= $pre_opts;
-        }
-
-        $pod .= "\n\n" if $pre_opts && $cmd_opts;
-
-        if ($cmd_opts) {
-            $pod .= "=head2 COMMAND OPTIONS\n\n";
-            $pod .= $cmd_opts;
-        }
-
-        $pod .= "\n";
+        my $opts = $options->docs('pod', groups => {':{' => '}:'}, head => 2);
+        my $pod = "=head1 PROVIDED OPTIONS\n\n$opts\n";
 
         my $found;
         my @lines;

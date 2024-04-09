@@ -22,7 +22,10 @@ for my $file (readdir($dh)) {
     $pkg =~ s{/}{::}g;
     $pkg =~ s{\.pm$}{}g;
 
-    require $rel;
+    unless (eval { require $rel; 1 }) {
+        next if $@ =~ m/deprecated/i;
+        die $@;
+    }
 
     my $pod = generate_pod($pkg) or die "Could not get usage POD!";
 
@@ -32,7 +35,7 @@ for my $file (readdir($dh)) {
     my @lines;
     open(my $fh, '<', $fq) or die "Could not open file '$fq' for reading: $!";
     while(my $line = <$fh>) {
-        if ($line eq "=head1 POD IS AUTO-GENERATED\n") {
+        if ($line =~ "^=head1 POD IS AUTO-GENERATED") {
             $found++;
             push @lines => $pod;
             next;
@@ -52,40 +55,11 @@ for my $file (readdir($dh)) {
 sub generate_pod {
     my $class = shift;
 
-    die "FIXME";
-
     my $cmd = $class->name;
-    my (@args) = $class->doc_args;
+    my (@args) = $class->cli_args;
 
-    my $options = App::Yath::Options->new();
-    require App::Yath;
-    my $ay = App::Yath->new();
-    $options->include($ay->load_options);
-    $options->set_command_class($class);
-    my $pre_opts = $options->pre_docs('pod', head => 3);
-    my $cmd_opts = $options->cmd_docs('pod', head => 3);
-
-    my $usage = "    \$ yath [YATH OPTIONS] $cmd";
-
-    my @head2s;
-
-    push @head2s => ("=head2 YATH OPTIONS",    $pre_opts) if $pre_opts;
-
-    if ($cmd_opts) {
-        $usage .= " [COMMAND OPTIONS]";
-        push @head2s => ("=head2 COMMAND OPTIONS", $cmd_opts);
-    }
-
-    if (@args) {
-        $usage .= " [COMMAND ARGUMENTS]";
-
-        push @head2s => (
-            "=head2 COMMAND ARGUMENTS",
-            "=over 4",
-            (map { ref($_) ? ( "=item $_->[0]", $_->[1] ) : ("=item $_") } @args),
-            "=back"
-        );
-    }
+    my $usage = "    \$ yath [YATH OPTIONS] $cmd [COMMAND OPTIONS]";
+    $usage .= " [COMMAND ARGUMENTS]" if @args && length($args[0]);
 
     my @out = (
         "=head1 NAME",
@@ -94,26 +68,28 @@ sub generate_pod {
         $class->description,
         "=head1 USAGE",
         $usage,
-        @head2s
     );
+
+    if ($class->can('options')) {
+        my $options = $class->options();
+        my $opts = $options->docs('pod', groups => {':{' => '}:'}, head => 3);
+
+        push @out => ("=head2 OPTIONS", $opts);
+    }
 
     return join("\n\n" => grep { $_ } @out);
 }
-
 
 sub start {
     return ("=pod", "=encoding UTF-8");
 }
 
 sub ending {
-    my ($sec,$min,$hour,$mday,$mon,$year) = localtime();
-    $year = $year + 1900;
-
     return <<"    EOT"
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at
-F<http://github.com/Test-More/Test2-Harness/>.
+L<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 MAINTAINERS
 
@@ -133,12 +109,12 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =head1 COPYRIGHT
 
-Copyright $year Chad Granum E<lt>exodist7\@gmail.comE<gt>.
+Copyright Chad Granum E<lt>exodist7\@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
-See F<http://dev.perl.org/licenses/>
+See L<http://dev.perl.org/licenses/>
 
 =cut
     EOT

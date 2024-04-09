@@ -16,7 +16,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::runner - FIXME
+App::Yath::Command::runner - DEPRECATED
 
 =head1 DESCRIPTION
 

@@ -658,7 +658,7 @@ This is the category  (foo)
         # Note this was done by printing the value and spot-checking it, so it
         # is a test that the doc output does not accidentally change, there
         # could be bugs that need to be fixed that mean this needs to change.
-        is(options->docs('pod', groups => {':{' => '}:'}, category => 'foo', head => 3), <<"        EOT", "Got expected docs");
+        is(options->docs('pod', groups => {':{' => '}:'}, head => 3), <<"        EOT", "Got expected docs");
 =head3 This is the category
 
 =over 4

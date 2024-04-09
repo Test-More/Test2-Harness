@@ -1,8 +1,6 @@
 #!/usr/bin/perl
-
-# Avoid contaminating the 'main' namespace, and the current scope (which could
-# be re-rused by goto_alt_script()!)
-# Do not use strict or warnings. Keep this file as tiny as possible
+use strict;
+use warnings;
 
 BEGIN {
     return if $^C;

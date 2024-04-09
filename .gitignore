@@ -34,3 +34,37 @@ lastlog-1.*
 *.test_info.*.json
 .testsharedjobslots.yml
 xxx
+
+!Build/
+.last_cover_stats
+/MYMETA.*
+*.o
+*.pm.tdy
+*.bs
+*.ERR
+*.bak
+
+# Devel::NYTProf
+nytprof.out
+
+# Dizt::Zilla
+/.build/
+
+# Module::Build
+_build/
+Build
+Build.bat
+
+# Module::Install
+inc/
+
+# ExtUtils::MakeMaker
+/blib/
+/_eumm/
+/*.gz
+/Makefile
+/Makefile.old
+/MANIFEST.bak
+/pm_to_blib
+/*.zip
+/Test2-Harness-Renderer-JUnit-*

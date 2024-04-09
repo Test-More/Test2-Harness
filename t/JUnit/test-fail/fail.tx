@@ -1,0 +1,8 @@
+use Test2::V0;
+
+# plan ok one test fail
+
+pass("pass");
+fail("this is a failure");
+
+done_testing;

@@ -1,0 +1,8 @@
+use Test2::V0;
+
+plan 2;
+
+pass("pass");
+pass("another success");
+
+die "plan 2 with 2 success exit non 0...";

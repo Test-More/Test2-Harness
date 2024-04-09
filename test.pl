@@ -9,11 +9,11 @@ use App::Yath::Util qw/find_yath/;
 print "1..2\n";
 
 $ENV{'YATH_SELF_TEST'} = 1;
-system($^X, find_yath(), '-D', 'test', '--qvf', '-r1', '--default-search' => './t', '--default-search' => './t2', @ARGV);
+system($^X, '-Ilib', find_yath(), '-D', 'test', '--qvf', '-r1', '--default-search' => './t', '--default-search' => './t2', @ARGV);
 my $exit1 = $?;
 
 $ENV{T2_NO_FORK} = 1;
-system($^X, find_yath(), '-D', 'test', '--qvf', '-r1', '--default-search' => './t', '--default-search' => './t2', @ARGV);
+system($^X, '-Ilib', find_yath(), '-D', 'test', '--qvf', '-r1', '--default-search' => './t', '--default-search' => './t2', @ARGV);
 my $exit2 = $?;
 
 print "not " if $exit1;

@@ -85,6 +85,7 @@ on 'configure' => sub {
 
 on 'develop' => sub {
   requires "Test2::Require::Module" => "0.000127";
+  requires "Test::Perl::Critic" => "0";
   requires "Test::Pod" => "1.41";
   requires "Test::Spelling" => "0.12";
 };

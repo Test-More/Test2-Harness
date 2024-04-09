@@ -10,13 +10,9 @@ our $VERSION = '2.000000';
 
 use Importer Importer => 'import';
 
-use Importer 'Test2::Harness::Util::Minimal';
-
 use Importer 'Test2::Util::Times' => qw/render_duration/;
 
-
 our @EXPORT_OK = (
-    @Test2::Harness::Util::Minimal::EXPORT,
     qw{
         find_libraries
         mod2file
@@ -43,8 +39,36 @@ our @EXPORT_OK = (
         render_status_data
 
         looks_like_uuid
+
+        clean_path
+        find_in_updir
     },
 );
+
+sub clean_path {
+    my ( $path, $absolute ) = @_;
+
+    $absolute //= 1;
+    $path = Cwd::realpath($path) // $path if $absolute;
+
+    return File::Spec->rel2abs($path);
+}
+
+sub find_in_updir {
+    my $path = shift;
+    return clean_path($path) if -f $path;
+
+    my %seen;
+    while(1) {
+        $path = File::Spec->catdir('..', $path);
+        my $check = eval { Cwd::realpath(File::Spec->rel2abs($path)) };
+        last unless $check;
+        last if $seen{$check}++;
+        return $check if -f $check;
+    }
+
+    return;
+}
 
 sub looks_like_uuid {
     my ($in) = @_;

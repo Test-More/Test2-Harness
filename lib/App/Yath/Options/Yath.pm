@@ -5,12 +5,15 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util qw/find_libraries mod2file fqmod/;
-use Test2::Harness::Util::Minimal qw/find_in_updir clean_path/;
+use Test2::Harness::Util qw/find_in_updir clean_path/;
 
 use Cwd();
 use File::Spec();
 
 use Getopt::Yath;
+include_options(
+    'App::Yath::Options::Harness',
+);
 
 option_group {group => 'yath', category => 'Yath Options'} => sub {
     option project => (
@@ -57,42 +60,54 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
         notes => 'This is parsed early in the argument processing sequence, before options that may be earlier in your argument list.',
     );
 
+    my $INC_SEEN;
     option dev_libs => (
-        type        => 'AutoList',
+        type        => 'AutoPathList',
         short       => 'D',
         name        => 'dev-lib',
 
         autofill => sub { map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch' },
 
-        description => 'Add paths to @INC before loading ANYTHING. This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
+        description => 'This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
+        notes => "This option can cause yath to use exec() to reload itself with the correct libraries in place. Each occurence of this argument can cause an additional exec() call. Use --dev-libs-verbose BEFORE any -D calls to see the exec() calls.",
 
-        long_examples  => ['', '=lib'],
-        short_examples => ['', 'lib', '=lib', 'lib'],
-
-        normalize => \&clean_path,
+        long_examples  => ['', '=lib', '="lib/*"'],
+        short_examples => ['', 'lib', '=lib', 'lib', '"lib/*"'],
 
         trigger => sub {
             my $opt = shift;
             my %params = @_;
-
             return unless $params{action} eq 'set';
 
-            my $ref = $params{ref};
-            my $val = $params{val};
-            my %seen = map { $_ => 1 } @{$$ref};
-            my @new = grep { !$seen{$_} } @$val;
+            $INC_SEEN //= {map {($_ => 1, clean_path($_) => 1)} @INC};
 
-            return unless @new;
+            my @missing;
+            for my $lib (@{$params{val}}) {
+                next if $INC_SEEN->{$lib} || $INC_SEEN->{clean_path($lib)};
+                push @missing => $lib;
+            }
 
-            warn <<"            EOT" for @new;
-dev-lib '$_' added to \@INC late, it is possible some yath libraries were already loaded from other paths.
-(Maybe you need to move the -D or --dev-lib argument(s) to be earlier in your command line or config file?)
-            EOT
+            return unless @missing;
 
-            die "Some dev-lib paths were added too late.\n";
+            my $settings = $params{settings};
+            if ($settings->yath->dev_libs_verbose) {
+                print STDERR "Developer library paths were specified but missing from \@INC... re-launching yath with proper include paths...\n";
+                print STDERR "  -> $_\n" for @missing;
+                print STDERR "\n";
+            }
+
+            my %default = map {($_ => 1, clean_path($_) => 1)} grep { $_ } split /\n/, `$^X -e 'print "\$_\n" for \@INC'`;
+            my @add = map { "-I$_" } grep { !$default{$_} } map {clean_path($_)} @INC, @missing;
+            exec($^X, @add, $settings->yath->script, @{$settings->yath->orig_argv // []});
         },
 
-        notes => 'This is parsed early in the argument processing sequence, before options that may be earlier in your argument list.',
+        normalize => \&clean_path,
+    );
+
+    option dev_libs_verbose => (
+        type => 'Bool',
+        default => 0,
+        description => 'Be verbose and announce that yath will re-exec in order to have the correct includes (normally yath will just call exec() quietly)',
     );
 
     option help => (

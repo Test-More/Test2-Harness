@@ -1,19 +1,36 @@
-package Getopt::Yath::Option::AutoList;
+package Getopt::Yath::Option::AutoPathList;
 use strict;
 use warnings;
 
 our $VERSION = '2.000000';
 
-use parent 'Getopt::Yath::Option::List';
+use Getopt::Yath::Option::PathList;
+
+use parent 'Getopt::Yath::Option::AutoList';
 use Test2::Harness::Util::HashBase;
 
-sub allows_arg        { 1 }
-sub requires_arg      { 0 }
-sub allows_autofill   { 1 }
-sub requires_autofill { 1 }
+BEGIN {
+    *normalize_value = Getopt::Yath::Option::PathList->can('normalize_value');
+}
 
-sub inject_default_long_examples  { qq{='["json","list"]'} }
-sub inject_default_short_examples { qq{='["json","list"]'} }
+sub default_long_examples  {
+    my $self = shift;
+    my %params = @_;
+
+    my $list = $self->SUPER::default_long_examples(%params);
+    push @$list => (qq{='*.*'});
+    return $list;
+}
+
+sub default_short_examples {
+    my $self = shift;
+    my %params = @_;
+
+    my $list = $self->SUPER::default_long_examples(%params);
+    push @$list => (qq{='*.*'});
+    return $list;
+}
+
 
 1;
 
@@ -25,7 +42,7 @@ __END__
 
 =head1 NAME
 
-Getopt::Yath::Option::AutoList - FIXME
+Getopt::Yath::Option::AutoPathList - FIXME
 
 =head1 DESCRIPTION
 

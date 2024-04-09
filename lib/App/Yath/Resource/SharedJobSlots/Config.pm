@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use YAML::Tiny;
 use Sys::Hostname qw/hostname/;
-use Test2::Harness::Util::Minimal qw/find_in_updir/;
+use Test2::Harness::Util qw/find_in_updir/;
 
 use Test2::Harness::Util::HashBase qw{
     <config_file

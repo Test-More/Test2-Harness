@@ -14,7 +14,7 @@ $dir =~ s{^\./}{};
 
 yath(
     command => 'test',
-    pre     => ['-p+SmokePlugin'],
+    pre     => ["-D=$dir/lib", '-p+SmokePlugin'],
     args    => [$dir, '--ext=tx'],
     log     => 1,
     exit    => 0,
@@ -23,7 +23,7 @@ yath(
 
 yath(
     command => 'test',
-    pre     => ['-p+SmokePlugin'],
+    pre     => ["-D=$dir/lib", '-p+SmokePlugin'],
     args    => [$dir, '-j3', '--ext=tx'],
     log     => 1,
     exit    => 0,

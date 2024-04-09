@@ -74,12 +74,15 @@ sub normalize_value {
     return @output;
 }
 
+sub inject_default_long_examples  { qq{ '["json","list"]'}, qq{='["json","list"]'} }
+sub inject_default_short_examples { qq{ '["json","list"]'}, qq{='["json","list"]'} }
+
 sub default_long_examples  {
     my $self = shift;
     my %params = @_;
 
     my $list = $self->SUPER::default_long_examples(%params);
-    push @$list => (qq{ '["json","list"]'}, qq{='["json","list"]'});
+    push @$list => $self->inject_default_long_examples();
     return $list;
 }
 
@@ -88,7 +91,7 @@ sub default_short_examples {
     my %params = @_;
 
     my $list = $self->SUPER::default_long_examples(%params);
-    push @$list => (qq{ '["json","list"]'}, qq{='["json","list"]'});
+    push @$list => $self->inject_default_short_examples();
     return $list;
 }
 

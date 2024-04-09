@@ -529,11 +529,9 @@ This is the category  (foo)
   [auto-list]
   -L
   -L=ARG
-  -L '["json","list"]'
   -L='["json","list"]'
   --auto-list
   --auto-list=ARG
-  --auto-list '["json","list"]'
   --auto-list='["json","list"]'
   --no-auto-list
     an auto list
@@ -697,8 +695,6 @@ NO DESCRIPTION - FIX ME
 
 =item -L=ARG
 
-=item -L '["json","list"]'
-
 =item -L='["json","list"]'
 
 =item -L=:{ ARG1 ARG2 ... }:
@@ -706,8 +702,6 @@ NO DESCRIPTION - FIX ME
 =item --auto-list
 
 =item --auto-list=ARG
-
-=item --auto-list '["json","list"]'
 
 =item --auto-list='["json","list"]'
 

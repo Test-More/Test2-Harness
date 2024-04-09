@@ -23,13 +23,6 @@ include_options(
 );
 
 option_group {group => 'speedtag', category => 'Speedtag Options'} => sub {
-    option dummy => (
-        type    => 'Bool',
-        default => 0,
-
-        description => "Do not actually tag files",
-    );
-
     option generate_durations_file => (
         type => 'Auto',
         alt  => ['durations', 'duration'],
@@ -166,7 +159,7 @@ sub run {
                 $durations{$tfile} = uc($dur);
             }
 
-            if ($settings->speedtag->dummy) {
+            if ($settings->harness->dummy) {
                 print "Would tag (dummy) file $job->{file} with duration '$dur'\n";
                 chomp($old);
                 chomp($new);

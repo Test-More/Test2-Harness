@@ -14,7 +14,7 @@ use Carp qw/confess/;
 use App::Yath::Resource::SharedJobSlots::State;
 use App::Yath::Resource::SharedJobSlots::Config;
 
-use Test2::Harness::Util::Minimal qw/find_in_updir/;
+use Test2::Harness::Util qw/find_in_updir/;
 
 use Getopt::Yath;
 

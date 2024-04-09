@@ -30,6 +30,7 @@ use Getopt::Yath::Settings;
 use Getopt::Yath::Term qw/USE_COLOR color fit_to_width/;
 
 use App::Yath::Options::Yath;
+use App::Yath::ConfigFile;
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
@@ -349,7 +350,18 @@ sub process_args {
 
     my $settings = $self->{+SETTINGS};
 
-    my $state = $self->_process_global_args($self->argv);
+    my $argv = $self->argv;
+
+    my @configs;
+    for my $attr (qw/config_file user_config_file/) {
+        my $file = $settings->yath->$attr or next;
+
+        my $config = App::Yath::ConfigFile->new(file => $file);
+        push @configs => $config;
+        unshift @$argv => $config->global;
+    }
+
+    my $state = $self->_process_global_args($argv);
 
     my $cmd;
 
@@ -390,7 +402,11 @@ sub process_args {
             $cmd = $stop;
         }
 
-        push @cmd_args => @{$state->{remains} // []};
+        @cmd_args = (
+            (map { $_->command($cmd) } reverse @configs),
+            @cmd_args,
+            @{$state->{remains} // []},
+        );
 
         $self->load_command($cmd) if $cmd;
 
@@ -400,7 +416,7 @@ sub process_args {
     $cmd //= 'do';
 
     my $test_args;
-    my $argv = [@{$state->{skipped}}];
+    $argv = [@{$state->{skipped}}];
     if (my $stop = $state->{stop}) {
         if ($stop eq '--') {
             for my $arg (@{$state->{remains}}) {
@@ -445,7 +461,6 @@ sub run {
     my $self = shift;
 
     $self->clear_env();
-
     $self->process_args();
 
     my $settings = $self->{+SETTINGS};

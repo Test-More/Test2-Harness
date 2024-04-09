@@ -1,0 +1,9 @@
+-D
+-D=rel(t2/lib)
+;-pSelfTest
+--project Test2-Harness
+
+[test]
+-Irel(t2/lib)
+--default-search rel(t)
+--default-search rel(t2)

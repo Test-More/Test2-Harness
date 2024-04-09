@@ -133,7 +133,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option changed => (
-        type          => 'List',
+        type          => 'PathList',
         split_on      => ',',
         description   => "Specify one or more files as having been changed.",
         long_examples => [' path/to/file'],
@@ -141,7 +141,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
 
     option changes_exclude_files => (
         alt           => ['changes-exclude-file'],
-        type          => 'List',
+        type          => 'PathList',
         split_on      => ',',
         description   => 'Specify one or more files to ignore when looking at changes',
         long_examples => [' path/to/file'],
@@ -149,7 +149,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
 
     option changes_exclude_patterns => (
         alt           => ['changes-exclude-pattern'],
-        type          => 'List',
+        type          => 'PathList',
         split_on      => ',',
         description   => 'Ignore files matching this pattern when looking for changes. Your pattern will be inserted unmodified into a `$file =~ m/$pattern/` check.',
         long_examples => [" '(apple|pear|orange)'"],
@@ -157,7 +157,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
 
     option changes_filter_files => (
         alt           => ['changes-filter-file'],
-        type          => 'List',
+        type          => 'PathList',
         split_on      => ',',
         description   => 'Specify one or more files to check for changes. Changes to other files will be ignored',
         long_examples => [' path/to/file'],
@@ -234,7 +234,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
 
     option exclude_files => (
         alt => ['exclude-file'],
-        type  => 'List',
+        type  => 'PathList',
         field => 'exclude-files',
 
         long_examples  => [' t/nope.t'],
@@ -248,15 +248,15 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
         type  => 'List',
         field => 'exclude-patterns',
 
-        long_examples  => [' t/nope.t'],
-        short_examples => [' t/nope.t'],
+        long_examples  => [' nope'],
+        short_examples => [' nope'],
 
         description => "Exclude a pattern from testing, matched using m/\$PATTERN/",
     );
 
     option exclude_lists => (
         alt  => ['exclude-list'],
-        type => 'List',
+        type => 'PathList',
 
         long_examples  => [' file.txt', ' http://example.com/exclusions.txt'],
         short_examples => [' file.txt', ' http://example.com/exclusions.txt'],
@@ -265,14 +265,14 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     );
 
     option default_search => (
-        type    => 'List',
+        type    => 'PathList',
         default => sub { './t', './t2', './test.pl' },
 
         description => "Specify the default file/dir search. defaults to './t', './t2', and 'test.pl'. The default search is only used if no files were specified at the command line",
     );
 
     option default_at_search => (
-        type    => 'List',
+        type    => 'PathList',
         default => sub { './xt' },
 
         description => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",

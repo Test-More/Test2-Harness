@@ -67,7 +67,7 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
     );
 
     option includes => (
-        type        => 'List',
+        type        => 'PathList',
         name        => 'include',
         short       => 'I',
         description => "Add a directory to your include paths",

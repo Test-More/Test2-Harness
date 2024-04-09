@@ -143,10 +143,10 @@ sub collect {
     my $err = $@;
 
     if (!$ok) {
-        $self->_die($err, no_exit => 1);
-        print $stderr $err;
-        print STDERR "Test2 Harness Collector Error: $err";
-        return 255;
+        eval { $self->_die($err, no_exit => 1) };
+        eval { print $stderr $err };
+        eval { print STDERR "Test2 Harness Collector Error: $err" };
+        exit(255);
     }
 
     return 0 unless $params{forward_exit};

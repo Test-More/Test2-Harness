@@ -36,7 +36,11 @@ sub init {
         $line =~ s/\s+$//g;
         next unless length($line);
 
-        $line =~ s{rel\(([^\)]+)\)}{clean_path("$rel/$1")}ge;
+        # Support rel(...)
+        # Also support legacy glob(...) and relglob(...) by stripping the glob
+        # part out as that is handled automatically now in applicable options.
+        $line =~ s{rel(?:glob)?\(([^\)]+)\)}{clean_path("$rel/$1")}ge;
+        $line =~ s{glob\(([^\)]+)\)}{$1}g;
 
         if ($line =~ m/^\[(\S+)\]/) {
             $set = $command->{$1} //= [];

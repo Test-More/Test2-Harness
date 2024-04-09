@@ -26,11 +26,14 @@ requires "IPC::Cmd" => "0";
 requires "IPC::Open3" => "0";
 requires "Import::Into" => "0";
 requires "Importer" => "0.025";
+requires "JSON::PP" => "0";
 requires "Linux::Inotify2" => "2.3";
 requires "List::Util" => "1.56";
+requires "Long::Jump" => "0.000001";
 requires "POSIX" => "0";
 requires "Scalar::Util" => "0";
 requires "Scope::Guard" => "0";
+requires "Storable" => "0";
 requires "Symbol" => "0";
 requires "Sys::Hostname" => "0";
 requires "Term::Table" => "0.015";
@@ -56,6 +59,7 @@ requires "Test::Builder::Formatter" => "1.302198";
 requires "Test::More" => "1.302198";
 requires "Text::ParseWords" => "0";
 requires "Time::HiRes" => "0";
+requires "XML::Generator" => "0";
 requires "YAML::Tiny" => "0";
 requires "base" => "0";
 requires "constant" => "0";
@@ -76,7 +80,13 @@ suggests "Win32::Console::ANSI" => "0";
 
 on 'test' => sub {
   requires "Child" => "0";
+  requires "Data::Dumper" => "0";
   requires "File::Copy" => "0";
+  requires "File::Temp" => "0";
+  requires "Test2::Plugin::NoWarnings" => "0";
+  requires "Test2::Tools::Explain" => "0";
+  requires "Test::More" => "1.302198";
+  requires "XML::Simple" => "0";
 };
 
 on 'configure' => sub {
@@ -85,7 +95,9 @@ on 'configure' => sub {
 
 on 'develop' => sub {
   requires "Test2::Require::Module" => "0.000127";
+  requires "Test::CheckManifest" => "0";
   requires "Test::Perl::Critic" => "0";
   requires "Test::Pod" => "1.41";
+  requires "Test::Pod::Coverage" => "0";
   requires "Test::Spelling" => "0.12";
 };

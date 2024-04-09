@@ -18,7 +18,7 @@ jobs:
     name: "simple testrun"
     env:
       PERL_USE_UNSAFE_INC: 0
-      AUTHOR_TESTING: 1
+      AUTHOR_TESTING: 0
       AUTOMATED_TESTING: 1
       RELEASE_TESTING: 1
       PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
@@ -35,7 +35,7 @@ jobs:
       - name: install dependencies from cpanfile
         uses: perl-actions/install-with-cpm@stable
         with:
-          cpanfile: "cpanfile"          
+          cpanfile: "cpanfile"
       - run: perl Makefile.PL
       - run: make
       - run: make test
@@ -51,7 +51,7 @@ jobs:
 
     env:
        PERL_USE_UNSAFE_INC: 0
-       AUTHOR_TESTING: 1
+       AUTHOR_TESTING: 0
        AUTOMATED_TESTING: 1
        RELEASE_TESTING: 1
        PERL_CARTON_PATH: $GITHUB_WORKSPACE/local

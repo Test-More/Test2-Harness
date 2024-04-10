@@ -29,13 +29,31 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
     option slots => (
         type           => 'Scalar',
         short          => 'j',
-        default        => 1,
         alt            => ['jobs', 'job_count'],
         description    => 'Set the number of concurrent jobs to run. Add a :# if you also wish to designate multiple slots per test. 8:2 means 8 slots, but each test gets 2 slots, so 4 tests run concurrently. Tests can find their concurrency assignemnt in the "T2_HARNESS_MY_JOB_CONCURRENCY" environment variable.',
+        notes          => "If System::Info is installed, this will default to half the cpu core count, otherwise the default is 2.",
         long_examples  => [' 4', ' 8:2'],
         short_examples => ['4',  '8:2'],
         from_env_vars  => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
         clear_env_vars => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
+
+        default => sub {
+            if (eval { require System::Info; System::Info->can('ncore') ? 1 : 0 }) {
+                my $count = System::Info->new->ncore;
+                if ($count > 2) {
+                    $count /= 2;
+                    print "System::Info is installed, setting job count to $count (Half the cores on this system)\n";
+                    return $count;
+                }
+                else {
+                    print "System::Info is installed, setting job count to 2 (Because we have less than 3 cores)\n";
+                    return 2;
+                }
+            }
+
+            print "System::Info is not installed, setting job count to 2.\n";
+            return 2;
+        },
 
         trigger => sub {
             my $opt    = shift;

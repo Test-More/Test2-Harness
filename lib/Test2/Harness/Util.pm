@@ -2,9 +2,12 @@ package Test2::Harness::Util;
 use strict;
 use warnings;
 
+use Cwd qw/realpath/;
 use Carp qw/confess croak/;
 use Fcntl qw/LOCK_EX LOCK_UN :mode/;
 use Test2::Util qw/try_sig_mask do_rename/;
+
+use File::Spec;
 
 our $VERSION = '2.000000';
 
@@ -49,7 +52,7 @@ sub clean_path {
     my ( $path, $absolute ) = @_;
 
     $absolute //= 1;
-    $path = Cwd::realpath($path) // $path if $absolute;
+    $path = realpath($path) // $path if $absolute;
 
     return File::Spec->rel2abs($path);
 }
@@ -61,7 +64,7 @@ sub find_in_updir {
     my %seen;
     while(1) {
         $path = File::Spec->catdir('..', $path);
-        my $check = eval { Cwd::realpath(File::Spec->rel2abs($path)) };
+        my $check = eval { realpath(File::Spec->rel2abs($path)) };
         last unless $check;
         last if $seen{$check}++;
         return $check if -f $check;

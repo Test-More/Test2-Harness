@@ -711,7 +711,7 @@ B<Note:> that an environment variable can be prefixed with a C<!> to indicate
 the value should be boolean-inverted. This means that an option like C<quiet>
 can have C<< from_env_vars => ['!VERBOSE'] >> to be set to true when the
 VERBOSE env var is false. This also works when setting a variable, so you could
-have C<< set_env_vars => ['!VERBOSE']>.
+have C<< set_env_vars => ['!VERBOSE'] >>.
 
 =item clear_env_vars => \@LIST
 
@@ -731,7 +731,7 @@ B<Note:> that an environment variable can be prefixed with a C<!> to indicate
 the value should be boolean-inverted. This means that an option like C<quiet>
 can have C<< from_env_vars => ['!VERBOSE'] >> to be set to true when the
 VERBOSE env var is false. This also works when setting a variable, so you could
-have C<< set_env_vars => ['!VERBOSE']>.
+have C<< set_env_vars => ['!VERBOSE'] >>.
 
 =item short_examples => \@LIST
 

@@ -60,7 +60,7 @@ $inject
 
     close($fh);
 
-    sleep 2;
+    sleep 5;
 }
 
 touch('$Preload::Flux::VAR = "initial";');

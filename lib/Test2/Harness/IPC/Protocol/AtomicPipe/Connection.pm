@@ -56,7 +56,6 @@ sub init {
     }
     else {
         my $p = Atomic::Pipe->write_fifo($fifo);
-        $p->blocking(0);
         $p->resize_or_max($p->max_size) if $p->max_size;
 
         $self->{+PIPE} = $p;

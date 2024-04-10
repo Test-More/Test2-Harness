@@ -754,8 +754,9 @@ sub _process {
     my $pe_timeout = $self->post_exit_timeout;
 
     my $handles = [];
-    push @$handles => [$stdout->rh, sub { $last_event = time; $self->handle_event(stdout => $stdout) }, eof => sub { $stdout->eof }, name => 'stdout'];
-    push @$handles => [$stderr->rh, sub { $last_event = time; $self->handle_event(stderr => $stderr) }, eof => sub { $stderr->eof }, name => 'stderr']
+    my $broken = {};
+    push @$handles => [$stdout->rh, sub { $last_event = time; $self->handle_event(stdout => $stdout, $broken) }, eof => sub { $broken->{$stdout} || $stdout->eof }, name => 'stdout'];
+    push @$handles => [$stderr->rh, sub { $last_event = time; $self->handle_event(stderr => $stderr, $broken) }, eof => sub { $broken->{$stderr} || $stderr->eof }, name => 'stderr']
         unless $self->{+MERGE_OUTPUTS};
 
     ipc_loop(
@@ -766,8 +767,8 @@ sub _process {
 
         iteration_start => sub {
             $self->{+STEP}->() if $self->{+STEP};
-            $self->peek_event($pid, stderr => $stderr);
-            $self->peek_event($pid, stdout => $stdout);
+            $self->peek_event($pid, stderr => $stderr, $broken);
+            $self->peek_event($pid, stdout => $stdout, $broken);
             $self->_flush(age => 0.5);
         },
 
@@ -896,11 +897,11 @@ sub _process {
 
 sub peek_event {
     my $self = shift;
-    my ($pid, $name, $fh) = @_;
+    my ($pid, $name, $fh, $broken) = @_;
 
     my $last_peek = $self->{+PEEKS}->{$name} // ['', 0];
 
-    my ($type, $val) = $fh->get_line_burst_or_data(peek_line => 1);
+    my ($type, $val) = $self->get_line_burst_or_data($name, $fh, broken => $broken, peek_line => 1);
     return unless $type;
 
     if ($type eq 'peek') {
@@ -930,17 +931,38 @@ sub peek_event {
 
 sub handle_event {
     my $self = shift;
-    my ($name, $fh) = @_;
+    my ($name, $fh, $broken) = @_;
 
     my $out = 0;
     while (1) {
-        my ($type, $val) = $fh->get_line_burst_or_data();
+        my ($type, $val) = $self->get_line_burst_or_data($name, $fh, broken => $broken);
         last unless $type;
 
         $out .= $self->_handle_event($name, $type, $val);
     }
 
     return $out++;
+}
+
+sub get_line_burst_or_data {
+    my $self = shift;
+    my ($name, $fh, %params) = @_;
+
+    my $broken = $params{broken};
+
+    return if $broken && $broken->{$fh};
+
+    my ($type, $val);
+    if (eval { ($type, $val) = $fh->get_line_burst_or_data(%params); 1 }) {
+        return ($type, $val);
+    }
+
+    my $err = $@ || "An error occured";
+
+    warn $err;
+    $broken->{$fh} = $err if $broken;
+
+    return;
 }
 
 sub _handle_event {

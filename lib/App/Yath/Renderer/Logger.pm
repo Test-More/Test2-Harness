@@ -177,9 +177,11 @@ sub start {
     print "Opened log file: $file\n";
 
     my $link = normalize_log_file(lastlog => $self->settings);
-    symlink($file => $link) or die "Could not create symlink $file -> $link: $!";
+    unless ($file eq $link) {
+        symlink($file => $link) or die "Could not create symlink $file -> $link: $!";
+        print "Linked log file: $link\n";
+    }
 
-    print "Linked log file: $link\n";
 }
 
 sub render_event {

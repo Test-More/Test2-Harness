@@ -38,12 +38,12 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
         clear_env_vars => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
 
         default => sub {
-            if (eval { require System::Info; System::Info->can('ncore') ? 1 : 0 }) {
-                my $count = System::Info->new->ncore;
-                if ($count > 2) {
-                    $count /= 2;
-                    print "System::Info is installed, setting job count to $count (Half the cores on this system)\n";
-                    return $count;
+            my $ncore = eval { require System::Info; System::Info->new->ncore } || 0;
+            if ($ncore) {
+                if ($ncore > 2) {
+                    $ncore /= 2;
+                    print "System::Info is installed, setting job count to $ncore (Half the cores on this system)\n";
+                    return $ncore;
                 }
                 else {
                     print "System::Info is installed, setting job count to 2 (Because we have less than 3 cores)\n";
@@ -51,7 +51,7 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
                 }
             }
 
-            print "System::Info is not installed, setting job count to 2.\n";
+            print "Setting job count to 2. Install a sufficient version of System::Info to have this default to half the total number of cores.\n";
             return 2;
         },
 

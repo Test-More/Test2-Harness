@@ -141,7 +141,7 @@ sub find_files_to_watch {
         %watches = %{$stage->watches};
     }
 
-    for my $file (map { clean_path($_) } values %INC) {
+    for my $file (map { $_ ? clean_path($_) : () } values %INC) {
         next if ref $file;
         next unless -e $file;
         next unless $self->should_watch($file);

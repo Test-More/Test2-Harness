@@ -45,6 +45,9 @@ sub yath {
     my $enc = delete $params{encoding};
     my $prefix = delete $params{prefix};
 
+    my $timeout = delete $params{timeout};
+    my $timeout_cb = delete $params{timeout_cb};
+
     my $subtest  = delete $params{test} // delete $params{tests} // delete $params{subtest};
     my $exittest = delete $params{exit};
 
@@ -114,6 +117,16 @@ sub yath {
         swap_io(\*STDERR, $wh);
     };
 
+    local $SIG{ALRM};
+    if ($timeout) {
+        $SIG{ALRM} = sub {
+            $timeout_cb->($pid) if $timeout_cb;
+            kill('TERM', $pid);
+        };
+
+        alarm($timeout);
+    }
+
     my $our_pid = $$;
     eval "END{ kill('TERM', \$pid) if \$pid && \$\$ == $our_pid }; 1" or die $@;
 
@@ -145,6 +158,8 @@ sub yath {
         waitpid($pid, 0);
         $exit = $?;
     }
+
+    alarm(0) if $timeout;
 
     $pid = undef;
 

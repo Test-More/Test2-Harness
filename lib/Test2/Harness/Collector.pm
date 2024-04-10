@@ -799,6 +799,10 @@ sub _process {
             }
 
             if (defined $exited) {
+                for my $h (@$handles) {
+                    my ($x, $y, %params) = @$h;
+                    return 0 unless $params{eof}->();
+                }
                 return 1 if !$auditor;
                 return 1 if $auditor->has_plan;
                 return 1 if $exit;                # If the exit value is not true we do not wait for post-exit timeout

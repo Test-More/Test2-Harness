@@ -51,6 +51,8 @@ our @EXPORT_OK = (
 sub clean_path {
     my ( $path, $absolute ) = @_;
 
+    confess "No path was provided to clean_path()" unless $path;
+
     $absolute //= 1;
     $path = realpath($path) // $path if $absolute;
 

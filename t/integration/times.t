@@ -10,6 +10,8 @@ my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
+local $ENV{TABLE_TERM_SIZE} = 500;
+
 my $out = yath(
     command => 'test',
     args    => [$dir, '--ext=tx'],

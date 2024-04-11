@@ -31,9 +31,9 @@ my @renderers = qw{--renderer=JUnit};
 
 delete $ENV{JUNIT_TEST_FILE};    # make sure it's not defined
 
-my $env = {                      # env passed to yath
-    PERL5LIB => "$FindBin::Bin/../../lib" . $ENV{PERL5LIB} ? ":$ENV{PERL5LIB}" : '',
-};
+# env passed to yath
+my $env = {PERL5LIB => "$FindBin::Bin/../../lib"};
+$env->{PERL5LIB} .= ":$ENV{PERL5LIB}" if $ENV{PERL5LIB};
 
 {
     note "all tests are ok - JUNIT_TEST_FILE not set ; renderer define";

@@ -1,5 +1,7 @@
 use Test2::V0;
 use Test2::Plugin::DieOnFail;
+# HARNESS-CONFLICTS-PERSIST
+# HARNESS-DURATION-LONG
 
 use App::Yath::Tester qw/yath/;
 use File::Temp qw/tempdir/;

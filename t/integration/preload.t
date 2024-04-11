@@ -1,4 +1,6 @@
 use Test2::V0;
+# HARNESS-CONFLICTS-PERSIST
+# HARNESS-DURATION-LONG
 
 use File::Temp qw/tempdir/;
 use File::Spec;

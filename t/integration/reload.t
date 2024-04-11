@@ -1,4 +1,6 @@
 use Test2::V0;
+# HARNESS-CONFLICTS-PERSIST
+# HARNESS-DURATION-LONG
 #use Test2::Plugin::DieOnFail;
 
 use File::Temp qw/tempdir/;

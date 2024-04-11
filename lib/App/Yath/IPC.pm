@@ -261,7 +261,7 @@ sub _generate_ipc {
 
     my $pre  = $settings->ipc->prefix;
     my $file = join "-" => ($pre, $daemon ? 'daemon' : 'one', $$, $pshort);
-    $file .= ":${port}" if length($port);
+    $file .= ":${port}" if defined($port) && length($port);
 
     my ($dir) = @{$self->dirs};
     my $full = clean_path(File::Spec->catfile($dir, $file));

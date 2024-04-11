@@ -17,6 +17,7 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Tools::Explain;
 use Test2::Plugin::NoWarnings;
 
+use Test2::Require::Module 'XML::Simple';
 use XML::Simple ();
 
 $ENV{TABLE_TERM_SIZE} = 200;

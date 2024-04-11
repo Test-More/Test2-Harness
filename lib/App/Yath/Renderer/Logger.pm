@@ -25,7 +25,10 @@ option_group {group => 'logging', category => "Logging Options", applicable => \
         prefix      => 'log',
         type        => 'Scalar',
         normalize   => \&clean_path,
-        default => sub { File::Spec->tmpdir() },
+        default => sub {
+            my ($options, $settings) = @_;
+            return $settings->yath->orig_tmp // File::Spec->tmpdir();
+        },
         description => 'Specify a log directory. Will fall back to the system temp dir.',
     );
 

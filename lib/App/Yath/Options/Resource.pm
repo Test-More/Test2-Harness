@@ -94,13 +94,15 @@ sub jobs_post_process {
 
     my $settings = $state->{settings};
     my $resource = $settings->resource;
-    $resource->field(slots     => 1) unless $resource->slots;
-    $resource->field(job_slots => 1) unless $resource->job_slots;
+    $resource->option(slots     => 1) unless $resource->slots;
+    $resource->option(job_slots => 1) unless $resource->job_slots;
 
     my $slots     = $resource->slots;
     my $job_slots = $resource->job_slots;
 
     die "The slots per job (set to $job_slots) must not be larger than the total number of slots (set to $slots).\n" if $job_slots > $slots;
+
+    $resource->option(classes => {}) unless $resource->classes;
 
     my %found;
     for my $r (keys %{$resource->classes}) {

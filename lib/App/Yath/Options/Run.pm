@@ -64,6 +64,8 @@ option_group {group => 'run', category => "Run Options"} => sub {
             my $opt = shift;
             my %params = @_;
 
+            $params{settings}->tests->option(env_vars => {}) unless $params{settings}->tests->env_vars;
+
             if ($params{action} eq 'set') {
                 $params{settings}->tests->env_vars->{AUTHOR_TESTING} = 1;
             }

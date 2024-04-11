@@ -161,7 +161,7 @@ sub start_process {
 
     $post_fork->() if $post_fork;
 
-    no warnings "exec";
+    no warnings;
     my $ok = eval { exec(@$cmd); 1 };
     my $err = $@;
     print STDERR longmess("Failed to exec ($!) $@\n");

@@ -43,6 +43,7 @@ option_post_process sub {
 
     if ($settings->check_group('tests')) {
         my $tests = $settings->tests;
+        $tests->option(env_vars => {}) unless $tests->env_vars;
         $tests->env_vars->{TABLE_TERM_SIZE} = $term->width if defined $term->width;
     }
 };

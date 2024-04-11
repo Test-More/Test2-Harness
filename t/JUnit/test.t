@@ -19,6 +19,8 @@ use Test2::Plugin::NoWarnings;
 
 use XML::Simple ();
 
+$ENV{TABLE_TERM_SIZE} = 200;
+
 my $tmpdir = File::Temp->newdir();
 
 my $dir = __FILE__;
@@ -29,7 +31,7 @@ my @renderers = qw{--renderer=JUnit};
 delete $ENV{JUNIT_TEST_FILE};    # make sure it's not defined
 
 my $env = {                      # env passed to yath
-    PERL5LIB => "$FindBin::Bin/../../lib",
+    PERL5LIB => "$FindBin::Bin/../../lib:$ENV{PERL5LIB}",
 };
 
 {

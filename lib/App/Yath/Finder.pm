@@ -784,7 +784,7 @@ By default C<App::Yath::Finder::> is prefixed onto your custom finder, use
 
     # Custom finders may provide their own options if desired.
     # This is optional.
-    use App::Yath::Options;
+    use Getopt::Yath;
     option foo => (
         ...
     );

@@ -1,0 +1,85 @@
+div.field-table-wrapper {
+    border: 4px solid #C0C0C0;
+    border-radius: 10px;
+    display: block;
+    width: max-content;
+    padding: 0px;
+}
+
+table.field-table {
+    background: #F8F8F8;
+    border-spacing: 0;
+    border-collapse: collapse;
+    border: none;
+}
+
+table.field-table, table.field-table > * > tr > th, table.field-table > * > tr > td {
+    border: 1px solid #C0C0C0;
+    padding:2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-spacing: -1px;
+    white-space: nowrap;
+    min-width: max-content;
+}
+
+table.field-table > * > tr > td {
+    position: relative;
+}
+
+table.field-table > * > tr.hover {
+    filter: brightness(90%);
+}
+
+table.field-table > thead > tr.field-table-header > th {
+    text-transform: uppercase;
+    text-align: center;
+    position: sticky;
+    top: 79px;
+    background: #E8E8E8;
+    padding: 0;
+    height: 1px;
+    white-space: nowrap;
+    z-index: 8;
+}
+
+div.field-table-header-col-inner {
+    border-bottom: 2px solid #C0C0C0;
+    border-top: 1px solid #C0C0C0;
+    margin-top: -1px;
+    margin-bottom: -1px;
+    padding: 2px;
+    padding-left: 1px;
+    padding-right: 1px;
+/*    height: 100%; */
+    display: flex;
+    align-items: center;
+    text-align: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+@media only screen and (max-height: 500px) {
+    table.field-table > * > tr.field-table-header > th {
+        top: -1px !important;
+    }
+}
+
+table.tool_table {
+    border-collapse: collapse;
+    border: none;
+    padding: 0;
+    display: inline;
+}
+
+table.tool_table > tr > td.details {
+    padding-left: 4px;
+}
+
+table.tool_table tr {
+    padding: 0;
+}
+
+table.tool_table td {
+    padding: 0;
+}

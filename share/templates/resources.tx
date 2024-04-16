@@ -1,0 +1,14 @@
+<script>
+    res_uri   = '<: $res_uri :>';
+    stamp_uri = '<: $stamp_uri :>';
+    tailing   = <: $tailing ? "true" : "false" :>;
+    selected  = '<: $selected :>';
+</script>
+
+<div id="put_stamps_here"></div>
+
+<div id="run_list"></div>
+
+<div class="resource loading">
+    <B>Waiting for resource data...</B>
+</div>

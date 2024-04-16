@@ -1,0 +1,197 @@
+body {
+    margin: 8px;
+}
+
+div#content {
+    padding-bottom: 200px;
+}
+
+div#content > div.timeout, div#content > div.error {
+    border: 1px solid #FF0000;
+    border-radius: 12px;
+    padding: 40px;
+    width: fit-content;
+    margin: 0 auto;
+    margin-top: 10px;
+    margin-bottom: 20px;
+    background: #FFCCCC;
+    font-weight: bold;
+    font-size: 30;
+    animation: timeout_pulse 2s infinite !important;
+}
+
+@keyframes timeout_pulse {
+    0%   { background-color: #FFDDDD }
+    50%  { background-color: #FFBBBB }
+    100% { background-color: #FFDDDD }
+}
+
+div.resource {
+    border: 1px solid #000000;
+    border-radius: 12px;
+    padding: 8px;
+    width: fit-content;
+    margin: 0 auto;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+@keyframes loading_pulse {
+    0%   { background-color: #AADDFF }
+    50%  { background-color: #88BBFF }
+    100% { background-color: #AADDFF }
+}
+
+
+div.resource.loading {
+    animation: loading_pulse 2s infinite !important;
+}
+
+div.resource h1 {
+    margin: 0;
+    text-align: center;
+    border: 1px solid #000000;
+    border-bottom: 1px solid #909090;
+    border-radius: 12px;
+    border-top: none;
+    margin-left: -9px;
+    margin-right: -9px;
+    margin-top: -9px;
+    overflow: hidden;
+}
+
+div.resource h2, div.resource h3 {
+    border-top: 1px solid #B0B0B0;
+    border-radius: 2px;
+    width: fit-content;
+    padding-left: 16px;
+    padding-right: 16px;
+    margin-left: 6px;
+    margin-right: 6px;
+}
+
+div.resource h3 {
+    border-top: 1px dotted #B0B0B0;
+}
+
+div.resource table {
+    margin-bottom: 20px;
+    border-collapse: collapse;
+    border: 1px solid #000000;
+}
+
+div.resource table td, div.resource table th {
+    border: 1px solid #000000;
+    padding: 4px;
+}
+
+div.resource table th {
+    border-bottom: 2px solid #000000;
+    font-weight: bold;
+}
+
+div#put_stamps_here {
+    position: fixed;
+    bottom: 30px;
+    overflow: hidden;
+    width: 100%;
+    margin-left: -8px;
+}
+
+div.stamp_selector {
+    background: white;
+    border: 1px solid #000000;
+    overflow: hidden;
+    border-radius: 10px;
+    padding: 0px;
+    overflow: hidden;
+    margin: 0;
+    width: auto;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+div.stamp_selector h1 {
+    margin: -1px;
+    margin-bottom: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
+    text-align: center;
+    border: 1px solid #000000;
+    border-bottom: 1px solid #909090;
+    border-radius: 10px;
+    border-top: none;
+    overflow: hidden;
+}
+
+div.stamp_selector div.stamp_selector_inner {
+    overflow: none;
+    padding: 4px;
+    margin: 4px;
+    overflow: hidden;
+    display: block;
+}
+
+div.stamp_selector input[type=button] {
+    float: right;
+    width: auto;
+    margin-right: 8px;
+    margin-left: 8px;
+    font-size: 16px;
+    padding: 2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 8px;
+}
+
+div.stamp_selector input {
+    overflow: hidden;
+    padding: 0px;
+    margin: 0;
+    width: 100%;
+}
+
+div.stamp_selector div.stamp_selector_left_bound {
+    display: block;
+    float: left;
+    margin-left: 4px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+}
+
+div.stamp_selector div.stamp_selector_right_bound {
+    display: block;
+    float: right;
+    margin-left: 4px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+}
+
+div.stamp_selector div.stamp_selector_select {
+    width: fit-content;
+    margin: 0 auto;
+    font-weight: bold;
+}
+
+div.stamp_selector div.stamp_selector_select a,
+div.stamp_selector div.stamp_selector_select a:link,
+div.stamp_selector div.stamp_selector_select a:visited,
+div.stamp_selector div.stamp_selector_select a:active,
+div.stamp_selector div.stamp_selector_select a:hover {
+    text-decoration: none;
+    color: black;
+    cursor: pointer;
+}
+
+div.stamp_selector div.stamp_selector_select a:hover {
+    color: blue;
+}
+
+div#run_list {
+    width: fit-content;
+    margin: 0 auto;
+    margin-top: 10px;
+    margin-bottom: 40px;
+}
+
+

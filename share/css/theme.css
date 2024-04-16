@@ -1,0 +1,150 @@
+.error,   .error_box,   .error_txt   { color: #FF4040; }
+.success, .success_box, .success_txt { color: #007000; }
+.broken,  .broken_box,  .broken_txt  { color: #902090; }
+.pending, .pending_box, .pending_txt { color: #0000A0; }
+.running, .running_box, .running_txt { color: #00A0A0; }
+.iffy,    .iffy_box,    .iffy_txt    { color: #b55d05; }
+
+.retry_txt    { text-decoration: line-through; }
+
+.iffy,    .iffy_box,    .iffy_set    { background: #fcfc03; }
+.error,   .error_box,   .error_set   { background: #FFE0E0; }
+.success, .success_box, .success_set { background: #E0FFE0; }
+.broken,  .broken_box,  .broken_set  { background: #FFB0D0; }
+.pending, .pending_box, .pending_set { background: #F0F0FF; }
+.running, .running_box, .running_set {
+    animation: running_set_pulse 2s infinite !important;
+}
+@keyframes running_set_pulse {
+    0%   { background-color: #F0F0FF }
+    50%  { background-color: #C0C0F0 }
+    100% { background-color: #F0F0FF }
+}
+
+.running.error, .running_box.error_box, .running_set.error_set {
+    animation: running_failing_pulse 2s infinite !important;
+}
+
+@keyframes running_failing_pulse {
+    0%   { background-color: #FFF0F0 }
+    50%  { background-color: #F0C0C0 }
+    100% { background-color: #FFF0F0 }
+}
+
+.error_box   { border: 1px solid #FF0000; background: #FFF0F0; }
+.success_box { border: 1px solid #00C000; background: #F0FFF0; }
+.broken_box  { border: 1px solid #902090; }
+.pending_box { border: 1px solid #0000C0; }
+.running_box { border: 1px solid #009090; }
+
+.error_set .count a {
+    color: #FF4040;
+    text-decoration: none;
+    border: 1px solid #F05050;
+    border-radius: 6px;
+}
+
+.error_set .count a:hover {
+    background: #F0A0A0;
+}
+
+.job_index {
+    display: none !important;
+}
+
+.important_note {
+    background: #fcfc03;
+    margin: 0;
+    padding: 6px;
+    border-top: 1px solid;
+    margin-left: -5px;
+    margin-right: -5px;
+    margin-bottom: -5px;
+    font-style: italic;
+}
+
+.etoggle {
+    color: black;
+}
+
+.etoggle:hover, .etoggle.clicked:hover {
+    color:  #0000A0;
+}
+
+.etoggle.unicode,
+.etoggle.unicode:link,
+.etoggle.unicode:visited,
+.etoggle.unicode:active,
+.etoggle.unicode:hover {
+    text-decoration: none;
+    font-size: 18px;
+    margin: 0;
+    padding: 0px;
+    padding-top: 2px;
+    padding-right: 2px;
+    margin-left: -2px;
+    margin-bottom: -2px;
+    color: black;
+}
+
+.etoggle.clicked {
+    border: 1px solid #AABBFF;
+    background: #DDEEFF;
+    color:  #000060;
+}
+
+.etoggle.error {
+    color: red;
+}
+
+div#progress_bar {
+    animation: running_set_pulse 2s infinite !important;
+}
+
+div#progress_bar:empty {
+    display: none;
+}
+
+span.tooltip-expand {
+    float: left;
+    padding-right: 6px;
+    cursor: zoom-in;
+}
+
+span.tooltip-expand.locked {
+    color: #6060F0;
+    cursor: zoom-out;
+}
+
+div.tooltip {
+    display: block;
+    position: absolute;
+    top: -3px;
+    left: 23px;
+
+    border: 2px solid #6060B0;
+    border-radius: 6px;
+    background: #EEEEFF;
+    width: auto;
+    min-width: max-content;
+    z-index: 9;
+
+    padding: 3px;
+
+    white-space: nowrap;
+}
+
+table.tool_table {
+    position: relative;
+}
+
+table.tool_table > tr > td {
+    position: relative;
+    white-space: nowrap;
+}
+
+table.tool_table > tr > td > div.tooltip {
+    top: -5px;
+    left: 18px;
+    white-space: nowrap;
+}

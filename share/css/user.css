@@ -1,0 +1,33 @@
+table.user_table td {
+    vertical-align: middle;
+}
+
+table.user_table td input {
+    display: block;
+    float: left;
+    margin-top: 2px;
+    margin-right: 6px;
+}
+
+table.user_table td.flag {
+    text-align: center;
+}
+
+div.user_section {
+    display: block;
+    float: left;
+    padding: 12px;
+    margin: 10px;
+    border-radius: 10px;
+    border: 1px solid black;
+}
+
+div.user_section h3 {
+    text-align: center;
+    margin-top: -5px;
+}
+
+div.user_section#change_password {
+    max-width: 500px;
+    float: none;
+}

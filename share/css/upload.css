@@ -1,0 +1,13 @@
+div#log_upload {
+    padding: 5px;
+}
+
+div#log_upload small {
+    display: block;
+    max-width: 600px;
+    margin-top: 6px;
+}
+
+div.wrapper.closed {
+    display: none;
+}

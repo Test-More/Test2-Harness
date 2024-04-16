@@ -1,0 +1,10 @@
+<script>data_uri  = '<: $data_uri :>';</script>
+
+<div id="run_list">
+</div>
+
+<div id="job_list">
+</div>
+
+<div id="event_list">
+</div>

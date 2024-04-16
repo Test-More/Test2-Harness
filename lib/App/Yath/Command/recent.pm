@@ -2,7 +2,7 @@ package App::Yath::Command::recent;
 use strict;
 use warnings;
 
-our $VERSION = '0.000145';
+our $VERSION = '2.000000';
 
 use Term::Table;
 use Test2::Harness::UI::Util qw/config_from_settings/;

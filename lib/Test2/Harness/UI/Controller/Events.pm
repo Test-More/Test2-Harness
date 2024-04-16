@@ -2,7 +2,7 @@ package Test2::Harness::UI::Controller::Events;
 use strict;
 use warnings;
 
-our $VERSION = '0.000145';
+our $VERSION = '2.000000';
 
 use List::Util qw/max/;
 use Test2::Harness::UI::Response qw/resp error/;

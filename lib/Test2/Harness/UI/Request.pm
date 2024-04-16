@@ -2,7 +2,7 @@ package Test2::Harness::UI::Request;
 use strict;
 use warnings;
 
-our $VERSION = '0.000145';
+our $VERSION = '2.000000';
 
 use Test2::Harness::UI::UUID qw/gen_uuid uuid_inflate/;
 use Data::GUID;

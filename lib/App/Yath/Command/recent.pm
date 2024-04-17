@@ -11,11 +11,11 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'yathui', category => "List Options"} => sub {
+option_group {group => 'yathui', prefix => 'yathui', category => "List Options"} => sub {
     option max => (
-        type => 's',
+        type => 'Scalar',
         long_examples => [' 10'],
         default => 10,
         description => 'Max number of recent runs to show',

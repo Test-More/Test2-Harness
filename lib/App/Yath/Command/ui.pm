@@ -23,28 +23,24 @@ use Plack::Runner;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/<log_file/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-include_options(
-    'App::Yath::Options::PreCommand',
-);
-
-option_group {prefix => 'ui', category => "UI Options"} => sub {
+option_group {prefix => 'ui', group => 'ui', category => "UI Options"} => sub {
     option schema => (
-        type => 's',
+        type => 'Scalar',
         default => 'PostgreSQL',
         long_examples => [' PostgreSQL', ' MySQL', ' MySQL56'],
         description => "What type of DB/schema to use",
     );
 
     option port => (
-        type => 's',
+        type => 'Scalar',
         long_examples => [' 8080'],
         description => 'Port to use',
     );
 
     option port_command => (
-        type => 's',
+        type => 'Scalar',
         long_examples => [' get_port.sh', ' get_port.sh --pid $$'],
         description => 'Use a command to get a port number. "$$" will be replaced with the PID of the yath process',
     );

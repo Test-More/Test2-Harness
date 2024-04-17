@@ -15,11 +15,7 @@ use Test2::Harness::Renderer::UIDB;
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
 
-use App::Yath::Options;
-
-include_options(
-    'App::Yath::Options::PreCommand',
-);
+use Getopt::Yath;
 
 sub summary { "Use the YathUIDB plugin to upload a log file" }
 

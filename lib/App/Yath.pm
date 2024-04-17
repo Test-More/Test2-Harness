@@ -591,39 +591,49 @@ sub handle_debug {
         $cli_params{group} = $group if $group && $group ne '1';
         $help .= $self->cli_help($yath_options, %cli_params);
 
-        if (eval { require IO::Pager; 1 }) {
-            local $SIG{PIPE} = sub {};
-            my $pager = IO::Pager->new(*STDOUT);
-            $pager->print($help);
-        }
-        else {
-            print $help;
-        }
+        $self->page_out($help);
 
         $exit //= 0;
     }
 
     if (my $group = $settings->yath->show_opts) {
-        print "\nCommand selected: $cmd ($cmd_class)\n" if $cmd && $cmd_class;
+        my $out = "";
+        $out .= "\nCommand selected: $cmd ($cmd_class)\n" if $cmd && $cmd_class;
 
         my @args = @{$self->argv};
-        print "\nargs: " . join(', ' => @args) . "\n" if @args;
+        $out .= "\nargs: " . join(', ' => @args) . "\n" if @args;
 
-        my $out = $group eq '1' ? encode_pretty_json($settings) : encode_pretty_json($settings->{$group} // "!! Invalid Group '$group' !!");
+        my $json = $group eq '1' ? encode_pretty_json($settings) : encode_pretty_json($settings->{$group} // "!! Invalid Group '$group' !!");
 
-        print "\nCurrent command line and config options result in these settings:\n";
-        print "$out\n";
+        $out .= "\nCurrent command line and config options result in these settings:\n";
+        $out .= "$json\n";
 
-        print $self->_render_groups(
+        $out .= $self->_render_groups(
             title => 'If the above output is too much, you can limit it to specific option groups',
             param => '--show-opts=GROUP_NAME',
         ) if $group eq '1';
 
+        $self->page_out($out);
 
         $exit //= 0;
     }
 
     exit($exit) if defined $exit;
+}
+
+sub page_out {
+    my $self = shift;
+    my ($out) = @_;
+
+    if (eval { require IO::Pager; 1 }) {
+        local $SIG{PIPE} = sub {};
+        local $ENV{LESS} = "-r";
+        my $pager = IO::Pager->new(*STDOUT);
+        $pager->print($out);
+    }
+    else {
+        print $out;
+    }
 }
 
 sub version_info {

@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 sub is_list { 1 }
 
 BEGIN { require Test2::EventFacet; our @ISA = qw(Test2::EventFacet) }
-use Test2::Util::HashBase qw{-data -filename -is_image};
+use Test2::Harness::Util::HashBase qw{-data -filename -is_image};
 
 1;
 

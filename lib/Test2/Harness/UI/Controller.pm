@@ -8,7 +8,7 @@ use Carp qw/croak/;
 
 use Test2::Harness::UI::Response qw/error/;
 
-use Test2::Harness::UI::Util::HashBase qw/-request -config/;
+use Test2::Harness::Util::HashBase qw/-request -config/;
 
 sub uses_session { 1 }
 

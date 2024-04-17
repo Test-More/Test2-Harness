@@ -13,7 +13,7 @@ use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 use parent 'Test2::Harness::UI::Controller';
-use Test2::Harness::UI::Util::HashBase qw/-title/;
+use Test2::Harness::Util::HashBase qw/-title/;
 
 sub handle {
     my $self = shift;

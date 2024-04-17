@@ -8,7 +8,7 @@ use Data::Dumper;
 use Test2::Harness::UI::UUID qw/gen_uuid/;
 use Test2::Harness::UI::Util qw/parse_duration is_invalid_subtest_name/;
 
-use Test2::Harness::UI::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     <config
 };
 

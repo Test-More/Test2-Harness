@@ -17,7 +17,7 @@ use Test2::Util qw/IS_WIN32 clone_io/;
 use Time::HiRes qw/time/;
 
 use parent 'App::Yath::Renderer';
-use Test2::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     -composer
     -last_depth
     -_buffered <_buffer

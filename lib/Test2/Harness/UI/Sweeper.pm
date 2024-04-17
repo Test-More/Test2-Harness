@@ -6,7 +6,7 @@ use Test2::Harness::UI::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 
-use Test2::Harness::UI::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     <config
     <interval
 };

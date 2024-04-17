@@ -16,7 +16,7 @@ use Test2::Harness::UI::Util qw/share_dir/;
 use Test2::Harness::UI::Response qw/resp error/;
 
 use parent 'Test2::Harness::UI::Controller';
-use Test2::Harness::UI::Util::HashBase;
+use Test2::Harness::Util::HashBase;
 
 sub title { 'Upload A Test Log' }
 

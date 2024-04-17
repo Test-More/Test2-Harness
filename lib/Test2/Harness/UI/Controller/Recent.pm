@@ -9,7 +9,7 @@ use Test2::Harness::UI::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
 use parent 'Test2::Harness::UI::Controller';
-use Test2::Harness::UI::Util::HashBase qw/-title/;
+use Test2::Harness::Util::HashBase qw/-title/;
 
 sub handle {
     my $self = shift;

@@ -8,7 +8,7 @@ use Test2::Util qw/get_tid pkg_to_file/;
 
 use Carp qw/croak/;
 
-use Test2::Harness::UI::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     -_schema
     -dbi_dsn -dbi_user -dbi_pass
     -single_user -single_run -no_upload

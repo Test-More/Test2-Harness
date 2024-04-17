@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use Test2::Harness::UI::Response qw/resp error/;
 
 use parent 'Test2::Harness::UI::Controller';
-use Test2::Harness::UI::Util::HashBase;
+use Test2::Harness::Util::HashBase;
 use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 sub title { 'Binary' }

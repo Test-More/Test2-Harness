@@ -11,7 +11,7 @@ use Time::HiRes qw/time/;
 use Parallel::Runner;
 use IO::Compress::Bzip2;
 
-use Test2::Harness::UI::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     <config
     <procs
 };

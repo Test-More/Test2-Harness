@@ -42,7 +42,7 @@ use Test2::Harness::UI::Response qw/resp error/;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
-use Test2::Harness::UI::Util::HashBase qw/-config -router/;
+use Test2::Harness::Util::HashBase qw/-config -router/;
 
 sub init {
     my $self = shift;

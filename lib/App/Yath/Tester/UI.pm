@@ -24,7 +24,7 @@ use Importer Importer => 'import';
 
 our @EXPORT = qw/start_yathui_server/;
 
-use Test2::Harness::UI::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     +schema <db <dsn <config <socket <port +_starman_pid
 };
 

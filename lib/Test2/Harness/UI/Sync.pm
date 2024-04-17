@@ -10,7 +10,7 @@ use Test2::Harness::UI::UUID qw/uuid_inflate gen_uuid/;
 
 our $VERSION = '2.000000';
 
-use Test2::Harness::UI::Util::HashBase;
+use Test2::Harness::Util::HashBase;
 
 sub run_delta {
     my $self = shift;

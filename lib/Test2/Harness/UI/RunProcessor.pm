@@ -29,7 +29,7 @@ use Test2::Harness::UI::Util::ImportModes qw{
     record_subtest_events
 };
 
-use Test2::Harness::UI::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     <config
 
     <running <jobs <binaries

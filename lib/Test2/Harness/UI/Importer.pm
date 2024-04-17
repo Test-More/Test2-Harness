@@ -8,7 +8,7 @@ use Carp qw/croak/;
 
 use Test2::Harness::UI::RunProcessor;
 
-use Test2::Harness::UI::Util::HashBase qw/-config -worker_id/;
+use Test2::Harness::Util::HashBase qw/-config -worker_id/;
 
 use Test2::Harness::UI::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;

@@ -10,7 +10,7 @@ use HTTP::Tiny;
 use File::Temp qw/tempdir/;
 use IO::Uncompress::Gunzip qw/gunzip/;
 
-use Test2::Harness::UI::Util::HashBase qw/-config -dir/;
+use Test2::Harness::Util::HashBase qw/-config -dir/;
 use Test2::Harness::UI::UUID qw/uuid_inflate/;
 
 sub init {

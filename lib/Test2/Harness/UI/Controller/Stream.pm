@@ -15,7 +15,7 @@ use JSON::PP();
 use Carp qw/croak/;
 
 use parent 'Test2::Harness::UI::Controller';
-use Test2::Harness::UI::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     <run
     <job
 };

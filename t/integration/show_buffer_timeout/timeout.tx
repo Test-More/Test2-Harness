@@ -1,0 +1,18 @@
+use Test2::V0;
+
+subtest outer => sub {
+    ok(1, "outer 1");
+    subtest inner => sub {
+        ok(1, "inner 1");
+        subtest deeper => sub {
+            ok(1, "deeper 1");
+            subtest even_deeper => sub {
+                ok(1, "even deeper 1");
+                diag "diag";
+                sleep 10;
+            };
+        };
+    };
+};
+
+1;

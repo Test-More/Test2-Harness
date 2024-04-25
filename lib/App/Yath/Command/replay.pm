@@ -20,6 +20,10 @@ include_options(
     'App::Yath::Options::Renderer',
 );
 
+include_options(
+    'App::Yath::Options::Renderer',
+);
+
 option_group {group => 'run', category => "Run Options"} => sub {
     option run_auditor => (
         type => 'Scalar',

@@ -20,7 +20,7 @@ use parent 'App::Yath::Renderer';
 use Test2::Util::HashBase qw{
     -composer
     -last_depth
-    -_buffered
+    -_buffered <_buffer
     <job_io
     +io
     <enc_io
@@ -202,7 +202,13 @@ sub write {
     my $hf = hub_truth($f);
     my $depth = $hf->{nested} || 0;
 
-    return if $depth && (!$self->{+SHOW_BUFFER} || !$self->{+PROGRESS});
+    my $also_show;
+    unless ($depth) {
+        my $lines = delete $self->{+_BUFFER}->{$job_id};
+        if ($f->{errors} && @{$f->{errors}}) {
+            $also_show = $lines;
+        }
+    }
 
     my $lines;
     if (!$self->{+VERBOSE}) {
@@ -216,6 +222,10 @@ sub write {
     elsif ($depth) {
         my $tree = $self->render_tree($f, '>');
         $lines = $self->build_buffered_event($f, $tree);
+
+        push @{$self->{+_BUFFER}->{$job_id} //= []} => @$lines;
+
+        return unless $self->{+SHOW_BUFFER} || $self->{+PROGRESS} || $also_show;
     }
     else {
         my $tree = $self->render_tree($f,);
@@ -224,7 +234,7 @@ sub write {
 
     my ($peek) = map { $_->{peek} } grep { $_->{peek} } @{$f->{info} // []};
 
-    $should_show ||= $lines && @$lines;
+    $should_show ||= $also_show || ($lines && @$lines);
     unless ($should_show || $self->{+VERBOSE}) {
         if (my $last = $self->{last_rendered}) {
             return if time - $last < 0.2;
@@ -245,6 +255,10 @@ sub write {
         print $io "\r";
 
         print $io "\e[K" unless $buffered eq 'peek';
+    }
+
+    if ($also_show) {
+        print $io $_, "\n" for @$also_show;
     }
 
     if ($peek) {

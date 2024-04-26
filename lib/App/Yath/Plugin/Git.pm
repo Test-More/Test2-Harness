@@ -158,8 +158,7 @@ This plugin will attach git data to your test logs if any is available.
 =head1 READING THE DATA
 
 The data is attached to the 'run' entry in the log file. This can be seen
-directly in the json data. The data is also easily accessible with
-L<Test2::Harness::UI>.
+directly in the json data, database, or server.
 
 The data will include the long sha, short sha, branch name, and a brief status.
 

@@ -2,8 +2,10 @@ package Test2::Harness::Renderer::UIDB;
 use strict;
 use warnings;
 
+our $VERSION = '2.000000';
+
 use Test2::Harness::Util::Deprecated(
-    delegate => 'App::Yath::Renderer::UIDB',
+    delegate => 'App::Yath::Renderer::DB',
 );
 
 1;

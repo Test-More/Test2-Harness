@@ -41,7 +41,7 @@ sub available {
     my ($id, $job) = @_;
 
     my $run_count = $self->{+JOB_SLOTS};
-    my $min_slots = $job->test_file->check_min_slots // 1;
+    my $min_slots = $job->test_file->check_min_slots || 1;
     my $max_slots = $job->test_file->check_max_slots // $min_slots;
 
     return -1 if $run_count < $min_slots;
@@ -50,6 +50,8 @@ sub available {
     my $free = $self->{+SLOTS} - $self->{+USED};
     return 0 if $free < 1;
     return 0 if $free < $min_slots;
+
+    $max_slots = $free if $max_slots < 1;
 
     return min($max_slots, $free);
 }

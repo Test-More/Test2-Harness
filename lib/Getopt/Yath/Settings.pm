@@ -4,8 +4,11 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Getopt::Yath::Settings::Group;
 use Carp();
+
+use Getopt::Yath::Settings::Group;
+
+use Test2::Harness::Util::JSON qw/decode_json/;
 
 sub new {
     my $class = shift;
@@ -71,6 +74,14 @@ sub AUTOLOAD {
     Carp::croak("Method $group() must be called on a blessed instance") unless ref($this);
 
     $this->group($group);
+}
+
+sub FROM_JSON {
+    my $class = shift;
+    my ($json) = @_;
+
+    my $data = decode_json($json);
+    $class->new($data);
 }
 
 sub TO_JSON {

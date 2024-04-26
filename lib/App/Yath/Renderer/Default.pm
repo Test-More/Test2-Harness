@@ -184,8 +184,6 @@ sub render_event {
     my $num = $f->{assert} && $f->{assert}->{number} ? $f->{assert}->{number} : undef;
 
     $self->write($event, $num, $f);
-
-    $self->render_final_data($f->{final_data}) if $f->{final_data};
 }
 
 sub write {

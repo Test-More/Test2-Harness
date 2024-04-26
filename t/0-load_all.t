@@ -1,9 +1,11 @@
 use Test2::V0;
-use Test2::IPC;
+use Test2::IPC qw/cull/;
+# HARNESS-JOB-SLOTS
 
 use File::Find;
 use Test2::Harness;
 use Test2::Harness::Util qw/file2mod/;
+use Parallel::Runner;
 
 use Test2::Harness::Util::Deprecated();
 $Test2::Harness::Util::Deprecated::IGNORE_IMPORT = 1;
@@ -13,6 +15,11 @@ my %SKIP = (
     'lib/Test2/Harness/IPC/Protocol/IPSocket/Connection.pm'   => 1,
     'lib/Test2/Harness/IPC/Protocol/UnixSocket.pm'            => 1,
     'lib/Test2/Harness/IPC/Protocol/UnixSocket/Connection.pm' => 1,
+);
+
+my $runner = Parallel::Runner->new(
+    $ENV{T2_HARNESS_MY_JOB_CONCURRENCY} // 2,
+    iteration_callback => sub { cull() },
 );
 
 my $pid = $$;
@@ -25,30 +32,24 @@ sub wanted {
 
     return if $SKIP{$file};
 
-    my $pid = fork;
-    if ($pid) {
-        waitpid($pid, 0);
-        ok(!$?, "Subprocess exited cleanly");
-        return;
-    }
-    else {
+    $runner->run(sub {
         local $ENV{T2_HARNESS_PIPE_COUNT} = -1;
         subtest $file => sub {
             $file =~ s{^.*lib/}{}g;
             my @warnings;
 
-            if ($file =~ m{Schema/(MySQL|PostgreSQL|SQLite)/}) {
-                ok(eval { require "Test2/Harness/UI/Schema/$1.pm" }, "Load necessary schema '$1'", $@);
+            if ($file =~ m{(MySQL|PostgreSQL|SQLite)}) {
+                ok(eval { require "App/Yath/Schema/$1.pm" }, "Load necessary schema '$1'", $@);
             }
-            elsif ($file =~ m{UI/Schema\.pm$} || $file =~ m{Schema/(Overlay|Result)}) {
-                ok(eval { require Test2::Harness::UI::Schema::PostgreSQL }, "Load schema");
+            elsif ($file =~ m{App/Yath/Schema\.pm$} || $file =~ m{Schema/(Overlay|Result)}) {
+                ok(eval { require App::Yath::Schema::PostgreSQL }, "Load schema");
             }
 
             my $ok = eval { local $SIG{__WARN__} = sub { push @warnings => @_ }; require($file); 1 };
             my $err = $@;
             {
                 no warnings 'once';
-                ok($ok, "require $file (" . ($Test2::Harness::UI::Schema::LOADED // 'undef') . ")", $ok ? () : $err);
+                ok($ok, "require $file (" . ($App::Yath::Schema::LOADED // 'undef') . ")", $ok ? () : $err);
             }
             ok(!@warnings, "No Warnings", @warnings);
 
@@ -57,9 +58,9 @@ sub wanted {
             no strict 'refs';
             is($$sym, $Test2::Harness::VERSION, "Package $mod ($file) has the version number");
         };
-
-        exit(0);
-    }
+    }, 1);
 };
+
+$runner->finish();
 
 done_testing;

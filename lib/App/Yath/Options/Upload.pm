@@ -1,0 +1,95 @@
+package App::Yath::Options::Upload;
+use strict;
+use warnings;
+
+our $VERSION = '2.000000';
+
+use Getopt::Yath;
+
+option_group {group => 'upload', prefix => 'upload', category => "DB Upload Options"} => sub {
+    option flush_interval => (
+        type => 'Scalar',
+        long_examples => [' 2', ' 1.5'],
+        description => 'When buffering DB writes, force a flush when an event is recieved at least N seconds after the last flush.',
+    );
+
+    option buffering => (
+        type => 'Scalar',
+        long_examples => [ ' none', ' job', ' diag', ' run' ],
+        description => 'Type of buffering to use, if "none" then events are written to the db one at a time, which is SLOW',
+        default => 'diag',
+    );
+
+    option mode => (
+        type => 'Scalar',
+        default => 'qvfd',
+        description => "Set the upload mode (default 'qvfd')",
+        long_examples => [
+            ' summary',
+            ' qvf',
+            ' qvfd',
+            ' complete',
+        ],
+    );
+
+    option user => (
+        type => 'Scalar',
+        default => sub { $ENV{USER} },
+        description => "Username to be associated with runs stored in the database. Defaults to your shell username.",
+    );
+
+    option retry => (
+        type => 'Count',
+        description => "How many times to try an operation before giving up",
+        default => 0,
+    );
+};
+
+1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Options::Upload - FIXME
+
+=head1 DESCRIPTION
+
+=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+L<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See L<http://dev.perl.org/licenses/>
+
+=cut
+

@@ -98,7 +98,7 @@ sub run {
     for my $sig (qw/INT TERM HUP/) {
         $SIG{$sig} = sub {
             $SIG{$sig} = 'DEFAULT';
-            eval { $_->($sig) } for @sig_render;
+            eval { $_->signal($sig) } for @sig_render;
             print STDERR "\nCought SIG$sig, shutting down...\n";
             $client->send_and_get(abort => $run_id);
             $guard->dismiss();

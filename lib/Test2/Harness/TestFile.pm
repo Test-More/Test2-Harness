@@ -360,9 +360,9 @@ sub _scan {
 
             $headers{timeout}->{$type} = $num;
         }
-        elsif ($dir eq 'job' && $rest =~ m/slots\s+(\d+)(?:\s+(\d+))?$/i) {
-            $headers{min_slots} //= $1;
-            $headers{max_slots} //= $2 ? $2 : $1;
+        elsif ($dir eq 'job' && $rest =~ m/slots(\s+(\d+)(?:\s+(\d+))?)?$/i) {
+            $headers{min_slots} //= $1 // 1;
+            $headers{max_slots} //= $2 ? $2 : -1;
         }
         else {
             warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";

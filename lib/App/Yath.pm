@@ -324,6 +324,7 @@ sub load_command {
     my $self = shift;
     my ($cmd) = @_;
 
+    $cmd =~ s/-/::/g;
     my $cmd_class = "App::Yath::Command::$cmd";
     my $cmd_file = mod2file($cmd_class);
 
@@ -658,7 +659,7 @@ Extended Version Info
                 eval { require(mod2file($_)); 1 }
                     ? [$_ => $_->VERSION // 'N/A']
                     : [$_ => 'N/A']
-            } qw/Test2::API Test2::Suite Test::Builder Test2::Harness Test2::Harness::UI/,
+            } qw/Test2::API Test2::Suite Test::Builder Test2::Harness App::Yath::Server/,
         ),
         (
             map {

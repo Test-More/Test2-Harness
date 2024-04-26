@@ -309,6 +309,7 @@ sub check_command {
 
     return @{$check_cache{$cmd}} if $check_cache{$cmd};
 
+    $cmd =~ s/-/::/g;
     my $cmd_class = "App::Yath::Command::$cmd";
     my $cmd_file = mod2file($cmd_class);
 

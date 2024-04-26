@@ -42,7 +42,7 @@ sub command_info_hash {
     my $hs = $settings->help;
 
     my %commands;
-    my $command_libs = find_libraries('App::Yath::Command::*');
+    my $command_libs = { %{find_libraries('App::Yath::Command::*')}, %{find_libraries('App::Yath::Command::*::*')}};
     for my $lib (sort keys %$command_libs) {
         my $ok = eval {
             local $SIG{__WARN__} = sub { 1 };

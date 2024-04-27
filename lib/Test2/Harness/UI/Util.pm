@@ -24,7 +24,7 @@ my %SCHEMA_TO_QDB_DRIVER = (
 my %SCHEMA_TO_DBD_DRIVER = (
     mariadb    => 'DBD::MariaDB',
     mysql      => 'DBD::mysql',
-    postgresql => 'DBD::postgresql',
+    postgresql => 'DBD::Pg',
 );
 
 my %BAD_ST_NAME = (

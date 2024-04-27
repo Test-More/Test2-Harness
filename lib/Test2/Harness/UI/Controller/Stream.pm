@@ -118,17 +118,16 @@ sub stream_runs {
 
     if ($id) {
         my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->search({name => $id})->first };
-        $project //= eval { $p_rs->search({project_id => $uuid})->first };
+        $project //= eval { $p_rs->find({name => $id}) };
+        $project //= eval { $p_rs->find({project_id => $uuid}) };
 
         if ($project) {
-            $uuid = uuid_inflate($project->project_id);
             $params{search_base} = $params{search_base}->search_rs({'me.project_id' => $project->project_id});
         }
         else {
             my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->search({username => $id})->first };
-            $user //= eval { $u_rs->search({user_id  => $uuid})->first };
+            $user //= eval { $u_rs->find({username => $id}) };
+            $user //= eval { $u_rs->find({user_id  => $uuid}) };
 
             if ($user) {
                 $uuid = uuid_inflate($user->user_id);

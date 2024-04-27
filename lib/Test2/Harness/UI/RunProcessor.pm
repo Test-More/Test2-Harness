@@ -395,7 +395,7 @@ sub user {
     my $user_id = $self->{+USER_ID} // confess "No user or user_id specified";
 
     my $schema = $self->schema;
-    my $user = $schema->resultset('Run')->search({user_id => $user_id})->first;
+    my $user = $schema->resultset('User')->find({user_id => $user_id});
     return $user if $user;
     confess "Invalid user_id: $user_id";
 }
@@ -417,7 +417,7 @@ sub project {
     my $project_id = $self->{+PROJECT_ID} // confess "No project or project_id specified";
 
     my $schema = $self->schema;
-    my $project = $schema->resultset('Project')->search({project_id => $project_id})->first;
+    my $project = $schema->resultset('Project')->find({project_id => $project_id});
     return $project if $project;
     confess "Invalid project_id: $project_id";
 }

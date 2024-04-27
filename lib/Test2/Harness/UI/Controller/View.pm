@@ -37,8 +37,8 @@ sub handle {
 
     if ($id) {
         my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->search({name => $id})->first };
-        $project //= eval { $p_rs->search({project_id => $uuid})->first };
+        $project //= eval { $p_rs->find({name => $id}) };
+        $project //= eval { $p_rs->find({project_id => $uuid}) };
 
         if ($project) {
             $uuid = uuid_inflate($project->project_id);
@@ -46,8 +46,8 @@ sub handle {
         }
         else {
             my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->search({username => $id})->first };
-            $user //= eval { $u_rs->search({user_id => $uuid})->first };
+            $user //= eval { $u_rs->find({username => $id}) };
+            $user //= eval { $u_rs->find({user_id => $uuid}) };
 
             if ($user) {
                 $uuid = uuid_inflate($user->user_id);
@@ -62,7 +62,7 @@ sub handle {
     if($run_id) {
         $run_id = uuid_inflate($run_id) or die error(404 => 'Invalid Run');
 
-        my $run = eval { $schema->resultset('Run')->search({run_id => $run_id})->first } or die error(404 => 'Invalid Run');
+        my $run = eval { $schema->resultset('Run')->find({run_id => $run_id}) } or die error(404 => 'Invalid Run');
         $self->{+TITLE} .= ">" . $run->project->name;
     }
 

@@ -102,7 +102,7 @@ sub lookup_run {
     my $schema = $self->{+CONFIG}->schema;
 
     my $rs = $schema->resultset('Run');
-    my $run = eval { $rs->search({run_id => $lookup})->first };
+    my $run = eval { $rs->find({run_id => $lookup}) };
 
     return () unless $run;
     return (
@@ -159,7 +159,7 @@ sub lookup_event {
     my $schema = $self->{+CONFIG}->schema;
 
     my $rs = $schema->resultset('Event');
-    my $event = eval { $rs->search({event_id => $lookup})->first };
+    my $event = eval { $rs->find({event_id => $lookup}) };
 
     return () unless $event;
 

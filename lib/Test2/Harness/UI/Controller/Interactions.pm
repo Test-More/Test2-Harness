@@ -61,7 +61,7 @@ sub data {
 
     my $schema = $self->{+CONFIG}->schema;
     # Get event
-    my $event = $schema->resultset('Event')->search({event_id => $id})->first
+    my $event = $schema->resultset('Event')->find({event_id => $id})
         or die error(404 => 'Invalid Event');
 
     my $stamp = $event->get_column('stamp') or die "No stamp?!";

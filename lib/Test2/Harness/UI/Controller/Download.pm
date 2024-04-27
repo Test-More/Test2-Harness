@@ -36,7 +36,7 @@ sub handle {
         my $it = $route->{id} or die error(404 => 'No id');
         $it = uuid_inflate($it) or die error(404 => 'Invalid Run');
         my $schema = $self->{+CONFIG}->schema;
-        $run = $schema->resultset('Run')->search({run_id => $it})->first or die error(404 => 'Invalid Run');
+        $run = $schema->resultset('Run')->find({run_id => $it}) or die error(404 => 'Invalid Run');
     }
 
     my $log = $run->log_file;

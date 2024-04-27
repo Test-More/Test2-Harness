@@ -85,14 +85,14 @@ sub get_thing {
     }
     else {
         my $uuid = uuid_inflate($id);
-        if ($uuid && eval { $thing = $run_rs->search({run_id => $uuid})->first }) {
+        if ($uuid && eval { $thing = $run_rs->find({run_id => $uuid}) }) {
             $search_args->{run_id} = $uuid;
             $done_check = sub {
                 return 1 if $thing->complete;
                 return 0;
             };
         }
-        elsif (($uuid && eval { $thing = $host_rs->search({host_id => $uuid})->first }) || eval { $thing = $host_rs->search({hostname => $id})->first }) {
+        elsif (($uuid && eval { $thing = $host_rs->find({host_id => $uuid}) }) || eval { $thing = $host_rs->find({hostname => $id}) }) {
             $search_args->{host_id} = $thing->host_id;
         }
         else {

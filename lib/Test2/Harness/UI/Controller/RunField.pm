@@ -28,7 +28,7 @@ sub handle {
 
     my $it = uuid_inflate($route->{id}) or die error(404 => 'No id');
     my $schema = $self->{+CONFIG}->schema;
-    my $field = $schema->resultset('RunField')->search({run_field_id => $it})->first or die error(404 => 'Invalid Field');
+    my $field = $schema->resultset('RunField')->find({run_field_id => $it}) or die error(404 => 'Invalid Field');
 
     if (my $act = $route->{action}) {
         if ($act eq 'delete') {

@@ -170,7 +170,7 @@ sub data_no_jobs {
     my $self = shift;
 
     my %data = %$self;
-    delete $data{$_} for $self->no_json, 'jobs';
+    delete $data{$_} for $self->no_json, qw/jobs job_lookup/;
 
     return \%data;
 }

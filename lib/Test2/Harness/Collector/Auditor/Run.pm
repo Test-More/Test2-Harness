@@ -11,7 +11,7 @@ use parent 'Test2::Harness::Collector::Auditor';
 use Test2::Harness::Util::HashBase qw{
     <jobs
     <launches
-    <asserts
+    <asserts <asserts_passed <asserts_failed
     <start
     <stop
 
@@ -125,6 +125,12 @@ sub _audit {
 
     if ($f->{assert}) {
         $self->{+ASSERTS}++;
+        if ($f->{assert}->{pass}) {
+            $self->{+ASSERTS_PASSED}++
+        }
+        else {
+            $self->{+ASSERTS_FAILED}++
+        }
     }
 
     if ($f->{parent} && !$f->{assert}->{pass}) {
@@ -221,11 +227,13 @@ sub summary {
     my $cpu = sum0(@$times);
 
     return $self->{+SUMMARY} = {
-        pass         => $self->{+ASSERTS} ? $final_data->{pass} : 0,
-        cpu_usage    => $wall ? int($cpu / $wall * 100) : 0,
-        failures     => (0 + @{$final_data->{failed} // []}),
-        tests_seen   => $self->{+LAUNCHES},
-        asserts_seen => $self->{+ASSERTS},
+        pass           => $self->{+ASSERTS} ? $final_data->{pass}     : 0,
+        cpu_usage      => $wall             ? int($cpu / $wall * 100) : 0,
+        failures       => (0 + @{$final_data->{failed} // []}),
+        tests_seen     => $self->{+LAUNCHES},
+        asserts_seen   => $self->{+ASSERTS},
+        asserts_passed => $self->{+ASSERTS_PASSED},
+        asserts_failed => $self->{+ASSERTS_FAILED},
 
         time_data => {
             start   => $self->{+START},

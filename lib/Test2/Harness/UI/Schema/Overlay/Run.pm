@@ -93,17 +93,7 @@ sub expanded_coverages {
     my $self = shift;
     my ($query) = @_;
 
-    my $pick_me = {run_id => $self->run_id};
-
-    if ($query) {
-        $query = {'-and' => [$query, $pick_me]};
-    }
-    else {
-        $query = $pick_me;
-    }
-
-    my $schema = $self->result_source->schema;
-    $schema->resultset('Coverage')->search(
+    $self->coverages->search(
         $query,
         {
             order_by   => [qw/test_file_id source_file_id source_sub_id/],

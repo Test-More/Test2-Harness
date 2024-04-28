@@ -516,7 +516,7 @@ sub _build_stat_uncovered {
     my $field = $schema->resultset('RunField')->search(
         {
             'me.name'        => 'coverage',
-            'me.data'        => \'IS NOT NULL',
+            'me.data'        => { '!=' => undef },
             'run.project_id' => $project->project_id,
             'run.has_coverage' => 1,
             @$users ? (user_id => {'-in' => [map { uuid_deflate($_) } @$users]}) : ()
@@ -558,7 +558,7 @@ sub _build_stat_coverage {
     my @items = reverse $schema->resultset('RunField')->search(
         {
             'me.name'        => 'coverage',
-            'me.data'        => \'IS NOT NULL',
+            'me.data'        => { '!=' => undef },
             'run.project_id' => $project->project_id,
             'run.has_coverage' => 1,
             @$users ? (user_id => {'-in' => [map { uuid_deflate($_) } @$users]}) : ()

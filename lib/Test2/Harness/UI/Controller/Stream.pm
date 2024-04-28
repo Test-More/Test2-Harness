@@ -328,7 +328,7 @@ sub stream_set {
                 };
 
                 my @ids = $track ? keys %$incomplete : ();
-                $query = [$query, {"me.$id_field" => {'IN' => \@ids}}] if @ids;
+                $query = [$query, {"me.$id_field" => { -in => \@ids }}] if @ids;
 
                 $items = $search_base->search(
                     $query,

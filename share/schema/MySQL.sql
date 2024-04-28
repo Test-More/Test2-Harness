@@ -22,6 +22,7 @@ CREATE TABLE email (
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     UNIQUE(local, domain)
 ) ROW_FORMAT=COMPRESSED;
+CREATE INDEX email_user ON email(user_id);
 
 CREATE TABLE primary_email (
     user_id         BINARY(16)      NOT NULL PRIMARY KEY,
@@ -278,10 +279,9 @@ CREATE TABLE events (
     UNIQUE(insert_ord, job_key),
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)
 ) ROW_FORMAT=COMPRESSED;
-CREATE INDEX event_job    ON events(job_key);
+CREATE INDEX event_job    ON events(job_key, is_subtest);
 CREATE INDEX event_trace  ON events(trace_id);
 CREATE INDEX event_parent ON events(parent_id);
-CREATE INDEX is_subtest   ON events(is_subtest);
 
 CREATE TABLE binaries (
     binary_id       BINARY(16)      NOT NULL PRIMARY KEY,
@@ -293,6 +293,7 @@ CREATE TABLE binaries (
 
     FOREIGN KEY (event_id)        REFERENCES events(event_id)
 );
+CREATE INDEX binaries_event ON binaries(event_id);
 
 CREATE TABLE source_files (
     source_file_id  BINARY(16)                                          NOT NULL PRIMARY KEY,
@@ -367,10 +368,9 @@ CREATE TABLE reporting (
     FOREIGN KEY (event_id)        REFERENCES events(event_id)
 );
 CREATE INDEX reporting_user ON reporting(user_id);
+CREATE INDEX reporting_run  ON reporting(run_id);
 CREATE INDEX reporting_a    ON reporting(project_id);
 CREATE INDEX reporting_b    ON reporting(project_id, user_id);
-CREATE INDEX reporting_c    ON reporting(project_id, test_file_id, subtest);
-CREATE INDEX reporting_d    ON reporting(project_id, test_file_id, subtest, user_id);
 CREATE INDEX reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);
 
 CREATE TABLE resource_batch (
@@ -382,6 +382,7 @@ CREATE TABLE resource_batch (
     FOREIGN KEY (run_id)  REFERENCES runs(run_id),
     FOREIGN KEY (host_id) REFERENCES hosts(host_id)
 ) ROW_FORMAT=COMPRESSED;
+CREATE INDEX resource_batch_run ON resource_batch(run_id);
 
 CREATE TABLE resources (
     resource_id         BINARY(16)      NOT NULL PRIMARY KEY,

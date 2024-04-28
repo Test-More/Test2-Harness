@@ -346,8 +346,6 @@ CREATE TABLE reporting (
 CREATE INDEX IF NOT EXISTS reporting_user ON reporting(user_id);
 CREATE INDEX IF NOT EXISTS reporting_a    ON reporting(project_id);
 CREATE INDEX IF NOT EXISTS reporting_b    ON reporting(project_id, user_id);
-CREATE INDEX IF NOT EXISTS reporting_c    ON reporting(project_id, test_file_id, subtest);
-CREATE INDEX IF NOT EXISTS reporting_d    ON reporting(project_id, test_file_id, subtest, user_id);
 CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);
 
 CREATE TABLE resource_batch (

@@ -54,9 +54,7 @@ sub run {
 
     my $config = schema_config_from_settings($settings);
 
-    my $ydb  = $settings->db;
-    my $yup = $settings->upload;
-    my $user = $yup->user || $ENV{USER};
+    my $user = $settings->yath->user;
 
     my $is_term = -t STDOUT ? 1 : 0;
 

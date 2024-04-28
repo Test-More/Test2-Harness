@@ -26,6 +26,7 @@ option_group {group => 'db', prefix => 'db', category => "Database Options"} => 
     option user => (
         type => 'Scalar',
         description => 'Username to use when connecting to the db',
+        default => sub { $ENV{USER} },
     );
 
     option pass => (

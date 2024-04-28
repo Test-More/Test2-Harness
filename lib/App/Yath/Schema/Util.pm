@@ -53,7 +53,7 @@ sub dbd_driver {
 sub schema_config_from_settings {
     my ($settings) = @_;
 
-    my $db = $settings->group('db') or die "No DB settings";
+    my $db = $settings->group('db') or return;
 
     if (my $cmod = $db->config) {
         my $file = mod2file($cmod);
@@ -90,6 +90,8 @@ sub schema_config_from_settings {
             $dsn .= ";port=$port" if $port;
         }
     }
+
+    return unless $dsn;
 
     require App::Yath::Schema::Config;
     return App::Yath::Schema::Config->new(

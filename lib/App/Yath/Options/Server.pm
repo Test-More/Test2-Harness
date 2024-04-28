@@ -10,8 +10,25 @@ option_group {group => 'server', prefix => 'server', category => "Server Options
     option url => (
         type => 'Scalar',
         alt => ['uri'],
-        description => "Yath-UI url",
-        long_examples  => [" http://my-yath-ui.com/..."],
+        description => "Yath server url",
+        long_examples  => [" http://my-yath-server.com/..."],
+    );
+
+    option api_key => (
+        type => 'Scalar',
+        description => "Yath server API key. This is not necessary if your Yath server instance is set to single-user"
+    );
+
+    option grace => (
+        type => 'Bool',
+        description => "If yath cannot connect to yath-ui it normally throws an error, use this to make it fail gracefully. You get a warning, but things keep going.",
+        default => 0,
+    );
+
+    option retry => (
+        type => 'Count',
+        description => "How many times to try an operation before giving up",
+        default => 0,
     );
 };
 

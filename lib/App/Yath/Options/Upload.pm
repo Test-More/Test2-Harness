@@ -32,12 +32,6 @@ option_group {group => 'upload', prefix => 'upload', category => "DB Upload Opti
         ],
     );
 
-    option user => (
-        type => 'Scalar',
-        default => sub { $ENV{USER} },
-        description => "Username to be associated with runs stored in the database. Defaults to your shell username.",
-    );
-
     option retry => (
         type => 'Count',
         description => "How many times to try an operation before giving up",

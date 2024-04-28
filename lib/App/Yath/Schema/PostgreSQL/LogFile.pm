@@ -16,18 +16,16 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("log_files");
 __PACKAGE__->add_columns(
   "log_file_id",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "log_files_log_file_id_seq",
   },
   "name",
   { data_type => "text", is_nullable => 0 },
@@ -41,11 +39,11 @@ __PACKAGE__->has_many(
   "runs",
   "App::Yath::Schema::Result::Run",
   { "foreign.log_file_id" => "self.log_file_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:38
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

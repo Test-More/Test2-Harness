@@ -4,13 +4,15 @@ use warnings;
 
 our $VERSION = '2.000000';
 
+use POSIX;
+
 use Carp qw/croak/;
 
 use App::Yath::Schema::RunProcessor;
 
 use Test2::Harness::Util::HashBase qw/-config -worker_id/;
 
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
@@ -21,6 +23,22 @@ sub init {
 
     croak "'config' is a required attribute"
         unless $self->{+CONFIG};
+
+    $self->{+WORKER_ID} //= gen_uuid();
+}
+
+sub spawn {
+    my $self = shift;
+
+    my $pid = fork // die "Could not fork: $!";
+    return $pid if $pid;
+
+    local $SIG{INT}  = sub { POSIX::_exit(0) };
+    local $SIG{TERM} = sub { POSIX::_exit(0) };
+
+    my $ok = eval { $self->run(); 1 };
+    warn $@ unless $ok;
+    exit($ok ? 0 : 255);
 }
 
 sub run {
@@ -35,10 +53,10 @@ sub run {
         $schema->resultset('Run')->search(
             {status   => 'pending', log_file_id => {'!=' => undef}},
             {order_by => {-asc => 'added'}, rows => 1},
-        )->update({status => 'running', worker_id => $worker_id->{string}});
+        )->update({status => 'running', worker_id => $worker_id});
 
         my $run = $schema->resultset('Run')->search(
-            {status   => 'running',         worker_id => $worker_id->{string}},
+            {status   => 'running',         worker_id => $worker_id},
             {order_by => {-asc => 'added'}, rows      => 1},
         )->first;
 
@@ -66,12 +84,10 @@ sub process {
 
     if ($ok && !$status->{errors}) {
         syswrite(\*STDOUT, "Completed run " . $run->run_id . " (" . $run->log_file->name . ") in $total seconds.\n");
-        $run->update({status => 'complete', passed => $status->{passed}, failed => $status->{failed}, retried => $status->{retried}});
     }
     else {
         my $error = $ok ? join("\n" => @{$status->{errors}}) : $err;
-        syswrite(\*STDOUT, "Failed feed " . $run->run_id . " (" . $run->log_file->name . ") in $total seconds.\n$error\n");
-        $run->update({status => 'broken', error => $error});
+        syswrite(\*STDOUT, "Failed run " . $run->run_id . " (" . $run->log_file->name . ") in $total seconds.\n$error\n");
     }
 
     return;
@@ -101,17 +117,18 @@ sub process_log {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my @errors;
     local $| = 1;
     while (my $line = <$fh>) {
         next if $line =~ m/^null$/ims;
         my $ln = $.;
 
-        my $error = $self->process_event_json($processor, $ln => $line);
-
-        return {errors => ["error processing line number $ln: $error"]} if $error;
+        my $error = $self->process_event_json($processor, $ln => $line) or next;
+        push @errors => "error processing line number $ln: $error";
     }
 
-    my $status = $processor->finish();
+    my $status = $processor->finish(@errors);
+
     return $status;
 }
 
@@ -121,7 +138,7 @@ sub process_event_json {
 
     my $ok = eval {
         my $event = decode_json($json);
-        $processor->process_event($event, undef, line => $ln);
+        $processor->process_event($event, undef, $ln);
         1;
     };
     my $err = $@;

@@ -16,21 +16,22 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("binaries");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0 },
   "binary_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
   "event_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "is_image",
+  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
   "filename",
   { data_type => "varchar", is_nullable => 0, size => 512 },
   "description",
   { data_type => "text", is_nullable => 1 },
-  "is_image",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
   "data",
   { data_type => "longblob", is_nullable => 0 },
 );
@@ -39,14 +40,16 @@ __PACKAGE__->belongs_to(
   "event",
   "App::Yath::Schema::Result::Event",
   { event_id => "event_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "CASCADE",
+    on_update     => "RESTRICT",
+  },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('event_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('binary_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

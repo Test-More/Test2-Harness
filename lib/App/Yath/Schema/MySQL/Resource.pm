@@ -16,36 +16,59 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("resources");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0 },
   "resource_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
-  "resource_batch_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "batch_ord",
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
+  "resource_type_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "run_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "host_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "stamp",
+  {
+    data_type => "timestamp",
+    datetime_undef_if_invalid => 1,
+    is_nullable => 0,
+  },
+  "resource_ord",
   { data_type => "integer", is_nullable => 0 },
-  "module",
-  { data_type => "varchar", is_nullable => 0, size => 512 },
   "data",
-  { data_type => "json", is_nullable => 0 },
+  { data_type => "longtext", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("resource_id");
-__PACKAGE__->add_unique_constraint("resource_batch_id", ["resource_batch_id", "batch_ord"]);
+__PACKAGE__->add_unique_constraint("run_id", ["run_id", "resource_ord"]);
 __PACKAGE__->belongs_to(
-  "resource_batch",
-  "App::Yath::Schema::Result::ResourceBatch",
-  { resource_batch_id => "resource_batch_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  "host",
+  "App::Yath::Schema::Result::Host",
+  { host_id => "host_id" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "SET NULL",
+    on_update     => "RESTRICT",
+  },
+);
+__PACKAGE__->belongs_to(
+  "resource_type",
+  "App::Yath::Schema::Result::ResourceType",
+  { resource_type_id => "resource_type_id" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
+);
+__PACKAGE__->belongs_to(
+  "run",
+  "App::Yath::Schema::Result::Run",
+  { run_id => "run_id" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('resource_batch_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('resource_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -14,19 +14,17 @@ use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-__PACKAGE__->parent_column('parent_id');
+__PACKAGE__->inflate_column(
+    rendered => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('rendered', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('rendered', {}),
+    },
+);
 
 __PACKAGE__->inflate_column(
     facets => {
         inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('facets', {}),
         deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('facets', {}),
-    },
-);
-
-__PACKAGE__->inflate_column(
-    orphan => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('orphan', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('orphan', {}),
     },
 );
 
@@ -41,12 +39,6 @@ sub in_mode {
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_all_fields;
-
-    # Inflate
-    $cols{facets} = $self->facets;
-    $cols{orphan} = $self->orphan;
-    $cols{lines}  = App::Yath::Renderer::Default::Composer->render_super_verbose($cols{facets});
-
     return \%cols;
 }
 
@@ -65,13 +57,13 @@ sub line_data {
     my %cols = $self->get_all_fields;
     my %out;
 
-    my $has_facets = ($cols{has_facets} || $cols{facets}) ? 1 : 0;
-    my $has_orphan = ($cols{has_orphan} || $cols{orphan}) ? 1 : 0;
+    my $has_facets = $cols{has_facets} ? 1 : 0;
+    my $is_orphan = $cols{is_orphan} ? 1 : 0;
     my $has_binary = $cols{has_binary} ? 1 : 0;
+    my $is_parent  = $cols{is_subtest} ? 1 : 0;
+    my $causes_fail = $cols{causes_fail} ? 1 : 0;
 
-    $cols{facets} = $self->facets if $has_facets;
-
-    $out{lines} = App::Yath::Renderer::Default::Composer->render_super_verbose($has_facets ? $self->facets : $self->orphan);
+    $out{lines} = $self->rendered // [];
 
     if ($has_binary) {
         for my $binary ($self->binaries) {
@@ -86,38 +78,23 @@ sub line_data {
         }
     }
 
-    $out{facets} = $has_facets;
-    $out{orphan} = $has_orphan;
+    $out{facets}    = $has_facets;
+    $out{orphan}    = $is_orphan;
+    $out{is_parent} = $is_parent;
+    $out{is_fail}   = $causes_fail;
 
-    $out{parent_id} = $cols{parent_id} if $cols{parent_id};
-    $out{nested}    = $cols{nested} // 0;
+    if ($cols{parent_id}) {
+        $out{parent_id} = $cols{parent_id};
+        $out{parent_uuid} = ref($cols{parent_uuid}) ? $cols{parent_uuid}->event_uuid : $cols{parent_uuid};
+    }
+
+    $out{nested} = $cols{nested} // 0;
 
     $out{event_id} = $cols{event_id};
-
-    $out{is_parent} = ($has_facets && $cols{facets}{parent}) ? 1 : 0;
-    $out{is_fail}   = ($has_facets && $cols{facets}{assert}) ? $cols{facets}{assert}{pass} ? 0 : 1 : undef;
+    $out{event_uuid} = $cols{event_uuid};
 
     return \%out;
 }
-
-__PACKAGE__->has_many(
-    "events",
-    "App::Yath::Schema::Result::Event",
-    {"foreign.parent_id" => "self.event_id"},
-    {cascade_copy        => 0, cascade_delete => 0},
-);
-
-__PACKAGE__->belongs_to(
-    "parent_rel",
-    "App::Yath::Schema::Result::Event",
-    {event_id => "parent_id"},
-    {
-        is_deferrable => 0,
-        join_type     => "LEFT",
-        on_delete     => "NO ACTION",
-        on_update     => "NO ACTION",
-    },
-);
 
 1;
 

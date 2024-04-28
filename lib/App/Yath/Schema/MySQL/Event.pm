@@ -16,77 +16,107 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("events");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0 },
+  "trace_uuid",
+  { data_type => "uuid", is_nullable => 1 },
+  "parent_uuid",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1 },
   "event_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
-  "job_key",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "event_ord",
-  { data_type => "bigint", is_nullable => 0 },
-  "insert_ord",
   { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
-  "has_binary",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
-  "is_subtest",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
-  "is_diag",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
-  "is_harness",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
-  "is_time",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
+  "job_try_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "parent_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "event_idx",
+  { data_type => "integer", is_nullable => 0 },
+  "event_sdx",
+  { data_type => "integer", is_nullable => 0 },
   "stamp",
   {
     data_type => "timestamp",
     datetime_undef_if_invalid => 1,
     is_nullable => 1,
   },
-  "parent_id",
-  { data_type => "binary", is_nullable => 1, size => 16 },
-  "trace_id",
-  { data_type => "char", is_nullable => 1, size => 36 },
   "nested",
-  { data_type => "integer", default_value => 0, is_nullable => 1 },
+  { data_type => "smallint", is_nullable => 0 },
+  "is_subtest",
+  { data_type => "tinyint", is_nullable => 0 },
+  "is_diag",
+  { data_type => "tinyint", is_nullable => 0 },
+  "is_harness",
+  { data_type => "tinyint", is_nullable => 0 },
+  "is_time",
+  { data_type => "tinyint", is_nullable => 0 },
+  "is_orphan",
+  { data_type => "tinyint", is_nullable => 0 },
+  "causes_fail",
+  { data_type => "tinyint", is_nullable => 0 },
+  "has_facets",
+  { data_type => "tinyint", is_nullable => 0 },
+  "has_binary",
+  { data_type => "tinyint", is_nullable => 0 },
   "facets",
-  { data_type => "json", is_nullable => 1 },
-  "facets_line",
-  { data_type => "bigint", is_nullable => 1 },
-  "orphan",
-  { data_type => "json", is_nullable => 1 },
-  "orphan_line",
-  { data_type => "bigint", is_nullable => 1 },
+  { data_type => "longtext", is_nullable => 1 },
+  "rendered",
+  { data_type => "longtext", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("event_id");
-__PACKAGE__->add_unique_constraint("insert_ord", ["insert_ord", "job_key"]);
+__PACKAGE__->add_unique_constraint("event_uuid", ["event_uuid"]);
+__PACKAGE__->add_unique_constraint("job_try_id", ["job_try_id", "event_idx", "event_sdx"]);
 __PACKAGE__->has_many(
   "binaries",
   "App::Yath::Schema::Result::Binary",
   { "foreign.event_id" => "self.event_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
-);
-__PACKAGE__->belongs_to(
-  "job_key",
-  "App::Yath::Schema::Result::Job",
-  { job_key => "job_key" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
-  "App::Yath::Schema::Result::Reporting",
-  { "foreign.event_id" => "self.event_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  "events_parent_uuids",
+  "App::Yath::Schema::Result::Event",
+  { "foreign.parent_uuid" => "self.event_uuid" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->has_many(
+  "events_parents",
+  "App::Yath::Schema::Result::Event",
+  { "foreign.parent_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->belongs_to(
+  "job_try",
+  "App::Yath::Schema::Result::JobTry",
+  { job_try_id => "job_try_id" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
+);
+__PACKAGE__->belongs_to(
+  "parent",
+  "App::Yath::Schema::Result::Event",
+  { event_id => "parent_id" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "CASCADE",
+    on_update     => "RESTRICT",
+  },
+);
+__PACKAGE__->belongs_to(
+  "parent_uuid",
+  "App::Yath::Schema::Result::Event",
+  { event_uuid => "parent_uuid" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "RESTRICT",
+    on_update     => "RESTRICT",
+  },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('parent_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('event_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

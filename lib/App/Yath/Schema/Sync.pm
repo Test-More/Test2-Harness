@@ -6,11 +6,13 @@ use DBI;
 use Scope::Guard;
 use Carp qw/croak/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util::HashBase;
+
+die "FIXME";
 
 sub run_delta {
     my $self = shift;
@@ -44,9 +46,6 @@ sub sync {
     my $cache = $params{cache} // {};
     my $debug = $params{debug} // 0;
 
-    my $from_uuidf = $params{from_uuid_format} // 'binary';
-    my $to_uuidf   = $params{to_uuid_format}   // 'binary';
-
     my ($rh, $wh);
     pipe($rh, $wh) or die "Could not open pipe: $!";
     $wh->autoflush(1);
@@ -66,7 +65,6 @@ sub sync {
             rh      => $rh,
             cache   => $cache,
             debug   => $debug,
-            uuidf   => $to_uuidf,
         );
 
         $guard->dismiss();
@@ -81,7 +79,6 @@ sub sync {
         wh      => $wh,
         skip    => $skip,
         debug   => $debug,
-        uuidf   => $from_uuidf,
     );
     close($wh);
 
@@ -151,7 +148,7 @@ sub _get_dbh_runs {
     my @out;
 
     while (my $run = $sth->fetchrow_arrayref()) {
-        push @out => uuid_inflate($run->[0])->string;
+        push @out => $run->[0];
     }
 
     return \@out;
@@ -166,7 +163,6 @@ sub write_sync {
     my $dbh     = $params{dbh}     or croak "'dbh' is required";
     my $run_ids = $params{run_ids} or croak "'run_ids' must be an arrayref of run ids";
     my $wh      = $params{wh}      or croak "'wh' is required and must be a writable filehandle";
-    my $uuidf   = $params{uuidf} // 'binary';
     my $skip    = $params{skip}  // {};
     my $debug   = $params{debug} // 0;
 
@@ -184,7 +180,7 @@ sub write_sync {
     my $counter = 0;
     my $subcount = 0;
     for my $run_id (@$run_ids) {
-        my $run_uuid = uuid_inflate($run_id)->$uuidf;
+        my $run_uuid = $run_id;
         my @args = ($dbh, $run_uuid, $skip);
 
         for my $meth (@to_dump) {
@@ -212,7 +208,6 @@ sub read_sync {
     my $dbh     = $params{dbh}     or croak "'dbh' is required";
     my $run_ids = $params{run_ids} or croak "'run_ids' must be an arrayref of run ids";
     my $rh      = $params{rh}      or croak "'rh' is required and must be a readable filehandle";
-    my $uuidf   = $params{uuidf} // 'binary';
     my $cache   = $params{cache} // {};
     my $debug   = $params{debug} // 0;
 
@@ -260,7 +255,7 @@ sub read_sync {
         my $method = "import_$type";
 
         next if eval {
-            $self->$method(dbh => $dbh, item => $data->{$type}, uuidf => $uuidf, cache => $cache);
+            $self->$method(dbh => $dbh, item => $data->{$type}, cache => $cache);
             1;
         };
 
@@ -276,7 +271,7 @@ sub read_sync {
 
 sub get_or_create_id {
     my $self = shift;
-    my ($cache, $dbh, $uuidf, $table, $field, $via_field, $via_value) = @_;
+    my ($cache, $dbh, $table, $field, $via_field, $via_value) = @_;
 
     return undef unless $via_value;
 
@@ -285,7 +280,7 @@ sub get_or_create_id {
 
 sub _get_or_create_id {
     my $self = shift;
-    my ($cache, $dbh, $uuidf, $table, $field, $via_field, $via_value) = @_;
+    my ($cache, $dbh, $table, $field, $via_field, $via_value) = @_;
 
     my $sql = "SELECT $field FROM $table WHERE $via_field = ?";
 
@@ -293,19 +288,17 @@ sub _get_or_create_id {
     $sth->execute($via_value) or die "MySQL Error: " . $dbh->errstr;
     if ($sth->rows) {
         my $row = $sth->fetchrow_hashref();
-        return uuid_inflate($row->{$field})->string;
+        return $row->{$field};
     }
 
     my $uuid = gen_uuid();
-    $self->insert($dbh, $uuidf, $table, {$field => $uuid, $via_field => $via_value});
-    return $uuid->string;
+    $self->insert($dbh, $table, {$field => $uuid, $via_field => $via_value});
+    return $uuid;
 }
 
 sub insert {
     my $self = shift;
-    my ($dbh, $uuidf, $table, $data) = @_;
-
-    _fix_uuids($uuidf => $data);
+    my ($dbh, $table, $data) = @_;
 
     my $sql  = "INSERT INTO $table(";
     my (@fields, @vars);
@@ -317,63 +310,6 @@ sub insert {
 
     my $sth = $dbh->prepare($sql);
     $sth->execute(@vars) or die "Insert failed: " . $dbh->errstr;
-}
-
-sub stringify_uuids {
-    my ($in) = @_;
-    _fix_uuids(string => $in);
-}
-
-sub binarify_uuids {
-    my ($in) = @_;
-    _fix_uuids(binary => $in);
-}
-
-my @ID_FIELDS = qw{
-    coverage_id
-    coverage_manager_id
-    event_id
-    job_field_id
-    job_id
-    job_key
-    parent_id
-    project_id
-    reporting_id
-    run_field_id
-    run_id
-    source_file_id
-    source_sub_id
-    test_file_id
-    user_id
-};
-
-sub _fix_uuids {
-    my ($method => $in) = @_;
-    return unless $in;
-    my $type = ref($in);
-
-    if (!$type) {
-        return uuid_inflate($in)->$method;
-    }
-    if ($type eq 'App::Yath::Schema::UUID') {
-        return $in->$method;
-    }
-    if ($type eq 'HASH') {
-        # Cannot do all_id or _key fields, some are not uuids...
-        # This is a list of safe ones
-        for my $key (@ID_FIELDS) {
-            next unless exists $in->{$key};
-            $in->{$key} = _fix_uuids($method, $in->{$key});
-        }
-    }
-    elsif($type eq 'ARRAY') {
-        _fix_uuids($method, $_) for @$in;
-    }
-    else {
-        die "Unsupported type '$type' '$in'";
-    }
-
-    return $in;
 }
 
 sub render_runs {
@@ -393,7 +329,7 @@ sub render_runs {
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
 
-    my $run = stringify_uuids($sth->fetchrow_hashref());
+    my $run = $sth->fetchrow_hashref();
     delete $run->{has_coverage} if $skip->{coverage};
 
     return {run => $run};
@@ -409,7 +345,7 @@ sub render_run_fields {
          WHERE run_id = ?
     EOT
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $run_fields = stringify_uuids($sth->fetchall_arrayref({}));
+    my $run_fields = $sth->fetchall_arrayref({});
 
     return map { +{run_field => $_} } @$run_fields;
 }
@@ -420,16 +356,16 @@ sub render_jobs {
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                run_id, job_key, job_id, job_try, job_ord, is_harness_out, status, parameters, fields, name, fail, retry,
+                run_id, job_key, job_id, job_try, job_idx, is_harness_out, status, parameters, fields, name, fail, retry,
                 exit_code, launch, start, ended, duration, pass_count, fail_count,
                 test_files.filename
           FROM jobs
-          JOIN test_files USING (test_file_id)
+          JOIN test_files USING (test_file_idx)
          WHERE run_id = ?
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $jobs = stringify_uuids($sth->fetchall_arrayref({}));
+    my $jobs = $sth->fetchall_arrayref({});
     return map { +{job => $_} } @$jobs;
 }
 
@@ -445,7 +381,7 @@ sub render_job_fields {
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $job_fields = stringify_uuids($sth->fetchall_arrayref({}));
+    my $job_fields = $sth->fetchall_arrayref({});
     return map { +{job_field => $_} } @$job_fields;
 }
 
@@ -462,7 +398,7 @@ sub render_events {
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $events = stringify_uuids($sth->fetchall_arrayref({}));
+    my $events = $sth->fetchall_arrayref({});
     return map { +{event => $_} } @$events;
 }
 
@@ -480,7 +416,7 @@ sub render_binaries {
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $binaries = stringify_uuids($sth->fetchall_arrayref({}));
+    my $binaries = ($sth->fetchall_arrayref({});
     return map { +{binary => $_} } @$binaries;
 }
 
@@ -490,18 +426,18 @@ sub render_reporting {
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                reporting_id, run_id, run_ord, job_try, subtest, duration, fail, pass, retry, abort, job_key, event_id,
+                reporting_idx, run_id, run_idx, job_try, subtest, duration, fail, pass, retry, abort, job_key, event_id,
                 projects.name AS project_name,
                 users.username AS username,
                 test_files.filename AS filename
           FROM reporting
-          JOIN projects   USING(project_id)
-          JOIN users      USING(user_id)
-          JOIN test_files USING(test_file_id)
+          JOIN projects   USING(project_idx)
+          JOIN users      USING(user_idx)
+          JOIN test_files USING(test_file_idx)
          WHERE run_id = ?
     EOT
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $reporting = stringify_uuids($sth->fetchall_arrayref({}));
+    my $reporting = $sth->fetchall_arrayref({});
     return map { +{reporting => $_} } @$reporting;
 }
 
@@ -511,21 +447,21 @@ sub render_coverage {
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                coverage_id, run_id, job_key, metadata,
+                coverage_idx, run_id, job_key, metadata,
                 test_files.filename AS test_file,
                 source_files.filename AS source_file,
                 source_subs.subname AS source_sub,
                 coverage_manager.package AS coverage_manager
           FROM coverage
-          JOIN test_files       USING(test_file_id)
-          JOIN source_files     USING(source_file_id)
-          JOIN source_subs      USING(source_sub_id)
-          JOIN coverage_manager USING(coverage_manager_id)
+          JOIN test_files       USING(test_file_idx)
+          JOIN source_files     USING(source_file_idx)
+          JOIN source_subs      USING(source_sub_idx)
+          JOIN coverage_manager USING(coverage_manager_idx)
          WHERE run_id = ?
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $coverage = stringify_uuids($sth->fetchall_arrayref({}));
+    my $coverage = $sth->fetchall_arrayref({});
     return map { +{coverage => $_} } @$coverage;
 }
 
@@ -534,14 +470,13 @@ sub import_run {
     my %params = @_;
 
     my $dbh   = $params{dbh};
-    my $uuidf = $params{uuidf};
     my $cache = $params{cache};
     my $run   = $params{item};
 
-    $run->{user_id}    = $self->get_or_create_id($cache, $dbh, $uuidf, 'users'    => 'user_id',    username => delete $run->{username});
-    $run->{project_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'projects' => 'project_id', name     => delete $run->{project_name});
+    $run->{user_idx}    = $self->get_or_create_id($cache, $dbh, 'users'    => 'user_idx',    username => delete $run->{username});
+    $run->{project_idx} = $self->get_or_create_id($cache, $dbh, 'projects' => 'project_idx', name     => delete $run->{project_name});
 
-    $self->insert($dbh, $uuidf, runs => $run);
+    $self->insert($dbh, runs => $run);
 }
 
 sub import_run_field {
@@ -549,10 +484,9 @@ sub import_run_field {
     my %params = @_;
 
     my $dbh       = $params{dbh};
-    my $uuidf     = $params{uuidf};
     my $run_field = $params{item};
 
-    $self->insert($dbh, $uuidf, run_fields => $run_field);
+    $self->insert($dbh, run_fields => $run_field);
 }
 
 sub import_job {
@@ -560,13 +494,12 @@ sub import_job {
     my %params = @_;
 
     my $dbh   = $params{dbh};
-    my $uuidf = $params{uuidf};
     my $cache = $params{cache};
     my $job   = $params{item};
 
-    $job->{test_file_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files' => 'test_file_id', filename => delete $job->{filename});
+    $job->{test_file_idx} = $self->get_or_create_id($cache, $dbh, 'test_files' => 'test_file_idx', filename => delete $job->{filename});
 
-    $self->insert($dbh, $uuidf, jobs => $job);
+    $self->insert($dbh, jobs => $job);
 }
 
 sub import_job_field {
@@ -574,10 +507,9 @@ sub import_job_field {
     my %params = @_;
 
     my $dbh       = $params{dbh};
-    my $uuidf     = $params{uuidf};
     my $job_field = $params{item};
 
-    $self->insert($dbh, $uuidf, job_fields => $job_field);
+    $self->insert($dbh, job_fields => $job_field);
 }
 
 sub import_event {
@@ -585,10 +517,9 @@ sub import_event {
     my %params = @_;
 
     my $dbh   = $params{dbh};
-    my $uuidf = $params{uuidf};
     my $event = $params{item};
 
-    $self->insert($dbh, $uuidf, events => $event);
+    $self->insert($dbh, events => $event);
 }
 
 sub import_binary {
@@ -596,10 +527,9 @@ sub import_binary {
     my %params = @_;
 
     my $dbh    = $params{dbh};
-    my $uuidf  = $params{uuidf};
     my $binary = $params{item};
 
-    $self->insert($dbh, $uuidf, binaries => $binary);
+    $self->insert($dbh, binaries => $binary);
 }
 
 sub import_reporting {
@@ -607,15 +537,14 @@ sub import_reporting {
     my %params = @_;
 
     my $dbh       = $params{dbh};
-    my $uuidf     = $params{uuidf};
     my $cache     = $params{cache};
     my $reporting = $params{item};
 
-    $reporting->{project_id}   = $self->get_or_create_id($cache, $dbh, $uuidf, 'projects'   => 'project_id',   name     => delete $reporting->{project_name});
-    $reporting->{user_id}      = $self->get_or_create_id($cache, $dbh, $uuidf, 'users'      => 'user_id',      username => delete $reporting->{username});
-    $reporting->{test_file_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files' => 'test_file_id', filename => delete $reporting->{filename});
+    $reporting->{project_idx}   = $self->get_or_create_id($cache, $dbh, 'projects'   => 'project_idx',   name     => delete $reporting->{project_name});
+    $reporting->{user_idx}      = $self->get_or_create_id($cache, $dbh, 'users'      => 'user_idx',      username => delete $reporting->{username});
+    $reporting->{test_file_idx} = $self->get_or_create_id($cache, $dbh, 'test_files' => 'test_file_idx', filename => delete $reporting->{filename});
 
-    $self->insert($dbh, $uuidf, reporting => $reporting);
+    $self->insert($dbh, reporting => $reporting);
 }
 
 sub import_coverage {
@@ -623,16 +552,15 @@ sub import_coverage {
     my %params = @_;
 
     my $dbh      = $params{dbh};
-    my $uuidf    = $params{uuidf};
     my $cache    = $params{cache};
     my $coverage = $params{item};
 
-    $coverage->{test_file_id}        = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files'       => 'test_file_id',        filename => delete $coverage->{test_file});
-    $coverage->{source_file_id}      = $self->get_or_create_id($cache, $dbh, $uuidf, 'source_files'     => 'source_file_id',      filename => delete $coverage->{source_file});
-    $coverage->{source_sub_id}       = $self->get_or_create_id($cache, $dbh, $uuidf, 'source_subs'      => 'source_sub_id',       subname  => delete $coverage->{source_sub});
-    $coverage->{coverage_manager_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'coverage_manager' => 'coverage_manager_id', package  => delete $coverage->{coverage_manager});
+    $coverage->{test_file_idx}        = $self->get_or_create_id($cache, $dbh, 'test_files'       => 'test_file_idx',        filename => delete $coverage->{test_file});
+    $coverage->{source_file_idx}      = $self->get_or_create_id($cache, $dbh, 'source_files'     => 'source_file_idx',      filename => delete $coverage->{source_file});
+    $coverage->{source_sub_idx}       = $self->get_or_create_id($cache, $dbh, 'source_subs'      => 'source_sub_idx',       subname  => delete $coverage->{source_sub});
+    $coverage->{coverage_manager_idx} = $self->get_or_create_id($cache, $dbh, 'coverage_manager' => 'coverage_manager_idx', package  => delete $coverage->{coverage_manager});
 
-    $self->insert($dbh, $uuidf, coverage => $coverage);
+    $self->insert($dbh, coverage => $coverage);
 }
 
 1;
@@ -714,9 +642,6 @@ Copy data from the source database to the destination database.
         skip  => {},              # Optional hashref of (TABLE => bool) for tables to skip
         cache => {},              # Optional uuid cache map.
         debug => 0,               # Optional, turn on for verbosity
-
-        from_uuid_format => 'binary',    # Defaults to 'binary' may be 'string' for older databases
-        to_uuid_format   => 'binary',    # Defaults to 'binary' may be 'string' for older databases
     );
 
 =item $sync->write_sync(...)
@@ -727,7 +652,6 @@ Output the data to jsonl format.
         dbh     => $dbh,        # Source database
         run_ids => $run_ids,    # list of run_ids to sync
         wh      => $wh,         # Where to print the jsonl data
-        uuidf   => $uuidf,      # UUID format, defaults to 'binary', 'string' is also valid.
         skip    => $skip,       # Optional hashref of (TABLE => bool) for tables to skip
         debug   => 0,           # Optional, turn on for verbosity
     );
@@ -740,32 +664,23 @@ Read the jsonl data and insert it into the database.
         dbh     => $dbh,        # Destination database
         run_ids => $run_ids,    # list of run_ids to sync
         rh      => $rh,         # Where to read the jsonl data
-        uuidf   => $uuidf,      # UUID format, defaults to 'binary', 'string' is also valid.
         cache   => $cache,      # Optional uuid cache map.
         debug   => 0,           # Optional, turn on for verbosity
     );
 
-=item $uuid = $sync->get_or_create_id($cache, $dbh, $uuidf, $table, $uuid_field, $value_field, $value)
+=item $uuid = $sync->get_or_create_id($cache, $dbh, $table, $uuid_field, $value_field, $value)
 
 Create or find a common link in the database (think project, user, etc).
 
     my $uuid = $sync->get_or_create_id(
-        $cache, $dbh, 'binary',
-        users    => 'user_id',
+        $cache, $dbh,
+        users    => 'user_idx',
         username => 'bob',
     );
 
-=item $sync->insert($dbh, $uuidf, $table, $data)
+=item $sync->insert($dbh, $table, $data)
 
-Insert $data as a row into $table using the $uuidf uuid format.
-
-=item $sync->stringify_uuids($thing)
-
-Takes a string or nested data structure, will convert uuid's in id fields to the string form.
-
-=item $sync->binarify_uuids($thing)
-
-Takes a string or nested data structure, will convert uuid's in id fields to the binary form.
+Insert $data as a row into $table.
 
 =back
 

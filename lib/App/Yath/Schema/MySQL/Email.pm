@@ -16,21 +16,20 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("email");
 __PACKAGE__->add_columns(
   "email_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
   "user_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "verified",
+  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
   "local",
   { data_type => "varchar", is_nullable => 0, size => 128 },
   "domain",
   { data_type => "varchar", is_nullable => 0, size => 128 },
-  "verified",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("email_id");
 __PACKAGE__->add_unique_constraint("local", ["local", "domain"]);
@@ -38,26 +37,23 @@ __PACKAGE__->might_have(
   "email_verification_code",
   "App::Yath::Schema::Result::EmailVerificationCode",
   { "foreign.email_id" => "self.email_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->might_have(
   "primary_email",
   "App::Yath::Schema::Result::PrimaryEmail",
   { "foreign.email_id" => "self.email_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
   { user_id => "user_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('email_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

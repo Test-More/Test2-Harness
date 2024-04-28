@@ -16,23 +16,37 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("reporting");
 __PACKAGE__->add_columns(
   "reporting_id",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "reporting_reporting_id_seq",
   },
-  "run_ord",
-  { data_type => "bigint", is_nullable => 0 },
+  "job_try_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "test_file_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "project_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "user_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "run_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "job_try",
-  { data_type => "integer", is_nullable => 1 },
+  { data_type => "smallint", is_nullable => 1 },
+  "retry",
+  { data_type => "smallint", is_nullable => 0 },
+  "abort",
+  { data_type => "smallint", is_nullable => 0 },
+  "fail",
+  { data_type => "smallint", is_nullable => 0 },
+  "pass",
+  { data_type => "smallint", is_nullable => 0 },
   "subtest",
   {
     data_type => "varchar",
@@ -41,48 +55,17 @@ __PACKAGE__->add_columns(
     size => 512,
   },
   "duration",
-  { data_type => "double precision", is_nullable => 0 },
-  "fail",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
-  "pass",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
-  "retry",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
-  "abort",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
-  "project_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "run_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "user_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "job_key",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
-  "test_file_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
-  "event_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  { data_type => "numeric", is_nullable => 0, size => [14, 4] },
 );
 __PACKAGE__->set_primary_key("reporting_id");
 __PACKAGE__->belongs_to(
-  "event",
-  "App::Yath::Schema::Result::Event",
-  { event_id => "event_id" },
+  "job_try",
+  "App::Yath::Schema::Result::JobTry",
+  { job_try_id => "job_try_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "NO ACTION",
-    on_update     => "NO ACTION",
-  },
-);
-__PACKAGE__->belongs_to(
-  "job_key",
-  "App::Yath::Schema::Result::Job",
-  { job_key => "job_key" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "NO ACTION",
+    on_delete     => "SET NULL",
     on_update     => "NO ACTION",
   },
 );
@@ -90,13 +73,13 @@ __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
   { project_id => "project_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "run",
   "App::Yath::Schema::Result::Run",
   { run_id => "run_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "test_file",
@@ -105,7 +88,7 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "NO ACTION",
+    on_delete     => "CASCADE",
     on_update     => "NO ACTION",
   },
 );
@@ -113,11 +96,11 @@ __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
   { user_id => "user_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:38
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -16,42 +16,63 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("resources");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "resource_id",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "resources_resource_id_seq",
   },
-  "resource_batch_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "batch_ord",
+  "resource_type_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "run_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "host_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "stamp",
+  { data_type => "timestamp with time zone", is_nullable => 0 },
+  "resource_ord",
   { data_type => "integer", is_nullable => 0 },
-  "module",
-  { data_type => "varchar", is_nullable => 0, size => 512 },
   "data",
   { data_type => "jsonb", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("resource_id");
 __PACKAGE__->add_unique_constraint(
-  "resources_resource_batch_id_batch_ord_key",
-  ["resource_batch_id", "batch_ord"],
+  "resources_run_id_resource_ord_key",
+  ["run_id", "resource_ord"],
 );
 __PACKAGE__->belongs_to(
-  "resource_batch",
-  "App::Yath::Schema::Result::ResourceBatch",
-  { resource_batch_id => "resource_batch_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  "host",
+  "App::Yath::Schema::Result::Host",
+  { host_id => "host_id" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "SET NULL",
+    on_update     => "NO ACTION",
+  },
+);
+__PACKAGE__->belongs_to(
+  "resource_type",
+  "App::Yath::Schema::Result::ResourceType",
+  { resource_type_id => "resource_type_id" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
+);
+__PACKAGE__->belongs_to(
+  "run",
+  "App::Yath::Schema::Result::Run",
+  { run_id => "run_id" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:38
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

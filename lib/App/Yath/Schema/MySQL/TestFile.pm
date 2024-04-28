@@ -16,41 +16,38 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("test_files");
 __PACKAGE__->add_columns(
   "test_file_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
   "filename",
-  { data_type => "varchar", is_nullable => 0, size => 512 },
+  { data_type => "varchar", is_nullable => 0, size => 255 },
 );
 __PACKAGE__->set_primary_key("test_file_id");
 __PACKAGE__->add_unique_constraint("filename", ["filename"]);
 __PACKAGE__->has_many(
-  "coverages",
+  "coverage",
   "App::Yath::Schema::Result::Coverage",
   { "foreign.test_file_id" => "self.test_file_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "jobs",
   "App::Yath::Schema::Result::Job",
   { "foreign.test_file_id" => "self.test_file_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.test_file_id" => "self.test_file_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('test_file_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

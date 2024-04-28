@@ -16,28 +16,28 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("sessions");
 __PACKAGE__->add_columns(
+  "session_uuid",
+  { data_type => "uuid", is_nullable => 0 },
   "session_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
   "active",
   { data_type => "tinyint", default_value => 1, is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("session_id");
+__PACKAGE__->add_unique_constraint("session_uuid", ["session_uuid"]);
 __PACKAGE__->has_many(
   "session_hosts",
   "App::Yath::Schema::Result::SessionHost",
   { "foreign.session_id" => "self.session_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('session_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

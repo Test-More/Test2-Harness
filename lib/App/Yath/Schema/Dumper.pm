@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use App::Yath::Schema::Util qw/format_duration/;
 use Test2::Harness::Util::JSON qw/encode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 use Time::HiRes qw/time/;
 use Parallel::Runner;
 use IO::Compress::Bzip2;
@@ -95,7 +95,7 @@ sub dump {
                             || ($spec->{data_type} eq 'binary' && $spec->{size} == 16)
                             || ($spec->{data_type} eq 'char'   && $spec->{size} == 36);
 
-                        $data{$col} = defined($data{$col}) ? uuid_inflate($data{$col})->string : undef;
+                        $data{$col} = defined($data{$col}) ? $data{$col} : undef;
                     }
 
                     print $fh encode_json(\%data), "\n";

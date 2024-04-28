@@ -6,11 +6,14 @@ our $VERSION = '2.000000';
 
 use parent 'DBIx::Class::Core';
 
-sub get_all_fields {
+*get_all_fields = __PACKAGE__->can('get_inflated_columns');
+
+sub TO_JSON {
     my $self = shift;
-    my @fields = $self->result_source->columns;
-    return ( map {($_ => $self->$_)} @fields );
+    my %cols = $self->get_all_fields;
+    return \%cols;
 }
+
 
 1;
 

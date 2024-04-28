@@ -16,32 +16,33 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("sessions");
 __PACKAGE__->add_columns(
+  "session_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "session_id",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "sessions_session_id_seq",
   },
   "active",
   { data_type => "boolean", default_value => \"true", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("session_id");
+__PACKAGE__->add_unique_constraint("sessions_session_uuid_key", ["session_uuid"]);
 __PACKAGE__->has_many(
   "session_hosts",
   "App::Yath::Schema::Result::SessionHost",
   { "foreign.session_id" => "self.session_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:38
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

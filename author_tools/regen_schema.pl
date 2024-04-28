@@ -1,6 +1,8 @@
 use strict;
 use warnings;
 
+use DBIx::Class::Schema::Loader 'make_schema_at';
+use DBIx::Class::Storage::DBI::MariaDB;
 use DBIx::QuickDB;
 
 use App::Yath::Schema::Util qw/qdb_driver dbd_driver/;
@@ -8,40 +10,126 @@ my $version = App::Yath::Schema::Util->VERSION;
 
 my $schemadir = './share/schema/';
 
-opendir(my $dh, $schemadir) or die "Could not open schema dir: $!";
-for my $schema_file (sort readdir($dh)) {
+my $start_pid = $$;
+
+my @todo;
+if (@ARGV) {
+    @todo = map { /\.sql$/ ? $_ : "${_}.sql"} @ARGV;
+}
+
+unless (@todo) {
+    opendir(my $dh, $schemadir) or die "Could not open schema dir: $!";
+    @todo = sort readdir($dh);
+}
+
+for my $schema_file (@todo) {
+    exit(0) unless $$ == $start_pid;
     next unless $schema_file =~ m/\.sql$/;
 
     my $schema = $schema_file;
     $schema =~ s/\.sql$//;
 
+    my $loop_pid = fork;
+    if ($loop_pid) {
+        waitpid($loop_pid, 0);
+        next;
+    }
+
+    local $ENV{PATH} = "$ENV{HOME}/percona/bin:$ENV{PATH}" if $schema_file =~ /Percona/ && -x "$ENV{HOME}/percona/bin/mysqld";
+
     my $qdb_driver = qdb_driver($schema_file);
     my $dbd_driver = dbd_driver($schema_file);
 
+    # Schema dumper does not like DBD::MariaDB
+#    $dbd_driver = 'DBD::mysql' if $dbd_driver eq 'DBD::MariaDB';
+
     print "Generating $schema using qdb driver '$qdb_driver' and dbd driver '$dbd_driver'\n";
 
-    my $db = DBIx::QuickDB->build_db($schema => {driver => $qdb_driver, dbd_driver => $dbd_driver});
+    #$qdb_driver = 'MySQL' if $qdb_driver eq 'Percona';
+
+    my $db;
+    unless (eval { $db = DBIx::QuickDB->build_db($schema => {driver => $qdb_driver, dbd_driver => $dbd_driver}); 1 }) {
+        warn $@;
+        next;
+    }
+
     {
-        my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
-        $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
+        my $dbh;
+        if ($schema_file =~ m/SQLite/) {
+            $dbh = $db->connect('harness_ui', AutoCommit => 1, RaiseError => 1);
+        }
+        else {
+            $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
+            $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
+        }
+
         $db->load_sql(harness_ui => "${schemadir}/${schema_file}");
     }
 
     mkdir("./tmp");
     system('rm', '-rf', "./tmp/$schema");
     mkdir("./tmp/$schema");
-    system(
-        'dbicdump',
-        '-o' => 'dump_directory=./tmp/' . $schema,
-        '-o' => 'components=["InflateColumn::DateTime", "InflateColumn::Serializer", "InflateColumn::Serializer::JSON", "Tree::AdjacencyList", "UUIDColumns"]',
-        '-o' => 'debug=0',
-        '-o' => 'generate_pod=0',
-        '-o' => 'skip_load_external=1',
-        'App::Yath::Schema',
-        $db->connect_string('harness_ui'),
-        '',
-        ''
-    ) and die "Error";
+
+    my $pid = fork;
+    if ($pid) {
+        waitpid($pid, 0);
+        die "Child process failed ($?)" if $?;
+    }
+    else {
+        make_schema_at(
+            'App::Yath::Schema',
+            {
+                debug => 0,
+
+                dump_directory => "./tmp/$schema",
+                generate_pod   => 0,
+
+                skip_load_external => 1,
+
+                moniker_map => sub {
+                    my ($table, $name) = @_;
+
+                    return "JobTry" if $name eq 'JobTries';
+                    return $name;
+                },
+
+                rel_name_map => sub {
+                    my ($info) = @_;
+
+                    return 'children'
+                        if $info->{remote_columns}
+                        && $info->{local_columns}
+                        && $info->{name}                eq 'events'
+                        && $info->{local_class}         eq 'App::Yath::Schema::Result::Event'
+                        && $info->{remote_class}        eq 'App::Yath::Schema::Result::Event'
+                        && $info->{remote_columns}->[0] eq 'parent_event'
+                        && $info->{local_columns}->[0]  eq 'event_id';
+
+                    return "coverage" if $info->{name} eq 'coverages';
+                    return "reports"  if $info->{name} eq 'reportings';
+                    return $info->{name};
+                },
+
+                relationship_attrs => {
+                    has_many   => {cascade_delete => 1},
+                    might_have => {cascade_delete => 1},
+                },
+
+                components => [
+                    "InflateColumn::DateTime",
+                    "InflateColumn::Serializer",
+                    "InflateColumn::Serializer::JSON",
+                    #"Tree::AdjacencyList",
+                    "UUIDColumns",
+                ],
+            },
+            [$db->connect_string('harness_ui'), '', ''],
+        );
+        exit 0;
+    }
+
+    my $extra = '';
+#    $extra .= "use DBIx::Class::Storage::DBI::MariaDB;\n" if $schema =~ m/(MySQL|Percona|MariaDB)/i;
 
     system("rm -rf lib/App/Yath/Schema/${schema}");
     mkdir "lib/App/Yath/Schema/${schema}";
@@ -52,7 +140,7 @@ use utf8;
 use strict;
 use warnings;
 use Carp();
-
+$extra
 our \$VERSION = '$version';
 
 # DO NOT MODIFY THIS FILE, GENERATED BY ${ \__FILE__ }\n
@@ -304,7 +392,11 @@ See L<http://dev.perl.org/licenses/>
             close($oh);
         }
     }
+
+    exit(0) unless $$ == $start_pid;
 }
+
+exit(0) unless $$ == $start_pid;
 
 sub process_pkg {
     my ($file, $schema) = @_;
@@ -383,7 +475,7 @@ sub process_uuid {
     my @uuids;
     for my $col (keys %cols) {
         my $data = $cols{$col} or next;
-        next unless $col eq 'owner' || $col =~ m/_(id|key)$/;
+        next unless $col =~ m/_uuid$/;
         next unless $data->{data_type} eq 'binary';
         next unless $data->{size} == 16;
         push @uuids => $col;
@@ -393,12 +485,8 @@ sub process_uuid {
     print $fh @lines;
 
     if (@uuids) {
-        my $specs = join "\n" => map { "__PACKAGE__->inflate_column('$_' => { inflate => \\&uuid_inflate, deflate => \\&uuid_deflate });" } @uuids;
-
-        print $fh <<"        EOT";
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-$specs
-        EOT
+        my $specs = join "\n" => map { "__PACKAGE__->inflate_column('$_' => { inflate => \\&App::Yath::Schema::Util::format_uuid_for_app, deflate => \\&App::Yath::Schema::Util::format_uuid_for_db });" } @uuids;
+        print $fh "$specs\n";
     }
 
     print $fh "# DO NOT MODIFY ANY PART OF THIS FILE\n";

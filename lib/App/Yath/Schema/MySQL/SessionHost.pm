@@ -16,43 +16,42 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("session_hosts");
 __PACKAGE__->add_columns(
   "session_host_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
-  "session_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
   "user_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "session_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "created",
   {
     data_type => "timestamp",
     datetime_undef_if_invalid => 1,
-    default_value => \"current_timestamp",
+    default_value => "current_timestamp(6)",
     is_nullable => 0,
   },
   "accessed",
   {
     data_type => "timestamp",
     datetime_undef_if_invalid => 1,
-    default_value => \"current_timestamp",
+    default_value => "current_timestamp(6)",
     is_nullable => 0,
   },
   "address",
-  { data_type => "varchar", is_nullable => 0, size => 128 },
+  { data_type => "text", is_nullable => 0 },
   "agent",
-  { data_type => "varchar", is_nullable => 0, size => 128 },
+  { data_type => "text", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("session_host_id");
-__PACKAGE__->add_unique_constraint("session_id", ["session_id", "address", "agent"]);
+__PACKAGE__->add_unique_constraint("address", ["address", "agent", "session_id"]);
 __PACKAGE__->belongs_to(
   "session",
   "App::Yath::Schema::Result::Session",
   { session_id => "session_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 __PACKAGE__->belongs_to(
   "user",
@@ -61,17 +60,13 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 1,
     join_type     => "LEFT",
-    on_delete     => "RESTRICT",
+    on_delete     => "CASCADE",
     on_update     => "RESTRICT",
   },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('session_host_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('session_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

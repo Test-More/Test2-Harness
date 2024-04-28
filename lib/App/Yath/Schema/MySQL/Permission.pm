@@ -16,26 +16,23 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("permissions");
 __PACKAGE__->add_columns(
   "permission_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
   "project_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "user_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "updated",
   {
     data_type => "timestamp",
     datetime_undef_if_invalid => 1,
-    default_value => \"current_timestamp",
+    default_value => "current_timestamp(6)",
     is_nullable => 0,
   },
-  "cpan_batch",
-  { data_type => "bigint", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("permission_id");
 __PACKAGE__->add_unique_constraint("project_id", ["project_id", "user_id"]);
@@ -43,21 +40,17 @@ __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
   { project_id => "project_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
   { user_id => "user_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('project_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('permission_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

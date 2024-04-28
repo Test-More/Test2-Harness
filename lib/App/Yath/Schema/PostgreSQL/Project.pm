@@ -16,23 +16,21 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("projects");
 __PACKAGE__->add_columns(
   "project_id",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "projects_project_id_seq",
   },
+  "owner",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "name",
   { data_type => "citext", is_nullable => 0 },
-  "owner",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
 );
 __PACKAGE__->set_primary_key("project_id");
 __PACKAGE__->add_unique_constraint("projects_name_key", ["name"]);
@@ -43,7 +41,7 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "NO ACTION",
+    on_delete     => "SET NULL",
     on_update     => "NO ACTION",
   },
 );
@@ -51,23 +49,23 @@ __PACKAGE__->has_many(
   "permissions",
   "App::Yath::Schema::Result::Permission",
   { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "runs",
   "App::Yath::Schema::Result::Run",
   { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:38
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

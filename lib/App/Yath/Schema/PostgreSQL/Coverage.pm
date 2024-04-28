@@ -16,37 +16,43 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("coverage");
 __PACKAGE__->add_columns(
-  "coverage_id",
+  "event_uuid",
   { data_type => "uuid", is_nullable => 0, size => 16 },
-  "run_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "test_file_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "source_file_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "source_sub_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "coverage_id",
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "coverage_coverage_id_seq",
+  },
+  "job_try_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "coverage_manager_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
-  "job_key",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "run_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "test_file_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "source_file_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "source_sub_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "metadata",
   { data_type => "jsonb", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("coverage_id");
 __PACKAGE__->add_unique_constraint(
-  "coverage_run_id_test_file_id_source_file_id_source_sub_id_j_key",
+  "coverage_run_id_job_try_id_test_file_id_source_file_id_sour_key",
   [
     "run_id",
+    "job_try_id",
     "test_file_id",
     "source_file_id",
     "source_sub_id",
-    "job_key",
   ],
 );
 __PACKAGE__->belongs_to(
@@ -56,18 +62,18 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "NO ACTION",
+    on_delete     => "CASCADE",
     on_update     => "NO ACTION",
   },
 );
 __PACKAGE__->belongs_to(
-  "job_key",
-  "App::Yath::Schema::Result::Job",
-  { job_key => "job_key" },
+  "job_try",
+  "App::Yath::Schema::Result::JobTry",
+  { job_try_id => "job_try_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "NO ACTION",
+    on_delete     => "SET NULL",
     on_update     => "NO ACTION",
   },
 );
@@ -75,29 +81,29 @@ __PACKAGE__->belongs_to(
   "run",
   "App::Yath::Schema::Result::Run",
   { run_id => "run_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "source_file",
   "App::Yath::Schema::Result::SourceFile",
   { source_file_id => "source_file_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "source_sub",
   "App::Yath::Schema::Result::SourceSub",
   { source_sub_id => "source_sub_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "test_file",
   "App::Yath::Schema::Result::TestFile",
   { test_file_id => "test_file_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:38
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

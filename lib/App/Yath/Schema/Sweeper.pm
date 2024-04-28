@@ -2,7 +2,7 @@ package App::Yath::Schema::Sweeper;
 use strict;
 use warnings;
 use Time::HiRes qw/time/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 
@@ -130,7 +130,7 @@ sub sweep_run {
     }
 
     if ($params{coverage}) {
-        $run->coverages->delete;
+        $run->coverage->delete;
         $run->update({has_coverage => 0}) unless $params{runs};
     }
 
@@ -148,7 +148,7 @@ sub sweep_run {
         $run->delete;
     }
     elsif (my $sweep_name = $params{sweep_name}) {
-        $self->config->schema->resultset('Sweep')->find_or_create({name => $sweep_name, run_id => $run->run_id, sweep_id => gen_uuid});
+        $self->config->schema->resultset('Sweep')->find_or_create({name => $sweep_name, run_id => $run->run_id});
     }
 
     print "[$$] ($params{id}) Run: " . $run->run_id . " took " . sprintf("%0.4f", time - $start) . " seconds to sweep $counter job(s).\n";

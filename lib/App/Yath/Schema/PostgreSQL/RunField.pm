@@ -16,17 +16,23 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("run_fields");
 __PACKAGE__->add_columns(
-  "run_field_id",
+  "event_uuid",
   { data_type => "uuid", is_nullable => 0, size => 16 },
+  "run_field_id",
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "run_fields_run_field_id_seq",
+  },
   "run_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "name",
-  { data_type => "varchar", is_nullable => 0, size => 255 },
+  { data_type => "varchar", is_nullable => 0, size => 64 },
   "data",
   { data_type => "jsonb", is_nullable => 1 },
   "details",
@@ -37,16 +43,15 @@ __PACKAGE__->add_columns(
   { data_type => "text", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("run_field_id");
-__PACKAGE__->add_unique_constraint("run_fields_run_id_name_key", ["run_id", "name"]);
 __PACKAGE__->belongs_to(
   "run",
   "App::Yath::Schema::Result::Run",
   { run_id => "run_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:38
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

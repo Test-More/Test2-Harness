@@ -11,13 +11,6 @@ use Carp qw/confess/;
 
 use App::Yath::Schema::DateTimeFormat qw/DTF/;
 
-__PACKAGE__->inflate_column(
-    parameters => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
-    },
-);
-
 # For joining
 __PACKAGE__->belongs_to(
   "user_join",
@@ -32,43 +25,43 @@ sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 sub sig {
     my $self = shift;
 
+    my $parameters = $self->parameters;
+
     return join ";" => (
-        (map {$self->$_ // ''} qw/status pinned passed failed retried concurrency/),
-        (map {length($self->$_ // '')} qw/parameters/),
-        ($self->run_fields->count),
+        (map {$self->$_ // ''} qw/status pinned passed failed retried concurrency_j concurrency_x/),
+        $parameters ? length($parameters) : (''),
+        (scalar $self->run_fields->count),
     );
 }
 
 sub short_run_fields {
     my $self = shift;
 
-    return [ map { my $d = +{$_->get_all_fields}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->run_fields->search(undef, {
-        remove_columns => ['data'],
+    return $self->run_fields->search(undef, {
+        remove_columns => ['data', 'parameters'],
         '+select' => ['data IS NOT NULL AS has_data'],
         '+as' => ['has_data'],
-    })->all ];
+    })->all;
 }
 
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_all_fields;
 
-    # Just No.
-    delete $cols{log_data};
+    $cols{user}    //= $self->user->username;
+    $cols{project} //= $self->project->name;
 
-    # Inflate
-    $cols{parameters} = $self->parameters;
-    $cols{user}       //= $self->user->username;
-    $cols{project}    //= $self->project->name;
+    $cols{fields} = [];
+    for my $rf ($cols{prefetched_fields} ? $self->run_fields : $self->short_run_fields) {
+        my $fields = {$rf->get_all_fields};
 
-    if ($cols{prefetched_fields}) {
-        $cols{fields} = [ map { {$_->get_all_fields} } $self->run_fields ];
-    }
-    else {
-        $cols{fields} = $self->short_run_fields;
+        my $has_data = delete $fields->{data};
+        $fields->{has_data} //= $has_data ? \'1' : \'0';
+
+        push @{$cols{fields}} => $fields;
     }
 
-    my $dt = DTF()->parse_datetime( $cols{added} );
+    my $dt = DTF()->parse_datetime($cols{added});
 
     $cols{added} = $dt->strftime("%Y-%m-%d %I:%M%P");
 
@@ -91,11 +84,11 @@ sub normalize_to_mode {
     $_->normalize_to_mode(mode => $mode) for $self->jobs->all;
 }
 
-sub expanded_coverages {
+sub expanded_coverage {
     my $self = shift;
     my ($query) = @_;
 
-    $self->coverages->search(
+    $self->coverage->search(
         $query,
         {
             order_by   => [qw/test_file_id source_file_id source_sub_id/],
@@ -115,7 +108,7 @@ sub coverage_data {
     my (%params) = @_;
 
     my $query = $params{query};
-    my $rs = $self->expanded_coverages($query);
+    my $rs = $self->expanded_coverage($query);
 
     my $curr_test;
     my $data;

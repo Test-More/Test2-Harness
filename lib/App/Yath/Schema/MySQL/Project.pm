@@ -16,17 +16,16 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("projects");
 __PACKAGE__->add_columns(
   "project_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
+  "owner",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "name",
   { data_type => "varchar", is_nullable => 0, size => 128 },
-  "owner",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 1, size => 16 },
 );
 __PACKAGE__->set_primary_key("project_id");
 __PACKAGE__->add_unique_constraint("name", ["name"]);
@@ -37,7 +36,7 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 1,
     join_type     => "LEFT",
-    on_delete     => "RESTRICT",
+    on_delete     => "SET NULL",
     on_update     => "RESTRICT",
   },
 );
@@ -45,26 +44,23 @@ __PACKAGE__->has_many(
   "permissions",
   "App::Yath::Schema::Result::Permission",
   { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "runs",
   "App::Yath::Schema::Result::Run",
   { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('project_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('owner' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

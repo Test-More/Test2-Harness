@@ -7,18 +7,11 @@ use utf8;
 use strict;
 use warnings;
 
-use App::Yath::Schema::ImportModes qw/record_all_events mode_check/;
-
 use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-__PACKAGE__->inflate_column(
-    parameters => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
-    },
-);
+*job_tries = *jobs_tries;
 
 sub file {
     my $self = shift;
@@ -48,27 +41,26 @@ sub short_file {
     return $file;
 }
 
-my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
-sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
+sub complete {
+    my $self = shift;
+
+    my @tries = $self->job_tries or return 0;
+
+    my $to_see = 1;
+    for my $try (@tries) {
+        $to_see--;
+        return 0 unless $try->complete;
+        $to_see++ if $try->retry;
+    }
+
+    return $to_see ? 0 : 1;
+}
 
 sub sig {
     my $self = shift;
 
-    return join ";" => (
-        (map {$self->$_ // ''} qw/status pass_count fail_count name file fail/),
-        (map {length($self->$_ // '')} qw/parameters/),
-        ($self->job_fields->count),
-    );
-}
-
-sub short_job_fields {
-    my $self = shift;
-
-    return [ map { my $d = +{$_->get_all_fields}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->job_fields->search(undef, {
-        remove_columns => ['data'],
-        '+select' => ['data IS NOT NULL AS has_data'],
-        '+as' => ['has_data'],
-    })->all ];
+    my $out = join ';' => map { $_->sig } sort { $a->job_try_ord <=> $b->job_try_ord } $self->jobs_tries;
+    $out //= ';';
 }
 
 sub TO_JSON {
@@ -78,18 +70,17 @@ sub TO_JSON {
     $cols{short_file}    = $self->short_file;
     $cols{shortest_file} = $self->shortest_file;
 
-    # Inflate
-    $cols{parameters} = $self->parameters;
-
-    $cols{fields} = $self->short_job_fields;
-
     return \%cols;
 }
 
-my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file status job_ord run_id };
+my @GLANCE_FIELDS = qw{ job_uuid is_harness_out };
 
 sub glance_data {
     my $self = shift;
+    my %params = @_;
+
+    my $try_id = $params{try_id};
+
     my %cols = $self->get_all_fields;
 
     my %data;
@@ -99,52 +90,18 @@ sub glance_data {
     $data{short_file}    = $self->short_file;
     $data{shortest_file} = $self->shortest_file;
 
-    $data{fields} = $self->short_job_fields;
+    my @out;
 
-    return \%data;
-}
-
-sub normalize_to_mode {
-    my $self = shift;
-    my %params = @_;
-
-    my $mode = $params{mode} // $self->run->mode;
-
-    # No need to purge anything
-    return if record_all_events(mode => $mode, job => $self);
-    return if mode_check($mode, 'complete');
-
-    if (mode_check($mode, 'summary', 'qvf')) {
-        my $has_binary = $self->events->search({has_binary => 1});
-        while (my $e = $has_binary->next()) {
-            $has_binary->binaries->delete;
-            $e->delete;
-        }
-
-        $self->events->delete;
-        return;
+    for my $try ($self->jobs_tries) {
+        next if $try_id && $try->job_try_id != $try_id;
+        push @out => {%data, %{$try->glance_data}};
     }
 
-    my $query = {
-        is_diag => 0,
-        is_harness => 0,
-        is_time => 0,
-    };
-
-    if (mode_check($mode, 'qvfds')) {
-        $query->{'-not'} = {is_subtest => 1, nested => 0};
-    }
-    elsif(!mode_check($mode, 'qvfd')) {
-        die "Unknown mode '$mode'";
+    unless (@out) {
+        push @out => {%data, status => 'pending'}
     }
 
-    my $has_binary = $self->events->search({%$query, has_binary => 1});
-    while (my $e = $has_binary->next()) {
-        $has_binary->binaries->delete;
-        $e->delete;
-    }
-
-    $self->events->search($query)->delete();
+    return @out;
 }
 
 1;

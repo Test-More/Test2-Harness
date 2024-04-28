@@ -16,27 +16,27 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("users");
 __PACKAGE__->add_columns(
   "user_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
-  "username",
-  { data_type => "varchar", is_nullable => 0, size => 64 },
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
   "pw_hash",
   { data_type => "varchar", is_nullable => 1, size => 31 },
   "pw_salt",
   { data_type => "varchar", is_nullable => 1, size => 22 },
-  "realname",
-  { data_type => "varchar", is_nullable => 1, size => 64 },
   "role",
   {
     data_type => "enum",
+    default_value => "user",
     extra => { list => ["admin", "user"] },
     is_nullable => 0,
   },
+  "username",
+  { data_type => "varchar", is_nullable => 0, size => 64 },
+  "realname",
+  { data_type => "text", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("user_id");
 __PACKAGE__->add_unique_constraint("username", ["username"]);
@@ -44,55 +44,53 @@ __PACKAGE__->has_many(
   "api_keys",
   "App::Yath::Schema::Result::ApiKey",
   { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "emails",
   "App::Yath::Schema::Result::Email",
   { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "permissions",
   "App::Yath::Schema::Result::Permission",
   { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->might_have(
   "primary_email",
   "App::Yath::Schema::Result::PrimaryEmail",
   { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "projects",
   "App::Yath::Schema::Result::Project",
   { "foreign.owner" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "runs",
   "App::Yath::Schema::Result::Run",
   { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "session_hosts",
   "App::Yath::Schema::Result::SessionHost",
   { "foreign.user_id" => "self.user_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

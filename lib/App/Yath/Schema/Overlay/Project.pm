@@ -8,7 +8,7 @@ use strict;
 use warnings;
 
 use Statistics::Basic qw/median/;
-use App::Yath::Schema::UUID qw/uuid_deflate/;
+
 
 use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
@@ -25,7 +25,7 @@ sub last_covered_run {
     };
 
     my $attrs = {
-        order_by => {'-desc' => 'run_ord'},
+        order_by => {'-desc' => 'run_id'},
         rows => 1,
     };
 
@@ -63,7 +63,7 @@ sub durations {
            AND jobs.duration IS NOT NULL
            AND test_files.filename IS NOT NULL
     EOT
-    my @vals = (uuid_deflate($self->project_id));
+    my @vals = ($self->project_id);
 
     my ($user_append, @user_args) = $username ? ("users.username = ?", $username) : ();
 
@@ -79,7 +79,7 @@ sub durations {
               FROM runs
               JOIN users USING(user_id)
               $where
-             ORDER BY run_ord DESC
+             ORDER BY run_id DESC
              LIMIT ?
         EOT
 

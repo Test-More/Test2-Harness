@@ -16,25 +16,25 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("api_keys");
 __PACKAGE__->add_columns(
-  "api_key_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
-  "user_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "name",
-  { data_type => "varchar", is_nullable => 0, size => 128 },
   "value",
-  { data_type => "varchar", is_nullable => 0, size => 16 },
+  { data_type => "uuid", is_nullable => 0 },
+  "api_key_id",
+  { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
+  "user_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "status",
   {
     data_type => "enum",
+    default_value => "active",
     extra => { list => ["active", "disabled", "revoked"] },
     is_nullable => 0,
   },
+  "name",
+  { data_type => "varchar", is_nullable => 0, size => 128 },
 );
 __PACKAGE__->set_primary_key("api_key_id");
 __PACKAGE__->add_unique_constraint("value", ["value"]);
@@ -42,14 +42,11 @@ __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
   { user_id => "user_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('api_key_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

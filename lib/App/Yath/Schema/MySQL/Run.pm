@@ -16,83 +16,87 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("runs");
 __PACKAGE__->add_columns(
+  "run_uuid",
+  { data_type => "uuid", is_nullable => 0 },
   "run_id",
-  { data_type => "binary", is_nullable => 0, size => 16 },
-  "user_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "run_ord",
   { data_type => "bigint", is_auto_increment => 1, is_nullable => 0 },
+  "user_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "project_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "log_file_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "sync_id",
+  { data_type => "integer", is_foreign_key => 1, is_nullable => 1 },
+  "passed",
+  { data_type => "integer", is_nullable => 1 },
+  "failed",
+  { data_type => "integer", is_nullable => 1 },
+  "to_retry",
+  { data_type => "integer", is_nullable => 1 },
+  "retried",
+  { data_type => "integer", is_nullable => 1 },
+  "concurrency_j",
+  { data_type => "integer", is_nullable => 1 },
+  "concurrency_x",
+  { data_type => "integer", is_nullable => 1 },
+  "added",
+  {
+    data_type => "timestamp",
+    datetime_undef_if_invalid => 1,
+    default_value => "current_timestamp(6)",
+    is_nullable => 0,
+  },
   "status",
   {
     data_type => "enum",
+    default_value => "pending",
     extra => {
       list => ["pending", "running", "complete", "broken", "canceled"],
     },
     is_nullable => 0,
   },
+  "mode",
+  {
+    data_type => "enum",
+    default_value => "qvfd",
+    extra => { list => ["qvfds", "qvfd", "qvf", "summary", "complete"] },
+    is_nullable => 0,
+  },
+  "canon",
+  { data_type => "tinyint", is_nullable => 0 },
+  "pinned",
+  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
+  "has_coverage",
+  { data_type => "tinyint", is_nullable => 1 },
+  "has_resources",
+  { data_type => "tinyint", is_nullable => 1 },
+  "parameters",
+  { data_type => "longtext", is_nullable => 1 },
   "worker_id",
   { data_type => "text", is_nullable => 1 },
   "error",
   { data_type => "text", is_nullable => 1 },
-  "project_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "pinned",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
-  "has_coverage",
-  { data_type => "tinyint", default_value => 0, is_nullable => 0 },
-  "added",
-  {
-    data_type => "timestamp",
-    datetime_undef_if_invalid => 1,
-    default_value => \"current_timestamp",
-    is_nullable => 0,
-  },
   "duration",
-  { data_type => "text", is_nullable => 1 },
-  "log_file_id",
-  { data_type => "binary", is_foreign_key => 1, is_nullable => 1, size => 16 },
-  "mode",
-  {
-    data_type => "enum",
-    extra => { list => ["qvfds", "qvfd", "qvf", "summary", "complete"] },
-    is_nullable => 0,
-  },
-  "buffer",
-  {
-    data_type => "enum",
-    default_value => "job",
-    extra => { list => ["none", "diag", "job", "run"] },
-    is_nullable => 0,
-  },
-  "passed",
-  { data_type => "integer", is_nullable => 1 },
-  "failed",
-  { data_type => "integer", is_nullable => 1 },
-  "retried",
-  { data_type => "integer", is_nullable => 1 },
-  "concurrency",
-  { data_type => "integer", is_nullable => 1 },
-  "parameters",
-  { data_type => "json", is_nullable => 1 },
+  { data_type => "decimal", is_nullable => 1, size => [14, 4] },
 );
 __PACKAGE__->set_primary_key("run_id");
-__PACKAGE__->add_unique_constraint("run_ord", ["run_ord"]);
+__PACKAGE__->add_unique_constraint("run_uuid", ["run_uuid"]);
 __PACKAGE__->has_many(
-  "coverages",
+  "coverage",
   "App::Yath::Schema::Result::Coverage",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "jobs",
   "App::Yath::Schema::Result::Job",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "log_file",
@@ -101,7 +105,7 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 1,
     join_type     => "LEFT",
-    on_delete     => "RESTRICT",
+    on_delete     => "SET NULL",
     on_update     => "RESTRICT",
   },
 );
@@ -109,46 +113,52 @@ __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
   { project_id => "project_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "resource_batches",
-  "App::Yath::Schema::Result::ResourceBatch",
+  "resources",
+  "App::Yath::Schema::Result::Resource",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "run_fields",
   "App::Yath::Schema::Result::RunField",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "sweeps",
   "App::Yath::Schema::Result::Sweep",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->belongs_to(
+  "sync",
+  "App::Yath::Schema::Result::Sync",
+  { sync_id => "sync_id" },
+  {
+    is_deferrable => 1,
+    join_type     => "LEFT",
+    on_delete     => "SET NULL",
+    on_update     => "RESTRICT",
+  },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
   { user_id => "user_id" },
-  { is_deferrable => 1, on_delete => "RESTRICT", on_update => "RESTRICT" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "RESTRICT" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:22
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('project_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('run_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('log_file_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:31
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -21,9 +21,14 @@ sub DTF {
         return $DTF = 'DateTime::Format::Pg';
     }
 
-    if ($App::Yath::Schema::LOADED =~ m/mysql/i) {
+    if ($App::Yath::Schema::LOADED =~ m/(mysql|mariadb|percona)/i) {
         require DateTime::Format::MySQL;
         return $DTF = 'DateTime::Format::MySQL';
+    }
+
+    if ($App::Yath::Schema::LOADED =~ m/sqlite/i) {
+        require DateTime::Format::SQLite;
+        return $DTF = 'DateTime::Format::SQLite';
     }
 
     die "Not sure what DateTime::Formatter to use";

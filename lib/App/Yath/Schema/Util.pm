@@ -7,22 +7,42 @@ our $VERSION = '2.000000';
 use Carp qw/croak/;
 
 use Test2::Harness::Util qw/mod2file/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
 
 use Importer Importer => 'import';
 
-our @EXPORT = qw/qdb_driver dbd_driver schema_config_from_settings find_job format_duration parse_duration is_invalid_subtest_name/;
+our @EXPORT = qw{
+    schema_config_from_settings
+
+    qdb_driver          dbd_driver
+    find_job            find_job_and_try
+    format_duration     parse_duration
+
+    is_invalid_subtest_name
+
+    is_mysql
+    is_postgresql
+    is_sqlite
+    is_percona
+    is_mariadb
+
+    format_uuid_for_db
+    format_uuid_for_app
+};
 
 my %SCHEMA_TO_QDB_DRIVER = (
-    mariadb    => 'MySQL',
+    sqlite     => 'SQLite',
+    mariadb    => 'MariaDB',
     mysql      => 'MySQL',
+    percona    => 'Percona',
     postgresql => 'PostgreSQL',
     pg         => 'PostgreSQL',
 );
 
 my %SCHEMA_TO_DBD_DRIVER = (
-    mariadb    => 'DBD::MariaDB',
+    sqlite     => 'DBD::SQLite',
+    mariadb    => 'DBD::mysql',
     mysql      => 'DBD::mysql',
+    percona    => 'DBD::mysql',
     postgresql => 'DBD::Pg',
     pg         => 'DBD::Pg',
 );
@@ -51,15 +71,22 @@ sub dbd_driver {
 }
 
 sub schema_config_from_settings {
-    my ($settings) = @_;
+    my ($settings, %params) = @_;
 
-    my $db = $settings->group('db') or die "No DB settings";
+    my $config_class = delete $params{config_class} // 'App::Yath::Schema::Config';
+    require(mod2file($config_class));
+
+    my $db = $settings->group('db');
+    unless($db) {
+        return App::Yath::Schema::Config->new(%params) if $params{ephemeral};
+        croak "No database settings";
+    }
 
     if (my $cmod = $db->config) {
         my $file = mod2file($cmod);
         require $file;
 
-        return $cmod->yath_ui_config(%$$db);
+        return $cmod->yath_db_config(%$$db);
     }
 
     my $dsn = $db->dsn;
@@ -91,30 +118,59 @@ sub schema_config_from_settings {
         }
     }
 
-    require App::Yath::Schema::Config;
-    return App::Yath::Schema::Config->new(
-        dbi_dsn  => $dsn,
-        dbi_user => $db->user // '',
-        dbi_pass => $db->pass // '',
-    );
+    if ($dsn) {
+        return App::Yath::Schema::Config->new(
+            %params,
+            dbi_dsn  => $dsn,
+            dbi_user => $db->user // '',
+            dbi_pass => $db->pass // '',
+        );
+    }
+
+    croak "Could not find a DSN" unless $params{ephemeral};
+
+    return App::Yath::Schema::Config->new(%params);
+}
+
+{
+    no strict 'refs';
+    no warnings 'once';
+    *{$_} = *{"App::Yath::Schema::$_"} for qw/is_mysql is_postgresql is_sqlite is_percona is_mariadb/;
+}
+
+sub format_uuid_for_db  { App::Yath::Schema->format_uuid_for_db(@_) }
+sub format_uuid_for_app { App::Yath::Schema->format_uuid_for_app(@_) }
+
+sub find_job_and_try {
+    my ($schema, $uuid, $try) = @_;
+
+    my $job = find_job(@_);
+    my $job_id = $job->job_id;
+
+    my $job_try = find_job_try($schema, $job_id, $try);
+
+    return ($job, $job_try);
 }
 
 sub find_job {
-    my ($schema, $uuid, $try) = @_;
+    my ($schema, $uuid) = @_;
 
-    $uuid = uuid_inflate($uuid) or croak "Invalid job identifier";
+    return $schema->resultset('Job')->find({job_uuid => format_uuid_for_db($uuid)});
+}
 
-    my $jobs = $schema->resultset('Job');
+sub find_job_try {
+    my ($schema, $job_id, $try) = @_;
+
+    my $job_tries = $schema->resultset('JobTry');
 
     if (length $try) {
-        return $jobs->search({job_id => $uuid}, {order_by => {'-desc' => 'job_try'}, limit => 1})->first
+        return $job_tries->search({job_id => $job_id}, {order_by => {'-desc' => 'job_try_ord'}, limit => 1})->first
             if $try == -1;
 
-        return $jobs->search({job_id => $uuid, job_try => $try})->first;
+        return $job_tries->find({job_id => $job_id, job_try_ord => $try});
     }
 
-    return $jobs->search({job_key => $uuid})->first
-        || $jobs->search({job_id  => $uuid}, {order_by => {'-desc' => 'job_try'}, limit => 1})->first;
+    return $job_tries->search({job_id  => $job_id}, {order_by => {'-desc' => 'job_try_ord'}, limit => 1})->first;
 }
 
 sub base_name {

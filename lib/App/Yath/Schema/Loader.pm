@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use App::Yath::Schema::Util qw/format_duration/;
 use Test2::Harness::Util::JSON qw/decode_json/;
-use App::Yath::Schema::UUID qw/uuid_deflate/;
+
 use Time::HiRes qw/time/;
 use Parallel::Runner;
 use IO::Uncompress::Bunzip2;
@@ -73,17 +73,6 @@ sub load {
                         $count++;
 
                         my $row = decode_json($line);
-
-                        for my $col (keys %$cols_info) {
-                            my $spec = $cols_info->{$col};
-                            next if $col eq 'trace_id';
-                            next
-                                unless ($spec->{data_type} eq 'uuid')
-                                || ($spec->{data_type} eq 'binary' && $spec->{size} == 16)
-                                || ($spec->{data_type} eq 'char'   && $spec->{size} == 36);
-
-                            $row->{$col} = uuid_deflate($row->{$col});
-                        }
 
                         my $ok  = eval { $rs->create($row); 1 };
                         my $err = $@;

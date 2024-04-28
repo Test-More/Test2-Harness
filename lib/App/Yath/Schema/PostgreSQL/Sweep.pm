@@ -29,7 +29,7 @@ __PACKAGE__->add_columns(
   { data_type => "varchar", is_nullable => 0, size => 255 },
 );
 __PACKAGE__->set_primary_key("sweep_id");
-__PACKAGE__->add_unique_constraint("sweeps_name_run_id_key", ["name", "run_id"]);
+__PACKAGE__->add_unique_constraint("sweeps_run_id_name_key", ["run_id", "name"]);
 __PACKAGE__->belongs_to(
   "run",
   "App::Yath::Schema::Result::Run",
@@ -38,7 +38,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 10:30:23
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 16:05:48
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

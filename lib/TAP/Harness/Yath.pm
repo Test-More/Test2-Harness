@@ -2,30 +2,9 @@ package TAP::Harness::Yath;
 use strict;
 use warnings;
 
-# $ENV{HARNESS_SUBCLASS}
+our $VERSION = '2.000000';
 
-{
-    package TAP::Harness::Yath::Aggregator;
-
-    use Test2::Harness::Util::HashBase qw{
-        files_total
-        files_failed
-        files_passed
-
-        asserts_total
-        asserts_passed
-        asserts_failed
-    };
-
-    sub has_errors { $_[0]->{+FILES_FAILED} || $_[0]->{+ASSERTS_FAILED} }
-
-    sub total  { $_[0]->{+ASSERTS_TOTAL} }
-    sub failed { $_[0]->{+ASSERTS_FAILED} }
-    sub passed { $_[0]->{+ASSERTS_PASSED} }
-
-    sub total_files  { $_[0]->{+FILES_TOTAL} }
-    sub failed_files { $_[0]->{+FILES_FAILED} }
-}
+use TAP::Harness::Yath::Aggregator;
 
 our $SUMMARY;
 
@@ -85,3 +64,63 @@ sub runtests {
 1;
 
 __END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+TAP::Harness::Yath - Use yath instead of prove when installing modules.
+
+=head1 DESCRIPTION
+
+This tool allows you to tell the module install process to use yath instead of
+prove. This works for cpan, cpanm, and most other module install tools. It
+hooks into the process used by L<ExtUtils::MakeMaker> and
+L<Module::Build::Tiny> which ultimately cover most of cpan.
+
+=head1 SYNOPSIS
+
+    HARNESS_SUBCLASS="TAP::Harness::Yath" cpanm [MODULES]
+
+Setting the C<HARNESS_SUBCLASS> env var to "TAP::Harness::Yath" Will cause this
+module to be used instead of L<Test::Harness> or L<TAP::Harness>.
+
+You can also pass in command line arguments for yath using the
+C<TAP_HARNESS_YATH_ARGS> env var, args should be seperated by comma. Any other
+yath env vars will also work.
+
+    TAP_HARNESS_YATH_ARGS="-v,--color" HARNESS_SUBCLASS="TAP::Harness::Yath" cpanm -v [MODULES]
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+L<http://github.com/Test-More/Test2-Harness/>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See L<http://dev.perl.org/licenses/>
+
+=cut

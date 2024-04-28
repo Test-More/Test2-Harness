@@ -55,6 +55,7 @@ CREATE TABLE email (
 
     UNIQUE(local, domain)
 );
+CREATE INDEX IF NOT EXISTS email_user ON email(user_id);
 
 CREATE TABLE primary_email (
     user_id         UUID            NOT NULL REFERENCES users(user_id) PRIMARY KEY,
@@ -171,7 +172,7 @@ CREATE TABLE sweeps (
     run_id          UUID            NOT NULL REFERENCES runs(run_id),
     name            VARCHAR(255)    NOT NULL,
 
-    UNIQUE(name, run_id)
+    UNIQUE(run_id, name)
 );
 CREATE INDEX IF NOT EXISTS sweep_runs ON sweeps(run_id);
 
@@ -284,6 +285,7 @@ CREATE TABLE binaries (
     is_image        BOOL            NOT NULL DEFAULT FALSE,
     data            BYTEA           NOT NULL
 );
+CREATE INDEX IF NOT EXISTS binaries_event ON binaries(event_id);
 
 CREATE TABLE source_files (
     source_file_id  UUID            NOT NULL PRIMARY KEY,
@@ -344,6 +346,7 @@ CREATE TABLE reporting (
     event_id        UUID    DEFAULT NULL REFERENCES events(event_id)
 );
 CREATE INDEX IF NOT EXISTS reporting_user ON reporting(user_id);
+CREATE INDEX IF NOT EXISTS reporting_run  ON reporting(run_id);
 CREATE INDEX IF NOT EXISTS reporting_a    ON reporting(project_id);
 CREATE INDEX IF NOT EXISTS reporting_b    ON reporting(project_id, user_id);
 CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);
@@ -354,6 +357,7 @@ CREATE TABLE resource_batch (
     host_id             UUID            NOT NULL REFERENCES hosts(host_id),
     stamp               TIMESTAMP(4)    NOT NULL
 );
+CREATE INDEX IF NOT EXISTS resource_batch_run ON resource_batch(run_id);
 
 CREATE TABLE resources (
     resource_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,

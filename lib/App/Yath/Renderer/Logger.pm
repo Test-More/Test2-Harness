@@ -58,6 +58,10 @@ option_group {group => 'logging', category => "Logging Options", applicable => \
         }
     };
 
+    warn "FIXME: publish should send log to server\n";
+    option publish => (
+    );
+
     option log => (
         type        => 'Auto',
         short       => 'L',

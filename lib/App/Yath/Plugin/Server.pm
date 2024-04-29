@@ -1,3 +1,13 @@
+
+# Move cover stuff to cover plugin
+#
+# move duration to finder
+#
+# move publish to client-publish
+#
+# [POST] server/publish/project
+
+__END__
 package App::Yath::Plugin::Server;
 use strict;
 use warnings;

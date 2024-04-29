@@ -3,6 +3,11 @@ use strict;
 use warnings;
 
 use Carp qw/croak/;
+our @CARP_NOT = (
+    __PACKAGE__,
+    'Getopt::Yath',
+    'Getopt::Yath::Instance',
+);
 
 use Test2::Harness::Util qw/mod2file fqmod/;
 use Getopt::Yath::Term qw/USE_COLOR color/;
@@ -12,6 +17,7 @@ our $VERSION = '2.000000';
 use Test2::Harness::Util::HashBase qw{
     <title
     <field <name <short <alt <alt_no
+    <allow_underscore_in_alt
 
     <group
     <prefix
@@ -23,8 +29,12 @@ use Test2::Harness::Util::HashBase qw{
 
     <applicable
     <default <autofill <initialize <clear
+    <default_text <autofill_text
     <normalize
     +trigger
+
+    <allowed_values
+    <allowed_values_text
 
     <from_env_vars
     <clear_env_vars
@@ -75,6 +85,7 @@ sub create {
     my $type = delete $params{type} or croak "No 'type' specified";
 
     my $new_class = fqmod($type, __PACKAGE__);
+    local $Carp::CarpLevel = $Carp::CarpLevel = 1;
     return $new_class->new(%params);
 }
 
@@ -200,6 +211,13 @@ sub init {
     $self->{+FIELD} =~ s/-/_/g;
     $self->{+NAME}  =~ s/_/-/g;
 
+    unless ($self->allow_underscore_in_alt) {
+        for my $alt (@{$self->{+ALT} // []}) {
+            next unless $alt =~ m/_/;
+            croak "alt option form '$alt' contains an underscore, replace it with a '-' or set 'allow_underscore_in_alt' to true";
+        }
+    }
+
     croak "'default' is not allowed (did you mean 'initialize'" . ($self->allows_autofill ? " or 'autofill'" : "") . "?)"
         if $self->{+DEFAULT} && !$self->allows_default;
 
@@ -227,6 +245,46 @@ sub init {
     }
 
     return $self;
+}
+
+sub check_value {
+    my $self = shift;
+    my ($val) = @_;
+
+    return unless defined $val;
+
+    $val = [$val] unless ref($val) eq 'ARRAY';
+
+    my $av = $self->allowed_values or return;
+    my $r = ref($av);
+
+    my @bad;
+    for my $v (@$val) {
+        my $ok = 1;
+        if ($r eq 'CODE') {
+            $ok = $self->$av($v);
+        }
+        elsif ($r =~ /Regex/i) {
+            $ok = $v =~ $av;
+        }
+        elsif($r eq 'ARRAY') {
+            $ok = 0;
+            for my $c (@$av) {
+                next unless defined $c;
+                no warnings;
+                $ok = 1 and last if $c eq $v;
+                $ok = 1 and last if 0+$c && 0+$v && $c == $v;
+            }
+        }
+        else {
+             die "Invalid value check '$av' ($r) defined at " . $self->trace_string . ".\n";
+        }
+        next if $ok;
+
+        push @bad => $v;
+    }
+
+    return @bad;
 }
 
 sub forms {
@@ -367,6 +425,20 @@ sub cli_docs {
     if (my @notes = $self->notes) {
         my %seen;
         push @out => map { "\n" . Getopt::Yath::Term::fit_to_width(" ", "Note: $_", prefix => "  ") } grep { $_ && !$seen{$_}++ } @notes;
+    }
+
+    for my $field (qw/default autofill/) {
+        my $t = "${field}_text";
+        my $val = $self->$t || $self->$field // next;
+        next if ref($val);
+        push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "$field: $val", prefix => "  ");
+    }
+
+    if (my $avt = $self->allowed_values_text) {
+        push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "Allowed Values: $avt", prefix => "  ");
+    }
+    elsif (my $vals = $self->allowed_values) {
+        push @out => "\n" . Getopt::Yath::Term::fit_to_width(" ", "Allowed Values: " . join(", " => @$vals), prefix => "  ") if @$vals;
     }
 
     return join "\n" => @out;

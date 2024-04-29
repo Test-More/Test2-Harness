@@ -35,7 +35,7 @@ include_options(
     'App::Yath::Options::Yath',
     'App::Yath::Options::DB',
     'App::Yath::Options::Upload',
-    'App::Yath::Options::Server',
+    'App::Yath::Options::Client',
 );
 
 option_group {group => 'db', prefix => 'db', category => "Database Options"} => sub {

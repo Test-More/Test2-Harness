@@ -24,8 +24,8 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
 
     option user => (
         type => 'Scalar',
-        description => 'Username to associate with logs, database entries, and yath servers (Defaults to $ENV{USER})',
-        default => sub { $ENV{USER} },
+        description => 'Username to associate with logs, database entries, and yath servers.',
+        from_env_vars => [qw/YATH_USER USER/],
     );
 
     option base_dir => (

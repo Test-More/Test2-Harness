@@ -1,4 +1,4 @@
-package App::Yath::Command::server::recent;
+package App::Yath::Command::client::recent;
 use strict;
 use warnings;
 
@@ -12,7 +12,7 @@ use Getopt::Yath;
 include_options(
     'App::Yath::Options::Yath',
     'App::Yath::Options::Recent',
-    'App::Yath::Options::Server',
+    'App::Yath::Options::Client',
 );
 
 sub summary { "Show a list of recent runs on a yathui server" }

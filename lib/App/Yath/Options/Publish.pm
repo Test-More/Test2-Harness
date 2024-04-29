@@ -1,4 +1,4 @@
-package App::Yath::Options::Server;
+package App::Yath::Options::Publish;
 use strict;
 use warnings;
 
@@ -6,28 +6,22 @@ our $VERSION = '2.000000';
 
 use Getopt::Yath;
 
-option_group {group => 'server', prefix => 'server', category => "Server Options"} => sub {
-    option url => (
+option_group {group => 'publish', prefix => 'publish', category => "Publish Options"} => sub {
+    option mode => (
         type => 'Scalar',
-        alt => ['uri'],
-        description => "Yath server url",
-        long_examples  => [" http://my-yath-server.com/..."],
-    );
-
-    option api_key => (
-        type => 'Scalar',
-        description => "Yath server API key. This is not necessary if your Yath server instance is set to single-user"
-    );
-
-    option grace => (
-        type => 'Bool',
-        description => "If yath cannot connect to yath-ui it normally throws an error, use this to make it fail gracefully. You get a warning, but things keep going.",
-        default => 0,
+        default => 'qvfd',
+        description => "Set the upload mode (default 'qvfd')",
+        long_examples => [
+            ' summary',
+            ' qvf',
+            ' qvfd',
+            ' complete',
+        ],
     );
 
     option retry => (
         type => 'Count',
-        description => "How many times to try an operation before giving up",
+        description => "How many times to retry an operation before giving up",
         default => 0,
     );
 };
@@ -42,7 +36,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Server - FIXME
+App::Yath::Options::Publish - FIXME
 
 =head1 DESCRIPTION
 

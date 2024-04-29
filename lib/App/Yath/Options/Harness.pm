@@ -48,14 +48,14 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
     option keep_dirs => (
         type        => 'Bool',
         short       => 'k',
-        alt         => ['keep_dir'],
+        alt         => ['keep-dir'],
         description => 'Do not delete directories when done. This is useful if you want to inspect the directories used for various commands.',
         default     => 0,
     );
 
     option tmpdir => (
         type           => 'Scalar',
-        alt            => ['tmp_dir'],
+        alt            => ['tmp-dir'],
         description    => 'Use a specific temp directory (Default: use system temp dir)',
         from_env_vars  => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
         clear_env_vars => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR/],

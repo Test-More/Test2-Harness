@@ -1,4 +1,4 @@
-package App::Yath::Options::Upload;
+package App::Yath::Options::Client;
 use strict;
 use warnings;
 
@@ -6,30 +6,25 @@ our $VERSION = '2.000000';
 
 use Getopt::Yath;
 
-option_group {group => 'upload', prefix => 'upload', category => "DB Upload Options"} => sub {
-    option flush_interval => (
+option_group {group => 'client', prefix => 'client', category => "Web Client Options"} => sub {
+    option url => (
         type => 'Scalar',
-        long_examples => [' 2', ' 1.5'],
-        description => 'When buffering DB writes, force a flush when an event is recieved at least N seconds after the last flush.',
+        alt => ['uri'],
+        description => "Yath server url",
+        long_examples  => [" http://my-yath-server.com/..."],
+        from_env_vars => [qw/YATH_URL/],
     );
 
-    option buffering => (
+    option api_key => (
         type => 'Scalar',
-        long_examples => [ ' none', ' job', ' diag', ' run' ],
-        description => 'Type of buffering to use, if "none" then events are written to the db one at a time, which is SLOW',
-        default => 'diag',
+        description => "Yath server API key. This is not necessary if your Yath server instance is set to single-user",
+        from_env_vars => [qw/YATH_API_KEY/],
     );
 
-    option mode => (
-        type => 'Scalar',
-        default => 'qvfd',
-        description => "Set the upload mode (default 'qvfd')",
-        long_examples => [
-            ' summary',
-            ' qvf',
-            ' qvfd',
-            ' complete',
-        ],
+    option grace => (
+        type => 'Bool',
+        description => "If yath cannot connect to yath-ui it normally throws an error, use this to make it fail gracefully. You get a warning, but things keep going.",
+        default => 0,
     );
 
     option retry => (
@@ -49,7 +44,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Upload - FIXME
+App::Yath::Options::Client - FIXME
 
 =head1 DESCRIPTION
 

@@ -38,8 +38,13 @@ include_options(
     'App::Yath::Options::Run',
     'App::Yath::Options::Tests',
     'App::Yath::Options::Yath',
+    'App::Yath::Options::Client',
+    'App::Yath::Options::DB',
 );
 
+use App::Yath::Options::Tests qw/ set_dot_args /;
+
+sub accepts_dot_args { 1 }
 sub args_include_tests { 1 }
 
 sub load_plugins   { 1 }

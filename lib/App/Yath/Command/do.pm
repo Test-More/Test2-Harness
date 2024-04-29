@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use parent 'App::Yath::Command';
+use parent 'App::Yath::Command::Test';
 use Test2::Harness::Util::HashBase;
 
 sub group { ' main' }

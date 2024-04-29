@@ -1,8 +1,122 @@
-package App::Yath::Command::ui;
+package App::Yath::Command::server;
 use strict;
 use warnings;
 
 our $VERSION = '2.000000';
+
+use parent 'App::Yath::Command';
+use Test2::Harness::Util::HashBase;
+
+sub summary     { "Start a yath web server" }
+sub description { "Starts a web server that can be used to view test runs in a web browser" }
+sub group       { "server" }
+
+sub cli_args { "[log1.jsonl[.gz|.bz2] [log2.jsonl[.gz|.bz2]]]" }
+sub cli_dot  { "[:: STARMAN/PLACKUP ARGS]" }
+
+sub accepts_dot_args { 1 }
+
+sub set_dot_args {
+    my $class = shift;
+    my ($settings, $dot_args) = @_;
+    push @{$settings->server->launcher_args} => @$dot_args;
+    return;
+}
+
+use Getopt::Yath;
+include_options(
+    'App::Yath::Options::Yath',
+    'App::Yath::Options::DB',
+    'App::Yath::Options::Term',
+);
+
+option_group {group => 'server', category => "Server Options"} => sub {
+    option ephemeral => (
+        type => 'Auto',
+        autofill => 'Auto',
+        long_examples => ['', '=Auto', '=PostgreSQL', '=MySQL'],
+        description => "Use a temporary 'ephemeral' database that will be destroyed when the server exits.",
+        autofill_text => 'If no db type is specified it will use "auto" which will try PostgreSQL first, then MySQL.',
+        allowed_values => [qw/Auto PostgreSQL MySQL/],
+    );
+
+    option shell => (
+        type => 'Bool',
+        default => 0,
+        description => "Drop into a shell where the server and database env vars are set so that yath commands will use the started server.",
+    );
+
+    option daemon => (
+        type => 'Bool',
+        default => 0,
+        description => "Run the server in the background.",
+    );
+
+    option dev => (
+        type => 'Bool',
+        default => 0,
+        description => 'Launches in "developer mode" which accepts some developer commands while the server is running.',
+    );
+
+    option launcher => (
+        type => 'Scalar',
+        default => 'starman',
+        description => 'Command to use to launch the server `<launcher> path/to/share/psgi/yath.psgi`',
+        notes => "You can pass custom args to the launcher after a '::' like `yath server [ARGS] [LOG FILES(s)]:: [LAUNCHER ARGS]`",
+    );
+
+    option port_command => (
+        type => 'Scalar',
+        description => 'Command to run that returns a port number.',
+    );
+
+    option port => (
+        type => 'Scalar',
+        description => 'Port to listen on.',
+        notes => 'This is passed to the launcher via `launcher --port PORT`',
+        default => sub {
+            my ($option, $settings) = @_;
+
+            if (my $cmd = $settings->server->port_command) {
+                local $?;
+                my $port = `$cmd`;
+                die "Port command `$cmd` exited with error code $?.\n" if $?;
+                die "Port command `$cmd` did not return a valid port.\n" unless $port;
+                chomp($port);
+                die "Port command `$cmd` did not return a valid port: $port.\n" unless $port =~ m/^\d+$/;
+                return $port;
+            }
+
+            return 8080;
+        },
+    );
+
+    option workers => (
+        type => 'Scalar',
+        default => sub { eval { require System::Info; System::Info->new->ncore } || 5 },
+        default_text => "5, or number of cores if System::Info is installed.",
+        description => 'Number of workers. Defaults to the number of cores, or 5 if System::Info is not installed.',
+        notes => 'This is passed to the launcher via `launcher --workers WORKERS`',
+    );
+
+    option importers => (
+        type => 'Scalar',
+        default => 2,
+        description => 'Number of log importer processes.',
+    );
+
+    option launcher_args => (
+        type => 'List',
+        initialize => sub { [] },
+        description => "Set additional options for the loader.",
+        notes => "It is better to put loader arguments after '::' at the end of the command line.",
+        long_examples => [' "--reload"', '="--reload"'],
+    );
+};
+
+1;
+
+__END__
 
 use Test2::Util qw/pkg_to_file/;
 

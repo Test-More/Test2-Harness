@@ -14,15 +14,19 @@ use Importer Importer => 'import';
 our @EXPORT = qw/qdb_driver dbd_driver schema_config_from_settings find_job format_duration parse_duration is_invalid_subtest_name/;
 
 my %SCHEMA_TO_QDB_DRIVER = (
-    mariadb    => 'MySQL',
+    sqlite     => 'SQLite',
+    mariadb    => 'MariaDB',
     mysql      => 'MySQL',
+    percona    => 'Percona',
     postgresql => 'PostgreSQL',
     pg         => 'PostgreSQL',
 );
 
 my %SCHEMA_TO_DBD_DRIVER = (
+    sqlite     => 'DBD::SQLite',
     mariadb    => 'DBD::MariaDB',
-    mysql      => 'DBD::mysql',
+    mysql      => 'DBD::MariaDB',
+    percona    => 'DBD::MariaDB',
     postgresql => 'DBD::Pg',
     pg         => 'DBD::Pg',
 );

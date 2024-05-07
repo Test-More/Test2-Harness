@@ -35,6 +35,14 @@ CREATE TYPE user_type AS ENUM(
     'user'     -- Can manage reports for their projects
 );
 
+CREATE TABLE config(
+    config_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    setting           VARCHAR(128)    NOT NULL,
+    value             VARCHAR(256)    NOT NULL,
+
+    UNIQUE(setting)
+);
+
 CREATE TABLE users (
     user_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
     username        CITEXT          NOT NULL,

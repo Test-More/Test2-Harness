@@ -28,7 +28,7 @@ __PACKAGE__->add_columns(
   "name",
   { data_type => "varchar", is_nullable => 0, size => 512 },
   "data",
-  { data_type => "json", is_nullable => 1 },
+  { data_type => "longtext", is_nullable => 1 },
   "details",
   { data_type => "text", is_nullable => 1 },
   "raw",
@@ -46,10 +46,10 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 16:05:46
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 17:35:33
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-__PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('job_field_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+__PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

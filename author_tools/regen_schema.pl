@@ -18,12 +18,27 @@ for my $schema_file (sort readdir($dh)) {
     my $qdb_driver = qdb_driver($schema_file);
     my $dbd_driver = dbd_driver($schema_file);
 
+    # Schema dumper does not like DBD::MariaDB
+    $dbd_driver = 'DBD::mysql' if $dbd_driver eq 'DBD::MariaDB';
+
     print "Generating $schema using qdb driver '$qdb_driver' and dbd driver '$dbd_driver'\n";
 
-    my $db = DBIx::QuickDB->build_db($schema => {driver => $qdb_driver, dbd_driver => $dbd_driver});
+    my $db;
+    unless (eval { $db = DBIx::QuickDB->build_db($schema => {driver => $qdb_driver, dbd_driver => $dbd_driver}); 1 }) {
+        warn $@;
+        next;
+    }
+
     {
-        my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
-        $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
+        my $dbh;
+        if ($schema_file =~ m/SQLite/) {
+            $dbh = $db->connect('harness_ui', AutoCommit => 1, RaiseError => 1);
+        }
+        else {
+            $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
+            $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
+        }
+
         $db->load_sql(harness_ui => "${schemadir}/${schema_file}");
     }
 

@@ -52,11 +52,11 @@ __PACKAGE__->add_columns(
   "nested",
   { data_type => "integer", default_value => 0, is_nullable => 1 },
   "facets",
-  { data_type => "json", is_nullable => 1 },
+  { data_type => "longtext", is_nullable => 1 },
   "facets_line",
   { data_type => "bigint", is_nullable => 1 },
   "orphan",
-  { data_type => "json", is_nullable => 1 },
+  { data_type => "longtext", is_nullable => 1 },
   "orphan_line",
   { data_type => "bigint", is_nullable => 1 },
 );
@@ -82,7 +82,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 16:05:46
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 17:35:33
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
 __PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('event_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });

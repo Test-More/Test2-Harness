@@ -49,7 +49,7 @@ __PACKAGE__->add_columns(
   {
     data_type => "timestamp",
     datetime_undef_if_invalid => 1,
-    default_value => \"current_timestamp",
+    default_value => "current_timestamp()",
     is_nullable => 0,
   },
   "duration",
@@ -78,7 +78,7 @@ __PACKAGE__->add_columns(
   "concurrency",
   { data_type => "integer", is_nullable => 1 },
   "parameters",
-  { data_type => "json", is_nullable => 1 },
+  { data_type => "longtext", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("run_id");
 __PACKAGE__->add_unique_constraint("run_ord", ["run_ord"]);
@@ -143,12 +143,12 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 16:05:46
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 17:35:33
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
+__PACKAGE__->inflate_column('run_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('project_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('log_file_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('user_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('run_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

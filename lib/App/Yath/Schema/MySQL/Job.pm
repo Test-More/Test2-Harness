@@ -42,9 +42,9 @@ __PACKAGE__->add_columns(
     is_nullable => 0,
   },
   "parameters",
-  { data_type => "json", is_nullable => 1 },
+  { data_type => "longtext", is_nullable => 1 },
   "fields",
-  { data_type => "json", is_nullable => 1 },
+  { data_type => "longtext", is_nullable => 1 },
   "test_file_id",
   { data_type => "binary", is_foreign_key => 1, is_nullable => 1, size => 16 },
   "name",
@@ -131,12 +131,12 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 16:05:46
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 17:35:33
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
+__PACKAGE__->inflate_column('job_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
+__PACKAGE__->inflate_column('test_file_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('run_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('test_file_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('job_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

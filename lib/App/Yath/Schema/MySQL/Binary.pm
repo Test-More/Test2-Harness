@@ -43,7 +43,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-04-28 16:05:46
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 17:35:33
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
 __PACKAGE__->inflate_column('binary_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('event_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });

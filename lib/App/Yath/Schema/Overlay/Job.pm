@@ -64,7 +64,7 @@ sub sig {
 sub short_job_fields {
     my $self = shift;
 
-    return [ map { my $d = +{$_->get_all_fields}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->job_fields->search(undef, {
+    return [ map { my $d = +{$_->get_all_fields}; delete $d->{job_key}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->job_fields->search(undef, {
         remove_columns => ['data'],
         '+select' => ['data IS NOT NULL AS has_data'],
         '+as' => ['has_data'],

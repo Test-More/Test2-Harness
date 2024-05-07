@@ -5,6 +5,7 @@ use warnings;
 use Carp qw/croak confess/;
 use Test2::Harness::Util qw/parse_exit mod2file/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use Plack::Runner;
 use DBIx::QuickDB;
@@ -41,13 +42,6 @@ sub init {
     croak "'schema_config' is a required attribute" unless $self->{+SCHEMA_CONFIG};
 
     $self->{+QDB_PARAMS} //= {};
-}
-
-sub plack {
-    my $self = shift;
-    return $self->{+PLACK} //= App::Yath::Server::Plack->new(
-        schema_config => $self->{+SCHEMA_CONFIG},
-    );
 }
 
 sub restart_server {
@@ -188,26 +182,52 @@ sub start_server {
 
     return $self->{+PID} = $pid if $pid;
 
-    my $ok = eval {
-        my $r = Plack::Runner->new;
-
-        my @options;
-        push @options => @{$self->{+LAUNCHER_ARGS} // []};
-        push @options => ("--server"  => $self->{+LAUNCHER})   if $self->{+LAUNCHER};
-        push @options => ('--listen'  => ":$self->{+PORT}")    if $self->{+PORT};
-        push @options => ('--workers' => ":$self->{+WORKERS}") if $self->{+WORKERS};
-
-        $r->parse_options(@options);
-        $r->run($self->plack()->to_app());
-
-        1;
-    };
+    my $ok = eval { $self->_do_server_exec(); 1 };
     my $err = $@;
 
     unless ($ok) {
         eval { warn $err };
         exit 255;
     }
+
+    exit(0);
+}
+
+sub _do_server_exec {
+    my $self = shift;
+
+    my @options;
+    push @options => @{$self->{+LAUNCHER_ARGS} // []};
+    push @options => ("--server"  => $self->{+LAUNCHER})   if $self->{+LAUNCHER};
+    push @options => ('--listen'  => ":$self->{+PORT}")    if $self->{+PORT};
+    push @options => ('--workers' => ":$self->{+WORKERS}") if $self->{+WORKERS};
+
+    exec(
+        $^X,
+        (map {"-I$_"} @INC),
+        "-m${ \__PACKAGE__ }",
+        '-e' => "${ \__PACKAGE__ }->_do_server_post_exec(\$ARGV[0])",
+        encode_json({
+            schema_config => $self->{+SCHEMA_CONFIG},
+            launcher_options => \@options,
+        }),
+    );
+}
+
+sub _do_server_post_exec {
+    my $class = shift;
+    my ($json) = @_;
+
+    my $data = decode_json($json);
+
+    my $r = Plack::Runner->new;
+    $r->parse_options(@{$data->{launcher_options}});
+
+    my $app = App::Yath::Server::Plack->new(
+        schema_config => bless($data->{+SCHEMA_CONFIG}, 'App::Yath::Schema::Config'),
+    );
+
+    $r->run($app->to_app());
 
     exit(0);
 }

@@ -24,9 +24,9 @@ my %SCHEMA_TO_QDB_DRIVER = (
 
 my %SCHEMA_TO_DBD_DRIVER = (
     sqlite     => 'DBD::SQLite',
-    mariadb    => 'DBD::MariaDB',
-    mysql      => 'DBD::MariaDB',
-    percona    => 'DBD::MariaDB',
+    mariadb    => 'DBD::mysql',
+    mysql      => 'DBD::mysql',
+    percona    => 'DBD::mysql',
     postgresql => 'DBD::Pg',
     pg         => 'DBD::Pg',
 );

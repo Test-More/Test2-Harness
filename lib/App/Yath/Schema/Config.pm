@@ -15,6 +15,17 @@ use Test2::Harness::Util::HashBase qw{
     <ephemeral_stack
 };
 
+sub TO_JSON {
+    my $self = shift;
+    my %data = %$self;
+
+    delete $data{+_SCHEMA};
+    delete $data{+EPHEMERAL};
+    delete $data{+EPHEMERAL_STACK};
+
+    return \%data;
+}
+
 sub disconnect { shift->schema->storage->disconnect }
 sub connect    { shift->schema->storage->dbh }
 

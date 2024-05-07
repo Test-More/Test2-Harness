@@ -15,9 +15,9 @@ use base 'DBIx::Class::Schema';
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-if ($App::Yath::Schema::LOADED =~ m/(MySQL|Percona|MariaDB)/i && eval { require DBIx::Class::Storage::DBI::mysql::Retryable; 1 }) {
-    __PACKAGE__->storage_type('::DBI::mysql::Retryable');
-}
+#if ($App::Yath::Schema::LOADED =~ m/(MySQL|Percona|MariaDB)/i && eval { require DBIx::Class::Storage::DBI::mysql::Retryable; 1 }) {
+#    __PACKAGE__->storage_type('::DBI::mysql::Retryable');
+#}
 
 require App::Yath::Schema::ResultSet;
 __PACKAGE__->load_namespaces(

@@ -2,9 +2,14 @@ package App::Yath::Command::server;
 use strict;
 use warnings;
 
+use feature 'state';
+
 use App::Yath::Server;
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
+use App::Yath::Schema::UUID qw/gen_uuid/;
+
+use Test2::Harness::Util qw/clean_path/;
 
 our $VERSION = '2.000000';
 
@@ -110,15 +115,20 @@ sub run {
     };
 
     my $server = $self->{+SERVER} = App::Yath::Server->new(schema_config => $config, $settings->webserver->all, qdb_params => $qdb_params);
-
     $server->start_server;
 
     my $done = 0;
     $SIG{TERM} = sub { $done++; print "Caught SIGTERM shutting down...\n"; $SIG{TERM} = 'DEFAULT' };
     $SIG{INT}  = sub { $done++; print "Caught SIGINT shutting down...\n";  $SIG{INT}  = 'DEFAULT' };
 
+    for my $log (@{$args // []}) {
+        $self->load_file($config, $log);
+    }
+
     SERVER_LOOP: until ($done) {
         if ($settings->server->dev) {
+            $ENV{T2_HARNESS_SERVER_DEV} = 1;
+
             unless(eval { $done = $self->shell($pid); 1 }) {
                 warn $@;
                 $done = 1;
@@ -137,6 +147,52 @@ sub run {
     }
 
     return 0;
+}
+
+
+sub load_file {
+    my $self = shift;
+    my ($config, $file) = @_;
+
+    $file = clean_path($file);
+
+    state %projects;
+
+    my $project;
+    if ($file =~ m/moose/i) {
+        $project = 'Moose';
+    }
+    else {
+        $project = $1 if $file =~ m/\b([\w\d]+)\./;
+    }
+
+    $project //= "oops";
+
+    unless ($projects{$project}) {
+        my $p = $config->schema->resultset('Project')->find_or_create({name => $project, project_id => gen_uuid()});
+        $projects{$project} = $p;
+    }
+
+    my $logfile = $config->schema->resultset('LogFile')->create({
+        log_file_id => gen_uuid(),
+        name        => $file,
+        local_file  => $file =~ m{^/} ? $file : "./demo/$file",
+    });
+
+    state $user = $config->schema->resultset('User')->find_or_create({username => 'root', password => 'root', realname => 'root', user_id => gen_uuid()});
+
+    my $run = $config->schema->resultset('Run')->create({
+        run_id     => gen_uuid(),
+        user_id    => $user->user_id,
+        mode       => 'complete',
+        buffer     => 'job',
+        status     => 'pending',
+        project_id => $projects{$project}->project_id,
+
+        log_file_id => $logfile->log_file_id,
+    });
+
+    return $run;
 }
 
 sub shell {

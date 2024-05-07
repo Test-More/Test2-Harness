@@ -21,7 +21,7 @@ sub DTF {
         return $DTF = 'DateTime::Format::Pg';
     }
 
-    if ($App::Yath::Schema::LOADED =~ m/mysql/i) {
+    if ($App::Yath::Schema::LOADED =~ m/(mysql|mariadb|percona)/i) {
         require DateTime::Format::MySQL;
         return $DTF = 'DateTime::Format::MySQL';
     }

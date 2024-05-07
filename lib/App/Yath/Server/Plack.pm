@@ -227,7 +227,7 @@ sub handle_request {
             user          => $user,
         );
 
-        $res = $controller->auth_check() // $controller->handle();
+        $res = $controller->auth_check() // $controller->handle($route);
 
         1;
     };
@@ -239,7 +239,7 @@ sub handle_request {
         }
         else {
             warn $err;
-            my $msg = ($ENV{T2_HARNESS_UI_ENV} || '') eq 'dev' ? "$err\n" : undef;
+            my $msg = ($ENV{T2_HARNESS_SERVER_DEV} || '') eq 'dev' ? "$err\n" : undef;
             $res = error(500 => $msg);
         }
     }
@@ -263,6 +263,7 @@ sub handle_request {
                 single_user => $self->single_user // 0,
                 single_run  => $self->single_run  // 0,
                 no_upload   => $schema->config('no_upload') // 0,
+                show_user   => $self->single_user ? 0 : 1,
 
                 user     => $req->user     || undef,
                 errors   => $res->errors   || [],

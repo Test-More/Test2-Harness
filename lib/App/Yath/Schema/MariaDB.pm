@@ -3,6 +3,7 @@ use utf8;
 use strict;
 use warnings;
 use Carp();
+use DBIx::Class::Storage::DBI::MariaDB;
 
 our $VERSION = '2.000000';
 

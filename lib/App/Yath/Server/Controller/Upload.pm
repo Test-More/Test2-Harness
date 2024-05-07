@@ -103,6 +103,7 @@ sub process_form {
         status     => 'pending',
 
         log_file => {
+            log_file_id => $run_id,
             name => $file,
             data => do { local $/; <$fh> },
         },

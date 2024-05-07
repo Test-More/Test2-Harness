@@ -32,7 +32,7 @@ sub handle {
     my $failed       = $route->{failed};
 
     error(404 => 'No source') unless $source || $project_name;
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $query = {status => 'complete'};
     my $attrs = {order_by => {'-desc' => 'run_ord'}, rows => 1};

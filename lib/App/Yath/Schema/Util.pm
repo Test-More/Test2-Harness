@@ -55,15 +55,18 @@ sub dbd_driver {
 }
 
 sub schema_config_from_settings {
-    my ($settings) = @_;
+    my ($settings, %params) = @_;
 
-    my $db = $settings->group('db') or return;
+    my $config_class = delete $params{config_class} // 'App::Yath::Schema::Config';
+    require(mod2file($config_class));
+
+    my $db = $settings->group('db') or croak "No database settings";
 
     if (my $cmod = $db->config) {
         my $file = mod2file($cmod);
         require $file;
 
-        return $cmod->yath_ui_config(%$$db);
+        return $cmod->yath_db_config(%$$db);
     }
 
     my $dsn = $db->dsn;
@@ -95,14 +98,18 @@ sub schema_config_from_settings {
         }
     }
 
-    return unless $dsn;
+    if ($dsn) {
+        return App::Yath::Schema::Config->new(
+            %params,
+            dbi_dsn  => $dsn,
+            dbi_user => $db->user // '',
+            dbi_pass => $db->pass // '',
+        );
+    }
 
-    require App::Yath::Schema::Config;
-    return App::Yath::Schema::Config->new(
-        dbi_dsn  => $dsn,
-        dbi_user => $db->user // '',
-        dbi_pass => $db->pass // '',
-    );
+    croak "Could not find a DSN" unless $params{ephemeral};
+
+    return App::Yath::Schema::Config->new(%params);
 }
 
 sub find_job {

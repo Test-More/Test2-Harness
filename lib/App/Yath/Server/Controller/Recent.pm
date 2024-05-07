@@ -25,7 +25,7 @@ sub handle {
     my $user_name    = $route->{user};
     my $count        = $route->{count} || 10;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $runs   = $schema->vague_run_search(
         username     => $user_name,
         project_name => $project_name,

@@ -38,7 +38,7 @@ include_options(
     'App::Yath::Options::Run',
     'App::Yath::Options::Tests',
     'App::Yath::Options::Yath',
-    'App::Yath::Options::Client',
+    'App::Yath::Options::WebClient',
     'App::Yath::Options::DB',
 );
 

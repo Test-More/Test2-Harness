@@ -6,13 +6,14 @@ our $VERSION = '2.000000';
 
 use Text::Xslate();
 
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/open_file/;
 
+use App::Yath::Schema::UUID qw/uuid_inflate/;
 use App::Yath::Schema::Queries();
 
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 
 use parent 'App::Yath::Server::Controller';
@@ -44,9 +45,9 @@ sub handle {
         'upload.tx',
         {
             base_uri => $req->base->as_string,
-            single_user => $self->{+CONFIG}->single_user,
+            single_user => $self->single_user,
             user     => $user,
-            projects => App::Yath::Schema::Queries->new(config => $self->{+CONFIG})->projects,
+            projects => App::Yath::Schema::Queries->new(config => $self->{+SCHEMA_CONFIG})->projects,
         }
     );
 
@@ -74,7 +75,7 @@ sub process_form {
     my $tmp  = $req->uploads->{log_file}->tempname;
 
     my $project_name = $req->parameters->{project} || return $res->add_error('project is required');
-    my $project = $self->schema->resultset('Project')->find_or_create({name => $project_name});
+    my $project = $self->schema->resultset('Project')->find_or_create({name => $project_name, project_id => gen_uuid()});
 
     my $mode  = $req->parameters->{mode}        || 'qvfd';
 

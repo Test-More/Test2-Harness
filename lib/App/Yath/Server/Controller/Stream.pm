@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use Data::GUID;
 use List::Util qw/max/;
 use Scalar::Util qw/blessed/;
-use App::Yath::Server::Util qw/find_job/;
+use App::Yath::Schema::Util qw/find_job/;
 use App::Yath::Schema::UUID qw/uuid_inflate/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json/;
@@ -75,7 +75,7 @@ sub stream_runs {
     my $self = shift;
     my ($req, $route) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $opts = {
         remove_columns => [qw/log_data run_fields.data parameters/],
@@ -183,7 +183,7 @@ sub stream_jobs {
     if (my $job_uuid = $route->{job}) {
         $job_uuid = uuid_inflate($job_uuid) or die error(404 => "Invalid job id");
 
-        my $schema = $self->{+CONFIG}->schema;
+        my $schema = $self->schema;
         return $self->stream_single(%params, item => find_job($schema, $job_uuid, $route->{try}));
     }
 
@@ -314,7 +314,7 @@ sub stream_set {
             unless ($items) {
                 my $val;
                 if (blessed($ord) && $ord->isa('DateTime')) {
-                    my $schema = $self->{+CONFIG}->schema;
+                    my $schema = $self->schema;
                     my $dtf = $schema->storage->datetime_parser;
                     $val = $dtf->format_datetime($ord);
                 }
@@ -324,7 +324,7 @@ sub stream_set {
 
                 my $query = {
                     ($custom_query ? %$custom_query : ()),
-                    $ord_field => {'>' => $val},
+                    defined($val) ? ($ord_field => {'>' => $val}) : (),
                 };
 
                 my @ids = $track ? keys %$incomplete : ();

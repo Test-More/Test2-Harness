@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Text::Xslate();
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Schema::UUID qw/uuid_inflate/;
 
@@ -200,15 +200,15 @@ sub send_verification_code {
 
     my $schema = $self->schema;
 
+    my $our_email = $schema->config('email') or die "System email address is not set";
+
     my $code = $schema->resultset('EmailVerificationCode')->find_or_create({email_id => $email->email_id});
     my $text = $code->evcode_id;
-
-    my $config = $self->{+CONFIG};
 
     my $msg = Email::Simple->create(
         header => [
             To      => $email->address,
-            From    => $config->email,
+            From    => $our_email,
             Subject => "Email verification code",
         ],
         body => "Verification code: $text\n",

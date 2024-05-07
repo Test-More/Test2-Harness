@@ -110,7 +110,7 @@ sub _process_first_line {
 
     {
         no warnings 'once';
-        $dbh->{mysql_auto_reconnect} = 1 if $App::Yath::Server::Schema::LOADED =~ m/mysql/i;
+        $dbh->{mysql_auto_reconnect} = 1 if $App::Yath::Schema::LOADED =~ m/(mysql|percona|maraidb)/i;
     }
 
     my $e = decode_json(scalar $line);
@@ -630,7 +630,7 @@ sub get_job {
 
     # Prevent duplicate coverage when --retry is used
     if ($job_try) {
-        if ($App::Yath::Schema::LOADED =~ m/mysql/i) {
+        if ($App::Yath::Schema::LOADED =~ m/(mysql|percona|mariadb)/i) {
             my $schema = $self->schema;
             $schema->storage->connected; # Make sure we are connected
             my $dbh    = $schema->storage->dbh;

@@ -6,6 +6,8 @@ use Carp qw/confess/;
 
 use App::Yath::Schema::UUID qw/uuid_inflate/;
 
+use Test2::Harness::Util::UUID qw/gen_uuid/;
+
 our $VERSION = '2.000000';
 
 use base 'DBIx::Class::Schema';
@@ -13,7 +15,7 @@ use base 'DBIx::Class::Schema';
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-if ($App::Yath::Schema::LOADED =~ m/MySQL/ && eval { require DBIx::Class::Storage::DBI::mysql::Retryable; 1 }) {
+if ($App::Yath::Schema::LOADED =~ m/(MySQL|Percona|MariaDB)/i && eval { require DBIx::Class::Storage::DBI::mysql::Retryable; 1 }) {
     __PACKAGE__->storage_type('::DBI::mysql::Retryable');
 }
 
@@ -21,6 +23,17 @@ require App::Yath::Schema::ResultSet;
 __PACKAGE__->load_namespaces(
     default_resultset_class => 'ResultSet',
 );
+
+sub config {
+    my $self = shift;
+    my ($setting, @val) = @_;
+
+    my $conf = $self->resultset('Config')->find_or_create({config_id => gen_uuid(), setting => $setting, @val ? (value => $val[0]) : ()});
+
+    $conf->update({value => $val[0]}) if @val;
+
+    return $conf->value;
+}
 
 sub vague_run_search {
     my $self = shift;

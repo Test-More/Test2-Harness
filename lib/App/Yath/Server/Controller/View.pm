@@ -6,7 +6,8 @@ our $VERSION = '2.000000';
 
 use Data::GUID;
 use Text::Xslate(qw/mark_raw/);
-use App::Yath::Server::Util qw/share_dir find_job/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/find_job/;
 use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Schema::UUID qw/uuid_inflate/;
 
@@ -28,7 +29,7 @@ sub handle {
     $res->add_js('eventtable.js');
     $res->add_js('view.js');
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $id     = $route->{id};
     my $uuid   = uuid_inflate($id);

@@ -1,4 +1,4 @@
-package App::Yath::Options::Client;
+package App::Yath::Options::WebClient;
 use strict;
 use warnings;
 
@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Getopt::Yath;
 
-option_group {group => 'client', prefix => 'client', category => "Web Client Options"} => sub {
+option_group {group => 'webclient', category => "Web Client Options"} => sub {
     option url => (
         type => 'Scalar',
         alt => ['uri'],
@@ -44,7 +44,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Client - FIXME
+App::Yath::Options::WebClient - FIXME
 
 =head1 DESCRIPTION
 

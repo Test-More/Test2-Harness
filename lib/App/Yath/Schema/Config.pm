@@ -10,7 +10,9 @@ use Carp qw/croak/;
 
 use Test2::Harness::Util::HashBase qw{
     -_schema
-    -dbi_dsn -dbi_user -dbi_pass
+    <dbi_dsn <dbi_user <dbi_pass
+    <ephemeral
+    <ephemeral_stack
 };
 
 sub disconnect { shift->schema->storage->disconnect }
@@ -19,18 +21,55 @@ sub connect    { shift->schema->storage->dbh }
 sub init {
     my $self = shift;
 
-    croak "'dbi_dsn' is a required attribute"
-        unless defined $self->{+DBI_DSN};
+    unless ($self->{+EPHEMERAL}) {
+        croak "'dbi_dsn' is a required attribute" unless defined $self->{+DBI_DSN};
+        croak "'dbi_user' is a required attribute" unless defined $self->{+DBI_USER};
+        croak "'dbi_pass' is a required attribute" unless defined $self->{+DBI_PASS};
+    }
+}
 
-    croak "'dbi_user' is a required attribute"
-        unless defined $self->{+DBI_USER};
+sub _check_for_creds {
+    my $self = shift;
 
-    croak "'dbi_pass' is a required attribute"
-        unless defined $self->{+DBI_PASS};
+    croak "'dbi_dsn' has not been set yet"  unless defined $self->{+DBI_DSN};
+    croak "'dbi_user' has not been set yet" unless defined $self->{+DBI_USER};
+    croak "'dbi_pass' has not been set yet" unless defined $self->{+DBI_PASS};
+}
+
+sub push_ephemeral_credentials {
+    my $self = shift;
+    my %params = @_;
+
+    push @{$self->{+EPHEMERAL_STACK} //= []} => [@{$self}{DBI_DSN(), DBI_USER(), DBI_PASS()}, delete($self->{+_SCHEMA}), delete($ENV{YATH_DB_SCHEMA})];
+
+    $self->{$_} = $params{$_} // croak "'$_' is a required parameter" for DBI_DSN(), DBI_USER(), DBI_PASS();
+
+    if (my $schema_type = $params{schema_type}) {
+        $ENV{YATH_DB_SCHEMA} = $schema_type;
+    }
+
+    return;
+}
+
+sub pop_ephemeral_credentials {
+    my $self = shift;
+
+    my $set = pop(@{$self->{+EPHEMERAL_STACK} // []}) or croak "No db to pop";
+
+    my $schema;
+    (@{$self}{DBI_DSN(), DBI_USER(), DBI_PASS()}, $self->{+_SCHEMA}, $schema) = @$set;
+
+    $ENV{YATH_DB_SCHEMA} = $schema if defined $schema;
+
+    delete $self->{+EPHEMERAL_STACK} unless @{$self->{+EPHEMERAL_STACK}};
+
+    return;
 }
 
 sub guess_db_driver {
     my $self = shift;
+
+    $self->_check_for_creds();
 
     return 'MySQL' if $self->{+DBI_DSN} =~ m/(mysql|maria|percona)/i;
     return 'PostgreSQL' if $self->{+DBI_DSN} =~ m/(pg|postgre)/i;
@@ -39,7 +78,10 @@ sub guess_db_driver {
 
 sub db_driver {
     my $self = shift;
-    return $ENV{YATH_UI_SCHEMA} //= $self->guess_db_driver;
+
+    $self->_check_for_creds();
+
+    return $ENV{YATH_DB_SCHEMA} //= $self->guess_db_driver;
 }
 
 sub schema {
@@ -47,10 +89,12 @@ sub schema {
 
     return $self->{+_SCHEMA} if $self->{+_SCHEMA};
 
+    $self->_check_for_creds();
+
     {
         no warnings 'once';
         unless ($App::Yath::Schema::LOADED) {
-            my $schema = $ENV{YATH_UI_SCHEMA} //= $self->guess_db_driver;
+            my $schema = $ENV{YATH_DB_SCHEMA} //= $self->guess_db_driver;
             require(mod2file("App::Yath::Schema::$schema"));
         }
     }

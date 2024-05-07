@@ -30,7 +30,7 @@ sub handle {
     my $median       = $route->{median} || 0;
     my $username     = $route->{user};
 
-    my $schema  = $self->{+CONFIG}->schema;
+    my $schema  = $self->schema;
     my $project = $schema->resultset('Project')->find({name => $project_name});
 
     my $data = {};

@@ -27,7 +27,7 @@ sub handle {
     my $req = $self->{+REQUEST};
     my $res = resp(200);
     my $user = $req->user;
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     die error(404 => 'Missing route') unless $route;
     my $it = $route->{name} or die error(400 => 'No query specified');
@@ -35,7 +35,7 @@ sub handle {
     my $arg = $route->{arg};
     die error(400 => 'Missing Argument') if $spec->{args} && !defined($arg);
 
-    my $q = App::Yath::Schema::Queries->new(config => $self->{+CONFIG});
+    my $q = App::Yath::Schema::Queries->new(config => $self->{+SCHEMA_CONFIG});
     my $data = $q->$it($arg);
 
     $res->stream(

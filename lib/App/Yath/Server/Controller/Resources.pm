@@ -7,7 +7,8 @@ our $VERSION = '2.000000';
 use DateTime;
 use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
-use App::Yath::Server::Util qw/share_dir find_job/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/find_job/;
 use App::Yath::Schema::DateTimeFormat qw/DTF/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Util::Times qw/render_duration/;
@@ -69,7 +70,7 @@ sub get_thing {
     my $self = shift;
     my ($id) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my ($thing, $stamp_start, $done_check);
     my $search_args = {};
@@ -110,7 +111,7 @@ sub get_stamps {
     my $search_args = $params{search_args} || {};
     my $start = $params{start};
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     my $fields = "";
@@ -223,7 +224,7 @@ sub render_stamp_resources {
     my $search_args = $params{search_args};
     my $batch_id    = uuid_inflate($params{batch});
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $res_rs = $schema->resultset('Resource');
 
     my @res_list;

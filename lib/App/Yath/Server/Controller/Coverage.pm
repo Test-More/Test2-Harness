@@ -22,7 +22,7 @@ sub handle {
     my $req = $self->{+REQUEST};
     my $res = resp(200);
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     die error(404 => 'Missing route') unless $route;
     my $source = $route->{source} or die error(404 => 'No source');

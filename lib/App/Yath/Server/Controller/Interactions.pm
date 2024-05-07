@@ -8,7 +8,8 @@ use DateTime;
 use Data::GUID;
 use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
-use App::Yath::Server::Util qw/share_dir find_job/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/find_job/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 use App::Yath::Schema::UUID qw/uuid_inflate/;
 
@@ -59,7 +60,7 @@ sub data {
     my $self = shift;
     my ($id, $context) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     # Get event
     my $event = $schema->resultset('Event')->find({event_id => $id})
         or die error(404 => 'Invalid Event');
@@ -179,7 +180,7 @@ sub interval {
     my $self = shift;
     my ($stamp, $op, $context) = @_;
 
-    my $driver = $self->{+CONFIG}->db_driver;
+    my $driver = $self->{+SCHEMA_CONFIG}->db_driver;
 
     return \"timestamp '$stamp' $op INTERVAL '$context' seconds" if $driver eq 'PostgreSQL';
 

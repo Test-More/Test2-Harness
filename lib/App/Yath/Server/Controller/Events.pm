@@ -21,7 +21,7 @@ sub handle {
     my $req    = $self->{+REQUEST};
     my $res    = resp(200);
     my $user   = $req->user;
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     die error(404 => 'Missing route') unless $route;
     my $it = $route->{id} or die error(404 => 'No name or id');

@@ -4,17 +4,46 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use File::Spec;
+use File::Spec();
+use File::ShareDir();
 
 use Test2::Harness::Util qw/clean_path/;
 
 use Importer Importer => 'import';
 use Config qw/%Config/;
+use Carp qw/croak/;
 
 our @EXPORT_OK = qw{
     is_generated_test_pl
     find_yath
+    share_dir share_file
 };
+
+sub share_file {
+    my ($file) = @_;
+
+    my $path = "share/$file";
+    return $path if -f $path;
+
+    return File::ShareDir::dist_file('Test2-Harness' => $file);
+
+    croak "Could not find '$file'";
+}
+
+sub share_dir {
+    my ($dir) = @_;
+
+    my $path = "share/$dir";
+    return $path if -d $path;
+
+    my $root = File::ShareDir::dist_dir('Test2-Harness');
+
+    $path .= "/$dir";
+
+    croak "Could not find '$dir'" unless -d $path;
+
+    return $path;
+}
 
 sub find_yath {
     return $App::Yath::Script::SCRIPT if defined $App::Yath::Script::SCRIPT;

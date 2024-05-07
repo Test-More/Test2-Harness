@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use App::Yath::Schema::UUID qw/uuid_inflate/;
@@ -28,7 +28,7 @@ sub handle {
 
     my $it = $route->{id} or die error(404 => 'No id');
     $it = uuid_inflate($it) or die error(404 => "Invalid id");
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $field = $schema->resultset('JobField')->find({job_field_id => $it}) or die error(404 => 'Invalid Field');
 
     if (my $act = $route->{action}) {

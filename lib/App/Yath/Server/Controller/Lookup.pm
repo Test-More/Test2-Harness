@@ -7,7 +7,8 @@ our $VERSION = '2.000000';
 use Data::GUID;
 use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
-use App::Yath::Server::Util qw/share_dir find_job/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/find_job/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
 use parent 'App::Yath::Server::Controller';
@@ -99,7 +100,7 @@ sub lookup_run {
 
     return if $state->{run}->{$lookup}++;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $rs = $schema->resultset('Run');
     my $run = eval { $rs->find({run_id => $lookup}) };
@@ -124,7 +125,7 @@ sub lookup_jobs {
 
     return if $state->{job}->{$lookup}++;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $rs = $schema->resultset('Job');
 
@@ -156,7 +157,7 @@ sub lookup_event {
 
     return if $state->{event}->{$lookup}++;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $rs = $schema->resultset('Event');
     my $event = eval { $rs->find({event_id => $lookup}) };

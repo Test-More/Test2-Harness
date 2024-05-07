@@ -16,7 +16,7 @@ use Getopt::Yath;
 include_options(
     'App::Yath::Options::Yath',
     'App::Yath::Options::Recent',
-    'App::Yath::Options::Client',
+    'App::Yath::Options::WebClient',
     'App::Yath::Options::DB',
 );
 

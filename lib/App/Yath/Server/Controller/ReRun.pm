@@ -31,7 +31,7 @@ sub handle {
     }
 
     error(404 => 'No source') unless $run_id || ($project_name && $username);
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $query = {};
     my $attrs = {order_by => {'-desc' => 'run_ord'}, rows => 1};

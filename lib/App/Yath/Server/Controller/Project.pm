@@ -7,7 +7,8 @@ our $VERSION = '2.000000';
 use Time::Elapsed qw/elapsed/;
 use List::Util qw/sum/;
 use Text::Xslate();
-use App::Yath::Server::Util qw/share_dir format_duration parse_duration is_invalid_subtest_name/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/format_duration parse_duration is_invalid_subtest_name/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use App::Yath::Schema::UUID qw/uuid_deflate uuid_inflate/;
@@ -26,7 +27,7 @@ sub users {
     my $self = shift;
     my ($project) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     my $query = <<"    EOT";
@@ -65,7 +66,7 @@ sub handle {
     my $n     = $route->{n}     // 25;
     my $stats = $route->{stats} // 0;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $project;
     $project = $schema->resultset('Project')->single({name => $it});
@@ -196,7 +197,7 @@ sub get_add_query {
 
     return ("AND $user_query\n", @add_vals) unless $n || $range;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     if ($range) {
@@ -246,7 +247,7 @@ sub _build_stat_run_list {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
@@ -273,7 +274,7 @@ sub _build_stat_expensive_files {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
@@ -326,7 +327,7 @@ sub _build_stat_expensive_subtests {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
@@ -379,7 +380,7 @@ sub _build_stat_expensive_users {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
@@ -429,7 +430,7 @@ sub _build_stat_user_summary {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
     my ($add_query, @add_vals) = $self->get_add_query($project, $stat);
@@ -510,7 +511,7 @@ sub _build_stat_uncovered {
     my $self = shift;
     my ($project, $stat) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $users = $stat->{users};
     my $field = $schema->resultset('RunField')->search(
@@ -552,7 +553,7 @@ sub _build_stat_coverage {
 
     my $n = $stat->{n};
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $users = $stat->{users};
     my @items = reverse $schema->resultset('RunField')->search(

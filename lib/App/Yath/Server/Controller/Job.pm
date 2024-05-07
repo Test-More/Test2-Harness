@@ -7,7 +7,8 @@ our $VERSION = '2.000000';
 use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
-use App::Yath::Server::Util qw/share_dir find_job/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/find_job/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
@@ -22,7 +23,7 @@ sub handle {
 
     my $res = resp(200);
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $user = $req->user;
 
     die error(404 => 'Missing route') unless $route;

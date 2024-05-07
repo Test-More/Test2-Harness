@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '2.000000';
 
+use POSIX;
+
 use Carp qw/croak/;
 
 use App::Yath::Schema::RunProcessor;
@@ -21,6 +23,22 @@ sub init {
 
     croak "'config' is a required attribute"
         unless $self->{+CONFIG};
+
+    $self->{+WORKER_ID} //= gen_uuid();
+}
+
+sub spawn {
+    my $self = shift;
+
+    my $pid = fork // die "Could not fork: $!";
+    return $pid if $pid;
+
+    local $SIG{INT}  = sub { POSIX::_exit(0) };
+    local $SIG{TERM} = sub { POSIX::_exit(0) };
+
+    my $ok = eval { $self->run(); 1 };
+    warn $@ unless $ok;
+    exit($ok ? 0 : 255);
 }
 
 sub run {

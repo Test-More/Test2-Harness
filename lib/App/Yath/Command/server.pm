@@ -2,10 +2,17 @@ package App::Yath::Command::server;
 use strict;
 use warnings;
 
+use App::Yath::Server;
+
+use App::Yath::Schema::Util qw/schema_config_from_settings/;
+
 our $VERSION = '2.000000';
 
 use parent 'App::Yath::Command';
-use Test2::Harness::Util::HashBase;
+use Test2::Harness::Util::HashBase qw{
+    <server
+    <config
+};
 
 sub summary     { "Start a yath web server" }
 sub description { "Starts a web server that can be used to view test runs in a web browser" }
@@ -19,25 +26,26 @@ sub accepts_dot_args { 1 }
 sub set_dot_args {
     my $class = shift;
     my ($settings, $dot_args) = @_;
-    push @{$settings->server->launcher_args} => @$dot_args;
+    push @{$settings->webserver->launcher_args} => @$dot_args;
     return;
 }
 
 use Getopt::Yath;
 include_options(
+    'App::Yath::Options::Term',
     'App::Yath::Options::Yath',
     'App::Yath::Options::DB',
-    'App::Yath::Options::Term',
+    'App::Yath::Options::WebServer',
 );
 
 option_group {group => 'server', category => "Server Options"} => sub {
     option ephemeral => (
         type => 'Auto',
         autofill => 'Auto',
-        long_examples => ['', '=Auto', '=PostgreSQL', '=MySQL'],
+        long_examples => ['', '=Auto', '=PostgreSQL', '=MySQL', '=MariaDB' ],
         description => "Use a temporary 'ephemeral' database that will be destroyed when the server exits.",
         autofill_text => 'If no db type is specified it will use "auto" which will try PostgreSQL first, then MySQL.',
-        allowed_values => [qw/Auto PostgreSQL MySQL/],
+        allowed_values => [qw/Auto PostgreSQL MySQL MariaDB/],
     );
 
     option shell => (
@@ -58,61 +66,188 @@ option_group {group => 'server', category => "Server Options"} => sub {
         description => 'Launches in "developer mode" which accepts some developer commands while the server is running.',
     );
 
-    option launcher => (
-        type => 'Scalar',
-        default => 'starman',
-        description => 'Command to use to launch the server `<launcher> path/to/share/psgi/yath.psgi`',
-        notes => "You can pass custom args to the launcher after a '::' like `yath server [ARGS] [LOG FILES(s)]:: [LAUNCHER ARGS]`",
+    option single_user => (
+        type => 'Bool',
+        default => 0,
+        description => "When using an ephemeral database you can use this to enable single user mode to avoid login and user credentials.",
     );
 
-    option port_command => (
-        type => 'Scalar',
-        description => 'Command to run that returns a port number.',
+    option single_run => (
+        type => 'Bool',
+        default => 0,
+        description => "When using an ephemeral database you can use this to enable single run mode which causes the server to take you directly to the first run.",
     );
 
-    option port => (
-        type => 'Scalar',
-        description => 'Port to listen on.',
-        notes => 'This is passed to the launcher via `launcher --port PORT`',
-        default => sub {
-            my ($option, $settings) = @_;
-
-            if (my $cmd = $settings->server->port_command) {
-                local $?;
-                my $port = `$cmd`;
-                die "Port command `$cmd` exited with error code $?.\n" if $?;
-                die "Port command `$cmd` did not return a valid port.\n" unless $port;
-                chomp($port);
-                die "Port command `$cmd` did not return a valid port: $port.\n" unless $port =~ m/^\d+$/;
-                return $port;
-            }
-
-            return 8080;
-        },
+    option no_upload => (
+        type => 'Bool',
+        default => 0,
+        description => "When using an ephemeral database you can use this to enable no-upload mode which removes the upload workflow.",
     );
 
-    option workers => (
+    option email => (
         type => 'Scalar',
-        default => sub { eval { require System::Info; System::Info->new->ncore } || 5 },
-        default_text => "5, or number of cores if System::Info is installed.",
-        description => 'Number of workers. Defaults to the number of cores, or 5 if System::Info is not installed.',
-        notes => 'This is passed to the launcher via `launcher --workers WORKERS`',
-    );
-
-    option importers => (
-        type => 'Scalar',
-        default => 2,
-        description => 'Number of log importer processes.',
-    );
-
-    option launcher_args => (
-        type => 'List',
-        initialize => sub { [] },
-        description => "Set additional options for the loader.",
-        notes => "It is better to put loader arguments after '::' at the end of the command line.",
-        long_examples => [' "--reload"', '="--reload"'],
+        description => "When using an ephemeral database you can use this to set a 'from' email address for email sent from this server.",
     );
 };
+
+
+sub run {
+    my $self = shift;
+    my $pid = $$;
+
+    my $args = $self->args;
+    my $settings = $self->settings;
+
+    my $ephemeral = $settings->server->ephemeral;
+
+    my $config = $self->{+CONFIG} = schema_config_from_settings($settings, ephemeral => $ephemeral);
+
+    my $qdb_params = {
+        single_user => $settings->server->single_user // 0,
+        single_run  => $settings->server->single_run  // 0,
+        no_upload   => $settings->server->no_upload   // 0,
+        email       => $settings->server->email       // undef,
+    };
+
+    my $server = $self->{+SERVER} = App::Yath::Server->new(schema_config => $config, $settings->webserver->all, qdb_params => $qdb_params);
+
+    $server->start_server;
+
+    my $done = 0;
+    $SIG{TERM} = sub { $done++; print "Caught SIGTERM shutting down...\n"; $SIG{TERM} = 'DEFAULT' };
+    $SIG{INT}  = sub { $done++; print "Caught SIGINT shutting down...\n";  $SIG{INT}  = 'DEFAULT' };
+
+    SERVER_LOOP: until ($done) {
+        if ($settings->server->dev) {
+            unless(eval { $done = $self->shell($pid); 1 }) {
+                warn $@;
+                $done = 1;
+            }
+        }
+        else {
+            sleep 1;
+        }
+    }
+
+    if ($pid == $$) {
+        $server->stop_server if $server->pid;
+    }
+    else {
+        die "Scope leak, wrong PID";
+    }
+
+    return 0;
+}
+
+sub shell {
+    my $self = shift;
+    my ($pid, $doneref) = @_;
+
+    # Return that we should exit if the PID is wrong.
+    return 1 unless $pid == $$;
+
+    my $settings = $self->settings;
+    my $server = $self->{+SERVER};
+    my $config = $self->{+CONFIG};
+
+    $SIG{TERM} = sub { $SIG{TERM} = 'DEFAULT'; die "Cought SIGTERM exiting...\n" };
+    $SIG{INT}  = sub { $SIG{INT}  = 'DEFAULT'; die "Cought SIGINT exiting...\n" };
+
+    STDERR->autoflush();
+    sleep 1;
+
+    my $dsn = $config->dbi_dsn;
+
+    print "DBI_DSN: $dsn\n\n";
+    print "\n";
+    print "| Yath Server Developer Shell       |\n";
+    print "| type 'help', 'h', or '?' for help |\n";
+
+    while(1) {
+        print "\n> ";
+
+        my $in = <STDIN>;
+        return 1 if !defined($in) && eof(STDIN);
+        chomp($in);
+        next unless length($in);
+
+        return 1 if $in =~ m/^(q|x|exit|quit)$/;
+
+        if ($in =~ m/^(help|h|\?)(?:\s(.+))?$/) {
+            $self->shell_help($1);
+            next;
+        }
+
+        my ($cmd, $args) = split /\s/, $in, 2;
+
+        my $meth = "shell_$cmd";
+        if ($self->can($meth)) {
+            eval { $self->$meth($args); 1 } or warn $@;
+        }
+        else {
+            print STDERR "Invalid command '$in'\n";
+        }
+    }
+}
+
+sub shell_help_text { "Show command list." }
+sub shell_help {
+    my $self = shift;
+    my $class = ref($self);
+    my $stash = do { no strict 'refs'; \%{"$class\::"} };
+
+    print "\nAvailable commands:\n";
+    printf(" %-12s   %s\n", "[q]uit", "Quit the program.");
+    printf(" %-12s   %s\n", "e[x]it", "Exit the program.");
+    printf(" %-12s   %s\n", "[h]elp", "Show this help.");
+    printf(" %-12s   %s\n", "?", "Show this help.");
+
+    for my $sym (sort keys %$stash) {
+        next unless $sym =~ m/^shell_(.*)/;
+        my $cmd = $1;
+        next if $cmd eq 'help';
+        next if $sym =~ m/_text$/;
+        next unless $self->can($sym);
+
+        my $text = "${sym}_text";
+        $text = $self->can($text) ? $self->$text() : 'No description.';
+        printf(" %-12s   %s\n", $cmd, $text);
+    }
+    print "\n";
+}
+
+sub shell_reload_text { "Restart web server (does not restart database or importers)." }
+sub shell_reload { $_[0]->server->restart_server }
+
+sub shell_reloaddb_text { "Restart database (data is lost)." }
+sub shell_reloaddb {
+    my $self = shift;
+
+    my $server = $self->server;
+    $server->stop_server;
+    $server->stop_importers;
+    $server->reset_ephemeral_db;
+    $server->start_server;
+}
+
+sub shell_reloadimp_text { "Restart the importers." }
+sub shell_reloadimp { $_[0]->restart_importers() }
+
+sub shell_db_text { "Open the database." }
+sub shell_db { $_[0]->server->qdb->shell }
+
+sub shell_load_text { "Load a database file (filename given as argument)" }
+sub shell_load { die "TODO: fix me" }
+
+{
+    no warnings 'once';
+    *shell_r        = \*shell_reload;
+    *shell_r_text   = \*shell_reload_text;
+    *shell_rdb      = \*shell_reloaddb;
+    *shell_rdb_text = \*shell_reloaddb_text;
+    *shell_ri       = \*shell_reloadimp;
+    *shell_ri_text  = \*shell_reloadimp_text;
+}
 
 1;
 

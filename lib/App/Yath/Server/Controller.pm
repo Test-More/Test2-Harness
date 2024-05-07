@@ -8,21 +8,49 @@ use Carp qw/croak/;
 
 use App::Yath::Server::Response qw/error/;
 
-use Test2::Harness::Util::HashBase qw/-request -config/;
-
-sub uses_session { 1 }
+use Test2::Harness::Util::HashBase qw{
+    <request
+    <route
+    +schema
+    <schema_config
+    <session
+    <session_host
+    <single_run
+    <single_user
+    <user
+};
 
 sub init {
     my $self = shift;
 
-    croak "'request' is a required attribute" unless $self->{+REQUEST};
-    croak "'config' is a required attribute"  unless $self->{+CONFIG};
+    croak "'request' is a required attribute"       unless $self->{+REQUEST};
+    croak "'schema_config' is a required attribute" unless $self->{+SCHEMA_CONFIG};
+
+    croak "'single_user' must be defined" unless defined $self->{+SINGLE_USER};
+    croak "'single_run' must be defined"  unless defined $self->{+SINGLE_RUN};
 }
 
-sub title  { 'Test2-Harness-UI' }
-sub handle { error(501) }
+sub schema { $_[0]->{+SCHEMA} //= $_[0]->{+SCHEMA_CONFIG}->schema }
 
-sub schema { $_[0]->{+CONFIG}->schema }
+sub title { 'Yath-Server' }
+
+sub handle { error(501 => "Controller '" . ref($_[0]) . "' did not implement handle()") }
+
+sub requires_user { 0 }
+
+sub auth_check {
+    my $self = shift;
+
+    return unless $self->requires_user;
+
+    return error(501 => "Controller '" . ref($_[0]) . "' did not implement verify_user_credentials()")
+        unless $self->can('verify_user_credentials');
+
+    return error(401) unless $self->verify_user_credentials();
+
+    return;
+}
+
 
 1;
 

@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 
-use Test2::Harness::Util::HashBase qw/-config/;
+use Test2::Harness::Util::HashBase qw/<config/;
 
 use App::Yath::Schema::UUID qw/uuid_deflate/;
 

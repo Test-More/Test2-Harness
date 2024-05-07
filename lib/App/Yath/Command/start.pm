@@ -42,7 +42,7 @@ sub option_modules {
         'App::Yath::Options::Renderer',
         'App::Yath::Options::Tests',
         'App::Yath::Options::DB',
-        'App::Yath::Options::Client',
+        'App::Yath::Options::WebClient',
     );
 }
 

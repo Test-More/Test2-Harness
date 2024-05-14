@@ -22,11 +22,19 @@ my %MODES = (
     map {$_ => $_} values %MODES,
 );
 
-our @EXPORT_OK = qw/event_in_mode record_all_events mode_check record_subtest_events/;
+our @EXPORT_OK = qw/event_in_mode record_all_events mode_check record_subtest_events is_mode/;
 
 our %EXPORT_ANON = (
     '%MODES' => \%MODES,
 );
+
+sub is_mode {
+    my ($mode) = @_;
+    return 0 unless $mode;
+    return 0 if $mode =~ m/^\d+$/;
+    return 0 unless $MODES{$mode};
+    return 1;
+}
 
 sub mode_check {
     my ($got, @want) = @_;

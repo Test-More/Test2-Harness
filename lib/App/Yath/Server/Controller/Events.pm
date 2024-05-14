@@ -40,7 +40,7 @@ sub handle {
             or die error(404 => 'Invalid Event');
     }
 
-    $attrs{order_by} = {-asc => 'event_ord'};
+    $attrs{order_by} = {-asc => 'event_idx'};
 
     if ($route->{from} eq 'single_event') {
         $res->content_type('application/json');
@@ -51,17 +51,17 @@ sub handle {
     if ($p->{load_subtests}) {
         # If we are loading subtests then we want ALL descendants, so here
         # we take the parent event and find the next event of the same
-        # nesting level, then we want all events with an event_ord between
+        # nesting level, then we want all events with an event_idx between
         # them (in the same job);
         my $end_at = $schema->resultset('Event')->find(
-            {%query, nested => $event->nested, event_ord => {'>' => $event->event_ord}},
+            {%query, nested => $event->nested, event_idx => {'>' => $event->event_idx}},
             {
-                columns => [qw/event_ord/],
+                columns => [qw/event_idx/],
                 %attrs,
             },
         );
 
-        $query{event_ord} = {'>' => $event->event_ord, '<' => $end_at->event_ord};
+        $query{event_ord} = {'>' => $event->event_idx, '<' => $end_at->event_idx};
     }
     else {
         # We want direct descendants only
@@ -70,19 +70,7 @@ sub handle {
 
     $rs = $schema->resultset('Event')->search(
         \%query,
-        {
-            remove_columns => ['orphan'],
-            '+select'      => [
-                'facets IS NOT NULL AS has_facets',
-                'orphan IS NOT NULL AS has_orphan',
-            ],
-            '+as' => [
-                'has_facets',
-                'has_orphan',
-            ],
-
-            %attrs
-        },
+        \%attrs
     );
 
     $res->stream(

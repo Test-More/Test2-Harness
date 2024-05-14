@@ -20,7 +20,7 @@ sub last_covered_run {
 
     my $query = {
         status => 'complete',
-        project_id => $self->project_id,
+        project_idx => $self->project_idx,
         has_coverage => 1,
     };
 
@@ -57,13 +57,13 @@ sub durations {
         SELECT test_files.filename, jobs.duration
           FROM jobs
           JOIN runs USING(run_id)
-          JOIN test_files USING(test_file_id)
-          JOIN users USING(user_id)
-         WHERE runs.project_id = ?
+          JOIN test_files USING(test_file_idx)
+          JOIN users USING(user_idx)
+         WHERE runs.project_idx = ?
            AND jobs.duration IS NOT NULL
            AND test_files.filename IS NOT NULL
     EOT
-    my @vals = (uuid_deflate($self->project_id));
+    my @vals = (uuid_deflate($self->project_idx));
 
     my ($user_append, @user_args) = $username ? ("users.username = ?", $username) : ();
 
@@ -77,7 +77,7 @@ sub durations {
         my $sth   = $dbh->prepare(<<"        EOT");
             SELECT run_id
               FROM runs
-              JOIN users USING(user_id)
+              JOIN users USING(user_idx)
               $where
              ORDER BY run_ord DESC
              LIMIT ?

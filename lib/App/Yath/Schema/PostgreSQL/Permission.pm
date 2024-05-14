@@ -21,18 +21,17 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("permissions");
 __PACKAGE__->add_columns(
-  "permission_id",
+  "permission_idx",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "permissions_permission_idx_seq",
   },
-  "project_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "user_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "project_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "user_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "updated",
   {
     data_type     => "timestamp",
@@ -40,29 +39,27 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
-  "cpan_batch",
-  { data_type => "bigint", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("permission_id");
+__PACKAGE__->set_primary_key("permission_idx");
 __PACKAGE__->add_unique_constraint(
-  "permissions_project_id_user_id_key",
-  ["project_id", "user_id"],
+  "permissions_project_idx_user_idx_key",
+  ["project_idx", "user_idx"],
 );
 __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
-  { project_id => "project_id" },
+  { project_idx => "project_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
-  { user_id => "user_id" },
+  { user_idx => "user_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

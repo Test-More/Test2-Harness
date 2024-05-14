@@ -16,22 +16,10 @@ confess "You must first load a App::Yath::Schema::NAME module"
 
 __PACKAGE__->parent_column('parent_id');
 
-__PACKAGE__->inflate_column(
-    facets => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('facets', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('facets', {}),
-    },
-);
-
-__PACKAGE__->inflate_column(
-    orphan => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('orphan', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('orphan', {}),
-    },
-);
-
 sub run  { shift->job->run }
 sub user { shift->job->run->user }
+
+sub facets { shift->facet }
 
 sub in_mode {
     my $self = shift;
@@ -41,12 +29,6 @@ sub in_mode {
 sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_all_fields;
-
-    # Inflate
-    $cols{facets} = $self->facets;
-    $cols{orphan} = $self->orphan;
-    $cols{lines}  = App::Yath::Renderer::Default::Composer->render_super_verbose($cols{facets});
-
     return \%cols;
 }
 
@@ -65,13 +47,18 @@ sub line_data {
     my %cols = $self->get_all_fields;
     my %out;
 
-    my $has_facets = ($cols{has_facets} || $cols{facets}) ? 1 : 0;
-    my $has_orphan = ($cols{has_orphan} || $cols{orphan}) ? 1 : 0;
+    my $has_facets = $cols{has_facets} ? 1 : 0;
+    my $has_orphan = $cols{has_orphan} ? 1 : 0;
     my $has_binary = $cols{has_binary} ? 1 : 0;
+    my $is_parent  = $cols{is_subtest} ? 1 : 0;
+    my $causes_fail = $cols{causes_fail} ? 1 : 0;
 
-    $cols{facets} = $self->facets if $has_facets;
-
-    $out{lines} = App::Yath::Renderer::Default::Composer->render_super_verbose($has_facets ? $self->facets : $self->orphan);
+    if (my $r = $self->render) {
+        $out{lines} = $r->data;
+    }
+    else {
+        $out{lines} = [];
+    }
 
     if ($has_binary) {
         for my $binary ($self->binaries) {
@@ -81,21 +68,20 @@ sub line_data {
                 'binary',
                 $binary->is_image ? 'IMAGE' : 'BINARY',
                 $filename,
-                $binary->binary_id,
+                $binary->binary_idx,
             ];
         }
     }
 
-    $out{facets} = $has_facets;
-    $out{orphan} = $has_orphan;
+    $out{facets}    = $has_facets;
+    $out{orphan}    = $has_orphan;
+    $out{is_parent} = $is_parent;
+    $out{is_fail}   = $causes_fail;
 
     $out{parent_id} = $cols{parent_id} if $cols{parent_id};
     $out{nested}    = $cols{nested} // 0;
 
     $out{event_id} = $cols{event_id};
-
-    $out{is_parent} = ($has_facets && $cols{facets}{parent}) ? 1 : 0;
-    $out{is_fail}   = ($has_facets && $cols{facets}{assert}) ? $cols{facets}{assert}{pass} ? 0 : 1 : undef;
 
     return \%out;
 }

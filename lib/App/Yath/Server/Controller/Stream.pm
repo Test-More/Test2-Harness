@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use List::Util qw/max/;
 use Scalar::Util qw/blessed/;
 use App::Yath::Schema::Util qw/find_job/;
@@ -78,7 +77,7 @@ sub stream_runs {
     my $schema = $self->schema;
 
     my $opts = {
-        remove_columns => [qw/log_data run_fields.data parameters/],
+        remove_columns => [qw/run_fields.data/],
 
         join       => [qw/user_join project run_fields/],
         '+columns' => {
@@ -114,27 +113,19 @@ sub stream_runs {
     my $id     = $route->{id};
     my $uuid   = uuid_inflate($id);
     my $run_id = $route->{run_id};
-    my ($project, $user);
 
     if ($id) {
-        my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->find({name => $id}) };
-        $project //= eval { $p_rs->find({project_id => $uuid}) };
-
-        if ($project) {
-            $params{search_base} = $params{search_base}->search_rs({'me.project_id' => $project->project_id});
+        if (my $uuid = uuid_inflate($id)) {
+            $run_id //= $uuid;
         }
         else {
+            my $p_rs = $schema->resultset('Project');
             my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->find({username => $id}) };
-            $user //= eval { $u_rs->find({user_id  => $uuid}) };
-
-            if ($user) {
-                $uuid = uuid_inflate($user->user_id);
-                $params{search_base} = $params{search_base}->search_rs({'me.user_id' => $user->user_id});
+            if (my $project = eval { $p_rs->find({name => $id}) }) {
+                $params{search_base} = $params{search_base}->search_rs({'me.project_idx' => $project->project_idx});
             }
-            else {
-                $run_id //= $uuid;
+            elsif (my $user = eval { $u_rs->find({username => $id}) }) {
+                $params{search_base} = $params{search_base}->search_rs({'me.user_idx' => $user->user_idx});
             }
         }
     }
@@ -172,12 +163,12 @@ sub stream_jobs {
 
         track_status => 1,
         id_field     => 'job_key',
-        ord_field    => 'job_ord',
+        ord_field    => 'job_idx',
         method       => 'glance_data',
         search_base  => scalar($run->jobs),
         custom_opts  => $opts,
 
-        order_by => [{'-desc' => 'status'}, {'-desc' => [qw/job_try job_ord name/]}],
+        order_by => [{'-desc' => 'status'}, {'-desc' => [qw/job_try job_idx name/]}],
     );
 
     if (my $job_uuid = $route->{job}) {
@@ -199,18 +190,6 @@ sub stream_events {
     # we only stream nested events when the job is still running
     my $query = $job->complete ? {nested => 0} : undef;
 
-    my $opts = {
-        remove_columns => ['orphan'],
-        '+select' => [
-            'facets IS NOT NULL AS has_facets',
-            'orphan IS NOT NULL AS has_orphan',
-        ],
-        '+as' => [
-            'has_facets',
-            'has_orphan',
-        ],
-    };
-
     return $self->stream_set(
         type   => 'event',
         parent => $job,
@@ -219,12 +198,11 @@ sub stream_events {
 
         track_status => 0,
         id_field     => 'event_id',
-        ord_field    => 'insert_ord',
-        sort_field   => 'event_ord',
+        ord_field    => 'event_idx',
+        sort_field   => 'event_idx',
         sort_dir     => '-asc',
         method       => 'line_data',
         custom_query => $query,
-        custom_opts  => $opts,
         search_base  => scalar($job->events),
     );
 }

@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
 use App::Yath::Util qw/share_dir/;

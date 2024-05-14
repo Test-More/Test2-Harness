@@ -21,8 +21,8 @@ sub option :lvalue {
     my $self = shift;
     my ($option, @vals) = @_;
 
-    Carp::croak("Too many arguments for option()") if @vals > 1;
-    Carp::croak("The '$option' option does not exist") unless exists $self->{$option};
+    Carp::confess("Too many arguments for option()") if @vals > 1;
+    Carp::confess("The '$option' option does not exist") unless exists $self->{$option};
 
     ($self->{$option}) = @vals if @vals;
 
@@ -42,7 +42,7 @@ sub option_ref {
     my $self = shift;
     my ($name, $create) = @_;
 
-    Carp::croak("The '$name' option does not exist") unless $create || exists $self->{$name};
+    Carp::confess("The '$name' option does not exist") unless $create || exists $self->{$name};
 
     return \($self->{$name});
 }
@@ -69,7 +69,7 @@ sub AUTOLOAD : lvalue {
 
     return if $option eq 'DESTROY';
 
-    Carp::croak("Method $option() must be called on a blessed instance") unless ref($this);
+    Carp::confess("Method $option() must be called on a blessed instance") unless ref($this);
 
     $this->option($option, @_);
 }

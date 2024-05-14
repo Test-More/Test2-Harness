@@ -21,8 +21,13 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("binaries");
 __PACKAGE__->add_columns(
-  "binary_id",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
+  "binary_idx",
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "binaries_binary_idx_seq",
+  },
   "event_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "filename",
@@ -34,7 +39,7 @@ __PACKAGE__->add_columns(
   "data",
   { data_type => "bytea", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("binary_id");
+__PACKAGE__->set_primary_key("binary_idx");
 __PACKAGE__->belongs_to(
   "event",
   "App::Yath::Schema::Result::Event",
@@ -43,7 +48,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

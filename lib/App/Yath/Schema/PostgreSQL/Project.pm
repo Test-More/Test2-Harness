@@ -21,25 +21,24 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("projects");
 __PACKAGE__->add_columns(
-  "project_id",
+  "project_idx",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "projects_project_idx_seq",
   },
   "name",
   { data_type => "citext", is_nullable => 0 },
   "owner",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("project_id");
+__PACKAGE__->set_primary_key("project_idx");
 __PACKAGE__->add_unique_constraint("projects_name_key", ["name"]);
 __PACKAGE__->belongs_to(
   "owner",
   "App::Yath::Schema::Result::User",
-  { user_id => "owner" },
+  { user_idx => "owner" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -50,24 +49,24 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->has_many(
   "permissions",
   "App::Yath::Schema::Result::Permission",
-  { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.project_idx" => "self.project_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "reportings",
   "App::Yath::Schema::Result::Reporting",
-  { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.project_idx" => "self.project_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "runs",
   "App::Yath::Schema::Result::Run",
-  { "foreign.project_id" => "self.project_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.project_idx" => "self.project_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

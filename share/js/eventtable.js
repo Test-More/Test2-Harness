@@ -196,7 +196,7 @@ t2hui.eventtable.message_inner_builder = function(item, dest, data) {
         return;
     }
 
-    if (typeof(item.extra) === "string") {
+    if (typeof(item.extra) === "number" && item.tag === "IMAGE") {
         var out = $('<div class="binary"></div>');
         var link = $('<a href="/binary/' + item.extra + '">' + item.message + '</a>');
         out.append(link);

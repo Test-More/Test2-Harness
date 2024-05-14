@@ -21,16 +21,15 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("email");
 __PACKAGE__->add_columns(
-  "email_id",
+  "email_idx",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "email_email_idx_seq",
   },
-  "user_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "user_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "local",
   { data_type => "citext", is_nullable => 0 },
   "domain",
@@ -38,29 +37,29 @@ __PACKAGE__->add_columns(
   "verified",
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("email_id");
+__PACKAGE__->set_primary_key("email_idx");
 __PACKAGE__->add_unique_constraint("email_local_domain_key", ["local", "domain"]);
 __PACKAGE__->might_have(
   "email_verification_code",
   "App::Yath::Schema::Result::EmailVerificationCode",
-  { "foreign.email_id" => "self.email_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.email_idx" => "self.email_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->might_have(
   "primary_email",
   "App::Yath::Schema::Result::PrimaryEmail",
-  { "foreign.email_id" => "self.email_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.email_idx" => "self.email_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
-  { user_id => "user_id" },
+  { user_idx => "user_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

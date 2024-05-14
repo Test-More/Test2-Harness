@@ -19,6 +19,19 @@ option_group {group => 'publish', prefix => 'publish', category => "Publish Opti
         ],
     );
 
+    option flush_interval => (
+        type => 'Scalar',
+        long_examples => [' 2', ' 1.5'],
+        description => 'When buffering DB writes, force a flush when an event is recieved at least N seconds after the last flush.',
+    );
+
+    option buffering => (
+        type => 'Scalar',
+        long_examples => [ ' none', ' job', ' diag', ' run' ],
+        description => 'Type of buffering to use, if "none" then events are written to the db one at a time, which is SLOW',
+        default => 'diag',
+    );
+
     option retry => (
         type => 'Count',
         description => "How many times to retry an operation before giving up",

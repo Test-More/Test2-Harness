@@ -148,7 +148,7 @@ sub sweep_run {
         $run->delete;
     }
     elsif (my $sweep_name = $params{sweep_name}) {
-        $self->config->schema->resultset('Sweep')->find_or_create({name => $sweep_name, run_id => $run->run_id, sweep_id => gen_uuid});
+        $self->config->schema->resultset('Sweep')->find_or_create({name => $sweep_name, run_id => $run->run_id});
     }
 
     print "[$$] ($params{id}) Run: " . $run->run_id . " took " . sprintf("%0.4f", time - $start) . " seconds to sweep $counter job(s).\n";

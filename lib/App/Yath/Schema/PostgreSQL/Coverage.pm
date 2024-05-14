@@ -21,38 +21,43 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("coverage");
 __PACKAGE__->add_columns(
-  "coverage_id",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
+  "coverage_idx",
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "coverage_coverage_idx_seq",
+  },
   "run_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "test_file_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "source_file_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "source_sub_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "coverage_manager_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
   "job_key",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  "test_file_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "source_file_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "source_sub_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "coverage_manager_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "metadata",
   { data_type => "jsonb", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("coverage_id");
+__PACKAGE__->set_primary_key("coverage_idx");
 __PACKAGE__->add_unique_constraint(
-  "coverage_run_id_test_file_id_source_file_id_source_sub_id_j_key",
+  "coverage_run_id_job_key_test_file_idx_source_file_idx_sourc_key",
   [
     "run_id",
-    "test_file_id",
-    "source_file_id",
-    "source_sub_id",
     "job_key",
+    "test_file_idx",
+    "source_file_idx",
+    "source_sub_idx",
   ],
 );
 __PACKAGE__->belongs_to(
   "coverage_manager",
   "App::Yath::Schema::Result::CoverageManager",
-  { coverage_manager_id => "coverage_manager_id" },
+  { coverage_manager_idx => "coverage_manager_idx" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -61,7 +66,7 @@ __PACKAGE__->belongs_to(
   },
 );
 __PACKAGE__->belongs_to(
-  "job_key",
+  "job",
   "App::Yath::Schema::Result::Job",
   { job_key => "job_key" },
   {
@@ -80,24 +85,24 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "source_file",
   "App::Yath::Schema::Result::SourceFile",
-  { source_file_id => "source_file_id" },
+  { source_file_idx => "source_file_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "source_sub",
   "App::Yath::Schema::Result::SourceSub",
-  { source_sub_id => "source_sub_id" },
+  { source_sub_idx => "source_sub_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "test_file",
   "App::Yath::Schema::Result::TestFile",
-  { test_file_id => "test_file_id" },
+  { test_file_idx => "test_file_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

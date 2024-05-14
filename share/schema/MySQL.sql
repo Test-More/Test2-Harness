@@ -14,7 +14,7 @@ CREATE TABLE users (
     role ENUM(
         'admin',    -- Can add users and set permissions
         'user'      -- Can manage reports for their projects
-    ) NOT NULL,
+    ) NOT NULL DEFAULT 'user',
 
     UNIQUE(username)
 ) ROW_FORMAT=COMPRESSED;
@@ -151,7 +151,6 @@ CREATE TABLE runs (
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
     concurrency     INTEGER         DEFAULT NULL,
-    parameters      JSON            DEFAULT NULL,
 
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
@@ -207,7 +206,6 @@ CREATE TABLE jobs (
 
     status ENUM('pending', 'running', 'complete', 'broken', 'canceled') NOT NULL,
 
-    parameters      JSON        DEFAULT NULL,
     fields          JSON        DEFAULT NULL,
 
     test_file_id    BINARY(16)  DEFAULT NULL,
@@ -263,7 +261,6 @@ CREATE TABLE events (
     job_key         BINARY(16)  NOT NULL,
 
     event_ord       BIGINT      NOT NULL,
-    insert_ord      BIGINT      NOT NULL AUTO_INCREMENT,
 
     has_binary      BOOL        NOT NULL DEFAULT FALSE,
     is_subtest      BOOL        NOT NULL DEFAULT FALSE,
@@ -277,13 +274,9 @@ CREATE TABLE events (
     trace_id        CHAR(36)    DEFAULT NULL,
     nested          INT         DEFAULT 0,
 
-    facets          JSON        DEFAULT NULL,
-    facets_line     BIGINT      DEFAULT NULL,
+    render          JSON        DEFAULT NULL,
 
-    orphan          JSON        DEFAULT NULL,
-    orphan_line     BIGINT      DEFAULT NULL,
-
-    UNIQUE(insert_ord, job_key),
+    UNIQUE(event_ord, job_key),
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)
 ) ROW_FORMAT=COMPRESSED;
 CREATE INDEX event_job    ON events(job_key, is_subtest);
@@ -400,4 +393,36 @@ CREATE TABLE resources (
 
     FOREIGN KEY (resource_batch_id) REFERENCES resource_batch(resource_batch_id),
     UNIQUE(resource_batch_id, batch_ord)
+) ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE facets (
+    event_id    BINARY(16)  NOT NULL PRIMARY KEY,
+
+    data        JSON        DEFAULT NULL,
+    line        BIGINT      DEFAULT NULL,
+
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+) ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE orphans (
+    event_id    BINARY(16)  NOT NULL PRIMARY KEY,
+
+    data        JSON        DEFAULT NULL,
+    line        BIGINT      DEFAULT NULL,
+
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+) ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE run_parameters (
+    run_id      BINARY(16)  NOT NULL PRIMARY KEY,
+    parameters  JSON        DEFAULT NULL,
+
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+) ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE job_parameters (
+    job_key     BINARY(16)  NOT NULL PRIMARY KEY,
+    parameters  JSON        DEFAULT NULL,
+
+    FOREIGN KEY (job_key) REFERENCES jobs(job_key)
 ) ROW_FORMAT=COMPRESSED;

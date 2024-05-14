@@ -21,37 +21,30 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("resources");
 __PACKAGE__->add_columns(
-  "resource_id",
+  "resource_idx",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "resources_resource_idx_seq",
   },
-  "resource_batch_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "batch_ord",
-  { data_type => "integer", is_nullable => 0 },
+  "resource_batch_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "module",
   { data_type => "varchar", is_nullable => 0, size => 512 },
   "data",
   { data_type => "jsonb", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("resource_id");
-__PACKAGE__->add_unique_constraint(
-  "resources_resource_batch_id_batch_ord_key",
-  ["resource_batch_id", "batch_ord"],
-);
+__PACKAGE__->set_primary_key("resource_idx");
 __PACKAGE__->belongs_to(
   "resource_batch",
   "App::Yath::Schema::Result::ResourceBatch",
-  { resource_batch_id => "resource_batch_id" },
+  { resource_batch_idx => "resource_batch_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

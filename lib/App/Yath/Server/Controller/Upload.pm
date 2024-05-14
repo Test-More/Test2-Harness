@@ -75,7 +75,7 @@ sub process_form {
     my $tmp  = $req->uploads->{log_file}->tempname;
 
     my $project_name = $req->parameters->{project} || return $res->add_error('project is required');
-    my $project = $self->schema->resultset('Project')->find_or_create({name => $project_name, project_id => gen_uuid()});
+    my $project = $self->schema->resultset('Project')->find_or_create({name => $project_name});
 
     my $mode  = $req->parameters->{mode}        || 'qvfd';
 
@@ -97,13 +97,13 @@ sub process_form {
 
     my $run = $self->schema->resultset('Run')->create({
         $run_id ? (run_id => $run_id) : (),
-        user_id    => ref($user) ? $user->user_id : 1,
-        project_id => $project->project_id,
+        user_idx    => ref($user) ? $user->user_idx : 1,
+        project_idx => $project->project_idx,
         mode       => $mode,
         status     => 'pending',
 
         log_file => {
-            log_file_id => $run_id,
+            log_file_idx => $run_id,
             name => $file,
             data => do { local $/; <$fh> },
         },

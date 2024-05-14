@@ -93,8 +93,8 @@ sub get_thing {
                 return 0;
             };
         }
-        elsif (($uuid && eval { $thing = $host_rs->find({host_id => $uuid}) }) || eval { $thing = $host_rs->find({hostname => $id}) }) {
-            $search_args->{host_id} = $thing->host_id;
+        elsif (($uuid && eval { $thing = $host_rs->find({host_idx => $uuid}) }) || eval { $thing = $host_rs->find({hostname => $id}) }) {
+            $search_args->{host_idx} = $thing->host_idx;
         }
         else {
             die error(404 => 'Invalid Job ID or Host ID');
@@ -120,9 +120,9 @@ sub get_stamps {
         $fields = "run_id = ?";
         push @vals => uuid_deflate($search_args->{run_id});
     }
-    elsif ($search_args->{host_id}) {
-        $fields = "host_id = ?";
-        push @vals => uuid_deflate($search_args->{host_id});
+    elsif ($search_args->{host_idx}) {
+        $fields = "host_idx = ?";
+        push @vals => uuid_deflate($search_args->{host_idx});
     }
 
     if ($$start) {
@@ -130,7 +130,7 @@ sub get_stamps {
         push @vals => $$start;
     }
 
-    my $sth = $dbh->prepare("SELECT resource_batch_id, stamp FROM resource_batch WHERE " . $fields . " ORDER BY stamp ASC");
+    my $sth = $dbh->prepare("SELECT resource_batch_idx, stamp FROM resource_batch WHERE " . $fields . " ORDER BY stamp ASC");
     $sth->execute(@vals) or die $sth->errstr;
     my $rows = $sth->fetchall_arrayref;
 
@@ -155,8 +155,8 @@ sub data_stamps {
     if (my $run_id = $search_args->{run_id}) {
         push @out => { run_id => $run_id };
     }
-    if (my $host_id = $search_args->{host_id}) {
-        push @out => { host_id => $host_id };
+    if (my $host_idx = $search_args->{host_idx}) {
+        push @out => { host_idx => $host_idx };
     }
 
     my $start   = time;
@@ -228,7 +228,7 @@ sub render_stamp_resources {
     my $res_rs = $schema->resultset('Resource');
 
     my @res_list;
-    my $resources = $res_rs->search({resource_batch_id => $batch_id}, {order_by => {'-asc' => 'batch_ord'}});
+    my $resources = $res_rs->search({resource_batch_idx => $batch_id}, {order_by => {'-asc' => 'batch_ord'}});
     while (my $res = $resources->next) {
         push @res_list => $self->render_resource($res);
     }

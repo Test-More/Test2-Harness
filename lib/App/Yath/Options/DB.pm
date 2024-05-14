@@ -16,7 +16,7 @@ option_group {group => 'db', prefix => 'db', category => "Database Options"} => 
     option driver => (
         type => 'Scalar',
         description => "DBI Driver to use",
-        long_examples => [' Pg', ' mysql', ' MariaDB'],
+        long_examples => [' Pg', ' PostgreSQL', ' MySQL', ' MariaDB', ' Percona', ' SQLite'],
         from_env_vars => [qw/YATH_DB_DRIVER/],
     );
 

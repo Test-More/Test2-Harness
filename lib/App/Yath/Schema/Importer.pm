@@ -51,7 +51,7 @@ sub run {
 
     while (!defined($max) || $max--) {
         $schema->resultset('Run')->search(
-            {status   => 'pending', log_file_id => {'!=' => undef}},
+            {status   => 'pending', log_file_idx => {'!=' => undef}},
             {order_by => {-asc => 'added'}, rows => 1},
         )->update({status => 'running', worker_id => $worker_id->{string}});
 

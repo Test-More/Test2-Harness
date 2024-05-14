@@ -27,7 +27,7 @@ option_group {group => 'webclient', category => "Web Client Options"} => sub {
         default => 0,
     );
 
-    option retry => (
+    option request_retry => (
         type => 'Count',
         description => "How many times to try an operation before giving up",
         default => 0,

@@ -21,6 +21,13 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("job_fields");
 __PACKAGE__->add_columns(
+  "job_field_idx",
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "job_fields_job_field_idx_seq",
+  },
   "job_field_id",
   { data_type => "uuid", is_nullable => 0, size => 16 },
   "job_key",
@@ -36,17 +43,17 @@ __PACKAGE__->add_columns(
   "link",
   { data_type => "text", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("job_field_id");
-__PACKAGE__->add_unique_constraint("job_fields_job_key_name_key", ["job_key", "name"]);
+__PACKAGE__->set_primary_key("job_field_idx");
+__PACKAGE__->add_unique_constraint("job_fields_job_field_id_key", ["job_field_id"]);
 __PACKAGE__->belongs_to(
-  "job_key",
+  "job",
   "App::Yath::Schema::Result::Job",
   { job_key => "job_key" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

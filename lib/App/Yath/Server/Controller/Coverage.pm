@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use List::Util qw/max/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;

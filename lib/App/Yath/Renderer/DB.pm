@@ -34,7 +34,7 @@ use Getopt::Yath;
 include_options(
     'App::Yath::Options::Yath',
     'App::Yath::Options::DB',
-    'App::Yath::Options::Upload',
+    'App::Yath::Options::Publish',
     'App::Yath::Options::WebClient',
 );
 
@@ -207,18 +207,13 @@ sub _send_resources {
     my $self = shift;
     my ($stamp, $resources) = @_;
 
-    my $batch_id = gen_uuid();
-    my $ord = 0;
     my @items;
     for my $res (@$resources) {
         my $data = $res->status_data or next;
 
         my $item = {
-            resource_id       => gen_uuid(),
-            resource_batch_id => $batch_id,
-            batch_ord         => $ord++,
-            module            => ref($res) || $res,
-            data              => encode_ascii_json($data),
+            module => ref($res) || $res,
+            data   => encode_ascii_json($data),
         };
 
         push @items => $item;
@@ -226,7 +221,7 @@ sub _send_resources {
 
     return unless @items;
 
-    $self->render_event({facet_data => {db_resources => {stamp => $stamp, batch_id => $batch_id, items => \@items}}});
+    $self->render_event({facet_data => {db_resources => {stamp => $stamp, items => \@items}}});
 
     return;
 }

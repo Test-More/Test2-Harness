@@ -68,7 +68,7 @@ sub gen_api_key {
 
     return $self->result_source->schema->resultset('ApiKey')->create(
         {
-            user_id => $self->user_id,
+            user_idx => $self->user_idx,
             value   => gen_uuid(),
             status  => 'active',
             name    => $name,

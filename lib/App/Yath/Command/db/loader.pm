@@ -30,7 +30,7 @@ option_group {group => 'loader', category => "Loader Options"} => sub {
         type           => 'Scalar',
         short          => 'j',
         alt            => ['procs'],
-        description    => 'Set the number of processes to use to dump the database',
+        description    => 'Set the number of processes to use to load the database',
         notes          => "If System::Info is installed, this will default to the cpu core count, otherwise the default is 1.",
         long_examples  => [' 5'],
         short_examples => ['5'],

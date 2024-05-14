@@ -45,6 +45,12 @@ option_group {group => 'webserver', category => "Web Server Options"} => sub {
         },
     );
 
+    option host => (
+        type => 'Scalar',
+        default => 'localhost',
+        description => "Host/Address to bind to, default 'localhost'.",
+    );
+
     option workers => (
         type => 'Scalar',
         default => sub { eval { require System::Info; System::Info->new->ncore } || 5 },

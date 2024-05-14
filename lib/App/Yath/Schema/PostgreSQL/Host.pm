@@ -21,28 +21,27 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("hosts");
 __PACKAGE__->add_columns(
-  "host_id",
+  "host_idx",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "hosts_host_idx_seq",
   },
   "hostname",
   { data_type => "varchar", is_nullable => 0, size => 512 },
 );
-__PACKAGE__->set_primary_key("host_id");
+__PACKAGE__->set_primary_key("host_idx");
 __PACKAGE__->add_unique_constraint("hosts_hostname_key", ["hostname"]);
 __PACKAGE__->has_many(
   "resource_batches",
   "App::Yath::Schema::Result::ResourceBatch",
-  { "foreign.host_id" => "self.host_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.host_idx" => "self.host_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

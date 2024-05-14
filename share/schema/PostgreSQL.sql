@@ -35,66 +35,69 @@ CREATE TYPE user_type AS ENUM(
     'user'     -- Can manage reports for their projects
 );
 
+CREATE TYPE io_stream AS ENUM(
+    'STDOUT',
+    'STDERR'
+);
+
 CREATE TABLE config(
-    config_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    setting           VARCHAR(128)    NOT NULL,
-    value             VARCHAR(256)    NOT NULL,
+    config_idx  BIGSERIAL       PRIMARY KEY,
+    setting     VARCHAR(128)    NOT NULL,
+    value       VARCHAR(256)    NOT NULL,
 
     UNIQUE(setting)
 );
 
 CREATE TABLE users (
-    user_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    username        CITEXT          NOT NULL,
-    pw_hash         VARCHAR(31)     DEFAULT NULL,
-    pw_salt         VARCHAR(22)     DEFAULT NULL,
-    realname        TEXT            DEFAULT NULL,
-    role            user_type       NOT NULL DEFAULT 'user',
+    user_idx    BIGSERIAL   NOT NULL PRIMARY KEY,
+    username    CITEXT      NOT NULL,
+    pw_hash     VARCHAR(31) DEFAULT NULL,
+    pw_salt     VARCHAR(22) DEFAULT NULL,
+    realname    TEXT        DEFAULT NULL,
+    role        user_type   NOT NULL DEFAULT 'user',
 
     UNIQUE(username)
 );
 
 CREATE TABLE email (
-    email_id        UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    user_id         UUID            NOT NULL REFERENCES users(user_id),
-    local           CITEXT          NOT NULL,
-    domain          CITEXT          NOT NULL,
-    verified        BOOL            NOT NULL DEFAULT FALSE,
+    email_idx   BIGSERIAL   NOT NULL PRIMARY KEY,
+    user_idx    BIGINT      NOT NULL REFERENCES users(user_idx),
+    local       CITEXT      NOT NULL,
+    domain      CITEXT      NOT NULL,
+    verified    BOOL        NOT NULL DEFAULT FALSE,
 
     UNIQUE(local, domain)
 );
-CREATE INDEX IF NOT EXISTS email_user ON email(user_id);
+CREATE INDEX IF NOT EXISTS email_user ON email(user_idx);
 
 CREATE TABLE primary_email (
-    user_id         UUID            NOT NULL REFERENCES users(user_id) PRIMARY KEY,
-    email_id        UUID            NOT NULL REFERENCES email(email_id),
+    user_idx        BIGINT  NOT NULL REFERENCES users(user_idx) PRIMARY KEY,
+    email_idx       BIGINT  NOT NULL REFERENCES email(email_idx),
 
-    unique(email_id)
+    unique(email_idx)
 );
 
 CREATE TABLE hosts (
-    host_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    host_idx    BIGSERIAL       NOT NULL PRIMARY KEY,
     hostname    VARCHAR(512)    NOT NULL,
 
     unique(hostname)
 );
 
 CREATE TABLE email_verification_codes (
-    evcode_id       UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    email_id        UUID            NOT NULL REFERENCES email(email_id),
-
-    unique(email_id)
+    email_idx   BIGINT  NOT NULL REFERENCES email(email_idx) PRIMARY KEY,
+    evcode      UUID    NOT NULL
 );
 
 CREATE TABLE sessions (
-    session_id      UUID     DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    active          BOOL     DEFAULT TRUE
+    session_id  UUID    NOT NULL PRIMARY KEY,
+    active      BOOL    DEFAULT TRUE
 );
 
 CREATE TABLE session_hosts (
-    session_host_id     UUID        DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    session_host_idx    BIGSERIAL   NOT NULL PRIMARY KEY,
+    user_idx            BIGINT      REFERENCES users(user_idx),
     session_id          UUID        NOT NULL REFERENCES sessions(session_id),
-    user_id             UUID        REFERENCES users(user_id),
 
     created             TIMESTAMP   NOT NULL DEFAULT now(),
     accessed            TIMESTAMP   NOT NULL DEFAULT now(),
@@ -107,50 +110,52 @@ CREATE TABLE session_hosts (
 CREATE INDEX IF NOT EXISTS session_hosts_session ON session_hosts(session_id);
 
 CREATE TABLE api_keys (
-    api_key_id      UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    user_id         UUID            NOT NULL REFERENCES users(user_id),
-    name            VARCHAR(128)    NOT NULL,
-    value           VARCHAR(36)     NOT NULL,
-    status          api_key_status  NOT NULL DEFAULT 'active',
+    api_key_idx BIGSERIAL       NOT NULL PRIMARY KEY,
+    user_idx    BIGINT          NOT NULL REFERENCES users(user_idx),
+    name        VARCHAR(128)    NOT NULL,
+    value       VARCHAR(36)     NOT NULL,
+    status      api_key_status  NOT NULL DEFAULT 'active',
 
     UNIQUE(value)
 );
-CREATE INDEX IF NOT EXISTS api_key_user ON api_keys(user_id);
+CREATE INDEX IF NOT EXISTS api_key_user ON api_keys(user_idx);
 
 CREATE TABLE log_files (
-    log_file_id     UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    name            TEXT            NOT NULL,
+    log_file_idx    BIGINT  NOT NULL PRIMARY KEY,
+    name            TEXT    NOT NULL,
     local_file      TEXT,
     data            BYTEA
 );
 
 CREATE TABLE projects (
-    project_id      UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    name            CITEXT          NOT NULL,
-    owner           UUID            DEFAULT NULL REFERENCES users(user_id),
+    project_idx     BIGSERIAL   NOT NULL PRIMARY KEY,
+    name            CITEXT      NOT NULL,
+    owner           BIGINT      DEFAULT NULL REFERENCES users(user_idx),
 
     UNIQUE(name)
 );
 
 CREATE TABLE permissions (
-    permission_id   UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    project_id      UUID            NOT NULL REFERENCES projects(project_id),
-    user_id         UUID            NOT NULL REFERENCES users(user_id),
+    permission_idx  BIGSERIAL       NOT NULL PRIMARY KEY,
+    project_idx     BIGINT          NOT NULL REFERENCES projects(project_idx),
+    user_idx        BIGINT          NOT NULL REFERENCES users(user_idx),
     updated         TIMESTAMP       NOT NULL DEFAULT now(),
 
-    cpan_batch      BIGINT          DEFAULT NULL,
-
-    UNIQUE(project_id, user_id)
+    UNIQUE(project_idx, user_idx)
 );
 
 CREATE TABLE runs (
-    run_id          UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    run_ord         BIGSERIAL       NOT NULL,
-    user_id         UUID            NOT NULL REFERENCES users(user_id),
+    run_idx         BIGSERIAL       NOT NULL PRIMARY KEY,
+    user_idx        BIGINT          NOT NULL REFERENCES users(user_idx),
+    project_idx     BIGINT          NOT NULL REFERENCES projects(project_idx),
+    log_file_idx    BIGINT          DEFAULT NULL REFERENCES log_files(log_file_idx),
+
+    run_id          UUID            NOT NULL,
+
     status          queue_status    NOT NULL DEFAULT 'pending',
+
     worker_id       TEXT            DEFAULT NULL,
     error           TEXT            DEFAULT NULL,
-    project_id      UUID            NOT NULL REFERENCES projects(project_id),
 
     pinned          BOOL            NOT NULL DEFAULT FALSE,
     has_coverage    BOOL            NOT NULL DEFAULT FALSE,
@@ -160,32 +165,31 @@ CREATE TABLE runs (
     duration        TEXT            DEFAULT NULL,
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
     buffer          run_buffering   NOT NULL DEFAULT 'job',
-    log_file_id     UUID            DEFAULT NULL REFERENCES log_files(log_file_id),
 
     -- From Log
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     retried         INTEGER         DEFAULT NULL,
     concurrency     INTEGER         DEFAULT NULL,
-    parameters      JSONB           DEFAULT NULL,
 
-    UNIQUE(run_ord)
+    UNIQUE(run_id)
 );
-CREATE INDEX IF NOT EXISTS run_projects ON runs(project_id);
-CREATE INDEX IF NOT EXISTS run_status ON runs(status);
-CREATE INDEX IF NOT EXISTS run_user ON runs(user_id);
+CREATE INDEX IF NOT EXISTS run_projects ON runs(project_idx);
+CREATE INDEX IF NOT EXISTS run_status   ON runs(status);
+CREATE INDEX IF NOT EXISTS run_user     ON runs(user_idx);
 
 CREATE TABLE sweeps (
-    sweep_id        UUID            NOT NULL PRIMARY KEY,
-    run_id          UUID            NOT NULL REFERENCES runs(run_id),
+    sweep_idx       BIGSERIAL       NOT NULL PRIMARY KEY,
+    run_idx         BIGINT          NOT NULL REFERENCES runs(run_idx),
     name            VARCHAR(255)    NOT NULL,
 
-    UNIQUE(run_id, name)
+    UNIQUE(run_idx, name)
 );
-CREATE INDEX IF NOT EXISTS sweep_runs ON sweeps(run_id);
+CREATE INDEX IF NOT EXISTS sweep_runs ON sweeps(run_idx);
 
 CREATE TABLE run_fields (
-    run_field_id    UUID            NOT NULL PRIMARY KEY,
+    run_field_idx   BIGSERIAL       NOT NULL PRIMARY KEY,
+    run_field_id    UUID            NOT NULL,
     run_id          UUID            NOT NULL REFERENCES runs(run_id),
     name            VARCHAR(255)    NOT NULL,
     data            JSONB           DEFAULT NULL,
@@ -193,57 +197,81 @@ CREATE TABLE run_fields (
     raw             TEXT            DEFAULT NULL,
     link            TEXT            DEFAULT NULL,
 
-    UNIQUE(run_id, name)
+    UNIQUE(run_field_id)
+);
+CREATE INDEX IF NOT EXISTS run_fields_run_id ON run_fields(run_id);
+CREATE INDEX IF NOT EXISTS run_fields_name   ON run_fields(name);
+
+CREATE TABLE run_parameters (
+    run_parameters_idx  BIGSERIAL   NOT NULL PRIMARY KEY,
+    run_id              UUID        NOT NULL REFERENCES runs(run_id),
+    parameters          JSONB       DEFAULT NULL,
+
+    UNIQUE(run_id)
 );
 
 CREATE TABLE test_files (
-    test_file_id    UUID            NOT NULL PRIMARY KEY,
+    test_file_idx   BIGSERIAL       NOT NULL PRIMARY KEY,
     filename        VARCHAR(255)    NOT NULL,
 
     UNIQUE(filename)
 );
 
 CREATE TABLE jobs (
-    job_key         UUID        NOT NULL PRIMARY KEY,
+    job_idx         BIGSERIAL           NOT NULL PRIMARY KEY,
 
-    job_id          UUID        NOT NULL,
-    job_try         INT         NOT NULL DEFAULT 0,
-    job_ord         BIGINT      NOT NULL,
-    run_id          UUID        NOT NULL REFERENCES runs(run_id),
+    job_key         UUID                NOT NULL,
+    job_id          UUID                NOT NULL,
+    run_id          UUID                NOT NULL REFERENCES runs(run_id),
 
-    is_harness_out  BOOL        NOT NULL DEFAULT FALSE,
+    test_file_idx   BIGINT              DEFAULT NULL REFERENCES test_files(test_file_idx),
 
-    status          queue_status    NOT NULL DEFAULT 'pending',
-    parameters      JSONB           DEFAULT NULL,
+    job_try         INT                 NOT NULL DEFAULT 0,
+    status          queue_status        NOT NULL DEFAULT 'pending',
 
-    test_file_id    UUID            DEFAULT NULL REFERENCES test_files(test_file_id),
+    is_harness_out  BOOL                NOT NULL DEFAULT FALSE,
 
     -- Summaries
-    name            TEXT            DEFAULT NULL,
-    fail            BOOL            DEFAULT NULL,
-    retry           BOOL            DEFAULT NULL,
-    exit_code       INT             DEFAULT NULL,
-    launch          TIMESTAMP       DEFAULT NULL,
-    start           TIMESTAMP       DEFAULT NULL,
-    ended           TIMESTAMP       DEFAULT NULL,
+    fail            BOOL                DEFAULT NULL,
+    retry           BOOL                DEFAULT NULL,
+    name            TEXT                DEFAULT NULL,
+    exit_code       INT                 DEFAULT NULL,
+    launch          TIMESTAMP           DEFAULT NULL,
+    start           TIMESTAMP           DEFAULT NULL,
+    ended           TIMESTAMP           DEFAULT NULL,
 
     duration        DOUBLE PRECISION    DEFAULT NULL,
 
-    pass_count      BIGINT          DEFAULT NULL,
-    fail_count      BIGINT          DEFAULT NULL,
+    pass_count      BIGINT              DEFAULT NULL,
+    fail_count      BIGINT              DEFAULT NULL,
 
-    -- Output data
-    stdout          TEXT            DEFAULT NULL,
-    stderr          TEXT            DEFAULT NULL,
-
+    UNIQUE(job_key),
     UNIQUE(job_id, job_try)
 );
 CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_fail ON jobs(fail);
-CREATE INDEX IF NOT EXISTS job_file ON jobs(test_file_id);
+CREATE INDEX IF NOT EXISTS job_file ON jobs(test_file_idx);
+
+CREATE TABLE job_parameters (
+    job_parameters_idx  BIGSERIAL   NOT NULL PRIMARY KEY,
+    job_key             UUID        NOT NULL REFERENCES jobs(job_key),
+    parameters          JSONB       DEFAULT NULL,
+
+    UNIQUE(job_key)
+);
+
+CREATE TABLE job_outputs (
+    job_output_idx  BIGSERIAL                   NOT NULL PRIMARY KEY,
+    job_key         UUID                        NOT NULL REFERENCES jobs(job_key),
+    stream          io_stream                   NOT NULL,
+    output          TEXT                        NOT NULL,
+
+    UNIQUE(job_key, stream)
+);
 
 CREATE TABLE job_fields (
-    job_field_id    UUID            NOT NULL PRIMARY KEY,
+    job_field_idx   BIGSERIAL       NOT NULL PRIMARY KEY,
+    job_field_id    UUID            NOT NULL,
     job_key         UUID            NOT NULL REFERENCES jobs(job_key),
     name            VARCHAR(512)    NOT NULL,
     data            JSONB           DEFAULT NULL,
@@ -251,41 +279,68 @@ CREATE TABLE job_fields (
     raw             TEXT            DEFAULT NULL,
     link            TEXT            DEFAULT NULL,
 
-    UNIQUE(job_key, name)
+    UNIQUE(job_field_id)
 );
+CREATE INDEX IF NOT EXISTS job_fields_job_key ON job_fields(job_key);
+CREATE INDEX IF NOT EXISTS job_fields_name ON job_fields(name);
 
 CREATE TABLE events (
-    event_id        UUID        NOT NULL PRIMARY KEY,
+    event_idx       BIGSERIAL   NOT NULL PRIMARY KEY,
+    event_id        UUID        NOT NULL,
 
     job_key         UUID        NOT NULL REFERENCES jobs(job_key),
 
-    event_ord       BIGINT      NOT NULL,
-    insert_ord      BIGSERIAL   NOT NULL,
+    is_subtest      BOOL        NOT NULL,
+    is_diag         BOOL        NOT NULL,
+    is_harness      BOOL        NOT NULL,
+    is_time         BOOL        NOT NULL,
+    is_assert       BOOL        NOT NULL,
 
-    is_subtest      BOOL        NOT NULL DEFAULT FALSE,
-    is_diag         BOOL        NOT NULL DEFAULT FALSE,
-    is_harness      BOOL        NOT NULL DEFAULT FALSE,
-    is_time         BOOL        NOT NULL DEFAULT FALSE,
-    has_binary      BOOL        NOT NULL DEFAULT FALSE,
+    causes_fail     BOOL        NOT NULL,
+
+    has_binary      BOOL        NOT NULL,
+    has_facets      BOOL        NOT NULL,
+    has_orphan      BOOL        NOT NULL,
 
     stamp           TIMESTAMP   DEFAULT NULL,
 
     parent_id       UUID        DEFAULT NULL, -- REFERENCES events(event_id),
     trace_id        UUID        DEFAULT NULL,
-    nested          INT         DEFAULT 0,
+    nested          INT         NOT NULL DEFAULT 0,
 
-    facets          JSONB       DEFAULT NULL,
-    facets_line     BIGINT      DEFAULT NULL,
-
-    orphan          JSONB       DEFAULT NULL,
-    orphan_line     BIGINT      DEFAULT NULL
+    UNIQUE(event_id)
 );
-CREATE INDEX IF NOT EXISTS event_job    ON events(job_key, is_subtest);
+CREATE INDEX IF NOT EXISTS event_id     ON events(event_id);
+CREATE INDEX IF NOT EXISTS event_job_ts ON events(job_key, stamp);
+CREATE INDEX IF NOT EXISTS event_job_st ON events(job_key, is_subtest);
 CREATE INDEX IF NOT EXISTS event_trace  ON events(trace_id);
 CREATE INDEX IF NOT EXISTS event_parent ON events(parent_id);
 
+CREATE TABLE renders (
+    event_id    UUID        NOT NULL PRIMARY KEY REFERENCES events(event_id),
+    data        JSONB       DEFAULT NULL,
+
+    UNIQUE(event_id)
+);
+
+CREATE TABLE facets (
+    event_id    UUID        NOT NULL PRIMARY KEY REFERENCES events(event_id),
+    data        JSONB       DEFAULT NULL,
+    line        BIGINT      DEFAULT NULL,
+
+    UNIQUE(event_id)
+);
+
+CREATE TABLE orphans (
+    event_id    UUID        NOT NULL PRIMARY KEY REFERENCES events(event_id),
+    data        JSONB       DEFAULT NULL,
+    line        BIGINT      DEFAULT NULL,
+
+    UNIQUE(event_id)
+);
+
 CREATE TABLE binaries (
-    binary_id       UUID            NOT NULL PRIMARY KEY,
+    binary_idx      BIGSERIAL       NOT NULL PRIMARY KEY,
     event_id        UUID            NOT NULL REFERENCES events(event_id),
     filename        VARCHAR(512)    NOT NULL,
     description     TEXT            DEFAULT NULL,
@@ -295,47 +350,56 @@ CREATE TABLE binaries (
 CREATE INDEX IF NOT EXISTS binaries_event ON binaries(event_id);
 
 CREATE TABLE source_files (
-    source_file_id  UUID            NOT NULL PRIMARY KEY,
+    source_file_idx BIGSERIAL       NOT NULL PRIMARY KEY,
     filename        VARCHAR(512)    NOT NULL,
 
     UNIQUE(filename)
 );
 
 CREATE TABLE source_subs (
-    source_sub_id   UUID            NOT NULL PRIMARY KEY,
+    source_sub_idx  BIGSERIAL       NOT NULL PRIMARY KEY,
     subname         VARCHAR(512)    NOT NULL,
 
     UNIQUE(subname)
 );
 
 CREATE TABLE coverage_manager (
-    coverage_manager_id   UUID          NOT NULL PRIMARY KEY,
+    coverage_manager_idx  BIGSERIAL     NOT NULL PRIMARY KEY,
     package               VARCHAR(256)  NOT NULL,
 
     UNIQUE(package)
 );
 
 CREATE TABLE coverage (
-    coverage_id     UUID    NOT NULL PRIMARY KEY,
+    coverage_idx            BIGSERIAL   NOT NULL PRIMARY KEY,
 
-    run_id              UUID    NOT NULL REFERENCES runs(run_id),
-    test_file_id        UUID    NOT NULL REFERENCES test_files(test_file_id),
-    source_file_id      UUID    NOT NULL REFERENCES source_files(source_file_id),
-    source_sub_id       UUID    NOT NULL REFERENCES source_subs(source_sub_id),
-    coverage_manager_id UUID    DEFAULT NULL REFERENCES coverage_manager(coverage_manager_id),
-    job_key             UUID    DEFAULT NULL REFERENCES jobs(job_key),
+    run_id                  UUID        NOT NULL REFERENCES runs(run_id),
+    job_key                 UUID        DEFAULT NULL REFERENCES jobs(job_key),
 
-    metadata    JSONB   DEFAULT NULL,
+    test_file_idx           BIGINT      NOT NULL REFERENCES test_files(test_file_idx),
+    source_file_idx         BIGINT      NOT NULL REFERENCES source_files(source_file_idx),
+    source_sub_idx          BIGINT      NOT NULL REFERENCES source_subs(source_sub_idx),
+    coverage_manager_idx    BIGINT      DEFAULT NULL REFERENCES coverage_manager(coverage_manager_idx),
 
-    UNIQUE(run_id, test_file_id, source_file_id, source_sub_id, job_key)
+    metadata                JSONB       DEFAULT NULL,
+
+    UNIQUE(run_id, job_key, test_file_idx, source_file_idx, source_sub_idx)
 );
-CREATE INDEX IF NOT EXISTS coverage_from_source ON coverage(source_file_id, source_sub_id);
-CREATE INDEX IF NOT EXISTS coverage_from_run_source ON coverage(run_id, source_file_id, source_sub_id);
-CREATE INDEX IF NOT EXISTS coverage_from_job ON coverage(job_key);
+CREATE INDEX IF NOT EXISTS coverage_from_source     ON coverage(source_file_idx, source_sub_idx);
+CREATE INDEX IF NOT EXISTS coverage_from_run_source ON coverage(run_id, source_file_idx, source_sub_idx);
+CREATE INDEX IF NOT EXISTS coverage_from_job        ON coverage(job_key);
 
 CREATE TABLE reporting (
-    reporting_id    UUID                DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    run_ord         BIGINT              NOT NULL,
+    reporting_idx   BIGSERIAL           NOT NULL PRIMARY KEY,
+
+    project_idx     BIGINT  NOT NULL     REFERENCES projects(project_idx),
+    user_idx        BIGINT  NOT NULL     REFERENCES users(user_idx),
+    run_id          UUID    NOT NULL     REFERENCES runs(run_id),
+
+    test_file_idx   BIGINT  DEFAULT NULL REFERENCES test_files(test_file_idx),
+    job_key         UUID    DEFAULT NULL REFERENCES jobs(job_key),
+    event_id        UUID    DEFAULT NULL REFERENCES events(event_id),
+
     job_try         INT                 DEFAULT NULL,
     subtest         VARCHAR(512)        DEFAULT NULL,
     duration        DOUBLE PRECISION    NOT NULL,
@@ -343,35 +407,26 @@ CREATE TABLE reporting (
     fail            SMALLINT    NOT NULL DEFAULT 0,
     pass            SMALLINT    NOT NULL DEFAULT 0,
     retry           SMALLINT    NOT NULL DEFAULT 0,
-    abort           SMALLINT    NOT NULL DEFAULT 0,
-
-    project_id      UUID    NOT NULL     REFERENCES projects(project_id),
-    run_id          UUID    NOT NULL     REFERENCES runs(run_id),
-    user_id         UUID    NOT NULL     REFERENCES users(user_id),
-    job_key         UUID    DEFAULT NULL REFERENCES jobs(job_key),
-    test_file_id    UUID    DEFAULT NULL REFERENCES test_files(test_file_id),
-    event_id        UUID    DEFAULT NULL REFERENCES events(event_id)
+    abort           SMALLINT    NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS reporting_user ON reporting(user_id);
+CREATE INDEX IF NOT EXISTS reporting_user ON reporting(user_idx);
 CREATE INDEX IF NOT EXISTS reporting_run  ON reporting(run_id);
-CREATE INDEX IF NOT EXISTS reporting_a    ON reporting(project_id);
-CREATE INDEX IF NOT EXISTS reporting_b    ON reporting(project_id, user_id);
-CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_id, test_file_id, subtest, user_id, run_ord);
+CREATE INDEX IF NOT EXISTS reporting_a    ON reporting(project_idx);
+CREATE INDEX IF NOT EXISTS reporting_b    ON reporting(project_idx, user_idx);
+CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_idx, test_file_idx, subtest, user_idx, reporting_idx);
 
 CREATE TABLE resource_batch (
-    resource_batch_id   UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
+    resource_batch_idx  BIGSERIAL       PRIMARY KEY,
     run_id              UUID            NOT NULL REFERENCES runs(run_id),
-    host_id             UUID            NOT NULL REFERENCES hosts(host_id),
+    host_idx            BIGINT          NOT NULL REFERENCES hosts(host_idx),
     stamp               TIMESTAMP(4)    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS resource_batch_run ON resource_batch(run_id);
 
 CREATE TABLE resources (
-    resource_id         UUID            DEFAULT UUID_GENERATE_V4() PRIMARY KEY,
-    resource_batch_id   UUID            NOT NULL REFERENCES resource_batch(resource_batch_id),
-    batch_ord           INT             NOT NULL,
+    resource_idx        BIGSERIAL       NOT NULL PRIMARY KEY,
+    resource_batch_idx  BIGINT          NOT NULL REFERENCES resource_batch(resource_batch_idx),
     module              VARCHAR(512)    NOT NULL,
-    data                JSONB           NOT NULL,
-
-    UNIQUE(resource_batch_id, batch_ord)
+    data                JSONB           NOT NULL
 );
+CREATE INDEX IF NOT EXISTS resources_batch_idx ON resources(resource_batch_idx);

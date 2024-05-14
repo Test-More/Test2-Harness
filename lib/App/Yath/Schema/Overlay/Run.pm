@@ -11,18 +11,11 @@ use Carp qw/confess/;
 
 use App::Yath::Schema::DateTimeFormat qw/DTF/;
 
-__PACKAGE__->inflate_column(
-    parameters => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
-    },
-);
-
 # For joining
 __PACKAGE__->belongs_to(
   "user_join",
   "App::Yath::Schema::Result::User",
-  { user_id => "user_id" },
+  { user_idx => "user_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
@@ -32,9 +25,11 @@ sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 sub sig {
     my $self = shift;
 
+    my $run_parameter = $self->run_parameter;
+
     return join ";" => (
         (map {$self->$_ // ''} qw/status pinned passed failed retried concurrency/),
-        (map {length($self->$_ // '')} qw/parameters/),
+        $run_parameter ? length($run_parameter->parameters) : (''),
         ($self->run_fields->count),
     );
 }
@@ -53,11 +48,11 @@ sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_all_fields;
 
-    # Just No.
-    delete $cols{log_data};
-
     # Inflate
-    $cols{parameters} = $self->parameters;
+    if (my $p = $self->run_parameter) {
+        $cols{parameters} = $p->parameters;
+    }
+
     $cols{user}       //= $self->user->username;
     $cols{project}    //= $self->project->name;
 
@@ -98,7 +93,7 @@ sub expanded_coverages {
     $self->coverages->search(
         $query,
         {
-            order_by   => [qw/test_file_id source_file_id source_sub_id/],
+            order_by   => [qw/test_file_idx source_file_idx source_sub_idx/],
             join       => [qw/test_file source_file source_sub coverage_manager/],
             '+columns' => {
                 test_file   => 'test_file.filename',

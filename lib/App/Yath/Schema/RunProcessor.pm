@@ -5,7 +5,8 @@ use warnings;
 our $VERSION = '2.000000';
 
 use DateTime;
-use Data::GUID;
+use Data::Dumper;
+
 use List::Util qw/first min max/;
 use Time::HiRes qw/time/;
 use MIME::Base64 qw/decode_base64/;
@@ -19,7 +20,7 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 use App::Yath::Schema::Config;
 
 use App::Yath::Schema::Util qw/format_duration is_invalid_subtest_name schema_config_from_settings/;
-use App::Yath::Schema::UUID qw/gen_uuid uuid_inflate uuid_mass_deflate/;
+use App::Yath::Schema::UUID qw/gen_uuid uuid_inflate uuid_deflate uuid_mass_deflate/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use App::Yath::Schema::ImportModes qw{
@@ -33,7 +34,7 @@ use App::Yath::Schema::ImportModes qw{
 use Test2::Harness::Util::HashBase qw{
     <config
 
-    <running <jobs <binaries
+    <running <jobs
 
     signal
 
@@ -42,13 +43,13 @@ use Test2::Harness::Util::HashBase qw{
     <mode
     <interval <last_flush
     <run <run_id
-    +user +user_id
-    +project +project_id
+    +user +user_idx
+    +project +project_idx
 
     <first_stamp <last_stamp
 
     <passed <failed <retried
-    <job0_id <job_ord
+    <job0_id
 
     <disconnect_retry
 
@@ -94,7 +95,7 @@ sub process_lines {
             $next->($line);
         }
         else {
-            $next = $class->_process_first_line($line, $settings);
+            ($next, $last) = $class->_process_first_line($line, $settings);
         }
     };
 }
@@ -104,7 +105,6 @@ sub _process_first_line {
     my ($line, $settings) = @_;
 
     my $run;
-    my $self;
     my $config = schema_config_from_settings($settings);
     my $dbh = $config->connect // die "Could not connect to the db";
 
@@ -116,31 +116,33 @@ sub _process_first_line {
     my $e = decode_json(scalar $line);
     my $f = $e->{facet_data};
 
+    my $self;
     my $run_id;
     if (my $runf = $f->{harness_run}) {
         $run_id = uuid_inflate($runf->{run_id}) or die "No run-id?";
 
-        my $up = $self->settings->prefix('upload') or die "No upload settings";
+        my $pub = $settings->group('publish') or die "No publish settings";
 
-        my $proj = $self->settings->yath->project or die "Project is required";
-        my $user = $up->user // $ENV{USER};
+        my $proj = $settings->yath->project or die "Project is required";
+        my $user = $settings->yath->user // $ENV{USER};
 
-        my $p = $config->schema->resultset('Project')->find_or_create({name => $proj, project_id => gen_uuid()});
-        my $u = $config->schema->resultset('User')->find_or_create({username => $user, user_id => gen_uuid(), role => 'user'});
+        my $p = $config->schema->resultset('Project')->find_or_create({name => $proj});
+        my $u = $config->schema->resultset('User')->find_or_create({username => $user, role => 'user'});
 
         $run = $config->schema->resultset('Run')->create({
             run_id     => $run_id,
-            mode       => $up->mode,
-            buffer     => $up->buffering,
+            mode       => $pub->mode,
+            buffer     => $pub->buffering,
             status     => 'pending',
-            user_id    => $u->user_id,
-            project_id => $p->project_id,
+            user_idx    => $u->user_idx,
+            project_idx => $p->project_idx,
         });
 
-        $self = App::Yath::Schema::RunProcessor->new(
+        $self = $class->new(
+            settings => $settings,
             config => $config,
             run => $run,
-            interval => $up->flush_interval,
+            interval => $pub->flush_interval,
         );
 
         $self->start();
@@ -151,9 +153,11 @@ sub _process_first_line {
     }
 
     my $links;
-    if (my $url = $self->settings->server->url) {
-        $links = "\nThis run can be reviewed at: $url/view/$run_id\n\n";
-        print STDOUT $links;
+    if ($settings->check_group('webclient')) {
+        if (my $url = $settings->webclient->url) {
+            $links = "\nThis run can be reviewed at: $url/view/$run_id\n\n";
+            print STDOUT $links;
+        }
     }
 
     my $int = $SIG{INT};
@@ -220,7 +224,7 @@ sub retry_on_disconnect {
         for (1 .. 10) {
             $self->schema->storage->disconnect;
             last if $self->schema->storage->connected;
-            sleep 1;
+            #sleep 1;
         }
     }
 
@@ -236,6 +240,9 @@ sub populate {
     $self->retry_on_disconnect(
         "Populate '$type'",
         sub {
+            no warnings 'once';
+            local $Data::Dumper::Freezer = 'T2HarnessFREEZE';
+            local *DateTime::T2HarnessFREEZE = sub { my $x = $_[0]->ymd . " " . $_[0]->hms; $_[0] = \$x };
             my $rs = $self->schema->resultset($type);
             my $ok = eval { $rs->populate($data); 1 };
             my $err = $@;
@@ -243,7 +250,7 @@ sub populate {
 
             die $err unless $err =~ m/duplicate/i;
 
-            warn "Duplicate found:\n====\n$err\n====\n\nPopulating '$type' 1 at a time.\n";
+            warn "\nDuplicate found:\n====\n$err\n====\n\nPopulating '$type' 1 at a time.\n";
             for my $item (@$data) {
                 uuid_mass_deflate($item);
                 next if eval { $rs->create($item); 1 };
@@ -299,8 +306,8 @@ sub init {
         my $schema = $self->schema;
         my $run = $schema->resultset('Run')->create({
             run_id     => $run_id,
-            user_id    => $self->user_id,
-            project_id => $self->project_id,
+            user_idx    => $self->user_idx,
+            project_idx => $self->project_idx,
             mode       => $mode,
             status     => 'pending',
         });
@@ -310,11 +317,13 @@ sub init {
 
     $run->discard_changes;
 
-    $self->{+PROJECT_ID} //= $run->project_id;
+    $self->{+PROJECT_IDX} //= $run->project_idx;
+
+    confess "No project idx?!?" unless $self->{+PROJECT_IDX};
 
     $self->{+RUN_ID}     = uuid_inflate($self->{+RUN_ID});
-    $self->{+USER_ID}    = uuid_inflate($self->{+USER_ID});
-    $self->{+PROJECT_ID} = uuid_inflate($self->{+PROJECT_ID});
+    $self->{+USER_IDX}    = uuid_inflate($self->{+USER_IDX});
+    $self->{+PROJECT_IDX} = uuid_inflate($self->{+PROJECT_IDX});
 
     $self->{+ID_CACHE} = {};
     $self->{+COVERAGE} = [];
@@ -322,7 +331,6 @@ sub init {
     $self->{+PASSED} = 0;
     $self->{+FAILED} = 0;
 
-    $self->{+JOB_ORD} = 1;
     $self->{+JOB0_ID} = gen_uuid();
 }
 
@@ -430,34 +438,70 @@ sub flush_events {
 
     return unless @write;
 
+    my @dups;
     my @write_bin;
+    my @write_facets;
+    my @write_orphans;
+    my @write_render;
+
     for my $e (@write) {
-        my $list = delete $e->{has_binary};
+        if (my $bins = delete $e->{binaries}) {
+            push @write_bin => @$bins;
+        }
 
-        $e->{has_binary} = $list && @$list ? 1 : 0;
-        next unless $e->{has_binary};
+        for my $t (qw/facets orphan/) {
+            my $l = "${t}_line";
+            my $list = $t eq 'facets' ? \@write_facets : \@write_orphans;
 
-        $e->{has_binary} = 1;
-        for my $uuid (@$list) {
-            push @write_bin => delete $self->{+BINARIES}->{$uuid};
+            if (my $data = delete $e->{$t}) {
+                $e->{"has_$t"} = 1;
+                my $line = delete $e->{$l};
+                push @$list => {
+                    event_id => $e->{event_id},
+                    line => $line,
+                    data => $data,
+                };
+
+                next unless $t eq 'facets';
+
+                my $facets = decode_json($data);
+
+                $e->{is_assert} = $facets->{assert} ? 1 : 0;
+
+                my $lines = App::Yath::Renderer::Default::Composer->render_super_verbose($facets) or next;
+                next unless @$lines;
+
+                push @write_render => {
+                    event_id => $e->{event_id},
+                    data => encode_json($lines),
+                };
+            }
+            else {
+                $e->{"has_$t"} = 0;
+                delete $e->{$l};
+            }
         }
     }
 
     local $ENV{DBIC_DT_SEARCH_OK} = 1;
-    $self->populate(Event => \@write);
+    $self->populate(Event  => \@write);
+    $self->populate(Render => \@write_render);
+    $self->populate(Facet  => \@write_facets);
+    $self->populate(Orphan => \@write_orphans);
     $self->populate(Binary => \@write_bin);
 }
 
 sub flush_reporting {
     my $self = shift;
 
+    return;
+
     my @write;
 
     my %mixin_run = (
-        user_id    => $self->user_id,
+        user_idx    => $self->user_idx,
         run_id     => $self->{+RUN_ID},
-        run_ord    => $self->run->run_ord(),
-        project_id => $self->{+PROJECT_ID},
+        project_idx => $self->{+PROJECT_IDX},
     );
 
     my $jobs = $self->{+JOBS};
@@ -477,7 +521,7 @@ sub flush_reporting {
                 %mixin_run,
                 job_try      => $job->{job_try} // 0,
                 job_key      => $job->{job_key},
-                test_file_id => $job->{result}->test_file_id,
+                test_file_idx => $job->{result}->test_file_idx,
             );
 
             if (my $duration = $job->{duration}) {
@@ -487,7 +531,6 @@ sub flush_reporting {
                 my $abort = (defined($fail) || defined($retry)) ? 0 : 1;
 
                 push @write => {
-                    reporting_id => gen_uuid(),
                     duration     => $duration,
                     pass         => $pass,
                     fail         => $fail,
@@ -506,7 +549,6 @@ sub flush_reporting {
                 delete $rep->{event_id} if $strip_event_id;
 
                 %$rep = (
-                    reporting_id => gen_uuid(),
                     %mixin,
                     %$rep,
                 );
@@ -529,20 +571,20 @@ sub user {
     return $self->{+RUN}->user if $self->{+RUN};
     return $self->{+USER} if $self->{+USER};
 
-    my $user_id = $self->{+USER_ID} // confess "No user or user_id specified";
+    my $user_idx = $self->{+USER_IDX} // confess "No user or user_idx specified";
 
     my $schema = $self->schema;
-    my $user = $schema->resultset('User')->find({user_id => $user_id});
+    my $user = $schema->resultset('User')->find({user_idx => $user_idx});
     return $user if $user;
-    confess "Invalid user_id: $user_id";
+    confess "Invalid user_idx: $user_idx";
 }
 
-sub user_id {
+sub user_idx {
     my $self = shift;
 
-    return $self->{+RUN}->user_id if $self->{+RUN};
-    return $self->{+USER}->user_id if $self->{+USER};
-    return $self->{+USER_ID} if $self->{+USER_ID};
+    return $self->{+RUN}->user_idx if $self->{+RUN};
+    return $self->{+USER}->user_idx if $self->{+USER};
+    return $self->{+USER_IDX} if $self->{+USER_IDX};
 }
 
 sub project {
@@ -551,20 +593,20 @@ sub project {
     return $self->{+RUN}->project if $self->{+RUN};
     return $self->{+PROJECT} if $self->{+PROJECT};
 
-    my $project_id = $self->{+PROJECT_ID} // confess "No project or project_id specified";
+    my $project_idx = $self->{+PROJECT_IDX} // confess "No project or project_idx specified";
 
     my $schema = $self->schema;
-    my $project = $schema->resultset('Project')->find({project_id => $project_id});
+    my $project = $schema->resultset('Project')->find({project_idx => $project_idx});
     return $project if $project;
-    confess "Invalid project_id: $project_id";
+    confess "Invalid project_idx: $project_idx";
 }
 
-sub project_id {
+sub project_idx {
     my $self = shift;
 
-    return $self->{+RUN}->project_id if $self->{+RUN};
-    return $self->{+PROJECT}->project_id if $self->{+PROJECT};
-    return $self->{+PROJECT_ID} if $self->{+PROJECT_ID};
+    return $self->{+RUN}->project_idx if $self->{+RUN};
+    return $self->{+PROJECT}->project_idx if $self->{+PROJECT};
+    return $self->{+PROJECT_IDX} if $self->{+PROJECT_IDX};
 }
 
 sub start {
@@ -596,14 +638,14 @@ sub get_job {
 
     my $key = gen_uuid();
 
-    my $test_file_id = undef;
+    my $test_file_idx = undef;
     if (my $queue = $params{queue}) {
         my $file = $queue->{rel_file} // $queue->{file};
-        $test_file_id = $self->get_test_file_id($file) if $file;
-        $self->{+FILE_CACHE}->{$job_id} //= $test_file_id if $test_file_id;
+        $test_file_idx = $self->get_test_file_idx($file) if $file;
+        $self->{+FILE_CACHE}->{$job_id} //= $test_file_idx if $test_file_idx;
     }
 
-    $test_file_id //= $self->{+FILE_CACHE}->{$job_id};
+    $test_file_idx //= $self->{+FILE_CACHE}->{$job_id};
 
     my $result;
     $self->retry_on_disconnect(
@@ -614,11 +656,10 @@ sub get_job {
                 job_id         => $job_id,
                 job_try        => $job_try,
                 is_harness_out => $is_harness_out,
-                job_ord        => $self->{+JOB_ORD}++,
                 run_id         => $self->{+RUN}->run_id,
                 fail_count     => 0,
                 pass_count     => 0,
-                test_file_id   => $test_file_id,
+                test_file_idx   => $test_file_idx,
 
                 $is_harness_out ? (name => "HARNESS INTERNAL LOG") : (),
             });
@@ -648,7 +689,7 @@ sub get_job {
         else {
             $self->retry_on_disconnect(
                 "delete old coverage" => sub {
-                    $self->schema->resultset('Coverage')->search({'job_key.job_id' => $job_id}, {join => 'job_key'})->delete;
+                    $self->schema->resultset('Coverage')->search({'job.job_id' => $job_id}, {join => 'job'})->delete;
                 }
             );
         }
@@ -667,7 +708,6 @@ sub get_job {
         orphans   => {},
         reporting => [],
 
-        event_ord => 1,
         result    => $result,
     };
 
@@ -712,7 +752,7 @@ sub process_event {
 
 sub host {
     my $self = shift;
-    return $self->{+HOST} //= $self->{+CONFIG}->schema->resultset('Host')->find_or_create({hostname => hostname(), host_id => gen_uuid()});
+    return $self->{+HOST} //= $self->{+CONFIG}->schema->resultset('Host')->find_or_create({hostname => hostname()});
 }
 
 sub insert_resources {
@@ -726,7 +766,7 @@ sub insert_resources {
     my $config = $self->{+CONFIG};
 
     my $run_id  = $self->run->run_id;
-    my $host_id = $self->host->host_id;
+    my $host_idx = $self->host->host_idx;
 
     my $res_rs   = $config->schema->resultset('Resource');
     my $batch_rs = $config->schema->resultset('ResourceBatch');
@@ -734,9 +774,9 @@ sub insert_resources {
     my $dt_stamp = DateTime->from_epoch(epoch => $stamp, time_zone => 'local');
 
     my $batch = $batch_rs->create({
-        resource_batch_id => $batch_id,
+        resource_batch_idx => $batch_id,
         run_id            => uuid_inflate($run_id),
-        host_id           => uuid_inflate($host_id),
+        host_idx           => $host_idx,
         stamp             => $dt_stamp,
     });
 
@@ -782,38 +822,23 @@ sub finish {
         $self->retry_on_disconnect("insert duration row" => sub {
             my $fail = $aborted ? 0 : $self->{+FAILED} ? 1 : 0;
             my $pass = ($fail || $aborted) ? 0 : 1;
-            $self->schema->resultset('Reporting')->create({
-                reporting_id => gen_uuid(),
-                user_id      => $self->user_id,
-                run_id       => $self->{+RUN_ID},
-                project_id   => $self->{+PROJECT_ID},
-                run_ord      => $self->run->run_ord(),
-                duration     => $duration,
-                retry        => 0,
-                pass         => $pass,
-                fail         => $fail,
-                abort        => $aborted,
-            });
+            my $row  = {
+                run_id      => $self->{+RUN_ID},
+                user_idx    => $self->user_idx,
+                project_idx => $self->project_idx,
+                duration    => $duration,
+                retry       => 0,
+                pass        => $pass,
+                fail        => $fail,
+                abort       => $aborted,
+            };
+            $self->schema->resultset('Reporting')->create($row);
         });
     }
 
     $self->retry_on_disconnect("update run status" => sub { $run->update($status) });
 
     return $status;
-}
-
-sub add_binary {
-    my $self = shift;
-    my $file = {@_};
-
-    my $uuid = $file->{binary_id} //= gen_uuid();
-    $file->{is_image} //= $file->{filename} =~ m/\.(a?png|gif|jpe?g|svg|bmp|ico)$/ ? 1 : 0;
-    $file->{data} = decode_base64($file->{data});
-
-    my $bins = $self->{+BINARIES} //= {};
-    $bins->{$uuid} = $file;
-
-    return $uuid;
 }
 
 sub _process_event {
@@ -827,13 +852,19 @@ sub _process_event {
     my $e_id   = uuid_inflate($harness->{event_id} // $event->{event_id} // die "No event id!");
     my $nested = $f->{hubs}->[0]->{nested} || 0;
 
-    my @has_binary;
+    my @binaries;
     if ($f->{binary} && @{$f->{binary}}) {
         for my $file (@{$f->{binary}}) {
             my $data = delete $file->{data};
             $file->{data}    = 'removed';
-            my $binary_id = $self->add_binary(event_id => $e_id, filename => $file->{filename}, description => $file->{details}, data => $data, is_image => $file->{is_image});
-            push @has_binary => $binary_id;
+
+            push @binaries => {
+                event_id => $e_id,
+                filename => $file->{filename},
+                description => $file->{details},
+                data => decode_base64($data),
+                is_image => $file->{is_image} // $file->{filename} =~ m/\.(a?png|gif|jpe?g|svg|bmp|ico)$/ ? 1 : 0,
+            };
         }
     }
 
@@ -852,17 +883,18 @@ sub _process_event {
     my $is_subtest = $f->{parent} ? 1 : 0;
 
     my $e = {
-        event_id   => $e_id,
-        nested     => $nested,
-        is_subtest => $is_subtest,
-        is_diag    => $is_diag,
-        is_harness => $is_harness,
-        is_time    => $is_time,
-        trace_id   => $trace->{uuid},
-        job_key    => $job->{job_key},
-        event_ord  => $job->{event_ord}++,
-        stamp      => $self->format_stamp($harness->{stamp} || $event->{stamp} || $params{stamp}),
-        has_binary => \@has_binary,
+        event_id    => $e_id,
+        nested      => $nested,
+        is_subtest  => $is_subtest,
+        is_diag     => $is_diag,
+        is_harness  => $is_harness,
+        is_time     => $is_time,
+        causes_fail => $fail,
+        trace_id    => $trace->{uuid},
+        job_key     => $job->{job_key},
+        stamp       => $self->format_stamp($harness->{stamp} || $event->{stamp} || $params{stamp}),
+        binaries    => \@binaries,
+        has_binary  => @binaries ? 1 : 0,
     };
 
     my $orphan = $nested ? 1 : 0;
@@ -1007,23 +1039,22 @@ sub _add_coverage {
     my $self = shift;
     my %params = @_;
 
-    my $test_id = $self->get_test_file_id($params{test}) or confess("Could not get test id (for '$params{test}')");
+    my $test_id = $self->get_test_file_idx($params{test}) or confess("Could not get test id (for '$params{test}')");
 
-    my $source_id  = $self->_get__id(SourceFile      => 'source_file_id',      filename => $params{source}) or die "Could not get source id";
-    my $sub_id     = $self->_get__id(SourceSub       => 'source_sub_id',       subname  => $params{sub})    or die "Could not get sub id";
-    my $manager_id = $self->_get__id(CoverageManager => 'coverage_manager_id', package  => $params{manager});
+    my $source_id  = $self->_get__id(SourceFile      => 'source_file_idx',      filename => $params{source}) or die "Could not get source id";
+    my $sub_id     = $self->_get__id(SourceSub       => 'source_sub_idx',       subname  => $params{sub})    or die "Could not get sub id";
+    my $manager_id = $self->_get__id(CoverageManager => 'coverage_manager_idx', package  => $params{manager});
 
     my $meta = $manager_id ? encode_json($params{meta}) : undef;
 
     my $coverage = $self->{+COVERAGE} //= [];
 
     push @$coverage => {
-        coverage_id         => gen_uuid(),
         run_id              => $self->{+RUN_ID},
-        test_file_id        => $test_id,
-        source_file_id      => $source_id,
-        source_sub_id       => $sub_id,
-        coverage_manager_id => $manager_id,
+        test_file_idx        => $test_id,
+        source_file_idx      => $source_id,
+        source_sub_idx       => $sub_id,
+        coverage_manager_idx => $manager_id,
         metadata            => $meta,
         job_key             => $params{job_key},
     };
@@ -1047,9 +1078,11 @@ sub flush_coverage {
 
 sub _get__id {
     my $self = shift;
-    my $id = $self->_get___id(@_);
-    return $id unless defined $id;
-    return uuid_inflate($id);
+    my ($type, $id_field, $field, $id) = @_;
+    my $out = $self->_get___id(@_);
+    return $out unless defined $out;
+    return $out if $id_field =~ m/_idx$/;
+    return uuid_inflate($out);
 }
 
 sub _get___id {
@@ -1061,19 +1094,45 @@ sub _get___id {
     return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id}
         if $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id};
 
-    my $spec = {$field => $id, $id_field => gen_uuid()};
+    my $spec = {$field => $id};
+
+    # idx fields are always auto-increment, otherwise the id is uuid
+    $spec->{$id_field} = gen_uuid() unless $id_field =~ m/_idx$/;
+
     my $result = $self->schema->resultset($type)->find_or_create($spec);
 
     return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id} = $result->$id_field;
 }
 
-sub get_test_file_id {
+sub get_test_file_idx {
     my $self = shift;
     my ($file) = @_;
 
     return undef unless $file;
 
-    return $self->_get__id('TestFile' => 'test_file_id', filename => $file);
+    return $self->_get__id('TestFile' => 'test_file_idx', filename => $file);
+}
+
+sub add_io_streams {
+    my $self = shift;
+    my ($job, @streams) = @_;
+
+    my $job_key = $job->job_key;
+
+    my @write;
+    for my $s (@streams) {
+        my ($stream, $output) = @$s;
+        $output = clean_output($output);
+        next unless defined $output && length($output);
+
+        push @write => {
+            job_key => $job_key,
+            stream => uc($stream),
+            output => $output,
+        };
+    }
+
+    $self->populate('JobOutput' => \@write);
 }
 
 sub add_run_fields {
@@ -1124,7 +1183,6 @@ sub _add_fields {
         $new->{raw}     = $field->{raw}               if $field->{raw};
         $new->{link}    = $field->{link}              if $field->{link};
         $new->{data}    = encode_json($field->{data}) if $field->{data};
-
 
         push @add => $new;
 
@@ -1195,7 +1253,10 @@ sub update_other {
         }
 
         clean($run_data);
-        $run->parameters($run_data);
+        $self->schema->resultset('RunParameter')->find_or_create({
+            run_id => $run->run_id,
+            parameters => $run_data,
+        });
 
         if (my $fields = $run_data->{harness_run_fields} // $run_data->{fields}) {
             $self->add_run_fields($fields);
@@ -1207,14 +1268,19 @@ sub update_other {
 
     # Handle job events
     if (my $job_data = $f->{harness_job}) {
-        #$cols{test_file_id} ||= $self->get_test_file_id($job_data->{file});
+        #$cols{test_file_idx} ||= $self->get_test_file_idx($job_data->{file});
         $cols{name} ||= $job_data->{job_name};
-        clean($job_data);
-        $cols{parameters} = encode_json($job_data);
         $f->{harness_job}  = "Removed, see job with job_key $cols{job_key}";
+
+        clean($job_data);
+        $self->schema->resultset('JobParameter')->find_or_create({
+            job_key => uuid_deflate($job_result->job_key),
+            parameters => $job_data,
+        });
+
     }
     if (my $job_exit = $f->{harness_job_exit}) {
-        #$cols{test_file_id} ||= $self->get_test_file_id($job_exit->{file});
+        #$cols{test_file_idx} ||= $self->get_test_file_idx($job_exit->{file});
         $cols{exit_code} = $job_exit->{exit};
 
         if ($job_exit->{retry} && $job_exit->{retry} eq 'will-retry') {
@@ -1226,22 +1292,25 @@ sub update_other {
             $cols{retry} = 0;
         }
 
-        $cols{stderr} = clean_output(delete $job_exit->{stderr});
-        $cols{stdout} = clean_output(delete $job_exit->{stdout});
+        $self->add_io_streams(
+            $job_result,
+            [STDERR => delete $job_exit->{stderr}],
+            [STDOUT => delete $job_exit->{stdout}],
+        );
     }
     if (my $job_start = $f->{harness_job_start}) {
-        $cols{test_file_id} ||= $self->get_test_file_id($job_start->{rel_file}) if $job_start->{rel_file};
-        $cols{test_file_id} ||= $self->get_test_file_id($job_start->{file});
+        $cols{test_file_idx} ||= $self->get_test_file_idx($job_start->{rel_file}) if $job_start->{rel_file};
+        $cols{test_file_idx} ||= $self->get_test_file_idx($job_start->{file});
         $cols{start} = $self->format_stamp($job_start->{stamp});
     }
     if (my $job_launch = $f->{harness_job_launch}) {
         $cols{status} = 'running';
 
-        $cols{test_file_id} ||= $self->get_test_file_id($job_launch->{file});
+        $cols{test_file_idx} ||= $self->get_test_file_idx($job_launch->{file});
         $cols{launch} = $self->format_stamp($job_launch->{stamp});
     }
     if (my $job_end = $f->{harness_job_end}) {
-        #$cols{test_file_id} ||= $self->get_test_file_id($job_end->{file});
+        #$cols{test_file_idx} ||= $self->get_test_file_idx($job_end->{file});
         $cols{fail} ||= $job_end->{fail} ? 1 : 0;
         $cols{ended} = $self->format_stamp($job_end->{stamp});
 
@@ -1252,7 +1321,7 @@ sub update_other {
         $cols{status} = 'complete';
 
         if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
-            my $tfile_id = $cols{test_file_id} ||= $self->get_test_file_id($job_end->{rel_file}) if $job_end->{rel_file};
+            my $tfile_id = $cols{test_file_idx} ||= $self->get_test_file_idx($job_end->{rel_file}) if $job_end->{rel_file};
 
             if (my $duration = $job_end->{times}->{totals}->{total}) {
                 $job->{duration} = $duration;

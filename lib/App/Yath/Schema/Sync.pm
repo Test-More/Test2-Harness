@@ -12,6 +12,8 @@ our $VERSION = '2.000000';
 
 use Test2::Harness::Util::HashBase;
 
+die "FIXME";
+
 sub run_delta {
     my $self = shift;
     my ($dbh_a, $dbh_b) = @_;
@@ -330,21 +332,21 @@ sub binarify_uuids {
 }
 
 my @ID_FIELDS = qw{
-    coverage_id
-    coverage_manager_id
+    coverage_idx
+    coverage_manager_idx
     event_id
     job_field_id
     job_id
     job_key
     parent_id
-    project_id
-    reporting_id
+    project_idx
+    reporting_idx
     run_field_id
     run_id
-    source_file_id
-    source_sub_id
-    test_file_id
-    user_id
+    source_file_idx
+    source_sub_idx
+    test_file_idx
+    user_idx
 };
 
 sub _fix_uuids {
@@ -386,8 +388,8 @@ sub render_runs {
             passed, failed, retried, concurrency, parameters, has_coverage,
             users.username, projects.name as project_name
         FROM runs
-        JOIN users    USING(user_id)
-        JOIN projects USING(project_id)
+        JOIN users    USING(user_idx)
+        JOIN projects USING(project_idx)
         WHERE run_id = ?
     EOT
 
@@ -424,7 +426,7 @@ sub render_jobs {
                 exit_code, launch, start, ended, duration, pass_count, fail_count,
                 test_files.filename
           FROM jobs
-          JOIN test_files USING (test_file_id)
+          JOIN test_files USING (test_file_idx)
          WHERE run_id = ?
     EOT
 
@@ -490,14 +492,14 @@ sub render_reporting {
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                reporting_id, run_id, run_ord, job_try, subtest, duration, fail, pass, retry, abort, job_key, event_id,
+                reporting_idx, run_id, run_ord, job_try, subtest, duration, fail, pass, retry, abort, job_key, event_id,
                 projects.name AS project_name,
                 users.username AS username,
                 test_files.filename AS filename
           FROM reporting
-          JOIN projects   USING(project_id)
-          JOIN users      USING(user_id)
-          JOIN test_files USING(test_file_id)
+          JOIN projects   USING(project_idx)
+          JOIN users      USING(user_idx)
+          JOIN test_files USING(test_file_idx)
          WHERE run_id = ?
     EOT
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
@@ -511,16 +513,16 @@ sub render_coverage {
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                coverage_id, run_id, job_key, metadata,
+                coverage_idx, run_id, job_key, metadata,
                 test_files.filename AS test_file,
                 source_files.filename AS source_file,
                 source_subs.subname AS source_sub,
                 coverage_manager.package AS coverage_manager
           FROM coverage
-          JOIN test_files       USING(test_file_id)
-          JOIN source_files     USING(source_file_id)
-          JOIN source_subs      USING(source_sub_id)
-          JOIN coverage_manager USING(coverage_manager_id)
+          JOIN test_files       USING(test_file_idx)
+          JOIN source_files     USING(source_file_idx)
+          JOIN source_subs      USING(source_sub_idx)
+          JOIN coverage_manager USING(coverage_manager_idx)
          WHERE run_id = ?
     EOT
 
@@ -538,8 +540,8 @@ sub import_run {
     my $cache = $params{cache};
     my $run   = $params{item};
 
-    $run->{user_id}    = $self->get_or_create_id($cache, $dbh, $uuidf, 'users'    => 'user_id',    username => delete $run->{username});
-    $run->{project_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'projects' => 'project_id', name     => delete $run->{project_name});
+    $run->{user_idx}    = $self->get_or_create_id($cache, $dbh, $uuidf, 'users'    => 'user_idx',    username => delete $run->{username});
+    $run->{project_idx} = $self->get_or_create_id($cache, $dbh, $uuidf, 'projects' => 'project_idx', name     => delete $run->{project_name});
 
     $self->insert($dbh, $uuidf, runs => $run);
 }
@@ -564,7 +566,7 @@ sub import_job {
     my $cache = $params{cache};
     my $job   = $params{item};
 
-    $job->{test_file_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files' => 'test_file_id', filename => delete $job->{filename});
+    $job->{test_file_idx} = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files' => 'test_file_idx', filename => delete $job->{filename});
 
     $self->insert($dbh, $uuidf, jobs => $job);
 }
@@ -611,9 +613,9 @@ sub import_reporting {
     my $cache     = $params{cache};
     my $reporting = $params{item};
 
-    $reporting->{project_id}   = $self->get_or_create_id($cache, $dbh, $uuidf, 'projects'   => 'project_id',   name     => delete $reporting->{project_name});
-    $reporting->{user_id}      = $self->get_or_create_id($cache, $dbh, $uuidf, 'users'      => 'user_id',      username => delete $reporting->{username});
-    $reporting->{test_file_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files' => 'test_file_id', filename => delete $reporting->{filename});
+    $reporting->{project_idx}   = $self->get_or_create_id($cache, $dbh, $uuidf, 'projects'   => 'project_idx',   name     => delete $reporting->{project_name});
+    $reporting->{user_idx}      = $self->get_or_create_id($cache, $dbh, $uuidf, 'users'      => 'user_idx',      username => delete $reporting->{username});
+    $reporting->{test_file_idx} = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files' => 'test_file_idx', filename => delete $reporting->{filename});
 
     $self->insert($dbh, $uuidf, reporting => $reporting);
 }
@@ -627,10 +629,10 @@ sub import_coverage {
     my $cache    = $params{cache};
     my $coverage = $params{item};
 
-    $coverage->{test_file_id}        = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files'       => 'test_file_id',        filename => delete $coverage->{test_file});
-    $coverage->{source_file_id}      = $self->get_or_create_id($cache, $dbh, $uuidf, 'source_files'     => 'source_file_id',      filename => delete $coverage->{source_file});
-    $coverage->{source_sub_id}       = $self->get_or_create_id($cache, $dbh, $uuidf, 'source_subs'      => 'source_sub_id',       subname  => delete $coverage->{source_sub});
-    $coverage->{coverage_manager_id} = $self->get_or_create_id($cache, $dbh, $uuidf, 'coverage_manager' => 'coverage_manager_id', package  => delete $coverage->{coverage_manager});
+    $coverage->{test_file_idx}        = $self->get_or_create_id($cache, $dbh, $uuidf, 'test_files'       => 'test_file_idx',        filename => delete $coverage->{test_file});
+    $coverage->{source_file_idx}      = $self->get_or_create_id($cache, $dbh, $uuidf, 'source_files'     => 'source_file_idx',      filename => delete $coverage->{source_file});
+    $coverage->{source_sub_idx}       = $self->get_or_create_id($cache, $dbh, $uuidf, 'source_subs'      => 'source_sub_idx',       subname  => delete $coverage->{source_sub});
+    $coverage->{coverage_manager_idx} = $self->get_or_create_id($cache, $dbh, $uuidf, 'coverage_manager' => 'coverage_manager_idx', package  => delete $coverage->{coverage_manager});
 
     $self->insert($dbh, $uuidf, coverage => $coverage);
 }
@@ -751,7 +753,7 @@ Create or find a common link in the database (think project, user, etc).
 
     my $uuid = $sync->get_or_create_id(
         $cache, $dbh, 'binary',
-        users    => 'user_id',
+        users    => 'user_idx',
         username => 'bob',
     );
 

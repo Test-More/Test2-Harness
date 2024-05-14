@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Util qw/share_dir/;

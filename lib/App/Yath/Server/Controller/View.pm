@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use Text::Xslate(qw/mark_raw/);
 use App::Yath::Util qw/share_dir/;
 use App::Yath::Schema::Util qw/find_job/;
@@ -32,30 +31,21 @@ sub handle {
     my $schema = $self->schema;
 
     my $id     = $route->{id};
-    my $uuid   = uuid_inflate($id);
     my $run_id = $route->{run_id};
     my ($project, $user);
 
     if ($id) {
-        my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->find({name => $id}) };
-        $project //= eval { $p_rs->find({project_id => $uuid}) };
-
-        if ($project) {
-            $uuid = uuid_inflate($project->project_id);
-            $self->{+TITLE} .= ">" . $project->name;
+        if (my $uuid = uuid_inflate($id)) {
+            $run_id //= $uuid;
         }
         else {
+            my $p_rs = $schema->resultset('Project');
             my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->find({username => $id}) };
-            $user //= eval { $u_rs->find({user_id => $uuid}) };
-
-            if ($user) {
-                $uuid = uuid_inflate($user->user_id);
-                $self->{+TITLE} .= ">" . $user->username;
+            if (my $project = eval { $p_rs->find({name => $id}) }) {
+                $self->{+TITLE} .= ">" . $project->name;
             }
-            else {
-                $run_id //= $uuid;
+            elsif (my $user = eval { $u_rs->find({username => $id}) }) {
+                $self->{+TITLE} .= ">" . $user->username;
             }
         }
     }
@@ -79,7 +69,7 @@ sub handle {
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
 
     my $base_uri   = $req->base->as_string;
-    my $stream_uri = join '/' => $base_uri . 'stream', grep {length $_} ($uuid // $run_id), $job_uuid, $job_try;
+    my $stream_uri = join '/' => $base_uri . 'stream', grep {length $_} ($id // $run_id), $job_uuid, $job_try;
 
     my $content = $tx->render(
         'view.tx',

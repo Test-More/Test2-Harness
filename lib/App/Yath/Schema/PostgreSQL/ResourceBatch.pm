@@ -21,33 +21,32 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("resource_batch");
 __PACKAGE__->add_columns(
-  "resource_batch_id",
+  "resource_batch_idx",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "resource_batch_resource_batch_idx_seq",
   },
   "run_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "host_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "host_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "stamp",
   { data_type => "timestamp", is_nullable => 0, size => 4 },
 );
-__PACKAGE__->set_primary_key("resource_batch_id");
+__PACKAGE__->set_primary_key("resource_batch_idx");
 __PACKAGE__->belongs_to(
   "host",
   "App::Yath::Schema::Result::Host",
-  { host_id => "host_id" },
+  { host_idx => "host_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 __PACKAGE__->has_many(
   "resources",
   "App::Yath::Schema::Result::Resource",
-  { "foreign.resource_batch_id" => "self.resource_batch_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.resource_batch_idx" => "self.resource_batch_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "run",
@@ -57,7 +56,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -14,7 +14,7 @@ CREATE TABLE users (
     role TEXT CHECK(role IN (
         'admin',    -- Can add users and set permissions
         'user'      -- Can manage reports for their projects
-    )) NOT NULL,
+    )) NOT NULL DEFAULT 'user',
 
     UNIQUE(username)
 );
@@ -124,10 +124,10 @@ CREATE TABLE permissions (
 );
 
 CREATE TABLE runs (
-    run_id          UUID            NOT NULL PRIMARY KEY,
+    run_ord         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_id          UUID            NOT NULL,
     user_id         UUID            NOT NULL,
 
-    run_ord         INT             NOT NULL,
 
     status          TEXT            CHECK(status IN ('pending', 'running', 'complete', 'broken', 'canceled')) NOT NULL,
     worker_id       TEXT            DEFAULT NULL,
@@ -155,21 +155,12 @@ CREATE TABLE runs (
 
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (project_id)  REFERENCES projects(project_id),
-    FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id),
-
-    UNIQUE(run_ord)
+    FOREIGN KEY (log_file_id) REFERENCES log_files(log_file_id)
 );
+CREATE INDEX run_run_id ON runs(run_id);
 CREATE INDEX run_projects ON runs(project_id);
 CREATE INDEX run_status ON runs(status);
 CREATE INDEX run_user ON runs(user_id);
-CREATE TRIGGER runs_auto_increment_trigger
-    AFTER INSERT ON runs
-    WHEN runs.run_ord IS NULL
-    BEGIN
-        UPDATE runs
-        SET run_ord = (SELECT IFNULL(MAX(run_ord), 0) + 1 FROM runs)
-        WHERE run_id = new.run_id;
-    END;
 
 CREATE TABLE sweeps (
     sweep_id        UUID            NOT NULL PRIMARY KEY,
@@ -270,8 +261,7 @@ CREATE TABLE events (
 
     job_key         UUID        NOT NULL,
 
-    event_ord       INT         NOT NULL,
-    insert_ord      INT         NOT NULL,
+    event_ord       BIGINT      NOT NULL,
 
     has_binary      BOOL        NOT NULL DEFAULT FALSE,
     is_subtest      BOOL        NOT NULL DEFAULT FALSE,
@@ -285,27 +275,15 @@ CREATE TABLE events (
     trace_id        CHAR(36)    DEFAULT NULL,
     nested          INT         DEFAULT 0,
 
-    facets          JSON        DEFAULT NULL,
-    facets_line     INT         DEFAULT NULL,
+    render          JSON        DEFAULT NULL,
 
-    orphan          JSON        DEFAULT NULL,
-    orphan_line     INT         DEFAULT NULL,
-
-    UNIQUE(insert_ord, job_key),
+    UNIQUE(event_ord, job_key),
     FOREIGN KEY (job_key) REFERENCES jobs(job_key)
 );
-CREATE INDEX event_job    ON events(job_key, is_subtest);
-CREATE INDEX event_trace  ON events(trace_id);
-CREATE INDEX event_parent ON events(parent_id);
-CREATE TRIGGER events_auto_increment_trigger
-    AFTER INSERT ON events
-    WHEN events.event_ord IS NULL
-    BEGIN
-        UPDATE events
-        SET event_ord = (SELECT IFNULL(MAX(event_ord), 0) + 1 FROM events)
-        WHERE run_id = new.run_id;
-    END;
-
+CREATE INDEX event_event_id ON events(event_id);
+CREATE INDEX event_job      ON events(job_key, is_subtest);
+CREATE INDEX event_trace    ON events(trace_id);
+CREATE INDEX event_parent   ON events(parent_id);
 
 CREATE TABLE binaries (
     binary_id       UUID            NOT NULL PRIMARY KEY,
@@ -417,4 +395,36 @@ CREATE TABLE resources (
 
     FOREIGN KEY (resource_batch_id) REFERENCES resource_batch(resource_batch_id),
     UNIQUE(resource_batch_id, batch_ord)
+);
+
+CREATE TABLE facets (
+    event_id    UUID        NOT NULL PRIMARY KEY,
+
+    data        JSON        DEFAULT NULL,
+    line        BIGINT      DEFAULT NULL,
+
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+);
+
+CREATE TABLE orphans (
+    event_id    UUID        NOT NULL PRIMARY KEY,
+
+    data        JSON        DEFAULT NULL,
+    line        BIGINT      DEFAULT NULL,
+
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+);
+
+CREATE TABLE run_parameters (
+    run_id              UUID    NOT NULL PRIMARY KEY,
+    parameters          JSON    DEFAULT NULL,
+
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+
+CREATE TABLE job_parameters (
+    job_key             UUID    NOT NULL PRIMARY KEY,
+    parameters          JSON    DEFAULT NULL,
+
+    FOREIGN KEY (job_key) REFERENCES jobs(job_key)
 );

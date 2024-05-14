@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 
+use DBIx::Class::Schema::Loader 'make_schema_at';
 use DBIx::Class::Storage::DBI::MariaDB;
 use DBIx::QuickDB;
 
@@ -10,7 +11,8 @@ my $version = App::Yath::Schema::Util->VERSION;
 my $schemadir = './share/schema/';
 
 opendir(my $dh, $schemadir) or die "Could not open schema dir: $!";
-for my $schema_file (sort readdir($dh)) {
+#for my $schema_file (sort readdir($dh)) {
+for my $schema_file ('PostgreSQL.sql') {
     next unless $schema_file =~ m/\.sql$/;
 
     my $schema = $schema_file;
@@ -23,6 +25,8 @@ for my $schema_file (sort readdir($dh)) {
 #    $dbd_driver = 'DBD::mysql' if $dbd_driver eq 'DBD::MariaDB';
 
     print "Generating $schema using qdb driver '$qdb_driver' and dbd driver '$dbd_driver'\n";
+
+    $qdb_driver = 'MySQL' if $qdb_driver eq 'Percona';
 
     my $db;
     unless (eval { $db = DBIx::QuickDB->build_db($schema => {driver => $qdb_driver, dbd_driver => $dbd_driver}); 1 }) {
@@ -46,21 +50,50 @@ for my $schema_file (sort readdir($dh)) {
     mkdir("./tmp");
     system('rm', '-rf', "./tmp/$schema");
     mkdir("./tmp/$schema");
-    system(
-        'dbicdump',
-        '-o' => 'dump_directory=./tmp/' . $schema,
-        '-o' => 'components=["InflateColumn::DateTime", "InflateColumn::Serializer", "InflateColumn::Serializer::JSON", "Tree::AdjacencyList", "UUIDColumns"]',
-        '-o' => 'debug=0',
-        '-o' => 'generate_pod=0',
-        '-o' => 'skip_load_external=1',
-        'App::Yath::Schema',
-        $db->connect_string('harness_ui'),
-        '',
-        ''
-    ) and die "Error";
+
+    my $pid = fork;
+    if ($pid) {
+        waitpid($pid, 0);
+        die "Child process failed ($?)" if $?;
+    }
+    else {
+        make_schema_at(
+            'App::Yath::Schema',
+            {
+                debug => 0,
+
+                dump_directory => "./tmp/$schema",
+                generate_pod   => 0,
+
+                skip_load_external => 1,
+
+                rel_name_map => sub {
+                    my ($info) = @_;
+                    $info->{name} =~ s/_idx$//;
+                    $info->{name} =~ s/_key$//;
+                    return $info->{name};
+                },
+
+                relationship_attrs => {
+                    has_many   => {cascade_delete => 1},
+                    might_have => {cascade_delete => 1},
+                },
+
+                components => [
+                    "InflateColumn::DateTime",
+                    "InflateColumn::Serializer",
+                    "InflateColumn::Serializer::JSON",
+                    "Tree::AdjacencyList",
+                    "UUIDColumns",
+                ],
+            },
+            [$db->connect_string('harness_ui'), '', ''],
+        );
+        exit 0;
+    }
 
     my $extra = '';
-    $extra .= "use DBIx::Class::Storage::DBI::MariaDB;\n" if $schema =~ m/(MySQL|Percona|MariaDB)/i;
+#    $extra .= "use DBIx::Class::Storage::DBI::MariaDB;\n" if $schema =~ m/(MySQL|Percona|MariaDB)/i;
 
     system("rm -rf lib/App/Yath/Schema/${schema}");
     mkdir "lib/App/Yath/Schema/${schema}";

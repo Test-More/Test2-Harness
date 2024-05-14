@@ -28,7 +28,7 @@ sub config {
     my $self = shift;
     my ($setting, @val) = @_;
 
-    my $conf = $self->resultset('Config')->find_or_create({config_id => gen_uuid(), setting => $setting, @val ? (value => $val[0]) : ()});
+    my $conf = $self->resultset('Config')->find_or_create({setting => $setting, @val ? (value => $val[0]) : ()});
 
     $conf->update({value => $val[0]}) if @val;
 
@@ -48,12 +48,12 @@ sub vague_run_search {
 
     if (my $username = $params{username}) {
         $user = $self->resultset('User')->find({username => $username}) || die "Invalid Username ($username)";
-        $query->{user_id} = $user->user_id;
+        $query->{user_idx} = $user->user_idx;
     }
 
     if (my $project_name = $params{project_name}) {
         $project = $self->resultset('Project')->find({name => $project_name}) || die "Invalid Project ($project)";
-        $query->{project_id} = $project->project_id;
+        $query->{project_idx} = $project->project_idx;
     }
 
     if (my $source = $params{source}) {
@@ -64,20 +64,20 @@ sub vague_run_search {
             return $run if $run;
         }
 
-        if (my $p = $self->resultset('Project')->find($uuid ? {project_id => $uuid} : {name => $source})) {
+        if (my $p = $self->resultset('Project')->find({name => $source})) {
             die "Project mismatch ($source)"
-                if $project && $project->project_id ne $p->project_id;
+                if $project && $project->project_idx ne $p->project_idx;
 
-            $query->{project_id} = $p->project_id;
+            $query->{project_idx} = $p->project_idx;
         }
-        elsif (my $u = $self->resultset('User')->find($uuid ? {user_id => $uuid} : {username => $source})) {
+        elsif (my $u = $self->resultset('User')->find({username => $source})) {
             die "User mismatch ($source)"
-                if $user && $user->user_id ne $u->user_id;
+                if $user && $user->user_idx ne $u->user_idx;
 
-            $query->{user_id} = $u->user_id;
+            $query->{user_idx} = $u->user_idx;
         }
         else {
-            die "No UUID match in runs, users, or projects ($uuid)" if $uuid;
+            die "No UUID match in runs ($uuid)" if $uuid;
             die "No match for source ($source)";
         }
     }

@@ -16,17 +16,12 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::HashBase qw{
     <is_subprocess
     <subprocess_pid
-    <resource_id
 };
-
-sub init {
-    my $self = shift;
-    $self->{+RESOURCE_ID} //= gen_uuid();
-}
 
 sub spawns_process { 0 }
 sub is_job_limiter { 0 }
 
+sub init     { }
 sub setup    { }
 sub teardown { }
 sub tick     { }

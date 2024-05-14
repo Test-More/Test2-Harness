@@ -98,7 +98,7 @@ sub uuid_inflate {
 
 sub magic_stringify {
     my $self = shift;
-    return $self->{string} unless $App::Yath::Schema::LOADED && $App::Yath::Schema::LOADED =~ m/mysql/i;
+    return $self->{string} unless $App::Yath::Schema::LOADED && $App::Yath::Schema::LOADED =~ m/(mysql|percona)/i;
 
     my $i = 0;
     while (my @call = caller($i++)) {
@@ -114,7 +114,7 @@ sub uuid_deflate {
     return undef unless $val;
     $val = uuid_inflate($val) unless blessed($val) && $val->isa(__PACKAGE__);
     return undef unless $val;
-    return $val->{binary} if $App::Yath::Schema::LOADED && $App::Yath::Schema::LOADED =~ m/mysql/i;
+    return $val->{binary} if $App::Yath::Schema::LOADED && $App::Yath::Schema::LOADED =~ m/(mysql|percona)/i;
     return $val->{string};
 }
 

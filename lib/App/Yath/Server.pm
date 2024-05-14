@@ -33,6 +33,7 @@ use Test2::Harness::Util::HashBase qw{
     <launcher
     <launcher_args
     <port
+    <host
     <workers
 };
 
@@ -136,9 +137,14 @@ sub start_ephemeral_db {
         }
     }
 
-    my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
-    $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
-
+    my $dbh;
+    if ($schema_type =~ m/SQLite/i) {
+        $dbh = $db->connect('harness_ui', AutoCommit => 1, RaiseError => 1);
+    }
+    else {
+        $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
+        $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
+    }
 
     $db->load_sql(harness_ui => share_file("schema/$schema_type.sql"));
     my $dsn = $db->connect_string('harness_ui');
@@ -150,7 +156,7 @@ sub start_ephemeral_db {
 
     my $schema = $config->schema;
 
-    $schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root', user_id => gen_uuid()});
+    $schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
 
     my $qdb_params = $self->{+QDB_PARAMS} // {};
     $schema->config(single_user => $qdb_params->{single_user} // 0);
@@ -182,6 +188,8 @@ sub start_server {
 
     return $self->{+PID} = $pid if $pid;
 
+    $0 = "yath-web-server";
+
     my $ok = eval { $self->_do_server_exec(); 1 };
     my $err = $@;
 
@@ -198,9 +206,9 @@ sub _do_server_exec {
 
     my @options;
     push @options => @{$self->{+LAUNCHER_ARGS} // []};
-    push @options => ("--server"  => $self->{+LAUNCHER})   if $self->{+LAUNCHER};
-    push @options => ('--listen'  => ":$self->{+PORT}")    if $self->{+PORT};
-    push @options => ('--workers' => ":$self->{+WORKERS}") if $self->{+WORKERS};
+    push @options => ("--server"  => $self->{+LAUNCHER})              if $self->{+LAUNCHER};
+    push @options => ('--listen'  => "$self->{+HOST}:$self->{+PORT}") if $self->{+PORT};
+    push @options => ('--workers' => "$self->{+WORKERS}")             if $self->{+WORKERS};
 
     exec(
         $^X,
@@ -217,6 +225,8 @@ sub _do_server_exec {
 sub _do_server_post_exec {
     my $class = shift;
     my ($json) = @_;
+
+    $0 = "yath-web-server";
 
     my $data = decode_json($json);
 
@@ -240,6 +250,8 @@ sub restart_importers {
 
 sub start_importers {
     my $self = shift;
+
+    local $0 = 'yath-importer';
 
     croak "Importers already started" if $self->{+IMPORTER_PIDS};
 

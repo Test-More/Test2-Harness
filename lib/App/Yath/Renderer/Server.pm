@@ -153,10 +153,10 @@ sub init {
     );
 
     $self->{+USER} = 'root';
-    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root', user_id => gen_uuid()});
+    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
 
     $self->{+PROJECT} = 'default';
-    my $proj = $config->schema->resultset('Project')->create({name => 'default', project_id => gen_uuid()});
+    my $proj = $config->schema->resultset('Project')->create({name => 'default'});
 
     $self->{+CONFIG} = $config;
 

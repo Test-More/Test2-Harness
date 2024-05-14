@@ -5,7 +5,6 @@ use warnings;
 our $VERSION = '2.000000';
 
 use DateTime;
-use Data::GUID;
 use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Util qw/share_dir/;
@@ -133,7 +132,7 @@ sub data {
                         },
                     ],
                 },
-                {order_by => 'event_ord'},
+                {order_by => 'event_idx'},
             );
 
             return 0;

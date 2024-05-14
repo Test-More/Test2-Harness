@@ -34,7 +34,7 @@ sub maybe {
     return $g->$opt // $default;
 }
 
-sub check_group { $_[0]->{$_[1]} ? 1 : 0 }
+sub check_group { $_[0]->{$_[1]} // 0 }
 
 sub group {
     my $self = shift;
@@ -45,7 +45,7 @@ sub group {
     return $self->{$group} = Getopt::Yath::Settings::Group->new()
         if $vivify;
 
-    Carp::croak("The '$group' group is not defined");
+    Carp::confess("The '$group' group is not defined");
 }
 
 sub create_group {
@@ -71,7 +71,7 @@ sub AUTOLOAD {
 
     return if $group eq 'DESTROY';
 
-    Carp::croak("Method $group() must be called on a blessed instance") unless ref($this);
+    Carp::confess("Method $group() must be called on a blessed instance") unless ref($this);
 
     $this->group($group);
 }

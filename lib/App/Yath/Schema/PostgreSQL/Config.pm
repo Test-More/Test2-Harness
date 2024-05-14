@@ -21,24 +21,23 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("config");
 __PACKAGE__->add_columns(
-  "config_id",
+  "config_idx",
   {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "config_config_idx_seq",
   },
   "setting",
   { data_type => "varchar", is_nullable => 0, size => 128 },
   "value",
   { data_type => "varchar", is_nullable => 0, size => 256 },
 );
-__PACKAGE__->set_primary_key("config_id");
+__PACKAGE__->set_primary_key("config_idx");
 __PACKAGE__->add_unique_constraint("config_setting_key", ["setting"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

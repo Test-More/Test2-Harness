@@ -21,23 +21,21 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("runs");
 __PACKAGE__->add_columns(
-  "run_id",
-  {
-    data_type => "uuid",
-    default_value => \"uuid_generate_v4()",
-    is_nullable => 0,
-    retrieve_on_insert => 1,
-    size => 16,
-  },
-  "run_ord",
+  "run_idx",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "runs_run_ord_seq",
+    sequence          => "runs_run_idx_seq",
   },
-  "user_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "user_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "project_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "log_file_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "run_id",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "status",
   {
     data_type => "enum",
@@ -52,8 +50,6 @@ __PACKAGE__->add_columns(
   { data_type => "text", is_nullable => 1 },
   "error",
   { data_type => "text", is_nullable => 1 },
-  "project_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "pinned",
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "has_coverage",
@@ -87,8 +83,6 @@ __PACKAGE__->add_columns(
     },
     is_nullable => 0,
   },
-  "log_file_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
   "passed",
   { data_type => "integer", is_nullable => 1 },
   "failed",
@@ -97,27 +91,25 @@ __PACKAGE__->add_columns(
   { data_type => "integer", is_nullable => 1 },
   "concurrency",
   { data_type => "integer", is_nullable => 1 },
-  "parameters",
-  { data_type => "jsonb", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("run_id");
-__PACKAGE__->add_unique_constraint("runs_run_ord_key", ["run_ord"]);
+__PACKAGE__->set_primary_key("run_idx");
+__PACKAGE__->add_unique_constraint("runs_run_id_key", ["run_id"]);
 __PACKAGE__->has_many(
   "coverages",
   "App::Yath::Schema::Result::Coverage",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "jobs",
   "App::Yath::Schema::Result::Job",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "log_file",
   "App::Yath::Schema::Result::LogFile",
-  { log_file_id => "log_file_id" },
+  { log_file_idx => "log_file_idx" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -128,42 +120,48 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
-  { project_id => "project_id" },
+  { project_idx => "project_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 __PACKAGE__->has_many(
   "reportings",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "resource_batches",
   "App::Yath::Schema::Result::ResourceBatch",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "run_fields",
   "App::Yath::Schema::Result::RunField",
   { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->might_have(
+  "run_parameter",
+  "App::Yath::Schema::Result::RunParameter",
+  { "foreign.run_id" => "self.run_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "sweeps",
   "App::Yath::Schema::Result::Sweep",
-  { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { "foreign.run_idx" => "self.run_idx" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
-  { user_id => "user_id" },
+  { user_idx => "user_idx" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

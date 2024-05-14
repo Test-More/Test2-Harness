@@ -65,7 +65,7 @@ sub process_form {
 
     # This one we allow non-post, all others need post.
     if ('logout' eq $action) {
-        $req->session_host->update({'user_id' => undef});
+        $req->session_host->update({'user_idx' => undef});
         return $res->add_msg("You have been logged out.");
     }
     elsif ($action eq 'verify') {
@@ -94,7 +94,7 @@ sub process_form {
         return $res->add_error("Invalid username or password")
             unless $user && $user->verify_password($password);
 
-        $req->session_host->update({'user_id' => $user->user_id});
+        $req->session_host->update({'user_idx' => $user->user_idx});
         return $res->add_msg("You have been logged in.");
     }
 
@@ -111,7 +111,7 @@ sub process_form {
             return $res->add_error("This email is already in use.");
         }
 
-        my $email = eval { $schema->resultset('Email')->create({user_id => $user->user_id, local => $local, domain => $domain}) };
+        my $email = eval { $schema->resultset('Email')->create({user_idx => $user->user_idx, local => $local, domain => $domain}) };
         $res->add_error("Unable to add email: $@") unless $email;
 
         $self->send_verification_code($email);
@@ -145,25 +145,24 @@ sub process_form {
         return $res->add_msg("Password Changed.");
     }
 
-    if ($p->{api_key_id} && $KEY_ACTION_MAP{$action}) {
-        my $key_id = uuid_inflate($p->{api_key_id});
+    if ($p->{api_key_idx} && $KEY_ACTION_MAP{$action}) {
+        my $key_id = uuid_inflate($p->{api_key_idx});
         my $user = $req->user or return $res->add_error("You must be logged in");
 
-        my $key = $schema->resultset('ApiKey')->find({api_key_id => $key_id, user_id => $user->user_id});
+        my $key = $schema->resultset('ApiKey')->find({api_key_idx => $key_id, user_idx => $user->user_idx});
         return $res->add_error("Invalid key") unless $key;
 
         $key->update({status => $KEY_ACTION_MAP{$action}});
         return $res->add_msg("Key status changed.");
     }
 
-    if (my $email_id = $p->{email_id}) {
-        $email_id = uuid_inflate($email_id) or return $res->add_error("Invalid email id");
+    if (my $email_idx = $p->{email_idx}) {
         my $user = $req->user or return $res->add_error("You must be logged in");
-        my $email = $schema->resultset('Email')->find({email_id => $email_id, user_id => $user->user_id});
+        my $email = $schema->resultset('Email')->find({email_idx => $email_idx, user_idx => $user->user_idx});
         return $res->add_error("Invalid Email") unless $email;
 
         if ($action eq 'make primary') {
-            my $pri = $schema->resultset('PrimaryEmail')->update_or_create({user_id => $user->user_id, email_id => $email_id});
+            my $pri = $schema->resultset('PrimaryEmail')->update_or_create({user_idx => $user->user_idx, email_idx => $email_idx});
             return $res->add_error("Could not make email primary: $@") unless $pri;
             return $res->add_msg("Set primary email address.");
         }
@@ -202,7 +201,7 @@ sub send_verification_code {
 
     my $our_email = $schema->config('email') or die "System email address is not set";
 
-    my $code = $schema->resultset('EmailVerificationCode')->find_or_create({email_id => $email->email_id});
+    my $code = $schema->resultset('EmailVerificationCode')->find_or_create({email_idx => $email->email_idx});
     my $text = $code->evcode_id;
 
     my $msg = Email::Simple->create(

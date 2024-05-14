@@ -21,29 +21,35 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("events");
 __PACKAGE__->add_columns(
-  "event_id",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
-  "job_key",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "event_ord",
-  { data_type => "bigint", is_nullable => 0 },
-  "insert_ord",
+  "event_idx",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "events_insert_ord_seq",
+    sequence          => "events_event_idx_seq",
   },
+  "event_id",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
+  "job_key",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "is_subtest",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  { data_type => "boolean", is_nullable => 0 },
   "is_diag",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  { data_type => "boolean", is_nullable => 0 },
   "is_harness",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  { data_type => "boolean", is_nullable => 0 },
   "is_time",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  { data_type => "boolean", is_nullable => 0 },
+  "is_assert",
+  { data_type => "boolean", is_nullable => 0 },
+  "causes_fail",
+  { data_type => "boolean", is_nullable => 0 },
   "has_binary",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  { data_type => "boolean", is_nullable => 0 },
+  "has_facets",
+  { data_type => "boolean", is_nullable => 0 },
+  "has_orphan",
+  { data_type => "boolean", is_nullable => 0 },
   "stamp",
   { data_type => "timestamp", is_nullable => 1 },
   "parent_id",
@@ -51,38 +57,49 @@ __PACKAGE__->add_columns(
   "trace_id",
   { data_type => "uuid", is_nullable => 1, size => 16 },
   "nested",
-  { data_type => "integer", default_value => 0, is_nullable => 1 },
-  "facets",
-  { data_type => "jsonb", is_nullable => 1 },
-  "facets_line",
-  { data_type => "bigint", is_nullable => 1 },
-  "orphan",
-  { data_type => "jsonb", is_nullable => 1 },
-  "orphan_line",
-  { data_type => "bigint", is_nullable => 1 },
+  { data_type => "integer", default_value => 0, is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("event_id");
+__PACKAGE__->set_primary_key("event_idx");
+__PACKAGE__->add_unique_constraint("events_event_id_key", ["event_id"]);
 __PACKAGE__->has_many(
   "binaries",
   "App::Yath::Schema::Result::Binary",
   { "foreign.event_id" => "self.event_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->might_have(
+  "facet",
+  "App::Yath::Schema::Result::Facet",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
-  "job_key",
+  "job",
   "App::Yath::Schema::Result::Job",
   { job_key => "job_key" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+);
+__PACKAGE__->might_have(
+  "orphan",
+  "App::Yath::Schema::Result::Orphan",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->might_have(
+  "render",
+  "App::Yath::Schema::Result::Render",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "reportings",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.event_id" => "self.event_id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+  { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-06 20:59:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

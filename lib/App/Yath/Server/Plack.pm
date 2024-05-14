@@ -5,7 +5,6 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Router::Simple;
-use Data::GUID;
 use DateTime;
 
 use Text::Xslate(qw/mark_raw/);
@@ -151,7 +150,7 @@ sub router {
     $router->connect('/rerun/:run_id'            => {controller => 'App::Yath::Server::Controller::ReRun'});
     $router->connect('/rerun/:project/:username' => {controller => 'App::Yath::Server::Controller::ReRun'});
 
-    $router->connect('/binary/:binary_id' => {controller => 'App::Yath::Server::Controller::Binary'});
+    $router->connect('/binary/:binary_idx' => {controller => 'App::Yath::Server::Controller::Binary'});
 
     $router->connect('/download/:id' => {controller => 'App::Yath::Server::Controller::Download'});
 
@@ -210,7 +209,7 @@ sub handle_request {
             $user = $self->schema->resultset('User')->find({username => 'root'});
         }
         elsif ($session_host) {
-            $user = $session_host->user if $session_host->user_id;
+            $user = $session_host->user if $session_host->user_idx;
         }
 
         $req->set_user($user) if $user;

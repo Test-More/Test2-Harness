@@ -45,8 +45,8 @@ sub _from_project {
     my $schema = $self->{+CONFIG}->schema;
     my $project = $schema->resultset('Project')->find({name => $project_name}) or return [];
 
-    my $sth = $dbh->prepare("SELECT distinct($field) FROM runs WHERE project_id = ? ORDER BY $field ASC");
-    $sth->execute(uuid_deflate($project->project_id)) or die $sth->errstr;
+    my $sth = $dbh->prepare("SELECT distinct($field) FROM runs WHERE project_idx = ? ORDER BY $field ASC");
+    $sth->execute(uuid_deflate($project->project_idx)) or die $sth->errstr;
     my $rows = $sth->fetchall_arrayref;
     return [map { $_->[0] } @$rows];
 }

@@ -13,13 +13,6 @@ use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-__PACKAGE__->inflate_column(
-    parameters => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
-    },
-);
-
 sub file {
     my $self = shift;
     my %cols = $self->get_all_fields;
@@ -54,9 +47,11 @@ sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 sub sig {
     my $self = shift;
 
+    my $job_parameter = $self->job_parameter;
+
     return join ";" => (
         (map {$self->$_ // ''} qw/status pass_count fail_count name file fail/),
-        (map {length($self->$_ // '')} qw/parameters/),
+        $job_parameter ? length($job_parameter->parameters) : (''),
         ($self->job_fields->count),
     );
 }
@@ -79,7 +74,7 @@ sub TO_JSON {
     $cols{shortest_file} = $self->shortest_file;
 
     # Inflate
-    $cols{parameters} = $self->parameters;
+    $cols{parameters} = $self->job_parameter->parameters;
 
     $cols{fields} = $self->short_job_fields;
 

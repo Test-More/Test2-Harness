@@ -68,7 +68,6 @@ sub session_host {
     );
 
     $host //= $schema->resultset('SessionHost')->create({
-        session_host_id => gen_uuid,
         session_id      => $session->session_id,
         address         => $self->address // 'SOCKET',
         agent           => $self->user_agent,

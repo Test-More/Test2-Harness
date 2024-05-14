@@ -11,12 +11,16 @@ our @EXPORT = qw/gen_uuid/;
 our @EXPORT_OK = qw/UG gen_uuid/;
 
 my ($UG, $UG_PID);
+
 sub UG {
     return $UG if $UG && $UG_PID && $UG_PID == $$;
 
     $UG_PID = $$;
     return $UG = Data::UUID->new;
 }
+
+# Initialize it here in this PID to start
+UG();
 
 sub gen_uuid { UG()->create_str() }
 

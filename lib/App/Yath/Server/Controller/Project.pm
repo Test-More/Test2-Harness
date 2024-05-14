@@ -31,23 +31,22 @@ sub users {
     my $dbh = $schema->storage->dbh;
 
     my $query = <<"    EOT";
-        SELECT users.user_id AS user_id, users.username AS username
+        SELECT users.user_idx AS user_idx, users.username AS username
           FROM users
-          JOIN runs USING(user_id)
-         WHERE runs.project_id = ?
-         GROUP BY user_id
+          JOIN runs USING(user_idx)
+         WHERE runs.project_idx = ?
+         GROUP BY user_idx
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute(uuid_deflate($project->project_id)) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_idx)) or die $sth->errstr;
 
     my $owner = $project->owner;
     my @out;
     for my $row (@{$sth->fetchall_arrayref // []}) {
-        my ($user_id, $username) = @$row;
-        $user_id = uuid_inflate($user_id);
-        my $is_owner = ($owner && $user_id eq $owner->user_id) ? 1 : 0;
-        push @out => {user_id => $user_id, username => $username, owner => $is_owner};
+        my ($user_idx, $username) = @$row;
+        my $is_owner = ($owner && $user_idx eq $owner->user_idx) ? 1 : 0;
+        push @out => {user_idx => $user_idx, username => $username, owner => $is_owner};
     }
 
     @out = sort { $b->{owner} cmp $a->{owner} || $a->{username} cmp $b->{username} } @out;
@@ -70,9 +69,6 @@ sub handle {
 
     my $project;
     $project = $schema->resultset('Project')->single({name => $it});
-    if (my $uuid = uuid_inflate($it)) {
-        $project //= $schema->resultset('Project')->single({project_id => $uuid});
-    }
     error(404 => 'Invalid Project') unless $project;
 
     return $self->html($req, $project, $n)
@@ -192,7 +188,7 @@ sub get_add_query {
 
     my @add_vals;
 
-    my $user_query = 'user_id in (' . join(',' => map { '?' } @$users) . ')';
+    my $user_query = 'user_idx in (' . join(',' => map { '?' } @$users) . ')';
     push @add_vals => map { uuid_deflate($_) } @$users;
 
     return ("AND $user_query\n", @add_vals) unless $n || $range;
@@ -204,7 +200,7 @@ sub get_add_query {
         my $query = <<"        EOT";
             SELECT min(run_ord) AS min, max(run_ord) AS max
               FROM runs
-             WHERE project_id = ?
+             WHERE project_idx = ?
                AND added >= ?
                AND added <= ?
         EOT
@@ -213,7 +209,7 @@ sub get_add_query {
         $end   = parse_date($end);
 
         my $sth = $dbh->prepare($query);
-        $sth->execute(uuid_deflate($project->project_id), $start, $end) or die $sth->errstr;
+        $sth->execute(uuid_deflate($project->project_idx), $start, $end) or die $sth->errstr;
 
         my $ords = $sth->fetchrow_hashref;
 
@@ -226,7 +222,7 @@ sub get_add_query {
     my $query = <<"    EOT";
         SELECT run_ord, run_id
           FROM reporting
-         WHERE project_id = ?
+         WHERE project_idx = ?
            AND $user_query
       GROUP BY run_ord, run_id
       ORDER BY run_ord DESC
@@ -234,7 +230,7 @@ sub get_add_query {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute(uuid_deflate($project->project_id), @add_vals, $n) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_idx), @add_vals, $n) or die $sth->errstr;
 
     my @ids = map { $_->[1] } @{$sth->fetchall_arrayref};
     return ('') unless @ids;
@@ -255,13 +251,13 @@ sub _build_stat_run_list {
     my $query = <<"    EOT";
         SELECT run_id
           FROM reporting
-         WHERE project_id = ?
+         WHERE project_idx = ?
            $add_query
       ORDER BY run_id DESC
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_idx), @add_vals) or die $sth->errstr;
 
     my @ids = map { uuid_inflate($_->[0]) } @{$sth->fetchall_arrayref};
 
@@ -285,22 +281,22 @@ sub _build_stat_expensive_files {
                AVG(duration)            AS average_duration,
                COUNT(DISTINCT(run_ord)) AS runs,
                COUNT(duration)          AS tries,
-               COUNT(DISTINCT(user_id)) AS users,
+               COUNT(DISTINCT(user_idx)) AS users,
                SUM(pass)                AS pass,
                SUM(fail)                AS fail,
                SUM(retry)               AS retry,
                SUM(abort)               AS abort
           FROM reporting
-     LEFT JOIN test_files USING(test_file_id)
-         WHERE project_id    = ?
+     LEFT JOIN test_files USING(test_file_idx)
+         WHERE project_idx    = ?
            AND subtest      IS     NULL
-           AND test_file_id IS NOT NULL
+           AND test_file_idx IS NOT NULL
            $add_query
       GROUP BY filename
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_idx), @add_vals) or die $sth->errstr;
 
     my @rows;
     for my $row (sort { $b->[1] <=> $a->[1] } @{$sth->fetchall_arrayref}) {
@@ -339,21 +335,21 @@ sub _build_stat_expensive_subtests {
                AVG(duration)            AS average_duration,
                COUNT(DISTINCT(run_ord)) AS runs,
                COUNT(duration)          AS tries,
-               COUNT(DISTINCT(user_id)) AS users,
+               COUNT(DISTINCT(user_idx)) AS users,
                SUM(pass)                AS pass,
                SUM(fail)                AS fail,
                SUM(abort)               AS abort
           FROM reporting
-     LEFT JOIN test_files USING(test_file_id)
-         WHERE project_id    = ?
+     LEFT JOIN test_files USING(test_file_idx)
+         WHERE project_idx    = ?
            AND subtest      IS NOT NULL
-           AND test_file_id IS NOT NULL
+           AND test_file_idx IS NOT NULL
            $add_query
       GROUP BY filename, subtest
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_idx), @add_vals) or die $sth->errstr;
 
     my @rows;
     for my $row (sort { $b->[2] <=> $a->[2] } @{$sth->fetchall_arrayref}) {
@@ -394,8 +390,8 @@ sub _build_stat_expensive_users {
                SUM(fail)       AS fail,
                SUM(abort)      AS abort
           FROM reporting
-     LEFT JOIN users USING(user_id)
-         WHERE project_id = ?
+     LEFT JOIN users USING(user_idx)
+         WHERE project_idx = ?
            AND job_key    IS NULL
            AND subtest    IS NULL
            $add_query
@@ -403,7 +399,7 @@ sub _build_stat_expensive_users {
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_idx), @add_vals) or die $sth->errstr;
 
     my @rows;
     for my $row (sort { $b->[1] <=> $a->[1] } @{$sth->fetchall_arrayref}) {
@@ -439,26 +435,26 @@ sub _build_stat_user_summary {
         SELECT SUM(duration)            AS total_duration,
                AVG(duration)            AS average_duration,
                COUNT(DISTINCT(run_ord)) AS runs,
-               COUNT(DISTINCT(user_id)) AS users,
+               COUNT(DISTINCT(user_idx)) AS users,
                SUM(pass)                AS pass,
                SUM(fail)                AS fail,
                SUM(retry)               AS retry,
                SUM(abort)               AS abort,
-               CASE WHEN test_file_id IS NULL THEN FALSE ELSE TRUE END AS has_file,
+               CASE WHEN test_file_idx IS NULL THEN FALSE ELSE TRUE END AS has_file,
                CASE WHEN subtest      IS NULL THEN FALSE ELSE TRUE END AS has_subtest,
                COUNT(subtest) AS total_subtests,
-               COUNT(test_file_id) AS total_test_files,
+               COUNT(test_file_idx) AS total_test_files,
                COUNT(DISTINCT(subtest)) AS unique_subtests,
-               COUNT(DISTINCT(test_file_id)) AS unique_test_files
+               COUNT(DISTINCT(test_file_idx)) AS unique_test_files
           FROM reporting
-         WHERE project_id    = ?
+         WHERE project_idx    = ?
            $add_query
       GROUP BY has_file, has_subtest
       ORDER BY has_File, has_subtest
     EOT
 
     my $sth = $dbh->prepare($query);
-    $sth->execute(uuid_deflate($project->project_id), @add_vals) or die $sth->errstr;
+    $sth->execute(uuid_deflate($project->project_idx), @add_vals) or die $sth->errstr;
 
     my $runs = $sth->fetchrow_hashref;
 
@@ -518,9 +514,9 @@ sub _build_stat_uncovered {
         {
             'me.name'        => 'coverage',
             'me.data'        => { '!=' => undef },
-            'run.project_id' => $project->project_id,
+            'run.project_idx' => $project->project_idx,
             'run.has_coverage' => 1,
-            @$users ? (user_id => {'-in' => [map { uuid_deflate($_) } @$users]}) : ()
+            @$users ? (user_idx => {'-in' => $users}) : ()
         },
         {
             join     => 'run',
@@ -560,9 +556,9 @@ sub _build_stat_coverage {
         {
             'me.name'        => 'coverage',
             'me.data'        => { '!=' => undef },
-            'run.project_id' => $project->project_id,
+            'run.project_idx' => $project->project_idx,
             'run.has_coverage' => 1,
-            @$users ? (user_id => {'-in' => [map { uuid_deflate($_) } @$users]}) : ()
+            @$users ? (user_idx => {'-in' => $users}) : ()
         },
         {
             join     => 'run',

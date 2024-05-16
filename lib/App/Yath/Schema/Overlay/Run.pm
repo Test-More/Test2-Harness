@@ -19,6 +19,15 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
 
+if ($App::Yath::Schema::LOADED eq 'Percona') {
+    __PACKAGE__->might_have(
+      "run_parameter",
+      "App::Yath::Schema::Result::RunParameter",
+      { "foreign.run_id" => "self.run_id" },
+      { cascade_copy => 0, cascade_delete => 1 },
+    );
+}
+
 my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
 sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 

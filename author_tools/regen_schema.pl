@@ -11,12 +11,21 @@ my $version = App::Yath::Schema::Util->VERSION;
 my $schemadir = './share/schema/';
 
 opendir(my $dh, $schemadir) or die "Could not open schema dir: $!";
-#for my $schema_file (sort readdir($dh)) {
-for my $schema_file ('PostgreSQL.sql') {
+my $start_pid = $$;
+for my $schema_file (sort readdir($dh)) {
+    exit(0) unless $$ == $start_pid;
     next unless $schema_file =~ m/\.sql$/;
 
     my $schema = $schema_file;
     $schema =~ s/\.sql$//;
+
+    my $loop_pid = fork;
+    if ($loop_pid) {
+        waitpid($loop_pid, 0);
+        next;
+    }
+
+    local $ENV{PATH} = "$ENV{HOME}/percona/bin:$ENV{PATH}" if $schema_file =~ /Percona/ && -x "$ENV{HOME}/percona/bin/mysqld";
 
     my $qdb_driver = qdb_driver($schema_file);
     my $dbd_driver = dbd_driver($schema_file);
@@ -26,7 +35,7 @@ for my $schema_file ('PostgreSQL.sql') {
 
     print "Generating $schema using qdb driver '$qdb_driver' and dbd driver '$dbd_driver'\n";
 
-    $qdb_driver = 'MySQL' if $qdb_driver eq 'Percona';
+    #$qdb_driver = 'MySQL' if $qdb_driver eq 'Percona';
 
     my $db;
     unless (eval { $db = DBIx::QuickDB->build_db($schema => {driver => $qdb_driver, dbd_driver => $dbd_driver}); 1 }) {
@@ -356,7 +365,11 @@ See L<http://dev.perl.org/licenses/>
             close($oh);
         }
     }
+
+    exit(0) unless $$ == $start_pid;
 }
+
+exit(0) unless $$ == $start_pid;
 
 sub process_pkg {
     my ($file, $schema) = @_;

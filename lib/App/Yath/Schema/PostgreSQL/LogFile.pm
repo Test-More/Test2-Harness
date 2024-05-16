@@ -22,7 +22,12 @@ __PACKAGE__->load_components(
 __PACKAGE__->table("log_files");
 __PACKAGE__->add_columns(
   "log_file_idx",
-  { data_type => "bigint", is_nullable => 0 },
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "log_files_log_file_idx_seq",
+  },
   "name",
   { data_type => "text", is_nullable => 0 },
   "local_file",
@@ -39,7 +44,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:41
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -42,7 +42,7 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "NO ACTION",
+    on_delete     => "SET NULL",
     on_update     => "NO ACTION",
   },
 );
@@ -66,7 +66,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:41
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

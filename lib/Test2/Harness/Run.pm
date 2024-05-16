@@ -54,6 +54,7 @@ use Test2::Harness::Util::HashBase(
         <jobs
         <job_lookup
         <test_settings
+        <settings
     },
 
     (map { "+$_" } @NO_JSON),

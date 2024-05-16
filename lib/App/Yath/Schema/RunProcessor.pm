@@ -8,7 +8,7 @@ use DateTime;
 use Data::Dumper;
 
 use List::Util qw/first min max/;
-use Time::HiRes qw/time/;
+use Time::HiRes qw/time sleep/;
 use MIME::Base64 qw/decode_base64/;
 use Sys::Hostname qw/hostname/;
 
@@ -77,10 +77,10 @@ sub process_handle {
 
 sub process_lines {
     my $class = shift;
-    my ($settings) = @_;
+    my ($settings, %params) = @_;
 
     my $done = 0;
-    my ($next, $last);
+    my ($next, $last, $run);
     return sub {
         my $line = shift;
 
@@ -89,20 +89,21 @@ sub process_lines {
         if (!defined($line)) {
             $done++;
             $last->();
-            return;
         }
         elsif ($next) {
             $next->($line);
         }
         else {
-            ($next, $last) = $class->_process_first_line($line, $settings);
+            ($next, $last, $run) = $class->_process_first_line($line, $settings, %params);
         }
+
+        return $run;
     };
 }
 
 sub _process_first_line {
     my $class = shift;
-    my ($line, $settings) = @_;
+    my ($line, $settings, %params) = @_;
 
     my $run;
     my $config = schema_config_from_settings($settings);
@@ -123,11 +124,16 @@ sub _process_first_line {
 
         my $pub = $settings->group('publish') or die "No publish settings";
 
-        my $proj = $settings->yath->project or die "Project is required";
+        my $proj = $runf->{settings}->{yath}->{project} || $params{project} || $settings->yath->project or die "Project name could not be determined";
         my $user = $settings->yath->user // $ENV{USER};
 
         my $p = $config->schema->resultset('Project')->find_or_create({name => $proj});
         my $u = $config->schema->resultset('User')->find_or_create({username => $user, role => 'user'});
+
+        if (my $old = $config->schema->resultset('Run')->find({run_id => $run_id})) {
+            die "Run with id '$run_id' is already published. Use --publish-force to override it." unless $settings->publish->force;
+            $old->delete;
+        }
 
         $run = $config->schema->resultset('Run')->create({
             run_id     => $run_id,
@@ -166,6 +172,8 @@ sub _process_first_line {
     $SIG{INT}  = sub { $self->set_signal('INT');  die "Caught Signal 'INT'\n"; };
     $SIG{TERM} = sub { $self->set_signal('TERM'); die "Caught Signal 'TERM'\n"; };
 
+    my @errors;
+
     return (
         sub {
             my $line = shift;
@@ -179,33 +187,18 @@ sub _process_first_line {
 
             warn "Error sending event(s) to database:\n====\n$err\n====\n";
 
+            push @errors => $err;
             die $err if $self->{+SIGNAL};
-            my $run = $self->{+RUN} or return;
-            $run->update({status => 'canceled', error => $err});
         },
         sub {
-            $self->finish;
+            $self->finish(@errors);
             print STDOUT $links if $links;
 
             $SIG{INT} = $int;
             $SIG{TERM} = $term;
-        }
+        },
+        $run,
     );
-}
-
-sub trim_error {
-    my ($msg, $err) = @_;
-
-    my @lines;
-    if ($ENV{TEST2_HARNESS_IMPORT_VERBOSE}) {
-        @lines = ($err);
-    }
-    else {
-        @lines = split /\n/, $err;
-        @lines = (@lines[1 .. 5], "\n[... TRIMMED, set the TEST2_HARNESS_IMPORT_VERBOSE=1 env var to see the entire error ...]\n", @lines[-5 .. -1]) if @lines > 12;
-    }
-
-    return join("\n" => $msg, @lines) . "\n";
 }
 
 sub retry_on_disconnect {
@@ -220,15 +213,16 @@ sub retry_on_disconnect {
 
         last unless $err =~ m/(gone away|connect|timeout)/i;
 
-        # Try to fix the connection
-        for (1 .. 10) {
+        if ($attempt) {
             $self->schema->storage->disconnect;
-            last if $self->schema->storage->connected;
-            #sleep 1;
+            sleep 0.5;
         }
+
+        # Try to fix the connection
+        $self->schema->storage->ensure_connected();
     }
 
-    die trim_error(qq{Failed "$description" (attempt $attempt)}, $err);
+    die qq{Failed "$description" (attempt $attempt)\n$err\n};
 }
 
 sub populate {

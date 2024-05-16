@@ -123,6 +123,7 @@ sub become_instance {
         instance_ipc      => $instance->ipc->[0]->callback,
         test_settings     => $ts,
         jobs              => $jobs,
+        settings          => $settings,
     );
 
     $instance->scheduler->queue_run($run);

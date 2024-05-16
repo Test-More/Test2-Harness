@@ -44,11 +44,11 @@ __PACKAGE__->belongs_to(
   "event",
   "App::Yath::Schema::Result::Event",
   { event_id => "event_id" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:41
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

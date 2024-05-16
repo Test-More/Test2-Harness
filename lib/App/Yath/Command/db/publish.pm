@@ -41,18 +41,23 @@ sub run {
     die "'$file' is not a valid log file" unless -f $file;
     die "'$file' does not look like a log file" unless $file =~ m/\.jsonl(\.(gz|bz2))?$/;
 
+    my $lines = 0;
     my $fh;
     if ($file =~ m/\.bz2$/) {
+        $fh = IO::Uncompress::Bunzip2->new($file) or die "Could not open bz2 file: $Bunzip2Error";
+        $lines++ while <$fh>;
         $fh = IO::Uncompress::Bunzip2->new($file) or die "Could not open bz2 file: $Bunzip2Error";
     }
     elsif ($file =~ m/\.gz$/) {
         $fh = IO::Uncompress::Gunzip->new($file) or die "Could not open gz file: $GunzipError";
+        $lines++ while <$fh>;
+        $fh = IO::Uncompress::Gunzip->new($file) or die "Could not open gz file: $GunzipError";
     }
     else {
         open($fh, '<', $file) or die "Could not open log file: $!";
+        $lines++ while <$fh>;
+        seek($fh, 0, 0);
     }
-
-    my $config = schema_config_from_settings($settings);
 
     my $user = $settings->yath->user;
 
@@ -60,25 +65,60 @@ sub run {
 
     print "\n" if $is_term;
 
-    my $cb = App::Yath::Schema::RunProcessor->process_lines($settings);
+    my $project = $file;
+    $project =~ s{^.*/}{}g;
+    $project =~ s{\.jsonl.*$}{}g;
+    $project =~ s/-\d.*$//g;
+    $project =~ s/^\s+//g;
+    $project =~ s/\s+$//g;
+
+    my $cb = App::Yath::Schema::RunProcessor->process_lines($settings, project => $project);
+
+    my $run = eval { $cb->(scalar(<$fh>)) } or return $self->fail($@);
+
+    $SIG{INT} = sub {
+        print STDERR "\nCought SIGINT...\n";
+        eval { $run->update({status => 'canceled', error => "SIGINT while importing"}); 1 } or warn $@;
+        exit 255;
+    };
+
+    $SIG{TERM} = sub {
+        print STDERR "\nCought SIGTERM...\n";
+        eval { $run->update({status => 'canceled', error => "SIGTERM while importing"}); 1 } or warn $@;
+        exit 255;
+    };
+
+    my $len = length("" . $lines);
 
     local $| = 1;
     while (my $line = <$fh>) {
         my $ln = $.;
 
-        print "\033[Fprocessing log line: $ln\n"
+        printf("\033[Fprocessing '%s' line: % ${len}d / %d\n", $file, $ln, $lines)
             if $is_term;
 
         next if $line =~ m/^null$/ims;
 
-        $cb->($line);
+        eval { $cb->($line); 1 } or return $self->fail($@, $run);
     }
 
     $cb->();
 
-    print "Upload Complete\n";
+    print "Published Run (status: " . $run->status . ")\n";
 
     return 0;
+}
+
+sub fail {
+    my $self = shift;
+    my ($err, $run) = @_;
+
+    $run->update({status => 'broken', error => $err}) if $run;
+
+    print STDERR "\n$err\n";
+
+    print STDERR "\nPublish Failed.\n";
+    return 255;
 }
 
 1;

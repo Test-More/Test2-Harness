@@ -49,17 +49,17 @@ __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
   { project_idx => "project_idx" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
   { user_idx => "user_idx" },
-  { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-13 18:09:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:41
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

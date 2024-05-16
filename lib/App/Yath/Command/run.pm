@@ -90,6 +90,7 @@ sub run {
         aggregator_ipc => $client->connect->callback,
         test_settings  => $ts,
         jobs           => $jobs,
+        settings       => $settings,
     );
 
     my $res = $client->queue_run($run);

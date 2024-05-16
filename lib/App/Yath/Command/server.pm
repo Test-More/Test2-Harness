@@ -323,7 +323,7 @@ sub shell_reloadimp_text { "Restart the importers." }
 sub shell_reloadimp { $_[0]->restart_importers() }
 
 sub shell_db_text { "Open the database." }
-sub shell_db { $_[0]->server->qdb->shell }
+sub shell_db { $_[0]->server->qdb->shell('harness_ui') }
 
 sub shell_shell_text { "Open a shell" }
 sub shell_shell { system($ENV{SHELL}) }

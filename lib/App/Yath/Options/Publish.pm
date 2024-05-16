@@ -37,6 +37,12 @@ option_group {group => 'publish', prefix => 'publish', category => "Publish Opti
         description => "How many times to retry an operation before giving up",
         default => 0,
     );
+
+    option force => (
+        type => 'Bool',
+        description => 'If the run has already been published, override it. (Delete it, and publish again)',
+        default => 0,
+    );
 };
 
 1;

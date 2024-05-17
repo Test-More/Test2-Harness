@@ -48,7 +48,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:33
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:06
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
 __PACKAGE__->inflate_column('job_field_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });

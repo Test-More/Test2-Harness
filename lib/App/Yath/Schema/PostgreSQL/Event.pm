@@ -32,6 +32,8 @@ __PACKAGE__->add_columns(
   { data_type => "uuid", is_nullable => 0, size => 16 },
   "job_key",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "event_ord",
+  { data_type => "integer", is_nullable => 0 },
   "is_subtest",
   { data_type => "boolean", is_nullable => 0 },
   "is_diag",
@@ -57,10 +59,11 @@ __PACKAGE__->add_columns(
   "trace_id",
   { data_type => "uuid", is_nullable => 1, size => 16 },
   "nested",
-  { data_type => "integer", default_value => 0, is_nullable => 0 },
+  { data_type => "smallint", default_value => 0, is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("event_idx");
 __PACKAGE__->add_unique_constraint("events_event_id_key", ["event_id"]);
+__PACKAGE__->add_unique_constraint("events_job_key_event_ord_key", ["job_key", "event_ord"]);
 __PACKAGE__->has_many(
   "binaries",
   "App::Yath::Schema::Result::Binary",
@@ -85,8 +88,8 @@ __PACKAGE__->might_have(
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
-__PACKAGE__->might_have(
-  "render",
+__PACKAGE__->has_many(
+  "renders",
   "App::Yath::Schema::Result::Render",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
@@ -99,7 +102,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:41
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:14
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

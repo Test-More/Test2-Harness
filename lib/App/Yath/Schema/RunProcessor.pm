@@ -56,6 +56,39 @@ use Test2::Harness::Util::HashBase qw{
     +host
 };
 
+my %DB_TAGS = (
+    'ABOUT'    => 'ABOUT',
+    'ARRAY'    => 'ARRAY',
+    'BRIEF'    => 'BRIEF',
+    'CONTROL'  => 'CONTROL',
+    'CRITICAL' => 'CRITICAL',
+    'DEBUG'    => 'DEBUG',
+    'DIAG'     => 'DIAG',
+    'ENCODING' => 'ENCODING',
+    'ERROR'    => 'ERROR',
+    'FACETS'   => 'FACETS',
+    'FAIL'     => 'FAIL',
+    'FAILED'   => 'FAILED',
+    'FATAL'    => 'FATAL',
+    'HALT'     => 'HALT',
+    'HARNESS'  => 'HARNESS',
+    'KILL'     => 'KILL',
+    'NO  PLAN' => 'NO PLAN',
+    'PASS'     => 'PASS',
+    'PASSED'   => 'PASSED',
+    'PLAN'     => 'PLAN',
+    'REASON'   => 'REASON',
+    'SHOW'     => 'SHOW',
+    'SKIP ALL' => 'SKIP ALL',
+    'SKIPPED'  => 'SKIPPED',
+    'STDERR'   => 'STDERR',
+    'TAGS'     => 'TAGS',
+    'TIMEOUT'  => 'TIMEOUT',
+    'VERSION'  => 'VERSION',
+    'WARN'     => 'WARN',
+    'WARNING'  => 'WARNING',
+);
+
 sub process_stdin {
     my $class = shift;
     my ($settings) = @_;
@@ -443,7 +476,8 @@ sub flush_events {
             push @write_bin => @$bins;
         }
 
-        for my $t (qw/facets orphan/) {
+        my $rendered = 0;
+        for my $t (qw/facets orphan/) { # Order matters
             my $l = "${t}_line";
             my $list = $t eq 'facets' ? \@write_facets : \@write_orphans;
 
@@ -456,7 +490,8 @@ sub flush_events {
                     data => $data,
                 };
 
-                next unless $t eq 'facets';
+                # Prefer rendering from facets, but if we only have an orphan render that
+                next if $rendered;
 
                 my $facets = decode_json($data);
 
@@ -465,10 +500,26 @@ sub flush_events {
                 my $lines = App::Yath::Renderer::Default::Composer->render_super_verbose($facets) or next;
                 next unless @$lines;
 
-                push @write_render => {
-                    event_id => $e->{event_id},
-                    data => encode_json($lines),
-                };
+                $rendered = 1;
+
+                push @write_render => map {
+                    my ($tag, $other_tag);
+                    unless ($tag = $DB_TAGS{$_->[1]}) {
+                        $tag = 'other';
+                        $other_tag = $_->[1];
+                    }
+
+                    {
+                        event_id  => $e->{event_id},
+                        job_key   => $e->{job_key},
+
+                        facet     => $_->[0],
+                        tag       => $tag,
+                        other_tag => $other_tag,
+                        message   => $_->[2] // "",
+                        data      => $_->[3] ? encode_json($_->[3]) : undef,
+                    }
+                } @$lines;
             }
             else {
                 $e->{"has_$t"} = 0;
@@ -698,6 +749,7 @@ sub get_job {
         job_id  => $job_id,
         job_try => $job_try,
 
+        event_ord => 1,
         events    => [],
         orphans   => {},
         reporting => [],
@@ -840,6 +892,8 @@ sub _process_event {
     my ($event, $f, %params) = @_;
     my $job = $params{job};
 
+    my $ord = $job->{event_ord}++;
+
     my $harness = $f->{harness} // {};
     my $trace   = $f->{trace}   // {};
 
@@ -878,6 +932,7 @@ sub _process_event {
 
     my $e = {
         event_id    => $e_id,
+        event_ord   => $ord,
         nested      => $nested,
         is_subtest  => $is_subtest,
         is_diag     => $is_diag,
@@ -1242,8 +1297,8 @@ sub update_other {
     if (my $run_data = $f->{harness_run}) {
         my $settings = $run_data->{settings} //= $f->{harness_settings};
 
-        if (my $j = $settings->{runner}->{job_count}) {
-            $run->concurrency($j);
+        if (my $c = $settings->{resource}->{slots}) {
+            $run->concurrency($c);
         }
 
         clean($run_data);

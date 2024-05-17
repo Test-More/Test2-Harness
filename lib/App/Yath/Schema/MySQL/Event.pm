@@ -98,11 +98,11 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:33
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:06
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
+__PACKAGE__->inflate_column('event_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('parent_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 __PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
-__PACKAGE__->inflate_column('event_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

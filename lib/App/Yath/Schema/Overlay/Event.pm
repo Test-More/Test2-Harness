@@ -53,12 +53,7 @@ sub line_data {
     my $is_parent  = $cols{is_subtest} ? 1 : 0;
     my $causes_fail = $cols{causes_fail} ? 1 : 0;
 
-    if (my $r = $self->render) {
-        $out{lines} = $r->data;
-    }
-    else {
-        $out{lines} = [];
-    }
+    $out{lines} = [map { [$_->facet, $_->real_tag, $_->message, $_->data] } $self->renders];
 
     if ($has_binary) {
         for my $binary ($self->binaries) {

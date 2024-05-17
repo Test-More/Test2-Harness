@@ -18,6 +18,7 @@ __PACKAGE__->inflate_column(
     },
 );
 
+sub real_tag { $_[0]->other_tag // $_[0]->tag }
 
 1;
 

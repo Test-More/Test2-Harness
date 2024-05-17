@@ -40,6 +40,40 @@ CREATE TYPE io_stream AS ENUM(
     'STDERR'
 );
 
+CREATE TYPE tags AS ENUM(
+    'other', -- Catch all for any not in this enum
+    'ABOUT',
+    'ARRAY',
+    'BRIEF',
+    'CONTROL',
+    'CRITICAL',
+    'DEBUG',
+    'DIAG',
+    'ENCODING',
+    'ERROR',
+    'FACETS',
+    'FAIL',
+    'FAILED',
+    'FATAL',
+    'HALT',
+    'HARNESS',
+    'KILL',
+    'NO PLAN',
+    'PASS',
+    'PASSED',
+    'PLAN',
+    'REASON',
+    'SHOW',
+    'SKIP ALL',
+    'SKIPPED',
+    'STDERR',
+    'TAGS',
+    'TIMEOUT',
+    'VERSION',
+    'WARN',
+    'WARNING'
+);
+
 CREATE TABLE config(
     config_idx  BIGSERIAL       PRIMARY KEY,
     setting     VARCHAR(128)    NOT NULL,
@@ -290,6 +324,8 @@ CREATE TABLE events (
 
     job_key     UUID        NOT NULL REFERENCES jobs(job_key) ON DELETE CASCADE,
 
+    event_ord   INTEGER     NOT NULL,
+
     is_subtest  BOOL        NOT NULL,
     is_diag     BOOL        NOT NULL,
     is_harness  BOOL        NOT NULL,
@@ -306,8 +342,9 @@ CREATE TABLE events (
 
     parent_id   UUID        DEFAULT NULL, -- REFERENCES events(event_id),
     trace_id    UUID        DEFAULT NULL,
-    nested      INT         NOT NULL DEFAULT 0,
+    nested      SMALLINT    NOT NULL DEFAULT 0,
 
+    UNIQUE(job_key, event_ord),
     UNIQUE(event_id)
 );
 CREATE INDEX IF NOT EXISTS event_job_ts ON events(job_key, stamp);
@@ -316,11 +353,22 @@ CREATE INDEX IF NOT EXISTS event_trace  ON events(trace_id);
 CREATE INDEX IF NOT EXISTS event_parent ON events(parent_id);
 
 CREATE TABLE renders (
-    event_id    UUID        NOT NULL PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,
-    data        JSONB       DEFAULT NULL,
+    render_idx  BIGSERIAL   NOT NULL PRIMARY KEY,
+    job_key     UUID        NOT NULL REFERENCES jobs(job_key)    ON DELETE CASCADE,
+    event_id    UUID        NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
 
-    UNIQUE(event_id)
+    facet       VARCHAR(64) NOT NULL,
+    tag         tags        NOT NULL,
+
+    other_tag   VARCHAR(8)  DEFAULT NULL,
+
+    message     TEXT        NOT NULL,
+    data        JSONB       DEFAULT NULL
 );
+CREATE INDEX IF NOT EXISTS render_event      on renders(event_id);
+CREATE INDEX IF NOT EXISTS render_job        on renders(job_key);
+CREATE INDEX IF NOT EXISTS render_job_tag    on renders(job_key, tag);
+CREATE INDEX IF NOT EXISTS render_job_ot_tag on renders(job_key, tag, other_tag);
 
 CREATE TABLE facets (
     event_id    UUID        NOT NULL PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,

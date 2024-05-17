@@ -4,10 +4,10 @@ t2hui.runtable.build_table = function() {
     var columns = [
         { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.runtable.tool_builder },
 
-        { 'name': 'concurrency',  'label': 'C', 'class': 'count', 'builder': t2hui.runtable.build_concurrency },
-        { 'name': 'passed',  'label': 'P', 'class': 'count', 'builder': t2hui.runtable.build_pass },
-        { 'name': 'failed',  'label': 'F', 'class': 'count', 'builder': t2hui.runtable.build_fail },
-        { 'name': 'retried', 'label': 'R', 'class': 'count', 'builder': t2hui.runtable.build_retry },
+        { 'name': 'concurrency',  'label': 'C', 'tooltip': '[C]oncurrency', 'class': 'count', 'builder': t2hui.runtable.build_concurrency },
+        { 'name': 'passed',  'label': 'P', 'tooltip': '[P]assed', 'class': 'count', 'builder': t2hui.runtable.build_pass },
+        { 'name': 'failed',  'label': 'F', 'tooltip': '[F]ailed', 'class': 'count', 'builder': t2hui.runtable.build_fail },
+        { 'name': 'retried', 'label': 'R', 'tooltip': '[R]etried', 'class': 'count', 'builder': t2hui.runtable.build_retry },
 
         { 'name': 'project', 'label': 'project', 'class': 'project', 'builder': t2hui.runtable.build_project },
         { 'name': 'status',  'label': 'status',  'class': 'status'},

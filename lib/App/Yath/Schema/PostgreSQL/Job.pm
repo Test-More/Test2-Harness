@@ -105,6 +105,12 @@ __PACKAGE__->might_have(
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
+  "renders",
+  "App::Yath::Schema::Result::Render",
+  { "foreign.job_key" => "self.job_key" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->has_many(
   "reportings",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.job_key" => "self.job_key" },
@@ -129,7 +135,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:41
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:14
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

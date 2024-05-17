@@ -58,12 +58,30 @@ sub sig {
 
 sub short_job_fields {
     my $self = shift;
+    my %params = @_;
 
-    return [ map { my $d = +{$_->get_all_fields}; delete $d->{job_key}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->job_fields->search(undef, {
-        remove_columns => ['data'],
-        '+select' => ['data IS NOT NULL AS has_data'],
-        '+as' => ['has_data'],
-    })->all ];
+    my @fields = $params{prefetched_fields} ? $self->job_fields : $self->job_fields->search(
+        undef, {
+            remove_columns => ['data'],
+            '+select'      => ['data IS NOT NULL AS has_data'],
+            '+as'          => ['has_data'],
+        }
+    )->all;
+
+    my @out;
+    for my $jf (@fields) {
+        my $fields = {$jf->get_all_fields};
+
+        my $has_data = 0;
+        $has_data ||= 1 if delete $fields->{data};
+        $has_data ||= 1 if eval { $jf->get_column('has_data') };
+
+        $fields->{has_data} = $has_data ? \'1' : \'0';
+
+        push @out => $fields;
+    }
+
+    return \@out;
 }
 
 sub TO_JSON {
@@ -76,7 +94,7 @@ sub TO_JSON {
     # Inflate
     $cols{parameters} = $self->job_parameter->parameters;
 
-    $cols{fields} = $self->short_job_fields;
+    $cols{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
 
     return \%cols;
 }
@@ -94,7 +112,7 @@ sub glance_data {
     $data{short_file}    = $self->short_file;
     $data{shortest_file} = $self->shortest_file;
 
-    $data{fields} = $self->short_job_fields;
+    $data{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
 
     return \%data;
 }

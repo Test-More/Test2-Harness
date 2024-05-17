@@ -45,15 +45,16 @@ sub handle {
     }
 
     $res->stream(
-        env          => $req->env,
-        content_type => 'application/x-jsonl; charset=utf-8',
+        env   => $req->env,
         cache => $cache,
+
+        content_type => 'application/x-jsonl; charset=utf-8',
 
         done => sub {
             my @keep;
             while (my $set = shift @sets) {
                 my ($check) = @$set;
-                next if $check->(); # Next if done
+                next if $check->();    # Next if done
 
                 # Not done, keep it
                 push @keep => $set;
@@ -64,7 +65,9 @@ sub handle {
             return @sets ? 0 : 1;
         },
 
-        fetch => sub { map { $_->[1]->() } @sets },
+        fetch => sub {
+            map { $_->[1]->() } @sets;
+        },
     );
 
     return $res;
@@ -87,7 +90,7 @@ sub stream_runs {
             'run_fields.details'      => 'run_fields.details',
             'run_fields.raw'          => 'run_fields.raw',
             'run_fields.link'         => 'run_fields.link',
-            'run_fields.data',        => \"run_fields.data IS NOT NULL",
+            'run_fields.has_data',    => \"run_fields.data IS NOT NULL",
             'user'                    => \'user_join.username',
             'project'                 => \'project.name',
         },
@@ -145,14 +148,24 @@ sub stream_jobs {
     my $run = $self->{+RUN} // return;
 
     my $opts = {
-        join => 'test_file',
-        remove_columns => [qw/stdout stderr parameters/],
+        join => ['test_file', 'job_fields'],
+        remove_columns => [qw/stdout stderr parameters run_fields.data/],
         '+select' => [
             'test_file.filename AS file',
         ],
         '+as' => [
             'file',
         ],
+
+        '+columns' => {
+            'prefetched_fields'       => \'1',
+            'job_fields.job_field_id' => 'job_fields.job_field_id',
+            'job_fields.name'         => 'job_fields.name',
+            'job_fields.details'      => 'job_fields.details',
+            'job_fields.raw'          => 'job_fields.raw',
+            'job_fields.link'         => 'job_fields.link',
+            'job_fields.has_data',    => \"job_fields.data IS NOT NULL",
+        },
     };
 
     my %params = (
@@ -198,8 +211,8 @@ sub stream_events {
 
         track_status => 0,
         id_field     => 'event_id',
-        ord_field    => 'event_idx',
-        sort_field   => 'event_idx',
+        ord_field    => 'event_ord',
+        sort_field   => 'event_ord',
         sort_dir     => '-asc',
         method       => 'line_data',
         custom_query => $query,

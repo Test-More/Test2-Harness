@@ -21,21 +21,88 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("renders");
 __PACKAGE__->add_columns(
+  "render_idx",
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "renders_render_idx_seq",
+  },
+  "job_key",
+  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "event_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "facet",
+  { data_type => "varchar", is_nullable => 0, size => 64 },
+  "tag",
+  {
+    data_type => "enum",
+    extra => {
+      custom_type_name => "tags",
+      list => [
+        "other",
+        "ABOUT",
+        "ARRAY",
+        "BRIEF",
+        "CONTROL",
+        "CRITICAL",
+        "DEBUG",
+        "DIAG",
+        "ENCODING",
+        "ERROR",
+        "FACETS",
+        "FAIL",
+        "FAILED",
+        "FATAL",
+        "HALT",
+        "HARNESS",
+        "KILL",
+        "NO PLAN",
+        "PASS",
+        "PASSED",
+        "PLAN",
+        "REASON",
+        "SHOW",
+        "SKIP ALL",
+        "SKIPPED",
+        "STDERR",
+        "TAGS",
+        "TIMEOUT",
+        "VERSION",
+        "WARN",
+        "WARNING",
+      ],
+    },
+    is_nullable => 0,
+  },
+  "other_tag",
+  {
+    data_type => "varchar",
+    default_value => \"null",
+    is_nullable => 1,
+    size => 8,
+  },
+  "message",
+  { data_type => "text", is_nullable => 0 },
   "data",
   { data_type => "jsonb", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("event_id");
+__PACKAGE__->set_primary_key("render_idx");
 __PACKAGE__->belongs_to(
   "event",
   "App::Yath::Schema::Result::Event",
   { event_id => "event_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
+__PACKAGE__->belongs_to(
+  "job",
+  "App::Yath::Schema::Result::Job",
+  { job_key => "job_key" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
+);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:41
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:14
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -67,7 +67,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-15 16:47:39
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:11
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
 __PACKAGE__->inflate_column('session_id' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 # DO NOT MODIFY ANY PART OF THIS FILE

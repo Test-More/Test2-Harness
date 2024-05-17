@@ -4,10 +4,10 @@ t2hui.jobtable.build_table = function() {
     var columns = [
         { 'name': 'tools', 'label': 'tools', 'class': 'tools', 'builder': t2hui.jobtable.tool_builder },
 
-        { 'name': 'try', 'label': 'T', 'class': 'count', 'builder': t2hui.jobtable.build_try },
+        { 'name': 'try', 'label': 'T', 'tooltip': '[T]ry', 'class': 'count', 'builder': t2hui.jobtable.build_try },
 
-        { 'name': 'pass_count',  'label': 'P', 'class': 'count', 'builder': t2hui.jobtable.build_pass },
-        { 'name': 'fail_count',  'label': 'F', 'class': 'count', 'builder': t2hui.jobtable.build_fail },
+        { 'name': 'pass_count', 'tooltip': '[P]ass', 'label': 'P', 'class': 'count', 'builder': t2hui.jobtable.build_pass },
+        { 'name': 'fail_count', 'tooltip': '[F]ail', 'label': 'F', 'class': 'count', 'builder': t2hui.jobtable.build_fail },
 
         { 'name': 'exit',  'label': 'exit',  'class': 'exit', 'builder': t2hui.jobtable.build_exit },
 

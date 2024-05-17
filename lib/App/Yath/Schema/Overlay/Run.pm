@@ -46,11 +46,11 @@ sub sig {
 sub short_run_fields {
     my $self = shift;
 
-    return [ map { my $d = +{$_->get_all_fields}; $d->{data} = $d->{has_data} ? \'1' : \'0'; $d } $self->run_fields->search(undef, {
+    return $self->run_fields->search(undef, {
         remove_columns => ['data'],
         '+select' => ['data IS NOT NULL AS has_data'],
         '+as' => ['has_data'],
-    })->all ];
+    })->all;
 }
 
 sub TO_JSON {
@@ -65,11 +65,17 @@ sub TO_JSON {
     $cols{user}       //= $self->user->username;
     $cols{project}    //= $self->project->name;
 
-    if ($cols{prefetched_fields}) {
-        $cols{fields} = [ map { {$_->get_all_fields} } $self->run_fields ];
-    }
-    else {
-        $cols{fields} = $self->short_run_fields;
+    $cols{fields} = [];
+    for my $rf ($cols{prefetched_fields} ? $self->run_fields : $self->short_run_fields) {
+        my $fields = {$rf->get_all_fields};
+
+        my $has_data = 0;
+        $has_data ||= 1 if delete $fields->{data};
+        $has_data ||= 1 if eval { $rf->get_column('has_data') };
+
+        $fields->{has_data} = $has_data ? \'1' : \'0';
+
+        push @{$cols{fields}} => $fields;
     }
 
     my $dt = DTF()->parse_datetime( $cols{added} );

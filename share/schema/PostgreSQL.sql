@@ -318,31 +318,40 @@ CREATE TABLE job_fields (
 CREATE INDEX IF NOT EXISTS job_fields_job_key ON job_fields(job_key);
 CREATE INDEX IF NOT EXISTS job_fields_name    ON job_fields(name);
 
+CREATE TABLE resources(
+    resource_idx   BIGSERIAL   NOT NULL PRIMARY KEY,
+    name           TEXT        NOT NULL,
+
+    UNIQUE(name)
+);
+
 CREATE TABLE events (
-    event_idx   BIGSERIAL   NOT NULL PRIMARY KEY,
-    event_id    UUID        NOT NULL,
+    event_idx       BIGSERIAL   NOT NULL PRIMARY KEY,
+    event_id        UUID        NOT NULL,
 
-    job_key     UUID        NOT NULL REFERENCES jobs(job_key) ON DELETE CASCADE,
+    job_key         UUID        NOT NULL REFERENCES jobs(job_key) ON DELETE CASCADE,
 
-    event_ord   INTEGER     NOT NULL,
+    event_ord       INTEGER     NOT NULL,
 
-    is_subtest  BOOL        NOT NULL,
-    is_diag     BOOL        NOT NULL,
-    is_harness  BOOL        NOT NULL,
-    is_time     BOOL        NOT NULL,
-    is_assert   BOOL        NOT NULL,
+    is_subtest      BOOL        NOT NULL,
+    is_diag         BOOL        NOT NULL,
+    is_harness      BOOL        NOT NULL,
+    is_time         BOOL        NOT NULL,
+    is_assert       BOOL        NOT NULL,
 
-    causes_fail BOOL        NOT NULL,
+    causes_fail     BOOL        NOT NULL,
 
-    has_binary  BOOL        NOT NULL,
-    has_facets  BOOL        NOT NULL,
-    has_orphan  BOOL        NOT NULL,
+    has_binary      BOOL        NOT NULL,
+    has_facets      BOOL        NOT NULL,
+    has_orphan      BOOL        NOT NULL,
 
-    stamp       TIMESTAMP   DEFAULT NULL,
+    resource_idx    BIGINT      DEFAULT NULL REFERENCES resources(resource_idx) ON DELETE SET NULL,
 
-    parent_id   UUID        DEFAULT NULL, -- REFERENCES events(event_id),
-    trace_id    UUID        DEFAULT NULL,
-    nested      SMALLINT    NOT NULL DEFAULT 0,
+    stamp       TIMESTAMP       NOT NULL,
+
+    parent_id   UUID            DEFAULT NULL, -- REFERENCES events(event_id),
+    trace_id    UUID            DEFAULT NULL,
+    nested      SMALLINT        NOT NULL DEFAULT 0,
 
     UNIQUE(job_key, event_ord),
     UNIQUE(event_id)
@@ -372,19 +381,34 @@ CREATE INDEX IF NOT EXISTS render_job_ot_tag on renders(job_key, tag, other_tag)
 
 CREATE TABLE facets (
     event_id    UUID        NOT NULL PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,
-    data        JSONB       DEFAULT NULL,
-    line        BIGINT      DEFAULT NULL,
+    data        JSONB       NOT NULL,
+    line        BIGINT      NOT NULL,
 
     UNIQUE(event_id)
 );
 
 CREATE TABLE orphans (
     event_id    UUID        NOT NULL PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,
-    data        JSONB       DEFAULT NULL,
-    line        BIGINT      DEFAULT NULL,
+    data        JSONB       NOT NULL,
+    line        BIGINT      NOT NULL,
 
     UNIQUE(event_id)
 );
+
+CREATE TABLE resource_data (
+    resource_data_idx   BIGSERIAL   NOT NULL PRIMARY KEY,
+    resource_idx        BIGINT      NOT NULL REFERENCES resources(resource_idx) ON DELETE CASCADE,
+    event_id            UUID        NOT NULL REFERENCES events(event_id)        ON DELETE CASCADE,
+    run_id              UUID        NOT NULL REFERENCES runs(run_id)            ON DELETE CASCADE,
+
+    data                JSONB       NOT NULL,
+    line                BIGINT      NOT NULL,
+
+    UNIQUE(event_id)
+);
+CREATE INDEX IF NOT EXISTS res_data_runs         ON resource_data(run_id);
+CREATE INDEX IF NOT EXISTS res_data_res          ON resource_data(resource_idx);
+CREATE INDEX IF NOT EXISTS res_data_runs_and_res ON resource_data(run_id, resource_idx);
 
 CREATE TABLE binaries (
     binary_idx      BIGSERIAL       NOT NULL PRIMARY KEY,
@@ -462,18 +486,3 @@ CREATE INDEX IF NOT EXISTS reporting_a    ON reporting(project_idx);
 CREATE INDEX IF NOT EXISTS reporting_b    ON reporting(project_idx, user_idx);
 CREATE INDEX IF NOT EXISTS reporting_e    ON reporting(project_idx, test_file_idx, subtest, user_idx, reporting_idx);
 
-CREATE TABLE resource_batch (
-    resource_batch_idx  BIGSERIAL       PRIMARY KEY,
-    run_id              UUID            NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
-    host_idx            BIGINT          NOT NULL REFERENCES hosts(host_idx) ON DELETE CASCADE,
-    stamp               TIMESTAMP(4)    NOT NULL
-);
-CREATE INDEX IF NOT EXISTS resource_batch_run ON resource_batch(run_id);
-
-CREATE TABLE resources (
-    resource_idx        BIGSERIAL       NOT NULL PRIMARY KEY,
-    resource_batch_idx  BIGINT          NOT NULL REFERENCES resource_batch(resource_batch_idx) ON DELETE CASCADE,
-    module              VARCHAR(512)    NOT NULL,
-    data                JSONB           NOT NULL
-);
-CREATE INDEX IF NOT EXISTS resources_batch_idx ON resources(resource_batch_idx);

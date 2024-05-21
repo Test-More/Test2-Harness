@@ -130,8 +130,8 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "resource_batches",
-  "App::Yath::Schema::Result::ResourceBatch",
+  "resource_datas",
+  "App::Yath::Schema::Result::ResourceData",
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
@@ -161,7 +161,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:14
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

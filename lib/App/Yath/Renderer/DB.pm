@@ -23,10 +23,6 @@ use Test2::Harness::Util::HashBase qw{
     <pid
     <write_pipe
     <stopped
-
-    +resource_interval
-    +resources
-    <last_resource_stamp
 };
 
 use Getopt::Yath;
@@ -37,15 +33,6 @@ include_options(
     'App::Yath::Options::Publish',
     'App::Yath::Options::WebClient',
 );
-
-option_group {group => 'db', prefix => 'db', category => "Database Options"} => sub {
-    option resources => (
-        type => 'Auto',
-        description => 'Send resource info (for supported resources) to the database at the specified interval in seconds (5 if not specified)',
-        long_examples => ['', '=5'],
-        autofill => 5,
-    );
-};
 
 sub start {
     my $self = shift;
@@ -110,12 +97,6 @@ sub render_event {
     return;
 }
 
-sub step {
-    my $self = shift;
-
-    $self->send_resources();
-}
-
 sub signal {
     my $self = shift;
     my ($sig) = @_;
@@ -159,69 +140,6 @@ sub finish {
     $self->_stop('finish');
     $self->_close();
     $self->_wait();
-
-    return;
-}
-
-sub resource_interval {
-    my $self = shift;
-    return $self->{+RESOURCE_INTERVAL} //= $self->settings->db->resources;
-}
-
-sub resources {
-    my $self = shift;
-    return $self->{+RESOURCES} if $self->{+RESOURCES};
-
-    die "FIXME";
-
-    my $state = $self->state;
-    $state->poll;
-
-    return $self->{+RESOURCES} = [grep { $_ && $_->can('status_data') } @{$state->resources}];
-}
-
-sub send_resources {
-    my $self = shift;
-
-    my $interval = $self->resource_interval or return;
-    my $resources = $self->resources or return;
-    return unless @$resources;
-
-    my $stamp = time;
-
-    if (my $last = $self->{+LAST_RESOURCE_STAMP}) {
-        my $delta = $stamp - $last;
-        return unless $delta >= $interval;
-    }
-
-    unless(eval { $self->_send_resources($stamp => $resources); 1 }) {
-        my $err = $@;
-        warn "Non fatal error, could not send resource info to YathUI: $err";
-        return;
-    }
-
-    return $self->{+LAST_RESOURCE_STAMP} = $stamp;
-}
-
-sub _send_resources {
-    my $self = shift;
-    my ($stamp, $resources) = @_;
-
-    my @items;
-    for my $res (@$resources) {
-        my $data = $res->status_data or next;
-
-        my $item = {
-            module => ref($res) || $res,
-            data   => encode_ascii_json($data),
-        };
-
-        push @items => $item;
-    }
-
-    return unless @items;
-
-    $self->render_event({facet_data => {db_resources => {stamp => $stamp, items => \@items}}});
 
     return;
 }

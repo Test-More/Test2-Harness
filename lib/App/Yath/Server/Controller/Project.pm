@@ -183,7 +183,7 @@ sub get_add_query {
 
     return ('') unless $n || @$users || $range;
 
-    return ("AND run_ord > (SELECT MAX(run_ord) - ? FROM runs)\n", $n)
+    return ("AND run_idx > (SELECT MAX(run_idx) - ? FROM runs)\n", $n)
         unless @$users || $range;
 
     my @add_vals;
@@ -198,7 +198,7 @@ sub get_add_query {
 
     if ($range) {
         my $query = <<"        EOT";
-            SELECT min(run_ord) AS min, max(run_ord) AS max
+            SELECT min(run_idx) AS min, max(run_idx) AS max
               FROM runs
              WHERE project_idx = ?
                AND added >= ?
@@ -213,19 +213,19 @@ sub get_add_query {
 
         my $ords = $sth->fetchrow_hashref;
 
-        my $ord_query = "run_ord >= ? AND run_ord <= ?";
+        my $ord_query = "run_idx >= ? AND run_idx <= ?";
         push @add_vals => ($ords->{min}, $ords->{max});
         return ("AND $user_query AND $ord_query", @add_vals) if @$users;
         return ("AND $ord_query", @add_vals);
     }
 
     my $query = <<"    EOT";
-        SELECT run_ord, run_id
+        SELECT run_idx, run_id
           FROM reporting
          WHERE project_idx = ?
            AND $user_query
-      GROUP BY run_ord, run_id
-      ORDER BY run_ord DESC
+      GROUP BY run_idx, run_id
+      ORDER BY run_idx DESC
          LIMIT ?
     EOT
 
@@ -261,7 +261,7 @@ sub _build_stat_run_list {
 
     my @ids = map { uuid_inflate($_->[0]) } @{$sth->fetchall_arrayref};
 
-    my @items = map { $_->TO_JSON } $schema->resultset('Run')->search({run_id => {'-in' => \@ids}}, {order_by => {'-DESC' => 'run_ord'}})->all;
+    my @items = map { $_->TO_JSON } $schema->resultset('Run')->search({run_id => {'-in' => \@ids}}, {order_by => {'-DESC' => 'run_idx'}})->all;
 
     $stat->{runs} = \@items;
 }
@@ -279,7 +279,7 @@ sub _build_stat_expensive_files {
         SELECT test_files.filename      AS filename,
                SUM(duration)            AS total_duration,
                AVG(duration)            AS average_duration,
-               COUNT(DISTINCT(run_ord)) AS runs,
+               COUNT(DISTINCT(run_id)) AS runs,
                COUNT(duration)          AS tries,
                COUNT(DISTINCT(user_idx)) AS users,
                SUM(pass)                AS pass,
@@ -333,7 +333,7 @@ sub _build_stat_expensive_subtests {
                subtest                  AS subtest,
                SUM(duration)            AS total_duration,
                AVG(duration)            AS average_duration,
-               COUNT(DISTINCT(run_ord)) AS runs,
+               COUNT(DISTINCT(run_id))  AS runs,
                COUNT(duration)          AS tries,
                COUNT(DISTINCT(user_idx)) AS users,
                SUM(pass)                AS pass,
@@ -434,7 +434,7 @@ sub _build_stat_user_summary {
     my $query = <<"    EOT";
         SELECT SUM(duration)            AS total_duration,
                AVG(duration)            AS average_duration,
-               COUNT(DISTINCT(run_ord)) AS runs,
+               COUNT(DISTINCT(run_id))  AS runs,
                COUNT(DISTINCT(user_idx)) AS users,
                SUM(pass)                AS pass,
                SUM(fail)                AS fail,

@@ -32,7 +32,7 @@ __PACKAGE__->set_primary_key("job_parameters_idx");
 __PACKAGE__->add_unique_constraint("job_key", ["job_key"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:40
 use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
 __PACKAGE__->inflate_column('job_key' => { inflate => \&uuid_inflate, deflate => \&uuid_deflate });
 # DO NOT MODIFY ANY PART OF THIS FILE

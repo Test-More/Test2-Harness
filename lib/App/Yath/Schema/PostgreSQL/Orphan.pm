@@ -24,9 +24,9 @@ __PACKAGE__->add_columns(
   "event_id",
   { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "data",
-  { data_type => "jsonb", is_nullable => 1 },
+  { data_type => "jsonb", is_nullable => 0 },
   "line",
-  { data_type => "bigint", is_nullable => 1 },
+  { data_type => "bigint", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("event_id");
 __PACKAGE__->belongs_to(
@@ -37,7 +37,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:14
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

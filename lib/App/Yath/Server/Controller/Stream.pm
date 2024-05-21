@@ -79,21 +79,22 @@ sub stream_runs {
 
     my $schema = $self->schema;
 
+    # FIXME: Does this make it faster or slower?
     my $opts = {
-        remove_columns => [qw/run_fields.data/],
-
-        join       => [qw/user_join project run_fields/],
-        '+columns' => {
-            'prefetched_fields'       => \'1',
-            'run_fields.run_field_id' => 'run_fields.run_field_id',
-            'run_fields.name'         => 'run_fields.name',
-            'run_fields.details'      => 'run_fields.details',
-            'run_fields.raw'          => 'run_fields.raw',
-            'run_fields.link'         => 'run_fields.link',
-            'run_fields.has_data',    => \"run_fields.data IS NOT NULL",
-            'user'                    => \'user_join.username',
-            'project'                 => \'project.name',
-        },
+#        remove_columns => [qw/run_fields.data/],
+#
+#        join       => [qw/user_join project run_fields/],
+#        '+columns' => {
+#            'prefetched_fields'       => \'1',
+#            'run_fields.run_field_id' => 'run_fields.run_field_id',
+#            'run_fields.name'         => 'run_fields.name',
+#            'run_fields.details'      => 'run_fields.details',
+#            'run_fields.raw'          => 'run_fields.raw',
+#            'run_fields.link'         => 'run_fields.link',
+#            'run_fields.has_data',    => \"run_fields.data IS NOT NULL",
+#            'user'                    => \'user_join.username',
+#            'project'                 => \'project.name',
+#        },
     };
 
     my %params = (
@@ -113,29 +114,25 @@ sub stream_runs {
         timeout => 60 * 30,    # 30 min.
     );
 
-    my $id     = $route->{id};
-    my $uuid   = uuid_inflate($id);
-    my $run_id = $route->{run_id};
-
-    if ($id) {
-        if (my $uuid = uuid_inflate($id)) {
-            $run_id //= $uuid;
-        }
-        else {
-            my $p_rs = $schema->resultset('Project');
-            my $u_rs = $schema->resultset('User');
-            if (my $project = eval { $p_rs->find({name => $id}) }) {
-                $params{search_base} = $params{search_base}->search_rs({'me.project_idx' => $project->project_idx});
-            }
-            elsif (my $user = eval { $u_rs->find({username => $id}) }) {
-                $params{search_base} = $params{search_base}->search_rs({'me.user_idx' => $user->user_idx});
-            }
-        }
-    }
+    my $run_id     = $route->{run_id};
+    my $user_id    = $route->{user_id};
+    my $project_id = $route->{project_id};
+    my ($project, $user, $run);
 
     if($run_id) {
         $run_id = uuid_inflate($run_id) or die error(404 => "Invalid run id");
         return $self->stream_single(%params, id => $run_id);
+    }
+
+    if ($project_id) {
+        my $p_rs = $schema->resultset('Project');
+        $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_idx => $project_id}) } // die error(404 => 'Invalid Project');
+        $params{search_base} = $params{search_base}->search_rs({'me.project_idx' => $project->project_idx});
+    }
+    elsif ($user_id) {
+        my $u_rs = $schema->resultset('User');
+        $user = eval { $u_rs->find({username => $user_id}) } // eval { $u_rs->find({user_idx => $user_id}) } // die error(404 => 'Invalid User');
+        $params{search_base} = $params{search_base}->search_rs({'me.user_idx' => $user->user_idx});
     }
 
     return $self->stream_set(%params);
@@ -147,25 +144,15 @@ sub stream_jobs {
 
     my $run = $self->{+RUN} // return;
 
+    # FIXME: Does this make it faster or slower?
     my $opts = {
-        join => ['test_file', 'job_fields'],
-        remove_columns => [qw/stdout stderr parameters run_fields.data/],
-        '+select' => [
-            'test_file.filename AS file',
-        ],
-        '+as' => [
-            'file',
-        ],
-
-        '+columns' => {
-            'prefetched_fields'       => \'1',
-            'job_fields.job_field_id' => 'job_fields.job_field_id',
-            'job_fields.name'         => 'job_fields.name',
-            'job_fields.details'      => 'job_fields.details',
-            'job_fields.raw'          => 'job_fields.raw',
-            'job_fields.link'         => 'job_fields.link',
-            'job_fields.has_data',    => \"job_fields.data IS NOT NULL",
-        },
+#        join => ['test_file'],
+#        '+select' => [
+#            'test_file.filename AS file',
+#        ],
+#        '+as' => [
+#            'file',
+#        ],
     };
 
     my %params = (

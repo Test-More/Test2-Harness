@@ -30,46 +30,47 @@ sub handle {
 
     my $schema = $self->schema;
 
-    my $id     = $route->{id};
-    my $run_id = $route->{run_id};
-    my ($project, $user);
+    my $run_id     = $route->{run_id};
+    my $user_id    = $route->{user_id};
+    my $project_id = $route->{project_id};
+    my ($project, $user, $run);
 
-    if ($id) {
-        if (my $uuid = uuid_inflate($id)) {
-            $run_id //= $uuid;
-        }
-        else {
-            my $p_rs = $schema->resultset('Project');
-            my $u_rs = $schema->resultset('User');
-            if (my $project = eval { $p_rs->find({name => $id}) }) {
-                $self->{+TITLE} .= ">" . $project->name;
-            }
-            elsif (my $user = eval { $u_rs->find({username => $id}) }) {
-                $self->{+TITLE} .= ">" . $user->username;
-            }
-        }
+    my @url;
+    if ($project_id) {
+        my $p_rs = $schema->resultset('Project');
+        $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_idx => $project_id}) } // die error(404 => 'Invalid Project');
+        $self->{+TITLE} .= ">" . $project->name;
+        @url = ('project', $project_id);
     }
-
-    if($run_id) {
+    elsif ($user_id) {
+        my $u_rs = $schema->resultset('User');
+        $user = eval { $u_rs->find({username => $user_id}) } // eval { $u_rs->find({user_idx => $user_id}) } // die error(404 => 'Invalid User');
+        $self->{+TITLE} .= ">" . $user->username;
+        @url = ('user', $user_id);
+    }
+    elsif($run_id) {
         $run_id = uuid_inflate($run_id) or die error(404 => 'Invalid Run');
+        push @url => $run_id;
 
-        my $run = eval { $schema->resultset('Run')->find({run_id => $run_id}) } or die error(404 => 'Invalid Run');
+        $run = eval { $schema->resultset('Run')->find({run_id => $run_id}) } or die error(404 => 'Invalid Run');
         $self->{+TITLE} .= ">" . $run->project->name;
-    }
 
-    my $job_uuid = $route->{job};
-    my $job_try  = $route->{try};
+        my $job_try = $route->{try};
 
-    if ($job_uuid) {
-        $job_uuid = uuid_inflate($job_uuid) or die error(404 => 'Invalid Job');
-        my $job = find_job($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
-        $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
+        if (my $job_uuid = $route->{job}) {
+            $job_uuid = uuid_inflate($job_uuid) or die error(404 => 'Invalid Job');
+            my $job = find_job($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
+            $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
+            push @url => $job_uuid;
+        }
+
+        push @url => $job_try if $job_try;
     }
 
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
 
     my $base_uri   = $req->base->as_string;
-    my $stream_uri = join '/' => $base_uri . 'stream', grep {length $_} ($id // $run_id), $job_uuid, $job_try;
+    my $stream_uri = join '/' => $base_uri . 'stream', @url;
 
     my $content = $tx->render(
         'view.tx',

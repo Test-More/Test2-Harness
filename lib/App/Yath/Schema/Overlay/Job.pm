@@ -72,11 +72,8 @@ sub short_job_fields {
     for my $jf (@fields) {
         my $fields = {$jf->get_all_fields};
 
-        my $has_data = 0;
-        $has_data ||= 1 if delete $fields->{data};
-        $has_data ||= 1 if eval { $jf->get_column('has_data') };
-
-        $fields->{has_data} = $has_data ? \'1' : \'0';
+        my $has_data = delete $fields->{data};
+        $fields->{has_data} //= $has_data ? \'1' : \'0';
 
         push @out => $fields;
     }
@@ -99,7 +96,7 @@ sub TO_JSON {
     return \%cols;
 }
 
-my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file status job_ord run_id };
+my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file status job_idx run_id };
 
 sub glance_data {
     my $self = shift;

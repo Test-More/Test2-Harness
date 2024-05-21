@@ -64,8 +64,8 @@ t2hui.runtable.build_project = function(item, col) {
     if (val === null) { return };
     if (val === undefined) { return };
 
-    var vlink = base_uri  + 'view/' + item.project_id;
-    var slink = base_uri  + 'project/' + item.project_id;
+    var vlink = base_uri  + 'view/project/' + val;
+    var slink = base_uri  + 'project/' + val;
 
     var stats = $('<a class="tool etoggle" title="Project Stats" href="' + slink + '"><img src="/img/stats.png" /></a>');
     var proj  = $('<a title="See runs for ' + val + '" href="' + vlink + '">' + val + '</a>');
@@ -79,7 +79,7 @@ t2hui.runtable.build_user = function(item, col) {
     if (val === null) { return };
     if (val === undefined) { return };
 
-    var vlink = base_uri  + 'view/' + item.user_id;
+    var vlink = base_uri  + 'view/user/' + val;
 
     var proj  = $('<a title="See runs for ' + val + '" href="' + vlink + '">' + val + '</a>');
     col.append(proj);

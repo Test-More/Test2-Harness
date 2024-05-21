@@ -158,16 +158,20 @@ sub router {
     $router->connect('/lookup/:lookup'      => {controller => 'App::Yath::Server::Controller::Lookup'});
     $router->connect('/lookup/data/:lookup' => {controller => 'App::Yath::Server::Controller::Lookup', data => 1});
 
-    $router->connect('/view'                   => {controller => 'App::Yath::Server::Controller::View'});
-    $router->connect('/view/:id'               => {controller => 'App::Yath::Server::Controller::View'});
-    $router->connect('/view/:run_id/:job'      => {controller => 'App::Yath::Server::Controller::View'});
-    $router->connect('/view/:run_id/:job/:try' => {controller => 'App::Yath::Server::Controller::View'});
+    $router->connect('/view'                     => {controller => 'App::Yath::Server::Controller::View'});
+    $router->connect('/view/:run_id'             => {controller => 'App::Yath::Server::Controller::View'});
+    $router->connect('/view/:run_id/:job'        => {controller => 'App::Yath::Server::Controller::View'});
+    $router->connect('/view/:run_id/:job/:try'   => {controller => 'App::Yath::Server::Controller::View'});
+    $router->connect('/view/user/:user_id'       => {controller => 'App::Yath::Server::Controller::View'});
+    $router->connect('/view/project/:project_id' => {controller => 'App::Yath::Server::Controller::View'});
 
-    $router->connect('/stream/run/:run_id'       => {controller => 'App::Yath::Server::Controller::Stream', run_only => 1});
-    $router->connect('/stream'                   => {controller => 'App::Yath::Server::Controller::Stream'});
-    $router->connect('/stream/:id'               => {controller => 'App::Yath::Server::Controller::Stream'});
-    $router->connect('/stream/:run_id/:job'      => {controller => 'App::Yath::Server::Controller::Stream'});
-    $router->connect('/stream/:run_id/:job/:try' => {controller => 'App::Yath::Server::Controller::Stream'});
+    $router->connect('/stream'                     => {controller => 'App::Yath::Server::Controller::Stream'});
+    $router->connect('/stream/:run_id'             => {controller => 'App::Yath::Server::Controller::Stream'});
+    $router->connect('/stream/:run_id/:job'        => {controller => 'App::Yath::Server::Controller::Stream'});
+    $router->connect('/stream/:run_id/:job/:try'   => {controller => 'App::Yath::Server::Controller::Stream'});
+    $router->connect('/stream/run/:run_id'         => {controller => 'App::Yath::Server::Controller::Stream', run_only => 1});
+    $router->connect('/stream/user/:user_id'       => {controller => 'App::Yath::Server::Controller::Stream'});
+    $router->connect('/stream/project/:project_id' => {controller => 'App::Yath::Server::Controller::Stream'});
 
     $router->connect('/sweeper/:count/days'    => {controller => 'App::Yath::Server::Controller::Sweeper', units => 'day'});
     $router->connect('/sweeper/:count/hours'   => {controller => 'App::Yath::Server::Controller::Sweeper', units => 'hour'});

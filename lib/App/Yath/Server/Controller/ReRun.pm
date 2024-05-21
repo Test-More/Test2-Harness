@@ -34,7 +34,7 @@ sub handle {
     my $schema = $self->schema;
 
     my $query = {};
-    my $attrs = {order_by => {'-desc' => 'run_ord'}, rows => 1};
+    my $attrs = {order_by => {'-desc' => 'run_idx'}, rows => 1};
 
     my $run;
     my $ok = eval {

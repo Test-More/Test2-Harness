@@ -9,6 +9,7 @@ use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Util qw/share_dir/;
 use App::Yath::Schema::Util qw/find_job/;
 use Test2::Harness::Util::JSON qw/encode_json/;
+use App::Yath::Schema::UUID qw/uuid_inflate/;
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;

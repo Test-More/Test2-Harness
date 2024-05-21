@@ -82,7 +82,7 @@ sub data {
                 {start => {'<=' => $stamp}},
             ],
         },
-        {order_by => 'job_ord'},
+        {order_by => 'job_idx'},
     );
 
     my $req = $self->{+REQUEST};

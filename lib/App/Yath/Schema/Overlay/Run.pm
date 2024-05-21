@@ -69,11 +69,8 @@ sub TO_JSON {
     for my $rf ($cols{prefetched_fields} ? $self->run_fields : $self->short_run_fields) {
         my $fields = {$rf->get_all_fields};
 
-        my $has_data = 0;
-        $has_data ||= 1 if delete $fields->{data};
-        $has_data ||= 1 if eval { $rf->get_column('has_data') };
-
-        $fields->{has_data} = $has_data ? \'1' : \'0';
+        my $has_data = delete $fields->{data};
+        $fields->{has_data} //= $has_data ? \'1' : \'0';
 
         push @{$cols{fields}} => $fields;
     }

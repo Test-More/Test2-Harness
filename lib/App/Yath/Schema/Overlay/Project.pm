@@ -25,7 +25,7 @@ sub last_covered_run {
     };
 
     my $attrs = {
-        order_by => {'-desc' => 'run_ord'},
+        order_by => {'-desc' => 'run_idx'},
         rows => 1,
     };
 
@@ -79,7 +79,7 @@ sub durations {
               FROM runs
               JOIN users USING(user_idx)
               $where
-             ORDER BY run_ord DESC
+             ORDER BY run_idx DESC
              LIMIT ?
         EOT
 

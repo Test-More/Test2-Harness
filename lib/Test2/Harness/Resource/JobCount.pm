@@ -73,6 +73,8 @@ sub assign {
 
     $env->{T2_HARNESS_MY_JOB_CONCURRENCY} = $count;
 
+    $self->send_data_event;
+
     return $env;
 }
 
@@ -84,6 +86,8 @@ sub release {
     my $count = $assign->{count};
 
     $self->{+USED} -= $count;
+
+    $self->send_data_event;
 
     return $id;
 }

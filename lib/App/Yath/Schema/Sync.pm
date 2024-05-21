@@ -422,7 +422,7 @@ sub render_jobs {
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                run_id, job_key, job_id, job_try, job_ord, is_harness_out, status, parameters, fields, name, fail, retry,
+                run_id, job_key, job_id, job_try, job_idx, is_harness_out, status, parameters, fields, name, fail, retry,
                 exit_code, launch, start, ended, duration, pass_count, fail_count,
                 test_files.filename
           FROM jobs
@@ -492,7 +492,7 @@ sub render_reporting {
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                reporting_idx, run_id, run_ord, job_try, subtest, duration, fail, pass, retry, abort, job_key, event_id,
+                reporting_idx, run_id, run_idx, job_try, subtest, duration, fail, pass, retry, abort, job_key, event_id,
                 projects.name AS project_name,
                 users.username AS username,
                 test_files.filename AS filename

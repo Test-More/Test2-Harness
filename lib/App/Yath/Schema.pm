@@ -42,7 +42,7 @@ sub vague_run_search {
     my ($project, $run, $user);
 
     my $query = $params{query} // {status => 'complete'};
-    my $attrs = $params{attrs} // {order_by => {'-desc' => 'run_ord'}, rows => 1};
+    my $attrs = $params{attrs} // {order_by => {'-desc' => 'run_idx'}, rows => 1};
 
     $attrs->{offset} = $params{idx} if $params{idx};
 

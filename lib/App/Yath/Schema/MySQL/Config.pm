@@ -32,7 +32,7 @@ __PACKAGE__->set_primary_key("config_idx");
 __PACKAGE__->add_unique_constraint("setting", ["setting"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:35
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

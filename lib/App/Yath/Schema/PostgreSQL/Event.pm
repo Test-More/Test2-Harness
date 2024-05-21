@@ -52,8 +52,10 @@ __PACKAGE__->add_columns(
   { data_type => "boolean", is_nullable => 0 },
   "has_orphan",
   { data_type => "boolean", is_nullable => 0 },
+  "resource_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "stamp",
-  { data_type => "timestamp", is_nullable => 1 },
+  { data_type => "timestamp", is_nullable => 0 },
   "parent_id",
   { data_type => "uuid", is_nullable => 1, size => 16 },
   "trace_id",
@@ -100,9 +102,26 @@ __PACKAGE__->has_many(
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
+__PACKAGE__->belongs_to(
+  "resource",
+  "App::Yath::Schema::Result::Resource",
+  { resource_idx => "resource_idx" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "SET NULL",
+    on_update     => "NO ACTION",
+  },
+);
+__PACKAGE__->might_have(
+  "resource_data",
+  "App::Yath::Schema::Result::ResourceData",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-17 12:15:14
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

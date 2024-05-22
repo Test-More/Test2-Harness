@@ -10,9 +10,19 @@ my $version = App::Yath::Schema::Util->VERSION;
 
 my $schemadir = './share/schema/';
 
-opendir(my $dh, $schemadir) or die "Could not open schema dir: $!";
 my $start_pid = $$;
-for my $schema_file (sort readdir($dh)) {
+
+my @todo;
+if (@ARGV) {
+    @todo = map { /\.sql$/ ? $_ : "${_}.sql"} @ARGV;
+}
+
+unless (@todo) {
+    opendir(my $dh, $schemadir) or die "Could not open schema dir: $!";
+    @todo = sort readdir($dh);
+}
+
+for my $schema_file (@todo) {
     exit(0) unless $$ == $start_pid;
     next unless $schema_file =~ m/\.sql$/;
 
@@ -78,8 +88,12 @@ for my $schema_file (sort readdir($dh)) {
 
                 rel_name_map => sub {
                     my ($info) = @_;
-                    $info->{name} =~ s/_idx$//;
-                    $info->{name} =~ s/_key$//;
+                    return "facets"       if $info->{name} eq 'facet';
+                    return "orphans"      if $info->{name} eq 'orphan';
+                    return "reports"      if $info->{name} eq 'reportings';
+                    return "renderings"   if $info->{name} eq 'renders';
+                    return "children"     if $info->{name} eq 'events' && $info->{local_class} eq 'App::Yath::Schema::Result::Event';
+                    return "parent_event" if $info->{name} eq 'parent';
                     return $info->{name};
                 },
 

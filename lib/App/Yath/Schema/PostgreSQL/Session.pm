@@ -22,11 +22,19 @@ __PACKAGE__->load_components(
 __PACKAGE__->table("sessions");
 __PACKAGE__->add_columns(
   "session_id",
+  {
+    data_type         => "bigint",
+    is_auto_increment => 1,
+    is_nullable       => 0,
+    sequence          => "sessions_session_id_seq",
+  },
+  "session_uuid",
   { data_type => "uuid", is_nullable => 0, size => 16 },
   "active",
   { data_type => "boolean", default_value => \"true", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("session_id");
+__PACKAGE__->add_unique_constraint("sessions_session_uuid_key", ["session_uuid"]);
 __PACKAGE__->has_many(
   "session_hosts",
   "App::Yath::Schema::Result::SessionHost",
@@ -35,7 +43,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

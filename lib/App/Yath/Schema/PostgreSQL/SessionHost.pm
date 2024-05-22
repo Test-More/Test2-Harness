@@ -21,17 +21,17 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("session_hosts");
 __PACKAGE__->add_columns(
-  "session_host_idx",
+  "session_host_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "session_hosts_session_host_idx_seq",
+    sequence          => "session_hosts_session_host_id_seq",
   },
-  "user_idx",
+  "user_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "session_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "created",
   {
     data_type     => "timestamp",
@@ -51,7 +51,7 @@ __PACKAGE__->add_columns(
   "agent",
   { data_type => "text", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("session_host_idx");
+__PACKAGE__->set_primary_key("session_host_id");
 __PACKAGE__->add_unique_constraint(
   "session_hosts_session_id_address_agent_key",
   ["session_id", "address", "agent"],
@@ -65,7 +65,7 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
-  { user_idx => "user_idx" },
+  { user_id => "user_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -75,7 +75,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -21,27 +21,27 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("source_subs");
 __PACKAGE__->add_columns(
-  "source_sub_idx",
+  "source_sub_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "source_subs_source_sub_idx_seq",
+    sequence          => "source_subs_source_sub_id_seq",
   },
   "subname",
   { data_type => "varchar", is_nullable => 0, size => 512 },
 );
-__PACKAGE__->set_primary_key("source_sub_idx");
+__PACKAGE__->set_primary_key("source_sub_id");
 __PACKAGE__->add_unique_constraint("source_subs_subname_key", ["subname"]);
 __PACKAGE__->has_many(
   "coverages",
   "App::Yath::Schema::Result::Coverage",
-  { "foreign.source_sub_idx" => "self.source_sub_idx" },
+  { "foreign.source_sub_id" => "self.source_sub_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

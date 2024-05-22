@@ -21,27 +21,27 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("coverage_manager");
 __PACKAGE__->add_columns(
-  "coverage_manager_idx",
+  "coverage_manager_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "coverage_manager_coverage_manager_idx_seq",
+    sequence          => "coverage_manager_coverage_manager_id_seq",
   },
   "package",
   { data_type => "varchar", is_nullable => 0, size => 256 },
 );
-__PACKAGE__->set_primary_key("coverage_manager_idx");
+__PACKAGE__->set_primary_key("coverage_manager_id");
 __PACKAGE__->add_unique_constraint("coverage_manager_package_key", ["package"]);
 __PACKAGE__->has_many(
   "coverages",
   "App::Yath::Schema::Result::Coverage",
-  { "foreign.coverage_manager_idx" => "self.coverage_manager_idx" },
+  { "foreign.coverage_manager_id" => "self.coverage_manager_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

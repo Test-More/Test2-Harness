@@ -21,17 +21,17 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("renders");
 __PACKAGE__->add_columns(
-  "render_idx",
+  "render_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "renders_render_idx_seq",
+    sequence          => "renders_render_id_seq",
   },
-  "job_key",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "job_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "event_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "facet",
   { data_type => "varchar", is_nullable => 0, size => 64 },
   "tag",
@@ -87,7 +87,7 @@ __PACKAGE__->add_columns(
   "data",
   { data_type => "jsonb", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("render_idx");
+__PACKAGE__->set_primary_key("render_id");
 __PACKAGE__->belongs_to(
   "event",
   "App::Yath::Schema::Result::Event",
@@ -97,12 +97,12 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "job",
   "App::Yath::Schema::Result::Job",
-  { job_key => "job_key" },
+  { job_id => "job_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

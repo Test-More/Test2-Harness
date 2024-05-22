@@ -21,19 +21,27 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("events");
 __PACKAGE__->add_columns(
-  "event_idx",
+  "event_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "events_event_idx_seq",
+    sequence          => "events_event_id_seq",
   },
-  "event_id",
+  "job_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "parent_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "event_uuid",
   { data_type => "uuid", is_nullable => 0, size => 16 },
-  "job_key",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  "trace_uuid",
+  { data_type => "uuid", is_nullable => 1, size => 16 },
+  "stamp",
+  { data_type => "timestamp", is_nullable => 0 },
   "event_ord",
   { data_type => "integer", is_nullable => 0 },
+  "nested",
+  { data_type => "smallint", is_nullable => 0 },
   "is_subtest",
   { data_type => "boolean", is_nullable => 0 },
   "is_diag",
@@ -52,28 +60,32 @@ __PACKAGE__->add_columns(
   { data_type => "boolean", is_nullable => 0 },
   "has_orphan",
   { data_type => "boolean", is_nullable => 0 },
-  "resource_idx",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "stamp",
-  { data_type => "timestamp", is_nullable => 0 },
-  "parent_id",
-  { data_type => "uuid", is_nullable => 1, size => 16 },
-  "trace_id",
-  { data_type => "uuid", is_nullable => 1, size => 16 },
-  "nested",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
+  "has_resources",
+  { data_type => "boolean", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("event_idx");
-__PACKAGE__->add_unique_constraint("events_event_id_key", ["event_id"]);
-__PACKAGE__->add_unique_constraint("events_job_key_event_ord_key", ["job_key", "event_ord"]);
+__PACKAGE__->set_primary_key("event_id");
+__PACKAGE__->add_unique_constraint("events_event_uuid_key", ["event_uuid"]);
+__PACKAGE__->add_unique_constraint("events_job_id_event_ord_key", ["job_id", "event_ord"]);
 __PACKAGE__->has_many(
   "binaries",
   "App::Yath::Schema::Result::Binary",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
+__PACKAGE__->has_many(
+  "children",
+  "App::Yath::Schema::Result::Event",
+  { "foreign.parent_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->has_many(
+  "coverages",
+  "App::Yath::Schema::Result::Coverage",
+  { "foreign.event_id" => "self.event_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
 __PACKAGE__->might_have(
-  "facet",
+  "facets",
   "App::Yath::Schema::Result::Facet",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
@@ -81,47 +93,47 @@ __PACKAGE__->might_have(
 __PACKAGE__->belongs_to(
   "job",
   "App::Yath::Schema::Result::Job",
-  { job_key => "job_key" },
+  { job_id => "job_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->might_have(
-  "orphan",
+  "orphans",
   "App::Yath::Schema::Result::Orphan",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
+__PACKAGE__->belongs_to(
+  "parent_event",
+  "App::Yath::Schema::Result::Event",
+  { event_id => "parent_id" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "CASCADE",
+    on_update     => "NO ACTION",
+  },
+);
 __PACKAGE__->has_many(
-  "renders",
+  "renderings",
   "App::Yath::Schema::Result::Render",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
-__PACKAGE__->belongs_to(
+__PACKAGE__->might_have(
   "resource",
   "App::Yath::Schema::Result::Resource",
-  { resource_idx => "resource_idx" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "SET NULL",
-    on_update     => "NO ACTION",
-  },
-);
-__PACKAGE__->might_have(
-  "resource_data",
-  "App::Yath::Schema::Result::ResourceData",
   { "foreign.event_id" => "self.event_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

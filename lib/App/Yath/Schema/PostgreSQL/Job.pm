@@ -21,23 +21,21 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("jobs");
 __PACKAGE__->add_columns(
-  "job_idx",
+  "job_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "jobs_job_idx_seq",
+    sequence          => "jobs_job_id_seq",
   },
-  "job_key",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
-  "job_id",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
   "run_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "test_file_idx",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "test_file_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "job_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "job_try",
-  { data_type => "integer", default_value => 0, is_nullable => 0 },
+  { data_type => "integer", is_nullable => 0 },
   "status",
   {
     data_type => "enum",
@@ -71,49 +69,48 @@ __PACKAGE__->add_columns(
   "fail_count",
   { data_type => "bigint", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("job_idx");
-__PACKAGE__->add_unique_constraint("jobs_job_id_job_try_key", ["job_id", "job_try"]);
-__PACKAGE__->add_unique_constraint("jobs_job_key_key", ["job_key"]);
+__PACKAGE__->set_primary_key("job_id");
+__PACKAGE__->add_unique_constraint("jobs_job_uuid_job_try_key", ["job_uuid", "job_try"]);
 __PACKAGE__->has_many(
   "coverages",
   "App::Yath::Schema::Result::Coverage",
-  { "foreign.job_key" => "self.job_key" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "events",
   "App::Yath::Schema::Result::Event",
-  { "foreign.job_key" => "self.job_key" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "job_fields",
   "App::Yath::Schema::Result::JobField",
-  { "foreign.job_key" => "self.job_key" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "job_outputs",
   "App::Yath::Schema::Result::JobOutput",
-  { "foreign.job_key" => "self.job_key" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->might_have(
   "job_parameter",
   "App::Yath::Schema::Result::JobParameter",
-  { "foreign.job_key" => "self.job_key" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "renders",
+  "renderings",
   "App::Yath::Schema::Result::Render",
-  { "foreign.job_key" => "self.job_key" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
-  { "foreign.job_key" => "self.job_key" },
+  { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
@@ -125,7 +122,7 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "test_file",
   "App::Yath::Schema::Result::TestFile",
-  { test_file_idx => "test_file_idx" },
+  { test_file_id => "test_file_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -135,7 +132,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

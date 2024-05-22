@@ -21,24 +21,24 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("projects");
 __PACKAGE__->add_columns(
-  "project_idx",
+  "project_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "projects_project_idx_seq",
+    sequence          => "projects_project_id_seq",
   },
   "name",
   { data_type => "citext", is_nullable => 0 },
   "owner",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("project_idx");
+__PACKAGE__->set_primary_key("project_id");
 __PACKAGE__->add_unique_constraint("projects_name_key", ["name"]);
 __PACKAGE__->belongs_to(
   "owner",
   "App::Yath::Schema::Result::User",
-  { user_idx => "owner" },
+  { user_id => "owner" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -49,24 +49,24 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->has_many(
   "permissions",
   "App::Yath::Schema::Result::Permission",
-  { "foreign.project_idx" => "self.project_idx" },
+  { "foreign.project_id" => "self.project_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
-  { "foreign.project_idx" => "self.project_idx" },
+  { "foreign.project_id" => "self.project_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
   "runs",
   "App::Yath::Schema::Result::Run",
-  { "foreign.project_idx" => "self.project_idx" },
+  { "foreign.project_id" => "self.project_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -21,25 +21,25 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("reporting");
 __PACKAGE__->add_columns(
-  "reporting_idx",
+  "reporting_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "reporting_reporting_idx_seq",
+    sequence          => "reporting_reporting_id_seq",
   },
-  "project_idx",
+  "event_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "job_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "test_file_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "project_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "user_idx",
+  "user_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "run_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
-  "test_file_idx",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "job_key",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
-  "event_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 1, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "job_try",
   { data_type => "integer", is_nullable => 1 },
   "subtest",
@@ -60,7 +60,7 @@ __PACKAGE__->add_columns(
   "abort",
   { data_type => "smallint", default_value => 0, is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("reporting_idx");
+__PACKAGE__->set_primary_key("reporting_id");
 __PACKAGE__->belongs_to(
   "event",
   "App::Yath::Schema::Result::Event",
@@ -68,25 +68,25 @@ __PACKAGE__->belongs_to(
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "CASCADE",
+    on_delete     => "SET NULL",
     on_update     => "NO ACTION",
   },
 );
 __PACKAGE__->belongs_to(
   "job",
   "App::Yath::Schema::Result::Job",
-  { job_key => "job_key" },
+  { job_id => "job_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
-    on_delete     => "CASCADE",
+    on_delete     => "SET NULL",
     on_update     => "NO ACTION",
   },
 );
 __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
-  { project_idx => "project_idx" },
+  { project_id => "project_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
@@ -98,7 +98,7 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "test_file",
   "App::Yath::Schema::Result::TestFile",
-  { test_file_idx => "test_file_idx" },
+  { test_file_id => "test_file_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -109,12 +109,12 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
-  { user_idx => "user_idx" },
+  { user_id => "user_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

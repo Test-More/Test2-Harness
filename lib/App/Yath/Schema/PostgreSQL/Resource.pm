@@ -21,33 +21,58 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("resources");
 __PACKAGE__->add_columns(
-  "resource_idx",
+  "resource_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "resources_resource_idx_seq",
+    sequence          => "resources_resource_id_seq",
   },
-  "name",
-  { data_type => "text", is_nullable => 0 },
+  "event_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "resource_type_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "run_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "data",
+  { data_type => "jsonb", is_nullable => 0 },
+  "line",
+  { data_type => "bigint", is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("resource_idx");
-__PACKAGE__->add_unique_constraint("resources_name_key", ["name"]);
-__PACKAGE__->has_many(
-  "events",
+__PACKAGE__->set_primary_key("resource_id");
+__PACKAGE__->add_unique_constraint("resources_event_id_key", ["event_id"]);
+__PACKAGE__->belongs_to(
+  "event",
   "App::Yath::Schema::Result::Event",
-  { "foreign.resource_idx" => "self.resource_idx" },
-  { cascade_copy => 0, cascade_delete => 1 },
+  { event_id => "event_id" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "SET NULL",
+    on_update     => "NO ACTION",
+  },
+);
+__PACKAGE__->belongs_to(
+  "resource_type",
+  "App::Yath::Schema::Result::Resource",
+  { resource_id => "resource_type_id" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->has_many(
-  "resource_datas",
-  "App::Yath::Schema::Result::ResourceData",
-  { "foreign.resource_idx" => "self.resource_idx" },
+  "resources",
+  "App::Yath::Schema::Result::Resource",
+  { "foreign.resource_type_id" => "self.resource_id" },
   { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->belongs_to(
+  "run",
+  "App::Yath::Schema::Result::Run",
+  { run_id => "run_id" },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -21,19 +21,19 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("job_fields");
 __PACKAGE__->add_columns(
-  "job_field_idx",
+  "job_field_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "job_fields_job_field_idx_seq",
+    sequence          => "job_fields_job_field_id_seq",
   },
-  "job_field_id",
+  "job_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "job_field_uuid",
   { data_type => "uuid", is_nullable => 0, size => 16 },
-  "job_key",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
   "name",
-  { data_type => "varchar", is_nullable => 0, size => 512 },
+  { data_type => "varchar", is_nullable => 0, size => 64 },
   "data",
   { data_type => "jsonb", is_nullable => 1 },
   "details",
@@ -43,17 +43,17 @@ __PACKAGE__->add_columns(
   "link",
   { data_type => "text", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("job_field_idx");
-__PACKAGE__->add_unique_constraint("job_fields_job_field_id_key", ["job_field_id"]);
+__PACKAGE__->set_primary_key("job_field_id");
+__PACKAGE__->add_unique_constraint("job_fields_job_field_uuid_key", ["job_field_uuid"]);
 __PACKAGE__->belongs_to(
   "job",
   "App::Yath::Schema::Result::Job",
-  { job_key => "job_key" },
+  { job_id => "job_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

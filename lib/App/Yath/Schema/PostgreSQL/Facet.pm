@@ -22,7 +22,7 @@ __PACKAGE__->load_components(
 __PACKAGE__->table("facets");
 __PACKAGE__->add_columns(
   "event_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "data",
   { data_type => "jsonb", is_nullable => 0 },
   "line",
@@ -37,7 +37,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

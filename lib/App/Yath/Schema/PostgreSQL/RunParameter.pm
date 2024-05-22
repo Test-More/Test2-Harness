@@ -21,20 +21,12 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("run_parameters");
 __PACKAGE__->add_columns(
-  "run_parameters_idx",
-  {
-    data_type         => "bigint",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "run_parameters_run_parameters_idx_seq",
-  },
   "run_id",
-  { data_type => "uuid", is_foreign_key => 1, is_nullable => 0, size => 16 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "parameters",
   { data_type => "jsonb", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("run_parameters_idx");
-__PACKAGE__->add_unique_constraint("run_parameters_run_id_key", ["run_id"]);
+__PACKAGE__->set_primary_key("run_id");
 __PACKAGE__->belongs_to(
   "run",
   "App::Yath::Schema::Result::Run",
@@ -43,7 +35,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -21,12 +21,12 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("log_files");
 __PACKAGE__->add_columns(
-  "log_file_idx",
+  "log_file_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "log_files_log_file_idx_seq",
+    sequence          => "log_files_log_file_id_seq",
   },
   "name",
   { data_type => "text", is_nullable => 0 },
@@ -35,16 +35,16 @@ __PACKAGE__->add_columns(
   "data",
   { data_type => "bytea", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("log_file_idx");
+__PACKAGE__->set_primary_key("log_file_id");
 __PACKAGE__->has_many(
   "runs",
   "App::Yath::Schema::Result::Run",
-  { "foreign.log_file_idx" => "self.log_file_idx" },
+  { "foreign.log_file_id" => "self.log_file_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

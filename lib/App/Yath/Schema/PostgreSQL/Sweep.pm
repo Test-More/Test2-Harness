@@ -21,29 +21,29 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("sweeps");
 __PACKAGE__->add_columns(
-  "sweep_idx",
+  "sweep_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "sweeps_sweep_idx_seq",
+    sequence          => "sweeps_sweep_id_seq",
   },
-  "run_idx",
+  "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "name",
-  { data_type => "varchar", is_nullable => 0, size => 255 },
+  { data_type => "varchar", is_nullable => 0, size => 64 },
 );
-__PACKAGE__->set_primary_key("sweep_idx");
-__PACKAGE__->add_unique_constraint("sweeps_run_idx_name_key", ["run_idx", "name"]);
+__PACKAGE__->set_primary_key("sweep_id");
+__PACKAGE__->add_unique_constraint("sweeps_run_id_name_key", ["run_id", "name"]);
 __PACKAGE__->belongs_to(
   "run",
   "App::Yath::Schema::Result::Run",
-  { run_idx => "run_idx" },
+  { run_id => "run_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

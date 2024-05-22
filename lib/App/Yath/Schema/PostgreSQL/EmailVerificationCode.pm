@@ -21,21 +21,21 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("email_verification_codes");
 __PACKAGE__->add_columns(
-  "email_idx",
+  "email_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "evcode",
   { data_type => "uuid", is_nullable => 0, size => 16 },
 );
-__PACKAGE__->set_primary_key("email_idx");
+__PACKAGE__->set_primary_key("email_id");
 __PACKAGE__->belongs_to(
   "email",
   "App::Yath::Schema::Result::Email",
-  { email_idx => "email_idx" },
+  { email_id => "email_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

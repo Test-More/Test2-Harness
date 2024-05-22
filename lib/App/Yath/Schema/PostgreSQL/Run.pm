@@ -21,20 +21,20 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("runs");
 __PACKAGE__->add_columns(
-  "run_idx",
+  "run_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "runs_run_idx_seq",
+    sequence          => "runs_run_id_seq",
   },
-  "user_idx",
+  "user_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "project_idx",
+  "project_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "log_file_idx",
+  "log_file_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "run_id",
+  "run_uuid",
   { data_type => "uuid", is_nullable => 0, size => 16 },
   "status",
   {
@@ -54,6 +54,10 @@ __PACKAGE__->add_columns(
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "has_coverage",
   { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  "has_resources",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  "duration",
+  { data_type => "text", is_nullable => 1 },
   "added",
   {
     data_type     => "timestamp",
@@ -61,8 +65,6 @@ __PACKAGE__->add_columns(
     is_nullable   => 0,
     original      => { default_value => \"now()" },
   },
-  "duration",
-  { data_type => "text", is_nullable => 1 },
   "mode",
   {
     data_type => "enum",
@@ -92,8 +94,8 @@ __PACKAGE__->add_columns(
   "concurrency",
   { data_type => "integer", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("run_idx");
-__PACKAGE__->add_unique_constraint("runs_run_id_key", ["run_id"]);
+__PACKAGE__->set_primary_key("run_id");
+__PACKAGE__->add_unique_constraint("runs_run_uuid_key", ["run_uuid"]);
 __PACKAGE__->has_many(
   "coverages",
   "App::Yath::Schema::Result::Coverage",
@@ -109,7 +111,7 @@ __PACKAGE__->has_many(
 __PACKAGE__->belongs_to(
   "log_file",
   "App::Yath::Schema::Result::LogFile",
-  { log_file_idx => "log_file_idx" },
+  { log_file_id => "log_file_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -120,18 +122,18 @@ __PACKAGE__->belongs_to(
 __PACKAGE__->belongs_to(
   "project",
   "App::Yath::Schema::Result::Project",
-  { project_idx => "project_idx" },
+  { project_id => "project_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->has_many(
-  "reportings",
+  "reports",
   "App::Yath::Schema::Result::Reporting",
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->has_many(
-  "resource_datas",
-  "App::Yath::Schema::Result::ResourceData",
+  "resources",
+  "App::Yath::Schema::Result::Resource",
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
@@ -150,18 +152,18 @@ __PACKAGE__->might_have(
 __PACKAGE__->has_many(
   "sweeps",
   "App::Yath::Schema::Result::Sweep",
-  { "foreign.run_idx" => "self.run_idx" },
+  { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
-  { user_idx => "user_idx" },
+  { user_id => "user_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

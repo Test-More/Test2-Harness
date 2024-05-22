@@ -21,28 +21,28 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("primary_email");
 __PACKAGE__->add_columns(
-  "user_idx",
+  "user_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "email_idx",
+  "email_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
 );
-__PACKAGE__->set_primary_key("user_idx");
-__PACKAGE__->add_unique_constraint("primary_email_email_idx_key", ["email_idx"]);
+__PACKAGE__->set_primary_key("user_id");
+__PACKAGE__->add_unique_constraint("primary_email_email_id_key", ["email_id"]);
 __PACKAGE__->belongs_to(
   "email",
   "App::Yath::Schema::Result::Email",
-  { email_idx => "email_idx" },
+  { email_id => "email_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
-  { user_idx => "user_idx" },
+  { user_id => "user_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

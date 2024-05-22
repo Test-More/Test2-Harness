@@ -21,21 +21,21 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("hosts");
 __PACKAGE__->add_columns(
-  "host_idx",
+  "host_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "hosts_host_idx_seq",
+    sequence          => "hosts_host_id_seq",
   },
   "hostname",
   { data_type => "varchar", is_nullable => 0, size => 512 },
 );
-__PACKAGE__->set_primary_key("host_idx");
+__PACKAGE__->set_primary_key("host_id");
 __PACKAGE__->add_unique_constraint("hosts_hostname_key", ["hostname"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

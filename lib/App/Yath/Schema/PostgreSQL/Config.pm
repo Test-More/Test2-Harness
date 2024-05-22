@@ -21,23 +21,23 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("config");
 __PACKAGE__->add_columns(
-  "config_idx",
+  "config_id",
   {
     data_type         => "bigint",
     is_auto_increment => 1,
     is_nullable       => 0,
-    sequence          => "config_config_idx_seq",
+    sequence          => "config_config_id_seq",
   },
   "setting",
   { data_type => "varchar", is_nullable => 0, size => 128 },
   "value",
   { data_type => "varchar", is_nullable => 0, size => 256 },
 );
-__PACKAGE__->set_primary_key("config_idx");
+__PACKAGE__->set_primary_key("config_id");
 __PACKAGE__->add_unique_constraint("config_setting_key", ["setting"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 15:47:43
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

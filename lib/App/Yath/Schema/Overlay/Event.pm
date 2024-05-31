@@ -14,12 +14,15 @@ use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-__PACKAGE__->parent_column('parent_id');
+__PACKAGE__->inflate_column(
+    rendered => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('rendered', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('rendered', {}),
+    },
+);
 
 sub run  { shift->job->run }
 sub user { shift->job->run->user }
-
-sub facets { shift->facet }
 
 sub in_mode {
     my $self = shift;
@@ -53,7 +56,7 @@ sub line_data {
     my $is_parent  = $cols{is_subtest} ? 1 : 0;
     my $causes_fail = $cols{causes_fail} ? 1 : 0;
 
-    $out{lines} = [map { [$_->facet, $_->real_tag, $_->message, $_->data] } $self->renders];
+    $out{lines} = $self->rendered // [];
 
     if ($has_binary) {
         for my $binary ($self->binaries) {
@@ -63,7 +66,7 @@ sub line_data {
                 'binary',
                 $binary->is_image ? 'IMAGE' : 'BINARY',
                 $filename,
-                $binary->binary_idx,
+                $binary->binary_id,
             ];
         }
     }
@@ -80,25 +83,6 @@ sub line_data {
 
     return \%out;
 }
-
-__PACKAGE__->has_many(
-    "events",
-    "App::Yath::Schema::Result::Event",
-    {"foreign.parent_id" => "self.event_id"},
-    {cascade_copy        => 0, cascade_delete => 0},
-);
-
-__PACKAGE__->belongs_to(
-    "parent_rel",
-    "App::Yath::Schema::Result::Event",
-    {event_id => "parent_id"},
-    {
-        is_deferrable => 0,
-        join_type     => "LEFT",
-        on_delete     => "NO ACTION",
-        on_update     => "NO ACTION",
-    },
-);
 
 1;
 

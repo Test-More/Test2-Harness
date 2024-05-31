@@ -7,8 +7,6 @@ use utf8;
 use strict;
 use warnings;
 
-use App::Yath::Schema::ImportModes qw/record_all_events mode_check/;
-
 use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
@@ -42,44 +40,44 @@ sub short_file {
 }
 
 my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
-sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
+#sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
+sub complete { 0 }
 
 sub sig {
     my $self = shift;
 
-    my $job_parameter = $self->job_parameter;
-
-    return join ";" => (
-        (map {$self->$_ // ''} qw/status pass_count fail_count name file fail/),
-        $job_parameter ? length($job_parameter->parameters) : (''),
-        ($self->job_fields->count),
-    );
+    return "FIXME";
+#    return join ";" => (
+#        (map {$self->$_ // ''} qw/name file fail/),
+#        $parameters ? length($parameters) : (''),
+#        ($self->job_fields->count),
+#    );
 }
 
-sub short_job_fields {
-    my $self = shift;
-    my %params = @_;
-
-    my @fields = $params{prefetched_fields} ? $self->job_fields : $self->job_fields->search(
-        undef, {
-            remove_columns => ['data'],
-            '+select'      => ['data IS NOT NULL AS has_data'],
-            '+as'          => ['has_data'],
-        }
-    )->all;
-
-    my @out;
-    for my $jf (@fields) {
-        my $fields = {$jf->get_all_fields};
-
-        my $has_data = delete $fields->{data};
-        $fields->{has_data} //= $has_data ? \'1' : \'0';
-
-        push @out => $fields;
-    }
-
-    return \@out;
-}
+#sub short_job_fields {
+#    my $self = shift;
+#    my %params = @_;
+#
+#    my @fields = $params{prefetched_fields} ? $self->job_fields : $self->job_fields->search(
+#        undef, {
+#            remove_columns => ['data'],
+#            '+select'      => ['data IS NOT NULL AS has_data'],
+#            '+as'          => ['has_data'],
+#        }
+#    )->all;
+#
+#    my @out;
+#    for my $jf (@fields) {
+#        my $fields = {$jf->get_all_fields};
+#
+#        my $has_data = delete $fields->{data};
+#        $fields->{has_data} //= $has_data ? \'1' : \'0';
+#
+#        push @out => $fields;
+#    }
+#
+#    return \@out;
+#}
 
 sub TO_JSON {
     my $self = shift;
@@ -88,10 +86,8 @@ sub TO_JSON {
     $cols{short_file}    = $self->short_file;
     $cols{shortest_file} = $self->shortest_file;
 
-    # Inflate
-    $cols{parameters} = $self->job_parameter->parameters;
-
-    $cols{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
+    # FIXME?
+#    $cols{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
 
     return \%cols;
 }
@@ -100,6 +96,11 @@ my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pas
 
 sub glance_data {
     my $self = shift;
+    my %params = @_;
+
+    # FIXME: Handle this
+    my $try_id = $params{try_id};
+
     my %cols = $self->get_all_fields;
 
     my %data;
@@ -109,52 +110,9 @@ sub glance_data {
     $data{short_file}    = $self->short_file;
     $data{shortest_file} = $self->shortest_file;
 
-    $data{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
+#    $data{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
 
     return \%data;
-}
-
-sub normalize_to_mode {
-    my $self = shift;
-    my %params = @_;
-
-    my $mode = $params{mode} // $self->run->mode;
-
-    # No need to purge anything
-    return if record_all_events(mode => $mode, job => $self);
-    return if mode_check($mode, 'complete');
-
-    if (mode_check($mode, 'summary', 'qvf')) {
-        my $has_binary = $self->events->search({has_binary => 1});
-        while (my $e = $has_binary->next()) {
-            $has_binary->binaries->delete;
-            $e->delete;
-        }
-
-        $self->events->delete;
-        return;
-    }
-
-    my $query = {
-        is_diag => 0,
-        is_harness => 0,
-        is_time => 0,
-    };
-
-    if (mode_check($mode, 'qvfds')) {
-        $query->{'-not'} = {is_subtest => 1, nested => 0};
-    }
-    elsif(!mode_check($mode, 'qvfd')) {
-        die "Unknown mode '$mode'";
-    }
-
-    my $has_binary = $self->events->search({%$query, has_binary => 1});
-    while (my $e = $has_binary->next()) {
-        $has_binary->binaries->delete;
-        $e->delete;
-    }
-
-    $self->events->search($query)->delete();
 }
 
 1;

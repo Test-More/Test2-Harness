@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("primary_email");
@@ -42,7 +41,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -11,7 +11,7 @@ use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Carp qw/croak/;
 
 use constant COST => 8;
@@ -68,7 +68,7 @@ sub gen_api_key {
 
     return $self->result_source->schema->resultset('ApiKey')->create(
         {
-            user_idx => $self->user_idx,
+            user_id => $self->user_id,
             value   => gen_uuid(),
             status  => 'active',
             name    => $name,

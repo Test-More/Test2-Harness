@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("hosts");
@@ -33,9 +32,15 @@ __PACKAGE__->add_columns(
 );
 __PACKAGE__->set_primary_key("host_id");
 __PACKAGE__->add_unique_constraint("hosts_hostname_key", ["hostname"]);
+__PACKAGE__->has_many(
+  "resources",
+  "App::Yath::Schema::Result::Resource",
+  { "foreign.host_id" => "self.host_id" },
+  { cascade_copy => 0, cascade_delete => 1 },
+);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

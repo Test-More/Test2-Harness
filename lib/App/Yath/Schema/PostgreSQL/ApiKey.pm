@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("api_keys");
 __PACKAGE__->add_columns(
+  "value",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "api_key_id",
   {
     data_type         => "bigint",
@@ -30,10 +31,6 @@ __PACKAGE__->add_columns(
   },
   "user_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "name",
-  { data_type => "varchar", is_nullable => 0, size => 128 },
-  "value",
-  { data_type => "varchar", is_nullable => 0, size => 36 },
   "status",
   {
     data_type => "enum",
@@ -44,6 +41,8 @@ __PACKAGE__->add_columns(
     },
     is_nullable => 0,
   },
+  "name",
+  { data_type => "varchar", is_nullable => 0, size => 128 },
 );
 __PACKAGE__->set_primary_key("api_key_id");
 __PACKAGE__->add_unique_constraint("api_keys_value_key", ["value"]);
@@ -55,7 +54,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("jobs");
 __PACKAGE__->add_columns(
+  "job_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "job_id",
   {
     data_type         => "bigint",
@@ -31,85 +32,19 @@ __PACKAGE__->add_columns(
   "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "test_file_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "job_uuid",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
-  "job_try",
-  { data_type => "integer", is_nullable => 0 },
-  "status",
-  {
-    data_type => "enum",
-    default_value => "pending",
-    extra => {
-      custom_type_name => "queue_status",
-      list => ["pending", "running", "complete", "broken", "canceled"],
-    },
-    is_nullable => 0,
-  },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "is_harness_out",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "fail",
+  { data_type => "boolean", is_nullable => 0 },
+  "failed",
+  { data_type => "boolean", is_nullable => 0 },
+  "passed",
   { data_type => "boolean", is_nullable => 1 },
-  "retry",
-  { data_type => "boolean", is_nullable => 1 },
-  "name",
-  { data_type => "text", is_nullable => 1 },
-  "exit_code",
-  { data_type => "integer", is_nullable => 1 },
-  "launch",
-  { data_type => "timestamp", is_nullable => 1 },
-  "start",
-  { data_type => "timestamp", is_nullable => 1 },
-  "ended",
-  { data_type => "timestamp", is_nullable => 1 },
-  "duration",
-  { data_type => "double precision", is_nullable => 1 },
-  "pass_count",
-  { data_type => "bigint", is_nullable => 1 },
-  "fail_count",
-  { data_type => "bigint", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("job_id");
-__PACKAGE__->add_unique_constraint("jobs_job_uuid_job_try_key", ["job_uuid", "job_try"]);
+__PACKAGE__->add_unique_constraint("jobs_job_uuid_key", ["job_uuid"]);
 __PACKAGE__->has_many(
-  "coverages",
-  "App::Yath::Schema::Result::Coverage",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
-);
-__PACKAGE__->has_many(
-  "events",
-  "App::Yath::Schema::Result::Event",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
-);
-__PACKAGE__->has_many(
-  "job_fields",
-  "App::Yath::Schema::Result::JobField",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
-);
-__PACKAGE__->has_many(
-  "job_outputs",
-  "App::Yath::Schema::Result::JobOutput",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
-);
-__PACKAGE__->might_have(
-  "job_parameter",
-  "App::Yath::Schema::Result::JobParameter",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
-);
-__PACKAGE__->has_many(
-  "renderings",
-  "App::Yath::Schema::Result::Render",
-  { "foreign.job_id" => "self.job_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
-);
-__PACKAGE__->has_many(
-  "reports",
-  "App::Yath::Schema::Result::Reporting",
+  "jobs_tries",
+  "App::Yath::Schema::Result::JobTry",
   { "foreign.job_id" => "self.job_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
@@ -123,16 +58,11 @@ __PACKAGE__->belongs_to(
   "test_file",
   "App::Yath::Schema::Result::TestFile",
   { test_file_id => "test_file_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "CASCADE",
-    on_update     => "NO ACTION",
-  },
+  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

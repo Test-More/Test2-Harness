@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("runs");
 __PACKAGE__->add_columns(
+  "run_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "run_id",
   {
     data_type         => "bigint",
@@ -34,36 +35,36 @@ __PACKAGE__->add_columns(
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "log_file_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "run_uuid",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
-  "status",
-  {
-    data_type => "enum",
-    default_value => "pending",
-    extra => {
-      custom_type_name => "queue_status",
-      list => ["pending", "running", "complete", "broken", "canceled"],
-    },
-    is_nullable => 0,
-  },
-  "worker_id",
-  { data_type => "text", is_nullable => 1 },
-  "error",
-  { data_type => "text", is_nullable => 1 },
-  "pinned",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "has_coverage",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "has_resources",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
-  "duration",
-  { data_type => "text", is_nullable => 1 },
+  "sync_id",
+  { data_type => "integer", is_foreign_key => 1, is_nullable => 1 },
+  "passed",
+  { data_type => "integer", is_nullable => 1 },
+  "failed",
+  { data_type => "integer", is_nullable => 1 },
+  "to_retry",
+  { data_type => "integer", is_nullable => 1 },
+  "retried",
+  { data_type => "integer", is_nullable => 1 },
+  "concurrency_j",
+  { data_type => "integer", is_nullable => 1 },
+  "concurrency_x",
+  { data_type => "integer", is_nullable => 1 },
   "added",
   {
     data_type     => "timestamp",
     default_value => \"current_timestamp",
     is_nullable   => 0,
     original      => { default_value => \"now()" },
+  },
+  "status",
+  {
+    data_type => "enum",
+    default_value => "pending",
+    extra => {
+      custom_type_name => "queue_stat",
+      list => ["pending", "running", "complete", "broken", "canceled"],
+    },
+    is_nullable => 0,
   },
   "mode",
   {
@@ -75,29 +76,32 @@ __PACKAGE__->add_columns(
     },
     is_nullable => 0,
   },
-  "buffer",
+  "canon",
+  { data_type => "boolean", is_nullable => 0 },
+  "pinned",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
+  "has_coverage",
+  { data_type => "boolean", is_nullable => 1 },
+  "has_resources",
+  { data_type => "boolean", is_nullable => 1 },
+  "parameters",
+  { data_type => "jsonb", is_nullable => 1 },
+  "worker_id",
+  { data_type => "text", is_nullable => 1 },
+  "error",
+  { data_type => "text", is_nullable => 1 },
+  "duration",
   {
-    data_type => "enum",
-    default_value => "job",
-    extra => {
-      custom_type_name => "run_buffering",
-      list => ["none", "diag", "job", "run"],
-    },
-    is_nullable => 0,
+    data_type => "numeric",
+    default_value => \"null",
+    is_nullable => 1,
+    size => [14, 4],
   },
-  "passed",
-  { data_type => "integer", is_nullable => 1 },
-  "failed",
-  { data_type => "integer", is_nullable => 1 },
-  "retried",
-  { data_type => "integer", is_nullable => 1 },
-  "concurrency",
-  { data_type => "integer", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("run_id");
 __PACKAGE__->add_unique_constraint("runs_run_uuid_key", ["run_uuid"]);
 __PACKAGE__->has_many(
-  "coverages",
+  "coverage",
   "App::Yath::Schema::Result::Coverage",
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 1 },
@@ -143,17 +147,22 @@ __PACKAGE__->has_many(
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
-__PACKAGE__->might_have(
-  "run_parameter",
-  "App::Yath::Schema::Result::RunParameter",
-  { "foreign.run_id" => "self.run_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
-);
 __PACKAGE__->has_many(
   "sweeps",
   "App::Yath::Schema::Result::Sweep",
   { "foreign.run_id" => "self.run_id" },
   { cascade_copy => 0, cascade_delete => 1 },
+);
+__PACKAGE__->belongs_to(
+  "sync",
+  "App::Yath::Schema::Result::Sync",
+  { sync_id => "sync_id" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "SET NULL",
+    on_update     => "NO ACTION",
+  },
 );
 __PACKAGE__->belongs_to(
   "user",
@@ -163,7 +172,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

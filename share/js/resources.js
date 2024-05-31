@@ -123,8 +123,8 @@ $(function() {
             if (!item)         { return }
             if (item.complete) { complete = true }
 
-            if (item.run_id) {
-                var stream_url = base_uri + 'stream/run/' + item.run_id;
+            if (item.run_uuid) {
+                var stream_url = base_uri + 'stream/run/' + item.run_uuid;
                 var run_table = t2hui.runtable.build_table();
                 runs.append(run_table.render());
 
@@ -133,7 +133,7 @@ $(function() {
                     {},
                     function(item) {
                         if (item.type === 'run') {
-                            run_table.render_item(item.data, item.data.run_id);
+                            run_table.render_item(item.data, item.data.run_uuid);
                         }
                     }
                 );

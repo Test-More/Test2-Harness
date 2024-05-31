@@ -169,7 +169,6 @@ function FieldTable(spec) {
 
         var attr = me.spec.dynamic_field_attribute;
         if (attr && item[attr]) {
-            console.log(attr, "xxx", item[attr]);
             item[attr].forEach(function(field) {
                 var col = me.render_dynamic_col(field, field.name, item);
                 if (me.hidden_columns[field.name]) {
@@ -222,7 +221,6 @@ function FieldTable(spec) {
             toolrow.prepend(td);
         }
 
-        console.log(field);
         if (field.has_data) {
             var viewer = $('<div class="tool etoggle" title="Extended Data"><img src="/img/data.png" /></div>');
             var td = $('<td></td>');

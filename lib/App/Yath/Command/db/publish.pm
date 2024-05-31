@@ -4,10 +4,12 @@ use warnings;
 
 our $VERSION = '2.000000';
 
+use Time::HiRes qw/time/;
+
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
 use IO::Uncompress::Gunzip  qw($GunzipError);
 
-use App::Yath::Schema::Util qw/schema_config_from_settings/;
+use App::Yath::Schema::Util qw/schema_config_from_settings format_duration/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use App::Yath::Schema::RunProcessor;
@@ -72,9 +74,16 @@ sub run {
     $project =~ s/^\s+//g;
     $project =~ s/\s+$//g;
 
+    my $start = time;
+
     my $cb = App::Yath::Schema::RunProcessor->process_lines($settings, project => $project);
 
-    my $run = eval { $cb->(scalar(<$fh>)) } or return $self->fail($@);
+    my $run;
+    eval {
+        my $ln = <$fh>;
+        $run = $cb->($ln);
+        1
+    } or return $self->fail($@);
 
     $SIG{INT} = sub {
         print STDERR "\nCought SIGINT...\n";
@@ -104,12 +113,17 @@ sub run {
 
     $cb->();
 
-    print "Published Run (status: " . $run->status . ")\n";
+    my $end = time;
+
+    my $dur = format_duration($end - $start);
+
+    print "Published Run. [Status: " . $run->status . ", Duration: $dur]\n";
 
     return 0;
 }
 
 sub fail {
+    print STDERR "FAIL!\n\n";
     my $self = shift;
     my ($err, $run) = @_;
 

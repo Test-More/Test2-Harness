@@ -16,7 +16,7 @@ use Time::HiRes qw/time/;
 use Test2::Harness::Util qw/clean_path/;
 use Test2::Harness::IPC::Util qw/start_process/;
 use Test2::Harness::Util::JSON qw/encode_ascii_json/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use parent 'App::Yath::Renderer';
 use Test2::Harness::Util::HashBase qw{

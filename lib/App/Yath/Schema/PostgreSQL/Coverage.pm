@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("coverage");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "coverage_id",
   {
     data_type         => "bigint",
@@ -28,9 +29,7 @@ __PACKAGE__->add_columns(
     is_nullable       => 0,
     sequence          => "coverage_coverage_id_seq",
   },
-  "event_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "job_id",
+  "job_try_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "coverage_manager_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
@@ -47,10 +46,10 @@ __PACKAGE__->add_columns(
 );
 __PACKAGE__->set_primary_key("coverage_id");
 __PACKAGE__->add_unique_constraint(
-  "coverage_run_id_job_id_test_file_id_source_file_id_source_s_key",
+  "coverage_run_id_job_try_id_test_file_id_source_file_id_sour_key",
   [
     "run_id",
-    "job_id",
+    "job_try_id",
     "test_file_id",
     "source_file_id",
     "source_sub_id",
@@ -68,20 +67,9 @@ __PACKAGE__->belongs_to(
   },
 );
 __PACKAGE__->belongs_to(
-  "event",
-  "App::Yath::Schema::Result::Event",
-  { event_id => "event_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "SET NULL",
-    on_update     => "NO ACTION",
-  },
-);
-__PACKAGE__->belongs_to(
-  "job",
-  "App::Yath::Schema::Result::Job",
-  { job_id => "job_id" },
+  "job_try",
+  "App::Yath::Schema::Result::JobTry",
+  { job_try_id => "job_try_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -115,7 +103,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

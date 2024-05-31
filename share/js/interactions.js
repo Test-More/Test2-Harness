@@ -4,7 +4,7 @@ function build_interactions(item, state) {
     if (item.type === 'run') {
         var run_table = t2hui.runtable.build_table();
         content.append(run_table.render());
-        run_table.render_item(item.data, item.data.run_id);
+        run_table.render_item(item.data, item.data.run_uuid);
         return;
     }
 
@@ -24,7 +24,7 @@ function build_interactions(item, state) {
             content.empty();
 
             state = {};
-            var uri = base_uri + 'interactions/data/' + event_id + '/' + val;
+            var uri = base_uri + 'interactions/data/' + event_uuid + '/' + val;
             t2hui.fetch(uri, {}, function(item) { build_interactions(item, state) });
             return true;
         });
@@ -36,16 +36,16 @@ function build_interactions(item, state) {
 
     else if (item.type === 'job') {
         state.event_table = null;
-        content.append('<hr id="section_' + item.data.job_key + '" />');
+        content.append('<hr id="section_' + item.data.job_uuid + '" />');
 
         var job_table = t2hui.jobtable.build_table(null);
 
         if (state.list) {
-            state.list.append('<li><a href="#section_' + item.data.job_key + '">' + item.data.file + '</a></li>');
+            state.list.append('<li><a href="#section_' + item.data.job_uuid + '">' + item.data.file + '</a></li>');
         }
 
         content.append(job_table.render());
-        job_table.render_item(item.data, item.data.job_key);
+        job_table.render_item(item.data, item.data.job_uuid);
         return;
     }
 
@@ -61,7 +61,7 @@ function build_interactions(item, state) {
             state.event_table    = event_table;
         }
 
-        state.event_table.render_item(item.data, item.data.event_id);
+        state.event_table.render_item(item.data, item.data.event_uuid);
     }
 }
 

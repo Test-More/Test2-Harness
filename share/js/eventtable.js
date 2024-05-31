@@ -78,7 +78,7 @@ t2hui.eventtable.expand_lines = function(item) {
             'item': item,
             'set_ord': count++,
             'set_total': item.lines.length,
-            'id': item.event_id,
+            'id': item.event_uuid,
         });
         tools = false;
     });
@@ -94,10 +94,10 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 
     if (item.item.is_parent == false) { return }
 
-    var events_uri = base_uri + 'event/' + item.item.event_id + '/events';
+    var events_uri = base_uri + 'event/' + item.item.event_uuid + '/events';
 
     var jumpto = window.location.hash.substr(1);
-    var highlight = item.item.event_id === jumpto ? true : false;
+    var highlight = item.item.event_uuid === jumpto ? true : false;
 
     var expand = $('<div class="stoggle">+</div>');
 
@@ -126,17 +126,17 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 
                         if (highlight) {
                             row.addClass('highlight');
-                            $('[data-parent-id="' + item.item.event_id + '"]').addClass('highlight');
+                            $('[data-parent-id="' + item.item.event_uuid + '"]').addClass('highlight');
                         }
                         else {
                             row.removeClass('highlight');
-                            $('[data-parent-id="' + item.item.event_id + '"]').removeClass('highlight');
+                            $('[data-parent-id="' + item.item.event_uuid + '"]').removeClass('highlight');
                         }
                     });
                 }
             },
             function(e) {
-                var params = {"data": {"parent-id": item.item.event_id}};
+                var params = {"data": {"parent-id": item.item.event_uuid}};
                 if (highlight) {
                     params.class = "highlight";
                 }
@@ -256,7 +256,7 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
             $('#modal_body').text("loading...");
             $('#free_modal').slideDown();
 
-            var uri = base_uri + 'event/' + item.item.event_id;
+            var uri = base_uri + 'event/' + item.item.event_uuid;
 
             $.ajax(uri, {
                 'data': { 'content-type': 'application/json' },
@@ -277,7 +277,7 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
             $('#modal_body').text("loading...");
             $('#free_modal').slideDown();
 
-            var uri = base_uri + 'event/' + item.item.event_id;
+            var uri = base_uri + 'event/' + item.item.event_uuid;
 
             $.ajax(uri, {
                 'data': { 'content-type': 'application/json' },
@@ -304,7 +304,7 @@ t2hui.eventtable.modify_row = function(row, item, table, controls) {
     row.addClass('facet_' + item.facet);
     row.addClass('tag_' + ctag);
 
-    row.attr('data-event-id', item.item.event_id);
+    row.attr('data-event-id', item.item.event_uuid);
 
     if (!controls.filters.seen[tag]) {
         controls.filters.state[tag] = !controls.filters.hide[tag];

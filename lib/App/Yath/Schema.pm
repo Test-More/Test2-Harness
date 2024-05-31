@@ -4,10 +4,6 @@ use strict;
 use warnings;
 use Carp qw/confess/;
 
-use App::Yath::Schema::UUID qw/uuid_inflate/;
-
-use Test2::Harness::Util::UUID qw/gen_uuid/;
-
 our $VERSION = '2.000000';
 
 use base 'DBIx::Class::Schema';
@@ -42,42 +38,37 @@ sub vague_run_search {
     my ($project, $run, $user);
 
     my $query = $params{query} // {status => 'complete'};
-    my $attrs = $params{attrs} // {order_by => {'-desc' => 'run_idx'}, rows => 1};
+    my $attrs = $params{attrs} // {order_by => {'-desc' => 'run_id'}, rows => 1};
 
     $attrs->{offset} = $params{idx} if $params{idx};
 
     if (my $username = $params{username}) {
         $user = $self->resultset('User')->find({username => $username}) || die "Invalid Username ($username)";
-        $query->{user_idx} = $user->user_idx;
+        $query->{user_id} = $user->user_id;
     }
 
     if (my $project_name = $params{project_name}) {
         $project = $self->resultset('Project')->find({name => $project_name}) || die "Invalid Project ($project)";
-        $query->{project_idx} = $project->project_idx;
+        $query->{project_id} = $project->project_id;
     }
 
     if (my $source = $params{source}) {
-        my $uuid = uuid_inflate($source);
-
-        if ($uuid) {
-            $run = $self->resultset('Run')->find({%$query, run_id => $uuid}, $attrs);
-            return $run if $run;
-        }
+        my $run = $self->resultset('Run')->find_by_id_or_uuid($source, $query, $attrs);
+        return $run if $run;
 
         if (my $p = $self->resultset('Project')->find({name => $source})) {
             die "Project mismatch ($source)"
-                if $project && $project->project_idx ne $p->project_idx;
+                if $project && $project->project_id ne $p->project_id;
 
-            $query->{project_idx} = $p->project_idx;
+            $query->{project_id} = $p->project_id;
         }
         elsif (my $u = $self->resultset('User')->find({username => $source})) {
             die "User mismatch ($source)"
-                if $user && $user->user_idx ne $u->user_idx;
+                if $user && $user->user_id ne $u->user_id;
 
-            $query->{user_idx} = $u->user_idx;
+            $query->{user_id} = $u->user_id;
         }
         else {
-            die "No UUID match in runs ($uuid)" if $uuid;
             die "No match for source ($source)";
         }
     }

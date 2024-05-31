@@ -11,7 +11,7 @@ use App::Yath::Schema::RunProcessor;
 use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util qw/mod2file/;
 use App::Yath::Server::Util qw/share_dir share_file dbd_driver qdb_driver/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
 use Plack::Builder;

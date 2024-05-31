@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use Carp qw/croak/;
 
 use Test2::Harness::Util qw/mod2file/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use Importer Importer => 'import';
 
@@ -118,8 +118,6 @@ sub schema_config_from_settings {
 
 sub find_job {
     my ($schema, $uuid, $try) = @_;
-
-    $uuid = uuid_inflate($uuid) or croak "Invalid job identifier";
 
     my $jobs = $schema->resultset('Job');
 

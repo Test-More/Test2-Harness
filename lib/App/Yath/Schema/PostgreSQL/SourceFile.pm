@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("source_files");
@@ -34,14 +33,14 @@ __PACKAGE__->add_columns(
 __PACKAGE__->set_primary_key("source_file_id");
 __PACKAGE__->add_unique_constraint("source_files_filename_key", ["filename"]);
 __PACKAGE__->has_many(
-  "coverages",
+  "coverage",
   "App::Yath::Schema::Result::Coverage",
   { "foreign.source_file_id" => "self.source_file_id" },
   { cascade_copy => 0, cascade_delete => 1 },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

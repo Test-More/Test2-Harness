@@ -1,6 +1,7 @@
 package App::Yath::Schema::RunProcessor;
 use strict;
 use warnings;
+use utf8;
 
 our $VERSION = '2.000000';
 
@@ -10,7 +11,7 @@ use Data::Dumper;
 use List::Util qw/first min max/;
 use Time::HiRes qw/time sleep/;
 use MIME::Base64 qw/decode_base64/;
-use Sys::Hostname qw/hostname/;
+use Scalar::Util qw/weaken/;
 
 use Clone qw/clone/;
 use Carp qw/croak confess/;
@@ -20,8 +21,8 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 use App::Yath::Schema::Config;
 
 use App::Yath::Schema::Util qw/format_duration is_invalid_subtest_name schema_config_from_settings/;
-use App::Yath::Schema::UUID qw/gen_uuid uuid_inflate uuid_deflate uuid_mass_deflate/;
-use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Harness::Util::JSON qw/encode_ascii_json decode_json/;
 
 use App::Yath::Schema::ImportModes qw{
     %MODES
@@ -34,60 +35,91 @@ use App::Yath::Schema::ImportModes qw{
 use Test2::Harness::Util::HashBase qw{
     <config
 
-    <running <jobs
-
-    signal
-
-    <coverage <uncover <new_jobs <id_cache <file_cache
-
-    <mode
-    <interval <last_flush
-    <run <run_id
-    +user +user_idx
-    +project +project_idx
-
-    <first_stamp <last_stamp
-
-    <passed <failed <retried
-    <job0_id
-
+    <running
+    <clone_facets
     <disconnect_retry
 
-    +host
+    <mode
+    signal
+
+    <id_cache
+    <file_cache
+
+    <resource_ord
+
+    <run <run_id <run_uuid
+    <jobs
+    +job0 +job0_uuid +job0_id +job0_try
+    +user +user_id +user_name
+    +project +project_id +project_name
+
+    <first_stamp <last_stamp <duration
+
+    <interval <last_flush
+    <buffer_size
+
+    <done
+    <errors
+
+    <resources
+    <coverage
+    <reporting
+    <run_fields <run_delta
+    <try_fields
 };
 
-my %DB_TAGS = (
-    'ABOUT'    => 'ABOUT',
-    'ARRAY'    => 'ARRAY',
-    'BRIEF'    => 'BRIEF',
-    'CONTROL'  => 'CONTROL',
-    'CRITICAL' => 'CRITICAL',
-    'DEBUG'    => 'DEBUG',
-    'DIAG'     => 'DIAG',
-    'ENCODING' => 'ENCODING',
-    'ERROR'    => 'ERROR',
-    'FACETS'   => 'FACETS',
-    'FAIL'     => 'FAIL',
-    'FAILED'   => 'FAILED',
-    'FATAL'    => 'FATAL',
-    'HALT'     => 'HALT',
-    'HARNESS'  => 'HARNESS',
-    'KILL'     => 'KILL',
-    'NO  PLAN' => 'NO PLAN',
-    'PASS'     => 'PASS',
-    'PASSED'   => 'PASSED',
-    'PLAN'     => 'PLAN',
-    'REASON'   => 'REASON',
-    'SHOW'     => 'SHOW',
-    'SKIP ALL' => 'SKIP ALL',
-    'SKIPPED'  => 'SKIPPED',
-    'STDERR'   => 'STDERR',
-    'TAGS'     => 'TAGS',
-    'TIMEOUT'  => 'TIMEOUT',
-    'VERSION'  => 'VERSION',
-    'WARN'     => 'WARN',
-    'WARNING'  => 'WARNING',
-);
+sub schema { $_[0]->{+CONFIG}->schema }
+
+sub init {
+    my $self = shift;
+
+    croak "'config' is a required attribute"
+        unless $self->{+CONFIG};
+
+    $self->{+DISCONNECT_RETRY} //= 15;
+
+    my $run;
+    if ($run = $self->{+RUN}) {
+        $self->{+RUN_ID} = $run->run_id;
+        $self->{+MODE}   = $MODES{$run->mode};
+
+        $self->retry_on_disconnect("update status for run '$self->{+RUN_ID}'" => sub { $run->update({status => 'pending'}) });
+    }
+    else {
+        my $run_uuid = $self->{+RUN_UUID} // croak "either 'run' or 'run_uuid' must be provided";
+        my $mode     = $self->{+MODE}     // croak "'mode' is a required attribute unless 'run' is specified";
+        $self->{+MODE} = $MODES{$mode} // croak "Invalid mode '$mode'";
+
+        my $schema = $self->schema;
+        my $run    = $schema->resultset('Run')->create({
+            run_uuid   => $run_uuid,
+            user_id    => $self->user_id,
+            project_id => $self->project_id,
+            mode       => $mode,
+            status     => 'pending',
+        });
+
+        $self->{+RUN} = $run;
+    }
+
+    $run->discard_changes;
+
+    $self->{+PROJECT_ID} //= $run->project_id;
+
+    confess "No project id?!?" unless $self->{+PROJECT_ID};
+
+    $self->{+ID_CACHE} = {};
+
+    $self->{+CLONE_FACETS} //= 1;
+
+    $self->{+RESOURCE_ORD} //= 1;
+
+    $self->{+COVERAGE}   = [];
+    $self->{+RESOURCES}  = [];
+    $self->{+REPORTING}  = [];
+    $self->{+RUN_FIELDS} = [];
+    $self->{+TRY_FIELDS} = [];
+}
 
 sub process_stdin {
     my $class = shift;
@@ -95,7 +127,6 @@ sub process_stdin {
 
     return $class->process_handle(\*STDIN, $settings);
 }
-
 
 sub process_handle {
     my $class = shift;
@@ -113,6 +144,7 @@ sub process_lines {
     my ($settings, %params) = @_;
 
     my $done = 0;
+    my $idx = 1;
     my ($next, $last, $run);
     return sub {
         my $line = shift;
@@ -124,10 +156,10 @@ sub process_lines {
             $last->();
         }
         elsif ($next) {
-            $next->($line);
+            $next->($line, $idx++);
         }
         else {
-            ($next, $last, $run) = $class->_process_first_line($line, $settings, %params);
+            ($next, $last, $run) = $class->_process_first_line($line, $idx++, $settings, %params);
         }
 
         return $run;
@@ -136,7 +168,7 @@ sub process_lines {
 
 sub _process_first_line {
     my $class = shift;
-    my ($line, $settings, %params) = @_;
+    my ($line, $idx, $settings, %params) = @_;
 
     my $run;
     my $config = schema_config_from_settings($settings);
@@ -151,11 +183,14 @@ sub _process_first_line {
     my $f = $e->{facet_data};
 
     my $self;
-    my $run_id;
+    my ($run_id, $run_uuid);
     if (my $runf = $f->{harness_run}) {
-        $run_id = uuid_inflate($runf->{run_id}) or die "No run-id?";
+        $run_uuid = $runf->{run_id} or die "No run-uuid?";
 
         my $pub = $settings->group('publish') or die "No publish settings";
+
+        # Legacy logs
+        $runf->{settings} //= delete $f->{harness_settings};
 
         my $proj = $runf->{settings}->{yath}->{project} || $params{project} || $settings->yath->project or die "Project name could not be determined";
         my $user = $settings->yath->user // $ENV{USER};
@@ -163,29 +198,39 @@ sub _process_first_line {
         my $p = $config->schema->resultset('Project')->find_or_create({name => $proj});
         my $u = $config->schema->resultset('User')->find_or_create({username => $user, role => 'user'});
 
-        if (my $old = $config->schema->resultset('Run')->find({run_id => $run_id})) {
-            die "Run with id '$run_id' is already published. Use --publish-force to override it." unless $settings->publish->force;
+        if (my $old = $config->schema->resultset('Run')->find({run_uuid => $run_uuid})) {
+            die "Run with uuid '$run_uuid' is already published. Use --publish-force to override it." unless $settings->publish->force;
             $old->delete;
         }
 
         $run = $config->schema->resultset('Run')->create({
-            run_id     => $run_id,
+            run_uuid   => $run_uuid,
+            canon      => 1,
             mode       => $pub->mode,
-            buffer     => $pub->buffering,
             status     => 'pending',
-            user_idx    => $u->user_idx,
-            project_idx => $p->project_idx,
+            user_id    => $u->user_id,
+            project_id => $p->project_id,
         });
 
+        $run_id = $run->run_id;
+
         $self = $class->new(
-            settings => $settings,
-            config => $config,
-            run => $run,
-            interval => $pub->flush_interval,
+            settings     => $settings,
+            config       => $config,
+            run          => $run,
+            run_id       => $run_id,
+            run_uuid     => $run_uuid,
+            interval     => $pub->flush_interval,
+            buffer_size  => $pub->buffer_size,
+            user         => $u,
+            user_id      => $u->user_id,
+            project      => $p,
+            project_id   => $p->project_id,
+            clone_facets => 0,
         );
 
         $self->start();
-        $self->process_event($e, $f);
+        $self->process_event($e, $f, $idx);
     }
     else {
         die "First event did not contain run data";
@@ -206,14 +251,15 @@ sub _process_first_line {
     $SIG{TERM} = sub { $self->set_signal('TERM'); die "Caught Signal 'TERM'\n"; };
 
     my @errors;
+    $self->{+ERRORS} = \@errors;
 
     return (
         sub {
-            my $line = shift;
+            my ($line, $idx) = @_;
 
             return if eval {
                 my $e = decode_json($line);
-                $self->process_event($e);
+                $self->process_event($e, undef, $idx);
                 1;
             };
             my $err = $@;
@@ -236,7 +282,7 @@ sub _process_first_line {
 
 sub retry_on_disconnect {
     my $self = shift;
-    my ($description, $callback) = @_;
+    my ($description, $callback, $on_exception) = @_;
 
     my ($attempt, $err);
     for my $i (0 .. ($self->{+DISCONNECT_RETRY} - 1)) {
@@ -255,7 +301,9 @@ sub retry_on_disconnect {
         $self->schema->storage->ensure_connected();
     }
 
-    die qq{Failed "$description" (attempt $attempt)\n$err\n};
+    $on_exception->() if $on_exception;
+    print STDERR qq{Failed "$description" (attempt $attempt)\n$err\n};
+    exit(0);
 }
 
 sub populate {
@@ -264,10 +312,13 @@ sub populate {
 
     return unless $data && @$data;
 
+    local $ENV{DBIC_DT_SEARCH_OK} = 1;
+
     $self->retry_on_disconnect(
         "Populate '$type'",
         sub {
             no warnings 'once';
+            local $Data::Dumper::Sortkeys = 1;
             local $Data::Dumper::Freezer = 'T2HarnessFREEZE';
             local *DateTime::T2HarnessFREEZE = sub { my $x = $_[0]->ymd . " " . $_[0]->hms; $_[0] = \$x };
             my $rs = $self->schema->resultset($type);
@@ -279,7 +330,6 @@ sub populate {
 
             warn "\nDuplicate found:\n====\n$err\n====\n\nPopulating '$type' 1 at a time.\n";
             for my $item (@$data) {
-                uuid_mass_deflate($item);
                 next if eval { $rs->create($item); 1 };
                 my $err = $@;
 
@@ -296,362 +346,108 @@ sub populate {
 }
 
 sub format_stamp {
-    my $self = shift;
+    my $self  = shift;
     my $stamp = shift;
     return undef unless $stamp;
 
     unless (ref($stamp)) {
-        $self->{+FIRST_STAMP} = $self->{+FIRST_STAMP} ? min($self->{+FIRST_STAMP}, $stamp) : $stamp;
-        $self->{+LAST_STAMP}  = $self->{+LAST_STAMP}  ? max($self->{+LAST_STAMP}, $stamp)  : $stamp;
+        my $recalc = 0;
+        if (!$self->{+FIRST_STAMP} || $self->{+FIRST_STAMP} > $stamp) {
+            $self->{+FIRST_STAMP} = $stamp;
+            $recalc = 1;
+        }
+
+        if (!$self->{+LAST_STAMP} || $self->{+LAST_STAMP} < $stamp) {
+            $self->{+LAST_STAMP} = $stamp;
+            $recalc = 1;
+        }
+
+        $self->{+DURATION} = $self->{+LAST_STAMP} - $self->{+FIRST_STAMP} if $recalc;
     }
 
     return DateTime->from_epoch(epoch => $stamp, time_zone => 'local');
 }
 
-sub schema { $_[0]->{+CONFIG}->schema }
-
-sub init {
+sub job0_uuid {
     my $self = shift;
-
-    croak "'config' is a required attribute"
-        unless $self->{+CONFIG};
-
-    $self->{+DISCONNECT_RETRY} //= 15;
-
-    my $run;
-    if ($run = $self->{+RUN}) {
-        $self->{+RUN_ID} = $run->run_id;
-        $self->{+MODE}   = $MODES{$run->mode};
-
-        $self->retry_on_disconnect("update status for run '$self->{+RUN_ID}'" => sub { $run->update({status => 'pending'}) });
-    }
-    else {
-        my $run_id = $self->{+RUN_ID} // croak "either 'run' or 'run_id' must be provided";
-        my $mode   = $self->{+MODE}   // croak "'mode' is a required attribute unless 'run' is specified";
-        $self->{+MODE} = $MODES{$mode} // croak "Invalid mode '$mode'";
-
-        my $schema = $self->schema;
-        my $run = $schema->resultset('Run')->create({
-            run_id     => $run_id,
-            user_idx    => $self->user_idx,
-            project_idx => $self->project_idx,
-            mode       => $mode,
-            status     => 'pending',
-        });
-
-        $self->{+RUN} = $run;
-    }
-
-    $run->discard_changes;
-
-    $self->{+PROJECT_IDX} //= $run->project_idx;
-
-    confess "No project idx?!?" unless $self->{+PROJECT_IDX};
-
-    $self->{+RUN_ID}     = uuid_inflate($self->{+RUN_ID});
-    $self->{+USER_IDX}    = uuid_inflate($self->{+USER_IDX});
-    $self->{+PROJECT_IDX} = uuid_inflate($self->{+PROJECT_IDX});
-
-    $self->{+ID_CACHE} = {};
-    $self->{+COVERAGE} = [];
-
-    $self->{+PASSED} = 0;
-    $self->{+FAILED} = 0;
-
-    $self->{+JOB0_ID} = gen_uuid();
+    return $self->{+JOB0_UUID} //= $self->job0->{job_uuid};
 }
 
-sub flush_all {
+sub job0_id {
     my $self = shift;
-
-    my $all = $self->{+JOBS};
-    for my $jobs (values %$all) {
-        for my $job (values %$jobs) {
-            $job->{done} = 'end';
-            $self->flush(job => $job);
-        }
-    }
-
-    $self->flush_events();
-    $self->flush_reporting();
+    return $self->{+JOB0_ID} //= $self->job0->{job_id};
 }
 
-sub flush {
+sub job0_try {
     my $self = shift;
-    my %params = @_;
-
-    my $job = $params{job} or croak "job is required";
-    my $res = $job->{result};
-
-    my $bmode = $self->run->buffer;
-    my $int = $self->{+INTERVAL};
-
-    # Always update if needed
-    $self->retry_on_disconnect("update run" => sub { $self->run->insert_or_update() });
-
-    my $flush = $params{force} ? 'force' : 0;
-    $flush ||= 'always' if $bmode eq 'none';
-    $flush ||= 'diag' if $bmode eq 'diag' && $res->fail && $params{is_diag};
-    $flush ||= 'job' if $job->{done};
-    $flush ||= 'status' if $res->is_column_changed('status');
-    $flush ||= 'fail' if $res->is_column_changed('fail');
-
-    if ($int && !$flush) {
-        my $last = $self->{+LAST_FLUSH};
-        $flush = 'interval' if !$last || $int < time - $last;
-    }
-
-    return "" unless $flush;
-    $self->{+LAST_FLUSH} = time;
-
-    $self->retry_on_disconnect("update job result" => sub { $res->update() });
-
-    $self->flush_events();
-    $self->flush_reporting();
-
-    if (my $done = $job->{done}) {
-        # Last time we need to write this, so clear it.
-        delete $self->{+JOBS}->{$job->{job_id}}->{$job->{job_try}};
-
-        unless ($res->status eq 'complete') {
-            my $status = $self->{+SIGNAL} ? 'canceled' : 'broken';
-            $status = 'canceled' if $done eq 'end';
-            $res->status($status);
-        }
-
-        # Normalize the fail/pass
-        my $fail = $res->fail ? 1 : 0;
-        $res->fail($fail);
-
-        $res->normalize_to_mode(mode => $self->{+MODE});
-    }
-
-    $self->retry_on_disconnect("update job result" => sub { $res->update() });
-
-    return $flush;
+    return $self->{+JOB0_TRY} //= $self->get_job_try($self->job0, 0);
 }
 
-sub flush_events {
+sub job0 {
     my $self = shift;
-
-    return if mode_check($self->{+MODE}, 'summary');
-
-    my @write;
-
-    my $jobs = $self->{+JOBS};
-    for my $tries (values %$jobs) {
-        for my $job (values %$tries) {
-            my $events = $job->{events};
-            my $deferred = $job->{deffered_events} //= [];
-
-            if (record_all_events(mode => $self->{+MODE}, job => $job->{result})) {
-                push @write => (@$deferred, @$events);
-                @$deferred = ();
-            }
-            else {
-                for my $event (@$events) {
-                    if (event_in_mode(event => $event, record_all_event => 0, mode => $self->{+MODE}, job => $job->{result})) {
-                        push @write => $event;
-                    }
-                    else {
-                        push @$deferred => $event;
-                    }
-                }
-            }
-
-            @$events = ();
-        }
-    }
-
-    return unless @write;
-
-    my @dups;
-    my @write_bin;
-    my @write_facets;
-    my @write_orphans;
-    my @write_render;
-
-    for my $e (@write) {
-        if (my $bins = delete $e->{binaries}) {
-            push @write_bin => @$bins;
-        }
-
-        my $rendered = 0;
-        for my $t (qw/facets orphan/) { # Order matters
-            my $l = "${t}_line";
-            my $list = $t eq 'facets' ? \@write_facets : \@write_orphans;
-
-            if (my $data = delete $e->{$t}) {
-                $e->{"has_$t"} = 1;
-                my $line = delete $e->{$l};
-                push @$list => {
-                    event_id => $e->{event_id},
-                    line => $line,
-                    data => $data,
-                };
-
-                # Prefer rendering from facets, but if we only have an orphan render that
-                next if $rendered;
-
-                my $facets = decode_json($data);
-
-                $e->{is_assert} = $facets->{assert} ? 1 : 0;
-
-                my $lines = App::Yath::Renderer::Default::Composer->render_super_verbose($facets) or next;
-                next unless @$lines;
-
-                $rendered = 1;
-
-                push @write_render => map {
-                    my ($tag, $other_tag);
-                    unless ($tag = $DB_TAGS{$_->[1]}) {
-                        $tag = 'other';
-                        $other_tag = $_->[1];
-                    }
-
-                    {
-                        event_id  => $e->{event_id},
-                        job_key   => $e->{job_key},
-
-                        facet     => $_->[0],
-                        tag       => $tag,
-                        other_tag => $other_tag,
-                        message   => $_->[2] // "",
-                        data      => $_->[3] ? encode_json($_->[3]) : undef,
-                    }
-                } @$lines;
-            }
-            else {
-                $e->{"has_$t"} = 0;
-                delete $e->{$l};
-            }
-        }
-    }
-
-    local $ENV{DBIC_DT_SEARCH_OK} = 1;
-    $self->populate(Event  => \@write);
-    $self->populate(Render => \@write_render);
-    $self->populate(Facet  => \@write_facets);
-    $self->populate(Orphan => \@write_orphans);
-    $self->populate(Binary => \@write_bin);
-}
-
-sub flush_reporting {
-    my $self = shift;
-
-    return;
-
-    my @write;
-
-    my %mixin_run = (
-        user_idx    => $self->user_idx,
-        run_id     => $self->{+RUN_ID},
-        project_idx => $self->{+PROJECT_IDX},
-    );
-
-    my $jobs = $self->{+JOBS};
-    for my $tries (values %$jobs) {
-        for my $job (values %$tries) {
-            my $strip_event_id = 0;
-
-            $strip_event_id = 1 unless record_subtest_events(
-                job  => $job->{result},
-                fail => $job->{result}->fail,
-                mode => $self->{+MODE},
-
-                is_harness_out => 0,
-            );
-
-            my %mixin = (
-                %mixin_run,
-                job_try      => $job->{job_try} // 0,
-                job_key      => $job->{job_key},
-                test_file_idx => $job->{result}->test_file_idx,
-            );
-
-            if (my $duration = $job->{duration}) {
-                my $fail  = $job->{result}->fail // 0;
-                my $pass  = $fail ? 0 : 1;
-                my $retry = $job->{result}->retry // 0;
-                my $abort = (defined($fail) || defined($retry)) ? 0 : 1;
-
-                push @write => {
-                    duration     => $duration,
-                    pass         => $pass,
-                    fail         => $fail,
-                    abort        => $abort,
-                    retry        => $retry,
-                    %mixin,
-                };
-            }
-
-            my $reporting = delete $job->{reporting};
-
-            for my $rep (@$reporting) {
-                next unless defined $rep->{duration};
-                next unless defined $rep->{subtest};
-
-                delete $rep->{event_id} if $strip_event_id;
-
-                %$rep = (
-                    %mixin,
-                    %$rep,
-                );
-
-                push @write => $rep;
-            }
-        }
-    }
-
-    return unless @write;
-
-    local $ENV{DBIC_DT_SEARCH_OK} = 1;
-
-    $self->populate(Reporting => \@write);
+    return $self->{+JOB0} //= $self->get_job($self->{+JOB0_UUID} //= gen_uuid());
 }
 
 sub user {
     my $self = shift;
 
-    return $self->{+RUN}->user if $self->{+RUN};
     return $self->{+USER} if $self->{+USER};
-
-    my $user_idx = $self->{+USER_IDX} // confess "No user or user_idx specified";
+    return $self->{+USER} = $self->{+RUN}->user if $self->{+RUN};
 
     my $schema = $self->schema;
-    my $user = $schema->resultset('User')->find({user_idx => $user_idx});
-    return $user if $user;
-    confess "Invalid user_idx: $user_idx";
+
+    if (my $user_id = $self->{+USER_ID}) {
+        my $user = $schema->resultset('User')->find({user_id => $user_id}) or confess "Invalid user id: $user_id";
+        return $self->{+USER} = $user;
+    }
+
+    if (my $username = $self->{+USER_NAME}) {
+        my $user = $schema->resultset('User')->find({username => $username}) or confess "Invalid user name: $username";
+        return $self->{+USER} = $user;
+    }
+
+    confess "No user, user_name, or user_id specified";
 }
 
-sub user_idx {
+sub user_id {
     my $self = shift;
+    return $self->{+USER_ID} //= $self->user->user_id;
+}
 
-    return $self->{+RUN}->user_idx if $self->{+RUN};
-    return $self->{+USER}->user_idx if $self->{+USER};
-    return $self->{+USER_IDX} if $self->{+USER_IDX};
+sub user_name {
+    my $self = shift;
+    return $self->{+USER_NAME} //= $self->user->username;
 }
 
 sub project {
     my $self = shift;
 
-    return $self->{+RUN}->project if $self->{+RUN};
     return $self->{+PROJECT} if $self->{+PROJECT};
-
-    my $project_idx = $self->{+PROJECT_IDX} // confess "No project or project_idx specified";
+    return $self->{+PROJECT} = $self->{+RUN}->project if $self->{+RUN};
 
     my $schema = $self->schema;
-    my $project = $schema->resultset('Project')->find({project_idx => $project_idx});
-    return $project if $project;
-    confess "Invalid project_idx: $project_idx";
+
+    if (my $project_id = $self->{+PROJECT_ID}) {
+        my $project = $schema->resultset('Project')->find({project_id => $project_id}) or confess "Invalid project id: $project_id";
+        return $self->{+PROJECT} = $project;
+    }
+
+    if (my $name = $self->{+PROJECT_NAME}) {
+        my $project = $schema->resultset('Project')->find({projectname => $name}) or confess "Invalid project name: $name";
+        return $self->{+PROJECT} = $project;
+    }
+
+    confess "No project, project_name, or project_id specified";
 }
 
-sub project_idx {
+sub project_id {
     my $self = shift;
+    return $self->{+PROJECT_ID} //= $self->project->project_id;
+}
 
-    return $self->{+RUN}->project_idx if $self->{+RUN};
-    return $self->{+PROJECT}->project_idx if $self->{+PROJECT};
-    return $self->{+PROJECT_IDX} if $self->{+PROJECT_IDX};
+sub project_name {
+    my $self = shift;
+    return $self->{+PROJECT_NAME} //= $self->project->name;
 }
 
 sub start {
@@ -665,592 +461,108 @@ sub start {
 
 sub get_job {
     my $self = shift;
-    my (%params) = @_;
+    my ($job_uuid, %params) = @_;
 
     my $is_harness_out = 0;
-    my $job_id = $params{job_id};
 
-    if (!$job_id || $job_id eq '0') {
-        $job_id = $self->{+JOB0_ID};
+    my $test_file_id;
+
+    if (!$job_uuid || $job_uuid eq '0' || $job_uuid eq $self->{+JOB0_UUID}) {
+        $job_uuid = $self->job0_uuid;
         $is_harness_out = 1;
+        $test_file_id = $self->get_test_file_id('HARNESS INTERNAL LOG');
     }
 
-    $job_id = uuid_inflate($job_id);
+    my $run_id = $self->{+RUN}->run_id;
     my $job_try = $params{job_try} // 0;
 
-    my $job = $self->{+JOBS}->{$job_id}->{$job_try};
-    return $job if $job;
-
-    my $key = gen_uuid();
-
-    my $test_file_idx = undef;
-    if (my $queue = $params{queue}) {
-        my $file = $queue->{rel_file} // $queue->{file};
-        $test_file_idx = $self->get_test_file_idx($file) if $file;
-        $self->{+FILE_CACHE}->{$job_id} //= $test_file_idx if $test_file_idx;
+    if (my $job = $self->{+JOBS}->{$job_uuid}) {
+        return $job;
     }
 
-    $test_file_idx //= $self->{+FILE_CACHE}->{$job_id};
-
     my $result;
+
+    $test_file_id //= $self->{+FILE_CACHE}->{$job_uuid};
+
+    for my $spec ($params{queue}, $params{job_spec}) {
+        last if $test_file_id;
+        next unless $spec;
+
+        my $file = $spec->{rel_file} // $spec->{file};
+        $test_file_id = $self->get_test_file_id($file) if $file;
+        $self->{+FILE_CACHE}->{$job_uuid} = $test_file_id;
+    }
+
+    die "Could not find a test file name or id" unless $test_file_id;
+
     $self->retry_on_disconnect(
         "vivify job" => sub {
             $result = $self->schema->resultset('Job')->update_or_create({
-                status         => 'pending',
-                job_key        => $key,
-                job_id         => $job_id,
-                job_try        => $job_try,
+                job_uuid       => $job_uuid,
+                run_id         => $run_id,
+                test_file_id   => $test_file_id,
                 is_harness_out => $is_harness_out,
-                run_id         => $self->{+RUN}->run_id,
-                fail_count     => 0,
-                pass_count     => 0,
-                test_file_idx   => $test_file_idx,
-
-                $is_harness_out ? (name => "HARNESS INTERNAL LOG") : (),
+                passed         => undef,
+                failed         => 0,
             });
         }
     );
 
-    # In case we are resuming.
-    $self->retry_on_disconnect("delete old events" => sub { $result->events->delete_all() });
+    my $job_id = $result->job_id;
 
-    # Prevent duplicate coverage when --retry is used
-    if ($job_try) {
-        if ($App::Yath::Schema::LOADED =~ m/(mysql|percona|mariadb)/i) {
-            my $schema = $self->schema;
-            $schema->storage->connected; # Make sure we are connected
-            my $dbh    = $schema->storage->dbh;
+    my $job = {
+        run_id       => $run_id,
+        job_id       => $job_id,
+        job_uuid     => $job_uuid,
+        test_file_id => $test_file_id,
 
-            my $query = <<"            EOT";
-            DELETE coverage
-              FROM coverage
-              JOIN jobs USING(job_key)
-             WHERE job_id = ?
-            EOT
+        is_harness_out => $is_harness_out,
 
-            my $sth = $dbh->prepare($query);
-            $sth->execute($job_id) or die $sth->errstr;
-        }
-        else {
-            $self->retry_on_disconnect(
-                "delete old coverage" => sub {
-                    $self->schema->resultset('Coverage')->search({'job.job_id' => $job_id}, {join => 'job'})->delete;
-                }
-            );
-        }
-    }
+        tries => [],
 
-    if (my $old = $self->{+JOBS}->{$job_id}->{$job_try - 1}) {
-        $self->{+UNCOVER}->{$old->{job_key}}++;
-    }
-
-    $job = {
-        job_key => $key,
-        job_id  => $job_id,
-        job_try => $job_try,
-
-        event_ord => 1,
-        events    => [],
-        orphans   => {},
-        reporting => [],
-
-        result    => $result,
+        result => $result,
     };
 
-    return $self->{+JOBS}->{$job_id}->{$job_try} = $job;
+    return $self->{+JOBS}->{$job_uuid} = $job;
 }
 
-sub process_event {
+sub get_job_try {
     my $self = shift;
-    my ($event, $f, %params) = @_;
+    my ($job, $try_ord) = @_;
 
-    $f //= $event->{facet_data};
-    $f = $f ? clone($f) : {};
+    $try_ord //= 0;
 
-    $self->start unless $self->{+RUNNING};
-
-    if (my $res = delete $f->{db_resources}) {
-        $self->insert_resources($res);
-        return unless keys %$f;
+    if (my $try = $job->{tries}->[$try_ord]) {
+        return $try;
     }
 
-    my $job = $params{job} // $self->get_job(%{$f->{harness} // {}}, queue => $f->{harness_job_queued});
-
-    my $e = $self->_process_event($event, $f, %params, job => $job);
-    clean($e);
-
-    if (my $od = $e->{orphan}) {
-        $job->{orphans}->{$e->{event_id}} = $e;
-    }
-    else {
-        if (my $o = delete $job->{orphans}->{$e->{event_id}}) {
-            $e->{orphan} = $o->{orphan};
-            $e->{orphan_line} = $o->{orphan_line} if defined $o->{orphan_line};
-            $e->{stamp} //= $o->{stamp};
+    my $result;
+    $self->retry_on_disconnect(
+        "vivify job try" => sub {
+            $result = $self->schema->resultset('JobTry')->update_or_create({
+                job_id      => $job->{job_id},
+                job_try_ord => $try_ord,
+            });
         }
-        push @{$job->{events}} => $e;
-    }
-
-    $self->flush(job => $job, is_diag => $e->{is_diag});
-
-    return;
-}
-
-sub host {
-    my $self = shift;
-    return $self->{+HOST} //= $self->{+CONFIG}->schema->resultset('Host')->find_or_create({hostname => hostname()});
-}
-
-sub insert_resources {
-    my $self = shift;
-    my ($res) = @_;
-
-    my $stamp    = $res->{stamp};
-    my $items    = $res->{items};
-    my $batch_id = $res->{batch_id};
-
-    my $config = $self->{+CONFIG};
-
-    my $run_id  = $self->run->run_id;
-    my $host_idx = $self->host->host_idx;
-
-    my $res_rs   = $config->schema->resultset('Resource');
-    my $batch_rs = $config->schema->resultset('ResourceBatch');
-
-    my $dt_stamp = DateTime->from_epoch(epoch => $stamp, time_zone => 'local');
-
-    my $batch = $batch_rs->create({
-        resource_batch_idx => $batch_id,
-        run_id            => uuid_inflate($run_id),
-        host_idx           => $host_idx,
-        stamp             => $dt_stamp,
-    });
-
-    $res_rs->populate($items);
-}
-
-sub finish {
-    my $self = shift;
-    my (@errors) = @_;
-
-    $self->flush_all();
-
-    my $run = $self->run;
-
-    my $status;
-    my $dur_stat;
-    my $aborted = 0;
-
-    if (@errors) {
-        my $error = join "\n" => @errors;
-        $status = {status => 'broken', error => $error};
-        $dur_stat = 'abort';
-    }
-    else {
-        my $stat;
-        if ($self->{+SIGNAL}) {
-            $stat = 'canceled';
-            $dur_stat = 'abort';
-            $aborted = 1;
-        }
-        else {
-            $stat = 'complete';
-            $dur_stat = $self->{+FAILED} ? 'fail' : 'pass';
-        }
-
-        $status = {status => $stat, passed => $self->{+PASSED}, failed => $self->{+FAILED}, retried => $self->{+RETRIED}};
-    }
-
-    if ($self->{+FIRST_STAMP} && $self->{+LAST_STAMP}) {
-        my $duration = $self->{+LAST_STAMP} - $self->{+FIRST_STAMP};
-        $status->{duration} = format_duration($duration);
-
-        $self->retry_on_disconnect("insert duration row" => sub {
-            my $fail = $aborted ? 0 : $self->{+FAILED} ? 1 : 0;
-            my $pass = ($fail || $aborted) ? 0 : 1;
-            my $row  = {
-                run_id      => $self->{+RUN_ID},
-                user_idx    => $self->user_idx,
-                project_idx => $self->project_idx,
-                duration    => $duration,
-                retry       => 0,
-                pass        => $pass,
-                fail        => $fail,
-                abort       => $aborted,
-            };
-            $self->schema->resultset('Reporting')->create($row);
-        });
-    }
-
-    $self->retry_on_disconnect("update run status" => sub { $run->update($status) });
-
-    return $status;
-}
-
-sub _process_event {
-    my $self = shift;
-    my ($event, $f, %params) = @_;
-    my $job = $params{job};
-
-    my $ord = $job->{event_ord}++;
-
-    my $harness = $f->{harness} // {};
-    my $trace   = $f->{trace}   // {};
-
-    my $e_id   = uuid_inflate($harness->{event_id} // $event->{event_id} // die "No event id!");
-    my $nested = $f->{hubs}->[0]->{nested} || 0;
-
-    my @binaries;
-    if ($f->{binary} && @{$f->{binary}}) {
-        for my $file (@{$f->{binary}}) {
-            my $data = delete $file->{data};
-            $file->{data}    = 'removed';
-
-            push @binaries => {
-                event_id => $e_id,
-                filename => $file->{filename},
-                description => $file->{details},
-                data => decode_base64($data),
-                is_image => $file->{is_image} // $file->{filename} =~ m/\.(a?png|gif|jpe?g|svg|bmp|ico)$/ ? 1 : 0,
-            };
-        }
-    }
-
-    my $fail = causes_fail($f) ? 1 : 0;
-
-    my $is_diag = $fail;
-    $is_diag ||= 1 if $f->{errors} && @{$f->{errors}};
-    $is_diag ||= 1 if $f->{assert} && !($f->{assert}->{pass} || $f->{amnesty});
-    $is_diag ||= 1 if $f->{info} && first { $_->{debug} || $_->{important} } @{$f->{info}};
-    $is_diag //= 0;
-
-    my $is_harness = (first { substr($_, 0, 8) eq 'harness_' } keys %$f) ? 1 : 0;
-
-    my $is_time = $f->{harness_job_end} ? ($f->{harness_job_end}->{times} ? 1 : 0) : 0;
-
-    my $is_subtest = $f->{parent} ? 1 : 0;
-
-    my $e = {
-        event_id    => $e_id,
-        event_ord   => $ord,
-        nested      => $nested,
-        is_subtest  => $is_subtest,
-        is_diag     => $is_diag,
-        is_harness  => $is_harness,
-        is_time     => $is_time,
-        causes_fail => $fail,
-        trace_id    => $trace->{uuid},
-        job_key     => $job->{job_key},
-        stamp       => $self->format_stamp($harness->{stamp} || $event->{stamp} || $params{stamp}),
-        binaries    => \@binaries,
-        has_binary  => @binaries ? 1 : 0,
-    };
-
-    my $orphan = $nested ? 1 : 0;
-    if (my $p = $params{parent_id}) {
-        $e->{parent_id} ||= $p;
-        $orphan = 0;
-    }
-
-    if ($orphan) {
-        clean($f);
-
-        if ($f->{parent} && $f->{parent}->{children}) {
-            $f->{parent}->{children} = "Removed";
-        }
-
-        $e->{orphan}      = encode_json($f);
-        $e->{orphan_line} = $params{line} if $params{line};
-    }
-    else {
-        if (my $fields = $f->{run_fields}) {
-            $self->add_run_fields($fields);
-        }
-
-        if (my $job_coverage = $f->{job_coverage}) {
-            $self->add_job_coverage($job, $job_coverage);
-            $f->{job_coverage} = "Removed, used to populate the job_coverage table";
-        }
-
-        if (my $run_coverage = $f->{run_coverage}) {
-            $f->{run_coverage} = "Removed, used to populate the run_coverage table";
-            $self->add_run_coverage($run_coverage);
-        }
-
-        if ($f->{parent} && $f->{parent}->{children}) {
-            $self->process_event({}, $_, job => $job, parent_id => $e_id, line => $params{line}) for @{$f->{parent}->{children}};
-            $f->{parent}->{children} = "Removed, used to populate events table";
-
-            $self->add_subtest_duration($job, $e, $f) unless $nested;
-        }
-
-        unless ($nested) {
-            my $res = $job->{result};
-            if ($fail) {
-                $res->fail_count($res->fail_count + 1);
-                $res->fail(1);
-            }
-            $res->pass_count($res->pass_count + 1) if $f->{assert} && !$fail;
-
-            $self->update_other($job, $f) if $e->{is_harness};
-        }
-
-        clean($f);
-        $e->{facets}      = encode_json($f);
-        $e->{facets_line} = $params{line} if $params{line};
-    }
-
-    return $e;
-}
-
-sub add_subtest_duration {
-    my $self = shift;
-    my ($job, $e, $f) = @_;
-
-    return if $f->{hubs}->[0]->{nested};
-
-    my $parent = $f->{parent}       // return;
-    my $assert = $f->{assert}       // return;
-    my $st     = $assert->{details} // return;
-    return if is_invalid_subtest_name($st);
-
-    my $start    = $parent->{start_stamp} // return;
-    my $stop     = $parent->{stop_stamp}  // return;
-    my $duration = $stop - $start         // return;
-
-    push @{$job->{reporting}} => {
-        duration => $duration,
-        subtest  => $st,
-        event_id => $e->{event_id},
-        abort => 0,
-        retry => 0,
-        $assert->{pass} ? (pass => 1, fail => 0) : (fail => 1, pass => 0),
-    };
-}
-
-sub add_job_coverage {
-    my $self = shift;
-    my ($job, $job_coverage) = @_;
-
-    my $job_id  = $job->{job_id};
-    my $job_try = $job->{job_try} // 0;
-
-    # Do not add coverage if a retry has already started. Events could be out of order.
-    return if $self->{+JOBS}->{$job_id}->{$job_try + 1};
-    return if $self->{+UNCOVER} && $self->{+UNCOVER}->{$job->{job_key}};
-
-    for my $source (keys %{$job_coverage->{files}}) {
-        my $subs = $job_coverage->{files}->{$source};
-        for my $sub (keys %$subs) {
-            my $test = $job_coverage->{test} // $job->{result}->file;
-
-            $self->_add_coverage(
-                job_key => $job->{job_key},
-                test    => $test,
-                source  => $source,
-                sub     => $sub,
-                manager => $job_coverage->{manager},
-                meta    => $subs->{$sub},
-            );
-        }
-    }
-
-    $self->flush_coverage;
-}
-
-sub add_run_coverage {
-    my $self = shift;
-    my ($run_coverage) = @_;
-
-    my $files = $run_coverage->{files};
-    my $meta  = $run_coverage->{testmeta};
-
-    for my $source (keys %$files) {
-        my $subs = $files->{$source};
-        for my $sub (keys %$subs) {
-            my $tests = $subs->{$sub};
-            for my $test (keys %$tests) {
-                $self->_add_coverage(
-                    test    => $test,
-                    source  => $source,
-                    sub     => $sub,
-                    manager => $meta->{$test}->{manager},
-                    meta    => $tests->{$test}
-                );
-            }
-        }
-    }
-
-    $self->flush_coverage;
-}
-
-sub _add_coverage {
-    my $self = shift;
-    my %params = @_;
-
-    my $test_id = $self->get_test_file_idx($params{test}) or confess("Could not get test id (for '$params{test}')");
-
-    my $source_id  = $self->_get__id(SourceFile      => 'source_file_idx',      filename => $params{source}) or die "Could not get source id";
-    my $sub_id     = $self->_get__id(SourceSub       => 'source_sub_idx',       subname  => $params{sub})    or die "Could not get sub id";
-    my $manager_id = $self->_get__id(CoverageManager => 'coverage_manager_idx', package  => $params{manager});
-
-    my $meta = $manager_id ? encode_json($params{meta}) : undef;
-
-    my $coverage = $self->{+COVERAGE} //= [];
-
-    push @$coverage => {
-        run_id              => $self->{+RUN_ID},
-        test_file_idx        => $test_id,
-        source_file_idx      => $source_id,
-        source_sub_idx       => $sub_id,
-        coverage_manager_idx => $manager_id,
-        metadata            => $meta,
-        job_key             => $params{job_key},
-    };
-}
-
-sub flush_coverage {
-    my $self = shift;
-
-    my $coverage = $self->{+COVERAGE} or return;
-    return unless @$coverage;
-
-    $self->retry_on_disconnect("update has_coverage" => sub { $self->{+RUN}->update({has_coverage => 1}) })
-        unless $self->{+RUN}->has_coverage;
-
-    $self->populate(Coverage => $coverage);
-
-    @$coverage = ();
-
-    return;
-}
-
-sub _get__id {
-    my $self = shift;
-    my ($type, $id_field, $field, $id) = @_;
-    my $out = $self->_get___id(@_);
-    return $out unless defined $out;
-    return $out if $id_field =~ m/_idx$/;
-    return uuid_inflate($out);
-}
-
-sub _get___id {
-    my $self = shift;
-    my ($type, $id_field, $field, $id) = @_;
-
-    return undef unless $id;
-
-    return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id}
-        if $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id};
-
-    my $spec = {$field => $id};
-
-    # idx fields are always auto-increment, otherwise the id is uuid
-    $spec->{$id_field} = gen_uuid() unless $id_field =~ m/_idx$/;
-
-    my $result = $self->schema->resultset($type)->find_or_create($spec);
-
-    return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id} = $result->$id_field;
-}
-
-sub get_test_file_idx {
-    my $self = shift;
-    my ($file) = @_;
-
-    return undef unless $file;
-
-    return $self->_get__id('TestFile' => 'test_file_idx', filename => $file);
-}
-
-sub add_io_streams {
-    my $self = shift;
-    my ($job, @streams) = @_;
-
-    my $job_key = $job->job_key;
-
-    my @write;
-    for my $s (@streams) {
-        my ($stream, $output) = @$s;
-        $output = clean_output($output);
-        next unless defined $output && length($output);
-
-        push @write => {
-            job_key => $job_key,
-            stream => uc($stream),
-            output => $output,
-        };
-    }
-
-    $self->populate('JobOutput' => \@write);
-}
-
-sub add_run_fields {
-    my $self = shift;
-    my ($fields) = @_;
-
-    my $run    = $self->{+RUN};
-    my $run_id = $run->run_id;
-
-    return $self->_add_fields(
-        fields    => $fields,
-        type      => 'RunField',
-        key_field => 'run_field_id',
-        attrs     => {run_id => $run_id},
     );
-}
 
-sub add_job_fields {
-    my $self = shift;
-    my ($job, $fields) = @_;
+    my $try = {
+        job_try_id  => $result->job_try_id,
+        job_try_ord => $try_ord,
+        result      => $result,
 
-    my $job_key = $job->job_key;
+        orphan_events => {},
+        ready_events  => [],
 
-    return $self->_add_fields(
-        fields    => $fields,
-        type      => 'JobField',
-        key_field => 'job_field_id',
-        attrs     => {job_key => $job_key},
-    );
-}
+        job      => $job,
+        run_id   => $job->{run_id},
+        job_id   => $job->{job_id},
+        job_uuid => $job->{job_uuid},
+    };
 
-sub _add_fields {
-    my $self = shift;
-    my %params = @_;
+    weaken($try->{job});
 
-    my $fields    = $params{fields};
-    my $type      = $params{type};
-    my $key_field = $params{key_field};
-    my $attrs     = $params{attrs} // {};
-
-    my @add;
-    for my $field (@$fields) {
-        my $id  = gen_uuid;
-        my $new = {%$attrs, $key_field => $id};
-
-        $new->{name}    = $field->{name}    || 'unknown';
-        $new->{details} = $field->{details} || $new->{name};
-        $new->{raw}     = $field->{raw}               if $field->{raw};
-        $new->{link}    = $field->{link}              if $field->{link};
-        $new->{data}    = encode_json($field->{data}) if $field->{data};
-
-        push @add => $new;
-
-        # Replace the item in the $fields array with the id
-        $field = $id;
-    }
-
-    $self->populate($type => \@add);
-}
-
-sub clean_output {
-    my $text = shift;
-
-    return undef unless defined $text;
-    $text =~ s/^T2-HARNESS-ESYNC: \d+\n//gm;
-    chomp($text);
-
-    return undef unless length($text);
-    return $text;
+    return $job->{tries}->[$try_ord] = $try
 }
 
 sub clean {
@@ -1288,106 +600,1046 @@ sub clean_array {
     return 0;
 }
 
-sub update_other {
+sub _get__id {
     my $self = shift;
-    my ($job, $f) = @_;
+    my ($type, $id_field, $field, $id) = @_;
 
-    my $run = $self->{+RUN};
+    return undef unless $id;
 
-    if (my $run_data = $f->{harness_run}) {
-        my $settings = $run_data->{settings} //= $f->{harness_settings};
+    return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id}
+        if $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id};
 
-        if (my $c = $settings->{resource}->{slots}) {
-            $run->concurrency($c);
+    my $spec = {$field => $id};
+
+    # id fields are always auto-increment, uuid is always uuid
+    $spec->{$id_field} = gen_uuid() if $id_field =~ m/_uuid$/;
+
+    my $result = $self->schema->resultset($type)->find_or_create($spec);
+
+    return $self->{+ID_CACHE}->{$type}->{$id_field}->{$field}->{$id} = $result->$id_field;
+}
+
+sub get_test_file_id {
+    my $self = shift;
+    my ($file) = @_;
+
+    return undef unless $file;
+
+    my @parts = split /(\/t2?\/)/, $file;
+    my $new;
+    while (my $part = shift @parts) {
+        if ($part =~ m{/(t2?)/} && !$new) {
+            $new = "$1/";
+            next;
         }
 
-        clean($run_data);
-        $self->schema->resultset('RunParameter')->find_or_create({
-            run_id => $run->run_id,
-            parameters => $run_data,
-        });
+        next unless $new;
 
-        if (my $fields = $run_data->{harness_run_fields} // $run_data->{fields}) {
-            $self->add_run_fields($fields);
-        }
+        $new .= $part;
     }
 
-    my $job_result = $job->{result};
-    my %cols = $job_result->get_columns;
+    $file = $new if $new;
 
-    # Handle job events
-    if (my $job_data = $f->{harness_job}) {
-        #$cols{test_file_idx} ||= $self->get_test_file_idx($job_data->{file});
-        $cols{name} ||= $job_data->{job_name};
-        $f->{harness_job}  = "Removed, see job with job_key $cols{job_key}";
+    $file =~ s{^\.+/+}{};
 
-        clean($job_data);
-        $self->schema->resultset('JobParameter')->find_or_create({
-            job_key => uuid_deflate($job_result->job_key),
-            parameters => $job_data,
-        });
+    return $self->_get__id('TestFile' => 'test_file_id', filename => $file);
+}
 
+sub _pull_facet_binaries {
+    my $self = shift;
+    my ($f, $params) = @_;
+
+    my $bin = $f->{binary} or return undef;
+    return undef unless @$bin;
+
+    my $e_uuid = $params->{e_uuid};
+    my @binaries;
+
+    for my $file (@$bin) {
+        my $data = delete $file->{data};
+        $file->{data} = 'Extracted to the "binaries" table';
+
+        push @binaries => {
+            event_uuid  => $e_uuid,
+            filename    => $file->{filename},
+            description => $file->{details},
+            data        => decode_base64($data),
+            is_image    => $file->{is_image} // $file->{filename} =~ m/\.(a?png|gif|jpe?g|svg|bmp|ico)$/ ? 1 : 0,
+        };
     }
-    if (my $job_exit = $f->{harness_job_exit}) {
-        #$cols{test_file_idx} ||= $self->get_test_file_idx($job_exit->{file});
-        $cols{exit_code} = $job_exit->{exit};
 
-        if ($job_exit->{retry} && $job_exit->{retry} eq 'will-retry') {
-            $cols{retry} = 1;
-            $self->{+RETRIED}++;
-            $self->{+FAILED}--;
-        }
-        else {
-            $cols{retry} = 0;
-        }
+    return undef unless @binaries;
+    return \@binaries;
+}
 
-        $self->add_io_streams(
-            $job_result,
-            [STDERR => delete $job_exit->{stderr}],
-            [STDOUT => delete $job_exit->{stdout}],
-        );
-    }
-    if (my $job_start = $f->{harness_job_start}) {
-        $cols{test_file_idx} ||= $self->get_test_file_idx($job_start->{rel_file}) if $job_start->{rel_file};
-        $cols{test_file_idx} ||= $self->get_test_file_idx($job_start->{file});
-        $cols{start} = $self->format_stamp($job_start->{stamp});
-    }
-    if (my $job_launch = $f->{harness_job_launch}) {
-        $cols{status} = 'running';
+sub _pull_facet_resource {
+    my $self = shift;
+    my ($f, $params) = @_;
 
-        $cols{test_file_idx} ||= $self->get_test_file_idx($job_launch->{file});
-        $cols{launch} = $self->format_stamp($job_launch->{stamp});
-    }
-    if (my $job_end = $f->{harness_job_end}) {
-        #$cols{test_file_idx} ||= $self->get_test_file_idx($job_end->{file});
-        $cols{fail} ||= $job_end->{fail} ? 1 : 0;
-        $cols{ended} = $self->format_stamp($job_end->{stamp});
+    my $resf = $f->{resource_state} or return undef;
+    my $data = delete $resf->{data};
+    $resf->{data} = 'Extracted to the "resources" table';
 
-        $cols{fail} ? $self->{+FAILED}++ : $self->{+PASSED}++;
+    my $ord    = $self->{+RESOURCE_ORD}++;
+    my $mod    = $resf->{module};
+    my $host   = $resf->{host};
+    my $e_uuid = $params->{e_uuid};
+    my $stamp  = $self->format_stamp($f->{harness}->{stamp});
 
-        # All done
-        $job->{done} = 1;
-        $cols{status} = 'complete';
+    my $resource_type_id = $self->_get__id(ResourceType => 'resource_type_id', name     => $mod)  or die "Could not get resource_type id";
+    my $host_id          = $self->_get__id(Host         => 'host_id',          hostname => $host) or die "Could not get host id";
 
-        if ($job_end->{rel_file} && $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total}) {
-            my $tfile_id = $cols{test_file_idx} ||= $self->get_test_file_idx($job_end->{rel_file}) if $job_end->{rel_file};
+    push @{$self->{+RESOURCES} //= []} => {
+        run_id           => $self->{+RUN_ID},
+        host_id          => $host_id,
+        resource_type_id => $resource_type_id,
+        resource_ord     => $ord,
+        event_uuid       => $e_uuid,
+        data             => encode_ascii_json($data),
+        stamp            => $stamp,
+    };
+}
 
-            if (my $duration = $job_end->{times}->{totals}->{total}) {
-                $job->{duration} = $duration;
-                $cols{duration} = $duration;
+sub _pull_facet_run_coverage {
+    my $self = shift;
+    my ($f, $params) = @_;
+    my $c = $self->_pull_facet__coverage($f, 'run', $params);
+
+    my $files  = $c->{files};
+    my $meta   = $c->{testmeta};
+
+    my $try    = $params->{try};
+    my $e_uuid = $params->{e_uuid};
+
+    for my $source (keys %$files) {
+        my $subs = $files->{$source};
+        for my $sub (keys %$subs) {
+            my $tests = $subs->{$sub};
+            for my $test (keys %$tests) {
+                push @{$self->{+COVERAGE} //= []} => $self->_pre_process_coverage(
+                    event_uuid => $e_uuid,
+                    test       => $test,
+                    source     => $source,
+                    sub        => $sub,
+                    manager    => $meta->{$test}->{manager},
+                    meta       => $tests->{$test}
+                );
             }
         }
     }
-    if (my $job_fields = $f->{harness_job_fields}) {
-        $self->add_job_fields($job_result, $job_fields);
-    }
-
-    $job_result->set_columns(\%cols);
 
     return;
 }
 
-1;
+sub _pre_process_coverage {
+    my $self   = shift;
+    my %params = @_;
+
+    my $e_uuid = $params{event_uuid};
+    my $test_id = $self->get_test_file_id($params{test}) or confess("Could not get test id (for '$params{test}')");
+
+    my $source_id  = $self->_get__id(SourceFile      => 'source_file_id',      filename => $params{source}) or die "Could not get source id";
+    my $sub_id     = $self->_get__id(SourceSub       => 'source_sub_id',       subname  => $params{sub})    or die "Could not get sub id";
+    my $manager_id = $self->_get__id(CoverageManager => 'coverage_manager_id', package  => $params{manager});
+
+    return {
+        run_id              => $self->{+RUN_ID},
+        event_uuid          => $e_uuid,
+        test_file_id        => $test_id,
+        source_file_id      => $source_id,
+        source_sub_id       => $sub_id,
+        coverage_manager_id => $manager_id,
+
+        $manager_id         ? (metadata   => encode_ascii_json($params{meta})) : (),
+        $params{job_try_id} ? (job_try_id => $params{job_try_id})              : (),
+    };
+}
+
+sub _pull_facet_job_try_coverage {
+    my $self = shift;
+    my ($f, $params) = @_;
+    my $c = $self->_pull_facet__coverage($f, 'job', $params);
+
+    my $job    = $params->{job};
+    my $try    = $params->{try};
+    my $e_uuid = $params->{e_uuid};
+
+    for my $source (keys %{$c->{files}}) {
+        my $subs = $c->{files}->{$source};
+        for my $sub (keys %$subs) {
+            my $test = $c->{test} // $job->{result}->file;
+
+            push @{$self->{+COVERAGE} //= []} => $self->_pre_process_coverage(
+                event_uuid => $e_uuid,
+                job_try_id => $try->{job_try_id},
+                test       => $test,
+                source     => $source,
+                sub        => $sub,
+                manager    => $c->{manager},
+                meta       => $subs->{$sub},
+            );
+        }
+    }
+
+    return;
+}
+
+sub _pull_facet__coverage {
+    my $self = shift;
+    my ($f, $type, $params) = @_;
+    my $e_uuid = $params->{e_uuid};
+
+    my $c = delete $f->{"${type}_coverage"} or return undef;
+
+    $f->{"${type}_coverage"} = 'Extracted to the "coverage" table';
+    return $c;
+}
+
+sub _pull_facet_children {
+    my $self = shift;
+    my ($f, $params) = @_;
+
+    my $p = $f->{parent} or return undef;
+    my $c = $p->{children} or return undef;
+    return undef unless @$c;
+    $f->{parent}->{children} = 'Extracted to populate "events" table';
+
+    return $c;
+}
+
+sub _pull_facet__fields {
+    my $self = shift;
+    my ($f, $type, $params) = @_;
+
+    my @fields;
+    if (my $fs = $f->{"${type}_fields"}) {
+        push @fields => @{$fs};
+        $f->{"${type}_fields"} = qq{Extracted to populate "${type}_fields" table};
+    }
+
+    if (my $fs = $f->{"harness_${type}_fields"}) {
+        push @fields => @{$fs};
+        $f->{"harness_${type}_fields"} = qq{Extracted to populate "${type}_fields" table};
+    }
+
+    if (my $p = $f->{"harness_${type}"}) {
+        if (my $fs = $p->{fields}) {
+            push @fields => @{$fs};
+            $p->{"fields"} = qq{Extracted to populate "${type}_fields" table};
+        }
+
+        if (my $fs = $p->{"${type}_fields"}) {
+            push @fields => @{$fs};
+            $p->{"${type}_fields"} = qq{Extracted to populate "${type}_fields" table};
+        }
+
+        if (my $fs = $p->{"harness_${type}_fields"}) {
+            push @fields => @{$fs};
+            $p->{"harness_${type}_fields"} = qq{Extracted to populate "${type}_fields" table};
+        }
+    }
+
+    return undef unless @fields;
+
+    my %mixin  = $type eq 'run' ? (run_id => $self->{+RUN_ID}) : (job_try_id => $params->{try}->{job_try_id});
+    my $e_uuid = $params->{e_uuid};
+
+    for my $field (@fields) {
+        my $name = $field->{name} || 'unknown';
+
+        my $row = {
+            %mixin,
+            event_uuid => $e_uuid,
+            name       => $name,
+            details    => $field->{details} || $name,
+        };
+
+        $row->{raw}  = $field->{raw}  if $field->{raw};
+        $row->{link} = $field->{link} if $field->{link};
+
+        $row->{data} = encode_ascii_json($field->{data}) if $field->{data};
+
+        if ($type eq 'run') {
+            push @{$self->{+RUN_FIELDS} //= []} => $row;
+        }
+        else {
+            push @{$self->{+TRY_FIELDS} //= []} => $row;
+        }
+    }
+}
+
+sub _pull_facet__params {
+    my $self = shift;
+    my ($f, $type, $params) = @_;
+
+    my $p = $f->{"harness_${type}"} or return undef;
+    $f->{"harness_${type}"} = qq{Extracted to populate "${type}.parameters" column};
+
+    return $p;
+}
+
+sub _pull_facet_run_fields {
+    my $self = shift;
+    my ($f, $params) = @_;
+    return $self->_pull_facet__fields($f, 'run', $params);
+}
+
+sub _pull_facet_run_params {
+    my $self = shift;
+    my ($f, $params) = @_;
+    return $self->_pull_facet__params($f, 'run', $params);
+}
+
+sub _pull_facet_job_try_fields {
+    my $self = shift;
+    my ($f, $params) = @_;
+    return $self->_pull_facet__fields($f, 'job', $params);
+}
+
+sub _pull_facet_job_try_params {
+    my $self = shift;
+    my ($f, $params) = @_;
+    return $self->_pull_facet__params($f, 'job', $params);
+}
+
+sub _pull_facet_reporting {
+    my $self = shift;
+    my ($f, $params) = @_;
+
+    return if $f->{hubs}->[0]->{nested};
+
+    my $parent = $f->{parent}       // return;
+    my $assert = $f->{assert}       // return;
+    my $st     = $assert->{details} // return;
+    return if is_invalid_subtest_name($st);
+
+    my $start    = $parent->{start_stamp} // return;
+    my $stop     = $parent->{stop_stamp}  // return;
+    my $duration = $stop - $start         // return;
+
+    my $try = $params->{try};
+    my $job = $params->{job};
+
+    my $test_file_id = $job->{is_harness_out} ? undef : $job->{test_file_id};
+
+    push @{$self->{+REPORTING} //= []} => {
+        run_id     => $self->run_id,
+        user_id    => $self->user_id,
+        project_id => $self->project_id,
+
+        job_try_id   => $try->{job_try_id},
+        job_try      => $try->{job_try_ord},
+        test_file_id => $test_file_id,
+
+        subtest  => $st,
+        duration => $duration,
+
+        abort => 0,
+        retry => 0,
+
+        $assert->{pass} ? (pass => 1, fail => 0) : (fail => 1, pass => 0),
+    };
+}
+
+sub _pull_facet_run_updates {
+    my $self = shift;
+    my ($f, $params) = @_;
+
+    my $delta = $self->{+RUN_DELTA} //= {};
+
+    $delta->{'=has_coverage'} = 1 if $f->{job_coverage} || $f->{run_coverage};
+
+    $delta->{'=has_resources'} = 1 if $f->{resource_state};
+
+    if (my $run_params = $self->_pull_facet_run_params($f, $params)) {
+        $delta->{'=parameters'} = encode_ascii_json($run_params);
+
+        my $settings = $run_params->{settings};
+
+        if (my $r = $settings->{resource}) {
+            if (my $j = $r->{slots}) {
+                $delta->{'=concurrency_j'} = $j;
+            }
+
+            if (my $x = $r->{job_slots}) {
+                $delta->{'=concurrency_x'} = $x;
+            }
+        }
+        elsif (my $r2 = $settings->{runner}) { #Legacy logs
+            if (my $j = $r2->{job_count}) {
+                $delta->{'=concurrency_j'} = $j;
+            }
+        }
+    }
+
+    if (my $job_exit = $f->{harness_job_end}) {
+        if ($job_exit->{fail}) {
+            if ($job_exit->{retry}) {
+                $delta->{'Δto_retry'} += 1;
+            }
+            else {
+                $delta->{'Δfailed'} += 1;
+            }
+        }
+        else {
+            $delta->{'Δpassed'} += 1;
+        }
+
+        if ($params->{try}->{job_try_ord}) {
+            $delta->{'Δto_retry'} -= 1;
+            $delta->{'Δretried'} += 1;
+        }
+    }
+
+    if (my $dur = $self->{+DURATION}) {
+        unless ($params->{run}->{duration} && $dur <= $params->{run}->{duration}) {
+            $delta->{'=duration'} = $dur;
+            $params->{run}->{duration} = $dur;
+        }
+    }
+
+    return;
+}
+
+sub _pull_facet_job_updates {
+    my $self = shift;
+    my ($f, $params) = @_;
+
+    my $job_exit = $f->{harness_job_end} or return undef;
+
+    my $delta = $params->{job}->{delta} //= {};
+
+    if ($job_exit->{fail}) {
+        $delta->{'=failed'} = 1;
+    }
+    else {
+        $delta->{'=passed'} = 1;
+    }
+
+    return;
+}
+
+sub _pull_facet_job_try_updates {
+    my $self = shift;
+    my ($f, $params) = @_;
+
+    return undef if $params->{nested};
+
+    my $delta = $params->{try}->{delta} //= {};
+
+    if (my $job_params = $self->_pull_facet_job_try_params($f, $params)) {
+        $delta->{'=parameters'} = encode_ascii_json($job_params);
+    }
+
+    if ($params->{causes_fail}) {
+        $delta->{'=fail_count'} += 1;
+    }
+    elsif (my $assert = $f->{assert}) {
+        $delta->{'=pass_count'} += 1;
+    }
+
+    if (my $job_start = $f->{harness_job_start}) {
+        $delta->{'=start'} = $self->format_stamp($job_start->{stamp});
+    }
+
+    if (my $job_launch = $f->{harness_job_launch}) {
+        $delta->{'=launch'} = $self->format_stamp($job_launch->{stamp});
+        $delta->{'=status'} = 'running';
+    }
+
+    if (my $job_exit = $f->{harness_job_exit}) {
+        $delta->{'=exit_code'} = $job_exit->{exit} if $job_exit->{exit};
+
+        $delta->{'=stdout'} = clean_output($job_exit->{stdout}) if $job_exit->{stdout};
+        $delta->{'=stderr'} = clean_output($job_exit->{stderr}) if $job_exit->{stderr};
+    }
+
+    if (my $job_end = $f->{harness_job_end}) {
+        my $try = $params->{try};
+        my $job = $params->{job};
+
+        my $report = {
+            run_id     => $self->run_id,
+            user_id    => $self->user_id,
+            project_id => $self->project_id,
+
+            job_try_id   => $try->{job_try_id},
+            job_try      => $try->{job_try_ord},
+            test_file_id => $job->{test_file_id},
+
+            abort => $self->{+SIGNAL} ? 1 : 0,
+        };
+
+        if ($job_end->{fail}) {
+            $delta->{'=fail'}  += 1;
+            $delta->{'=retry'} += $job_end->{retry} ? 1 : 0;
+
+            $report->{fail} = 1;
+            $report->{pass} = 0;
+            $report->{retry} = $job_end->{retry} ? 1 : 0;
+        }
+        else {
+            $delta->{'=retry'} = 0;
+
+            $report->{fail} = 0;
+            $report->{pass} = 1;
+            $report->{retry} = 0;
+        }
+
+        my $duration = 0;
+        $duration = $job_end->{times}->{totals}->{total} if $job_end->{times} && $job_end->{times}->{totals} && $job_end->{times}->{totals}->{total};
+
+        $delta->{'=ended'}    = $self->format_stamp($job_end->{stamp});
+        $delta->{'=status'}   = 'complete';
+        $delta->{'=duration'} = $duration if $duration;
+
+        $params->{try}->{done} = 1;
+
+        $report->{duration} = $duration // 0;
+
+        push @{$self->{+REPORTING} //= []} => $report;
+    }
+
+    return;
+}
+
+sub clean_output {
+    my $text = shift;
+
+    return undef unless defined $text;
+    $text =~ s/^T2-HARNESS-ESYNC: \d+\n//gm;
+    chomp($text);
+
+    return undef unless length($text);
+    return $text;
+}
+
+sub process_event {
+    my $self = shift;
+    my ($event, $f, $idx, @oops) = @_;
+
+    croak "Too many arguments" if @oops;
+
+    $f //= $event->{facet_data} // die "No facet data!";
+    $f = clone($f) if $self->{+CLONE_FACETS};
+
+    my $harness = $f->{harness} or die "No 'harness' facet!";
+
+    my $job = $self->get_job($harness->{job_id}, queue => $f->{harness_job_queued}, job_spec => $f->{harness_job});
+    my $try = $self->get_job_try($job, $harness->{job_try});
+
+    my $sdx = 1;
+
+    my $ok = eval {
+        my @todo = ([$f, event => $event]);
+        while (my $set = shift @todo) {
+            my ($sf, %sp) = @$set;
+            push @todo => $self->_process_event($sf, %sp, job => $job, try => $try, idx => $idx, sdx => $sdx++);
+        }
+
+        1;
+    };
+    my $err = $@;
+
+    $self->flush($job, $try);
+
+    die $err unless $ok;
+
+    return;
+}
+
+sub validate_uuid {
+    my $self = shift;
+    my ($uuid) = @_;
+
+    confess "No uuid provided" unless $uuid;
+    confess "UUID '$uuid' Contains invalid characters ($1)" if $uuid =~ m/([^a-fA-F0-9\-])/;
+
+    return 1;
+}
+
+sub _process_event {
+    my $self = shift;
+    my ($f, %params) = @_;
+
+    my ($e_uuid, $formatted_stamp);
+    if (my $harness = $f->{harness}) {
+        $e_uuid  = $harness->{event_id} // die "No event id!";
+        $formatted_stamp = $harness->{stamp} ? $self->format_stamp($harness->{stamp}) : undef;
+    }
+    else {
+        $e_uuid = $f->{about}->{uuid} if $f->{about} && $f->{about}->{uuid};
+        $e_uuid //= gen_uuid();
+    }
+
+    my $rendered = App::Yath::Renderer::Default::Composer->render_super_verbose($f);
+    $rendered = undef unless $rendered && @$rendered;
+
+    my $job = $params{job};
+    my $try = $params{try};
+    my $idx = $params{idx};
+    my $sdx = $params{sdx};
+
+    my $trace = $f->{trace} // {};
+
+    die "An event cannot be its own parent" if $params{parent} && $e_uuid eq $params{parent};
+
+    # Since we directly insert this into a query later we need to make absolutely sure it is a UUID and not any kind of injection.
+    $self->validate_uuid($e_uuid);
+
+    my $fail = causes_fail($f) ? 1 : 0;
+    my $is_diag = $fail;
+    $is_diag ||= 1 if $f->{errors} && @{$f->{errors}};
+    $is_diag ||= 1 if $f->{assert} && !($f->{assert}->{pass} || $f->{amnesty});
+    $is_diag ||= 1 if $f->{info} && first { $_->{debug} || $_->{important} } @{$f->{info}};
+    $is_diag //= 0;
+
+    my $is_time = $f->{harness_job_end} ? ($f->{harness_job_end}->{times} ? 1 : 0) : 0;
+    my $is_harness = (first { substr($_, 0, 8) eq 'harness_' } keys %$f) ? 1 : 0;
+    my $is_subtest = $f->{parent} ? 1 : 0;
+
+    my $nested = $f->{hubs}->[0]->{nested} || 0;
+
+    my $pull_params = {
+        %params,
+        causes_fail => $fail,
+        is_diag     => $is_diag,
+        e_uuid      => $e_uuid,
+        is_time     => $is_time,
+        is_harness  => $is_harness,
+        is_subtest  => $is_subtest,
+        nested      => $nested,
+    };
+
+    $self->_pull_facet_job_updates($f, $pull_params);
+    $self->_pull_facet_job_try_fields($f, $pull_params);
+    $self->_pull_facet_job_try_updates($f, $pull_params);
+    $self->_pull_facet_job_try_coverage($f, $pull_params);
+    $self->_pull_facet_run_fields($f, $pull_params);
+    $self->_pull_facet_run_updates($f, $pull_params);
+    $self->_pull_facet_run_coverage($f, $pull_params);
+    $self->_pull_facet_resource($f, $pull_params);
+
+    my $children  = $self->_pull_facet_children($f, $pull_params);
+    my $binaries  = $self->_pull_facet_binaries($f, $pull_params);
+
+    $self->_pull_facet_reporting($f, $pull_params) if $children;
+
+    # Nested items are orphans unless they have a parent.
+    my $orphan = $nested ? 1 : 0;
+    $orphan = 0 if $params{parent};
+    $orphan = 1 if $params{orphan};
+
+    my $e;
+    $e = $try->{orphan_events}->{$e_uuid} // {};
+
+    %$e = (
+        %$e,
+
+        job_try_id => $try->{job_try_id},
+
+        event_uuid => $e_uuid,
+        trace_uuid => $trace->{uuid},
+
+        stamp     => $formatted_stamp,
+        event_idx => $idx,
+        event_sdx => $sdx,
+        nested    => $nested,
+
+        is_subtest => $is_subtest,
+        is_diag    => $is_diag,
+        is_harness => $is_harness,
+        is_time    => $is_time,
+
+        causes_fail => $fail,
+
+        $params{parent} ? (parent_uuid => $params{parent}) : (),
+
+        # Facet version wins if we have one, but we want them here if all we
+        # got was an orphan.
+
+        $binaries ? (has_binaries => 1, rel_binaries => $binaries) : (has_binaries => 0),
+
+        $rendered ? (rendered => $rendered) : (),
+    );
+
+    if ($orphan) {
+        $e->{has_facets} //= 0;
+        $e->{has_orphan} = 1;
+
+        clean($e->{orphan} = $f);
+
+        $try->{orphan_events}->{$e_uuid} = $e;
+    }
+    else {
+        delete $try->{orphan_events}->{$e_uuid};
+        $e->{has_orphan} //= 0;
+        $e->{has_facets} = 1;
+
+        clean($e->{facets} = $f);
+
+        push @{$try->{ready_events} //= []} => $e;
+    }
+
+    $try->{urgent} = 1 if $is_diag;
+
+    return unless $children && @$children;
+
+    return map {[$_, job => $job, try => $try, idx => $idx, parent => $e_uuid, orphan => $orphan]} @$children;
+}
+
+sub finish {
+    my $self = shift;
+    my (@errors) = @_;
+
+    $self->{+DONE} = 1;
+
+    $self->flush_all();
+
+    my $run = $self->run;
+
+    my $status;
+    my $aborted = 0;
+
+    if (@errors) {
+        my $error = join "\n" => @errors;
+        $status = {status => 'broken', error => $error};
+    }
+    else {
+        my $stat;
+        if ($self->{+SIGNAL}) {
+            $stat = 'canceled';
+            $aborted = 1;
+        }
+        else {
+            $stat = 'complete';
+        }
+
+        $status = {status => $stat};
+    }
+
+    if (my $dur = $self->{+DURATION}) {
+        $self->retry_on_disconnect("insert duration report row" => sub {
+            my $fail = $aborted ? 0 : $run->failed ? 1 : 0;
+            my $pass = ($fail || $aborted) ? 0 : 1;
+
+            my $row = {
+                run_id      => $self->{+RUN_ID},
+                user_id     => $self->user_id,
+                project_id  => $self->project_id,
+                duration    => $dur,
+                retry       => 0,
+                pass        => $pass,
+                fail        => $fail,
+                abort       => $aborted,
+            };
+
+            $self->schema->resultset('Reporting')->create($row);
+        });
+    }
+
+    $self->retry_on_disconnect("update run status" => sub { $run->update($status) });
+
+    return $status;
+}
+
+sub DESTROY {
+    return;
+    my $self = shift;
+    return if $self->{+DONE};
+    $self->finish("Unknown issue, destructor closed out import process. \$@ was: $@", @{$self->{+ERRORS}});
+}
+
+sub flush_all {
+    my $self = shift;
+
+    $self->flush_run();
+    $self->flush_coverage();
+    $self->flush_reporting();
+    $self->flush_try_fields();
+
+    for my $job (values %{$self->{+JOBS}}) {
+
+        $self->flush_job($job);
+
+        for my $try (@{$job->{tries} // []}) {
+            next unless $try;
+
+            $self->flush_try($try);
+            $self->flush_events($try);
+        }
+    }
+}
+
+sub flush_run {
+    my $self = shift;
+
+    if (my $delta = delete $self->{+RUN_DELTA}) {
+        $self->apply_delta($self->{+RUN}, $delta);
+    }
+
+    my $run_fields = delete $self->{+RUN_FIELDS};
+    my $resources  = delete $self->{+RESOURCES};
+
+    $self->populate(RunField => $run_fields) if $run_fields && @$run_fields;
+    $self->populate(Resource => $resources)  if $resources  && @$resources;
+
+    return;
+}
+
+sub flush_coverage {
+    my $self = shift;
+
+    my $coverage = delete $self->{+COVERAGE};
+    if ($coverage && @$coverage) {
+        $self->populate(Coverage => $coverage);
+        return 1;
+    }
+
+    return 0;
+}
+
+sub flush_reporting {
+    my $self = shift;
+
+    my $reporting = delete $self->{+REPORTING};
+    if ($reporting && @$reporting) {
+        $self->populate(Reporting => $reporting);
+        return 1;
+    }
+
+    return 0;
+}
+
+sub flush_try_fields {
+    my $self   = shift;
+
+    my $job_fields = delete $self->{+TRY_FIELDS};
+    $self->populate(JobTryField => $job_fields) if $job_fields && @$job_fields;
+
+    return;
+}
+
+sub flush_job {
+    my $self = shift;
+    my ($job) = @_;
+
+    if (my $delta = delete $job->{delta}) {
+        $self->apply_delta($job->{result}, $delta);
+    }
+}
+
+sub flush_try {
+    my $self = shift;
+    my ($try) = @_;
+
+    my $delta = delete $try->{delta};
+
+    if ($self->{+DONE} || $try->{done}) {
+        $delta //= {};
+        my $res = $try->{result};
+        my $status = $res->status || '';
+
+        unless ($status eq 'complete') {
+            my $status = $self->{+SIGNAL} ? 'canceled' : 'broken';
+            $status = 'canceled' if $self->{+DONE} && !$try->{done};
+
+            $delta->{'=status'} = $status;
+        }
+
+        my $fail = 0;
+        $fail ||= $delta->{'=fail'};
+        $fail ||= $res->fail;
+
+        # Normalize the fail/pass
+        $delta->{'=fail'} = $fail ? 1 : 0;
+    }
+
+    $self->apply_delta($try->{result}, $delta) if $delta;
+
+    return;
+}
+
+sub apply_delta {
+    my $self = shift;
+    my ($res, $delta) = @_;
+
+    my $update = {};
+
+    for my $field (keys %$delta) {
+        my $val = $delta->{$field};
+
+        if ($field =~ s/^=//) {
+            $update->{$field} = $val;
+        }
+        elsif ($field =~ s/^Δ//) {
+            $update->{$field} = ($res->$field // 0) + $val;
+        }
+    }
+
+    $self->retry_on_disconnect("update $res" => sub { $res->update($update) }, sub { print STDERR Dumper($update) });
+}
+
+sub flush {
+    my $self = shift;
+    my ($job, $try) = @_;
+
+    my $changed = 0;
+
+    # Always flush these, they are things we want to have up to date
+    $self->flush_run();
+    $self->flush_job($job);
+    $self->flush_try($try);
+    $self->flush_try_fields();
+
+    my $int_flush = 0;
+    my $int = $self->{+INTERVAL};
+    if ($int) {
+        my $last = $self->{+LAST_FLUSH};
+        $int_flush = 1 if !$last || $int < time - $last;
+    }
+
+    my $bs = $self->{+BUFFER_SIZE};
+    my $flushed;
+
+    if (my $e = $try->{ready_events}) {
+        my $urgent = delete $try->{urgent};
+        $flushed += $self->flush_events($try, urgent => $urgent) if $try->{done} || $urgent || $int_flush || ($e && @$e >= $bs);
+    }
+
+    if (my $c = $self->{+COVERAGE}) {
+        $flushed += $self->flush_coverage() if $int_flush || ($bs && @$c >= $bs);
+    }
+
+    if (my $r = $self->{+REPORTING}) {
+        $flushed += $self->flush_reporting() if $int_flush || ($bs && @$r >= $bs);
+    }
+
+    $self->{+LAST_FLUSH} = time if $flushed;
+
+    return;
+}
+
+sub flush_events {
+    my $self = shift;
+    my ($try, %params) = @_;
+
+    return if mode_check($self->{+MODE}, 'summary');
+
+    my $events   = $try->{ready_events} //= [];
+    my $deferred = $try->{deffered_events} //= [];
+
+    my $urgent = $params{urgent};
+    my $done   = $self->{+DONE} || $try->{done};
+
+    if ($done) {
+        my @orphans = values %{delete($try->{orphan_events}) // {}};
+
+        if (@orphans) {
+            my $msg = "Left with " . scalar(@orphans) . " orphaned events";
+            push @{$self->{+ERRORS}} => "$msg.";
+            warn $msg;
+        }
+
+        push @$events => @orphans;
+    }
+
+    my (@write_events, @write_bin, $parent_ids);
+
+    if (record_all_events(mode => $self->{+MODE}, job => $try->{job}->{result}, try => $try->{result})) {
+        for my $event (@$deferred, @$events) {
+            $event->{facets} = encode_ascii_json($event->{facets}) if $event->{facets};
+            $event->{orphan} = encode_ascii_json($event->{orphan}) if $event->{orphan};
+            $event->{rendered} = encode_ascii_json($event->{rendered}) if $event->{rendered};
+
+            $parent_ids++ if $event->{parent_uuid};
+
+            push @write_events => $event;
+            push @write_bin => @{delete($event->{rel_binaries}) // []};
+        }
+
+        @$deferred = ();
+    }
+    else {
+        for my $event (@$events) {
+            if (event_in_mode(event => $event, record_all_event => 0, mode => $self->{+MODE}, job => $try->{job}->{result}, try => $try->{result})) {
+                $event->{facets} = encode_ascii_json($event->{facets}) if $event->{facets};
+                $event->{orphan} = encode_ascii_json($event->{orphan}) if $event->{orphan};
+                $event->{rendered} = encode_ascii_json($event->{rendered}) if $event->{rendered};
+
+                $parent_ids++ if $event->{parent_uuid};
+
+                push @write_events => $event;
+                push @write_bin => @{delete($event->{rel_binaries}) // []};
+            }
+            else {
+                push @$deferred => $event;
+            }
+        }
+    }
+
+    @$events = ();
+
+    my $out = 0;
+
+    if (@write_events || @write_bin) {
+        $out = 1;
+        $try->{normalized} = 0;
+
+        if (@write_events) {
+            @write_events = sort { $a->{event_idx} <=> $b->{event_idx} || $a->{event_sdx} <=> $b->{event_sdx} } @write_events;
+            $self->populate(Event  => \@write_events)
+        }
+        $self->populate(Binary => \@write_bin)    if @write_bin;
+
+    }
+
+    if ($done && !$try->{normalized}) {
+        @$deferred = (); # Not going to happen at this point
+        $try->{result}->normalize_to_mode(mode => $self->{+MODE});
+        $try->{normalized} = 1;
+
+        $self->fix_event_tree($try) if $parent_ids;
+        $self->remove_orphans($try) unless $try->{result}->fail;
+    }
+
+    return $out;
+}
+
+sub fix_event_tree {
+    my $self = shift;
+    my ($try) = @_;
+
+    # FIXME: Need different mysql syntax, also test sqlite
+    my $dbh = $self->{+CONFIG}->connect;
+    my $sth = $dbh->prepare(<<"    EOT");
+        UPDATE events
+           SET parent_id = event2.event_id
+          FROM events AS event2
+         WHERE events.job_try_id  = ?
+           AND events.job_try_id  = event2.job_try_id
+           AND events.parent_id   IS NULL
+           AND events.parent_uuid = event2.event_uuid
+    EOT
+
+    $sth->execute($try->{job_try_id}) or die $sth->errstr;
+}
+
+sub remove_orphans {
+    my $self = shift;
+    my ($try) = @_;
+
+    # FIXME: Need different mysql syntax, also test sqlite
+    my $dbh = $self->{+CONFIG}->connect;
+    my $sth = $dbh->prepare(<<"    EOT");
+        UPDATE events
+           SET orphan = NULL
+         WHERE job_try_id = ?
+           AND orphan IS NOT NULL
+    EOT
+
+    $sth->execute($try->{job_try_id}) or die $sth->errstr;
+}
 
 __END__
 

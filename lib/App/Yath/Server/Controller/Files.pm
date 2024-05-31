@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use List::Util qw/max/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase;
@@ -34,7 +34,7 @@ sub handle {
     my $schema = $self->schema;
 
     my $query = {status => 'complete'};
-    my $attrs = {order_by => {'-desc' => 'run_idx'}, rows => 1};
+    my $attrs = {order_by => {'-desc' => 'run_id'}, rows => 1};
 
     $attrs->{offset} = $idx if $idx;
 
@@ -52,12 +52,19 @@ sub handle {
     die error(400 => "Invalid Request: $err") unless $ok;
     die error(404 => 'No Data')               unless $run;
 
-    my $search = {retry => 0};
-    $search->{fail} = 1 if $failed;
+    my $search = {is_harness_out => 0};
+    if ($failed) {
+        $search->{fail} = 1;
+        $search->{retry} = 0;
+    }
 
     my $files = $run->jobs->search(
         $search,
-        {join => 'test_file', order_by => 'test_file.filename'},
+        {
+            join => ['jobs_tries', 'test_file'],
+            order_by => 'test_file.filename',
+            group_by => ['me.job_id', 'test_file.filename'],
+        },
     );
 
     unless($json) {

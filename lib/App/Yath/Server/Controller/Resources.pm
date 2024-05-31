@@ -12,7 +12,6 @@ use App::Yath::Schema::Util qw/find_job/;
 use App::Yath::Schema::DateTimeFormat qw/DTF/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Util::Times qw/render_duration/;
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -29,7 +28,7 @@ sub handle {
     my $id = $route->{id} or die error(404 => 'No id provided');
 
     # Specific instant
-    my $batch = uuid_inflate($route->{batch});
+    my $batch = $route->{batch};
 
     if ($route->{data}) {
         return $self->data_stamps($req, $id) unless $batch;
@@ -85,16 +84,15 @@ sub get_thing {
         $search_args->{global} = 1;
     }
     else {
-        my $uuid = uuid_inflate($id);
-        if ($uuid && eval { $thing = $run_rs->find({run_id => $uuid}) }) {
-            $search_args->{run_id} = $uuid;
+        if (eval { $thing = $run_rs->find({run_id => $id}) }) {
+            $search_args->{run_id} = $id;
             $done_check = sub {
                 return 1 if $thing->complete;
                 return 0;
             };
         }
-        elsif (($uuid && eval { $thing = $host_rs->find({host_idx => $uuid}) }) || eval { $thing = $host_rs->find({hostname => $id}) }) {
-            $search_args->{host_idx} = $thing->host_idx;
+        elsif ((eval { $thing = $host_rs->find({host_id => $id}) }) || eval { $thing = $host_rs->find({hostname => $id}) }) {
+            $search_args->{host_id} = $thing->host_id;
         }
         else {
             die error(404 => 'Invalid Job ID or Host ID');
@@ -118,11 +116,11 @@ sub get_stamps {
     my @vals;
     if ($search_args->{run_id}) {
         $fields = "run_id = ?";
-        push @vals => uuid_deflate($search_args->{run_id});
+        push @vals => $search_args->{run_id};
     }
-    elsif ($search_args->{host_idx}) {
-        $fields = "host_idx = ?";
-        push @vals => uuid_deflate($search_args->{host_idx});
+    elsif ($search_args->{host_id}) {
+        $fields = "host_id = ?";
+        push @vals => $search_args->{host_id};
     }
 
     if ($$start) {
@@ -130,13 +128,11 @@ sub get_stamps {
         push @vals => $$start;
     }
 
-    my $sth = $dbh->prepare("SELECT resource_batch_idx, stamp FROM resource_batch WHERE " . $fields . " ORDER BY stamp ASC");
+    my $sth = $dbh->prepare("SELECT resource_batch_id, stamp FROM resource_batch WHERE " . $fields . " ORDER BY stamp ASC");
     $sth->execute(@vals) or die $sth->errstr;
     my $rows = $sth->fetchall_arrayref;
 
     return unless @$rows;
-
-    $_->[0] = uuid_inflate($_->[0]) for @$rows;
 
     $$start = $rows->[-1]->[1];
 
@@ -155,8 +151,8 @@ sub data_stamps {
     if (my $run_id = $search_args->{run_id}) {
         push @out => { run_id => $run_id };
     }
-    if (my $host_idx = $search_args->{host_idx}) {
-        push @out => { host_idx => $host_idx };
+    if (my $host_id = $search_args->{host_id}) {
+        push @out => { host_id => $host_id };
     }
 
     my $start   = time;
@@ -222,13 +218,13 @@ sub render_stamp_resources {
     my %params = @_;
 
     my $search_args = $params{search_args};
-    my $batch_id    = uuid_inflate($params{batch});
+    my $batch_id    = $params{batch};
 
     my $schema = $self->schema;
     my $res_rs = $schema->resultset('Resource');
 
     my @res_list;
-    my $resources = $res_rs->search({resource_batch_idx => $batch_id}, {order_by => {'-asc' => 'batch_ord'}});
+    my $resources = $res_rs->search({resource_batch_id => $batch_id}, {order_by => {'-asc' => 'batch_ord'}});
     while (my $res = $resources->next) {
         push @res_list => $self->render_resource($res);
     }

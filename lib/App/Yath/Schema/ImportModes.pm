@@ -68,12 +68,13 @@ sub record_all_events {
 
     my $mode = _get_mode(%params);
 
-    my $job            = $params{job};
+    my $try            = $params{try};
+    my $job            = $params{job} // $try ? $try->job : undef;
     my $fail           = $params{fail};
     my $is_harness_out = $params{is_harness_out};
 
-    croak "must specify either 'job' or 'fail' and 'is_harness_out'"
-        unless $job || (defined($fail) && defined($is_harness_out));
+    croak "must specify either 'try' or 'fail' and 'is_harness_out'"
+        unless $try || (defined($fail) && defined($is_harness_out));
 
     # Always true in complete mode
     return 1 if $mode >= $MODES{complete};
@@ -86,7 +87,7 @@ sub record_all_events {
     return 1 if $is_harness_out;
 
     # QVF and QVFD are all events when failing
-    $fail //= $job->fail;
+    $fail //= $try->fail;
     return 1 if $fail && $mode >= $MODES{qvf};
 
     return 0;

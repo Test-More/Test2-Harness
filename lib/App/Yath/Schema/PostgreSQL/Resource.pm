@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("resources");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "resource_id",
   {
     data_type         => "bigint",
@@ -28,41 +29,35 @@ __PACKAGE__->add_columns(
     is_nullable       => 0,
     sequence          => "resources_resource_id_seq",
   },
-  "event_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "resource_type_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "host_id",
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "stamp",
+  { data_type => "timestamp", is_nullable => 0 },
+  "resource_ord",
+  { data_type => "integer", is_nullable => 0 },
   "data",
   { data_type => "jsonb", is_nullable => 0 },
-  "line",
-  { data_type => "bigint", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("resource_id");
-__PACKAGE__->add_unique_constraint("resources_event_id_key", ["event_id"]);
+__PACKAGE__->add_unique_constraint(
+  "resources_run_id_resource_ord_key",
+  ["run_id", "resource_ord"],
+);
 __PACKAGE__->belongs_to(
-  "event",
-  "App::Yath::Schema::Result::Event",
-  { event_id => "event_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "SET NULL",
-    on_update     => "NO ACTION",
-  },
+  "host",
+  "App::Yath::Schema::Result::Host",
+  { host_id => "host_id" },
+  { is_deferrable => 0, on_delete => "SET NULL", on_update => "NO ACTION" },
 );
 __PACKAGE__->belongs_to(
   "resource_type",
-  "App::Yath::Schema::Result::Resource",
-  { resource_id => "resource_type_id" },
+  "App::Yath::Schema::Result::ResourceType",
+  { resource_type_id => "resource_type_id" },
   { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
-);
-__PACKAGE__->has_many(
-  "resources",
-  "App::Yath::Schema::Result::Resource",
-  { "foreign.resource_type_id" => "self.resource_id" },
-  { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
   "run",
@@ -72,7 +67,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

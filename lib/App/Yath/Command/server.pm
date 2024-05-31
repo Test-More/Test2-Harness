@@ -7,7 +7,7 @@ use feature 'state';
 use App::Yath::Server;
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use App::Yath::Schema::ImportModes qw/is_mode/;
 
 use Test2::Harness::Util qw/clean_path/;
@@ -174,14 +174,13 @@ sub load_file {
     state $user = $config->schema->resultset('User')->find_or_create({username => 'root', password => 'root', realname => 'root'});
 
     my $run = $config->schema->resultset('Run')->create({
-        run_id     => gen_uuid(),
-        user_idx    => $user->user_idx,
+        user_id    => $user->user_id,
         mode       => $mode,
         buffer     => 'job',
         status     => 'pending',
-        project_idx => $projects{$project}->project_idx,
+        project_id => $projects{$project}->project_id,
 
-        log_file_idx => $logfile->log_file_idx,
+        log_file_id => $logfile->log_file_id,
     });
 
     return $run;
@@ -378,7 +377,7 @@ use App::Yath::Server::Config;
 use App::Yath::Schema::Importer;
 use App::Yath::Server;
 
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
 use Plack::Builder;
@@ -457,18 +456,17 @@ sub run {
         single_run  => 1,
     );
 
-    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root', user_idx => gen_uuid()});
-    my $proj = $config->schema->resultset('Project')->create({name => 'default', project_idx => gen_uuid()});
+    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
+    my $proj = $config->schema->resultset('Project')->create({name => 'default'});
 
     $config->schema->resultset('Run')->create({
         run_id     => gen_uuid(),
-        user_idx    => $user->user_idx,
+        user_id    => $user->user_id,
         mode       => 'complete',
         status     => 'pending',
-        project_idx => $proj->project_idx,
+        project_id => $proj->project_id,
 
         log_file => {
-            log_file_idx => gen_uuid(),
             name        => $self->{+LOG_FILE},
             local_file  => $self->{+LOG_FILE},
         },

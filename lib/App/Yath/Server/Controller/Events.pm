@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use List::Util qw/max/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase;
@@ -29,18 +29,16 @@ sub handle {
     my $p = $req->parameters;
     my (%query, %attrs, $rs, $meth, $event);
 
-    my $event_id = uuid_inflate($it) or die error(404 => "Invalid event id");
-
     if ($route->{from} eq 'single_event') {
-        $event = $schema->resultset('Event')->find({event_id => $event_id}, {remove_columns => [qw/orphan/]})
+        $event = $schema->resultset('Event')->find({event_id => $it}, {remove_columns => [qw/orphan/]})
             or die error(404 => 'Invalid Event');
     }
     else {
-        $event = $schema->resultset('Event')->find({event_id => $event_id}, {remove_columns => [qw/orphan facets/]})
+        $event = $schema->resultset('Event')->find({event_id => $it}, {remove_columns => [qw/orphan facets/]})
             or die error(404 => 'Invalid Event');
     }
 
-    $attrs{order_by} = {-asc => 'event_idx'};
+    $attrs{order_by} = {-asc => 'event_id'};
 
     if ($route->{from} eq 'single_event') {
         $res->content_type('application/json');
@@ -51,21 +49,22 @@ sub handle {
     if ($p->{load_subtests}) {
         # If we are loading subtests then we want ALL descendants, so here
         # we take the parent event and find the next event of the same
-        # nesting level, then we want all events with an event_idx between
+        # nesting level, then we want all events with an event_id between
         # them (in the same job);
         my $end_at = $schema->resultset('Event')->find(
-            {%query, nested => $event->nested, event_idx => {'>' => $event->event_idx}},
+            {%query, nested => $event->nested, event_id => {'>' => $event->event_id}},
             {
-                columns => [qw/event_idx/],
+                columns => [qw/event_id/],
                 %attrs,
             },
         );
 
-        $query{event_ord} = {'>' => $event->event_idx, '<' => $end_at->event_idx};
+    # FIXME: This should be using event_idx and event_sdx
+        $query{event_id} = {'>' => $event->event_id, '<' => $end_at->event_id};
     }
     else {
         # We want direct descendants only
-        $query{'parent_id'} = $event_id;
+        $query{'parent_id'} = $it;
     }
 
     $rs = $schema->resultset('Event')->search(

@@ -12,7 +12,7 @@ use App::Yath::Schema::RunProcessor;
 
 use Test2::Harness::Util::HashBase qw/-config -worker_id/;
 
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);
@@ -51,12 +51,12 @@ sub run {
 
     while (!defined($max) || $max--) {
         $schema->resultset('Run')->search(
-            {status   => 'pending', log_file_idx => {'!=' => undef}},
+            {status   => 'pending', log_file_id => {'!=' => undef}},
             {order_by => {-asc => 'added'}, rows => 1},
-        )->update({status => 'running', worker_id => $worker_id->{string}});
+        )->update({status => 'running', worker_id => $worker_id});
 
         my $run = $schema->resultset('Run')->search(
-            {status   => 'running',         worker_id => $worker_id->{string}},
+            {status   => 'running',         worker_id => $worker_id},
             {order_by => {-asc => 'added'}, rows      => 1},
         )->first;
 

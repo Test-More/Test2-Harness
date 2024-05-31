@@ -8,7 +8,7 @@ use App::Yath::Server::Response qw/resp error/;
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 sub title { 'Binary' }
 
@@ -20,14 +20,14 @@ sub handle {
     my $res = resp(200);
 
     die error(404 => 'Missing route') unless $route;
-    my $binary_idx = $route->{binary_idx} or die error(404 => "Invalid Route");
+    my $binary_id = $route->{binary_id} or die error(404 => "Invalid Route");
 
-    error(404 => 'No id') unless $binary_idx;
+    error(404 => 'No id') unless $binary_id;
 
     my $schema = $self->schema;
-    my $binary = $schema->resultset('Binary')->find({binary_idx => $binary_idx});
+    my $binary = $schema->resultset('Binary')->find({binary_id => $binary_id});
 
-    error(404 => 'No such binary file') unless $binary_idx;
+    error(404 => 'No such binary file') unless $binary_id;
 
     my $filename = $binary->filename;
 

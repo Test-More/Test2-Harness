@@ -9,7 +9,7 @@ use Text::Xslate(qw/mark_raw/);
 use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -25,7 +25,7 @@ sub handle {
 
     die error(404 => 'Missing route') unless $route;
 
-    my $it = uuid_inflate($route->{id}) or die error(404 => 'No id');
+    my $it = $route->{id} or die error(404 => 'No id');
     my $schema = $self->schema;
     my $field = $schema->resultset('RunField')->find({run_field_id => $it}) or die error(404 => 'Invalid Field');
 

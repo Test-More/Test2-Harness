@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("projects");
@@ -28,10 +27,10 @@ __PACKAGE__->add_columns(
     is_nullable       => 0,
     sequence          => "projects_project_id_seq",
   },
-  "name",
-  { data_type => "citext", is_nullable => 0 },
   "owner",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "name",
+  { data_type => "citext", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("project_id");
 __PACKAGE__->add_unique_constraint("projects_name_key", ["name"]);
@@ -66,7 +65,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

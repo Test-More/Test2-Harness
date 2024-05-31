@@ -8,7 +8,7 @@ use strict;
 use warnings;
 
 use Statistics::Basic qw/median/;
-use App::Yath::Schema::UUID qw/uuid_deflate/;
+
 
 use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
@@ -20,12 +20,12 @@ sub last_covered_run {
 
     my $query = {
         status => 'complete',
-        project_idx => $self->project_idx,
+        project_id => $self->project_id,
         has_coverage => 1,
     };
 
     my $attrs = {
-        order_by => {'-desc' => 'run_idx'},
+        order_by => {'-desc' => 'run_id'},
         rows => 1,
     };
 
@@ -57,13 +57,13 @@ sub durations {
         SELECT test_files.filename, jobs.duration
           FROM jobs
           JOIN runs USING(run_id)
-          JOIN test_files USING(test_file_idx)
-          JOIN users USING(user_idx)
-         WHERE runs.project_idx = ?
+          JOIN test_files USING(test_file_id)
+          JOIN users USING(user_id)
+         WHERE runs.project_id = ?
            AND jobs.duration IS NOT NULL
            AND test_files.filename IS NOT NULL
     EOT
-    my @vals = (uuid_deflate($self->project_idx));
+    my @vals = ($self->project_id);
 
     my ($user_append, @user_args) = $username ? ("users.username = ?", $username) : ();
 
@@ -77,9 +77,9 @@ sub durations {
         my $sth   = $dbh->prepare(<<"        EOT");
             SELECT run_id
               FROM runs
-              JOIN users USING(user_idx)
+              JOIN users USING(user_id)
               $where
-             ORDER BY run_idx DESC
+             ORDER BY run_id DESC
              LIMIT ?
         EOT
 

@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("email");
@@ -30,12 +29,12 @@ __PACKAGE__->add_columns(
   },
   "user_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  "verified",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "local",
   { data_type => "citext", is_nullable => 0 },
   "domain",
   { data_type => "citext", is_nullable => 0 },
-  "verified",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
 );
 __PACKAGE__->set_primary_key("email_id");
 __PACKAGE__->add_unique_constraint("email_local_domain_key", ["local", "domain"]);
@@ -59,7 +58,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

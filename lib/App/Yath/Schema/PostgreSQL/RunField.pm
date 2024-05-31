@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("run_fields");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "run_field_id",
   {
     data_type         => "bigint",
@@ -30,8 +31,6 @@ __PACKAGE__->add_columns(
   },
   "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
-  "run_field_uuid",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
   "name",
   { data_type => "varchar", is_nullable => 0, size => 64 },
   "data",
@@ -44,7 +43,6 @@ __PACKAGE__->add_columns(
   { data_type => "text", is_nullable => 1 },
 );
 __PACKAGE__->set_primary_key("run_field_id");
-__PACKAGE__->add_unique_constraint("run_fields_run_field_uuid_key", ["run_field_uuid"]);
 __PACKAGE__->belongs_to(
   "run",
   "App::Yath::Schema::Result::Run",
@@ -53,7 +51,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

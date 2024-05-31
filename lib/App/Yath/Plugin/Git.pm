@@ -75,11 +75,8 @@ sub run_fields {
 
     if ($branch) {
         $data{branch} = $branch;
-
-        my $short = length($branch) > 20 ? substr($branch, 0, 20) : $branch;
-
-        $field->{details} = $short;
-        $field->{raw} = $branch;
+        $field->{details} = $branch;
+        $field->{raw} = $long_sha;
     }
     else {
         $short_sha ||= substr($long_sha, 0, 16);

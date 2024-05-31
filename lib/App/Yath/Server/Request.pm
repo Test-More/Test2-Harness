@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 
-use App::Yath::Schema::UUID qw/gen_uuid uuid_inflate/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use parent 'Plack::Request';
 use Test2::Harness::Util::HashBase qw{
@@ -36,13 +36,13 @@ sub session {
     my $session;
     my $cookies = $self->cookies;
 
-    if (my $id = uuid_inflate($cookies->{id})) {
-        $session = $schema->resultset('Session')->find({session_id => $id});
+    if (my $uuid = $cookies->{uuid}) {
+        $session = $schema->resultset('Session')->find({session_uuid => $uuid});
         $session = undef unless $session && $session->active;
     }
 
     $session ||= $schema->resultset('Session')->create(
-        {session_id => gen_uuid},
+        {session_uuid => gen_uuid},
     );
 
     return $self->{+SESSION} = $session;

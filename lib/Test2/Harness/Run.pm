@@ -122,9 +122,10 @@ sub send_initial_events {
 
             facet_data => {
                 harness_job_queued => {
-                    file   => $job->test_file->file,
-                    job_id => $job->job_id,
-                    stamp  => $stamp,
+                    file     => $job->test_file->file,
+                    rel_file => $job->test_file->relative,
+                    job_id   => $job->job_id,
+                    stamp    => $stamp,
                 }
             },
         );

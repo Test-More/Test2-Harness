@@ -90,7 +90,7 @@ use feature 'state';
 
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util qw/clean_path/;
 
@@ -252,27 +252,26 @@ sub load_file {
     $project //= "oops";
 
     unless ($projects{$project}) {
-        my $p = $config->schema->resultset('Project')->find_or_create({name => $project, project_idx => gen_uuid()});
+        my $p = $config->schema->resultset('Project')->find_or_create({name => $project});
         $projects{$project} = $p;
     }
 
     my $logfile = $config->schema->resultset('LogFile')->create({
-        log_file_idx => gen_uuid(),
         name        => $file,
         local_file  => $file =~ m{^/} ? $file : "./demo/$file",
     });
 
-    state $user = $config->schema->resultset('User')->find_or_create({username => 'root', password => 'root', realname => 'root', user_idx => gen_uuid()});
+    state $user = $config->schema->resultset('User')->find_or_create({username => 'root', password => 'root', realname => 'root'});
 
     my $run = $config->schema->resultset('Run')->create({
         run_id     => gen_uuid(),
-        user_idx    => $user->user_idx,
+        user_id    => $user->user_id,
         mode       => 'complete',
         buffer     => 'job',
         status     => 'pending',
-        project_idx => $projects{$project}->project_idx,
+        project_id => $projects{$project}->project_id,
 
-        log_file_idx => $logfile->log_file_idx,
+        log_file_id => $logfile->log_file_id,
     });
 
     return $run;
@@ -400,7 +399,7 @@ use App::Yath::Server::Config;
 use App::Yath::Schema::Importer;
 use App::Yath::Server;
 
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
 use Plack::Builder;

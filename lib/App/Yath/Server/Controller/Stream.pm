@@ -7,7 +7,8 @@ our $VERSION = '2.000000';
 use List::Util qw/max/;
 use Scalar::Util qw/blessed/;
 use App::Yath::Schema::Util qw/find_job/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+use Test2::Harness::Util::UUID qw/looks_like_uuid/;
+
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 use JSON::PP();
@@ -79,24 +80,7 @@ sub stream_runs {
 
     my $schema = $self->schema;
 
-    # FIXME: Does this make it faster or slower?
-    my $opts = {
-#        remove_columns => [qw/run_fields.data/],
-#
-#        join       => [qw/user_join project run_fields/],
-#        '+columns' => {
-#            'prefetched_fields'       => \'1',
-#            'run_fields.run_field_id' => 'run_fields.run_field_id',
-#            'run_fields.name'         => 'run_fields.name',
-#            'run_fields.details'      => 'run_fields.details',
-#            'run_fields.raw'          => 'run_fields.raw',
-#            'run_fields.link'         => 'run_fields.link',
-#            'run_fields.has_data',    => \"run_fields.data IS NOT NULL",
-#            'user'                    => \'user_join.username',
-#            'project'                 => \'project.name',
-#        },
-    };
-
+    my $opts = {remove_columns => [qw/parameters/]};
     my %params = (
         type => 'run',
 
@@ -104,8 +88,8 @@ sub stream_runs {
 
         track_status  => 1,
         id_field      => 'run_id',
-        ord_field     => 'added',
-        sort_field    => 'added',
+        ord_field     => 'run_id',
+        sort_field    => 'run_id',
         search_base   => $schema->resultset('Run'),
         initial_limit => RUN_LIMIT,
 
@@ -117,22 +101,24 @@ sub stream_runs {
     my $run_id     = $route->{run_id};
     my $user_id    = $route->{user_id};
     my $project_id = $route->{project_id};
+
+
     my ($project, $user, $run);
 
     if($run_id) {
-        $run_id = uuid_inflate($run_id) or die error(404 => "Invalid run id");
+        $params{id_field} = 'run_uuid' if looks_like_uuid($run_id);
         return $self->stream_single(%params, id => $run_id);
     }
 
     if ($project_id) {
         my $p_rs = $schema->resultset('Project');
-        $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_idx => $project_id}) } // die error(404 => 'Invalid Project');
-        $params{search_base} = $params{search_base}->search_rs({'me.project_idx' => $project->project_idx});
+        $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_id => $project_id}) } // die error(404 => 'Invalid Project');
+        $params{search_base} = $params{search_base}->search_rs({'me.project_id' => $project->project_id});
     }
     elsif ($user_id) {
         my $u_rs = $schema->resultset('User');
-        $user = eval { $u_rs->find({username => $user_id}) } // eval { $u_rs->find({user_idx => $user_id}) } // die error(404 => 'Invalid User');
-        $params{search_base} = $params{search_base}->search_rs({'me.user_idx' => $user->user_idx});
+        $user = eval { $u_rs->find({username => $user_id}) } // eval { $u_rs->find({user_id => $user_id}) } // die error(404 => 'Invalid User');
+        $params{search_base} = $params{search_base}->search_rs({'me.user_id' => $user->user_id});
     }
 
     return $self->stream_set(%params);
@@ -162,18 +148,16 @@ sub stream_jobs {
         req => $req,
 
         track_status => 1,
-        id_field     => 'job_key',
-        ord_field    => 'job_idx',
+        id_field     => 'job_id',
+        ord_field    => 'job_id',
         method       => 'glance_data',
         search_base  => scalar($run->jobs),
         custom_opts  => $opts,
 
-        order_by => [{'-desc' => 'status'}, {'-desc' => [qw/job_try job_idx name/]}],
+        order_by => [{'-desc' => 'status'}, {'-desc' => [qw/job_try job_id name/]}],
     );
 
     if (my $job_uuid = $route->{job}) {
-        $job_uuid = uuid_inflate($job_uuid) or die error(404 => "Invalid job id");
-
         my $schema = $self->schema;
         return $self->stream_single(%params, item => find_job($schema, $job_uuid, $route->{try}));
     }
@@ -198,8 +182,8 @@ sub stream_events {
 
         track_status => 0,
         id_field     => 'event_id',
-        ord_field    => 'event_ord',
-        sort_field   => 'event_ord',
+        ord_field    => 'event_idx',
+        sort_field   => 'event_idx',
         sort_dir     => '-asc',
         method       => 'line_data',
         custom_query => $query,
@@ -271,6 +255,7 @@ sub stream_set {
     my $order_by = $params{order_by} // $sort_field ? {$sort_dir => $sort_field} : croak "Must specify either 'order_by' or 'sort_field'";
 
     my $items = $search_base->search($custom_query, {%$custom_opts, order_by => $order_by, $limit ? (rows => $limit) : ()});
+    my @buffer;
 
     my $start = time;
     my $ord;
@@ -289,7 +274,7 @@ sub stream_set {
             return 0;
         },
         sub {
-            unless ($items) {
+            unless ($items || @buffer) {
                 my $val;
                 if (blessed($ord) && $ord->isa('DateTime')) {
                     my $schema = $self->schema;
@@ -314,8 +299,8 @@ sub stream_set {
                 );
             }
 
-            while (my $item = $items->next()) {
-                $ord = $item->$ord_field;
+            while (my $item = shift(@buffer) || $items->next()) {
+                $ord = max($ord || 0, $item->$ord_field);
 
                 my $update = JSON::PP::false;
                 if ($track) {
@@ -334,8 +319,8 @@ sub stream_set {
                     }
                 }
 
-                my $data = $method ? $item->$method : $item->TO_JSON;
-                return encode_json({type => $type, update => $update, data => $data}) . "\n";
+                my @buffer = $method ? $item->$method : $item->TO_JSON;
+                return encode_json({type => $type, update => $update, data => shift(@buffer)}) . "\n";
             }
 
             $items = undef;

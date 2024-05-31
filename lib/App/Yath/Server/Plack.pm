@@ -15,8 +15,6 @@ use Plack::Builder;
 use Plack::App::Directory;
 use Plack::App::File;
 
-use App::Yath::Schema::UUID qw/gen_uuid uuid_inflate/;
-
 use App::Yath::Server::Request;
 use App::Yath::Server::Controller::Upload;
 use App::Yath::Server::Controller::Recent;
@@ -24,7 +22,7 @@ use App::Yath::Server::Controller::User;
 use App::Yath::Server::Controller::Run;
 use App::Yath::Server::Controller::RunField;
 use App::Yath::Server::Controller::Job;
-use App::Yath::Server::Controller::JobField;
+use App::Yath::Server::Controller::JobTryField;
 use App::Yath::Server::Controller::Download;
 use App::Yath::Server::Controller::Sweeper;
 use App::Yath::Server::Controller::Project;
@@ -120,8 +118,8 @@ sub router {
     $router->connect('/run/field/:id'        => {controller => 'App::Yath::Server::Controller::RunField'});
     $router->connect('/run/field/:id/delete' => {controller => 'App::Yath::Server::Controller::RunField', action => 'delete'});
 
-    $router->connect('/job/field/:id'        => {controller => 'App::Yath::Server::Controller::JobField'});
-    $router->connect('/job/field/:id/delete' => {controller => 'App::Yath::Server::Controller::JobField', action => 'delete'});
+    $router->connect('/job/field/:id'        => {controller => 'App::Yath::Server::Controller::JobTryField'});
+    $router->connect('/job/field/:id/delete' => {controller => 'App::Yath::Server::Controller::JobTryField', action => 'delete'});
 
     $router->connect('/job/:job'         => {controller => 'App::Yath::Server::Controller::Job'});
     $router->connect('/job/:job/:try'    => {controller => 'App::Yath::Server::Controller::Job'});
@@ -137,20 +135,20 @@ sub router {
     $router->connect('/coverage/:source/:user'  => {controller => 'App::Yath::Server::Controller::Coverage'});
     $router->connect('/coverage/:source/delete' => {controller => 'App::Yath::Server::Controller::Coverage', delete => 1});
 
-    $router->connect('/failed/:source'                 => {controller => 'App::Yath::Server::Controller::Files', failed => 1});
-    $router->connect('/failed/:source/json'            => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
-    $router->connect('/failed/:project/:idx'           => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
-    $router->connect('/failed/:project/:username/:idx' => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
+    $router->connect('/failed/:source'                => {controller => 'App::Yath::Server::Controller::Files', failed => 1});
+    $router->connect('/failed/:source/json'           => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
+    $router->connect('/failed/:project/:id'           => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
+    $router->connect('/failed/:project/:username/:id' => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
 
-    $router->connect('/files/:source'                 => {controller => 'App::Yath::Server::Controller::Files', failed => 0});
-    $router->connect('/files/:source/json'            => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
-    $router->connect('/files/:project/:idx'           => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
-    $router->connect('/files/:project/:username/:idx' => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
+    $router->connect('/files/:source'                => {controller => 'App::Yath::Server::Controller::Files', failed => 0});
+    $router->connect('/files/:source/json'           => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
+    $router->connect('/files/:project/:id'           => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
+    $router->connect('/files/:project/:username/:id' => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
 
     $router->connect('/rerun/:run_id'            => {controller => 'App::Yath::Server::Controller::ReRun'});
     $router->connect('/rerun/:project/:username' => {controller => 'App::Yath::Server::Controller::ReRun'});
 
-    $router->connect('/binary/:binary_idx' => {controller => 'App::Yath::Server::Controller::Binary'});
+    $router->connect('/binary/:binary_id' => {controller => 'App::Yath::Server::Controller::Binary'});
 
     $router->connect('/download/:id' => {controller => 'App::Yath::Server::Controller::Download'});
 
@@ -213,7 +211,7 @@ sub handle_request {
             $user = $self->schema->resultset('User')->find({username => 'root'});
         }
         elsif ($session_host) {
-            $user = $session_host->user if $session_host->user_idx;
+            $user = $session_host->user if $session_host->user_id;
         }
 
         $req->set_user($user) if $user;
@@ -293,7 +291,7 @@ sub handle_request {
         }
     }
 
-    $res->cookies->{id} = {value => $session->session_id, httponly => 1, expires => '+1M'}
+    $res->cookies->{uuid} = {value => $session->session_uuid, httponly => 1, expires => '+1M'}
         if $session;
 
     return $res->finalize;

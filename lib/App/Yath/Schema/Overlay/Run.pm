@@ -15,18 +15,9 @@ use App::Yath::Schema::DateTimeFormat qw/DTF/;
 __PACKAGE__->belongs_to(
   "user_join",
   "App::Yath::Schema::Result::User",
-  { user_idx => "user_idx" },
+  { user_id => "user_id" },
   { is_deferrable => 0, on_delete => "NO ACTION", on_update => "NO ACTION" },
 );
-
-if ($App::Yath::Schema::LOADED eq 'Percona') {
-    __PACKAGE__->might_have(
-      "run_parameter",
-      "App::Yath::Schema::Result::RunParameter",
-      { "foreign.run_id" => "self.run_id" },
-      { cascade_copy => 0, cascade_delete => 1 },
-    );
-}
 
 my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
 sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
@@ -34,12 +25,12 @@ sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 sub sig {
     my $self = shift;
 
-    my $run_parameter = $self->run_parameter;
+    my $parameters = $self->parameters;
 
     return join ";" => (
-        (map {$self->$_ // ''} qw/status pinned passed failed retried concurrency/),
-        $run_parameter ? length($run_parameter->parameters) : (''),
-        ($self->run_fields->count),
+        (map {$self->$_ // ''} qw/status pinned passed failed retried concurrency_j concurrency_x/),
+        $parameters ? length($parameters) : (''),
+        (scalar $self->run_fields->count),
     );
 }
 
@@ -47,7 +38,7 @@ sub short_run_fields {
     my $self = shift;
 
     return $self->run_fields->search(undef, {
-        remove_columns => ['data'],
+        remove_columns => ['data', 'parameters'],
         '+select' => ['data IS NOT NULL AS has_data'],
         '+as' => ['has_data'],
     })->all;
@@ -57,13 +48,8 @@ sub TO_JSON {
     my $self = shift;
     my %cols = $self->get_all_fields;
 
-    # Inflate
-    if (my $p = $self->run_parameter) {
-        $cols{parameters} = $p->parameters;
-    }
-
-    $cols{user}       //= $self->user->username;
-    $cols{project}    //= $self->project->name;
+    $cols{user}    //= $self->user->username;
+    $cols{project} //= $self->project->name;
 
     $cols{fields} = [];
     for my $rf ($cols{prefetched_fields} ? $self->run_fields : $self->short_run_fields) {
@@ -75,7 +61,7 @@ sub TO_JSON {
         push @{$cols{fields}} => $fields;
     }
 
-    my $dt = DTF()->parse_datetime( $cols{added} );
+    my $dt = DTF()->parse_datetime($cols{added});
 
     $cols{added} = $dt->strftime("%Y-%m-%d %I:%M%P");
 
@@ -98,14 +84,14 @@ sub normalize_to_mode {
     $_->normalize_to_mode(mode => $mode) for $self->jobs->all;
 }
 
-sub expanded_coverages {
+sub expanded_coverage {
     my $self = shift;
     my ($query) = @_;
 
-    $self->coverages->search(
+    $self->coverage->search(
         $query,
         {
-            order_by   => [qw/test_file_idx source_file_idx source_sub_idx/],
+            order_by   => [qw/test_file_id source_file_id source_sub_id/],
             join       => [qw/test_file source_file source_sub coverage_manager/],
             '+columns' => {
                 test_file   => 'test_file.filename',
@@ -122,7 +108,7 @@ sub coverage_data {
     my (%params) = @_;
 
     my $query = $params{query};
-    my $rs = $self->expanded_coverages($query);
+    my $rs = $self->expanded_coverage($query);
 
     my $curr_test;
     my $data;

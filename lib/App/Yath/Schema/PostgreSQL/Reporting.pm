@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("reporting");
@@ -28,9 +27,7 @@ __PACKAGE__->add_columns(
     is_nullable       => 0,
     sequence          => "reporting_reporting_id_seq",
   },
-  "event_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "job_id",
+  "job_try_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "test_file_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
@@ -41,7 +38,15 @@ __PACKAGE__->add_columns(
   "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "job_try",
-  { data_type => "integer", is_nullable => 1 },
+  { data_type => "smallint", is_nullable => 1 },
+  "retry",
+  { data_type => "smallint", is_nullable => 0 },
+  "abort",
+  { data_type => "smallint", is_nullable => 0 },
+  "fail",
+  { data_type => "smallint", is_nullable => 0 },
+  "pass",
+  { data_type => "smallint", is_nullable => 0 },
   "subtest",
   {
     data_type => "varchar",
@@ -50,32 +55,13 @@ __PACKAGE__->add_columns(
     size => 512,
   },
   "duration",
-  { data_type => "double precision", is_nullable => 0 },
-  "fail",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
-  "pass",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
-  "retry",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
-  "abort",
-  { data_type => "smallint", default_value => 0, is_nullable => 0 },
+  { data_type => "numeric", is_nullable => 0, size => [14, 4] },
 );
 __PACKAGE__->set_primary_key("reporting_id");
 __PACKAGE__->belongs_to(
-  "event",
-  "App::Yath::Schema::Result::Event",
-  { event_id => "event_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "SET NULL",
-    on_update     => "NO ACTION",
-  },
-);
-__PACKAGE__->belongs_to(
-  "job",
-  "App::Yath::Schema::Result::Job",
-  { job_id => "job_id" },
+  "job_try",
+  "App::Yath::Schema::Result::JobTry",
+  { job_try_id => "job_try_id" },
   {
     is_deferrable => 0,
     join_type     => "LEFT",
@@ -114,7 +100,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

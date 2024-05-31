@@ -4,12 +4,11 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Util qw/share_dir/;
 use App::Yath::Schema::Util qw/find_job/;
 use Test2::Harness::Util::JSON qw/encode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -57,7 +56,7 @@ sub data {
     my $req = $self->{+REQUEST};
     my $res = resp(200);
 
-    my @sources = qw/run jobs event/;
+    my @sources = qw/run job event/;
 
     my @out;
 
@@ -91,19 +90,13 @@ sub lookup_run {
     my ($lookup, $state) = @_;
 
     return unless $lookup;
-    if (blessed($lookup)) {
-        $lookup = $lookup->run_id;
-    }
-    else {
-        $lookup = uuid_inflate($lookup);
-    }
 
     return if $state->{run}->{$lookup}++;
 
     my $schema = $self->schema;
 
     my $rs = $schema->resultset('Run');
-    my $run = eval { $rs->find({run_id => $lookup}) };
+    my $run = $rs->find_by_id_or_uuid($lookup);
 
     return () unless $run;
     return (
@@ -111,36 +104,44 @@ sub lookup_run {
     );
 }
 
-sub lookup_jobs {
+sub lookup_job {
     my $self = shift;
-    my ($lookup, $state) = @_;
+    my ($lookup, $state, $try_id) = @_;
 
     return unless $lookup;
-    if (blessed($lookup)) {
-        $lookup = $lookup->job_key;
-    }
-    else {
-        $lookup = uuid_inflate($lookup);
-    }
 
     return if $state->{job}->{$lookup}++;
 
     my $schema = $self->schema;
 
     my $rs = $schema->resultset('Job');
+    my $job = $rs->find_by_id_or_uuid($lookup);
+    return () unless $job;
 
-    my @out;
+    # FIXME: Make sure getitng only a specific job_try_id works
+    return (
+        $self->lookup_run($job->run_id, $state),
+        encode_json({type => 'job', data => $job->glance_data(try_id => $try_id)}) . "\n",
+    );
+}
 
-    for my $key (qw/job_id job_key/) {
-        my $jobs = eval { $rs->search({$key => $lookup}) };
+sub lookup_job_try {
+    my $self = shift;
+    my ($lookup, $state) = @_;
 
-        while (my $job = eval { $jobs->next }) {
-            push @out => $self->lookup_run($job->run_id, $state);
-            push @out => encode_json({type => 'job', data => $job->glance_data }) . "\n";
-        }
-    }
+    return unless $lookup;
 
-    return @out;
+    return if $state->{job_try}->{$lookup}++;
+
+    my $schema = $self->schema;
+
+    my $rs = $schema->resultset('JobTry');
+    my $try = $rs->find({job_try_id => $lookup});
+    return () unless $try;
+
+    return (
+        $self->lookup_job($try->job_id, $state, try => $try->job_try_id),
+    );
 }
 
 sub lookup_event {
@@ -148,24 +149,18 @@ sub lookup_event {
     my ($lookup, $state) = @_;
 
     return unless $lookup;
-    if (blessed($lookup)) {
-        $lookup = $lookup->event_id;
-    }
-    else {
-        $lookup = uuid_inflate($lookup);
-    }
 
     return if $state->{event}->{$lookup}++;
 
     my $schema = $self->schema;
 
     my $rs = $schema->resultset('Event');
-    my $event = eval { $rs->find({event_id => $lookup}) };
+    my $event = $rs->find_by_id_or_uuid($lookup);
 
     return () unless $event;
 
     return (
-        $self->lookup_jobs($event->job_key, $state),
+        $self->lookup_job_try($event->job_try_id, $state),
         encode_json({type => 'event', data => $event->line_data }) . "\n"
     );
 }

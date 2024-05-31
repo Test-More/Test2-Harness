@@ -18,7 +18,7 @@ use Carp qw/croak/;
 use Time::HiRes qw/sleep/;
 use Test2::Util qw/pkg_to_file/;
 use App::Yath::Server::Util qw/dbd_driver qdb_driver share_dir share_file/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Scope::Guard qw/guard/;
 use File::Temp qw/tempfile/;
 

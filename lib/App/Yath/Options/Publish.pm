@@ -25,11 +25,11 @@ option_group {group => 'publish', prefix => 'publish', category => "Publish Opti
         description => 'When buffering DB writes, force a flush when an event is recieved at least N seconds after the last flush.',
     );
 
-    option buffering => (
+    option buffer_size => (
         type => 'Scalar',
-        long_examples => [ ' none', ' job', ' diag', ' run' ],
-        description => 'Type of buffering to use, if "none" then events are written to the db one at a time, which is SLOW',
-        default => 'diag',
+        long_examples => [ ' 100' ],
+        description => 'Maximum number of events, coverage, or reporting items to buffer before flushing them (each has its own buffer of this size, and each job has its own event buffer of this size)',
+        default => 100,
     );
 
     option retry => (

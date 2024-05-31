@@ -8,6 +8,7 @@ use Carp qw/croak/;
 
 use Term::Table;
 use Time::HiRes qw/time/;
+use Sys::Hostname qw/hostname/;
 
 use Test2::Harness::Util qw/parse_exit/;
 use Test2::Harness::IPC::Util qw/start_collected_process ipc_connect set_procname/;
@@ -18,12 +19,12 @@ use Test2::Harness::Util::HashBase qw{
     <is_subprocess
     <subprocess_pid
     <_send_event
+    +host
 };
 
 sub spawns_process { 0 }
 sub is_job_limiter { 0 }
 
-sub init     { }
 sub teardown { }
 sub tick     { }
 sub cleanup  { }
@@ -38,6 +39,9 @@ sub available      { croak "'$_[0]' does not implement 'available'" }
 sub assign         { croak "'$_[0]' does not implement 'assign'" }
 sub release        { croak "'$_[0]' does not implement 'release'" }
 sub subprocess_run { croak "'$_[0]' does not implement 'subprocess_run'" }
+
+sub init { $_[0]->host }
+sub host { $_[0]->{+HOST} //= hostname() }
 
 sub DESTROY {
     my $self = shift;
@@ -144,6 +148,7 @@ sub send_data_event {
             resource_state => {
                 module => ref($self) || $self,
                 data   => $data,
+                host   => $self->{+HOST},
             },
         },
     });

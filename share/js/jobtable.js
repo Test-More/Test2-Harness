@@ -85,7 +85,7 @@ t2hui.jobtable.tool_builder = function(item, tools, data) {
         $('#modal_body').text("loading...");
         $('#free_modal').slideDown();
 
-        var uri = base_uri + 'job/' + item.job_key;
+        var uri = base_uri + 'job/' + item.job_uuid;
 
         $.ajax(uri, {
             'data': { 'content-type': 'application/json' },
@@ -96,7 +96,7 @@ t2hui.jobtable.tool_builder = function(item, tools, data) {
         });
     });
 
-    var link = base_uri + 'view/' + item.run_id + '/' + item.job_key;
+    var link = base_uri + 'view/' + item.run_uuid + '/' + item.job_uuid;
     var go = $('<a class="tool etoggle" title="Open Job" href="' + link + '"><img src="/img/goto.png" /></a>');
     tools.append(go);
 };

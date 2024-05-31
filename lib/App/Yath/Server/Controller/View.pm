@@ -8,7 +8,7 @@ use Text::Xslate(qw/mark_raw/);
 use App::Yath::Util qw/share_dir/;
 use App::Yath::Schema::Util qw/find_job/;
 use App::Yath::Server::Response qw/resp error/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -38,27 +38,25 @@ sub handle {
     my @url;
     if ($project_id) {
         my $p_rs = $schema->resultset('Project');
-        $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_idx => $project_id}) } // die error(404 => 'Invalid Project');
+        $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_id => $project_id}) } // die error(404 => 'Invalid Project');
         $self->{+TITLE} .= ">" . $project->name;
         @url = ('project', $project_id);
     }
     elsif ($user_id) {
         my $u_rs = $schema->resultset('User');
-        $user = eval { $u_rs->find({username => $user_id}) } // eval { $u_rs->find({user_idx => $user_id}) } // die error(404 => 'Invalid User');
+        $user = eval { $u_rs->find({username => $user_id}) } // eval { $u_rs->find({user_id => $user_id}) } // die error(404 => 'Invalid User');
         $self->{+TITLE} .= ">" . $user->username;
         @url = ('user', $user_id);
     }
     elsif($run_id) {
-        $run_id = uuid_inflate($run_id) or die error(404 => 'Invalid Run');
         push @url => $run_id;
 
-        $run = eval { $schema->resultset('Run')->find({run_id => $run_id}) } or die error(404 => 'Invalid Run');
+        $run = eval { $schema->resultset('Run')->find_by_id_or_uuid($run_id) } or die error(404 => 'Invalid Run');
         $self->{+TITLE} .= ">" . $run->project->name;
 
         my $job_try = $route->{try};
 
         if (my $job_uuid = $route->{job}) {
-            $job_uuid = uuid_inflate($job_uuid) or die error(404 => 'Invalid Job');
             my $job = find_job($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
             $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
             push @url => $job_uuid;

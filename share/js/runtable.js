@@ -86,10 +86,18 @@ t2hui.runtable.build_user = function(item, col) {
 };
 
 t2hui.runtable.build_concurrency = function(item, col) {
-    var val = item.concurrency;
-    if (val === null) { return };
-    if (val === undefined) { return };
-    col.text("-j" + val);
+    var valj = item.concurrency_j;
+    var valx = item.concurrency_x;
+    if (valj === null) { return };
+    if (valj === undefined) { return };
+
+    var val = "-j" + valj;
+
+    if (valx) {
+        val = val + ":" + valx;
+    }
+
+    col.text(val);
 };
 
 t2hui.runtable.build_pass = function(item, col) {
@@ -104,7 +112,7 @@ t2hui.runtable.build_fail = function(item, col) {
     if (val === null) { return };
     if (val === undefined) { return };
     if (val == 0) { col.append($('<div class="success_txt">' + val + '</div>')) }
-    else { col.append($('<a href="' + base_uri  + 'failed/' + item.run_id + '">' + val + '</a>')) }
+    else { col.append($('<a href="' + base_uri  + 'failed/' + item.run_uuid + '">' + val + '</a>')) }
 };
 
 t2hui.runtable.build_retry = function(item, col) {
@@ -116,8 +124,8 @@ t2hui.runtable.build_retry = function(item, col) {
 };
 
 t2hui.runtable.tool_builder = function(item, tools, data) {
-    var link = base_uri + 'view/' + item.run_id;
-    var downlink = base_uri + 'download/' + item.run_id;
+    var link = base_uri + 'view/' + item.run_uuid;
+    var downlink = base_uri + 'download/' + item.run_uuid;
 
     var params = $('<div class="tool etoggle" title="See Run Parameters"><img src="/img/data.png" /></div>');
     tools.append(params);
@@ -125,7 +133,7 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
         $('#modal_body').html("Loading...");
         $('#free_modal').slideDown();
 
-        var url = base_uri + 'run/' + item.run_id + '/parameters';
+        var url = base_uri + 'run/' + item.run_uuid + '/parameters';
         $.ajax(url, {
             'data': { 'content-type': 'application/json' },
             'error': function(a, b, c) { alert("Failed to load run paramaters") },
@@ -179,7 +187,7 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
             var ok = confirm("Are you sure you wish to cancel this run? This action cannot be undone!\nNote: This only changes the runs status, it will not stop a running test. This is used to 'fix' an aborted run that is still set to 'running'");
             if (!ok) { return; }
 
-            var url = base_uri + 'run/' + item.run_id + '/cancel';
+            var url = base_uri + 'run/' + item.run_uuid + '/cancel';
             $.ajax(url, {
                 'data': { 'content-type': 'application/json' },
                 'error': function(a, b, c) { alert("Failed to cancel run") },
@@ -199,18 +207,18 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
             var ok = confirm("Are you sure you wish to delete this run? This action cannot be undone!");
             if (!ok) { return; }
 
-            var url = base_uri + 'run/' + item.run_id + '/delete';
+            var url = base_uri + 'run/' + item.run_uuid + '/delete';
             $.ajax(url, {
                 'data': { 'content-type': 'application/json' },
                 'error': function(a, b, c) { alert("Could not delete run") },
                 'success': function() {
-                    $('tr#' + item.run_id).remove();
+                    $('tr#' + item.run_uuid).remove();
                 },
             });
         });
     }
 
-    var resources = $('<a class="tool etoggle unicode" title="resources" href="' + base_uri + 'resources/' + item.run_id + '">&#9851;</a>');
+    var resources = $('<a class="tool etoggle unicode" title="resources" href="' + base_uri + 'resources/' + item.run_uuid + '">&#9851;</a>');
     tools.append(resources);
 
     var cimg = $('<img src="/img/coverage.png"/>');
@@ -220,7 +228,7 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
     dcover.append(dcimg);
 
     if (item.has_coverage && item.status === 'complete') {
-        var curl = base_uri + 'coverage/' + item.run_id;
+        var curl = base_uri + 'coverage/' + item.run_uuid;
         var clink = $('<a href="' + curl + '">');
         clink.append(cimg);
         cover.append(clink);
@@ -268,7 +276,7 @@ t2hui.runtable.tool_builder = function(item, tools, data) {
     tools.prepend(pintool);
 
     pintool.click(function() {
-        var url = base_uri + 'run/' + item.run_id + '/pin';
+        var url = base_uri + 'run/' + item.run_uuid + '/pin';
         $.ajax(url, {
             'data': { 'content-type': 'application/json' },
             'error': function(a, b, c) { alert("Failed to pin run") },

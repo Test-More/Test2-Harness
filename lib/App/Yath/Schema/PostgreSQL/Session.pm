@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("sessions");
 __PACKAGE__->add_columns(
+  "session_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "session_id",
   {
     data_type         => "bigint",
@@ -28,8 +29,6 @@ __PACKAGE__->add_columns(
     is_nullable       => 0,
     sequence          => "sessions_session_id_seq",
   },
-  "session_uuid",
-  { data_type => "uuid", is_nullable => 0, size => 16 },
   "active",
   { data_type => "boolean", default_value => \"true", is_nullable => 1 },
 );
@@ -43,7 +42,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

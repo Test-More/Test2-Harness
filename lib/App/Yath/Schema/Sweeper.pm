@@ -2,7 +2,7 @@ package App::Yath::Schema::Sweeper;
 use strict;
 use warnings;
 use Time::HiRes qw/time/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 
@@ -130,7 +130,7 @@ sub sweep_run {
     }
 
     if ($params{coverage}) {
-        $run->coverages->delete;
+        $run->coverage->delete;
         $run->update({has_coverage => 0}) unless $params{runs};
     }
 

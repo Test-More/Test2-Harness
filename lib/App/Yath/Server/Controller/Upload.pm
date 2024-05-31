@@ -6,11 +6,10 @@ our $VERSION = '2.000000';
 
 use Text::Xslate();
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/open_file/;
 
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 use App::Yath::Schema::Queries();
 
 use App::Yath::Util qw/share_dir/;
@@ -97,13 +96,13 @@ sub process_form {
 
     my $run = $self->schema->resultset('Run')->create({
         $run_id ? (run_id => $run_id) : (),
-        user_idx    => ref($user) ? $user->user_idx : 1,
-        project_idx => $project->project_idx,
+        user_id    => ref($user) ? $user->user_id : 1,
+        project_id => $project->project_id,
         mode       => $mode,
         status     => 'pending',
 
         log_file => {
-            log_file_idx => $run_id,
+            log_file_id => $run_id, # FIXME
             name => $file,
             data => do { local $/; <$fh> },
         },
@@ -120,7 +119,7 @@ sub api_user {
     return unless $key_val;
 
     my $schema = $self->schema;
-    my $key = $schema->resultset('ApiKey')->find({value => uuid_inflate($key_val)})
+    my $key = $schema->resultset('ApiKey')->find({value => $key_val})
         or return undef;
 
     return undef unless $key->status eq 'active';

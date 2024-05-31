@@ -10,7 +10,7 @@ use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Util qw/share_dir/;
 use App::Yath::Schema::Util qw/find_job/;
 use Test2::Harness::Util::JSON qw/encode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -23,7 +23,12 @@ sub handle {
 
     my $req = $self->{+REQUEST};
 
-    my $id      = uuid_inflate($route->{id}) or die error(404 => 'No event id provided');
+    my $schema = $self->schema;
+    my $id     = $route->{id} or die error(404 => 'No event id provided');
+
+    my $event = $schema->resultset('Event')->find_by_id_or_uuid($id)
+        or die error(404 => 'Invalid Event');
+
     my $context = $route->{context} // 1;
     return $self->data($id, $context) if $route->{data};
 
@@ -43,10 +48,10 @@ sub handle {
     my $content = $tx->render(
         'interactions.tx',
         {
-            base_uri   => $req->base->as_string,
-            event_id   => $id,
-            user       => $req->user,
-            data_uri   => $data_uri,
+            base_uri      => $req->base->as_string,
+            event_id      => $event->event_uuid,
+            user          => $req->user,
+            data_uri      => $data_uri,
             context_count => $context,
         }
     );
@@ -60,29 +65,32 @@ sub data {
     my ($id, $context) = @_;
 
     my $schema = $self->schema;
+
     # Get event
-    my $event = $schema->resultset('Event')->find({event_id => $id})
+    my $event = $schema->resultset('Event')->find_by_id_or_uuid($id)
         or die error(404 => 'Invalid Event');
 
     my $stamp = $event->get_column('stamp') or die "No stamp?!";
 
-    # Get job
-    my $job = $event->job_key or die error(500 => "Could not find job");
-
-    # Get run from event
-    my $run = $job->run or die error(500 => "Could not find run");
+    # Get job id
+    my $try = $event->job_try;
+    my $job = $try->job;
+    my $run = $job->run;
 
     # Get tests from run where the start and end surround the event
-    my $job_rs = $run->jobs(
+    my $try_rs = $schema->resultset('JobTry')->search(
         {
-            job_key => {'!=' => $job->job_key},
-            ended => {'>=' => $stamp},
+            'job.job_id' => {'!=' => $job->job_id},
+            'me.ended' => {'>=' => $stamp },
             '-or' => [
-                {launch => {'<=' => $stamp}},
-                {start => {'<=' => $stamp}},
+                {'me.launch' => {'<=' => $stamp}},
+                {'me.start' => {'<=' => $stamp}},
             ],
         },
-        {order_by => 'job_idx'},
+        {
+            join     => 'job',
+            order_by => 'job_try_id',
+        },
     );
 
     my $req = $self->{+REQUEST};
@@ -93,7 +101,7 @@ sub data {
         {type => 'run',   data => $run},
         {type => 'job',   data => $job->glance_data},
         {type => 'event', data => $event->line_data},
-        {type => 'count', data => $job_rs->count},
+        {type => 'count', data => $try_rs->count},
     );
 
     my $advance = sub {
@@ -117,8 +125,8 @@ sub data {
             $event_rs = undef;
         }
 
-        if (my $job = $job_rs->next) {
-            push @out => {type => 'job', data => $job->glance_data};
+        if (my $try = $try_rs->next) {
+            push @out => {type => 'job', data => $try->glance_data};
 
             $event_rs = $job->events(
                 {
@@ -132,7 +140,7 @@ sub data {
                         },
                     ],
                 },
-                {order_by => 'event_idx'},
+                {order_by => ['event_idx', 'event_sdx']},
             );
 
             return 0;

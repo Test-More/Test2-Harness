@@ -16,11 +16,12 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "Tree::AdjacencyList",
   "UUIDColumns",
 );
 __PACKAGE__->table("binaries");
 __PACKAGE__->add_columns(
+  "event_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "binary_id",
   {
     data_type         => "bigint",
@@ -29,13 +30,13 @@ __PACKAGE__->add_columns(
     sequence          => "binaries_binary_id_seq",
   },
   "event_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
+  "is_image",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "filename",
   { data_type => "varchar", is_nullable => 0, size => 512 },
   "description",
   { data_type => "text", is_nullable => 1 },
-  "is_image",
-  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
   "data",
   { data_type => "bytea", is_nullable => 0 },
 );
@@ -44,11 +45,16 @@ __PACKAGE__->belongs_to(
   "event",
   "App::Yath::Schema::Result::Event",
   { event_id => "event_id" },
-  { is_deferrable => 0, on_delete => "CASCADE", on_update => "NO ACTION" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "CASCADE",
+    on_update     => "NO ACTION",
+  },
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-21 17:11:11
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

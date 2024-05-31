@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use List::Util qw/max/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase;
@@ -39,15 +39,13 @@ sub handle {
         $run = $project->last_covered_run(user => $username);
     }
     else {
-        $source = uuid_inflate($source) or die error(404 => 'Invalid Run');
-        $run = eval { $schema->resultset('Run')->find({run_id => $source}) } or warn $@;
-        die error(405) unless $run;
+        $run = $schema->resultset('Run')->find_by_id_or_uuid($source) or die error(405);
     }
 
     die error(404) unless $run;
 
     if ($delete) {
-        $run->coverages->delete;
+        $run->coverage->delete;
         $run->update({has_coverage => 0});
     }
     else {

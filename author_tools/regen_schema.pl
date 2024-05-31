@@ -86,14 +86,27 @@ for my $schema_file (@todo) {
 
                 skip_load_external => 1,
 
+                moniker_map => sub {
+                    my ($table, $name) = @_;
+
+                    return "JobTry" if $name eq 'JobTries';
+                    return $name;
+                },
+
                 rel_name_map => sub {
                     my ($info) = @_;
-                    return "facets"       if $info->{name} eq 'facet';
-                    return "orphans"      if $info->{name} eq 'orphan';
-                    return "reports"      if $info->{name} eq 'reportings';
-                    return "renderings"   if $info->{name} eq 'renders';
-                    return "children"     if $info->{name} eq 'events' && $info->{local_class} eq 'App::Yath::Schema::Result::Event';
-                    return "parent_event" if $info->{name} eq 'parent';
+
+                    return 'children'
+                        if $info->{remote_columns}
+                        && $info->{local_columns}
+                        && $info->{name}                eq 'events'
+                        && $info->{local_class}         eq 'App::Yath::Schema::Result::Event'
+                        && $info->{remote_class}        eq 'App::Yath::Schema::Result::Event'
+                        && $info->{remote_columns}->[0] eq 'parent_event'
+                        && $info->{local_columns}->[0]  eq 'event_id';
+
+                    return "coverage" if $info->{name} eq 'coverages';
+                    return "reports"  if $info->{name} eq 'reportings';
                     return $info->{name};
                 },
 
@@ -106,7 +119,7 @@ for my $schema_file (@todo) {
                     "InflateColumn::DateTime",
                     "InflateColumn::Serializer",
                     "InflateColumn::Serializer::JSON",
-                    "Tree::AdjacencyList",
+                    #"Tree::AdjacencyList",
                     "UUIDColumns",
                 ],
             },

@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use parent 'Plack::Request';
 use Test2::Harness::Util::HashBase qw{

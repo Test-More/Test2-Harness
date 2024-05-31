@@ -12,7 +12,7 @@ use App::Yath::Schema::RunProcessor;
 
 use Test2::Harness::Util::HashBase qw/-config -worker_id/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 
 use IO::Uncompress::Bunzip2 qw($Bunzip2Error);

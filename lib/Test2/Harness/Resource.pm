@@ -13,7 +13,7 @@ use Sys::Hostname qw/hostname/;
 use Test2::Harness::Util qw/parse_exit/;
 use Test2::Harness::IPC::Util qw/start_collected_process ipc_connect set_procname/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
     <is_subprocess

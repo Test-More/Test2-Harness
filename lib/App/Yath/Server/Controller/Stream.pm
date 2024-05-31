@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use List::Util qw/max/;
 use Scalar::Util qw/blessed/;
 use App::Yath::Schema::Util qw/find_job/;
-use Test2::Harness::Util::UUID qw/looks_like_uuid/;
+use Test2::Util::UUID qw/looks_like_uuid/;
 
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json/;

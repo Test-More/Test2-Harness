@@ -6,7 +6,7 @@ use DBI;
 use Scope::Guard;
 use Carp qw/croak/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 

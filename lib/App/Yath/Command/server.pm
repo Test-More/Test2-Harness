@@ -7,7 +7,7 @@ use feature 'state';
 use App::Yath::Server;
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use App::Yath::Schema::ImportModes qw/is_mode/;
 
 use Test2::Harness::Util qw/clean_path/;
@@ -377,7 +377,7 @@ use App::Yath::Server::Config;
 use App::Yath::Schema::Importer;
 use App::Yath::Server;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
 use Plack::Builder;

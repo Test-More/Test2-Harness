@@ -21,7 +21,7 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 use App::Yath::Schema::Config;
 
 use App::Yath::Schema::Util qw/format_duration is_invalid_subtest_name schema_config_from_settings/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_ascii_json decode_json/;
 
 use App::Yath::Schema::ImportModes qw{

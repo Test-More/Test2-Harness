@@ -19,7 +19,7 @@ use Test2::Harness::Util::LogFile;
 
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::IPC::Util qw/set_procname/;
 
 use parent 'App::Yath::Command';

@@ -4,7 +4,7 @@ use warnings;
 
 use Carp qw/croak confess/;
 use Test2::Harness::Util qw/parse_exit mod2file/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use Plack::Runner;

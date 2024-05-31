@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use parent 'DBIx::Class::ResultSet';
 
 use Carp qw/croak/;
-use Test2::Harness::Util::UUID qw/looks_like_uuid/;
+use Test2::Util::UUID qw/looks_like_uuid/;
 
 __PACKAGE__->load_components('Helper::ResultSet::RemoveColumns');
 

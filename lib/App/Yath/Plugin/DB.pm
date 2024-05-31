@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
 use Test2::Harness::Util qw/mod2file/;
-use Test2::Harness::Util::UUID qw/looks_like_uuid/;
+use Test2::Util::UUID qw/looks_like_uuid/;
 
 use Getopt::Yath;
 use parent 'App::Yath::Plugin';

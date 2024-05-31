@@ -2,7 +2,7 @@ package App::Yath::Schema::Sweeper;
 use strict;
 use warnings;
 use Time::HiRes qw/time/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 

@@ -11,7 +11,7 @@ use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Carp qw/croak/;
 
 use constant COST => 8;

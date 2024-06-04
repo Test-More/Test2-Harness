@@ -28,13 +28,6 @@ __PACKAGE__->inflate_column(
     },
 );
 
-__PACKAGE__->inflate_column(
-    orphan => {
-        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('orphan', {}),
-        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('orphan', {}),
-    },
-);
-
 sub run  { shift->job->run }
 sub user { shift->job->run->user }
 
@@ -65,7 +58,7 @@ sub line_data {
     my %out;
 
     my $has_facets = $cols{has_facets} ? 1 : 0;
-    my $has_orphan = $cols{has_orphan} ? 1 : 0;
+    my $is_orphan = $cols{is_orphan} ? 1 : 0;
     my $has_binary = $cols{has_binary} ? 1 : 0;
     my $is_parent  = $cols{is_subtest} ? 1 : 0;
     my $causes_fail = $cols{causes_fail} ? 1 : 0;
@@ -86,7 +79,7 @@ sub line_data {
     }
 
     $out{facets}    = $has_facets;
-    $out{orphan}    = $has_orphan;
+    $out{orphan}    = $is_orphan;
     $out{is_parent} = $is_parent;
     $out{is_fail}   = $causes_fail;
 

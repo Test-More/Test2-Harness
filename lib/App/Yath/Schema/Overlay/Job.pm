@@ -73,15 +73,12 @@ sub TO_JSON {
     return \%cols;
 }
 
-#my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file status job_idx run_id };
-
 my @GLANCE_FIELDS = qw{ job_uuid is_harness_out };
 
 sub glance_data {
     my $self = shift;
     my %params = @_;
 
-    # FIXME: Handle this
     my $try_id = $params{try_id};
 
     my %cols = $self->get_all_fields;
@@ -96,6 +93,7 @@ sub glance_data {
     my @out;
 
     for my $try ($self->jobs_tries) {
+        next if $try_id && $try->job_try_id != $try_id;
         push @out => {%data, %{$try->glance_data}};
     }
 

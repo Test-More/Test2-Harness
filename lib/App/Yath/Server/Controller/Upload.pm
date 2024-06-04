@@ -95,14 +95,14 @@ sub process_form {
     open(my $fh, '<:raw', $tmp) or die "Could not open uploaded file '$tmp': $!";
 
     my $run = $self->schema->resultset('Run')->create({
-        $run_id ? (run_id => $run_id) : (),
+        $run_id ? (run_uuid => $run_id) : (),
         user_id    => ref($user) ? $user->user_id : 1,
         project_id => $project->project_id,
         mode       => $mode,
         status     => 'pending',
+        canon      => 1,
 
         log_file => {
-            log_file_id => $run_id, # FIXME
             name => $file,
             data => do { local $/; <$fh> },
         },

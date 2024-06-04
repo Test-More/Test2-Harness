@@ -52,17 +52,15 @@ __PACKAGE__->add_columns(
   { data_type => "tinyint", is_nullable => 0 },
   "is_time",
   { data_type => "tinyint", is_nullable => 0 },
+  "is_orphan",
+  { data_type => "tinyint", is_nullable => 0 },
   "causes_fail",
   { data_type => "tinyint", is_nullable => 0 },
   "has_facets",
   { data_type => "tinyint", is_nullable => 0 },
-  "has_orphan",
-  { data_type => "tinyint", is_nullable => 0 },
   "has_binary",
   { data_type => "tinyint", is_nullable => 0 },
   "facets",
-  { data_type => "longtext", is_nullable => 1 },
-  "orphan",
   { data_type => "longtext", is_nullable => 1 },
   "rendered",
   { data_type => "longtext", is_nullable => 1 },
@@ -118,7 +116,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-03 19:08:09
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:13:59
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

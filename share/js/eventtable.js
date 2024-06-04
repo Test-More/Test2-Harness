@@ -158,8 +158,11 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 }
 
 t2hui.eventtable.place_row = function(row, item, table, state) {
-    if (!item.item['loading_subtest']) {
-        if (item.item.orphan) {
+    if (item.item.orphan) {
+        if (item.item['loading_subtest']) {
+            row.addClass('stuck_orphan');
+        }
+        else {
             row.addClass('temp_orphan');
             if (!state['orphan']) {
                 state['orphan'] = row;
@@ -250,7 +253,12 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
     }
 
     if (item.item.facets) {
-        var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><img src="/img/data.png" /></div>');
+        var img = "/img/data.png";
+        if (item.item.orphan) {
+            img = "/img/orphan.png";
+        }
+
+        var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><img src="' + img + '" /></div>');
         tools.append(efacet);
         efacet.click(function() {
             $('#modal_body').empty();
@@ -264,27 +272,6 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
                 'success': function(event) {
                     $('#modal_body').empty();
                     var formatter = new JSONFormatter(event.facets, 2);
-                    $('#modal_body').html(formatter.render());
-                },
-            });
-        });
-    }
-
-    if (item.item.orphan) {
-        var eorphan = $('<div class="tool etoggle" title="See Orphan Facet Data"><img src="/img/orphan.png" /></div>');
-        tools.append(eorphan);
-        eorphan.click(function() {
-            $('#modal_body').empty();
-            $('#modal_body').text("loading...");
-            $('#free_modal').slideDown();
-
-            var uri = base_uri + 'event/' + item.item.event_uuid;
-
-            $.ajax(uri, {
-                'data': { 'content-type': 'application/json' },
-                'success': function(event) {
-                    $('#modal_body').empty();
-                    var formatter = new JSONFormatter(event.orphan, 2);
                     $('#modal_body').html(formatter.render());
                 },
             });

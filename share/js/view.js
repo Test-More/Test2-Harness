@@ -12,7 +12,7 @@ $(function() {
                 state.run_table.make_sortable();
             }
 
-            if (state.job_table) {
+            if (state.job_table && state.has_non_harness_job) {
                 state.job_table.make_sortable();
             }
         }},
@@ -41,6 +41,11 @@ $(function() {
             else if (item.type === 'job') {
                 item.data.run_uuid = state.run.run_uuid;
                 state.job = item.data;
+
+                if (!state.job.is_harness_out) {
+                    state.has_non_harness_job = 1;
+                }
+
                 if (!state.job_table) {
                     var job_table = t2hui.jobtable.build_table(state.run);
                     jobs.append(job_table.render());

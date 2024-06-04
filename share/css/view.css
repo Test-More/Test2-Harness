@@ -45,6 +45,11 @@ div.live {
     scroll-snap-align: end;
 }
 
+tr.stuck_orphan {
+    background: #FFF0E0 !important;
+    border: 2px dashed #FF90F0 !important;
+}
+
 tr.temp_orphan {
     background: #C0E0FF;
 }

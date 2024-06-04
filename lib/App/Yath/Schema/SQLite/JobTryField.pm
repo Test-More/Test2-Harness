@@ -22,7 +22,7 @@ __PACKAGE__->table("job_try_fields");
 __PACKAGE__->add_columns(
   "event_uuid",
   { data_type => "uuid", is_nullable => 0 },
-  "job_field_id",
+  "job_try_field_id",
   { data_type => "integer", is_auto_increment => 1, is_nullable => 0 },
   "job_try_id",
   { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
@@ -37,7 +37,7 @@ __PACKAGE__->add_columns(
   "link",
   { data_type => "text", default_value => \"null", is_nullable => 1 },
 );
-__PACKAGE__->set_primary_key("job_field_id");
+__PACKAGE__->set_primary_key("job_try_field_id");
 __PACKAGE__->belongs_to(
   "job_try",
   "App::Yath::Schema::Result::JobTry",
@@ -46,7 +46,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-03 19:08:19
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:10
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

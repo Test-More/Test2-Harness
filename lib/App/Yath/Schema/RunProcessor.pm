@@ -119,6 +119,12 @@ sub init {
     $self->{+REPORTING}  = [];
     $self->{+RUN_FIELDS} = [];
     $self->{+TRY_FIELDS} = [];
+
+    $self->{+BUFFER_SIZE} //= 100;
+}
+
+sub process_log_file {
+    my $class = shift;
 }
 
 sub process_stdin {
@@ -240,7 +246,7 @@ sub _process_first_line {
     if ($settings->check_group('webclient')) {
         if (my $url = $settings->webclient->url) {
             $links = "\nThis run can be reviewed at: $url/view/$run_id\n\n";
-            print STDOUT $links;
+            print STDOUT $links if $params{print_links};
         }
     }
 
@@ -271,7 +277,7 @@ sub _process_first_line {
         },
         sub {
             $self->finish(@errors);
-            print STDOUT $links if $links;
+            print STDOUT $links if $links && $params{print_links};
 
             $SIG{INT} = $int;
             $SIG{TERM} = $term;
@@ -1172,6 +1178,14 @@ sub _process_event {
         $e_uuid //= gen_uuid();
     }
 
+    unless ($formatted_stamp) {
+        if (my $q = $f->{harness_job_queued}) {
+            $formatted_stamp = $self->format_stamp($q->{stamp});
+        }
+
+        $formatted_stamp //= $self->format_stamp($self->{+LAST_STAMP}) if $self->{+LAST_STAMP};
+    }
+
     my $rendered = App::Yath::Renderer::Default::Composer->render_super_verbose($f);
     $rendered = undef unless $rendered && @$rendered;
 
@@ -1253,6 +1267,8 @@ sub _process_event {
 
         causes_fail => $fail,
 
+        has_facets => 1,
+
         $params{parent} ? (parent_uuid => format_uuid_for_db($params{parent})) : (),
 
         # Facet version wins if we have one, but we want them here if all we
@@ -1263,20 +1279,15 @@ sub _process_event {
         $rendered ? (rendered => $rendered) : (),
     );
 
+    clean($e->{facets} = $f);
+
     if ($orphan) {
-        $e->{has_facets} //= 0;
-        $e->{has_orphan} = 1;
-
-        clean($e->{orphan} = $f);
-
+        $e->{is_orphan} = 1;
         $try->{orphan_events}->{$e_uuid} = $e;
     }
     else {
         delete $try->{orphan_events}->{$e_uuid};
-        $e->{has_orphan} //= 0;
-        $e->{has_facets} = 1;
-
-        clean($e->{facets} = $f);
+        $e->{is_orphan} = 0;
 
         push @{$try->{ready_events} //= []} => $e;
     }
@@ -1603,8 +1614,6 @@ sub flush_events {
         @$deferred = (); # Not going to happen at this point
         $try->{result}->normalize_to_mode(mode => $self->{+MODE});
         $try->{normalized} = 1;
-
-        $self->remove_orphans($try) unless $try->{result}->fail;
     }
 
     return $out;
@@ -1675,24 +1684,7 @@ sub fix_binary_events {
     $sth->execute($try->{job_try_id}) or die $sth->errstr;
 }
 
-
-sub remove_orphans {
-    my $self = shift;
-    my ($try) = @_;
-
-    my $dbh = $self->{+CONFIG}->connect;
-    my $schema = $self->{+CONFIG}->schema;
-
-    my $sth = $dbh->prepare(<<"    EOT");
-        UPDATE events
-           SET orphan = NULL
-         WHERE job_try_id = ?
-           AND orphan IS NOT NULL
-    EOT
-
-    $sth->execute($try->{job_try_id}) or die $sth->errstr;
-}
-
+1;
 __END__
 
 =pod

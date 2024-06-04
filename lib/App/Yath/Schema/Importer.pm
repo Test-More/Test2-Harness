@@ -84,12 +84,10 @@ sub process {
 
     if ($ok && !$status->{errors}) {
         syswrite(\*STDOUT, "Completed run " . $run->run_id . " (" . $run->log_file->name . ") in $total seconds.\n");
-        $run->update({status => 'complete', passed => $status->{passed}, failed => $status->{failed}, retried => $status->{retried}});
     }
     else {
         my $error = $ok ? join("\n" => @{$status->{errors}}) : $err;
-        syswrite(\*STDOUT, "Failed feed " . $run->run_id . " (" . $run->log_file->name . ") in $total seconds.\n$error\n");
-        $run->update({status => 'broken', error => $error});
+        syswrite(\*STDOUT, "Failed run " . $run->run_id . " (" . $run->log_file->name . ") in $total seconds.\n$error\n");
     }
 
     return;
@@ -119,17 +117,18 @@ sub process_log {
 
     my $schema = $self->{+CONFIG}->schema;
 
+    my @errors;
     local $| = 1;
     while (my $line = <$fh>) {
         next if $line =~ m/^null$/ims;
         my $ln = $.;
 
-        my $error = $self->process_event_json($processor, $ln => $line);
-
-        return {errors => ["error processing line number $ln: $error"]} if $error;
+        my $error = $self->process_event_json($processor, $ln => $line) or next;
+        push @errors => "error processing line number $ln: $error";
     }
 
-    my $status = $processor->finish();
+    my $status = $processor->finish(@errors);
+
     return $status;
 }
 
@@ -139,7 +138,7 @@ sub process_event_json {
 
     my $ok = eval {
         my $event = decode_json($json);
-        $processor->process_event($event, undef, line => $ln);
+        $processor->process_event($event, undef, $ln);
         1;
     };
     my $err = $@;

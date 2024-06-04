@@ -31,7 +31,7 @@ __PACKAGE__->set_primary_key("version_id");
 __PACKAGE__->add_unique_constraint("version_unique", ["version"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-03 19:08:19
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:10
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

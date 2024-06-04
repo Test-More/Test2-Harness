@@ -7,7 +7,7 @@ our $VERSION = '2.000000';
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
 use App::Yath::Util qw/share_dir/;
-use App::Yath::Schema::Util qw/find_job/;
+use App::Yath::Schema::Util qw/find_job_and_try/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
@@ -27,14 +27,15 @@ sub handle {
 
     die error(404 => 'Missing route') unless $route;
     my $it = $route->{job} or die error(404 => 'No job uuid');
-    my $try = $route->{try};
+    my $ord = $route->{try};
 
-    my $job = find_job($schema, $it, $try) // die error(404 => 'Invalid Job');
+    my ($job, $try) = find_job_and_try($schema, $it, $ord);
+    die error(404 => 'Invalid Job') unless $job && $try;
 
-    $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id . '+' . $job->job_try;
+    $self->{+TITLE} = 'Job: ' . ($job->file || $job->name) . ' - ' . $job->job_id . '+' . $try->job_try_ord;
 
     $res->content_type('application/json');
-    $res->raw_body($job);
+    $res->raw_body({job => $job, try => $try});
     return $res;
 }
 

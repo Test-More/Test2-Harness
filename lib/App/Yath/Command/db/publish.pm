@@ -76,7 +76,7 @@ sub run {
 
     my $start = time;
 
-    my $cb = App::Yath::Schema::RunProcessor->process_lines($settings, project => $project);
+    my $cb = App::Yath::Schema::RunProcessor->process_lines($settings, project => $project, print_links => 1);
 
     my $run;
     eval {

@@ -284,15 +284,14 @@ CREATE TABLE events (
     is_diag         BOOL        NOT NULL,
     is_harness      BOOL        NOT NULL,
     is_time         BOOL        NOT NULL,
+    is_orphan       BOOL        NOT NULL,
 
     causes_fail     BOOL        NOT NULL,
 
     has_facets      BOOL        NOT NULL,
-    has_orphan      BOOL        NOT NULL,
     has_binary      BOOL        NOT NULL,
 
     facets          JSON        DEFAULT NULL,
-    orphan          JSON        DEFAULT NULL,
     rendered        JSON        DEFAULT NULL,
 
     FOREIGN KEY (parent_uuid)   REFERENCES events(event_uuid),
@@ -340,16 +339,16 @@ CREATE INDEX run_fields_run_id ON run_fields(run_id);
 CREATE INDEX run_fields_name   ON run_fields(name);
 
 CREATE TABLE job_try_fields (
-    event_uuid      BINARY(16)      NOT NULL,
+    event_uuid          BINARY(16)      NOT NULL,
 
-    job_field_id    BIGINT          NOT NULL    PRIMARY KEY AUTO_INCREMENT,
-    job_try_id      BIGINT          NOT NULL,
+    job_try_field_id    BIGINT          NOT NULL    PRIMARY KEY AUTO_INCREMENT,
+    job_try_id          BIGINT          NOT NULL,
 
-    name            VARCHAR(64)     NOT NULL,
-    data            JSON            DEFAULT NULL,
-    details         TEXT            DEFAULT NULL,
-    raw             TEXT            DEFAULT NULL,
-    link            TEXT            DEFAULT NULL,
+    name                VARCHAR(64)     NOT NULL,
+    data                JSON            DEFAULT NULL,
+    details             TEXT            DEFAULT NULL,
+    raw                 TEXT            DEFAULT NULL,
+    link                TEXT            DEFAULT NULL,
 
     FOREIGN KEY (job_try_id) REFERENCES job_tries(job_try_id) ON DELETE CASCADE
 );

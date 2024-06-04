@@ -13,6 +13,13 @@ use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
+__PACKAGE__->inflate_column(
+    parameters => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('parameters', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('parameters', {}),
+    },
+);
+
 sub normalize_to_mode {
     my $self = shift;
     my %params = @_;

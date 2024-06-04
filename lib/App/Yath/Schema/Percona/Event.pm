@@ -52,17 +52,15 @@ __PACKAGE__->add_columns(
   { data_type => "tinyint", is_nullable => 0 },
   "is_time",
   { data_type => "tinyint", is_nullable => 0 },
+  "is_orphan",
+  { data_type => "tinyint", is_nullable => 0 },
   "causes_fail",
   { data_type => "tinyint", is_nullable => 0 },
   "has_facets",
   { data_type => "tinyint", is_nullable => 0 },
-  "has_orphan",
-  { data_type => "tinyint", is_nullable => 0 },
   "has_binary",
   { data_type => "tinyint", is_nullable => 0 },
   "facets",
-  { data_type => "json", is_nullable => 1 },
-  "orphan",
   { data_type => "json", is_nullable => 1 },
   "rendered",
   { data_type => "json", is_nullable => 1 },
@@ -118,7 +116,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-03 19:35:37
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:06
 __PACKAGE__->inflate_column('event_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });
 __PACKAGE__->inflate_column('trace_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });
 __PACKAGE__->inflate_column('parent_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });

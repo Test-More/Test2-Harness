@@ -131,16 +131,7 @@ sub stream_jobs {
 
     my $run = $self->{+RUN} // return;
 
-    # FIXME: Does this make it faster or slower?
-    my $opts = {
-#        join => ['test_file'],
-#        '+select' => [
-#            'test_file.filename AS file',
-#        ],
-#        '+as' => [
-#            'file',
-#        ],
-    };
+    my $opts = {};
 
     my %params = (
         type   => 'job',

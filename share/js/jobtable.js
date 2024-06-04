@@ -85,12 +85,12 @@ t2hui.jobtable.tool_builder = function(item, tools, data) {
         $('#modal_body').text("loading...");
         $('#free_modal').slideDown();
 
-        var uri = base_uri + 'job/' + item.job_uuid;
+        var uri = base_uri + 'job/' + item.job_uuid + '/' + item.job_try_ord;
 
         $.ajax(uri, {
             'data': { 'content-type': 'application/json' },
             'success': function(job) {
-                var formatter = new JSONFormatter(job.parameters, 2);
+                var formatter = new JSONFormatter(job.try.parameters, 2);
                 $('#modal_body').html(formatter.render());
             },
         });
@@ -132,11 +132,11 @@ t2hui.jobtable.modify_row = function(row, item) {
 };
 
 t2hui.jobtable.field_preprocess = function(field_data) {
-    field_data.delete = base_uri + 'job/field/' + field_data.job_field_id + '/delete';
+    field_data.delete = base_uri + 'job/field/' + field_data.job_try_field_id + '/delete';
 };
 
 t2hui.jobtable.field_fetch = function(field_data, item) {
-    return base_uri + 'job/field/' + field_data.job_field_id;
+    return base_uri + 'job/field/' + field_data.job_try_field_id;
 };
 
 

@@ -8,9 +8,8 @@ use DateTime;
 use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
 use App::Yath::Util qw/share_dir/;
-use App::Yath::Schema::Util qw/find_job/;
+use App::Yath::Schema::Util qw/find_job is_mysql/;
 use Test2::Harness::Util::JSON qw/encode_json/;
-
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -70,7 +69,7 @@ sub data {
     my $event = $schema->resultset('Event')->find_by_id_or_uuid($id)
         or die error(404 => 'Invalid Event');
 
-    my $stamp = $event->get_column('stamp') or die "No stamp?!";
+    my $stamp = $event->get_column('stamp') or die error(500 => "Requested event does not have a timestamp");
 
     # Get job id
     my $try = $event->job_try;
@@ -99,7 +98,7 @@ sub data {
     my ($event_rs, %seen_events);
     my @out = (
         {type => 'run',   data => $run},
-        {type => 'job',   data => $job->glance_data},
+        {type => 'job',   data => $job->glance_data(try_id => $try->job_try_id)},
         {type => 'event', data => $event->line_data},
         {type => 'count', data => $try_rs->count},
     );
@@ -126,9 +125,10 @@ sub data {
         }
 
         if (my $try = $try_rs->next) {
-            push @out => {type => 'job', data => $try->glance_data};
+            my $job = $try->job;
+            push @out => {type => 'job', data => $job->glance_data(try_id => $try->job_try_id)};
 
-            $event_rs = $job->events(
+            $event_rs = $try->events(
                 {
                     '-or' => [
                         {is_subtest => 1, nested => 0},
@@ -187,9 +187,8 @@ sub interval {
     my $self = shift;
     my ($stamp, $op, $context) = @_;
 
-    my $driver = $self->{+SCHEMA_CONFIG}->db_driver;
-
-    return \"timestamp '$stamp' $op INTERVAL '$context' seconds" if $driver eq 'PostgreSQL';
+    return \"timestamp '$stamp' $op INTERVAL '$context' second"
+        unless is_mysql();
 
     # *Sigh* MySQL
     return \"DATE_ADD('$stamp', INTERVAL $context second)" if $op eq '+';

@@ -273,15 +273,14 @@ CREATE TABLE events (
     is_diag         BOOL        NOT NULL,
     is_harness      BOOL        NOT NULL,
     is_time         BOOL        NOT NULL,
+    is_orphan       BOOL        NOT NULL,
 
     causes_fail     BOOL        NOT NULL,
 
     has_facets      BOOL        NOT NULL,
-    has_orphan      BOOL        NOT NULL,
     has_binary      BOOL        NOT NULL,
 
     facets          JSONB       DEFAULT NULL,
-    orphan          JSONB       DEFAULT NULL,
     rendered        JSONB       DEFAULT NULL,
 
     UNIQUE(job_try_id, event_idx, event_sdx),
@@ -321,16 +320,16 @@ CREATE INDEX IF NOT EXISTS run_fields_run_id ON run_fields(run_id);
 CREATE INDEX IF NOT EXISTS run_fields_name   ON run_fields(name);
 
 CREATE TABLE job_try_fields (
-    event_uuid      UUID            NOT NULL,
+    event_uuid          UUID            NOT NULL,
 
-    job_field_id    BIGSERIAL       NOT NULL     PRIMARY KEY,
-    job_try_id      BIGINT          NOT NULL     REFERENCES job_tries(job_try_id) ON DELETE CASCADE,
+    job_try_field_id    BIGSERIAL       NOT NULL     PRIMARY KEY,
+    job_try_id          BIGINT          NOT NULL     REFERENCES job_tries(job_try_id) ON DELETE CASCADE,
 
-    name            VARCHAR(64)     NOT NULL,
-    data            JSONB           DEFAULT NULL,
-    details         TEXT            DEFAULT NULL,
-    raw             TEXT            DEFAULT NULL,
-    link            TEXT            DEFAULT NULL
+    name                VARCHAR(64)     NOT NULL,
+    data                JSONB           DEFAULT NULL,
+    details             TEXT            DEFAULT NULL,
+    raw                 TEXT            DEFAULT NULL,
+    link                TEXT            DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS job_try_fields_job_id ON job_try_fields(job_try_id);
 CREATE INDEX IF NOT EXISTS job_try_fields_name   ON job_try_fields(name);

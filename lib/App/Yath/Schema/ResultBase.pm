@@ -8,6 +8,13 @@ use parent 'DBIx::Class::Core';
 
 *get_all_fields = __PACKAGE__->can('get_inflated_columns');
 
+sub TO_JSON {
+    my $self = shift;
+    my %cols = $self->get_all_fields;
+    return \%cols;
+}
+
+
 1;
 
 __END__

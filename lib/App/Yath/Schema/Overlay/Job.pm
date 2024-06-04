@@ -11,6 +11,8 @@ use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
+*job_tries = *jobs_tries;
+
 sub file {
     my $self = shift;
     my %cols = $self->get_all_fields;
@@ -39,45 +41,27 @@ sub short_file {
     return $file;
 }
 
-my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
-#sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
-sub complete { 0 }
+sub complete {
+    my $self = shift;
+
+    my @tries = $self->job_tries or return 0;
+
+    my $to_see = 1;
+    for my $try (@tries) {
+        $to_see--;
+        return 0 unless $try->complete;
+        $to_see++ if $try->retry;
+    }
+
+    return $to_see ? 0 : 1;
+}
 
 sub sig {
     my $self = shift;
 
-    return "FIXME";
-#    return join ";" => (
-#        (map {$self->$_ // ''} qw/name file fail/),
-#        $parameters ? length($parameters) : (''),
-#        ($self->job_fields->count),
-#    );
+    my $out = join ';' => map { $_->sig } sort { $a->job_try_ord <=> $b->job_try_ord } $self->jobs_tries;
+    $out //= ';';
 }
-
-#sub short_job_fields {
-#    my $self = shift;
-#    my %params = @_;
-#
-#    my @fields = $params{prefetched_fields} ? $self->job_fields : $self->job_fields->search(
-#        undef, {
-#            remove_columns => ['data'],
-#            '+select'      => ['data IS NOT NULL AS has_data'],
-#            '+as'          => ['has_data'],
-#        }
-#    )->all;
-#
-#    my @out;
-#    for my $jf (@fields) {
-#        my $fields = {$jf->get_all_fields};
-#
-#        my $has_data = delete $fields->{data};
-#        $fields->{has_data} //= $has_data ? \'1' : \'0';
-#
-#        push @out => $fields;
-#    }
-#
-#    return \@out;
-#}
 
 sub TO_JSON {
     my $self = shift;
@@ -86,13 +70,12 @@ sub TO_JSON {
     $cols{short_file}    = $self->short_file;
     $cols{shortest_file} = $self->shortest_file;
 
-    # FIXME?
-#    $cols{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
-
     return \%cols;
 }
 
-my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file status job_idx run_id };
+#my @GLANCE_FIELDS = qw{ exit_code fail fail_count job_key job_try retry name pass_count file status job_idx run_id };
+
+my @GLANCE_FIELDS = qw{ job_uuid is_harness_out };
 
 sub glance_data {
     my $self = shift;
@@ -110,9 +93,17 @@ sub glance_data {
     $data{short_file}    = $self->short_file;
     $data{shortest_file} = $self->shortest_file;
 
-#    $data{fields} = $self->short_job_fields(prefetched => $cols{prefetched_fields});
+    my @out;
 
-    return \%data;
+    for my $try ($self->jobs_tries) {
+        push @out => {%data, %{$try->glance_data}};
+    }
+
+    unless (@out) {
+        push @out => {%data, status => 'pending'}
+    }
+
+    return @out;
 }
 
 1;

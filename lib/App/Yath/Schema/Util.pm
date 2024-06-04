@@ -8,10 +8,26 @@ use Carp qw/croak/;
 
 use Test2::Harness::Util qw/mod2file/;
 
-
 use Importer Importer => 'import';
 
-our @EXPORT = qw/qdb_driver dbd_driver schema_config_from_settings find_job format_duration parse_duration is_invalid_subtest_name/;
+our @EXPORT = qw{
+    schema_config_from_settings
+
+    qdb_driver          dbd_driver
+    find_job            find_job_and_try
+    format_duration     parse_duration
+
+    is_invalid_subtest_name
+
+    is_mysql
+    is_postgresql
+    is_sqlite
+    is_percona
+    is_mariadb
+
+    format_uuid_for_db
+    format_uuid_for_app
+};
 
 my %SCHEMA_TO_QDB_DRIVER = (
     sqlite     => 'SQLite',
@@ -116,20 +132,45 @@ sub schema_config_from_settings {
     return App::Yath::Schema::Config->new(%params);
 }
 
-sub find_job {
+{
+    no strict 'refs';
+    no warnings 'once';
+    *{$_} = *{"App::Yath::Schema::$_"} for qw/is_mysql is_postgresql is_sqlite is_percona is_mariadb/;
+}
+
+sub format_uuid_for_db  { App::Yath::Schema->format_uuid_for_db(@_) }
+sub format_uuid_for_app { App::Yath::Schema->format_uuid_for_app(@_) }
+
+sub find_job_and_try {
     my ($schema, $uuid, $try) = @_;
 
-    my $jobs = $schema->resultset('Job');
+    my $job = find_job(@_);
+    my $job_id = $job->job_id;
+
+    my $job_try = find_job_try($schema, $job_id, $try);
+
+    return ($job, $job_try);
+}
+
+sub find_job {
+    my ($schema, $uuid) = @_;
+
+    return $schema->resultset('Job')->find({job_uuid => format_uuid_for_db($uuid)});
+}
+
+sub find_job_try {
+    my ($schema, $job_id, $try) = @_;
+
+    my $job_tries = $schema->resultset('JobTry');
 
     if (length $try) {
-        return $jobs->search({job_id => $uuid}, {order_by => {'-desc' => 'job_try'}, limit => 1})->first
+        return $job_tries->search({job_id => $job_id}, {order_by => {'-desc' => 'job_try_ord'}, limit => 1})->first
             if $try == -1;
 
-        return $jobs->search({job_id => $uuid, job_try => $try})->first;
+        return $job_tries->find({job_id => $job_id, job_try_ord => $try});
     }
 
-    return $jobs->search({job_key => $uuid})->first
-        || $jobs->search({job_id  => $uuid}, {order_by => {'-desc' => 'job_try'}, limit => 1})->first;
+    return $job_tries->search({job_id  => $job_id}, {order_by => {'-desc' => 'job_try_ord'}, limit => 1})->first;
 }
 
 sub base_name {

@@ -34,7 +34,7 @@ __PACKAGE__->add_columns(
   "run_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "host_id",
-  { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
+  { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
   "stamp",
   { data_type => "timestamp", is_nullable => 0 },
   "resource_ord",
@@ -51,7 +51,12 @@ __PACKAGE__->belongs_to(
   "host",
   "App::Yath::Schema::Result::Host",
   { host_id => "host_id" },
-  { is_deferrable => 0, on_delete => "SET NULL", on_update => "NO ACTION" },
+  {
+    is_deferrable => 0,
+    join_type     => "LEFT",
+    on_delete     => "SET NULL",
+    on_update     => "NO ACTION",
+  },
 );
 __PACKAGE__->belongs_to(
   "resource_type",
@@ -67,7 +72,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-03 19:08:18
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

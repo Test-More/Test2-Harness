@@ -30,15 +30,15 @@ sub handle {
     my (%query, %attrs, $rs, $meth, $event);
 
     if ($route->{from} eq 'single_event') {
-        $event = $schema->resultset('Event')->find({event_id => $it}, {remove_columns => [qw/orphan/]})
+        $event = $schema->resultset('Event')->find_by_id_or_uuid($it, {remove_columns => [qw/orphan/]})
             or die error(404 => 'Invalid Event');
     }
     else {
-        $event = $schema->resultset('Event')->find({event_id => $it}, {remove_columns => [qw/orphan facets/]})
+        $event = $schema->resultset('Event')->find_by_id_or_uuid($it, {remove_columns => [qw/orphan facets/]})
             or die error(404 => 'Invalid Event');
     }
 
-    $attrs{order_by} = {-asc => 'event_id'};
+    $attrs{order_by} = {-asc => ['event_idx', 'event_sdx', 'event_id']};
 
     if ($route->{from} eq 'single_event') {
         $res->content_type('application/json');
@@ -47,24 +47,13 @@ sub handle {
     }
 
     if ($p->{load_subtests}) {
-        # If we are loading subtests then we want ALL descendants, so here
-        # we take the parent event and find the next event of the same
-        # nesting level, then we want all events with an event_id between
-        # them (in the same job);
-        my $end_at = $schema->resultset('Event')->find(
-            {%query, nested => $event->nested, event_id => {'>' => $event->event_id}},
-            {
-                columns => [qw/event_id/],
-                %attrs,
-            },
-        );
-
-    # FIXME: This should be using event_idx and event_sdx
-        $query{event_id} = {'>' => $event->event_id, '<' => $end_at->event_id};
+        $query{job_try_id} = $event->job_try_id;           # Same job try
+        $query{event_idx} = $event->event_idx;             # Same subtest
+        $query{event_id}  = {'!=' => $event->event_id};    # Not this event
     }
     else {
         # We want direct descendants only
-        $query{'parent_id'} = $it;
+        $query{'parent_id'} = $event->event_id;
     }
 
     $rs = $schema->resultset('Event')->search(

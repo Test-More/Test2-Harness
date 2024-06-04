@@ -96,14 +96,17 @@ t2hui.jobtable.tool_builder = function(item, tools, data) {
         });
     });
 
-    var link = base_uri + 'view/' + item.run_uuid + '/' + item.job_uuid;
+    var link = base_uri + 'view/' + item.run_uuid + '/' + item.job_uuid + '/' + item.job_try_ord;
     var go = $('<a class="tool etoggle" title="Open Job" href="' + link + '"><img src="/img/goto.png" /></a>');
     tools.append(go);
 };
 
 t2hui.jobtable.modify_row = function(row, item) {
     if (item.short_file) {
-        if (item.retry == true) {
+        if (item.is_harness_out) {
+            row.addClass('harness_out');
+        }
+        else if (item.retry == true) {
             row.addClass('iffy_set');
             row.addClass('retry_txt');
         }
@@ -157,7 +160,7 @@ t2hui.jobtable.init_table = function(table, state) {
 }
 
 t2hui.jobtable.place_row = function(row, item, table, state, existing) {
-    if (!item.short_file) {
+    if (item.is_harness_out) {
         state['header'].after(row);
         return true;
     }

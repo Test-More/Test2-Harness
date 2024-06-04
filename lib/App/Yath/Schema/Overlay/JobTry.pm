@@ -44,6 +44,57 @@ sub normalize_to_mode {
     $self->events->search($query)->delete();
 }
 
+sub short_job_try_fields {
+    my $self = shift;
+    my %params = @_;
+
+    my @fields = $params{prefetched_fields} ? $self->job_try_fields : $self->job_try_fields->search(
+        undef, {
+            remove_columns => ['data'],
+            '+select'      => ['data IS NOT NULL AS has_data'],
+            '+as'          => ['has_data'],
+        }
+    )->all;
+
+    my @out;
+    for my $jf (@fields) {
+        my $fields = {$jf->get_all_fields};
+
+        my $has_data = delete $fields->{data};
+        $fields->{has_data} //= $has_data ? \'1' : \'0';
+
+        push @out => $fields;
+    }
+
+    return \@out;
+}
+
+my @GLANCE_FIELDS = qw{ exit_code fail job_try_ord job_try_id retry fail_count pass_count status duration };
+
+sub sig {
+    my $self = shift;
+
+    my %cols = $self->get_all_fields;
+
+    return join ':' => map { $_ // '' } @cols{@GLANCE_FIELDS};
+}
+
+sub glance_data {
+    my $self = shift;
+    my %params = @_;
+
+    my %cols = $self->get_all_fields;
+
+    my %data;
+    @data{@GLANCE_FIELDS} = @cols{@GLANCE_FIELDS};
+
+    $data{fields} = $self->short_job_try_fields;
+
+    return \%data;
+}
+
+my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
+sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 
 1;
 

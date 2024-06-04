@@ -30,7 +30,7 @@ CREATE TYPE user_type AS ENUM(
 
 CREATE TABLE versions(
     version     NUMERIC(10,6)   NOT NULL,
-    version_id  SERIAL          PRIMARY KEY,
+    version_id  SERIAL          NOT NULL PRIMARY KEY,
     updated     TIMESTAMP       NOT NULL DEFAULT now(),
 
     UNIQUE(version)
@@ -39,7 +39,7 @@ CREATE TABLE versions(
 INSERT INTO versions(version) VALUES('2.000000');
 
 CREATE TABLE config(
-    config_id   SERIAL          PRIMARY KEY,
+    config_id   SERIAL          NOT NULL PRIMARY KEY,
     setting     VARCHAR(128)    NOT NULL,
     value       VARCHAR(256)    NOT NULL,
 
@@ -278,7 +278,7 @@ CREATE TABLE events (
 
     has_facets      BOOL        NOT NULL,
     has_orphan      BOOL        NOT NULL,
-    has_binaries    BOOL        NOT NULL,
+    has_binary      BOOL        NOT NULL,
 
     facets          JSONB       DEFAULT NULL,
     orphan          JSONB       DEFAULT NULL,
@@ -359,10 +359,10 @@ CREATE TABLE resource_types(
 CREATE TABLE resources (
     event_uuid          UUID        NOT NULL,
 
-    resource_id         BIGSERIAL   NOT NULL PRIMARY KEY,
-    resource_type_id    BIGINT      NOT NULL     REFERENCES resource_types(resource_type_id) ON DELETE CASCADE,
-    run_id              BIGINT      NOT NULL     REFERENCES runs(run_id)                     ON DELETE CASCADE,
-    host_id             BIGINT      NOT NULL     REFERENCES hosts(host_id)                   ON DELETE SET NULL,
+    resource_id         BIGSERIAL   NOT NULL    PRIMARY KEY,
+    resource_type_id    BIGINT      NOT NULL    REFERENCES resource_types(resource_type_id) ON DELETE CASCADE,
+    run_id              BIGINT      NOT NULL    REFERENCES runs(run_id)                     ON DELETE CASCADE,
+    host_id             BIGINT                  REFERENCES hosts(host_id)                   ON DELETE SET NULL,
 
     stamp               TIMESTAMP   NOT NULL,
     resource_ord        INTEGER     NOT NULL,

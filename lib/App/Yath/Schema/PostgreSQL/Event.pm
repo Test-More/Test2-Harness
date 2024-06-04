@@ -59,7 +59,7 @@ __PACKAGE__->add_columns(
   { data_type => "boolean", is_nullable => 0 },
   "has_orphan",
   { data_type => "boolean", is_nullable => 0 },
-  "has_binaries",
+  "has_binary",
   { data_type => "boolean", is_nullable => 0 },
   "facets",
   { data_type => "jsonb", is_nullable => 1 },
@@ -122,7 +122,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-05-29 14:47:42
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-03 19:08:18
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

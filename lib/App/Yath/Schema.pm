@@ -3,10 +3,13 @@ use utf8;
 use strict;
 use warnings;
 use Carp qw/confess/;
+use Carp::Always;
 
 our $VERSION = '2.000000';
 
 use base 'DBIx::Class::Schema';
+
+use Test2::Util::UUID qw/uuid2bin bin2uuid/;
 
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
@@ -19,6 +22,49 @@ require App::Yath::Schema::ResultSet;
 __PACKAGE__->load_namespaces(
     default_resultset_class => 'ResultSet',
 );
+
+sub is_mysql {
+    return 1 if is_mariadb();
+    return 1 if is_percona();
+    return 1 if $App::Yath::Schema::LOADED =~ m/MySQL/;
+    return 0;
+}
+
+sub is_postgresql {
+    return 1 if $App::Yath::Schema::LOADED =~ m/PostgreSQL/;
+    return 0;
+}
+
+sub is_sqlite {
+    return 1 if $App::Yath::Schema::LOADED =~ m/SQLite/;
+    return 0;
+}
+
+sub is_percona {
+    return 1 if $App::Yath::Schema::LOADED =~ m/Percona/;
+    return 0;
+}
+
+sub is_mariadb {
+    return 1 if $App::Yath::Schema::LOADED =~ m/MariaDB/;
+    return 0;
+}
+
+sub format_uuid_for_db {
+    my $class = shift;
+    my ($uuid) = @_;
+
+    return $uuid unless is_percona();
+    return uuid2bin($uuid);
+}
+
+sub format_uuid_for_app {
+    my $class = shift;
+    my ($uuid_bin) = @_;
+
+    return $uuid_bin unless is_percona();
+    return bin2uuid($uuid_bin);
+}
 
 sub config {
     my $self = shift;

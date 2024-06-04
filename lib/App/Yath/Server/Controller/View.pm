@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Text::Xslate(qw/mark_raw/);
 use App::Yath::Util qw/share_dir/;
-use App::Yath::Schema::Util qw/find_job/;
+use App::Yath::Schema::Util qw/find_job_and_try/;
 use App::Yath::Server::Response qw/resp error/;
 
 
@@ -57,7 +57,7 @@ sub handle {
         my $job_try = $route->{try};
 
         if (my $job_uuid = $route->{job}) {
-            my $job = find_job($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
+            my ($job, $try) = find_job_and_try($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
             $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
             push @url => $job_uuid;
         }

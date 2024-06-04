@@ -46,12 +46,12 @@ t2hui.runtable.place_row = function(row, item, table, state, existing) {
     }
 
     if (!state['biggest']) {
-        state['biggest'] = item.run_ord;
+        state['biggest'] = item.run_id;
         return false;
     }
 
-    if (item.run_ord > state.biggest) {
-        state['biggest'] = item.run_ord;
+    if (item.run_id > state.biggest) {
+        state['biggest'] = item.run_id;
         table.body.prepend(row);
         return true;
     }

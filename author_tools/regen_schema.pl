@@ -475,7 +475,7 @@ sub process_uuid {
     my @uuids;
     for my $col (keys %cols) {
         my $data = $cols{$col} or next;
-        next unless $col eq 'owner' || $col =~ m/_(id|key)$/;
+        next unless $col =~ m/_uuid$/;
         next unless $data->{data_type} eq 'binary';
         next unless $data->{size} == 16;
         push @uuids => $col;
@@ -485,12 +485,8 @@ sub process_uuid {
     print $fh @lines;
 
     if (@uuids) {
-        my $specs = join "\n" => map { "__PACKAGE__->inflate_column('$_' => { inflate => \\&uuid_inflate, deflate => \\&uuid_deflate });" } @uuids;
-
-        print $fh <<"        EOT";
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
-$specs
-        EOT
+        my $specs = join "\n" => map { "__PACKAGE__->inflate_column('$_' => { inflate => \\&App::Yath::Schema::Util::format_uuid_for_app, deflate => \\&App::Yath::Schema::Util::format_uuid_for_db });" } @uuids;
+        print $fh "$specs\n";
     }
 
     print $fh "# DO NOT MODIFY ANY PART OF THIS FILE\n";

@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use List::Util qw/max/;
 use Scalar::Util qw/blessed/;
-use App::Yath::Schema::Util qw/find_job/;
+use App::Yath::Schema::Util qw/find_job_and_try format_uuid_for_db/;
 use Test2::Util::UUID qw/looks_like_uuid/;
 
 use App::Yath::Server::Response qw/resp error/;
@@ -18,6 +18,7 @@ use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw{
     <run
     <job
+    <try
 };
 
 use constant RUN_LIMIT => 100;
@@ -159,7 +160,10 @@ sub stream_jobs {
 
     if (my $job_uuid = $route->{job}) {
         my $schema = $self->schema;
-        return $self->stream_single(%params, item => find_job($schema, $job_uuid, $route->{try}));
+        my ($job, $try) = find_job_and_try($schema, $job_uuid, $route->{try});
+        $self->{+JOB} = $job;
+        $self->{+TRY} = $try;
+        return $self->stream_single(%params, item => $job);
     }
 
     return $self->stream_set(%params);
@@ -170,13 +174,14 @@ sub stream_events {
     my ($req, $route) = @_;
 
     my $job = $self->{+JOB} // return;
+    my $try = $self->{+TRY} // return;
 
     # we only stream nested events when the job is still running
-    my $query = $job->complete ? {nested => 0} : undef;
+    my $query = $try->complete ? {nested => 0} : undef;
 
     return $self->stream_set(
         type   => 'event',
-        parent => $job,
+        parent => $try,
 
         req => $req,
 
@@ -187,7 +192,7 @@ sub stream_events {
         sort_dir     => '-asc',
         method       => 'line_data',
         custom_query => $query,
-        search_base  => scalar($job->events),
+        search_base  => scalar($try->events),
     );
 }
 
@@ -208,6 +213,7 @@ sub stream_single {
         $it = $params{item} or die error(404 => "Invalid Item");
     }
     else {
+        $id = format_uuid_for_db($id) if $id_field =~ m/_uuid$/;
         $it = $search_base->search({%$custom_query, "me.$id_field" => $id}, $custom_opts)->first or die error(404 => "Invalid $type");
     }
     $self->{$type} = $it;
@@ -228,7 +234,7 @@ sub stream_single {
 
             return if $unchanged;
 
-            my $data = $method ? $it->$method : $it->TO_JSON;
+            my ($data) = $method ? $it->$method : $it->TO_JSON;
             return encode_json({type => $type, update => $update, data => $data}) . "\n";
         },
     ];
@@ -255,11 +261,12 @@ sub stream_set {
     my $order_by = $params{order_by} // $sort_field ? {$sort_dir => $sort_field} : croak "Must specify either 'order_by' or 'sort_field'";
 
     my $items = $search_base->search($custom_query, {%$custom_opts, order_by => $order_by, $limit ? (rows => $limit) : ()});
-    my @buffer;
+    my (@buffer, $buffer_item);
 
     my $start = time;
     my $ord;
     my $incomplete = {};
+    my $update;
 
     return [
         sub {
@@ -291,6 +298,7 @@ sub stream_set {
                 };
 
                 my @ids = $track ? keys %$incomplete : ();
+                @ids = map { format_uuid_for_db($_) } @ids if $id_field =~ m/_uuid$/;
                 $query = [$query, {"me.$id_field" => { -in => \@ids }}] if @ids;
 
                 $items = $search_base->search(
@@ -299,27 +307,41 @@ sub stream_set {
                 );
             }
 
-            while (my $item = shift(@buffer) || $items->next()) {
-                $ord = max($ord || 0, $item->$ord_field);
+            while (1) {
+                my ($item);
 
-                my $update = JSON::PP::false;
-                if ($track) {
-                    my $id = $item->$id_field;
-                    if (my $old = $incomplete->{$id}) {
-                        $update = JSON::PP::true;
-                        # Nothing has changed, no need to send it.
-                        next if $old->sig eq $item->sig;
-                    }
+                if (@buffer) {
+                    $item = $buffer_item;
+                }
+                else {
+                    $item = $items->next() or last;
 
-                    if ($item->complete) {
-                        delete $incomplete->{$id};
-                    }
-                    else {
-                        $incomplete->{$id} = $item;
+                    $ord = max($ord || 0, $item->$ord_field);
+
+                    $update = JSON::PP::false;
+
+                    if ($track) {
+                        my $id = $item->$id_field;
+                        if (my $old = $incomplete->{$id}) {
+                            $update = JSON::PP::true;
+                            # Nothing has changed, no need to send it.
+                            next if $old->sig eq $item->sig;
+                        }
+
+                        if ($item->complete) {
+                            delete $incomplete->{$id};
+                        }
+                        else {
+                            $incomplete->{$id} = $item;
+                        }
                     }
                 }
 
-                my @buffer = $method ? $item->$method : $item->TO_JSON;
+                unless (@buffer) {
+                    @buffer = $method ? $item->$method : $item->TO_JSON;
+                    $buffer_item = $item;
+                }
+
                 return encode_json({type => $type, update => $update, data => shift(@buffer)}) . "\n";
             }
 

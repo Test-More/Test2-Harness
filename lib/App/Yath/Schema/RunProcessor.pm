@@ -20,7 +20,7 @@ use Test2::Util::Facets2Legacy qw/causes_fail/;
 
 use App::Yath::Schema::Config;
 
-use App::Yath::Schema::Util qw/format_duration is_invalid_subtest_name schema_config_from_settings/;
+use App::Yath::Schema::Util qw/format_duration is_invalid_subtest_name schema_config_from_settings format_uuid_for_db/;
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_ascii_json decode_json/;
 
@@ -92,7 +92,7 @@ sub init {
 
         my $schema = $self->schema;
         my $run    = $schema->resultset('Run')->create({
-            run_uuid   => $run_uuid,
+            run_uuid   => format_uuid_for_db($run_uuid),
             user_id    => $self->user_id,
             project_id => $self->project_id,
             mode       => $mode,
@@ -198,13 +198,13 @@ sub _process_first_line {
         my $p = $config->schema->resultset('Project')->find_or_create({name => $proj});
         my $u = $config->schema->resultset('User')->find_or_create({username => $user, role => 'user'});
 
-        if (my $old = $config->schema->resultset('Run')->find({run_uuid => $run_uuid})) {
+        if (my $old = $config->schema->resultset('Run')->find({run_uuid => format_uuid_for_db($run_uuid)})) {
             die "Run with uuid '$run_uuid' is already published. Use --publish-force to override it." unless $settings->publish->force;
             $old->delete;
         }
 
         $run = $config->schema->resultset('Run')->create({
-            run_uuid   => $run_uuid,
+            run_uuid   => format_uuid_for_db($run_uuid),
             canon      => 1,
             mode       => $pub->mode,
             status     => 'pending',
@@ -498,7 +498,7 @@ sub get_job {
     $self->retry_on_disconnect(
         "vivify job" => sub {
             $result = $self->schema->resultset('Job')->update_or_create({
-                job_uuid       => $job_uuid,
+                job_uuid       => format_uuid_for_db($job_uuid),
                 run_id         => $run_id,
                 test_file_id   => $test_file_id,
                 is_harness_out => $is_harness_out,
@@ -660,7 +660,7 @@ sub _pull_facet_binaries {
         $file->{data} = 'Extracted to the "binaries" table';
 
         push @binaries => {
-            event_uuid  => $e_uuid,
+            event_uuid  => format_uuid_for_db($e_uuid),
             filename    => $file->{filename},
             description => $file->{details},
             data        => decode_base64($data),
@@ -694,7 +694,7 @@ sub _pull_facet_resource {
         host_id          => $host_id,
         resource_type_id => $resource_type_id,
         resource_ord     => $ord,
-        event_uuid       => $e_uuid,
+        event_uuid       => format_uuid_for_db($e_uuid),
         data             => encode_ascii_json($data),
         stamp            => $stamp,
     };
@@ -744,7 +744,7 @@ sub _pre_process_coverage {
 
     return {
         run_id              => $self->{+RUN_ID},
-        event_uuid          => $e_uuid,
+        event_uuid          => format_uuid_for_db($e_uuid),
         test_file_id        => $test_id,
         source_file_id      => $source_id,
         source_sub_id       => $sub_id,
@@ -849,7 +849,7 @@ sub _pull_facet__fields {
 
         my $row = {
             %mixin,
-            event_uuid => $e_uuid,
+            event_uuid => format_uuid_for_db($e_uuid),
             name       => $name,
             details    => $field->{details} || $name,
         };
@@ -1238,8 +1238,8 @@ sub _process_event {
 
         job_try_id => $try->{job_try_id},
 
-        event_uuid => $e_uuid,
-        trace_uuid => $trace->{uuid},
+        event_uuid => format_uuid_for_db($e_uuid),
+        trace_uuid => $trace->{uuid} ? format_uuid_for_db($trace->{uuid}) : undef,
 
         stamp     => $formatted_stamp,
         event_idx => $idx,
@@ -1253,12 +1253,12 @@ sub _process_event {
 
         causes_fail => $fail,
 
-        $params{parent} ? (parent_uuid => $params{parent}) : (),
+        $params{parent} ? (parent_uuid => format_uuid_for_db($params{parent})) : (),
 
         # Facet version wins if we have one, but we want them here if all we
         # got was an orphan.
 
-        $binaries ? (has_binaries => 1, rel_binaries => $binaries) : (has_binaries => 0),
+        $binaries ? (has_binary => 1, rel_binaries => $binaries) : (has_binary => 0),
 
         $rendered ? (rendered => $rendered) : (),
     );
@@ -1438,11 +1438,12 @@ sub flush_try {
     if ($self->{+DONE} || $try->{done}) {
         $delta //= {};
         my $res = $try->{result};
-        my $status = $res->status || '';
+        my $status = $delta->{'=status'} || $res->status || '';
 
         unless ($status eq 'complete') {
             my $status = $self->{+SIGNAL} ? 'canceled' : 'broken';
             $status = 'canceled' if $self->{+DONE} && !$try->{done};
+            $status = 'complete' if $try->{job}->{is_harness_out};
 
             $delta->{'=status'} = $status;
         }
@@ -1588,10 +1589,14 @@ sub flush_events {
 
         if (@write_events) {
             @write_events = sort { $a->{event_idx} <=> $b->{event_idx} || $a->{event_sdx} <=> $b->{event_sdx} } @write_events;
-            $self->populate(Event  => \@write_events)
+            $self->populate(Event  => \@write_events);
+            $self->fix_event_tree($try) if $parent_ids;
         }
-        $self->populate(Binary => \@write_bin)    if @write_bin;
 
+        if (@write_bin) {
+            $self->populate(Binary => \@write_bin);
+            $self->fix_binary_events($try);
+        }
     }
 
     if ($done && !$try->{normalized}) {
@@ -1599,7 +1604,6 @@ sub flush_events {
         $try->{result}->normalize_to_mode(mode => $self->{+MODE});
         $try->{normalized} = 1;
 
-        $self->fix_event_tree($try) if $parent_ids;
         $self->remove_orphans($try) unless $try->{result}->fail;
     }
 
@@ -1610,27 +1614,75 @@ sub fix_event_tree {
     my $self = shift;
     my ($try) = @_;
 
-    # FIXME: Need different mysql syntax, also test sqlite
+
     my $dbh = $self->{+CONFIG}->connect;
-    my $sth = $dbh->prepare(<<"    EOT");
-        UPDATE events
-           SET parent_id = event2.event_id
-          FROM events AS event2
-         WHERE events.job_try_id  = ?
-           AND events.job_try_id  = event2.job_try_id
-           AND events.parent_id   IS NULL
-           AND events.parent_uuid = event2.event_uuid
-    EOT
+    my $schema = $self->{+CONFIG}->schema;
+    my $sth;
+
+    if ($schema->is_postgresql || $schema->is_sqlite) {
+        $sth = $dbh->prepare(<<"        EOT");
+            UPDATE events
+               SET parent_id = event2.event_id
+              FROM events AS event2
+             WHERE events.job_try_id  = ?
+               AND events.job_try_id  = event2.job_try_id
+               AND events.parent_id   IS NULL
+               AND events.parent_uuid = event2.event_uuid
+        EOT
+    }
+    elsif ($schema->is_mysql) {
+        $sth = $dbh->prepare(<<"        EOT");
+            UPDATE events event1
+              JOIN events AS event2 ON event1.parent_uuid = event2.event_uuid
+               SET event1.parent_id = event2.event_id
+             WHERE event1.job_try_id  = ?
+               AND event1.job_try_id  = event2.job_try_id
+               AND event1.parent_id   IS NULL
+        EOT
+    }
 
     $sth->execute($try->{job_try_id}) or die $sth->errstr;
 }
+
+sub fix_binary_events {
+    my $self = shift;
+    my ($try) = @_;
+
+    my $dbh = $self->{+CONFIG}->connect;
+    my $schema = $self->{+CONFIG}->schema;
+    my $sth;
+
+    if ($schema->is_postgresql || $schema->is_sqlite) {
+        $sth = $dbh->prepare(<<"        EOT");
+            UPDATE binaries
+               SET event_id = events.event_id
+              FROM events
+             WHERE events.job_try_id = ?
+               AND events.event_uuid = binaries.event_uuid
+        EOT
+    }
+    elsif ($schema->is_mysql) {
+        $sth = $dbh->prepare(<<"        EOT");
+            UPDATE binaries
+              JOIN events ON events.event_uuid = binaries.event_uuid
+               SET binaries.event_id = events.event_id
+             WHERE events.job_try_id = ?
+               AND events.event_uuid = binaries.event_uuid
+               AND binaries.event_id IS NULL
+        EOT
+    }
+
+    $sth->execute($try->{job_try_id}) or die $sth->errstr;
+}
+
 
 sub remove_orphans {
     my $self = shift;
     my ($try) = @_;
 
-    # FIXME: Need different mysql syntax, also test sqlite
     my $dbh = $self->{+CONFIG}->connect;
+    my $schema = $self->{+CONFIG}->schema;
+
     my $sth = $dbh->prepare(<<"    EOT");
         UPDATE events
            SET orphan = NULL

@@ -8,6 +8,7 @@ use parent 'DBIx::Class::ResultSet';
 
 use Carp qw/croak/;
 use Test2::Util::UUID qw/looks_like_uuid/;
+use App::Yath::Schema::Util qw/format_uuid_for_db/;
 
 __PACKAGE__->load_components('Helper::ResultSet::RemoveColumns');
 
@@ -34,10 +35,10 @@ sub find_by_id_or_uuid {
     }
 
     if (looks_like_uuid($id)) {
-        $query->{$ucol} = $id;
+        $query->{$ucol} = format_uuid_for_db($id);
     }
     elsif ($id =~ m/^\d+$/) {
-        $query->{$pcol} =  $id;
+        $query->{$pcol} = $id;
     }
     else {
         croak "'$id' does not look like either a numeric ID or a UUID";

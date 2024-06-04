@@ -21,6 +21,20 @@ __PACKAGE__->inflate_column(
     },
 );
 
+__PACKAGE__->inflate_column(
+    facets => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('facets', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('facets', {}),
+    },
+);
+
+__PACKAGE__->inflate_column(
+    orphan => {
+        inflate => DBIx::Class::InflateColumn::Serializer::JSON->get_unfreezer('orphan', {}),
+        deflate => DBIx::Class::InflateColumn::Serializer::JSON->get_freezer('orphan', {}),
+    },
+);
+
 sub run  { shift->job->run }
 sub user { shift->job->run->user }
 
@@ -76,10 +90,15 @@ sub line_data {
     $out{is_parent} = $is_parent;
     $out{is_fail}   = $causes_fail;
 
-    $out{parent_id} = $cols{parent_id} if $cols{parent_id};
-    $out{nested}    = $cols{nested} // 0;
+    if ($cols{parent_id}) {
+        $out{parent_id} = $cols{parent_id};
+        $out{parent_uuid} = ref($cols{parent_uuid}) ? $cols{parent_uuid}->event_uuid : $cols{parent_uuid};
+    }
+
+    $out{nested} = $cols{nested} // 0;
 
     $out{event_id} = $cols{event_id};
+    $out{event_uuid} = $cols{event_uuid};
 
     return \%out;
 }

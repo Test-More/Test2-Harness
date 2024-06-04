@@ -46,7 +46,7 @@ $(function() {
                     jobs.append(job_table.render());
                     state.job_table = job_table;
                 }
-                state.job_table.render_item(item.data, item.data.job_uuid);
+                state.job_table.render_item(item.data, item.data.job_try_id);
             }
             else if (item.type === 'run') {
                 state.run = item.data;

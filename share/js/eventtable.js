@@ -66,6 +66,7 @@ t2hui.eventtable.build_table = function(run, job, controls) {
 t2hui.eventtable.expand_lines = function(item) {
     var out = [];
 
+
     var tools = true;
     var count = 0;
     item.lines.forEach(function(line) {
@@ -178,7 +179,7 @@ t2hui.eventtable.place_row = function(row, item, table, state) {
 
     var pid = item.item['parent_id'];
     if (!state[pid]) {
-        var got = table.table.find('tr[data-event-id="' + item.item.parent_id + '"]');
+        var got = $('tr[data-event-id="' + item.item.parent_uuid + '"]');
         state[pid] = got.last();
     }
 

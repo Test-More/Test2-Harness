@@ -42,7 +42,11 @@ __PACKAGE__->add_columns(
   "event_sdx",
   { data_type => "integer", is_nullable => 0 },
   "stamp",
-  { data_type => "timestamp", is_nullable => 1 },
+  {
+    data_type     => "timestamp with time zone",
+    default_value => \"null",
+    is_nullable   => 1,
+  },
   "nested",
   { data_type => "smallint", is_nullable => 0 },
   "is_subtest",
@@ -120,7 +124,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:09
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 16:31:50
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

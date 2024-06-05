@@ -36,11 +36,23 @@ __PACKAGE__->add_columns(
   "exit_code",
   { data_type => "integer", is_nullable => 1 },
   "launch",
-  { data_type => "timestamp", is_nullable => 1 },
+  {
+    data_type     => "timestamp with time zone",
+    default_value => \"null",
+    is_nullable   => 1,
+  },
   "start",
-  { data_type => "timestamp", is_nullable => 1 },
+  {
+    data_type     => "timestamp with time zone",
+    default_value => \"null",
+    is_nullable   => 1,
+  },
   "ended",
-  { data_type => "timestamp", is_nullable => 1 },
+  {
+    data_type     => "timestamp with time zone",
+    default_value => \"null",
+    is_nullable   => 1,
+  },
   "status",
   {
     data_type => "enum",
@@ -108,7 +120,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:09
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 16:31:50
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

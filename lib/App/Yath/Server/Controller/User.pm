@@ -66,6 +66,7 @@ sub process_form {
     # This one we allow non-post, all others need post.
     if ('logout' eq $action) {
         $req->session_host->update({'user_id' => undef});
+        $req->set_user(undef);
         return $res->add_msg("You have been logged out.");
     }
     elsif ($action eq 'verify') {
@@ -95,6 +96,7 @@ sub process_form {
             unless $user && $user->verify_password($password);
 
         $req->session_host->update({'user_id' => $user->user_id});
+        $req->set_user($user);
         return $res->add_msg("You have been logged in.");
     }
 

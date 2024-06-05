@@ -1,7 +1,7 @@
 CREATE TABLE versions(
     version_id  INTEGER         NOT NULL    PRIMARY KEY AUTOINCREMENT,
     version     NUMERIC(10,6)   NOT NULL,
-    updated     TIMESTAMP       NOT NULL    DEFAULT now,
+    updated     DATETIME(6)     NOT NULL    DEFAULT now,
 
     UNIQUE(version)
 );
@@ -76,8 +76,8 @@ CREATE TABLE session_hosts (
     user_id             INTEGER              REFERENCES users(user_id)       ON DELETE CASCADE,
     session_id          INTEGER     NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
 
-    created             TIMESTAMP   NOT NULL DEFAULT now,
-    accessed            TIMESTAMP   NOT NULL DEFAULT now,
+    created             DATETIME(6) NOT NULL DEFAULT now,
+    accessed            DATETIME(6) NOT NULL DEFAULT now,
 
     address             TEXT        NOT NULL,
     agent               TEXT        NOT NULL,
@@ -118,7 +118,7 @@ CREATE TABLE permissions (
     permission_id   INTEGER     NOT NULL PRIMARY KEY AUTOINCREMENT,
     project_id      INTEGER     NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
     user_id         INTEGER     NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    updated         TIMESTAMP   NOT NULL DEFAULT now,
+    updated         DATETIME(6) NOT NULL DEFAULT now,
 
     UNIQUE(project_id, user_id)
 );
@@ -148,7 +148,7 @@ CREATE TABLE runs (
     retried         INTEGER         DEFAULT NULL,
     concurrency_j   INTEGER         DEFAULT NULL,
     concurrency_x   INTEGER         DEFAULT NULL,
-    added           TIMESTAMP       NOT NULL        DEFAULT now,
+    added           DATETIME(6)     NOT NULL        DEFAULT now,
 
     status          TEXT            CHECK(status IN ('pending', 'running', 'complete', 'broken', 'canceled'))
                                     DEFAULT 'pending' NOT NULL,
@@ -214,9 +214,9 @@ CREATE TABLE job_tries (
     fail_count      INTEGER         DEFAULT NULL,
 
     exit_code       INTEGER         DEFAULT NULL,
-    launch          TIMESTAMP       DEFAULT NULL,
-    start           TIMESTAMP       DEFAULT NULL,
-    ended           TIMESTAMP       DEFAULT NULL,
+    launch          DATETIME(6)     DEFAULT NULL,
+    start           DATETIME(6)     DEFAULT NULL,
+    ended           DATETIME(6)     DEFAULT NULL,
 
     status          TEXT            CHECK(status IN ('pending', 'running', 'complete', 'broken', 'canceled'))
                                     DEFAULT 'pending' NOT NULL,
@@ -247,7 +247,7 @@ CREATE TABLE events (
 
     event_idx       INTEGER     NOT NULL, -- Line number from log, or event number from stream
     event_sdx       INTEGER     NOT NULL, -- Event sequence number from the line (IE parent + subtest events)
-    stamp           TIMESTAMP   DEFAULT NULL,
+    stamp           DATETIME(6) DEFAULT NULL,
 
     nested          SMALLINTEGERNOT NULL,
 
@@ -345,7 +345,7 @@ CREATE TABLE resources (
     run_id              INTEGER     NOT NULL    REFERENCES runs(run_id)                     ON DELETE CASCADE,
     host_id             INTEGER                 REFERENCES hosts(host_id)                   ON DELETE SET NULL,
 
-    stamp               TIMESTAMP   NOT NULL,
+    stamp               DATETIME(6) NOT NULL,
     resource_ord        INTEGER     NOT NULL,
 
     data                JSON        NOT NULL,
@@ -353,6 +353,7 @@ CREATE TABLE resources (
     UNIQUE(run_id, resource_ord)
 );
 CREATE INDEX IF NOT EXISTS res_data_runs         ON resources(run_id);
+CREATE INDEX IF NOT EXISTS res_data_run_ords     ON resources(run_id, resource_ord);
 CREATE INDEX IF NOT EXISTS res_data_res          ON resources(resource_type_id);
 CREATE INDEX IF NOT EXISTS res_data_runs_and_res ON resources(run_id, resource_type_id);
 

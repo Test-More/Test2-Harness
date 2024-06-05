@@ -25,13 +25,18 @@ __PACKAGE__->add_columns(
   "version",
   { data_type => "numeric", is_nullable => 0, size => [10, 6] },
   "updated",
-  { data_type => "timestamp", default_value => \"now", is_nullable => 0 },
+  {
+    data_type => "datetime",
+    default_value => \"now",
+    is_nullable => 0,
+    size => 6,
+  },
 );
 __PACKAGE__->set_primary_key("version_id");
 __PACKAGE__->add_unique_constraint("version_unique", ["version"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:10
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 16:43:41
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

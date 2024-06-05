@@ -1,7 +1,7 @@
 CREATE TABLE versions(
     version     NUMERIC(10,6)   NOT NULL,
     version_id  INT             NOT NULL    PRIMARY KEY AUTO_INCREMENT,
-    updated     TIMESTAMP       NOT NULL    DEFAULT now(),
+    updated     DATETIME        NOT NULL    DEFAULT now(),
 
     UNIQUE(version)
 );
@@ -77,12 +77,12 @@ CREATE TABLE sessions (
 );
 
 CREATE TABLE session_hosts (
-    session_host_id     BIGINT      NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    session_id          BIGINT      NOT NULL,
+    session_host_id     BIGINT          NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    session_id          BIGINT          NOT NULL,
     user_id             BIGINT,
 
-    created             TIMESTAMP   NOT NULL DEFAULT now(),
-    accessed            TIMESTAMP   NOT NULL DEFAULT now(),
+    created             DATETIME        NOT NULL DEFAULT now(),
+    accessed            DATETIME        NOT NULL DEFAULT now(),
 
     address             VARCHAR(128)    NOT NULL,
     agent               VARCHAR(128)    NOT NULL,
@@ -131,7 +131,7 @@ CREATE TABLE permissions (
     permission_id   BIGINT      NOT NULL PRIMARY KEY AUTO_INCREMENT,
     project_id      BIGINT      NOT NULL,
     user_id         BIGINT      NOT NULL,
-    updated         TIMESTAMP   NOT NULL DEFAULT now(),
+    updated         DATETIME    NOT NULL DEFAULT now(),
 
     FOREIGN KEY (project_id)    REFERENCES projects(project_id) ON DELETE CASCADE,
     FOREIGN KEY (user_id)       REFERENCES users(user_id)       ON DELETE CASCADE,
@@ -164,7 +164,7 @@ CREATE TABLE runs (
     retried         INTEGER         DEFAULT NULL,
     concurrency_j   INTEGER         DEFAULT NULL,
     concurrency_x   INTEGER         DEFAULT NULL,
-    added           TIMESTAMP       NOT NULL        DEFAULT now(),
+    added           DATETIME        NOT NULL        DEFAULT now(),
 
     status          ENUM('pending', 'running', 'complete', 'broken', 'canceled')
                                     NOT NULL        DEFAULT 'pending',
@@ -240,9 +240,9 @@ CREATE TABLE job_tries (
     fail_count      BIGINT          DEFAULT NULL,
 
     exit_code       INTEGER         DEFAULT NULL,
-    launch          TIMESTAMP       DEFAULT NULL,
-    start           TIMESTAMP       DEFAULT NULL,
-    ended           TIMESTAMP       DEFAULT NULL,
+    launch          DATETIME        DEFAULT NULL,
+    start           DATETIME        DEFAULT NULL,
+    ended           DATETIME        DEFAULT NULL,
 
 
     status          ENUM('pending', 'running', 'complete', 'broken', 'canceled')
@@ -276,7 +276,7 @@ CREATE TABLE events (
 
     event_idx       INTEGER     NOT NULL, -- Line number from log, or event number from stream
     event_sdx       INTEGER     NOT NULL, -- Event sequence number from the line (IE parent + subtest events)
-    stamp           TIMESTAMP   DEFAULT NULL,
+    stamp           DATETIME    DEFAULT NULL,
 
     nested          SMALLINT    NOT NULL,
 
@@ -384,7 +384,7 @@ CREATE TABLE resources (
     run_id              BIGINT      NOT NULL,
     host_id             BIGINT,
 
-    stamp               TIMESTAMP   NOT NULL,
+    stamp               DATETIME    NOT NULL,
     resource_ord        INTEGER     NOT NULL,
 
     data                JSON        NOT NULL,
@@ -396,6 +396,7 @@ CREATE TABLE resources (
     UNIQUE(run_id, resource_ord)
 );
 CREATE INDEX res_data_runs         ON resources(run_id);
+CREATE INDEX res_data_run_ords     ON resources(run_id, resource_ord);
 CREATE INDEX res_data_res          ON resources(resource_type_id);
 CREATE INDEX res_data_runs_and_res ON resources(run_id, resource_type_id);
 

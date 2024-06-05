@@ -16,6 +16,19 @@ use Test2::Util::Times qw/render_duration/;
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
 
+# Get a list of all stamps, make slider
+#   Update slider as more stamps are added
+# Find latest state of all resources up to the chosen stamp
+#   SELECT resource_types.name AS name,
+#          MAX(resource_id)    AS resource_id
+#     FROM resources
+#     JOIN resource_types USING(resource_type_id)
+#    WHERE run_id = ?
+#    GROUP BY name;
+#
+#  Load the specified list of resources
+
+__END__
 sub handle {
     my $self = shift;
     my ($route) = @_;

@@ -27,7 +27,12 @@ __PACKAGE__->add_columns(
   "user_id",
   { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
   "updated",
-  { data_type => "timestamp", default_value => \"now", is_nullable => 0 },
+  {
+    data_type => "datetime",
+    default_value => \"now",
+    is_nullable => 0,
+    size => 6,
+  },
 );
 __PACKAGE__->set_primary_key("permission_id");
 __PACKAGE__->add_unique_constraint("project_id_user_id_unique", ["project_id", "user_id"]);
@@ -45,7 +50,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:10
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 16:43:41
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

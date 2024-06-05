@@ -1,7 +1,7 @@
 CREATE TABLE versions(
     version     NUMERIC(10,6)   NOT NULL,
     version_id  INT             NOT NULL    PRIMARY KEY AUTO_INCREMENT,
-    updated     TIMESTAMP       NOT NULL    DEFAULT now(),
+    updated     TIMESTAMP(6)    NOT NULL    DEFAULT now(),
 
     UNIQUE(version)
 );
@@ -70,15 +70,15 @@ CREATE TABLE sessions (
 );
 
 CREATE TABLE session_hosts (
-    session_host_id     BIGINT      NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    user_id             BIGINT               REFERENCES users(user_id)       ON DELETE CASCADE,
-    session_id          BIGINT      NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+    session_host_id     BIGINT          NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    user_id             BIGINT                   REFERENCES users(user_id)       ON DELETE CASCADE,
+    session_id          BIGINT          NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
 
-    created             TIMESTAMP   NOT NULL DEFAULT now(),
-    accessed            TIMESTAMP   NOT NULL DEFAULT now(),
+    created             TIMESTAMP(6)    NOT NULL DEFAULT now(),
+    accessed            TIMESTAMP(6)    NOT NULL DEFAULT now(),
 
-    address             TEXT        NOT NULL,
-    agent               TEXT        NOT NULL,
+    address             TEXT            NOT NULL,
+    agent               TEXT            NOT NULL,
 
     UNIQUE(address, agent, session_id)
 );
@@ -114,10 +114,10 @@ CREATE TABLE projects (
 );
 
 CREATE TABLE permissions (
-    permission_id   BIGINT      NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    project_id      BIGINT      NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-    user_id         BIGINT      NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    updated         TIMESTAMP   NOT NULL DEFAULT now(),
+    permission_id   BIGINT          NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    project_id      BIGINT          NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    user_id         BIGINT          NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    updated         TIMESTAMP(6)    NOT NULL DEFAULT now(),
 
     UNIQUE(project_id, user_id)
 );
@@ -147,7 +147,7 @@ CREATE TABLE runs (
     retried         INTEGER         DEFAULT NULL,
     concurrency_j   INTEGER         DEFAULT NULL,
     concurrency_x   INTEGER         DEFAULT NULL,
-    added           TIMESTAMP       NOT NULL        DEFAULT now(),
+    added           TIMESTAMP(6)    NOT NULL        DEFAULT now(),
 
     status          ENUM('pending', 'running', 'complete', 'broken', 'canceled')
                                     NOT NULL        DEFAULT 'pending',
@@ -213,9 +213,9 @@ CREATE TABLE job_tries (
     fail_count      BIGINT          DEFAULT NULL,
 
     exit_code       INTEGER         DEFAULT NULL,
-    launch          TIMESTAMP       DEFAULT NULL,
-    start           TIMESTAMP       DEFAULT NULL,
-    ended           TIMESTAMP       DEFAULT NULL,
+    launch          TIMESTAMP(6)    DEFAULT NULL,
+    start           TIMESTAMP(6)    DEFAULT NULL,
+    ended           TIMESTAMP(6)    DEFAULT NULL,
 
 
     status          ENUM('pending', 'running', 'complete', 'broken', 'canceled')
@@ -237,33 +237,33 @@ CREATE INDEX IF NOT EXISTS job_try_fail     ON job_tries(fail);
 CREATE INDEX IF NOT EXISTS job_try_job_fail ON job_tries(job_id, fail);
 
 CREATE TABLE events (
-    event_uuid      UUID        NOT NULL,
-    trace_uuid      UUID        DEFAULT NULL,
-    parent_uuid     UUID        DEFAULT NULL    REFERENCES events(event_uuid),
+    event_uuid      UUID            NOT NULL,
+    trace_uuid      UUID            DEFAULT NULL,
+    parent_uuid     UUID            DEFAULT NULL    REFERENCES events(event_uuid),
 
-    event_id        BIGINT      NOT NULL        PRIMARY KEY AUTO_INCREMENT,
-    job_try_id      BIGINT      NOT NULL        REFERENCES job_tries(job_try_id) ON DELETE CASCADE,
-    parent_id       BIGINT      DEFAULT NULL    REFERENCES events(event_id)      ON DELETE CASCADE,
+    event_id        BIGINT          NOT NULL        PRIMARY KEY AUTO_INCREMENT,
+    job_try_id      BIGINT          NOT NULL        REFERENCES job_tries(job_try_id) ON DELETE CASCADE,
+    parent_id       BIGINT          DEFAULT NULL    REFERENCES events(event_id)      ON DELETE CASCADE,
 
-    event_idx       INTEGER     NOT NULL, -- Line number from log, or event number from stream
-    event_sdx       INTEGER     NOT NULL, -- Event sequence number from the line (IE parent + subtest events)
-    stamp           TIMESTAMP   DEFAULT NULL,
+    event_idx       INTEGER         NOT NULL, -- Line number from log, or event number from stream
+    event_sdx       INTEGER         NOT NULL, -- Event sequence number from the line (IE parent + subtest events)
+    stamp           TIMESTAMP(6)    DEFAULT NULL,
 
-    nested          SMALLINT    NOT NULL,
+    nested          SMALLINT        NOT NULL,
 
-    is_subtest      BOOL        NOT NULL,
-    is_diag         BOOL        NOT NULL,
-    is_harness      BOOL        NOT NULL,
-    is_time         BOOL        NOT NULL,
-    is_orphan       BOOL        NOT NULL,
+    is_subtest      BOOL            NOT NULL,
+    is_diag         BOOL            NOT NULL,
+    is_harness      BOOL            NOT NULL,
+    is_time         BOOL            NOT NULL,
+    is_orphan       BOOL            NOT NULL,
 
-    causes_fail     BOOL        NOT NULL,
+    causes_fail     BOOL            NOT NULL,
 
-    has_facets      BOOL        NOT NULL,
-    has_binary      BOOL        NOT NULL,
+    has_facets      BOOL            NOT NULL,
+    has_binary      BOOL            NOT NULL,
 
-    facets          JSON        DEFAULT NULL,
-    rendered        JSON        DEFAULT NULL,
+    facets          JSON            DEFAULT NULL,
+    rendered        JSON            DEFAULT NULL,
 
     UNIQUE(job_try_id, event_idx, event_sdx),
     UNIQUE(event_uuid)
@@ -338,21 +338,22 @@ CREATE TABLE resource_types(
 );
 
 CREATE TABLE resources (
-    event_uuid          UUID        NOT NULL,
+    event_uuid          UUID            NOT NULL,
 
-    resource_id         BIGINT      NOT NULL    PRIMARY KEY AUTO_INCREMENT,
-    resource_type_id    BIGINT      NOT NULL    REFERENCES resource_types(resource_type_id) ON DELETE CASCADE,
-    run_id              BIGINT      NOT NULL    REFERENCES runs(run_id)                     ON DELETE CASCADE,
-    host_id             BIGINT                  REFERENCES hosts(host_id)                   ON DELETE SET NULL,
+    resource_id         BIGINT          NOT NULL    PRIMARY KEY AUTO_INCREMENT,
+    resource_type_id    BIGINT          NOT NULL    REFERENCES resource_types(resource_type_id) ON DELETE CASCADE,
+    run_id              BIGINT          NOT NULL    REFERENCES runs(run_id)                     ON DELETE CASCADE,
+    host_id             BIGINT                      REFERENCES hosts(host_id)                   ON DELETE SET NULL,
 
-    stamp               TIMESTAMP   NOT NULL,
-    resource_ord        INTEGER     NOT NULL,
+    stamp               TIMESTAMP(6)    NOT NULL,
+    resource_ord        INTEGER         NOT NULL,
 
-    data                JSON        NOT NULL,
+    data                JSON            NOT NULL,
 
     UNIQUE(run_id, resource_ord)
 );
 CREATE INDEX IF NOT EXISTS res_data_runs         ON resources(run_id);
+CREATE INDEX IF NOT EXISTS res_data_run_ords     ON resources(run_id, resource_ord);
 CREATE INDEX IF NOT EXISTS res_data_res          ON resources(resource_type_id);
 CREATE INDEX IF NOT EXISTS res_data_runs_and_res ON resources(run_id, resource_type_id);
 

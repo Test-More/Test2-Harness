@@ -51,7 +51,7 @@ __PACKAGE__->add_columns(
   { data_type => "integer", is_nullable => 1 },
   "added",
   {
-    data_type     => "timestamp",
+    data_type     => "timestamp with time zone",
     default_value => \"current_timestamp",
     is_nullable   => 0,
     original      => { default_value => \"now()" },
@@ -172,7 +172,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:14:09
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 16:31:50
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

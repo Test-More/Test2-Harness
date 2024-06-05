@@ -28,7 +28,7 @@ __PACKAGE__->add_columns(
   {
     data_type => "timestamp",
     datetime_undef_if_invalid => 1,
-    default_value => "current_timestamp()",
+    default_value => "current_timestamp(6)",
     is_nullable => 0,
   },
 );
@@ -36,7 +36,7 @@ __PACKAGE__->set_primary_key("version_id");
 __PACKAGE__->add_unique_constraint("version", ["version"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 12:13:59
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-04 16:33:12
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

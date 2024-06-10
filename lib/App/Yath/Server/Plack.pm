@@ -264,7 +264,7 @@ sub handle_request {
                 single_user => $self->single_user // 0,
                 single_run  => $self->single_run  // 0,
                 no_upload   => $schema->config('no_upload') // 0,
-                show_user   => $self->single_user ? 0 : 1,
+                show_user   => $self->single_user ? $schema->config('show_user') // 0 : 1,
 
                 user     => $req->user     || undef,
                 errors   => $res->errors   || [],

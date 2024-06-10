@@ -239,7 +239,7 @@ sub render_amnesty {
 
     my %seen;
     return map {
-        $seen{join '' => @{$_}{qw/tag details/}}++
+        $seen{join '' => map { $_ // '' } @{$_}{qw/tag details/}}++
             ? ()
             : ['amnesty', $_->{tag}, $_->{details}]
     } @{$f->{amnesty}};

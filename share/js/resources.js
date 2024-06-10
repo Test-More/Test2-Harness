@@ -141,7 +141,6 @@ function render_resource(idx, data) {
 }
 
 function do_render_resource(idx, data) {
-
     var content = $('div#content');
     var resources = [];
 

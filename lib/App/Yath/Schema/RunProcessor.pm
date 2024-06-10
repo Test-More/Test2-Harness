@@ -1394,7 +1394,6 @@ sub flush_run {
 
     $self->populate(RunField => $run_fields) if $run_fields && @$run_fields;
     $self->populate(Resource => $resources)  if $resources  && @$resources;
-    sleep 1 if $resources  && @$resources;
 
     return;
 }

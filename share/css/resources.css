@@ -10,7 +10,6 @@ div#content > div.timeout, div#content > div.error {
     border: 1px solid #FF0000;
     border-radius: 12px;
     padding: 40px;
-    width: fit-content;
     margin: 0 auto;
     margin-top: 10px;
     margin-bottom: 20px;
@@ -30,7 +29,6 @@ div.resource {
     border: 1px solid #000000;
     border-radius: 12px;
     padding: 8px;
-    width: fit-content;
     margin: 0 auto;
     margin-top: 10px;
     margin-bottom: 10px;
@@ -63,7 +61,6 @@ div.resource h1 {
 div.resource h2, div.resource h3 {
     border-top: 1px solid #B0B0B0;
     border-radius: 2px;
-    width: fit-content;
     padding-left: 16px;
     padding-right: 16px;
     margin-left: 6px;
@@ -94,7 +91,6 @@ div#resource_wrapper.rendered {
     position: fixed;
     bottom: 30px;
     overflow: hidden;
-    width: 100%;
     margin-left: -8px;
 }
 
@@ -188,7 +184,7 @@ div.range_selector div.range_selector_select a:hover {
 }
 
 div#run_list {
-    width: fit-content;
+    width: 80%;
     margin: 0 auto;
     margin-top: 10px;
     margin-bottom: 40px;

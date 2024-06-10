@@ -14,6 +14,7 @@ use Test2::Util::UUID qw/uuid2bin bin2uuid/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;
 
+#FIXME Do we need this?
 #if ($App::Yath::Schema::LOADED =~ m/(MySQL|Percona|MariaDB)/i && eval { require DBIx::Class::Storage::DBI::mysql::Retryable; 1 }) {
 #    __PACKAGE__->storage_type('::DBI::mysql::Retryable');
 #}
@@ -70,7 +71,7 @@ sub config {
     my $self = shift;
     my ($setting, @val) = @_;
 
-    my $conf = $self->resultset('Config')->find_or_create({setting => $setting, @val ? (value => $val[0]) : ()});
+    my $conf = $self->resultset('Config')->find_or_create({setting => $setting, @val ? (value => $val[0]) : (value => 0)});
 
     $conf->update({value => $val[0]}) if @val;
 

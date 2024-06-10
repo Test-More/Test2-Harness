@@ -30,8 +30,6 @@ sub handle {
 
     my $schema = $self->schema;
 
-    use Data::Dumper;
-    print Dumper($route);
     my $run_id     = $route->{run_id};
     my $user_id    = $route->{user_id};
     my $project_id = $route->{project_id};

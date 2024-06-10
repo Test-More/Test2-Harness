@@ -193,6 +193,24 @@ sub res_stream {
             my $data = $self->get_up_to($run, $max);
             $current = $max;
 
+            for my $res (@{$data->{resources} // []}) {
+                for my $item (@{$res->{data} // []}) {
+                    for my $table (@{$item->{tables} // []}) {
+                        my $format = $table->{format} or next;
+                        my $rows   = $table->{rows} or next;
+                        for (my $idx = 0; $idx < @$format; $idx++) {
+                            my $fmt = $format->[$idx] or next;
+
+                            if ($fmt eq 'duration') {
+                                for my $row (@$rows) {
+                                    $row->[$idx] = render_duration($row->[$idx]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             return encode_json({min => $min, max => $max, complete => $complete, data => $data}) . "\n";
         },
     );

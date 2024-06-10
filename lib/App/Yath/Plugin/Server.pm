@@ -1,4 +1,14 @@
-package App::Yath::Plugin::YathUI;
+
+# Move cover stuff to cover plugin
+#
+# move duration to finder
+#
+# move publish to client-publish
+#
+# [POST] server/publish/project
+
+__END__
+package App::Yath::Plugin::Server;
 use strict;
 use warnings;
 
@@ -11,12 +21,9 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 use Getopt::Yath;
 use parent 'App::Yath::Plugin';
 
-sub can_log {
-    my ($option, $options) = @_;
-
-    return 1 if $options->included->{'App::Yath::Options::Logging'};
-    return 0;
-}
+include_options(
+    'App::Yath::Options::Server',
+);
 
 sub can_finder {
     my ($option, $options) = @_;
@@ -25,68 +32,27 @@ sub can_finder {
     return 0;
 }
 
-option_group {prefix => 'yathui', group => 'yathui', category => "YathUI Options"} => sub {
-    option url => (
-        type => 'Scalar',
-        alt => ['uri'],
-        description => "Yath-UI url",
-        long_examples  => [" http://my-yath-ui.com/..."],
-    );
+sub can_render {
+    my ($option, $options) = @_;
 
-    option api_key => (
-        type => 'Scalar',
-        description => "Yath-UI API key. This is not necessary if your Yath-UI instance is set to single-user"
-    );
+    return 1 if $options->included->{'App::Yath::Options::Render'};
+    return 0;
+}
 
-    option project => (
-        type => 'Scalar',
-        description => "The Yath-UI project for your test results",
-    );
-
-    option mode => (
-        type => 'Scalar',
-        default => 'qvfd',
-        description => "Set the upload mode (default 'qvfd')",
-        long_examples => [
-            ' summary',
-            ' qvf',
-            ' qvfd',
-            ' complete',
-        ],
-    );
-
-    option retry => (
-        type => 'Count',
-        description => "How many times to try an operation before giving up",
-        default => 0,
-    );
-
-    option grace => (
-        type => 'Bool',
-        description => "If yath cannot connect to yath-ui it normally throws an error, use this to make it fail gracefully. You get a warning, but things keep going.",
-        default => 0,
-    );
-
+option_group {prefix => 'server', group => 'server', category => "Server Options"} => sub {
     option durations => (
         type => 'Bool',
-        description => "Poll duration data from Yath-UI to help order tests efficiently",
+        description => "Poll duration data from your server to help order tests efficiently",
         default => 0,
         applicable => \&can_finder,
     );
 
     option coverage => (
         type => 'Bool',
-        description => "Poll coverage data from Yath-UI to determine what tests should be run for changed files",
+        description => "Poll coverage data from your server to determine what tests should be run for changed files",
         default => 0,
         applicable => \&can_finder,
     );
-
-#    TODO
-#    option median_durations => (
-#        type => 'b',
-#        description => "Get median duration data",
-#        default => 0,
-#    );
 
     option medium_duration => (
         type => 'Scalar',
@@ -102,11 +68,12 @@ option_group {prefix => 'yathui', group => 'yathui', category => "YathUI Options
         default => 10,
     );
 
-    option upload => (
+    option publish => (
         type => 'Bool',
-        description => "Upload the log to Yath-UI",
+        description => 'Publish the log to the server when the run is complete',
+        notes => 'This will enable logging if it is not already enabled',
         default => 0,
-        applicable => \&can_log,
+        applicable => \&can_render,
     );
 
     option_post_process -1 => sub {
@@ -115,21 +82,22 @@ option_group {prefix => 'yathui', group => 'yathui', category => "YathUI Options
         my $settings = $state->{settings};
 
         my $has_finder = $options->included->{'App::Yath::Options::Finder'};
-        my $has_logger = $options->included->{'App::Yath::Options::Logging'};
+        my $has_render = $options->included->{'App::Yath::Options::Renderer'};
 
-        my $has_durations = $has_finder && $settings->yathui->durations;
-        my $has_upload    = $has_logger && $settings->yathui->upload;
-        my $has_coverage  = $has_finder && $settings->yathui->coverage;
+        my $has_durations = $has_finder && $settings->server->durations;
+        my $has_publish   = $has_render && $settings->server->publish;
+        my $has_coverage  = $has_finder && $settings->server->coverage;
 
-        return unless $has_durations || $has_upload || $has_coverage;
+        return unless $has_durations || $has_publish || $has_coverage;
 
-        my $url     = $settings->yathui->url     or die "'--yathui-url URL' is required to use durations, coverage, or upload a log";
-        my $project = $settings->yathui->project or die "'--yathui-project NAME' is required to use durations, coverage, or upload a log";
-        my $grace   = $settings->yathui->grace;
+        my $project = $settings->yath->project or die "'--project NAME' is required to use durations, coverage, or upload a log";
+        my $url     = $settings->server->url   or die "'--server-url URL' is required to use durations, coverage, or upload a log";
+        my $grace   = $settings->server->grace;
 
         $url =~ s{/+$}{}g;
 
-        if ($has_upload) {
+        if ($has_render) {
+            die "fixme";
             $settings->logging->option(log => 1);
             $settings->logging->option(bzip2 => 1);
         }
@@ -162,8 +130,8 @@ sub grab_rerun {
 
     my $path;
     if ($rerun eq '1') {
-        my $project = $settings->yathui->project or return (0);
-        my $user = $settings->yathui->user // $ENV{USER};
+        my $project = $settings->yath->project or return (0);
+        my $user = $settings->yath->user // $ENV{USER};
 
         $path = "$project/$user";
 

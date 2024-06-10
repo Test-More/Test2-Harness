@@ -192,7 +192,7 @@ t2hui.project_stats.reload = function(all) {
                 var run_table = t2hui.runtable.build_table();
                 div.html(run_table.render());
                 item.runs.forEach(function(run) {
-                    run_table.render_item(run, run.run_id);
+                    run_table.render_item(run, run.run_uuid);
                 })
             }
 

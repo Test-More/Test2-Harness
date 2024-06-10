@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util qw/fqmod/;
 use List::Util qw/mesh/;
 

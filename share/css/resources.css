@@ -90,7 +90,7 @@ div.resource table th {
     font-weight: bold;
 }
 
-div#put_stamps_here {
+div#resource_wrapper.rendered {
     position: fixed;
     bottom: 30px;
     overflow: hidden;
@@ -98,7 +98,7 @@ div#put_stamps_here {
     margin-left: -8px;
 }
 
-div.stamp_selector {
+div.range_selector {
     background: white;
     border: 1px solid #000000;
     overflow: hidden;
@@ -111,7 +111,7 @@ div.stamp_selector {
     margin-right: 10px;
 }
 
-div.stamp_selector h1 {
+div.range_selector h1 {
     margin: -1px;
     margin-bottom: 8px;
     padding-left: 6px;
@@ -124,7 +124,7 @@ div.stamp_selector h1 {
     overflow: hidden;
 }
 
-div.stamp_selector div.stamp_selector_inner {
+div.range_selector div.range_selector_inner {
     overflow: none;
     padding: 4px;
     margin: 4px;
@@ -132,7 +132,7 @@ div.stamp_selector div.stamp_selector_inner {
     display: block;
 }
 
-div.stamp_selector input[type=button] {
+div.range_selector input[type=button] {
     float: right;
     width: auto;
     margin-right: 8px;
@@ -144,14 +144,14 @@ div.stamp_selector input[type=button] {
     border-radius: 8px;
 }
 
-div.stamp_selector input {
+div.range_selector input {
     overflow: hidden;
     padding: 0px;
     margin: 0;
     width: 100%;
 }
 
-div.stamp_selector div.stamp_selector_left_bound {
+div.range_selector div.range_selector_left_bound {
     display: block;
     float: left;
     margin-left: 4px;
@@ -159,7 +159,7 @@ div.stamp_selector div.stamp_selector_left_bound {
     margin-bottom: 4px;
 }
 
-div.stamp_selector div.stamp_selector_right_bound {
+div.range_selector div.range_selector_right_bound {
     display: block;
     float: right;
     margin-left: 4px;
@@ -167,23 +167,23 @@ div.stamp_selector div.stamp_selector_right_bound {
     margin-bottom: 4px;
 }
 
-div.stamp_selector div.stamp_selector_select {
+div.range_selector div.range_selector_select {
     width: fit-content;
     margin: 0 auto;
     font-weight: bold;
 }
 
-div.stamp_selector div.stamp_selector_select a,
-div.stamp_selector div.stamp_selector_select a:link,
-div.stamp_selector div.stamp_selector_select a:visited,
-div.stamp_selector div.stamp_selector_select a:active,
-div.stamp_selector div.stamp_selector_select a:hover {
+div.range_selector div.range_selector_select a,
+div.range_selector div.range_selector_select a:link,
+div.range_selector div.range_selector_select a:visited,
+div.range_selector div.range_selector_select a:active,
+div.range_selector div.range_selector_select a:hover {
     text-decoration: none;
     color: black;
     cursor: pointer;
 }
 
-div.stamp_selector div.stamp_selector_select a:hover {
+div.range_selector div.range_selector_select a:hover {
     color: blue;
 }
 

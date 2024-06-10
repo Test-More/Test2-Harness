@@ -19,7 +19,7 @@ use Test2::Harness::Util::LogFile;
 
 use Test2::Harness::Util qw/mod2file write_file_atomic/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::IPC::Util qw/set_procname/;
 
 use parent 'App::Yath::Command';
@@ -38,8 +38,13 @@ include_options(
     'App::Yath::Options::Run',
     'App::Yath::Options::Tests',
     'App::Yath::Options::Yath',
+    'App::Yath::Options::WebClient',
+    'App::Yath::Options::DB',
 );
 
+use App::Yath::Options::Tests qw/ set_dot_args /;
+
+sub accepts_dot_args { 1 }
 sub args_include_tests { 1 }
 
 sub load_plugins   { 1 }
@@ -85,6 +90,7 @@ sub run {
         aggregator_ipc => $client->connect->callback,
         test_settings  => $ts,
         jobs           => $jobs,
+        settings       => $settings,
     );
 
     my $res = $client->queue_run($run);

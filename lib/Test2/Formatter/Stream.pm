@@ -11,7 +11,7 @@ use Carp qw/croak confess/;
 use Time::HiRes qw/time/;
 use Test2::Util qw/get_tid/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util qw/hub_truth apply_encoding/;
 
 use Test2::Harness::Collector::Child qw/send_event/;

@@ -29,7 +29,7 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
     option slots => (
         type           => 'Scalar',
         short          => 'j',
-        alt            => ['jobs', 'job_count'],
+        alt            => ['jobs', 'job-count'],
         description    => 'Set the number of concurrent jobs to run. Add a :# if you also wish to designate multiple slots per test. 8:2 means 8 slots, but each test gets 2 slots, so 4 tests run concurrently. Tests can find their concurrency assignemnt in the "T2_HARNESS_MY_JOB_CONCURRENCY" environment variable.',
         notes          => "If System::Info is installed, this will default to half the cpu core count, otherwise the default is 2.",
         long_examples  => [' 4', ' 8:2'],
@@ -71,7 +71,7 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
 
     option job_slots => (
         type  => 'Scalar',
-        alt   => ['slots_per_job'],
+        alt   => ['slots-per-job'],
         short => 'x',
 
         description    => "This sets the number of slots each job will use (default 1). This is normally set by the ':#' in '-j#:#'.",

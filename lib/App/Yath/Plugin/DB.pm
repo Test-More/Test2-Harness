@@ -5,7 +5,8 @@ use warnings;
 our $VERSION = '2.000000';
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
-use Test2::Harness::Util qw/mod2file looks_like_uuid/;
+use Test2::Harness::Util qw/mod2file/;
+use Test2::Util::UUID qw/looks_like_uuid/;
 
 use Getopt::Yath;
 use parent 'App::Yath::Plugin';
@@ -63,9 +64,9 @@ sub duration_data {
     my $ydb = $settings->prefix('yathui-db') or return;
     return unless $ydb->durations;
 
-    my $config = schema_config_from_settings($settings);
-    my $schema = $config->schema;
-    my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
+    my $config  = schema_config_from_settings($settings);
+    my $schema  = $config->schema;
+    my $pname   = $settings->yath->project                              or die "--project is required.\n";
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
 
     my %args = (user => $ydb->publisher, limit => $ydb->duration_limit);
@@ -94,8 +95,8 @@ sub grab_rerun {
 
     my ($ok, $err, $run);
     if ($rerun eq '1') {
-        my $project_name = $settings->yathui->project;
-        my $username = $settings->yathui->user // $ENV{USER};
+        my $project_name = $settings->yath->project;
+        my $username = $settings->yath->user // $ENV{USER};
         $ok = eval { $run = $schema->vague_run_search(query => {}, project_name => $project_name, username => $username); 1 };
         $err = $@;
     }
@@ -163,9 +164,9 @@ sub get_coverage_rows {
 
     my $config  = schema_config_from_settings($settings);
     my $schema  = $config->schema;
-    my $pname   = $settings->yathui->project                            or die "yathui-project is required.\n";
+    my $pname   = $settings->yath->project                              or die "--project is required.\n";
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
-    my $run = $project->last_covered_run(user => $ydb->publisher) or return;
+    my $run     = $project->last_covered_run(user => $ydb->publisher)   or return;
 
     my @searches = $plugin->get_coverage_searches($settings, $changes) or return;
     return $run->expanded_coverages({'-or' => \@searches});

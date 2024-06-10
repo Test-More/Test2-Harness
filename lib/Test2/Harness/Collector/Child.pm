@@ -13,7 +13,7 @@ use Time::HiRes qw/time/;
 use Test2::Util qw/get_tid/;
 use Carp qw/confess croak/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_ascii_json/;
 
 use vars qw/$STDERR_APIPE $STDOUT_APIPE/;

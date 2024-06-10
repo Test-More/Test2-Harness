@@ -4,11 +4,10 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use List::Util qw/max/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase;
@@ -32,10 +31,10 @@ sub handle {
     my $failed       = $route->{failed};
 
     error(404 => 'No source') unless $source || $project_name;
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $query = {status => 'complete'};
-    my $attrs = {order_by => {'-desc' => 'run_ord'}, rows => 1};
+    my $attrs = {order_by => {'-desc' => 'run_id'}, rows => 1};
 
     $attrs->{offset} = $idx if $idx;
 
@@ -53,12 +52,21 @@ sub handle {
     die error(400 => "Invalid Request: $err") unless $ok;
     die error(404 => 'No Data')               unless $run;
 
-    my $search = {retry => 0};
-    $search->{fail} = 1 if $failed;
+    my $search = {is_harness_out => 0};
+    if ($failed) {
+        $search->{fail} = 1;
+        $search->{retry} = 0;
+    }
 
     my $files = $run->jobs->search(
         $search,
-        {join => 'test_file', order_by => 'test_file.filename'},
+        {
+            join => ['jobs_tries', 'test_file'],
+            order_by => 'test_file.filename',
+            group_by => ['me.job_id', 'test_file.filename'],
+            '+select' => [{max => 'jobs_tries.job_try_id'}, {max => 'jobs_tries.job_try_ord'}, {bool_and => 'jobs_tries.fail'}],
+            '+as' => ['job_try_id', 'job_try_ord', 'fail'],
+        },
     );
 
     unless($json) {
@@ -68,8 +76,8 @@ sub handle {
         return $res;
     }
 
-    my $run_id = $run->run_id;
-    my $run_uri = $req->base . "view/$run_id";
+    my $run_uuid = $run->run_uuid;
+    my $run_uri = $req->base . "view/$run_uuid";
 
     my $field_exclusions = {
         -and => [
@@ -81,8 +89,8 @@ sub handle {
 
     my $data = {
         last_run_stamp => $run->added->epoch,
-        run_id         => $run_id,
-        run_uri        => $req->base . "view/" . $run->run_id,
+        run_uuid         => $run_uuid,
+        run_uri        => $req->base . "view/" . $run->run_uuid,
         fields         => [$run->run_fields->search($field_exclusions)->all],
         failures       => [],
         passes         => [],
@@ -92,21 +100,23 @@ sub handle {
     my $passes   = $data->{passes};
 
     while (my $file = $files->next) {
-        my $job_key = $file->job_key;
-        my $job_id  = $file->job_id;
+        my $job_uuid = $file->get_column('job_uuid');
+        my $try_id   = $file->get_column('job_try_id');
+        my $try_ord  = $file->get_column('job_try_ord');
+        my $fail     = $file->get_column('fail');
 
         my $row = {
             file     => $file->file,
-            fields   => [$file->job_fields->search($field_exclusions)->all],
-            job_id   => $job_id,
-            job_key  => $job_key,
-            uri      => "$run_uri/$job_key",
+            fields   => [$schema->resultset('JobTryField')->search({job_try_id => $try_id, %$field_exclusions})->all],
+            job_uuid => $job_uuid,
+            job_try  => $try_id,
+            uri      => "$run_uri/$job_uuid/$try_ord",
         };
 
-        if ($file->fail) {
+        if ($fail) {
             my $subtests = {};
 
-            my $event_rs = $file->events({nested => 0, is_subtest => 1});
+            my $event_rs = $schema->resultset('JobTry')->find({job_try_id => $try_id})->events({nested => 0, is_subtest => 1});
             while (my $event = $event_rs->next) {
                 my $f = $event->facets;
                 next unless $f->{assert};

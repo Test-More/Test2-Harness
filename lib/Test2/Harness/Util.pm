@@ -41,8 +41,6 @@ our @EXPORT_OK = (
 
         render_status_data
 
-        looks_like_uuid
-
         clean_path
         find_in_updir
     },
@@ -73,15 +71,6 @@ sub find_in_updir {
     }
 
     return;
-}
-
-sub looks_like_uuid {
-    my ($in) = @_;
-
-    return undef unless defined $in;
-    return undef unless length($in) == 36;
-    return undef unless $in =~ m/^[0-9A-F\-]+$/i;
-    return $in;
 }
 
 sub is_same_file {

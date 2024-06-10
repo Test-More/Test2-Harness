@@ -7,11 +7,11 @@ our $VERSION = '2.000000';
 use DateTime;
 use Scalar::Util qw/blessed/;
 use App::Yath::Server::Response qw/resp error/;
-use App::Yath::Server::Util qw/share_dir find_job/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/find_job/;
 use App::Yath::Schema::DateTimeFormat qw/DTF/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Util::Times qw/render_duration/;
-use App::Yath::Schema::UUID qw/uuid_inflate uuid_deflate/;
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -20,19 +20,25 @@ sub handle {
     my $self = shift;
     my ($route) = @_;
 
-    $self->{+TITLE} = 'YathUI';
+    $self->{+TITLE} = 'Yath Run Resources';
 
     my $req = $self->{+REQUEST};
 
-    # Test run, Host, or resource instance
-    my $id = $route->{id} or die error(404 => 'No id provided');
+    my $schema = $self->schema;
 
-    # Specific instant
-    my $batch = uuid_inflate($route->{batch});
+    # Test run
+    my $run_id  = $route->{run_id} or die error(404 => 'No run ID or UUID provided');
+    my $run = $schema->resultset('Run')->find_by_id_or_uuid($run_id) or die error(404 => "Invalid Run");
+
+    die error(400 => "This run does not have any resource data.") unless $run->has_resources;
+
+    my $res_ord = $route->{ord};
 
     if ($route->{data}) {
-        return $self->data_stamps($req, $id) unless $batch;
-        return $self->data($req, $id, $batch);
+        return $self->res_max($run) if $route->{max};
+        return $self->res_min($run) if $route->{min};
+        return $self->res_ord($run, $res_ord) if $res_ord;
+        return $self->res_stream($req, $run);
     }
 
     my $res = resp(200);
@@ -43,21 +49,21 @@ sub handle {
 
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
 
-    my $base_uri  = $req->base->as_string;
-    my $stamp_uri = join '/' => $base_uri . 'resources', 'data', $id;
-    my $res_uri   = join '/' => $base_uri . 'resources', $id;
-    $stamp_uri =~ s{/$}{}g;
-    $res_uri =~ s{/$}{}g;
+    my $base_uri = $req->base->as_string;
+    my $res_uri  = join '/' => $base_uri . 'resources', $run_id;
+    my $data_uri = join '/' => $base_uri . 'resources', $run_id, 'data';
+    $res_uri  =~ s{/$}{}g;
+    $data_uri =~ s{/$}{}g;
 
     my $content = $tx->render(
         'resources.tx',
         {
-            user      => $req->user,
-            base_uri  => $req->base->as_string,
-            stamp_uri => $stamp_uri,
-            res_uri   => $res_uri,
-            tailing   => $batch ? 0      : 1,
-            selected  => $batch ? $batch : undef,
+            user     => $req->user,
+            base_uri => $base_uri,
+            res_uri  => $res_uri,
+            data_uri => $data_uri,
+            selected => $res_ord,
+            tailing  => $res_ord ? 0 : 1,
         }
     );
 
@@ -65,204 +71,134 @@ sub handle {
     return $res;
 }
 
-sub get_thing {
+sub get_min_ord {
     my $self = shift;
-    my ($id) = @_;
+    my ($run) = @_;
 
-    my $schema = $self->{+CONFIG}->schema;
-
-    my ($thing, $stamp_start, $done_check);
-    my $search_args = {};
-    my $stamp_args  = {start => \$stamp_start};
-
-    my $host_rs = $schema->resultset('Host');
-    my $res_rs  = $schema->resultset('Resource');
-    my $run_rs  = $schema->resultset('Run');
-
-    if (!$id || lc($id) eq 'global') {
-        $thing = undef;
-        $search_args->{global} = 1;
-    }
-    else {
-        my $uuid = uuid_inflate($id);
-        if ($uuid && eval { $thing = $run_rs->find({run_id => $uuid}) }) {
-            $search_args->{run_id} = $uuid;
-            $done_check = sub {
-                return 1 if $thing->complete;
-                return 0;
-            };
-        }
-        elsif (($uuid && eval { $thing = $host_rs->find({host_id => $uuid}) }) || eval { $thing = $host_rs->find({hostname => $id}) }) {
-            $search_args->{host_id} = $thing->host_id;
-        }
-        else {
-            die error(404 => 'Invalid Job ID or Host ID');
-        }
-    }
-
-    return ($thing, $search_args, $stamp_args, $done_check);
-}
-
-sub get_stamps {
-    my $self = shift;
-    my %params = @_;
-
-    my $search_args = $params{search_args} || {};
-    my $start = $params{start};
-
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $dbh = $schema->storage->dbh;
 
-    my $fields = "";
-    my @vals;
-    if ($search_args->{run_id}) {
-        $fields = "run_id = ?";
-        push @vals => uuid_deflate($search_args->{run_id});
-    }
-    elsif ($search_args->{host_id}) {
-        $fields = "host_id = ?";
-        push @vals => uuid_deflate($search_args->{host_id});
-    }
-
-    if ($$start) {
-        $fields .= " AND stamp > ?";
-        push @vals => $$start;
-    }
-
-    my $sth = $dbh->prepare("SELECT resource_batch_id, stamp FROM resource_batch WHERE " . $fields . " ORDER BY stamp ASC");
-    $sth->execute(@vals) or die $sth->errstr;
-    my $rows = $sth->fetchall_arrayref;
-
-    return unless @$rows;
-
-    $_->[0] = uuid_inflate($_->[0]) for @$rows;
-
-    $$start = $rows->[-1]->[1];
-
-    return $rows;
+    my $sth = $dbh->prepare("SELECT MIN(resource_ord) FROM resources WHERE run_id = ?");
+    $sth->execute($run->run_id);
+    my $row = $sth->fetchrow_arrayref() or return 0;
+    return $row->[0] // 0;
 }
 
-sub data_stamps {
+sub get_max_ord {
     my $self = shift;
-    my ($req, $id) = @_;
+    my ($run) = @_;
+
+    my $schema = $self->schema;
+    my $dbh = $schema->storage->dbh;
+
+    my $sth = $dbh->prepare("SELECT MAX(resource_ord) FROM resources WHERE run_id = ?");
+    $sth->execute($run->run_id);
+    my $row = $sth->fetchrow_arrayref() or return 0;
+    return $row->[0] // 0;
+}
+
+sub res_max {
+    my $self = shift;
+    my ($run) = @_;
 
     my $res = resp(200);
-    my ($thing, $search_args, $stamp_args, $done_check) = $self->get_thing($id);
+    $res->content_type('text/plain');
+    $res->body($self->get_max_ord($run));
+    return $res;
+}
 
-    my ($complete, @out);
+sub res_min {
+    my $self = shift;
+    my ($run) = @_;
 
-    if (my $run_id = $search_args->{run_id}) {
-        push @out => { run_id => $run_id };
-    }
-    if (my $host_id = $search_args->{host_id}) {
-        push @out => { host_id => $host_id };
-    }
+    my $res = resp(200);
+    $res->content_type('text/plain');
+    $res->body($self->get_min_ord($run));
+    return $res;
+}
 
-    my $start   = time;
-    my $advance = sub {
-        return 0 if @out;
-        return 1 if $complete;
-        return 1 if (time - $start) > 600;
+sub get_up_to {
+    my $self = shift;
+    my ($run, $ord) = @_;
 
-        if ($thing) {
-            if (my $stamps = $self->get_stamps(%$stamp_args, search_args => $search_args)) {
-                push @out => {stamps => $stamps};
-            }
+    my $schema = $self->schema;
+    my $dbh = $schema->storage->dbh;
 
-            # Finish if run is done
-            if ($done_check && $done_check->()) {
-                push @out => {complete => 1};
-            }
+    my $sth = $dbh->prepare(<<'    EOT');
+        SELECT name, stamp, resource_ord, data
+          FROM resources
+          JOIN resource_types USING(resource_type_id)
+         WHERE resource_id IN (
+            SELECT MAX(resource_id)
+              FROM resources
+             WHERE run_id = ?
+               AND resource_ord <= ?
+             GROUP BY resource_type_id
+         );
+    EOT
 
-            return 0;
-        }
+    $sth->execute($run->run_id, $ord);
 
-        push @out => {complete => 1};
-        return 1;
-    };
+    return {ord => $ord, resources => [map { $_->{data} = decode_json($_->{data}); $_ } @{$sth->fetchall_arrayref({})}]};
+}
 
+sub res_ord {
+    my $self = shift;
+    my ($run, $ord) = @_;
+
+    my $data = $self->get_up_to($run, $ord);
+
+    my $res = resp(200);
+    $res->content_type('application/json');
+    $res->raw_body($data);
+    return $res;
+}
+
+sub res_stream {
+    my $self = shift;
+    my ($req, $run) = @_;
+
+    my $current;
+    my $complete = 0;
+
+    my $min = $self->get_min_ord($run);
+
+    my $run_uuid = $run->run_uuid;
+    my $run_sent = 0;
+
+    my $res = resp(200);
     $res->stream(
         env          => $req->env,
         content_type => 'application/x-jsonl; charset=utf-8',
-        done         => $advance,
+        done => sub { $complete },
 
         fetch => sub {
             return () if $complete;
 
-            $advance->() unless @out;
+            unless ($run_sent) {
+                $run_sent = 1;
+                return encode_json({run_uuid => $run_uuid}) . "\n";
+            }
 
-            my $item = shift @out or return ();
-            $complete = 1 if $item->{complete};
+            $run->discard_changes;
+            my $run_complete = $run->complete;
+            my $max = $self->get_max_ord($run);
+            if (defined $current && $max <= $current) {
+                $complete = 1 if $run_complete;
+                return unless $complete;
+                return encode_json({min => $min, max => $max, complete => $complete, data => undef}) . "\n";
+            }
 
-            return encode_json($item) . "\n";
+            $min //= $self->get_min_ord($run);
+            my $data = $self->get_up_to($run, $max);
+            $current = $max;
+
+            return encode_json({min => $min, max => $max, complete => $complete, data => $data}) . "\n";
         },
     );
 
     return $res;
 }
-
-sub data {
-    my $self = shift;
-    my ($req, $id, $batch) = @_;
-
-    my $res = resp(200);
-    my ($thing, $search_args, $stamp_args, $done_check) = $self->get_thing($id);
-
-    $res->content_type('application/json');
-    $res->raw_body({
-        resources => $self->render_stamp_resources(search_args => $search_args, batch => $batch),
-    });
-
-    return $res;
-}
-
-sub render_stamp_resources {
-    my $self = shift;
-    my %params = @_;
-
-    my $search_args = $params{search_args};
-    my $batch_id    = uuid_inflate($params{batch});
-
-    my $schema = $self->{+CONFIG}->schema;
-    my $res_rs = $schema->resultset('Resource');
-
-    my @res_list;
-    my $resources = $res_rs->search({resource_batch_id => $batch_id}, {order_by => {'-asc' => 'batch_ord'}});
-    while (my $res = $resources->next) {
-        push @res_list => $self->render_resource($res);
-    }
-
-    return \@res_list;
-}
-
-sub render_resource {
-    my $self = shift;
-    my ($r) = @_;
-
-    my $data = $r->data;
-
-    for my $group (@{$data || []}) {
-        for my $table (@{$group->{tables} || []}) {
-            for my $row (@{$table->{rows} || []}) {
-                my @formats = @{$table->{format} || []};
-
-                for my $item (@{$row || []}) {
-                    my $format = shift @formats or next;
-
-                    unless ($format eq 'duration') {
-                        $item = "$item (unsupported format '$format')";
-                        next;
-                    }
-
-                    $item = render_duration($item);
-                }
-            }
-        }
-    }
-
-    return {resource => $r->module, groups => $r->data};
-}
-
 
 1;
 

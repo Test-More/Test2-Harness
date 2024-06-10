@@ -10,7 +10,7 @@ use Test2::Harness::TestSettings;
 use Test2::Harness::IPC::Protocol;
 
 use Test2::Harness::Util qw/mod2file/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 our $VERSION = '2.000000';
 
@@ -54,6 +54,7 @@ use Test2::Harness::Util::HashBase(
         <jobs
         <job_lookup
         <test_settings
+        <settings
     },
 
     (map { "+$_" } @NO_JSON),
@@ -121,9 +122,10 @@ sub send_initial_events {
 
             facet_data => {
                 harness_job_queued => {
-                    file   => $job->test_file->file,
-                    job_id => $job->job_id,
-                    stamp  => $stamp,
+                    file     => $job->test_file->file,
+                    rel_file => $job->test_file->relative,
+                    job_id   => $job->job_id,
+                    stamp    => $stamp,
                 }
             },
         );

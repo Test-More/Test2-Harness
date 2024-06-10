@@ -25,7 +25,7 @@ sub run {
     my $settings = $self->settings;
     my $config = schema_config_from_settings($settings);
 
-    $SIG{INT} = sub { exit 0 };
+    $SIG{INT}  = sub { exit 0 };
     $SIG{TERM} = sub { exit 0 };
 
     App::Yath::Schema::Importer->new(config => $config)->run;

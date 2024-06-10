@@ -4,13 +4,12 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -28,14 +27,13 @@ sub handle {
 
     my $run;
 
-    if ($self->{+CONFIG}->single_run) {
+    if ($self->single_run) {
         $run = $user->runs->first or die error(404 => 'Invalid run');
     }
     else {
         my $it = $route->{id} or die error(404 => 'No id');
-        $it = uuid_inflate($it) or die error(404 => "Invalid run id");
-        my $schema = $self->{+CONFIG}->schema;
-        $run = $schema->resultset('Run')->find({run_id => $it}) or die error(404 => 'Invalid Run');
+        my $schema = $self->schema;
+        $run = $schema->resultset('Run')->find_by_id_or_uuid($it) or die error(404 => 'Invalid Run');
     }
 
     if (my $act = $route->{action}) {
@@ -52,32 +50,6 @@ sub handle {
         }
         elsif ($act eq 'delete') {
             die error(400 => "Cannot delete a pinned run") if $run->pinned;
-
-            $run->coverages->delete;
-            $run->reportings->delete;
-
-            my $batches = $run->resource_batches;
-            while (my $batch = $batches->next) {
-                $batch->resources->delete;
-                $batch->delete;
-            }
-
-            my $jobs = $run->jobs;
-
-            while (my $job = $jobs->next()) {
-                my $has_binary = $job->events->search({has_binary => 1});
-                while (my $e = $has_binary->next()) {
-                    $has_binary->binaries->delete;
-                    $e->delete;
-                }
-
-                $job->events->delete;
-                $job->job_fields->delete;
-                $job->delete;
-            }
-
-            $run->run_fields->delete;
-            $run->sweeps->delete;
             $run->delete;
         }
     }

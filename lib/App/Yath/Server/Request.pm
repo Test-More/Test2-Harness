@@ -4,57 +4,56 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use App::Yath::Schema::UUID qw/gen_uuid uuid_inflate/;
-use Data::GUID;
 use Carp qw/croak/;
 
+use Test2::Util::UUID qw/gen_uuid/;
+use App::Yath::Schema::Util qw/format_uuid_for_db/;
+
 use parent 'Plack::Request';
+use Test2::Harness::Util::HashBase qw{
+    +session
+    +session_host
+    <schema
+    user
+};
 
 sub new {
     my $class = shift;
-    my %params = @_;
+    my(%params) = @_;
 
-    my $env = delete $params{env} or croak "'env' is a required attribute";
+    croak "'env' is a required attribute"    unless $params{env};
+    croak "'schema' is a required attribute" unless $params{+SCHEMA};
 
-    my $self = $class->SUPER::new($env);
-    $self->{'config'} = delete $params{config} or croak "'config' is a required attribute";
-
-    return $self;
+    return bless(\%params, $class);
 }
-
-sub schema { $_[0]->{config}->schema }
 
 sub session {
     my $self = shift;
 
-    return $self->{session} if $self->{session};
+    return $self->{+SESSION} if $self->{+SESSION};
 
     my $schema = $self->schema;
 
     my $session;
     my $cookies = $self->cookies;
 
-    if (my $id = uuid_inflate($cookies->{id})) {
-        $session = $schema->resultset('Session')->find({session_id => $id});
+    if (my $uuid = $cookies->{uuid}) {
+        $session = $schema->resultset('Session')->find({session_uuid => $uuid});
         $session = undef unless $session && $session->active;
     }
 
-    $session ||= $self->schema->resultset('Session')->create(
-        {session_id => gen_uuid},
+    my $uuid = gen_uuid();
+    $session ||= $schema->resultset('Session')->create(
+        {session_uuid => format_uuid_for_db($uuid)},
     );
 
-    $self->{session} = $session;
-
-    # Vivify this
-    $self->session_host;
-
-    return $session;
+    return $self->{+SESSION} = $session;
 }
 
 sub session_host {
     my $self = shift;
 
-    return $self->{session_host} if $self->{session_host};
+    return $self->{+SESSION_HOST} if $self->{+SESSION_HOST};
 
     my $session = $self->session or return undef;
 
@@ -71,7 +70,6 @@ sub session_host {
     );
 
     $host //= $schema->resultset('SessionHost')->create({
-        session_host_id => gen_uuid,
         session_id      => $session->session_id,
         address         => $self->address // 'SOCKET',
         agent           => $self->user_agent,
@@ -79,20 +77,9 @@ sub session_host {
 
     $schema->txn_commit;
 
-    return $self->{session_host} = $host;
+    return $self->{+SESSION_HOST} = $host;
 }
 
-sub user {
-    my $self = shift;
-
-    return $self->schema->resultset('User')->find({username => 'root'})
-        if $self->{config}->single_user;
-
-    my $host = $self->session_host or return undef;
-
-    return undef unless $host->user_id;
-    return $host->user;
-}
 
 1;
 

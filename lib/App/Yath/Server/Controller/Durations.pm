@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
 
@@ -30,7 +29,7 @@ sub handle {
     my $median       = $route->{median} || 0;
     my $username     = $route->{user};
 
-    my $schema  = $self->{+CONFIG}->schema;
+    my $schema  = $self->schema;
     my $project = $schema->resultset('Project')->find({name => $project_name});
 
     my $data = {};

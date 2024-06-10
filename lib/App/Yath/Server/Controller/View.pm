@@ -4,11 +4,11 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use Text::Xslate(qw/mark_raw/);
-use App::Yath::Server::Util qw/share_dir find_job/;
+use App::Yath::Util qw/share_dir/;
+use App::Yath::Schema::Util qw/find_job_and_try/;
 use App::Yath::Server::Response qw/resp error/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -28,57 +28,49 @@ sub handle {
     $res->add_js('eventtable.js');
     $res->add_js('view.js');
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
-    my $id     = $route->{id};
-    my $uuid   = uuid_inflate($id);
-    my $run_id = $route->{run_id};
-    my ($project, $user);
+    use Data::Dumper;
+    print Dumper($route);
+    my $run_id     = $route->{run_id};
+    my $user_id    = $route->{user_id};
+    my $project_id = $route->{project_id};
+    my ($project, $user, $run);
 
-    if ($id) {
+    my @url;
+    if ($project_id) {
         my $p_rs = $schema->resultset('Project');
-        $project //= eval { $p_rs->find({name => $id}) };
-        $project //= eval { $p_rs->find({project_id => $uuid}) };
-
-        if ($project) {
-            $uuid = uuid_inflate($project->project_id);
-            $self->{+TITLE} .= ">" . $project->name;
-        }
-        else {
-            my $u_rs = $schema->resultset('User');
-            $user //= eval { $u_rs->find({username => $id}) };
-            $user //= eval { $u_rs->find({user_id => $uuid}) };
-
-            if ($user) {
-                $uuid = uuid_inflate($user->user_id);
-                $self->{+TITLE} .= ">" . $user->username;
-            }
-            else {
-                $run_id //= $uuid;
-            }
-        }
+        $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_id => $project_id}) } // die error(404 => 'Invalid Project');
+        $self->{+TITLE} .= ">" . $project->name;
+        @url = ('project', $project_id);
     }
+    elsif ($user_id) {
+        my $u_rs = $schema->resultset('User');
+        $user = eval { $u_rs->find({username => $user_id}) } // eval { $u_rs->find({user_id => $user_id}) } // die error(404 => 'Invalid User');
+        $self->{+TITLE} .= ">" . $user->username;
+        @url = ('user', $user_id);
+    }
+    elsif($run_id) {
+        push @url => $run_id;
 
-    if($run_id) {
-        $run_id = uuid_inflate($run_id) or die error(404 => 'Invalid Run');
-
-        my $run = eval { $schema->resultset('Run')->find({run_id => $run_id}) } or die error(404 => 'Invalid Run');
+        $run = eval { $schema->resultset('Run')->find_by_id_or_uuid($run_id) } or die error(404 => 'Invalid Run');
         $self->{+TITLE} .= ">" . $run->project->name;
-    }
 
-    my $job_uuid = $route->{job};
-    my $job_try  = $route->{try};
+        my $job_try = $route->{try};
 
-    if ($job_uuid) {
-        $job_uuid = uuid_inflate($job_uuid) or die error(404 => 'Invalid Job');
-        my $job = find_job($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
-        $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
+        if (my $job_uuid = $route->{job}) {
+            my ($job, $try) = find_job_and_try($schema, $job_uuid, $job_try) or die error(404 => 'Invalid Job');
+            $self->{+TITLE} .= ">" . ($job->shortest_file // 'HARNESS');
+            push @url => $job_uuid;
+        }
+
+        push @url => $job_try if $job_try;
     }
 
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
 
     my $base_uri   = $req->base->as_string;
-    my $stream_uri = join '/' => $base_uri . 'stream', grep {length $_} ($uuid // $run_id), $job_uuid, $job_try;
+    my $stream_uri = join '/' => $base_uri . 'stream', @url;
 
     my $content = $tx->render(
         'view.tx',

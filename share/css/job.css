@@ -37,6 +37,10 @@ div.live {
     scroll-snap-align: end;
 }
 
+tr.stuck_orphan {
+    background: #FFAAAA !important;
+}
+
 tr.temp_orphan {
     background: #C0E0FF;
 }

@@ -36,8 +36,8 @@
 <body>
 
 <script>base_uri = '<: $base_uri :>';</script>
-<script>single_user = <: $config.single_user :>;</script>
-<script>show_user = <: $config.show_user :>;</script>
+<script>single_user = <: $single_user :>;</script>
+<script>show_user = <: $show_user :>;</script>
 <script>time_zone = '<: $time_zone :>';</script>
 
 <div id="free_modal" style="display: none">
@@ -52,15 +52,15 @@
         <h1>Test2-Harness-UI</h1>
 
         <ul id="nav_main">
-            : if !$config.single_run {
+            : if !$single_run {
                 <li><a href="<: $base_uri :>">Dashboard</a></li>
 
-                : if !$config.no_upload {
+                : if !$no_upload {
                     <li class="split">&nbsp;</li>
                     <li><a href="<: $base_uri :>upload">Upload A Log</a></li>
                 : }
             : }
-            : if !$config.single_user {
+            : if !$single_user {
                 <li class="split">&nbsp;</li>
                 <li><a href="<: $base_uri :>user">User Settings</a></li>
             : }
@@ -75,7 +75,7 @@
             </li>
         </ul>
 
-        : if !$config.single_user {
+        : if !$single_user {
             <div id="login_header">
             : if $user {
                 <a class="logout" href="<: $base_uri :>user?action=logout">Log-Out</a>

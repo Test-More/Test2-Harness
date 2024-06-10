@@ -18,7 +18,7 @@ use Carp qw/croak/;
 use Time::HiRes qw/sleep/;
 use Test2::Util qw/pkg_to_file/;
 use App::Yath::Server::Util qw/dbd_driver qdb_driver share_dir share_file/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Scope::Guard qw/guard/;
 use File::Temp qw/tempfile/;
 
@@ -87,8 +87,8 @@ sub init {
         local $ENV{YATH_UI_SCHEMA} = $schema;
 
         require(pkg_to_file("App::Yath::Server::Schema::$schema"));
-        my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root', user_id => gen_uuid()});
-        my $project = $config->schema->resultset('Project')->create({name => 'test', project_id => gen_uuid()});
+        my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
+        my $project = $config->schema->resultset('Project')->create({name => 'test'});
 
         exec('starman', '-Ilib', '--listen' => ($self->{+PORT} ? ":$self->{+PORT}" : $self->{+SOCKET}), '--workers', 5, share_file('psgi/test.psgi')),
     }

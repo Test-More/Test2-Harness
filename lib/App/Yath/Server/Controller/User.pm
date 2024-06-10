@@ -5,9 +5,9 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Text::Xslate();
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use Email::Sender::Simple qw(sendmail);
 use Email::Simple;
@@ -66,13 +66,14 @@ sub process_form {
     # This one we allow non-post, all others need post.
     if ('logout' eq $action) {
         $req->session_host->update({'user_id' => undef});
+        $req->set_user(undef);
         return $res->add_msg("You have been logged out.");
     }
     elsif ($action eq 'verify') {
-        my $evcode_id = $p->{verification_code}
+        my $evcode = $p->{verification_code}
             or return $res->add_error("Invalid verification code");
 
-        my $code = $schema->resultset('EmailVerificationCode')->find({evcode_id => uuid_inflate($evcode_id)})
+        my $code = $schema->resultset('EmailVerificationCode')->find({evcode => $evcode})
             or return $res->add_error("Invalid verification code");
 
         my $email = $code->email;
@@ -95,6 +96,7 @@ sub process_form {
             unless $user && $user->verify_password($password);
 
         $req->session_host->update({'user_id' => $user->user_id});
+        $req->set_user($user);
         return $res->add_msg("You have been logged in.");
     }
 
@@ -145,11 +147,11 @@ sub process_form {
         return $res->add_msg("Password Changed.");
     }
 
-    if ($p->{api_key_id} && $KEY_ACTION_MAP{$action}) {
-        my $key_id = uuid_inflate($p->{api_key_id});
+    if ($p->{api_key} && $KEY_ACTION_MAP{$action}) {
+        my $api_key = $p->{api_key};
         my $user = $req->user or return $res->add_error("You must be logged in");
 
-        my $key = $schema->resultset('ApiKey')->find({api_key_id => $key_id, user_id => $user->user_id});
+        my $key = $schema->resultset('ApiKey')->find({value => $api_key, user_id => $user->user_id});
         return $res->add_error("Invalid key") unless $key;
 
         $key->update({status => $KEY_ACTION_MAP{$action}});
@@ -157,7 +159,6 @@ sub process_form {
     }
 
     if (my $email_id = $p->{email_id}) {
-        $email_id = uuid_inflate($email_id) or return $res->add_error("Invalid email id");
         my $user = $req->user or return $res->add_error("You must be logged in");
         my $email = $schema->resultset('Email')->find({email_id => $email_id, user_id => $user->user_id});
         return $res->add_error("Invalid Email") unless $email;
@@ -200,15 +201,15 @@ sub send_verification_code {
 
     my $schema = $self->schema;
 
-    my $code = $schema->resultset('EmailVerificationCode')->find_or_create({email_id => $email->email_id});
-    my $text = $code->evcode_id;
+    my $our_email = $schema->config('email') or die "System email address is not set";
 
-    my $config = $self->{+CONFIG};
+    my $code = $schema->resultset('EmailVerificationCode')->find_or_create({email_id => $email->email_id});
+    my $text = $code->evcode;
 
     my $msg = Email::Simple->create(
         header => [
             To      => $email->address,
-            From    => $config->email,
+            From    => $our_email,
             Subject => "Email verification code",
         ],
         body => "Verification code: $text\n",

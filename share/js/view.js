@@ -12,14 +12,14 @@ $(function() {
                 state.run_table.make_sortable();
             }
 
-            if (state.job_table) {
+            if (state.job_table && state.has_non_harness_job) {
                 state.job_table.make_sortable();
             }
         }},
         function(item) {
             if (item.type === 'event') {
-                item.data.run_id  = state.run.run_id;
-                item.data.job_key = state.job.job_key;
+                item.data.run_uuid  = state.run.run_uuid;
+                item.data.job_uuid = state.job.job_uuid;
                 state.event = item.data;
                 if (!state.event_table) {
                     var event_controls = t2hui.eventtable.build_controls(state.run, state.job);
@@ -36,17 +36,22 @@ $(function() {
                     }
                 }
 
-                state.event_table.render_item(item.data, item.data.event_id);
+                state.event_table.render_item(item.data, item.data.event_uuid);
             }
             else if (item.type === 'job') {
-                item.data.run_id = state.run.run_id;
+                item.data.run_uuid = state.run.run_uuid;
                 state.job = item.data;
+
+                if (!state.job.is_harness_out) {
+                    state.has_non_harness_job = 1;
+                }
+
                 if (!state.job_table) {
                     var job_table = t2hui.jobtable.build_table(state.run);
                     jobs.append(job_table.render());
                     state.job_table = job_table;
                 }
-                state.job_table.render_item(item.data, item.data.job_key);
+                state.job_table.render_item(item.data, item.data.job_try_id);
             }
             else if (item.type === 'run') {
                 state.run = item.data;
@@ -55,7 +60,7 @@ $(function() {
                     runs.append(run_table.render());
                     state.run_table = run_table;
                 }
-                state.run_table.render_item(item.data, item.data.run_id);
+                state.run_table.render_item(item.data, item.data.run_uuid);
             }
         }
     );

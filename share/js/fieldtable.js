@@ -221,7 +221,7 @@ function FieldTable(spec) {
             toolrow.prepend(td);
         }
 
-        if (field.data) {
+        if (field.has_data) {
             var viewer = $('<div class="tool etoggle" title="Extended Data"><img src="/img/data.png" /></div>');
             var td = $('<td></td>');
             td.append(viewer);
@@ -319,6 +319,9 @@ function FieldTable(spec) {
         var col = $('<th class="field-table-header-col ' + me.column_class(data) + '"></th>');
         col.append(inner);
         inner.click(function() { col.trigger('click'); });
+        if (data.tooltip) {
+            inner.attr('title', data.tooltip);
+        }
         return col;
     }
 

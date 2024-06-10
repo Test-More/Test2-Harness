@@ -2,245 +2,318 @@ package App::Yath::Server;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
-
-use Router::Simple;
-use Text::Xslate(qw/mark_raw/);
-use Scalar::Util qw/blessed/;
-use DateTime;
-
-use App::Yath::Server::Request;
-use App::Yath::Server::Controller::Upload;
-use App::Yath::Server::Controller::Recent;
-use App::Yath::Server::Controller::User;
-use App::Yath::Server::Controller::Run;
-use App::Yath::Server::Controller::RunField;
-use App::Yath::Server::Controller::Job;
-use App::Yath::Server::Controller::JobField;
-use App::Yath::Server::Controller::Download;
-use App::Yath::Server::Controller::Sweeper;
-use App::Yath::Server::Controller::Project;
-use App::Yath::Server::Controller::Resources;
-
-use App::Yath::Server::Controller::Stream;
-use App::Yath::Server::Controller::View;
-use App::Yath::Server::Controller::Lookup;
-
-use App::Yath::Server::Controller::Query;
-use App::Yath::Server::Controller::Events;
-
-use App::Yath::Server::Controller::Durations;
-use App::Yath::Server::Controller::Coverage;
-use App::Yath::Server::Controller::Files;
-use App::Yath::Server::Controller::ReRun;
-
-use App::Yath::Server::Controller::Interactions;
-use App::Yath::Server::Controller::Binary;
-
-use App::Yath::Server::Util qw/share_dir/;
-use App::Yath::Server::Response qw/resp error/;
-
+use Carp qw/croak confess/;
+use Test2::Harness::Util qw/parse_exit mod2file/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
-use Test2::Harness::Util::HashBase qw/-config -router/;
+use Plack::Runner;
+use DBIx::QuickDB;
+
+use App::Yath::Server::Plack;
+use App::Yath::Schema::Importer;
+
+use App::Yath::Util qw/share_file/;
+use App::Yath::Schema::Util qw/qdb_driver dbd_driver/;
+
+our $VERSION = '2.000000';
+
+use Test2::Harness::Util::HashBase qw{
+    <schema_config
+
+    <root_pid
+
+    +plack
+    <pid
+    <importer_pids
+    <qdb
+    <qdb_params
+
+    <importers
+    <launcher
+    <launcher_args
+    <port
+    <host
+    <workers
+};
 
 sub init {
     my $self = shift;
 
-    my $router = $self->{+ROUTER} ||= Router::Simple->new;
-    my $config = $self->{+CONFIG};
+    croak "'schema_config' is a required attribute" unless $self->{+SCHEMA_CONFIG};
 
-    $router->connect('/' => {controller => 'App::Yath::Server::Controller::View'});
-
-    $router->connect('/upload' => {controller => 'App::Yath::Server::Controller::Upload'})
-        unless $config->single_run;
-
-    $router->connect('/user' => {controller => 'App::Yath::Server::Controller::User'})
-        unless $config->single_user;
-
-    $router->connect('/resources/data/:id'        => {controller => 'App::Yath::Server::Controller::Resources', data => 1});
-    $router->connect('/resources/data/:id/'       => {controller => 'App::Yath::Server::Controller::Resources', data => 1});
-    $router->connect('/resources/data/:id/:batch' => {controller => 'App::Yath::Server::Controller::Resources', data => 1});
-    $router->connect('/resources/:id'             => {controller => 'App::Yath::Server::Controller::Resources'});
-    $router->connect('/resources/:id/'            => {controller => 'App::Yath::Server::Controller::Resources'});
-    $router->connect('/resources/:id/:batch'      => {controller => 'App::Yath::Server::Controller::Resources'});
-
-    $router->connect('/interactions/:id'               => {controller => 'App::Yath::Server::Controller::Interactions'});
-    $router->connect('/interactions/:id/:context'      => {controller => 'App::Yath::Server::Controller::Interactions'});
-    $router->connect('/interactions/data/:id'          => {controller => 'App::Yath::Server::Controller::Interactions', data => 1});
-    $router->connect('/interactions/data/:id/:context' => {controller => 'App::Yath::Server::Controller::Interactions', data => 1});
-
-    $router->connect('/project/:id'           => {controller => 'App::Yath::Server::Controller::Project'});
-    $router->connect('/project/:id/stats'     => {controller => 'App::Yath::Server::Controller::Project', stats => 1});
-    $router->connect('/project/:id/:n'        => {controller => 'App::Yath::Server::Controller::Project'});
-    $router->connect('/project/:id/:n/:count' => {controller => 'App::Yath::Server::Controller::Project'});
-
-    $router->connect('/recent/:project/:user/:count' => {controller => 'App::Yath::Server::Controller::Recent'});
-    $router->connect('/recent/:project/:user'        => {controller => 'App::Yath::Server::Controller::Recent'});
-
-    $router->connect('/query/:name'      => {controller => 'App::Yath::Server::Controller::Query'});
-    $router->connect('/query/:name/:arg' => {controller => 'App::Yath::Server::Controller::Query'});
-
-    $router->connect('/run/:id'            => {controller => 'App::Yath::Server::Controller::Run'});
-    $router->connect('/run/:id/pin'        => {controller => 'App::Yath::Server::Controller::Run', action => 'pin_toggle'});
-    $router->connect('/run/:id/delete'     => {controller => 'App::Yath::Server::Controller::Run', action => 'delete'});
-    $router->connect('/run/:id/cancel'     => {controller => 'App::Yath::Server::Controller::Run', action => 'cancel'});
-    $router->connect('/run/:id/parameters' => {controller => 'App::Yath::Server::Controller::Run', action => 'parameters'});
-
-    $router->connect('/run/field/:id'        => {controller => 'App::Yath::Server::Controller::RunField'});
-    $router->connect('/run/field/:id/delete' => {controller => 'App::Yath::Server::Controller::RunField', action => 'delete'});
-
-    $router->connect('/job/field/:id'        => {controller => 'App::Yath::Server::Controller::JobField'});
-    $router->connect('/job/field/:id/delete' => {controller => 'App::Yath::Server::Controller::JobField', action => 'delete'});
-
-    $router->connect('/job/:job'         => {controller => 'App::Yath::Server::Controller::Job'});
-    $router->connect('/job/:job/:try'    => {controller => 'App::Yath::Server::Controller::Job'});
-    $router->connect('/event/:id'        => {controller => 'App::Yath::Server::Controller::Events', from => 'single_event'});
-    $router->connect('/event/:id/events' => {controller => 'App::Yath::Server::Controller::Events', from => 'event'});
-
-    $router->connect('/durations/:project'                => {controller => 'App::Yath::Server::Controller::Durations'});
-    $router->connect('/durations/:project/median'         => {controller => 'App::Yath::Server::Controller::Durations', median => 1});
-    $router->connect('/durations/:project/median/:user'   => {controller => 'App::Yath::Server::Controller::Durations', median => 1});
-    $router->connect('/durations/:project/:short/:medium' => {controller => 'App::Yath::Server::Controller::Durations'});
-
-    $router->connect('/coverage/:source'        => {controller => 'App::Yath::Server::Controller::Coverage'});
-    $router->connect('/coverage/:source/:user'  => {controller => 'App::Yath::Server::Controller::Coverage'});
-    $router->connect('/coverage/:source/delete' => {controller => 'App::Yath::Server::Controller::Coverage', delete => 1});
-
-    $router->connect('/failed/:source'                 => {controller => 'App::Yath::Server::Controller::Files', failed => 1});
-    $router->connect('/failed/:source/json'            => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
-    $router->connect('/failed/:project/:idx'           => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
-    $router->connect('/failed/:project/:username/:idx' => {controller => 'App::Yath::Server::Controller::Files', failed => 1, json => 1});
-
-    $router->connect('/files/:source'                 => {controller => 'App::Yath::Server::Controller::Files', failed => 0});
-    $router->connect('/files/:source/json'            => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
-    $router->connect('/files/:project/:idx'           => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
-    $router->connect('/files/:project/:username/:idx' => {controller => 'App::Yath::Server::Controller::Files', failed => 0, json => 1});
-
-    $router->connect('/rerun/:run_id'            => {controller => 'App::Yath::Server::Controller::ReRun'});
-    $router->connect('/rerun/:project/:username' => {controller => 'App::Yath::Server::Controller::ReRun'});
-
-    $router->connect('/binary/:binary_id' => {controller => 'App::Yath::Server::Controller::Binary'});
-
-    $router->connect('/download/:id' => {controller => 'App::Yath::Server::Controller::Download'});
-
-    $router->connect('/lookup'              => {controller => 'App::Yath::Server::Controller::Lookup'});
-    $router->connect('/lookup/:lookup'      => {controller => 'App::Yath::Server::Controller::Lookup'});
-    $router->connect('/lookup/data/:lookup' => {controller => 'App::Yath::Server::Controller::Lookup', data => 1});
-
-    $router->connect('/view'                   => {controller => 'App::Yath::Server::Controller::View'});
-    $router->connect('/view/:id'               => {controller => 'App::Yath::Server::Controller::View'});
-    $router->connect('/view/:run_id/:job'      => {controller => 'App::Yath::Server::Controller::View'});
-    $router->connect('/view/:run_id/:job/:try' => {controller => 'App::Yath::Server::Controller::View'});
-
-    $router->connect('/stream/run/:run_id'       => {controller => 'App::Yath::Server::Controller::Stream', run_only => 1});
-    $router->connect('/stream'                   => {controller => 'App::Yath::Server::Controller::Stream'});
-    $router->connect('/stream/:id'               => {controller => 'App::Yath::Server::Controller::Stream'});
-    $router->connect('/stream/:run_id/:job'      => {controller => 'App::Yath::Server::Controller::Stream'});
-    $router->connect('/stream/:run_id/:job/:try' => {controller => 'App::Yath::Server::Controller::Stream'});
-
-    $router->connect('/sweeper/:count/days'    => {controller => 'App::Yath::Server::Controller::Sweeper', units => 'day'});
-    $router->connect('/sweeper/:count/hours'   => {controller => 'App::Yath::Server::Controller::Sweeper', units => 'hour'});
-    $router->connect('/sweeper/:count/minutes' => {controller => 'App::Yath::Server::Controller::Sweeper', units => 'minute'});
-    $router->connect('/sweeper/:count/seconds' => {controller => 'App::Yath::Server::Controller::Sweeper', units => 'second'});
+    $self->{+QDB_PARAMS} //= {};
 }
 
-sub to_app {
+sub restart_server {
     my $self = shift;
+    my ($sig) = @_;
 
-    my $router = $self->{+ROUTER};
+    my $exit = $self->stop_server($sig);
+    $self->start_server();
 
-    return sub {
-        my $env = shift;
-
-        my $req = App::Yath::Server::Request->new(env => $env, config => $self->{+CONFIG});
-
-        my $r = $router->match($env) || {};
-
-        $self->wrap($r->{controller}, $req, $r);
-    };
+    return $exit;
 }
 
-sub wrap {
+sub stop_server {
     my $self = shift;
-    my ($class, $req, $r) = @_;
+    my ($sig) = @_;
 
-    my ($controller, $res, $session);
-    my $ok = eval {
-        die error(404) unless $class;
+    $self->_root_proc_check();
 
-        if ($class->uses_session) {
-            $session = $req->session;
-            $req->session_host; # vivify this
-        }
+    my $pid = delete $self->{+PID} or croak "No server running";
 
-        $controller = $class->new(request => $req, config => $self->{+CONFIG});
-        $res = $controller->handle($r);
+    return $self->stop_proc($pid, $sig);
+}
 
-        1;
-    };
-    my $err = $@ || 'Internal Error';
+sub stop_proc {
+    my $self = shift;
+    my ($pid, $sig) = @_;
 
-    unless ($ok && $res) {
-        if (blessed($err) && $err->isa('App::Yath::Server::Response')) {
-            $res = $err;
+    $self->_root_proc_check();
+
+    croak "'pid' is required" unless $pid;
+    $sig //= 'TERM';
+
+    local $?;
+    kill($sig, $pid);
+    my $got = waitpid($pid, 0);
+    my $exit = $?;
+
+    croak "waitpid returned '$got', expected '$pid'" unless $got == $pid;
+    return parse_exit($exit);
+}
+
+sub reset_ephemeral_db {
+    my $self = shift;
+    my ($sig) = @_;
+
+    my $exit = $self->stop_ephemeral_db($sig);
+    $self->start_ephemeral_db();
+
+    return $exit;
+}
+
+sub stop_ephemeral_db {
+    my $self = shift;
+    my ($sig) = @_;
+
+    $self->_root_proc_check();
+    $self->stop_server   if $self->{+PID};
+    $self->stop_importers if $self->{+IMPORTER_PIDS};
+
+    my $db = delete $self->{+QDB} or croak "No ephemeral db running";
+
+    $db->stop;
+}
+
+sub start_ephemeral_db {
+    my $self = shift;
+
+    croak "Ephemeral DB already started" if $self->{+QDB};
+
+    $self->{+ROOT_PID} //= $$;
+    $self->_root_proc_check();
+
+    my $config = $self->{+SCHEMA_CONFIG};
+    my $schema_type = $config->ephemeral // 'Auto';
+
+    my $qdb_args;
+    if ($schema_type eq 'Auto') {
+        $qdb_args = {drivers => [qdb_driver('PostgreSQL'), qdb_driver('MySQL')]};
+        $schema_type = undef;
+    }
+    else {
+        $qdb_args = {driver => qdb_driver($schema_type), dbd_driver => dbd_driver($schema_type)}
+    }
+
+    my $db = DBIx::QuickDB->build_db(harness_ui => $qdb_args);
+    unless($schema_type) {
+        if (ref($db) =~ m/::(PostgreSQL|MySQL)$/) {
+            $schema_type = $1;
         }
         else {
-            warn $err;
-            my $msg = ($ENV{T2_HARNESS_UI_ENV} || '') eq 'dev' ? "$err\n" : undef;
-            $res = error(500 => $msg);
+            die "$db does not look like PostgreSQL or MySQL";
         }
     }
 
-    my $ct = $r->{json} ? 'application/json' : blessed($res) ? $res->content_type() : 'text/html';
-    $ct ||= 'text/html';
-    $ct = lc($ct);
-    $res->content_type($ct) if blessed($res);
-
-    if (my $stream = $res->stream) {
-        return $stream;
+    my $dbh;
+    if ($schema_type =~ m/SQLite/i) {
+        $dbh = $db->connect('harness_ui', AutoCommit => 1, RaiseError => 1);
+    }
+    else {
+        $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1);
+        $dbh->do('CREATE DATABASE harness_ui') or die "Could not create db " . $dbh->errstr;
     }
 
-    if ($ct eq 'text/html') {
-        my $dt = DateTime->now(time_zone => 'local');
+    $db->load_sql(harness_ui => share_file("schema/$schema_type.sql"));
+    my $dsn = $db->connect_string('harness_ui');
 
-        my $tx      = Text::Xslate->new(path => [share_dir('templates')]);
-        my $wrapped = $tx->render(
-            'main.tx',
-            {
-                config => $self->{+CONFIG},
+    $config->push_ephemeral_credentials(dbi_dsn => $dsn, dbi_user => '', dbi_pass => '', schema_type => $schema_type);
+    $ENV{YATH_DB_DSN} = $dsn;
 
-                user     => $req->user     || undef,
-                errors   => $res->errors   || [],
-                messages => $res->messages || [],
-                add_css  => $res->css      || [],
-                add_js   => $res->js       || [],
-                title    => $res->title    || ($controller ? $controller->title : 'Test2-Harness-UI'),
+    require(mod2file("App::Yath::Schema::$schema_type"));
 
-                time_zone => $dt->strftime("%Z"),
+    my $schema = $config->schema;
 
-                base_uri => $req->base->as_string || '',
-                content  => mark_raw($res->raw_body)  || '',
-            }
-        );
+    $schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
 
-        $res->body($wrapped);
-    }
-    elsif($ct eq 'application/json') {
-        if (my $data = $res->raw_body) {
-            $res->body(ref($data) ? encode_json($data) : $data);
-        }
-        elsif (my $errors = $res->errors) {
-            $res->body(encode_json({errors => $errors}));
-        }
-    }
+    my $qdb_params = $self->{+QDB_PARAMS} // {};
+    $schema->config(single_user => $qdb_params->{single_user} // 0);
+    $schema->config(single_run  => $qdb_params->{single_run}  // 0);
+    $schema->config(no_upload   => $qdb_params->{no_upload}   // 0);
+    $schema->config(email       => $qdb_params->{email}) if $qdb_params->{email};
 
-    $res->cookies->{id} = {value => $session->session_id, httponly => 1, expires => '+1M'}
-        if $session;
-
-    return $res->finalize;
+    return $self->{+QDB} = $db;
 }
 
+sub start_server {
+    my $self = shift;
+    my %params = @_;
+
+    croak "Server already started with pid $self->{+PID}" if $self->{+PID};
+
+    $self->{+ROOT_PID} //= $$;
+    $self->_root_proc_check();
+
+    if ($self->{+SCHEMA_CONFIG}->ephemeral && !$params{no_db} && !$self->{+QDB}) {
+        $self->start_ephemeral_db();
+    }
+
+    unless ($self->{+IMPORTER_PIDS} || $params{no_importers}) {
+        $self->start_importers();
+    }
+
+    my $pid = fork // die "Could not fork: $!";
+
+    return $self->{+PID} = $pid if $pid;
+
+    $0 = "yath-web-server";
+
+    my $ok = eval { $self->_do_server_exec(); 1 };
+    my $err = $@;
+
+    unless ($ok) {
+        eval { warn $err };
+        exit 255;
+    }
+
+    exit(0);
+}
+
+sub _do_server_exec {
+    my $self = shift;
+
+    my @options;
+    push @options => @{$self->{+LAUNCHER_ARGS} // []};
+    push @options => ("--server"  => $self->{+LAUNCHER})              if $self->{+LAUNCHER};
+    push @options => ('--listen'  => "$self->{+HOST}:$self->{+PORT}") if $self->{+PORT};
+    push @options => ('--workers' => "$self->{+WORKERS}")             if $self->{+WORKERS};
+
+    exec(
+        $^X,
+        (map {"-I$_"} @INC),
+        "-m${ \__PACKAGE__ }",
+        '-e' => "${ \__PACKAGE__ }->_do_server_post_exec(\$ARGV[0])",
+        encode_json({
+            schema_config => $self->{+SCHEMA_CONFIG},
+            launcher_options => \@options,
+        }),
+    );
+}
+
+sub _do_server_post_exec {
+    my $class = shift;
+    my ($json) = @_;
+
+    $0 = "yath-web-server";
+
+    my $data = decode_json($json);
+
+    my $r = Plack::Runner->new;
+    $r->parse_options(@{$data->{launcher_options}});
+
+    my $app = App::Yath::Server::Plack->new(
+        schema_config => bless($data->{+SCHEMA_CONFIG}, 'App::Yath::Schema::Config'),
+    );
+
+    $r->run($app->to_app());
+
+    exit(0);
+}
+
+sub restart_importers {
+    my $self = shift;
+    $self->stop_importers();
+    $self->start_importers();
+}
+
+sub start_importers {
+    my $self = shift;
+
+    local $0 = 'yath-importer';
+
+    croak "Importers already started" if $self->{+IMPORTER_PIDS};
+
+    $self->{+ROOT_PID} //= $$;
+    $self->_root_proc_check();
+
+    # Gen uuids here before forking
+    my @pids;
+    for (1 .. $self->{+IMPORTERS} // 2) {
+        push @pids => App::Yath::Schema::Importer->new(config => $self->{+SCHEMA_CONFIG})->spawn();
+    }
+
+    $self->{+IMPORTER_PIDS} = \@pids;
+}
+
+sub stop_importers {
+    my $self = shift;
+
+    my $pids = delete $self->{+IMPORTER_PIDS} or croak "Importers not started";
+    $self->_root_proc_check();
+
+    kill('TERM', @$pids);
+
+    for my $pid (@$pids) {
+        local $?;
+        my $got = waitpid($pid, 0);
+        my $exit = $?;
+
+        warn "waitpid returned '$got' expected '$pid'" unless $got == $pid;
+        warn "importer process exited with $exit" if $exit;
+    }
+
+    return;
+}
+
+sub _root_proc_check {
+    my $self = shift;
+    confess "root_pid is not set, did you start any servers?" unless $self->{+ROOT_PID};
+    return if $$ == $self->{+ROOT_PID};
+    confess "Attempt to manage processes from the wrong process";
+}
+
+sub shutdown {
+    my $self = shift;
+
+    $self->_root_proc_check();
+
+    $self->stop_importers()    if $self->importer_pids;
+    $self->stop_ephemeral_db() if $self->qdb;
+    $self->stop_server()       if $self->pid;
+}
+
+sub DESTROY {
+    my $self = shift;
+
+    local $?;
+
+    return unless $self->{+ROOT_PID};
+    return unless $self->{+ROOT_PID} == $$;
+
+    $self->shutdown();
+}
 
 __END__
 
@@ -250,22 +323,13 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server - Web interface for viewing and inspecting yath test logs
-
-=head1 EARLY VERSION WARNING
-
-This program is still in early development. There are many bugs, missing
-features, and things that will change.
+App::Yath::Server - FIXME
 
 =head1 DESCRIPTION
 
-This package provides a web UI for yath logs.
 
 =head1 SYNOPSIS
 
-The easiest thing to do is use the C<yath ui path/to/logfile> command, which
-will create a temporary postgresql db, load your log into it, then launch the
-app in starman on a local port that you can visit in your browser.
 
 =head1 SOURCE
 

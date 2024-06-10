@@ -1,10 +1,169 @@
-function build_resource(cont, item) {
+$(function() {
+    var content = $('div#content');
+    var runs    = $('div#run_list');
+
+    var state = {
+        'min': null,
+        'max': null,
+        'data': null,
+        'rendered': null,
+        'tailing': tailing,
+        'selected': selected,
+        'complete': false,
+    };
+
+    t2hui.fetch(
+        data_uri + "/stream",
+        {
+            "done": function() {
+                if (state.complete) { return }
+                content.prepend('<div class="timeout">Connection has timed out, reload page to get updates.</div>');
+            }
+        },
+        function(item) {
+            if (!item)         { return                }
+            if (item.complete) { state.complete = true }
+            if (item.max)      { state.max = item.max  }
+            if (item.min)      { state.min = item.min  }
+
+            if (item.run_uuid) {
+                var stream_url = base_uri + 'stream/run/' + item.run_uuid;
+                var run_table = t2hui.runtable.build_table();
+                runs.append(run_table.render());
+
+                t2hui.fetch(
+                    stream_url,
+                    {},
+                    function(item) {
+                        if (item.type === 'run') {
+                            run_table.render_item(item.data, item.data.run_uuid);
+                        }
+                    }
+                );
+            }
+
+            redraw_resources(state, item.data);
+        }
+    );
+});
+
+function redraw_resources(state, data) {
+    if (!state.min || !state.max) {
+        return;
+    }
+
+    if (!state.rendered || !state.range) {
+        var range   = {};
+        range.dom   = $('<input type="range" min="' + state.min + '" max="' + state.max + '"></input>');
+        range.tail  = $('<input type="button" value="&#9658;"></input>');
+        range.stop  = $('<input type="button" value="&#9632;"></input>');
+        range.prev  = $('<input type="button" value="&lt;"></input>');
+        range.next  = $('<input type="button" value="&gt;"></input>');
+        range.first = $('<input type="button" value="&lt;&lt;"></input>');
+        range.last  = $('<input type="button" value="&gt;&gt;"></input>');
+
+        var range_inner = $('<div class="range_selector_inner"></div>');
+        var range_wrap  = $('<div class="range_selector"><h1>Timerange Selector</h1></div>');
+
+        range.select = $('<div class="range_selector_select"></div>');
+
+        range_inner.append(range.dom);
+        range_wrap.append(range.last, range.next, range.tail, range.stop, range.prev, range.first, range_inner, range.select);
+
+        state.pick_range = function(idx, idx_data) {
+            range.dom.val(idx);
+            state.selected = idx;
+            render_resource(idx, idx_data);
+        };
+
+        var selector_change = function() {
+            state.tailing = false;
+            var idx = range.dom.val();
+            state.pick_range(idx);
+        };
+
+        range.dom.on('input', selector_change);
+        range.dom.change(selector_change);
+
+        range.stop.click(function()  { state.tailing = false });
+        range.tail.click(function()  { state.tailing = true;  state.pick_range(state.max)});
+        range.first.click(function() { state.tailing = false; state.pick_range(state.min)});
+        range.last.click(function()  { state.tailing = false; state.pick_range(state.max)});
+
+        range.next.click(function() {
+            var idx = range.dom.val();
+            idx = Number(idx) + 1;
+            if (idx > state.max) { return }
+            state.tailing = false;
+            state.pick_range(idx);
+        });
+
+        range.prev.click(function() {
+            var idx = range.dom.val();
+            idx = Number(idx) - 1;
+            if (idx < state.min) { return }
+            state.tailing = false;
+            state.pick_range(idx);
+        });
+
+        state.rendered = $('div#resource_wrapper');
+        state.rendered.removeClass('loading');
+        state.rendered.addClass('rendered');
+        state.rendered.empty();
+        state.rendered.prepend(range_wrap);
+        state.range = range;
+    }
+
+    var range = state.range;
+    range.dom.attr('min', state.min);
+    range.dom.attr('max', state.max);
+
+    if (state.tailing && range.selected != state.max) {
+        state.pick_range(state.max, data);
+    }
+}
+
+function render_resource(idx, data) {
+    if (data && data.ord == idx) {
+        do_render_resource(idx, data.resources);
+        return;
+    }
+
+    $.ajax(data_uri + '/' + idx, {
+        'data': { 'content-type': 'application/json' },
+        'error': function() {
+            content.append('<div class="error">Could not load resources for index "' + idx + '"</div>');
+        },
+        'success': function(item) {
+            do_render_resource(idx, item.resources);
+        },
+    });
+}
+
+function do_render_resource(idx, data) {
+
+    var content = $('div#content');
+    var resources = [];
+
+    data.forEach(function(res) {
+        var res = build_resource(res);
+        resources.push(res);
+    });
+
+    content.children('div.resource').detach();
+    content.append(resources);
+
+    history.replaceState({"index": idx}, null, res_uri + '/' + idx);
+}
+
+
+function build_resource(item) {
     var res = $('<div class="resource"></div>');
-    var name = $('<h1>' + item.resource + '</h1>');
+    var name = $('<h1>' + item.name + '</h1>');
     res.append(name);
 
-    if (item.groups) {
-        item.groups.forEach(function(group) {
+    if (item.data) {
+        item.data.forEach(function(group) {
             build_group(res, group);
         });
     }
@@ -55,175 +214,3 @@ function build_table(res, table) {
 
     res.append(t);
 }
-
-function select_stamp(stamps) {
-    if (!stamps) { return }
-    if (!stamps.select) { return }
-
-    var selected = stamps.selected;
-    if (!selected) { return }
-
-    var data = stamps.lookup[selected];
-    if (data == null) { return }
-
-    var name = data["val"];
-    var idx  = data["idx"];
-
-    stamps.selected = null;
-    stamps.select.html('<a href="' + res_uri + '/' + selected + '">' + name + '</a>');
-    stamps.dom.val(idx);
-}
-
-function load_resource(stamp) {
-    var content = $('div#content');
-
-    $.ajax(stamp_uri + '/' + stamp, {
-        'data': { 'content-type': 'application/json' },
-        'error': function() {
-            content.append('<div class="error">Could not load resources for timestamp "' + stamp + '"</div>');
-        },
-        'success': function(item) {
-            var resources = [];
-
-            item.resources.forEach(function(res) {
-                var res = build_resource( content, res );
-                resources.push(res);
-            });
-
-            content.children('div.resource').detach();
-            content.append(resources);
-
-            history.replaceState({"stamp": stamp}, null, res_uri + '/' + stamp);
-        },
-    });
-}
-
-$(function() {
-    var content = $('div#content');
-    var runs    = $('div#run_list');
-
-    var stamps = {
-        "dom": null,
-        "list": [],
-        "lookup": {},
-        "selected": null,
-        "select": null,
-    };
-
-    var complete = false;
-    t2hui.fetch(
-        stamp_uri,
-        {
-            "done": function() {
-                if (complete) { return }
-                content.prepend('<div class="timeout">Connection has timed out, reload page to get updates.</div>');
-            }
-        },
-        function(item) {
-            if (!item)         { return }
-            if (item.complete) { complete = true }
-
-            if (item.run_id) {
-                var stream_url = base_uri + 'stream/run/' + item.run_id;
-                var run_table = t2hui.runtable.build_table();
-                runs.append(run_table.render());
-
-                t2hui.fetch(
-                    stream_url,
-                    {},
-                    function(item) {
-                        if (item.type === 'run') {
-                            run_table.render_item(item.data, item.data.run_id);
-                        }
-                    }
-                );
-            }
-
-            if (item.stamps) {
-                if (!stamps.dom) {
-                    stamps.dom = $('<input type="range" min="0"></input>');
-                    stamps.tail = $('<input type="button" value="&#9658;"></input>');
-                    stamps.stop = $('<input type="button" value="&#9632;"></input>');
-                    stamps.prev = $('<input type="button" value="&lt;"></input>');
-                    stamps.next = $('<input type="button" value="&gt;"></input>');
-                    stamps.first = $('<input type="button" value="&lt;&lt;"></input>');
-                    stamps.last = $('<input type="button" value="&gt;&gt;"></input>');
-                    var stamp_inner = $('<div class="stamp_selector_inner"></div>');
-                    var stamp_wrap = $('<div class="stamp_selector"><h1>Timestamp Selector</h1></div>');
-
-                    stamps.select = $('<div class="stamp_selector_select"></div>');
-
-                    stamp_inner.append(stamps.dom);
-                    stamp_wrap.append(stamps.last, stamps.next, stamps.tail, stamps.stop, stamps.prev, stamps.first, stamp_inner, stamps.select);
-                    content.find('#put_stamps_here').append(stamp_wrap);
-
-                    var selector_change = function() {
-                        tailing = false;
-                        var idx = stamps.dom.val();
-                        load_resource(stamps.list[idx]);
-                        stamps.selected = stamps.list[idx];
-                        select_stamp(stamps);
-                    };
-
-                    var pick_stamp = function(stamp) {
-                        load_resource(stamp);
-                        stamps.selected = stamp;
-                        select_stamp(stamps);
-                    }
-
-                    stamps.dom.on('input', selector_change);
-                    stamps.dom.change(selector_change);
-
-                    stamps.stop.click(function()  { tailing = false });
-                    stamps.tail.click(function()  { tailing = true;  pick_stamp(stamps.list[stamps.list.length - 1]) });
-                    stamps.first.click(function() { tailing = false; pick_stamp(stamps.list[0]); });
-                    stamps.last.click(function()  { tailing = false; pick_stamp(stamps.list[stamps.list.length - 1]) });
-
-                    stamps.next.click(function() {
-                        var idx = stamps.dom.val();
-                        idx = idx - (0 - 1);
-                        if (!stamps.list[idx]) { return }
-                        tailing = false;
-                        pick_stamp(stamps.list[idx]);
-                    });
-
-                    stamps.prev.click(function() {
-                        var idx = stamps.dom.val();
-                        idx = idx - 1;
-                        if (idx < 0) { return }
-                        if (!stamps.list[idx]) { return }
-                        tailing = false;
-                        pick_stamp(stamps.list[idx]);
-                    });
-
-                    if (selected) {
-                        pick_stamp(selected);
-                    }
-                }
-
-                item.stamps.forEach(function(stamp) {
-                    var id = stamp[0];
-                    var val = stamp[1];
-
-                    if (stamps.lookup[id]) { return }
-
-                    stamps.list.push(id);
-                    var idx = stamps.list.length - 1
-                    stamps.lookup[id] = {
-                        "idx": idx,
-                        "val": val,
-                    };
-
-                    stamps.dom.attr("max", idx);
-
-                    if (tailing) {
-                        stamps.selected = id;
-                        load_resource(id);
-                    }
-                });
-
-                if (stamps.selected && stamps.select) { select_stamp(stamps) }
-            }
-        },
-    );
-});

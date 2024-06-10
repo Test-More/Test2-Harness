@@ -28,7 +28,7 @@ sub handle {
 
     my $sweeper = App::Yath::Schema::Sweeper->new(
         interval => $interval,
-        config   => $self->{+CONFIG},
+        config   => $self->{+SCHEMA_CONFIG},
     );
 
     my $purged = $sweeper->sweep;

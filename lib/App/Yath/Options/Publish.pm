@@ -1,4 +1,4 @@
-package App::Yath::Options::Upload;
+package App::Yath::Options::Publish;
 use strict;
 use warnings;
 
@@ -6,20 +6,7 @@ our $VERSION = '2.000000';
 
 use Getopt::Yath;
 
-option_group {group => 'upload', prefix => 'upload', category => "DB Upload Options"} => sub {
-    option flush_interval => (
-        type => 'Scalar',
-        long_examples => [' 2', ' 1.5'],
-        description => 'When buffering DB writes, force a flush when an event is recieved at least N seconds after the last flush.',
-    );
-
-    option buffering => (
-        type => 'Scalar',
-        long_examples => [ ' none', ' job', ' diag', ' run' ],
-        description => 'Type of buffering to use, if "none" then events are written to the db one at a time, which is SLOW',
-        default => 'diag',
-    );
-
+option_group {group => 'publish', prefix => 'publish', category => "Publish Options"} => sub {
     option mode => (
         type => 'Scalar',
         default => 'qvfd',
@@ -32,15 +19,28 @@ option_group {group => 'upload', prefix => 'upload', category => "DB Upload Opti
         ],
     );
 
-    option user => (
+    option flush_interval => (
         type => 'Scalar',
-        default => sub { $ENV{USER} },
-        description => "Username to be associated with runs stored in the database. Defaults to your shell username.",
+        long_examples => [' 2', ' 1.5'],
+        description => 'When buffering DB writes, force a flush when an event is recieved at least N seconds after the last flush.',
+    );
+
+    option buffer_size => (
+        type => 'Scalar',
+        long_examples => [ ' 100' ],
+        description => 'Maximum number of events, coverage, or reporting items to buffer before flushing them (each has its own buffer of this size, and each job has its own event buffer of this size)',
+        default => 100,
     );
 
     option retry => (
         type => 'Count',
-        description => "How many times to try an operation before giving up",
+        description => "How many times to retry an operation before giving up",
+        default => 0,
+    );
+
+    option force => (
+        type => 'Bool',
+        description => 'If the run has already been published, override it. (Delete it, and publish again)',
         default => 0,
     );
 };
@@ -55,7 +55,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Upload - FIXME
+App::Yath::Options::Publish - FIXME
 
 =head1 DESCRIPTION
 

@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
@@ -25,7 +24,7 @@ sub handle {
     my $user_name    = $route->{user};
     my $count        = $route->{count} || 10;
 
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
     my $runs   = $schema->vague_run_search(
         username     => $user_name,
         project_name => $project_name,

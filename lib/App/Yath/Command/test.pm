@@ -24,6 +24,8 @@ include_options(
     'App::Yath::Command::run',
 );
 
+use App::Yath::Options::Tests qw/ set_dot_args /;
+
 option_group {group => 'runner', category => "Runner Options"} => sub {
     option preload_threshold => (
         type    => 'Scalar',
@@ -35,6 +37,7 @@ option_group {group => 'runner', category => "Runner Options"} => sub {
     );
 };
 
+sub accepts_dot_args { 1 }
 sub args_include_tests { 1 }
 
 sub group { ' main' }
@@ -120,6 +123,7 @@ sub become_instance {
         instance_ipc      => $instance->ipc->[0]->callback,
         test_settings     => $ts,
         jobs              => $jobs,
+        settings          => $settings,
     );
 
     $instance->scheduler->queue_run($run);

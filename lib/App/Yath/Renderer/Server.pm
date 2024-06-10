@@ -11,7 +11,7 @@ use App::Yath::Schema::RunProcessor;
 use Test2::Util qw/pkg_to_file/;
 use Test2::Harness::Util qw/mod2file/;
 use App::Yath::Server::Util qw/share_dir share_file dbd_driver qdb_driver/;
-use App::Yath::Schema::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use DBIx::QuickDB;
 use Plack::Builder;
@@ -153,10 +153,10 @@ sub init {
     );
 
     $self->{+USER} = 'root';
-    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root', user_id => gen_uuid()});
+    my $user = $config->schema->resultset('User')->create({username => 'root', password => 'root', realname => 'root'});
 
     $self->{+PROJECT} = 'default';
-    my $proj = $config->schema->resultset('Project')->create({name => 'default', project_id => gen_uuid()});
+    my $proj = $config->schema->resultset('Project')->create({name => 'default'});
 
     $self->{+CONFIG} = $config;
 

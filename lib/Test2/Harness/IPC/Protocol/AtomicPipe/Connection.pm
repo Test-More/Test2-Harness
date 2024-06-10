@@ -13,7 +13,7 @@ use Time::HiRes qw/sleep/;
 use Scalar::Util qw/weaken blessed/;
 
 use Test2::Harness::IPC::Util qw/check_pipe ipc_warn pid_is_running/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json/;
 
 use Test2::Harness::Instance::Message;

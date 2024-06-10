@@ -4,13 +4,12 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -29,13 +28,12 @@ sub handle {
 
     my $run;
 
-    if ($self->{+CONFIG}->single_run) {
+    if ($self->single_run) {
         $run = $user->runs->first or die error(404 => 'Invalid run');
     }
     else {
         my $it = $route->{id} or die error(404 => 'No id');
-        $it = uuid_inflate($it) or die error(404 => 'Invalid Run');
-        my $schema = $self->{+CONFIG}->schema;
+        my $schema = $self->schema;
         $run = $schema->resultset('Run')->find({run_id => $it}) or die error(404 => 'Invalid Run');
     }
 

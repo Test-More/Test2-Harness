@@ -41,11 +41,15 @@ sub option_modules {
         'App::Yath::Options::Yath',
         'App::Yath::Options::Renderer',
         'App::Yath::Options::Tests',
+        'App::Yath::Options::DB',
+        'App::Yath::Options::WebClient',
     );
 }
 
 use Getopt::Yath;
 include_options(__PACKAGE__->option_modules);
+
+use App::Yath::Options::Tests qw/ set_dot_args /;
 
 option_group {group => 'start', category => "Start Options"} => sub {
     option foreground => (
@@ -62,6 +66,7 @@ sub load_plugins   { 1 }
 sub load_resources { 1 }
 sub load_renderers { 1 }
 
+sub accepts_dot_args { 1 }
 sub args_include_tests { 0 }
 
 sub group { 'daemon' }

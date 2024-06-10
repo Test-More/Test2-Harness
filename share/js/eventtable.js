@@ -66,6 +66,7 @@ t2hui.eventtable.build_table = function(run, job, controls) {
 t2hui.eventtable.expand_lines = function(item) {
     var out = [];
 
+
     var tools = true;
     var count = 0;
     item.lines.forEach(function(line) {
@@ -78,7 +79,7 @@ t2hui.eventtable.expand_lines = function(item) {
             'item': item,
             'set_ord': count++,
             'set_total': item.lines.length,
-            'id': item.event_id,
+            'id': item.event_uuid,
         });
         tools = false;
     });
@@ -94,10 +95,10 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 
     if (item.item.is_parent == false) { return }
 
-    var events_uri = base_uri + 'event/' + item.item.event_id + '/events';
+    var events_uri = base_uri + 'event/' + item.item.event_uuid + '/events';
 
     var jumpto = window.location.hash.substr(1);
-    var highlight = item.item.event_id === jumpto ? true : false;
+    var highlight = item.item.event_uuid === jumpto ? true : false;
 
     var expand = $('<div class="stoggle">+</div>');
 
@@ -126,17 +127,17 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 
                         if (highlight) {
                             row.addClass('highlight');
-                            $('[data-parent-id="' + item.item.event_id + '"]').addClass('highlight');
+                            $('[data-parent-id="' + item.item.event_uuid + '"]').addClass('highlight');
                         }
                         else {
                             row.removeClass('highlight');
-                            $('[data-parent-id="' + item.item.event_id + '"]').removeClass('highlight');
+                            $('[data-parent-id="' + item.item.event_uuid + '"]').removeClass('highlight');
                         }
                     });
                 }
             },
             function(e) {
-                var params = {"data": {"parent-id": item.item.event_id}};
+                var params = {"data": {"parent-id": item.item.event_uuid}};
                 if (highlight) {
                     params.class = "highlight";
                 }
@@ -157,8 +158,11 @@ t2hui.eventtable.message_builder = function(item, dest, data, table) {
 }
 
 t2hui.eventtable.place_row = function(row, item, table, state) {
-    if (!item.item['loading_subtest']) {
-        if (item.item.orphan) {
+    if (item.item.orphan) {
+        if (item.item['loading_subtest']) {
+            row.addClass('stuck_orphan');
+        }
+        else {
             row.addClass('temp_orphan');
             if (!state['orphan']) {
                 state['orphan'] = row;
@@ -178,7 +182,7 @@ t2hui.eventtable.place_row = function(row, item, table, state) {
 
     var pid = item.item['parent_id'];
     if (!state[pid]) {
-        var got = table.table.find('tr[data-event-id="' + item.item.parent_id + '"]');
+        var got = $('tr[data-event-id="' + item.item.parent_uuid + '"]');
         state[pid] = got.last();
     }
 
@@ -196,7 +200,7 @@ t2hui.eventtable.message_inner_builder = function(item, dest, data) {
         return;
     }
 
-    if (typeof(item.extra) === "string") {
+    if (typeof(item.extra) === "number" && item.tag === "IMAGE") {
         var out = $('<div class="binary"></div>');
         var link = $('<a href="/binary/' + item.extra + '">' + item.message + '</a>');
         out.append(link);
@@ -249,41 +253,25 @@ t2hui.eventtable.tool_builder = function(item, tools, data) {
     }
 
     if (item.item.facets) {
-        var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><img src="/img/data.png" /></div>');
+        var img = "/img/data.png";
+        if (item.item.orphan) {
+            img = "/img/orphan.png";
+        }
+
+        var efacet = $('<div class="tool etoggle" title="See Raw Facet Data"><img src="' + img + '" /></div>');
         tools.append(efacet);
         efacet.click(function() {
             $('#modal_body').empty();
             $('#modal_body').text("loading...");
             $('#free_modal').slideDown();
 
-            var uri = base_uri + 'event/' + item.item.event_id;
+            var uri = base_uri + 'event/' + item.item.event_uuid;
 
             $.ajax(uri, {
                 'data': { 'content-type': 'application/json' },
                 'success': function(event) {
                     $('#modal_body').empty();
                     var formatter = new JSONFormatter(event.facets, 2);
-                    $('#modal_body').html(formatter.render());
-                },
-            });
-        });
-    }
-
-    if (item.item.orphan) {
-        var eorphan = $('<div class="tool etoggle" title="See Orphan Facet Data"><img src="/img/orphan.png" /></div>');
-        tools.append(eorphan);
-        eorphan.click(function() {
-            $('#modal_body').empty();
-            $('#modal_body').text("loading...");
-            $('#free_modal').slideDown();
-
-            var uri = base_uri + 'event/' + item.item.event_id;
-
-            $.ajax(uri, {
-                'data': { 'content-type': 'application/json' },
-                'success': function(event) {
-                    $('#modal_body').empty();
-                    var formatter = new JSONFormatter(event.orphan, 2);
                     $('#modal_body').html(formatter.render());
                 },
             });
@@ -304,7 +292,7 @@ t2hui.eventtable.modify_row = function(row, item, table, controls) {
     row.addClass('facet_' + item.facet);
     row.addClass('tag_' + ctag);
 
-    row.attr('data-event-id', item.item.event_id);
+    row.attr('data-event-id', item.item.event_uuid);
 
     if (!controls.filters.seen[tag]) {
         controls.filters.state[tag] = !controls.filters.hide[tag];

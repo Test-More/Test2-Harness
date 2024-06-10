@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase;
@@ -26,15 +26,11 @@ sub handle {
     my $project_name = $route->{project};
     my $username     = $route->{username};
 
-    if ($run_id) {
-        $run_id = uuid_inflate($run_id) or die error(404 => "Invalid run id");
-    }
-
     error(404 => 'No source') unless $run_id || ($project_name && $username);
-    my $schema = $self->{+CONFIG}->schema;
+    my $schema = $self->schema;
 
     my $query = {};
-    my $attrs = {order_by => {'-desc' => 'run_ord'}, rows => 1};
+    my $attrs = {order_by => {'-desc' => 'run_id'}, rows => 1};
 
     my $run;
     my $ok = eval {

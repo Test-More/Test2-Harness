@@ -20,6 +20,11 @@ use Test2::Harness::Util::HashBase qw{
 };
 
 use Getopt::Yath;
+
+include_options(
+    'App::Yath::Options::WebClient',
+);
+
 option_group {group => 'logging', category => "Logging Options", applicable => \&applicable} => sub {
     option dir => (
         prefix      => 'log',
@@ -57,6 +62,19 @@ option_group {group => 'logging', category => "Logging Options", applicable => \
             }
         }
     };
+
+    option publish => (
+        type => 'Auto',
+        description => 'Publish the log to a yath server, will use the --url if one is provided, otherwise use =URL to specify a url',
+        long_examples => ['', '=URL'],
+        short_examples => ['', '=URL'],
+        notes => 'This should not be used in combination with the DB renderer if the url uses the database.',
+        autofill => sub {
+            my ($option, $settings) = @_;
+            my $url = $settings->webclient->url or die "No --url specified, either provide one or give a value to the --publish option.\n(NOTE: the --url option must come before the --publish option on the command line)\n";
+            return $url;
+        },
+    );
 
     option log => (
         type        => 'Auto',
@@ -202,6 +220,8 @@ sub finish {
     close($self->{+FH});
 
     print "\nWrote log file: $self->{+FILE}\n";
+
+    warn "FIXME: publish should send log to server\n";
 }
 
 sub weight { -100 }

@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 use Time::HiRes qw/sleep time/;
-use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::Util::JSON qw/encode_json encode_ascii_json/;
 
 use parent 'Plack::Response';
 
@@ -76,7 +76,6 @@ sub stream {
 
         my ($done, $fetch);
         if(my $rs = $params{resultset}) {
-            my $json = Test2::Harness::Util::JSON::JSON()->new->utf8(0)->convert_blessed(1)->allow_nonref(1);
             my $go = 1;
             $done = sub { !$go };
             $fetch = sub {
@@ -85,7 +84,7 @@ sub stream {
                 if(my $meth = $params{data_method}) {
                     $data = $go->$meth();
                 }
-                my $out = $json->encode($data) . "\n";
+                my $out = encode_ascii_json($data) . "\n";
                 return $out;
             };
         }

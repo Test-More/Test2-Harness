@@ -1,16 +1,15 @@
-package App::Yath::Server::Controller::JobField;
+package App::Yath::Server::Controller::JobTryField;
 use strict;
 use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::GUID;
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
-use App::Yath::Schema::UUID qw/uuid_inflate/;
+
 
 use parent 'App::Yath::Server::Controller';
 use Test2::Harness::Util::HashBase qw/-title/;
@@ -27,9 +26,8 @@ sub handle {
     die error(404 => 'Missing route') unless $route;
 
     my $it = $route->{id} or die error(404 => 'No id');
-    $it = uuid_inflate($it) or die error(404 => "Invalid id");
-    my $schema = $self->{+CONFIG}->schema;
-    my $field = $schema->resultset('JobField')->find({job_field_id => $it}) or die error(404 => 'Invalid Field');
+    my $schema = $self->schema;
+    my $field = $schema->resultset('JobTryField')->find({job_try_field_id => $it}) or die error(404 => 'Invalid Field');
 
     if (my $act = $route->{action}) {
         if ($act eq 'delete') {

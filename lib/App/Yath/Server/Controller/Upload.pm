@@ -6,13 +6,13 @@ our $VERSION = '2.000000';
 
 use Text::Xslate();
 
-use App::Yath::Schema::UUID qw/uuid_inflate/;
 use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/open_file/;
 
+
 use App::Yath::Schema::Queries();
 
-use App::Yath::Server::Util qw/share_dir/;
+use App::Yath::Util qw/share_dir/;
 use App::Yath::Server::Response qw/resp error/;
 
 use parent 'App::Yath::Server::Controller';
@@ -44,9 +44,9 @@ sub handle {
         'upload.tx',
         {
             base_uri => $req->base->as_string,
-            single_user => $self->{+CONFIG}->single_user,
+            single_user => $self->single_user,
             user     => $user,
-            projects => App::Yath::Schema::Queries->new(config => $self->{+CONFIG})->projects,
+            projects => App::Yath::Schema::Queries->new(config => $self->{+SCHEMA_CONFIG})->projects,
         }
     );
 
@@ -95,11 +95,12 @@ sub process_form {
     open(my $fh, '<:raw', $tmp) or die "Could not open uploaded file '$tmp': $!";
 
     my $run = $self->schema->resultset('Run')->create({
-        $run_id ? (run_id => $run_id) : (),
+        $run_id ? (run_uuid => $run_id) : (),
         user_id    => ref($user) ? $user->user_id : 1,
         project_id => $project->project_id,
         mode       => $mode,
         status     => 'pending',
+        canon      => 1,
 
         log_file => {
             name => $file,
@@ -118,7 +119,7 @@ sub api_user {
     return unless $key_val;
 
     my $schema = $self->schema;
-    my $key = $schema->resultset('ApiKey')->find({value => uuid_inflate($key_val)})
+    my $key = $schema->resultset('ApiKey')->find({value => $key_val})
         or return undef;
 
     return undef unless $key->status eq 'active';

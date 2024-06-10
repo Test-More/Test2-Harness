@@ -573,7 +573,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Sync - Module for dumping, loading, and syncing yathui databases
+App::Yath::Schema::Sync - Module for dumping, loading, and syncing yath databases
 
 =head1 DESCRIPTION
 

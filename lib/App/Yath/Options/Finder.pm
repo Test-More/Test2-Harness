@@ -8,11 +8,11 @@ use Test2::Harness::Util qw/fqmod/;
 use Getopt::Yath;
 
 my %RERUN_MODES = (
-    all     => "Re-Run all tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
-    failed  => "Re-Run failed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
-    retried => "Re-Run retried tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
-    passed  => "Re-Run passed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
-    missed  => "Run missed tests from a previously aborted/stopped run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+    all     => "Re-Run all tests from a previous run from a log file (or last log file). Plugins can intercept this, such as the database plugin which will grab a run UUID and derive tests to re-run from that.",
+    failed  => "Re-Run failed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as the database plugin which will grab a run UUID and derive tests to re-run from that.",
+    retried => "Re-Run retried tests from a previous run from a log file (or last log file). Plugins can intercept this, such as the database plugin which will grab a run UUID and derive tests to re-run from that.",
+    passed  => "Re-Run passed tests from a previous run from a log file (or last log file). Plugins can intercept this, such as the database plugin which will grab a run UUID and derive tests to re-run from that.",
+    missed  => "Run missed tests from a previously aborted/stopped run from a log file (or last log file). Plugins can intercept this, such as the database plugin which will grab a run UUID and derive tests to re-run from that.",
 );
 
 option_group {group => 'finder', category => "Finder Options"} => sub {
@@ -66,7 +66,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     option rerun => (
         type => 'Auto',
 
-        description   => "Re-Run tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
+        description   => "Re-Run tests from a previous run from a log file (or last log file). Plugins can intercept this, such as the database plugin which will grab a run UUID and derive tests to re-run from that.",
         long_examples => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
 
         autofill => sub {

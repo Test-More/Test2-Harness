@@ -20,7 +20,7 @@ include_options(
     'App::Yath::Options::DB',
 );
 
-sub summary { "Show a list of recent runs on a yathui server" }
+sub summary { "Show a list of recent runs (using logs, database and/or server" }
 
 sub group { 'recent' }
 

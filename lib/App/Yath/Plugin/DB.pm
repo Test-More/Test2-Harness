@@ -49,6 +49,7 @@ option_group {group => 'db', prefix => 'db', category => "Database Options"} => 
 sub get_coverage_tests {
     my ($plugin, $settings, $changes) = @_;
 
+    # Fixme yathui-db has been moved to other settings
     my $ydb = $settings->prefix('yathui-db') or return;
     return unless $ydb->coverage;
 
@@ -61,6 +62,7 @@ sub get_coverage_tests {
 
 sub duration_data {
     my ($plugin, $settings) = @_;
+    # Fixme yathui-db has been moved to other settings
     my $ydb = $settings->prefix('yathui-db') or return;
     return unless $ydb->durations;
 
@@ -109,7 +111,7 @@ sub grab_rerun {
     }
 
     unless ($run) {
-        print $ok ? "No previous run found\n" : "Error getting rerun data from yathui database: $err\n";
+        print $ok ? "No previous run found\n" : "Error getting rerun data from yath database: $err\n";
         return (1);
     }
 
@@ -159,6 +161,7 @@ sub get_coverage_searches {
 sub get_coverage_rows {
     my ($plugin, $settings, $changes) = @_;
 
+    # Fixme yathui-db has been moved to other settings
     my $ydb = $settings->prefix('yathui-db') or return;
     return unless $ydb->coverage;
 

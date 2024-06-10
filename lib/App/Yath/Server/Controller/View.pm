@@ -17,7 +17,7 @@ sub handle {
     my $self = shift;
     my ($route) = @_;
 
-    $self->{+TITLE} = 'YathUI';
+    $self->{+TITLE} = 'Yath';
 
     my $req = $self->{+REQUEST};
 

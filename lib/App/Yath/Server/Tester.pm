@@ -2,6 +2,8 @@ package App::Yath::Tester::Server;
 use strict;
 use warnings;
 
+# FIXME: This module needs to be reworked
+
 our $VERSION = '2.000000';
 
 BEGIN { $ENV{T2_HARNESS_UI_ENV} = 'dev' }

@@ -29,9 +29,9 @@ sub sweep {
     $params{subtests}   //= 1;
     $params{run_fields} //= 1;
     $params{job_fields} //= 1;
-    $params{run_concurrency} //= $ENV{YATHUI_SWEEPER_RUN_CONCURRENCY} // 1;
-    $params{job_concurrency} //= $ENV{YATHUI_SWEEPER_JOB_CONCURRENCY} // 1;
-    $params{sweep_name}      //= $ENV{YATHUI_SWEEPER_NAME};
+    $params{run_concurrency} //= $ENV{YATH_SWEEPER_RUN_CONCURRENCY} // 1;
+    $params{job_concurrency} //= $ENV{YATH_SWEEPER_JOB_CONCURRENCY} // 1;
+    $params{sweep_name}      //= $ENV{YATH_SWEEPER_NAME};
 
     # Cannot remove jobs if we keep events
     $params{jobs} = 0 unless $params{events} && $params{subtests} && $params{job_fields};

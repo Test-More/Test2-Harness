@@ -15,7 +15,7 @@ include_options(
     'App::Yath::Options::WebClient',
 );
 
-sub summary { "Show a list of recent runs on a yathui server" }
+sub summary { "Show a list of recent runs on a yath server" }
 
 sub description {
     return <<"    EOT";

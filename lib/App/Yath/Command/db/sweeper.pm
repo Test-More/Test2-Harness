@@ -91,7 +91,7 @@ option_group {group => 'sweeper', category => "Sweeper Options"} => sub {
     option name => (
         type => 'Scalar',
         default => sub { $ENV{USER} },
-        from_env_vars => ['YATHUI_SWEEPER_NAME'],
+        from_env_vars => ['YATH_SWEEPER_NAME'],
         description => "Give a name to the sweep",
     );
 };

@@ -23,7 +23,7 @@ option_group {group => 'webclient', category => "Web Client Options"} => sub {
 
     option grace => (
         type => 'Bool',
-        description => "If yath cannot connect to yath-ui it normally throws an error, use this to make it fail gracefully. You get a warning, but things keep going.",
+        description => "If yath cannot connect to a server it normally throws an error, use this to make it fail gracefully. You get a warning, but things keep going.",
         default => 0,
     );
 

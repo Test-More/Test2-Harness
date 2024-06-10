@@ -30,6 +30,8 @@ use Test2::Harness::Util::HashBase qw{
     port
 };
 
+# FIXME: This entire module is in need of fixing
+
 use Getopt::Yath;
 option_group {group => 'ui', prefix => 'ui', category => "YathUI Renderer Options"} => sub {
     option user => (

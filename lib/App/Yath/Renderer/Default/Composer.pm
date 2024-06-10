@@ -344,9 +344,8 @@ App::Yath::Renderer::Default::Composer - Compose output components from event fa
 =head1 DESCRIPTION
 
 This is used by L<App::Yath::Renderer::Default> to turn events into output
-components. This logic lives here instead of in the formatter because it is
-also used by L<Test2::Harness::UI>. Other tools may also find this conversion
-useful.
+components. This logic lives here instead of in the renderer because it is
+also used for the yath web server.
 
 =head1 SYNOPSIS
 

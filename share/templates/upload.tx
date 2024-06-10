@@ -1,0 +1,56 @@
+<div id="log_upload">
+    <form id="log_upload" method="POST" enctype="multipart/form-data">
+        <dl class="form">
+            <dt><label for="project">Project</label></dt>
+            <dd>
+                <input type="text" name="project" id="project" list="projects" required>
+                <datalist id="projects">
+                    : for $projects -> $project {
+                        <option value="<: $project :>">
+                    : }
+                </datalist>
+                <small>Required</small>
+            </dd>
+
+            <dt><label for="log_file">Log File</label></dt>
+            <dd><input type="file" name="log_file" id="log_file" accept=".jsonl.bz2,.jsonl.gz" required></dd>
+
+            : if !$user && !$single_user {
+                <dt><label for="api_key">API Key</label></dt>
+                <dd>
+                    <input type="password" name="api_key" id="api_key" required>
+                    <small>Log in to avoid entering an API key.</small>
+                </dd>
+            : }
+
+            <dt><label for="mode">Mode</label></dt>
+            <dd>
+                <select name="mode" id="mode">
+                    <option value="summary">Summary</option>
+                    <option value="qvf">QVF</option>
+                    <option value="qvfd" selected>QVF+D</option>
+                    <option value="complete">Complete</option>
+                </select>
+                    <dl class="tiny">
+                        <dt>Summary</dt>
+                        <dd>Import each test job/file, but no events. (You can only see ovarall pass/fail)</dd>
+                        <dt>QVF</dt>
+                        <dd>Import summaries for passing jobs, but all events for failing ones.</dd>
+                        <dt>QVF+D</dt>
+                        <dd>Same as QVF except diagnostics events are also imported for passing jobs.</dd>
+                        <dt>Complete</dt>
+                        <dd>Import all events for all jobs.</dd>
+                    </dl>
+            </dd>
+
+            <dt>&nbsp;</dt>
+            <dd>
+                <br />
+                <input type="submit" value="Upload Log" name="action">
+            </dd>
+        </dl>
+
+    </form>
+</div>
+
+

@@ -1,0 +1,12 @@
+<script>
+    res_uri  = '<: $res_uri :>';
+    data_uri = '<: $data_uri :>';
+    tailing  = <: $tailing ? "true" : "false" :>;
+    selected = '<: $selected :>';
+</script>
+
+<div id="resource_wrapper" class="loading">
+    <B>Waiting for resource data...</B>
+</div>
+
+<div id="run_list"></div>

@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 use Test2::Harness::Util qw/clean_path mod2file fqmod/;
 use Test2::Harness::Util::JSON qw/encode_json stream_json_l/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use parent 'App::Yath::Plugin';
 use Test2::Harness::Util::HashBase qw/-aggregator -no_aggregate +metrics +outfile/;

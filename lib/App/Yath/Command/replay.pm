@@ -16,6 +16,7 @@ use Test2::Harness::Util::HashBase qw{
 };
 
 use Getopt::Yath;
+
 include_options(
     'App::Yath::Options::Renderer',
 );

@@ -22,6 +22,12 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
         description => 'This lets you provide a label for your current project/codebase. This is best used in a .yath.rc file.',
     );
 
+    option user => (
+        type => 'Scalar',
+        description => 'Username to associate with logs, database entries, and yath servers.',
+        from_env_vars => [qw/YATH_USER USER/],
+    );
+
     option base_dir => (
         type        => 'Scalar',
         description => "Root directory for the project being tested (usually where .yath.rc lives)",

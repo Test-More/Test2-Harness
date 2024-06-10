@@ -1,0 +1,48 @@
+use Test2::V0;
+use Test2::Plugin::Cover;
+use Path::Tiny;
+
+use Test2::Harness::Util::JSON qw/encode_json/;
+
+STDIN->blocking(0);
+
+print "INPUT ${ \__FILE__ }: " . encode_json({
+    env   => {map { ($_ => $ENV{$_}) } grep { m/^COVER_TEST_/ } keys %ENV},
+    argv  => [@ARGV],
+    stdin => join('' => <STDIN>),
+}) . "\n";
+
+use Ax;
+use Bx;
+use Cx;
+
+Test2::Plugin::Cover->set_from_manager('Manager');
+Test2::Plugin::Cover->set_root(path('t/integration/coverage/lib')->realpath);
+
+is(Cx->c, 'c', "Got c");
+
+ok($ENV{T2_HARNESS_JOB_IS_TRY}, "Only passes on the second try") if $ENV{A_FAIL_ONCE};
+
+subtest a => sub {
+    Test2::Plugin::Cover->set_from({subtest => 'a'});
+    is(Ax->a, 'a', "Got a");
+    is(Ax->aa, 'aa', "Got aa");
+    Test2::Plugin::Cover->clear_from();
+};
+
+subtest b => sub {
+    Test2::Plugin::Cover->set_from({subtest => 'b'});
+    is(Ax->a, 'a', "Got a");
+    is(Bx->b, 'b', "Got b");
+    Test2::Plugin::Cover->clear_from();
+};
+
+subtest c => sub {
+    Test2::Plugin::Cover->set_from({subtest => 'c'});
+    is(Ax->a, 'a', "Got a");
+    is(Bx->b, 'b', "Got b");
+    is(Cx->c, 'c', "Got c");
+    Test2::Plugin::Cover->clear_from();
+};
+
+done_testing;

@@ -7,7 +7,7 @@ use List::Util qw/shuffle/;
 
 our $VERSION = '2.000000';
 
-use Test2::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     use_color
     _job_color_instances
     color_map_text

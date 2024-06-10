@@ -1,0 +1,27 @@
+div.dashboard_controls {
+    display: block;
+    overflow: hidden;
+    padding: 4px;
+}
+
+div.dashboard_controls div {
+    float: left;
+    display: block;
+    margin-left: 4px;
+    margin-right: 4px;
+    padding: 2px;
+}
+
+div.dashboard_controls div.dashboard_pager {
+    cursor: pointer;
+    border: 1px solid #AAAAAA;
+    border-radius: 6px;
+}
+
+div.dashboard_controls div.dashboard_pager:hover {
+    background: #AAAAAA;
+}
+
+div.dashboard_controls div.dashboard_pager.hide {
+    visibility: hidden;
+}

@@ -94,8 +94,8 @@ App::Yath::Plugin::SysInfo - Plugin to attach system information to a run.
 
 =head1 DESCRIPTION
 
-This plugin attaches a lot of system information to the yath log. This is
-mainly useful if you intend to view the log in L<Test2::Harness::UI>.
+This plugin attaches a lot of system information to the yath log. This is most
+useful when using a database or server.
 
 =head1 SOURCE
 

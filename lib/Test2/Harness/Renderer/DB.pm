@@ -1,24 +1,12 @@
-package Test2::Harness::Util::UUID;
+package Test2::Harness::Renderer::DB;
 use strict;
 use warnings;
 
 our $VERSION = '2.000000';
 
-use Data::UUID;
-use Importer 'Importer' => 'import';
-
-our @EXPORT = qw/gen_uuid/;
-our @EXPORT_OK = qw/UG gen_uuid/;
-
-my ($UG, $UG_PID);
-sub UG {
-    return $UG if $UG && $UG_PID && $UG_PID == $$;
-
-    $UG_PID = $$;
-    return $UG = Data::UUID->new;
-}
-
-sub gen_uuid { UG()->create_str() }
+use Test2::Harness::Util::Deprecated(
+    delegate => 'App::Yath::Renderer::DB',
+);
 
 1;
 
@@ -30,25 +18,15 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Util::UUID - Utils for generating UUIDs.
+Test2::Harness::Renderer::DB - FIXME
 
 =head1 DESCRIPTION
 
-This module provides a consistent UUID source for all of Test2::Harness.
-
 =head1 SYNOPSIS
-
-    use Test2::Harness::Util::UUID qw/gen_uuid/;
-
-    my $uuid = gen_uuid;
 
 =head1 EXPORTS
 
 =over 4
-
-=item $uuid = gen_uuid()
-
-Generate a UUID.
 
 =back
 
@@ -83,3 +61,4 @@ modify it under the same terms as Perl itself.
 See L<http://dev.perl.org/licenses/>
 
 =cut
+

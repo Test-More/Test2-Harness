@@ -1,0 +1,14 @@
+<div id="login">
+    <form id="login_form" method="POST">
+        <dl class="tiny">
+            <dt><label for="username">username<label></dt>
+            <dd><input name="username" id="login_user" type="text" required/></dd>
+
+            <dt><label for="password">password<label></dt>
+            <dd><input name="password" id="login_pass" type="password" required/></dd>
+
+            <dt>&nbsp;</dt>
+            <dd><br /><input type="submit" name="action" value="Login"></dd>
+    </form>
+</div>
+

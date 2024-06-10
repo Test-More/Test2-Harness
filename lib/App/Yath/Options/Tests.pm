@@ -4,7 +4,10 @@ use warnings;
 
 our $VERSION = '2.000000';
 
+use Importer Importer => 'import';
 use Getopt::Yath;
+
+our @EXPORT_OK = qw/ set_dot_args /;
 
 use Test2::Harness::TestSettings;
 my $DEFAULT_COVER_ARGS = Test2::Harness::TestSettings->default_cover_args;
@@ -133,7 +136,7 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
 
     option stream => (
         type   => 'Bool',
-        alt    => ['use_stream'],
+        alt    => ['use-stream'],
         alt_no => ['TAP'],
 
         description => "The TAP format is lossy and clunky. Test2::Harness normally uses a newer streaming format to receive test results. There are old/legacy tests where this causes problems, in which case setting --TAP or --no-stream can help.",
@@ -141,7 +144,7 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
 
     option test_args => (
         type  => 'List',
-        alt   => ['test_arg'],
+        alt   => ['test-arg'],
         field => 'args',
 
         description => 'Arguments to pass in as @ARGV for all tests that are run. These can be provided easier using the \'::\' argument separator.'
@@ -204,6 +207,19 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
         description => 'If true then any job retries will be done in isolation (as though -j1 was set)',
     );
 };
+
+sub set_dot_args {
+    my $class = shift;
+    my ($settings, $dot_args) = @_;
+
+    my $oldvals = $settings->tests->args;
+    unshift @$dot_args => @$oldvals;
+    $settings->tests->option(args => $dot_args);
+
+    return;
+}
+
+
 
 1;
 

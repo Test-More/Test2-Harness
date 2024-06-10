@@ -6,7 +6,7 @@ use parent 'App::Yath::Theme';
 
 our $VERSION = '2.000000';
 
-use Test2::Util::HashBase;
+use Test2::Harness::Util::HashBase;
 
 sub DEFAULT_BASE_COLORS() {
     return (

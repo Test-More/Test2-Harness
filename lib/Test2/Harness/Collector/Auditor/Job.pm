@@ -9,7 +9,7 @@ use Scalar::Util qw/blessed/;
 use List::Util qw/first max/;
 use Time::HiRes qw/time/;
 
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util qw/hub_truth parse_exit/;
 

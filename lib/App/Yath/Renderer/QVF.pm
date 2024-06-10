@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use parent 'App::Yath::Renderer::Default';
-use Test2::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     <job_buffers
     <real_verbose
     <quiet

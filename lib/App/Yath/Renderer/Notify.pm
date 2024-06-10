@@ -108,7 +108,7 @@ option_group {prefix => 'notify', group => 'notify', category => "Notification O
 
     option text_module => (
         type => 'Scalar',
-        alt => ['message_module'],
+        alt => ['message-module'],
         description => "Use the specified module to generate messages for emails and/or slack.",
     );
 

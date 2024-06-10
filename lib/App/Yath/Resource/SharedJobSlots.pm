@@ -18,7 +18,7 @@ use Test2::Harness::Util qw/find_in_updir/;
 
 use Getopt::Yath;
 
-option_group {group => 'shared_slots', category => "Shared Slot Options"} => sub {
+option_group {group => 'resource', category => "Resource Options"} => sub {
     option shared_jobs => (
         type => 'Bool',
         maybe => 1,
@@ -41,16 +41,15 @@ sub shared_post_process {
     my $settings = $state->{settings};
     return unless $settings->check_group('resource');
 
-    my $resource     = $settings->resource;
-    my $shared_slots = $settings->shared_slots;
+    my $resource = $settings->resource;
 
     my $required = 0;
-    if (defined($shared_slots->shared_jobs)) {
-        return unless $shared_slots->shared_jobs;
+    if (defined($resource->shared_jobs)) {
+        return unless $resource->shared_jobs;
         $required = 1;
     }
 
-    my $base_name = $shared_slots->shared_jobs_config;
+    my $base_name = $resource->shared_jobs_config;
 
     unless ($base_name && (-e $base_name || find_in_updir($base_name))) {
         return unless $required;

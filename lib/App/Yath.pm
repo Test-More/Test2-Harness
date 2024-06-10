@@ -104,28 +104,39 @@ sub cli_help {
     my $opts = $options->docs('cli', groups => {':{' => '}:'}, group => $params{group}, settings => $settings, color => $self->use_color);
 
     my $script = File::Spec->abs2rel($settings->yath->script // $0);
-    my $usage = '';
-    my $append = '';
-    if ($self->use_color) {
-        $usage = join ' ' => (
-            color('bold white') . "USAGE:" . color('reset'),
-            color('white') . $script,
-            color('cyan') . "[YATH OPTIONS]",
-            color('bold green') . $cmd . color('reset'),
-            color('cyan') . "[OPTIONS FOR COMMAND AND/OR YATH]",
-            color('yellow') . "[--]",
-        );
 
-        $append = ($cmd_class && $cmd_class->args_include_tests) ? ' ' . join " " => (
-            color('white') . "[ARGUMENTS/TESTS]",
-            color('green') . "[TEST :{ ARGS TO PASS TO TEST }:]",
-            color('magenta') . "[:: PASS-THROUGH]" . color('reset')
-        ) : color('white') . " [ARGUMENTS]";
+    my $colors = {reset => ''};
+    if ($self->use_color) {
+        $colors = {
+            reset     => color('reset'),
+            usage     => color('bold white'),
+            script    => color('white'),
+            yath_opts => color('cyan'),
+            command   => color('bold green'),
+            cmd_opts  => color('cyan'),
+            '--a'     => color('yellow'),
+            '--b'     => color('yellow'),
+            arguments => color('white'),
+            tests     => color('green'),
+            dot_args  => color('magenta'),
+        };
     }
-    else {
-        $usage = "USAGE: $script [YATH OPTIONS] $cmd [OPTIONS FOR COMMAND AND/OR YATH] [--]";
-        $append = ($cmd_class && $cmd_class->args_include_tests) ? " [ARGUMENTS/TESTS] [TEST :{ ARGS TO PASS TO TEST }:] [:: PASS-THROUGH]" : " [ARGUMENTS]";
-    }
+
+    my $parts = {
+        usage     => "USAGE:",
+        script    => $script,
+        yath_opts => "[YATH OPTIONS]",
+        command   => $cmd,
+        cmd_opts  => "[OPTIONS FOR COMMAND AND/OR YATH]",
+        ($cmd_class->cli_args || $cmd_class->args_include_tests) ? ('--a'     => "[[--]", '--b' => ']')                      : (),
+        $cmd_class->args_include_tests                           ? (tests     => "[TEST :{ ARGS TO PASS TO TEST }:]")        : (),
+        $cmd_class->cli_args                                     ? (arguments => $cmd_class->cli_args)                       : (),
+        $cmd_class->accepts_dot_args                             ? (dot_args  => $cmd_class->cli_dot || "[:: PASS-THROUGH]") : (),
+    };
+
+    my $usage = join " " => map { ($colors->{$_} || '') . $parts->{$_} . $colors->{reset} } grep { $parts->{$_} } qw/usage script yath_opts command cmd_opts --a tests arguments/;
+    $usage .= ($colors->{'--b'} || '') . $parts->{'--b'} . $colors->{'reset'} if $parts->{'--b'};
+    $usage .= " " . ($colors->{'dot_args'} || '') . $parts->{'dot_args'} . $colors->{'reset'} if $parts->{'dot_args'};
 
     my $end = "";
     if ($settings->yath->help && !$params{group}) {
@@ -135,7 +146,7 @@ sub cli_help {
         );
     }
 
-    return "${usage}${append}\n${help}\n${opts}\n${end}";
+    return "${usage}\n${help}\n${opts}\n${end}";
 }
 
 sub _strip_color {
@@ -143,8 +154,8 @@ sub _strip_color {
     my ($colors, $line) = @_;
     return $line unless $self->use_color;
 
-    my $pattern = join '|' => map { "\Q$_\E"} values %$colors;
-    $line =~ s/($pattern)//g;
+    my $pattern = join '|' => map { "\Q$_\E"} grep { $_ } values %$colors;
+    $line =~ s/($pattern)//g if $pattern;
 
     return $line;
 }
@@ -309,6 +320,7 @@ sub check_command {
 
     return @{$check_cache{$cmd}} if $check_cache{$cmd};
 
+    $cmd =~ s/-/::/g;
     my $cmd_class = "App::Yath::Command::$cmd";
     my $cmd_file = mod2file($cmd_class);
 
@@ -323,6 +335,7 @@ sub load_command {
     my $self = shift;
     my ($cmd) = @_;
 
+    $cmd =~ s/-/::/g;
     my $cmd_class = "App::Yath::Command::$cmd";
     my $cmd_file = mod2file($cmd_class);
 
@@ -343,6 +356,8 @@ sub load_command {
     $self->include_options('plugins'  => 'App::Yath::Plugin::*')   if $cmd_class->load_plugins();
     $self->include_options('resource' => 'App::Yath::Resource::*') if $cmd_class->load_resources();
     $self->include_options('renderer' => 'App::Yath::Renderer::*') if $cmd_class->load_renderers();
+
+    return $cmd_class;
 }
 
 sub process_args {
@@ -363,7 +378,7 @@ sub process_args {
 
     my $state = $self->_process_global_args($argv);
 
-    my $cmd;
+    my ($cmd, $cmd_class);
 
     if (my $stop = $state->{stop}) {
         my @cmd_args;
@@ -408,25 +423,26 @@ sub process_args {
             @{$state->{remains} // []},
         );
 
-        $self->load_command($cmd) if $cmd;
+        $cmd_class = $self->load_command($cmd) if $cmd;
 
         $state = $self->_process_command_args(\@cmd_args, cmd => $cmd);
     }
 
     $cmd //= 'do';
+    $cmd_class //= 'App::Yath::Command::do';
 
-    my $test_args;
+    my $dot_args;
     $argv = [@{$state->{skipped}}];
     if (my $stop = $state->{stop}) {
         if ($stop eq '--') {
             for my $arg (@{$state->{remains}}) {
-                if    ($test_args)   { push @$test_args => $arg }
-                elsif ($arg eq '::') { $test_args //= [] }
+                if    ($dot_args)   { push @$dot_args => $arg }
+                elsif ($arg eq '::') { $dot_args //= [] }
                 else                 { push @$argv => $arg }
             }
         }
         elsif ($stop eq '::') {
-            $test_args = [@{$state->{remains}}];
+            push @{$dot_args //= []} => @{$state->{remains}};
         }
         else {
             push @$argv => ($stop, @{$state->{remains}});
@@ -436,9 +452,9 @@ sub process_args {
         push @$argv => @{$state->{remains}};
     }
 
-    if ($test_args) {
-        die "'::' cannot be used with the '$cmd' command" unless $settings->check_group('tests');
-        $settings->tests->option(args => $test_args);
+    if ($dot_args) {
+        die "'::' cannot be used with the '$cmd' command" unless $cmd_class->accepts_dot_args;
+        $cmd_class->set_dot_args($settings, $dot_args);
     }
 
     $self->{argv} = $argv;
@@ -591,39 +607,49 @@ sub handle_debug {
         $cli_params{group} = $group if $group && $group ne '1';
         $help .= $self->cli_help($yath_options, %cli_params);
 
-        if (eval { require IO::Pager; 1 }) {
-            local $SIG{PIPE} = sub {};
-            my $pager = IO::Pager->new(*STDOUT);
-            $pager->print($help);
-        }
-        else {
-            print $help;
-        }
+        $self->page_out($help);
 
         $exit //= 0;
     }
 
     if (my $group = $settings->yath->show_opts) {
-        print "\nCommand selected: $cmd ($cmd_class)\n" if $cmd && $cmd_class;
+        my $out = "";
+        $out .= "\nCommand selected: $cmd ($cmd_class)\n" if $cmd && $cmd_class;
 
         my @args = @{$self->argv};
-        print "\nargs: " . join(', ' => @args) . "\n" if @args;
+        $out .= "\nargs: " . join(', ' => @args) . "\n" if @args;
 
-        my $out = $group eq '1' ? encode_pretty_json($settings) : encode_pretty_json($settings->{$group} // "!! Invalid Group '$group' !!");
+        my $json = $group eq '1' ? encode_pretty_json($settings) : encode_pretty_json($settings->{$group} // "!! Invalid Group '$group' !!");
 
-        print "\nCurrent command line and config options result in these settings:\n";
-        print "$out\n";
+        $out .= "\nCurrent command line and config options result in these settings:\n";
+        $out .= "$json\n";
 
-        print $self->_render_groups(
+        $out .= $self->_render_groups(
             title => 'If the above output is too much, you can limit it to specific option groups',
             param => '--show-opts=GROUP_NAME',
         ) if $group eq '1';
 
+        $self->page_out($out);
 
         $exit //= 0;
     }
 
     exit($exit) if defined $exit;
+}
+
+sub page_out {
+    my $self = shift;
+    my ($out) = @_;
+
+    if (eval { require IO::Pager; 1 }) {
+        local $SIG{PIPE} = sub {};
+        local $ENV{LESS} = "-r";
+        my $pager = IO::Pager->new(*STDOUT);
+        $pager->print($out);
+    }
+    else {
+        print $out;
+    }
 }
 
 sub version_info {
@@ -647,7 +673,7 @@ Extended Version Info
                 eval { require(mod2file($_)); 1 }
                     ? [$_ => $_->VERSION // 'N/A']
                     : [$_ => 'N/A']
-            } qw/Test2::API Test2::Suite Test::Builder Test2::Harness Test2::Harness::UI/,
+            } qw/Test2::API Test2::Suite Test::Builder Test2::Harness App::Yath::Server/,
         ),
         (
             map {

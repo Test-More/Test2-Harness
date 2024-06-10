@@ -17,7 +17,7 @@ use Test2::Util qw/IS_WIN32 clone_io/;
 use Time::HiRes qw/time/;
 
 use parent 'App::Yath::Renderer';
-use Test2::Util::HashBase qw{
+use Test2::Harness::Util::HashBase qw{
     -composer
     -last_depth
     -_buffered <_buffer
@@ -184,8 +184,6 @@ sub render_event {
     my $num = $f->{assert} && $f->{assert}->{number} ? $f->{assert}->{number} : undef;
 
     $self->write($event, $num, $f);
-
-    $self->render_final_data($f->{final_data}) if $f->{final_data};
 }
 
 sub write {

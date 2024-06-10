@@ -11,7 +11,7 @@ use Scalar::Util qw/blessed/;
 use Test2::Harness::TestFile;
 
 use Test2::Harness::Util qw/clean_path/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
     <test_file

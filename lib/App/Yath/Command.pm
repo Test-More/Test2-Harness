@@ -10,19 +10,23 @@ use Test2::Harness::Util qw/mod2file/;
 
 use Test2::Harness::Util::HashBase qw/<settings <args <env_vars <option_state <plugins/;
 
+sub accepts_dot_args   { 0 }
 sub args_include_tests { 0 }
 sub internal_only      { 0 }
 sub summary            { "No Summary" }
 sub description        { "No Description" }
 sub group              { "Z-FIXME" }
 
-sub cli_args {  }
+sub cli_args { }
+sub cli_dot  { }
 
 sub load_plugins   { 0 }
 sub load_resources { 0 }
 sub load_renderers { 0 }
 
 sub name { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
+
+sub set_dot_args { croak "set_dot_args is not implemented" }
 
 sub run {
     my $self = shift;

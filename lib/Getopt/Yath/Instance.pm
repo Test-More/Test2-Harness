@@ -360,7 +360,7 @@ sub process_args {
         delete $state->{cleared}->{$group_name}->{$field_name} if $state->{cleared}->{$group_name};
 
         if ($opt->requires_arg && !$set) {
-            die "No argument provided to '$base'.\n" unless @$argv;
+            die "No argument provided to '$first'.\n" unless @$argv;
             $arg = shift(@$argv);
         }
 
@@ -371,7 +371,7 @@ sub process_args {
         }
 
         if (ref($arg) && @$arg > 1 && !$opt->allows_list) {
-            die "Option '$base' cannot take multiple values, got: [" . join(', ' => @$arg) . "].\n";
+            die "Option '$first' cannot take multiple values, got: [" . join(', ' => @$arg) . "].\n";
         }
 
         my $from = '';
@@ -400,6 +400,10 @@ sub process_args {
         }
 
         $opt->trigger(action => 'set', ref => $ref, val => \@val, state => $state, options => $self, settings => $settings, group => $group, set_from => $from);
+        my @bad = $opt->check_value(\@val);
+        if (@bad) {
+            die "Invalid value(s) for option '$first': " . join(', ' => map {defined($_) ? "'$_'" : 'undef' } @bad) . "\n";
+        }
         $opt->add_value($ref, @val);
     }
 

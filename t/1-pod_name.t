@@ -25,8 +25,13 @@ for my $set (@files) {
 
     open(my $fh, '<', "$file") or die "Could not open file '$file': $!";
 
-    chomp(my $start = <$fh>);
-    push @res => is($start, "package $mod;", "$file has correct package $mod", "Incorrect: $start");
+    my $pkg_line;
+    while (my $line = <$fh>) {
+        next unless $line =~ m/^package\s+(\S+);/;
+        chomp($pkg_line = $line);
+        last;
+    }
+    push @res => is($pkg_line, "package $mod;", "$file has correct package $mod", "Incorrect: $pkg_line");
 
     my $found;
     while(my $line = <$fh>) {
@@ -41,7 +46,7 @@ for my $set (@files) {
 
         my $space = <$fh> // last;
         chomp(my $check = <$fh> // '');
-        push @res => like($check, qr/^\Q$mod - \E.+$/, "$file POD has correct package '$mod' under NAME");
+        push @res => like($check, qr/^\Q$mod - \E.+$/, "$file POD has correct package '$mod' under NAME", "Incorrect: $check");
 
         last;
     }

@@ -7,27 +7,24 @@ our $VERSION = '2.000000';
 use Carp qw/croak/;
 
 use Term::Table;
+use Time::HiRes qw/time/;
+use Sys::Hostname qw/hostname/;
 
 use Test2::Harness::Util qw/parse_exit/;
 use Test2::Harness::IPC::Util qw/start_collected_process ipc_connect set_procname/;
 use Test2::Harness::Util::JSON qw/decode_json encode_json/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
     <is_subprocess
     <subprocess_pid
-    <resource_id
+    <_send_event
+    +host
 };
-
-sub init {
-    my $self = shift;
-    $self->{+RESOURCE_ID} //= gen_uuid();
-}
 
 sub spawns_process { 0 }
 sub is_job_limiter { 0 }
 
-sub setup    { }
 sub teardown { }
 sub tick     { }
 sub cleanup  { }
@@ -43,9 +40,17 @@ sub assign         { croak "'$_[0]' does not implement 'assign'" }
 sub release        { croak "'$_[0]' does not implement 'release'" }
 sub subprocess_run { croak "'$_[0]' does not implement 'subprocess_run'" }
 
+sub init { $_[0]->host }
+sub host { $_[0]->{+HOST} //= hostname() }
+
 sub DESTROY {
     my $self = shift;
     $self->cleanup();
+}
+
+sub setup {
+    my $self = shift;
+    $self->send_data_event;
 }
 
 sub sort_weight {
@@ -129,6 +134,33 @@ sub _subprocess_run {
     $class->subprocess_run(%$params);
 
     exit 0;
+}
+
+sub send_data_event {
+    my $self = shift;
+
+    my ($data) = $self->status_data();
+
+    return unless $data;
+
+    $self->send_event({
+        facet_data => {
+            resource_state => {
+                module => ref($self) || $self,
+                data   => $data,
+                host   => $self->{+HOST},
+            },
+        },
+    });
+}
+
+sub send_event {
+    my $self = shift;
+    my ($e) = @_;
+
+    my $send = $self->{+_SEND_EVENT} //= Test2::Harness::Collector::Child->send_event;
+
+    $send->($e);
 }
 
 sub status_data { () }

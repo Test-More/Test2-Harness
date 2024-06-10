@@ -4,8 +4,11 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Getopt::Yath::Settings::Group;
 use Carp();
+
+use Getopt::Yath::Settings::Group;
+
+use Test2::Harness::Util::JSON qw/decode_json/;
 
 sub new {
     my $class = shift;
@@ -31,7 +34,7 @@ sub maybe {
     return $g->$opt // $default;
 }
 
-sub check_group { $_[0]->{$_[1]} ? 1 : 0 }
+sub check_group { $_[0]->{$_[1]} // 0 }
 
 sub group {
     my $self = shift;
@@ -42,7 +45,7 @@ sub group {
     return $self->{$group} = Getopt::Yath::Settings::Group->new()
         if $vivify;
 
-    Carp::croak("The '$group' group is not defined");
+    Carp::confess("The '$group' group is not defined");
 }
 
 sub create_group {
@@ -68,9 +71,17 @@ sub AUTOLOAD {
 
     return if $group eq 'DESTROY';
 
-    Carp::croak("Method $group() must be called on a blessed instance") unless ref($this);
+    Carp::confess("Method $group() must be called on a blessed instance") unless ref($this);
 
     $this->group($group);
+}
+
+sub FROM_JSON {
+    my $class = shift;
+    my ($json) = @_;
+
+    my $data = decode_json($json);
+    $class->new($data);
 }
 
 sub TO_JSON {

@@ -15,7 +15,7 @@ use Test2::Harness::Event;
 
 use Test2::Harness::Util qw/hash_purge/;
 use Test2::Harness::IPC::Util qw/ipc_warn/;
-use Test2::Harness::Util::UUID qw/gen_uuid/;
+use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 
 use Test2::Harness::Util::HashBase qw{

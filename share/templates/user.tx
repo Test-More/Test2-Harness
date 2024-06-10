@@ -1,0 +1,128 @@
+<div class="user_section" id="change_password">
+    <h3>Change Password</h3>
+    <form id="change_password_form" method="POST">
+        <dl class="medium">
+            <dt><label for="old_password">old password<label></dt>
+            <dd><input name="old_password" type="password" required/></dd>
+
+            <dt><label for="new_password_1">new password<label></dt>
+            <dd><input name="new_password_1" type="password" required/></dd>
+
+            <dt><label for="new_password_2">new password (again)<label></dt>
+            <dd><input name="new_password_2" type="password" required/></dd>
+
+            <dt>&nbsp;</dt>
+            <dd><br /><input type="submit" name="action" value="Change Password"></dd>
+        </dl>
+    </form>
+</div>
+
+<div class="user_section">
+    <h3>Email Addresses</h3>
+
+    <div id="add_email">
+        <form id="add_email_form" method="POST">
+            <label for="email">Add Email Address</label>
+            <input type="text" name="new_email" required>
+            <input type="submit" name="action" value="Add Email">
+        </form>
+    </div>
+
+    <div id="emails">
+        : if $emails.0 {
+            <table class="user_table">
+                <tr><th>address</th><th>verified</th><th>primary</th><th>Actions</th></tr>
+                : for $emails -> $email {
+                    <tr>
+                        <td><: $email.local :>@<: $email.domain :></td>
+                        <td class="flag"><: $email.verified   ? "Y" : "N" :></td>
+                        <td class="flag"><: $email.is_primary ? "Y" : "N" :></td>
+                        <td>
+                            <form method="POST">
+                                <input type="submit" name="action" value="Delete">
+                                <input type="hidden" name="email_id" value="<: $email.email_id :>">
+
+                                : if !$email.is_primary  {
+                                    <input type="submit" name="action" value="Make Primary">
+                                : }
+
+                                : if !$email.verified  {
+                                    <input type="submit" name="action" value="Send Verification Code">
+                                : }
+                            </form>
+                        </td>
+                        : if !$email.verified {
+                            <td>
+                                <form method="POST">
+                                    <input type="hidden" name="email_id" value="<: $email.email_id :>">
+                                    <input type="text" name="verification_code" required>
+                                    <input type="submit" name="action" value="Verify">
+                                </form>
+                            </td>
+                        : }
+                    </tr>
+                : }
+            </table>
+        : }
+    </div>
+</div>
+
+<div class="user_section">
+    <h3>API Keys</h3>
+    <div id="add_key">
+        <form id="add_key_form" method="POST">
+            <label for="key_name">Key Name</label>
+            <input type="text" name="key_name" required>
+            <input type="submit" name="action" value="Generate Key">
+        </form>
+    </div>
+    <div id="api_keys">
+        : if $keys.0 {
+            <table class="user_table">
+                <tr><th>Key Name</th><th>Key</th><th>Status</th><th>Actions</th></tr>
+                : for $keys -> $key {
+                    <tr>
+                        <td><: $key.name :></td>
+                        <td><: $key.value :></td>
+                        <td class="flag"><: $key.status :></td>
+                        <td>
+                            : if $key.status == 'active' {
+                                <form method="POST">
+                                    <input type="submit" name="action" value="Disable">
+                                    <input type="submit" name="action" value="Revoke">
+                                    <input type="hidden" name="api_key_id" value="<: $key.api_key_id :>">
+                                </form>
+                            : }
+                            : else if $key.status == 'disabled' {
+                                <form method="POST">
+                                    <input type="submit" name="action" value="Enable">
+                                    <input type="submit" name="action" value="Revoke">
+                                    <input type="hidden" name="api_key_id" value="<: $key.api_key_id :>">
+                                <form method="POST">
+                            : }
+                        </td>
+                    </tr>
+                : }
+            </table>
+        : }
+    </div>
+</div>
+
+<div class="user_section">
+    <div id="user_perms">
+        : if $perms.0 {
+            <h3>Project Permissions</h3>
+            <table class="user_table">
+                : for $perms -> $perm {
+                    <tr>
+                        <td><: $perm.project.name :></td>
+                        <td>&nbsp;&nbsp;</td>
+                        : if $perm.cpan_batch {
+                            <td>From CPAN</td>
+                        : }
+                    </tr>
+                : }
+            </table>
+        : }
+    </div>
+</div>

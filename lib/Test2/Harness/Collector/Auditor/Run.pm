@@ -102,6 +102,7 @@ sub _audit {
 
     my $f = $e->{facet_data};
 
+    # For legacy logs
     if (my $run = $f->{harness_run}) {
         my $jobs = $run->{job_lookup} // {};
         for my $job_id (keys %$jobs) {
@@ -123,6 +124,10 @@ sub _audit {
     my $tries = $self->{+JOBS}->{$job_id} //= [];
     my $job   = $tries->[$job_try]        //= {};
 
+    if (my $q = $f->{harness_job_queued}) {
+        $job->{file} //= $q->{rel_file} // $q->{file};
+    }
+
     if ($f->{assert}) {
         $self->{+ASSERTS}++;
         if ($f->{assert}->{pass}) {
@@ -139,7 +144,7 @@ sub _audit {
 
     if (my $j = $f->{harness_job}) {
         my $file = $j->{file};
-        $job->{file} = $file;
+        $job->{file} //= $file;
     }
 
     if ($f->{harness_job_launch}) {

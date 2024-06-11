@@ -298,7 +298,7 @@ sub ipc_loop {
     my $wait_time_is_code = ref($wait_time) eq 'CODE' ? 1 : 0;
     my $get_wait_time = sub {
         my $ready = shift;
-        return 0 if $did_work && !@$ready;
+        return 0 if $did_work || @$ready;
         return $wait_time unless $wait_time_is_code;
         return $wait_time->();
     };

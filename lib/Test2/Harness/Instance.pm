@@ -82,7 +82,8 @@ sub run {
 
         iteration_start => sub {
             $_->tick(type => 'instance') for @$plugins, @$resources;
-            $cb->(@_) if $cb;
+            return $cb->(@_) if $cb;
+            return;
         },
 
         end_check => sub {
@@ -96,7 +97,7 @@ sub run {
         iteration_end  => sub { $self->{+SCHEDULER}->advance() ? 1 : 0 },
         handle_request => sub { $self->handle_request(@_) },
 
-        handle_message => sub { },    # Intentionally do nothing.
+        handle_message => sub { },                                   # Intentionally do nothing.
     );
 
     $_->teardown(%args)          for reverse @$resources;

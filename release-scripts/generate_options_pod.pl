@@ -10,48 +10,64 @@ unshift @INC => './lib';
 
 require App::Yath::Command;
 
+my @bad;
 for my $base ('./lib/App/Yath/Options', './lib/App/Yath/Plugin') {
     opendir(my $dh, $base) or die "Could not open dir '$base': $!";
 
     for my $file (readdir($dh)) {
-        next unless $file =~ m/\.pm$/;
-        my $fq = "$base/$file";
-
-        my $rel = $fq;
-        $rel =~ s{^\./lib/}{}g;
-
-        my $pkg = $rel;
-        $pkg =~ s{/}{::}g;
-        $pkg =~ s{\.pm$}{}g;
-
-        unless (eval { require $rel; 1 }) {
-            next if $@ =~ m/deprecated/i;
-            die $@;
-        }
-
-        next unless $pkg->can('options');
-        my $options = $pkg->options or next;
-        my $opts = $options->docs('pod', groups => {':{' => '}:'}, head => 2);
-        my $pod = "=head1 PROVIDED OPTIONS\n\n$opts\n";
-
-        my $found;
-        my @lines;
-        open(my $fh, '<', $fq) or die "Could not open file '$fq' for reading: $!";
-        while (my $line = <$fh>) {
-            if ($line eq "=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED\n") {
-                $found++;
-                push @lines => $pod;
-                next;
-            }
-
-            push @lines => $line;
-        }
-        close($fh);
-
-        next unless $found;
-
-        open($fh, '>', $fq) or die "Could not open file '$fq' for writing: $!";
-        print $fh @lines;
-        close($fh);
+        eval { handle_file($base, $file); 1 } and next;
+        warn $@;
+        push @bad => "$base/$file";
     }
+}
+
+exit(0) unless @bad;
+
+print STDERR "The following files had errors\n";
+print STDERR "  $_\n" for @bad;
+print STDERR "\n";
+exit 1;
+
+sub handle_file {
+    my ($base, $file) = @_;
+
+    return unless $file =~ m/\.pm$/;
+    my $fq = "$base/$file";
+
+    my $rel = $fq;
+    $rel =~ s{^\./lib/}{}g;
+
+    my $pkg = $rel;
+    $pkg =~ s{/}{::}g;
+    $pkg =~ s{\.pm$}{}g;
+
+    unless (eval { require $rel; 1 }) {
+        return if $@ =~ m/deprecated/i;
+        die $@;
+    }
+
+    return unless $pkg->can('options');
+    my $options = $pkg->options or next;
+    my $opts    = $options->docs('pod', groups => {':{' => '}:'}, head => 2);
+    my $pod     = "=head1 PROVIDED OPTIONS\n\n$opts\n";
+
+    my $found;
+    my @lines;
+    open(my $fh, '<', $fq) or die "Could not open file '$fq' for reading: $!";
+    while (my $line = <$fh>) {
+        if ($line eq "=head1 PROVIDED OPTIONS POD IS AUTO-GENERATED\n") {
+            $found++;
+            push @lines => $pod;
+            next;
+        }
+
+        push @lines => $line;
+    }
+    close($fh);
+
+    return unless $found;
+
+    open($fh, '>', $fq) or die "Could not open file '$fq' for writing: $!";
+    print $fh @lines;
+    close($fh);
 }

@@ -11,8 +11,24 @@ my $base = './lib/App/Yath/Command';
 
 opendir(my $dh, $base) or die "Could not open command dir!";
 
+my @bad;
 for my $file (readdir($dh)) {
-    next unless $file =~ m/\.pm$/;
+    eval { handle_file($file); 1 } and next;
+    warn $@;
+    push @bad => "$base/$file";
+}
+
+exit(0) unless @bad;
+
+print STDERR "The following files had errors\n";
+print STDERR "  $_\n" for @bad;
+print STDERR "\n";
+exit 1;
+
+sub handle_file {
+    my $file = shift;
+
+    return unless $file =~ m/\.pm$/;
     my $fq = "$base/$file";
 
     my $rel = $fq;
@@ -23,7 +39,7 @@ for my $file (readdir($dh)) {
     $pkg =~ s{\.pm$}{}g;
 
     unless (eval { require $rel; 1 }) {
-        next if $@ =~ m/deprecated/i;
+        return if $@ =~ m/deprecated/i;
         die $@;
     }
 

@@ -123,10 +123,6 @@ sub init {
     $self->{+BUFFER_SIZE} //= 100;
 }
 
-sub process_log_file {
-    my $class = shift;
-}
-
 sub process_stdin {
     my $class = shift;
     my ($settings) = @_;
@@ -140,8 +136,10 @@ sub process_handle {
 
     my $cb = $class->process_lines($settings);
 
-    while (my $line = <$fh>) {
+    while (1) {
+        my $line = <$fh>;
         $cb->($line);
+        last unless $line;
     }
 }
 

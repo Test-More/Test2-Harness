@@ -1,4 +1,4 @@
-package App::Yath::Tester::Server;
+package App::Yath::Server::Tester;
 use strict;
 use warnings;
 

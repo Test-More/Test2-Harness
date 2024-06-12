@@ -27,13 +27,13 @@ sub handle {
 
     my $res = resp(200);
 
-    my $run_id = $self->process_form($res) if $req->parameters->{action};
+    my $run_uuid = $self->process_form($res) if $req->parameters->{action};
 
     my $tx = Text::Xslate->new(path => [share_dir('templates')]);
     my $user = $req->user;
 
     if ($req->parameters->{json}) {
-        $res->as_json($run_id ? (run_id => $run_id) : ());
+        $res->as_json($run_uuid ? (run_uuid => $run_uuid) : ());
         return $res;
     }
 
@@ -82,20 +82,20 @@ sub process_form {
         unless $file =~ m/\.jsonl\.(bz2|gz)$/i;
     my $ext = lc($1);
 
-    my ($run_id);
+    my ($run_uuid);
     my $ok = eval {
         my $fh = open_file($tmp, '<', ext => $ext);
         my $header = <$fh>;
         close($fh);
 
-        $run_id = decode_json($header)->{facet_data}->{harness_run}->{run_id};
+        $run_uuid = decode_json($header)->{facet_data}->{harness_run}->{run_id};
     };
     return $res->add_error("Error decoding json: $@") unless $ok;
 
     open(my $fh, '<:raw', $tmp) or die "Could not open uploaded file '$tmp': $!";
 
     my $run = $self->schema->resultset('Run')->create({
-        $run_id ? (run_uuid => $run_id) : (),
+        $run_uuid ? (run_uuid => $run_uuid) : (),
         user_id    => ref($user) ? $user->user_id : 1,
         project_id => $project->project_id,
         mode       => $mode,
@@ -109,7 +109,7 @@ sub process_form {
     });
 
     $res->add_message("Upload Success, added import to queue");
-    return $run->run_id;
+    return $run->run_uuid;
 }
 
 sub api_user {

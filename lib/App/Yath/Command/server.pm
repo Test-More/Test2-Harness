@@ -96,6 +96,10 @@ sub run {
     my $server = $self->{+SERVER} = App::Yath::Server->new(schema_config => $config, $settings->webserver->all, qdb_params => $qdb_params);
     $server->start_server;
 
+    my $user = $config->schema->resultset('User')->create({username => $ENV{USER}, password => 'password', realname => $ENV{USER}});
+    my $api_key = $config->schema->resultset('ApiKey')->create({value => gen_uuid, user_id => $user->user_id, name => "ephemeral"});
+    $ENV{YATH_API_KEY} = $api_key->value;
+
     my $done = 0;
     $SIG{TERM} = sub { $done++; print "Caught SIGTERM shutting down...\n" unless $daemon; $SIG{TERM} = 'DEFAULT' };
     $SIG{INT}  = sub { $done++; print "Caught SIGINT shutting down...\n"  unless $daemon; $SIG{INT}  = 'DEFAULT' };
@@ -110,6 +114,7 @@ sub run {
     print "\nYath URL: $ENV{YATH_URL}\n\n";
 
     if ($shell) {
+        local $ENV{YATH_SHELL} = 1;
         system($ENV{SHELL});
     }
     else {
@@ -325,7 +330,7 @@ sub shell_db_text { "Open the database." }
 sub shell_db { $_[0]->server->qdb->shell('harness_ui') }
 
 sub shell_shell_text { "Open a shell" }
-sub shell_shell { system($ENV{SHELL}) }
+sub shell_shell { $ENV{YATH_SHELL} = 1; system($ENV{SHELL}) }
 
 sub shell_load_text { "Load a database file (filename given as argument)" }
 sub shell_load {

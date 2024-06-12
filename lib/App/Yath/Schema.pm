@@ -3,7 +3,6 @@ use utf8;
 use strict;
 use warnings;
 use Carp qw/confess/;
-use Carp::Always;
 
 our $VERSION = '2.000000';
 

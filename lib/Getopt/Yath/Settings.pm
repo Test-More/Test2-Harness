@@ -8,7 +8,7 @@ use Carp();
 
 use Getopt::Yath::Settings::Group;
 
-use Test2::Harness::Util::JSON qw/decode_json/;
+use Test2::Harness::Util::JSON qw/decode_json decode_json_file/;
 
 sub new {
     my $class = shift;
@@ -74,6 +74,14 @@ sub AUTOLOAD {
     Carp::confess("Method $group() must be called on a blessed instance") unless ref($this);
 
     $this->group($group);
+}
+
+sub FROM_JSON_FILE {
+    my $class = shift;
+    my ($file, %params) = @_;
+
+    my $data = decode_json_file($file, %params);
+    $class->new($data);
 }
 
 sub FROM_JSON {

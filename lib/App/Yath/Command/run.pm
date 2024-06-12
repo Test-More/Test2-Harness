@@ -215,6 +215,8 @@ sub stop_plugins_and_renderers {
     my $exit ||= $auditor->exit_value;
     $_->client_finalize(settings => $settings, auditor => $auditor, exit => \$exit) for @$plugins;
 
+    $_->exit_hook($auditor) for reverse @$renderers;
+
     return $exit || $alt_exit;
 }
 

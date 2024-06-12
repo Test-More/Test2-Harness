@@ -4,7 +4,7 @@ use Test2::Require::Module 'Test2::Plugin::Cover' => '0.000022';
 use HTTP::Tiny::UNIX;
 
 use App::Yath::Tester qw/yath/;
-use App::Yath::Tester::UI qw/start_yathui_server/;
+use App::Yath::Server::Tester qw/start_yathui_server/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;

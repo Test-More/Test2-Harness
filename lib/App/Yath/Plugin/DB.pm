@@ -13,7 +13,7 @@ use parent 'App::Yath::Plugin';
 
 include_options(
     'App::Yath::Options::DB',
-    'App::Yath::Options::Upload',
+    'App::Yath::Options::Publish',
     'App::Yath::Options::Yath',
 );
 

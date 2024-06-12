@@ -1,7 +1,19 @@
+package App::Yath::Plugin::Server;
+use strict;
+use warnings;
+
+our $VERSION = '2.000000';
+
+use Test2::Harness::Util::Deprecated;
+
+1;
+
 
 # Move cover stuff to cover plugin
 #
 # move duration to finder
+#
+# Handle rerun
 #
 # move publish to client-publish
 #

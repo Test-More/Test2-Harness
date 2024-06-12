@@ -5,6 +5,7 @@ use warnings;
 use Carp qw/confess longmess croak/;
 use Cpanel::JSON::XS();
 use Importer Importer => 'import';
+use File::Temp qw/ tempfile /;
 
 our $VERSION = '2.000000';
 
@@ -20,6 +21,9 @@ our @EXPORT_OK = qw{
 
     json_true
     json_false
+
+    encode_ascii_json_file
+    decode_json_file
 };
 
 my $json   = Cpanel::JSON::XS->new->utf8(1)->convert_blessed(1)->allow_nonref(1);
@@ -45,6 +49,30 @@ sub stream_json_l {
     return stream_json_l_url($path, $handler, %params) if $path =~ m{^https?://};
 
     croak "'$path' is not a valid path (file does not exist, or is not an http(s) url)";
+}
+
+sub encode_ascii_json_file {
+    my ($data) = @_;
+    my $json = encode_ascii_json($data);
+
+    my ($fh, $file) = tempfile("$$-XXXXXX", TMPDIR => 1, SUFFIX => '.json');
+    print $fh $json;
+    close($fh);
+
+    return $file;
+}
+
+sub decode_json_file {
+    my ($file, %params) = @_;
+
+    open(my $fh, '<', $file) or die "Could not open '$file': $!";
+    my $json = do { local $/; <$fh> };
+
+    if ($params{unlink}) {
+        unlink($file) or warn "Could not unlink '$file': $!";
+    }
+
+    return decode_json($json);
 }
 
 sub stream_json_l_file {

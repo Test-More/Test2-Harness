@@ -33,14 +33,16 @@ sub import {
     };
 
     $export{include_options} = sub {
-        for my $module (@_) {
+        while (my $module = shift @_) {
             my $file = mod2file($module);
             require $file unless $INC{$file};
 
             croak "Module '$module' does not have an 'options' method"
                 unless $module->can('options');
 
-            $instance->include($module->options);
+            my $list = @_ && ref($_[0]) eq 'ARRAY' ? shift(@_) : undef;
+
+            $instance->include($module->options, $list);
         }
     };
 

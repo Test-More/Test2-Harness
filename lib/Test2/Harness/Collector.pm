@@ -15,7 +15,7 @@ use Test2::Harness::Collector::Auditor::Job;
 use Test2::Harness::Collector::IOParser::Stream;
 
 use Test2::Harness::Util qw/mod2file parse_exit open_file chmod_tmp/;
-use Test2::Harness::Util::JSON qw/decode_json encode_ascii_json/;
+use Test2::Harness::Util::JSON qw/decode_json encode_ascii_json decode_json_file/;
 use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate set_procname/;
 
 BEGIN {
@@ -116,7 +116,20 @@ sub init {
 my $warned = 0;
 sub collect {
     my $class = shift;
-    my %params = (@_ == 1) ? (%{decode_json($_[0])}) : (@_);
+    my %params;
+
+    if (@_ == 1) {
+        my ($in) = @_;
+        if ($in =~ m/\.json$/ || -f $in) {
+            %params = %{decode_json_file($in, unlink => 1)};
+        }
+        else {
+            %params = %{decode_json($in)};
+        }
+    }
+    else {
+        %params = @_;
+    }
 
     die "No root pid" unless $params{root_pid};
     $class->setsid if $params{setsid};
@@ -759,6 +772,8 @@ sub _process {
     push @$handles => [$stderr->rh, sub { $last_event = time; $self->handle_event(stderr => $stderr, $broken) }, eof => sub { $broken->{$stderr} || $stderr->eof }, name => 'stderr']
         unless $self->{+MERGE_OUTPUTS};
 
+    my %timeout_warns;
+
     ipc_loop(
         handles   => $handles,
         sigchild  => sub { $reap->(0) },
@@ -801,8 +816,29 @@ sub _process {
             if (defined $exited) {
                 for my $h (@$handles) {
                     my ($x, $y, %params) = @$h;
-                    return 0 unless $params{eof}->();
+
+                    my $timeout;
+                    if (my $delta = int(time - $last_event)) {
+                        $timeout = 1 if $delta > 10;
+
+                        unless ($timeout) {
+                            if ($timeout_warns{main}) {
+                                my $countdown = int(10 - $delta);
+                                unless ($timeout_warns{$countdown}) {
+                                    warn "  $countdown...\n";
+                                    $timeout_warns{$countdown} = 1;
+                                }
+                            }
+                            else {
+                                warn "Testing looks complete, but a filehandle is still open (Did a plugin or renderer fork without an exec?), will timeout in 10 seconds...\n";
+                                $timeout_warns{main} = 1;
+                            }
+                        }
+                    }
+
+                    return 0 unless $params{eof}->() || $timeout;
                 }
+
                 return 1 if !$auditor;
                 return 1 if $auditor->has_plan;
                 return 1 if $exit;                # If the exit value is not true we do not wait for post-exit timeout

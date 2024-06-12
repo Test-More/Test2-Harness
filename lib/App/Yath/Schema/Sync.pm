@@ -12,7 +12,7 @@ our $VERSION = '2.000000';
 
 use Test2::Harness::Util::HashBase;
 
-die "FIXME";
+# FIXME this whole file needs work
 
 sub run_delta {
     my $self = shift;
@@ -416,7 +416,7 @@ sub render_binaries {
     EOT
 
     $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
-    my $binaries = ($sth->fetchall_arrayref({});
+    my $binaries = ($sth->fetchall_arrayref({}));
     return map { +{binary => $_} } @$binaries;
 }
 

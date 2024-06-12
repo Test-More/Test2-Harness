@@ -15,7 +15,7 @@ use Time::HiRes qw/time/;
 
 use Test2::Harness::Util qw/clean_path/;
 use Test2::Harness::IPC::Util qw/start_process/;
-use Test2::Harness::Util::JSON qw/encode_ascii_json/;
+use Test2::Harness::Util::JSON qw/encode_ascii_json_file encode_ascii_json/;
 use Test2::Util::UUID qw/gen_uuid/;
 
 use parent 'App::Yath::Renderer';
@@ -31,7 +31,7 @@ include_options(
     'App::Yath::Options::Yath',
     'App::Yath::Options::DB',
     'App::Yath::Options::Publish',
-    'App::Yath::Options::WebClient',
+    'App::Yath::Options::WebClient' => [qw/url/],
 );
 
 sub start {
@@ -49,16 +49,16 @@ sub start {
         [
             $^X,                                                       # perl
             (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),    # Use the dev libs specified
-            "-mApp::Yath::Schema::RunProcessor",                  # Load processor
+            "-mApp::Yath::Schema::RunProcessor",                       # Load processor
             "-mGetopt::Yath::Settings",                                # Load settings lib
             '-e' => <<"            EOT",                               # Run it.
 exit(
     App::Yath::Schema::RunProcessor->process_stdin(
-        Getopt::Yath::Settings->FROM_JSON(\$ARGV[0])
+        Getopt::Yath::Settings->FROM_JSON_FILE(\$ARGV[0], unlink => 1)
     )
 );
             EOT
-            encode_ascii_json($self->{+SETTINGS}),                     # Pass settings in as arg
+            encode_ascii_json_file($self->{+SETTINGS}),                # Pass settings in as arg
         ],
         sub {
             close(STDIN);
@@ -82,7 +82,7 @@ sub render_event {
     local $SIG{PIPE} = sub {
         warn "Caught SIGPIPE while writing to the database";
         $spipe++;
-        $self->{+STOPPED} = 'SIGPIPE';
+        $self->{+STOPPED} = ['SIGPIPE'];
         close($self->{+WRITE_PIPE});
         $self->{+WRITE_PIPE} = undef;
     };

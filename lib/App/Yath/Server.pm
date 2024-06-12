@@ -120,7 +120,7 @@ sub start_ephemeral_db {
 
     my $qdb_args;
     if ($schema_type eq 'Auto') {
-        $qdb_args = {drivers => [qdb_driver('PostgreSQL'), qdb_driver('MySQL')]};
+        $qdb_args = {drivers => [qdb_driver('PostgreSQL'), qdb_driver('MariaDB'), qdb_driver('MySQL'), qdb_driver('Percona'), qdb_driver('SQLite')]};
         $schema_type = undef;
     }
     else {

@@ -22,40 +22,42 @@ for my $set (@files) {
     my ($file, $mod) = @$set;
 
     my @res;
+    subtest $file => sub {
 
-    open(my $fh, '<', "$file") or die "Could not open file '$file': $!";
+        open(my $fh, '<', "$file") or die "Could not open file '$file': $!";
 
-    my $pkg_line;
-    while (my $line = <$fh>) {
-        next unless $line =~ m/^package\s+(\S+);/;
-        chomp($pkg_line = $line);
-        last;
-    }
-    push @res => is($pkg_line, "package $mod;", "$file has correct package $mod", "Incorrect: $pkg_line");
-
-    my $found;
-    while(my $line = <$fh>) {
-        chomp($line);
-        if ($line eq "=head1 POD IS AUTO-GENERATED") {
-            $found = 1;
+        my $pkg_line;
+        while (my $line = <$fh>) {
+            next unless $line =~ m/^package\s+(\S+);/;
+            chomp($pkg_line = $line);
             last;
         }
-        next unless $line eq '=head1 NAME';
+        push @res => is($pkg_line, "package $mod;", "$file has correct package $mod", "Incorrect: $pkg_line");
 
-        $found = 1;
+        my $found;
+        while (my $line = <$fh>) {
+            chomp($line);
+            if ($line eq "=head1 POD IS AUTO-GENERATED") {
+                $found = 1;
+                last;
+            }
+            next unless $line eq '=head1 NAME';
 
-        my $space = <$fh> // last;
-        chomp(my $check = <$fh> // '');
-        push @res => like($check, qr/^\Q$mod - \E.+$/, "$file POD has correct package '$mod' under NAME", "Incorrect: $check");
+            $found = 1;
 
-        last;
-    }
+            my $space = <$fh> // last;
+            chomp(my $check = <$fh> // '');
+            push @res => like($check, qr/^\Q$mod - \E.+$/, "$file POD has correct package '$mod' under NAME", "Incorrect: $check");
 
-    push @res => ok($found, "Found 'NAME' section in $file POD");
+            last;
+        }
+
+        push @res => ok($found, "Found 'NAME' section in $file POD");
+    };
 
     next unless grep { !$_ } @res;
     $bad_files{$file} = $mod;
-};
+}
 
 if (keys %bad_files) {
     my $diag = "All files with errors:\n";

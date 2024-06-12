@@ -183,6 +183,7 @@ sub become_collector {
     );
 
     my $collector = $self->collector();
+
     my $exit = $collector->process($pid);
 
     remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0})

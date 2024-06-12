@@ -144,6 +144,8 @@ sub become_collector {
 
     $self->start_plugins_and_renderers();
 
+    my $collector = $self->collector;
+
     my $exit = $self->SUPER::become_collector($pid);
 
     return $self->stop_plugins_and_renderers($exit);

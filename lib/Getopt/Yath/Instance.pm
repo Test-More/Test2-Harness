@@ -63,7 +63,7 @@ sub _post {
 
 sub include {
     my $self = shift;
-    my ($other) = @_;
+    my ($other, $list) = @_;
 
     return unless $other;
     return if $self->{+DEDUP}->{$other}++;
@@ -76,7 +76,13 @@ sub include {
         }
     }
 
-    $self->_option($_) for @{$other->options};
+    if ($list) {
+        my %want = map {$_ => 1} @$list;
+        $self->_option($_) for grep { $want{$_->title} || $want{$_->field} || $want{$_->name} } @{$other->options};
+    }
+    else {
+        $self->_option($_) for @{$other->options};
+    }
 
     for my $set (values %{$other->posts}) {
         for my $post (@$set) {

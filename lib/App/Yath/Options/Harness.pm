@@ -56,10 +56,18 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
     option tmpdir => (
         type           => 'Scalar',
         alt            => ['tmp-dir'],
-        description    => 'Use a specific temp directory (Default: use system temp dir)',
-        from_env_vars  => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
+        description    => 'Use a specific temp directory (Default: create a temp dir under the system one)',
+        from_env_vars  => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR/],
         clear_env_vars => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR/],
-        default        => sub { File::Spec->tmpdir },
+        set_env_vars   => [qw/TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
+
+        default => sub {
+            my $tmpdir = File::Spec->tmpdir;
+            return $tmpdir if $tmpdir =~ m/yath/ && $ENV{YATH_SHELL};
+
+            my $dir = tempdir("yath-$ENV{USER}-$$-XXXXXX", CLEANUP => 1, TMPDIR => 1);
+            return $dir;
+        },
     );
 
     option clear => (

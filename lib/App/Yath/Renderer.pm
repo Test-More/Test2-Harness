@@ -40,6 +40,8 @@ sub step   { }
 sub signal { }
 sub finish { }
 
+sub exit_hook {}
+
 sub weight { 0 }
 
 1;

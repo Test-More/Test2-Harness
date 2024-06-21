@@ -150,7 +150,7 @@ sub become_daemon {
     if ($pid) {
         sleep 2;
         kill('HUP', $pid);
-        exit(0);
+        POSIX::_exit(0);
     }
 }
 
@@ -187,6 +187,9 @@ sub become_collector {
     my $exit = $collector->process($pid);
 
     remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0})
+        unless $settings->harness->keep_dirs;
+
+    remove_tree($settings->harness->tmpdir, {safe => 1, keep_root => 0})
         unless $settings->harness->keep_dirs;
 
     return $exit;

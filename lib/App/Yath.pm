@@ -35,6 +35,7 @@ use App::Yath::ConfigFile;
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Scalar::Util qw/blessed/;
+use File::Path qw/remove_tree/;
 use File::Spec;
 use Term::Table;
 
@@ -531,6 +532,13 @@ sub run_command {
 
     die "Command '" . $cmd->name() . "' did not return an exit value.\n"
         unless defined $exit;
+
+    my $settings = $self->settings;
+
+    unless ($settings->harness->keep_dirs) {
+        remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0});
+        remove_tree($settings->harness->tmpdir,  {safe => 1, keep_root => 0});
+    }
 
     return $exit;
 }

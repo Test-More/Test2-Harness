@@ -65,7 +65,7 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
             my $tmpdir = File::Spec->tmpdir;
             return $tmpdir if $tmpdir =~ m/yath/ && $ENV{YATH_SHELL};
 
-            my $dir = tempdir("yath-$ENV{USER}-$$-XXXXXX", CLEANUP => 1, TMPDIR => 1);
+            my $dir = tempdir("yath-$ENV{USER}-$$-XXXXXX", CLEANUP => 0, TMPDIR => 1);
             return $dir;
         },
     );

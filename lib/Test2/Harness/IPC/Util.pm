@@ -16,7 +16,7 @@ use POSIX();
 use IO::Select();
 
 use Test2::Harness::Util::JSON qw/encode_pretty_json encode_json encode_ascii_json_file/;
-use Test2::Harness::Util qw/mod2file/;
+use Test2::Harness::Util qw/mod2file parse_exit/;
 
 use Importer Importer => 'import';
 

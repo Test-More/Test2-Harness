@@ -55,7 +55,7 @@ sub encode_ascii_json_file {
     my ($data) = @_;
     my $json = encode_ascii_json($data);
 
-    my ($fh, $file) = tempfile("$$-XXXXXX", TMPDIR => 1, SUFFIX => '.json');
+    my ($fh, $file) = tempfile("$$-XXXXXX", TMPDIR => 1, SUFFIX => '.json', UNLINK => 0);
     print $fh $json;
     close($fh);
 

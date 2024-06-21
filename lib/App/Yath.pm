@@ -550,9 +550,12 @@ sub include_options {
     my $option_libs = find_libraries($namespace);
 
     for my $lib (sort keys %$option_libs) {
-        next if $lib eq 'App::Yath::Plugin::Notify';
+        local $@;
         my $ok = eval { require $option_libs->{$lib}; 1 };
+
         unless ($ok) {
+            next if $self->deprecated_core($lib);
+
             chomp($@);
             warn "\n==== Failed to load module '$option_libs->{$lib}' ====\n$@\n==== End error for '$option_libs->{$lib}' ====\n\n";
             next;
@@ -571,6 +574,15 @@ sub include_options {
 
         $opts->include($add);
     }
+}
+
+sub deprecated_core {
+    my $self = shift;
+    my ($class) = @_;
+
+    no strict 'refs';
+
+    return ${"$class\::DEPRECATED_CORE"} ? 1 : 0;
 }
 
 sub handle_debug {

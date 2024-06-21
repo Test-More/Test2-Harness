@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Carp qw/croak/;
+use Carp qw/confess/;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 
@@ -25,10 +25,10 @@ sub init {
         $self->{+NAME} //= $client->send_and_get('log_file');
     }
 
-    my $file = $self->{+NAME} // croak "'name' is a required attribute unless 'client' is specified";
-    croak "'$file' is not a valid log file" unless -f $file;
+    my $file = $self->{+NAME} // confess "'name' is a required attribute unless 'client' is specified";
+    confess "'$file' is not a valid log file" unless -f $file;
 
-    open(my $fh, '<', $file) or croak "Could not open log file '$file' for reading: $!";
+    open(my $fh, '<', $file) or confess "Could not open log file '$file' for reading: $!";
     $fh->blocking(0);
     $self->{+FH} = $fh;
 

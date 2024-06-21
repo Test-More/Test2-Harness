@@ -13,11 +13,12 @@ sub import {
     my %params = @_;
     my ($mod, $file, $line) = caller();
 
-    my $append = delete($params{append});
+    my $append   = delete($params{append});
     my $delegate = delete($params{delegate});
     my $replaced = delete($params{replaced}) // $delegate;
     my $fatal    = delete($params{fatal})    // ($delegate ? 0 : 1);
     my $inject   = delete($params{inject})   // ($delegate ? 0 : 1);
+    my $core     = delete($params{core})     // 0;
 
     my $replaced_is_list = 0;
     if ($replaced) {
@@ -64,8 +65,14 @@ sub import {
 
     if ($inject) {
         no strict 'refs';
-        *{"$mod\::$_"} = $action for qw/new init can isa does DOES meta options/;
+        *{"$mod\::$_"}     = $action for qw/new init does can DOES meta options isa/;
         *{"$mod\::import"} = sub { return if $IGNORE_IMPORT; goto &$action };
+
+        my $deprecated = 1;
+        *{"$mod\::deprecated"}      = sub { $deprecated };
+        *{"$mod\::DEPRECATED"}      = \$deprecated;
+        *{"$mod\::deprecated_core"} = sub { $core };
+        *{"$mod\::DEPRECATED_CORE"} = \$core;
     }
 
     if (my @bad = sort keys %params) {

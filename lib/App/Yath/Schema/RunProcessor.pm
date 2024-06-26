@@ -22,7 +22,7 @@ use App::Yath::Schema::Config;
 
 use App::Yath::Schema::Util qw/format_duration is_invalid_subtest_name schema_config_from_settings format_uuid_for_db/;
 use Test2::Util::UUID qw/gen_uuid/;
-use Test2::Harness::Util::JSON qw/encode_ascii_json decode_json/;
+use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 
 use App::Yath::Schema::ImportModes qw{
     %MODES
@@ -699,7 +699,7 @@ sub _pull_facet_resource {
         resource_type_id => $resource_type_id,
         resource_ord     => $ord,
         event_uuid       => format_uuid_for_db($e_uuid),
-        data             => encode_ascii_json($data),
+        data             => encode_json($data),
         stamp            => $stamp,
     };
 }
@@ -754,7 +754,7 @@ sub _pre_process_coverage {
         source_sub_id       => $sub_id,
         coverage_manager_id => $manager_id,
 
-        $manager_id         ? (metadata   => encode_ascii_json($params{meta})) : (),
+        $manager_id         ? (metadata   => encode_json($params{meta})) : (),
         $params{job_try_id} ? (job_try_id => $params{job_try_id})              : (),
     };
 }
@@ -861,7 +861,7 @@ sub _pull_facet__fields {
         $row->{raw}  = $field->{raw}  if $field->{raw};
         $row->{link} = $field->{link} if $field->{link};
 
-        $row->{data} = encode_ascii_json($field->{data}) if $field->{data};
+        $row->{data} = encode_json($field->{data}) if $field->{data};
 
         if ($type eq 'run') {
             push @{$self->{+RUN_FIELDS} //= []} => $row;
@@ -956,7 +956,7 @@ sub _pull_facet_run_updates {
     $delta->{'=has_resources'} = 1 if $f->{resource_state};
 
     if (my $run_params = $self->_pull_facet_run_params($f, $params)) {
-        $delta->{'=parameters'} = encode_ascii_json($run_params);
+        $delta->{'=parameters'} = encode_json($run_params);
 
         my $settings = $run_params->{settings};
 
@@ -1032,7 +1032,7 @@ sub _pull_facet_job_try_updates {
     my $delta = $params->{try}->{delta} //= {};
 
     if (my $job_params = $self->_pull_facet_job_try_params($f, $params)) {
-        $delta->{'=parameters'} = encode_ascii_json($job_params);
+        $delta->{'=parameters'} = encode_json($job_params);
     }
 
     if ($params->{causes_fail}) {
@@ -1558,9 +1558,9 @@ sub flush_events {
 
     if (record_all_events(mode => $self->{+MODE}, job => $try->{job}->{result}, try => $try->{result})) {
         for my $event (@$deferred, @$events) {
-            $event->{facets} = encode_ascii_json($event->{facets}) if $event->{facets};
-            $event->{orphan} = encode_ascii_json($event->{orphan}) if $event->{orphan};
-            $event->{rendered} = encode_ascii_json($event->{rendered}) if $event->{rendered};
+            $event->{facets} = encode_json($event->{facets}) if $event->{facets};
+            $event->{orphan} = encode_json($event->{orphan}) if $event->{orphan};
+            $event->{rendered} = encode_json($event->{rendered}) if $event->{rendered};
 
             $parent_ids++ if $event->{parent_uuid};
 
@@ -1573,9 +1573,9 @@ sub flush_events {
     else {
         for my $event (@$events) {
             if (event_in_mode(event => $event, record_all_event => 0, mode => $self->{+MODE}, job => $try->{job}->{result}, try => $try->{result})) {
-                $event->{facets} = encode_ascii_json($event->{facets}) if $event->{facets};
-                $event->{orphan} = encode_ascii_json($event->{orphan}) if $event->{orphan};
-                $event->{rendered} = encode_ascii_json($event->{rendered}) if $event->{rendered};
+                $event->{facets} = encode_json($event->{facets}) if $event->{facets};
+                $event->{orphan} = encode_json($event->{orphan}) if $event->{orphan};
+                $event->{rendered} = encode_json($event->{rendered}) if $event->{rendered};
 
                 $parent_ids++ if $event->{parent_uuid};
 

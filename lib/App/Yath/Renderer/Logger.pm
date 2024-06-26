@@ -9,7 +9,7 @@ use File::Spec;
 use POSIX qw/strftime/;
 
 use Test2::Harness::Util qw/clean_path/;
-use Test2::Harness::Util::JSON qw/encode_ascii_json/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use parent 'App::Yath::Renderer';
 use Test2::Harness::Util::HashBase qw{
@@ -209,7 +209,7 @@ sub render_event {
     my $self = shift;
     my ($event) = @_;
 
-    print {$self->{+FH}} encode_ascii_json($event), "\n";
+    print {$self->{+FH}} encode_json($event), "\n";
 }
 
 sub finish {

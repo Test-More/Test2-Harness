@@ -14,7 +14,7 @@ use Test2::Util qw/get_tid/;
 use Carp qw/confess croak/;
 
 use Test2::Util::UUID qw/gen_uuid/;
-use Test2::Harness::Util::JSON qw/encode_ascii_json/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use vars qw/$STDERR_APIPE $STDOUT_APIPE/;
 
@@ -103,7 +103,7 @@ sub send_event {
             no warnings 'once';
             local *UNIVERSAL::TO_JSON = sub { "$_[0]" };
 
-            $json = encode_ascii_json($event);
+            $json = encode_json($event);
         }
 
         $stdout->write_message($json);

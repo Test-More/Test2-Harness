@@ -15,7 +15,7 @@ use Time::HiRes qw/time/;
 
 use Test2::Harness::Util qw/clean_path/;
 use Test2::Harness::IPC::Util qw/start_process/;
-use Test2::Harness::Util::JSON qw/encode_ascii_json_file encode_ascii_json/;
+use Test2::Harness::Util::JSON qw/encode_json_file encode_json/;
 use Test2::Util::UUID qw/gen_uuid/;
 
 use parent 'App::Yath::Renderer';
@@ -58,7 +58,7 @@ exit(
     )
 );
             EOT
-            encode_ascii_json_file($self->{+SETTINGS}),                # Pass settings in as arg
+            encode_json_file($self->{+SETTINGS}),                # Pass settings in as arg
         ],
         sub {
             close(STDIN);
@@ -88,7 +88,7 @@ sub render_event {
     };
 
     my $ok = eval {
-        print {$self->{+WRITE_PIPE}} encode_ascii_json($e), "\n";
+        print {$self->{+WRITE_PIPE}} encode_json($e), "\n";
         1;
     };
 

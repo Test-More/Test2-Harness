@@ -95,12 +95,12 @@
 
         <p>
 
-        As an example, at ZipRecruiter we have stages like this:
+        As an example:
 
         <dl>
             <dt>CPAN</dt><dd>CPAN modules are loaded, but no internal code is</dd>
-            <dt>base</dt><dd>Our basic modules are loaded, this is built on top of the CPAN preloads</dd>
-            <dt>app1</dt><dd>One of our apps is preloaded on top of base</dd>
+            <dt>base</dt><dd>Basic modules are loaded, this is built on top of the CPAN preloads</dd>
+            <dt>app1</dt><dd>One app is preloaded on top of base</dd>
             <dt>app2</dt><dd>Another app is preloaded on top of base.</dd>
         </dl>
 
@@ -122,25 +122,6 @@
         <p>
 
         Note that this all works for persist mode as well, each stage will have its own process all set to go!
-    </dd>
-
-    <dt id="future">future</dt>
-    <dd>
-        <h2>How will this change going forward?</h2>
-        <br />
-        <br />
-
-        The way this preload system grew was fairly organic to solve a problem at ZipRecruiter.
-
-        <p>
-
-        For backcompat none of these hooks should change very much.
-
-        <p>
-
-        Moving forward there may be a new system that lets you define your
-        preloads as a data structure (DSL?) that allows smarter inheritence,
-        and requires less work from you.
     </dd>
 </dl>
 

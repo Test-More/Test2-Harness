@@ -179,10 +179,11 @@ sub load_file {
     state $user = $config->schema->resultset('User')->find_or_create({username => 'root', password => 'root', realname => 'root'});
 
     my $run = $config->schema->resultset('Run')->create({
+        run_uuid   => gen_uuid,
         user_id    => $user->user_id,
         mode       => $mode,
-        buffer     => 'job',
         status     => 'pending',
+        canon      => 1,
         project_id => $projects{$project}->project_id,
 
         log_file_id => $logfile->log_file_id,

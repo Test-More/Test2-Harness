@@ -12,9 +12,7 @@ our $VERSION = '2.000000';
 our @EXPORT_OK = qw{
     decode_json
     encode_json
-    encode_ascii_json
     encode_pretty_json
-    encode_canon_json
     stream_json_l
     stream_json_l_url
     stream_json_l_file
@@ -22,19 +20,16 @@ our @EXPORT_OK = qw{
     json_true
     json_false
 
-    encode_ascii_json_file
+    encode_json_file
     decode_json_file
 };
 
 my $json   = Cpanel::JSON::XS->new->utf8(1)->convert_blessed(1)->allow_nonref(1);
 my $ascii  = Cpanel::JSON::XS->new->ascii(1)->convert_blessed(1)->allow_nonref(1);
-my $canon  = Cpanel::JSON::XS->new->utf8(1)->canonical(1)->convert_blessed(1)->allow_nonref(1);
-my $pretty = Cpanel::JSON::XS->new->utf8(1)->pretty(1)->canonical(1)->convert_blessed(1)->allow_nonref(1);
+my $pretty = Cpanel::JSON::XS->new->ascii(1)->pretty(1)->canonical(1)->convert_blessed(1)->allow_nonref(1);
 
 sub decode_json        { my $out; eval { $out = $json->decode(@_);   1} // confess($@); $out }
-sub encode_json        { my $out; eval { $out = $json->encode(@_);   1} // confess($@); $out }
-sub encode_ascii_json  { my $out; eval { $out = $ascii->encode(@_);  1} // confess($@); $out }
-sub encode_canon_json  { my $out; eval { $out = $canon->encode(@_);  1} // confess($@); $out }
+sub encode_json  { my $out; eval { $out = $ascii->encode(@_);  1} // confess($@); $out }
 sub encode_pretty_json { my $out; eval { $out = $pretty->encode(@_); 1} // confess($@); $out }
 
 sub json_true  { Cpanel::JSON::XS->true }
@@ -51,9 +46,9 @@ sub stream_json_l {
     croak "'$path' is not a valid path (file does not exist, or is not an http(s) url)";
 }
 
-sub encode_ascii_json_file {
+sub encode_json_file {
     my ($data) = @_;
-    my $json = encode_ascii_json($data);
+    my $json = encode_json($data);
 
     my ($fh, $file) = tempfile("$$-XXXXXX", TMPDIR => 1, SUFFIX => '.json', UNLINK => 0);
     print $fh $json;

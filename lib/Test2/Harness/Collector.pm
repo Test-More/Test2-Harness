@@ -15,7 +15,7 @@ use Test2::Harness::Collector::Auditor::Job;
 use Test2::Harness::Collector::IOParser::Stream;
 
 use Test2::Harness::Util qw/mod2file parse_exit open_file chmod_tmp/;
-use Test2::Harness::Util::JSON qw/decode_json encode_ascii_json decode_json_file/;
+use Test2::Harness::Util::JSON qw/decode_json encode_json decode_json_file/;
 use Test2::Harness::IPC::Util qw/pid_is_running swap_io start_process ipc_connect ipc_loop inflate set_procname/;
 
 BEGIN {
@@ -85,11 +85,11 @@ sub init {
     }
     elsif ($ref eq 'GLOB') {
         my $fh = $self->{+OUTPUT};
-        $self->{+OUTPUT_CB} = sub { print $fh encode_ascii_json($_) . "\n" for @_ };
+        $self->{+OUTPUT_CB} = sub { print $fh encode_json($_) . "\n" for @_ };
     }
     elsif ($self->{+OUTPUT}->isa('Atomic::Pipe')) {
         my $wp = $self->{+OUTPUT};
-        $self->{+OUTPUT_CB} = sub { $wp->write_message(encode_ascii_json($_)) for @_ };
+        $self->{+OUTPUT_CB} = sub { $wp->write_message(encode_json($_)) for @_ };
     }
     else {
         croak "Unknown output type: $self->{+OUTPUT} ($ref)";
@@ -198,7 +198,7 @@ sub collect_command {
 
     my $handler = sub {
         for my $e (@_) {
-            $stdout->write_message(encode_ascii_json($e));
+            $stdout->write_message(encode_json($e));
             next unless $stderr;
             my $event_id = $e->{event_id} or next;
             $stderr->write_message(qq/{"event_id":"$event_id"}/);
@@ -300,7 +300,7 @@ sub collect_job {
     else {
         $handler = sub {
             for my $e (@_) {
-                print STDOUT encode_ascii_json($e), "\n";
+                print STDOUT encode_json($e), "\n";
                 $inst_handler->($e) if $inst_con;
             }
         };
@@ -315,7 +315,7 @@ sub collect_job {
 
         my $old_handler = $handler;
         $handler = sub {
-            print $fh encode_ascii_json($_), "\n" for @_;
+            print $fh encode_json($_), "\n" for @_;
             $fh->flush();
             $old_handler->(@_);
         };

@@ -14,7 +14,7 @@ use Test2::Harness::Collector::IOParser;
 
 use Test2::Harness::Util qw/mod2file/;
 use Test2::Harness::IPC::Util qw/pid_is_running set_procname/;
-use Test2::Harness::Util::JSON qw/encode_ascii_json/;
+use Test2::Harness::Util::JSON qw/encode_json/;
 
 use File::Path qw/remove_tree/;
 
@@ -233,7 +233,7 @@ sub collector {
         always_flush => 1,
         output       => sub {
             for my $e (@_) {
-                print $log encode_ascii_json($e), "\n";
+                print $log encode_json($e), "\n";
                 return unless $renderers;
                 $_->render_event($e) for @$renderers;
             }

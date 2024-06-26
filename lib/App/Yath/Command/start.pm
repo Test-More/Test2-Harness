@@ -189,8 +189,9 @@ sub become_collector {
     remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0})
         unless $settings->harness->keep_dirs;
 
-    remove_tree($settings->harness->tmpdir, {safe => 1, keep_root => 0})
-        unless $settings->harness->keep_dirs;
+    # FIXME: This breaks server with ephemeral db
+    #remove_tree($settings->harness->tmpdir, {safe => 1, keep_root => 0})
+    #    unless $settings->harness->keep_dirs;
 
     return $exit;
 }

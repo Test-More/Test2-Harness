@@ -537,7 +537,9 @@ sub run_command {
 
     unless ($settings->harness->keep_dirs) {
         remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0});
-        remove_tree($settings->harness->tmpdir,  {safe => 1, keep_root => 0});
+
+        # Fixme - breaks server with ephemeral db
+        #remove_tree($settings->harness->tmpdir,  {safe => 1, keep_root => 0});
     }
 
     return $exit;

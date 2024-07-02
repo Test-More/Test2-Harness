@@ -59,7 +59,7 @@ sub clean_path {
 
 sub find_in_updir {
     my $path = shift;
-    return clean_path($path) if -f $path;
+    return clean_path($path) if -e $path;
 
     my %seen;
     while(1) {
@@ -67,7 +67,7 @@ sub find_in_updir {
         my $check = eval { realpath(File::Spec->rel2abs($path)) };
         last unless $check;
         last if $seen{$check}++;
-        return $check if -f $check;
+        return $check if -e $check;
     }
 
     return;

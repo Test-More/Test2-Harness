@@ -23,7 +23,7 @@ sub share_file {
     my ($file) = @_;
 
     my $path = "share/$file";
-    return $path if -f $path;
+    return $path if -e "share/Test2-Harness" && -f $path;
 
     return File::ShareDir::dist_file('Test2-Harness' => $file);
 
@@ -34,11 +34,11 @@ sub share_dir {
     my ($dir) = @_;
 
     my $path = "share/$dir";
-    return $path if -d $path;
+    return $path if -e "share/Test2-Harness" && -d $path;
 
     my $root = File::ShareDir::dist_dir('Test2-Harness');
 
-    $path .= "/$dir";
+    $path = "$root/$dir";
 
     croak "Could not find '$dir'" unless -d $path;
 

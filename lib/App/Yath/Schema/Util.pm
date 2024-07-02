@@ -4,7 +4,7 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Carp qw/croak/;
+use Carp qw/croak confess/;
 
 use Test2::Harness::Util qw/mod2file/;
 
@@ -79,7 +79,7 @@ sub schema_config_from_settings {
     my $db = $settings->group('db');
     unless($db) {
         return App::Yath::Schema::Config->new(%params) if $params{ephemeral};
-        croak "No database settings";
+        confess "No database settings";
     }
 
     if (my $cmod = $db->config) {
@@ -127,7 +127,7 @@ sub schema_config_from_settings {
         );
     }
 
-    croak "Could not find a DSN" unless $params{ephemeral};
+    confess "Could not find a DSN" unless $params{ephemeral};
 
     return App::Yath::Schema::Config->new(%params);
 }

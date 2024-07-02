@@ -8,6 +8,7 @@ use Getopt::Yath::Term qw/term_size USE_COLOR/;
 use App::Yath::Renderer::Default::Composer();
 use Test2::Harness::Util qw/hub_truth apply_encoding mod2file fqmod/;
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
+use Test2::Util::Facets2Legacy qw/causes_fail/;
 
 use File::Spec();
 use IO::Handle;
@@ -33,7 +34,7 @@ use Test2::Harness::Util::HashBase qw{
     -verbose
     -job_length
     -ecount
-    -active_files
+    -active_jobs
     -_active_disp
     -_file_stats
     -job_numbers
@@ -42,7 +43,19 @@ use Test2::Harness::Util::HashBase qw{
     +jobnum_counter
     <start_time
     <theme
+
+    +max_active
 };
+
+sub wants_status_lines {
+    my $class = shift;
+    my (%params) = @_;
+
+    my $settings = $params{settings};
+    my $jobs = $settings->resource->slots // 1;
+
+    return 6 + $jobs;
+}
 
 sub TAG_WIDTH() { 8 }
 
@@ -74,14 +87,14 @@ sub init {
     $use_color = $self->{+TTY} unless defined $use_color;
     $self->{+COLOR} = $use_color;
 
-    $self->{+SHOW_BUFFER} //= $use_color && USE_COLOR;
+    $self->{+SHOW_BUFFER} //= $self->{+SL_START};
 
     $self->{+ECOUNT} //= 0;
 
     my $theme = $self->{+THEME};
     my $reset = $theme->get_term_color('reset');
     my $msg   = $theme->get_term_color(status => 'message_a');
-    $self->{+_ACTIVE_DISP} = ["[${msg}INITIALIZING${reset}]", ''];
+    $self->{+_ACTIVE_DISP} = "[${msg}INITIALIZING${reset}]";
     $self->{+_FILE_STATS}  = {
         passed  => 0,
         failed  => 0,
@@ -276,8 +289,7 @@ sub write {
     elsif (!$self->{+VERBOSE}) {
         print $io $_, "\n" for @$lines;
         if ($self->{+TTY} && $self->{+PROGRESS}) {
-            print $io $self->render_status($f);
-            $self->{+_BUFFERED} = 'progress';
+            $self->render_status($f);
         }
     }
     elsif ($depth && $lines && @$lines) {
@@ -286,6 +298,7 @@ sub write {
     }
     else {
         print $io $_, "\n" for @$lines;
+        $self->render_status($f);
     }
 
     delete $self->{+JOB_IO}->{$job_id} if $job_id && $f->{harness_job_end};
@@ -346,8 +359,7 @@ sub step {
     }
 
     if ($self->{+TTY} && $self->{+PROGRESS}) {
-        print $io $self->render_status();
-        $self->{+_BUFFERED} = 1;
+        $self->render_status();
     }
 }
 
@@ -369,9 +381,23 @@ sub update_active_disp {
         $stats->{todo}++;
     }
 
+    my $active = $self->{+ACTIVE_JOBS} //= {};
+    my $job_id = $f->{harness}->{job_id} // 0;
+
+    if (causes_fail($f) && $active->{$job_id}) {
+        $active->{$job_id}->{state} = 'failed';
+    }
+
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
-        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $self->{+JOB_NUMBERS}->{$job->{job_id}} //= $self->{+JOBNUM_COUNTER}++;
+
+        $active->{$job_id} = {
+            file   => File::Spec->abs2rel($job->{file}),
+            number => $self->{+JOBNUM_COUNTER}++,
+            job_id => $job_id,
+            state  => 'running',
+        };
+
         $should_show = 1;
         $stats->{running}++;
         $stats->{todo}--;
@@ -380,7 +406,7 @@ sub update_active_disp {
 
     if ($f->{harness_job_end}) {
         my $file = $f->{harness_job_end}->{file};
-        delete $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($file)};
+        delete $active->{$job_id};
         $should_show = 1;
         $stats->{running}--;
 
@@ -392,32 +418,8 @@ sub update_active_disp {
         }
     }
 
+    return $self->{+_ACTIVE_DISP} = '' unless $active && keys %$active;
     return $out unless $should_show;
-
-    my $theme = $self->{+THEME};
-    my $statline = join '|' => (
-        $self->_highlight($stats->{passed},  'P', $theme->get_term_color(state => 'passed')),
-        $self->_highlight($stats->{failed},  'F', $theme->get_term_color(state => 'failed')),
-        $self->_highlight($stats->{running}, 'R', $theme->get_term_color(state => 'running')),
-        $self->_highlight($stats->{todo},    'T', $theme->get_term_color(state => 'todo')),
-    );
-
-    $statline = "[$statline]";
-
-    my $active = $self->{+ACTIVE_FILES};
-
-    return $self->{+_ACTIVE_DISP} = [$statline, ''] unless $active && keys %$active;
-
-    my $reset = $self->reset;
-
-    my $str .= "(";
-    {
-        no warnings 'numeric';
-        $str .= join(' ' => map { m{([^/]+)$}; "$active->{$_}:$1" } sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) or $a cmp $b } keys %$active);
-    }
-    $str .= ")";
-
-    $self->{+_ACTIVE_DISP} = [$statline, $str];
 
     return 1;
 }
@@ -456,38 +458,37 @@ sub update_spinner {
         return 0;
     }
 
-    $self->{+_ACTIVE_DISP} = [
-        join(
-            '' => (
-                $border => "[ ",              $reset,
-                $spin   => $stats->{spinner}, $reset,
-                ''      => " ",
-                $self->{+IS_PERSISTENT}
-                ? (
-                    $msg     => "Waiting for busy runner", $reset,
-                    ''       => " ",
-                    $sub_msg => "(see ",       $reset,
-                    $cmd     => "yath status", $reset,
-                    $sub_msg => ")",           $reset,
-                    )
-                : ($msg => "INITIALIZING", $reset),
-                ''      => " ",
-                $spin   => $stats->{spinner}, $reset,
-                $border => " ]",              $reset,
-            )
-        ),
-        '',
-    ];
+    $self->{+_ACTIVE_DISP} = join(
+        '' => (
+            $border => "[ ",              $reset,
+            $spin   => $stats->{spinner}, $reset,
+            ''      => " ",
+            $self->{+IS_PERSISTENT}
+            ? (
+                $msg     => "Waiting for busy runner", $reset,
+                ''       => " ",
+                $sub_msg => "(see ",       $reset,
+                $cmd     => "yath status", $reset,
+                $sub_msg => ")",           $reset,
+                )
+            : ($msg => "INITIALIZING", $reset),
+            ''      => " ",
+            $spin   => $stats->{spinner}, $reset,
+            $border => " ]",              $reset,
+        )
+    );
 
     return 1;
 }
 
 sub _highlight {
     my $self = shift;
-    my ($val, $label, $color) = @_;
+    my ($color, $val) = @_;
 
-    return "${label}:${val}" unless $val && $self->{+COLOR};
-    return sprintf('%s%s:%d%s', $color, $label, $val, $self->reset);
+    return 0 unless $val;
+
+    my $theme = $self->{+THEME};
+    return $theme->get_term_color(state => $color) . $val . $self->reset;
 }
 
 
@@ -503,24 +504,50 @@ sub colorstrip {
 sub render_status {
     my $self = shift;
 
+    my $io = $self->{+IO} or return;
+    my $sl = $self->{+SL_START};
+
     my $theme = $self->theme;
 
     my $reset = $self->reset;
     my $message = $theme->get_term_color(status => 'default') || '';
 
-    my $str = "$self->{+_ACTIVE_DISP}->[0] Events: $self->{+ECOUNT} ${message}$self->{+_ACTIVE_DISP}->[1]${reset}";
-
-    my $max = term_size() || 80;
-
-    if (length($str) > $max) {
-        my $nocolor = $self->colorstrip($str);
-        $str = substr($nocolor, 0, $max - 8) . " ...)$reset" if length($nocolor) > $max;
-        $str =~ s/\(/$message(/;
-        $str =~ s/^\[[^\]]+\]/$self->{+_ACTIVE_DISP}->[0]/;
+    if (my $spinner = $self->{+_ACTIVE_DISP}) {
+        print $io $self->wrap_status($spinner);
+        return;
     }
 
-    return $str;
+    my $stats = $self->{+_FILE_STATS};
+
+    my @lines = (
+        "         Events: $self->{+ECOUNT}",
+        "    Total Tests: $stats->{total}",
+        "   Passed Tests: " . $self->_highlight(passed  => $stats->{passed}),
+        "   Failed Tests: " . $self->_highlight(failed  => $stats->{failed}),
+        "  Running Tests: " . $self->_highlight(running => $stats->{running}),
+        "Remaining Tests: " . $self->_highlight(todo    => $stats->{todo}),
+    );
+
+    my $active = $self->{+ACTIVE_JOBS};
+
+    my $cnt = 0;
+    for my $job_id (sort { ($active->{$a} || 0) <=> ($active->{$b} || 0) } keys %$active) {
+        $cnt++;
+
+        my $job = $active->{$job_id};
+        push @lines => "  " . $self->_highlight($job->{state} => $job->{file});
+    }
+
+    $self->{+MAX_ACTIVE} = $cnt unless $self->{+MAX_ACTIVE} && $self->{+MAX_ACTIVE} > $cnt;
+
+    if ($cnt < $self->{+MAX_ACTIVE}) {
+        push @lines => '  ----' for ($cnt + 1) .. $self->{+MAX_ACTIVE};
+    }
+
+    print $io $self->wrap_status(@lines);
 }
+
+sub end_of_events { $_[0]->render_status }
 
 sub build_buffered_event {
     my $self = shift;

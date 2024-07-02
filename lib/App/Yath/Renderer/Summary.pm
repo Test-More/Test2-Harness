@@ -51,7 +51,7 @@ sub args_from_settings {
 
 sub weight { -99 }
 
-sub finish {
+sub exit_hook {
     my $self = shift;
     my ($auditor) = @_;
 

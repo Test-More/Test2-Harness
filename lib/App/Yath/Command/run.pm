@@ -210,6 +210,8 @@ sub stop_plugins_and_renderers {
         facet_data => {harness_final => $auditor->final_data},
     ));
 
+    $_->end_of_events() for reverse @$renderers;
+
     $_->finish($auditor) for reverse @$renderers;
 
     my $exit ||= $auditor->exit_value;

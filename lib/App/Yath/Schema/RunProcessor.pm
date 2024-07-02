@@ -132,21 +132,25 @@ sub process_stdin {
 
 sub process_csnb {
     my $class = shift;
-    my ($settings) = @_;
+    my ($settings, %params) = @_;
 
     require Consumer::NonBlock;
     my $r = Consumer::NonBlock->reader_from_env();
 
     my $cb = $class->process_lines($settings);
 
-    my $is_term = -t STDOUT;
+    my ($sln);
+    if ($params{sl_start} && $params{sl_end}) {
+        $sln = $params{sl_start};
+        STDOUT->autoflush(1);
+        print "\e[s\e[${sln}H\e[KYath DB Upload processing event: 0\e[u";
+    }
 
     my $ln = 0;
     while (1) {
         my $line = $r->read_line;
         $ln++;
-        STDOUT->autoflush(1);
-        printf("\r\e[KYath DB Upload processing line: %d\r", $ln) if $is_term && !($ln % 10);
+        print "\e[s\e[${sln}H\e[KYath DB Upload processing event: $ln\e[u" if $sln;
         $cb->($line);
         last unless $line;
     }
@@ -1556,7 +1560,7 @@ sub flush_events {
     my $self = shift;
     my ($try, %params) = @_;
 
-    return if mode_check($self->{+MODE}, 'summary');
+    return 0 if mode_check($self->{+MODE}, 'summary');
 
     my $events   = $try->{ready_events} //= [];
     my $deferred = $try->{deffered_events} //= [];

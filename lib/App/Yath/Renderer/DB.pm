@@ -8,6 +8,8 @@ our $VERSION = '2.000000';
 # them here anyway so that any errors can be reported before we fork.
 use Getopt::Yath::Settings;
 use App::Yath::Schema::RunProcessor;
+use Consumer::NonBlock;
+use App::Yath::Schema::Util;
 
 use Atomic::Pipe;
 use YAML::Tiny;
@@ -18,7 +20,6 @@ use Test2::Harness::Util qw/clean_path find_in_updir/;
 use Test2::Harness::IPC::Util qw/start_process/;
 use Test2::Harness::Util::JSON qw/encode_json_file encode_json decode_json_file/;
 use Test2::Util::UUID qw/gen_uuid/;
-use Consumer::NonBlock;
 
 use parent 'App::Yath::Renderer';
 use Test2::Harness::Util::HashBase qw{
@@ -80,12 +81,19 @@ option_post_process 1000 => sub {
     }
 };
 
+sub wants_status_lines { 1 }
+
 sub start {
     my $self = shift;
+
+    App::Yath::Schema::Util::schema_config_from_settings($self->{+SETTINGS});
 
     my ($r, $w) = Consumer::NonBlock->pair(batch_size => 1000);
 
     $self->{+WRITER} = $w;
+
+    $self->{+SL_START} //= 0;
+    $self->{+SL_END}   //= 0;
 
     my %seen;
     $self->{+PID} = start_process(
@@ -97,7 +105,9 @@ sub start {
             '-e' => <<"            EOT",                               # Run it.
 exit(
     App::Yath::Schema::RunProcessor->process_csnb(
-        Getopt::Yath::Settings->FROM_JSON_FILE(\$ARGV[0], unlink => 1)
+        Getopt::Yath::Settings->FROM_JSON_FILE(\$ARGV[0], unlink => 1),
+        sl_start => $self->{+SL_START},
+        sl_end   => $self->{+SL_END},
     )
 );
             EOT

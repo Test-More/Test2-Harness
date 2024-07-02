@@ -131,14 +131,47 @@ sub init_renderers {
     my $is_qvf = $rs->qvf || ($rs->verbose && $rs->quiet);
     my $r_classes = $rs->classes;
 
+    my $term = -t STDOUT;
+
+    $r_classes->{'App::Yath::Renderer::ResetTerm'} //= [] if $term;
+
+    my $status_lines = 0;
+
     my @renderers;
     for my $class (sort { $a->weight <=> $b->weight || $a cmp $b } map { require(mod2file($_)); $_ } keys %$r_classes) {
+        # FIXME: Do these exist?
         $class = 'App::Yath::Theme::QVF'     if $is_qvf  && $class eq 'App::Yath::Theme::Default';
         $class = 'App::Yath::Theme::Default' if !$is_qvf && $class eq 'App::Yath::Theme::QVF';
 
+        my ($sl_start, $sl_end) = (0,0);
+        if ($term) {
+            if (my $want = $class->wants_status_lines(settings => $settings)) {
+                $status_lines += 1;
+                $sl_start = $status_lines;
+                $status_lines += $want - 1;
+                $sl_end = $status_lines;
+            }
+        }
+
         my $params = $r_classes->{$class};
-        my $r = $class->new($settings->renderer->all, $settings->term->all, @$params, %params, settings => $settings, theme => $theme);
+
+        my $r = $class->new(
+            $settings->renderer->all,
+            $settings->term->all,
+            @$params,
+            %params,
+            settings => $settings,
+            theme    => $theme,
+            sl_start => $sl_start,
+            sl_end   => $sl_end,
+        );
+
         push @renderers => $r;
+    }
+
+    if ($term && $status_lines) {
+        STDOUT->autoflush(1);
+        print "\e[H\e[2J\e[" . ($status_lines + 1) . "r\e[" . ($status_lines + 2) . "H";
     }
 
     return \@renderers;

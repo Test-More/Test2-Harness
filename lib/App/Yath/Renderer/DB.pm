@@ -10,6 +10,7 @@ use Getopt::Yath::Settings;
 use App::Yath::Schema::RunProcessor;
 
 use Atomic::Pipe;
+use YAML::Tiny;
 
 use Time::HiRes qw/time/;
 
@@ -33,6 +34,50 @@ include_options(
     'App::Yath::Options::Publish',
     'App::Yath::Options::WebClient' => [qw/url/],
 );
+
+option_post_process 1000 => sub {
+    my ($options, $state) = @_;
+    my $settings = $state->{settings};
+
+    return if $settings->yath->project;
+
+    my $project;
+
+    if (my $meta_json = find_in_updir('META.json')) {
+        my $json = decode_json_file($meta_json);
+        $project = $json->{name};
+    }
+    elsif (my $meta_yml = find_in_updir('META.yml')) {
+        my $yml = YAML::Tiny->read($meta_yml) or die "Could not read '$meta_yml'";
+        $project = $yml->[0]->{name};
+    }
+    elsif (my $dist_ini = find_in_updir('dist.ini')) {
+        open(my $fh, '<', $dist_ini) or die "Could not open '$dist_ini': $!";
+        while (my $line = <$fh>) {
+            next unless $line =~ m/^name\s*=\s*(.*)$/;
+            $project = $1;
+            last;
+        }
+    }
+    else {
+        for my $sc ('.git', '.svn','.cvs') {
+            my $path = find_in_updir($sc) or next;
+
+            $path = clean_path($path);
+            $path =~ m{([^-/]+)(-\d.*)?/\Q$sc\E$} or next;
+
+            $project = $1;
+            last if $project;
+        }
+    }
+
+    if ($project) {
+        $settings->yath->project($project);
+    }
+    else {
+        die "Could not determine project, please specify with the --project option.\n";
+    }
+};
 
 sub start {
     my $self = shift;

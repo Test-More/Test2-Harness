@@ -14,15 +14,16 @@ use YAML::Tiny;
 
 use Time::HiRes qw/time/;
 
-use Test2::Harness::Util qw/clean_path/;
+use Test2::Harness::Util qw/clean_path find_in_updir/;
 use Test2::Harness::IPC::Util qw/start_process/;
-use Test2::Harness::Util::JSON qw/encode_json_file encode_json/;
+use Test2::Harness::Util::JSON qw/encode_json_file encode_json decode_json_file/;
 use Test2::Util::UUID qw/gen_uuid/;
+use Consumer::NonBlock;
 
 use parent 'App::Yath::Renderer';
 use Test2::Harness::Util::HashBase qw{
     <pid
-    <write_pipe
+    <writer
     <stopped
 };
 
@@ -82,12 +83,9 @@ option_post_process 1000 => sub {
 sub start {
     my $self = shift;
 
-    my ($r, $w) = Atomic::Pipe->pair;
+    my ($r, $w) = Consumer::NonBlock->pair(batch_size => 1000);
 
-    $w->resize($w->max_size);
-    $w->wh->autoflush(1);
-
-    $self->{+WRITE_PIPE} = $w->wh;
+    $self->{+WRITER} = $w;
 
     my %seen;
     $self->{+PID} = start_process(
@@ -98,7 +96,7 @@ sub start {
             "-mGetopt::Yath::Settings",                                # Load settings lib
             '-e' => <<"            EOT",                               # Run it.
 exit(
-    App::Yath::Schema::RunProcessor->process_stdin(
+    App::Yath::Schema::RunProcessor->process_csnb(
         Getopt::Yath::Settings->FROM_JSON_FILE(\$ARGV[0], unlink => 1)
     )
 );
@@ -106,13 +104,14 @@ exit(
             encode_json_file($self->{+SETTINGS}),                # Pass settings in as arg
         ],
         sub {
-            close(STDIN);
-            open(STDIN, '<&', $r->rh) or die "Could not open STDIN to pipe: $!";
+            $r->set_env_var;
+            $w->weaken;
             $w->close;
         }
     );
 
-    $r->close;
+    $r->weaken();
+    $r->close();
 
     return;
 }
@@ -123,21 +122,7 @@ sub render_event {
 
     return if $self->{+STOPPED};
 
-    my $spipe = 0;
-    local $SIG{PIPE} = sub {
-        warn "Caught SIGPIPE while writing to the database";
-        $spipe++;
-        $self->{+STOPPED} = ['SIGPIPE'];
-        close($self->{+WRITE_PIPE});
-        $self->{+WRITE_PIPE} = undef;
-    };
-
-    my $ok = eval {
-        print {$self->{+WRITE_PIPE}} encode_json($e), "\n";
-        1;
-    };
-
-    die $@ unless $ok || $spipe;
+    $self->{+WRITER}->write_line(encode_json($e));
 
     return;
 }
@@ -168,8 +153,8 @@ sub _stop {
 sub _close {
     my $self = shift;
 
-    my $p = delete $self->{+WRITE_PIPE} or return;
-    close($p);
+    my $p = delete $self->{+WRITER} or return;
+    $p->close;
 }
 
 sub _wait {

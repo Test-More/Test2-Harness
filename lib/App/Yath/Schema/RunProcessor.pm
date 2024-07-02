@@ -130,6 +130,28 @@ sub process_stdin {
     return $class->process_handle(\*STDIN, $settings);
 }
 
+sub process_csnb {
+    my $class = shift;
+    my ($settings) = @_;
+
+    require Consumer::NonBlock;
+    my $r = Consumer::NonBlock->reader_from_env();
+
+    my $cb = $class->process_lines($settings);
+
+    my $is_term = -t STDOUT;
+
+    my $ln = 0;
+    while (1) {
+        my $line = $r->read_line;
+        $ln++;
+        STDOUT->autoflush(1);
+        printf("\r\e[KYath DB Upload processing line: %d\r", $ln) if $is_term && !($ln % 10);
+        $cb->($line);
+        last unless $line;
+    }
+}
+
 sub process_handle {
     my $class = shift;
     my ($fh, $settings) = @_;

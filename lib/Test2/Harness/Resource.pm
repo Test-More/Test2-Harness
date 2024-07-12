@@ -12,7 +12,7 @@ use Sys::Hostname qw/hostname/;
 
 use Test2::Harness::Util qw/parse_exit/;
 use Test2::Harness::IPC::Util qw/start_collected_process ipc_connect set_procname/;
-use Test2::Harness::Util::JSON qw/decode_json encode_json/;
+use Test2::Harness::Util::JSON qw/decode_json_file encode_json_file/;
 use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness::Util::HashBase qw{
@@ -87,11 +87,11 @@ sub spawn_command {
 
     my %seen;
     return (
-        $^X,                                                       # Call current perl
-        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),    # Use the dev libs specified
-        "-m$class",                                                # Load Resource
-        '-e' => "exit($class->_subprocess_run(\$ARGV[0]))",        # Run it.
-        encode_json({parent_pid => $$, $self->subprocess_args}),        # json data
+        $^X,                                                             # Call current perl
+        (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),          # Use the dev libs specified
+        "-m$class",                                                      # Load Resource
+        '-e' => "exit($class->_subprocess_run(\$ARGV[0]))",              # Run it.
+        encode_json_file({parent_pid => $$, $self->subprocess_args}),    # json data
     );
 }
 
@@ -122,12 +122,12 @@ sub spawn_process {
 
 sub _subprocess_run {
     my $class = shift;
-    my ($json) = @_;
+    my ($json_file) = @_;
 
     STDOUT->autoflush(1);
     STDERR->autoflush(1);
 
-    my $params = decode_json($json);
+    my $params = decode_json_file($json_file);
 
     set_procname(set => ['resource', $class->resourse_name(%$params)]);
 

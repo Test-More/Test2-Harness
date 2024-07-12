@@ -132,7 +132,7 @@ sub start_collected_process {
             (map { ("-I$_") } grep { -d $_ && !$seen{$_}++ } @INC),          # Use the dev libs specified
             '-mTest2::Harness::Collector',                                   # Load Collector
             '-e' => 'exit(Test2::Harness::Collector->collect($ARGV[0]))',    # Run it.
-            encode_json_file(\%params),                                # json data for what to do
+            encode_json_file(\%params),                                      # json data for what to do
         ],
         $post_fork,
     );

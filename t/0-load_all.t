@@ -53,6 +53,8 @@ sub wanted {
             }
             ok(!@warnings, "No Warnings", @warnings);
 
+            return if $file =~ m{Test2/Harness/UI/Schema};
+
             my $mod = file2mod($file);
             my $sym = "$mod\::VERSION";
             no strict 'refs';

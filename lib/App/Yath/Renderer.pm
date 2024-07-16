@@ -25,8 +25,6 @@ use Test2::Harness::Util::HashBase qw{
     <show_run_fields
     <settings
     <theme
-    <sl_start
-    <sl_end
 };
 
 sub init {
@@ -46,28 +44,7 @@ sub exit_hook {}
 
 sub weight { 0 }
 
-sub wants_status_lines { 0 }
-
 sub end_of_events { }
-
-sub wrap_status {
-    my $self = shift;
-    my @lines = @_;
-
-    croak "" unless $self->{+SL_START};
-
-    my @out;
-    for my $ln ($self->{+SL_START} .. $self->{+SL_END}) {
-        my $line = shift @lines or next;
-
-        push @out => "\e[s\e[${ln}H\e[K$line\e[u";
-    }
-
-    carp "Too many status lines to diplay: " . scalar(@lines) . " were not rendered."
-        if @lines;
-
-    return @out;
-}
 
 1;
 

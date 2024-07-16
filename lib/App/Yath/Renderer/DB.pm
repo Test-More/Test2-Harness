@@ -81,8 +81,6 @@ option_post_process 1000 => sub {
     }
 };
 
-sub wants_status_lines { 1 }
-
 sub start {
     my $self = shift;
 
@@ -91,9 +89,6 @@ sub start {
     my ($r, $w) = Consumer::NonBlock->pair(batch_size => 1000);
 
     $self->{+WRITER} = $w;
-
-    $self->{+SL_START} //= 0;
-    $self->{+SL_END}   //= 0;
 
     my %seen;
     $self->{+PID} = start_process(
@@ -106,8 +101,6 @@ sub start {
 exit(
     App::Yath::Schema::RunProcessor->process_csnb(
         Getopt::Yath::Settings->FROM_JSON_FILE(\$ARGV[0], unlink => 1),
-        sl_start => $self->{+SL_START},
-        sl_end   => $self->{+SL_END},
     )
 );
             EOT

@@ -14,7 +14,7 @@ sub args_from_settings {
 }
 
 sub weight { -99999999 }
-sub finish { print "\e[r\e[H\e[2J" }
+sub finish { print "\e[0m\e[=l" if -t STDOUT }
 sub render_event {}
 
 1;

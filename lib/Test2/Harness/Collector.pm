@@ -9,6 +9,7 @@ use Atomic::Pipe;
 use Carp qw/croak/;
 use POSIX ":sys_wait_h";
 use File::Temp qw/tempfile/;
+use File::Path qw/remove_tree/;
 use Time::HiRes qw/time sleep/;
 
 use Test2::Harness::Collector::Auditor::Job;
@@ -134,9 +135,9 @@ sub collect {
     die "No root pid" unless $params{root_pid};
     $class->setsid if $params{setsid};
 
-    my ($self, $cb, @ipc);
+    my ($self, $cb, $cleanup, @ipc);
     if ($params{job}) {
-        ($self, $cb, @ipc) = $class->collect_job(%params);
+        ($self, $cb, $cleanup, @ipc) = $class->collect_job(%params);
     }
     elsif ($params{command}) {
         ($self, $cb, @ipc) = $class->collect_command(%params);
@@ -152,8 +153,11 @@ sub collect {
 
     my $exit;
     my $ok = eval { $exit = $self->launch_and_process($cb); 1 } // 0;
-
     my $err = $@;
+
+    if ($cleanup) {
+        eval { $cleanup->(); 1 } or warn $@;
+    }
 
     if (!$ok) {
         eval { $self->_die($err, no_exit => 1) };
@@ -237,8 +241,9 @@ sub collect_job {
     my $job = inflate($params{job},           'Test2::Harness::Run::Job')     or die "No job provided";
 
     die "No workdir provided" unless $params{workdir};
-    $params{tempdir} = File::Temp::tempdir(DIR => $params{workdir}, CLEANUP => 1, TEMPLATE => "tmp-$$-XXXX");
-    chmod_tmp($params{tempdir});
+    my $tempdir = File::Temp::tempdir(DIR => $params{workdir}, TEMPLATE => "tmp-$$-XXXX");
+    $params{tempdir} = $tempdir;
+    chmod_tmp($tempdir);
 
     my ($inst_ipc, $inst_con) = ipc_connect($run->instance_ipc);
     my ($agg_ipc,  $agg_con)  = ipc_connect($run->aggregator_ipc);
@@ -355,6 +360,9 @@ sub collect_job {
                     pid    => $pid,
                 },
             );
+        },
+        sub {
+            remove_tree($tempdir, {safe => 1, keep_root => 0});
         },
         $inst_ipc => $inst_con,
         $agg_ipc =>  $agg_con,

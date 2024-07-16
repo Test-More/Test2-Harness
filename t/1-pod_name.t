@@ -32,6 +32,14 @@ for my $set (@files) {
             chomp($pkg_line = $line);
             last;
         }
+
+        $pkg_line =~ s/Schema::Result/Schema::MySQL/      if $file =~ m{MySQL}      && $pkg_line !~ m/MySQL/;
+        $pkg_line =~ s/Schema::Result/Schema::MySQL56/    if $file =~ m{MySQL56}    && $pkg_line !~ m/MySQL56/;
+        $pkg_line =~ s/Schema::Result/Schema::Overlay/    if $file =~ m{Overlay}    && $pkg_line !~ m/Overlay/;
+        $pkg_line =~ s/Schema::Result/Schema::Percona/    if $file =~ m{Percona}    && $pkg_line !~ m/Percona/;
+        $pkg_line =~ s/Schema::Result/Schema::PostgreSQL/ if $file =~ m{PostgreSQL} && $pkg_line !~ m/PostgreSQL/;
+        $pkg_line =~ s/Schema::Result/Schema::SQLite/     if $file =~ m{SQLite}     && $pkg_line !~ m/SQLite/;
+
         push @res => is($pkg_line, "package $mod;", "$file has correct package $mod", "Incorrect: $pkg_line");
 
         my $found;

@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Permission - Overlay for Permission result class.
+App::Yath::Schema::Overlay::Permission - Overlay for Permission result class.
 
 =head1 DESCRIPTION
 

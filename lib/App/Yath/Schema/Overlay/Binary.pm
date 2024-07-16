@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Binary - Overlay for Binary result class.
+App::Yath::Schema::Overlay::Binary - Overlay for Binary result class.
 
 =head1 DESCRIPTION
 

@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::SessionHost - Overlay for SessionHost result class.
+App::Yath::Schema::Overlay::SessionHost - Overlay for SessionHost result class.
 
 =head1 DESCRIPTION
 

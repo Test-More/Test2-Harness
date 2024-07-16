@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::ApiKey - Overlay for ApiKey result class.
+App::Yath::Schema::Overlay::ApiKey - Overlay for ApiKey result class.
 
 =head1 DESCRIPTION
 

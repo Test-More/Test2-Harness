@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::PrimaryEmail - Overlay for PrimaryEmail result class.
+App::Yath::Schema::Overlay::PrimaryEmail - Overlay for PrimaryEmail result class.
 
 =head1 DESCRIPTION
 

@@ -36,7 +36,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::RunField - Overlay for RunField result class.
+App::Yath::Schema::Overlay::RunField - Overlay for RunField result class.
 
 =head1 DESCRIPTION
 

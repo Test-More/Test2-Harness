@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Version - Overlay for Version result class.
+App::Yath::Schema::Overlay::Version - Overlay for Version result class.
 
 =head1 DESCRIPTION
 

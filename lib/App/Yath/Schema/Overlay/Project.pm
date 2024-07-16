@@ -137,7 +137,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Project - Overlay for Project result class.
+App::Yath::Schema::Overlay::Project - Overlay for Project result class.
 
 =head1 DESCRIPTION
 

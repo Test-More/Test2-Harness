@@ -113,7 +113,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::JobTry - Overlay for JobTry result class.
+App::Yath::Schema::Overlay::JobTry - Overlay for JobTry result class.
 
 =head1 DESCRIPTION
 

@@ -35,7 +35,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::JobTryField - Overlay for JobTryField result class.
+App::Yath::Schema::Overlay::JobTryField - Overlay for JobTryField result class.
 
 =head1 DESCRIPTION
 

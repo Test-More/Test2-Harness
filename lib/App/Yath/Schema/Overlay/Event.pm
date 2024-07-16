@@ -106,7 +106,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Event - Overlay for Event result class.
+App::Yath::Schema::Overlay::Event - Overlay for Event result class.
 
 =head1 DESCRIPTION
 

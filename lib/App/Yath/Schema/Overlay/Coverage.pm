@@ -72,7 +72,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Coverage - Overlay for Coverage result class.
+App::Yath::Schema::Overlay::Coverage - Overlay for Coverage result class.
 
 =head1 DESCRIPTION
 

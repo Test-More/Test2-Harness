@@ -205,7 +205,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Run - Overlay for Run result class.
+App::Yath::Schema::Overlay::Run - Overlay for Run result class.
 
 =head1 DESCRIPTION
 

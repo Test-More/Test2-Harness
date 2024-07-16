@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::SourceSub - Overlay for SourceSub result class.
+App::Yath::Schema::Overlay::SourceSub - Overlay for SourceSub result class.
 
 =head1 DESCRIPTION
 

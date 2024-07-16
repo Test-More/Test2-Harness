@@ -351,7 +351,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::$pkg - Overlay for $pkg result class.
+App::Yath::Schema::Overlay::$pkg - Overlay for $pkg result class.
 
 =head1 DESCRIPTION
 

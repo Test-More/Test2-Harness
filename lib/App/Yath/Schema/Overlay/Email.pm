@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Email - Overlay for Email result class.
+App::Yath::Schema::Overlay::Email - Overlay for Email result class.
 
 =head1 DESCRIPTION
 

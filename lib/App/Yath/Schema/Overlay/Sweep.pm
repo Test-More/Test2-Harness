@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Sweep - Overlay for Sweep result class.
+App::Yath::Schema::Overlay::Sweep - Overlay for Sweep result class.
 
 =head1 DESCRIPTION
 

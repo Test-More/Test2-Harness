@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::EmailVerificationCode - Overlay for EmailVerificationCode result class.
+App::Yath::Schema::Overlay::EmailVerificationCode - Overlay for EmailVerificationCode result class.
 
 =head1 DESCRIPTION
 

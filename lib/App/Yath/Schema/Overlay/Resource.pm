@@ -28,7 +28,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Resource - Overlay for Resource result class.
+App::Yath::Schema::Overlay::Resource - Overlay for Resource result class.
 
 =head1 DESCRIPTION
 

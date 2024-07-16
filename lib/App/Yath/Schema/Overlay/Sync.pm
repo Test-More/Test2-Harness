@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Sync - Overlay for Sync result class.
+App::Yath::Schema::Overlay::Sync - Overlay for Sync result class.
 
 =head1 DESCRIPTION
 

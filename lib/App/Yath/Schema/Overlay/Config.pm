@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Config - Overlay for Config result class.
+App::Yath::Schema::Overlay::Config - Overlay for Config result class.
 
 =head1 DESCRIPTION
 

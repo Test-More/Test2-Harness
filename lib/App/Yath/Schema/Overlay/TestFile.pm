@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::TestFile - Overlay for TestFile result class.
+App::Yath::Schema::Overlay::TestFile - Overlay for TestFile result class.
 
 =head1 DESCRIPTION
 

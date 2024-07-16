@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::CoverageManager - Overlay for CoverageManager result class.
+App::Yath::Schema::Overlay::CoverageManager - Overlay for CoverageManager result class.
 
 =head1 DESCRIPTION
 

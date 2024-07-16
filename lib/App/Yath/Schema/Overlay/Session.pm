@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Session - Overlay for Session result class.
+App::Yath::Schema::Overlay::Session - Overlay for Session result class.
 
 =head1 DESCRIPTION
 

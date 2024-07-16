@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Reporting - Overlay for Reporting result class.
+App::Yath::Schema::Overlay::Reporting - Overlay for Reporting result class.
 
 =head1 DESCRIPTION
 

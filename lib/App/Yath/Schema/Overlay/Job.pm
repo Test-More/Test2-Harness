@@ -114,7 +114,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::Job - Overlay for Job result class.
+App::Yath::Schema::Overlay::Job - Overlay for Job result class.
 
 =head1 DESCRIPTION
 

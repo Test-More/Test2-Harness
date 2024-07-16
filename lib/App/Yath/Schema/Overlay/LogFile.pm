@@ -21,7 +21,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::LogFile - Overlay for LogFile result class.
+App::Yath::Schema::Overlay::LogFile - Overlay for LogFile result class.
 
 =head1 DESCRIPTION
 

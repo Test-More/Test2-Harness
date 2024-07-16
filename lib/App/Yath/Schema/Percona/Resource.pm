@@ -68,7 +68,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-06-10 11:56:36
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-16 15:46:29
 __PACKAGE__->inflate_column('event_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });
 # DO NOT MODIFY ANY PART OF THIS FILE
 

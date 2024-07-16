@@ -86,7 +86,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Result::User - Overlay for User result class.
+App::Yath::Schema::Overlay::User - Overlay for User result class.
 
 =head1 DESCRIPTION
 

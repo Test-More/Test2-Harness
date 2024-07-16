@@ -29,7 +29,7 @@ my $ascii  = Cpanel::JSON::XS->new->ascii(1)->convert_blessed(1)->allow_nonref(1
 my $pretty = Cpanel::JSON::XS->new->ascii(1)->pretty(1)->canonical(1)->convert_blessed(1)->allow_nonref(1);
 
 sub decode_json        { my $out; eval { $out = $json->decode(@_);   1} // confess($@); $out }
-sub encode_json  { my $out; eval { $out = $ascii->encode(@_);  1} // confess($@); $out }
+sub encode_json        { my $out; eval { $out = $ascii->encode(@_);  1} // confess($@); $out }
 sub encode_pretty_json { my $out; eval { $out = $pretty->encode(@_); 1} // confess($@); $out }
 
 sub json_true  { Cpanel::JSON::XS->true }

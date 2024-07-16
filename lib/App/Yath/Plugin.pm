@@ -6,18 +6,11 @@ our $VERSION = '2.000000';
 
 use parent 'Test2::Harness::Plugin';
 use Test2::Harness::Util::HashBase qw{
-    <settings
+    settings
 };
 
 #FIXME Document this!
-sub args_from_settings {
-    my $class = shift;
-    my %params = @_;
-
-    my $settings = $params{settings};
-
-    return (settings => $settings);
-}
+sub args_from_settings { () }
 
 # We do not want these defined by default, but it should be documented
 #sub sort_files {}

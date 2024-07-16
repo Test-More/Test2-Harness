@@ -499,7 +499,9 @@ sub run {
 
         if ($has_new) {
             $new_args //= [];
-            push @$plugins => $pclass->new(@$new_args);
+            my $plugin = $pclass->new(@$new_args);
+            $plugin->set_settings($settings);
+            push @$plugins => $plugin
         }
         else {
             push @$plugins => $pclass;

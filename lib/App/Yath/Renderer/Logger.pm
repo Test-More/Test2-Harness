@@ -17,6 +17,7 @@ use Test2::Harness::Util::HashBase qw{
     <gzip
     <bzip2
     <fh
+    <lastlog
 };
 
 use Getopt::Yath;
@@ -74,6 +75,14 @@ option_group {group => 'logging', category => "Logging Options", applicable => \
             my $url = $settings->webclient->url or die "No --url specified, either provide one or give a value to the --publish option.\n(NOTE: the --url option must come before the --publish option on the command line)\n";
             return $url;
         },
+    );
+
+    option lastlog => (
+        type => 'Bool',
+        default => 1,
+        description => "Symlink the log to a file named lastlog.jsonl[.COMPRESSION]",
+        from_env_vars => [qw/!YATH_NO_LASTLOG YATH_LINK_LASTLOG/],
+        set_env_vars  => [qw/YATH_NO_LASTLOG/], # Set this negated one if we ARE doing laslog so that nested yaths do not also do lastlog
     );
 
     option log => (
@@ -163,18 +172,6 @@ sub args_from_settings {
 sub start {
     my $self = shift;
 
-    for my $ext ('jsonl', 'jsonl.bz2', 'jsonl.gz') {
-        my $n0 = "lastlog.${ext}";
-        my $n1 = "lastlog-1.${ext}";
-
-        if (-e $n1 || -l $n1) {
-#            unlink(clean_path($n1));
-            unlink($n1);
-        }
-
-        rename($n0, $n1) if -e $n0 || -l $n0;
-    }
-
     my $fh;
     my $file = $self->file;
 
@@ -196,13 +193,6 @@ sub start {
     $self->{+FH} = $fh;
 
     print "Opened log file: $file\n";
-
-    my $link = normalize_log_file(lastlog => $self->settings);
-    unless ($file eq $link) {
-        symlink($file => $link) or die "Could not create symlink $file -> $link: $!";
-        print "Linked log file: $link\n";
-    }
-
 }
 
 sub render_event {
@@ -220,6 +210,27 @@ sub finish {
     close($self->{+FH});
 
     print "\nWrote log file: $self->{+FILE}\n";
+
+    if ($self->lastlog) {
+        for my $ext ('jsonl', 'jsonl.bz2', 'jsonl.gz') {
+            my $n0 = "lastlog.${ext}";
+            my $n1 = "lastlog-1.${ext}";
+
+            if (-e $n1 || -l $n1) {
+                unlink(clean_path($n1));
+                unlink($n1);
+            }
+
+            rename($n0, $n1) if -e $n0 || -l $n0;
+        }
+
+        my $file = $self->{+FILE};
+        my $link = normalize_log_file(lastlog => $self->settings);
+        unless ($file eq $link) {
+            symlink($file => $link) or die "Could not create symlink $file -> $link: $!";
+            print "Linked log file: $link\n";
+        }
+    }
 
     warn "FIXME: publish should send log to server\n";
 }

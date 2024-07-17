@@ -91,9 +91,9 @@ sub render_summary {
         : (),
     );
 
-    my $res = "    -->  Result: " . ($pass ? 'PASSED' : 'FAILED') . "  <--";
+    my $res = "    -->  Result: " . (defined($pass) ? $pass ? 'PASSED' : 'FAILED' : 'N/A') . "  <--";
     if ($self->color && USE_COLOR) {
-        my $color = $self->theme->get_term_color(tag => $pass ? 'passed' : 'failed');
+        my $color = $self->theme->get_term_color(tag => defined($pass) ? $pass ? 'passed' : 'failed' : 'skipped');
         my $reset = $self->theme->get_term_color('reset');
         $res = "$color$res$reset";
     }

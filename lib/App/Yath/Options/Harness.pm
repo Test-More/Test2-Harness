@@ -66,6 +66,7 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
             return $tmpdir if $tmpdir =~ m/yath/ && $ENV{YATH_SHELL};
 
             my $dir = tempdir("yath-$ENV{USER}-$$-XXXXXX", CLEANUP => 0, TMPDIR => 1);
+            chmod_tmp($dir);
             return $dir;
         },
     );

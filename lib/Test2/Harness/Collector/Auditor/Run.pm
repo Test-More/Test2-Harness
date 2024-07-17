@@ -232,7 +232,7 @@ sub summary {
     my $cpu = sum0(@$times);
 
     return $self->{+SUMMARY} = {
-        pass           => $self->{+ASSERTS} ? $final_data->{pass}     : 0,
+        pass           => $self->{+ASSERTS} ? $final_data->{pass}     : undef,
         cpu_usage      => $wall             ? int($cpu / $wall * 100) : 0,
         failures       => (0 + @{$final_data->{failed} // []}),
         tests_seen     => $self->{+LAUNCHES},

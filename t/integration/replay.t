@@ -26,6 +26,9 @@ sub clean_output {
     $out->{output} =~ s/^\s+//mg;
     $out->{output} =~ s/\e\[0m//mg;
 
+    # Can remove this once the fixme is removed
+    $out->{output} =~ s/^FIXME: publish should send log to server$//gm;
+
     my @lines;
     my $start;
     for my $line (split /\n/, $out->{output}) {

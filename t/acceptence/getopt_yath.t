@@ -520,11 +520,17 @@ This is the category  (foo)
   --no-aut
     An auto-field
 
+    default: yyy
+
+    autofill: xxx
+
   [aut2]
   --aut2
   --aut2=ARG
   --no-aut2
     NO DESCRIPTION - FIX ME
+
+    autofill: zzz
 
   [auto-list]
   -L
@@ -553,6 +559,8 @@ This is the category  (foo)
   --bar
   --no-bar
     bar boolean
+
+    default: 0
 
   [baz]
   --baz
@@ -603,6 +611,8 @@ This is the category  (foo)
   --no-foo
     foo boolean
 
+    default: 1
+
   [list]
   -l ARG
   -l=ARG
@@ -642,6 +652,8 @@ This is the category  (foo)
   --scalar=ARG
   --no-scl
     A scalar
+
+    default: I am a scalar
 
   [scl2]
   --scl2 ARG

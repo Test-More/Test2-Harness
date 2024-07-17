@@ -212,7 +212,7 @@ sub set_dot_args {
     my $class = shift;
     my ($settings, $dot_args) = @_;
 
-    my $oldvals = $settings->tests->args;
+    my $oldvals = $settings->tests->args // [];
     unshift @$dot_args => @$oldvals;
     $settings->tests->option(args => $dot_args);
 

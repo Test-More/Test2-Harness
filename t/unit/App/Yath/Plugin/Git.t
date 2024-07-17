@@ -29,7 +29,7 @@ subtest ENV => sub {
     local $ENV{GIT_LONG_SHA}  = "1230988f2c2bd26a1691a82766d5bf5c7524b123";
     local $ENV{GIT_SHORT_SHA} = "1230988";
     local $ENV{GIT_STATUS}    = " M lib/App/Yath/Command.pm";
-    local $ENV{GIT_BRANCH}    = "my.super-long-branch-name-needs-to-be-trimmed";
+    local $ENV{GIT_BRANCH}    = "my.super-long-branch-name";
 
     my @fields = $CLASS->run_fields();
 
@@ -37,13 +37,13 @@ subtest ENV => sub {
         \@fields,
         [{
             data => {
-                branch => 'my.super-long-branch-name-needs-to-be-trimmed',
+                branch => 'my.super-long-branch-name',
                 sha    => '1230988f2c2bd26a1691a82766d5bf5c7524b123',
                 status => ' M lib/App/Yath/Command.pm',
             },
-            details => 'my.super-long-branch',
+            details => 'my.super-long-branch-name',
             name    => 'git',
-            raw     => 'my.super-long-branch-name-needs-to-be-trimmed',
+            raw     => '1230988f2c2bd26a1691a82766d5bf5c7524b123',
         }],
         "Added git field",
     );
@@ -70,7 +70,7 @@ subtest CMD => sub {
             },
             details => 'my.branch.foo',
             name    => 'git',
-            raw     => 'my.branch.foo',
+            raw     => '4570988f2c2bd26a1691a82766d5bf5c7524bcea',
         }],
         "Added git field",
     );
@@ -97,7 +97,7 @@ subtest MIX => sub {
             },
             details => 'my.branch.foo',
             name    => 'git',
-            raw     => 'my.branch.foo',
+            raw     => '1230988f2c2bd26a1691a82766d5bf5c7524b123',
         }],
         "Added git field",
     );

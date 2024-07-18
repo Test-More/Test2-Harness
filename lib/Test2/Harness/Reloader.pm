@@ -4,6 +4,7 @@ use warnings;
 
 use Carp qw/croak/;
 use Scalar::Util qw/weaken/;
+use B();
 
 use Test2::Harness::Util qw/clean_path file2mod open_file/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
@@ -255,7 +256,15 @@ sub file_info {
             $info->{module}    = $mod;
             $info->{inc_entry} = $modfile;
 
-            $info->{has_import} = $mod->can('import');
+            if (my $imp = $mod->can('import')) {
+                my $cobj    = B::svref_2object($imp);
+                my $file    = $cobj->FILE // 'NONE';
+                my $package = $cobj->GV->STASH->NAME // 'NONE';
+
+                # Perl 5.40 adds a UNIVERSAL::import
+                $info->{has_import} = 1 unless $package eq 'UNIVERSAL' || $file eq 'universal.c';
+            }
+
             $info->{t2_preload} = $mod->can('TEST2_HARNESS_PRELOAD');
         }
 

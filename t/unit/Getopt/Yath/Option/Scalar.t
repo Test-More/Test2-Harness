@@ -1,4 +1,4 @@
-use Test2::V0 -target => Getopt::Yath::Option::Scalar;
+use Test2::V0 -target => 'Getopt::Yath::Option::Scalar';
 
 skip_all "write me";
 

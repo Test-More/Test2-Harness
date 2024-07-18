@@ -1,4 +1,4 @@
-use Test2::V0 -target => Getopt::Yath::Settings;
+use Test2::V0 -target => 'Getopt::Yath::Settings';
 
 skip_all "write me";
 

@@ -1,4 +1,4 @@
-use Test2::V0 -target => Getopt::Yath::Option;
+use Test2::V0 -target => 'Getopt::Yath::Option';
 
 skip_all "write me";
 

@@ -1,4 +1,4 @@
-use Test2::V0 -target => App::Yath::Command::ps;
+use Test2::V0 -target => 'App::Yath::Command::ps';
 
 skip_all "write me";
 

@@ -1,4 +1,4 @@
-use Test2::V0 -target => Test2::Harness::Collector::TapParser;
+use Test2::V0 -target => 'Test2::Harness::Collector::TapParser';
 
 skip_all "write me";
 

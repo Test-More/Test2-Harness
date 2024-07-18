@@ -1,4 +1,4 @@
-use Test2::V0 -target => App::Yath::Renderer::QVF;
+use Test2::V0 -target => 'App::Yath::Renderer::QVF';
 
 skip_all "write me";
 

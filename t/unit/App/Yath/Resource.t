@@ -1,4 +1,4 @@
-use Test2::V0 -target => App::Yath::Resource;
+use Test2::V0 -target => 'App::Yath::Resource';
 
 skip_all "write me";
 

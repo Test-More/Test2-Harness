@@ -1,4 +1,4 @@
-use Test2::V0 -target => Getopt::Yath::Option::AutoList;
+use Test2::V0 -target => 'Getopt::Yath::Option::AutoList';
 
 skip_all "write me";
 

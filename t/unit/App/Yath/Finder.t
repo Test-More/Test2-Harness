@@ -1,4 +1,4 @@
-use Test2::V0 -target => App::Yath::Finder;
+use Test2::V0 -target => 'App::Yath::Finder';
 
 skip_all "write me";
 

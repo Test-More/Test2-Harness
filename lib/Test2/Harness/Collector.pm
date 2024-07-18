@@ -241,7 +241,7 @@ sub collect_job {
     my $job = inflate($params{job},           'Test2::Harness::Run::Job')     or die "No job provided";
 
     die "No workdir provided" unless $params{workdir};
-    my $tempdir = File::Temp::tempdir(DIR => $params{workdir}, TEMPLATE => "tmp-$$-XXXX");
+    my $tempdir = File::Temp::tempdir(DIR => $params{workdir}, TEMPLATE => "XXXXXX");
     $params{tempdir} = $tempdir;
     chmod_tmp($tempdir);
 
@@ -560,7 +560,11 @@ sub setup_child_env_vars {
 
     delete $ENV{T2_HARNESS_PIPE_COUNT};
 
-    $ENV{TMPDIR} = $self->tempdir;
+    $ENV{TEMPDIR}  = $self->tempdir;
+    $ENV{TEMP_DIR} = $self->tempdir;
+    $ENV{TMPDIR}   = $self->tempdir;
+    $ENV{TMP_DIR}  = $self->tempdir;
+
     $ENV{T2_TRACE_STAMPS} = 1;
 
     $ENV{HARNESS_ACTIVE}       = 1;

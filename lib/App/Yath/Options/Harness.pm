@@ -53,30 +53,6 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
         default     => 0,
     );
 
-    option tmpdir => (
-        type           => 'Scalar',
-        alt            => ['tmp-dir'],
-        description    => 'Use a specific temp directory (Default: create a temp dir under the system one)',
-        from_env_vars  => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR/],
-        clear_env_vars => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR/],
-        set_env_vars   => [qw/TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
-
-        default => sub {
-            my $tmpdir = File::Spec->tmpdir;
-            return $tmpdir if $tmpdir =~ m/yath/ && $ENV{YATH_SHELL};
-
-            my $dir = tempdir("yath-$ENV{USER}-$$-XXXXXX", CLEANUP => 0, TMPDIR => 1);
-            chmod_tmp($dir);
-            return $dir;
-        },
-    );
-
-    option clear => (
-        type    => 'Bool',
-        short       => 'C',
-        description => 'Clear the work directory if it is not already empty',
-    );
-
     option workdir => (
         type           => 'Scalar',
         description    => 'Set the work directory (Default: new temp directory)',
@@ -106,11 +82,11 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
             my $opt = shift;
             my ($settings) = @_;
 
-            my $template = join '-' => ("yath", $$, "XXXXXX");
+            my $template = join '-' => ("yath", $$, "XXXX");
 
             my $workdir = tempdir(
                 $template,
-                DIR     => $settings->harness->tmpdir,
+                TMPDIR => 1,
                 CLEANUP => 0,
             );
 
@@ -119,6 +95,36 @@ option_group {group => 'harness', category => 'Harness Options'} => sub {
             return $workdir;
         },
     );
+
+    option tmpdir => (
+        type           => 'Scalar',
+        alt            => ['tmp-dir'],
+        description    => 'Use a specific temp directory (Default: create a temp dir under the system one)',
+        from_env_vars  => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR/],
+        clear_env_vars => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR/],
+        set_env_vars   => [qw/TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
+
+        default => sub {
+            my $opt = shift;
+            my ($settings) = @_;
+
+            my $dir = File::Spec->catdir($settings->harness->workdir, 'tmp');
+
+            unless(-d $dir) {
+                mkdir($dir) or die "Could not mkdir($dir): $!";
+            }
+
+            chmod_tmp($dir);
+            return $dir;
+        },
+    );
+
+    option clear => (
+        type    => 'Bool',
+        short       => 'C',
+        description => 'Clear the work directory if it is not already empty',
+    );
+
 };
 
 option_post_process sub {

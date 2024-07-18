@@ -7,7 +7,6 @@ our $VERSION = '2.000000';
 use IO::Select;
 
 use Carp qw/croak/;
-use File::Temp qw/tempdir/;
 use Time::HiRes qw/sleep time/;
 
 use Test2::Harness::Run;

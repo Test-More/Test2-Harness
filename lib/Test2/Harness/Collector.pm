@@ -362,7 +362,8 @@ sub collect_job {
             );
         },
         sub {
-            remove_tree($tempdir, {safe => 1, keep_root => 0});
+            local $SIG{__WARN__} = sub { 1 };
+            remove_tree($tempdir, {safe => 1, keep_root => 0}) if -d $tempdir;
         },
         $inst_ipc => $inst_con,
         $agg_ipc =>  $agg_con,

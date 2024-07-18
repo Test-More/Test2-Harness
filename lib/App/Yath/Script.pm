@@ -59,6 +59,8 @@ sub run {
         argv     => $argv,
     );
 
+    require Carp::Always;
+    Carp::Always->import();
     return $app->run();
 }
 

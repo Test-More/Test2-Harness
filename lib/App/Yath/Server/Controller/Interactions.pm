@@ -205,7 +205,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Interactions
+App::Yath::Server::Controller::Interactions - Check for interactions between tests
 
 =head1 DESCRIPTION
 

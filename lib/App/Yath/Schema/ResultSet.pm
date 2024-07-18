@@ -57,6 +57,8 @@ __END__
 
 =head1 NAME
 
+App::Yath::Schema::ResultSet - Common resultset class for yath.
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

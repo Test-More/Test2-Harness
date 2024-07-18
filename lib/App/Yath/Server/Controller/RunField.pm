@@ -50,7 +50,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Run
+App::Yath::Server::Controller::RunField - Controller for fetching run fields
 
 =head1 DESCRIPTION
 

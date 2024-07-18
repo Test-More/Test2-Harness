@@ -173,7 +173,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Lookup
+App::Yath::Server::Controller::Lookup - Controller for searching
 
 =head1 DESCRIPTION
 

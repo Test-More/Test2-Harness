@@ -230,7 +230,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::User
+App::Yath::Server::Controller::User - User managemet controller
 
 =head1 DESCRIPTION
 

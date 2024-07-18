@@ -155,7 +155,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Files
+App::Yath::Server::Controller::Files - Controller for interacting with files
 
 =head1 DESCRIPTION
 

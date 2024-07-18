@@ -91,7 +91,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::View
+App::Yath::Server::Controller::View - Used for veiwing items
 
 =head1 DESCRIPTION
 

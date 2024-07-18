@@ -50,7 +50,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Run
+App::Yath::Server::Controller::JobTryField - Controller for interacting with JobTryFields
 
 =head1 DESCRIPTION
 

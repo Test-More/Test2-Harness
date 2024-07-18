@@ -81,7 +81,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Events
+App::Yath::Server::Controller::Events - Controller for fetching events
 
 =head1 DESCRIPTION
 

@@ -56,7 +56,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Download
+App::Yath::Server::Controller::Download - Controller for downloading log files
 
 =head1 DESCRIPTION
 

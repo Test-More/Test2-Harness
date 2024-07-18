@@ -65,7 +65,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Files
+App::Yath::Server::Controller::ReRun - Controller to fetch data for re-running things.
 
 =head1 DESCRIPTION
 

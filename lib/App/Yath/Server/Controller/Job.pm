@@ -49,7 +49,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Job
+App::Yath::Server::Controller::Job - Controller for viewing a job
 
 =head1 DESCRIPTION
 

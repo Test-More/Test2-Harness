@@ -145,7 +145,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Command::publish - FIXME
+App::Yath::Command::db::publish - Command to publish a log to a database.
 
 =head1 DESCRIPTION
 

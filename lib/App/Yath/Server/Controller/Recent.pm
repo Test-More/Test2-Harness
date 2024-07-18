@@ -54,7 +54,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Recent
+App::Yath::Server::Controller::Recent - Fetch recent runs
 
 =head1 DESCRIPTION
 

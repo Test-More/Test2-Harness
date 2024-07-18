@@ -73,7 +73,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Options::Schema - Options for using a database.
+App::Yath::Options::DB - Options used for database connections.
 
 =head1 DESCRIPTION
 

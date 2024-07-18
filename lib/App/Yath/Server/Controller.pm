@@ -62,7 +62,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller
+App::Yath::Server::Controller - Base class for yath server controllers.
 
 =head1 DESCRIPTION
 

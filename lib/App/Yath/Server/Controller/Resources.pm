@@ -228,7 +228,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Resources
+App::Yath::Server::Controller::Resources - controller for fetching resource data.
 
 =head1 DESCRIPTION
 

@@ -61,7 +61,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Queries
+App::Yath::Schema::Queries - Encapsulation of some common queries
 
 =head1 DESCRIPTION
 

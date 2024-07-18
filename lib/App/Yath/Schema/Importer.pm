@@ -155,7 +155,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::Importer
+App::Yath::Schema::Importer - Import a log
 
 =head1 DESCRIPTION
 

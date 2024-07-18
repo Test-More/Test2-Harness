@@ -65,7 +65,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Durations
+App::Yath::Server::Controller::Durations - Controller for fetching durations data
 
 =head1 DESCRIPTION
 

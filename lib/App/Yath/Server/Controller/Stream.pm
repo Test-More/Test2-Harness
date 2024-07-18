@@ -352,7 +352,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Stream
+App::Yath::Server::Controller::Stream - Controller for streaming data that is still being generated.
 
 =head1 DESCRIPTION
 

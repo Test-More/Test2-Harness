@@ -69,7 +69,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Run
+App::Yath::Server::Controller::Run - Controller for interacting with runs.
 
 =head1 DESCRIPTION
 

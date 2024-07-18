@@ -54,7 +54,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Binary
+App::Yath::Server::Controller::Binary - Interact with binary objects in the database.
 
 =head1 DESCRIPTION
 

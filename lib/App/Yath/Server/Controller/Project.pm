@@ -636,7 +636,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Project
+App::Yath::Server::Controller::Project - Controller for fetching project data.
 
 =head1 DESCRIPTION
 

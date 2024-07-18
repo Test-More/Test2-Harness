@@ -137,7 +137,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Upload
+App::Yath::Server::Controller::Upload - Controller for uploading logs
 
 =head1 DESCRIPTION
 

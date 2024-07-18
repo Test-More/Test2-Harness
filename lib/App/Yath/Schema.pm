@@ -136,6 +136,8 @@ __END__
 
 =head1 NAME
 
+App::Yath::Schema - Yath database root schema object.
+
 =head1 DESCRIPTION
 
 =head1 SYNOPSIS

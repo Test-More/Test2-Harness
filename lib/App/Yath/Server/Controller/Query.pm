@@ -62,7 +62,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Query
+App::Yath::Server::Controller::Query - Controller for using queries.
 
 =head1 DESCRIPTION
 

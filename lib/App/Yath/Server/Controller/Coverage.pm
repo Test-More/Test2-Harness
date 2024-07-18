@@ -85,7 +85,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Coverage
+App::Yath::Server::Controller::Coverage - Controller for fetching coverage data.
 
 =head1 DESCRIPTION
 

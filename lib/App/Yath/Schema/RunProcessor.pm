@@ -1717,7 +1717,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Schema::RunProcessor
+App::Yath::Schema::RunProcessor - Processes runs for database import
 
 =head1 DESCRIPTION
 

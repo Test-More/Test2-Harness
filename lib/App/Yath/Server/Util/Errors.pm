@@ -39,7 +39,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Util::Errors
+App::Yath::Server::Util::Errors - Easily throw http codes
 
 =head1 DESCRIPTION
 

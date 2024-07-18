@@ -56,7 +56,7 @@ __END__
 
 =head1 NAME
 
-App::Yath::Server::Controller::Sweeper
+App::Yath::Server::Controller::Sweeper - Controller for triggering database sweeps
 
 =head1 DESCRIPTION
 

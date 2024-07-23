@@ -80,7 +80,7 @@ sub health_check {
     my $self = shift;
 
     for my $con (values %{$self->{+CONNECTIONS}}) {
-        delete $self->{+CONNECTIONS}->{$con->fifo} unless $con->health_check;
+        delete $self->{+CONNECTIONS}->{$con->fifo} if $con->expired;
     }
 
     my $ok = $self->{+ACTIVE};
@@ -148,7 +148,7 @@ sub send_message {
     for my $con (values %{$self->{+CONNECTIONS}}) {
         next if eval { $con->send_message($msg); 1 };
         ipc_warn(error => $@);
-        delete $self->{+CONNECTIONS}->{$con->fifo} unless $con->health_check;
+        delete $self->{+CONNECTIONS}->{$con->fifo} if $con->expired;
     }
 
     return;

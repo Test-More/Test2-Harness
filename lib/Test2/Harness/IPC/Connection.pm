@@ -21,6 +21,7 @@ sub callback { confess "\nProtocol $_[0] does not implement callback()" }
 
 sub active       { confess "\nProtocol $_[0] does not implement active()" }
 sub health_check { confess "\nProtocol $_[0] does not implement health_check()" }
+sub expired      { confess "\nProtocol $_[0] does not implement expired()" }
 
 sub send_message { confess "\nProtocol $_[0] does not implement send_message()" }
 sub send_request { confess "\nProtocol $_[0] does not implement send_request()" }

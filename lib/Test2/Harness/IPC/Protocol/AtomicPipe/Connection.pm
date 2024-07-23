@@ -24,10 +24,11 @@ use parent 'Test2::Harness::IPC::Connection';
 use Test2::Harness::Util::HashBase qw{
     <active
     <fifo
-    <pipe
+    +pipe
     <reader
     <requests
     <peer_pid
+    <deactivated
 };
 
 my %CACHE;
@@ -42,6 +43,19 @@ sub init {
 
     my $fifo = $self->{+FIFO} or croak "'fifo' is a required attribute";
 
+    if ($CACHE{$fifo}) {
+        $self->{+PIPE} = $CACHE{$fifo};
+    }
+
+    $self->{+ACTIVE} = 1;
+}
+
+sub pipe {
+    my $self = shift;
+    return $self->{+PIPE} if $self->{+PIPE};
+
+    my $fifo = $self->{+FIFO} or die "No fifo?!";
+
     my $valid_fifo = 0;
     for (1 .. 10) {
         $valid_fifo ||= -e $fifo && -p $fifo;
@@ -51,20 +65,15 @@ sub init {
 
     confess "'$fifo' is not a valid fifo" unless $valid_fifo;
 
-    if ($CACHE{$fifo}) {
-        $self->{+PIPE} = $CACHE{$fifo};
-    }
-    else {
-        my $p = Atomic::Pipe->write_fifo($fifo);
-        $p->resize_or_max($p->max_size) if $p->max_size;
+    my $p = Atomic::Pipe->write_fifo($fifo);
+    $p->resize_or_max($p->max_size) if $p->max_size;
 
-        $self->{+PIPE} = $p;
+    $self->{+PIPE} = $p;
 
-        $CACHE{$fifo} = $p;
-        weaken($CACHE{$fifo});
-    }
+    $CACHE{$fifo} = $p;
+    weaken($CACHE{$fifo});
 
-    $self->{+ACTIVE} = 1;
+    return $p;
 }
 
 sub handles_for_select { $_[0]->{+READER}->handles_for_select }
@@ -76,7 +85,7 @@ sub health_check {
     return 0 unless $self->{+ACTIVE};
 
     my $ok = 1;
-    $ok &&= check_pipe($self->{+PIPE}, $self->{+FIFO});
+    $ok &&= check_pipe($self->pipe, $self->{+FIFO});
     $ok &&= pid_is_running($self->{+PEER_PID}) if $self->{+PEER_PID};
 
     return 1 if $ok;
@@ -85,6 +94,23 @@ sub health_check {
 
     return 0;
 }
+
+sub expired {
+    my $self = shift;
+
+    return 0 if $self->{+ACTIVE} && $self->health_check;
+    return 1 unless keys %{$self->{+REQUESTS}};
+
+    $self->{+DEACTIVATED} //= time;
+
+    my $delta = time - $self->{+DEACTIVATED};
+
+    # If we have not had a response in 60 seconds we assume the connection died.
+    return 1 if $delta > 60;
+
+    return 0;
+}
+
 
 sub send_message {
     my $self = shift;
@@ -102,7 +128,7 @@ sub send_message {
     my $ok;
     while (1) {
         $! = 0;
-        last if eval { local $SIG{PIPE} = 'IGNORE'; $self->{+PIPE}->write_message($json); 1 };
+        last if eval { local $SIG{PIPE} = 'IGNORE'; $self->pipe->write_message($json); 1 };
         next if $! == EINTR;
         $self->terminate();
         croak "Disconnected pipe";
@@ -176,13 +202,14 @@ sub handle_response {
     croak "'$id' is not a valid request/response id" unless exists $self->{+REQUESTS}->{$id};
     croak "'$id' already has a response" if defined $self->{+REQUESTS}->{$id};
 
-    $self->{+REQUESTS}->{$id} = $res;
+    $self->{+REQUESTS}->{$id} //= $res;
 }
 
 sub terminate {
     my $self = shift;
 
     $self->{+ACTIVE} = 0;
+    $self->{+DEACTIVATED} = time;
 
     delete $self->{+PIPE};
     delete $self->{+READER};

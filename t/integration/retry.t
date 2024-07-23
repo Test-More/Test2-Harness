@@ -1,6 +1,5 @@
 use Test2::V0;
 # HARNESS-DURATION-LONG
-# HARNESS-CONFLICTS-PERSIST
 
 use App::Yath::Tester qw/yath/;
 

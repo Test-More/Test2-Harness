@@ -132,31 +132,16 @@ sub yath {
 
     close($wh);
 
-    my (@lines, $exit);
+    print "DEBUG: Waiting for $pid\n" if $debug;
+    waitpid($pid, 0);
+    my $exit = $?;
+
+    my (@lines);
     if ($capture) {
         open(my $rh, '<', $cfile) or die "Could not open output file: $!";
         apply_encoding($rh, $enc) if $enc;
-        $rh->blocking(0);
-        while (1) {
-            seek($rh, 0, SEEK_CUR); # CLEAR EOF
-            my @new = <$rh>;
-            push @lines => @new;
-            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1; ## no critic
-
-            waitpid($pid, WNOHANG) or next;
-            $exit = $?;
-            last;
-        }
-
-        while (my @new = <$rh>) {
-            push @lines => @new;
-            print map { chomp($_); "DEBUG: > $_\n" } @new if $debug > 1; ## no critic
-        }
-    }
-    else {
-        print "DEBUG: Waiting for $pid\n" if $debug;
-        waitpid($pid, 0);
-        $exit = $?;
+        @lines = <$rh>;
+        print map { chomp($_); "DEBUG: > $_\n" } @lines if $debug > 1; ## no critic
     }
 
     alarm(0) if $timeout;

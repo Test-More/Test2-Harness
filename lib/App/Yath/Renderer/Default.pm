@@ -609,18 +609,16 @@ sub render_tree {
             $len = $self->{+JOB_LENGTH};
         }
 
-        if ($id) {
-            $job = sprintf("%sjob %${len}s%s ", $color, $number, $reset || '');
-        }
-        else {
-            $job = sprintf("%sRUNNER%s ", $color, $reset || '');
-        }
+        $len += 4; # "job "
+        $len = 6 unless $len >= 6;
+
+        $job = sprintf("%s%-${len}s%s", $color, ($id ? "job $number" : "RUNNER"), $reset || '');
     }
 
     my $hf = hub_truth($f);
     my $depth = $hf->{nested} || 0;
 
-    my @pipes = (' ', map $char, 1 .. $depth);
+    my @pipes = ('', map $char, 1 .. $depth);
     return join(' ' => $job, @pipes) . " ";
 }
 

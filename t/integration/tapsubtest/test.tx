@@ -1,9 +1,16 @@
-# HARNESS-NO-STREAM
-use Test2::V0;
-use Test2::Tools::Subtest qw/subtest_buffered/;
+# vi: ft=perl
+use strict;
+use warnings;
 
-subtest_buffered buffered => sub {
-    ok(1, "buffered ok");
-};
+print <<EOT;
+ok 1 - buffered {
+    ok 1 - nested {
+        ok 1 - buffered ok
+        1..1
+    }
+    1..1
+}
+1..1
+EOT
 
-done_testing;
+exit 0;

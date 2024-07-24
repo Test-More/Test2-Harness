@@ -19,7 +19,10 @@ yath(
             \@lines,
             subset {
                 item '[  PASS  ]  job 1 +~buffered';
-                item '[  PASS  ]  job 1   + buffered ok';
+                item '[  PASS  ]  job 1   +~nested';
+                item '[  PASS  ]  job 1   | + buffered ok';
+                item '[  PLAN  ]  job 1   | | Expected assertions: 1';
+                item '            job 1   | ^';
                 item '[  PLAN  ]  job 1   | Expected assertions: 1';
                 item '            job 1   ^';
                 item '[  PLAN  ]  job 1   Expected assertions: 1';

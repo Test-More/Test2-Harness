@@ -164,7 +164,7 @@ sub start_process {
     no warnings;
     my $ok = eval { exec(@$cmd); 1 };
     my $err = $@;
-    print STDERR longmess("Failed to exec ($!) $@\n");
+    print STDERR longmess("Failed to exec " . join(' ', @$cmd) . " . ($!) $@\n");
     POSIX::_exit(255);
 }
 

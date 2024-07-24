@@ -151,11 +151,12 @@ sub collect {
     open(my $stderr, '>&', \*STDERR) or die "Could not clone STDERR";
     local $SIG{__WARN__} = sub { print $stderr @_ };
 
+    my $start_pid = $$;
     my $exit;
     my $ok = eval { $exit = $self->launch_and_process($cb); 1 } // 0;
     my $err = $@;
 
-    if ($cleanup) {
+    if ($cleanup && $start_pid == $$) {
         eval { $cleanup->(); 1 } or warn $@;
     }
 
@@ -362,7 +363,6 @@ sub collect_job {
             );
         },
         sub {
-            local $SIG{__WARN__} = sub { 1 };
             remove_tree($tempdir, {safe => 1, keep_root => 0}) if -d $tempdir;
         },
         $inst_ipc => $inst_con,

@@ -190,10 +190,6 @@ sub become_collector {
     remove_tree($settings->workspace->workdir, {safe => 1, keep_root => 0})
         unless $settings->workspace->keep_dirs;
 
-    # FIXME: This breaks server with ephemeral db
-    #remove_tree($settings->workspace->tmpdir, {safe => 1, keep_root => 0})
-    #    unless $settings->workspace->keep_dirs;
-
     return $exit;
 }
 

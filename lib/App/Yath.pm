@@ -537,11 +537,11 @@ sub run_command {
 
     my $settings = $self->settings;
 
-    unless ($settings->harness->keep_dirs) {
-        remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0});
+    if ($settings->check_group('workspace') && !$settings->workspace->keep_dirs) {
+        remove_tree($settings->workspace->workdir, {safe => 1, keep_root => 0});
 
         # Fixme - breaks server with ephemeral db
-        #remove_tree($settings->harness->tmpdir,  {safe => 1, keep_root => 0});
+        #remove_tree($settings->workspace->tmpdir,  {safe => 1, keep_root => 0});
     }
 
     return $exit;

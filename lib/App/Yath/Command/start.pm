@@ -35,6 +35,7 @@ sub option_modules {
     return (
         'App::Yath::Options::IPC',
         'App::Yath::Options::Harness',
+        'App::Yath::Options::Workspace',
         'App::Yath::Options::Resource',
         'App::Yath::Options::Runner',
         'App::Yath::Options::Scheduler',
@@ -186,19 +187,19 @@ sub become_collector {
 
     my $exit = $collector->process($pid);
 
-    remove_tree($settings->harness->workdir, {safe => 1, keep_root => 0})
-        unless $settings->harness->keep_dirs;
+    remove_tree($settings->workspace->workdir, {safe => 1, keep_root => 0})
+        unless $settings->workspace->keep_dirs;
 
     # FIXME: This breaks server with ephemeral db
-    #remove_tree($settings->harness->tmpdir, {safe => 1, keep_root => 0})
-    #    unless $settings->harness->keep_dirs;
+    #remove_tree($settings->workspace->tmpdir, {safe => 1, keep_root => 0})
+    #    unless $settings->workspace->keep_dirs;
 
     return $exit;
 }
 
 sub log_file {
     my $self = shift;
-    return $self->{+LOG_FILE} //= File::Spec->catfile($self->settings->harness->workdir, 'log.jsonl');
+    return $self->{+LOG_FILE} //= File::Spec->catfile($self->settings->workspace->workdir, 'log.jsonl');
 }
 
 sub collector {
@@ -307,7 +308,7 @@ sub runner {
 
     my $ts = Test2::Harness::TestSettings->new($settings->tests->all);
 
-    return $self->{+RUNNER} = $class->new($runner_s->all, test_settings => $ts, workdir => $settings->harness->workdir, plugins => $plugins, is_daemon => $self->start_daemon_runner);
+    return $self->{+RUNNER} = $class->new($runner_s->all, test_settings => $ts, workdir => $settings->workspace->workdir, plugins => $plugins, is_daemon => $self->start_daemon_runner);
 }
 
 sub resources {

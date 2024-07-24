@@ -658,7 +658,10 @@ sub handle_debug {
         $exit //= 0;
     }
 
-    exit($exit) if defined $exit;
+    if (defined $exit) {
+        remove_tree($settings->workspace->workdir, {safe => 1, keep_root => 0}) if $settings->check_group('workspace');
+        exit($exit);
+    }
 }
 
 sub page_out {

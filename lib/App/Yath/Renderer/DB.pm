@@ -86,7 +86,8 @@ sub start {
 
     App::Yath::Schema::Util::schema_config_from_settings($self->{+SETTINGS});
 
-    my ($r, $w) = Consumer::NonBlock->pair(batch_size => 1000);
+    my ($dir) = grep { $_ && -d $_ } '/dev/shm', '/tmp', $ENV{SYSTEM_TMPDIR};
+    my ($r, $w) = Consumer::NonBlock->pair(batch_size => 1000, $dir ? (base_dir => $dir) : ());
 
     $self->{+WRITER} = $w;
 

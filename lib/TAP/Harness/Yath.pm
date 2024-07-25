@@ -4,6 +4,11 @@ use warnings;
 
 our $VERSION = '2.000000';
 
+BEGIN {
+    require Test::Harness;
+    Test::Harness->VERSION(3.49);
+}
+
 use TAP::Harness::Yath::Aggregator;
 
 our $SUMMARY;

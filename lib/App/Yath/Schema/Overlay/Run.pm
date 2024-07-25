@@ -174,21 +174,24 @@ sub rerun_data {
 
     my $files = $self->jobs->search(
         {},
-        {join => 'test_file', order_by => 'test_file.filename'},
+        {
+            join => 'test_file', order_by => 'test_file.filename'
+        },
     );
 
     my $data = {};
 
     while (my $file = $files->next) {
+        next if $file->is_harness_out;
+
         my $name = $file->file || next;
 
         my $row = $data->{$name} //= {};
 
-        $row->{retry}++ if $file->job_try > 0;
-
-        if($file->ended) {
-            $row->{end}++;
-            $row->{$file->fail ? 'fail' : 'pass'}++;
+        for my $try ($file->job_tries) {
+            $row->{retry}++ if $try->job_try_ord;
+            $row->{end}++ if $try->ended;
+            $row->{$try->fail ? 'fail' : 'pass'}++;
         }
     }
 

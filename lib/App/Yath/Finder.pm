@@ -13,6 +13,7 @@ use Carp qw/croak/;
 use Time::HiRes qw/time/;
 use Text::ParseWords qw/quotewords/;
 
+use Test2::Harness::Util::File::JSONL;
 use Test2::Harness::TestFile;
 use File::Spec;
 
@@ -290,8 +291,8 @@ sub add_rerun_to_search {
         $self->set_search($search);
     }
 
-    my $modes = $self->{+RERUN_MODES};
-    my $mode_hash = { map {$_ => 1} @$modes };
+    my $mode_hash = $self->{+RERUN_MODES};
+    my $modes = [ keys %$mode_hash ];
 
     my ($grabbed, $data);
     for my $p ($self->get_capable_plugins(grab_rerun => [@{$self->{+RERUN_PLUGINS} // []}, @$plugins])) {
@@ -314,6 +315,7 @@ sub add_rerun_to_search {
                 unless $rerun;
         }
 
+        die "Could not find anything to rerun.\n" if $rerun eq '-1';
         die "'$rerun' is not a valid log file, and no plugin intercepted it.\n" unless -f $rerun;
 
         my $stream = Test2::Harness::Util::File::JSONL->new(name => $rerun, skip_bad_decode => 1);

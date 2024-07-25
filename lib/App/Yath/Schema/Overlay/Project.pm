@@ -29,12 +29,12 @@ sub last_covered_run {
         rows => 1,
     };
 
-    if ($params{user}) {
-        $query->{'user.username'} = $params{user};
-        push @{$attrs->{join} //= []} => 'user';
-    }
-
     my $schema = $self->result_source->schema;
+
+    if (my $username = $params{user}) {
+        my $user = $schema->resultset('User')->find({username => $username}) or die "Invalid user: $username";
+        $query->{'user_id'} = $user->user_id;
+    }
 
     my $run = $schema->resultset('Run')->find($query, $attrs);
     return $run;

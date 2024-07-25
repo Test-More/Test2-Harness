@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use Test2::Harness::Util qw/fqmod/;
+use List::Util qw/first/;
 use Getopt::Yath;
 
 my %RERUN_MODES = (
@@ -71,7 +72,7 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
 
         autofill => sub {
             my $log = first { -e $_ } qw{ ./lastlog.jsonl ./lastlog.jsonl.bz2 ./lastlog.jsonl.gz };
-            return $log // './lastlog.jsonl';
+            return $log // -1;
         },
     );
 

@@ -63,7 +63,7 @@ sub init {
 
 sub duration_data {
     my $self = shift;
-    my ($plugins, $test_files) = @_;
+    my ($plugins, $settings, $test_files) = @_;
 
     $self->{+DURATION_DATA} //= $self->pull_durations();
 
@@ -693,11 +693,12 @@ sub find_project_files {
         );
     }
 
+    my $durations;
     my $test_count = @tests;
     my $threshold = $self->durations_threshold // 0;
     if ($test_count >= $threshold) {
         my $start = time;
-        my $durations = $self->duration_data($plugins, $settings, [map { $_->relative } @tests]);
+        $durations = $self->duration_data($plugins, $settings, [map { $_->relative } @tests]);
         my $end = time;
         if ($durations && keys %$durations) {
             printf("Fetched duration data (Took %0.2f seconds)\n", $end - $start);
@@ -710,7 +711,17 @@ sub find_project_files {
 
     $_->munge_files(\@tests, $settings) for @$plugins;
 
-    return [ sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests ];
+    my @out;
+    if ($durations && $durations->{sorted}) {
+        my %all_tests = map { ($_->relative() => $_) } @tests;
+        push @out => delete($all_tests{$_}) for @{$durations->{sorted}};
+        push @out => map { $a->rank <=> $b->rank || $a->file cmp $b->file } values %all_tests;
+    }
+    else {
+        @out = sort { $a->rank <=> $b->rank || $a->file cmp $b->file } @tests;
+    }
+
+    return \@out;
 }
 
 sub include_file {

@@ -62,25 +62,17 @@ sub get_coverage_tests {
 
 sub duration_data {
     my ($plugin, $settings) = @_;
-    # Fixme yathui-db has been moved to other settings
-    my $ydb = $settings->prefix('yathui-db') or return;
-    return unless $ydb->durations;
+    my $db = $settings->check_group('db') or return;
+    return unless $db->durations;
 
     my $config  = schema_config_from_settings($settings);
     my $schema  = $config->schema;
     my $pname   = $settings->yath->project                              or die "--project is required.\n";
     my $project = $schema->resultset('Project')->find({name => $pname}) or die "Invalid project '$pname'.\n";
 
-    my %args = (user => $ydb->publisher, limit => $ydb->duration_limit);
-    if (my $yui = $settings->prefix('yathui')) {
-        $args{short}  = $yui->medium_duration;
-        $args{medium} = $yui->long_duration;
+    my $out = $project->durations(user => $db->publisher, limit => $db->duration_limit);
 
-        # TODO
-        #$args{median} = $yui->median_durations;
-    }
-
-    return $project->durations(%args);
+    return $out;
 }
 
 sub grab_rerun {

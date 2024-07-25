@@ -44,9 +44,6 @@ sub durations {
     my $self   = shift;
     my %params = @_;
 
-    my $median   = $params{median} || 0;
-    my $short    = $params{short}  || 15;
-    my $medium   = $params{medium} || 30;
     my $username = $params{user};
     my $limit    = $params{limit};
 
@@ -54,13 +51,14 @@ sub durations {
     my $dbh = $schema->storage->dbh;
 
     my $query = <<"    EOT";
-        SELECT test_files.filename, jobs.duration
-          FROM jobs
+        SELECT test_files.filename, job_tries.duration
+          FROM job_tries
+          JOIN jobs USING(job_id)
           JOIN runs USING(run_id)
           JOIN test_files USING(test_file_id)
           JOIN users USING(user_id)
          WHERE runs.project_id = ?
-           AND jobs.duration IS NOT NULL
+           AND job_tries.duration IS NOT NULL
            AND test_files.filename IS NOT NULL
     EOT
     my @vals = ($self->project_id);
@@ -88,7 +86,7 @@ sub durations {
         my @ids = map { $_->[0] } @{$sth->fetchall_arrayref};
 
         if (@ids) {
-            $query .= "AND run_id IN (" . ('?' x scalar @ids) . ")\n";
+            $query .= "AND run_id IN (" . join(',', map { '?' } @ids) . ")";
             push @vals => (@ids);
         }
     }
@@ -109,21 +107,8 @@ sub durations {
         $data->{$file} = median($set);
     }
 
-    if ($median) {
-        my $sorted = [sort { $data->{$b} <=> $data->{$a} } keys %$data];
-        $data = {lookup => $data, sorted => $sorted};
-    }
-    else {
-        for my $file (keys %$data) {
-            my $time = $data->{$file};
-            my $summary;
-            if    ($time < $short)  { $summary = 'SHORT' }
-            elsif ($time < $medium) { $summary = 'MEDIUM' }
-            else                    { $summary = 'LONG' }
-
-            $data->{$file} = $summary;
-        }
-    }
+    my $sorted = [sort { $data->{$b} <=> $data->{$a} } keys %$data];
+    $data = {lookup => $data, sorted => $sorted};
 
     return $data;
 }

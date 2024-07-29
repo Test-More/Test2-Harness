@@ -223,7 +223,7 @@ sub _process_first_line {
         $runf->{settings} //= delete $f->{harness_settings};
 
         my $proj = $runf->{settings}->{yath}->{project} || $params{project} || $settings->yath->project or die "Project name could not be determined";
-        my $user = $settings->yath->user // $ENV{USER};
+        my $user = $pub->user // $settings->yath->user // $ENV{USER};
 
         my $p = $config->schema->resultset('Project')->find_or_create({name => $proj});
         my $u = $config->schema->resultset('User')->find_or_create({username => $user, role => 'user'});

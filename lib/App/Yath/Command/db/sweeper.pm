@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use App::Yath::Schema::Loader;
 use App::Yath::Schema::Sweeper;
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;

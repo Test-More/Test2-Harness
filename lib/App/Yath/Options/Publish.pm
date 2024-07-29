@@ -43,6 +43,12 @@ option_group {group => 'publish', prefix => 'publish', category => "Publish Opti
         description => 'If the run has already been published, override it. (Delete it, and publish again)',
         default => 0,
     );
+
+    option user => (
+        type => 'Scalar',
+        description => "User to publish results as",
+        default => sub { $ENV{USER} }
+    );
 };
 
 1;

@@ -1,30 +1,31 @@
 use Test2::V0;
 
-BEGIN {
-    skip_all "This test needs to be refactored";
-}
-
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Require::Module 'Test2::Plugin::Cover' => '0.000022';
-use HTTP::Tiny::UNIX;
+
+use App::Yath::Schema::Config;
+use App::Yath::Server;
 
 use App::Yath::Tester qw/yath/;
-use App::Yath::Server::Tester qw/start_yathui_server/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 $dir =~ s/\d+$//;
+$dir =~ s{-ui}{}g;
 
-my $server = start_yathui_server();
-my $dsn = $server->dsn;
+my $config = App::Yath::Schema::Config->new(ephemeral => 'Auto');
+my $server = App::Yath::Server->new(schema_config => $config);
+my $db = $server->start_ephemeral_db;
+my $dsn = $db->connect_string('harness_ui');;
 
-my @yathdb_args = (
-    "--yathui-db",
-    '--yathui-db-dsn'  => $dsn,
-    '--yathui-project' => 'test',
-    '--yathui-user'    => 'root',
-    '--yathui-mode'    => 'complete',
+my @yath_args = (
+    '--db-dsn'  => $dsn,
+    '--project' => 'test',
+    '--db-publisher' => 'root',
+    '--publish-mode' => 'complete',
+    '--renderer' => 'DB',
+    '--publish-user' => 'root',
 );
 
 # Run twice so we have extra coverage data
@@ -40,7 +41,7 @@ for (1 .. 2) {
             $dir,
             '--ext=tx',
             '-v',
-            @yathdb_args,
+            @yath_args,
             '--cover-files',
             '--cover-metrics',
             '--retry' => 1,
@@ -52,6 +53,8 @@ for (1 .. 2) {
         },
     );
 }
+
+$ENV{A_FAIL_ONCE} = 0;
 
 my $coverage_data = [
     {
@@ -111,27 +114,20 @@ my $coverage_data = [
     },
 ];
 
-$server->subtest(
-    have_coverage => sub {
-        my $schema  = $server->config->schema;
-        my $project = $schema->resultset('Project')->find({name => 'test'});
-        my $run     = $project->last_covered_run;
+subtest have_coverage => sub {
+    my $schema  = $server->schema_config->schema;
+    my $project = $schema->resultset('Project')->find({name => 'test'});
+    my $run     = $project->last_covered_run;
 
-        is( [$run->coverage_data], $coverage_data, "Got predicted coverage data via DB",);
+    is([$run->coverage_data], $coverage_data, "Got predicted coverage data via DB",);
+};
 
-#        my $res = HTTP::Tiny::UNIX->new->get('http:' . $server->socket . '//coverage/test');
-#        is($res->{status}, 200, "Connected ok");
-#        my $got = [map { decode_json($_) } split /\n/, $res->{content}];
-#        is( $got, $coverage_data, "Got predicted coverage data via http",);
-    }
-);
-
-push @yathdb_args => '--yathui-db-coverage';
+push @yath_args => '--db-coverage';
 
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v', '--show-changed-files'],
     exit    => 0,
     env     => {TEST_CASE => 'Ax'},
     test    => sub {
@@ -152,7 +148,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Bx'},
     test    => sub {
@@ -178,7 +174,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Cx'},
     test    => sub {
@@ -199,7 +195,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Bxb'},
     test    => sub {
@@ -223,7 +219,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Cxc'},
     test    => sub {
@@ -244,7 +240,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Ax*'},
     test    => sub {
@@ -265,7 +261,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Axa'},
     test    => sub {
@@ -286,7 +282,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Axaa'},
     test    => sub {
@@ -307,7 +303,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'Axaaa'},
     test    => sub {
@@ -328,7 +324,7 @@ yath(
 yath(
     command => 'test',
     pre     => ['-D./lib'],
-    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yathdb_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
+    args    => ["-D$dir/lib", "-I$dir/lib", '--ext=tx', @yath_args, '--plugin' => '+Plugin', '--changed-only', '-v'],
     exit    => 0,
     env     => {TEST_CASE => 'AxCx'},
     test    => sub {

@@ -8,8 +8,6 @@ sub summary     { "Start an importer process that will wait for uploaded logs to
 sub description { "Start an importer process that will wait for uploaded logs to import" }
 sub group       { "db" }
 
-use App::Yath::Schema::Loader;
-
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
 
 use parent 'App::Yath::Command';

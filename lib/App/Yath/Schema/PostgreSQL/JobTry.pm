@@ -20,6 +20,8 @@ __PACKAGE__->load_components(
 );
 __PACKAGE__->table("job_tries");
 __PACKAGE__->add_columns(
+  "job_try_uuid",
+  { data_type => "uuid", is_nullable => 0, size => 16 },
   "job_try_id",
   {
     data_type         => "bigint",
@@ -120,7 +122,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-16 15:46:32
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-29 09:21:17
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

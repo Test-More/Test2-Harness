@@ -123,16 +123,6 @@ CREATE TABLE permissions (
     UNIQUE(project_id, user_id)
 );
 
-CREATE TABLE syncs (
-    sync_id         INTEGER     NOT NULL PRIMARY KEY AUTOINCREMENT,
-    last_run_id     INTEGER     NOT NULL,
-    last_project_id INTEGER     NOT NULL,
-    last_user_id    INTEGER     NOT NULL,
-    source          VARCHAR(64) NOT NULL,
-
-    UNIQUE(source)
-);
-
 CREATE TABLE runs (
     run_uuid        UUID            NOT NULL,
 
@@ -141,7 +131,6 @@ CREATE TABLE runs (
     project_id      INTEGER         NOT NULL        REFERENCES projects(project_id)    ON DELETE CASCADE,
     log_file_id     INTEGER         DEFAULT NULL    REFERENCES log_files(log_file_id)  ON DELETE SET NULL,
 
-    sync_id         INTEGER         DEFAULT NULL    REFERENCES syncs(sync_id)          ON DELETE SET NULL,
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     to_retry        INTEGER         DEFAULT NULL,
@@ -156,7 +145,7 @@ CREATE TABLE runs (
     mode            TEXT            CHECK(mode IN ('qvfds', 'qvfd', 'qvf', 'summary', 'complete'))
                                     DEFAULT 'qvfd' NOT NULL,
 
-    canon           BOOL            NOT NULL, -- Should be true if sync_id was never set
+    canon           BOOL            NOT NULL,
     pinned          BOOL            NOT NULL        DEFAULT FALSE,
     has_coverage    BOOL            DEFAULT NULL,
     has_resources   BOOL            DEFAULT NULL,
@@ -208,6 +197,7 @@ CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(test_file_id);
 
 CREATE TABLE job_tries (
+    job_try_uuid    UUID            NOT NULL,
     job_try_id      INTEGER         NOT NULL    PRIMARY KEY AUTOINCREMENT,
     job_id          INTEGER         NOT NULL    REFERENCES jobs(job_id) ON DELETE CASCADE,
     pass_count      INTEGER         DEFAULT NULL,

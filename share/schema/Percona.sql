@@ -139,16 +139,6 @@ CREATE TABLE permissions (
     UNIQUE(project_id, user_id)
 );
 
-CREATE TABLE syncs (
-    sync_id         INT         NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    last_run_id     BIGINT      NOT NULL,
-    last_project_id BIGINT      NOT NULL,
-    last_user_id    BIGINT      NOT NULL,
-    source          VARCHAR(64) NOT NULL,
-
-    UNIQUE(source)
-);
-
 CREATE TABLE runs (
     run_uuid        BINARY(16)      NOT NULL,
 
@@ -157,7 +147,6 @@ CREATE TABLE runs (
     project_id      BIGINT          NOT NULL,
     log_file_id     BIGINT          DEFAULT NULL,
 
-    sync_id         INTEGER         DEFAULT NULL,
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     to_retry        INTEGER         DEFAULT NULL,
@@ -172,7 +161,7 @@ CREATE TABLE runs (
     mode            ENUM('qvfds', 'qvfd', 'qvf', 'summary', 'complete')
                                     NOT NULL        DEFAULT 'qvfd',
 
-    canon           BOOL            NOT NULL, -- Should be true if sync_id was never set
+    canon           BOOL            NOT NULL,
     pinned          BOOL            NOT NULL        DEFAULT FALSE,
     has_coverage    BOOL            DEFAULT NULL,
     has_resources   BOOL            DEFAULT NULL,
@@ -185,7 +174,6 @@ CREATE TABLE runs (
     FOREIGN KEY (user_id)       REFERENCES users(user_id)          ON DELETE CASCADE,
     FOREIGN KEY (project_id)    REFERENCES projects(project_id)    ON DELETE CASCADE,
     FOREIGN KEY (log_file_id)   REFERENCES log_files(log_file_id)  ON DELETE SET NULL,
-    FOREIGN KEY (sync_id)       REFERENCES syncs(sync_id)          ON DELETE SET NULL,
 
     UNIQUE(run_uuid)
 );
@@ -234,6 +222,7 @@ CREATE INDEX job_runs ON jobs(run_id);
 CREATE INDEX job_file ON jobs(test_file_id);
 
 CREATE TABLE job_tries (
+    job_try_uuid    BINARY(16)      NOT NULL,
     job_try_id      BIGINT          NOT NULL    PRIMARY KEY AUTO_INCREMENT,
     job_id          BIGINT          NOT NULL,
     pass_count      BIGINT          DEFAULT NULL,

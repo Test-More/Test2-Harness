@@ -35,8 +35,6 @@ __PACKAGE__->add_columns(
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 0 },
   "log_file_id",
   { data_type => "bigint", is_foreign_key => 1, is_nullable => 1 },
-  "sync_id",
-  { data_type => "integer", is_foreign_key => 1, is_nullable => 1 },
   "passed",
   { data_type => "integer", is_nullable => 1 },
   "failed",
@@ -154,17 +152,6 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 1 },
 );
 __PACKAGE__->belongs_to(
-  "sync",
-  "App::Yath::Schema::Result::Sync",
-  { sync_id => "sync_id" },
-  {
-    is_deferrable => 0,
-    join_type     => "LEFT",
-    on_delete     => "SET NULL",
-    on_update     => "NO ACTION",
-  },
-);
-__PACKAGE__->belongs_to(
   "user",
   "App::Yath::Schema::Result::User",
   { user_id => "user_id" },
@@ -172,7 +159,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-16 15:46:32
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-29 09:21:17
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

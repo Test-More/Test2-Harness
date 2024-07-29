@@ -145,16 +145,6 @@ CREATE TABLE permissions (
     UNIQUE(project_id, user_id)
 );
 
-CREATE TABLE syncs (
-    sync_id         SERIAL      NOT NULL PRIMARY KEY,
-    last_run_id     BIGINT      NOT NULL,
-    last_project_id BIGINT      NOT NULL,
-    last_user_id    BIGINT      NOT NULL,
-    source          VARCHAR(64) NOT NULL,
-
-    UNIQUE(source)
-);
-
 CREATE TABLE runs (
     run_uuid        UUID            NOT NULL,
 
@@ -163,7 +153,6 @@ CREATE TABLE runs (
     project_id      BIGINT          NOT NULL     REFERENCES projects(project_id)    ON DELETE CASCADE,
     log_file_id     BIGINT          DEFAULT NULL REFERENCES log_files(log_file_id)  ON DELETE SET NULL,
 
-    sync_id         INTEGER         DEFAULT NULL REFERENCES syncs(sync_id)          ON DELETE SET NULL,
     passed          INTEGER         DEFAULT NULL,
     failed          INTEGER         DEFAULT NULL,
     to_retry        INTEGER         DEFAULT NULL,
@@ -175,7 +164,7 @@ CREATE TABLE runs (
     status          queue_stat      NOT NULL DEFAULT 'pending',
     mode            run_modes       NOT NULL DEFAULT 'qvfd',
 
-    canon           BOOL            NOT NULL, -- Should be true if sync_id was never set
+    canon           BOOL            NOT NULL,
     pinned          BOOL            NOT NULL DEFAULT FALSE,
     has_coverage    BOOL            DEFAULT NULL,
     has_resources   BOOL            DEFAULT NULL,
@@ -227,6 +216,7 @@ CREATE INDEX IF NOT EXISTS job_runs ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS job_file ON jobs(test_file_id);
 
 CREATE TABLE job_tries (
+    job_try_uuid    UUID            NOT NULL,
     job_try_id      BIGSERIAL       NOT NULL    PRIMARY KEY,
     job_id          BIGINT          NOT NULL    REFERENCES jobs(job_id) ON DELETE CASCADE,
     pass_count      BIGINT          DEFAULT NULL,

@@ -12,32 +12,36 @@ use Test2::Harness::Util::HashBase qw{
 };
 
 my @TABLES = qw{
-    api_keys coverage coverage_manager email email_verification_codes events
-    job_fields jobs log_files permissions primary_email projects run_fields
-    runs session_hosts sessions source_files source_subs test_files users
+    api_keys resources coverage coverage_manager email email_verification_codes
+    events job_try_fields job_tries jobs log_files permissions primary_email
+    projects run_fields runs session_hosts sessions source_files source_subs
+    test_files users
 };
 
 sub sweep {
     my $self = shift;
     my %params = @_;
 
-    $params{runs}       //= 1;
-    $params{jobs}       //= 1;
-    $params{coverage}   //= 1;
-    $params{events}     //= 1;
-    $params{resources}  //= 1;
-    $params{subtests}   //= 1;
-    $params{run_fields} //= 1;
-    $params{job_fields} //= 1;
+    $params{runs}            //= 1;
+    $params{jobs}            //= 1;
+    $params{job_tries}       //= 1;
+    $params{coverage}        //= 1;
+    $params{events}          //= 1;
+    $params{resources}       //= 1;
+    $params{reports}         //= 1;
+    $params{subtests}        //= 1;
+    $params{run_fields}      //= 1;
+    $params{job_try_fields}  //= 1;
     $params{run_concurrency} //= $ENV{YATH_SWEEPER_RUN_CONCURRENCY} // 1;
     $params{job_concurrency} //= $ENV{YATH_SWEEPER_JOB_CONCURRENCY} // 1;
     $params{sweep_name}      //= $ENV{YATH_SWEEPER_NAME};
 
     # Cannot remove jobs if we keep events
-    $params{jobs} = 0 unless $params{events} && $params{subtests} && $params{job_fields};
+    $params{job_tries} = 0 unless $params{events} && $params{subtests} && $params{job_try_fields};
+    $params{jobs} = 0 unless $params{job_tries};
 
     # Cannot delete runs if we save jobs or coverage
-    $params{runs} = 0 unless $params{jobs} && $params{coverage} && $params{run_fields} && $params{resources};
+    $params{runs} = 0 unless $params{jobs} && $params{coverage} && $params{run_fields} && $params{resources} && $params{reports};
 
     my $db_type = $self->config->guess_db_driver;
 
@@ -45,7 +49,7 @@ sub sweep {
     if ($db_type eq 'PostgreSQL') {
         $interval = "< NOW() - INTERVAL '$interval'";
     }
-    elsif ($db_type =~ m/mysql/i) {
+    elsif ($db_type =~ m/(mysql|percona|mariadb)/i) {
         $interval = "< NOW() - INTERVAL $interval";
     }
     else {
@@ -90,7 +94,8 @@ sub sweep {
         $runner->finish;
     }
 
-    if ($db_type =~ m/mysql/i) {
+
+    if ($db_type =~ m/(mysql|mariadb|percona)/i) {
         my $dbh = $self->config->schema->storage->dbh;
         $dbh->do('ANALYZE TABLE ' . join ', ' => @TABLES);
     }
@@ -135,15 +140,12 @@ sub sweep_run {
     }
 
     if ($params{resources}) {
-        my $batches = $run->resource_batches;
-        while (my $batch = $batches->next) {
-            $batch->resources->delete;
-            $batch->delete;
-        }
+        $run->resources->delete;
+        $run->update({has_resources => 0}) unless $params{runs};
     }
 
     if ($params{runs}) {
-        $run->reportings->delete;
+        $run->reports->delete;
         $run->sweeps->delete;
         $run->delete;
     }
@@ -151,49 +153,57 @@ sub sweep_run {
         $self->config->schema->resultset('Sweep')->find_or_create({name => $sweep_name, run_id => $run->run_id});
     }
 
-    print "[$$] ($params{id}) Run: " . $run->run_id . " took " . sprintf("%0.4f", time - $start) . " seconds to sweep $counter job(s).\n";
+    print "[$$] ($params{id}) Run: " . $run->run_uuid . " took " . sprintf("%0.4f", time - $start) . " seconds to sweep $counter job(s).\n";
 }
 
 sub sweep_job {
     my $self = shift;
     my ($run, $job, %params) = @_;
 
-    local $0 = "$0 > " . $job->job_key;
+    local $0 = "$0 > " . $job->job_uuid;
 
     my $start = time;
 
-    if ($params{events}) {
-        if ($params{subtests}) {
-            $job->reportings->update({event_id => undef});
+    my $tries = $job->job_tries;
+    while (my $try = $tries->next()) {
+        if ($params{events}) {
+            if ($params{subtests}) {
+                my $has_binary = $try->events->search({has_binary => 1});
+                while (my $e = $has_binary->next()) {
+                    $e->binaries->delete;
+                    $e->delete;
+                }
 
-            my $has_binary = $job->events->search({has_binary => 1});
-            while (my $e = $has_binary->next()) {
-                $e->binaries->delete;
-                $e->delete;
+                $try->events->delete;
             }
-
-            $job->events->delete;
-        }
-        else {
-            my $events = $job->events->search({'-not' => {is_subtest => 1, nested => 0}});
-            while (my $e = $events->next()) {
-                $e->binaries->delete;
-                $e->delete;
+            else {
+                my $events = $try->events->search({'-not' => {is_subtest => 1, nested => 0}});
+                while (my $e = $events->next()) {
+                    $e->binaries->delete;
+                    $e->delete;
+                }
             }
         }
-    }
 
-    if ($params{job_fields}) {
-        $job->job_fields->delete;
+        if ($params{job_try_fields}) {
+            $try->job_try_fields->delete;
+        }
+
+        if ($params{reports}) {
+            $try->reports->delete;
+        }
+
+        if ($params{job_tries}) {
+            $try->delete;
+        }
     }
 
     if ($params{jobs}) {
-        $job->reportings->delete;
         $job->delete;
     }
 
     return unless (time - $start) > 1;
-    print "[$$] ($params{id}) Run: " . $run->run_id . " job " . $job->job_key . " took " . sprintf("%0.4f", time - $start) . " seconds\n";
+    print "[$$] ($params{id}) Run: " . $run->run_uuid . " job " . $job->job_uuid . " took " . sprintf("%0.4f", time - $start) . " seconds\n";
 }
 
 1;

@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000000';
 
 use App::Yath::Schema::Loader;
+use App::Yath::Schema::Sweeper;
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
 
@@ -32,7 +33,7 @@ option_group {group => 'sweeper', category => "Sweeper Options"} => sub {
         description => 'Delete old event data (default: yes)',
     );
 
-    option job_fields => (
+    option job_try_fields => (
         type => 'Bool',
         default => 1,
         description => 'Delete old job field data (default: yes)',
@@ -44,7 +45,19 @@ option_group {group => 'sweeper', category => "Sweeper Options"} => sub {
         description => 'Delete old job data (default: yes)',
     );
 
-    option resource => (
+    option job_tries => (
+        type => 'Bool',
+        default => 1,
+        description => 'Delete old job try data (default: yes)',
+    );
+
+    option reports => (
+        type => 'Bool',
+        default => 1,
+        description => 'Delete old report data (default: yes)',
+    );
+
+    option resources => (
         type => 'Bool',
         default => 1,
         description => 'Delete old resource data (default: yes)',
@@ -104,9 +117,12 @@ sub run {
 
     my $sweeper = App::Yath::Schema::Sweeper->new(
         interval => $settings->sweeper->interval,
+        config   => $config,
     );
 
     $sweeper->sweep($settings->sweeper->all);
+
+    return 0;
 }
 
 1;

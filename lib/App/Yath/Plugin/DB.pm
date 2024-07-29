@@ -49,7 +49,6 @@ option_group {group => 'db', prefix => 'db', category => "Database Options"} => 
 sub get_coverage_tests {
     my ($plugin, $settings, $changes) = @_;
 
-    # Fixme yathui-db has been moved to other settings
     my $db = $settings->check_group('db') or return;
     return unless $db->coverage;
 
@@ -150,7 +149,6 @@ sub get_coverage_searches {
 sub get_coverage_rows {
     my ($plugin, $settings, $changes) = @_;
 
-    # Fixme yathui-db has been moved to other settings
     my $db = $settings->check_group('db') or return;
     return unless $db->coverage;
 

@@ -82,9 +82,12 @@ sub guess_db_driver {
 
     $self->_check_for_creds();
 
-    return 'MySQL' if $self->{+DBI_DSN} =~ m/(mysql|maria|percona)/i;
+    return 'SQLite'     if $self->{+DBI_DSN} =~ m/sqlite/i;
+    return 'MariaDB'    if $self->{+DBI_DSN} =~ m/maria/i;
+    return 'Percona'    if $self->{+DBI_DSN} =~ m/percona/i;
+    return 'MySQL'      if $self->{+DBI_DSN} =~ m/mysql/i;
     return 'PostgreSQL' if $self->{+DBI_DSN} =~ m/(pg|postgre)/i;
-    return 'PostgreSQL'; # Default
+    return 'PostgreSQL';    # Default
 }
 
 sub db_driver {

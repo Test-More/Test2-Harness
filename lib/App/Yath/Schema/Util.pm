@@ -76,7 +76,8 @@ sub schema_config_from_settings {
     my $config_class = delete $params{config_class} // 'App::Yath::Schema::Config';
     require(mod2file($config_class));
 
-    my $db = $settings->group('db');
+    my $group = $params{settings_group} // 'db';
+    my $db = $settings->group($group);
     unless($db) {
         return App::Yath::Schema::Config->new(%params) if $params{ephemeral};
         confess "No database settings";

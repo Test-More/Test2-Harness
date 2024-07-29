@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use DBI;
+use DateTime;
 use Scope::Guard;
 use Carp qw/croak/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
@@ -12,8 +13,6 @@ our $VERSION = '2.000000';
 
 use Test2::Harness::Util::HashBase;
 
-# FIXME this whole file needs work
-
 sub run_delta {
     my $self = shift;
     my ($dbh_a, $dbh_b) = @_;
@@ -21,15 +20,19 @@ sub run_delta {
     my $refa = ref($dbh_a);
     my $refb = ref($dbh_b);
 
-    my $a_runs = $refa eq 'ARRAY' ? $dbh_a : $self->get_runs($dbh_a);
-    my $b_runs = $refb eq 'ARRAY' ? $dbh_b : $self->get_runs($dbh_b);
+    my $a_runs = $refa eq 'HASH' ? $dbh_a : $self->get_runs($dbh_a);
+    my $b_runs = $refb eq 'HASH' ? $dbh_b : $self->get_runs($dbh_b);
 
-    my %map_a = map {($_ => 1)} @$a_runs;
-    my %map_b = map {($_ => 1)} @$b_runs;
+    for my $run_uuid (keys %$a_runs, keys %$b_runs) {
+        # If both have it, delete from both
+        next unless $a_runs->{$run_uuid} && $b_runs->{$run_uuid};
+        delete $a_runs->{$run_uuid};
+        delete $b_runs->{$run_uuid};
+    }
 
     return {
-        missing_in_a => [grep { !$map_a{$_} } @$b_runs],
-        missing_in_b => [grep { !$map_b{$_} } @$a_runs],
+        missing_in_a => $b_runs,
+        missing_in_b => $a_runs,
     };
 }
 
@@ -37,14 +40,16 @@ sub sync {
     my $self = shift;
     my %params = @_;
 
-    my $from_dbh = $params{from_dbh} or croak "Need a DBH to pull data (from_dbh)";
-    my $to_dbh   = $params{to_dbh}   or croak "Need a DBH to push data TO (to_dbh)";
-    my $run_ids  = $params{run_ids}  or croak "Need a list of run_id's to sync";
+    my $from_dbh  = $params{from_dbh}  or croak "Need a DBH to pull data (from_dbh)";
+    my $to_dbh    = $params{to_dbh}    or croak "Need a DBH to push data TO (to_dbh)";
+    my $run_uuids = $params{run_uuids} or croak "Need a list of run_uuid's to sync";
 
     my $name  = $params{name}  // "$from_dbh -> $to_dbh";
     my $skip  = $params{skip}  // {};
     my $cache = $params{cache} // {};
     my $debug = $params{debug} // 0;
+
+    
 
     my ($rh, $wh);
     pipe($rh, $wh) or die "Could not open pipe: $!";
@@ -60,11 +65,11 @@ sub sync {
         });
 
         $self->read_sync(
-            dbh     => $to_dbh,
-            run_ids => $run_ids,
-            rh      => $rh,
-            cache   => $cache,
-            debug   => $debug,
+            dbh       => $to_dbh,
+            run_uuids => $run_uuids,
+            rh        => $rh,
+            cache     => $cache,
+            debug     => $debug,
         );
 
         $guard->dismiss();
@@ -74,11 +79,11 @@ sub sync {
 
     close($rh);
     $self->write_sync(
-        dbh     => $from_dbh,
-        run_ids => $run_ids,
-        wh      => $wh,
-        skip    => $skip,
-        debug   => $debug,
+        dbh       => $from_dbh,
+        run_uuids => $run_uuids,
+        wh        => $wh,
+        skip      => $skip,
+        debug     => $debug,
     );
     close($wh);
 
@@ -109,27 +114,7 @@ sub get_runs {
     my $self = shift;
     my ($dbh_or_file) = @_;
 
-    return $self->_get_jsonl_runs($dbh_or_file)
-        if $dbh_or_file =~ m/\.jsonl$/ && -f $dbh_or_file;
-
     return $self->_get_dbh_runs($dbh_or_file);
-}
-
-sub _get_jsonl_runs {
-    my $self = shift;
-    my ($file) = @_;
-
-    my $runs = [];
-
-    open(my $fh, '<', $file) or croak "Could not open file '$file' for reading: $!";
-    while (my $line = <$fh>) {
-        # We only care about lines that start with this, the format does not allow this to false-positive
-        next unless $line =~ m/\{"run":\{.*"run_id":"([^"]+)"/;
-        push @$runs => $1;
-    }
-    close($fh);
-
-    return $runs;
 }
 
 sub _get_dbh_runs {
@@ -137,34 +122,34 @@ sub _get_dbh_runs {
     my ($dbh) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
-        SELECT run_id
+        SELECT run_uuid, run_id
         FROM   runs
         WHERE  status NOT IN ('pending', 'running', 'broken')
         ORDER  BY added ASC
     EOT
 
-    $sth->execute() or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute() or die "Error: " . $dbh->errstr;
 
-    my @out;
+    my %out;
 
     while (my $run = $sth->fetchrow_arrayref()) {
-        push @out => $run->[0];
+        $out{$run->[0]} = $run->[1];
     }
 
-    return \@out;
+    return \%out;
 }
 
-sub table_list { qw/runs run_fields jobs job_fields events binaries reporting coverage/ }
+sub table_list { qw/runs jobs job_tries events run_fields job_try_fields binaries reporting coverage/ }
 
 sub write_sync {
     my $self = shift;
     my %params = @_;
 
-    my $dbh     = $params{dbh}     or croak "'dbh' is required";
-    my $run_ids = $params{run_ids} or croak "'run_ids' must be an arrayref of run ids";
-    my $wh      = $params{wh}      or croak "'wh' is required and must be a writable filehandle";
-    my $skip    = $params{skip}  // {};
-    my $debug   = $params{debug} // 0;
+    my $dbh       = $params{dbh}       or croak "'dbh' is required";
+    my $run_uuids = $params{run_uuids} or croak "'run_uuids' must be a hashref of {run_uuid => run_id}";
+    my $wh        = $params{wh}        or croak "'wh' is required and must be a writable filehandle";
+    my $skip      = $params{skip}  // {};
+    my $debug     = $params{debug} // 0;
 
     my @to_dump;
     for my $table ($self->table_list) {
@@ -176,12 +161,11 @@ sub write_sync {
 
     STDOUT->autoflush(1);
 
-    my $total = @$run_ids;
+    my $total = keys %$run_uuids;
     my $counter = 0;
     my $subcount = 0;
-    for my $run_id (@$run_ids) {
-        my $run_uuid = $run_id;
-        my @args = ($dbh, $run_uuid, $skip);
+    for my $run_uuid (keys %$run_uuids) {
+        my @args = ($dbh, $run_uuid, $run_uuids->{$run_uuid}, $skip);
 
         for my $meth (@to_dump) {
             for my $item ($self->$meth(@args)) {
@@ -194,7 +178,7 @@ sub write_sync {
 
         $counter++;
         if ($debug) {
-            print "  Dumped run $counter/$total: $run_id\n";
+            print "  Dumped run $counter/$total: $run_uuid\n";
         }
     }
 
@@ -205,18 +189,17 @@ sub read_sync {
     my $self = shift;
     my %params = @_;
 
-    my $dbh     = $params{dbh}     or croak "'dbh' is required";
-    my $run_ids = $params{run_ids} or croak "'run_ids' must be an arrayref of run ids";
-    my $rh      = $params{rh}      or croak "'rh' is required and must be a readable filehandle";
-    my $cache   = $params{cache} // {};
-    my $debug   = $params{debug} // 0;
+    my $dbh       = $params{dbh}       or croak "'dbh' is required";
+    my $run_uuids = $params{run_uuids} or croak "'run_uuids' must be a hashref of {run_uuid => run_id}";
+    my $rh        = $params{rh}        or croak "'rh' is required and must be a readable filehandle";
+    my $cache     = $params{cache} // {};
+    my $debug     = $params{debug} // 0;
 
     $dbh->{AutoCommit} = 0;
 
-    my %include = map {($_ => 1)} @$run_ids;
-    my $total = @$run_ids;
+    my $total = keys %$run_uuids;
     my $counter = 0;
-    my $last_run_id;
+    my $last_run_uuid;
     my $broken;
     while (my $line = <$rh>) {
         my $data = decode_json($line);
@@ -224,33 +207,35 @@ sub read_sync {
         my ($type, @bad) = keys %$data;
         die "Invalid data!" if @bad;
 
+        $self->format_date_time($dbh, $data->{$type});
+
         if ($type eq 'run') {
             $dbh->commit();
             $dbh->{AutoCommit} = 0;
 
-            if ($debug && $last_run_id) {
+            if ($debug && $last_run_uuid) {
                 if ($broken) {
-                    print "  BROKEN run $counter/$total: $last_run_id\n";
+                    print "  BROKEN run $counter/$total: $last_run_uuid\n";
                 }
                 else {
-                    print "Imported run $counter/$total: $last_run_id\n";
+                    print "Imported run $counter/$total: $last_run_uuid\n";
                 }
             }
 
             $broken = undef;
-            my $new_run_id = $data->{$type}->{run_id};
+            my $new_run_uuid = $data->{$type}->{run_uuid};
 
-            if ($new_run_id && !$include{$new_run_id}) {
-                $last_run_id = undef;
+            if ($new_run_uuid && !$run_uuids->{$new_run_uuid}) {
+                $last_run_uuid = undef;
                 next;
             }
 
-            $last_run_id = $new_run_id;
+            $last_run_uuid = $new_run_uuid;
             $counter++;
         }
 
         next if $broken;
-        next unless $last_run_id;
+        next unless $last_run_uuid;
 
         my $method = "import_$type";
 
@@ -260,13 +245,71 @@ sub read_sync {
         };
 
         $dbh->rollback();
-        $broken = $last_run_id;
+        $broken = $last_run_uuid;
     }
 
     $dbh->commit();
     $dbh->disconnect();
 
     return;
+}
+
+sub parse_date_time {
+    my $self = shift;
+    my ($dbh, $item) = @_;
+
+    my $cb;
+    my $driver = $dbh->{Driver}->{Name};
+    if ($driver =~ m/^Pg$/i || $driver =~ m/postgresql/i) {
+        require DateTime::Format::Pg;
+        $cb = sub { DateTime::Format::Pg->parse_timestamptz(@_) };
+    }
+    elsif ($driver =~ m/(mysql|percona|mariadb)/i) {
+        require DateTime::Format::MySQL;
+        $cb = sub { DateTime::Format::MySQL->parse_datetime(@_) };
+    }
+    elsif ($driver =~ m/sqlite/) {
+        require DateTime::Format::SQLite;
+        $cb = sub { DateTime::Format::SQLite->parse_datetime(@_) };
+    }
+    else {
+        die "No date parser for driver '$driver'";
+    }
+
+    for my $field (qw/accessed added created ended launch stamp start updated/) {
+        next unless exists $item->{$field};
+        my $val = $item->{$field} or next;
+        $item->{$field} = $cb->($val)->hires_epoch;
+    }
+}
+
+sub format_date_time {
+    my $self = shift;
+    my ($dbh, $item) = @_;
+
+    my $cb;
+    my $driver = $dbh->{Driver}->{Name};
+    if ($driver =~ m/^Pg$/i || $driver =~ m/postgresql/i) {
+        require DateTime::Format::Pg;
+        $cb = sub { DateTime::Format::Pg->format_timestamptz(@_) };
+    }
+    elsif ($driver =~ m/(mysql|percona|mariadb)/i) {
+        require DateTime::Format::MySQL;
+        $cb = sub { DateTime::Format::MySQL->format_datetime(@_) };
+    }
+    elsif ($driver =~ m/sqlite/) {
+        require DateTime::Format::SQLite;
+        $cb = sub { DateTime::Format::SQLite->format_datetime(@_) };
+    }
+    else {
+        die "No date parser for driver '$driver'";
+    }
+
+    for my $field (qw/accessed added created ended launch stamp start updated/) {
+        next unless exists $item->{$field};
+        my $val = $item->{$field} or next;
+        $item->{$field} = $cb->(DateTime->from_epoch($val));
+    }
 }
 
 sub get_or_create_id {
@@ -282,18 +325,28 @@ sub _get_or_create_id {
     my $self = shift;
     my ($cache, $dbh, $table, $field, $via_field, $via_value) = @_;
 
+    my $id = $self->_get_id(@_);
+    return $id if $id;
+
+    $self->insert($dbh, $table, {$via_field => $via_value});
+
+    return $self->_get_id(@_);
+}
+
+sub _get_id {
+    my $self = shift;
+    my ($cache, $dbh, $table, $field, $via_field, $via_value) = @_;
+
     my $sql = "SELECT $field FROM $table WHERE $via_field = ?";
 
     my $sth = $dbh->prepare($sql);
-    $sth->execute($via_value) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($via_value) or die "Error: " . $dbh->errstr;
     if ($sth->rows) {
         my $row = $sth->fetchrow_hashref();
         return $row->{$field};
     }
 
-    my $uuid = gen_uuid();
-    $self->insert($dbh, $table, {$field => $uuid, $via_field => $via_value});
-    return $uuid;
+    return;
 }
 
 sub insert {
@@ -314,12 +367,13 @@ sub insert {
 
 sub render_runs {
     my $self = shift;
-    my ($dbh, $run_id, $skip) = @_;
+    my ($dbh, $run_uuid, $run_id, $skip) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-            run_id, status, worker_id, error, added, duration, mode, buffer,
-            passed, failed, retried, concurrency, parameters, has_coverage,
+            passed, failed, to_retry, retried, concurrency_j,
+            concurrency_x, added, status, mode, pinned, has_coverage,
+            has_resources, parameters, worker_id, error, duration,
             users.username, projects.name as project_name
         FROM runs
         JOIN users    USING(user_id)
@@ -327,142 +381,177 @@ sub render_runs {
         WHERE run_id = ?
     EOT
 
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
 
     my $run = $sth->fetchrow_hashref();
-    delete $run->{has_coverage} if $skip->{coverage};
+    $run->{run_uuid} = $run_uuid;
+    $run->{canon} = 0;
+    delete $run->{has_coverage}  if $skip->{coverage};
+    delete $run->{has_resources} if $skip->{resources};
+
+    $self->parse_date_time($dbh, $run);
 
     return {run => $run};
 }
 
 sub render_run_fields {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_uuid, $run_id) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
-        SELECT run_id, run_field_id, name, data, details, raw, link
+        SELECT event_uuid, name, data, details, raw, link
           FROM run_fields
          WHERE run_id = ?
     EOT
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
     my $run_fields = $sth->fetchall_arrayref({});
 
-    return map { +{run_field => $_} } @$run_fields;
+    return map { $_->{run_uuid} = $run_uuid; $self->parse_date_time($dbh, $_); +{run_field => $_} } @$run_fields;
 }
 
 sub render_jobs {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_uuid, $run_id) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                run_id, job_key, job_id, job_try, job_idx, is_harness_out, status, parameters, fields, name, fail, retry,
-                exit_code, launch, start, ended, duration, pass_count, fail_count,
-                test_files.filename
+            job_uuid, is_harness_out, failed, passed,
+            test_files.filename
           FROM jobs
-          JOIN test_files USING (test_file_idx)
+          JOIN test_files USING (test_file_id)
          WHERE run_id = ?
     EOT
 
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
     my $jobs = $sth->fetchall_arrayref({});
-    return map { +{job => $_} } @$jobs;
+    return map { $_->{run_uuid} = $run_uuid; $self->parse_date_time($dbh, $_); +{job => $_} } @$jobs;
 }
 
-sub render_job_fields {
+sub render_job_tries {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_uuid, $run_id) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
-        SELECT job_field_id, job_key, job_fields.name as name, data, details, raw, link
-          FROM job_fields
-          JOIN jobs USING(job_key)
-         WHERE run_id = ?
+        SELECT
+            job_try_uuid, pass_count, fail_count, exit_code, launch, start,
+            ended, status, job_try_ord, fail, retry, duration, parameters,
+            stdout, stderr,
+            jobs.job_uuid
+          FROM job_tries
+          JOIN jobs USING(job_id)
+         WHERE jobs.run_id = ?
     EOT
 
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
+    my $jobs = $sth->fetchall_arrayref({});
+    return map {$self->parse_date_time($dbh, $_); +{job_try => $_} } @$jobs;
+}
+
+sub render_job_try_fields {
+    my $self = shift;
+    my ($dbh, $run_uuid, $run_id) = @_;
+
+    my $sth = $dbh->prepare(<<"    EOT");
+        SELECT
+            event_uuid, name, data, details, raw, link,
+            job_tries.job_try_uuid
+          FROM job_try_fields
+          JOIN job_tries USING(job_try_id)
+          JOIN jobs      USING(job_id)
+         WHERE jobs.run_id = ?
+    EOT
+
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
     my $job_fields = $sth->fetchall_arrayref({});
-    return map { +{job_field => $_} } @$job_fields;
+    return map {$self->parse_date_time($dbh, $_); +{job_try_field => $_} } @$job_fields;
 }
 
 sub render_events {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_uuid, $run_id) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
-        SELECT events.*
+        SELECT events.*, job_try_uuid
           FROM events
-          JOIN jobs USING(job_key)
-         WHERE run_id = ?
+          JOIN job_tries USING(job_try_id)
+          JOIN jobs      USING(job_id)
+         WHERE jobs.run_id = ?
            AND is_subtest = TRUE
+      ORDER BY event_id
     EOT
 
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
     my $events = $sth->fetchall_arrayref({});
-    return map { +{event => $_} } @$events;
+    return map {$self->parse_date_time($dbh, $_); +{event => $_} } @$events;
 }
 
 sub render_binaries {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_uuid, $run_id) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
-        SELECT binaries.*
-          FROM binaries
-          JOIN events USING(event_id)
-          JOIN jobs USING(job_key)
+        SELECT
+            B.event_uuid, B.is_image, B.filename, B.description, B.data
+          FROM binaries  AS B
+          JOIN events    USING(event_id)
+          JOIN job_tries USING(job_try_id)
+          JOIN jobs      USING(job_id)
          WHERE run_id = ?
            AND is_subtest = TRUE
     EOT
 
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
     my $binaries = ($sth->fetchall_arrayref({}));
-    return map { +{binary => $_} } @$binaries;
+    return map {$self->parse_date_time($dbh, $_); +{binary => $_} } @$binaries;
 }
 
 sub render_reporting {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_uuid, $run_id) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                reporting_idx, run_id, run_idx, job_try, subtest, duration, fail, pass, retry, abort, job_key, event_id,
-                projects.name AS project_name,
-                users.username AS username,
-                test_files.filename AS filename
-          FROM reporting
-          JOIN projects   USING(project_idx)
-          JOIN users      USING(user_idx)
-          JOIN test_files USING(test_file_idx)
+            R.job_try, R.retry, R.abort, R.fail, R.pass, R.subtest, R.duration,
+            job_tries.job_try_uuid  AS job_try_uuid,
+            projects.name           AS project_name,
+            users.username          AS username,
+            test_files.filename     AS filename
+          FROM reporting  AS R
+          JOIN job_tries  USING(job_try_id)
+          JOIN projects   USING(project_id)
+          JOIN users      USING(user_id)
+          JOIN test_files USING(test_file_id)
          WHERE run_id = ?
     EOT
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
     my $reporting = $sth->fetchall_arrayref({});
-    return map { +{reporting => $_} } @$reporting;
+    return map { $_->{run_uuid} = $run_uuid; $self->parse_date_time($dbh, $_); +{reporting => $_} } @$reporting;
 }
 
 sub render_coverage {
     my $self = shift;
-    my ($dbh, $run_id) = @_;
+    my ($dbh, $run_uuid, $run_id) = @_;
 
     my $sth = $dbh->prepare(<<"    EOT");
         SELECT
-                coverage_idx, run_id, job_key, metadata,
-                test_files.filename AS test_file,
-                source_files.filename AS source_file,
-                source_subs.subname AS source_sub,
-                coverage_manager.package AS coverage_manager
+            event_uuid, metadata,
+            job_tries.job_try_uuid   AS job_try_uuid,
+            test_files.filename      AS test_file,
+            source_files.filename    AS source_file,
+            source_subs.subname      AS source_sub,
+            coverage_manager.package AS coverage_manager
           FROM coverage
-          JOIN test_files       USING(test_file_idx)
-          JOIN source_files     USING(source_file_idx)
-          JOIN source_subs      USING(source_sub_idx)
-          JOIN coverage_manager USING(coverage_manager_idx)
+          JOIN job_tries        USING(job_try_id)
+          JOIN test_files       USING(test_file_id)
+          JOIN source_files     USING(source_file_id)
+          JOIN source_subs      USING(source_sub_id)
+          JOIN coverage_manager USING(coverage_manager_id)
          WHERE run_id = ?
     EOT
 
-    $sth->execute($run_id) or die "MySQL Error: " . $dbh->errstr;
+    $sth->execute($run_id) or die "Error: " . $dbh->errstr;
     my $coverage = $sth->fetchall_arrayref({});
-    return map { +{coverage => $_} } @$coverage;
+    return map { $_->{run_uuid} = $run_uuid; $self->parse_date_time($dbh, $_), +{coverage => $_} } @$coverage;
 }
 
 sub import_run {
@@ -473,8 +562,8 @@ sub import_run {
     my $cache = $params{cache};
     my $run   = $params{item};
 
-    $run->{user_idx}    = $self->get_or_create_id($cache, $dbh, 'users'    => 'user_idx',    username => delete $run->{username});
-    $run->{project_idx} = $self->get_or_create_id($cache, $dbh, 'projects' => 'project_idx', name     => delete $run->{project_name});
+    $run->{user_id}    = $self->get_or_create_id($cache, $dbh, 'users'    => 'user_id',    username => delete $run->{username});
+    $run->{project_id} = $self->get_or_create_id($cache, $dbh, 'projects' => 'project_id', name     => delete $run->{project_name});
 
     $self->insert($dbh, runs => $run);
 }
@@ -484,7 +573,10 @@ sub import_run_field {
     my %params = @_;
 
     my $dbh       = $params{dbh};
+    my $cache     = $params{cache};
     my $run_field = $params{item};
+
+    $run_field->{run_id} = $self->get_or_create_id($cache, $dbh, 'runs' => 'run_id', run_uuid => delete $run_field->{run_uuid});
 
     $self->insert($dbh, run_fields => $run_field);
 }
@@ -497,19 +589,36 @@ sub import_job {
     my $cache = $params{cache};
     my $job   = $params{item};
 
-    $job->{test_file_idx} = $self->get_or_create_id($cache, $dbh, 'test_files' => 'test_file_idx', filename => delete $job->{filename});
+    $job->{run_id}       = $self->get_or_create_id($cache, $dbh, 'runs'       => 'run_id',       run_uuid => delete $job->{run_uuid});
+    $job->{test_file_id} = $self->get_or_create_id($cache, $dbh, 'test_files' => 'test_file_id', filename => delete $job->{filename});
 
     $self->insert($dbh, jobs => $job);
 }
 
-sub import_job_field {
+sub import_job_try {
+    my $self = shift;
+    my %params = @_;
+
+    my $dbh   = $params{dbh};
+    my $cache = $params{cache};
+    my $try   = $params{item};
+
+    $try->{job_id} = $self->get_or_create_id($cache, $dbh, 'jobs' => 'job_id', job_uuid => delete $try->{job_uuid});
+
+    $self->insert($dbh, job_tries => $try);
+}
+
+sub import_job_try_field {
     my $self   = shift;
     my %params = @_;
 
     my $dbh       = $params{dbh};
-    my $job_field = $params{item};
+    my $cache     = $params{cache};
+    my $try_field = $params{item};
 
-    $self->insert($dbh, job_fields => $job_field);
+    $try_field->{job_try_id} = $self->get_or_create_id($cache, $dbh, 'job_tries' => 'job_try_id', job_try_uuid => delete $try_field->{job_try_uuid});
+
+    $self->insert($dbh, job_try_fields => $try_field);
 }
 
 sub import_event {
@@ -517,7 +626,10 @@ sub import_event {
     my %params = @_;
 
     my $dbh   = $params{dbh};
+    my $cache = $params{cache};
     my $event = $params{item};
+
+    $event->{job_try_id} = $self->get_or_create_id($cache, $dbh, 'job_tries' => 'job_try_id', job_try_uuid => delete $event->{job_try_uuid});
 
     $self->insert($dbh, events => $event);
 }
@@ -527,7 +639,10 @@ sub import_binary {
     my %params = @_;
 
     my $dbh    = $params{dbh};
+    my $cache = $params{cache};
     my $binary = $params{item};
+
+    $binary->{event_id} = $self->get_or_create_id($cache, $dbh, 'events' => 'event_id', event_uuid => $binary->{job_try_uuid});
 
     $self->insert($dbh, binaries => $binary);
 }
@@ -540,9 +655,11 @@ sub import_reporting {
     my $cache     = $params{cache};
     my $reporting = $params{item};
 
-    $reporting->{project_idx}   = $self->get_or_create_id($cache, $dbh, 'projects'   => 'project_idx',   name     => delete $reporting->{project_name});
-    $reporting->{user_idx}      = $self->get_or_create_id($cache, $dbh, 'users'      => 'user_idx',      username => delete $reporting->{username});
-    $reporting->{test_file_idx} = $self->get_or_create_id($cache, $dbh, 'test_files' => 'test_file_idx', filename => delete $reporting->{filename});
+    $reporting->{job_try_id}   = $self->get_or_create_id($cache, $dbh, 'job_tries'  => 'job_try_id',   job_try_uuid => delete $reporting->{job_try_uuid});
+    $reporting->{test_file_id} = $self->get_or_create_id($cache, $dbh, 'test_files' => 'test_file_id', filename     => delete $reporting->{filename});
+    $reporting->{project_id}   = $self->get_or_create_id($cache, $dbh, 'projects'   => 'project_id',   name         => delete $reporting->{project_name});
+    $reporting->{user_id}      = $self->get_or_create_id($cache, $dbh, 'users'      => 'user_id',      username     => delete $reporting->{username});
+    $reporting->{run_id}       = $self->get_or_create_id($cache, $dbh, 'runs'       => 'run_id',       run_uuid     => delete $reporting->{run_uuid});
 
     $self->insert($dbh, reporting => $reporting);
 }
@@ -555,10 +672,12 @@ sub import_coverage {
     my $cache    = $params{cache};
     my $coverage = $params{item};
 
-    $coverage->{test_file_idx}        = $self->get_or_create_id($cache, $dbh, 'test_files'       => 'test_file_idx',        filename => delete $coverage->{test_file});
-    $coverage->{source_file_idx}      = $self->get_or_create_id($cache, $dbh, 'source_files'     => 'source_file_idx',      filename => delete $coverage->{source_file});
-    $coverage->{source_sub_idx}       = $self->get_or_create_id($cache, $dbh, 'source_subs'      => 'source_sub_idx',       subname  => delete $coverage->{source_sub});
-    $coverage->{coverage_manager_idx} = $self->get_or_create_id($cache, $dbh, 'coverage_manager' => 'coverage_manager_idx', package  => delete $coverage->{coverage_manager});
+    $coverage->{job_try_id}          = $self->get_or_create_id($cache, $dbh, 'job_tries'        => 'job_try_id',          job_try_uuid => delete $coverage->{job_try_uuid});
+    $coverage->{coverage_manager_id} = $self->get_or_create_id($cache, $dbh, 'coverage_manager' => 'coverage_manager_id', package      => delete $coverage->{coverage_manager});
+    $coverage->{run_id}              = $self->get_or_create_id($cache, $dbh, 'runs'             => 'run_id',              run_uuid     => delete $coverage->{run_uuid});
+    $coverage->{test_file_id}        = $self->get_or_create_id($cache, $dbh, 'test_files'       => 'test_file_id',        filename     => delete $coverage->{test_file});
+    $coverage->{source_file_id}      = $self->get_or_create_id($cache, $dbh, 'source_files'     => 'source_file_id',      filename     => delete $coverage->{source_file});
+    $coverage->{source_sub_id}       = $self->get_or_create_id($cache, $dbh, 'source_subs'      => 'source_sub_id',       subname      => delete $coverage->{source_sub});
 
     $self->insert($dbh, coverage => $coverage);
 }

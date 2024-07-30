@@ -58,3 +58,4 @@ t2/non_perl/test.binary
 t2_lib
 test-logs/
 xxx
+.immiscible-test.lock

@@ -1,3 +1,4 @@
+use Test2::Plugin::IsolateTemp;
 use Test2::V0;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
@@ -7,6 +8,8 @@ use App::Yath::Schema::Config;
 use App::Yath::Server;
 
 use App::Yath::Tester qw/yath/;
+
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;

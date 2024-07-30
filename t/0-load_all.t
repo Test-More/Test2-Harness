@@ -47,6 +47,11 @@ sub wanted {
 
             my $ok = eval { local $SIG{__WARN__} = sub { push @warnings => @_ }; require($file); 1 };
             my $err = $@;
+            if ($err =~ m/^Can't locate / || $err =~ m/version \S+ required--this is only version/) {
+                skip_all $err;
+                return;
+            }
+
             {
                 no warnings 'once';
                 ok($ok, "require $file (" . ($App::Yath::Schema::LOADED // 'undef') . ")", $ok ? () : $err);

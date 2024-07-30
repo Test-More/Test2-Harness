@@ -1,6 +1,8 @@
 use Test2::Plugin::IsolateTemp;
 use Test2::V0;
 
+use Test2::Tools::QuickDB;
+
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Require::Module 'Test2::Plugin::Cover' => '0.000022';
 
@@ -17,6 +19,7 @@ $dir =~ s{^\./}{};
 $dir =~ s/\d+$//;
 $dir =~ s{-ui}{}g;
 
+skipall_unless_can_db();
 my $config = App::Yath::Schema::Config->new(ephemeral => 'Auto');
 my $server = App::Yath::Server->new(schema_config => $config);
 my $db = $server->start_ephemeral_db;

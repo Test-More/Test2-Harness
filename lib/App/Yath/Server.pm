@@ -129,11 +129,11 @@ sub start_ephemeral_db {
 
     my $db = DBIx::QuickDB->build_db(harness_ui => $qdb_args);
     unless($schema_type) {
-        if (ref($db) =~ m/::(PostgreSQL|MySQL)$/) {
+        if (ref($db) =~ m/::(PostgreSQL|MariaDB|Percona|SQLite|MySQL)$/) {
             $schema_type = $1;
         }
         else {
-            die "$db does not look like PostgreSQL or MySQL";
+            die "$db does not look like PostgreSQL, Percona, MariaDB, SQLite or MySQL";
         }
     }
 

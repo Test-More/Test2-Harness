@@ -118,7 +118,6 @@ sub lookup_job {
     my $job = $rs->find_by_id_or_uuid($lookup);
     return () unless $job;
 
-    # FIXME: Make sure getitng only a specific job_try_id works
     return (
         $self->lookup_run($job->run_id, $state),
         encode_json({type => 'job', data => $job->glance_data(try_id => $try_id)}) . "\n",

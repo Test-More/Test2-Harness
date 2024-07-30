@@ -9,7 +9,7 @@ use B();
 use Test2::Harness::Util qw/clean_path file2mod open_file/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json/;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 BEGIN {
     local $@;

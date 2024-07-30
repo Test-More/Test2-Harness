@@ -2,7 +2,7 @@ package App::Yath::Schema::ImportModes;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use Scalar::Util qw/blessed reftype/;
 use Carp qw/croak/;

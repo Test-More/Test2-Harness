@@ -2,7 +2,7 @@ package App::Yath::Command::test;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use Time::HiRes qw/sleep/;
 use Test2::Harness::Util qw/mod2file write_file_atomic/;

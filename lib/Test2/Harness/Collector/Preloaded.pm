@@ -2,7 +2,7 @@ package Test2::Harness::Collector::Preloaded;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 # If FindBin is installed, go ahead and load it. We do not care much about
 # success vs failure here.

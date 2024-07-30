@@ -2,7 +2,7 @@ package App::Yath::Command::run;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use List::Util qw/first/;
 use Time::HiRes qw/sleep time/;

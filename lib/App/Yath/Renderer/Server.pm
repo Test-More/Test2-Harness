@@ -2,7 +2,7 @@ package App::Yath::Renderer::Server;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
 use App::Yath::Server;

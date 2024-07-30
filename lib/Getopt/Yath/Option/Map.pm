@@ -2,7 +2,7 @@ package Getopt::Yath::Option::Map;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 

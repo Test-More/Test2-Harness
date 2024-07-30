@@ -2,7 +2,7 @@ package Getopt::Yath::Term;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 our @EXPORT = qw/color USE_COLOR term_size fit_to_width/;
 use Importer Importer => 'import';

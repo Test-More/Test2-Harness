@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::PostgreSQL::Sweep;
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 package
     App::Yath::Schema::Result::Sweep;

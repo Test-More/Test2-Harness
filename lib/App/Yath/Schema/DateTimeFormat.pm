@@ -2,7 +2,7 @@ package App::Yath::Schema::DateTimeFormat;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use Carp qw/confess/;
 use Importer Importer => 'import';

@@ -2,7 +2,7 @@ package App::Yath::Command::db::publish;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use Time::HiRes qw/time/;
 

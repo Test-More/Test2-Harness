@@ -4,7 +4,7 @@ use warnings;
 
 BEGIN { die "This protocol has not yet been implemented" }
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use parent 'Test2::Harness::IPC::Protocol';
 use Test2::Harness::Util::HashBase;

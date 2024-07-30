@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Stream;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use List::Util qw/max/;
 use Scalar::Util qw/blessed/;

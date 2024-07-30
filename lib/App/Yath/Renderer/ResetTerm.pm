@@ -2,7 +2,7 @@ package App::Yath::Renderer::ResetTerm;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use parent 'App::Yath::Renderer';
 use Test2::Harness::Util::HashBase;

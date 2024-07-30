@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Upload;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use Text::Xslate();
 

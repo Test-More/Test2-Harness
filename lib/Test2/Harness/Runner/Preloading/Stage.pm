@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Preloading::Stage;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 my %ORIG_SIG;
 BEGIN { %ORIG_SIG = %SIG }

@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::PostgreSQL::Permission;
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 package
     App::Yath::Schema::Result::Permission;

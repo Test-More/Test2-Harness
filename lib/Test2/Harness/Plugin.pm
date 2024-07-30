@@ -5,7 +5,7 @@ use warnings;
 use feature 'state';
 use Carp();
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 sub tick              { }
 sub run_queued        { }

@@ -1,5 +1,5 @@
 package App::Yath::Schema::Overlay::Sweep;
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 package
     App::Yath::Schema::Result::Sweep;

@@ -2,7 +2,7 @@ package Getopt::Yath::Option::AutoPathList;
 use strict;
 use warnings;
 
-our $VERSION = '2.000000';
+our $VERSION = '2.000001';
 
 use Getopt::Yath::Option::PathList;
 

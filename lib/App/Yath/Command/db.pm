@@ -12,7 +12,7 @@ use Test2::Harness::Util::HashBase;
 
 sub summary     { "Start a yath database server" }
 sub description { "Starts a database that can be used to temporarily store data (data is deleted when server shuts down)" }
-sub group       { "db" }
+sub group       { "database" }
 
 sub cli_args { "" }
 

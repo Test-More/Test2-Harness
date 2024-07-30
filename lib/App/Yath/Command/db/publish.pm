@@ -23,12 +23,9 @@ include_options(
     'App::Yath::Options::Publish',
 );
 
-sub summary { "Publish a log file directly to a yath database" }
-
-sub group { 'log' }
-
-sub cli_args { "[--] event_log.jsonl[.gz|.bz2]" }
-
+sub summary     { "Publish a log file directly to a yath database" }
+sub group       { ["database", 'log parsing'] }
+sub cli_args    { "[--] event_log.jsonl[.gz|.bz2]" }
 sub description { "Publish a log file directly to a yath database" }
 
 sub run {

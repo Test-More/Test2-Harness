@@ -13,10 +13,25 @@ use Importer Importer => 'import';
 use Config qw/%Config/;
 use Carp qw/croak/;
 
+BEGIN {
+    if (eval { require IO::Pager; 1 }) {
+        *paged_print = sub {
+            local $SIG{PIPE} = sub {};
+            local $ENV{LESS} = "-r";
+            my $pager = IO::Pager->new(*STDOUT);
+            $pager->print($_) for @_;
+        };
+    }
+    else {
+        *paged_print = sub { print @_ };
+    }
+}
+
 our @EXPORT_OK = qw{
     is_generated_test_pl
     find_yath
     share_dir share_file
+    paged_print
 };
 
 sub share_file {

@@ -11,7 +11,7 @@ use Test2::Harness::Util::HashBase;
 
 sub group { 'daemon' }
 
-sub summary { "Kill the runner and any running or pending tests" }
+sub summary { "Wait for running tests to complete, then end runner and abort any pending tests" }
 sub cli_args { "" }
 
 sub description {

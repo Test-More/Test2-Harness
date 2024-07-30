@@ -23,7 +23,7 @@ option_group {group => 'failed', category => 'Command Options'} => sub {
 
 sub summary { "Show the failed tests from an event log" }
 
-sub group { 'log' }
+sub group { 'log parsing' }
 
 sub cli_args { "[--] event_log.jsonl[.gz|.bz2]" }
 

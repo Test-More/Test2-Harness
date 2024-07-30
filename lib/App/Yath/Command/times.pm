@@ -21,7 +21,7 @@ include_options(
 
 sub summary { "Get times from a test log" }
 
-sub group { 'log' }
+sub group { 'log parsing' }
 
 sub cli_args { "[--] event_log.jsonl[.gz|.bz2] [Field1] [Field2]" }
 

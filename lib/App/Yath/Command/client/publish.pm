@@ -19,11 +19,13 @@ include_options(
     'App::Yath::Options::Publish' => [qw/mode/],
 );
 
-sub summary { "Publish a log file to a yath server" }
+sub group { ['web client', 'log parsing'] }
+
+sub summary { "Publish a log file to a yath web server" }
 
 sub description {
     return <<"    EOT";
-Publish a log file to a yath server. (API key is required)
+Publish a log file to a yath web server. (API key is required)
     EOT
 }
 

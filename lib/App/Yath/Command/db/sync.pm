@@ -14,7 +14,7 @@ use Test2::Harness::Util::HashBase;
 
 sub summary     { "Sync runs and associated data from one db to another" }
 sub description { "Sync runs and associated data from one db to another" }
-sub group       { "db" }
+sub group       { "database" }
 
 sub cli_args { "" }
 

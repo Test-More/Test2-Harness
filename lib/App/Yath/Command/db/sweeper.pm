@@ -10,7 +10,7 @@ use App::Yath::Schema::Util qw/schema_config_from_settings/;
 
 sub summary     { "Sweep a database" }
 sub description { "Deletes old data from a database" }
-sub group       { "db" }
+sub group       { "database" }
 
 use parent 'App::Yath::Command';
 use Getopt::Yath;

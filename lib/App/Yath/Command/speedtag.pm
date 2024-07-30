@@ -47,7 +47,7 @@ option_group {group => 'speedtag', category => 'Speedtag Options'} => sub {
     );
 };
 
-sub group { 'log' }
+sub group { 'log parsing' }
 
 sub summary { "Tag tests with duration (short medium long) using a source log" }
 

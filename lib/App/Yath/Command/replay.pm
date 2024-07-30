@@ -39,7 +39,7 @@ sub load_plugins       { 0 }
 sub load_resources     { 0 }
 sub args_include_tests { 0 }
 
-sub group { 'log' }
+sub group { 'log parsing' }
 
 sub summary { "Replay a test run from an event log" }
 

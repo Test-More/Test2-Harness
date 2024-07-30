@@ -15,11 +15,13 @@ include_options(
     'App::Yath::Options::WebClient',
 );
 
-sub summary { "Show a list of recent runs on a yath server" }
+sub summary { "Show a list of recent runs on a yath web server" }
+
+sub group { ['web client', 'history'] }
 
 sub description {
     return <<"    EOT";
-This command will find the last several runs from a yath server
+This command will find the last several runs from a yath web server
     EOT
 }
 

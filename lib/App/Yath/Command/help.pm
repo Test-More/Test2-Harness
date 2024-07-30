@@ -10,6 +10,7 @@ use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/<_command_info_hash/;
 
 use Test2::Harness::Util qw/find_libraries mod2file/;
+use App::Yath::Util qw/paged_print/;
 use List::Util();
 use File::Spec();
 
@@ -30,6 +31,7 @@ option_group {group => 'help', category => "Help Options"} => sub {
         type => 'Count',
         short => 'v',
         description => "Show commands that would normally be omitted such as internal and deprecated",
+        initialize => 0,
     );
 };
 
@@ -68,7 +70,11 @@ sub command_info_hash {
         next if $internal && !$hs->verbose;
         my $name = $lib->name;
         my $group = $internal ? 'z  internal only' : $lib->group;
-        push @{$commands{$group}} => [$name, $lib->summary];
+        $group = [$group] unless ref $group;
+        for my $g (@$group) {
+            next if $g =~ m/deprecated/ && !$hs->verbose;
+            push @{$commands{$g}} => [$name, $hs->verbose ? ($lib) : (), $lib->summary];
+        }
     }
 
     return $self->{+_COMMAND_INFO_HASH} = \%commands;
@@ -82,25 +88,37 @@ sub run {
 
     my $script = File::Spec->abs2rel($self->settings->yath->script // $0);
 
-    print "\nUsage: $script help [-v] [COMMAND]\n";
+    paged_print(
+        "\nUsage: $script help [-v] [COMMAND]\n",
+        $self->command_table,
+    );
+
+    return 0;
+}
+
+sub command_table {
+    my $self = shift;
 
     my $command_info_hash = $self->command_info_hash;
-    for my $group (sort keys %$command_info_hash) {
+
+    my $out = "";
+
+    for my $group (reverse sort keys %$command_info_hash) {
         my $set = $command_info_hash->{$group};
 
         my $printable = $group;
         $printable =~ s/^\s+//g;
         $printable =~ s/\s+$//g;
-        $printable =~ s/^z\s+//g;
-        print "\n\n" . ucfirst($printable) . " commands:\n";
+        $printable =~ s/^z\s+//ig;
+        $printable =~ s/^z-//ig;
+        $out .= "\n" . uc($printable) . " COMMANDS:\n";
 
-        my $table = Term::Table->new(
-            rows   => [ sort { $a->[0] cmp $b->[0] } @$set ],
-        );
-        print map { "$_\n" } $table->render;
+        my $rows = [ sort { $a->[0] cmp $b->[0] } @$set ];
+        my $table = Term::Table->new(rows => $rows);
+        $out .= join '' =>  map { "$_\n" } $table->render;
     }
 
-    return 0;
+    return $out;
 }
 
 sub command_help {
@@ -113,7 +131,7 @@ sub command_help {
 
     my $app = App::Yath->new(command => $cmd_class, settings => $self->settings);
     $app->options->include($cmd_class->options);
-    print $app->cli_help();
+    paged_print($app->cli_help());
 
     return 0;
 }

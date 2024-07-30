@@ -15,7 +15,6 @@ sub args_include_tests { 0 }
 sub internal_only      { 0 }
 sub summary            { "No Summary" }
 sub description        { "No Description" }
-sub group              { "Z-FIXME" }
 
 sub cli_args { }
 sub cli_dot  { }
@@ -24,7 +23,24 @@ sub load_plugins   { 0 }
 sub load_resources { 0 }
 sub load_renderers { 0 }
 
-sub name { $_[0] =~ m/([^:=]+)(?:=.*)?$/; $1 || $_[0] }
+sub name {
+    my $class_or_self = shift;
+    my $class = ref($class_or_self) || $class_or_self;
+
+    if ($class =~ m/^App::Yath::Command::(.+)$/) {
+        my $out = $1;
+        $out =~ s/::/-/g;
+        return $out;
+    }
+
+    return $class;
+}
+
+sub group {
+    my $name = $_[0]->name;
+    return if $_[0]->name =~ m/^(.+)-/;
+    return 'Z-FIXME';
+}
 
 sub set_dot_args { croak "set_dot_args is not implemented" }
 

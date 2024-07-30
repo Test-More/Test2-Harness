@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 
 sub summary     { "Start an importer process that will wait for uploaded logs to import" }
 sub description { "Start an importer process that will wait for uploaded logs to import" }
-sub group       { "db" }
+sub group       { "database" }
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
 

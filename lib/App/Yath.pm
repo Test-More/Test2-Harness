@@ -31,6 +31,7 @@ use Getopt::Yath::Term qw/USE_COLOR color fit_to_width/;
 
 use App::Yath::Options::Yath;
 use App::Yath::ConfigFile;
+use App::Yath::Util qw/paged_print/;
 
 use Carp qw/croak/;
 use Time::HiRes qw/time/;
@@ -81,10 +82,13 @@ sub cli_help {
     my $cmd_class = $self->command;
 
     $options //= $self->options;
-    my $cmd = $cmd_class ? $cmd_class->name : 'COMMAND';
 
     my $help = "";
+
+    my $no_cmd = 0;
+    my $cmd = "COMMAND";
     if ($cmd_class) {
+        $cmd = $cmd_class->name // 'COMMAND';
         if ($self->use_color) {
             $help .= "\n";
             $help .= color('bold white') . "Command selected: ";
@@ -97,10 +101,15 @@ sub cli_help {
         else {
             $help .= "\nCommand selected: $cmd ($cmd_class)\n";
         }
-
-        my @desc = map { fit_to_width(" ", $_) } split /\n\n/, $cmd_class->description;
-        $help .= join "\n\n" => @desc;
     }
+    else {
+        $no_cmd = 1;
+        require App::Yath::Command::help;
+        $cmd_class //= 'App::Yath::Command::help';
+    }
+
+    my @desc = map { fit_to_width(" ", $_) } split /\n\n/, $cmd_class->description;
+    $help .= join "\n\n" => @desc;
 
     my $opts = $options->docs('cli', groups => {':{' => '}:'}, group => $params{group}, settings => $settings, color => $self->use_color);
 
@@ -147,7 +156,15 @@ sub cli_help {
         );
     }
 
-    return "${usage}\n${help}\n${opts}\n${end}";
+    my $cmds = "";
+    if ($no_cmd) {
+        $settings->create_group('help');
+        $settings->help->create_option(verbose => 0);
+        my $it = App::Yath::Command::help->new(settings => $settings);
+        $cmds = $it->command_table;
+    }
+
+    return "${usage}\n${help}\n${opts}\n${end}\n${cmds}";
 }
 
 sub _strip_color {
@@ -631,7 +648,7 @@ sub handle_debug {
         $cli_params{group} = $group if $group && $group ne '1';
         $help .= $self->cli_help($yath_options, %cli_params);
 
-        $self->page_out($help);
+        paged_print($help);
 
         $exit //= 0;
     }
@@ -653,7 +670,7 @@ sub handle_debug {
             param => '--show-opts=GROUP_NAME',
         ) if $group eq '1';
 
-        $self->page_out($out);
+        paged_print($out);
 
         $exit //= 0;
     }
@@ -661,21 +678,6 @@ sub handle_debug {
     if (defined $exit) {
         remove_tree($settings->workspace->workdir, {safe => 1, keep_root => 0}) if $settings->check_group('workspace');
         exit($exit);
-    }
-}
-
-sub page_out {
-    my $self = shift;
-    my ($out) = @_;
-
-    if (eval { require IO::Pager; 1 }) {
-        local $SIG{PIPE} = sub {};
-        local $ENV{LESS} = "-r";
-        my $pager = IO::Pager->new(*STDOUT);
-        $pager->print($out);
-    }
-    else {
-        print $out;
     }
 }
 

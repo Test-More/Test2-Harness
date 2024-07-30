@@ -9,7 +9,7 @@ our $VERSION = '2.000000';
 use Test2::Harness::Util qw/open_file/;
 use App::Yath::Util qw/is_generated_test_pl/;
 
-sub group { 'zinit' }
+sub group { 'z-init' }
 
 sub summary { "Create/update test.pl to run tests via Test2::Harness" }
 

@@ -7,6 +7,7 @@ our $VERSION = '2.000000';
 use parent 'App::Yath::Command::recent';
 use Test2::Harness::Util::HashBase;
 
+sub group   { ["database", 'history'] }
 sub summary { "Show a list of recent runs in the database" }
 
 sub description {

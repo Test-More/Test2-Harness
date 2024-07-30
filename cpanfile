@@ -75,7 +75,6 @@ requires "Test2::Tools::Compare" => "0.000163";
 requires "Test2::Tools::Tiny" => "1.302199";
 requires "Test2::Util" => "1.302199";
 requires "Test2::Util::Facets2Legacy" => "1.302199";
-requires "Test2::Util::Table" => "1.302199";
 requires "Test2::Util::Times" => "0.000163";
 requires "Test2::Util::UUID" => "0.002008";
 requires "Test2::V0" => "0.000163";

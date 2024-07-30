@@ -91,7 +91,7 @@ sub expanded_coverage {
     $self->coverage->search(
         $query,
         {
-            order_by   => [qw/test_file_id source_file_id source_sub_id/],
+            order_by   => [qw/me.test_file_id me.source_file_id me.source_sub_id/],
             join       => [qw/test_file source_file source_sub coverage_manager/],
             '+columns' => {
                 test_file   => 'test_file.filename',

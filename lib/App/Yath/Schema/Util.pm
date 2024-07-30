@@ -13,7 +13,7 @@ use Importer Importer => 'import';
 our @EXPORT = qw{
     schema_config_from_settings
 
-    qdb_driver          dbd_driver
+    qdb_driver          dbd_driver       format_driver
     find_job            find_job_and_try
     format_duration     parse_duration
 
@@ -47,6 +47,15 @@ my %SCHEMA_TO_DBD_DRIVER = (
     pg         => 'DBD::Pg',
 );
 
+my %SCHEMA_TO_FORMAT_DRIVER = (
+    sqlite     => 'DateTime::Format::SQLite',
+    mariadb    => 'DateTime::Format::MySQL',
+    mysql      => 'DateTime::Format::MySQL',
+    percona    => 'DateTime::Format::MySQL',
+    postgresql => 'DateTime::Format::Pg',
+    pg         => 'DateTime::Format::Pg',
+);
+
 my %BAD_ST_NAME = (
     '__ANON__'            => 1,
     'unnamed'             => 1,
@@ -68,6 +77,11 @@ sub qdb_driver {
 sub dbd_driver {
     my $base = base_name(@_);
     return $SCHEMA_TO_DBD_DRIVER{$base};
+}
+
+sub format_driver {
+    my $base = base_name(@_);
+    return $SCHEMA_TO_FORMAT_DRIVER{$base};
 }
 
 sub schema_config_from_settings {

@@ -116,7 +116,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-29 09:21:14
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-30 16:23:06
 __PACKAGE__->inflate_column('parent_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });
 __PACKAGE__->inflate_column('event_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });
 __PACKAGE__->inflate_column('trace_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });

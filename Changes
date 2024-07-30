@@ -1,5 +1,24 @@
 {{$NEXT}}
 
+    - NOTE: Backwords incompatible changes, plugins and renderers may need rewriting
+    - IPC system overhaul
+    - Getopt::Yath has been extracted to its own set of modules
+    - Use of Atomic::Pipe to convey data between test and harness
+    - Each test has its own auditor process instead of a single auditor bottleneck
+    - Yath web server (formerly Yath-UI) has been merged in
+    - Yath database (formerly part of Yath-UI) has been merged in
+    - Revamped renderer system
+    - JUnit renderer has been merged in
+    - Database rendering happens in a non-blocking way
+    - Several other systems have been overhauled as a result of the IPC rewrite
+    - More consistent flags
+    - Automatic paging for help (With IO::Pager)
+    - Better command list and organization
+    - Ability to restrict help output to specific sections as needed --help=SECTION
+    - Ability to --show-opts=SECTION to see what your settings do
+    - Support for PostgreSQL, SQLite, MySQL (generic), Percona, and MariaDB
+    - Many other fixes and overhauls
+
 1.000155  2023-10-03 08:53:01-07:00 America/Los_Angeles
 
     - Fix sleep that is often interrupted

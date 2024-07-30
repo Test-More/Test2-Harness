@@ -4,7 +4,6 @@ use warnings;
 
 our $VERSION = '2.000000';
 
-use Import::Into();
 use Atomic::Pipe();
 use constant();
 
@@ -36,7 +35,8 @@ sub import {
             *{"$caller\::$sub"} = $val;
         }
         else {
-            constant->import::into($caller, $sub, $val);
+            my $v = $val;
+            *{"$caller\::$sub"} = sub() { $v };
         }
     }
 }

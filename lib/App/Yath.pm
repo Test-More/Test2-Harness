@@ -700,7 +700,7 @@ Extended Version Info
                 eval { require(mod2file($_)); 1 }
                     ? [$_ => $_->VERSION // 'N/A']
                     : [$_ => 'N/A']
-            } qw/Test2::API Test2::Suite Test::Builder Test2::Harness App::Yath::Server/,
+            } qw/Test2::API Test2::Suite Test::Builder Test2::Harness/,
         ),
         (
             map {

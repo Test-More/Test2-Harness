@@ -13,7 +13,6 @@ use Time::HiRes qw/time sleep/;
 use MIME::Base64 qw/decode_base64/;
 use Scalar::Util qw/weaken/;
 
-use Clone qw/clone/;
 use Carp qw/croak confess/;
 
 use Test2::Util::Facets2Legacy qw/causes_fail/;
@@ -36,7 +35,6 @@ use Test2::Harness::Util::HashBase qw{
     <config
 
     <running
-    <clone_facets
     <disconnect_retry
 
     <mode
@@ -109,8 +107,6 @@ sub init {
     confess "No project id?!?" unless $self->{+PROJECT_ID};
 
     $self->{+ID_CACHE} = {};
-
-    $self->{+CLONE_FACETS} //= 1;
 
     $self->{+RESOURCE_ORD} //= 1;
 
@@ -256,7 +252,6 @@ sub _process_first_line {
             user_id      => $u->user_id,
             project      => $p,
             project_id   => $p->project_id,
-            clone_facets => 0,
         );
 
         $self->start();
@@ -1153,7 +1148,6 @@ sub process_event {
     croak "Too many arguments" if @oops;
 
     $f //= $event->{facet_data} // die "No facet data!";
-    $f = clone($f) if $self->{+CLONE_FACETS};
 
     my $harness = $f->{harness} or die "No 'harness' facet!";
 

@@ -7,7 +7,6 @@ our $VERSION = '2.000000';
 use Carp qw/croak confess longmess/;
 use Errno qw/ESRCH EINTR/;
 use Config qw/%Config/;
-use IPC::Open3 qw/open3/;
 use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
 use Data::Dumper qw/Dumper/;

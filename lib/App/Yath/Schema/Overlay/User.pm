@@ -7,6 +7,8 @@ use utf8;
 use strict;
 use warnings;
 
+use Class::C3;
+
 use Carp qw/confess/;
 confess "You must first load a App::Yath::Schema::NAME module"
     unless $App::Yath::Schema::LOADED;

@@ -10,3 +10,4 @@ requires "Linux::Inotify2"          => "0";
 requires "System::Info"             => "0.064";
 requires "Term::ANSIColor"          => "4.06";
 requires "Term::ReadLine"           => "0";
+requires "Module::Pluggable"        => "5.2";

@@ -28,7 +28,7 @@ sub run_fields {
             user  => $ENV{USER},
             shell => $ENV{SHELL},
             term  => $ENV{TERM},
-            (map { m/(YATH|T2|TEST2|HARNESS|PERL|CPAN|TAP)/i ? ($_ => $ENV{$_}) : ()} grep keys %ENV),
+            (map { m/(YATH|T2|TEST2|HARNESS|PERL|CPAN|TAP)/i ? ($_ => $ENV{$_}) : ()} keys %ENV),
         },
 
         ipc => {

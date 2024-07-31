@@ -1,6 +1,12 @@
 # modules required for Continuous Integrations
 #   outside of Dist::Zilla vision
 
-requires "Devel::AssertOS" => "0";
-requires "Module::Install" => "1.21";
-
+requires "Devel::AssertOS"          => "0";
+requires "Module::Install"          => "1.21";
+requires "Class::XSAccessor"        => "1.19";
+requires "DBD::SQLite"              => "0";
+requires "DateTime::Format::SQLite" => "0";
+requires "Linux::Inotify2"          => "0";
+requires "System::Info"             => "0.064";
+requires "Term::ANSIColor"          => "4.06";
+requires "Term::ReadLine"           => "0";

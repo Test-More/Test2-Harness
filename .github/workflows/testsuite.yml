@@ -28,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: perl -V
+      - run: cpm install -g --show-build-log-on-failure Module::Install
       - name: install dependencies from cpanfile.ci
         uses: perl-actions/install-with-cpm@stable
         with:
@@ -83,6 +84,7 @@ jobs:
       - run: perl -V
       - name: Install Dependencies
         run: |
+          cpm install -g --show-build-log-on-failure Module::Install
           cpm install -g --show-build-log-on-failure --cpanfile cpanfile.ci
           cpm install -g --show-build-log-on-failure --cpanfile cpanfile
       - run: perl Makefile.PL

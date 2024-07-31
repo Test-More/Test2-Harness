@@ -2,4 +2,5 @@
 #   outside of Dist::Zilla vision
 
 requires "Devel::AssertOS" => "0";
+requires "Module::Install" => "1.21";
 

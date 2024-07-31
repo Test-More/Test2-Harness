@@ -1,3 +1,4 @@
+use Test2::Require::AuthorTesting;
 use Test2::Plugin::IsolateTemp;
 use Test2::V0;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;

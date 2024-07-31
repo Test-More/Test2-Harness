@@ -4,7 +4,7 @@ use warnings;
 
 use parent 'App::Yath::Theme';
 
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 use Test2::Harness::Util::HashBase;
 

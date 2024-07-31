@@ -2,7 +2,7 @@ package Test2::Harness::UI::Schema::Result::Coverage;
 use strict;
 use warnings;
 
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 use Test2::Harness::Util::Deprecated(replaced => 'App::Yath::Schema::Overlay::Coverage');
 

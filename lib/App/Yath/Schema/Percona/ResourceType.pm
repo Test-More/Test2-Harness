@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::Percona::ResourceType;
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 package
     App::Yath::Schema::Result::ResourceType;

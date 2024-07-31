@@ -1,5 +1,5 @@
 package App::Yath::Schema::Overlay::Reporting;
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 package
     App::Yath::Schema::Result::Reporting;

@@ -2,7 +2,7 @@ package App::Yath::Server::Response;
 use strict;
 use warnings;
 
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 use Carp qw/croak/;
 use Time::HiRes qw/sleep time/;

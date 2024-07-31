@@ -2,7 +2,7 @@ package Test2::Harness::Util::Deprecated::Tester;
 use strict;
 use warnings;
 
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 use Test2::Harness::Util qw/mod2file/;
 use Test2::Tools::Basic qw/ok done_testing/;

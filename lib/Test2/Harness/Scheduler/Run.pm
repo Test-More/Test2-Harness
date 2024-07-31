@@ -2,7 +2,7 @@ package Test2::Harness::Scheduler::Run;
 use strict;
 use warnings;
 
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 use parent 'Test2::Harness::Run';
 

@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Job;
 use strict;
 use warnings;
 
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);

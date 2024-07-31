@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::MySQL::Job;
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 package
     App::Yath::Schema::Result::Job;

@@ -2,7 +2,7 @@ package App::Yath::Server::Util::Errors;
 use strict;
 use warnings;
 
-our $VERSION = '2.000001';
+our $VERSION = '2.000002';
 
 use Scalar::Util qw/blessed/;
 

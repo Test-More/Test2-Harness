@@ -126,11 +126,13 @@ sub post_process {
         my $cover_class = $cover->class // 'Test2::Plugin::Cover';
 
         eval { require(mod2file($cover_class)); 1 } or die "Could not enable file coverage, could not load '$cover_class': $@";
+        $tests->option(load_import => {}) unless $tests->load_import;
         push @{$tests->load_import->{'@'}} => $cover_class;
         $tests->load_import->{$cover_class} = [];
 
         if ($settings->check_group('runner')) {
             my $runner = $settings->runner;
+            $runner->option(preload_early => {}) unless $runner->preload_early;
             unshift @{$runner->preload_early->{'@'}} => $cover_class;
             $runner->preload_early->{$cover_class} = [disabled => 1];
         }

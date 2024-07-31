@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix 5.14
+    - Bump min perl to 5.14
+
 2.000001  2024-07-31 09:30:20-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Fix some test issues

@@ -484,6 +484,7 @@ sub process_args {
         for my $set (['yath', 'plugins', 'App::Yath::Plugin'], ['renderer', 'classes', 'App::Yath::Renderer'], ['resource', 'classes', 'App::Yath::Resource']) {
             my ($group, $field, $type) = @$set;
             next unless $module->isa($type);
+            $settings->$group->option($field => {}) unless $settings->$group->$field;
             my $args = $settings->$group->$field->{$module} //= [];
             next unless $module->can('args_from_settings');
             push @$args => $module->args_from_settings(settings => $settings, args => $args, group => $group, field => $field, type => $type);

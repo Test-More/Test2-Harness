@@ -1,5 +1,7 @@
 use Test2::V0;
 
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
+
 use File::Temp qw/tempdir/;
 use File::Spec;
 

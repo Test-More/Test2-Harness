@@ -11,6 +11,8 @@ use Test2::Harness::Util qw/clean_path/;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
+
 use Test2::Util qw/CAN_REALLY_FORK/;
 skip_all "Cannot fork, skipping preload test"
     if $ENV{T2_NO_FORK} || !CAN_REALLY_FORK;

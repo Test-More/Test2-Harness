@@ -1,6 +1,8 @@
 use Test2::V0;
 
 use App::Yath::Tester qw/yath/;
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
+
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;

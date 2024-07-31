@@ -7,6 +7,8 @@ my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
+
 my $project = "asgadfgds";
 
 run_tests('test');

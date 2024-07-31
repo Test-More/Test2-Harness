@@ -4,6 +4,8 @@ use Test2::V0;
 use App::Yath::Tester qw/yath/;
 use File::Temp qw/tempdir/;
 use Test2::Harness::Util::File::JSONL;
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
+
 
 use Test2::Harness::Util::JSON qw/decode_json/;
 

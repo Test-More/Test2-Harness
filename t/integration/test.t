@@ -9,6 +9,8 @@ use Test2::Harness::Util::File::JSONL;
 
 use Test2::Harness::Util       qw/clean_path/;
 use Test2::Harness::Util::JSON qw/decode_json/;
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
+
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;

@@ -6,6 +6,8 @@ use File::Spec;
 use App::Yath::Tester qw/yath/;
 use App::Yath::Util qw/find_yath/;
 
+use Test2::Plugin::Immiscible(sub { $ENV{TEST2_HARNESS_ACTIVE} ? 1 : 0 });
+
 yath(
     command => 'help',
     args    => [],

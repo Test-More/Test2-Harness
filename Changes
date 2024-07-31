@@ -2,6 +2,9 @@
 
     - Fix 5.14
     - Bump min perl to 5.14
+    - Fix issue where perl libs would not carry down effectively
+    - Remove DBIx::Class::UUIDColumns as a dep
+    - Remove DBIx::Class::Tree::AdjacencyList as a dep
 
 2.000001  2024-07-31 09:30:20-07:00 America/Los_Angeles (TRIAL RELEASE)
 

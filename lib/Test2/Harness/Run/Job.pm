@@ -65,7 +65,7 @@ sub launch_command {
 
     if ($self->test_file->non_perl) {
         $run_file = "./$run_file" unless $run_file =~ m{^[/\.]};
-        return ([$run_file, @{$ts->args // []}], {PERL5LIB => join $Config{path_sep} => @includes, $ENV{PERL5LIB}});
+        return ([$run_file, @{$ts->args // []}], {PERL5LIB => join($Config{path_sep} => @includes, $ENV{PERL5LIB})});
     }
 
     @includes = map { "-I$_" } @includes;
@@ -92,7 +92,7 @@ sub launch_command {
         @loads,
         $run_file,
         @{$self->args // []},
-        @{$ts->args // []},
+        @{$ts->args   // []},
     ];
 }
 

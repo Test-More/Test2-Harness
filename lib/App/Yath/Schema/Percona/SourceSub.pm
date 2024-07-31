@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "UUIDColumns",
 );
 __PACKAGE__->table("source_subs");
 __PACKAGE__->add_columns(
@@ -35,7 +34,7 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-30 16:23:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-31 16:25:14
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

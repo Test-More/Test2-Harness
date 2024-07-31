@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "UUIDColumns",
 );
 __PACKAGE__->table("coverage");
 __PACKAGE__->add_columns(
@@ -98,7 +97,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-30 16:23:01
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-31 16:25:09
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

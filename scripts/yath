@@ -4,6 +4,11 @@ use warnings;
 
 BEGIN {
     return if $^C;
+
+    my %SEEN = map { $_ => 1 } @INC;
+    push @INC => grep { !$SEEN{$_}++ } split /;/, $ENV{T2_HARNESS_INCLUDES} if $ENV{T2_HARNESS_INCLUDES};
+    $ENV{T2_HARNESS_INCLUDES} = join ';' => @INC;
+
     require App::Yath::Script;
     App::Yath::Script::goto_alt_script('yath', __FILE__, './scripts/yath');
 }

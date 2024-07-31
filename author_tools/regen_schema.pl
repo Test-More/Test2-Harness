@@ -120,8 +120,6 @@ for my $schema_file (@todo) {
                     "InflateColumn::DateTime",
                     "InflateColumn::Serializer",
                     "InflateColumn::Serializer::JSON",
-                    #"Tree::AdjacencyList",
-                    "UUIDColumns",
                 ],
             },
             [$db->connect_string('harness_ui'), '', ''],

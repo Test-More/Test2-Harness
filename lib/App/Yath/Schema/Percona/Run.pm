@@ -16,7 +16,6 @@ __PACKAGE__->load_components(
   "InflateColumn::DateTime",
   "InflateColumn::Serializer",
   "InflateColumn::Serializer::JSON",
-  "UUIDColumns",
 );
 __PACKAGE__->table("runs");
 __PACKAGE__->add_columns(
@@ -145,7 +144,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-30 16:23:06
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-31 16:25:14
 __PACKAGE__->inflate_column('run_uuid' => { inflate => \&App::Yath::Schema::Util::format_uuid_for_app, deflate => \&App::Yath::Schema::Util::format_uuid_for_db });
 # DO NOT MODIFY ANY PART OF THIS FILE
 

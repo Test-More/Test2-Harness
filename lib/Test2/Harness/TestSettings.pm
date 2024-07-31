@@ -6,6 +6,7 @@ our $VERSION = '2.000002';
 
 use Scalar::Util qw/blessed/;
 use Test2::Util qw/IS_WIN32/;
+use Test2::Harness::Util qw/clean_path/;
 
 use File::Spec;
 
@@ -118,6 +119,7 @@ sub includes {
         );
     }
 
+    push @$out => split /;/, $ENV{T2_HARNESS_INCLUDES} if $ENV{T2_HARNESS_INCLUDES};
     push @$out => '.' if $self->{+UNSAFE_INC};
 
     if (my $ch_dir = $self->{+CH_DIR}) {

@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Fix some test issues
+    - Include some needed modules when loading schema
+
 2.000000  2024-07-30 15:00:13-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - NOTE: Backwords incompatible changes, plugins and renderers may need rewriting

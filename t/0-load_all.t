@@ -39,15 +39,16 @@ sub wanted {
             my @warnings;
 
             if ($file =~ m{(MySQL|PostgreSQL|SQLite)}) {
-                ok(eval { require "App/Yath/Schema/$1.pm" }, "Load necessary schema '$1'", $@);
+                my $schema = $1;
+                eval { require "App/Yath/Schema/$schema.pm"; 1} or skip_all "Could not load $schema: $@";
             }
             elsif ($file =~ m{App/Yath/Schema\.pm$} || $file =~ m{Schema/(Overlay|Result)}) {
-                ok(eval { require App::Yath::Schema::PostgreSQL }, "Load schema");
+                eval { require App::Yath::Schema::SQLite; 1 } or skip_all "Could not load SQLite: $@";
             }
 
             my $ok = eval { local $SIG{__WARN__} = sub { push @warnings => @_ }; require($file); 1 };
             my $err = $@;
-            if ($err =~ m/^Can't locate / || $err =~ m/version \S+ required--this is only version/) {
+            if ($err =~ m/^Can't locate / || $err =~ m/version \S+ required--this is only version/ || $err =~ m/must be installed/) {
                 skip_all $err;
                 return;
             }

@@ -30,7 +30,7 @@ __PACKAGE__->set_primary_key("config_id");
 __PACKAGE__->add_unique_constraint("setting_unique", ["setting"]);
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-31 16:25:17
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-08-01 07:08:23
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

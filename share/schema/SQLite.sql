@@ -91,7 +91,7 @@ CREATE TABLE api_keys (
     value       UUID            NOT NULL,
     user_id     INTEGER         NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
 
-    status      TEXT            NOT NULL CHECK(status IN ('active', 'disabled', 'revoked')),
+    status      TEXT            NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'disabled', 'revoked')),
 
     name        VARCHAR(128)    NOT NULL,
 

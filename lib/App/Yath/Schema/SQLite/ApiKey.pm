@@ -26,7 +26,7 @@ __PACKAGE__->add_columns(
   "user_id",
   { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
   "status",
-  { data_type => "text", is_nullable => 0 },
+  { data_type => "text", default_value => "active", is_nullable => 0 },
   "name",
   { data_type => "varchar", is_nullable => 0, size => 128 },
 );
@@ -40,7 +40,7 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-07-31 16:25:17
+# Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-08-01 07:08:23
 # DO NOT MODIFY ANY PART OF THIS FILE
 
 1;

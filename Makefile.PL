@@ -28,7 +28,7 @@ $File::ShareDir::Install::INCLUDE_DOTDIRS = 1;
 install_share dist => "share";
 
 my %WriteMakefileArgs = (
-  "ABSTRACT" => "FIXME",
+  "ABSTRACT" => "AKA 'yath' Yet Another Test Harness, A modern alternative to prove.",
   "AUTHOR" => "Chad Granum <exodist\@cpan.org>",
   "CONFIGURE_REQUIRES" => {
     "ExtUtils::MakeMaker" => 0,

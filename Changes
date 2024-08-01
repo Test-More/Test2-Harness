@@ -4,6 +4,7 @@
     - Fix SQLite schema issue with api_keys
     - Better POD for generated Schema packages
     - Fix percona DB support, and add more db tests
+    - Basic docs in Test2::Harness module
 
 2.000002  2024-07-31 17:01:46-07:00 America/Los_Angeles (TRIAL RELEASE)
 

@@ -2,7 +2,7 @@ package Getopt::Yath::Option::Bool;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use parent 'Getopt::Yath::Option';
 use Test2::Harness::Util::HashBase;

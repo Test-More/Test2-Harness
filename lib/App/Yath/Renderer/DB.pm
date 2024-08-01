@@ -2,7 +2,7 @@ package App::Yath::Renderer::DB;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 # This module does not directly use these, but the process it spawns does. Load
 # them here anyway so that any errors can be reported before we fork.

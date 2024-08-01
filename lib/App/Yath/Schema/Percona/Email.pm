@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::Percona::Email;
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 package
     App::Yath::Schema::Result::Email;

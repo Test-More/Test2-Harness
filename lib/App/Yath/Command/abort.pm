@@ -2,7 +2,7 @@ package App::Yath::Command::abort;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use App::Yath::Client;
 

@@ -2,7 +2,7 @@ package Test2::Harness::UI::Schema::Result::SessionHost;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Test2::Harness::Util::Deprecated(replaced => 'App::Yath::Schema::Overlay::SessionHost');
 

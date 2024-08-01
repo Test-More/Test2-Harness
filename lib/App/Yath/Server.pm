@@ -16,7 +16,7 @@ use App::Yath::Schema::Importer;
 use App::Yath::Util qw/share_file/;
 use App::Yath::Schema::Util qw/qdb_driver dbd_driver/;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Test2::Harness::Util::HashBase qw{
     <schema_config

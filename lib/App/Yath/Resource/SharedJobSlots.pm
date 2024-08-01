@@ -2,7 +2,7 @@ package App::Yath::Resource::SharedJobSlots;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use YAML::Tiny;
 use File::Spec;

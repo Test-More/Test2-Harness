@@ -4,7 +4,7 @@ use warnings;
 
 use Test2::API qw/context/;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 our $LOCK;
 

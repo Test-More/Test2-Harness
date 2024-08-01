@@ -4,7 +4,7 @@ use warnings;
 
 use Term::Table();
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw/<_command_info_hash/;

@@ -2,7 +2,7 @@ package App::Yath::Plugin;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use parent 'Test2::Harness::Plugin';
 use Test2::Harness::Util::HashBase qw{

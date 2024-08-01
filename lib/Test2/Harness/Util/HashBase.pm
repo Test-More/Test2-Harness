@@ -2,7 +2,7 @@ package Test2::Harness::Util::HashBase;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 #################################################################
 #                                                               #

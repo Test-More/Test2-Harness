@@ -2,7 +2,7 @@ package App::Yath::Renderer::Default::Composer;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Scalar::Util qw/blessed/;
 use List::Util qw/first/;

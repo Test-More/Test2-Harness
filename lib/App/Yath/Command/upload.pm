@@ -2,7 +2,7 @@ package App::Yath::Command::upload;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Test2::Harness::Util::Deprecated(
     replaced => ['App::Yath::Command::client::publish', 'App::Yath::Command::db::publish'],

@@ -1,5 +1,5 @@
 package App::Yath::Schema::Overlay::LogFile;
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 package
     App::Yath::Schema::Result::LogFile;

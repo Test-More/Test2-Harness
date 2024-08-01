@@ -12,7 +12,7 @@ use App::Yath::Schema::ImportModes qw/is_mode/;
 
 use Test2::Harness::Util qw/clean_path/;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw{

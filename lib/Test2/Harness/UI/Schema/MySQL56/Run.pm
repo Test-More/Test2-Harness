@@ -2,7 +2,7 @@ package Test2::Harness::UI::Schema::MySQL56::Run;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Test2::Harness::Util::Deprecated;
 

@@ -2,7 +2,7 @@ package App::Yath::Renderer;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Carp qw/croak carp/;
 

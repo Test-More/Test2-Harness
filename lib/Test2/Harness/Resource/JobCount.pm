@@ -2,7 +2,7 @@ package Test2::Harness::Resource::JobCount;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Carp qw/croak/;
 use List::Util qw/max min/;

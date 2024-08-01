@@ -2,7 +2,7 @@ package App::Yath::Resource::SharedJobSlots::State;
 use strict;
 use warnings;
 
-our $VERSION = '2.000002';
+our $VERSION = '2.000003';
 
 use Test2::Harness::Util::File::JSON;
 use Scalar::Util qw/weaken/;

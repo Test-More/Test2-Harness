@@ -19,7 +19,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Util::UUID - Deprecated
+Test2::Harness::Util::UUID - DEPRECATED
 
 =head1 DESCRIPTION
 

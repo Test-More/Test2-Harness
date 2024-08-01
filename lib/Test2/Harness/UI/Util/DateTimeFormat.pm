@@ -18,7 +18,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Util::DateTimeFormat - Deprecated.
+Test2::Harness::UI::Util::DateTimeFormat - DEPRECATED
 
 =head1 DESCRIPTION
 

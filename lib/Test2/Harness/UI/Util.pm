@@ -18,7 +18,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Util - Deprecated.
+Test2::Harness::UI::Util - DEPRECATED
 
 =head1 DESCRIPTION
 

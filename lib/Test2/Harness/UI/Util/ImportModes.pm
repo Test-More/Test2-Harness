@@ -18,7 +18,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::UI::Util::ImportModes - Deprecated.
+Test2::Harness::UI::Util::ImportModes - DEPRECATED
 
 =head1 DESCRIPTION
 

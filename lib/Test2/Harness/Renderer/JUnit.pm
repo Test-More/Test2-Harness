@@ -18,7 +18,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Renderer::JUnit - Deprecated, use L<App::Yath::Renderer::JUnit>.
+Test2::Harness::Renderer::JUnit - DEPRECATED
 
 =head1 SOURCE
 

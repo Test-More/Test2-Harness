@@ -398,21 +398,23 @@ sub process_args {
 
     my ($cmd, $cmd_class);
 
-    if (my $stop = $state->{stop}) {
+    my $stop = $state->{stop};
+    my $remains = $state->{remains} //= [];
+    if ($stop || !@$remains) {
         my @cmd_args;
 
-        my $is_do   = $stop eq 'do';
-        my $is_stop = (!$is_do)   && ($stop eq '--' || $stop eq '::');
-        my $is_cmd  = (!$is_stop) && ($self->check_command($stop))[0];
-        my $is_path = -e $stop    && !($is_do || $is_stop || $is_cmd);
+        my $is_do   = $stop       && $stop eq 'do';
+        my $is_stop = (!$is_do)   && $stop    && ($stop eq '--' || $stop eq '::');
+        my $is_cmd  = (!$is_stop) && $stop    && ($self->check_command($stop))[0];
+        my $is_path = $stop       && -e $stop && !($is_do || $is_stop || $is_cmd);
 
         @cmd_args = @{$state->{skipped}};
 
-        if ($is_do || $is_stop || $is_path) {
+        if ($is_do || $is_stop || $is_path || !$is_cmd) {
             print STDERR "\n** Note: You should use the `do`, `run` or `test` commands, relying on the default behavior when no command is specified is discouraged. **\n\n"
                 unless $is_do;
 
-            push @cmd_args => $stop unless $is_do;
+            push @cmd_args => $stop if $stop && !$is_do && !$is_cmd;
 
             require App::Yath::Options::IPC;
             my $ipc_state = App::Yath::Options::IPC->options->process_args(
@@ -422,7 +424,8 @@ sub process_args {
                 skip_non_opts => 1,
             );
 
-            if (App::Yath::Options::IPC->find_persistent_runner($ipc_state->{settings})) {
+            require App::Yath::IPC;
+            if (App::Yath::IPC->new(settings => $ipc_state->{settings})->find()) {
                 print "Found a persistent runner, defaulting to the 'run' command.\n";
                 $cmd = 'run';
             }

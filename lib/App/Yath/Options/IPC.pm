@@ -79,8 +79,6 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
 
 __END__
 
-__END__
-
 =pod
 
 =encoding UTF-8

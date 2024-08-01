@@ -5,7 +5,7 @@
 use strict;
 use warnings;
 
-use 5.010000;
+use 5.014000;
 use ExtUtils::MakeMaker;
 
 use Config qw/%Config/;
@@ -41,7 +41,7 @@ my %WriteMakefileArgs = (
     "scripts/yath"
   ],
   "LICENSE" => "perl",
-  "MIN_PERL_VERSION" => "5.010000",
+  "MIN_PERL_VERSION" => "5.014000",
   "NAME" => "Test2::Harness",
   "PREREQ_PM" => {
     "Atomic::Pipe" => "0.021",
@@ -58,8 +58,6 @@ my %WriteMakefileArgs = (
     "DBIx::Class::InflateColumn::DateTime" => 0,
     "DBIx::Class::InflateColumn::Serializer" => 0,
     "DBIx::Class::InflateColumn::Serializer::JSON" => 0,
-    "DBIx::Class::Tree::AdjacencyList" => 0,
-    "DBIx::Class::UUIDColumns" => 0,
     "DBIx::QuickDB" => 0,
     "Data::Dumper" => 0,
     "DateTime" => 0,
@@ -170,8 +168,6 @@ my %FallbackPrereqs = (
   "DBIx::Class::InflateColumn::DateTime" => 0,
   "DBIx::Class::InflateColumn::Serializer" => 0,
   "DBIx::Class::InflateColumn::Serializer::JSON" => 0,
-  "DBIx::Class::Tree::AdjacencyList" => 0,
-  "DBIx::Class::UUIDColumns" => 0,
   "DBIx::QuickDB" => 0,
   "Data::Dumper" => 0,
   "DateTime" => 0,

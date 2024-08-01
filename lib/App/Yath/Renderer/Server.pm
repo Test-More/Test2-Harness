@@ -25,6 +25,12 @@ include_options(
 sub start {
     my $self = shift;
 
+    # Do not use the yath workdir for these things, it will get cleaned up too soon.
+    my ($dir) = grep { $_ && -d $_ } '/dev/shm', $ENV{SYSTEM_TMPDIR}, '/tmp', $ENV{TMP_DIR}, $ENV{TMPDIR};
+    local $ENV{TMPDIR} = $dir;
+    local $ENV{TMP_DIR} = $dir;
+    local $ENV{TEMP_DIR} = $dir;
+
     my $settings  = $self->settings;
     my $ephemeral = $settings->server->ephemeral;
     unless ($ephemeral) {
@@ -41,7 +47,7 @@ sub start {
         email       => undef,
     };
 
-    my $server = $self->{+SERVER} //= App::Yath::Server->new(schema_config => $config, $settings->webserver->all, qdb_params => $qdb_params);
+    my $server = $self->{+SERVER} = App::Yath::Server->new(schema_config => $config, $settings->webserver->all, qdb_params => $qdb_params);
     $server->start_server(no_importers => 1);
 
     sleep 1;

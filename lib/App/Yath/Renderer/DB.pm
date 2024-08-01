@@ -86,7 +86,12 @@ sub start {
 
     App::Yath::Schema::Util::schema_config_from_settings($self->{+SETTINGS});
 
-    my ($dir) = grep { $_ && -d $_ } '/dev/shm', '/tmp', $ENV{SYSTEM_TMPDIR};
+    # Do not use the yath workdir for these things, it will get cleaned up too soon.
+    my ($dir) = grep { $_ && -d $_ } '/dev/shm', $ENV{SYSTEM_TMPDIR}, '/tmp', $ENV{TMP_DIR}, $ENV{TMPDIR};
+    local $ENV{TMPDIR} = $dir;
+    local $ENV{TMP_DIR} = $dir;
+    local $ENV{TEMP_DIR} = $dir;
+
     my ($r, $w) = Consumer::NonBlock->pair(batch_size => 1000, $dir ? (base_dir => $dir) : ());
 
     $self->{+WRITER} = $w;

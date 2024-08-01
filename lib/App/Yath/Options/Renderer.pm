@@ -116,6 +116,12 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
 
         description => 'Show run fields. (Default: off, unless -vv)',
     );
+
+    option server => (
+        type => 'Auto',
+        autofill => 'Auto',
+        description => "Start an ephemeral yath database and web server to view results",
+    );
 };
 
 sub init_renderers {
@@ -134,6 +140,13 @@ sub init_renderers {
     my $term = -t STDOUT;
 
     $r_classes->{'App::Yath::Renderer::ResetTerm'} //= [] if $term;
+
+    if (my $eph = $rs->server) {
+        $r_classes->{'App::Yath::Renderer::Server'} //= [];
+        if ($eph ne 'Auto' && $settings->check_group('server')) {
+            $settings->server->option(ephemeral => $eph);
+        }
+    }
 
     my @renderers;
     for my $class (sort { $a->weight <=> $b->weight || $a cmp $b } map { require(mod2file($_)); $_ } keys %$r_classes) {

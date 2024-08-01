@@ -9,13 +9,23 @@ unshift @INC => './lib';
 
 my $base = './lib/App/Yath/Command';
 
-opendir(my $dh, $base) or die "Could not open command dir!";
+my @DIRS = ($base);
 
 my @bad;
-for my $file (readdir($dh)) {
-    eval { handle_file($file); 1 } and next;
-    warn $@;
-    push @bad => "$base/$file";
+while(my $dir = shift @DIRS) {
+    opendir(my $dh, $dir) or die "Could not open '$dir': $!";
+
+    for my $file (readdir($dh)) {
+        next if $file =~ m/^\./;
+        if (-d "$dir/$file") {
+            push @DIRS => "$dir/$file";
+            next;
+        }
+
+        eval { handle_file($dir, $file); 1 } and next;
+        warn $@;
+        push @bad => "$dir/$file";
+    }
 }
 
 exit(0) unless @bad;
@@ -26,10 +36,10 @@ print STDERR "\n";
 exit 1;
 
 sub handle_file {
-    my $file = shift;
+    my ($dir, $file) = @_;
 
     return unless $file =~ m/\.pm$/;
-    my $fq = "$base/$file";
+    my $fq = "$dir/$file";
 
     my $rel = $fq;
     $rel =~ s{^\./lib/}{}g;
@@ -38,12 +48,13 @@ sub handle_file {
     $pkg =~ s{/}{::}g;
     $pkg =~ s{\.pm$}{}g;
 
+    my $pod;
     unless (eval { require $rel; 1 }) {
-        return if $@ =~ m/deprecated/i;
-        die $@;
+        die $@ unless $@ =~ m/deprecated/i;
+        $pod = generate_deprecated_pod($pkg);
     }
 
-    my $pod = generate_pod($pkg) or die "Could not get usage POD!";
+    $pod //= generate_pod($pkg) or die "Could not get usage POD!";
 
     $pod = join "\n\n" => start(), $pod, ending();
 
@@ -92,6 +103,19 @@ sub generate_pod {
 
         push @out => ("=head2 OPTIONS", $opts);
     }
+
+    return join("\n\n" => grep { $_ } @out);
+}
+
+sub generate_deprecated_pod {
+    my $class = shift;
+
+    my @out = (
+        "=head1 NAME",
+        "$class - DEPRECATED",
+        "=head1 DESCRIPTION",
+        "DEPRECATED",
+    );
 
     return join("\n\n" => grep { $_ } @out);
 }

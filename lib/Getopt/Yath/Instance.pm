@@ -498,7 +498,7 @@ sub docs {
     $params{color} //= USE_COLOR() && -t STDOUT;
 
     my $settings = $params{settings};
-    my $opts = [ grep { $_->is_applicable($self, $settings) } @{$self->options // []} ];
+    my $opts = [ grep { $params{applicable} || $_->is_applicable($self, $settings) } @{$self->options // []} ];
 
     $format //= "UNDEFINED";
     my $fset = $DOC_FORMATS{$format} or croak "Invalid documentation format '$format'";

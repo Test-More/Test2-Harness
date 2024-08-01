@@ -11,7 +11,7 @@ unshift @INC => './lib';
 require App::Yath::Command;
 
 my @bad;
-for my $base ('./lib/App/Yath/Options', './lib/App/Yath/Plugin') {
+for my $base ('./lib/App/Yath/Options', './lib/App/Yath/Plugin', './lib/App/Yath/Renderer') {
     opendir(my $dh, $base) or die "Could not open dir '$base': $!";
 
     for my $file (readdir($dh)) {
@@ -48,7 +48,7 @@ sub handle_file {
 
     return unless $pkg->can('options');
     my $options = $pkg->options or next;
-    my $opts    = $options->docs('pod', groups => {':{' => '}:'}, head => 2);
+    my $opts    = $options->docs('pod', applicable => 1, groups => {':{' => '}:'}, head => 2) or die "Could not generate options docs for $pkg - $base/$file";
     my $pod     = "=head1 PROVIDED OPTIONS\n\n$opts\n";
 
     my $found;

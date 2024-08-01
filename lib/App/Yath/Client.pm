@@ -11,7 +11,7 @@ use App::Yath::IPC;
 
 use Test2::Harness::IPC::Protocol;
 
-use parent 'Test2::Harness';
+use parent 'Test2::Harness::Client';
 use Test2::Harness::Util::HashBase qw{
     <settings
     <ipc <connect

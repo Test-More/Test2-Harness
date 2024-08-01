@@ -6,7 +6,7 @@ use feature 'state';
 
 use App::Yath::Server;
 
-use App::Yath::Schema::Util qw/schema_config_from_settings/;
+use App::Yath::Schema::Util qw/schema_config_from_settings format_uuid_for_db/;
 use Test2::Util::UUID qw/gen_uuid/;
 use App::Yath::Schema::ImportModes qw/is_mode/;
 
@@ -97,7 +97,7 @@ sub run {
     $server->start_server;
 
     my $user = $config->schema->resultset('User')->create({username => $ENV{USER}, password => 'password', realname => $ENV{USER}});
-    my $api_key = $config->schema->resultset('ApiKey')->create({value => gen_uuid, user_id => $user->user_id, name => "ephemeral"});
+    my $api_key = $config->schema->resultset('ApiKey')->create({value => format_uuid_for_db(gen_uuid()), user_id => $user->user_id, name => "ephemeral"});
     $ENV{YATH_API_KEY} = $api_key->value;
 
     my $done = 0;
@@ -179,7 +179,7 @@ sub load_file {
     state $user = $config->schema->resultset('User')->find_or_create({username => 'root', password => 'root', realname => 'root'});
 
     my $run = $config->schema->resultset('Run')->create({
-        run_uuid   => gen_uuid,
+        run_uuid   => format_uuid_for_db(gen_uuid()),
         user_id    => $user->user_id,
         mode       => $mode,
         status     => 'pending',

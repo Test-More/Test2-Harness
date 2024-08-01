@@ -565,7 +565,7 @@ sub get_job_try {
     $self->retry_on_disconnect(
         "vivify job try" => sub {
             $result = $self->schema->resultset('JobTry')->update_or_create({
-                job_try_uuid => gen_uuid(),
+                job_try_uuid => format_uuid_for_db(gen_uuid()),
                 job_id       => $job->{job_id},
                 job_try_ord  => $try_ord,
             });

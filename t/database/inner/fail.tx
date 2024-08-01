@@ -1,0 +1,7 @@
+use Test2::V0;
+
+subtest fail => sub {
+    ok(0, "fail");
+};
+
+done_testing();

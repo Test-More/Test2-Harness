@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+2.000003  2024-08-01 17:05:41-07:00 America/Los_Angeles (TRIAL RELEASE)
+
     - Fix automatic POD generation for commands and options
     - Fix SQLite schema issue with api_keys
     - Better POD for generated Schema packages

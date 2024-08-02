@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::User;
 use strict;
 use warnings;
 
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 use Text::Xslate();
 use App::Yath::Util qw/share_dir/;

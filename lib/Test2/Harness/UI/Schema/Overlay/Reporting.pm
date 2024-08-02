@@ -2,7 +2,7 @@ package Test2::Harness::UI::Schema::Result::Reporting;
 use strict;
 use warnings;
 
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 use Test2::Harness::Util::Deprecated(replaced => 'App::Yath::Schema::Overlay::Reporting');
 

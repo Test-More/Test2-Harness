@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::MySQL::Permission;
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 package
     App::Yath::Schema::Result::Permission;

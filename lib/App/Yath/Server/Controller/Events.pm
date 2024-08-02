@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Events;
 use strict;
 use warnings;
 
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 use List::Util qw/max/;
 use App::Yath::Server::Response qw/resp error/;

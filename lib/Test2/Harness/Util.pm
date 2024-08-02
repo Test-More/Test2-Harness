@@ -9,7 +9,7 @@ use Test2::Util qw/try_sig_mask do_rename/;
 
 use File::Spec;
 
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 use Importer Importer => 'import';
 

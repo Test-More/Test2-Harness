@@ -2,7 +2,7 @@ package Getopt::Yath::Option::PathList;
 use strict;
 use warnings;
 
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 use parent 'Getopt::Yath::Option::List';
 use Test2::Harness::Util::HashBase;

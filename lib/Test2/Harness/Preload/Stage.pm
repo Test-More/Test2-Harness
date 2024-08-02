@@ -2,7 +2,7 @@ package Test2::Harness::Preload::Stage;
 use strict;
 use warnings;
 
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 use Carp qw/croak/;
 use Test2::Harness::Util qw/clean_path/;

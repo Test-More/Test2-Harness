@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::Percona::JobTryField;
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 package
     App::Yath::Schema::Result::JobTryField;

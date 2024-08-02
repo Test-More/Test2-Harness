@@ -2,7 +2,7 @@ package App::Yath::Schema::ResultSet;
 use strict;
 use warnings;
 
-our $VERSION = '2.000003';
+our $VERSION = '2.000004';
 
 use parent 'DBIx::Class::ResultSet';
 

@@ -9,6 +9,7 @@ BEGIN {
     return if $^C;
 
     package App::Yath::Script;
+    our $VERSION = '1.000156';
 
     my $ORIG_TMP;
     my $ORIG_TMP_PERMS;

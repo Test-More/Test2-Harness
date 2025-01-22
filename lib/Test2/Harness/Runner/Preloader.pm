@@ -36,6 +36,7 @@ use Test2::Harness::Util::HashBase(
         <blacklist
 
         <monitored
+        <last_update
     },
 
     '<monitor', # This means watch for changes, restart stage if any found
@@ -546,6 +547,10 @@ sub check {
     return 1 if $self->{+CHANGED};
 
     return 0 unless $self->{+MONITOR};
+
+    # Do not check for changes more often than 1 second (This is used in a loop that needs to be more often than once a second)
+    return 0 if $self->{+LAST_UPDATE} && 1 > (time - $self->{+LAST_UPDATE});
+    $self->{+LAST_UPDATE} = time;
 
     my $dtrace = $self->dtrace;
     $dtrace->start if $self->{+RELOAD};

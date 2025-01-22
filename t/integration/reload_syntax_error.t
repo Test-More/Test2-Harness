@@ -43,7 +43,7 @@ sub touch {
     my ($inject) = @_;
     my $path = "$tmpdir/Preload/Flux.pm";
     note "Touching $path...";
-    sleep 2;
+    sleep 1;
 
     open(my $fh, '>', $path) or die $!;
 
@@ -60,6 +60,8 @@ $inject
     EOT
 
     close($fh);
+
+    sleep 2;
 }
 
 touch('$Preload::Flux::VAR = "initial";');

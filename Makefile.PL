@@ -10,7 +10,7 @@ use ExtUtils::MakeMaker;
 
 use Config qw/%Config/;
 die "OS unsupported\nTest2-Harness currently only works on systems that support true forking.\n"
-    unless $Config{d_fork};
+    unless $Config{d_fork} or $ENV{T2_NO_FORK};
 if ($ENV{AUTOMATED_TESTING}) {
     my $is_njh = 0;
     $is_njh ||= -d '/export/home/njh';

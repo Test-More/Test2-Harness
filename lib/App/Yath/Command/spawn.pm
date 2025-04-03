@@ -180,10 +180,12 @@ sub run {
             sleep 0.2;
         }
     }
+    close($wfh);
 
     $self->clear_sig_handlers();
 
     my $exit = read_line($fh) // die "Could not get exit code";
+    close($fh);
     $exit = parse_exit($exit);
     if ($exit->{sig}) {
         print STDERR "Terminated with signal: $exit->{sig}.\n";

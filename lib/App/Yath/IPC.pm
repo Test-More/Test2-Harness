@@ -6,6 +6,7 @@ our $VERSION = '2.000004';
 
 use Carp qw/croak confess/;
 use File::Path qw/make_path/;
+use Digest::SHA qw/sha1_hex/;
 use Sys::Hostname qw/hostname/;
 
 use Test2::Harness::Util qw/mod2file clean_path fqmod/;
@@ -18,7 +19,7 @@ use Test2::Harness::Util::HashBase qw{
     <settings
     <fixme
 
-    +dirs
+    +dir
     +ipcs
     +start
     +gen_ipc
@@ -32,27 +33,24 @@ sub init {
     croak "'settings' is a required attribute" unless $self->{+SETTINGS};
 }
 
-sub dirs {
+sub dir {
     my $self = shift;
 
-    return $self->{+DIRS} if $self->{+DIRS};
+    return $self->{+DIR} if $self->{+DIR};
 
     my $settings = $self->{+SETTINGS};
 
     my $ipc_dir = $settings->ipc->dir;
-    return $self->{+DIRS} = [$ipc_dir] if $ipc_dir;
+    return $self->{+DIR} = $ipc_dir if $ipc_dir;
 
-    my @stat = stat($settings->yath->base_dir);
+    my $base = clean_path($settings->yath->base_dir);
+    my $sha = sha1_hex($base);
 
-    my %search = (
-        base => File::Spec->catdir($settings->yath->base_dir, '.yath-ipc', hostname()),
-        temp => File::Spec->catdir(File::Spec->tmpdir(), join('-' => 'yath-ipc', $ENV{USER}, @stat[0, 1])),
-    );
+    $ipc_dir = File::Spec->catdir($settings->yath->orig_tmp, "yath-ipc-$ENV{USER}-$sha");
 
-    my @dirs = grep { -e $_ ? -w $_ : make_path($_) } map { $search{$_} // die "'$_' is not a valid ipc dir to check.\n" } @{$settings->ipc->dir_order // ['base', 'temp']};
-    die "Could not find any writable IPC directories.\n" unless @dirs;
+    make_path($ipc_dir) unless -e $ipc_dir;
 
-    return $self->{+DIRS} = \@dirs;
+    return $self->{+DIR} = $ipc_dir;
 }
 
 sub ipcs {
@@ -76,7 +74,7 @@ sub _find_ipcs {
     my $self = shift;
 
     my $settings = $self->settings;
-    my $dirs     = $self->dirs;
+    my $dir      = $self->dir;
 
     my $pre = $settings->ipc->prefix;
 
@@ -84,33 +82,31 @@ sub _find_ipcs {
 
     my $regex = $self->parse_ipc_regex();
 
-    for my $dir (@$dirs) {
-        opendir(my $dh, $dir) or next;
-        for my $file (readdir($dh)) {
-            next unless $file =~ $regex;
-            my $full = File::Spec->catfile($dir, $file);
-            my %ipc  = $self->parse_ipc_file($full);
+    opendir(my $dh, $dir) or die "Could not open dir '$dir'";
+    for my $file (readdir($dh)) {
+        next unless $file =~ $regex;
+        my $full = File::Spec->catfile($dir, $file);
+        my %ipc  = $self->parse_ipc_file($full);
 
-            if (my $err = $ipc{error}) {
-                warn "Skipping '$full': $@";
+        if (my $err = $ipc{error}) {
+            warn "Skipping '$full': $@";
+            next;
+        }
+
+        # This will be empty if the file could not be parsed
+        my $type = $ipc{type} or next;
+
+        if (my $pid = $ipc{peer_pid}) {
+            unless (pid_is_running($pid)) {
+                print "Detected stale runner file: $full\n Deleting...\n";
+                unlink($full);
                 next;
             }
-
-            # This will be empty if the file could not be parsed
-            my $type = $ipc{type} or next;
-
-            if (my $pid = $ipc{peer_pid}) {
-                unless (pid_is_running($pid)) {
-                    print "Detected stale runner file: $full\n Deleting...\n";
-                    unlink($full);
-                    next;
-                }
-            }
-
-            push @{$found{$type}} => \%ipc;
         }
-        closedir($dh);
+
+        push @{$found{$type}} => \%ipc;
     }
+    closedir($dh);
 
     return \%found;
 }
@@ -263,7 +259,7 @@ sub _generate_ipc {
     my $file = join "-" => ($pre, $daemon ? 'daemon' : 'one', $$, $pshort);
     $file .= ":${port}" if defined($port) && length($port);
 
-    my ($dir) = @{$self->dirs};
+    my $dir = $self->dir;
     my $full = clean_path(File::Spec->catfile($dir, $file));
 
     my $address = $settings->ipc->address // $prot->get_address($full);

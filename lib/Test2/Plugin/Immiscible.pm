@@ -21,7 +21,7 @@ sub import {
         if (-w '.') {
             if (open($LOCK, '>>', './.immiscible-test.lock')) {
                 require Fcntl;
-                if (flock($LOCK, Fcntl::LOCK_EX)) {
+                if (flock($LOCK, Fcntl::LOCK_EX())) {
                     $ctx->note("Immiscibility enforcement success.");
                 }
                 else {

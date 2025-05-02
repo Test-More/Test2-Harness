@@ -9,6 +9,14 @@ BEGIN {
     push @INC => grep { !$SEEN{$_}++ } split /;/, $ENV{T2_HARNESS_INCLUDES} if $ENV{T2_HARNESS_INCLUDES};
     $ENV{T2_HARNESS_INCLUDES} = join ';' => @INC;
 
+    unless ($ENV{PERL_HASH_SEED}) {
+        my @ltime = localtime;
+        my $seed = sprintf('%04d%02d%02d', 1900 + $ltime[5], 1 + $ltime[4], $ltime[3]);
+        print "PERL_HASH_SEED not set, setting to '$seed' for more reproducible results.\n";
+        $ENV{PERL_HASH_SEED} = $seed;
+        exec $^X, (map {('-I' => $_)} @INC), __FILE__, @ARGV;
+    }
+
     require App::Yath::Script;
     App::Yath::Script::goto_alt_script('yath', __FILE__, './scripts/yath');
 }

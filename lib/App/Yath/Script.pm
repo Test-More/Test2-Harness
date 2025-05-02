@@ -86,12 +86,13 @@ sub args_to_settings_data {
 
     my $base_dir;
     if ($base_file) {
-        my ($v, $d) = File::Spec->splitpath($base_file);
-        $base_dir = clean_path(File::Spec->catpath($v, $d));
+        my ($v, @d) = File::Spec->splitpath($base_file);
+        pop @d;
+        $base_dir = clean_path(File::Spec->catpath($v, @d));
     }
     elsif ($cwd) {
-        my ($v, $d) = File::Spec->splitpath($cwd);
-        $base_dir = clean_path(File::Spec->catpath($v, $d));
+        my ($v, @d) = File::Spec->splitpath($cwd);
+        $base_dir = clean_path(File::Spec->catpath($v, @d));
     }
 
     $ENV{SYSTEM_TMPDIR} = $orig_tmp;

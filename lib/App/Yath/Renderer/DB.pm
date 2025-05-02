@@ -73,13 +73,19 @@ option_post_process 1000 => sub {
         }
     }
 
-    if ($project) {
-        $settings->yath->project($project);
-    }
-    else {
-        die "Could not determine project, please specify with the --project option.\n";
-    }
+    $settings->yath->project($project) if $project;
 };
+
+
+sub init {
+    my $self = shift;
+
+    $self->SUPER::init();
+
+    die "Could not determine project, please specify with the --project option.\n"
+        unless $self->{+SETTINGS}->yath->project;
+
+}
 
 sub start {
     my $self = shift;

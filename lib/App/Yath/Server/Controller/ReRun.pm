@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::ReRun;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use App::Yath::Server::Response qw/resp error/;
 use Test2::Harness::Util::JSON qw/encode_json encode_pretty_json decode_json/;

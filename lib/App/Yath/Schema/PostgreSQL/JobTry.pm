@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::PostgreSQL::JobTry;
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 package
     App::Yath::Schema::Result::JobTry;

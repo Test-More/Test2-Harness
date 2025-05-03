@@ -2,7 +2,7 @@ package App::Yath::Server::Plack;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use Router::Simple;
 use DateTime;

@@ -2,7 +2,7 @@ package App::Yath::Command::recent;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use Term::Table;
 use Test2::Harness::Util::JSON qw/decode_json/;

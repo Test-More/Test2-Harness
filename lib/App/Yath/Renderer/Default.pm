@@ -2,7 +2,7 @@ package App::Yath::Renderer::Default;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use Getopt::Yath::Term qw/term_size USE_COLOR/;
 use App::Yath::Renderer::Default::Composer();

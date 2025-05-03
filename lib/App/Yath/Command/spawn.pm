@@ -2,7 +2,7 @@ package App::Yath::Command::spawn;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use Time::HiRes qw/sleep time/;
 use File::Temp qw/tempfile/;

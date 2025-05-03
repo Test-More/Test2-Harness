@@ -2,7 +2,7 @@ package App::Yath::Plugin::DB;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use App::Yath::Schema::Util qw/schema_config_from_settings/;
 use Test2::Harness::Util qw/mod2file/;

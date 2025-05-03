@@ -2,7 +2,7 @@ package App::Yath::Command::ui;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use Test2::Harness::Util::Deprecated(
     replaced => 'App::Yath::Command::server',

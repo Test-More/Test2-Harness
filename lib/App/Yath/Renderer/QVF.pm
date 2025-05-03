@@ -2,7 +2,7 @@ package App::Yath::Renderer::QVF;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use parent 'App::Yath::Renderer::Default';
 use Test2::Harness::Util::HashBase qw{

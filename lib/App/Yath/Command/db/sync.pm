@@ -2,7 +2,7 @@ package App::Yath::Command::db::sync;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use DBI;
 use App::Yath::Schema::Sync;

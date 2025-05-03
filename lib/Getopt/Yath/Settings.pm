@@ -2,7 +2,7 @@ package Getopt::Yath::Settings;
 use strict;
 use warnings;
 
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 use Carp();
 

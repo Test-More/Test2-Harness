@@ -1,5 +1,5 @@
 package App::Yath::Schema::Overlay::RunField;
-our $VERSION = '2.000004';
+our $VERSION = '2.000005';
 
 package
     App::Yath::Schema::Result::RunField;

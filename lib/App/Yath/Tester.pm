@@ -2,7 +2,7 @@ package App::Yath::Tester;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use Test2::API qw/context run_subtest/;
 use Test2::Tools::Compare qw/is/;

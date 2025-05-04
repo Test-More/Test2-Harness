@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::MariaDB::ResourceType;
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 package
     App::Yath::Schema::Result::ResourceType;

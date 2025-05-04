@@ -2,7 +2,7 @@ package Test2::Harness::Settings;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use Test2::Harness::Util::Deprecated(
     replaced => 'Getopt::Yath::Settings',

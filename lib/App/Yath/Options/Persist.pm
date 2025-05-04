@@ -2,7 +2,7 @@ package App::Yath::Options::Persist;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use Test2::Harness::Util::Deprecated(
     append => "This is now handled via flags on specific yath commands.",

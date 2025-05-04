@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Sweeper;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use App::Yath::Schema::Sweeper;
 use App::Yath::Server::Response qw/resp error/;

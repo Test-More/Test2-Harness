@@ -2,7 +2,7 @@ package Test2::Harness::Instance::Message;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;

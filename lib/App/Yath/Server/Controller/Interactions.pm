@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Interactions;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use DateTime;
 use Scalar::Util qw/blessed/;

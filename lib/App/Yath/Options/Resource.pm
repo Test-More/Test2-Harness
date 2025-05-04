@@ -2,7 +2,7 @@ package App::Yath::Options::Resource;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use Test2::Harness::Util qw/mod2file fqmod/;
 

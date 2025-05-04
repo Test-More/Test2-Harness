@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use feature 'state';
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use Getopt::Yath;
 include_options(

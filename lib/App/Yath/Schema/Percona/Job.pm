@@ -1,6 +1,6 @@
 use utf8;
 package App::Yath::Schema::Percona::Job;
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 package
     App::Yath::Schema::Result::Job;

@@ -2,7 +2,7 @@ package Test2::Harness::IPC::Protocol;
 use strict;
 use warnings;
 
-our $VERSION = '2.000005';
+our $VERSION = '2.000006';
 
 use Carp qw/confess croak/;
 use Scalar::Util qw/blessed/;

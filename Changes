@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Version bump to fix a botched trial release
+
 1.000156  2025-01-22 09:54:36-08:00 America/Los_Angeles
 
     - Poll for filesystem changes less often

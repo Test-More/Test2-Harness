@@ -2,7 +2,7 @@ package Test2::Formatter::Stream;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use IO::Handle;
 use Atomic::Pipe;

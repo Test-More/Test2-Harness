@@ -2,7 +2,7 @@ package Getopt::Yath::Option::Scalar;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use parent 'Getopt::Yath::Option';
 use Test2::Harness::Util::HashBase;

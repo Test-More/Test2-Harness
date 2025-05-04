@@ -12,7 +12,7 @@ our @CARP_NOT = (
 use Test2::Harness::Util qw/mod2file fqmod/;
 use Getopt::Yath::Term qw/USE_COLOR color/;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use Test2::Harness::Util::HashBase qw{
     <title

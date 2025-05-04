@@ -6,7 +6,7 @@ use Carp qw/confess/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use Test2::Harness::Util::HashBase qw{
     <run_id

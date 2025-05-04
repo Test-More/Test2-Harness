@@ -2,7 +2,7 @@ package App::Yath::Plugin::Cover;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use Test2::Harness::Util qw/clean_path mod2file fqmod/;
 use Test2::Harness::Util::JSON qw/encode_json stream_json_l/;

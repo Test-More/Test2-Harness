@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use utf8;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use DateTime;
 use Data::Dumper;

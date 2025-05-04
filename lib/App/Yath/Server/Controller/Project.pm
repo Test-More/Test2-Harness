@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Project;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use Time::Elapsed qw/elapsed/;
 use List::Util qw/sum/;

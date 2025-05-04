@@ -2,7 +2,7 @@ package Test2::Harness::Util::Deprecated;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use Carp qw/confess cluck carp/;
 

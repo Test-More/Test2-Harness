@@ -2,7 +2,7 @@ package TAP::Harness::Yath;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 BEGIN {
     require Test::Harness;

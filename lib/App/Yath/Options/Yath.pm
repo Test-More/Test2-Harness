@@ -2,7 +2,7 @@ package App::Yath::Options::Yath;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use Test2::Harness::Util qw/find_libraries mod2file fqmod/;
 use Test2::Harness::Util qw/find_in_updir clean_path/;

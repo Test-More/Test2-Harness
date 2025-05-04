@@ -2,7 +2,7 @@ package Test2::Harness::Reloader::Inotify2;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use Carp qw/croak/;
 use Linux::Inotify2 qw/IN_MODIFY IN_ATTRIB IN_DELETE_SELF IN_MOVE_SELF/;

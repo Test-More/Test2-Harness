@@ -2,7 +2,7 @@ package App::Yath::Server::Controller::Download;
 use strict;
 use warnings;
 
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 use List::Util qw/max/;
 use Text::Xslate(qw/mark_raw/);

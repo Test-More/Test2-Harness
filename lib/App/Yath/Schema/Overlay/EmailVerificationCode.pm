@@ -1,5 +1,5 @@
 package App::Yath::Schema::Overlay::EmailVerificationCode;
-our $VERSION = '2.000006';
+our $VERSION = '2.000007';
 
 package
     App::Yath::Schema::Result::EmailVerificationCode;

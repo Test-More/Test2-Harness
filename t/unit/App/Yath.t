@@ -146,7 +146,7 @@ subtest load_options => sub {
 
     $two->settings->harness->field(no_scan_plugins => 0);
 
-    warns { $options = $two->load_options() };
+    my @ignore = warns { $options = $two->load_options() };
     like(
         $options->included,
         {
@@ -168,7 +168,7 @@ subtest process_argv => sub {
         config => {fake => [qw/-Dbaz -z/], other => [qw/-noop/]},
     );
 
-    warns { is($one->process_argv(), $one->_argv, "remaining args are returned") };
+    my @ignore = warns { is($one->process_argv(), $one->_argv, "remaining args are returned") };
 
     is($one->command_class, 'App::Yath::Command::fake', "Set command class");
     is(
@@ -249,14 +249,14 @@ subtest command_from_argv => sub {
     $one->settings->harness->vivify_field('persist_file');
     $one->settings->harness->vivify_field('project');
     $one->settings->harness->vivify_field('persist_dir');
-    warns { is($one->_command_from_argv(), "replay", "Found 'replay' command because we got a log") };
+    my @ignore = warns { is($one->_command_from_argv(), "replay", "Found 'replay' command because we got a log") };
     is($one->_argv, ['-f', '--foo', 'foo.jsonl.bz2', '-b', '--bar'], "log was not removed from argv");
 
     $one = $CLASS->new(argv => ['-f', '--foo', __FILE__, '-b', '--bar']);
     $one->settings->harness->vivify_field('persist_file');
     $one->settings->harness->vivify_field('project');
     $one->settings->harness->vivify_field('persist_dir');
-    warns { is($one->_command_from_argv(), "test", "Found 'test' command because we got a path") };
+    my @ignore = warns { is($one->_command_from_argv(), "test", "Found 'test' command because we got a path") };
     is($one->_argv, ['-f', '--foo', __FILE__, '-b', '--bar'], "path was not removed");
 };
 

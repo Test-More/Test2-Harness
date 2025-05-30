@@ -1,5 +1,4 @@
 use Test2::V0;
-use Test::Exception;
 
 plan tests => 1;
 
@@ -11,6 +10,6 @@ sub checks_exit_code {
   }
 }
 
-lives_ok { checks_exit_code() } 'exit code OK';
+ok(lives { checks_exit_code() }, 'exit code OK');
 
 done_testing;

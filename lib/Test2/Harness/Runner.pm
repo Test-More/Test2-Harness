@@ -518,7 +518,7 @@ sub set_proc_exit {
             $timed_out = 1;
         }
 
-        if (($exit || $timed_out) && $proc->is_try < $proc->retry ) {
+        if (($exit || $timed_out) && $proc->is_try < ($proc->retry // 0) ) {
             $self->state->retry_task($task->{job_id});
             push @args => 'will-retry';
         }

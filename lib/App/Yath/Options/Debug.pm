@@ -201,6 +201,7 @@ sub _post_process_interactive {
         $SIG{PIPE} = sub { exit 1 };
 
         $SIG{CHLD} = sub {
+            local $?;
             my $res = waitpid($pid, 0);
             my $exit = ($? >> 8);
 

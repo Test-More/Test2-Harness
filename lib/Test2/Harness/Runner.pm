@@ -215,6 +215,7 @@ sub stop {
 
     # Time to get serious
     if (keys %{$self->{+PROCS}}) {
+        local $?;
         print STDERR "$$ $0 Some child processes are refusing to exit, sending KILL signal...\n";
         print("$$ $0 == $_ " . waitpid($_, WNOHANG) . "\n") for keys %{$self->{+PROCS}};
         $self->killall('KILL');

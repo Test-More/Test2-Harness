@@ -223,6 +223,7 @@ sub launch_spawn {
 
     my $pid = fork() // die $!;
     if ($pid) {
+        local $?;
         waitpid($pid, 0);
         return;
     }
@@ -242,6 +243,7 @@ sub launch_spawn {
             open(my $fh, '>>', $spawn->{task}->{ipcfile}) or die "Could not open pidfile: $!";
             print $fh "$$\n$pid\n" . fileno($wh) . "\n";
             $fh->flush();
+            local $?;
             waitpid($pid, 0);
             print $fh "$?\n";
             close($fh);

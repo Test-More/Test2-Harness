@@ -35,6 +35,8 @@ sub cover {
 sub yath {
     my %params = @_;
 
+    local $?;
+
     my $ctx = context();
 
     my $cmd = delete $params{cmd} // delete $params{command};

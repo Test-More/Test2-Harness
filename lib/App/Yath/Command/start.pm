@@ -174,6 +174,7 @@ sub run {
     my $err_fh = open_file($stderr, '<');
     my $out_fh = open_file($stdout, '<');
 
+    local $?;
     while (1) {
         my $out = waitpid($pid, WNOHANG);
         my $wstat = $?;

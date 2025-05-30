@@ -59,6 +59,7 @@ sub shellcall {
 
     my $pid = fork // die "Could not fork: $!";
     if ($pid) {
+        local $?;
         waitpid($pid, 0);
         return $?;
     }

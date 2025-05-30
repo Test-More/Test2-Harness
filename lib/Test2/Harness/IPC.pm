@@ -130,6 +130,8 @@ sub _bring_out_yer_dead {
     my $procs   = $self->{+PROCS}   //= {};
     my $waiting = $self->{+WAITING} //= {};
 
+    local $?;
+
     # Wait on any/all pids
     my $found = 0;
     while ((my $pid = waitpid(-1, WNOHANG)) > 0) {

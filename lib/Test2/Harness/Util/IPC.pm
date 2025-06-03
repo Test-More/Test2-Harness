@@ -7,6 +7,7 @@ our $VERSION = '1.000161';
 use Cwd qw/getcwd/;
 use Config qw/%Config/;
 use Test2::Util qw/CAN_REALLY_FORK/;
+use Test2::Harness::Util qw/untaint/;
 
 use Importer Importer => 'import';
 
@@ -80,6 +81,7 @@ sub _run_cmd_fork {
         $_->() for @{$params{run_in_child} // []};
     }
     %ENV = (%ENV, %{$params{env}}) if $params{env};
+    $_ = untaint($_) for values %ENV;
     setpgrp(0, 0) if USE_P_GROUPS && !$params{no_set_pgrp};
 
     $cmd = [$cmd->()] if ref($cmd) eq 'CODE';
@@ -108,7 +110,7 @@ sub _run_cmd_fork {
     swap_io(\*STDIN,  $stdin,  $die) if $stdin;
     open(STDIN, "<", "/dev/null") if !$stdin;
 
-    @$cmd = map { ref($_) eq 'CODE' ? $_->() : $_ } @$cmd;
+    @$cmd = map { untaint($_) } map { ref($_) eq 'CODE' ? $_->() : $_ } @$cmd;
 
     exec(@$cmd) or $die->("Failed to exec!");
 }

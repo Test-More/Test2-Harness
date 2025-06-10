@@ -257,6 +257,7 @@ sub finish {
     my ($filename) = reverse File::Spec->splitpath($log_file);
 
     my ($ok, $res, $data) = $this->_request(
+        $settings,
         'upload', {
             log_file => {
                 filename     => $filename,

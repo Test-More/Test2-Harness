@@ -101,7 +101,10 @@ sub schema_config_from_settings {
         my $file = mod2file($cmod);
         require $file;
 
-        return $cmod->yath_db_config(%$$db);
+        # Don't call it like %$$, that won't work.
+        # Either use %$db or $db->%*.
+        # The latter is clearer in most cases, so I picked that.
+        return $cmod->yath_db_config($db->%*);
     }
 
     my $dsn = $db->dsn;

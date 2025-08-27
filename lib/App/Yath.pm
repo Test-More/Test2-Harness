@@ -398,23 +398,26 @@ sub process_args {
 
     my ($cmd, $cmd_class);
 
+    # XXX Why is our "action" called "stop"? This doesn't make sense to me.
     my $stop = $state->{stop};
     my $remains = $state->{remains} //= [];
     if ($stop || !@$remains) {
         my @cmd_args;
 
-        my $is_do   = $stop       && $stop eq 'do';
-        my $is_stop = (!$is_do)   && $stop    && ($stop eq '--' || $stop eq '::');
-        my $is_cmd  = (!$is_stop) && $stop    && ($self->check_command($stop))[0];
-        my $is_path = $stop       && -e $stop && !($is_do || $is_stop || $is_cmd);
+        # XXX Minor optimization -- could use List::Util::first if already loaded
+        # XXX Also, WHY? We have check_command which can find this below?
+        my $is_common_action = $stop                && grep { $stop eq $_ } qw{do run test};
+        my $is_stop          = (!$is_common_action) && $stop    && ($stop eq '--' || $stop eq '::');
+        my $is_cmd           = (!$is_stop)          && $stop    && ($self->check_command($stop))[0];
+        my $is_path          = $stop                && -e $stop && !($is_common_action || $is_stop || $is_cmd);
 
         @cmd_args = @{$state->{skipped}};
 
-        if ($is_do || $is_stop || $is_path || !$is_cmd) {
+        if ( $is_common_action || $is_stop || $is_path || !$is_cmd ) {
             print STDERR "\n** Note: You should use the `do`, `run` or `test` commands, relying on the default behavior when no command is specified is discouraged. **\n\n"
-                unless $is_do;
+                unless $is_common_action;
 
-            push @cmd_args => $stop if $stop && !$is_do && !$is_cmd;
+            push @cmd_args => $stop if $stop && !$is_common_action && !$is_cmd;
 
             require App::Yath::Options::IPC;
             my $ipc_state = App::Yath::Options::IPC->options->process_args(

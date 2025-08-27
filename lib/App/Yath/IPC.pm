@@ -46,7 +46,8 @@ sub dir {
     my $base = clean_path($settings->yath->base_dir);
     my $sha = sha1_hex($base);
 
-    $ipc_dir = File::Spec->catdir($settings->yath->orig_tmp, "yath-ipc-$ENV{USER}-$sha");
+    # XXX orig_tmp doesn't exist. Just set it to something.
+    $ipc_dir = File::Spec->catdir('/tmp', "yath-ipc-$ENV{USER}-$sha");
 
     make_path($ipc_dir) unless -e $ipc_dir;
 

@@ -333,7 +333,7 @@ sub manage_tests {
         }
 
         # Kill pid if run is terminated and it has a pid
-        if ($job_data->{run}->halt && !$job_data->{killed}) {
+        if ( $job_data->{'run'} && $job_data->{run}->halt && !$job_data->{killed}) {
             next unless $job_data->{pid};
             CORE::kill('TERM', $job_data->{pid});
             $job_data->{killed} = 1;

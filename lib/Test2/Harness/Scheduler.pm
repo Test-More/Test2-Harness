@@ -307,6 +307,9 @@ sub abort {
         CORE::kill('TERM', $pid);
         $job->{killed} = 1;
     }
+
+    # Also just exit the entire process, as BAIL_OUT means you should exit
+    $self->terminate(1);
 }
 
 sub kill {

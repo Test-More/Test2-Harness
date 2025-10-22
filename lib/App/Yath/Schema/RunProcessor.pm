@@ -351,7 +351,10 @@ sub populate {
             my $err = $@;
             return 1 if $ok;
 
-            die $err unless $err =~ m/duplicate/i;
+            unless ( $err =~ m/duplicate/i ) {
+                warn $err; # DO NOT die here, it screws up the run reporting!
+                return 0;
+            }
 
             warn "\nDuplicate found:\n====\n$err\n====\n\nPopulating '$type' 1 at a time.\n";
             for my $item (@$data) {

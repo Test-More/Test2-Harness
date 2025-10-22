@@ -39,12 +39,35 @@ use Test2::Harness::Util::HashBase qw{
 sub trace     { $_[0]->{+FACET_DATA}->{trace} }
 sub set_trace { confess "'trace' is a read only attribute" }
 
+sub _scrub_facet_data {
+    my ($f) = @_;
+
+    # Scan for non-printing chars and scrub them if they aren't newlines.
+    if( exists($f->{'assert'}) && $f->{'assert'}{'details'} ) {
+        $f->{'assert'}{'details'} =~ s/[^\n[:print:]]//g;
+    }
+    if( exists($f->{'info'}) && ref $f->{'info'} eq 'ARRAY' ) {
+        @{ $_->{'details'} =~ s/[^\n[:print:]]//g for $f->{'info'} };
+    }
+    if( exists($f->{'trace'}) && ref $f->{'trace'}{'full_caller'} eq 'ARRAY' ) {
+        for ( @{ $f->{'trace'}{'full_caller'} } ) {
+            $_ =~ s/[^\n[:print:]]//g if length $_;
+        }
+    }
+    if( exists $f->{'meta'} && exists $f->{'meta'}{'Test::Builder'} && exists $f->{'meta'}{'Test::Builder'}{'name'} && length $f->{'meta'}{'Test::Builder'}{'name'} ) {
+        $f->{'meta'}{'Test::Builder'}{'name'} =~ s/[^\n[:print:]]//g;
+    }
+
+    return;
+}
+
 sub init {
     my $self = shift;
 
     $self->Test2::Event::init() if INIT_EVENT;
 
     my $data = $self->{+FACET_DATA} || confess "'facet_data' is a required attribute";
+    _scrub_facet_data($data);
 
     $self->{+JOB_ID} //= 0;
 

@@ -434,7 +434,8 @@ sub _pre_event {
 
             # Only info (stderr/stdout) should be peeked.
             next unless $fd->{info} && @{$fd->{info}};
-            $event->{facet_data}->{harness}->{peek} = 1;
+            $fd->{harness}{peek} = 1;
+            $_->{'details'} =~ s/[^\n[:print:]]//g for @{ $fd->{'info'} };
 
             my %keep = (harness => 1, info => 1, trace => 1, hubs => 1, from_tap => 1);
             delete $fd->{$_} for grep { !$keep{$_} } keys %$fd;
@@ -959,6 +960,7 @@ sub peek_event {
 
     if ($type eq 'peek') {
         $val = $self->decode_line($val) if $self->{+ENCODING};
+
         return if $val =~ m/[\n\r]+$/;
         return if $val eq $last_peek->[0];
 
@@ -1054,7 +1056,10 @@ sub decode_line {
 
     my $encoding = $self->{+ENCODING} or return $val;
 
-    return Encode::decode($encoding, $val);
+    my $decoded = Encode::decode($encoding, $val);
+
+    # Sanitize non-printing chars other than \n
+    return $decoded =~ s/[^\n[:print:]]//gr;
 }
 
 sub should_retry {

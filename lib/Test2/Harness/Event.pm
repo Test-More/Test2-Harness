@@ -8,6 +8,7 @@ use Carp qw/confess/;
 use List::Util qw/min/;
 use Time::HiRes qw/time/;
 use Test2::Harness::Util::JSON qw/encode_json/;
+use Test2::Harness::Util::Scrubber ();
 
 use Importer 'Test2::Util::Facets2Legacy' => ':ALL';
 
@@ -67,7 +68,7 @@ sub init {
     $self->Test2::Event::init() if INIT_EVENT;
 
     my $data = $self->{+FACET_DATA} || confess "'facet_data' is a required attribute";
-    _scrub_facet_data($data);
+    Test2::Harness::Util::Scrubber::scrub_facet_data($data);
 
     $self->{+JOB_ID} //= 0;
 

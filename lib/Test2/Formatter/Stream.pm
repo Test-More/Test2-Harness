@@ -13,6 +13,7 @@ use Test2::Util qw/get_tid/;
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util qw/hub_truth apply_encoding/;
+use Test2::Harness::Util::Scrubber ();
 
 use Test2::Harness::Collector::Child qw/send_event/;
 
@@ -95,33 +96,10 @@ if ($^C) {
     *write = sub { };
 }
 
-sub _scrub_facet_data {
-    my ($f) = @_;
-    return unless $INC{'Test2/Plugin/UTF8.pm'}; # Apparently this is actually a UTF8 bug. Remove this and t/integration/encoding.t fails!
-
-    # Scan for non-printing chars and scrub them if they aren't newlines.
-    if( exists($f->{'assert'}) && $f->{'assert'}{'details'} ) {
-        $f->{'assert'}{'details'} =~ s/[^\n[:print:]]//g;
-    }
-    if( exists($f->{'info'}) && ref $f->{'info'} eq 'ARRAY' ) {
-        @{ $_->{'details'} =~ s/[^\n[:print:]]//g for $f->{'info'} };
-    }
-    if( exists($f->{'trace'}) && ref $f->{'trace'}{'full_caller'} eq 'ARRAY' ) {
-        for ( @{ $f->{'trace'}{'full_caller'} } ) {
-            $_ =~ s/[^\n[:print:]]//g if length $_;
-        }
-    }
-    if( exists $f->{'meta'} && exists $f->{'meta'}{'Test::Builder'} && exists $f->{'meta'}{'Test::Builder'}{'name'} && length $f->{'meta'}{'Test::Builder'}{'name'} ) {
-        $f->{'meta'}{'Test::Builder'}{'name'} =~ s/[^\n[:print:]]//g;
-    }
-
-    return $f;
-}
-
 sub write {
     my ($self, $e, $num, $f) = @_;
     $f ||= $e->facet_data;
-    _scrub_facet_data($f);
+    Test2::Harness::Utils::Scrubber::scrub_facet_data($f);
 
     $self->_set_encoding($f->{control}->{encoding}) if $f->{control}->{encoding};
 

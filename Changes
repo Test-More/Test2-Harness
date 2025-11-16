@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Require Starman for a CLI based web server
+    - Removed old demo scripts
+
 2.000006  2025-05-04 03:45:10-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Fixing accidental non-trial release

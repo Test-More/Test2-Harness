@@ -22,6 +22,7 @@ our @EXPORT_OK = qw{
 
     encode_json_file
     decode_json_file
+    decode_json_no_null
 };
 
 my $json   = Cpanel::JSON::XS->new->utf8(1)->convert_blessed(1)->allow_nonref(1);
@@ -34,6 +35,23 @@ sub encode_pretty_json { my $out; eval { $out = $pretty->encode(@_); 1} // confe
 
 sub json_true  { Cpanel::JSON::XS->true }
 sub json_false { Cpanel::JSON::XS->false }
+
+# It is far easier to strip out null characters before decode.
+sub decode_json_no_null {
+    my $json = shift;
+
+    my $orig = $json;
+    $json =~ s/(?<!\\)((?:\\)(?:0|u0000))/\\$1/g;
+
+    my $out;
+    eval {
+        $out = decode_json($json);
+        1;
+    } and return $out;
+
+    print "Before: $orig\n--------\nAfter: $json\n";
+    exit(1);
+}
 
 sub stream_json_l {
     my ($path, $handler, %params) = @_;

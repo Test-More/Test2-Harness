@@ -50,6 +50,11 @@ sub is_mariadb {
     return 0;
 }
 
+sub can_store_null_character {
+    return 0 if is_postgresql();
+    return 1;
+}
+
 sub format_uuid_for_db {
     my $class = shift;
     my ($uuid) = @_;

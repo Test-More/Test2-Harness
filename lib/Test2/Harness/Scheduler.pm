@@ -308,8 +308,8 @@ sub abort {
         $job->{killed} = 1;
     }
 
-    # Also just exit the entire process, as BAIL_OUT means you should exit
-    $self->terminate(1);
+    # Terminate the runner unless we still have unhalted runs.
+    $self->terminate(1) unless first { !$_->halt } values %{$self->{+RUNS} // {}};
 }
 
 sub kill {

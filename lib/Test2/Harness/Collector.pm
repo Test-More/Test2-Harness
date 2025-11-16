@@ -543,7 +543,7 @@ sub setup_child_input {
     }
     else {
         my $input = $ts->input // "";
-        my ($fh, $file) = tempfile("input-$$-XXXX", TMPDIR => 1, UNLINK => 1);
+        my ($fh, $file) = tempfile("input-$$-XXXX", TMPDIR => 1, UNLINK => 0);
         print $fh $input;
         close($fh);
         open($fh, '<', $file) or die "Could not open '$file' for reading: $!";

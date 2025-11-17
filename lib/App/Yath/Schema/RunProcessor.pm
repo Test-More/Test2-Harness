@@ -3,6 +3,8 @@ use strict;
 use warnings;
 use utf8;
 
+use feature qw/state/;
+
 our $VERSION = '2.000007';
 
 use DateTime;
@@ -21,7 +23,13 @@ use App::Yath::Schema::Config;
 
 use App::Yath::Schema::Util qw/format_duration is_invalid_subtest_name schema_config_from_settings format_uuid_for_db/;
 use Test2::Util::UUID qw/gen_uuid/;
-use Test2::Harness::Util::JSON qw/encode_json decode_json/;
+
+use Test2::Harness::Util::JSON qw/encode_json decode_json_no_null decode_json/;
+
+sub do_decode_json {
+    state $DECODER //= App::Yath::Schema::can_store_null_character() ? \&decode_json : \&decode_json_no_null;
+    return $DECODER->(@_);
+}
 
 use App::Yath::Schema::ImportModes qw{
     %MODES
@@ -205,7 +213,7 @@ sub _process_first_line {
         $dbh->{mysql_auto_reconnect} = 1 if $App::Yath::Schema::LOADED =~ m/(mysql|percona|maraidb)/i;
     }
 
-    my $e = decode_json(scalar $line);
+    my $e = do_decode_json(scalar $line);
     my $f = $e->{facet_data};
 
     my $self;
@@ -283,7 +291,7 @@ sub _process_first_line {
             my ($line, $idx) = @_;
 
             return if eval {
-                my $e = decode_json($line);
+                my $e = do_decode_json($line);
                 $self->process_event($e, undef, $idx);
                 1;
             };

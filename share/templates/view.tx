@@ -1,6 +1,14 @@
-<script>stream_uri  = '<: $stream_uri :>';</script>
+<script>
+    stream_uri  = '<: $stream_uri :>';
+    page_num    = <: $page_num // 0 :>;
+</script>
 
 <div id="run_list">
+    <div id="run_pager">
+        <span id="run_pager_prev">&lt; Previous Page</span>
+        <span id="run_pager_page">Page: <: $page_num :></span>
+        <span id="run_pager_next">Next Page &gt;</span>
+    </div>
 </div>
 
 <div id="job_list">

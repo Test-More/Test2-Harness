@@ -43,6 +43,7 @@ t2hui.fetch = function(url, args, cb) {
     var running = false;
     var done = false;
     var iterate = async function(response) {
+        if (!response) return;
         if (running) return;
         running = true;
 

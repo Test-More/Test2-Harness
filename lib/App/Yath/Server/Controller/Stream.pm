@@ -21,7 +21,7 @@ use Test2::Harness::Util::HashBase qw{
     <try
 };
 
-use constant RUN_LIMIT => 100;
+use constant RUN_LIMIT => 50;
 
 sub title { 'Stream' }
 
@@ -102,11 +102,12 @@ sub stream_runs {
     my $run_id     = $route->{run_id};
     my $user_id    = $route->{user_id};
     my $project_id = $route->{project_id};
-
+    $params{page_num} = $route->{page_num} // 1;
 
     my ($project, $user, $run);
 
     if($run_id) {
+        delete $params{page_num};
         $params{id_field} = 'run_uuid' if looks_like_uuid($run_id);
         return $self->stream_single(%params, id => $run_id);
     }
@@ -239,6 +240,7 @@ sub stream_set {
     my $custom_query = $params{custom_query} // undef;
     my $id_field     = $params{id_field};
     my $limit        = $params{initial_limit};
+    my $page         = $params{page_num} // 1;
     my $method       = $params{method};
     my $ord_field    = $params{ord_field};
     my $parent       = $params{parent};
@@ -251,7 +253,9 @@ sub stream_set {
 
     my $order_by = $params{order_by} // $sort_field ? {$sort_dir => $sort_field} : croak "Must specify either 'order_by' or 'sort_field'";
 
-    my $items = $search_base->search($custom_query, {%$custom_opts, order_by => $order_by, $limit ? (rows => $limit) : ()});
+    my $offset = int($limit * ($page - 1));
+
+    my $items = $search_base->search($custom_query, {%$custom_opts, offset => $offset, order_by => $order_by, $limit ? (rows => $limit) : ()});
     my (@buffer, $buffer_item);
 
     my $start = time;
@@ -264,6 +268,7 @@ sub stream_set {
             return 0 if $items;
             return 0 if $track && keys %$incomplete;
 
+            return 1 if $page > 1;
             return 1 if $parent && $parent->complete;
 
             my $running = time - $start;

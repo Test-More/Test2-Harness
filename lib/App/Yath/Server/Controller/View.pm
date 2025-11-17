@@ -33,9 +33,11 @@ sub handle {
     my $run_id     = $route->{run_id};
     my $user_id    = $route->{user_id};
     my $project_id = $route->{project_id};
+    my $page_num   = $route->{page_num} // 1;
     my ($project, $user, $run);
 
     my @url;
+
     if ($project_id) {
         my $p_rs = $schema->resultset('Project');
         $project = eval { $p_rs->find({name => $project_id}) } // eval { $p_rs->find({project_id => $project_id}) } // die error(404 => 'Invalid Project');
@@ -50,6 +52,8 @@ sub handle {
     }
     elsif($run_id) {
         push @url => $run_id;
+
+        $page_num = undef;
 
         $run = eval { $schema->resultset('Run')->find_by_id_or_uuid($run_id) } or die error(404 => 'Invalid Run');
         $self->{+TITLE} .= ">" . $run->project->name;
@@ -76,6 +80,7 @@ sub handle {
             base_uri   => $req->base->as_string,
             user       => $req->user,
             stream_uri => $stream_uri,
+            page_num   => $page_num,
         }
     );
 

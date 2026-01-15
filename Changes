@@ -3,6 +3,7 @@
     - Require Starman for a CLI based web server
     - Removed old demo scripts
     - Pagination for runs!
+    - Break out Getopt::Yath
 
 2.000006  2025-05-04 03:45:10-07:00 America/Los_Angeles (TRIAL RELEASE)
 

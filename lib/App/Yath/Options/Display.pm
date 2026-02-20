@@ -34,6 +34,12 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
         default     => 0,
     );
 
+    option no_final_table => (
+        type        => 'b',
+        description => "When printing final results, don't use table-style display",
+        default     => 0,
+    );
+
     option show_times => (
         short       => 'T',
         description => 'Show the timing data for each job',

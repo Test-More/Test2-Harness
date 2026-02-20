@@ -675,6 +675,9 @@ sub render_final_data {
 
     return if $self->settings->display->quiet > 1;
 
+    return $self->_render_final_data_plainly($final_data)
+        if $self->settings->display->no_final_table;
+
     if (my $rows = $final_data->{retried}) {
         print "\nThe following jobs failed at least once:\n";
         print join "\n" => table(
@@ -711,6 +714,72 @@ sub render_final_data {
         );
         print "\n";
     }
+}
+
+sub _render_final_data_plainly {
+  my $self = shift;
+  my ($final_data) = @_;
+
+  return if $self->settings->display->quiet > 1;
+
+  if (my $rows = $final_data->{retried}) {
+    print "\nThe following jobs failed at least once:\n";
+    for my $row (@$rows) {
+      print "- filename: $row->[2]\n";
+      print "  job_id: $row->[0]\n";
+      print "  times_run: $row->[1]\n";
+      print "  succeeded_eventually: $row->[3]\n";
+    }
+  }
+
+  if (my $rows = $final_data->{failed}) {
+    print "\nThe following jobs failed:\n";
+    for my $row (@$rows) {
+      print "- filename: $row->[1]\n";
+      print "  job_id: $row->[0]\n";
+      if ($row->[2]) {
+        print "  subtests:\n";
+        my @paths = _subtest_paths($row->[2]);
+        print "  - $_\n" for @paths;
+      }
+    }
+  }
+
+  if (my $rows = $final_data->{halted}) {
+    print "\nThe following jobs requested all testing be halted:\n";
+    for my $row (@$rows) {
+      print "- filename: $row->[1]\n";
+      print "  job_id: $row->[0]\n";
+      print "  reason: $row->[2]\n" if $row->[2];
+    }
+  }
+
+  if (my $rows = $final_data->{unseen}) {
+    print "\nThe following jobs never ran:\n";
+    for my $row (@$rows) {
+      print "- filename: $row->[1]\n";
+      print "  job_id: $row->[0]\n";
+    }
+  }
+}
+
+sub _subtest_paths {
+  my ($map) = @_;
+
+  my @paths;
+  my @todo = @$map;
+  my @state;
+  while (my $st = shift @todo) {
+    if (!ref($st)) {
+      pop @state if $st eq 'pop';
+      next;
+    }
+    push @state, $st->[0];
+    push @paths, join(' -> ', @state);
+    unshift @todo, (@{$st->[1]}, 'pop');
+  }
+
+  return @paths;
 }
 
 sub stringify_subtest_map {

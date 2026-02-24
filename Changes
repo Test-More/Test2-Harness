@@ -1,8 +1,14 @@
 {{$NEXT}}
 
+    - Fix missing Changes entries
+
 1.000162  2026-02-20 10:37:39-08:00 America/Los_Angeles
 
+    - add and respect the --no-final-table display option
+
 1.000161  2025-06-10 15:36:21-07:00 America/Los_Angeles
+
+    - Fix #284: Bad caller in --yath-ui-upload route
 
 1.000160  2025-05-30 14:00:00-07:00 America/Los_Angeles
 

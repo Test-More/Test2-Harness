@@ -168,12 +168,14 @@ sub _post_process_interactive {
     ${$settings->debug->vivify_field('fifo')} = $fifo;
 
     if ($settings->check_prefix('display')) {
-        $settings->display->field(quiet => 0);
-        $settings->display->field(verbose => 1) unless $settings->display->verbose;
+        my $display = $settings->display;
+        $display->field(quiet   => 0) if $display->check_field('quiet');
+        $display->field(verbose => 1) if $display->check_field('verbose') && !$display->verbose;
     }
 
     if ($settings->check_prefix('formatter')) {
-        $settings->formatter->field(qvf => 0);
+        my $formatter = $settings->formatter;
+        $formatter->field(qvf => 0) if $formatter->check_field('qvf');
     }
 
     if ($settings->check_prefix('run')) {

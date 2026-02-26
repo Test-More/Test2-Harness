@@ -34,6 +34,20 @@ yath(
                 unlike($out->{output}, qr{pass\.tx}, "'pass.tx' was not seen as a failure when reading the log");
             },
         );
+
+        # GH #300: 'yath failed --interactive' should not crash with
+        # "The 'quiet' field does not exist"
+        $out = yath(
+            command => 'failed',
+            args    => ['-i', $logfile],
+            exit    => 0,
+            test    => sub {
+                my $out = shift;
+
+                ok(!$out->{exit}, "'failed -i' command exits true");
+                unlike($out->{output}, qr{field does not exist}, "'failed -i' does not crash on missing display fields");
+            },
+        );
     },
 );
 

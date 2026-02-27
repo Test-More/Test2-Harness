@@ -1,0 +1,11 @@
+use Test2::Tools::Tiny;
+use strict;
+use warnings;
+
+ok(1, "a passing test before bail");
+
+BAIL_OUT("Something went horribly wrong") unless $ENV{BAILOUT_DO_PASS};
+
+ok(1, "should not reach here");
+
+done_testing;

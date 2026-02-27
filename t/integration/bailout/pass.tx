@@ -1,0 +1,7 @@
+use Test2::Tools::Tiny;
+use strict;
+use warnings;
+
+ok(1, "this test always passes");
+
+done_testing;

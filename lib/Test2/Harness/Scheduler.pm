@@ -307,6 +307,9 @@ sub abort {
         CORE::kill('TERM', $pid);
         $job->{killed} = 1;
     }
+
+    # Also terminate the scheduler itself, as BAIL_OUT means we should exit
+    $self->terminate(1);
 }
 
 sub kill {

@@ -36,21 +36,27 @@ sub run {
 
     my $run = Test2::Harness::Run->new(%{decode_json(<STDIN>)});
 
-    my $collector = $collector_class->new(
+    my $collector;
+    $collector = $collector_class->new(
         %args,
         settings   => $settings,
         workdir    => $dir,
         run_id     => $run_id,
         runner_pid => $runner_pid,
         run        => $run,
+        output_fh  => $fh,
         # as_json may already have the json form of the event cached, if so
-        # we can avoid doing an extra call to encode_json
-        action => sub { print $fh defined($_[0]) ? $_[0]->as_json . "\n" : "null\n"; },
+        # we can avoid doing an extra call to encode_json.
+        # Workers pass raw JSON strings, so check ref() before calling as_json.
+        action => sub { print {$collector->output_fh} defined($_[0]) ? ref($_[0]) ? $_[0]->as_json . "\n" : $_[0] : "null\n"; },
     );
 
     local $SIG{PIPE} = 'IGNORE';
     my $ok = eval { $collector->process(); 1 };
     my $err = $@;
+
+    # Avoid refcycle ($collector->action closes over $collector)
+    delete $collector->{action};
 
     eval { print $fh "null\n"; 1 } or warn $@;
 

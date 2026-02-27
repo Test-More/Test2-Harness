@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Add --spawn-worker-at-max option to allow multiple collectors
+    - When max-open-jobs is reached, fork worker collectors to handle backlog
+
 1.000163  2026-02-23 20:07:43-08:00 America/Los_Angeles
 
     - Fix missing Changes entries

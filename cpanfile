@@ -27,7 +27,6 @@ requires "File::Path" => "2.11";
 requires "File::ShareDir" => "0";
 requires "File::Spec" => "0";
 requires "File::Temp" => "0";
-requires "Getopt::Yath" => "2.000007";
 requires "HTTP::Tiny" => "0";
 requires "HTTP::Tiny::Multipart" => "0";
 requires "HTTP::Tiny::UNIX" => "0";

@@ -250,7 +250,10 @@ sub _post_process {
 
         push @{$finder->rerun_modes} => $mode;
 
-        next if $val eq '1';
+        if ($val eq '1') {
+            $rerun //= '1';
+            next;
+        }
 
         $rerun //= $val;
         $rerun = $val if $rerun eq '1';

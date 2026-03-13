@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '1.000164';
 
 use Test2::Util::Term qw/term_size/;
-use Test2::Harness::Util qw/hub_truth apply_encoding/;
+use Test2::Harness::Util qw/hub_truth apply_encoding sanitize_filename/;
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 use Test2::Util qw/IS_WIN32 clone_io/;
 use Time::HiRes qw/time/;
@@ -369,7 +369,7 @@ sub update_active_disp {
 
     if ($f->{harness_job_launch}) {
         my $job = $f->{harness_job};
-        $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($job->{file})} = $job->{job_name} || $job->{job_id};
+        $self->{+ACTIVE_FILES}->{sanitize_filename(File::Spec->abs2rel($job->{file}))} = $job->{job_name} || $job->{job_id};
         $should_show = 1;
         $stats->{running}++;
         $stats->{todo}--;
@@ -378,7 +378,7 @@ sub update_active_disp {
 
     if ($f->{harness_job_end}) {
         my $file = $f->{harness_job_end}->{file};
-        delete $self->{+ACTIVE_FILES}->{File::Spec->abs2rel($file)};
+        delete $self->{+ACTIVE_FILES}->{sanitize_filename(File::Spec->abs2rel($file))};
         $should_show = 1;
         $stats->{running}--;
 

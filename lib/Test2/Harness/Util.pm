@@ -40,7 +40,24 @@ our @EXPORT_OK = qw{
 
     looks_like_uuid
     is_same_file
+
+    sanitize_filename
 };
+
+sub sanitize_filename {
+    my ($name) = @_;
+    return $name unless defined $name;
+
+    # Replace ANSI escape sequences (CSI and OSC) with empty string
+    $name =~ s/\e\[[0-9;]*[A-Za-z]//g;   # CSI sequences: ESC [ ... letter
+    $name =~ s/\e\][^\a\e]*(?:\a|\e\\)//g; # OSC sequences: ESC ] ... BEL/ST
+
+    # Replace remaining control characters (0x00-0x1F, 0x7F) with their
+    # caret notation, e.g. \x01 => ^A, \x1B => ^[, \x7F => ^?
+    $name =~ s/([\x00-\x1f\x7f])/'^' . chr(ord($1) ^ 0x40)/ge;
+
+    return $name;
+}
 
 sub is_same_file {
     my ($file1, $file2) = @_;

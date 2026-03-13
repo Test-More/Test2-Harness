@@ -9,6 +9,7 @@ use Time::HiRes qw/time/;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/decode_json/;
+use Test2::Harness::Util qw/sanitize_filename/;
 
 use Test2::Harness::Event;
 use Test2::Harness::Auditor::Watcher;
@@ -94,7 +95,7 @@ sub finish {
     my $final_data = {pass => 1};
 
     while (my ($job_id, $watchers) = each %{$self->{+WATCHERS}}) {
-        my $file = File::Spec->abs2rel($self->{+QUEUED}->{$job_id}->{file});
+        my $file = sanitize_filename(File::Spec->abs2rel($self->{+QUEUED}->{$job_id}->{file}));
 
         if (@$watchers) {
             push @{$final_data->{failed}} => [$job_id, $file, $watchers->[-1]->failed_subtest_tree] if $watchers->[-1]->fail;

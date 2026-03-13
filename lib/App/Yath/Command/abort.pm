@@ -15,7 +15,7 @@ use Test2::Harness::Runner::State;
 use Test2::Harness::Util::File::JSON();
 use Test2::Harness::Util::Queue();
 
-use Test2::Harness::Util qw/open_file/;
+use Test2::Harness::Util qw/open_file sanitize_filename/;
 
 use parent 'App::Yath::Command::status';
 use Test2::Harness::Util::HashBase;
@@ -52,7 +52,7 @@ sub run {
     my $running = $state->running_tasks;
     for my $task (values %$running) {
         my $pid = $self->get_job_pid($task->{run_id}, $task->{job_id}) // next;;
-        my $file = $task->{rel_file};
+        my $file = sanitize_filename($task->{rel_file});
         print "Killing test $pid - $file...\n";
         kill('INT', $pid);
     }

@@ -15,7 +15,7 @@ use Test2::Harness::IPC;
 use Test2::Harness::Runner::State;
 
 use Test2::Harness::Util::JSON qw/encode_json decode_json JSON/;
-use Test2::Harness::Util qw/mod2file open_file chmod_tmp/;
+use Test2::Harness::Util qw/mod2file open_file chmod_tmp sanitize_filename/;
 use Test2::Util::Table qw/table/;
 
 use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
@@ -450,7 +450,7 @@ sub stop {
         for my $task (values %$running) {
             next unless $task->{run_id} && $task->{run_id} eq $self->{+RUN_ID};
             my $pid = $self->get_job_pid($task->{run_id}, $task->{job_id}) // next;
-            my $file = $task->{rel_file};
+            my $file = sanitize_filename($task->{rel_file});
             print "Killing test $pid - $file...\n";
             kill('INT', $pid);
         }

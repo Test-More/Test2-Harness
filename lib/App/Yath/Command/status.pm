@@ -6,6 +6,7 @@ our $VERSION = '1.000164';
 
 use Term::Table();
 use File::Spec();
+use Test2::Harness::Util qw/sanitize_filename/;
 
 use Test2::Harness::Runner::State;
 use Test2::Harness::Util::File::JSON();
@@ -73,7 +74,7 @@ sub run {
             next;
         }
 
-        my @rows = map {[$_->{job_id}, $_->{is_try} // $_->{job_try} // 0, $_->{rel_file}, join(', ' => @{$_->{conflicts} // []})]} @tasks;
+        my @rows = map {[$_->{job_id}, $_->{is_try} // $_->{job_try} // 0, sanitize_filename($_->{rel_file}), join(', ' => @{$_->{conflicts} // []})]} @tasks;
         my $run_table = Term::Table->new(
             collapse => 1,
             header => [qw/uuid try test conflicts/],
@@ -117,7 +118,7 @@ sub run {
             for my $file (keys %{$reload_status->{$stage}}) {
                 next if $seen{$file}++;
                 my $data = $reload_status->{$stage}->{$file} or next;
-                print "\n==== SOURCE FILE: $file ====\n";
+                print "\n==== SOURCE FILE: " . sanitize_filename($file) . " ====\n";
                 print $data->{error} if $data->{error};
                 print $_ for @{$data->{warnings} // []};
             }
@@ -128,7 +129,7 @@ sub run {
     print "\n**** Running tests: ****\n";
     my $running = $state->running_tasks;
     my $running_tasks = [values %$running];
-    my @rows = map {[$self->get_job_pid($_->{run_id}, $_->{job_id}) // 'N/A', $_->{job_id}, $_->{is_try} // $_->{job_try} // 0, $_->{rel_file}, join(', ' => @{$_->{conflicts} // []})]} @$running_tasks;
+    my @rows = map {[$self->get_job_pid($_->{run_id}, $_->{job_id}) // 'N/A', $_->{job_id}, $_->{is_try} // $_->{job_try} // 0, sanitize_filename($_->{rel_file}), join(', ' => @{$_->{conflicts} // []})]} @$running_tasks;
     if (@rows) {
         my $run_table = Term::Table->new(
             collapse => 1,

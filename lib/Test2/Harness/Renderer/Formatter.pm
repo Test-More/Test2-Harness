@@ -10,7 +10,7 @@ use File::Spec;
 
 use Storable qw/dclone/;
 
-use Test2::Harness::Util qw/fqmod mod2file/;
+use Test2::Harness::Util qw/fqmod mod2file sanitize_filename/;
 use Test2::Harness::Util::JSON qw/encode_pretty_json/;
 
 BEGIN { require Test2::Harness::Renderer; our @ISA = ('Test2::Harness::Renderer') }
@@ -106,7 +106,7 @@ sub render_event {
                 tag       => $f->{harness_job_launch}->{retry} ? 'RETRY' : 'LAUNCH',
                 debug     => 0,
                 important => 1,
-                details   => File::Spec->abs2rel($job->{file}),
+                details   => sanitize_filename(File::Spec->abs2rel($job->{file})),
             };
         }
 
@@ -136,7 +136,7 @@ sub render_event {
         }
 
         if ($self->{+SHOW_JOB_END}) {
-            my $name = File::Spec->abs2rel($file);
+            my $name = sanitize_filename(File::Spec->abs2rel($file));
             $name .= "  -  $skip" if $skip;
 
             my $tag = 'PASSED';

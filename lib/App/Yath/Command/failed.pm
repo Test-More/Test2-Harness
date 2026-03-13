@@ -7,6 +7,8 @@ our $VERSION = '1.000164';
 use Test2::Util::Table qw/table/;
 use Test2::Harness::Util::File::JSONL;
 
+use Test2::Harness::Util qw/sanitize_filename/;
+
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase qw{<log_file};
 
@@ -78,10 +80,10 @@ sub run {
         my $subtests = join "\n" => grep { !$seen{$_}++ } sort @{$data->{subtests} // []};
 
         if ($settings->display->brief) {
-            print $ends->[-1]->{rel_file}, "\n" if $ends->[-1]->{fail};
+            print sanitize_filename($ends->[-1]->{rel_file}), "\n" if $ends->[-1]->{fail};
         }
         else {
-            push @$rows => [$job_id, scalar(@$ends), $ends->[-1]->{rel_file}, $subtests, $ends->[-1]->{fail} ? "NO" : "YES"];
+            push @$rows => [$job_id, scalar(@$ends), sanitize_filename($ends->[-1]->{rel_file}), $subtests, $ends->[-1]->{fail} ? "NO" : "YES"];
         }
     }
 

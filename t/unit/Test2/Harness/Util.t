@@ -88,4 +88,29 @@ ok(is_same_file("$tmp/foo", "$tmp/foo2"), "hard link");
 ok(is_same_file("$tmp/foo", "$tmp/foo3"), "soft link");
 ok(!is_same_file("$tmp/foo", "$tmp/bar"), "Different files");
 
+subtest sanitize_filename => sub {
+    # Normal filename unchanged
+    is(sanitize_filename('t/foo/bar.t'), 't/foo/bar.t', "Normal filename unchanged");
+
+    # undef passes through
+    is(sanitize_filename(undef), undef, "undef passes through");
+
+    # ANSI CSI sequences stripped (e.g. ESC[0m, ESC[1;31m, ESC[H)
+    is(sanitize_filename("t/\e[1mBoo\e[0m.t"), 't/Boo.t', "CSI bold/reset stripped");
+    is(sanitize_filename("t/\e[H\e[2J.t"), 't/.t', "CSI cursor home + clear stripped");
+    is(sanitize_filename("t/\e[1;31mred\e[0m.t"), 't/red.t', "CSI with params stripped");
+
+    # OSC sequences stripped (ESC ] ... BEL or ESC ] ... ST)
+    is(sanitize_filename("t/\e]0;evil title\a.t"), 't/.t', "OSC with BEL stripped");
+    is(sanitize_filename("t/\e]0;evil title\e\\.t"), 't/.t', "OSC with ST stripped");
+
+    # Remaining control characters become caret notation
+    is(sanitize_filename("t/foo\x01bar.t"), 't/foo^Abar.t', "SOH becomes ^A");
+    is(sanitize_filename("t/foo\x7fbar.t"), 't/foo^?bar.t', "DEL becomes ^?");
+    is(sanitize_filename("t/foo\tbar.t"), 't/foo^Ibar.t', "Tab becomes ^I");
+
+    # Combined: ANSI stripped first, then control chars escaped
+    is(sanitize_filename("t/\e[0J\x01.t"), 't/^A.t', "CSI stripped then ctrl escaped");
+};
+
 done_testing;

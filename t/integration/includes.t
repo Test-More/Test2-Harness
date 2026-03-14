@@ -52,4 +52,10 @@ yath(
     exit    => 0,
 ) if can_run('bash');
 
+yath(
+    command => 'test',
+    args    => ['child-inherits-inc.tx'],
+    exit    => 0,
+);
+
 done_testing;

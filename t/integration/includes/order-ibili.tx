@@ -27,6 +27,6 @@ like(
     "Added all via cli, in order"
 );
 
-is($ENV{PERL5LIB}, $ENV{OLD_PERL5LIB}, "PERL5LIB has not been modified");
+isnt($ENV{PERL5LIB}, $ENV{OLD_PERL5LIB}, "PERL5LIB includes project lib paths for child process inheritance");
 
 done_testing;

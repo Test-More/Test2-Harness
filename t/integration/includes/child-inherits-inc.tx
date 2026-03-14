@@ -1,0 +1,27 @@
+use Test2::V0;
+
+use File::Spec;
+use Config qw/%Config/;
+
+# This test verifies that child processes spawned via system() inherit
+# the include paths set by yath (fixes GitHub #296).
+# When yath runs a test with --lib, the test process gets -I flags on
+# the command line. But system($^X, ...) children don't inherit CLI flags;
+# they need PERL5LIB to find project modules.
+
+my @parts = File::Spec->splitpath(File::Spec->rel2abs(__FILE__));
+pop @parts;
+my $path = File::Spec->catpath(@parts);
+
+my $lib_dir = File::Spec->catdir($path, 'lib');
+
+# Spawn a child perl process and capture its @INC
+my $child_inc = `$^X -e "print join qq{\\n}, \@INC"`;
+my @child_inc = split /\n/, $child_inc;
+
+ok(
+    (grep { $_ eq $lib_dir } @child_inc),
+    "Child process via backticks inherits project lib dir ($lib_dir) via PERL5LIB"
+) or diag "Child \@INC was: @child_inc";
+
+done_testing;

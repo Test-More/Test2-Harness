@@ -88,4 +88,21 @@ ok(is_same_file("$tmp/foo", "$tmp/foo2"), "hard link");
 ok(is_same_file("$tmp/foo", "$tmp/foo3"), "soft link");
 ok(!is_same_file("$tmp/foo", "$tmp/bar"), "Different files");
 
+subtest process_includes_filters_refs => sub {
+    # Simulate @INC containing blessed objects (e.g. Carmel::Runtime::FastINC)
+    my $blessed_obj = bless {}, 'Fake::INC::Hook';
+    my $code_ref = sub { return };
+
+    local @INC = ('/usr/lib/perl5', $blessed_obj, '/usr/share/perl5', $code_ref, ['array_hook']);
+
+    my @result = process_includes(
+        list            => [],
+        include_current => 1,
+    );
+
+    ok(!grep({ ref($_) } @result), "No references in process_includes output");
+    ok(grep({ $_ eq '/usr/lib/perl5' } @result), "String paths preserved");
+    ok(grep({ $_ eq '/usr/share/perl5' } @result), "All string paths preserved");
+};
+
 done_testing;

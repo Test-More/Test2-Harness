@@ -15,7 +15,7 @@ BEGIN {
     my $ORIG_TMP_PERMS;
     my %ORIG_SIG = map { defined($SIG{$_}) ? ($_ => "$SIG{$_}") : ()} keys %SIG;
     my @ORIG_ARGV = @ARGV;
-    my @ORIG_INC = @INC;
+    my @ORIG_INC = grep { !ref($_) } @INC;
     my @DEVLIBS;
     my %CONFIG;
     my $NO_PLUGINS;

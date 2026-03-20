@@ -104,7 +104,7 @@ sub process_includes {
         @list = @start;
     }
 
-    push @list => @INC if delete $params{include_current};
+    push @list => grep { !ref($_) } @INC if delete $params{include_current};
 
     @list = map { $_ eq '.' ? $_ : clean_path($_) || $_ } @list if delete $params{clean};
 

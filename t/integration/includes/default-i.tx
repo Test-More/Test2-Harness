@@ -1,6 +1,7 @@
 use Test2::V0;
 
 use File::Spec;
+use Config qw/%Config/;
 
 my @parts = File::Spec->splitpath(File::Spec->rel2abs(__FILE__));
 pop @parts;
@@ -20,6 +21,16 @@ like(
     "Added lib, blib/lib, and blib/arch AFTER the -Ixyz"
 );
 
-is($ENV{PERL5LIB}, $ENV{OLD_PERL5LIB}, "PERL5LIB has not been modified");
+like(
+    [split $Config{path_sep}, $ENV{PERL5LIB}],
+    [
+        App::Yath->app_path,
+        File::Spec->catdir($path, 'xyz'),
+        File::Spec->catdir($path, 'lib'),
+        File::Spec->catdir($path, 'blib', 'lib'),
+        File::Spec->catdir($path, 'blib', 'arch'),
+    ],
+    "PERL5LIB includes lib paths so child processes inherit them"
+);
 
 done_testing;

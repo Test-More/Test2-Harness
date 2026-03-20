@@ -13,7 +13,6 @@ $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
 chdir($dir);
-$ENV{OLD_PERL5LIB} = $ENV{PERL5LIB};
 
 yath(
     command => 'test',
@@ -42,6 +41,12 @@ yath(
 yath(
     command => 'test',
     args    => ['-Ixyz', '--unsafe-inc', 'dot-last.tx'],
+    exit    => 0,
+);
+
+yath(
+    command => 'test',
+    args    => ['system-child.tx'],
     exit    => 0,
 );
 

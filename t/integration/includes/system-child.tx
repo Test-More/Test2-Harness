@@ -1,0 +1,19 @@
+use Test2::V0;
+
+use File::Spec;
+
+my @parts = File::Spec->splitpath(File::Spec->rel2abs(__FILE__));
+pop @parts;
+my $path = File::Spec->catpath(@parts);
+
+my $helper = File::Spec->catfile($path, 'child-inc.pl');
+my @child_inc = split /\n/, `$^X $helper`;
+chomp @child_inc;
+
+my %child_has = map { $_ => 1 } @child_inc;
+
+ok($child_has{File::Spec->catdir($path, 'lib')},        "Child process sees lib/ via PERL5LIB");
+ok($child_has{File::Spec->catdir($path, 'blib', 'lib')}, "Child process sees blib/lib/ via PERL5LIB");
+ok($child_has{File::Spec->catdir($path, 'blib', 'arch')},"Child process sees blib/arch/ via PERL5LIB");
+
+done_testing;

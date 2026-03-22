@@ -259,6 +259,7 @@ sub write_test_info {
     my $self = shift;
 
     return if $ENV{TEST2_HARNESS_NO_WRITE_TEST_INFO};
+    return unless -w ".";
 
     my $info_file = "./.test_info.$$.json";
 

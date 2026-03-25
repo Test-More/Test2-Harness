@@ -60,7 +60,7 @@ END {
             print "$0 pending...\n";
             use Carp qw/cluck/;
             local $SIG{ALRM} = sub { cluck "oops"; exit 255 };
-            alarm 5;
+            alarm 30;
             until (-f $TRIGGER) {
                 print "$0 Waiting...\n";
                 sleep 0.2

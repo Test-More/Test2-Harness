@@ -73,6 +73,7 @@ sub run {
     my $rows = [];
     while (my ($job_id, $data) = each %failed) {
         my $ends = $data->{ends} // [];
+        next unless @$ends;
 
         my %seen;
         my $subtests = join "\n" => grep { !$seen{$_}++ } sort @{$data->{subtests} // []};

@@ -275,8 +275,9 @@ sub _post_process {
             my $jc = $settings->runner->job_count // 1;
             $settings->finder->field(durations_threshold => $jc + 1);
         }
-
-        $settings->finder->field(durations_threshold => 1);
+        else {
+            $settings->finder->field(durations_threshold => 1);
+        }
     }
 
     $settings->finder->field(default_search => ['./t', './t2', 'test.pl'])

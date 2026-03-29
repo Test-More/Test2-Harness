@@ -59,23 +59,11 @@ sub session_host {
 
     my $schema = $self->schema;
 
-    $schema->txn_begin;
-
-    my $host = $schema->resultset('SessionHost')->find(
-        {
-            session_id => $session->session_id,
-            address    => $self->address // 'SOCKET',
-            agent      => $self->user_agent,
-        }
-    );
-
-    $host //= $schema->resultset('SessionHost')->create({
-        session_id      => $session->session_id,
-        address         => $self->address // 'SOCKET',
-        agent           => $self->user_agent,
+    my $host = $schema->resultset('SessionHost')->find_or_create({
+        session_id => $session->session_id,
+        address    => $self->address // 'SOCKET',
+        agent      => $self->user_agent,
     });
-
-    $schema->txn_commit;
 
     return $self->{+SESSION_HOST} = $host;
 }

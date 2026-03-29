@@ -55,7 +55,6 @@ jobs:
         with:
           since-perl: v5.14
           until-perl: "5.40"
-          with-devel: true
 
   #
   # Only trigger the matrix if the testsuite pass above

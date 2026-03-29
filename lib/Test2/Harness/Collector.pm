@@ -92,6 +92,8 @@ sub process {
             }
 
             delete $jobs->{$job_try};
+            delete $self->{+PENDING}->{$jdir->job_id} unless $done->{retry};
+
             unless ($settings->debug->keep_dirs) {
                 my $job_path = $jdir->job_root;
                 # Needed because we set the perms so that a tmpdir under it can be used.
@@ -110,12 +112,8 @@ sub process {
                         my $e = $self->_harness_event(0, undef, time, info => [{details => $msg, tag => "INTERNAL", debug => 1, important => 1}]);
                         $self->{+ACTION}->($e);
                     }
-                    next;
                 }
             }
-
-            delete $jobs->{$job_try};
-            delete $self->{+PENDING}->{$jdir->job_id} unless $done->{retry};
         }
 
         last if !$count && $self->runner_exited;

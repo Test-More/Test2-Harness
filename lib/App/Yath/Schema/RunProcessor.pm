@@ -327,7 +327,11 @@ sub retry_on_disconnect {
 
         if ($attempt) {
             $self->schema->storage->disconnect;
-            sleep 0.5;
+
+            # Exponential backoff with jitter: 1s, 2s, 4s, ... capped at 30s
+            my $base_delay = min(30, 2 ** ($attempt - 1));
+            my $delay = $base_delay * (0.5 + rand(0.5));
+            sleep $delay;
         }
 
         # Try to fix the connection

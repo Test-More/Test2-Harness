@@ -631,7 +631,7 @@ option to configure the interval.
     }
 
     if (defined $self->{+PET_BUFFER} && !$self->{+PET_DONE}++) {
-        push @out => $self->_process_timeout_line('post-exit' => $self->{+ET_BUFFER}, <<"        EOT");
+        push @out => $self->_process_timeout_line('post-exit' => $self->{+PET_BUFFER}, <<"        EOT");
 Sometimes tests will fork and then return. On supported systems Test2::Harness
 will start all tests with their own process group and will wait for the entire
 group to exit before considering the test done. In these cases Test2::Harness

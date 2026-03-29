@@ -201,6 +201,11 @@ sub handle_request {
     my $self = shift;
     my ($env) = @_;
 
+    # Health check endpoint — bypass routing, sessions, and auth
+    if ($env->{PATH_INFO} eq '/health' && ($env->{REQUEST_METHOD} || '') eq 'GET') {
+        return $self->_health_check();
+    }
+
     my $schema = $self->schema;
     my $router           = $self->router;
     my $route            = $router->match($env) || {};
@@ -300,6 +305,31 @@ sub handle_request {
     $res->cookies->{uuid} = {value => $session->session_uuid, httponly => 1, expires => '+1M'}
         if $session;
 
+    return $res->finalize;
+}
+
+
+sub _health_check {
+    my $self = shift;
+
+    my ($ok, $error);
+    eval {
+        my $dbh = $self->schema->storage->dbh;
+        $ok = $dbh->ping ? 1 : 0;
+        $error = "DB ping returned false" unless $ok;
+        1;
+    } or do {
+        $ok = 0;
+        $error = "$@";
+        chomp $error;
+    };
+
+    my $status = $ok ? 200 : 503;
+    my $body   = $ok ? {ok => 1} : {ok => 0, error => $error};
+
+    my $res = resp($status);
+    $res->content_type('application/json');
+    $res->body(encode_json($body));
     return $res->finalize;
 }
 

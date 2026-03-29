@@ -89,7 +89,7 @@ sub run {
     @jobs = sort { $self->sort_compare($a, $b) } @jobs;
 
     for my $job (@jobs) {
-        my $data = $job->{time};
+        my $data = $job->{time} or next;
         push @rows => $self->build_row({%$data, file => $job->{file}});
         $totals->{$_} += $data->{$_} for @NUMERIC;
     }
@@ -121,8 +121,8 @@ sub sort_compare {
 
     my $order = $self->{+FIELDS};
 
-    my $ta = $ja->{time};
-    my $tb = $jb->{time};
+    my $ta = $ja->{time} || {};
+    my $tb = $jb->{time} || {};
 
     for my $field (@$order) {
         my $fa = $ta->{$field};

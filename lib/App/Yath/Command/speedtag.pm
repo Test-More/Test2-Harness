@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '1.000164';
 
+use Test2::Harness::Util::File::JSON;
 use Test2::Harness::Util::File::JSONL;
 
 use App::Yath::Options;
@@ -95,7 +96,7 @@ sub run {
     $self->{+MAX_MEDIUM} = shift @$args if @$args;
 
     die "max short duration must be an integer, got '$self->{+MAX_SHORT}'"  unless $self->{+MAX_SHORT}  && $self->{+MAX_SHORT} =~ m/^\d+$/;
-    die "max short duration must be an integer, got '$self->{+MAX_MEDIUM}'" unless $self->{+MAX_MEDIUM} && $self->{+MAX_MEDIUM} =~ m/^\d+$/;
+    die "max medium duration must be an integer, got '$self->{+MAX_MEDIUM}'" unless $self->{+MAX_MEDIUM} && $self->{+MAX_MEDIUM} =~ m/^\d+$/;
 
     my $stream = Test2::Harness::Util::File::JSONL->new(name => $self->{+LOG_FILE});
 

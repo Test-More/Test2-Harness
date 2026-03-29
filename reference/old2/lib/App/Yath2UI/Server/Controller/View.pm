@@ -73,14 +73,18 @@ sub handle {
 
     my $base_uri   = $req->base->as_string;
     my $stream_uri = join '/' => $base_uri . 'stream', @url;
+    my $view_base_uri = @url
+        ? join('/' => $base_uri . 'view', @url)
+        : $base_uri . 'view/page';
 
     my $content = $tx->render(
         'view.tx',
         {
-            base_uri   => $req->base->as_string,
-            user       => $req->user,
-            stream_uri => $stream_uri,
-            page_num   => $page_num,
+            base_uri      => $req->base->as_string,
+            user          => $req->user,
+            stream_uri    => $stream_uri,
+            view_base_uri => $view_base_uri,
+            page_num      => $page_num,
         }
     );
 

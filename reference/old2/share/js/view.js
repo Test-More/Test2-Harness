@@ -7,6 +7,22 @@ $(function() {
 
     var fetch_uri = stream_uri;
 
+    var update_url = function(new_page) {
+        var url = view_base_uri + '/' + new_page;
+        history.pushState({page: new_page}, '', url);
+    };
+
+    var navigate_to_page = function(new_page) {
+        page_num = new_page;
+        var page_elem = $('#run_pager_page');
+        page_elem.text("Page: " + page_num);
+
+        $('#runs').remove();
+        state.run_table = null;
+        fetch_uri = stream_uri + '/page/' + page_num;
+        fetch();
+    };
+
     var fetch = function() {
         t2hui.fetch(
             fetch_uri,
@@ -73,26 +89,26 @@ $(function() {
         fetch_uri = stream_uri + '/page/' + page_num;
 
         var page_elem = $('#run_pager_page');
+        page_elem.text("Page: " + page_num);
 
         $('#run_pager_prev').click(function() {
             if (page_num == 1) { return }
             page_num = page_num - 1;
-            page_elem.text("Page: " + page_num);
-
-            $('#runs').remove();
-            state.run_table = null;
-            fetch_uri = stream_uri + '/page/' + page_num;
-            fetch();
+            update_url(page_num);
+            navigate_to_page(page_num);
         });
 
         $('#run_pager_next').click(function() {
             page_num = page_num + 1;
-            page_elem.text("Page: " + page_num);
+            update_url(page_num);
+            navigate_to_page(page_num);
+        });
 
-            $('#runs').remove();
-            state.run_table = null;
-            fetch_uri = stream_uri + '/page/' + page_num;
-            fetch();
+        $(window).on('popstate', function(e) {
+            var pop_state = e.originalEvent.state;
+            if (pop_state && pop_state.page) {
+                navigate_to_page(pop_state.page);
+            }
         });
     }
     else {

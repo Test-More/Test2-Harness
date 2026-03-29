@@ -82,6 +82,11 @@ sub process_form {
         unless $file =~ m/\.jsonl\.(bz2|gz)$/i;
     my $ext = lc($1);
 
+    my $max_upload_size = $self->schema->config('max_upload_size') || 500 * 1024 * 1024;  # Default 500MB
+    my $file_size = -s $tmp;
+    die error(413, "File too large: upload exceeds maximum allowed size of $max_upload_size bytes")
+        if defined($file_size) && $file_size > $max_upload_size;
+
     my ($run_uuid);
     my $ok = eval {
         my $fh = open_file($tmp, '<', ext => $ext);

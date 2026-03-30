@@ -41,7 +41,7 @@ jobs:
       - name: install dependencies from cpanfile.ci
         uses: perl-actions/install-with-cpm@v1
         with:
-          cpanfile: "cpanfile.ci"
+          cpanfile: ".github/cpanfile.ci"
       - name: install dependencies from cpanfile
         uses: perl-actions/install-with-cpm@v1
         with:
@@ -104,14 +104,22 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: local
-          key: cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
+          key: cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', '.github/cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
           restore-keys: |
-            cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-
+            cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', '.github/cpanfile.ci') }}-
             cpan-perl-${{ matrix.perl-version }}-
-      - name: Install Dependencies
-        run: |
-          cpm install --show-build-log-on-failure --cpanfile cpanfile.ci
-          cpm install --show-build-log-on-failure --cpanfile cpanfile
+      - name: install dependencies from cpanfile.ci
+        uses: perl-actions/install-with-cpm@v1
+        with:
+          cpanfile: ".github/cpanfile.ci"
+          global: true
+          sudo: false
+      - name: install dependencies from cpanfile
+        uses: perl-actions/install-with-cpm@v1
+        with:
+          cpanfile: "cpanfile"
+          global: true
+          sudo: false
       - run: perl Makefile.PL
       - run: make
       - run: make test

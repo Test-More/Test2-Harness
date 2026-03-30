@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: perl -V
       - name: install dependencies from cpanfile.ci
         uses: perl-actions/install-with-cpm@v1
@@ -54,7 +54,7 @@ jobs:
         uses: perl-actions/perl-versions@v2
         with:
           since-perl: v5.14
-          until-perl: "5.40"
+          until-perl: "5.42"
           with-devel: false
 
   #
@@ -85,7 +85,7 @@ jobs:
       image: perldocker/perl-tester:${{ matrix.perl-version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: perl -V
       - name: Install Dependencies
         run: |

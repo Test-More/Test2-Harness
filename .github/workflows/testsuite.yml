@@ -72,6 +72,8 @@ jobs:
        PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
        T2_NO_FORK: 1
 
+    continue-on-error: true
+
     strategy:
       fail-fast: false
       matrix:

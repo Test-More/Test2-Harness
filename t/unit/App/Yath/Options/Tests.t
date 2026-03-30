@@ -10,7 +10,7 @@ subtest "module provides options and parse_options" => sub {
 subtest "all fields default to undef (null-by-default design)" => sub {
     my $tests = $parse->([], no_set_env => 1)->{settings}{tests};
 
-    is($tests->{use_fork},          undef, "use_fork defaults to undef");
+    is($tests->{use_fork},          0,     "use_fork defaults to 0 (Bool type)");
     is($tests->{load},              undef, "load defaults to undef");
     is($tests->{use_timeout},       undef, "use_timeout defaults to undef");
     is($tests->{includes},          undef, "includes defaults to undef");

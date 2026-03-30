@@ -1,7 +1,6 @@
 package App::Yath::Command::server;
 use strict;
 use warnings;
-use Carp::Always;
 
 use feature 'state';
 

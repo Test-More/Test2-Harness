@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+2.000007  2026-03-29 21:19:04-07:00 America/Los_Angeles (TRIAL RELEASE)
+
     - Remove Carp::Always accidentally left in
     - Require updated Getopt::Yath
     - Require Starman for a CLI based web server

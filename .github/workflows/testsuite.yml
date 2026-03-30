@@ -28,6 +28,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: perl -V
+      - name: Get cache week number
+        id: cache-week
+        run: echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v4
+        with:
+          path: local
+          key: cpan-ubuntu-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
+          restore-keys: |
+            cpan-ubuntu-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-
+            cpan-ubuntu-
       - name: install dependencies from cpanfile.ci
         uses: perl-actions/install-with-cpm@v1
         with:
@@ -72,6 +82,7 @@ jobs:
        AUTOMATED_TESTING: 1
        RELEASE_TESTING: 1
        PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
+       PERL5LIB: ${{ github.workspace }}/local/lib/perl5
        T2_NO_FORK: 1
 
     continue-on-error: true
@@ -87,10 +98,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: perl -V
+      - name: Get cache week number
+        id: cache-week
+        run: echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v4
+        with:
+          path: local
+          key: cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
+          restore-keys: |
+            cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-
+            cpan-perl-${{ matrix.perl-version }}-
       - name: Install Dependencies
         run: |
-          cpm install -g --show-build-log-on-failure --cpanfile cpanfile.ci
-          cpm install -g --show-build-log-on-failure --cpanfile cpanfile
+          cpm install --show-build-log-on-failure --cpanfile cpanfile.ci
+          cpm install --show-build-log-on-failure --cpanfile cpanfile
       - run: perl Makefile.PL
       - run: make
       - run: make test

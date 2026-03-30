@@ -21,6 +21,7 @@ use Test2::Harness2::Util::HashBase qw{
 
     +dir
     +ipcs
+    +ipc_regex
     +start
     +gen_ipc
 
@@ -114,10 +115,12 @@ sub _find_ipcs {
 
 sub parse_ipc_regex {
     my $self = shift;
-    my $pre  = $self->settings->ipc->prefix;
+    return $self->{+IPC_REGEX} if $self->{+IPC_REGEX};
 
-    #                      TYPE       PID   PROT     PORT
-    return qr/^\Q$pre\E-(one|daemon)-(\d+)-(\w+)(?::(\d+))?$/;
+    my $pre = $self->settings->ipc->prefix;
+
+    #                           TYPE       PID   PROT     PORT
+    return $self->{+IPC_REGEX} = qr/^\Q$pre\E-(one|daemon)-(\d+)-(\w+)(?::(\d+))?$/;
 }
 
 sub parse_ipc_file {

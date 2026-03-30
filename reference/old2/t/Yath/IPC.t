@@ -81,4 +81,21 @@ subtest 'dir() username fallback chain' => sub {
     }
 };
 
+subtest 'parse_ipc_regex() caches the compiled regex' => sub {
+    my $ipc_group = mock {} => (
+        add => [prefix => sub { 'yath' }],
+    );
+    my $settings = mock {} => (
+        add => [ipc => sub { $ipc_group }],
+    );
+
+    my $ipc = $CLASS->new(settings => $settings);
+
+    my $regex1 = $ipc->parse_ipc_regex;
+    my $regex2 = $ipc->parse_ipc_regex;
+
+    ok(defined $regex1, 'parse_ipc_regex returns a defined value');
+    ref_is($regex1, $regex2, 'parse_ipc_regex returns the same cached object on repeated calls');
+};
+
 done_testing;

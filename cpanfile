@@ -5,7 +5,6 @@ requires "Atomic::Pipe" => "0.021";
 requires "B" => "0";
 requires "Capture::Tiny" => "0.48";
 requires "Carp" => "0";
-requires "Carp::Always" => "0";
 requires "Class::C3" => "0.35";
 requires "Consumer::NonBlock" => "0.002";
 requires "Cpanel::JSON::XS" => "4.38";

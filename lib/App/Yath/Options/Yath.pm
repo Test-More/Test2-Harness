@@ -11,6 +11,7 @@ use Cwd();
 use File::Spec();
 
 use Getopt::Yath;
+require Getopt::Yath::Option::BoolMap;
 include_options(
     'App::Yath::Options::Harness',
 );

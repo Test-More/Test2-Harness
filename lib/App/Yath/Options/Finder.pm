@@ -7,6 +7,7 @@ our $VERSION = '2.000007';
 use Test2::Harness::Util qw/fqmod/;
 use List::Util qw/first/;
 use Getopt::Yath;
+require Getopt::Yath::Option::BoolMap;
 
 my %RERUN_MODES = (
     all     => "Re-Run all tests from a previous run from a log file (or last log file). Plugins can intercept this, such as the database plugin which will grab a run UUID and derive tests to re-run from that.",

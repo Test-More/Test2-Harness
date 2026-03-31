@@ -7,7 +7,17 @@ eval { require App::Yath::Renderer::Server; 1 }
 
 our $CLASS = 'App::Yath::Renderer::Server';
 
-my $settings = bless({}, 'MockSettings');
+# Server inherits from DB whose init() calls $settings->yath->project.
+package MockYath {
+    sub new     { bless {project => 'test-project'}, shift }
+    sub project { $_[0]->{project} }
+}
+package MockSettings {
+    sub new  { bless {}, shift }
+    sub yath { MockYath->new() }
+}
+
+my $settings = MockSettings->new();
 
 # --- Inheritance ---
 

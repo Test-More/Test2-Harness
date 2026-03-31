@@ -104,8 +104,16 @@ subtest '_health_check returns 503 when DB connection throws' => sub {
 };
 
 subtest '/health only responds to GET' => sub {
+    my $health_called = 0;
+    my $mock_dbh = mock {} => (
+        add => [ping => sub { $health_called++; 1 }],
+    );
+    my $mock_storage = mock {} => (
+        add => [dbh => sub { $mock_dbh }],
+    );
     my $mock_schema = mock {} => (
         add => [
+            storage => sub { $mock_storage },
             config  => sub { 0 },
         ],
     );
@@ -115,14 +123,21 @@ subtest '/health only responds to GET' => sub {
 
     my $plack = App::Yath::Server::Plack->new(schema_config => $mock_config);
 
-    # POST /health should fall through to normal routing (and get 404)
-    my $env = {
+    # GET /health should trigger the health check
+    my $get_result = $plack->handle_request({
+        PATH_INFO      => '/health',
+        REQUEST_METHOD => 'GET',
+    });
+    is($get_result->[0], 200, 'GET /health returns 200');
+    is($health_called, 1, 'health check was invoked for GET');
+
+    # POST /health should NOT trigger the health check — it falls through
+    $health_called = 0;
+    my $post_result = eval { $plack->handle_request({
         PATH_INFO      => '/health',
         REQUEST_METHOD => 'POST',
-    };
-    my $result = $plack->handle_request($env);
-
-    is($result->[0], 404, 'POST /health returns 404 (not handled by health check)');
+    }) };
+    is($health_called, 0, 'health check was NOT invoked for POST');
 };
 
 done_testing;

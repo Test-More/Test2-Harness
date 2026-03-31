@@ -47,7 +47,10 @@ sub init {
 
     delete $self->{class};
 
-    $self->{+EXCLUDE_FILES} = { map {( $_ => 1 )} @{$self->{+EXCLUDE_FILES}} } if ref($self->{+EXCLUDE_FILES}) eq 'ARRAY';
+    $self->{+EXCLUDE_FILES} = ref($self->{+EXCLUDE_FILES}) eq 'ARRAY'
+        ? { map {( $_ => 1 )} @{$self->{+EXCLUDE_FILES}} }
+        : ($self->{+EXCLUDE_FILES} || {});
+    $self->{+EXCLUDE_PATTERNS} //= [];
 
     if (my $plugins = $self->{+RERUN_PLUGINS}) {
         for (@$plugins) {
@@ -579,6 +582,27 @@ sub find_multi_project_files {
 }
 
 
+sub parse_test_item {
+    my ($item) = @_;
+
+    my ($path, $type, $data) = split /(:<|:@|:=)/, $item, 3;
+    my $test_params;
+    if ($type && $data) {
+        $test_params = {};
+        if ($type eq ':<') {
+            $test_params->{stdin} = $data;
+        }
+        elsif ($type eq ':@') {
+            $test_params->{argv} = decode_json($data);
+        }
+        elsif ($type eq ':=') {
+            $test_params->{env} = decode_json($data);
+        }
+    }
+
+    return ($path, $test_params);
+}
+
 sub find_project_files {
     my $self = shift;
     my ($plugins, $input) = @_;
@@ -605,20 +629,7 @@ sub find_project_files {
             ($path, $test_params) = @$item;
         }
         else {
-            my ($type, $data);
-            ($path, $type, $data) = split /(:<|:@|:=)/, $item, 2;
-            if ($type && $data) {
-                $test_params = {};
-                if ($type eq ':<') {
-                    $test_params->{stdin} = $data;
-                }
-                elsif ($type eq ':@') {
-                    $test_params->{argv} = decode_json($data);
-                }
-                elsif ($type eq ':=') {
-                    $test_params->{env} = decode_json($data);
-                }
-            }
+            ($path, $test_params) = parse_test_item($item);
         }
 
         push @dirs => $path and next if -d $path;

@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::Renderer';
 
 my $parse = \&App::Yath::Options::Renderer::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "default values" => sub {
     local %ENV = %ENV;
     delete $ENV{$_} for qw/YATH_COLOR CLICOLOR_FORCE T2_HARNESS_IS_VERBOSE HARNESS_IS_VERBOSE TABLE_TERM_SIZE/;

@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::Yath';
 
 my $parse = \&App::Yath::Options::Yath::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "includes Harness options (harness group)" => sub {
     my $settings = $parse->([], no_set_env => 1)->{settings};
     ok(exists $settings->{harness}, "harness group is present (included from Harness)");

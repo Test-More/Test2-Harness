@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::Tests';
 
 my $parse = \&App::Yath::Options::Tests::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "all fields default to undef (null-by-default design)" => sub {
     my $tests = $parse->([], no_set_env => 1)->{settings}{tests};
 

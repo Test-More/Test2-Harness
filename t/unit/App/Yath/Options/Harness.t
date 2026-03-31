@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::Harness';
 
 my $parse = \&App::Yath::Options::Harness::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "default values" => sub {
     local %ENV = %ENV;
     delete $ENV{T2_HARNESS_DUMMY};

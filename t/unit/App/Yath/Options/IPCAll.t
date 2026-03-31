@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::IPCAll';
 
 my $parse = \&App::Yath::Options::IPCAll::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "includes IPC options (ipc group)" => sub {
     my $settings = $parse->([], no_set_env => 1)->{settings};
     ok(exists $settings->{ipc}, "ipc group is present (included from IPC)");

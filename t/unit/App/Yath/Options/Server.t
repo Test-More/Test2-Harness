@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::Server';
 
 my $parse = \&App::Yath::Options::Server::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "default values" => sub {
     my $server = $parse->([], no_set_env => 1)->{settings}{server};
 

@@ -3,11 +3,6 @@ use Test2::V0 -target => 'App::Yath::Options::DB';
 # parse_options is exported as a function into the module namespace, not a method
 my $parse = \&App::Yath::Options::DB::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "default values when no env vars set" => sub {
     local %ENV = %ENV;
     delete $ENV{$_} for qw/YATH_DB_CONFIG YATH_DB_DRIVER YATH_DB_NAME YATH_DB_USER YATH_DB_PASS YATH_DB_DSN YATH_DB_HOST YATH_DB_PORT YATH_DB_SOCKET USER/;

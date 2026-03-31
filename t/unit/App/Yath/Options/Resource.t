@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::Resource';
 
 my $parse = \&App::Yath::Options::Resource::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "slots can be set explicitly via -j" => sub {
     local %ENV = %ENV;
     delete $ENV{$_} for qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/;

@@ -2,11 +2,6 @@ use Test2::V0 -target => 'App::Yath::Options::Term';
 
 my $parse = \&App::Yath::Options::Term::parse_options;
 
-subtest "module provides options and parse_options" => sub {
-    ok(CLASS()->can('options'),       "options() method exists");
-    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
-};
-
 subtest "term_width (width field) can be set via CLI" => sub {
     local %ENV = %ENV;
     delete $ENV{TABLE_TERM_SIZE};

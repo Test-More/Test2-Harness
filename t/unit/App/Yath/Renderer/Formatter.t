@@ -1,4 +1,9 @@
-use Test2::V0 -target => 'App::Yath::Renderer::Formatter';
+use Test2::V0;
+
+eval { require App::Yath::Renderer::Formatter; 1 }
+    or skip_all "App::Yath::Renderer::Formatter requires optional dependencies: $@";
+
+our $CLASS = 'App::Yath::Renderer::Formatter';
 
 # We use a minimal mock formatter so we can instantiate the renderer without a
 # real Test2 formatter being present.

@@ -1,4 +1,9 @@
-use Test2::V0 -target => 'App::Yath::Renderer::Notify';
+use Test2::V0;
+
+eval { require App::Yath::Renderer::Notify; 1 }
+    or skip_all "App::Yath::Renderer::Notify requires optional dependencies: $@";
+
+our $CLASS = 'App::Yath::Renderer::Notify';
 
 # Minimal mock settings: provides the notify group with text_module => undef
 # so render_event can run its full logic without errors.

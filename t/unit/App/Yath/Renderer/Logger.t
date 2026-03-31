@@ -1,4 +1,9 @@
-use Test2::V0 -target => 'App::Yath::Renderer::Logger';
+use Test2::V0;
+
+eval { require App::Yath::Renderer::Logger; 1 }
+    or skip_all "App::Yath::Renderer::Logger requires optional dependencies: $@";
+
+our $CLASS = 'App::Yath::Renderer::Logger';
 
 # Utility functions in Logger.pm are package subs, not methods.
 my $expand           = App::Yath::Renderer::Logger->can('expand');

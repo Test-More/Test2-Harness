@@ -1,5 +1,12 @@
-use Test2::V0 -target => 'App::Yath::Renderer::QVF';
-use App::Yath::Theme;
+use Test2::V0;
+
+eval { require App::Yath::Renderer::QVF; 1 }
+    or skip_all "App::Yath::Renderer::QVF requires optional dependencies: $@";
+
+eval { require App::Yath::Theme; 1 }
+    or skip_all "App::Yath::Theme required: $@";
+
+our $CLASS = 'App::Yath::Renderer::QVF';
 
 my $settings = bless({}, 'MockSettings');
 my $theme    = App::Yath::Theme->new();

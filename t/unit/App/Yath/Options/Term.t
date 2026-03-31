@@ -4,7 +4,7 @@ my $parse = \&App::Yath::Options::Term::parse_options;
 
 subtest "module provides options and parse_options" => sub {
     ok(CLASS()->can('options'),       "options() method exists");
-    ok(CLASS()->can('parse_options'), "parse_options() function exists in namespace");
+    ok(defined &{CLASS() . '::parse_options'}, "parse_options() function is defined");
 };
 
 subtest "term_width (width field) can be set via CLI" => sub {

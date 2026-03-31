@@ -1,26 +1,41 @@
 use Test2::V0 -target => 'App::Yath::Command::which';
 
-subtest 'metadata' => sub {
-    is(CLASS->name,    'which',  'name');
-    is(CLASS->group,   'daemon', 'group');
-    ok(CLASS->summary,           'summary is non-empty');
-    ok(CLASS->description,       'description is non-empty');
+subtest 'run() when no daemon found' => sub {
+    my $find_called = 0;
+    my $mock = mock 'App::Yath::IPC' => (
+        override => [
+            new  => sub { bless {}, 'App::Yath::IPC' },
+            find => sub { $find_called++; return () },
+        ],
+    );
+
+    my $obj = CLASS->new(settings => {});
+    open my $fh, '>', \(my $stdout = '');
+    my $oldfh = select $fh;
+    my $ret = $obj->run();
+    select $oldfh;
+
+    ok($find_called, 'find() was called on IPC');
+    is($ret, 0, 'returns 0');
+    like($stdout, qr/No persistent harness was found/, 'prints not-found message');
 };
 
-subtest 'flags' => sub {
-    is(CLASS->accepts_dot_args,   0, 'accepts_dot_args is 0');
-    is(CLASS->args_include_tests, 0, 'args_include_tests is 0');
-    is(CLASS->load_plugins,       0, 'load_plugins is 0');
-    is(CLASS->load_resources,     0, 'load_resources is 0');
-    is(CLASS->load_renderers,     0, 'load_renderers is 0');
-};
+subtest 'run() when daemon found' => sub {
+    my $mock = mock 'App::Yath::IPC' => (
+        override => [
+            new  => sub { bless {}, 'App::Yath::IPC' },
+            find => sub { return {dir => '/tmp/yath', pid => 12345} },
+        ],
+    );
 
-subtest 'cli_args' => sub {
-    is(CLASS->cli_args, '', 'cli_args is empty string');
-};
+    my $obj = CLASS->new(settings => {});
+    open my $fh, '>', \(my $stdout = '');
+    my $oldfh = select $fh;
+    my $ret = $obj->run();
+    select $oldfh;
 
-subtest 'inheritance' => sub {
-    ok(CLASS->isa('App::Yath::Command'), 'is a App::Yath::Command');
+    is($ret, 0, 'returns 0');
+    like($stdout, qr/Found a persistent runner/, 'prints found message');
 };
 
 done_testing;

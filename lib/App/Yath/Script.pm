@@ -151,7 +151,7 @@ sub parse_new_dev_libs {
     return 0 unless @add;
 
     my %seen = map { ($_ => 1, clean_path($_) => 1) } @INC;
-    @add = grep { !($seen{$_} || $seen{clean_path(@_)}) } @add;
+    @add = grep { !($seen{$_} || $seen{clean_path($_)}) } @add;
     return 0 unless @add;
 
     unshift @INC => @add;

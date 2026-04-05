@@ -1,6 +1,15 @@
 {{$NEXT}}
 
     - Move `yath` script out of version branches
+    - Add --goto-file option to V0 for testing goto::file behavior
+    - Fix version auto-detection to dynamically scan @INC instead of
+      using a hardcoded version range
+    - Fix config version marker parsing to allow blank lines before
+      the marker in .yath.rc / .yath.user.rc
+    - Document version detection behavior: default-to-V1 when config
+      exists without a marker, and .yath.user.rc overriding .yath.rc
+    - Add goto::file as a development dependency
+    - Add acceptance test for goto::file in BEGIN phase
 
 2.000010  2026-03-31 22:05:02-07:00 America/Los_Angeles (TRIAL RELEASE)
 

@@ -223,16 +223,56 @@ __END__
 
 App::Yath::Script - Script initialization and utility functions for Test2::Harness
 
+=head1 SYNOPSIS
+
+The C<yath> script uses this module as its entry point:
+
+    #!/usr/bin/perl
+    use strict;
+    use warnings;
+
+    BEGIN {
+        return if $^C;
+        require App::Yath::Script;
+        App::Yath::Script::do_begin();
+    }
+
+    exit(App::Yath::Script::do_runtime());
+
 =head1 DESCRIPTION
 
-This module provides the initial entry point for the yath script. It handles
+This module provides the initial entry point for the C<yath> script. It handles
 script discovery, configuration loading, version detection, and delegation to
-version-specific script modules (App::Yath::Script::V{X}).
+version-specific script modules (C<App::Yath::Script::V{X}>).
 
-It also provides utility functions for path manipulation, finding files in
-parent directories, and module-to-file conversion.
+During the C<BEGIN> phase, C<do_begin()> locates C<.yath.rc> and
+C<.yath.user.rc> configuration files, determines the harness version to use,
+and delegates to the appropriate C<App::Yath::Script::V{X}> module. At
+runtime, C<do_runtime()> hands off execution to that module.
+
+=head1 PRIMARY API
+
+These are the main entry points used by the C<yath> script:
+
+=over 4
+
+=item do_begin()
+
+Called during C<BEGIN>. Discovers the script path, injects include paths,
+seeds C<PERL_HASH_SEED> for reproducibility, loads C<.yath.rc> /
+C<.yath.user.rc> configuration files, determines the harness version, and
+delegates to C<App::Yath::Script::V{X}-E<gt>do_begin(...)>.
+
+=item $exit = do_runtime()
+
+Called after C<BEGIN>. Delegates to C<App::Yath::Script::V{X}-E<gt>do_runtime()>
+and returns the exit code.
+
+=back
 
 =head1 EXPORTS
+
+All exports are optional (via L<Importer>).
 
 =over 4
 
@@ -242,16 +282,16 @@ Returns the path to the currently executing script file.
 
 =item $yath_module = module()
 
-Returns the name of the currently loaded App::Yath::Script::V{X} module.
+Returns the name of the currently loaded C<App::Yath::Script::V{X}> module.
 
-=item do_exec(\@ARGV)
+=item do_exec(\@argv)
 
-Re-executes the current script with the given arguments. Sets
+Re-executes the current script with the given arguments. Sets the
 C<T2_HARNESS_INCLUDES> environment variable to preserve the current C<@INC>.
 
-=item $clean_path = clean_path($unclean_path)
+=item $clean_path = clean_path($path)
 
-=item $clean_path = clean_path($unclean_path, 0)
+=item $clean_path = clean_path($path, $absolute)
 
 Converts a path to an absolute, normalized form. By default resolves symbolic
 links using C<realpath>. Pass a false second argument to skip realpath

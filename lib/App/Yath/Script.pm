@@ -73,7 +73,7 @@ sub do_begin {
     }
     else {
         my @err;
-        for my $v (2 .. 1) {
+        for my $v (reverse 1 .. 2) {
             my $mod = "App::Yath::Script::V${v}";
 
             my $file = mod2file($mod);

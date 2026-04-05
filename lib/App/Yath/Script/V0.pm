@@ -13,6 +13,11 @@ option_group {group => 'v0', category => 'V0 Options'} => sub {
         type        => 'List',
         description => 'Arguments to process during the BEGIN phase',
     );
+
+    option goto_file => (
+        type        => 'Scalar',
+        description => 'Use goto::file to switch to a different file during BEGIN (for testing)',
+    );
 };
 
 sub do_begin {
@@ -28,6 +33,12 @@ sub do_begin {
     @ARGV = @{$state->{skipped} // []};
 
     print "BEGIN: $_\n" for @BEGIN_ARGS;
+
+    my $goto = $state->{settings}->v0->goto_file;
+    if ($goto) {
+        require goto::file;
+        goto::file->import($goto);
+    }
 }
 
 sub do_runtime {

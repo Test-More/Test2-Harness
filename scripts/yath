@@ -7,6 +7,8 @@ our $VERSION = '2.000011';
 BEGIN {
     return if $^C;
 
+    @INC = split /;/, $ENV{T2_HARNESS_INCLUDES} if $ENV{T2_HARNESS_INCLUDES};
+
     require App::Yath::Script;
 
     App::Yath::Script::do_begin();

@@ -2,124 +2,213 @@ package App::Yath::Script;
 use strict;
 use warnings;
 
+use Cwd qw/realpath/;
+use Carp qw/confess/;
+use File::Spec();
+
+use Importer Importer => 'import';
+
+our @EXPORT_OK = (
+    qw{
+        script
+        module
+
+        do_exec
+
+        clean_path
+        find_in_updir
+        mod2file
+    },
+);
+
 our $VERSION = '2.000011';
 
-use Cwd;
-use File::Spec;
-use Time::HiRes qw/time/;
-use Test2::Harness::Util qw/find_in_updir clean_path/;
-use Getopt::Yath::Settings;
-use App::Yath;
+our ($SCRIPT, $MOD);
 
-sub script { $App::Yath::Script::SCRIPT }
+sub script { $SCRIPT }
+sub module { $MOD }
 
-$Test2::Harness::Util::USING_ALT //= 0;
-sub goto_alt_script {
-    my ($app_name, $curr_path, $check_path) = @_;
+sub do_begin {
+    my $argv = [@ARGV];
+    my @caller = caller();
 
-    my @caller0 = caller(0);
-    my @caller1 = caller(1);
+    my $exec = 0;
 
-    die "goto_alt_script() must be called in a BEGIN block at $caller0[1] line $caller0[2].\n" unless @caller1 && $caller1[3] && $caller1[3] =~ m/BEGIN/;
-    die "goto_alt_script() must be called in package 'main' at $caller0[1] line $caller0[2].\n" unless @caller0 && $caller0[0] && $caller0[0] eq 'main';
+    $SCRIPT = clean_path($caller[1]);
 
-    return unless -e $check_path;
-    return unless -x $check_path;
+    inject_includes();
 
-    return if clean_path($curr_path) eq clean_path($check_path);
+    $exec = 1 if seed_hash();
+    $exec = 1 if find_alt_script();
+    $exec = 1 if parse_new_dev_libs();
 
-    # Unlikely, but if any logic above is broken it can happen
-    die "Recursion detected when using alternate $app_name script" if $Test2::Harness::Util::USING_ALT++;
+    do_exec($argv) if $exec;
 
-    print "\n *** Found alternate $app_name script in '$check_path', switching to it ***\n\n";
+    my $config      = find_in_updir('.yath.rc');
+    my $user_config = find_in_updir('.yath.user.rc');
 
-    require goto::file;
-    goto::file->import($check_path);
+    my $version;
+    for my $conf ($config, $user_config) {
+        next unless $conf && -f $conf;
+
+        # Default to 1 if we have a .yath.rc but no version
+        $version //= 1;
+
+        open(my $fh, '<', $conf) or die "Failed to open config file '$conf': $!";
+        my $line = <$fh>;
+        close($fh);
+
+        next unless $line =~ m/^(#|;)\s*V(\d+)$/i;
+        $version = int($1);
+    }
+
+    if (defined $version) {
+        warn "Warning: Version '0' is for validating the yath script only, it should not be used for any real testing.\n"
+            if $version == 0;
+
+        $MOD = "App::Yath::Script::V${version}";
+
+        my $file = mod2file($MOD);
+        eval { require $file; 1 } or die "Could not load $MOD: $@";
+    }
+    else {
+        my @err;
+        for my $v (2 .. 1) {
+            my $mod = "App::Yath::Script::V${v}";
+
+            my $file = mod2file($mod);
+            if (eval { require $file; 1 }) {
+                $MOD = $mod;
+                last;
+            }
+
+            push @err => $@;
+        }
+
+        die join "\n" => (
+            "No Test2::Harness (App::Yath) versions appear to be installed...",
+            @err,
+        ) unless $MOD;
+    }
+
+    die "Could not find a App::Yath::Script::V{X} module to use...\n"
+        unless $MOD;
+
+    $MOD->do_begin(
+        script      => $SCRIPT,
+        argv        => $argv,
+        config      => $config,
+        user_config => $user_config,
+    );
 }
 
-sub run {
-    my ($script, $argv) = @_;
+sub do_runtime { $MOD->do_runtime(@_) }
+
+sub do_exec {
+    my ($argv) = @_;
+    $ENV{T2_HARNESS_INCLUDES} = join ';' => @INC;
+    exec($^X, $SCRIPT, @$argv);
+}
+
+sub find_alt_script {
+    my $script = './scripts/yath';
+    return 0 unless -f $script;
+    return 0 unless -x $script;
 
     $script = clean_path($script);
-    $App::Yath::Script::SCRIPT //= $script;
 
-    $argv //= [];
+    return 0 if $script eq clean_path($SCRIPT);
 
-    my $settings_data = args_to_settings_data($script, $argv);
+    $SCRIPT = $script;
 
-    my $script_version = $VERSION;
-    my $app_version    = $App::Yath::VERSION;
-    die "yath script ($App::Yath::Script::SCRIPT) has a different version than App::Yath ($INC{'App/Yath.pm'})\n     Script: $script_version\n  App::Yath: $app_version\n\n"
-        unless $script_version == $app_version;
-
-    my $settings = Getopt::Yath::Settings->new(%$settings_data);
-
-    my $app = App::Yath->new(
-        settings => $settings,
-        argv     => $argv,
-    );
-
-    return $app->run();
+    return 1;
 }
 
-sub args_to_settings_data {
-    my ($script, $argv) = @_;
+sub parse_new_dev_libs {
+    my @add;
+    for my $arg (@ARGV) {
+        last if $arg eq '::';
+        last if $arg eq '--';
 
-    my $orig_argv      = [@$argv];
-    my $orig_tmp       = File::Spec->tmpdir();
-    my $orig_tmp_perms = ((stat($orig_tmp))[2] & 07777);
-    my $orig_inc       = [@INC];
-    my $orig_sig       = {%SIG};
+        next unless $arg =~ m/^(?:-D|--dev-libs?)(?:=(.+))?$/;
+        my $arg = $1;
 
-    my $config_file      = find_in_updir('.yath.rc');
-    my $user_config_file = find_in_updir('.yath.user.rc');
+        unless ($arg) {
+            push @add => map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch';
+            next;
+        }
 
-    my $base_file = $config_file || $user_config_file;
-    unless ($base_file) {
-        for my $scm ('.git', '.svn', '.cvs') {
-            $base_file = find_in_updir($scm);
-            last if $base_file;
+        for my $path (split /,/, $arg) {
+            if ($path =~ m/\*/) {
+                push @add => glob($path);
+            }
+            else {
+                push @add => $path;
+            }
         }
     }
 
-    my $cwd = clean_path(Cwd::getcwd());
+    return 0 unless @add;
 
-    my $base_dir;
-    if ($base_file) {
-        my ($v, @d) = File::Spec->splitpath($base_file);
-        pop @d;
-        $base_dir = clean_path(File::Spec->catpath($v, @d));
+    my %seen = map { ($_ => 1, clean_path($_) => 1) } @INC;
+    @add = grep { !($seen{$_} || $seen{clean_path(@_)}) } @add;
+    return 0 unless @add;
+
+    unshift @INC => @add;
+    return 1;
+}
+
+sub inject_includes {
+    return unless $ENV{T2_HARNESS_INCLUDES};
+    @INC = split /;/, $ENV{T2_HARNESS_INCLUDES};
+}
+
+sub seed_hash {
+    return 0 if $ENV{PERL_HASH_SEED};
+
+    my @ltime = localtime;
+    my $seed = sprintf('%04d%02d%02d', 1900 + $ltime[5], 1 + $ltime[4], $ltime[3]);
+    print "PERL_HASH_SEED not set, setting to '$seed' for more reproducible results.\n";
+
+    $ENV{PERL_HASH_SEED} = $seed;
+
+    return 1;
+}
+
+sub clean_path {
+    my ( $path, $absolute ) = @_;
+
+    confess "No path was provided to clean_path()" unless $path;
+
+    $absolute //= 1;
+    $path = realpath($path) // $path if $absolute;
+
+    return File::Spec->rel2abs($path);
+}
+
+sub find_in_updir {
+    my $path = shift;
+    return clean_path($path) if -e $path;
+
+    my %seen;
+    while(1) {
+        $path = File::Spec->catdir('..', $path);
+        my $check = eval { realpath(File::Spec->rel2abs($path)) };
+        last unless $check;
+        last if $seen{$check}++;
+        return $check if -e $check;
     }
-    elsif ($cwd) {
-        my ($v, @d) = File::Spec->splitpath($cwd);
-        $base_dir = clean_path(File::Spec->catpath($v, @d));
-    }
 
-    $ENV{SYSTEM_TMPDIR} = $orig_tmp;
+    return;
+}
 
-    return {
-        yath => {
-            script => $script,
-
-            script_version => $VERSION,
-
-            scan_options => {},
-
-            config_file      => $config_file      || '',
-            user_config_file => $user_config_file || '',
-
-            base_dir  => $base_dir,
-            new_argv  => $argv,
-            orig_argv => $orig_argv,
-            orig_inc  => $orig_inc,
-            orig_tmp  => $orig_tmp,
-
-            orig_tmp_perms => $orig_tmp_perms,
-
-            cwd   => $cwd,
-            start => time(),
-        },
-    };
+sub mod2file {
+    my ($mod) = @_;
+    confess "No module name provided" unless $mod;
+    my $file = $mod;
+    $file =~ s{::}{/}g;
+    $file .= ".pm";
+    return $file;
 }
 
 1;
@@ -132,15 +221,52 @@ __END__
 
 =head1 NAME
 
-App::Yath::Script - FIXME
+App::Yath::Script - Script initialization and utility functions for Test2::Harness
 
 =head1 DESCRIPTION
 
-=head1 SYNOPSIS
+This module provides the initial entry point for the yath script. It handles
+script discovery, configuration loading, version detection, and delegation to
+version-specific script modules (App::Yath::Script::V{X}).
+
+It also provides utility functions for path manipulation, finding files in
+parent directories, and module-to-file conversion.
 
 =head1 EXPORTS
 
 =over 4
+
+=item $script_file = script()
+
+Returns the path to the currently executing script file.
+
+=item $yath_module = module()
+
+Returns the name of the currently loaded App::Yath::Script::V{X} module.
+
+=item do_exec(\@ARGV)
+
+Re-executes the current script with the given arguments. Sets
+C<T2_HARNESS_INCLUDES> environment variable to preserve the current C<@INC>.
+
+=item $clean_path = clean_path($unclean_path)
+
+=item $clean_path = clean_path($unclean_path, 0)
+
+Converts a path to an absolute, normalized form. By default resolves symbolic
+links using C<realpath>. Pass a false second argument to skip realpath
+resolution.
+
+=item $full_path = find_in_updir($file)
+
+Searches for a file starting from the current directory and moving up through
+parent directories until found. Returns the full path to the file or C<undef>
+if not found.
+
+=item $file = mod2file($mod)
+
+Converts a module name (e.g., C<App::Yath::Script>) to a file path
+(e.g., C<App/Yath/Script.pm>).
 
 =back
 
@@ -176,8 +302,4 @@ See L<http://dev.perl.org/licenses/>
 
 =cut
 
-
 =pod
-
-=cut POD NEEDS AUDIT
-

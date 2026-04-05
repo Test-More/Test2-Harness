@@ -2,26 +2,17 @@
 use strict;
 use warnings;
 
+our $VERSION = '2.000011';
+
 BEGIN {
     return if $^C;
 
-    my %SEEN = map { $_ => 1 } @INC;
-    push @INC => grep { !$SEEN{$_}++ } split /;/, $ENV{T2_HARNESS_INCLUDES} if $ENV{T2_HARNESS_INCLUDES};
-    $ENV{T2_HARNESS_INCLUDES} = join ';' => @INC;
-
-    unless ($ENV{PERL_HASH_SEED}) {
-        my @ltime = localtime;
-        my $seed = sprintf('%04d%02d%02d', 1900 + $ltime[5], 1 + $ltime[4], $ltime[3]);
-        print "PERL_HASH_SEED not set, setting to '$seed' for more reproducible results.\n";
-        $ENV{PERL_HASH_SEED} = $seed;
-        exec $^X, (map {('-I' => $_)} @INC), __FILE__, @ARGV;
-    }
-
     require App::Yath::Script;
-    App::Yath::Script::goto_alt_script('yath', __FILE__, './scripts/yath');
+
+    App::Yath::Script::do_begin();
 }
 
-exit(App::Yath::Script::run(__FILE__, \@ARGV));
+exit(App::Yath::Script::do_runtime());
 
 __END__
 
@@ -31,18 +22,7 @@ __END__
 
 =head1 NAME
 
-yath - script to launch L<App::Yath> which is the frontend for
-L<Test2::Harness>.
-
-=head1 DESCRIPTION
-
-=head1 SYNOPSIS
-
-=head1 EXPORTS
-
-=over 4
-
-=back
+yath - script to launch yath.
 
 =head1 SOURCE
 

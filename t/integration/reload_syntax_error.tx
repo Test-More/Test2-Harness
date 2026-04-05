@@ -1,4 +1,0 @@
-use Test2::V0;
-my ($want) = @ARGV;
-is($Preload::Flux::VAR, $want, "Var set as expected");
-done_testing;

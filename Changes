@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Move `yath` script out of version branches
+
 2.000010  2026-03-31 22:05:02-07:00 America/Los_Angeles (TRIAL RELEASE)
 
     - Add AI and LLM Policy

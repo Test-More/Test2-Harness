@@ -58,7 +58,7 @@ sub do_begin {
         my $line = <$fh>;
         close($fh);
 
-        next unless $line =~ m/^(#|;)\s*V(\d+)$/i;
+        next unless $line =~ m/^(?:#|;)\s*V(\d+)$/i;
         $version = int($1);
     }
 

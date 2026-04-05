@@ -51,15 +51,26 @@ sub do_begin {
     for my $conf ($config, $user_config) {
         next unless $conf && -f $conf;
 
-        # Default to 1 if we have a .yath.rc but no version
+        # Existing Test2::Harness projects have .yath.rc files with
+        # V1-specific options but no version marker. Default to V1 when a
+        # config file exists so those projects keep working without edits.
+        # Projects that want V2+ should add an explicit "# V2" marker.
         $version //= 1;
 
         open(my $fh, '<', $conf) or die "Failed to open config file '$conf': $!";
-        my $line = <$fh>;
+        # Scan comment/blank header lines for a version marker (# V1, ; V2, etc.)
+        while (my $line = <$fh>) {
+            chomp $line;
+            next if $line =~ m/^\s*$/;           # skip blank lines
+            last unless $line =~ m/^(?:#|;)/;     # stop at first non-comment line
+            if ($line =~ m/^(?:#|;)\s*V(\d+)$/i) {
+                # .yath.user.rc is processed after .yath.rc so a user-level
+                # version marker intentionally overrides the project-level one.
+                $version = int($1);
+            }
+            last;
+        }
         close($fh);
-
-        next unless $line =~ m/^(?:#|;)\s*V(\d+)$/i;
-        $version = int($1);
     }
 
     if (defined $version) {
@@ -72,8 +83,25 @@ sub do_begin {
         eval { require $file; 1 } or die "Could not load $MOD: $@";
     }
     else {
+        # No config file found -- scan @INC for available V# modules and
+        # try the highest version first so we default to the latest.
+        my %found;
+        for my $inc (@INC) {
+            next if ref $inc;
+            my $dir = File::Spec->catdir($inc, 'App', 'Yath', 'Script');
+            next unless -d $dir;
+            opendir(my $dh, $dir) or next;
+            for my $entry (readdir $dh) {
+                $found{$1} = 1 if $entry =~ /^V(\d+)\.pm$/;
+            }
+            closedir $dh;
+        }
+
+        # V0 is for script validation only, never auto-select it
+        delete $found{0};
+
         my @err;
-        for my $v (reverse 1 .. 2) {
+        for my $v (sort { $b <=> $a } keys %found) {
             my $mod = "App::Yath::Script::V${v}";
 
             my $file = mod2file($mod);
@@ -249,6 +277,27 @@ During the C<BEGIN> phase, C<do_begin()> locates C<.yath.rc> and
 C<.yath.user.rc> configuration files, determines the harness version to use,
 and delegates to the appropriate C<App::Yath::Script::V{X}> module. At
 runtime, C<do_runtime()> hands off execution to that module.
+
+=head2 Version Detection
+
+When no configuration file is found, the latest installed
+C<App::Yath::Script::V{X}> module is used automatically (C<V0> is excluded
+from auto-detection since it is reserved for script validation).
+
+When a C<.yath.rc> or C<.yath.user.rc> file exists, the version defaults to
+B<1> unless an explicit version marker is present. This preserves backwards
+compatibility with existing L<Test2::Harness> projects whose configuration
+files predate the version marker convention. Projects that want a newer version
+should add an explicit marker (e.g. C<# V2>) to their configuration file.
+
+The version marker must appear in the comment header at the top of the file --
+it is a comment line matching C<# VN> or C<; VN> (case-insensitive). Blank
+lines before it are allowed, but the marker must come before the first
+non-comment line.
+
+If both C<.yath.rc> and C<.yath.user.rc> contain version markers, the
+user-level file (C<.yath.user.rc>) takes precedence. This allows individual
+developers to override the project-level version when needed.
 
 =head1 PRIMARY API
 

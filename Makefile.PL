@@ -36,6 +36,7 @@ my %WriteMakefileArgs = (
     "Carp" => 0,
     "Cwd" => "3.75",
     "File::Spec" => 0,
+    "Getopt::Yath" => "2.000008",
     "Importer" => "0.025"
   },
   "TEST_REQUIRES" => {
@@ -43,7 +44,7 @@ my %WriteMakefileArgs = (
   },
   "VERSION" => "2.000011",
   "test" => {
-    "TESTS" => ""
+    "TESTS" => "t/acceptance/*.t t/unit/*.t t/unit/Script/*.t"
   }
 );
 
@@ -51,6 +52,7 @@ my %FallbackPrereqs = (
   "Carp" => 0,
   "Cwd" => "3.75",
   "File::Spec" => 0,
+  "Getopt::Yath" => "2.000008",
   "Importer" => "0.025",
   "Test2::V0" => "1.302199"
 );

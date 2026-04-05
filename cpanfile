@@ -4,6 +4,7 @@
 requires "Carp" => "0";
 requires "Cwd" => "3.75";
 requires "File::Spec" => "0";
+requires "Getopt::Yath" => "2.000008";
 requires "Importer" => "0.025";
 requires "perl" => "5.014000";
 
@@ -18,4 +19,5 @@ on 'configure' => sub {
 on 'develop' => sub {
   requires "Test::Pod" => "1.41";
   requires "Test::Spelling" => "0.12";
+  requires "goto::file" => "0";
 };

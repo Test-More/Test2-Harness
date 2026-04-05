@@ -2,16 +2,73 @@
 
 App::Yath::Script - Script initialization and utility functions for Test2::Harness
 
+# SYNOPSIS
+
+The `yath` script uses this module as its entry point:
+
+    #!/usr/bin/perl
+    use strict;
+    use warnings;
+
+    BEGIN {
+        return if $^C;
+        require App::Yath::Script;
+        App::Yath::Script::do_begin();
+    }
+
+    exit(App::Yath::Script::do_runtime());
+
 # DESCRIPTION
 
-This module provides the initial entry point for the yath script. It handles
+This module provides the initial entry point for the `yath` script. It handles
 script discovery, configuration loading, version detection, and delegation to
-version-specific script modules (App::Yath::Script::V{X}).
+version-specific script modules (`App::Yath::Script::V{X}`).
 
-It also provides utility functions for path manipulation, finding files in
-parent directories, and module-to-file conversion.
+During the `BEGIN` phase, `do_begin()` locates `.yath.rc` and
+`.yath.user.rc` configuration files, determines the harness version to use,
+and delegates to the appropriate `App::Yath::Script::V{X}` module. At
+runtime, `do_runtime()` hands off execution to that module.
+
+## Version Detection
+
+When no configuration file is found, the latest installed
+`App::Yath::Script::V{X}` module is used automatically (`V0` is excluded
+from auto-detection since it is reserved for script validation).
+
+When a `.yath.rc` or `.yath.user.rc` file exists, the version defaults to
+**1** unless an explicit version marker is present. This preserves backwards
+compatibility with existing [Test2::Harness](https://metacpan.org/pod/Test2%3A%3AHarness) projects whose configuration
+files predate the version marker convention. Projects that want a newer version
+should add an explicit marker (e.g. `# V2`) to their configuration file.
+
+The version marker must appear in the comment header at the top of the file --
+it is a comment line matching `# VN` or `; VN` (case-insensitive). Blank
+lines before it are allowed, but the marker must come before the first
+non-comment line.
+
+If both `.yath.rc` and `.yath.user.rc` contain version markers, the
+user-level file (`.yath.user.rc`) takes precedence. This allows individual
+developers to override the project-level version when needed.
+
+# PRIMARY API
+
+These are the main entry points used by the `yath` script:
+
+- do\_begin()
+
+    Called during `BEGIN`. Discovers the script path, injects include paths,
+    seeds `PERL_HASH_SEED` for reproducibility, loads `.yath.rc` /
+    `.yath.user.rc` configuration files, determines the harness version, and
+    delegates to `App::Yath::Script::V{X}->do_begin(...)`.
+
+- $exit = do\_runtime()
+
+    Called after `BEGIN`. Delegates to `App::Yath::Script::V{X}->do_runtime()`
+    and returns the exit code.
 
 # EXPORTS
+
+All exports are optional (via [Importer](https://metacpan.org/pod/Importer)).
 
 - $script\_file = script()
 
@@ -19,15 +76,15 @@ parent directories, and module-to-file conversion.
 
 - $yath\_module = module()
 
-    Returns the name of the currently loaded App::Yath::Script::V{X} module.
+    Returns the name of the currently loaded `App::Yath::Script::V{X}` module.
 
-- do\_exec(\\@ARGV)
+- do\_exec(\\@argv)
 
-    Re-executes the current script with the given arguments. Sets
+    Re-executes the current script with the given arguments. Sets the
     `T2_HARNESS_INCLUDES` environment variable to preserve the current `@INC`.
 
-- $clean\_path = clean\_path($unclean\_path)
-- $clean\_path = clean\_path($unclean\_path, 0)
+- $clean\_path = clean\_path($path)
+- $clean\_path = clean\_path($path, $absolute)
 
     Converts a path to an absolute, normalized form. By default resolves symbolic
     links using `realpath`. Pass a false second argument to skip realpath

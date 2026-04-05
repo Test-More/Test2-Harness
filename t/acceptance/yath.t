@@ -92,9 +92,7 @@ subtest 'PERL_HASH_SEED re-exec preserves @INC' => sub {
     local $ENV{PERL_HASH_SEED};
     delete $ENV{PERL_HASH_SEED};
 
-    my $cmd = join ' ', $perl, "-I$libdir", $yath, '--begin', 'reexec', 'test';
-    my $output = `$cmd 2>&1`;
-    my $exit   = $? >> 8;
+    my ($output, $exit) = run_yath('--begin', 'reexec', 'test');
 
     like($output, qr/PERL_HASH_SEED not set/, 'seed message printed');
     like($output, qr/^BEGIN: reexec$/m,        'begin arg survived re-exec');

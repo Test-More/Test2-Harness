@@ -33,11 +33,17 @@ subtest 'clean_path' => sub {
 };
 
 subtest 'find_in_updir' => sub {
-    # .yath.rc exists in the project root, should be found from cwd
-    my $found = find_in_updir('.yath.rc');
-    ok(defined $found, 'found .yath.rc');
-    ok(-f $found,      '.yath.rc is a file');
-    like($found, qr/\.yath\.rc$/, 'path ends with .yath.rc');
+    # Create a temp file in cwd so we have something reliable to find
+    my $marker = ".yath_test_marker_$$";
+    open(my $fh, '>', $marker) or die "Cannot create $marker: $!";
+    close($fh);
+
+    my $found = find_in_updir($marker);
+    ok(defined $found, 'found marker file');
+    ok(-f $found,      'marker file is a file');
+    like($found, qr/\Q$marker\E$/, 'path ends with marker filename');
+
+    unlink $marker;
 
     # Non-existent file returns undef
     my $missing = find_in_updir('.nonexistent_file_that_should_not_exist');

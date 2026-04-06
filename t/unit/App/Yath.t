@@ -172,7 +172,7 @@ subtest process_argv => sub {
 
     is($one->command_class, 'App::Yath::Command::fake', "Set command class");
     is(
-        ${$one->settings->fake},
+        {%{$one->settings->fake}},
         {
             x         => 1,
             y         => 1,

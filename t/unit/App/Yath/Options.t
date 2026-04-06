@@ -445,7 +445,7 @@ subtest populate_pre_defaults => sub {
     $one->populate_pre_defaults();
 
     is(
-        ${$one->settings->x},
+        {%{$one->settings->x}},
         {
             baz => 42,
             bar => {},
@@ -489,7 +489,7 @@ subtest populate_cmd_defaults => sub {
     $one->populate_cmd_defaults();
 
     is(
-        ${$one->settings->x},
+        {%{$one->settings->x}},
         {
             baz => 42,
             bar => {},
@@ -665,7 +665,7 @@ subtest '*_command_opts' => sub {
     is($one->pending_cmd, undef, "Nothing left to do");
 
     is(
-        ${$one->settings->x},
+        {%{$one->settings->x}},
         {
             foo => FDNE(),
             bar => T(),
@@ -718,7 +718,7 @@ subtest '*_pre_command_opts' => sub {
     is($one->pending_pre, undef, "Nothing left to do");
 
     is(
-        ${$one->settings->x},
+        {%{$one->settings->x}},
         {
             foo => FDNE(),
             bar => T(),

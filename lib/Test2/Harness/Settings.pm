@@ -9,14 +9,19 @@ use Scalar::Util();
 
 use Test2::Harness::Settings::Prefix;
 
+use parent 'Getopt::Yath::Settings';
+
 sub new {
     my $class = shift;
 
     my $hash;
-    if (@_ == 1) {
+    if (@_ == 1 && !ref($_[0])) {
         require Test2::Harness::Util::File::JSON;
         my $settings_file = Test2::Harness::Util::File::JSON->new(name => $_[0]);
         $hash = $settings_file->read;
+    }
+    elsif (@_ == 1) {
+        $hash = $_[0];
     }
     else {
         $hash = {@_};
@@ -39,20 +44,35 @@ sub new {
         $hash->{$key} = Test2::Harness::Settings::Prefix->new(%$val);
     }
 
-    return bless(\$hash, $class);
+    return bless($hash, $class);
 }
+
+# Override group() to use Prefix instead of Group
+sub group {
+    my $self = shift;
+    my ($group, $vivify) = @_;
+
+    return $self->{$group} if $self->{$group};
+
+    return $self->{$group} = Test2::Harness::Settings::Prefix->new()
+        if $vivify;
+
+    Carp::confess("The '$group' group is not defined");
+}
+
+# Legacy API methods that delegate to the Group-based API
 
 sub define_prefix {
     my $self = shift;
     my ($prefix) = @_;
 
-    return ${$self}->{$prefix} //= Test2::Harness::Settings::Prefix->new;
+    return $self->{$prefix} //= Test2::Harness::Settings::Prefix->new;
 }
 
 sub check_prefix {
     my $self = shift;
     my ($prefix) = @_;
-    return exists(${$self}->{$prefix});
+    return exists($self->{$prefix});
 }
 
 sub prefix {
@@ -60,9 +80,9 @@ sub prefix {
     my ($prefix, @args) = @_;
 
     Carp::croak("Too many arguments for prefix()") if @args;
-    Carp::croak("The '$prefix' prefix is not defined") unless ${$self}->{$prefix};
+    Carp::croak("The '$prefix' prefix is not defined") unless $self->{$prefix};
 
-    return ${$self}->{$prefix};
+    return $self->{$prefix};
 }
 
 sub build {
@@ -91,7 +111,7 @@ sub AUTOLOAD {
 
 sub TO_JSON {
     my $self = shift;
-    return {%$$self};
+    return {%$self};
 }
 
 1;

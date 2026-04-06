@@ -10,35 +10,36 @@ use File::Temp qw/tempdir/;
 
 use Test2::Harness::Util qw/clean_path chmod_tmp/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
+option_group {group => 'workspace', category => "Workspace Options"} => sub {
     option tmp_dir => (
-        type        => 's',
+        type        => 'Scalar',
         short       => 't',
         alt         => ['tmpdir'],
         description => 'Use a specific temp directory (Default: use system temp dir)',
-        env_vars => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
+        from_env_vars => [qw/T2_HARNESS_TEMP_DIR YATH_TEMP_DIR TMPDIR TEMPDIR TMP_DIR TEMP_DIR/],
         default     => sub { File::Spec->tmpdir },
     );
 
     option workdir => (
-        type         => 's',
+        type         => 'Scalar',
         short        => 'w',
         description  => 'Set the work directory (Default: new temp directory)',
-        env_vars => [qw/T2_WORKDIR YATH_WORKDIR/],
-        clear_env_vars => 1,
+        from_env_vars => [qw/T2_WORKDIR YATH_WORKDIR/],
+        clear_env_vars => [qw/T2_WORKDIR YATH_WORKDIR/],
         normalize    => \&clean_path,
     );
 
     option clear => (
+        type        => 'Bool',
         short       => 'C',
         description => 'Clear the work directory if it is not already empty',
     );
 
-    post sub {
-        my %params   = @_;
-        my $settings = $params{settings};
+    option_post_process sub {
+        my ($instance, $state) = @_;
+        my $settings = $state->{settings};
 
         if (my $workdir = $settings->workspace->workdir) {
             if (-d $workdir) {
@@ -58,7 +59,7 @@ option_group {prefix => 'workspace', category => "Workspace Options"} => sub {
         my $tmpdir = tempdir(
             $template,
             DIR     => $settings->workspace->tmp_dir,
-            CLEANUP => !($settings->debug->keep_dirs || $params{command}->always_keep_dir),
+            CLEANUP => !($settings->debug->keep_dirs || ($state->{command} && $state->{command}->always_keep_dir)),
         );
         chmod_tmp($tmpdir);
 

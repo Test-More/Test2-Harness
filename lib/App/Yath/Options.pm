@@ -162,6 +162,7 @@ sub _include_getopt_yath_instance {
                 my $state = {
                     settings => $settings,
                     remains  => $params{args},
+                    command  => $params{command},
                 };
                 $callback->($inst, $state);
             };

@@ -70,7 +70,11 @@ sub pre_command { 0 }
 
 # Env vars: Getopt::Yath uses from_env_vars, old system uses env_vars
 sub env_vars       { $_[0]->{inner}->from_env_vars }
-sub clear_env_vars { $_[0]->{inner}->clear_env_vars }
+sub clear_env_vars {
+    my $val = $_[0]->{inner}->clear_env_vars;
+    return $val if ref($val) eq 'ARRAY';
+    return $val ? 1 : 0;  # old-style boolean for backward compat
+}
 
 # Derive the old-style type letter from the Getopt::Yath::Option subclass
 sub type {

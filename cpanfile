@@ -3,6 +3,7 @@
 
 requires "App::Yath::Script" => "2.000011";
 requires "Carp" => "0";
+requires "Getopt::Yath" => "0.001001";
 requires "Config" => "0";
 requires "Cwd" => "0";
 requires "Data::Dumper" => "0";

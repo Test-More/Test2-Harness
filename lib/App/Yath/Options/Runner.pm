@@ -11,15 +11,16 @@ use Test2::Harness::Util qw/clean_path mod2file/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use File::Spec;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
 my $DEFAULT_COVER_ARGS = '-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
 
-option_group {prefix => 'runner', category => "Runner Options"} => sub {
+option_group {group => 'runner', category => "Runner Options"} => sub {
     option use_fork => (
+        type        => 'Bool',
         alt         => ['fork'],
         description => "(default: on, except on windows) Normally tests are run by forking, which allows for features like preloading. This will turn off the behavior globally (which is not compatible with preloading). This is slower, it is better to tag misbehaving tests with the '# HARNESS-NO-PRELOAD' comment in their header to disable forking only for those tests.",
-        env_vars => [qw/!T2_NO_FORK T2_HARNESS_FORK !T2_HARNESS_NO_FORK YATH_FORK !YATH_NO_FORK/],
+        from_env_vars => [qw/!T2_NO_FORK T2_HARNESS_FORK !T2_HARNESS_NO_FORK YATH_FORK !YATH_NO_FORK/],
         default     => sub {
             return 0 if IS_WIN32;
             return 1;
@@ -27,32 +28,33 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option abort_on_bail => (
-        type => 'b',
+        type => 'Bool',
         default => 1,
         description => "Abort all testing if a bail-out is encountered (default: on)",
     );
 
     option use_timeout => (
+        type        => 'Bool',
         alt         => ['timeout'],
         description => "(default: on) Enable/disable timeouts",
         default     => 1,
     );
 
     option shared_jobs_config => (
-        type => 's',
+        type => 'Scalar',
         description => 'Where to look for a shared slot config file. If a filename with no path is provided yath will search the current and all parent directories for the name.',
         default => '.sharedjobslots.yml',
         long_examples => [ ' .sharedjobslots.yml', ' relative/path/.sharedjobslots.yml', ' /absolute/path/.sharedjobslots.yml' ],
     );
 
-    post \&jobs_post_process;
+    option_post_process \&jobs_post_process;
     option job_count => (
-        type           => 's',
+        type           => 'Scalar',
         short          => 'j',
         alt            => ['jobs'],
         description    => 'Set the number of concurrent jobs to run. Add a :# if you also wish to designate multiple slots per test. 8:2 means 8 slots, but each test gets 2 slots, so 4 tests run concurrently. Tests can find their concurrency assignemnt in the "T2_HARNESS_MY_JOB_CONCURRENCY" environment variable.',
-        env_vars       => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
-        clear_env_vars => 1,
+        from_env_vars  => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
+        clear_env_vars => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
         long_examples  => [' 4', ' 8:2'],
         short_examples => ['4', '8:2'],
 
@@ -70,17 +72,17 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option slots_per_job => (
-        type => 's',
+        type => 'Scalar',
         short => 'x',
         description => "This sets the number of slots each job will use (default 1). This is normally set by the ':#' in '-j#:#'.",
-        env_vars => ['T2_HARNESS_JOB_CONCURRENCY'],
-        clear_env_vars => 1,
+        from_env_vars => ['T2_HARNESS_JOB_CONCURRENCY'],
+        clear_env_vars => ['T2_HARNESS_JOB_CONCURRENCY'],
         long_examples => [' 2'],
         short_examples => ['2'],
     );
 
     option dump_depmap => (
-        type => 'b',
+        type => 'Bool',
         description => "When using staged preload, dump the depmap for each stage as json files",
         default => 0,
     );
@@ -88,14 +90,14 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option includes => (
         name        => 'include',
         short       => 'I',
-        type        => 'm',
+        type        => 'List',
         description => "Add a directory to your include paths",
     );
 
     option resources => (
         name => 'resource',
         short => 'R',
-        type => 'm',
+        type => 'List',
         description => "Use a resource module to assign resource assignments to individual tests",
         long_examples  => [' Port', ' +Test2::Harness::Runner::Resource::Port'],
         short_examples => [' Port'],
@@ -111,6 +113,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option tlib => (
+        type        => 'Bool',
         description => "(Default: off) Include 't/lib' in your module path",
         default     => 0,
         action => sub {
@@ -120,6 +123,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option lib => (
+        type  => 'Bool',
         short => 'l',
         description => "(Default: include if it exists) Include 'lib' in your module path",
         default     => 1,
@@ -132,6 +136,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option blib => (
+        type  => 'Bool',
         short => 'b',
         description => "(Default: include if it exists) Include 'blib/lib' and 'blib/arch' in your module path",
         default     => 1,
@@ -149,13 +154,14 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option unsafe_inc => (
+        type        => 'Bool',
         description => "perl is removing '.' from \@INC as a security concern. This option keeps things from breaking for now.",
-        env_vars    => [qw/PERL_USE_UNSAFE_INC/],
+        from_env_vars => [qw/PERL_USE_UNSAFE_INC/],
         default     => 0,
     );
 
     option preloads => (
-        type        => 'm',
+        type        => 'List',
         alt         => ['preload'],
         short       => 'P',
         description => 'Preload a module before running tests',
@@ -164,20 +170,21 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option preload_threshold => (
         short => 'W',
         alt => ['Pt'],
-        type => 's',
+        type => 'Scalar',
         default => 0,
         description => "Only do preload if at least N tests are going to be run. In some cases a full preload takes longer than simply running the tests, this lets you specify a minimum number of test jobs that will be run for preload to happen. This has no effect for a persistent runner. The default is 0, and it means always preload."
     );
 
     option nytprof => (
-        type => 'b',
+        type => 'Bool',
         description => "Use Devel::NYTProf on tests. This will set addpid=1 for you. This works with or without fork.",
         long_examples => [''],
     );
 
-    post \&cover_post_process;
+    option_post_process \&cover_post_process;
     option cover => (
-        type        => 'd',
+        type        => 'Auto',
+        autofill    => 1,
         description => "Use Devel::Cover to calculate test coverage. This disables forking. If no args are specified the following are used: $DEFAULT_COVER_ARGS",
         long_examples => ['', '=-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl'],
         action      => sub {
@@ -191,14 +198,14 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option switch => (
         field        => 'switches',
         short        => 'S',
-        type         => 'm',
+        type         => 'List',
         description  => 'Pass the specified switch to perl for each test. This is not compatible with preload.',
     );
 
     option resource_timeout => (
         alt => ['rt'],
 
-        type => 's',
+        type => 'Scalar',
         default => 0,
 
         long_examples  => [' SECONDS'],
@@ -209,7 +216,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option event_timeout => (
         alt => ['et'],
 
-        type => 's',
+        type => 'Scalar',
         default => 60,
 
         long_examples  => [' SECONDS'],
@@ -220,7 +227,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     option post_exit_timeout => (
         alt => ['pet'],
 
-        type => 's',
+        type => 'Scalar',
         default => 15,
 
         long_examples  => [' SECONDS'],
@@ -229,15 +236,15 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
     );
 
     option runner_id => (
-        type => 's',
+        type => 'Scalar',
         default => sub { gen_uuid() },
         description => 'Runner ID (usually a generated uuid)',
     );
 };
 
 sub jobs_post_process {
-    my %params   = @_;
-    my $settings = $params{settings};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
     my $runner = $settings->runner or return;
 
@@ -302,8 +309,8 @@ sub fix_job_resources {
 }
 
 sub cover_post_process {
-    my %params   = @_;
-    my $settings = $params{settings};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
     if ($ENV{T2_DEVEL_COVER} && !$settings->runner->cover) {
         $settings->runner->field(cover => $ENV{T2_DEVEL_COVER} eq '1' ? $ENV{T2_DEVEL_COVER} : $DEFAULT_COVER_ARGS);

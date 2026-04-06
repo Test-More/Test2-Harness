@@ -9,6 +9,7 @@ use Scalar::Util qw/blessed/;
 use Test2::Harness::Util qw/mod2file/;
 
 use App::Yath::Option();
+use App::Yath::Option::Adapter();
 use Test2::Harness::Settings();
 
 use Test2::Harness::Util::HashBase qw{
@@ -116,13 +117,67 @@ sub include {
     my $self = shift;
     my ($inc) = @_;
 
-    croak "Include must be an instance of ${ \__PACKAGE__ }, got ${ defined($inc) ? \qq['$inc'] : \'undef' }"
-        unless $inc && blessed($inc) && $inc->isa(__PACKAGE__);
+    croak "Include must be an instance of ${ \__PACKAGE__ } or Getopt::Yath::Instance, got ${ defined($inc) ? \qq['$inc'] : \'undef' }"
+        unless $inc && blessed($inc) && ($inc->isa(__PACKAGE__) || $inc->isa('Getopt::Yath::Instance'));
+
+    if ($inc->isa('Getopt::Yath::Instance')) {
+        return $self->_include_getopt_yath_instance($inc);
+    }
 
     $self->include_option($_) for @{$inc->all};
 
     $self->{+POST_LIST_SORTED} = 0;
     push @{$self->{+POST_LIST}} => @{$inc->post_list};
+
+    return;
+}
+
+sub _include_getopt_yath_instance {
+    my $self = shift;
+    my ($inst) = @_;
+
+    # Wrap each Getopt::Yath::Option in an adapter
+    for my $gy_opt (@{$inst->options || []}) {
+        my $adapter = App::Yath::Option::Adapter->new(inner => $gy_opt);
+        $self->include_option($adapter);
+    }
+
+    # Merge post-process callbacks
+    my $posts = $inst->posts || {};
+    $self->{+POST_LIST_SORTED} = 0;
+    for my $weight (keys %$posts) {
+        for my $post_entry (@{$posts->{$weight}}) {
+            my $applicable = $post_entry->{applicable};
+            my $callback   = $post_entry->{callback};
+
+            # Wrap the callback to translate from old-style call convention
+            # Old: ($weight, $applicable, $callback) where callback gets (options => $opts, args => ..., settings => ...)
+            # Getopt::Yath: callback gets ($instance, $state)
+            my $wrapped_cb = sub {
+                my %params = @_;
+                my $options  = $params{options};
+                my $settings = $params{settings};
+
+                # Create a minimal state hash for the Getopt::Yath callback
+                my $state = {
+                    settings => $settings,
+                    remains  => $params{args},
+                };
+                $callback->($inst, $state);
+            };
+
+            push @{$self->{+POST_LIST}} => [$weight, $applicable, $wrapped_cb];
+        }
+    }
+
+    # Process included instances recursively
+    my $included = $inst->included || {};
+    for my $type (keys %$included) {
+        for my $sub_inst (@{$included->{$type}}) {
+            next unless blessed($sub_inst) && $sub_inst->isa('Getopt::Yath::Instance');
+            $self->_include_getopt_yath_instance($sub_inst);
+        }
+    }
 
     return;
 }
@@ -138,7 +193,14 @@ sub include_from {
         $self->include($options);
 
         $self->{+INCLUDED}->{$pkg}++;
-        $self->{+INCLUDED}->{$_}++ for keys %{$options->included};
+
+        if ($options->isa(__PACKAGE__)) {
+            $self->{+INCLUDED}->{$_}++ for keys %{$options->included};
+        }
+        elsif ($options->isa('Getopt::Yath::Instance')) {
+            my $inc = $options->included || {};
+            $self->{+INCLUDED}->{$_}++ for keys %$inc;
+        }
     }
 
     return;

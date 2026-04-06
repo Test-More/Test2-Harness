@@ -140,7 +140,7 @@ sub load_options {
         my $add = $lib->options;
         next unless $add;
 
-        unless (blessed($add) && $add->isa('App::Yath::Options')) {
+        unless (blessed($add) && ($add->isa('App::Yath::Options') || $add->isa('Getopt::Yath::Instance'))) {
             warn "Module '$option_libs->{$lib}' is outdated, not loading options.\n"
                 unless $ENV{'YATH_SELF_TEST'};
             next;

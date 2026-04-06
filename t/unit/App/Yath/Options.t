@@ -345,33 +345,33 @@ subtest include => sub {
 
     like(
         dies { $one->include() },
-        qr/Include must be an instance of $CLASS, got undef/,
+        qr/Include must be an instance of $CLASS or Getopt::Yath::Instance, got undef/,
         "Must specify what to include"
     );
 
     like(
         dies { $one->include('foo') },
-        qr/Include must be an instance of $CLASS, got 'foo'/,
+        qr/Include must be an instance of $CLASS or Getopt::Yath::Instance, got 'foo'/,
         "String is not a valid include"
     );
 
     like(
         dies { $one->include($CLASS) },
-        qr/Include must be an instance of $CLASS, got '$CLASS'/,
+        qr/Include must be an instance of $CLASS or Getopt::Yath::Instance, got '$CLASS'/,
         "Package is not a valid include"
     );
 
     my $ref = [];
     like(
         dies { $one->include($ref) },
-        qr/Include must be an instance of $CLASS, got '\Q$ref\E'/,
+        qr/Include must be an instance of $CLASS or Getopt::Yath::Instance, got '\Q$ref\E'/,
         "A reference is not a valid include"
     );
 
     bless $ref, 'XXX';
     like(
         dies { $one->include($ref) },
-        qr/Include must be an instance of $CLASS, got '\Q$ref\E'/,
+        qr/Include must be an instance of $CLASS or Getopt::Yath::Instance, got '\Q$ref\E'/,
         "Must be an instance of $CLASS"
     );
 

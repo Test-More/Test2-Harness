@@ -6,57 +6,61 @@ our $VERSION = '1.000168';
 
 use Test2::Harness::Util qw/mod2file/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'display', category => "Display Options"} => sub {
+option_group {group => 'display', category => "Display Options"} => sub {
     option color => (
+        type        => 'Bool',
         description => "Turn color on, default is true if STDOUT is a TTY.",
         default     => sub { -t STDOUT ? 1 : 0 },
     );
 
     option quiet => (
         short       => 'q',
-        type        => 'c',
+        type        => 'Count',
         description => "Be very quiet.",
         default     => 0,
     );
 
     option verbose => (
         short       => 'v',
-        type        => 'c',
+        type        => 'Count',
         description => "Be more verbose",
         default     => 0,
     );
 
     option no_wrap => (
-        type        => 'b',
+        type        => 'Bool',
         description => "Do not do fancy text-wrapping, let the terminal handle it",
         default     => 0,
     );
 
     option no_final_table => (
-        type        => 'b',
+        type        => 'Bool',
         description => "When printing final results, don't use table-style display",
         default     => 0,
     );
 
     option show_times => (
+        type        => 'Bool',
         short       => 'T',
         description => 'Show the timing data for each job',
     );
 
     option hide_runner_output => (
+        type        => 'Bool',
         description => 'Hide output from the runner, showing only test output. (See Also truncate_runner_output)',
         default     => 0,
     );
 
     option truncate_runner_output => (
+        type        => 'Bool',
         description => 'Only show runner output that was generated after the current command. This is only useful with a persistent runner.',
         default     => 0,
     );
 
     option term_width => (
-        type          => 's',
+        type          => 'Scalar',
         alt           => ['term-size'],
         description   => 'Alternative to setting $TABLE_TERM_SIZE. Setting this will override the terminal width detection to the number of characters specified.',
         long_examples => [' 80', ' 200'],
@@ -68,14 +72,16 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
     );
 
     option 'progress' => (
+        type    => 'Bool',
         default => sub { -t STDOUT ? 1 : 0 },
 
         description => "Toggle progress indicators. On by default if STDOUT is a TTY. You can use --no-progress to disable the 'events seen' counter and buffered event pre-display",
     );
 
     option renderers => (
-        alt  => ['renderer'],
-        type => 'H',
+        alt      => ['renderer'],
+        type     => 'Map',
+        split_on => ',',
 
         description => 'Specify renderers, (Default: "Formatter=Test2"). Use "+" to give a fully qualified module name. Without "+" "Test2::Harness::Renderer::" will be prepended to your argument.',
 
@@ -98,9 +104,9 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
         },
     );
 
-    post 100 => sub {
-        my %params   = @_;
-        my $settings = $params{settings};
+    option_post_process 100 => sub {
+        my ($instance, $state) = @_;
+        my $settings = $state->{settings};
 
         my $display   = $settings->display;
         my $renderers = $display->renderers;
@@ -145,38 +151,43 @@ option_group {prefix => 'display', category => "Display Options"} => sub {
     };
 };
 
-option_group {prefix => 'formatter', category => "Formatter Options"} => sub {
+option_group {group => 'formatter', category => "Formatter Options"} => sub {
     option formatter => (
-        type                => 's',
+        type                => 'Scalar',
     );
 
     option 'qvf' => (
+        type        => 'Bool',
         description => '[Q]uiet, but [V]erbose on [F]ailure. Hide all output from tests when they pass, except to say they passed. If a test fails then ALL output from the test is verbosely output.',
     );
 
     option show_job_end => (
+        type        => 'Bool',
         description => 'Show output when a job ends. (Default: on)',
         default     => 1,
     );
 
     option show_job_info => (
+        type                => 'Bool',
         description         => 'Show the job configuration when a job starts. (Default: off, unless -vv)',
         default             => 0,
     );
 
     option show_job_launch => (
+        type                => 'Bool',
         description         => "Show output for the start of a job. (Default: off unless -v)",
         default             => 0,
     );
 
     option show_run_info => (
+        type                => 'Bool',
         description         => 'Show the run configuration when a run starts. (Default: off, unless -vv)',
         default             => 0,
     );
 
-    post 90 => sub {
-        my %params   = @_;
-        my $settings = $params{settings};
+    option_post_process 90 => sub {
+        my ($instance, $state) = @_;
+        my $settings = $state->{settings};
 
         $settings->formatter->field(formatter => $settings->formatter->qvf ? 'QVF' : 'Test2')
             unless defined $settings->formatter->formatter;

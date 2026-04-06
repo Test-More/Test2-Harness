@@ -641,6 +641,10 @@ sub _index_option {
 
     for my $n ($opt->name, @{$opt->alt || []}) {
         if (my $existing = $index->{$n}) {
+            # For Adapter-wrapped options, compare the inner Getopt::Yath::Option
+            my $e_inner = $existing->can('inner') ? $existing->inner : $existing;
+            my $o_inner = $opt->can('inner') ? $opt->inner : $opt;
+            next if "$e_inner" eq "$o_inner";
             next if "$existing" eq "$opt";
             croak "Option '$n' was already defined (" . $existing->trace_string . ")";
         }
@@ -651,6 +655,9 @@ sub _index_option {
 
     if (my $short = $opt->short) {
         if (my $existing = $index->{$short}) {
+            my $e_inner = $existing->can('inner') ? $existing->inner : $existing;
+            my $o_inner = $opt->can('inner') ? $opt->inner : $opt;
+            return $out if "$e_inner" eq "$o_inner";
             return $out if "$existing" eq "$opt";
             croak "Option '$short' was already defined (" . $existing->trace_string . ")";
         }

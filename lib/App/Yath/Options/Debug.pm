@@ -10,58 +10,65 @@ use Test2::Harness::Util qw/find_libraries mod2file clean_path/;
 
 use Errno qw/EINTR/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'debug', category => 'Help and Debugging'} => sub {
-    post 99999 => \&_post_process_show_opts;
-    post 99998 => \&_post_process_interactive;
-    post \&_post_process_version;
-    post \&_post_process_help;
+option_group {group => 'debug', category => 'Help and Debugging'} => sub {
+    option_post_process 99999 => \&_post_process_show_opts;
+    option_post_process 99998 => \&_post_process_interactive;
+    option_post_process \&_post_process_version;
+    option_post_process \&_post_process_help;
 
     option dummy => (
+        type           => 'Bool',
         short          => 'd',
         description    => 'Dummy run, do not actually execute anything',
-        env_vars       => [qw/T2_HARNESS_DUMMY/],
-        clear_env_vars => 1,
+        from_env_vars  => [qw/T2_HARNESS_DUMMY/],
+        clear_env_vars => [qw/T2_HARNESS_DUMMY/],
         default        => 0,
     );
 
     option procname_prefix => (
-        type => 's',
+        type => 'Scalar',
         default => '',
         description => 'Add a prefix to all proc names (as seen by ps).',
     );
 
     option keep_dirs => (
+        type        => 'Bool',
         short       => 'k',
-        alt         => ['keep_dir'],
+        alt         => ['keep-dir'],
         description => 'Do not delete directories when done. This is useful if you want to inspect the directories used for various commands.',
         default     => 0,
     );
 
     option 'show-opts' => (
+        type        => 'Bool',
         description => 'Exit after showing what yath thinks your options mean',
         pre_command => 1,
     );
 
     option version => (
+        type        => 'Bool',
         short       => 'V',
         description => "Exit after showing a helpful usage message",
         pre_command => 1,
     );
 
     option help => (
+        type        => 'Bool',
         short       => 'h',
         description => "exit after showing help information",
     );
 
     option interactive => (
+        type  => 'Bool',
         short => 'i',
         description => 'Use interactive mode, 1 test at a time, stdin forwarded to it',
     );
 
     option summary => (
-        type        => 'd',
+        type        => 'Auto',
+        autofill    => 1,
         description => "Write out a summary json file, if no path is provided 'summary.json' will be used. The .json extension is added automatically if omitted.",
 
         long_examples => ['', '=/path/to/summary.json'],
@@ -99,7 +106,8 @@ sub summary_action {
 }
 
 sub _post_process_help {
-    my %params = @_;
+    my ($instance, $state) = @_;
+    my %params = (settings => $state->{settings}, args => $state->{remains}, command => $state->{command});
 
     return unless $params{settings}->debug->help;
 
@@ -124,7 +132,8 @@ sub _post_process_help {
 }
 
 sub _post_process_show_opts {
-    my %params = @_;
+    my ($instance, $state) = @_;
+    my %params = (settings => $state->{settings}, args => $state->{remains}, command => $state->{command});
 
     return unless $params{settings}->debug->show_opts;
 
@@ -146,11 +155,10 @@ sub _post_process_show_opts {
 my $RAN = 0;
 sub _post_process_interactive {
     return if $RAN++;
-    my %params = @_;
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
-    return unless $params{settings}->debug->interactive;
-
-    my $settings = $params{settings};
+    return unless $settings->debug->interactive;
 
     my ($fifo);
     if ($settings->check_prefix('workspace')) {
@@ -248,9 +256,9 @@ sub _post_process_interactive {
 }
 
 sub _post_process_version {
-    my %params = @_;
+    my ($instance, $state) = @_;
 
-    return unless $params{settings}->debug->version;
+    return unless $state->{settings}->debug->version;
 
     require App::Yath;
     my $out = <<"    EOT";

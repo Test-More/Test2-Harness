@@ -2,7 +2,7 @@ use Test2::V0 -target => 'Test2::Harness::Settings::Prefix';
 
 my $one = $CLASS->new();
 isa_ok($one, [$CLASS], "Created an instance");
-ref_ok($one, 'REF', "Hash is slightly obscured by an extra deref");
+ref_ok($one, 'HASH', "Now uses direct hash storage (inherits from Settings::Group)");
 
 like(
     dies { $one->foo },

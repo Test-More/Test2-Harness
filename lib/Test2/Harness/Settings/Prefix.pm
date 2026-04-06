@@ -7,24 +7,23 @@ our $VERSION = '1.000168';
 use Carp();
 use Test2::Harness::Util();
 
-sub new {
-    my $class = shift;
-    my $hash = {@_};
-    return bless \$hash, $class;
-}
+use parent 'Getopt::Yath::Settings::Group';
+
+# Group's new() already does: bless({@_}, $class) or bless($_[0], $class)
+# which gives us direct-hash storage. No override needed.
 
 sub vivify_field {
     my $self = shift;
     my ($field) = @_;
 
-    return \(${$self}->{$field});
+    return $self->option_ref($field, 1);
 }
 
 sub check_field {
     my $self = shift;
     my ($field) = @_;
 
-    return exists ${$self}->{$field};
+    return $self->check_option($field);
 }
 
 sub field : lvalue {
@@ -32,19 +31,21 @@ sub field : lvalue {
     my ($field, @args) = @_;
 
     Carp::croak("Too many arguments for field()") if @args > 1;
-    Carp::croak("The '$field' field does not exist") unless exists ${$self}->{$field};
+    Carp::croak("The '$field' field does not exist") unless exists $self->{$field};
 
-    (${$self}->{$field}) = @args if @args;
+    ($self->{$field}) = @args if @args;
 
-    return ${$self}->{$field};
+    return $self->{$field};
 }
 
 sub remove_field {
     my $self = shift;
     my ($field) = @_;
-    delete ${$self}->{$field};
+    $self->delete_option($field);
 }
 
+# Override AUTOLOAD to call field() instead of option() so error messages
+# say "field" rather than "option" for backwards compatibility.
 our $AUTOLOAD;
 sub AUTOLOAD : lvalue {
     my $this = shift;
@@ -62,7 +63,7 @@ sub AUTOLOAD : lvalue {
 
 sub TO_JSON {
     my $self = shift;
-    return {%$$self};
+    return {%$self};
 }
 
 sub build {
@@ -71,7 +72,7 @@ sub build {
 
     require(Test2::Harness::Util::mod2file($class));
 
-    return $class->new(%$$self, @args);
+    return $class->new(%$self, @args);
 }
 
 1;

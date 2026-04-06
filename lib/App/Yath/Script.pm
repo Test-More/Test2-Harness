@@ -35,6 +35,7 @@ sub do_begin {
     my $exec = 0;
 
     $SCRIPT = clean_path($caller[1]);
+    $ENV{YATH_SCRIPT} = $SCRIPT;
 
     inject_includes();
 

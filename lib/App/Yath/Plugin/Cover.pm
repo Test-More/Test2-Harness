@@ -11,20 +11,20 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use parent 'App::Yath::Plugin';
 use Test2::Harness::Util::HashBase qw/-aggregator -no_aggregate +metrics +outfile/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'cover', category => "Cover Options"} => sub {
-    post \&post_process;
+option_group {group => 'cover', category => "Cover Options"} => sub {
+    option_post_process \&post_process;
 
     option types => (
         alt => ['cover-type'],
-        type => 'm',
+        type => 'List',
         default => sub { [qw/pl pm/] },
     );
 
     option dirs => (
         alt => ['cover-dir'],
-        type => 'm',
+        type => 'List',
         default => sub { ['lib'] },
 
         action => sub {
@@ -34,23 +34,24 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
     );
 
     option exclude_private => (
-        type => 'b',
+        type => 'Bool',
         default => 0,
         description => "",
     );
 
     option files => (
-        type => 'b',
+        type => 'Bool',
         description => "Use Test2::Plugin::Cover to collect coverage data for what files are touched by what tests. Unlike Devel::Cover this has very little performance impact (About 4% difference)",
     );
 
     option metrics => (
-        type => 'b',
+        type => 'Bool',
         description => '',
     );
 
     option write => (
-        type => 'd',
+        type => 'Auto',
+        autofill => 1,
         normalize => \&clean_path,
         long_examples => ['', '=coverage.jsonl', '=coverage.json'],
         description => "Create a json or jsonl file of all coverage data seen during the run (This implies --cover-files).",
@@ -64,7 +65,7 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
 
     option aggregator => (
         alt => ['cover-agg'],
-        type => 's',
+        type => 'Scalar',
         long_examples => [' ByTest', ' ByRun', ' +Custom::Aggregator'],
         description => 'Choose a custom aggregator subclass',
         normalize => sub {
@@ -75,38 +76,38 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
     );
 
     option class => (
-        type => 's',
+        type => 'Scalar',
         description => 'Choose a Test2::Plugin::Cover subclass',
         default => 'Test2::Plugin::Cover',
     );
 
     option manager => (
-        type => 's',
+        type => 'Scalar',
         description => "Coverage 'from' manager to use when coverage data does not provide one",
         long_examples => [ ' My::Coverage::Manager'],
         applicable => \&changes_applicable,
     );
 
     option from_type => (
-        type => 's',
+        type => 'Scalar',
         description => 'File type for coverage source. Usually it can be detected, but when it cannot be you should specify. "json" is old style single-blob coverage data, "jsonl" is the new by-test style, "log" is a logfile from a previous run.',
         long_examples => [' json', ' jsonl', ' log' ],
     );
 
     option maybe_from_type => (
-        type => 's',
+        type => 'Scalar',
         'description' => 'Same as "from_type" but for "maybe_from". Defaults to "from_type" if that is specified, otherwise auto-detect',
         long_examples => [' json', ' jsonl', ' log' ],
     );
 
     option from => (
-        type => 's',
+        type => 'Scalar',
         description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will not be run if the file/url is invalid.",
         long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.jsonl']
     );
 
     option maybe_from => (
-        type => 's',
+        type => 'Scalar',
         description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will coninue if even if the coverage file/url is invalid.",
         long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.jsonl']
     );
@@ -131,8 +132,8 @@ sub spawn_args {
 }
 
 sub post_process {
-    my %params   = @_;
-    my $settings = $params{settings};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
     my $cover = $settings->cover;
 

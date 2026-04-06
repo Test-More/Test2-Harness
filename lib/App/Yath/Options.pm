@@ -138,7 +138,15 @@ sub _include_getopt_yath_instance {
 
     # Wrap each Getopt::Yath::Option in an adapter
     for my $gy_opt (@{$inst->options || []}) {
-        my $adapter = App::Yath::Option::Adapter->new(inner => $gy_opt);
+        my %extra;
+        # Detect if this option comes from a plugin based on its trace
+        if (my $trace = $gy_opt->trace) {
+            my $caller = $trace->[0] // '';
+            if ($caller =~ m/^(App::Yath::Plugin::\S+)/) {
+                $extra{from_plugin} = $1;
+            }
+        }
+        my $adapter = App::Yath::Option::Adapter->new(inner => $gy_opt, %extra);
         $self->include_option($adapter);
     }
 

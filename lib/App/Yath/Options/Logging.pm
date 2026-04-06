@@ -8,19 +8,20 @@ use POSIX qw/strftime/;
 use Test2::Harness::Util qw/clean_path/;
 use File::Spec;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'logging', category => "Logging Options"} => sub {
+option_group {group => 'logging', category => "Logging Options"} => sub {
     option log => (
+        type        => 'Bool',
         short       => 'L',
         description => 'Turn on logging',
     );
 
     option log_file_format => (
         alt  => ['lff'],
-        type => 's',
+        type => 'Scalar',
 
-        env_vars => [qw/YATH_LOG_FILE_FORMAT TEST2_HARNESS_LOG_FORMAT/],
+        from_env_vars => [qw/YATH_LOG_FILE_FORMAT TEST2_HARNESS_LOG_FORMAT/],
         default => sub { '%!P%Y-%m-%d_%H:%M:%S_%!U.jsonl' },
 
         description => 'Specify the format for automatically-generated log files. Overridden by --log-file, if given. This option implies -L (Default: \$YATH_LOG_FILE_FORMAT, if that is set, or else "%!P%Y-%m-%d~%H:%M:%S~%!U~%!p.jsonl"). This is a string in which percent-escape sequences will be replaced as per POSIX::strftime. The following special escape sequences are also replaced: (%!P : Project name followed by a ~, if a project is defined, otherwise empty string) (%!U : the unique test run ID) (%!p : the process ID) (%!S : the number of seconds since local midnight UTC)',
@@ -28,36 +29,38 @@ option_group {prefix => 'logging', category => "Logging Options"} => sub {
     );
 
     option bzip2 => (
+        type         => 'Bool',
         short        => 'B',
-        alt          => ['bz2', 'bzip2_log'],
+        alt          => ['bz2', 'bzip2-log'],
         description  => 'Use bzip2 compression when writing the log. This option implies -L. The .bz2 prefix is added to log file name for you',
     );
 
     option gzip => (
+        type         => 'Bool',
         short        => 'G',
-        alt          => ['gz', 'gzip_log'],
+        alt          => ['gz', 'gzip-log'],
         description  => 'Use gzip compression when writing the log. This option implies -L. The .gz prefix is added to log file name for you',
     );
 
     option log_dir => (
-        type        => 's',
+        type        => 'Scalar',
         normalize   => \&clean_path,
         description => 'Specify a log directory. Will fall back to the system temp dir.',
     );
 
     option log_file => (
         short        => 'F',
-        type         => 's',
+        type         => 'Scalar',
         normalize    => \&clean_path,
         description  => "Specify the name of the log file. This option implies -L.",
     );
 
-    post \&post_process;
+    option_post_process \&post_process;
 };
 
 sub post_process {
-    my %params   = @_;
-    my $settings = $params{settings};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
     my $logging  = $settings->logging;
 
     die "You cannot specify both bzip2-log and gzip-log\n" if $logging->bzip2 && $logging->gzip;

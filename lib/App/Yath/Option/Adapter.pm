@@ -143,10 +143,18 @@ sub get_default {
         return $ENV{$env};
     }
 
-    # Try initialize value (Getopt::Yath's equivalent of default)
-    my $val = $inner->get_initial_value();
+    # Check for explicit default on the inner option
+    # Getopt::Yath uses 'default' (evaluated at finalize time)
+    # and 'initialize' (evaluated at init time).
+    if (exists $inner->{default}) {
+        my $default = $inner->{default};
+        return ref($default) eq 'CODE' ? $default->() : $default;
+    }
 
-    return $val if defined $val;
+    if (exists $inner->{initialize}) {
+        my $init = $inner->{initialize};
+        return ref($init) eq 'CODE' ? $init->() : $init;
+    }
 
     # Fall back to type-appropriate defaults
     my $type = $self->type;

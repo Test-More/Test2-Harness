@@ -7,12 +7,13 @@ our $VERSION = '1.000168';
 use Test2::Util qw/IS_WIN32/;
 use Test2::Harness::Util qw/clean_path/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'runner', category => "Runner Options"} => sub {
+option_group {group => 'runner', category => "Runner Options"} => sub {
     option daemon => (
+        type        => 'Bool',
         description => 'Start the runner as a daemon (Default: True)',
-        default => 1,
+        default     => 1,
     );
 };
 

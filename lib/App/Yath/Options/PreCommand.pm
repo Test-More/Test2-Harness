@@ -7,11 +7,11 @@ our $VERSION = '1.000168';
 use App::Yath::Util qw/find_pfile/;
 use Test2::Harness::Util qw/mod2file clean_path/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'harness', pre_command => 1} => sub {
+option_group {group => 'harness', pre_command => 1} => sub {
     option plugins => (
-        type  => 'm',
+        type  => 'List',
         short => 'p',
         alt  => ['plugin'],
 
@@ -24,28 +24,28 @@ option_group {prefix => 'harness', pre_command => 1} => sub {
     );
 
     option no_scan_plugins => (
-        type => 'b',
+        type => 'Bool',
 
         category => 'Plugins',
         description => 'Normally yath scans for and loads all App::Yath::Plugin::* modules in order to bring in command-line options they may provide. This flag will disable that. This is useful if you have a naughty plugin that is loading other modules when it should not.',
     );
 
     option project => (
-        type        => 's',
+        type        => 'Scalar',
         alt         => ['project-name'],
         category    => 'Environment',
         description => 'This lets you provide a label for your current project/codebase. This is best used in a .yath.rc file. This is necessary for a persistent runner.',
     );
 
     option persist_dir => (
-        type        => 's',
+        type        => 'Scalar',
         category    => 'Environment',
         description => 'Where to find persistence files.',
         normalize   => \&clean_path,
     );
 
     option persist_file => (
-        type        => 's',
+        type        => 'Scalar',
         category    => 'Environment',
         alt         => ['pfile'],
         normalize   => \&clean_path,
@@ -53,9 +53,10 @@ option_group {prefix => 'harness', pre_command => 1} => sub {
     );
 
     option dev_libs => (
-        type  => 'D',
-        short => 'D',
-        name  => 'dev-lib',
+        type     => 'AutoList',
+        autofill => 1,
+        short    => 'D',
+        name     => 'dev-lib',
 
         category    => 'Developer',
         description => 'Add paths to @INC before loading ANYTHING. This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
@@ -67,7 +68,7 @@ option_group {prefix => 'harness', pre_command => 1} => sub {
         action    => \&dev_libs_action,
     );
 
-    post \&post_process;
+    option_post_process \&post_process;
 };
 
 sub plugin_action {
@@ -118,8 +119,8 @@ dev-lib '$_' added to \@INC late, it is possible some yath libraries were alread
 }
 
 sub post_process {
-    my %params   = @_;
-    my $settings = $params{settings};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
     $settings->harness->field(persist_file => find_pfile($settings, vivify => 1, no_checks => 1))
         unless defined $settings->harness->persist_file;

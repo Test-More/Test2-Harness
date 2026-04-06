@@ -6,7 +6,9 @@ our $VERSION = '1.000168';
 
 use Test2::Harness::Util qw/mod2file/;
 
-use App::Yath::Options;
+use Getopt::Yath;
+
+require(mod2file('Test2::Harness::Finder'));
 
 my %RERUN_MODES = (
     all     => "Re-Run all tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
@@ -16,9 +18,9 @@ my %RERUN_MODES = (
     missed  => "Run missed tests from a previously aborted/stopped run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
 );
 
-option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2::Harness::Finder'} => sub {
+option_group {group => 'finder', category => "Finder Options"} => sub {
     option finder => (
-        type          => 's',
+        type          => 'Scalar',
         default       => 'Test2::Harness::Finder',
         description   => 'Specify what Finder subclass to use when searching for files/processing the file list. Use the "+" prefix to specify a fully qualified namespace, otherwise Test2::Harness::Finder::XXX namespace is assumed.',
         long_examples => [' MyFinder', ' +Test2::Harness::Finder::MyFinder'],
@@ -26,63 +28,67 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
         adds_options  => 1,
         pre_process   => \&finder_pre_process,
         action        => \&finder_action,
-
-        builds => undef,    # This option is not for the build
     );
 
     option extension => (
         field       => 'extensions',
-        type        => 'm',
+        type        => 'List',
         alt         => ['ext'],
         description => 'Specify valid test filename extensions, default: t and t2',
     );
 
     option search => (
-        type => 'm',
+        type => 'List',
 
         description => 'List of tests and test directories to use instead of the default search paths. Typically these can simply be listed as command line arguments without the --search prefix.',
     );
 
     option no_long => (
+        type        => 'Bool',
         description => "Do not run tests that have their duration flag set to 'LONG'",
     );
 
     option only_long => (
+        type        => 'Bool',
         description => "Only run tests that have their duration flag set to 'LONG'",
     );
 
     option show_changed_files => (
+        type        => 'Bool',
         description => "Print a list of changed files if any are found",
         applicable => \&changes_applicable,
     );
 
     option changed_only => (
+        type        => 'Bool',
         description => "Only search for tests for changed files (Requires a coverage data source, also requires a list of changes either from the --changed option, or a plugin that implements changed_files() or changed_diff())",
         applicable => \&changes_applicable,
     );
 
     option rerun => (
-        type => 'd',
+        type     => 'Auto',
+        autofill => 1,
         description => "Re-Run tests from a previous run from a log file (or last log file). Plugins can intercept this, such as YathUIDB which will grab a run UUID and derive tests to re-run from that.",
         long_examples => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
     );
 
     option rerun_plugin => (
-        type => 'm',
+        type => 'List',
         description => "What plugin(s) should be used for rerun (will fallback to other plugins if the listed ones decline the value, this is just used ot set an order of priority)",
         long_examples => [' Foo', ' +App::Yath::Plugin::Foo'],
     );
 
     option rerun_modes => (
         alt => ['rerun-mode'],
-        type => 'm',
+        type => 'List',
         description => "Pick which test categories to run",
         long_examples => [' failed,missed,...', map {" $_"} sort keys %RERUN_MODES],
     );
 
     for my $mode (keys %RERUN_MODES) {
         option "rerun_$mode" => (
-            type             => 'd',
+            type             => 'Auto',
+            autofill         => 1,
             description      => $RERUN_MODES{$mode},
             long_examples    => ['', '=path/to/log.jsonl', '=plugin_specific_string'],
             ignore_for_build => 1,
@@ -90,84 +96,84 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
     }
 
     option changed => (
-        type => 'm',
+        type => 'List',
         description => "Specify one or more files as having been changed.",
         long_examples => [' path/to/file'],
         applicable => \&changes_applicable,
     );
 
     option changes_exclude_file => (
-        type => 'm',
+        type => 'List',
         description => 'Specify one or more files to ignore when looking at changes',
         long_examples => [' path/to/file'],
         applicable => \&changes_applicable,
     );
 
     option changes_exclude_pattern => (
-        type => 'm',
+        type => 'List',
         description => 'Ignore files matching this pattern when looking for changes. Your pattern will be inserted unmodified into a `$file =~ m/$pattern/` check.',
         long_examples => [" '(apple|pear|orange)'"],
         applicable => \&changes_applicable,
     );
 
     option changes_filter_file => (
-        type => 'm',
+        type => 'List',
         description => 'Specify one or more files to check for changes. Changes to other files will be ignored',
         long_examples => [' path/to/file'],
         applicable => \&changes_applicable,
     );
 
     option changes_filter_pattern => (
-        type => 'm',
+        type => 'List',
         description => 'Specify a pattern for change checking. When only running tests for changed files this will limit which files are checked for changes. Only files that match this pattern will be checked. Your pattern will be inserted unmodified into a `$file =~ m/$pattern/` check.',
         long_examples => [" '(apple|pear|orange)'"],
         applicable => \&changes_applicable,
     );
 
     option changes_diff => (
-        type => 's',
+        type => 'Scalar',
         description => "Path to a diff file that should be used to find changed files for use with --changed-only. This must be in the same format as `git diff -W --minimal -U1000000`",
         long_examples => [' path/to/diff.diff'],
         applicable => \&changes_applicable,
     );
 
     option changes_plugin => (
-        type => 's',
+        type => 'Scalar',
         description => "What plugin should be used to detect changed files.",
         long_examples => [' Git', ' +App::Yath::Plugin::Git'],
         applicable => \&changes_applicable,
     );
 
     option changes_include_whitespace => (
-        type => 'b',
+        type => 'Bool',
         description => "Include changed lines that are whitespace only (default: off)",
         applicable => \&changes_applicable,
         default => 0,
     );
 
     option changes_exclude_nonsub => (
-        type => 'b',
+        type => 'Bool',
         description => "Exclude changes outside of subroutines (perl files only) (default: off)",
         applicable => \&changes_applicable,
         default => 0,
     );
 
     option changes_exclude_loads => (
-        type => 'b',
+        type => 'Bool',
         description => "Exclude coverage tests which only load changed files, but never call code from them. (default: off)",
         applicable => \&changes_applicable,
         default => 0,
     );
 
     option changes_exclude_opens => (
-        type => 'b',
+        type => 'Bool',
         description => "Exclude coverage tests which only open() changed files, but never call code from them. (default: off)",
         applicable => \&changes_applicable,
         default => 0,
     );
 
     option durations => (
-        type => 's',
+        type => 'Scalar',
 
         long_examples  => [' file.json', ' http://example.com/durations.json'],
         short_examples => [' file.json', ' http://example.com/durations.json'],
@@ -176,7 +182,7 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
     );
 
     option maybe_durations => (
-        type => 's',
+        type => 'Scalar',
 
         long_examples  => [' file.json', ' http://example.com/durations.json'],
         short_examples => [' file.json', ' http://example.com/durations.json'],
@@ -186,14 +192,14 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
 
     option durations_threshold => (
         alt => ['Dt'],
-        type => 's',
+        type => 'Scalar',
         default => undef,
         description => "Only fetch duration data if running at least this number of tests. Default (-j value + 1)"
     );
 
     option exclude_file => (
         field => 'exclude_files',
-        type  => 'm',
+        type  => 'List',
 
         long_examples  => [' t/nope.t'],
         short_examples => [' t/nope.t'],
@@ -203,7 +209,7 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
 
     option exclude_pattern => (
         field => 'exclude_patterns',
-        type  => 'm',
+        type  => 'List',
 
         long_examples  => [' t/nope.t'],
         short_examples => [' t/nope.t'],
@@ -213,7 +219,7 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
 
     option exclude_list => (
         field => 'exclude_lists',
-        type => 'm',
+        type => 'List',
 
         long_examples  => [' file.txt', ' http://example.com/exclusions.txt'],
         short_examples => [' file.txt', ' http://example.com/exclusions.txt'],
@@ -222,24 +228,23 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
     );
 
     option default_search => (
-        type => 'm',
+        type => 'List',
 
         description => "Specify the default file/dir search. defaults to './t', './t2', and 'test.pl'. The default search is only used if no files were specified at the command line",
     );
 
     option default_at_search => (
-        type => 'm',
+        type => 'List',
 
         description => "Specify the default file/dir search when 'AUTHOR_TESTING' is set. Defaults to './xt'. The default AT search is only used if no files were specified at the command line",
     );
 
-    post \&_post_process;
+    option_post_process \&_post_process;
 };
 
 sub _post_process {
-    my %params   = @_;
-    my $settings = $params{settings};
-    my $options  = $params{options};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
     my $finder = $settings->finder;
 

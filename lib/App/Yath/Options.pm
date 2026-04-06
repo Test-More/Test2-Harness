@@ -169,6 +169,7 @@ sub _include_getopt_yath_instance {
                 # Create a minimal state hash for the Getopt::Yath callback
                 my $state = {
                     settings => $settings,
+                    options  => $options,
                     remains  => $params{args},
                     command  => $params{command},
                 };

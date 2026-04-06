@@ -11,7 +11,7 @@ use Sys::Hostname qw/hostname/;
 
 use Carp qw/croak confess/;
 
-use App::Yath::Options;
+use Getopt::Yath;
 
 use parent 'App::Yath::Plugin';
 use Test2::Harness::Util::HashBase qw/-final -tries -problems -problem_cids +text_mod +text_mod_handles_events +text_mod_fail/;
@@ -24,39 +24,39 @@ sub applicable {
     return 0;
 }
 
-option_group {prefix => 'notify', category => "Notification Options", applicable => \&applicable} => sub {
+option_group {group => 'notify', category => "Notification Options", applicable => \&applicable} => sub {
     option slack => (
-        type => 'm',
+        type => 'List',
         description => "Send results to a slack channel and/or user",
         long_examples  => [" '#foo'", " '\@bar'"],
     );
 
     option slack_fail => (
-        type => 'm',
+        type => 'List',
         description => "Send failing results to a slack channel and/or user",
         long_examples => [" '#foo'", " '\@bar'"],
     );
 
     option slack_url => (
-        type => 's',
+        type => 'Scalar',
         description => "Specify an API endpoint for slack webhook integrations",
         long_examples  => [" https://hooks.slack.com/..."],
     );
 
     option slack_owner => (
-        type => 'b',
+        type => 'Bool',
         description => "Send slack notifications to the slack channels/users listed in test meta-data when tests fail.",
         default => 0,
     );
 
     option no_batch_slack => (
-        type => 'b',
+        type => 'Bool',
         default => 0,
         description => 'Usually owner failures are sent as a single batch at the end of testing. Toggle this to send failures as they happen.',
     );
 
     option email_from => (
-        type          => 's',
+        type          => 'Scalar',
         long_examples => [' foo@example.com'],
         description   => "If any email is sent, this is who it will be from",
         default       => sub {
@@ -67,48 +67,48 @@ option_group {prefix => 'notify', category => "Notification Options", applicable
     );
 
     option email => (
-        type => 'm',
+        type => 'List',
         long_examples => [' foo@example.com'],
         description => "Email the test results to the specified email address(es)",
     );
 
     option email_fail => (
-        type => 'm',
+        type => 'List',
         long_examples => [' foo@example.com'],
         description => "Email failing results to the specified email address(es)",
     );
 
     option email_owner => (
-        type => 'b',
+        type => 'Bool',
         description => 'Email the owner of broken tests files upon failure. Add `# HARNESS-META-OWNER foo@example.com` to the top of a test file to give it an owner',
         default => 0,
     );
 
     option no_batch_email => (
-        type => 'b',
+        type => 'Bool',
         default => 0,
         description => 'Usually owner failures are sent as a single batch at the end of testing. Toggle this to send failures as they happen.',
     );
 
     option text => (
-        type => 's',
+        type => 'Scalar',
         alt => ['message', 'msg'],
         description => "Add a custom text snippet to email/slack notifications",
     );
 
     option text_module => (
-        type => 's',
-        alt => ['message_module'],
+        type => 'Scalar',
+        alt => ['message-module'],
         description => "Use the specified module to generate messages for emails and/or slack.",
     );
 
-    post sub {
-        my %params = @_;
+    option_post_process sub {
+        my ($instance, $state) = @_;
 
-        my $settings = $params{settings};
-        my $options  = $params{options};
+        my $settings = $state->{settings};
+        my $options  = $state->{options};
 
-        my $set_by_cli = $options->set_by_cli->{notify};
+        my $set_by_cli = $options ? $options->set_by_cli->{notify} : {};
 
         # Should we use email?
         if (@{$settings->notify->email} || $settings->notify->email_owner) {

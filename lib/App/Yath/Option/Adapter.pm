@@ -62,7 +62,20 @@ sub inner { $_[0]->{inner} }
 sub prefix { $_[0]->{inner}->group }
 
 # Direct delegation for methods with matching names
-sub name        { $_[0]->{inner}->name }
+# Name: In the old App::Yath::Option system, plugin options had their prefix
+# prepended to the name (e.g., 'cover-write' not just 'write'). Non-plugin
+# options did not get the prefix. We replicate that here so the lookup index
+# and long_args work correctly.
+sub name {
+    my $self = shift;
+    my $inner = $self->{inner};
+    my $name = $inner->name;
+    my $prefix = $inner->group;
+    if ($prefix && $inner->trace && $inner->trace->[0] =~ m/^App::Yath::Plugin::/) {
+        return "$prefix-$name";
+    }
+    return $name;
+}
 sub field       { $_[0]->{inner}->field }
 sub title       { $_[0]->{inner}->title }
 sub short       { $_[0]->{inner}->short }
@@ -71,7 +84,13 @@ sub category    { $_[0]->{inner}->category }
 sub description { $_[0]->{inner}->description }
 sub trace       { $_[0]->{inner}->trace }
 sub trace_string { $_[0]->{inner}->trace_string }
-sub long_args   { $_[0]->{inner}->long_args }
+# long_args: returns ($name, @alt) for use in the option parser lookup.
+# $name is prefixed for plugin options (via our name() method), alt names
+# are returned as-is (matching old App::Yath::Option behavior).
+sub long_args   {
+    my $self = shift;
+    return ($self->name, @{$self->{inner}->alt || []});
+}
 sub autofill    { $_[0]->{inner}->autofill }
 sub pre_process {
     my $self = shift;

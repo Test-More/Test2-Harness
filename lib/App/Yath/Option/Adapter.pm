@@ -7,6 +7,23 @@ our $VERSION = '1.000168';
 use Carp qw/confess/;
 use Scalar::Util qw/blessed/;
 
+# Inject legacy attribute accessors into Getopt::Yath::Option so that
+# options defined with old-style attributes (action, builds, pre_command,
+# adds_options, pre_process, ignore_for_build) pass validation.
+# These attributes are stored on the option object but only used by the
+# Adapter bridge, not by Getopt::Yath itself.
+{
+    require Getopt::Yath::Option;
+    for my $attr (qw/action builds pre_command adds_options pre_process ignore_for_build/) {
+        my $const = uc($attr);
+        unless (Getopt::Yath::Option->can($const)) {
+            no strict 'refs';
+            *{"Getopt::Yath::Option::$const"} = sub () { $attr };
+            *{"Getopt::Yath::Option::$attr"}  = sub { $_[0]->{$attr} };
+        }
+    }
+}
+
 # This adapter wraps a Getopt::Yath::Option object so it can be used
 # wherever an App::Yath::Option is expected. It delegates attribute access
 # to the wrapped object and translates where the APIs differ.
@@ -56,8 +73,19 @@ sub trace       { $_[0]->{inner}->trace }
 sub trace_string { $_[0]->{inner}->trace_string }
 sub long_args   { $_[0]->{inner}->long_args }
 sub autofill    { $_[0]->{inner}->autofill }
-sub pre_process { undef }     # Getopt::Yath doesn't have this concept directly
-sub adds_options { $_[0]->{inner}->mod_adds_options }
+sub pre_process {
+    my $self = shift;
+    # Check for legacy pre_process callback from converted options
+    return $self->{inner}->{pre_process} if $self->{inner}->{pre_process};
+    return undef;
+}
+
+sub adds_options {
+    my $self = shift;
+    # Check legacy attribute first, then Getopt::Yath native
+    return $self->{inner}->{adds_options} if $self->{inner}->{adds_options};
+    return $self->{inner}->mod_adds_options;
+}
 
 sub from_plugin  { $_[0]->{from_plugin} }
 sub from_command { $_[0]->{from_command} }
@@ -66,7 +94,10 @@ sub from_command { $_[0]->{from_command} }
 # overridden if needed. The old system used pre_command to determine
 # whether to show an option before or after the command. Getopt::Yath
 # options included via the bridge are typically command options.
-sub pre_command { 0 }
+sub pre_command {
+    my $self = shift;
+    return $self->{inner}->{pre_command} ? 1 : 0;
+}
 
 # Env vars: Getopt::Yath uses from_env_vars, old system uses env_vars
 sub env_vars       { $_[0]->{inner}->from_env_vars }
@@ -79,7 +110,14 @@ sub clear_env_vars {
 # Derive the old-style type letter from the Getopt::Yath::Option subclass
 sub type {
     my $self = shift;
-    my $class = ref($self->{inner});
+    my $inner = $self->{inner};
+    my $class = ref($inner);
+
+    # Map with split_on behaves like old 'H' type (hash-list)
+    if ($class eq 'Getopt::Yath::Option::Map' && $inner->can('split_on') && $inner->split_on) {
+        return 'H';
+    }
+
     return $CLASS_TO_TYPE{$class} // 's';    # default to scalar if unknown
 }
 
@@ -243,9 +281,16 @@ sub handle {
     my $type = $self->type;
     my $handler = $HANDLERS{$type} //= sub { ${$_[0]} = $_[1] };
 
-    # Getopt::Yath options don't have a legacy action callback,
-    # but they may have a trigger. We fire the trigger if present.
     my $inner = $self->{inner};
+
+    # Check for legacy action callback (from converted options files)
+    if (my $action = $inner->{action}) {
+        my $prefix = $self->prefix;
+        my $field  = $self->field;
+        return $action->($prefix, $field, $raw, $norm, $slot, $settings, $handler, $options);
+    }
+
+    # Getopt::Yath options may have a trigger instead
     if ($inner->{trigger}) {
         my $group = $settings->define_prefix($self->prefix);
         $inner->trigger(

@@ -6,14 +6,17 @@ our $VERSION = '1.000168';
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
-use App::Yath::Options;
+use Getopt::Yath;
+use Test2::Harness::Util qw/mod2file/;
 
-option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harness::Run'} => sub {
-    post \&post_process;
+require(mod2file('Test2::Harness::Run'));
+
+option_group {group => 'run', category => "Run Options"} => sub {
+    option_post_process \&post_process;
 
     option link => (
         field => 'links',
-        type => 'm',
+        type => 'List',
         long_examples  => [
             " 'https://travis.work/builds/42'",
             " 'https://jenkins.work/job/42'",
@@ -23,17 +26,17 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     );
 
     option test_args => (
-        type => 'm',
+        type => 'List',
         description => 'Arguments to pass in as @ARGV for all tests that are run. These can be provided easier using the \'::\' argument separator.'
     );
 
     option input => (
-        type        => 's',
+        type        => 'Scalar',
         description => 'Input string to be used as standard input for ALL tests. See also: --input-file',
     );
 
     option input_file => (
-        type        => 's',
+        type        => 'Scalar',
         description => 'Use the specified file as standard input to ALL tests',
         action      => sub {
             my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
@@ -49,22 +52,25 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     );
 
     option dbi_profiling => (
-        type => 'b',
+        type => 'Bool',
         description => "Use Test2::Plugin::DBIProfile to collect database profiling data",
     );
 
     option author_testing => (
+        type         => 'Bool',
         short        => 'A',
         description  => 'This will set the AUTHOR_TESTING environment to true',
     );
 
     option use_stream => (
+        type        => 'Bool',
         name        => 'stream',
         description => "Use the stream formatter (default is on)",
         default     => 1,
     );
 
     option tap => (
+        type        => 'Bool',
         field       => 'use_stream',
         alt         => ['TAP', '--no-stream'],
         normalize   => sub { $_[0] ? 0 : 1 },
@@ -72,7 +78,7 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     );
 
     option fields => (
-        type           => 'm',
+        type           => 'List',
         short          => 'f',
         long_examples  => [' name:details', ' JSON_STRING'],
         short_examples => [' name:details', ' JSON_STRING'],
@@ -83,29 +89,31 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     option env_var => (
         field          => 'env_vars',
         short          => 'E',
-        type           => 'h',
+        type           => 'Map',
         long_examples  => [' VAR=VAL'],
         short_examples => ['VAR=VAL', ' VAR=VAL'],
         description    => 'Set environment variables to set when each test is run.',
     );
 
     option run_id => (
+        type        => 'Scalar',
         alt         => ['id'],
         description => 'Set a specific run-id. (Default: a UUID)',
         default     => \&gen_uuid,
     );
 
     option load => (
-        type        => 'm',
+        type        => 'List',
         short       => 'm',
         alt         => ['load-module'],
         description => 'Load a module in each test (after fork). The "import" method is not called.',
     );
 
     option load_import => (
-        type  => 'H',
-        short => 'M',
-        alt   => ['loadim'],
+        type     => 'Map',
+        split_on => ',',
+        short    => 'M',
+        alt      => ['loadim'],
 
         long_examples  => [' Module', ' Module=import_arg1,arg2,...'],
         short_examples => [' Module', ' Module=import_arg1,arg2,...'],
@@ -114,17 +122,20 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     );
 
     option event_uuids => (
+        type    => 'Bool',
         default => 1,
         alt => ['uuids'],
         description => 'Use Test2::Plugin::UUID inside tests (default: on)',
     );
 
     option mem_usage => (
+        type    => 'Bool',
         default => 1,
         description => 'Use Test2::Plugin::MemUsage inside tests (default: on)',
     );
 
     option io_events => (
+        type    => 'Bool',
         default => 0,
         description => 'Use Test2::Plugin::IOEvents inside tests to turn all prints into test2 events (default: off)',
     );
@@ -132,21 +143,21 @@ option_group {prefix => 'run', category => "Run Options", builds => 'Test2::Harn
     option retry => (
         default => 0,
         short => 'r',
-        type => 's',
+        type => 'Scalar',
         description => 'Run any jobs that failed a second time. NOTE: --retry=1 means failing tests will be attempted twice!',
     );
 
     option retry_isolated => (
         default => 0,
         alt => ['retry-iso'],
-        type => 'b',
+        type => 'Bool',
         description => 'If true then any job retries will be done in isolation (as though -j1 was set)',
     );
 };
 
 sub post_process {
-    my %params   = @_;
-    my $settings = $params{settings};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
     $settings->run->env_vars->{AUTHOR_TESTING} = 1 if $settings->run->author_testing;
 

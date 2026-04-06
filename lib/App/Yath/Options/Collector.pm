@@ -4,30 +4,30 @@ use warnings;
 
 our $VERSION = '1.000168';
 
-use App::Yath::Options;
+use Getopt::Yath;
 
-option_group {prefix => 'collector', category => "Collector Options"} => sub {
+option_group {group => 'collector', category => "Collector Options"} => sub {
     option max_open_jobs => (
-        type => 's',
+        type => 'Scalar',
         description => 'Maximum number of jobs a collector can process at a time, if more jobs are pending their output will be delayed until the earlier jobs have been processed. (Default: double the -j value)',
         long_examples  => [' 18'],
         short_examples => [' 18'],
     );
 
     option max_poll_events => (
-        type => 's',
+        type => 'Scalar',
         description => 'Maximum number of events to poll from a job before jumping to the next job. (Default: 1000)',
         default => 1000,
         long_examples  => [' 1000'],
         short_examples => [' 1000'],
     );
 
-    post \&collector_post;
+    option_post_process \&collector_post;
 };
 
 sub collector_post {
-    my %params   = @_;
-    my $settings = $params{settings};
+    my ($instance, $state) = @_;
+    my $settings = $state->{settings};
 
     unless ($settings->collector->max_open_jobs) {
         my $j = $settings->runner->job_count // 1;

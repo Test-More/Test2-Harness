@@ -12,12 +12,11 @@ my $yath   = File::Spec->rel2abs('scripts/yath');
 my $libdir = File::Spec->rel2abs('lib');
 my $perl   = $Config{perlpath};
 
-# The yath script searches upward for .yath.rc to determine which V# module
-# to load. During cpanm installs no .yath.rc exists, so we create one in a
-# temp dir and run yath from there.
+# The yath script searches upward for .yath.v#.rc to determine which V#
+# module to load. During cpanm installs no RC file exists, so we create one
+# in a temp dir and run yath from there.
 my $dir = tempdir(CLEANUP => 1);
-open(my $rc, '>', File::Spec->catfile($dir, '.yath.rc')) or die "Cannot write .yath.rc: $!";
-print $rc "# V0\n";
+open(my $rc, '>', File::Spec->catfile($dir, '.yath.v0.rc')) or die "Cannot write .yath.v0.rc: $!";
 close($rc);
 
 # All invocations pre-set PERL_HASH_SEED to avoid re-exec
@@ -97,6 +96,115 @@ subtest 'PERL_HASH_SEED re-exec preserves @INC' => sub {
     like($output, qr/PERL_HASH_SEED not set/, 'seed message printed');
     like($output, qr/^BEGIN: reexec$/m,        'begin arg survived re-exec');
     like($output, qr/^RUNTIME: test$/m,        'runtime arg survived re-exec');
+
+    is($exit, 0, 'exit code is 0');
+};
+
+subtest 'V# as first argument selects version' => sub {
+    # Create a dir with a .yath.v0.rc so V0 is available via filename
+    my $tdir = tempdir(CLEANUP => 1);
+    open(my $fh, '>', File::Spec->catfile($tdir, '.yath.v0.rc')) or die $!;
+    close($fh);
+
+    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'V0', 'hello';
+    my $output = `$cmd 2>&1`;
+    my $exit   = $? >> 8;
+
+    like($output, qr/^Warning:.*Version '0'/m, 'V0 warning printed when V0 given on CLI');
+    like($output, qr/^RUNTIME: hello$/m,       'V0 is not treated as a runtime arg');
+    unlike($output, qr/^RUNTIME: V0$/m,        'V0 was stripped from args');
+
+    is($exit, 0, 'exit code is 0');
+};
+
+subtest 'v# (lowercase) as first argument selects version' => sub {
+    my $tdir = tempdir(CLEANUP => 1);
+    open(my $fh, '>', File::Spec->catfile($tdir, '.yath.v0.rc')) or die $!;
+    close($fh);
+
+    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'v0', 'world';
+    my $output = `$cmd 2>&1`;
+    my $exit   = $? >> 8;
+
+    like($output, qr/^Warning:.*Version '0'/m, 'V0 warning with lowercase v0');
+    like($output, qr/^RUNTIME: world$/m,       'runtime arg passed through');
+    unlike($output, qr/^RUNTIME: v0$/m,        'v0 was stripped from args');
+
+    is($exit, 0, 'exit code is 0');
+};
+
+subtest 'V# CLI overrides rc file version' => sub {
+    # Dir has a .yath.v0.rc but no plain .yath.rc or other versioned file
+    # Passing V0 explicitly should still use V0 and find the rc file
+    my $tdir = tempdir(CLEANUP => 1);
+    open(my $fh, '>', File::Spec->catfile($tdir, '.yath.v0.rc')) or die $!;
+    close($fh);
+
+    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'V0', '--begin', 'cli_ver';
+    my $output = `$cmd 2>&1`;
+    my $exit   = $? >> 8;
+
+    like($output, qr/^Warning:.*Version '0'/m, 'loaded V0 as requested');
+    like($output, qr/^BEGIN: cli_ver$/m,        'begin arg processed');
+
+    is($exit, 0, 'exit code is 0');
+};
+
+subtest 'V# only matches as first argument' => sub {
+    # V0 as second arg should be treated as a runtime arg, not a version selector
+    my ($output, $exit) = run_yath('first', 'V0');
+
+    like($output, qr/^RUNTIME: first$/m, 'first arg is runtime');
+    like($output, qr/^RUNTIME: V0$/m,    'V0 as second arg is passed through as runtime arg');
+
+    is($exit, 0, 'exit code is 0');
+};
+
+subtest 'symlink .yath.rc -> .yath.v0.rc is found' => sub {
+    my $tdir = tempdir(CLEANUP => 1);
+
+    # Create versioned file and symlink
+    open(my $fh, '>', File::Spec->catfile($tdir, '.yath.v0.rc')) or die $!;
+    close($fh);
+    symlink('.yath.v0.rc', File::Spec->catfile($tdir, '.yath.rc'))
+        or die "Cannot create symlink: $!";
+
+    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'test_arg';
+    my $output = `$cmd 2>&1`;
+    my $exit   = $? >> 8;
+
+    like($output, qr/^Warning:.*Version '0'/m, 'symlinked .yath.rc resolved to V0');
+    like($output, qr/^RUNTIME: test_arg$/m,    'runtime arg processed');
+
+    is($exit, 0, 'exit code is 0');
+};
+
+subtest 'uppercase V in rc filename' => sub {
+    my $tdir = tempdir(CLEANUP => 1);
+    open(my $fh, '>', File::Spec->catfile($tdir, '.yath.V0.rc')) or die $!;
+    close($fh);
+
+    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'test_upper';
+    my $output = `$cmd 2>&1`;
+    my $exit   = $? >> 8;
+
+    like($output, qr/^Warning:.*Version '0'/m, 'V0 loaded from .yath.V0.rc');
+    like($output, qr/^RUNTIME: test_upper$/m,  'runtime arg processed');
+
+    is($exit, 0, 'exit code is 0');
+};
+
+subtest 'CLI V# finds uppercase V rc filename' => sub {
+    my $tdir = tempdir(CLEANUP => 1);
+    open(my $fh, '>', File::Spec->catfile($tdir, '.yath.V0.rc')) or die $!;
+    close($fh);
+
+    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'V0', 'cli_upper';
+    my $output = `$cmd 2>&1`;
+    my $exit   = $? >> 8;
+
+    like($output, qr/^Warning:.*Version '0'/m, 'CLI V0 found .yath.V0.rc');
+    like($output, qr/^RUNTIME: cli_upper$/m,   'runtime arg processed');
 
     is($exit, 0, 'exit code is 0');
 };

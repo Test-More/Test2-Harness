@@ -17,6 +17,7 @@ our @EXPORT_OK = (
 
         clean_path
         find_in_updir
+        find_rc_updir
         mod2file
     },
 );
@@ -29,6 +30,14 @@ sub script { $SCRIPT }
 sub module { $MOD }
 
 sub do_begin {
+    # Check for an explicit version as the very first argument (V# or v#).
+    # Strip it from @ARGV before anything else sees it.
+    my $cli_version;
+    if (@ARGV && $ARGV[0] =~ /^[Vv](\d+)$/) {
+        $cli_version = int($1);
+        shift @ARGV;
+    }
+
     my $argv = [@ARGV];
     my @caller = caller();
 
@@ -45,33 +54,25 @@ sub do_begin {
 
     do_exec($argv) if $exec;
 
-    my $config      = find_in_updir('.yath.rc');
-    my $user_config = find_in_updir('.yath.user.rc');
-
     my $version;
-    for my $conf ($config, $user_config) {
-        next unless $conf && -f $conf;
+    my ($config, $user_config);
 
-        # Existing Test2::Harness projects have .yath.rc files with
-        # V1-specific options but no version marker. Default to V1 when a
-        # config file exists so those projects keep working without edits.
-        # Projects that want V2+ should add an explicit "# V2" marker.
-        $version //= 1;
+    if (defined $cli_version) {
+        # Explicit version on CLI -- only look for versioned RC files.
+        # Accept both .yath.v#.rc and .yath.V#.rc.
+        $config      = find_in_updir(".yath.v${cli_version}.rc")      // find_in_updir(".yath.V${cli_version}.rc");
+        $user_config = find_in_updir(".yath.user.v${cli_version}.rc") // find_in_updir(".yath.user.V${cli_version}.rc");
+        $version     = $cli_version;
+    }
+    else {
+        my $config_version;
+        ($config, $config_version) = find_rc_updir('.yath');
 
-        open(my $fh, '<', $conf) or die "Failed to open config file '$conf': $!";
-        # Scan comment/blank header lines for a version marker (# V1, ; V2, etc.)
-        while (my $line = <$fh>) {
-            chomp $line;
-            next if $line =~ m/^\s*$/;           # skip blank lines
-            last unless $line =~ m/^(?:#|;)/;     # stop at first non-comment line
-            if ($line =~ m/^(?:#|;)\s*V(\d+)$/i) {
-                # .yath.user.rc is processed after .yath.rc so a user-level
-                # version marker intentionally overrides the project-level one.
-                $version = int($1);
-            }
-            last;
-        }
-        close($fh);
+        my $user_version;
+        ($user_config, $user_version) = find_rc_updir('.yath.user');
+
+        # .yath.user(.v#).rc version takes precedence over .yath(.v#).rc
+        $version = $user_version // $config_version;
     }
 
     if (defined $version) {
@@ -215,6 +216,48 @@ sub clean_path {
     return File::Spec->rel2abs($path);
 }
 
+sub find_rc_updir {
+    my ($prefix) = @_;
+
+    my $versioned_pattern = qr/^\Q$prefix\E\.[Vv](\d+)\.rc$/;
+    my $plain_name        = "$prefix.rc";
+
+    my $abs = eval { realpath(File::Spec->rel2abs('.')) };
+    my %seen;
+    while ($abs && !$seen{$abs}++) {
+        # Priority 1: plain name that is a symlink to a versioned file.
+        my $plain_path = File::Spec->catfile($abs, $plain_name);
+        if (-l $plain_path && -f $plain_path) {
+            my $target = readlink($plain_path) // '';
+            if ((File::Spec->splitpath($target))[2] =~ $versioned_pattern) {
+                return ($plain_path, int($1));
+            }
+        }
+
+        # Priority 2: explicitly versioned file (.yath.v#.rc).
+        if (opendir(my $dh, $abs)) {
+            for my $entry (readdir $dh) {
+                if ($entry =~ $versioned_pattern) {
+                    my $v    = int($1);
+                    my $path = File::Spec->catfile($abs, $entry);
+                    closedir $dh;
+                    return ($path, $v);
+                }
+            }
+            closedir $dh;
+        }
+
+        # Priority 3: plain unversioned file, default to V1.
+        if (-f $plain_path) {
+            return ($plain_path, 1);
+        }
+
+        $abs = eval { realpath(File::Spec->catdir($abs, '..')) };
+    }
+
+    return;
+}
+
 sub find_in_updir {
     my $path = shift;
     return clean_path($path) if -e $path;
@@ -285,20 +328,34 @@ When no configuration file is found, the latest installed
 C<App::Yath::Script::V{X}> module is used automatically (C<V0> is excluded
 from auto-detection since it is reserved for script validation).
 
-When a C<.yath.rc> or C<.yath.user.rc> file exists, the version defaults to
-B<1> unless an explicit version marker is present. This preserves backwards
-compatibility with existing L<Test2::Harness> projects whose configuration
-files predate the version marker convention. Projects that want a newer version
-should add an explicit marker (e.g. C<# V2>) to their configuration file.
+The version is determined by the configuration filename using the following
+priority (highest first) in each directory searched:
 
-The version marker must appear in the comment header at the top of the file --
-it is a comment line matching C<# VN> or C<; VN> (case-insensitive). Blank
-lines before it are allowed, but the marker must come before the first
-non-comment line.
+=over 4
 
-If both C<.yath.rc> and C<.yath.user.rc> contain version markers, the
-user-level file (C<.yath.user.rc>) takes precedence. This allows individual
-developers to override the project-level version when needed.
+=item 1.
+
+A C<.yath.rc> symlink whose target filename matches C<.yath.v#.rc> -- the
+version is extracted from the target name. This lets projects keep a stable
+C<.yath.rc> name while pointing at the versioned file.
+
+=item 2.
+
+An explicitly versioned file C<.yath.v#.rc> (e.g. C<.yath.v2.rc>).
+
+=item 3.
+
+A plain C<.yath.rc> (not a symlink to a versioned file) -- defaults to B<1>
+for backwards compatibility with existing L<Test2::Harness> projects.
+
+=back
+
+The same priority applies to user-level configuration (C<.yath.user.rc> /
+C<.yath.user.v#.rc>).
+
+If both project-level and user-level configuration files specify a version,
+the user-level version takes precedence. This allows individual developers to
+override the project-level version when needed.
 
 =head1 PRIMARY API
 

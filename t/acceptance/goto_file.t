@@ -12,12 +12,11 @@ my $yath   = File::Spec->rel2abs('scripts/yath');
 my $libdir = File::Spec->rel2abs('lib');
 my $perl   = $Config{perlpath};
 
-# The yath script searches upward for .yath.rc to determine which V# module
-# to load. During cpanm installs no .yath.rc exists, so we create one in a
-# temp dir and run yath from there.
+# The yath script searches upward for .yath.v#.rc to determine which V#
+# module to load. During cpanm installs no RC file exists, so we create one
+# in a temp dir and run yath from there.
 my $dir = tempdir(CLEANUP => 1);
-open(my $rc, '>', File::Spec->catfile($dir, '.yath.rc')) or die "Cannot write .yath.rc: $!";
-print $rc "# V0\n";
+open(my $rc, '>', File::Spec->catfile($dir, '.yath.v0.rc')) or die "Cannot write .yath.v0.rc: $!";
 close($rc);
 
 # All invocations pre-set PERL_HASH_SEED to avoid re-exec

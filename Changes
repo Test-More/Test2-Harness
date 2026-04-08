@@ -1,5 +1,6 @@
 {{$NEXT}}
 
+    - Set the YATH_SCRIPT env var
     - Move `yath` script out of version branches
     - Add --goto-file option to V0 for testing goto::file behavior
     - Fix version auto-detection to dynamically scan @INC instead of

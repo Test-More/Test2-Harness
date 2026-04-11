@@ -41,12 +41,14 @@ sub can_store_null_character {
 }
 
 sub format_uuid_for_db {
+    shift if @_ && defined $_[0] && !ref($_[0]) && $_[0] eq __PACKAGE__;
     my ($uuid) = @_;
     return $uuid unless is_percona();
     return uuid2bin($uuid);
 }
 
 sub format_uuid_for_app {
+    shift if @_ && defined $_[0] && !ref($_[0]) && $_[0] eq __PACKAGE__;
     my ($uuid_bin) = @_;
     return $uuid_bin unless is_percona();
     return bin2uuid($uuid_bin);

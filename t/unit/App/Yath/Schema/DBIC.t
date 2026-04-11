@@ -42,4 +42,13 @@ ok(!can_store_null_character(),   'PostgreSQL cannot store null char');
     is(format_uuid_for_app('abc'), 'abc', 'uuid identity for SQLite (to app)');
 }
 
+# Method-form wrappers must also work, since existing consumers call
+# $schema->is_postgresql as a method.
+{
+    local $App::Yath::Schema::DBIC::LOADED = 'PostgreSQL';
+    ok(App::Yath::Schema::DBIC->is_postgresql, 'method-form is_postgresql');
+    ok(!App::Yath::Schema::DBIC->is_sqlite,    'method-form is_sqlite false');
+    is(App::Yath::Schema::DBIC->format_uuid_for_db('x'), 'x', 'method-form format_uuid_for_db');
+}
+
 done_testing;

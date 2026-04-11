@@ -122,3 +122,15 @@ sub vague_run_search {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC - Unified DBIx::Class schema class with per-backend helpers.
+
+=cut

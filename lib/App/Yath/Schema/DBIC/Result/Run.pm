@@ -574,3 +574,15 @@ sub rerun_data {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Run - DBIC Result class for the Run table.
+
+=cut

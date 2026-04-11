@@ -41,3 +41,15 @@ __PACKAGE__->has_many(
 );
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::SourceFile - DBIC Result class for the SourceFile table.
+
+=cut

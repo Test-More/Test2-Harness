@@ -86,3 +86,15 @@ __PACKAGE__->belongs_to(
 );
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Email - DBIC Result class for the Email table.
+
+=cut

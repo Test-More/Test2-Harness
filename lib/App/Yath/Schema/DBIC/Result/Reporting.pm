@@ -128,3 +128,15 @@ __PACKAGE__->belongs_to(
 );
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Reporting - DBIC Result class for the Reporting table.
+
+=cut

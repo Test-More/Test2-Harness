@@ -47,3 +47,15 @@ __PACKAGE__->has_many(
 );
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::LogFile - DBIC Result class for the LogFile table.
+
+=cut

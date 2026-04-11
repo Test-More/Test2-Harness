@@ -16,3 +16,15 @@ $App::Yath::Schema::DBIC::LOADED = "Percona";
 require App::Yath::Schema::DBIC;
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Percona - Percona Server connection module for the unified DBIC schema.
+
+=cut

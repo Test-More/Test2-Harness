@@ -90,3 +90,15 @@ if (is_percona()) {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Session - DBIC Result class for the Session table.
+
+=cut

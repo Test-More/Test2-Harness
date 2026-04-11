@@ -416,3 +416,15 @@ my %COMPLETE_STATUS = (complete => 1, failed => 1, canceled => 1, broken => 1);
 sub complete { return $COMPLETE_STATUS{$_[0]->status} // 0 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::JobTry - DBIC Result class for the JobTry table.
+
+=cut

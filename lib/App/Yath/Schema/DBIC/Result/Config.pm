@@ -40,3 +40,15 @@ __PACKAGE__->set_primary_key("config_id");
 __PACKAGE__->add_unique_constraint("setting_unique", ["setting"]);
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Config - DBIC Result class for the Config table.
+
+=cut

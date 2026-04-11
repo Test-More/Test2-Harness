@@ -69,3 +69,15 @@ __PACKAGE__->set_primary_key("version_id");
 __PACKAGE__->add_unique_constraint("version_unique", ["version"]);
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Version - DBIC Result class for the Version table.
+
+=cut

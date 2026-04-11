@@ -138,3 +138,15 @@ __PACKAGE__->belongs_to(
 );
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::SessionHost - DBIC Result class for the SessionHost table.
+
+=cut

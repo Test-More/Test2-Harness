@@ -227,3 +227,15 @@ sub manager_package {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Coverage - DBIC Result class for the Coverage table.
+
+=cut

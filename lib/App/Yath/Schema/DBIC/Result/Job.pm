@@ -243,3 +243,15 @@ sub glance_data {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Job - DBIC Result class for the Job table.
+
+=cut

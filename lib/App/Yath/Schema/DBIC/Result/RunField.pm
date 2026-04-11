@@ -134,3 +134,15 @@ sub TO_JSON {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::RunField - DBIC Result class for the RunField table.
+
+=cut

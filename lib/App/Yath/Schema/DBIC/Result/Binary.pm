@@ -114,3 +114,15 @@ if (is_percona()) {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+App::Yath::Schema::DBIC::Result::Binary - DBIC Result class for the Binary table.
+
+=cut

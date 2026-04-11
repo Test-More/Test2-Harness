@@ -107,15 +107,15 @@ sub schema {
 
     {
         no warnings 'once';
-        unless ($App::Yath::Schema::LOADED) {
+        unless ($App::Yath::Schema::DBIC::LOADED) {
             my $schema = $ENV{YATH_DB_SCHEMA} //= $self->guess_db_driver;
-            require(mod2file("App::Yath::Schema::$schema"));
+            require(mod2file("App::Yath::Schema::DBIC::$schema"));
         }
     }
 
-    require App::Yath::Schema;
+    require App::Yath::Schema::DBIC;
 
-    return $self->{+_SCHEMA} = App::Yath::Schema->connect(
+    return $self->{+_SCHEMA} = App::Yath::Schema::DBIC->connect(
         $self->dbi_dsn,
         $self->dbi_user,
         $self->dbi_pass,

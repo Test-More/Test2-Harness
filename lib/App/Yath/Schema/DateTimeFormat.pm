@@ -14,19 +14,19 @@ sub DTF {
     return $DTF if $DTF;
 
     confess "You must first load a App::Yath::Schema::NAME module"
-        unless $App::Yath::Schema::LOADED;
+        unless $App::Yath::Schema::DBIC::LOADED;
 
-    if ($App::Yath::Schema::LOADED =~ m/postgresql/i) {
+    if ($App::Yath::Schema::DBIC::LOADED =~ m/postgresql/i) {
         require DateTime::Format::Pg;
         return $DTF = 'DateTime::Format::Pg';
     }
 
-    if ($App::Yath::Schema::LOADED =~ m/(mysql|mariadb|percona)/i) {
+    if ($App::Yath::Schema::DBIC::LOADED =~ m/(mysql|mariadb|percona)/i) {
         require DateTime::Format::MySQL;
         return $DTF = 'DateTime::Format::MySQL';
     }
 
-    if ($App::Yath::Schema::LOADED =~ m/sqlite/i) {
+    if ($App::Yath::Schema::DBIC::LOADED =~ m/sqlite/i) {
         require DateTime::Format::SQLite;
         return $DTF = 'DateTime::Format::SQLite';
     }

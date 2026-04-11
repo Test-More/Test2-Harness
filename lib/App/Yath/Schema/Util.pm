@@ -150,11 +150,11 @@ sub schema_config_from_settings {
 {
     no strict 'refs';
     no warnings 'once';
-    *{$_} = *{"App::Yath::Schema::$_"} for qw/is_mysql is_postgresql is_sqlite is_percona is_mariadb/;
+    *{$_} = *{"App::Yath::Schema::DBIC::$_"} for qw/is_mysql is_postgresql is_sqlite is_percona is_mariadb/;
 }
 
-sub format_uuid_for_db  { App::Yath::Schema->format_uuid_for_db(@_) }
-sub format_uuid_for_app { App::Yath::Schema->format_uuid_for_app(@_) }
+sub format_uuid_for_db  { App::Yath::Schema::DBIC->format_uuid_for_db(@_) }
+sub format_uuid_for_app { App::Yath::Schema::DBIC->format_uuid_for_app(@_) }
 
 sub find_job_and_try {
     my ($schema, $uuid, $try) = @_;

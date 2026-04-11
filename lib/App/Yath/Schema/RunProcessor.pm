@@ -27,7 +27,7 @@ use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::JSON qw/encode_json decode_json_no_null decode_json/;
 
 sub do_decode_json {
-    state $DECODER //= App::Yath::Schema::can_store_null_character() ? \&decode_json : \&decode_json_no_null;
+    state $DECODER //= App::Yath::Schema::DBIC::can_store_null_character() ? \&decode_json : \&decode_json_no_null;
     return $DECODER->(@_);
 }
 
@@ -210,7 +210,7 @@ sub _process_first_line {
 
     {
         no warnings 'once';
-        $dbh->{mysql_auto_reconnect} = 1 if $App::Yath::Schema::LOADED =~ m/(mysql|percona|maraidb)/i;
+        $dbh->{mysql_auto_reconnect} = 1 if $App::Yath::Schema::DBIC::LOADED =~ m/(mysql|percona|maraidb)/i;
     }
 
     my $e = do_decode_json(scalar $line);

@@ -152,7 +152,7 @@ sub start_ephemeral_db {
     $config->push_ephemeral_credentials(dbi_dsn => $dsn, dbi_user => '', dbi_pass => '', schema_type => $schema_type);
     $ENV{YATH_DB_DSN} = $dsn;
 
-    require(mod2file("App::Yath::Schema::$schema_type"));
+    require(mod2file("App::Yath::Schema::DBIC::$schema_type"));
 
     my $schema = $config->schema;
 

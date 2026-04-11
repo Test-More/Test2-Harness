@@ -40,10 +40,10 @@ sub wanted {
 
             if ($file =~ m{(MySQL|PostgreSQL|SQLite)}) {
                 my $schema = $1;
-                eval { require "App/Yath/Schema/$schema.pm"; 1} or skip_all "Could not load $schema: $@";
+                eval { require "App/Yath/Schema/DBIC/$schema.pm"; 1} or skip_all "Could not load $schema: $@";
             }
-            elsif ($file =~ m{App/Yath/Schema\.pm$} || $file =~ m{Schema/(Overlay|Result)}) {
-                eval { require App::Yath::Schema::SQLite; 1 } or skip_all "Could not load SQLite: $@";
+            elsif ($file =~ m{App/Yath/Schema/DBIC\.pm$} || $file =~ m{Schema/DBIC/(Result)}) {
+                eval { require App::Yath::Schema::DBIC::SQLite; 1 } or skip_all "Could not load SQLite: $@";
             }
 
             my $ok = eval { local $SIG{__WARN__} = sub { push @warnings => @_ }; require($file); 1 };
@@ -55,7 +55,7 @@ sub wanted {
 
             {
                 no warnings 'once';
-                ok($ok, "require $file (" . ($App::Yath::Schema::LOADED // 'undef') . ")", $ok ? () : $err);
+                ok($ok, "require $file (" . ($App::Yath::Schema::DBIC::LOADED // 'undef') . ")", $ok ? () : $err);
             }
             ok(!@warnings, "No Warnings", @warnings);
 

@@ -1,128 +1,66 @@
 # Schema DBIC Unification — Resume State
 
-**Last updated:** 2026-04-11 (after Phase 5 completion)
+**Last updated:** 2026-04-11 (Phase 6 + Phase 7 complete)
 **Branch:** `2.0`
-**Last commit:** `4d5ffd2e6 chore(schema): delete legacy per-backend schema trees and tests`
+**Last commit:** `1778809f7 refactor(tests): delete stale Overlay/* unit test stubs`
+**Tag:** `post-dbic-migration`
 **Working tree:** clean
 
-## Where to resume
+## Status: DONE
 
-**Phase 6 (test infrastructure) is next.** Phase 5 is complete and the legacy per-backend trees and tests have been deleted in the same sweep. No subagent is currently mid-task — start a fresh subagent for Phase 6 Task 23 per the plan.
+All phases of the schema DBIC unification refactor are complete. The branch is
+ready for review, merge, or further work. No subagent is mid-task.
 
-Read `docs/superpowers/plans/2026-04-11-schema-dbic-unification.md` for the original plan. **Phases 2, 3, and 4 are OBSOLETE** (they described the generator approach — see pivot note). **Phases 5, 6, 7 are still the source of truth for what's left**, but Phase 5 actually ended up interleaved with the "Delete old trees" step (see below).
+## Summary of what landed
 
-## Critical pivot
+### Phase 6 — Test infrastructure (2026-04-11)
 
-The user rejected the auto-generator approach mid-Phase 2. Instead of using `regen_schema.pl` + parser/merger/emitter helpers, Result classes are hand-maintained. `author_tools/regen_schema.pl` and `author_tools/lib/Yath/Regen/DBIC/*` were deleted in commit `1a70dd29e`. The unified Result files have NO `# >>> BEGIN/END GENERATED <<<` markers — they are normal hand-maintained Perl modules.
+- `186ab65cb` Task 23 — `t/lib/App/Yath/Test/DBIC/Database.pm` (ephemeral_server helper)
+- `c55eed0c0` Task 24 — `t/lib/App/Yath/Test/DBIC/Schema.pm` (run_schema_tests: load + 29 source + User password subtests)
+- `511ae04da` Task 25 — `t/lib/App/Yath/Test/DBIC/Coverage.pm` (run_coverage_tests; body lifted from coverage-sqlite.t lines 40-352; `$dir` hardcoded to `t/integration/coverage` because the plan's caller-derived regex would have yielded the nonexistent `t/integration/dbic-coverage`)
+- `658113321` Task 26 — 10 shim `.t` files: `dbic-{schema,coverage}-{sqlite,postgresql,mysql,mariadb,percona}.t`
+- `05bd7b0fb` Task 27 — deleted the 5 legacy `t/integration/coverage-*.t` files. The other files Task 27 listed (per-backend unit test dirs, `t/UI/{PostgreSQL,MySQL}.t`) had already been removed in Phase 5's `4d5ffd2e6`.
 
-## What is done
+### Phase 5 follow-up fixes discovered during Phase 6
 
-### Phase 1 (Foundation)
-- `lib/App/Yath/Schema/DBIC.pm` — schema class with exportable helpers (`is_sqlite`, `is_postgresql`, `is_mysql`, `is_mariadb`, `is_percona`, `can_store_null_character`, `format_uuid_for_db`, `format_uuid_for_app`). Method-form works too. `load_namespaces` is guarded on `$LOADED` so the module is importable at compile time without a backend loaded (fixes standalone `perl -c` on every Result class).
-- `lib/App/Yath/Schema/DBIC/ResultBase.pm` — hand-maintained unified base.
-- `lib/App/Yath/Schema/DBIC/ResultSet.pm` — hand-maintained unified resultset.
-- `t/unit/App/Yath/Schema/DBIC.t` — 19 tests, passing.
+- `c45ffb88f` **Latent Phase 5 gap** — the legacy `App::Yath::Schema` defined runtime methods `config()` and `vague_run_search()` that were never ported to the new unified `App::Yath::Schema::DBIC`. Eight consumers call them (`Server.pm`, `Plack.pm`, `Controller/{User,Recent,ReRun,Files}.pm`, `Plugin/DB.pm`, `Command/recent.pm`). The Phase 5 validation only exercised compile-time loading via `t/0-load_all.t`, so the gap went unnoticed until the new `ephemeral_server` helper hit a runtime failure in `Server.pm` line 162. Both methods copied verbatim from the pre-deletion `Schema.pm`.
 
-### Phase 2 (hand-migration)
-All 29 unified Result classes written at `lib/App/Yath/Schema/DBIC/Result/<Name>.pm`:
-ApiKey, Binary, Config, Coverage, CoverageManager, Email, EmailVerificationCode, Event, Host, Job, JobTry, JobTryField, LogFile, Permission, PrimaryEmail, Project, Reporting, Resource, ResourceType, Run, RunField, Session, SessionHost, SourceFile, SourceSub, Sweep, TestFile, User, Version.
+### Phase 7 — Validation & sweep
 
-Five connection modules:
-- `lib/App/Yath/Schema/DBIC/SQLite.pm`, `PostgreSQL.pm`, `MySQL.pm`, `MariaDB.pm`, `Percona.pm`
+- `5f5fef7ef` **POD convention fix** — `t/1-pod_name.t` was failing on all 36 files in the unified DBIC tree because the Phase 2 style guide removed POD. The user elected to keep the convention check unchanged and instead add minimal `=head1 NAME` POD stubs to every file in the tree (DBIC.pm, 5 connection modules, ResultBase.pm, ResultSet.pm, 29 Result classes). Phase 2 style rule "no POD at bottom" has been amended: the Result classes DO carry a minimal `=head1 NAME` block.
+- `1778809f7` **Stale overlay stubs deleted** — Task 30's stale-reference sweep surfaced 30 dead placeholder `.t` files under `t/unit/App/Yath/Schema/Overlay/` that all `skip_all "write me"` against the deleted `App::Yath::Schema::Overlay::*` namespace. Equivalent stubs under `t/unit/App/Yath/Schema/Result/*.t` already target the DBIC-resolved namespace, so the Overlay copies were dead duplicates. Deleted.
+- **Tag** — `post-dbic-migration` applied to `1778809f7`.
 
-Smoke test (still passes; re-run to re-verify):
-```
-for driver in SQLite PostgreSQL MySQL MariaDB Percona; do
-  perl -Ilib -e 'use App::Yath::Schema::DBIC::'$driver'; my @s = sort App::Yath::Schema::DBIC->sources; print "Driver='$driver' sources=", scalar(@s), "\n"'
-done
-```
-Expected: each line prints `sources=29`.
+### Full-suite validation
 
-### Phase 5 (consumer updates) — DONE
+Run via: `perl -Ilib scripts/yath test -D -j24`
 
-All consumers rewritten to reference the unified DBIC namespace:
+Result: 298 files, 3013 assertions, 65s, all green. All 5 backends are available on this host except Percona (skips cleanly). Both schema shims and coverage shims exercise PostgreSQL, MySQL, MariaDB, and SQLite end-to-end.
 
-- **Task 17** (`a26f43ccd`) — schema-adjacent modules: 4 of 9 files touched (Util, RunProcessor, Config, DateTimeFormat). Sync, Sweeper, Importer, ImportModes, Queries had no applicable references.
-- **Task 18** (`2a8e39205`) — server/renderer/plugin layer: only 1 line in `Server.pm` changed (dynamic require of backend connection module). The 22 controllers and all plugin/renderer/options files were already clean.
-- **Task 19** — command layer: NO CHANGES NEEDED. Every reference in `Command/db*.pm`, `recent.pm`, `server.pm` was to exempted sub-namespaces (`::Util`, `::Sync`, `::Sweeper`, etc.). No commit was made.
-- **Task 20** (`ceb1e745b`) — unit tests: 33 files updated (29 `Result/*.t` + `Schema.t`, `ResultBase.t`, `ResultSet.t`, plus one stray).
-- **Task 21** (`66585a765`) — ancillary tests: only `t/0-load_all.t` needed changes (4 lines: dynamic require path, SQLite pre-load guard regex, $LOADED reference). `t/database/test.pl` and `t/integration/coverage-*.t` had nothing to update.
-- **Task 22 (validation)** — ran into a fundamental issue: the plan expected the legacy and unified trees to coexist at load time, but each backend's connection module `confess`es if its sibling's `$LOADED` is already set. The pragmatic fix was to **delete the legacy trees in the same pass**, collapsing the "Delete old trees" step into Phase 5.
+## Obsolete plan tasks (Phases 2, 3, 4, 29 — generator rewrite approach)
 
-### Legacy tree deletion — DONE (`4d5ffd2e6`)
+The original plan's Phase 2/3/4 described an auto-generator (`regen_schema.pl` + Parser/Merger/Emitter/Splicer/Writer helpers). The user rejected that mid-Phase 2 in favor of hand-maintained unified files; the generator was deleted in commit `1a70dd29e`. Task 29 (idempotency check) and Task 30 Step 3 (author_tools regen tests) are therefore obsolete and were skipped.
 
-366 files removed in a single commit:
+## Pivots that amended the plan
 
-**Deleted library trees:**
-- `lib/App/Yath/Schema.pm`
-- `lib/App/Yath/Schema/ResultBase.pm`, `ResultSet.pm`
-- `lib/App/Yath/Schema/{SQLite,PostgreSQL,MySQL,MariaDB,Percona}.pm` (5 connection modules)
-- `lib/App/Yath/Schema/{SQLite,PostgreSQL,MySQL,MariaDB,Percona}/*.pm` (5 × 29 per-backend Result classes)
-- `lib/App/Yath/Schema/Overlay/*.pm` (29 overlay stubs)
-- `lib/App/Yath/Schema/Result/*.pm` (29 cross-backend Result base classes)
+1. **Generator approach killed** — hand-maintained Result classes, no `>>> GENERATED <<<` markers. (Phase 2, pre-existing context.)
+2. **Phase 5 and "delete legacy trees" were interleaved** — the plan expected the old and new trees to coexist during Phase 5 validation, but each backend's connection module `confess`es if its sibling's `$LOADED` is set. Task 22 handled this by deleting the legacy trees in the same pass.
+3. **Task 25 `$dir` hardcoded** — plan proposed deriving from caller, but the new shim filenames (`dbic-coverage-*`) don't match the fixture directory (`t/integration/coverage/`). Fixed in the implementation.
+4. **Task 27 scope reduced** — the per-backend unit test dirs and `t/UI/{PostgreSQL,MySQL}.t` were already deleted in Phase 5, so Task 27 ended up being just the 5 `t/integration/coverage-*.t` files.
+5. **Phase 2 "no POD at bottom" amended** — `t/1-pod_name.t` required POD; rather than exempt the tree, minimal `=head1 NAME` stubs were added.
+6. **Overlay unit-test stubs cleaned up** — not strictly in scope of any task, but caught by Task 30 Step 2's grep sweep.
 
-**Deleted tests:**
-- `t/unit/App/Yath/Schema/{SQLite,PostgreSQL,MySQL,MariaDB,Percona}/*.t` (legacy per-table tests)
-- `t/unit/App/Yath/Schema/{SQLite,MariaDB,Percona}.t` (top-level backend tests)
-- `t/UI/{MySQL,PostgreSQL}.t`
+## Known issues still flagged (unchanged — not blockers)
 
-**Validation after deletion:**
-- `t/0-load_all.t` passes: **220 tests, all green** against SQLite.
-- Syntax sweep clean across `lib/App/Yath/`, `t/unit/App/Yath/`, `t/integration/coverage-*.t`, `t/database/`.
-- Phase 1 `t/unit/App/Yath/Schema/DBIC.t` still passes (19 tests).
-- Smoke test all five drivers still reports `sources=29`.
+1. **`Event.nested` preserved as `smallintegernot`** (SQLite only, bug in original loader output). Needs a follow-up SQL schema/migration fix.
+2. **Percona UUID inflate_column inconsistency** — preserved from the old overlay.
+3. **`Run.pm coverage_data` iterator bug** (`$run_id` compared but never set) — preserved verbatim.
+4. **`Job.pm` `*job_tries = *jobs_tries` glob alias** — "used only once" compile-time warning, preserved.
 
-**Note:** `lib/App/Yath/Schema/Table/` does not exist in this repo — the earlier memory note about leaving it alone was a false positive. Nothing there to worry about.
+## How to resume (should the work be reopened)
 
-### Key commits (most recent first)
-- `4d5ffd2e6` — delete legacy per-backend schema trees and tests (Phase 5 cleanup)
-- `675f645aa` — fix: guard DBIC.pm `load_namespaces` on `$LOADED` so standalone `perl -c` works on all Result classes
-- `66585a765` — refactor(tests): update ancillary tests (Task 21)
-- `ceb1e745b` — refactor(tests): update unit tests (Task 20)
-- `2a8e39205` — refactor(schema): update server/renderer/plugin (Task 18)
-- `a26f43ccd` — refactor(schema): update schema-adjacent modules (Task 17)
-- `85f1685aa` — docs: prior resume state
-- `188adbeaa` — DBIC connection modules + load_namespaces
-- (older Phase 1 / Phase 2 commits — see prior resume state)
+1. `git status` — verify clean tree.
+2. `perl -Ilib scripts/yath test -D -j24` — full suite (~65s on this host). Expect 298 files pass, Percona shims skip if not installed.
+3. `git tag -l post-dbic-migration` — should list the tag.
 
-## What is NOT done
-
-### Phase 6 — Test infrastructure
-Per the original plan:
-- **Task 23** — `t/lib/App/Yath/Test/DBIC/Database.pm` — ephemeral DB helper wrapping `App::Yath::Server->start_ephemeral_db`
-- **Task 24** — `t/lib/App/Yath/Test/DBIC/Schema.pm` — reusable schema smoke tests
-- **Task 25** — `t/lib/App/Yath/Test/DBIC/Coverage.pm` — reusable body extracted from current `coverage-*.t`
-- **Task 26** — 10 shim `.t` files under `t/integration/` named `dbic-{schema,coverage}-<driver>.t`
-- **Task 27** — Delete the old per-db unit tests and `t/UI/{PostgreSQL,MySQL}.t` and old `t/integration/coverage-*.t`. **Partial overlap with Phase 5 deletion:** the per-backend unit tests under `t/unit/App/Yath/Schema/{SQLite,...}/` and `t/UI/{MySQL,PostgreSQL}.t` have ALREADY been deleted. `t/integration/coverage-*.t` is still present (Task 21 only made them compile-clean; Task 27 will delete them once replaced by Task 26 shims).
-
-### Phase 7 — Validation
-- **Task 28** — Run the full test suite against each available backend
-- **Task 29** — Idempotency check (obsolete — no generator)
-- **Task 30** — Final sweep and summary commit. Tag `post-dbic-migration`.
-
-## Known issues still flagged (unchanged)
-
-1. **Event.nested preserved verbatim as `smallintegernot`** (SQLite only, bug in original loader output). File: `lib/App/Yath/Schema/DBIC/Result/Event.pm`. Needs a follow-up SQL schema/migration fix.
-
-2. **Percona UUID inflate_column inconsistency.** The new unified Result files preserve the existing inconsistency — Binary and tables that had an inflate get a `if (is_percona()) { __PACKAGE__->inflate_column(...) }` block; the ones that didn't get nothing. Latent bug that only manifests when querying those tables on Percona.
-
-3. **`Run.pm coverage_data` iterator bug** (pre-existing in the overlay): `$run_id` is compared but never set. Preserved verbatim.
-
-4. **`Job.pm` `*job_tries = *jobs_tries` glob alias** produces a harmless "used only once" warning at compile time. Pre-existing behavior preserved.
-
-## Style conventions established during Phase 2 (unchanged)
-
-See the prior revision of this file for the full style guide — unchanged. Highlights:
-
-- File structure: package → pragmas → `our $VERSION` → `use parent 'App::Yath::Schema::DBIC::ResultBase'` → `use App::Yath::Schema::DBIC qw/.../` → `load_components` → `table` → `add_columns` → `set_primary_key` → `add_unique_constraint` → relationships → conditional Percona `inflate_column` → unconditional JSON `inflate_column` → custom methods → `1;`. No POD at bottom.
-- 3-way / 4-way `do {}` branching patterns for PK/UUID/Boolean/Enum/Datetime/JSON columns (using `is_sqlite()`, `is_postgresql()`, `is_percona()`, `is_mysql()`, `is_mariadb()`).
-- Relationship targets: always `App::Yath::Schema::DBIC::Result::Foo`.
-- `belongs_to` attrs: uniform `is_deferrable => 0, on_update => "NO ACTION"`.
-
-## How to pick up from here
-
-1. Verify working tree is clean: `git status`
-2. Verify smoke test still passes (command above)
-3. Verify `t/0-load_all.t` still passes: `YATH_SCHEMA_DRIVER=SQLite prove -Ilib t/0-load_all.t`
-4. Read this file and the plan (`docs/superpowers/plans/2026-04-11-schema-dbic-unification.md`) — Phase 6 sections
-5. Dispatch subagent for Phase 6 Task 23 (`App::Yath::Test::DBIC::Database` helper).
+Beyond that, the refactor is done. The 4 known latent issues above are the only follow-ups, and they're scoped to individual columns/methods — not structural.

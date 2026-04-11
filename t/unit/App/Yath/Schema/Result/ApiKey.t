@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema::Result::ApiKey'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC::Result::ApiKey'
 
 skip_all "write me";
 

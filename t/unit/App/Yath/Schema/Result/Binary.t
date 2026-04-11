@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema::Result::Binary'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC::Result::Binary'
 
 skip_all "write me";
 

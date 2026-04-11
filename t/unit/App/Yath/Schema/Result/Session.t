@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema::Result::Session'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC::Result::Session'
 
 skip_all "write me";
 

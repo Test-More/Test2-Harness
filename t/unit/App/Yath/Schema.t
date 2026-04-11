@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC'
 
 skip_all "write me";
 

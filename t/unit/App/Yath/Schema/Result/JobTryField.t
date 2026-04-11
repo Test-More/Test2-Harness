@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema::Result::JobTryField'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC::Result::JobTryField'
 
 skip_all "write me";
 

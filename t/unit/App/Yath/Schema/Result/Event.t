@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema::Result::Event'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC::Result::Event'
 
 skip_all "write me";
 

@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema::Result::Permission'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC::Result::Permission'
 
 skip_all "write me";
 

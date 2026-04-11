@@ -1,4 +1,4 @@
-use Test2::V0; # -target => 'App::Yath::Schema::Result::Version'
+use Test2::V0; # -target => 'App::Yath::Schema::DBIC::Result::Version'
 
 skip_all "write me";
 

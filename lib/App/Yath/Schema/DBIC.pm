@@ -23,13 +23,12 @@ our @EXPORT_OK = qw/
     format_uuid_for_app
 /;
 
-confess "You must first load a App::Yath::Schema::DBIC::NAME module"
-    unless $App::Yath::Schema::DBIC::LOADED;
-
-require App::Yath::Schema::DBIC::ResultSet;
-__PACKAGE__->load_namespaces(
-    default_resultset_class => '+App::Yath::Schema::DBIC::ResultSet',
-);
+if ($App::Yath::Schema::DBIC::LOADED) {
+    require App::Yath::Schema::DBIC::ResultSet;
+    __PACKAGE__->load_namespaces(
+        default_resultset_class => '+App::Yath::Schema::DBIC::ResultSet',
+    );
+}
 
 sub is_sqlite     { ($App::Yath::Schema::DBIC::LOADED // '') =~ m/SQLite/     ? 1 : 0 }
 sub is_postgresql { ($App::Yath::Schema::DBIC::LOADED // '') =~ m/PostgreSQL/ ? 1 : 0 }

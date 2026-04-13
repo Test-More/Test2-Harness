@@ -1,0 +1,721 @@
+use Test2::V0;
+use File::Temp qw/tempdir/;
+use POSIX qw/:sys_wait_h/;
+use Config;
+use Test2::Harness2::Util::JSON qw/decode_json/;
+
+use Test2::Harness2::Collector;
+
+my $IS_WIN32 = $^O eq 'MSWin32';
+my $CAN_FORK = $Config{d_fork};
+my $CAN_FIFO = !$IS_WIN32 && eval { require POSIX; POSIX->can('mkfifo') };
+
+my $tmpdir = tempdir(CLEANUP => 1);
+
+sub read_events {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or die "Could not open $file: $!";
+    my @events;
+    while (my $line = <$fh>) {
+        chomp $line;
+        push @events, decode_json($line);
+    }
+    close($fh);
+    return @events;
+}
+
+sub find_events {
+    my ($events, %filter) = @_;
+    my @found;
+    for my $e (@$events) {
+        my $match = 1;
+        if ($filter{stream}) {
+            $match = 0 unless ($e->{facet_data}{from_stream}{source} // '') eq uc($filter{stream});
+        }
+        if ($filter{exit}) {
+            $match = 0 unless exists $e->{facet_data}{harness_process_exit};
+        }
+        push @found, $e if $match;
+    }
+    return @found;
+}
+
+# ===========================================================================
+# Launch mode tests (all platforms)
+# ===========================================================================
+
+subtest 'launch - basic stdout/stderr' => sub {
+    my $output = "$tmpdir/a_basic.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'print "hello stdout\n"; print STDERR "hello stderr\n"'],
+        output_file => $output,
+    );
+
+    ok($collector,                "created collector");
+    ok($collector->collector_pid, "has collector pid");
+
+    my $exit = $collector->wait();
+    is($exit, 0, "collector exited cleanly");
+
+    my @events = read_events($output);
+    ok(@events >= 2, "got at least 2 events");
+
+    my ($out_ev) = find_events(\@events, stream => 'stdout');
+    ok($out_ev, "found stdout event");
+    like($out_ev->{facet_data}{from_stream}{details}, qr/hello stdout/, "stdout content correct");
+
+    my ($err_ev) = find_events(\@events, stream => 'stderr');
+    ok($err_ev, "found stderr event");
+    like($err_ev->{facet_data}{from_stream}{details}, qr/hello stderr/, "stderr content correct");
+    is($err_ev->{facet_data}{info}[0]{debug}, 1, "stderr marked as debug");
+
+    my ($exit_ev) = find_events(\@events, exit => 1);
+    ok($exit_ev, "found exit event");
+    is($exit_ev->{facet_data}{harness_process_exit}{err}, 0, "exit status 0");
+};
+
+subtest 'launch - exit code capture' => sub {
+    my $output = "$tmpdir/a_exit.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'exit 42'],
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events = read_events($output);
+    my ($exit_ev) = find_events(\@events, exit => 1);
+    ok($exit_ev, "found exit event");
+    is($exit_ev->{facet_data}{harness_process_exit}{err}, 42, "exit status 42");
+};
+
+subtest 'launch - env vars' => sub {
+    my $output = "$tmpdir/a_env.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'print $ENV{MY_TEST_VAR}, "\n"'],
+        env_vars    => {MY_TEST_VAR => 'collector_test_value'},
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events = read_events($output);
+    my ($out_ev) = find_events(\@events, stream => 'stdout');
+    ok($out_ev, "found stdout event");
+    like($out_ev->{facet_data}{from_stream}{details}, qr/collector_test_value/, "env var was passed");
+};
+
+subtest 'launch - env vars via spec name' => sub {
+    my $output = "$tmpdir/a_env_spec.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'print $ENV{SPEC_VAR}, "\n"'],
+        env         => {SPEC_VAR => 'from_spec_name'},
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events = read_events($output);
+    my ($out_ev) = find_events(\@events, stream => 'stdout');
+    ok($out_ev, "found stdout event");
+    like($out_ev->{facet_data}{from_stream}{details}, qr/from_spec_name/, "env var passed via spec name 'env'");
+};
+
+subtest 'launch - multi-line output' => sub {
+    my $output = "$tmpdir/a_multi.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'for (1..5) { print "line $_\n" }'],
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    is(scalar @out_evs, 5, "got 5 stdout events");
+};
+
+subtest 'launch - string launch arg' => sub {
+    my $output = "$tmpdir/a_string.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => 'echo hello_string',
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 1, "got stdout event from string launch");
+    like($out_evs[0]->{facet_data}{from_stream}{details}, qr/hello_string/, "string launch content correct");
+};
+
+# ===========================================================================
+# Pipe-based collection tests (pipe handles + pid) -- require fork
+# ===========================================================================
+
+subtest 'pipes - pipe handles with pid' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    my $output = "$tmpdir/b_pipes.jsonl";
+
+    pipe(my $out_r, my $out_w) or die "pipe: $!";
+    pipe(my $err_r, my $err_w) or die "pipe: $!";
+
+    my $child = fork();
+    die "fork: $!" unless defined $child;
+
+    if (!$child) {
+        close($out_r);
+        close($err_r);
+        print $out_w "pipe stdout line 1\n";
+        print $out_w "pipe stdout line 2\n";
+        print $err_w "pipe stderr line 1\n";
+        close($out_w);
+        close($err_w);
+        exit(7);
+    }
+
+    close($out_w);
+    close($err_w);
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout      => $out_r,
+        stderr      => $err_r,
+        pid         => $child,
+        output_file => $output,
+    );
+
+    $collector->wait();
+    waitpid($child, 0);
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 2, "got at least 2 stdout events from pipes");
+
+    my @err_evs = find_events(\@events, stream => 'stderr');
+    ok(@err_evs >= 1, "got at least 1 stderr event from pipes");
+
+    like($out_evs[0]->{facet_data}{from_stream}{details}, qr/pipe stdout line 1/, "first stdout line correct");
+    like($err_evs[0]->{facet_data}{from_stream}{details}, qr/pipe stderr line 1/, "first stderr line correct");
+
+    # Pipe-based collection does not capture exit code (did not start child)
+    my @exit_evs = find_events(\@events, exit => 1);
+    is(scalar @exit_evs, 0, "no exit event for externally-managed child");
+};
+
+subtest 'pipes - spec name mapping (stdout/stderr/pid)' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    my $output = "$tmpdir/b_specnames.jsonl";
+
+    pipe(my $out_r, my $out_w) or die "pipe: $!";
+    pipe(my $err_r, my $err_w) or die "pipe: $!";
+
+    my $child = fork();
+    die "fork: $!" unless defined $child;
+
+    if (!$child) {
+        close($out_r);
+        close($err_r);
+        print $out_w "spec name test\n";
+        close($out_w);
+        close($err_w);
+        exit(0);
+    }
+
+    close($out_w);
+    close($err_w);
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout      => $out_r,
+        stderr      => $err_r,
+        pid         => $child,
+        output_file => $output,
+    );
+
+    $collector->wait();
+    waitpid($child, 0);
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 1, "spec name mapping works for stdout/stderr/pid");
+    like($out_evs[0]->{facet_data}{from_stream}{details}, qr/spec name test/, "content correct");
+};
+
+subtest 'pipes - stdout pipe only (no stderr)' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    my $output = "$tmpdir/b_stdout_only.jsonl";
+
+    pipe(my $out_r, my $out_w) or die "pipe: $!";
+
+    my $child = fork();
+    die "fork: $!" unless defined $child;
+
+    if (!$child) {
+        close($out_r);
+        print $out_w "only stdout\n";
+        close($out_w);
+        exit(0);
+    }
+
+    close($out_w);
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout      => $out_r,
+        pid         => $child,
+        output_file => $output,
+    );
+
+    $collector->wait();
+    waitpid($child, 0);
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 1, "got stdout event with stdout-only pipe");
+};
+
+# ===========================================================================
+# File-based collection tests (regular files, no Atomic::Pipe) -- all platforms
+# ===========================================================================
+
+subtest 'file - file handles' => sub {
+    my $output = "$tmpdir/c_handles.jsonl";
+
+    my $stdout_file = "$tmpdir/c_stdout.txt";
+    my $stderr_file = "$tmpdir/c_stderr.txt";
+
+    open(my $ofh, '>', $stdout_file) or die $!;
+    print $ofh "file stdout line 1\n";
+    print $ofh "file stdout line 2\n";
+    close($ofh);
+
+    open(my $efh, '>', $stderr_file) or die $!;
+    print $efh "file stderr line 1\n";
+    close($efh);
+
+    open(my $out_fh, '<', $stdout_file) or die $!;
+    open(my $err_fh, '<', $stderr_file) or die $!;
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        out_fh      => $out_fh,
+        err_fh      => $err_fh,
+        child_pid   => undef,
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    is(scalar @out_evs, 2, "got 2 stdout events from file handles");
+
+    my @err_evs = find_events(\@events, stream => 'stderr');
+    is(scalar @err_evs, 1, "got 1 stderr event from file handles");
+
+    my @exit_evs = find_events(\@events, exit => 1);
+    is(scalar @exit_evs, 0, "no exit event for file-based collection (no pid)");
+};
+
+subtest 'file - string paths' => sub {
+    my $output = "$tmpdir/c_paths.jsonl";
+
+    my $stdout_file = "$tmpdir/c_paths_stdout.txt";
+    my $stderr_file = "$tmpdir/c_paths_stderr.txt";
+
+    open(my $ofh, '>', $stdout_file) or die $!;
+    print $ofh "path stdout line 1\n";
+    print $ofh "path stdout line 2\n";
+    print $ofh "path stdout line 3\n";
+    close($ofh);
+
+    open(my $efh, '>', $stderr_file) or die $!;
+    print $efh "path stderr line 1\n";
+    print $efh "path stderr line 2\n";
+    close($efh);
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout      => $stdout_file,
+        stderr      => $stderr_file,
+        pid         => undef,
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    is(scalar @out_evs, 3, "got 3 stdout events from string paths");
+
+    my @err_evs = find_events(\@events, stream => 'stderr');
+    is(scalar @err_evs, 2, "got 2 stderr events from string paths");
+};
+
+subtest 'file - spec name mapping with paths' => sub {
+    my $output = "$tmpdir/c_specnames.jsonl";
+
+    my $stdout_file = "$tmpdir/c_spec_stdout.txt";
+    my $stderr_file = "$tmpdir/c_spec_stderr.txt";
+
+    open(my $ofh, '>', $stdout_file) or die $!;
+    print $ofh "spec path test\n";
+    close($ofh);
+
+    open(my $efh, '>', $stderr_file) or die $!;
+    print $efh "spec err test\n";
+    close($efh);
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout      => $stdout_file,
+        stderr      => $stderr_file,
+        pid         => undef,
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 1, "spec names work for file-based string paths");
+};
+
+# ===========================================================================
+# Fifo-based collection tests -- require fork + mkfifo (Unix only)
+# ===========================================================================
+
+subtest 'fifo - fifo handles use Atomic::Pipe' => sub {
+    skip_all "fork and mkfifo required" unless $CAN_FORK && $CAN_FIFO;
+
+    my $fifo_out = "$tmpdir/fifo_stdout";
+    my $fifo_err = "$tmpdir/fifo_stderr";
+
+    POSIX::mkfifo($fifo_out, 0700) or die "mkfifo $fifo_out: $!";
+    POSIX::mkfifo($fifo_err, 0700) or die "mkfifo $fifo_err: $!";
+
+    my $output = "$tmpdir/c_fifo.jsonl";
+
+    my $writer = fork();
+    die "fork: $!" unless defined $writer;
+
+    if (!$writer) {
+        open(my $out_w, '>', $fifo_out) or die "open fifo_out: $!";
+        open(my $err_w, '>', $fifo_err) or die "open fifo_err: $!";
+
+        print $out_w "fifo stdout line 1\n";
+        print $out_w "fifo stdout line 2\n";
+        print $err_w "fifo stderr line 1\n";
+
+        close($out_w);
+        close($err_w);
+        exit(0);
+    }
+
+    open(my $out_r, '<', $fifo_out) or die "open fifo_out reader: $!";
+    open(my $err_r, '<', $fifo_err) or die "open fifo_err reader: $!";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout      => $out_r,
+        stderr      => $err_r,
+        pid         => undef,
+        output_file => $output,
+    );
+
+    $collector->wait();
+    waitpid($writer, 0);
+
+    my @events = read_events($output);
+
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 2, "got at least 2 stdout events from fifo");
+
+    my @err_evs = find_events(\@events, stream => 'stderr');
+    ok(@err_evs >= 1, "got at least 1 stderr event from fifo");
+
+    like($out_evs[0]->{facet_data}{from_stream}{details}, qr/fifo stdout line 1/, "fifo stdout content correct");
+    like($err_evs[0]->{facet_data}{from_stream}{details}, qr/fifo stderr line 1/, "fifo stderr content correct");
+
+    unlink($fifo_out);
+    unlink($fifo_err);
+};
+
+subtest 'fifo - fifo string paths' => sub {
+    skip_all "fork and mkfifo required" unless $CAN_FORK && $CAN_FIFO;
+
+    my $fifo_out = "$tmpdir/fifo_path_stdout";
+    my $fifo_err = "$tmpdir/fifo_path_stderr";
+
+    POSIX::mkfifo($fifo_out, 0700) or die "mkfifo $fifo_out: $!";
+    POSIX::mkfifo($fifo_err, 0700) or die "mkfifo $fifo_err: $!";
+
+    my $output = "$tmpdir/c_fifo_paths.jsonl";
+
+    my $writer = fork();
+    die "fork: $!" unless defined $writer;
+
+    if (!$writer) {
+        open(my $out_w, '>', $fifo_out) or die "open: $!";
+        open(my $err_w, '>', $fifo_err) or die "open: $!";
+        print $out_w "fifo path out\n";
+        print $err_w "fifo path err\n";
+        close($out_w);
+        close($err_w);
+        exit(0);
+    }
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout      => $fifo_out,
+        stderr      => $fifo_err,
+        pid         => undef,
+        output_file => $output,
+    );
+
+    $collector->wait();
+    waitpid($writer, 0);
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 1, "got stdout event from fifo string path");
+
+    my @err_evs = find_events(\@events, stream => 'stderr');
+    ok(@err_evs >= 1, "got stderr event from fifo string path");
+
+    unlink($fifo_out);
+    unlink($fifo_err);
+};
+
+# ===========================================================================
+# Child termination (all platforms)
+# ===========================================================================
+
+subtest 'child killed when parent_pids disappear' => sub {
+    # Launch a long-running child, pass a parent_pid that is already gone
+    # (use a PID we know doesn't exist).  The collector should detect the
+    # dead parent, kill the child, and exit cleanly.
+    my $output = "$tmpdir/kill_parent.jsonl";
+
+    # Pick a PID that almost certainly does not exist
+    my $fake_parent = 2_000_000_000;
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'sleep 300'],
+        output_file => $output,
+        parent_pids => [$fake_parent],
+    );
+
+    my $exit = $collector->wait();
+
+    # Collector should have exited (not hung for 300 seconds)
+    ok(defined $exit, "collector exited after detecting dead parent pid");
+
+    # The output file should exist (log was written before exit)
+    ok(-f $output, "output log was written");
+};
+
+subtest 'child killed on signal' => sub {
+    skip_all "fork required for signal test" unless $CAN_FORK;
+
+    my $output = "$tmpdir/kill_signal.jsonl";
+
+    # Use a child that prints something first so the collector has time
+    # to enter its loop and open the output file before we signal it.
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'print "started\n"; sleep 300'],
+        output_file => $output,
+    );
+
+    my $cpid = $collector->collector_pid;
+    ok($cpid, "collector process is running");
+
+    # Wait until the output file appears (collector has entered the loop)
+    my $deadline = time + 5;
+    while (!-f $output && time < $deadline) {
+        sleep(0.1);
+    }
+
+    # Send TERM to the collector process
+    kill('TERM', $cpid);
+
+    my $exit = $collector->wait();
+    ok(defined $exit, "collector exited after TERM signal");
+    ok(-f $output,    "output log was written before exit");
+};
+
+# ===========================================================================
+# Exception resilience (all platforms)
+# ===========================================================================
+
+{
+    # A parser that explodes after the first event to test exception handling
+    package Test2::Harness2::Collector::Parser::_Exploding;
+    use parent 'Test2::Harness2::Collector::Parser::IOParser';
+
+    my $call_count = 0;
+
+    sub parse_io {
+        my $self = shift;
+        $call_count++;
+        die "Intentional kaboom on call $call_count" if $call_count > 1;
+        return $self->SUPER::parse_io(@_);
+    }
+
+    sub _reset { $call_count = 0 }
+}
+
+subtest 'exception in run loop is logged as error event' => sub {
+    Test2::Harness2::Collector::Parser::_Exploding->_reset();
+
+    my $output = "$tmpdir/exception.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch      => ['perl', '-e', 'print "line1\n"; print "line2\n"'],
+        parser      => Test2::Harness2::Collector::Parser::_Exploding->new(),
+        output_file => $output,
+    );
+
+    $collector->wait();
+
+    my @events = read_events($output);
+
+    my @error_evs = grep { exists $_->{facet_data}{errors} } @events;
+    ok(@error_evs >= 1, "got at least 1 error event from exception");
+    like(
+        $error_evs[0]->{facet_data}{errors}[0]{details},
+        qr/Intentional kaboom/,
+        "error event contains the exception message"
+    );
+    is($error_evs[0]->{facet_data}{errors}[0]{fail}, 1, "error event marked as failure");
+};
+
+# ===========================================================================
+# Construction validation (all platforms)
+# ===========================================================================
+
+subtest 'construction validation' => sub {
+    like(
+        dies { Test2::Harness2::Collector->new(output_file => 'test.jsonl') },
+        qr/Must specify either/,
+        "dies without launch or stdout/stderr"
+    );
+
+    like(
+        dies {
+            Test2::Harness2::Collector->new(
+                launch      => ['echo'],
+                stdout      => \*STDIN,
+                output_file => 'test.jsonl',
+            )
+        },
+        qr/not both/,
+        "dies with both launch and stdout"
+    );
+
+    like(
+        dies { Test2::Harness2::Collector->new(launch => ['echo']) },
+        qr/output_file/,
+        "dies without output_file"
+    );
+};
+
+# ===========================================================================
+# Interpose tests (fork+capture current process) -- require fork
+# ===========================================================================
+
+subtest 'interpose - captures output and exit code' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    my $output = "$tmpdir/d_interpose.jsonl";
+
+    # We must fork first because interpose() causes the child to resume
+    # execution and the parent to exit() after collecting.  Running
+    # interpose() directly inside the test process would kill the harness.
+    my $outer = fork();
+    die "fork: $!" unless defined $outer;
+
+    if (!$outer) {
+        Test2::Harness2::Collector->interpose(output_file => $output);
+
+        # Only the child (original execution path) reaches here
+        print "interpose stdout\n";
+        print STDERR "interpose stderr\n";
+        exit(0);
+    }
+
+    # Test process waits for the collector (the outer fork became the
+    # collector parent; it exits when the inner child finishes).
+    waitpid($outer, 0);
+    is($?, 0, "collector exited cleanly");
+
+    my @events = read_events($output);
+
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    ok(@out_evs >= 1, "got stdout event from interposed child");
+    like($out_evs[0]->{facet_data}{from_stream}{details}, qr/interpose stdout/, "stdout content correct");
+
+    my @err_evs = find_events(\@events, stream => 'stderr');
+    ok(@err_evs >= 1, "got stderr event from interposed child");
+    like($err_evs[0]->{facet_data}{from_stream}{details}, qr/interpose stderr/, "stderr content correct");
+
+    my ($exit_ev) = find_events(\@events, exit => 1);
+    ok($exit_ev, "found exit event");
+    is($exit_ev->{facet_data}{harness_process_exit}{err}, 0, "exit status 0");
+};
+
+subtest 'interpose - captures non-zero exit' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    my $output = "$tmpdir/d_interpose_exit.jsonl";
+
+    my $outer = fork();
+    die "fork: $!" unless defined $outer;
+
+    if (!$outer) {
+        Test2::Harness2::Collector->interpose(output_file => $output);
+        exit(17);
+    }
+
+    waitpid($outer, 0);
+    is($?, 0, "collector exited cleanly");
+
+    my @events = read_events($output);
+    my ($exit_ev) = find_events(\@events, exit => 1);
+    ok($exit_ev, "found exit event");
+    is($exit_ev->{facet_data}{harness_process_exit}{err}, 17, "exit code 17 captured");
+};
+
+subtest 'interpose - multi-line output' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    my $output = "$tmpdir/d_interpose_multi.jsonl";
+
+    my $outer = fork();
+    die "fork: $!" unless defined $outer;
+
+    if (!$outer) {
+        Test2::Harness2::Collector->interpose(output_file => $output);
+        for (1 .. 3) { print "line $_\n" }
+        exit(0);
+    }
+
+    waitpid($outer, 0);
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    is(scalar @out_evs, 3, "got 3 stdout events from interposed child");
+};
+
+subtest 'interpose - validation' => sub {
+    like(
+        dies { Test2::Harness2::Collector->interpose() },
+        qr/output_file/,
+        "dies without output_file"
+    );
+};
+
+done_testing;

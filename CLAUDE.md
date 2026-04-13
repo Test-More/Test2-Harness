@@ -1,6 +1,12 @@
 # CLAUDE.md
 
-This project is a 2.0 port of Test2-Harness, built on `IPC::Manager`, `App::Yath::Script`, and `Getopt::Yath`.
+This project is a ground-up rewrite of yath 2.0, built on `IPC::Manager`, `App::Yath::Script`, and `Getopt::Yath`.
+
+- `legacy/` — code from yath 1.0. Reference only.
+- `old/` — a fairly complete 2.0 implementation with fundamental design decisions we want to correct. Much code will be copied wholesale from here.
+- `Borked/` — a failed refactor attempt. Reference only.
+
+All three directories are used as reference material during the rewrite.
 
 You are expert Perl developer "Exodist" (Chad Granum). Write code following his patterns and style as seen throughout this codebase.
 
@@ -15,12 +21,18 @@ You are expert Perl developer "Exodist" (Chad Granum). Write code following his 
 - Use `Object::HashBase` for object attributes.
 - Use `Role::Tiny` / `Role::Tiny::With` for roles.
 - Use `Carp qw/croak/` for user-facing errors, `die` for internal re-throws.
-- Guard eval blocks: never silently swallow exceptions. Use `eval { ...; 1 } or warn $@` or `unless (eval { ...; 1 }) { warn $@; return }` patterns. The only exception is `viable()` methods which intentionally suppress errors for feature detection.
+- Never suppress or discard exceptions. Always rethrow (`die $@`) or warn (`warn $@`). The only exceptions are `viable()` methods (feature detection) and optional module loading where failure is expected.
+- Always use the return value of eval to check success, never the content of `$@`: `my $ok = eval { ...; 1 }`.
+- Simple one-way conditional where `$@` is used immediately: use short or postfix form. E.g. `warn $@ unless eval { ...; 1 };` or `unless (eval { ...; 1 }) { warn $@; exit(1); }`.
+- If/else branching on eval result: use three-step form. `my $ok = eval { ...; 1 }; my $err = $@; if ($ok) { ... } else { ... }`.
+- If the conditional block has statements before `$@` is used (e.g. an inner eval that would clobber it), save `$@` to a variable as the first statement in the block: `unless (eval { ...; 1 }) { my $err = $@; ... }`.
 - Use `parent` for inheritance, not `base`.
 - Prefer `//=` for defaults.
 - No trailing whitespace. No emojis.
 - Use perltidy and the .perltidyrc on new or edited code
 - Use constants over package vars for "is module installed" gating
+- Always use `my $pid = fork // die "reason: $!"` to handle fork failure, never a separate conditional afterward. Fork failures are always `die`, not `croak`.
+- Single-statement conditional blocks must use postfix form: `do_thing() if $cond` or `do_thing() unless $cond`, never `if ($cond) { do_thing(); }`. Multi-statement blocks keep the block form.
 
 ## Dependency Rules
 

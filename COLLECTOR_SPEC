@@ -1,0 +1,99 @@
+Specification for Test2::Harness2::Collector
+
+Interface A:
+
+my $collector = Test2::Harness::Collector->new(
+    launch => 'path/to/program' // \@program, # Takes a program string, or arrayref of what system() or exec() accepts
+    env => \%env_hash,
+
+    launcher => $CLASS, # Optional, if not specified then use a default
+
+    output_file => 'path/to/output.jsonl',
+    auditor => $CLASS, # Optional
+    parser => $CLASS, # Optional, default to a plain IO Parser
+    renderers => [
+        [$CLASS, %CONSTRUCTION_ARGS],
+        $blessed_instance,
+        sub { ... },
+        ... # Any number of the above possible item types
+    ]
+);
+
+Interface B:
+
+my $collector = Test2::Harness2::Collector->new(
+    stderr => $STDERR_PIPE_READ_HANDLE,
+    stdout => $STDOUT_PIPE_READ_HANDLE,
+    pid => $PROCESS_PID,
+
+    output_file => 'path/to/output.jsonl',
+    auditor => $CLASS, # Optional
+    parser => $CLASS, # Optional, default to a plain IO Parser
+    renderers => [
+        [$CLASS, %CONSTRUCTION_ARGS],
+        $blessed_instance,
+        sub { ... },
+        ... # Any number of the above possible item types
+    ]
+);
+
+Interface C:
+
+my $collector = Test2::Harness2::Collector->new(
+    stderr => '/path/to/stderr_file' // $stderr_filehandle,
+    stdout => '/path/to/stdout_file' // $stdout_filehandle,
+    pid => undef,
+
+    output_file => 'path/to/output.jsonl',
+    auditor => $CLASS, # Optional
+    parser => $CLASS, # Optional, default to a plain IO Parser
+    renderers => [
+        [$CLASS, %CONSTRUCTION_ARGS],
+        $blessed_instance,
+        sub { ... },
+        ... # Any number of the above possible item types
+    ]
+);
+
+
+
+
+Regardless of the interface used, new() will spawn a new collector process. The collector will read the stderr/stdout of another process, parse them into Test2 events (old/lib/Test2/Harness2/Event.pm, put it and any utilities it needs back into lib/). Copy the Parsers from old/lib. For now do not worry about implementing the renderers. The collector should complete once the process it is monitoring exits, if the collector started the process it should also capture the exit code of the process from waitpid. If the collector did not start the process (interface B) it cannot capture the exit code and should no use waitpid.
+
+Option A has the new collector process also start the new process it will be monitoring. It should clone its original stderr/stdout in case it needs it later. It should open 2 new pipes, one for STDOUT and STDERR and open their writers with FDs 1 and 2 after closing the original STDout and STDERR (There is prior art for this in the existing code in old/). The default launcher class should simply launch the specified program with the correct environment variables set. The default launcher should be fully portable and launch the program in a way that works on linux, windows, or most other platforms.
+
+If any util libraries from old/ are needed copy them back into lib/
+
+Create a script under scripts/ called 'yath_collector', the first argument should be an output file, then optionally arguments of the VAR=VAL format to define env vars, and then anything after those is command arguments for the arrayref. This script will start a collector, the collector will start the program with the env vars set, and will write the collected output events to the output file. This script can be used to test interface A.
+
+The script can also accept an output file, then '--' to indicate it is not starting anything, then it should get 2 files as arguments, the first should be opened as stdout, the second as stderr, these will be used instead of pipes. This allows testing the collector when it does not launch a program by pointing it at regular files. In this use case the pid can be set to undef to indicate it has no pid to mnitor, and instead it just completes when the filehandles hit EOF. This checks Interface C
+
+Atomic::Pipe should be used to read from the handled when they are pipes, assuming mixed mode. See how Atomic::Pipe is currently used by the old Collector system in old/
+
+Atomic::Pipe should be used for pipes passed in in Interface B
+
+Atomic::Pipe must not be used for interface C, unless the files passed in are fifo or pipe filehandles
+
+Write tests for any/all code put under lib/ during this task.
+
+Do not worry about implementing auditors, renderers or the TAP parser yet. Just basic IO parsing into Test2::Harness2::Event events written to the .jsonl file.
+
+Copy over and use the JSON util libraries in old/
+
+Try to maintain portability with windows for at least the basic functionality.
+
+Launcher classes should live under Test2::Harness2::Collector::Launcher::*
+
+Parsers should live under Test2::Harness2::Collector::Parser::*
+
+In the future there will be a way for Interface B to use IPC to ask when the pid it is monitoring, but did not start, has exited, and what its exit code is. This will be a non-blocking check. Write things so that it will be easy to insert that logic in later, for now leave a comment in the code like "When we have IPC and can check for an exit and exit code, this is where we will do that check".
+
+Also implement logic where you can pass in a list of parent PIDS to keep trakc of, if the list is provided and any of the pids in it go away, the Collector should terminate the child process, first gracefully with TERM, then harder with KILL if a timeout (default 15 seconds, but configurable at construction) is exceeded without the child exiting. Also if the collector gets a signal such as INT or TERM it should also kill the child process and finish writing the log before exiting.
+
+The collector should set $0 to something like 'Collector - $PID_BEING_MONITORED - Child program', if there is no pid do not include it, if there is no child program list the stderr/stdout files being read, or the log file being written
+
+Avoid busy loops, Atomic::Pipe should already handle this, and stderr/stdout files do not need to worry about it. But if a busy loop is needed sleep a tiny bit to avoid issues.
+
+Atomic::Pipe is in ~/projects/Atomic-Pipe if you need to look at the code for implementation details, docs, or to check for busy loops.
+
+Goal: The collector process is responsible for processing all output, and when possible exit codes, of another process and recording it as an event log (jsonl) file full of Test2::Harness2::Event data. Sometimes it must start the process it will monitor, sometimes it will monitor a process it did not start. It must always exit when the process it is monitoring is complete (normally with pid check, exit check. But when both stderr/stdout are EOF can work when it is not possible to monitor a PID because there is not a pid to monitor).

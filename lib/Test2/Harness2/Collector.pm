@@ -13,6 +13,7 @@ use Atomic::Pipe;
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
+use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Util qw/mod2file parse_exit/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file/;
 use Test2::Harness2::Util::HashBase qw{
@@ -21,10 +22,9 @@ use Test2::Harness2::Util::HashBase qw{
     <out_fh
     <err_fh
     <child_pid
-    <output_file
     <auditor
     <parser
-    <renderers
+    <loggers
     <parent_pids
     <kill_timeout
 
@@ -33,6 +33,9 @@ use Test2::Harness2::Util::HashBase qw{
 
     +_started
     <_owns_child
+
+    +_event_loggers
+    +_loggers_spec
 };
 
 use constant IS_WIN32 => $^O eq 'MSWin32';
@@ -49,8 +52,9 @@ sub init {
     $self->{+ENV_VARS}  //= delete $self->{env}    if exists $self->{env};
 
     $self->{+KILL_TIMEOUT} //= 15;
-    $self->{+RENDERERS}    //= [];
     $self->{+ENV_VARS}     //= {};
+
+    $self->_normalize_loggers();
 
     my $has_launch = defined $self->{+LAUNCH};
     my $has_stdio  = defined($self->{+OUT_FH}) || defined($self->{+ERR_FH});
@@ -60,9 +64,6 @@ sub init {
 
     croak "Must specify either 'launch' or 'stdout'/'stderr'"
         unless $has_launch || $has_stdio;
-
-    croak "'output_file' is a required attribute"
-        unless defined $self->{+OUTPUT_FILE};
 
     # Normalize launch to arrayref
     $self->{+LAUNCH} = [$self->{+LAUNCH}] if $has_launch && !ref($self->{+LAUNCH});
@@ -80,11 +81,74 @@ sub init {
         }
     }
 
-    # Default parser
-    $self->{+PARSER} //= 'Test2::Harness2::Collector::Parser::IOParser';
+    # Default parser -- only needed when something will consume events.
+    # Skip the default when there are no loggers and no auditor; user may
+    # still pass one explicitly, which will be honored.
+    $self->{+PARSER} //= 'Test2::Harness2::Collector::Parser::IOParser'
+        if @{$self->{+LOGGERS}} || $self->{+AUDITOR};
 
     # Load parser class if it's a class name
-    require(mod2file($self->{+PARSER})) unless ref $self->{+PARSER};
+    require(mod2file($self->{+PARSER}))
+        if defined($self->{+PARSER}) && !ref $self->{+PARSER};
+}
+
+sub _load_logger_class {
+    my ($class) = @_;
+    my $file = mod2file($class);
+    return if $INC{$file};
+    no strict 'refs';
+    return if %{"${class}::"};
+    require $file;
+}
+
+sub _normalize_loggers {
+    my $self = shift;
+
+    my $loggers = $self->{+LOGGERS} //= [];
+
+    croak "'loggers' must be an arrayref" unless ref($loggers) eq 'ARRAY';
+
+    # Save original spec for Win32 spawn serialization
+    $self->{+_LOGGERS_SPEC} = [@$loggers];
+
+    my @normalized;
+    for my $item (@$loggers) {
+        my $inst;
+
+        if (blessed($item)) {
+            $inst = $item;
+        }
+        elsif (ref($item) eq 'ARRAY') {
+            my ($class, @args) = @$item;
+            croak "Logger arrayref must begin with a class name"
+                unless defined($class) && !ref($class);
+            _load_logger_class($class);
+            $inst = $class->new(@args);
+        }
+        elsif (!ref($item)) {
+            _load_logger_class($item);
+            $inst = $item->new();
+        }
+        else {
+            croak "Invalid logger specification: " . ref($item);
+        }
+
+        croak "Logger '" . (blessed($inst) || $inst) . "' does not implement Test2::Harness2::Role::Collector::Logger"
+            unless $inst->DOES('Test2::Harness2::Role::Collector::Logger');
+
+        push @normalized, $inst;
+    }
+
+    # Verify depends_on requirements
+    my %have = map { (blessed($_) || $_) => 1 } @normalized;
+    for my $l (@normalized) {
+        for my $dep ($l->depends_on) {
+            next if $have{$dep};
+            croak "Logger '" . (blessed($l) || $l) . "' requires logger '$dep', but it is not present";
+        }
+    }
+
+    $self->{+LOGGERS} = \@normalized;
 }
 
 sub spawn {
@@ -142,7 +206,6 @@ sub _spawn_collector_win32 {
     my %params = (
         launch       => $self->{+LAUNCH},
         env_vars     => $self->{+ENV_VARS},
-        output_file  => $self->{+OUTPUT_FILE},
         kill_timeout => $self->{+KILL_TIMEOUT},
     );
 
@@ -156,6 +219,15 @@ sub _spawn_collector_win32 {
     else {
         $params{parser} = $parser;
     }
+
+    # Loggers must be specified as class names or [class, @args] arrayrefs on
+    # Windows, since blessed instances cannot be serialized to the spawned
+    # collector process.
+    for my $item (@{$self->{+_LOGGERS_SPEC}}) {
+        croak "Blessed logger instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
+            if blessed($item);
+    }
+    $params{loggers} = $self->{+_LOGGERS_SPEC};
 
     my $json_file = encode_json_file(\%params);
 
@@ -235,14 +307,14 @@ sub _run_collector {
     $SIG{TERM} = sub { $got_signal = 'TERM' };
     $SIG{INT}  = sub { $got_signal = 'INT' };
 
-    # Open output file
-    open(my $out_fh, '>', $self->{+OUTPUT_FILE})
-        or croak "Could not open output file '$self->{+OUTPUT_FILE}': $!";
-    $out_fh->autoflush(1);
+    # Start loggers and cache the event-logging subset
+    $_->startup($self) for @{$self->{+LOGGERS}};
+    $self->{+_EVENT_LOGGERS} = [grep { $_->log_events } @{$self->{+LOGGERS}}];
 
-    # Instantiate parser
+    # Instantiate parser. When there is no parser the collector still drains
+    # the handles but discards the lines without constructing events.
     my $parser = $self->{+PARSER};
-    $parser = $parser->new() unless ref $parser;
+    $parser = $parser->new() if defined($parser) && !ref $parser;
 
     # Main collection loop
     my $child_exited = 0;
@@ -256,7 +328,7 @@ sub _run_collector {
     my $draining = 0;    # Set when we got a signal/parent-gone and are finishing up
 
     while (1) {
-        unless (eval {
+        my $ok = eval {
             # Check for signal - kill child but keep draining handles
             if ($got_signal && !$draining) {
                 $self->_kill_child($child_pid) if $child_pid;
@@ -282,27 +354,29 @@ sub _run_collector {
 
             # Read stdout
             unless ($stdout_eof) {
-                my @lines = _read_handle($out_r);
+                my @lines = $self->_read_handle($out_r);
                 for my $line (@lines) {
                     if (!defined $line) {
                         $stdout_eof = 1;
                         last;
                     }
+                    next unless $parser;
                     my $event = $parser->parse_io(stream => 'stdout', line => $line, stamp => time);
-                    $self->_write_event($out_fh, $event) if $event;
+                    $self->_write_event($event) if $event;
                 }
             }
 
             # Read stderr
             unless ($stderr_eof) {
-                my @lines = _read_handle($err_r);
+                my @lines = $self->_read_handle($err_r);
                 for my $line (@lines) {
                     if (!defined $line) {
                         $stderr_eof = 1;
                         last;
                     }
+                    next unless $parser;
                     my $event = $parser->parse_io(stream => 'stderr', line => $line, stamp => time);
-                    $self->_write_event($out_fh, $event) if $event;
+                    $self->_write_event($event) if $event;
                 }
             }
 
@@ -320,27 +394,32 @@ sub _run_collector {
             # (pid provided but not started by us).
 
             1;
-        })
-        {
-            # Save $@ before the inner eval clobbers it
-            my $err = $@;
+        };
+        my $err = $@;
 
-            # Write the exception as an event to the log
-            eval {
-                my $err_event = Test2::Harness2::Event->new(
-                    event_id   => gen_uuid(),
-                    stamp      => time,
-                    facet_data => {
-                        errors => [{
-                            tag     => 'COLLECTOR',
-                            details => "Collector exception: $err",
-                            fail    => 1,
-                        }],
-                    },
-                );
-                $self->_write_event($out_fh, $err_event);
-                1;
-            } or warn "Failed to write error event: $@";
+        unless ($ok) {
+            if ($parser) {
+                # Write the exception as an event to the log
+                my $log_ok = eval {
+                    my $err_event = Test2::Harness2::Event->new(
+                        event_id   => gen_uuid(),
+                        stamp      => time,
+                        facet_data => {
+                            errors => [{
+                                tag     => 'COLLECTR',
+                                details => "Collector exception: $err",
+                                fail    => 1,
+                            }],
+                        },
+                    );
+                    $self->_write_event($err_event);
+                    1;
+                };
+                warn "Failed to write error event: $@" unless $log_ok;
+            }
+            else {
+                warn "Collector exception: $err";
+            }
 
             # Terminate the child and bail out of the loop
             $self->_kill_child($child_pid) if $child_pid && $started_child;
@@ -359,8 +438,8 @@ sub _run_collector {
         }
     }
 
-    # Write exit event if we have an exit code
-    if (defined $child_exit) {
+    # Write exit event if we have an exit code and something consumes events
+    if (defined $child_exit && $parser) {
         my $exit_event = Test2::Harness2::Event->new(
             event_id   => gen_uuid(),
             stamp      => time,
@@ -368,10 +447,11 @@ sub _run_collector {
                 harness_process_exit => parse_exit($child_exit),
             },
         );
-        $self->_write_event($out_fh, $exit_event);
+        $self->_write_event($exit_event);
     }
 
-    close($out_fh);
+    # Shut down loggers
+    $_->shutdown($self) for @{$self->{+LOGGERS}};
 
     # Restore signal handlers
     $SIG{TERM} = $old_term // 'DEFAULT';
@@ -402,11 +482,6 @@ sub _set_procname {
             push @files, "err=$self->{+ERR_FH}";
         }
         push @parts, @files if @files;
-
-        push @parts, $self->{+OUTPUT_FILE} unless @files;
-    }
-    else {
-        push @parts, $self->{+OUTPUT_FILE};
     }
 
     $0 = join(' - ', @parts);
@@ -517,10 +592,11 @@ sub _wrap_handle {
     }
 
     # Regular file handle -- use plain line-reader shim, no Atomic::Pipe.
-    return Test2::Harness2::Collector::_FileLineReader->new($handle);
+    return Test2::Harness2::Collector::FileLineReader->new($handle);
 }
 
 sub _read_handle {
+    my $self = shift;
     my ($handle) = @_;
 
     # Atomic::Pipe handles
@@ -538,18 +614,17 @@ sub _read_handle {
         return @lines;
     }
 
-    # _FileLineReader shim
+    # FileLineReader shim
     return $handle->read_lines();
 }
 
 sub _write_event {
     my $self = shift;
-    my ($fh, $event) = @_;
+    my ($event) = @_;
 
     return unless $event;
 
-    my $json = $event->as_json();
-    print $fh $json, "\n";
+    $_->log_event($event) for @{$self->{+_EVENT_LOGGERS} // []};
 }
 
 sub _kill_child {
@@ -613,7 +688,6 @@ sub interpose {
 
     croak "interpose() is a class method"           if ref $class;
     croak "interpose() is not supported on Windows" if IS_WIN32;
-    croak "'output_file' is a required parameter" unless defined $params{output_file};
 
     my ($out_r, $out_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
     my ($err_r, $err_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
@@ -698,38 +772,6 @@ sub wait {
     $self->{+EXIT_CODE} = $exit;
 
     return $exit;
-}
-
-1;
-
-# Thin shim so that regular file handles can be read with the same interface
-# as Atomic::Pipe handles in the main collection loop.
-package Test2::Harness2::Collector::_FileLineReader;
-
-sub new {
-    my ($class, $fh) = @_;
-    return bless {fh => $fh, eof => 0}, $class;
-}
-
-sub read_lines {
-    my $self = shift;
-    my $fh   = $self->{fh};
-
-    return () if $self->{eof};
-
-    my @lines;
-    while (defined(my $line = <$fh>)) {
-        chomp $line;
-        push @lines, $line;
-    }
-
-    # If readline returned undef we hit EOF
-    if (eof($fh)) {
-        $self->{eof} = 1;
-        push @lines, undef;
-    }
-
-    return @lines;
 }
 
 1;

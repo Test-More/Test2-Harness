@@ -5,6 +5,7 @@ use Config;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
 use Test2::Harness2::Collector;
+use Test2::Harness2::Collector::Logger::JSONL;
 
 my $IS_WIN32 = $^O eq 'MSWin32';
 my $CAN_FORK = $Config{d_fork};
@@ -48,8 +49,8 @@ subtest 'launch - basic stdout/stderr' => sub {
     my $output = "$tmpdir/a_basic.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => ['perl', '-e', 'print "hello stdout\n"; print STDERR "hello stderr\n"'],
-        output_file => $output,
+        launch  => ['perl', '-e', 'print "hello stdout\n"; print STDERR "hello stderr\n"'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     ok($collector,                "created collector");
@@ -79,8 +80,8 @@ subtest 'launch - exit code capture' => sub {
     my $output = "$tmpdir/a_exit.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => ['perl', '-e', 'exit 42'],
-        output_file => $output,
+        launch  => ['perl', '-e', 'exit 42'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -95,9 +96,9 @@ subtest 'launch - env vars' => sub {
     my $output = "$tmpdir/a_env.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => ['perl', '-e', 'print $ENV{MY_TEST_VAR}, "\n"'],
-        env_vars    => {MY_TEST_VAR => 'collector_test_value'},
-        output_file => $output,
+        launch   => ['perl', '-e', 'print $ENV{MY_TEST_VAR}, "\n"'],
+        env_vars => {MY_TEST_VAR => 'collector_test_value'},
+        loggers  => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -112,9 +113,9 @@ subtest 'launch - env vars via spec name' => sub {
     my $output = "$tmpdir/a_env_spec.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => ['perl', '-e', 'print $ENV{SPEC_VAR}, "\n"'],
-        env         => {SPEC_VAR => 'from_spec_name'},
-        output_file => $output,
+        launch  => ['perl', '-e', 'print $ENV{SPEC_VAR}, "\n"'],
+        env     => {SPEC_VAR => 'from_spec_name'},
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -129,8 +130,8 @@ subtest 'launch - multi-line output' => sub {
     my $output = "$tmpdir/a_multi.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => ['perl', '-e', 'for (1..5) { print "line $_\n" }'],
-        output_file => $output,
+        launch  => ['perl', '-e', 'for (1..5) { print "line $_\n" }'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -144,8 +145,8 @@ subtest 'launch - string launch arg' => sub {
     my $output = "$tmpdir/a_string.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => 'echo hello_string',
-        output_file => $output,
+        launch  => 'echo hello_string',
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -186,10 +187,10 @@ subtest 'pipes - pipe handles with pid' => sub {
     close($err_w);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $out_r,
-        stderr      => $err_r,
-        pid         => $child,
-        output_file => $output,
+        stdout  => $out_r,
+        stderr  => $err_r,
+        pid     => $child,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -234,10 +235,10 @@ subtest 'pipes - spec name mapping (stdout/stderr/pid)' => sub {
     close($err_w);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $out_r,
-        stderr      => $err_r,
-        pid         => $child,
-        output_file => $output,
+        stdout  => $out_r,
+        stderr  => $err_r,
+        pid     => $child,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -269,9 +270,9 @@ subtest 'pipes - stdout pipe only (no stderr)' => sub {
     close($out_w);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $out_r,
-        pid         => $child,
-        output_file => $output,
+        stdout  => $out_r,
+        pid     => $child,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -305,10 +306,10 @@ subtest 'file - file handles' => sub {
     open(my $err_fh, '<', $stderr_file) or die $!;
 
     my $collector = Test2::Harness2::Collector->spawn(
-        out_fh      => $out_fh,
-        err_fh      => $err_fh,
-        child_pid   => undef,
-        output_file => $output,
+        out_fh    => $out_fh,
+        err_fh    => $err_fh,
+        child_pid => undef,
+        loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -342,10 +343,10 @@ subtest 'file - string paths' => sub {
     close($efh);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $stdout_file,
-        stderr      => $stderr_file,
-        pid         => undef,
-        output_file => $output,
+        stdout  => $stdout_file,
+        stderr  => $stderr_file,
+        pid     => undef,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -373,10 +374,10 @@ subtest 'file - spec name mapping with paths' => sub {
     close($efh);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $stdout_file,
-        stderr      => $stderr_file,
-        pid         => undef,
-        output_file => $output,
+        stdout  => $stdout_file,
+        stderr  => $stderr_file,
+        pid     => undef,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -421,10 +422,10 @@ subtest 'fifo - fifo handles use Atomic::Pipe' => sub {
     open(my $err_r, '<', $fifo_err) or die "open fifo_err reader: $!";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $out_r,
-        stderr      => $err_r,
-        pid         => undef,
-        output_file => $output,
+        stdout  => $out_r,
+        stderr  => $err_r,
+        pid     => undef,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -470,10 +471,10 @@ subtest 'fifo - fifo string paths' => sub {
     }
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $fifo_out,
-        stderr      => $fifo_err,
-        pid         => undef,
-        output_file => $output,
+        stdout  => $fifo_out,
+        stderr  => $fifo_err,
+        pid     => undef,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -505,7 +506,7 @@ subtest 'child killed when parent_pids disappear' => sub {
 
     my $collector = Test2::Harness2::Collector->spawn(
         launch      => ['perl', '-e', 'sleep 300'],
-        output_file => $output,
+        loggers     => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
         parent_pids => [$fake_parent],
     );
 
@@ -526,8 +527,8 @@ subtest 'child killed on signal' => sub {
     # Use a child that prints something first so the collector has time
     # to enter its loop and open the output file before we signal it.
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => ['perl', '-e', 'print "started\n"; sleep 300'],
-        output_file => $output,
+        launch  => ['perl', '-e', 'print "started\n"; sleep 300'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     my $cpid = $collector->collector_pid;
@@ -574,9 +575,9 @@ subtest 'exception in run loop is logged as error event' => sub {
     my $output = "$tmpdir/exception.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => ['perl', '-e', 'print "line1\n"; print "line2\n"'],
-        parser      => Test2::Harness2::Collector::Parser::_Exploding->new(),
-        output_file => $output,
+        launch  => ['perl', '-e', 'print "line1\n"; print "line2\n"'],
+        parser  => Test2::Harness2::Collector::Parser::_Exploding->new(),
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
     $collector->wait();
@@ -599,7 +600,7 @@ subtest 'exception in run loop is logged as error event' => sub {
 
 subtest 'construction validation' => sub {
     like(
-        dies { Test2::Harness2::Collector->new(output_file => 'test.jsonl') },
+        dies { Test2::Harness2::Collector->new() },
         qr/Must specify either/,
         "dies without launch or stdout/stderr"
     );
@@ -607,9 +608,8 @@ subtest 'construction validation' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                launch      => ['echo'],
-                stdout      => \*STDIN,
-                output_file => 'test.jsonl',
+                launch => ['echo'],
+                stdout => \*STDIN,
             )
         },
         qr/not both/,
@@ -617,9 +617,20 @@ subtest 'construction validation' => sub {
     );
 
     like(
-        dies { Test2::Harness2::Collector->new(launch => ['echo']) },
+        dies {
+            Test2::Harness2::Collector->new(
+                launch  => ['echo'],
+                loggers => 'not-an-arrayref',
+            )
+        },
+        qr/loggers.*must be an arrayref/,
+        "dies when loggers is not an arrayref"
+    );
+
+    like(
+        dies { Test2::Harness2::Collector::Logger::JSONL->new() },
         qr/output_file/,
-        "dies without output_file"
+        "JSONL logger dies without output_file"
     );
 };
 
@@ -639,7 +650,9 @@ subtest 'interpose - captures output and exit code' => sub {
     die "fork: $!" unless defined $outer;
 
     if (!$outer) {
-        Test2::Harness2::Collector->interpose(output_file => $output);
+        Test2::Harness2::Collector->interpose(
+            loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+        );
 
         # Only the child (original execution path) reaches here
         print "interpose stdout\n";
@@ -676,7 +689,9 @@ subtest 'interpose - captures non-zero exit' => sub {
     die "fork: $!" unless defined $outer;
 
     if (!$outer) {
-        Test2::Harness2::Collector->interpose(output_file => $output);
+        Test2::Harness2::Collector->interpose(
+            loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+        );
         exit(17);
     }
 
@@ -698,7 +713,9 @@ subtest 'interpose - multi-line output' => sub {
     die "fork: $!" unless defined $outer;
 
     if (!$outer) {
-        Test2::Harness2::Collector->interpose(output_file => $output);
+        Test2::Harness2::Collector->interpose(
+            loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+        );
         for (1 .. 3) { print "line $_\n" }
         exit(0);
     }
@@ -708,14 +725,6 @@ subtest 'interpose - multi-line output' => sub {
     my @events  = read_events($output);
     my @out_evs = find_events(\@events, stream => 'stdout');
     is(scalar @out_evs, 3, "got 3 stdout events from interposed child");
-};
-
-subtest 'interpose - validation' => sub {
-    like(
-        dies { Test2::Harness2::Collector->interpose() },
-        qr/output_file/,
-        "dies without output_file"
-    );
 };
 
 done_testing;

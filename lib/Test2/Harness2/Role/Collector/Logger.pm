@@ -102,12 +102,12 @@ Called once when the collector is done (the collected process has exited and
 all streams have been drained). The L<Test2::Harness2::Collector> instance is
 passed as the only argument.
 
-=item $logger->failing($collector)
+=item $logger->failing($bool)
 
-Called when the collector has detected a failure condition. This is generally
-only applicable to collectors that watch test processes. It is not called for
-collected processes that do not fail. The L<Test2::Harness2::Collector>
-instance is passed as the only argument.
+Called exactly once when the collector's auditor transitions from passing to
+failing. Not called on processes that finish without ever being marked
+failing, and not called when no auditor is in use. A true value (currently
+C<1>) is passed as the sole argument.
 
 =back
 

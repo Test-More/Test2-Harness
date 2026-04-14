@@ -36,6 +36,7 @@ use Test2::Harness2::Util::HashBase qw{
 
     +_event_loggers
     +_loggers_spec
+    +_failing_notified
 };
 
 use constant IS_WIN32 => $^O eq 'MSWin32';
@@ -362,7 +363,7 @@ sub _run_collector {
                     }
                     next unless $parser;
                     my $event = $parser->parse_io(stream => 'stdout', line => $line, stamp => time);
-                    $self->_write_event($event) if $event;
+                    $self->_process_event($event) if $event;
                 }
             }
 
@@ -376,7 +377,7 @@ sub _run_collector {
                     }
                     next unless $parser;
                     my $event = $parser->parse_io(stream => 'stderr', line => $line, stamp => time);
-                    $self->_write_event($event) if $event;
+                    $self->_process_event($event) if $event;
                 }
             }
 
@@ -447,7 +448,7 @@ sub _run_collector {
                 harness_process_exit => parse_exit($child_exit),
             },
         );
-        $self->_write_event($exit_event);
+        $self->_process_event($exit_event);
     }
 
     # Shut down loggers
@@ -616,6 +617,28 @@ sub _read_handle {
 
     # FileLineReader shim
     return $handle->read_lines();
+}
+
+sub _process_event {
+    my $self = shift;
+    my ($event) = @_;
+
+    return unless $event;
+
+    my @events;
+    if (my $auditor = $self->{+AUDITOR}) {
+        @events = $auditor->audit_event($event);
+
+        if (!$self->{+_FAILING_NOTIFIED} && $auditor->failing) {
+            $_->failing(1) for @{$self->{+LOGGERS}};
+            $self->{+_FAILING_NOTIFIED} = 1;
+        }
+    }
+    else {
+        @events = ($event);
+    }
+
+    $self->_write_event($_) for @events;
 }
 
 sub _write_event {

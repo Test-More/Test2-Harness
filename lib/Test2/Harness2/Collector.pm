@@ -15,7 +15,7 @@ use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
 use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Util qw/mod2file parse_exit/;
-use Test2::Harness2::Util::JSON qw/encode_json encode_json_file/;
+use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::HashBase qw{
     <launch
     <env_vars
@@ -324,7 +324,17 @@ sub _run_collector {
     my $stderr_eof   = defined($err_r) ? 0 : 1;
 
     # Merged if same handle object or err not provided
-    $stderr_eof = 1 if defined($out_r) && defined($err_r) && "$out_r" eq "$err_r";
+    my $merge_outputs = defined($out_r) && defined($err_r) && "$out_r" eq "$err_r";
+    $stderr_eof = 1 if $merge_outputs;
+
+    # Ordering buffer. Atomic::Pipe streams may interleave plain lines with
+    # JSON-burst events on STDOUT, and the Test2 Stream formatter sends a
+    # sync marker {"event_id":...} on STDERR each time it writes an event on
+    # STDOUT. We buffer both streams until we have seen the matching
+    # event_id on both sides (or just once when the streams are merged) and
+    # then flush in order, so stdout/stderr text keeps its relative
+    # ordering against the events.
+    my $buffer = {seen => {}, stdout => [], stderr => []};
 
     my $draining = 0;    # Set when we got a signal/parent-gone and are finishing up
 
@@ -355,29 +365,25 @@ sub _run_collector {
 
             # Read stdout
             unless ($stdout_eof) {
-                my @lines = $self->_read_handle($out_r);
-                for my $line (@lines) {
-                    if (!defined $line) {
+                for my $item ($self->_read_handle($out_r)) {
+                    if (!defined $item) {
                         $stdout_eof = 1;
                         last;
                     }
                     next unless $parser;
-                    my $event = $parser->parse_io(stream => 'stdout', line => $line, stamp => time);
-                    $self->_process_event($event) if $event;
+                    $self->_ingest_item($buffer, 'stdout', $item, $merge_outputs, $parser);
                 }
             }
 
             # Read stderr
             unless ($stderr_eof) {
-                my @lines = $self->_read_handle($err_r);
-                for my $line (@lines) {
-                    if (!defined $line) {
+                for my $item ($self->_read_handle($err_r)) {
+                    if (!defined $item) {
                         $stderr_eof = 1;
                         last;
                     }
                     next unless $parser;
-                    my $event = $parser->parse_io(stream => 'stderr', line => $line, stamp => time);
-                    $self->_process_event($event) if $event;
+                    $self->_ingest_item($buffer, 'stderr', $item, $merge_outputs, $parser);
                 }
             }
 
@@ -438,6 +444,10 @@ sub _run_collector {
             last;
         }
     }
+
+    # Flush anything still sitting in the ordering buffer (items that never
+    # got a matching sync marker).
+    $self->_flush_buffer($buffer, $parser) if $parser;
 
     # Write exit event if we have an exit code and something consumes events
     if (defined $child_exit && $parser) {
@@ -600,23 +610,109 @@ sub _read_handle {
     my $self = shift;
     my ($handle) = @_;
 
-    # Atomic::Pipe handles
+    # Atomic::Pipe handles -- return (type, data) tuples so the caller can
+    # distinguish atomic message bursts (JSON events) from plain lines.
     if (blessed($handle) && $handle->isa('Atomic::Pipe')) {
-        my @lines;
+        my @items;
 
         while (1) {
             my ($type, $data) = $handle->get_line_burst_or_data();
             last unless defined $type;
-            push @lines, $data;
+            push @items, [$type, $data];
         }
 
-        push @lines, undef if $handle->eof();
+        push @items, undef if $handle->eof();
 
-        return @lines;
+        return @items;
     }
 
-    # FileLineReader shim
-    return $handle->read_lines();
+    # FileLineReader shim -- wrap each line as a [line => $data] tuple, and
+    # preserve the trailing undef EOF sentinel the reader already emits.
+    return map { defined($_) ? [line => $_] : undef } $handle->read_lines();
+}
+
+sub _ingest_item {
+    my $self = shift;
+    my ($buffer, $stream, $item, $merge_outputs, $parser) = @_;
+
+    my ($type, $data) = @$item;
+    my $stamp = time;
+
+    if ($type eq 'message') {
+        # Atomic JSON burst. On STDOUT this is a full event; on STDERR it is
+        # a sync marker whose event_id tells us that the matching STDOUT
+        # event (and any STDERR context around it) can now be drained.
+        my $decoded;
+        unless (eval { $decoded = decode_json($data); 1 }) {
+            my $err = $@;
+            warn "Collector: failed to decode JSON burst on $stream: $err";
+            return;
+        }
+
+        push @{$buffer->{$stream}}, [$stamp, message => $decoded];
+
+        my $event_id = ref($decoded) eq 'HASH' ? $decoded->{event_id} : undef;
+        return unless defined $event_id;
+
+        my $count     = ++$buffer->{seen}{$event_id};
+        my $threshold = $merge_outputs ? 1 : 2;
+
+        $self->_flush_buffer($buffer, $parser, to => $event_id)
+            if $count >= $threshold;
+
+        return;
+    }
+
+    # Plain line. Atomic::Pipe delivers lines with the trailing newline
+    # still attached in mixed_data_mode; strip it for consistency with
+    # the FileLineReader path (which chomps).
+    chomp $data;
+    push @{$buffer->{$stream}}, [$stamp, line => $data];
+
+    # Until we have seen any event, there is nothing to synchronize against
+    # -- flush eagerly so pure-text processes don't stall.
+    $self->_flush_buffer($buffer, $parser) unless keys %{$buffer->{seen}};
+}
+
+sub _flush_buffer {
+    my $self = shift;
+    my ($buffer, $parser, %params) = @_;
+
+    my $to = $params{to};
+
+    for my $stream (qw/stderr stdout/) {
+        my $queue = $buffer->{$stream};
+        while (my $entry = shift @$queue) {
+            my ($stamp, $kind, $val) = @$entry;
+
+            if ($kind eq 'message') {
+                if ($stream eq 'stdout') {
+                    # A real event arrived via a burst -- feed it through
+                    # the parser so the harness facet still gets populated.
+                    my $event = $parser->parse_io(
+                        stream => $stream,
+                        event  => $val,
+                        stamp  => $stamp,
+                    );
+                    $self->_process_event($event) if $event;
+                }
+                # STDERR messages are sync markers only; nothing to emit.
+
+                last if defined($to)
+                    && ref($val) eq 'HASH'
+                    && defined($val->{event_id})
+                    && $val->{event_id} eq $to;
+            }
+            else {
+                my $event = $parser->parse_io(
+                    stream => $stream,
+                    line   => $val,
+                    stamp  => $stamp,
+                );
+                $self->_process_event($event) if $event;
+            }
+        }
+    }
 }
 
 sub _process_event {

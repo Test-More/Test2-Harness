@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
 
@@ -23,9 +24,8 @@ sub parse_io {
     my (%params) = @_;
 
     my $stream = $params{stream} or croak "No 'stream' provided";
-    my $line   = $params{line};
 
-    return unless defined $line;
+    return unless defined $params{line} || defined $params{event};
 
     my $event = $self->get_event(%params);
 
@@ -63,6 +63,12 @@ sub normalize_event {
 sub get_event {
     my $self = shift;
     my (%params) = @_;
+
+    # Pre-built event (typically decoded from a JSON burst on STDOUT).
+    if (my $ev = $params{event}) {
+        return $ev if blessed($ev);
+        return Test2::Harness2::Event->new(%$ev);
+    }
 
     return Test2::Harness2::Event->new(
         stamp      => $params{stamp}    // time,

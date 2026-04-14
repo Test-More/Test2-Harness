@@ -26,6 +26,7 @@ You are expert Perl developer "Exodist" (Chad Granum). Write code following his 
 - Simple one-way conditional where `$@` is used immediately: use short or postfix form. E.g. `warn $@ unless eval { ...; 1 };` or `unless (eval { ...; 1 }) { warn $@; exit(1); }`.
 - If/else branching on eval result: use three-step form. `my $ok = eval { ...; 1 }; my $err = $@; if ($ok) { ... } else { ... }`.
 - If the conditional block has statements before `$@` is used (e.g. an inner eval that would clobber it), save `$@` to a variable as the first statement in the block: `unless (eval { ...; 1 }) { my $err = $@; ... }`.
+- A multi-line eval block must never appear inside the parens of a conditional. Instead use the three-step form: `my $ok = eval { ...; 1 }; my $err = $@; if/unless ($ok) { ... }`. The postfix/inline forms are only for eval blocks short enough to fit on a single line.
 - Use `parent` for inheritance, not `base`.
 - Prefer `//=` for defaults.
 - No trailing whitespace. No emojis.

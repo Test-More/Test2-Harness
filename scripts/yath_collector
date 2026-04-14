@@ -5,6 +5,7 @@ use warnings;
 use lib 'lib';
 
 use Test2::Harness2::Collector;
+use Test2::Harness2::Collector::Logger::JSONL;
 
 # Usage:
 #   Launch mode (spawn a child process):
@@ -23,10 +24,10 @@ if (@ARGV && $ARGV[0] eq '--') {
     my $stderr_file = shift @ARGV or die "Expected stderr file after '--'\n";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        stdout      => $stdout_file,
-        stderr      => $stderr_file,
-        pid         => undef,
-        output_file => $output_file,
+        stdout  => $stdout_file,
+        stderr  => $stderr_file,
+        pid     => undef,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output_file]],
     );
 
     $collector->wait();
@@ -42,9 +43,9 @@ else {
     die "No command specified\n" unless @ARGV;
 
     my $collector = Test2::Harness2::Collector->spawn(
-        launch      => [@ARGV],
-        env         => \%env,
-        output_file => $output_file,
+        launch  => [@ARGV],
+        env     => \%env,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output_file]],
     );
 
     $collector->wait();

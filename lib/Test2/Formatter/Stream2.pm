@@ -8,13 +8,13 @@ use IO::Handle;
 use Atomic::Pipe;
 
 use Carp qw/croak confess/;
+use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util qw/get_tid/;
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Util qw/hub_truth apply_encoding/;
-
-use Test2::Harness2::Collector::Child qw/send_event/;
+use Test2::Harness2::Util::JSON qw/encode_json/;
 
 use parent qw/Test2::Formatter/;
 use Test2::Harness2::Util::HashBase qw{
@@ -25,12 +25,21 @@ use Test2::Harness2::Util::HashBase qw{
     <stream_id
     <tb
     <tb_handles
+    +stdout_apipe
+    +stderr_apipe
 };
 
 sub hide_buffered { 0 }
 
 sub init {
     my $self = shift;
+
+    # T2_HARNESS2_PIPE_COUNT is set by Test2::Harness2::Collector in every
+    # child process it spawns; it counts the mixed-mode pipes the collector
+    # is reading from (1 when STDOUT and STDERR are merged, 2 otherwise).
+    # Its presence is our sole signal that we are running inside a collector.
+    my $pipe_count = $ENV{T2_HARNESS2_PIPE_COUNT}
+        or confess "Test2::Formatter::Stream2 must be loaded inside a Test2::Harness2::Collector child (T2_HARNESS2_PIPE_COUNT is not set)";
 
     $self->{+STREAM_ID} = 1;
 
@@ -42,9 +51,22 @@ sub init {
         Test2::API::test2_stderr()->autoflush(1);
     }
 
+    # Wrap STDOUT (always) and STDERR (when not merged with STDOUT) as
+    # mixed-mode atomic pipes so we can write JSON event "bursts" alongside
+    # ordinary text and the collector parent will demux them.
+    my $stdout_apipe = Atomic::Pipe->from_fh('>&=', \*STDOUT);
+    $stdout_apipe->set_mixed_data_mode();
+    $self->{+STDOUT_APIPE} = $stdout_apipe;
+
+    if ($pipe_count > 1) {
+        my $stderr_apipe = Atomic::Pipe->from_fh('>&=', \*STDERR);
+        $stderr_apipe->set_mixed_data_mode();
+        $self->{+STDERR_APIPE} = $stderr_apipe;
+    }
+
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;
-        $self->{+TB} = Test::Builder::Formatter->new();
+        $self->{+TB}         = Test::Builder::Formatter->new();
         $self->{+TB_HANDLES} = [@{$self->{+TB}->handles}];
     }
 }
@@ -54,14 +76,61 @@ sub record {
     my ($facets, $num) = @_;
 
     # Local is expensive! Only do it if we really need to.
-    local($\, $,) = (undef, '') if $\ || $,;
+    local ($\, $,) = (undef, '') if $\ || $,;
 
     my $id = $self->{+STREAM_ID}++;
-    send_event(
+    $self->_send_event(
         $facets,
         stream_id    => $id,
         assert_count => $self->{+NO_NUMBERS} ? undef : $num,
     );
+}
+
+# Serialize an event and send it to the collector parent: full JSON payload as
+# an atomic message burst on STDOUT, and a tiny {"event_id":...} sync marker
+# on STDERR (when STDERR is its own pipe) so the collector can keep STDERR
+# text ordered against the events.
+sub _send_event {
+    my $self = shift;
+    my ($in, %fields) = @_;
+
+    my ($event, $facets);
+    if (blessed($in) && $in->isa('Test2::Harness2::Event')) {
+        $event    = $in;
+        $facets   = $event->facet_data;
+        $in->{$_} = $fields{$_} for keys %fields;
+    }
+    elsif ($in->{facet_data}) {
+        $event  = {%$in, %fields};
+        $facets = $in->{facet_data};
+    }
+    else {
+        $facets = $in;
+        $event  = \%fields;
+    }
+
+    my $event_id = $event->{event_id} //= $facets->{about}->{uuid} //= $fields{event_id} //= gen_uuid();
+    $facets->{about}->{uuid} //= $event_id;
+
+    $event->{facet_data} = $facets;
+    $event->{event_id}   = $event_id;
+
+    $event->{stamp} //= time;
+    $event->{tid}   //= get_tid();
+    $event->{pid}   //= $$;
+
+    my $json;
+    {
+        no warnings 'once';
+        local *UNIVERSAL::TO_JSON = sub { "$_[0]" };
+        $json = encode_json($event);
+    }
+
+    $self->{+STDOUT_APIPE}->write_message($json);
+
+    if (my $stderr = $self->{+STDERR_APIPE}) {
+        $stderr->write_message(qq/{"event_id":"$event_id"}/);
+    }
 }
 
 sub encoding {
@@ -171,7 +240,7 @@ sub finalize {
     return $self->{+TB}->finalize(@_);
 }
 
-sub DESTROY {}
+sub DESTROY { }
 
 our $AUTOLOAD;
 
@@ -212,13 +281,62 @@ __END__
 
 =head1 NAME
 
-Test2::Formatter::Stream - Test2 Formatter that directly writes events.
+Test2::Formatter::Stream2 - Test2 formatter that emits events directly to the
+collector.
 
 =head1 DESCRIPTION
 
-Formatter used by default when L<App::Yath2> runs tests.
+Default L<Test2> formatter installed by L<App::Yath2> when it runs tests under
+L<Test2::Harness2::Collector>. Instead of producing TAP, it serializes each
+event as JSON and writes it as an atomic message burst on the test process's
+STDOUT, with a small C<{"event_id":...}> sync marker on STDERR so the
+collector can keep STDERR text ordered against the events.
 
-This formatter cannot be used directly, it only works under yath.
+This formatter cannot be used standalone -- it requires the environment set
+up by the collector (specifically C<T2_HARNESS2_PIPE_COUNT>, which the child
+inherits from the collector parent). Constructing it outside that environment
+will throw at C<init>-time.
+
+=head2 Test::Builder bridge
+
+When constructed with C<check_tb =E<gt> 1>, the formatter instantiates a
+L<Test::Builder::Formatter> alongside itself. If a caller later replaces
+Test::Builder's stdout/stderr/todo handles (which legacy code occasionally
+does to capture output) the formatter routes that one event through
+Test::Builder's TAP path instead of the harness JSON path, preserving legacy
+behavior. The L</handles>, L</set_handles>, L</set_no_header>,
+L</set_no_diag>, L</set_no_numbers>, L</terminate>, L</finalize>, and
+C<AUTOLOAD> hooks all forward to Test::Builder::Formatter when the bridge is
+active.
+
+=head1 ATTRIBUTES
+
+=over 4
+
+=item encoding
+
+The active output encoding. Setting it via L</encoding> emits a control
+event so the collector can mirror the change, and applies the encoding to
+both STDOUT and STDERR via L<Test2::Harness2::Util/apply_encoding>.
+
+=item no_header / no_diag / no_numbers
+
+Mirror the Test::Builder formatter flags. Affect what is written for each
+event (header / diagnostic info / assertion numbers respectively). When the
+TB bridge is active, settings are propagated to it as well.
+
+=item stream_id
+
+Monotonically-increasing stream sequence number stamped onto every event so
+the collector / loggers can preserve emission order across pipes.
+
+=item tb / tb_handles
+
+Internal: the Test::Builder::Formatter bridge instance and its captured
+initial handles. Populated only when C<check_tb> was passed to the
+constructor.
+
+=back
 
 =head1 SOURCE
 

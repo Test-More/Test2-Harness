@@ -16,6 +16,7 @@ use Test2::Harness2::Event;
 use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Util qw/mod2file parse_exit/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
+use Test2::Harness2::Util::IPC qw/pid_is_running/;
 use Test2::Harness2::Util::HashBase qw{
     <launch
     <env_vars
@@ -351,7 +352,7 @@ sub _run_collector {
             if (!$draining && $self->{+PARENT_PIDS} && @{$self->{+PARENT_PIDS}}) {
                 my $parent_gone = 0;
                 for my $ppid (@{$self->{+PARENT_PIDS}}) {
-                    unless (_pid_is_running($ppid)) {
+                    unless (pid_is_running($ppid)) {
                         $parent_gone = 1;
                         last;
                     }
@@ -751,7 +752,7 @@ sub _kill_child {
     my ($pid) = @_;
 
     return unless $pid;
-    return unless _pid_is_running($pid);
+    return unless pid_is_running($pid);
 
     if (IS_WIN32) {
         # Windows has no SIGTERM.  kill(9, $pid) terminates the process.
@@ -776,30 +777,6 @@ sub _kill_child {
     kill('KILL', $pid);
     my $rv = waitpid($pid, 0);
     return $?;
-}
-
-sub _pid_is_running {
-    my ($pid) = @_;
-
-    return 0 unless $pid;
-
-    local $!;
-
-    # kill(0, $pid) works on both Unix and Windows to check if a process
-    # is running and we have permission to signal it.
-    return 1 if kill(0, $pid);
-
-    # On Unix, ESRCH means no such process.  On Windows $! is set to a
-    # platform-specific value, but kill(0) returning false is sufficient.
-    if (!IS_WIN32) {
-        require POSIX;
-        return 0 if $! == POSIX::ESRCH();
-
-        # Some other error (e.g. EPERM) - process exists but not ours
-        return -1;
-    }
-
-    return 0;
 }
 
 sub interpose {

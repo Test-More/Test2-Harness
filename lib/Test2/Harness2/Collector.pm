@@ -16,7 +16,7 @@ use Test2::Harness2::Event;
 use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Util qw/mod2file parse_exit/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
-use Test2::Harness2::Util::IPC qw/pid_is_running/;
+use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
 use Test2::Harness2::Util::HashBase qw{
     <launch
     <env_vars
@@ -482,7 +482,7 @@ sub _set_procname {
         push @parts => @files if @files;
     }
 
-    $0 = join(' - ', @parts);
+    set_procname(set => [join(' - ', @parts)]);
 }
 
 sub _launch_child {
@@ -504,8 +504,8 @@ sub _launch_child {
         # On Windows there is no fork.  Redirect STDOUT/STDERR to the pipe
         # write ends, spawn via system(1, @cmd) (P_NOWAIT) which returns
         # the child PID immediately, then restore handles.
-        _swap_io(\*STDOUT, $out_w->wh);
-        _swap_io(\*STDERR, $err_w->wh);
+        swap_io(\*STDOUT, $out_w->wh);
+        swap_io(\*STDERR, $err_w->wh);
         STDOUT->autoflush(1);
         STDERR->autoflush(1);
 
@@ -533,8 +533,8 @@ sub _launch_child {
             $out_r->close();
             $err_r->close();
 
-            _swap_io(\*STDOUT, $out_w->wh);
-            _swap_io(\*STDERR, $err_w->wh);
+            swap_io(\*STDOUT, $out_w->wh);
+            swap_io(\*STDERR, $err_w->wh);
             STDOUT->autoflush(1);
             STDERR->autoflush(1);
 
@@ -562,17 +562,6 @@ sub _launch_child {
     close($orig_stderr);
 
     return ($pid, $out_r, $err_r);
-}
-
-sub _swap_io {
-    my ($fh, $to) = @_;
-
-    my $orig_fd = fileno($fh);
-    croak "Could not get fd for handle" unless defined $orig_fd;
-
-    open($fh, '>&', $to) or croak "Could not redirect fd $orig_fd: $!";
-
-    croak "Handle does not have the expected fd (got " . fileno($fh) . ", wanted $orig_fd)" if fileno($fh) != $orig_fd;
 }
 
 sub _wrap_handle {
@@ -867,8 +856,8 @@ sub _interpose_child {
     $params->{out_r}->close();
     $params->{err_r}->close();
 
-    _swap_io(\*STDOUT, $params->{out_w}->wh);
-    _swap_io(\*STDERR, $params->{err_w}->wh);
+    swap_io(\*STDOUT, $params->{out_w}->wh);
+    swap_io(\*STDERR, $params->{err_w}->wh);
     STDOUT->autoflush(1);
     STDERR->autoflush(1);
 

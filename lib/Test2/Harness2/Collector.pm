@@ -138,7 +138,7 @@ sub _normalize_loggers {
         croak "Logger '" . (blessed($inst) || $inst) . "' does not implement Test2::Harness2::Role::Collector::Logger"
             unless $inst->DOES('Test2::Harness2::Role::Collector::Logger');
 
-        push @normalized, $inst;
+        push @normalized => $inst;
     }
 
     # Verify depends_on requirements
@@ -334,8 +334,10 @@ sub _run_collector {
     # STDOUT. We buffer both streams until we have seen the matching
     # event_id on both sides (or just once when the streams are merged) and
     # then flush in order, so stdout/stderr text keeps its relative
-    # ordering against the events.
-    my $buffer = {seen => {}, stdout => [], stderr => []};
+    # ordering against the events. `saw_event` latches once we see any
+    # JSON-burst so the "pure text" eager-flush path stops firing even after
+    # we have pruned flushed event_ids out of `seen`.
+    my $buffer = {seen => {}, saw_event => 0, stdout => [], stderr => []};
 
     my $draining = 0;    # Set when we got a signal/parent-gone and are finishing up
 
@@ -397,37 +399,19 @@ sub _run_collector {
                 }
             }
 
-            # When we have IPC and can check for an exit and exit code, this
-            # is where we will do that check for externally-managed processes
-            # (pid provided but not started by us).
+            # For externally-managed pids we can't waitpid, but we can still
+            # notice they are gone via pid_is_running. Exit status is not
+            # available in this path; that requires the IPC channel.
+            if ($child_pid && !$started_child && !$child_exited) {
+                $child_exited = 1 unless pid_is_running($child_pid);
+            }
 
             1;
         };
         my $err = $@;
 
         unless ($ok) {
-            if ($parser) {
-                # Write the exception as an event to the log
-                my $log_ok = eval {
-                    my $err_event = Test2::Harness2::Event->new(
-                        event_id   => gen_uuid(),
-                        stamp      => time,
-                        facet_data => {
-                            errors => [{
-                                tag     => 'COLLECTR',
-                                details => "Collector exception: $err",
-                                fail    => 1,
-                            }],
-                        },
-                    );
-                    $self->_write_event($err_event);
-                    1;
-                };
-                warn "Failed to write error event: $@" unless $log_ok;
-            }
-            else {
-                warn "Collector exception: $err";
-            }
+            $self->_emit_collector_error($err);
 
             # Terminate the child and bail out of the loop
             $self->_kill_child($child_pid) if $child_pid && $started_child;
@@ -450,8 +434,10 @@ sub _run_collector {
     # got a matching sync marker).
     $self->_flush_buffer($buffer, $parser) if $parser;
 
-    # Write exit event if we have an exit code and something consumes events
-    if (defined $child_exit && $parser) {
+    # Write exit event if we have an exit code. Collector-synthesized events
+    # like this don't need a parser; _process_event will still feed loggers
+    # and the auditor on its own.
+    if (defined $child_exit) {
         my $exit_event = Test2::Harness2::Event->new(
             event_id   => gen_uuid(),
             stamp      => time,
@@ -478,22 +464,22 @@ sub _set_procname {
 
     my @parts = ('Collector');
 
-    push @parts, $child_pid if $child_pid;
+    push @parts => $child_pid if $child_pid;
 
     if ($self->{+LAUNCH}) {
         my $cmd = ref($self->{+LAUNCH}) ? join(' ', @{$self->{+LAUNCH}}) : $self->{+LAUNCH};
-        push @parts, $cmd;
+        push @parts => $cmd;
     }
     elsif (defined $self->{+OUT_FH} || defined $self->{+ERR_FH}) {
         # Try to show file info
         my @files;
         if (!ref($self->{+OUT_FH}) && defined $self->{+OUT_FH}) {
-            push @files, "out=$self->{+OUT_FH}";
+            push @files => "out=$self->{+OUT_FH}";
         }
         if (!ref($self->{+ERR_FH}) && defined $self->{+ERR_FH}) {
-            push @files, "err=$self->{+ERR_FH}";
+            push @files => "err=$self->{+ERR_FH}";
         }
-        push @parts, @files if @files;
+        push @parts => @files if @files;
     }
 
     $0 = join(' - ', @parts);
@@ -611,7 +597,7 @@ sub _read_handle {
     my $self = shift;
     my ($handle) = @_;
 
-    # Atomic::Pipe handles -- return (type, data) tuples so the caller can
+    # Atomic::Pipe handles -- return [type, data] tuples so the caller can
     # distinguish atomic message bursts (JSON events) from plain lines.
     if (blessed($handle) && $handle->isa('Atomic::Pipe')) {
         my @items;
@@ -619,17 +605,17 @@ sub _read_handle {
         while (1) {
             my ($type, $data) = $handle->get_line_burst_or_data();
             last unless defined $type;
-            push @items, [$type, $data];
+            push @items => [$type, $data];
         }
 
-        push @items, undef if $handle->eof();
+        push @items => undef if $handle->eof();
 
         return @items;
     }
 
-    # FileLineReader shim -- wrap each line as a [line => $data] tuple, and
-    # preserve the trailing undef EOF sentinel the reader already emits.
-    return map { defined($_) ? [line => $_] : undef } $handle->read_lines();
+    # FileLineReader already emits [line => $data] tuples and a trailing
+    # undef EOF sentinel, so pass its output through unchanged.
+    return $handle->read_lines();
 }
 
 sub _ingest_item {
@@ -646,14 +632,19 @@ sub _ingest_item {
         my $decoded;
         unless (eval { $decoded = decode_json($data); 1 }) {
             my $err = $@;
-            warn "Collector: failed to decode JSON burst on $stream: $err";
+            $self->_emit_collector_error(
+                "Failed to decode JSON burst on $stream: $err",
+                invalid_json => $data,
+            );
             return;
         }
 
-        push @{$buffer->{$stream}}, [$stamp, message => $decoded];
+        push @{$buffer->{$stream}} => [$stamp, message => $decoded];
 
         my $event_id = ref($decoded) eq 'HASH' ? $decoded->{event_id} : undef;
         return unless defined $event_id;
+
+        $buffer->{saw_event} = 1;
 
         my $count     = ++$buffer->{seen}{$event_id};
         my $threshold = $merge_outputs ? 1 : 2;
@@ -668,11 +659,12 @@ sub _ingest_item {
     # still attached in mixed_data_mode; strip it for consistency with
     # the FileLineReader path (which chomps).
     chomp $data;
-    push @{$buffer->{$stream}}, [$stamp, line => $data];
+    push @{$buffer->{$stream}} => [$stamp, line => $data];
 
-    # Until we have seen any event, there is nothing to synchronize against
-    # -- flush eagerly so pure-text processes don't stall.
-    $self->_flush_buffer($buffer, $parser) unless keys %{$buffer->{seen}};
+    # Until we have seen any event there is nothing to synchronize against
+    # -- flush eagerly so pure-text processes don't stall. We can't rely on
+    # keys %{seen} here because flush_buffer prunes event_ids as they drain.
+    $self->_flush_buffer($buffer, $parser) unless $buffer->{saw_event};
 }
 
 sub _flush_buffer {
@@ -699,10 +691,12 @@ sub _flush_buffer {
                 }
                 # STDERR messages are sync markers only; nothing to emit.
 
-                last if defined($to)
-                    && ref($val) eq 'HASH'
-                    && defined($val->{event_id})
-                    && $val->{event_id} eq $to;
+                # Drop event_ids we've drained so `seen` can't grow without
+                # bound across a long-running process.
+                if (ref($val) eq 'HASH' && defined(my $eid = $val->{event_id})) {
+                    delete $buffer->{seen}{$eid};
+                    last if defined($to) && $eid eq $to;
+                }
             }
             else {
                 my $event = $parser->parse_io(
@@ -714,6 +708,32 @@ sub _flush_buffer {
             }
         }
     }
+}
+
+sub _emit_collector_error {
+    my $self = shift;
+    my ($msg, %extra) = @_;
+
+    my $ok = eval {
+        my $event = Test2::Harness2::Event->new(
+            event_id   => gen_uuid(),
+            stamp      => time,
+            facet_data => {
+                errors => [{
+                    tag     => 'COLLECTR',
+                    details => "Collector exception: $msg",
+                    fail    => 1,
+                    %extra,
+                }],
+            },
+        );
+        $self->_process_event($event);
+        1;
+    };
+    return if $ok;
+
+    warn "Collector exception: $msg\n";
+    warn "Additionally, failed to log collector error: $@\n";
 }
 
 sub _process_event {
@@ -859,7 +879,9 @@ sub _interpose_child {
 sub wait {
     my $self = shift;
 
-    # On Windows the collector ran inline, nothing to wait for
+    # COLLECTOR_PID is unset only when the collector ran inline (e.g. the
+    # Win32 non-launch path that consumes pre-opened handles in this
+    # process). In that case there is nothing to wait for.
     my $cpid = $self->{+COLLECTOR_PID} or return;
 
     my $rv   = waitpid($cpid, 0);

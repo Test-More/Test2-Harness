@@ -53,8 +53,9 @@ subtest 'launch - basic stdout/stderr' => sub {
         loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
-    ok($collector,                "created collector");
-    ok($collector->collector_pid, "has collector pid");
+    ok($collector,      "created collector");
+    ok($collector->pid, "has collector pid");
+    isa_ok($collector, 'Test2::Harness2::Collector::Handle');
 
     my $exit = $collector->wait();
     is($exit, 0, "collector exited cleanly");
@@ -531,7 +532,7 @@ subtest 'child killed on signal' => sub {
         loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
-    my $cpid = $collector->collector_pid;
+    my $cpid = $collector->pid;
     ok($cpid, "collector process is running");
 
     # Wait until the output file appears (collector has entered the loop)

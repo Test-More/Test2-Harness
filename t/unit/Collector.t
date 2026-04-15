@@ -634,6 +634,137 @@ subtest 'construction validation' => sub {
     );
 };
 
+subtest 'spec validation - bad shapes are rejected at init' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    like(
+        dies {
+            Test2::Harness2::Collector->new(
+                stdout  => $devnull,
+                loggers => [{bogus => 1}],
+            )
+        },
+        qr/Invalid logger specification/,
+        "hashref logger spec rejected"
+    );
+
+    like(
+        dies {
+            Test2::Harness2::Collector->new(
+                stdout  => $devnull,
+                loggers => [[]],
+            )
+        },
+        qr/Logger arrayref must begin with a class name/,
+        "empty arrayref logger spec rejected"
+    );
+
+    like(
+        dies {
+            Test2::Harness2::Collector->new(
+                stdout  => $devnull,
+                auditor => {bogus => 1},
+            )
+        },
+        qr/Invalid auditor specification/,
+        "hashref auditor spec rejected"
+    );
+
+    like(
+        dies {
+            Test2::Harness2::Collector->new(
+                stdout  => $devnull,
+                auditor => 'Test2::Harness2::Util',    # exists but doesn't DOES role
+            )
+        },
+        qr/does not implement Test2::Harness2::Role::Auditor/,
+        "auditor class missing role rejected at validate time"
+    );
+
+    like(
+        dies {
+            Test2::Harness2::Collector->new(
+                stdout  => $devnull,
+                loggers => ['Test2::Harness2::Util'],
+            )
+        },
+        qr/does not implement Test2::Harness2::Role::Collector::Logger/,
+        "logger class missing role rejected at validate time"
+    );
+};
+
+subtest 'spec instantiation is deferred to the collector child' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    # Sentinel class that records every constructor call. If init() instantiates
+    # it, the count goes up in the parent. We expect the count to be zero in
+    # the parent right after construction.
+    package T2H2_Test_Sentinel_Logger;
+    our $CONSTRUCTED = 0;
+    sub new        { $CONSTRUCTED++; bless {}, shift }
+    sub depends_on { () }
+    sub log_events { 0 }
+    sub log_event  { }
+    sub startup    { }
+    sub shutdown   { }
+    sub failing    { }
+    sub DOES       { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+
+    package main;
+
+    package T2H2_Test_Sentinel_Auditor;
+    our $CONSTRUCTED = 0;
+    sub new         { $CONSTRUCTED++; bless {}, shift }
+    sub audit_event { return ($_[1]) }
+    sub fail_count  { 0 }
+    sub pass_count  { 0 }
+    sub failing     { 0 }
+    sub passing     { 1 }
+    sub DOES        { $_[1] eq 'Test2::Harness2::Role::Auditor' || $_[0]->isa($_[1]) }
+
+    package main;
+
+    $T2H2_Test_Sentinel_Logger::CONSTRUCTED  = 0;
+    $T2H2_Test_Sentinel_Auditor::CONSTRUCTED = 0;
+
+    my $c = Test2::Harness2::Collector->new(
+        stdout  => $devnull,
+        loggers => ['T2H2_Test_Sentinel_Logger'],
+        auditor => 'T2H2_Test_Sentinel_Auditor',
+    );
+
+    is($T2H2_Test_Sentinel_Logger::CONSTRUCTED,  0, "logger constructor not called in init()");
+    is($T2H2_Test_Sentinel_Auditor::CONSTRUCTED, 0, "auditor constructor not called in init()");
+
+    # Loggers/auditor accessors return the original specs (not instances).
+    is($c->loggers, ['T2H2_Test_Sentinel_Logger'], "loggers attr holds spec");
+    is($c->auditor, 'T2H2_Test_Sentinel_Auditor',  "auditor attr holds spec");
+};
+
+subtest 'blessed instances pass through unchanged and survive validation' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    package T2H2_Test_Blessed_Logger;
+    sub new        { bless {}, shift }
+    sub depends_on { () }
+    sub log_events { 0 }
+    sub log_event  { }
+    sub startup    { }
+    sub shutdown   { }
+    sub failing    { }
+    sub DOES       { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+
+    package main;
+
+    my $logger = T2H2_Test_Blessed_Logger->new();
+    my $c      = Test2::Harness2::Collector->new(
+        stdout  => $devnull,
+        loggers => [$logger],
+    );
+
+    is($c->loggers->[0], exact_ref($logger), "blessed logger spec preserved");
+};
+
 # ===========================================================================
 # Interpose tests (fork+capture current process) -- require fork
 # ===========================================================================

@@ -37,6 +37,7 @@ use Test2::Harness2::Util::HashBase qw{
 
     +_event_loggers
     +_loggers_spec
+    +_auditor_spec
     +_failing_notified
 };
 
@@ -57,6 +58,7 @@ sub init {
     $self->{+ENV_VARS}     //= {};
 
     $self->_normalize_loggers();
+    $self->_normalize_auditor();
 
     my $has_launch = defined $self->{+LAUNCH};
     my $has_stdio  = defined($self->{+OUT_FH}) || defined($self->{+ERR_FH});
@@ -103,6 +105,51 @@ sub _load_logger_class {
     require $file;
 }
 
+sub _spec_class {
+    my ($spec) = @_;
+
+    return ref($spec) if blessed($spec);
+    return $spec->[0] if ref($spec) eq 'ARRAY';
+    return $spec      if !ref($spec);
+    return undef;
+}
+
+# Validates a single spec for blessed/arrayref/string shape, loads the class
+# (for non-blessed forms), and verifies it implements $role at the class level.
+# Returns nothing; croaks on any problem.
+sub _validate_spec {
+    my ($spec, $kind, $role) = @_;
+
+    if (blessed($spec)) {
+        croak ucfirst($kind) . " '" . ref($spec) . "' does not implement $role"
+            unless $spec->DOES($role);
+        return;
+    }
+
+    my $class;
+    if (ref($spec) eq 'ARRAY') {
+        $class = $spec->[0];
+        croak ucfirst($kind) . " arrayref must begin with a class name"
+            unless defined($class) && !ref($class);
+    }
+    elsif (!ref($spec)) {
+        $class = $spec;
+    }
+    else {
+        croak "Invalid $kind specification: " . ref($spec);
+    }
+
+    _load_logger_class($class);
+
+    croak ucfirst($kind) . " '$class' does not implement $role"
+        unless $class->DOES($role);
+}
+
+# Pure validation: confirm each entry is a well-formed spec whose class
+# implements the logger role. Constructors are NOT invoked here -- the actual
+# instances are built lazily in _instantiate_loggers, which runs in the
+# collector child only. This avoids opening files or other side effects in the
+# parent that would then be duplicated across the fork/spawn boundary.
 sub _normalize_loggers {
     my $self = shift;
 
@@ -110,47 +157,82 @@ sub _normalize_loggers {
 
     croak "'loggers' must be an arrayref" unless ref($loggers) eq 'ARRAY';
 
-    # Save original spec for Win32 spawn serialization
-    $self->{+_LOGGERS_SPEC} = [@$loggers];
+    my $role = 'Test2::Harness2::Role::Collector::Logger';
 
-    my @normalized;
     for my $item (@$loggers) {
-        my $inst;
+        _validate_spec($item, 'logger', $role);
+    }
 
+    # depends_on is a class method on the logger role with a default of (),
+    # so we can resolve dependencies without instantiating.
+    my %have = map { _spec_class($_) => 1 } @$loggers;
+    for my $item (@$loggers) {
+        my $class = _spec_class($item);
+        for my $dep ($class->depends_on) {
+            next if $have{$dep};
+            croak "Logger '$class' requires logger '$dep', but it is not present";
+        }
+    }
+
+    # Preserve original spec list for later serialization / instantiation.
+    $self->{+_LOGGERS_SPEC} = [@$loggers];
+}
+
+sub _normalize_auditor {
+    my $self = shift;
+
+    my $spec = $self->{+AUDITOR};
+    return unless defined $spec;
+
+    _validate_spec($spec, 'auditor', 'Test2::Harness2::Role::Auditor');
+
+    $self->{+_AUDITOR_SPEC} = $spec;
+}
+
+# Build instances from the spec list. Called from _run_collector so that only
+# the collector child process constructs loggers/auditor objects -- the parent
+# never opens those file handles, sockets, etc.
+sub _instantiate_loggers {
+    my $self = shift;
+
+    my $specs = $self->{+_LOGGERS_SPEC} //= [];
+
+    my @instances;
+    for my $item (@$specs) {
         if (blessed($item)) {
-            $inst = $item;
+            push @instances => $item;
         }
         elsif (ref($item) eq 'ARRAY') {
             my ($class, @args) = @$item;
-            croak "Logger arrayref must begin with a class name"
-                unless defined($class) && !ref($class);
-            _load_logger_class($class);
-            $inst = $class->new(@args);
-        }
-        elsif (!ref($item)) {
-            _load_logger_class($item);
-            $inst = $item->new();
+            push @instances => $class->new(@args);
         }
         else {
-            croak "Invalid logger specification: " . ref($item);
-        }
-
-        croak "Logger '" . (blessed($inst) || $inst) . "' does not implement Test2::Harness2::Role::Collector::Logger"
-            unless $inst->DOES('Test2::Harness2::Role::Collector::Logger');
-
-        push @normalized => $inst;
-    }
-
-    # Verify depends_on requirements
-    my %have = map { (blessed($_) || $_) => 1 } @normalized;
-    for my $l (@normalized) {
-        for my $dep ($l->depends_on) {
-            next if $have{$dep};
-            croak "Logger '" . (blessed($l) || $l) . "' requires logger '$dep', but it is not present";
+            push @instances => $item->new();
         }
     }
 
-    $self->{+LOGGERS} = \@normalized;
+    $self->{+LOGGERS} = \@instances;
+}
+
+sub _instantiate_auditor {
+    my $self = shift;
+
+    my $spec = $self->{+_AUDITOR_SPEC};
+    return unless defined $spec;
+
+    my $inst;
+    if (blessed($spec)) {
+        $inst = $spec;
+    }
+    elsif (ref($spec) eq 'ARRAY') {
+        my ($class, @args) = @$spec;
+        $inst = $class->new(@args);
+    }
+    else {
+        $inst = $spec->new();
+    }
+
+    $self->{+AUDITOR} = $inst;
 }
 
 sub spawn {
@@ -231,6 +313,14 @@ sub _spawn_collector_win32 {
     }
     $params{loggers} = $self->{+_LOGGERS_SPEC};
 
+    # Auditor follows the same constraint -- class name or [class, %args]
+    # arrayref only on Windows, since blessed instances cannot be serialized.
+    if (defined $self->{+_AUDITOR_SPEC}) {
+        croak "Blessed auditor instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
+            if blessed($self->{+_AUDITOR_SPEC});
+        $params{auditor} = $self->{+_AUDITOR_SPEC};
+    }
+
     my $json_file = encode_json_file(\%params);
 
     # Build the command: current perl, all @INC paths, load this module,
@@ -308,6 +398,11 @@ sub _run_collector {
 
     $SIG{TERM} = sub { $got_signal = 'TERM' };
     $SIG{INT}  = sub { $got_signal = 'INT' };
+
+    # Build logger and auditor instances now, in the collector child process
+    # only, so the parent never opens those file handles / sockets / etc.
+    $self->_instantiate_loggers();
+    $self->_instantiate_auditor();
 
     # Start loggers and cache the event-logging subset
     $_->startup($self) for @{$self->{+LOGGERS}};

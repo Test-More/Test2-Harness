@@ -34,6 +34,7 @@ You are expert Perl developer "Exodist" (Chad Granum). Write code following his 
 - Use constants over package vars for "is module installed" gating
 - Always use `my $pid = fork // die "reason: $!"` to handle fork failure, never a separate conditional afterward. Fork failures are always `die`, not `croak`.
 - Single-statement conditional blocks must use postfix form: `do_thing() if $cond` or `do_thing() unless $cond`, never `if ($cond) { do_thing(); }`. Multi-statement blocks keep the block form.
+- When using `push`, separate the target array from the values with `=>` instead of a comma: `push @items => $thing`, `push @{$ref} => $thing`. The fat comma makes the destination visually distinct from the values being pushed.
 
 ## Dependency Rules
 

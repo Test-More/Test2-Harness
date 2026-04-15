@@ -8,12 +8,14 @@ use Carp qw/croak/;
 use POSIX qw/:sys_wait_h/;
 use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
+use Scope::Guard ();
 use IO::Handle;
 use Atomic::Pipe;
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
 use Test2::Harness2::Collector::FileLineReader;
+use Test2::Harness2::Collector::Handle;
 use Test2::Harness2::Util qw/mod2file parse_exit/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
@@ -28,9 +30,6 @@ use Test2::Harness2::Util::HashBase qw{
     <loggers
     <parent_pids
     <kill_timeout
-
-    <collector_pid
-    <exit_code
 
     +_started
     <_owns_child
@@ -238,19 +237,33 @@ sub _instantiate_auditor {
 sub spawn {
     my ($class, %params) = @_;
     my $self = $class->new(%params);
+
+    # start() replaces $_[0] with a handle in the parent (see below), so this
+    # local $self becomes the handle on success.
     $self->start();
+
     return $self;
 }
 
 sub start {
-    my $self = shift;
+    my ($self) = @_;
 
     croak "Collector already started" if $self->{+_STARTED};
     $self->{+_STARTED} = 1;
 
-    $self->_spawn_collector();
+    my $pid = $self->_spawn_collector();
 
-    return;
+    # In the child of a fork, _spawn_collector exits before returning here.
+    # Defensive: if we ever do return in the child, blow up loudly rather
+    # than continuing the caller's code path.
+    return unless defined $pid;
+
+    # Parent: replace the caller's collector reference with a handle so the
+    # heavyweight Collector instance (with its loggers, auditor, parser, and
+    # pipe machinery) is not kept alive in the parent.
+    $_[0] = Test2::Harness2::Collector::Handle->new(pid => $pid);
+
+    return $pid;
 }
 
 sub _spawn_collector {
@@ -260,16 +273,21 @@ sub _spawn_collector {
 
     my $pid = fork() // die "Failed to fork collector: $!";
 
-    # Parent - record the collector pid
-    return $self->{+COLLECTOR_PID} = $pid if $pid;
+    # Parent
+    return $pid if $pid;
 
-    # Child - run the collector
-    unless (eval { $self->_run_collector(); 1 }) {
-        warn "Collector process died: $@";
-        exit(1);
-    }
+    # Child -- never return from this scope. The Scope::Guard makes a runaway
+    # control flow loud (POSIX::_exit(255)) instead of letting the caller's
+    # code resume in a process it never expected to touch.
+    my $guard = Scope::Guard->new(sub { POSIX::_exit(255) });
 
-    exit(0);
+    my $ok  = eval { $self->_run_collector(); 1 };
+    my $err = $@;
+
+    $self->_emit_collector_error("Collector process died: $err") unless $ok;
+
+    $guard->dismiss;
+    POSIX::_exit($ok ? 0 : 1);
 }
 
 sub _spawn_collector_win32 {
@@ -281,7 +299,7 @@ sub _spawn_collector_win32 {
         # Pipe-based and file-based callers pass in file handles which
         # cannot be serialized to a new process, so run the collector inline.
         warn "Collector died: $@" unless eval { $self->_run_collector(); 1 };
-        return;
+        return undef;
     }
 
     # Launch mode: serialize the constructor args to a temp JSON file
@@ -345,7 +363,7 @@ sub _spawn_collector_win32 {
         croak "Failed to spawn collector process: " . ($err || $!);
     }
 
-    $self->{+COLLECTOR_PID} = $pid;
+    return $pid;
 }
 
 # Class method invoked by the spawned collector process on Windows.
@@ -359,12 +377,17 @@ sub collect_from_file {
 
     my $self = $class->new(%$params);
 
-    unless (eval { $self->_run_collector(); 1 }) {
-        warn "Collector process died: $@";
-        exit(1);
-    }
+    # Defensive scope guard: never let execution leak past this method in the
+    # spawned process.
+    my $guard = Scope::Guard->new(sub { POSIX::_exit(255) });
 
-    exit(0);
+    my $ok  = eval { $self->_run_collector(); 1 };
+    my $err = $@;
+
+    $self->_emit_collector_error("Collector process died: $err") unless $ok;
+
+    $guard->dismiss;
+    POSIX::_exit($ok ? 0 : 1);
 }
 
 sub _run_collector {
@@ -391,13 +414,11 @@ sub _run_collector {
     # Set process name
     $self->_set_procname($child_pid);
 
-    # Setup signal handlers
+    # Setup signal handlers (block-local so they restore automatically when
+    # _run_collector returns, including via die).
     my $got_signal;
-    my $old_term = $SIG{TERM};
-    my $old_int  = $SIG{INT};
-
-    $SIG{TERM} = sub { $got_signal = 'TERM' };
-    $SIG{INT}  = sub { $got_signal = 'INT' };
+    local $SIG{TERM} = sub { $got_signal = 'TERM' };
+    local $SIG{INT}  = sub { $got_signal = 'INT' };
 
     # Build logger and auditor instances now, in the collector child process
     # only, so the parent never opens those file handles / sockets / etc.
@@ -546,10 +567,6 @@ sub _run_collector {
     # Shut down loggers
     $_->shutdown($self) for @{$self->{+LOGGERS}};
 
-    # Restore signal handlers
-    $SIG{TERM} = $old_term // 'DEFAULT';
-    $SIG{INT}  = $old_int  // 'DEFAULT';
-
     return 1;
 }
 
@@ -583,80 +600,105 @@ sub _set_procname {
 sub _launch_child {
     my $self = shift;
 
-    my $cmd = $self->{+LAUNCH};
-    my $env = $self->{+ENV_VARS};
-
     my ($out_r, $out_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
     my ($err_r, $err_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
 
-    # Save copies of the original STDOUT/STDERR before redirecting
+    # Save copies of the original STDOUT/STDERR before redirecting; restored
+    # by both platform-specific launchers in the parent path.
     open(my $orig_stdout, '>&', \*STDOUT) or croak "Could not clone STDOUT: $!";
     open(my $orig_stderr, '>&', \*STDERR) or croak "Could not clone STDERR: $!";
 
-    my $pid;
+    my $pid =
+        IS_WIN32
+        ? $self->_launch_child_win32($out_r, $out_w, $err_r, $err_w, $orig_stdout, $orig_stderr)
+        : $self->_launch_child_unix($out_r, $out_w, $err_r, $err_w, $orig_stdout, $orig_stderr);
 
-    if (IS_WIN32) {
-        # On Windows there is no fork.  Redirect STDOUT/STDERR to the pipe
-        # write ends, spawn via system(1, @cmd) (P_NOWAIT) which returns
-        # the child PID immediately, then restore handles.
-        swap_io(\*STDOUT, $out_w->wh);
-        swap_io(\*STDERR, $err_w->wh);
-        STDOUT->autoflush(1);
-        STDERR->autoflush(1);
-
-        my $ok;
-        {
-            local @ENV{keys %$env} = values %$env;
-            $ok = eval { $pid = system 1, @$cmd; 1 };
-        }
-        my $err = $@;
-
-        # Restore STDOUT/STDERR immediately after spawn
-        open(STDOUT, '>&', $orig_stdout) or croak "Could not restore STDOUT: $!";
-        open(STDERR, '>&', $orig_stderr) or croak "Could not restore STDERR: $!";
-
-        if (!$ok || !$pid || $pid < 0) {
-            croak "Failed to spawn '@$cmd': " . ($err || $!);
-        }
-    }
-    else {
-        # Unix: fork, redirect in the child, exec.
-        $pid = fork() // die "Failed to fork child process: $!";
-
-        if (!$pid) {
-            # Child process
-            $out_r->close();
-            $err_r->close();
-
-            swap_io(\*STDOUT, $out_w->wh);
-            swap_io(\*STDERR, $err_w->wh);
-            STDOUT->autoflush(1);
-            STDERR->autoflush(1);
-
-            close($orig_stdout);
-            close($orig_stderr);
-
-            local @ENV{keys %$env} = values %$env;
-            exec(@$cmd) or croak "Failed to exec '@$cmd': $!";
-        }
-
-        # Parent continues below
-    }
-
-    # Parent (both platforms) - close write ends so reads get EOF
+    # Parent (both platforms) - close write ends so reads get EOF.
     $out_w->close();
     $err_w->close();
-
-    # Restore original stdout/stderr (no-op path on win32, already restored)
-    unless (IS_WIN32) {
-        open(STDOUT, '>&', $orig_stdout) or croak "Could not restore STDOUT: $!";
-        open(STDERR, '>&', $orig_stderr) or croak "Could not restore STDERR: $!";
-    }
 
     close($orig_stdout);
     close($orig_stderr);
 
     return ($pid, $out_r, $err_r);
+}
+
+# Environment additions injected into every collector-launched child so
+# Test2::Formatter::Stream2 knows it is running under a collector
+# (and how many mixed-mode pipes the collector is reading from).
+sub _child_env_overrides {
+    my $self = shift;
+    return (
+        %{$self->{+ENV_VARS}},
+        T2_HARNESS2_PIPE_COUNT => 2,
+    );
+}
+
+sub _launch_child_unix {
+    my $self = shift;
+    my ($out_r, $out_w, $err_r, $err_w, $orig_stdout, $orig_stderr) = @_;
+
+    my $cmd = $self->{+LAUNCH};
+
+    my $pid = fork() // die "Failed to fork child process: $!";
+
+    if (!$pid) {
+        # Child process
+        $out_r->close();
+        $err_r->close();
+
+        swap_io(\*STDOUT, $out_w->wh);
+        swap_io(\*STDERR, $err_w->wh);
+        STDOUT->autoflush(1);
+        STDERR->autoflush(1);
+
+        close($orig_stdout);
+        close($orig_stderr);
+
+        my %env = $self->_child_env_overrides;
+        local @ENV{keys %env} = values %env;
+        exec(@$cmd) or croak "Failed to exec '@$cmd': $!";
+    }
+
+    # Parent: restore STDOUT/STDERR so collector diagnostics still go to the
+    # real terminal.
+    open(STDOUT, '>&', $orig_stdout) or croak "Could not restore STDOUT: $!";
+    open(STDERR, '>&', $orig_stderr) or croak "Could not restore STDERR: $!";
+
+    return $pid;
+}
+
+sub _launch_child_win32 {
+    my $self = shift;
+    my ($out_r, $out_w, $err_r, $err_w, $orig_stdout, $orig_stderr) = @_;
+
+    my $cmd = $self->{+LAUNCH};
+
+    # On Windows there is no fork. Redirect STDOUT/STDERR to the pipe write
+    # ends, spawn via system(1, @cmd) (P_NOWAIT) which returns the child PID
+    # immediately, then restore handles.
+    swap_io(\*STDOUT, $out_w->wh);
+    swap_io(\*STDERR, $err_w->wh);
+    STDOUT->autoflush(1);
+    STDERR->autoflush(1);
+
+    my $pid;
+    my $ok;
+    {
+        my %env = $self->_child_env_overrides;
+        local @ENV{keys %env} = values %env;
+        $ok = eval { $pid = system 1, @$cmd; 1 };
+    }
+    my $err = $@;
+
+    # Restore STDOUT/STDERR immediately after spawn.
+    open(STDOUT, '>&', $orig_stdout) or croak "Could not restore STDOUT: $!";
+    open(STDERR, '>&', $orig_stderr) or croak "Could not restore STDERR: $!";
+
+    croak "Failed to spawn '@$cmd': " . ($err || $!)
+        if !$ok || !$pid || $pid < 0;
+
+    return $pid;
 }
 
 sub _wrap_handle {
@@ -839,29 +881,27 @@ sub _process_event {
         @events = ($event);
     }
 
-    $self->_write_event($_) for @events;
-}
+    my $loggers = $self->{+_EVENT_LOGGERS} or return;
+    return unless @$loggers;
 
-sub _write_event {
-    my $self = shift;
-    my ($event) = @_;
-
-    return unless $event;
-
-    $_->log_event($event) for @{$self->{+_EVENT_LOGGERS} // []};
+    for my $e (@events) {
+        next unless $e;
+        $_->log_event($e) for @$loggers;
+    }
 }
 
 sub _kill_child {
     my $self = shift;
     my ($pid) = @_;
 
-    return unless $pid;
-    return unless pid_is_running($pid);
+    croak "_kill_child called without a pid" unless $pid;
+    return                                   unless pid_is_running($pid);
 
     if (IS_WIN32) {
-        # Windows has no SIGTERM.  kill(9, $pid) terminates the process.
-        kill(9, $pid);
-        my $rv = waitpid($pid, 0);
+        # Windows perl does not have a useful SIGTERM; use SIGINT as the
+        # graceful-shutdown signal there.
+        kill('INT', $pid);
+        waitpid($pid, 0);
         return $?;
     }
 
@@ -889,20 +929,13 @@ sub interpose {
     croak "interpose() is a class method"           if ref $class;
     croak "interpose() is not supported on Windows" if IS_WIN32;
 
-    my ($out_r, $out_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
-    my ($err_r, $err_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    ($params{out_r}, $params{out_w}) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    ($params{err_r}, $params{err_w}) = Atomic::Pipe->pair(mixed_data_mode => 1);
 
-    open(my $orig_stdout, '>&', \*STDOUT) or croak "Could not clone STDOUT: $!";
-    open(my $orig_stderr, '>&', \*STDERR) or croak "Could not clone STDERR: $!";
+    open($params{orig_stdout}, '>&', \*STDOUT) or croak "Could not clone STDOUT: $!";
+    open($params{orig_stderr}, '>&', \*STDERR) or croak "Could not clone STDERR: $!";
 
     my $pid = fork() // die "Failed to fork for interpose: $!";
-
-    $params{out_r}       = $out_r;
-    $params{out_w}       = $out_w;
-    $params{err_r}       = $err_r;
-    $params{err_w}       = $err_w;
-    $params{orig_stdout} = $orig_stdout;
-    $params{orig_stderr} = $orig_stderr;
 
     # Child resumes caller's execution path
     return $class->_interpose_child(\%params) unless $pid;
@@ -914,6 +947,10 @@ sub interpose {
 
 sub _interpose_parent {
     my ($class, $params) = @_;
+
+    # Defensive scope guard: this method is the parent's whole life from the
+    # interpose fork onward; never let execution leak past it.
+    my $guard = Scope::Guard->new(sub { POSIX::_exit(255) });
 
     my $out_w       = delete $params->{out_w};
     my $err_w       = delete $params->{err_w};
@@ -937,12 +974,13 @@ sub _interpose_parent {
 
     my $self = $class->new(%$params);
 
-    unless (eval { $self->_run_collector(); 1 }) {
-        warn "Collector (interpose) died: $@";
-        exit(1);
-    }
+    my $ok  = eval { $self->_run_collector(); 1 };
+    my $err = $@;
 
-    exit(0);
+    $self->_emit_collector_error("Collector (interpose) died: $err") unless $ok;
+
+    $guard->dismiss;
+    POSIX::_exit($ok ? 0 : 1);
 }
 
 sub _interpose_child {
@@ -958,22 +996,6 @@ sub _interpose_child {
 
     close($params->{orig_stdout});
     close($params->{orig_stderr});
-}
-
-sub wait {
-    my $self = shift;
-
-    # COLLECTOR_PID is unset only when the collector ran inline (e.g. the
-    # Win32 non-launch path that consumes pre-opened handles in this
-    # process). In that case there is nothing to wait for.
-    my $cpid = $self->{+COLLECTOR_PID} or return;
-
-    my $rv   = waitpid($cpid, 0);
-    my $exit = $?;
-
-    $self->{+EXIT_CODE} = $exit;
-
-    return $exit;
 }
 
 1;

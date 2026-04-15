@@ -18,13 +18,13 @@ sub read_lines {
     my @lines;
     while (defined(my $line = <$fh>)) {
         chomp $line;
-        push @lines, $line;
+        push @lines => [line => $line];
     }
 
     # If readline returned undef we hit EOF
     if (eof($fh)) {
         $self->{eof} = 1;
-        push @lines, undef;
+        push @lines => undef;
     }
 
     return @lines;
@@ -44,10 +44,10 @@ Test2::Harness2::Collector::FileLineReader - Thin line-reader shim for regular f
 
 =head1 DESCRIPTION
 
-Lets regular file handles be read with the same C<read_lines> interface the
-collector uses for L<Atomic::Pipe> handles. Reads all currently-available lines
-and appends C<undef> once EOF has been reached so callers can detect the end of
-stream.
+Lets regular file handles be read with the same interface the collector uses
+for L<Atomic::Pipe> handles. C<read_lines> returns a list of C<[line =E<gt>
+$data]> tuples for each line currently available on the handle, and appends
+C<undef> once EOF has been reached so callers can detect the end of stream.
 
 =head1 SOURCE
 

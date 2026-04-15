@@ -1,6 +1,6 @@
 use Test2::V0;
 
-use Test2::Harness2::Util qw/mod2file parse_exit/;
+use Test2::Harness2::Util qw/hub_truth mod2file parse_exit/;
 
 subtest 'mod2file' => sub {
     is(mod2file('Foo::Bar::Baz'), 'Foo/Bar/Baz.pm', "converts :: to / and adds .pm");
@@ -52,6 +52,16 @@ subtest 'parse_exit - requires argument' => sub {
         qr/exit value is required/,
         "dies on undef"
     );
+};
+
+subtest 'hub_truth' => sub {
+    my $hub   = {nested => 2, hid => 'h'};
+    my $trace = {frame => ['Foo', 'foo.t', 42]};
+
+    is(hub_truth({hubs => [$hub], trace => $trace}), $hub, "hubs[0] preferred over trace");
+    is(hub_truth({trace => $trace}),                 $trace, "trace used when no hubs");
+    is(hub_truth({hubs => [], trace => $trace}),     $trace, "empty hubs falls back to trace");
+    is(hub_truth({}),                                {},     "empty hash returned when neither present");
 };
 
 done_testing;

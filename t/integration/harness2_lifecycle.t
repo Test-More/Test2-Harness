@@ -1,6 +1,7 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
 use POSIX qw/:sys_wait_h _exit/;
+use Time::HiRes qw/sleep/;
 
 use Test2::Harness2;
 
@@ -9,7 +10,7 @@ sub wait_until {
     my $deadline = time + $timeout_sec;
     while (time < $deadline) {
         return 1 if $check->();
-        select undef, undef, undef, 0.05;
+        sleep(0.05);
     }
     return 0;
 }
@@ -142,7 +143,7 @@ subtest 'detached service survives caller death' => sub {
     close $r;
     waitpid $helper, 0;
 
-    select undef, undef, undef, 0.5;
+    sleep(0.5);
     ok(kill(0, $svc_pid), 'detached service still alive after caller died');
 
     # Clean up: send TERM directly since we have no Spawn handle.

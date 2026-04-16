@@ -9,7 +9,7 @@ use POSIX qw/WNOHANG/;
 
 use Object::HashBase qw{
     <pid
-    <exit_code
+    exit_code
 };
 
 sub init {
@@ -20,14 +20,19 @@ sub init {
 
 sub wait {
     my $self = shift;
+    return $self->{+EXIT_CODE} if defined $self->{+EXIT_CODE};
     waitpid($self->{+PID}, 0);
     return $self->{+EXIT_CODE} = $?;
 }
 
 # Non-blocking completion check. Returns true if the collector process has
-# exited, false if it is still running.
+# exited, false if it is still running. When the service loop has already
+# reaped the pid (IPC::Manager's reap_children runs per-tick) it fills
+# exit_code in via set_exit_code, and this short-circuits.
 sub is_done {
-    my $self   = shift;
+    my $self = shift;
+    return 1 if defined $self->{+EXIT_CODE};
+
     my $reaped = waitpid($self->{+PID}, WNOHANG);
     if ($reaped > 0) {
         $self->{+EXIT_CODE} //= $?;

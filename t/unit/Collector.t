@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use POSIX qw/:sys_wait_h/;
 use Config;
-use Test2::Harness2::Util::JSON qw/decode_json/;
+use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 
 use Test2::Harness2::Collector;
 use Test2::Harness2::Collector::Logger::JSONL;
@@ -964,6 +964,58 @@ subtest 'new_pgroup attribute can be set to 1' => sub {
         new_pgroup => 1,
     );
     is($c->new_pgroup, 1, 'set to 1');
+};
+
+subtest 'new_pgroup=1 puts launched child in its own pgroup (Unix)' => sub {
+    skip_all 'Unix-only' if $^O eq 'MSWin32';
+
+    require File::Temp;
+    my $tmp     = File::Temp->new(SUFFIX => '.jsonl');
+    my $tmpfile = $tmp->filename;
+    $tmp->close;
+
+    my $handle = Test2::Harness2::Collector->spawn(
+        launch     => [$^X, '-e', 'print STDOUT "pgid=", getpgrp(), " pid=", $$, "\n"'],
+        new_pgroup => 1,
+        loggers    => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $tmpfile]],
+    );
+
+    my $exit = $handle->wait;
+    is($exit, 0, 'child exited cleanly');
+
+    my @events = read_events($tmpfile);
+    my ($out_ev) = find_events(\@events, stream => 'stdout');
+    ok($out_ev, 'found stdout event') or diag encode_json(\@events);
+
+    my $details = $out_ev->{facet_data}{from_stream}{details} // '';
+    my ($pgid)  = $details =~ /pgid=(\d+)/;
+    my ($pid)   = $details =~ /pid=(\d+)/;
+    ok($pid && $pgid, "captured pid=$pid and pgid=$pgid from log") or diag "details: $details";
+    is($pgid, $pid, 'child is own pgroup leader (pgid == pid)');
+};
+
+subtest 'new_pgroup=0 leaves child in parent pgroup (Unix)' => sub {
+    skip_all 'Unix-only' if $^O eq 'MSWin32';
+
+    require File::Temp;
+    my $tmp     = File::Temp->new(SUFFIX => '.jsonl');
+    my $tmpfile = $tmp->filename;
+    $tmp->close;
+
+    my $handle = Test2::Harness2::Collector->spawn(
+        launch  => [$^X, '-e', 'print STDOUT "pgid=", getpgrp(), "\n"'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $tmpfile]],
+    );
+    $handle->wait;
+
+    my @events = read_events($tmpfile);
+    my ($out_ev) = find_events(\@events, stream => 'stdout');
+    ok($out_ev, 'found stdout event') or diag encode_json(\@events);
+
+    my $details = $out_ev->{facet_data}{from_stream}{details} // '';
+    my ($pgid) = $details =~ /pgid=(\d+)/;
+    ok(defined($pgid), "captured pgid=$pgid from log") or diag "details: $details";
+    isnt($pgid, $$, "child pgid is not the test's own pid");
 };
 
 done_testing;

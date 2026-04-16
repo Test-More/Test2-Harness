@@ -193,11 +193,12 @@ sub handle_request {
 
     my $name = $payload->{request};
 
-    return $self->handle_status_request                   if $name eq 'status';
-    return $self->handle_queue_test_run_request($payload) if $name eq 'queue_test_run';
-    return $self->handle_finish_request                   if $name eq 'finish';
-    return $self->handle_terminate_request                if $name eq 'Terminate';
-    return $self->handle_detach_request($payload)         if $name eq 'Detach';
+    return $self->handle_status_request                        if $name eq 'status';
+    return $self->handle_queue_test_run_request($payload)      if $name eq 'queue_test_run';
+    return $self->handle_finish_request                        if $name eq 'finish';
+    return $self->handle_terminate_request                     if $name eq 'Terminate';
+    return $self->handle_detach_request($payload)              if $name eq 'Detach';
+    return $self->handle_job_complete_notify_request($payload) if $name eq 'job_complete_notify';
 
     return {ok => 0, error => "unknown request '$name'"};
 }
@@ -269,6 +270,15 @@ sub handle_finish_request {
 sub handle_terminate_request {
     my $self = shift;
     $self->_perform_hard_stop;
+    return {ok => 1};
+}
+
+sub handle_job_complete_notify_request {
+    my ($self, $payload) = @_;
+    # The act of receiving this request has already woken the service's
+    # event loop. On the next run_on_all iteration, _check_current_completion
+    # will detect the completion via waitpid. We don't need to do anything
+    # here -- just acknowledge.
     return {ok => 1};
 }
 
@@ -451,6 +461,14 @@ sub run_on_all {
         ],
         loggers => [
             [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
+            [
+                'Test2::Harness2::Collector::Logger::IPCNotify',
+                ipcm_info    => $self->ipcm_info,
+                service_name => $self->{+NAME},
+                run_id       => $run_id,
+                job_id       => $jid,
+                job_try      => 0,
+            ],
         ],
     );
 

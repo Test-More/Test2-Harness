@@ -318,21 +318,15 @@ sub _perform_hard_stop {
 
     # Add any registered workers.
     if ($self->can('workers')) {
-        push @pids => map { $_->{pid} } values %{$self->workers // {}};
+        push @pids => keys %{$self->workers // {}};
     }
 
     if (@pids) {
         # TERM all tracked pids. The collector's own cleanup kills its test.
+        # All workers are spawned with new_pgroup => 1 so each is already in
+        # its own pgroup; we send TERM directly by pid rather than by pgroup,
+        # which avoids accidentally killing the service itself.
         kill 'TERM', $_ for @pids;
-
-        # Backstop: kill the service's pgroup. Only safe if we explicitly
-        # set our own pgroup at startup (run_on_start does this in
-        # production; unit tests construct the service without that call,
-        # so we'd otherwise broadcast TERM to the test runner's pgroup).
-        # Tests in their own pgroups (Stream2-isolated or new_pgroup
-        # children) are NOT reached by this; they're reached via the
-        # collector's own cleanup.
-        kill 'TERM', -$$ if $self->{+OWN_PGROUP};
 
         my $deadline = time + $timeout;
         while (time < $deadline) {
@@ -349,9 +343,6 @@ sub _perform_hard_stop {
             # Block-reap.
             waitpid($_, 0) for @alive;
         }
-
-        # Backstop: kill the service's pgroup for any stragglers.
-        kill 'KILL', -$$ if $self->{+OWN_PGROUP};
 
         # Drain any remaining zombies.
         while ((my $p = waitpid(-1, WNOHANG)) > 0) { }

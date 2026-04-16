@@ -18,6 +18,22 @@ use Test2::Harness2::Util::HashBase qw{
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Collector::Logger';
 
+# PURPOSE OF THIS MODULE:
+#
+# When a test collector exits, this logger sends a message to the harness service
+# to WAKE UP the service's IPC event loop. This wakeup ensures that the next
+# run_on_all tick happens immediately, rather than waiting up to ~0.2s for the
+# normal poll interval.
+#
+# The message itself (job_complete_notify) is a no-op at the service side -- the
+# wake-up IS the effect. This is intentional: we use IPC::Manager's fire-and-forget
+# send_message() primitive rather than sync_request() because we don't need a
+# response and don't want to block the collector's shutdown.
+#
+# The actual completion is still detected by the existing _check_current_completion
+# path on the next loop iteration via waitpid(WNOHANG). The message just ensures
+# the loop doesn't sleep through that window.
+
 sub init {
     my $self = shift;
 
@@ -96,10 +112,19 @@ Test2::Harness2::Collector::Logger::IPCNotify - IPC completion notification logg
 
 =head1 DESCRIPTION
 
-A collector logger that sends a C<job_complete_notify> IPC request to the
-harness service when a test finishes. This wakes the service's event loop
-immediately on test completion rather than waiting for the normal poll
-interval before the next test is dispatched.
+A collector logger that sends a C<job_complete_notify> IPC message to the
+harness service when a test finishes. The primary purpose of this message is
+to B<wake up the service's event loop> immediately on test completion, so the
+next C<run_on_all> tick happens right away rather than waiting up to ~0.2s
+for the normal poll interval.
+
+The message itself is a no-op at the service side — the wake-up IS the effect.
+This is intentional; we use IPC::Manager's fire-and-forget message primitive
+(not C<sync_request>) because we don't need a response and don't want to block
+the collector's shutdown path. The actual completion is still detected by the
+existing C<_check_current_completion> path on the next loop iteration via
+C<waitpid(WNOHANG)>. The message just ensures the loop doesn't sleep through
+that window.
 
 The logger is a no-op for individual events; it only acts in C<shutdown()>.
 If the IPC notification fails (e.g. because the service is not reachable),

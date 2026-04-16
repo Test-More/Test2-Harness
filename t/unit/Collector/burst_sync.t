@@ -85,11 +85,12 @@ subtest 'stdout JSON burst becomes a decoded event, not a line' => sub {
     my $out = "$tmpdir/burst.jsonl";
 
     my $c = Test2::Harness2::Collector->spawn(
-        stdout  => $out_r,
-        stderr  => $err_r,
-        pid     => $child,
-        parser  => 'Test2::Harness2::Collector::Parser::IOParser',
-        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $out]],
+        ipcm_info => undef,
+        stdout    => $out_r,
+        stderr    => $err_r,
+        pid       => $child,
+        parser    => 'Test2::Harness2::Collector::Parser::IOParser',
+        loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $out]],
     );
     $c->wait();
     waitpid($child, 0);
@@ -98,15 +99,15 @@ subtest 'stdout JSON burst becomes a decoded event, not a line' => sub {
     is(scalar @evs, 1, "one event produced (no line event from burst, no event from sync marker)");
 
     my $e = $evs[0];
-    is($e->{event_id}, $event->{event_id}, "event_id preserved from burst");
-    is($e->{facet_data}{assert}{pass},    1,          "assert.pass preserved");
-    is($e->{facet_data}{assert}{details}, 'synthetic', "assert.details preserved");
+    is($e->{event_id},                    $event->{event_id}, "event_id preserved from burst");
+    is($e->{facet_data}{assert}{pass},    1,                  "assert.pass preserved");
+    is($e->{facet_data}{assert}{details}, 'synthetic',        "assert.details preserved");
     ok(!$e->{facet_data}{from_stream}, "burst event did NOT get a from_stream facet");
     ok(!$e->{facet_data}{info},        "burst event did NOT get a wrapping info entry");
 };
 
 subtest 'sync marker orders stdout lines + event + stderr text' => sub {
-    my $eid = '22222222-2222-2222-2222-222222222222';
+    my $eid   = '22222222-2222-2222-2222-222222222222';
     my $event = {
         event_id   => $eid,
         stamp      => 99,
@@ -127,10 +128,11 @@ subtest 'sync marker orders stdout lines + event + stderr text' => sub {
     my $out = "$tmpdir/sync.jsonl";
 
     my $c = Test2::Harness2::Collector->spawn(
-        stdout  => $out_r,
-        stderr  => $err_r,
-        pid     => $child,
-        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $out]],
+        ipcm_info => undef,
+        stdout    => $out_r,
+        stderr    => $err_r,
+        pid       => $child,
+        loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $out]],
     );
     $c->wait();
     waitpid($child, 0);
@@ -140,9 +142,9 @@ subtest 'sync marker orders stdout lines + event + stderr text' => sub {
     # Describe each event as either its stream+line or its about.details
     my @ordered = map {
         my $fd = $_->{facet_data};
-        $fd->{about}      ? "event:$fd->{about}{details}" :
-        $fd->{from_stream} ? "$fd->{from_stream}{source}:$fd->{from_stream}{details}" :
-        "other"
+              $fd->{about}       ? "event:$fd->{about}{details}"
+            : $fd->{from_stream} ? "$fd->{from_stream}{source}:$fd->{from_stream}{details}"
+            : "other"
     } @evs;
 
     # The before-stdout line must come before the event; the event must
@@ -151,17 +153,23 @@ subtest 'sync marker orders stdout lines + event + stderr text' => sub {
     my %pos;
     for my $i (0 .. $#ordered) { $pos{$ordered[$i]} = $i }
 
-    ok(defined $pos{'STDOUT:before-stdout'}, "got before-stdout line")
-        and ok(defined $pos{'event:MIDDLE'}, "got event")
-        and ok(defined $pos{'STDOUT:after-stdout'}, "got after-stdout line")
+            ok(defined $pos{'STDOUT:before-stdout'}, "got before-stdout line")
+        and ok(defined $pos{'event:MIDDLE'},         "got event")
+        and ok(defined $pos{'STDOUT:after-stdout'},  "got after-stdout line")
         and ok(defined $pos{'STDERR:before-stderr'}, "got before-stderr line");
 
-    ok($pos{'STDOUT:before-stdout'} < $pos{'event:MIDDLE'},
-        "stdout line before burst is ordered before the event");
-    ok($pos{'STDERR:before-stderr'} < $pos{'event:MIDDLE'},
-        "stderr line before sync is ordered before the event");
-    ok($pos{'event:MIDDLE'} < $pos{'STDOUT:after-stdout'},
-        "stdout line after burst is ordered after the event");
+    ok(
+        $pos{'STDOUT:before-stdout'} < $pos{'event:MIDDLE'},
+        "stdout line before burst is ordered before the event"
+    );
+    ok(
+        $pos{'STDERR:before-stderr'} < $pos{'event:MIDDLE'},
+        "stderr line before sync is ordered before the event"
+    );
+    ok(
+        $pos{'event:MIDDLE'} < $pos{'STDOUT:after-stdout'},
+        "stdout line after burst is ordered after the event"
+    );
 };
 
 done_testing;

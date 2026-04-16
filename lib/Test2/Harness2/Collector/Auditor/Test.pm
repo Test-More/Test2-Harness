@@ -58,6 +58,9 @@ use Test2::Harness2::Util::HashBase qw{
 sub init {
     my $self = shift;
 
+    croak "'ipcm_info' is required (pass undef explicitly if no service is connected)"
+        unless exists $self->{+IPCM_INFO};
+
     $self->{+_FAILURES}       = 0;
     $self->{+_ERRORS}         = 0;
     $self->{+_SUB_FAILURES}   = 0;
@@ -261,10 +264,11 @@ sub _subtest_process {
         my $name = $f->{assert}->{details} // "unnamed subtest ($f->{trace}->{frame}->[1] line $f->{trace}->{frame}->[2])";
 
         my $subauditor = blessed($self)->new(
-            nested  => $self->{+NESTED} + 1,
-            run_id  => $self->{+RUN_ID},
-            job_id  => $self->{+JOB_ID},
-            job_try => $self->{+JOB_TRY},
+            nested    => $self->{+NESTED} + 1,
+            run_id    => $self->{+RUN_ID},
+            job_id    => $self->{+JOB_ID},
+            job_try   => $self->{+JOB_TRY},
+            ipcm_info => $self->{+IPCM_INFO},
         );
 
         for my $sf (@{$f->{parent}->{children}}) {

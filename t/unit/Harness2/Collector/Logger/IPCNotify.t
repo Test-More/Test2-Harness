@@ -7,23 +7,25 @@ use Test2::Harness2::Collector::Logger::IPCNotify;
 
 subtest 'init - required attributes' => sub {
     like(
-        dies { Test2::Harness2::Collector::Logger::IPCNotify->new() },
+        dies { Test2::Harness2::Collector::Logger::IPCNotify->new(ipcm_info => undef) },
         qr/service_name.*required/i,
         'missing service_name croaks',
     );
 
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
+        ipcm_info    => undef,
         service_name => 'harness',
     );
-    ok($logger, 'constructed with service_name only');
+    ok($logger, 'constructed with ipcm_info=>undef and service_name');
     is($logger->job_try, 0, 'job_try defaults to 0');
     ok(!defined $logger->run_id,    'run_id defaults to undef');
     ok(!defined $logger->job_id,    'job_id defaults to undef');
-    ok(!defined $logger->ipcm_info, 'ipcm_info defaults to undef');
+    ok(!defined $logger->ipcm_info, 'ipcm_info is undef when passed as undef');
 };
 
 subtest 'set_process_info' => sub {
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
+        ipcm_info    => undef,
         service_name => 'harness',
     );
     $logger->set_process_info(run_id => 'r1', job_id => 'j1', job_try => 2);
@@ -39,6 +41,7 @@ subtest 'set_process_info' => sub {
 
 subtest 'set_ipcm_info' => sub {
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
+        ipcm_info    => undef,
         service_name => 'harness',
     );
     my $ii = {fake => 1};
@@ -170,6 +173,7 @@ subtest 'shutdown warns on IPC failure, does not die' => sub {
 
 subtest 'shutdown warns and skips when ipcm_info is undef' => sub {
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
+        ipcm_info    => undef,
         service_name => 'harness',
         run_id       => 'r1',
         job_id       => 'j1',
@@ -210,6 +214,13 @@ subtest 'startup and log_event are no-ops' => sub {
 subtest 'depends_on returns empty list' => sub {
     my @deps = Test2::Harness2::Collector::Logger::IPCNotify->depends_on;
     is(\@deps, [], 'depends_on returns empty list');
+};
+
+subtest 'ipcm_info is required at construction' => sub {
+    my $ok  = eval { Test2::Harness2::Collector::Logger::IPCNotify->new(service_name => 'harness'); 1 };
+    my $err = $@;
+    ok(!$ok, 'croaks without ipcm_info');
+    like($err, qr/ipcm_info/, 'error mentions ipcm_info');
 };
 
 done_testing;

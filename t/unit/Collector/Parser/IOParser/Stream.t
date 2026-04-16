@@ -2,7 +2,7 @@ use Test2::V0;
 
 use Test2::Harness2::Collector::Parser::IOParser::Stream;
 
-sub parser { Test2::Harness2::Collector::Parser::IOParser::Stream->new(@_) }
+sub parser { Test2::Harness2::Collector::Parser::IOParser::Stream->new(ipcm_info => undef, @_) }
 
 subtest 'construction and inheritance' => sub {
     my $p = parser();
@@ -16,11 +16,11 @@ subtest 'stdout TAP replaces facet_data' => sub {
     ok($event, "got event");
 
     my $fd = $event->facet_data;
-    ok($fd->{assert},    "assert facet present");
-    is($fd->{assert}{pass}, 1, "pass");
+    ok($fd->{assert}, "assert facet present");
+    is($fd->{assert}{pass},   1, "pass");
     is($fd->{assert}{number}, 1, "number");
 
-    is($fd->{from_tap}{source},  'STDOUT',          "from_tap STDOUT");
+    is($fd->{from_tap}{source},  'STDOUT',        "from_tap STDOUT");
     is($fd->{from_tap}{details}, 'ok 1 - passed', "from_tap details");
 
     ok(!$fd->{from_stream}, "from_stream NOT set on TAP match");
@@ -28,36 +28,36 @@ subtest 'stdout TAP replaces facet_data' => sub {
 
 subtest 'stdout plan line' => sub {
     my $event = parser()->parse_io(stream => 'stdout', line => '1..2');
-    my $fd = $event->facet_data;
-    is($fd->{plan}{count}, 2, "plan count");
+    my $fd    = $event->facet_data;
+    is($fd->{plan}{count},      2,        "plan count");
     is($fd->{from_tap}{source}, 'STDOUT', "from_tap");
 };
 
 subtest 'stdout non-TAP falls back to from_stream' => sub {
     my $event = parser()->parse_io(stream => 'stdout', line => 'hello world');
-    my $fd = $event->facet_data;
+    my $fd    = $event->facet_data;
 
     ok(!$fd->{assert}, "no assert");
     ok(!$fd->{plan},   "no plan");
 
-    is($fd->{from_stream}{source},  'STDOUT',       "from_stream source");
+    is($fd->{from_stream}{source},  'STDOUT',      "from_stream source");
     is($fd->{from_stream}{details}, 'hello world', "from_stream details");
-    is($fd->{info}[0]{tag},   'STDOUT',     "info tag");
-    is($fd->{info}[0]{debug}, 0,            "not debug");
+    is($fd->{info}[0]{tag},         'STDOUT',      "info tag");
+    is($fd->{info}[0]{debug},       0,             "not debug");
 };
 
 subtest 'stderr comment becomes DIAG' => sub {
     my $event = parser()->parse_io(stream => 'stderr', line => '# bad thing happened');
-    my $fd = $event->facet_data;
+    my $fd    = $event->facet_data;
 
-    is($fd->{from_tap}{source},  'STDERR', "from_tap source");
-    is($fd->{info}[-1]{tag},     'DIAG',   "tag DIAG");
-    is($fd->{info}[-1]{debug},   1,        "debug=1");
+    is($fd->{from_tap}{source}, 'STDERR', "from_tap source");
+    is($fd->{info}[-1]{tag},    'DIAG',   "tag DIAG");
+    is($fd->{info}[-1]{debug},  1,        "debug=1");
 };
 
 subtest 'stderr non-comment falls back to from_stream' => sub {
     my $event = parser()->parse_io(stream => 'stderr', line => 'Use of uninitialized value');
-    my $fd = $event->facet_data;
+    my $fd    = $event->facet_data;
 
     ok(!$fd->{from_tap}, "no from_tap");
 

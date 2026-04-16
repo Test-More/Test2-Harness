@@ -27,6 +27,7 @@ use Test2::Harness2::Util::HashBase qw{
     <test_loggers
     <kill_timeout
     <parent_pids
+    <jump_to
     +state
     +queue
     +current
@@ -97,30 +98,39 @@ sub start {
     # Grab the loggers to hand to interpose before forking.
     my $loggers = $self->{+LOGGERS};
 
-    # AI: Add a jump_to attribute to Harness2, if set then interpose should use LongJump to jump to the jump point named in the attribute after the child is forked, it should return a subref that the jump point can use to run the collector. the goal is to have the collector unwind the stack so stack traces are cleaner, and if the collector scope is somehow escaped it will not resume execution from an undesirable space. It should also continue to work fine without a jump_to attribute. Add a test that verifies the jump functionality and that the collector still does its job after the jump. Add docs for how to write the jump point for anyone who wants to do this.
+    # Everything the interpose child needs to do after the pipes are wired up
+    # is packaged here so it can either run inline (the normal path) or be
+    # handed to a caller-provided Long::Jump point via jump_to.
+    my $run_service = sub {
+        my $stdout_apipe = Atomic::Pipe->from_fh('>&=', \*STDOUT);
+        $stdout_apipe->set_mixed_data_mode();
+        $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->new(
+            pipe   => $stdout_apipe,
+            job_id => $self->job_id,
+        );
+
+        if ($test_run) {
+            $self->request_handler_queue_test_run($test_run);
+            $self->{+FINISH_AFTER_INITIAL_RUN} = 1 if $finish_after;
+        }
+
+        my $exit = $self->run;
+        POSIX::_exit($exit // 0);
+    };
+
+    my $jump_to = $self->{+JUMP_TO};
+
     Test2::Harness2::Collector->interpose(
-        ipcm_info   => $self->ipcm_info,
-        loggers     => $loggers,
-        parser      => 'Test2::Harness2::Collector::Parser::IOParser',
-        parent_pids => [$caller_pid],
+        ipcm_info    => $self->ipcm_info,
+        loggers      => $loggers,
+        parser       => 'Test2::Harness2::Collector::Parser::IOParser',
+        parent_pids  => [$caller_pid],
+        (defined($jump_to) ? (jump_to => $jump_to, jump_payload => $run_service) : ()),
     );
 
-    # Only the interpose child returns from interpose() above.
-    # STDOUT is now the write end of an Atomic::Pipe in mixed_data_mode.
-    my $stdout_apipe = Atomic::Pipe->from_fh('>&=', \*STDOUT);
-    $stdout_apipe->set_mixed_data_mode();
-    $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->new(
-        pipe   => $stdout_apipe,
-        job_id => $self->job_id,
-    );
-
-    if ($test_run) {
-        $self->request_handler_queue_test_run($test_run);
-        $self->{+FINISH_AFTER_INITIAL_RUN} = 1 if $finish_after;
-    }
-
-    my $exit = $self->run;
-    POSIX::_exit($exit // 0);
+    # Reached only in the interpose child on the non-jump path; with jump_to
+    # set the longjump has already handed $run_service to the setjump caller.
+    $run_service->();
 }
 
 sub spawn {
@@ -526,6 +536,40 @@ B<Use start() or spawn(), not new().> Direct C<new()> constructs the object
 but does not start the service loop. Prefer the C<start()> entry point when
 you want the current process to become the harness, or C<spawn()> when you
 want the harness to run in a child process and get back a handle to it.
+
+=head1 JUMP_TO
+
+Passing C<jump_to =E<gt> $name> to C<start()> tells the harness to unwind
+its own call stack inside the interposed collector child before running the
+service, using L<Long::Jump>. The caller must install a matching
+C<setjump()> around the C<start()> call; when the longjump fires the
+setjump returns a single-element arrayref whose only element is a
+coderef. Invoking that coderef runs the service (set up the emitter, queue
+any requested run, enter the main loop, and C<_exit>).
+
+This is useful when a test script has deep harness machinery above the
+setjump that should not be present on the service's stack. After the jump,
+the service runs from a clean stack frame, so exceptions and stack traces
+are tidier and an accidental C<return> out of the service cannot resume
+execution anywhere unintended.
+
+    use Long::Jump qw/setjump/;
+
+    my $ret = setjump 'harness' => sub {
+        Test2::Harness2->start(
+            workdir => $wd,
+            jump_to => 'harness',
+            # ... other start() args ...
+        );
+        # unreachable in the service child; the parent becomes the
+        # collector and exits without returning here either.
+    };
+
+    my ($run_service) = @$ret;
+    $run_service->();   # never returns; service calls _exit
+
+If C<jump_to> is set but no matching setjump is active, C<start()> croaks
+before forking. Without C<jump_to>, C<start()> behaves exactly as before.
 
 =head1 SOURCE
 

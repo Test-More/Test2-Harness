@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '2.000011';
 
+use Carp qw/croak/;
 use POSIX qw/WNOHANG/;
 
 use Test2::Harness2::Util::HashBase qw{
@@ -11,26 +12,23 @@ use Test2::Harness2::Util::HashBase qw{
     <exit_code
 };
 
-# This file makes reference to an "inline collector", I believe we removed that concept a while back, it was a thing you wrote for windows that I changed by asing for the system(1) workaround to spawn windows processes. Correct any logic that assumes inline collectors are a thing, and remove comments and docs referencing them. If an inline collector is still a thing pause and explain where it is and why we need it.
+sub init {
+    my $self = shift;
+    croak "'pid' is a required attribute"
+        unless defined $self->{+PID};
+}
 
 sub wait {
     my $self = shift;
-
-    # The collector ran inline (e.g. the Win32 non-launch path), so there is
-    # nothing to wait on. The exit_code -- if any -- was recorded directly.
-    my $pid = $self->{+PID} or return $self->{+EXIT_CODE};
-
-    waitpid($pid, 0);
+    waitpid($self->{+PID}, 0);
     return $self->{+EXIT_CODE} = $?;
 }
 
 # Non-blocking completion check. Returns true if the collector process has
-# exited, false if it is still running. For an inline collector (no pid) this
-# always returns true because there is nothing to wait on.
+# exited, false if it is still running.
 sub is_done {
     my $self   = shift;
-    my $pid    = $self->{+PID} or return 1;
-    my $reaped = waitpid($pid, WNOHANG);
+    my $reaped = waitpid($self->{+PID}, WNOHANG);
     if ($reaped > 0) {
         $self->{+EXIT_CODE} //= $?;
         return 1;
@@ -78,16 +76,14 @@ the handle.
 
 =over 4
 
-=item pid
+=item pid (required)
 
-The collector process pid, or undef when the collector ran inline (e.g. the
-Win32 non-launch path that consumes pre-opened handles in the same process).
+The collector process pid.
 
 =item exit_code
 
 The wait-status integer returned by L</wait>, or undef before L</wait> has
-completed. For an inline collector this may be set by the collector itself
-to communicate its outcome.
+completed.
 
 =back
 
@@ -98,15 +94,12 @@ to communicate its outcome.
 =item $exit = $handle->wait
 
 Block until the collector process exits, then return its raw wait-status.
-For an inline collector this is a no-op that returns whatever C<exit_code>
-was recorded.
 
 =item $bool = $handle->is_done
 
 Non-blocking completion check. Returns true if the collector process has
 already exited, false if it is still running. Also records C<exit_code> on
-first successful reap. For an inline collector (no pid) this always returns
-true.
+first successful reap.
 
 =back
 

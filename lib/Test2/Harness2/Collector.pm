@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Config;
 use POSIX qw/:sys_wait_h/;
 use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
@@ -38,6 +39,7 @@ use Test2::Harness2::Util::HashBase qw{
     +_loggers_spec
     +_auditor_spec
     +_failing_notified
+    +_child_exit
 };
 
 use constant IS_WIN32 => $^O eq 'MSWin32';
@@ -287,7 +289,7 @@ sub _spawn_collector {
     $self->_emit_collector_error("Collector process died: $err") unless $ok;
 
     $guard->dismiss;
-    POSIX::_exit($ok ? 0 : 1);
+    $self->_exit_mirroring_child($ok);
 }
 
 sub _spawn_collector_win32 {
@@ -387,7 +389,7 @@ sub collect_from_file {
     $self->_emit_collector_error("Collector process died: $err") unless $ok;
 
     $guard->dismiss;
-    POSIX::_exit($ok ? 0 : 1);
+    $self->_exit_mirroring_child($ok);
 }
 
 sub _run_collector {
@@ -550,10 +552,11 @@ sub _run_collector {
     # got a matching sync marker).
     $self->_flush_buffer($buffer, $parser) if $parser;
 
-    # Write exit event if we have an exit code. Collector-synthesized events
-    # like this don't need a parser; _process_event will still feed loggers
-    # and the auditor on its own.
+    # Write exit event if we have an exit code, and stash it so the spawning
+    # method can mirror the child's exit when it terminates the collector.
     if (defined $child_exit) {
+        $self->{+_CHILD_EXIT} = $child_exit;
+
         my $exit_event = Test2::Harness2::Event->new(
             event_id   => gen_uuid(),
             stamp      => time,
@@ -890,6 +893,50 @@ sub _process_event {
     }
 }
 
+# Terminate the collector process. Three cases drive the chosen exit:
+#
+#   * Collector itself failed (the eval { _run_collector } died, $collector_ok
+#     is false): _exit(255). Distinct from any child status so callers can
+#     tell a collector bug apart from a test failure.
+#
+#   * We have the watched child's wait-status (launch and interpose modes,
+#     where we own waitpid): mirror it. If the child died from a signal we
+#     restore that signal's default disposition and re-raise it, so the
+#     collector's wait-status carries the same signal the test process did.
+#     Otherwise _exit with the child's exit code.
+#
+#   * No wait-status available (pipe mode with an externally-managed pid, or
+#     pure file-input mode): we cannot mirror an exit. Fall back to the
+#     auditor's verdict -- exit 1 if the auditor saw a failure on the child
+#     being collected, 0 for normal operation. With no auditor, exit 0.
+sub _exit_mirroring_child {
+    my $self = shift;
+    my ($collector_ok) = @_;
+
+    POSIX::_exit(255) unless $collector_ok;
+
+    if (defined(my $child_exit = $self->{+_CHILD_EXIT})) {
+        my $codes = parse_exit($child_exit);
+
+        if (my $sig = $codes->{sig}) {
+            my @names = split ' ', $Config{sig_name};
+            if (my $name = $names[$sig]) {
+                $SIG{$name} = 'DEFAULT';
+                kill($name => $$);
+            }
+
+            # If the signal didn't terminate us, fall back to the shell
+            # convention of 128 + signal number.
+            POSIX::_exit(128 + $sig);
+        }
+
+        POSIX::_exit($codes->{err} // 0);
+    }
+
+    # No wait-status. Use the auditor's verdict if we have one.
+    POSIX::_exit($self->{+_FAILING_NOTIFIED} ? 1 : 0);
+}
+
 sub _kill_child {
     my $self = shift;
     my ($pid) = @_;
@@ -980,7 +1027,7 @@ sub _interpose_parent {
     $self->_emit_collector_error("Collector (interpose) died: $err") unless $ok;
 
     $guard->dismiss;
-    POSIX::_exit($ok ? 0 : 1);
+    $self->_exit_mirroring_child($ok);
 }
 
 sub _interpose_child {

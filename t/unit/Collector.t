@@ -85,12 +85,104 @@ subtest 'launch - exit code capture' => sub {
         loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
-    $collector->wait();
+    my $exit = $collector->wait();
+
+    is($exit >> 8, 42, "collector mirrored child's exit code 42");
 
     my @events = read_events($output);
     my ($exit_ev) = find_events(\@events, exit => 1);
     ok($exit_ev, "found exit event");
     is($exit_ev->{facet_data}{harness_process_exit}{err}, 42, "exit status 42");
+};
+
+subtest 'launch - signal mirroring' => sub {
+    skip_all "fork/signal mirroring not applicable on Win32" if $IS_WIN32;
+
+    my $output = "$tmpdir/a_signal.jsonl";
+
+    # Child kills itself with SIGUSR1 (chosen because no test framework or
+    # harness machinery handles it by default). Collector should observe the
+    # signal exit and re-raise the same signal in itself, so $? on the
+    # collector's wait-status carries the signal too.
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch  => ['perl', '-e', 'kill USR1 => $$; sleep 5'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+    );
+
+    my $exit = $collector->wait();
+    my $sig  = $exit & 127;
+
+    use Config;
+    my @names = split ' ', $Config{sig_name};
+    is($names[$sig], 'USR1', "collector wait-status carries the same signal as the child");
+
+    my @events = read_events($output);
+    my ($exit_ev) = find_events(\@events, exit => 1);
+    ok($exit_ev, "found exit event");
+    is($names[$exit_ev->{facet_data}{harness_process_exit}{sig}], 'USR1', "exit event carries the signal");
+};
+
+# Minimal auditor stub for tests that need to drive the collector's
+# auditor-failing exit-code path without pulling in the full Test auditor.
+{
+
+    package T2H2_Test_StubAuditor;
+    use Role::Tiny::With;
+    with 'Test2::Harness2::Role::Auditor';
+    sub new         { my $c = shift; bless {failing => 0, @_}, $c }
+    sub audit_event { return ($_[1]) }
+    sub fail_count  { $_[0]->{failing} ? 1 : 0 }
+    sub pass_count  { 0 }
+    sub failing     { $_[0]->{failing} }
+    sub passing     { !$_[0]->{failing} }
+}
+
+subtest 'no-wait-status modes - exit reflects auditor verdict' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    # Pipe-based collection where the collector cannot waitpid the watched
+    # child (it is owned by another process). Without an exit code to mirror,
+    # the collector falls back to the auditor's verdict.
+
+    my $run_pipe_test = sub {
+        my ($auditor_failing, $tag) = @_;
+
+        pipe(my $out_r, my $out_w) or die "pipe: $!";
+        pipe(my $err_r, my $err_w) or die "pipe: $!";
+
+        my $child = fork();
+        die "fork: $!" unless defined $child;
+        if (!$child) {
+            close($out_r);
+            close($err_r);
+            print $out_w "hello\n";
+            close($out_w);
+            close($err_w);
+            exit(0);
+        }
+        close($out_w);
+        close($err_w);
+
+        my $collector = Test2::Harness2::Collector->spawn(
+            stdout  => $out_r,
+            stderr  => $err_r,
+            pid     => $child,
+            auditor => ['T2H2_Test_StubAuditor', failing => $auditor_failing],
+            loggers => [],
+        );
+
+        my $exit = $collector->wait();
+        waitpid($child, 0);
+        return $exit;
+    };
+
+    my $passing_exit = $run_pipe_test->(0, 'passing');
+    is($passing_exit >> 8,  0, "auditor passing -> collector exits 0");
+    is($passing_exit & 127, 0, "no signal in the wait-status");
+
+    my $failing_exit = $run_pipe_test->(1, 'failing');
+    is($failing_exit >> 8,  1, "auditor failing -> collector exits 1");
+    is($failing_exit & 127, 0, "no signal in the wait-status");
 };
 
 subtest 'launch - env vars' => sub {
@@ -828,7 +920,7 @@ subtest 'interpose - captures non-zero exit' => sub {
     }
 
     waitpid($outer, 0);
-    is($?, 0, "collector exited cleanly");
+    is($? >> 8, 17, "collector mirrored child's non-zero exit");
 
     my @events = read_events($output);
     my ($exit_ev) = find_events(\@events, exit => 1);

@@ -25,4 +25,11 @@ subtest 'test_file is required' => sub {
     like($err, qr/test_file/, 'error mentions test_file');
 };
 
+subtest 'run_id is required' => sub {
+    my $ok  = eval { Test2::Harness2::Run::Job->new(test_file => 't/foo.t'); 1 };
+    my $err = $@;
+    ok(!$ok, 'croaks without run_id');
+    like($err, qr/run_id/, 'error mentions run_id');
+};
+
 done_testing;

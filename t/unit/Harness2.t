@@ -1,10 +1,13 @@
 use Test2::V0;
+use Config;
 use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
 use POSIX qw/WNOHANG/;
 
 use Test2::Harness2;
 use Test2::Harness2::Run;
+
+my $CAN_FORK = $Config{d_fork};
 
 subtest 'constructs with valid workdir' => sub {
     my $dir = tempdir(CLEANUP => 1);
@@ -305,6 +308,39 @@ subtest 'run_on_general_message - unknown kind warns' => sub {
     ok($ok, 'unknown kind does not die');
     is(scalar @warnings, 1, 'one warning for unknown kind');
     like($warnings[0], qr/unhandled general message/, 'warning is descriptive');
+};
+
+subtest 'start - jump_to unwinds the interpose child via Long::Jump' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+    require Long::Jump;
+
+    my $dir = tempdir(CLEANUP => 1);
+
+    my $outer = fork() // die "fork: $!";
+    if (!$outer) {
+        # Exit codes communicate results back to the test process:
+        #   0 -- setjump caught the longjump and got a CODE-ref payload
+        #   3 -- setjump returned but payload was not a CODE ref
+        # 100 -- start() returned to this code path instead of longjumping
+        # Anything else -- unexpected
+        my $ret = Long::Jump::setjump('harness_pt', sub {
+            Test2::Harness2->start(
+                workdir     => $dir,
+                ipcm_info   => {fake => 1},
+                jump_to     => 'harness_pt',
+                parent_pids => [],
+            );
+            POSIX::_exit(100);
+        });
+
+        my $payload = ($ret && @$ret) ? $ret->[0] : undef;
+        POSIX::_exit(3) unless ref($payload) eq 'CODE';
+        POSIX::_exit(0);
+    }
+
+    waitpid($outer, 0);
+    is($? >> 8, 0, 'interpose child reached the setjump with a CODE-ref payload');
+    ok(-e "$dir/services/harness.jsonl", 'service log file was created by the collector');
 };
 
 subtest 'run_on_start sets up pgid (smoke test)' => sub {

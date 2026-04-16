@@ -1091,6 +1091,79 @@ subtest 'interpose - captures non-zero exit' => sub {
     is($exit_ev->{facet_data}{harness_process_exit}{err}, 17, "exit code 17 captured");
 };
 
+subtest 'interpose - jump_to unwinds to setjump with payload' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    require Long::Jump;
+    my $output = "$tmpdir/d_interpose_jump.jsonl";
+
+    my $outer = fork();
+    die "fork: $!" unless defined $outer;
+
+    if (!$outer) {
+        my $ret = Long::Jump::setjump('interpose_pt', sub {
+            Test2::Harness2::Collector->interpose(
+                ipcm_info    => {},
+                loggers      => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+                jump_to      => 'interpose_pt',
+                jump_payload => sub { print "from payload\n"; 42 },
+            );
+            # The child never reaches here because the longjump happens inside
+            # interpose. The parent never reaches here either because it turns
+            # into the collector and exits.
+            POSIX::_exit(100);
+        });
+
+        my ($payload) = @$ret;
+        die "setjump did not get a payload" unless ref($payload) eq 'CODE';
+        my $from_payload = $payload->();
+        print "payload returned: $from_payload\n";
+        exit(0);
+    }
+
+    waitpid($outer, 0);
+    is($?, 0, "collector exited cleanly on the jump path");
+
+    my @events  = read_events($output);
+    my @out_evs = find_events(\@events, stream => 'stdout');
+    my @lines   = map { $_->{facet_data}{from_stream}{details} } @out_evs;
+    ok((grep { /from payload/ } @lines),          "payload output captured");
+    ok((grep { /payload returned: 42/ } @lines), "post-payload output captured");
+};
+
+subtest 'interpose - jump_to croaks without an active setjump' => sub {
+    my $err;
+    {
+        local $@;
+        eval {
+            Test2::Harness2::Collector->interpose(
+                ipcm_info    => {},
+                jump_to      => 'not_set',
+                jump_payload => sub { },
+            );
+            1;
+        };
+        $err = $@;
+    }
+    like($err, qr/No active setjump/, 'interpose croaks when setjump is missing');
+};
+
+subtest 'interpose - jump_payload without jump_to is an error' => sub {
+    my $err;
+    {
+        local $@;
+        eval {
+            Test2::Harness2::Collector->interpose(
+                ipcm_info    => {},
+                jump_payload => sub { },
+            );
+            1;
+        };
+        $err = $@;
+    }
+    like($err, qr/jump_payload.*requires.*jump_to/i, 'payload without jump_to is rejected');
+};
+
 subtest 'interpose - multi-line output' => sub {
     skip_all "fork required" unless $CAN_FORK;
 

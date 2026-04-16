@@ -1166,11 +1166,42 @@ sub _kill_child {
     return $?;
 }
 
+# Fork, and let the child continue the caller's execution path while the
+# parent becomes the collector for whatever the child does. Never returns in
+# the parent.
+#
+# Optional parameters:
+#
+#   jump_to      -- name of a currently-active Long::Jump setjump. When set,
+#                   the interpose child does a longjump() back to that point
+#                   after the pipes are wired up, rather than returning
+#                   normally. The caller's stack is unwound to the setjump,
+#                   giving cleaner stack traces for the code that runs
+#                   under the collector.
+#
+#   jump_payload -- an optional coderef passed through longjump() to the
+#                   setjump. Typically the caller uses this to hand the
+#                   "continue the work" closure back to the setjump site.
+#                   Requires jump_to.
 sub interpose {
     my ($class, %params) = @_;
 
     croak "interpose() is a class method"           if ref $class;
     croak "interpose() is not supported on Windows" if IS_WIN32;
+
+    my $jump_to      = delete $params{jump_to};
+    my $jump_payload = delete $params{jump_payload};
+
+    croak "'jump_payload' must be a code reference"
+        if defined($jump_payload) && ref($jump_payload) ne 'CODE';
+    croak "'jump_payload' requires 'jump_to'"
+        if defined($jump_payload) && !defined($jump_to);
+
+    if (defined $jump_to) {
+        require Long::Jump;
+        croak "No active setjump named '$jump_to'"
+            unless Long::Jump::havejump($jump_to);
+    }
 
     ($params{out_r}, $params{out_w}) = Atomic::Pipe->pair(mixed_data_mode => 1);
     ($params{err_r}, $params{err_w}) = Atomic::Pipe->pair(mixed_data_mode => 1);
@@ -1180,12 +1211,24 @@ sub interpose {
 
     my $pid = fork() // die "Failed to fork for interpose: $!";
 
-    # Child resumes caller's execution path
-    return $class->_interpose_child(\%params) unless $pid;
-
     # Parent becomes the collector and exits when done -- does not return
-    $params{pid} = $pid;
-    $class->_interpose_parent(\%params);
+    if ($pid) {
+        $params{pid} = $pid;
+        $class->_interpose_parent(\%params);
+    }
+
+    # Child: complete handle setup, then either return to the caller or
+    # unwind the stack back to the named setjump with the caller's payload.
+    $class->_interpose_child(\%params);
+
+    if (defined $jump_to) {
+        Long::Jump::longjump($jump_to, $jump_payload);
+        # longjump does not return on success; if we're still here something
+        # has gone seriously wrong.
+        POSIX::_exit(255);
+    }
+
+    return;
 }
 
 sub _interpose_parent {

@@ -29,20 +29,6 @@ sub init {
         unless defined($self->{+OUTPUT_FILE}) || defined($self->{+FH});
 }
 
-sub set_process_info {
-    my ($self, %info) = @_;
-    $self->{+RUN_ID}  = $info{run_id}  if exists $info{run_id};
-    $self->{+JOB_ID}  = $info{job_id}  if exists $info{job_id};
-    $self->{+JOB_TRY} = $info{job_try} if exists $info{job_try};
-    return;
-}
-
-sub set_ipcm_info {
-    my ($self, $info) = @_;
-    $self->{+IPCM_INFO} = $info;
-    return;
-}
-
 sub startup {
     my $self = shift;
 

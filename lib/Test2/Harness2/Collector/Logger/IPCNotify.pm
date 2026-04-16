@@ -61,11 +61,6 @@ sub set_ipcm_info {
 
 sub log_events { 0 }
 
-# AI: Are these 3 needed, or can we just use the default role implementations?
-sub startup    { }
-sub log_event  { }
-sub depends_on { () }
-
 sub shutdown {
     my $self = shift;
 

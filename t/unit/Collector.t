@@ -951,4 +951,19 @@ subtest 'interpose - multi-line output' => sub {
     is(scalar @out_evs, 3, "got 3 stdout events from interposed child");
 };
 
+subtest 'new_pgroup attribute defaults to 0' => sub {
+    my $c = Test2::Harness2::Collector->new(
+        launch => ['perl', '-e', '1'],
+    );
+    is($c->new_pgroup, 0, 'defaults to 0');
+};
+
+subtest 'new_pgroup attribute can be set to 1' => sub {
+    my $c = Test2::Harness2::Collector->new(
+        launch     => ['perl', '-e', '1'],
+        new_pgroup => 1,
+    );
+    is($c->new_pgroup, 1, 'set to 1');
+};
+
 done_testing;

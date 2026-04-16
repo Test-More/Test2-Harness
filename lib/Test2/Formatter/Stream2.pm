@@ -173,7 +173,20 @@ sub write {
     local $f->{info} if $self->{+NO_DIAG};
     local $f->{plan} if $self->{+NO_HEADER};
 
-    # AI: Add comments to this block explaining what it does and why it does it.
+    # Test::Builder bridge: if Test::Builder's stdout/stderr/todo handles have
+    # been swapped out since init (legacy tests do this to capture output),
+    # route this one event through Test::Builder's TAP path instead of the
+    # harness JSON path, so the capturing code still sees what it expects.
+    #
+    # An event is "TB only" when:
+    #   * the current TB stdout or stderr handle differs from the one we
+    #     captured at init time (a clear sign the caller rerouted output), OR
+    #   * the TB todo handle is no longer one of our initial stdout/stderr
+    #     handles (the caller installed an independent todo handle, which
+    #     again means they want TB to drive output).
+    #
+    # Buffered events are skipped here because they arrive again as part of
+    # their parent subtest event; writing them now would double-emit.
     my $tb_only = 0;
     if ($self->{+TB}) {
         $tb_only ||= $self->{+TB_HANDLES}->[0] != $self->{+TB}->{handles}->[0];

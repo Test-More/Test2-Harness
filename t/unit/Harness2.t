@@ -1,8 +1,10 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
+use POSIX qw/WNOHANG/;
 
 use Test2::Harness2;
+use Test2::Harness2::Run;
 
 subtest 'constructs with valid workdir' => sub {
     my $dir = tempdir(CLEANUP => 1);
@@ -167,6 +169,82 @@ subtest 'run_on_all dispatches next pending job to a Collector' => sub {
 
     my $status = $h->handle_status_request;
     ok($status->{running}, 'status reports running job');
+};
+
+subtest 'run_on_all detects collector exit and advances queue' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    $h->handle_queue_test_run_request({files => ['dummy.t']});
+
+    my $run   = $h->{queue}[0];
+    my $jid   = $run->pending->[0];
+    my ($job) = grep { $_->job_id eq $jid } @{$run->jobs};
+    $run->mark_running($jid);
+
+    # Fork a child that exits immediately so we have a reapable pid.
+    my $child_pid = fork // die "fork: $!";
+    if (!$child_pid) { POSIX::_exit(0); }
+
+    my $fake_handle = bless {pid => $child_pid}, 'Test2::Harness2::Collector::Handle';
+
+    # Give the child a moment to exit before we check.
+    select undef, undef, undef, 0.1;
+
+    $h->{current} = {
+        run        => $run,
+        job        => $job,
+        handle     => $fake_handle,
+        pid        => $child_pid,
+        started_at => time,
+    };
+
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub { die "should not relaunch" };
+        $h->run_on_all({});
+    }
+
+    ok(!$h->{current}, 'current cleared after completion');
+    is(scalar @{$run->done}, 1, 'job marked done');
+};
+
+subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    # Fork a child that will wait for a signal.
+    my $child_pid = fork // die "fork: $!";
+    if (!$child_pid) {
+        POSIX::setpgid(0, 0);    # simulate a test in its own pgroup
+        $SIG{TERM} = sub { POSIX::_exit(0) };
+        sleep 30;
+        POSIX::_exit(99);
+    }
+
+    my $fake_handle = bless {pid => $child_pid}, 'Test2::Harness2::Collector::Handle';
+
+    my $run   = Test2::Harness2::Run->from_files(files => ['dummy.t']);
+    my $jid   = $run->pending->[0];
+    my ($job) = grep { $_->job_id eq $jid } @{$run->jobs};
+    $run->mark_running($jid);
+
+    $h->{current} = {
+        run        => $run,
+        job        => $job,
+        handle     => $fake_handle,
+        pid        => $child_pid,
+        started_at => time,
+    };
+    push @{$h->{queue}} => $run;
+
+    $h->_perform_hard_stop;
+
+    # Give the OS a moment to finish reaping.
+    select undef, undef, undef, 0.1;
+
+    ok(!kill(0, $child_pid), 'child is dead');
+    ok(!$h->{current},       'current cleared');
 };
 
 done_testing;

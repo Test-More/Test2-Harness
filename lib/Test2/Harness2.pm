@@ -391,7 +391,7 @@ sub run_on_start {
     # Linux::Prctl is an optional dep. On non-Linux or when the module
     # is not installed, we skip silently -- the harness still works, we
     # just lose the escape-hatch cleanup for detached grandchildren.
-    if (HAS_LINUX_PRCTL) {
+    if (HAS_LINUX_PRCTL && Linux::Prctl->can('set_child_subreaper')) {
         Linux::Prctl::set_child_subreaper(1);
     }
 
@@ -498,5 +498,35 @@ B<Use start() or spawn(), not new().> Direct C<new()> constructs the object
 but does not start the service loop. Prefer the C<start()> entry point when
 you want the current process to become the harness, or C<spawn()> when you
 want the harness to run in a child process and get back a handle to it.
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+L<https://github.com/Test-More/Test2-Harness>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See L<https://dev.perl.org/licenses/>
 
 =cut

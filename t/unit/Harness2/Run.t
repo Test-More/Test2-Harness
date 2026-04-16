@@ -40,4 +40,41 @@ subtest 'requires files' => sub {
     ok(!$ok, 'croaks without files');
 };
 
+subtest 'mark_running croaks on unknown job_id' => sub {
+    my $run = Test2::Harness2::Run->from_files(files => ['t/a.t']);
+    my $ok  = eval { $run->mark_running('not-a-real-id'); 1 };
+    ok(!$ok, 'croaked');
+    like($@, qr/not pending/);
+};
+
+subtest 'mark_done croaks when job is not running' => sub {
+    my $run = Test2::Harness2::Run->from_files(files => ['t/a.t']);
+    my $jid = $run->jobs->[0]->job_id;
+    my $ok  = eval { $run->mark_done($jid); 1 };                      # never marked running
+    ok(!$ok, 'croaked');
+    like($@, qr/not running/);
+};
+
+subtest 'mark_* preserves FIFO order across multiple jobs' => sub {
+    my $run  = Test2::Harness2::Run->from_files(files => ['t/a.t', 't/b.t', 't/c.t']);
+    my @jids = map { $_->job_id } @{$run->jobs};
+    $run->mark_running($_) for @jids;
+    is($run->running, \@jids, 'running preserves queue order');
+    $run->mark_done($_) for reverse @jids;
+    is($run->done, [reverse @jids], 'done reflects completion order, not queue order');
+};
+
+subtest 'empty run with no jobs is vacuously complete' => sub {
+    my $run = Test2::Harness2::Run->new;
+    ok($run->is_complete,        'empty run is complete');
+    ok(defined $run->created_at, 'created_at populated');
+    ok(defined $run->run_id,     'run_id populated');
+};
+
+subtest 'from_files rejects non-arrayref files' => sub {
+    my $ok = eval { Test2::Harness2::Run->from_files(files => 'not-an-array'); 1 };
+    ok(!$ok, 'croaked');
+    like($@, qr/arrayref/);
+};
+
 done_testing;

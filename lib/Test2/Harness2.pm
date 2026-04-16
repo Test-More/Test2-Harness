@@ -68,8 +68,56 @@ sub pid        { $_[0]->{pid} //= $$ }
 sub set_pid    { $_[0]->{pid} = $_[1] }
 sub watch_pids { $_[0]->{+WATCH_PIDS_REF} }
 
-# Stubs filled in by later tasks.
-sub handle_request { croak "handle_request() not implemented yet" }
+# IPC::Manager calls handle_request($req, $msg) where $req is a hashref
+# with a 'request' key holding the request-name string, e.g.
+# { request => 'status', ipcm_request_id => '...', ... }.
+# We dispatch on $req->{request}.
+sub handle_request {
+    my ($self, $req, $msg) = @_;
+
+    my $name = $req->{request};
+
+    return $self->handle_status_request if $name eq 'status';
+    # Tasks 10-12 add: queue_test_run, finish, Terminate, Detach
+
+    return {ok => 0, error => "unknown request '$name'"};
+}
+
+sub handle_status_request {
+    my $self = shift;
+
+    my $queue = [
+        map { {
+            run_id  => $_->run_id,
+            pending => [@{$_->pending}],
+            running => [@{$_->running}],
+            done    => [@{$_->done}],
+        } } @{$self->{+QUEUE}}
+    ];
+
+    my $running;
+    if (my $cur = $self->{+CURRENT}) {
+        $running = {
+            run_id    => $cur->{run}->run_id,
+            job_id    => $cur->{job}->job_id,
+            test_file => $cur->{job}->test_file,
+            pid       => $cur->{pid},
+            started   => $cur->{started_at},
+        };
+    }
+
+    return {
+        service => {
+            name    => $self->{+NAME},
+            pid     => $$,
+            job_id  => $self->{+JOB_ID},
+            workdir => $self->{+WORKDIR},
+            state   => $self->{+STATE},
+        },
+        queue   => $queue,
+        running => $running,
+    };
+}
 
 1;
 

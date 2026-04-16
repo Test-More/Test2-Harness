@@ -46,4 +46,19 @@ subtest 'consumes IPC::Manager::Role::Service' => sub {
     ok(Test2::Harness2->DOES('IPC::Manager::Role::Service'), 'role applied');
 };
 
+subtest 'status returns current state without running' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h = Test2::Harness2->new(workdir => $dir);
+
+    my $status = $h->handle_status_request;
+
+    is($status->{service}{name},    'harness');
+    is($status->{service}{pid},     $$);
+    is($status->{service}{workdir}, $dir);
+    is($status->{service}{state},   'running');
+    like($status->{service}{job_id}, qr/^[0-9A-F-]{36}$/i);
+    is($status->{queue},   [],    'empty queue');
+    is($status->{running}, undef, 'nothing running');
+};
+
 done_testing;

@@ -32,7 +32,7 @@ Hard-stop procedure (executed by `Terminate`, by signal handler, and as a final 
 6. `run_should_end` must not return true until every tracked worker is reaped — otherwise we'd exit leaving zombies or orphans.
 7. A SIGTERM/SIGINT to the service itself routes through the role's signal handling, sets `+state` to `'terminating'`, and triggers this same procedure.
 
-Best-effort addendum for grandchildren that escaped the test's tracked pid (e.g., a test spawns a grandchild and has the grandchild `setsid` + detach): these are unreachable portably. On Linux we can optionally enable `PR_SET_CHILD_SUBREAPER` so that such orphans reparent to the harness, letting us `waitpid(-1, ...)` them; decide at implementation time whether to enable this (it requires `Linux::Prctl` or a small XS shim). Without it, those grandchildren are the test's responsibility to clean up, and the harness logs a warning if any untracked children remain at cleanup.
+Best-effort addendum for grandchildren that escaped the test's tracked pid (e.g., a test spawns a grandchild and has the grandchild `setsid` + detach): these are unreachable portably. On Linux, if `Linux::Prctl` is installed (listed as an optional dep — see "Optional use of `Linux::Prctl` for subreaping" below), the harness sets `PR_SET_CHILD_SUBREAPER` on startup so such orphans reparent to the harness and become reachable via `waitpid(-1, ...)` during cleanup. Without the module, those grandchildren are the test's responsibility to clean up; the harness logs a warning if any untracked children remain at cleanup.
 
 **Invariant 2 — nothing survives its parent.** If the harness service process exits for any reason (intentional shutdown, crash, SIGKILL from outside), every child process must terminate on its own — we cannot rely on the service's signal handlers, because they may never run.
 
@@ -43,26 +43,84 @@ Best-effort addendum for grandchildren that escaped the test's tracked pid (e.g.
 
 Both invariants must be covered by unit tests — one that kills the service forcibly and verifies all descendants exit, and one that calls `Terminate` mid-run and verifies the running test process is gone (not just the collector).
 
-## Changes to `Test2::Harness2::Collector` — pgroup isolation for launched tests
+## Changes to `Test2::Harness2::Collector` — opt-in pgroup isolation for launched children
 
-The Collector already owns fork+exec. The test's pgroup isolation (Invariant 1) is applied there, post-fork and pre-exec, so it runs deterministically before any Perl code in the test has a chance to execute.
+The Collector already owns fork+exec. Pgroup isolation (Invariant 1) is applied there, post-fork and pre-exec, so it runs deterministically before any Perl code in the launched child has a chance to execute. It is **opt-in**, not always-on: the harness will enable it for test Collectors but leave it disabled for other uses of Collector that aren't tests (e.g., helper utilities, the service's own interpose path — which does not go through `_launch_child_unix` anyway, but the principle stands: only tests get their pgroup switched).
 
-**Unix** (`_launch_child_unix`, lib/Test2/Harness2/Collector.pm:640-664). In the child branch, right before `exec(@$cmd)`, call:
+New Collector attribute:
+
+- `<new_pgroup` — boolean, default `0`. When true, the launched child calls `POSIX::setpgid(0, 0)` post-fork / pre-exec. When false, the child inherits the Collector's pgroup. The service will pass `new_pgroup => 1` when building a per-test Collector in `run_on_all`.
+
+**Unix** (`_launch_child_unix`, lib/Test2/Harness2/Collector.pm:640-664). In the child branch, immediately before `exec(@$cmd)`:
 
 ```perl
-POSIX::setpgid(0, 0) or warn "setpgid failed: $!";
+# Optionally put the child in a brand-new process group so its signal
+# handling is isolated from the harness. Enabled only when the caller
+# sets new_pgroup => 1 (the harness does so for test launches). This
+# prevents a test doing `kill 'TERM', 0` from taking down the harness.
+if ($self->{+NEW_PGROUP}) {
+    POSIX::setpgid(0, 0) or warn "setpgid failed: $!";
+}
 ```
 
-`0, 0` means "make my pid my own pgid". This is cheap, idempotent, and does not require `Stream2` to do anything. Runs before environment setup, before `exec`, with no window in which the test is in the harness's pgroup.
+**Windows** (`_launch_child_win32`, lib/Test2/Harness2/Collector.pm:674+). The current path uses `system(1, @cmd)` (Perl's `P_NOWAIT` spawn), which does not expose `CREATE_NEW_PROCESS_GROUP`. Two viable equivalents:
 
-**Windows** (`_launch_child_win32`, lib/Test2/Harness2/Collector.pm:674+). The current path uses `system(1, @cmd)` (Perl's `P_NOWAIT` spawn) which does not expose `CREATE_NEW_PROCESS_GROUP`. Windows has two viable equivalents to Unix pgroups:
+- **`CREATE_NEW_PROCESS_GROUP`** passed to `CreateProcess` via `Win32::Process::Create`. Only affects CTRL+C / CTRL+BREAK delivery, not general kill.
+- **Job Objects** (`AssignProcessToJobObject` + `TerminateJobObject`) via `Win32::Job`. Stronger: the OS atomically terminates the whole job when asked, which is exactly what hard-stop wants.
 
-- **`CREATE_NEW_PROCESS_GROUP`** flag passed to `CreateProcess` — makes the new process a process-group leader for CTRL+C / CTRL+BREAK purposes. Only affects those two console signals, not general kill delivery. Usable via `Win32::Process::Create`.
-- **Job objects** (`AssignProcessToJobObject` + `TerminateJobObject`) — stronger: the OS atomically terminates the whole job when asked. Usable via `Win32::Job`.
+These are **optional dependencies** — only needed on Windows, and only when the harness is asked to isolate a launched child's pgroup. Rules:
 
-Both require replacing `system(1, ...)` with a richer spawn path. Neither is a one-line change, and `Collector->interpose` already bails on Windows (`IS_WIN32` check at line 977) — so the harness is not yet Windows-clean end-to-end.
+- `Win32::Process` / `Win32::Job` are **not** imported at top of file. They load via `require`/`eval` guarded by `IS_WIN32 && $self->{+NEW_PGROUP}`, at the exact point they're needed (inside `_launch_child_win32`'s Windows branch when `new_pgroup` is true). Non-Windows installs never try to load them, and Windows installs that never enable `new_pgroup` also never load them. Use constants to gate ("is module installed") per the project style guide.
+- They are listed as **optional** prereqs in `dist.ini` (under a `[Prereqs / Recommends]` or `[Prereqs / Suggests]` section, matching whatever existing convention the dist uses — check during implementation).
+- If `new_pgroup => 1` is requested on Windows and neither module is installed, the Collector throws a clear exception naming the missing module and explaining that Windows pgroup isolation requires it. This matches the project's rule for optional deps ("throw a clear exception stating which dependencies are needed").
+- Normal Unix use of the harness, and Windows use without `new_pgroup`, must never try to load the Win32-only modules and must never warn or error about them.
 
-**Decision:** Unix gets the `setpgid` change now, as part of this work. Windows gets a TODO comment and a deferred ticket — the harness remains usable on Windows at the same fidelity it has today (no isolation), and this spec does not claim Invariant 1 holds on Windows. Implementation-time call whether to add a token `Win32::Process::Create`-with-`CREATE_NEW_PROCESS_GROUP` path if it's genuinely one-line; otherwise defer.
+Implementation-time decision: pick ONE of the two Windows approaches, not both. Lean toward `Win32::Job`, since atomic `TerminateJobObject` matches the hard-stop model more cleanly than CTRL+BREAK delivery.
+
+## Optional use of `Linux::Prctl` for subreaping
+
+On Linux, the harness can optionally use `Linux::Prctl` to set `PR_SET_CHILD_SUBREAPER` so orphaned grandchildren — tests that spawned a process which then `setsid`+double-forked into the background — reparent to the harness rather than to init(1). Without this, the harness cannot `waitpid` those grandchildren and cannot kill them as part of cleanup (Invariant 1's best-effort addendum); with it, they become normal tracked descendants of the harness.
+
+Rules (same shape as the Windows optional deps):
+
+- `Linux::Prctl` is **optional**. It is NOT imported at top of file. It is loaded via `eval { require Linux::Prctl; 1 }` guarded by a `HAS_LINUX_PRCTL` constant, per the project style guide ("Use constants over package vars for 'is module installed' gating").
+- Listed as optional (recommends/suggests) in `dist.ini`. Non-Linux installs never try to load it. Linux installs without it still work, but lose the subreaper behavior and therefore cannot clean up detached grandchildren.
+- Used in exactly one place: in `run_on_start`, right after `POSIX::setpgid(0, 0)`. The call site gets a multi-line comment block explaining what it does, why it's optional, and what behavior is lost if it's missing. Example:
+
+```perl
+# Ask the kernel to treat us as a subreaper (Linux >= 3.4 only).
+# Effect: any descendant that gets orphaned (its immediate parent
+# died, typically because a test double-forked or called setsid +
+# exit on its parent) reparents to THIS process instead of init(1).
+# That lets our hard-stop cleanup path waitpid those grandchildren
+# and guarantee Invariant 1 (no survivors). Without this, such
+# grandchildren escape our visibility and become the test's
+# responsibility to clean up.
+#
+# Linux::Prctl is an optional dep. On non-Linux or when the module
+# is not installed, we skip silently -- the harness still works, we
+# just lose the escape-hatch cleanup for detached grandchildren.
+if (HAS_LINUX_PRCTL) {
+    Linux::Prctl::set_child_subreaper(1);
+}
+```
+
+- No other part of the code should conditionally branch on subreaper availability; the effect is transparent (if it's on, `waitpid(-1, ...)` sees more children; if it's off, it sees fewer).
+
+## Optional dependencies summary
+
+For clarity, the optional deps introduced or relied on by this spec, all declared as optional in `dist.ini`:
+
+| Module            | Platform    | When used                                                                                  |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `Linux::Prctl`    | Linux       | `run_on_start` enables `PR_SET_CHILD_SUBREAPER` so detached grandchildren reparent to us.  |
+| `Win32::Job` (or `Win32::Process`) | Windows | Collector's Windows launch path when `new_pgroup => 1`; replaces `system(1, ...)` spawn. |
+
+Behavior contract:
+
+- None of these modules load on platforms that don't need them.
+- Linux installs without `Linux::Prctl` work correctly, minus detached-grandchild cleanup.
+- Windows installs without the chosen Win32 module work correctly **until** `new_pgroup => 1` is requested, at which point the Collector throws a clear exception naming the missing module. The harness is the only caller that passes `new_pgroup => 1`, so users who never invoke the service on Windows never hit this.
 
 ## Module layout
 
@@ -186,10 +244,10 @@ caller                   (has the Spawn handle, can exit independently)
 
 ### Service loop (role overrides)
 
-- **`run_on_start`** — call `POSIX::setpgid(0, 0)` so the service owns its own process group, distinct from any pgroup the caller is in (Invariant 1). Emit a `service_started` event (carries `job_id`, `pid`, `pgid`, `name`, `workdir`). Any bookkeeping internal to the service goes here; service loggers already exist in the interpose parent.
+- **`run_on_start`** — call `POSIX::setpgid(0, 0)` so the service owns its own process group, distinct from any pgroup the caller is in (Invariant 1). If `HAS_LINUX_PRCTL`, call `Linux::Prctl::set_child_subreaper(1)` — see "Optional use of `Linux::Prctl` for subreaping" for rationale and required comment block. Emit a `service_started` event (carries `job_id`, `pid`, `pgid`, `name`, `workdir`). Any bookkeeping internal to the service goes here; service loggers already exist in the interpose parent.
 - **`run_on_all($activity)`** — the critical hot path. Runs every iteration (not just on interval), so tests flip over without waiting for the interval timer:
   1. If `+current` is set, check whether its collector Handle is done (non-blocking). If so, `log_event` a `job_complete` event, move the job_id from the run's `running` to `done` list, and clear `+current`. If the run is fully done (`pending` and `running` both empty), drop it from `+queue` and emit `run_complete`.
-  2. If `+current` is unset AND `+state eq 'running'` (or `'finishing'`) AND `+queue` is non-empty: pick the head run, pull the next pending job, build the per-job output path (`$workdir/runs/$run_id/$job_id/0.jsonl`), launch a Collector with that logger plus the test auditor, with `env_vars => { T2_FORMATTER => 'Stream2', ... }` so tests auto-engage `Test2::Formatter::Stream2`. **The Collector MUST be launched with `parent_pids => [$service_pid]`** (Invariant 2) so the test dies if the service dies. The Collector stays in the service's pgroup; the test process is isolated into its own pgroup by the Collector's own post-fork/pre-exec setpgid (Invariant 1). Store the Handle + metadata in `+current`, register the collector pid as a worker.
+  2. If `+current` is unset AND `+state eq 'running'` (or `'finishing'`) AND `+queue` is non-empty: pick the head run, pull the next pending job, build the per-job output path (`$workdir/runs/$run_id/$job_id/0.jsonl`), launch a Collector with that logger plus the test auditor. Collector args include: `env_vars => { T2_FORMATTER => 'Stream2', ... }` (tests auto-engage `Test2::Formatter::Stream2`); **`parent_pids => [$service_pid]`** (Invariant 2 — test dies if service dies); and **`new_pgroup => 1`** (Invariant 1 — the launched test process lands in its own pgroup, post-fork/pre-exec, so the test cannot signal its way into the harness). Store the Handle + metadata in `+current`, register the collector pid as a worker.
 - **`run_should_end`** — returns true when `+state eq 'terminating'` AND all workers reaped AND `+current` cleared; OR when `+state eq 'finishing'` AND `+queue` is empty AND `+current` is undef AND no registered workers are alive. The "workers reaped" gate is Invariant 1 — we must not exit while descendants could still be running. Also triggers the `finishing` transition when `+finish_after_initial_run` and the initial run is now fully done.
 - **`run_on_cleanup`** — final-chance sweep (Invariant 1). Reap any registered workers; if any remain alive after `kill_timeout` of TERM, escalate to KILL on the whole pgroup. Emit `service_stopped`. Service-logger shutdown happens in the interpose parent when the service process exits.
 - **`watch_pids`** — returns the `parent_pids` passed in at construction (Invariant 2: the service self-terminates if any watched parent dies). `start()` passes the grandparent pid of the interpose child; `spawn()` passes the top-level spawn-caller pid. `Detach` IPC handler removes a pid from this list at runtime.

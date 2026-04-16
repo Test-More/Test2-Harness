@@ -17,7 +17,7 @@ use Test2::Harness2::Util qw/hub_truth apply_encoding/;
 use Test2::Harness2::Util::EventEmitter;
 
 use parent qw/Test2::Formatter/;
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     +encoding
     <no_header
     <no_numbers

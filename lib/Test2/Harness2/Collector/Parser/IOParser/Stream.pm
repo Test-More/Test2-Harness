@@ -7,7 +7,7 @@ our $VERSION = '2.000011';
 use Test2::Harness2::Collector::Parser::TapParser qw/parse_stdout_tap parse_stderr_tap/;
 
 use parent 'Test2::Harness2::Collector::Parser::IOParser';
-use Test2::Harness2::Util::HashBase qw{};
+use Object::HashBase qw{};
 
 sub parse_stream_line {
     my $self = shift;

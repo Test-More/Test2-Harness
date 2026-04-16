@@ -8,7 +8,7 @@ use Carp qw/confess/;
 use Time::HiRes qw/time/;
 use Test2::Harness2::Util::JSON qw/encode_json/;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <facet_data
     <stream_id
     <event_id

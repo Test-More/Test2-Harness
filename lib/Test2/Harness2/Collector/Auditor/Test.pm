@@ -17,7 +17,7 @@ use Test2::Harness2::Event;
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Auditor';
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <run_id
     <job_id
     <job_try

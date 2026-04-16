@@ -7,7 +7,7 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use IO::Handle;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <output_file
     <fh
     <run_id

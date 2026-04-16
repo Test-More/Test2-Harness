@@ -7,7 +7,7 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use POSIX qw/:sys_wait_h/;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <pid
     <ipcm_info
     <workdir

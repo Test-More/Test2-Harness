@@ -11,6 +11,8 @@ use Test2::Harness2::Util::HashBase qw{
     <exit_code
 };
 
+# This file makes reference to an "inline collector", I believe we removed that concept a while back, it was a thing you wrote for windows that I changed by asing for the system(1) workaround to spawn windows processes. Correct any logic that assumes inline collectors are a thing, and remove comments and docs referencing them. If an inline collector is still a thing pause and explain where it is and why we need it.
+
 sub wait {
     my $self = shift;
 

@@ -97,6 +97,7 @@ sub start {
     # Grab the loggers to hand to interpose before forking.
     my $loggers = $self->{+LOGGERS};
 
+    # AI: Add a jump_to attribute to Harness2, if set then interpose should use LongJump to jump to the jump point named in the attribute after the child is forked, it should return a subref that the jump point can use to run the collector. the goal is to have the collector unwind the stack so stack traces are cleaner, and if the collector scope is somehow escaped it will not resume execution from an undesirable space. It should also continue to work fine without a jump_to attribute. Add a test that verifies the jump functionality and that the collector still does its job after the jump. Add docs for how to write the jump point for anyone who wants to do this.
     Test2::Harness2::Collector->interpose(
         ipcm_info   => $self->ipcm_info,
         loggers     => $loggers,
@@ -396,6 +397,10 @@ sub run_on_start {
     else {
         warn "setpgid(0,0) failed in run_on_start: $!";
     }
+
+    # AI: Linux::Prctl is problematic. Remove it from the dist.
+    # Instead create a new ~/projects/Test2/Test2-Harness2-ChildSubReaper directory, inside create a new perl distribution for Test2::Harness2::ChildSubReaper that uses XS to provide the functionality we need. Make that an optional dep and use it when it is installed and when it applies to the architecture the code is running on.
+    # Create test cases that only run when it is installed as well as test cases that hide the module to forcefully test when it is not installed.
 
     # Ask the kernel to treat us as a subreaper (Linux >= 3.4 only).
     # Effect: any descendant that gets orphaned (its immediate parent

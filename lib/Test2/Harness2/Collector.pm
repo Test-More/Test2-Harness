@@ -52,6 +52,7 @@ use constant IS_WIN32 => $^O eq 'MSWin32';
 sub init {
     my $self = shift;
 
+    # AI: This must always be set and valid, do not allow it to be undef. Correct any logic and tests that assume it can be undef.
     croak "'ipcm_info' is required (pass undef explicitly if no service is connected)"
         unless exists $self->{+IPCM_INFO};
 
@@ -70,6 +71,7 @@ sub init {
     $self->{+ENV_VARS}     //= {};
     $self->{+NEW_PGROUP}   //= 0;
 
+    # AI: Better re-order these, we will need to pass the auditor to the loggers when it is set.
     $self->_normalize_loggers();
     $self->_normalize_auditor();
 
@@ -109,6 +111,7 @@ sub init {
         if defined($self->{+PARSER}) && !ref $self->{+PARSER};
 }
 
+# AI: This should be a class method, not a function
 sub _load_logger_class {
     my ($class) = @_;
     my $file = mod2file($class);
@@ -118,6 +121,7 @@ sub _load_logger_class {
     require $file;
 }
 
+# AI: This should be a class method, not a function
 sub _spec_class {
     my ($spec) = @_;
 
@@ -130,6 +134,7 @@ sub _spec_class {
 # Validates a single spec for blessed/arrayref/string shape, loads the class
 # (for non-blessed forms), and verifies it implements $role at the class level.
 # Returns nothing; croaks on any problem.
+# AI: This should be a class method, not a function
 sub _validate_spec {
     my ($spec, $kind, $role) = @_;
 
@@ -220,6 +225,8 @@ sub _instantiate_loggers {
             );
             $item->set_ipcm_info($self->{+IPCM_INFO})
                 if defined $self->{+IPCM_INFO};
+
+            # Set the auditor if we have one
             push @instances => $item;
         }
         elsif (ref($item) eq 'ARRAY') {
@@ -518,6 +525,7 @@ sub _setup_child_handles {
 sub _init_event_sinks {
     my $self = shift;
 
+    # AI: Should re-order these since loggers need auditor when it is set
     $self->_instantiate_loggers();
     $self->_instantiate_auditor();
 

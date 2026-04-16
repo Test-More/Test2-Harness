@@ -68,6 +68,9 @@ sub shutdown {
     close($fh);
 }
 
+#AI: This will need set_ipcm_info and set_process_info after making the default implementations into empty no-ops
+
+
 1;
 
 __END__

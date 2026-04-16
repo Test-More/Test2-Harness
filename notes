@@ -1,7 +1,0 @@
-Collector classes should require the ipcm_info attribute
-
-_run_collector is very long, can it be broken up into multiple functions?
-
-Add a comment to IPCNotify explaining that we send a message to wake up the service loop.
-
-Instead of requireing set_process_info and set_ipcm_info, there can be default no-op implementations for both auditors and loggers. Remove no-op implementations from the classes that implement the roles.

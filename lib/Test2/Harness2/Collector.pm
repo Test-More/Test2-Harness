@@ -70,9 +70,10 @@ sub init {
     $self->{+ENV_VARS}     //= {};
     $self->{+NEW_PGROUP}   //= 0;
 
-    # AI: Better re-order these, we will need to pass the auditor to the loggers when it is set.
-    $self->_normalize_loggers();
+    # Auditor first: loggers may need to consult it, and validation should run
+    # in the same order as instantiation below.
     $self->_normalize_auditor();
+    $self->_normalize_loggers();
 
     my $has_launch = defined $self->{+LAUNCH};
     my $has_stdio  = defined($self->{+OUT_FH}) || defined($self->{+ERR_FH});
@@ -217,14 +218,16 @@ sub _instantiate_loggers {
     my @instances;
     for my $item (@$specs) {
         if (blessed($item)) {
+            # Pre-constructed instance: stamp info onto it via setters
+            # since we cannot re-run its constructor.
             $item->set_process_info(
                 run_id  => $self->{+RUN_ID},
                 job_id  => $self->{+JOB_ID},
                 job_try => $self->{+JOB_TRY},
             );
             $item->set_ipcm_info($self->{+IPCM_INFO});
+            $item->set_auditor($self->{+AUDITOR}) if $self->{+AUDITOR};
 
-            # Set the auditor if we have one
             push @instances => $item;
         }
         elsif (ref($item) eq 'ARRAY') {
@@ -234,6 +237,7 @@ sub _instantiate_loggers {
                 job_id    => $self->{+JOB_ID},
                 job_try   => $self->{+JOB_TRY},
                 ipcm_info => $self->{+IPCM_INFO},
+                (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
                 @args,
             );
         }
@@ -243,6 +247,7 @@ sub _instantiate_loggers {
                 job_id    => $self->{+JOB_ID},
                 job_try   => $self->{+JOB_TRY},
                 ipcm_info => $self->{+IPCM_INFO},
+                (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
             );
         }
     }
@@ -522,9 +527,11 @@ sub _setup_child_handles {
 sub _init_event_sinks {
     my $self = shift;
 
-    # AI: Should re-order these since loggers need auditor when it is set
-    $self->_instantiate_loggers();
+    # Auditor before loggers so loggers that want it can receive it as a
+    # constructor argument (for new() specs) or via set_auditor() (for
+    # pre-blessed instances, handled in _instantiate_loggers).
     $self->_instantiate_auditor();
+    $self->_instantiate_loggers();
 
     $_->startup($self) for @{$self->{+LOGGERS}};
     $self->{+_EVENT_LOGGERS} = [grep { $_->log_events } @{$self->{+LOGGERS}}];

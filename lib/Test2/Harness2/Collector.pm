@@ -420,9 +420,23 @@ sub _run_collector {
 
     # Setup signal handlers (block-local so they restore automatically when
     # _run_collector returns, including via die).
+    #
+    # Ignore-class signals: tests and test-spawned child processes may send
+    # these for their own coordination.  The collector must not die from them.
+    # SIGPIPE in particular: write calls already check errno; we don't want a
+    # broken-pipe to kill the collector.
+    local $SIG{USR1} = 'IGNORE';
+    local $SIG{USR2} = 'IGNORE';
+    local $SIG{HUP}  = 'IGNORE';
+    local $SIG{PIPE} = 'IGNORE';
+
+    # Graceful-shutdown signals: TERM the watched child and let the existing
+    # wait + exit-mirroring path handle cleanup.  We set $got_signal so the
+    # main loop can notice and break out after draining remaining output.
     my $got_signal;
     local $SIG{TERM} = sub { $got_signal = 'TERM' };
     local $SIG{INT}  = sub { $got_signal = 'INT' };
+    local $SIG{QUIT} = sub { $got_signal = 'QUIT' };
 
     # Build logger and auditor instances now, in the collector child process
     # only, so the parent never opens those file handles / sockets / etc.

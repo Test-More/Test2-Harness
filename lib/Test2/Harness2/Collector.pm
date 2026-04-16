@@ -30,6 +30,7 @@ use Object::HashBase qw{
     <auditor
     <parser
     <loggers
+    <loggers_lookup
     <parent_pids
     <kill_timeout
     <run_id
@@ -215,8 +216,11 @@ sub _instantiate_loggers {
 
     my $specs = $self->{+_LOGGERS_SPEC} //= [];
 
-    my @instances;
+    $self->{+LOGGERS}        = [];
+    $self->{+LOGGERS_LOOKUP} = {};
+
     for my $item (@$specs) {
+        my $inst;
         if (blessed($item)) {
             # Pre-constructed instance: stamp info onto it via setters
             # since we cannot re-run its constructor.
@@ -227,32 +231,46 @@ sub _instantiate_loggers {
             );
             $item->set_ipcm_info($self->{+IPCM_INFO});
             $item->set_auditor($self->{+AUDITOR}) if $self->{+AUDITOR};
-
-            push @instances => $item;
+            $item->set_loggers_lookup($self->{+LOGGERS_LOOKUP});
+            $inst = $item;
         }
         elsif (ref($item) eq 'ARRAY') {
             my ($class, @args) = @$item;
-            push @instances => $class->new(
-                run_id    => $self->{+RUN_ID},
-                job_id    => $self->{+JOB_ID},
-                job_try   => $self->{+JOB_TRY},
-                ipcm_info => $self->{+IPCM_INFO},
+            $inst = $class->new(
+                run_id          => $self->{+RUN_ID},
+                job_id          => $self->{+JOB_ID},
+                job_try         => $self->{+JOB_TRY},
+                ipcm_info       => $self->{+IPCM_INFO},
+                loggers_lookup  => $self->{+LOGGERS_LOOKUP},
                 (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
                 @args,
             );
         }
         else {
-            push @instances => $item->new(
-                run_id    => $self->{+RUN_ID},
-                job_id    => $self->{+JOB_ID},
-                job_try   => $self->{+JOB_TRY},
-                ipcm_info => $self->{+IPCM_INFO},
+            $inst = $item->new(
+                run_id          => $self->{+RUN_ID},
+                job_id          => $self->{+JOB_ID},
+                job_try         => $self->{+JOB_TRY},
+                ipcm_info       => $self->{+IPCM_INFO},
+                loggers_lookup  => $self->{+LOGGERS_LOOKUP},
                 (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
             );
         }
+        $self->_add_logger($inst);
     }
+}
 
-    $self->{+LOGGERS} = \@instances;
+# Append a logger instance to both the ordered LOGGERS array and the
+# class-keyed LOGGERS_LOOKUP hash. Kept as a helper so anything that grows
+# the logger set later stays in sync on both structures.
+sub _add_logger {
+    my $self = shift;
+    my ($logger) = @_;
+
+    push @{$self->{+LOGGERS}} => $logger;
+    push @{$self->{+LOGGERS_LOOKUP}{ref $logger} //= []} => $logger;
+
+    return $logger;
 }
 
 sub _instantiate_auditor {

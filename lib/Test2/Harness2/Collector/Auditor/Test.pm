@@ -35,6 +35,8 @@ use Object::HashBase qw{
     -numbers
     -halt
     -failed_subtest_tree
+    -passing_subtests
+    -failing_subtests
 };
 
 # Attribute reference:
@@ -54,6 +56,8 @@ use Object::HashBase qw{
 #   numbers             -- map of TAP assertion-number -> times-seen, for duplicate / missing-number detection.
 #   halt                -- human-readable bail-out reason if a control facet halted the run, undef otherwise.
 #   failed_subtest_tree -- nested arrayref describing the path through any failed subtests for diagnostics.
+#   passing_subtests    -- arrayref of names of subtests that have passed at this auditor's nesting level.
+#   failing_subtests    -- arrayref of names of subtests that have failed at this auditor's nesting level.
 
 sub init {
     my $self = shift;
@@ -67,8 +71,10 @@ sub init {
     $self->{+_PLANS}          = 0;
     $self->{+ASSERTION_COUNT} = 0;
 
-    $self->{+NUMBERS}  = {};
-    $self->{+SUBTESTS} = {};
+    $self->{+NUMBERS}          = {};
+    $self->{+SUBTESTS}         = {};
+    $self->{+PASSING_SUBTESTS} = [];
+    $self->{+FAILING_SUBTESTS} = [];
 
     $self->{+NESTED} //= 0;
 }
@@ -198,7 +204,33 @@ sub _audit {
         my $st = $self->{+SUBTESTS}->{$nested + 1} ||= {};
         $st->{event} = $event;
         $f->{harness_auditor}->{no_render} = 1;
-        return;
+
+        # Only announce at this auditor's own nesting level -- nested
+        # subtest_start events that slip past the from_tap gate above are
+        # still swallowed as before. Downstream consumers that watch for
+        # harness.subtest_started therefore only see the top-level
+        # announcements produced by the top-level auditor.
+        return unless $is_ours;
+
+        # Emit a synthetic announcement event so downstream loggers can react
+        # to a subtest starting without snooping on the swallowed raw event.
+        # Carry the original event's trace and timestamps so consumers can
+        # correlate the announcement with the source location.
+        my $stamp = $event->{stamp} // $f->{harness}->{stamp} // time;
+        my $announce = Test2::Harness2::Event->new(
+            event_id   => gen_uuid(),
+            stamp      => $stamp,
+            facet_data => {
+                harness => {
+                    subtest_started => 1,
+                    nested          => $nested,
+                    stamp           => $stamp,
+                },
+                (defined $f->{trace} ? (trace => {%{$f->{trace}}}) : ()),
+            },
+        );
+        $self->_normalize_event($announce);
+        return $announce;
     }
 
     my @out;
@@ -346,6 +378,11 @@ sub _subtest_process {
 
             my $tree = $self->{+FAILED_SUBTEST_TREE} //= [];
             push @$tree => [$name, $subauditor->{+FAILED_SUBTEST_TREE} // []];
+
+            push @{$self->{+FAILING_SUBTESTS} //= []} => $name;
+        }
+        else {
+            push @{$self->{+PASSING_SUBTESTS} //= []} => $name;
         }
     }
 

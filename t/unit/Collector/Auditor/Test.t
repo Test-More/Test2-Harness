@@ -372,6 +372,128 @@ subtest 'ipcm_info is required at construction' => sub {
     like($err, qr/ipcm_info/, 'error mentions ipcm_info');
 };
 
+subtest 'subtest_start emits a synthetic subtest_started announcement' => sub {
+    my $a = mk();
+
+    my @out = $a->audit_event({
+        event_id   => 'ST-1',
+        stamp      => 1234.5,
+        facet_data => {
+            harness => {subtest_start => 1, stamp => 1234.5, nested => 0},
+            trace   => {frame => ['main', 't/foo.t', 42]},
+        },
+    });
+
+    is(scalar @out, 1, 'one announcement event emitted');
+    my $ann = $out[0];
+
+    ok($ann->{facet_data}{harness}{subtest_started}, 'new subtest_started flag set');
+    ok(!$ann->{facet_data}{harness}{subtest_start},  'raw subtest_start not re-emitted');
+    is($ann->{facet_data}{harness}{nested}, 0, 'nested preserved');
+    is($ann->{facet_data}{harness}{stamp},  1234.5, 'harness stamp preserved');
+    is($ann->{stamp}, 1234.5, 'top-level stamp preserved');
+    is($ann->{facet_data}{trace}{frame}, ['main', 't/foo.t', 42], 'trace preserved');
+    isnt($ann->{event_id}, 'ST-1', 'announcement has its own event_id');
+
+    # The original event is still stashed internally for subsequent
+    # subtest-close processing.
+    ok($a->subtests->{1}, 'subtest stashed internally');
+};
+
+subtest 'subtest_start does not announce when not at this auditor level' => sub {
+    my $a = mk();
+
+    # TAP-parsed nested subtest_start: from_tap is set and the effective
+    # nesting (read from hub_truth, which uses hubs[0] or trace) is > 0.
+    # The from_tap gate lets the event reach the subtest_start branch,
+    # but the announcement must not fire because this is not the
+    # auditor's own level.
+    my @out = $a->audit_event({
+        event_id   => 'ST-NESTED',
+        facet_data => {
+            harness  => {subtest_start => 1},
+            from_tap => {source => 'STDOUT', details => 'ok 1 - sub {'},
+            trace    => {frame => ['main', 't/foo.t', 10], nested => 1},
+        },
+    });
+
+    ok(!grep({ $_->{facet_data}{harness}{subtest_started} } @out),
+        'no subtest_started announcement emitted for nested level');
+};
+
+subtest 'auditor tracks passing and failing top-level subtest names' => sub {
+    my $a = mk();
+    $a->audit_event({facet_data => {plan => {count => 2}}});
+
+    # Passing subtest
+    $a->audit_event({
+        facet_data => {
+            assert => {pass => 1, details => 'alpha'},
+            parent => {
+                hid      => 1,
+                children => [
+                    do { my $id = gen_uuid(); {assert => {pass => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
+                    do { my $id = gen_uuid(); {plan   => {count => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
+                ],
+            },
+        }
+    });
+
+    # Failing subtest
+    $a->audit_event({
+        facet_data => {
+            assert => {pass => 0, details => 'beta'},
+            parent => {
+                hid      => 2,
+                children => [
+                    do { my $id = gen_uuid(); {assert => {pass => 0}, harness => {event_id => $id}, about => {uuid => $id}} },
+                    do { my $id = gen_uuid(); {plan   => {count => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
+                ],
+            },
+        }
+    });
+
+    is($a->passing_subtests, ['alpha'], 'passing subtest tracked');
+    is($a->failing_subtests, ['beta'],  'failing subtest tracked');
+};
+
+subtest 'nested subtest names do not leak into the top-level auditor lists' => sub {
+    my $a = mk();
+    $a->audit_event({facet_data => {plan => {count => 1}}});
+
+    # Top-level subtest 'outer' whose children include another subtest 'inner'.
+    # Only 'outer' should show up in the top auditor's passing_subtests.
+    $a->audit_event({
+        facet_data => {
+            assert => {pass => 1, details => 'outer'},
+            parent => {
+                hid      => 1,
+                children => [
+                    do {
+                        my $id = gen_uuid();
+                        {
+                            assert  => {pass => 1, details => 'inner'},
+                            harness => {event_id => $id},
+                            about   => {uuid     => $id},
+                            parent  => {
+                                hid      => 2,
+                                children => [
+                                    do { my $x = gen_uuid(); {assert => {pass => 1}, harness => {event_id => $x}, about => {uuid => $x}} },
+                                    do { my $x = gen_uuid(); {plan   => {count => 1}, harness => {event_id => $x}, about => {uuid => $x}} },
+                                ],
+                            },
+                        }
+                    },
+                    do { my $id = gen_uuid(); {plan => {count => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
+                ],
+            },
+        }
+    });
+
+    is($a->passing_subtests, ['outer'], 'only the top-level subtest name is kept');
+    is($a->failing_subtests, [],        'no failing subtests recorded');
+};
+
 subtest 'event_id mismatch across facets is rejected' => sub {
     my $a  = mk();
     my $id = gen_uuid();

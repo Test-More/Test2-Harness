@@ -83,7 +83,7 @@ sub handle_request {
     return $self->handle_queue_test_run_request($req) if $name eq 'queue_test_run';
     return $self->handle_finish_request               if $name eq 'finish';
     return $self->handle_terminate_request            if $name eq 'Terminate';
-    # Tasks 11-12 add: Detach
+    return $self->handle_detach_request($req)         if $name eq 'Detach';
 
     return {ok => 0, error => "unknown request '$name'"};
 }
@@ -158,6 +158,15 @@ sub handle_terminate_request {
     # Actual process-killing happens in _perform_hard_stop (Task 14).
     # Clearing the queue here is safe and matches the spec.
     $self->{+QUEUE} = [];
+    return {ok => 1};
+}
+
+sub handle_detach_request {
+    my ($self, $payload) = @_;
+    my $pid = $payload->{pid};
+    return {ok => 0, error => "missing 'pid'"} unless defined $pid;
+
+    $self->{+WATCH_PIDS_REF} = [grep { $_ != $pid } @{$self->{+WATCH_PIDS_REF}}];
     return {ok => 1};
 }
 

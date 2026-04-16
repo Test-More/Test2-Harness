@@ -36,7 +36,7 @@ sub from_files {
     my $files = $params{files} or croak "'files' is required";
     croak "'files' must be an arrayref" unless ref($files) eq 'ARRAY';
 
-    my $run_id = $params{run_id} //= gen_uuid();
+    my $run_id = $params{run_id} // gen_uuid();
 
     my @jobs = map {
         Test2::Harness2::Run::Job->new(
@@ -45,18 +45,22 @@ sub from_files {
         );
     } @$files;
 
-    return $class->new(%params, jobs => \@jobs);
+    return $class->new(%params, run_id => $run_id, jobs => \@jobs);
 }
 
 sub mark_running {
     my ($self, $jid) = @_;
-    $self->{+PENDING} = [grep { $_ ne $jid } @{$self->{+PENDING}}];
+    my @new = grep { $_ ne $jid } @{$self->{+PENDING}};
+    croak "job_id '$jid' is not pending" if @new == @{$self->{+PENDING}};
+    $self->{+PENDING} = \@new;
     push @{$self->{+RUNNING}} => $jid;
 }
 
 sub mark_done {
     my ($self, $jid) = @_;
-    $self->{+RUNNING} = [grep { $_ ne $jid } @{$self->{+RUNNING}}];
+    my @new = grep { $_ ne $jid } @{$self->{+RUNNING}};
+    croak "job_id '$jid' is not running" if @new == @{$self->{+RUNNING}};
+    $self->{+RUNNING} = \@new;
     push @{$self->{+DONE}} => $jid;
 }
 

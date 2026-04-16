@@ -129,12 +129,14 @@ subtest 'launch - signal mirroring' => sub {
     package T2H2_Test_StubAuditor;
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Auditor';
-    sub new         { my $c = shift; bless {failing => 0, @_}, $c }
-    sub audit_event { return ($_[1]) }
-    sub fail_count  { $_[0]->{failing} ? 1 : 0 }
-    sub pass_count  { 0 }
-    sub failing     { $_[0]->{failing} }
-    sub passing     { !$_[0]->{failing} }
+    sub new              { my $c = shift; bless {failing => 0, @_}, $c }
+    sub audit_event      { return ($_[1]) }
+    sub fail_count       { $_[0]->{failing} ? 1 : 0 }
+    sub pass_count       { 0 }
+    sub failing          { $_[0]->{failing} }
+    sub passing          { !$_[0]->{failing} }
+    sub set_process_info { }
+    sub set_ipcm_info    { }
 }
 
 subtest 'no-wait-status modes - exit reflects auditor verdict' => sub {
@@ -917,26 +919,30 @@ subtest 'spec instantiation is deferred to the collector child' => sub {
     # the parent right after construction.
     package T2H2_Test_Sentinel_Logger;
     our $CONSTRUCTED = 0;
-    sub new        { $CONSTRUCTED++; bless {}, shift }
-    sub depends_on { () }
-    sub log_events { 0 }
-    sub log_event  { }
-    sub startup    { }
-    sub shutdown   { }
-    sub failing    { }
-    sub DOES       { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+    sub new              { $CONSTRUCTED++; bless {}, shift }
+    sub depends_on       { () }
+    sub log_events       { 0 }
+    sub log_event        { }
+    sub startup          { }
+    sub shutdown         { }
+    sub failing          { }
+    sub set_process_info { }
+    sub set_ipcm_info    { }
+    sub DOES             { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
 
     package main;
 
     package T2H2_Test_Sentinel_Auditor;
     our $CONSTRUCTED = 0;
-    sub new         { $CONSTRUCTED++; bless {}, shift }
-    sub audit_event { return ($_[1]) }
-    sub fail_count  { 0 }
-    sub pass_count  { 0 }
-    sub failing     { 0 }
-    sub passing     { 1 }
-    sub DOES        { $_[1] eq 'Test2::Harness2::Role::Auditor' || $_[0]->isa($_[1]) }
+    sub new              { $CONSTRUCTED++; bless {}, shift }
+    sub audit_event      { return ($_[1]) }
+    sub fail_count       { 0 }
+    sub pass_count       { 0 }
+    sub failing          { 0 }
+    sub passing          { 1 }
+    sub set_process_info { }
+    sub set_ipcm_info    { }
+    sub DOES             { $_[1] eq 'Test2::Harness2::Role::Auditor' || $_[0]->isa($_[1]) }
 
     package main;
 
@@ -961,14 +967,16 @@ subtest 'blessed instances pass through unchanged and survive validation' => sub
     open(my $devnull, '<', '/dev/null') or die $!;
 
     package T2H2_Test_Blessed_Logger;
-    sub new        { bless {}, shift }
-    sub depends_on { () }
-    sub log_events { 0 }
-    sub log_event  { }
-    sub startup    { }
-    sub shutdown   { }
-    sub failing    { }
-    sub DOES       { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+    sub new              { bless {}, shift }
+    sub depends_on       { () }
+    sub log_events       { 0 }
+    sub log_event        { }
+    sub startup          { }
+    sub shutdown         { }
+    sub failing          { }
+    sub set_process_info { }
+    sub set_ipcm_info    { }
+    sub DOES             { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
 
     package main;
 
@@ -1236,5 +1244,134 @@ subtest 'collector-process warnings are routed through loggers' => sub {
 };
 
 use Test2::Harness2::Collector::Handle;
+
+# ===========================================================================
+# Process-info attributes (run_id / job_id / job_try / ipcm_info)
+# ===========================================================================
+
+subtest 'run_id defaults to undef' => sub {
+    my $c = Test2::Harness2::Collector->new(launch => ['perl', '-e', '1']);
+    ok(!defined $c->run_id, 'run_id defaults to undef');
+};
+
+subtest 'job_id auto-generated as UUID' => sub {
+    my $c = Test2::Harness2::Collector->new(launch => ['perl', '-e', '1']);
+    like($c->job_id, qr/^[0-9A-F-]{36}$/i, 'job_id auto-generated as UUID');
+};
+
+subtest 'job_try defaults to 0' => sub {
+    my $c = Test2::Harness2::Collector->new(launch => ['perl', '-e', '1']);
+    is($c->job_try, 0, 'job_try defaults to 0');
+};
+
+subtest 'ipcm_info defaults to undef' => sub {
+    my $c = Test2::Harness2::Collector->new(launch => ['perl', '-e', '1']);
+    ok(!defined $c->ipcm_info, 'ipcm_info defaults to undef');
+};
+
+subtest 'explicit run_id/job_id/job_try/ipcm_info accepted at construction' => sub {
+    my $ii = {host => 'localhost'};
+    my $c  = Test2::Harness2::Collector->new(
+        launch    => ['perl', '-e', '1'],
+        run_id    => 'my-run',
+        job_id    => 'my-job',
+        job_try   => 2,
+        ipcm_info => $ii,
+    );
+    is($c->run_id,    'my-run', 'run_id stored');
+    is($c->job_id,    'my-job', 'job_id stored');
+    is($c->job_try,   2,        'job_try stored');
+    is($c->ipcm_info, $ii,      'ipcm_info stored');
+};
+
+subtest 'blessed auditor receives set_process_info and set_ipcm_info at instantiation' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    our @T2H2_RecordingAuditor_PI;
+    our @T2H2_RecordingAuditor_IPCM;
+    @T2H2_RecordingAuditor_PI   = ();
+    @T2H2_RecordingAuditor_IPCM = ();
+
+    package T2H2_Test_RecordingAuditor;
+    sub new              { bless {}, shift }
+    sub audit_event      { return ($_[1]) }
+    sub fail_count       { 0 }
+    sub pass_count       { 0 }
+    sub failing          { 0 }
+    sub passing          { 1 }
+    sub set_process_info { push @main::T2H2_RecordingAuditor_PI   => {@_[1 .. $#_]}; return }
+    sub set_ipcm_info    { push @main::T2H2_RecordingAuditor_IPCM => $_[1];          return }
+    sub DOES             { $_[1] eq 'Test2::Harness2::Role::Auditor' || $_[0]->isa($_[1]) }
+
+    package main;
+
+    my $auditor = T2H2_Test_RecordingAuditor->new();
+    my $ii      = {fake => 1};
+
+    my $c = Test2::Harness2::Collector->new(
+        stdout    => $devnull,
+        run_id    => 'RRR',
+        job_id    => 'JJJ',
+        job_try   => 7,
+        ipcm_info => $ii,
+        auditor   => $auditor,
+    );
+
+    # Trigger instantiation (normally happens in child, but we can call directly)
+    $c->_instantiate_auditor();
+
+    is(scalar @T2H2_RecordingAuditor_PI,      1,     'set_process_info called once on blessed auditor');
+    is($T2H2_RecordingAuditor_PI[0]{run_id},  'RRR', 'run_id passed to set_process_info');
+    is($T2H2_RecordingAuditor_PI[0]{job_id},  'JJJ', 'job_id passed to set_process_info');
+    is($T2H2_RecordingAuditor_PI[0]{job_try}, 7,     'job_try passed to set_process_info');
+
+    is(scalar @T2H2_RecordingAuditor_IPCM, 1,   'set_ipcm_info called once on blessed auditor');
+    is($T2H2_RecordingAuditor_IPCM[0],     $ii, 'ipcm_info value passed to set_ipcm_info');
+};
+
+subtest 'blessed logger receives set_process_info and set_ipcm_info at instantiation' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    our @T2H2_RecordingLogger_PI;
+    our @T2H2_RecordingLogger_IPCM;
+    @T2H2_RecordingLogger_PI   = ();
+    @T2H2_RecordingLogger_IPCM = ();
+
+    package T2H2_Test_RecordingLogger;
+    sub new              { bless {}, shift }
+    sub depends_on       { () }
+    sub log_events       { 0 }
+    sub log_event        { }
+    sub startup          { }
+    sub shutdown         { }
+    sub failing          { }
+    sub set_process_info { push @main::T2H2_RecordingLogger_PI   => {@_[1 .. $#_]}; return }
+    sub set_ipcm_info    { push @main::T2H2_RecordingLogger_IPCM => $_[1];          return }
+    sub DOES             { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+
+    package main;
+
+    my $logger = T2H2_Test_RecordingLogger->new();
+    my $ii     = {fake => 2};
+
+    my $c = Test2::Harness2::Collector->new(
+        stdout    => $devnull,
+        run_id    => 'R2',
+        job_id    => 'J2',
+        job_try   => 1,
+        ipcm_info => $ii,
+        loggers   => [$logger],
+    );
+
+    $c->_instantiate_loggers();
+
+    is(scalar @T2H2_RecordingLogger_PI,      1,    'set_process_info called once on blessed logger');
+    is($T2H2_RecordingLogger_PI[0]{run_id},  'R2', 'run_id passed');
+    is($T2H2_RecordingLogger_PI[0]{job_id},  'J2', 'job_id passed');
+    is($T2H2_RecordingLogger_PI[0]{job_try}, 1,    'job_try passed');
+
+    is(scalar @T2H2_RecordingLogger_IPCM, 1,   'set_ipcm_info called once on blessed logger');
+    is($T2H2_RecordingLogger_IPCM[0],     $ii, 'ipcm_info value passed');
+};
 
 done_testing;

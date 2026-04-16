@@ -15,9 +15,24 @@ use Test2::Harness2::Util::HashBase qw{
     <run_id
     <job_id
     <job_try
+    <ipcm_info
     <name
     <type
 };
+
+sub set_process_info {
+    my ($self, %info) = @_;
+    $self->{+RUN_ID}  = $info{run_id}  if exists $info{run_id};
+    $self->{+JOB_ID}  = $info{job_id}  if exists $info{job_id};
+    $self->{+JOB_TRY} = $info{job_try} if exists $info{job_try};
+    return;
+}
+
+sub set_ipcm_info {
+    my ($self, $info) = @_;
+    $self->{+IPCM_INFO} = $info;
+    return;
+}
 
 sub parse_io {
     my $self = shift;

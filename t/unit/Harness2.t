@@ -164,7 +164,11 @@ subtest 'run_on_all dispatches next pending job to a Collector' => sub {
     is($args{parent_pids},            [$$],      'parent_pids includes service pid');
     is($args{env_vars}{T2_FORMATTER}, 'Stream2', 'T2_FORMATTER set');
     like($args{loggers}[0][2], qr{\Q$dir\E/runs/.+/.+/0\.jsonl}, 'per-job JSONL path');
-    ok($h->{current}, 'current populated');
+    like($args{run_id},        qr/^[0-9A-F-]{36}$/i,             'run_id passed to collector');
+    like($args{job_id},        qr/^[0-9A-F-]{36}$/i,             'job_id passed to collector');
+    is($args{job_try}, 0, 'job_try passed as 0 to collector');
+    ok(!exists $args{env_vars}{T2_IPC_INFO}, 'ipcm_info not in env_vars (not passed to test process)');
+    ok($h->{current},                        'current populated');
     is($h->{current}{pid}, 99999, 'current.pid set from handle');
 
     my $status = $h->request_handler_status;

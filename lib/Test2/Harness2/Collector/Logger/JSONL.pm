@@ -10,6 +10,10 @@ use IO::Handle;
 use Test2::Harness2::Util::HashBase qw{
     <output_file
     <fh
+    <run_id
+    <job_id
+    <job_try
+    <ipcm_info
 };
 
 use Role::Tiny::With;
@@ -23,6 +27,20 @@ sub init {
 
     croak "Either 'output_file' or 'fh' is required"
         unless defined($self->{+OUTPUT_FILE}) || defined($self->{+FH});
+}
+
+sub set_process_info {
+    my ($self, %info) = @_;
+    $self->{+RUN_ID}  = $info{run_id}  if exists $info{run_id};
+    $self->{+JOB_ID}  = $info{job_id}  if exists $info{job_id};
+    $self->{+JOB_TRY} = $info{job_try} if exists $info{job_try};
+    return;
+}
+
+sub set_ipcm_info {
+    my ($self, $info) = @_;
+    $self->{+IPCM_INFO} = $info;
+    return;
 }
 
 sub startup {

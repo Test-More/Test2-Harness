@@ -462,19 +462,16 @@ sub run_on_all {
         new_pgroup  => 1,
         parent_pids => [$$],
         env_vars    => {T2_FORMATTER => 'Stream2'},
-        auditor     => [
-            $self->{+TEST_AUDITOR},
-            run_id => $run_id, job_id => $job_id, job_try => 0
-        ],
-        loggers => [
+        run_id      => $run_id,
+        job_id      => $job_id,
+        job_try     => 0,
+        ipcm_info   => $self->ipcm_info,
+        auditor     => $self->{+TEST_AUDITOR},
+        loggers     => [
             [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
             [
                 'Test2::Harness2::Collector::Logger::IPCNotify',
-                ipcm_info    => $self->ipcm_info,
                 service_name => $self->{+NAME},
-                run_id       => $run_id,
-                job_id       => $job_id,
-                job_try      => 0,
             ],
         ],
     );

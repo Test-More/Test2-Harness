@@ -21,6 +21,7 @@ use Test2::Harness2::Util::HashBase qw{
     <run_id
     <job_id
     <job_try
+    <ipcm_info
     -assertion_count
     -exit
     -plan
@@ -57,10 +58,6 @@ use Test2::Harness2::Util::HashBase qw{
 sub init {
     my $self = shift;
 
-    croak "'run_id' is a required attribute"  unless defined $self->{+RUN_ID};
-    croak "'job_id' is a required attribute"  unless defined $self->{+JOB_ID};
-    croak "'job_try' is a required attribute" unless defined $self->{+JOB_TRY};
-
     $self->{+_FAILURES}       = 0;
     $self->{+_ERRORS}         = 0;
     $self->{+_SUB_FAILURES}   = 0;
@@ -71,6 +68,20 @@ sub init {
     $self->{+SUBTESTS} = {};
 
     $self->{+NESTED} //= 0;
+}
+
+sub set_process_info {
+    my ($self, %info) = @_;
+    $self->{+RUN_ID}  = $info{run_id}  if exists $info{run_id};
+    $self->{+JOB_ID}  = $info{job_id}  if exists $info{job_id};
+    $self->{+JOB_TRY} = $info{job_try} if exists $info{job_try};
+    return;
+}
+
+sub set_ipcm_info {
+    my ($self, $info) = @_;
+    $self->{+IPCM_INFO} = $info;
+    return;
 }
 
 sub passing { !$_[0]->failing }

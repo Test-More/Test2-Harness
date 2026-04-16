@@ -47,12 +47,15 @@ sub shutdown {
             );
         }
 
-        $self->{+HANDLE}->sync_request({
-            request => 'job_complete_notify',
-            run_id  => $self->{+RUN_ID},
-            job_id  => $self->{+JOB_ID},
-            job_try => $self->{+JOB_TRY},
-        });
+        $self->{+HANDLE}->client->send_message(
+            $self->{+SERVICE_NAME},
+            {
+                kind    => 'job_complete_notify',
+                run_id  => $self->{+RUN_ID},
+                job_id  => $self->{+JOB_ID},
+                job_try => $self->{+JOB_TRY},
+            },
+        );
 
         1;
     };

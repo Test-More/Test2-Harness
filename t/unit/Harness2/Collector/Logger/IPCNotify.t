@@ -76,14 +76,18 @@ subtest 'log_events returns false' => sub {
 subtest 'shutdown sends job_complete_notify' => sub {
     my @sent;
 
-    # Build a fake handle that records sync_request calls.
-    my $fake_handle = bless {}, 'FakeIPCHandle';
+    # Build a fake client that records send_message calls.
+    my $fake_client = bless {}, 'FakeIPCClient';
     no warnings 'once';
-    *FakeIPCHandle::sync_request = sub {
-        my ($self, $payload) = @_;
-        push @sent => $payload;
-        return {ok => 1};
+    *FakeIPCClient::send_message = sub {
+        my ($self, $to, $content) = @_;
+        push @sent => {to => $to, content => $content};
+        return;
     };
+
+    # Build a fake handle whose client() returns our fake client.
+    my $fake_handle = bless {}, 'FakeIPCHandle';
+    *FakeIPCHandle::client = sub { $fake_client };
 
     # Intercept IPC::Manager::Service::Handle->new to return our fake.
     local *IPC::Manager::Service::Handle::new = sub { $fake_handle };
@@ -98,14 +102,17 @@ subtest 'shutdown sends job_complete_notify' => sub {
 
     $logger->shutdown;
 
-    is(scalar @sent, 1, 'one sync_request call');
+    is(scalar @sent, 1, 'one send_message call');
     is(
         $sent[0],
         {
-            request => 'job_complete_notify',
-            run_id  => 'run-123',
-            job_id  => 'job-456',
-            job_try => 2,
+            to      => 'harness',
+            content => {
+                kind    => 'job_complete_notify',
+                run_id  => 'run-123',
+                job_id  => 'job-456',
+                job_try => 2,
+            },
         },
         'payload shape is correct',
     );
@@ -117,9 +124,11 @@ subtest 'shutdown sends job_complete_notify' => sub {
 
 subtest 'handle is lazily built and cached' => sub {
     my $new_count   = 0;
-    my $fake_handle = bless {}, 'FakeIPCHandle2';
+    my $fake_client = bless {}, 'FakeIPCClient2';
     no warnings 'once';
-    *FakeIPCHandle2::sync_request = sub { {ok => 1} };
+    *FakeIPCClient2::send_message = sub { };
+    my $fake_handle = bless {}, 'FakeIPCHandle2';
+    *FakeIPCHandle2::client = sub { $fake_client };
 
     local *IPC::Manager::Service::Handle::new = sub { $new_count++; $fake_handle };
 

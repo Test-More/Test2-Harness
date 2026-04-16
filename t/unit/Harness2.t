@@ -177,9 +177,9 @@ subtest 'run_on_all detects collector exit and advances queue' => sub {
 
     $h->handle_queue_test_run_request({files => ['dummy.t']});
 
-    my $run   = $h->{queue}[0];
-    my $job_id   = $run->pending->[0];
-    my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
+    my $run    = $h->{queue}[0];
+    my $job_id = $run->pending->[0];
+    my ($job)  = grep { $_->job_id eq $job_id } @{$run->jobs};
     $run->mark_running($job_id);
 
     # Fork a child that exits immediately so we have a reapable pid.
@@ -224,9 +224,9 @@ subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
 
     my $fake_handle = bless {pid => $child_pid}, 'Test2::Harness2::Collector::Handle';
 
-    my $run   = Test2::Harness2::Run->from_files(files => ['dummy.t']);
-    my $job_id   = $run->pending->[0];
-    my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
+    my $run    = Test2::Harness2::Run->from_files(files => ['dummy.t']);
+    my $job_id = $run->pending->[0];
+    my ($job)  = grep { $_->job_id eq $job_id } @{$run->jobs};
     $run->mark_running($job_id);
 
     $h->{current} = {
@@ -262,6 +262,45 @@ subtest 'run_should_end honors state and workers' => sub {
     delete $h->{current};
     $h->{state} = 'terminating';
     ok($h->run_should_end, 'terminating + cleared: end');
+};
+
+subtest 'run_on_general_message - job_complete_notify is a no-op' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    # A message object with content => { kind => 'job_complete_notify', ... }.
+    my $fake_msg = bless {}, 'FakeMsg';
+    no warnings 'once';
+    *FakeMsg::content = sub { {
+        kind    => 'job_complete_notify',
+        run_id  => 'r1',
+        job_id  => 'j1',
+        job_try => 0,
+    } };
+
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings => @_ };
+
+    my $ok = eval { $h->run_on_general_message($fake_msg); 1 };
+    ok($ok, 'job_complete_notify message does not die');
+    is(\@warnings, [], 'no warnings for known kind');
+};
+
+subtest 'run_on_general_message - unknown kind warns' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $fake_msg = bless {}, 'FakeMsgUnknown';
+    no warnings 'once';
+    *FakeMsgUnknown::content = sub { {kind => 'some_future_thing'} };
+
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings => @_ };
+
+    my $ok = eval { $h->run_on_general_message($fake_msg); 1 };
+    ok($ok, 'unknown kind does not die');
+    is(scalar @warnings, 1, 'one warning for unknown kind');
+    like($warnings[0], qr/unhandled general message/, 'warning is descriptive');
 };
 
 subtest 'run_on_start sets up pgid (smoke test)' => sub {

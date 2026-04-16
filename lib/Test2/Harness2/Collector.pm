@@ -443,29 +443,12 @@ sub collect_from_file {
 sub _run_collector {
     my $self = shift;
 
-    my ($child_pid, $out_r, $err_r);
-    my $started_child = defined($self->{+LAUNCH}) || $self->{+_OWNS_CHILD};
-
-    if (defined $self->{+LAUNCH}) {
-        ($child_pid, $out_r, $err_r) = $self->_launch_child();
-        $self->{+CHILD_PID} = $child_pid;
-    }
-    else {
-        $child_pid = $self->{+CHILD_PID};
-
-        # Wrap handles for the collection loop.
-        # Pipe handles: wrap in Atomic::Pipe with mixed_data_mode.
-        # Regular file handles: use a plain line-reader shim.
-        # Fifo/pipe handles passed as file paths: also wrapped in Atomic::Pipe.
-        $out_r = $self->_wrap_handle($self->{+OUT_FH}) if defined $self->{+OUT_FH};
-        $err_r = $self->_wrap_handle($self->{+ERR_FH}) if defined $self->{+ERR_FH};
-    }
-
-    # Set process name
+    my ($child_pid, $out_r, $err_r, $started_child) = $self->_setup_child_handles();
     $self->_set_procname($child_pid);
 
-    # Setup signal handlers (block-local so they restore automatically when
-    # _run_collector returns, including via die).
+    # Signal handlers. Installed with `local` so they restore automatically
+    # when _run_collector returns (including via die), which is why they must
+    # live in this top-level method rather than a helper.
     #
     # Ignore-class signals: tests and test-spawned child processes may send
     # these for their own coordination.  The collector must not die from them.
@@ -484,17 +467,65 @@ sub _run_collector {
     local $SIG{INT}  = sub { $got_signal = 'INT' };
     local $SIG{QUIT} = sub { $got_signal = 'QUIT' };
 
-    # Build logger and auditor instances now, in the collector child process
-    # only, so the parent never opens those file handles / sockets / etc.
+    my $parser = $self->_init_event_sinks();
+
+    # Route collector-process warnings through the logger chain in addition to
+    # the default STDERR print.  Must stay in this scope for the same `local`
+    # reason as the signal handlers above.
+    local $SIG{__WARN__} = $self->_make_warn_handler($parser);
+
+    my ($buffer, $child_exit) = $self->_run_collection_loop(
+        child_pid     => $child_pid,
+        out_r         => $out_r,
+        err_r         => $err_r,
+        started_child => $started_child,
+        parser        => $parser,
+        got_signal    => \$got_signal,
+    );
+
+    $self->_finalize_collection($buffer, $parser, $child_exit);
+
+    return 1;
+}
+
+sub _setup_child_handles {
+    my $self = shift;
+
+    my $started_child = defined($self->{+LAUNCH}) || $self->{+_OWNS_CHILD};
+
+    if (defined $self->{+LAUNCH}) {
+        my ($child_pid, $out_r, $err_r) = $self->_launch_child();
+        $self->{+CHILD_PID} = $child_pid;
+        return ($child_pid, $out_r, $err_r, $started_child);
+    }
+
+    my $child_pid = $self->{+CHILD_PID};
+
+    # Wrap handles for the collection loop.
+    # Pipe handles: wrap in Atomic::Pipe with mixed_data_mode.
+    # Regular file handles: use a plain line-reader shim.
+    # Fifo/pipe handles passed as file paths: also wrapped in Atomic::Pipe.
+    my $out_r = defined($self->{+OUT_FH}) ? $self->_wrap_handle($self->{+OUT_FH}) : undef;
+    my $err_r = defined($self->{+ERR_FH}) ? $self->_wrap_handle($self->{+ERR_FH}) : undef;
+
+    return ($child_pid, $out_r, $err_r, $started_child);
+}
+
+# Build logger and auditor instances in the collector child process (so the
+# parent never opens their file handles / sockets / etc.), start the loggers,
+# cache the event-logging subset, and instantiate the parser. Returns the
+# parser (which may be undef when no loggers and no auditor are configured).
+sub _init_event_sinks {
+    my $self = shift;
+
     $self->_instantiate_loggers();
     $self->_instantiate_auditor();
 
-    # Start loggers and cache the event-logging subset
     $_->startup($self) for @{$self->{+LOGGERS}};
     $self->{+_EVENT_LOGGERS} = [grep { $_->log_events } @{$self->{+LOGGERS}}];
 
-    # Instantiate parser. When there is no parser the collector still drains
-    # the handles but discards the lines without constructing events.
+    # When there is no parser the collector still drains the handles but
+    # discards the lines without constructing events.
     my $parser = $self->{+PARSER};
     if (defined($parser) && !ref $parser) {
         $parser = $parser->new(
@@ -514,14 +545,18 @@ sub _run_collector {
             if defined $self->{+IPCM_INFO};
     }
 
-    # Route collector-process warnings through the logger chain in addition to
-    # the default STDERR print.  This captures warnings produced by auditors,
-    # loggers, and the collector's own internal logic that would otherwise only
-    # reach the calling terminal.  Child-process warnings already flow through
-    # the stdout/stderr pipe to this process's parser chain, so no handler is
-    # needed on the child side.  Use local so the handler is restored when
-    # _run_collector returns (including via die).
-    local $SIG{__WARN__} = sub {
+    return $parser;
+}
+
+# Returns a coderef suitable for `local $SIG{__WARN__}`. Captures $parser so
+# the handler can fill in the harness facet when a parser is attached.
+# Child-process warnings already flow through the stdout/stderr pipe to this
+# process's parser chain, so no handler is needed on the child side.
+sub _make_warn_handler {
+    my $self = shift;
+    my ($parser) = @_;
+
+    return sub {
         my ($msg) = @_;
         print STDERR $msg;
 
@@ -547,8 +582,19 @@ sub _run_collector {
         # Use print STDERR rather than warn to avoid re-entering this handler.
         print STDERR "Failed to log warning event: $@\n" unless $ok;
     };
+}
 
-    # Main collection loop
+sub _run_collection_loop {
+    my $self = shift;
+    my %args = @_;
+
+    my $child_pid      = $args{child_pid};
+    my $out_r          = $args{out_r};
+    my $err_r          = $args{err_r};
+    my $started_child  = $args{started_child};
+    my $parser         = $args{parser};
+    my $got_signal_ref = $args{got_signal};
+
     my $child_exited = 0;
     my $child_exit   = undef;
     my $stdout_eof   = defined($out_r) ? 0 : 1;
@@ -574,7 +620,7 @@ sub _run_collector {
     while (1) {
         my $ok = eval {
             # Check for signal - kill child but keep draining handles
-            if ($got_signal && !$draining) {
+            if ($$got_signal_ref && !$draining) {
                 $self->_kill_child($child_pid) if $child_pid;
                 $draining     = 1;
                 $child_exited = 1;
@@ -660,6 +706,13 @@ sub _run_collector {
         }
     }
 
+    return ($buffer, $child_exit);
+}
+
+sub _finalize_collection {
+    my $self = shift;
+    my ($buffer, $parser, $child_exit) = @_;
+
     # Flush anything still sitting in the ordering buffer (items that never
     # got a matching sync marker).
     $self->_flush_buffer($buffer, $parser) if $parser;
@@ -679,10 +732,9 @@ sub _run_collector {
         $self->_process_event($exit_event);
     }
 
-    # Shut down loggers
     $_->shutdown($self) for @{$self->{+LOGGERS}};
 
-    return 1;
+    return;
 }
 
 sub _set_procname {

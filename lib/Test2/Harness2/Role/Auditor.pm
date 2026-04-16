@@ -9,11 +9,29 @@ use Role::Tiny;
 requires 'audit_event';
 requires 'fail_count';
 requires 'pass_count';
-requires 'set_process_info';
-requires 'set_ipcm_info';
 
 sub passing { !$_[0]->fail_count }
 sub failing { $_[0]->fail_count }
+
+# Default implementations of the process-info setters.
+# String hash keys are used here because HashBase constants (RUN_ID, etc.) are
+# defined in the consuming class's package, not in the role's package.
+# The runtime effect is identical since HashBase constants simply return the
+# attribute name as a string.
+
+sub set_process_info {
+    my ($self, %info) = @_;
+    $self->{run_id}  = $info{run_id}  if exists $info{run_id};
+    $self->{job_id}  = $info{job_id}  if exists $info{job_id};
+    $self->{job_try} = $info{job_try} if exists $info{job_try};
+    return;
+}
+
+sub set_ipcm_info {
+    my ($self, $info) = @_;
+    $self->{ipcm_info} = $info;
+    return;
+}
 
 1;
 

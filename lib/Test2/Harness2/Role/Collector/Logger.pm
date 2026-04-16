@@ -6,11 +6,28 @@ our $VERSION = '2.000011';
 
 use Role::Tiny;
 
-requires 'set_process_info';
-requires 'set_ipcm_info';
-
 # Consumers of this role may be plain classes (no new() method) or may be used
 # as objects (new() method defined).
+
+# Default implementations of the process-info setters.
+# String hash keys are used here because HashBase constants (RUN_ID, etc.) are
+# defined in the consuming class's package, not in the role's package.
+# The runtime effect is identical since HashBase constants simply return the
+# attribute name as a string.
+
+sub set_process_info {
+    my ($self, %info) = @_;
+    $self->{run_id}  = $info{run_id}  if exists $info{run_id};
+    $self->{job_id}  = $info{job_id}  if exists $info{job_id};
+    $self->{job_try} = $info{job_try} if exists $info{job_try};
+    return;
+}
+
+sub set_ipcm_info {
+    my ($self, $info) = @_;
+    $self->{ipcm_info} = $info;
+    return;
+}
 
 sub depends_on { () }
 

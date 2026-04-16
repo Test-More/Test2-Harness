@@ -40,12 +40,18 @@ sub _build_handle {
 }
 
 # Sends a synchronous request to the service and returns the response content.
-# The $name is the value of the 'request' dispatch key.
+# IPC::Manager's sync_request($peer, $payload) sends:
+#   { ipcm_request_id => ..., request => $payload }
+# to the service.  The service's handle_request receives that whole envelope
+# as $req and dispatches on $req->{request}, which here is a hashref
+# containing the 'request' dispatch key plus any extra fields.
+# We extract and return only the inner 'response' value from the envelope.
 sub _send_request {
     my ($self, $name, $payload) = @_;
     $payload //= {};
-    my $hdl = $self->handle;
-    return $hdl->sync_request({request => $name, %$payload});
+    my $hdl  = $self->handle;
+    my $resp = $hdl->sync_request($self->{+NAME}, {request => $name, %$payload});
+    return $resp->{response};
 }
 
 sub queue_test_run {

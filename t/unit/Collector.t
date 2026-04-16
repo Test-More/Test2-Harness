@@ -1202,12 +1202,16 @@ subtest 'new_pgroup throws on Windows without Win32::Job' => sub {
     like($err, qr/new_pgroup/, 'error mentions the feature');
 };
 
+subtest 'Handle requires pid' => sub {
+    like(
+        dies { Test2::Harness2::Collector::Handle->new() },
+        qr/pid.*required/,
+        'croaks without pid',
+    );
+};
+
 subtest 'Handle->is_done - non-blocking completion check' => sub {
     skip_all "fork required" unless $CAN_FORK;
-
-    # Inline handle (no pid) is always done.
-    my $inline = Test2::Harness2::Collector::Handle->new(pid => undef);
-    ok($inline->is_done, 'inline handle (no pid) reports done immediately');
 
     # Handle for a still-running child returns false, then true after exit.
     my $child = fork // die "fork: $!";

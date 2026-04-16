@@ -352,14 +352,12 @@ sub _spawn_collector {
 sub _spawn_collector_win32 {
     my $self = shift;
 
-    my $has_launch = defined $self->{+LAUNCH};
-
-    unless ($has_launch) {
-        # Pipe-based and file-based callers pass in file handles which
-        # cannot be serialized to a new process, so run the collector inline.
-        warn "Collector died: $@" unless eval { $self->_run_collector(); 1 };
-        return undef;
-    }
+    # On Windows there is no fork, so we must serialize collector args and
+    # spawn a fresh perl process via system(1, @cmd). Open file handles
+    # cannot cross that boundary, so handle-based collection (stdout/stderr
+    # attributes, or any non-launch path) is not supported.
+    croak "Handle-based collection is not supported on Windows; use 'launch' instead"
+        unless defined $self->{+LAUNCH};
 
     # Launch mode: serialize the constructor args to a temp JSON file
     # and spawn a new perl process that loads this module and runs

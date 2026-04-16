@@ -120,7 +120,7 @@ subtest 'Terminate is idempotent and always accepted' => sub {
 
 subtest 'Detach removes a pid from watch_pids' => sub {
     my $dir = tempdir(CLEANUP => 1);
-    my $h = Test2::Harness2->new(workdir => $dir, parent_pids => [1001, 1002]);
+    my $h   = Test2::Harness2->new(workdir => $dir, parent_pids => [1001, 1002]);
 
     is($h->watch_pids, [1001, 1002]);
 
@@ -132,6 +132,41 @@ subtest 'Detach removes a pid from watch_pids' => sub {
     my $r2 = $h->handle_detach_request({pid => 1001});
     ok($r2->{ok});
     is($h->watch_pids, [1002]);
+};
+
+subtest 'run_on_all dispatches next pending job to a Collector' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    # Use a self-contained script as the "test" so we don't need a real .t file.
+    $h->handle_queue_test_run_request({files => ['does-not-matter.t']});
+
+    # Override the per-job launch so we're not spawning a real perl process.
+    # Instead, record the args the Collector would be given.
+    my @collector_args;
+    my $fake_handle = bless {pid => 99999}, 'Test2::Harness2::Collector::Handle';
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub {
+            my ($class, %args) = @_;
+            @collector_args = %args;
+            return $fake_handle;
+        };
+
+        $h->run_on_all({});
+    }
+
+    ok(@collector_args, 'spawn was called');
+    my %args = @collector_args;
+    is($args{new_pgroup},             1,         'new_pgroup set');
+    is($args{parent_pids},            [$$],      'parent_pids includes service pid');
+    is($args{env_vars}{T2_FORMATTER}, 'Stream2', 'T2_FORMATTER set');
+    like($args{loggers}[0][2], qr{\Q$dir\E/runs/.+/.+/0\.jsonl}, 'per-job JSONL path');
+    ok($h->{current}, 'current populated');
+    is($h->{current}{pid}, 99999, 'current.pid set from handle');
+
+    my $status = $h->handle_status_request;
+    ok($status->{running}, 'status reports running job');
 };
 
 done_testing;

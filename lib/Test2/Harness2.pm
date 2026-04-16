@@ -11,6 +11,7 @@ use Test2::Util::UUID qw/gen_uuid/;
 
 use constant HAS_LINUX_PRCTL => eval { require Linux::Prctl; 1 } ? 1 : 0;
 
+use Test2::Harness2::Collector;
 use Test2::Harness2::Run;
 
 use Test2::Harness2::Util::HashBase qw{
@@ -168,6 +169,55 @@ sub handle_detach_request {
 
     $self->{+WATCH_PIDS_REF} = [grep { $_ != $pid } @{$self->{+WATCH_PIDS_REF}}];
     return {ok => 1};
+}
+
+sub run_on_all {
+    my ($self, $activity) = @_;
+
+    # Completion detection is in Task 14.
+    # $self->_check_current_completion;
+
+    return if $self->{+CURRENT};
+    return if $self->{+STATE} eq 'terminating';
+    return unless @{$self->{+QUEUE}};
+
+    my $run = $self->{+QUEUE}[0];
+    return unless @{$run->pending};
+
+    my $jid = $run->pending->[0];
+    my ($job) = grep { $_->job_id eq $jid } @{$run->jobs};
+
+    my $run_id  = $run->run_id;
+    my $log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $jid;
+    make_path($log_dir);
+    my $log_file = "$log_dir/0.jsonl";
+
+    my $handle = Test2::Harness2::Collector->spawn(
+        launch      => [$^X, '-Ilib', $job->test_file],
+        new_pgroup  => 1,
+        parent_pids => [$$],
+        env_vars    => {T2_FORMATTER => 'Stream2'},
+        auditor     => [
+            $self->{+TEST_AUDITOR},
+            run_id => $run_id, job_id => $jid, job_try => 0
+        ],
+        loggers => [
+            [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
+        ],
+    );
+
+    $run->mark_running($jid);
+
+    $self->{+CURRENT} = {
+        run        => $run,
+        job        => $job,
+        handle     => $handle,
+        pid        => $handle->{pid},
+        started_at => time,
+    };
+
+    $self->register_worker("test-$jid", $handle->{pid})
+        if $self->can('register_worker');
 }
 
 1;

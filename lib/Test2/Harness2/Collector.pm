@@ -22,6 +22,7 @@ use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
 use Test2::Harness2::Util::HashBase qw{
     <launch
+    <new_pgroup
     <env_vars
     <out_fh
     <err_fh
@@ -57,6 +58,7 @@ sub init {
 
     $self->{+KILL_TIMEOUT} //= 15;
     $self->{+ENV_VARS}     //= {};
+    $self->{+NEW_PGROUP}   //= 0;
 
     $self->_normalize_loggers();
     $self->_normalize_auditor();

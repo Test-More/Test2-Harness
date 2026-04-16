@@ -69,7 +69,6 @@ sub set_pid    { $_[0]->{pid} = $_[1] }
 sub watch_pids { $_[0]->{+WATCH_PIDS_REF} }
 
 # Stubs filled in by later tasks.
-sub run            { croak "run() not implemented yet" }
 sub handle_request { croak "handle_request() not implemented yet" }
 
 1;

@@ -14,13 +14,25 @@ This spec implements only what the stub comments ask for. Feature parity with `o
 
 Two invariants are load-bearing and must be enforced everywhere processes are created or signalled. Every later section (interpose plumbing, per-test dispatch, Terminate, finish, cleanup) has to honor them, and the implementation must include tests that exercise each one.
 
-**Invariant 1 — no survivors on hard stop.** When the service is terminated (via `Terminate` request, fatal signal, `run_on_cleanup` from an abnormal exit, or crash), every process descended from the service — test collectors, test processes, and anything those forked — must be killed and reaped. The implementation strategy:
+**Invariant 1 — no survivors on hard stop.** When the service is terminated (via `Terminate` request, fatal signal, `run_on_cleanup` from an abnormal exit, or crash), every process descended from the service — test collectors, test processes, and anything those forked — must be killed and reaped. Because tests are free to call `setsid` or `setpgid` to establish their own process groups (often intentional — to keep the test's own signal handling isolated from the harness), we cannot rely on a single "kill the harness's pgroup" call to reach everything. The implementation must combine pgroup signalling with per-pid tracking at each layer.
 
-- The service calls `setpgrp(0, 0)` (or `POSIX::setpgid(0, 0)`) on `run_on_start` so it owns its own process group. Every test Collector it launches inherits that process group (and the tests they launch inherit in turn) unless they explicitly set their own.
-- Hard stop sends `TERM` to the negative pgid (`kill 'TERM', -$service_pid`), waits up to `kill_timeout` seconds while reaping via `waitpid(-1, WNOHANG)`, then sends `KILL` to the negative pgid for any still-alive pids, then waits without `WNOHANG` until all are reaped. Anything that forked into a new pgid is tracked through `register_worker` and killed the same way as a fallback.
-- `Terminate` goes through this path. So does `run_on_cleanup` (even on clean shutdown, verify no stragglers; if any, kill them aggressively).
-- `run_should_end` must not return true until `+current` is cleared AND there are no registered workers still alive — otherwise we'd exit and orphan children.
-- A SIGTERM/SIGINT to the service itself routes through the role's signal handling, sets state to `'terminating'`, and triggers the same kill-pgroup path.
+Process-group discipline:
+
+- The **service** calls `POSIX::setpgid(0, 0)` on `run_on_start` so it owns its own process group, distinct from the harness's caller.
+- Each **test Collector**, when it launches, also calls `POSIX::setpgid(0, 0)` so it starts its own process group. This gives two-way isolation: the harness can signal the collector's pgroup without hitting its own pgroup, and if a test sends a signal to its own pgroup it cannot accidentally hit the harness.
+- A **test that further sets its own pgroup** (setsid/setpgid from within the test) escapes the collector's pgroup. This is expected. The collector still knows the test's direct pid from `fork` and signals it by pid, not just by pgroup.
+
+Hard-stop procedure (executed by `Terminate`, by signal handler, and as a final sweep in `run_on_cleanup`):
+
+1. Mark `+state` as `'terminating'` and clear `+queue` so no new work starts.
+2. For each tracked collector (from `+current` and `register_worker`): send `TERM` to the collector's pid AND to its negative pgid. The collector's own cleanup (Invariant 1, nested) is responsible for killing the test process it launched — by pid if the test escaped into its own pgroup, by pgroup otherwise. Collectors need this self-cleanup behavior; it's already partially present (via `kill_timeout`) and may need tightening.
+3. Also send `TERM` to the service's own negative pgid, to catch anything else that stayed in the service's pgroup.
+4. Reap with `waitpid(-1, WNOHANG)` in a loop for up to `kill_timeout` seconds.
+5. For any still-alive tracked pid, send `KILL` to the pid and to its negative pgid. Block-reap until all tracked pids are gone.
+6. `run_should_end` must not return true until every tracked worker is reaped — otherwise we'd exit leaving zombies or orphans.
+7. A SIGTERM/SIGINT to the service itself routes through the role's signal handling, sets `+state` to `'terminating'`, and triggers this same procedure.
+
+Best-effort addendum for grandchildren that escaped both the collector's pgroup and the test's tracked pid (e.g., a test that spawns a grandchild and has the grandchild `setsid` + detach): we cannot reliably kill these in a portable way. On Linux we can optionally enable `PR_SET_CHILD_SUBREAPER` so that such orphans reparent to the harness, letting us `waitpid(-1, ...)` them; decide at implementation time whether to enable this (it requires `Linux::Prctl` or a small XS shim). Without it, those grandchildren are the test's responsibility to clean up, and the harness logs a warning if any untracked children remain at cleanup.
 
 **Invariant 2 — nothing survives its parent.** If the harness service process exits for any reason (intentional shutdown, crash, SIGKILL from outside), every child process must terminate on its own — we cannot rely on the service's signal handlers, because they may never run.
 
@@ -153,10 +165,10 @@ caller                   (has the Spawn handle, can exit independently)
 
 ### Service loop (role overrides)
 
-- **`run_on_start`** — call `POSIX::setpgid(0, 0)` so the service owns its own process group (Invariant 1). Emit a `service_started` event (carries `job_id`, `pid`, `pgid`, `name`, `workdir`). Any bookkeeping internal to the service goes here; service loggers already exist in the interpose parent.
+- **`run_on_start`** — call `POSIX::setpgid(0, 0)` so the service owns its own process group, distinct from any pgroup the caller is in (Invariant 1). Emit a `service_started` event (carries `job_id`, `pid`, `pgid`, `name`, `workdir`). Any bookkeeping internal to the service goes here; service loggers already exist in the interpose parent.
 - **`run_on_all($activity)`** — the critical hot path. Runs every iteration (not just on interval), so tests flip over without waiting for the interval timer:
   1. If `+current` is set, check whether its collector Handle is done (non-blocking). If so, `log_event` a `job_complete` event, move the job_id from the run's `running` to `done` list, and clear `+current`. If the run is fully done (`pending` and `running` both empty), drop it from `+queue` and emit `run_complete`.
-  2. If `+current` is unset AND `+state eq 'running'` (or `'finishing'`) AND `+queue` is non-empty: pick the head run, pull the next pending job, build the per-job output path (`$workdir/runs/$run_id/$job_id/0.jsonl`), launch a Collector with that logger plus the test auditor, with `env_vars => { T2_FORMATTER => 'Stream2', ... }` so tests auto-engage `Test2::Formatter::Stream2`. **The Collector MUST be launched with `parent_pids => [$service_pid]`** (Invariant 2) so the test dies if the service dies. Store the Handle + metadata in `+current`, register the collector pid as a worker.
+  2. If `+current` is unset AND `+state eq 'running'` (or `'finishing'`) AND `+queue` is non-empty: pick the head run, pull the next pending job, build the per-job output path (`$workdir/runs/$run_id/$job_id/0.jsonl`), launch a Collector with that logger plus the test auditor, with `env_vars => { T2_FORMATTER => 'Stream2', ... }` so tests auto-engage `Test2::Formatter::Stream2`. **The Collector MUST be launched with `parent_pids => [$service_pid]`** (Invariant 2) so the test dies if the service dies. The Collector must also call `POSIX::setpgid(0, 0)` in the child (Invariant 1) to isolate its pgroup from the service — the Collector is the right place to enforce this; if it does not already, add it. Store the Handle + metadata in `+current`, register the collector pid as a worker.
 - **`run_should_end`** — returns true when `+state eq 'terminating'` AND all workers reaped AND `+current` cleared; OR when `+state eq 'finishing'` AND `+queue` is empty AND `+current` is undef AND no registered workers are alive. The "workers reaped" gate is Invariant 1 — we must not exit while descendants could still be running. Also triggers the `finishing` transition when `+finish_after_initial_run` and the initial run is now fully done.
 - **`run_on_cleanup`** — final-chance sweep (Invariant 1). Reap any registered workers; if any remain alive after `kill_timeout` of TERM, escalate to KILL on the whole pgroup. Emit `service_stopped`. Service-logger shutdown happens in the interpose parent when the service process exits.
 - **`watch_pids`** — returns the `parent_pids` passed in at construction (Invariant 2: the service self-terminates if any watched parent dies). `start()` passes the grandparent pid of the interpose child; `spawn()` passes the top-level spawn-caller pid. `Detach` IPC handler removes a pid from this list at runtime.
@@ -168,7 +180,7 @@ caller                   (has the Spawn handle, can exit independently)
 - **`queue_test_run`** — payload `{files => [...], run_id => $opt}`. If `+state ne 'running'`, return `{ok => 0, error => 'service not accepting new runs'}`. Otherwise build a `Run`, push onto `+queue`, emit `run_queued`, return `{ok => 1, run_id => $run->run_id}`.
 - **`status`** — no payload. Return the shape below.
 - **`finish`** — no payload. If `+state eq 'running'`, set to `'finishing'`, emit `finish_requested`, return `{ok => 1}`. Otherwise `{ok => 0}` (already finishing or terminating).
-- **`Terminate`** — no payload. Hard stop, per Invariant 1: set `+state` to `'terminating'`, clear `+queue`, then `kill 'TERM', -$$` (the service's own pgroup, which includes every test collector and their test processes). Reap via `waitpid(-1, WNOHANG)` in a loop for up to `kill_timeout` seconds, then `kill 'KILL', -$$` on any survivors and block-reap the rest. Emit `terminated`. Return `{ok => 1}`. Idempotent — a second `Terminate` returns `{ok => 1}` and retries the pgroup kill for any stragglers.
+- **`Terminate`** — no payload. Hard stop, per Invariant 1: set `+state` to `'terminating'`, clear `+queue`, then run the full hard-stop procedure — signal each tracked collector pid AND its negative pgid (so collectors in their own pgroups are reached), signal the service's own negative pgid (for anything that stayed in it), reap with `WNOHANG` during `kill_timeout`, escalate TERM → KILL on survivors, block-reap until clear. Emit `terminated`. Return `{ok => 1}`. Idempotent — a second `Terminate` re-runs the sweep for any stragglers.
 - **`Detach`** — payload `{pid => $pid}` (Invariant 2). Remove `$pid` from `watch_pids` so the service stops treating that pid's death as a termination trigger. Returns `{ok => 1}`. Used by `Spawn->detach()`; also propagates to the interpose parent so it also stops watching.
 
 ### `status` response
@@ -250,6 +262,8 @@ Scope: construction, workdir validation, queue/dispatch flow, and both lifecycle
 Invariant 1 (no survivors on hard stop):
 
 - Spawn the service with a long-running test (one that `sleep`s or prints slowly). Capture the test pid and collector pid from `status()`. Call `Terminate`. After the terminate returns, neither pid should be alive (use `kill 0, $pid` to probe).
+- Pgroup-escape variant: use a test file that calls `POSIX::setsid()` (or `setpgid(0, 0)`) at the top so it puts itself in a fresh pgroup before sleeping. Same assertions — the harness must still kill it, by pid, not just by pgroup.
+- Harness-pgroup isolation: after the service is up and a test is running, the test sends `SIGTERM` to its own pgid (`kill 'TERM', 0`). The harness must remain running (the test's pgroup kill does not bleed into the service's pgroup). The test process itself will die from the signal; the harness observes that as a normal test completion.
 
 Invariant 2 (nothing survives its parent):
 

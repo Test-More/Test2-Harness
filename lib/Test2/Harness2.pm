@@ -113,7 +113,7 @@ sub start {
     );
 
     if ($test_run) {
-        $self->handle_queue_test_run_request($test_run);
+        $self->request_handler_queue_test_run($test_run);
         $self->{+FINISH_AFTER_INITIAL_RUN} = 1 if $finish_after;
     }
 
@@ -191,17 +191,17 @@ sub handle_request {
     my $payload = $req->{request};
     $payload = {request => $payload} unless ref($payload) eq 'HASH';
 
-    my $name = $payload->{request};
+    my $type = $payload->{request};
 
-    return $self->handle_status_request                   if $name eq 'status';
-    return $self->handle_queue_test_run_request($payload) if $name eq 'queue_test_run';
-    return $self->handle_finish_request                   if $name eq 'finish';
-    return $self->handle_terminate_request                if $name eq 'Terminate';
-    return $self->handle_detach_request($payload)         if $name eq 'Detach';
-    return {ok => 0, error => "unknown request '$name'"};
+    return {ok => 0, error => "missing request type"} unless defined $type;
+
+    my $handler = "request_handler_$type";
+    return $self->$handler($payload) if $self->can($handler);
+
+    return {ok => 0, error => "unknown request '$type'"};
 }
 
-sub handle_queue_test_run_request {
+sub request_handler_queue_test_run {
     my ($self, $payload) = @_;
     $payload //= {};
 
@@ -222,7 +222,7 @@ sub handle_queue_test_run_request {
     return {ok => 1, run_id => $run->run_id};
 }
 
-sub handle_status_request {
+sub request_handler_status {
     my $self = shift;
 
     my $queue = [
@@ -258,14 +258,14 @@ sub handle_status_request {
     };
 }
 
-sub handle_finish_request {
+sub request_handler_finish {
     my $self = shift;
     return {ok => 0} unless $self->{+STATE} eq 'running';
     $self->{+STATE} = 'finishing';
     return {ok => 1};
 }
 
-sub handle_terminate_request {
+sub request_handler_terminate {
     my $self = shift;
     $self->_perform_hard_stop;
     return {ok => 1};
@@ -289,7 +289,7 @@ sub run_on_general_message {
     return;
 }
 
-sub handle_detach_request {
+sub request_handler_detach {
     my ($self, $payload) = @_;
     my $pid = $payload->{pid};
     return {ok => 0, error => "missing 'pid'"} unless defined $pid;

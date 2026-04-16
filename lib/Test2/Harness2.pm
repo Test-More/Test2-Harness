@@ -81,7 +81,9 @@ sub handle_request {
 
     return $self->handle_status_request               if $name eq 'status';
     return $self->handle_queue_test_run_request($req) if $name eq 'queue_test_run';
-    # Tasks 11-12 add: finish, Terminate, Detach
+    return $self->handle_finish_request               if $name eq 'finish';
+    return $self->handle_terminate_request            if $name eq 'Terminate';
+    # Tasks 11-12 add: Detach
 
     return {ok => 0, error => "unknown request '$name'"};
 }
@@ -141,6 +143,22 @@ sub handle_status_request {
         queue   => $queue,
         running => $running,
     };
+}
+
+sub handle_finish_request {
+    my $self = shift;
+    return {ok => 0} unless $self->{+STATE} eq 'running';
+    $self->{+STATE} = 'finishing';
+    return {ok => 1};
+}
+
+sub handle_terminate_request {
+    my $self = shift;
+    $self->{+STATE} = 'terminating';
+    # Actual process-killing happens in _perform_hard_stop (Task 14).
+    # Clearing the queue here is safe and matches the spec.
+    $self->{+QUEUE} = [];
+    return {ok => 1};
 }
 
 1;

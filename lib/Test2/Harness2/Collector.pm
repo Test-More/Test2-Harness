@@ -6,7 +6,7 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use Config;
-use POSIX qw/:sys_wait_h/;
+use POSIX qw/:sys_wait_h setpgid/;
 use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
 use Scope::Guard ();
@@ -659,6 +659,14 @@ sub _launch_child_unix {
 
         close($orig_stdout);
         close($orig_stderr);
+
+        # Optionally put the child in a brand-new process group so its signal
+        # handling is isolated from the harness. Enabled only when the caller
+        # sets new_pgroup => 1 (the harness does so for test launches). This
+        # prevents a test doing `kill 'TERM', 0` from taking down the harness.
+        if ($self->{+NEW_PGROUP}) {
+            POSIX::setpgid(0, 0) or warn "setpgid(0,0) failed: $!";
+        }
 
         my %env = $self->_child_env_overrides;
         local @ENV{keys %env} = values %env;

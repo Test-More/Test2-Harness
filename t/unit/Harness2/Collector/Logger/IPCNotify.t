@@ -7,25 +7,24 @@ use Test2::Harness2::Collector::Logger::IPCNotify;
 
 subtest 'init - required attributes' => sub {
     like(
-        dies { Test2::Harness2::Collector::Logger::IPCNotify->new(ipcm_info => undef) },
+        dies { Test2::Harness2::Collector::Logger::IPCNotify->new(ipcm_info => {fake => 1}) },
         qr/service_name.*required/i,
         'missing service_name croaks',
     );
 
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
-        ipcm_info    => undef,
+        ipcm_info    => {fake => 1},
         service_name => 'harness',
     );
-    ok($logger, 'constructed with ipcm_info=>undef and service_name');
+    ok($logger, 'constructed with ipcm_info and service_name');
     is($logger->job_try, 0, 'job_try defaults to 0');
-    ok(!defined $logger->run_id,    'run_id defaults to undef');
-    ok(!defined $logger->job_id,    'job_id defaults to undef');
-    ok(!defined $logger->ipcm_info, 'ipcm_info is undef when passed as undef');
+    ok(!defined $logger->run_id, 'run_id defaults to undef');
+    ok(!defined $logger->job_id, 'job_id defaults to undef');
 };
 
 subtest 'set_process_info' => sub {
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
-        ipcm_info    => undef,
+        ipcm_info    => {fake => 1},
         service_name => 'harness',
     );
     $logger->set_process_info(run_id => 'r1', job_id => 'j1', job_try => 2);
@@ -41,10 +40,10 @@ subtest 'set_process_info' => sub {
 
 subtest 'set_ipcm_info' => sub {
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
-        ipcm_info    => undef,
+        ipcm_info    => {fake => 1},
         service_name => 'harness',
     );
-    my $ii = {fake => 1};
+    my $ii = {fake => 2};
     $logger->set_ipcm_info($ii);
     is($logger->ipcm_info, $ii, 'ipcm_info stored via set_ipcm_info');
 };
@@ -165,30 +164,6 @@ subtest 'shutdown warns on IPC failure, does not die' => sub {
     ok(!$err, 'no exception escaped');
     is(scalar @warnings, 1, 'exactly one warning emitted');
     like($warnings[0], qr/IPCNotify shutdown failed/, 'warning mentions IPCNotify shutdown');
-};
-
-# ---------------------------------------------------------------------------
-# shutdown() skips with warn when ipcm_info is undef
-# ---------------------------------------------------------------------------
-
-subtest 'shutdown warns and skips when ipcm_info is undef' => sub {
-    my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
-        ipcm_info    => undef,
-        service_name => 'harness',
-        run_id       => 'r1',
-        job_id       => 'j1',
-    );
-
-    my @warnings;
-    local $SIG{__WARN__} = sub { push @warnings => @_ };
-
-    my $ok  = eval { $logger->shutdown; 1 };
-    my $err = $@;
-
-    ok($ok,   'shutdown does not die when ipcm_info is undef');
-    ok(!$err, 'no exception escaped');
-    is(scalar @warnings, 1, 'exactly one warning emitted');
-    like($warnings[0], qr/ipcm_info not set/, 'warning mentions ipcm_info');
 };
 
 # ---------------------------------------------------------------------------

@@ -5,10 +5,10 @@ use Test2::Util::UUID qw/gen_uuid/;
 
 my $CLASS = 'Test2::Harness2::Collector::Auditor::Test';
 
-sub mk { $CLASS->new(ipcm_info => undef, run_id => 'R', job_id => 'J', job_try => 0, @_) }
+sub mk { $CLASS->new(ipcm_info => {}, run_id => 'R', job_id => 'J', job_try => 0, @_) }
 
 subtest 'construction' => sub {
-    my $a = $CLASS->new(ipcm_info => undef);
+    my $a = $CLASS->new(ipcm_info => {});
     ok($a,                   "constructs without run_id/job_id/job_try");
     ok(!defined $a->run_id,  "run_id defaults to undef");
     ok(!defined $a->job_id,  "job_id defaults to undef");
@@ -25,7 +25,7 @@ subtest 'construction' => sub {
 };
 
 subtest 'set_process_info' => sub {
-    my $a = $CLASS->new(ipcm_info => undef);
+    my $a = $CLASS->new(ipcm_info => {});
     $a->set_process_info(run_id => 'RR', job_id => 'JJ', job_try => 3);
     is($a->run_id,  'RR', "run_id updated via set_process_info");
     is($a->job_id,  'JJ', "job_id updated via set_process_info");
@@ -38,7 +38,7 @@ subtest 'set_process_info' => sub {
 };
 
 subtest 'set_ipcm_info' => sub {
-    my $a  = $CLASS->new(ipcm_info => undef);
+    my $a  = $CLASS->new(ipcm_info => {});
     my $ii = {host => 'localhost'};
     $a->set_ipcm_info($ii);
     is($a->ipcm_info, $ii, "ipcm_info stored via set_ipcm_info");

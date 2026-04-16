@@ -22,8 +22,8 @@ with 'Test2::Harness2::Role::Collector::Logger';
 sub init {
     my $self = shift;
 
-    croak "'ipcm_info' is required (pass undef explicitly if no service is connected)"
-        unless exists $self->{+IPCM_INFO};
+    croak "'ipcm_info' is a required attribute"
+        unless defined $self->{+IPCM_INFO};
 
     croak "Pass either 'output_file' or 'fh', not both"
         if defined($self->{+OUTPUT_FILE}) && defined($self->{+FH});

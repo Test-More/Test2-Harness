@@ -52,9 +52,8 @@ use constant IS_WIN32 => $^O eq 'MSWin32';
 sub init {
     my $self = shift;
 
-    # AI: This must always be set and valid, do not allow it to be undef. Correct any logic and tests that assume it can be undef.
-    croak "'ipcm_info' is required (pass undef explicitly if no service is connected)"
-        unless exists $self->{+IPCM_INFO};
+    croak "'ipcm_info' is a required attribute"
+        unless defined $self->{+IPCM_INFO};
 
     # Map spec constructor names to internal attribute names so callers can
     # use the natural names from the spec (stdout, stderr, pid, env) even
@@ -223,8 +222,7 @@ sub _instantiate_loggers {
                 job_id  => $self->{+JOB_ID},
                 job_try => $self->{+JOB_TRY},
             );
-            $item->set_ipcm_info($self->{+IPCM_INFO})
-                if defined $self->{+IPCM_INFO};
+            $item->set_ipcm_info($self->{+IPCM_INFO});
 
             # Set the auditor if we have one
             push @instances => $item;
@@ -266,8 +264,7 @@ sub _instantiate_auditor {
             job_id  => $self->{+JOB_ID},
             job_try => $self->{+JOB_TRY},
         );
-        $inst->set_ipcm_info($self->{+IPCM_INFO})
-            if defined $self->{+IPCM_INFO};
+        $inst->set_ipcm_info($self->{+IPCM_INFO});
     }
     elsif (ref($spec) eq 'ARRAY') {
         my ($class, @args) = @$spec;
@@ -549,8 +546,7 @@ sub _init_event_sinks {
             job_id  => $self->{+JOB_ID},
             job_try => $self->{+JOB_TRY},
         );
-        $parser->set_ipcm_info($self->{+IPCM_INFO})
-            if defined $self->{+IPCM_INFO};
+        $parser->set_ipcm_info($self->{+IPCM_INFO});
     }
 
     return $parser;

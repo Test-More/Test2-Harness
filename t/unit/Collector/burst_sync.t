@@ -85,7 +85,7 @@ subtest 'stdout JSON burst becomes a decoded event, not a line' => sub {
     my $out = "$tmpdir/burst.jsonl";
 
     my $c = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $out_r,
         stderr    => $err_r,
         pid       => $child,
@@ -128,7 +128,7 @@ subtest 'sync marker orders stdout lines + event + stderr text' => sub {
     my $out = "$tmpdir/sync.jsonl";
 
     my $c = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $out_r,
         stderr    => $err_r,
         pid       => $child,

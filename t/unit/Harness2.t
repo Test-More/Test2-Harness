@@ -118,4 +118,20 @@ subtest 'Terminate is idempotent and always accepted' => sub {
     ok($r2->{ok}, 'second still accepted');
 };
 
+subtest 'Detach removes a pid from watch_pids' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h = Test2::Harness2->new(workdir => $dir, parent_pids => [1001, 1002]);
+
+    is($h->watch_pids, [1001, 1002]);
+
+    my $res = $h->handle_detach_request({pid => 1001});
+    ok($res->{ok});
+    is($h->watch_pids, [1002], 'pid removed');
+
+    # Idempotent: detaching an already-absent pid is also ok=1
+    my $r2 = $h->handle_detach_request({pid => 1001});
+    ok($r2->{ok});
+    is($h->watch_pids, [1002]);
+};
+
 done_testing;

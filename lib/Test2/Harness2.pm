@@ -442,11 +442,11 @@ sub run_on_all {
     my $run = $self->{+QUEUE}[0];
     return unless @{$run->pending};
 
-    my $jid = $run->pending->[0];
-    my ($job) = grep { $_->job_id eq $jid } @{$run->jobs};
+    my $job_id = $run->pending->[0];
+    my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
 
     my $run_id  = $run->run_id;
-    my $log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $jid;
+    my $log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $job_id;
     make_path($log_dir);
     my $log_file = "$log_dir/0.jsonl";
 
@@ -457,7 +457,7 @@ sub run_on_all {
         env_vars    => {T2_FORMATTER => 'Stream2'},
         auditor     => [
             $self->{+TEST_AUDITOR},
-            run_id => $run_id, job_id => $jid, job_try => 0
+            run_id => $run_id, job_id => $job_id, job_try => 0
         ],
         loggers => [
             [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
@@ -466,13 +466,13 @@ sub run_on_all {
                 ipcm_info    => $self->ipcm_info,
                 service_name => $self->{+NAME},
                 run_id       => $run_id,
-                job_id       => $jid,
+                job_id       => $job_id,
                 job_try      => 0,
             ],
         ],
     );
 
-    $run->mark_running($jid);
+    $run->mark_running($job_id);
 
     $self->{+CURRENT} = {
         run        => $run,
@@ -482,7 +482,7 @@ sub run_on_all {
         started_at => time,
     };
 
-    $self->register_worker("test-$jid", $handle->{pid})
+    $self->register_worker("test-$job_id", $handle->{pid})
         if $self->can('register_worker');
 }
 

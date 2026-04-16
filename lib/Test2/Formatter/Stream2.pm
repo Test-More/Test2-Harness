@@ -14,7 +14,7 @@ use Test2::Util qw/get_tid/;
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Util qw/hub_truth apply_encoding/;
-use Test2::Harness2::Util::JSON qw/encode_json/;
+use Test2::Harness2::Util::EventEmitter;
 
 use parent qw/Test2::Formatter/;
 use Test2::Harness2::Util::HashBase qw{
@@ -27,6 +27,7 @@ use Test2::Harness2::Util::HashBase qw{
     <tb_handles
     +stdout_apipe
     +stderr_apipe
+    <emitter
 };
 
 sub hide_buffered { 0 }
@@ -63,6 +64,11 @@ sub init {
         $stderr_apipe->set_mixed_data_mode();
         $self->{+STDERR_APIPE} = $stderr_apipe;
     }
+
+    $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->new(
+        pipe        => $self->{+STDOUT_APIPE},
+        stderr_pipe => $self->{+STDERR_APIPE},
+    );
 
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;
@@ -119,17 +125,10 @@ sub _send_event {
     $event->{tid}   //= get_tid();
     $event->{pid}   //= $$;
 
-    my $json;
     {
         no warnings 'once';
         local *UNIVERSAL::TO_JSON = sub { "$_[0]" };
-        $json = encode_json($event);
-    }
-
-    $self->{+STDOUT_APIPE}->write_message($json);
-
-    if (my $stderr = $self->{+STDERR_APIPE}) {
-        $stderr->write_message(qq/{"event_id":"$event_id"}/);
+        $self->{+EMITTER}->emit_raw($event);
     }
 }
 

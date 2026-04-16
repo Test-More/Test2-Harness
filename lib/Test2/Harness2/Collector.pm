@@ -20,7 +20,7 @@ use Test2::Harness2::Collector::Handle;
 use Test2::Harness2::Util qw/mod2file parse_exit/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <launch
     <new_pgroup
     <env_vars

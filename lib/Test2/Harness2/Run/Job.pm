@@ -8,7 +8,7 @@ use Carp qw/croak/;
 use File::Spec ();
 use Test2::Util::UUID qw/gen_uuid/;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <job_id
     <test_file
     <test_file_abs

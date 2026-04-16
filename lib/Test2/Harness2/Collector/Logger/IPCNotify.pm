@@ -6,7 +6,7 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <ipcm_info
     <service_name
     <run_id

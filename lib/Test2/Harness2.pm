@@ -18,7 +18,7 @@ use Test2::Harness2::Collector;
 use Test2::Harness2::Run;
 use Test2::Harness2::Util::EventEmitter;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <workdir
     <name
     <job_id

@@ -10,7 +10,7 @@ use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness2::Run::Job;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <run_id
     <jobs
     <created_at

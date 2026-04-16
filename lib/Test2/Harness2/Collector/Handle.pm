@@ -7,7 +7,7 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use POSIX qw/WNOHANG/;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <pid
     <exit_code
 };

@@ -11,7 +11,7 @@ use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness2::Event;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <run_id
     <job_id
     <job_try
@@ -200,7 +200,7 @@ Used via the collector:
 =head1 ATTRIBUTES
 
 All attributes are optional and exposed as read-only accessors via
-L<Test2::Harness2::Util::HashBase>.
+L<Object::HashBase>.
 
 =over 4
 

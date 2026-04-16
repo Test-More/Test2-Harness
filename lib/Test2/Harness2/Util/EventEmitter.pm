@@ -10,7 +10,7 @@ use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness2::Util::JSON qw/encode_json/;
 
-use Test2::Harness2::Util::HashBase qw{
+use Object::HashBase qw{
     <pipe
     <stderr_pipe
     <job_id

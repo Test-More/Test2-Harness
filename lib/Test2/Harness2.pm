@@ -98,6 +98,7 @@ sub start {
     my $loggers = $self->{+LOGGERS};
 
     Test2::Harness2::Collector->interpose(
+        ipcm_info   => $self->ipcm_info,
         loggers     => $loggers,
         parser      => 'Test2::Harness2::Collector::Parser::IOParser',
         parent_pids => [$caller_pid],

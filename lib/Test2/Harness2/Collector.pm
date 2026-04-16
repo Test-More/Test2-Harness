@@ -52,6 +52,9 @@ use constant IS_WIN32 => $^O eq 'MSWin32';
 sub init {
     my $self = shift;
 
+    croak "'ipcm_info' is required (pass undef explicitly if no service is connected)"
+        unless exists $self->{+IPCM_INFO};
+
     # Map spec constructor names to internal attribute names so callers can
     # use the natural names from the spec (stdout, stderr, pid, env) even
     # though HashBase cannot use those as constants due to Perl reserved words.

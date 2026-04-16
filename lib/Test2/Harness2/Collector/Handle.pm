@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '2.000011';
 
+use POSIX qw/WNOHANG/;
+
 use Test2::Harness2::Util::HashBase qw{
     <pid
     <exit_code
@@ -18,6 +20,20 @@ sub wait {
 
     waitpid($pid, 0);
     return $self->{+EXIT_CODE} = $?;
+}
+
+# Non-blocking completion check. Returns true if the collector process has
+# exited, false if it is still running. For an inline collector (no pid) this
+# always returns true because there is nothing to wait on.
+sub is_done {
+    my $self   = shift;
+    my $pid    = $self->{+PID} or return 1;
+    my $reaped = waitpid($pid, WNOHANG);
+    if ($reaped > 0) {
+        $self->{+EXIT_CODE} //= $?;
+        return 1;
+    }
+    return 0;
 }
 
 1;
@@ -82,6 +98,13 @@ to communicate its outcome.
 Block until the collector process exits, then return its raw wait-status.
 For an inline collector this is a no-op that returns whatever C<exit_code>
 was recorded.
+
+=item $bool = $handle->is_done
+
+Non-blocking completion check. Returns true if the collector process has
+already exited, false if it is still running. Also records C<exit_code> on
+first successful reap. For an inline collector (no pid) this always returns
+true.
 
 =back
 

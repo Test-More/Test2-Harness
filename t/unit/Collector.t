@@ -1020,17 +1020,49 @@ subtest 'new_pgroup=0 leaves child in parent pgroup (Unix)' => sub {
 
 subtest 'new_pgroup throws on Windows without Win32::Job' => sub {
     my $collector = Test2::Harness2::Collector->new(
-        stdout    => \*STDOUT,
+        stdout     => \*STDOUT,
         new_pgroup => 1,
     );
 
     # Call the check directly to verify it croaks with the expected message
-    my $ok = eval { $collector->_check_new_pgroup_supported_on_win32(); 1 };
+    my $ok  = eval { $collector->_check_new_pgroup_supported_on_win32(); 1 };
     my $err = $@;
 
     ok(!$ok, 'check raises exception');
     like($err, qr/Win32::Job/, 'error names the required module');
     like($err, qr/new_pgroup/, 'error mentions the feature');
 };
+
+subtest 'Handle->is_done - non-blocking completion check' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    # Inline handle (no pid) is always done.
+    my $inline = Test2::Harness2::Collector::Handle->new(pid => undef);
+    ok($inline->is_done, 'inline handle (no pid) reports done immediately');
+
+    # Handle for a still-running child returns false, then true after exit.
+    my $child = fork // die "fork: $!";
+    if (!$child) { sleep 30; POSIX::_exit(0); }
+
+    my $handle = Test2::Harness2::Collector::Handle->new(pid => $child);
+    ok(!$handle->is_done, 'is_done returns false while child is alive');
+
+    kill 'TERM', $child;
+    # Wait for termination, then confirm is_done returns true.
+    waitpid($child, 0);
+
+    # Re-wrap the same pid after it has been reaped to confirm a
+    # freshly-reaped pid comes back as done.
+    my $child2 = fork // die "fork: $!";
+    if (!$child2) { POSIX::_exit(0); }
+
+    my $h2 = Test2::Harness2::Collector::Handle->new(pid => $child2);
+    # Give the child a moment to exit.
+    select undef, undef, undef, 0.05;
+    ok($h2->is_done,           'is_done returns true after child exits');
+    ok(defined $h2->exit_code, 'exit_code recorded on reap');
+};
+
+use Test2::Harness2::Collector::Handle;
 
 done_testing;

@@ -19,9 +19,8 @@ Two invariants are load-bearing and must be enforced everywhere processes are cr
 Process-group discipline (only two layers, not three):
 
 - The **service** calls `POSIX::setpgid(0, 0)` on `run_on_start` so it owns its own process group, distinct from the caller's pgroup. The service's pgroup covers the service itself plus every test Collector it forks.
-- **Test Collectors do NOT change their process group.** They stay in the service's pgroup so a single `kill -PGID $service_pgid` cleans up the whole harness tree at once, and so the service never has to isolate *from* its own collectors.
-- **The test process itself is isolated by `Test2::Formatter::Stream2`**, not by the Collector. When Stream2 loads inside the test (via `T2_FORMATTER=Stream2`, which the service sets in `env_vars` for every test), it checks whether the current process is already its own pgroup leader (`getpgrp() == $$`). If not, it calls `POSIX::setpgid(0, 0)` to escape into its own pgroup. This way, a test calling `kill 'TERM', 0` (signal its own pgroup) cannot bleed into the harness's pgroup.
-- Tests that do not load Stream2 (unusual, since the service forces `T2_FORMATTER=Stream2`) remain in the service's pgroup; this is the user's responsibility to avoid if they care about isolation.
+- The **Collector** itself does not change its process group — it stays in the service's pgroup so a single `kill -PGID $service_pgid` cleans up the whole harness tree at once.
+- The **Collector's fork+exec child** calls `POSIX::setpgid(0, 0)` just before `exec`, so the test process runs in its own fresh pgroup from its very first instruction. This does not depend on the test loading any particular formatter. A test calling `kill 'TERM', 0` (signal its own pgroup) cannot bleed into the harness's pgroup. See the "Changes to `Test2::Harness2::Collector`" section for the exact code location and for the Windows situation.
 
 Hard-stop procedure (executed by `Terminate`, by signal handler, and as a final sweep in `run_on_cleanup`):
 
@@ -44,17 +43,26 @@ Best-effort addendum for grandchildren that escaped the test's tracked pid (e.g.
 
 Both invariants must be covered by unit tests — one that kills the service forcibly and verifies all descendants exit, and one that calls `Terminate` mid-run and verifies the running test process is gone (not just the collector).
 
-## Changes to `Test2::Formatter::Stream2`
+## Changes to `Test2::Harness2::Collector` — pgroup isolation for launched tests
 
-Stream2 gains responsibility for isolating the test's process group from the harness (Invariant 1). When Stream2 loads (as a formatter, which happens very early in the test lifecycle), it checks whether the current process is already its own pgroup leader:
+The Collector already owns fork+exec. The test's pgroup isolation (Invariant 1) is applied there, post-fork and pre-exec, so it runs deterministically before any Perl code in the test has a chance to execute.
+
+**Unix** (`_launch_child_unix`, lib/Test2/Harness2/Collector.pm:640-664). In the child branch, right before `exec(@$cmd)`, call:
 
 ```perl
-POSIX::setpgid(0, 0) if getpgrp() != $$;
+POSIX::setpgid(0, 0) or warn "setpgid failed: $!";
 ```
 
-If not, it calls `setpgid(0, 0)` to become one. This runs regardless of whether Stream2 is loaded via `T2_FORMATTER=Stream2` (the harness's default) or via an explicit `use Test2::Formatter::Stream2`. The check is cheap and idempotent — if the test is already its own pgroup leader (e.g., because a shell pipeline put it in one), Stream2 leaves it alone.
+`0, 0` means "make my pid my own pgid". This is cheap, idempotent, and does not require `Stream2` to do anything. Runs before environment setup, before `exec`, with no window in which the test is in the harness's pgroup.
 
-Rationale: tests frequently `kill 'TERM', 0` or similar, and the harness needs to never share a pgroup with the test process.
+**Windows** (`_launch_child_win32`, lib/Test2/Harness2/Collector.pm:674+). The current path uses `system(1, @cmd)` (Perl's `P_NOWAIT` spawn) which does not expose `CREATE_NEW_PROCESS_GROUP`. Windows has two viable equivalents to Unix pgroups:
+
+- **`CREATE_NEW_PROCESS_GROUP`** flag passed to `CreateProcess` — makes the new process a process-group leader for CTRL+C / CTRL+BREAK purposes. Only affects those two console signals, not general kill delivery. Usable via `Win32::Process::Create`.
+- **Job objects** (`AssignProcessToJobObject` + `TerminateJobObject`) — stronger: the OS atomically terminates the whole job when asked. Usable via `Win32::Job`.
+
+Both require replacing `system(1, ...)` with a richer spawn path. Neither is a one-line change, and `Collector->interpose` already bails on Windows (`IS_WIN32` check at line 977) — so the harness is not yet Windows-clean end-to-end.
+
+**Decision:** Unix gets the `setpgid` change now, as part of this work. Windows gets a TODO comment and a deferred ticket — the harness remains usable on Windows at the same fidelity it has today (no isolation), and this spec does not claim Invariant 1 holds on Windows. Implementation-time call whether to add a token `Win32::Process::Create`-with-`CREATE_NEW_PROCESS_GROUP` path if it's genuinely one-line; otherwise defer.
 
 ## Module layout
 
@@ -181,7 +189,7 @@ caller                   (has the Spawn handle, can exit independently)
 - **`run_on_start`** — call `POSIX::setpgid(0, 0)` so the service owns its own process group, distinct from any pgroup the caller is in (Invariant 1). Emit a `service_started` event (carries `job_id`, `pid`, `pgid`, `name`, `workdir`). Any bookkeeping internal to the service goes here; service loggers already exist in the interpose parent.
 - **`run_on_all($activity)`** — the critical hot path. Runs every iteration (not just on interval), so tests flip over without waiting for the interval timer:
   1. If `+current` is set, check whether its collector Handle is done (non-blocking). If so, `log_event` a `job_complete` event, move the job_id from the run's `running` to `done` list, and clear `+current`. If the run is fully done (`pending` and `running` both empty), drop it from `+queue` and emit `run_complete`.
-  2. If `+current` is unset AND `+state eq 'running'` (or `'finishing'`) AND `+queue` is non-empty: pick the head run, pull the next pending job, build the per-job output path (`$workdir/runs/$run_id/$job_id/0.jsonl`), launch a Collector with that logger plus the test auditor, with `env_vars => { T2_FORMATTER => 'Stream2', ... }` so tests auto-engage `Test2::Formatter::Stream2` (which also handles the test's pgroup isolation — see Invariant 1). **The Collector MUST be launched with `parent_pids => [$service_pid]`** (Invariant 2) so the test dies if the service dies. The Collector itself stays in the service's pgroup. Store the Handle + metadata in `+current`, register the collector pid as a worker.
+  2. If `+current` is unset AND `+state eq 'running'` (or `'finishing'`) AND `+queue` is non-empty: pick the head run, pull the next pending job, build the per-job output path (`$workdir/runs/$run_id/$job_id/0.jsonl`), launch a Collector with that logger plus the test auditor, with `env_vars => { T2_FORMATTER => 'Stream2', ... }` so tests auto-engage `Test2::Formatter::Stream2`. **The Collector MUST be launched with `parent_pids => [$service_pid]`** (Invariant 2) so the test dies if the service dies. The Collector stays in the service's pgroup; the test process is isolated into its own pgroup by the Collector's own post-fork/pre-exec setpgid (Invariant 1). Store the Handle + metadata in `+current`, register the collector pid as a worker.
 - **`run_should_end`** — returns true when `+state eq 'terminating'` AND all workers reaped AND `+current` cleared; OR when `+state eq 'finishing'` AND `+queue` is empty AND `+current` is undef AND no registered workers are alive. The "workers reaped" gate is Invariant 1 — we must not exit while descendants could still be running. Also triggers the `finishing` transition when `+finish_after_initial_run` and the initial run is now fully done.
 - **`run_on_cleanup`** — final-chance sweep (Invariant 1). Reap any registered workers; if any remain alive after `kill_timeout` of TERM, escalate to KILL on the whole pgroup. Emit `service_stopped`. Service-logger shutdown happens in the interpose parent when the service process exits.
 - **`watch_pids`** — returns the `parent_pids` passed in at construction (Invariant 2: the service self-terminates if any watched parent dies). `start()` passes the grandparent pid of the interpose child; `spawn()` passes the top-level spawn-caller pid. `Detach` IPC handler removes a pid from this list at runtime.
@@ -275,8 +283,8 @@ Scope: construction, workdir validation, queue/dispatch flow, and both lifecycle
 Invariant 1 (no survivors on hard stop):
 
 - Spawn the service with a long-running test (one that `sleep`s or prints slowly). Capture the test pid and collector pid from `status()`. Call `Terminate`. After the terminate returns, neither pid should be alive (use `kill 0, $pid` to probe).
-- Stream2-pgroup isolation: use a test file that `use`s `Test2::V0` (so Stream2 is the formatter under the harness env) and then calls `kill 'TERM', 0` from within the test. Assert that the harness survives — the test's pgroup signal does not reach the service. The test itself dies from the signal; the harness sees it as a normal collector completion.
-- A Stream2 unit test (`t/unit/Stream2.t` or similar — extend an existing test if present) that invokes Stream2 in a subprocess where `getpgrp() != $$`, and verifies that after load, `getpgrp() == $$`. Also verify it's idempotent when the process is already a pgroup leader (no syscall failure).
+- Pgroup isolation of the test process: use a test file that calls `kill 'TERM', 0` early. The harness must survive — the test's pgroup signal does not reach the service. The test itself dies from the signal; the harness sees it as a normal collector completion. (This exercises the Collector's post-fork/pre-exec `setpgid`.)
+- A Collector unit test (extend `t/unit/Collector.t`) that launches a tiny child which prints `getpgrp()` and `$$`. Assert they are equal — confirming the Collector put the child in its own pgroup before exec. Skip on Windows.
 
 Invariant 2 (nothing survives its parent):
 

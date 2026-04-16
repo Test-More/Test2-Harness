@@ -50,6 +50,8 @@ sub emit_event {
 sub emit_raw {
     my ($self, $event) = @_;
 
+    # AI: Normalize event_id, if it only specified in the harness facet copy it to the top level key, if it is only in the top level key copy it to the harness facet, if it is not defined in any location generate one and use it in both. If it has it at botht he top level and the harness facet and they are different throw an exeption.
+
     my $json = encode_json($event);
     $self->{+PIPE}->write_message($json);
 

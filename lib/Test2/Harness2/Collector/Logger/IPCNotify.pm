@@ -47,13 +47,15 @@ sub init {
 
 sub log_events { 0 }
 
+# AI: Are these 3 needed, or can we just use the default role implementations?
 sub startup { }
-
 sub log_event { }
+sub depends_on { () }
 
 sub shutdown {
     my $self = shift;
 
+    #AI: ipcm_info is required during construction, how could it be unset? Is this block dead code?
     unless (defined $self->{+IPCM_INFO}) {
         warn "IPCNotify shutdown: ipcm_info not set, skipping notification\n";
         return;
@@ -84,8 +86,6 @@ sub shutdown {
 
     return;
 }
-
-sub depends_on { () }
 
 1;
 

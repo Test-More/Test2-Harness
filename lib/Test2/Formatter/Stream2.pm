@@ -173,6 +173,7 @@ sub write {
     local $f->{info} if $self->{+NO_DIAG};
     local $f->{plan} if $self->{+NO_HEADER};
 
+    # AI: Add comments to this block explaining what it does and why it does it.
     my $tb_only = 0;
     if ($self->{+TB}) {
         $tb_only ||= $self->{+TB_HANDLES}->[0] != $self->{+TB}->{handles}->[0];

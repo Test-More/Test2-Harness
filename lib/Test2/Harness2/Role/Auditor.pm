@@ -19,6 +19,10 @@ sub failing { $_[0]->fail_count }
 # The runtime effect is identical since HashBase constants simply return the
 # attribute name as a string.
 
+# AI: These default implementations for set_process_info and set_ipcm_info
+# should be empty, as some auditors may not need to record these.
+# Role consumers that need these can override to store it. Do not assume every
+# auditor will be a blessed hash.
 sub set_process_info {
     my ($self, %info) = @_;
     $self->{run_id}  = $info{run_id}  if exists $info{run_id};

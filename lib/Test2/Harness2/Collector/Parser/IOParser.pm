@@ -63,6 +63,7 @@ sub normalize_event {
     my ($io, $event) = @_;
 
     my $stamp    = $event->{stamp}    // $io->{stamp}    // time;
+    # AI: Throw an exception if we have an event_id from both event and io, and they do not match.
     my $event_id = $event->{event_id} // $io->{event_id} // gen_uuid();
 
     $event->{stamp}    = $stamp;

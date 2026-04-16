@@ -2,6 +2,8 @@ package Test2::Harness2::Util::HashBase;
 use strict;
 use warnings;
 
+# AI: Remove the inlined Object::Hashbase and switch to using the regular Object::HashBase cpan module add it to dist.ini as a requirement at the currently installed version
+
 our $VERSION = '2.000011';
 
 #################################################################

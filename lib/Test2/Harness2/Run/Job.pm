@@ -14,6 +14,8 @@ use Test2::Harness2::Util::HashBase qw{
     <run_id
 };
 
+# Update this to have both the relative absolute paths to the test file, if we only get one use it to calculate the other.
+# It is possible something may have chdir'd before we run the test, so use the absolute full path when running a job. The relative name should be saved for display at a later time.
 sub init {
     my $self = shift;
 

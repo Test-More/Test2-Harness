@@ -126,6 +126,7 @@ sub _normalize_event {
 
     my $f = $event->{facet_data} //= {};
 
+    # AI: Check for event_id consistency, if any 2 places are set to different uuids an exception should be thrown. Also update other places that verify/set the run_id to grab/set the {about}->{uuid} facet data as well.
     my $event_id = $event->{event_id} // $f->{harness}->{event_id} // $f->{about}->{uuid} // gen_uuid();
 
     $event->{event_id} = $event_id;

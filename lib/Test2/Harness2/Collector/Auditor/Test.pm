@@ -140,17 +140,39 @@ sub _normalize_event {
 
     my $f = $event->{facet_data} //= {};
 
-    # AI: Check for event_id consistency, if any 2 places are set to different uuids an exception should be thrown. Also update other places that verify/set the run_id to grab/set the {about}->{uuid} facet data as well.
-    my $event_id = $event->{event_id} // $f->{harness}->{event_id} // $f->{about}->{uuid} // gen_uuid();
+    # event_id lives in three places that must agree: the top-level key, the
+    # harness facet, and the about facet's uuid. Any two set to different
+    # values indicates an upstream bug -- refuse to paper over it. Read
+    # through intermediate hashrefs only when they already exist so we do
+    # not autovivify empty facets just to inspect them.
+    my %sources;
+    $sources{$event->{event_id}}          = 'event'         if defined $event->{event_id};
+    $sources{$f->{harness}{event_id}}   //= 'harness facet' if $f->{harness} && defined $f->{harness}{event_id};
+    $sources{$f->{about}{uuid}}         //= 'about facet'   if $f->{about}   && defined $f->{about}{uuid};
+
+    if (keys(%sources) > 1) {
+        croak "event_id mismatch across facets: "
+            . join(', ', map { "$sources{$_}='$_'" } sort keys %sources);
+    }
+
+    my $event_id
+        = $event->{event_id}
+        // ($f->{harness} && $f->{harness}{event_id})
+        // ($f->{about}   && $f->{about}{uuid})
+        // gen_uuid();
 
     $event->{event_id} = $event_id;
-    $f->{about}->{uuid}       //= $event_id;
-    $f->{harness}->{event_id} //= $event_id;
+
+    # harness gets stamped with several fields below so it can be
+    # autovivified; about is only stamped when the caller already put an
+    # about facet in place so we do not create one just to hold a uuid.
+    $f->{harness}{event_id} //= $event_id;
+    $f->{about}{uuid}       //= $event_id if $f->{about};
 
     for my $field (qw/run_id job_id job_try/) {
         my $val = $self->{$field};
         $event->{$field} //= $val;
-        $f->{harness}->{$field} //= $val;
+        $f->{harness}{$field} //= $val;
     }
 }
 
@@ -207,7 +229,7 @@ sub _audit {
         };
 
         $event = Test2::Harness2::Event->new(
-            event_id   => gen_uuid(),
+            event_id   => $f->{harness}->{event_id} // $f->{about}->{uuid} // gen_uuid(),
             stamp      => $stamp,
             facet_data => $f,
         );
@@ -266,7 +288,7 @@ sub _subtest_process {
 
     unless ($event) {
         $event = Test2::Harness2::Event->new(
-            event_id   => gen_uuid(),
+            event_id   => $f->{harness}->{event_id} // $f->{about}->{uuid} // gen_uuid(),
             facet_data => $f,
         );
         $self->_normalize_event($event);

@@ -79,7 +79,7 @@ subtest 'passing assertion' => sub {
     is($ev->{facet_data}{harness}{job_id},   'J',             "job_id mirrored into harness facet");
     is($ev->{facet_data}{harness}{job_try},  0,               "job_try mirrored into harness facet");
     is($ev->{facet_data}{harness}{event_id}, $ev->{event_id}, "event_id mirrored into harness facet");
-    is($ev->{facet_data}{about}{uuid},       $ev->{event_id}, "event_id mirrored into about.uuid");
+    ok(!$ev->{facet_data}{about}, "about facet not autovivified when absent from input");
 };
 
 subtest 'failing assertion' => sub {
@@ -224,8 +224,22 @@ subtest 'event_id is preserved when already set on event' => sub {
     my $eid = gen_uuid();
     my @out = $a->audit_event({event_id => $eid, facet_data => {assert => {pass => 1}}});
     is($out[0]->{event_id},                      $eid, "existing event_id preserved");
-    is($out[0]->{facet_data}{about}{uuid},       $eid, "about.uuid mirrors");
     is($out[0]->{facet_data}{harness}{event_id}, $eid, "harness.event_id mirrors");
+    ok(!$out[0]->{facet_data}{about}, "about facet not autovivified");
+};
+
+subtest 'event_id mirrors into about.uuid when about facet is already present' => sub {
+    my $a   = mk();
+    my $eid = gen_uuid();
+    my @out = $a->audit_event({
+        event_id   => $eid,
+        facet_data => {
+            assert => {pass    => 1},
+            about  => {details => 'something'},
+        },
+    });
+    is($out[0]->{facet_data}{about}{uuid}, $eid,
+        'about.uuid stamped when about facet was present');
 };
 
 subtest 'event_id sourced from facet_data.harness.event_id' => sub {
@@ -290,8 +304,8 @@ subtest 'subtest pass/fail accounting via parent.children' => sub {
             parent => {
                 hid      => 1,
                 children => [
-                    {assert => {pass  => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-                    {plan   => {count => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                    do { my $id = gen_uuid(); {assert => {pass => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
+                    do { my $id = gen_uuid(); {plan => {count => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
                 ],
             },
         }
@@ -310,8 +324,8 @@ subtest 'subtest with internal failure marks parent failing' => sub {
             parent => {
                 hid      => 1,
                 children => [
-                    {assert => {pass  => 0}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-                    {plan   => {count => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                    do { my $id = gen_uuid(); {assert => {pass => 0}, harness => {event_id => $id}, about => {uuid => $id}} },
+                    do { my $id = gen_uuid(); {plan => {count => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
                 ],
             },
         }
@@ -332,8 +346,8 @@ subtest 'subtest with internal plan-mismatch bubbles up' => sub {
             parent => {
                 hid      => 1,
                 children => [
-                    {assert => {pass  => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-                    {plan   => {count => 5}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                    do { my $id = gen_uuid(); {assert => {pass => 1}, harness => {event_id => $id}, about => {uuid => $id}} },
+                    do { my $id = gen_uuid(); {plan => {count => 5}, harness => {event_id => $id}, about => {uuid => $id}} },
                 ],
             },
         }
@@ -356,6 +370,24 @@ subtest 'ipcm_info is required at construction' => sub {
     my $err = $@;
     ok(!$ok, 'croaks without ipcm_info');
     like($err, qr/ipcm_info/, 'error mentions ipcm_info');
+};
+
+subtest 'event_id mismatch across facets is rejected' => sub {
+    my $a  = mk();
+    my $id = gen_uuid();
+    my $ok = eval {
+        $a->audit_event({
+            event_id   => $id,
+            facet_data => {
+                harness => {event_id => $id},
+                about   => {uuid     => gen_uuid()},
+            },
+        });
+        1;
+    };
+    my $err = $@;
+    ok(!$ok, 'croaks on mismatch');
+    like($err, qr/event_id mismatch/, 'error mentions mismatch');
 };
 
 done_testing;

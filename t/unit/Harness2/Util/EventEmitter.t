@@ -121,13 +121,50 @@ subtest 'emit_raw writes prebuilt event and stderr marker' => sub {
     my ($type, $msg) = $r->get_line_burst_or_data();
     is($type, 'message', 'stdout got a message');
     my $payload = decode_json($msg);
-    is($payload->{event_id},  'fake-uuid-1234', 'event_id intact');
-    is($payload->{stream_id}, 7,                'stream_id intact');
+    is($payload->{event_id},                    'fake-uuid-1234', 'event_id intact');
+    is($payload->{stream_id},                   7,                'stream_id intact');
+    is($payload->{facet_data}{harness}{event_id}, 'fake-uuid-1234', 'harness.event_id populated');
 
     my ($se_type, $se_msg) = $se_r->get_line_burst_or_data();
     is($se_type, 'message', 'stderr got a message');
     my $marker = decode_json($se_msg);
     is($marker->{event_id}, 'fake-uuid-1234', 'stderr marker event_id matches');
+};
+
+subtest 'emit_raw copies harness.event_id up to top level' => sub {
+    my ($r, $w) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    my $emitter = Test2::Harness2::Util::EventEmitter->new(pipe => $w);
+
+    my $raw = {facet_data => {harness => {event_id => 'from-harness'}, assert => {pass => 1}}};
+    my $ret = $emitter->emit_raw($raw);
+    is($ret, 'from-harness', 'propagated up to top level');
+    is($raw->{event_id}, 'from-harness', 'event mutated in place');
+};
+
+subtest 'emit_raw generates an event_id when missing' => sub {
+    my ($r, $w) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    my $emitter = Test2::Harness2::Util::EventEmitter->new(pipe => $w);
+
+    my $raw = {facet_data => {assert => {pass => 1}}};
+    my $ret = $emitter->emit_raw($raw);
+    like($ret, qr/\A[0-9a-f]{8}-/i, 'returns generated UUID');
+    is($raw->{event_id},                      $ret, 'top-level event_id set');
+    is($raw->{facet_data}{harness}{event_id}, $ret, 'harness.event_id set');
+};
+
+subtest 'emit_raw croaks on top-vs-harness mismatch' => sub {
+    my ($r, $w) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    my $emitter = Test2::Harness2::Util::EventEmitter->new(pipe => $w);
+
+    my $raw = {
+        event_id   => 'top-id',
+        facet_data => {harness => {event_id => 'harness-id'}},
+    };
+    like(
+        dies { $emitter->emit_raw($raw) },
+        qr/event_id mismatch/,
+        'croaks on mismatch',
+    );
 };
 
 done_testing;

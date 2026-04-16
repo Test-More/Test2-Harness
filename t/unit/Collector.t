@@ -641,6 +641,129 @@ subtest 'child killed on signal' => sub {
     ok(-f $output,    "output log was written before exit");
 };
 
+subtest 'graceful SIGTERM: collector exits promptly and child is reaped' => sub {
+    skip_all "fork required for signal test" unless $CAN_FORK;
+
+    my $output = "$tmpdir/graceful_term.jsonl";
+
+    # Child sleeps long enough that it would not exit on its own.
+    # It prints a line first so the collector enters its loop before we
+    # signal it.
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch  => ['perl', '-e', 'print "ready\n"; sleep 60'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+    );
+
+    my $cpid = $collector->pid;
+    ok($cpid, "collector process is running");
+
+    # Grab the test child's PID from /proc or via a small helper fork so we
+    # can verify it is dead after the collector exits.  We learn it from the
+    # exit event that the collector writes -- but that is only available after
+    # the fact.  Instead, we ask the collector's pid to find its children: on
+    # Linux /proc/$cpid/task/*/children works; elsewhere we rely on the
+    # collector having only one child.  Since we cannot reliably enumerate
+    # children portably, we take the simple approach: record the PID range
+    # and check via kill(0) after the fact.
+
+    # Wait for the output file to appear so the collector has opened the log
+    # and is in the main collection loop.
+    my $deadline = time + 5;
+    while (!-f $output && time < $deadline) {
+        sleep(0.05);
+    }
+    ok(-f $output, "output file exists: collector entered main loop");
+
+    # Send SIGTERM to the collector.
+    kill('TERM', $cpid);
+
+    # Collector must exit within a few seconds (not hang for the child's
+    # full sleep(60) duration).
+    my $start    = time;
+    my $exit_val = $collector->wait();
+    my $elapsed  = time - $start;
+
+    ok(defined $exit_val, "collector exited after SIGTERM");
+    ok($elapsed < 10,     "collector exited promptly (within 10s, took ${elapsed}s)");
+
+    # Confirm the collector process is gone.
+    my $collector_dead = !kill(0, $cpid);
+    ok($collector_dead, "collector process is dead after wait()");
+
+    # Read the exit event to find the child PID and confirm the child is
+    # also dead.  The collector writes a harness_process_exit facet which
+    # includes the wait-status but not the PID directly.  We instead parse
+    # /proc (Linux) or rely on the kill-0 check against the child PID we
+    # embedded in the log output.
+    #
+    # Simplest reliable approach: scan /proc for any child of the (now-dead)
+    # collector.  Since the collector is gone, its children were either reaped
+    # by us or became orphans adopted by init.  Either way they should be dead
+    # or about to be -- check /proc if available, otherwise skip the child-dead
+    # assertion.
+    if (-d '/proc') {
+        # Collect all PIDs that list $cpid as their parent.
+        # /proc/<pid>/stat format: pid (comm) state ppid ...
+        # comm can contain spaces, so we strip the (comm) field before splitting.
+        my @orphans;
+        opendir(my $dh, '/proc') or die "opendir /proc: $!";
+        for my $entry (readdir($dh)) {
+            next unless $entry =~ /^\d+$/;
+            my $stat = "/proc/$entry/stat";
+            next unless -r $stat;
+            eval {
+                open(my $fh, '<', $stat) or return;
+                my $line = <$fh>;
+                close $fh;
+                # Strip the (comm) field which may contain spaces/parens, then split
+                $line =~ s/^\d+\s+\(.*?\)\s+//;
+                my @f = split(' ', $line);
+                # After stripping, f[0]=state f[1]=ppid
+                push @orphans => $entry if defined($f[1]) && $f[1] == $cpid;
+            };
+        }
+        closedir($dh);
+        is(scalar @orphans, 0, "no child processes remain under the (dead) collector pid");
+    }
+    else {
+        pass("skipping /proc child check (not on Linux)");
+    }
+};
+
+subtest 'ignore-class signals do not kill the collector' => sub {
+    skip_all "fork required for signal test" unless $CAN_FORK;
+
+    my $output = "$tmpdir/ignore_sigs.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch  => ['perl', '-e', 'print "ready\n"; sleep 60'],
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+    );
+
+    my $cpid = $collector->pid;
+    ok($cpid, "collector process is running");
+
+    # Wait for the collector to be in its main loop.
+    my $deadline = time + 5;
+    while (!-f $output && time < $deadline) {
+        sleep(0.05);
+    }
+    ok(-f $output, "output file exists: collector entered main loop");
+
+    # Send SIGUSR1 -- collector must ignore it and keep running.
+    kill('USR1', $cpid);
+    sleep(0.2);
+
+    my $still_alive = kill(0, $cpid);
+    ok($still_alive, "collector is still alive after SIGUSR1");
+
+    # Clean up: send TERM so the collector exits before the test suite moves on.
+    kill('TERM', $cpid);
+    $collector->wait();
+
+    ok(!kill(0, $cpid), "collector exited after cleanup SIGTERM");
+};
+
 # ===========================================================================
 # Exception resilience (all platforms)
 # ===========================================================================

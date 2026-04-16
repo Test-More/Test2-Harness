@@ -45,11 +45,25 @@ sub init {
     $self->{+JOB_TRY} //= 0;
 }
 
+sub set_process_info {
+    my ($self, %info) = @_;
+    $self->{+RUN_ID}  = $info{run_id}  if exists $info{run_id};
+    $self->{+JOB_ID}  = $info{job_id}  if exists $info{job_id};
+    $self->{+JOB_TRY} = $info{job_try} if exists $info{job_try};
+    return;
+}
+
+sub set_ipcm_info {
+    my ($self, $info) = @_;
+    $self->{+IPCM_INFO} = $info;
+    return;
+}
+
 sub log_events { 0 }
 
 # AI: Are these 3 needed, or can we just use the default role implementations?
-sub startup { }
-sub log_event { }
+sub startup    { }
+sub log_event  { }
 sub depends_on { () }
 
 sub shutdown {

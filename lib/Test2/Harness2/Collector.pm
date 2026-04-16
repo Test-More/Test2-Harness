@@ -111,18 +111,18 @@ sub init {
         if defined($self->{+PARSER}) && !ref $self->{+PARSER};
 }
 
-# AI: This should be a class method, not a function
 sub _load_logger_class {
-    my ($class) = @_;
-    my $file = mod2file($class);
+    my $class  = shift;
+    my ($name) = @_;
+    my $file   = mod2file($name);
     return if $INC{$file};
     no strict 'refs';
-    return if %{"${class}::"};
+    return if %{"${name}::"};
     require $file;
 }
 
-# AI: This should be a class method, not a function
 sub _spec_class {
+    my $class  = shift;
     my ($spec) = @_;
 
     return ref($spec) if blessed($spec);
@@ -134,8 +134,8 @@ sub _spec_class {
 # Validates a single spec for blessed/arrayref/string shape, loads the class
 # (for non-blessed forms), and verifies it implements $role at the class level.
 # Returns nothing; croaks on any problem.
-# AI: This should be a class method, not a function
 sub _validate_spec {
+    my $class = shift;
     my ($spec, $kind, $role) = @_;
 
     if (blessed($spec)) {
@@ -144,23 +144,23 @@ sub _validate_spec {
         return;
     }
 
-    my $class;
+    my $name;
     if (ref($spec) eq 'ARRAY') {
-        $class = $spec->[0];
+        $name = $spec->[0];
         croak ucfirst($kind) . " arrayref must begin with a class name"
-            unless defined($class) && !ref($class);
+            unless defined($name) && !ref($name);
     }
     elsif (!ref($spec)) {
-        $class = $spec;
+        $name = $spec;
     }
     else {
         croak "Invalid $kind specification: " . ref($spec);
     }
 
-    _load_logger_class($class);
+    $class->_load_logger_class($name);
 
-    croak ucfirst($kind) . " '$class' does not implement $role"
-        unless $class->DOES($role);
+    croak ucfirst($kind) . " '$name' does not implement $role"
+        unless $name->DOES($role);
 }
 
 # Pure validation: confirm each entry is a well-formed spec whose class
@@ -178,14 +178,14 @@ sub _normalize_loggers {
     my $role = 'Test2::Harness2::Role::Collector::Logger';
 
     for my $item (@$loggers) {
-        _validate_spec($item, 'logger', $role);
+        $self->_validate_spec($item, 'logger', $role);
     }
 
     # depends_on is a class method on the logger role with a default of (),
     # so we can resolve dependencies without instantiating.
-    my %have = map { _spec_class($_) => 1 } @$loggers;
+    my %have = map { $self->_spec_class($_) => 1 } @$loggers;
     for my $item (@$loggers) {
-        my $class = _spec_class($item);
+        my $class = $self->_spec_class($item);
         for my $dep ($class->depends_on) {
             next if $have{$dep};
             croak "Logger '$class' requires logger '$dep', but it is not present";
@@ -202,7 +202,7 @@ sub _normalize_auditor {
     my $spec = $self->{+AUDITOR};
     return unless defined $spec;
 
-    _validate_spec($spec, 'auditor', 'Test2::Harness2::Role::Auditor');
+    $self->_validate_spec($spec, 'auditor', 'Test2::Harness2::Role::Auditor');
 
     $self->{+_AUDITOR_SPEC} = $spec;
 }

@@ -9,29 +9,13 @@ use Role::Tiny;
 # Consumers of this role may be plain classes (no new() method) or may be used
 # as objects (new() method defined).
 
-# Default implementations of the process-info setters.
-# String hash keys are used here because HashBase constants (RUN_ID, etc.) are
-# defined in the consuming class's package, not in the role's package.
-# The runtime effect is identical since HashBase constants simply return the
-# attribute name as a string.
-
-# AI: These default implementations for set_process_info and set_ipcm_info
-# should be empty, as some loggers will not need to record these.
-# Role consumers that need these can override to store it. Do not assume every
-# logger will be a blessed hash.
-sub set_process_info {
-    my ($self, %info) = @_;
-    $self->{run_id}  = $info{run_id}  if exists $info{run_id};
-    $self->{job_id}  = $info{job_id}  if exists $info{job_id};
-    $self->{job_try} = $info{job_try} if exists $info{job_try};
-    return;
-}
-
-sub set_ipcm_info {
-    my ($self, $info) = @_;
-    $self->{ipcm_info} = $info;
-    return;
-}
+# Default no-op implementations. Loggers that need to retain the run/job/ipcm
+# info, the auditor, or cross-logger dependencies must override these -- the
+# role can't assume every consumer is a blessed hash or wants to track them.
+sub set_process_info { }
+sub set_ipcm_info    { }
+sub set_auditor      { }
+sub set_deps         { }
 
 sub depends_on { () }
 
@@ -132,6 +116,31 @@ Called exactly once when the collector's auditor transitions from passing to
 failing. Not called on processes that finish without ever being marked
 failing, and not called when no auditor is in use. A true value (currently
 C<1>) is passed as the sole argument.
+
+=item $logger->set_process_info(run_id => ..., job_id => ..., job_try => ...)
+
+Invoked by the collector when a pre-constructed logger instance is handed to
+it, so the collector can stamp its run/job identifiers onto the logger. The
+default is a no-op; loggers that want to retain these identifiers must
+override.
+
+=item $logger->set_ipcm_info($info)
+
+Invoked by the collector when a pre-constructed logger instance is handed to
+it, so the collector can share its IPC::Manager info. The default is a no-op;
+loggers that talk to a service must override.
+
+=item $logger->set_auditor($auditor)
+
+Invoked by the collector after instantiation so loggers that consult the
+auditor (e.g. for pass/fail summaries) can capture it. The default is a no-op.
+
+=item $logger->set_deps(\%deps)
+
+Invoked by the collector after instantiation with a hashref mapping
+C<< $class => $instance >> for every logger this one declared in
+L</depends_on>, so a dependent logger can query its dependencies. The default
+is a no-op.
 
 =back
 

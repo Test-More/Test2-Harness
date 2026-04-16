@@ -8,7 +8,7 @@ use Carp qw/croak/;
 use File::Path qw/make_path/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
-use POSIX qw/WNOHANG/;
+use POSIX qw/WNOHANG getpgrp/;
 
 use constant HAS_LINUX_PRCTL => eval { require Linux::Prctl; 1 } ? 1 : 0;
 
@@ -248,6 +248,75 @@ sub _perform_hard_stop {
     }
 
     delete $self->{+CURRENT};
+}
+
+sub run_should_end {
+    my $self = shift;
+
+    if ($self->{+STATE} eq 'terminating') {
+        return 1 if !$self->{+CURRENT};
+        return 0;
+    }
+
+    if ($self->{+STATE} eq 'finishing') {
+        return 1 if !$self->{+CURRENT} && !@{$self->{+QUEUE}};
+        return 0;
+    }
+
+    return 0;
+}
+
+sub run_on_start {
+    my $self = shift;
+
+    # Own our pgroup so tests that kill their own pgroups can't reach us,
+    # and so we can TERM -PGID as a backstop on hard stop.
+    if (POSIX::setpgid(0, 0)) {
+        $self->{+OWN_PGROUP} = 1;
+    }
+    else {
+        warn "setpgid(0,0) failed in run_on_start: $!";
+    }
+
+    # Ask the kernel to treat us as a subreaper (Linux >= 3.4 only).
+    # Effect: any descendant that gets orphaned (its immediate parent
+    # died, typically because a test double-forked or called setsid +
+    # exit on its parent) reparents to THIS process instead of init(1).
+    # That lets our hard-stop cleanup path waitpid those grandchildren
+    # and guarantee Invariant 1 (no survivors). Without this, such
+    # grandchildren escape our visibility and become the test's
+    # responsibility to clean up.
+    #
+    # Linux::Prctl is an optional dep. On non-Linux or when the module
+    # is not installed, we skip silently -- the harness still works, we
+    # just lose the escape-hatch cleanup for detached grandchildren.
+    if (HAS_LINUX_PRCTL) {
+        Linux::Prctl::set_child_subreaper(1);
+    }
+
+    # First structured event: service is up.
+    $self->_emit_service_event(
+        kind    => 'service_started',
+        pid     => $$,
+        pgid    => getpgrp(),
+        name    => $self->{+NAME},
+        workdir => $self->{+WORKDIR},
+    );
+}
+
+sub run_on_cleanup {
+    my $self = shift;
+
+    # Final sweep -- any stragglers go now.
+    $self->_perform_hard_stop if $self->{+CURRENT} || @{$self->{+QUEUE}};
+
+    $self->_emit_service_event(kind => 'service_stopped');
+}
+
+sub _emit_service_event {
+    my ($self, %fields) = @_;
+    my $em = $self->{+EMITTER} or return;    # no emitter in tests
+    $em->emit_event(%fields);
 }
 
 sub run_on_all {

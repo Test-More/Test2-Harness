@@ -247,4 +247,34 @@ subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
     ok(!$h->{current},       'current cleared');
 };
 
+subtest 'run_should_end honors state and workers' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    ok(!$h->run_should_end, 'running + empty queue: keep running');
+
+    $h->{state} = 'finishing';
+    ok($h->run_should_end, 'finishing + empty queue + no current: end');
+
+    $h->{current} = {pid => 123};
+    ok(!$h->run_should_end, 'finishing + current: keep running');
+
+    delete $h->{current};
+    $h->{state} = 'terminating';
+    ok($h->run_should_end, 'terminating + cleared: end');
+};
+
+subtest 'run_on_start sets up pgid (smoke test)' => sub {
+    # We can't safely setpgid in the test process itself, so mock POSIX::setpgid.
+    my $called;
+    {
+        no warnings 'redefine';
+        local *POSIX::setpgid = sub { $called = [@_]; 1 };
+        my $dir = tempdir(CLEANUP => 1);
+        my $h   = Test2::Harness2->new(workdir => $dir);
+        $h->run_on_start;
+    }
+    is($called, [0, 0], 'setpgid(0,0) was called');
+};
+
 done_testing;

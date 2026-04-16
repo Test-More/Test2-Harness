@@ -1015,7 +1015,7 @@ subtest 'new_pgroup=0 leaves child in parent pgroup (Unix)' => sub {
     my $details = $out_ev->{facet_data}{from_stream}{details} // '';
     my ($pgid) = $details =~ /pgid=(\d+)/;
     ok(defined($pgid), "captured pgid=$pgid from log") or diag "details: $details";
-    isnt($pgid, $$, "child pgid is not the test's own pid");
+    is($pgid, getpgrp(), "child pgid matches parent's own pgroup");
 };
 
 subtest 'new_pgroup throws on Windows without Win32::Job' => sub {

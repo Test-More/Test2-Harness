@@ -79,10 +79,16 @@ sub start {
 
     $args{parent_pids} //= [$caller_pid];
 
-    # Spawn the IPC bus before forking so both parent and child share the
-    # same connection info.
-    my $spawn = ipcm_spawn();
-    $args{ipcm_info} = $spawn->info;
+    # If ipcm_info was already provided (e.g. by spawn()), reuse it.
+    # Otherwise spawn a fresh IPC bus now.  Keep $ipcm_guard alive for the
+    # rest of start() so the IPC bus is not torn down before the service
+    # process connects.  POSIX::_exit bypasses Perl destructors, so the
+    # guard never fires in either the service child or the collector parent.
+    my $ipcm_guard;
+    unless ($args{ipcm_info}) {
+        $ipcm_guard = ipcm_spawn();
+        $args{ipcm_info} = $ipcm_guard->info;
+    }
 
     # Construct the service object in the pre-fork process.  init() creates
     # $workdir/services/ and populates default loggers.
@@ -115,6 +121,56 @@ sub start {
     POSIX::_exit($exit // 0);
 }
 
+sub spawn {
+    my ($class, %args) = @_;
+
+    my $test_run     = delete $args{test_run};
+    my $finish_after = delete $args{finish_after_initial_run};
+
+    $args{parent_pids} //= [$$];
+
+    # Spawn the IPC bus in the parent so both parent and child share the same
+    # connection info.  Use guard => 0 so the parent does not try to tear down
+    # the bus when the Spawn object goes out of scope; the child owns it.
+    my $ipcm = ipcm_spawn(guard => 0);
+    $args{ipcm_info} = $ipcm->info;
+
+    my $pid = fork // die "fork: $!";
+
+    if ($pid) {
+        # Parent: build the handle and block until the service is ready to
+        # accept requests (same pattern as ipcm_service's post-fork wait).
+        require Test2::Harness2::Spawn;
+        my $handle = Test2::Harness2::Spawn->new(
+            pid       => $pid,
+            ipcm_info => $args{ipcm_info},
+            workdir   => $args{workdir},
+            name      => $args{name} // 'harness',
+        );
+
+        my $timeout = 10;
+        my $start   = time;
+        until ($handle->handle->ready) {
+            die "Timeout waiting for harness service to come up after ${timeout}s\n"
+                if time - $start > $timeout;
+            select undef, undef, undef, 0.025;
+        }
+
+        return $handle;
+    }
+
+    # Child: run the service via start().  ipcm_info is already set so
+    # start() will skip the second ipcm_spawn() call.
+    $class->start(
+        %args,
+        ($test_run     ? (test_run                 => $test_run)     : ()),
+        ($finish_after ? (finish_after_initial_run => $finish_after) : ()),
+    );
+
+    # start() never returns; POSIX::_exit is called inside.
+    POSIX::_exit(255);
+}
+
 # IPC::Manager::Role::Service required methods. Fleshed out in later tasks.
 sub orig_io    { {} }
 sub ipcm_info  { $_[0]->{ipcm_info} }
@@ -122,20 +178,26 @@ sub pid        { $_[0]->{pid} //= $$ }
 sub set_pid    { $_[0]->{pid} = $_[1] }
 sub watch_pids { $_[0]->{+WATCH_PIDS_REF} }
 
-# IPC::Manager calls handle_request($req, $msg) where $req is a hashref
-# with a 'request' key holding the request-name string, e.g.
-# { request => 'status', ipcm_request_id => '...', ... }.
-# We dispatch on $req->{request}.
+# IPC::Manager calls handle_request($req, $msg) where $req is the full
+# message envelope: { ipcm_request_id => '...', request => $payload }.
+# When called via Spawn->_send_request the payload is a hashref
+# { request => $name, ...extra_fields... }.  We unwrap it so that
+# $payload->{request} is the dispatch name and the extra fields are
+# available for the individual handlers.
 sub handle_request {
     my ($self, $req, $msg) = @_;
 
-    my $name = $req->{request};
+    # Unwrap the IPC::Manager envelope: $req->{request} is our payload.
+    my $payload = $req->{request};
+    $payload = {request => $payload} unless ref($payload) eq 'HASH';
 
-    return $self->handle_status_request               if $name eq 'status';
-    return $self->handle_queue_test_run_request($req) if $name eq 'queue_test_run';
-    return $self->handle_finish_request               if $name eq 'finish';
-    return $self->handle_terminate_request            if $name eq 'Terminate';
-    return $self->handle_detach_request($req)         if $name eq 'Detach';
+    my $name = $payload->{request};
+
+    return $self->handle_status_request                   if $name eq 'status';
+    return $self->handle_queue_test_run_request($payload) if $name eq 'queue_test_run';
+    return $self->handle_finish_request                   if $name eq 'finish';
+    return $self->handle_terminate_request                if $name eq 'Terminate';
+    return $self->handle_detach_request($payload)         if $name eq 'Detach';
 
     return {ok => 0, error => "unknown request '$name'"};
 }

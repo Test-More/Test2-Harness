@@ -1018,4 +1018,19 @@ subtest 'new_pgroup=0 leaves child in parent pgroup (Unix)' => sub {
     isnt($pgid, $$, "child pgid is not the test's own pid");
 };
 
+subtest 'new_pgroup throws on Windows without Win32::Job' => sub {
+    my $collector = Test2::Harness2::Collector->new(
+        stdout    => \*STDOUT,
+        new_pgroup => 1,
+    );
+
+    # Call the check directly to verify it croaks with the expected message
+    my $ok = eval { $collector->_check_new_pgroup_supported_on_win32(); 1 };
+    my $err = $@;
+
+    ok(!$ok, 'check raises exception');
+    like($err, qr/Win32::Job/, 'error names the required module');
+    like($err, qr/new_pgroup/, 'error mentions the feature');
+};
+
 done_testing;

@@ -681,9 +681,25 @@ sub _launch_child_unix {
     return $pid;
 }
 
+sub _check_new_pgroup_supported_on_win32 {
+    my $self = shift;
+
+    # new_pgroup is not yet wired up on Windows. The spec calls for
+    # Win32::Job (AssignProcessToJobObject + TerminateJobObject) to
+    # replace system(1, @cmd) with an atomically-terminable spawn path.
+    # Until that work lands, fail fast rather than silently ignoring the
+    # isolation request -- the harness relies on it for Invariant 1.
+    if ($self->{+NEW_PGROUP}) {
+        croak "new_pgroup => 1 is not yet supported on Windows; install Win32::Job "
+            . "and implement the Collector Win32 launch path that uses it";
+    }
+}
+
 sub _launch_child_win32 {
     my $self = shift;
     my ($out_r, $out_w, $err_r, $err_w, $orig_stdout, $orig_stderr) = @_;
+
+    $self->_check_new_pgroup_supported_on_win32();
 
     my $cmd = $self->{+LAUNCH};
 

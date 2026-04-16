@@ -11,6 +11,8 @@ use Test2::Util::UUID qw/gen_uuid/;
 
 use constant HAS_LINUX_PRCTL => eval { require Linux::Prctl; 1 } ? 1 : 0;
 
+use Test2::Harness2::Run;
+
 use Test2::Harness2::Util::HashBase qw{
     <workdir
     <name
@@ -77,10 +79,32 @@ sub handle_request {
 
     my $name = $req->{request};
 
-    return $self->handle_status_request if $name eq 'status';
-    # Tasks 10-12 add: queue_test_run, finish, Terminate, Detach
+    return $self->handle_status_request               if $name eq 'status';
+    return $self->handle_queue_test_run_request($req) if $name eq 'queue_test_run';
+    # Tasks 11-12 add: finish, Terminate, Detach
 
     return {ok => 0, error => "unknown request '$name'"};
+}
+
+sub handle_queue_test_run_request {
+    my ($self, $payload) = @_;
+    $payload //= {};
+
+    return {ok => 0, error => 'service not accepting new runs'}
+        if $self->{+STATE} ne 'running';
+
+    my $files = $payload->{files} || [];
+    return {ok => 0, error => "'files' must be a non-empty arrayref"}
+        unless ref($files) eq 'ARRAY' && @$files;
+
+    my $run = Test2::Harness2::Run->from_files(
+        files => $files,
+        (defined $payload->{run_id} ? (run_id => $payload->{run_id}) : ()),
+    );
+
+    push @{$self->{+QUEUE}} => $run;
+
+    return {ok => 1, run_id => $run->run_id};
 }
 
 sub handle_status_request {

@@ -464,7 +464,7 @@ sub run_on_all {
     my $log_file = "$log_dir/0.jsonl";
 
     my $handle = Test2::Harness2::Collector->spawn(
-        launch      => [$^X, '-Ilib', $job->test_file],
+        launch      => [$^X, '-Ilib', $job->test_file_abs],
         new_pgroup  => 1,
         parent_pids => [$$],
         env_vars    => {T2_FORMATTER => 'Stream2'},

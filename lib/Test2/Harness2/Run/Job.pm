@@ -5,25 +5,48 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use File::Spec ();
 use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness2::Util::HashBase qw{
     <job_id
     <test_file
+    <test_file_abs
     <job_try
     <run_id
 };
 
-# Update this to have both the relative absolute paths to the test file, if we only get one use it to calculate the other.
-# It is possible something may have chdir'd before we run the test, so use the absolute full path when running a job. The relative name should be saved for display at a later time.
 sub init {
     my $self = shift;
 
-    croak "'test_file' is a required attribute"
-        unless defined $self->{+TEST_FILE};
-
     croak "'run_id' is a required attribute"
         unless defined $self->{+RUN_ID};
+
+    # Inputs can arrive in either slot with either shape -- the caller may
+    # not know whether the path they have is relative or absolute. Sort by
+    # shape first (absolute goes to test_file_abs, relative goes to
+    # test_file) and then fill in the missing one. Resolve the absolute
+    # path in the caller's current directory at construction time so a
+    # later chdir does not redirect the launch.
+    my @inputs = grep { defined } ($self->{+TEST_FILE}, $self->{+TEST_FILE_ABS});
+    croak "'test_file' or 'test_file_abs' is required"
+        unless @inputs;
+
+    my ($abs, $rel);
+    for my $path (@inputs) {
+        if (File::Spec->file_name_is_absolute($path)) {
+            $abs //= $path;
+        }
+        else {
+            $rel //= $path;
+        }
+    }
+
+    $abs //= File::Spec->rel2abs($rel);
+    $rel //= File::Spec->abs2rel($abs);
+
+    $self->{+TEST_FILE}     = $rel;
+    $self->{+TEST_FILE_ABS} = $abs;
 
     $self->{+JOB_ID}  //= gen_uuid();
     $self->{+JOB_TRY} //= 0;
@@ -65,9 +88,22 @@ object.
 
 =over 4
 
-=item test_file (required)
+=item test_file
 
-Path to the test file to execute.
+Relative path to the test file, kept for display. Derived from an
+absolute input if the caller only supplied one.
+
+=item test_file_abs
+
+Absolute path to the test file, resolved in the caller's current
+directory at construction time so a later chdir does not redirect the
+launch. Derived from a relative input if the caller only supplied one.
+
+At least one of L</test_file> or L</test_file_abs> is required. Each
+input is classified by L<File::Spec/file_name_is_absolute>, so the
+caller may hand either slot a path of either shape -- an absolute path
+supplied as C<test_file> still lands in C<test_file_abs> internally,
+and vice-versa.
 
 =item run_id (required)
 

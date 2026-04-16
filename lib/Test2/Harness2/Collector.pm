@@ -438,6 +438,40 @@ sub _run_collector {
     my $parser = $self->{+PARSER};
     $parser = $parser->new() if defined($parser) && !ref $parser;
 
+    # Route collector-process warnings through the logger chain in addition to
+    # the default STDERR print.  This captures warnings produced by auditors,
+    # loggers, and the collector's own internal logic that would otherwise only
+    # reach the calling terminal.  Child-process warnings already flow through
+    # the stdout/stderr pipe to this process's parser chain, so no handler is
+    # needed on the child side.  Use local so the handler is restored when
+    # _run_collector returns (including via die).
+    local $SIG{__WARN__} = sub {
+        my ($msg) = @_;
+        print STDERR $msg;
+
+        my $ok = eval {
+            my %harness;
+            if ($parser) {
+                $harness{run_id}  = $parser->run_id  if defined $parser->run_id;
+                $harness{job_id}  = $parser->job_id  if defined $parser->job_id;
+                $harness{job_try} = $parser->job_try if defined $parser->job_try;
+            }
+
+            my $event = Test2::Harness2::Event->new(
+                event_id   => gen_uuid(),
+                stamp      => time,
+                facet_data => {
+                    (%harness ? (harness => \%harness) : ()),
+                    info => [{tag => 'WARNING', details => $msg, debug => 1}],
+                },
+            );
+            $self->_process_event($event);
+            1;
+        };
+        # Use print STDERR rather than warn to avoid re-entering this handler.
+        print STDERR "Failed to log warning event: $@\n" unless $ok;
+    };
+
     # Main collection loop
     my $child_exited = 0;
     my $child_exit   = undef;
@@ -690,8 +724,7 @@ sub _check_new_pgroup_supported_on_win32 {
     # Until that work lands, fail fast rather than silently ignoring the
     # isolation request -- the harness relies on it for Invariant 1.
     if ($self->{+NEW_PGROUP}) {
-        croak "new_pgroup => 1 is not yet supported on Windows; install Win32::Job "
-            . "and implement the Collector Win32 launch path that uses it";
+        croak "new_pgroup => 1 is not yet supported on Windows; install Win32::Job " . "and implement the Collector Win32 launch path that uses it";
     }
 }
 

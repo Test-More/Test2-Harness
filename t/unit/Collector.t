@@ -1063,6 +1063,55 @@ subtest 'Handle->is_done - non-blocking completion check' => sub {
     ok(defined $h2->exit_code, 'exit_code recorded on reap');
 };
 
+# ===========================================================================
+# $SIG{__WARN__} handler routes collector-process warnings through loggers
+# ===========================================================================
+
+{
+
+    # A logger that emits a warn() during shutdown so we can exercise the
+    # $SIG{__WARN__} handler that _run_collector installs.  shutdown() fires
+    # after the handler is in place and after the child has been collected, so
+    # any warnings produced there must appear in the JSONL log as WARNING info
+    # events in addition to going to STDERR.
+    package T2H2_Test_WarnOnShutdown_Logger;
+    use parent 'Test2::Harness2::Collector::Logger::JSONL';
+
+    sub shutdown {
+        my $self = shift;
+        warn "collector-process warning from shutdown\n";
+        $self->SUPER::shutdown(@_);
+    }
+}
+
+subtest 'collector-process warnings are routed through loggers' => sub {
+    my $output = "$tmpdir/warn_handler.jsonl";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch  => ['perl', '-e', '1'],
+        loggers => [T2H2_Test_WarnOnShutdown_Logger->new(output_file => $output)],
+    );
+
+    my $exit = $collector->wait();
+    is($exit, 0, "collector exited cleanly");
+
+    my @events = read_events($output);
+    ok(@events >= 1, "got at least one event");
+
+    my @warn_evs = grep {
+        my $info = $_->{facet_data}{info};
+        $info && grep { ($_->{tag} // '') eq 'WARNING' } @$info;
+    } @events;
+
+    ok(@warn_evs >= 1, "found at least one WARNING info event in the log");
+    like(
+        $warn_evs[0]->{facet_data}{info}[0]{details},
+        qr/collector-process warning from shutdown/,
+        "WARNING event contains the warning text",
+    );
+    is($warn_evs[0]->{facet_data}{info}[0]{debug}, 1, "WARNING event is marked debug");
+};
+
 use Test2::Harness2::Collector::Handle;
 
 done_testing;

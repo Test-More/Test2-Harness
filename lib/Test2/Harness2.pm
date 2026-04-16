@@ -6,17 +6,22 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use File::Path qw/make_path/;
-use Time::HiRes qw/time/;
+use Time::HiRes qw/time sleep/;
 use Test2::Util::UUID qw/gen_uuid/;
 use POSIX qw/WNOHANG getpgrp/;
 
-use constant HAS_LINUX_PRCTL => eval { require Linux::Prctl; 1 } ? 1 : 0;
+use constant IS_WIN32 => $^O eq 'MSWin32';
+use constant HAS_CHILD_SUBREAPER => eval {
+    require Test2::Harness2::ChildSubReaper;
+    Test2::Harness2::ChildSubReaper::have_subreaper_support() ? 1 : 0;
+} || 0;
 
 use Atomic::Pipe;
 use IPC::Manager qw/ipcm_spawn/;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Run;
 use Test2::Harness2::Util::EventEmitter;
+use Test2::Harness2::Util::IPC qw/list_direct_children/;
 
 use Object::HashBase qw{
     <workdir
@@ -121,10 +126,10 @@ sub start {
     my $jump_to = $self->{+JUMP_TO};
 
     Test2::Harness2::Collector->interpose(
-        ipcm_info    => $self->ipcm_info,
-        loggers      => $loggers,
-        parser       => 'Test2::Harness2::Collector::Parser::IOParser',
-        parent_pids  => [$caller_pid],
+        ipcm_info   => $self->ipcm_info,
+        loggers     => $loggers,
+        parser      => 'Test2::Harness2::Collector::Parser::IOParser',
+        parent_pids => [$caller_pid],
         (defined($jump_to) ? (jump_to => $jump_to, jump_payload => $run_service) : ()),
     );
 
@@ -165,7 +170,8 @@ sub spawn {
         until ($handle->handle->ready) {
             die "Timeout waiting for harness service to come up after ${timeout}s\n"
                 if time - $start > $timeout;
-            select undef, undef, undef, 0.025;
+
+            sleep(0.02);
         }
 
         return $handle;
@@ -340,44 +346,125 @@ sub _perform_hard_stop {
     $self->{+STATE} = 'terminating';
     $self->{+QUEUE} = [];
 
-    my $timeout = $self->{+KILL_TIMEOUT};
+    my $grace = $self->{+KILL_TIMEOUT};
 
-    my @pids;
-    push @pids => $self->{+CURRENT}{pid} if $self->{+CURRENT};
+    # %pids maps each tracked pid to a hashref recording which signals
+    # we have already sent it and when:
+    #   $pids{$pid} = { TERM => $t1 }           # first-signal stage
+    #   $pids{$pid} = { TERM => $t1, KILL => $t2 }  # escalated to KILL
+    # An empty hashref means "tracked, but no signal sent yet" -- the
+    # state newly-reparented descendants arrive in. The timestamps let
+    # the loop tell "just KILL'd, give it a moment" from "KILL'd long
+    # ago and still alive -- stuck past signal reach".
+    my %pids;
+
+    $pids{$self->{+CURRENT}{pid}} //= {} if $self->{+CURRENT};
 
     # Add any registered workers.
     if ($self->can('workers')) {
-        push @pids => keys %{$self->workers // {}};
+        $pids{$_} //= {} for keys %{$self->workers // {}};
     }
 
-    if (@pids) {
-        # TERM all tracked pids. The collector's own cleanup kills its test.
-        # All workers are spawned with new_pgroup => 1 so each is already in
-        # its own pgroup; we send TERM directly by pid rather than by pgroup,
-        # which avoids accidentally killing the service itself.
-        kill 'TERM', $_ for @pids;
+    # Drop CURRENT/workers that IPC::Manager's per-tick waitpid may
+    # have reaped before _perform_hard_stop ran. Only one sweep is
+    # needed: from here on Perl runs synchronously and no other code
+    # path in the service reaps children behind us. Descendants
+    # reparented via PR_SET_CHILD_SUBREAPER aren't populated here --
+    # the loop below enumerates them on every iteration (via /proc,
+    # falling back to ps) and the first iteration catches whatever
+    # set is live at entry, so pre-loading them would be redundant.
+    delete $pids{$_} for grep { !kill(0, $_) } keys %pids;
 
-        my $deadline = time + $timeout;
-        while (time < $deadline) {
-            my @alive = grep { kill(0, $_) } @pids;
-            last unless @alive;
-            while ((my $p = waitpid(-1, WNOHANG)) > 0) { }
-            select undef, undef, undef, 0.05;
+    my $first_sig = IS_WIN32 ? 'INT' : 'TERM';
+
+    while (1) {
+        # Pick up any descendants that have reparented to us since the
+        # last pass -- freshly-enumerated on the first iteration, and
+        # any newcomers from a just-reaped parent on later iterations.
+        # They arrive with an empty signal map so they get the full
+        # first-signal grace window rather than inheriting the state
+        # of the layer above them.
+        if (HAS_CHILD_SUBREAPER) {
+            $pids{$_} //= {} for list_direct_children($$);
         }
 
-        # KILL anything still alive.
-        my @alive = grep { kill(0, $_) } @pids;
-        if (@alive) {
-            kill 'KILL', $_ for @alive;
-            # Block-reap.
-            waitpid($_, 0) for @alive;
+        my (@fresh, @to_kill, $unignored);
+        for my $pid (keys %pids) {
+            my $state = $pids{$pid};
+
+            next if $state->{IGNORE};
+
+            $unignored++;
+
+            if (my $f_ts = $state->{$first_sig}) {
+                if (my $k_ts = $state->{KILL}) {
+                    my $delta = time - $k_ts;
+
+                    if ($delta >= $grace) {
+                        $state->{IGNORE} = 1;
+                        $unignored--;
+                    }
+                }
+                elsif ((time - $f_ts) >= $grace) {
+                    # Times up, time to kill
+                    push @to_kill => $pid;
+                }
+            }
+            else {
+                # New, need first signal
+                push @fresh => $pid;
+            }
         }
 
-        # Drain any remaining zombies.
-        while ((my $p = waitpid(-1, WNOHANG)) > 0) { }
+        # If unignored is 0 then we have no pids that need action now or in the future.
+        last unless $unignored;
+
+        # Send the first signal to anything that has not had one. All
+        # workers are spawned with new_pgroup => 1 so each is already
+        # in its own pgroup; we signal by pid rather than by pgroup,
+        # which avoids accidentally signalling the service itself.
+        if (@fresh) {
+            kill($first_sig => @fresh);
+            my $now = time;
+            $pids{$_}{$first_sig} = $now for @fresh;
+        }
+
+        if (@to_kill) {
+            kill(KILL => @to_kill);
+            my $now = time;
+            $pids{$_}{KILL} = $now for @to_kill;
+        }
+
+        # Reap whatever is ready.
+        my $reaped = 0;
+        while (my $pid = waitpid(-1, WNOHANG)) {
+            last if $pid < 1;
+            delete $pids{$pid};
+            $reaped = 1;
+        }
+
+        # Sleep unless we did something.
+        sleep(0.05) unless $reaped || @fresh || @to_kill;
     }
 
     delete $self->{+CURRENT};
+}
+
+# IPC::Manager service-loop hook: a non-worker child pid was reaped.
+# The only pid we track here is the currently-running collector; hand
+# its exit status to the Collector::Handle so _check_current_completion
+# sees is_done. Reparented descendants (subreaper orphans) also land
+# here when they exit -- nothing further to do for those.
+sub run_on_pid {
+    my ($self, $pid, $exit) = @_;
+
+    my $cur = $self->{+CURRENT} or return;
+    return unless $cur->{pid} && $cur->{pid} == $pid;
+
+    my $handle = $cur->{handle} or return;
+    $handle->set_exit_code($exit) unless defined $handle->exit_code;
+
+    return;
 }
 
 sub run_should_end {
@@ -399,8 +486,9 @@ sub run_should_end {
 sub run_on_start {
     my $self = shift;
 
-    # Own our pgroup so tests that kill their own pgroups can't reach us,
-    # and so we can TERM -PGID as a backstop on hard stop.
+    # Own our pgroup so tests that kill their own pgroups can't reach us.
+    # _perform_hard_stop still signals by pid, not by pgroup, to avoid
+    # hitting the service itself.
     if (POSIX::setpgid(0, 0)) {
         $self->{+OWN_PGROUP} = 1;
     }
@@ -408,24 +496,35 @@ sub run_on_start {
         warn "setpgid(0,0) failed in run_on_start: $!";
     }
 
-    # AI: Linux::Prctl is problematic. Remove it from the dist.
-    # Instead create a new ~/projects/Test2/Test2-Harness2-ChildSubReaper directory, inside create a new perl distribution for Test2::Harness2::ChildSubReaper that uses XS to provide the functionality we need. Make that an optional dep and use it when it is installed and when it applies to the architecture the code is running on.
-    # Create test cases that only run when it is installed as well as test cases that hide the module to forcefully test when it is not installed.
-
     # Ask the kernel to treat us as a subreaper (Linux >= 3.4 only).
     # Effect: any descendant that gets orphaned (its immediate parent
     # died, typically because a test double-forked or called setsid +
     # exit on its parent) reparents to THIS process instead of init(1).
-    # That lets our hard-stop cleanup path waitpid those grandchildren
-    # and guarantee Invariant 1 (no survivors). Without this, such
-    # grandchildren escape our visibility and become the test's
-    # responsibility to clean up.
     #
-    # Linux::Prctl is an optional dep. On non-Linux or when the module
-    # is not installed, we skip silently -- the harness still works, we
-    # just lose the escape-hatch cleanup for detached grandchildren.
-    if (HAS_LINUX_PRCTL && Linux::Prctl->can('set_child_subreaper')) {
-        Linux::Prctl::set_child_subreaper(1);
+    # Once reparented, those processes become our direct children for
+    # all kernel purposes. Ongoing bookkeeping falls to two pieces:
+    #
+    #   * Reaping: IPC::Manager's service loop runs waitpid(-1, WNOHANG)
+    #     every tick and forwards each non-worker pid to run_on_pid().
+    #     Our run_on_pid() recognizes the currently-tracked collector
+    #     pid and hands its exit status to the collector Handle;
+    #     anything else is a reparented descendant that's already been
+    #     drained.
+    #
+    #   * Termination at shutdown: pgroups do not follow reparenting,
+    #     so _perform_hard_stop also enumerates our direct children
+    #     (via /proc, falling back to ps) and folds any extras into
+    #     the TERM-then-KILL sequence. That enumeration only runs at
+    #     shutdown; the per-tick reap is handled in-loop by
+    #     IPC::Manager.
+    #
+    # Test2::Harness2::ChildSubReaper is an optional dep. On non-Linux
+    # or when the module is not installed, we skip silently -- the
+    # harness still works, we just lose the escape-hatch cleanup for
+    # detached grandchildren.
+    if (HAS_CHILD_SUBREAPER) {
+        Test2::Harness2::ChildSubReaper::set_child_subreaper(1)
+            or warn "set_child_subreaper failed: $!";
     }
 
     # First structured event: service is up.
@@ -456,6 +555,11 @@ sub _emit_service_event {
 sub run_on_all {
     my ($self, $activity) = @_;
 
+    # IPC::Manager's service loop already reaped any exited child and
+    # routed non-worker pids through run_on_pid(), so by the time we
+    # get here the collector Handle has its exit_code stashed when
+    # applicable. _check_current_completion reads that via
+    # $handle->is_done without needing to waitpid itself.
     $self->_check_current_completion;
 
     return if $self->{+CURRENT};

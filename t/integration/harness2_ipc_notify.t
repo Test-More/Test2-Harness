@@ -1,6 +1,6 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
-use Time::HiRes qw/time/;
+use Time::HiRes qw/time sleep/;
 
 use Test2::Harness2;
 
@@ -20,7 +20,7 @@ sub wait_until {
     my $deadline = time + $timeout_sec;
     while (time < $deadline) {
         return 1 if $check->();
-        select undef, undef, undef, 0.05;
+        sleep(0.05);
     }
     return 0;
 }

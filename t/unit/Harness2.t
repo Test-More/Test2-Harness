@@ -3,6 +3,7 @@ use Config;
 use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
 use POSIX qw/WNOHANG/;
+use Time::HiRes qw/sleep/;
 
 use Test2::Harness2;
 use Test2::Harness2::Run;
@@ -196,7 +197,7 @@ subtest 'run_on_all detects collector exit and advances queue' => sub {
     my $fake_handle = bless {pid => $child_pid}, 'Test2::Harness2::Collector::Handle';
 
     # Give the child a moment to exit before we check.
-    select undef, undef, undef, 0.1;
+    sleep(0.1);
 
     $h->{current} = {
         run        => $run,
@@ -248,7 +249,7 @@ subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
     $h->_perform_hard_stop;
 
     # Give the OS a moment to finish reaping.
-    select undef, undef, undef, 0.1;
+    sleep(0.1);
 
     ok(!kill(0, $child_pid), 'child is dead');
     ok(!$h->{current},       'current cleared');
@@ -354,6 +355,190 @@ subtest 'run_on_start sets up pgid (smoke test)' => sub {
         $h->run_on_start;
     }
     is($called, [0, 0], 'setpgid(0,0) was called');
+};
+
+subtest 'run_on_start calls ChildSubReaper when available' => sub {
+    skip_all "ChildSubReaper support is not present in this build"
+        unless Test2::Harness2::HAS_CHILD_SUBREAPER();
+
+    my @calls;
+    no warnings 'redefine';
+    local *POSIX::setpgid                                        = sub { 1 };
+    local *Test2::Harness2::ChildSubReaper::set_child_subreaper  = sub {
+        push @calls => [@_];
+        return 1;
+    };
+
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    $h->run_on_start;
+
+    is(scalar @calls, 1,  'set_child_subreaper called once');
+    is($calls[0],     [1], 'called with (1) to enable the flag');
+};
+
+subtest 'HAS_CHILD_SUBREAPER compiles to 0 when the module is absent' => sub {
+    # The HAS_CHILD_SUBREAPER constant is resolved at compile time, so we
+    # have to load Test2::Harness2 in a fresh perl interpreter to
+    # exercise the "module not installed" path. The @INC hook rejects
+    # any attempt to load Test2::Harness2::ChildSubReaper before the
+    # constant is evaluated.
+    my $script = <<'END_PERL';
+unshift @INC, sub {
+    my (undef, $filename) = @_;
+    die "hidden by test\n"
+        if $filename eq 'Test2/Harness2/ChildSubReaper.pm';
+    return undef;
+};
+require Test2::Harness2;
+exit(Test2::Harness2::HAS_CHILD_SUBREAPER() ? 1 : 0);
+END_PERL
+
+    my @cmd = ($^X, (map { "-I$_" } grep { -d $_ } @INC), '-e', $script);
+    system(@cmd);
+    is($? >> 8, 0, 'constant is false when the module cannot be loaded');
+};
+
+subtest 'run_on_start warns when set_child_subreaper fails' => sub {
+    skip_all "ChildSubReaper support is not present in this build"
+        unless Test2::Harness2::HAS_CHILD_SUBREAPER();
+
+    no warnings 'redefine';
+    local *POSIX::setpgid                                        = sub { 1 };
+    local *Test2::Harness2::ChildSubReaper::set_child_subreaper  = sub { $! = 1; 0 };
+
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings => @_ };
+
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    $h->run_on_start;
+
+    ok((grep { /set_child_subreaper failed/ } @warnings),
+        'failure is surfaced via warn');
+};
+
+subtest 'run_on_pid stashes exit status on the collector Handle' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $handle = bless {pid => 12345}, 'Test2::Harness2::Collector::Handle';
+    $h->{current} = {pid => 12345, handle => $handle};
+
+    $h->run_on_pid(12345, 256);
+    is($handle->exit_code, 256, 'exit status forwarded to the current Handle');
+
+    # Subsequent reap of the same pid shouldn't clobber a pre-existing code.
+    $h->run_on_pid(12345, 512);
+    is($handle->exit_code, 256, 'existing exit_code is preserved');
+};
+
+subtest 'run_on_pid ignores pids that are not the current collector' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $handle = bless {pid => 12345}, 'Test2::Harness2::Collector::Handle';
+    $h->{current} = {pid => 12345, handle => $handle};
+
+    # Some other pid: a reparented descendant the service loop drained.
+    # No-op -- no exception, Handle untouched.
+    ok(lives { $h->run_on_pid(99999, 0) }, 'tolerates non-current pid');
+    ok(!defined $handle->exit_code, 'Handle exit_code not touched');
+};
+
+subtest 'Handle::is_done short-circuits when exit_code is pre-set' => sub {
+    my $handle = Test2::Harness2::Collector::Handle->new(pid => 99999999);
+    $handle->set_exit_code(0);
+    ok($handle->is_done, 'is_done returns true without calling waitpid');
+};
+
+subtest '_perform_hard_stop TERMs reparented descendants on Linux' => sub {
+    skip_all "fork required"   unless $Config{d_fork};
+    skip_all "Linux /proc required" unless -d '/proc';
+    skip_all "ChildSubReaper support is not present in this build"
+        unless Test2::Harness2::HAS_CHILD_SUBREAPER();
+
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir, kill_timeout => 3);
+
+    # Fork a long-running child that catches TERM so we can verify hard_stop
+    # actually sent the signal rather than the kernel killing the child for
+    # some other reason.
+    my $kid = fork // die "fork: $!";
+    if (!$kid) {
+        $SIG{TERM} = sub { POSIX::_exit(0) };
+        sleep 30;
+        POSIX::_exit(99);
+    }
+
+    # Not in CURRENT, not in workers -- the only path that picks it up is
+    # the subreaper-descendant enumeration inside _perform_hard_stop.
+    $h->_perform_hard_stop;
+
+    # Hard stop waitpid's everything, so the child is gone.
+    ok(!kill(0, $kid), 'reparented descendant was terminated and reaped');
+};
+
+subtest '_perform_hard_stop catches grandchildren reparented mid-kill' => sub {
+    skip_all "fork required"        unless $Config{d_fork};
+    skip_all "Linux /proc required" unless -d '/proc';
+    skip_all "ChildSubReaper support is not present in this build"
+        unless Test2::Harness2::HAS_CHILD_SUBREAPER();
+
+    my $dir = tempdir(CLEANUP => 1);
+
+    # Short grace so A's TERM->KILL escalation happens quickly, then
+    # X gets the same treatment from a fresh window.
+    my $h = Test2::Harness2->new(workdir => $dir, kill_timeout => 1);
+
+    # Build a two-level tree: A is our direct child, X is A's child.
+    # A IGNOREs TERM so it can only die from KILL; that forces X's
+    # reparenting to happen during the KILL phase of the outer loop.
+    # X must still get its own TERM first with a fresh grace window,
+    # not inherit A's KILL.
+    my $x_flag = "$dir/x_got_term";
+    pipe(my $pipe_r, my $pipe_w) or die "pipe: $!";
+    my $a = fork // die "fork: $!";
+    if (!$a) {
+        close $pipe_r;
+
+        my $x = fork // die "fork: $!";
+        if (!$x) {
+            close $pipe_w;
+            $SIG{TERM} = sub {
+                open(my $fh, '>', $x_flag) or POSIX::_exit(2);
+                print $fh "got TERM\n";
+                close $fh;
+                POSIX::_exit(0);
+            };
+            sleep 30;
+            POSIX::_exit(99);
+        }
+
+        # A: report X's pid, ignore TERM, wait for KILL. X must outlive
+        # A long enough to reparent to the test process.
+        syswrite($pipe_w, "$x\n");
+        close $pipe_w;
+        $SIG{TERM} = 'IGNORE';
+        sleep 30;
+        POSIX::_exit(99);
+    }
+    close $pipe_w;
+
+    my $x_line = <$pipe_r>;
+    chomp $x_line;
+    my $x = $x_line + 0;
+    close $pipe_r;
+
+    ok(kill(0, $a), 'A is alive pre-stop');
+    ok(kill(0, $x), 'X is alive pre-stop');
+
+    $h->_perform_hard_stop;
+
+    ok(!kill(0, $a), 'A reaped');
+    ok(!kill(0, $x), 'X (reparented grandchild) also reaped');
+    ok(-f $x_flag,
+        'X received its own TERM grace window (not just KILL after A fell)');
 };
 
 done_testing;

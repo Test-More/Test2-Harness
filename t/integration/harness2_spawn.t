@@ -1,5 +1,6 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
+use Time::HiRes qw/sleep/;
 
 use Test2::Harness2;
 
@@ -27,7 +28,7 @@ for (1 .. 200) {
         $done = 1;
         last;
     }
-    select undef, undef, undef, 0.05;
+    sleep(0.05);
 }
 ok($done, 'run completed within 10s') or diag "still running after 10s";
 

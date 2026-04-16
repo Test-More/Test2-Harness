@@ -2,6 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use POSIX qw/:sys_wait_h/;
 use Config;
+use Time::HiRes qw/sleep/;
 use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 
 use Test2::Harness2::Collector;
@@ -1304,7 +1305,7 @@ subtest 'Handle->is_done - non-blocking completion check' => sub {
 
     my $h2 = Test2::Harness2::Collector::Handle->new(pid => $child2);
     # Give the child a moment to exit.
-    select undef, undef, undef, 0.05;
+    sleep(0.05);
     ok($h2->is_done,           'is_done returns true after child exits');
     ok(defined $h2->exit_code, 'exit_code recorded on reap');
 };

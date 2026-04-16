@@ -8,6 +8,7 @@ use Carp qw/croak/;
 use File::Path qw/make_path/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
+use POSIX qw/WNOHANG/;
 
 use constant HAS_LINUX_PRCTL => eval { require Linux::Prctl; 1 } ? 1 : 0;
 
@@ -155,10 +156,7 @@ sub handle_finish_request {
 
 sub handle_terminate_request {
     my $self = shift;
-    $self->{+STATE} = 'terminating';
-    # Actual process-killing happens in _perform_hard_stop (Task 14).
-    # Clearing the queue here is safe and matches the spec.
-    $self->{+QUEUE} = [];
+    $self->_perform_hard_stop;
     return {ok => 1};
 }
 
@@ -171,11 +169,77 @@ sub handle_detach_request {
     return {ok => 1};
 }
 
+sub _check_current_completion {
+    my $self = shift;
+    my $cur  = $self->{+CURRENT} or return;
+
+    my $handle = $cur->{handle};
+    return unless $handle->is_done;
+
+    # Move the job from running to done.
+    $cur->{run}->mark_done($cur->{job}->job_id);
+
+    # If the whole run is complete, pop it from the queue.
+    if ($cur->{run}->is_complete) {
+        my $run_id = $cur->{run}->run_id;
+        $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
+
+        # Flip to finishing if requested (Task 15 builds on this).
+        $self->{+STATE} = 'finishing'
+            if $self->{+FINISH_AFTER_INITIAL_RUN}
+            && $self->{+STATE} eq 'running';
+    }
+
+    delete $self->{+CURRENT};
+}
+
+sub _perform_hard_stop {
+    my $self = shift;
+
+    $self->{+STATE} = 'terminating';
+    $self->{+QUEUE} = [];
+
+    my $timeout = $self->{+KILL_TIMEOUT};
+
+    my @pids;
+    push @pids => $self->{+CURRENT}{pid} if $self->{+CURRENT};
+
+    # Add any registered workers.
+    if ($self->can('workers')) {
+        push @pids => map { $_->{pid} } values %{$self->workers // {}};
+    }
+
+    if (@pids) {
+        # TERM all tracked pids. The collector's own cleanup kills its test.
+        kill 'TERM', $_ for @pids;
+
+        my $deadline = time + $timeout;
+        while (time < $deadline) {
+            my @alive = grep { kill(0, $_) } @pids;
+            last unless @alive;
+            while ((my $p = waitpid(-1, WNOHANG)) > 0) { }
+            select undef, undef, undef, 0.05;
+        }
+
+        # KILL anything still alive.
+        my @alive = grep { kill(0, $_) } @pids;
+        if (@alive) {
+            kill 'KILL', $_ for @alive;
+            # Block-reap.
+            waitpid($_, 0) for @alive;
+        }
+
+        # Drain any remaining zombies.
+        while ((my $p = waitpid(-1, WNOHANG)) > 0) { }
+    }
+
+    delete $self->{+CURRENT};
+}
+
 sub run_on_all {
     my ($self, $activity) = @_;
 
-    # Completion detection is in Task 14.
-    # $self->_check_current_completion;
+    $self->_check_current_completion;
 
     return if $self->{+CURRENT};
     return if $self->{+STATE} eq 'terminating';

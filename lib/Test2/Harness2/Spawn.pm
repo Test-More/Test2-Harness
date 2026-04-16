@@ -68,14 +68,14 @@ sub finish { $_[0]->_send_request('finish') }
 
 sub terminate {
     my $self = shift;
-    my $res  = $self->_send_request('Terminate');
+    my $res  = $self->_send_request('terminate');
     $self->wait;
     return $res;
 }
 
 sub detach {
     my $self = shift;
-    my $res  = $self->_send_request('Detach', {pid => $$});
+    my $res  = $self->_send_request('detach', {pid => $$});
     $self->{+TERMINATE_ON_DESTROY} = 0;
     return $res;
 }
@@ -138,11 +138,11 @@ exposes convenience methods that proxy the service's request handlers.
 =head2 Terminate-on-destroy contract
 
 By default, when a C<Spawn> object goes out of scope the service is
-terminated automatically via C<terminate()>, which sends a C<Terminate>
+terminated automatically via C<terminate()>, which sends a C<terminate>
 request and then C<waitpid()>s the daemon.  This prevents leaked background
 processes when the caller forgets to clean up.
 
-Call C<detach()> to opt out: it sends a C<Detach> request (removing the
+Call C<detach()> to opt out: it sends a C<detach> request (removing the
 caller's PID from the service's watch-list) and clears the
 C<terminate_on_destroy> flag so DESTROY becomes a no-op.
 

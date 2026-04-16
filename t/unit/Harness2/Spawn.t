@@ -32,7 +32,7 @@ subtest 'detach turns off terminate_on_destroy' => sub {
 
     $s->detach;
 
-    is($sent[0][0],              'Detach', 'sent Detach request');
+    is($sent[0][0],              'detach', 'sent detach request');
     is($sent[0][1]{pid},         $$,       'payload includes caller pid');
     is($s->terminate_on_destroy, 0,        'flag cleared');
 };

@@ -49,7 +49,7 @@ subtest 'launch - basic stdout/stderr' => sub {
     my $output = "$tmpdir/a_basic.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'print "hello stdout\n"; print STDERR "hello stderr\n"'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -82,7 +82,7 @@ subtest 'launch - exit code capture' => sub {
     my $output = "$tmpdir/a_exit.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'exit 42'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -107,7 +107,7 @@ subtest 'launch - signal mirroring' => sub {
     # signal exit and re-raise the same signal in itself, so $? on the
     # collector's wait-status carries the signal too.
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'kill USR1 => $$; sleep 5'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -169,7 +169,7 @@ subtest 'no-wait-status modes - exit reflects auditor verdict' => sub {
         close($err_w);
 
         my $collector = Test2::Harness2::Collector->spawn(
-            ipcm_info => undef,
+            ipcm_info => {},
             stdout    => $out_r,
             stderr    => $err_r,
             pid       => $child,
@@ -195,7 +195,7 @@ subtest 'launch - env vars' => sub {
     my $output = "$tmpdir/a_env.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'print $ENV{MY_TEST_VAR}, "\n"'],
         env_vars  => {MY_TEST_VAR => 'collector_test_value'},
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
@@ -213,7 +213,7 @@ subtest 'launch - env vars via spec name' => sub {
     my $output = "$tmpdir/a_env_spec.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'print $ENV{SPEC_VAR}, "\n"'],
         env       => {SPEC_VAR => 'from_spec_name'},
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
@@ -231,7 +231,7 @@ subtest 'launch - multi-line output' => sub {
     my $output = "$tmpdir/a_multi.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'for (1..5) { print "line $_\n" }'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -247,7 +247,7 @@ subtest 'launch - string launch arg' => sub {
     my $output = "$tmpdir/a_string.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => 'echo hello_string',
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -290,7 +290,7 @@ subtest 'pipes - pipe handles with pid' => sub {
     close($err_w);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $out_r,
         stderr    => $err_r,
         pid       => $child,
@@ -339,7 +339,7 @@ subtest 'pipes - spec name mapping (stdout/stderr/pid)' => sub {
     close($err_w);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $out_r,
         stderr    => $err_r,
         pid       => $child,
@@ -375,7 +375,7 @@ subtest 'pipes - stdout pipe only (no stderr)' => sub {
     close($out_w);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $out_r,
         pid       => $child,
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
@@ -412,7 +412,7 @@ subtest 'file - file handles' => sub {
     open(my $err_fh, '<', $stderr_file) or die $!;
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         out_fh    => $out_fh,
         err_fh    => $err_fh,
         child_pid => undef,
@@ -450,7 +450,7 @@ subtest 'file - string paths' => sub {
     close($efh);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $stdout_file,
         stderr    => $stderr_file,
         pid       => undef,
@@ -482,7 +482,7 @@ subtest 'file - spec name mapping with paths' => sub {
     close($efh);
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $stdout_file,
         stderr    => $stderr_file,
         pid       => undef,
@@ -531,7 +531,7 @@ subtest 'fifo - fifo handles use Atomic::Pipe' => sub {
     open(my $err_r, '<', $fifo_err) or die "open fifo_err reader: $!";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $out_r,
         stderr    => $err_r,
         pid       => undef,
@@ -581,7 +581,7 @@ subtest 'fifo - fifo string paths' => sub {
     }
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $fifo_out,
         stderr    => $fifo_err,
         pid       => undef,
@@ -616,7 +616,7 @@ subtest 'child killed when parent_pids disappear' => sub {
     my $fake_parent = 2_000_000_000;
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info   => undef,
+        ipcm_info   => {},
         launch      => ['perl', '-e', 'sleep 300'],
         loggers     => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
         parent_pids => [$fake_parent],
@@ -639,7 +639,7 @@ subtest 'child killed on signal' => sub {
     # Use a child that prints something first so the collector has time
     # to enter its loop and open the output file before we signal it.
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'print "started\n"; sleep 300'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -670,7 +670,7 @@ subtest 'graceful SIGTERM: collector exits promptly and child is reaped' => sub 
     # It prints a line first so the collector enters its loop before we
     # signal it.
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'print "ready\n"; sleep 60'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -757,7 +757,7 @@ subtest 'ignore-class signals do not kill the collector' => sub {
     my $output = "$tmpdir/ignore_sigs.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'print "ready\n"; sleep 60'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
@@ -813,9 +813,9 @@ subtest 'exception in run loop is logged as error event' => sub {
     my $output = "$tmpdir/exception.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', 'print "line1\n"; print "line2\n"'],
-        parser    => Test2::Harness2::Collector::Parser::_Exploding->new(ipcm_info => undef),
+        parser    => Test2::Harness2::Collector::Parser::_Exploding->new(ipcm_info => {}),
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
     );
 
@@ -839,7 +839,7 @@ subtest 'exception in run loop is logged as error event' => sub {
 
 subtest 'construction validation' => sub {
     like(
-        dies { Test2::Harness2::Collector->new(ipcm_info => undef) },
+        dies { Test2::Harness2::Collector->new(ipcm_info => {}) },
         qr/Must specify either/,
         "dies without launch or stdout/stderr"
     );
@@ -847,7 +847,7 @@ subtest 'construction validation' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                ipcm_info => undef,
+                ipcm_info => {},
                 launch    => ['echo'],
                 stdout    => \*STDIN,
             )
@@ -859,7 +859,7 @@ subtest 'construction validation' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                ipcm_info => undef,
+                ipcm_info => {},
                 launch    => ['echo'],
                 loggers   => 'not-an-arrayref',
             )
@@ -869,7 +869,7 @@ subtest 'construction validation' => sub {
     );
 
     like(
-        dies { Test2::Harness2::Collector::Logger::JSONL->new(ipcm_info => undef) },
+        dies { Test2::Harness2::Collector::Logger::JSONL->new(ipcm_info => {}) },
         qr/output_file/,
         "JSONL logger dies without output_file"
     );
@@ -881,7 +881,7 @@ subtest 'spec validation - bad shapes are rejected at init' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                ipcm_info => undef,
+                ipcm_info => {},
                 stdout    => $devnull,
                 loggers   => [{bogus => 1}],
             )
@@ -893,7 +893,7 @@ subtest 'spec validation - bad shapes are rejected at init' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                ipcm_info => undef,
+                ipcm_info => {},
                 stdout    => $devnull,
                 loggers   => [[]],
             )
@@ -905,7 +905,7 @@ subtest 'spec validation - bad shapes are rejected at init' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                ipcm_info => undef,
+                ipcm_info => {},
                 stdout    => $devnull,
                 auditor   => {bogus => 1},
             )
@@ -917,7 +917,7 @@ subtest 'spec validation - bad shapes are rejected at init' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                ipcm_info => undef,
+                ipcm_info => {},
                 stdout    => $devnull,
                 auditor   => 'Test2::Harness2::Util',    # exists but doesn't DOES role
             )
@@ -929,7 +929,7 @@ subtest 'spec validation - bad shapes are rejected at init' => sub {
     like(
         dies {
             Test2::Harness2::Collector->new(
-                ipcm_info => undef,
+                ipcm_info => {},
                 stdout    => $devnull,
                 loggers   => ['Test2::Harness2::Util'],
             )
@@ -978,7 +978,7 @@ subtest 'spec instantiation is deferred to the collector child' => sub {
     $T2H2_Test_Sentinel_Auditor::CONSTRUCTED = 0;
 
     my $c = Test2::Harness2::Collector->new(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $devnull,
         loggers   => ['T2H2_Test_Sentinel_Logger'],
         auditor   => 'T2H2_Test_Sentinel_Auditor',
@@ -1011,7 +1011,7 @@ subtest 'blessed instances pass through unchanged and survive validation' => sub
 
     my $logger = T2H2_Test_Blessed_Logger->new();
     my $c      = Test2::Harness2::Collector->new(
-        ipcm_info => undef,
+        ipcm_info => {},
         stdout    => $devnull,
         loggers   => [$logger],
     );
@@ -1036,7 +1036,7 @@ subtest 'interpose - captures output and exit code' => sub {
 
     if (!$outer) {
         Test2::Harness2::Collector->interpose(
-            ipcm_info => undef,
+            ipcm_info => {},
             loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
         );
 
@@ -1076,7 +1076,7 @@ subtest 'interpose - captures non-zero exit' => sub {
 
     if (!$outer) {
         Test2::Harness2::Collector->interpose(
-            ipcm_info => undef,
+            ipcm_info => {},
             loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
         );
         exit(17);
@@ -1101,7 +1101,7 @@ subtest 'interpose - multi-line output' => sub {
 
     if (!$outer) {
         Test2::Harness2::Collector->interpose(
-            ipcm_info => undef,
+            ipcm_info => {},
             loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
         );
         for (1 .. 3) { print "line $_\n" }
@@ -1117,7 +1117,7 @@ subtest 'interpose - multi-line output' => sub {
 
 subtest 'new_pgroup attribute defaults to 0' => sub {
     my $c = Test2::Harness2::Collector->new(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', '1'],
     );
     is($c->new_pgroup, 0, 'defaults to 0');
@@ -1125,7 +1125,7 @@ subtest 'new_pgroup attribute defaults to 0' => sub {
 
 subtest 'new_pgroup attribute can be set to 1' => sub {
     my $c = Test2::Harness2::Collector->new(
-        ipcm_info  => undef,
+        ipcm_info  => {},
         launch     => ['perl', '-e', '1'],
         new_pgroup => 1,
     );
@@ -1141,7 +1141,7 @@ subtest 'new_pgroup=1 puts launched child in its own pgroup (Unix)' => sub {
     $tmp->close;
 
     my $handle = Test2::Harness2::Collector->spawn(
-        ipcm_info  => undef,
+        ipcm_info  => {},
         launch     => [$^X, '-e', 'print STDOUT "pgid=", getpgrp(), " pid=", $$, "\n"'],
         new_pgroup => 1,
         loggers    => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $tmpfile]],
@@ -1170,7 +1170,7 @@ subtest 'new_pgroup=0 leaves child in parent pgroup (Unix)' => sub {
     $tmp->close;
 
     my $handle = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => [$^X, '-e', 'print STDOUT "pgid=", getpgrp(), "\n"'],
         loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $tmpfile]],
     );
@@ -1188,7 +1188,7 @@ subtest 'new_pgroup=0 leaves child in parent pgroup (Unix)' => sub {
 
 subtest 'new_pgroup throws on Windows without Win32::Job' => sub {
     my $collector = Test2::Harness2::Collector->new(
-        ipcm_info  => undef,
+        ipcm_info  => {},
         stdout     => \*STDOUT,
         new_pgroup => 1,
     );
@@ -1257,9 +1257,9 @@ subtest 'collector-process warnings are routed through loggers' => sub {
     my $output = "$tmpdir/warn_handler.jsonl";
 
     my $collector = Test2::Harness2::Collector->spawn(
-        ipcm_info => undef,
+        ipcm_info => {},
         launch    => ['perl', '-e', '1'],
-        loggers   => [T2H2_Test_WarnOnShutdown_Logger->new(ipcm_info => undef, output_file => $output)],
+        loggers   => [T2H2_Test_WarnOnShutdown_Logger->new(ipcm_info => {}, output_file => $output)],
     );
 
     my $exit = $collector->wait();
@@ -1289,23 +1289,24 @@ use Test2::Harness2::Collector::Handle;
 # ===========================================================================
 
 subtest 'run_id defaults to undef' => sub {
-    my $c = Test2::Harness2::Collector->new(ipcm_info => undef, launch => ['perl', '-e', '1']);
+    my $c = Test2::Harness2::Collector->new(ipcm_info => {}, launch => ['perl', '-e', '1']);
     ok(!defined $c->run_id, 'run_id defaults to undef');
 };
 
 subtest 'job_id auto-generated as UUID' => sub {
-    my $c = Test2::Harness2::Collector->new(ipcm_info => undef, launch => ['perl', '-e', '1']);
+    my $c = Test2::Harness2::Collector->new(ipcm_info => {}, launch => ['perl', '-e', '1']);
     like($c->job_id, qr/^[0-9A-F-]{36}$/i, 'job_id auto-generated as UUID');
 };
 
 subtest 'job_try defaults to 0' => sub {
-    my $c = Test2::Harness2::Collector->new(ipcm_info => undef, launch => ['perl', '-e', '1']);
+    my $c = Test2::Harness2::Collector->new(ipcm_info => {}, launch => ['perl', '-e', '1']);
     is($c->job_try, 0, 'job_try defaults to 0');
 };
 
-subtest 'ipcm_info explicitly passed as undef' => sub {
-    my $c = Test2::Harness2::Collector->new(ipcm_info => undef, launch => ['perl', '-e', '1']);
-    ok(!defined $c->ipcm_info, 'ipcm_info is undef when passed as undef');
+subtest 'ipcm_info stored when provided' => sub {
+    my $ii = {host => 'localhost'};
+    my $c  = Test2::Harness2::Collector->new(ipcm_info => $ii, launch => ['perl', '-e', '1']);
+    is($c->ipcm_info, $ii, 'ipcm_info stored on the collector');
 };
 
 subtest 'explicit run_id/job_id/job_try/ipcm_info accepted at construction' => sub {

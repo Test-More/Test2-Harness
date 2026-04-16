@@ -3,12 +3,12 @@ use Test2::V0;
 use Test2::Harness2::Collector::Parser::IOParser;
 
 subtest 'construction' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => undef);
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
     ok($parser, "created parser");
 };
 
 subtest 'parse stdout' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => undef);
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
     my $event  = $parser->parse_io(stream => 'stdout', line => 'hello');
 
     ok($event, "got event");
@@ -22,7 +22,7 @@ subtest 'parse stdout' => sub {
 };
 
 subtest 'parse stderr' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => undef);
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
     my $event  = $parser->parse_io(stream => 'stderr', line => 'err');
 
     my $fd = $event->facet_data;
@@ -32,14 +32,14 @@ subtest 'parse stderr' => sub {
 };
 
 subtest 'returns undef for undef line' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => undef);
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
     my $event  = $parser->parse_io(stream => 'stdout', line => undef);
     ok(!defined $event, "undef line returns undef");
 };
 
 subtest 'normalize_event sets harness facet' => sub {
     my $parser = Test2::Harness2::Collector::Parser::IOParser->new(
-        ipcm_info => undef,
+        ipcm_info => {},
         run_id    => 'R1',
         job_id    => 'J1',
         job_try   => 2,
@@ -55,7 +55,7 @@ subtest 'normalize_event sets harness facet' => sub {
 };
 
 subtest 'set_process_info updates run_id/job_id/job_try' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => undef);
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
     $parser->set_process_info(run_id => 'RX', job_id => 'JX', job_try => 4);
     is($parser->run_id,  'RX', 'run_id set via set_process_info');
     is($parser->job_id,  'JX', 'job_id set via set_process_info');
@@ -68,7 +68,7 @@ subtest 'set_process_info updates run_id/job_id/job_try' => sub {
 };
 
 subtest 'set_ipcm_info stores ipcm_info' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => undef);
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
     my $ii     = {host => 'localhost'};
     $parser->set_ipcm_info($ii);
     is($parser->ipcm_info, $ii, 'ipcm_info stored via set_ipcm_info');

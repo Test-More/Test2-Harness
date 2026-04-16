@@ -23,8 +23,8 @@ use Test2::Harness2::Util::HashBase qw{
 sub init {
     my $self = shift;
 
-    croak "'ipcm_info' is required (pass undef explicitly if no service is connected)"
-        unless exists $self->{+IPCM_INFO};
+    croak "'ipcm_info' is a required attribute"
+        unless defined $self->{+IPCM_INFO};
 }
 
 sub set_process_info {

@@ -37,8 +37,8 @@ with 'Test2::Harness2::Role::Collector::Logger';
 sub init {
     my $self = shift;
 
-    croak "'ipcm_info' is required (pass undef explicitly if no service is connected)"
-        unless exists $self->{+IPCM_INFO};
+    croak "'ipcm_info' is a required attribute"
+        unless defined $self->{+IPCM_INFO};
 
     croak "'service_name' is a required attribute" unless defined $self->{+SERVICE_NAME};
 
@@ -63,12 +63,6 @@ sub log_events { 0 }
 
 sub shutdown {
     my $self = shift;
-
-    #AI: ipcm_info is required during construction, how could it be unset? Is this block dead code?
-    unless (defined $self->{+IPCM_INFO}) {
-        warn "IPCNotify shutdown: ipcm_info not set, skipping notification\n";
-        return;
-    }
 
     my $ok = eval {
         unless ($self->{+HANDLE}) {

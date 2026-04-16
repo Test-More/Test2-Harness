@@ -2,7 +2,7 @@ use Test2::V0;
 
 use Test2::Harness2::Collector::Parser::IOParser::Stream;
 
-sub parser { Test2::Harness2::Collector::Parser::IOParser::Stream->new(ipcm_info => undef, @_) }
+sub parser { Test2::Harness2::Collector::Parser::IOParser::Stream->new(ipcm_info => {}, @_) }
 
 subtest 'construction and inheritance' => sub {
     my $p = parser();

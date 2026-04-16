@@ -49,19 +49,19 @@ sub from_files {
 }
 
 sub mark_running {
-    my ($self, $jid) = @_;
-    my @new = grep { $_ ne $jid } @{$self->{+PENDING}};
-    croak "job_id '$jid' is not pending" if @new == @{$self->{+PENDING}};
+    my ($self, $job_id) = @_;
+    my @new = grep { $_ ne $job_id } @{$self->{+PENDING}};
+    croak "job_id '$job_id' is not pending" if @new == @{$self->{+PENDING}};
     $self->{+PENDING} = \@new;
-    push @{$self->{+RUNNING}} => $jid;
+    push @{$self->{+RUNNING}} => $job_id;
 }
 
 sub mark_done {
-    my ($self, $jid) = @_;
-    my @new = grep { $_ ne $jid } @{$self->{+RUNNING}};
-    croak "job_id '$jid' is not running" if @new == @{$self->{+RUNNING}};
+    my ($self, $job_id) = @_;
+    my @new = grep { $_ ne $job_id } @{$self->{+RUNNING}};
+    croak "job_id '$job_id' is not running" if @new == @{$self->{+RUNNING}};
     $self->{+RUNNING} = \@new;
-    push @{$self->{+DONE}} => $jid;
+    push @{$self->{+DONE}} => $job_id;
 }
 
 sub is_complete {
@@ -89,9 +89,9 @@ Test2::Harness2::Run - A single test run (ordered list of jobs with FIFO state t
     my $run = Test2::Harness2::Run->from_files(files => ['t/foo.t', 't/bar.t']);
 
     # Advance job states
-    my $jid = $run->pending->[0];
-    $run->mark_running($jid);
-    $run->mark_done($jid);
+    my $job_id = $run->pending->[0];
+    $run->mark_running($job_id);
+    $run->mark_done($job_id);
 
     print "complete!\n" if $run->is_complete;
 

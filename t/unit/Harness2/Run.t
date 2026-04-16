@@ -23,15 +23,15 @@ subtest 'auto-generates run_id' => sub {
 
 subtest 'mark_running / mark_done move job through states' => sub {
     my $run = Test2::Harness2::Run->from_files(files => ['t/a.t']);
-    my $jid = $run->jobs->[0]->job_id;
+    my $job_id = $run->jobs->[0]->job_id;
 
-    $run->mark_running($jid);
-    is($run->pending, [],     'pending empty');
-    is($run->running, [$jid], 'running has job');
+    $run->mark_running($job_id);
+    is($run->pending, [],         'pending empty');
+    is($run->running, [$job_id], 'running has job');
 
-    $run->mark_done($jid);
-    is($run->running, [],     'running empty');
-    is($run->done,    [$jid], 'done has job');
+    $run->mark_done($job_id);
+    is($run->running, [],         'running empty');
+    is($run->done,    [$job_id], 'done has job');
     ok($run->is_complete, 'run is complete');
 };
 
@@ -49,8 +49,8 @@ subtest 'mark_running croaks on unknown job_id' => sub {
 
 subtest 'mark_done croaks when job is not running' => sub {
     my $run = Test2::Harness2::Run->from_files(files => ['t/a.t']);
-    my $jid = $run->jobs->[0]->job_id;
-    my $ok  = eval { $run->mark_done($jid); 1 };                      # never marked running
+    my $job_id = $run->jobs->[0]->job_id;
+    my $ok  = eval { $run->mark_done($job_id); 1 };                      # never marked running
     ok(!$ok, 'croaked');
     like($@, qr/not running/);
 };

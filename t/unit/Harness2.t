@@ -178,9 +178,9 @@ subtest 'run_on_all detects collector exit and advances queue' => sub {
     $h->handle_queue_test_run_request({files => ['dummy.t']});
 
     my $run   = $h->{queue}[0];
-    my $jid   = $run->pending->[0];
-    my ($job) = grep { $_->job_id eq $jid } @{$run->jobs};
-    $run->mark_running($jid);
+    my $job_id   = $run->pending->[0];
+    my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
+    $run->mark_running($job_id);
 
     # Fork a child that exits immediately so we have a reapable pid.
     my $child_pid = fork // die "fork: $!";
@@ -225,9 +225,9 @@ subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
     my $fake_handle = bless {pid => $child_pid}, 'Test2::Harness2::Collector::Handle';
 
     my $run   = Test2::Harness2::Run->from_files(files => ['dummy.t']);
-    my $jid   = $run->pending->[0];
-    my ($job) = grep { $_->job_id eq $jid } @{$run->jobs};
-    $run->mark_running($jid);
+    my $job_id   = $run->pending->[0];
+    my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
+    $run->mark_running($job_id);
 
     $h->{current} = {
         run        => $run,

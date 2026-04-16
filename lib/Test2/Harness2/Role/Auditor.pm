@@ -9,9 +9,11 @@ use Role::Tiny;
 requires 'audit_event';
 requires 'fail_count';
 requires 'pass_count';
+requires 'set_process_info';
+requires 'set_ipcm_info';
 
 sub passing { !$_[0]->fail_count }
-sub failing {  $_[0]->fail_count }
+sub failing { $_[0]->fail_count }
 
 1;
 

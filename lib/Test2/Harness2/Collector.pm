@@ -32,6 +32,10 @@ use Test2::Harness2::Util::HashBase qw{
     <loggers
     <parent_pids
     <kill_timeout
+    <run_id
+    <job_id
+    <job_try
+    <ipcm_info
 
     +_started
     <_owns_child
@@ -55,6 +59,9 @@ sub init {
     $self->{+ERR_FH}    //= delete $self->{stderr} if exists $self->{stderr};
     $self->{+CHILD_PID} //= delete $self->{pid}    if exists $self->{pid};
     $self->{+ENV_VARS}  //= delete $self->{env}    if exists $self->{env};
+
+    $self->{+JOB_ID}  //= gen_uuid();
+    $self->{+JOB_TRY} //= 0;
 
     $self->{+KILL_TIMEOUT} //= 15;
     $self->{+ENV_VARS}     //= {};
@@ -203,14 +210,32 @@ sub _instantiate_loggers {
     my @instances;
     for my $item (@$specs) {
         if (blessed($item)) {
+            $item->set_process_info(
+                run_id  => $self->{+RUN_ID},
+                job_id  => $self->{+JOB_ID},
+                job_try => $self->{+JOB_TRY},
+            );
+            $item->set_ipcm_info($self->{+IPCM_INFO})
+                if defined $self->{+IPCM_INFO};
             push @instances => $item;
         }
         elsif (ref($item) eq 'ARRAY') {
             my ($class, @args) = @$item;
-            push @instances => $class->new(@args);
+            push @instances => $class->new(
+                run_id    => $self->{+RUN_ID},
+                job_id    => $self->{+JOB_ID},
+                job_try   => $self->{+JOB_TRY},
+                ipcm_info => $self->{+IPCM_INFO},
+                @args,
+            );
         }
         else {
-            push @instances => $item->new();
+            push @instances => $item->new(
+                run_id    => $self->{+RUN_ID},
+                job_id    => $self->{+JOB_ID},
+                job_try   => $self->{+JOB_TRY},
+                ipcm_info => $self->{+IPCM_INFO},
+            );
         }
     }
 
@@ -226,13 +251,31 @@ sub _instantiate_auditor {
     my $inst;
     if (blessed($spec)) {
         $inst = $spec;
+        $inst->set_process_info(
+            run_id  => $self->{+RUN_ID},
+            job_id  => $self->{+JOB_ID},
+            job_try => $self->{+JOB_TRY},
+        );
+        $inst->set_ipcm_info($self->{+IPCM_INFO})
+            if defined $self->{+IPCM_INFO};
     }
     elsif (ref($spec) eq 'ARRAY') {
         my ($class, @args) = @$spec;
-        $inst = $class->new(@args);
+        $inst = $class->new(
+            run_id    => $self->{+RUN_ID},
+            job_id    => $self->{+JOB_ID},
+            job_try   => $self->{+JOB_TRY},
+            ipcm_info => $self->{+IPCM_INFO},
+            @args,
+        );
     }
     else {
-        $inst = $spec->new();
+        $inst = $spec->new(
+            run_id    => $self->{+RUN_ID},
+            job_id    => $self->{+JOB_ID},
+            job_try   => $self->{+JOB_TRY},
+            ipcm_info => $self->{+IPCM_INFO},
+        );
     }
 
     $self->{+AUDITOR} = $inst;
@@ -450,7 +493,23 @@ sub _run_collector {
     # Instantiate parser. When there is no parser the collector still drains
     # the handles but discards the lines without constructing events.
     my $parser = $self->{+PARSER};
-    $parser = $parser->new() if defined($parser) && !ref $parser;
+    if (defined($parser) && !ref $parser) {
+        $parser = $parser->new(
+            run_id    => $self->{+RUN_ID},
+            job_id    => $self->{+JOB_ID},
+            job_try   => $self->{+JOB_TRY},
+            ipcm_info => $self->{+IPCM_INFO},
+        );
+    }
+    elsif (defined $parser && ref $parser) {
+        $parser->set_process_info(
+            run_id  => $self->{+RUN_ID},
+            job_id  => $self->{+JOB_ID},
+            job_try => $self->{+JOB_TRY},
+        );
+        $parser->set_ipcm_info($self->{+IPCM_INFO})
+            if defined $self->{+IPCM_INFO};
+    }
 
     # Route collector-process warnings through the logger chain in addition to
     # the default STDERR print.  This captures warnings produced by auditors,

@@ -21,12 +21,23 @@ with 'Test2::Harness2::Role::Collector::Logger';
 sub init {
     my $self = shift;
 
-    croak "'ipcm_info' is a required attribute"    unless defined $self->{+IPCM_INFO};
     croak "'service_name' is a required attribute" unless defined $self->{+SERVICE_NAME};
-    croak "'run_id' is a required attribute"       unless defined $self->{+RUN_ID};
-    croak "'job_id' is a required attribute"       unless defined $self->{+JOB_ID};
 
     $self->{+JOB_TRY} //= 0;
+}
+
+sub set_process_info {
+    my ($self, %info) = @_;
+    $self->{+RUN_ID}  = $info{run_id}  if exists $info{run_id};
+    $self->{+JOB_ID}  = $info{job_id}  if exists $info{job_id};
+    $self->{+JOB_TRY} = $info{job_try} if exists $info{job_try};
+    return;
+}
+
+sub set_ipcm_info {
+    my ($self, $info) = @_;
+    $self->{+IPCM_INFO} = $info;
+    return;
 }
 
 sub log_events { 0 }
@@ -37,6 +48,11 @@ sub log_event { }
 
 sub shutdown {
     my $self = shift;
+
+    unless (defined $self->{+IPCM_INFO}) {
+        warn "IPCNotify shutdown: ipcm_info not set, skipping notification\n";
+        return;
+    }
 
     my $ok = eval {
         unless ($self->{+HANDLE}) {

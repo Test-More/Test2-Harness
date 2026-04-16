@@ -8,32 +8,40 @@ my $CLASS = 'Test2::Harness2::Collector::Auditor::Test';
 sub mk { $CLASS->new(run_id => 'R', job_id => 'J', job_try => 0, @_) }
 
 subtest 'construction' => sub {
-    like(
-        dies { $CLASS->new() },
-        qr/'run_id' is a required attribute/,
-        "run_id required"
-    );
+    my $a = $CLASS->new();
+    ok($a,                   "constructs without run_id/job_id/job_try");
+    ok(!defined $a->run_id,  "run_id defaults to undef");
+    ok(!defined $a->job_id,  "job_id defaults to undef");
+    ok(!defined $a->job_try, "job_try defaults to undef");
 
-    like(
-        dies { $CLASS->new(run_id => 'R') },
-        qr/'job_id' is a required attribute/,
-        "job_id required"
-    );
+    my $b = mk();
+    is($b->run_id,          'R', "run_id stored");
+    is($b->job_id,          'J', "job_id stored");
+    is($b->job_try,         0,   "job_try stored");
+    is($b->nested,          0,   "nested defaults to 0");
+    is($b->assertion_count, 0,   "no assertions yet");
 
-    like(
-        dies { $CLASS->new(run_id => 'R', job_id => 'J') },
-        qr/'job_try' is a required attribute/,
-        "job_try required"
-    );
+    ok($b->DOES('Test2::Harness2::Role::Auditor'), "consumes Role::Auditor");
+};
 
-    my $a = mk();
-    is($a->run_id,  'R', "run_id stored");
-    is($a->job_id,  'J', "job_id stored");
-    is($a->job_try, 0,   "job_try stored");
-    is($a->nested,  0,   "nested defaults to 0");
-    is($a->assertion_count, 0, "no assertions yet");
+subtest 'set_process_info' => sub {
+    my $a = $CLASS->new();
+    $a->set_process_info(run_id => 'RR', job_id => 'JJ', job_try => 3);
+    is($a->run_id,  'RR', "run_id updated via set_process_info");
+    is($a->job_id,  'JJ', "job_id updated via set_process_info");
+    is($a->job_try, 3,    "job_try updated via set_process_info");
 
-    ok($a->DOES('Test2::Harness2::Role::Auditor'), "consumes Role::Auditor");
+    # Partial update -- only keys present in %info are changed.
+    $a->set_process_info(job_try => 5);
+    is($a->run_id,  'RR', "run_id unchanged after partial update");
+    is($a->job_try, 5,    "job_try updated");
+};
+
+subtest 'set_ipcm_info' => sub {
+    my $a  = $CLASS->new();
+    my $ii = {host => 'localhost'};
+    $a->set_ipcm_info($ii);
+    is($a->ipcm_info, $ii, "ipcm_info stored via set_ipcm_info");
 };
 
 subtest 'empty auditor state' => sub {
@@ -48,28 +56,28 @@ subtest 'empty auditor state' => sub {
 
     # fail() consults fail_error_facet_list which complains about missing plan,
     # so it latches as failing once asked.
-    ok($a->fail, "fail() latches because empty test would fail at exit");
+    ok($a->fail,  "fail() latches because empty test would fail at exit");
     ok(!$a->pass, "pass() agrees");
 };
 
 subtest 'passing assertion' => sub {
-    my $a = mk();
+    my $a   = mk();
     my @out = $a->audit_event({facet_data => {assert => {pass => 1, details => 'ok'}}});
 
     is($a->assertion_count, 1, "assertion counted");
-    is($a->pass_count, 1, "one passing assertion");
-    is($a->fail_count, 0, "no failures");
+    is($a->pass_count,      1, "one passing assertion");
+    is($a->fail_count,      0, "no failures");
     ok(!$a->failing, "still passing live");
 
     is(@out, 1, "one event returned");
     my $ev = $out[0];
     ok($ev->{event_id}, "event has event_id");
-    is($ev->{run_id},  'R', "run_id injected on event");
-    is($ev->{job_id},  'J', "job_id injected on event");
-    is($ev->{job_try}, 0,   "job_try injected on event");
-    is($ev->{facet_data}{harness}{run_id},   'R', "run_id mirrored into harness facet");
-    is($ev->{facet_data}{harness}{job_id},   'J', "job_id mirrored into harness facet");
-    is($ev->{facet_data}{harness}{job_try},  0,   "job_try mirrored into harness facet");
+    is($ev->{run_id},                        'R',             "run_id injected on event");
+    is($ev->{job_id},                        'J',             "job_id injected on event");
+    is($ev->{job_try},                       0,               "job_try injected on event");
+    is($ev->{facet_data}{harness}{run_id},   'R',             "run_id mirrored into harness facet");
+    is($ev->{facet_data}{harness}{job_id},   'J',             "job_id mirrored into harness facet");
+    is($ev->{facet_data}{harness}{job_try},  0,               "job_try mirrored into harness facet");
     is($ev->{facet_data}{harness}{event_id}, $ev->{event_id}, "event_id mirrored into harness facet");
     is($ev->{facet_data}{about}{uuid},       $ev->{event_id}, "event_id mirrored into about.uuid");
 };
@@ -79,17 +87,19 @@ subtest 'failing assertion' => sub {
     $a->audit_event({facet_data => {assert => {pass => 0, details => 'nope'}}});
 
     is($a->assertion_count, 1, "assertion counted");
-    is($a->pass_count, 0, "no passes");
-    ok($a->failing, "failing live");
+    is($a->pass_count,      0, "no passes");
+    ok($a->failing,         "failing live");
     ok($a->fail_count >= 1, "fail_count >= 1");
 };
 
 subtest 'amnesty (todo) on failing assertion' => sub {
     my $a = mk();
-    $a->audit_event({facet_data => {
-        assert  => {pass => 0, details => 'todo failure'},
-        amnesty => [{tag => 'TODO', details => 'reason'}],
-    }});
+    $a->audit_event({
+        facet_data => {
+            assert  => {pass => 0, details => 'todo failure'},
+            amnesty => [{tag => 'TODO', details => 'reason'}],
+        }
+    });
 
     is($a->assertion_count, 1, "assertion counted");
     ok(!$a->failing, "todo failure does not count as failure");
@@ -115,13 +125,15 @@ subtest 'plan with skip (no count)' => sub {
 
 subtest 'plan / assertion-count mismatch' => sub {
     my $a = mk();
-    $a->audit_event({facet_data => {plan => {count => 3}}});
-    $a->audit_event({facet_data => {assert => {pass => 1}}});
-    $a->audit_event({facet_data => {assert => {pass => 1}}});
+    $a->audit_event({facet_data => {plan   => {count => 3}}});
+    $a->audit_event({facet_data => {assert => {pass  => 1}}});
+    $a->audit_event({facet_data => {assert => {pass  => 1}}});
 
     my @errs = $a->subtest_fail_error_facet_list;
-    ok((grep { $_->{details} =~ /Planned for 3 assertions, but saw 2/ } @errs),
-        "plan/count mismatch flagged");
+    ok(
+        (grep { $_->{details} =~ /Planned for 3 assertions, but saw 2/ } @errs),
+        "plan/count mismatch flagged"
+    );
 };
 
 subtest 'no plan declared but assertions made' => sub {
@@ -141,41 +153,47 @@ subtest 'bail-out / halt' => sub {
 subtest 'error facets' => sub {
     my $a = mk();
     $a->audit_event({facet_data => {errors => [{tag => 'X', fail => 1, details => 'boom'}]}});
-    ok($a->failing, "errors facet with fail=>1 marks failing");
+    ok($a->failing,         "errors facet with fail=>1 marks failing");
     ok($a->fail_count >= 1, "fail_count incremented");
 };
 
 subtest 'TAP assertion numbers' => sub {
     my $a = mk();
     $a->audit_event({facet_data => {assert => {pass => 1, number => 1}}});
-    $a->audit_event({facet_data => {assert => {pass => 1, number => 1}}}); # dup
-    $a->audit_event({facet_data => {assert => {pass => 1, number => 3}}}); # skip 2
+    $a->audit_event({facet_data => {assert => {pass => 1, number => 1}}});    # dup
+    $a->audit_event({facet_data => {assert => {pass => 1, number => 3}}});    # skip 2
 
     my @errs = $a->subtest_fail_error_facet_list;
-    ok((grep { $_->{details} =~ /number 1 was seen more than once/ } @errs),
-        "duplicate number flagged");
-    ok((grep { $_->{details} =~ /number 2 was never seen/ } @errs),
-        "missing number flagged");
+    ok(
+        (grep { $_->{details} =~ /number 1 was seen more than once/ } @errs),
+        "duplicate number flagged"
+    );
+    ok(
+        (grep { $_->{details} =~ /number 2 was never seen/ } @errs),
+        "missing number flagged"
+    );
 };
 
 subtest 'harness_process_exit synthesizes harness_job_exit' => sub {
     my $a = mk();
-    $a->audit_event({facet_data => {plan => {count => 1}}});
-    $a->audit_event({facet_data => {assert => {pass => 1}}});
+    $a->audit_event({facet_data => {plan   => {count => 1}}});
+    $a->audit_event({facet_data => {assert => {pass  => 1}}});
 
-    my @out = $a->audit_event({facet_data => {
-        harness_process_exit => {all => 0, err => 0, sig => 0, dmp => 0},
-    }});
+    my @out = $a->audit_event({
+        facet_data => {
+            harness_process_exit => {all => 0, err => 0, sig => 0, dmp => 0},
+        }
+    });
 
     is(@out, 1, "exit produces one event");
     my $ev   = $out[0];
     my $exit = $ev->{facet_data}{harness_job_exit};
 
     ok($exit, "harness_job_exit synthesized");
-    is($exit->{job_id},  'J', "job_id on harness_job_exit");
-    is($exit->{job_try}, 0,   "job_try on harness_job_exit");
-    is($exit->{exit},    0,   "exit value on harness_job_exit");
-    is($exit->{codes}{all}, 0, "codes preserves parse_exit hash");
+    is($exit->{job_id},     'J', "job_id on harness_job_exit");
+    is($exit->{job_try},    0,   "job_try on harness_job_exit");
+    is($exit->{exit},       0,   "exit value on harness_job_exit");
+    is($exit->{codes}{all}, 0,   "codes preserves parse_exit hash");
     ok(defined $exit->{stamp}, "stamp set");
 
     is($a->exit, 0, "auditor records exit code");
@@ -186,84 +204,98 @@ subtest 'non-zero exit produces fail facets' => sub {
     my $a = mk();
     $a->audit_event({facet_data => {plan => {count => 0}}});
 
-    my @out = $a->audit_event({facet_data => {
-        harness_process_exit => {all => 42 << 8, err => 42, sig => 0, dmp => 0},
-    }});
+    my @out = $a->audit_event({
+        facet_data => {
+            harness_process_exit => {all => 42 << 8, err => 42, sig => 0, dmp => 0},
+        }
+    });
 
-    my $ev = $out[0];
+    my $ev   = $out[0];
     my $errs = $ev->{facet_data}{errors};
     ok($errs && @$errs, "errors injected onto exit event");
-    ok((grep { $_->{details} =~ /returned error \(Err: 42\)/ } @$errs),
-        "non-zero exit flagged in errors");
+    ok(
+        (grep { $_->{details} =~ /returned error \(Err: 42\)/ } @$errs),
+        "non-zero exit flagged in errors"
+    );
 };
 
 subtest 'event_id is preserved when already set on event' => sub {
-    my $a = mk();
+    my $a   = mk();
     my $eid = gen_uuid();
     my @out = $a->audit_event({event_id => $eid, facet_data => {assert => {pass => 1}}});
-    is($out[0]->{event_id}, $eid, "existing event_id preserved");
+    is($out[0]->{event_id},                      $eid, "existing event_id preserved");
     is($out[0]->{facet_data}{about}{uuid},       $eid, "about.uuid mirrors");
     is($out[0]->{facet_data}{harness}{event_id}, $eid, "harness.event_id mirrors");
 };
 
 subtest 'event_id sourced from facet_data.harness.event_id' => sub {
-    my $a = mk();
+    my $a   = mk();
     my $eid = gen_uuid();
-    my @out = $a->audit_event({facet_data => {
-        assert  => {pass => 1},
-        harness => {event_id => $eid},
-    }});
+    my @out = $a->audit_event({
+        facet_data => {
+            assert  => {pass     => 1},
+            harness => {event_id => $eid},
+        }
+    });
     is($out[0]->{event_id}, $eid, "event_id taken from harness facet");
 };
 
 subtest 'event_id sourced from facet_data.about.uuid' => sub {
-    my $a = mk();
+    my $a   = mk();
     my $eid = gen_uuid();
-    my @out = $a->audit_event({facet_data => {
-        assert => {pass => 1},
-        about  => {uuid => $eid},
-    }});
+    my @out = $a->audit_event({
+        facet_data => {
+            assert => {pass => 1},
+            about  => {uuid => $eid},
+        }
+    });
     is($out[0]->{event_id}, $eid, "event_id taken from about.uuid");
 };
 
 subtest 'event_id generated when missing everywhere' => sub {
-    my $a = mk();
+    my $a   = mk();
     my @out = $a->audit_event({facet_data => {assert => {pass => 1}}});
     like($out[0]->{event_id}, qr/^[0-9A-F-]{36}$/i, "uuid-shaped event_id generated");
 };
 
 subtest 'STDERR from_tap events bypass subtest processing' => sub {
-    my $a = mk();
-    my @out = $a->audit_event({facet_data => {
-        info     => [{tag => 'STDERR', details => 'some diag'}],
-        from_tap => {source => 'STDERR', details => 'some diag'},
-    }});
-    is(@out, 1, "stderr passed through");
+    my $a   = mk();
+    my @out = $a->audit_event({
+        facet_data => {
+            info     => [{tag => 'STDERR', details => 'some diag'}],
+            from_tap => {source => 'STDERR', details => 'some diag'},
+        }
+    });
+    is(@out,                1, "stderr passed through");
     is($a->assertion_count, 0, "no assertion counted");
 };
 
 subtest 'STDOUT line from_tap is processed' => sub {
-    my $a = mk();
-    my @out = $a->audit_event({facet_data => {
-        info     => [{tag => 'STDOUT', details => 'random text'}],
-        from_tap => {source => 'STDOUT', details => 'random text'},
-    }});
+    my $a   = mk();
+    my @out = $a->audit_event({
+        facet_data => {
+            info     => [{tag => 'STDOUT', details => 'random text'}],
+            from_tap => {source => 'STDOUT', details => 'random text'},
+        }
+    });
     is(@out, 1, "event passed through");
 };
 
 subtest 'subtest pass/fail accounting via parent.children' => sub {
     my $a = mk();
     $a->audit_event({facet_data => {plan => {count => 1}}});
-    $a->audit_event({facet_data => {
-        assert => {pass => 1, details => 'inner subtest'},
-        parent => {
-            hid      => 1,
-            children => [
-                {assert => {pass => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-                {plan   => {count => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-            ],
-        },
-    }});
+    $a->audit_event({
+        facet_data => {
+            assert => {pass => 1, details => 'inner subtest'},
+            parent => {
+                hid      => 1,
+                children => [
+                    {assert => {pass  => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                    {plan   => {count => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                ],
+            },
+        }
+    });
     ok(!$a->failing, "passing subtest leaves auditor passing");
 };
 
@@ -272,17 +304,19 @@ subtest 'subtest with internal failure marks parent failing' => sub {
     $a->audit_event({facet_data => {plan => {count => 1}}});
     # In a real event stream Test2 sets the outer subtest assert to pass=>0
     # whenever any inner assertion fails; the auditor relies on that signal.
-    $a->audit_event({facet_data => {
-        assert => {pass => 0, details => 'subtest'},
-        parent => {
-            hid      => 1,
-            children => [
-                {assert => {pass => 0}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-                {plan   => {count => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-            ],
-        },
-    }});
-    ok($a->failing, "subtest with failed inner assertion marks failing");
+    $a->audit_event({
+        facet_data => {
+            assert => {pass => 0, details => 'subtest'},
+            parent => {
+                hid      => 1,
+                children => [
+                    {assert => {pass  => 0}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                    {plan   => {count => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                ],
+            },
+        }
+    });
+    ok($a->failing,             "subtest with failed inner assertion marks failing");
     ok($a->failed_subtest_tree, "failed_subtest_tree populated");
 };
 
@@ -292,26 +326,28 @@ subtest 'subtest with internal plan-mismatch bubbles up' => sub {
     # Outer assert says pass, but inner plan says 5 with only 1 assertion --
     # the sub-auditor should detect the mismatch and force the outer subtest
     # to fail via injected error facets.
-    $a->audit_event({facet_data => {
-        assert => {pass => 1, details => 'subtest'},
-        parent => {
-            hid      => 1,
-            children => [
-                {assert => {pass => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-                {plan   => {count => 5}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
-            ],
-        },
-    }});
+    $a->audit_event({
+        facet_data => {
+            assert => {pass => 1, details => 'subtest'},
+            parent => {
+                hid      => 1,
+                children => [
+                    {assert => {pass  => 1}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                    {plan   => {count => 5}, harness => {event_id => gen_uuid()}, about => {uuid => gen_uuid()}},
+                ],
+            },
+        }
+    });
     ok($a->failing, "internal plan mismatch in subtest marks parent failing");
 };
 
 subtest 'pass/fail latching after exit' => sub {
     my $a = mk();
-    $a->audit_event({facet_data => {plan => {count => 1}}});
-    $a->audit_event({facet_data => {assert => {pass => 1}}});
-    $a->audit_event({facet_data => {harness_process_exit => {all => 0, err => 0, sig => 0, dmp => 0}}});
+    $a->audit_event({facet_data => {plan                 => {count => 1}}});
+    $a->audit_event({facet_data => {assert               => {pass  => 1}}});
+    $a->audit_event({facet_data => {harness_process_exit => {all   => 0, err => 0, sig => 0, dmp => 0}}});
 
-    ok($a->pass, "pass() true after clean exit");
+    ok($a->pass,  "pass() true after clean exit");
     ok(!$a->fail, "fail() false after clean exit");
 };
 

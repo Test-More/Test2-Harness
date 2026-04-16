@@ -6,6 +6,9 @@ our $VERSION = '2.000011';
 
 use Role::Tiny;
 
+requires 'set_process_info';
+requires 'set_ipcm_info';
+
 # Consumers of this role may be plain classes (no new() method) or may be used
 # as objects (new() method defined).
 

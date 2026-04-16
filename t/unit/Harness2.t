@@ -91,4 +91,31 @@ subtest 'queue_test_run rejects when state is not running' => sub {
     like($res->{error}, qr/not accepting/);
 };
 
+subtest 'finish transitions running -> finishing and rejects further queueing' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $res = $h->handle_finish_request;
+    ok($res->{ok}, 'finish accepted');
+    is($h->{state}, 'finishing', 'state transitioned');
+
+    my $q = $h->handle_queue_test_run_request({files => ['t/x.t']});
+    ok(!$q->{ok}, 'subsequent queue rejected');
+
+    my $again = $h->handle_finish_request;
+    ok(!$again->{ok}, 'second finish returns ok=0');
+};
+
+subtest 'Terminate is idempotent and always accepted' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $r1 = $h->handle_terminate_request;
+    ok($r1->{ok}, 'first accepted');
+    is($h->{state}, 'terminating');
+
+    my $r2 = $h->handle_terminate_request;
+    ok($r2->{ok}, 'second still accepted');
+};
+
 done_testing;

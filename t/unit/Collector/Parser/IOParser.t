@@ -1,6 +1,7 @@
 use Test2::V0;
 
 use Test2::Harness2::Collector::Parser::IOParser;
+use Test2::Harness2::Event;
 
 subtest 'construction' => sub {
     my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
@@ -79,6 +80,30 @@ subtest 'ipcm_info is required at construction' => sub {
     my $err = $@;
     ok(!$ok, 'croaks without ipcm_info');
     like($err, qr/ipcm_info/, 'error mentions ipcm_info');
+};
+
+subtest 'normalize_event croaks on event_id mismatch between event and io' => sub {
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
+    my $event  = Test2::Harness2::Event->new(
+        event_id   => 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA',
+        facet_data => {},
+    );
+    my $io = {stream => 'stdout', event_id => 'BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB'};
+
+    my $ok  = eval { $parser->normalize_event($io, $event); 1 };
+    my $err = $@;
+    ok(!$ok, 'normalize_event croaks on mismatch');
+    like($err, qr/event_id mismatch/, 'error mentions event_id mismatch');
+};
+
+subtest 'normalize_event accepts matching event_ids' => sub {
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
+    my $id     = 'CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC';
+    my $event  = Test2::Harness2::Event->new(event_id => $id, facet_data => {});
+    my $io     = {stream => 'stdout', event_id => $id};
+
+    ok(lives { $parser->normalize_event($io, $event) }, 'lives when ids match');
+    is($event->{event_id}, $id, 'event_id preserved');
 };
 
 done_testing;

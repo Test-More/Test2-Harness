@@ -62,8 +62,13 @@ sub normalize_event {
     my $self = shift;
     my ($io, $event) = @_;
 
-    my $stamp    = $event->{stamp}    // $io->{stamp}    // time;
-    # AI: Throw an exception if we have an event_id from both event and io, and they do not match.
+    my $stamp = $event->{stamp} // $io->{stamp} // time;
+
+    croak "event_id mismatch between event ('$event->{event_id}') and io ('$io->{event_id}')"
+        if defined($event->{event_id})
+        && defined($io->{event_id})
+        && $event->{event_id} ne $io->{event_id};
+
     my $event_id = $event->{event_id} // $io->{event_id} // gen_uuid();
 
     $event->{stamp}    = $stamp;
@@ -71,6 +76,11 @@ sub normalize_event {
 
     $event->{facet_data}{harness}{stamp}    = $stamp;
     $event->{facet_data}{harness}{event_id} = $event_id;
+
+    # Only fill in about.uuid when an about facet already exists -- don't
+    # autovivify one just to stamp a uuid onto it.
+    $event->{facet_data}{about}{uuid} //= $event_id
+        if $event->{facet_data}{about};
 
     if (defined $self->{+RUN_ID}) {
         $event->{facet_data}{harness}{run_id} //= $self->{+RUN_ID};

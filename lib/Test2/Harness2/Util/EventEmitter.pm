@@ -50,17 +50,26 @@ sub emit_event {
 sub emit_raw {
     my ($self, $event) = @_;
 
-    # AI: Normalize event_id, if it only specified in the harness facet copy it to the top level key, if it is only in the top level key copy it to the harness facet, if it is not defined in any location generate one and use it in both. If it has it at botht he top level and the harness facet and they are different throw an exeption.
+    # Make sure the top-level event_id and the harness facet event_id agree.
+    # If only one is set, propagate it; if neither, generate one; if both are
+    # set to different values, refuse to emit -- that is always a caller bug.
+    my $top     = $event->{event_id};
+    my $harness = $event->{facet_data}{harness}{event_id};
+    if (defined($top) && defined($harness) && $top ne $harness) {
+        croak "event_id mismatch: top-level '$top' vs harness facet '$harness'";
+    }
+    my $event_id = $top // $harness // gen_uuid();
+    $event->{event_id}                      = $event_id;
+    $event->{facet_data}{harness}{event_id} = $event_id;
 
     my $json = encode_json($event);
     $self->{+PIPE}->write_message($json);
 
     if (my $se = $self->{+STDERR_PIPE}) {
-        my $event_id = $event->{event_id};
         $se->write_message(qq/{"event_id":"$event_id"}/);
     }
 
-    return $event->{event_id};
+    return $event_id;
 }
 
 1;

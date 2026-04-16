@@ -12,8 +12,11 @@ use POSIX qw/WNOHANG getpgrp/;
 
 use constant HAS_LINUX_PRCTL => eval { require Linux::Prctl; 1 } ? 1 : 0;
 
+use Atomic::Pipe;
+use IPC::Manager qw/ipcm_spawn/;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Run;
+use Test2::Harness2::Util::EventEmitter;
 
 use Test2::Harness2::Util::HashBase qw{
     <workdir
@@ -65,6 +68,51 @@ sub init {
     ];
     $self->{+TEST_AUDITOR} //= 'Test2::Harness2::Collector::Auditor::Test';
     $self->{+TEST_LOGGERS} //= ['Test2::Harness2::Collector::Logger::JSONL'];
+}
+
+sub start {
+    my ($class, %args) = @_;
+
+    my $test_run     = delete $args{test_run};
+    my $finish_after = delete $args{finish_after_initial_run};
+    my $caller_pid   = $$;
+
+    $args{parent_pids} //= [$caller_pid];
+
+    # Spawn the IPC bus before forking so both parent and child share the
+    # same connection info.
+    my $spawn = ipcm_spawn();
+    $args{ipcm_info} = $spawn->info;
+
+    # Construct the service object in the pre-fork process.  init() creates
+    # $workdir/services/ and populates default loggers.
+    my $self = $class->new(%args);
+
+    # Grab the loggers to hand to interpose before forking.
+    my $loggers = $self->{+LOGGERS};
+
+    Test2::Harness2::Collector->interpose(
+        loggers     => $loggers,
+        parser      => 'Test2::Harness2::Collector::Parser::IOParser',
+        parent_pids => [$caller_pid],
+    );
+
+    # Only the interpose child returns from interpose() above.
+    # STDOUT is now the write end of an Atomic::Pipe in mixed_data_mode.
+    my $stdout_apipe = Atomic::Pipe->from_fh('>&=', \*STDOUT);
+    $stdout_apipe->set_mixed_data_mode();
+    $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->new(
+        pipe   => $stdout_apipe,
+        job_id => $self->job_id,
+    );
+
+    if ($test_run) {
+        $self->handle_queue_test_run_request($test_run);
+        $self->{+FINISH_AFTER_INITIAL_RUN} = 1 if $finish_after;
+    }
+
+    my $exit = $self->run;
+    POSIX::_exit($exit // 0);
 }
 
 # IPC::Manager::Role::Service required methods. Fleshed out in later tasks.

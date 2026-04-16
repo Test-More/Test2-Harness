@@ -1462,9 +1462,11 @@ subtest 'blessed logger receives set_process_info and set_ipcm_info at instantia
     sub startup          { }
     sub shutdown         { }
     sub failing          { }
-    sub set_process_info { push @main::T2H2_RecordingLogger_PI   => {@_[1 .. $#_]}; return }
-    sub set_ipcm_info    { push @main::T2H2_RecordingLogger_IPCM => $_[1];          return }
-    sub DOES             { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+    sub set_process_info    { push @main::T2H2_RecordingLogger_PI   => {@_[1 .. $#_]}; return }
+    sub set_ipcm_info       { push @main::T2H2_RecordingLogger_IPCM => $_[1];          return }
+    sub set_auditor         { }
+    sub set_loggers_lookup  { }
+    sub DOES                { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
 
     package main;
 

@@ -10,12 +10,12 @@ use Role::Tiny;
 # as objects (new() method defined).
 
 # Default no-op implementations. Loggers that need to retain the run/job/ipcm
-# info, the auditor, or cross-logger dependencies must override these -- the
+# info, the auditor, or the cross-logger lookup must override these -- the
 # role can't assume every consumer is a blessed hash or wants to track them.
-sub set_process_info { }
-sub set_ipcm_info    { }
-sub set_auditor      { }
-sub set_deps         { }
+sub set_process_info    { }
+sub set_ipcm_info       { }
+sub set_auditor         { }
+sub set_loggers_lookup  { }
 
 sub depends_on { () }
 
@@ -135,12 +135,16 @@ loggers that talk to a service must override.
 Invoked by the collector after instantiation so loggers that consult the
 auditor (e.g. for pass/fail summaries) can capture it. The default is a no-op.
 
-=item $logger->set_deps(\%deps)
+=item $logger->set_loggers_lookup(\%lookup)
 
-Invoked by the collector after instantiation with a hashref mapping
-C<< $class => $instance >> for every logger this one declared in
-L</depends_on>, so a dependent logger can query its dependencies. The default
-is a no-op.
+Invoked by the collector after instantiation with a reference to the
+collector's own C<< $class => [@instances] >> lookup hash. Loggers that need
+to consult siblings (for example, a logger that reads from another logger's
+state) should store this and B<weaken> their copy to avoid a reference
+cycle. The hash stays in sync with the collector's own state, so later
+additions are visible.
+
+The default implementation is a no-op.
 
 =back
 

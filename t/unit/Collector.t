@@ -98,6 +98,52 @@ subtest 'launch - exit code capture' => sub {
     is($exit_ev->{facet_data}{harness_process_exit}{err}, 42, "exit status 42");
 };
 
+subtest 'launch - loop yields CPU while child is idle' => sub {
+    skip_all "fork required"              unless $CAN_FORK;
+    skip_all "/proc/\$pid/status required" unless -e "/proc/$$/status";
+
+    my $output = "$tmpdir/a_idle_yield.jsonl";
+
+    # Child sleeps a while before producing output, giving the collector a
+    # long stretch with nothing on either pipe. If the collector's read loop
+    # does non-blocking reads without a select(), it will tight-spin over
+    # that stretch and its voluntary_ctxt_switches will stay at whatever
+    # value it had when it entered the loop. A select()-paced loop will
+    # block on the idle pipes and accrue voluntary context switches.
+    my $collector = Test2::Harness2::Collector->spawn(
+        ipcm_info => {},
+        launch    => ['perl', '-e', 'sleep 2; print "done\n"'],
+        loggers   => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output]],
+    );
+
+    my $cpid = $collector->pid;
+    ok($cpid, "have collector pid");
+
+    my $read_vcs = sub {
+        open(my $fh, '<', "/proc/$cpid/status") or return undef;
+        while (my $line = <$fh>) {
+            return $1 if $line =~ /^voluntary_ctxt_switches:\s+(\d+)/;
+        }
+        return undef;
+    };
+
+    # Let the collector finish setup and land in its read loop.
+    sleep 0.2;
+    my $before = $read_vcs->();
+
+    # Sit idle while the child is asleep; a busy-looping collector accrues
+    # no voluntary yields here.
+    sleep 0.8;
+    my $after = $read_vcs->();
+
+    my $exit = $collector->wait();
+    is($exit, 0, "collector exited cleanly");
+
+    ok(defined $before && defined $after, "read voluntary_ctxt_switches");
+    my $delta = $after - $before;
+    cmp_ok($delta, '>', 0, "collector yielded CPU while child was idle (vcs delta=$delta)");
+};
+
 subtest 'launch - signal mirroring' => sub {
     skip_all "fork/signal mirroring not applicable on Win32" if $IS_WIN32;
 

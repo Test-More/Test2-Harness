@@ -11,6 +11,7 @@ use Time::HiRes qw/time sleep/;
 use Scalar::Util qw/blessed/;
 use Scope::Guard ();
 use IO::Handle;
+use IO::Select;
 use Atomic::Pipe;
 
 use Test2::Util::UUID qw/gen_uuid/;
@@ -631,6 +632,18 @@ sub _run_collection_loop {
     my $merge_outputs = defined($out_r) && defined($err_r) && "$out_r" eq "$err_r";
     $stderr_eof = 1 if $merge_outputs;
 
+    # IO::Select paces the loop so it parks on idle pipes instead of
+    # busy-spinning through non-blocking reads. can_read also returns
+    # immediately once a pipe closes, so EOF latency is unaffected. The
+    # per-iteration parent-pid / signal / waitpid bookkeeping still fires
+    # every $cycle seconds even when no I/O happens.
+    my $cycle  = 0.2;
+    my $sel    = IO::Select->new;
+    my $out_fh = $stdout_eof ? undef : _select_fh($out_r);
+    my $err_fh = $stderr_eof ? undef : _select_fh($err_r);
+    $sel->add($out_fh) if defined $out_fh;
+    $sel->add($err_fh) if defined $err_fh;
+
     # Ordering buffer. Atomic::Pipe streams may interleave plain lines with
     # JSON-burst events on STDOUT, and the Test2 Stream formatter sends a
     # sync marker {"event_id":...} on STDERR each time it writes an event on
@@ -645,6 +658,8 @@ sub _run_collection_loop {
     my $draining = 0;    # Set when we got a signal/parent-gone and are finishing up
 
     while (1) {
+        $sel->can_read($cycle) if $sel->count;
+
         my $ok = eval {
             # Check for signal - kill child but keep draining handles
             if ($$got_signal_ref && !$draining) {
@@ -674,6 +689,7 @@ sub _run_collection_loop {
                 for my $item ($self->_read_handle($out_r)) {
                     if (!defined $item) {
                         $stdout_eof = 1;
+                        $sel->remove($out_fh) if defined $out_fh;
                         last;
                     }
                     next unless $parser;
@@ -686,6 +702,7 @@ sub _run_collection_loop {
                 for my $item ($self->_read_handle($err_r)) {
                     if (!defined $item) {
                         $stderr_eof = 1;
+                        $sel->remove($err_fh) if defined $err_fh;
                         last;
                     }
                     next unless $parser;
@@ -934,6 +951,17 @@ sub _wrap_handle {
 
     # Regular file handle -- use plain line-reader shim, no Atomic::Pipe.
     return Test2::Harness2::Collector::FileLineReader->new($handle);
+}
+
+# Pulls a raw filehandle out of whatever _wrap_handle produced, for use with
+# IO::Select. Returns undef for unknown handle shapes (callers must treat
+# that as "cannot be select()ed" and fall back to the read path).
+sub _select_fh {
+    my ($handle) = @_;
+    return undef unless defined $handle;
+    return $handle->rh   if blessed($handle) && $handle->isa('Atomic::Pipe');
+    return $handle->{fh} if blessed($handle) && $handle->isa('Test2::Harness2::Collector::FileLineReader');
+    return undef;
 }
 
 sub _read_handle {

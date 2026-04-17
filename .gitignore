@@ -60,3 +60,4 @@ test-logs/
 xxx
 .immiscible-test.lock
 data
+/.claude/

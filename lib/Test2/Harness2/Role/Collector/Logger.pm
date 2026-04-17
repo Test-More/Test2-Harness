@@ -27,6 +27,13 @@ sub startup  { }
 sub shutdown { }
 sub failing  { }
 
+# Class method called before a logger is instantiated so loggers that are
+# only meaningful in certain collector contexts (service vs test, specific
+# service name, etc.) can opt out. Returning false causes the collector to
+# silently drop the spec without instantiating anything. The default accepts
+# every context.
+sub applicable { 1 }
+
 1;
 
 __END__
@@ -73,6 +80,10 @@ Then pass it to the collector:
             'My::Logger',                       # class name
             My::Logger->new(%args),             # instance
             ['My::Logger', foo => 1, bar => 2], # class + constructor args
+            {                                   # pre-built instance paired
+                instance => My::Logger->new,    # with a rebuild recipe (used
+                build    => ['My::Logger'],     # on platforms that cannot
+            },                                  # fork the service instance)
         ],
     );
 
@@ -145,6 +156,19 @@ cycle. The hash stays in sync with the collector's own state, so later
 additions are visible.
 
 The default implementation is a no-op.
+
+=item $bool = CLASS->applicable(\%info)
+
+Class-method guard that the collector invokes before instantiating a
+logger. The info hashref describes the collector's context -- at minimum
+C<kind> (C<'service'> or C<'test'>) and C<service_name>, and may include
+C<run_id>/C<job_id>/C<job_try> when the collector is running a specific
+test job. Returning a false value causes the collector to silently discard
+the spec without instantiating anything, so a logger that only makes
+sense in one context can be listed in a shared logger list without blowing
+up in contexts where it does not apply.
+
+The default returns C<1> (accepts every context).
 
 =back
 

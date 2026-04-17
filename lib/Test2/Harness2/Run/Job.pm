@@ -52,6 +52,17 @@ sub init {
     $self->{+JOB_TRY} //= 0;
 }
 
+sub to_hash {
+    my $self = shift;
+    return {
+        run_id        => $self->{+RUN_ID},
+        job_id        => $self->{+JOB_ID},
+        job_try       => $self->{+JOB_TRY},
+        test_file     => $self->{+TEST_FILE},
+        test_file_abs => $self->{+TEST_FILE_ABS},
+    };
+}
+
 1;
 
 __END__

@@ -272,26 +272,42 @@ subtest 'run_should_end honors state and workers' => sub {
     ok($h->run_should_end, 'terminating + cleared: end');
 };
 
-subtest 'run_on_general_message - job_complete_notify is a no-op' => sub {
+subtest 'run_on_general_message - test_complete is re-emitted' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
-    # A message object with content => { kind => 'job_complete_notify', ... }.
-    my $fake_msg = bless {}, 'FakeMsg';
+    # Wire up a recording emitter so we can see the re-emit.
+    my @emitted;
+    $h->{emitter} = bless {}, 'FakeEmitter';
     no warnings 'once';
+    *FakeEmitter::emit_event = sub {
+        my ($self, %f) = @_;
+        push @emitted => \%f;
+        return;
+    };
+
+    my $fake_msg = bless {}, 'FakeMsg';
     *FakeMsg::content = sub { {
-        kind    => 'job_complete_notify',
-        run_id  => 'r1',
-        job_id  => 'j1',
-        job_try => 0,
+        kind      => 'test_complete',
+        run_id    => 'r1',
+        job_id    => 'j1',
+        job_try   => 0,
+        pass      => 1,
+        exit_code => 0,
+        exit_sig  => 0,
     } };
 
     my @warnings;
     local $SIG{__WARN__} = sub { push @warnings => @_ };
 
     my $ok = eval { $h->run_on_general_message($fake_msg); 1 };
-    ok($ok, 'job_complete_notify message does not die');
+    ok($ok, 'test_complete message does not die');
     is(\@warnings, [], 'no warnings for known kind');
+    is(scalar @emitted,        1,               'one event re-emitted');
+    is($emitted[0]{kind},      'test_complete', 'kind preserved');
+    is($emitted[0]{run_id},    'r1',            'run_id preserved');
+    is($emitted[0]{pass},      1,               'pass preserved');
+    is($emitted[0]{exit_code}, 0,               'exit_code preserved');
 };
 
 subtest 'run_on_general_message - unknown kind warns' => sub {
@@ -539,6 +555,61 @@ subtest '_perform_hard_stop catches grandchildren reparented mid-kill' => sub {
     ok(!kill(0, $x), 'X (reparented grandchild) also reaped');
     ok(-f $x_flag,
         'X received its own TERM grace window (not just KILL after A fell)');
+};
+
+subtest 'request_handler_queue_test_run emits run_queued event with full run data' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my @emitted;
+    $h->{emitter} = bless {}, 'QREmitter';
+    no warnings 'once';
+    *QREmitter::emit_event = sub {
+        my ($self, %f) = @_;
+        push @emitted => \%f;
+    };
+
+    my $res = $h->request_handler_queue_test_run({files => ['t/a.t', 't/b.t']});
+    ok($res->{ok}, 'run queued');
+
+    is(scalar @emitted,      1,            'one event emitted');
+    is($emitted[0]{kind},    'run_queued', 'kind is run_queued');
+    is($emitted[0]{run}{run_id}, $res->{run_id}, 'run_id matches');
+    is(scalar @{$emitted[0]{run}{jobs}}, 2, 'event carries both jobs');
+    is($emitted[0]{run}{jobs}[0]{test_file}, 't/a.t', 'job test_file preserved');
+};
+
+subtest '_check_current_completion emits run_ended when run is done' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my @emitted;
+    $h->{emitter} = bless {}, 'REEmitter';
+    no warnings 'once';
+    *REEmitter::emit_event = sub {
+        my ($self, %f) = @_;
+        push @emitted => \%f;
+    };
+
+    my $run = Test2::Harness2::Run->from_files(
+        files  => ['t/a.t'],
+        run_id => 'R-END2',
+    );
+    push @{$h->{queue}} => $run;
+
+    my $job_id = $run->pending->[0];
+    $run->mark_running($job_id);
+
+    require Test2::Harness2::Collector::Handle;
+    my $handle = Test2::Harness2::Collector::Handle->new(pid => 1);
+    $handle->set_exit_code(0);
+
+    $h->{current} = {run => $run, job => $run->jobs->[0], handle => $handle};
+    $h->_check_current_completion;
+
+    my ($ended) = grep { $_->{kind} eq 'run_ended' } @emitted;
+    ok($ended, 'run_ended event emitted');
+    is($ended->{run_id}, 'R-END2', 'run_ended carries run_id');
 };
 
 done_testing;

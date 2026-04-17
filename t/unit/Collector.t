@@ -933,8 +933,8 @@ subtest 'spec validation - bad shapes are rejected at init' => sub {
                 loggers   => [{bogus => 1}],
             )
         },
-        qr/Invalid logger specification/,
-        "hashref logger spec rejected"
+        qr/hash spec requires 'instance' and 'build' keys/,
+        "malformed hashref logger spec rejected"
     );
 
     like(
@@ -1543,6 +1543,138 @@ subtest 'blessed logger receives set_process_info and set_ipcm_info at instantia
 # ===========================================================================
 # ipcm_info required at construction
 # ===========================================================================
+
+subtest '{instance, build} logger spec normalizes and instantiates' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    our @T2H2_Test_HBLogger_PI;
+    our @T2H2_Test_HBLogger_IPCM;
+    @T2H2_Test_HBLogger_PI   = ();
+    @T2H2_Test_HBLogger_IPCM = ();
+
+    package T2H2_Test_HBLogger;
+    sub new              { bless {@_[1 .. $#_]}, $_[0] }
+    sub depends_on       { () }
+    sub log_events       { 0 }
+    sub log_event        { }
+    sub startup          { }
+    sub shutdown         { }
+    sub failing          { }
+    sub set_process_info   { push @main::T2H2_Test_HBLogger_PI   => {@_[1 .. $#_]}; return }
+    sub set_ipcm_info      { push @main::T2H2_Test_HBLogger_IPCM => $_[1];          return }
+    sub set_auditor        { }
+    sub set_loggers_lookup { }
+    sub DOES               { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+    sub applicable         { 1 }
+
+    package main;
+
+    my $instance = T2H2_Test_HBLogger->new;
+    my $ii       = {fake => 'ii'};
+
+    my $c = Test2::Harness2::Collector->new(
+        stdout    => $devnull,
+        run_id    => 'RHB',
+        job_id    => 'JHB',
+        job_try   => 2,
+        ipcm_info => $ii,
+        loggers   => [{instance => $instance, build => ['T2H2_Test_HBLogger']}],
+    );
+
+    $c->_instantiate_loggers();
+
+    is(scalar @{$c->loggers}, 1, 'one logger instance');
+    is($c->loggers->[0], $instance, 'same instance reused (not rebuilt)');
+
+    is(scalar @T2H2_Test_HBLogger_PI,      1,    'set_process_info called once');
+    is($T2H2_Test_HBLogger_PI[0]{run_id},  'RHB','run_id stamped');
+    is($T2H2_Test_HBLogger_PI[0]{job_id},  'JHB','job_id stamped');
+    is($T2H2_Test_HBLogger_PI[0]{job_try}, 2,    'job_try stamped');
+    is(scalar @T2H2_Test_HBLogger_IPCM, 1,   'set_ipcm_info called once');
+    is($T2H2_Test_HBLogger_IPCM[0],     $ii, 'ipcm_info passed');
+};
+
+subtest '{instance, build} logger spec rejects missing keys' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    package T2H2_Test_BadHB;
+    sub new              { bless {}, shift }
+    sub depends_on       { () }
+    sub DOES             { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+
+    package main;
+
+    my $inst = T2H2_Test_BadHB->new;
+
+    my $missing_build = eval {
+        Test2::Harness2::Collector->new(
+            stdout    => $devnull,
+            ipcm_info => {},
+            loggers   => [{instance => $inst}],
+        );
+        1;
+    };
+    ok(!$missing_build, 'missing build key croaks');
+    like($@, qr/'instance' and 'build'/, 'error mentions required keys');
+
+    my $missing_instance = eval {
+        Test2::Harness2::Collector->new(
+            stdout    => $devnull,
+            ipcm_info => {},
+            loggers   => [{build => ['T2H2_Test_BadHB']}],
+        );
+        1;
+    };
+    ok(!$missing_instance, 'missing instance key croaks');
+};
+
+subtest 'applicable() filter drops specs before instantiation' => sub {
+    open(my $devnull, '<', '/dev/null') or die $!;
+
+    package T2H2_Test_ServiceOnly;
+    our $CONSTRUCTED = 0;
+    sub new              { $CONSTRUCTED++; bless {}, shift }
+    sub depends_on       { () }
+    sub log_events       { 0 }
+    sub log_event        { }
+    sub startup          { }
+    sub shutdown         { }
+    sub failing          { }
+    sub set_process_info   { }
+    sub set_ipcm_info      { }
+    sub set_auditor        { }
+    sub set_loggers_lookup { }
+    sub DOES { $_[1] eq 'Test2::Harness2::Role::Collector::Logger' || $_[0]->isa($_[1]) }
+    sub applicable { $_[1] && ($_[1]->{kind} // '') eq 'service' }
+
+    package main;
+
+    # kind => 'test' -- logger should be filtered out before new() runs.
+    $T2H2_Test_ServiceOnly::CONSTRUCTED = 0;
+    my $c = Test2::Harness2::Collector->new(
+        stdout      => $devnull,
+        ipcm_info   => {},
+        logger_info => {kind => 'test'},
+        loggers     => ['T2H2_Test_ServiceOnly'],
+    );
+
+    $c->_instantiate_loggers();
+    is($T2H2_Test_ServiceOnly::CONSTRUCTED, 0, 'service-only logger not built in test context');
+    is(scalar @{$c->loggers},                0, 'no logger instances retained');
+
+    # kind => 'service' -- logger should be kept and instantiated normally.
+    $T2H2_Test_ServiceOnly::CONSTRUCTED = 0;
+    my $c2 = Test2::Harness2::Collector->new(
+        stdout      => $devnull,
+        ipcm_info   => {},
+        logger_info => {kind => 'service'},
+        loggers     => ['T2H2_Test_ServiceOnly'],
+    );
+
+    $c2->_instantiate_loggers();
+    is($T2H2_Test_ServiceOnly::CONSTRUCTED, 1, 'service-only logger built in service context');
+    is(scalar @{$c2->loggers},               1, 'one logger instance retained');
+};
 
 subtest 'ipcm_info is required at construction - Collector' => sub {
     my $ok  = eval { Test2::Harness2::Collector->new(launch => ['perl', '-e', '1']); 1 };

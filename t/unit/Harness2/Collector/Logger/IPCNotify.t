@@ -66,7 +66,7 @@ subtest 'log_events returns false' => sub {
 # shutdown() sends the right IPC message
 # ---------------------------------------------------------------------------
 
-subtest 'shutdown sends job_complete_notify' => sub {
+subtest 'shutdown sends test_complete' => sub {
     my @sent;
 
     # Build a fake client that records send_message calls.
@@ -85,15 +85,23 @@ subtest 'shutdown sends job_complete_notify' => sub {
     # Intercept IPC::Manager::Service::Handle->new to return our fake.
     local *IPC::Manager::Service::Handle::new = sub { $fake_handle };
 
+    # Fake auditor that reports passing so the logger can fill pass=1.
+    my $fake_auditor = bless {}, 'FakeAuditor';
+    *FakeAuditor::failing = sub { 0 };
+
+    # Fake collector carrying a _child_exit wait-status of 2 << 8 (exit code 2).
+    my $fake_collector = {_child_exit => (2 << 8)};
+
     my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
         ipcm_info    => {fake => 1},
         service_name => 'harness',
         run_id       => 'run-123',
         job_id       => 'job-456',
         job_try      => 2,
+        auditor      => $fake_auditor,
     );
 
-    $logger->shutdown;
+    $logger->shutdown($fake_collector);
 
     is(scalar @sent, 1, 'one send_message call');
     is(
@@ -101,13 +109,16 @@ subtest 'shutdown sends job_complete_notify' => sub {
         {
             to      => 'harness',
             content => {
-                kind    => 'job_complete_notify',
-                run_id  => 'run-123',
-                job_id  => 'job-456',
-                job_try => 2,
+                kind      => 'test_complete',
+                run_id    => 'run-123',
+                job_id    => 'job-456',
+                job_try   => 2,
+                pass      => 1,
+                exit_code => 2,
+                exit_sig  => 0,
             },
         },
-        'payload shape is correct',
+        'payload shape includes pass/exit_code',
     );
 };
 

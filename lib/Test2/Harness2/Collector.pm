@@ -32,6 +32,7 @@ use Object::HashBase qw{
     <parser
     <loggers
     <loggers_lookup
+    <logger_info
     <parent_pids
     <kill_timeout
     <run_id
@@ -129,7 +130,12 @@ sub _spec_class {
 
     return ref($spec) if blessed($spec);
     return $spec->[0] if ref($spec) eq 'ARRAY';
-    return $spec      if !ref($spec);
+    if (ref($spec) eq 'HASH') {
+        return ref($spec->{instance}) if blessed($spec->{instance});
+        return $spec->{build}[0]      if ref($spec->{build}) eq 'ARRAY';
+        return undef;
+    }
+    return $spec if !ref($spec);
     return undef;
 }
 
@@ -151,6 +157,41 @@ sub _validate_spec {
         $name = $spec->[0];
         croak ucfirst($kind) . " arrayref must begin with a class name"
             unless defined($name) && !ref($name);
+    }
+    elsif (ref($spec) eq 'HASH') {
+        # {instance, build} -- pre-built instance plus a recipe that can be
+        # used to rebuild on platforms where the live instance cannot follow
+        # the service across process boundaries (Windows, primarily). Only
+        # loggers accept this form; auditors are single-instance and have no
+        # equivalent use case.
+        croak "Invalid $kind specification: HASH"
+            unless $kind eq 'logger';
+
+        my $instance = $spec->{instance};
+        my $build    = $spec->{build};
+
+        croak ucfirst($kind) . " hash spec requires 'instance' and 'build' keys"
+            unless defined($instance) && defined($build);
+        croak ucfirst($kind) . " hash spec 'instance' must be a blessed object"
+            unless blessed($instance);
+        croak ucfirst($kind) . " '" . ref($instance) . "' does not implement $role"
+            unless $instance->DOES($role);
+        croak ucfirst($kind) . " hash spec 'build' must be an arrayref"
+            unless ref($build) eq 'ARRAY';
+
+        $name = $build->[0];
+        croak ucfirst($kind) . " hash spec 'build' must begin with a class name"
+            unless defined($name) && !ref($name);
+
+        $class->_load_logger_class($name);
+
+        croak ucfirst($kind) . " '$name' does not implement $role"
+            unless $name->DOES($role);
+
+        croak ucfirst($kind) . " hash spec instance '" . ref($instance) . "' must be an instance of '$name'"
+            unless $instance->isa($name);
+
+        return;
     }
     elsif (!ref($spec)) {
         $name = $spec;
@@ -183,6 +224,22 @@ sub _normalize_loggers {
         $self->_validate_spec($item, 'logger', $role);
     }
 
+    # Applicability filter: class-method check run before instantiation so
+    # loggers that don't belong in this collector's context (service vs test,
+    # wrong service name, etc.) can opt out without ever being built. Skipped
+    # specs are simply dropped. Classes that never defined applicable() are
+    # treated as applicable by default -- matches the role's default and keeps
+    # hand-rolled loggers that mock DOES working without also mocking every
+    # role method.
+    my $info = $self->_logger_info;
+    my @kept;
+    for my $item (@$loggers) {
+        my $class = $self->_spec_class($item);
+        next if $class->can('applicable') && !$class->applicable($info);
+        push @kept => $item;
+    }
+    $loggers = \@kept;
+
     # depends_on is a class method on the logger role with a default of (),
     # so we can resolve dependencies without instantiating.
     my %have = map { $self->_spec_class($_) => 1 } @$loggers;
@@ -194,8 +251,28 @@ sub _normalize_loggers {
         }
     }
 
-    # Preserve original spec list for later serialization / instantiation.
+    # Preserve the filtered spec list for later serialization / instantiation.
+    $self->{+LOGGERS}       = $loggers;
     $self->{+_LOGGERS_SPEC} = [@$loggers];
+}
+
+# Context hashref handed to each logger class's applicable() check. Built
+# from the collector's own attributes plus any caller-supplied logger_info;
+# caller-supplied keys win over defaults so overrides stay explicit.
+sub _logger_info {
+    my $self = shift;
+
+    my %info = (
+        run_id  => $self->{+RUN_ID},
+        job_id  => $self->{+JOB_ID},
+        job_try => $self->{+JOB_TRY},
+    );
+
+    if (my $extra = $self->{+LOGGER_INFO}) {
+        %info = (%info, %$extra);
+    }
+
+    return \%info;
 }
 
 sub _normalize_auditor {
@@ -225,15 +302,15 @@ sub _instantiate_loggers {
         if (blessed($item)) {
             # Pre-constructed instance: stamp info onto it via setters
             # since we cannot re-run its constructor.
-            $item->set_process_info(
-                run_id  => $self->{+RUN_ID},
-                job_id  => $self->{+JOB_ID},
-                job_try => $self->{+JOB_TRY},
-            );
-            $item->set_ipcm_info($self->{+IPCM_INFO});
-            $item->set_auditor($self->{+AUDITOR}) if $self->{+AUDITOR};
-            $item->set_loggers_lookup($self->{+LOGGERS_LOOKUP});
-            $inst = $item;
+            $inst = $self->_stamp_logger_instance($item);
+        }
+        elsif (ref($item) eq 'HASH') {
+            # {instance, build}: use the instance on this platform. On
+            # Windows _spawn_collector_win32 already stripped the instance
+            # and left only the build arrayref, so this branch runs only
+            # when the instance survived into the collector process (i.e.
+            # via fork on unix).
+            $inst = $self->_stamp_logger_instance($item->{instance});
         }
         elsif (ref($item) eq 'ARRAY') {
             my ($class, @args) = @$item;
@@ -259,6 +336,22 @@ sub _instantiate_loggers {
         }
         $self->_add_logger($inst);
     }
+}
+
+sub _stamp_logger_instance {
+    my $self = shift;
+    my ($inst) = @_;
+
+    $inst->set_process_info(
+        run_id  => $self->{+RUN_ID},
+        job_id  => $self->{+JOB_ID},
+        job_try => $self->{+JOB_TRY},
+    );
+    $inst->set_ipcm_info($self->{+IPCM_INFO});
+    $inst->set_auditor($self->{+AUDITOR}) if $self->{+AUDITOR};
+    $inst->set_loggers_lookup($self->{+LOGGERS_LOOKUP});
+
+    return $inst;
 }
 
 # Append a logger instance to both the ordered LOGGERS array and the
@@ -388,6 +481,7 @@ sub _spawn_collector_win32 {
     );
 
     $params{parent_pids} = $self->{+PARENT_PIDS} if $self->{+PARENT_PIDS};
+    $params{logger_info} = $self->{+LOGGER_INFO} if $self->{+LOGGER_INFO};
 
     # Parser must be a class name for the spawned process to load it
     my $parser = $self->{+PARSER};
@@ -400,12 +494,24 @@ sub _spawn_collector_win32 {
 
     # Loggers must be specified as class names or [class, @args] arrayrefs on
     # Windows, since blessed instances cannot be serialized to the spawned
-    # collector process.
+    # collector process. The {instance, build} form is accepted here by
+    # dropping the instance and passing the build recipe along; the spawned
+    # process will rebuild a fresh instance from the recipe.
+    my @win_loggers;
     for my $item (@{$self->{+_LOGGERS_SPEC}}) {
-        croak "Blessed logger instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
-            if blessed($item);
+        if (ref($item) eq 'HASH') {
+            croak "Logger hash spec is missing 'build' (required to rebuild instance on Windows)"
+                unless ref($item->{build}) eq 'ARRAY';
+            push @win_loggers => $item->{build};
+        }
+        elsif (blessed($item)) {
+            croak "Blessed logger instances cannot be passed to a Windows collector; use class name, [class, \@args], or {instance, build} form";
+        }
+        else {
+            push @win_loggers => $item;
+        }
     }
-    $params{loggers} = $self->{+_LOGGERS_SPEC};
+    $params{loggers} = \@win_loggers;
 
     # Auditor follows the same constraint -- class name or [class, %args]
     # arrayref only on Windows, since blessed instances cannot be serialized.

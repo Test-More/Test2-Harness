@@ -69,6 +69,18 @@ sub is_complete {
     return !@{$self->{+PENDING}} && !@{$self->{+RUNNING}};
 }
 
+sub to_hash {
+    my $self = shift;
+    return {
+        run_id     => $self->{+RUN_ID},
+        created_at => $self->{+CREATED_AT},
+        jobs       => [map { $_->to_hash } @{$self->{+JOBS}}],
+        pending    => [@{$self->{+PENDING}}],
+        running    => [@{$self->{+RUNNING}}],
+        done       => [@{$self->{+DONE}}],
+    };
+}
+
 1;
 
 __END__

@@ -71,6 +71,10 @@ sub init {
             'Test2::Harness2::Collector::Logger::JSONL',
             output_file => "$wd/services/$self->{+NAME}.jsonl",
         ],
+        [
+            'Test2::Harness2::Collector::Logger::QueueJSON',
+            workdir => $wd,
+        ],
     ];
     $self->{+TEST_AUDITOR} //= 'Test2::Harness2::Collector::Auditor::Test';
     $self->{+TEST_LOGGERS} //= ['Test2::Harness2::Collector::Logger::JSONL'];
@@ -128,6 +132,7 @@ sub start {
     Test2::Harness2::Collector->interpose(
         ipcm_info   => $self->ipcm_info,
         loggers     => $loggers,
+        logger_info => {kind => 'service', service_name => $self->{+NAME}, workdir => $self->{+WORKDIR}},
         parser      => 'Test2::Harness2::Collector::Parser::IOParser',
         parent_pids => [$caller_pid],
         (defined($jump_to) ? (jump_to => $jump_to, jump_payload => $run_service) : ()),
@@ -237,6 +242,11 @@ sub request_handler_queue_test_run {
 
     push @{$self->{+QUEUE}} => $run;
 
+    $self->_emit_service_event(
+        kind => 'run_queued',
+        run  => $run->to_hash,
+    );
+
     return {ok => 1, run_id => $run->run_id};
 }
 
@@ -295,10 +305,22 @@ sub run_on_general_message {
     my $content = $msg->content;
     my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
 
-    if (defined $kind && $kind eq 'job_complete_notify') {
-        # The act of receiving this message has already woken the service's
-        # event loop. On the next run_on_all iteration, _check_current_completion
-        # will detect the completion via waitpid. Nothing else to do.
+    if (defined $kind && $kind eq 'test_complete') {
+        # The test collector's IPCNotify logger sent this after the child
+        # exited. Two effects: the act of receiving the message already woke
+        # the service's event loop (so the next run_on_all tick detects the
+        # completion via waitpid without waiting on the ~0.2s idle poll),
+        # and we re-emit it as a structured event on the service's stdout so
+        # our own collector's loggers see it alongside run_queued/run_ended.
+        $self->_emit_service_event(
+            kind      => 'test_complete',
+            run_id    => $content->{run_id},
+            job_id    => $content->{job_id},
+            job_try   => $content->{job_try},
+            pass      => $content->{pass},
+            exit_code => $content->{exit_code},
+            exit_sig  => $content->{exit_sig},
+        );
         return;
     }
 
@@ -330,6 +352,11 @@ sub _check_current_completion {
     if ($cur->{run}->is_complete) {
         my $run_id = $cur->{run}->run_id;
         $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
+
+        $self->_emit_service_event(
+            kind   => 'run_ended',
+            run_id => $run_id,
+        );
 
         # Flip to finishing if requested (Task 15 builds on this).
         $self->{+STATE} = 'finishing'
@@ -587,6 +614,14 @@ sub run_on_all {
         job_try     => 0,
         ipcm_info   => $self->ipcm_info,
         auditor     => $self->{+TEST_AUDITOR},
+        logger_info => {
+            kind         => 'test',
+            service_name => $self->{+NAME},
+            workdir      => $self->{+WORKDIR},
+            run_id       => $run_id,
+            job_id       => $job_id,
+            job_try      => 0,
+        },
         loggers     => [
             [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
             [
@@ -597,6 +632,14 @@ sub run_on_all {
     );
 
     $run->mark_running($job_id);
+
+    $self->_emit_service_event(
+        kind    => 'test_start',
+        run_id  => $run_id,
+        job_id  => $job_id,
+        job_try => 0,
+        job     => $job->to_hash,
+    );
 
     $self->{+CURRENT} = {
         run        => $run,

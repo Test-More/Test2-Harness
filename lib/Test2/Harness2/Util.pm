@@ -5,10 +5,14 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
+use Cwd qw/realpath/;
+use File::Spec ();
 use Importer Importer => 'import';
 
 our @EXPORT_OK = qw{
     apply_encoding
+    clean_path
+    file2mod
     hub_truth
     mod2file
     parse_exit
@@ -21,6 +25,26 @@ sub mod2file {
     $file =~ s{::}{/}g;
     $file .= ".pm";
     return $file;
+}
+
+sub file2mod {
+    my ($file) = @_;
+    confess "No filename provided" unless defined $file && length $file;
+    my $mod = $file;
+    $mod =~ s{/}{::}g;
+    $mod =~ s/\.[^.]*$//;
+    return $mod;
+}
+
+sub clean_path {
+    my ($path, $absolute) = @_;
+
+    confess "No path was provided to clean_path()" unless defined $path && length $path;
+
+    $absolute //= 1;
+    $path = realpath($path) // $path if $absolute;
+
+    return File::Spec->rel2abs($path);
 }
 
 sub apply_encoding {
@@ -96,6 +120,19 @@ C<:encoding($encoding)>.
 
 Convert a Perl module name (C<Foo::Bar::Baz>) to its C<%INC>-style relative
 path (C<Foo/Bar/Baz.pm>). Confesses if the module name is undefined.
+
+=item $module = file2mod($path)
+
+Inverse of C<mod2file>. Convert a filename like C<Foo/Bar/Baz.pm> to the
+module name C<Foo::Bar::Baz>. Strips the final extension; slashes become
+C<::>. Confesses if the filename is undefined or empty.
+
+=item $abs = clean_path($path, $absolute)
+
+Return C<$path> converted to an absolute, realpath-resolved path. When
+C<$absolute> is false, the realpath resolution is skipped but the path is
+still made absolute via L<File::Spec/rel2abs>. Confesses when the path is
+undefined or empty.
 
 =item $facet = hub_truth($facet_data)
 

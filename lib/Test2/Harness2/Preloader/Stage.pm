@@ -8,8 +8,6 @@ use Carp qw/croak/;
 use POSIX ();
 use Time::HiRes qw/sleep time/;
 
-use Long::Jump qw/longjump/;
-
 use Test2::Harness2::Util qw/mod2file/;
 
 use Object::HashBase qw{
@@ -205,14 +203,20 @@ sub request_handler_shutdown {
 
 # launch_test payload (at minimum):
 #   test_file => '/abs/path/to/t/foo.t'      (required)
-#   env       => { ... }                     (optional overrides)
-#   argv      => [ ... ]                     (optional argv for the test)
+#   env       => { ... }                     (optional environment overrides)
+#   argv      => [ ... ]                     (optional @ARGV for the test)
+#   loggers   => [ ... ]                     (optional; default: none)
+#   auditor   => 'Class' | $instance         (optional)
+#   parser    => 'Class'                     (optional)
+#   run_id / job_id / job_try                (optional identifiers)
 #
-# The stage forks. The parent returns immediately with the grandchild-bound
-# pid so the harness can track it. The forked child runs post_fork,
-# pre_launch, and then longjumps the test payload all the way up to the
-# base preloader's setjump point; the landing there hands control to the
-# test file via goto::file.
+# The stage forks. The parent returns immediately with the
+# collector-process pid so the harness can track it. The forked child is
+# handed off to Test2::Harness2::Collector::Preloaded::launch, which forks
+# again (collector -> test), runs pre_fork/post_fork/pre_launch, and
+# longjumps the test payload all the way up to the base preloader's
+# setjump point; the landing there hands control to the test file via
+# goto::file.
 sub request_handler_launch_test {
     my $self = shift;
     my ($payload) = @_;
@@ -236,32 +240,36 @@ sub request_handler_launch_test {
 
     if ($pid) {
         return {
-            ok       => 1,
-            stage    => $self->{+NAME},
-            test_pid => $pid,
+            ok             => 1,
+            stage          => $self->{+NAME},
+            collector_pid  => $pid,
         };
     }
 
-    # ----- forked test child from here on -----
+    # ----- forked child from here on -----
+    # Hand off to the preloaded collector helper. It forks again internally
+    # (collector stays here, test process becomes the grandchild of the
+    # stage), wires the collector pipes, runs post_fork / pre_launch, and
+    # longjumps the test payload back to the base preloader.
+    require Test2::Harness2::Collector::Preloaded;
 
-    # post_fork runs as early as possible in the child.
-    eval { $stage->do_post_fork($payload); 1 };
+    Test2::Harness2::Collector::Preloaded->launch(
+        stage_obj  => $stage,
+        test_file  => $test_file,
+        jump_label => $self->{+JUMP_LABEL},
+        ipcm_info  => $self->{+IPCM_INFO},
+        loggers    => $payload->{loggers} // [],
+        (defined $payload->{auditor} ? (auditor => $payload->{auditor}) : ()),
+        (defined $payload->{parser}  ? (parser  => $payload->{parser})  : ()),
+        (defined $payload->{run_id}  ? (run_id  => $payload->{run_id})  : ()),
+        (defined $payload->{job_id}  ? (job_id  => $payload->{job_id})  : ()),
+        (defined $payload->{job_try} ? (job_try => $payload->{job_try}) : ()),
+        (defined $payload->{env}     ? (env     => $payload->{env})     : ()),
+        (defined $payload->{argv}    ? (argv    => $payload->{argv})    : ()),
+    );
 
-    # pre_launch runs just before we hand off to the test.
-    eval { $stage->do_pre_launch($payload); 1 };
-
-    # Unwind the stack all the way to the base preloader's setjump frame.
-    # _post_jump_launch (in Test2::Harness2::Preloader) recognises the
-    # payload kind and invokes goto::file from the zero-stack landing.
-    longjump($self->{+JUMP_LABEL} => {
-        kind      => 'launch_test',
-        test_file => $test_file,
-        env       => $payload->{env},
-        argv      => $payload->{argv},
-        stage     => $self->{+NAME},
-    });
-
-    # Unreachable; longjump does not return.
+    # Unreachable; launch() either interposes into a collector loop (which
+    # exits via POSIX::_exit) or longjumps into the preloader.
     POSIX::_exit(254);
 }
 

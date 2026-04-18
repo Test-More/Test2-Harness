@@ -66,25 +66,27 @@ sub bootstrap_script {
     # the documentation and build_exec_argv can agree. The script reads the
     # config-file path from $ARGV[0].
     #
-    # Long::Jump wraps the body we want protected in a sub {}. When no
-    # long_jump occurs the setjump sub simply returns (service drained);
-    # when a long_jump fires the stack unwinds back to this expression and
-    # $payload carries whatever the jumper passed. Doing the setup work in
-    # BEGIN and then calling setjump exactly once at the top of runtime
-    # keeps the landing frame at the minimum achievable depth.
+    # Everything substantive happens inside BEGIN. That matters: when a
+    # descendant test process longjumps back to the setjump frame, Perl is
+    # still in the compile phase of the bootstrap's main file. The
+    # post-jump handler can then call goto::file, which is a source filter
+    # that only affects what Perl parses next. Running the filter install
+    # at runtime of the bootstrap script would be too late -- Perl would
+    # already be past the point where the filter would be consulted.
     return <<'SCRIPT';
 use strict;
 use warnings;
 use Test2::Harness2::Preloader;
-BEGIN { Test2::Harness2::Preloader->_begin_bootstrap($ARGV[0]) }
-my $payload = Long::Jump::setjump(
-    $Test2::Harness2::Preloader::JUMP_LABEL,
-    sub { Test2::Harness2::Preloader->_serve($ARGV[0]) },
-);
-if ($payload) {
-    Test2::Harness2::Preloader->_post_jump_launch($payload);
+BEGIN {
+    Test2::Harness2::Preloader->_begin_bootstrap($ARGV[0]);
+    my $payload = Long::Jump::setjump(
+        $Test2::Harness2::Preloader::JUMP_LABEL,
+        sub { Test2::Harness2::Preloader->_serve($ARGV[0]) },
+    );
+    if ($payload) {
+        Test2::Harness2::Preloader->_post_jump_launch($payload);
+    }
 }
-exit 0;
 SCRIPT
 }
 
@@ -173,9 +175,20 @@ sub _begin_bootstrap {
 #   { kind => 'launch_test', test_file => $path, env => \%env, ... }
 #   anything else -> dump and exit (defensive)
 sub _post_jump_launch {
-    my ($class, $payload) = @_;
+    my ($class, $raw) = @_;
 
-    my $kind = ref($payload) eq 'HASH' ? $payload->{kind} : undef;
+    # Long::Jump::setjump returns an arrayref of the positional values the
+    # longjumper passed. Our stage always calls longjump with a single
+    # hashref, so unwrap it here.
+    my $payload;
+    if (ref($raw) eq 'ARRAY' && @$raw && ref($raw->[0]) eq 'HASH') {
+        $payload = $raw->[0];
+    }
+    elsif (ref($raw) eq 'HASH') {
+        $payload = $raw;
+    }
+
+    my $kind = $payload ? $payload->{kind} : undef;
 
     if (defined $kind && $kind eq 'launch_test') {
         my $test_file = $payload->{test_file}
@@ -194,9 +207,13 @@ sub _post_jump_launch {
         # Rewind @ARGV if the caller asked for it.
         @ARGV = @{$payload->{argv} // []};
 
-        # Hand off with an effectively empty stack.
+        # Hand off. goto::file installs a source filter; once it returns
+        # and BEGIN unwinds, Perl resumes compiling with the test file's
+        # source replacing whatever came next in the -e script. There is
+        # nothing after this in the bootstrap, so the filter takes over
+        # completely.
         goto::file->import($test_file);
-        die "goto::file returned; should never happen";
+        return;
     }
 
     warn "Unknown longjump payload kind '" . ($kind // '<undef>') . "'; exiting.\n";

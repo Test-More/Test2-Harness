@@ -251,6 +251,12 @@ harness introspects these via L</service_methods> at initialization (for
 harness-global resources) or at run start (for per-run resources) and
 invokes each.
 
+The method is invoked with these keyword arguments:
+
+    harness => $harness,          # the Test2::Harness2 instance
+    scope   => 'global' | 'run',  # global init vs per-run startup
+    run     => $run,              # only present when scope is 'run'
+
 The method is responsible for deciding whether a service is needed and, if
 so, for forking the subprocess and reporting its pid to the harness by
 calling:
@@ -290,13 +296,28 @@ or C<resource_resumed> IPC message) the resource becomes usable again.
 
 =back
 
-The harness enforces this contract in C<_start_resource_services>: after
-the method returns, the C<restart> flag on every tracked entry for this
-C<(resource, method)> pair is overwritten with the returned code. A
-resource author who passes C<< restart =E<gt> 1 >> to C<track_resource_service>
+The harness enforces this contract in C<_invoke_service_method>: after
+the method returns, the C<restart> flag on every newly-tracked entry for
+this C<(resource, method)> pair is overwritten with the returned code.
+A resource author who passes C<< restart =E<gt> 1 >> to C<track_resource_service>
 but returns C<0> from the method will have their tracked entry
 authoritatively reset to C<restart =E<gt> 0>. Rely on the return value, not
 the kwarg.
+
+=head2 Restart semantics
+
+When a restartable (return-value C<1>) service exits, the harness
+re-invokes its C<service_*> method. Basic spiral protection caps
+consecutive restart attempts at C<MAX_RESTART_ATTEMPTS> (currently 5);
+the counter resets to 1 when a service survived at least
+C<RESTART_HEALTHY_SECS> (currently 30) before exiting. Note that the
+reset is one-shot per long-lived window: a service that survived 30s,
+died, and then immediately crash-loops will burn up to
+C<MAX_RESTART_ATTEMPTS> rapid retries before the resource is flipped to
+C<permanent_broken>. If the re-invoked method dies, the resource stays
+C<broken> (no automatic progression to C<permanent_broken>); operator
+intervention is required. If the re-invoked method returns C<-1>, the
+resource is flipped to C<permanent_broken>.
 
 If a resource is in a broken state while a test is still running against it,
 and that test later fails, the test should be queued for re-run (retry

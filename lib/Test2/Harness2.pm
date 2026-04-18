@@ -10,15 +10,24 @@ use Time::HiRes qw/time sleep/;
 use Test2::Util::UUID qw/gen_uuid/;
 use POSIX qw/WNOHANG getpgrp/;
 
-use constant IS_WIN32 => $^O eq 'MSWin32';
+use constant IS_WIN32            => $^O eq 'MSWin32';
 use constant HAS_CHILD_SUBREAPER => eval {
     require Test2::Harness2::ChildSubReaper;
     Test2::Harness2::ChildSubReaper::have_subreaper_support() ? 1 : 0;
 } || 0;
 
+# Basic restart-spiral protection for resource services.
+# MAX_RESTART_ATTEMPTS caps how many consecutive restart attempts a
+# service gets before the resource is flipped to permanent_broken.
+# RESTART_HEALTHY_SECS is the runtime above which a cleanly-exiting
+# service resets the attempts counter back to 1 on its next restart.
+use constant MAX_RESTART_ATTEMPTS => 5;
+use constant RESTART_HEALTHY_SECS => 30;
+
 use Atomic::Pipe;
 use IPC::Manager qw/ipcm_spawn/;
 use Test2::Harness2::Collector;
+use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Run;
 use Test2::Harness2::Util::EventEmitter;
 use Test2::Harness2::Util::IPC qw/list_direct_children/;
@@ -33,9 +42,11 @@ use Object::HashBase qw{
     <kill_timeout
     <parent_pids
     <jump_to
+    <resources
     +state
     +queue
-    +current
+    +running_jobs
+    +resource_services
     +finish_after_initial_run
     +emitter
     +watch_pids_ref
@@ -57,14 +68,18 @@ sub init {
 
     make_path("$wd/services");
 
-    $self->{+NAME}           //= 'harness';
-    $self->{+JOB_ID}         //= gen_uuid();
-    $self->{+KILL_TIMEOUT}   //= 15;
-    $self->{+PARENT_PIDS}    //= [];
-    $self->{+STATE}          //= 'running';
-    $self->{+QUEUE}          //= [];
-    $self->{+WATCH_PIDS_REF} //= [@{$self->{+PARENT_PIDS}}];
-    $self->{+OWN_PGROUP}     //= 0;
+    $self->{+NAME}              //= 'harness';
+    $self->{+JOB_ID}            //= gen_uuid();
+    $self->{+KILL_TIMEOUT}      //= 15;
+    $self->{+PARENT_PIDS}       //= [];
+    $self->{+STATE}             //= 'running';
+    $self->{+QUEUE}             //= [];
+    $self->{+RUNNING_JOBS}      //= {};
+    $self->{+RESOURCE_SERVICES} //= {};
+    $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
+    $self->{+OWN_PGROUP}        //= 0;
+
+    $self->_init_resources;
 
     $self->{+LOGGERS} //= [
         [
@@ -74,6 +89,20 @@ sub init {
     ];
     $self->{+TEST_AUDITOR} //= 'Test2::Harness2::Collector::Auditor::Test';
     $self->{+TEST_LOGGERS} //= ['Test2::Harness2::Collector::Logger::JSONL'];
+}
+
+sub _init_resources {
+    my $self = shift;
+
+    $self->{+RESOURCES} //= [];
+
+    # At least one job-count limiter must be active. Fall back to a
+    # single-slot JobCount if the caller did not supply one; this preserves
+    # the legacy "one at a time" behaviour when the harness is used without
+    # explicit concurrency configuration.
+    my $has_limiter = grep { $_->is_job_limiter } @{$self->{+RESOURCES}};
+    push @{$self->{+RESOURCES}} => Test2::Harness2::Resource::JobCount->new(slots => 1)
+        unless $has_limiter;
 }
 
 sub start {
@@ -252,16 +281,18 @@ sub request_handler_status {
         } } @{$self->{+QUEUE}}
     ];
 
-    my $running;
-    if (my $cur = $self->{+CURRENT}) {
-        $running = {
+    my @running = map {
+        my $cur = $_;
+        {
             run_id    => $cur->{run}->run_id,
             job_id    => $cur->{job}->job_id,
-            test_file => $cur->{job}->test_file,
+            test_file => $cur->{job}->test_file_rel,
             pid       => $cur->{pid},
             started   => $cur->{started_at},
         };
-    }
+    } values %{$self->{+RUNNING_JOBS}};
+
+    my @resources = map { $_->status } @{$self->{+RESOURCES}};
 
     return {
         service => {
@@ -271,8 +302,9 @@ sub request_handler_status {
             workdir => $self->{+WORKDIR},
             state   => $self->{+STATE},
         },
-        queue   => $queue,
-        running => $running,
+        queue     => $queue,
+        running   => \@running,
+        resources => \@resources,
     };
 }
 
@@ -295,14 +327,36 @@ sub run_on_general_message {
     my $content = $msg->content;
     my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
 
-    if (defined $kind && $kind eq 'job_complete_notify') {
-        # The act of receiving this message has already woken the service's
-        # event loop. On the next run_on_all iteration, _check_current_completion
-        # will detect the completion via waitpid. Nothing else to do.
-        return;
-    }
+    # The act of receiving this message has already woken the service's event
+    # loop. On the next run_on_all iteration, _check_completions will detect
+    # the completion via waitpid. Nothing else to do.
+    return if defined $kind && $kind eq 'job_complete_notify';
+
+    return $self->_handle_resource_state_message($kind, $content)
+        if defined $kind && $kind =~ m/^resource_(?:paused|resumed|ready|broken|permanent_broken)$/;
 
     warn "Test2::Harness2: unhandled general message kind: " . (defined $kind ? "'$kind'" : '(none)') . "\n";
+
+    return;
+}
+
+sub _handle_resource_state_message {
+    my ($self, $kind, $content) = @_;
+
+    my $name = ref($content) eq 'HASH' ? $content->{resource} : undef;
+    return unless defined $name;
+
+    my ($res) = grep { $_->resource_name eq $name } @{$self->{+RESOURCES} // []};
+    return unless $res;
+
+    if    ($kind eq 'resource_paused')           { $res->mark_paused }
+    elsif ($kind eq 'resource_broken')           { $res->mark_broken }
+    elsif ($kind eq 'resource_permanent_broken') { $res->mark_permanent_broken }
+    elsif ($kind eq 'resource_resumed' || $kind eq 'resource_ready') {
+        # Permanent brokenness is sticky; a resource cannot re-declare itself
+        # ready once the harness has ruled it out.
+        $res->mark_resumed unless $res->is_permanent_broken;
+    }
 
     return;
 }
@@ -316,28 +370,51 @@ sub request_handler_detach {
     return {ok => 1};
 }
 
-sub _check_current_completion {
+sub _check_completions {
     my $self = shift;
-    my $cur  = $self->{+CURRENT} or return;
 
-    my $handle = $cur->{handle};
-    return unless $handle->is_done;
+    my $running = $self->{+RUNNING_JOBS};
 
-    # Move the job from running to done.
-    $cur->{run}->mark_done($cur->{job}->job_id);
+    for my $job_id (keys %$running) {
+        my $cur    = $running->{$job_id};
+        my $handle = $cur->{handle};
 
-    # If the whole run is complete, pop it from the queue.
-    if ($cur->{run}->is_complete) {
-        my $run_id = $cur->{run}->run_id;
-        $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
+        next unless $handle->is_done;
 
-        # Flip to finishing if requested (Task 15 builds on this).
-        $self->{+STATE} = 'finishing'
-            if $self->{+FINISH_AFTER_INITIAL_RUN}
-            && $self->{+STATE} eq 'running';
+        # Release any resources this job had assigned, then move it from
+        # running to done on its run.
+        $self->_release_job_resources($cur);
+        $cur->{run}->mark_done($job_id);
+
+        delete $running->{$job_id};
+
+        # If the whole run is complete, pop it from the queue.
+        if ($cur->{run}->is_complete) {
+            my $run    = $cur->{run};
+            my $run_id = $run->run_id;
+            $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
+
+            $self->_teardown_run_resources($run);
+
+            $self->{+STATE} = 'finishing'
+                if $self->{+FINISH_AFTER_INITIAL_RUN}
+                && $self->{+STATE} eq 'running';
+        }
     }
+}
 
-    delete $self->{+CURRENT};
+sub _release_job_resources {
+    my ($self, $cur) = @_;
+
+    my $assigned = $cur->{assigned_resources} or return;
+    my $id       = $cur->{assign_id};
+
+    for my $res (@$assigned) {
+        my $ok  = eval { $res->release(id => $id, job => $cur->{job}); 1 };
+        my $err = $@;
+        warn "failed to release resource '" . $res->resource_name . "': $err"
+            unless $ok;
+    }
 }
 
 sub _perform_hard_stop {
@@ -358,11 +435,18 @@ sub _perform_hard_stop {
     # ago and still alive -- stuck past signal reach".
     my %pids;
 
-    $pids{$self->{+CURRENT}{pid}} //= {} if $self->{+CURRENT};
+    for my $cur (values %{$self->{+RUNNING_JOBS} // {}}) {
+        $pids{$cur->{pid}} //= {} if $cur->{pid};
+    }
 
     # Add any registered workers.
     if ($self->can('workers')) {
         $pids{$_} //= {} for keys %{$self->workers // {}};
+    }
+
+    # Add any resource-service pids.
+    for my $info (values %{$self->{+RESOURCE_SERVICES} // {}}) {
+        $pids{$info->{pid}} //= {} if $info->{pid};
     }
 
     # Drop CURRENT/workers that IPC::Manager's per-tick waitpid may
@@ -447,22 +531,94 @@ sub _perform_hard_stop {
         sleep(0.05) unless $reaped || @fresh || @to_kill;
     }
 
-    delete $self->{+CURRENT};
+    # Drop all tracked running jobs; their pids are either gone or being
+    # ignored. _release_job_resources makes a best-effort release on each.
+    for my $cur (values %{$self->{+RUNNING_JOBS} // {}}) {
+        $self->_release_job_resources($cur);
+    }
+    $self->{+RUNNING_JOBS}      = {};
+    $self->{+RESOURCE_SERVICES} = {};
 }
 
-# IPC::Manager service-loop hook: a non-worker child pid was reaped.
-# The only pid we track here is the currently-running collector; hand
-# its exit status to the Collector::Handle so _check_current_completion
-# sees is_done. Reparented descendants (subreaper orphans) also land
-# here when they exit -- nothing further to do for those.
+# IPC::Manager service-loop hook: a non-worker child pid was reaped. The
+# pids we track here are:
+#   - running collectors (one per active job_id)
+#   - resource-service processes spawned via service_* methods
+# Reparented descendants (subreaper orphans) that we did not spawn also
+# land here; they get no handling beyond the drain the service loop did.
 sub run_on_pid {
     my ($self, $pid, $exit) = @_;
 
-    my $cur = $self->{+CURRENT} or return;
-    return unless $cur->{pid} && $cur->{pid} == $pid;
+    # Find the running job owning this pid, if any.
+    for my $cur (values %{$self->{+RUNNING_JOBS} // {}}) {
+        next unless $cur->{pid} && $cur->{pid} == $pid;
+        my $handle = $cur->{handle} or return;
+        $handle->set_exit_code($exit) unless defined $handle->exit_code;
+        return;
+    }
 
-    my $handle = $cur->{handle} or return;
-    $handle->set_exit_code($exit) unless defined $handle->exit_code;
+    # Resource-service exit. Drop the tracking entry first so the restart
+    # branch below (which may cause the resource's service_* method to
+    # register a new pid) cannot collide with the old one.
+    my $svc    = delete $self->{+RESOURCE_SERVICES}->{$pid} or return;
+    my $res    = $svc->{resource};
+    my $method = $svc->{method};
+
+    # Non-restartable service: the resource is effectively gone for the
+    # rest of this harness run.
+    unless ($svc->{restart}) {
+        $res->mark_permanent_broken;
+        return;
+    }
+
+    # Restartable service: mark broken, then attempt to re-invoke the
+    # service_* method. The resource's method is expected to fork a
+    # replacement and call track_resource_service with the new pid.
+    $res->mark_broken;
+
+    # Basic restart-spiral protection. A service that survived at least
+    # RESTART_HEALTHY_SECS resets the attempts counter; otherwise the
+    # counter climbs and we eventually give up.
+    my $ran_for  = time - ($svc->{started_at} // time);
+    my $attempts = ($ran_for >= RESTART_HEALTHY_SECS) ? 1 : (($svc->{attempts} // 1) + 1);
+
+    if ($attempts > MAX_RESTART_ATTEMPTS) {
+        warn "resource '" . $res->resource_name . "' service '$method' exceeded " . MAX_RESTART_ATTEMPTS . " restart attempts; marking permanent_broken\n";
+        $res->mark_permanent_broken;
+        return;
+    }
+
+    # Snapshot existing tracked pids for this (resource, method) so we
+    # can identify the new one afterwards and stamp the attempts counter
+    # on it.
+    my %old_pids = map { $_->{pid} => 1 }
+        grep { $_->{resource} == $res && defined $_->{method} && $_->{method} eq $method } values %{$self->{+RESOURCE_SERVICES} // {}};
+
+    my $status = $self->_invoke_service_method(
+        $res, $method,
+        scope => $svc->{scope},
+        (defined $svc->{run} ? (run => $svc->{run}) : ()),
+    );
+
+    # Method died: already warned inside the helper. Resource stays marked
+    # broken; operator intervention needed.
+    return unless defined $status;
+
+    # Method declared the service no longer needed. Treat as permanent:
+    # the resource will not come back this session.
+    if ($status < 0) {
+        $res->mark_permanent_broken;
+        return;
+    }
+
+    # New pid (or pids) registered. Apply the attempts counter so the
+    # next exit knows how many tries we've already spent.
+    for my $new_svc (values %{$self->{+RESOURCE_SERVICES} // {}}) {
+        next unless $new_svc->{resource} == $res;
+        next unless defined $new_svc->{method} && $new_svc->{method} eq $method;
+        next if $old_pids{$new_svc->{pid}};
+        $new_svc->{attempts} = $attempts;
+    }
 
     return;
 }
@@ -470,13 +626,15 @@ sub run_on_pid {
 sub run_should_end {
     my $self = shift;
 
+    my $has_running = keys %{$self->{+RUNNING_JOBS} // {}} ? 1 : 0;
+
     if ($self->{+STATE} eq 'terminating') {
-        return 1 if !$self->{+CURRENT};
+        return 1 unless $has_running;
         return 0;
     }
 
     if ($self->{+STATE} eq 'finishing') {
-        return 1 if !$self->{+CURRENT} && !@{$self->{+QUEUE}};
+        return 1 if !$has_running && !@{$self->{+QUEUE}};
         return 0;
     }
 
@@ -535,13 +693,109 @@ sub run_on_start {
         name    => $self->{+NAME},
         workdir => $self->{+WORKDIR},
     );
+
+    $self->_start_resource_services($self->{+RESOURCES}, scope => 'global');
+}
+
+sub _start_resource_services {
+    my ($self, $resources, %opts) = @_;
+
+    my $scope = $opts{scope} // 'global';
+
+    for my $res (@$resources) {
+        for my $method ($res->service_methods) {
+            $self->_invoke_service_method(
+                $res, $method,
+                scope => $scope,
+                (exists $opts{run} ? (run => $opts{run}) : ()),
+            );
+        }
+    }
+
+    return;
+}
+
+# Single source of truth for calling a resource's service_* method. Used
+# at initialization (_start_resource_services) and on restart (run_on_pid).
+#
+# Returns the method's return value (or undef if the method died). The
+# caller is responsible for acting on the return: -1 / undef means no
+# new tracking state should exist; >= 0 means the resource should have
+# called track_resource_service from inside the method to hand over the
+# pid.
+#
+# Enforces the POD contract that the restart flag on any newly-tracked
+# service entry is the return value of the method, not the kwarg the
+# author happened to pass.
+sub _invoke_service_method {
+    my ($self, $res, $method, %opts) = @_;
+
+    my $status;
+    my $ok = eval {
+        $status = $res->$method(
+            harness => $self,
+            scope   => $opts{scope} // 'global',
+            (exists $opts{run} ? (run => $opts{run}) : ()),
+        );
+        1;
+    };
+    my $err = $@;
+    unless ($ok) {
+        warn "resource '" . $res->resource_name . "' service '$method' died: $err";
+        return undef;
+    }
+
+    return $status if !defined($status) || $status < 0;
+
+    # Service started. Enforce the POD contract: restart flag is the return
+    # value, not the kwarg.
+    for my $svc (values %{$self->{+RESOURCE_SERVICES} // {}}) {
+        next unless $svc->{resource} == $res;
+        next unless defined $svc->{method} && $svc->{method} eq $method;
+        $svc->{restart} = $status ? 1 : 0;
+    }
+
+    return $status;
+}
+
+sub track_resource_service {
+    my ($self, %p) = @_;
+
+    my $pid = $p{pid}      or croak "'pid' is required";
+    my $res = $p{resource} or croak "'resource' is required";
+
+    # NOTE: the caller may seed {restart} here, but the authoritative value
+    # is set by _invoke_service_method based on the service method's
+    # return code (0 vs 1). This keeps the POD contract enforced in one
+    # place rather than trusting each resource author.
+    $self->{+RESOURCE_SERVICES}->{$pid} = {
+        pid        => $pid,
+        resource   => $res,
+        method     => $p{method},
+        scope      => $p{scope} // 'global',
+        run        => $p{run},
+        restart    => $p{restart} ? 1 : 0,
+        started_at => $p{started_at} // time,
+        attempts   => $p{attempts}   // 1,
+    };
+
+    return $pid;
 }
 
 sub run_on_cleanup {
     my $self = shift;
 
-    # Final sweep -- any stragglers go now.
-    $self->_perform_hard_stop if $self->{+CURRENT} || @{$self->{+QUEUE}};
+    # Snapshot the queue so we can tear down per-run resources for any
+    # runs that didn't complete cleanly -- _perform_hard_stop drains the
+    # queue before returning.
+    my @leftover_runs = @{$self->{+QUEUE} // []};
+
+    my $has_running = keys %{$self->{+RUNNING_JOBS} // {}};
+    $self->_perform_hard_stop if $has_running || @{$self->{+QUEUE}};
+
+    $self->_teardown_run_resources($_) for @leftover_runs;
+
+    $_->teardown for @{$self->{+RESOURCES} // []};
 
     $self->_emit_service_event(kind => 'service_stopped');
 }
@@ -556,58 +810,211 @@ sub run_on_all {
     my ($self, $activity) = @_;
 
     # IPC::Manager's service loop already reaped any exited child and
-    # routed non-worker pids through run_on_pid(), so by the time we
-    # get here the collector Handle has its exit_code stashed when
-    # applicable. _check_current_completion reads that via
-    # $handle->is_done without needing to waitpid itself.
-    $self->_check_current_completion;
+    # routed non-worker pids through run_on_pid(), so by the time we get
+    # here each collector Handle has its exit_code stashed when applicable.
+    # _check_completions reads that via $handle->is_done without needing
+    # to waitpid itself.
+    $self->_check_completions;
 
-    return if $self->{+CURRENT};
     return if $self->{+STATE} eq 'terminating';
-    return unless @{$self->{+QUEUE}};
 
-    my $run = $self->{+QUEUE}[0];
-    return unless @{$run->pending};
+    # Launch as many pending jobs as the active resources permit this tick.
+    1 while $self->_try_launch_next_pending;
+}
 
-    my $job_id = $run->pending->[0];
-    my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
+sub _try_launch_next_pending {
+    my $self = shift;
+
+    return 0 unless @{$self->{+QUEUE} // []};
+
+    for my $run (@{$self->{+QUEUE}}) {
+        next if $run->is_complete;
+
+        # Lazy per-run resource startup: the first time this run is
+        # considered for launch we spin up its resource services.
+        $self->_ensure_run_resources_started($run);
+
+        for my $job_id (@{$run->pending}) {
+            my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
+            next unless $job;
+
+            my ($decision, $use_res) = $self->_evaluate_resources_for($run, $job);
+
+            if ($decision eq 'skip') {
+                # The resource set can never satisfy this job. Drop it
+                # from pending; real skip-result events are left for the
+                # follow-on scheduler work.
+                $run->mark_skipped($job_id);
+                if ($run->is_complete) {
+                    my $rid = $run->run_id;
+                    $self->{+QUEUE} = [grep { $_->run_id ne $rid } @{$self->{+QUEUE}}];
+                    $self->_teardown_run_resources($run);
+                    $self->{+STATE} = 'finishing'
+                        if $self->{+FINISH_AFTER_INITIAL_RUN}
+                        && $self->{+STATE} eq 'running';
+                }
+                return 1;
+            }
+
+            next if $decision eq 'defer';
+
+            $self->_launch_job($run, $job, $use_res);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+sub _evaluate_resources_for {
+    my ($self, $run, $job) = @_;
+
+    # Global resources are consulted first, then per-run resources layered
+    # on top. Either set may defer or skip; all-or-nothing commitment is
+    # preserved because we only call assign() in _launch_job after the
+    # entire walk returns ('launch', \@use).
+    my @all = (@{$self->{+RESOURCES}}, @{$run->resources // []});
+
+    my @use;
+    for my $res (@all) {
+        next unless $res->applicable(job => $job);
+
+        # A permanently-broken resource can never satisfy this job.
+        return ('skip') if $res->is_permanent_broken;
+
+        # Transient brokenness / paused state: try again later.
+        return ('defer') unless $res->is_usable;
+
+        my $av = $res->available(job => $job);
+        return ('skip')  if $av < 0;
+        return ('defer') if !$av;
+
+        push @use => $res;
+    }
+
+    return ('launch', \@use);
+}
+
+sub _ensure_run_resources_started {
+    my ($self, $run) = @_;
+
+    # String keys here match the HashBase +resources_started / +resources_torn_down
+    # declarations on Test2::Harness2::Run -- the constants are scoped to
+    # that package, but the attributes are idempotency flags, not a
+    # public API, so touching the hash directly is fine.
+    return if $run->{resources_started};
+    $run->{resources_started} = 1;
+
+    my $resources = $run->resources // [];
+    return unless @$resources;
+
+    $self->_start_resource_services($resources, scope => 'run', run => $run);
+
+    return;
+}
+
+sub _teardown_run_resources {
+    my ($self, $run) = @_;
+
+    return if $run->{resources_torn_down};
+    $run->{resources_torn_down} = 1;
+
+    # Collect per-run service pids, then remove their tracking entries
+    # BEFORE signalling. run_on_pid reads from the tracking map; once the
+    # entries are gone the reap that follows TERM is a no-op, which is
+    # what we want -- we don't want to restart a service we're tearing
+    # down.
+    my @pids;
+    for my $pid (keys %{$self->{+RESOURCE_SERVICES} // {}}) {
+        my $svc = $self->{+RESOURCE_SERVICES}{$pid};
+        next unless ref($svc->{run}) && $svc->{run} == $run;
+        push @pids => $pid;
+        delete $self->{+RESOURCE_SERVICES}{$pid};
+    }
+
+    # Signal per-run services to stop. If they ignore TERM,
+    # _perform_hard_stop at shutdown will still enumerate surviving
+    # children via the subreaper path and escalate to KILL.
+    kill TERM => @pids if @pids;
+
+    for my $res (@{$run->resources // []}) {
+        my $ok  = eval { $res->teardown; 1 };
+        my $err = $@;
+        warn "resource '" . $res->resource_name . "' teardown died: $err"
+            unless $ok;
+    }
+
+    return;
+}
+
+sub _launch_job {
+    my ($self, $run, $job, $resources) = @_;
 
     my $run_id  = $run->run_id;
+    my $job_id  = $job->job_id;
     my $log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $job_id;
     make_path($log_dir);
     my $log_file = "$log_dir/0.jsonl";
 
-    my $handle = Test2::Harness2::Collector->spawn(
-        launch      => [$^X, '-Ilib', $job->test_file_abs],
-        new_pgroup  => 1,
-        parent_pids => [$$],
-        env_vars    => {T2_FORMATTER => 'Stream2'},
-        run_id      => $run_id,
-        job_id      => $job_id,
-        job_try     => 0,
-        ipcm_info   => $self->ipcm_info,
-        auditor     => $self->{+TEST_AUDITOR},
-        loggers     => [
-            [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
-            [
-                'Test2::Harness2::Collector::Logger::IPCNotify',
-                service_name => $self->{+NAME},
+    my $assign_id = gen_uuid();
+    my %env;
+    for my $res (@$resources) {
+        $res->assign(id => $assign_id, job => $job, env => \%env);
+    }
+
+    my $handle;
+    my $spawn_ok = eval {
+        $handle = Test2::Harness2::Collector->spawn(
+            launch      => [$^X, '-Ilib', $job->test_file_abs],
+            new_pgroup  => 1,
+            parent_pids => [$$],
+            env_vars    => {T2_FORMATTER => 'Stream2', %env},
+            run_id      => $run_id,
+            job_id      => $job_id,
+            job_try     => 0,
+            ipcm_info   => $self->ipcm_info,
+            auditor     => $self->{+TEST_AUDITOR},
+            loggers     => [
+                [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
+                [
+                    'Test2::Harness2::Collector::Logger::IPCNotify',
+                    service_name => $self->{+NAME},
+                ],
             ],
-        ],
-    );
+        );
+        1;
+    };
+    my $spawn_err = $@;
+
+    unless ($spawn_ok) {
+        # spawn() failed; release the resources we just committed so their
+        # slots don't leak. The job never reached RUNNING_JOBS so
+        # _release_job_resources won't reach it on its own.
+        for my $res (@$resources) {
+            my $rok  = eval { $res->release(id => $assign_id, job => $job); 1 };
+            my $rerr = $@;
+            warn "failed to release resource '" . $res->resource_name . "' after spawn failure: $rerr"
+                unless $rok;
+        }
+        die $spawn_err;
+    }
 
     $run->mark_running($job_id);
 
-    $self->{+CURRENT} = {
-        run        => $run,
-        job        => $job,
-        handle     => $handle,
-        pid        => $handle->{pid},
-        started_at => time,
+    $self->{+RUNNING_JOBS}->{$job_id} = {
+        run                => $run,
+        job                => $job,
+        handle             => $handle,
+        pid                => $handle->pid,
+        started_at         => time,
+        assign_id          => $assign_id,
+        assigned_resources => $resources,
     };
 
-    $self->register_worker("test-$job_id", $handle->{pid})
+    $self->register_worker("test-$job_id", $handle->pid)
         if $self->can('register_worker');
+
+    return $job_id;
 }
 
 1;

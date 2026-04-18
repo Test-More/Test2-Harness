@@ -24,7 +24,7 @@ ok($queued->{ok}, 'queued') or diag explain $queued;
 my $done;
 for (1 .. 200) {
     my $status = $spawn->status;
-    if (!$status->{running} && scalar(@{$status->{queue}}) == 0) {
+    if (!@{$status->{running} // []} && scalar(@{$status->{queue}}) == 0) {
         $done = 1;
         last;
     }

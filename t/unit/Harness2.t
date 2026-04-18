@@ -27,9 +27,78 @@ BEGIN {
 }
 
 use Test2::Harness2;
+use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Run;
 
 my $CAN_FORK = $Config{d_fork};
+
+# Inline test resources for the restart and per-run subtests.
+# Test::Restart::Res drives restart cases: SERVICE_RETURNS is a queue of
+# codes the method returns on each call; PIDS is a queue of pids to track
+# on each successful (>= 0) call.
+{
+
+    package Test::Restart::Res;
+    use Object::HashBase qw/<service_returns <pids/;
+    use Role::Tiny::With;
+    with 'Test2::Harness2::Role::Resource';
+    sub available { 1 }
+    sub assign    { 1 }
+    sub release   { 1 }
+    sub status    { {} }
+
+    sub service_foo {
+        my ($self, %p) = @_;
+        my $ret = shift @{$self->{+SERVICE_RETURNS}};
+        return $ret if !defined($ret) || $ret < 0;
+        my $pid = shift @{$self->{+PIDS}};
+        $p{harness}->track_resource_service(
+            pid      => $pid,
+            resource => $self,
+            method   => 'service_foo',
+            scope    => $p{scope},
+            ($p{run} ? (run => $p{run}) : ()),
+        );
+        return $ret;
+    }
+}
+
+# Test::RunRes::Res exercises the per-run lifecycle path: counts
+# service-method invocations and teardown calls so the subtests can
+# assert lazy start and tear-down semantics.
+{
+
+    package Test::RunRes::Res;
+    use Object::HashBase qw/<calls <teardowns <pids/;
+    use Role::Tiny::With;
+    with 'Test2::Harness2::Role::Resource';
+
+    sub init {
+        my $self = shift;
+        $self->{+CALLS}     //= 0;
+        $self->{+TEARDOWNS} //= 0;
+    }
+    sub available { 1 }
+    sub assign    { 1 }
+    sub release   { 1 }
+    sub status    { {} }
+    sub teardown  { $_[0]->{+TEARDOWNS}++ }
+
+    sub service_one {
+        my ($self, %p) = @_;
+        $self->{+CALLS}++;
+        my $pid = shift @{$self->{+PIDS} //= []};
+        return -1 unless defined $pid;    # no pid -> declared not needed
+        $p{harness}->track_resource_service(
+            pid      => $pid,
+            resource => $self,
+            method   => 'service_one',
+            scope    => $p{scope},
+            ($p{run} ? (run => $p{run}) : ()),
+        );
+        return 0;                         # started, one-shot
+    }
+}
 
 subtest 'constructs with valid workdir' => sub {
     my $dir = tempdir(CLEANUP => 1);
@@ -102,8 +171,10 @@ subtest 'status returns current state without running' => sub {
     is($status->{service}{workdir}, $dir);
     is($status->{service}{state},   'running');
     like($status->{service}{job_id}, qr/^[0-9A-F-]{36}$/i);
-    is($status->{queue},   [],    'empty queue');
-    is($status->{running}, undef, 'nothing running');
+    is($status->{queue},                  [],         'empty queue');
+    is($status->{running},                [],         'nothing running');
+    is(scalar @{$status->{resources}},    1,          'default JobCount resource installed');
+    is($status->{resources}[0]{resource}, 'jobcount', 'resource name surfaces');
 };
 
 subtest 'queue_test_run enqueues and returns run_id' => sub {
@@ -269,16 +340,20 @@ subtest 'run_on_all dispatches next pending job to a Collector' => sub {
     # Use a self-contained script as the "test" so we don't need a real .t file.
     $h->request_handler_queue_test_run({files => ['does-not-matter.t']});
 
-    # Override the per-job launch so we're not spawning a real perl process.
-    # Instead, record the args the Collector would be given.
+    # Record only the first spawn; after that return a sentinel and stop
+    # consuming slots so the launcher loop exits cleanly.
     my @collector_args;
     my $fake_handle = bless {pid => 99999}, 'Test2::Harness2::Collector::Handle';
+    my $calls       = 0;
     {
         no warnings 'redefine';
         local *Test2::Harness2::Collector::spawn = sub {
             my ($class, %args) = @_;
-            @collector_args = %args;
-            return $fake_handle;
+            if (!$calls++) {
+                @collector_args = %args;
+                return $fake_handle;
+            }
+            die "only one spawn expected under a single-slot JobCount";
         };
 
         $h->run_on_all({});
@@ -289,17 +364,52 @@ subtest 'run_on_all dispatches next pending job to a Collector' => sub {
     is($args{new_pgroup},             1,         'new_pgroup set');
     is($args{parent_pids},            [$$],      'parent_pids includes service pid');
     is($args{env_vars}{T2_FORMATTER}, 'Stream2', 'T2_FORMATTER set');
+    is(
+        $args{env_vars}{T2_HARNESS_MY_JOB_CONCURRENCY}, 1,
+        'JobCount injected concurrency env var'
+    );
     like($args{loggers}[0][2], qr{\Q$dir\E/logs/runs/.+/.+/0\.jsonl}, 'per-job JSONL path');
     like($args{run_id},        qr/^[0-9A-F-]{36}$/i,             'run_id passed to collector');
     like($args{job_id},        qr/^[0-9A-F-]{36}$/i,             'job_id passed to collector');
     is($args{job_try}, 0, 'job_try passed as 0 to collector');
     is($args{ipc_peer}, 'harness', 'ipc_peer set to service name so collector can send loggers_ready');
     ok(!exists $args{env_vars}{T2_IPC_INFO}, 'ipcm_info not in env_vars (not passed to test process)');
-    ok($h->{current},                        'current populated');
-    is($h->{current}{pid}, 99999, 'current.pid set from handle');
+    my @running = values %{$h->{running_jobs}};
+    is(scalar @running,    1,     'one running job tracked');
+    is($running[0]->{pid}, 99999, 'running job pid set from handle');
 
     my $status = $h->request_handler_status;
-    ok($status->{running}, 'status reports running job');
+    is(scalar @{$status->{running}}, 1, 'status reports one running job');
+};
+
+subtest 'run_on_all commits no resource when any is unavailable' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    # Two resources: A has room, B is paused (available returns 0). A job must
+    # not consume a slot on A when B would defer it.
+    my $res_a = Test2::Harness2::Resource::JobCount->new(slots => 5);
+    my $res_b = Test2::Harness2::Resource::JobCount->new(slots => 2);
+    $res_b->mark_paused;
+
+    my $h = Test2::Harness2->new(
+        workdir   => $dir,
+        resources => [$res_a, $res_b],
+    );
+
+    $h->request_handler_queue_test_run({files => ['x.t']});
+
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub {
+            die "must not spawn when a resource defers";
+        };
+        $h->run_on_all({});
+    }
+
+    is($res_a->used,                      0, 'resource A not committed when B defers');
+    is($res_b->used,                      0, 'resource B not committed');
+    is(scalar keys %{$h->{running_jobs}}, 0, 'no running jobs');
+    is(scalar @{$h->{queue}},             1, 'run still queued, job still pending');
 };
 
 subtest 'run_on_all detects collector exit and advances queue' => sub {
@@ -322,12 +432,19 @@ subtest 'run_on_all detects collector exit and advances queue' => sub {
     # Give the child a moment to exit before we check.
     sleep(0.1);
 
-    $h->{current} = {
-        run        => $run,
-        job        => $job,
-        handle     => $fake_handle,
-        pid        => $child_pid,
-        started_at => time,
+    # Pre-assign the JobCount slot so _check_completions can release it.
+    my ($res) = @{$h->{resources}};
+    my %env;
+    $res->assign(id => 'test-assign', job => $job, env => \%env);
+
+    $h->{running_jobs}{$job_id} = {
+        run                => $run,
+        job                => $job,
+        handle             => $fake_handle,
+        pid                => $child_pid,
+        started_at         => time,
+        assign_id          => 'test-assign',
+        assigned_resources => [$res],
     };
 
     {
@@ -336,8 +453,9 @@ subtest 'run_on_all detects collector exit and advances queue' => sub {
         $h->run_on_all({});
     }
 
-    ok(!$h->{current}, 'current cleared after completion');
+    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared after completion');
     is(scalar @{$run->done}, 1, 'job marked done');
+    is($res->used,           0, 'JobCount slot released');
 };
 
 subtest 'run_on_all emits run_started + job_started for the first job' => sub {
@@ -465,12 +583,13 @@ subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
     my ($job)  = grep { $_->job_id eq $job_id } @{$run->jobs};
     $run->mark_running($job_id);
 
-    $h->{current} = {
-        run        => $run,
-        job        => $job,
-        handle     => $fake_handle,
-        pid        => $child_pid,
-        started_at => time,
+    $h->{running_jobs}{$job_id} = {
+        run                => $run,
+        job                => $job,
+        handle             => $fake_handle,
+        pid                => $child_pid,
+        started_at         => time,
+        assigned_resources => [],
     };
     push @{$h->{queue}} => $run;
 
@@ -479,8 +598,8 @@ subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
     # Give the OS a moment to finish reaping.
     sleep(0.1);
 
-    ok(!kill(0, $child_pid), 'child is dead');
-    ok(!$h->{current},       'current cleared');
+    ok(!kill(0, $child_pid),        'child is dead');
+    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared');
 };
 
 subtest 'run_should_end honors state and workers' => sub {
@@ -490,14 +609,14 @@ subtest 'run_should_end honors state and workers' => sub {
     ok(!$h->run_should_end, 'running + empty queue: keep running');
 
     $h->{state} = 'finishing';
-    ok($h->run_should_end, 'finishing + empty queue + no current: end');
+    ok($h->run_should_end, 'finishing + empty queue + no running jobs: end');
 
-    $h->{current} = {pid => 123};
-    ok(!$h->run_should_end, 'finishing + current: keep running');
+    $h->{running_jobs}{'j1'} = {pid => 123};
+    ok(!$h->run_should_end, 'finishing + running job: keep running');
 
-    delete $h->{current};
+    delete $h->{running_jobs}{'j1'};
     $h->{state} = 'terminating';
-    ok($h->run_should_end, 'terminating + cleared: end');
+    ok($h->run_should_end, 'terminating + no running jobs: end');
 };
 
 subtest 'run_on_general_message - job_complete_notify is a no-op' => sub {
@@ -559,6 +678,328 @@ subtest 'run_on_general_message - loggers_ready emits job_loggers event' => sub 
         'loggers payload passed through');
 };
 
+subtest 'run_on_general_message - resource state messages flip the named resource' => sub {
+    my $dir   = tempdir(CLEANUP => 1);
+    my $res   = Test2::Harness2::Resource::JobCount->new(slots => 1);
+    my $h     = Test2::Harness2->new(workdir => $dir, resources => [$res]);
+    my $kind  = 'resource_paused';
+    my $rname = $res->resource_name;
+
+    my $make_msg = sub {
+        my ($k) = @_;
+        my $pkg = 'FakeMsg::' . $k;
+        my $obj = bless {}, $pkg;
+        no strict 'refs';
+        no warnings 'once', 'redefine';
+        *{"${pkg}::content"} = sub { {kind => $k, resource => $rname} };
+        return $obj;
+    };
+
+    $h->run_on_general_message($make_msg->('resource_paused'));
+    ok($res->is_paused,  'resource marked paused');
+    ok(!$res->is_usable, 'paused resource is not usable');
+
+    $h->run_on_general_message($make_msg->('resource_resumed'));
+    ok(!$res->is_paused, 'resumed clears pause');
+
+    $h->run_on_general_message($make_msg->('resource_broken'));
+    ok($res->is_broken, 'marked broken');
+
+    $h->run_on_general_message($make_msg->('resource_ready'));
+    ok(!$res->is_broken, 'ready clears broken');
+
+    $h->run_on_general_message($make_msg->('resource_permanent_broken'));
+    ok($res->is_permanent_broken, 'permanently broken');
+    ok($res->is_broken,           'also broken');
+
+    # Sticky: resumed must not un-permanent.
+    $h->run_on_general_message($make_msg->('resource_resumed'));
+    ok($res->is_permanent_broken, 'permanent brokenness survives resume');
+};
+
+subtest 'run_on_general_message - unknown resource name is a no-op' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $fake_msg = bless {}, 'FakeMsgUnknownRes';
+    no warnings 'once';
+    *FakeMsgUnknownRes::content = sub { {kind => 'resource_broken', resource => 'not-a-real-name'} };
+
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings => @_ };
+
+    ok(lives { $h->run_on_general_message($fake_msg) }, 'tolerates unknown resource name');
+    is(\@warnings, [], 'no warning for a known kind with a stale resource');
+};
+
+subtest 'run_on_pid resource-service branch flips state based on restart flag' => sub {
+    my $dir  = tempdir(CLEANUP => 1);
+    my $res1 = Test2::Harness2::Resource::JobCount->new(slots => 1);    # restartable
+    my $res2 = Test2::Harness2::Resource::JobCount->new(slots => 1);    # permanent
+    my $h    = Test2::Harness2->new(workdir => $dir, resources => [$res1, $res2]);
+
+    # JobCount has no service_* methods, so the restart branch's
+    # re-invocation will die on method-not-found. That's a documented
+    # path: the resource stays broken (not permanent) and a warning is
+    # emitted. Capture the warning rather than leaking it to stderr.
+    $h->track_resource_service(pid => 71001, resource => $res1, method => 'service_one', restart => 1);
+    $h->track_resource_service(pid => 71002, resource => $res2, method => 'service_two', restart => 0);
+
+    my @warnings;
+    {
+        local $SIG{__WARN__} = sub { push @warnings => @_ };
+        $h->run_on_pid(71001, 0);
+        $h->run_on_pid(71002, 0);
+    }
+
+    ok($res1->is_broken,            'restart=1 service exit marks resource broken');
+    ok(!$res1->is_permanent_broken, 'not permanently broken');
+
+    ok($res2->is_permanent_broken, 'restart=0 service exit marks permanently broken');
+    ok($res2->is_broken,           'also broken (as per role contract)');
+
+    ok(!exists $h->{resource_services}{71001}, 'tracked pid removed after exit');
+    ok(!exists $h->{resource_services}{71002}, 'tracked pid removed after exit');
+
+    ok(
+        (grep { /service 'service_one' died/ } @warnings),
+        'restart attempt warned when the method could not be called',
+    );
+};
+
+subtest 'restart: successful re-invocation tracks a new pid with attempts+1' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    # Only one restart iteration: the service method will be called once
+    # and track pid 88002. The original pid (88001) was seeded directly
+    # so the service method's pid queue doesn't need to produce it.
+    my $res = Test::Restart::Res->new(service_returns => [1], pids => [88002]);
+    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
+
+    $h->track_resource_service(
+        pid        => 88001,
+        resource   => $res,
+        method     => 'service_foo',
+        restart    => 1,
+        started_at => time,
+        attempts   => 1,
+    );
+
+    $h->run_on_pid(88001, 0);
+
+    ok(!exists $h->{resource_services}{88001}, 'old pid removed');
+    ok(exists $h->{resource_services}{88002},  'new pid tracked after restart');
+    is($h->{resource_services}{88002}{attempts}, 2, 'attempts counter incremented');
+    is($h->{resource_services}{88002}{restart},  1, 'restart flag preserved from new return value');
+    ok($res->is_broken,            'resource stays broken until service signals ready');
+    ok(!$res->is_permanent_broken, 'not permanently broken');
+};
+
+subtest 'restart: attempts cap flips to permanent_broken' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $res = Test::Restart::Res->new(service_returns => [], pids => []);
+    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
+
+    $h->track_resource_service(
+        pid        => 88100,
+        resource   => $res,
+        method     => 'service_foo',
+        restart    => 1,
+        started_at => time,
+        attempts   => Test2::Harness2::MAX_RESTART_ATTEMPTS(),
+    );
+
+    my @warnings;
+    {
+        local $SIG{__WARN__} = sub { push @warnings => @_ };
+        $h->run_on_pid(88100, 0);
+    }
+
+    ok($res->is_permanent_broken, 'resource permanently broken once attempts exhausted');
+    ok(
+        (grep { /exceeded.*restart attempts/ } @warnings),
+        'warning mentions the attempts cap',
+    );
+};
+
+subtest 'restart: healthy runtime resets the attempts counter' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $res = Test::Restart::Res->new(service_returns => [1], pids => [88201]);
+    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
+
+    $h->track_resource_service(
+        pid        => 88200,
+        resource   => $res,
+        method     => 'service_foo',
+        restart    => 1,
+        started_at => time - (Test2::Harness2::RESTART_HEALTHY_SECS() + 1),
+        attempts   => Test2::Harness2::MAX_RESTART_ATTEMPTS(),
+    );
+
+    $h->run_on_pid(88200, 0);
+
+    ok(exists $h->{resource_services}{88201}, 'new pid tracked after healthy-runtime reset');
+    is($h->{resource_services}{88201}{attempts}, 1, 'attempts counter reset to 1');
+    ok(!$res->is_permanent_broken, 'not permanently broken');
+};
+
+subtest 'restart: method returning -1 marks permanent_broken' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $res = Test::Restart::Res->new(service_returns => [-1], pids => []);
+    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
+
+    $h->track_resource_service(
+        pid        => 88300,
+        resource   => $res,
+        method     => 'service_foo',
+        restart    => 1,
+        started_at => time,
+        attempts   => 1,
+    );
+
+    $h->run_on_pid(88300, 0);
+
+    ok($res->is_permanent_broken,          'service declined restart -> permanent_broken');
+    ok(!(keys %{$h->{resource_services}}), 'no tracked entries remain');
+};
+
+subtest 'per-run resources start lazily and tear down on completion' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    my $run_res = Test::RunRes::Res->new(pids => []);    # no pids -> service returns -1 (not needed)
+    my $run     = Test2::Harness2::Run->from_files(
+        files     => ['skip-me.t'],
+        resources => [$run_res],
+    );
+
+    my $h = Test2::Harness2->new(workdir => $dir);
+    push @{$h->{queue}} => $run;
+
+    is($run_res->calls,     0, 'service method not called at queue time');
+    is($run_res->teardowns, 0, 'no teardown yet');
+
+    my $fake_handle = bless {pid => 99991}, 'Test2::Harness2::Collector::Handle';
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub { $fake_handle };
+        $h->run_on_all({});
+    }
+
+    is($run_res->calls, 1, 'service_one called exactly once when run was first considered');
+
+    # Second tick while the job is still running: lazy start must not re-fire.
+    $h->run_on_all({});
+    is($run_res->calls, 1, 'service_one not re-invoked on subsequent ticks');
+
+    # Finish the job.
+    my ($cur) = values %{$h->{running_jobs}};
+    $cur->{handle}->set_exit_code(0);
+
+    $h->run_on_all({});
+
+    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared');
+    is($run_res->teardowns, 1, 'teardown invoked exactly once');
+};
+
+subtest 'per-run resource-service pid is tracked with scope="run" and a run ref' => sub {
+    my $dir     = tempdir(CLEANUP => 1);
+    my $run_res = Test::RunRes::Res->new(pids => [88500]);
+    my $run     = Test2::Harness2::Run->from_files(
+        files     => ['x.t'],
+        resources => [$run_res],
+    );
+
+    my $h = Test2::Harness2->new(workdir => $dir);
+    push @{$h->{queue}} => $run;
+
+    # Evaluate once but do not launch (mock spawn to die so we stop short).
+    my $evaluated;
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub { die "stop before launch" };
+        eval { $h->run_on_all({}); 1 };    # spawn dies; we just want the lazy start side effect
+        $evaluated = 1;
+    }
+    ok($evaluated, 'evaluated');
+
+    ok(exists $h->{resource_services}{88500}, 'per-run service pid tracked');
+    is($h->{resource_services}{88500}{scope}, 'run', 'scope is "run"');
+    ok(ref($h->{resource_services}{88500}{run}), 'run reference stored on tracked entry');
+};
+
+subtest 'per-run resources participate in _evaluate_resources_for' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    my $global_limiter = Test2::Harness2::Resource::JobCount->new(slots => 4);
+    my $run_limiter    = Test2::Harness2::Resource::JobCount->new(slots => 4);
+    $run_limiter->mark_paused;    # per-run resource defers
+
+    my $h = Test2::Harness2->new(workdir => $dir, resources => [$global_limiter]);
+
+    my $run = Test2::Harness2::Run->from_files(
+        files     => ['x.t'],
+        resources => [$run_limiter],
+    );
+    push @{$h->{queue}} => $run;
+
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub { die "must not launch when run-resource defers" };
+        $h->run_on_all({});
+    }
+
+    is($global_limiter->used,             0, 'global limiter not consumed when run-resource defers');
+    is($run_limiter->used,                0, 'run limiter not consumed either');
+    is(scalar keys %{$h->{running_jobs}}, 0, 'no running jobs');
+};
+
+subtest 'run_on_cleanup tears down per-run resources for uncompleted runs' => sub {
+    my $dir     = tempdir(CLEANUP => 1);
+    my $run_res = Test::RunRes::Res->new(pids => []);
+    my $run     = Test2::Harness2::Run->from_files(
+        files     => ['never-runs.t'],
+        resources => [$run_res],
+    );
+
+    my $h = Test2::Harness2->new(workdir => $dir);
+    push @{$h->{queue}} => $run;
+
+    # Pretend the run was started but never completed.
+    $run->{resources_started} = 1;
+
+    my @emits;
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::_perform_hard_stop  = sub { $_[0]->{queue} = []; $_[0]->{running_jobs} = {} };
+        local *Test2::Harness2::_emit_service_event = sub { push @emits => {@_[1 .. $#_]} };
+        $h->run_on_cleanup;
+    }
+
+    is($run_res->teardowns, 1, 'uncompleted run had its resources torn down');
+};
+
+subtest '_evaluate_resources_for returns skip when a resource is permanently broken' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $a   = Test2::Harness2::Resource::JobCount->new(slots => 4);
+    my $b   = Test2::Harness2::Resource::JobCount->new(slots => 4);
+    $b->mark_permanent_broken;
+
+    my $h = Test2::Harness2->new(workdir => $dir, resources => [$a, $b]);
+
+    $h->request_handler_queue_test_run({files => ['perm-broken.t']});
+
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub { die "permanently broken -> skip, not launch" };
+        $h->run_on_all({});
+    }
+
+    is($a->used,                          0, 'no slot consumed on A');
+    is(scalar keys %{$h->{running_jobs}}, 0, 'no running jobs');
+    my $run_still_queued = scalar @{$h->{queue}};
+    is($run_still_queued, 0, 'run removed after its only job was skipped');
+};
+
 subtest 'run_on_general_message - unknown kind warns' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
@@ -589,15 +1030,18 @@ subtest 'start - jump_to unwinds the interpose child via Long::Jump' => sub {
         #   3 -- setjump returned but payload was not a CODE ref
         # 100 -- start() returned to this code path instead of longjumping
         # Anything else -- unexpected
-        my $ret = Long::Jump::setjump('harness_pt', sub {
-            Test2::Harness2->start(
-                workdir     => $dir,
-                ipcm_info   => {fake => 1},
-                jump_to     => 'harness_pt',
-                parent_pids => [],
-            );
-            POSIX::_exit(100);
-        });
+        my $ret = Long::Jump::setjump(
+            'harness_pt',
+            sub {
+                Test2::Harness2->start(
+                    workdir     => $dir,
+                    ipcm_info   => {fake => 1},
+                    jump_to     => 'harness_pt',
+                    parent_pids => [],
+                );
+                POSIX::_exit(100);
+            }
+        );
 
         my $payload = ($ret && @$ret) ? $ret->[0] : undef;
         POSIX::_exit(3) unless ref($payload) eq 'CODE';
@@ -628,8 +1072,8 @@ subtest 'run_on_start calls ChildSubReaper when available' => sub {
 
     my @calls;
     no warnings 'redefine';
-    local *POSIX::setpgid                                        = sub { 1 };
-    local *Test2::Harness2::ChildSubReaper::set_child_subreaper  = sub {
+    local *POSIX::setpgid                                       = sub { 1 };
+    local *Test2::Harness2::ChildSubReaper::set_child_subreaper = sub {
         push @calls => [@_];
         return 1;
     };
@@ -638,7 +1082,7 @@ subtest 'run_on_start calls ChildSubReaper when available' => sub {
     my $h   = Test2::Harness2->new(workdir => $dir);
     $h->run_on_start;
 
-    is(scalar @calls, 1,  'set_child_subreaper called once');
+    is(scalar @calls, 1,   'set_child_subreaper called once');
     is($calls[0],     [1], 'called with (1) to enable the flag');
 };
 
@@ -669,8 +1113,8 @@ subtest 'run_on_start warns when set_child_subreaper fails' => sub {
         unless Test2::Harness2::HAS_CHILD_SUBREAPER();
 
     no warnings 'redefine';
-    local *POSIX::setpgid                                        = sub { 1 };
-    local *Test2::Harness2::ChildSubReaper::set_child_subreaper  = sub { $! = 1; 0 };
+    local *POSIX::setpgid                                       = sub { 1 };
+    local *Test2::Harness2::ChildSubReaper::set_child_subreaper = sub { $! = 1; 0 };
 
     my @warnings;
     local $SIG{__WARN__} = sub { push @warnings => @_ };
@@ -679,8 +1123,10 @@ subtest 'run_on_start warns when set_child_subreaper fails' => sub {
     my $h   = Test2::Harness2->new(workdir => $dir);
     $h->run_on_start;
 
-    ok((grep { /set_child_subreaper failed/ } @warnings),
-        'failure is surfaced via warn');
+    ok(
+        (grep { /set_child_subreaper failed/ } @warnings),
+        'failure is surfaced via warn'
+    );
 };
 
 subtest 'run_on_pid stashes exit status on the collector Handle' => sub {
@@ -688,27 +1134,27 @@ subtest 'run_on_pid stashes exit status on the collector Handle' => sub {
     my $h   = Test2::Harness2->new(workdir => $dir);
 
     my $handle = bless {pid => 12345}, 'Test2::Harness2::Collector::Handle';
-    $h->{current} = {pid => 12345, handle => $handle};
+    $h->{running_jobs}{'j1'} = {pid => 12345, handle => $handle};
 
     $h->run_on_pid(12345, 256);
-    is($handle->exit_code, 256, 'exit status forwarded to the current Handle');
+    is($handle->exit_code, 256, 'exit status forwarded to the owning Handle');
 
     # Subsequent reap of the same pid shouldn't clobber a pre-existing code.
     $h->run_on_pid(12345, 512);
     is($handle->exit_code, 256, 'existing exit_code is preserved');
 };
 
-subtest 'run_on_pid ignores pids that are not the current collector' => sub {
+subtest 'run_on_pid ignores pids that are not a tracked collector' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
     my $handle = bless {pid => 12345}, 'Test2::Harness2::Collector::Handle';
-    $h->{current} = {pid => 12345, handle => $handle};
+    $h->{running_jobs}{'j1'} = {pid => 12345, handle => $handle};
 
     # Some other pid: a reparented descendant the service loop drained.
     # No-op -- no exception, Handle untouched.
-    ok(lives { $h->run_on_pid(99999, 0) }, 'tolerates non-current pid');
-    ok(!defined $handle->exit_code, 'Handle exit_code not touched');
+    ok(lives { $h->run_on_pid(99999, 0) }, 'tolerates unknown pid');
+    ok(!defined $handle->exit_code,        'Handle exit_code not touched');
 };
 
 subtest 'Handle::is_done short-circuits when exit_code is pre-set' => sub {
@@ -718,7 +1164,7 @@ subtest 'Handle::is_done short-circuits when exit_code is pre-set' => sub {
 };
 
 subtest '_perform_hard_stop TERMs reparented descendants on Linux' => sub {
-    skip_all "fork required"   unless $Config{d_fork};
+    skip_all "fork required"        unless $Config{d_fork};
     skip_all "Linux /proc required" unless -d '/proc';
     skip_all "ChildSubReaper support is not present in this build"
         unless Test2::Harness2::HAS_CHILD_SUBREAPER();
@@ -802,8 +1248,10 @@ subtest '_perform_hard_stop catches grandchildren reparented mid-kill' => sub {
 
     ok(!kill(0, $a), 'A reaped');
     ok(!kill(0, $x), 'X (reparented grandchild) also reaped');
-    ok(-f $x_flag,
-        'X received its own TERM grace window (not just KILL after A fell)');
+    ok(
+        -f $x_flag,
+        'X received its own TERM grace window (not just KILL after A fell)'
+    );
 };
 
 done_testing;

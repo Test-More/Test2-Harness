@@ -127,7 +127,7 @@ L<Moose::Util/apply_all_roles>.
 
 It is consulted automatically by L<Test2::Harness2::Reloader> when the file
 under reload appears to define a Moose class or role and when this helper
-reports L</viable> true.
+reports C<viable> true.
 
 =head1 METHODS
 

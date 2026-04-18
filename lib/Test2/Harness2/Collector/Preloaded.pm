@@ -117,7 +117,7 @@ preloader's stack-zero landing.
 =head1 DESCRIPTION
 
 Wraps the "fork + collector + fork + execute" sequence used by a stage
-service to run a test under the preloader. Call L</launch> from the stage
+service to run a test under the preloader. Call C<launch> from the stage
 service's C<launch_test> request handler; the call never returns in the
 calling process, but the stage service's parent is the forked collector
 and continues to serve other requests.

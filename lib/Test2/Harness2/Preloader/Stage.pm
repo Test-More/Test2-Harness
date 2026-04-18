@@ -346,7 +346,7 @@ Lifecycle:
 
 =over 4
 
-=item 1. The parent (preloader or a parent stage) calls L</fork_and_run>.
+=item 1. The parent (preloader or a parent stage) calls C<fork_and_run>.
 
 =item 2. The child runs the stage's C<load_sequence> (requires / code
 callbacks), then spawns any nested child stages.
@@ -360,7 +360,7 @@ callbacks, then C<longjump>s back to the base preloader's setjump
 landing, where L<goto::file> takes over and runs the test with a
 near-empty Perl stack.
 
-=item 5. If a nested child stage dies, L</run_on_pid> automatically
+=item 5. If a nested child stage dies, C<run_on_pid> automatically
 restarts it.
 
 =back

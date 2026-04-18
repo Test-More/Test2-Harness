@@ -429,7 +429,7 @@ preload pipeline.
 =head1 SPAWNING
 
 The harness spawns the preloader by fork+exec'ing a canonical one-liner.
-The argv for that is produced by L</build_exec_argv>:
+The argv for that is produced by C<build_exec_argv>:
 
     my $cfg_file = Test2::Harness2::Preloader->write_config_file(
         $workdir,

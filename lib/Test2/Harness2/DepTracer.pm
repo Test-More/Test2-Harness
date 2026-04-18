@@ -358,7 +358,7 @@ Count of direct loads per file.
 
 Keyed by source package, then by target package, value is a list of
 argument-arrayrefs passed to each C<import()> call. Populated by hooking
-C<Exporter::import> and by explicit calls to L</record_import>.
+C<Exporter::import> and by explicit calls to C<record_import>.
 
 =back
 
@@ -433,7 +433,7 @@ time.
 Modules that install their own C<import> method (Moose, Sub::Exporter, many
 Exporter::Tiny consumers with overridden behavior) bypass the
 C<Exporter::import> hook. Their import events will not be captured
-automatically. Teach such modules to call L</record_import> on the
+automatically. Teach such modules to call C<record_import> on the
 active DepTracer if you want their imports included.
 
 =item ExportLevel

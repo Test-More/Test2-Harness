@@ -505,7 +505,7 @@ Two backends are provided:
 =item L<Test2::Harness2::Reloader::Inotify2>
 
 Preferred on Linux when C<Linux::Inotify2> is installed. Selected
-automatically by the factory in L</new>.
+automatically by the factory in C<new>.
 
 =item L<Test2::Harness2::Reloader::Stat>
 

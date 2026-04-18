@@ -1,19 +1,28 @@
 use Test2::V0;
 use Test2::Harness2::Run;
+use Test2::Harness2::TestFile;
 
 subtest 'from_files builds jobs with inherited run_id' => sub {
     my $run = Test2::Harness2::Run->from_files(
         run_id => 'run-1',
         files  => ['t/a.t', 't/b.t'],
     );
-    is($run->run_id,               'run-1', 'run_id set');
-    is(scalar @{$run->jobs},       2,       'two jobs');
-    is($run->jobs->[0]->run_id,    'run-1', 'job inherits run_id');
-    is($run->jobs->[0]->test_file, 't/a.t');
-    is($run->jobs->[1]->test_file, 't/b.t');
-    is(scalar @{$run->pending},    2, 'both pending');
-    is(scalar @{$run->running},    0, 'none running');
-    is(scalar @{$run->done},       0, 'none done');
+    is($run->run_id,                   'run-1', 'run_id set');
+    is(scalar @{$run->jobs},           2,       'two jobs');
+    is($run->jobs->[0]->run_id,        'run-1', 'job inherits run_id');
+    is($run->jobs->[0]->test_file_rel, 't/a.t', 'job a relative path');
+    is($run->jobs->[1]->test_file_rel, 't/b.t', 'job b relative path');
+    isa_ok($run->jobs->[0]->test_file, ['Test2::Harness2::TestFile'], 'test_file is a TestFile');
+    is(scalar @{$run->pending}, 2, 'both pending');
+    is(scalar @{$run->running}, 0, 'none running');
+    is(scalar @{$run->done},    0, 'none done');
+};
+
+subtest 'from_files accepts TestFile objects directly' => sub {
+    my $tf  = Test2::Harness2::TestFile->new(file => 't/a.t', min_slots => 2);
+    my $run = Test2::Harness2::Run->from_files(files => [$tf]);
+    is($run->jobs->[0]->test_file,            $tf, 'pre-built TestFile passed through');
+    is($run->jobs->[0]->test_file->min_slots, 2,   'attributes preserved');
 };
 
 subtest 'auto-generates run_id' => sub {
@@ -22,15 +31,15 @@ subtest 'auto-generates run_id' => sub {
 };
 
 subtest 'mark_running / mark_done move job through states' => sub {
-    my $run = Test2::Harness2::Run->from_files(files => ['t/a.t']);
+    my $run    = Test2::Harness2::Run->from_files(files => ['t/a.t']);
     my $job_id = $run->jobs->[0]->job_id;
 
     $run->mark_running($job_id);
-    is($run->pending, [],         'pending empty');
+    is($run->pending, [],        'pending empty');
     is($run->running, [$job_id], 'running has job');
 
     $run->mark_done($job_id);
-    is($run->running, [],         'running empty');
+    is($run->running, [],        'running empty');
     is($run->done,    [$job_id], 'done has job');
     ok($run->is_complete, 'run is complete');
 };
@@ -43,16 +52,18 @@ subtest 'requires files' => sub {
 subtest 'mark_running croaks on unknown job_id' => sub {
     my $run = Test2::Harness2::Run->from_files(files => ['t/a.t']);
     my $ok  = eval { $run->mark_running('not-a-real-id'); 1 };
+    my $err = $@;
     ok(!$ok, 'croaked');
-    like($@, qr/not pending/);
+    like($err, qr/not pending/);
 };
 
 subtest 'mark_done croaks when job is not running' => sub {
-    my $run = Test2::Harness2::Run->from_files(files => ['t/a.t']);
+    my $run    = Test2::Harness2::Run->from_files(files => ['t/a.t']);
     my $job_id = $run->jobs->[0]->job_id;
-    my $ok  = eval { $run->mark_done($job_id); 1 };                      # never marked running
+    my $ok     = eval { $run->mark_done($job_id); 1 };                   # never marked running
+    my $err    = $@;
     ok(!$ok, 'croaked');
-    like($@, qr/not running/);
+    like($err, qr/not running/);
 };
 
 subtest 'mark_* preserves FIFO order across multiple jobs' => sub {
@@ -72,9 +83,40 @@ subtest 'empty run with no jobs is vacuously complete' => sub {
 };
 
 subtest 'from_files rejects non-arrayref files' => sub {
-    my $ok = eval { Test2::Harness2::Run->from_files(files => 'not-an-array'); 1 };
+    my $ok  = eval { Test2::Harness2::Run->from_files(files => 'not-an-array'); 1 };
+    my $err = $@;
     ok(!$ok, 'croaked');
-    like($@, qr/arrayref/);
+    like($err, qr/arrayref/);
+};
+
+subtest 'from_files rehydrates hashrefs into TestFile objects' => sub {
+    my $run = Test2::Harness2::Run->from_files(files => [{file => 't/a.t', min_slots => 3}]);
+    my $tf  = $run->jobs->[0]->test_file;
+    isa_ok($tf, ['Test2::Harness2::TestFile'], 'hashref wrapped');
+    is($tf->min_slots, 3, 'attributes preserved across rehydrate');
+};
+
+subtest 'from_files rejects non-TestFile/non-hash refs' => sub {
+    my $ok  = eval { Test2::Harness2::Run->from_files(files => [\'scalar-ref']); 1 };
+    my $err = $@;
+    ok(!$ok, 'croaked on unexpected ref');
+    like($err, qr/TestFile/);
+};
+
+subtest 'mark_skipped moves pending -> done without transitioning through running' => sub {
+    my $run    = Test2::Harness2::Run->from_files(files => ['t/a.t']);
+    my $job_id = $run->jobs->[0]->job_id;
+
+    $run->mark_skipped($job_id);
+    is($run->pending, [],        'pending empty');
+    is($run->running, [],        'running untouched');
+    is($run->done,    [$job_id], 'job landed in done');
+    ok($run->is_complete, 'run complete');
+
+    my $ok  = eval { $run->mark_skipped($job_id); 1 };
+    my $err = $@;
+    ok(!$ok, 'second skip croaks (already done)');
+    like($err, qr/not pending/);
 };
 
 done_testing;

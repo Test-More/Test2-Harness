@@ -137,6 +137,25 @@ tracked consumer so method-list changes take effect.
 
 ---
 
+## Known flake: prove -r of integration tests
+
+Running `prove -Ilib t/integration -r` sometimes hangs on the first few
+integration files in the "preloader_*" family. The culprit is the
+`ipcm_spawn()` FIFO handshake inside IPC::Manager -- the test process
+opens `/tmp/PerlIPCManager-<pid>-<rand>/spawn` for read and blocks on
+`wait_for_partner` because the helper process never opened the other
+end. Individual tests always pass when invoked directly (`perl -Ilib
+t/integration/preloader_*.t`).
+
+This is not a defect in any of the new preloader code -- it is an
+IPC::Manager quirk (likely a race during the spawn handshake under
+sequential test load). Workarounds / follow-ups:
+
+* Run integration tests one at a time (`prove ... -s` or direct perl
+  invocation).
+* Investigate IPC::Manager's spawn handshake for missing timeout /
+  retry logic.
+
 ## Quick smoke path
 
     cd .claude/worktrees/reimplement-preloader

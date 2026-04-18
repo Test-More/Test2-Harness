@@ -555,6 +555,54 @@ subtest 'restart: attempts cap flips to permanent_broken' => sub {
         (grep { /exceeded.*restart attempts/ } @warnings),
         'warning mentions the attempts cap',
     );
+    # Reinforce that the cap short-circuits BEFORE re-invocation: the
+    # service_returns queue should still be empty, and no new pid should
+    # have been tracked.
+    is($res->service_returns, [], 'service method was not invoked when attempts cap hit');
+    ok(!(keys %{$h->{resource_services}}), 'no tracked entries after cap');
+};
+
+subtest 'restart: method dying leaves the resource broken but not permanent' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    # Inline a resource whose service_foo dies explicitly. We want to
+    # verify that the restart branch lands on the "method died" path,
+    # which leaves the resource `broken` (so new assignments refuse) but
+    # does NOT flip to permanent_broken -- operator intervention path.
+    {
+
+        package Test::DyingRes::Res;
+        use Object::HashBase;
+        use Role::Tiny::With;
+        with 'Test2::Harness2::Role::Resource';
+        sub available   { 1 }
+        sub assign      { 1 }
+        sub release     { 1 }
+        sub status      { {} }
+        sub service_foo { die "nope" }
+    }
+
+    my $res = Test::DyingRes::Res->new;
+    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
+
+    $h->track_resource_service(
+        pid        => 88400,
+        resource   => $res,
+        method     => 'service_foo',
+        restart    => 1,
+        started_at => time,
+        attempts   => 1,
+    );
+
+    my @warnings;
+    {
+        local $SIG{__WARN__} = sub { push @warnings => @_ };
+        $h->run_on_pid(88400, 0);
+    }
+
+    ok($res->is_broken,                                   'resource still broken after method-died restart');
+    ok(!$res->is_permanent_broken,                        'method-died does NOT flip to permanent');
+    ok((grep { /service 'service_foo' died/ } @warnings), 'method-died warning surfaces');
 };
 
 subtest 'restart: healthy runtime resets the attempts counter' => sub {

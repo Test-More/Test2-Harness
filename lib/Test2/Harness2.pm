@@ -420,6 +420,11 @@ sub _release_job_resources {
 sub _perform_hard_stop {
     my $self = shift;
 
+    # NOTE: this method kills processes and clears scheduler state; it
+    # does NOT call teardown() on any resources. Callers that want a
+    # clean shutdown must invoke run_on_cleanup (or call
+    # _teardown_run_resources explicitly for any per-run resources
+    # they care about) after this returns.
     $self->{+STATE} = 'terminating';
     $self->{+QUEUE} = [];
 
@@ -546,6 +551,12 @@ sub _perform_hard_stop {
 #   - resource-service processes spawned via service_* methods
 # Reparented descendants (subreaper orphans) that we did not spawn also
 # land here; they get no handling beyond the drain the service loop did.
+#
+# IPC::Manager dispatches run_on_pid serially per tick, so the restart
+# branch below is not re-entered mid-invocation even though it calls back
+# into the resource (which may call track_resource_service). Do not
+# introduce unguarded mutation of +RESOURCE_SERVICES from another code
+# path that could also execute inside a single tick.
 sub run_on_pid {
     my ($self, $pid, $exit) = @_;
 
@@ -583,7 +594,10 @@ sub run_on_pid {
     my $attempts = ($ran_for >= RESTART_HEALTHY_SECS) ? 1 : (($svc->{attempts} // 1) + 1);
 
     if ($attempts > MAX_RESTART_ATTEMPTS) {
-        warn "resource '" . $res->resource_name . "' service '$method' exceeded " . MAX_RESTART_ATTEMPTS . " restart attempts; marking permanent_broken\n";
+        warn sprintf(
+            "resource '%s' (class %s, last pid %d) service '%s' exceeded %d restart attempts; marking permanent_broken\n",
+            $res->resource_name, ref($res), $pid, $method, MAX_RESTART_ATTEMPTS,
+        );
         $res->mark_permanent_broken;
         return;
     }
@@ -730,6 +744,16 @@ sub _start_resource_services {
 sub _invoke_service_method {
     my ($self, $res, $method, %opts) = @_;
 
+    # Snapshot pre-existing tracked pids for this (resource, method) pair
+    # BEFORE the method runs. Any tracked entry that existed before the
+    # call had its restart flag set by a previous invocation; the flag
+    # rewrite below applies only to entries that appeared during this
+    # call, so we never clobber a sibling pid that's still running under
+    # the same method name.
+    my %pre_existing =
+        map { $_->{pid} => 1 }
+        grep { $_->{resource} == $res && defined $_->{method} && $_->{method} eq $method } values %{$self->{+RESOURCE_SERVICES} // {}};
+
     my $status;
     my $ok = eval {
         $status = $res->$method(
@@ -747,11 +771,13 @@ sub _invoke_service_method {
 
     return $status if !defined($status) || $status < 0;
 
-    # Service started. Enforce the POD contract: restart flag is the return
-    # value, not the kwarg.
+    # Service started. Enforce the POD contract on newly-tracked entries:
+    # the restart flag is the return value of the method, not whatever
+    # kwarg the author happened to pass to track_resource_service.
     for my $svc (values %{$self->{+RESOURCE_SERVICES} // {}}) {
         next unless $svc->{resource} == $res;
         next unless defined $svc->{method} && $svc->{method} eq $method;
+        next if $pre_existing{$svc->{pid}};
         $svc->{restart} = $status ? 1 : 0;
     }
 
@@ -773,10 +799,10 @@ sub track_resource_service {
         resource   => $res,
         method     => $p{method},
         scope      => $p{scope} // 'global',
-        run        => $p{run},
         restart    => $p{restart} ? 1 : 0,
         started_at => $p{started_at} // time,
         attempts   => $p{attempts}   // 1,
+        (defined $p{run} ? (run => $p{run}) : ()),
     };
 
     return $pid;
@@ -795,7 +821,15 @@ sub run_on_cleanup {
 
     $self->_teardown_run_resources($_) for @leftover_runs;
 
-    $_->teardown for @{$self->{+RESOURCES} // []};
+    # Guard every teardown so a throwing resource cannot short-circuit the
+    # loop and skip the service_stopped emit that downstream callers rely
+    # on to observe a clean shutdown.
+    for my $res (@{$self->{+RESOURCES} // []}) {
+        my $ok  = eval { $res->teardown; 1 };
+        my $err = $@;
+        warn "resource '" . $res->resource_name . "' teardown died: $err"
+            unless $ok;
+    }
 
     $self->_emit_service_event(kind => 'service_stopped');
 }
@@ -916,6 +950,10 @@ sub _ensure_run_resources_started {
 sub _teardown_run_resources {
     my ($self, $run) = @_;
 
+    # Called from three sites: _check_completions (normal run completion),
+    # _try_launch_next_pending (all-skipped completion), and
+    # run_on_cleanup (runs left in the queue at shutdown). The
+    # resources_torn_down flag below makes each call idempotent.
     return if $run->{resources_torn_down};
     $run->{resources_torn_down} = 1;
 
@@ -932,10 +970,17 @@ sub _teardown_run_resources {
         delete $self->{+RESOURCE_SERVICES}{$pid};
     }
 
-    # Signal per-run services to stop. If they ignore TERM,
-    # _perform_hard_stop at shutdown will still enumerate surviving
-    # children via the subreaper path and escalate to KILL.
-    kill TERM => @pids if @pids;
+    # Signal per-run services to stop. kill(0) narrows (but does not
+    # eliminate) the pid-reuse race between reap-from-elsewhere and our
+    # TERM -- a reaped pid that has already been recycled to a stranger
+    # will no longer be signal-addressable. If a TERM is delivered to a
+    # still-live service that ignores it, _perform_hard_stop at shutdown
+    # enumerates surviving children via the subreaper path and escalates
+    # to KILL.
+    for my $pid (@pids) {
+        next unless kill 0 => $pid;
+        kill TERM => $pid;
+    }
 
     for my $res (@{$run->resources // []}) {
         my $ok  = eval { $res->teardown; 1 };

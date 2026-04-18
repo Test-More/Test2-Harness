@@ -50,7 +50,7 @@ subtest 'five fast tests complete quickly via IPC notification' => sub {
     my $done = wait_until(
         sub {
             my $s = $spawn->status;
-            return !$s->{running} && !@{$s->{queue}};
+            return !@{$s->{running} // []} && !@{$s->{queue}};
         },
         20,
     );

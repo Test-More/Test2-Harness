@@ -33,7 +33,8 @@ subtest 'Terminate mid-run kills collector and test process' => sub {
     wait_until(
         sub {
             my $s = $spawn->status;
-            $running_pid = $s->{running} && $s->{running}{pid};
+            my ($first) = @{$s->{running} // []};
+            $running_pid = $first && $first->{pid};
             return $running_pid ? 1 : 0;
         },
         10
@@ -72,7 +73,7 @@ PERL
     wait_until(
         sub {
             my $s = $spawn->status;
-            return !$s->{running} && !@{$s->{queue}};
+            return !@{$s->{running} // []} && !@{$s->{queue}};
         },
         15
     ) or diag "run did not complete";

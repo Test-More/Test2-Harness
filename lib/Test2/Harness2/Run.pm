@@ -5,10 +5,12 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness2::Run::Job;
+use Test2::Harness2::TestFile;
 
 use Object::HashBase qw{
     <run_id
@@ -17,6 +19,9 @@ use Object::HashBase qw{
     <pending
     <running
     <done
+    <resources
+    +resources_started
+    +resources_torn_down
 };
 
 sub init {
@@ -28,6 +33,7 @@ sub init {
     $self->{+PENDING}    //= [map { $_->job_id } @{$self->{+JOBS}}];
     $self->{+RUNNING}    //= [];
     $self->{+DONE}       //= [];
+    $self->{+RESOURCES}  //= [];
 }
 
 sub from_files {
@@ -39,8 +45,26 @@ sub from_files {
     my $run_id = $params{run_id} // gen_uuid();
 
     my @jobs = map {
+        my $input = $_;
+
+        my $tf;
+        if (blessed($input) && $input->isa('Test2::Harness2::TestFile')) {
+            $tf = $input;
+        }
+        elsif (ref($input) eq 'HASH') {
+            # Rehydrate an attribute hash (e.g. after JSON round-trip through
+            # the IPC queue_test_run handler) back into a TestFile.
+            $tf = Test2::Harness2::TestFile->new(%$input);
+        }
+        elsif (ref($input)) {
+            croak "files entries must be TestFile objects, hashrefs, or path strings";
+        }
+        else {
+            $tf = Test2::Harness2::TestFile->new(file => $input);
+        }
+
         Test2::Harness2::Run::Job->new(
-            test_file => $_,
+            test_file => $tf,
             run_id    => $run_id,
         );
     } @$files;
@@ -61,6 +85,14 @@ sub mark_done {
     my @new = grep { $_ ne $job_id } @{$self->{+RUNNING}};
     croak "job_id '$job_id' is not running" if @new == @{$self->{+RUNNING}};
     $self->{+RUNNING} = \@new;
+    push @{$self->{+DONE}} => $job_id;
+}
+
+sub mark_skipped {
+    my ($self, $job_id) = @_;
+    my @new = grep { $_ ne $job_id } @{$self->{+PENDING}};
+    croak "job_id '$job_id' is not pending" if @new == @{$self->{+PENDING}};
+    $self->{+PENDING} = \@new;
     push @{$self->{+DONE}} => $job_id;
 }
 
@@ -132,6 +164,14 @@ Arrayref of job_ids currently being executed.
 
 Arrayref of job_ids that have finished.
 
+=item resources
+
+Arrayref of L<Test2::Harness2::Role::Resource> instances that are scoped
+to this specific run (as opposed to the harness-global resources on the
+harness itself). Defaults to empty. The harness service starts per-run
+resource services lazily when the run is first considered for launch,
+and tears them down when the run completes.
+
 =back
 
 =head1 METHODS
@@ -152,6 +192,12 @@ currently pending.
 
 Move C<$job_id> from C<running> to C<done>.  Croaks if the job is not
 currently running.
+
+=item $run->mark_skipped($job_id)
+
+Move C<$job_id> directly from C<pending> to C<done> without going through
+C<running>.  Used by the scheduler when a resource rules a job
+permanently-unsatisfiable.  Croaks if the job is not currently pending.
 
 =item $bool = $run->is_complete
 

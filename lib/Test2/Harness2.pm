@@ -33,6 +33,9 @@ use Object::HashBase qw{
     <kill_timeout
     <parent_pids
     <jump_to
+    <preload
+    +preloader_pid
+    +preloader_name
     +state
     +queue
     +current
@@ -74,6 +77,12 @@ sub init {
     ];
     $self->{+TEST_AUDITOR} //= 'Test2::Harness2::Collector::Auditor::Test';
     $self->{+TEST_LOGGERS} //= ['Test2::Harness2::Collector::Logger::JSONL'];
+
+    # Preload configuration is accepted here but the preloader subprocess
+    # is not started until run_on_start(): it has to fork from the service
+    # process, not the spawn()-caller.
+    $self->{+PRELOAD}         //= [];
+    $self->{+PRELOADER_NAME}  //= 'preloader';
 }
 
 sub start {
@@ -276,6 +285,82 @@ sub request_handler_status {
     };
 }
 
+sub request_handler_launch_test_in_preload {
+    my ($self, $payload) = @_;
+
+    my $stage = $payload->{stage};
+    return {ok => 0, error => "'stage' is required"}
+        unless defined $stage && length $stage;
+
+    my $test_file = $payload->{test_file};
+    return {ok => 0, error => "'test_file' is required"}
+        unless defined $test_file && length $test_file;
+
+    return {ok => 0, error => "no preloader configured"}
+        unless $self->{+PRELOADER_PID};
+
+    my $ok = eval {
+        require IPC::Manager::Service::Handle;
+        1;
+    };
+    return {ok => 0, error => "IPC::Manager::Service::Handle unavailable: $@"}
+        unless $ok;
+
+    my $handle = IPC::Manager::Service::Handle->new(
+        service_name => $stage,
+        ipcm_info    => $self->ipcm_info,
+    );
+
+    return {ok => 0, error => "stage '$stage' is not ready"} unless $handle->ready;
+
+    # Defaults: hand the preloaded test the same auditor and logger
+    # classes the inline-launch path uses. Loggers are specified as
+    # [class, key => value] tuples so they round-trip cleanly through
+    # IPC serialisation.
+    my $run_id  = $payload->{run_id}  // gen_uuid();
+    my $job_id  = $payload->{job_id}  // gen_uuid();
+    my $job_try = $payload->{job_try} // 0;
+
+    my $default_log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $job_id;
+    make_path($default_log_dir);
+
+    my $loggers = $payload->{loggers} // [
+        [
+            $self->{+TEST_LOGGERS}[0],
+            output_file => "$default_log_dir/0.jsonl",
+        ],
+        [
+            'Test2::Harness2::Collector::Logger::IPCNotify',
+            service_name => $self->{+NAME},
+        ],
+    ];
+
+    my $auditor = exists $payload->{auditor}
+        ? $payload->{auditor}
+        : $self->{+TEST_AUDITOR};
+
+    my $resp = $handle->sync_request($stage, {
+        request   => 'launch_test',
+        test_file => $test_file,
+        loggers   => $loggers,
+        auditor   => $auditor,
+        run_id    => $run_id,
+        job_id    => $job_id,
+        job_try   => $job_try,
+        (exists $payload->{env}    ? (env    => $payload->{env})    : ()),
+        (exists $payload->{argv}   ? (argv   => $payload->{argv})   : ()),
+        (exists $payload->{parser} ? (parser => $payload->{parser}) : ()),
+    });
+
+    my $r = $resp->{response};
+    return {
+        %$r,
+        run_id => $run_id,
+        job_id => $job_id,
+        stage  => $stage,
+    };
+}
+
 sub request_handler_finish {
     my $self = shift;
     return {ok => 0} unless $self->{+STATE} eq 'running';
@@ -451,12 +536,25 @@ sub _perform_hard_stop {
 }
 
 # IPC::Manager service-loop hook: a non-worker child pid was reaped.
-# The only pid we track here is the currently-running collector; hand
-# its exit status to the Collector::Handle so _check_current_completion
-# sees is_done. Reparented descendants (subreaper orphans) also land
-# here when they exit -- nothing further to do for those.
+# Handles:
+#   * Collector pid tracked via $self->{+CURRENT}
+#   * Preloader subprocess (restart on unexpected exit)
+#   * Reparented subreaper orphans (drained elsewhere, nothing to do)
 sub run_on_pid {
     my ($self, $pid, $exit) = @_;
+
+    if (defined($self->{+PRELOADER_PID}) && $self->{+PRELOADER_PID} == $pid) {
+        my $preloads = $self->{+PRELOAD} // [];
+        if ($self->{+STATE} eq 'running' && @$preloads) {
+            warn "$$ $0 - preloader pid $pid exited (status=$exit); restarting\n";
+            delete $self->{+PRELOADER_PID};
+            $self->_start_preloader;
+        }
+        else {
+            delete $self->{+PRELOADER_PID};
+        }
+        return;
+    }
 
     my $cur = $self->{+CURRENT} or return;
     return unless $cur->{pid} && $cur->{pid} == $pid;
@@ -535,6 +633,49 @@ sub run_on_start {
         name    => $self->{+NAME},
         workdir => $self->{+WORKDIR},
     );
+
+    # Bring up the preloader subprocess if the caller asked for one.
+    $self->_start_preloader if @{$self->{+PRELOAD} // []};
+}
+
+sub _start_preloader {
+    my $self = shift;
+
+    require Test2::Harness2::Preloader;
+
+    my $config = {
+        workdir     => $self->{+WORKDIR},
+        name        => $self->{+PRELOADER_NAME},
+        ipcm_info   => $self->ipcm_info,
+        parent_pids => [$$],
+        preload     => [@{$self->{+PRELOAD}}],
+    };
+
+    my $cfg_file = Test2::Harness2::Preloader->write_config_file(
+        $self->{+WORKDIR},
+        $config,
+    );
+
+    # The preloader inherits the *child's* @INC minus anything the
+    # caller-side build_exec_argv would have picked up; that's the right
+    # behavior -- the preloader process runs with the harness's view of
+    # the world.
+    my @argv = Test2::Harness2::Preloader->build_exec_argv(
+        config_file => $cfg_file,
+    );
+
+    my $pid = fork // die "fork for preloader: $!";
+
+    unless ($pid) {
+        exec { $argv[0] } @argv
+            or do {
+                warn "exec preloader failed: $!\n";
+                POSIX::_exit(127);
+            };
+    }
+
+    $self->{+PRELOADER_PID} = $pid;
+    return $pid;
 }
 
 sub run_on_cleanup {
@@ -543,7 +684,54 @@ sub run_on_cleanup {
     # Final sweep -- any stragglers go now.
     $self->_perform_hard_stop if $self->{+CURRENT} || @{$self->{+QUEUE}};
 
+    # Take the preloader down cleanly. shutdown is a soft stop so the
+    # stage tree can teardown in order. If the preloader is unresponsive
+    # we still SIGTERM and fall back to SIGKILL with a short grace period
+    # rather than leaking the subprocess.
+    if (my $pre_pid = delete $self->{+PRELOADER_PID}) {
+        $self->_shutdown_preloader($pre_pid);
+    }
+
     $self->_emit_service_event(kind => 'service_stopped');
+}
+
+sub _shutdown_preloader {
+    my ($self, $pid) = @_;
+
+    # Best-effort soft shutdown via IPC. Don't block forever.
+    my $ok = eval {
+        require IPC::Manager::Service::Handle;
+        my $h = IPC::Manager::Service::Handle->new(
+            service_name => $self->{+PRELOADER_NAME},
+            ipcm_info    => $self->ipcm_info,
+        );
+        $h->sync_request($self->{+PRELOADER_NAME}, {request => 'shutdown'}) if $h->ready;
+        1;
+    };
+    warn "preloader soft shutdown failed: $@" unless $ok;
+
+    # Grace period for clean exit, then SIGTERM, then SIGKILL.
+    my $deadline = time + 5;
+    while (kill(0, $pid) && time < $deadline) {
+        sleep(0.05);
+        last if waitpid($pid, WNOHANG) == $pid;
+    }
+
+    if (kill 0, $pid) {
+        kill TERM => $pid;
+        my $kdl = time + 5;
+        while (kill(0, $pid) && time < $kdl) {
+            sleep(0.05);
+            last if waitpid($pid, WNOHANG) == $pid;
+        }
+    }
+
+    if (kill 0, $pid) {
+        kill KILL => $pid;
+        waitpid $pid, 0;
+    }
+
+    return;
 }
 
 sub _emit_service_event {

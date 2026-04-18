@@ -63,6 +63,19 @@ sub queue_test_run {
     return $self->_send_request('queue_test_run', \%args);
 }
 
+# Launch a single test under the preloader stage named by 'stage'. This is
+# a direct-dispatch path: the harness service forwards the request to the
+# stage's IPC service and returns the stage's response (with collector pid
+# and run/job identifiers attached).
+sub launch_test_in_preload {
+    my $self = shift;
+    my %args =
+          @_ == 1 && ref($_[0]) eq 'HASH' ? %{$_[0]}
+        : @_ % 2 == 0                     ? @_
+        :                                   ();
+    return $self->_send_request('launch_test_in_preload', \%args);
+}
+
 sub status { $_[0]->_send_request('status') }
 sub finish { $_[0]->_send_request('finish') }
 

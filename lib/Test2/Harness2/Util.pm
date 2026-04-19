@@ -5,16 +5,25 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
+use Fcntl qw/LOCK_EX LOCK_UN/;
 use Importer Importer => 'import';
 use Test2::Util qw/try_sig_mask do_rename/;
 
 our @EXPORT_OK = qw{
     apply_encoding
+    close_file
     hub_truth
     load_module
+    lock_file
+    maybe_open_file
+    maybe_read_file
     mod2file
+    open_file
     parse_exit
+    read_file
     tinysleep
+    unlock_file
+    write_file
     write_file_atomic
 };
 
@@ -93,6 +102,123 @@ sub parse_exit {
     };
 }
 
+# Compression readers recognised by open_file(). Only used on read; writes
+# go through plain open() regardless of extension.
+my %COMPRESSION = (
+    bz2 => {module => 'IO::Uncompress::Bunzip2', errors => \$IO::Uncompress::Bunzip2::Bunzip2Error},
+    gz  => {module => 'IO::Uncompress::Gunzip',  errors => \$IO::Uncompress::Gunzip::GunzipError},
+);
+
+# Open $file for $mode (default '<'). For read mode, files whose name ends
+# in .gz or .bz2 (or an explicit 'ext'/'compression' option) are opened via
+# the matching IO::Uncompress::* module so callers get a normal-looking
+# filehandle over compressed data. Dies on failure; the 'no_decompress'
+# opt bypasses compression detection entirely.
+sub open_file {
+    my ($file, $mode, %opts) = @_;
+    $mode ||= '<';
+
+    unless ($opts{no_decompress}) {
+        if (my $ext = $opts{ext}) {
+            $opts{compression} //= $COMPRESSION{$ext} or die "Unknown compression: $ext";
+        }
+
+        if ($file =~ m/\.(gz|bz2)$/i) {
+            my $ext = lc($1);
+            $opts{compression} //= $COMPRESSION{$ext} or die "Unknown compression: $ext";
+        }
+
+        if ($mode eq '<' && $opts{compression}) {
+            my $spec = $opts{compression};
+            my $mod  = $spec->{module};
+            require(mod2file($mod));
+
+            my $fh = $mod->new($file) or die "Could not open file '$file' ($mode): ${$spec->{errors}}";
+            return $fh;
+        }
+    }
+
+    open(my $fh, $mode, $file) or confess "Could not open file '$file' ($mode): $!";
+    return $fh;
+}
+
+sub maybe_open_file {
+    my ($file, $mode) = @_;
+    return undef unless -f $file;
+    return open_file($file, $mode);
+}
+
+sub close_file {
+    my ($fh, $name) = @_;
+    return if close($fh);
+    confess "Could not close file: $!" unless $name;
+    confess "Could not close file '$name': $!";
+}
+
+sub read_file {
+    my ($file, @args) = @_;
+
+    my $fh = open_file($file, '<', @args);
+    local $/;
+    my $out = <$fh>;
+    close_file($fh, $file);
+
+    return $out;
+}
+
+sub maybe_read_file {
+    my ($file) = @_;
+    return undef unless -f $file;
+    return read_file($file);
+}
+
+sub write_file {
+    my ($file, @content) = @_;
+
+    my $fh = open_file($file, '>');
+    print $fh @content;
+    close_file($fh, $file);
+
+    return @content;
+}
+
+# Advisory lock helpers over flock(). lock_file accepts either a filename
+# (opened for append unless $mode overrides) or an already-open handle,
+# and retries up to 20 times on EINTR/ERESTART before giving up. Callers
+# must pair lock_file with unlock_file (or close the handle) to release.
+sub lock_file {
+    my ($file, $mode) = @_;
+
+    my $fh;
+    if (ref $file) {
+        $fh = $file;
+    }
+    else {
+        open($fh, $mode // '>>', $file) or die "Could not open file '$file': $!";
+    }
+
+    for (1 .. 21) {
+        flock($fh, LOCK_EX) and last;
+        die "Could not lock file (try $_): $!" if $_ >= 20;
+        next if $!{EINTR} || $!{ERESTART};
+        die "Could not lock file: $!";
+    }
+
+    return $fh;
+}
+
+sub unlock_file {
+    my ($fh) = @_;
+    for (1 .. 21) {
+        flock($fh, LOCK_UN) and last;
+        die "Could not unlock file (try $_): $!" if $_ >= 20;
+        next if $!{EINTR} || $!{ERESTART};
+        die "Could not unlock file: $!";
+    }
+
+    return $fh;
+}
+
 # Write @content to "$file.pend" and then do_rename() it over $file.  Signal
 # masking keeps the half-written pending file from being abandoned if the
 # process is signalled mid-write.  Callers that need richer encoding (e.g.
@@ -104,9 +230,7 @@ sub write_file_atomic {
     my $pend = "$file.pend";
 
     my ($ok, $err) = try_sig_mask {
-        open(my $fh, '>', $pend) or die "Could not open '$pend' (>): $!";
-        print $fh @content;
-        close($fh) or die "Could not close '$pend': $!";
+        write_file($pend, @content);
         my ($ren_ok, $ren_err) = do_rename($pend, $file);
         die "$pend -> $file: $ren_err" unless $ren_ok;
     };
@@ -202,6 +326,67 @@ by the rest of the interval. Prefer this over C<Time::HiRes::sleep>
 inside polling loops (C<waitpid> reapers, TERM-then-KILL escalation,
 readiness waits) where prompt signal response matters. Returns
 nothing. A non-positive or undefined argument is a no-op.
+
+=item $fh = open_file($path)
+
+=item $fh = open_file($path, $mode)
+
+=item $fh = open_file($path, $mode, %opts)
+
+Open C<$path> and return the handle. The default mode is C<< '<' >>.
+When opening for read, C<.gz> / C<.bz2> extensions trigger transparent
+decompression via L<IO::Uncompress::Gunzip> / L<IO::Uncompress::Bunzip2>;
+pass C<< no_decompress =E<gt> 1 >> to disable that behaviour, or
+C<< ext =E<gt> 'gz' >> / C<< ext =E<gt> 'bz2' >> to force a specific
+compression when the filename does not carry the usual extension.
+
+Dies with a C<confess>-style message on failure.
+
+=item $fh = maybe_open_file($path)
+
+=item $fh = maybe_open_file($path, $mode)
+
+Like L</open_file>, but returns C<undef> when C<$path> is not a regular
+file instead of raising an exception. Intended for "read if present"
+callers.
+
+=item close_file($fh)
+
+=item close_file($fh, $name)
+
+Wrap C<close()> with a clearer error. The optional C<$name> is included
+in the diagnostic when the close fails.
+
+=item $content = read_file($path, %open_opts)
+
+Slurp C<$path> in full and return the result. Extra options are passed
+through to L</open_file> (e.g. for explicit compression handling). Dies
+on any I/O failure.
+
+=item $content = maybe_read_file($path)
+
+Like L</read_file>, but returns C<undef> when C<$path> is not a regular
+file instead of raising an exception.
+
+=item write_file($path, @content)
+
+Open C<$path> for write, print C<@content>, and close. Dies on any I/O
+failure. For crash-safe writes use L</write_file_atomic>.
+
+=item $fh = lock_file($path_or_fh)
+
+=item $fh = lock_file($path, $mode)
+
+Acquire an exclusive advisory lock via C<flock(LOCK_EX)>. Accepts either
+a filename (opened in C<< '>>' >> mode unless C<$mode> is supplied) or an
+already-open handle. Retries up to 20 times on C<EINTR>/C<ERESTART>
+before giving up. Returns the locked handle; pair with L</unlock_file>
+(or simply close the handle) to release.
+
+=item unlock_file($fh)
+
+Release an advisory lock acquired via L</lock_file>. Retries on
+C<EINTR>/C<ERESTART> the same way as acquisition.
 
 =item write_file_atomic($path, @content)
 

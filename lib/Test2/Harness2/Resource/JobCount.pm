@@ -161,7 +161,7 @@ The harness requires at least one C<is_job_limiter> resource to be
 configured; without one it falls back to an instance of this class with
 C<slots =E<gt> 1>, preserving the legacy "one at a time" behaviour.
 
-Each job declares its slot requirements on its L<Test2::Harness2::TestFile>
+Each job declares its slot requirements on its L<Test2::Harness2::Role::TestFile>
 (C<min_slots> / C<max_slots>). The resource grants an integer count from
 that range, writes it to C<T2_HARNESS_MY_JOB_CONCURRENCY> in the child
 environment, and tracks the outstanding assignment until C<release> is

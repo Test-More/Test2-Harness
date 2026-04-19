@@ -2,6 +2,9 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use Time::HiRes qw/time sleep/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 use Test2::Harness2;
 
 # ---------------------------------------------------------------------------

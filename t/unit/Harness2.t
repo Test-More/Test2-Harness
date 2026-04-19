@@ -5,6 +5,9 @@ use File::Path qw/make_path/;
 use POSIX qw/WNOHANG/;
 use Time::HiRes qw/sleep/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 use Test2::Harness2;
 use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Run;

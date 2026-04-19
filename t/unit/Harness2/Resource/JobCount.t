@@ -1,7 +1,10 @@
 use Test2::V0;
+
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Run::Job;
-use Test2::Harness2::TestFile;
 
 sub make_job {
     my (%tf_attrs) = @_;

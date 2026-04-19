@@ -1,7 +1,10 @@
 use Test2::V0;
 use File::Spec ();
-use Test2::Harness2::Run::Job;
+
+use lib 't/lib';
 use Test2::Harness2::TestFile;
+
+use Test2::Harness2::Run::Job;
 
 subtest 'constructs with a TestFile' => sub {
     my $tf  = Test2::Harness2::TestFile->new(file => 't/foo.t');
@@ -67,7 +70,7 @@ subtest 'rejects non-TestFile refs' => sub {
     };
     my $err = $@;
     ok(!$ok, 'croaks on unrelated blessed ref');
-    like($err, qr/TestFile/);
+    like($err, qr/Role::TestFile/);
 };
 
 done_testing;

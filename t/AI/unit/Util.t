@@ -2,7 +2,20 @@ use Test2::V0;
 use Time::HiRes qw/time/;
 use POSIX ();
 
-use Test2::Harness2::Util qw/hub_truth load_module mod2file parse_exit tinysleep/;
+use File::Temp qw/tempfile tempdir/;
+use Fcntl qw/LOCK_EX LOCK_NB/;
+
+use Test2::Harness2::Util qw{
+    apply_encoding
+    close_file
+    hub_truth
+    load_module
+    lock_file
+    mod2file
+    parse_exit
+    tinysleep
+    unlock_file
+};
 
 subtest 'mod2file' => sub {
     is(mod2file('Foo::Bar::Baz'), 'Foo/Bar/Baz.pm', "converts :: to / and adds .pm");
@@ -127,6 +140,74 @@ subtest 'load_module - requires a name' => sub {
         qr/required/,
         'dies on empty string',
     );
+};
+
+subtest 'apply_encoding - utf8' => sub {
+    my ($fh, $path) = tempfile(UNLINK => 1);
+    apply_encoding($fh, 'utf8');
+    print $fh "\x{263A}";
+    close $fh;
+
+    open(my $rh, '<:raw', $path) or die $!;
+    my $bytes = do { local $/; <$rh> };
+    close $rh;
+    is($bytes, "\xe2\x98\xba", 'utf8 layer emitted three-byte encoding');
+};
+
+subtest 'apply_encoding - no-op on false' => sub {
+    my ($fh) = tempfile(UNLINK => 1);
+    my $ok = eval { apply_encoding($fh, undef); apply_encoding($fh, ''); 1 };
+    ok($ok, 'returns without changing anything on undef/empty');
+};
+
+subtest 'close_file - succeeds without name' => sub {
+    my ($fh) = tempfile(UNLINK => 1);
+    my $ok = eval { close_file($fh); 1 };
+    ok($ok, 'closes an open handle cleanly');
+};
+
+subtest 'close_file - already-closed handle dies' => sub {
+    my ($fh) = tempfile(UNLINK => 1);
+    close($fh);
+    like(
+        dies { close_file($fh, 'thing.txt') },
+        qr/Could not close file 'thing\.txt'/,
+        'diagnostic includes the name'
+    );
+};
+
+subtest 'lock_file / unlock_file - round trip on a path' => sub {
+    my $dir  = tempdir(CLEANUP => 1);
+    my $path = "$dir/lockme";
+
+    my $fh = lock_file($path);
+    ok($fh, 'got a locked handle');
+
+    # Second non-blocking lock attempt in this process shares advisory
+    # locks on the same handle but not between handles.
+    open(my $other, '>>', $path) or die $!;
+    my $got_second = flock($other, LOCK_EX | LOCK_NB);
+    ok(!$got_second, 'second independent handle cannot acquire exclusive lock');
+    close($other);
+
+    unlock_file($fh);
+    close($fh);
+
+    # After unlock, a fresh handle should lock immediately.
+    open(my $after, '>>', $path) or die $!;
+    ok(flock($after, LOCK_EX | LOCK_NB), 'lock available after unlock');
+    close($after);
+};
+
+subtest 'lock_file - accepts an already-open handle' => sub {
+    my $dir  = tempdir(CLEANUP => 1);
+    my $path = "$dir/lockme2";
+
+    open(my $fh, '>>', $path) or die $!;
+    my $locked = lock_file($fh);
+    is($locked, $fh, 'returns the same handle it was given');
+    unlock_file($fh);
+    close($fh);
 };
 
 done_testing;

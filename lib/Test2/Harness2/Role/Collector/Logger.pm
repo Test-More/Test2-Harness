@@ -12,12 +12,16 @@ use Role::Tiny;
 # Default no-op implementations. Loggers that need to retain the run/job/ipcm
 # info, the auditor, or the cross-logger lookup must override these -- the
 # role can't assume every consumer is a blessed hash or wants to track them.
-sub set_process_info    { }
-sub set_ipcm_info       { }
-sub set_auditor         { }
-sub set_loggers_lookup  { }
+sub set_process_info   { }
+sub set_ipcm_info      { }
+sub set_auditor        { }
+sub set_loggers_lookup { }
 
 sub depends_on { () }
+
+sub applicable { 1 }
+
+sub metadata { undef }
 
 sub log_events { 1 }
 
@@ -87,6 +91,50 @@ All methods are optional and have sensible default implementations in the role.
 Return a list of other logger class names that must also be present for this
 logger to work. The collector validates these dependencies during construction.
 The default implementation returns an empty list.
+
+=item $bool = $logger_or_class->applicable($collector)
+
+Return true when this logger makes sense for C<$collector>'s context,
+false to have the collector skip it.  Called as either a class or an
+instance method against every configured logger spec before the loggers
+are instantiated.  Non-applicable loggers are dropped from the collector
+entirely -- they are not constructed, do not receive lifecycle hooks,
+and do not contribute metadata.
+
+Typical use is to restrict a logger to either service collectors
+(harness-level interpose) or test-job collectors.  Since job collectors
+are the ones that have an auditor attached, a logger that only makes
+sense for a test job can check C<< $collector->auditor >>.
+
+The default implementation returns true (applicable in every context).
+
+=item \%info_or_undef = $logger->metadata()
+
+Return a hashref describing where and how the data this logger produced can
+be retrieved by an external consumer.  For a file-backed logger this is
+typically a path (e.g. C<< { jsonl_file => '/path/to/events.jsonl' } >>).
+Loggers that do not persist retrievable data (for example, loggers that
+fire transient IPC messages) should return C<undef> -- the default -- so
+downstream consumers see nothing to chase.
+
+The collector gathers each logger's metadata after L</startup> runs and
+forwards it to its configured IPC peer so the harness service can publish a
+C<job_loggers> event describing where the job's outputs live.  Keyed by
+class name, the payload shape is:
+
+    {
+        'Logger::Class::A' => [ { ...metadata... }, ... ],
+        'Logger::Class::B' => [ { ...metadata... } ],
+    }
+
+The value is always an arrayref because the same logger class may be
+configured more than once (for example, two JSONL loggers writing to
+different files).  Loggers that return C<undef> are omitted entirely: a
+class with no defined metadata does not appear in the hash at all.  If no
+configured logger returns metadata the event still fires, but with an
+empty C<loggers> hash, so downstream consumers always see the message.
+
+The default implementation returns C<undef>.
 
 =item $bool = $logger->log_events()
 

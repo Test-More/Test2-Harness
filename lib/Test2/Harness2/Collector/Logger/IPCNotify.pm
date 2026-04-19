@@ -61,6 +61,17 @@ sub set_ipcm_info {
 
 sub log_events { 0 }
 
+# metadata() inherited default is undef: this logger only fires a transient
+# IPC wake-up, so there is nothing to retrieve after the fact.
+
+# The wake-up notification only makes sense for test-job collectors (the
+# harness service picks it up on shutdown to tick the run loop sooner).
+# Service-level collectors have no peer to ping -- skip this logger there.
+sub applicable {
+    my ($class_or_self, $collector) = @_;
+    return $collector && $collector->auditor ? 1 : 0;
+}
+
 sub shutdown {
     my $self = shift;
 
@@ -70,6 +81,7 @@ sub shutdown {
             $self->{+HANDLE} = IPC::Manager::Service::Handle->new(
                 service_name => $self->{+SERVICE_NAME},
                 ipcm_info    => $self->{+IPCM_INFO},
+                (defined $self->{+JOB_ID} ? (name => $self->{+JOB_ID}) : ()),
             );
         }
 

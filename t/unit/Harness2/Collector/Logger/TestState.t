@@ -69,9 +69,18 @@ subtest 'construction - required attributes' => sub {
         qr/peer.*required/,
         'peer required',
     );
+    like(
+        dies { $CLASS->new(ipcm_info => {}, peer => 'x') },
+        qr/job_id.*required/,
+        'job_id required',
+    );
 
-    my $logger = $CLASS->new(ipcm_info => {fake => 1}, peer => 'harness');
-    ok($logger, 'constructs with ipcm_info + peer');
+    my $logger = $CLASS->new(
+        ipcm_info => {fake => 1},
+        peer      => 'harness',
+        job_id    => 'J',
+    );
+    ok($logger, 'constructs with ipcm_info + peer + job_id');
     is($logger->job_try, 0, 'job_try defaults to 0');
 };
 
@@ -174,6 +183,7 @@ subtest 'loggers_lookup passed via constructor is weakened too' => sub {
     my $state  = $CLASS->new(
         ipcm_info      => {fake => 1},
         peer           => 'harness',
+        job_id         => 'J',
         loggers_lookup => $lookup,
     );
     ok(isweak($state->{loggers_lookup}),
@@ -255,6 +265,11 @@ subtest 'shutdown defaults empty subtest lists when auditor has none' => sub {
     $state->shutdown;
     is($sent[0]{payload}{passing_subtests}, [], 'empty list default');
     is($sent[0]{payload}{failing_subtests}, [], 'empty list default');
+};
+
+subtest 'metadata is undef -- TestState has no retrievable output' => sub {
+    my $state = build_logger();
+    ok(!defined $state->metadata, 'metadata is undef (role default)');
 };
 
 done_testing;

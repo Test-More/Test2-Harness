@@ -39,33 +39,15 @@ subtest 'returns undef for undef line' => sub {
 };
 
 subtest 'normalize_event sets harness facet' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(
-        ipcm_info => {},
-        run_id    => 'R1',
-        job_id    => 'J1',
-        job_try   => 2,
-    );
-    my $event = $parser->parse_io(stream => 'stdout', line => 'test');
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
+    my $event  = $parser->parse_io(stream => 'stdout', line => 'test');
 
     my $h = $event->facet_data->{harness};
-    is($h->{run_id},  'R1', "run_id propagated");
-    is($h->{job_id},  'J1', "job_id propagated");
-    is($h->{job_try}, 2,    "job_try propagated");
     ok(defined $h->{event_id}, "event_id set in harness");
     ok(defined $h->{stamp},    "stamp set in harness");
-};
-
-subtest 'set_process_info updates run_id/job_id/job_try' => sub {
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => {});
-    $parser->set_process_info(run_id => 'RX', job_id => 'JX', job_try => 4);
-    is($parser->run_id,  'RX', 'run_id set via set_process_info');
-    is($parser->job_id,  'JX', 'job_id set via set_process_info');
-    is($parser->job_try, 4,    'job_try set via set_process_info');
-
-    # Partial update
-    $parser->set_process_info(job_try => 99);
-    is($parser->run_id,  'RX', 'run_id unchanged on partial update');
-    is($parser->job_try, 99,   'job_try updated on partial update');
+    ok(!exists $h->{run_id},   "run_id not stamped on event");
+    ok(!exists $h->{job_id},   "job_id not stamped on event");
+    ok(!exists $h->{job_try},  "job_try not stamped on event");
 };
 
 subtest 'set_ipcm_info stores ipcm_info' => sub {

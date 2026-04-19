@@ -77,4 +77,25 @@ subtest 'from_files rejects non-arrayref files' => sub {
     like($@, qr/arrayref/);
 };
 
+subtest 'TO_JSON returns a plain hash of slot values' => sub {
+    my $run = Test2::Harness2::Run->from_files(
+        run_id => 'r-1',
+        files  => ['t/a.t', 't/b.t'],
+    );
+
+    my $h = $run->TO_JSON;
+    is(ref($h), 'HASH', 'returns a hashref');
+    ok(!ref($h) || ref($h) eq 'HASH', 'outer return is unblessed');
+    is($h->{run_id}, 'r-1', 'run_id present');
+    ok(defined $h->{created_at}, 'created_at present');
+    is(ref($h->{pending}), 'ARRAY', 'pending is arrayref');
+    is(ref($h->{running}), 'ARRAY', 'running is arrayref');
+    is(ref($h->{done}),    'ARRAY', 'done is arrayref');
+    is(ref($h->{jobs}),    'ARRAY', 'jobs is arrayref');
+    is(scalar @{$h->{jobs}}, 2,     'two jobs');
+    ok($h->{jobs}[0]->can('TO_JSON'),
+        'job entries implement TO_JSON (convert_blessed handles them at encode time)');
+    is($h->{jobs}[0]->run_id, 'r-1', 'job inherits run_id');
+};
+
 done_testing;

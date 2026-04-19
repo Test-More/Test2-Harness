@@ -33,16 +33,18 @@ waitpid $pid, 0;
 my $exit = $? >> 8;
 is($exit, 0, 'service exited cleanly');
 
-ok(-e "$dir/services/harness.jsonl", 'service log written');
+ok(-e "$dir/logs/services/harness.jsonl", 'service log written');
 
-# Find the run_id directory.
-opendir my $dh, "$dir/runs" or die "Cannot open $dir/runs: $!";
-my @runs = grep { !/^\./ } readdir $dh;
+# Find the run_id directory (peers with the logs/runs/<id>.json snapshot).
+opendir my $dh, "$dir/logs/runs" or die "Cannot open $dir/logs/runs: $!";
+my @run_dirs = grep { !/^\./ && -d "$dir/logs/runs/$_" } readdir $dh;
 closedir $dh;
-is(scalar @runs, 1, 'one run dir');
+is(scalar @run_dirs, 1, 'one run dir');
+
+ok(-f "$dir/logs/runs/$run_dirs[0].json", 'logs/runs/<id>.json sidecar written');
 
 # Read the service log and confirm key events are present.
-open my $slog, '<', "$dir/services/harness.jsonl" or die "Cannot open harness.jsonl: $!";
+open my $slog, '<', "$dir/logs/services/harness.jsonl" or die "Cannot open harness.jsonl: $!";
 my @events = map { decode_json($_) } grep { /\S/ } <$slog>;
 close $slog;
 

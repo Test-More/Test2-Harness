@@ -6,17 +6,19 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use File::Path qw/make_path/;
+use File::Spec ();
 use Time::HiRes qw/time sleep/;
 use Test2::Util::UUID qw/gen_uuid/;
+use Test2::Harness2::Util qw/parse_exit/;
+use Test2::Harness2::Util::JSON qw/write_json_file_atomic/;
 use POSIX qw/WNOHANG getpgrp/;
 
-use constant IS_WIN32 => $^O eq 'MSWin32';
+use constant IS_WIN32            => $^O eq 'MSWin32';
 use constant HAS_CHILD_SUBREAPER => eval {
     require Test2::Harness2::ChildSubReaper;
     Test2::Harness2::ChildSubReaper::have_subreaper_support() ? 1 : 0;
 } || 0;
 
-use Atomic::Pipe;
 use IPC::Manager qw/ipcm_spawn/;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Run;
@@ -25,6 +27,7 @@ use Test2::Harness2::Util::IPC qw/list_direct_children/;
 
 use Object::HashBase qw{
     <workdir
+    <logdir
     <name
     <job_id
     <loggers
@@ -50,12 +53,28 @@ sub init {
 
     my $wd = $self->{+WORKDIR} // croak "'workdir' is a required attribute";
     croak "workdir '$wd' does not exist or is not a directory" unless -d $wd;
-    croak "workdir '$wd' already contains services/ -- refusing to clobber"
-        if -e "$wd/services";
-    croak "workdir '$wd' already contains runs/ -- refusing to clobber"
-        if -e "$wd/runs";
 
-    make_path("$wd/services");
+    # logdir defaults to 'logs' under the workdir. A caller-supplied
+    # relative path is resolved under the workdir; an absolute path is
+    # used verbatim (File::Spec handles non-unix absolute shapes like
+    # 'C:\...' and UNC paths, so we do not just check for a leading /).
+    # An existing empty directory is accepted -- only a non-empty
+    # logdir clobbers prior output and is refused.
+    my $logdir = $self->{+LOGDIR} // 'logs';
+    $logdir = File::Spec->catdir($wd, $logdir)
+        unless File::Spec->file_name_is_absolute($logdir);
+    $self->{+LOGDIR} = $logdir;
+
+    if (-e $logdir) {
+        croak "logdir '$logdir' exists but is not a directory" unless -d $logdir;
+        opendir(my $dh, $logdir) or croak "Cannot read logdir '$logdir': $!";
+        my @entries = grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+        closedir $dh;
+        croak "logdir '$logdir' is not empty -- refusing to clobber"
+            if @entries;
+    }
+
+    make_path("$logdir/services");
 
     $self->{+NAME}           //= 'harness';
     $self->{+JOB_ID}         //= gen_uuid();
@@ -66,10 +85,18 @@ sub init {
     $self->{+WATCH_PIDS_REF} //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}     //= 0;
 
+    # TODO: Eventually we will remove this default, but wait until we write the
+    # App::Yath2 code for that. No immediate action, but leave this TODO for
+    # future reference.
     $self->{+LOGGERS} //= [
         [
             'Test2::Harness2::Collector::Logger::JSONL',
-            output_file => "$wd/services/$self->{+NAME}.jsonl",
+            output_file => "$logdir/services/$self->{+NAME}.jsonl",
+        ],
+        [
+            'Test2::Harness2::Collector::Logger::JSON',
+            output_file => "$logdir/services/$self->{+NAME}.json",
+            spec        => $self,
         ],
     ];
     $self->{+TEST_AUDITOR} //= 'Test2::Harness2::Collector::Auditor::Test';
@@ -97,7 +124,7 @@ sub start {
     }
 
     # Construct the service object in the pre-fork process.  init() creates
-    # $workdir/services/ and populates default loggers.
+    # $workdir/logs/services/ and populates default loggers.
     my $self = $class->new(%args);
 
     # Grab the loggers to hand to interpose before forking.
@@ -107,12 +134,14 @@ sub start {
     # is packaged here so it can either run inline (the normal path) or be
     # handed to a caller-provided Long::Jump point via jump_to.
     my $run_service = sub {
-        my $stdout_apipe = Atomic::Pipe->from_fh('>&=', \*STDOUT);
-        $stdout_apipe->set_mixed_data_mode();
-        $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->new(
-            pipe   => $stdout_apipe,
-            job_id => $self->job_id,
-        );
+        # The EventEmitter defaults wrap STDOUT and, when
+        # T2_HARNESS2_PIPE_COUNT advertises separate pipes, STDERR for the
+        # sync marker. The interposing collector is responsible for
+        # publishing that env var (see Collector::_interpose_child). We
+        # use the process-wide cached instance so anything else in this
+        # service that emits (e.g. a formatter running in the same
+        # process) shares one wrapper around the real FDs.
+        $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->std;
 
         if ($test_run) {
             $self->request_handler_queue_test_run($test_run);
@@ -127,6 +156,7 @@ sub start {
 
     Test2::Harness2::Collector->interpose(
         ipcm_info   => $self->ipcm_info,
+        ipc_peer    => $self->{+NAME},
         loggers     => $loggers,
         parser      => 'Test2::Harness2::Collector::Parser::IOParser',
         parent_pids => [$caller_pid],
@@ -237,6 +267,37 @@ sub request_handler_queue_test_run {
 
     push @{$self->{+QUEUE}} => $run;
 
+    # FUTURE -- READ THIS WHEN MERGING / REBASING FROM THE
+    # 'reimplement-resource-classes' BRANCH:
+    #
+    # That branch introduces resource services that are spun up for a
+    # run based on the run's resource needs. When that work lands,
+    # EVERY run should become its own service (even runs that declare no
+    # resource needs), spawned by the harness as it picks the run up off
+    # this queue. Those resource services should run as sub-services under
+    # the run service, not alongside it. The run service itself should be
+    # configured with the JSON logger -- just like the harness's own
+    # interpose collector is today -- which will then own the file at
+    # "$logdir/runs/$run_id.json".
+    #
+    # Until that run service exists, the harness service writes the file
+    # directly so downstream consumers always have a runs/<id>.json
+    # sidecar to read. The call below is the stopgap; remove it once the
+    # run service's JSON logger takes over at run startup.
+    $self->_write_run_snapshot($run);
+
+    $self->_emit_service_event(
+        kind     => 'run_queued',
+        run_data => $run->TO_JSON,
+    );
+
+    for my $job (@{$run->jobs}) {
+        $self->_emit_service_event(
+            kind     => 'job_queued',
+            job_data => $job->TO_JSON,
+        );
+    }
+
     return {ok => 1, run_id => $run->run_id};
 }
 
@@ -302,6 +363,21 @@ sub run_on_general_message {
         return;
     }
 
+    if (defined $kind && $kind eq 'loggers_ready') {
+        # Each job's collector reports its logger metadata after startup so
+        # the service can record where the job's outputs live.
+        $self->_emit_service_event(
+            kind     => 'job_loggers',
+            job_info => {
+                run_id  => $content->{run_id},
+                job_id  => $content->{job_id},
+                job_try => $content->{job_try},
+            },
+            loggers => $content->{loggers} // {},
+        );
+        return;
+    }
+
     warn "Test2::Harness2: unhandled general message kind: " . (defined $kind ? "'$kind'" : '(none)') . "\n";
 
     return;
@@ -326,10 +402,37 @@ sub _check_current_completion {
     # Move the job from running to done.
     $cur->{run}->mark_done($cur->{job}->job_id);
 
+    my $raw_exit = $handle->exit_code;
+    my $exit     = defined($raw_exit)                                       ? parse_exit($raw_exit) : undef;
+    my $pass     = defined($exit) && $exit->{err} == 0 && $exit->{sig} == 0 ? 1                     : 0;
+
+    $self->_emit_service_event(
+        kind     => 'job_completed',
+        job_info => {
+            run_id  => $cur->{run}->run_id,
+            job_id  => $cur->{job}->job_id,
+            job_try => $cur->{job}->job_try,
+        },
+        exit => $exit,
+        pass => $pass,
+    );
+
     # If the whole run is complete, pop it from the queue.
     if ($cur->{run}->is_complete) {
         my $run_id = $cur->{run}->run_id;
         $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
+
+        # FUTURE (reimplement-resource-classes branch): this atomic
+        # swap is the stopgap shutdown half of the runs/<id>.json file.
+        # Once runs are their own services with the JSON logger attached,
+        # the logger's shutdown hook will own this swap; remove the call
+        # below at that time.
+        $self->_write_run_snapshot($cur->{run});
+
+        $self->_emit_service_event(
+            kind     => 'run_ended',
+            run_data => {run_id => $run_id},
+        );
 
         # Flip to finishing if requested (Task 15 builds on this).
         $self->{+STATE} = 'finishing'
@@ -552,6 +655,34 @@ sub _emit_service_event {
     $em->emit_event(%fields);
 }
 
+sub TO_JSON {
+    my $self = shift;
+    return {
+        name    => $self->{+NAME},
+        job_id  => $self->{+JOB_ID},
+        workdir => $self->{+WORKDIR},
+        pid     => $self->pid,
+    };
+}
+
+# STOPGAP until runs become their own services (see the
+# reimplement-resource-classes commentary in
+# request_handler_queue_test_run and _check_current_completion). Writes
+# "$logdir/runs/$run_id.json" atomically with the run's current TO_JSON
+# snapshot. Called once when the run is queued and again when the run
+# completes, so readers always see either an initial-state snapshot or
+# the final-state snapshot, never a partial file.
+sub _write_run_snapshot {
+    my ($self, $run) = @_;
+
+    my $runs_dir = $self->{+LOGDIR} . '/runs';
+    make_path($runs_dir) unless -d $runs_dir;
+
+    my $path = $runs_dir . '/' . $run->run_id . '.json';
+    write_json_file_atomic($path, $run->TO_JSON);
+    return;
+}
+
 sub run_on_all {
     my ($self, $activity) = @_;
 
@@ -573,9 +704,25 @@ sub run_on_all {
     my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
 
     my $run_id  = $run->run_id;
-    my $log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $job_id;
+    my $log_dir = join '/', $self->{+LOGDIR}, 'runs', $run_id, $job_id;
     make_path($log_dir);
-    my $log_file = "$log_dir/0.jsonl";
+    my $log_file  = "$log_dir/0.jsonl";
+    my $json_file = "$log_dir/0.json";
+
+    # First job of this run -- announce run_started before the job_started.
+    $self->_emit_service_event(
+        kind     => 'run_started',
+        run_data => {run_id => $run_id},
+    ) if !@{$run->running} && !@{$run->done};
+
+    $self->_emit_service_event(
+        kind     => 'job_started',
+        job_info => {
+            run_id  => $run_id,
+            job_id  => $job_id,
+            job_try => $job->job_try,
+        },
+    );
 
     my $handle = Test2::Harness2::Collector->spawn(
         launch      => [$^X, '-Ilib', $job->test_file_abs],
@@ -586,9 +733,15 @@ sub run_on_all {
         job_id      => $job_id,
         job_try     => 0,
         ipcm_info   => $self->ipcm_info,
+        ipc_peer    => $self->{+NAME},
         auditor     => $self->{+TEST_AUDITOR},
         loggers     => [
             [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
+            [
+                'Test2::Harness2::Collector::Logger::JSON',
+                output_file => $json_file,
+                spec        => $job,
+            ],
             [
                 'Test2::Harness2::Collector::Logger::IPCNotify',
                 service_name => $self->{+NAME},

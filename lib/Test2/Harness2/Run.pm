@@ -33,7 +33,7 @@ sub init {
 sub from_files {
     my ($class, %params) = @_;
 
-    my $files = $params{files} or croak "'files' is required";
+    my $files = delete $params{files} or croak "'files' is required";
     croak "'files' must be an arrayref" unless ref($files) eq 'ARRAY';
 
     my $run_id = $params{run_id} // gen_uuid();
@@ -68,6 +68,8 @@ sub is_complete {
     my $self = shift;
     return !@{$self->{+PENDING}} && !@{$self->{+RUNNING}};
 }
+
+sub TO_JSON { return {%{$_[0]}} }
 
 1;
 

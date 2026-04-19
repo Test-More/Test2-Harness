@@ -198,4 +198,12 @@ subtest 'ipcm_info is required at construction' => sub {
     like($err, qr/ipcm_info/, 'error mentions ipcm_info');
 };
 
+subtest 'metadata is undef -- IPCNotify has no retrievable output' => sub {
+    my $logger = Test2::Harness2::Collector::Logger::IPCNotify->new(
+        ipcm_info    => {fake => 1},
+        service_name => 'harness',
+    );
+    ok(!defined $logger->metadata, 'metadata is undef (role default)');
+};
+
 done_testing;

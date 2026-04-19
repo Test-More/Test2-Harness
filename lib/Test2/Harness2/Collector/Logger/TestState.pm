@@ -35,6 +35,9 @@ sub init {
     croak "'peer' is a required attribute"
         unless defined $self->{+PEER};
 
+    croak "'job_id' is a required attribute"
+        unless defined $self->{+JOB_ID};
+
     $self->{+JOB_TRY} //= 0;
 
     # If loggers_lookup came in via the constructor, weaken it the same way
@@ -43,11 +46,23 @@ sub init {
     weaken($self->{+LOGGERS_LOOKUP}) if defined $self->{+LOGGERS_LOOKUP};
 }
 
+# TestState narrates a single test job: startup announces test_started,
+# shutdown reports test_completed with auditor-derived counts. It has no
+# useful role on service-level collectors, which have no auditor and no
+# single test to narrate -- skip it there.
+sub applicable {
+    my ($class_or_self, $collector) = @_;
+    return $collector && $collector->auditor ? 1 : 0;
+}
+
 # Fire-and-forget messages to an IPC peer. log_events is intentionally false
 # so log_event is never called: per-subtest announcements flow from the
 # auditor, which emits synthetic harness.subtest_started events that get
 # written to the JSONL log; anything reading the log sees them there.
 sub log_events { 0 }
+
+# metadata() inherited default is undef: messages to the peer are transient;
+# nothing to retrieve from this logger after the fact.
 
 sub set_auditor {
     my ($self, $auditor) = @_;
@@ -147,6 +162,7 @@ sub _send {
             $self->{+HANDLE} = IPC::Manager::Service::Handle->new(
                 service_name => $self->{+PEER},
                 ipcm_info    => $self->{+IPCM_INFO},
+                (defined $self->{+JOB_ID} ? (name => $self->{+JOB_ID}) : ()),
             );
         }
 

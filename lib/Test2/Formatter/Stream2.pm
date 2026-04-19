@@ -5,7 +5,6 @@ use warnings;
 our $VERSION = '2.000011';
 
 use IO::Handle;
-use Atomic::Pipe;
 
 use Carp qw/croak confess/;
 use Scalar::Util qw/blessed/;
@@ -25,8 +24,6 @@ use Object::HashBase qw{
     <stream_id
     <tb
     <tb_handles
-    +stdout_apipe
-    +stderr_apipe
     <emitter
 };
 
@@ -36,11 +33,12 @@ sub init {
     my $self = shift;
 
     # T2_HARNESS2_PIPE_COUNT is set by Test2::Harness2::Collector in every
-    # child process it spawns; it counts the mixed-mode pipes the collector
-    # is reading from (1 when STDOUT and STDERR are merged, 2 otherwise).
-    # Its presence is our sole signal that we are running inside a collector.
-    my $pipe_count = $ENV{T2_HARNESS2_PIPE_COUNT}
-        or confess "Test2::Formatter::Stream2 must be loaded inside a Test2::Harness2::Collector child (T2_HARNESS2_PIPE_COUNT is not set)";
+    # child process it spawns; its presence is our sole signal that we are
+    # running inside a collector. The EventEmitter reads the same env var
+    # to decide whether to wrap STDERR, so we just confirm the signal
+    # here and let the emitter handle the actual pipe wrapping.
+    confess "Test2::Formatter::Stream2 must be loaded inside a Test2::Harness2::Collector child (T2_HARNESS2_PIPE_COUNT is not set)"
+        unless $ENV{T2_HARNESS2_PIPE_COUNT};
 
     $self->{+STREAM_ID} = 1;
 
@@ -52,23 +50,7 @@ sub init {
         Test2::API::test2_stderr()->autoflush(1);
     }
 
-    # Wrap STDOUT (always) and STDERR (when not merged with STDOUT) as
-    # mixed-mode atomic pipes so we can write JSON event "bursts" alongside
-    # ordinary text and the collector parent will demux them.
-    my $stdout_apipe = Atomic::Pipe->from_fh('>&=', \*STDOUT);
-    $stdout_apipe->set_mixed_data_mode();
-    $self->{+STDOUT_APIPE} = $stdout_apipe;
-
-    if ($pipe_count > 1) {
-        my $stderr_apipe = Atomic::Pipe->from_fh('>&=', \*STDERR);
-        $stderr_apipe->set_mixed_data_mode();
-        $self->{+STDERR_APIPE} = $stderr_apipe;
-    }
-
-    $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->new(
-        pipe        => $self->{+STDOUT_APIPE},
-        stderr_pipe => $self->{+STDERR_APIPE},
-    );
+    $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->std;
 
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;

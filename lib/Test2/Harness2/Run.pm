@@ -5,10 +5,15 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
 
+use Role::Tiny ();
+
 use Test2::Harness2::Run::Job;
+use Test2::Harness2::Role::TestFile;
+use Test2::Harness2::Util qw/load_module/;
 
 use Object::HashBase qw{
     <run_id
@@ -17,6 +22,10 @@ use Object::HashBase qw{
     <pending
     <running
     <done
+    <resources
+    <aborted_reason
+    +resources_started
+    +resources_torn_down
 };
 
 sub init {
@@ -28,6 +37,7 @@ sub init {
     $self->{+PENDING}    //= [map { $_->job_id } @{$self->{+JOBS}}];
     $self->{+RUNNING}    //= [];
     $self->{+DONE}       //= [];
+    $self->{+RESOURCES}  //= [];
 }
 
 sub from_files {
@@ -38,14 +48,46 @@ sub from_files {
 
     my $run_id = $params{run_id} // gen_uuid();
 
-    my @jobs = map {
-        Test2::Harness2::Run::Job->new(
-            test_file => $_,
+    # Accept only role-consuming blessed objects, or a TO_JSON-shaped
+    # hashref carrying '__test_file_class__'. The class (named in the
+    # hash for the hashref case) is asked to rehydrate itself -- there
+    # is no caller-side default class.
+    my @jobs;
+    for my $input (@$files) {
+        my $test_file = _coerce_test_file($input);
+        push @jobs => Test2::Harness2::Run::Job->new(
+            test_file => $test_file,
             run_id    => $run_id,
         );
-    } @$files;
+    }
 
     return $class->new(%params, run_id => $run_id, jobs => \@jobs);
+}
+
+sub _coerce_test_file {
+    my ($input) = @_;
+
+    if (blessed($input)) {
+        return $input
+            if Role::Tiny::does_role($input, 'Test2::Harness2::Role::TestFile');
+        croak "files entries must consume Test2::Harness2::Role::TestFile, got a " . ref($input);
+    }
+
+    if (ref($input) eq 'HASH') {
+        my $tf_class = $input->{__test_file_class__}
+            or croak "hashref entries must carry '__test_file_class__' (got keys: " . join(',', sort keys %$input) . ")";
+
+        my $ok  = eval { load_module($tf_class); 1 };
+        my $err = $@;
+        croak "could not load '$tf_class': $err" unless $ok;
+
+        croak "'$tf_class' does not consume Test2::Harness2::Role::TestFile"
+            unless Role::Tiny::does_role($tf_class, 'Test2::Harness2::Role::TestFile');
+
+        return $tf_class->rehydrate($input);
+    }
+
+    croak "files entries must consume Test2::Harness2::Role::TestFile or be a hashref with __test_file_class__";
 }
 
 sub mark_running {
@@ -61,6 +103,14 @@ sub mark_done {
     my @new = grep { $_ ne $job_id } @{$self->{+RUNNING}};
     croak "job_id '$job_id' is not running" if @new == @{$self->{+RUNNING}};
     $self->{+RUNNING} = \@new;
+    push @{$self->{+DONE}} => $job_id;
+}
+
+sub mark_skipped {
+    my ($self, $job_id) = @_;
+    my @new = grep { $_ ne $job_id } @{$self->{+PENDING}};
+    croak "job_id '$job_id' is not pending" if @new == @{$self->{+PENDING}};
+    $self->{+PENDING} = \@new;
     push @{$self->{+DONE}} => $job_id;
 }
 
@@ -114,7 +164,8 @@ UUID identifying this run (auto-generated if not supplied).
 
 =item jobs
 
-Arrayref of L<Test2::Harness2::Run::Job> objects.
+Arrayref of L<Test2::Harness2::Run::Job> objects. Each job carries a
+L<Test2::Harness2::Role::TestFile>-consuming value object.
 
 =item created_at
 
@@ -132,6 +183,14 @@ Arrayref of job_ids currently being executed.
 
 Arrayref of job_ids that have finished.
 
+=item resources
+
+Arrayref of L<Test2::Harness2::Role::Resource> instances that are scoped
+to this specific run (as opposed to the harness-global resources on the
+harness itself). Defaults to empty. The harness service starts per-run
+resource services lazily when the run is first considered for launch,
+and tears them down when the run completes.
+
 =back
 
 =head1 METHODS
@@ -140,8 +199,23 @@ Arrayref of job_ids that have finished.
 
 =item $run = Test2::Harness2::Run->from_files(files => \@files, %opts)
 
-Construct a run from a list of test file paths.  Each file becomes one
-L<Test2::Harness2::Run::Job>.
+Construct a run from a list of C<files>. Each entry becomes one
+L<Test2::Harness2::Run::Job>. Entries may be:
+
+=over 4
+
+=item * an object consuming L<Test2::Harness2::Role::TestFile>
+
+=item * a hashref carrying a C<__test_file_class__> key naming the
+concrete TestFile class (as emitted by
+L<Test2::Harness2::Role::TestFile/TO_JSON>). The class is loaded if
+needed and asked to L<< rehydrate|Test2::Harness2::Role::TestFile/rehydrate >>
+itself from the hashref.
+
+=back
+
+Bare path strings are B<not> accepted: callers must hand in either a
+live role consumer or a fully-tagged JSON hash.
 
 =item $run->mark_running($job_id)
 
@@ -152,6 +226,12 @@ currently pending.
 
 Move C<$job_id> from C<running> to C<done>.  Croaks if the job is not
 currently running.
+
+=item $run->mark_skipped($job_id)
+
+Move C<$job_id> directly from C<pending> to C<done> without going through
+C<running>.  Used by the scheduler when a resource rules a job
+permanently-unsatisfiable.  Croaks if the job is not currently pending.
 
 =item $bool = $run->is_complete
 

@@ -89,6 +89,7 @@ requires "YAML::Tiny" => "1.74";
 requires "base" => "0";
 requires "constant" => "0";
 requires "goto::file" => "0.005";
+requires "mro" => "0";
 requires "parent" => "0.241";
 requires "perl" => "5.014000";
 suggests "Class::XSAccessor" => "1.19";

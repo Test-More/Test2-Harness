@@ -22,19 +22,23 @@ use Object::HashBase qw{
     <workdir
     <name
     <run_id
-    <run
     <job_id
     <loggers
     <kill_timeout
     <ipcm_info
     <parent_pids
     <jump_to
+    +run
     +state
     +resource_services
     +emitter
     +watch_pids_ref
     +own_pgroup
 };
+
+# Public accessor for the Run object -- named run_obj rather than 'run'
+# to avoid shadowing IPC::Manager::Role::Service's run() loop method.
+sub run_obj { $_[0]->{+RUN} }
 
 use Role::Tiny::With;
 with 'IPC::Manager::Role::Service', 'Test2::Harness2::Role::ResourceServiceHost';
@@ -326,6 +330,14 @@ sub start {
             pipe   => $stdout_apipe,
             job_id => $self->job_id,
         );
+
+        # The harness signals run-service shutdown with SIGTERM. The
+        # service loop checks run_should_end each tick, so flipping
+        # state to 'terminating' here is enough -- run_on_cleanup
+        # will then cascade TERMs to the tracked resource services
+        # via _perform_hard_stop before the process exits.
+        my $self_ref = $self;
+        local $SIG{TERM} = sub { $self_ref->{+STATE} = 'terminating' };
 
         my $exit = $self->run;
         POSIX::_exit($exit // 0);

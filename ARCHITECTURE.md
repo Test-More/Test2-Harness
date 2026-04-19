@@ -225,21 +225,33 @@ loop over an IPC bus. The full source lives in `lib/Test2/Harness2.pm`.
 
 ### Workdir layout
 
-`workdir` is required and must already be a directory. The service refuses
-to start if `services/` or `runs/` already exists inside it (would mix old
-logs with new). Other contents are tolerated. The service then creates:
+`workdir` is required and must already be a directory. All harness
+logging lives under `$workdir/logs/`. The service refuses to start if
+`$workdir/logs/` already exists and is non-empty (would mix old logs
+with new); other contents of the workdir are tolerated. The service
+creates:
 
 ```
 $workdir/
-  services/
-    $name.jsonl              service-lifecycle event log (default name=harness)
-  runs/
-    <run_id>/
-      <job_id>/
-        0.jsonl              per-test event log
+  logs/
+    services/
+      <name>.jsonl          service-lifecycle event stream (default name=harness)
+      <name>.json           service JSON snapshot (init fields + final verdict)
+    runs/
+      <run_id>.json         per-run JSON snapshot (written by the harness itself)
+      <run_id>/
+        <job_id>/
+          0.jsonl           per-test event stream
+          0.json            per-test JSON snapshot (init + exit + pass/fail)
 ```
 
-`runs/` and its subdirectories are created lazily as runs/jobs dispatch.
+`logs/runs/` and its subdirectories are created lazily as runs and
+jobs dispatch. Every `.jsonl` stream has a `.json` sidecar produced
+by the `Collector::Logger::JSON` snapshot logger (attached as a
+default alongside `Logger::JSONL`). The per-run `<run_id>.json`
+sidecar is a stopgap written directly by the harness — the commented
+TODO in the code points at a future migration where each run becomes
+its own service and owns its own snapshot file.
 
 ### Service-loop hooks
 
@@ -250,17 +262,26 @@ overrides the relevant callbacks:
   `service_started` event.
 - `run_on_all($activity)` — runs every iteration. Calls
   `_check_current_completion` (drains a finished collector's exit code,
-  marks the job done, may transition state to `finishing`). If no job is
-  in flight and the queue is non-empty and state is not `terminating`,
-  builds the next job's log path and launches a `Collector` with
-  `new_pgroup => 1`, the test auditor + loggers, and an `IPCNotify` logger
-  pointed at the service. Stores the handle in `+current` and registers
-  the collector pid as a worker.
+  marks the job done, emits `job_completed` + possibly `run_ended`,
+  rewrites the `<run_id>.json` snapshot, may transition state to
+  `finishing`). If no job is in flight and the queue is non-empty and
+  state is not `terminating`, builds the next job's log path, emits
+  `run_started` when starting a run's first job, emits `job_started`,
+  and launches a `Collector` with `new_pgroup => 1`, the test auditor
+  + loggers, and an `IPCNotify` logger pointed at the service. Stores
+  the handle in `+current` and registers the collector pid as a
+  worker.
 - `run_on_pid($pid, $exit)` — the IPC loop already reaped the child;
   hand the exit code to the matching collector handle.
-- `run_on_general_message($msg)` — recognises the `job_complete_notify`
-  wake-up message from `IPCNotify`. The act of receiving wakes the loop;
-  no further action is needed.
+- `run_on_general_message($msg)` — recognises two message kinds from
+  per-test collectors:
+  - `job_complete_notify` (from `Logger::IPCNotify`) — wake-up only;
+    receipt itself bumps the event loop.
+  - `loggers_ready` (from the collector itself, after all loggers
+    have finished `startup()`) — carries `{run_id, job_id, job_try,
+    loggers => { ClassName => [{metadata}, ...], ... }}`. The service
+    turns this into a `job_loggers` event so downstream consumers
+    know which logger instances produced which files / IPC handles.
 - `run_should_end` — true once the queue is drained, `+current` is clear,
   and (in `terminating` state) all pids have been reaped.
 - `run_on_cleanup` — final hard-stop sweep; emit `service_stopped`.
@@ -290,6 +311,35 @@ All requests refuse to queue new work once the service is past `running`.
 }
 ```
 
+### Lifecycle events
+
+The service emits a structured event stream through its own
+`EventEmitter` (section 9); the events land in
+`logs/services/<name>.jsonl` via the service-log collector, and a
+final merged snapshot is written to `logs/services/<name>.json` by
+`Logger::JSON`. Every event carries a `kind` field and the shapes
+below are the fields inside the event's `harness` facet:
+
+| Kind                | When                                                          | Payload                                                                   |
+|---------------------|---------------------------------------------------------------|----------------------------------------------------------------------------|
+| `service_started`   | `run_on_start`                                                | `pid`, `pgid`, `name`, `workdir`                                           |
+| `run_queued`        | `queue_test_run` request                                      | `run_data => $run->TO_JSON`                                                |
+| `job_queued`        | once per job inside a newly-queued run                        | `job_data => $job->TO_JSON`                                                |
+| `run_started`       | before the first job of a run dispatches                      | `run_data => { run_id }`                                                   |
+| `job_started`       | when a per-test collector is launched                         | `job_info => { run_id, job_id, job_try }`                                  |
+| `job_loggers`       | on receipt of the collector's `loggers_ready` message         | `job_info`, `loggers => { ClassName => [{metadata}, ...], ... }`           |
+| `job_completed`     | when the collector handle reports done                        | `job_info`, `exit` (parsed wait-status), `pass` (0/1)                      |
+| `run_ended`         | when a run's last job completes                               | `run_data => { run_id }`                                                   |
+| `service_stopped`   | `run_on_cleanup`                                              | none                                                                       |
+
+The service also writes `logs/runs/<run_id>.json` directly (outside
+the logger stack) at `run_queued` time and again at `run_ended` time,
+using `Util::JSON::write_json_file_atomic`. This is the stopgap
+sidecar noted above.
+
+`Test2::Harness2` itself implements `TO_JSON` returning
+`{name, job_id, workdir, pid}`.
+
 ## 5. Run / Job Model
 
 `Test2::Harness2::Run` and `Test2::Harness2::Run::Job` are plain
@@ -299,7 +349,9 @@ All requests refuse to queue new work once the service is past `running`.
   parallel id lists tracking lifecycle: `pending`, `running`, `done`.
   `mark_running($job_id)` and `mark_done($job_id)` move ids between lists
   and croak on misuse. `is_complete` is true when both `pending` and
-  `running` are empty.
+  `running` are empty. `TO_JSON` returns a shallow copy of the hash so
+  the full run (ids + job list + status) is serialisable into the
+  `run_queued` event payload and the per-run JSON sidecar.
 - `Run->from_files(files => \@paths, run_id => $opt)` is the only
   expected constructor; it builds one `Job` per path with a shared `run_id`.
 - `Run::Job` carries `job_id` (UUID), `test_file` (relative), `test_file_abs`
@@ -307,7 +359,8 @@ All requests refuse to queue new work once the service is past `running`.
   The constructor accepts either form, classifies inputs by
   `File::Spec::file_name_is_absolute`, and resolves the missing form in the
   caller's CWD at construction time so a later `chdir` does not redirect
-  the launch.
+  the launch. `TO_JSON` likewise returns a shallow copy of the hash for
+  the `job_queued` event and the per-job JSON sidecar.
 
 The current rewrite runs **one job at a time per service** — the loop in
 `run_on_all` only dispatches when `+current` is unset.
@@ -386,8 +439,11 @@ raw stdout/stderr line
 
 Live under `lib/Test2/Harness2/Collector/Parser/`. They turn raw lines and
 message bursts into `Test2::Harness2::Event` objects and stamp every event
-with the `harness` facet (`event_id`, `stamp`, optional
-`run_id`/`job_id`/`job_try`).
+with the `harness` facet (`event_id`, `stamp`). Parsers do **not** stamp
+`run_id` / `job_id` / `job_try` onto events — that provenance is carried
+by the log's on-disk path (`logs/runs/<run_id>/<job_id>/0.jsonl`) and by
+the service-level events that bracket each job (`job_started`,
+`job_completed`).
 
 - `IOParser` — base. Wraps each line in `from_stream` + `info` facets. No
   protocol parsing.
@@ -419,25 +475,49 @@ to override what it cares about.
 | `log_event($event)`        | Per event, only if `log_events()` returns true     |
 | `failing(1)`               | Once, when auditor flips passing → failing         |
 | `shutdown($collector)`     | Once, at child-side teardown                       |
+| `metadata()`               | Return a hashref describing this logger instance (file path, fileno, etc.) or `undef` to opt out. Gathered into the `loggers_ready` IPC message and surfaced as a `job_loggers` event. |
 | `set_process_info(...)`    | Pass `run_id`/`job_id`/`job_try`/pid in            |
 | `set_ipcm_info(...)`       | Hand over the IPC connection info                  |
-| `set_auditor($auditor)`    | Give the logger access to the auditor             |
-| `set_loggers_lookup(...)`  | Sibling-logger map for cross-references           |
+| `set_auditor($auditor)`    | Give the logger access to the auditor              |
+| `set_loggers_lookup(...)`  | Sibling-logger map for cross-references            |
 | `depends_on()`             | Names of other loggers that must be present        |
 
 Provided loggers:
 
-- **`Logger::JSONL`** — writes one JSON-encoded event per line to a file.
-  Default for both service-lifecycle events and per-test events.
+- **`Logger::JSONL`** — writes one JSON-encoded event per line to a
+  file. Default for both service-lifecycle events and per-test events.
+  `metadata` reports `{jsonl_file => $path}` for file-backed instances
+  and `{jsonl_fileno => fileno, pid => $pid}` when the caller passed a
+  pre-opened handle.
+- **`Logger::JSON`** — snapshot logger, also a default wherever
+  `Logger::JSONL` is. At `startup` writes the collector's `source`
+  (its owner object's `TO_JSON`) to a `.json` file via
+  `Util::JSON::write_json_file_atomic`. At `shutdown` atomically
+  rewrites that same file with the original fields merged with the
+  parsed child `exit` status (read from the collector's
+  public `child_exit` accessor) and — when an auditor is attached —
+  the `pass`/`fail` verdict. `metadata` reports `{json_file => $path}`.
+  Produces `<name>.json` for the service interpose collector and
+  `0.json` for every per-job collector. Does not subscribe to events
+  (`log_events` returns false).
 - **`Logger::IPCNotify`** — sends a `job_complete_notify` IPC message
-  from the per-test collector to the service when the test finishes. The
-  service's `run_on_general_message` recognises this and uses the wake-up
-  to drive `_check_current_completion` immediately, instead of waiting
-  for the next `~0.2s` poll tick.
+  from the per-test collector to the service when the test finishes.
+  The service's `run_on_general_message` recognises this and uses the
+  wake-up to drive `_check_current_completion` immediately, instead of
+  waiting for the next `~0.2s` poll tick. `metadata` returns `undef`.
 - **`Logger::TestState`** — sends per-test lifecycle messages
   (`test_started`, `test_failing`, `test_completed`) to an IPC peer with
   pass/fail/assertion counts and the JSONL log path. Useful for status
-  panels and external monitors.
+  panels and external monitors. `metadata` returns `undef`.
+
+When all loggers have completed `startup`, the collector calls
+`metadata` on each one, gathers the non-`undef` results keyed by
+class (multiple instances of the same class accumulate into an
+arrayref), and sends a single `loggers_ready` IPC message to its
+`ipc_peer` carrying `{run_id, job_id, job_try, loggers => { ... }}`.
+The service turns that into a `job_loggers` lifecycle event so later
+consumers (UI, DB) can find the logger outputs for a given job by
+inspecting the event stream alone.
 
 ### Spec normalisation, lazy instantiation
 
@@ -449,6 +529,10 @@ instantiates everything inside `_init_event_sinks` once it owns the
 descriptors. Every `Collector` family class requires `ipcm_info` to be
 present at construction (an `undef` value is allowed but must be passed
 explicitly) so callers cannot silently default away the IPC connection.
+A per-test collector also requires `ipc_peer` — the service name to
+address `loggers_ready` and `job_complete_notify` messages to — and
+registers itself on the IPC bus under its own `job_id` so the peer
+can identify the sender.
 
 ### Stream-ordering buffer
 
@@ -495,7 +579,9 @@ The collector's own exit code carries one of three signals:
 1. **255** if the collector itself failed.
 2. **The launched child's `wait()` status** (interface A) — including
    re-raising the same signal the child died from, so the collector's
-   exit faithfully mirrors the child.
+   exit faithfully mirrors the child. The collector exposes this
+   `child_exit` as a public attribute so downstream loggers (notably
+   `Logger::JSON`) can read it at shutdown.
 3. **The auditor's verdict** (1 fail / 0 pass) when no live child exit is
    available (interface B, interface C).
 
@@ -532,19 +618,22 @@ knows whether STDERR is its own pipe.
 Small bag of shared helpers: `mod2file`, `apply_encoding` (UTF-8-safe
 `binmode` wrapper that avoids known thread bugs), `hub_truth` (extract the
 canonical hub/trace facet from a facet_data hash), `parse_exit` (decode
-`waitpid` status into `{sig, err, dmp, all}`).
+`waitpid` status into `{sig, err, dmp, all}`), and `write_file_atomic`
+(write-to-tempfile-then-`rename` for any string payload — the base of
+the JSON snapshot writer).
 
 ### `Test2::Harness2::Util::EventEmitter`
 
 Standalone JSON-event writer that does **not** depend on Test2::API or
-Stream2. Used by the harness service itself to emit structured lifecycle
-events — `service_started`, `service_stopped`, `run_queued`,
-`run_started`/`run_complete`, `job_started`/`job_complete`,
-`finish_requested`, `terminated` — through the same atomic-pipe protocol
-the formatter uses, so the service-log collector parses them with exactly
-the same `IOParser` it uses for everything else. UUID generation and
-`event_id` consistency between the top-level field and the `harness`
-facet are guaranteed at emit time.
+Stream2. Used by the harness service itself to emit the structured
+lifecycle events catalogued in section 4 through the same atomic-pipe
+protocol the formatter uses, so the service-log collector parses them
+with exactly the same `IOParser` it uses for everything else. UUID
+generation and `event_id` consistency between the top-level field and
+the `harness` facet are guaranteed at emit time. The emitter does
+**not** stamp `run_id` / `job_id` / `job_try` — that provenance comes
+from the event payload's `run_data` / `job_info` fields and from the
+log-file path.
 
 ### `Test2::Harness2::Util::IPC`
 
@@ -570,8 +659,11 @@ hard-stop path:
 Thin `Cpanel::JSON::XS` wrapper configured for the project's needs:
 UTF-8, `convert_blessed`, `allow_nonref`. Exports `encode_json`,
 `encode_pretty_json` (canonical sort for human-facing files),
-`decode_json`, file-level `encode_json_file` / `decode_json_file`, and
-`json_true` / `json_false` boolean values.
+`decode_json`, file-level `encode_json_file` / `decode_json_file`,
+`write_json_file_atomic($path, \%data)` (pretty-printed atomic write
+via `Util::write_file_atomic` — used by `Logger::JSON` and by the
+harness's per-run sidecar), and `json_true` / `json_false` boolean
+values.
 
 ### `Test2::Harness2::Event`
 
@@ -593,17 +685,42 @@ the same pipe without corruption:
   collector as `[message => $decoded]`. Each is a single Test2 event
   hashref.
 
-### Per-test JSONL log (`runs/<run_id>/<job_id>/0.jsonl`)
+### Per-test logs (`logs/runs/<run_id>/<job_id>/0.{jsonl,json}`)
 
-One JSON-encoded `Test2::Harness2::Event` per line. Every event carries
-the `harness` facet with `event_id`, `stamp`, and the per-job context
-(`run_id`, `job_id`, `job_try`).
+The `0.jsonl` file holds one JSON-encoded `Test2::Harness2::Event` per
+line — the full event stream from the test. Every event carries the
+`harness` facet with `event_id` and `stamp`; `run_id` / `job_id` /
+`job_try` are **not** stamped onto events and come from the file path
+instead.
 
-### Service log (`services/<name>.jsonl`)
+The `0.json` sidecar is a single JSON document written by
+`Logger::JSON`. At the collector's `startup` it contains the source
+object's `TO_JSON` snapshot (for a per-test collector, the `Run::Job`
+fields); at `shutdown` it is atomically rewritten with those same
+fields plus `exit` (parsed from `child_exit`) and, when an auditor is
+attached, `pass` (0/1).
 
-Same JSONL shape as per-test logs, but events are the service's own
-lifecycle records. They carry the service's `job_id` (set at construction)
-and have no `run_id`.
+### Per-run snapshot (`logs/runs/<run_id>.json`)
+
+A single JSON document written directly by the harness (not by a
+logger) via `Util::JSON::write_json_file_atomic`. Rewritten twice:
+once at `run_queued` time with the initial `Run->TO_JSON`, and once
+at `run_ended` time with the final state (all jobs moved to `done`).
+Marked TODO in the code — the intent is to retire this in favour of
+a future "run as a service" model where each run's own JSON logger
+owns its snapshot file.
+
+### Service logs (`logs/services/<name>.{jsonl,json}`)
+
+Same JSONL shape as per-test logs, but the events are the service's
+own lifecycle records (section 4). They carry the service's `job_id`
+(set at construction) and no `run_id` — per-run and per-job IDs ride
+inside the event payload's `run_data` / `job_info` fields instead.
+
+A `<name>.json` sidecar is also written by `Logger::JSON` attached
+to the service-log collector: startup snapshot uses the harness's
+`TO_JSON` (`{name, job_id, workdir, pid}`), shutdown merges in the
+final exit status.
 
 ### IPC requests
 
@@ -615,11 +732,21 @@ hashrefs returned by the handler.
 
 ### IPC general messages
 
-Asynchronous fire-and-forget. The only one currently used is
-`{ kind => 'job_complete_notify', ... }` from `Logger::IPCNotify` to the
-service, used purely as a wake-up signal — the receipt itself bumps the
-service's event loop, and the next `run_on_all` iteration drains the
-completed collector.
+Asynchronous fire-and-forget. Currently used message kinds:
+
+- `{kind => 'job_complete_notify', ...}` — from `Logger::IPCNotify`
+  on every per-test collector to the service, used purely as a
+  wake-up signal. Receipt itself bumps the service's event loop, and
+  the next `run_on_all` iteration drains the completed collector.
+- `{kind => 'loggers_ready', run_id, job_id, job_try, loggers => {...}}`
+  — from a per-test collector to the service once every logger has
+  finished `startup`. `loggers` maps logger class names to arrayrefs
+  of that class's `metadata()` hashrefs. The service emits a
+  `job_loggers` lifecycle event carrying the payload.
+
+Both messages are addressed to the collector's `ipc_peer` (the
+service name). Senders register on the IPC bus under their own
+`job_id` so the peer can identify the sender.
 
 ## 11. External Dependencies
 

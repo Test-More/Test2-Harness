@@ -106,7 +106,10 @@ subtest 'service dies when its caller dies (no detach)' => sub {
     }
     waitpid $helper, 0;
 
-    # The service should exit on its own shortly.
+    # The service should exit on its own. Under the new architecture
+    # the shutdown has to cascade harness -> run service -> test
+    # collectors, so the 15s kill_timeout at each layer can stack.
+    # 45s keeps us clear of the worst-case single retry.
     ok(
         wait_until(
             sub {
@@ -116,7 +119,7 @@ subtest 'service dies when its caller dies (no detach)' => sub {
                 my $content = <$fh>;
                 return $content =~ /service_stopped/;
             },
-            20
+            45
         ),
         'service logged service_stopped after caller died'
     );

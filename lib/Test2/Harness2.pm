@@ -18,6 +18,7 @@ use constant HAS_CHILD_SUBREAPER => eval {
 
 use Atomic::Pipe;
 use IPC::Manager qw/ipcm_spawn/;
+use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Role::ResourceServiceHost;
@@ -324,9 +325,14 @@ sub run_on_general_message {
     my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
 
     # The act of receiving this message has already woken the service's event
-    # loop. On the next run_on_all iteration, _check_completions will detect
-    # the completion via waitpid. Nothing else to do.
+    # loop. On the next run_on_all iteration the scheduler re-ticks. Nothing
+    # else to do.
     return if defined $kind && $kind eq 'job_complete_notify';
+
+    # A per-run RunService reports a test job's final exit status here so
+    # the harness can release resources and advance its scheduler.
+    return $self->_handle_job_complete($content)
+        if defined $kind && $kind eq 'job_complete';
 
     return $self->_handle_resource_state_message($kind, $content)
         if defined $kind && $kind =~ m/^resource_(?:paused|resumed|ready|broken|permanent_broken)$/;
@@ -366,37 +372,32 @@ sub request_handler_detach {
     return {ok => 1};
 }
 
-sub _check_completions {
-    my $self = shift;
+sub _handle_job_complete {
+    my ($self, $content) = @_;
 
-    my $running = $self->{+RUNNING_JOBS};
+    my $job_id = ref($content) eq 'HASH' ? $content->{job_id} : undef;
+    return unless defined $job_id;
 
-    for my $job_id (keys %$running) {
-        my $cur    = $running->{$job_id};
-        my $handle = $cur->{handle};
+    my $cur = delete $self->{+RUNNING_JOBS}->{$job_id};
+    return unless $cur;
 
-        next unless $handle->is_done;
+    # Release any resources this job had assigned and advance the run.
+    $self->_release_job_resources($cur);
+    $cur->{run}->mark_done($job_id);
 
-        # Release any resources this job had assigned, then move it from
-        # running to done on its run.
-        $self->_release_job_resources($cur);
-        $cur->{run}->mark_done($job_id);
+    if ($cur->{run}->is_complete) {
+        my $run    = $cur->{run};
+        my $run_id = $run->run_id;
+        $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
 
-        delete $running->{$job_id};
+        $self->_teardown_run_service($run);
 
-        # If the whole run is complete, pop it from the queue.
-        if ($cur->{run}->is_complete) {
-            my $run    = $cur->{run};
-            my $run_id = $run->run_id;
-            $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
-
-            $self->_teardown_run_service($run);
-
-            $self->{+STATE} = 'finishing'
-                if $self->{+FINISH_AFTER_INITIAL_RUN}
-                && $self->{+STATE} eq 'running';
-        }
+        $self->{+STATE} = 'finishing'
+            if $self->{+FINISH_AFTER_INITIAL_RUN}
+            && $self->{+STATE} eq 'running';
     }
+
+    return;
 }
 
 sub _release_job_resources {
@@ -564,14 +565,6 @@ sub _perform_hard_stop {
 sub run_on_pid {
     my ($self, $pid, $exit) = @_;
 
-    # Find the running job owning this pid, if any.
-    for my $cur (values %{$self->{+RUNNING_JOBS} // {}}) {
-        next unless $cur->{pid} && $cur->{pid} == $pid;
-        my $handle = $cur->{handle} or return;
-        $handle->set_exit_code($exit) unless defined $handle->exit_code;
-        return;
-    }
-
     # Run-service exit. The per-run supervisor finished on its own
     # (either because _teardown_run_service sent it TERM, or because
     # its parent-pid watch tripped and it exited voluntarily). Drop
@@ -581,6 +574,26 @@ sub run_on_pid {
         my $info = $self->{+RUN_SERVICES}->{$rid};
         next unless $info->{pid} && $info->{pid} == $pid;
         delete $self->{+RUN_SERVICES}->{$rid};
+        return;
+    }
+
+    # Orphan test-collector exit: a test whose run service died mid-run
+    # may reparent to us (via subreaper or by init). Normally the run
+    # service would have sent job_complete first; only reach this branch
+    # if that didn't happen. Release resources and mark the job done so
+    # the scheduler doesn't wait forever.
+    for my $job_id (keys %{$self->{+RUNNING_JOBS} // {}}) {
+        my $cur = $self->{+RUNNING_JOBS}->{$job_id};
+        next unless $cur->{pid} && $cur->{pid} == $pid;
+
+        warn "Test2::Harness2: orphaned test pid $pid exited with $exit (job $job_id); " . "its run service died before reporting\n";
+        $self->_handle_job_complete({
+            kind   => 'job_complete',
+            run_id => $cur->{run}->run_id,
+            job_id => $job_id,
+            pid    => $pid,
+            exit   => $exit,
+        });
         return;
     }
 
@@ -702,13 +715,9 @@ sub _emit_service_event {
 sub run_on_all {
     my ($self, $activity) = @_;
 
-    # IPC::Manager's service loop already reaped any exited child and
-    # routed non-worker pids through run_on_pid(), so by the time we get
-    # here each collector Handle has its exit_code stashed when applicable.
-    # _check_completions reads that via $handle->is_done without needing
-    # to waitpid itself.
-    $self->_check_completions;
-
+    # Job completion is driven by the job_complete IPC message the run
+    # services send when a test collector exits (see _handle_job_complete).
+    # Here we only drive the scheduler forward.
     return if $self->{+STATE} eq 'terminating';
 
     # Launch as many pending jobs as the active resources permit this tick.
@@ -805,26 +814,61 @@ sub _ensure_run_service_started {
     return unless defined $self->ipcm_info;
 
     my $run_id = $run->run_id;
+    my $bus    = "run-$run_id";
     my $pid    = Test2::Harness2::RunService->spawn(
-        workdir     => $self->{+WORKDIR},
-        run         => $run,
-        ipcm_info   => $self->ipcm_info,
-        parent_pids => [$$],
+        workdir      => $self->{+WORKDIR},
+        run          => $run,
+        ipcm_info    => $self->ipcm_info,
+        parent_pids  => [$$],
+        harness_name => $self->{+NAME},
     );
 
     $self->{+RUN_SERVICES}->{$run_id} = {
         pid        => $pid,
         run        => $run,
+        bus_name   => $bus,
         started_at => time,
     };
 
     return;
 }
 
+# Lazy-build an IPC handle to the run service, once we need to make a
+# sync_request into it. Cached on the run-services entry so repeated
+# launches reuse one handle.
+sub _run_service_handle {
+    my ($self, $run_id) = @_;
+
+    my $entry = $self->{+RUN_SERVICES}->{$run_id}
+        or croak "no run service tracked for run '$run_id'";
+
+    return $entry->{_handle} //= IPC::Manager::Service::Handle->new(
+        service_name => $entry->{bus_name},
+        ipcm_info    => $self->ipcm_info,
+    );
+}
+
+# Block briefly waiting for a newly-spawned run service to be ready
+# to accept IPC requests. sync_request itself queues messages that
+# arrive before the service is up, but the timeout behaviour is
+# clearer if we wait explicitly.
+sub _wait_for_run_service_ready {
+    my ($self, $run_id) = @_;
+
+    my $handle   = $self->_run_service_handle($run_id);
+    my $deadline = time + 10;
+    until ($handle->ready) {
+        croak "timeout waiting for run service '$run_id' to come up"
+            if time > $deadline;
+        sleep(0.02);
+    }
+    return $handle;
+}
+
 sub _teardown_run_service {
     my ($self, $run) = @_;
 
-    # Called from three sites: _check_completions (normal run
+    # Called from three sites: _handle_job_complete (normal run
     # completion), _try_launch_next_pending (all-skipped completion),
     # and run_on_cleanup (runs left in the queue at shutdown). The
     # resources_torn_down flag below makes each call idempotent.
@@ -849,11 +893,8 @@ sub _teardown_run_service {
 sub _launch_job {
     my ($self, $run, $job, $resources) = @_;
 
-    my $run_id  = $run->run_id;
-    my $job_id  = $job->job_id;
-    my $log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $job_id;
-    make_path($log_dir);
-    my $log_file = "$log_dir/0.jsonl";
+    my $run_id = $run->run_id;
+    my $job_id = $job->job_id;
 
     my $assign_id = gen_uuid();
     my %env;
@@ -861,57 +902,61 @@ sub _launch_job {
         $res->assign(id => $assign_id, job => $job, env => \%env);
     }
 
-    my $handle;
-    my $spawn_ok = eval {
-        $handle = Test2::Harness2::Collector->spawn(
-            launch      => [$^X, '-Ilib', $job->test_file_abs],
-            new_pgroup  => 1,
-            parent_pids => [$$],
-            env_vars    => {T2_FORMATTER => 'Stream2', %env},
-            run_id      => $run_id,
-            job_id      => $job_id,
-            job_try     => 0,
-            ipcm_info   => $self->ipcm_info,
-            auditor     => $self->{+TEST_AUDITOR},
-            loggers     => [
-                [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
-                [
-                    'Test2::Harness2::Collector::Logger::IPCNotify',
-                    service_name => $self->{+NAME},
-                ],
-            ],
+    # Delegate the actual Collector fork to the per-run supervisor so
+    # the test process runs under the run's subtree. The harness owns
+    # scheduling (resources assigned above) and the run service owns
+    # launch + reap + stdio logging.
+    my $launch_ok = eval {
+        my $handle = $self->_wait_for_run_service_ready($run_id);
+
+        my $envelope = $handle->sync_request(
+            "run-$run_id",
+            {
+                request   => 'launch_job',
+                run_id    => $run_id,
+                job_id    => $job_id,
+                job_try   => 0,
+                test_file => $job->test_file_abs,
+                env       => \%env,
+                auditor   => $self->{+TEST_AUDITOR},
+                loggers   => [],                       # run service adds its own JSONL logger
+            },
         );
+
+        # IPC::Manager wraps request bodies in {response => ...}; our
+        # actual handler return value lives inside that slot.
+        my $resp = ref($envelope) eq 'HASH' ? $envelope->{response} : undef;
+        die "launch_job rejected: " . (ref($resp) eq 'HASH' ? ($resp->{error} // '(no error given)') : '(no response)')
+            unless ref($resp) eq 'HASH' && $resp->{ok};
+
+        $run->mark_running($job_id);
+
+        $self->{+RUNNING_JOBS}->{$job_id} = {
+            run                => $run,
+            job                => $job,
+            pid                => $resp->{pid},
+            started_at         => time,
+            assign_id          => $assign_id,
+            assigned_resources => $resources,
+            log_file           => $resp->{log_file},
+        };
+
         1;
     };
-    my $spawn_err = $@;
+    my $launch_err = $@;
 
-    unless ($spawn_ok) {
-        # spawn() failed; release the resources we just committed so their
-        # slots don't leak. The job never reached RUNNING_JOBS so
-        # _release_job_resources won't reach it on its own.
+    unless ($launch_ok) {
+        # Launch failed; release the resources we just committed so
+        # their slots don't leak. The job never reached RUNNING_JOBS
+        # so _release_job_resources won't reach it on its own.
         for my $res (@$resources) {
             my $rok  = eval { $res->release(id => $assign_id, job => $job); 1 };
             my $rerr = $@;
-            warn "failed to release resource '" . $res->resource_name . "' after spawn failure: $rerr"
+            warn "failed to release resource '" . $res->resource_name . "' after launch failure: $rerr"
                 unless $rok;
         }
-        die $spawn_err;
+        die $launch_err;
     }
-
-    $run->mark_running($job_id);
-
-    $self->{+RUNNING_JOBS}->{$job_id} = {
-        run                => $run,
-        job                => $job,
-        handle             => $handle,
-        pid                => $handle->pid,
-        started_at         => time,
-        assign_id          => $assign_id,
-        assigned_resources => $resources,
-    };
-
-    $self->register_worker("test-$job_id", $handle->pid)
-        if $self->can('register_worker');
 
     return $job_id;
 }

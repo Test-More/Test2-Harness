@@ -7,7 +7,7 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use Config;
 use POSIX qw/:sys_wait_h setpgid/;
-use Time::HiRes qw/time sleep/;
+use Time::HiRes qw/time/;
 use Scalar::Util qw/blessed/;
 use Scope::Guard ();
 use IO::Handle;
@@ -18,7 +18,7 @@ use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
 use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Collector::Handle;
-use Test2::Harness2::Util qw/mod2file parse_exit/;
+use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
 use Object::HashBase qw{
@@ -113,18 +113,14 @@ sub init {
         if @{$self->{+LOGGERS}} || $self->{+AUDITOR};
 
     # Load parser class if it's a class name
-    require(mod2file($self->{+PARSER}))
+    load_module($self->{+PARSER})
         if defined($self->{+PARSER}) && !ref $self->{+PARSER};
 }
 
 sub _load_logger_class {
-    my $class  = shift;
+    my $class = shift;
     my ($name) = @_;
-    my $file   = mod2file($name);
-    return if $INC{$file};
-    no strict 'refs';
-    return if %{"${name}::"};
-    require $file;
+    load_module($name);
 }
 
 sub _spec_class {
@@ -561,6 +557,13 @@ sub _init_event_sinks {
     $self->_instantiate_auditor();
     $self->_instantiate_loggers();
 
+    # Announce ourselves to the peer service before any loggers start,
+    # so the harness scheduler can track our pid (and start its pid-
+    # gone grace timer later) regardless of whether any loggers are
+    # configured. This is critical-path bookkeeping, not an
+    # informational log event.
+    $self->_send_collector_started;
+
     $_->startup($self) for @{$self->{+LOGGERS}};
     $self->{+_EVENT_LOGGERS} = [grep { $_->log_events } @{$self->{+LOGGERS}}];
 
@@ -582,13 +585,87 @@ sub _init_event_sinks {
     return $parser;
 }
 
-# Gather metadata from each instantiated logger, keyed by class so multiple
-# instances of the same class coexist, and fire a one-shot loggers_ready
-# message to the configured IPC peer. Fire-and-forget: we never block the
-# collector on delivery beyond a short wait for the peer to come up (the
-# service-interpose flow races the peer's own registration), and failures
-# are warned. The collector registers on the IPC bus under its job_id so
-# the receiving peer can identify which collector produced the message.
+# Lazy IPC handle for any message the collector needs to send directly
+# to its peer service. One handle per collector: registers the collector
+# on the IPC bus under its job_id so the peer can identify the sender.
+# The collector owns the critical lifecycle messages below so tests run
+# correctly with no loggers configured.
+sub ipc_handle {
+    my $self = shift;
+    return $self->{_ipc_handle} if $self->{_ipc_handle};
+
+    require IPC::Manager::Service::Handle;
+    my $handle = IPC::Manager::Service::Handle->new(
+        service_name => $self->{+IPC_PEER},
+        ipcm_info    => $self->{+IPCM_INFO},
+        name         => $self->{+JOB_ID},
+    );
+
+    # Wait briefly for the peer to register so the first message actually
+    # lands; this matters mainly in the service-interpose flow where the
+    # collector and the service it talks to are siblings racing through
+    # startup. If the peer never comes up we still return the handle and
+    # let individual sends fall through to the warn path, so regressions
+    # surface rather than silently swallow.
+    eval { $handle->ready(5); 1 };
+
+    return $self->{_ipc_handle} = $handle;
+}
+
+# Fire-and-forget send to the collector's peer service. Failures warn;
+# we never block the collector on delivery or propagate the exception,
+# since the collector's lifecycle must not depend on peer liveness.
+sub _send_peer_message {
+    my ($self, $content) = @_;
+
+    my $ok = eval {
+        my $handle = $self->ipc_handle;
+        $handle->client->send_message($self->{+IPC_PEER}, $content);
+        1;
+    };
+    my $err = $@;
+    warn "Collector IPC send failed (kind '" . ($content->{kind} // '?') . "'): $err"
+        unless $ok;
+
+    return;
+}
+
+# The collector-lifecycle critical messages. These MUST NOT move into a
+# logger: the harness scheduler uses them to track the collector pid
+# even when no loggers are configured, and whenever the collector ends
+# up in a process tree the harness cannot reap directly (a preload
+# stage launching tests, an orphaned descendant, ...). See
+# Test2::Harness2::run_on_general_message for the receiving side.
+sub _send_collector_started {
+    my $self = shift;
+    $self->_send_peer_message({
+        kind    => 'collector_started',
+        run_id  => $self->{+RUN_ID},
+        job_id  => $self->{+JOB_ID},
+        job_try => $self->{+JOB_TRY} // 0,
+        pid     => $$,
+    });
+    return;
+}
+
+sub _send_collector_exiting {
+    my $self = shift;
+    $self->_send_peer_message({
+        kind    => 'collector_exiting',
+        run_id  => $self->{+RUN_ID},
+        job_id  => $self->{+JOB_ID},
+        job_try => $self->{+JOB_TRY} // 0,
+        pid     => $$,
+    });
+    return;
+}
+
+# Gather metadata from each instantiated logger, keyed by class so
+# multiple instances of the same class coexist, and fire a one-shot
+# loggers_ready message to the configured IPC peer. This is still on
+# the collector (not a logger) because downstream consumers of the
+# service log need to know where the job's outputs live regardless of
+# which logger set a particular collector was given.
 sub _send_logger_metadata {
     my $self = shift;
 
@@ -605,35 +682,13 @@ sub _send_logger_metadata {
         push @{$loggers{$class}} => $meta;
     }
 
-    my $ok = eval {
-        require IPC::Manager::Service::Handle;
-        my $handle = IPC::Manager::Service::Handle->new(
-            service_name => $self->{+IPC_PEER},
-            ipcm_info    => $self->{+IPCM_INFO},
-            name         => $self->{+JOB_ID},
-        );
-
-        # Wait briefly for the peer to register so the message actually
-        # lands; this matters mainly in the service-interpose flow where
-        # the collector and the service it talks to are siblings racing
-        # through startup. If the peer never comes up we still try the
-        # send (and fall through to the warn path) so regressions are
-        # surfaced rather than silently swallowed.
-        $handle->ready(5);
-
-        $handle->client->send_message(
-            $self->{+IPC_PEER},
-            {
-                kind    => 'loggers_ready',
-                run_id  => $self->{+RUN_ID},
-                job_id  => $self->{+JOB_ID},
-                job_try => $self->{+JOB_TRY},
-                loggers => \%loggers,
-            },
-        );
-        1;
-    };
-    warn "Collector loggers_ready send failed: $@" unless $ok;
+    $self->_send_peer_message({
+        kind    => 'loggers_ready',
+        run_id  => $self->{+RUN_ID},
+        job_id  => $self->{+JOB_ID},
+        job_try => $self->{+JOB_TRY},
+        loggers => \%loggers,
+    });
 
     return;
 }
@@ -830,40 +885,12 @@ sub _finalize_collection {
 
     $_->shutdown($self) for @{$self->{+LOGGERS}};
 
-    # For test-job collectors (those with an auditor), wake the harness
-    # service's IPC loop with a job_complete_notify so the next
-    # run_on_all tick happens immediately instead of after the normal
-    # poll interval. The message itself is a no-op at the service side
-    # -- the wake-up IS the effect. Service-level collectors (no
-    # auditor) have no peer waiting on a per-job notification.
-    $self->_send_job_complete_notify if $self->{+AUDITOR};
-
-    return;
-}
-
-sub _send_job_complete_notify {
-    my $self = shift;
-
-    my $ok = eval {
-        require IPC::Manager::Service::Handle;
-        my $handle = IPC::Manager::Service::Handle->new(
-            service_name => $self->{+IPC_PEER},
-            ipcm_info    => $self->{+IPCM_INFO},
-            name         => $self->{+JOB_ID},
-        );
-
-        $handle->client->send_message(
-            $self->{+IPC_PEER},
-            {
-                kind    => 'job_complete_notify',
-                run_id  => $self->{+RUN_ID},
-                job_id  => $self->{+JOB_ID},
-                job_try => $self->{+JOB_TRY},
-            },
-        );
-        1;
-    };
-    warn "Collector job_complete_notify send failed: $@" unless $ok;
+    # Tell the peer service we are about to exit so the scheduler can
+    # arm its pid-gone grace timer immediately. Still critical path,
+    # still independent of whatever loggers were (or were not)
+    # configured. Fires after logger shutdown so any last logger
+    # messages flush first through the same shared handle.
+    $self->_send_collector_exiting;
 
     return;
 }
@@ -1291,7 +1318,7 @@ sub _kill_child {
     while (time - $start < $timeout) {
         my $rv = waitpid($pid, WNOHANG);
         return $? if $rv == $pid;
-        sleep(0.1);
+        tinysleep(0.1);
     }
 
     # Force kill

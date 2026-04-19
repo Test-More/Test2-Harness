@@ -11,10 +11,44 @@ use Test2::Util qw/try_sig_mask do_rename/;
 our @EXPORT_OK = qw{
     apply_encoding
     hub_truth
+    load_module
     mod2file
     parse_exit
+    tinysleep
     write_file_atomic
 };
+
+# Load a Perl module by its :: name, idempotently. Returns the module
+# name. Short-circuits when %INC already has the file or the package
+# stash is already populated, so repeated calls (or calls for modules
+# that were brought in by some other path) are cheap. Dies (via the
+# underlying require) if the module cannot be loaded.
+sub load_module {
+    my ($name) = @_;
+    croak "load_module: module name is required"
+        unless defined $name && length $name;
+
+    my $file = mod2file($name);
+    return $name if $INC{$file};
+    {
+        no strict 'refs';
+        return $name if %{"${name}::"};
+    }
+    require $file;
+    return $name;
+}
+
+# Short sub-second sleep that returns early when a signal arrives.
+# Time::HiRes::sleep retries internally on EINTR, so a long nap will
+# silently swallow signals; polling loops that want to react to
+# SIGCHLD / SIGTERM promptly should use this instead. Implemented
+# over four-arg select(), which returns -1 on EINTR.
+sub tinysleep {
+    my ($secs) = @_;
+    return if !defined $secs || $secs <= 0;
+    select(undef, undef, undef, $secs);
+    return;
+}
 
 sub mod2file {
     my ($mod) = @_;
@@ -120,6 +154,15 @@ C<$encoding> is false. Uses C<:utf8> for any C<utf-?8> spelling to avoid the
 thread segfault from C<:encoding(utf8)>; for any other encoding uses
 C<:encoding($encoding)>.
 
+=item $name = load_module($module_name)
+
+Load C<$module_name> via C<require>, idempotently. Short-circuits when
+C<%INC> already records the file or the package stash is populated, so
+repeated calls (or calls for modules pulled in by another path) do no
+work. Returns the module name on success; propagates the underlying
+C<require> exception on failure. Use this wherever the harness
+dynamically loads a class by string name.
+
 =item $path = mod2file($module_name)
 
 Convert a Perl module name (C<Foo::Bar::Baz>) to its C<%INC>-style relative
@@ -149,6 +192,16 @@ Decode a wait-status integer (typically C<$?>) into a hashref:
 =back
 
 Croaks if C<$wstat> is undefined.
+
+=item tinysleep($seconds)
+
+Sub-second sleep that returns early when a signal arrives. Backed by
+four-arg C<select()>, which returns C<-1> on C<EINTR>, so a signal
+received mid-nap causes an immediate return instead of being delayed
+by the rest of the interval. Prefer this over C<Time::HiRes::sleep>
+inside polling loops (C<waitpid> reapers, TERM-then-KILL escalation,
+readiness waits) where prompt signal response matters. Returns
+nothing. A non-positive or undefined argument is a no-op.
 
 =item write_file_atomic($path, @content)
 

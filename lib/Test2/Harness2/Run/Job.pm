@@ -8,7 +8,9 @@ use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
 use Test2::Util::UUID qw/gen_uuid/;
 
-use Test2::Harness2::TestFile;
+use Role::Tiny ();
+
+use Test2::Harness2::Role::TestFile;
 
 use Object::HashBase qw{
     <job_id
@@ -26,24 +28,28 @@ sub init {
     my $tf = $self->{+TEST_FILE};
     croak "'test_file' is a required attribute" unless defined $tf;
 
-    # Accept either a TestFile instance or a bare path (string) for
-    # convenience. Anything else is a bug on the caller's side.
     if (blessed($tf)) {
-        croak "'test_file' must be a Test2::Harness2::TestFile, got a " . ref($tf)
-            unless $tf->isa('Test2::Harness2::TestFile');
+        croak "'test_file' must consume Test2::Harness2::Role::TestFile, got a " . ref($tf)
+            unless Role::Tiny::does_role($tf, 'Test2::Harness2::Role::TestFile');
     }
     elsif (ref($tf)) {
-        croak "'test_file' must be a Test2::Harness2::TestFile or a path string";
+        croak "'test_file' must consume Test2::Harness2::Role::TestFile or be a path string";
     }
     else {
-        $self->{+TEST_FILE} = Test2::Harness2::TestFile->new(file => $tf);
+        my $class = $Test2::Harness2::Role::TestFile::DEFAULT_CLASS
+            or croak "cannot wrap a path string: no \$Test2::Harness2::Role::TestFile::DEFAULT_CLASS is set" . " (load a concrete TestFile class first)";
+
+        $self->{+TEST_FILE} = $class->new(file => $tf);
+
+        croak "'$class' does not consume Test2::Harness2::Role::TestFile"
+            unless Role::Tiny::does_role($self->{+TEST_FILE}, 'Test2::Harness2::Role::TestFile');
     }
 
     $self->{+JOB_ID}  //= gen_uuid();
     $self->{+JOB_TRY} //= 0;
 }
 
-sub test_file_abs { $_[0]->{+TEST_FILE}->file }
+sub test_file_abs { $_[0]->{+TEST_FILE}->absolute }
 sub test_file_rel { $_[0]->{+TEST_FILE}->relative }
 
 sub TO_JSON { return {%{$_[0]}} }
@@ -63,14 +69,15 @@ Test2::Harness2::Run::Job - A single test job within a run
 =head1 SYNOPSIS
 
     use Test2::Harness2::Run::Job;
-    use Test2::Harness2::TestFile;
+    use My::TestFile;    # any class consuming Test2::Harness2::Role::TestFile
 
     my $job = Test2::Harness2::Run::Job->new(
-        test_file => Test2::Harness2::TestFile->new(file => 't/foo.t'),
+        test_file => My::TestFile->new(file => 't/foo.t'),
         run_id    => $run_id,
     );
 
-    # Convenience: path strings are wrapped in a default TestFile.
+    # Convenience: path strings are wrapped via
+    # $Test2::Harness2::Role::TestFile::DEFAULT_CLASS when one is set.
     my $job2 = Test2::Harness2::Run::Job->new(
         test_file => 't/foo.t',
         run_id    => $run_id,
@@ -93,8 +100,10 @@ object.
 
 =item test_file (required)
 
-A L<Test2::Harness2::TestFile>. A plain path string is accepted as a
-convenience and will be wrapped in a default C<TestFile> automatically.
+An object consuming L<Test2::Harness2::Role::TestFile>. A plain path
+string is accepted as a convenience and is wrapped via
+C<$Test2::Harness2::Role::TestFile::DEFAULT_CLASS> (the caller must have
+loaded a concrete class that registered itself in that slot).
 
 =item run_id (required)
 
@@ -116,7 +125,7 @@ Retry counter; defaults to 0.
 
 =item $path = $job->test_file_abs
 
-Absolute path of the test file, equivalent to C<< $job->test_file->file >>.
+Absolute path of the test file, equivalent to C<< $job->test_file->absolute >>.
 
 =item $path = $job->test_file_rel
 

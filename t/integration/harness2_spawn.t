@@ -2,6 +2,9 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use Time::HiRes qw/sleep/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 use Test2::Harness2;
 
 my $dir = tempdir(CLEANUP => 1);
@@ -14,7 +17,7 @@ close $fh;
 
 my $spawn = Test2::Harness2->spawn(workdir => $dir);
 isa_ok($spawn, ['Test2::Harness2::Spawn']);
-ok($spawn->pid, 'has pid');
+ok($spawn->pid,          'has pid');
 ok(kill(0, $spawn->pid), 'service is alive');
 
 my $queued = $spawn->queue_test_run(files => [$test_file]);

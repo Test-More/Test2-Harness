@@ -3,6 +3,9 @@ use File::Temp qw/tempdir/;
 use POSIX qw/:sys_wait_h _exit/;
 use Time::HiRes qw/sleep/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 use Test2::Harness2;
 
 sub wait_until {

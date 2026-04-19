@@ -9,8 +9,10 @@ use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
 
+use Role::Tiny ();
+
 use Test2::Harness2::Run::Job;
-use Test2::Harness2::TestFile;
+use Test2::Harness2::Role::TestFile;
 
 use Object::HashBase qw{
     <run_id
@@ -48,19 +50,26 @@ sub from_files {
         my $input = $_;
 
         my $tf;
-        if (blessed($input) && $input->isa('Test2::Harness2::TestFile')) {
+        if (blessed($input) && Role::Tiny::does_role($input, 'Test2::Harness2::Role::TestFile')) {
             $tf = $input;
         }
-        elsif (ref($input) eq 'HASH') {
-            # Rehydrate an attribute hash (e.g. after JSON round-trip through
-            # the IPC queue_test_run handler) back into a TestFile.
-            $tf = Test2::Harness2::TestFile->new(%$input);
+        elsif (blessed($input)) {
+            croak "files entries must consume Test2::Harness2::Role::TestFile, got a " . ref($input);
         }
-        elsif (ref($input)) {
-            croak "files entries must be TestFile objects, hashrefs, or path strings";
+        elsif (ref($input) eq 'HASH' || !ref($input)) {
+            my $class = $Test2::Harness2::Role::TestFile::DEFAULT_CLASS
+                or croak "cannot wrap a " . (ref($input) ? "hashref" : "path string") . ": no \$Test2::Harness2::Role::TestFile::DEFAULT_CLASS is set" . " (load a concrete TestFile class first)";
+
+            $tf =
+                ref($input) eq 'HASH'
+                ? $class->new(%$input)
+                : $class->new(file => $input);
+
+            croak "'$class' does not consume Test2::Harness2::Role::TestFile"
+                unless Role::Tiny::does_role($tf, 'Test2::Harness2::Role::TestFile');
         }
         else {
-            $tf = Test2::Harness2::TestFile->new(file => $input);
+            croak "files entries must consume Test2::Harness2::Role::TestFile, be a hashref, or a path string";
         }
 
         Test2::Harness2::Run::Job->new(
@@ -146,7 +155,8 @@ UUID identifying this run (auto-generated if not supplied).
 
 =item jobs
 
-Arrayref of L<Test2::Harness2::Run::Job> objects.
+Arrayref of L<Test2::Harness2::Run::Job> objects. Each job carries a
+L<Test2::Harness2::Role::TestFile>-consuming value object.
 
 =item created_at
 
@@ -180,8 +190,24 @@ and tears them down when the run completes.
 
 =item $run = Test2::Harness2::Run->from_files(files => \@files, %opts)
 
-Construct a run from a list of test file paths.  Each file becomes one
-L<Test2::Harness2::Run::Job>.
+Construct a run from a list of C<files>. Each entry becomes one
+L<Test2::Harness2::Run::Job>. Entries may be:
+
+=over 4
+
+=item * an object consuming L<Test2::Harness2::Role::TestFile>
+
+=item * a hashref of attributes (rehydrated via
+C<$Test2::Harness2::Role::TestFile::DEFAULT_CLASS>)
+
+=item * a path string (wrapped via the same default class)
+
+=back
+
+Hash/string entries require a concrete TestFile class to be loaded and
+registered as
+C<$Test2::Harness2::Role::TestFile::DEFAULT_CLASS>; otherwise C<from_files>
+croaks.
 
 =item $run->mark_running($job_id)
 

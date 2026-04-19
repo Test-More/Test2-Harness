@@ -1,6 +1,9 @@
 use Test2::V0;
-use Test2::Harness2::Run;
+
+use lib 't/lib';
 use Test2::Harness2::TestFile;
+
+use Test2::Harness2::Run;
 
 subtest 'from_files builds jobs with inherited run_id' => sub {
     my $run = Test2::Harness2::Run->from_files(
@@ -100,7 +103,7 @@ subtest 'from_files rejects non-TestFile/non-hash refs' => sub {
     my $ok  = eval { Test2::Harness2::Run->from_files(files => [\'scalar-ref']); 1 };
     my $err = $@;
     ok(!$ok, 'croaked on unexpected ref');
-    like($err, qr/TestFile/);
+    like($err, qr/Role::TestFile/);
 };
 
 subtest 'mark_skipped moves pending -> done without transitioning through running' => sub {

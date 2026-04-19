@@ -6,6 +6,9 @@ use File::Spec ();
 use POSIX qw/WNOHANG/;
 use Time::HiRes qw/sleep/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 # The jump_to subtest drives the interpose path with a stub ipcm_info; the
 # collector would otherwise try to talk to a real IPC bus on startup and
 # leak "loggers_ready send failed" warnings onto STDERR. Stubbing the handle
@@ -21,7 +24,7 @@ BEGIN {
     *IPC::Manager::Service::Handle::client = sub {
         return bless {}, 'T2H2_Harness2Test_NoopClient';
     };
-    *IPC::Manager::Service::Handle::ready   = sub { 1 };
+    *IPC::Manager::Service::Handle::ready       = sub { 1 };
     *T2H2_Harness2Test_NoopClient::send_message = sub { return };
     *T2H2_Harness2Test_NoopClient::disconnect   = sub { return };
 }

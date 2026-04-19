@@ -4,6 +4,9 @@ use File::Path qw/make_path/;
 use Cpanel::JSON::XS qw/decode_json/;
 use POSIX qw/_exit/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 use Test2::Harness2;
 
 my $dir = tempdir(CLEANUP => 1);

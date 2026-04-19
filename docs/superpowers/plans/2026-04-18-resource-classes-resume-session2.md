@@ -182,11 +182,11 @@ policy can consult it.
 All three still `croak "not implemented yet"` on runtime hooks.
 - **Memory** (easiest): read `MemAvailable` from `/proc/meminfo`.
   Jobs declare memory need via a new TestFile attribute or a
-  per-resource kwarg on `available` (prefer the latter). `assign`
+  per-resource named argument on `available` (prefer the latter). `assign`
   should reserve a tracked counter so a burst of launches doesn't
   each see the same headroom.
 - **Disk**: `Filesys::Df` on a declared mountpoint, or shell out
-  to `df -Pk`. `{mount => '/tmp', need => 500_000_000}` kwargs on
+  to `df -Pk`. `{mount => '/tmp', need => 500_000_000}` arguments on
   `available`.
 - **SharedJobs**: port `legacy/lib/Test2/Harness/Runner/Resource/
   SharedJobSlots/{.pm,Config.pm,State.pm}`. **Do not** apply the
@@ -270,12 +270,12 @@ payload. Resource classes have no `from_json` / `new_from_json`.
 classes and accept `resources => [{class => '...', ...}]` in the
 handler.
 
-### Test stubs accept surplus kwargs (I5)
+### Test stubs accept surplus named arguments (I5)
 
 `Test::Restart::Res` / `Test::RunRes::Res` inline test resources
-silently absorb any kwargs the harness might add later.
+silently absorb any named arguments the harness might add later.
 **Fix:** `croak "unexpected args: @{[sort keys %p]}"` after
-filtering known kwargs.
+filtering known arguments.
 
 ### Pre-existing podchecker warning
 
@@ -347,7 +347,7 @@ visible here.
 - **String paths auto-wrap**: `Run::Job` and `Run::from_files`
   accept bare path strings for caller convenience.
 - **Restart-flag authority**: the method's return value wins. The
-  `restart` kwarg to `track_resource_service` is advisory; the
+  `restart` argument to `track_resource_service` is advisory; the
   harness authoritatively rewrites it in `_invoke_service_method`
   based on the return code. Only newly-tracked entries are
   rewritten, using a pre-call snapshot.

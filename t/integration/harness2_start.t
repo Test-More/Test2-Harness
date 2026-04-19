@@ -4,6 +4,9 @@ use File::Path qw/make_path/;
 use Cpanel::JSON::XS qw/decode_json/;
 use POSIX qw/_exit/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+
 use Test2::Harness2;
 
 my $dir = tempdir(CLEANUP => 1);
@@ -23,7 +26,7 @@ my $pid = fork // die $!;
 if (!$pid) {
     Test2::Harness2->start(
         workdir                  => $dir,
-        test_run                 => {files => [$test_file]},
+        test_run                 => {files => [Test2::Harness2::TestFile->new(file => $test_file)]},
         finish_after_initial_run => 1,
     );
     POSIX::_exit(0);

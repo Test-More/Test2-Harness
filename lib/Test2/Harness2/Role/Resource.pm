@@ -251,11 +251,22 @@ harness introspects these via L</service_methods> at initialization (for
 harness-global resources) or at run start (for per-run resources) and
 invokes each.
 
-The method is invoked with these keyword arguments:
+The method is invoked with these named arguments:
 
-    harness => $harness,          # the Test2::Harness2 instance
-    scope   => 'global' | 'run',  # global init vs per-run startup
-    run     => $run,              # only present when scope is 'run'
+    harness  => $harness,          # the Test2::Harness2 instance
+    scope    => 'global' | 'run',  # global init vs per-run startup
+    name     => $name,             # service name (method name minus 'service_' by default)
+    log_path => $path,             # pre-created JSONL log file the harness has chosen
+    run      => $run,              # only present when scope is 'run'
+
+The harness guarantees that the C<name> is unique within its scope
+(global scope across all global services, and per-run within each run;
+the harness's own C<name> is reserved in the global scope). The
+C<log_path> points at the file C<services/E<lt>nameE<gt>.jsonl> under
+the workdir for global services, or C<runs/E<lt>run_idE<gt>/services/E<lt>nameE<gt>.jsonl>
+for per-run services. The file exists (empty) by the time the method is
+called, so a resource that spawns an external process can freely redirect
+its child's stdout / stderr to C<log_path>.
 
 The method is responsible for deciding whether a service is needed and, if
 so, for forking the subprocess and reporting its pid to the harness by
@@ -302,7 +313,7 @@ this C<(resource, method)> pair is overwritten with the returned code.
 A resource author who passes C<< restart =E<gt> 1 >> to C<track_resource_service>
 but returns C<0> from the method will have their tracked entry
 authoritatively reset to C<restart =E<gt> 0>. Rely on the return value, not
-the kwarg.
+the C<restart> argument.
 
 =head2 Restart semantics
 

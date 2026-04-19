@@ -715,7 +715,9 @@ sub run_on_pid {
     my $status = $self->_invoke_service_method(
         $res, $method,
         scope => $svc->{scope},
-        (defined $svc->{run} ? (run => $svc->{run}) : ()),
+        (defined $svc->{name}     ? (name     => $svc->{name})     : ()),
+        (defined $svc->{log_path} ? (log_path => $svc->{log_path}) : ()),
+        (defined $svc->{run}      ? (run      => $svc->{run})      : ()),
     );
 
     # Method died: already warned inside the helper. Resource stays marked
@@ -819,15 +821,142 @@ sub _start_resource_services {
     my ($self, $resources, %opts) = @_;
 
     my $scope = $opts{scope} // 'global';
+    my $run   = $opts{run};
 
+    # Walk the resources once to derive service names and validate
+    # uniqueness BEFORE invoking any service_* method. We never want to
+    # fork a subprocess only to discover its log file would collide with
+    # another service's. Build the ordered start list here and hand it to
+    # _invoke_service_method one entry at a time.
+    my @plan;
+    my %seen;
     for my $res (@$resources) {
         for my $method ($res->service_methods) {
-            $self->_invoke_service_method(
-                $res, $method,
+            my $name = _resource_service_name_from_method($method);
+
+            croak sprintf(
+                "resource '%s' service '%s' collides with in-batch service '%s' (name '%s' in %s scope)",
+                $res->resource_name,  $method,
+                $seen{$name}{method}, $name,
+                $scope,
+            ) if $seen{$name};
+
+            $self->_assert_service_name_unused(
+                name  => $name,
                 scope => $scope,
-                (exists $opts{run} ? (run => $opts{run}) : ()),
+                run   => $run,
+                (resource => $res, method => $method),
             );
+
+            my $log_path = $self->_resource_service_log_path(
+                name  => $name,
+                scope => $scope,
+                run   => $run,
+            );
+            _touch_log_file($log_path);
+
+            $seen{$name} = {resource => $res, method => $method};
+            push @plan => {
+                resource => $res,
+                method   => $method,
+                name     => $name,
+                log_path => $log_path,
+            };
         }
+    }
+
+    for my $entry (@plan) {
+        $self->_invoke_service_method(
+            $entry->{resource}, $entry->{method},
+            name     => $entry->{name},
+            log_path => $entry->{log_path},
+            scope    => $scope,
+            (defined $run ? (run => $run) : ()),
+        );
+    }
+
+    return;
+}
+
+# service_foo -> foo. Consumers could theoretically declare a method
+# literally named 'service_' (empty suffix); we refuse that here because
+# the resulting empty name would create a bare '.jsonl' file.
+sub _resource_service_name_from_method {
+    my ($method) = @_;
+    (my $name = $method) =~ s/^service_//;
+    croak "cannot derive service name from method '$method'"
+        unless length $name;
+    return $name;
+}
+
+sub _resource_service_log_path {
+    my ($self, %p) = @_;
+
+    my $name  = $p{name}  // croak "'name' is required";
+    my $scope = $p{scope} // 'global';
+    my $run   = $p{run};
+
+    my $dir = $scope eq 'run'
+        ? do {
+        croak "run-scoped service log path requires 'run'" unless ref $run;
+        my $rid = $run->run_id;
+        join '/', $self->{+WORKDIR}, 'runs', $rid, 'services';
+        }
+        : join '/', $self->{+WORKDIR}, 'services';
+
+    make_path($dir) unless -d $dir;
+
+    return "$dir/$name.jsonl";
+}
+
+sub _touch_log_file {
+    my ($path) = @_;
+    return if -e $path;
+    open my $fh, '>>', $path or croak "open '$path': $!";
+    close $fh;
+    return;
+}
+
+# Reject a service name that would collide with another service in the
+# same scope. The harness's own NAME is reserved in the global scope
+# because its logger already owns services/<name>.jsonl.
+sub _assert_service_name_unused {
+    my ($self, %p) = @_;
+
+    my $name  = $p{name}  // croak "'name' is required";
+    my $scope = $p{scope} // 'global';
+    my $run   = $p{run};
+
+    if ($scope eq 'global' && defined $self->{+NAME} && $self->{+NAME} eq $name) {
+        croak sprintf(
+            "service name '%s' is reserved by the harness itself (global scope)",
+            $name,
+        );
+    }
+
+    my $services = $self->{+RESOURCE_SERVICES} // {};
+    for my $svc (values %$services) {
+        my $svc_scope = $svc->{scope} // 'global';
+        next unless ($svc->{name} // '') eq $name;
+        next unless $svc_scope eq $scope;
+        if ($scope eq 'run') {
+            next unless ref($svc->{run}) && ref($run) && $svc->{run} == $run;
+        }
+
+        # Same (resource, method) is the restart case -- we'll drop the
+        # old entry before re-invoking, so it's not a real collision.
+        next
+            if defined $p{resource}
+            && defined $p{method}
+            && $svc->{resource} == $p{resource}
+            && ($svc->{method} // '') eq $p{method};
+
+        croak sprintf(
+            "service name '%s' is already in use in %s scope%s",
+            $name,
+            $scope,
+            ($scope eq 'run' ? ' for this run' : ''),
+        );
     }
 
     return;
@@ -843,10 +972,28 @@ sub _start_resource_services {
 # pid.
 #
 # Enforces the POD contract that the restart flag on any newly-tracked
-# service entry is the return value of the method, not the kwarg the
-# author happened to pass.
+# service entry is the return value of the method, not the named
+# argument the author happened to pass.
 sub _invoke_service_method {
     my ($self, $res, $method, %opts) = @_;
+
+    my $scope = $opts{scope} // 'global';
+    my $run   = $opts{run};
+
+    # Resolve and prepare the service's name + log path, defaulting to
+    # the method-derived name and the path under workdir. The caller
+    # (_start_resource_services or run_on_pid restart) may pass them
+    # pre-computed to avoid a redundant make_path/touch.
+    my $name     = $opts{name}     // _resource_service_name_from_method($method);
+    my $log_path = $opts{log_path} // do {
+        my $p = $self->_resource_service_log_path(
+            name  => $name,
+            scope => $scope,
+            run   => $run,
+        );
+        _touch_log_file($p);
+        $p;
+    };
 
     # Snapshot pre-existing tracked pids for this (resource, method) pair
     # BEFORE the method runs. Any tracked entry that existed before the
@@ -861,9 +1008,11 @@ sub _invoke_service_method {
     my $status;
     my $ok = eval {
         $status = $res->$method(
-            harness => $self,
-            scope   => $opts{scope} // 'global',
-            (exists $opts{run} ? (run => $opts{run}) : ()),
+            harness  => $self,
+            scope    => $scope,
+            name     => $name,
+            log_path => $log_path,
+            (defined $run ? (run => $run) : ()),
         );
         1;
     };
@@ -877,12 +1026,18 @@ sub _invoke_service_method {
 
     # Service started. Enforce the POD contract on newly-tracked entries:
     # the restart flag is the return value of the method, not whatever
-    # kwarg the author happened to pass to track_resource_service.
+    # named argument the author happened to pass to track_resource_service.
+    # Stamp the resolved name + log_path on any entry that didn't get
+    # them explicitly from the resource; this keeps later status reports
+    # and restart paths coherent even when a resource author forgot to
+    # echo those arguments back.
     for my $svc (values %{$self->{+RESOURCE_SERVICES} // {}}) {
         next unless $svc->{resource} == $res;
         next unless defined $svc->{method} && $svc->{method} eq $method;
         next if $pre_existing{$svc->{pid}};
         $svc->{restart} = $status ? 1 : 0;
+        $svc->{name}     //= $name;
+        $svc->{log_path} //= $log_path;
     }
 
     return $status;
@@ -894,6 +1049,38 @@ sub track_resource_service {
     my $pid = $p{pid}      or croak "'pid' is required";
     my $res = $p{resource} or croak "'resource' is required";
 
+    my $scope = $p{scope} // 'global';
+    my $run   = $p{run};
+
+    # Derive the service's public name either from the caller's argument
+    # or from the method name (service_foo -> foo). Every tracked entry
+    # is expected to carry a name; the name maps 1:1 to a log file path.
+    my $name = $p{name};
+    if (!defined $name && defined $p{method}) {
+        $name = _resource_service_name_from_method($p{method});
+    }
+    croak "cannot track a resource service without a 'name' (and no 'method' to derive one from)"
+        unless defined $name && length $name;
+
+    # Last-resort name-uniqueness check. _start_resource_services does
+    # the same validation pre-invoke, but a resource author who calls
+    # us directly (bypassing the service_* discovery path) still has to
+    # play by the same rules.
+    $self->_assert_service_name_unused(
+        name     => $name,
+        scope    => $scope,
+        run      => $run,
+        resource => $res,
+        (defined $p{method} ? (method => $p{method}) : ()),
+    );
+
+    my $log_path = $p{log_path} // $self->_resource_service_log_path(
+        name  => $name,
+        scope => $scope,
+        run   => $run,
+    );
+    _touch_log_file($log_path);
+
     # NOTE: the caller may seed {restart} here, but the authoritative value
     # is set by _invoke_service_method based on the service method's
     # return code (0 vs 1). This keeps the POD contract enforced in one
@@ -902,11 +1089,13 @@ sub track_resource_service {
         pid        => $pid,
         resource   => $res,
         method     => $p{method},
-        scope      => $p{scope} // 'global',
+        name       => $name,
+        log_path   => $log_path,
+        scope      => $scope,
         restart    => $p{restart} ? 1 : 0,
         started_at => $p{started_at} // time,
         attempts   => $p{attempts}   // 1,
-        (defined $p{run} ? (run => $p{run}) : ()),
+        (defined $run ? (run => $run) : ()),
     };
 
     return $pid;

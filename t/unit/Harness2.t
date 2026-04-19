@@ -2,8 +2,29 @@ use Test2::V0;
 use Config;
 use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
+use File::Spec ();
 use POSIX qw/WNOHANG/;
 use Time::HiRes qw/sleep/;
+
+# The jump_to subtest drives the interpose path with a stub ipcm_info; the
+# collector would otherwise try to talk to a real IPC bus on startup and
+# leak "loggers_ready send failed" warnings onto STDERR. Stubbing the handle
+# class keeps the unit test clean. Inherited through fork into the service
+# and collector processes.
+BEGIN {
+    require IPC::Manager::Service::Handle;
+    no warnings 'once', 'redefine';
+    *IPC::Manager::Service::Handle::new = sub {
+        my $class = shift;
+        return bless {}, $class;
+    };
+    *IPC::Manager::Service::Handle::client = sub {
+        return bless {}, 'T2H2_Harness2Test_NoopClient';
+    };
+    *IPC::Manager::Service::Handle::ready   = sub { 1 };
+    *T2H2_Harness2Test_NoopClient::send_message = sub { return };
+    *T2H2_Harness2Test_NoopClient::disconnect   = sub { return };
+}
 
 use Test2::Harness2;
 use Test2::Harness2::Run;
@@ -16,23 +37,41 @@ subtest 'constructs with valid workdir' => sub {
     is($h->workdir, $dir,      'workdir stored');
     is($h->name,    'harness', 'name defaults to "harness"');
     like($h->job_id, qr/^[0-9A-F-]{36}$/i, 'job_id auto-generated');
-    ok(-d "$dir/services", 'services/ dir created');
+    ok(-d "$dir/logs/services", 'logs/services/ dir created');
 };
 
-subtest 'rejects existing services/ directory' => sub {
+subtest 'rejects non-empty logs/ directory but accepts an empty one' => sub {
     my $dir = tempdir(CLEANUP => 1);
-    make_path("$dir/services");
+    make_path("$dir/logs");
+    open my $fh, '>', "$dir/logs/stale.jsonl" or die $!;
+    close $fh;
+
     my $ok  = eval { Test2::Harness2->new(workdir => $dir); 1 };
     my $err = $@;
-    ok(!$ok, 'constructor dies');
-    like($err, qr/services/, 'error mentions services');
+    ok(!$ok, 'constructor dies when logs/ has leftover content');
+    like($err, qr/not empty/, 'error explains what is wrong');
+
+    # An empty existing logs/ directory should be accepted.
+    my $dir2 = tempdir(CLEANUP => 1);
+    make_path("$dir2/logs");
+    my $h = eval { Test2::Harness2->new(workdir => $dir2) };
+    ok($h, 'empty existing logs/ dir is accepted') or diag $@;
+    ok(-d "$dir2/logs/services", 'services subdir created under the empty logs/');
 };
 
-subtest 'rejects existing runs/ directory' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    make_path("$dir/runs");
-    my $ok = eval { Test2::Harness2->new(workdir => $dir); 1 };
-    ok(!$ok, 'constructor dies on pre-existing runs/');
+subtest 'logdir attribute accepts absolute and relative paths' => sub {
+    my $wd  = tempdir(CLEANUP => 1);
+    my $alt = tempdir(CLEANUP => 1);
+
+    my $h = Test2::Harness2->new(workdir => $wd, logdir => $alt);
+    is($h->logdir, $alt, 'absolute logdir used verbatim');
+    ok(-d "$alt/services", 'services subdir created in absolute logdir');
+
+    my $wd2 = tempdir(CLEANUP => 1);
+    my $h2  = Test2::Harness2->new(workdir => $wd2, logdir => 'custom-logs');
+    is($h2->logdir, File::Spec->catdir($wd2, 'custom-logs'),
+        'relative logdir is resolved under workdir');
+    ok(-d "$wd2/custom-logs/services", 'services subdir created under relative logdir');
 };
 
 subtest 'tolerates other files in workdir' => sub {
@@ -86,6 +125,89 @@ subtest 'queue_test_run uses provided run_id when given' => sub {
     my $h   = Test2::Harness2->new(workdir => $dir);
     my $res = $h->request_handler_queue_test_run({files => ['t/x.t'], run_id => 'my-id'});
     is($res->{run_id}, 'my-id');
+};
+
+subtest 'queue_test_run writes the initial runs/<id>.json snapshot' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $res = $h->request_handler_queue_test_run(
+        {files => ['t/first.t', 't/second.t']},
+    );
+    ok($res->{ok}, 'queued');
+
+    my $path = "$dir/logs/runs/$res->{run_id}.json";
+    ok(-f $path, 'logs/runs/<id>.json written at queue time');
+
+    require Test2::Harness2::Util::JSON;
+    my $snapshot = Test2::Harness2::Util::JSON::decode_json_file($path);
+    is($snapshot->{run_id}, $res->{run_id}, 'snapshot carries run_id');
+    is(scalar @{$snapshot->{pending}}, 2, 'all jobs pending at queue time');
+    is(scalar @{$snapshot->{done}},    0, 'nothing done yet');
+    is(scalar @{$snapshot->{jobs}},    2, 'jobs inlined via TO_JSON');
+};
+
+subtest 'run completion atomic-swaps the runs/<id>.json snapshot' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $run = Test2::Harness2::Run->from_files(files => ['done.t']);
+    push @{$h->{queue}} => $run;
+    my ($job) = @{$run->jobs};
+    $run->mark_running($job->job_id);
+
+    # Write the "initial" snapshot as queue_test_run would do.
+    $h->_write_run_snapshot($run);
+
+    my $path = "$dir/logs/runs/" . $run->run_id . ".json";
+    require Test2::Harness2::Util::JSON;
+    my $before = Test2::Harness2::Util::JSON::decode_json_file($path);
+    is(scalar @{$before->{running}}, 1, 'before completion: one running');
+    is(scalar @{$before->{done}},    0, 'before completion: none done');
+
+    my $fake_handle = bless {pid => 1, exit_code => 0},
+        'Test2::Harness2::Collector::Handle';
+    $h->{current} = {
+        run        => $run,
+        job        => $job,
+        handle     => $fake_handle,
+        pid        => 1,
+        started_at => time,
+    };
+
+    $h->_check_current_completion;
+
+    my $after = Test2::Harness2::Util::JSON::decode_json_file($path);
+    is(scalar @{$after->{running}}, 0, 'after completion: running empty');
+    is(scalar @{$after->{done}},    1, 'after completion: job moved to done');
+};
+
+subtest 'queue_test_run emits run_queued and job_queued events' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my @emitted;
+    no warnings 'redefine';
+    local *Test2::Harness2::_emit_service_event = sub {
+        my ($self, %fields) = @_;
+        push @emitted => \%fields;
+    };
+
+    $h->request_handler_queue_test_run({files => ['t/x.t', 't/y.t']});
+
+    is(scalar @emitted, 3, 'one run_queued + two job_queued events');
+    is($emitted[0]{kind}, 'run_queued', 'first event is run_queued');
+    ok($emitted[0]{run_data}, 'run_queued has run_data');
+    ok($emitted[0]{run_data}{run_id}, 'run_data carries run_id');
+    ok($emitted[0]{run_data}{jobs},   'run_data inlines jobs');
+
+    is($emitted[1]{kind}, 'job_queued', 'second event is job_queued');
+    ok($emitted[1]{job_data}{job_id}, 'job_data carries job_id');
+    ok($emitted[1]{job_data}{run_id}, 'job_data carries run_id');
+    is($emitted[1]{job_data}{test_file}, 't/x.t', 'job_data carries test_file');
+
+    is($emitted[2]{kind}, 'job_queued', 'third event is job_queued');
+    is($emitted[2]{job_data}{test_file}, 't/y.t', 'second job_data carries test_file');
 };
 
 subtest 'queue_test_run rejects when state is not running' => sub {
@@ -167,10 +289,11 @@ subtest 'run_on_all dispatches next pending job to a Collector' => sub {
     is($args{new_pgroup},             1,         'new_pgroup set');
     is($args{parent_pids},            [$$],      'parent_pids includes service pid');
     is($args{env_vars}{T2_FORMATTER}, 'Stream2', 'T2_FORMATTER set');
-    like($args{loggers}[0][2], qr{\Q$dir\E/runs/.+/.+/0\.jsonl}, 'per-job JSONL path');
+    like($args{loggers}[0][2], qr{\Q$dir\E/logs/runs/.+/.+/0\.jsonl}, 'per-job JSONL path');
     like($args{run_id},        qr/^[0-9A-F-]{36}$/i,             'run_id passed to collector');
     like($args{job_id},        qr/^[0-9A-F-]{36}$/i,             'job_id passed to collector');
     is($args{job_try}, 0, 'job_try passed as 0 to collector');
+    is($args{ipc_peer}, 'harness', 'ipc_peer set to service name so collector can send loggers_ready');
     ok(!exists $args{env_vars}{T2_IPC_INFO}, 'ipcm_info not in env_vars (not passed to test process)');
     ok($h->{current},                        'current populated');
     is($h->{current}{pid}, 99999, 'current.pid set from handle');
@@ -215,6 +338,111 @@ subtest 'run_on_all detects collector exit and advances queue' => sub {
 
     ok(!$h->{current}, 'current cleared after completion');
     is(scalar @{$run->done}, 1, 'job marked done');
+};
+
+subtest 'run_on_all emits run_started + job_started for the first job' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    $h->request_handler_queue_test_run({files => ['first.t']});
+
+    my @emitted;
+    my $fake_handle = bless {pid => 99999}, 'Test2::Harness2::Collector::Handle';
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::Collector::spawn = sub { return $fake_handle };
+        local *Test2::Harness2::_emit_service_event = sub {
+            my ($self, %fields) = @_;
+            push @emitted => \%fields;
+        };
+        $h->run_on_all({});
+    }
+
+    my @kinds = map { $_->{kind} } @emitted;
+    ok((grep { $_ eq 'run_started' } @kinds), 'run_started emitted');
+    ok((grep { $_ eq 'job_started' } @kinds), 'job_started emitted');
+
+    my ($rs) = grep { $_->{kind} eq 'run_started' } @emitted;
+    is($rs->{run_data}, {run_id => $h->{queue}[0]->run_id}, 'run_started carries only run_id');
+
+    my ($js) = grep { $_->{kind} eq 'job_started' } @emitted;
+    ok($js->{job_info}{run_id},  'job_started carries run_id');
+    ok($js->{job_info}{job_id},  'job_started carries job_id');
+    is($js->{job_info}{job_try}, 0, 'job_started carries job_try=0');
+};
+
+subtest '_check_current_completion emits job_completed and run_ended' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $run = Test2::Harness2::Run->from_files(files => ['done.t']);
+    push @{$h->{queue}} => $run;
+    my ($job) = @{$run->jobs};
+    $run->mark_running($job->job_id);
+
+    my $fake_handle = bless {pid => 1, exit_code => 0}, 'Test2::Harness2::Collector::Handle';
+    $h->{current} = {
+        run        => $run,
+        job        => $job,
+        handle     => $fake_handle,
+        pid        => 1,
+        started_at => time,
+    };
+
+    my @emitted;
+    no warnings 'redefine';
+    local *Test2::Harness2::_emit_service_event = sub {
+        my ($self, %fields) = @_;
+        push @emitted => \%fields;
+    };
+
+    $h->_check_current_completion;
+
+    my @kinds = map { $_->{kind} } @emitted;
+    is(\@kinds, ['job_completed', 'run_ended'], 'both completion events in order');
+
+    my $jc = $emitted[0];
+    is($jc->{job_info}{run_id},  $run->run_id, 'job_completed run_id');
+    is($jc->{job_info}{job_id},  $job->job_id, 'job_completed job_id');
+    is($jc->{job_info}{job_try}, 0,            'job_completed job_try');
+    is($jc->{pass}, 1, 'pass=1 for exit 0');
+    is($jc->{exit}{err}, 0, 'exit.err=0');
+    is($jc->{exit}{sig}, 0, 'exit.sig=0');
+
+    my $re = $emitted[1];
+    is($re->{run_data}, {run_id => $run->run_id}, 'run_ended carries only run_id');
+};
+
+subtest '_check_current_completion reports pass=0 for non-zero exit' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $run = Test2::Harness2::Run->from_files(files => ['fail.t']);
+    push @{$h->{queue}} => $run;
+    my ($job) = @{$run->jobs};
+    $run->mark_running($job->job_id);
+
+    my $fake_handle = bless {pid => 2, exit_code => 1 << 8}, 'Test2::Harness2::Collector::Handle';
+    $h->{current} = {
+        run        => $run,
+        job        => $job,
+        handle     => $fake_handle,
+        pid        => 2,
+        started_at => time,
+    };
+
+    my @emitted;
+    no warnings 'redefine';
+    local *Test2::Harness2::_emit_service_event = sub {
+        my ($self, %fields) = @_;
+        push @emitted => \%fields;
+    };
+
+    $h->_check_current_completion;
+
+    my ($jc) = grep { $_->{kind} eq 'job_completed' } @emitted;
+    is($jc->{pass}, 0, 'pass=0 for non-zero exit');
+    is($jc->{exit}{err}, 1, 'exit.err=1');
 };
 
 subtest '_perform_hard_stop TERMs tracked pids and reaps them' => sub {
@@ -294,6 +522,43 @@ subtest 'run_on_general_message - job_complete_notify is a no-op' => sub {
     is(\@warnings, [], 'no warnings for known kind');
 };
 
+subtest 'run_on_general_message - loggers_ready emits job_loggers event' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+
+    my $fake_msg = bless {}, 'FakeMsgLoggers';
+    no warnings 'once';
+    *FakeMsgLoggers::content = sub { {
+        kind    => 'loggers_ready',
+        run_id  => 'R',
+        job_id  => 'J',
+        job_try => 0,
+        loggers => {
+            'Test2::Harness2::Collector::Logger::JSONL' => [
+                {jsonl_file => '/abs/run/J/0.jsonl'},
+            ],
+        },
+    } };
+
+    my @emitted;
+    no warnings 'redefine';
+    local *Test2::Harness2::_emit_service_event = sub {
+        my ($self, %fields) = @_;
+        push @emitted => \%fields;
+    };
+
+    $h->run_on_general_message($fake_msg);
+
+    is(scalar @emitted, 1, 'one service event emitted');
+    is($emitted[0]{kind}, 'job_loggers', 'event kind is job_loggers');
+    is($emitted[0]{job_info},
+        {run_id => 'R', job_id => 'J', job_try => 0},
+        'job_info carries run/job/try ids');
+    is($emitted[0]{loggers}{'Test2::Harness2::Collector::Logger::JSONL'},
+        [{jsonl_file => '/abs/run/J/0.jsonl'}],
+        'loggers payload passed through');
+};
+
 subtest 'run_on_general_message - unknown kind warns' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
@@ -341,7 +606,7 @@ subtest 'start - jump_to unwinds the interpose child via Long::Jump' => sub {
 
     waitpid($outer, 0);
     is($? >> 8, 0, 'interpose child reached the setjump with a CODE-ref payload');
-    ok(-e "$dir/services/harness.jsonl", 'service log file was created by the collector');
+    ok(-e "$dir/logs/services/harness.jsonl", 'service log file was created by the collector');
 };
 
 subtest 'run_on_start sets up pgid (smoke test)' => sub {

@@ -106,8 +106,8 @@ subtest 'service dies when its caller dies (no detach)' => sub {
     ok(
         wait_until(
             sub {
-                return 0 unless -e "$dir/services/harness.jsonl";
-                open my $fh, '<', "$dir/services/harness.jsonl" or return 0;
+                return 0 unless -e "$dir/logs/services/harness.jsonl";
+                open my $fh, '<', "$dir/logs/services/harness.jsonl" or return 0;
                 local $/;
                 my $content = <$fh>;
                 return $content =~ /service_stopped/;

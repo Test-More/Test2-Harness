@@ -82,6 +82,19 @@ sub set_ipcm_info {
     return;
 }
 
+# For the file-backed form the path is the locator. For a caller-supplied
+# filehandle we cannot know a stable path, but we can still report the
+# fileno and owning pid: on OSes that expose a process's open file
+# descriptors (e.g. Linux via /proc/<pid>/fd/<fileno>) the consumer can
+# still resolve an underlying path, and even when it cannot the pair makes
+# clear why jsonl_file is absent.
+sub metadata {
+    my $self = shift;
+    return {jsonl_file => $self->{+OUTPUT_FILE}} if defined $self->{+OUTPUT_FILE};
+    my $fh = $self->{+FH} or return undef;
+    return {jsonl_fileno => fileno($fh), pid => $$};
+}
+
 1;
 
 __END__

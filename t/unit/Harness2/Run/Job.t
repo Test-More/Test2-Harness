@@ -86,4 +86,19 @@ subtest 'relative path supplied as test_file_abs lands in test_file' => sub {
     like($job->test_file_abs, qr{\Qfoo.t\E\z}, 'ends at the input file');
 };
 
+subtest 'TO_JSON returns a plain hash of all attributes' => sub {
+    my $job = Test2::Harness2::Run::Job->new(
+        job_id    => 'j-1',
+        test_file => 't/foo.t',
+        run_id    => 'r-1',
+    );
+    my $h = $job->TO_JSON;
+    is(ref($h), 'HASH', 'returns a hashref');
+    is($h->{job_id},  'j-1',     'job_id present');
+    is($h->{run_id},  'r-1',     'run_id present');
+    is($h->{test_file}, 't/foo.t', 'test_file present');
+    ok($h->{test_file_abs}, 'test_file_abs present');
+    is($h->{job_try}, 0, 'job_try present');
+};
+
 done_testing;

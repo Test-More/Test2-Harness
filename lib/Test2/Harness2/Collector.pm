@@ -38,6 +38,7 @@ use Object::HashBase qw{
     <job_id
     <job_try
     <ipcm_info
+    <ipc_peer
 
     +_started
     <_owns_child
@@ -46,7 +47,7 @@ use Object::HashBase qw{
     +_loggers_spec
     +_auditor_spec
     +_failing_notified
-    +_child_exit
+    <child_exit
 };
 
 use constant IS_WIN32 => $^O eq 'MSWin32';
@@ -56,6 +57,9 @@ sub init {
 
     croak "'ipcm_info' is a required attribute"
         unless defined $self->{+IPCM_INFO};
+
+    croak "'ipc_peer' is a required attribute"
+        unless defined $self->{+IPC_PEER};
 
     # Map spec constructor names to internal attribute names so callers can
     # use the natural names from the spec (stdout, stderr, pid, env) even
@@ -124,7 +128,7 @@ sub _load_logger_class {
 }
 
 sub _spec_class {
-    my $class  = shift;
+    my $class = shift;
     my ($spec) = @_;
 
     return ref($spec) if blessed($spec);
@@ -221,6 +225,13 @@ sub _instantiate_loggers {
     $self->{+LOGGERS_LOOKUP} = {};
 
     for my $item (@$specs) {
+        # Applicability gate: let each spec opt out of contexts it was
+        # not designed for (e.g. test-job-only loggers on a service
+        # collector). Blessed instances answer for themselves; everything
+        # else is asked via its class.
+        my $logger_class = blessed($item) ? $item : $self->_spec_class($item);
+        next unless $logger_class->applicable($self);
+
         my $inst;
         if (blessed($item)) {
             # Pre-constructed instance: stamp info onto it via setters
@@ -238,22 +249,22 @@ sub _instantiate_loggers {
         elsif (ref($item) eq 'ARRAY') {
             my ($class, @args) = @$item;
             $inst = $class->new(
-                run_id          => $self->{+RUN_ID},
-                job_id          => $self->{+JOB_ID},
-                job_try         => $self->{+JOB_TRY},
-                ipcm_info       => $self->{+IPCM_INFO},
-                loggers_lookup  => $self->{+LOGGERS_LOOKUP},
+                run_id         => $self->{+RUN_ID},
+                job_id         => $self->{+JOB_ID},
+                job_try        => $self->{+JOB_TRY},
+                ipcm_info      => $self->{+IPCM_INFO},
+                loggers_lookup => $self->{+LOGGERS_LOOKUP},
                 (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
                 @args,
             );
         }
         else {
             $inst = $item->new(
-                run_id          => $self->{+RUN_ID},
-                job_id          => $self->{+JOB_ID},
-                job_try         => $self->{+JOB_TRY},
-                ipcm_info       => $self->{+IPCM_INFO},
-                loggers_lookup  => $self->{+LOGGERS_LOOKUP},
+                run_id         => $self->{+RUN_ID},
+                job_id         => $self->{+JOB_ID},
+                job_try        => $self->{+JOB_TRY},
+                ipcm_info      => $self->{+IPCM_INFO},
+                loggers_lookup => $self->{+LOGGERS_LOOKUP},
                 (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
             );
         }
@@ -268,7 +279,7 @@ sub _add_logger {
     my $self = shift;
     my ($logger) = @_;
 
-    push @{$self->{+LOGGERS}} => $logger;
+    push @{$self->{+LOGGERS}}                            => $logger;
     push @{$self->{+LOGGERS_LOOKUP}{ref $logger} //= []} => $logger;
 
     return $logger;
@@ -498,7 +509,7 @@ sub _run_collector {
     # Route collector-process warnings through the logger chain in addition to
     # the default STDERR print.  Must stay in this scope for the same `local`
     # reason as the signal handlers above.
-    local $SIG{__WARN__} = $self->_make_warn_handler($parser);
+    local $SIG{__WARN__} = $self->_make_warn_handler;
 
     my ($buffer, $child_exit) = $self->_run_collection_loop(
         child_pid     => $child_pid,
@@ -553,54 +564,95 @@ sub _init_event_sinks {
     $_->startup($self) for @{$self->{+LOGGERS}};
     $self->{+_EVENT_LOGGERS} = [grep { $_->log_events } @{$self->{+LOGGERS}}];
 
+    # Once every logger has started (and knows its final locators, e.g. an
+    # opened output file), report their metadata to the IPC peer so the
+    # harness service can emit a job_loggers event.
+    $self->_send_logger_metadata;
+
     # When there is no parser the collector still drains the handles but
     # discards the lines without constructing events.
     my $parser = $self->{+PARSER};
     if (defined($parser) && !ref $parser) {
-        $parser = $parser->new(
-            run_id    => $self->{+RUN_ID},
-            job_id    => $self->{+JOB_ID},
-            job_try   => $self->{+JOB_TRY},
-            ipcm_info => $self->{+IPCM_INFO},
-        );
+        $parser = $parser->new(ipcm_info => $self->{+IPCM_INFO});
     }
     elsif (defined $parser && ref $parser) {
-        $parser->set_process_info(
-            run_id  => $self->{+RUN_ID},
-            job_id  => $self->{+JOB_ID},
-            job_try => $self->{+JOB_TRY},
-        );
         $parser->set_ipcm_info($self->{+IPCM_INFO});
     }
 
     return $parser;
 }
 
-# Returns a coderef suitable for `local $SIG{__WARN__}`. Captures $parser so
-# the handler can fill in the harness facet when a parser is attached.
+# Gather metadata from each instantiated logger, keyed by class so multiple
+# instances of the same class coexist, and fire a one-shot loggers_ready
+# message to the configured IPC peer. Fire-and-forget: we never block the
+# collector on delivery beyond a short wait for the peer to come up (the
+# service-interpose flow races the peer's own registration), and failures
+# are warned. The collector registers on the IPC bus under its job_id so
+# the receiving peer can identify which collector produced the message.
+sub _send_logger_metadata {
+    my $self = shift;
+
+    # Drop loggers that have nothing retrievable to report: a class with no
+    # defined metadata does not appear at all, and a class keeps only the
+    # slots that actually produced metadata.  The event still fires when
+    # nobody contributed anything, with loggers => {}, so downstream
+    # consumers always see the message.
+    my %loggers;
+    for my $logger (@{$self->{+LOGGERS}}) {
+        my $meta = $logger->metadata;
+        next unless defined $meta;
+        my $class = ref($logger);
+        push @{$loggers{$class}} => $meta;
+    }
+
+    my $ok = eval {
+        require IPC::Manager::Service::Handle;
+        my $handle = IPC::Manager::Service::Handle->new(
+            service_name => $self->{+IPC_PEER},
+            ipcm_info    => $self->{+IPCM_INFO},
+            name         => $self->{+JOB_ID},
+        );
+
+        # Wait briefly for the peer to register so the message actually
+        # lands; this matters mainly in the service-interpose flow where
+        # the collector and the service it talks to are siblings racing
+        # through startup. If the peer never comes up we still try the
+        # send (and fall through to the warn path) so regressions are
+        # surfaced rather than silently swallowed.
+        $handle->ready(5);
+
+        $handle->client->send_message(
+            $self->{+IPC_PEER},
+            {
+                kind    => 'loggers_ready',
+                run_id  => $self->{+RUN_ID},
+                job_id  => $self->{+JOB_ID},
+                job_try => $self->{+JOB_TRY},
+                loggers => \%loggers,
+            },
+        );
+        1;
+    };
+    warn "Collector loggers_ready send failed: $@" unless $ok;
+
+    return;
+}
+
+# Returns a coderef suitable for `local $SIG{__WARN__}`.
 # Child-process warnings already flow through the stdout/stderr pipe to this
 # process's parser chain, so no handler is needed on the child side.
 sub _make_warn_handler {
     my $self = shift;
-    my ($parser) = @_;
 
     return sub {
         my ($msg) = @_;
         print STDERR $msg;
 
         my $ok = eval {
-            my %harness;
-            if ($parser) {
-                $harness{run_id}  = $parser->run_id  if defined $parser->run_id;
-                $harness{job_id}  = $parser->job_id  if defined $parser->job_id;
-                $harness{job_try} = $parser->job_try if defined $parser->job_try;
-            }
-
             my $event = Test2::Harness2::Event->new(
                 event_id   => gen_uuid(),
                 stamp      => time,
                 facet_data => {
-                    (%harness ? (harness => \%harness) : ()),
                     info => [{tag => 'WARNING', details => $msg, debug => 1}],
                 },
             );
@@ -764,7 +816,7 @@ sub _finalize_collection {
     # Write exit event if we have an exit code, and stash it so the spawning
     # method can mirror the child's exit when it terminates the collector.
     if (defined $child_exit) {
-        $self->{+_CHILD_EXIT} = $child_exit;
+        $self->{+CHILD_EXIT} = $child_exit;
 
         my $exit_event = Test2::Harness2::Event->new(
             event_id   => gen_uuid(),
@@ -1157,7 +1209,7 @@ sub _exit_mirroring_child {
 
     POSIX::_exit(255) unless $collector_ok;
 
-    if (defined(my $child_exit = $self->{+_CHILD_EXIT})) {
+    if (defined(my $child_exit = $self->{+CHILD_EXIT})) {
         my $codes = parse_exit($child_exit);
 
         if (my $sig = $codes->{sig}) {
@@ -1328,6 +1380,15 @@ sub _interpose_child {
 
     close($params->{orig_stdout});
     close($params->{orig_stderr});
+
+    # Tell downstream readers (Stream2 formatter, Harness2 service
+    # run_service, etc.) how many mixed-mode pipes the collector is
+    # actually reading. interpose() always creates two (stdout + stderr,
+    # separate), so the child advertises 2. This is the same contract
+    # _child_env_overrides publishes to launch-path children, and it is
+    # the reliable signal -- filenos alone cannot distinguish a merged
+    # setup (both fds dup'd onto the same pipe) from separate pipes.
+    $ENV{T2_HARNESS2_PIPE_COUNT} = 2;
 }
 
 1;

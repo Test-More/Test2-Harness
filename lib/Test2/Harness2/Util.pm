@@ -6,12 +6,14 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
 use Importer Importer => 'import';
+use Test2::Util qw/try_sig_mask do_rename/;
 
 our @EXPORT_OK = qw{
     apply_encoding
     hub_truth
     mod2file
     parse_exit
+    write_file_atomic
 };
 
 sub mod2file {
@@ -55,6 +57,32 @@ sub parse_exit {
         dmp => $dmp,
         all => $exit,
     };
+}
+
+# Write @content to "$file.pend" and then do_rename() it over $file.  Signal
+# masking keeps the half-written pending file from being abandoned if the
+# process is signalled mid-write.  Callers that need richer encoding (e.g.
+# JSON) layer their own helper on top; see write_json_file_atomic in
+# Test2::Harness2::Util::JSON.
+sub write_file_atomic {
+    my ($file, @content) = @_;
+
+    my $pend = "$file.pend";
+
+    my ($ok, $err) = try_sig_mask {
+        open(my $fh, '>', $pend) or die "Could not open '$pend' (>): $!";
+        print $fh @content;
+        close($fh) or die "Could not close '$pend': $!";
+        my ($ren_ok, $ren_err) = do_rename($pend, $file);
+        die "$pend -> $file: $ren_err" unless $ren_ok;
+    };
+
+    unless ($ok) {
+        unlink($pend);
+        die $err;
+    }
+
+    return @content;
 }
 
 1;
@@ -121,6 +149,13 @@ Decode a wait-status integer (typically C<$?>) into a hashref:
 =back
 
 Croaks if C<$wstat> is undefined.
+
+=item write_file_atomic($path, @content)
+
+Write C<@content> to C<$path> atomically: writes to C<"$path.pend"> first,
+then C<do_rename()>s it over the target under a signal mask so an
+interrupt cannot leave a half-written file in place.  Dies on any I/O
+failure; the pending file is removed on error.
 
 =back
 

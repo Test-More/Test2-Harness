@@ -12,9 +12,6 @@ use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
 
 use Object::HashBase qw{
-    <run_id
-    <job_id
-    <job_try
     <ipcm_info
     <name
     <type
@@ -25,14 +22,6 @@ sub init {
 
     croak "'ipcm_info' is a required attribute"
         unless defined $self->{+IPCM_INFO};
-}
-
-sub set_process_info {
-    my ($self, %info) = @_;
-    $self->{+RUN_ID}  = $info{run_id}  if exists $info{run_id};
-    $self->{+JOB_ID}  = $info{job_id}  if exists $info{job_id};
-    $self->{+JOB_TRY} = $info{job_try} if exists $info{job_try};
-    return;
 }
 
 sub set_ipcm_info {
@@ -81,16 +70,6 @@ sub normalize_event {
     # autovivify one just to stamp a uuid onto it.
     $event->{facet_data}{about}{uuid} //= $event_id
         if $event->{facet_data}{about};
-
-    if (defined $self->{+RUN_ID}) {
-        $event->{facet_data}{harness}{run_id} //= $self->{+RUN_ID};
-    }
-    if (defined $self->{+JOB_ID}) {
-        $event->{facet_data}{harness}{job_id} //= $self->{+JOB_ID};
-    }
-    if (defined $self->{+JOB_TRY}) {
-        $event->{facet_data}{harness}{job_try} //= $self->{+JOB_TRY};
-    }
 }
 
 sub get_event {
@@ -152,9 +131,7 @@ L<Test2::Harness2::Collector::Parser::IOParser::Stream> override
 C<parse_stream_line> to recognize richer line formats (e.g. TAP) while
 reusing the rest of the pipeline.
 
-The parser also attaches a C<harness> facet carrying the event id, stamp,
-and (optionally) identifiers supplied at construction time, so events can be
-correlated back to a specific harness run / job / attempt.
+The parser also attaches a C<harness> facet carrying the event id and stamp.
 
 This class is instantiated by the collector automatically when no parser is
 supplied and at least one logger or an auditor is present; see
@@ -166,11 +143,7 @@ the default.
 
     use Test2::Harness2::Collector::Parser::IOParser;
 
-    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(
-        run_id  => $run_id,
-        job_id  => $job_id,
-        job_try => 1,
-    );
+    my $parser = Test2::Harness2::Collector::Parser::IOParser->new(ipcm_info => $ii);
 
     my $event = $parser->parse_io(
         stream => 'stdout',
@@ -181,7 +154,7 @@ the default.
     # $event->facet_data->{from_stream}{source}  eq 'STDOUT'
     # $event->facet_data->{from_stream}{details} eq 'hello world'
     # $event->facet_data->{info}[0]{tag}         eq 'STDOUT'
-    # $event->facet_data->{harness}{run_id}      eq $run_id
+    # $event->facet_data->{harness}{event_id}    eq $event->event_id
 
 Used via the collector:
 
@@ -199,25 +172,13 @@ Used via the collector:
 
 =head1 ATTRIBUTES
 
-All attributes are optional and exposed as read-only accessors via
-L<Object::HashBase>.
+Exposed as read-only accessors via L<Object::HashBase>.
 
 =over 4
 
-=item run_id
+=item ipcm_info (required)
 
-Identifier for the overall harness run. When set, copied into each event's
-C<< harness.run_id >> facet.
-
-=item job_id
-
-Identifier for the specific job (typically a test file) being collected.
-When set, copied into C<< harness.job_id >>.
-
-=item job_try
-
-Attempt number for this job (1 for the first run, 2 for the first retry,
-etc.). When set, copied into C<< harness.job_try >>.
+IPC::Manager route info for the collector pipeline.
 
 =item name
 
@@ -296,9 +257,8 @@ code that a line has been consumed).
 
 =item $parser->normalize_event(\%io, $event)
 
-Merge identifiers and timing information into the event. Sets
-C<< $event->{stamp} >> and C<< $event->{event_id} >>, then copies those plus
-any configured C<run_id>/C<job_id>/C<job_try> into
+Merge timing information into the event. Sets C<< $event->{stamp} >> and
+C<< $event->{event_id} >>, then copies those into
 C<< $event->{facet_data}{harness} >>. Safe to call multiple times; existing
 C<harness> fields are preserved.
 

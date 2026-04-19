@@ -40,9 +40,9 @@ use Object::HashBase qw{
 };
 
 # Attribute reference:
-#   run_id              -- identifier of the run this auditor belongs to (required, injected onto every event).
-#   job_id              -- identifier of the job (test) this auditor belongs to (required, injected onto every event).
-#   job_try             -- 0-based attempt number for this job (required, injected onto every event).
+#   run_id              -- identifier of the run this auditor belongs to (used in harness_job_exit).
+#   job_id              -- identifier of the job (test) this auditor belongs to (used in harness_job_exit).
+#   job_try             -- 0-based attempt number for this job (used in harness_job_exit).
 #   assertion_count     -- total assertions seen so far (passing + failing, sans amnesty bookkeeping).
 #   exit                -- raw wait-status integer captured from the harness_process_exit facet, undef until seen.
 #   plan                -- the plan facet hashref once observed (count / details / etc.), undef otherwise.
@@ -152,34 +152,23 @@ sub _normalize_event {
     # through intermediate hashrefs only when they already exist so we do
     # not autovivify empty facets just to inspect them.
     my %sources;
-    $sources{$event->{event_id}}          = 'event'         if defined $event->{event_id};
-    $sources{$f->{harness}{event_id}}   //= 'harness facet' if $f->{harness} && defined $f->{harness}{event_id};
-    $sources{$f->{about}{uuid}}         //= 'about facet'   if $f->{about}   && defined $f->{about}{uuid};
+    $sources{$event->{event_id}} = 'event' if defined $event->{event_id};
+    $sources{$f->{harness}{event_id}} //= 'harness facet' if $f->{harness} && defined $f->{harness}{event_id};
+    $sources{$f->{about}{uuid}}       //= 'about facet'   if $f->{about}   && defined $f->{about}{uuid};
 
     if (keys(%sources) > 1) {
-        croak "event_id mismatch across facets: "
-            . join(', ', map { "$sources{$_}='$_'" } sort keys %sources);
+        croak "event_id mismatch across facets: " . join(', ', map { "$sources{$_}='$_'" } sort keys %sources);
     }
 
-    my $event_id
-        = $event->{event_id}
-        // ($f->{harness} && $f->{harness}{event_id})
-        // ($f->{about}   && $f->{about}{uuid})
-        // gen_uuid();
+    my $event_id = $event->{event_id} // ($f->{harness} && $f->{harness}{event_id}) // ($f->{about} && $f->{about}{uuid}) // gen_uuid();
 
     $event->{event_id} = $event_id;
 
-    # harness gets stamped with several fields below so it can be
-    # autovivified; about is only stamped when the caller already put an
-    # about facet in place so we do not create one just to hold a uuid.
+    # harness gets stamped with the event_id; about is only stamped when the
+    # caller already put an about facet in place so we do not create one just
+    # to hold a uuid.
     $f->{harness}{event_id} //= $event_id;
     $f->{about}{uuid}       //= $event_id if $f->{about};
-
-    for my $field (qw/run_id job_id job_try/) {
-        my $val = $self->{$field};
-        $event->{$field} //= $val;
-        $f->{harness}{$field} //= $val;
-    }
 }
 
 sub _audit {
@@ -216,7 +205,7 @@ sub _audit {
         # to a subtest starting without snooping on the swallowed raw event.
         # Carry the original event's trace and timestamps so consumers can
         # correlate the announcement with the source location.
-        my $stamp = $event->{stamp} // $f->{harness}->{stamp} // time;
+        my $stamp    = $event->{stamp} // $f->{harness}->{stamp} // time;
         my $announce = Test2::Harness2::Event->new(
             event_id   => gen_uuid(),
             stamp      => $stamp,

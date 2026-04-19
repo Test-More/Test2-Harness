@@ -67,16 +67,16 @@ subtest 'stderr non-comment falls back to from_stream' => sub {
 };
 
 subtest 'normalize_event still runs on TAP and non-TAP events' => sub {
-    my $p = parser(run_id => 'R', job_id => 'J', job_try => 1);
+    my $p = parser();
 
     my $tap_ev = $p->parse_io(stream => 'stdout', line => 'ok 1');
-    is($tap_ev->facet_data->{harness}{run_id}, 'R', "TAP event has run_id");
     ok(defined $tap_ev->facet_data->{harness}{event_id}, "TAP event has event_id");
     ok(defined $tap_ev->facet_data->{harness}{stamp},    "TAP event has stamp");
+    ok(!exists $tap_ev->facet_data->{harness}{run_id}, "no run_id stamp on TAP event");
 
     my $raw_ev = $p->parse_io(stream => 'stdout', line => 'not tap');
-    is($raw_ev->facet_data->{harness}{run_id}, 'R', "raw event has run_id");
     ok(defined $raw_ev->facet_data->{harness}{event_id}, "raw event has event_id");
+    ok(!exists $raw_ev->facet_data->{harness}{run_id}, "no run_id stamp on raw event");
 };
 
 subtest 'returns undef for undef line' => sub {

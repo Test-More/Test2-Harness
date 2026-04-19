@@ -7,6 +7,8 @@ use Cpanel::JSON::XS();
 use File::Temp qw/tempfile/;
 use Importer Importer => 'import';
 
+use Test2::Harness2::Util qw/write_file_atomic/;
+
 our $VERSION = '2.000011';
 
 our @EXPORT_OK = qw{
@@ -15,6 +17,7 @@ our @EXPORT_OK = qw{
     encode_pretty_json
     decode_json_file
     encode_json_file
+    write_json_file_atomic
     json_true
     json_false
 };
@@ -63,6 +66,16 @@ sub encode_json_file {
     close($fh);
 
     return $file;
+}
+
+sub write_json_file_atomic {
+    my ($path, $data) = @_;
+
+    croak "path is required"         unless defined $path;
+    croak "data hashref is required" unless defined $data;
+
+    write_file_atomic($path, encode_pretty_json($data));
+    return;
 }
 
 sub json_true  { Cpanel::JSON::XS->true }
@@ -130,6 +143,13 @@ controls cleanup). Returns the path to that file.
 Slurp C<$path>, decode it via L</decode_json>, and return the result. With
 C<unlink =E<gt> 1> the file is removed after reading (a warn-level diagnostic
 fires if the unlink fails).
+
+=item write_json_file_atomic($path, \%data)
+
+Encode C<\%data> with L</encode_pretty_json> and write it to C<$path>
+atomically: the encoder writes a sibling tempfile in the same directory
+and C<rename>s it over the target, so readers never see a partial file.
+Throws on any I/O failure; the tempfile is cleaned up on error.
 
 =item $bool = json_true()
 

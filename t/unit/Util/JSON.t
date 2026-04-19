@@ -1,7 +1,7 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
 
-use Test2::Harness2::Util::JSON qw/encode_json decode_json encode_pretty_json decode_json_file encode_json_file json_true json_false/;
+use Test2::Harness2::Util::JSON qw/encode_json decode_json encode_pretty_json decode_json_file encode_json_file write_json_file_atomic json_true json_false/;
 
 my $tmpdir = tempdir(CLEANUP => 1);
 
@@ -68,6 +68,33 @@ subtest 'invalid json dies' => sub {
         qr/.+/,
         "decode_json dies on invalid input"
     );
+};
+
+subtest 'write_json_file_atomic writes the target and leaves no residue' => sub {
+    my $dir  = tempdir(CLEANUP => 1);
+    my $path = "$dir/snap.json";
+
+    write_json_file_atomic($path, {run_id => 'R1', state => 'queued'});
+
+    ok(-f $path, 'target file exists');
+    my $decoded = decode_json_file($path);
+    is($decoded, {run_id => 'R1', state => 'queued'}, 'content roundtrips');
+
+    opendir my $dh, $dir or die $!;
+    my @entries = grep { !/^\./ } readdir $dh;
+    closedir $dh;
+    is(\@entries, ['snap.json'], 'no stray tempfile left behind');
+};
+
+subtest 'write_json_file_atomic overwrites an existing file in place' => sub {
+    my $dir  = tempdir(CLEANUP => 1);
+    my $path = "$dir/snap.json";
+
+    write_json_file_atomic($path, {v => 1});
+    write_json_file_atomic($path, {v => 2, extra => 'yes'});
+
+    my $decoded = decode_json_file($path);
+    is($decoded, {v => 2, extra => 'yes'}, 'second write replaces the first');
 };
 
 done_testing;

@@ -72,12 +72,12 @@ subtest 'passing assertion' => sub {
     is(@out, 1, "one event returned");
     my $ev = $out[0];
     ok($ev->{event_id}, "event has event_id");
-    is($ev->{run_id},                        'R',             "run_id injected on event");
-    is($ev->{job_id},                        'J',             "job_id injected on event");
-    is($ev->{job_try},                       0,               "job_try injected on event");
-    is($ev->{facet_data}{harness}{run_id},   'R',             "run_id mirrored into harness facet");
-    is($ev->{facet_data}{harness}{job_id},   'J',             "job_id mirrored into harness facet");
-    is($ev->{facet_data}{harness}{job_try},  0,               "job_try mirrored into harness facet");
+    ok(!exists $ev->{run_id},                      "run_id not stamped on event");
+    ok(!exists $ev->{job_id},                      "job_id not stamped on event");
+    ok(!exists $ev->{job_try},                     "job_try not stamped on event");
+    ok(!exists $ev->{facet_data}{harness}{run_id}, "run_id not stamped on harness facet");
+    ok(!exists $ev->{facet_data}{harness}{job_id}, "job_id not stamped on harness facet");
+    ok(!exists $ev->{facet_data}{harness}{job_try}, "job_try not stamped on harness facet");
     is($ev->{facet_data}{harness}{event_id}, $ev->{event_id}, "event_id mirrored into harness facet");
     ok(!$ev->{facet_data}{about}, "about facet not autovivified when absent from input");
 };

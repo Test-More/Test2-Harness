@@ -52,6 +52,8 @@ sub init {
     $self->{+JOB_TRY} //= 0;
 }
 
+sub TO_JSON { return {%{$_[0]}} }
+
 1;
 
 __END__

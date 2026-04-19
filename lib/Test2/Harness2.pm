@@ -10,7 +10,6 @@ use File::Spec ();
 use Time::HiRes qw/time sleep/;
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Util qw/parse_exit/;
-use Test2::Harness2::Util::JSON qw/write_json_file_atomic/;
 use POSIX qw/WNOHANG getpgrp/;
 
 use constant IS_WIN32            => $^O eq 'MSWin32';
@@ -55,6 +54,10 @@ use Object::HashBase qw{
 
 use Role::Tiny::With;
 with 'IPC::Manager::Role::Service', 'Test2::Harness2::Role::ResourceServiceHost';
+
+# Resource-service log files live under the harness's logdir
+# ($workdir/logs/ by default), not directly under $workdir.
+sub _service_host_logdir { $_[0]->{+LOGDIR} }
 
 sub init {
     my $self = shift;
@@ -293,25 +296,6 @@ sub request_handler_queue_test_run {
     );
 
     push @{$self->{+QUEUE}} => $run;
-
-    # FUTURE -- READ THIS WHEN MERGING / REBASING FROM THE
-    # 'reimplement-resource-classes' BRANCH:
-    #
-    # That branch introduces resource services that are spun up for a
-    # run based on the run's resource needs. When that work lands,
-    # EVERY run should become its own service (even runs that declare no
-    # resource needs), spawned by the harness as it picks the run up off
-    # this queue. Those resource services should run as sub-services under
-    # the run service, not alongside it. The run service itself should be
-    # configured with the JSON logger -- just like the harness's own
-    # interpose collector is today -- which will then own the file at
-    # "$logdir/runs/$run_id.json".
-    #
-    # Until that run service exists, the harness service writes the file
-    # directly so downstream consumers always have a runs/<id>.json
-    # sidecar to read. The call below is the stopgap; remove it once the
-    # run service's JSON logger takes over at run startup.
-    $self->_write_run_snapshot($run);
 
     $self->_emit_service_event(
         kind     => 'run_queued',
@@ -822,24 +806,6 @@ sub TO_JSON {
     };
 }
 
-# STOPGAP until runs become their own services (see the
-# reimplement-resource-classes commentary in
-# request_handler_queue_test_run and _check_current_completion). Writes
-# "$logdir/runs/$run_id.json" atomically with the run's current TO_JSON
-# snapshot. Called once when the run is queued and again when the run
-# completes, so readers always see either an initial-state snapshot or
-# the final-state snapshot, never a partial file.
-sub _write_run_snapshot {
-    my ($self, $run) = @_;
-
-    my $runs_dir = $self->{+LOGDIR} . '/runs';
-    make_path($runs_dir) unless -d $runs_dir;
-
-    my $path = $runs_dir . '/' . $run->run_id . '.json';
-    write_json_file_atomic($path, $run->TO_JSON);
-    return;
-}
-
 sub run_on_all {
     my ($self, $activity) = @_;
 
@@ -945,6 +911,7 @@ sub _ensure_run_service_started {
     my $bus    = "run-$run_id";
     my $pid    = Test2::Harness2::RunService->spawn(
         workdir      => $self->{+WORKDIR},
+        logdir       => $self->{+LOGDIR},
         run          => $run,
         ipcm_info    => $self->ipcm_info,
         parent_pids  => [$$],
@@ -1038,6 +1005,12 @@ sub _launch_job {
             job_try => $job->job_try,
         },
     );
+
+    my $assign_id = gen_uuid();
+    my %env;
+    for my $res (@$resources) {
+        $res->assign(id => $assign_id, job => $job, env => \%env);
+    }
 
     # Delegate the actual Collector fork to the per-run supervisor so
     # the test process runs under the run's subtree. The harness owns

@@ -38,6 +38,14 @@ sub _service_host_run { undef }
 # the log file is just "run.jsonl") override this.
 sub _service_host_log_name { $_[0]->name }
 
+# The directory root under which this host lays out service log files.
+# Defaults to C<< $self->workdir >>; consumers that keep all logs in a
+# subdirectory (typically $workdir/logs/) override this to point at
+# that subdirectory instead. Both scope=global ('services/<name>.jsonl')
+# and scope=run ('runs/<run_id>/services/<name>.jsonl') paths hang off
+# this root.
+sub _service_host_logdir { $_[0]->workdir }
+
 # The tracking hashref for resource services (pid => entry). Consumers
 # expose this via a HashBase attribute called resource_services; the
 # role reads/writes through this method so a consumer can override the
@@ -131,9 +139,9 @@ sub _resource_service_log_path {
         ? do {
         croak "run-scoped service log path requires 'run'" unless ref $run;
         my $rid = $run->run_id;
-        join '/', $self->workdir, 'runs', $rid, 'services';
+        join '/', $self->_service_host_logdir, 'runs', $rid, 'services';
         }
-        : join '/', $self->workdir, 'services';
+        : join '/', $self->_service_host_logdir, 'services';
 
     make_path($dir) unless -d $dir;
 

@@ -53,10 +53,10 @@ subtest 'constructs with required attributes' => sub {
     is($svc->name,     'run-r-1', 'default bus name includes run_id for uniqueness');
     is($svc->run_id,   'r-1',     'run_id derived from run');
     is($svc->workdir,  $dir,      'workdir stored');
-    ok(-d "$dir/runs/r-1/services", 'services dir created at construction');
+    ok(-d "$dir/logs/runs/r-1/services", 'services dir created at construction');
     is(
         $svc->log_file,
-        "$dir/runs/r-1/services/run.jsonl",
+        "$dir/logs/runs/r-1/services/run.jsonl",
         'log file path is runs/<id>/services/<log_name>.jsonl',
     );
 };
@@ -105,7 +105,7 @@ subtest 'resource-service startup lands under runs/<id>/services/' => sub {
     # directly to the resource host role -- same call it would make.
     $svc->_start_resource_services($run->resources, scope => 'run', run => $run);
 
-    my $expected = "$dir/runs/r-start/services/foo.jsonl";
+    my $expected = "$dir/logs/runs/r-start/services/foo.jsonl";
     ok(-e $expected, "resource log at $expected");
     is(scalar keys %{$svc->{resource_services}}, 1, 'one service tracked');
 
@@ -181,7 +181,7 @@ subtest 'per-run usage of a name matching the global harness is allowed' => sub 
 
     my $ok = eval { $svc->_start_resource_services($run->resources, scope => 'run', run => $run); 1 };
     ok($ok,                                              'no reservation conflict');
-    ok(-e "$dir/runs/r-harnessy/services/harness.jsonl", 'per-run harness.jsonl created');
+    ok(-e "$dir/logs/runs/r-harnessy/services/harness.jsonl", 'per-run harness.jsonl created');
 };
 
 subtest 'terminate handler transitions to terminating' => sub {

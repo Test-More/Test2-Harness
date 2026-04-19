@@ -179,59 +179,15 @@ subtest 'queue_test_run uses provided run_id when given' => sub {
     is($res->{run_id}, 'my-id');
 };
 
-subtest 'queue_test_run writes the initial runs/<id>.json snapshot' => sub {
+subtest 'queue_test_run does not write the runs/<id>.json snapshot (run service does)' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
-    my $res = $h->request_handler_queue_test_run(
-        {files => ['t/first.t', 't/second.t']},
-    );
+    my $res = $h->request_handler_queue_test_run({files => ['t/x.t']});
     ok($res->{ok}, 'queued');
 
     my $path = "$dir/logs/runs/$res->{run_id}.json";
-    ok(-f $path, 'logs/runs/<id>.json written at queue time');
-
-    require Test2::Harness2::Util::JSON;
-    my $snapshot = Test2::Harness2::Util::JSON::decode_json_file($path);
-    is($snapshot->{run_id}, $res->{run_id}, 'snapshot carries run_id');
-    is(scalar @{$snapshot->{pending}}, 2, 'all jobs pending at queue time');
-    is(scalar @{$snapshot->{done}},    0, 'nothing done yet');
-    is(scalar @{$snapshot->{jobs}},    2, 'jobs inlined via TO_JSON');
-};
-
-subtest 'run completion atomic-swaps the runs/<id>.json snapshot' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    my $h   = Test2::Harness2->new(workdir => $dir);
-
-    my $run = Test2::Harness2::Run->from_files(files => ['done.t']);
-    push @{$h->{queue}} => $run;
-    my ($job) = @{$run->jobs};
-    $run->mark_running($job->job_id);
-
-    # Write the "initial" snapshot as queue_test_run would do.
-    $h->_write_run_snapshot($run);
-
-    my $path = "$dir/logs/runs/" . $run->run_id . ".json";
-    require Test2::Harness2::Util::JSON;
-    my $before = Test2::Harness2::Util::JSON::decode_json_file($path);
-    is(scalar @{$before->{running}}, 1, 'before completion: one running');
-    is(scalar @{$before->{done}},    0, 'before completion: none done');
-
-    my $fake_handle = bless {pid => 1, exit_code => 0},
-        'Test2::Harness2::Collector::Handle';
-    $h->{current} = {
-        run        => $run,
-        job        => $job,
-        handle     => $fake_handle,
-        pid        => 1,
-        started_at => time,
-    };
-
-    $h->_check_current_completion;
-
-    my $after = Test2::Harness2::Util::JSON::decode_json_file($path);
-    is(scalar @{$after->{running}}, 0, 'after completion: running empty');
-    is(scalar @{$after->{done}},    1, 'after completion: job moved to done');
+    ok(!-e $path, 'no snapshot at queue time -- run service owns the file');
 };
 
 subtest 'queue_test_run emits run_queued and job_queued events' => sub {
@@ -256,10 +212,16 @@ subtest 'queue_test_run emits run_queued and job_queued events' => sub {
     is($emitted[1]{kind}, 'job_queued', 'second event is job_queued');
     ok($emitted[1]{job_data}{job_id}, 'job_data carries job_id');
     ok($emitted[1]{job_data}{run_id}, 'job_data carries run_id');
-    is($emitted[1]{job_data}{test_file}, 't/x.t', 'job_data carries test_file');
+    like(
+        $emitted[1]{job_data}{test_file}{file}, qr{/t/x\.t$},
+        'job_data carries test_file absolute path',
+    );
 
     is($emitted[2]{kind}, 'job_queued', 'third event is job_queued');
-    is($emitted[2]{job_data}{test_file}, 't/y.t', 'second job_data carries test_file');
+    like(
+        $emitted[2]{job_data}{test_file}{file}, qr{/t/y\.t$},
+        'second job_data carries test_file absolute path',
+    );
 };
 
 subtest 'queue_test_run rejects when state is not running' => sub {
@@ -440,14 +402,24 @@ subtest 'run_on_all emits run_started + job_started for the first job' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
-    $h->request_handler_queue_test_run({files => ['first.t']});
+    $h->request_handler_queue_test_run({files => ['/abs/first.t']});
+
+    $h->{ipcm_info} = {fake => 1};    # enable _ensure_run_service_started
 
     my @emitted;
-    my $fake_handle = bless {pid => 99999}, 'Test2::Harness2::Collector::Handle';
+    my $fake_ipc_handle = bless {
+        ready => 1,
+        sync  => sub { +{response => {ok => 1, pid => 123}} },
+    }, 'Test::FakeIPCHandle';
+
     {
         no warnings 'redefine';
-        local *Test2::Harness2::Collector::spawn = sub { return $fake_handle };
-        local *Test2::Harness2::_emit_service_event = sub {
+        local *Test::FakeIPCHandle::ready           = sub { 1 };
+        local *Test::FakeIPCHandle::sync_request    = sub { my $s = shift; $s->{sync}->(@_); };
+        local *Test2::Harness2::RunService::spawn           = sub { 90_000 };
+        local *Test2::Harness2::_run_service_handle         = sub { $fake_ipc_handle };
+        local *Test2::Harness2::_wait_for_run_service_ready = sub { $fake_ipc_handle };
+        local *Test2::Harness2::_emit_service_event         = sub {
             my ($self, %fields) = @_;
             push @emitted => \%fields;
         };
@@ -467,20 +439,18 @@ subtest 'run_on_all emits run_started + job_started for the first job' => sub {
     is($js->{job_info}{job_try}, 0, 'job_started carries job_try=0');
 };
 
-subtest '_check_current_completion emits job_completed and run_ended' => sub {
+subtest 'job_complete IPC emits job_completed and run_ended' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
-    my $run = Test2::Harness2::Run->from_files(files => ['done.t']);
+    my $run = Test2::Harness2::Run->from_files(files => ['/abs/done.t']);
     push @{$h->{queue}} => $run;
     my ($job) = @{$run->jobs};
     $run->mark_running($job->job_id);
 
-    my $fake_handle = bless {pid => 1, exit_code => 0}, 'Test2::Harness2::Collector::Handle';
-    $h->{current} = {
+    $h->{running_jobs}{$job->job_id} = {
         run        => $run,
         job        => $job,
-        handle     => $fake_handle,
         pid        => 1,
         started_at => time,
     };
@@ -491,8 +461,18 @@ subtest '_check_current_completion emits job_completed and run_ended' => sub {
         my ($self, %fields) = @_;
         push @emitted => \%fields;
     };
+    local *Test2::Harness2::_teardown_run_service = sub { };
 
-    $h->_check_current_completion;
+    $h->run_on_general_message(
+        Test::FakeIpcMsg->new({
+            kind    => 'job_complete',
+            run_id  => $run->run_id,
+            job_id  => $job->job_id,
+            job_try => 0,
+            pid     => 1,
+            exit    => 0,
+        }),
+    );
 
     my @kinds = map { $_->{kind} } @emitted;
     is(\@kinds, ['job_completed', 'run_ended'], 'both completion events in order');
@@ -501,7 +481,7 @@ subtest '_check_current_completion emits job_completed and run_ended' => sub {
     is($jc->{job_info}{run_id},  $run->run_id, 'job_completed run_id');
     is($jc->{job_info}{job_id},  $job->job_id, 'job_completed job_id');
     is($jc->{job_info}{job_try}, 0,            'job_completed job_try');
-    is($jc->{pass}, 1, 'pass=1 for exit 0');
+    is($jc->{pass},      1, 'pass=1 for exit 0');
     is($jc->{exit}{err}, 0, 'exit.err=0');
     is($jc->{exit}{sig}, 0, 'exit.sig=0');
 
@@ -509,20 +489,18 @@ subtest '_check_current_completion emits job_completed and run_ended' => sub {
     is($re->{run_data}, {run_id => $run->run_id}, 'run_ended carries only run_id');
 };
 
-subtest '_check_current_completion reports pass=0 for non-zero exit' => sub {
+subtest 'job_complete IPC reports pass=0 for non-zero exit' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
-    my $run = Test2::Harness2::Run->from_files(files => ['fail.t']);
+    my $run = Test2::Harness2::Run->from_files(files => ['/abs/fail.t']);
     push @{$h->{queue}} => $run;
     my ($job) = @{$run->jobs};
     $run->mark_running($job->job_id);
 
-    my $fake_handle = bless {pid => 2, exit_code => 1 << 8}, 'Test2::Harness2::Collector::Handle';
-    $h->{current} = {
+    $h->{running_jobs}{$job->job_id} = {
         run        => $run,
         job        => $job,
-        handle     => $fake_handle,
         pid        => 2,
         started_at => time,
     };
@@ -533,11 +511,21 @@ subtest '_check_current_completion reports pass=0 for non-zero exit' => sub {
         my ($self, %fields) = @_;
         push @emitted => \%fields;
     };
+    local *Test2::Harness2::_teardown_run_service = sub { };
 
-    $h->_check_current_completion;
+    $h->run_on_general_message(
+        Test::FakeIpcMsg->new({
+            kind    => 'job_complete',
+            run_id  => $run->run_id,
+            job_id  => $job->job_id,
+            job_try => 0,
+            pid     => 2,
+            exit    => (1 << 8),    # raw wait status for exit code 1
+        }),
+    );
 
     my ($jc) = grep { $_->{kind} eq 'job_completed' } @emitted;
-    is($jc->{pass}, 0, 'pass=0 for non-zero exit');
+    is($jc->{pass},      0, 'pass=0 for non-zero exit');
     is($jc->{exit}{err}, 1, 'exit.err=1');
 };
 

@@ -121,7 +121,7 @@ subtest 'global service lays down services/<name>.jsonl + passes name + log_path
 
     $h->_start_resource_services([$res], scope => 'global');
 
-    my $expected = "$dir/services/foo.jsonl";
+    my $expected = "$dir/logs/services/foo.jsonl";
     ok(-e $expected, "log file created at $expected");
 
     is($res->last_args->{name},     'foo',     'name argument derived from method');
@@ -142,7 +142,7 @@ subtest 'per-run service lays down runs/<run_id>/services/<name>.jsonl' => sub {
 
     $h->_start_resource_services([$res], scope => 'run', run => $run);
 
-    my $expected = "$dir/runs/r-alpha/services/foo.jsonl";
+    my $expected = "$dir/logs/runs/r-alpha/services/foo.jsonl";
     ok(-e $expected, "log file created at $expected");
     is($res->last_args->{log_path}, $expected, 'log_path points to per-run dir');
     is($res->last_args->{scope},    'run',     'scope argument is run');
@@ -165,7 +165,7 @@ subtest 'in-batch global name collision across two resources is rejected' => sub
     like($err, qr/collides with in-batch service 'service_foo'/, 'explains the collision');
     is(scalar keys %{$h->{resource_services}}, 0, 'no services tracked after failure');
     ok(
-        !-e "$dir/services/foo.jsonl" || -z "$dir/services/foo.jsonl",
+        !-e "$dir/logs/services/foo.jsonl" || -z "$dir/logs/services/foo.jsonl",
         'log file empty or absent (first service was touched before collision detected)'
     );
 };
@@ -200,8 +200,8 @@ subtest 'name is allowed to collide across scopes (global vs run)' => sub {
     };
     my $err = $@;
     ok($ok,                                       'run-scoped reuse of a global name is allowed') or diag $err;
-    ok(-e "$dir/services/foo.jsonl",              'global log at services/foo.jsonl');
-    ok(-e "$dir/runs/r-cross/services/foo.jsonl", 'run log at runs/r-cross/services/foo.jsonl');
+    ok(-e "$dir/logs/services/foo.jsonl",              'global log at services/foo.jsonl');
+    ok(-e "$dir/logs/runs/r-cross/services/foo.jsonl", 'run log at runs/r-cross/services/foo.jsonl');
 };
 
 subtest 'names are allowed to collide across different runs' => sub {
@@ -219,8 +219,8 @@ subtest 'names are allowed to collide across different runs' => sub {
     };
     my $err = $@;
     ok($ok,                                   'separate runs may share service names') or diag $err;
-    ok(-e "$dir/runs/r-A/services/foo.jsonl", 'run A has its own foo.jsonl');
-    ok(-e "$dir/runs/r-B/services/foo.jsonl", 'run B has its own foo.jsonl');
+    ok(-e "$dir/logs/runs/r-A/services/foo.jsonl", 'run A has its own foo.jsonl');
+    ok(-e "$dir/logs/runs/r-B/services/foo.jsonl", 'run B has its own foo.jsonl');
 };
 
 subtest "harness's own NAME is reserved in global scope" => sub {
@@ -242,7 +242,7 @@ subtest 'harness name is not reserved in per-run scope' => sub {
 
     my $ok = eval { $h->_start_resource_services([$res], scope => 'run', run => $run); 1 };
     ok($ok,                                    'per-run usage of the harness-reserved name is permitted');
-    ok(-e "$dir/runs/r-ns/services/foo.jsonl", 'per-run log created regardless of global reservation');
+    ok(-e "$dir/logs/runs/r-ns/services/foo.jsonl", 'per-run log created regardless of global reservation');
 };
 
 subtest 'one resource with two services gets two distinct log files' => sub {
@@ -252,8 +252,8 @@ subtest 'one resource with two services gets two distinct log files' => sub {
 
     $h->_start_resource_services([$res], scope => 'global');
 
-    ok(-e "$dir/services/alpha.jsonl", 'alpha log created');
-    ok(-e "$dir/services/beta.jsonl",  'beta log created');
+    ok(-e "$dir/logs/services/alpha.jsonl", 'alpha log created');
+    ok(-e "$dir/logs/services/beta.jsonl",  'beta log created');
 
     my %by_name = map { ($_->{name} => $_) } values %{$h->{resource_services}};
     ok(exists $by_name{alpha}, 'alpha service tracked');
@@ -301,7 +301,7 @@ subtest 'restart reuses the same name + log_path' => sub {
     my $h = Test2::Harness2->new(workdir => $dir, resources => [$r]);
     $h->_start_resource_services([$r], scope => 'global');
 
-    my $expected = "$dir/services/foo.jsonl";
+    my $expected = "$dir/logs/services/foo.jsonl";
     is($h->{resource_services}{93_701}{log_path}, $expected, 'initial log_path set');
 
     # Simulate the original pid exiting; restart picks up pid 93_702.

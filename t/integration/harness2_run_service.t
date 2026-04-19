@@ -55,11 +55,11 @@ subtest 'run service writes its own jsonl log under runs/<run_id>/services' => s
     $spawn->wait;
 
     # Find the run_id directory under runs/.
-    opendir my $rdh, "$dir/runs" or die "open $dir/runs: $!";
-    my @runs = grep { !/^\./ } readdir $rdh;
+    opendir my $rdh, "$dir/logs/runs" or die "open $dir/runs: $!";
+    my @runs = grep { !/^\./ && !/\.json$/ } readdir $rdh;
     closedir $rdh;
     is(scalar @runs, 1, 'one run dir written');
-    my $run_dir = "$dir/runs/$runs[0]";
+    my $run_dir = "$dir/logs/runs/$runs[0]";
 
     ok(-d "$run_dir/services", 'per-run services dir created');
 
@@ -96,11 +96,11 @@ subtest "run service runs in its own process and is a child of the harness" => s
     $spawn->wait;
 
     # Dig the run-id directory out, read both logs.
-    opendir my $rdh, "$dir/runs" or die "open $dir/runs: $!";
-    my @runs = grep { !/^\./ } readdir $rdh;
+    opendir my $rdh, "$dir/logs/runs" or die "open $dir/runs: $!";
+    my @runs = grep { !/^\./ && !/\.json$/ } readdir $rdh;
     closedir $rdh;
-    my $run_log  = "$dir/runs/$runs[0]/services/run.jsonl";
-    my $harn_log = "$dir/services/harness.jsonl";
+    my $run_log  = "$dir/logs/runs/$runs[0]/services/run.jsonl";
+    my $harn_log = "$dir/logs/services/harness.jsonl";
 
     my @run_started = grep { ($_->{facet_data}{harness}{kind} // '') eq 'service_started' } read_jsonl($run_log);
     my @har_started = grep { ($_->{facet_data}{harness}{kind} // '') eq 'service_started' } read_jsonl($harn_log);

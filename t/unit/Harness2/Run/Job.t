@@ -81,10 +81,10 @@ subtest 'TO_JSON returns a plain hash of all attributes' => sub {
     );
     my $h = $job->TO_JSON;
     is(ref($h), 'HASH', 'returns a hashref');
-    is($h->{job_id},  'j-1',     'job_id present');
-    is($h->{run_id},  'r-1',     'run_id present');
-    is($h->{test_file}, 't/foo.t', 'test_file present');
-    ok($h->{test_file_abs}, 'test_file_abs present');
+    is($h->{job_id}, 'j-1', 'job_id present');
+    is($h->{run_id}, 'r-1', 'run_id present');
+    is(ref($h->{test_file}), 'HASH', 'test_file serialized via its own TO_JSON');
+    like($h->{test_file}{file}, qr{/t/foo\.t$}, 'test_file->file ends with the path');
     is($h->{job_try}, 0, 'job_try present');
 };
 

@@ -52,7 +52,16 @@ sub init {
 sub test_file_abs { $_[0]->{+TEST_FILE}->absolute }
 sub test_file_rel { $_[0]->{+TEST_FILE}->relative }
 
-sub TO_JSON { return {%{$_[0]}} }
+sub TO_JSON {
+    my $self = shift;
+    my %out  = %$self;
+    # test_file is a role consumer; serialize it through its own
+    # TO_JSON so downstream readers get plain JSON data and can tell
+    # at a glance what the original path was.
+    my $tf = $out{+TEST_FILE};
+    $out{+TEST_FILE} = $tf->TO_JSON if blessed($tf) && $tf->can('TO_JSON');
+    return \%out;
+}
 
 1;
 

@@ -21,15 +21,17 @@ use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Role::ResourceServiceHost;
 use Test2::Harness2::Util::IPC qw/list_direct_children/;
-use Test2::Harness2::Util::JSON qw/encode_json/;
+use Test2::Harness2::Util::JSON qw/encode_json write_json_file_atomic/;
 
 use Object::HashBase qw{
     <workdir
+    <logdir
     <name
     <log_name
     <run_id
     <job_id
     <log_file
+    <snapshot_file
     <kill_timeout
     <ipcm_info
     <parent_pids
@@ -51,6 +53,10 @@ sub run_obj { $_[0]->{+RUN} }
 # name (which is suffixed with the run_id to guarantee uniqueness
 # across runs on the shared IPC bus).
 sub _service_host_log_name { $_[0]->{+LOG_NAME} }
+
+# Resource-service log files live under the harness's $logdir, not the
+# bare $workdir.
+sub _service_host_logdir { $_[0]->{+LOGDIR} }
 
 use Role::Tiny::With;
 with 'IPC::Manager::Role::Service', 'Test2::Harness2::Role::ResourceServiceHost';
@@ -74,7 +80,12 @@ sub init {
 
     $self->{+RUN_ID} //= $run->run_id;
 
-    my $svc_dir = "$wd/runs/$self->{+RUN_ID}/services";
+    # logdir defaults to $workdir/logs/ -- mirroring the harness's own
+    # default. Callers that pass their own logdir (typically the
+    # harness handing through $self->{+LOGDIR}) get that path verbatim.
+    $self->{+LOGDIR} //= "$wd/logs";
+    my $logdir  = $self->{+LOGDIR};
+    my $svc_dir = "$logdir/runs/$self->{+RUN_ID}/services";
     make_path($svc_dir) unless -d $svc_dir;
 
     $self->{+LOG_NAME}          //= 'run';
@@ -89,7 +100,20 @@ sub init {
     $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
-    $self->{+LOG_FILE} //= "$svc_dir/$self->{+LOG_NAME}.jsonl";
+    $self->{+LOG_FILE}      //= "$svc_dir/$self->{+LOG_NAME}.jsonl";
+    $self->{+SNAPSHOT_FILE} //= "$logdir/runs/$self->{+RUN_ID}.json";
+}
+
+# Atomic-swap the runs/<run_id>.json snapshot with the run's current
+# TO_JSON. Called once at startup (initial state) and once at cleanup
+# (final state); the atomic write means downstream readers always see a
+# consistent file, never a partial one. This is what the upstream
+# 'reimplement-resource-classes'-branch comments in Test2::Harness2
+# referred to as "the run service's JSON logger takes over".
+sub _write_snapshot {
+    my $self = shift;
+    write_json_file_atomic($self->{+SNAPSHOT_FILE}, $self->{+RUN}->TO_JSON);
+    return;
 }
 
 # ----------------------------------------------------------------------
@@ -158,13 +182,16 @@ sub request_handler_launch_job {
     # the one the harness itself used to use when it still launched
     # jobs directly.
     unless (defined $log_file) {
-        my $log_dir = join '/', $self->{+WORKDIR}, 'runs', $run_id, $job_id;
+        my $log_dir = join '/', $self->{+LOGDIR}, 'runs', $run_id, $job_id;
         make_path($log_dir);
         $log_file = "$log_dir/$job_try.jsonl";
     }
 
     my @logger_specs;
     push @logger_specs => @$loggers;
+
+    my $json_file = $log_file;
+    $json_file =~ s/\.jsonl$/.json/;
 
     my $handle;
     my $spawn_ok = eval {
@@ -177,12 +204,17 @@ sub request_handler_launch_job {
             job_id      => $job_id,
             job_try     => $job_try,
             ipcm_info   => $self->ipcm_info,
+            ipc_peer    => $self->{+NAME},
             (defined $auditor ? (auditor => $auditor) : ()),
             loggers => [
                 (map { [@$_] } @logger_specs),    # shallow-clone to decouple from payload
                 [
                     'Test2::Harness2::Collector::Logger::JSONL',
                     output_file => $log_file,
+                ],
+                [
+                    'Test2::Harness2::Collector::Logger::JSON',
+                    output_file => $json_file,
                 ],
             ],
         );
@@ -279,6 +311,11 @@ sub run_on_start {
         Test2::Harness2::ChildSubReaper::set_child_subreaper(1)
             or warn "set_child_subreaper failed in run_on_start: $!";
     }
+
+    # Initial snapshot of the run. The final snapshot is written during
+    # run_on_cleanup after the state transitions are committed.
+    my $snap_ok = eval { $self->_write_snapshot; 1 };
+    warn "run-service initial snapshot write failed: $@" unless $snap_ok;
 
     $self->_emit_service_event(
         kind    => 'service_started',
@@ -378,6 +415,11 @@ sub run_on_cleanup {
         warn "resource '" . $res->resource_name . "' teardown died: $err"
             unless $ok;
     }
+
+    # Final snapshot -- downstream readers can atomically swap from the
+    # queued/running snapshot to the done/final one.
+    my $snap_ok = eval { $self->_write_snapshot; 1 };
+    warn "run-service final snapshot write failed: $@" unless $snap_ok;
 
     $self->_emit_service_event(kind => 'service_stopped');
 }

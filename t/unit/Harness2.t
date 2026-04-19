@@ -66,42 +66,11 @@ my $CAN_FORK = $Config{d_fork};
     }
 }
 
-# Test::RunRes::Res exercises the per-run lifecycle path: counts
-# service-method invocations and teardown calls so the subtests can
-# assert lazy start and tear-down semantics.
-{
-
-    package Test::RunRes::Res;
-    use Object::HashBase qw/<calls <teardowns <pids/;
-    use Role::Tiny::With;
-    with 'Test2::Harness2::Role::Resource';
-
-    sub init {
-        my $self = shift;
-        $self->{+CALLS}     //= 0;
-        $self->{+TEARDOWNS} //= 0;
-    }
-    sub available { 1 }
-    sub assign    { 1 }
-    sub release   { 1 }
-    sub status    { {} }
-    sub teardown  { $_[0]->{+TEARDOWNS}++ }
-
-    sub service_one {
-        my ($self, %p) = @_;
-        $self->{+CALLS}++;
-        my $pid = shift @{$self->{+PIDS} //= []};
-        return -1 unless defined $pid;    # no pid -> declared not needed
-        $p{harness}->track_resource_service(
-            pid      => $pid,
-            resource => $self,
-            method   => 'service_one',
-            scope    => $p{scope},
-            ($p{run} ? (run => $p{run}) : ()),
-        );
-        return 0;                         # started, one-shot
-    }
-}
+# Per-run resource-service lifecycle (invocation of service_* methods,
+# teardown calls) lives in the run-service process after the harness
+# refactor; those tests live in t/unit/Harness2/RunService.t. Here we
+# only exercise the harness's scheduling-side handling of per-run
+# resources and the lazy spawn of the run service itself.
 
 subtest 'constructs with valid workdir' => sub {
     my $dir = tempdir(CLEANUP => 1);
@@ -914,68 +883,81 @@ subtest 'restart: method returning -1 marks permanent_broken' => sub {
     ok(!(keys %{$h->{resource_services}}), 'no tracked entries remain');
 };
 
-subtest 'per-run resources start lazily and tear down on completion' => sub {
+subtest 'harness spawns a run service lazily for each run it considers' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
-    my $run_res = Test::RunRes::Res->new(pids => []);    # no pids -> service returns -1 (not needed)
-    my $run     = Test2::Harness2::Run->from_files(
-        files     => ['skip-me.t'],
-        resources => [$run_res],
-    );
-
-    my $h = Test2::Harness2->new(workdir => $dir);
+    my $run = Test2::Harness2::Run->from_files(files => ['x.t']);
+    my $h   = Test2::Harness2->new(workdir => $dir);
     push @{$h->{queue}} => $run;
 
-    is($run_res->calls,     0, 'service method not called at queue time');
-    is($run_res->teardowns, 0, 'no teardown yet');
+    # Spoof ipcm_info so _ensure_run_service_started actually tries to
+    # fork. Mock RunService->spawn so we don't really fork from the
+    # test; capture what the harness handed it.
+    $h->{ipcm_info} = {fake => 1};
 
+    my @spawn_calls;
     my $fake_handle = bless {pid => 99991}, 'Test2::Harness2::Collector::Handle';
     {
         no warnings 'redefine';
+        local *Test2::Harness2::RunService::spawn = sub {
+            my ($class, %args) = @_;
+            push @spawn_calls => \%args;
+            return 91_001;    # pretend child pid
+        };
+        local *Test2::Harness2::Collector::spawn = sub { $fake_handle };
+
+        $h->run_on_all({});
+        $h->run_on_all({});    # a second tick must not re-fork
+    }
+
+    is(scalar @spawn_calls,      1,    'RunService->spawn called exactly once for the run');
+    is($spawn_calls[0]{workdir}, $dir, 'workdir forwarded to run service');
+    ref_is($spawn_calls[0]{run}, $run, 'Run object forwarded to run service');
+    is(
+        $h->{run_services}{$run->run_id}{pid},
+        91_001,
+        'harness tracked the run-service pid',
+    );
+};
+
+subtest 'harness spawns a run service even when the run has no resources' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $run = Test2::Harness2::Run->from_files(files => ['y.t']);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    $h->{ipcm_info} = {fake => 1};
+    push @{$h->{queue}} => $run;
+
+    my @spawn_calls;
+    my $fake_handle = bless {pid => 99992}, 'Test2::Harness2::Collector::Handle';
+    {
+        no warnings 'redefine';
+        local *Test2::Harness2::RunService::spawn = sub {
+            push @spawn_calls => {@_[1 .. $#_]};
+            return 91_002;
+        };
         local *Test2::Harness2::Collector::spawn = sub { $fake_handle };
         $h->run_on_all({});
     }
 
-    is($run_res->calls, 1, 'service_one called exactly once when run was first considered');
-
-    # Second tick while the job is still running: lazy start must not re-fire.
-    $h->run_on_all({});
-    is($run_res->calls, 1, 'service_one not re-invoked on subsequent ticks');
-
-    # Finish the job.
-    my ($cur) = values %{$h->{running_jobs}};
-    $cur->{handle}->set_exit_code(0);
-
-    $h->run_on_all({});
-
-    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared');
-    is($run_res->teardowns, 1, 'teardown invoked exactly once');
+    is(scalar @spawn_calls, 1, 'run service spawned for a run with zero resources');
 };
 
-subtest 'per-run resource-service pid is tracked with scope="run" and a run ref' => sub {
-    my $dir     = tempdir(CLEANUP => 1);
-    my $run_res = Test::RunRes::Res->new(pids => [88500]);
-    my $run     = Test2::Harness2::Run->from_files(
-        files     => ['x.t'],
-        resources => [$run_res],
-    );
+subtest 'run-service pid is recognized by run_on_pid and dropped cleanly' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
 
-    my $h = Test2::Harness2->new(workdir => $dir);
-    push @{$h->{queue}} => $run;
+    $h->{run_services}{r1} = {
+        pid        => 91_050,
+        run        => Test2::Harness2::Run->new(run_id => 'r1'),
+        started_at => time,
+    };
 
-    # Evaluate once but do not launch (mock spawn to die so we stop short).
-    my $evaluated;
-    {
-        no warnings 'redefine';
-        local *Test2::Harness2::Collector::spawn = sub { die "stop before launch" };
-        eval { $h->run_on_all({}); 1 };    # spawn dies; we just want the lazy start side effect
-        $evaluated = 1;
-    }
-    ok($evaluated, 'evaluated');
+    # run_on_pid for this pid must drop the tracking entry but not
+    # treat it as a resource-service exit (nothing to restart; the
+    # RunService is responsible for cascading shutdown to its children).
+    $h->run_on_pid(91_050, 0);
 
-    ok(exists $h->{resource_services}{88500}, 'per-run service pid tracked');
-    is($h->{resource_services}{88500}{scope}, 'run', 'scope is "run"');
-    ok(ref($h->{resource_services}{88500}{run}), 'run reference stored on tracked entry');
+    ok(!exists $h->{run_services}{r1}, 'run-service pid cleared from tracking');
 };
 
 subtest 'per-run resources participate in _evaluate_resources_for' => sub {
@@ -1004,19 +986,29 @@ subtest 'per-run resources participate in _evaluate_resources_for' => sub {
     is(scalar keys %{$h->{running_jobs}}, 0, 'no running jobs');
 };
 
-subtest 'run_on_cleanup tears down per-run resources for uncompleted runs' => sub {
-    my $dir     = tempdir(CLEANUP => 1);
-    my $run_res = Test::RunRes::Res->new(pids => []);
-    my $run     = Test2::Harness2::Run->from_files(
-        files     => ['never-runs.t'],
-        resources => [$run_res],
-    );
+subtest 'run_on_cleanup signals run services for uncompleted runs' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $run = Test2::Harness2::Run->from_files(files => ['never-runs.t']);
 
     my $h = Test2::Harness2->new(workdir => $dir);
     push @{$h->{queue}} => $run;
 
-    # Pretend the run was started but never completed.
+    # Fork a short-lived child as the pretend run-service pid. The
+    # child just waits for a signal; run_on_cleanup should TERM it,
+    # which we reap in the parent.
+    my $child_pid = fork // die "fork: $!";
+    if (!$child_pid) {
+        $SIG{TERM} = sub { POSIX::_exit(0) };
+        sleep 30;    # dies via SIGTERM from the harness, not the timer
+        POSIX::_exit(255);
+    }
+
     $run->{resources_started} = 1;
+    $h->{run_services}{$run->run_id} = {
+        pid        => $child_pid,
+        run        => $run,
+        started_at => time,
+    };
 
     my @emits;
     {
@@ -1026,7 +1018,20 @@ subtest 'run_on_cleanup tears down per-run resources for uncompleted runs' => su
         $h->run_on_cleanup;
     }
 
-    is($run_res->teardowns, 1, 'uncompleted run had its resources torn down');
+    # Wait for the child to exit (it should respond to the TERM we just sent).
+    my $deadline = time + 5;
+    my $reaped;
+    until ($reaped) {
+        $reaped = waitpid($child_pid, POSIX::WNOHANG()) > 0;
+        last if $reaped;
+        last if time > $deadline;
+        sleep(0.05);
+    }
+    kill 'KILL', $child_pid unless $reaped;    # belt-and-braces cleanup
+    waitpid($child_pid, 0) unless $reaped;
+
+    ok($reaped,                                  'run-service pid exited after run_on_cleanup signalled it');
+    ok(!exists $h->{run_services}{$run->run_id}, 'run-service tracking cleared');
 };
 
 subtest '_evaluate_resources_for returns skip when a resource is permanently broken' => sub {

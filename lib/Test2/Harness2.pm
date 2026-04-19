@@ -25,6 +25,7 @@ use Test2::Harness2::Collector;
 use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Role::ResourceServiceHost;
 use Test2::Harness2::Run;
+use Test2::Harness2::RunService;
 use Test2::Harness2::Util::EventEmitter;
 use Test2::Harness2::Util::IPC qw/list_direct_children/;
 
@@ -44,6 +45,7 @@ use Object::HashBase qw{
     +queue
     +running_jobs
     +resource_services
+    +run_services
     +finish_after_initial_run
     +emitter
     +watch_pids_ref
@@ -89,6 +91,7 @@ sub init {
     $self->{+QUEUE}             //= [];
     $self->{+RUNNING_JOBS}      //= {};
     $self->{+RESOURCE_SERVICES} //= {};
+    $self->{+RUN_SERVICES}      //= {};
     $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
@@ -479,7 +482,7 @@ sub _check_completions {
             my $run_id = $run->run_id;
             $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
 
-            $self->_teardown_run_resources($run);
+            $self->_teardown_run_service($run);
 
             # FUTURE (reimplement-resource-classes branch): this atomic
             # swap is the stopgap shutdown half of the runs/<id>.json
@@ -520,7 +523,7 @@ sub _perform_hard_stop {
     # NOTE: this method kills processes and clears scheduler state; it
     # does NOT call teardown() on any resources. Callers that want a
     # clean shutdown must invoke run_on_cleanup (or call
-    # _teardown_run_resources explicitly for any per-run resources
+    # _teardown_run_service explicitly for any per-run resources
     # they care about) after this returns.
     $self->{+STATE} = 'terminating';
     $self->{+QUEUE} = [];
@@ -548,6 +551,14 @@ sub _perform_hard_stop {
 
     # Add any resource-service pids.
     for my $info (values %{$self->{+RESOURCE_SERVICES} // {}}) {
+        $pids{$info->{pid}} //= {} if $info->{pid};
+    }
+
+    # Add any run-service pids. A run service's own SIG{TERM} handler
+    # cascades the TERM down to its per-run resource services before
+    # the service loop unwinds, so they'll be taken down by their own
+    # run service when we signal it here.
+    for my $info (values %{$self->{+RUN_SERVICES} // {}}) {
         $pids{$info->{pid}} //= {} if $info->{pid};
     }
 
@@ -665,6 +676,18 @@ sub run_on_pid {
         return;
     }
 
+    # Run-service exit. The per-run supervisor finished on its own
+    # (either because _teardown_run_service sent it TERM, or because
+    # its parent-pid watch tripped and it exited voluntarily). Drop
+    # its tracking entry and move on; any resource-service state
+    # reported via IPC has already been applied.
+    for my $rid (keys %{$self->{+RUN_SERVICES} // {}}) {
+        my $info = $self->{+RUN_SERVICES}->{$rid};
+        next unless $info->{pid} && $info->{pid} == $pid;
+        delete $self->{+RUN_SERVICES}->{$rid};
+        return;
+    }
+
     # Resource-service exit (handled by the shared host role, which
     # takes care of restart-spiral protection, state flags, and
     # re-invocation). Reparented descendants that aren't one of ours
@@ -759,7 +782,7 @@ sub run_on_cleanup {
     my $has_running = keys %{$self->{+RUNNING_JOBS} // {}};
     $self->_perform_hard_stop if $has_running || @{$self->{+QUEUE}};
 
-    $self->_teardown_run_resources($_) for @leftover_runs;
+    $self->_teardown_run_service($_) for @leftover_runs;
 
     # Guard every teardown so a throwing resource cannot short-circuit the
     # loop and skip the service_stopped emit that downstream callers rely
@@ -834,7 +857,7 @@ sub _try_launch_next_pending {
 
         # Lazy per-run resource startup: the first time this run is
         # considered for launch we spin up its resource services.
-        $self->_ensure_run_resources_started($run);
+        $self->_ensure_run_service_started($run);
 
         for my $job_id (@{$run->pending}) {
             my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
@@ -850,7 +873,7 @@ sub _try_launch_next_pending {
                 if ($run->is_complete) {
                     my $rid = $run->run_id;
                     $self->{+QUEUE} = [grep { $_->run_id ne $rid } @{$self->{+QUEUE}}];
-                    $self->_teardown_run_resources($run);
+                    $self->_teardown_run_service($run);
                     $self->{+STATE} = 'finishing'
                         if $self->{+FINISH_AFTER_INITIAL_RUN}
                         && $self->{+STATE} eq 'running';
@@ -897,65 +920,60 @@ sub _evaluate_resources_for {
     return ('launch', \@use);
 }
 
-sub _ensure_run_resources_started {
+sub _ensure_run_service_started {
     my ($self, $run) = @_;
 
-    # String keys here match the HashBase +resources_started / +resources_torn_down
-    # declarations on Test2::Harness2::Run -- the constants are scoped to
-    # that package, but the attributes are idempotency flags, not a
-    # public API, so touching the hash directly is fine.
+    # String keys here match the HashBase +resources_started /
+    # +resources_torn_down declarations on Test2::Harness2::Run -- the
+    # constants are scoped to that package, but the attributes are just
+    # idempotency flags, so touching the hash directly is fine.
     return if $run->{resources_started};
     $run->{resources_started} = 1;
 
-    my $resources = $run->resources // [];
-    return unless @$resources;
+    # In unit tests that exercise scheduler logic without building a
+    # real IPC bus, ipcm_info is undef; skip the fork then so the
+    # rest of the scheduler still works. Production code paths
+    # (start/spawn) always set ipcm_info before this method runs.
+    return unless defined $self->ipcm_info;
 
-    $self->_start_resource_services($resources, scope => 'run', run => $run);
+    my $run_id = $run->run_id;
+    my $pid    = Test2::Harness2::RunService->spawn(
+        workdir     => $self->{+WORKDIR},
+        run         => $run,
+        ipcm_info   => $self->ipcm_info,
+        parent_pids => [$$],
+    );
+
+    $self->{+RUN_SERVICES}->{$run_id} = {
+        pid        => $pid,
+        run        => $run,
+        started_at => time,
+    };
 
     return;
 }
 
-sub _teardown_run_resources {
+sub _teardown_run_service {
     my ($self, $run) = @_;
 
-    # Called from three sites: _check_completions (normal run completion),
-    # _try_launch_next_pending (all-skipped completion), and
-    # run_on_cleanup (runs left in the queue at shutdown). The
+    # Called from three sites: _check_completions (normal run
+    # completion), _try_launch_next_pending (all-skipped completion),
+    # and run_on_cleanup (runs left in the queue at shutdown). The
     # resources_torn_down flag below makes each call idempotent.
     return if $run->{resources_torn_down};
     $run->{resources_torn_down} = 1;
 
-    # Collect per-run service pids, then remove their tracking entries
-    # BEFORE signalling. run_on_pid reads from the tracking map; once the
-    # entries are gone the reap that follows TERM is a no-op, which is
-    # what we want -- we don't want to restart a service we're tearing
-    # down.
-    my @pids;
-    for my $pid (keys %{$self->{+RESOURCE_SERVICES} // {}}) {
-        my $svc = $self->{+RESOURCE_SERVICES}{$pid};
-        next unless ref($svc->{run}) && $svc->{run} == $run;
-        push @pids => $pid;
-        delete $self->{+RESOURCE_SERVICES}{$pid};
-    }
+    my $rid = $run->run_id;
+    my $svc = delete $self->{+RUN_SERVICES}->{$rid};
+    return unless $svc;
+    return unless $svc->{pid};
 
-    # Signal per-run services to stop. kill(0) narrows (but does not
-    # eliminate) the pid-reuse race between reap-from-elsewhere and our
-    # TERM -- a reaped pid that has already been recycled to a stranger
-    # will no longer be signal-addressable. If a TERM is delivered to a
-    # still-live service that ignores it, _perform_hard_stop at shutdown
-    # enumerates surviving children via the subreaper path and escalates
-    # to KILL.
-    for my $pid (@pids) {
-        next unless kill 0 => $pid;
-        kill TERM => $pid;
-    }
-
-    for my $res (@{$run->resources // []}) {
-        my $ok  = eval { $res->teardown; 1 };
-        my $err = $@;
-        warn "resource '" . $res->resource_name . "' teardown died: $err"
-            unless $ok;
-    }
+    # SIGTERM the run service. Its SIG{TERM} handler flips the service
+    # state to 'terminating' and run_on_cleanup inside the child will
+    # cascade TERMs to the run's resource services before exiting. The
+    # reap lands on our side via IPC::Manager's waitpid tick and falls
+    # through run_on_pid -- see the run-services guard there.
+    kill TERM => $svc->{pid} if kill 0 => $svc->{pid};
 
     return;
 }

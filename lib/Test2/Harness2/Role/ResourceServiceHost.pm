@@ -235,7 +235,7 @@ sub _invoke_service_method {
     # rewrite below applies only to entries that appeared during this
     # call, so we never clobber a sibling pid that's still running under
     # the same method name.
-    my $services    = $self->resource_services;
+    my $services = $self->resource_services;
     my %pre_existing =
         map { $_->{pid} => 1 }
         grep { $_->{resource} == $res && defined $_->{method} && $_->{method} eq $method } values %$services;

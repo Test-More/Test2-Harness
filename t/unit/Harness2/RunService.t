@@ -49,15 +49,15 @@ subtest 'constructs with required attributes' => sub {
         run     => $run,
     );
 
-    is($svc->name,    'run', 'default name');
-    is($svc->run_id,  'r-1', 'run_id derived from run');
-    is($svc->workdir, $dir,  'workdir stored');
+    is($svc->log_name, 'run',     'default log_name');
+    is($svc->name,     'run-r-1', 'default bus name includes run_id for uniqueness');
+    is($svc->run_id,   'r-1',     'run_id derived from run');
+    is($svc->workdir,  $dir,      'workdir stored');
     ok(-d "$dir/runs/r-1/services", 'services dir created at construction');
-    ok($svc->loggers,               'default logger configured');
     is(
-        $svc->loggers->[0][2],
+        $svc->log_file,
         "$dir/runs/r-1/services/run.jsonl",
-        'default logger writes to runs/<id>/services/run.jsonl',
+        'log file path is runs/<id>/services/<log_name>.jsonl',
     );
 };
 

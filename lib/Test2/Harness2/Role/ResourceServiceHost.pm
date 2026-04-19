@@ -19,8 +19,7 @@ use constant RESTART_HEALTHY_SECS => 30;
 
 # Consumer contract: an accessor that returns the working directory the
 # host is writing logs under, an accessor for the host's own service
-# name (reserved in its scope), and a hash slot that stores tracked
-# services keyed by pid.
+# name, and a hash slot that stores tracked services keyed by pid.
 requires 'workdir';
 requires 'name';
 
@@ -31,6 +30,13 @@ sub _service_host_scope { 'global' }
 # The run object this host is bound to, when the host is run-scoped.
 # Global hosts return undef.
 sub _service_host_run { undef }
+
+# The name the host uses for its own log file (and which a resource
+# service cannot take in the host's scope). Defaults to the bus-level
+# name; consumers whose bus name differs from their log file name
+# (e.g. RunService, where the bus name has to be unique per run but
+# the log file is just "run.jsonl") override this.
+sub _service_host_log_name { $_[0]->name }
 
 # The tracking hashref for resource services (pid => entry). Consumers
 # expose this via a HashBase attribute called resource_services; the
@@ -160,7 +166,8 @@ sub _assert_service_name_unused {
         $reserved = ref($host_run) && ref($run) && $host_run == $run;
     }
 
-    if ($reserved && defined $self->name && $self->name eq $name) {
+    my $host_log_name = $self->_service_host_log_name;
+    if ($reserved && defined $host_log_name && $host_log_name eq $name) {
         croak sprintf(
             "service name '%s' is reserved by the %s service itself",
             $name, $host_scope,

@@ -231,7 +231,7 @@ subtest "harness's own NAME is reserved in global scope" => sub {
     my $ok  = eval { $h->_start_resource_services([$res], scope => 'global'); 1 };
     my $err = $@;
     ok(!$ok, 'croaks');
-    like($err, qr/reserved by the harness/, 'error mentions reservation');
+    like($err, qr/reserved by the global service/, 'error mentions reservation');
 };
 
 subtest 'harness name is not reserved in per-run scope' => sub {

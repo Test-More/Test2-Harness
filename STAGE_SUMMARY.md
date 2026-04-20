@@ -307,3 +307,111 @@ This stage assumes `App::Yath::Script` is installed in the running
 perl. It is: `which yath` points at `App-Yath-Script`'s launcher,
 and `perldoc -l App::Yath::Script` resolves. If your CI image ever
 lacks it, `scripts/yath` will fail at `require App::Yath::Script`.
+
+# Stage 5 — Minimal `test` command
+
+## Branch
+
+- `plan-stage-05-test-command`
+- Base: `plan-stage-04-yath-script`
+
+## What landed
+
+1. **`App::Yath2::TestFile: a plain TestFile value object`** —
+   `lib/App/Yath2/TestFile.pm`. Role-consuming
+   (`Test2::Harness2::Role::TestFile`) `Object::HashBase` object with
+   the defaults that `Run::from_files` expects. `Test2::Harness2`
+   itself never touches a concrete TestFile class; it only looks at
+   the role.
+
+2. **`App::Yath2::Finder::Simple: minimal test-file discovery`** —
+   `lib/App/Yath2/Finder/Simple.pm`. Expands positional args: files
+   pass through as-is; directories get a recursive `*.t` scan.
+   Dedup on absolute path. Croaks on missing paths.
+
+3. **`App::Yath2::Command::test: minimal test command with per-run
+   IPC pass/fail tally`** — `lib/App/Yath2/Command/test.pm`. The
+   command spawns a harness service, queues a single run over IPC
+   via `Spawn->queue_test_run` (capturing the returned `run_id`),
+   polls `run_status($run_id)` until the run drains, reads
+   `pass_count` / `fail_count` from the response, then sends
+   `finish` and waits. Exit 0 on all-pass, 1 on any fails, 2 on
+   startup/IPC errors. Tally is driven entirely by IPC — no
+   logger-written file is load-bearing — and is scoped to the
+   specific `run_id` the command queued (so future multi-run
+   daemonized usage stays isolated). Alongside this, the
+   `t/lib/Test2/Harness2/TestFile.pm` fixture is dropped; every
+   Harness2 test that needed a concrete TestFile now uses
+   `App::Yath2::TestFile`, and the dedicated round-trip test moves
+   from `t/AI/unit/Harness2/TestFile.t` to
+   `t/AI/unit/App/Yath2/TestFile.t`. The role unit tests continue
+   to use inline consumer packages and do not depend on any
+   concrete class.
+
+4. **`App::Yath2: dispatch 'test' command to App::Yath2::Command::test`** —
+   flip the registry entry from the stub sentinel to the real class
+   name and add `_dispatch()` which `require`s + `new`s + runs.
+
+5. **`t/AI/unit/App/Yath2.t: match Stage 5's real 'test' dispatch`** —
+   update the dispatcher unit test so it no longer asserts on the
+   "not ported yet" stub for the `test` command; it now exercises
+   the real dispatch path.
+
+## Tests
+
+- `prove -j16 -I lib -I t/lib -r t` — all files, all tests pass.
+- End-to-end `yath test` smokes: single passing test -> pass=1
+  fail=0 exit=0; single failing test -> pass=0 fail=1 exit=1;
+  mixed pass/fail -> exit=1.
+- Two-run isolation smoke: queue a pass-only run and a fail-only
+  run against the same harness; `run_status` reports correct
+  per-run counts keyed by `run_id`.
+
+## Points of interest / decisions you may want to revisit
+
+1. **`App::Yath2::Finder::Simple` is a pure class method, not a
+   role consumer.** Stage 7 (plugins) will introduce hooks that want
+   to interpose on finder results. When that lands, expect this
+   module to either grow a plugin-aware subclass or be replaced.
+
+2. **Per-run tally through IPC, not on-disk artifacts.** The
+   command polls `run_status($run_id)` and reads `pass_count` /
+   `fail_count` from the live queue or, if the run has already
+   completed, from a captured snapshot populated when the run was
+   pruned. Run gains `pass_count` / `fail_count` slots; `mark_done`
+   takes a pass flag; Harness2 gains a `completed_runs` snapshot
+   map; `request_handler_run_status` (+ `Spawn::run_status`) is the
+   new IPC verb. No logger-written file is functionally
+   load-bearing.
+
+3. **`argv` hash-key trick repeated.** `App::Yath2::Command::test`
+   carries the same explicit `sub argv { $_[0]->{argv} }` accessor
+   that `App::Yath2` does, for the same reason (the `ARGV` bareword
+   reservation). If we end up building many command classes with
+   the same shape, it's worth extracting a tiny
+   `App::Yath2::Role::Command` that does this once.
+
+4. **`local $?` around `$spawn->wait`.** `Spawn::wait` calls
+   `waitpid` and thus leaves `$?` set to the service's exit status.
+   Perl's END/DESTROY cleanup propagates `$?` after `exit()`, which
+   silently overrode the explicit `exit 1` we were trying to return.
+   The fix is a `local $?` block; the commit message calls this out
+   so the trap stays documented.
+
+5. **`--help` / `--version` inside `yath test` not wired.** The
+   Stage-5 scope is "positional args only, no options." Once Stage
+   6 ports the option libraries, `Command::test` will start
+   consuming them. Right now any `-flag` argument to `yath test`
+   would be passed straight through to the finder, which will
+   then fail the `-e $path` check.
+
+6. **PLAN Stage 5 says "Only ship narrowly-scoped unit/smoke
+   coverage"** — we deliberately avoided porting
+   `old/t/Yath/integration/test.t`. Integration coverage comes in
+   later stages as options/plugins/preloads/renderers land.
+
+7. **`App::Yath2::TestFile` vs role split.** The concrete
+   test-file processing logic lives in `App::Yath2::TestFile`;
+   `Test2::Harness2` only ships `Test2::Harness2::Role::TestFile`
+   describing what consumers must provide. This keeps
+   `Test2::Harness2` independent of any concrete TestFile class.

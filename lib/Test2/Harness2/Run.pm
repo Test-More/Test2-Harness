@@ -24,6 +24,10 @@ use Object::HashBase qw{
     <done
     <resources
     <aborted_reason
+    <loggers
+    <extend_loggers
+    <test_loggers
+    <extend_test_loggers
     +resources_started
     +resources_torn_down
 };
@@ -38,6 +42,56 @@ sub init {
     $self->{+RUNNING}    //= [];
     $self->{+DONE}       //= [];
     $self->{+RESOURCES}  //= [];
+
+    # Per-run logger overrides. Each of the four slots is an arrayref
+    # of logger specs; each pair is mutually exclusive.
+    #
+    #   loggers               Replace the harness's service_loggers for
+    #                         this run's RunService + resource services.
+    #   extend_loggers        Append to the harness's service_loggers
+    #                         for this run.
+    #   test_loggers          Replace the harness's test_loggers for
+    #                         test jobs in this run.
+    #   extend_test_loggers   Append to the harness's test_loggers for
+    #                         this run's test jobs.
+    #
+    # The effective list is computed at launch time by the harness /
+    # run service; the Run only carries intent.
+    for my $slot (LOGGERS, EXTEND_LOGGERS, TEST_LOGGERS, EXTEND_TEST_LOGGERS) {
+        next unless defined $self->{$slot};
+        croak "'$slot' must be an arrayref"
+            unless ref($self->{$slot}) eq 'ARRAY';
+    }
+
+    croak "'loggers' and 'extend_loggers' are mutually exclusive"
+        if defined $self->{+LOGGERS} && defined $self->{+EXTEND_LOGGERS};
+
+    croak "'test_loggers' and 'extend_test_loggers' are mutually exclusive"
+        if defined $self->{+TEST_LOGGERS} && defined $self->{+EXTEND_TEST_LOGGERS};
+}
+
+# Effective per-run logger lists. Given the harness-level defaults,
+# return the list the run should actually use for its service /
+# test-job collectors. Replace-style overrides win outright; extend-
+# style overrides append to the harness defaults. Each returns a
+# fresh arrayref so callers can mutate without reaching back into
+# the Run.
+sub effective_service_loggers {
+    my ($self, $harness_defaults) = @_;
+    return _effective($self->{+LOGGERS}, $self->{+EXTEND_LOGGERS}, $harness_defaults);
+}
+
+sub effective_test_loggers {
+    my ($self, $harness_defaults) = @_;
+    return _effective($self->{+TEST_LOGGERS}, $self->{+EXTEND_TEST_LOGGERS}, $harness_defaults);
+}
+
+sub _effective {
+    my ($replace, $extend, $defaults) = @_;
+    $defaults //= [];
+    return [@$replace] if defined $replace;
+    return [@$defaults, @$extend] if defined $extend;
+    return [@$defaults];
 }
 
 sub from_files {

@@ -36,6 +36,7 @@ use Object::HashBase qw{
     <name
     <job_id
     <loggers
+    <service_loggers
     <test_auditor
     <test_loggers
     <kill_timeout
@@ -128,22 +129,42 @@ sub init {
 
     $self->_init_resources;
 
-    # TODO: Eventually we will remove this default, but wait until we write the
-    # App::Yath2 code for that. No immediate action, but leave this TODO for
-    # future reference.
-    $self->{+LOGGERS} //= [
-        [
-            'Test2::Harness2::Collector::Logger::JSONL',
-            output_file => "$logdir/services/$self->{+NAME}.jsonl",
-        ],
-        [
-            'Test2::Harness2::Collector::Logger::JSON',
-            output_file => "$logdir/services/$self->{+NAME}.json",
-            spec        => $self,
-        ],
-    ];
+    # Loggers default to empty: the caller decides what (if anything)
+    # gets written to disk. Three independent lists control the three
+    # service tiers the harness manages:
+    #
+    #   loggers          Run on the harness's OWN Collector interpose.
+    #                    A typical harness config might put a JSONL +
+    #                    JSON pair here pointing at
+    #                    "$logdir/services/$NAME.{jsonl,json}".
+    #
+    #   service_loggers  Applied to each child service the harness
+    #                    starts (RunService and resource services).
+    #                    Runs may extend or replace this list per-run
+    #                    via queue_test_run.
+    #
+    #   test_loggers     Applied to the per-test-job Collector spawned
+    #                    inside a RunService. Runs may extend or
+    #                    replace this list per-run via queue_test_run.
+    #
+    # Each slot is an arrayref of logger specs: either a blessed
+    # logger instance or an arrayref [$class, %args] that the
+    # Collector instantiates in the child process.
+    $self->{+LOGGERS}         //= [];
+    $self->{+SERVICE_LOGGERS} //= [];
+    $self->{+TEST_LOGGERS}    //= [];
+
+    croak "'loggers' must be an arrayref"
+        unless ref($self->{+LOGGERS}) eq 'ARRAY';
+    croak "'service_loggers' must be an arrayref"
+        unless ref($self->{+SERVICE_LOGGERS}) eq 'ARRAY';
+    croak "'test_loggers' must be an arrayref"
+        unless ref($self->{+TEST_LOGGERS}) eq 'ARRAY';
+
+    # The test auditor default is still set here: it's a class-level
+    # concern, not a per-instance logger, and a run-complete
+    # pass/fail verdict is useless without it.
     $self->{+TEST_AUDITOR} //= 'Test2::Harness2::Collector::Auditor::Test';
-    $self->{+TEST_LOGGERS} //= ['Test2::Harness2::Collector::Logger::JSONL'];
 }
 
 sub _init_resources {

@@ -157,9 +157,17 @@ sub request_handler_launch_job {
     my $log_file      = $payload->{log_file};
     my $env           = $payload->{env} // {};
     my $auditor       = $payload->{auditor};
-    my $loggers       = $payload->{loggers} // [];
-    my $test_file_abs = $payload->{test_file};
-    my $launch_cmd    = $payload->{launch};
+    # Per-job logger spec list. Defaults to the RunService's own
+    # TEST_LOGGERS (set at spawn time from the run's effective
+    # test_loggers list). Callers can override per-launch via the
+    # payload -- not used from the standard harness path but kept
+    # for targeted launches (e.g. synth-skip / synth-fail). This
+    # service no longer injects any hard-coded JSONL / JSON pair --
+    # if the caller wants those, they include the specs (typically
+    # with placeholder paths, see below).
+    my $payload_loggers = $payload->{loggers} // $self->{+TEST_LOGGERS} // [];
+    my $test_file_abs   = $payload->{test_file};
+    my $launch_cmd      = $payload->{launch};
 
     return {ok => 0, error => "'test_file' must be absolute"}
         unless $test_file_abs =~ m{^/};
@@ -169,21 +177,26 @@ sub request_handler_launch_job {
     # real test file when no override is present.
     $launch_cmd //= [$^X, '-Ilib', $test_file_abs];
 
-    # Default the per-job log file to runs/<run_id>/<job_id>/<try>.jsonl
-    # when the harness didn't pre-compute one. The path layout mirrors
-    # the one the harness itself used to use when it still launched
-    # jobs directly.
-    unless (defined $log_file) {
-        my $log_dir = join '/', $self->{+LOGDIR}, 'runs', $run_id, $job_id;
-        make_path($log_dir);
-        $log_file = "$log_dir/$job_try.jsonl";
-    }
+    # Per-job log directory exists for any logger that wants to write
+    # something per-try. Callers describe the path via %LOG_DIR% /
+    # %JOB_TRY% placeholders in their spec; we fill them in below.
+    my $log_dir = join '/', $self->{+LOGDIR}, 'runs', $run_id, $job_id;
+    make_path($log_dir);
 
-    my @logger_specs;
-    push @logger_specs => @$loggers;
+    # Default the payload-level log_file only if the caller wants one;
+    # loggers are otherwise driven entirely by the payload_loggers
+    # specs. Kept for back-compat with callers that pass log_file
+    # explicitly.
+    $log_file //= undef;
 
-    my $json_file = $log_file;
-    $json_file =~ s/\.jsonl$/.json/;
+    my %ctx = (
+        LOGDIR  => $self->{+LOGDIR},
+        LOG_DIR => $log_dir,
+        RUN_ID  => $run_id,
+        JOB_ID  => $job_id,
+        JOB_TRY => $job_try,
+    );
+    my @logger_specs = map { _expand_logger_spec($_, \%ctx) } @$payload_loggers;
 
     my $handle;
     my $spawn_ok = eval {
@@ -198,17 +211,7 @@ sub request_handler_launch_job {
             ipcm_info   => $self->ipcm_info,
             ipc_peer    => $self->{+NAME},
             (defined $auditor ? (auditor => $auditor) : ()),
-            loggers => [
-                (map { [@$_] } @logger_specs),    # shallow-clone to decouple from payload
-                [
-                    'Test2::Harness2::Collector::Logger::JSONL',
-                    output_file => $log_file,
-                ],
-                [
-                    'Test2::Harness2::Collector::Logger::JSON',
-                    output_file => $json_file,
-                ],
-            ],
+            loggers => [@logger_specs],
         );
         1;
     };
@@ -543,6 +546,33 @@ sub spawn {
     # Child: take over the process and run the service loop.
     $class->start(%args);
     POSIX::_exit(255);    # start() should never return
+}
+
+# Substitute %LOGDIR%, %LOG_DIR%, %RUN_ID%, %JOB_ID%, %JOB_TRY%
+# placeholders in a logger spec's string args. Blessed instances and
+# bare class names pass through untouched (no args to substitute).
+# Only scalar args are walked -- arrayref / hashref args are left
+# alone; callers with richer argument shapes are responsible for
+# their own substitution.
+sub _expand_logger_spec {
+    my ($spec, $ctx) = @_;
+
+    return $spec if blessed($spec);
+    return $spec unless ref($spec) eq 'ARRAY';
+
+    my @out;
+    for my $item (@$spec) {
+        push @out => (defined($item) && !ref($item) ? _expand_placeholders($item, $ctx) : $item);
+    }
+    return \@out;
+}
+
+sub _expand_placeholders {
+    my ($str, $ctx) = @_;
+    return $str unless defined $str && index($str, '%') >= 0;
+
+    $str =~ s/%([A-Z_]+)%/exists $ctx->{$1} ? $ctx->{$1} : "%$1%"/ge;
+    return $str;
 }
 
 1;

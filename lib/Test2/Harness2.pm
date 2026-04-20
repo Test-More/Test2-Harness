@@ -1217,7 +1217,10 @@ sub _launch_job {
                 test_file => $job->test_file_abs,
                 env       => \%env,
                 auditor   => $self->{+TEST_AUDITOR},
-                loggers   => [],                       # run service adds its own loggers
+                # Omit loggers from the payload: the run service uses
+                # its own TEST_LOGGERS slot (populated at spawn from
+                # the run's effective test_loggers) when the payload
+                # doesn't override.
                 (defined $opts{launch} ? (launch => $opts{launch}) : ()),
             },
         );

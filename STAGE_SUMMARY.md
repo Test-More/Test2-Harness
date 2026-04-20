@@ -5,10 +5,20 @@
 - `plan-stage-05-test-command`
 - Base: `plan-stage-04-yath-script`
 
+## Post-rebase note (architectural realignment)
+
+PLAN gained a new "State and control flow: IPC, not on-disk
+artifacts" section after these commits first landed: no file
+written by a logger can be functionally load-bearing, and the
+`test` command's pass/fail verdict must come from a direct IPC
+query to the harness service, not from reading `0.json`. Commit
+#6 below is the correction -- it replaces the original Stage-5
+file-tally path with IPC-driven polling + tally.
+
 ## What landed
 
-Five commits (the fifth is a post-Stage-5 cleanup committed here rather
-than opened as a separate stage):
+Six commits (commits #5 and #6 are post-Stage-5 cleanups committed
+here rather than opened as separate stages):
 
 1. **`App::Yath2::TestFile: a plain TestFile value object`** —
    `lib/App/Yath2/TestFile.pm`. Role-consuming
@@ -23,9 +33,11 @@ than opened as a separate stage):
    Dedup on absolute path. Croaks on missing paths.
 
 3. **`App::Yath2::Command::test: minimal test command`** —
-   `lib/App/Yath2/Command/test.pm`. The Stage-5 command: finder ->
-   spawn harness -> wait -> tally per-job `0.json` sidecars -> exit
-   0 / 1 / 2.
+   `lib/App/Yath2/Command/test.pm`. The original Stage-5 command:
+   finder -> spawn harness -> wait -> tally per-job `0.json`
+   sidecars -> exit 0 / 1 / 2. Superseded by commit #6 once PLAN
+   forbade file-based tally; the original commit is preserved in
+   history for review clarity.
 
 4. **`App::Yath2: dispatch 'test' command to App::Yath2::Command::test`** —
    flip the registry entry from the stub sentinel to the real class
@@ -41,27 +53,45 @@ than opened as a separate stage):
    (`t/AI/unit/Harness2/Role/TestFile.t`) continue to use inline
    consumer packages and do not depend on any concrete class.
 
+6. **`Command::test: tally pass/fail via IPC, scoped to the
+   queued run`** — PLAN's "State and control flow: IPC, not
+   on-disk artifacts" section forbids any logger-written file
+   from being functionally load-bearing, and the tally must be
+   scoped to the specific run the command queued (today
+   Command::test; tomorrow Command::run against a multi-run
+   daemonized harness). This commit:
+   - Threads a pass flag into Run's `mark_done`; Run gains
+     `pass_count` / `fail_count` slots.
+   - Adds a `completed_runs` snapshot map on Harness2 keyed by
+     run_id, populated when a run is pruned from the queue.
+   - Adds `request_handler_run_status` (+ `Spawn::run_status`):
+     given a run_id, returns the run's live queue state or, if
+     the run has already completed, its captured snapshot.
+   - Rewrites Command::test to drop `test_run` at spawn, queue
+     the run over IPC via `Spawn->queue_test_run` (capturing the
+     returned `run_id`), poll `run_status($run_id)` for drain,
+     read the per-run `pass_count` / `fail_count` from the
+     response, then send `finish` and wait. The `0.json` walk
+     is gone.
+
 ## Tests
 
-- `prove -I lib -I t/lib -r t` — 32 files, 355 tests, all pass (~72s).
-- Manual smoke via `perl -Ilib scripts/yath test <path>` — command
-  wiring works end-to-end: options parsed, finder runs, harness
-  service spawned, logs written, per-run JSON sidecar produced.
+- `prove -j16 -I lib -I t/lib -r t` — 31 files, 343 tests, all
+  pass (~60s wall clock).
+- End-to-end `yath test` smokes (single-file, post commit #6):
+  `passing.t` -> pass=1 fail=0 exit=0; `failing.t` -> pass=0
+  fail=1 exit=1; mixed -> pass=1 fail=1 exit=1.
+- Two-run isolation smoke (ad-hoc): queue a pass-only run and a
+  fail-only run against the same harness; `run_status` reports
+  pass=1/fail=0 for the first id and pass=0/fail=1 for the
+  second. Per-run scoping confirmed.
 
-**However:** the test jobs themselves do not actually run to
-completion under the current base branch (see "Pre-existing
-harness infrastructure issue" below). Manual smokes therefore
-exit with the fail path, because the harness emits
-`job_completed {err => 255}` on every job launch and no per-job
-`0.json` sidecar is ever written.
+## Historical: pre-existing harness infrastructure issue (now resolved)
 
-Per Chad's direction on 2026-04-19, Stages 6+ proceed on top of
-this chain and accept that `yath test` is not end-to-end
-verifiable until the base regression is addressed separately.
-Stage 6 work will be verified via the `prove -I lib -I t/lib -r t`
-path only.
-
-## Pre-existing harness infrastructure issue (NOT Stage 5 scope)
+**Resolved by the logger overhaul now landed on
+`reimplement-resource-classes` + commit #6 above.** The notes
+below describe the state before that overhaul; leaving them in
+place for the commit-review narrative.
 
 When invoking a test through either
 

@@ -10,6 +10,14 @@ use Time::HiRes qw/time/;
 
 use Test2::Harness2::Util qw/tinysleep/;
 
+use Getopt::Yath;
+include_options(
+    'App::Yath2::Options::Tests',
+    'App::Yath2::Options::Renderer',
+    'App::Yath2::Options::Resource',
+    'App::Yath2::Options::Runner',
+);
+
 use Object::HashBase qw{
     <script
     <config
@@ -38,20 +46,43 @@ sub init {
     return;
 }
 
+# Exposed as a named sub so unit tests can invoke option parsing without
+# needing to construct a full command object. parse_options is a closure
+# over the options instance for the package that imported Getopt::Yath,
+# so the call has to happen from inside this package.
+sub _parse_argv {
+    my ($argv) = @_;
+    return parse_options($argv, skip_non_opts => 1, stops => ['--']);
+}
+
 sub run {
     my $self = shift;
 
-    require App::Yath2::Finder::Simple;
-
-    my $argv = $self->argv;
-
-    unless (@$argv) {
-        print STDERR "yath test: no tests given\n";
-        print STDERR "Usage: yath test FILE [FILE...] | DIRECTORY [DIRECTORY...]\n";
+    my $parsed = eval { _parse_argv([@{$self->argv}]) };
+    unless (defined $parsed) {
+        my $err = $@;
+        print STDERR "yath test: option parse failed: $err\n";
         return 2;
     }
 
-    my $ok = eval { _run_tests($argv) };
+    my @positional = @{$parsed->{skipped} // []};
+    push @positional => @{$parsed->{remains}} if $parsed->{remains};
+
+    unless (@positional) {
+        print STDERR "yath test: no tests given\n";
+        print STDERR "Usage: yath test [OPTIONS] FILE [FILE...] | DIRECTORY [DIRECTORY...]\n";
+        return 2;
+    }
+
+    my $settings    = $parsed->{settings};
+    my $launch_args = _build_launch_args($settings, $parsed);
+    my $slots       = _resolve_slots($settings);
+    my $verbose     = _resolve_verbose($settings);
+    my $preloads    = _resolve_preloads($settings);
+
+    _warn_preloads_placeholder($preloads) if @$preloads;
+
+    my $ok = eval { _run_tests(\@positional, $launch_args, $slots, $verbose) };
     unless (defined $ok) {
         my $err = $@;
         print STDERR "yath test: error: $err\n";
@@ -60,10 +91,95 @@ sub run {
     return $ok;
 }
 
-sub _run_tests {
-    my ($paths) = @_;
+# Build the arrayref of perl -I... switches that the harness injects
+# between $^X and the absolute test file. Semantics mirror the old yath
+# defaults:
+#
+#   -I PATH      -> -IPATH
+#   --lib        -> -Ilib
+#   --blib       -> -Iblib/lib -Iblib/arch
+#   --no-lib     -> suppress auto-inclusion of lib/
+#   --no-blib    -> suppress auto-inclusion of blib/
+#
+# If the user passes neither --lib nor --no-lib, lib/ is auto-included
+# when ./lib exists; same pattern for blib.
+sub _build_launch_args {
+    my ($settings, $parsed) = @_;
 
+    my $cleared = $parsed->{cleared} // {};
+
+    my $includes = eval { $settings->tests->includes } // [];
+    $includes = [] unless ref($includes) eq 'ARRAY';
+
+    my $lib_explicit_on   = eval { $settings->tests->lib }  ? 1 : 0;
+    my $blib_explicit_on  = eval { $settings->tests->blib } ? 1 : 0;
+    my $lib_explicit_off  = _was_cleared($cleared, 'tests', 'lib');
+    my $blib_explicit_off = _was_cleared($cleared, 'tests', 'blib');
+
+    my $lib_on  = $lib_explicit_on  || (!$lib_explicit_off  && -d 'lib');
+    my $blib_on = $blib_explicit_on || (!$blib_explicit_off && -d 'blib');
+
+    my @paths;
+    push @paths => @$includes;
+    push @paths => 'lib' if $lib_on;
+    push @paths => 'blib/lib', 'blib/arch' if $blib_on;
+
+    return [map { "-I$_" } @paths];
+}
+
+# Getopt::Yath's cleared bookkeeping lives under $parsed->{cleared}.
+# The shape is not tightly documented, so check the most likely keys
+# defensively: either a flat "<group>.<opt>" key or a nested
+# { group => { opt => 1 } } hash. Either way returns true when the
+# user explicitly passed --no-<opt>.
+sub _was_cleared {
+    my ($cleared, $group, $opt) = @_;
+    return 0 unless ref($cleared) eq 'HASH';
+
+    my $group_cleared = $cleared->{$group};
+    return 1 if ref($group_cleared) eq 'HASH' && $group_cleared->{$opt};
+
+    return 1 if $cleared->{"$group.$opt"};
+    return 1 if $cleared->{$opt};
+
+    return 0;
+}
+
+# Map --slots N (a.k.a. -j N, --job-count N) to the JobCount resource's
+# slot count. Fall back to 1 so the single-run default mirrors what the
+# harness uses when no resource is supplied (Test2::Harness2::_init_resources).
+sub _resolve_slots {
+    my ($settings) = @_;
+
+    my $slots = eval { $settings->resource->slots };
+    return 1 unless defined $slots && $slots =~ m/^\d+$/ && $slots > 0;
+    return $slots;
+}
+
+sub _resolve_verbose {
+    my ($settings) = @_;
+    my $v = eval { $settings->renderer->verbose };
+    return $v // 0;
+}
+
+sub _resolve_preloads {
+    my ($settings) = @_;
+    my $p = eval { $settings->runner->preloads };
+    return [] unless ref($p) eq 'ARRAY';
+    return $p;
+}
+
+sub _warn_preloads_placeholder {
+    my ($preloads) = @_;
+    print STDERR "yath test: --preload is accepted as a placeholder in this stage " . "but not yet wired through; the following preloads were ignored: " . join(', ', @$preloads) . "\n";
+}
+
+sub _run_tests {
+    my ($paths, $launch_args, $slots, $verbose) = @_;
+
+    require App::Yath2::Finder::Simple;
     require Test2::Harness2;
+    require Test2::Harness2::Resource::JobCount;
 
     my @tests = App::Yath2::Finder::Simple->find(@$paths);
     unless (@tests) {
@@ -73,7 +189,10 @@ sub _run_tests {
 
     my $dir = File::Temp->newdir('yath-test-XXXXXX', TMPDIR => 1);
 
-    print STDOUT "yath test: running ", scalar(@tests), " test file(s) under $dir\n";
+    print STDOUT "yath test: running ", scalar(@tests), " test file(s) under $dir",
+        ($verbose ? " (verbose=$verbose)" : ""), "\n";
+
+    my @resources = (Test2::Harness2::Resource::JobCount->new(slots => $slots));
 
     # No finish_after_initial_run: the service stays up while we
     # poll for drain and query the tally. We send finish() ourselves
@@ -84,7 +203,11 @@ sub _run_tests {
     # command knows the run_id -- future Command::run will use the
     # same pattern against an existing multi-run harness, where
     # scoping the tally to one specific run_id is required.
-    my $spawn = Test2::Harness2->spawn(workdir => "$dir");
+    my $spawn = Test2::Harness2->spawn(
+        workdir   => "$dir",
+        resources => \@resources,
+        (@$launch_args ? (launch_args => $launch_args) : ()),
+    );
 
     my $queue_resp = $spawn->queue_test_run(files => \@tests);
     my $run_id     = ref($queue_resp) eq 'HASH' ? $queue_resp->{run_id} : undef;

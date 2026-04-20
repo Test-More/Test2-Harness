@@ -81,8 +81,6 @@ sub run {
     my $verbose     = _resolve_verbose($settings);
     my $preloads    = _resolve_preloads($settings);
 
-    _warn_preloads_placeholder($preloads) if @$preloads;
-
     my $plugins = eval { _load_plugins($settings) };
     unless (defined $plugins) {
         my $err = $@;
@@ -92,7 +90,7 @@ sub run {
 
     $_->client_setup(settings => $settings) for @$plugins;
 
-    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $plugins) };
+    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $preloads, $plugins) };
     my $err = $@;
 
     $_->client_teardown(settings => $settings) for reverse @$plugins;
@@ -197,14 +195,10 @@ sub _resolve_preloads {
     return $p;
 }
 
-sub _warn_preloads_placeholder {
-    my ($preloads) = @_;
-    print STDERR "yath test: --preload is accepted as a placeholder in this stage " . "but not yet wired through; the following preloads were ignored: " . join(', ', @$preloads) . "\n";
-}
-
 sub _run_tests {
-    my ($paths, $launch_args, $slots, $verbose, $plugins) = @_;
-    $plugins //= [];
+    my ($paths, $launch_args, $slots, $verbose, $preloads, $plugins) = @_;
+    $plugins  //= [];
+    $preloads //= [];
 
     require App::Yath2::Finder::Simple;
     require Test2::Harness2;
@@ -219,9 +213,18 @@ sub _run_tests {
     my $dir = File::Temp->newdir('yath-test-XXXXXX', TMPDIR => 1);
 
     print STDOUT "yath test: running ", scalar(@tests), " test file(s) under $dir",
-        ($verbose ? " (verbose=$verbose)" : ""), "\n";
+        ($verbose ? " (verbose=$verbose)" : ""),
+        (@$preloads ? " (preload=" . join(',', @$preloads) . ")" : ""), "\n";
 
     my @resources = (Test2::Harness2::Resource::JobCount->new(slots => $slots));
+
+    if (@$preloads) {
+        require Test2::Harness2::Resource::Preload;
+        push @resources => Test2::Harness2::Resource::Preload->new(
+            workdir => "$dir",
+            preload => [@$preloads],
+        );
+    }
 
     # No finish_after_initial_run: the service stays up while we
     # poll for drain and query the tally. We send finish() ourselves

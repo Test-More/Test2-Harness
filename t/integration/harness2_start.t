@@ -6,6 +6,7 @@ use POSIX qw/_exit/;
 
 use lib 't/lib';
 use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
 
@@ -26,6 +27,8 @@ my $pid = fork // die $!;
 if (!$pid) {
     Test2::Harness2->start(
         workdir                  => $dir,
+        loggers                  => classic_harness_loggers($dir),
+        test_loggers             => classic_test_loggers(),
         test_run                 => {files => [Test2::Harness2::TestFile->new(file => $test_file)]},
         finish_after_initial_run => 1,
     );

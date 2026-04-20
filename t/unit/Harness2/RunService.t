@@ -64,6 +64,8 @@ subtest 'constructs with required attributes' => sub {
         "$dir/logs/runs/r-1/services/run.jsonl",
         'log file path is runs/<id>/services/<log_name>.jsonl',
     );
+    is($svc->loggers,      [], 'loggers default is empty arrayref');
+    is($svc->test_loggers, [], 'test_loggers default is empty arrayref');
 };
 
 subtest 'requires workdir' => sub {

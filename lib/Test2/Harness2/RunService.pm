@@ -100,10 +100,12 @@ sub init {
     $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
-    # No default log_file: the harness opts in to service-level
-    # JSONL by supplying a log_file or by wiring proper loggers via
-    # service_loggers. Same principle as the harness itself -- no
-    # implicit on-disk artifacts.
+    # log_file is the run service's own direct-JSONL audit trail;
+    # distinct from the configurable `loggers` slot. The default
+    # keeps the classic per-run layout under
+    # $logdir/runs/<run_id>/services/<log_name>.jsonl. Set it to
+    # undef explicitly to disable the audit trail.
+    $self->{+LOG_FILE} //= "$svc_dir/$self->{+LOG_NAME}.jsonl";
     $self->{+SNAPSHOT_FILE} //= "$logdir/runs/$self->{+RUN_ID}.json";
 
     # Logger specs. Both default to []; the caller (typically the

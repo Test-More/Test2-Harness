@@ -1,244 +1,203 @@
-# Stage 7 — Plugin roles
+# Stage 8 — Initial preload system (no reloading)
 
 ## Branch
 
-- `plan-stage-07-plugins`
-- Base: `plan-stage-06-options` (post-rebase, on top of the
-  harness-explicit-loggers chain now landed on
-  `reimplement-resource-classes`)
+- `plan-stage-08-preload`
+- Base: `plan-stage-07-plugins` (8186ee153)
 
-## Notes — post-rebase / architectural realignment
+## What landed (six commits, in order)
 
-- The plan-stage chain has been rebased onto a new
-  `reimplement-resource-classes` (option A from PLAN_RESUME.md).
-  Both the resource-class work and the logger overhaul (formerly
-  on the `harness-explicit-loggers` side branch) are now part of
-  every plan-stage's base.
-- PLAN gained a new "State and control flow: IPC, not on-disk
-  artifacts" section. That change is absorbed in Stage 5 (a
-  commit there rewrites `Command::test` to tally via IPC query to
-  the harness service). A stage-7 cleanup commit that previously
-  supplied a spec-less `Logger::JSON` to Command::test (a
-  file-tally workaround, now an explicit PLAN violation) has been
-  dropped from this branch.
-- End-to-end single-file `yath test` works on this chain. The
-  many-files IPC-recipient issue documented at the bottom of this
-  summary was first observed under the dropped file-tally
-  workaround; it is still open and belongs to the base, not to
-  Stage 7.
+1. **`Preload DSL: port stage builder and stage value object`** —
+   `lib/Test2/Harness2/Preload.pm` (the DSL importer + meta-object)
+   and `lib/Test2/Harness2/Preload/Stage.pm` (the pure-data stage
+   value object), ported from the `reimplement-preloader` branch.
+   `watch`, `reload_inplace_check`, and the `Reloader::ACTIVE`
+   fallback are present so DSL code stays portable from old/, but
+   the reloader path is inert until Stage 9 lands it.
+   - `t/AI/unit/Harness2/Preload.t` — 11 subtests covering stage
+     basics, add_to_load_sequence, callback dispatch, watch, the
+     DSL's build_stage + nesting + duplicate detection, default
+     stage resolution, eager stages, import exports, and merge.
 
-## What landed (eight commits)
+2. **`Preload: resource class + root service + BEGIN bootstrap`** —
+   three coordinated modules:
+   - `lib/Test2/Harness2/Resource/Preload.pm` consumes
+     `Role::Resource` and declares `service_preload_start`. It's
+     not a job limiter; `available` never gates; `assign` stamps
+     `T2_HARNESS_PRELOAD_STAGE` into the child env when a stage is
+     known. `service_preload_applicable` returns 0 for an empty
+     preload list, `service_preload_restartable` returns 0 (Stage 8
+     preload is non-restartable; Stage 9 will add reloading and
+     with it restartability).
+   - `lib/Test2/Harness2/PreloadService.pm` is the root preload
+     service. Consumes `Role::Service`. `request_handler_launch_job`
+     forks a child that calls `Collector->interpose` and runs the
+     test via `do $test_file` inside the forked test grandchild.
+   - `lib/Test2/Harness2/PreloadService/Bootstrap.pm` is the tiny
+     BEGIN-time module referenced by `service_preload_start`'s
+     `ipcm_service(exec => {...stay_in_begin => 1...})` argv. Its
+     `import` reads the config file and `require`s each preload
+     module before `IPC::Manager::Service::State::import` takes over
+     and enters the service loop.
+   - `t/AI/unit/Harness2/Resource/Preload.t` — 4 subtests covering
+     construction validation, applicability gating, the
+     Role::Resource contract methods, and the env-stamp path.
 
-1. **`Test2::Harness2::Role::Plugin`** — new Role::Tiny role at
-   `lib/Test2/Harness2/Role/Plugin.pm` declaring the harness-side
-   hook surface. Every hook has a no-op or no-answer default so a
-   bare consumer round-trips cleanly and callers can dispatch
-   without `can()` checks. Hooks: `tick`, `run_queued`,
-   `run_complete`, `run_halted`, `instance_setup`,
-   `instance_teardown`, `instance_finalize`, `setup`, `teardown`,
-   `munge_search`, `munge_files`, `claim_file`, `duration_data`,
-   `coverage_data`, `post_process_coverage_tests`, `changed_files`,
-   `changed_diff`, `TO_JSON`.
+3. **`Harness2: route launch_job to the preload service when a
+   preload resource is present`** — adds `_preload_target_for` and
+   `_wait_for_service_ready` helpers and teaches `_launch_job` to
+   target `"preload"` instead of `"run-$run_id"` when a Preload
+   resource is configured and its service has come up. The
+   synthetic-skip / synthetic-fail paths (`opts{launch}` supplied)
+   always bypass the preload route. The launch payload now carries
+   `run_bus_name` so the preload service's collector can address
+   its `ipc_run` without having to reconstruct the run service's
+   bus name from the `run_id`.
 
-2. **`App::Yath2::Role::Plugin`** — new Role::Tiny role at
-   `lib/App/Yath2/Role/Plugin.pm` that consumes the harness role
-   via `Role::Tiny::With` and adds CLI-layer hooks: `client_setup`,
-   `client_teardown`, `client_finalize`, `sort_files_2`,
-   `sort_files` (deprecated alias), `args_from_settings`. A
-   consumer of this role also satisfies the harness role and can
-   be handed to `Test2::Harness2` directly.
+4. **`Command::test: wire --preload to a
+   Test2::Harness2::Resource::Preload`** — drops the placeholder
+   stderr warning and instead attaches a `Resource::Preload` to
+   the harness spawn when `--preload=Module` is passed. Empty
+   `--preload` leaves the resource out entirely (non-preload path
+   unchanged).
 
-3. **`App::Yath2::Options::Yath: activate --plugin / -p`** —
-   uncomments the `plugins` Map option inside
-   `lib/App/Yath2/Options/Yath.pm` (shape unchanged from the
-   verbatim copy that landed in Stage 6). Short-form `-p` and
-   long-form `--plugin=` both accept comma-split constructor
-   args; fully-qualified class names pass through via the `+`
-   prefix, while bare names resolve under `App::Yath2::Plugin::*`.
-   `mod_adds_options => 1` is preserved so a plugin class's own
-   option libraries are still auto-picked-up.
+5. **`Tests: end-to-end Stage 8 preload smoke coverage`** —
+   `t/AI/integration/preload_basic.t` runs two scenarios through a
+   spawned harness with a `Resource::Preload` attached:
+   - A trivial pass with `Scalar::Util` preloaded — verifies
+     routing from harness to preload service to collector to test
+     actually lands a pass/fail tally back via `run_status` IPC.
+   - A sentinel test that asserts its preloaded module is ALREADY
+     in `%INC` at test startup, before the test file itself does
+     any `require`. That is the actual preload benefit: the test
+     child inherits the preload root's `%INC` via fork.
 
-4. **`Test2::Harness2: accept a 'plugins' slot`** — adds
-   `<plugins` to the HashBase slot list and validates in `init`
-   that it is an arrayref (default `[]`). Per-hook dispatch into
-   Scheduler / RunService / Collector is deliberately not wired
-   yet — this stage's contract is just "the harness accepts the
-   plugin list and does not lose it". Actual hook dispatch into
-   the harness-side pipeline will land as each downstream
-   consumer grows a real use for a specific hook (stage 8+).
+6. **`STAGE_SUMMARY: Stage 8 summary`** (this file).
 
-5. **`App::Yath2::Plugins`** — new helper module at
-   `lib/App/Yath2/Plugins.pm` with two entry points:
-   - `load_plugins(\%spec)` turns the option Map into an ordered
-     arrayref of plugin handles: instances for classes that
-     define `new()`, bare class names otherwise. Sort order is
-     alphabetical by class name for determinism.
-   - `dispatch(\@plugins, $hook, @args)` walks the handle list
-     and only calls plugins that actually implement `$hook`
-     (rather than hitting the role's no-op default), so
-     list-returning hooks do not accumulate empty answers.
+## Test results
 
-6. **`Command::test: load plugins and dispatch client lifecycle
-   hooks`** — extends `App::Yath2::Command::test` with
-   `include_options('App::Yath2::Options::Yath')` so `--plugin`
-   reaches the command's option set. Adds `_load_plugins` (built
-   on `App::Yath2::Plugins->load_plugins`), dispatches
-   `client_setup` before the harness spawn, then
-   `client_teardown` and `client_finalize` in reverse order
-   after the spawn completes (whether the run succeeded or
-   threw). The loaded plugin list is threaded through to
-   `Test2::Harness2->spawn()` via the new `plugins` slot.
+- `prove -I lib -I t/lib -r -j16 t` — **40 files / 405 tests, all
+  passing** on this branch.
+- End-to-end CLI smoke via `perl -Ilib scripts/yath test
+  --preload=Scalar::Util /tmp/preload_test.t` — `pass=1 fail=0`,
+  with `$INC{'Scalar/Util.pm'}` observable in the test before the
+  test's own `use Scalar::Util`.
 
-7. **Role unit tests** — `t/AI/unit/Test2/Harness2/Role/Plugin.t`
-   (4 subtests) and `t/AI/unit/App/Yath2/Role/Plugin.t`
-   (4 subtests). Each covers role consumption (including the
-   transitive composition), default hook return values on a bare
-   consumer, overriding consumers dispatched in order, and the
-   `TO_JSON` serialization shape.
+## Points of interest / decisions worth revisiting
 
-8. **CLI / loader / slot tests** — three additional test files:
-   - `t/AI/unit/App/Yath2/Plugins.t` (10 subtests) — empty and
-     error inputs, stateful / stateless instantiation, missing-
-     class error, `dispatch()` skip-non-implementers, order.
-   - `t/AI/unit/App/Yath2/Command/test-plugins.t` (6 subtests) —
-     `-p` / `--plugin` parsing end-to-end through `Command::test`,
-     including the `+` fully-qualified escape and
-     multiple-plugin argv.
-   - `t/AI/unit/Test2/Harness2-plugins.t` (3 subtests) —
-     Harness2's new plugins slot: default, preservation, and
-     arrayref validation.
+### 1. Stage-subtree services are NOT implemented in Stage 8
 
-## Tests
+`IPC_AND_LOGGERS` section 10.1 calls for each DSL stage to be its
+own service in its own process, with nested stages forked from
+their parents. Stage 8's PreloadService is a single flat root: the
+`_build_meta` hook does merge DSL meta-objects from preloaded
+libraries (so `stage`/`preload`/`eager`/`default` declarations
+are captured), but every `launch_job` runs from the root's own
+forked child, not from a per-stage service.
 
-- `prove -j16 -I lib -I t/lib -r t`
-- Result: 38 files / 396 tests, all passing (~60s wall clock
-  with `-j16`; ~76s serial). No pre-existing test was modified.
-- End-to-end single-file `yath test` is no longer blocked — the
-  Stage 5 regression documented in PLAN_RESUME.md was the
-  missing caller-supplied logger specs, which the logger-overhaul
-  commits + this branch's Command::test update together resolve.
-  Smoke runs: `yath test trivial-pass.t` -> pass=1 fail=0 exit=0;
-  `yath test trivial-fail.t` -> pass=0 fail=1 exit=1.
+The net effect for Stage 8 users: `--preload=Module` works, and
+`use Test2::Harness2::Preload; stage foo => sub { preload 'X' };`
+in `Module` is honoured at the DSL-data level (the modules get
+loaded at root startup), but a test cannot yet be routed to a
+specific named stage — every test goes through the root.
 
-- **Known gap**: `yath test -j16 t/` on the full 38-file suite
-  hangs after the "running 38 test file(s)" banner. Stderr emits
-  two IPC errors --
-  `Collector IPC send failed (kind 'collector_started'):
-  'harness' is not a valid message recipient`
-  and the same for `loggers_ready` -- then no further progress.
-  This is _not_ introduced by Stage 7; it only became visible now
-  that single-file `yath test` works. Likely a concurrency /
-  IPC-recipient-resolution bug in the many-collectors-at-once
-  path. Needs investigation in a separate branch. Prove still
-  passes the same suite in 60s with `-j16` so the underlying
-  tests and harness plumbing are fine in isolation.
+Adding per-stage services is a natural follow-up; the DSL, the
+Resource, and the launch-routing hook are already shaped to
+accommodate it without reworking callers.
 
-## Points of interest / decisions to revisit
+### 2. No detach pattern in `launch_job`
 
-- **Plugins are stored on the harness but not yet dispatched.**
-  `Test2::Harness2` just records the plugin list; nothing inside
-  Scheduler, RunService, or Collector calls `run_queued`,
-  `instance_setup`, `tick`, etc. The roles declare the surface;
-  the call sites land when the consuming subsystem needs them
-  (stage 8 preloads will most likely be first). If you want an
-  earlier dispatch boundary, this is where to open it.
+`IPC_AND_LOGGERS` section 10.4 specifies that test-job collectors
+launched from a preload stage must be detached via an intermediary
+fork+exit so the stage can be pruned or reloaded without killing
+running tests. Stage 8's PreloadService keeps the collector as a
+direct child of the preload service — short-term this is
+harmless because:
 
-- **`client_*` hooks fire around `_run_tests`, unconditionally.**
-  `client_teardown` and `client_finalize` run even when
-  `_run_tests` threw. A plugin that wants "only on success"
-  teardown needs to check `exit` itself. This matches the old
-  behaviour where teardown was a best-effort callback.
+- Stage 8 doesn't implement stage reload or pruning, so the
+  stage can't disappear mid-run.
+- The preload service's `service_on_reaped` cleans up
+  launch-tracking state, and its `run_should_end` waits for every
+  launched collector before unwinding the loop.
 
-- **`send_event` and `shell_call` are intentionally not ported.**
-  Both depended on `Test2::Harness2::Collector::Child` and
-  `Test2::Harness2::IPC::Util`, neither of which exists in the
-  new rewrite yet. They can come back once their collector-side
-  hosts do; adding empty stubs now would be worse than leaving
-  the hooks off the role.
+**Stage 9 will need to introduce the detach pattern** because
+reloading requires the stage's collector-parentage to be
+discardable. That's explicitly flagged in `PreloadService`'s POD.
 
-- **Renderer-facing hooks (`annotate_event`, `finish`,
-  `finalize`) are deferred to Stage 12** by design. They are
-  documented in `App::Yath2::Role::Plugin`'s POD as "coming in
-  stage 12" rather than silently omitted, so a port of
-  `App::Yath2::Plugin::SysInfo` / `Git` / `Cover` in Stage 15
-  that relies on `finish` for end-of-run reporting can be
-  recognised as "waiting on Stage 12" rather than "lost in the
-  shuffle".
+### 3. No `Long::Jump + goto::file` test-body substitution
 
-- **`sort_files_2` is declared but not yet called.** Finder /
-  scheduler integration happens in a later stage once the
-  post-discovery flow has a clear owner; right now the hook
-  just exists for plugins to implement without needing a
-  downstream call site.
+Stage 8 uses `do $test_file` inside the forked test child rather
+than the `Long::Jump + goto::file` unwind-to-BEGIN pattern that
+`old/` and `reimplement-preloader` use. The preloaded `%INC` is
+still inherited via fork, which is the essential preload benefit
+— the `goto::file` refinement is about stack depth / $0 handling,
+not about preload correctness. Deferred to later.
 
-- **Plugin args on a class-only plugin croak.** If you write
-  `-pStateless=a,b` but `App::Yath2::Plugin::Stateless` has no
-  `new()`, the loader croaks with a message that names the
-  plugin and prints the args. Old yath silently ignored the
-  args in that case; the new behaviour surfaces the mismatch
-  loudly. If that turns out to be too strict for real-world
-  use, flip `App::Yath2::Plugins::load_plugins` to a
-  warn-and-drop.
+### 4. `run_bus_name` in the launch payload
 
-- **`dispatch()` helper vs direct `for @$plugins` loop.**
-  `Command::test` uses the direct loop for `client_setup`
-  because every plugin has the role's default available and we
-  want that default hit for consistency. `dispatch()` is there
-  for list-returning hooks (`changed_files`, `coverage_data`,
-  `duration_data`) where the empty default would pollute the
-  aggregate. Pick whichever matches the hook's semantics.
+`IPC_AND_LOGGERS` section 5.4 specifies that run services use the
+`run_id` directly as their bus name. The current `RunService`
+implementation actually names itself `"run-$run_id"`, which is a
+drift from the spec. Rather than change the existing naming
+mid-stage (risky: breaks every in-flight rebase on the chain),
+this stage threads the authoritative run-service bus name through
+the launch payload. When the RunService naming gets realigned
+with the spec, dropping `run_bus_name` from the payload is a
+two-line edit.
 
-- **`fqmod` eagerly `require`s the plugin module during option
-  parsing.** The test fixtures for `-p+Other::NS::Plug`
-  therefore have to inline-define the class and prime `%INC`;
-  real plugins outside the `App::Yath2::Plugin::*` namespace
-  need to be installed before `-p+Some::Mod` will even parse.
-  This mirrors old behaviour; flag for a second look if the
-  CPAN-loadable-at-parse-time requirement becomes awkward.
+### 5. Preload is harness-global only in Stage 8
 
-## What this branch needs from the user
+Per `IPC_AND_LOGGERS` section 9, a Preload resource can be
+attached at harness-global scope (resource lives in the harness,
+its service is `ipc_parent = harness`, no `ipc_run`) or
+run-scoped (lives in a run service, `ipc_parent = run service`,
+`ipc_run = run_id`). Stage 8 implements only the global-scope
+flavour: `Command::test` attaches the resource to the harness,
+and `_preload_target_for` walks the harness's `resources` list
+only.
 
-No blockers. Stage 8 can begin on top of this branch. The only
-interaction point with the `harness-explicit-loggers` side
-branch (PLAN_RESUME.md decision A / B / C) is that once
-`yath test` is end-to-end runnable, Command::test will want to
-pass explicit logger specs alongside the plugins it already
-threads through — a mechanical follow-up that can happen in
-either order relative to Stage 8.
+Run-scoped preloads are a follow-up: `Run.pm` already supports
+per-run resources; wiring them into the preload-routing path is
+a targeted change to `_preload_target_for` and a symmetric
+lookup on `run->resources`.
 
-## Next stage
+### 6. PreloadService is non-restartable (Stage 8 compromise)
 
-Stage 8 — initial preload system (no reloading). Create the
-worktree off this branch:
+A preload-service crash flips the resource `permanent_broken`
+and the scheduler's `broken_resource_behavior` (skip / fail /
+abort) covers the pending tests. Stage 9 will add reloading and
+with it the restartability companion
+(`service_preload_restartable` returning 1 instead of 0).
+Reloading and restart are two sides of the same work.
 
-    git -C /home/exodist/projects/Test2/Test2-Harness worktree add \
-      .claude/worktrees/plan-stage-08-preloads \
-      -b plan-stage-08-preloads plan-stage-07-plugins
-    # then mirror .claude/ + CLAUDE.md symlinks
-    # (snippet in CLAUDE.md under "Worktree Config Inheritance")
+## Flip-back notes for the next stage
 
-Stage 8's plan calls for using the `reimplement-preloader` branch
-as a starting point — cherry-pick / rebase its DSL / DepTracer /
-Reloader / exec+BEGIN+Long::Jump work onto this chain rather
-than re-deriving it.
+- **Stage 9 (preload reloading)** should pick up the detach
+  pattern in `PreloadService::request_handler_launch_job` and
+  the restartability flip on the resource, both flagged in
+  POD. The existing DSL surfaces (`watch`,
+  `reload_inplace_check`) are already in place.
+- **Stage 12 (renderers)** may want the preload service to
+  emit `collector_artifacts` announcements for its own
+  interpose collector (when one is eventually added). Today
+  the preload service doesn't have a service collector
+  wrapping it; adding one is a self-contained change to
+  `Resource::Preload::service_preload_start` + the exec argv.
+- **Any stage that rebases onto a re-aligned RunService**
+  (bus name = `run_id`, per `IPC_AND_LOGGERS` section 5.4)
+  needs to drop `run_bus_name` from the launch payload.
 
-## Post-refactor rebase (2026-04-20)
+## Dependencies / what a reviewer should verify
 
-Rebased through the full plan-stage chain onto the updated
-`reimplement-resource-classes` base (`0c46805cf`). Refactor
-headline items (IPC kind renames, direct artifact routing,
-`collector:` bus name, configurable `launch_job_timeout`) land
-here automatically from the base.
-
-During cascade, the intermediate replay of stage-5's
-`pass_count`/`fail_count` + IPC-tally commit on top of the stage-6
-reshape of `App::Yath2::Command::test` produced merge-content
-conflicts in `lib/App/Yath2/Command/test.pm` and
-`lib/Test2/Harness2/Run.pm`. Resolution kept the HEAD (stage-7)
-version of `Command::test.pm`, which is a proper superset of the
-stage-5 incoming version, and kept all three Run.pm init lines
-(pass/fail/launch_job_timeout). The `TestFile.t` rename/rename was
-resolved by keeping `t/AI/unit/App/Yath2/TestFile.t`. No Stage-7
-commits themselves needed edits. (Live branch tip recorded in
-`PLAN_RESUME.md` on the primary repo, not pinned here.) Full
-`prove -j16 -I lib -I t/lib -r t` green (382 tests).
+- `Test2::Harness2::Role::Resource` and `Role::Service` contracts
+  are honoured by the new classes.
+- `ipcm_service` with `exec => { stay_in_begin => 1 }` — the
+  `IPC::Manager` version on this system (0.000027) has this
+  path; any prior version that lacked it would break startup.
+  The POD flags this; CPAN metadata does not, so a future
+  `META.json` bump may be warranted.
+- `Collector::interpose` is called from a forked child of the
+  preload service; the parent of that interpose fork becomes
+  the collector (`_interpose_parent` → `_run_collector` →
+  `_exit_mirroring_child`). This is the same shape RunService
+  uses for its `launch_job` handler, so no new ground there.

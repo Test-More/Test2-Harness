@@ -105,7 +105,7 @@ sub init {
     # keeps the classic per-run layout under
     # $logdir/runs/<run_id>/services/<log_name>.jsonl. Set it to
     # undef explicitly to disable the audit trail.
-    $self->{+LOG_FILE} //= "$svc_dir/$self->{+LOG_NAME}.jsonl";
+    $self->{+LOG_FILE}      //= "$svc_dir/$self->{+LOG_NAME}.jsonl";
     $self->{+SNAPSHOT_FILE} //= "$logdir/runs/$self->{+RUN_ID}.json";
 
     # Logger specs. Both default to []; the caller (typically the
@@ -153,12 +153,12 @@ sub request_handler_launch_job {
             unless defined $payload->{$required};
     }
 
-    my $job_id        = $payload->{job_id};
-    my $job_try       = $payload->{job_try} // 0;
-    my $run_id        = $payload->{run_id}  // $self->{+RUN_ID};
-    my $log_file      = $payload->{log_file};
-    my $env           = $payload->{env} // {};
-    my $auditor       = $payload->{auditor};
+    my $job_id   = $payload->{job_id};
+    my $job_try  = $payload->{job_try} // 0;
+    my $run_id   = $payload->{run_id}  // $self->{+RUN_ID};
+    my $log_file = $payload->{log_file};
+    my $env      = $payload->{env} // {};
+    my $auditor  = $payload->{auditor};
     # Per-job logger spec list. Defaults to the RunService's own
     # TEST_LOGGERS (set at spawn time from the run's effective
     # test_loggers list). Callers can override per-launch via the
@@ -211,7 +211,9 @@ sub request_handler_launch_job {
             job_id      => $job_id,
             job_try     => $job_try,
             ipcm_info   => $self->ipcm_info,
-            ipc_peer    => $self->{+NAME},
+            ipc_parent  => $self->{+NAME},
+            ipc_harness => $self->{+HARNESS_NAME},
+            kind        => 'test',
             (defined $auditor ? (auditor => $auditor) : ()),
             loggers => [@logger_specs],
         );

@@ -1251,6 +1251,54 @@ sub _wait_for_run_service_ready {
     return $handle;
 }
 
+# When a preload resource is configured, route launch_job to its
+# bus name so the test runs in the preloaded interpreter. A preload
+# that is not-yet-running, paused, or permanent_broken returns undef
+# so the run service takes over.
+#
+# Stage 8 routing is deliberately simple: the first Preload resource
+# in the harness's global resources list wins. Later stages with
+# richer stage-assignment (HARNESS-STAGE-NAME directives, per-run
+# preloads) will need a more specific selection rule; for now the
+# single-preload-global-scope path is the only shape.
+sub _preload_target_for {
+    my ($self, $job, $resources) = @_;
+
+    for my $res (@{$self->{+RESOURCES} // []}) {
+        next unless $res->isa('Test2::Harness2::Resource::Preload');
+        next if $res->is_permanent_broken;
+        next if $res->is_broken;
+        next if $res->is_paused;
+        next unless $res->pid;                                            # service not up yet
+        next unless $res->service_preload_applicable(harness => $self);
+
+        return $res->service_name;
+    }
+
+    return undef;
+}
+
+# Generic "wait for $service_name to be ready on the bus" helper.
+# Mirrors _wait_for_run_service_ready but takes the bus name directly
+# so it can be used for preload services and any other non-run
+# services the harness routes requests to.
+sub _wait_for_service_ready {
+    my ($self, $bus_name) = @_;
+
+    my $handle = IPC::Manager::Service::Handle->new(
+        service_name => $bus_name,
+        ipcm_info    => $self->ipcm_info,
+    );
+
+    my $deadline = time + 10;
+    until ($handle->ready) {
+        croak "timeout waiting for service '$bus_name' to come up"
+            if time > $deadline;
+        tinysleep(0.02);
+    }
+    return $handle;
+}
+
 sub _teardown_run_service {
     my ($self, $run) = @_;
 
@@ -1304,28 +1352,42 @@ sub _launch_job {
         $res->assign(id => $assign_id, job => $job, env => \%env, %assign_args);
     }
 
-    # Delegate the actual Collector fork to the per-run supervisor so
-    # the test process runs under the run's subtree. The harness owns
-    # scheduling (resources assigned above) and the run service owns
-    # launch + reap + stdio logging.
+    # Decide which service handles the launch: a preload resource
+    # (if present, usable, and not part of a synthetic launch) gets
+    # priority so tests run in the preloaded interpreter. Otherwise
+    # the per-run supervisor owns launch + reap + stdio logging. The
+    # harness still owns scheduling (resources assigned above).
+    my $preload_target = !$opts{launch} ? $self->_preload_target_for($job, $resources) : undef;
+
     my $launch_ok = eval {
-        my $handle = $self->_wait_for_run_service_ready($run_id);
+        my $handle;
+        my $target_bus;
+
+        if (defined $preload_target) {
+            $handle     = $self->_wait_for_service_ready($preload_target);
+            $target_bus = $preload_target;
+        }
+        else {
+            $handle     = $self->_wait_for_run_service_ready($run_id);
+            $target_bus = "run-$run_id";
+        }
 
         my $envelope = $handle->sync_request(
-            "run-$run_id",
+            $target_bus,
             {
-                request   => 'launch_job',
-                run_id    => $run_id,
-                job_id    => $job_id,
-                job_try   => 0,
-                test_file => $job->test_file_abs,
-                env       => \%env,
-                auditor   => $self->{+TEST_AUDITOR},
+                request      => 'launch_job',
+                run_id       => $run_id,
+                run_bus_name => "run-$run_id",
+                job_id       => $job_id,
+                job_try      => 0,
+                test_file    => $job->test_file_abs,
+                env          => \%env,
+                auditor      => $self->{+TEST_AUDITOR},
                 # Omit loggers from the payload: the run service uses
                 # its own TEST_LOGGERS slot (populated at spawn from
                 # the run's effective test_loggers) when the payload
                 # doesn't override.
-                (defined $opts{launch} ? (launch => $opts{launch}) : ()),
+                (defined $opts{launch} ? (launch      => $opts{launch})         : ()),
                 ($self->{+LAUNCH_ARGS} ? (launch_args => $self->{+LAUNCH_ARGS}) : ()),
             },
         );

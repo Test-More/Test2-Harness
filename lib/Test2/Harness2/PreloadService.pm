@@ -248,14 +248,15 @@ sub request_handler_launch_job {
             unless defined $payload->{$required};
     }
 
-    my $run_id    = $payload->{run_id};
-    my $job_id    = $payload->{job_id};
-    my $job_try   = $payload->{job_try} // 0;
-    my $test_file = $payload->{test_file};
-    my $env       = $payload->{env} // {};
-    my $auditor   = $payload->{auditor};
-    my $loggers   = $payload->{loggers} // [];
-    my $stage     = $payload->{stage};
+    my $run_id       = $payload->{run_id};
+    my $run_bus_name = $payload->{run_bus_name} // "run-$run_id";
+    my $job_id       = $payload->{job_id};
+    my $job_try      = $payload->{job_try} // 0;
+    my $test_file    = $payload->{test_file};
+    my $env          = $payload->{env} // {};
+    my $auditor      = $payload->{auditor};
+    my $loggers      = $payload->{loggers} // [];
+    my $stage        = $payload->{stage};
 
     return {ok => 0, error => "'test_file' must be absolute"}
         unless $test_file =~ m{^/};
@@ -285,14 +286,15 @@ sub request_handler_launch_job {
     # (collector, test); the collector runs its read loop and exits;
     # the test continues with `do $test_file`.
     $self->_run_launch_child(
-        run_id    => $run_id,
-        job_id    => $job_id,
-        job_try   => $job_try,
-        test_file => $test_file,
-        env       => $env,
-        auditor   => $auditor,
-        loggers   => $loggers,
-        stage     => $stage,
+        run_id       => $run_id,
+        run_bus_name => $run_bus_name,
+        job_id       => $job_id,
+        job_try      => $job_try,
+        test_file    => $test_file,
+        env          => $env,
+        auditor      => $auditor,
+        loggers      => $loggers,
+        stage        => $stage,
     );
 
     # _run_launch_child always _exits; this is a belt-and-suspenders.
@@ -302,13 +304,14 @@ sub request_handler_launch_job {
 sub _run_launch_child {
     my ($self, %p) = @_;
 
-    my $run_id    = $p{run_id};
-    my $job_id    = $p{job_id};
-    my $job_try   = $p{job_try};
-    my $test_file = $p{test_file};
-    my $env       = $p{env} // {};
-    my $auditor   = $p{auditor};
-    my $loggers   = $p{loggers} // [];
+    my $run_id       = $p{run_id};
+    my $run_bus_name = $p{run_bus_name} // "run-$run_id";
+    my $job_id       = $p{job_id};
+    my $job_try      = $p{job_try};
+    my $test_file    = $p{test_file};
+    my $env          = $p{env} // {};
+    my $auditor      = $p{auditor};
+    my $loggers      = $p{loggers} // [];
 
     # interpose's parent becomes the collector and exits from that
     # code path; its child (us) returns here with STDOUT/STDERR swapped
@@ -316,7 +319,7 @@ sub _run_launch_child {
     Test2::Harness2::Collector->interpose(
         ipcm_info   => $self->ipcm_info,
         ipc_parent  => $self->{+NAME},
-        ipc_run     => $run_id,
+        ipc_run     => $run_bus_name,
         ipc_harness => $self->{+HARNESS_NAME},
         kind        => 'test',
         loggers     => $loggers,

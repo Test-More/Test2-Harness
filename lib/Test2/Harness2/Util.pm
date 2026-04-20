@@ -15,6 +15,7 @@ our @EXPORT_OK = qw{
     apply_encoding
     clean_path
     close_file
+    file2mod
     fqmod
     hub_truth
     load_module
@@ -70,6 +71,19 @@ sub mod2file {
     $file =~ s{::}{/}g;
     $file .= ".pm";
     return $file;
+}
+
+# Inverse of mod2file: turn a relative %INC-style path into a Perl
+# module name. Strips the final extension (.pm, .pl, .t, etc.) so
+# callers can feed it any concrete file that shadows a module
+# entry. Dies loudly on an empty argument.
+sub file2mod {
+    my ($file) = @_;
+    confess "No filename provided" unless defined $file && length $file;
+    my $mod = $file;
+    $mod =~ s{/}{::}g;
+    $mod =~ s/\.[^.]*$//;
+    return $mod;
 }
 
 # Normalize a path to an absolute form (and, by default, a real path).

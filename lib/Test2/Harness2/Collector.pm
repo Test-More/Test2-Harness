@@ -38,7 +38,9 @@ use Object::HashBase qw{
     <job_id
     <job_try
     <ipcm_info
-    <ipc_peer
+    <ipc_parent
+    <ipc_harness
+    <kind
 
     +_started
     <_owns_child
@@ -58,8 +60,15 @@ sub init {
     croak "'ipcm_info' is a required attribute"
         unless defined $self->{+IPCM_INFO};
 
-    croak "'ipc_peer' is a required attribute"
-        unless defined $self->{+IPC_PEER};
+    # ipc_harness is the bus name of the main harness service; every
+    # collector needs it so end-of-life messages land there regardless
+    # of the collector's position in the service tree. ipc_parent is
+    # the bus name of whatever service spawned this collector (for a
+    # test-job collector: its RunService; for the harness interpose
+    # collector: undef -- it has no parent service to notify). A
+    # missing parent is valid; a missing harness is not.
+    croak "'ipc_harness' is a required attribute"
+        unless defined $self->{+IPC_HARNESS};
 
     # Map spec constructor names to internal attribute names so callers can
     # use the natural names from the spec (stdout, stderr, pid, env) even
@@ -557,19 +566,14 @@ sub _init_event_sinks {
     $self->_instantiate_auditor();
     $self->_instantiate_loggers();
 
-    # Announce ourselves to the peer service before any loggers start,
-    # so the harness scheduler can track our pid (and start its pid-
-    # gone grace timer later) regardless of whether any loggers are
-    # configured. This is critical-path bookkeeping, not an
-    # informational log event.
-    $self->_send_collector_started;
-
     $_->startup($self) for @{$self->{+LOGGERS}};
     $self->{+_EVENT_LOGGERS} = [grep { $_->log_events } @{$self->{+LOGGERS}}];
 
     # Once every logger has started (and knows its final locators, e.g. an
-    # opened output file), report their metadata to the IPC peer so the
-    # harness service can emit a job_loggers event.
+    # opened output file), report their metadata to the harness so it can
+    # emit a job_loggers event. The message goes straight to the harness
+    # (ipc_harness), not up through an intermediate parent service; only
+    # the harness consumes it.
     $self->_send_logger_metadata;
 
     # When there is no parser the collector still drains the handles but
@@ -585,87 +589,117 @@ sub _init_event_sinks {
     return $parser;
 }
 
-# Lazy IPC handle for any message the collector needs to send directly
-# to its peer service. One handle per collector: registers the collector
-# on the IPC bus under its job_id so the peer can identify the sender.
-# The collector owns the critical lifecycle messages below so tests run
-# correctly with no loggers configured.
-sub ipc_handle {
-    my $self = shift;
-    return $self->{_ipc_handle} if $self->{_ipc_handle};
+# Lazy IPC handle per target bus name. One handle entry per unique
+# target; each registers the collector on the IPC bus under its
+# job_id so the receiving service can identify the sender. The
+# collector sends only UPWARD (to its parent service or to the
+# harness); it never holds a handle into the IPC identity of the
+# process it is monitoring.
+sub _ipc_handle {
+    my ($self, $target) = @_;
+    return $self->{_ipc_handles}->{$target}
+        if $self->{_ipc_handles} && $self->{_ipc_handles}->{$target};
 
     require IPC::Manager::Service::Handle;
     my $handle = IPC::Manager::Service::Handle->new(
-        service_name => $self->{+IPC_PEER},
+        service_name => $target,
         ipcm_info    => $self->{+IPCM_INFO},
         name         => $self->{+JOB_ID},
     );
 
-    # Wait briefly for the peer to register so the first message actually
-    # lands; this matters mainly in the service-interpose flow where the
-    # collector and the service it talks to are siblings racing through
-    # startup. If the peer never comes up we still return the handle and
-    # let individual sends fall through to the warn path, so regressions
-    # surface rather than silently swallow.
+    # Wait briefly for the target to register so the first message
+    # actually lands; matters mainly in the service-interpose flow
+    # where the collector and its parent service race through startup.
+    # If the target never comes up we still return the handle and let
+    # individual sends fall through to the warn path.
     eval { $handle->ready(5); 1 };
 
-    return $self->{_ipc_handle} = $handle;
+    return $self->{_ipc_handles}->{$target} = $handle;
 }
 
-# Fire-and-forget send to the collector's peer service. Failures warn;
-# we never block the collector on delivery or propagate the exception,
-# since the collector's lifecycle must not depend on peer liveness.
-sub _send_peer_message {
-    my ($self, $content) = @_;
+# Fire-and-forget send to a specific target service. Failures that
+# indicate the peer is already gone (EPIPE / "Disconnected pipe")
+# are silenced -- collectors routinely outlive the services that
+# spawned them, and warning about a dead peer every time a run
+# completes is just noise. Any other failure warns so genuine
+# regressions surface. Returns nothing either way since the
+# collector's lifecycle must never depend on delivery.
+sub _send_to {
+    my ($self, $target, $content) = @_;
+    return unless defined $target;
 
     my $ok = eval {
-        my $handle = $self->ipc_handle;
-        $handle->client->send_message($self->{+IPC_PEER}, $content);
+        my $handle = $self->_ipc_handle($target);
+        $handle->client->send_message($target, $content);
         1;
     };
+    return if $ok;
+
     my $err = $@;
-    warn "Collector IPC send failed (kind '" . ($content->{kind} // '?') . "'): $err"
-        unless $ok;
+    return if $err =~ /Disconnected pipe|broken pipe|EPIPE/i;
 
+    warn "Collector IPC send failed (kind '" . ($content->{kind} // '?') . "'): $err";
     return;
 }
 
-# The collector-lifecycle critical messages. These MUST NOT move into a
-# logger: the harness scheduler uses them to track the collector pid
-# even when no loggers are configured, and whenever the collector ends
-# up in a process tree the harness cannot reap directly (a preload
-# stage launching tests, an orphaned descendant, ...). See
-# Test2::Harness2::run_on_general_message for the receiving side.
-sub _send_collector_started {
-    my $self = shift;
-    $self->_send_peer_message({
-        kind    => 'collector_started',
-        run_id  => $self->{+RUN_ID},
-        job_id  => $self->{+JOB_ID},
-        job_try => $self->{+JOB_TRY} // 0,
-        pid     => $$,
-    });
-    return;
-}
-
+# Collector exit notifications. Two recipients:
+#
+#   1. ipc_parent (if set): a brief "collector_exiting" signal
+#      telling whichever service spawned us that we are shutting
+#      down. For per-job test collectors this is the RunService;
+#      for resource-service collectors their host service; for the
+#      harness interpose collector it is undef (no parent service).
+#
+#   2. ipc_harness: a richer "collector_exiting" event addressed
+#      directly to the main harness. Payload carries enough for
+#      the harness to update its tracking without another IPC hop
+#      -- for a test collector, the auditor's pass/fail verdict
+#      and the child exit code are included here. The harness
+#      uses these to advance its scheduler and aggregate per-run
+#      tallies.
+#
+# Called once, at the end of the collector's lifecycle, after
+# logger shutdowns have flushed.
 sub _send_collector_exiting {
     my $self = shift;
-    $self->_send_peer_message({
+
+    my $kind        = $self->{+KIND} // 'generic';
+    my $child_exit  = $self->{+CHILD_EXIT};
+    my $auditor     = $self->{+AUDITOR};
+    my $has_verdict = ref($auditor) && $auditor->can('pass') ? 1 : 0;
+
+    my %base = (
         kind    => 'collector_exiting',
+        role    => $kind,
         run_id  => $self->{+RUN_ID},
         job_id  => $self->{+JOB_ID},
         job_try => $self->{+JOB_TRY} // 0,
         pid     => $$,
-    });
+    );
+
+    # Brief upward signal to the spawning service (if any).
+    $self->_send_to($self->{+IPC_PARENT}, {%base}) if defined $self->{+IPC_PARENT};
+
+    # Detailed report to the harness. Tests carry pass/fail and
+    # exit; non-test collectors (services, resource services) omit
+    # the auditor fields.
+    my %harness_payload = %base;
+    $harness_payload{exit} = $child_exit if defined $child_exit;
+    if ($has_verdict) {
+        $harness_payload{pass}       = $auditor->pass ? 1 : 0;
+        $harness_payload{pass_count} = $auditor->pass_count if $auditor->can('pass_count');
+        $harness_payload{fail_count} = $auditor->fail_count if $auditor->can('fail_count');
+    }
+    $self->_send_to($self->{+IPC_HARNESS}, \%harness_payload);
+
     return;
 }
 
 # Gather metadata from each instantiated logger, keyed by class so
 # multiple instances of the same class coexist, and fire a one-shot
-# loggers_ready message to the configured IPC peer. This is still on
-# the collector (not a logger) because downstream consumers of the
-# service log need to know where the job's outputs live regardless of
-# which logger set a particular collector was given.
+# loggers_ready message directly to the harness service. The
+# harness is the only consumer; sending through an intermediate
+# parent service would be a detour for no one.
 sub _send_logger_metadata {
     my $self = shift;
 
@@ -682,13 +716,15 @@ sub _send_logger_metadata {
         push @{$loggers{$class}} => $meta;
     }
 
-    $self->_send_peer_message({
-        kind    => 'loggers_ready',
-        run_id  => $self->{+RUN_ID},
-        job_id  => $self->{+JOB_ID},
-        job_try => $self->{+JOB_TRY},
-        loggers => \%loggers,
-    });
+    $self->_send_to(
+        $self->{+IPC_HARNESS}, {
+            kind    => 'loggers_ready',
+            run_id  => $self->{+RUN_ID},
+            job_id  => $self->{+JOB_ID},
+            job_try => $self->{+JOB_TRY},
+            loggers => \%loggers,
+        }
+    );
 
     return;
 }

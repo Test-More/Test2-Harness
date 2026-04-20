@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 use Test2::Harness2;
 use Test2::Harness2::Run;

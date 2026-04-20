@@ -4,7 +4,7 @@ use POSIX qw/:sys_wait_h _exit/;
 use Time::HiRes qw/sleep/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
@@ -33,7 +33,7 @@ subtest 'Terminate mid-run kills collector and test process' => sub {
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
-    my $q     = $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
+    my $q     = $spawn->queue_test_run(files => [App::Yath2::TestFile->new(file => $tf)]);
     ok($q->{ok}, 'queued');
 
     # Wait for status to show a running job.
@@ -79,7 +79,7 @@ PERL
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
-    $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
+    $spawn->queue_test_run(files => [App::Yath2::TestFile->new(file => $tf)]);
 
     # Wait for the run to complete (the test dies, the collector finishes).
     wait_until(
@@ -113,7 +113,7 @@ subtest 'service dies when its caller dies (no detach)' => sub {
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
-        $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
+        $spawn->queue_test_run(files => [App::Yath2::TestFile->new(file => $tf)]);
         # Intentionally NOT detached — leak via _exit so DESTROY doesn't fire.
         _exit(0);
     }

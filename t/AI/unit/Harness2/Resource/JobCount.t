@@ -1,14 +1,14 @@
 use Test2::V0;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Run::Job;
 
 sub make_job {
     my (%tf_attrs) = @_;
-    my $tf = Test2::Harness2::TestFile->new(file => 't/x.t', %tf_attrs);
+    my $tf = App::Yath2::TestFile->new(file => 't/x.t', %tf_attrs);
     return Test2::Harness2::Run::Job->new(
         test_file => $tf,
         run_id    => 'r',

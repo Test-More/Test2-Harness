@@ -7,7 +7,7 @@ use POSIX qw/WNOHANG/;
 use Time::HiRes qw/sleep/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers/;
 
 # The jump_to subtest drives the interpose path with a stub ipcm_info; the
@@ -38,7 +38,7 @@ my $CAN_FORK = $Config{d_fork};
 
 # Wrap a path (or list of paths) in TestFile objects so the scheduler
 # and Run->from_files see the object-only input they now require.
-sub _tf  { Test2::Harness2::TestFile->new(file => $_[0]) }
+sub _tf  { App::Yath2::TestFile->new(file => $_[0]) }
 sub _tfs { [map { _tf($_) } @_] }
 
 # Inline test resources for the restart and per-run subtests.

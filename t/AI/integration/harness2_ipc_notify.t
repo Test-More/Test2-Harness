@@ -3,7 +3,7 @@ use File::Temp qw/tempdir/;
 use Time::HiRes qw/time sleep/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 use Test2::Harness2;
 
@@ -45,7 +45,7 @@ subtest 'five fast tests complete quickly via IPC notification' => sub {
     isa_ok($spawn, ['Test2::Harness2::Spawn'], 'got a Spawn handle');
     ok(kill(0, $spawn->pid), 'service is alive before queuing');
 
-    my @tfs = map { Test2::Harness2::TestFile->new(file => $_) } @files;
+    my @tfs = map { App::Yath2::TestFile->new(file => $_) } @files;
     my $queued = $spawn->queue_test_run(files => \@tfs);
     ok($queued->{ok}, 'queued 5-file run') or diag explain $queued;
 

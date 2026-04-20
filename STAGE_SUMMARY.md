@@ -1,58 +1,95 @@
-# Stage 11 -- Log archive support (App::Yath2::LogArchive)
+# Stage 13 -- Non-daemon yath commands
 
 ## Branch
 
-- `plan-stage-11-log-archive`
-- Base: `plan-stage-10-log-audit` (596f5a9c8)
+- `plan-stage-13-commands`
+- Base: `plan-stage-11-log-archive` (3d7450146)
 
-## What landed (one commit)
+## What landed (one commit, seven new command modules)
 
-1. **`App::Yath2::LogArchive: create / extract logs/ archives`**
-   - `lib/App/Yath2/LogArchive.pm` with `create` and `extract`
-     class methods.
-   - Formats: **.tar.gz** (default; Archive::Tar + IO::Compress::Gzip),
-     **.tar.bz2** (Archive::Tar + IO::Compress::Bzip2), **.zip**
-     (gated behind Archive::Zip), **.7z** (shelled out to the
-     `7z` binary on `$PATH`).
-   - `HAS_ARCHIVE_TAR`, `HAS_GZIP`, `HAS_BZIP2`, `HAS_ARCHIVE_ZIP`,
-     `HAS_7Z` compile-time constants gate optional deps.
-   - Atomic writes via `$archive.pend` + rename.
-   - Archive root is always `logs/` regardless of the source
-     directory's name; extraction reproduces the same layout a
-     live workdir exposes.
-   - `supported_formats` / `format_is_supported` let callers pick
-     a format that will work in the current environment.
-   - `t/AI/unit/App/Yath2/LogArchive.t` exercises tar.gz
-     round-trip, `.tgz` extension inference, error branches for
-     missing logdir / missing archive / unknown format.
+1. **`Command stubs: help, list, which, init, failed, projects, do`**
+   - `lib/App/Yath2/Command/help.pm` -- top-level dispatcher.
+     With no args, delegates to `App::Yath2` for the usage
+     banner. With a command name, loads the module and prints
+     its optional `help` method's output.
+   - `lib/App/Yath2/Command/list.pm` -- run
+     `App::Yath2::Finder::Simple` and print each discovered test
+     path. No finder options yet (layered in a later revision
+     when `App::Yath2::Options::Finder` is activated).
+   - `lib/App/Yath2/Command/which.pm` -- prints the `scripts/yath`
+     + `App::Yath2.pm` + `Test2::Harness2.pm` paths the current
+     invocation is using.
+   - `lib/App/Yath2/Command/init.pm` -- writes a minimal
+     `.yath.rc` with a `# V2` marker line. Refuses to overwrite
+     an existing file.
+   - `lib/App/Yath2/Command/failed.pm` -- stub (depends on
+     Stage 12's artifact-reading layer).
+   - `lib/App/Yath2/Command/projects.pm` -- stub (project
+     enumeration shape not decided).
+   - `lib/App/Yath2/Command/do.pm` -- stub (alias resolution
+     depends on a richer config loader).
+   - `lib/App/Yath2.pm` COMMANDS registry flips these seven from
+     the placeholder `1` to their concrete class names. Daemon
+     commands remain stubbed -- Stage 14 covers them.
+   - `t/AI/unit/App/Yath2/Command/list.t` exercises list's return
+     codes (the happy-path STDOUT capture is skipped because
+     `local *STDOUT = ...` doesn't play nicely with Test2's
+     formatter; see manual smoke below).
 
 ## Test results
 
-- New test: `t/AI/unit/App/Yath2/LogArchive.t` -- 6 subtests, all
-  passing.
+- `prove -I lib -I t/lib -r -j16 t` -- **44 files / 424 tests,
+  all passing** on this branch.
 
-## Deliberately out of scope for Stage 11
+## Manual smoke coverage (CLI round-trip)
 
-Per PLAN: no renderer changes, no command wiring. Consequently:
+    $ perl -Ilib scripts/yath which
+    script:         /.../scripts/yath
+    App::Yath2:     lib/App/Yath2.pm
+    Test2::Harness2 lib/Test2/Harness2.pm
 
-- No `yath archive` / `yath extract` command.
-- No `--archive=...` option on `yath test` yet.
-- Renderer code is untouched.
+    $ perl -Ilib scripts/yath list t/AI/unit/Util
+    t/AI/unit/Util/JSON.t
+    t/AI/unit/Util/JSON_no_null.t
 
-Stage 12 (renderers) and any later command that wants to package a
-run's output will reach for `App::Yath2::LogArchive->create` then.
+    $ cd /tmp/new-project && perl -Ilib .../scripts/yath init
+    Created .yath.rc
+
+## Deliberate deferrals
+
+Per PLAN Stage 13 scope:
+
+> Explicitly out of scope for this stage: anything that reads a
+> stored yath log (`replay`, `times`, `speedtag`, `recent`, and
+> all `db` commands). Anything that needs a daemon: Stage 14.
+
+Consequently `failed`, `projects`, and `do` are stubbed rather
+than fleshed out:
+
+- `failed` wants the artifact-reading layer (Stage 12) plus a
+  last-run-workdir discovery path. Both are concrete follow-ups.
+- `projects` doesn't have an agreed enumeration shape; a
+  concrete consumer will decide whether projects are enumerated
+  from a config file, a directory convention, or a CLI list.
+- `do` wants alias resolution, which in turn needs a richer
+  `.yath.rc` loader. The Stage 4 `.yath.rc` is intentionally
+  trivial; alias-era config is a separate port.
+
+Each stub explains the dependency in its error message so a
+later revisit knows which upstream piece to wire in.
 
 ## Flip-back notes
 
-- **Stage 12** may want to drive extraction from the command-side
-  artifact-reading layer when the user feeds it a stored archive
-  rather than a live workdir. `extract` returns a tempdir with
-  CLEANUP; the layer can point at that directory as a drop-in
-  for a live workdir.
-- **Any future yath archive-family command** should call
-  `create` and `format_is_supported` to produce a clear
-  install-prompt error rather than let the archive write fail at
-  runtime.
-- **Stage 19 audit** should confirm that nothing in
-  `old/lib/Test2/Harness2/Log.pm` silently returned, since the
-  POD there is now replaced by this module's docs.
+- **Stage 14** inherits the remaining stubbed registry entries:
+  `start`, `stop`, `status`, `ping`, `kill`, `ps`, `run`,
+  `spawn`, `abort`, `watch`, `reload`, `resources`. Stage 14
+  will flip them to real class names after the daemon machinery
+  is in place.
+- **Stage 12 (renderers / artifact-reading layer)** unblocks
+  `failed`. When that lands, `Command::failed::run` walks the
+  artifact tree of the most recent run and forwards the failing
+  tests back through `Command::test`.
+- **Later stages that add finder options** (e.g. `--ext=tx`)
+  should layer `include_options('App::Yath2::Options::Finder')`
+  on `Command::list` the same way Stage 6 did it for
+  `Command::test`.

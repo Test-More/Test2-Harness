@@ -25,13 +25,11 @@ use Object::HashBase qw{
 # go through the argv() method below.
 sub argv { $_[0]->{argv} }
 
-# Minimal command registry. Keys are command names; values are either
-# 1 (reserved, not yet ported) or a module name (once ported). At this
-# stage only --help / --version are wired; every command name listed
-# here prints the 'not yet implemented' banner. Later stages flip
-# entries to real command classes as they land.
+# Command registry. Keys are command names; values are either the class
+# name of the command module (ported) or 1 (stubbed, prints a 'not yet
+# implemented' banner). Later stages flip entries as commands land.
 my %COMMANDS = (
-    test      => 1,
+    test      => 'App::Yath2::Command::test',
     list      => 1,
     help      => 1,
     init      => 1,
@@ -154,19 +152,48 @@ sub run {
     }
 
     if (exists $COMMANDS{$cmd}) {
-        # Stage 5+ flips these to real dispatch. Until then the stub
-        # banner keeps the user oriented.
-        $self->_print_to(
-            \*STDERR,
-            "yath2: the '$cmd' command has not been ported yet in this rewrite.\n",
-            "See PLAN for the planned port order; until then this command is not available.\n",
-        );
-        return 2;
+        my $target = $COMMANDS{$cmd};
+
+        if ($target eq '1') {
+            $self->_print_to(
+                \*STDERR,
+                "yath2: the '$cmd' command has not been ported yet in this rewrite.\n",
+                "See PLAN for the planned port order; until then this command is not available.\n",
+            );
+            return 2;
+        }
+
+        return $self->_dispatch($target, $remains);
     }
 
     $self->_print_to(\*STDERR, "yath2: unknown command '$cmd'.\n\n");
     $self->_print_usage(\*STDERR);
     return 2;
+}
+
+sub _dispatch {
+    my $self = shift;
+    my ($class, $cmd_argv) = @_;
+
+    my $file = $class;
+    $file =~ s{::}{/}g;
+    $file .= '.pm';
+
+    my $ok = eval { require $file; 1 };
+    unless ($ok) {
+        my $err = $@;
+        $self->_print_to(\*STDERR, "yath2: failed to load '$class': $err");
+        return 2;
+    }
+
+    my $cmd = $class->new(
+        script      => $self->{+SCRIPT},
+        argv        => $cmd_argv,
+        config      => $self->{+CONFIG},
+        user_config => $self->{+USER_CONFIG},
+    );
+
+    return $cmd->run;
 }
 
 sub _print_version {

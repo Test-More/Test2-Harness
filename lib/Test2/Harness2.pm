@@ -44,6 +44,7 @@ use Object::HashBase qw{
     <parent_pids
     <jump_to
     <resources
+    <plugins
     <broken_resource_behavior
     <launch_args
     +state
@@ -130,6 +131,16 @@ sub init {
     $self->{+BROKEN_RESOURCE_BEHAVIOR} //= 'skip';
     croak "invalid broken_resource_behavior '$self->{+BROKEN_RESOURCE_BEHAVIOR}' (want skip, fail, or abort)"
         unless BROKEN_BEHAVIORS->{$self->{+BROKEN_RESOURCE_BEHAVIOR}};
+
+    # Plugins are stored as-is so the harness service, the scheduler,
+    # and the run service can all reach them. Per-hook dispatch into
+    # Scheduler / RunService / Collector lands as each of those
+    # consumers grows a real use for the hook (stages 8+); this
+    # stage's contract is just "the harness accepts them and does
+    # not lose them".
+    my $plugins = $self->{+PLUGINS} // [];
+    croak "'plugins' must be an arrayref" unless ref($plugins) eq 'ARRAY';
+    $self->{+PLUGINS} = $plugins;
 
     $self->_init_resources;
 

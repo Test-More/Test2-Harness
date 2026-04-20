@@ -8,6 +8,7 @@ use Time::HiRes qw/sleep/;
 
 use lib 't/lib';
 use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::Loggers qw/classic_harness_loggers/;
 
 # The jump_to subtest drives the interpose path with a stub ipcm_info; the
 # collector would otherwise try to talk to a real IPC bus on startup and
@@ -1259,6 +1260,7 @@ subtest 'start - jump_to unwinds the interpose child via Long::Jump' => sub {
                     ipcm_info   => {fake => 1},
                     jump_to     => 'harness_pt',
                     parent_pids => [],
+                    loggers     => classic_harness_loggers($dir),
                 );
                 POSIX::_exit(100);
             }

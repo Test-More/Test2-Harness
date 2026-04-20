@@ -6,6 +6,7 @@ use Cpanel::JSON::XS qw/decode_json/;
 
 use lib 't/lib';
 use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
 
@@ -38,7 +39,11 @@ subtest 'run service writes its own jsonl log under runs/<run_id>/services' => s
     print $fh "use Test2::V0; ok(1); done_testing;\n";
     close $fh;
 
-    my $spawn = Test2::Harness2->spawn(workdir => $dir);
+    my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
     my $q     = $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
     ok($q->{ok}, 'queued') or diag explain $q;
 
@@ -80,7 +85,11 @@ subtest "run service runs in its own process and is a child of the harness" => s
     print $fh "use Test2::V0; ok(1); done_testing;\n";
     close $fh;
 
-    my $spawn = Test2::Harness2->spawn(workdir => $dir);
+    my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
     $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
 
     # Drain the run so the collector has a chance to flush both logs.

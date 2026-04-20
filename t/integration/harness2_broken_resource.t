@@ -5,6 +5,7 @@ use Test2::Harness2::Util::JSON qw/decode_json/;
 
 use lib 't/lib';
 use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
 
@@ -83,7 +84,12 @@ subtest 'skip (default): broken resource -> synth skip_all path runs' => sub {
     close $fh;
 
     my $broken = Test::BrokenRes->new;
-    my $spawn  = Test2::Harness2->spawn(workdir => $dir, resources => [$broken]);
+    my $spawn  = Test2::Harness2->spawn(
+        workdir      => $dir,
+        resources    => [$broken],
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
     $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
     run_harness_until_drained($dir, $spawn);
 
@@ -110,6 +116,8 @@ subtest 'fail: broken resource -> synth die, non-zero exit' => sub {
         workdir                  => $dir,
         resources                => [$broken],
         broken_resource_behavior => 'fail',
+        loggers                  => classic_harness_loggers($dir),
+        test_loggers             => classic_test_loggers(),
     );
     $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
     run_harness_until_drained($dir, $spawn);
@@ -137,6 +145,8 @@ subtest 'abort: every queued job gets synth-launched even for multiple tests' =>
         workdir                  => $dir,
         resources                => [$broken],
         broken_resource_behavior => 'abort',
+        loggers                  => classic_harness_loggers($dir),
+        test_loggers             => classic_test_loggers(),
     );
     $spawn->queue_test_run(
         files => [

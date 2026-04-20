@@ -1,8 +1,14 @@
--D
--D=rel(t/Harness/selftest/lib)
-;-pSelfTest
---project Test2-Harness2
-
-[test]
--Irel(t/Harness/selftest/lib)
---default-search rel(t)
+# V2
+# TODO: the options below are V1 leftovers. Uncomment and
+# re-express them as V2 options once the relevant Stage 6 option
+# libraries land and --project / -D / [test] are wired through
+# Getopt::Yath.
+#
+# -D
+# -D=rel(t/Harness/selftest/lib)
+# ;-pSelfTest
+# --project Test2-Harness2
+#
+# [test]
+# -Irel(t/Harness/selftest/lib)
+# --default-search rel(t)

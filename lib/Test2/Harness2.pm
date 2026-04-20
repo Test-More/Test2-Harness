@@ -54,6 +54,7 @@ use Object::HashBase qw{
     +emitter
     watch_pids
     own_pgroup
+    +completed_runs
 };
 
 # Valid values for broken_resource_behavior: what the scheduler does
@@ -126,7 +127,8 @@ sub init {
     $self->{+RUNNING_JOBS}      //= {};
     $self->{+RESOURCE_SERVICES} //= {};
     $self->{+RUN_SERVICES}      //= {};
-    $self->{+WATCH_PIDS}    //= [@{$self->{+PARENT_PIDS}}];
+    $self->{+COMPLETED_RUNS}    //= {};
+    $self->{+WATCH_PIDS}        //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
     $self->{+BROKEN_RESOURCE_BEHAVIOR} //= 'skip';
@@ -376,10 +378,12 @@ sub request_handler_status {
 
     my $queue = [
         map { {
-            run_id  => $_->run_id,
-            pending => [@{$_->pending}],
-            running => [@{$_->running}],
-            done    => [@{$_->done}],
+            run_id     => $_->run_id,
+            pending    => [@{$_->pending}],
+            running    => [@{$_->running}],
+            done       => [@{$_->done}],
+            pass_count => $_->pass_count,
+            fail_count => $_->fail_count,
         } } @{$self->{+QUEUE}}
     ];
 
@@ -408,6 +412,45 @@ sub request_handler_status {
         running   => \@running,
         resources => \@resources,
     };
+}
+
+# Per-run state query. Returns:
+#   { ok => 1, state => 'running'|'completed', run_id, pending, running,
+#     done, pass_count, fail_count }
+# for a run the harness has seen, either still in the queue or moved
+# into the completed_runs snapshot after it finished. Returns
+#   { ok => 0, error => '...' } for an unknown run_id.
+#
+# The completed snapshot is what makes this query safe to call after
+# the run has drained: the queue prunes finished runs, but their
+# terminal state is captured into completed_runs first.
+sub request_handler_run_status {
+    my ($self, $payload) = @_;
+    $payload //= {};
+
+    my $run_id = $payload->{run_id};
+    return {ok => 0, error => "'run_id' is required"}
+        unless defined $run_id && length $run_id;
+
+    for my $run (@{$self->{+QUEUE}}) {
+        next unless $run->run_id eq $run_id;
+        return {
+            ok         => 1,
+            state      => 'running',
+            run_id     => $run_id,
+            pending    => [@{$run->pending}],
+            running    => [@{$run->running}],
+            done       => [@{$run->done}],
+            pass_count => $run->pass_count,
+            fail_count => $run->fail_count,
+        };
+    }
+
+    if (my $snap = $self->{+COMPLETED_RUNS}->{$run_id}) {
+        return {ok => 1, state => 'completed', %$snap};
+    }
+
+    return {ok => 0, error => "unknown run_id '$run_id'"};
 }
 
 sub request_handler_finish {
@@ -575,11 +618,26 @@ sub _handle_job_complete {
 
     # Release any resources this job had assigned and advance the run.
     $self->_release_job_resources($cur);
-    $cur->{run}->mark_done($job_id);
+    $cur->{run}->mark_done($job_id, $pass);
 
     if ($cur->{run}->is_complete) {
         my $run    = $cur->{run};
         my $run_id = $run->run_id;
+
+        # Capture the run's terminal state before it's pruned from
+        # the queue. Callers (yath test, yath run) query their
+        # specific run_id via request_handler_run_status; that
+        # handler falls through to this snapshot after the run is
+        # gone from the queue.
+        $self->{+COMPLETED_RUNS}->{$run_id} = {
+            run_id     => $run_id,
+            pending    => [@{$run->pending}],
+            running    => [@{$run->running}],
+            done       => [@{$run->done}],
+            pass_count => $run->pass_count,
+            fail_count => $run->fail_count,
+        };
+
         $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
 
         $self->_teardown_run_service($run);
@@ -939,6 +997,20 @@ sub _finalize_run_if_complete {
     return unless $run->is_complete;
 
     my $run_id = $run->run_id;
+
+    # Same snapshot contract as _handle_job_complete: capture the
+    # run's terminal state into completed_runs before the queue
+    # pruning erases it, so request_handler_run_status can still
+    # answer for this run_id afterwards.
+    $self->{+COMPLETED_RUNS}->{$run_id} //= {
+        run_id     => $run_id,
+        pending    => [@{$run->pending}],
+        running    => [@{$run->running}],
+        done       => [@{$run->done}],
+        pass_count => $run->pass_count,
+        fail_count => $run->fail_count,
+    };
+
     $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
     $self->_teardown_run_service($run);
     $self->{+STATE} = 'finishing'

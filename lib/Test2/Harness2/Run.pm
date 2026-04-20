@@ -22,6 +22,8 @@ use Object::HashBase qw{
     <pending
     <running
     <done
+    <pass_count
+    <fail_count
     <resources
     <aborted_reason
     <loggers
@@ -49,6 +51,8 @@ sub init {
     $self->{+PENDING}            //= [map { $_->job_id } @{$self->{+JOBS}}];
     $self->{+RUNNING}            //= [];
     $self->{+DONE}               //= [];
+    $self->{+PASS_COUNT}         //= 0;
+    $self->{+FAIL_COUNT}         //= 0;
     $self->{+RESOURCES}          //= [];
     $self->{+LAUNCH_JOB_TIMEOUT} //= DEFAULT_LAUNCH_JOB_TIMEOUT_SECS;
 
@@ -174,11 +178,13 @@ sub mark_running {
 }
 
 sub mark_done {
-    my ($self, $job_id) = @_;
+    my ($self, $job_id, $pass) = @_;
     my @new = grep { $_ ne $job_id } @{$self->{+RUNNING}};
     croak "job_id '$job_id' is not running" if @new == @{$self->{+RUNNING}};
     $self->{+RUNNING} = \@new;
     push @{$self->{+DONE}} => $job_id;
+    if   ($pass) { $self->{+PASS_COUNT}++ }
+    else         { $self->{+FAIL_COUNT}++ }
 }
 
 sub mark_skipped {

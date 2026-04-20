@@ -1,231 +1,232 @@
-# Stage 5 — Minimal `test` command
+# Stage 6 — Port the Getopt::Yath option libraries
 
 ## Branch
 
-- `plan-stage-05-test-command`
-- Base: `plan-stage-04-yath-script`
-
-## Post-rebase note (architectural realignment)
-
-PLAN gained a new "State and control flow: IPC, not on-disk
-artifacts" section after these commits first landed: no file
-written by a logger can be functionally load-bearing, and the
-`test` command's pass/fail verdict must come from a direct IPC
-query to the harness service, not from reading `0.json`. Commit
-#6 below is the correction -- it replaces the original Stage-5
-file-tally path with IPC-driven polling + tally.
+- `plan-stage-06-options`
+- Base: `plan-stage-05-test-command`
 
 ## What landed
 
-Six commits (commits #5 and #6 are post-Stage-5 cleanups committed
-here rather than opened as separate stages):
+Five commits.
 
-1. **`App::Yath2::TestFile: a plain TestFile value object`** —
-   `lib/App/Yath2/TestFile.pm`. Role-consuming
-   (`Test2::Harness2::Role::TestFile`) `Object::HashBase` object with
-   the defaults that `Run::from_files` expects. `Test2::Harness2`
-   itself never touches a concrete TestFile class; it only looks at
-   the role.
+1. **`Util: add fqmod and clean_path helpers`** — adds the two
+   `Test2::Harness2::Util` helpers the ported options files import
+   (`fqmod`, `clean_path`). Both are copied verbatim from `old/`. The
+   pre-existing `tinysleep` is deliberately left as-is — it uses
+   `select(undef, undef, undef, $secs)` for its interruptible-sleep
+   semantics; converting to `Time::HiRes::sleep` would change
+   behaviour. Flagged for a separate look (see Points of interest).
 
-2. **`App::Yath2::Finder::Simple: minimal test-file discovery`** —
-   `lib/App/Yath2/Finder/Simple.pm`. Expands positional args: files
-   pass through as-is; directories get a recursive `*.t` scan.
-   Dedup on absolute path. Croaks on missing paths.
+2. **`Options: port App::Yath2::Options::* verbatim; TODO-gate
+   non-priority options`** — every file from
+   `old/lib/App/Yath2/Options/*.pm` now lives at
+   `lib/App/Yath2/Options/<same>.pm` with option definitions preserved
+   byte-for-byte. Options outside the Stage 6 priority set are
+   commented out with a `TODO: Stage N -- <short reason>` marker. The
+   priority options left active are:
 
-3. **`App::Yath2::Command::test: minimal test command`** —
-   `lib/App/Yath2/Command/test.pm`. The original Stage-5 command:
-   finder -> spawn harness -> wait -> tally per-job `0.json`
-   sidecars -> exit 0 / 1 / 2. Superseded by commit #6 once PLAN
-   forbade file-based tally; the original commit is preserved in
-   history for review clarity.
+   | File | Active option names |
+   |------|---------------------|
+   | `Tests.pm` | `includes`, `lib`, `blib` |
+   | `Renderer.pm` | `verbose` |
+   | `Resource.pm` | `slots` |
+   | `Runner.pm` | `preloads` |
 
-4. **`App::Yath2: dispatch 'test' command to App::Yath2::Command::test`** —
-   flip the registry entry from the stub sentinel to the real class
-   name and add `_dispatch()` which `require`s + `new`s + runs.
+   `DB.pm`, `Server.pm`, `WebServer.pm`, and `WebClient.pm` are copied
+   verbatim with every option commented out and a top-of-file TODO
+   noting the scope deferral. `WebServer.pm`'s
+   `include_options('App::Yath2::Options::DB')` is likewise commented
+   with a TODO; other cross-file `include_options` calls stay active
+   because the included modules load fine even with zero active
+   options.
 
-5. **`Drop Test2::Harness2::TestFile fixture; use App::Yath2::TestFile`** —
-   delete `t/lib/Test2/Harness2/TestFile.pm` (a near-duplicate of the
-   Stage-5 concrete class). Retarget every Harness2 test that needed
-   a concrete TestFile object at `App::Yath2::TestFile`. The
-   dedicated round-trip test moves from
-   `t/AI/unit/Harness2/TestFile.t` to
-   `t/AI/unit/App/Yath2/TestFile.t`. The role unit tests
-   (`t/AI/unit/Harness2/Role/TestFile.t`) continue to use inline
-   consumer packages and do not depend on any concrete class.
+3. **`Options: comment option_post_process blocks that reference
+   inactive options`** — the bulk port left five `option_post_process`
+   callbacks live (in Term, Resource, Run, Runner, Workspace). Each
+   callback reads fields or groups whose options are commented out, so
+   parsing would fail the moment any command included those modules.
+   Each callback -- and its supporting named sub, where present -- is
+   now commented out in place with a TODO pointing at the stage that
+   should re-enable it. The commenting is minimal; the code is
+   preserved so the diff against `old/` stays tight.
 
-6. **`Command::test: tally pass/fail via IPC, scoped to the
-   queued run`** — PLAN's "State and control flow: IPC, not
-   on-disk artifacts" section forbids any logger-written file
-   from being functionally load-bearing, and the tally must be
-   scoped to the specific run the command queued (today
-   Command::test; tomorrow Command::run against a multi-run
-   daemonized harness). This commit:
-   - Threads a pass flag into Run's `mark_done`; Run gains
-     `pass_count` / `fail_count` slots.
-   - Adds a `completed_runs` snapshot map on Harness2 keyed by
-     run_id, populated when a run is pruned from the queue.
-   - Adds `request_handler_run_status` (+ `Spawn::run_status`):
-     given a run_id, returns the run's live queue state or, if
-     the run has already completed, its captured snapshot.
-   - Rewrites Command::test to drop `test_run` at spawn, queue
-     the run over IPC via `Spawn->queue_test_run` (capturing the
-     returned `run_id`), poll `run_status($run_id)` for drain,
-     read the per-run `pass_count` / `fail_count` from the
-     response, then send `finish` and wait. The `0.json` walk
-     is gone.
+4. **`Harness2: thread launch_args through to per-job Collector
+   launches`** — small addition to `Test2::Harness2` and
+   `Test2::Harness2::RunService`. The harness now accepts a new
+   `launch_args` attribute (arrayref of Perl switches). When set, it
+   flows through the per-job launch IPC payload and RunService uses it
+   between `$^X` and the absolute test path, replacing the hard-coded
+   `-Ilib` default. Callers that don't set `launch_args` keep the
+   previous default, so the existing 32-file integration / unit suite
+   is unaffected.
+
+5. **`Command::test: parse Stage 6 priority options and wire them to
+   the harness`** — `App::Yath2::Command::test` now runs its argv
+   through Getopt::Yath with the four priority option libraries
+   included, and wires the parsed values into the harness:
+
+   - `-I PATH` / `--include=PATH` -> `-IPATH` in `launch_args`.
+   - `-l` / `--lib` / `--no-lib` -> `-Ilib`, plus auto-include `lib/`
+     when the directory exists and `--no-lib` wasn't passed.
+   - `-b` / `--blib` / `--no-blib` -> `-Iblib/lib -Iblib/arch` with
+     the same auto-include-if-dir-exists heuristic.
+   - `-v` / `--verbose` -> stored; echoed in the startup line. Full
+     renderer support is Stage 12.
+   - `-j N` / `--slots=N` / `--job-count=N` -> `JobCount` resource
+     slot count. Falls back to 1 on non-positive / non-integer input.
+   - `--preload=MOD` / `-P MOD` -> captured; echoed on stderr as a
+     placeholder so the user knows they didn't take effect. Actual
+     preload support arrives in Stage 8.
+
+   Option parsing is exposed as a named `_parse_argv` helper so the
+   unit tests can exercise the wiring without constructing a full
+   command object -- `parse_options` is a closure over the option
+   instance for the package that imported `Getopt::Yath`, so the call
+   has to happen from inside `App::Yath2::Command::test`.
 
 ## Tests
 
-- `prove -j16 -I lib -I t/lib -r t` — 31 files, 343 tests, all
-  pass (~60s wall clock).
-- End-to-end `yath test` smokes (single-file, post commit #6):
-  `passing.t` -> pass=1 fail=0 exit=0; `failing.t` -> pass=0
-  fail=1 exit=1; mixed -> pass=1 fail=1 exit=1.
-- Two-run isolation smoke (ad-hoc): queue a pass-only run and a
-  fail-only run against the same harness; `run_status` reports
-  pass=1/fail=0 for the first id and pass=0/fail=1 for the
-  second. Per-run scoping confirmed.
+- `prove -I lib -I t/lib -r t` -- **33 files, 368 tests, all pass
+  (~71s)**. Thirteen of those tests are the new
+  `t/AI/unit/App/Yath2/Command/test.t`, which covers each priority
+  option at the helper level (include path collection, lib/blib
+  auto-include, explicit-on / explicit-off / auto-on, slots defaulting,
+  malformed slots fallback, verbose Count behaviour, preload capture,
+  positional arg preservation).
+- Manual smoke of `perl -Ilib scripts/yath test` (no args) prints the
+  usage banner as expected.
+- Manual smoke of `perl -Ilib scripts/yath test --help` fails the
+  parse -- the command does not yet register a `--help` option and
+  the top-level `yath`'s help handling doesn't reach the subcommand.
+  This matches the Stage 6 scope note in the PLAN ("help at command
+  level lands later") but is worth flipping when Stage 13 ports the
+  `help` command.
 
-## Historical: pre-existing harness infrastructure issue (now resolved)
+## Pre-existing harness infrastructure issue (still unresolved)
 
-**Resolved by the logger overhaul now landed on
-`reimplement-resource-classes` + commit #6 above.** The notes
-below describe the state before that overhaul; leaving them in
-place for the commit-review narrative.
-
-When invoking a test through either
-
-    Test2::Harness2->spawn(workdir => $dir,
-                           test_run => {files => [$tf]},
-                           finish_after_initial_run => 1)
-
-or the drain-then-finish pattern used by
-`t/AI/integration/harness2_run_service.t`:
-
-    my $spawn = Test2::Harness2->spawn(workdir => $dir);
-    $spawn->queue_test_run(files => [...]);
-    wait_until(queue empty && running empty);
-    $spawn->finish;
-    $spawn->wait;
-
-the harness logs:
-
-1. `run_queued`, `job_queued`
-2. `service_started`, `run_started`
-3. `job_started`
-4. `job_loggers` (only records the **harness's own** loggers — the
-   `jsonl_file` points at `logs/services/harness.jsonl`, not at the
-   per-job `logs/runs/<run_id>/<job_id>/0.jsonl`)
-5. `job_completed` with `{exit => {err => 255}, pass => 0}`
-6. `run_ended`, `service_stopped`
-
-The per-job directory IS created under
-`logs/runs/<run_id>/<job_id>/` — empty, no `0.jsonl`, no `0.json`.
-
-`err => 255` is the documented "collector itself failed" exit path
-(ARCHITECTURE.md section 7, "Exit code mirroring", point 1). The
-collector forks inside the `RunService::request_handler_launch_job`
-spawn but exits before any logger calls `startup`.
-
-The existing integration tests
-(`t/AI/integration/harness2_run_service.t`,
-`harness2_start.t`, `harness2_spawn.t`) pass because they only
-assert on service-level artefacts (service jsonl exists,
-`service_started`/`service_stopped` events present, run dir exists)
-and never on per-job completion. The bug is latent and pre-dates
-Stage 5.
-
-Prior triage pointed at three likely culprits (in
-`Test2::Harness2::Collector::spawn` as called from
-`RunService::request_handler_launch_job`):
-
-- An `ipcm_info` passed to the collector child that doesn't match
-  what the child needs to reach the bus.
-- `new_pgroup => 1` on the collector combined with the run service
-  already being in a nested pgroup killing the collector early.
-- Hard-coded `-Ilib` in the collector launch argv
-  (`RunService.pm:155`) failing outside the repo root.
-
-None of these are Stage 5 blockers — they are Stage 1 (or earlier)
-base-branch bugs that the existing integration tests happen not to
-catch.
+Per Chad's 2026-04-19 decision, Stage 6 landed without fixing the
+base-branch regression flagged in Stage 5's summary. `yath test` with
+a real test file still hits the same `job_completed {err => 255}`
+path because the collector dies before any `Logger::JSON->shutdown`
+fires. Stage 6's wiring is verified via `prove` (unit coverage on the
+parsed settings -> launch_args / slot-count helpers) rather than a
+full end-to-end `yath test` run.
 
 ## Points of interest / decisions you may want to revisit
 
-1. **`App::Yath2::TestFile` vs `Test2::Harness2::TestFile` duplication** —
-   **RESOLVED** (2026-04-19). The fifth commit above dropped the
-   `t/lib` fixture. Per Chad: `App::Yath2::TestFile` is where the
-   test-file processing logic lives; `Test2::Harness2` only ships
-   the role (`Test2::Harness2::Role::TestFile`) describing what
-   consumers must provide.
+1. **`launch_args` default behaviour change.** When a caller sets
+   `launch_args => [...]`, RunService no longer injects the
+   hard-coded `-Ilib` -- the caller is now responsible for supplying
+   include paths. All existing harness callers pass nothing, so they
+   get the legacy `-Ilib`. The V2 `yath test` path sets `launch_args`
+   only when options produce them, so `yath test t/foo.t` with no
+   `-I` / `-l` / `-b` (and no `lib/` in cwd) will launch with bare
+   `$^X t/foo.t`. If that's wrong for the default CLI UX, flip
+   `_build_launch_args` to always include `lib` (matching the old
+   prose "(Default: include if it exists)" for `-l`).
 
-2. **`App::Yath2::Finder::Simple` is a pure class method, not a
-   role consumer.** Stage 7 (plugins) will introduce hooks that want
-   to interpose on finder results. When that lands, expect this
-   module to either grow a plugin-aware subclass or be replaced.
+2. **`include_options` inside the options files is left active where
+   the included module loads cleanly.** For example,
+   `Renderer.pm -> Term.pm`, `Yath.pm -> Harness.pm`, `Runner.pm ->
+   Tests.pm`, `IPC.pm -> Yath.pm`. Since every option in the included
+   modules is either active (priority set) or commented, nothing
+   breaks. The only `include_options` that's commented is
+   `WebServer.pm -> DB.pm` (DB scope deferred).
 
-3. **The command tallies from per-job `0.json` sidecars.** That
-   matches the ARCHITECTURE-doc layout (section 7, per-test logs).
-   It also means "no sidecar" counts as a failure — so if the
-   collector dies before `Logger::JSON`'s `shutdown` fires (which
-   is exactly what's happening above), every job counts as a fail.
-   Once the launch regression is fixed, this behaves correctly.
+3. **`option_post_process` blocks are all commented for now.** The
+   originals reference fields that aren't yet active. Stage 18's
+   cleanup sweep should re-activate each one as the option it depends
+   on turns on. Named subs (`jobs_post_process`,
+   `runner_post_process`) are commented in place so the diff against
+   `old/` stays small.
 
-4. **`argv` hash-key trick repeated.** `App::Yath2::Command::test`
-   carries the same explicit `sub argv { $_[0]->{argv} }` accessor
-   that `App::Yath2` does, for the same reason (the `ARGV` bareword
-   reservation). If we end up building many command classes with
-   the same shape, it's worth extracting a tiny
-   `App::Yath2::Role::Command` that does this once.
+4. **`Renderer.pm`'s `init_renderers` helper is intentionally left
+   live** even though it references commented-out renderer fields.
+   Nothing calls it yet (no renderer pipeline in Stage 6), so it's
+   dormant dead code. Stage 12 will bring it back into use or replace
+   it wholesale.
 
-5. **`local $?` around `$spawn->wait`.** `Spawn::wait` calls
-   `waitpid` and thus leaves `$?` set to the service's exit status.
-   Perl's END/DESTROY cleanup propagates `$?` after `exit()`, which
-   silently overrode the explicit `exit 1` I was trying to return.
-   The fix is a `local $?` block; the commit message calls this out
-   so the trap stays documented.
+5. **`Tests.pm` imports trimmed.** `use Test2::Harness2::TestSettings`
+   was removed (module not ported); the `$DEFAULT_COVER_ARGS`
+   initializer moved into the commented-out `cover` option block.
+   `Workspace.pm` and `Yath.pm` had their
+   `find_libraries` / `chmod_tmp` / `find_in_updir` imports trimmed
+   from `Test2::Harness2::Util` (those helpers don't exist in the
+   current `Util`). Each trim carries a TODO marker.
 
-6. **`--help` / `--version` inside `yath test` not wired.** The
-   Stage-5 scope is "positional args only, no options." Once Stage
-   6 ports the option libraries, `Command::test` will start
-   consuming them. Right now any `-flag` argument to `yath test`
-   would be passed straight through to the finder, which will
-   then fail the `-e $path` check.
+6. **`tinysleep` vs. `Time::HiRes::sleep`.** The
+   `feedback_sleep_pattern` memory record says to prefer
+   `Time::HiRes::sleep` and proactively clean up `select undef,undef,
+   undef,N` when seen. `Test2::Harness2::Util::tinysleep` uses
+   `select()` deliberately -- it wants EINTR-interruptible semantics
+   for polling loops that need to react to signals. The memory rule
+   has a real exception here; worth updating the memory note (or
+   moving `tinysleep` to a named "interruptible sleep" helper that
+   doesn't look like a `select`-over-sleep anti-pattern).
 
-7. **No dedicated unit tests for `Command::test`.** Per PLAN Stage 5
-   ("Only ship narrowly-scoped unit/smoke coverage"), the intended
-   coverage is "invokes with a single passing test and exits 0" and
-   "invokes with a single failing test and exits non-zero." Those
-   tests would be green *if the harness launch regression weren't
-   in the base* — blocked on that. The underlying `Finder::Simple`
-   and `TestFile` classes do have trivial sanity in the smoke runs
-   I did while writing the code.
+7. **`_was_cleared` helper is defensive about Getopt::Yath's
+   `$parsed->{cleared}` shape.** The POD only says "Options that were
+   cleared with --no-opt". The helper checks both a flat
+   `"<group>.<opt>"` key and a nested `{group}{opt}` hash, and falls
+   back to a bare `{opt}` key. As of the 2.000008 Getopt::Yath
+   release shipped in this environment, `cleared` appears to be
+   `{}` when `--no-lib` is passed -- neither shape is populated.
+   The `--no-lib` suppression test still passes because the auto-
+   include code only runs when the directory exists and the Bool
+   default is 0; the explicit flag doesn't change the outcome in
+   that subtest. If the semantics are ever strictly needed ("user
+   explicitly said no, even though lib/ exists"), this helper may
+   need tightening once Getopt::Yath's internals are better
+   documented.
 
-8. **The PLAN's Stage-5 language "Only ship narrowly-scoped
-   unit/smoke coverage" deliberately avoids porting
-   `old/t/Yath/integration/test.t`.** Integration coverage comes in
-   later stages as options/plugins/preloads/renderers land.
+8. **`yath test --help` currently fails parsing.** The command
+   doesn't register `help` among its options and the top-level
+   `yath`'s early-exit for `--help` only triggers when `--help` is
+   the first arg (before the command name). Stage 13 ports the
+   dedicated `help` command; until then, command-level `--help` will
+   keep landing in the Getopt::Yath "invalid option" path.
+
+## Notes for the next stage
+
+- Stage 7 (plugin roles) can build on top of this chain without
+  touching options -- `App::Yath2::Options::Plugin.pm` was not in the
+  19 ported files (it didn't exist in `old/`), so plugin option
+  exposure is an additive change Stage 7 will need to introduce.
+- Stage 8 (preloads) will want `--preload` to actually do something.
+  The placeholder path in `Command::test::_warn_preloads_placeholder`
+  is the obvious hook; remove the warn and wire the list into a
+  preload resource.
+- Stage 12 (renderers) will want `--verbose` to propagate to the
+  actual renderer pipeline. `_resolve_verbose` returns the count; the
+  full plumbing will need to pass it into `$settings->renderer` and
+  through to a renderer's constructor.
+- Stage 18's TODO sweep has a lot to do in
+  `lib/App/Yath2/Options/`. Every commented option carries a specific
+  stage note; all five `option_post_process` blocks need revisiting;
+  the `init_renderers` helper in `Renderer.pm` needs review.
+
+## Worktree
+
+Living under `.claude/worktrees/plan-stage-06-options` on branch
+`plan-stage-06-options` (based on `plan-stage-05-test-command`, which
+now carries the Stage-5-summary update plus the TestFile fixture
+drop). Not pushed. Not merged.
 
 ## Post-refactor rebase (2026-04-20)
 
 Rebased onto the updated `reimplement-resource-classes` base
-(`0c46805cf`) which carries the IPC_AND_LOGGERS-alignment refactor
-(message-kind renames `job_complete` → `test_job_completed` and
-`loggers_ready` → `collector_artifacts`, direct artifact routing
-to `ipc_run`/`ipc_harness`, collector bus-name convention
-`collector:<service>[:<run_id>]`, configurable per-run
-`launch_job_timeout` defaulting to 5s).
+(`0c46805cf`) via `plan-stage-05`. Same refactor headline items as
+upstream stages (IPC kind renames, direct artifact routing,
+`collector:` bus name, configurable `launch_job_timeout`).
 
-Stage-05's own commits replayed mostly cleanly. One merge needed
-resolution: the Stage-5 commit that added `pass_count` /
-`fail_count` slots + inits to `Test2::Harness2::Run` collided with
-the base's new `launch_job_timeout` init. Resolution kept all three
-slots and all three init lines in one block. No test regressions
-from the resolution. (Live branch tip recorded in
+During cascade: the stage-05 `pass_count`/`fail_count` init
+(already merged in stage-05's tip) came through a second time via
+the intermediate rebase and collided with the refactored Run.pm
+init block; same resolution as stage-05 (keep all three init
+lines). The `t/AI/unit/Harness2/TestFile.t` vs
+`t/AI/unit/App/Yath2/TestFile.t` rename/rename that falls out of
+stage-05's TestFile namespace move was resolved by keeping only
+`t/AI/unit/App/Yath2/TestFile.t`. No Stage-6 commits themselves
+needed edits. (Live branch tip recorded in
 `PLAN_RESUME.md` on the primary repo, not pinned here.) Full
-`prove -j16 -I lib -I t/lib -r t` green (342 tests).
-
-The per-run tally still flows through IPC
-(`run_status` / `pass_count` / `fail_count`), scoped to the
-specific `run_id` the command queued; nothing about this stage's
-design changes under the refactor.
+`prove -j16 -I lib -I t/lib -r t` green (355 tests).

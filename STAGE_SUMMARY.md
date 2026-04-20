@@ -70,3 +70,22 @@
    the committed artefact of this stage is only the file moves. The rule
    itself is carried by `ARCHITECTURE.md` (already present) and by the
    per-user `CLAUDE.md` (updated but not committed).
+
+## Post-refactor rebase (2026-04-20)
+
+Rebased onto the updated `reimplement-resource-classes` base
+(`0c46805cf`), which now carries the IPC_AND_LOGGERS-alignment
+refactor:
+
+- IPC message-kind renames: `job_complete` → `test_job_completed`,
+  `loggers_ready` → `collector_artifacts`.
+- Collector artifact routing now targets `ipc_run` (preferred) or
+  `ipc_harness`, not `ipc_parent`.
+- Collector bus name convention: `collector:<service>[:<run_id>]`.
+- Per-run `launch_job_timeout` slot on `Test2::Harness2::Run` with
+  a 5-second default.
+
+Stage-02's own commits (the `t/AI/` move) replayed cleanly — no
+conflicts during cascade. (Live branch tip recorded in
+`PLAN_RESUME.md` on the primary repo, not pinned here.) Full
+`prove -j16 -I lib -I t/lib -r t` run green downstream.

@@ -100,13 +100,16 @@ option_group {group => 'workspace', category => 'Workspace Options'} => sub {
 
 };
 
-option_post_process sub {
-    my ($options, $state) = @_;
-
-    my $settings = $state->{settings};
-
-    remove_tree($settings->workspace->workdir, {safe => 1, keep_root => 1}) if $settings->workspace->clear;
-};
+# TODO: Stage 6 — re-enable the workspace post-process when the workdir
+# and clear options are activated. Parsing currently fails because the
+# 'workspace' group has no fields.
+# option_post_process sub {
+#     my ($options, $state) = @_;
+#
+#     my $settings = $state->{settings};
+#
+#     remove_tree($settings->workspace->workdir, {safe => 1, keep_root => 1}) if $settings->workspace->clear;
+# };
 
 1;
 

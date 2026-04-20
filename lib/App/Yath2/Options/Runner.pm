@@ -97,18 +97,23 @@ option_group {group => 'runner', category => "Runner Options"} => sub {
     # );
 };
 
-option_post_process \&runner_post_process;
+# TODO: Stage 6 — re-enable runner_post_process when tests->switches is
+# activated. Preloads are live but switches is still commented out, so
+# the cross-check would fail at parse time.
+# option_post_process \&runner_post_process;
 
-sub runner_post_process {
-    my ($options, $state) = @_;
-
-    my $settings = $state->{settings};
-    my $runner   = $settings->runner;
-    my $tests    = $settings->tests;
-
-    warn "WARNING: Combining preload and switches will render preloads useless...\n"
-        if @{$runner->preloads // []} && @{$tests->switches // []};
-}
+# TODO: Stage 6 — restore runner_post_process when tests->switches
+# returns. Preserved here so diffs against old/ stay small.
+# sub runner_post_process {
+#     my ($options, $state) = @_;
+#
+#     my $settings = $state->{settings};
+#     my $runner   = $settings->runner;
+#     my $tests    = $settings->tests;
+#
+#     warn "WARNING: Combining preload and switches will render preloads useless...\n"
+#         if @{$runner->preloads // []} && @{$tests->switches // []};
+# }
 
 __END__
 

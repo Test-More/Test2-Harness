@@ -88,36 +88,42 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
     #     },
     # );
 
-    option_post_process 50 => \&jobs_post_process;
+    # TODO: Stage 6 — re-enable jobs_post_process once job_slots and
+    # classes are activated. The current definition references both, so
+    # it would fail at parse time.
+    # option_post_process 50 => \&jobs_post_process;
 };
 
-sub jobs_post_process {
-    my ($options, $state) = @_;
-
-    my $settings = $state->{settings};
-    my $resource = $settings->resource;
-    $resource->option(slots     => 1) unless $resource->slots;
-    $resource->option(job_slots => 1) unless $resource->job_slots;
-
-    my $slots     = $resource->slots;
-    my $job_slots = $resource->job_slots;
-
-    die "The slots per job (set to $job_slots) must not be larger than the total number of slots (set to $slots).\n" if $job_slots > $slots;
-
-    $resource->option(classes => {}) unless $resource->classes;
-
-    my %found;
-    for my $r (keys %{$resource->classes}) {
-        require(mod2file($r));
-        next unless $r->is_job_limiter;
-        $found{$r}++;
-    }
-
-    unless (keys %found) {
-        require Test2::Harness2::Resource::JobCount;
-        $resource->classes->{'Test2::Harness2::Resource::JobCount'} //= [];
-    }
-}
+# TODO: Stage 6 — restore jobs_post_process when job_slots and classes
+# options return. Preserved here (not in Getopt::Yath's post-process
+# chain) so diffs against old/ stay small.
+# sub jobs_post_process {
+#     my ($options, $state) = @_;
+#
+#     my $settings = $state->{settings};
+#     my $resource = $settings->resource;
+#     $resource->option(slots     => 1) unless $resource->slots;
+#     $resource->option(job_slots => 1) unless $resource->job_slots;
+#
+#     my $slots     = $resource->slots;
+#     my $job_slots = $resource->job_slots;
+#
+#     die "The slots per job (set to $job_slots) must not be larger than the total number of slots (set to $slots).\n" if $job_slots > $slots;
+#
+#     $resource->option(classes => {}) unless $resource->classes;
+#
+#     my %found;
+#     for my $r (keys %{$resource->classes}) {
+#         require(mod2file($r));
+#         next unless $r->is_job_limiter;
+#         $found{$r}++;
+#     }
+#
+#     unless (keys %found) {
+#         require Test2::Harness2::Resource::JobCount;
+#         $resource->classes->{'Test2::Harness2::Resource::JobCount'} //= [];
+#     }
+# }
 
 1;
 

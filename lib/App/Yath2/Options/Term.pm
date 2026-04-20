@@ -38,18 +38,22 @@ option_group {group => 'term', category => "Terminal Options"} => sub {
     # );
 };
 
-option_post_process sub {
-    my ($options, $state) = @_;
-    my $settings = $state->{settings};
-
-    my $term = $settings->term;
-
-    if ($settings->check_group('tests')) {
-        my $tests = $settings->tests;
-        $tests->option(env_vars => {}) unless $tests->env_vars;
-        $tests->env_vars->{TABLE_TERM_SIZE} = $term->width if defined $term->width;
-    }
-};
+# TODO: Stage 6 — re-enable the post-process that forwards TABLE_TERM_SIZE
+# into the tests group once Term.pm's options (term width) and Tests.pm's
+# env_vars option are both active. Leaving it live right now breaks every
+# parse because the 'term' group has no fields.
+# option_post_process sub {
+#     my ($options, $state) = @_;
+#     my $settings = $state->{settings};
+#
+#     my $term = $settings->term;
+#
+#     if ($settings->check_group('tests')) {
+#         my $tests = $settings->tests;
+#         $tests->option(env_vars => {}) unless $tests->env_vars;
+#         $tests->env_vars->{TABLE_TERM_SIZE} = $term->width if defined $term->width;
+#     }
+# };
 
 1;
 

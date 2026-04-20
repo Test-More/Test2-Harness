@@ -133,25 +133,28 @@ option_group {group => 'run', category => "Run Options"} => sub {
     # );
 };
 
-option_post_process 0 => sub {
-    my ($options, $state) = @_;
-
-    my $settings = $state->{settings};
-    my $run      = $settings->run;
-
-    return unless $run->interactive;
-
-    if ($settings->check_group('renderer')) {
-        my $r = $settings->renderer;
-        $r->verbose(1) unless $r->verbose;
-    }
-
-    if ($settings->check_group('resource')) {
-        my $r = $settings->resource;
-        $r->job_slots(1);
-        $r->slots(1);
-    }
-};
+# TODO: Stage 6 — re-enable the interactive post-process when the run
+# group's interactive option returns. Right now it would fail at parse
+# time because the 'run' group is empty.
+# option_post_process 0 => sub {
+#     my ($options, $state) = @_;
+#
+#     my $settings = $state->{settings};
+#     my $run      = $settings->run;
+#
+#     return unless $run->interactive;
+#
+#     if ($settings->check_group('renderer')) {
+#         my $r = $settings->renderer;
+#         $r->verbose(1) unless $r->verbose;
+#     }
+#
+#     if ($settings->check_group('resource')) {
+#         my $r = $settings->resource;
+#         $r->job_slots(1);
+#         $r->slots(1);
+#     }
+# };
 
 1;
 

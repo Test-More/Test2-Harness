@@ -30,11 +30,14 @@ sub init {
     croak "'output_file' is a required attribute"
         unless defined $self->{+OUTPUT_FILE};
 
-    croak "'spec' is a required attribute"
-        unless defined $self->{+SPEC};
-
-    croak "'spec' must be an object that implements TO_JSON"
-        unless blessed($self->{+SPEC}) && $self->{+SPEC}->can('TO_JSON');
+    # spec is optional: when present it gets serialized at startup so
+    # the sidecar has identity data; when absent the sidecar carries
+    # only exit status and (if an auditor is attached) the pass/fail
+    # verdict recorded at shutdown.
+    if (defined $self->{+SPEC}) {
+        croak "'spec' must be an object that implements TO_JSON"
+            unless blessed($self->{+SPEC}) && $self->{+SPEC}->can('TO_JSON');
+    }
 }
 
 sub set_ipcm_info {
@@ -62,9 +65,12 @@ sub metadata {
 
 # Take a snapshot of the spec at startup so shutdown can publish the
 # original data plus exit/pass details regardless of any mutation the
-# spec underwent during collection.
+# spec underwent during collection. When no spec was supplied we skip
+# the initial snapshot; shutdown will still publish exit/pass.
 sub startup {
     my $self = shift;
+
+    return unless defined $self->{+SPEC};
 
     my $data = $self->{+SPEC}->TO_JSON;
     $self->{+_DATA} = $data;
@@ -74,12 +80,17 @@ sub startup {
 
 # At shutdown, overwrite the file with the original startup data plus the
 # collected process's exit status and (when an auditor is attached) the
-# auditor's pass/fail verdict.
+# auditor's pass/fail verdict. When no spec and no cached data are
+# available, start from an empty hash.
 sub shutdown {
     my $self = shift;
     my ($collector) = @_;
 
-    my $data = {%{$self->{+_DATA} // $self->{+SPEC}->TO_JSON}};
+    my $base =
+          defined $self->{+_DATA} ? $self->{+_DATA}
+        : defined $self->{+SPEC}  ? $self->{+SPEC}->TO_JSON
+        :                           {};
+    my $data = {%$base};
 
     if (blessed($collector) && $collector->can('child_exit')) {
         my $raw = $collector->child_exit;

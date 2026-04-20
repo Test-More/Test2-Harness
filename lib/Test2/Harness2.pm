@@ -742,10 +742,6 @@ sub run_on_all {
                 output_file => $json_file,
                 spec        => $job,
             ],
-            [
-                'Test2::Harness2::Collector::Logger::IPCNotify',
-                service_name => $self->{+NAME},
-            ],
         ],
     );
 

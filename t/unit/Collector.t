@@ -1660,20 +1660,27 @@ subtest '_send_logger_metadata omits loggers whose metadata is undef' => sub {
         return;
     };
 
-    # JSONL produces metadata; IPCNotify does not (undef).
-    require Test2::Harness2::Collector::Logger::IPCNotify;
-    my $jsonl    = Test2::Harness2::Collector::Logger::JSONL->new(
+    # JSONL produces metadata; SilentLogger does not (undef).
+    {
+
+        package T2H2_Test_SilentLogger;
+        use Role::Tiny::With;
+        with 'Test2::Harness2::Role::Collector::Logger';
+        sub new { bless {}, shift }
+
+        # Returns undef (role default) so _send_logger_metadata will omit it.
+    }
+
+    my $jsonl = Test2::Harness2::Collector::Logger::JSONL->new(
         ipcm_info => {}, output_file => '/tmp/one.jsonl',
     );
-    my $notifier = Test2::Harness2::Collector::Logger::IPCNotify->new(
-        ipcm_info => {}, service_name => 'harness',
-    );
+    my $silent = T2H2_Test_SilentLogger->new;
 
     my $c = Test2::Harness2::Collector->new(
         stdout    => $devnull,
         ipcm_info => {fake => 1},
         ipc_peer  => 'harness',
-        loggers   => [$jsonl, $notifier],
+        loggers   => [$jsonl, $silent],
     );
     $c->_instantiate_loggers();
     $c->_send_logger_metadata;
@@ -1681,10 +1688,10 @@ subtest '_send_logger_metadata omits loggers whose metadata is undef' => sub {
     is(scalar @sent, 1, 'one message sent');
     my $loggers = $sent[0]{loggers};
 
-    my $jsonl_class    = 'Test2::Harness2::Collector::Logger::JSONL';
-    my $notifier_class = 'Test2::Harness2::Collector::Logger::IPCNotify';
-    ok( exists $loggers->{$jsonl_class},    'JSONL present (defined metadata)');
-    ok(!exists $loggers->{$notifier_class}, 'IPCNotify absent (undef metadata)');
+    my $jsonl_class  = 'Test2::Harness2::Collector::Logger::JSONL';
+    my $silent_class = 'T2H2_Test_SilentLogger';
+    ok( exists $loggers->{$jsonl_class},  'JSONL present (defined metadata)');
+    ok(!exists $loggers->{$silent_class}, 'silent logger absent (undef metadata)');
     is($loggers->{$jsonl_class}, [{jsonl_file => '/tmp/one.jsonl'}],
         'JSONL slot carries only the defined metadata');
 };
@@ -1706,16 +1713,14 @@ subtest '_send_logger_metadata still fires when every logger returns undef' => s
         return;
     };
 
-    require Test2::Harness2::Collector::Logger::IPCNotify;
-    my $notifier = Test2::Harness2::Collector::Logger::IPCNotify->new(
-        ipcm_info => {}, service_name => 'harness',
-    );
+    # Reuse the silent-logger class defined in the previous subtest.
+    my $silent = T2H2_Test_SilentLogger->new;
 
     my $c = Test2::Harness2::Collector->new(
         stdout    => $devnull,
         ipcm_info => {fake => 1},
         ipc_peer  => 'harness',
-        loggers   => [$notifier],
+        loggers   => [$silent],
     );
     $c->_instantiate_loggers();
     $c->_send_logger_metadata;

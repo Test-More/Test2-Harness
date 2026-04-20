@@ -830,6 +830,41 @@ sub _finalize_collection {
 
     $_->shutdown($self) for @{$self->{+LOGGERS}};
 
+    # For test-job collectors (those with an auditor), wake the harness
+    # service's IPC loop with a job_complete_notify so the next
+    # run_on_all tick happens immediately instead of after the normal
+    # poll interval. The message itself is a no-op at the service side
+    # -- the wake-up IS the effect. Service-level collectors (no
+    # auditor) have no peer waiting on a per-job notification.
+    $self->_send_job_complete_notify if $self->{+AUDITOR};
+
+    return;
+}
+
+sub _send_job_complete_notify {
+    my $self = shift;
+
+    my $ok = eval {
+        require IPC::Manager::Service::Handle;
+        my $handle = IPC::Manager::Service::Handle->new(
+            service_name => $self->{+IPC_PEER},
+            ipcm_info    => $self->{+IPCM_INFO},
+            name         => $self->{+JOB_ID},
+        );
+
+        $handle->client->send_message(
+            $self->{+IPC_PEER},
+            {
+                kind    => 'job_complete_notify',
+                run_id  => $self->{+RUN_ID},
+                job_id  => $self->{+JOB_ID},
+                job_try => $self->{+JOB_TRY},
+            },
+        );
+        1;
+    };
+    warn "Collector job_complete_notify send failed: $@" unless $ok;
+
     return;
 }
 

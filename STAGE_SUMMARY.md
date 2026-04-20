@@ -205,3 +205,27 @@ catch.
    unit/smoke coverage" deliberately avoids porting
    `old/t/Yath/integration/test.t`.** Integration coverage comes in
    later stages as options/plugins/preloads/renderers land.
+
+## Post-refactor rebase (2026-04-20)
+
+Rebased onto the updated `reimplement-resource-classes` base
+(`0c46805cf`) which carries the IPC_AND_LOGGERS-alignment refactor
+(message-kind renames `job_complete` → `test_job_completed` and
+`loggers_ready` → `collector_artifacts`, direct artifact routing
+to `ipc_run`/`ipc_harness`, collector bus-name convention
+`collector:<service>[:<run_id>]`, configurable per-run
+`launch_job_timeout` defaulting to 5s).
+
+Stage-05's own commits replayed mostly cleanly. One merge needed
+resolution: the Stage-5 commit that added `pass_count` /
+`fail_count` slots + inits to `Test2::Harness2::Run` collided with
+the base's new `launch_job_timeout` init. Resolution kept all three
+slots and all three init lines in one block. No test regressions
+from the resolution. (Live branch tip recorded in
+`PLAN_RESUME.md` on the primary repo, not pinned here.) Full
+`prove -j16 -I lib -I t/lib -r t` green (342 tests).
+
+The per-run tally still flows through IPC
+(`run_status` / `pass_count` / `fail_count`), scoped to the
+specific `run_id` the command queued; nothing about this stage's
+design changes under the refactor.

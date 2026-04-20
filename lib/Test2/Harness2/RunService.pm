@@ -30,6 +30,8 @@ use Object::HashBase qw{
     <ipcm_info
     <parent_pids
     <harness_name
+    <loggers
+    <test_loggers
     +run
     +state
     <resource_services
@@ -98,8 +100,21 @@ sub init {
     $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
-    $self->{+LOG_FILE}      //= "$svc_dir/$self->{+LOG_NAME}.jsonl";
+    # No default log_file: the harness opts in to service-level
+    # JSONL by supplying a log_file or by wiring proper loggers via
+    # service_loggers. Same principle as the harness itself -- no
+    # implicit on-disk artifacts.
     $self->{+SNAPSHOT_FILE} //= "$logdir/runs/$self->{+RUN_ID}.json";
+
+    # Logger specs. Both default to []; the caller (typically the
+    # harness) supplies them at spawn time.
+    $self->{+LOGGERS}      //= [];
+    $self->{+TEST_LOGGERS} //= [];
+
+    croak "'loggers' must be an arrayref"
+        unless ref($self->{+LOGGERS}) eq 'ARRAY';
+    croak "'test_loggers' must be an arrayref"
+        unless ref($self->{+TEST_LOGGERS}) eq 'ARRAY';
 }
 
 # Atomic-swap the runs/<run_id>.json snapshot with the run's current
@@ -480,10 +495,13 @@ sub start {
 
     my $self = $class->new(%args);
 
-    open(my $log_fh, '>>', $self->{+LOG_FILE})
-        or croak "cannot open run-service log '$self->{+LOG_FILE}': $!";
-    $log_fh->autoflush(1);
-    $self->{+LOG_FH} = $log_fh;
+    my $log_fh;
+    if (defined $self->{+LOG_FILE}) {
+        open($log_fh, '>>', $self->{+LOG_FILE})
+            or croak "cannot open run-service log '$self->{+LOG_FILE}': $!";
+        $log_fh->autoflush(1);
+        $self->{+LOG_FH} = $log_fh;
+    }
 
     # The harness signals run-service shutdown with SIGTERM. The
     # service loop checks run_should_end each tick, so flipping state
@@ -495,7 +513,7 @@ sub start {
 
     my $exit = $self->run;
 
-    close($log_fh);
+    close($log_fh) if $log_fh;
 
     POSIX::_exit($exit // 0);
 }

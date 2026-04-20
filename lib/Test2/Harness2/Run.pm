@@ -28,20 +28,29 @@ use Object::HashBase qw{
     <extend_loggers
     <test_loggers
     <extend_test_loggers
+    <launch_job_timeout
     +resources_started
     +resources_torn_down
 };
 
+# Default retry interval the harness will use when a launch_job
+# request to a run service or preload stage times out waiting for
+# its ack (see IPC_AND_LOGGERS §14). Overridable per-run by setting
+# launch_job_timeout at construction; a future CLI option will
+# expose this to the user.
+use constant DEFAULT_LAUNCH_JOB_TIMEOUT_SECS => 5;
+
 sub init {
     my $self = shift;
 
-    $self->{+RUN_ID}     //= gen_uuid();
-    $self->{+JOBS}       //= [];
-    $self->{+CREATED_AT} //= time;
-    $self->{+PENDING}    //= [map { $_->job_id } @{$self->{+JOBS}}];
-    $self->{+RUNNING}    //= [];
-    $self->{+DONE}       //= [];
-    $self->{+RESOURCES}  //= [];
+    $self->{+RUN_ID}             //= gen_uuid();
+    $self->{+JOBS}               //= [];
+    $self->{+CREATED_AT}         //= time;
+    $self->{+PENDING}            //= [map { $_->job_id } @{$self->{+JOBS}}];
+    $self->{+RUNNING}            //= [];
+    $self->{+DONE}               //= [];
+    $self->{+RESOURCES}          //= [];
+    $self->{+LAUNCH_JOB_TIMEOUT} //= DEFAULT_LAUNCH_JOB_TIMEOUT_SECS;
 
     # Per-run logger overrides. Each of the four slots is an arrayref
     # of logger specs; each pair is mutually exclusive.
@@ -89,7 +98,7 @@ sub effective_test_loggers {
 sub _effective {
     my ($replace, $extend, $defaults) = @_;
     $defaults //= [];
-    return [@$replace] if defined $replace;
+    return [@$replace]            if defined $replace;
     return [@$defaults, @$extend] if defined $extend;
     return [@$defaults];
 }

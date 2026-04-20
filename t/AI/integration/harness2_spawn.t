@@ -3,7 +3,7 @@ use File::Temp qw/tempdir/;
 use Time::HiRes qw/sleep/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 use Test2::Harness2;
 
@@ -20,7 +20,7 @@ isa_ok($spawn, ['Test2::Harness2::Spawn']);
 ok($spawn->pid,          'has pid');
 ok(kill(0, $spawn->pid), 'service is alive');
 
-my $tf     = Test2::Harness2::TestFile->new(file => $test_file);
+my $tf     = App::Yath2::TestFile->new(file => $test_file);
 my $queued = $spawn->queue_test_run(files => [$tf]);
 ok($queued->{ok}, 'queued') or diag explain $queued;
 

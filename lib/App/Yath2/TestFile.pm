@@ -1,4 +1,4 @@
-package Test2::Harness2::TestFile;
+package App::Yath2::TestFile;
 use strict;
 use warnings;
 
@@ -52,8 +52,8 @@ sub init {
     croak "'file' is a required attribute" unless defined $file && length $file;
 
     # Resolve to an absolute path once so a later chdir does not redirect
-    # the launch. The role's ->absolute/->relative methods both derive from
-    # this stored value.
+    # the launch. The role's ->absolute/->relative methods both derive
+    # from this stored value.
     $self->{+FILE} = File::Spec->rel2abs($file)
         unless File::Spec->file_name_is_absolute($file);
 
@@ -88,29 +88,26 @@ __END__
 
 =head1 NAME
 
-Test2::Harness2::TestFile - Reference implementation of
-L<Test2::Harness2::Role::TestFile> used by the test suite.
+App::Yath2::TestFile - Plain TestFile value object for the V2 yath
+application layer.
 
 =head1 DESCRIPTION
 
-A plain value object carrying everything the harness scheduler and resource
-layer need to make decisions about a single test file. Consumes
+A plain value object carrying everything the harness scheduler and
+resource layer need to make decisions about a single test file. Consumes
 L<Test2::Harness2::Role::TestFile> for its interface; uses
-L<Object::HashBase> for storage; fills defaults during C<init> for each
-attribute whose HashBase accessor would otherwise shadow the role
-default with C<undef>; resolves C<file> to an absolute path.
+L<Object::HashBase> for storage.
 
-B<This class lives under C<t/lib>>. It exists for the test suite and for
-callers that want a simple drop-in TestFile class; the harness library
-itself does not depend on it. A fuller implementation with directive
-parsing and file scanning is expected to land later in the rewrite.
+At this stage the class is a thin wrapper: each positional test argument
+to C<yath test> is turned into one C<App::Yath2::TestFile> with default
+slot / category / duration settings. Directive parsing and file scanning
+will grow in later stages as the finder/plugins layer matures.
 
 =head1 SYNOPSIS
 
-    use lib 't/lib';
-    use Test2::Harness2::TestFile;
+    use App::Yath2::TestFile;
 
-    my $tf = Test2::Harness2::TestFile->new(
+    my $tf = App::Yath2::TestFile->new(
         file      => 't/foo.t',
         min_slots => 1,
         max_slots => 2,
@@ -144,8 +141,8 @@ L<https://github.com/Test-More/Test2-Harness>.
 
 Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
-This program is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself.
+This program is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
 
 See L<https://dev.perl.org/licenses/>
 

@@ -5,7 +5,7 @@ use Cpanel::JSON::XS qw/decode_json/;
 use POSIX qw/_exit/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
@@ -29,7 +29,7 @@ if (!$pid) {
         workdir                  => $dir,
         loggers                  => classic_harness_loggers($dir),
         test_loggers             => classic_test_loggers(),
-        test_run                 => {files => [Test2::Harness2::TestFile->new(file => $test_file)]},
+        test_run                 => {files => [App::Yath2::TestFile->new(file => $test_file)]},
         finish_after_initial_run => 1,
     );
     POSIX::_exit(0);

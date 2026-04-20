@@ -1,11 +1,11 @@
 use Test2::V0;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 use Test2::Harness2::Run;
 
-sub _tf { Test2::Harness2::TestFile->new(file => $_[0]) }
+sub _tf { App::Yath2::TestFile->new(file => $_[0]) }
 
 subtest 'from_files builds jobs with inherited run_id' => sub {
     my $run = Test2::Harness2::Run->from_files(
@@ -17,14 +17,14 @@ subtest 'from_files builds jobs with inherited run_id' => sub {
     is($run->jobs->[0]->run_id,        'run-1', 'job inherits run_id');
     is($run->jobs->[0]->test_file_rel, 't/a.t', 'job a relative path');
     is($run->jobs->[1]->test_file_rel, 't/b.t', 'job b relative path');
-    isa_ok($run->jobs->[0]->test_file, ['Test2::Harness2::TestFile'], 'test_file is a TestFile');
+    isa_ok($run->jobs->[0]->test_file, ['App::Yath2::TestFile'], 'test_file is a TestFile');
     is(scalar @{$run->pending}, 2, 'both pending');
     is(scalar @{$run->running}, 0, 'none running');
     is(scalar @{$run->done},    0, 'none done');
 };
 
 subtest 'from_files accepts TestFile objects directly' => sub {
-    my $tf  = Test2::Harness2::TestFile->new(file => 't/a.t', min_slots => 2);
+    my $tf  = App::Yath2::TestFile->new(file => 't/a.t', min_slots => 2);
     my $run = Test2::Harness2::Run->from_files(files => [$tf]);
     is($run->jobs->[0]->test_file,            $tf, 'pre-built TestFile passed through');
     is($run->jobs->[0]->test_file->min_slots, 2,   'attributes preserved');
@@ -98,14 +98,14 @@ subtest 'from_files rehydrates tagged hashrefs into TestFile objects' => sub {
     my $run = Test2::Harness2::Run->from_files(
         files => [
             {
-                __test_file_class__ => 'Test2::Harness2::TestFile',
+                __test_file_class__ => 'App::Yath2::TestFile',
                 file                => 't/a.t',
                 min_slots           => 3,
             },
         ],
     );
     my $tf = $run->jobs->[0]->test_file;
-    isa_ok($tf, ['Test2::Harness2::TestFile'], 'tagged hashref rehydrated');
+    isa_ok($tf, ['App::Yath2::TestFile'], 'tagged hashref rehydrated');
     is($tf->min_slots, 3, 'attributes preserved across rehydrate');
 };
 

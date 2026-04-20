@@ -5,7 +5,7 @@ use POSIX qw/:sys_wait_h/;
 use Cpanel::JSON::XS qw/decode_json/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
@@ -44,7 +44,7 @@ subtest 'run service writes its own jsonl log under runs/<run_id>/services' => s
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
-    my $q     = $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
+    my $q     = $spawn->queue_test_run(files => [App::Yath2::TestFile->new(file => $tf)]);
     ok($q->{ok}, 'queued') or diag explain $q;
 
     # Drain the run.
@@ -90,7 +90,7 @@ subtest "run service runs in its own process and is a child of the harness" => s
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
-    $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
+    $spawn->queue_test_run(files => [App::Yath2::TestFile->new(file => $tf)]);
 
     # Drain the run so the collector has a chance to flush both logs.
     wait_until(

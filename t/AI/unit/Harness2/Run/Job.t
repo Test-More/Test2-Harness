@@ -2,12 +2,12 @@ use Test2::V0;
 use File::Spec ();
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 use Test2::Harness2::Run::Job;
 
 subtest 'constructs with a TestFile' => sub {
-    my $tf  = Test2::Harness2::TestFile->new(file => 't/foo.t');
+    my $tf  = App::Yath2::TestFile->new(file => 't/foo.t');
     my $job = Test2::Harness2::Run::Job->new(
         job_id    => 'abc-123',
         test_file => $tf,
@@ -27,7 +27,7 @@ subtest 'rejects bare path strings (rehydration happens at Run::from_files)' => 
 };
 
 subtest 'auto-generates job_id when absent' => sub {
-    my $tf  = Test2::Harness2::TestFile->new(file => 't/foo.t');
+    my $tf  = App::Yath2::TestFile->new(file => 't/foo.t');
     my $job = Test2::Harness2::Run::Job->new(test_file => $tf, run_id => 'r1');
     like($job->job_id, qr/^[0-9A-F-]{36}$/i, 'UUID-shaped job_id');
 };
@@ -40,7 +40,7 @@ subtest 'test_file is required' => sub {
 };
 
 subtest 'run_id is required' => sub {
-    my $tf = Test2::Harness2::TestFile->new(file => 't/foo.t');
+    my $tf = App::Yath2::TestFile->new(file => 't/foo.t');
     my $ok  = eval { Test2::Harness2::Run::Job->new(test_file => $tf); 1 };
     my $err = $@;
     ok(!$ok, 'croaks without run_id');
@@ -48,7 +48,7 @@ subtest 'run_id is required' => sub {
 };
 
 subtest 'test_file_abs / test_file_rel shortcuts' => sub {
-    my $tf  = Test2::Harness2::TestFile->new(file => 't/foo.t');
+    my $tf  = App::Yath2::TestFile->new(file => 't/foo.t');
     my $job = Test2::Harness2::Run::Job->new(test_file => $tf, run_id => 'r1');
     is($job->test_file_rel, 't/foo.t', 'test_file_rel is the relative path');
     like($job->test_file_abs, qr{\Qfoo.t\E\z}, 'test_file_abs ends with foo.t');
@@ -68,7 +68,7 @@ subtest 'rejects non-TestFile refs' => sub {
 };
 
 subtest 'TO_JSON returns a plain hash; nested test_file is left to convert_blessed' => sub {
-    my $tf  = Test2::Harness2::TestFile->new(file => 't/foo.t');
+    my $tf  = App::Yath2::TestFile->new(file => 't/foo.t');
     my $job = Test2::Harness2::Run::Job->new(
         job_id    => 'j-1',
         test_file => $tf,

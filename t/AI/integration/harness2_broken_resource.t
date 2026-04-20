@@ -4,7 +4,7 @@ use Time::HiRes qw/sleep/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
 use lib 't/lib';
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
@@ -90,7 +90,7 @@ subtest 'skip (default): broken resource -> synth skip_all path runs' => sub {
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
-    $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
+    $spawn->queue_test_run(files => [App::Yath2::TestFile->new(file => $tf)]);
     run_harness_until_drained($dir, $spawn);
 
     # The synth skip_all ran through the normal Collector launch --
@@ -119,7 +119,7 @@ subtest 'fail: broken resource -> synth die, non-zero exit' => sub {
         loggers                  => classic_harness_loggers($dir),
         test_loggers             => classic_test_loggers(),
     );
-    $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
+    $spawn->queue_test_run(files => [App::Yath2::TestFile->new(file => $tf)]);
     run_harness_until_drained($dir, $spawn);
 
     my @events    = harness_events_for($dir);
@@ -150,7 +150,7 @@ subtest 'abort: every queued job gets synth-launched even for multiple tests' =>
     );
     $spawn->queue_test_run(
         files => [
-            map { Test2::Harness2::TestFile->new(file => "$dir/never_$_.t") } 1 .. 3,
+            map { App::Yath2::TestFile->new(file => "$dir/never_$_.t") } 1 .. 3,
         ],
     );
     run_harness_until_drained($dir, $spawn, 30);

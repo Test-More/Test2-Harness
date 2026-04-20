@@ -118,3 +118,18 @@ Inotify2, Moose/Exporter reload helpers, exec+BEGIN+Long::Jump
 bootstrap, collector routing, harness acceptance). When Stages 8-9
 come around, those commits should be cherry-picked / rebased onto
 the stage chain rather than implemented from scratch.
+
+## Post-refactor rebase (2026-04-20)
+
+Rebased onto the updated `reimplement-resource-classes` base
+(`0c46805cf`), which now carries the IPC_AND_LOGGERS-alignment
+refactor (message-kind renames `job_complete` → `test_job_completed`
+and `loggers_ready` → `collector_artifacts`, direct artifact
+routing to `ipc_run`/`ipc_harness`, collector bus-name convention
+`collector:<service>[:<run_id>]`, configurable per-run
+`launch_job_timeout` defaulting to 5s).
+
+Stage-03's own commits (utility classes port) replayed cleanly —
+no conflicts during cascade. (Live branch tip recorded in
+`PLAN_RESUME.md` on the primary repo, not pinned here.) Full
+`prove -j16 -I lib -I t/lib -r t` run green downstream.

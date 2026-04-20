@@ -5,13 +5,17 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
+use Cwd qw/realpath/;
 use Fcntl qw/LOCK_EX LOCK_UN/;
+use File::Spec;
 use Importer Importer => 'import';
 use Test2::Util qw/try_sig_mask do_rename/;
 
 our @EXPORT_OK = qw{
     apply_encoding
+    clean_path
     close_file
+    fqmod
     hub_truth
     load_module
     lock_file
@@ -66,6 +70,63 @@ sub mod2file {
     $file =~ s{::}{/}g;
     $file .= ".pm";
     return $file;
+}
+
+# Normalize a path to an absolute form (and, by default, a real path).
+# With $absolute set to a false value the realpath() hop is skipped and
+# the path is only made absolute relative to cwd. Used by option
+# libraries that accept paths from users / environment.
+sub clean_path {
+    my ($path, $absolute) = @_;
+
+    confess "No path was provided to clean_path()" unless $path;
+
+    $absolute //= 1;
+    $path = realpath($path) // $path if $absolute;
+
+    return File::Spec->rel2abs($path);
+}
+
+# Resolve a short module name against one or more namespace prefixes.
+# "+Full::Name" is taken literally (the "+" is stripped). Otherwise each
+# prefix is tried in order until one loads. Returns the resolved module
+# name. With no_require => 1 no module is loaded and the first candidate
+# is returned; that mode requires exactly one prefix.
+sub fqmod {
+    my ($input, $prefixes, %options) = @_;
+
+    croak "At least 1 prefix is required" unless $prefixes;
+
+    $prefixes = [$prefixes] unless ref($prefixes) eq 'ARRAY';
+
+    croak "At least 1 prefix is required" unless @$prefixes;
+    croak "Cannot use no_require when providing multiple prefixes"
+        if $options{no_require} && @$prefixes > 1;
+
+    if ($input =~ m/^\+(.*)$/) {
+        my $mod = $1;
+        return $mod if $options{no_require};
+        return $mod if eval { require(mod2file($mod)); 1 };
+        confess($@);
+    }
+
+    my %tried;
+    for my $pre (@$prefixes) {
+        my $mod = $input =~ m/^\Q$pre\E/ ? $input : "$pre\::$input";
+
+        if ($options{no_require}) {
+            return $mod;
+        }
+        else {
+            return $mod if eval { require(mod2file($mod)); 1 };
+            ($tried{$mod}) = split /\n/, $@;
+            $tried{$mod} =~ s{^(Can't locate \S+ in \@INC).*$}{$1.};
+        }
+    }
+
+    my @caller = caller;
+
+    die "Could not locate a module matching '$input' at $caller[1] line $caller[2], the following were checked:\n" . join("\n", map { " * $_: $tried{$_}" } sort keys %tried) . "\n";
 }
 
 sub apply_encoding {
@@ -200,7 +261,7 @@ sub lock_file {
     for (1 .. 21) {
         flock($fh, LOCK_EX) and last;
         die "Could not lock file (try $_): $!" if $_ >= 20;
-        next if $!{EINTR} || $!{ERESTART};
+        next                                   if $!{EINTR} || $!{ERESTART};
         die "Could not lock file: $!";
     }
 
@@ -212,7 +273,7 @@ sub unlock_file {
     for (1 .. 21) {
         flock($fh, LOCK_UN) and last;
         die "Could not unlock file (try $_): $!" if $_ >= 20;
-        next if $!{EINTR} || $!{ERESTART};
+        next                                     if $!{EINTR} || $!{ERESTART};
         die "Could not unlock file: $!";
     }
 

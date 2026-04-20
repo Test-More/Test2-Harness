@@ -7,15 +7,15 @@
 
 ## What landed
 
-Four commits:
+Five commits (the fifth is a post-Stage-5 cleanup committed here rather
+than opened as a separate stage):
 
 1. **`App::Yath2::TestFile: a plain TestFile value object`** —
    `lib/App/Yath2/TestFile.pm`. Role-consuming
    (`Test2::Harness2::Role::TestFile`) `Object::HashBase` object with
-   the defaults that `Run::from_files` expects. Mirrors
-   `t/lib/Test2/Harness2/TestFile.pm` but lives in the `App::Yath2`
-   namespace so the harness library continues to not depend on a
-   specific TestFile class.
+   the defaults that `Run::from_files` expects. `Test2::Harness2`
+   itself never touches a concrete TestFile class; it only looks at
+   the role.
 
 2. **`App::Yath2::Finder::Simple: minimal test-file discovery`** —
    `lib/App/Yath2/Finder/Simple.pm`. Expands positional args: files
@@ -31,9 +31,19 @@ Four commits:
    flip the registry entry from the stub sentinel to the real class
    name and add `_dispatch()` which `require`s + `new`s + runs.
 
+5. **`Drop Test2::Harness2::TestFile fixture; use App::Yath2::TestFile`** —
+   delete `t/lib/Test2/Harness2/TestFile.pm` (a near-duplicate of the
+   Stage-5 concrete class). Retarget every Harness2 test that needed
+   a concrete TestFile object at `App::Yath2::TestFile`. The
+   dedicated round-trip test moves from
+   `t/AI/unit/Harness2/TestFile.t` to
+   `t/AI/unit/App/Yath2/TestFile.t`. The role unit tests
+   (`t/AI/unit/Harness2/Role/TestFile.t`) continue to use inline
+   consumer packages and do not depend on any concrete class.
+
 ## Tests
 
-- `prove -I lib -I t/lib -r t` — 32 files, 355 tests, all pass (72s).
+- `prove -I lib -I t/lib -r t` — 32 files, 355 tests, all pass (~72s).
 - Manual smoke via `perl -Ilib scripts/yath test <path>` — command
   wiring works end-to-end: options parsed, finder runs, harness
   service spawned, logs written, per-run JSON sidecar produced.
@@ -44,6 +54,12 @@ harness infrastructure issue" below). Manual smokes therefore
 exit with the fail path, because the harness emits
 `job_completed {err => 255}` on every job launch and no per-job
 `0.json` sidecar is ever written.
+
+Per Chad's direction on 2026-04-19, Stages 6+ proceed on top of
+this chain and accept that `yath test` is not end-to-end
+verifiable until the base regression is addressed separately.
+Stage 6 work will be verified via the `prove -I lib -I t/lib -r t`
+path only.
 
 ## Pre-existing harness infrastructure issue (NOT Stage 5 scope)
 
@@ -89,27 +105,29 @@ assert on service-level artefacts (service jsonl exists,
 and never on per-job completion. The bug is latent and pre-dates
 Stage 5.
 
-I spent maybe 20 minutes tracing this before cutting off to keep
-the chain moving. The reproduction is tiny — the exact code that
-harness2_run_service.t runs, pointed at a trivially-passing
-`use Test2::V0; ok(1); done_testing;` — and it's fully contained
-in `Test2::Harness2` / `Test2::Harness2::RunService` /
-`Test2::Harness2::Collector`. Zero `App::Yath2` code is involved.
+Prior triage pointed at three likely culprits (in
+`Test2::Harness2::Collector::spawn` as called from
+`RunService::request_handler_launch_job`):
 
-The command itself is structurally complete and will "just work"
-once this harness-side regression is debugged.
+- An `ipcm_info` passed to the collector child that doesn't match
+  what the child needs to reach the bus.
+- `new_pgroup => 1` on the collector combined with the run service
+  already being in a nested pgroup killing the collector early.
+- Hard-coded `-Ilib` in the collector launch argv
+  (`RunService.pm:155`) failing outside the repo root.
+
+None of these are Stage 5 blockers — they are Stage 1 (or earlier)
+base-branch bugs that the existing integration tests happen not to
+catch.
 
 ## Points of interest / decisions you may want to revisit
 
-1. **`App::Yath2::TestFile` duplicates `t/lib/Test2/Harness2/TestFile.pm`.**
-   Per PLAN, `Test2::Harness2::TestFile` is in the
-   "don't bulk-port, copy functionality as needed" bucket. Moving
-   the t/lib double into `lib/Test2/Harness2/TestFile.pm` would avoid
-   the duplication but touches something outside the `App::Yath2`
-   namespace. If you'd rather do that promotion instead, the
-   `App::Yath2::TestFile` file can be deleted and the imports in
-   `App::Yath2::Finder::Simple` / `App::Yath2::Command::test`
-   redirected in one edit.
+1. **`App::Yath2::TestFile` vs `Test2::Harness2::TestFile` duplication** —
+   **RESOLVED** (2026-04-19). The fifth commit above dropped the
+   `t/lib` fixture. Per Chad: `App::Yath2::TestFile` is where the
+   test-file processing logic lives; `Test2::Harness2` only ships
+   the role (`Test2::Harness2::Role::TestFile`) describing what
+   consumers must provide.
 
 2. **`App::Yath2::Finder::Simple` is a pure class method, not a
    role consumer.** Stage 7 (plugins) will introduce hooks that want
@@ -157,23 +175,3 @@ once this harness-side regression is debugged.
    unit/smoke coverage" deliberately avoids porting
    `old/t/Yath/integration/test.t`.** Integration coverage comes in
    later stages as options/plugins/preloads/renderers land.
-
-## Note for you, Chad
-
-If you want to unblock Stage 5 end-to-end now, the launch
-regression is almost certainly one of:
-
-- `Test2::Harness2::Collector->spawn` called from
-  `RunService::request_handler_launch_job` is receiving an
-  `ipcm_info` that doesn't match what the collector child expects,
-  so the child's bus connect fails.
-- `new_pgroup => 1` on the collector combined with the run service
-  already being in a nested pgroup is killing the collector early.
-- The launch argv is `[$^X, '-Ilib', $test_file_abs]` (RunService.pm
-  line 155) — the `-Ilib` is hard-coded and may not be the right
-  include path when the harness is invoked from outside the repo
-  root. Worth trying a smoke test with that line changed.
-
-None of these are Stage 5 blockers — they are Stage 1 (or earlier)
-base-branch bugs that the existing integration tests happen not to
-catch. Flagging them here so you can decide when to dig in.

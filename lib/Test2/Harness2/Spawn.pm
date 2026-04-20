@@ -66,6 +66,17 @@ sub queue_test_run {
 sub status { $_[0]->_send_request('status') }
 sub finish { $_[0]->_send_request('finish') }
 
+# Per-run status query. Returns the service's snapshot of a single run
+# (identified by run_id), whether it is still executing or already
+# completed. Callers (yath test, yath run) use this to poll for
+# drain + read the per-run tally, rather than reaching into the
+# harness-wide status response.
+sub run_status {
+    my ($self, $run_id) = @_;
+    croak "'run_id' is required" unless defined $run_id && length $run_id;
+    return $self->_send_request('run_status', {run_id => $run_id});
+}
+
 sub terminate {
     my $self = shift;
     my $res  = $self->_send_request('terminate');

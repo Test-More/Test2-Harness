@@ -12,7 +12,7 @@ use Test2::Harness2::Test::Loggers qw/classic_harness_loggers/;
 
 # The jump_to subtest drives the interpose path with a stub ipcm_info; the
 # collector would otherwise try to talk to a real IPC bus on startup and
-# leak "loggers_ready send failed" warnings onto STDERR. Stubbing the handle
+# leak "collector_artifacts send failed" warnings onto STDERR. Stubbing the handle
 # class keeps the unit test clean. Inherited through fork into the service
 # and collector processes.
 BEGIN {
@@ -406,7 +406,7 @@ subtest 'run_on_all commits no resource when any is unavailable' => sub {
     is(scalar @{$h->{queue}},             1, 'run still queued, job still pending');
 };
 
-subtest 'job_complete IPC from a run service advances the harness scheduler' => sub {
+subtest 'test_job_completed IPC from a run service advances the harness scheduler' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
@@ -431,10 +431,10 @@ subtest 'job_complete IPC from a run service advances the harness scheduler' => 
         assigned_resources => [$res],
     };
 
-    # Simulate the run service dispatching job_complete over IPC.
+    # Simulate the run service dispatching test_job_completed over IPC.
     $h->run_on_general_message(
         Test::FakeIpcMsg->new({
-            kind   => 'job_complete',
+            kind   => 'test_job_completed',
             run_id => $run->run_id,
             job_id => $job_id,
             pid    => 91234,
@@ -442,7 +442,7 @@ subtest 'job_complete IPC from a run service advances the harness scheduler' => 
         }),
     );
 
-    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared after job_complete');
+    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared after test_job_completed');
     is(scalar @{$run->done}, 1, 'job marked done');
     is($res->used,           0, 'JobCount slot released');
 };
@@ -489,7 +489,7 @@ subtest 'run_on_all emits run_started + job_started for the first job' => sub {
     is($js->{job_info}{job_try}, 0, 'job_started carries job_try=0');
 };
 
-subtest 'job_complete IPC emits job_completed and run_ended' => sub {
+subtest 'test_job_completed IPC emits job_completed and run_ended' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
@@ -515,7 +515,7 @@ subtest 'job_complete IPC emits job_completed and run_ended' => sub {
 
     $h->run_on_general_message(
         Test::FakeIpcMsg->new({
-            kind    => 'job_complete',
+            kind    => 'test_job_completed',
             run_id  => $run->run_id,
             job_id  => $job->job_id,
             job_try => 0,
@@ -565,7 +565,7 @@ subtest 'job_complete IPC reports pass=0 for non-zero exit' => sub {
 
     $h->run_on_general_message(
         Test::FakeIpcMsg->new({
-            kind    => 'job_complete',
+            kind    => 'test_job_completed',
             run_id  => $run->run_id,
             job_id  => $job->job_id,
             job_try => 0,
@@ -657,14 +657,14 @@ subtest 'run_on_general_message - job_complete_notify is a no-op' => sub {
     is(\@warnings, [], 'no warnings for known kind');
 };
 
-subtest 'run_on_general_message - loggers_ready emits job_loggers event' => sub {
+subtest 'run_on_general_message - collector_artifacts emits job_loggers event' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
 
     my $fake_msg = bless {}, 'FakeMsgLoggers';
     no warnings 'once';
     *FakeMsgLoggers::content = sub { {
-        kind    => 'loggers_ready',
+        kind    => 'collector_artifacts',
         run_id  => 'R',
         job_id  => 'J',
         job_try => 0,
@@ -1183,7 +1183,7 @@ subtest 'broken_resource_behavior=abort fails every remaining job in the run' =>
         sub {
             # One call per scheduler tick; the single-slot limiter
             # only lets one synth-fail run at a time, so we have to
-            # drain them by synthesizing job_complete IPCs between
+            # drain them by synthesizing test_job_completed IPCs between
             # ticks.
             while (my $cur = (values %{$h->{running_jobs}})[0] || 1) {
                 $h->run_on_all({});
@@ -1191,7 +1191,7 @@ subtest 'broken_resource_behavior=abort fails every remaining job in the run' =>
                 for my $jid (keys %{$h->{running_jobs}}) {
                     my $entry   = $h->{running_jobs}{$jid};
                     my $payload = {
-                        kind    => 'job_complete',
+                        kind    => 'test_job_completed',
                         run_id  => $entry->{run}->run_id,
                         job_id  => $entry->{job}->job_id,
                         job_try => 0,
@@ -1476,7 +1476,7 @@ subtest 'pid-liveness watchdog synthesizes job_complete after the grace window' 
     is($res->used, 0, 'resource released');
     ok((grep { $_->{kind} eq 'job_completed' } @emits), 'job_completed event emitted');
     ok(
-        (grep { /synthesizing job_complete/ } @warnings),
+        (grep { /synthesizing test_job_completed/ } @warnings),
         'watchdog warned about the synthesized completion'
     );
 };

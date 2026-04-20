@@ -212,6 +212,7 @@ sub request_handler_launch_job {
             job_try     => $job_try,
             ipcm_info   => $self->ipcm_info,
             ipc_parent  => $self->{+NAME},
+            ipc_run     => $self->{+NAME},
             ipc_harness => $self->{+HARNESS_NAME},
             kind        => 'test',
             (defined $auditor ? (auditor => $auditor) : ()),
@@ -241,7 +242,7 @@ sub request_handler_launch_job {
     # calling run_on_pid, so we would never see the exit and the harness
     # would never learn the job completed. Keeping it out of the worker
     # map routes the exit through run_on_pid where we forward it via
-    # job_complete.
+    # test_job_completed.
     return {ok => 1, pid => $pid, log_file => $log_file};
 }
 
@@ -328,11 +329,11 @@ sub run_on_pid {
     # Test-collector exit: tell the harness so it can release resources
     # and advance its scheduler. The run service's own tracking entry
     # is dropped here; the harness keeps a shadow entry until the
-    # job_complete message is handled.
+    # test_job_completed message is handled.
     if (my $job = delete $self->{+TEST_JOBS}->{$pid}) {
         $self->_send_to_harness(
             {
-                kind    => 'job_complete',
+                kind    => 'test_job_completed',
                 run_id  => $job->{run_id},
                 job_id  => $job->{job_id},
                 job_try => $job->{job_try},

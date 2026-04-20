@@ -16,7 +16,7 @@ use Atomic::Pipe;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Collector::Logger::JSONL;
 
-# The collector fires a loggers_ready IPC message after loggers start. No
+# The collector fires a collector_artifacts IPC message after loggers start. No
 # real bus is running here, so stub the handle out.
 BEGIN {
     require IPC::Manager::Service::Handle;

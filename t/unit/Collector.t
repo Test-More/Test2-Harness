@@ -10,7 +10,7 @@ use Test2::Harness2::Collector::Logger::JSONL;
 
 # Minimal logger that consumes the role and leaves metadata() at its
 # role default (undef). Used to assert that loggers with no metadata
-# get omitted from the loggers_ready payload.
+# get omitted from the collector_artifacts payload.
 {
 
     package T2H2_SilentLogger;
@@ -22,7 +22,7 @@ use Test2::Harness2::Collector::Logger::JSONL;
     sub shutdown   { }
 }
 
-# The collector now unconditionally fires a loggers_ready IPC message after
+# The collector now unconditionally fires a collector_artifacts IPC message after
 # its loggers start.  The real bus is not running under these unit tests, so
 # stub the handle out to keep the tests quiet and fast.  Individual subtests
 # below install their own overrides when they want to observe the message.
@@ -1642,10 +1642,10 @@ subtest 'ipcm_info is required at construction - Collector::Logger::JSONL' => su
 };
 
 # ===========================================================================
-# Logger metadata + loggers_ready IPC send
+# Logger metadata + collector_artifacts IPC send
 # ===========================================================================
 
-subtest '_send_logger_metadata groups metadata and registers under the job_id' => sub {
+subtest '_send_logger_metadata groups metadata and registers under the collector-bus id' => sub {
     open(my $devnull, '<', '/dev/null') or die $!;
 
     my @new_args;
@@ -1689,11 +1689,14 @@ subtest '_send_logger_metadata groups metadata and registers under the job_id' =
 
     is(scalar @new_args,           1,         'exactly one Handle constructed');
     is($new_args[0]{service_name}, 'harness', 'service_name is the configured peer');
-    is($new_args[0]{name},         'J1',      'client registers under its job_id');
+    is(
+        $new_args[0]{name}, 'collector:harness',
+        'client registers under collector:<service_name> (ipc_parent is harness here, kind is generic)',
+    );
 
     is(scalar @sent,               1,               'exactly one send_message call');
     is($sent[0]{to},               'harness',       'sent to the configured peer');
-    is($sent[0]{payload}{kind},    'loggers_ready', 'loggers_ready message kind');
+    is($sent[0]{payload}{kind},    'collector_artifacts', 'collector_artifacts message kind');
     is($sent[0]{payload}{run_id},  'R1',            'carries run_id');
     is($sent[0]{payload}{job_id},  'J1',            'carries job_id');
     is($sent[0]{payload}{job_try}, 0,               'carries job_try');
@@ -1780,7 +1783,7 @@ subtest '_send_logger_metadata still fires when every logger returns undef' => s
     $c->_send_logger_metadata;
 
     is(scalar @sent,      1,               'message still fires with no metadata to report');
-    is($sent[0]{kind},    'loggers_ready', 'correct kind');
+    is($sent[0]{kind},    'collector_artifacts', 'correct kind');
     is($sent[0]{loggers}, {},              'loggers is an empty hash');
 };
 
@@ -1808,7 +1811,7 @@ subtest '_send_logger_metadata warns on IPC failure, does not propagate' => sub 
 
     my $ok = eval { $c->_send_logger_metadata; 1 };
     ok($ok,                                                             'does not propagate the exception');
-    ok((grep { /Collector IPC send failed.*loggers_ready/ } @warnings), 'warning surfaces');
+    ok((grep { /Collector IPC send failed.*collector_artifacts/ } @warnings), 'warning surfaces');
 };
 
 subtest 'ipc_harness is required at construction - Collector' => sub {

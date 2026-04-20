@@ -1,203 +1,170 @@
-# Stage 8 — Initial preload system (no reloading)
+# Stage 9 — Preload reloading (scaffolding)
 
 ## Branch
 
-- `plan-stage-08-preload`
-- Base: `plan-stage-07-plugins` (8186ee153)
+- `plan-stage-09-preload-reload`
+- Base: `plan-stage-08-preload` (449a64ad5)
 
-## What landed (six commits, in order)
+## What landed (three commits, in order)
 
-1. **`Preload DSL: port stage builder and stage value object`** —
-   `lib/Test2/Harness2/Preload.pm` (the DSL importer + meta-object)
-   and `lib/Test2/Harness2/Preload/Stage.pm` (the pure-data stage
-   value object), ported from the `reimplement-preloader` branch.
-   `watch`, `reload_inplace_check`, and the `Reloader::ACTIVE`
-   fallback are present so DSL code stays portable from old/, but
-   the reloader path is inert until Stage 9 lands it.
-   - `t/AI/unit/Harness2/Preload.t` — 11 subtests covering stage
-     basics, add_to_load_sequence, callback dispatch, watch, the
-     DSL's build_stage + nesting + duplicate detection, default
-     stage resolution, eager stages, import exports, and merge.
+1. **`Preload: ChangeWatcher role + Stat/Inotify implementations`**
+   - `lib/Test2/Harness2/Role/ChangeWatcher.pm` declares the shared
+     watcher interface (`watch`, `changed_files`, `viable`).
+   - `lib/Test2/Harness2/ChangeWatcher/Stat.pm` is the portable
+     mtime-polling backend. Always viable. Rate-limited by
+     `min_interval` (default 1s, sub-second honoured via
+     `Time::HiRes`).
+   - `lib/Test2/Harness2/ChangeWatcher/Inotify.pm` is the
+     Linux-native `Linux::Inotify2` backend, gated by `HAS_INOTIFY`.
+     Non-viable installations fail construction with a clear error;
+     consumers should consult `viable()` first.
+   - `lib/Test2/Harness2/Util.pm` gains `file2mod` (inverse of
+     `mod2file`). Used by the reloader to derive a module name from
+     a `%INC` file path.
+   - `t/AI/unit/Harness2/ChangeWatcher.t` exercises both backends.
 
-2. **`Preload: resource class + root service + BEGIN bootstrap`** —
-   three coordinated modules:
-   - `lib/Test2/Harness2/Resource/Preload.pm` consumes
-     `Role::Resource` and declares `service_preload_start`. It's
-     not a job limiter; `available` never gates; `assign` stamps
-     `T2_HARNESS_PRELOAD_STAGE` into the child env when a stage is
-     known. `service_preload_applicable` returns 0 for an empty
-     preload list, `service_preload_restartable` returns 0 (Stage 8
-     preload is non-restartable; Stage 9 will add reloading and
-     with it restartability).
-   - `lib/Test2/Harness2/PreloadService.pm` is the root preload
-     service. Consumes `Role::Service`. `request_handler_launch_job`
-     forks a child that calls `Collector->interpose` and runs the
-     test via `do $test_file` inside the forked test grandchild.
-   - `lib/Test2/Harness2/PreloadService/Bootstrap.pm` is the tiny
-     BEGIN-time module referenced by `service_preload_start`'s
-     `ipcm_service(exec => {...stay_in_begin => 1...})` argv. Its
-     `import` reads the config file and `require`s each preload
-     module before `IPC::Manager::Service::State::import` takes over
-     and enters the service loop.
-   - `t/AI/unit/Harness2/Resource/Preload.t` — 4 subtests covering
-     construction validation, applicability gating, the
-     Role::Resource contract methods, and the env-stamp path.
+2. **`Preload: Role::Reloader + Default + KillRestart`**
+   - `lib/Test2/Harness2/Role/Reloader.pm` declares
+     `reload_module($module, $file, \%info)` with three return
+     shapes: `(1)` for in-place success, `(0, reason => ...)` for
+     runtime failure, `('not_reloadable', reason => ...)` for
+     policy-level refusal. Callers chain reloaders.
+   - `lib/Test2/Harness2/Reloader/Default.pm` implements the
+     in-place path. Priority: user watch callback > HARNESS-CHURN
+     block re-eval > generic stash-clear + re-require. Moose-
+     consuming modules get a metaclass `_reinitialize_class` pass
+     first when Moose is already loaded. Modules with non-trivial
+     `import()` are refused (Exporter-aware reloader is deferred).
+   - `lib/Test2/Harness2/Reloader/KillRestart.pm` unconditionally
+     returns `not_reloadable`. Intended as the terminal entry in a
+     reloader chain, falling into branch pruning per
+     `IPC_AND_LOGGERS` section 10.5.1.
+   - `t/AI/unit/Harness2/Reloader.t` exercises refusal branches,
+     user-callback routing, and a full in-place reload against a
+     real temp module.
 
-3. **`Harness2: route launch_job to the preload service when a
-   preload resource is present`** — adds `_preload_target_for` and
-   `_wait_for_service_ready` helpers and teaches `_launch_job` to
-   target `"preload"` instead of `"run-$run_id"` when a Preload
-   resource is configured and its service has come up. The
-   synthetic-skip / synthetic-fail paths (`opts{launch}` supplied)
-   always bypass the preload route. The launch payload now carries
-   `run_bus_name` so the preload service's collector can address
-   its `ipc_run` without having to reconstruct the run service's
-   bus name from the `run_id`.
-
-4. **`Command::test: wire --preload to a
-   Test2::Harness2::Resource::Preload`** — drops the placeholder
-   stderr warning and instead attaches a `Resource::Preload` to
-   the harness spawn when `--preload=Module` is passed. Empty
-   `--preload` leaves the resource out entirely (non-preload path
-   unchanged).
-
-5. **`Tests: end-to-end Stage 8 preload smoke coverage`** —
-   `t/AI/integration/preload_basic.t` runs two scenarios through a
-   spawned harness with a `Resource::Preload` attached:
-   - A trivial pass with `Scalar::Util` preloaded — verifies
-     routing from harness to preload service to collector to test
-     actually lands a pass/fail tally back via `run_status` IPC.
-   - A sentinel test that asserts its preloaded module is ALREADY
-     in `%INC` at test startup, before the test file itself does
-     any `require`. That is the actual preload benefit: the test
-     child inherits the preload root's `%INC` via fork.
-
-6. **`STAGE_SUMMARY: Stage 8 summary`** (this file).
+3. **`STAGE_SUMMARY: Stage 9 summary`** (this file).
 
 ## Test results
 
-- `prove -I lib -I t/lib -r -j16 t` — **40 files / 405 tests, all
-  passing** on this branch.
-- End-to-end CLI smoke via `perl -Ilib scripts/yath test
-  --preload=Scalar::Util /tmp/preload_test.t` — `pass=1 fail=0`,
-  with `$INC{'Scalar/Util.pm'}` observable in the test before the
-  test's own `use Scalar::Util`.
+- `prove -I lib -I t/lib -r -j16 t` — **42 files / 415 tests, all
+  passing** on this branch. Same green bar as Stage 8 plus the two
+  new Stage 9 test files.
+
+## Explicit Stage 9 deferrals
+
+Stage 9's PLAN entry calls for:
+
+> Teach the preload resource to watch `%INC` per stage via the
+> watcher role and to trigger the reloader chain when changes are
+> seen.
+
+> Implement deferral: when a reload fails with a reason, defer tests
+> needing the broken stage and log a single event per distinct
+> reason (tracker resets on stage-state or reason change).
+
+> Port `old/t/Yath/integration/reload*.t` into `t/`.
+
+This stage **ships the scaffolding but not the integration**:
+
+- The `ChangeWatcher` and `Reloader` roles + their initial
+  implementations are all in place.
+- The `PreloadService` tick loop **does not yet consult a
+  ChangeWatcher or dispatch through a Reloader chain**. Plumbing
+  the reloader into `PreloadService::run_on_tick` + the branch-
+  pruning path from `IPC_AND_LOGGERS` section 10.5.1 is a focused
+  follow-up — all the building blocks exist; what's missing is the
+  glue.
+- Stage deferral (tests held when a stage is `down` /
+  `restarting`, one warning per distinct reason) is not yet wired
+  into the harness scheduler. The scaffolding (the `not_reloadable`
+  return shape from reloaders) is ready for it.
+- `old/t/Yath/integration/reload*.t` is not ported: that test
+  depends on both the full reload integration and the daemon
+  (`yath start` / `yath run`) surface introduced in Stage 14.
+
+Stage 8's `PreloadService` POD already flagged that reload and
+stage restartability land together; Stage 9's scaffolding unblocks
+that work without landing it outright, so Stage 10 onward can
+proceed.
+
+## Deliberate drift from old/'s reloader
+
+- **Exporter-aware reload is not ported.** `old/`'s Reloader had
+  `Test2::Harness2::Reloader::Exporter` that tracked imported subs
+  and replayed them after reload. Stage 9's Default reloader
+  simply refuses any module with a non-trivial `import()`. The
+  refusal fails over to `KillRestart`, so callers that chain
+  correctly still make forward progress; the optimisation can
+  return as its own follow-up when someone has a concrete test
+  case.
+
+- **Reload blacklist feature is not ported.** `PLAN` explicitly
+  excludes it.
 
 ## Points of interest / decisions worth revisiting
 
-### 1. Stage-subtree services are NOT implemented in Stage 8
+### 1. Role::ChangeWatcher vs a single class
 
-`IPC_AND_LOGGERS` section 10.1 calls for each DSL stage to be its
-own service in its own process, with nested stages forked from
-their parents. Stage 8's PreloadService is a single flat root: the
-`_build_meta` hook does merge DSL meta-objects from preloaded
-libraries (so `stage`/`preload`/`eager`/`default` declarations
-are captured), but every `launch_job` runs from the root's own
-forked child, not from a per-stage service.
+`old/` had a base class `Test2::Harness2::Reloader` that picked
+Stat vs Inotify2 via a `BEGIN { *USE_INOTIFY = ... }` constant.
+Stage 9 instead uses a Role::Tiny role + two sibling classes.
 
-The net effect for Stage 8 users: `--preload=Module` works, and
-`use Test2::Harness2::Preload; stage foo => sub { preload 'X' };`
-in `Module` is honoured at the DSL-data level (the modules get
-loaded at root startup), but a test cannot yet be routed to a
-specific named stage — every test goes through the root.
+Rationale: the PLAN text said
+"Role::ChangeWatcher (or similar — pick the name that reads best)",
+and a role lets a consumer swap in a mock watcher for unit tests
+without inheritance gymnastics. The preload resource can pick the
+concrete class via `viable()` without the class hierarchy guessing
+for it.
 
-Adding per-stage services is a natural follow-up; the DSL, the
-Resource, and the launch-routing hook are already shaped to
-accommodate it without reworking callers.
+### 2. Direct-vs-symbolic package-variable access after reload
 
-### 2. No detach pattern in `launch_job`
+The Reloader unit test for an in-place reload uses
+`${"Pkg::VALUE"}` (symbolic deref) rather than `$Pkg::VALUE`
+(direct) to read the module's post-reload state. The direct form
+binds at compile time to the SV slot of the pre-reload glob;
+since the reloader deletes that glob before re-requiring, the
+direct form sees the stale value. Symbolic lookup resolves at
+runtime against the current stash.
 
-`IPC_AND_LOGGERS` section 10.4 specifies that test-job collectors
-launched from a preload stage must be detached via an intermediary
-fork+exit so the stage can be pruned or reloaded without killing
-running tests. Stage 8's PreloadService keeps the collector as a
-direct child of the preload service — short-term this is
-harmless because:
+In-process consumers (the preload stage launch paths that Stage 9's
+follow-up will wire in) should be fine because they look up
+subs by name / resolve packages at call time. The test comment
+calls this out explicitly.
 
-- Stage 8 doesn't implement stage reload or pruning, so the
-  stage can't disappear mid-run.
-- The preload service's `service_on_reaped` cleans up
-  launch-tracking state, and its `run_should_end` waits for every
-  launched collector before unwinding the loop.
+### 3. Construction pattern
 
-**Stage 9 will need to introduce the detach pattern** because
-reloading requires the stage's collector-parentage to be
-discardable. That's explicitly flagged in `PreloadService`'s POD.
-
-### 3. No `Long::Jump + goto::file` test-body substitution
-
-Stage 8 uses `do $test_file` inside the forked test child rather
-than the `Long::Jump + goto::file` unwind-to-BEGIN pattern that
-`old/` and `reimplement-preloader` use. The preloaded `%INC` is
-still inherited via fork, which is the essential preload benefit
-— the `goto::file` refinement is about stack depth / $0 handling,
-not about preload correctness. Deferred to later.
-
-### 4. `run_bus_name` in the launch payload
-
-`IPC_AND_LOGGERS` section 5.4 specifies that run services use the
-`run_id` directly as their bus name. The current `RunService`
-implementation actually names itself `"run-$run_id"`, which is a
-drift from the spec. Rather than change the existing naming
-mid-stage (risky: breaks every in-flight rebase on the chain),
-this stage threads the authoritative run-service bus name through
-the launch payload. When the RunService naming gets realigned
-with the spec, dropping `run_bus_name` from the payload is a
-two-line edit.
-
-### 5. Preload is harness-global only in Stage 8
-
-Per `IPC_AND_LOGGERS` section 9, a Preload resource can be
-attached at harness-global scope (resource lives in the harness,
-its service is `ipc_parent = harness`, no `ipc_run`) or
-run-scoped (lives in a run service, `ipc_parent = run service`,
-`ipc_run = run_id`). Stage 8 implements only the global-scope
-flavour: `Command::test` attaches the resource to the harness,
-and `_preload_target_for` walks the harness's `resources` list
-only.
-
-Run-scoped preloads are a follow-up: `Run.pm` already supports
-per-run resources; wiring them into the preload-routing path is
-a targeted change to `_preload_target_for` and a symmetric
-lookup on `run->resources`.
-
-### 6. PreloadService is non-restartable (Stage 8 compromise)
-
-A preload-service crash flips the resource `permanent_broken`
-and the scheduler's `broken_resource_behavior` (skip / fail /
-abort) covers the pending tests. Stage 9 will add reloading and
-with it the restartability companion
-(`service_preload_restartable` returning 1 instead of 0).
-Reloading and restart are two sides of the same work.
+`Object::HashBase qw{}` with zero slots does NOT install a
+`new()`. Both reloader classes declare their own minimal
+`sub new`. The watchers use `Object::HashBase` with real slots and
+get `new()` free. This mismatch is small and documented inline; a
+follow-up could pull an `::InstanceBase` that always supplies
+`new()`, but that's a refactor, not a stage requirement.
 
 ## Flip-back notes for the next stage
 
-- **Stage 9 (preload reloading)** should pick up the detach
-  pattern in `PreloadService::request_handler_launch_job` and
-  the restartability flip on the resource, both flagged in
-  POD. The existing DSL surfaces (`watch`,
-  `reload_inplace_check`) are already in place.
-- **Stage 12 (renderers)** may want the preload service to
-  emit `collector_artifacts` announcements for its own
-  interpose collector (when one is eventually added). Today
-  the preload service doesn't have a service collector
-  wrapping it; adding one is a self-contained change to
-  `Resource::Preload::service_preload_start` + the exec argv.
-- **Any stage that rebases onto a re-aligned RunService**
-  (bus name = `run_id`, per `IPC_AND_LOGGERS` section 5.4)
-  needs to drop `run_bus_name` from the launch payload.
+- **Stage 9 integration follow-up** (can be done as its own
+  commits on this branch, or pulled into the Stage 8 /
+  `PreloadService` codebase when reload lands): teach
+  `PreloadService` to construct a `ChangeWatcher::Inotify` (or
+  `Stat` fallback via `viable()`), seed it from `%INC` at
+  service startup, poll it in a tick hook, and dispatch each
+  change through `Reloader::Default` → `Reloader::KillRestart`.
+  The `_build_meta` hook already captures `stage->watches` so
+  the watcher can pull those in.
+- **Stage 12 (renderers)** doesn't depend on any of this.
+- **Any later stage that introduces `Exporter`-based preloads**
+  should add `Test2::Harness2::Reloader::Exporter` and insert it
+  into the chain before Default's refusal fires.
 
 ## Dependencies / what a reviewer should verify
 
-- `Test2::Harness2::Role::Resource` and `Role::Service` contracts
-  are honoured by the new classes.
-- `ipcm_service` with `exec => { stay_in_begin => 1 }` — the
-  `IPC::Manager` version on this system (0.000027) has this
-  path; any prior version that lacked it would break startup.
-  The POD flags this; CPAN metadata does not, so a future
-  `META.json` bump may be warranted.
-- `Collector::interpose` is called from a forked child of the
-  preload service; the parent of that interpose fork becomes
-  the collector (`_interpose_parent` → `_run_collector` →
-  `_exit_mirroring_child`). This is the same shape RunService
-  uses for its `launch_job` handler, so no new ground there.
+- `Role::Tiny` semantics: both new roles `requires` their core
+  methods and provide sensible defaults for hooks.
+- The `ChangeWatcher::Inotify` backend is not usable without
+  `Linux::Inotify2`; the compile path is fine (gated by
+  `HAS_INOTIFY`).
+- The Default reloader's `_reload_moose` is best-effort and falls
+  through to `_reload_generic` either way. That mirrors the
+  `old/` path; deeper metaclass surgery can come back when
+  `Test2::Harness2::Reloader::Moose` is reintroduced.

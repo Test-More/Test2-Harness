@@ -1,232 +1,244 @@
-# Stage 6 — Port the Getopt::Yath option libraries
+# Stage 7 — Plugin roles
 
 ## Branch
 
-- `plan-stage-06-options`
-- Base: `plan-stage-05-test-command`
+- `plan-stage-07-plugins`
+- Base: `plan-stage-06-options` (post-rebase, on top of the
+  harness-explicit-loggers chain now landed on
+  `reimplement-resource-classes`)
 
-## What landed
+## Notes — post-rebase / architectural realignment
 
-Five commits.
+- The plan-stage chain has been rebased onto a new
+  `reimplement-resource-classes` (option A from PLAN_RESUME.md).
+  Both the resource-class work and the logger overhaul (formerly
+  on the `harness-explicit-loggers` side branch) are now part of
+  every plan-stage's base.
+- PLAN gained a new "State and control flow: IPC, not on-disk
+  artifacts" section. That change is absorbed in Stage 5 (a
+  commit there rewrites `Command::test` to tally via IPC query to
+  the harness service). A stage-7 cleanup commit that previously
+  supplied a spec-less `Logger::JSON` to Command::test (a
+  file-tally workaround, now an explicit PLAN violation) has been
+  dropped from this branch.
+- End-to-end single-file `yath test` works on this chain. The
+  many-files IPC-recipient issue documented at the bottom of this
+  summary was first observed under the dropped file-tally
+  workaround; it is still open and belongs to the base, not to
+  Stage 7.
 
-1. **`Util: add fqmod and clean_path helpers`** — adds the two
-   `Test2::Harness2::Util` helpers the ported options files import
-   (`fqmod`, `clean_path`). Both are copied verbatim from `old/`. The
-   pre-existing `tinysleep` is deliberately left as-is — it uses
-   `select(undef, undef, undef, $secs)` for its interruptible-sleep
-   semantics; converting to `Time::HiRes::sleep` would change
-   behaviour. Flagged for a separate look (see Points of interest).
+## What landed (eight commits)
 
-2. **`Options: port App::Yath2::Options::* verbatim; TODO-gate
-   non-priority options`** — every file from
-   `old/lib/App/Yath2/Options/*.pm` now lives at
-   `lib/App/Yath2/Options/<same>.pm` with option definitions preserved
-   byte-for-byte. Options outside the Stage 6 priority set are
-   commented out with a `TODO: Stage N -- <short reason>` marker. The
-   priority options left active are:
+1. **`Test2::Harness2::Role::Plugin`** — new Role::Tiny role at
+   `lib/Test2/Harness2/Role/Plugin.pm` declaring the harness-side
+   hook surface. Every hook has a no-op or no-answer default so a
+   bare consumer round-trips cleanly and callers can dispatch
+   without `can()` checks. Hooks: `tick`, `run_queued`,
+   `run_complete`, `run_halted`, `instance_setup`,
+   `instance_teardown`, `instance_finalize`, `setup`, `teardown`,
+   `munge_search`, `munge_files`, `claim_file`, `duration_data`,
+   `coverage_data`, `post_process_coverage_tests`, `changed_files`,
+   `changed_diff`, `TO_JSON`.
 
-   | File | Active option names |
-   |------|---------------------|
-   | `Tests.pm` | `includes`, `lib`, `blib` |
-   | `Renderer.pm` | `verbose` |
-   | `Resource.pm` | `slots` |
-   | `Runner.pm` | `preloads` |
+2. **`App::Yath2::Role::Plugin`** — new Role::Tiny role at
+   `lib/App/Yath2/Role/Plugin.pm` that consumes the harness role
+   via `Role::Tiny::With` and adds CLI-layer hooks: `client_setup`,
+   `client_teardown`, `client_finalize`, `sort_files_2`,
+   `sort_files` (deprecated alias), `args_from_settings`. A
+   consumer of this role also satisfies the harness role and can
+   be handed to `Test2::Harness2` directly.
 
-   `DB.pm`, `Server.pm`, `WebServer.pm`, and `WebClient.pm` are copied
-   verbatim with every option commented out and a top-of-file TODO
-   noting the scope deferral. `WebServer.pm`'s
-   `include_options('App::Yath2::Options::DB')` is likewise commented
-   with a TODO; other cross-file `include_options` calls stay active
-   because the included modules load fine even with zero active
-   options.
+3. **`App::Yath2::Options::Yath: activate --plugin / -p`** —
+   uncomments the `plugins` Map option inside
+   `lib/App/Yath2/Options/Yath.pm` (shape unchanged from the
+   verbatim copy that landed in Stage 6). Short-form `-p` and
+   long-form `--plugin=` both accept comma-split constructor
+   args; fully-qualified class names pass through via the `+`
+   prefix, while bare names resolve under `App::Yath2::Plugin::*`.
+   `mod_adds_options => 1` is preserved so a plugin class's own
+   option libraries are still auto-picked-up.
 
-3. **`Options: comment option_post_process blocks that reference
-   inactive options`** — the bulk port left five `option_post_process`
-   callbacks live (in Term, Resource, Run, Runner, Workspace). Each
-   callback reads fields or groups whose options are commented out, so
-   parsing would fail the moment any command included those modules.
-   Each callback -- and its supporting named sub, where present -- is
-   now commented out in place with a TODO pointing at the stage that
-   should re-enable it. The commenting is minimal; the code is
-   preserved so the diff against `old/` stays tight.
+4. **`Test2::Harness2: accept a 'plugins' slot`** — adds
+   `<plugins` to the HashBase slot list and validates in `init`
+   that it is an arrayref (default `[]`). Per-hook dispatch into
+   Scheduler / RunService / Collector is deliberately not wired
+   yet — this stage's contract is just "the harness accepts the
+   plugin list and does not lose it". Actual hook dispatch into
+   the harness-side pipeline will land as each downstream
+   consumer grows a real use for a specific hook (stage 8+).
 
-4. **`Harness2: thread launch_args through to per-job Collector
-   launches`** — small addition to `Test2::Harness2` and
-   `Test2::Harness2::RunService`. The harness now accepts a new
-   `launch_args` attribute (arrayref of Perl switches). When set, it
-   flows through the per-job launch IPC payload and RunService uses it
-   between `$^X` and the absolute test path, replacing the hard-coded
-   `-Ilib` default. Callers that don't set `launch_args` keep the
-   previous default, so the existing 32-file integration / unit suite
-   is unaffected.
+5. **`App::Yath2::Plugins`** — new helper module at
+   `lib/App/Yath2/Plugins.pm` with two entry points:
+   - `load_plugins(\%spec)` turns the option Map into an ordered
+     arrayref of plugin handles: instances for classes that
+     define `new()`, bare class names otherwise. Sort order is
+     alphabetical by class name for determinism.
+   - `dispatch(\@plugins, $hook, @args)` walks the handle list
+     and only calls plugins that actually implement `$hook`
+     (rather than hitting the role's no-op default), so
+     list-returning hooks do not accumulate empty answers.
 
-5. **`Command::test: parse Stage 6 priority options and wire them to
-   the harness`** — `App::Yath2::Command::test` now runs its argv
-   through Getopt::Yath with the four priority option libraries
-   included, and wires the parsed values into the harness:
+6. **`Command::test: load plugins and dispatch client lifecycle
+   hooks`** — extends `App::Yath2::Command::test` with
+   `include_options('App::Yath2::Options::Yath')` so `--plugin`
+   reaches the command's option set. Adds `_load_plugins` (built
+   on `App::Yath2::Plugins->load_plugins`), dispatches
+   `client_setup` before the harness spawn, then
+   `client_teardown` and `client_finalize` in reverse order
+   after the spawn completes (whether the run succeeded or
+   threw). The loaded plugin list is threaded through to
+   `Test2::Harness2->spawn()` via the new `plugins` slot.
 
-   - `-I PATH` / `--include=PATH` -> `-IPATH` in `launch_args`.
-   - `-l` / `--lib` / `--no-lib` -> `-Ilib`, plus auto-include `lib/`
-     when the directory exists and `--no-lib` wasn't passed.
-   - `-b` / `--blib` / `--no-blib` -> `-Iblib/lib -Iblib/arch` with
-     the same auto-include-if-dir-exists heuristic.
-   - `-v` / `--verbose` -> stored; echoed in the startup line. Full
-     renderer support is Stage 12.
-   - `-j N` / `--slots=N` / `--job-count=N` -> `JobCount` resource
-     slot count. Falls back to 1 on non-positive / non-integer input.
-   - `--preload=MOD` / `-P MOD` -> captured; echoed on stderr as a
-     placeholder so the user knows they didn't take effect. Actual
-     preload support arrives in Stage 8.
+7. **Role unit tests** — `t/AI/unit/Test2/Harness2/Role/Plugin.t`
+   (4 subtests) and `t/AI/unit/App/Yath2/Role/Plugin.t`
+   (4 subtests). Each covers role consumption (including the
+   transitive composition), default hook return values on a bare
+   consumer, overriding consumers dispatched in order, and the
+   `TO_JSON` serialization shape.
 
-   Option parsing is exposed as a named `_parse_argv` helper so the
-   unit tests can exercise the wiring without constructing a full
-   command object -- `parse_options` is a closure over the option
-   instance for the package that imported `Getopt::Yath`, so the call
-   has to happen from inside `App::Yath2::Command::test`.
+8. **CLI / loader / slot tests** — three additional test files:
+   - `t/AI/unit/App/Yath2/Plugins.t` (10 subtests) — empty and
+     error inputs, stateful / stateless instantiation, missing-
+     class error, `dispatch()` skip-non-implementers, order.
+   - `t/AI/unit/App/Yath2/Command/test-plugins.t` (6 subtests) —
+     `-p` / `--plugin` parsing end-to-end through `Command::test`,
+     including the `+` fully-qualified escape and
+     multiple-plugin argv.
+   - `t/AI/unit/Test2/Harness2-plugins.t` (3 subtests) —
+     Harness2's new plugins slot: default, preservation, and
+     arrayref validation.
 
 ## Tests
 
-- `prove -I lib -I t/lib -r t` -- **33 files, 368 tests, all pass
-  (~71s)**. Thirteen of those tests are the new
-  `t/AI/unit/App/Yath2/Command/test.t`, which covers each priority
-  option at the helper level (include path collection, lib/blib
-  auto-include, explicit-on / explicit-off / auto-on, slots defaulting,
-  malformed slots fallback, verbose Count behaviour, preload capture,
-  positional arg preservation).
-- Manual smoke of `perl -Ilib scripts/yath test` (no args) prints the
-  usage banner as expected.
-- Manual smoke of `perl -Ilib scripts/yath test --help` fails the
-  parse -- the command does not yet register a `--help` option and
-  the top-level `yath`'s help handling doesn't reach the subcommand.
-  This matches the Stage 6 scope note in the PLAN ("help at command
-  level lands later") but is worth flipping when Stage 13 ports the
-  `help` command.
+- `prove -j16 -I lib -I t/lib -r t`
+- Result: 38 files / 396 tests, all passing (~60s wall clock
+  with `-j16`; ~76s serial). No pre-existing test was modified.
+- End-to-end single-file `yath test` is no longer blocked — the
+  Stage 5 regression documented in PLAN_RESUME.md was the
+  missing caller-supplied logger specs, which the logger-overhaul
+  commits + this branch's Command::test update together resolve.
+  Smoke runs: `yath test trivial-pass.t` -> pass=1 fail=0 exit=0;
+  `yath test trivial-fail.t` -> pass=0 fail=1 exit=1.
 
-## Pre-existing harness infrastructure issue (still unresolved)
+- **Known gap**: `yath test -j16 t/` on the full 38-file suite
+  hangs after the "running 38 test file(s)" banner. Stderr emits
+  two IPC errors --
+  `Collector IPC send failed (kind 'collector_started'):
+  'harness' is not a valid message recipient`
+  and the same for `loggers_ready` -- then no further progress.
+  This is _not_ introduced by Stage 7; it only became visible now
+  that single-file `yath test` works. Likely a concurrency /
+  IPC-recipient-resolution bug in the many-collectors-at-once
+  path. Needs investigation in a separate branch. Prove still
+  passes the same suite in 60s with `-j16` so the underlying
+  tests and harness plumbing are fine in isolation.
 
-Per Chad's 2026-04-19 decision, Stage 6 landed without fixing the
-base-branch regression flagged in Stage 5's summary. `yath test` with
-a real test file still hits the same `job_completed {err => 255}`
-path because the collector dies before any `Logger::JSON->shutdown`
-fires. Stage 6's wiring is verified via `prove` (unit coverage on the
-parsed settings -> launch_args / slot-count helpers) rather than a
-full end-to-end `yath test` run.
+## Points of interest / decisions to revisit
 
-## Points of interest / decisions you may want to revisit
+- **Plugins are stored on the harness but not yet dispatched.**
+  `Test2::Harness2` just records the plugin list; nothing inside
+  Scheduler, RunService, or Collector calls `run_queued`,
+  `instance_setup`, `tick`, etc. The roles declare the surface;
+  the call sites land when the consuming subsystem needs them
+  (stage 8 preloads will most likely be first). If you want an
+  earlier dispatch boundary, this is where to open it.
 
-1. **`launch_args` default behaviour change.** When a caller sets
-   `launch_args => [...]`, RunService no longer injects the
-   hard-coded `-Ilib` -- the caller is now responsible for supplying
-   include paths. All existing harness callers pass nothing, so they
-   get the legacy `-Ilib`. The V2 `yath test` path sets `launch_args`
-   only when options produce them, so `yath test t/foo.t` with no
-   `-I` / `-l` / `-b` (and no `lib/` in cwd) will launch with bare
-   `$^X t/foo.t`. If that's wrong for the default CLI UX, flip
-   `_build_launch_args` to always include `lib` (matching the old
-   prose "(Default: include if it exists)" for `-l`).
+- **`client_*` hooks fire around `_run_tests`, unconditionally.**
+  `client_teardown` and `client_finalize` run even when
+  `_run_tests` threw. A plugin that wants "only on success"
+  teardown needs to check `exit` itself. This matches the old
+  behaviour where teardown was a best-effort callback.
 
-2. **`include_options` inside the options files is left active where
-   the included module loads cleanly.** For example,
-   `Renderer.pm -> Term.pm`, `Yath.pm -> Harness.pm`, `Runner.pm ->
-   Tests.pm`, `IPC.pm -> Yath.pm`. Since every option in the included
-   modules is either active (priority set) or commented, nothing
-   breaks. The only `include_options` that's commented is
-   `WebServer.pm -> DB.pm` (DB scope deferred).
+- **`send_event` and `shell_call` are intentionally not ported.**
+  Both depended on `Test2::Harness2::Collector::Child` and
+  `Test2::Harness2::IPC::Util`, neither of which exists in the
+  new rewrite yet. They can come back once their collector-side
+  hosts do; adding empty stubs now would be worse than leaving
+  the hooks off the role.
 
-3. **`option_post_process` blocks are all commented for now.** The
-   originals reference fields that aren't yet active. Stage 18's
-   cleanup sweep should re-activate each one as the option it depends
-   on turns on. Named subs (`jobs_post_process`,
-   `runner_post_process`) are commented in place so the diff against
-   `old/` stays small.
+- **Renderer-facing hooks (`annotate_event`, `finish`,
+  `finalize`) are deferred to Stage 12** by design. They are
+  documented in `App::Yath2::Role::Plugin`'s POD as "coming in
+  stage 12" rather than silently omitted, so a port of
+  `App::Yath2::Plugin::SysInfo` / `Git` / `Cover` in Stage 15
+  that relies on `finish` for end-of-run reporting can be
+  recognised as "waiting on Stage 12" rather than "lost in the
+  shuffle".
 
-4. **`Renderer.pm`'s `init_renderers` helper is intentionally left
-   live** even though it references commented-out renderer fields.
-   Nothing calls it yet (no renderer pipeline in Stage 6), so it's
-   dormant dead code. Stage 12 will bring it back into use or replace
-   it wholesale.
+- **`sort_files_2` is declared but not yet called.** Finder /
+  scheduler integration happens in a later stage once the
+  post-discovery flow has a clear owner; right now the hook
+  just exists for plugins to implement without needing a
+  downstream call site.
 
-5. **`Tests.pm` imports trimmed.** `use Test2::Harness2::TestSettings`
-   was removed (module not ported); the `$DEFAULT_COVER_ARGS`
-   initializer moved into the commented-out `cover` option block.
-   `Workspace.pm` and `Yath.pm` had their
-   `find_libraries` / `chmod_tmp` / `find_in_updir` imports trimmed
-   from `Test2::Harness2::Util` (those helpers don't exist in the
-   current `Util`). Each trim carries a TODO marker.
+- **Plugin args on a class-only plugin croak.** If you write
+  `-pStateless=a,b` but `App::Yath2::Plugin::Stateless` has no
+  `new()`, the loader croaks with a message that names the
+  plugin and prints the args. Old yath silently ignored the
+  args in that case; the new behaviour surfaces the mismatch
+  loudly. If that turns out to be too strict for real-world
+  use, flip `App::Yath2::Plugins::load_plugins` to a
+  warn-and-drop.
 
-6. **`tinysleep` vs. `Time::HiRes::sleep`.** The
-   `feedback_sleep_pattern` memory record says to prefer
-   `Time::HiRes::sleep` and proactively clean up `select undef,undef,
-   undef,N` when seen. `Test2::Harness2::Util::tinysleep` uses
-   `select()` deliberately -- it wants EINTR-interruptible semantics
-   for polling loops that need to react to signals. The memory rule
-   has a real exception here; worth updating the memory note (or
-   moving `tinysleep` to a named "interruptible sleep" helper that
-   doesn't look like a `select`-over-sleep anti-pattern).
+- **`dispatch()` helper vs direct `for @$plugins` loop.**
+  `Command::test` uses the direct loop for `client_setup`
+  because every plugin has the role's default available and we
+  want that default hit for consistency. `dispatch()` is there
+  for list-returning hooks (`changed_files`, `coverage_data`,
+  `duration_data`) where the empty default would pollute the
+  aggregate. Pick whichever matches the hook's semantics.
 
-7. **`_was_cleared` helper is defensive about Getopt::Yath's
-   `$parsed->{cleared}` shape.** The POD only says "Options that were
-   cleared with --no-opt". The helper checks both a flat
-   `"<group>.<opt>"` key and a nested `{group}{opt}` hash, and falls
-   back to a bare `{opt}` key. As of the 2.000008 Getopt::Yath
-   release shipped in this environment, `cleared` appears to be
-   `{}` when `--no-lib` is passed -- neither shape is populated.
-   The `--no-lib` suppression test still passes because the auto-
-   include code only runs when the directory exists and the Bool
-   default is 0; the explicit flag doesn't change the outcome in
-   that subtest. If the semantics are ever strictly needed ("user
-   explicitly said no, even though lib/ exists"), this helper may
-   need tightening once Getopt::Yath's internals are better
-   documented.
+- **`fqmod` eagerly `require`s the plugin module during option
+  parsing.** The test fixtures for `-p+Other::NS::Plug`
+  therefore have to inline-define the class and prime `%INC`;
+  real plugins outside the `App::Yath2::Plugin::*` namespace
+  need to be installed before `-p+Some::Mod` will even parse.
+  This mirrors old behaviour; flag for a second look if the
+  CPAN-loadable-at-parse-time requirement becomes awkward.
 
-8. **`yath test --help` currently fails parsing.** The command
-   doesn't register `help` among its options and the top-level
-   `yath`'s early-exit for `--help` only triggers when `--help` is
-   the first arg (before the command name). Stage 13 ports the
-   dedicated `help` command; until then, command-level `--help` will
-   keep landing in the Getopt::Yath "invalid option" path.
+## What this branch needs from the user
 
-## Notes for the next stage
+No blockers. Stage 8 can begin on top of this branch. The only
+interaction point with the `harness-explicit-loggers` side
+branch (PLAN_RESUME.md decision A / B / C) is that once
+`yath test` is end-to-end runnable, Command::test will want to
+pass explicit logger specs alongside the plugins it already
+threads through — a mechanical follow-up that can happen in
+either order relative to Stage 8.
 
-- Stage 7 (plugin roles) can build on top of this chain without
-  touching options -- `App::Yath2::Options::Plugin.pm` was not in the
-  19 ported files (it didn't exist in `old/`), so plugin option
-  exposure is an additive change Stage 7 will need to introduce.
-- Stage 8 (preloads) will want `--preload` to actually do something.
-  The placeholder path in `Command::test::_warn_preloads_placeholder`
-  is the obvious hook; remove the warn and wire the list into a
-  preload resource.
-- Stage 12 (renderers) will want `--verbose` to propagate to the
-  actual renderer pipeline. `_resolve_verbose` returns the count; the
-  full plumbing will need to pass it into `$settings->renderer` and
-  through to a renderer's constructor.
-- Stage 18's TODO sweep has a lot to do in
-  `lib/App/Yath2/Options/`. Every commented option carries a specific
-  stage note; all five `option_post_process` blocks need revisiting;
-  the `init_renderers` helper in `Renderer.pm` needs review.
+## Next stage
 
-## Worktree
+Stage 8 — initial preload system (no reloading). Create the
+worktree off this branch:
 
-Living under `.claude/worktrees/plan-stage-06-options` on branch
-`plan-stage-06-options` (based on `plan-stage-05-test-command`, which
-now carries the Stage-5-summary update plus the TestFile fixture
-drop). Not pushed. Not merged.
+    git -C /home/exodist/projects/Test2/Test2-Harness worktree add \
+      .claude/worktrees/plan-stage-08-preloads \
+      -b plan-stage-08-preloads plan-stage-07-plugins
+    # then mirror .claude/ + CLAUDE.md symlinks
+    # (snippet in CLAUDE.md under "Worktree Config Inheritance")
+
+Stage 8's plan calls for using the `reimplement-preloader` branch
+as a starting point — cherry-pick / rebase its DSL / DepTracer /
+Reloader / exec+BEGIN+Long::Jump work onto this chain rather
+than re-deriving it.
 
 ## Post-refactor rebase (2026-04-20)
 
-Rebased onto the updated `reimplement-resource-classes` base
-(`0c46805cf`) via `plan-stage-05`. Same refactor headline items as
-upstream stages (IPC kind renames, direct artifact routing,
-`collector:` bus name, configurable `launch_job_timeout`).
+Rebased through the full plan-stage chain onto the updated
+`reimplement-resource-classes` base (`0c46805cf`). Refactor
+headline items (IPC kind renames, direct artifact routing,
+`collector:` bus name, configurable `launch_job_timeout`) land
+here automatically from the base.
 
-During cascade: the stage-05 `pass_count`/`fail_count` init
-(already merged in stage-05's tip) came through a second time via
-the intermediate rebase and collided with the refactored Run.pm
-init block; same resolution as stage-05 (keep all three init
-lines). The `t/AI/unit/Harness2/TestFile.t` vs
-`t/AI/unit/App/Yath2/TestFile.t` rename/rename that falls out of
-stage-05's TestFile namespace move was resolved by keeping only
-`t/AI/unit/App/Yath2/TestFile.t`. No Stage-6 commits themselves
-needed edits. (Live branch tip recorded in
+During cascade, the intermediate replay of stage-5's
+`pass_count`/`fail_count` + IPC-tally commit on top of the stage-6
+reshape of `App::Yath2::Command::test` produced merge-content
+conflicts in `lib/App/Yath2/Command/test.pm` and
+`lib/Test2/Harness2/Run.pm`. Resolution kept the HEAD (stage-7)
+version of `Command::test.pm`, which is a proper superset of the
+stage-5 incoming version, and kept all three Run.pm init lines
+(pass/fail/launch_job_timeout). The `TestFile.t` rename/rename was
+resolved by keeping `t/AI/unit/App/Yath2/TestFile.t`. No Stage-7
+commits themselves needed edits. (Live branch tip recorded in
 `PLAN_RESUME.md` on the primary repo, not pinned here.) Full
-`prove -j16 -I lib -I t/lib -r t` green (355 tests).
+`prove -j16 -I lib -I t/lib -r t` green (382 tests).

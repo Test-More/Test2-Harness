@@ -14,7 +14,7 @@ use POSIX qw/WNOHANG/;
 
 # When a test collector's pid is first noticed to be gone (either via a
 # liveness check or a collector_exiting IPC message), the scheduler waits
-# this many seconds for a real job_complete to arrive from the run
+# this many seconds for a real test_job_completed to arrive from the run
 # service before synthesizing one. Short enough to keep the scheduler
 # unblocked, long enough to cover normal IPC latency on a busy host.
 use constant JOB_PID_GRACE_SECS => 5;
@@ -241,6 +241,7 @@ sub start {
     Test2::Harness2::Collector->interpose(
         ipcm_info   => $self->ipcm_info,
         ipc_parent  => undef,
+        ipc_run     => undef,
         ipc_harness => $self->{+NAME},
         kind        => 'service',
         loggers     => $loggers,
@@ -420,7 +421,7 @@ sub run_on_general_message {
     # A per-run RunService reports a test job's final exit status here so
     # the harness can release resources and advance its scheduler.
     return $self->_handle_job_complete($content)
-        if defined $kind && $kind eq 'job_complete';
+        if defined $kind && $kind eq 'test_job_completed';
 
     # A collector reports its own end-of-life with kind/role info and,
     # for test collectors, the auditor's pass/fail verdict + child
@@ -434,9 +435,10 @@ sub run_on_general_message {
     return $self->_handle_resource_state_message($kind, $content)
         if defined $kind && $kind =~ m/^resource_(?:paused|resumed|ready|broken|permanent_broken)$/;
 
-    if (defined $kind && $kind eq 'loggers_ready') {
-        # Each job's collector reports its logger metadata after startup so
-        # the service can record where the job's outputs live.
+    if (defined $kind && $kind eq 'collector_artifacts') {
+        # A collector has reported the artifacts its loggers produce.
+        # Emit a service-level lifecycle event the command's
+        # artifact-reading layer can observe. See IPC_AND_LOGGERS §8.
         $self->emit_service_event(
             kind     => 'job_loggers',
             job_info => {
@@ -489,7 +491,7 @@ sub request_handler_detach {
 #
 #   1. Arm the pid-gone grace timer so the scheduler can advance
 #      even if the RunService's own SIGCHLD reap message is delayed
-#      or dropped -- job_complete from the RunService still wins if
+#      or dropped -- test_job_completed from the RunService still wins if
 #      it arrives first, otherwise we synthesize one on grace expiry.
 #
 #   2. For test-kind collectors, record the auditor's pass verdict
@@ -680,7 +682,7 @@ sub run_on_pid {
 
     # Orphan test-collector exit: a test whose run service died mid-run
     # may reparent to us (via subreaper or by init). Normally the run
-    # service would have sent job_complete first; only reach this branch
+    # service would have sent test_job_completed first; only reach this branch
     # if that didn't happen. Release resources and mark the job done so
     # the scheduler doesn't wait forever.
     for my $job_id (keys %{$self->{+RUNNING_JOBS} // {}}) {
@@ -689,7 +691,7 @@ sub run_on_pid {
 
         warn "Test2::Harness2: orphaned test pid $pid exited with $exit (job $job_id); " . "its run service died before reporting\n";
         $self->_handle_job_complete({
-            kind   => 'job_complete',
+            kind   => 'test_job_completed',
             run_id => $cur->{run}->run_id,
             job_id => $job_id,
             pid    => $pid,
@@ -779,7 +781,7 @@ sub TO_JSON {
 sub run_on_all {
     my ($self, $activity) = @_;
 
-    # Job completion is driven by the job_complete IPC message the run
+    # Job completion is driven by the test_job_completed IPC message the run
     # services send when a test collector exits (see _handle_job_complete),
     # backstopped by the pid-liveness watchdog in run_on_interval. Here
     # we only drive the scheduler forward.
@@ -792,7 +794,7 @@ sub run_on_all {
 # IPC::Manager calls run_on_interval every $self->interval seconds
 # (0.2s by default), which is where we park our per-job pid-liveness
 # watchdog. The check protects the scheduler from hanging forever when
-# a job_complete fails to land (crashed run service, test spawned
+# a test_job_completed fails to land (crashed run service, test spawned
 # outside the run's tree, IPC bus hiccup, ...).
 sub run_on_interval {
     my $self = shift;
@@ -810,11 +812,11 @@ sub run_on_interval {
 #     process that just happens to have taken the slot.
 #
 #   * pid_gone_since set, within the grace window: do nothing and wait
-#     for the real job_complete to arrive.
+#     for the real test_job_completed to arrive.
 #
 #   * pid_gone_since set, grace window elapsed: synthesize a
-#     job_complete so the scheduler can release resources and advance.
-#     We log a warning because a missing job_complete is an unusual
+#     test_job_completed so the scheduler can release resources and advance.
+#     We log a warning because a missing test_job_completed is an unusual
 #     path (collector crashed or reparented outside the run service's
 #     reach), worth flagging in the harness log.
 sub _check_running_job_pids {
@@ -837,16 +839,16 @@ sub _check_running_job_pids {
         next if ($now - $cur->{pid_gone_since}) < JOB_PID_GRACE_SECS;
 
         warn sprintf(
-            "Test2::Harness2: synthesizing job_complete for job %s (pid %d): " . "pid gone for %ds without a job_complete report\n",
+            "Test2::Harness2: synthesizing test_job_completed for job %s (pid %d): " . "pid gone for %ds without a test_job_completed report\n",
             $job_id, $pid, JOB_PID_GRACE_SECS,
         );
 
         $self->_handle_job_complete({
-            kind        => 'job_complete',
+            kind        => 'test_job_completed',
             run_id      => $cur->{run}->run_id,
             job_id      => $job_id,
             pid         => $pid,
-            exit        => undef,                 # raw wait status unknown
+            exit        => undef,                  # raw wait status unknown
             synthesized => 1,
         });
     }

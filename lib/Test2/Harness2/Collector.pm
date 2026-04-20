@@ -39,6 +39,7 @@ use Object::HashBase qw{
     <job_try
     <ipcm_info
     <ipc_parent
+    <ipc_run
     <ipc_harness
     <kind
 
@@ -604,7 +605,7 @@ sub _ipc_handle {
     my $handle = IPC::Manager::Service::Handle->new(
         service_name => $target,
         ipcm_info    => $self->{+IPCM_INFO},
-        name         => $self->{+JOB_ID},
+        name         => $self->_collector_bus_id,
     );
 
     # Wait briefly for the target to register so the first message
@@ -615,6 +616,48 @@ sub _ipc_handle {
     eval { $handle->ready(5); 1 };
 
     return $self->{_ipc_handles}->{$target} = $handle;
+}
+
+# Collector's own identity on the IPC bus. Per IPC_AND_LOGGERS §5.4
+# this must be self-describing:
+#
+#   collector:<service_name>           -- non-run-scoped collectors
+#                                         (harness's own, global resources,
+#                                         global-scope preload stages).
+#   collector:<service_name>:<run_id>  -- run-scoped collectors (run
+#                                         service's own, run-scoped
+#                                         resources, run-scoped preload
+#                                         stages, test-job collectors
+#                                         launched under a run).
+#
+# For service-interpose collectors, <service_name> is the interposed
+# service's bus name (what it registered as). For test-job collectors
+# there is no interposed service -- the test process is not a service --
+# so we use the job_id as the disambiguator.
+sub _collector_bus_id {
+    my $self = shift;
+
+    my $kind = $self->{+KIND} // 'generic';
+
+    my $service_name;
+    if ($kind eq 'test') {
+        $service_name = $self->{+JOB_ID};
+    }
+    else {
+        # Service collectors: interpose collector for a service identifies
+        # by that service's bus name. Prefer ipc_parent (the spawning
+        # service); fall back to ipc_harness (for the harness's own
+        # top-of-tree interpose). Last-resort uses job_id so a collector
+        # with neither identity still has a unique name.
+        $service_name = $self->{+IPC_PARENT} // $self->{+IPC_HARNESS} // $self->{+JOB_ID};
+    }
+
+    my $id = "collector:$service_name";
+    $id .= ":$self->{+IPC_RUN}"
+        if defined $self->{+IPC_RUN}
+        && (length($self->{+IPC_RUN}) + length($id) + 1) < 512;
+
+    return $id;
 }
 
 # Fire-and-forget send to a specific target service. Failures that
@@ -697,9 +740,11 @@ sub _send_collector_exiting {
 
 # Gather metadata from each instantiated logger, keyed by class so
 # multiple instances of the same class coexist, and fire a one-shot
-# loggers_ready message directly to the harness service. The
-# harness is the only consumer; sending through an intermediate
-# parent service would be a detour for no one.
+# `collector_artifacts` message (see IPC_AND_LOGGERS §8).
+#
+# Routing per §8.3: direct to ipc_run if the collector has one,
+# else ipc_harness. Never via ipc_parent -- the intermediate parent
+# (a preload stage, a resource service) has no use for the payload.
 sub _send_logger_metadata {
     my $self = shift;
 
@@ -716,9 +761,11 @@ sub _send_logger_metadata {
         push @{$loggers{$class}} => $meta;
     }
 
+    my $target = $self->{+IPC_RUN} // $self->{+IPC_HARNESS};
+
     $self->_send_to(
-        $self->{+IPC_HARNESS}, {
-            kind    => 'loggers_ready',
+        $target, {
+            kind    => 'collector_artifacts',
             run_id  => $self->{+RUN_ID},
             job_id  => $self->{+JOB_ID},
             job_try => $self->{+JOB_TRY},

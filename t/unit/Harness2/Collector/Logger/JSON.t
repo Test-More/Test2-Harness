@@ -45,10 +45,9 @@ subtest 'required attributes' => sub {
         'output_file required',
     );
 
-    like(
-        dies { $CLASS->new(ipcm_info => {}, output_file => '/tmp/x.json') },
-        qr/spec/,
-        'spec required',
+    ok(
+        $CLASS->new(ipcm_info => {}, output_file => '/tmp/x.json'),
+        'spec is optional -- without it the sidecar records exit/pass only',
     );
 
     like(
@@ -60,7 +59,7 @@ subtest 'required attributes' => sub {
             )
         },
         qr/TO_JSON/,
-        'spec must be an object implementing TO_JSON',
+        'spec, when provided, must be an object implementing TO_JSON',
     );
 };
 

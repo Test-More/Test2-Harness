@@ -34,6 +34,7 @@ use Object::HashBase qw{
     <workdir
     <logdir
     <name
+    <ipc_parent
     <job_id
     <loggers
     <service_loggers
@@ -232,9 +233,16 @@ sub start {
 
     my $jump_to = $self->{+JUMP_TO};
 
+    # The interpose collector has no parent service to notify -- it
+    # is the top of its own tree. ipc_parent stays undef; ipc_harness
+    # points at the service-side name so the collector can still
+    # deliver its end-of-life report to the harness if ever consumed
+    # by an external orchestrator on the same bus.
     Test2::Harness2::Collector->interpose(
         ipcm_info   => $self->ipcm_info,
-        ipc_peer    => $self->{+NAME},
+        ipc_parent  => undef,
+        ipc_harness => $self->{+NAME},
+        kind        => 'service',
         loggers     => $loggers,
         parser      => 'Test2::Harness2::Collector::Parser::IOParser',
         parent_pids => [$caller_pid],
@@ -414,14 +422,12 @@ sub run_on_general_message {
     return $self->_handle_job_complete($content)
         if defined $kind && $kind eq 'job_complete';
 
-    # A test job's collector reports its own pid at startup so the
-    # scheduler can track the process regardless of who spawned it.
-    return $self->_handle_collector_started($content)
-        if defined $kind && $kind eq 'collector_started';
-
-    # The collector itself signals "about to exit"; starts the same
-    # grace timer that _check_running_job_pids uses when it notices
-    # the pid has vanished on its own.
+    # A collector reports its own end-of-life with kind/role info and,
+    # for test collectors, the auditor's pass/fail verdict + child
+    # exit code. The harness uses this to arm a pid-gone grace timer
+    # (so the scheduler advances even when the RunService's reap
+    # message is delayed or lost) and to override the coarse exit-
+    # code-based pass inference with the auditor's real verdict.
     return $self->_handle_collector_exiting($content)
         if defined $kind && $kind eq 'collector_exiting';
 
@@ -478,29 +484,24 @@ sub request_handler_detach {
     return {ok => 1};
 }
 
-# Collector lifecycle messages. A test-job collector reports its pid
-# as soon as it is up so the scheduler can track the process even when
-# the test was spawned by a process outside the run's tree (preload
-# stages, custom launchers, ...). Matching by job_id, we fill in the
-# pid on the running_jobs entry if it was not already known.
-sub _handle_collector_started {
-    my ($self, $content) = @_;
-    return unless ref($content) eq 'HASH';
-
-    my $job_id = $content->{job_id};
-    my $pid    = $content->{pid};
-    return unless defined $job_id && defined $pid;
-
-    my $cur = $self->{+RUNNING_JOBS}->{$job_id} or return;
-    $cur->{pid} //= $pid;
-    return;
-}
-
-# The collector itself signals "about to exit" so the grace timer
-# starts as soon as the collector is committed to going away, rather
-# than waiting until _check_running_job_pids happens to notice the
-# pid has vanished. Same end result either way -- job_complete wins
-# if it arrives first, otherwise we synthesize one on grace expiry.
+# A collector has reached end-of-life and is sending its final
+# summary. Two things to do:
+#
+#   1. Arm the pid-gone grace timer so the scheduler can advance
+#      even if the RunService's own SIGCHLD reap message is delayed
+#      or dropped -- job_complete from the RunService still wins if
+#      it arrives first, otherwise we synthesize one on grace expiry.
+#
+#   2. For test-kind collectors, record the auditor's pass verdict
+#      in the running_jobs entry. _handle_job_complete, when it
+#      runs, prefers this verdict over the coarse exit-code-based
+#      pass inference -- the auditor knows about failed assertions
+#      that did not change the exit code, which exit-code alone can
+#      miss.
+#
+# Non-test collectors (role => 'service', resource service
+# collectors, ...) are informational only; the payload's exit code
+# is enough for anything else that wants it.
 sub _handle_collector_exiting {
     my ($self, $content) = @_;
     return unless ref($content) eq 'HASH';
@@ -510,6 +511,12 @@ sub _handle_collector_exiting {
 
     my $cur = $self->{+RUNNING_JOBS}->{$job_id} or return;
     $cur->{pid_gone_since} //= time;
+
+    my $role = $content->{role} // 'generic';
+    if ($role eq 'test' && exists $content->{pass}) {
+        $cur->{auditor_pass} = $content->{pass} ? 1 : 0;
+    }
+
     return;
 }
 
@@ -525,9 +532,20 @@ sub _handle_job_complete {
     # The run service reports exit in the IPC payload (a raw wait status).
     # Parse it once, then emit a job_completed lifecycle event for any
     # listeners following the harness's own log.
-    my $raw_exit = ref($content) eq 'HASH'                                  ? $content->{exit}      : undef;
-    my $exit     = defined($raw_exit)                                       ? parse_exit($raw_exit) : undef;
-    my $pass     = defined($exit) && $exit->{err} == 0 && $exit->{sig} == 0 ? 1                     : 0;
+    my $raw_exit = ref($content) eq 'HASH' ? $content->{exit}      : undef;
+    my $exit     = defined($raw_exit)      ? parse_exit($raw_exit) : undef;
+
+    # Prefer the auditor's verdict (recorded via collector_exiting)
+    # when it was reported; fall back to the coarse exit-code check.
+    # A test can have failed assertions while still exiting 0, which
+    # exit-code alone cannot see.
+    my $pass;
+    if (exists $cur->{auditor_pass}) {
+        $pass = $cur->{auditor_pass} ? 1 : 0;
+    }
+    else {
+        $pass = defined($exit) && $exit->{err} == 0 && $exit->{sig} == 0 ? 1 : 0;
+    }
 
     $self->emit_service_event(
         kind     => 'job_completed',

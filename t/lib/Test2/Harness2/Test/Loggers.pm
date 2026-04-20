@@ -58,10 +58,6 @@ sub classic_run_service_loggers {
 
 # Per-test-job logger specs. These use RunService placeholders so the
 # same list can be reused across every job the run launches.
-# Logger::JSON's 'spec' attr is optional; omitting it here means the
-# 0.json starts empty and is overwritten with exit / pass data at
-# shutdown -- enough for the Command::test tally (which only looks
-# at 'pass').
 sub classic_test_loggers {
     return [
         [

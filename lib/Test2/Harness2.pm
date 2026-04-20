@@ -314,12 +314,28 @@ sub request_handler_queue_test_run {
     return {ok => 0, error => "'files' must be a non-empty arrayref"}
         unless ref($files) eq 'ARRAY' && @$files;
 
-    my $run = Test2::Harness2::Run->from_files(
-        files => $files,
-        (defined $payload->{run_id} ? (run_id => $payload->{run_id}) : ()),
-    );
+    # loggers / extend_loggers and test_loggers / extend_test_loggers
+    # carry the caller's per-run intent. The Run constructor
+    # validates mutual exclusivity and shape; surface a tidy error
+    # response rather than letting the croak escape.
+    my %run_logger_opts;
+    for my $k (qw/loggers extend_loggers test_loggers extend_test_loggers/) {
+        $run_logger_opts{$k} = $payload->{$k} if defined $payload->{$k};
+    }
 
-    push @{$self->{+QUEUE}} => $run;
+    my $ok = eval {
+        my $run = Test2::Harness2::Run->from_files(
+            files => $files,
+            (defined $payload->{run_id} ? (run_id => $payload->{run_id}) : ()),
+            %run_logger_opts,
+        );
+        push @{$self->{+QUEUE}} => $run;
+        1;
+    };
+    my $err = $@;
+    return {ok => 0, error => "$err"} unless $ok;
+
+    my $run = $self->{+QUEUE}->[-1];
 
     $self->emit_service_event(
         kind     => 'run_queued',

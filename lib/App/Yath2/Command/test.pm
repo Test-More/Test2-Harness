@@ -12,6 +12,7 @@ use Test2::Harness2::Util qw/tinysleep/;
 
 use Getopt::Yath;
 include_options(
+    'App::Yath2::Options::Yath',
     'App::Yath2::Options::Tests',
     'App::Yath2::Options::Renderer',
     'App::Yath2::Options::Resource',
@@ -82,13 +83,40 @@ sub run {
 
     _warn_preloads_placeholder($preloads) if @$preloads;
 
-    my $ok = eval { _run_tests(\@positional, $launch_args, $slots, $verbose) };
-    unless (defined $ok) {
+    my $plugins = eval { _load_plugins($settings) };
+    unless (defined $plugins) {
         my $err = $@;
+        print STDERR "yath test: plugin load failed: $err\n";
+        return 2;
+    }
+
+    $_->client_setup(settings => $settings) for @$plugins;
+
+    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $plugins) };
+    my $err = $@;
+
+    $_->client_teardown(settings => $settings) for reverse @$plugins;
+    $_->client_finalize(settings => $settings, exit => \$ok) for reverse @$plugins;
+
+    unless (defined $ok) {
         print STDERR "yath test: error: $err\n";
         return 2;
     }
     return $ok;
+}
+
+# Build the plugin list from $settings->yath->plugins (a Map keyed by
+# fully-qualified class name). Returns an empty arrayref when no
+# plugins were requested so every call site can dispatch unconditionally.
+sub _load_plugins {
+    my ($settings) = @_;
+
+    require App::Yath2::Plugins;
+
+    my $specs = eval { $settings->yath->plugins } // {};
+    $specs = {} unless ref($specs) eq 'HASH';
+
+    return App::Yath2::Plugins->load_plugins($specs);
 }
 
 # Build the arrayref of perl -I... switches that the harness injects
@@ -175,7 +203,8 @@ sub _warn_preloads_placeholder {
 }
 
 sub _run_tests {
-    my ($paths, $launch_args, $slots, $verbose) = @_;
+    my ($paths, $launch_args, $slots, $verbose, $plugins) = @_;
+    $plugins //= [];
 
     require App::Yath2::Finder::Simple;
     require Test2::Harness2;
@@ -206,6 +235,7 @@ sub _run_tests {
     my $spawn = Test2::Harness2->spawn(
         workdir   => "$dir",
         resources => \@resources,
+        plugins   => $plugins,
         (@$launch_args ? (launch_args => $launch_args) : ()),
     );
 

@@ -1085,13 +1085,24 @@ sub _ensure_run_service_started {
 
     my $run_id = $run->run_id;
     my $bus    = "run-$run_id";
-    my $pid    = Test2::Harness2::RunService->spawn(
+
+    # Effective logger lists for this run: the harness's defaults,
+    # possibly overridden or extended by the Run's own intent slots.
+    # service_loggers flow to the RunService's own event output and
+    # to resource services scoped to this run; test_loggers flow to
+    # each per-job Collector launched inside the run.
+    my $svc_loggers  = $run->effective_service_loggers($self->{+SERVICE_LOGGERS});
+    my $test_loggers = $run->effective_test_loggers($self->{+TEST_LOGGERS});
+
+    my $pid = Test2::Harness2::RunService->spawn(
         workdir      => $self->{+WORKDIR},
         logdir       => $self->{+LOGDIR},
         run          => $run,
         ipcm_info    => $self->ipcm_info,
         parent_pids  => [$$],
         harness_name => $self->{+NAME},
+        loggers      => $svc_loggers,
+        test_loggers => $test_loggers,
     );
 
     $self->{+RUN_SERVICES}->{$run_id} = {

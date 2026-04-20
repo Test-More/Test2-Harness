@@ -151,25 +151,24 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
         long_examples  => ['', '=Group'],
     );
 
-    # TODO: Stage 7 — activate --plugin when plugin loader returns
-    # option plugins => (
-    #     type  => 'Map',
-    #     short => 'p',
-    #     alt   => ['plugin'],
-    #
-    #     description      => 'Load a yath plugin.',
-    #     mod_adds_options => 1,
-    #
-    #     normalize => sub {
-    #         my ($class, $args) = @_;
-    #
-    #         $class = fqmod($class, 'App::Yath2::Plugin');
-    #
-    #         $args = $args ? [split ',', $args] : [];
-    #
-    #         return $class => $args;
-    #     },
-    # );
+    option plugins => (
+        type  => 'Map',
+        short => 'p',
+        alt   => ['plugin'],
+
+        description      => 'Load a yath plugin.',
+        mod_adds_options => 1,
+
+        normalize => sub {
+            my ($class, $args) = @_;
+
+            $class = fqmod($class, 'App::Yath2::Plugin');
+
+            $args = $args ? [split ',', $args] : [];
+
+            return $class => $args;
+        },
+    );
 };
 
 1;

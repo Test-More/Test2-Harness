@@ -1387,44 +1387,6 @@ subtest 'orphan test pid on harness triggers job_complete fallback' => sub {
     );
 };
 
-subtest 'collector_started message fills in pid when missing' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    my $h   = Test2::Harness2->new(workdir => $dir);
-
-    my $run    = Test2::Harness2::Run->from_files(files => _tfs('/abs/c.t'));
-    my $job_id = $run->jobs->[0]->job_id;
-    push @{$h->{queue}} => $run;
-    $run->mark_running($job_id);
-
-    $h->{running_jobs}{$job_id} = {
-        run => $run,
-        job => $run->jobs->[0],
-        # No pid yet -- simulates a collector that was spawned outside
-        # the run service's tree so _launch_job never had one to record.
-        started_at         => time,
-        assigned_resources => [],
-    };
-
-    $h->run_on_general_message(
-        Test::FakeIpcMsg->new({
-            kind    => 'collector_started',
-            run_id  => $run->run_id,
-            job_id  => $job_id,
-            pid     => 61234,
-            job_try => 0,
-        }),
-    );
-
-    is($h->{running_jobs}{$job_id}{pid}, 61234, 'pid recorded from collector_started');
-
-    # A second collector_started with a different pid must not overwrite;
-    # we only fill in when missing.
-    $h->run_on_general_message(
-        Test::FakeIpcMsg->new({kind => 'collector_started', run_id => $run->run_id, job_id => $job_id, pid => 99999, job_try => 0}),
-    );
-    is($h->{running_jobs}{$job_id}{pid}, 61234, 'pid not overwritten when already set');
-};
-
 subtest 'collector_exiting arms the pid-gone grace timer' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);

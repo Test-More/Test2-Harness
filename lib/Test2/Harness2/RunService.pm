@@ -170,14 +170,19 @@ sub request_handler_launch_job {
     my $payload_loggers = $payload->{loggers} // $self->{+TEST_LOGGERS} // [];
     my $test_file_abs   = $payload->{test_file};
     my $launch_cmd      = $payload->{launch};
+    my $launch_args     = $payload->{launch_args};
 
     return {ok => 0, error => "'test_file' must be absolute"}
         unless $test_file_abs =~ m{^/};
 
     # The harness's synthetic-skip / synthetic-fail paths hand us an
     # explicit launch command (perl -e '...'). Default to running the
-    # real test file when no override is present.
-    $launch_cmd //= [$^X, '-Ilib', $test_file_abs];
+    # real test file through $^X, with the harness-supplied launch_args
+    # (typically perl -I switches) between the interpreter and the test
+    # file. Backward-compatible default when neither launch nor
+    # launch_args is provided: -Ilib relative to whatever cwd the
+    # collector inherits.
+    $launch_cmd //= [$^X, ($launch_args ? @$launch_args : ('-Ilib')), $test_file_abs];
 
     # Per-job log directory exists for any logger that wants to write
     # something per-try. Callers describe the path via %LOG_DIR% /

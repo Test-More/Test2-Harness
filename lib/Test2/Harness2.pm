@@ -45,6 +45,7 @@ use Object::HashBase qw{
     <jump_to
     <resources
     <broken_resource_behavior
+    <launch_args
     +state
     +queue
     +running_jobs
@@ -1314,6 +1315,7 @@ sub _launch_job {
                 # the run's effective test_loggers) when the payload
                 # doesn't override.
                 (defined $opts{launch} ? (launch => $opts{launch}) : ()),
+                ($self->{+LAUNCH_ARGS} ? (launch_args => $self->{+LAUNCH_ARGS}) : ()),
             },
         );
 

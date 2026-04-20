@@ -145,3 +145,20 @@ installed in the running perl. It is: `which yath` points at
 resolves. If your CI image ever lacks it, `scripts/yath` will fail
 at `require App::Yath::Script`. Worth adding a sanity check to
 CI (if/when CI runs `yath`) that the dep is installed.
+
+## Post-refactor rebase (2026-04-20)
+
+Rebased onto the updated `reimplement-resource-classes` base
+(`0c46805cf`), which now carries the IPC_AND_LOGGERS-alignment
+refactor (message-kind renames `job_complete` → `test_job_completed`
+and `loggers_ready` → `collector_artifacts`, direct artifact
+routing to `ipc_run`/`ipc_harness`, collector bus-name convention
+`collector:<service>[:<run_id>]`, configurable per-run
+`launch_job_timeout` defaulting to 5s).
+
+Stage-04's own commits (yath script + App::Yath2 skeleton)
+replayed cleanly except for the recurring `t/AI/unit/Util/JSON_no_null.t`
+move conflict (known base-branch rename already resolved the same
+way every cascade). (Live branch tip recorded in
+`PLAN_RESUME.md` on the primary repo, not pinned here.) Full
+`prove -j16 -I lib -I t/lib -r t` run green downstream.

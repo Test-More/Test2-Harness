@@ -30,10 +30,13 @@ sub argv { $_[0]->{argv} }
 # implemented' banner). Later stages flip entries as commands land.
 my %COMMANDS = (
     test      => 'App::Yath2::Command::test',
-    list      => 1,
-    help      => 1,
-    init      => 1,
-    failed    => 1,
+    help      => 'App::Yath2::Command::help',
+    list      => 'App::Yath2::Command::list',
+    which     => 'App::Yath2::Command::which',
+    init      => 'App::Yath2::Command::init',
+    failed    => 'App::Yath2::Command::failed',
+    projects  => 'App::Yath2::Command::projects',
+    do        => 'App::Yath2::Command::do',
     start     => 1,
     stop      => 1,
     status    => 1,
@@ -46,9 +49,6 @@ my %COMMANDS = (
     watch     => 1,
     reload    => 1,
     resources => 1,
-    which     => 1,
-    projects  => 1,
-    do        => 1,
 );
 
 sub init {

@@ -5,6 +5,7 @@ use Time::HiRes qw/sleep/;
 
 use lib 't/lib';
 use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 
 use Test2::Harness2;
 
@@ -27,7 +28,11 @@ subtest 'Terminate mid-run kills collector and test process' => sub {
     print $fh "use Test2::V0; ok(1); sleep 60; done_testing;\n";
     close $fh;
 
-    my $spawn = Test2::Harness2->spawn(workdir => $dir);
+    my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
     my $q     = $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
     ok($q->{ok}, 'queued');
 
@@ -69,7 +74,11 @@ done_testing;
 PERL
     close $fh;
 
-    my $spawn = Test2::Harness2->spawn(workdir => $dir);
+    my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
     $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
 
     # Wait for the run to complete (the test dies, the collector finishes).
@@ -99,7 +108,11 @@ subtest 'service dies when its caller dies (no detach)' => sub {
     # detaching. The service should notice its caller is gone and exit.
     my $helper = fork // die "fork: $!";
     if (!$helper) {
-        my $spawn = Test2::Harness2->spawn(workdir => $dir);
+        my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
         $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
         # Intentionally NOT detached — leak via _exit so DESTROY doesn't fire.
         _exit(0);
@@ -138,7 +151,11 @@ subtest 'detached service survives caller death' => sub {
     my $helper = fork // die "fork: $!";
     if (!$helper) {
         close $r;
-        my $spawn = Test2::Harness2->spawn(workdir => $dir);
+        my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
         $spawn->detach;
         print $w $spawn->pid, "\n";
         close $w;

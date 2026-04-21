@@ -20,9 +20,9 @@ my %SKIP = map { $_ => 1 } (
     # Timeout-dependent: need --event-timeout / --post-exit-timeout
     # to truncate the stuck child. Those options are commented out
     # in Options/Tests (Stage 6 TODO).
-    'timeout.t',
-    'post_exit_timeout.t',
-    'noplan.t',    # noplan.t also leans on --pet to truncate
+    'timeout.tx',
+    'post_exit_timeout.tx',
+    'noplan.tx',    # noplan.tx also leans on --pet to truncate
 
     # Raw-TAP fixtures that the new Auditor flags as failing even in
     # the "should pass" case (FAILURE_DO_PASS=1). The old fixtures
@@ -30,11 +30,11 @@ my %SKIP = map { $_ => 1 } (
     # numbering; old's Auditor tolerated this, the new one does
     # not. Capturing the divergence as a skip lets the fixtures
     # stay in-tree for when the Auditor contract is reviewed.
-    'badplan.t',
-    'buffered_subtest_abrupt_end.t',
-    'buffered_subtest_abrupt_end_nested.t',
-    'dupnums.t',
-    'missingnums.t',
+    'badplan.tx',
+    'buffered_subtest_abrupt_end.tx',
+    'buffered_subtest_abrupt_end_nested.tx',
+    'dupnums.tx',
+    'missingnums.tx',
 );
 
 opendir(my $DH, $dir) or die "Could not open directory $dir: $!";
@@ -47,11 +47,11 @@ sub run_test {
     my ($file) = @_;
     my $path = File::Spec->canonpath("$dir/$file");
     return unless -f $path;
-    return unless $file =~ /\.t$/;
+    return unless $file =~ /\.tx$/;
 
     if ($SKIP{$file}) {
         my $ctx = context();
-        $ctx->skip("failure_cases/$file requires --event-timeout / --post-exit-timeout (Stage 6 TODO)");
+        $ctx->skip("failure_cases/$file requires new-tree wiring (see SKIP table in t/integration/failure_cases.t)");
         $ctx->release;
         return;
     }

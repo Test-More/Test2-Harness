@@ -105,7 +105,24 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
             return unless @missing;
 
             my $settings = $params{settings};
-            if ($settings->yath->dev_libs_verbose) {
+
+            # The re-exec depends on the yath script path and the
+            # original argv that App::Yath::Script::V2 captures before
+            # dispatch. Stage 4's minimal App::Yath2 does not register
+            # 'script' / 'orig_argv' on the yath group yet (that comes
+            # with the full dispatcher wire-up in a later stage). When
+            # either is missing we can still populate @INC with the
+            # requested paths -- the autofill normalize has already
+            # added them -- and skip the re-exec. The user gets the
+            # paths in @INC; they just don't get the belt-and-braces
+            # interpreter relaunch that guarantees ordering in front
+            # of every other module load.
+            my $yath        = $settings->yath;
+            my $have_script = exists $yath->{script};
+            my $have_orig   = exists $yath->{orig_argv};
+            return unless $have_script && $have_orig;
+
+            if ($yath->dev_libs_verbose) {
                 print STDERR "Developer library paths were specified but missing from \@INC... re-launching yath with proper include paths...\n";
                 print STDERR "  -> $_\n" for @missing;
                 print STDERR "\n";
@@ -113,7 +130,7 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
 
             my %default = map { ($_ => 1, clean_path($_) => 1) } grep { $_ } split /\n/, `$^X -e 'print "\$_\n" for \@INC'`;
             my @add     = map { "-I$_" } grep { !$default{$_} } map { clean_path($_) } @INC, @missing;
-            exec($^X, @add, $settings->yath->script, @{$settings->yath->orig_argv // []});
+            exec($^X, @add, $yath->script, @{$yath->orig_argv // []});
         },
 
         normalize => \&clean_path,

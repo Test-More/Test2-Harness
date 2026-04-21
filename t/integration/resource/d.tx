@@ -1,0 +1,8 @@
+use Test2::V0;
+
+ok($ENV{RESOURCE_TEST}, "Set the env var");
+is($ARGV[0], $ENV{RESOURCE_TEST}, "Set the test cli argument to the same value");
+
+sleep 1;
+
+done_testing;

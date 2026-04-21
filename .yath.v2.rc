@@ -1,0 +1,17 @@
+# App::Yath::Script selects V2 via this file's name (.yath.v2.rc);
+# .yath.rc is a symlink to this file so the stable name still
+# resolves. A bare `# V2` comment is not parsed by the launcher.
+#
+# TODO: the options below are V1 leftovers. Uncomment and
+# re-express them as V2 options once the relevant Stage 6 option
+# libraries land and --project / -D / [test] are wired through
+# Getopt::Yath.
+#
+# -D
+# -D=rel(t/Harness/selftest/lib)
+# ;-pSelfTest
+# --project Test2-Harness2
+#
+# [test]
+# -Irel(t/Harness/selftest/lib)
+# --default-search rel(t)

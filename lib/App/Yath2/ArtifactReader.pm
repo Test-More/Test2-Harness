@@ -227,11 +227,14 @@ sub _emit_pending_events {
 
     my $running = $status->{running} // [];
     my $done    = $status->{done}    // [];
+    my $jobs    = ref($status->{jobs}) eq 'HASH' ? $status->{jobs} : {};
 
     # job-started events for running ids we haven't announced yet.
     for my $jid (@$running) {
         next if $self->{+EMITTED_STARTS}->{$jid}++;
         next if $self->{+MODE} eq 'quiet';
+        my $meta = ref($jobs->{$jid}) eq 'HASH' ? $jobs->{$jid} : {};
+        my $file = $meta->{test_file};
         $self->_dispatch({
             event_id   => "artifact-reader-start-$jid",
             stamp      => time,
@@ -239,7 +242,12 @@ sub _emit_pending_events {
                 harness => {
                     job_id           => $jid,
                     run_id           => $self->{+RUN_ID},
-                    test_job_started => {job_id => $jid, run_id => $self->{+RUN_ID}},
+                    (defined $file ? (file => $file) : ()),
+                    test_job_started => {
+                        job_id => $jid,
+                        run_id => $self->{+RUN_ID},
+                        (defined $file ? (file => $file) : ()),
+                    },
                 },
             },
         });
@@ -253,9 +261,12 @@ sub _emit_pending_events {
         my $artifacts = $self->_run_artifacts;
         for my $jid (@$new_done) {
             my $verdict = $self->_verdict_for_job($status, $jid);
+            my $meta    = ref($jobs->{$jid}) eq 'HASH' ? $jobs->{$jid} : {};
+            my $file    = $meta->{test_file};
             my %entry   = (
                 job_id => $jid,
                 pass   => $verdict,
+                (defined $file ? (test_file => $file) : ()),
             );
             my $log = $self->_job_log_from_artifacts($artifacts, $jid);
             $entry{log_file} = $log if defined $log;
@@ -280,10 +291,12 @@ sub _emit_pending_events {
                     harness => {
                         job_id             => $jid,
                         run_id             => $self->{+RUN_ID},
+                        (defined $file ? (file => $file) : ()),
                         test_job_completed => {
                             job_id => $jid,
                             run_id => $self->{+RUN_ID},
                             pass   => $verdict,
+                            (defined $file ? (file => $file) : ()),
                         },
                     },
                 },

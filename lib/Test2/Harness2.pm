@@ -471,6 +471,7 @@ sub request_handler_run_status {
             done       => [@{$run->done}],
             pass_count => $run->pass_count,
             fail_count => $run->fail_count,
+            jobs       => _run_job_info($run),
         };
     }
 
@@ -479,6 +480,26 @@ sub request_handler_run_status {
     }
 
     return {ok => 0, error => "unknown run_id '$run_id'"};
+}
+
+# Per-job metadata map: job_id => { test_file => ..., test_file_abs => ... }
+# Added to run_status so the command-side artifact-reading layer can
+# surface filename-shaped renderer events (IPC_AND_LOGGERS §13.0: the
+# renderer receives events, not raw harness state; adding job metadata
+# here keeps the one-query-per-poll pattern the ArtifactReader uses).
+sub _run_job_info {
+    my ($run) = @_;
+    my %out;
+    for my $job (@{$run->jobs // []}) {
+        my $jid = eval { $job->job_id }  // next;
+        my $rel = eval { $job->test_file_rel };
+        my $abs = eval { $job->test_file_abs };
+        $out{$jid} = {
+            (defined $rel ? (test_file     => $rel) : ()),
+            (defined $abs ? (test_file_abs => $abs) : ()),
+        };
+    }
+    return \%out;
 }
 
 # get_workdir: per IPC_AND_LOGGERS §11.2 an attached command asks the
@@ -987,6 +1008,7 @@ sub _handle_job_complete {
             done       => [@{$run->done}],
             pass_count => $run->pass_count,
             fail_count => $run->fail_count,
+            jobs       => _run_job_info($run),
         };
 
         $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
@@ -1360,6 +1382,7 @@ sub _finalize_run_if_complete {
         done       => [@{$run->done}],
         pass_count => $run->pass_count,
         fail_count => $run->fail_count,
+        jobs       => _run_job_info($run),
     };
 
     $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];

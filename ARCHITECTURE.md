@@ -2101,8 +2101,9 @@ exercise the service through `start()` or `spawn()`:
 - `harness2_lifecycle.t` — terminate/finish/detach behaviours, both
   invariants.
 
-Canonical runner is `perl -Ilib scripts/yath test -D -j24 [files...]`.
-Verbose runs drop `-j24`.
+Canonical runner is `yath test -D -j24 [files...]` using the `yath`
+script installed by `App::Yath::Script` (resolved via `PATH`; no
+hardcoded path). Verbose runs drop `-j24`.
 
 ### Authorship layout
 

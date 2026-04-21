@@ -1,2 +1,2 @@
-:map <F10> :w<cr>:! perl -Ilib scripts/yath -A -T -v %<CR>
-:imap <F10> <ESC>:w<cr>:! perl -Ilib scripts/yath -A -T -v %<CR>
+:map <F10> :w<cr>:! yath -A -T -v %<CR>
+:imap <F10> <ESC>:w<cr>:! yath -A -T -v %<CR>

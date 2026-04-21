@@ -1,0 +1,4 @@
+#!perl -w
+use Test2::V0;
+ok($^W,'-w should be honoured');
+done_testing;

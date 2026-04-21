@@ -1,0 +1,4 @@
+#!perl
+use Test2::V0;
+ok(!$^W,'-w should not leak');
+done_testing;

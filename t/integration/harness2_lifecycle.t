@@ -3,6 +3,10 @@ use File::Temp qw/tempdir/;
 use POSIX qw/:sys_wait_h _exit/;
 use Time::HiRes qw/sleep/;
 
+use lib 't/lib';
+use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
+
 use Test2::Harness2;
 
 sub wait_until {
@@ -24,8 +28,12 @@ subtest 'Terminate mid-run kills collector and test process' => sub {
     print $fh "use Test2::V0; ok(1); sleep 60; done_testing;\n";
     close $fh;
 
-    my $spawn = Test2::Harness2->spawn(workdir => $dir);
-    my $q     = $spawn->queue_test_run(files => [$tf]);
+    my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
+    my $q     = $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
     ok($q->{ok}, 'queued');
 
     # Wait for status to show a running job.
@@ -33,7 +41,8 @@ subtest 'Terminate mid-run kills collector and test process' => sub {
     wait_until(
         sub {
             my $s = $spawn->status;
-            $running_pid = $s->{running} && $s->{running}{pid};
+            my ($first) = @{$s->{running} // []};
+            $running_pid = $first && $first->{pid};
             return $running_pid ? 1 : 0;
         },
         10
@@ -65,14 +74,18 @@ done_testing;
 PERL
     close $fh;
 
-    my $spawn = Test2::Harness2->spawn(workdir => $dir);
-    $spawn->queue_test_run(files => [$tf]);
+    my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
+    $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
 
     # Wait for the run to complete (the test dies, the collector finishes).
     wait_until(
         sub {
             my $s = $spawn->status;
-            return !$s->{running} && !@{$s->{queue}};
+            return !@{$s->{running} // []} && !@{$s->{queue}};
         },
         15
     ) or diag "run did not complete";
@@ -95,14 +108,21 @@ subtest 'service dies when its caller dies (no detach)' => sub {
     # detaching. The service should notice its caller is gone and exit.
     my $helper = fork // die "fork: $!";
     if (!$helper) {
-        my $spawn = Test2::Harness2->spawn(workdir => $dir);
-        $spawn->queue_test_run(files => [$tf]);
+        my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
+        $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
         # Intentionally NOT detached — leak via _exit so DESTROY doesn't fire.
         _exit(0);
     }
     waitpid $helper, 0;
 
-    # The service should exit on its own shortly.
+    # The service should exit on its own. Under the new architecture
+    # the shutdown has to cascade harness -> run service -> test
+    # collectors, so the 15s kill_timeout at each layer can stack.
+    # 45s keeps us clear of the worst-case single retry.
     ok(
         wait_until(
             sub {
@@ -112,7 +132,7 @@ subtest 'service dies when its caller dies (no detach)' => sub {
                 my $content = <$fh>;
                 return $content =~ /service_stopped/;
             },
-            20
+            45
         ),
         'service logged service_stopped after caller died'
     );
@@ -131,7 +151,11 @@ subtest 'detached service survives caller death' => sub {
     my $helper = fork // die "fork: $!";
     if (!$helper) {
         close $r;
-        my $spawn = Test2::Harness2->spawn(workdir => $dir);
+        my $spawn = Test2::Harness2->spawn(
+        workdir      => $dir,
+        loggers      => classic_harness_loggers($dir),
+        test_loggers => classic_test_loggers(),
+    );
         $spawn->detach;
         print $w $spawn->pid, "\n";
         close $w;

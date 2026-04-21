@@ -77,6 +77,20 @@ sub request_handler_terminate {
     return {ok => 1};
 }
 
+# Cheap liveness check. Any service that consumes Role::Service can
+# be probed via a ping request without needing to grow its own
+# handler. The response shape is deliberately small: the reply
+# itself is the liveness signal; the pong fields are cosmetic.
+sub request_handler_ping {
+    my $self = shift;
+    return {
+        ok    => 1,
+        pong  => $$,
+        name  => $self->name,
+        stamp => time,
+    };
+}
+
 # Optional consumer overrides. Each has a default so the role can call
 # them unconditionally.
 

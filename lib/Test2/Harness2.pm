@@ -459,6 +459,186 @@ sub request_handler_run_status {
     return {ok => 0, error => "unknown run_id '$run_id'"};
 }
 
+# get_workdir: per IPC_AND_LOGGERS §11.2 an attached command asks the
+# harness where its workdir is. Returns the absolute path of the
+# harness's workdir plus the configured logdir (which may already be
+# absolute if the caller supplied one).
+sub request_handler_get_workdir {
+    my $self = shift;
+    return {
+        ok      => 1,
+        workdir => $self->{+WORKDIR},
+        logdir  => $self->{+LOGDIR},
+        name    => $self->{+NAME},
+    };
+}
+
+# list_processes: enumerate the harness's tracked process tree. Used by
+# `yath ps`. Returns one entry per service / collector / test-job
+# process the harness knows about. The harness is the source of truth
+# here -- run services, resource services, and test-job pids are all
+# tracked in-memory already; we just lift them into the response.
+sub request_handler_list_processes {
+    my $self = shift;
+
+    my @procs;
+
+    push @procs => {
+        pid  => $$,
+        type => 'service',
+        role => 'harness',
+        name => $self->{+NAME},
+    };
+
+    for my $rid (keys %{$self->{+RUN_SERVICES} // {}}) {
+        my $info = $self->{+RUN_SERVICES}->{$rid};
+        next unless $info->{pid};
+        push @procs => {
+            pid    => $info->{pid},
+            type   => 'service',
+            role   => 'run',
+            run_id => $rid,
+            name   => $info->{bus_name},
+            ($info->{started_at} ? (started_at => $info->{started_at}) : ()),
+        };
+    }
+
+    for my $key (keys %{$self->{+RESOURCE_SERVICES} // {}}) {
+        my $info = $self->{+RESOURCE_SERVICES}->{$key};
+        next unless $info->{pid};
+        push @procs => {
+            pid  => $info->{pid},
+            type => 'service',
+            role => 'resource',
+            name => $info->{service_name} // $key,
+            ($info->{resource_name} ? (resource_name => $info->{resource_name}) : ()),
+        };
+    }
+
+    for my $job_id (keys %{$self->{+RUNNING_JOBS} // {}}) {
+        my $cur = $self->{+RUNNING_JOBS}->{$job_id};
+        next unless $cur->{pid};
+        push @procs => {
+            pid        => $cur->{pid},
+            type       => 'collector',
+            role       => 'test',
+            run_id     => $cur->{run}->run_id,
+            job_id     => $job_id,
+            test_file  => $cur->{job}->test_file_rel,
+            ($cur->{started_at} ? (started_at => $cur->{started_at}) : ()),
+        };
+    }
+
+    return {ok => 1, processes => \@procs};
+}
+
+# list_resources: report the current state of every resource attached
+# to the harness, global or per-run. Used by `yath resources`. Each
+# resource's `status` method is the authoritative source; we extend
+# each status hash with `scope`, `resource_name`, `class`, and (for
+# run-scoped resources) the owning run_id.
+sub request_handler_list_resources {
+    my $self = shift;
+
+    my @entries;
+
+    for my $res (@{$self->{+RESOURCES} // []}) {
+        my $status = eval { $res->status } // {};
+        push @entries => {
+            class         => ref($res),
+            resource_name => $res->resource_name,
+            scope         => 'global',
+            is_paused           => $res->is_paused           ? 1 : 0,
+            is_broken           => $res->is_broken           ? 1 : 0,
+            is_permanent_broken => $res->is_permanent_broken ? 1 : 0,
+            is_usable           => $res->is_usable           ? 1 : 0,
+            status              => $status,
+        };
+    }
+
+    for my $rid (keys %{$self->{+RUN_SERVICES} // {}}) {
+        my $run = $self->{+RUN_SERVICES}->{$rid}->{run} // next;
+        for my $res (@{$run->resources // []}) {
+            my $status = eval { $res->status } // {};
+            push @entries => {
+                class         => ref($res),
+                resource_name => $res->resource_name,
+                scope         => 'run',
+                run_id        => $rid,
+                is_paused           => $res->is_paused           ? 1 : 0,
+                is_broken           => $res->is_broken           ? 1 : 0,
+                is_permanent_broken => $res->is_permanent_broken ? 1 : 0,
+                is_usable           => $res->is_usable           ? 1 : 0,
+                status              => $status,
+            };
+        }
+    }
+
+    return {ok => 1, resources => \@entries};
+}
+
+# abort_runs: drop every run in the queue and mark currently-running
+# jobs aborted so the scheduler stops launching new tests without
+# tearing the harness down. Currently-running jobs continue to
+# completion (per the "abort" semantic in the old yath: stop queuing,
+# let in-flight finish). The harness stays up and can accept new
+# runs -- callers who want the harness to exit after aborting should
+# follow up with a `finish` request.
+sub request_handler_abort_runs {
+    my ($self, $payload) = @_;
+    $payload //= {};
+
+    return {ok => 0, error => 'service not running'}
+        unless $self->{+STATE} eq 'running';
+
+    my @aborted;
+    for my $run (@{$self->{+QUEUE} // []}) {
+        my $rid = $run->run_id;
+        next if defined $payload->{run_id} && $run->run_id ne $payload->{run_id};
+
+        # mark_skipped every pending job so the run finalises without
+        # launching any more work; running jobs are left alone so
+        # in-flight tests complete normally.
+        for my $job_id (@{$run->pending}) {
+            $run->mark_skipped($job_id);
+        }
+        push @aborted => $rid;
+    }
+
+    # _try_launch_next_pending runs every tick; finalise runs that
+    # have no pending / no running so their completion propagates
+    # now rather than waiting for the next scheduling pass.
+    for my $run (@{$self->{+QUEUE} // []}) {
+        $self->_finalize_run_if_complete($run);
+    }
+
+    return {ok => 1, aborted => \@aborted};
+}
+
+# reload_preloads: forward the reload request to every Preload resource
+# the harness has. The resource's own `request_reload` hook decides
+# what to do; Stage 9 lays the scaffolding (ChangeWatcher + Reloader
+# roles) and the preload service will grow a concrete reload path
+# later. For Stage 14 the contract is: accept the request, return
+# which preload resources were notified, and let the resource layer
+# do whatever it currently does.
+sub request_handler_reload_preloads {
+    my $self = shift;
+
+    my @reloaded;
+    for my $res (@{$self->{+RESOURCES} // []}) {
+        next unless ref($res) && $res->isa('Test2::Harness2::Resource::Preload');
+        my $ok = eval {
+            $res->request_reload if $res->can('request_reload');
+            1;
+        };
+        warn "preload '" . $res->resource_name . "' reload failed: $@" unless $ok;
+        push @reloaded => $res->resource_name;
+    }
+
+    return {ok => 1, reloaded => \@reloaded};
+}
+
 # Store a collector_artifacts payload into the appropriate bucket.
 # See IPC_AND_LOGGERS §8. The inner shape is
 # { collector_id => { loggers => { Class => [\%inst, ...] }, run_id?, job_id?, job_try? } }

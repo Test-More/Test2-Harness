@@ -97,6 +97,23 @@ sub get_run_status {
     return $self->_send_request('get_run_status', {run_id => $run_id});
 }
 
+# Attached-command helpers (see IPC_AND_LOGGERS §11.2 and the Stage 14
+# daemon commands). Each is a thin wrapper over _send_request so the
+# command code stays declarative.
+sub get_workdir     { $_[0]->_send_request('get_workdir') }
+sub list_processes  { $_[0]->_send_request('list_processes') }
+sub list_resources  { $_[0]->_send_request('list_resources') }
+sub reload_preloads { $_[0]->_send_request('reload_preloads') }
+
+sub abort_runs {
+    my ($self, %args) = @_;
+    my %payload;
+    $payload{run_id} = $args{run_id} if defined $args{run_id};
+    return $self->_send_request('abort_runs', \%payload);
+}
+
+sub ping { $_[0]->_send_request('ping') }
+
 sub terminate {
     my $self = shift;
     my $res  = $self->_send_request('terminate');

@@ -1,270 +1,255 @@
-# Stage 12 -- Renderers + command-side artifact-reading layer
+# Stage 14 — Daemon-mode commands
 
-## Branch
+Branch: `plan-stage-14-daemon`
+Base:   `plan-stage-12-renderers` (tip `0847c7d6d`)
+HEAD:   `d4d76ee36`
+Commits: 5
 
-- `plan-stage-12-renderers`
-- Base: `plan-stage-13-commands` (`37ec8bf57`)
-- Stage 12 was deferred during session 2 (see `PLAN_RESUME_2026-04-20_session2.md`)
-  and is landing on top of Stage 13 rather than between 11 and 13 per
-  the user's instruction to preserve the chain even though the number
-  is out of sequence.
+Ports the 12 daemon-mode yath commands:
 
-## What landed (seven commits)
+    start  stop   status  ping    kill    ps
+    run    spawn  abort   watch   reload  resources
 
-1. **`Harness2: artifact-enumeration IPC handlers`** -- `da10f437a`
-   - `Test2::Harness2` grows two artifact buckets (`GLOBAL_ARTIFACTS`
-     and `RUN_ARTIFACTS`) populated from incoming `collector_artifacts`
-     messages. Successive announcements merge additively per
-     `IPC_AND_LOGGERS §8.2`.
-   - New request handlers: `list_global_artifacts`,
-     `list_run_artifacts(run_id => ...)`, `get_run_status(run_id => ...)`
-     (alias for `run_status`).
-   - `RunService` gains `run_on_general_message` so it stores its own
-     `collector_artifacts` arrivals and forwards the same payload to
-     the harness. The run service also exposes its own
-     `list_run_artifacts` request handler for direct queries.
-   - `Spawn` client: new helpers `list_global_artifacts`,
-     `list_run_artifacts`, `get_run_status`.
-   - Unit tests: `t/AI/unit/Harness2/Artifacts.t`. Covers empty
-     buckets, global vs run separation, additive merging, defensive
-     copying, and the `get_run_status` alias.
+plus the shared `App::Yath2::Daemon` pointer/attach helper and the
+new harness IPC request handlers the commands drive.
 
-2. **`App::Yath2::Role::Renderer: passive event-consumer role`** -- `e5b38e572`
-   - `lib/App/Yath2/Role/Renderer.pm` -- the single-entry-point
-     renderer contract from `IPC_AND_LOGGERS §13`. Required:
-     `event_in($event)`. Optional: `start_of_run`, `end_of_run`,
-     `shutdown` with no-op defaults.
-   - Unit test: role composition check, required-method enforcement,
-     default no-op dispatch, ordered call sequence.
+## Commits
 
-3. **`App::Yath2::Renderer::Theme::Composer: port facet composer`** -- `453e875ed`
-   - Port of `old/lib/App/Yath2/Renderer/Default/Composer.pm` into
-     `lib/App/Yath2/Renderer/Theme/Composer.pm`. Same public
-     interface: `render_one_line`, `render_verbose`, `render_brief`,
-     plus per-facet helpers. Emits `[facet, tag, text]` triples so
-     any text renderer can share it.
-   - Unit test: every dispatch path, SKIP variants, amnesty dedup,
-     debug fallback, error tag inference, super_verbose encoding.
+### 1. `b069001e2` Harness2: daemon-client IPC request handlers
 
-4. **`Renderer::Default, Renderer::Summary, Renderer::Formatter`** -- `5d742c386`
-   - Three minimal renderers, each consuming the role. Not a
-     bug-for-bug port of `old/` -- the Stage 12 contract is passive
-     consumption, so the old file-reading TUI was rewritten rather
-     than ported.
-   - `Renderer::Default`: one line per event (LAUNCH/PASSED/FAILED/RUN
-     headers for lifecycle events, render_brief for everything else).
-   - `Renderer::Summary`: end-of-run block with counts, optional
-     wall time, list of failing files, and a PASSED/FAILED verdict.
-   - `Renderer::Formatter`: verbose `-v` line-by-line formatter
-     that routes pass/info to STDOUT, fail/error/DIAG to STDERR.
-   - One unit test per renderer (Default, Summary, Formatter).
+Adds five request handlers on the Test2::Harness2 service:
 
-5. **`App::Yath2::ArtifactReader: command-side artifact-reading layer`** -- `9c0be9cbe`
-   - `lib/App/Yath2/ArtifactReader.pm` -- the only component in the
-     command that reads artifacts or queries the harness, per
-     `IPC_AND_LOGGERS §13`.
-   - Modes: quiet, qvf, verbose, default (§13.2). Mode selection
-     filters what the layer emits to renderers.
-   - Live path (`run`): polls `run_status` + `list_run_artifacts`
-     until drain; replays `0.jsonl` in verbose / qvf-fail mode.
-   - Replay path (`replay_from_logs`): walks an extracted logs/
-     tree and feeds the same event stream -- no IPC. Intended
-     for post-run playback from `App::Yath2::LogArchive` extracts.
-   - Fallback: when the primary `run_status` call returns anything
-     other than a hashref, falls back to `get_run_status`; verdicts
-     synthesised from per-job completion state when artifacts are
-     missing.
-   - Unit test: quiet / default / verbose / qvf mode selection;
-     verbose replay from a staged `0.jsonl`; qvf replay only on
-     failure; `replay_from_logs` against a synthesised logs tree;
-     constructor validation (bad mode, missing run_id).
+- `get_workdir` -- canonical workdir + logdir per IPC_AND_LOGGERS
+  section 11.2.
+- `list_processes` -- enumerate harness, run services, resource
+  services, running test collectors.
+- `list_resources` -- report global and per-run resources with their
+  usability/broken-state flags.
+- `abort_runs` -- mark every pending job across every queued run
+  (or a single run when `run_id` is given) skipped; in-flight tests
+  continue normally.
+- `reload_preloads` -- forward a reload trigger to every Preload
+  resource. Calls the resource's `request_reload` hook when present
+  (Stage 9 scaffolding).
 
-6. **`Command::test: wire --renderer / -r through ArtifactReader`** -- `222ca8245`
-   - Activate the renderer Map option in `Options::Renderer`
-     (default set: `Default` + `Summary`), plus `--quiet` and
-     `--qvf`. Bare names prefix with `App::Yath2::Renderer::`;
-     `+Fully::Qualified` pass through. `no_require` at parse time;
-     the command loads classes via `Util::load_module`.
-   - `Command::test`: new helpers `_resolve_mode` (qvf > quiet >
-     verbose > default) and `_load_renderers`. When at least one
-     renderer is configured the command routes events through
-     `ArtifactReader`; when none are configured it falls back to
-     the Stage 5 IPC tally path.
-   - Tests cover mode resolution, default-set composition, and
-     adding a renderer via `-rFormatter`.
+Plus a generic `request_handler_ping` on
+`Test2::Harness2::Role::Service` so any service consumer can be
+probed for liveness without growing its own handler, and matching
+thin wrapper methods on `Test2::Harness2::Spawn`: `get_workdir`,
+`list_processes`, `list_resources`, `abort_runs`, `reload_preloads`,
+`ping`.
 
-7. **`ArtifactReader: read from jsonl_file metadata key; Command::test attaches a per-job JSONL logger`** -- `bfa41ccac`
-   - Fix for end-to-end replay: the in-tree `Logger::JSONL` reports
-     its artefact as `jsonl_file` (not the generic `output_file`).
-     Teach `ArtifactReader` and `Renderer::Default` to check
-     `jsonl_file` / `output_file` / `json_file`.
-   - `Command::test` now attaches a JSONL logger to each test-job
-     collector whenever a renderer is configured, so there's a
-     `0.jsonl` to replay. Without renderers the harness still
-     installs no loggers by default (§12.1).
-   - Verified end to end: `yath test -v -rFormatter file.t` now
-     replays every NOTE / PASS / PLAN line from the test's 0.jsonl.
+### 2. `750f29b0e` App::Yath2::Daemon: pointer I/O + attach helper
 
-## Test results
+Shared module the daemon commands use to discover and connect to a
+running daemon. Two responsibilities:
 
-- `prove -I lib -I t/lib -r -j16 t` -- **51 files / 467 tests,
-  all passing** on this branch. Final line:
+- **Pointer I/O.** `write_pointer` drops a small JSON file at
+  `$workdir/daemon.json` plus an optional `.yath-daemon.json` hint
+  in the cwd. `remove_pointers` cleans both up (guarding the cwd
+  pointer so a second daemon started in the same directory isn't
+  accidentally unlinked). `read_pointer` decodes and sanity-checks
+  a pointer file.
+- **Attach helper.** `discover_pointer` honours the
+  IPC_AND_LOGGERS section 11.2 discovery order: explicit
+  `--daemon-workdir` / env var / cwd hint. `attach` returns a
+  `Test2::Harness2::Spawn` wired to the existing daemon's bus with
+  `terminate_on_destroy => 0`, so attached commands can't
+  accidentally tear the daemon down when their handle falls out of
+  scope.
 
-      Files=51, Tests=467, 61 wallclock secs ( 0.12 usr  0.02 sys +  4.20 cusr  3.54 csys =  7.88 CPU)
-      Result: PASS
+### 3. `e5fb01f31` yath start / spawn / stop daemon commands
 
-- CLI smoke (verbose replay):
+- **`start`** -- classic double-fork daemonizer that spawns
+  `Test2::Harness2`, writes the pointer file, and prints a
+  human-readable banner (`pid`, `name`, `workdir`) before exiting.
+  Accepts `--name=NAME`, `--logdir=DIR`, and `-f` / `--foreground`
+  to block until the daemon exits.
+- **`spawn`** -- machine-parseable cousin of `start`. Prints a
+  single `pid=... workdir=...` line and detaches. Suitable for
+  scripted launches.
+- **`stop`** -- attaches, sends `finish`, polls for the daemon's
+  process to actually exit, then cleans up pointer files. Supports
+  `--timeout N` (default 60s).
 
-      $ perl -Ilib scripts/yath test -v -rFormatter /tmp/passing.t
-      [PLAN    ] Expected assertions: 2
-      [PASS    ] foo
-      [NOTE    ] a note
-      [PASS    ] bar
-      ...
-      yath test: pass=1 fail=0
+The **double-fork** is load-bearing: if `Test2::Harness2->spawn`
+were called from the command process directly, the daemon child
+would inherit the command's stdio, holding any parent-side pipe
+(e.g. `yath start | tee` or a test's `open -|`) open forever. The
+intermediary closes stdio to `/dev/null` before forking the
+harness; the original command process never shares fds with the
+eventual daemon.
 
-- CLI smoke (qvf replay-on-fail):
+The registry on `App::Yath2.pm` flips all twelve daemon-mode
+entries from stub (value `1`) to real class names in the same
+commit, since the daemon class names are stable even while the
+commands were being written.
 
-      $ perl -Ilib scripts/yath test --qvf /tmp/failing.t
-      [FAIL    ] -: this fails
-      [DIAG    ] -: Failed test 'this fails' at line 2.
-      ...
-      RESULT: FAILED
-      yath test: pass=0 fail=1
+### 4. `923865efe` attached daemon-client commands
 
-## Points of interest / decisions worth revisiting
+Seven short attached commands that each discover the daemon and
+dispatch a single IPC request:
 
-### 1. Per-job verdict inference is greedy-fail
+- **`status`** -- prints service info, queue, running jobs, resources.
+- **`ping`** -- single round-trip to `request_handler_ping` with
+  `--count N` / `-n N` for repeats.
+- **`kill`** -- signal escalator (`TERM`/`INT` -> `KILL`) keyed off
+  the daemon pointer's pid; cleans up pointer files after.
+- **`ps`** -- tabular output: PID, type, role, name per process
+  from `list_processes`.
+- **`resources`** -- per-resource scope + state flags + status
+  dump from `list_resources`.
+- **`abort`** -- `abort_runs`; supports `--run-id=ID`.
+- **`reload`** -- forwards `reload_preloads` (Stage 9+ will fill in
+  the concrete reload behaviour; today the command is a clean
+  no-op against a daemon without preloads).
 
-`ArtifactReader::_verdict_for_job` infers a per-job pass/fail from
-the harness's `pass_count` / `fail_count` aggregates because the
-current `run_status` response does not carry per-job verdicts
-directly. The inference is greedy-fail: a newcomer is assumed
-passing unless the total `fail_count` exceeds what we've already
-recorded, in which case the newcomer is marked as the failing
-one.
+All seven accept `--daemon-workdir=PATH`; otherwise they follow the
+standard discovery order.
 
-This works for concurrent runs where the order of completion
-matches the order of fail_count increment (typical single-slot
-case and most multi-slot cases since the completion that bumped
-fail_count is the one we just observed), but it's structurally
-fragile: if two jobs complete between polls and one fails, we
-can't always tell which one was the failing one.
+### 5. `d4d76ee36` yath run + yath watch
 
-**Follow-up:** have the harness's `run_status` response include
-per-job verdicts, or have the run service push a per-completion
-message the layer can subscribe to. Once that lands, delete
-`_verdict_for_job` and read verdicts directly.
+Artifact-reader-driven commands:
 
-### 2. The layer polls; it does not subscribe to the IPC bus
+- **`run`** -- attaches to the daemon, discovers tests via
+  `App::Yath2::Finder::Simple`, submits them via `queue_test_run`,
+  and follows the run to completion via
+  `App::Yath2::ArtifactReader` (when any renderer is configured) or
+  a simple `run_status` poll. Exits 0 on all-pass, 1 on failure,
+  2 on usage/attach error.
+- **`watch`** -- same reader layer, but pointed at an existing run.
+  Picks the single queued run automatically, or takes an explicit
+  `--run-id=ID`. Installs the Default renderer if none were
+  configured so there's always visible output.
 
-Section 13.0 says "renderers do not subscribe to the bus." The
-*layer* could in principle subscribe, but the Stage 12
-implementation polls `run_status` + `list_run_artifacts` instead.
-Reason: simpler to reason about in the face of a replay-from-
-archive mode that has no bus. A push-based variant is feasible
-once the command-side IPC story stabilises.
+## Tests shipped
 
-### 3. `Renderer::Default` is terse
+Four new AI-authored integration tests under `t/AI/integration/`:
 
-The plan says "a clean minimal implementation is fine; it just
-needs to feel like a live test run display." `Renderer::Default`
-is deliberately minimal: one LAUNCH / PASSED / FAILED line per
-job plus a brief tag-column line per interesting facet. It is
-**not** a TUI -- no carriage-return overwrites, no active-job
-display, no colour theming. If a richer live display is wanted,
-it can be added as an output-side refinement without touching
-the role or the artifact-reader (per §13.0 "Output is free").
+- `harness2_daemon_requests.t` -- unit-style round trips for each
+  of the five new IPC request handlers + `ping`.
+- `daemon_start_stop.t` -- end-to-end `start` -> `stop` covering
+  pointer-file creation, banner output, and clean daemon exit.
+- `daemon_attached_commands.t` -- one daemon, then `status`,
+  `ping`, `ps`, `resources`, `abort`, `reload`, `kill` against it.
+- `daemon_run.t` -- `start` + `run <pass.t>` + `run <fail.t>` +
+  `kill`, asserting the exit-code contract of `yath run`.
 
-### 4. Mode precedence is qvf > quiet > verbose > default
+Plus `t/AI/unit/App/Yath2/Daemon.t` -- pure-Perl coverage of
+`write_pointer`, `read_pointer`, the three `discover_pointer`
+paths, and `remove_pointers`'s cwd-pointer guard.
 
-`Command::test::_resolve_mode` picks `qvf` first if set; else
-`quiet` if set and not also verbose; else `verbose` if any `-v`
-level; else `default`. `quiet + verbose` together was treated
-as "be verbose but use the quiet default colourway" in `old/` --
-since the Stage 12 layer doesn't do theming yet, that
-combination flows through as plain verbose. Worth revisiting
-once theming lands.
+## Old integration tests: deferred to Stage 17
 
-### 5. `--renderer` option uses `no_require` at parse time
+None of the old `old/t/Yath/integration/` integration tests
+(`persist.t`, `concurrency.t`, `reload.t`, etc.) are ported in this
+stage. They depend on:
 
-The renderer Map option's `normalize` callback is
-`fqmod($_[0], 'App::Yath2::Renderer', no_require => 1)`. Class
-loading is deferred to `_load_renderers`, which calls
-`load_module` and surfaces any load error with a clear
-"renderer class '...' failed to load: ..." message. Parse time
-stays fast; errors arrive when the user can still see them.
+- `App::Yath2::Tester` (the driver module the old tests share; not
+  yet ported to V2),
+- `--ext=tx` and related option surfaces (not yet wired in Stage 6),
+- The 1.0 log format (persist.t in particular inspects JSONL
+  shape),
+- End-to-end `yath run` output formatted by the old Default
+  renderer (pattern-matched in the tests).
 
-### 6. `Renderer::Default`'s `job_file_map` is informational only
+Each of those would trigger a >50% rewrite to fit the V2
+architecture. Per the stage rule (tests requiring >50% rewrite
+move to `t/AI/`), I wrote the AI-authored equivalents above
+instead. Stage 17 (acceptance-test sweep) can port the old tests
+once `App::Yath2::Tester`, `--ext`, and the matching-renderer
+output surfaces all land.
 
-`Renderer::Default::_render_harness_event` populates
-`job_file_map` from incoming `job_loggers` events but the
-Default renderer itself does not replay from those files (that
-is the artifact-reader's job). The map is kept in case a
-future renderer-side refinement wants to surface per-job file
-paths for debugging. Not load-bearing.
+## Final test suite
 
-### 7. No integration test exercising `ArtifactReader` against a real spawned harness
+Full suite on this branch's HEAD:
 
-Unit tests use a `FakeSpawn` mock. `PLAN_RESUME.md` notes a
-known `yath test -j16 t/` flakiness when running the full suite
-through the real harness (the many-collectors IPC path); until
-that's resolved, adding an integration test that spawns a real
-harness and drives a run through `ArtifactReader` risked
-introducing flake. The two manual CLI smokes above exercise
-the path end to end; a committed integration test is a
-follow-up worth adding once the IPC flakiness is addressed.
+    prove -I lib -I t/lib -r -j16 t/
+    Files=56, Tests=517, 60 wallclock secs. Result: PASS
 
-### 8. Artifact key lookup is permissive (`jsonl_file`, `output_file`, `json_file`)
+Starting point (Stage 12 tip): 51 files / 467 tests. This stage
+adds 5 test files and 50 subtests.
 
-The canonical in-tree `Logger::JSONL` reports `jsonl_file` in its
-metadata (matching `Logger::JSON`'s `json_file`), while the spec
-in §8.1 names `output_file` as the generic field. Stage 12 reads
-all three so the layer can handle both today's loggers and any
-future ones that adopt the unified key. If the project decides
-to settle on one name, the two fallback keys can be removed in a
-one-line edit each in `ArtifactReader::_job_log_from_artifacts`
-and `Renderer::Default::_extract_log_files`.
+## Daemon discovery -- decision recorded here for Stage 15
 
-## Deviations from `IPC_AND_LOGGERS`
+Pointer-file semantics used by Stage 14, recorded so Stage 15
+(plugins) and the future CLI-options rewrite can keep the shape
+consistent or override it deliberately:
 
-None that require a follow-up commit. Two points worth flagging
-even though they're intentional:
+- Canonical pointer is at `$workdir/daemon.json`. Workdir is a
+  `File::Temp::tempdir('yath2-$$-XXXXXX', TMPDIR => 1)` (per
+  IPC_AND_LOGGERS section 11.1).
+- Convenience pointer at `./.yath-daemon.json` (in the cwd the
+  `start` / `spawn` command ran in). Discovery-only hint;
+  authoritative location is the workdir pointer.
+- Discovery order: `--daemon-workdir=PATH`, then
+  `$ENV{YATH_DAEMON_WORKDIR}`, then `./.yath-daemon.json`.
+- Pointer contents:
+  `{ pid, workdir, ipcm_info, name, started_at }`. `name` is the
+  daemon's IPC bus identity (default `harness`; overridable via
+  `yath start --name=NAME`).
+- `.yath-daemon.json` added to `.gitignore`.
 
-- **`Spawn` exposes both `run_status` and `get_run_status`.** The
-  spec's §13.1 names `get_run_status` / `list_run_final_state`; the
-  harness already had `run_status` from Stage 5 so Stage 12 added
-  `get_run_status` as an explicit alias rather than renaming.
-  Either one is fine per the spec; the alias keeps the two forms
-  in sync.
-- **Artifact forwarding: run service always forwards to harness**,
-  not just at run end. The spec (§8.3) allows either per-message
-  forwarding or end-of-run aggregation; per-message is simpler and
-  keeps the harness's response to `list_run_artifacts` current
-  while the run is live. The extra IPC cost is one forward per
-  `collector_artifacts` announcement, which is already rare (once
-  per collector, not per event).
+Open for revision: when `yath init` grows project-level config
+(Stage 13's `init` is currently a stub), the project convention
+may want to pin the daemon workdir explicitly under the project
+rather than rely on a per-cwd pointer. That's a Stage 17/18 call.
 
-## Flip-back notes for the next stage
+## Points of interest for a reviewer
 
-- **Stage 13's `Command::failed` stub** can now be implemented.
-  `ArtifactReader` offers the artifact-discovery path it was
-  waiting on; use `Spawn->list_run_artifacts` (or a static
-  workdir snapshot) to find the last run's failing-job log
-  files and feed those back into `Command::test`.
-- **Preload-stage / run-scoped artifacts** flow through the same
-  route: the preload service's collector would also send
-  `collector_artifacts`. When the preload service's interpose
-  collector lands (flagged in Stage 8's summary), its
-  announcements join the harness's global bucket automatically --
-  no ArtifactReader changes needed.
-- **Richer per-job verdict wire shape.** Whenever the harness or
-  run service response grows per-job verdicts natively, delete
-  `ArtifactReader::_verdict_for_job` and read them directly. The
-  greedy-fail heuristic is adequate for Stage 12 but is the
-  single biggest source of latent ambiguity in the layer.
-- **Color / theming.** `Options::Renderer` still has TODO-gated
-  `--theme`, `--wrap`, `--show-times`, etc. Stage 12 does not
-  need them; the next renderer-facing stage (likely Stage 17 /
-  18's cleanup sweep, or whenever ResetTerm / QVF need theming)
-  should activate them.
+- **Double-fork daemonization.** `start` / `spawn` run
+  `_detach_stdio()` in an intermediary child, not in the command
+  process itself, so the command's STDOUT/STDERR stay open for
+  the banner. This is documented in the commit message and a
+  block comment in each file. Pipelines (`yath start | foo`)
+  would hang on EOF without this.
+- **`request_handler_ping` on Role::Service.** Placed on the role
+  so every service consumer gets it by default. `PreloadService`
+  already defines its own `request_handler_ping` (Stage 8) which
+  takes precedence there; the role-supplied version covers
+  `Test2::Harness2` and future services.
+- **`reload_preloads` hook is scaffolded.** The harness iterates
+  its preload resources and calls `request_reload` via `can()`.
+  Until Stage 9's preload reload integration lands, no preload
+  resource defines that method and the handler returns an empty
+  `reloaded` list. The command still exits cleanly.
+- **`abort_runs` semantic.** Pending jobs become `mark_skipped`;
+  running jobs finish normally. The daemon stays up. To drop
+  in-flight tests as well, follow with `yath kill` (or `yath
+  stop` for a clean drain).
+- **Stage 8 `run_bus_name` workaround** is unaffected. Nothing
+  in Stage 14 touches `RunService`'s bus-name convention.
+
+## Deviations from IPC_AND_LOGGERS / carry-forward notes
+
+None that conflict with the spec.
+
+- `reload_preloads`'s in-harness dispatch to
+  `$res->request_reload` is the minimum surface a Stage 9 reload
+  integration can grow against. The command contract
+  (`{ ok, reloaded }`) matches section 7-adjacent patterns (list
+  of affected resources) rather than introducing a new shape.
+- `yath watch` currently treats `list_global_artifacts` /
+  `list_run_artifacts` the same way `yath run` does -- via
+  `ArtifactReader`. If a future watch mode needs to replay from
+  an extracted archive (IPC_AND_LOGGERS section 13.2, post-run
+  playback), that falls under Stage 17/18.
+- `yath ps` leans on `list_processes` as the single source of
+  truth. The old `yath ps` read a filesystem-stored state file;
+  the new shape consults the live harness and is therefore
+  accurate across collector crashes.
+
+## Next stage pointers
+
+- **Stage 15** (plugins): the plugin loader used by `yath test`
+  (via `App::Yath2::Plugins`) is reusable; `yath run` doesn't
+  currently load plugins. Add a plugin-load step in `yath run`
+  when plugins grow their own per-command hooks.
+- **Stage 17** (acceptance sweep): the old `persist.t`,
+  `kill.t`-equivalent, `concurrency.t`, and `reload.t` tests can
+  all reuse Stage 14's fork-and-capture test pattern.
+  `App::Yath2::Tester` (if revived) should mirror the
+  `yath_run('start')` helper shape used throughout this stage's
+  tests.
+- **PLAN_RESUME** for a future session: this stage closes out all
+  twelve daemon-mode commands; no stubs remain in the registry.

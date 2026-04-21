@@ -1,206 +1,173 @@
-# Stage 17 -- Acceptance test port sweep
+# Stage 18 -- TODO cleanup sweep
 
 ## Branch
 
-- `plan-stage-17-acceptance`
-- Base: `plan-stage-16-resources` (tip `028ca8d4d`)
-- Final HEAD (before this summary): `f8c12c8ef`
-- Commit count: 22 code + this summary
+- `plan-stage-18-todos`
+- Base: `plan-stage-17-acceptance` (tip `773e493c8`)
+- Final HEAD (before this summary): `1e8e7d0fb`
+- Commit count: 8 code + this summary
 
 ## Scope
 
-Walk every test in `old/t/Yath/integration/` that wasn't brought in
-by an earlier stage and port it. Tests land human-authored under
-`t/integration/` unless the port would require more than 50% rewrite,
-in which case they move under `t/AI/` (none in this stage — every
-landed test stayed human-authored per the old/ body).
+Walk the tree for `TODO` markers left by earlier stages. Resolve
+each one where tractable; re-document the rest, in place, with
+clear pointers at the successor work that will resolve them.
+Intentional design markers left by earlier stages (the commented-
+out option libraries under `lib/App/Yath2/Options/*.pm`) stay
+untouched -- the PLAN's Stage 6 section calls for exactly that
+shape, and each such TODO already carries a "when X lands" note.
 
-Explicitly deferred from the sweep (per PLAN Stage 17 scope):
-`coverage*.t`, `times.t`, `speedtag.t`, `replay.t`, `db/*` (log-reading /
-DB/UI), `failed.t` (Stage 13), `reload*.t` (Stage 9).
+## TODO inventory (pre-Stage 18)
 
-## Supporting infrastructure landed
+A sweep of `lib/ t/ scripts/ docs/` at start of stage yielded
+roughly 170 `TODO`-flagged entries. Ignoring TAP-language hits
+(TAP parser / TAP test fixtures with legitimate `# TODO` directives),
+the real markers broke down as:
 
-Two prerequisite commits land the scaffolding the ported tests need:
+- ~155 in `lib/App/Yath2/Options/*.pm`: commented-out option
+  blocks waiting for their consumer stage to activate them.
+  These are the designed-deferred Stage 6 state and stay as-is.
+- 5 in `lib/App/Yath2/Plugin/Cover.pm`: coverage-aggregator /
+  load-import / preload-early wiring gaps. Reclassified as
+  successor-plan deferrals.
+- 1 in `lib/App/Yath2/ArtifactReader.pm`: per-job verdict
+  fallback via future `list_run_final_state` query.
+  Reclassified as a Stage 19 follow-up note.
+- 13 in `t/integration/*.t`: per-test `TODO Stage 18` headers on
+  skip_all'd ports from Stage 17. Reclassified as
+  successor-plan deferrals with explicit resolved-by pointers.
+- 1 in `scripts/yath`: @INC handling regression vs. old/scripts/yath.
+  **Resolved in place.**
+- 1 renderer synthetic-event gap (filename label column on
+  `[PASSED  ] <label>`). **Resolved in place.**
+
+## Disposition table
+
+| Category | Count | Disposition |
+|----------|-------|-------------|
+| `scripts/yath` @INC regression | 1 | Resolved |
+| `--extension` option activated + wired to Finder::Simple | 1 | Resolved |
+| Harness `run_status` jobs map + ArtifactReader filename | 1 | Resolved |
+| `Plugin::Cover` deferred wiring (load_import, preload_early, annotate_event, aggregator port) | 4 | Re-documented (successor plan) |
+| `ArtifactReader` per-job verdict inference | 1 | Re-documented (Stage 19) |
+| `t/integration/init.t` skip_all header | 1 | Re-documented (Stage 19 audit) |
+| `t/integration/help.t` skip_all header | 1 | Re-documented (post-parity help rewrite) |
+| `t/integration/*.t` other skip_all headers | 11 | Re-documented (per-test resolved-by) |
+| `lib/App/Yath2/Options/*.pm` option TODOs (Stage 6 designed-deferred) | ~155 | Untouched (already correctly deferred) |
+
+## `skip_all` lifts
+
+- **`t/integration/nested_includes.t`**: one lift. The combination
+  of the `scripts/yath` @INC fix and the new `T2_HARNESS_INCLUDES`
+  -> launch-`-I` plumbing in `App::Yath2::Command::test` lets the
+  test run to completion. Verified green with
+  `perl -Ilib -It/lib t/integration/nested_includes.t`.
+
+No other Stage 17 skip_all tests were lifted: each of the remaining
+twelve blocks on work substantially bigger than this stage (renderer
+Formatter redesign, --log / Tester plumbing, extra plugin hooks,
+daemon output-shape rebuild, retry-mechanism port, etc.).
+
+## Per-commit notes
 
 | SHA | Subject |
 |-----|---------|
-| `ccdd3dd7e` | `Util::IPC: add start_process helper for integration-test harness` -- ported the fork+exec helper verbatim from old/'s `Test2::Harness2::IPC::Util` (other responsibilities of that module are superseded by IPC::Manager). |
-| `af6a65b41` | `t/lib: port App::Yath2::Tester for integration-test ports` -- ported `App::Yath2::Tester` into `t/lib/` (test-support, not a published API). Two adaptations recorded in the commit body: dev paths go through perl's `-I` instead of pre-command `-D=path` (the V2 dispatcher rejects leading options), and `find_yath` walks up from cwd looking for `scripts/yath` rather than scanning installed `Config` paths. |
+| `5e8c462f3` | `scripts/yath: restore append-style T2_HARNESS_INCLUDES handling` -- one-block fix matching old/scripts/yath exactly. |
+| `4ee915672` | `Finder: activate --ext/--extension option and wire it through` -- uncomments the --ext / --extension / --extensions option on `App::Yath2::Options::Finder`, teaches `App::Yath2::Finder::Simple` an `extensions` named arg, threads it through `Command::test`, and folds `T2_HARNESS_INCLUDES` into the launch-side `-I` list (mirrors old/TestSettings::includes). |
+| `c53521c2f` | `t/integration: lift skip_all on nested_includes.t` -- replaces the skip with the real test body. |
+| `33838e41f` | `Harness: surface per-job test_file via run_status; ArtifactReader uses it` -- adds a `jobs` map (job_id => { test_file, test_file_abs }) to `request_handler_run_status` + the completed-run snapshot, then threads `file` into the synthetic `test_job_started` / `test_job_completed` events so `Renderer::Default::_job_label` gets to use its already-existing `$h->{file}` lookup branch. Renderer lines read `[PASSED  ] Event.t: ...` instead of the opaque UUID Stage 17 documented. |
+| `fdd31e285` | `Plugin::Cover: reclassify Stage 18 TODOs as successor-plan deferrals` -- rewrites four TODO markers as explicit 'Deferred: resolved-by <successor plan>' notes. |
+| `24f43be97` | `ArtifactReader: reclassify per-job verdict TODO as successor-plan note` -- similar reclassification. |
+| `0f94e7cd1` | `t/integration: reclassify init.t and help.t TODOs as post-parity follow-ups` -- these two tests are effectively obsolete-by-design or wait on a dedicated help rewrite; both are now explicitly deferred. |
+| `1e8e7d0fb` | `t/integration: reclassify skip_all TODO headers as successor-plan deferrals` -- bulk rewrite of eleven skip_all'd tests so their headers now name their blocking dependency verbatim rather than reading as Stage-18 leftovers. |
 
-## Per-test disposition
+## Tests
 
-Each row below is a single commit in the log. All nineteen
-candidate tests landed under `t/integration/`. Four actually run
-assertions; fifteen are committed as `skip_all` with a clear
-TODO pointing at the gap that blocks them.
-
-| Test | Disposition | SHA | Gap blocking the full port |
-|------|-------------|-----|----------------------------|
-| `verbose_env.t` | **Active port** | `738481fb0` | — (passes today) |
-| `test-w.t` | **Active port** | `bc7c2fc10` | dropped `--ext=tx`; Finder::Simple accepts the two `.tx` files verbatim via positional args |
-| `nested_includes.t` | skip_all (TODO) | `04c33924b` | `scripts/yath` replaces `@INC` with `T2_HARNESS_INCLUDES` instead of appending (regression vs old/scripts/yath) |
-| `failure_cases.t` | **Active port (partial)** | `6160f5de0` | eight fixtures run both branches; six skipped (three timeout-dependent, three raw-TAP fixtures the new Auditor flags) |
-| `smoke.t` | skip_all (TODO) | `8c963bc6c` | `--log` JSONL + Tester `log => 1` + `--ext` option + `-pSmokePlugin` finder hook |
-| `concurrency.t` | skip_all (TODO) | `ea6c28c8e` | `--log` JSONL + Tester `log => 1` |
-| `encoding.t` | skip_all (TODO) | `9df7f9a88` | Renderer::Formatter gap (no "job N" label column) |
-| `help.t` | skip_all (TODO) | `cac4fc522` | `App::Yath2` intercepts `help`; Command::help output is a Stage 13 stub |
-| `includes.t` | skip_all (TODO) | `2cf27c2d9` | `-I`/`-l`/`-b`/`--unsafe-inc` options commented out (Stage 6 TODO); no `App::Yath2->app_path` |
-| `init.t` | skip_all (TODO) | `46e1ce268` | Command::init writes `.yath.rc` (Stage 13 intent), old expected `test.pl` |
-| `log_dir.t` | skip_all (TODO) | `5f3db14c5` | `--log-dir` / `-L` commented out (Stage 6 TODO) |
-| `persist.t` | skip_all (TODO) | `16bfde07d` | renderer filename-label gap + `yath which`/`yath watch` output shape |
-| `plugin.t` | skip_all (TODO) | `4a43b6cfb` | `-A`/`--durations-threshold`/`--changes-plugin`/`--no-plugins` + full hook surface |
-| `projects.t` | skip_all (TODO) | `a2241b8b1` | Command::projects is a Stage 13 stub + renderer filename-label gap |
-| `resource.t` | skip_all (TODO) | `ec9824964` | `--log` + `-R+Resource` (commented out, Stage 6 TODO) + STDERR-to-log funneling |
-| `retry.t` | skip_all (TODO) | `ab1fcd44c` | `--retry`/`--project` commented out + retry mechanism not ported |
-| `stamps.t` | skip_all (TODO) | `6dbe42ced` | `--log` plumbing + `-A` + `-pTestPlugin` |
-| `tapsubtest.t` | skip_all (TODO) | `ea36982da` | Renderer::Formatter line-shape gap (no depth column, no job label) |
-| `test.t` | skip_all (TODO) | `bf223a419` | renderer filename-label gap + several Stage 6 options (`--ext`, `--exclude-file`, `--exclude-list`, `--durations`, `--no-unsafe-inc`) + arisdottle `::` arg forwarding |
-
-Follow-up commit:
-
-| SHA | Subject |
-|-----|---------|
-| `f8c12c8ef` | `t/integration: rename fixture .t -> .tx so prove ignores them` -- fixture dirs for `failure_cases` and `nested_includes` had to switch extensions so `prove -r` wouldn't pick them up as standalone tests. `failure_cases.t` was rewritten to pass each `.tx` fixture as an explicit path (Finder::Simple accepts any extension in positional-arg mode). |
-
-## Helpers brought across from old/t/lib/
-
-None. The one helper the ported tests actually call (`App::Yath2::
-Tester`) was ported from `old/lib/App/Yath2/Tester.pm` into `t/lib/`,
-not from `old/t/lib/`. The other helpers in `old/t/lib/`
-(`App::Yath2::Command::Broken`, `App::Yath2::Command::fake`,
-`App::Yath2::Plugin::Options`, `App::Yath2::Plugin::Test`,
-`App::Yath2::Test::DBIC::*`) are used by tests explicitly deferred
-by PLAN Stage 17 (DB tests, plugin tests that landed as skip_all).
-
-## Tests skipped with `skip_all` (summary)
-
-Seventeen test files ship with an explicit `skip_all` banner. Each
-one names the gap in both the skip message and a TODO header
-comment so Stage 18's sweep can pick them up:
-
-- Most gaps are one of:
-  - "option commented out in `App::Yath2::Options::*`" (Stage 6 TODO)
-  - "renderer/formatter line shape gap" (filename label in Default, depth indentation / job column in Formatter)
-  - "`--log` / Tester `log => 1` not plumbed" (Stage 12 / Stage 18 follow-up)
-- `persist.t` also flags the daemon-specific surface but the daemon
-  lifecycle itself is covered by `t/AI/integration/daemon_*.t`
-  (Stage 14). Porting `persist.t` is really about reaching string
-  parity, not re-testing the daemon.
-
-## Final test-suite result
+Final:
 
 ```
 prove -I lib -I t/lib -r -j16 t
-Files=84, Tests=590, 61 wallclock secs
+Files=84, Tests=591, 60 wallclock secs
 Result: PASS
 ```
 
-Running against `plan-stage-16-resources` (tip `028ca8d4d`) which
-was also green (65 files / 565 tests).
+Stage 17 baseline was 84 files / 590 tests. The +1 test is the
+`nested_includes.t` skip_all that now runs a real yath invocation.
 
-## Points of interest / decisions the next stage should revisit
+## Points of interest / decisions for Stage 19
 
-### 1. scripts/yath `T2_HARNESS_INCLUDES` handling is an outright regression
+### 1. Renderer Formatter column gap is a real follow-up
 
-`nested_includes.t` tripped on this:
+Stage 17 flagged that the new `Renderer::Formatter` drops the old
+"job N" column, the depth indentation, and the tree-corner markers.
+`encoding.t` and `tapsubtest.t` still skip_all on that.
 
-```perl
-# new scripts/yath
-@INC = split /;/, $ENV{T2_HARNESS_INCLUDES} if $ENV{T2_HARNESS_INCLUDES};
+Stage 18 did not attempt it. The decision tree is:
+(a) restore the old shape verbatim to let both tests port cleanly,
+(b) redesign the verbose output and move both tests under `t/AI/`
+    since > 50% of the body would change,
+(c) leave the skip_all markers in place indefinitely.
 
-# old scripts/yath
-my %SEEN = map { $_ => 1 } @INC;
-push @INC => grep { !$SEEN{$_}++ } split /;/, $ENV{T2_HARNESS_INCLUDES}
-    if $ENV{T2_HARNESS_INCLUDES};
-$ENV{T2_HARNESS_INCLUDES} = join ';' => @INC;
-```
+This is a renderer-design call; Stage 19 audit should decide.
 
-The new launcher **replaces** `@INC` rather than appending to it.
-That means any nested yath invocation (a yath test spawning
-another yath test) loses its own libraries. A one-line fix on
-`scripts/yath` would restore the old behaviour and unblock
-`nested_includes.t`. Not in scope for Stage 17 -- flagged for
-Stage 18.
+### 2. Auditor strictness vs. `old/`
 
-### 2. The Default renderer emits UUID-based job labels
+Stage 17 noted that `lib/Test2/Harness2/Collector/Auditor/Test.pm`
+rejects five raw-TAP shapes old/ tolerated in its
+`FAILURE_DO_PASS=1` branch (badplan.tx, dupnums.tx, missingnums.tx,
+buffered_subtest_abrupt_end.tx, buffered_subtest_abrupt_end_nested.tx).
 
-`lib/App/Yath2/Renderer/Default.pm::_job_label` tries
-`$h->{job_label}` / `$h->{file}` / `$h->{test_file}` / `$h->{job_id}`
-in order. `ArtifactReader` today emits synthetic
-`test_job_started` events that carry only `job_id`, no `file` or
-`test_file`. Consequence: every job line looks like
+Stage 18 did not touch the Auditor. Whether the stricter contract
+is a conscious improvement or a regression is a post-parity policy
+decision; Stage 19 audit is the right place.
 
-```
-[PASSED  ] 019DAF7C-..-..-..-..: test complete
-```
+### 3. `--log` / Tester `log => 1` plumbing is the single biggest skip_all multiplier
 
-`old/`'s tests expect `PASSED .../pass.tx`-shaped lines, so
-`test.t`, `persist.t`, `projects.t`, and several others can't
-currently assert against filenames. Fixing this needs
-`ArtifactReader` (or the harness upstream of it) to surface the
-test file in the synthetic event. **Three skip_all tests unblock
-once this is fixed.**
+Four skip_all'd tests (`concurrency.t`, `resource.t`, `smoke.t`,
+`stamps.t`) block primarily on the Tester `log => 1` knob and a
+CLI `--log` / `-L` / `--log-dir` that feeds an explicit JSONL
+logger into the workdir. The per-job JSONL logger already wires
+in for renderer consumption -- the user-facing top-level log is
+the gap. Activating the existing `--log` option block in
+`App::Yath2::Options::Run.pm` and a small Tester follow-up would
+unblock all four in one pass. Not in scope for Stage 18; flagged.
 
-### 3. Verbose Formatter lost the per-job column
+### 4. `init.t` is likely obsolete-by-design
 
-`old/`'s `Renderer::Formatter` produced lines like:
+`Command::init` writes `.yath.rc`, not `test.pl`. The assertion
+surface in `old/t/Yath/integration/init.t` is hardcoded to the old
+`test.pl` scaffold. Stage 19 audit should either delete the test
+body outright (it no longer maps to new behaviour) or rewrite it
+against `.yath.rc` (which almost certainly pushes it under
+`t/AI/` since >50% of the body would change).
 
-```
-[  PASS  ]  job 1 +~buffered
-(  NOTE  )  job 1   valid note [...]
-```
+### 5. `help.t` needs a dedicated help-rewrite stage
 
-The new `Renderer::Formatter` emits `[ TAG    ] <text>` with no
-job column, no nesting/depth column, and no tree-corner markers.
-`encoding.t` and `tapsubtest.t` both ride on the old line shape.
-Worth a deliberate decision before Stage 18 whether to:
-(a) restore the old shape verbatim, (b) redesign the verbose
-output and move the two tests into `t/AI/`, or (c) leave the
-two skip_all markers in place indefinitely. The scope is mostly
-theme/formatter work, not harness core.
+`App::Yath2` intercepts `help` at the top level; `Command::help`
+is a Stage 13 stub. The old-style layout the test asserts
+(`^Usage:`, per-command summary rows, group-header sections) is
+tied to Getopt::Yath's help generator. A dedicated help-rewrite
+stage is a reasonable successor plan item; Stage 18 does not
+attempt it.
 
-### 4. The new Auditor rejects some raw-TAP shapes old/ tolerated
+### 6. `lib/App/Yath2/Options/*.pm` option TODOs stay intentionally
 
-`failure_cases.t` turned up: `badplan.tx`, `dupnums.tx`,
-`missingnums.tx`, `buffered_subtest_abrupt_end.tx`, and
-`buffered_subtest_abrupt_end_nested.tx` all fail the
-`FAILURE_DO_PASS=1` branch because the new Auditor (in
-`lib/Test2/Harness2/Collector/Auditor/Test.pm`) is stricter about
-missing assertion numbers and plan anomalies than old/'s was. The
-ported test skips these five fixtures with a per-entry comment
-so the fixture bodies stay intact for whenever the Auditor
-contract is revisited. Not a blocker; a data point for a future
-Auditor-strictness policy decision.
+~155 option-level TODOs in `lib/App/Yath2/Options/*.pm` are the
+designed-deferred Stage 6 state (PLAN Stage 6: "Any option that a
+stage does not need yet stays wrapped in a clear TODO block...
+When a later stage activates one, the commenting is removed and
+the TODO marker deleted."). Each one names the stage that will
+activate it. They are the correct end-state for Stage 18, not
+outstanding work.
 
-### 5. App::Yath2::Tester lives under `t/lib/` rather than `lib/`
+### 7. Per-run JSON sidecar -- already done
 
-`old/` shipped `App::Yath2::Tester` as a published API under
-`lib/`, and a downstream `Test2::Harness2::IPC::Connection`-using
-test could `use App::Yath2::Tester qw/yath/` after it was
-installed. The new tree keeps it under `t/lib/` because:
-
-- It's test-support, not a stable interface. The two adaptations
-  (dev paths via `-I`, `find_yath` walking up from cwd) make it
-  tree-specific.
-- No non-in-tree consumer exists in this repo.
-
-If a later stage decides to expose it again, promoting it is a
-one-file `git mv` plus a POD rewrite. Until then, `t/lib/` keeps
-it local to the integration-test ports.
-
-### 6. Two skip_all tests may be permanently obsolete
-
-- `init.t` asserts the old `test.pl` scaffold. Stage 13's
-  `Command::init` intentionally writes `.yath.rc` instead. If the
-  init contract stays at `.yath.rc` forever, the test body is
-  obsolete by design -- Stage 18 can make a call between
-  "rewrite assertions against `.yath.rc`" and "delete the file".
-- `help.t` asserts the old Getopt::Yath-driven help layout. The
-  new `App::Yath2::run` intercepts `help` at the top level and
-  Command::help is a stub (Stage 13). The restoration path here
-  is large and design-dependent; this may land under `t/AI/`
-  when a full help rewrite is scoped.
+The PLAN's Stage 18 bullet about `Test2::Harness2` writing the
+per-run JSON directly needing to migrate to a per-run service
+owning its own snapshot is already satisfied:
+`Test2::Harness2::RunService::_write_snapshot` owns the atomic
+write to `$logdir/runs/<run_id>.json`, and `Test2::Harness2` itself
+no longer writes any run-scoped JSON. No work needed for this bullet.
 
 ## Safety
 
@@ -208,9 +175,8 @@ it local to the integration-test ports.
 - Did not push any branch.
 - Did not rebase any `plan-stage-*` branch.
 - Did not modify `PLAN` / `ARCHITECTURE.md` / `IPC_AND_LOGGERS`.
-- Did not delete or modify other worktrees.
-- No hook bypass.
-- No `--no-verify`, `--no-gpg-sign`, or `--amend` on published
-  commits (one in-session `--amend` on `HEAD` got reverted and the
-  change landed as a distinct `f8c12c8ef` commit; no branch was
-  pushed in between).
+- Did not modify or delete other worktrees.
+- No `--no-verify`, `--no-gpg-sign`, `--amend`, force-push, or hook bypass.
+- No AI / Claude / skill mentions in commit messages.
+- Did not delete any tests; the one skip_all lift landed as a
+  proper test body port (nested_includes.t).

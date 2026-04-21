@@ -4,8 +4,10 @@ use warnings;
 
 our $VERSION = '2.000011';
 
-use Carp qw/croak confess/;
+use Carp qw/croak confess longmess/;
+use Data::Dumper qw/Dumper/;
 use Errno qw/ESRCH/;
+use POSIX ();
 
 # /proc layouts we know how to parse: Linux's multi-line "PPid:" form
 # and FreeBSD/DragonFlyBSD's single-line positional form. Solaris,
@@ -21,6 +23,7 @@ use Importer Importer => 'import';
 our @EXPORT_OK = qw{
     pid_is_running
     set_procname
+    start_process
     swap_io
     list_direct_children
 };
@@ -52,6 +55,25 @@ sub set_procname {
     $name = "${prefix}-${name}" unless $name =~ m/^\Q$prefix\E-/;
 
     $0 = $name;
+}
+
+sub start_process {
+    my ($cmd, $post_fork) = @_;
+
+    confess "cmd is required, and must be populated" unless $cmd && @$cmd;
+    confess "cmd may not contain undefined values: " . Dumper($cmd)
+        if grep { !defined($_) } @$cmd;
+
+    my $pid = fork // die "Could not fork: $!";
+    return $pid if $pid;
+
+    $post_fork->() if $post_fork;
+
+    no warnings;
+    my $ok  = eval { exec(@$cmd); 1 };
+    my $err = $@;
+    print STDERR longmess("Failed to exec " . join(' ', @$cmd) . " . ($!) $err\n");
+    POSIX::_exit(255);
 }
 
 sub swap_io {
@@ -203,7 +225,7 @@ processes for cross-process work.
 
 =head1 SYNOPSIS
 
-    use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io list_direct_children/;
+    use Test2::Harness2::Util::IPC qw/pid_is_running set_procname start_process swap_io list_direct_children/;
 
     # Liveness check for a pid we may or may not own.
     if (my $rc = pid_is_running($child_pid)) {
@@ -242,6 +264,14 @@ replace the body, or C<append =E<gt> [...]> to append to the current C<$0>.
 
 Reopens C<$fh> as a duplicate of C<$to> while preserving its file descriptor
 number. Croaks if the resulting fd does not match.
+
+=item $pid = start_process(\@cmd, [\&post_fork])
+
+Forks and execs C<@cmd> in the child. Returns the child pid in the parent,
+never returns in the child. If C<post_fork> is provided it is called in the
+child after C<fork> but before C<exec> (commonly used to swap STDOUT /
+STDERR onto a tempfile so the parent can capture output). If C<exec> fails
+the child emits a diagnostic and exits with status C<255>.
 
 =item @pids = list_direct_children($parent)
 

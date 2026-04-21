@@ -75,6 +75,11 @@ use constant BROKEN_BEHAVIORS => {map { $_ => 1 } qw/skip fail abort/};
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Service', 'Test2::Harness2::Role::ResourceServiceHost';
 
+# Role::ResourceServiceHost scope hooks: the harness is the global
+# host, so its scope is 'global' and no Run is bound to it.
+sub service_host_scope { 'global' }
+sub service_host_run   { undef }
+
 # Resource-service log files live under the harness's logdir
 # ($workdir/logs/ by default), not directly under $workdir.
 sub service_host_logdir { $_[0]->{+LOGDIR} }

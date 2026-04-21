@@ -824,7 +824,7 @@ subtest 'restart: attempts cap flips to permanent_broken' => sub {
         resource   => $res,
         method     => 'service_foo_start',
         started_at => time,
-        attempts   => Test2::Harness2::Role::ResourceServiceHost::MAX_RESTART_ATTEMPTS(),
+        attempts   => $h->max_restart_attempts,
     );
 
     my @warnings;
@@ -884,8 +884,8 @@ subtest 'restart: healthy runtime resets the attempts counter' => sub {
         pid        => 88200,
         resource   => $res,
         method     => 'service_foo_start',
-        started_at => time - (Test2::Harness2::Role::ResourceServiceHost::RESTART_HEALTHY_SECS() + 1),
-        attempts   => Test2::Harness2::Role::ResourceServiceHost::MAX_RESTART_ATTEMPTS(),
+        started_at => time - ($h->restart_healthy_secs + 1),
+        attempts   => $h->max_restart_attempts,
     );
 
     $h->run_on_pid(88200, 0);

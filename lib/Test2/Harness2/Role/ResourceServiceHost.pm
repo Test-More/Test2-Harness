@@ -10,33 +10,32 @@ use Time::HiRes qw/time/;
 
 use Role::Tiny;
 
-# Basic restart-spiral protection for resource services. A service that
-# survives RESTART_HEALTHY_SECS resets its attempts counter back to 1 on
-# its next exit; consecutive fast-exits accumulate and the resource
-# flips to permanent_broken after MAX_RESTART_ATTEMPTS.
-use constant MAX_RESTART_ATTEMPTS => 5;
-use constant RESTART_HEALTHY_SECS => 30;
-
-# Consumer contract: accessors for the host's working directory and
-# service name, an emit hook (satisfied by Role::Service's
-# emit_service_event) so this role can log resource-service lifecycle
-# events through the host's event stream, and the resource_services
-# tracking accessor (see below for its contract).
+# Consumer contract: host-identity accessors, an emit hook (satisfied
+# by Role::Service's emit_service_event) so this role can log
+# resource-service lifecycle events through the host's event stream,
+# the resource_services tracking accessor (see below for its
+# contract), and the three host-scope accessors (scope / run / logdir)
+# that drive log-file placement and reservation checks.
 requires 'workdir';
 requires 'name';
 requires 'emit_service_event';
 requires 'resource_services';
 
-# Hooks consumers override. Each has a default so the role can call
-# them unconditionally.
+# The scope the host itself occupies. 'global' for the harness,
+# 'run' for the run service. No default: consumers must be explicit
+# about what scope their host occupies.
+requires 'service_host_scope';
 
-# The scope the host itself occupies. Defaults to 'global' for the
-# harness; run-scoped hosts override to 'run'.
-sub service_host_scope { 'global' }
+# The run object this host is bound to when service_host_scope is
+# 'run'. Must return undef for 'global' hosts. No default.
+requires 'service_host_run';
 
-# The run object this host is bound to, when the host is run-scoped.
-# Global hosts return undef.
-sub service_host_run { undef }
+# The directory root under which this host lays out service log
+# files. Both scope=global ('services/<name>.jsonl') and scope=run
+# ('runs/<run_id>/services/<name>.jsonl') paths hang off this root.
+# No default: every host picks an explicit root (typically
+# $workdir/logs/).
+requires 'service_host_logdir';
 
 # The name the host uses for its own log file (and which a resource
 # service cannot take in the host's scope). Defaults to the bus-level
@@ -45,12 +44,14 @@ sub service_host_run { undef }
 # the log file is just "run.jsonl") override this.
 sub service_host_log_name { $_[0]->name }
 
-# The directory root under which this host lays out service log files.
-# Defaults to $self->workdir; consumers that keep all logs in a
-# subdirectory (typically $workdir/logs/) override this. Both
-# scope=global ('services/<name>.jsonl') and scope=run
-# ('runs/<run_id>/services/<name>.jsonl') paths hang off this root.
-sub service_host_logdir { $_[0]->workdir }
+# Basic restart-spiral protection for resource services. A service
+# that survives restart_healthy_secs() resets its attempts counter
+# back to 1 on its next exit; consecutive fast-exits accumulate and
+# the resource flips to permanent_broken after
+# max_restart_attempts() tries. Both accessors are overridable with
+# sensible defaults.
+sub max_restart_attempts { 5 }
+sub restart_healthy_secs { 30 }
 
 sub start_resource_services {
     my ($self, $resources, %opts) = @_;
@@ -67,7 +68,7 @@ sub start_resource_services {
     my %seen;
     for my $res (@$resources) {
         for my $method ($res->service_methods) {
-            my $name = _resource_service_name_from_method($method);
+            my $name = $self->_resource_service_name_from_method($method);
 
             if (my $prev = $seen{$name}) {
                 croak sprintf(
@@ -121,7 +122,7 @@ sub start_resource_services {
 # only exposes methods matching it, and callers that name a method
 # explicitly must still respect the contract.
 sub _resource_service_name_from_method {
-    my ($method) = @_;
+    my ($self, $method) = @_;
 
     croak "cannot derive service name from method '$method'"
         unless $method =~ m/^service_(.+)_start\z/;
@@ -237,7 +238,7 @@ sub _invoke_service_method {
     # the method-derived name and the path under the host's logdir.
     # The caller (start_resource_services or the restart branch) may
     # pass them pre-computed to avoid a redundant make_path/touch.
-    my $name     = $opts{name}     // _resource_service_name_from_method($method);
+    my $name     = $opts{name}     // $self->_resource_service_name_from_method($method);
     my $log_path = $opts{log_path} // do {
         my $p = $self->_resource_service_log_path(
             name  => $name,
@@ -318,7 +319,7 @@ sub _invoke_service_method {
 # resource still blocks restart regardless.
 sub _service_is_restartable {
     my ($self, $res, $method, %call_args) = @_;
-    my $name      = _resource_service_name_from_method($method);
+    my $name      = $self->_resource_service_name_from_method($method);
     my $companion = "service_${name}_restartable";
     return 0 unless $res->can($companion);
     return $res->$companion(%call_args) ? 1 : 0;
@@ -339,7 +340,7 @@ sub track_resource_service {
     # 1:1 to a log file path.
     my $name = $p{name};
     if (!defined $name && defined $p{method}) {
-        $name = _resource_service_name_from_method($p{method});
+        $name = $self->_resource_service_name_from_method($p{method});
     }
     croak "cannot track a resource service without a 'name' (and no 'method' to derive one from)"
         unless defined $name && length $name;
@@ -429,15 +430,17 @@ sub handle_resource_service_exit {
     $res->mark_broken if $res->can('mark_broken');
 
     # Basic restart-spiral protection. A service that survived at
-    # least RESTART_HEALTHY_SECS resets the attempts counter;
+    # least restart_healthy_secs() resets the attempts counter;
     # otherwise the counter climbs and we eventually give up.
+    my $healthy_secs = $self->restart_healthy_secs;
+    my $max_attempts = $self->max_restart_attempts;
     my $ran_for  = time - ($svc->{started_at} // time);
-    my $attempts = ($ran_for >= RESTART_HEALTHY_SECS) ? 1 : (($svc->{attempts} // 1) + 1);
+    my $attempts = ($ran_for >= $healthy_secs) ? 1 : (($svc->{attempts} // 1) + 1);
 
-    if ($attempts > MAX_RESTART_ATTEMPTS) {
+    if ($attempts > $max_attempts) {
         warn sprintf(
             "resource '%s' (class %s, last pid %d) service '%s' exceeded %d restart attempts; marking permanent_broken\n",
-            $res->resource_name, ref($res), $pid, $method, MAX_RESTART_ATTEMPTS,
+            $res->resource_name, ref($res), $pid, $method, $max_attempts,
         );
         $res->mark_permanent_broken if $res->can('mark_permanent_broken');
         return 1;
@@ -559,21 +562,31 @@ Each tracked entry is a hashref carrying at least C<pid>, C<resource>,
 C<method>, C<name>, C<log_path>, C<scope>, C<started_at>, and
 C<attempts> (plus C<run> for per-run scope); see L</track_resource_service>.
 
+=item $scope = $host->service_host_scope
+
+The scope the host itself occupies: C<'global'> for the harness
+service, C<'run'> for the per-run service. No default; consumers
+must be explicit.
+
+=item $run = $host->service_host_run
+
+The L<Test2::Harness2::Run> object the host is bound to when
+C<service_host_scope> returns C<'run'>, or C<undef> when the scope is
+C<'global'>. No default.
+
+=item $path = $host->service_host_logdir
+
+The directory root under which service log files are laid out. Both
+C<scope=global> (C<services/E<lt>nameE<gt>.jsonl>) and C<scope=run>
+(C<runs/E<lt>run_idE<gt>/services/E<lt>nameE<gt>.jsonl>) paths hang
+off this root. No default; consumers typically return
+C<< $host->workdir . '/logs' >> or similar.
+
 =back
 
 =head1 PROVIDED METHODS
 
 =over 4
-
-=item $scope = $host->service_host_scope
-
-Default C<'global'>. Run-scoped hosts (the per-run service) override
-to C<'run'>.
-
-=item $run = $host->service_host_run
-
-Default C<undef>. Run-scoped hosts override to return the
-L<Test2::Harness2::Run> object they are bound to.
 
 =item $name = $host->service_host_log_name
 
@@ -582,11 +595,18 @@ the log-file name (e.g. C<name => "run-$run_id"> but C<log_name =>
 "run">) override this so the reservation check targets the log name,
 not the bus name.
 
-=item $path = $host->service_host_logdir
+=item $n = $host->max_restart_attempts
 
-Default: C<< $host->workdir >>. Consumers that keep logs in a
-subdirectory (typically C<$workdir/logs/>) override to point at that
-directory.
+Maximum number of consecutive fast-exit restart attempts before a
+restartable resource service is flipped to C<permanent_broken>.
+Default 5. Overridable.
+
+=item $secs = $host->restart_healthy_secs
+
+How long a resource service must have been running before its exit
+resets the attempts counter back to 1. Services that survive at
+least this long then die are treated as "first restart", not "N+1
+in a spiral". Default 30 seconds. Overridable.
 
 =item $host->start_resource_services(\@resources, scope => ..., run => ...)
 
@@ -639,8 +659,8 @@ event stream.
 Restartability is read only from C<service_XXX_restartable>; absence
 means the service is not restarted. A restartable service that
 exits triggers a re-invocation of the service method, subject to
-the C<MAX_RESTART_ATTEMPTS> / C<RESTART_HEALTHY_SECS>
-spiral-protection counters.
+the C<max_restart_attempts> / C<restart_healthy_secs>
+spiral-protection accessors (see L</PROVIDED METHODS>).
 
 =back
 

@@ -377,12 +377,13 @@ C<restartable> accessor, so there is only one place to look.
 =head2 Restart semantics
 
 When a restartable service exits, the harness re-invokes its
-C<service_*_start> method. Basic spiral protection caps consecutive restart
-attempts at C<MAX_RESTART_ATTEMPTS> (currently 5); the counter resets
-to 1 when a service survived at least C<RESTART_HEALTHY_SECS>
-(currently 30) before exiting. Note that the reset is one-shot per
-long-lived window: a service that survived 30s, died, and then
-immediately crash-loops will burn up to C<MAX_RESTART_ATTEMPTS> rapid
+C<service_*_start> method. Basic spiral protection caps consecutive
+restart attempts at C<$host-E<gt>max_restart_attempts> (default 5);
+the counter resets to 1 when a service survived at least
+C<$host-E<gt>restart_healthy_secs> (default 30) before exiting. Note
+that the reset is one-shot per long-lived window: a service that
+survived past the healthy threshold, died, and then immediately
+crash-loops will burn up to the full attempt budget of rapid
 retries before the resource is flipped to C<permanent_broken>. If the
 re-invoked method dies, the resource stays C<broken> (no automatic
 progression to C<permanent_broken>); operator intervention is

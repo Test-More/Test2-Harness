@@ -1,0 +1,54 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use lib 'lib';
+
+use Test2::Harness2::Collector;
+use Test2::Harness2::Collector::Logger::JSONL;
+
+# Usage:
+#   Launch mode (spawn a child process):
+#     yath_collector output.jsonl [VAR=VAL ...] command [args ...]
+#
+#   File mode (read from existing files):
+#     yath_collector output.jsonl -- stdout_file stderr_file
+
+my $output_file = shift @ARGV or die "Usage: $0 <output.jsonl> [VAR=VAL ...] <command> [args ...]\n" . "       $0 <output.jsonl> -- <stdout_file> <stderr_file>\n";
+
+if (@ARGV && $ARGV[0] eq '--') {
+    # File mode: read from files (string paths, collector opens them)
+    shift @ARGV;    # consume '--'
+
+    my $stdout_file = shift @ARGV or die "Expected stdout file after '--'\n";
+    my $stderr_file = shift @ARGV or die "Expected stderr file after '--'\n";
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        stdout  => $stdout_file,
+        stderr  => $stderr_file,
+        pid     => undef,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output_file]],
+    );
+
+    $collector->wait();
+}
+else {
+    # Launch mode: spawn a child process
+    my %env;
+    while (@ARGV && $ARGV[0] =~ /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) {
+        $env{$1} = $2;
+        shift @ARGV;
+    }
+
+    die "No command specified\n" unless @ARGV;
+
+    my $collector = Test2::Harness2::Collector->spawn(
+        launch  => [@ARGV],
+        env     => \%env,
+        loggers => [['Test2::Harness2::Collector::Logger::JSONL', output_file => $output_file]],
+    );
+
+    $collector->wait();
+}
+
+exit(0);

@@ -180,8 +180,13 @@ sub _extract_log_files {
     my @files;
     for my $class (sort keys %$loggers) {
         for my $inst (@{$loggers->{$class} // []}) {
-            push @files => $inst->{output_file}
-                if ref($inst) eq 'HASH' && defined $inst->{output_file};
+            next unless ref($inst) eq 'HASH';
+            for my $k (qw/jsonl_file output_file json_file/) {
+                if (defined $inst->{$k}) {
+                    push @files => $inst->{$k};
+                    last;
+                }
+            }
         }
     }
     return \@files;

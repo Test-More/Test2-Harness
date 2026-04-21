@@ -322,18 +322,23 @@ sub _job_log_from_artifacts {
     # Match by collector entry's job_id, not the opaque collector_id
     # key -- the collector_id convention in §5.4 isn't keyed by
     # job_id alone.
+    #
+    # The JSONL logger's metadata() reports the file path under
+    # 'jsonl_file' (see Test2::Harness2::Collector::Logger::JSONL).
+    # 'output_file' is checked as a fallback for future loggers that
+    # settle on the generic key. Non-file logger artefacts (DB, HTTP)
+    # are skipped.
     for my $cid (keys %{$artifacts->{artifacts}}) {
         my $entry = $artifacts->{artifacts}{$cid};
         next unless ref($entry) eq 'HASH';
         next unless defined $entry->{job_id} && $entry->{job_id} eq $jid;
 
-        # Prefer the first file-shaped logger instance we can find.
-        # Test2::Harness2::Collector::Logger::JSONL is the canonical
-        # one; non-file loggers (DB, notify) get skipped.
+        # Prefer the canonical JSONL class first.
         for my $class (qw/Test2::Harness2::Collector::Logger::JSONL/) {
             my $list = $entry->{loggers}{$class} // next;
             for my $inst (@$list) {
                 next unless ref($inst) eq 'HASH';
+                return $inst->{jsonl_file}  if defined $inst->{jsonl_file};
                 return $inst->{output_file} if defined $inst->{output_file};
             }
         }
@@ -341,7 +346,9 @@ sub _job_log_from_artifacts {
         for my $class (keys %{$entry->{loggers} // {}}) {
             for my $inst (@{$entry->{loggers}{$class} // []}) {
                 next unless ref($inst) eq 'HASH';
-                return $inst->{output_file} if defined $inst->{output_file};
+                for my $k (qw/jsonl_file output_file json_file/) {
+                    return $inst->{$k} if defined $inst->{$k};
+                }
             }
         }
     }

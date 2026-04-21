@@ -297,6 +297,19 @@ sub _run_tests {
         );
     }
 
+    # When any renderer is configured we must also put a JSONL
+    # logger on each test-job collector so the artifact-reading
+    # layer has something to replay in verbose / qvf mode. The
+    # harness otherwise installs no loggers by default (see
+    # IPC_AND_LOGGERS §12.1).
+    my @test_loggers = ();
+    if (@$renderers) {
+        @test_loggers = ([
+            'Test2::Harness2::Collector::Logger::JSONL',
+            output_file => '%LOG_DIR%/%JOB_TRY%.jsonl',
+        ]);
+    }
+
     # No finish_after_initial_run: the service stays up while the
     # artifact-reader polls for drain. Per PLAN's "State and control
     # flow: IPC, not on-disk artifacts", the pass/fail verdict flows
@@ -306,7 +319,8 @@ sub _run_tests {
         workdir   => "$dir",
         resources => \@resources,
         plugins   => $plugins,
-        (@$launch_args ? (launch_args => $launch_args) : ()),
+        (@test_loggers ? (test_loggers => \@test_loggers) : ()),
+        (@$launch_args ? (launch_args  => $launch_args)   : ()),
     );
 
     my $queue_resp = $spawn->queue_test_run(files => \@tests);

@@ -87,16 +87,16 @@ sub init {
 # the Run.
 sub effective_service_loggers {
     my ($self, $harness_defaults) = @_;
-    return _effective($self->{+LOGGERS}, $self->{+EXTEND_LOGGERS}, $harness_defaults);
+    return $self->_effective($self->{+LOGGERS}, $self->{+EXTEND_LOGGERS}, $harness_defaults);
 }
 
 sub effective_test_loggers {
     my ($self, $harness_defaults) = @_;
-    return _effective($self->{+TEST_LOGGERS}, $self->{+EXTEND_TEST_LOGGERS}, $harness_defaults);
+    return $self->_effective($self->{+TEST_LOGGERS}, $self->{+EXTEND_TEST_LOGGERS}, $harness_defaults);
 }
 
 sub _effective {
-    my ($replace, $extend, $defaults) = @_;
+    my ($self, $replace, $extend, $defaults) = @_;
     $defaults //= [];
     return [@$replace]            if defined $replace;
     return [@$defaults, @$extend] if defined $extend;
@@ -111,13 +111,14 @@ sub from_files {
 
     my $run_id = $params{run_id} // gen_uuid();
 
-    # Accept only role-consuming blessed objects, or a TO_JSON-shaped
-    # hashref carrying '__test_file_class__'. The class (named in the
-    # hash for the hashref case) is asked to rehydrate itself -- there
-    # is no caller-side default class.
+    # Accept a role-consuming blessed object, a [$class, @ctor_args]
+    # arrayref (passed through as $class->new(@ctor_args)), or a
+    # TO_JSON-shaped hashref carrying '__test_file_class__' (the
+    # class is asked to rehydrate itself from the hash). There is no
+    # caller-side default class.
     my @jobs;
     for my $input (@$files) {
-        my $test_file = _coerce_test_file($input);
+        my $test_file = $class->_coerce_test_file($input);
         push @jobs => Test2::Harness2::Run::Job->new(
             test_file => $test_file,
             run_id    => $run_id,
@@ -128,6 +129,7 @@ sub from_files {
 }
 
 sub _coerce_test_file {
+    my $class = shift;
     my ($input) = @_;
 
     if (blessed($input)) {
@@ -136,21 +138,31 @@ sub _coerce_test_file {
         croak "files entries must consume Test2::Harness2::Role::TestFile, got a " . ref($input);
     }
 
-    if (ref($input) eq 'HASH') {
-        my $tf_class = $input->{__test_file_class__}
+    my $ref = ref($input);
+
+    my ($tf_class, $method, @params);
+    if ($ref eq 'ARRAY') {
+        $method = 'new';
+        ($tf_class, @params) = @$ref;
+    }
+    elsif ($ref eq 'HASH') {
+        $method = 'rehydrate';
+        @params = ($input);
+        $tf_class = $input->{__test_file_class__}
             or croak "hashref entries must carry '__test_file_class__' (got keys: " . join(',', sort keys %$input) . ")";
-
-        my $ok  = eval { load_module($tf_class); 1 };
-        my $err = $@;
-        croak "could not load '$tf_class': $err" unless $ok;
-
-        croak "'$tf_class' does not consume Test2::Harness2::Role::TestFile"
-            unless Role::Tiny::does_role($tf_class, 'Test2::Harness2::Role::TestFile');
-
-        return $tf_class->rehydrate($input);
     }
 
-    croak "files entries must consume Test2::Harness2::Role::TestFile or be a hashref with __test_file_class__";
+    croak "files entries must consume Test2::Harness2::Role::TestFile or be a construction arrayref with a class and parameters, or a hashref with __test_file_class__"
+        unless $tf_class && $method;
+
+    my $ok  = eval { load_module($tf_class); 1 };
+    my $err = $@;
+    croak "could not load '$tf_class': $err" unless $ok;
+
+    croak "'$tf_class' does not consume Test2::Harness2::Role::TestFile"
+        unless Role::Tiny::does_role($tf_class, 'Test2::Harness2::Role::TestFile');
+
+    return $tf_class->$method(@params);
 }
 
 sub mark_running {
@@ -269,6 +281,9 @@ L<Test2::Harness2::Run::Job>. Entries may be:
 
 =item * an object consuming L<Test2::Harness2::Role::TestFile>
 
+=item * an arrayref C<[$class, @ctor_args]>. The class is loaded if
+needed and constructed via C<< $class->new(@ctor_args) >>.
+
 =item * a hashref carrying a C<__test_file_class__> key naming the
 concrete TestFile class (as emitted by
 L<Test2::Harness2::Role::TestFile/TO_JSON>). The class is loaded if
@@ -277,8 +292,8 @@ itself from the hashref.
 
 =back
 
-Bare path strings are B<not> accepted: callers must hand in either a
-live role consumer or a fully-tagged JSON hash.
+Bare path strings are B<not> accepted: callers must hand in one of
+the three forms above.
 
 =item $run->mark_running($job_id)
 

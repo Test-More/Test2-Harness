@@ -69,10 +69,14 @@ subtest '--help=BAD-GROUP errors with exit 2' => sub {
     like($r->{err}, qr/Known groups:/,                           'lists known groups');
 };
 
-subtest 'bare command name dispatches (stub) and exits 2' => sub {
+subtest 'bare command name routes to real command (Stage 5+ test cmd)' => sub {
+    # 'test' is wired to App::Yath2::Command::test as of Stage 5. With no
+    # test files in argv the command exits 2 with its own "no tests given"
+    # banner -- distinct from the pre-port stub banner.
     my $r = run_app(argv => ['test']);
-    is($r->{exit}, 2, 'exit 2');
-    like($r->{err}, qr/'test' command has not been ported/, 'stub banner on STDERR');
+    is($r->{exit}, 2, 'exit 2 (no tests given)');
+    like($r->{err}, qr/no tests given/, 'test command banner on STDERR');
+    unlike($r->{err}, qr/has not been ported/, 'not the unported-stub banner');
 };
 
 subtest '-D is stripped before command lookup' => sub {
@@ -81,16 +85,15 @@ subtest '-D is stripped before command lookup' => sub {
     is($bare->{exit}, 0, '-D alone: exit 0');
     like($bare->{out}, qr/USAGE:/, '-D alone: usage printed');
 
-    # -D <cmd> should route to the command, not be rejected as
-    # a leftover option.
-    my $with_cmd = run_app(argv => ['-D', 'test', 'foo.t']);
-    is($with_cmd->{exit}, 2, '-D <cmd>: stub exit 2');
-    like($with_cmd->{err}, qr/'test' command has not been ported/, '-D <cmd>: stub banner');
+    # -D <cmd> should route to the command (Stage 5+: real test command).
+    my $with_cmd = run_app(argv => ['-D', 'test']);
+    is($with_cmd->{exit}, 2, '-D <cmd>: exit 2');
+    like($with_cmd->{err}, qr/no tests given/, '-D <cmd>: test command banner');
 
     # -D=lib <cmd> should also route to the command.
     my $with_arg = run_app(argv => ['-D=lib', 'test']);
-    is($with_arg->{exit}, 2, '-D=lib <cmd>: stub exit 2');
-    like($with_arg->{err}, qr/'test' command has not been ported/, '-D=lib <cmd>: stub banner');
+    is($with_arg->{exit}, 2, '-D=lib <cmd>: exit 2');
+    like($with_arg->{err}, qr/no tests given/, '-D=lib <cmd>: test command banner');
 };
 
 subtest 'unknown top-level option errors with exit 2' => sub {

@@ -4,8 +4,6 @@ use warnings;
 
 our $VERSION = '2.000011';
 
-use POSIX ();
-
 use Role::Tiny;
 
 with 'IPC::Manager::Role::Service';
@@ -16,21 +14,6 @@ with 'IPC::Manager::Role::Service';
 # permanent_broken. Services that are meant to stay up for the
 # lifetime of their host override this to return true.
 sub restartable { 0 }
-
-# Default spawn: fork, and in the child run the IPC::Manager service
-# loop to completion, then _exit. Returns the child pid in the
-# parent. Consumers with more involved lifecycles (per-service log
-# file, pgroup setup, post_fork redirection, ...) override this.
-sub spawn {
-    my $self = shift;
-
-    my $pid = fork // die "fork: $!";
-    return $pid if $pid;
-
-    $self->set_pid($$);
-    my $exit = $self->run // 0;
-    POSIX::_exit($exit);
-}
 
 1;
 
@@ -59,6 +42,15 @@ single new accessor, L</restartable>, that the
 L<Test2::Harness2::Role::ResourceServiceHost> consults when a service
 exits to decide whether to re-spawn it.
 
+The L<Test2::Harness2::Role::ResourceServiceHost> uses IPC::Manager's
+own C<ipcm_service> to spawn each service and keys its tracking on
+C<< $handle->child_pid >> (the pid of C<ipcm_service>'s own fork --
+typically the service pid, or the wrapper pid if the service's
+C<post_fork_hook> interposes a collector / wrapper around itself).
+Services that want stdout/stderr captured into their log file (e.g.
+via L<Test2::Harness2::Collector::Service>) wire that up in their
+own C<post_fork_hook>.
+
 =head1 PROVIDED METHODS
 
 =over 4
@@ -70,14 +62,6 @@ auto-restarted when they exit before the host shuts down. A
 non-restartable service that exits flips its owning resource to
 C<permanent_broken>; a restartable service is re-spawned subject to
 the host's restart-spiral protection.
-
-=item $pid = $service->spawn
-
-Default implementation: C<fork>, call C<set_pid> in the child, run the
-service loop, and C<POSIX::_exit>. Returns the child pid in the
-parent. Consumers that need extra child-side setup (reopening the
-service's log file, redirecting stdio, pgroup changes, ...) override
-this.
 
 =back
 

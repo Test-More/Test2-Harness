@@ -38,6 +38,7 @@ requires "IO::Select" => "0";
 requires "IO::Uncompress::Bunzip2" => "0";
 requires "IO::Uncompress::Gunzip" => "0";
 requires "IPC::Cmd" => "0";
+requires "IPC::Manager" => "0.000029";
 requires "Importer" => "0.025";
 requires "JSON::PP" => "0";
 requires "LWP" => "0";

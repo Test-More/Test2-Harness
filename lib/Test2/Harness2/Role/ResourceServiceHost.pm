@@ -9,6 +9,8 @@ use File::Path qw/make_path/;
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 
+use IPC::Manager qw/ipcm_service/;
+
 use Role::Tiny;
 
 use Test2::Harness2::Util qw/load_module/;
@@ -253,10 +255,18 @@ sub _assert_service_name_unused {
 # resource service entry. Used at initialization
 # (start_resource_services) and on restart (handle_resource_service_exit).
 #
-# On construction or spawn failure the resource is flipped to
-# permanent_broken, a resource_service_start_failed event is emitted
-# through the host's event stream, and the caller sees 'failed'. A
-# successful spawn returns 'started'.
+# Delegates to IPC::Manager's ipcm_service for the actual fork +
+# service-loop setup; the handle it returns carries the first-fork pid
+# via $handle->child_pid. That's the pid the host tracks and watches
+# (it equals the service pid when the service has no post_fork_hook,
+# and equals the wrapper pid when the service interposes a collector /
+# wrapper via its own post_fork_hook).
+#
+# On ipcm_service failure (construction throw, missing child_pid,
+# ready-timeout croak) the resource is flipped to permanent_broken, a
+# resource_service_start_failed event is emitted through the host's
+# event stream, and the caller sees 'failed'. A successful spawn
+# returns 'started'.
 sub _start_service_entry {
     my ($self, %opts) = @_;
 
@@ -268,46 +278,39 @@ sub _start_service_entry {
     my $scope    = $opts{scope}    // 'global';
     my $run      = $opts{run};
 
-    my @new_args = (
-        @$args,
-        name      => $name,
-        log_path  => $log_path,
-        ipcm_info => $self->ipcm_info,
-    );
-
-    my $svc;
-    my $ctor_ok = eval {
-        $svc = $class->new(@new_args);
+    my $handle;
+    my $start_ok = eval {
+        $handle = ipcm_service(
+            $name,
+            class     => $class,
+            ipcm_info => $self->ipcm_info,
+            log_path  => $log_path,
+            @$args,
+        );
         1;
     };
-    my $ctor_err = $@;
-    unless ($ctor_ok) {
+    my $start_err = $@;
+    unless ($start_ok) {
         $self->_fail_service(
             resource => $res,
             class    => $class,
             name     => $name,
             scope    => $scope,
             run      => $run,
-            error    => $ctor_err,
+            error    => $start_err,
         );
         return 'failed';
     }
 
-    my $pid;
-    my $spawn_ok = eval {
-        $pid = $svc->spawn;
-        1;
-    };
-    my $spawn_err = $@;
-    unless ($spawn_ok && defined $pid) {
-        my $err = $spawn_ok ? "spawn() returned undef" : $spawn_err;
+    my $pid = $handle ? $handle->child_pid : undef;
+    unless (defined $pid) {
         $self->_fail_service(
             resource => $res,
             class    => $class,
             name     => $name,
             scope    => $scope,
             run      => $run,
-            error    => $err,
+            error    => "ipcm_service returned a handle with no child_pid",
         );
         return 'failed';
     }
@@ -620,10 +623,13 @@ in a spiral". Default 30 seconds. Overridable.
 
 Walk each resource's C<services> list, validate that each entry names
 a class that composes L<Test2::Harness2::Role::ResourceService>,
-validate name uniqueness across the batch, instantiate and spawn each
-service, and track the resulting pids. A service whose construction
-or spawn throws is flagged individually and the loop continues to the
-next entry.
+validate name uniqueness across the batch, and spawn each service via
+L<IPC::Manager/ipcm_service>. The pid the host tracks is
+C<< $handle->child_pid >> on the handle that C<ipcm_service> returns
+-- typically the service pid, or the wrapper pid when the service's
+C<post_fork_hook> interposes a collector. A service whose
+C<ipcm_service> call throws or whose handle has no C<child_pid> is
+flagged individually and the loop continues to the next entry.
 
 =item $host->track_resource_service(pid => ..., resource => ..., service_class => ..., service_args => ..., name => ..., ...)
 
@@ -657,8 +663,9 @@ L<Test2::Harness2::Role::ResourceService>.
 =item *
 
 C<@construction_params> must contain a C<name =E<gt> $name> pair; the
-host adds C<name>, C<log_path>, and C<ipcm_info> when calling
-C<< $class->new >>.
+host adds C<name>, C<log_path>, and C<ipcm_info> when passing the
+params through to L<IPC::Manager/ipcm_service> (which in turn passes
+them to C<< $class->new >>).
 
 =item *
 

@@ -13,15 +13,35 @@ use App::Yath2::TestFile;
 # either a single file path or a directory to scan recursively. Returns
 # a list of App::Yath2::TestFile objects, one per discovered file.
 #
-# No finder options yet: the scan matches *.t files (case-insensitive
-# on the extension). Symlinks are followed but a seen-path guard keeps
-# us out of infinite loops. Non-existent paths croak; a file argument
-# with a non-.t extension is accepted verbatim (so users can run, e.g.,
-# t/my_test.pl).
+# Accepts an optional 'extensions' named argument: a listref of bare
+# extensions (no leading dot) to match when scanning directories.
+# Defaults to ('t', 't2'). Symlinks are followed but a seen-path guard
+# keeps us out of infinite loops. Non-existent paths croak; a file
+# argument is accepted verbatim (so users can run, e.g., t/my_test.pl)
+# regardless of extension.
 sub find {
-    my ($class, @paths) = @_;
+    my $class = shift;
+
+    my @args = @_;
+    my @extensions;
+    my @paths;
+
+    # Accept either find($class, \%opts, @paths) or plain find($class, @paths).
+    if (@args && ref($args[0]) eq 'HASH') {
+        my $opts = shift @args;
+        my $e    = $opts->{extensions};
+        @extensions = ref($e) eq 'ARRAY' ? @$e : defined $e ? ($e) : ();
+        @paths      = @args;
+    }
+    else {
+        @paths = @args;
+    }
+
+    @extensions = qw/t t2/ unless @extensions;
 
     croak "no paths to search" unless @paths;
+
+    my $ext_re = _extensions_regex(\@extensions);
 
     my %seen;
     my @files;
@@ -30,7 +50,7 @@ sub find {
         croak "'$path' does not exist" unless -e $path;
 
         if (-d $path) {
-            _scan_dir($path, \%seen, \@files);
+            _scan_dir($path, $ext_re, \%seen, \@files);
         }
         else {
             my $abs = File::Spec->rel2abs($path);
@@ -42,8 +62,15 @@ sub find {
     return map { App::Yath2::TestFile->new(file => $_) } @files;
 }
 
+sub _extensions_regex {
+    my ($exts) = @_;
+    my @quoted = map { quotemeta($_) } @$exts;
+    my $alt    = join '|' => @quoted;
+    return qr/\.(?:$alt)$/i;
+}
+
 sub _scan_dir {
-    my ($dir, $seen, $files) = @_;
+    my ($dir, $ext_re, $seen, $files) = @_;
 
     my $abs = File::Spec->rel2abs($dir);
     return if $seen->{"DIR:$abs"}++;
@@ -55,9 +82,9 @@ sub _scan_dir {
     for my $entry (@entries) {
         my $child = File::Spec->catfile($dir, $entry);
         if (-d $child) {
-            _scan_dir($child, $seen, $files);
+            _scan_dir($child, $ext_re, $seen, $files);
         }
-        elsif (-f $child && $child =~ /\.t$/i) {
+        elsif (-f $child && $child =~ $ext_re) {
             my $child_abs = File::Spec->rel2abs($child);
             next if $seen->{$child_abs}++;
             push @{$files} => $child_abs;
@@ -92,6 +119,10 @@ plugin-driven finder in later stages.
     use App::Yath2::Finder::Simple;
 
     my @tests = App::Yath2::Finder::Simple->find('t/foo.t', 't/bar');
+    my @tx    = App::Yath2::Finder::Simple->find(
+        {extensions => ['tx']},
+        't/integration/fixtures',
+    );
 
 =head1 METHODS
 
@@ -99,10 +130,15 @@ plugin-driven finder in later stages.
 
 =item @tests = $class->find(@paths)
 
+=item @tests = $class->find(\%opts, @paths)
+
 Scan C<@paths>. Files are accepted verbatim (any extension);
-directories are recursively scanned for C<*.t> files (case-
-insensitive). Duplicate absolute paths are dropped. Non-existent
-paths croak.
+directories are recursively scanned for files whose extension matches
+C<extensions> (default C<t>, C<t2>). Duplicate absolute paths are
+dropped. Non-existent paths croak.
+
+The optional C<\%opts> hash accepts C<extensions> as an arrayref of
+bare extensions (no leading dot) or a single scalar.
 
 =back
 

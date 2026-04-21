@@ -31,16 +31,15 @@ option_group {group => 'finder', category => "Finder Options"} => sub {
     #     normalize => sub { fqmod($_[0], 'App::Yath2::Finder') },
     # );
 
-    # TODO: Stage 6 — activate --extension when finder is wired to the test command
-    # option extensions => (
-    #     type => 'List',
-    #     alt  => ['ext', 'extension'],
-    #     split_on => ',',
-    #
-    #     description => 'Specify valid test filename extensions, default: t and t2',
-    #     normalize   => sub { $_[0] =~ s/^\.+//g; $_[0] },
-    #     default     => sub { qw/t t2/ },
-    # );
+    option extensions => (
+        type     => 'List',
+        alt      => ['ext', 'extension'],
+        split_on => ',',
+
+        description => 'Specify valid test filename extensions, default: t and t2',
+        normalize   => sub { $_[0] =~ s/^\.+//g; $_[0] },
+        default     => sub { qw/t t2/ },
+    );
 
     # TODO: Stage 6 — activate --no-long when finder is wired to the test command
     # option no_long => (

@@ -17,6 +17,7 @@ include_options(
     'App::Yath2::Options::Renderer',
     'App::Yath2::Options::Resource',
     'App::Yath2::Options::Runner',
+    'App::Yath2::Options::Finder',
 );
 
 use Object::HashBase qw{
@@ -80,6 +81,7 @@ sub run {
     my $slots       = _resolve_slots($settings);
     my $verbose     = _resolve_verbose($settings);
     my $preloads    = _resolve_preloads($settings);
+    my $extensions  = _resolve_extensions($settings);
     my $renderers   = eval { _load_renderers($settings) };
     unless (defined $renderers) {
         my $err = $@;
@@ -99,7 +101,7 @@ sub run {
 
     my $shared_jobs = _resolve_shared_jobs($settings, $slots);
 
-    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode, $shared_jobs) };
+    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode, $shared_jobs, $extensions) };
     my $err = $@;
 
     $_->client_teardown(settings => $settings) for reverse @$plugins;
@@ -159,7 +161,20 @@ sub _build_launch_args {
     push @paths => 'lib' if $lib_on;
     push @paths => 'blib/lib', 'blib/arch' if $blib_on;
 
-    return [map { "-I$_" } @paths];
+    # Pull any directories published via T2_HARNESS_INCLUDES onto the
+    # launch -I list so nested yath invocations inherit their caller's
+    # @INC. scripts/yath republishes @INC into T2_HARNESS_INCLUDES on
+    # every invocation, so the chain of nested -I paths stays intact.
+    # Match old/'s TestSettings::includes behaviour: '.' is filtered out
+    # and the full path list is deduplicated below.
+    if (my $env_inc = $ENV{T2_HARNESS_INCLUDES}) {
+        push @paths => grep { $_ ne '.' } split /;/, $env_inc;
+    }
+
+    my %seen;
+    my @deduped = grep { !$seen{$_}++ } @paths;
+
+    return [map { "-I$_" } @deduped];
 }
 
 # Getopt::Yath's cleared bookkeeping lives under $parsed->{cleared}.
@@ -202,6 +217,16 @@ sub _resolve_preloads {
     my $p = eval { $settings->runner->preloads };
     return [] unless ref($p) eq 'ARRAY';
     return $p;
+}
+
+# Pull the extensions list from --extension / --ext. Empty list means
+# "use Finder::Simple's default" so we keep the single source of truth
+# for the default (t, t2) in the finder.
+sub _resolve_extensions {
+    my ($settings) = @_;
+    my $e = eval { $settings->finder->extensions };
+    return [] unless ref($e) eq 'ARRAY';
+    return $e;
 }
 
 # Decide whether to attach the App::Yath2::Resource::SharedJobSlots
@@ -315,16 +340,23 @@ sub _load_renderers {
 }
 
 sub _run_tests {
-    my ($paths, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode, $shared_jobs) = @_;
-    $plugins   //= [];
-    $preloads  //= [];
-    $renderers //= [];
-    $mode      //= 'default';
+    my ($paths, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode, $shared_jobs, $extensions) = @_;
+    $plugins    //= [];
+    $preloads   //= [];
+    $renderers  //= [];
+    $mode       //= 'default';
+    $extensions //= [];
 
     require App::Yath2::Finder::Simple;
     require Test2::Harness2;
 
-    my @tests = App::Yath2::Finder::Simple->find(@$paths);
+    my @tests;
+    if (@$extensions) {
+        @tests = App::Yath2::Finder::Simple->find({extensions => $extensions}, @$paths);
+    }
+    else {
+        @tests = App::Yath2::Finder::Simple->find(@$paths);
+    }
     unless (@tests) {
         print STDERR "yath test: no test files discovered under given paths\n";
         return 2;

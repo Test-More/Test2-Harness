@@ -6,6 +6,7 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use File::Path qw/make_path/;
+use File::Spec ();
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
@@ -181,10 +182,23 @@ sub request_handler_launch_job {
     # explicit launch command (perl -e '...'). Default to running the
     # real test file through $^X, with the harness-supplied launch_args
     # (typically perl -I switches) between the interpreter and the test
-    # file. Backward-compatible default when neither launch nor
-    # launch_args is provided: -Ilib relative to whatever cwd the
-    # collector inherits.
-    $launch_cmd //= [$^X, ($launch_args ? @$launch_args : ('-Ilib')), $test_file_abs];
+    # file. Build the default -I list from the harness's own @INC
+    # (absolutized) so a test that chdirs can still locate modules
+    # loaded lazily -- notably Test2::Formatter::Stream2, which is
+    # required from Test2::API only at first event-emit time, often
+    # well after the test script has changed its cwd.
+    unless ($launch_args) {
+        my @abs_inc;
+        my %seen;
+        for my $p (@INC) {
+            next if ref $p;
+            my $abs = File::Spec->file_name_is_absolute($p) ? $p : File::Spec->rel2abs($p);
+            next if $seen{$abs}++;
+            push @abs_inc => "-I$abs";
+        }
+        $launch_args = \@abs_inc;
+    }
+    $launch_cmd //= [$^X, @$launch_args, $test_file_abs];
 
     # Per-job log directory exists for any logger that wants to write
     # something per-try. Callers describe the path via %LOG_DIR% /

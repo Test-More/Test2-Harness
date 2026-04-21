@@ -5,7 +5,9 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Cwd ();
 use File::Temp ();
+use File::Spec ();
 use Time::HiRes qw/time/;
 
 use Test2::Harness2::Util qw/tinysleep load_module/;
@@ -171,8 +173,18 @@ sub _build_launch_args {
         push @paths => grep { $_ ne '.' } split /;/, $env_inc;
     }
 
+    # Canonicalize every path to absolute-from-cwd before emitting -I
+    # switches. Relative paths in @INC survive exactly as long as the
+    # inheriting process keeps the harness's cwd; any test that chdirs
+    # (and in particular any test that defers Test2::Formatter::Stream2
+    # loading past a chdir) then can't locate its own modules and the
+    # lazy formatter-require dies. Absolute paths make the launched
+    # perl's @INC cwd-independent.
+    my $cwd = Cwd::getcwd();
+    my @absolute = map { File::Spec->file_name_is_absolute($_) ? $_ : File::Spec->rel2abs($_, $cwd) } @paths;
+
     my %seen;
-    my @deduped = grep { !$seen{$_}++ } @paths;
+    my @deduped = grep { !$seen{$_}++ } @absolute;
 
     return [map { "-I$_" } @deduped];
 }

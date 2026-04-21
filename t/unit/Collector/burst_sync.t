@@ -16,7 +16,7 @@ use Atomic::Pipe;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Collector::Logger::JSONL;
 
-# The collector fires a loggers_ready IPC message after loggers start. No
+# The collector fires a collector_artifacts IPC message after loggers start. No
 # real bus is running here, so stub the handle out.
 BEGIN {
     require IPC::Manager::Service::Handle;
@@ -101,7 +101,7 @@ subtest 'stdout JSON burst becomes a decoded event, not a line' => sub {
 
     my $out = "$tmpdir/burst.jsonl";
 
-    my $c = Test2::Harness2::Collector->spawn(ipc_peer => "test-peer", 
+    my $c = Test2::Harness2::Collector->spawn(ipc_parent => "test-peer", ipc_harness => "test-peer", 
         ipcm_info => {},
         stdout    => $out_r,
         stderr    => $err_r,
@@ -144,7 +144,7 @@ subtest 'sync marker orders stdout lines + event + stderr text' => sub {
 
     my $out = "$tmpdir/sync.jsonl";
 
-    my $c = Test2::Harness2::Collector->spawn(ipc_peer => "test-peer", 
+    my $c = Test2::Harness2::Collector->spawn(ipc_parent => "test-peer", ipc_harness => "test-peer", 
         ipcm_info => {},
         stdout    => $out_r,
         stderr    => $err_r,

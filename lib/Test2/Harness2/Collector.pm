@@ -7,20 +7,30 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use Config;
 use POSIX qw/:sys_wait_h setpgid/;
-use Time::HiRes qw/time sleep/;
+use Time::HiRes qw/time/;
 use Scalar::Util qw/blessed/;
 use Scope::Guard ();
 use IO::Handle;
 use IO::Select;
 use Atomic::Pipe;
+use Role::Tiny ();
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
 use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Collector::Handle;
-use Test2::Harness2::Util qw/mod2file parse_exit/;
+use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
+
+# This is the base class. Two subclasses add the test-vs-service
+# divergent behaviour: Test2::Harness2::Collector::Test carries an
+# auditor and derives its bus_id from job_id, while
+# Test2::Harness2::Collector::Service skips the auditor machinery
+# and derives its bus_id from the interposed service's bus name.
+# The base class is instantiable (the auditor accessors default to
+# undef / no-op) so generic collector behaviour can be exercised
+# without picking a subclass.
 use Object::HashBase qw{
     <launch
     <new_pgroup
@@ -28,7 +38,6 @@ use Object::HashBase qw{
     <out_fh
     <err_fh
     <child_pid
-    <auditor
     <parser
     <loggers
     <loggers_lookup
@@ -38,17 +47,32 @@ use Object::HashBase qw{
     <job_id
     <job_try
     <ipcm_info
-    <ipc_peer
+    <ipc_parent
+    <ipc_run
+    <ipc_harness
+    <bus_id
 
     +_started
     <_owns_child
 
     +_event_loggers
     +_loggers_spec
-    +_auditor_spec
     +_failing_notified
     <child_exit
 };
+
+# Default auditor accessors for the base class. Test2::Harness2::Collector::Test
+# overrides `auditor` via its own HashBase slot and replaces
+# `_auditor_spec` / `_normalize_auditor` / `_instantiate_auditor` with
+# working implementations.
+sub auditor              { undef }
+sub _auditor_spec        { undef }
+sub _normalize_auditor   { }
+sub _instantiate_auditor { }
+
+# Test-specific exit payload hook. The base emits no extra fields;
+# Collector::Test fills in the auditor's pass verdict and counts.
+sub _extend_exiting_payload_for_harness { }
 
 use constant IS_WIN32 => $^O eq 'MSWin32';
 
@@ -58,8 +82,15 @@ sub init {
     croak "'ipcm_info' is a required attribute"
         unless defined $self->{+IPCM_INFO};
 
-    croak "'ipc_peer' is a required attribute"
-        unless defined $self->{+IPC_PEER};
+    # ipc_harness is the bus name of the main harness service; every
+    # collector needs it so end-of-life messages land there regardless
+    # of the collector's position in the service tree. ipc_parent is
+    # the bus name of whatever service spawned this collector (for a
+    # test-job collector: its RunService; for the harness interpose
+    # collector: undef -- it has no parent service to notify). A
+    # missing parent is valid; a missing harness is not.
+    croak "'ipc_harness' is a required attribute"
+        unless defined $self->{+IPC_HARNESS};
 
     # Map spec constructor names to internal attribute names so callers can
     # use the natural names from the spec (stdout, stderr, pid, env) even
@@ -75,6 +106,12 @@ sub init {
     $self->{+KILL_TIMEOUT} //= 15;
     $self->{+ENV_VARS}     //= {};
     $self->{+NEW_PGROUP}   //= 0;
+
+    # Callers should pass bus_id explicitly (the harness-interpose
+    # call site in particular cannot be derived from ipc_parent
+    # because the harness has no parent service). When they do not,
+    # fall back to the subclass's best-effort derivation.
+    $self->{+BUS_ID} //= $self->_build_collector_bus_id;
 
     # Auditor first: loggers may need to consult it, and validation should run
     # in the same order as instantiation below.
@@ -110,21 +147,11 @@ sub init {
     # Skip the default when there are no loggers and no auditor; user may
     # still pass one explicitly, which will be honored.
     $self->{+PARSER} //= 'Test2::Harness2::Collector::Parser::IOParser'
-        if @{$self->{+LOGGERS}} || $self->{+AUDITOR};
+        if @{$self->{+LOGGERS}} || $self->auditor;
 
     # Load parser class if it's a class name
-    require(mod2file($self->{+PARSER}))
+    load_module($self->{+PARSER})
         if defined($self->{+PARSER}) && !ref $self->{+PARSER};
-}
-
-sub _load_logger_class {
-    my $class  = shift;
-    my ($name) = @_;
-    my $file   = mod2file($name);
-    return if $INC{$file};
-    no strict 'refs';
-    return if %{"${name}::"};
-    require $file;
 }
 
 sub _spec_class {
@@ -146,7 +173,7 @@ sub _validate_spec {
 
     if (blessed($spec)) {
         croak ucfirst($kind) . " '" . ref($spec) . "' does not implement $role"
-            unless $spec->DOES($role);
+            unless Role::Tiny::does_role($spec, $role);
         return;
     }
 
@@ -163,10 +190,10 @@ sub _validate_spec {
         croak "Invalid $kind specification: " . ref($spec);
     }
 
-    $class->_load_logger_class($name);
+    load_module($name);
 
     croak ucfirst($kind) . " '$name' does not implement $role"
-        unless $name->DOES($role);
+        unless Role::Tiny::does_role($name, $role);
 }
 
 # Pure validation: confirm each entry is a well-formed spec whose class
@@ -202,17 +229,6 @@ sub _normalize_loggers {
     $self->{+_LOGGERS_SPEC} = [@$loggers];
 }
 
-sub _normalize_auditor {
-    my $self = shift;
-
-    my $spec = $self->{+AUDITOR};
-    return unless defined $spec;
-
-    $self->_validate_spec($spec, 'auditor', 'Test2::Harness2::Role::Auditor');
-
-    $self->{+_AUDITOR_SPEC} = $spec;
-}
-
 # Build instances from the spec list. Called from _run_collector so that only
 # the collector child process constructs loggers/auditor objects -- the parent
 # never opens those file handles, sockets, etc.
@@ -242,7 +258,7 @@ sub _instantiate_loggers {
                 job_try => $self->{+JOB_TRY},
             );
             $item->set_ipcm_info($self->{+IPCM_INFO});
-            $item->set_auditor($self->{+AUDITOR}) if $self->{+AUDITOR};
+            $item->set_auditor($self->auditor) if $self->auditor;
             $item->set_loggers_lookup($self->{+LOGGERS_LOOKUP});
             $inst = $item;
         }
@@ -254,7 +270,7 @@ sub _instantiate_loggers {
                 job_try        => $self->{+JOB_TRY},
                 ipcm_info      => $self->{+IPCM_INFO},
                 loggers_lookup => $self->{+LOGGERS_LOOKUP},
-                (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
+                (defined $self->auditor ? (auditor => $self->auditor) : ()),
                 @args,
             );
         }
@@ -265,7 +281,7 @@ sub _instantiate_loggers {
                 job_try        => $self->{+JOB_TRY},
                 ipcm_info      => $self->{+IPCM_INFO},
                 loggers_lookup => $self->{+LOGGERS_LOOKUP},
-                (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
+                (defined $self->auditor ? (auditor => $self->auditor) : ()),
             );
         }
         $self->_add_logger($inst);
@@ -283,44 +299,6 @@ sub _add_logger {
     push @{$self->{+LOGGERS_LOOKUP}{ref $logger} //= []} => $logger;
 
     return $logger;
-}
-
-sub _instantiate_auditor {
-    my $self = shift;
-
-    my $spec = $self->{+_AUDITOR_SPEC};
-    return unless defined $spec;
-
-    my $inst;
-    if (blessed($spec)) {
-        $inst = $spec;
-        $inst->set_process_info(
-            run_id  => $self->{+RUN_ID},
-            job_id  => $self->{+JOB_ID},
-            job_try => $self->{+JOB_TRY},
-        );
-        $inst->set_ipcm_info($self->{+IPCM_INFO});
-    }
-    elsif (ref($spec) eq 'ARRAY') {
-        my ($class, @args) = @$spec;
-        $inst = $class->new(
-            run_id    => $self->{+RUN_ID},
-            job_id    => $self->{+JOB_ID},
-            job_try   => $self->{+JOB_TRY},
-            ipcm_info => $self->{+IPCM_INFO},
-            @args,
-        );
-    }
-    else {
-        $inst = $spec->new(
-            run_id    => $self->{+RUN_ID},
-            job_id    => $self->{+JOB_ID},
-            job_try   => $self->{+JOB_TRY},
-            ipcm_info => $self->{+IPCM_INFO},
-        );
-    }
-
-    $self->{+AUDITOR} = $inst;
 }
 
 sub spawn {
@@ -420,10 +398,10 @@ sub _spawn_collector_win32 {
 
     # Auditor follows the same constraint -- class name or [class, %args]
     # arrayref only on Windows, since blessed instances cannot be serialized.
-    if (defined $self->{+_AUDITOR_SPEC}) {
+    if (defined $self->_auditor_spec) {
         croak "Blessed auditor instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
-            if blessed($self->{+_AUDITOR_SPEC});
-        $params{auditor} = $self->{+_AUDITOR_SPEC};
+            if blessed($self->_auditor_spec);
+        $params{auditor} = $self->_auditor_spec;
     }
 
     my $json_file = encode_json_file(\%params);
@@ -565,8 +543,10 @@ sub _init_event_sinks {
     $self->{+_EVENT_LOGGERS} = [grep { $_->log_events } @{$self->{+LOGGERS}}];
 
     # Once every logger has started (and knows its final locators, e.g. an
-    # opened output file), report their metadata to the IPC peer so the
-    # harness service can emit a job_loggers event.
+    # opened output file), report their metadata to the harness so it can
+    # emit a job_loggers event. The message goes straight to the harness
+    # (ipc_harness), not up through an intermediate parent service; only
+    # the harness consumes it.
     $self->_send_logger_metadata;
 
     # When there is no parser the collector still drains the handles but
@@ -582,13 +562,151 @@ sub _init_event_sinks {
     return $parser;
 }
 
-# Gather metadata from each instantiated logger, keyed by class so multiple
-# instances of the same class coexist, and fire a one-shot loggers_ready
-# message to the configured IPC peer. Fire-and-forget: we never block the
-# collector on delivery beyond a short wait for the peer to come up (the
-# service-interpose flow races the peer's own registration), and failures
-# are warned. The collector registers on the IPC bus under its job_id so
-# the receiving peer can identify which collector produced the message.
+# Lazy IPC handle per target bus name. One handle entry per unique
+# target; each registers the collector on the IPC bus under its
+# job_id so the receiving service can identify the sender. The
+# collector sends only UPWARD (to its parent service or to the
+# harness); it never holds a handle into the IPC identity of the
+# process it is monitoring.
+sub _ipc_handle {
+    my ($self, $target) = @_;
+    return $self->{_ipc_handles}->{$target}
+        if $self->{_ipc_handles} && $self->{_ipc_handles}->{$target};
+
+    require IPC::Manager::Service::Handle;
+    my $handle = IPC::Manager::Service::Handle->new(
+        service_name => $target,
+        ipcm_info    => $self->{+IPCM_INFO},
+        name         => $self->bus_id,
+    );
+
+    # Wait briefly for the target to register so the first message
+    # actually lands; matters mainly in the service-interpose flow
+    # where the collector and its parent service race through startup.
+    # If the target never comes up we still return the handle and let
+    # individual sends fall through to the warn path.
+    eval { $handle->ready(5); 1 } or warn "Error waiting for ipc target '$target' to become ready: $@";
+
+    return $self->{_ipc_handles}->{$target} = $handle;
+}
+
+# Collector's own identity on the IPC bus. Per IPC_AND_LOGGERS §5.4
+# this must be self-describing:
+#
+#   collector:<service_name>           -- non-run-scoped collectors
+#                                         (harness's own, global resources,
+#                                         global-scope preload stages).
+#   collector:<service_name>:<run_id>  -- run-scoped collectors (run
+#                                         service's own, run-scoped
+#                                         resources, run-scoped preload
+#                                         stages, test-job collectors
+#                                         launched under a run).
+#
+# For service-interpose collectors, <service_name> is the interposed
+# service's bus name (what it registered as). For test-job collectors
+# there is no interposed service -- the test process is not a service --
+# so we use the job_id as the disambiguator.
+sub _build_collector_bus_id {
+    my $self = shift;
+
+    # Base-class fallback: pick whichever identifier we have. Subclasses
+    # (Collector::Test, Collector::Service) tighten this down to the
+    # one their role actually identifies by.
+    my $collected_name = $self->{+IPC_PARENT} // $self->{+JOB_ID};
+
+    croak "Could not determine the name of what we are collecting: set bus_id explicitly, or ensure at least one of ipc_parent / job_id is provided"
+        unless $collected_name;
+
+    return $self->_compose_bus_id($collected_name);
+}
+
+# Share the run-id suffix logic between the base's fallback and the
+# subclass builders.
+sub _compose_bus_id {
+    my ($self, $collected_name) = @_;
+    my $id = "collector:$collected_name";
+    $id .= ":$self->{+IPC_RUN}"
+        if defined $self->{+IPC_RUN}
+        && (length($self->{+IPC_RUN}) + length($id) + 1) < 512;
+    return $id;
+}
+
+# Fire-and-forget send to a specific target service. Every send a
+# collector performs goes UP the tree -- to ipc_parent, ipc_run, or
+# ipc_harness -- and a collector never outlives its targets: a
+# correctly-shut-down system tears the collector down before the
+# services it talks to. A pipe / EPIPE error here therefore means
+# a parent went away before its collector was torn down, which is
+# a real bug (shutdown ordering, crashed peer, etc.) and wants to
+# surface, not get silenced. All send failures warn. Returns
+# nothing either way since the collector's lifecycle must never
+# depend on delivery.
+sub _send_to {
+    my ($self, $target, $content) = @_;
+    return unless defined $target;
+
+    my $ok = eval {
+        my $handle = $self->_ipc_handle($target);
+        $handle->client->send_message($target, $content);
+        1;
+    };
+    return if $ok;
+
+    my $err = $@;
+    warn "Collector IPC send failed (kind '" . ($content->{kind} // '?') . "'): $err";
+    return;
+}
+
+# Collector exit notifications. Two recipients:
+#
+#   1. ipc_parent (if set): a brief "collector_exiting" signal
+#      telling whichever service spawned us that we are shutting
+#      down. For per-job test collectors this is the RunService;
+#      for resource-service collectors their host service; for the
+#      harness interpose collector it is undef (no parent service).
+#
+#   2. ipc_harness: a richer "collector_exiting" event addressed
+#      directly to the main harness. Payload carries enough for
+#      the harness to update its tracking without another IPC hop
+#      -- for a test collector, the auditor's pass/fail verdict
+#      and the child exit code are included here. The harness
+#      uses these to advance its scheduler and aggregate per-run
+#      tallies.
+#
+# Called once, at the end of the collector's lifecycle, after
+# logger shutdowns have flushed.
+sub _send_collector_exiting {
+    my $self = shift;
+
+    my %base = (
+        kind    => 'collector_exiting',
+        run_id  => $self->{+RUN_ID},
+        job_id  => $self->{+JOB_ID},
+        job_try => $self->{+JOB_TRY} // 0,
+        pid     => $$,
+    );
+
+    # Brief upward signal to the spawning service (if any).
+    $self->_send_to($self->{+IPC_PARENT}, {%base}) if defined $self->{+IPC_PARENT};
+
+    # Detailed report to the harness. Every collector reports its
+    # child exit status; a Test subclass additionally fills in the
+    # auditor's pass verdict and counts via the extension hook.
+    my %harness_payload = %base;
+    $harness_payload{exit} = $self->{+CHILD_EXIT} if defined $self->{+CHILD_EXIT};
+    $self->_extend_exiting_payload_for_harness(\%harness_payload);
+    $self->_send_to($self->{+IPC_HARNESS}, \%harness_payload);
+
+    return;
+}
+
+# Gather metadata from each instantiated logger, keyed by class so
+# multiple instances of the same class coexist, and fire a one-shot
+# `collector_artifacts` message (see IPC_AND_LOGGERS §8).
+#
+# Routing per §8.3: direct to ipc_run if the collector has one,
+# else ipc_harness. Never via ipc_parent -- the intermediate parent
+# (a preload stage, a resource service) has no use for the payload.
 sub _send_logger_metadata {
     my $self = shift;
 
@@ -605,35 +723,17 @@ sub _send_logger_metadata {
         push @{$loggers{$class}} => $meta;
     }
 
-    my $ok = eval {
-        require IPC::Manager::Service::Handle;
-        my $handle = IPC::Manager::Service::Handle->new(
-            service_name => $self->{+IPC_PEER},
-            ipcm_info    => $self->{+IPCM_INFO},
-            name         => $self->{+JOB_ID},
-        );
+    my $target = $self->{+IPC_RUN} // $self->{+IPC_HARNESS};
 
-        # Wait briefly for the peer to register so the message actually
-        # lands; this matters mainly in the service-interpose flow where
-        # the collector and the service it talks to are siblings racing
-        # through startup. If the peer never comes up we still try the
-        # send (and fall through to the warn path) so regressions are
-        # surfaced rather than silently swallowed.
-        $handle->ready(5);
-
-        $handle->client->send_message(
-            $self->{+IPC_PEER},
-            {
-                kind    => 'loggers_ready',
-                run_id  => $self->{+RUN_ID},
-                job_id  => $self->{+JOB_ID},
-                job_try => $self->{+JOB_TRY},
-                loggers => \%loggers,
-            },
-        );
-        1;
-    };
-    warn "Collector loggers_ready send failed: $@" unless $ok;
+    $self->_send_to(
+        $target, {
+            kind    => 'collector_artifacts',
+            run_id  => $self->{+RUN_ID},
+            job_id  => $self->{+JOB_ID},
+            job_try => $self->{+JOB_TRY},
+            loggers => \%loggers,
+        }
+    );
 
     return;
 }
@@ -830,40 +930,12 @@ sub _finalize_collection {
 
     $_->shutdown($self) for @{$self->{+LOGGERS}};
 
-    # For test-job collectors (those with an auditor), wake the harness
-    # service's IPC loop with a job_complete_notify so the next
-    # run_on_all tick happens immediately instead of after the normal
-    # poll interval. The message itself is a no-op at the service side
-    # -- the wake-up IS the effect. Service-level collectors (no
-    # auditor) have no peer waiting on a per-job notification.
-    $self->_send_job_complete_notify if $self->{+AUDITOR};
-
-    return;
-}
-
-sub _send_job_complete_notify {
-    my $self = shift;
-
-    my $ok = eval {
-        require IPC::Manager::Service::Handle;
-        my $handle = IPC::Manager::Service::Handle->new(
-            service_name => $self->{+IPC_PEER},
-            ipcm_info    => $self->{+IPCM_INFO},
-            name         => $self->{+JOB_ID},
-        );
-
-        $handle->client->send_message(
-            $self->{+IPC_PEER},
-            {
-                kind    => 'job_complete_notify',
-                run_id  => $self->{+RUN_ID},
-                job_id  => $self->{+JOB_ID},
-                job_try => $self->{+JOB_TRY},
-            },
-        );
-        1;
-    };
-    warn "Collector job_complete_notify send failed: $@" unless $ok;
+    # Tell the peer service we are about to exit so the scheduler can
+    # arm its pid-gone grace timer immediately. Still critical path,
+    # still independent of whatever loggers were (or were not)
+    # configured. Fires after logger shutdown so any last logger
+    # messages flush first through the same shared handle.
+    $self->_send_collector_exiting;
 
     return;
 }
@@ -1202,7 +1274,7 @@ sub _process_event {
     return unless $event;
 
     my @events;
-    if (my $auditor = $self->{+AUDITOR}) {
+    if (my $auditor = $self->auditor) {
         @events = $auditor->audit_event($event);
 
         if (!$self->{+_FAILING_NOTIFIED} && $auditor->failing) {
@@ -1291,7 +1363,7 @@ sub _kill_child {
     while (time - $start < $timeout) {
         my $rv = waitpid($pid, WNOHANG);
         return $? if $rv == $pid;
-        sleep(0.1);
+        tinysleep(0.1);
     }
 
     # Force kill

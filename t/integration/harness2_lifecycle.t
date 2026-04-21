@@ -1,0 +1,155 @@
+use Test2::V0;
+use File::Temp qw/tempdir/;
+use POSIX qw/:sys_wait_h _exit/;
+use Time::HiRes qw/sleep/;
+
+use Test2::Harness2;
+
+sub wait_until {
+    my ($check, $timeout_sec) = @_;
+    my $deadline = time + $timeout_sec;
+    while (time < $deadline) {
+        return 1 if $check->();
+        sleep(0.05);
+    }
+    return 0;
+}
+
+subtest 'Terminate mid-run kills collector and test process' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    # Test file that sleeps forever.
+    my $tf = "$dir/sleep.t";
+    open my $fh, '>', $tf or die;
+    print $fh "use Test2::V0; ok(1); sleep 60; done_testing;\n";
+    close $fh;
+
+    my $spawn = Test2::Harness2->spawn(workdir => $dir);
+    my $q     = $spawn->queue_test_run(files => [$tf]);
+    ok($q->{ok}, 'queued');
+
+    # Wait for status to show a running job.
+    my $running_pid;
+    wait_until(
+        sub {
+            my $s = $spawn->status;
+            $running_pid = $s->{running} && $s->{running}{pid};
+            return $running_pid ? 1 : 0;
+        },
+        10
+    ) or die "test never started";
+
+    ok(kill(0, $running_pid), 'collector pid is alive pre-terminate');
+
+    $spawn->terminate;
+
+    # Brief wait in case the OS hasn't fully reaped yet.
+    wait_until(sub { !kill(0, $running_pid) }, 5);
+
+    ok(!kill(0, $running_pid), 'collector pid is dead post-terminate');
+    ok(!kill(0, $spawn->pid),  'service pid is dead post-terminate');
+};
+
+subtest 'test that signals its own pgroup does not kill the harness' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    my $tf = "$dir/kill-self.t";
+    open my $fh, '>', $tf or die;
+    print $fh <<'PERL';
+use Test2::V0;
+ok(1, "pre-kill");
+kill 'TERM', 0;  # signal own pgroup; must not reach harness
+sleep 1;         # in case signal arrives async
+fail("should be dead by now");
+done_testing;
+PERL
+    close $fh;
+
+    my $spawn = Test2::Harness2->spawn(workdir => $dir);
+    $spawn->queue_test_run(files => [$tf]);
+
+    # Wait for the run to complete (the test dies, the collector finishes).
+    wait_until(
+        sub {
+            my $s = $spawn->status;
+            return !$s->{running} && !@{$s->{queue}};
+        },
+        15
+    ) or diag "run did not complete";
+
+    ok(kill(0, $spawn->pid), 'harness still alive after test signalled its own pgroup');
+
+    $spawn->finish;
+    $spawn->wait;
+};
+
+subtest 'service dies when its caller dies (no detach)' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    my $tf = "$dir/sleep.t";
+    open my $fh, '>', $tf or die;
+    print $fh "use Test2::V0; ok(1); sleep 60; done_testing;\n";
+    close $fh;
+
+    # Fork a helper that spawns the service and then exits forcibly without
+    # detaching. The service should notice its caller is gone and exit.
+    my $helper = fork // die "fork: $!";
+    if (!$helper) {
+        my $spawn = Test2::Harness2->spawn(workdir => $dir);
+        $spawn->queue_test_run(files => [$tf]);
+        # Intentionally NOT detached — leak via _exit so DESTROY doesn't fire.
+        _exit(0);
+    }
+    waitpid $helper, 0;
+
+    # The service should exit on its own shortly.
+    ok(
+        wait_until(
+            sub {
+                return 0 unless -e "$dir/logs/services/harness.jsonl";
+                open my $fh, '<', "$dir/logs/services/harness.jsonl" or return 0;
+                local $/;
+                my $content = <$fh>;
+                return $content =~ /service_stopped/;
+            },
+            20
+        ),
+        'service logged service_stopped after caller died'
+    );
+};
+
+subtest 'detached service survives caller death' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    my $tf = "$dir/quick.t";
+    open my $fh, '>', $tf or die;
+    print $fh "use Test2::V0; ok(1); done_testing;\n";
+    close $fh;
+
+    # Pass the service pid back through a pipe so the outer test can clean up.
+    pipe(my $r, my $w) or die "pipe: $!";
+    my $helper = fork // die "fork: $!";
+    if (!$helper) {
+        close $r;
+        my $spawn = Test2::Harness2->spawn(workdir => $dir);
+        $spawn->detach;
+        print $w $spawn->pid, "\n";
+        close $w;
+        _exit(0);
+    }
+    close $w;
+    my $svc_pid = <$r>;
+    chomp $svc_pid;
+    close $r;
+    waitpid $helper, 0;
+
+    sleep(0.5);
+    ok(kill(0, $svc_pid), 'detached service still alive after caller died');
+
+    # Clean up: send TERM directly since we have no Spawn handle.
+    kill 'TERM', $svc_pid;
+    wait_until(sub { !kill(0, $svc_pid) }, 10);
+    ok(!kill(0, $svc_pid), 'service reaped after TERM');
+};
+
+done_testing;

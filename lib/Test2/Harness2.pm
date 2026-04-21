@@ -1,0 +1,857 @@
+package Test2::Harness2;
+use strict;
+use warnings;
+
+our $VERSION = '2.000011';
+
+use Carp qw/croak/;
+use File::Path qw/make_path/;
+use File::Spec ();
+use Time::HiRes qw/time sleep/;
+use Test2::Util::UUID qw/gen_uuid/;
+use Test2::Harness2::Util qw/parse_exit/;
+use Test2::Harness2::Util::JSON qw/write_json_file_atomic/;
+use POSIX qw/WNOHANG getpgrp/;
+
+use constant IS_WIN32            => $^O eq 'MSWin32';
+use constant HAS_CHILD_SUBREAPER => eval {
+    require Test2::Harness2::ChildSubReaper;
+    Test2::Harness2::ChildSubReaper::have_subreaper_support() ? 1 : 0;
+} || 0;
+
+use IPC::Manager qw/ipcm_spawn/;
+use Test2::Harness2::Collector;
+use Test2::Harness2::Run;
+use Test2::Harness2::Util::EventEmitter;
+use Test2::Harness2::Util::IPC qw/list_direct_children/;
+
+use Object::HashBase qw{
+    <workdir
+    <logdir
+    <name
+    <job_id
+    <loggers
+    <test_auditor
+    <test_loggers
+    <kill_timeout
+    <parent_pids
+    <jump_to
+    +state
+    +queue
+    +current
+    +finish_after_initial_run
+    +emitter
+    +watch_pids_ref
+    +own_pgroup
+};
+
+use Role::Tiny::With;
+with 'IPC::Manager::Role::Service';
+
+sub init {
+    my $self = shift;
+
+    my $wd = $self->{+WORKDIR} // croak "'workdir' is a required attribute";
+    croak "workdir '$wd' does not exist or is not a directory" unless -d $wd;
+
+    # logdir defaults to 'logs' under the workdir. A caller-supplied
+    # relative path is resolved under the workdir; an absolute path is
+    # used verbatim (File::Spec handles non-unix absolute shapes like
+    # 'C:\...' and UNC paths, so we do not just check for a leading /).
+    # An existing empty directory is accepted -- only a non-empty
+    # logdir clobbers prior output and is refused.
+    my $logdir = $self->{+LOGDIR} // 'logs';
+    $logdir = File::Spec->catdir($wd, $logdir)
+        unless File::Spec->file_name_is_absolute($logdir);
+    $self->{+LOGDIR} = $logdir;
+
+    if (-e $logdir) {
+        croak "logdir '$logdir' exists but is not a directory" unless -d $logdir;
+        opendir(my $dh, $logdir) or croak "Cannot read logdir '$logdir': $!";
+        my @entries = grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+        closedir $dh;
+        croak "logdir '$logdir' is not empty -- refusing to clobber"
+            if @entries;
+    }
+
+    make_path("$logdir/services");
+
+    $self->{+NAME}           //= 'harness';
+    $self->{+JOB_ID}         //= gen_uuid();
+    $self->{+KILL_TIMEOUT}   //= 15;
+    $self->{+PARENT_PIDS}    //= [];
+    $self->{+STATE}          //= 'running';
+    $self->{+QUEUE}          //= [];
+    $self->{+WATCH_PIDS_REF} //= [@{$self->{+PARENT_PIDS}}];
+    $self->{+OWN_PGROUP}     //= 0;
+
+    # TODO: Eventually we will remove this default, but wait until we write the
+    # App::Yath2 code for that. No immediate action, but leave this TODO for
+    # future reference.
+    $self->{+LOGGERS} //= [
+        [
+            'Test2::Harness2::Collector::Logger::JSONL',
+            output_file => "$logdir/services/$self->{+NAME}.jsonl",
+        ],
+        [
+            'Test2::Harness2::Collector::Logger::JSON',
+            output_file => "$logdir/services/$self->{+NAME}.json",
+            spec        => $self,
+        ],
+    ];
+    $self->{+TEST_AUDITOR} //= 'Test2::Harness2::Collector::Auditor::Test';
+    $self->{+TEST_LOGGERS} //= ['Test2::Harness2::Collector::Logger::JSONL'];
+}
+
+sub start {
+    my ($class, %args) = @_;
+
+    my $test_run     = delete $args{test_run};
+    my $finish_after = delete $args{finish_after_initial_run};
+    my $caller_pid   = $$;
+
+    $args{parent_pids} //= [$caller_pid];
+
+    # If ipcm_info was already provided (e.g. by spawn()), reuse it.
+    # Otherwise spawn a fresh IPC bus now.  Keep $ipcm_guard alive for the
+    # rest of start() so the IPC bus is not torn down before the service
+    # process connects.  POSIX::_exit bypasses Perl destructors, so the
+    # guard never fires in either the service child or the collector parent.
+    my $ipcm_guard;
+    unless ($args{ipcm_info}) {
+        $ipcm_guard = ipcm_spawn();
+        $args{ipcm_info} = $ipcm_guard->info;
+    }
+
+    # Construct the service object in the pre-fork process.  init() creates
+    # $workdir/logs/services/ and populates default loggers.
+    my $self = $class->new(%args);
+
+    # Grab the loggers to hand to interpose before forking.
+    my $loggers = $self->{+LOGGERS};
+
+    # Everything the interpose child needs to do after the pipes are wired up
+    # is packaged here so it can either run inline (the normal path) or be
+    # handed to a caller-provided Long::Jump point via jump_to.
+    my $run_service = sub {
+        # The EventEmitter defaults wrap STDOUT and, when
+        # T2_HARNESS2_PIPE_COUNT advertises separate pipes, STDERR for the
+        # sync marker. The interposing collector is responsible for
+        # publishing that env var (see Collector::_interpose_child). We
+        # use the process-wide cached instance so anything else in this
+        # service that emits (e.g. a formatter running in the same
+        # process) shares one wrapper around the real FDs.
+        $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->std;
+
+        if ($test_run) {
+            $self->request_handler_queue_test_run($test_run);
+            $self->{+FINISH_AFTER_INITIAL_RUN} = 1 if $finish_after;
+        }
+
+        my $exit = $self->run;
+        POSIX::_exit($exit // 0);
+    };
+
+    my $jump_to = $self->{+JUMP_TO};
+
+    Test2::Harness2::Collector->interpose(
+        ipcm_info   => $self->ipcm_info,
+        ipc_peer    => $self->{+NAME},
+        loggers     => $loggers,
+        parser      => 'Test2::Harness2::Collector::Parser::IOParser',
+        parent_pids => [$caller_pid],
+        (defined($jump_to) ? (jump_to => $jump_to, jump_payload => $run_service) : ()),
+    );
+
+    # Reached only in the interpose child on the non-jump path; with jump_to
+    # set the longjump has already handed $run_service to the setjump caller.
+    $run_service->();
+}
+
+sub spawn {
+    my ($class, %args) = @_;
+
+    my $test_run     = delete $args{test_run};
+    my $finish_after = delete $args{finish_after_initial_run};
+
+    $args{parent_pids} //= [$$];
+
+    # Spawn the IPC bus in the parent so both parent and child share the same
+    # connection info.  Use guard => 0 so the parent does not try to tear down
+    # the bus when the Spawn object goes out of scope; the child owns it.
+    my $ipcm = ipcm_spawn(guard => 0);
+    $args{ipcm_info} = $ipcm->info;
+
+    my $pid = fork // die "fork: $!";
+
+    if ($pid) {
+        # Parent: build the handle and block until the service is ready to
+        # accept requests (same pattern as ipcm_service's post-fork wait).
+        require Test2::Harness2::Spawn;
+        my $handle = Test2::Harness2::Spawn->new(
+            pid       => $pid,
+            ipcm_info => $args{ipcm_info},
+            workdir   => $args{workdir},
+            name      => $args{name} // 'harness',
+        );
+
+        my $timeout = 10;
+        my $start   = time;
+        until ($handle->handle->ready) {
+            die "Timeout waiting for harness service to come up after ${timeout}s\n"
+                if time - $start > $timeout;
+
+            sleep(0.02);
+        }
+
+        return $handle;
+    }
+
+    # Child: run the service via start().  ipcm_info is already set so
+    # start() will skip the second ipcm_spawn() call.
+    $class->start(
+        %args,
+        ($test_run     ? (test_run                 => $test_run)     : ()),
+        ($finish_after ? (finish_after_initial_run => $finish_after) : ()),
+    );
+
+    # start() never returns; POSIX::_exit is called inside.
+    POSIX::_exit(255);
+}
+
+# IPC::Manager::Role::Service required methods. Fleshed out in later tasks.
+sub orig_io    { {} }
+sub ipcm_info  { $_[0]->{ipcm_info} }
+sub pid        { $_[0]->{pid} //= $$ }
+sub set_pid    { $_[0]->{pid} = $_[1] }
+sub watch_pids { $_[0]->{+WATCH_PIDS_REF} }
+
+# IPC::Manager calls handle_request($req, $msg) where $req is the full
+# message envelope: { ipcm_request_id => '...', request => $payload }.
+# When called via Spawn->_send_request the payload is a hashref
+# { request => $name, ...extra_fields... }.  We unwrap it so that
+# $payload->{request} is the dispatch name and the extra fields are
+# available for the individual handlers.
+sub handle_request {
+    my ($self, $req, $msg) = @_;
+
+    # Unwrap the IPC::Manager envelope: $req->{request} is our payload.
+    my $payload = $req->{request};
+    $payload = {request => $payload} unless ref($payload) eq 'HASH';
+
+    my $type = $payload->{request};
+
+    return {ok => 0, error => "missing request type"} unless defined $type;
+
+    my $handler = "request_handler_$type";
+    return $self->$handler($payload) if $self->can($handler);
+
+    return {ok => 0, error => "unknown request '$type'"};
+}
+
+sub request_handler_queue_test_run {
+    my ($self, $payload) = @_;
+    $payload //= {};
+
+    return {ok => 0, error => 'service not accepting new runs'}
+        if $self->{+STATE} ne 'running';
+
+    my $files = $payload->{files} || [];
+    return {ok => 0, error => "'files' must be a non-empty arrayref"}
+        unless ref($files) eq 'ARRAY' && @$files;
+
+    my $run = Test2::Harness2::Run->from_files(
+        files => $files,
+        (defined $payload->{run_id} ? (run_id => $payload->{run_id}) : ()),
+    );
+
+    push @{$self->{+QUEUE}} => $run;
+
+    # FUTURE -- READ THIS WHEN MERGING / REBASING FROM THE
+    # 'reimplement-resource-classes' BRANCH:
+    #
+    # That branch introduces resource services that are spun up for a
+    # run based on the run's resource needs. When that work lands,
+    # EVERY run should become its own service (even runs that declare no
+    # resource needs), spawned by the harness as it picks the run up off
+    # this queue. Those resource services should run as sub-services under
+    # the run service, not alongside it. The run service itself should be
+    # configured with the JSON logger -- just like the harness's own
+    # interpose collector is today -- which will then own the file at
+    # "$logdir/runs/$run_id.json".
+    #
+    # Until that run service exists, the harness service writes the file
+    # directly so downstream consumers always have a runs/<id>.json
+    # sidecar to read. The call below is the stopgap; remove it once the
+    # run service's JSON logger takes over at run startup.
+    $self->_write_run_snapshot($run);
+
+    $self->_emit_service_event(
+        kind     => 'run_queued',
+        run_data => $run->TO_JSON,
+    );
+
+    for my $job (@{$run->jobs}) {
+        $self->_emit_service_event(
+            kind     => 'job_queued',
+            job_data => $job->TO_JSON,
+        );
+    }
+
+    return {ok => 1, run_id => $run->run_id};
+}
+
+sub request_handler_status {
+    my $self = shift;
+
+    my $queue = [
+        map { {
+            run_id  => $_->run_id,
+            pending => [@{$_->pending}],
+            running => [@{$_->running}],
+            done    => [@{$_->done}],
+        } } @{$self->{+QUEUE}}
+    ];
+
+    my $running;
+    if (my $cur = $self->{+CURRENT}) {
+        $running = {
+            run_id    => $cur->{run}->run_id,
+            job_id    => $cur->{job}->job_id,
+            test_file => $cur->{job}->test_file,
+            pid       => $cur->{pid},
+            started   => $cur->{started_at},
+        };
+    }
+
+    return {
+        service => {
+            name    => $self->{+NAME},
+            pid     => $$,
+            job_id  => $self->{+JOB_ID},
+            workdir => $self->{+WORKDIR},
+            state   => $self->{+STATE},
+        },
+        queue   => $queue,
+        running => $running,
+    };
+}
+
+sub request_handler_finish {
+    my $self = shift;
+    return {ok => 0} unless $self->{+STATE} eq 'running';
+    $self->{+STATE} = 'finishing';
+    return {ok => 1};
+}
+
+sub request_handler_terminate {
+    my $self = shift;
+    $self->_perform_hard_stop;
+    return {ok => 1};
+}
+
+sub run_on_general_message {
+    my ($self, $msg) = @_;
+
+    my $content = $msg->content;
+    my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
+
+    if (defined $kind && $kind eq 'job_complete_notify') {
+        # The act of receiving this message has already woken the service's
+        # event loop. On the next run_on_all iteration, _check_current_completion
+        # will detect the completion via waitpid. Nothing else to do.
+        return;
+    }
+
+    if (defined $kind && $kind eq 'loggers_ready') {
+        # Each job's collector reports its logger metadata after startup so
+        # the service can record where the job's outputs live.
+        $self->_emit_service_event(
+            kind     => 'job_loggers',
+            job_info => {
+                run_id  => $content->{run_id},
+                job_id  => $content->{job_id},
+                job_try => $content->{job_try},
+            },
+            loggers => $content->{loggers} // {},
+        );
+        return;
+    }
+
+    warn "Test2::Harness2: unhandled general message kind: " . (defined $kind ? "'$kind'" : '(none)') . "\n";
+
+    return;
+}
+
+sub request_handler_detach {
+    my ($self, $payload) = @_;
+    my $pid = $payload->{pid};
+    return {ok => 0, error => "missing 'pid'"} unless defined $pid;
+
+    $self->{+WATCH_PIDS_REF} = [grep { $_ != $pid } @{$self->{+WATCH_PIDS_REF}}];
+    return {ok => 1};
+}
+
+sub _check_current_completion {
+    my $self = shift;
+    my $cur  = $self->{+CURRENT} or return;
+
+    my $handle = $cur->{handle};
+    return unless $handle->is_done;
+
+    # Move the job from running to done.
+    $cur->{run}->mark_done($cur->{job}->job_id);
+
+    my $raw_exit = $handle->exit_code;
+    my $exit     = defined($raw_exit)                                       ? parse_exit($raw_exit) : undef;
+    my $pass     = defined($exit) && $exit->{err} == 0 && $exit->{sig} == 0 ? 1                     : 0;
+
+    $self->_emit_service_event(
+        kind     => 'job_completed',
+        job_info => {
+            run_id  => $cur->{run}->run_id,
+            job_id  => $cur->{job}->job_id,
+            job_try => $cur->{job}->job_try,
+        },
+        exit => $exit,
+        pass => $pass,
+    );
+
+    # If the whole run is complete, pop it from the queue.
+    if ($cur->{run}->is_complete) {
+        my $run_id = $cur->{run}->run_id;
+        $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
+
+        # FUTURE (reimplement-resource-classes branch): this atomic
+        # swap is the stopgap shutdown half of the runs/<id>.json file.
+        # Once runs are their own services with the JSON logger attached,
+        # the logger's shutdown hook will own this swap; remove the call
+        # below at that time.
+        $self->_write_run_snapshot($cur->{run});
+
+        $self->_emit_service_event(
+            kind     => 'run_ended',
+            run_data => {run_id => $run_id},
+        );
+
+        # Flip to finishing if requested (Task 15 builds on this).
+        $self->{+STATE} = 'finishing'
+            if $self->{+FINISH_AFTER_INITIAL_RUN}
+            && $self->{+STATE} eq 'running';
+    }
+
+    delete $self->{+CURRENT};
+}
+
+sub _perform_hard_stop {
+    my $self = shift;
+
+    $self->{+STATE} = 'terminating';
+    $self->{+QUEUE} = [];
+
+    my $grace = $self->{+KILL_TIMEOUT};
+
+    # %pids maps each tracked pid to a hashref recording which signals
+    # we have already sent it and when:
+    #   $pids{$pid} = { TERM => $t1 }           # first-signal stage
+    #   $pids{$pid} = { TERM => $t1, KILL => $t2 }  # escalated to KILL
+    # An empty hashref means "tracked, but no signal sent yet" -- the
+    # state newly-reparented descendants arrive in. The timestamps let
+    # the loop tell "just KILL'd, give it a moment" from "KILL'd long
+    # ago and still alive -- stuck past signal reach".
+    my %pids;
+
+    $pids{$self->{+CURRENT}{pid}} //= {} if $self->{+CURRENT};
+
+    # Add any registered workers.
+    if ($self->can('workers')) {
+        $pids{$_} //= {} for keys %{$self->workers // {}};
+    }
+
+    # Drop CURRENT/workers that IPC::Manager's per-tick waitpid may
+    # have reaped before _perform_hard_stop ran. Only one sweep is
+    # needed: from here on Perl runs synchronously and no other code
+    # path in the service reaps children behind us. Descendants
+    # reparented via PR_SET_CHILD_SUBREAPER aren't populated here --
+    # the loop below enumerates them on every iteration (via /proc,
+    # falling back to ps) and the first iteration catches whatever
+    # set is live at entry, so pre-loading them would be redundant.
+    delete $pids{$_} for grep { !kill(0, $_) } keys %pids;
+
+    my $first_sig = IS_WIN32 ? 'INT' : 'TERM';
+
+    while (1) {
+        # Pick up any descendants that have reparented to us since the
+        # last pass -- freshly-enumerated on the first iteration, and
+        # any newcomers from a just-reaped parent on later iterations.
+        # They arrive with an empty signal map so they get the full
+        # first-signal grace window rather than inheriting the state
+        # of the layer above them.
+        if (HAS_CHILD_SUBREAPER) {
+            $pids{$_} //= {} for list_direct_children($$);
+        }
+
+        my (@fresh, @to_kill, $unignored);
+        for my $pid (keys %pids) {
+            my $state = $pids{$pid};
+
+            next if $state->{IGNORE};
+
+            $unignored++;
+
+            if (my $f_ts = $state->{$first_sig}) {
+                if (my $k_ts = $state->{KILL}) {
+                    my $delta = time - $k_ts;
+
+                    if ($delta >= $grace) {
+                        $state->{IGNORE} = 1;
+                        $unignored--;
+                    }
+                }
+                elsif ((time - $f_ts) >= $grace) {
+                    # Times up, time to kill
+                    push @to_kill => $pid;
+                }
+            }
+            else {
+                # New, need first signal
+                push @fresh => $pid;
+            }
+        }
+
+        # If unignored is 0 then we have no pids that need action now or in the future.
+        last unless $unignored;
+
+        # Send the first signal to anything that has not had one. All
+        # workers are spawned with new_pgroup => 1 so each is already
+        # in its own pgroup; we signal by pid rather than by pgroup,
+        # which avoids accidentally signalling the service itself.
+        if (@fresh) {
+            kill($first_sig => @fresh);
+            my $now = time;
+            $pids{$_}{$first_sig} = $now for @fresh;
+        }
+
+        if (@to_kill) {
+            kill(KILL => @to_kill);
+            my $now = time;
+            $pids{$_}{KILL} = $now for @to_kill;
+        }
+
+        # Reap whatever is ready.
+        my $reaped = 0;
+        while (my $pid = waitpid(-1, WNOHANG)) {
+            last if $pid < 1;
+            delete $pids{$pid};
+            $reaped = 1;
+        }
+
+        # Sleep unless we did something.
+        sleep(0.05) unless $reaped || @fresh || @to_kill;
+    }
+
+    delete $self->{+CURRENT};
+}
+
+# IPC::Manager service-loop hook: a non-worker child pid was reaped.
+# The only pid we track here is the currently-running collector; hand
+# its exit status to the Collector::Handle so _check_current_completion
+# sees is_done. Reparented descendants (subreaper orphans) also land
+# here when they exit -- nothing further to do for those.
+sub run_on_pid {
+    my ($self, $pid, $exit) = @_;
+
+    my $cur = $self->{+CURRENT} or return;
+    return unless $cur->{pid} && $cur->{pid} == $pid;
+
+    my $handle = $cur->{handle} or return;
+    $handle->set_exit_code($exit) unless defined $handle->exit_code;
+
+    return;
+}
+
+sub run_should_end {
+    my $self = shift;
+
+    if ($self->{+STATE} eq 'terminating') {
+        return 1 if !$self->{+CURRENT};
+        return 0;
+    }
+
+    if ($self->{+STATE} eq 'finishing') {
+        return 1 if !$self->{+CURRENT} && !@{$self->{+QUEUE}};
+        return 0;
+    }
+
+    return 0;
+}
+
+sub run_on_start {
+    my $self = shift;
+
+    # Own our pgroup so tests that kill their own pgroups can't reach us.
+    # _perform_hard_stop still signals by pid, not by pgroup, to avoid
+    # hitting the service itself.
+    if (POSIX::setpgid(0, 0)) {
+        $self->{+OWN_PGROUP} = 1;
+    }
+    else {
+        warn "setpgid(0,0) failed in run_on_start: $!";
+    }
+
+    # Ask the kernel to treat us as a subreaper (Linux >= 3.4 only).
+    # Effect: any descendant that gets orphaned (its immediate parent
+    # died, typically because a test double-forked or called setsid +
+    # exit on its parent) reparents to THIS process instead of init(1).
+    #
+    # Once reparented, those processes become our direct children for
+    # all kernel purposes. Ongoing bookkeeping falls to two pieces:
+    #
+    #   * Reaping: IPC::Manager's service loop runs waitpid(-1, WNOHANG)
+    #     every tick and forwards each non-worker pid to run_on_pid().
+    #     Our run_on_pid() recognizes the currently-tracked collector
+    #     pid and hands its exit status to the collector Handle;
+    #     anything else is a reparented descendant that's already been
+    #     drained.
+    #
+    #   * Termination at shutdown: pgroups do not follow reparenting,
+    #     so _perform_hard_stop also enumerates our direct children
+    #     (via /proc, falling back to ps) and folds any extras into
+    #     the TERM-then-KILL sequence. That enumeration only runs at
+    #     shutdown; the per-tick reap is handled in-loop by
+    #     IPC::Manager.
+    #
+    # Test2::Harness2::ChildSubReaper is an optional dep. On non-Linux
+    # or when the module is not installed, we skip silently -- the
+    # harness still works, we just lose the escape-hatch cleanup for
+    # detached grandchildren.
+    if (HAS_CHILD_SUBREAPER) {
+        Test2::Harness2::ChildSubReaper::set_child_subreaper(1)
+            or warn "set_child_subreaper failed: $!";
+    }
+
+    # First structured event: service is up.
+    $self->_emit_service_event(
+        kind    => 'service_started',
+        pid     => $$,
+        pgid    => getpgrp(),
+        name    => $self->{+NAME},
+        workdir => $self->{+WORKDIR},
+    );
+}
+
+sub run_on_cleanup {
+    my $self = shift;
+
+    # Final sweep -- any stragglers go now.
+    $self->_perform_hard_stop if $self->{+CURRENT} || @{$self->{+QUEUE}};
+
+    $self->_emit_service_event(kind => 'service_stopped');
+}
+
+sub _emit_service_event {
+    my ($self, %fields) = @_;
+    my $em = $self->{+EMITTER} or return;    # no emitter in tests
+    $em->emit_event(%fields);
+}
+
+sub TO_JSON {
+    my $self = shift;
+    return {
+        name    => $self->{+NAME},
+        job_id  => $self->{+JOB_ID},
+        workdir => $self->{+WORKDIR},
+        pid     => $self->pid,
+    };
+}
+
+# STOPGAP until runs become their own services (see the
+# reimplement-resource-classes commentary in
+# request_handler_queue_test_run and _check_current_completion). Writes
+# "$logdir/runs/$run_id.json" atomically with the run's current TO_JSON
+# snapshot. Called once when the run is queued and again when the run
+# completes, so readers always see either an initial-state snapshot or
+# the final-state snapshot, never a partial file.
+sub _write_run_snapshot {
+    my ($self, $run) = @_;
+
+    my $runs_dir = $self->{+LOGDIR} . '/runs';
+    make_path($runs_dir) unless -d $runs_dir;
+
+    my $path = $runs_dir . '/' . $run->run_id . '.json';
+    write_json_file_atomic($path, $run->TO_JSON);
+    return;
+}
+
+sub run_on_all {
+    my ($self, $activity) = @_;
+
+    # IPC::Manager's service loop already reaped any exited child and
+    # routed non-worker pids through run_on_pid(), so by the time we
+    # get here the collector Handle has its exit_code stashed when
+    # applicable. _check_current_completion reads that via
+    # $handle->is_done without needing to waitpid itself.
+    $self->_check_current_completion;
+
+    return if $self->{+CURRENT};
+    return if $self->{+STATE} eq 'terminating';
+    return unless @{$self->{+QUEUE}};
+
+    my $run = $self->{+QUEUE}[0];
+    return unless @{$run->pending};
+
+    my $job_id = $run->pending->[0];
+    my ($job) = grep { $_->job_id eq $job_id } @{$run->jobs};
+
+    my $run_id  = $run->run_id;
+    my $log_dir = join '/', $self->{+LOGDIR}, 'runs', $run_id, $job_id;
+    make_path($log_dir);
+    my $log_file  = "$log_dir/0.jsonl";
+    my $json_file = "$log_dir/0.json";
+
+    # First job of this run -- announce run_started before the job_started.
+    $self->_emit_service_event(
+        kind     => 'run_started',
+        run_data => {run_id => $run_id},
+    ) if !@{$run->running} && !@{$run->done};
+
+    $self->_emit_service_event(
+        kind     => 'job_started',
+        job_info => {
+            run_id  => $run_id,
+            job_id  => $job_id,
+            job_try => $job->job_try,
+        },
+    );
+
+    my $handle = Test2::Harness2::Collector->spawn(
+        launch      => [$^X, '-Ilib', $job->test_file_abs],
+        new_pgroup  => 1,
+        parent_pids => [$$],
+        env_vars    => {T2_FORMATTER => 'Stream2'},
+        run_id      => $run_id,
+        job_id      => $job_id,
+        job_try     => 0,
+        ipcm_info   => $self->ipcm_info,
+        ipc_peer    => $self->{+NAME},
+        auditor     => $self->{+TEST_AUDITOR},
+        loggers     => [
+            [$self->{+TEST_LOGGERS}[0], output_file => $log_file],
+            [
+                'Test2::Harness2::Collector::Logger::JSON',
+                output_file => $json_file,
+                spec        => $job,
+            ],
+        ],
+    );
+
+    $run->mark_running($job_id);
+
+    $self->{+CURRENT} = {
+        run        => $run,
+        job        => $job,
+        handle     => $handle,
+        pid        => $handle->{pid},
+        started_at => time,
+    };
+
+    $self->register_worker("test-$job_id", $handle->{pid})
+        if $self->can('register_worker');
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+Test2::Harness2 - Top-level test harness service.
+
+=head1 SYNOPSIS
+
+    # Run once, then exit
+    Test2::Harness2->start(
+        workdir                  => '/path/to/wd',
+        test_run                 => {files => ['t/a.t', 't/b.t']},
+        finish_after_initial_run => 1,
+    );
+
+    # Spawn as a persistent daemon, keep queuing
+    my $spawn = Test2::Harness2->spawn(workdir => '/path/to/wd');
+    $spawn->queue_test_run(files => ['t/c.t']);
+    my $status = $spawn->status;
+    $spawn->finish;
+    $spawn->wait;
+
+=head1 DESCRIPTION
+
+B<Use start() or spawn(), not new().> Direct C<new()> constructs the object
+but does not start the service loop. Prefer the C<start()> entry point when
+you want the current process to become the harness, or C<spawn()> when you
+want the harness to run in a child process and get back a handle to it.
+
+=head1 JUMP_TO
+
+Passing C<jump_to =E<gt> $name> to C<start()> tells the harness to unwind
+its own call stack inside the interposed collector child before running the
+service, using L<Long::Jump>. The caller must install a matching
+C<setjump()> around the C<start()> call; when the longjump fires the
+setjump returns a single-element arrayref whose only element is a
+coderef. Invoking that coderef runs the service (set up the emitter, queue
+any requested run, enter the main loop, and C<_exit>).
+
+This is useful when a test script has deep harness machinery above the
+setjump that should not be present on the service's stack. After the jump,
+the service runs from a clean stack frame, so exceptions and stack traces
+are tidier and an accidental C<return> out of the service cannot resume
+execution anywhere unintended.
+
+    use Long::Jump qw/setjump/;
+
+    my $ret = setjump 'harness' => sub {
+        Test2::Harness2->start(
+            workdir => $wd,
+            jump_to => 'harness',
+            # ... other start() args ...
+        );
+        # unreachable in the service child; the parent becomes the
+        # collector and exits without returning here either.
+    };
+
+    my ($run_service) = @$ret;
+    $run_service->();   # never returns; service calls _exit
+
+If C<jump_to> is set but no matching setjump is active, C<start()> croaks
+before forking. Without C<jump_to>, C<start()> behaves exactly as before.
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+L<https://github.com/Test-More/Test2-Harness>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+See L<https://dev.perl.org/licenses/>
+
+=cut

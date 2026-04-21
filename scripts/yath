@@ -7,7 +7,16 @@ our $VERSION = '2.000011';
 BEGIN {
     return if $^C;
 
-    @INC = split /;/, $ENV{T2_HARNESS_INCLUDES} if $ENV{T2_HARNESS_INCLUDES};
+    # Merge T2_HARNESS_INCLUDES into @INC rather than replacing it, so
+    # nested yath invocations inherit their caller's library path
+    # without losing the dev-lib / -I path the current process was
+    # launched with. This matches old/scripts/yath exactly and is the
+    # behaviour t/integration/nested_includes.t relies on.
+    if ($ENV{T2_HARNESS_INCLUDES}) {
+        my %SEEN = map { $_ => 1 } @INC;
+        push @INC => grep { !$SEEN{$_}++ } split /;/, $ENV{T2_HARNESS_INCLUDES};
+    }
+    $ENV{T2_HARNESS_INCLUDES} = join ';' => @INC;
 
     require App::Yath::Script;
 

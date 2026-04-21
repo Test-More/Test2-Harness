@@ -31,6 +31,7 @@ use Object::HashBase qw{
     <test_loggers
     <extend_test_loggers
     <launch_job_timeout
+    <fields
     +resources_started
     +resources_torn_down
 };
@@ -55,6 +56,10 @@ sub init {
     $self->{+FAIL_COUNT}         //= 0;
     $self->{+RESOURCES}          //= [];
     $self->{+LAUNCH_JOB_TIMEOUT} //= DEFAULT_LAUNCH_JOB_TIMEOUT_SECS;
+    $self->{+FIELDS}             //= [];
+
+    croak "'fields' must be an arrayref"
+        unless ref($self->{+FIELDS}) eq 'ARRAY';
 
     # Per-run logger overrides. Each of the four slots is an arrayref
     # of logger specs; each pair is mutually exclusive.
@@ -186,6 +191,29 @@ sub mark_skipped {
 sub is_complete {
     my $self = shift;
     return !@{$self->{+PENDING}} && !@{$self->{+RUNNING}};
+}
+
+# Append one or more run-metadata "fields" to the run. A field is a
+# hashref produced by a plugin's run_fields() method (or anything
+# else that wants to stamp metadata onto the run) with the shape:
+#
+#   { name => 'sys', details => '...', raw => '...', data => { ... } }
+#
+# Fields show up in the run's TO_JSON snapshot so renderers and
+# downstream consumers can display them. This is the "harness_run_fields"
+# equivalent in the new architecture -- no IPC emit channel needed
+# because the fields travel with the Run object itself.
+sub add_fields {
+    my $self = shift;
+    return unless @_;
+
+    for my $field (@_) {
+        croak "run field must be a hashref"
+            unless ref($field) eq 'HASH';
+        push @{$self->{+FIELDS}} => $field;
+    }
+
+    return;
 }
 
 sub TO_JSON { return {%{$_[0]}} }

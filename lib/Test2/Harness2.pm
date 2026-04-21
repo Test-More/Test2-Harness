@@ -364,6 +364,28 @@ sub request_handler_queue_test_run {
 
     my $run = $self->{+QUEUE}->[-1];
 
+    # Dispatch the run_queued hook against every plugin attached to
+    # the harness. A plugin may return a list of "run fields" (a
+    # field being a hashref with name / details / raw / data keys, as
+    # per the old harness_run_fields facet), which we stamp onto the
+    # run before the run_queued service event fires. That way the
+    # event's run_data snapshot includes the plugin-supplied metadata.
+    #
+    # Each plugin is run inside its own eval so that a broken plugin
+    # cannot poison the queue operation; the error is warned and the
+    # next plugin is tried.
+    for my $plugin (@{$self->{+PLUGINS}}) {
+        next unless $plugin->can('run_queued');
+        my @fields;
+        my $pok = eval { @fields = $plugin->run_queued($run); 1 };
+        my $perr = $@;
+        unless ($pok) {
+            warn "Plugin '", (ref($plugin) || $plugin), "' run_queued hook failed: $perr";
+            next;
+        }
+        $run->add_fields(@fields) if @fields;
+    }
+
     $self->emit_service_event(
         kind     => 'run_queued',
         run_data => $run->TO_JSON,

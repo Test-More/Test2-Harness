@@ -17,6 +17,7 @@ our @EXPORT_OK = qw{
     clean_path
     close_file
     file2mod
+    find_in_updir
     fqmod
     hub_truth
     load_module
@@ -100,6 +101,27 @@ sub clean_path {
     $path = realpath($path) // $path if $absolute;
 
     return File::Spec->rel2abs($path);
+}
+
+# Search for $path starting in cwd and walking up parent directories.
+# Returns the realpath of the first hit, or undef if none is found.
+# Used by resources and config loaders that take a bare filename
+# (like '.sharedjobslots.yml') and want to locate the first copy
+# found in the project tree.
+sub find_in_updir {
+    my $path = shift;
+    return clean_path($path) if -e $path;
+
+    my %seen;
+    while (1) {
+        $path = File::Spec->catdir('..', $path);
+        my $check = eval { realpath(File::Spec->rel2abs($path)) };
+        last unless $check;
+        last if $seen{$check}++;
+        return $check if -e $check;
+    }
+
+    return;
 }
 
 # Resolve a short module name against one or more namespace prefixes.

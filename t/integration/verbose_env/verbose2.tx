@@ -1,0 +1,6 @@
+use Test2::V0;
+
+is($ENV{T2_HARNESS_IS_VERBOSE}, 2, "Verbosity level 2");
+is($ENV{HARNESS_IS_VERBOSE}, 2, "Verbosity level 2");
+
+done_testing;

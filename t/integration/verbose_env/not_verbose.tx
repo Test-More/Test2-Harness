@@ -1,0 +1,6 @@
+use Test2::V0;
+
+is($ENV{T2_HARNESS_IS_VERBOSE}, 0, "Not verbose");
+is($ENV{HARNESS_IS_VERBOSE}, 0, "Not verbose");
+
+done_testing;

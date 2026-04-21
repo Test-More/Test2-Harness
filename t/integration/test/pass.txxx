@@ -1,0 +1,7 @@
+use Test2::V0;
+
+is (scalar @ARGV, 2);
+is ( $ARGV[0], 'foobar');
+is ( $ARGV[1], 'baz');
+
+done_testing();

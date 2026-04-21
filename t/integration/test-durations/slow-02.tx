@@ -1,0 +1,5 @@
+use Test2::V0;
+
+ok 1, "$0";
+
+done_testing;

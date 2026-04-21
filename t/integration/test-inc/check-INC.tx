@@ -1,0 +1,18 @@
+package My::Simple::Test;
+
+use Test2::V0;
+
+my $has_dot_in_inc = grep { $_ eq '.' } @INC;
+ok !$has_dot_in_inc, q['.' is not in @INC run with --no-unsafe-inc];
+
+{	# relative path in @INC
+	my @relative_path = grep { index( $_, '/', 0 ) != 0 } @INC;
+	is \@relative_path, [], q[@INC does not contain relative path];
+}
+
+{  # check elative path in %INC
+	my @relative_path = grep { index( $_, '/', 0 ) != 0 } sort values %INC;
+	is \@relative_path, [], q[%INC does not contain relative path values];
+}
+
+done_testing;

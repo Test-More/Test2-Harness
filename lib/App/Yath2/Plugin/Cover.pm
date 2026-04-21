@@ -125,8 +125,8 @@ sub changes_applicable {
 # collection is requested. This is a direct port of old/; it depends
 # on two Stage 6 options (tests->load_import and runner->preload_early)
 # that are currently commented-out. When either option group is
-# inactive we skip the corresponding wiring with a TODO -- the rest
-# of the plugin (options, run metadata) still works.
+# inactive we skip the corresponding wiring (marked deferred inline
+# below) -- the rest of the plugin (options, run metadata) still works.
 sub post_process {
     my ($options, $state) = @_;
     my $settings = $state->{settings};
@@ -142,8 +142,10 @@ sub post_process {
     eval { require(mod2file($cover_class)); 1 }
         or die "Could not enable file coverage, could not load '$cover_class': $@";
 
-    # TODO Stage 18: when tests->load_import is re-activated, restore
-    # the force-inject path below (hoisted verbatim from old/).
+    # Deferred: when tests->load_import is re-activated (blocked by the
+    # Stage 6 TODO on App::Yath2::Options::Tests' --load-import option),
+    # this force-inject path hoisted verbatim from old/ takes effect.
+    # Resolved-by: Stage 6 follow-up activation of tests->load_import.
     if ($settings->check_group('tests')) {
         my $tests = $settings->tests;
         if ($tests->can('load_import')) {
@@ -153,9 +155,9 @@ sub post_process {
         }
     }
 
-    # TODO Stage 18: when runner->preload_early is re-activated,
-    # restore the preload-early injection below (hoisted verbatim
-    # from old/).
+    # Deferred: preload-early injection is blocked by the Stage 8 TODO
+    # on App::Yath2::Options::Runner's --preload-early option.
+    # Resolved-by: Stage 8 follow-up activation of runner->preload_early.
     if ($settings->check_group('runner')) {
         my $runner = $settings->runner;
         if ($runner->can('preload_early')) {
@@ -173,8 +175,10 @@ sub post_process {
 # 15 keeps the plugin option-group-complete and CLI-usable; the
 # field-emitting path returns when the upstream dispatch does.
 #
-# TODO Stage 18: route collector / artifact-reader events through
-# this plugin's annotate_event so coverage rollup re-lights.
+# Deferred: routing collector / artifact-reader events through a
+# plugin's annotate_event callback is a Stage 10 audit item -- the
+# coverage-aggregator port ships with its own event-dispatch wiring.
+# Resolved-by: Stage 10 successor plan (coverage-aggregator reinstate).
 sub run_queued { return }
 
 # annotate_event is the entry point renderer code (and the
@@ -182,10 +186,12 @@ sub run_queued { return }
 # wiring lands. Left in place so the Stage 15 surface matches old/,
 # but returns empty until its aggregator dependency is also ported.
 #
-# TODO Stage 18: port
-# App::Yath2::Log::CoverageAggregator + ByRun + ByTest and re-enable
-# this hook. The old implementation lives at
-# old/lib/Test2/Harness2/Log/CoverageAggregator*.pm.
+# Deferred: requires porting App::Yath2::Log::CoverageAggregator +
+# ByRun + ByTest. The old implementation lives at
+# old/lib/Test2/Harness2/Log/CoverageAggregator*.pm and its audit
+# landed in Stage 10 (docs/log-port-audit.md). The aggregators are
+# not needed until the coverage / summary renderer is revived.
+# Resolved-by: Stage 10 successor plan (coverage-aggregator reinstate).
 sub annotate_event {
     my $self = shift;
     return if $self->{+NO_AGGREGATE};

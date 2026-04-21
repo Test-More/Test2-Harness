@@ -1,6 +1,9 @@
 use Test2::V0;
 
-# TODO Stage 18: plugin.t exercises a custom TestPlugin with
+# Deferred (resolved-by: Stage 6 option activation + plugin hook
+# surface extension under App::Yath2::Role::Plugin + deprecation
+# shim decision for removed hooks): plugin.t exercises a custom
+# TestPlugin with
 # hooks for duration_data, changed_files, get_coverage_tests,
 # munge_files / munge_search, claim_file, and deprecated-hook
 # warnings. The old plugin used the -p+TestPlugin + -A +

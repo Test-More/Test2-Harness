@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: this test asserts the verbose (-v) formatter
+# Deferred (resolved-by: Formatter column work -- post-parity
+# renderer redesign or move-to-t/AI rewrite):
+# this test asserts the verbose (-v) formatter
 # output carries specific per-line encodings (both UTF-8 and
 # Latin-1 through to the terminal intact) using line shapes like:
 #

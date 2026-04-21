@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: stamps.t polls the yath --log JSONL stream and
+# Deferred (resolved-by: --log plumbing + -A / --no-plugins option
+# activation + shared TestPlugin surface): stamps.t polls the yath
+# --log JSONL stream and
 # asserts every event carries a $event->{stamp} entry. The test
 # uses -A + -pTestPlugin + -v + --no-plugins; its TestPlugin is
 # the same one shared with plugin.t.

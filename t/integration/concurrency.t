@@ -1,6 +1,7 @@
 use Test2::V0;
 
-# TODO Stage 18 / Stage 12 follow-up: this test polls a yath --log
+# Deferred (resolved-by: --log plumbing + Tester log=>1 follow-up):
+# this test polls a yath --log
 # JSONL file for harness_job_start / harness_job_exit events and
 # asserts the observed (start, exit) ordering respects the -j4 / -j2
 # concurrency cap.

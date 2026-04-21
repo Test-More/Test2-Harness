@@ -1,6 +1,7 @@
 use Test2::V0;
 
-# TODO Stage 18: includes.t verifies yath's @INC assembly across
+# Deferred (resolved-by: Stage 6 --unsafe-inc/-l/-b option activation
+# + App::Yath2->app_path): includes.t verifies yath's @INC assembly across
 # -I, -b (blib), -l (lib), --unsafe-inc, -D (dev-lib), and the
 # not-perl shebang handling. The test chdirs into
 # t/integration/includes/ and runs yath with a set of permutations

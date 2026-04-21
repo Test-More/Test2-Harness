@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: log_dir.t passes --log-dir=<path> and -L to yath
+# Deferred (resolved-by: Stage 6 --log-dir / -L option activation +
+# Command::test user-requested top-level JSONL logger wiring):
+# log_dir.t passes --log-dir=<path> and -L to yath
 # and verifies a single .jsonl file lands in that directory.
 #
 # Neither --log-dir nor -L are wired up yet: both options sit

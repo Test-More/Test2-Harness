@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: projects.t asserts `yath projects` enumerates a
+# Deferred (resolved-by: Command::projects implementation --
+# Stage 13 still a stub; filename label gap fixed in Stage 18):
+# projects.t asserts `yath projects` enumerates a
 # set of sibling project dirs (foo / bar / baz) under a common
 # root and runs yath in each, with output lines like
 # "PASSED .*foo.*t.*pass.tx".

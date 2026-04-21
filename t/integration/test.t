@@ -1,6 +1,10 @@
 use Test2::V0;
 
-# TODO Stage 18: the old test.t is the broad 'yath test' smoke
+# Deferred (resolved-by: Stage 6 --exclude-file/--exclude-list/
+# --durations/--no-unsafe-inc activation + arisdottle arg forwarding
+# + finder underscore-skip + durations-driven scheduling; the
+# filename-label gap itself is fixed in Stage 18):
+# the old test.t is the broad 'yath test' smoke
 # test. It asserts several things the current tree can't yet
 # produce:
 #

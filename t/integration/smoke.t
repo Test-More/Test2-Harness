@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: port the SmokePlugin fixture into the new plugin
+# Deferred (resolved-by: --log JSONL Tester plumbing + -pSmokePlugin
+# plugin-finder hook surface; --ext itself is now active post-Stage 18):
+# port the SmokePlugin fixture into the new plugin
 # surface and the --smoke-exists option Stage 6 left commented out
 # (see Options/Finder TODO markers). The fixture dir for this test
 # lives next to it under t/integration/smoke/ and carries a local

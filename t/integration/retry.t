@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: retry.t exercises the -r3 / --retry N / --project
+# Deferred (resolved-by: Stage 6 --retry / --project activation +
+# retry-mechanism port + harness_final.retried facet emission):
+# retry.t exercises the -r3 / --retry N / --project
 # options and polls the harness log for the harness_final facet to
 # assert the retry sequence (tried 2/2, 2/4, file=retry.tx,
 # status=YES/NO).

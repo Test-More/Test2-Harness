@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: tapsubtest.t asserts specific verbose-formatter
+# Deferred (resolved-by: Formatter depth-decoration rebuild -- post-
+# parity renderer redesign or move-to-t/AI rewrite):
+# tapsubtest.t asserts specific verbose-formatter
 # output lines for nested subtests using the old '[  PASS  ]  job 1
 # +~buffered' shape with level indentation (| + / | | / | ^ / ^).
 #

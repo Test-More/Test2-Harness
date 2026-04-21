@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: resource.t drives a custom Resource module
+# Deferred (resolved-by: --log JSONL Tester plumbing +
+# Stage 6 -R/--resource option activation + STDERR-to-log funneling):
+# resource.t drives a custom Resource module
 # (resource/lib/Resource.pm) through yath -R+Resource -j4 and
 # polls the JSONL log for STDERR lines of the form
 # "<pid> - <action>: <resource> - <slot>" then asserts the

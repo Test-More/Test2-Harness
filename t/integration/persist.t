@@ -1,6 +1,8 @@
 use Test2::V0;
 
-# TODO Stage 18: persist.t exercises the daemon lifecycle (start
+# Deferred (resolved-by: yath which/watch output-shape rebuild +
+# renderer parity with daemon surface -- post-Stage 14 follow-up):
+# persist.t exercises the daemon lifecycle (start
 # -> run -> which -> reload -> watch STOP -> run -> stop -> which)
 # while asserting filename-based output patterns like
 # "PASSED .*pass.tx" / "FAILED .*fail.tx" / "Found a persistent

@@ -45,15 +45,15 @@ use Object::HashBase qw{
     <jump_to
     <resources
     <broken_resource_behavior
-    +state
+    state
     +queue
     +running_jobs
     <resource_services
     +run_services
     +finish_after_initial_run
     +emitter
-    +watch_pids_ref
-    +own_pgroup
+    watch_pids
+    own_pgroup
 };
 
 # Valid values for broken_resource_behavior: what the scheduler does
@@ -126,7 +126,7 @@ sub init {
     $self->{+RUNNING_JOBS}      //= {};
     $self->{+RESOURCE_SERVICES} //= {};
     $self->{+RUN_SERVICES}      //= {};
-    $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
+    $self->{+WATCH_PIDS}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
     $self->{+BROKEN_RESOURCE_BEHAVIOR} //= 'skip';
@@ -487,7 +487,7 @@ sub request_handler_detach {
     my $pid = $payload->{pid};
     return {ok => 0, error => "missing 'pid'"} unless defined $pid;
 
-    $self->{+WATCH_PIDS_REF} = [grep { $_ != $pid } @{$self->{+WATCH_PIDS_REF}}];
+    $self->{+WATCH_PIDS} = [grep { $_ != $pid } @{$self->{+WATCH_PIDS}}];
     return {ok => 1};
 }
 

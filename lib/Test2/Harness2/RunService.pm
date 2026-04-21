@@ -33,12 +33,12 @@ use Object::HashBase qw{
     <loggers
     <test_loggers
     +run
-    +state
+    state
     <resource_services
     +test_jobs
     +log_fh
-    +watch_pids_ref
-    +own_pgroup
+    watch_pids
+    own_pgroup
 };
 
 # Public accessor for the Run object -- named run_obj rather than 'run'
@@ -97,7 +97,7 @@ sub init {
     $self->{+STATE}             //= 'running';
     $self->{+RESOURCE_SERVICES} //= {};
     $self->{+TEST_JOBS}         //= {};
-    $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
+    $self->{+WATCH_PIDS}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
     # log_file is the run service's own direct-JSONL audit trail;

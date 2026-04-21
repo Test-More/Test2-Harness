@@ -18,15 +18,6 @@ use constant HAS_CHILD_SUBREAPER => eval {
     Test2::Harness2::ChildSubReaper::have_subreaper_support() ? 1 : 0;
 } || 0;
 
-# Constants for the hash slots the role reaches into directly.
-# Consumers declare the same slot names via Object::HashBase; the two
-# agree by string value, so $self->{+STATE} here and $self->{+STATE}
-# in the consumer address the same field.
-use constant STATE          => 'state';
-use constant KILL_TIMEOUT   => 'kill_timeout';
-use constant OWN_PGROUP     => 'own_pgroup';
-use constant WATCH_PIDS_REF => 'watch_pids_ref';
-
 # Any harness-side long-lived service (Test2::Harness2, RunService, a
 # future preloader, ...) shares the same skeletal shape: an IPC::Manager
 # service, a JSONL/event-bus event stream, a pgroup + optional subreaper
@@ -45,12 +36,21 @@ requires 'name';
 requires 'emit_service_event';
 requires 'hard_stop_pids';
 
+# State / policy accessors the role drives. The role reads kill_timeout
+# and watch_pids, and writes state / own_pgroup via their setters. A
+# typical Object::HashBase consumer gets all of these for free by
+# declaring the corresponding slots without a leading-sigil, e.g.
+# `state kill_timeout own_pgroup watch_pids`.
+requires 'kill_timeout';
+requires 'set_state';
+requires 'set_own_pgroup';
+requires 'watch_pids';
+
 # IPC::Manager::Role::Service contract defaults. All services use
 # hash-backed storage, so the role touches $self as a hash safely.
-sub orig_io    { {} }
-sub pid        { $_[0]->{pid} //= $$ }
-sub set_pid    { $_[0]->{pid} = $_[1] }
-sub watch_pids { $_[0]->{+WATCH_PIDS_REF} }
+sub orig_io { {} }
+sub pid     { $_[0]->{pid} //= $$ }
+sub set_pid { $_[0]->{pid} = $_[1] }
 
 # Envelope-aware request dispatcher. Incoming IPC carries a request
 # payload under 'request'; the payload is either a scalar (the request
@@ -110,8 +110,10 @@ sub run_on_start {
     # Own our pgroup so signals from managed children (tests, resource
     # services) can't reach us via pgroup delivery. Signals go out by
     # pid, never by pgroup, so pgroup isolation is enough.
+    my $pgroup_set = 0;
     if (POSIX::setpgid(0, 0)) {
-        $self->{+OWN_PGROUP} = 1;
+        $self->set_own_pgroup(1);
+        $pgroup_set = 1;
     }
     else {
         warn "setpgid(0,0) failed in run_on_start: $!";
@@ -123,17 +125,24 @@ sub run_on_start {
     # perform_hard_stop reach them at shutdown and lets IPC::Manager's
     # per-tick waitpid drive run_on_pid for them. Skipped silently on
     # platforms / builds without subreaper support.
+    my $subreaper_set = 0;
     if (HAS_CHILD_SUBREAPER && $self->become_sub_reaper) {
-        Test2::Harness2::ChildSubReaper::set_child_subreaper(1)
-            or warn "set_child_subreaper failed in run_on_start: $!";
+        if (Test2::Harness2::ChildSubReaper::set_child_subreaper(1)) {
+            $subreaper_set = 1;
+        }
+        else {
+            warn "set_child_subreaper failed in run_on_start: $!";
+        }
     }
 
     $self->emit_service_event(
-        kind    => 'service_started',
-        pid     => $$,
-        pgid    => getpgrp(),
-        name    => $self->name,
-        workdir => $self->workdir,
+        kind          => 'service_started',
+        pid           => $$,
+        pgid          => getpgrp(),
+        name          => $self->name,
+        workdir       => $self->workdir,
+        pgroup_set    => $pgroup_set    ? 1 : 0,
+        subreaper_set => $subreaper_set ? 1 : 0,
         $self->service_started_fields,
     );
 
@@ -163,14 +172,14 @@ sub run_on_start {
 sub perform_hard_stop {
     my $self = shift;
 
-    $self->{+STATE} = 'terminating';
+    $self->set_state('terminating');
 
     # Let the consumer flip its own state before we enumerate pids
     # (e.g. Harness2 drains its queue so a racing run_on_all tick does
     # not try to schedule mid-shutdown).
     $self->service_pre_hard_stop;
 
-    my $grace = $self->{+KILL_TIMEOUT};
+    my $grace = $self->kill_timeout;
 
     my %pids = $self->hard_stop_pids;
 
@@ -290,7 +299,7 @@ and what its own startup steps are.
 
     package My::Harness::Service;
     use Object::HashBase qw{
-        <workdir <name <kill_timeout +state +own_pgroup +watch_pids_ref ...
+        <workdir <name kill_timeout state own_pgroup watch_pids ...
     };
 
     use Role::Tiny::With;
@@ -299,6 +308,10 @@ and what its own startup steps are.
     # Required:
     sub emit_service_event { ... }     # emit an event to the host's log
     sub hard_stop_pids     { ... }     # return pid => {} map
+
+    # kill_timeout / state / own_pgroup / watch_pids accessors come
+    # from the Object::HashBase declarations above (sigil-free slot
+    # names generate both a getter and a set_<name> setter).
 
     # Optional overrides (defaults provided):
     sub become_sub_reaper     { 1 }
@@ -334,6 +347,31 @@ Return a hash of C<< pid => {} >> for every pid the service owns when
 C<perform_hard_stop> starts. The role then layers subreaper children
 on top and drives the TERM/KILL escalator; the consumer does not need
 to filter for already-dead pids.
+
+=item $secs = $service->kill_timeout
+
+Grace window (seconds) between the first signal (TERM/INT) and KILL
+during C<perform_hard_stop>.
+
+=item $pids = $service->watch_pids
+
+Arrayref of pids IPC::Manager's per-tick C<waitpid> should monitor.
+This is the L<IPC::Manager::Role::Service> contract accessor; the
+role surfaces it here so every service exposes its pid set through
+the same accessor.
+
+=item $service->set_state($new)
+
+Write C<$new> to the service's state slot. The role calls
+C<< ->set_state('terminating') >> at the start of
+C<perform_hard_stop>.
+
+=item $service->set_own_pgroup($bool)
+
+Write a boolean flag recording whether C<setpgid(0, 0)> succeeded
+during C<run_on_start>. The role sets it from C<run_on_start>; the
+consumer reads it wherever it wants to know if the process is in its
+own pgroup.
 
 =back
 
@@ -388,6 +426,10 @@ clear tracking hashes, etc.
 Does C<setpgid(0, 0)>, optionally becomes a subreaper via
 L<Test2::Harness2::ChildSubReaper> (when C<become_sub_reaper> returns
 true), emits C<service_started>, and calls C<service_on_start>.
+The emitted event carries C<pgroup_set> and C<subreaper_set> boolean
+fields reflecting whether those setup steps actually succeeded; a
+consumer watching its own log (or a downstream aggregator) can
+detect a degraded startup without re-deriving it.
 
 =item $response = $self->handle_request($req, $msg)
 
@@ -406,11 +448,13 @@ TERM-then-KILL escalator. Sets the consumer's C<state> slot to
 C<terminating>, calls the optional pre/on-reaped/post hooks, and
 drives the loop documented inline in the source.
 
-=item orig_io, pid, set_pid, watch_pids
+=item orig_io, pid, set_pid
 
 L<IPC::Manager::Role::Service> contract accessors with hash-backed
-defaults. Read/write C<$self->{pid}> and C<$self->{watch_pids_ref}>
-respectively.
+defaults. C<orig_io> returns an empty hashref, C<pid> defaults to
+C<$$> on first read and is writable via C<set_pid>.
+C<watch_pids> is required of the consumer (see L</REQUIRED METHODS>
+above).
 
 =back
 

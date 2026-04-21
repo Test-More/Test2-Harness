@@ -15,9 +15,9 @@ use Test2::Harness2::Role::Service;
         <name
         <kill_timeout
         <ipcm_info
-        +state
-        +own_pgroup
-        +watch_pids_ref
+        state
+        own_pgroup
+        watch_pids
         +events
         +calls
         +pids_to_return
@@ -79,7 +79,7 @@ subtest 'IPC::Manager::Role::Service contract defaults' => sub {
     is($svc->pid,     $$, 'pid defaults to $$');
     $svc->set_pid(42);
     is($svc->pid,        42,    'set_pid stores on the hash');
-    is($svc->watch_pids, undef, 'watch_pids reads watch_pids_ref');
+    is($svc->watch_pids, undef, 'watch_pids starts undef');
 };
 
 subtest 'handle_request routes to request_handler_* methods' => sub {
@@ -138,7 +138,9 @@ subtest 'run_on_start: pgroup + service_started emit + service_on_start' => sub 
     is($e->{extra},   'flavor',          'extra field from service_started_fields');
 
     is($svc->{+T::Svc::Fake::CALLS()}, ['on_start'], 'service_on_start fired');
-    ok($svc->{+T::Svc::Fake::OWN_PGROUP()}, 'own_pgroup set after successful setpgid');
+    ok($svc->own_pgroup, 'own_pgroup set after successful setpgid');
+    is($e->{pgroup_set},    1, 'pgroup_set flag in service_started event');
+    is($e->{subreaper_set}, 0, 'subreaper_set flag in service_started event (become_sub_reaper default is 0)');
 };
 
 subtest 'perform_hard_stop runs the escalator and reap hooks' => sub {

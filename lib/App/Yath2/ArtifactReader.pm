@@ -316,9 +316,12 @@ sub _verdict_for_job {
     # them; for now, jobs are assumed to have passed unless the total
     # fail_count is non-zero AND this is the last unaccounted-for job.
     #
-    # The fallback path via list_run_final_state (TODO) would give us
-    # authoritative per-job verdicts. For now, use the inflight
-    # harness counters conservatively.
+    # Deferred: a list_run_final_state query (or per-job pass/fail
+    # inside the existing run_status jobs map) would give us
+    # authoritative per-job verdicts. Today's pass/fail counter
+    # inference is adequate for the default / qvf / verbose modes
+    # under Stage 12's acceptance bar; resolved-by a Stage 19
+    # successor item when authoritative per-job verdicts land.
     my $h_fail = $status->{fail_count} // 0;
     my $already_seen_fails = grep { !$_->{pass} } values %{$self->{+PER_JOB_COMPLETE}};
     return 1 if $h_fail <= $already_seen_fails;

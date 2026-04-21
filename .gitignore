@@ -15,6 +15,7 @@
 .last_cover_stats
 .testsharedjobslots.yml
 .yath-persist.json
+.yath-daemon.json
 /*.gz
 /*.jsonl
 /*.zip

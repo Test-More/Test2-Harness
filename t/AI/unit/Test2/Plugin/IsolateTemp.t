@@ -1,9 +1,17 @@
 use Test2::V0;
+use Cwd ();
 use File::Temp ();
 
 # Run the plugin's BEGIN-time side effects in a child so our own
 # $ENV{TMPDIR} / $ENV{TEMPDIR} aren't mutated for the rest of the
 # outer test run.
+
+# Absolute lib path so the child's lazily-loaded
+# Test2::Formatter::Stream2 (triggered by the inherited
+# T2_FORMATTER=Stream2 env var under yath) can still be located after
+# the plugin mutates $ENV{TMPDIR} or the test otherwise moves away
+# from the repo cwd.
+my $ABS_LIB = Cwd::abs_path('lib') // 'lib';
 
 sub run_child {
     my ($setup, $body) = @_;
@@ -20,7 +28,16 @@ HEADER
     print $script "done_testing;\n";
     close $script;
 
-    my $out = qx{$^X -I lib $script 2>&1};
+    # The child should emit plain TAP, not Stream2 JSON frames. When
+    # we are running under yath ourselves, T2_FORMATTER=Stream2 and
+    # T2_HARNESS2_PIPE_COUNT=2 are in our env; keeping them in the
+    # child would swap its formatter to Stream2 and the `ok 1` /
+    # `not ok` assertions this test greps for wouldn't appear.
+    local %ENV = %ENV;
+    delete $ENV{T2_FORMATTER};
+    delete $ENV{T2_HARNESS2_PIPE_COUNT};
+
+    my $out = qx{$^X -I '$ABS_LIB' $script 2>&1};
     return {out => $out, exit => $?};
 }
 

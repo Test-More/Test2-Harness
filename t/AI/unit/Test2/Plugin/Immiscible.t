@@ -11,7 +11,15 @@ use File::Temp qw/tempdir/;
 # lock in the caller's cwd. All probing happens via run_child so the
 # plugin's side effects stay in a throwaway tempdir.
 
+use Cwd ();
 use Test2::Plugin::Immiscible ();
+
+# Absolute lib path captured BEFORE any subtest cd's into a tempdir so
+# the child can still locate our Test2/Formatter/Stream2.pm once the
+# T2_FORMATTER=Stream2 env we inherit from the outer yath collector
+# triggers a lazy require. Without the absolute path the child's
+# `-I lib` is relative to the tempdir and Stream2 can't be found.
+my $ABS_LIB = Cwd::abs_path('lib') // 'lib';
 
 sub run_child {
     my ($perl_code, %opts) = @_;
@@ -22,8 +30,16 @@ sub run_child {
     print $script $perl_code;
     close $script;
 
+    # Clear the harness-injected formatter env so the child emits
+    # plain TAP / plugin notes, not Stream2 JSON frames. Under yath
+    # the outer collector sets these; under prove they are unset.
+    # This test greps for human-readable strings either way.
+    local %ENV = %ENV;
+    delete $ENV{T2_FORMATTER};
+    delete $ENV{T2_HARNESS2_PIPE_COUNT};
+
     my $cmd_dir = $dir ? "cd '$dir' && " : '';
-    my $out = qx{$cmd_dir $^X -I lib $script 2>&1};
+    my $out = qx{$cmd_dir $^X -I '$ABS_LIB' $script 2>&1};
     return {out => $out, exit => $?};
 }
 

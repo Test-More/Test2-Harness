@@ -243,12 +243,17 @@ sub start {
     # points at the service-side name so the collector can still
     # deliver its end-of-life report to the harness if ever consumed
     # by an external orchestrator on the same bus.
-    Test2::Harness2::Collector->interpose(
+    # Top-of-tree interpose: no ipc_parent means the Service
+    # subclass's builder cannot derive a bus_id, so pass one
+    # explicitly. The collector identifies by the harness's own
+    # bus name.
+    require Test2::Harness2::Collector::Service;
+    Test2::Harness2::Collector::Service->interpose(
         ipcm_info   => $self->ipcm_info,
         ipc_parent  => undef,
         ipc_run     => undef,
         ipc_harness => $self->{+NAME},
-        kind        => 'service',
+        bus_id      => "collector:" . $self->{+NAME},
         loggers     => $loggers,
         parser      => 'Test2::Harness2::Collector::Parser::IOParser',
         parent_pids => [$caller_pid],
@@ -519,8 +524,11 @@ sub _handle_collector_exiting {
     my $cur = $self->{+RUNNING_JOBS}->{$job_id} or return;
     $cur->{pid_gone_since} //= time;
 
-    my $role = $content->{role} // 'generic';
-    if ($role eq 'test' && exists $content->{pass}) {
+    # Only test-job collectors include a pass verdict in their
+    # collector_exiting payload (Collector::Test's
+    # _extend_exiting_payload_for_harness hook). Service collectors
+    # do not carry one.
+    if (exists $content->{pass}) {
         $cur->{auditor_pass} = $content->{pass} ? 1 : 0;
     }
 

@@ -202,7 +202,8 @@ sub request_handler_launch_job {
 
     my $handle;
     my $spawn_ok = eval {
-        $handle = Test2::Harness2::Collector->spawn(
+        require Test2::Harness2::Collector::Test;
+        $handle = Test2::Harness2::Collector::Test->spawn(
             launch      => $launch_cmd,
             new_pgroup  => 1,
             parent_pids => [$$],
@@ -214,7 +215,6 @@ sub request_handler_launch_job {
             ipc_parent  => $self->{+NAME},
             ipc_run     => $self->{+NAME},
             ipc_harness => $self->{+HARNESS_NAME},
-            kind        => 'test',
             (defined $auditor ? (auditor => $auditor) : ()),
             loggers => [@logger_specs],
         );

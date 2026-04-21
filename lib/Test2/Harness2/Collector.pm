@@ -23,7 +23,14 @@ use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
 
-# Remove 'kind' in favor of making this class a base class with Collector::Test and Collector::Service subclasses for the divergent behavior. The auditor can become a test subclass exclusive field. But for simplicity of implementation and branching there can be an 'auditor' method on the base class that just returns undef.
+# This is the base class. Two subclasses add the test-vs-service
+# divergent behaviour: Test2::Harness2::Collector::Test carries an
+# auditor and derives its bus_id from job_id, while
+# Test2::Harness2::Collector::Service skips the auditor machinery
+# and derives its bus_id from the interposed service's bus name.
+# The base class is instantiable (the auditor accessors default to
+# undef / no-op) so generic collector behaviour can be exercised
+# without picking a subclass.
 use Object::HashBase qw{
     <launch
     <new_pgroup
@@ -31,7 +38,6 @@ use Object::HashBase qw{
     <out_fh
     <err_fh
     <child_pid
-    <auditor
     <parser
     <loggers
     <loggers_lookup
@@ -44,7 +50,6 @@ use Object::HashBase qw{
     <ipc_parent
     <ipc_run
     <ipc_harness
-    <kind
     <bus_id
 
     +_started
@@ -52,10 +57,22 @@ use Object::HashBase qw{
 
     +_event_loggers
     +_loggers_spec
-    +_auditor_spec
     +_failing_notified
     <child_exit
 };
+
+# Default auditor accessors for the base class. Test2::Harness2::Collector::Test
+# overrides `auditor` via its own HashBase slot and replaces
+# `_auditor_spec` / `_normalize_auditor` / `_instantiate_auditor` with
+# working implementations.
+sub auditor              { undef }
+sub _auditor_spec        { undef }
+sub _normalize_auditor   { }
+sub _instantiate_auditor { }
+
+# Test-specific exit payload hook. The base emits no extra fields;
+# Collector::Test fills in the auditor's pass verdict and counts.
+sub _extend_exiting_payload_for_harness { }
 
 use constant IS_WIN32 => $^O eq 'MSWin32';
 
@@ -90,7 +107,10 @@ sub init {
     $self->{+ENV_VARS}     //= {};
     $self->{+NEW_PGROUP}   //= 0;
 
-    # Provide this when we call Collector->spawn and/or Collector->interpose, only fallback to building it if we were not provided one. Update places that start collectors to provide a BUS_ID for the collector. This avoids depending on the parent_ipc, which can be undef for the harness itself.
+    # Callers should pass bus_id explicitly (the harness-interpose
+    # call site in particular cannot be derived from ipc_parent
+    # because the harness has no parent service). When they do not,
+    # fall back to the subclass's best-effort derivation.
     $self->{+BUS_ID} //= $self->_build_collector_bus_id;
 
     # Auditor first: loggers may need to consult it, and validation should run
@@ -127,7 +147,7 @@ sub init {
     # Skip the default when there are no loggers and no auditor; user may
     # still pass one explicitly, which will be honored.
     $self->{+PARSER} //= 'Test2::Harness2::Collector::Parser::IOParser'
-        if @{$self->{+LOGGERS}} || $self->{+AUDITOR};
+        if @{$self->{+LOGGERS}} || $self->auditor;
 
     # Load parser class if it's a class name
     load_module($self->{+PARSER})
@@ -209,17 +229,6 @@ sub _normalize_loggers {
     $self->{+_LOGGERS_SPEC} = [@$loggers];
 }
 
-sub _normalize_auditor {
-    my $self = shift;
-
-    my $spec = $self->{+AUDITOR};
-    return unless defined $spec;
-
-    $self->_validate_spec($spec, 'auditor', 'Test2::Harness2::Role::Auditor');
-
-    $self->{+_AUDITOR_SPEC} = $spec;
-}
-
 # Build instances from the spec list. Called from _run_collector so that only
 # the collector child process constructs loggers/auditor objects -- the parent
 # never opens those file handles, sockets, etc.
@@ -249,7 +258,7 @@ sub _instantiate_loggers {
                 job_try => $self->{+JOB_TRY},
             );
             $item->set_ipcm_info($self->{+IPCM_INFO});
-            $item->set_auditor($self->{+AUDITOR}) if $self->{+AUDITOR};
+            $item->set_auditor($self->auditor) if $self->auditor;
             $item->set_loggers_lookup($self->{+LOGGERS_LOOKUP});
             $inst = $item;
         }
@@ -261,7 +270,7 @@ sub _instantiate_loggers {
                 job_try        => $self->{+JOB_TRY},
                 ipcm_info      => $self->{+IPCM_INFO},
                 loggers_lookup => $self->{+LOGGERS_LOOKUP},
-                (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
+                (defined $self->auditor ? (auditor => $self->auditor) : ()),
                 @args,
             );
         }
@@ -272,7 +281,7 @@ sub _instantiate_loggers {
                 job_try        => $self->{+JOB_TRY},
                 ipcm_info      => $self->{+IPCM_INFO},
                 loggers_lookup => $self->{+LOGGERS_LOOKUP},
-                (defined $self->{+AUDITOR} ? (auditor => $self->{+AUDITOR}) : ()),
+                (defined $self->auditor ? (auditor => $self->auditor) : ()),
             );
         }
         $self->_add_logger($inst);
@@ -290,44 +299,6 @@ sub _add_logger {
     push @{$self->{+LOGGERS_LOOKUP}{ref $logger} //= []} => $logger;
 
     return $logger;
-}
-
-sub _instantiate_auditor {
-    my $self = shift;
-
-    my $spec = $self->{+_AUDITOR_SPEC};
-    return unless defined $spec;
-
-    my $inst;
-    if (blessed($spec)) {
-        $inst = $spec;
-        $inst->set_process_info(
-            run_id  => $self->{+RUN_ID},
-            job_id  => $self->{+JOB_ID},
-            job_try => $self->{+JOB_TRY},
-        );
-        $inst->set_ipcm_info($self->{+IPCM_INFO});
-    }
-    elsif (ref($spec) eq 'ARRAY') {
-        my ($class, @args) = @$spec;
-        $inst = $class->new(
-            run_id    => $self->{+RUN_ID},
-            job_id    => $self->{+JOB_ID},
-            job_try   => $self->{+JOB_TRY},
-            ipcm_info => $self->{+IPCM_INFO},
-            @args,
-        );
-    }
-    else {
-        $inst = $spec->new(
-            run_id    => $self->{+RUN_ID},
-            job_id    => $self->{+JOB_ID},
-            job_try   => $self->{+JOB_TRY},
-            ipcm_info => $self->{+IPCM_INFO},
-        );
-    }
-
-    $self->{+AUDITOR} = $inst;
 }
 
 sub spawn {
@@ -427,10 +398,10 @@ sub _spawn_collector_win32 {
 
     # Auditor follows the same constraint -- class name or [class, %args]
     # arrayref only on Windows, since blessed instances cannot be serialized.
-    if (defined $self->{+_AUDITOR_SPEC}) {
+    if (defined $self->_auditor_spec) {
         croak "Blessed auditor instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
-            if blessed($self->{+_AUDITOR_SPEC});
-        $params{auditor} = $self->{+_AUDITOR_SPEC};
+            if blessed($self->_auditor_spec);
+        $params{auditor} = $self->_auditor_spec;
     }
 
     my $json_file = encode_json_file(\%params);
@@ -638,25 +609,25 @@ sub _ipc_handle {
 sub _build_collector_bus_id {
     my $self = shift;
 
-    # Instead of tracking 'KIND' make Collector a base class, with Test and Service subclasses, only divergent behavior goes in the subclasses. Correct collector class should be used for the type of process being started.
-    my $kind = $self->{+KIND} // 'generic';
+    # Base-class fallback: pick whichever identifier we have. Subclasses
+    # (Collector::Test, Collector::Service) tighten this down to the
+    # one their role actually identifies by.
+    my $collected_name = $self->{+IPC_PARENT} // $self->{+JOB_ID};
 
-    my $collected_name;
-    if ($kind eq 'test') {
-        $collected_name = $self->{+JOB_ID};
-    }
-    else {
-        $collected_name = $self->{+IPC_PARENT};
-    }
-
-    croak "Could not determine the name of wehat we are collecting"
+    croak "Could not determine the name of what we are collecting: set bus_id explicitly, or ensure at least one of ipc_parent / job_id is provided"
         unless $collected_name;
 
+    return $self->_compose_bus_id($collected_name);
+}
+
+# Share the run-id suffix logic between the base's fallback and the
+# subclass builders.
+sub _compose_bus_id {
+    my ($self, $collected_name) = @_;
     my $id = "collector:$collected_name";
     $id .= ":$self->{+IPC_RUN}"
         if defined $self->{+IPC_RUN}
         && (length($self->{+IPC_RUN}) + length($id) + 1) < 512;
-
     return $id;
 }
 
@@ -707,15 +678,8 @@ sub _send_to {
 sub _send_collector_exiting {
     my $self = shift;
 
-    # Remove 'KIND' in favor of subclasses for divergent behavior.
-    my $kind        = $self->{+KIND} // 'generic';
-    my $child_exit  = $self->{+CHILD_EXIT};
-    my $auditor     = $self->{+AUDITOR};
-    my $has_verdict = ref($auditor) && $auditor->can('pass') ? 1 : 0;
-
     my %base = (
         kind    => 'collector_exiting',
-        role    => $kind,
         run_id  => $self->{+RUN_ID},
         job_id  => $self->{+JOB_ID},
         job_try => $self->{+JOB_TRY} // 0,
@@ -725,16 +689,12 @@ sub _send_collector_exiting {
     # Brief upward signal to the spawning service (if any).
     $self->_send_to($self->{+IPC_PARENT}, {%base}) if defined $self->{+IPC_PARENT};
 
-    # Detailed report to the harness. Tests carry pass/fail and
-    # exit; non-test collectors (services, resource services) omit
-    # the auditor fields.
+    # Detailed report to the harness. Every collector reports its
+    # child exit status; a Test subclass additionally fills in the
+    # auditor's pass verdict and counts via the extension hook.
     my %harness_payload = %base;
-    $harness_payload{exit} = $child_exit if defined $child_exit;
-    if ($has_verdict) {
-        $harness_payload{pass}       = $auditor->pass ? 1 : 0;
-        $harness_payload{pass_count} = $auditor->pass_count if $auditor->can('pass_count');
-        $harness_payload{fail_count} = $auditor->fail_count if $auditor->can('fail_count');
-    }
+    $harness_payload{exit} = $self->{+CHILD_EXIT} if defined $self->{+CHILD_EXIT};
+    $self->_extend_exiting_payload_for_harness(\%harness_payload);
     $self->_send_to($self->{+IPC_HARNESS}, \%harness_payload);
 
     return;
@@ -1314,7 +1274,7 @@ sub _process_event {
     return unless $event;
 
     my @events;
-    if (my $auditor = $self->{+AUDITOR}) {
+    if (my $auditor = $self->auditor) {
         @events = $auditor->audit_event($event);
 
         if (!$self->{+_FAILING_NOTIFIED} && $auditor->failing) {

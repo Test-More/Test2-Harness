@@ -1,6 +1,6 @@
 use Test2::V0;
 
-# TODO Stage 18: help.t asserts the output format of yath's help
+# Deferred: help.t asserts the output format of yath's help
 # dispatcher:
 #
 #   ^Usage: .*yath
@@ -26,6 +26,9 @@ use Test2::V0;
 #      / "Harness Options" / "IPC Options" / ... section headers
 #      for per-command help.
 #
-# Until both land the test cannot pass.
+# Resolved-by: a help-rewrite successor stage (post-Stage 19
+# parity audit). The assertions' line shape is tied to Getopt::Yath's
+# help output; the rewrite likely ends up under t/AI/ as > 50% of
+# the body would change.
 
-plan skip_all => "help.t asserts the old Getopt::Yath-driven help layout; new Command::help output is a stub (Stage 13 + Stage 18 follow-up).";
+plan skip_all => "help.t asserts the old Getopt::Yath-driven help layout; new Command::help is a stub (post-Stage 19 follow-up).";

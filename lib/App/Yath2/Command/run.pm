@@ -77,9 +77,27 @@ sub run {
     my $verbose  = eval { $settings->renderer->verbose } // 0;
     my $mode = _resolve_mode($settings);
 
+    # Load CLI-side plugins and fire client_setup before the rest of
+    # the command does work. The harness-side plugin hooks
+    # (run_queued, etc.) don't run from this command -- they fire on
+    # the daemon where the run actually executes, against whatever
+    # plugins the daemon was started with. client_* are the command-
+    # side lifecycle hooks that make sense to run here.
+    my $plugins = eval { _load_plugins($settings) };
+    unless (defined $plugins) {
+        my $err = $@;
+        print STDERR "yath run: plugin load failed: $err\n";
+        return 2;
+    }
+
+    $_->client_setup(settings => $settings) for @$plugins;
+
     my $spawn = eval { App::Yath2::Daemon::attach(daemon_workdir => $daemon_workdir) };
     unless ($spawn) {
-        print STDERR "yath run: cannot attach to daemon: $@";
+        my $err = $@;
+        print STDERR "yath run: cannot attach to daemon: $err";
+        $_->client_teardown(settings => $settings)      for reverse @$plugins;
+        $_->client_finalize(settings => $settings, exit => \2) for reverse @$plugins;
         return 2;
     }
 
@@ -87,6 +105,8 @@ sub run {
     my @tests = App::Yath2::Finder::Simple->find(@positional);
     unless (@tests) {
         print STDERR "yath run: no test files discovered under given paths\n";
+        $_->client_teardown(settings => $settings)      for reverse @$plugins;
+        $_->client_finalize(settings => $settings, exit => \2) for reverse @$plugins;
         return 2;
     }
 
@@ -97,9 +117,12 @@ sub run {
     # after finish_after_queued. Surface the daemon's error cleanly.
     my $qres = eval { $spawn->queue_test_run(files => \@tests) };
     unless (ref($qres) eq 'HASH' && $qres->{ok}) {
+        my $err = $@;
         print STDERR "yath run: queue_test_run rejected: ",
-            (ref($qres) eq 'HASH' ? ($qres->{error} // '(no error)') : ($@ // '(no response)')),
+            (ref($qres) eq 'HASH' ? ($qres->{error} // '(no error)') : ($err // '(no response)')),
             "\n";
+        $_->client_teardown(settings => $settings)      for reverse @$plugins;
+        $_->client_finalize(settings => $settings, exit => \1) for reverse @$plugins;
         return 1;
     }
 
@@ -108,7 +131,10 @@ sub run {
 
     my $renderers = eval { _load_renderers($settings) };
     unless (defined $renderers) {
-        print STDERR "yath run: renderer load failed: $@\n";
+        my $err = $@;
+        print STDERR "yath run: renderer load failed: $err\n";
+        $_->client_teardown(settings => $settings)      for reverse @$plugins;
+        $_->client_finalize(settings => $settings, exit => \2) for reverse @$plugins;
         return 2;
     }
 
@@ -131,7 +157,26 @@ sub run {
 
     print STDOUT "yath run: pass=$pass fail=$fail\n";
 
-    return $fail ? 1 : 0;
+    my $exit = $fail ? 1 : 0;
+    $_->client_teardown(settings => $settings) for reverse @$plugins;
+    $_->client_finalize(settings => $settings, exit => \$exit) for reverse @$plugins;
+
+    return $exit;
+}
+
+# Load plugins from --plugin / -p arguments. Mirrors the shape used
+# by App::Yath2::Command::test so both commands pick up the same
+# plugin set when given the same --plugin argv. Returns an arrayref
+# (possibly empty) or dies with a loader error.
+sub _load_plugins {
+    my ($settings) = @_;
+
+    require App::Yath2::Plugins;
+
+    my $specs = eval { $settings->yath->plugins } // {};
+    $specs = {} unless ref($specs) eq 'HASH';
+
+    return App::Yath2::Plugins->load_plugins($specs);
 }
 
 sub _resolve_mode {

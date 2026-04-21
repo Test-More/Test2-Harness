@@ -660,14 +660,16 @@ sub _build_collector_bus_id {
     return $id;
 }
 
-# This comment is wrong. Collectors only ever send to parent processes, never child processes, as such they never outlive their ipc targets. The only exception to this rule that might come up is a service sending a termination to a child service, but that does not come from a collector and does not apply here. If we get a pipe error it means a parent process went away before a collector it is supposed to monitor, thats a real bug and needs to be reported.
-# Fire-and-forget send to a specific target service. Failures that
-# indicate the peer is already gone (EPIPE / "Disconnected pipe")
-# are silenced -- collectors routinely outlive the services that
-# spawned them, and warning about a dead peer every time a run
-# completes is just noise. Any other failure warns so genuine
-# regressions surface. Returns nothing either way since the
-# collector's lifecycle must never depend on delivery.
+# Fire-and-forget send to a specific target service. Every send a
+# collector performs goes UP the tree -- to ipc_parent, ipc_run, or
+# ipc_harness -- and a collector never outlives its targets: a
+# correctly-shut-down system tears the collector down before the
+# services it talks to. A pipe / EPIPE error here therefore means
+# a parent went away before its collector was torn down, which is
+# a real bug (shutdown ordering, crashed peer, etc.) and wants to
+# surface, not get silenced. All send failures warn. Returns
+# nothing either way since the collector's lifecycle must never
+# depend on delivery.
 sub _send_to {
     my ($self, $target, $content) = @_;
     return unless defined $target;
@@ -679,10 +681,7 @@ sub _send_to {
     };
     return if $ok;
 
-    # Do not skip pipe errors, they are a real error, not something to silence.
     my $err = $@;
-    return if $err =~ /Disconnected pipe|broken pipe|EPIPE/i;
-
     warn "Collector IPC send failed (kind '" . ($content->{kind} // '?') . "'): $err";
     return;
 }

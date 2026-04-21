@@ -60,3 +60,7 @@ test-logs/
 xxx
 .immiscible-test.lock
 data
+/.claude/
+/CLAUDE.md
+/ARCHITECTURE.md
+/docs/

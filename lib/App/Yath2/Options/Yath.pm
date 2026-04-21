@@ -56,12 +56,11 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
     #     long_examples  => ['', '=group'],
     # );
 
-    # TODO: Stage 6 — activate --version when introspection commands return
-    # option version => (
-    #     type => 'Bool',
-    #     short       => 'V',
-    #     description => "Exit after showing a helpful usage message",
-    # );
+    option version => (
+        type        => 'Bool',
+        short       => 'V',
+        description => "Exit after showing a helpful usage message",
+    );
 
     # TODO: Stage 7 — activate --scan-options when plugin scanning returns
     # option scan_options => (
@@ -75,66 +74,65 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
     # );
 
     my $INC_SEEN;
-    # TODO: Stage 6 — activate -D/--dev-libs when dev-lib re-exec flow returns
-    # option dev_libs => (
-    #     type        => 'AutoPathList',
-    #     short       => 'D',
-    #     name        => 'dev-lib',
-    #
-    #     autofill => sub { map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch' },
-    #
-    #     description => 'This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
-    #     notes => "This option can cause yath to use exec() to reload itself with the correct libraries in place. Each occurence of this argument can cause an additional exec() call. Use --dev-libs-verbose BEFORE any -D calls to see the exec() calls.",
-    #
-    #     long_examples  => ['', '=lib', '="lib/*"'],
-    #     short_examples => ['', 'lib', '=lib', 'lib', '"lib/*"'],
-    #
-    #     trigger => sub {
-    #         my $opt = shift;
-    #         my %params = @_;
-    #         return unless $params{action} eq 'set';
-    #
-    #         $INC_SEEN //= {map {($_ => 1, clean_path($_) => 1)} @INC};
-    #
-    #         my @missing;
-    #         for my $lib (@{$params{val}}) {
-    #             next if $INC_SEEN->{$lib} || $INC_SEEN->{clean_path($lib)};
-    #             push @missing => $lib;
-    #         }
-    #
-    #         return unless @missing;
-    #
-    #         my $settings = $params{settings};
-    #         if ($settings->yath->dev_libs_verbose) {
-    #             print STDERR "Developer library paths were specified but missing from \@INC... re-launching yath with proper include paths...\n";
-    #             print STDERR "  -> $_\n" for @missing;
-    #             print STDERR "\n";
-    #         }
-    #
-    #         my %default = map {($_ => 1, clean_path($_) => 1)} grep { $_ } split /\n/, `$^X -e 'print "\$_\n" for \@INC'`;
-    #         my @add = map { "-I$_" } grep { !$default{$_} } map {clean_path($_)} @INC, @missing;
-    #         exec($^X, @add, $settings->yath->script, @{$settings->yath->orig_argv // []});
-    #     },
-    #
-    #     normalize => \&clean_path,
-    # );
+    option dev_libs => (
+        type  => 'AutoPathList',
+        short => 'D',
+        name  => 'dev-lib',
 
-    # TODO: Stage 6 — activate --dev-libs-verbose when dev-lib re-exec flow returns
-    # option dev_libs_verbose => (
-    #     type => 'Bool',
-    #     default => 0,
-    #     description => 'Be verbose and announce that yath will re-exec in order to have the correct includes (normally yath will just call exec() quietly)',
-    # );
+        autofill => sub {
+            map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch';
+        },
 
-    # TODO: Stage 6 — activate --help when help-system returns
-    # option help => (
-    #     type           => 'Auto',
-    #     autofill       => 1,
-    #     short          => 'h',
-    #     description    => "exit after showing help information",
-    #     short_examples => ['', '=Group'],
-    #     long_examples  => ['', '=Group'],
-    # );
+        description => 'This is what you use if you are developing yath or yath plugins to make sure the yath script finds the local code instead of the installed versions of the same code. You can provide an argument (-Dfoo) to provide a custom path, or you can just use -D without and arg to add lib, blib/lib and blib/arch.',
+        notes       => "This option can cause yath to use exec() to reload itself with the correct libraries in place. Each occurence of this argument can cause an additional exec() call. Use --dev-libs-verbose BEFORE any -D calls to see the exec() calls.",
+
+        long_examples  => ['', '=lib', '="lib/*"'],
+        short_examples => ['', 'lib',  '=lib', 'lib', '"lib/*"'],
+
+        trigger => sub {
+            my $opt    = shift;
+            my %params = @_;
+            return unless $params{action} eq 'set';
+
+            $INC_SEEN //= {map { ($_ => 1, clean_path($_) => 1) } @INC};
+
+            my @missing;
+            for my $lib (@{$params{val}}) {
+                next if $INC_SEEN->{$lib} || $INC_SEEN->{clean_path($lib)};
+                push @missing => $lib;
+            }
+
+            return unless @missing;
+
+            my $settings = $params{settings};
+            if ($settings->yath->dev_libs_verbose) {
+                print STDERR "Developer library paths were specified but missing from \@INC... re-launching yath with proper include paths...\n";
+                print STDERR "  -> $_\n" for @missing;
+                print STDERR "\n";
+            }
+
+            my %default = map { ($_ => 1, clean_path($_) => 1) } grep { $_ } split /\n/, `$^X -e 'print "\$_\n" for \@INC'`;
+            my @add     = map { "-I$_" } grep { !$default{$_} } map { clean_path($_) } @INC, @missing;
+            exec($^X, @add, $settings->yath->script, @{$settings->yath->orig_argv // []});
+        },
+
+        normalize => \&clean_path,
+    );
+
+    option dev_libs_verbose => (
+        type        => 'Bool',
+        default     => 0,
+        description => 'Be verbose and announce that yath will re-exec in order to have the correct includes (normally yath will just call exec() quietly)',
+    );
+
+    option help => (
+        type           => 'Auto',
+        autofill       => 1,
+        short          => 'h',
+        description    => "exit after showing help information",
+        short_examples => ['', '=Group'],
+        long_examples  => ['', '=Group'],
+    );
 
     # TODO: Stage 7 — activate --plugin when plugin loader returns
     # option plugins => (

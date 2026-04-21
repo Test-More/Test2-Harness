@@ -69,6 +69,19 @@ sub run {
         return 2;
     }
 
+    my $settings = $parsed->{settings};
+
+    # --help / --help=GROUP short-circuit. The Options::Yath 'help'
+    # option activates as part of Stage 6; we check for it here so
+    # `yath test --help` and `yath test --help=GROUP` bail out with
+    # the relevant help text before the no-tests-given guard below
+    # tries to error on what looks like an empty positional list.
+    my $help = eval { ${$settings->yath->option_ref('help', 1)} };
+    if (defined $help) {
+        my $group = ($help eq '1') ? undef : $help;
+        return $self->_print_help($group);
+    }
+
     my @positional = @{$parsed->{skipped} // []};
     push @positional => @{$parsed->{remains}} if $parsed->{remains};
 
@@ -78,7 +91,6 @@ sub run {
         return 2;
     }
 
-    my $settings    = $parsed->{settings};
     my $launch_args = _build_launch_args($settings, $parsed);
     my $slots       = _resolve_slots($settings);
     my $verbose     = _resolve_verbose($settings);
@@ -119,6 +131,35 @@ sub run {
 # Build the plugin list from $settings->yath->plugins (a Map keyed by
 # fully-qualified class name). Returns an empty arrayref when no
 # plugins were requested so every call site can dispatch unconditionally.
+sub _print_help {
+    my $self    = shift;
+    my ($group) = @_;
+
+    # Build a Getopt::Yath::Instance carrying this command's full
+    # include_options chain so docs() sees every option the command
+    # can accept. Render either the whole option set or a single
+    # group depending on $group.
+    require Getopt::Yath::Instance;
+    my $inst = Getopt::Yath::Instance->new(
+        category_sort_map => {
+            'NO CATEGORY - FIX ME' => 99999,
+            'Yath Options'         => -100,
+            'Command Options'      => -90,
+            'Harness Options'      => -80,
+        },
+    );
+    $inst->include(App::Yath2::Options::Yath->options);
+    $inst->include(App::Yath2::Options::Tests->options);
+    $inst->include(App::Yath2::Options::Renderer->options);
+    $inst->include(App::Yath2::Options::Resource->options);
+    $inst->include(App::Yath2::Options::Runner->options);
+    $inst->include(App::Yath2::Options::Finder->options);
+
+    my $text = $inst->docs('cli', defined($group) ? (group => $group) : ());
+    print STDOUT $text;
+    return 0;
+}
+
 sub _load_plugins {
     my ($settings) = @_;
 

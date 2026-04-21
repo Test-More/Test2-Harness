@@ -77,6 +77,26 @@ sub run_status {
     return $self->_send_request('run_status', {run_id => $run_id});
 }
 
+# Artifact enumeration for the command-side artifact-reading layer.
+# See IPC_AND_LOGGERS §13.1. Each returns a {ok, artifacts} response
+# whose artifacts key is a { collector_id => { loggers, ... } } hash.
+sub list_global_artifacts {
+    my $self = shift;
+    return $self->_send_request('list_global_artifacts');
+}
+
+sub list_run_artifacts {
+    my ($self, $run_id) = @_;
+    croak "'run_id' is required" unless defined $run_id && length $run_id;
+    return $self->_send_request('list_run_artifacts', {run_id => $run_id});
+}
+
+sub get_run_status {
+    my ($self, $run_id) = @_;
+    croak "'run_id' is required" unless defined $run_id && length $run_id;
+    return $self->_send_request('get_run_status', {run_id => $run_id});
+}
+
 sub terminate {
     my $self = shift;
     my $res  = $self->_send_request('terminate');

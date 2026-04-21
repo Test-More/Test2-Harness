@@ -57,6 +57,8 @@ use Object::HashBase qw{
     +watch_pids_ref
     +own_pgroup
     +completed_runs
+    +global_artifacts
+    +run_artifacts
 };
 
 # Valid values for broken_resource_behavior: what the scheduler does
@@ -125,6 +127,8 @@ sub init {
     $self->{+RESOURCE_SERVICES} //= {};
     $self->{+RUN_SERVICES}      //= {};
     $self->{+COMPLETED_RUNS}    //= {};
+    $self->{+GLOBAL_ARTIFACTS}  //= {};
+    $self->{+RUN_ARTIFACTS}     //= {};
     $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
 
@@ -455,6 +459,134 @@ sub request_handler_run_status {
     return {ok => 0, error => "unknown run_id '$run_id'"};
 }
 
+# Store a collector_artifacts payload into the appropriate bucket.
+# See IPC_AND_LOGGERS §8. The inner shape is
+# { collector_id => { loggers => { Class => [\%inst, ...] }, run_id?, job_id?, job_try? } }
+# which is what list_global_artifacts / list_run_artifacts return.
+sub _record_artifacts {
+    my ($self, $payload) = @_;
+    return unless ref($payload) eq 'HASH';
+
+    my $loggers      = $payload->{loggers} // {};
+    my $run_id       = $payload->{run_id};
+    my $job_id       = $payload->{job_id};
+    my $job_try      = $payload->{job_try};
+    my $collector_id = $payload->{collector_id} // $job_id;
+    return unless defined $collector_id;
+
+    my $bucket;
+    if (defined $run_id && length $run_id) {
+        $self->{+RUN_ARTIFACTS}->{$run_id} //= {};
+        $bucket = $self->{+RUN_ARTIFACTS}->{$run_id};
+    }
+    else {
+        $bucket = $self->{+GLOBAL_ARTIFACTS};
+    }
+
+    my $entry = $bucket->{$collector_id} //= {
+        collector_id => $collector_id,
+        loggers      => {},
+        (defined $run_id  ? (run_id  => $run_id)  : ()),
+        (defined $job_id  ? (job_id  => $job_id)  : ()),
+        (defined $job_try ? (job_try => $job_try) : ()),
+    };
+
+    for my $class (keys %$loggers) {
+        my $instances = $loggers->{$class};
+        $instances = [$instances] unless ref($instances) eq 'ARRAY';
+        push @{$entry->{loggers}->{$class}} => @$instances;
+    }
+
+    return;
+}
+
+# Batch ingest artifacts a run service forwards to us at run end (or
+# sooner). Each payload entry is a collector_id => { loggers, ... }
+# snapshot collected by the run service. Used by the
+# run_artifacts_snapshot IPC message.
+sub _ingest_run_artifacts {
+    my ($self, $run_id, $snapshot) = @_;
+    return unless defined $run_id && length $run_id;
+    return unless ref($snapshot) eq 'HASH';
+
+    for my $collector_id (keys %$snapshot) {
+        my $entry   = $snapshot->{$collector_id};
+        my $loggers = ref($entry) eq 'HASH' ? ($entry->{loggers} // {}) : {};
+        $self->_record_artifacts({
+            collector_id => $collector_id,
+            run_id       => $run_id,
+            job_id       => ref($entry) eq 'HASH' ? $entry->{job_id}  : undef,
+            job_try      => ref($entry) eq 'HASH' ? $entry->{job_try} : undef,
+            loggers      => $loggers,
+        });
+    }
+    return;
+}
+
+# Artifact enumeration requests for the command-side artifact-reading
+# layer. See IPC_AND_LOGGERS §13.1.
+#
+# list_global_artifacts: artifacts from every non-run-scoped collector
+# the harness has learned about (harness's own interpose, global
+# resource services, global preload stages).
+sub request_handler_list_global_artifacts {
+    my $self = shift;
+    return {
+        ok        => 1,
+        artifacts => _clone_artifacts($self->{+GLOBAL_ARTIFACTS} // {}),
+    };
+}
+
+# list_run_artifacts: artifacts from every collector scoped to a
+# specific run_id (the run service's own interpose, run-scoped
+# resource services, run-scoped preload stages, test-job collectors
+# launched inside that run -- including tests launched from a
+# detached preload stage).
+sub request_handler_list_run_artifacts {
+    my ($self, $payload) = @_;
+    $payload //= {};
+
+    my $run_id = $payload->{run_id};
+    return {ok => 0, error => "'run_id' is required"}
+        unless defined $run_id && length $run_id;
+
+    my $bucket = $self->{+RUN_ARTIFACTS}->{$run_id} // {};
+    return {ok => 1, run_id => $run_id, artifacts => _clone_artifacts($bucket)};
+}
+
+# get_run_status: alias for request_handler_run_status so the
+# artifact-reading layer can use the name the spec prefers. Re-exports
+# the per-run aggregate (pass_count, fail_count, done, ...).
+sub request_handler_get_run_status {
+    my ($self, $payload) = @_;
+    return $self->request_handler_run_status($payload);
+}
+
+sub _clone_artifacts {
+    my ($bucket) = @_;
+    my %out;
+    for my $cid (keys %$bucket) {
+        my $entry   = $bucket->{$cid};
+        my $loggers = $entry->{loggers} // {};
+
+        my %loggers_copy;
+        for my $class (keys %$loggers) {
+            # Shallow-copy each instance hash so the caller cannot
+            # mutate our stored state by editing the response.
+            $loggers_copy{$class} = [map { {%$_} } @{$loggers->{$class} // []}];
+        }
+
+        $out{$cid} = {
+            collector_id => $entry->{collector_id},
+            loggers      => \%loggers_copy,
+            (defined $entry->{run_id}  ? (run_id  => $entry->{run_id})  : ()),
+            (defined $entry->{job_id}  ? (job_id  => $entry->{job_id})  : ()),
+            (defined $entry->{job_try} ? (job_try => $entry->{job_try}) : ()),
+        };
+    }
+    return \%out;
+}
+
 sub request_handler_finish {
     my $self = shift;
     return {ok => 0} unless $self->{+STATE} eq 'running';
@@ -492,8 +624,26 @@ sub run_on_general_message {
 
     if (defined $kind && $kind eq 'collector_artifacts') {
         # A collector has reported the artifacts its loggers produce.
-        # Emit a service-level lifecycle event the command's
-        # artifact-reading layer can observe. See IPC_AND_LOGGERS §8.
+        # See IPC_AND_LOGGERS §8: announcements route directly to
+        # ipc_run if the collector has one, else ipc_harness. The
+        # run service stashes its own arrivals; the harness stashes
+        # everything it receives directly.
+        #
+        # Two buckets:
+        #   GLOBAL_ARTIFACTS  - keyed by collector_id (harness's own
+        #                       collector, global resource-service
+        #                       collectors, global preload stages).
+        #                       Returned by list_global_artifacts.
+        #   RUN_ARTIFACTS     - keyed by run_id, then collector_id.
+        #                       Forwarded from each run service at
+        #                       run end (or per-message for quicker
+        #                       visibility while the run is live).
+        #
+        # Stage 12 takes the conservative path: if the payload
+        # carries a run_id, file it under that run_id; otherwise
+        # it's a global announcement. Successive announcements are
+        # additive (merge classes, append instances) per §8.2.
+        $self->_record_artifacts($content);
         $self->emit_service_event(
             kind     => 'job_loggers',
             job_info => {

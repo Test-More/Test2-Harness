@@ -39,6 +39,7 @@ use Object::HashBase qw{
     +log_fh
     +watch_pids_ref
     +own_pgroup
+    +artifacts
 };
 
 # Public accessor for the Run object -- named run_obj rather than 'run'
@@ -99,6 +100,7 @@ sub init {
     $self->{+TEST_JOBS}         //= {};
     $self->{+WATCH_PIDS_REF}    //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
+    $self->{+ARTIFACTS}         //= {};
 
     # log_file is the run service's own direct-JSONL audit trail;
     # distinct from the configurable `loggers` slot. The default
@@ -326,6 +328,90 @@ sub run_on_all {
     # run_on_pid for exits, so there's nothing more for us to do here
     # beyond letting the loop roll over.
     return;
+}
+
+# Inbound informational messages. Today we only act on collector_artifacts
+# per IPC_AND_LOGGERS §8.3: a run-scoped collector sends its logger
+# metadata directly here (ipc_run), and we both keep a local snapshot
+# for list_run_artifacts queries against our own bus name and forward
+# the same payload to the harness so the command-side artifact-reading
+# layer can discover every run's artifacts via the single IPC peer it
+# already holds.
+sub run_on_general_message {
+    my ($self, $msg) = @_;
+
+    my $content = $msg->content;
+    my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
+
+    if (defined $kind && $kind eq 'collector_artifacts') {
+        $self->_record_run_artifact($content);
+        $self->_forward_to_harness($content);
+        return;
+    }
+
+    return;
+}
+
+sub _record_run_artifact {
+    my ($self, $payload) = @_;
+    return unless ref($payload) eq 'HASH';
+
+    my $loggers      = $payload->{loggers} // {};
+    my $job_id       = $payload->{job_id};
+    my $job_try      = $payload->{job_try};
+    my $collector_id = $payload->{collector_id} // $job_id;
+    return unless defined $collector_id;
+
+    my $entry = $self->{+ARTIFACTS}->{$collector_id} //= {
+        collector_id => $collector_id,
+        run_id       => $self->{+RUN_ID},
+        loggers      => {},
+        (defined $job_id  ? (job_id  => $job_id)  : ()),
+        (defined $job_try ? (job_try => $job_try) : ()),
+    };
+
+    for my $class (keys %$loggers) {
+        my $instances = $loggers->{$class};
+        $instances = [$instances] unless ref($instances) eq 'ARRAY';
+        push @{$entry->{loggers}->{$class}} => @$instances;
+    }
+
+    return;
+}
+
+sub _forward_to_harness {
+    my ($self, $payload) = @_;
+    $self->_send_to_harness($payload);
+    return;
+}
+
+# Run service-side list_run_artifacts query. The command-side layer
+# normally asks the harness, but a direct query against the run
+# service is useful for tests and for callers that have a handle
+# on the run service.
+sub request_handler_list_run_artifacts {
+    my $self = shift;
+
+    my %out;
+    for my $cid (keys %{$self->{+ARTIFACTS} // {}}) {
+        my $entry   = $self->{+ARTIFACTS}->{$cid};
+        my $loggers = $entry->{loggers} // {};
+
+        my %loggers_copy;
+        for my $class (keys %$loggers) {
+            $loggers_copy{$class} = [map { {%$_} } @{$loggers->{$class} // []}];
+        }
+
+        $out{$cid} = {
+            collector_id => $entry->{collector_id},
+            loggers      => \%loggers_copy,
+            run_id       => $entry->{run_id},
+            (defined $entry->{job_id}  ? (job_id  => $entry->{job_id})  : ()),
+            (defined $entry->{job_try} ? (job_try => $entry->{job_try}) : ()),
+        };
+    }
+
+    return {ok => 1, run_id => $self->{+RUN_ID}, artifacts => \%out};
 }
 
 sub run_on_pid {

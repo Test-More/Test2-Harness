@@ -200,8 +200,56 @@ sub _init_resources {
         unless $has_limiter;
 }
 
+# Env vars the harness service must NOT inherit when it starts up.
+# These are collector- / formatter- / per-job plumbing set by an outer
+# yath when it was launching *us* as a test, and keeping them in place
+# inside a yath-under-yath inner service causes the inner process to
+# act as if it were still a test child of the outer harness (emitting
+# Stream2 frames into the outer's pipe, fabricating per-job metadata
+# from the outer run, treating TEST2_ACTIVE as already set, etc.).
+#
+# This list is intentionally narrower than old/lib/App/Yath2.pm's
+# clear_env:
+#   - HARNESS_IS_VERBOSE / T2_HARNESS_IS_VERBOSE are *user*-settable
+#     (Options::Renderer's verbose option wires them via set_env_vars).
+#     The old path cleared them *before* parsing options; we cannot do
+#     that here because options have already been parsed by the time
+#     the harness service starts. Leaving them in place respects the
+#     caller's --verbose setting.
+#   - T2_HARNESS_PRELOAD is likewise option-settable.
+# When App::Yath2 grows a real top-level entry point that clears env
+# before option parsing (Stage 4 successor), the pre-options set can
+# move there; Harness2 would keep the narrow post-options set below.
+sub _clear_problematic_env {
+    delete $ENV{T2_FORMATTER};
+    delete $ENV{T2_HARNESS2_PIPE_COUNT};
+    delete $ENV{T2_HARNESS_FORKED};
+    delete $ENV{T2_HARNESS_JOB_IS_TRY};
+    delete $ENV{T2_HARNESS_JOB_NAME};
+    delete $ENV{T2_STREAM_DIR};
+    delete $ENV{T2_STREAM_FILE};
+    delete $ENV{T2_STREAM_JOB_ID};
+    delete $ENV{TEST2_JOB_DIR};
+    delete $ENV{TEST2_RUN_DIR};
+
+    # TEST2_ACTIVE / TEST_ACTIVE / TEST2_HARNESS_ACTIVE advertise "Test2::API
+    # is already running a test". If Test2::API really is loaded in this
+    # process we leave them alone -- it reads them at BEGIN time and a later
+    # delete would confuse the runtime. Otherwise they are stale signals
+    # from the outer yath and safe to clear.
+    unless ($INC{'Test2/API.pm'}) {
+        delete $ENV{TEST2_ACTIVE};
+        delete $ENV{TEST_ACTIVE};
+        delete $ENV{TEST2_HARNESS_ACTIVE};
+    }
+
+    return;
+}
+
 sub start {
     my ($class, %args) = @_;
+
+    _clear_problematic_env();
 
     my $test_run     = delete $args{test_run};
     my $finish_after = delete $args{finish_after_initial_run};

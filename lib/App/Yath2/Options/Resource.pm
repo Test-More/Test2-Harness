@@ -88,6 +88,19 @@ option_group {group => 'resource', category => "Resource Options"} => sub {
     #     },
     # );
 
+    option shared_jobs => (
+        type        => 'Bool',
+        maybe       => 1,
+        description => "Enable or Disable shared job slots. When enabled, the SharedJobSlots resource coordinates test-job slot allocation with any other concurrent yath processes on the same host via a shared state file (see --shared-jobs-config).",
+    );
+
+    option shared_jobs_config => (
+        type          => 'Scalar',
+        default       => '.sharedjobslots.yml',
+        long_examples => [' .sharedjobslots.yml', ' relative/path/.sharedjobslots.yml', ' /absolute/path/.sharedjobslots.yml'],
+        description   => 'Where to look for a shared slot config file. If a filename with no path is provided yath will search the current and all parent directories for the name.',
+    );
+
     # TODO: Stage 6 — re-enable jobs_post_process once job_slots and
     # classes are activated. The current definition references both, so
     # it would fail at parse time.

@@ -97,7 +97,9 @@ sub run {
 
     $_->client_setup(settings => $settings) for @$plugins;
 
-    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode) };
+    my $shared_jobs = _resolve_shared_jobs($settings, $slots);
+
+    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode, $shared_jobs) };
     my $err = $@;
 
     $_->client_teardown(settings => $settings) for reverse @$plugins;
@@ -202,6 +204,55 @@ sub _resolve_preloads {
     return $p;
 }
 
+# Decide whether to attach the App::Yath2::Resource::SharedJobSlots
+# resource. --shared-jobs has three states:
+#
+#   undef/not-passed: opt in if (and only if) the config file exists.
+#                     This matches old/'s default behaviour.
+#   true:             require shared jobs; die if no config file is found.
+#   false:            never use shared jobs, even if a config file exists.
+#
+# Returns undef when shared jobs should be off, or a hashref carrying
+# the constructor args for the resource when it should be on. Building
+# the actual resource instance lives in _run_tests so the import of
+# the heavy module is deferred until really needed.
+sub _resolve_shared_jobs {
+    my ($settings, $slots) = @_;
+
+    my $resource = eval { $settings->resource };
+    return undef unless defined $resource;
+
+    my $shared    = eval { $resource->shared_jobs };
+    my $base_name = eval { $resource->shared_jobs_config };
+    $base_name //= '.sharedjobslots.yml';
+
+    if (defined $shared) {
+        return undef unless $shared;
+    }
+
+    # Decide based on presence of a config file. find_in_updir handles
+    # bare filenames; an explicit path is checked directly.
+    require Test2::Harness2::Util;
+    my $config_path = (-e $base_name) ? $base_name : Test2::Harness2::Util::find_in_updir($base_name);
+
+    unless ($config_path && -e $config_path) {
+        return undef unless defined $shared && $shared;
+        die "--shared-jobs specified, but could not find a config file ('$base_name').\n";
+    }
+
+    my $job_slots = 1;
+    eval {
+        my $s = $resource->job_slots;
+        $job_slots = $s if defined $s && $s =~ m/^\d+$/ && $s > 0;
+    };
+
+    return {
+        slots              => $slots,
+        job_slots          => $job_slots,
+        shared_jobs_config => $config_path,
+    };
+}
+
 # Decide which artifact-reader mode to use. quiet/qvf/verbose are
 # explicit; otherwise fall through to 'default'. The four values
 # match App::Yath2::ArtifactReader's mode enum.
@@ -215,7 +266,7 @@ sub _resolve_mode {
     my $verbose = eval { $rs->verbose };
 
     return 'qvf'     if $qvf;
-    return 'quiet'   if $quiet  && !$verbose;
+    return 'quiet'   if $quiet && !$verbose;
     return 'verbose' if $verbose;
     return 'default';
 }
@@ -238,7 +289,7 @@ sub _load_renderers {
         my $args = $classes->{$class} // [];
         $args = [] unless ref($args) eq 'ARRAY';
 
-        my $ok = eval { load_module($class); 1 };
+        my $ok  = eval { load_module($class); 1 };
         my $err = $@;
         unless ($ok) {
             die "renderer class '$class' failed to load: $err";
@@ -264,7 +315,7 @@ sub _load_renderers {
 }
 
 sub _run_tests {
-    my ($paths, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode) = @_;
+    my ($paths, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode, $shared_jobs) = @_;
     $plugins   //= [];
     $preloads  //= [];
     $renderers //= [];
@@ -272,7 +323,6 @@ sub _run_tests {
 
     require App::Yath2::Finder::Simple;
     require Test2::Harness2;
-    require Test2::Harness2::Resource::JobCount;
 
     my @tests = App::Yath2::Finder::Simple->find(@$paths);
     unless (@tests) {
@@ -283,11 +333,24 @@ sub _run_tests {
     my $dir = File::Temp->newdir('yath-test-XXXXXX', TMPDIR => 1);
 
     print STDOUT "yath test: running ", scalar(@tests), " test file(s) under $dir",
-        ($verbose ? " (verbose=$verbose)" : ""),
-        (@$preloads ? " (preload=" . join(',', @$preloads) . ")" : ""),
+        ($verbose     ? " (verbose=$verbose)"                                       : ""),
+        (@$preloads   ? " (preload=" . join(',', @$preloads) . ")"                  : ""),
+        ($shared_jobs ? " (shared-jobs=" . $shared_jobs->{shared_jobs_config} . ")" : ""),
         (" (mode=$mode)"), "\n";
 
-    my @resources = (Test2::Harness2::Resource::JobCount->new(slots => $slots));
+    # The limiter resource. SharedJobSlots is also a job limiter, so
+    # when it's active we use it instead of a plain JobCount (two
+    # limiters on the same harness would either both cap or fight --
+    # SharedJobSlots is the stricter of the two, pick it when set).
+    my @resources;
+    if ($shared_jobs) {
+        require App::Yath2::Resource::SharedJobSlots;
+        push @resources => App::Yath2::Resource::SharedJobSlots->new(%$shared_jobs);
+    }
+    else {
+        require Test2::Harness2::Resource::JobCount;
+        push @resources => Test2::Harness2::Resource::JobCount->new(slots => $slots);
+    }
 
     if (@$preloads) {
         require Test2::Harness2::Resource::Preload;

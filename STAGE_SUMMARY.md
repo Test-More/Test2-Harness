@@ -150,3 +150,185 @@ Four commits, each one mechanical-ish but separately reviewable:
    markers at the end of many files; I did not port those markers —
    the POD in these ports has been audited (by me, just now) against
    the code.
+
+# Stage 4 — Port `App::Yath::Script::V2` (yath script glue)
+
+## Branch
+
+- `plan-stage-04-yath-script`
+- Base: `plan-stage-03-utility-classes`
+
+## What landed
+
+1. **`App::Yath::Script::V2: scaffold the V2 handler`** —
+   `lib/App/Yath/Script/V2.pm`. Thin wrapper that implements the
+   versioned-handler contract defined by `App::Yath::Script` (from
+   the external `App-Yath-Script` distribution). `do_begin` captures
+   the dispatcher's parameters, `do_runtime` delegates to
+   `App::Yath2->run`. A `run()` class method lets tests bypass
+   `App::Yath::Script`.
+
+2. **`App::Yath2: minimal application class with --help / --version
+   and top-level Getopt::Yath options`** — `lib/App/Yath2.pm` plus
+   `lib/App/Yath2/Options/Yath.pm`. An `Object::HashBase` class with
+   fields `script`, `config`, `user_config`, and a hand-written
+   `argv` accessor (Perl reserves bareword `ARGV` for its magic
+   filehandle, so `Object::HashBase` cannot safely generate a
+   constant for a field named `argv`). `run()` does a pre-command
+   pass over argv using `Getopt::Yath` with `stop_at_non_opts=1`,
+   consuming the yath-level options (`--help`/`-h`,
+   `--help=GROUP`, `--version`/`-V`, `--dev-lib`/`-D`) and leaving
+   everything from the first bare token onward in
+   `state->{stop} + state->{remains}` for the command dispatcher.
+   Behaviour:
+     - no args, `--help`, `-h`, `help`: print usage banner, exit 0.
+     - `--help=GROUP`: group-scoped docs via
+       `Getopt::Yath::Instance::docs('cli', group => $g)`; unknown
+       group prints known groups on STDERR and exits 2.
+     - `--version`, `-V`: print `"$script (App::Yath2 $VERSION)"`,
+       exit 0.
+     - command name whose class loads (via `load_command`, i.e.
+       `App::Yath2::Command::$name` can be required and
+       `->isa('App::Yath2::Command')`): print the Stage 4
+       'dispatch not yet wired' banner on STDERR and exit 2. Stage
+       5 will replace that with the real dispatch.
+     - unknown command (no matching class): print `"yath2: unknown
+       command '$cmd'"` + usage, exit 2.
+     - unrecognised `-` option: print error + usage to STDERR,
+       exit 2.
+   Command resolution has no in-dist registry: `load_command`
+   tries to `require "App::Yath2::Command::$name"` and returns
+   the class if it subclasses `App::Yath2::Command`. This keeps
+   the command set an open extension point — third-party dists
+   can ship new commands by shipping modules in that namespace.
+   `App::Yath2::Options::Yath` is the Stage 4 minimum: just
+   `version`, `help`, and `dev_libs`. Plugins, project, base_dir,
+   show-opts, scan_options, and the real dev-lib exec-relaunch
+   logic are deferred to Stage 6 (the full port of
+   `old/lib/App/Yath2/Options/Yath.pm`).
+
+3. **Depend on `App::Yath::Script` for the `yath` launcher** — no
+   in-repo `scripts/yath` ships any more. `App::Yath::Script` is
+   listed as a runtime prereq (`>= 2.000011` in `dist.ini`,
+   `Makefile.PL`, and `cpanfile`); the installed `yath` script it
+   ships discovers `.yath.rc` / `.yath.user.rc`, picks the V2
+   handler, and reaches `App::Yath::Script::V2` in this
+   repository. Tests drive the dispatcher through `App::Yath2`
+   directly rather than shelling out to a launcher.
+
+4. **`.yath.rc: mark project as V2`** — rename the file to
+   `.yath.v2.rc` and replace `.yath.rc` with a symlink to it.
+   `App::Yath::Script` selects the handler version from the
+   config filename, not from file content, so the earlier bare
+   `# V2` comment inside a plain `.yath.rc` was a no-op and the
+   launcher would have fallen back to V1. The `[GatherFile]`
+   block in `dist.ini` picks up both the symlink and the
+   versioned file. The old V1-style options (`-D`, `--project`,
+   `[test]` section) remain commented out with a `TODO` pointing
+   at Stage 6; V2 does not parse those yet.
+
+5. **`t/AI/unit/App/Yath2.t: cover the top-level dispatcher`** —
+   captures STDOUT/STDERR via in-memory filehandles and exercises:
+   no args, `--version` / `-V`, `--help` / `-h`, `--help=yath`,
+   `--help=<bad>`, bare command name, `-D` / `-D <cmd>` /
+   `-D=lib <cmd>`, `--no-such-option`, bogus command, `help`
+   subcommand, and verifies argv is not mutated by `run()`.
+
+## Manual verification
+
+Run from the worktree root with the installed `yath` (resolved via
+`PATH`, supplied by `App::Yath::Script`):
+
+```
+$ yath --version
+yath (App::Yath2 2.000011)
+# exit 0
+
+$ yath --help
+... USAGE banner + top-level option docs, exit 0
+
+$ yath test some.t
+yath2: unknown command 'test'.
+... usage banner ...
+# exit 2  (no App::Yath2::Command::test installed yet; Stage 5 lands it.)
+
+$ yath bogus
+yath2: unknown command 'bogus'.
+... usage banner ...
+# exit 2
+```
+
+## Tests
+
+`prove -I lib -I t/lib -r t` — all pass, now including the new
+`t/AI/unit/App/Yath2.t`.
+
+## Points of interest / decisions you may want to revisit
+
+1. **`argv` cannot be an Object::HashBase field** because Perl
+   reserves the bareword `ARGV` as the name of the magic filehandle
+   used by `<>`. `old/App::Yath2` avoided this by quietly using the
+   string hash key `{argv}` alongside the constant for `ORIG_ARGV`.
+   I made the hack explicit: the field is listed neither in the
+   `use Object::HashBase` block nor via `{+ARGV}` anywhere in the
+   file, and an explicit `sub argv { $_[0]->{argv} }` provides the
+   read accessor. If you'd prefer the field renamed (`args`?
+   `cli_argv`?), that's one Edit away.
+
+2. **Command resolution is module-loaded, not registry-driven.**
+   `load_command('$name')` tries to `require` the file for
+   `App::Yath2::Command::$name` and returns the class if it
+   subclasses `App::Yath2::Command`. This matches the pattern in
+   `old/lib/App/Yath2.pm` (`load_command` at line 342) and
+   `legacy/lib/App/Yath.pm` (`load_command` at line 284) and
+   leaves the command set an open extension point for
+   third-party dists. Stage 5 lands `App::Yath2::Command` and
+   the first concrete command (`test`); Stage 4 itself ships
+   no command classes, so every command name resolves to
+   'unknown command' during this stage's tests.
+
+3. **The `.yath.rc -> .yath.v2.rc` symlink commits the repo's V2
+   switch.** `App::Yath::Script` version-detection keys off the
+   filename: a `.yath.rc` symlink whose target matches
+   `.yath.v#.rc` wins over a plain `.yath.rc` (which would default
+   to V1). CI does not invoke `yath`, so this is safe. Locally,
+   any invocation of `yath` in this branch will now load V2
+   instead of V1. If you need V1 to still work during the
+   transition, either revert this commit, or drop a sibling
+   `.yath.user.v1.rc` (user-level version wins per
+   `App::Yath::Script` semantics).
+
+4. **The V1-specific options are commented out, not translated.**
+   They live in `.yath.v2.rc`. Translating them requires the
+   Stage 6 option libraries, which deliberately land later. The
+   TODO block points at Stage 6 so the reactivation is easy to
+   find.
+
+5. **No project-local `scripts/yath` is shipped.** Stage 4 depends
+   on `App::Yath::Script` for the launcher instead of mirroring it
+   in-repo; the V2 handler in this tree is reached via the
+   installed `yath` script. The dependency is declared in
+   `dist.ini` / `Makefile.PL` / `cpanfile`.
+
+6. **`--help` is also accepted as the word `help`.** `App::Yath2->run`
+   special-cases the bareword `help` as equivalent to `--help`.
+   This is a small convenience; if you want `help` reserved for
+   the future `App::Yath2::Command::help` (which will know more
+   about per-command help), remove the `$first eq 'help'` branch
+   from `run()`. I added it because typing `yath help` is the
+   common muscle-memory shape.
+
+7. **`App::Yath2::Options::Yath` is intentionally tiny.** It only
+   exposes the yath-level options the Stage 4 scaffold actually
+   consumes. The full port (plugins, project, base_dir, show-opts,
+   scan_options, real dev-lib exec-relaunch) lands in Stage 6
+   alongside the rest of the option libraries.
+
+## Note on App-Yath-Script
+
+This stage declares `App::Yath::Script >= 2.000011` as a runtime
+prereq (`dist.ini`, `Makefile.PL`, `cpanfile`). The installed
+`yath` script is what dispatches to V2; no launcher is shipped
+from this repo. If a target environment lacks the prereq, the
+installation fails at the prereq check before `yath` is ever
+invoked.

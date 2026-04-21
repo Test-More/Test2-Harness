@@ -8,7 +8,7 @@ use Carp qw/croak/;
 use File::Temp ();
 use Time::HiRes qw/time/;
 
-use Test2::Harness2::Util qw/tinysleep/;
+use Test2::Harness2::Util qw/tinysleep load_module/;
 
 use Getopt::Yath;
 include_options(
@@ -80,6 +80,13 @@ sub run {
     my $slots       = _resolve_slots($settings);
     my $verbose     = _resolve_verbose($settings);
     my $preloads    = _resolve_preloads($settings);
+    my $renderers   = eval { _load_renderers($settings) };
+    unless (defined $renderers) {
+        my $err = $@;
+        print STDERR "yath test: renderer load failed: $err\n";
+        return 2;
+    }
+    my $mode = _resolve_mode($settings);
 
     my $plugins = eval { _load_plugins($settings) };
     unless (defined $plugins) {
@@ -90,7 +97,7 @@ sub run {
 
     $_->client_setup(settings => $settings) for @$plugins;
 
-    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $preloads, $plugins) };
+    my $ok  = eval { _run_tests(\@positional, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode) };
     my $err = $@;
 
     $_->client_teardown(settings => $settings) for reverse @$plugins;
@@ -195,10 +202,73 @@ sub _resolve_preloads {
     return $p;
 }
 
+# Decide which artifact-reader mode to use. quiet/qvf/verbose are
+# explicit; otherwise fall through to 'default'. The four values
+# match App::Yath2::ArtifactReader's mode enum.
+sub _resolve_mode {
+    my ($settings) = @_;
+    my $rs = eval { $settings->renderer };
+    return 'default' unless defined $rs;
+
+    my $qvf     = eval { $rs->qvf };
+    my $quiet   = eval { $rs->quiet };
+    my $verbose = eval { $rs->verbose };
+
+    return 'qvf'     if $qvf;
+    return 'quiet'   if $quiet  && !$verbose;
+    return 'verbose' if $verbose;
+    return 'default';
+}
+
+# Instantiate the renderer set from $settings->renderer->classes.
+# Each entry is Class => \@args. The class is loaded at this point
+# (the option's normalize uses no_require => 1 so parse time stays
+# cheap and failures land here with a clearer error).
+sub _load_renderers {
+    my ($settings) = @_;
+
+    my $rs = eval { $settings->renderer };
+    return [] unless defined $rs;
+
+    my $classes = eval { $rs->classes };
+    $classes = {} unless ref($classes) eq 'HASH';
+
+    my @out;
+    for my $class (sort keys %$classes) {
+        my $args = $classes->{$class} // [];
+        $args = [] unless ref($args) eq 'ARRAY';
+
+        my $ok = eval { load_module($class); 1 };
+        my $err = $@;
+        unless ($ok) {
+            die "renderer class '$class' failed to load: $err";
+        }
+
+        my $ctor_ok = eval {
+            my @ctor_args = @$args;
+            # Every in-tree renderer takes a %args hash. If the user
+            # passed bare scalars (e.g. -rDefault) @ctor_args is empty;
+            # if they passed `=a,b` we treat those as boolean flags
+            # keyed by themselves for now.
+            my %h = @ctor_args % 2 == 0 ? @ctor_args : map { $_ => 1 } @ctor_args;
+            push @out => $class->new(%h);
+            1;
+        };
+        my $ctor_err = $@;
+        unless ($ctor_ok) {
+            die "renderer class '$class' constructor failed: $ctor_err";
+        }
+    }
+
+    return \@out;
+}
+
 sub _run_tests {
-    my ($paths, $launch_args, $slots, $verbose, $preloads, $plugins) = @_;
-    $plugins  //= [];
-    $preloads //= [];
+    my ($paths, $launch_args, $slots, $verbose, $preloads, $plugins, $renderers, $mode) = @_;
+    $plugins   //= [];
+    $preloads  //= [];
+    $renderers //= [];
+    $mode      //= 'default';
 
     require App::Yath2::Finder::Simple;
     require Test2::Harness2;
@@ -214,7 +284,8 @@ sub _run_tests {
 
     print STDOUT "yath test: running ", scalar(@tests), " test file(s) under $dir",
         ($verbose ? " (verbose=$verbose)" : ""),
-        (@$preloads ? " (preload=" . join(',', @$preloads) . ")" : ""), "\n";
+        (@$preloads ? " (preload=" . join(',', @$preloads) . ")" : ""),
+        (" (mode=$mode)"), "\n";
 
     my @resources = (Test2::Harness2::Resource::JobCount->new(slots => $slots));
 
@@ -226,15 +297,11 @@ sub _run_tests {
         );
     }
 
-    # No finish_after_initial_run: the service stays up while we
-    # poll for drain and query the tally. We send finish() ourselves
-    # once we have the counts. Per PLAN's "State and control flow:
-    # IPC, not on-disk artifacts" section, the pass/fail verdict
-    # must come from IPC, not from any logger-written file. Queue
-    # the run over IPC (not via spawn's test_run shortcut) so the
-    # command knows the run_id -- future Command::run will use the
-    # same pattern against an existing multi-run harness, where
-    # scoping the tally to one specific run_id is required.
+    # No finish_after_initial_run: the service stays up while the
+    # artifact-reader polls for drain. Per PLAN's "State and control
+    # flow: IPC, not on-disk artifacts", the pass/fail verdict flows
+    # via IPC. Queue the run over IPC (not via spawn's test_run
+    # shortcut) so we know the run_id.
     my $spawn = Test2::Harness2->spawn(
         workdir   => "$dir",
         resources => \@resources,
@@ -247,7 +314,22 @@ sub _run_tests {
     croak "queue_test_run did not return a run_id"
         unless defined $run_id && length $run_id;
 
-    my ($pass, $fail) = _query_run_tally_via_ipc($spawn, $run_id);
+    my ($pass, $fail);
+    if (@$renderers) {
+        require App::Yath2::ArtifactReader;
+        my $layer = App::Yath2::ArtifactReader->new(
+            spawn     => $spawn,
+            run_id    => $run_id,
+            renderers => $renderers,
+            mode      => $mode,
+        );
+        my $final = $layer->run;
+        $pass = $final->{pass_count} // 0;
+        $fail = $final->{fail_count} // 0;
+    }
+    else {
+        ($pass, $fail) = _query_run_tally_via_ipc($spawn, $run_id);
+    }
 
     # Tell the service it's done and wait for it to exit.
     # Spawn->wait calls waitpid(), which sets $?. Perl's exit() propagates

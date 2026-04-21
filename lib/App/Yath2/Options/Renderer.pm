@@ -12,13 +12,12 @@ include_options(
 );
 
 option_group {group => 'renderer', category => "Renderer Options"} => sub {
-    # TODO: Stage 12 — activate --quiet when renderer scope expands
-    # option quiet => (
-    #     type        => 'Bool',
-    #     short       => 'q',
-    #     description => "Be very quiet.",
-    #     default     => 0,
-    # );
+    option quiet => (
+        type        => 'Bool',
+        short       => 'q',
+        description => "Be very quiet.",
+        default     => 0,
+    );
 
     option verbose => (
         type         => 'Count',
@@ -28,12 +27,11 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
         set_env_vars => [qw/T2_HARNESS_IS_VERBOSE HARNESS_IS_VERBOSE/],
     );
 
-    # TODO: Stage 12 — activate --qvf when renderer scope expands
-    # option qvf => (
-    #     type        => 'Bool',
-    #     default     => 0,
-    #     description => "Replaces App::Yath2::Theme::Default with App::Yath2::Theme::QVF which is quiet for passing tests and verbose for failing ones.",
-    # );
+    option qvf => (
+        type        => 'Bool',
+        default     => 0,
+        description => "Quiet on pass, verbose on failure.",
+    );
 
     # TODO: Stage 12 — activate --theme when renderer scope expands
     # option theme => (
@@ -72,23 +70,25 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
     #     description => 'Only show runner output that was generated after the current command. This is only useful with a persistent runner.',
     # );
 
-    # TODO: Stage 12 — activate --renderer when renderer scope expands
-    # option classes => (
-    #     type  => 'Map',
-    #     name  => 'renderers',
-    #     field => 'classes',
-    #     alt   => ['renderer'],
-    #
-    #     description => 'Specify renderers. Use "+" to give a fully qualified module name. Without "+" "App::Yath2::Renderer::" will be prepended to your argument.',
-    #
-    #     long_examples  => [' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
-    #     short_examples => ['MyRenderer',     ' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
-    #     initialize     => sub { {'App::Yath2::Renderer::Default' => [], 'App::Yath2::Renderer::Summary' => []} },
-    #
-    #     normalize => sub { fqmod($_[0], ['App::Yath2::Renderer', 'Test2::Harness2::Renderer']), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
-    #
-    #     mod_adds_options => 1,
-    # );
+    option classes => (
+        type  => 'Map',
+        name  => 'renderers',
+        field => 'classes',
+        alt   => ['renderer'],
+        short => 'r',
+
+        description => 'Specify renderers. Use "+" to give a fully qualified module name. Without "+" "App::Yath2::Renderer::" will be prepended to your argument.',
+
+        long_examples  => [' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2'],
+        short_examples => ['MyRenderer',     ' +My::Renderer',              ' MyRenderer,MyOtherRenderer'],
+        initialize     => sub { {'App::Yath2::Renderer::Default' => [], 'App::Yath2::Renderer::Summary' => []} },
+
+        normalize => sub {
+            my $key = fqmod($_[0], 'App::Yath2::Renderer', no_require => 1);
+            my $val = ref($_[1]) ? $_[1] : [split(',', $_[1] // '')];
+            return ($key, $val);
+        },
+    );
 
     # TODO: Stage 12 — activate --show-job-end when renderer scope expands
     # option show_job_end => (

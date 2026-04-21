@@ -136,6 +136,36 @@ subtest 'positional args survive option parsing' => sub {
     is([sort @positional], ['t/a.t', 't/b.t'], 'positional args preserved');
 };
 
+my $mode_helper      = \&App::Yath2::Command::test::_resolve_mode;
+my $renderers_helper = \&App::Yath2::Command::test::_load_renderers;
+
+subtest 'mode resolution' => sub {
+    is($mode_helper->(parse('t/foo.t')->{settings}),                    'default', 'no flags -> default');
+    is($mode_helper->(parse('-v',    't/foo.t')->{settings}),           'verbose', '-v -> verbose');
+    is($mode_helper->(parse('--quiet',     't/foo.t')->{settings}),     'quiet',   '--quiet -> quiet');
+    is($mode_helper->(parse('--qvf',       't/foo.t')->{settings}),     'qvf',     '--qvf -> qvf');
+    # qvf wins if both are set
+    is($mode_helper->(parse('--qvf', '-v', 't/foo.t')->{settings}),     'qvf',     'qvf wins over verbose');
+};
+
+subtest 'renderer-class resolution' => sub {
+    # Default set: Default + Summary
+    my $parsed    = parse('t/foo.t');
+    my $renderers = $renderers_helper->($parsed->{settings});
+    ok(ref($renderers) eq 'ARRAY', 'returns arrayref');
+    ok(scalar(@$renderers) >= 2, 'default set has at least two renderers');
+    my %seen = map { ref($_) => 1 } @$renderers;
+    ok($seen{'App::Yath2::Renderer::Default'}, 'Default is in the default set');
+    ok($seen{'App::Yath2::Renderer::Summary'}, 'Summary is in the default set');
+};
+
+subtest '--renderer adds a named renderer via the short prefix' => sub {
+    my $parsed = parse('-r', 'Formatter', 't/foo.t');
+    my $renderers = $renderers_helper->($parsed->{settings});
+    my %seen = map { ref($_) => 1 } @$renderers;
+    ok($seen{'App::Yath2::Renderer::Formatter'}, 'Formatter got loaded');
+};
+
 chdir $orig or die "chdir back to '$orig': $!";
 
 done_testing;

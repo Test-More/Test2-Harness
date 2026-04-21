@@ -21,11 +21,10 @@ sub resource_name { 'sharedjobs' }
 
 # STUB: cross-process / cross-user job slot coordinator. Modeled on the
 # old/ and legacy Resource::SharedJobSlots implementation but rewritten for
-# the new services model. Intended implementation: a
-# service_sharedjobs_start child owns the shared state file,
-# grants/releases slot reservations to
-# its harness parent via IPC, and honours multiple harnesses running on
-# the same host.
+# the new services model. Intended implementation: a resource service
+# (declared via services()) owns the shared state file, grants/releases
+# slot reservations to its harness parent via IPC, and honours multiple
+# harnesses running on the same host.
 sub available { croak __PACKAGE__ . "::available is not implemented yet" }
 sub assign    { croak __PACKAGE__ . "::assign is not implemented yet" }
 sub release   { croak __PACKAGE__ . "::release is not implemented yet" }

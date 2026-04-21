@@ -6,20 +6,26 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use File::Path qw/make_path/;
+use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 
 use Role::Tiny;
+
+use Test2::Harness2::Util qw/load_module/;
 
 # Consumer contract: host-identity accessors, an emit hook (satisfied
 # by Role::Service's emit_service_event) so this role can log
 # resource-service lifecycle events through the host's event stream,
 # the resource_services tracking accessor (see below for its
-# contract), and the three host-scope accessors (scope / run / logdir)
-# that drive log-file placement and reservation checks.
+# contract), the three host-scope accessors (scope / run / logdir)
+# that drive log-file placement and reservation checks, and
+# ipcm_info (supplied by IPC::Manager::Role::Service) so the host can
+# pass its IPC bus information into each service instance.
 requires 'workdir';
 requires 'name';
 requires 'emit_service_event';
 requires 'resource_services';
+requires 'ipcm_info';
 
 # The scope the host itself occupies. 'global' for the harness,
 # 'run' for the run service. No default: consumers must be explicit
@@ -53,28 +59,52 @@ sub service_host_log_name { $_[0]->name }
 sub max_restart_attempts { 5 }
 sub restart_healthy_secs { 30 }
 
+use constant SERVICE_ROLE => 'Test2::Harness2::Role::ResourceService';
+
 sub start_resource_services {
     my ($self, $resources, %opts) = @_;
 
     my $scope = $opts{scope} // 'global';
     my $run   = $opts{run};
 
-    # Walk the resources once to derive service names and validate
-    # uniqueness BEFORE invoking any service_* method. We never want to
-    # fork a subprocess only to discover its log file would collide
-    # with another service's. Build the ordered start list here and
-    # hand it to invoke_service_method one entry at a time.
+    # Walk the resources once to build the full plan (class +
+    # construction params + derived name + log_path), validating that
+    # every service class composes the service role and that every
+    # name is unique within this scope. We never want to fork a
+    # subprocess only to discover another in the batch would collide
+    # with it.
     my @plan;
     my %seen;
     for my $res (@$resources) {
-        for my $method ($res->service_methods) {
-            my $name = $self->_resource_service_name_from_method($method);
+        for my $entry ($res->services) {
+            croak sprintf(
+                "resource '%s' services() entry is not an arrayref",
+                $res->resource_name,
+            ) unless ref($entry) eq 'ARRAY';
+
+            my ($class, @args) = @$entry;
+            croak sprintf(
+                "resource '%s' services() entry is missing a service class",
+                $res->resource_name,
+            ) unless defined $class && length $class && !ref $class;
+
+            load_module($class);
+            croak sprintf(
+                "resource '%s' service class '%s' does not consume %s",
+                $res->resource_name, $class, SERVICE_ROLE,
+            ) unless Role::Tiny::does_role($class, SERVICE_ROLE);
+
+            my $name = _extract_name(\@args);
+            croak sprintf(
+                "resource '%s' service '%s' entry is missing a 'name' construction parameter",
+                $res->resource_name, $class,
+            ) unless defined $name && length $name;
 
             if (my $prev = $seen{$name}) {
                 croak sprintf(
                     "resource '%s' service '%s' collides with in-batch service '%s' (name '%s' in %s scope)",
-                    $res->resource_name, $method,
-                    $prev->{resource}->resource_name . "::" . $prev->{method},
+                    $res->resource_name, $class,
+                    $prev->{resource}->resource_name . "::" . $prev->{class},
                     $name, $scope,
                 );
             }
@@ -84,7 +114,7 @@ sub start_resource_services {
                 scope    => $scope,
                 run      => $run,
                 resource => $res,
-                method   => $method,
+                class    => $class,
             );
 
             my $log_path = $self->_resource_service_log_path(
@@ -94,10 +124,11 @@ sub start_resource_services {
             );
             $self->_touch_log_file($log_path);
 
-            $seen{$name} = {resource => $res, method => $method};
+            $seen{$name} = {resource => $res, class => $class};
             push @plan => {
                 resource => $res,
-                method   => $method,
+                class    => $class,
+                args     => \@args,
                 name     => $name,
                 log_path => $log_path,
             };
@@ -105,8 +136,10 @@ sub start_resource_services {
     }
 
     for my $entry (@plan) {
-        $self->_invoke_service_method(
-            $entry->{resource}, $entry->{method},
+        $self->_start_service_entry(
+            resource => $entry->{resource},
+            class    => $entry->{class},
+            args     => $entry->{args},
             name     => $entry->{name},
             log_path => $entry->{log_path},
             scope    => $scope,
@@ -117,17 +150,18 @@ sub start_resource_services {
     return;
 }
 
-# service_foo_start -> foo. A method that does not match the
-# service_*_start shape is refused: the service-method discovery path
-# only exposes methods matching it, and callers that name a method
-# explicitly must still respect the contract.
-sub _resource_service_name_from_method {
-    my ($self, $method) = @_;
-
-    croak "cannot derive service name from method '$method'"
-        unless $method =~ m/^service_(.+)_start\z/;
-
-    return $1;
+# Pull the 'name' value out of a key/value construction-params list
+# without consuming the list (services() returns may be shared across
+# calls). Returns undef if no 'name' pair is present.
+sub _extract_name {
+    my ($args) = @_;
+    my $n = @$args;
+    for (my $i = 0; $i + 1 < $n; $i += 2) {
+        my $k = $args->[$i];
+        next                   if ref $k;
+        return $args->[$i + 1] if $k eq 'name';
+    }
+    return undef;
 }
 
 sub _resource_service_log_path {
@@ -195,14 +229,14 @@ sub _assert_service_name_unused {
             next unless ref($svc->{run}) && ref($run) && $svc->{run} == $run;
         }
 
-        # Same (resource, method) is the restart case -- we'll drop
+        # Same (resource, class) is the restart case -- we'll drop
         # the old entry before re-invoking, so it's not a real
         # collision.
         next
             if defined $p{resource}
-            && defined $p{method}
+            && defined $p{class}
             && $svc->{resource} == $p{resource}
-            && ($svc->{method} // '') eq $p{method};
+            && ($svc->{service_class} // '') eq $p{class};
 
         croak sprintf(
             "service name '%s' is already in use in %s scope%s",
@@ -215,114 +249,112 @@ sub _assert_service_name_unused {
     return;
 }
 
-# Single source of truth for calling a resource's service_* method.
-# Used at initialization (start_resource_services) and on restart
-# (handle_resource_service_exit).
+# Single source of truth for constructing, spawning, and tracking one
+# resource service entry. Used at initialization
+# (start_resource_services) and on restart (handle_resource_service_exit).
 #
-# Contract (new as of the service-contract refactor):
-#   * If a service_XXX_applicable companion exists and returns false,
-#     the service is skipped entirely (no tracking, no brokenness).
-#   * The method's return value is ignored. A clean return means the
-#     service started; a thrown exception means it failed to start.
-#     On exception, the resource is flipped to permanent_broken, a
-#     resource_service_start_failed event is emitted through the host's
-#     event stream, and the scheduler continues to the next service
-#     rather than aborting the whole startup.
-sub _invoke_service_method {
-    my ($self, $res, $method, %opts) = @_;
+# On construction or spawn failure the resource is flipped to
+# permanent_broken, a resource_service_start_failed event is emitted
+# through the host's event stream, and the caller sees 'failed'. A
+# successful spawn returns 'started'.
+sub _start_service_entry {
+    my ($self, %opts) = @_;
 
-    my $scope = $opts{scope} // 'global';
-    my $run   = $opts{run};
+    my $res      = $opts{resource} // croak "'resource' is required";
+    my $class    = $opts{class}    // croak "'class' is required";
+    my $args     = $opts{args}     // [];
+    my $name     = $opts{name}     // croak "'name' is required";
+    my $log_path = $opts{log_path} // croak "'log_path' is required";
+    my $scope    = $opts{scope}    // 'global';
+    my $run      = $opts{run};
 
-    # Resolve and prepare the service's name + log path, defaulting to
-    # the method-derived name and the path under the host's logdir.
-    # The caller (start_resource_services or the restart branch) may
-    # pass them pre-computed to avoid a redundant make_path/touch.
-    my $name     = $opts{name}     // $self->_resource_service_name_from_method($method);
-    my $log_path = $opts{log_path} // do {
-        my $p = $self->_resource_service_log_path(
-            name  => $name,
-            scope => $scope,
-            run   => $run,
-        );
-        $self->_touch_log_file($p);
-        $p;
-    };
-
-    my %call_args = (
-        harness  => $self,
-        scope    => $scope,
-        name     => $name,
-        log_path => $log_path,
-        (defined $run ? (run => $run) : ()),
+    my @new_args = (
+        @$args,
+        name      => $name,
+        log_path  => $log_path,
+        ipcm_info => $self->ipcm_info,
     );
 
-    # Applicability gate. If the resource declared an applicable
-    # companion and it returns false, the service is not needed in
-    # this environment; skip with no side effects. Companion names
-    # drop the '_start' suffix: service_foo_start's companion is
-    # service_foo_applicable, not service_foo_start_applicable.
-    my $applicable_method = "service_${name}_applicable";
-    if ($res->can($applicable_method)) {
-        return 'skipped' unless $res->$applicable_method(%call_args);
-    }
-
-    my $ok = eval {
-        $res->$method(%call_args);
+    my $svc;
+    my $ctor_ok = eval {
+        $svc = $class->new(@new_args);
         1;
     };
-    my $err = $@;
-    unless ($ok) {
-        # Propagate the failure through the host's event stream and
-        # flip the resource to permanent_broken. Per contract, the
-        # exception is not re-thrown: the next service in the batch
-        # gets its chance to start, and the resource's own broken
-        # state records the failure for scheduling decisions.
-        if ($res->can('mark_permanent_broken')) {
-            my $mark_ok = eval { $res->mark_permanent_broken; 1 };
-            warn "mark_permanent_broken failed on '" . $res->resource_name . "': $@"
-                unless $mark_ok;
-        }
-
-        $self->emit_service_event(
-            kind     => 'resource_service_start_failed',
-            resource => $res->resource_name,
-            method   => $method,
+    my $ctor_err = $@;
+    unless ($ctor_ok) {
+        $self->_fail_service(
+            resource => $res,
+            class    => $class,
             name     => $name,
             scope    => $scope,
-            error    => "$err",
-            (defined $run ? (run_id => $run->run_id) : ()),
+            run      => $run,
+            error    => $ctor_err,
         );
-
         return 'failed';
     }
 
-    # Service started. Stamp the resolved name + log_path onto any
-    # tracked entry that was registered during the call but didn't get
-    # them explicitly -- this keeps later status reports and restart
-    # paths coherent.
-    my $services = $self->resource_services;
-    for my $svc (values %$services) {
-        next unless $svc->{resource} == $res;
-        next unless defined $svc->{method} && $svc->{method} eq $method;
-        $svc->{name}     //= $name;
-        $svc->{log_path} //= $log_path;
+    my $pid;
+    my $spawn_ok = eval {
+        $pid = $svc->spawn;
+        1;
+    };
+    my $spawn_err = $@;
+    unless ($spawn_ok && defined $pid) {
+        my $err = $spawn_ok ? "spawn() returned undef" : $spawn_err;
+        $self->_fail_service(
+            resource => $res,
+            class    => $class,
+            name     => $name,
+            scope    => $scope,
+            run      => $run,
+            error    => $err,
+        );
+        return 'failed';
     }
+
+    $self->track_resource_service(
+        pid           => $pid,
+        resource      => $res,
+        service_class => $class,
+        service_args  => [@$args],
+        name          => $name,
+        log_path      => $log_path,
+        scope         => $scope,
+        started_at    => $opts{started_at} // time,
+        attempts      => $opts{attempts}   // 1,
+        (defined $run ? (run => $run) : ()),
+    );
 
     return 'started';
 }
 
-# Whether a given (resource, method) pair should be auto-restarted on
-# exit. Consults only the optional service_XXX_restartable companion
-# (note: the companion drops the '_start' suffix that the starter
-# carries); absence means non-restartable. permanent_broken on the
-# resource still blocks restart regardless.
-sub _service_is_restartable {
-    my ($self, $res, $method, %call_args) = @_;
-    my $name      = $self->_resource_service_name_from_method($method);
-    my $companion = "service_${name}_restartable";
-    return 0 unless $res->can($companion);
-    return $res->$companion(%call_args) ? 1 : 0;
+sub _fail_service {
+    my ($self, %p) = @_;
+
+    my $res   = $p{resource};
+    my $class = $p{class};
+    my $name  = $p{name};
+    my $scope = $p{scope} // 'global';
+    my $run   = $p{run};
+    my $err   = $p{error};
+
+    if ($res->can('mark_permanent_broken')) {
+        my $mark_ok = eval { $res->mark_permanent_broken; 1 };
+        warn "mark_permanent_broken failed on '" . $res->resource_name . "': $@"
+            unless $mark_ok;
+    }
+
+    $self->emit_service_event(
+        kind          => 'resource_service_start_failed',
+        resource      => $res->resource_name,
+        service_class => $class,
+        name          => $name,
+        scope         => $scope,
+        error         => "$err",
+        (defined $run ? (run_id => $run->run_id) : ()),
+    );
+
+    return;
 }
 
 sub track_resource_service {
@@ -334,27 +366,22 @@ sub track_resource_service {
     my $scope = $p{scope} // 'global';
     my $run   = $p{run};
 
-    # Derive the service's public name either from the caller's
-    # argument or from the method name (service_foo_start -> foo).
-    # Every tracked entry is expected to carry a name; the name maps
-    # 1:1 to a log file path.
+    my $class = $p{service_class};
+    croak "'service_class' is required" unless defined $class && length $class;
+
     my $name = $p{name};
-    if (!defined $name && defined $p{method}) {
-        $name = $self->_resource_service_name_from_method($p{method});
-    }
-    croak "cannot track a resource service without a 'name' (and no 'method' to derive one from)"
+    croak "cannot track a resource service without a 'name'"
         unless defined $name && length $name;
 
     # Last-resort name-uniqueness check. start_resource_services does
-    # the same validation pre-invoke, but a resource author who calls
-    # us directly (bypassing the service_* discovery path) still has to
-    # play by the same rules.
+    # the same validation pre-spawn, but a caller that bypasses that
+    # path still has to play by the same rules.
     $self->_assert_service_name_unused(
         name     => $name,
         scope    => $scope,
         run      => $run,
         resource => $res,
-        (defined $p{method} ? (method => $p{method}) : ()),
+        class    => $class,
     );
 
     my $log_path = $p{log_path} // $self->_resource_service_log_path(
@@ -364,20 +391,23 @@ sub track_resource_service {
     );
     $self->_touch_log_file($log_path);
 
-    # Restartability is NOT stored on the entry: it is looked up
-    # lazily from the resource's service_XXX_restartable companion
-    # at exit time. That avoids stale flags when a consumer flips
-    # the resource's restart posture while a service is already
-    # running; it also keeps restart posture in exactly one place.
+    # Snapshot restartability from the service class at track time.
+    # The class method is the single source of truth; we store the
+    # value so handle_resource_service_exit doesn't need to reach back
+    # into the class after the service is gone.
+    my $restartable = $class->restartable ? 1 : 0;
+
     $self->resource_services->{$pid} = {
-        pid        => $pid,
-        resource   => $res,
-        method     => $p{method},
-        name       => $name,
-        log_path   => $log_path,
-        scope      => $scope,
-        started_at => $p{started_at} // time,
-        attempts   => $p{attempts}   // 1,
+        pid           => $pid,
+        resource      => $res,
+        service_class => $class,
+        service_args  => $p{service_args} // [],
+        name          => $name,
+        log_path      => $log_path,
+        scope         => $scope,
+        restartable   => $restartable,
+        started_at    => $p{started_at} // time,
+        attempts      => $p{attempts}   // 1,
         (defined $run ? (run => $run) : ()),
     };
 
@@ -395,27 +425,18 @@ sub handle_resource_service_exit {
     my $services = $self->resource_services;
 
     # Drop the tracking entry first so the restart branch below
-    # (which may cause the resource's service_* method to register a
-    # new pid) cannot collide with the old one.
+    # (which calls _start_service_entry, which may register a new
+    # pid) cannot collide with the old one.
     my $svc = delete $services->{$pid} or return 0;
 
-    my $res    = $svc->{resource};
-    my $method = $svc->{method};
-    my $scope  = $svc->{scope} // 'global';
-    my $run    = $svc->{run};
-
-    my %call_args = (
-        harness  => $self,
-        scope    => $scope,
-        name     => $svc->{name},
-        log_path => $svc->{log_path},
-        (defined $run ? (run => $run) : ()),
-    );
-
-    my $restartable =
-        defined $method
-        ? $self->_service_is_restartable($res, $method, %call_args)
-        : 0;
+    my $res         = $svc->{resource};
+    my $class       = $svc->{service_class};
+    my $args        = $svc->{service_args} // [];
+    my $name        = $svc->{name};
+    my $log_path    = $svc->{log_path};
+    my $scope       = $svc->{scope} // 'global';
+    my $run         = $svc->{run};
+    my $restartable = $svc->{restartable} ? 1 : 0;
 
     # Non-restartable service: the resource is effectively gone for
     # the rest of this host's lifetime.
@@ -424,9 +445,7 @@ sub handle_resource_service_exit {
         return 1;
     }
 
-    # Restartable service: mark broken, then attempt to re-invoke the
-    # service_* method. The resource's method is expected to fork a
-    # replacement and call track_resource_service with the new pid.
+    # Restartable service: mark broken, then attempt to re-spawn it.
     $res->mark_broken if $res->can('mark_broken');
 
     # Basic restart-spiral protection. A service that survived at
@@ -434,51 +453,32 @@ sub handle_resource_service_exit {
     # otherwise the counter climbs and we eventually give up.
     my $healthy_secs = $self->restart_healthy_secs;
     my $max_attempts = $self->max_restart_attempts;
-    my $ran_for  = time - ($svc->{started_at} // time);
-    my $attempts = ($ran_for >= $healthy_secs) ? 1 : (($svc->{attempts} // 1) + 1);
+    my $ran_for      = time - ($svc->{started_at} // time);
+    my $attempts     = ($ran_for >= $healthy_secs) ? 1 : (($svc->{attempts} // 1) + 1);
 
     if ($attempts > $max_attempts) {
         warn sprintf(
             "resource '%s' (class %s, last pid %d) service '%s' exceeded %d restart attempts; marking permanent_broken\n",
-            $res->resource_name, ref($res), $pid, $method, $max_attempts,
+            $res->resource_name, ref($res), $pid, $name, $max_attempts,
         );
         $res->mark_permanent_broken if $res->can('mark_permanent_broken');
         return 1;
     }
 
-    # Snapshot existing tracked pids for this (resource, method) so
-    # we can identify the new one afterwards and stamp the attempts
-    # counter on it.
-    my %old_pids = map { $_->{pid} => 1 }
-        grep { $_->{resource} == $res && defined $_->{method} && $_->{method} eq $method } values %$services;
-
-    my $outcome = $self->_invoke_service_method(
-        $res, $method,
-        scope => $scope,
-        (defined $svc->{name}     ? (name     => $svc->{name})     : ()),
-        (defined $svc->{log_path} ? (log_path => $svc->{log_path}) : ()),
-        (defined $run             ? (run      => $run)             : ()),
+    my $outcome = $self->_start_service_entry(
+        resource => $res,
+        class    => $class,
+        args     => $args,
+        name     => $name,
+        log_path => $log_path,
+        scope    => $scope,
+        attempts => $attempts,
+        (defined $run ? (run => $run) : ()),
     );
 
-    # Start failed. _invoke_service_method already marked the
-    # resource permanent_broken and emitted the failure event.
+    # Start failed. _start_service_entry already marked the resource
+    # permanent_broken and emitted the failure event.
     return 1 if $outcome eq 'failed';
-
-    # Resource declared the service no longer applicable. Treat as
-    # permanent: the resource will not come back this session.
-    if ($outcome eq 'skipped') {
-        $res->mark_permanent_broken if $res->can('mark_permanent_broken');
-        return 1;
-    }
-
-    # New pid (or pids) registered. Apply the attempts counter so the
-    # next exit knows how many tries we've already spent.
-    for my $new_svc (values %$services) {
-        next unless $new_svc->{resource} == $res;
-        next unless defined $new_svc->{method} && $new_svc->{method} eq $method;
-        next if $old_pids{$new_svc->{pid}};
-        $new_svc->{attempts} = $attempts;
-    }
 
     return 1;
 }
@@ -499,16 +499,17 @@ hosting logic for L<Test2::Harness2> and L<Test2::Harness2::RunService>.
 =head1 DESCRIPTION
 
 Both the global harness service and the per-run run service need to
-invoke C<service_*> methods on their resources, track the resulting
-pids, enforce name uniqueness, handle service exits (including
-restarts), and compute log-file paths. This role consolidates all of
-that so the two consumers can't drift.
+instantiate and spawn the supervised subprocesses declared by their
+resources, track the resulting pids, enforce name uniqueness, handle
+service exits (including restarts), and compute log-file paths. This
+role consolidates all of that so the two consumers can't drift.
 
 The role is storage-agnostic: it reads and writes tracking state
 through the C<resource_services> accessor and uses the consumer's
-C<workdir> / C<name> / C<emit_service_event> methods (the last of
-which Role::Service already provides) for path decisions, reservation
-checks, and failure logging.
+C<workdir> / C<name> / C<emit_service_event> / C<ipcm_info> methods
+(the last two of which L<Test2::Harness2::Role::Service> and
+L<IPC::Manager::Role::Service> already provide) for path decisions,
+reservation checks, service construction, and failure logging.
 
 =head1 REQUIRED METHODS
 
@@ -529,6 +530,12 @@ The host's own service name (reserved in its scope).
 Emit a structured event through the host's event stream.
 L<Test2::Harness2::Role::Service> supplies this; hosts that compose
 both roles get it for free.
+
+=item ipcm_info
+
+The host's IPC::Manager bus info. Forwarded into every resource
+service instance so each service connects to the same bus as its
+host. L<IPC::Manager::Role::Service> supplies this.
 
 =item $hashref = $host->resource_services
 
@@ -559,8 +566,9 @@ read-only accessor over a slot that C<init> primes to C<{}>:
     }
 
 Each tracked entry is a hashref carrying at least C<pid>, C<resource>,
-C<method>, C<name>, C<log_path>, C<scope>, C<started_at>, and
-C<attempts> (plus C<run> for per-run scope); see L</track_resource_service>.
+C<service_class>, C<service_args>, C<name>, C<log_path>, C<scope>,
+C<restartable>, C<started_at>, and C<attempts> (plus C<run> for
+per-run scope); see L</track_resource_service>.
 
 =item $scope = $host->service_host_scope
 
@@ -610,20 +618,19 @@ in a spiral". Default 30 seconds. Overridable.
 
 =item $host->start_resource_services(\@resources, scope => ..., run => ...)
 
-Walk each resource's C<service_methods>, validate name uniqueness
-across the batch, invoke each service method, and track the resulting
-pids. Skipped services (C<service_XXX_applicable> returned false) and
-failed services (service method threw) are each handled inline; the
-loop continues to the next service after either outcome.
+Walk each resource's C<services> list, validate that each entry names
+a class that composes L<Test2::Harness2::Role::ResourceService>,
+validate name uniqueness across the batch, instantiate and spawn each
+service, and track the resulting pids. A service whose construction
+or spawn throws is flagged individually and the loop continues to the
+next entry.
 
-=item $host->track_resource_service(pid => ..., resource => ..., method => ..., ...)
+=item $host->track_resource_service(pid => ..., resource => ..., service_class => ..., service_args => ..., name => ..., ...)
 
 Record a freshly-spawned service pid. Validates name uniqueness,
-creates the log file if it does not exist yet, and stores a tracking
-entry keyed by pid. Restart posture is B<not> stored here -- it is
-resolved lazily at exit time via the resource's
-C<service_XXX_restartable> companion (no companion means
-non-restartable).
+creates the log file if it does not exist yet, snapshots the
+restartable flag from C<< $service_class->restartable >>, and stores
+a tracking entry keyed by pid.
 
 =item $bool = $host->handle_resource_service_exit($pid, $exit)
 
@@ -634,33 +641,31 @@ was something else.
 
 =back
 
-=head1 SERVICE-METHOD CONTRACT
+=head1 SERVICE CONTRACT
 
-See L<Test2::Harness2::Role::Resource/SERVICE METHODS> for the full
+See L<Test2::Harness2::Role::Resource/SERVICES> for the full
 contract. Briefly:
 
 =over 4
 
 =item *
 
-C<service_XXX_applicable> (if defined) is consulted before any start
-attempt. Returning false skips the service entirely.
+A resource's C<services> method returns a list of
+C<[$class, @construction_params]> entries. Each class must compose
+L<Test2::Harness2::Role::ResourceService>.
 
 =item *
 
-C<service_XXX> starts the service. The return value is ignored.
-Success is signalled by returning normally; failure is signalled by
-throwing. On throw the resource is flipped to C<permanent_broken> and
-a C<resource_service_start_failed> event is emitted through the host's
-event stream.
+C<@construction_params> must contain a C<name =E<gt> $name> pair; the
+host adds C<name>, C<log_path>, and C<ipcm_info> when calling
+C<< $class->new >>.
 
 =item *
 
-Restartability is read only from C<service_XXX_restartable>; absence
-means the service is not restarted. A restartable service that
-exits triggers a re-invocation of the service method, subject to
-the C<max_restart_attempts> / C<restart_healthy_secs>
-spiral-protection accessors (see L</PROVIDED METHODS>).
+Restartability comes from C<< $class->restartable >>. Default false.
+A restartable service that exits triggers a re-spawn, subject to the
+C<max_restart_attempts> / C<restart_healthy_secs> spiral-protection
+accessors (see L</PROVIDED METHODS>).
 
 =back
 

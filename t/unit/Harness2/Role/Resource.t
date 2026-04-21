@@ -1,11 +1,14 @@
 use Test2::V0;
 
+use lib 't/lib';
+use Test2::Harness2::Test::ResourceService qw//;
+
 # Consumer package defined in-test so we can exercise the role machinery
 # independently of any concrete Resource class.
 {
 
     package My::TinyResource;
-    use Object::HashBase qw/<available_val +broken +permanent_broken +paused/;
+    use Object::HashBase qw/<available_val +broken +permanent_broken +paused <svc_classes/;
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Resource';
 
@@ -33,8 +36,11 @@ use Test2::V0;
         $self->{+PAUSED} = 0;
     }
 
-    sub service_alpha_start { -1 }
-    sub service_beta_start  { 0 }
+    sub services {
+        my $self    = shift;
+        my $classes = $self->{+SVC_CLASSES} // [];
+        return map { [$_->[0], name => $_->[1]] } @$classes;
+    }
 }
 
 {
@@ -99,43 +105,22 @@ subtest 'state transitions' => sub {
     );
 };
 
-subtest 'service_methods enumerates service_*_start subs only' => sub {
-    my @m = My::TinyResource->service_methods;
-    is(\@m, ['service_alpha_start', 'service_beta_start'], 'sorted list of service_*_start methods');
-
-    my @n = My::LimiterResource->service_methods;
-    is(\@n, [], 'empty list when no service_*_start methods');
+subtest 'services() default is empty list' => sub {
+    my $r = My::LimiterResource->new;
+    is([$r->services], [], 'no services by default');
 };
 
-subtest 'sort_methods default is alphabetical; overrideable' => sub {
-    {
+subtest 'services() returns [class, @params] entries' => sub {
+    my $cA = Test2::Harness2::Test::ResourceService::make_service_class(pid => 11);
+    my $cB = Test2::Harness2::Test::ResourceService::make_service_class(pid => 12);
+    my $r  = My::TinyResource->new(svc_classes => [[$cA, 'alpha'], [$cB, 'beta']]);
 
-        package My::OrderedResource;
-        use Object::HashBase;
-        use Role::Tiny::With;
-        with 'Test2::Harness2::Role::Resource';
-
-        sub available { 1 }
-        sub assign    { 1 }
-        sub release   { 1 }
-        sub status    { {} }
-
-        sub service_db_start     { 1 }
-        sub service_worker_start { 1 }
-
-        # worker depends on db, so explicit ordering reverses the
-        # alphabetical default.
-        sub sort_methods {
-            my $self = shift;
-            return sort { ($a eq 'service_db_start') <=> ($b eq 'service_db_start') || $a cmp $b } @_;
-        }
-    }
-
-    my @default = My::TinyResource->service_methods;
-    is(\@default, ['service_alpha_start', 'service_beta_start'], 'default sort is alphabetical');
-
-    my @ordered = My::OrderedResource->service_methods;
-    is(\@ordered, ['service_worker_start', 'service_db_start'], 'override steers startup order');
+    my @s = $r->services;
+    is(scalar(@s),       2,                 'two entries');
+    is($s[0][0],         $cA,               'first class');
+    is([@{$s[0]}[1, 2]], [name => 'alpha'], 'first params include name');
+    is($s[1][0],         $cB,               'second class');
+    is([@{$s[1]}[1, 2]], [name => 'beta'],  'second params include name');
 };
 
 done_testing;

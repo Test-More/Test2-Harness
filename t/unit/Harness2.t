@@ -9,6 +9,7 @@ use Time::HiRes qw/sleep/;
 use lib 't/lib';
 use Test2::Harness2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers/;
+use Test2::Harness2::Test::ResourceService qw//;
 
 # The jump_to subtest drives the interpose path with a stub ipcm_info; the
 # collector would otherwise try to talk to a real IPC bus on startup and
@@ -42,12 +43,13 @@ sub _tf  { Test2::Harness2::TestFile->new(file => $_[0]) }
 sub _tfs { [map { _tf($_) } @_] }
 
 # Inline test resources for the restart and per-run subtests.
-# Test::Restart::Res drives restart cases: service_foo_start pulls one pid
-# from its PIDS queue per call and registers it via
-# track_resource_service. When APPLICABLE is defined (non-undef) the
-# optional service_foo_applicable companion is provided and returns
-# that value. When DIE_ON_START is true the method throws instead of
-# starting a service.
+# Test::Restart::Res pairs a resource with a lazily-built throwaway
+# service class (built via Test::ResourceService) whose spawn() pulls
+# one pid per call from the resource's own PIDS queue. Tests tweak
+# knobs on the resource (restartable_flag / die_on_start) to shape the
+# generated class. A resource that never declares services (no pids
+# set) reports no services(), which is what the broken_resource_*
+# subtests want.
 {
 
     package Test::Restart::Res;
@@ -56,9 +58,9 @@ sub _tfs { [map { _tf($_) } @_] }
         +broken
         +permanent_broken
         +paused
-        <applicable
         <die_on_start
         <restartable_flag
+        +service_class
     };
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Resource';
@@ -86,31 +88,21 @@ sub _tfs { [map { _tf($_) } @_] }
         $self->{+PAUSED} = 0;
     }
 
-    sub service_foo_applicable {
+    sub service_class {
         my $self = shift;
-        my $val  = $self->{+APPLICABLE};
-        return defined $val ? $val : 1;
-    }
-
-    # Default restartable; tests set RESTARTABLE_FLAG to 0 to
-    # exercise the non-restartable path.
-    sub service_foo_restartable {
-        my $self = shift;
-        return defined $self->{+RESTARTABLE_FLAG} ? $self->{+RESTARTABLE_FLAG} : 1;
-    }
-
-    sub service_foo_start {
-        my ($self, %p) = @_;
-        die "service_foo_start failure (test)" if $self->{+DIE_ON_START};
-        my $pid = shift @{$self->{+PIDS}};
-        $p{harness}->track_resource_service(
-            pid      => $pid,
-            resource => $self,
-            method   => 'service_foo_start',
-            scope    => $p{scope},
-            ($p{run} ? (run => $p{run}) : ()),
+        return $self->{+SERVICE_CLASS} //= Test2::Harness2::Test::ResourceService::make_service_class(
+            restartable => defined $self->{+RESTARTABLE_FLAG} ? $self->{+RESTARTABLE_FLAG} : 1,
+            pids        => $self->{+PIDS},
+            ($self->{+DIE_ON_START} ? (spawn_die => "service_foo_start failure (test)") : ()),
         );
-        return;
+    }
+
+    sub services {
+        my $self = shift;
+        my $pids = $self->{+PIDS} // [];
+        # No services unless the resource was primed with a pid queue.
+        return () unless @$pids;
+        return ([$self->service_class, name => 'foo']);
     }
 }
 
@@ -570,7 +562,7 @@ subtest 'job_complete IPC reports pass=0 for non-zero exit' => sub {
             job_id  => $job->job_id,
             job_try => 0,
             pid     => 2,
-            exit    => (1 << 8),         # raw wait status for exit code 1
+            exit    => (1 << 8),               # raw wait status for exit code 1
         }),
     );
 
@@ -759,13 +751,24 @@ subtest 'run_on_general_message - unknown resource name is a no-op' => sub {
     is(\@warnings, [], 'no warning for a known kind with a stale resource');
 };
 
+sub _track_one {
+    my ($h, $res, %extra) = @_;
+    $h->track_resource_service(
+        resource      => $res,
+        service_class => $res->service_class,
+        service_args  => [],
+        name          => 'foo',
+        %extra,
+    );
+}
+
 subtest 'run_on_pid: restartable exit flips to broken and re-invokes' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $res = Test::Restart::Res->new(pids => [71011], restartable_flag => 1);
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
-    $h->track_resource_service(pid => 71001, resource => $res, method => 'service_foo_start');
+    _track_one($h, $res, pid => 71001);
     $h->run_on_pid(71001, 0);
 
     ok($res->is_broken,                        'restartable service exit marks resource broken');
@@ -777,10 +780,10 @@ subtest 'run_on_pid: restartable exit flips to broken and re-invokes' => sub {
 subtest 'run_on_pid: non-restartable exit flips straight to permanent_broken' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
-    my $res = Test::Restart::Res->new(pids => [], restartable_flag => 0);
+    my $res = Test::Restart::Res->new(pids => [71003], restartable_flag => 0);
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
-    $h->track_resource_service(pid => 71002, resource => $res, method => 'service_foo_start');
+    _track_one($h, $res, pid => 71002);
     $h->run_on_pid(71002, 0);
 
     ok($res->is_permanent_broken,              'non-restartable service exit marks permanently broken');
@@ -791,16 +794,14 @@ subtest 'run_on_pid: non-restartable exit flips straight to permanent_broken' =>
 subtest 'restart: successful re-invocation tracks a new pid with attempts+1' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
-    # Only one restart iteration: service_foo_start will be called once and
-    # track pid 88002. The original pid (88001) was seeded directly so
-    # the queue doesn't need to produce it.
+    # Only one restart iteration: spawn will be called once and
+    # return pid 88002. The original pid (88001) was seeded directly.
     my $res = Test::Restart::Res->new(pids => [88002]);
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
-    $h->track_resource_service(
+    _track_one(
+        $h, $res,
         pid        => 88001,
-        resource   => $res,
-        method     => 'service_foo_start',
         started_at => time,
         attempts   => 1,
     );
@@ -816,13 +817,12 @@ subtest 'restart: successful re-invocation tracks a new pid with attempts+1' => 
 
 subtest 'restart: attempts cap flips to permanent_broken' => sub {
     my $dir = tempdir(CLEANUP => 1);
-    my $res = Test::Restart::Res->new(pids => [88101]);                     # only one pid: would track if called
+    my $res = Test::Restart::Res->new(pids => [88101]);                     # only one pid: would be consumed if spawn ran
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
-    $h->track_resource_service(
+    _track_one(
+        $h, $res,
         pid        => 88100,
-        resource   => $res,
-        method     => 'service_foo_start',
         started_at => time,
         attempts   => $h->max_restart_attempts,
     );
@@ -838,19 +838,19 @@ subtest 'restart: attempts cap flips to permanent_broken' => sub {
         (grep { /exceeded.*restart attempts/ } @warnings),
         'warning mentions the attempts cap',
     );
-    # Reinforce that the cap short-circuits BEFORE re-invocation: no
-    # pid was consumed from the queue and nothing new is tracked.
-    is(scalar @{$res->pids}, 1, 'service method was not invoked when attempts cap hit');
+    # Reinforce that the cap short-circuits BEFORE re-spawn: no pid
+    # was consumed from the queue and nothing new is tracked.
+    is(scalar @{$res->pids}, 1, 'spawn was not invoked when attempts cap hit');
     ok(!(keys %{$h->{resource_services}}), 'no tracked entries after cap');
 };
 
-subtest 'restart: method dying during re-invocation flips to permanent_broken' => sub {
+subtest 'restart: spawn dying during re-invocation flips to permanent_broken' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
-    # Restartable resource whose second service_foo_start attempt throws:
-    # per the new contract an exception during start is treated as
+    # Restartable resource whose next spawn throws: per the new
+    # contract an exception during start is treated as
     # permanent_broken.
-    my $res = Test::Restart::Res->new(pids => [], die_on_start => 1);
+    my $res = Test::Restart::Res->new(pids => [88401], die_on_start => 1);
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
     my @emits;
@@ -858,10 +858,9 @@ subtest 'restart: method dying during re-invocation flips to permanent_broken' =
         no warnings 'redefine';
         local *Test2::Harness2::emit_service_event = sub { push @emits => {@_[1 .. $#_]} };
 
-        $h->track_resource_service(
+        _track_one(
+            $h, $res,
             pid        => 88400,
-            resource   => $res,
-            method     => 'service_foo_start',
             started_at => time,
             attempts   => 1,
         );
@@ -880,10 +879,9 @@ subtest 'restart: healthy runtime resets the attempts counter' => sub {
     my $res = Test::Restart::Res->new(pids => [88201]);
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
-    $h->track_resource_service(
+    _track_one(
+        $h, $res,
         pid        => 88200,
-        resource   => $res,
-        method     => 'service_foo_start',
         started_at => time - ($h->restart_healthy_secs + 1),
         attempts   => $h->max_restart_attempts,
     );
@@ -893,28 +891,6 @@ subtest 'restart: healthy runtime resets the attempts counter' => sub {
     ok(exists $h->{resource_services}{88201}, 'new pid tracked after healthy-runtime reset');
     is($h->{resource_services}{88201}{attempts}, 1, 'attempts counter reset to 1');
     ok(!$res->is_permanent_broken, 'not permanently broken');
-};
-
-subtest 'restart: service_foo_applicable returning false marks permanent_broken' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    # Resource is restartable, but on restart the companion
-    # service_foo_applicable reports "no longer needed"; the host
-    # treats that as permanent.
-    my $res = Test::Restart::Res->new(pids => [], applicable => 0);
-    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
-
-    $h->track_resource_service(
-        pid        => 88300,
-        resource   => $res,
-        method     => 'service_foo_start',
-        started_at => time,
-        attempts   => 1,
-    );
-
-    $h->run_on_pid(88300, 0);
-
-    ok($res->is_permanent_broken,          'service declined restart -> permanent_broken');
-    ok(!(keys %{$h->{resource_services}}), 'no tracked entries remain');
 };
 
 subtest 'harness spawns a run service lazily for each run it considers' => sub {

@@ -5,7 +5,6 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
-use mro ();
 
 use Role::Tiny;
 
@@ -57,42 +56,19 @@ sub mark_permanent_broken { croak ref($_[0]) . "::mark_permanent_broken is not i
 sub mark_paused           { croak ref($_[0]) . "::mark_paused is not implemented" }
 sub mark_resumed          { croak ref($_[0]) . "::mark_resumed is not implemented" }
 
-# Introspect service_*_start methods declared on the consumer class.
-# Each returned method is a discrete resource-service the harness should
-# start. Companion methods (service_XXX_applicable,
-# service_XXX_restartable) are looked up explicitly by the scheduler
-# and do not appear in the list. The _start suffix disambiguates the
-# starter from its companions and from any unrelated 'service_*'
-# accessor the consumer might define.
-sub service_methods {
-    my $self  = shift;
-    my $class = ref($self) || $self;
-
-    my %seen;
-    for my $pkg (@{mro::get_linear_isa($class)}) {
-        my $stash;
-        {
-            no strict 'refs';
-            $stash = \%{"${pkg}::"};
-        }
-        for my $name (keys %$stash) {
-            next unless $name =~ m/^service_.+_start\z/;
-            next unless $class->can($name);
-            $seen{$name} = 1;
-        }
-    }
-
-    return $self->sort_methods(keys %seen);
-}
-
-# Determines the startup order of a resource's services. Default is
-# alphabetical by method name; override in a consumer to express
-# explicit dependencies (e.g. start the database before the worker
-# that reads from it).
-sub sort_methods {
-    my $self = shift;
-    return sort @_;
-}
+# Declare the supervised subprocesses this resource needs in the
+# current environment. Each list entry is an arrayref:
+#
+#     [ $service_class, @construction_params ]
+#
+# $service_class must consume Test2::Harness2::Role::ResourceService;
+# @construction_params are passed through to $service_class->new as-is,
+# with the host layering name / log_path / ipcm_info on top before
+# construction. A resource that has nothing to supervise in the current
+# environment returns an empty list -- there is no separate
+# "applicable" hook; the resource's own logic decides membership by
+# including or omitting each service from the returned list.
+sub services { () }
 
 # Teardown hook; called by the harness when a resource is released globally
 # (harness shutdown) or per-run (run completes). Default: no-op.
@@ -148,11 +124,9 @@ caps the total number of concurrent jobs. Without an explicit limiter
 the harness falls back to a L<Test2::Harness2::Resource::JobCount> with
 a single slot.
 
-Resources may also expose one or more C<service_XXX> methods. During
-harness initialization (for harness-global resources) or at run start (for
-run-scoped resources), the harness invokes each such method and interprets
-the return value to decide whether to launch and track a supervised
-subprocess on its behalf. See L</SERVICE METHODS> below.
+Resources may also declare one or more supervised subprocesses via the
+L</services> method. The harness instantiates and supervises each one;
+the resource itself never forks. See L</SERVICES> below.
 
 =head1 SYNOPSIS
 
@@ -177,6 +151,13 @@ subprocess on its behalf. See L</SERVICE METHODS> below.
     sub assign  { ... }
     sub release { ... }
     sub status  { ... }
+
+    sub services {
+        my $self = shift;
+        return (
+            [ 'My::Resource::Daemon', name => 'mydaemon', config => $self->config ],
+        );
+    }
 
 =head1 REQUIRED METHODS
 
@@ -281,21 +262,21 @@ returning true. C<mark_permanent_broken> should also flip C<is_broken>
 to true; C<mark_resumed> clears transient broken/paused flags but must
 leave permanent brokenness intact.
 
-=item @methods = $resource->service_methods
+=item @entries = $resource->services
 
-Return the list of C<service_*_start> method names declared on the
-consuming class, ordered by L</sort_methods>. Used by the harness to
-discover and start supervised subprocesses for this resource. The
-C<_start> suffix is required; companion methods
-(C<service_XXX_applicable>, C<service_XXX_restartable>) do not carry
-the suffix and are never enumerated here. See L</SERVICE METHODS>.
+Return the list of supervised subprocesses this resource requires.
+Each entry is an arrayref:
 
-=item @ordered = $resource->sort_methods(@names)
+    [ $service_class, @construction_params ]
 
-Given the method names enumerated by L</service_methods>, return them
-in the order the harness should start them. Default: alphabetical.
-Override in a consumer to express explicit ordering (e.g. start a
-database service before the worker that reads from it).
+C<$service_class> must consume L<Test2::Harness2::Role::ResourceService>.
+C<@construction_params> are passed verbatim to
+C<< $service_class->new >>; the host adds C<name>, C<log_path>, and
+C<ipcm_info> on top before construction.
+
+Default: empty list. A resource that only needs supervision in certain
+environments returns an empty list when no service is applicable; there
+is no separate "applicable" hook.
 
 =item $resource->teardown
 
@@ -304,97 +285,40 @@ resources, run completion for per-run resources). Default: no-op.
 
 =back
 
-=head1 SERVICE METHODS
+=head1 SERVICES
 
-A resource may define one or more methods named
-C<service_SOMETHING_start>. The harness introspects these via
-L</service_methods> at initialization (for harness-global resources)
-or at run start (for per-run resources) and invokes each one whose
-optional companion C<service_SOMETHING_applicable> either does not
-exist or returns true.
+A resource declares its supervised subprocesses via L</services>. Each
+entry names a class that consumes L<Test2::Harness2::Role::ResourceService>
+plus the constructor arguments for one instance of that class. The host
+is responsible for instantiating the service, spawning it, tracking its
+pid, and restarting or retiring it when it exits. The resource itself
+never forks.
 
-The service method is invoked with these named arguments:
+The first argument of each construction-params list B<must> be C<name>
+(followed by the service's desired unique name within its scope). The
+host reads the name to derive the service's log file path and to
+enforce per-scope name uniqueness.
 
-    harness  => $harness,          # the Test2::Harness2 instance
-    scope    => 'global' | 'run',  # global init vs per-run startup
-    name     => $name,             # service name (the SOMETHING between 'service_' and '_start')
-    log_path => $path,             # pre-created JSONL log file the harness has chosen
-    run      => $run,              # only present when scope is 'run'
+Every service instance is constructed as:
 
-The harness guarantees that C<name> is unique within its scope (global
-scope across all global services, per-run within each run; the
-harness's own C<name> is reserved in the global scope). The
-C<log_path> points at C<services/E<lt>nameE<gt>.jsonl> under the
-workdir for global services, or
-C<runs/E<lt>run_idE<gt>/services/E<lt>nameE<gt>.jsonl> for per-run
-services. The file is pre-created, so a resource that spawns a
-subprocess can redirect its child's stdout/stderr to C<log_path>
-without checking.
-
-The service method is responsible for starting the subprocess and
-reporting its pid to the harness via:
-
-    $harness->track_resource_service(
-        pid      => $pid,
-        resource => $self,
-        method   => $method_name,
+    $service_class->new(
+        @construction_params,
+        name      => $name,         # mandatory; first pair in @construction_params
+        log_path  => $log_path,     # host-derived from name + scope
+        ipcm_info => $ipcm_info,    # host's IPC::Manager info
     );
 
-B<The service method's return value is ignored.> Success is signalled
-by returning normally; failure is signalled by throwing. If the method
-dies, the harness catches the exception, marks the resource
-C<permanent_broken>, and logs a C<resource_service_start_failed> event
-through the host service's logger. The service startup loop continues
-to the next service rather than aborting.
+Any additional arguments the resource wants to pass go before C<name>
+in the params list.
 
-=head2 Companion methods
+=head2 Restartability
 
-Two optional sibling methods tune the harness's treatment of each
-service. Neither ends in C<_start>, so neither is enumerated by
-C<service_methods>:
-
-=over 4
-
-=item $bool = $resource->service_XXX_applicable(%opts)
-
-When present, called B<before> C<service_XXX_start> with the same named
-arguments. Returning false skips the service entirely: no start
-attempt, no tracking, no brokenness impact. When absent, the service
-is always started.
-
-=item $bool = $resource->service_XXX_restartable(%opts)
-
-When present, returning true means the harness should auto-restart
-the service if it exits before shutdown (unless the resource has
-been marked C<permanent_broken>); returning false means a clean
-exit is accepted and a failure flips the resource to
-C<permanent_broken>. When this companion is absent the service is
-non-restartable -- the role deliberately has no blanket
-C<restartable> accessor, so there is only one place to look.
-
-=back
-
-=head2 Restart semantics
-
-When a restartable service exits, the harness re-invokes its
-C<service_*_start> method. Basic spiral protection caps consecutive
-restart attempts at C<$host-E<gt>max_restart_attempts> (default 5);
-the counter resets to 1 when a service survived at least
-C<$host-E<gt>restart_healthy_secs> (default 30) before exiting. Note
-that the reset is one-shot per long-lived window: a service that
-survived past the healthy threshold, died, and then immediately
-crash-loops will burn up to the full attempt budget of rapid
-retries before the resource is flipped to C<permanent_broken>. If the
-re-invoked method dies, the resource stays C<broken> (no automatic
-progression to C<permanent_broken>); operator intervention is
-required.
-
-If a resource is in a transient broken state while a test is still
-running against it and that test later fails, the test should be
-queued for re-run (retry logic is a future concern). If the resource
-is permanently broken, the harness dispatches jobs that need it
-according to its C<broken_resource_behavior> attribute (C<skip>,
-C<fail>, or C<abort>); see L<Test2::Harness2>.
+L<Test2::Harness2::Role::ResourceService/restartable> controls the
+host's behaviour when the service exits before shutdown. A
+non-restartable service that exits flips the owning resource to
+C<permanent_broken>; a restartable service is re-spawned, subject to
+spiral protection (C<$host-E<gt>max_restart_attempts>,
+C<$host-E<gt>restart_healthy_secs>).
 
 =head1 SOURCE
 

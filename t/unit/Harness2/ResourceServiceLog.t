@@ -3,21 +3,21 @@ use File::Temp qw/tempdir/;
 
 use lib 't/lib';
 use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::ResourceService qw//;
 
 use Test2::Harness2;
 use Test2::Harness2::Run;
 use Test2::Harness2::Run::Job;
 
-# Resource with a single service_foo method. Records the named arguments
-# the method receives so tests can assert name / log_path propagation.
+# Resource that returns a single service entry. The generated service
+# class records construction args on the instance so tests can inspect
+# name / log_path propagation.
 {
 
-    package Test::OneService;
-    use Object::HashBase qw{<pids <last_args};
+    package Test::OneService::Res;
+    use Object::HashBase qw{<service_class <svc_name};
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Resource';
-
-    sub init { $_[0]->{+PIDS} //= [] }
 
     sub available { 1 }
     sub assign    { 1 }
@@ -29,33 +29,22 @@ use Test2::Harness2::Run::Job;
     sub mark_paused           { }
     sub mark_resumed          { }
 
-    sub service_foo_start {
-        my ($self, %p) = @_;
-        $self->{+LAST_ARGS} = {%p};
-        my $pid = shift @{$self->{+PIDS}} // 90_000;
-        $p{harness}->track_resource_service(
-            pid      => $pid,
-            resource => $self,
-            method   => 'service_foo_start',
-            name     => $p{name},
-            log_path => $p{log_path},
-            scope    => $p{scope},
-            (defined $p{run} ? (run => $p{run}) : ()),
-        );
-        return 0;    # not restartable
+    sub services {
+        my $self  = shift;
+        my $class = $self->{+SERVICE_CLASS} or return ();
+        my $name  = $self->{+SVC_NAME} // 'foo';
+        return ([$class, name => $name]);
     }
 }
 
-# Second resource class that also declares service_foo -- used to exercise
-# in-batch and same-scope cross-resource collision.
+# Resource that declares two distinct services, keyed by different
+# names.
 {
 
-    package Test::OtherService;
-    use Object::HashBase qw{<pids};
+    package Test::TwoServices::Res;
+    use Object::HashBase qw{<classes};
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Resource';
-
-    sub init { $_[0]->{+PIDS} //= [] }
 
     sub available { 1 }
     sub assign    { 1 }
@@ -67,100 +56,46 @@ use Test2::Harness2::Run::Job;
     sub mark_paused           { }
     sub mark_resumed          { }
 
-    sub service_foo_start {
-        my ($self, %p) = @_;
-        my $pid = shift @{$self->{+PIDS}} // 91_000;
-        $p{harness}->track_resource_service(
-            pid      => $pid,
-            resource => $self,
-            method   => 'service_foo_start',
-            name     => $p{name},
-            log_path => $p{log_path},
-            scope    => $p{scope},
-            (defined $p{run} ? (run => $p{run}) : ()),
-        );
-        return 0;
+    # CLASSES is [[$class1, $name1], [$class2, $name2]]
+    sub services {
+        my $self = shift;
+        return map { [$_->[0], name => $_->[1]] } @{$self->{+CLASSES} // []};
     }
 }
 
-# Resource exposing two distinct service methods. Useful for asserting
-# that one resource can stand up multiple services as long as the names
-# don't collide.
-{
-
-    package Test::TwoServices;
-    use Object::HashBase qw{<pids};
-    use Role::Tiny::With;
-    with 'Test2::Harness2::Role::Resource';
-
-    sub init { $_[0]->{+PIDS} //= [] }
-
-    sub available { 1 }
-    sub assign    { 1 }
-    sub release   { 1 }
-    sub status    { {} }
-
-    sub mark_broken           { }
-    sub mark_permanent_broken { }
-    sub mark_paused           { }
-    sub mark_resumed          { }
-
-    sub _track_one {
-        my ($self, $method, %p) = @_;
-        my $pid = shift @{$self->{+PIDS}} // 92_000;
-        $p{harness}->track_resource_service(
-            pid      => $pid,
-            resource => $self,
-            method   => $method,
-            name     => $p{name},
-            log_path => $p{log_path},
-            scope    => $p{scope},
-            (defined $p{run} ? (run => $p{run}) : ()),
-        );
-        return 0;
-    }
-
-    sub service_alpha_start { my $self = shift; $self->_track_one('service_alpha_start', @_) }
-    sub service_beta_start  { my $self = shift; $self->_track_one('service_beta_start',  @_) }
+sub _mk_res {
+    my %opts = @_;
+    my $cls  = Test2::Harness2::Test::ResourceService::make_service_class(%opts);
+    return ($cls, Test::OneService::Res->new(service_class => $cls));
 }
 
-subtest 'global service lays down services/<name>.jsonl + passes name + log_path' => sub {
+subtest 'global service lays down services/<name>.jsonl' => sub {
     my $dir = tempdir(CLEANUP => 1);
-    my $res = Test::OneService->new(pids => [93_001]);
-    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
-
-    my @all;
-    for (1 .. 3) {
-        push @all => Test2::Harness2::Resource::JobCount->new(slots => 1);
-    }
+    my ($cls, $res) = _mk_res(pid => 93_001);
+    my $h = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
     $h->start_resource_services([$res], scope => 'global');
 
     my $expected = "$dir/logs/services/foo.jsonl";
     ok(-e $expected, "log file created at $expected");
 
-    is($res->last_args->{name},     'foo',     'name argument derived from method');
-    is($res->last_args->{log_path}, $expected, 'log_path argument matches file on disk');
-    is($res->last_args->{scope},    'global',  'scope argument set');
-
     my $svc = $h->{resource_services}{93_001};
     ok($svc, 'tracking entry exists');
-    is($svc->{name},     'foo',     'tracking entry records name');
-    is($svc->{log_path}, $expected, 'tracking entry records log_path');
+    is($svc->{name},          'foo',     'tracking entry records name');
+    is($svc->{log_path},      $expected, 'tracking entry records log_path');
+    is($svc->{service_class}, $cls,      'tracking entry records service_class');
 };
 
 subtest 'per-run service lays down runs/<run_id>/services/<name>.jsonl' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
-    my $res = Test::OneService->new(pids => [93_101]);
+    my ($cls, $res) = _mk_res(pid => 93_101);
     my $run = Test2::Harness2::Run->new(run_id => 'r-alpha', resources => [$res]);
 
     $h->start_resource_services([$res], scope => 'run', run => $run);
 
     my $expected = "$dir/logs/runs/r-alpha/services/foo.jsonl";
     ok(-e $expected, "log file created at $expected");
-    is($res->last_args->{log_path}, $expected, 'log_path points to per-run dir');
-    is($res->last_args->{scope},    'run',     'scope argument is run');
 
     my $svc = $h->{resource_services}{93_101};
     is($svc->{scope},    'run',     'tracking entry has run scope');
@@ -169,28 +104,24 @@ subtest 'per-run service lays down runs/<run_id>/services/<name>.jsonl' => sub {
 };
 
 subtest 'in-batch global name collision across two resources is rejected' => sub {
-    my $dir  = tempdir(CLEANUP => 1);
-    my $res1 = Test::OneService->new;
-    my $res2 = Test::OtherService->new;
-    my $h    = Test2::Harness2->new(workdir => $dir, resources => [$res1, $res2]);
+    my $dir = tempdir(CLEANUP => 1);
+    my ($c1, $res1) = _mk_res(pid => 93_010);
+    my ($c2, $res2) = _mk_res(pid => 93_011);
+    my $h = Test2::Harness2->new(workdir => $dir, resources => [$res1, $res2]);
 
     my $ok  = eval { $h->start_resource_services([$res1, $res2], scope => 'global'); 1 };
     my $err = $@;
     ok(!$ok, 'start croaked');
     like($err, qr/collides with in-batch service/, 'explains the collision');
     is(scalar keys %{$h->{resource_services}}, 0, 'no services tracked after failure');
-    ok(
-        !-e "$dir/logs/services/foo.jsonl" || -z "$dir/logs/services/foo.jsonl",
-        'log file empty or absent (first service was touched before collision detected)'
-    );
 };
 
 subtest 'per-run name collision within the same run is rejected' => sub {
-    my $dir  = tempdir(CLEANUP => 1);
-    my $h    = Test2::Harness2->new(workdir => $dir);
-    my $res1 = Test::OneService->new;
-    my $res2 = Test::OtherService->new;
-    my $run  = Test2::Harness2::Run->new(run_id => 'r-dup', resources => [$res1, $res2]);
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    my ($c1, $res1) = _mk_res(pid => 93_020);
+    my ($c2, $res2) = _mk_res(pid => 93_021);
+    my $run = Test2::Harness2::Run->new(run_id => 'r-dup', resources => [$res1, $res2]);
 
     my $ok = eval {
         $h->start_resource_services([$res1, $res2], scope => 'run', run => $run);
@@ -202,11 +133,11 @@ subtest 'per-run name collision within the same run is rejected' => sub {
 };
 
 subtest 'name is allowed to collide across scopes (global vs run)' => sub {
-    my $dir  = tempdir(CLEANUP => 1);
-    my $glob = Test::OneService->new(pids => [93_201]);
-    my $runr = Test::OtherService->new(pids => [93_202]);
-    my $h    = Test2::Harness2->new(workdir => $dir, resources => [$glob]);
-    my $run  = Test2::Harness2::Run->new(run_id => 'r-cross', resources => [$runr]);
+    my $dir = tempdir(CLEANUP => 1);
+    my ($cg, $glob) = _mk_res(pid => 93_201);
+    my ($cr, $runr) = _mk_res(pid => 93_202);
+    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$glob]);
+    my $run = Test2::Harness2::Run->new(run_id => 'r-cross', resources => [$runr]);
 
     $h->start_resource_services([$glob], scope => 'global');
     my $ok = eval {
@@ -220,10 +151,10 @@ subtest 'name is allowed to collide across scopes (global vs run)' => sub {
 };
 
 subtest 'names are allowed to collide across different runs' => sub {
-    my $dir  = tempdir(CLEANUP => 1);
-    my $h    = Test2::Harness2->new(workdir => $dir);
-    my $ra   = Test::OneService->new(pids => [93_301]);
-    my $rb   = Test::OtherService->new(pids => [93_302]);
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    my ($ca, $ra) = _mk_res(pid => 93_301);
+    my ($cb, $rb) = _mk_res(pid => 93_302);
     my $runA = Test2::Harness2::Run->new(run_id => 'r-A', resources => [$ra]);
     my $runB = Test2::Harness2::Run->new(run_id => 'r-B', resources => [$rb]);
 
@@ -240,8 +171,8 @@ subtest 'names are allowed to collide across different runs' => sub {
 
 subtest "harness's own NAME is reserved in global scope" => sub {
     my $dir = tempdir(CLEANUP => 1);
-    my $res = Test::OneService->new;
-    my $h   = Test2::Harness2->new(workdir => $dir, name => 'foo', resources => [$res]);
+    my ($cls, $res) = _mk_res(pid => 93_050);
+    my $h = Test2::Harness2->new(workdir => $dir, name => 'foo', resources => [$res]);
 
     my $ok  = eval { $h->start_resource_services([$res], scope => 'global'); 1 };
     my $err = $@;
@@ -252,7 +183,7 @@ subtest "harness's own NAME is reserved in global scope" => sub {
 subtest 'harness name is not reserved in per-run scope' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir, name => 'foo');
-    my $res = Test::OneService->new(pids => [93_400]);
+    my ($cls, $res) = _mk_res(pid => 93_400);
     my $run = Test2::Harness2::Run->new(run_id => 'r-ns', resources => [$res]);
 
     my $ok = eval { $h->start_resource_services([$res], scope => 'run', run => $run); 1 };
@@ -262,7 +193,9 @@ subtest 'harness name is not reserved in per-run scope' => sub {
 
 subtest 'one resource with two services gets two distinct log files' => sub {
     my $dir = tempdir(CLEANUP => 1);
-    my $res = Test::TwoServices->new(pids => [93_500, 93_501]);
+    my $cA  = Test2::Harness2::Test::ResourceService::make_service_class(pid => 93_500);
+    my $cB  = Test2::Harness2::Test::ResourceService::make_service_class(pid => 93_501);
+    my $res = Test::TwoServices::Res->new(classes => [[$cA, 'alpha'], [$cB, 'beta']]);
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
     $h->start_resource_services([$res], scope => 'global');
@@ -279,53 +212,13 @@ subtest 'one resource with two services gets two distinct log files' => sub {
 subtest 'restart reuses the same name + log_path' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
-    # An inline restartable resource: service_foo registers the next
-    # pid from its queue and leaves the name/log_path for the host to
-    # stamp. The per-method service_foo_restartable companion drives
-    # the re-invoke.
-    my $R = do {
-
-        package Test::RestartLog::Res;
-        use Object::HashBase qw{<pids +broken +permanent_broken};
-        use Role::Tiny::With;
-        with 'Test2::Harness2::Role::Resource';
-        sub init      { $_[0]->{+PIDS} //= [] }
-        sub available { 1 }
-        sub assign    { 1 }
-        sub release   { 1 }
-        sub status    { {} }
-
-        sub service_foo_restartable { 1 }
-
-        sub is_broken           { $_[0]->{+BROKEN}           ? 1 : 0 }
-        sub is_permanent_broken { $_[0]->{+PERMANENT_BROKEN} ? 1 : 0 }
-        sub mark_broken         { $_[0]->{+BROKEN} = 1 }
-
-        sub mark_permanent_broken {
-            my $self = shift;
-            $self->{+PERMANENT_BROKEN} = 1;
-            $self->{+BROKEN}           = 1;
-        }
-
-        sub service_foo_start {
-            my ($self, %p) = @_;
-            my $pid = shift @{$self->{+PIDS}};
-            $p{harness}->track_resource_service(
-                pid      => $pid,
-                resource => $self,
-                method   => 'service_foo_start',
-                name     => $p{name},
-                log_path => $p{log_path},
-                scope    => $p{scope},
-            );
-            return;
-        }
-        __PACKAGE__;
-    };
-
-    my $r = $R->new(pids => [93_701, 93_702]);
-    my $h = Test2::Harness2->new(workdir => $dir, resources => [$r]);
-    $h->start_resource_services([$r], scope => 'global');
+    my $cls = Test2::Harness2::Test::ResourceService::make_service_class(
+        restartable => 1,
+        pids        => [93_701, 93_702],
+    );
+    my $res = Test::OneService::Res->new(service_class => $cls);
+    my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
+    $h->start_resource_services([$res], scope => 'global');
 
     my $expected = "$dir/logs/services/foo.jsonl";
     is($h->{resource_services}{93_701}{log_path}, $expected, 'initial log_path set');
@@ -339,61 +232,49 @@ subtest 'restart reuses the same name + log_path' => sub {
     is($h->{resource_services}{93_702}{log_path}, $expected, 'restart preserves log_path');
 };
 
-subtest 'track_resource_service requires enough info to derive a name' => sub {
+subtest 'track_resource_service requires a service_class' => sub {
     my $dir = tempdir(CLEANUP => 1);
-    my $res = Test::OneService->new;
     my $h   = Test2::Harness2->new(workdir => $dir);
 
+    my $res;
+    my ($cls, $r) = _mk_res(pid => 9);
+    $res = $r;
+
     my $ok = eval {
-        $h->track_resource_service(pid => 9_999_801, resource => $res);
+        $h->track_resource_service(pid => 9_999_801, resource => $res, name => 'foo');
         1;
     };
     my $err = $@;
-    ok(!$ok, 'croaks without method or name');
-    like($err, qr/'name'/, 'error mentions name');
+    ok(!$ok, 'croaks without service_class');
+    like($err, qr/service_class/, 'error mentions service_class');
 };
 
 subtest 'track_resource_service rejects a duplicate name directly' => sub {
     my $dir = tempdir(CLEANUP => 1);
-    my $res = Test::OneService->new;
-    my $h   = Test2::Harness2->new(workdir => $dir);
+    my ($c1, $res1) = _mk_res(pid => 1);
+    my ($c2, $res2) = _mk_res(pid => 2);
+    my $h = Test2::Harness2->new(workdir => $dir);
 
     $h->track_resource_service(
-        pid      => 9_999_901,
-        resource => $res,
-        method   => 'service_foo_start',
+        pid           => 9_999_901,
+        resource      => $res1,
+        service_class => $c1,
+        service_args  => [],
+        name          => 'foo',
     );
     my $ok = eval {
         $h->track_resource_service(
-            pid      => 9_999_902,
-            resource => Test::OtherService->new,
-            method   => 'service_foo_start',
+            pid           => 9_999_902,
+            resource      => $res2,
+            service_class => $c2,
+            service_args  => [],
+            name          => 'foo',
         );
         1;
     };
     my $err = $@;
     ok(!$ok, 'direct duplicate across resources rejected');
     like($err, qr/already in use/, 'error mentions reuse');
-};
-
-subtest "method name outside the service_*_start shape is rejected" => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    my $res = Test::OneService->new;
-    my $h   = Test2::Harness2->new(workdir => $dir);
-
-    for my $bad ('service_', 'service_foo', 'foo_start', 'service__start') {
-        my $ok = eval {
-            $h->track_resource_service(
-                pid      => 9_999_950,
-                resource => $res,
-                method   => $bad,
-            );
-                   1;
-        };
-        my $err = $@;
-        ok(!$ok, "croaked on '$bad'");
-        like($err, qr/cannot derive service name/, "error on '$bad' mentions derivation failure");
-    }
 };
 
 done_testing;

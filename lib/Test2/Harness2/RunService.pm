@@ -252,12 +252,12 @@ sub request_handler_status {
     my @services;
     for my $svc (values %{$self->{+RESOURCE_SERVICES} // {}}) {
         push @services => {
-            pid      => $svc->{pid},
-            name     => $svc->{name},
-            method   => $svc->{method},
-            log_path => $svc->{log_path},
-            restart  => $svc->{restart},
-            resource => $svc->{resource}->resource_name,
+            pid           => $svc->{pid},
+            name          => $svc->{name},
+            service_class => $svc->{service_class},
+            log_path      => $svc->{log_path},
+            restartable   => $svc->{restartable},
+            resource      => $svc->{resource}->resource_name,
         };
     }
 

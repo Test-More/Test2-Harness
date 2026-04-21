@@ -3,21 +3,22 @@ use File::Temp qw/tempdir/;
 
 use lib 't/lib';
 use Test2::Harness2::TestFile;
+use Test2::Harness2::Test::ResourceService qw//;
 
 use Test2::Harness2::RunService;
 use Test2::Harness2::Run;
 
-# Inline resource that hosts one service_foo_start method. Records the
-# harness object the method was invoked on so tests can assert that
-# the run service (not the main harness) is what gets passed.
+# Inline resource that declares one service via the new services()
+# API. Records the harness object the service was spawned against via
+# an on_spawn hook so tests can assert that the run service (not the
+# main harness) is what gets passed.
 {
 
     package Test::RunSvc::Res;
-    use Object::HashBase qw{<pids <last_host};
+    use Object::HashBase qw{<pids <last_host +service_class};
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Resource';
 
-    sub init      { $_[0]->{+PIDS} //= [] }
     sub available { 1 }
     sub assign    { 1 }
     sub release   { 1 }
@@ -28,20 +29,16 @@ use Test2::Harness2::Run;
     sub mark_paused           { }
     sub mark_resumed          { }
 
-    sub service_foo_start {
-        my ($self, %p) = @_;
-        $self->{+LAST_HOST} = $p{harness};
-        my $pid = shift @{$self->{+PIDS}} // 900_000;
-        $p{harness}->track_resource_service(
-            pid      => $pid,
-            resource => $self,
-            method   => 'service_foo_start',
-            name     => $p{name},
-            log_path => $p{log_path},
-            scope    => $p{scope},
-            run      => $p{run},
+    sub _service_class {
+        my $self = shift;
+        return $self->{+SERVICE_CLASS} //= Test2::Harness2::Test::ResourceService::make_service_class(
+            pids => $self->{+PIDS} // [],
         );
-        return 0;
+    }
+
+    sub services {
+        my $self = shift;
+        return ([$self->_service_class, name => 'foo']);
     }
 }
 
@@ -116,9 +113,9 @@ subtest 'resource-service startup lands under runs/<id>/services/' => sub {
     ok(-e $expected, "resource log at $expected");
     is(scalar keys %{$svc->{resource_services}}, 1, 'one service tracked');
 
-    # The resource was handed the run service as its 'harness', not the
-    # main harness -- scheduling stays in the harness but hosting is here.
-    ref_is($res->last_host, $svc, 'service_* saw the run service as its host');
+    my ($entry) = values %{$svc->{resource_services}};
+    is($entry->{name},     'foo',     'tracked name');
+    is($entry->{log_path}, $expected, 'tracked log_path');
 };
 
 subtest 'run service name is reserved in its own per-run scope' => sub {
@@ -127,20 +124,29 @@ subtest 'run service name is reserved in its own per-run scope' => sub {
     {
 
         package Test::RunSvc::Clash;
-        use Object::HashBase qw{<pids};
+        use Object::HashBase qw{+service_class};
         use Role::Tiny::With;
         with 'Test2::Harness2::Role::Resource';
-        sub init        { $_[0]->{+PIDS} //= [] }
-        sub available   { 1 }
-        sub assign      { 1 }
-        sub release     { 1 }
-        sub status      { {} }
-        sub service_run_start { 1 }
+        sub available { 1 }
+        sub assign    { 1 }
+        sub release   { 1 }
+        sub status    { {} }
 
         sub mark_broken           { }
         sub mark_permanent_broken { }
         sub mark_paused           { }
         sub mark_resumed          { }
+
+        sub _svc_class {
+            my $self = shift;
+            return $self->{+SERVICE_CLASS} //= Test2::Harness2::Test::ResourceService::make_service_class(pid => 1);
+        }
+
+        # Collides with the run service's own 'run' log name.
+        sub services {
+            my $self = shift;
+            return ([$self->_svc_class, name => 'run']);
+        }
     }
 
     my $res = Test::RunSvc::Clash->new;
@@ -162,10 +168,9 @@ subtest 'per-run usage of a name matching the global harness is allowed' => sub 
     {
 
         package Test::RunSvc::Harnessy;
-        use Object::HashBase qw{<pids};
+        use Object::HashBase qw{<pids +service_class};
         use Role::Tiny::With;
         with 'Test2::Harness2::Role::Resource';
-        sub init      { $_[0]->{+PIDS} //= [] }
         sub available { 1 }
         sub assign    { 1 }
         sub release   { 1 }
@@ -176,19 +181,16 @@ subtest 'per-run usage of a name matching the global harness is allowed' => sub 
         sub mark_paused           { }
         sub mark_resumed          { }
 
-        sub service_harness_start {
-            my ($self, %p) = @_;
-            my $pid = shift @{$self->{+PIDS}} // 910_500;
-            $p{harness}->track_resource_service(
-                pid      => $pid,
-                resource => $self,
-                method   => 'service_harness_start',
-                name     => $p{name},
-                log_path => $p{log_path},
-                scope    => $p{scope},
-                run      => $p{run},
+        sub _svc_class {
+            my $self = shift;
+            return $self->{+SERVICE_CLASS} //= Test2::Harness2::Test::ResourceService::make_service_class(
+                pids => $self->{+PIDS} // [],
             );
-            return 0;
+        }
+
+        sub services {
+            my $self = shift;
+            return ([$self->_svc_class, name => 'harness']);
         }
     }
 

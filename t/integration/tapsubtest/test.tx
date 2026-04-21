@@ -1,0 +1,16 @@
+# vi: ft=perl
+use strict;
+use warnings;
+
+print <<EOT;
+ok 1 - buffered {
+    ok 1 - nested {
+        ok 1 - buffered ok
+        1..1
+    }
+    1..1
+}
+1..1
+EOT
+
+exit 0;

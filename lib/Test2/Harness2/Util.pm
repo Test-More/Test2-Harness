@@ -6,13 +6,14 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
 use Cwd qw/realpath/;
-use Fcntl qw/LOCK_EX LOCK_UN/;
+use Fcntl qw/LOCK_EX LOCK_UN :mode/;
 use File::Spec;
 use Importer Importer => 'import';
 use Test2::Util qw/try_sig_mask do_rename/;
 
 our @EXPORT_OK = qw{
     apply_encoding
+    chmod_tmp
     clean_path
     close_file
     file2mod
@@ -141,6 +142,21 @@ sub fqmod {
     my @caller = caller;
 
     die "Could not locate a module matching '$input' at $caller[1] line $caller[2], the following were checked:\n" . join("\n", map { " * $_: $tried{$_}" } sort keys %tried) . "\n";
+}
+
+# Set $file to the "sticky shared tmp" permission mask used by the
+# per-test isolated-tempdir plugin. Equivalent to `chmod 1777` on a
+# POSIX system: sticky bit set so nothing outside the owner can
+# remove files, plus rwx for owner/group/other so the test (and any
+# subprocesses it spawns under any UID) can write freely. Does not
+# croak on failure -- chmod on a temp dir is best-effort; callers
+# that actually require the mask should inspect return.
+sub chmod_tmp {
+    my $file = shift;
+
+    my $mode = S_ISVTX | S_IRWXU | S_IRWXG | S_IRWXO;
+
+    chmod($mode, $file);
 }
 
 sub apply_encoding {

@@ -13,6 +13,7 @@ use Scope::Guard ();
 use IO::Handle;
 use IO::Select;
 use Atomic::Pipe;
+use Role::Tiny ();
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
@@ -21,6 +22,8 @@ use Test2::Harness2::Collector::Handle;
 use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
+
+# Remove 'kind' in favor of making this class a base class with Collector::Test and Collector::Service subclasses for the divergent behavior. The auditor can become a test subclass exclusive field. But for simplicity of implementation and branching there can be an 'auditor' method on the base class that just returns undef.
 use Object::HashBase qw{
     <launch
     <new_pgroup
@@ -42,6 +45,7 @@ use Object::HashBase qw{
     <ipc_run
     <ipc_harness
     <kind
+    <bus_id
 
     +_started
     <_owns_child
@@ -86,6 +90,9 @@ sub init {
     $self->{+ENV_VARS}     //= {};
     $self->{+NEW_PGROUP}   //= 0;
 
+    # Provide this when we call Collector->spawn and/or Collector->interpose, only fallback to building it if we were not provided one. Update places that start collectors to provide a BUS_ID for the collector. This avoids depending on the parent_ipc, which can be undef for the harness itself.
+    $self->{+BUS_ID} //= $self->_build_collector_bus_id;
+
     # Auditor first: loggers may need to consult it, and validation should run
     # in the same order as instantiation below.
     $self->_normalize_auditor();
@@ -127,12 +134,6 @@ sub init {
         if defined($self->{+PARSER}) && !ref $self->{+PARSER};
 }
 
-sub _load_logger_class {
-    my $class = shift;
-    my ($name) = @_;
-    load_module($name);
-}
-
 sub _spec_class {
     my $class = shift;
     my ($spec) = @_;
@@ -152,7 +153,7 @@ sub _validate_spec {
 
     if (blessed($spec)) {
         croak ucfirst($kind) . " '" . ref($spec) . "' does not implement $role"
-            unless $spec->DOES($role);
+            unless Role::Tiny::does_role($spec, $role);
         return;
     }
 
@@ -169,10 +170,10 @@ sub _validate_spec {
         croak "Invalid $kind specification: " . ref($spec);
     }
 
-    $class->_load_logger_class($name);
+    load_module($name);
 
     croak ucfirst($kind) . " '$name' does not implement $role"
-        unless $name->DOES($role);
+        unless Role::Tiny::does_role($name, $role);
 }
 
 # Pure validation: confirm each entry is a well-formed spec whose class
@@ -605,7 +606,7 @@ sub _ipc_handle {
     my $handle = IPC::Manager::Service::Handle->new(
         service_name => $target,
         ipcm_info    => $self->{+IPCM_INFO},
-        name         => $self->_collector_bus_id,
+        name         => $self->bus_id,
     );
 
     # Wait briefly for the target to register so the first message
@@ -613,7 +614,7 @@ sub _ipc_handle {
     # where the collector and its parent service race through startup.
     # If the target never comes up we still return the handle and let
     # individual sends fall through to the warn path.
-    eval { $handle->ready(5); 1 };
+    eval { $handle->ready(5); 1 } or warn "Error waiting for ipc target '$target' to become ready: $@";
 
     return $self->{_ipc_handles}->{$target} = $handle;
 }
@@ -634,25 +635,24 @@ sub _ipc_handle {
 # service's bus name (what it registered as). For test-job collectors
 # there is no interposed service -- the test process is not a service --
 # so we use the job_id as the disambiguator.
-sub _collector_bus_id {
+sub _build_collector_bus_id {
     my $self = shift;
 
+    # Instead of tracking 'KIND' make Collector a base class, with Test and Service subclasses, only divergent behavior goes in the subclasses. Correct collector class should be used for the type of process being started.
     my $kind = $self->{+KIND} // 'generic';
 
-    my $service_name;
+    my $collected_name;
     if ($kind eq 'test') {
-        $service_name = $self->{+JOB_ID};
+        $collected_name = $self->{+JOB_ID};
     }
     else {
-        # Service collectors: interpose collector for a service identifies
-        # by that service's bus name. Prefer ipc_parent (the spawning
-        # service); fall back to ipc_harness (for the harness's own
-        # top-of-tree interpose). Last-resort uses job_id so a collector
-        # with neither identity still has a unique name.
-        $service_name = $self->{+IPC_PARENT} // $self->{+IPC_HARNESS} // $self->{+JOB_ID};
+        $collected_name = $self->{+IPC_PARENT};
     }
 
-    my $id = "collector:$service_name";
+    croak "Could not determine the name of wehat we are collecting"
+        unless $collected_name;
+
+    my $id = "collector:$collected_name";
     $id .= ":$self->{+IPC_RUN}"
         if defined $self->{+IPC_RUN}
         && (length($self->{+IPC_RUN}) + length($id) + 1) < 512;
@@ -660,6 +660,7 @@ sub _collector_bus_id {
     return $id;
 }
 
+# This comment is wrong. Collectors only ever send to parent processes, never child processes, as such they never outlive their ipc targets. The only exception to this rule that might come up is a service sending a termination to a child service, but that does not come from a collector and does not apply here. If we get a pipe error it means a parent process went away before a collector it is supposed to monitor, thats a real bug and needs to be reported.
 # Fire-and-forget send to a specific target service. Failures that
 # indicate the peer is already gone (EPIPE / "Disconnected pipe")
 # are silenced -- collectors routinely outlive the services that
@@ -678,6 +679,7 @@ sub _send_to {
     };
     return if $ok;
 
+    # Do not skip pipe errors, they are a real error, not something to silence.
     my $err = $@;
     return if $err =~ /Disconnected pipe|broken pipe|EPIPE/i;
 
@@ -706,6 +708,7 @@ sub _send_to {
 sub _send_collector_exiting {
     my $self = shift;
 
+    # Remove 'KIND' in favor of subclasses for divergent behavior.
     my $kind        = $self->{+KIND} // 'generic';
     my $child_exit  = $self->{+CHILD_EXIT};
     my $auditor     = $self->{+AUDITOR};

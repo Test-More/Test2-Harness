@@ -115,6 +115,7 @@ suggests "Win32::Console::ANSI" => "0";
 suggests "XML::Simple" => "0";
 
 on 'test' => sub {
+  requires "App::Yath::Script" => "0";
   requires "Exporter" => "0";
   requires "File::Copy" => "0";
   requires "Path::Tiny" => "0";

@@ -136,6 +136,7 @@ my %WriteMakefileArgs = (
     "parent" => "0.241"
   },
   "TEST_REQUIRES" => {
+    "App::Yath::Script" => 0,
     "Exporter" => 0,
     "File::Copy" => 0,
     "Path::Tiny" => 0,
@@ -156,6 +157,7 @@ my %WriteMakefileArgs = (
 );
 
 my %FallbackPrereqs = (
+  "App::Yath::Script" => 0,
   "Atomic::Pipe" => "0.021",
   "B" => 0,
   "Capture::Tiny" => "0.48",

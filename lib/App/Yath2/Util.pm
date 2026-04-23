@@ -104,6 +104,9 @@ sub find_yath {
         return clean_path($script);
     }
 
+    my $in_path = can_run('yath');
+    return clean_path($in_path) if $in_path;
+
     die "Could not find yath in Config paths";
 }
 

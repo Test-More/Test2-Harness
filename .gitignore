@@ -26,6 +26,8 @@
 /Makefile.old
 /Test2-*/
 /Test2-Harness-Renderer-JUnit-*
+/App-Yath-Script-*/
+/App-Yath-Script-*.tar.gz
 /_eumm/
 /blib/
 /old*/

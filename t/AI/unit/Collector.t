@@ -980,6 +980,15 @@ subtest 'construction validation' => sub {
         Test2::Harness2::Collector::Logger::JSONL->new(ipcm_info => {}),
         "JSONL logger constructs without an explicit output_file"
     );
+
+    # The real invariant: output_files() -- not new() -- croaks when
+    # neither output_file nor logdir is available, because the role's
+    # output_file_basename needs logdir to derive a path.
+    like(
+        dies { Test2::Harness2::Collector::Logger::JSONL->new(ipcm_info => {})->output_files },
+        qr/logdir/,
+        "JSONL logger croaks at output_files when neither output_file nor logdir is available"
+    );
 };
 
 subtest 'spec validation - bad shapes are rejected at init' => sub {

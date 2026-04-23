@@ -7,6 +7,8 @@ use lib 'lib';
 use Test2::Harness2::Collector;
 use Test2::Harness2::Collector::Logger::JSONL;
 
+our $VERSION = '2.000011';
+
 # Usage:
 #   Launch mode (spawn a child process):
 #     yath_collector output.jsonl [VAR=VAL ...] command [args ...]

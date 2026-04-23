@@ -45,6 +45,12 @@ harness service via IPC -- log files are not consulted.
 sub run {
     my $self = shift;
 
+    # Autoflush both streams so any print reaches an interactive user
+    # or a CI-captured log immediately instead of sitting in Perl's
+    # default block buffer until the process exits.
+    local $| = 1;
+    STDERR->autoflush(1);
+
     my $settings = $self->{+SETTINGS};
     my $args     = $self->{+ARGS} // [];
 
@@ -69,14 +75,35 @@ sub run {
         unless $queued->{ok};
     my $run_id = $queued->{run_id};
 
-    # Poll the harness's run_results handler until the run
-    # completes. The handler returns state => 'running' while there
-    # is still work in the queue and state => 'complete' with the
-    # aggregate pass verdict once run_state_update has observed the
-    # final mutation.
+    # Poll the harness's run_results handler until the run completes.
+    # The handler returns state => 'running' while there is still work
+    # in the queue and state => 'complete' with the aggregate pass
+    # verdict once run_state_update has observed the final mutation.
+    #
+    # Bounded deadline (default 15 min, override via YATH_TEST_TIMEOUT):
+    # without a cap, an unresponsive harness would spin the loop until
+    # the caller's wall-clock limit killed the process with no
+    # diagnostics.
+    my $timeout  = $ENV{YATH_TEST_TIMEOUT} // 900;
+    my $deadline = time + $timeout;
+
+    # Shapes of "harness peer is gone" from
+    # IPC::Manager::Service::Handle::sync_request at shutdown:
+    # in-flight race against service exit, or a post-close send to
+    # a stale client registry. Either one around finish()/run_results
+    # is an expected end-of-life race; any other error propagates.
+    my $service_gone_re = qr/peer .* went away|is not a valid message recipient/;
+
     my $final;
-    while (1) {
-        my $resp = $spawn->run_results(run_id => $run_id);
+    my $service_gone;
+    while (time < $deadline) {
+        my $resp = eval { $spawn->run_results(run_id => $run_id) };
+        my $err  = $@;
+        if (!defined $resp) {
+            die $err unless $err =~ $service_gone_re;
+            $service_gone = 1;
+            last;
+        }
         die "run_results rejected: " . ($resp->{error} // '(no error)') . "\n"
             unless $resp->{ok};
 
@@ -88,13 +115,38 @@ sub run {
         sleep(0.05);
     }
 
-    $spawn->finish;
+    unless ($final || $service_gone) {
+        # Deadline exceeded. Do NOT call $spawn->status or
+        # $spawn->terminate here -- both go through sync_request
+        # which is very likely what deadlocked us. SIGKILL the
+        # harness directly and move on.
+        print STDERR "Command::test: run did not complete within ${timeout}s\n";
+        my $pid = eval { $spawn->pid };
+        if ($pid) {
+            print STDERR "Command::test: sending SIGKILL to harness pid $pid\n";
+            kill 'KILL', $pid;
+        }
+        eval { $spawn->wait;                      1 };
+        eval { $spawn->clear_terminate_on_destroy; 1 };
+        die "Command::test: timed out after ${timeout}s (set YATH_TEST_TIMEOUT to raise the cap)\n";
+    }
+
+    # finish() races the service exit the same way run_results does;
+    # swallow the same specific peer-gone shapes and let anything
+    # else propagate.
+    unless (eval { $spawn->finish; 1 }) {
+        my $err = $@;
+        die $err unless $err =~ $service_gone_re;
+    }
     $spawn->wait;
 
     $settings->workspace->create_option(keep_dirs => 1);
 
     print "Work directory: $workdir\n";
 
+    # If the service went away before reporting a final state, treat
+    # the run as failed -- we lost the pass verdict and cannot guess.
+    return 1 unless $final;
     return $final->{pass} ? 0 : 1;
 }
 

@@ -1117,13 +1117,21 @@ sub _run_service_handle {
 # to accept IPC requests. sync_request itself queues messages that
 # arrive before the service is up, but the timeout behaviour is
 # clearer if we wait explicitly.
+#
+# The original hardcoded 10s cap assumed Linux-container scheduling
+# where IPC sockets bind essentially instantly. That assumption
+# breaks on macOS and intermittently on slower CI containers -- see
+# issue #392. Default raised to 60s and made env-overridable via
+# YATH_RUN_SERVICE_READY_TIMEOUT so contributors on slower hosts
+# can tune without a source patch.
 sub _wait_for_run_service_ready {
     my ($self, $run_id) = @_;
 
     my $handle   = $self->_run_service_handle($run_id);
-    my $deadline = time + 10;
+    my $cap      = $ENV{YATH_RUN_SERVICE_READY_TIMEOUT} // 60;
+    my $deadline = time + $cap;
     until ($handle->ready) {
-        croak "timeout waiting for run service '$run_id' to come up"
+        croak "timeout waiting for run service '$run_id' to come up after ${cap}s"
             if time > $deadline;
         tinysleep(0.02);
     }

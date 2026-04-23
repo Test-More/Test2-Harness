@@ -22,28 +22,23 @@ if ($ENV{AUTOMATED_TESTING}) {
         if $is_njh;
 }
 
-use File::ShareDir::Install;
-$File::ShareDir::Install::INCLUDE_DOTFILES = 1;
-$File::ShareDir::Install::INCLUDE_DOTDIRS = 1;
-install_share dist => "share";
-
 my %WriteMakefileArgs = (
-  "ABSTRACT" => "AKA 'yath' Yet Another Test Harness, A modern alternative to prove.",
+  "ABSTRACT" => "Top-level test harness service.",
   "AUTHOR" => "Chad Granum <exodist\@cpan.org>",
   "CONFIGURE_REQUIRES" => {
     "ExtUtils::MakeMaker" => 0,
-    "File::ShareDir::Install" => "0.06",
     "Test2::Event::V2" => "1.302199",
     "Test2::Util::Term" => "0.000159"
   },
   "DISTNAME" => "Test2-Harness2",
   "EXE_FILES" => [
-    "scripts/yath"
+    "scripts/yath_collector"
   ],
   "LICENSE" => "perl",
   "MIN_PERL_VERSION" => "5.014000",
   "NAME" => "Test2::Harness2",
   "PREREQ_PM" => {
+    "App::Yath::Script" => "2.000011",
     "Atomic::Pipe" => "0.021",
     "B" => 0,
     "Capture::Tiny" => "0.48",
@@ -87,7 +82,9 @@ my %WriteMakefileArgs = (
     "LWP" => 0,
     "LWP::UserAgent" => 0,
     "List::Util" => "1.56",
+    "Long::Jump" => "0.000004",
     "MIME::Base64" => 0,
+    "Object::HashBase" => "0.015",
     "POSIX" => 0,
     "Parallel::Runner" => 0,
     "Plack::App::Directory" => 0,
@@ -133,6 +130,7 @@ my %WriteMakefileArgs = (
     "base" => 0,
     "constant" => 0,
     "goto::file" => "0.005",
+    "mro" => 0,
     "parent" => "0.241"
   },
   "TEST_REQUIRES" => {
@@ -151,11 +149,12 @@ my %WriteMakefileArgs = (
   },
   "VERSION" => "2.000011",
   "test" => {
-    "TESTS" => "t/*.t t/Harness/*.t t/Harness/Util/*.t t/Harness/selftest/*.t t/UI/*.t t/UI/Schema/*.t t/UI/database/*.t t/UI/integration/*.t t/Yath/*.t t/Yath/JUnit/*.t t/Yath/integration/*.t t/Yath/integration/signals/*.t"
+    "TESTS" => "t/AI/integration/*.t t/AI/unit/*.t t/AI/unit/Collector/*.t t/AI/unit/Collector/Auditor/*.t t/AI/unit/Collector/Parser/*.t t/AI/unit/Collector/Parser/IOParser/*.t t/AI/unit/Harness2/*.t t/AI/unit/Harness2/Collector/Logger/*.t t/AI/unit/Harness2/Collector/Observer/*.t t/AI/unit/Harness2/Resource/*.t t/AI/unit/Harness2/Role/*.t t/AI/unit/Harness2/Role/Collector/*.t t/AI/unit/Harness2/Run/*.t t/AI/unit/Harness2/Util/*.t t/AI/unit/Util/*.t t/AI/unit/Util/File/*.t t/unit/*.t t/unit/Util/*.t t/unit/Util/File/*.t"
   }
 );
 
 my %FallbackPrereqs = (
+  "App::Yath::Script" => "2.000011",
   "Atomic::Pipe" => "0.021",
   "B" => 0,
   "Capture::Tiny" => "0.48",
@@ -201,7 +200,9 @@ my %FallbackPrereqs = (
   "LWP" => 0,
   "LWP::UserAgent" => 0,
   "List::Util" => "1.56",
+  "Long::Jump" => "0.000004",
   "MIME::Base64" => 0,
+  "Object::HashBase" => "0.015",
   "POSIX" => 0,
   "Parallel::Runner" => 0,
   "Path::Tiny" => 0,
@@ -257,6 +258,7 @@ my %FallbackPrereqs = (
   "base" => 0,
   "constant" => 0,
   "goto::file" => "0.005",
+  "mro" => 0,
   "parent" => "0.241"
 );
 
@@ -270,9 +272,3 @@ delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
   unless eval { ExtUtils::MakeMaker->VERSION(6.52) };
 
 WriteMakefile(%WriteMakefileArgs);
-
-{
-package
-MY;
-use File::ShareDir::Install qw(postamble);
-}

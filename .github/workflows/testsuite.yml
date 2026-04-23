@@ -7,6 +7,22 @@ on:
     tags-ignore:
       - '*'
   pull_request:
+  workflow_dispatch:
+    inputs:
+      run_matrix:
+        description: "Also run the Perl version matrix (slower)"
+        type: boolean
+        default: false
+
+# Cancel any in-flight run for the same branch/PR when a new push
+# arrives. Without this block, rapid force-pushes produce a pile of
+# superseded runs that each have to be cancelled individually, and
+# GitHub's anti-abuse heuristics can stop auto-triggering new runs
+# for a while. Scoping the group to workflow+ref means push events
+# and the PR events for the same branch share a single slot.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
 
@@ -15,23 +31,32 @@ jobs:
   #
 
   ubuntu:
-    name: "simple testrun"
+    name: "Simple TestRun"
     env:
       PERL_USE_UNSAFE_INC: 0
       AUTHOR_TESTING: 0
       AUTOMATED_TESTING: 1
       RELEASE_TESTING: 1
       PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
+      # Per-yath-run cap, only consulted when a contributor invokes
+      # `yath test` by hand; `make test` itself runs .t files directly
+      # via Test::Harness so this is purely defensive.
+      YATH_TEST_TIMEOUT: 480
+      # How long the harness waits for a freshly-spawned run service
+      # to announce itself over IPC. The upstream default (10s) is
+      # too tight for slower container scheduling; see #392.
+      YATH_RUN_SERVICE_READY_TIMEOUT: 60
 
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: perl -V
       - name: Get cache week number
         id: cache-week
         run: echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: local
           key: cpan-ubuntu-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
@@ -39,13 +64,22 @@ jobs:
             cpan-ubuntu-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-
             cpan-ubuntu-
       - name: install dependencies from cpanfile.ci
-        uses: perl-actions/install-with-cpm@v1
+        uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: ".github/cpanfile.ci"
       - name: install dependencies from cpanfile
-        uses: perl-actions/install-with-cpm@v1
+        uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: "cpanfile"
+      - name: install App::Yath::Script from script branch
+        # App-Yath-Script is not yet on CPAN; it lives on the `script`
+        # branch of this same repo. cpm cannot install from that branch
+        # because it has no META.json/META.yml, so use cpanm which
+        # configures the distribution via Makefile.PL.
+        uses: perl-actions/install-with-cpanm@v2
+        with:
+          install: "https://github.com/Test-More/Test2-Harness.git@script"
+          local-lib: local
       - run: perl Makefile.PL
       - run: make
       - run: make test
@@ -55,6 +89,9 @@ jobs:
   #
 
   perl-versions:
+    # On manual dispatch, only run when the user opts into the matrix.
+    # Push/PR events keep the default (always run).
+    if: github.event_name != 'workflow_dispatch' || inputs.run_matrix
     runs-on: ubuntu-latest
     name: List Perl versions
     outputs:
@@ -74,7 +111,11 @@ jobs:
   perl:
     name: "linux Perl ${{ matrix.perl-version }}"
     needs: [ubuntu, perl-versions]
+    # Same gate as perl-versions: skip on manual dispatch unless the
+    # user opted in.
+    if: github.event_name != 'workflow_dispatch' || inputs.run_matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     env:
        PERL_USE_UNSAFE_INC: 0
@@ -84,6 +125,13 @@ jobs:
        PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
        PERL5LIB: ${{ github.workspace }}/local/lib/perl5
        T2_NO_FORK: 1
+       # Per-yath-run cap; matches the ubuntu job but tighter since
+       # matrix jobs run in slower container scheduling.
+       YATH_TEST_TIMEOUT: 480
+       # Give the run-service handshake a larger budget than the
+       # upstream 10s default; matrix containers schedule IPC bind
+       # much more slowly than the host-native ubuntu job. See #392.
+       YATH_RUN_SERVICE_READY_TIMEOUT: 120
 
     continue-on-error: true
 
@@ -96,12 +144,12 @@ jobs:
       image: perldocker/perl-tester:${{ matrix.perl-version }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: perl -V
       - name: Get cache week number
         id: cache-week
         run: echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: local
           key: cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', '.github/cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
@@ -109,16 +157,25 @@ jobs:
             cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', '.github/cpanfile.ci') }}-
             cpan-perl-${{ matrix.perl-version }}-
       - name: install dependencies from cpanfile.ci
-        uses: perl-actions/install-with-cpm@v1
+        uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: ".github/cpanfile.ci"
           global: true
           sudo: false
       - name: install dependencies from cpanfile
-        uses: perl-actions/install-with-cpm@v1
+        uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: "cpanfile"
           global: true
+          sudo: false
+      - name: install App::Yath::Script from script branch
+        # App-Yath-Script is not yet on CPAN; it lives on the `script`
+        # branch of this same repo. cpm cannot install from that branch
+        # because it has no META.json/META.yml, so use cpanm which
+        # configures the distribution via Makefile.PL.
+        uses: perl-actions/install-with-cpanm@v2
+        with:
+          install: "https://github.com/Test-More/Test2-Harness.git@script"
           sudo: false
       - run: perl Makefile.PL
       - run: make

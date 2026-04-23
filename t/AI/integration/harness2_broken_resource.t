@@ -6,6 +6,7 @@ use Test2::Harness2::Util::JSON qw/decode_json/;
 use lib 't/lib';
 use Test2::Harness2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
+use Test2::Harness2::Test::SpawnRace qw/finish_and_wait/;
 
 use Test2::Harness2;
 
@@ -65,8 +66,8 @@ sub run_harness_until_drained {
         },
         $timeout,
     ) or die "run never drained";
-    $spawn->finish;
-    $spawn->wait;
+
+    finish_and_wait($spawn);
     return;
 }
 

@@ -82,8 +82,17 @@ sub terminate {
 sub detach {
     my $self = shift;
     my $res  = $self->_send_request('detach', {pid => $$});
-    $self->{+TERMINATE_ON_DESTROY} = 0;
+    $self->clear_terminate_on_destroy;
     return $res;
+}
+
+# Opt out of the DESTROY-time auto-terminate, e.g. after the caller has
+# already reaped the service through finish()+wait() and knows DESTROY
+# would race on a dead peer.
+sub clear_terminate_on_destroy {
+    my $self = shift;
+    $self->{+TERMINATE_ON_DESTROY} = 0;
+    return;
 }
 
 sub wait {
@@ -174,7 +183,7 @@ Service name (default: C<'harness'>).
 
 =item terminate_on_destroy
 
-Boolean; 1 by default.  Set to 0 by C<detach()>.
+Boolean; 1 by default.  Set to 0 by C<detach()> or C<clear_terminate_on_destroy()>.
 
 =back
 
@@ -220,6 +229,12 @@ C<terminate_on_destroy>.  The service continues running after the caller exits.
 =item $spawn->wait
 
 C<waitpid()> the service process.  Safe to call multiple times.
+
+=item $spawn->clear_terminate_on_destroy
+
+Clear the C<terminate_on_destroy> flag so DESTROY becomes a no-op.  Intended
+for callers that have already reaped the service (e.g. via
+C<finish()>+C<wait()>) and want to stop DESTROY from racing on a dead peer.
 
 =back
 

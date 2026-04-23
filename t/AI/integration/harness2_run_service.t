@@ -7,6 +7,7 @@ use Cpanel::JSON::XS qw/decode_json/;
 use lib 't/lib';
 use Test2::Harness2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
+use Test2::Harness2::Test::SpawnRace qw/finish_and_wait/;
 
 use Test2::Harness2;
 
@@ -60,8 +61,7 @@ subtest 'run service writes its own jsonl log under runs/<run_id>/services' => s
         15,
     ) or die "run did not drain";
 
-    $spawn->finish;
-    $spawn->wait;
+    finish_and_wait($spawn);
 
     # Find the run_id directory under runs/.
     # Under the logger-paths refactor the per-run .jsonl lives at
@@ -109,8 +109,7 @@ subtest "run service runs in its own process and is a child of the harness" => s
         15,
     ) or die "run did not drain";
 
-    $spawn->finish;
-    $spawn->wait;
+    finish_and_wait($spawn);
 
     # Dig the run-id jsonl out, read both logs.
     opendir my $rdh, "$dir/logs/runs" or die "open $dir/runs: $!";

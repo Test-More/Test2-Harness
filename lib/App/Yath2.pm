@@ -408,8 +408,25 @@ sub process_args {
 
         my $is_do   = $stop       && $stop eq 'do';
         my $is_stop = (!$is_do)   && $stop    && ($stop eq '--' || $stop eq '::');
-        my $is_cmd  = (!$is_stop) && $stop    && ($self->check_command($stop))[0];
+        my ($is_cmd, $cmd_err);
+        if (!$is_stop && $stop) {
+            ($is_cmd, $cmd_err) = $self->check_command($stop);
+        }
         my $is_path = $stop       && -e $stop && !($is_do || $is_stop || $is_cmd);
+
+        # If $stop looks like an intended command but check_command
+        # reported a real error beyond "module not installed", surface
+        # it instead of silently falling through to the default-command
+        # path. $cmd_err is only set when check_command ran and failed,
+        # so the other "is this a command-shaped token?" flags are
+        # already implied.
+        if ($cmd_err && !$is_do && !$is_path) {
+            my $cmd_file = $stop;
+            $cmd_file =~ s{-}{/}g;
+            $cmd_file = "App/Yath2/Command/$cmd_file.pm";
+            die "Error loading command '$stop':\n$cmd_err"
+                if $cmd_err !~ /Can't locate \Q$cmd_file\E in \@INC/;
+        }
 
         @cmd_args = @{$state->{skipped}};
 

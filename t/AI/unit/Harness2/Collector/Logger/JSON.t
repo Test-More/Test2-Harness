@@ -68,6 +68,29 @@ subtest 'required attributes' => sub {
     );
 };
 
+subtest 'output_file is lazily resolved from identity attributes' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+
+    my $logger = $CLASS->new(
+        ipcm_info    => {},
+        logdir       => $dir,
+        service_name => 'run',
+        run_id       => 'R1',
+        is_run       => 1,
+    );
+
+    my ($path) = $logger->output_files;
+    is($path, "$dir/runs/R1.json",
+        'output_files derives $logdir/runs/<run_id>.json when is_run is set');
+
+    my $bare = $CLASS->new(ipcm_info => {});
+    like(
+        dies { $bare->output_files },
+        qr/logdir/,
+        'output_files croaks when neither output_file nor logdir is available',
+    );
+};
+
 subtest 'log_events is true (consumes run_mutation events)' => sub {
     my $dir    = tempdir(CLEANUP => 1);
     my $logger = $CLASS->new(

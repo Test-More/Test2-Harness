@@ -19,6 +19,26 @@ sub wait_until {
     return 0;
 }
 
+# `kill 0, $pid` returns true as long as the process table has an
+# entry for $pid -- which includes zombies. When we kill a service
+# whose parent is gone (detach case) and end up running under a
+# container init that does not reap (e.g. GitHub Actions matrix jobs
+# without tini), the dead-but-unreaped process sticks around forever
+# and `!kill(0, $pid)` never becomes true. Treat a zombie as "gone
+# enough" for the purposes of the lifecycle tests by peeking at
+# /proc/$pid/status; fall back to plain `kill 0` off Linux.
+sub proc_gone {
+    my ($pid) = @_;
+    return 1 unless kill 0, $pid;
+    return 0 unless $^O eq 'linux';
+    open(my $fh, '<', "/proc/$pid/status") or return 1;
+    while (my $line = <$fh>) {
+        return 1 if $line =~ /^State:\s*Z\b/;
+        last if $line =~ /^State:/;
+    }
+    return 0;
+}
+
 subtest 'Terminate mid-run kills collector and test process' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
@@ -171,9 +191,12 @@ subtest 'detached service survives caller death' => sub {
     ok(kill(0, $svc_pid), 'detached service still alive after caller died');
 
     # Clean up: send TERM directly since we have no Spawn handle.
+    # Under a container init that does not reap zombies, the dead
+    # service sticks around as a zombie and plain `kill 0` keeps
+    # returning true; proc_gone() also accepts zombie state.
     kill 'TERM', $svc_pid;
-    wait_until(sub { !kill(0, $svc_pid) }, 10);
-    ok(!kill(0, $svc_pid), 'service reaped after TERM');
+    wait_until(sub { proc_gone($svc_pid) }, 10);
+    ok(proc_gone($svc_pid), 'service reaped after TERM');
 };
 
 done_testing;

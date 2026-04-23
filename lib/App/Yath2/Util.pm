@@ -8,8 +8,9 @@ use File::Spec();
 use File::ShareDir();
 
 use Test2::Harness2::Util qw/clean_path/;
-use App::Yath::Script qw/script/;
 use IPC::Cmd qw/can_run/;
+
+use constant HAVE_YATH_SCRIPT => eval { require App::Yath::Script; App::Yath::Script->import('script'); 1 };
 
 use Importer Importer => 'import';
 use Config qw/%Config/;
@@ -75,8 +76,10 @@ sub share_dir {
 }
 
 sub find_yath {
-    my $found = script();
-    return $found if defined $found;
+    if (HAVE_YATH_SCRIPT) {
+        my $found = script();
+        return $found if defined $found;
+    }
 
     if (-d 'scripts') {
         my $script = File::Spec->catfile('scripts', 'yath');

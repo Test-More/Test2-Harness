@@ -50,6 +50,7 @@ subtest 'Terminate mid-run kills collector and test process' => sub {
 
     my $spawn = Test2::Harness2->spawn(
         workdir      => $dir,
+        kill_timeout => 2,
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
@@ -96,6 +97,7 @@ PERL
 
     my $spawn = Test2::Harness2->spawn(
         workdir      => $dir,
+        kill_timeout => 2,
         loggers      => classic_harness_loggers($dir),
         test_loggers => classic_test_loggers(),
     );
@@ -129,20 +131,21 @@ subtest 'service dies when its caller dies (no detach)' => sub {
     my $helper = fork // die "fork: $!";
     if (!$helper) {
         my $spawn = Test2::Harness2->spawn(
-        workdir      => $dir,
-        loggers      => classic_harness_loggers($dir),
-        test_loggers => classic_test_loggers(),
-    );
+            workdir      => $dir,
+            kill_timeout => 2,
+            loggers      => classic_harness_loggers($dir),
+            test_loggers => classic_test_loggers(),
+        );
         $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
         # Intentionally NOT detached — leak via _exit so DESTROY doesn't fire.
         _exit(0);
     }
     waitpid $helper, 0;
 
-    # The service should exit on its own. Under the new architecture
-    # the shutdown has to cascade harness -> run service -> test
-    # collectors, so the 15s kill_timeout at each layer can stack.
-    # 45s keeps us clear of the worst-case single retry.
+    # The service should exit on its own. The shutdown cascades harness
+    # -> run service -> test collectors, so the kill_timeout grace at
+    # each layer can stack (two windows worst-case here). With
+    # kill_timeout => 2 above, 15s leaves comfortable headroom.
     ok(
         wait_until(
             sub {
@@ -152,7 +155,7 @@ subtest 'service dies when its caller dies (no detach)' => sub {
                 my $content = <$fh>;
                 return $content =~ /service_stopped/;
             },
-            45
+            15
         ),
         'service logged service_stopped after caller died'
     );
@@ -172,10 +175,11 @@ subtest 'detached service survives caller death' => sub {
     if (!$helper) {
         close $r;
         my $spawn = Test2::Harness2->spawn(
-        workdir      => $dir,
-        loggers      => classic_harness_loggers($dir),
-        test_loggers => classic_test_loggers(),
-    );
+            workdir      => $dir,
+            kill_timeout => 2,
+            loggers      => classic_harness_loggers($dir),
+            test_loggers => classic_test_loggers(),
+        );
         $spawn->detach;
         print $w $spawn->pid, "\n";
         close $w;

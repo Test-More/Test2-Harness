@@ -191,18 +191,19 @@ sub request_handler_launch_job {
     my $spawn_ok = eval {
         require Test2::Harness2::Collector::Test;
         $handle = Test2::Harness2::Collector::Test->spawn(
-            launch      => $launch_cmd,
-            new_pgroup  => 1,
-            parent_pids => [$$],
-            env_vars    => {T2_FORMATTER => 'Stream2', %$env},
-            logdir      => $self->{+LOGDIR},
-            run_id      => $run_id,
-            job_id      => $job_id,
-            job_try     => $job_try,
-            ipcm_info   => $self->ipcm_info,
-            ipc_parent  => $self->{+NAME},
-            ipc_run     => $self->{+NAME},
-            ipc_harness => $self->{+HARNESS_NAME},
+            launch       => $launch_cmd,
+            new_pgroup   => 1,
+            parent_pids  => [$$],
+            env_vars     => {T2_FORMATTER => 'Stream2', %$env},
+            logdir       => $self->{+LOGDIR},
+            run_id       => $run_id,
+            job_id       => $job_id,
+            job_try      => $job_try,
+            ipcm_info    => $self->ipcm_info,
+            ipc_parent   => $self->{+NAME},
+            ipc_run      => $self->{+NAME},
+            ipc_harness  => $self->{+HARNESS_NAME},
+            kill_timeout => $self->{+KILL_TIMEOUT},
             (defined $auditor ? (auditor => $auditor) : ()),
             loggers => [@logger_specs],
         );
@@ -763,6 +764,7 @@ sub start {
         loggers      => $loggers,
         parser       => 'Test2::Harness2::Collector::Parser::IOParser',
         parent_pids  => [$caller_pid],
+        kill_timeout => $self->{+KILL_TIMEOUT},
     );
 
     # Reached only in the interpose child; the interpose parent becomes

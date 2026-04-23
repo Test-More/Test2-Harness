@@ -1084,6 +1084,7 @@ sub _ensure_run_service_started {
         ipcm_info    => $self->ipcm_info,
         parent_pids  => [$$],
         harness_name => $self->{+NAME},
+        kill_timeout => $self->{+KILL_TIMEOUT},
         loggers      => $svc_loggers,
         test_loggers => $test_loggers,
     );

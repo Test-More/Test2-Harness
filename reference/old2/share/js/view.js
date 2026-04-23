@@ -88,6 +88,9 @@ $(function() {
     if (page_num) {
         fetch_uri = stream_uri + '/page/' + page_num;
 
+        // Record initial page state so browser back works after first navigation
+        history.replaceState({page: page_num}, '', view_base_uri + '/' + page_num);
+
         var page_elem = $('#run_pager_page');
         page_elem.text("Page: " + page_num);
 

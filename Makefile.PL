@@ -38,12 +38,13 @@ my %WriteMakefileArgs = (
   },
   "DISTNAME" => "Test2-Harness2",
   "EXE_FILES" => [
-    "scripts/yath"
+    "scripts/yath_collector"
   ],
   "LICENSE" => "perl",
   "MIN_PERL_VERSION" => "5.014000",
   "NAME" => "Test2::Harness2",
   "PREREQ_PM" => {
+    "App::Yath::Script" => "2.000011",
     "Atomic::Pipe" => "0.021",
     "B" => 0,
     "Capture::Tiny" => "0.48",
@@ -156,6 +157,7 @@ my %WriteMakefileArgs = (
 );
 
 my %FallbackPrereqs = (
+  "App::Yath::Script" => "2.000011",
   "Atomic::Pipe" => "0.021",
   "B" => 0,
   "Capture::Tiny" => "0.48",

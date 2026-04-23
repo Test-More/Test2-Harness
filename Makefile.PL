@@ -38,7 +38,7 @@ my %WriteMakefileArgs = (
   },
   "DISTNAME" => "Test2-Harness2",
   "EXE_FILES" => [
-    "scripts/yath"
+    "scripts/yath_collector"
   ],
   "LICENSE" => "perl",
   "MIN_PERL_VERSION" => "5.014000",

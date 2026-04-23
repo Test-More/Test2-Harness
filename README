@@ -37,20 +37,24 @@ DESCRIPTION
     App::Yath::Script::V{X} module is used automatically (V0 is excluded
     from auto-detection since it is reserved for script validation).
 
-    When a .yath.rc or .yath.user.rc file exists, the version defaults to 1
-    unless an explicit version marker is present. This preserves backwards
-    compatibility with existing Test2::Harness projects whose configuration
-    files predate the version marker convention. Projects that want a newer
-    version should add an explicit marker (e.g. # V2) to their
-    configuration file.
+    The version is determined by the configuration filename using the
+    following priority (highest first) in each directory searched:
 
-    The version marker must appear in the comment header at the top of the
-    file -- it is a comment line matching # VN or ; VN (case-insensitive).
-    Blank lines before it are allowed, but the marker must come before the
-    first non-comment line.
+      1. A .yath.rc symlink whose target filename matches .yath.v#.rc --
+      the version is extracted from the target name. This lets projects
+      keep a stable .yath.rc name while pointing at the versioned file.
 
-    If both .yath.rc and .yath.user.rc contain version markers, the
-    user-level file (.yath.user.rc) takes precedence. This allows
+      2. An explicitly versioned file .yath.v#.rc (e.g. .yath.v2.rc).
+
+      3. A plain .yath.rc (not a symlink to a versioned file) -- defaults
+      to 1 for backwards compatibility with existing Test2::Harness
+      projects.
+
+    The same priority applies to user-level configuration (.yath.user.rc /
+    .yath.user.v#.rc).
+
+    If both project-level and user-level configuration files specify a
+    version, the user-level version takes precedence. This allows
     individual developers to override the project-level version when
     needed.
 

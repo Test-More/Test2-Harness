@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+2.000011  2026-04-23 03:03:53-07:00 America/Los_Angeles
+
     - Determine yath version from RC filename (.yath.v#.rc) instead of
       parsing a #V / ;V header inside the file
     - Support .yath.rc as a symlink to a versioned .yath.v#.rc file,

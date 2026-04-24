@@ -57,7 +57,7 @@ sub _bootstrap {
 
     for my $rid (@runs) {
         my $scope_map = $archive->artifacts($rid);
-        my $state     = $self->_collect_static_state($scope_map);
+        my $state     = $self->_collect_static_state($scope_map, $rid);
         $self->_apply_run_state($rid, $state) if $state;
 
         $self->_setup_static_event_readers($scope_map);
@@ -73,6 +73,12 @@ sub _tick {
     # complete so the first poll returns every line; subsequent
     # polls return nothing and next() will unblock.
     $self->_drain_event_readers;
+
+    # Static inputs are finite: one drain pass empties every reader.
+    # Signal stream() to wind down as soon as the event queue empties
+    # -- anything still queued will be delivered before the loop
+    # checks EXIT_REQUESTED.
+    $self->{+EXIT_REQUESTED} = 1;
 
     return;
 }
@@ -120,10 +126,16 @@ sub _resolve_path {
 # Collect the state snapshot for a run by asking every logger whose
 # records_state() is true for its fetch_state. Reconcile across
 # loggers: cared-about fields must agree when both loggers set them.
+# A run's scope-map may include snapshots that describe the run itself
+# (run_id matches) alongside per-test-file metadata snapshots (no
+# run_id, or a different shape entirely). The run-shaped snapshot is
+# the one we need for lifecycle synthesis; other snapshots are only
+# validated for consistency against it.
 sub _collect_static_state {
-    my ($self, $scope_map) = @_;
+    my ($self, $scope_map, $rid) = @_;
 
-    my @state_snapshots;
+    my @run_scoped;
+    my @other;
     for my $rel (keys %$scope_map) {
         my $class  = $scope_map->{$rel};
         my $loaded = eval { load_module($class); 1 };
@@ -136,17 +148,20 @@ sub _collect_static_state {
         my $state  = $class->fetch_state($reader);
         next unless ref($state) eq 'HASH';
 
-        push @state_snapshots => [$class, $state];
+        if (defined $rid && defined $state->{run_id} && $state->{run_id} eq $rid) {
+            push @run_scoped => [$class, $state];
+        }
+        else {
+            push @other => [$class, $state];
+        }
     }
 
-    return undef unless @state_snapshots;
+    my @ordered = (@run_scoped, @other);
+    return undef unless @ordered;
 
-    # Merge: take the first snapshot as the base, then cross-check
-    # cared-about keys against each subsequent one. Disagreements on
-    # cared-about keys throw.
-    my ($base_class, $base) = @{$state_snapshots[0]};
-    for my $i (1 .. $#state_snapshots) {
-        my ($class, $other) = @{$state_snapshots[$i]};
+    my ($base_class, $base) = @{$ordered[0]};
+    for my $i (1 .. $#ordered) {
+        my ($class, $other) = @{$ordered[$i]};
         _assert_states_agree($base_class, $base, $class, $other);
     }
 

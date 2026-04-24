@@ -4,115 +4,107 @@ use warnings;
 
 our $VERSION = '2.000011';
 
-use Test2::Harness2::Util::File::JSONL;
-
-use parent 'App::Yath2::Command::run';
 use Object::HashBase qw{
-    +renderers
-    <final_data
-    <log_file
-    <tests_seen
-    <asserts_seen
+    <settings
+    <args
+    <env_vars
+    <option_state
+    <plugins
 };
+
+use Carp qw/croak/;
+
+use App::Yath2::LogArchive();
+use App::Yath2::Streamer::Static();
 
 use Getopt::Yath;
-
 include_options(
-    'App::Yath2::Options::Renderer',
+    'App::Yath2::Options::Yath',
 );
 
-include_options(
-    'App::Yath2::Options::Renderer',
-);
+use Role::Tiny::With;
+with 'App::Yath2::Role::Command';
 
-option_group {group => 'run', category => "Run Options"} => sub {
-    option run_auditor => (
-        type => 'Scalar',
-        default => 'Test2::Harness2::Collector::Auditor::Run',
-        normalize => sub { fqmod($_[0], 'Test2::Harness2::Collector::Auditor::Run') },
-        description => 'Auditor class to use when auditing the overall test run',
-    );
-};
-
-sub load_renderers     { 1 }
-sub load_plugins       { 0 }
-sub load_resources     { 0 }
 sub args_include_tests { 0 }
+sub group              { 'log parsing' }
+sub summary            { 'Replay events from a log archive or directory' }
 
-sub group { 'log parsing' }
-
-sub summary { "Replay a test run from an event log" }
-
-sub cli_args { "[--] event_log.jsonl[.gz|.bz2] [job1, job2, ...]" }
+sub cli_args { "[--] LOG [RUN_ID ...]" }
 
 sub description {
     return <<"    EOT";
-This yath command will re-run the harness against an event log produced by a
-previous test run. The only required argument is the path to the log file,
-which maybe compressed. Any extra arguments are assumed to be job id's. If you
-list any jobs, only listed jobs will be processed.
+Replays the event stream recorded in a completed yath log. LOG is either a
+.yath archive file or a directory that looks like \$workdir/logs (i.e. carries
+an artifacts.json manifest at the top level). RUN_IDs, if any, restrict the
+replay to the listed runs; with none, every run stored in the archive is
+replayed.
 
-This command accepts all the same renderer/formatter options that the 'test'
-command accepts.
+Each event is printed as one JSON object per line. Output matches what 'yath
+test' prints live, so anything that consumes the live stream will also consume
+a replay.
+
+Exit code is 0 when every replayed run passed, non-zero otherwise (or when
+the archive has no runs at all).
     EOT
 }
 
 sub run {
     my $self = shift;
 
-    my $args     = $self->args;
-    my $settings = $self->settings;
+    # Autoflush so each event lands on stdout as soon as it is
+    # emitted. Matches the test command's behaviour.
+    local $| = 1;
+    STDERR->autoflush(1);
 
+    my $args = $self->{+ARGS} // [];
     shift @$args if @$args && $args->[0] eq '--';
 
-    $self->{+LOG_FILE} = shift @$args or die "You must specify a log file";
-    die "'$self->{+LOG_FILE}' is not a valid log file" unless -f $self->{+LOG_FILE};
-    die "'$self->{+LOG_FILE}' does not look like a log file" unless $self->{+LOG_FILE} =~ m/\.jsonl(\.(gz|bz2))?$/;
+    my $log = shift @$args
+        or die "Usage: yath replay LOG [RUN_ID ...]\n";
 
-    my $stream = Test2::Harness2::Util::File::JSONL->new(name => $self->{+LOG_FILE});
-    while (1) {
-        my ($e) = $stream->poll(max => 1);
-        die "Could not find run_id in log.\n" unless $e;
+    die "Log source '$log' does not exist\n"
+        unless -e $log;
 
-        my $run_id = Test2::Harness2::Event->new($e)->run_id or next;
-
-        $settings->run->create_option(run_id => $run_id);
-        last;
+    # Requested run ids: default to the full set the archive carries.
+    my @requested = @$args;
+    unless (@requested) {
+        my $archive = App::Yath2::LogArchive->new(path => $log);
+        @requested = $archive->runs;
+        die "No runs found in '$log'\n" unless @requested;
     }
 
-    # Reset the stream
-    $stream = Test2::Harness2::Util::File::JSONL->new(name => $self->{+LOG_FILE});
+    my $streamer = App::Yath2::Streamer::Static->new(
+        log  => $log,
+        runs => [@requested],
+    );
 
-    $self->start_plugins_and_renderers();
-
-    my $jobs = @$args ? {map {$_ => 1} @$args} : undef;
-
-    while (1) {
-        my @events = $stream->poll(max => 1000) or last;
-
-        for my $e (@events) {
-            last unless defined $e;
-
-            if ($jobs) {
-                my $f = $e->{facet_data}->{harness_job_start} // $e->{facet_data}->{harness_job_queued};
-                if ($f && !$jobs->{$e->{job_id}}) {
-                    for my $field (qw/rel_file abs_file file/) {
-                        my $file = $f->{$field} or next;
-                        next unless $jobs->{$file};
-                        $jobs->{$e->{job_id}} = 1;
-                        last;
-                    }
-                }
-
-                next unless $jobs->{$e->{job_id}};
+    my $fail_runs = 0;
+    my %seen_end;
+    $streamer->stream(
+        callback => sub {
+            my ($event) = @_;
+            my $fd = $event->facet_data // {};
+            if (my $end = $fd->{harness_run_end}) {
+                my $rid = $end->{run_id} // $event->run_id;
+                $seen_end{$rid} = 1 if defined $rid;
+                $fail_runs++ unless $end->{pass};
             }
+            print $event->as_json, "\n";
+        },
+        # Exit when we have seen a run_end for every requested run.
+        exit_if => sub { keys(%seen_end) >= scalar(@requested) ? 1 : 0 },
+    );
 
-            $self->handle_event($e);
-        }
+    # Any requested run that never produced a run_end counts as a
+    # failure. The static replay cannot synthesise a terminal state
+    # for a run that was not completed when the archive was taken.
+    for my $rid (@requested) {
+        next if $seen_end{$rid};
+        print STDERR "replay: run '$rid' has no terminal state in archive\n";
+        $fail_runs++;
     }
 
-    my $exit = $self->stop_plugins_and_renderers();
-    return $exit;
+    return $fail_runs ? 1 : 0;
 }
 
 1;
@@ -120,4 +112,3 @@ sub run {
 __END__
 
 =head1 POD IS AUTO-GENERATED
-

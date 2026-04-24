@@ -567,17 +567,26 @@ sub _seed_artifacts_from_loggers {
 }
 
 # Return an instance suitable for calling metadata()/prepare_output_locations.
-# Blessed specs are returned as-is. Arrayref specs are instantiated with
-# harness-scope identity so metadata() resolves output paths the same way
-# the interpose collector's own instantiation would. This does not open
-# file handles (loggers defer that to startup()), so it is fork-safe.
+# Blessed specs are returned as-is. Arrayref specs ([$class, %args]) and
+# bare class-name strings are instantiated with harness-scope identity so
+# metadata() resolves output paths the same way the interpose collector's
+# own instantiation would. This does not open file handles (loggers defer
+# that to startup()), so it is fork-safe.
 sub _logger_instance_for_metadata {
     my ($self, $item) = @_;
 
     return $item if blessed($item);
-    return undef unless ref($item) eq 'ARRAY';
 
-    my ($class, @args) = @$item;
+    my ($class, @args);
+    if (ref($item) eq 'ARRAY') {
+        ($class, @args) = @$item;
+    }
+    elsif (!ref($item) && defined $item && length $item) {
+        $class = $item;
+    }
+    else {
+        return undef;
+    }
 
     my %identity = (
         logdir       => $self->{+LOGDIR},

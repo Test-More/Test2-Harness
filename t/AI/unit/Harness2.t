@@ -1393,4 +1393,64 @@ subtest 'perform_hard_stop catches grandchildren reparented mid-kill' => sub {
     );
 };
 
+subtest '_wait_for_run_service_ready - returns handle when ready immediately' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    my $rid = 'run-test-ready';
+
+    # Plant a fake entry so _run_service_handle can build a handle.
+    my $call_count = 0;
+    my $fake_handle = bless {}, 'T2H2_Test_ReadyHandle_Immediate';
+    no warnings 'once';
+    *T2H2_Test_ReadyHandle_Immediate::ready = sub { 1 };
+
+    # Inject handle via _run_service_handle override.
+    local *Test2::Harness2::_run_service_handle = sub { $fake_handle };
+
+    my $got = $h->_wait_for_run_service_ready($rid);
+    is($got, $fake_handle, 'returns the handle object when ready() is true immediately');
+};
+
+subtest '_wait_for_run_service_ready - croaks with cap in message on timeout' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    my $rid = 'run-test-timeout';
+
+    my $fake_handle = bless {}, 'T2H2_Test_ReadyHandle_Never';
+    no warnings 'once';
+    *T2H2_Test_ReadyHandle_Never::ready = sub { 0 };
+
+    local *Test2::Harness2::_run_service_handle = sub { $fake_handle };
+
+    # Use a very short timeout so the test completes quickly.
+    local $ENV{YATH_RUN_SERVICE_READY_TIMEOUT} = 0;
+
+    my $ok  = eval { $h->_wait_for_run_service_ready($rid); 1 };
+    my $err = $@;
+    ok(!$ok, 'croaks when handle never becomes ready');
+    like($err, qr/timeout waiting for run service '\Q$rid\E' to come up after 0s/,
+        'error message includes run_id and cap value');
+};
+
+subtest '_wait_for_run_service_ready - YATH_RUN_SERVICE_READY_TIMEOUT is honoured' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $h   = Test2::Harness2->new(workdir => $dir);
+    my $rid = 'run-test-envtimeout';
+
+    my $fake_handle = bless {}, 'T2H2_Test_ReadyHandle_EnvNever';
+    no warnings 'once';
+    *T2H2_Test_ReadyHandle_EnvNever::ready = sub { 0 };
+
+    local *Test2::Harness2::_run_service_handle = sub { $fake_handle };
+
+    # Custom cap via env var.
+    local $ENV{YATH_RUN_SERVICE_READY_TIMEOUT} = 0;
+
+    my $ok  = eval { $h->_wait_for_run_service_ready($rid); 1 };
+    my $err = $@;
+    ok(!$ok, 'croaks when handle never becomes ready with env-var cap');
+    like($err, qr/after 0s/, 'croak message reflects the env-var cap, not the hardcoded default');
+    unlike($err, qr/after 60s/, 'default 60s cap is not used when env var is set');
+};
+
 done_testing;

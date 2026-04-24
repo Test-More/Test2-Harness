@@ -567,17 +567,26 @@ sub _seed_artifacts_from_loggers {
 }
 
 # Return an instance suitable for calling metadata()/prepare_output_locations.
-# Blessed specs are returned as-is. Arrayref specs are instantiated with
-# harness-scope identity so metadata() resolves output paths the same way
-# the interpose collector's own instantiation would. This does not open
-# file handles (loggers defer that to startup()), so it is fork-safe.
+# Blessed specs are returned as-is. Arrayref specs ([$class, %args]) and
+# bare class-name strings are instantiated with harness-scope identity so
+# metadata() resolves output paths the same way the interpose collector's
+# own instantiation would. This does not open file handles (loggers defer
+# that to startup()), so it is fork-safe.
 sub _logger_instance_for_metadata {
     my ($self, $item) = @_;
 
     return $item if blessed($item);
-    return undef unless ref($item) eq 'ARRAY';
 
-    my ($class, @args) = @$item;
+    my ($class, @args);
+    if (ref($item) eq 'ARRAY') {
+        ($class, @args) = @$item;
+    }
+    elsif (!ref($item) && defined $item && length $item) {
+        $class = $item;
+    }
+    else {
+        return undef;
+    }
 
     my %identity = (
         logdir       => $self->{+LOGDIR},
@@ -840,12 +849,15 @@ sub _send_artifact_snapshot {
     }
     elsif ($scope eq 'run') {
         my $run_id = $params{run_id} or return;
-        # Filter the harness's merged map down to entries whose
-        # relative path lives under runs/$run_id/.
+        # Filter the harness's merged map down to entries scoped to
+        # this run. Matches both run-level files (runs/$run_id.jsonl,
+        # runs/$run_id.json) and nested paths (runs/$run_id/tests/...,
+        # runs/$run_id/services/...) so subscribers tail the run
+        # service's own log alongside per-test artifacts.
         my $all = $self->{+ARTIFACTS} // {};
         $artifacts = {
             map  { $_ => $all->{$_} }
-            grep { m{^runs/\Q$run_id\E/} }
+            grep { m{^runs/\Q$run_id\E(?:[./]|\z)} }
             keys %$all
         };
     }

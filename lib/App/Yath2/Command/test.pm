@@ -77,6 +77,10 @@ sub run {
             'Test2::Harness2::Collector::Logger::JSONL',
             'Test2::Harness2::Collector::Logger::JSON',
         ],
+        service_loggers => [
+            'Test2::Harness2::Collector::Logger::JSONL',
+            'Test2::Harness2::Collector::Logger::JSON',
+        ],
         test_loggers => [
             'Test2::Harness2::Collector::Logger::JSONL',
             'Test2::Harness2::Collector::Logger::JSON',
@@ -101,6 +105,7 @@ sub run {
         handle => $spawn,
         run    => $run_id,
         log    => "$workdir/logs",
+        global => 1,
     );
 
     my $final_pass;

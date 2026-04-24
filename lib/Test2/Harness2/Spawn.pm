@@ -66,6 +66,31 @@ sub queue_test_run {
 sub status { $_[0]->_send_request('status') }
 sub finish { $_[0]->_send_request('finish') }
 
+# Ask the harness to forward state and/or artifact updates to this
+# handle's IPC client. %params are the harness's subscribe payload:
+#   global    => $bool
+#   run       => $run_id
+#   runs      => [$run_id1, ...]
+#   state     => $bool
+#   artifacts => $bool
+# Croaks if the harness returns an error (e.g. unknown run_id).
+sub subscribe {
+    my $self = shift;
+    my %args = @_ == 1 && ref($_[0]) eq 'HASH' ? %{$_[0]} : @_;
+    my $res  = $self->_send_request('subscribe', \%args);
+    croak "subscribe failed: " . ($res->{error} // 'unknown error')
+        unless $res && $res->{ok};
+    return $res;
+}
+
+sub unsubscribe {
+    my $self = shift;
+    my $res  = $self->_send_request('unsubscribe', {});
+    croak "unsubscribe failed: " . ($res->{error} // 'unknown error')
+        unless $res && $res->{ok};
+    return $res;
+}
+
 sub run_results {
     my $self = shift;
     my %args = @_ == 1 && !ref($_[0]) ? (run_id => $_[0]) : @_;

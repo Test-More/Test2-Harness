@@ -5,6 +5,9 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use File::Basename qw/dirname/;
+use File::Path qw/make_path/;
+use File::Temp qw/tempdir/;
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time sleep/;
 use Test2::Util::UUID qw/gen_uuid/;
@@ -30,6 +33,7 @@ use Object::HashBase qw{
     +seen_run_end
     +mode
     +exit_requested
+    +archive_tmpdir
 };
 
 # Gate optional modules: Linux::Inotify2 is a nice-to-have for replace
@@ -375,13 +379,18 @@ sub _apply_artifacts {
 sub _bootstrap_static {
     my $self = shift;
 
-    # Locate artifacts.json: given log path may point at a directory
-    # (logs/) or a log archive file. For the first iteration only
-    # support the directory form; archive extraction is a separate
-    # entry point on LogArchive that callers can use before creating
-    # the streamer.
+    # Accept either a log directory (typically $workdir/logs) or a
+    # .yath archive file. Archive paths are extracted to a private
+    # tempdir up front so the rest of the static path operates on a
+    # plain directory layout.
     my $log = $self->{+LOG};
-    croak "Static streamer currently requires a directory path; got '$log'"
+
+    if (-f $log) {
+        $log = $self->_extract_archive($log);
+        $self->{+LOG} = $log;
+    }
+
+    croak "Static streamer requires a directory or log archive; got '$log'"
         unless -d $log;
 
     my $manifest = "$log/artifacts.json";
@@ -459,6 +468,40 @@ sub _collect_static_state {
     }
 
     return $base;
+}
+
+sub _extract_archive {
+    my ($self, $path) = @_;
+
+    # Lazy-load: LogArchive pulls in backend modules based on the
+    # archive format, and a consumer that only uses live mode or
+    # directory-mode should not pay for them.
+    require App::Yath2::LogArchive;
+
+    my $archive = App::Yath2::LogArchive->new(path => $path);
+    my $tmpdir  = tempdir('yath-streamer-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+    $self->{+ARCHIVE_TMPDIR} = $tmpdir;
+
+    for my $rel ($archive->list_files) {
+        my $abs = "$tmpdir/$rel";
+        my $dir = dirname($abs);
+        make_path($dir) unless -d $dir;
+
+        my $in = $archive->read_file($rel);
+        open(my $out, '>', $abs) or croak "Could not open '$abs' for write: $!";
+        binmode $in;
+        binmode $out;
+        my $buf;
+        while (my $n = read $in, $buf, 8192) {
+            print {$out} $buf;
+        }
+        close $in;
+        close $out or croak "Could not close '$abs': $!";
+    }
+
+    $archive->close if $archive->can('close');
+
+    return $tmpdir;
 }
 
 sub _setup_static_event_readers {
@@ -673,10 +716,17 @@ App::Yath2::Streamer - Produce a unified event stream from a running harness and
         ...
     }
 
-    # Static mode: synthesize events from a completed log directory.
+    # Static mode: synthesize events from a completed log directory
+    # or a .yath archive file. Archives are extracted to a private
+    # tempdir (cleaned up automatically when the Streamer goes away).
     my $s = App::Yath2::Streamer->new(
         log  => "$workdir/logs",
         runs => [$run_id1, $run_id2],
+    );
+
+    my $s = App::Yath2::Streamer->new(
+        log => '/path/to/20260424-035943.yath',
+        run => $run_id,
     );
 
 =head1 DESCRIPTION

@@ -6,6 +6,7 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use IO::Handle;
+use Test2::Harness2::Util::File::JSONL;
 
 use Object::HashBase qw{
     <output_file
@@ -117,6 +118,38 @@ sub metadata {
     my $fh = $self->{+FH} or return undef;
     return {jsonl_fileno => fileno($fh), pid => $$};
 }
+
+# ----------------------------------------------------------------------
+# Streamer interface
+sub update_style           { 'append' }
+sub records_state          { 0 }
+sub records_general_events { 1 }
+
+sub log_reader {
+    my $class = shift;
+    my ($path) = @_;
+    return Test2::Harness2::Util::File::JSONL->new(name => $path);
+}
+
+sub ready {
+    my $class = shift;
+    my ($r) = @_;
+    return 0 unless $r && $r->exists;
+    my @peek = $r->poll_with_index(max => 1, peek => 1);
+    return scalar @peek;
+}
+
+sub fetch_events {
+    my $class = shift;
+    my ($r) = @_;
+    return unless $r && $r->exists;
+    return $r->poll;
+}
+
+# No state to report for an append-style general-event logger; the
+# role requires the method, so return undef rather than producing a
+# bogus snapshot.
+sub fetch_state { undef }
 
 1;
 

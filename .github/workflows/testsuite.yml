@@ -3,7 +3,8 @@ name: testsuite
 on:
   push:
     branches:
-      - '*'
+      - main
+      - '2.0'
     tags-ignore:
       - '*'
   pull_request:

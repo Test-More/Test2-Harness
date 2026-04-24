@@ -68,10 +68,12 @@ jobs:
         uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: ".github/cpanfile.ci"
+          retries: 3
       - name: install dependencies from cpanfile
         uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: "cpanfile"
+          retries: 3
       - run: perl Makefile.PL
       - run: make
       - run: make test
@@ -154,12 +156,14 @@ jobs:
           cpanfile: ".github/cpanfile.ci"
           global: true
           sudo: false
+          retries: 3
       - name: install dependencies from cpanfile
         uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: "cpanfile"
           global: true
           sudo: false
+          retries: 3
       - run: perl Makefile.PL
       - run: make
       - run: make test

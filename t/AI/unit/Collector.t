@@ -1849,4 +1849,43 @@ subtest 'ipc_harness is required at construction - Collector' => sub {
     like($err, qr/ipc_harness/, 'error mentions ipc_harness');
 };
 
+# ===========================================================================
+# collect_from_file tempfile cleanup (Windows spawn path)
+# ===========================================================================
+
+subtest 'collect_from_file cleans up tempfile even if require fails before decode_json_file' => sub {
+    skip_all "fork required" unless $CAN_FORK;
+
+    # Create a dummy tempfile; its content is irrelevant because we want the
+    # child to die before decode_json_file ever runs.
+    require File::Temp;
+    my ($fh, $tmpfile) = File::Temp::tempfile(UNLINK => 0, SUFFIX => '.json');
+    print $fh '{}';
+    close $fh;
+    ok(-f $tmpfile, "tempfile exists before test");
+
+    my $pid = fork // die "fork: $!";
+    if (!$pid) {
+        # Force the next require of Test2::Harness2::Util::JSON to fail so
+        # collect_from_file dies before decode_json_file ever runs.  This
+        # simulates a module-load failure in the spawned collector child.
+        delete $INC{'Test2/Harness2/Util/JSON.pm'};
+        unshift @INC => sub {
+            my (undef, $mod) = @_;
+            die "simulated load failure\n" if $mod =~ m{Test2/Harness2/Util/JSON};
+            return;
+        };
+
+        # collect_from_file will die during require; the Scope::Guard added by
+        # the fix must unlink the file during stack unwind, before control
+        # returns to this eval.
+        eval { Test2::Harness2::Collector->collect_from_file($tmpfile) };
+        POSIX::_exit(0);
+    }
+
+    waitpid($pid, 0);
+    ok(!-f $tmpfile, "tempfile cleaned up even when collect_from_file dies before decode_json_file");
+    unlink $tmpfile if -f $tmpfile;    # Safety: remove if test fails
+};
+
 done_testing;

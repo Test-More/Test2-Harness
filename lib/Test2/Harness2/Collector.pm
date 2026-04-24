@@ -546,6 +546,12 @@ sub _spawn_collector_win32 {
 sub collect_from_file {
     my ($class, $file) = @_;
 
+    # Guarantee the tempfile is removed even if this process dies before
+    # decode_json_file runs (e.g. a module fails to load).  decode_json_file
+    # with unlink => 1 still handles the normal path; if it fires first the
+    # file is already gone and this becomes a no-op.
+    my $file_guard = Scope::Guard->new(sub { unlink $file if -f $file });
+
     require Test2::Harness2::Util::JSON;
     my $params = Test2::Harness2::Util::JSON::decode_json_file($file, unlink => 1);
 

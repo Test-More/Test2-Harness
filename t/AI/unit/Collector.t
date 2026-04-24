@@ -28,18 +28,14 @@ use Test2::Harness2::Collector::Logger::JSONL;
 # stub the handle out to keep the tests quiet and fast.  Individual subtests
 # below install their own overrides when they want to observe the message.
 BEGIN {
-    require IPC::Manager::Service::Handle;
+    require IPC::Manager;
     no warnings 'once', 'redefine';
-    *IPC::Manager::Service::Handle::new = sub {
-        my $class = shift;
-        return bless {}, $class;
-    };
-    *IPC::Manager::Service::Handle::client = sub {
+    *IPC::Manager::connect = sub {
         return bless {}, 'T2H2_TestNoopClient';
     };
-    *IPC::Manager::Service::Handle::ready = sub { 1 };
-    *T2H2_TestNoopClient::send_message    = sub { return };
-    *T2H2_TestNoopClient::disconnect      = sub { return };
+    *T2H2_TestNoopClient::send_message = sub { return };
+    *T2H2_TestNoopClient::peer_active  = sub { 1 };
+    *T2H2_TestNoopClient::disconnect   = sub { return };
 }
 
 my $IS_WIN32 = $^O eq 'MSWin32';
@@ -1665,18 +1661,15 @@ subtest 'ipcm_info is required at construction - Collector::Logger::JSONL' => su
 subtest '_send_logger_metadata groups metadata and registers under the collector-bus id' => sub {
     open(my $devnull, '<', '/dev/null') or die $!;
 
-    my @new_args;
+    my @connect_args;
     my @sent;
     no warnings 'once', 'redefine';
-    local *IPC::Manager::Service::Handle::new = sub {
-        my ($class, %args) = @_;
-        push @new_args => \%args;
-        my $fake_client = bless {sent   => \@sent}, 'T2H2_FakeClient_LMeta';
-        my $fake_handle = bless {client => $fake_client}, 'T2H2_FakeHandle_LMeta';
-        return $fake_handle;
+    local *IPC::Manager::connect = sub {
+        my (undef, @rest) = @_;
+        push @connect_args => \@rest;
+        return bless {sent => \@sent}, 'T2H2_FakeClient_LMeta';
     };
-    *T2H2_FakeHandle_LMeta::client       = sub { $_[0]->{client} };
-    *T2H2_FakeHandle_LMeta::ready        = sub { 1 };
+    *T2H2_FakeClient_LMeta::peer_active = sub { 1 };
     *T2H2_FakeClient_LMeta::send_message = sub {
         my ($self, $to, $payload) = @_;
         push @{$self->{sent}} => {to => $to, payload => $payload};
@@ -1709,10 +1702,9 @@ subtest '_send_logger_metadata groups metadata and registers under the collector
     $c->_instantiate_loggers();
     $c->_send_logger_metadata;
 
-    is(scalar @new_args,           1,         'exactly one Handle constructed');
-    is($new_args[0]{service_name}, 'harness', 'service_name is the configured peer');
+    is(scalar @connect_args,   1,                   'exactly one IPC client connected');
     is(
-        $new_args[0]{name}, 'collector:harness',
+        $connect_args[0][0], 'collector:harness',
         'Service collector bus_id derives from ipc_parent',
     );
 
@@ -1736,12 +1728,10 @@ subtest '_send_logger_metadata omits loggers whose metadata is undef' => sub {
 
     my @sent;
     no warnings 'once', 'redefine';
-    local *IPC::Manager::Service::Handle::new = sub {
-        my $fake_client = bless {sent => \@sent}, 'T2H2_FakeClient_Omit';
-        return bless {client => $fake_client}, 'T2H2_FakeHandle_Omit';
+    local *IPC::Manager::connect = sub {
+        return bless {sent => \@sent}, 'T2H2_FakeClient_Omit';
     };
-    *T2H2_FakeHandle_Omit::client       = sub { $_[0]->{client} };
-    *T2H2_FakeHandle_Omit::ready        = sub { 1 };
+    *T2H2_FakeClient_Omit::peer_active  = sub { 1 };
     *T2H2_FakeClient_Omit::send_message = sub {
         my ($self, $to, $payload) = @_;
         push @{$self->{sent}} => $payload;
@@ -1781,12 +1771,10 @@ subtest '_send_logger_metadata still fires when every logger returns undef' => s
 
     my @sent;
     no warnings 'once', 'redefine';
-    local *IPC::Manager::Service::Handle::new = sub {
-        my $fake_client = bless {sent => \@sent}, 'T2H2_FakeClient_Empty';
-        return bless {client => $fake_client}, 'T2H2_FakeHandle_Empty';
+    local *IPC::Manager::connect = sub {
+        return bless {sent => \@sent}, 'T2H2_FakeClient_Empty';
     };
-    *T2H2_FakeHandle_Empty::client       = sub { $_[0]->{client} };
-    *T2H2_FakeHandle_Empty::ready        = sub { 1 };
+    *T2H2_FakeClient_Empty::peer_active  = sub { 1 };
     *T2H2_FakeClient_Empty::send_message = sub {
         my ($self, $to, $payload) = @_;
         push @{$self->{sent}} => $payload;
@@ -1813,9 +1801,11 @@ subtest '_send_logger_metadata warns on IPC failure, does not propagate' => sub 
     open(my $devnull, '<', '/dev/null') or die $!;
 
     no warnings 'once', 'redefine';
-    local *IPC::Manager::Service::Handle::new = sub {
-        die "no route to peer\n";
+    local *IPC::Manager::connect = sub {
+        return bless {}, 'T2H2_FakeClient_Die';
     };
+    local *T2H2_FakeClient_Die::peer_active  = sub { 1 };
+    local *T2H2_FakeClient_Die::send_message = sub { die "no route to peer\n" };
 
     my $jsonl = Test2::Harness2::Collector::Logger::JSONL->new(
         ipcm_info => {}, output_file => '/tmp/x.jsonl',

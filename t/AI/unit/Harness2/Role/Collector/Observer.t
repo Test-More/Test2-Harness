@@ -64,13 +64,12 @@ use Test2::Harness2::Event;
 # Silence the IPC bus as Collector.t does, so unit tests don't need a
 # real IPC::Manager.
 BEGIN {
-    require IPC::Manager::Service::Handle;
+    require IPC::Manager;
     no warnings 'once', 'redefine';
-    *IPC::Manager::Service::Handle::new    = sub { bless {}, shift };
-    *IPC::Manager::Service::Handle::client = sub { bless {}, 'T2H2_ObsNoopClient' };
-    *IPC::Manager::Service::Handle::ready  = sub { 1 };
-    *T2H2_ObsNoopClient::send_message      = sub { };
-    *T2H2_ObsNoopClient::disconnect        = sub { };
+    *IPC::Manager::connect           = sub { bless {}, 'T2H2_ObsNoopClient' };
+    *T2H2_ObsNoopClient::send_message = sub { };
+    *T2H2_ObsNoopClient::peer_active  = sub { 1 };
+    *T2H2_ObsNoopClient::disconnect   = sub { };
 }
 
 my $CAN_FORK = $Config{d_fork};

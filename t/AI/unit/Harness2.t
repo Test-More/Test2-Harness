@@ -17,17 +17,13 @@ use Test2::Harness2::Test::ResourceService qw//;
 # class keeps the unit test clean. Inherited through fork into the service
 # and collector processes.
 BEGIN {
-    require IPC::Manager::Service::Handle;
+    require IPC::Manager;
     no warnings 'once', 'redefine';
-    *IPC::Manager::Service::Handle::new = sub {
-        my $class = shift;
-        return bless {}, $class;
-    };
-    *IPC::Manager::Service::Handle::client = sub {
+    *IPC::Manager::connect = sub {
         return bless {}, 'T2H2_Harness2Test_NoopClient';
     };
-    *IPC::Manager::Service::Handle::ready       = sub { 1 };
     *T2H2_Harness2Test_NoopClient::send_message = sub { return };
+    *T2H2_Harness2Test_NoopClient::peer_active  = sub { 1 };
     *T2H2_Harness2Test_NoopClient::disconnect   = sub { return };
 }
 
@@ -824,6 +820,7 @@ subtest 'harness spawns a run service lazily for each run it considers' => sub {
     my $run = Test2::Harness2::Run->from_files(files => _tfs('x.t'));
     my $h   = Test2::Harness2->new(workdir => $dir);
     push @{$h->{queue}} => $run;
+    $h->_scheduler_queue_run($run);
 
     # Spoof ipcm_info so _ensure_run_service_started actually tries to
     # fork. Mock RunService->spawn so we don't really fork from the
@@ -864,6 +861,7 @@ subtest 'harness spawns a run service even when the run has no resources' => sub
     my $h   = Test2::Harness2->new(workdir => $dir);
     $h->{ipcm_info} = {fake => 1};
     push @{$h->{queue}} => $run;
+    $h->_scheduler_queue_run($run);
 
     my @spawn_calls;
     my $fake_ipc_handle = bless {}, 'Test::FakeIPCHandle';
@@ -1102,6 +1100,10 @@ subtest 'broken_resource_behavior=abort fails every remaining job in the run' =>
 
                     # Run service's view: this job now in done, others
                     # still pending until the scheduler launches them.
+                    # The scheduler no longer writes to $run's arrays
+                    # (it keeps its own state) so mirror the running
+                    # transition here before the done transition.
+                    $run->mark_running($entry->{job}->job_id);
                     $run->mark_done($entry->{job}->job_id);
                     $h->run_on_general_message(Test::FakeIpcMsg->new({
                         kind     => 'run_state_update',

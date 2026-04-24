@@ -20,17 +20,13 @@ use Test2::Harness2::Collector::Logger::JSONL;
 # The collector fires a collector_artifacts IPC message after loggers start. No
 # real bus is running here, so stub the handle out.
 BEGIN {
-    require IPC::Manager::Service::Handle;
+    require IPC::Manager;
     no warnings 'once', 'redefine';
-    *IPC::Manager::Service::Handle::new = sub {
-        my $class = shift;
-        return bless {}, $class;
-    };
-    *IPC::Manager::Service::Handle::client = sub {
+    *IPC::Manager::connect = sub {
         return bless {}, 'T2H2_BurstSync_NoopClient';
     };
-    *IPC::Manager::Service::Handle::ready = sub { 1 };
     *T2H2_BurstSync_NoopClient::send_message = sub { return };
+    *T2H2_BurstSync_NoopClient::peer_active  = sub { 1 };
     *T2H2_BurstSync_NoopClient::disconnect   = sub { return };
 }
 

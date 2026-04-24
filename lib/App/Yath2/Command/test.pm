@@ -23,6 +23,7 @@ use Test2::Harness2::TestFile();
 use Test2::Harness2::Resource::JobCount();
 use App::Yath2::LogArchive();
 use App::Yath2::LogArchive::Format qw/default_writer_format/;
+use App::Yath2::Streamer::Live();
 
 use Getopt::Yath;
 include_options(
@@ -87,75 +88,52 @@ sub run {
         unless $queued->{ok};
     my $run_id = $queued->{run_id};
 
-    # Poll the harness's run_results handler until the run completes.
-    # The handler returns state => 'running' while there is still work
-    # in the queue and state => 'complete' with the aggregate pass
-    # verdict once run_state_update has observed the final mutation.
-    #
-    # Bounded deadline (default 15 min, override via YATH_TEST_TIMEOUT):
-    # without a cap, an unresponsive harness would spin the loop until
-    # the caller's wall-clock limit killed the process with no
-    # diagnostics.
-    my $timeout  = $ENV{YATH_TEST_TIMEOUT} // 900;
-    my $deadline = time + $timeout;
+    # Stream events synthesized from the harness's IPC state updates
+    # (plus any general events its loggers record) and print them as
+    # JSON lines to stdout. The stream's own harness_run_end event is
+    # the authoritative "run is over" signal: it carries the pass /
+    # pass_count / fail_count verdict, so we do not need to poll
+    # run_results at all. Polling a sync_request during harness
+    # shutdown was the source of the old "peer went away" race; by
+    # leaning entirely on the subscription stream we never issue a
+    # request to a service that may have started to close out.
+    my $streamer = App::Yath2::Streamer::Live->new(
+        handle => $spawn,
+        run    => $run_id,
+        log    => "$workdir/logs",
+    );
 
-    # Shapes of "harness peer is gone" from
-    # IPC::Manager::Service::Handle::sync_request at shutdown:
-    # in-flight race against service exit, or a post-close send to
-    # a stale client registry. Either one around finish()/run_results
-    # is an expected end-of-life race; any other error propagates.
-    my $service_gone_re = qr/peer .* went away|is not a valid message recipient/;
+    my $final_pass;
+    my $seen_end;
+    $streamer->stream(
+        callback => sub {
+            my ($event) = @_;
+            my $fd = $event->facet_data // {};
+            if (my $end = $fd->{harness_run_end}) {
+                $seen_end   = 1;
+                $final_pass = $end->{pass};
+            }
+            print $event->as_json, "\n";
+        },
+        exit_if => sub { $seen_end ? 1 : 0 },
+    );
 
-    my $final;
-    my $service_gone;
-    while (time < $deadline) {
-        my $resp = eval { $spawn->run_results(run_id => $run_id) };
-        my $err  = $@;
-        if (!defined $resp) {
-            die $err unless $err =~ $service_gone_re;
-            $service_gone = 1;
-            last;
-        }
-        die "run_results rejected: " . ($resp->{error} // '(no error)') . "\n"
-            unless $resp->{ok};
+    # Unsubscribe + finish while the harness is still up. We only
+    # leave the stream loop because we just saw harness_run_end from
+    # the service itself, so the service is guaranteed to still be
+    # around to accept these requests.
+    eval { $spawn->unsubscribe; 1 } or warn $@;
 
-        if (($resp->{state} // '') eq 'complete') {
-            $final = $resp;
-            last;
-        }
+    # Drop the streamer explicitly: it holds a reference to $spawn,
+    # which is what keeps the IPC handle (and its AtomicPipe client)
+    # alive. Without this, the client's pre_disconnect_hook fires
+    # later during run()'s scope teardown -- AFTER remove_tree has
+    # already nuked the workdir, making the fifo unlink warn.
+    undef $streamer;
 
-        sleep(0.05);
-    }
-
-    unless ($final || $service_gone) {
-        # Deadline exceeded. Do NOT call $spawn->status or
-        # $spawn->terminate here -- both go through sync_request
-        # which is very likely what deadlocked us. SIGKILL the
-        # harness directly and move on.
-        print STDERR "Command::test: run did not complete within ${timeout}s\n";
-        my $pid = eval { $spawn->pid };
-        if ($pid) {
-            print STDERR "Command::test: sending SIGKILL to harness pid $pid\n";
-            kill 'KILL', $pid;
-        }
-        eval { $spawn->wait;                      1 };
-        eval { $spawn->clear_terminate_on_destroy; 1 };
-        die "Command::test: timed out after ${timeout}s (set YATH_TEST_TIMEOUT to raise the cap)\n";
-    }
-
-    # finish() races the service exit the same way run_results does;
-    # swallow the same specific peer-gone shapes and let anything
-    # else propagate.
-    unless (eval { $spawn->finish; 1 }) {
-        my $err = $@;
-        die $err unless $err =~ $service_gone_re;
-    }
+    $spawn->finish;
     $spawn->wait;
 
-    # Drop the Spawn handle now so its IPC client destructors (which
-    # try to unlink their FIFOs in pre_disconnect_hook) run while
-    # the workdir still exists. If we wait until the end of run()
-    # the workdir is gone and the destructors emit warnings.
     undef $spawn;
 
     # Hold onto the workdir until we have archived its logs ourselves.
@@ -178,10 +156,7 @@ sub run {
         }
     }
 
-    # If the service went away before reporting a final state, treat
-    # the run as failed -- we lost the pass verdict and cannot guess.
-    return 1 unless $final;
-    return $final->{pass} ? 0 : 1;
+    return $final_pass ? 0 : 1;
 }
 
 1;

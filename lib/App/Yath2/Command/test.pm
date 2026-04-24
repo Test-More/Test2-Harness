@@ -23,7 +23,7 @@ use Test2::Harness2::TestFile();
 use Test2::Harness2::Resource::JobCount();
 use App::Yath2::LogArchive();
 use App::Yath2::LogArchive::Format qw/default_writer_format/;
-use App::Yath2::Streamer();
+use App::Yath2::Streamer::Live();
 
 use Getopt::Yath;
 include_options(
@@ -97,7 +97,7 @@ sub run {
     # shutdown was the source of the old "peer went away" race; by
     # leaning entirely on the subscription stream we never issue a
     # request to a service that may have started to close out.
-    my $streamer = App::Yath2::Streamer->new(
+    my $streamer = App::Yath2::Streamer::Live->new(
         handle => $spawn,
         run    => $run_id,
         log    => "$workdir/logs",

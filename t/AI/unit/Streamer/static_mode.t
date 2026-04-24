@@ -3,7 +3,7 @@ use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
 use Test2::Harness2::Util::JSON qw/write_json_file_atomic/;
 
-use App::Yath2::Streamer;
+use App::Yath2::Streamer::Static;
 
 my $tmp = tempdir(CLEANUP => 1);
 my $logdir = "$tmp/logs";
@@ -49,7 +49,7 @@ write_json_file_atomic(
     },
 );
 
-my $streamer = App::Yath2::Streamer->new(
+my $streamer = App::Yath2::Streamer::Static->new(
     log => $logdir,
     run => 'RUN1',
 );

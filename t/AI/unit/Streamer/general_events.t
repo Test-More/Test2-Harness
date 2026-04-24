@@ -3,7 +3,7 @@ use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
 use Test2::Harness2::Util::JSON qw/write_json_file_atomic encode_json/;
 
-use App::Yath2::Streamer;
+use App::Yath2::Streamer::Static;
 
 # Build a synthetic log dir that carries a records_state JSON snapshot
 # plus a records_general_events JSONL with two pre-recorded event
@@ -45,7 +45,7 @@ print $jf encode_json({event_id => 'EV1', facet_data => {info => [{details => 'p
 print $jf encode_json({event_id => 'EV2', facet_data => {info => [{details => 'post'}]}}), "\n";
 close $jf;
 
-my $streamer = App::Yath2::Streamer->new(log => $logdir, run => 'R');
+my $streamer = App::Yath2::Streamer::Static->new(log => $logdir, run => 'R');
 
 my (@synth, @general);
 while (my $event = $streamer->next) {

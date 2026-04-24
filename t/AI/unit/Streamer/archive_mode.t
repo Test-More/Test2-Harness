@@ -5,7 +5,7 @@ use Test2::Harness2::Util::JSON qw/write_json_file_atomic/;
 
 use App::Yath2::LogArchive;
 use App::Yath2::LogArchive::Format qw/default_writer_format/;
-use App::Yath2::Streamer;
+use App::Yath2::Streamer::Static;
 
 my $tmp   = tempdir(CLEANUP => 1);
 my $logs  = "$tmp/logs";
@@ -49,7 +49,7 @@ App::Yath2::LogArchive->create(
 ok(-f $archive_path, "archive written at $archive_path");
 
 # Streamer opens the archive directly.
-my $streamer = App::Yath2::Streamer->new(
+my $streamer = App::Yath2::Streamer::Static->new(
     log => $archive_path,
     run => 'RUN1',
 );

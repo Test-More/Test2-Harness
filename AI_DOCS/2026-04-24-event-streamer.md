@@ -195,3 +195,43 @@ Pre-existing failing tests (`t/AI/unit/Collector.t`,
 `t/AI/unit/Harness2/Role/Collector/Observer.t`,
 3 subtests in `t/AI/unit/Harness2.t`) were failing before this
 work and are unchanged by it.
+
+## Follow-up: split into Base / Live / Static
+
+The original monolithic `App::Yath2::Streamer` branched on a
+`MODE` slot (`live` vs `static`) in enough places that the file
+was hard to navigate. Later in the same day it was split into:
+
+- `App::Yath2::Streamer::Base` -- abstract parent. Carries the
+  event queue, state-diff + facet-synthesis code, event-reader
+  drain loop, and the public API (`stream`, `next`,
+  `request_exit`). Subclasses override `_tick` (called when the
+  queue runs dry) and `_bootstrap` (called at the tail of
+  `init`).
+- `App::Yath2::Streamer::Live` -- subscribes to a running
+  harness via a Spawn handle, ingests state/artifact IPC
+  messages, opens append-style general-event readers when the
+  harness advertises them, drains readers on every tick.
+- `App::Yath2::Streamer::Static` -- opens a log directory or a
+  `.yath` archive via `App::Yath2::LogArchive`, validates
+  requested runs, collects per-run state snapshots (with
+  cross-logger agreement checking), sets up general-event
+  readers; `_tick` just drains the readers.
+
+The old `App::Yath2::Streamer` facade was removed. Callers pick
+the class that matches their use case:
+
+    # Test command, live harness
+    my $s = App::Yath2::Streamer::Live->new(
+        handle => $spawn,
+        run    => $run_id,
+        log    => "$workdir/logs",
+    );
+
+    # Replay from an archive
+    my $s = App::Yath2::Streamer::Static->new(
+        log => '/path/to/run.yath',
+        run => $run_id,
+    );
+
+Tests and `App::Yath2::Command::test` were updated accordingly.

@@ -11,10 +11,9 @@ my $tmp   = tempdir(CLEANUP => 1);
 my $logs  = "$tmp/logs";
 make_path("$logs/runs/RUN1/tests");
 
-write_json_file_atomic(
-    "$logs/artifacts.json",
-    {"runs/RUN1/run.json" => 'Test2::Harness2::Collector::Logger::JSON'},
-);
+my $state_artifact = {"runs/RUN1/run.json" => 'Test2::Harness2::Collector::Logger::JSON'};
+write_json_file_atomic("$logs/artifacts.json",            $state_artifact);
+write_json_file_atomic("$logs/runs/RUN1/artifacts.json",  $state_artifact);
 
 write_json_file_atomic(
     "$logs/runs/RUN1/run.json",
@@ -80,5 +79,18 @@ my $run_end = $facets{harness_run_end}->[0];
 is($run_end->{pass},       0, 'run_end pass=0 (B failed)');
 is($run_end->{pass_count}, 1, 'run_end pass_count=1');
 is($run_end->{fail_count}, 1, 'run_end fail_count=1');
+
+# Lazy extraction: only the state artifact should have been pulled
+# out of the archive. The archive also contains a harness JSONL the
+# streamer does not need, so that file must NOT have been extracted.
+my $extracted = $streamer->{archive_extracted} // {};
+ok(
+    (grep { m{^runs/RUN1/run\.json\z} } keys %$extracted),
+    'state artifact was extracted on demand',
+);
+ok(
+    !(grep { m{harness\.(jsonl|json)\z} } keys %$extracted),
+    'unrelated harness logs were NOT extracted',
+);
 
 done_testing;

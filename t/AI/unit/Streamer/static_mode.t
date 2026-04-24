@@ -9,11 +9,12 @@ my $tmp = tempdir(CLEANUP => 1);
 my $logdir = "$tmp/logs";
 make_path("$logdir/runs/RUN1/tests");
 
-# Global artifacts manifest: just the per-run JSON state snapshot.
-write_json_file_atomic(
-    "$logdir/artifacts.json",
-    {"runs/RUN1/run.json" => 'Test2::Harness2::Collector::Logger::JSON'},
-);
+# Global artifacts manifest + per-run manifest. Real yath runs
+# write both; the streamer reads the per-run manifest via
+# LogArchive->artifacts($run_id).
+my $state_artifact = {"runs/RUN1/run.json" => 'Test2::Harness2::Collector::Logger::JSON'};
+write_json_file_atomic("$logdir/artifacts.json",                   $state_artifact);
+write_json_file_atomic("$logdir/runs/RUN1/artifacts.json",         $state_artifact);
 
 # Per-run state snapshot: two jobs, one passed, one never started.
 write_json_file_atomic(

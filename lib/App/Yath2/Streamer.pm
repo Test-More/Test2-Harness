@@ -33,7 +33,9 @@ use Object::HashBase qw{
     +seen_run_end
     +mode
     +exit_requested
+    +archive
     +archive_tmpdir
+    +archive_extracted
 };
 
 # Gate optional modules: Linux::Inotify2 is a nice-to-have for replace
@@ -380,64 +382,87 @@ sub _bootstrap_static {
     my $self = shift;
 
     # Accept either a log directory (typically $workdir/logs) or a
-    # .yath archive file. Archive paths are extracted to a private
-    # tempdir up front so the rest of the static path operates on a
-    # plain directory layout.
+    # .yath archive file. Both are consumed via LogArchive -- the
+    # Directory backend handles the directory form, the Tar / Zip /
+    # SevenZip backends handle archives. Files from archives are
+    # extracted lazily (only what the streamer actually reads) into
+    # a private tempdir; directory input returns its own paths
+    # directly.
+    require App::Yath2::LogArchive;
+
     my $log = $self->{+LOG};
-
-    if (-f $log) {
-        $log = $self->_extract_archive($log);
-        $self->{+LOG} = $log;
-    }
-
     croak "Static streamer requires a directory or log archive; got '$log'"
-        unless -d $log;
+        unless -d $log || -f $log;
 
-    my $manifest = "$log/artifacts.json";
-    croak "No artifacts.json found in '$log'"
-        unless -e $manifest;
-
-    my $af   = Test2::Harness2::Util::File::JSON->new(name => $manifest);
-    my $map  = $af->maybe_read // {};
-
-    # Index artifacts by scope: run_id -> { rel_path => logger_class }.
-    my %by_scope;
-    for my $rel (keys %$map) {
-        my $class = $map->{$rel};
-        my ($rid) = $rel =~ m{^runs/([^/]+)/};
-        my $scope = defined $rid ? "run:$rid" : 'harness';
-        $by_scope{$scope}->{$rel} = $class;
-    }
+    my $archive = App::Yath2::LogArchive->new(path => $log);
+    $self->{+ARCHIVE}           = $archive;
+    $self->{+ARCHIVE_EXTRACTED} = {};
 
     my @runs = @{$self->{+RUNS} // []};
 
-    # Validate all requested runs exist in the archive.
+    # Validate requested runs against the archive's run list.
+    my %known = map { $_ => 1 } $archive->runs;
     for my $rid (@runs) {
-        croak "unknown run '$rid' in archive '$log'"
-            unless $by_scope{"run:$rid"};
+        croak "unknown run '$rid' in '$log'"
+            unless $known{$rid};
     }
 
-    # If caller asked for global only, nothing more to do for state.
-    my @to_process = @runs;
-
-    for my $rid (@to_process) {
-        my $state = $self->_collect_static_state($log, $by_scope{"run:$rid"} // {});
+    for my $rid (@runs) {
+        my $scope_map = $archive->artifacts($rid);
+        my $state     = $self->_collect_static_state($scope_map);
         $self->_apply_run_state($rid, $state) if $state;
 
-        $self->_setup_static_event_readers($log, $by_scope{"run:$rid"} // {});
+        $self->_setup_static_event_readers($scope_map);
     }
 
-    # Drain the initial snapshot now so the very first next() returns
-    # the lifecycle events synthesized from it. Live-mode does this on
-    # demand via the IPC handle.
     return;
+}
+
+# Resolve an artifact's relative path to a local filesystem path.
+# Directory input: returns $LOG/$rel directly (no extraction).
+# Archive input: extracts the single file into a private tempdir the
+# first time it is asked for, caches the resulting path, and returns
+# the cached path on subsequent calls.
+sub _resolve_path {
+    my ($self, $rel) = @_;
+
+    my $archive = $self->{+ARCHIVE};
+    if ($archive->isa('App::Yath2::LogArchive::Directory')) {
+        my $abs = "$self->{+LOG}/$rel";
+        return -e $abs ? $abs : undef;
+    }
+
+    return $self->{+ARCHIVE_EXTRACTED}->{$rel}
+        if exists $self->{+ARCHIVE_EXTRACTED}->{$rel};
+
+    return undef unless $archive->has_file($rel);
+
+    my $tmpdir = $self->{+ARCHIVE_TMPDIR} //=
+        tempdir('yath-streamer-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+
+    my $abs = "$tmpdir/$rel";
+    my $dir = dirname($abs);
+    make_path($dir) unless -d $dir;
+
+    my $in = $archive->read_file($rel);
+    open(my $out, '>', $abs) or croak "Could not open '$abs' for write: $!";
+    binmode $in;
+    binmode $out;
+    my $buf;
+    while (my $n = read $in, $buf, 8192) {
+        print {$out} $buf;
+    }
+    close $in;
+    close $out or croak "Could not close '$abs': $!";
+
+    return $self->{+ARCHIVE_EXTRACTED}->{$rel} = $abs;
 }
 
 # Collect the state snapshot for a run by asking every logger whose
 # records_state() is true for its fetch_state. Reconcile across
 # loggers: cared-about fields must agree when both loggers set them.
 sub _collect_static_state {
-    my ($self, $log, $scope_map) = @_;
+    my ($self, $scope_map) = @_;
 
     my @state_snapshots;
     for my $rel (keys %$scope_map) {
@@ -446,8 +471,7 @@ sub _collect_static_state {
         next unless $loaded;
         next unless $class->can('records_state') && $class->records_state;
 
-        my $path = "$log/$rel";
-        next unless -e $path;
+        my $path = $self->_resolve_path($rel) or next;
 
         my $reader = $class->log_reader($path);
         my $state  = $class->fetch_state($reader);
@@ -470,42 +494,8 @@ sub _collect_static_state {
     return $base;
 }
 
-sub _extract_archive {
-    my ($self, $path) = @_;
-
-    # Lazy-load: LogArchive pulls in backend modules based on the
-    # archive format, and a consumer that only uses live mode or
-    # directory-mode should not pay for them.
-    require App::Yath2::LogArchive;
-
-    my $archive = App::Yath2::LogArchive->new(path => $path);
-    my $tmpdir  = tempdir('yath-streamer-XXXXXX', TMPDIR => 1, CLEANUP => 1);
-    $self->{+ARCHIVE_TMPDIR} = $tmpdir;
-
-    for my $rel ($archive->list_files) {
-        my $abs = "$tmpdir/$rel";
-        my $dir = dirname($abs);
-        make_path($dir) unless -d $dir;
-
-        my $in = $archive->read_file($rel);
-        open(my $out, '>', $abs) or croak "Could not open '$abs' for write: $!";
-        binmode $in;
-        binmode $out;
-        my $buf;
-        while (my $n = read $in, $buf, 8192) {
-            print {$out} $buf;
-        }
-        close $in;
-        close $out or croak "Could not close '$abs': $!";
-    }
-
-    $archive->close if $archive->can('close');
-
-    return $tmpdir;
-}
-
 sub _setup_static_event_readers {
-    my ($self, $log, $scope_map) = @_;
+    my ($self, $scope_map) = @_;
 
     for my $rel (keys %$scope_map) {
         my $class = $scope_map->{$rel};
@@ -513,8 +503,7 @@ sub _setup_static_event_readers {
         next unless $loaded;
         next unless $class->can('records_general_events') && $class->records_general_events;
 
-        my $path = "$log/$rel";
-        next unless -e $path;
+        my $path = $self->_resolve_path($rel) or next;
 
         my $reader = $class->log_reader($path);
         push @{$self->{+EVENT_READERS}->{$rel}} => [$class, $reader];

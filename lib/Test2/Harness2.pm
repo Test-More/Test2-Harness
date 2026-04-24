@@ -840,12 +840,15 @@ sub _send_artifact_snapshot {
     }
     elsif ($scope eq 'run') {
         my $run_id = $params{run_id} or return;
-        # Filter the harness's merged map down to entries whose
-        # relative path lives under runs/$run_id/.
+        # Filter the harness's merged map down to entries scoped to
+        # this run. Matches both run-level files (runs/$run_id.jsonl,
+        # runs/$run_id.json) and nested paths (runs/$run_id/tests/...,
+        # runs/$run_id/services/...) so subscribers tail the run
+        # service's own log alongside per-test artifacts.
         my $all = $self->{+ARTIFACTS} // {};
         $artifacts = {
             map  { $_ => $all->{$_} }
-            grep { m{^runs/\Q$run_id\E/} }
+            grep { m{^runs/\Q$run_id\E(?:[./]|\z)} }
             keys %$all
         };
     }

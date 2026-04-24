@@ -575,6 +575,16 @@ sub _handle_collector_artifacts {
     $self->_merge_artifacts($content->{loggers} // {});
     $self->_write_artifacts_manifest;
 
+    # Forward the merged artifact set to the harness so it can fan out
+    # to any run-scoped subscribers. The run service owns the on-disk
+    # artifacts.json for its run; the harness only needs the mapping
+    # in-memory for subscriber fan-out.
+    $self->_send_to_harness({
+        kind      => 'run_artifacts_update',
+        run_id    => $self->{+RUN_ID},
+        artifacts => {%{$self->{+ARTIFACTS} // {}}},
+    });
+
     $self->_emit_run_log_event(
         kind     => 'job_loggers',
         job_info => {

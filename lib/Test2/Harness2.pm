@@ -50,6 +50,8 @@ use Object::HashBase qw{
     +finish_after_initial_run
     +emitter
     +artifacts
+    +subscribers
+    +subscriber_retry
     watch_pids
     own_pgroup
 };
@@ -129,6 +131,8 @@ sub init {
     $self->{+WATCH_PIDS}        //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}        //= 0;
     $self->{+ARTIFACTS}         //= {};
+    $self->{+SUBSCRIBERS}       //= {};
+    $self->{+SUBSCRIBER_RETRY}  //= {};
 
     $self->{+BROKEN_RESOURCE_BEHAVIOR} //= 'skip';
     croak "invalid broken_resource_behavior '$self->{+BROKEN_RESOURCE_BEHAVIOR}' (want skip, fail, or abort)"
@@ -444,6 +448,10 @@ sub request_handler_run_results {
 sub run_on_general_message {
     my ($self, $msg) = @_;
 
+    # Drain any pending retries at the top of each message tick so
+    # temporary send failures resolve promptly when the bus catches up.
+    $self->_drain_subscriber_retries;
+
     my $content = $msg->content;
     my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
 
@@ -480,8 +488,38 @@ sub run_on_general_message {
         return;
     }
 
+    # Run service forwarded its current artifact set so any run-scoped
+    # subscriber can be brought up to date without scraping the on-disk
+    # manifest. Merge into our global map and fan out.
+    return $self->_handle_run_artifacts_update($content)
+        if defined $kind && $kind eq 'run_artifacts_update';
+
     warn "Test2::Harness2: unhandled general message kind: " . (defined $kind ? "'$kind'" : '(none)') . "\n";
 
+    return;
+}
+
+# Peer delta callback from IPC::Manager. A negative delta on a
+# subscribed peer IS the signal that the peer has left the bus --
+# no separate peer_exists() query is needed. Clean unsubscribes
+# have already removed the peer from SUBSCRIBERS, so anything that
+# reaches this branch is an unexpected departure; we warn and drop
+# the registration (plus any queued retries).
+sub run_on_peer_delta {
+    my ($self, $delta) = @_;
+
+    return unless ref($delta) eq 'HASH';
+
+    for my $peer (keys %$delta) {
+        next unless $delta->{$peer} < 0;
+        next unless exists $self->{+SUBSCRIBERS}->{$peer};
+
+        warn "Test2::Harness2: subscriber '$peer' left without unsubscribing\n";
+        delete $self->{+SUBSCRIBERS}->{$peer};
+        delete $self->{+SUBSCRIBER_RETRY}->{$peer};
+    }
+
+    $self->_drain_subscriber_retries;
     return;
 }
 
@@ -600,6 +638,315 @@ sub _handle_global_collector_artifacts {
 
     $self->_merge_artifacts($content->{loggers} // {});
     $self->_write_artifacts_manifest;
+    $self->_notify_artifact_subscribers(scope => 'harness');
+    return;
+}
+
+# Merge a run service's current artifact table into our global map
+# (entries are already logdir-relative) and notify run-scope
+# subscribers. The run service already owns the authoritative
+# runs/$run_id/artifacts.json; we just keep an in-memory view for
+# fan-out.
+sub _handle_run_artifacts_update {
+    my ($self, $content) = @_;
+
+    my $run_id    = $content->{run_id};
+    my $artifacts = $content->{artifacts};
+
+    return unless defined $run_id && ref($artifacts) eq 'HASH';
+
+    my $all = $self->{+ARTIFACTS} //= {};
+    for my $rel (keys %$artifacts) {
+        next unless defined $rel && length $rel;
+        my $class = $artifacts->{$rel};
+        if (exists $all->{$rel} && defined($all->{$rel}) && $all->{$rel} ne $class) {
+            warn "Test2::Harness2: artifact '$rel' already claimed by $all->{$rel}, ignoring duplicate from $class\n";
+            next;
+        }
+        $all->{$rel} = $class;
+    }
+
+    $self->_notify_artifact_subscribers(scope => 'run', run_id => $run_id);
+    return;
+}
+
+# ----------------------------------------------------------------------
+# Subscription API. Consumers (typically App::Yath2::Streamer) ask to
+# be told when run state or artifact tables change. The harness is the
+# only service that carries this registry; run services publish state
+# upstream via _send_to_harness, the harness then fans out to any
+# matching subscribers.
+#
+# Registry shape:
+#   { $peer_name => {
+#         global    => $bool,      # harness-scope artifacts + (future) harness state
+#         runs      => { $id=>1 }, # run ids the subscriber watches
+#         state     => $bool,      # want state change messages
+#         artifacts => $bool,      # want artifact change messages
+#     } }
+sub request_handler_subscribe {
+    my ($self, $payload, $msg) = @_;
+
+    my $peer = $msg ? $msg->from : undef;
+    return {ok => 0, error => "subscribe requires an IPC message context"}
+        unless defined $peer && length $peer;
+
+    my $global    = $payload->{global}    ? 1 : 0;
+    my $state     = $payload->{state}     ? 1 : 0;
+    my $artifacts = $payload->{artifacts} ? 1 : 0;
+
+    my @run_ids;
+    push @run_ids => $payload->{run}         if defined $payload->{run};
+    push @run_ids => @{$payload->{runs}}     if ref($payload->{runs}) eq 'ARRAY';
+
+    # Validate every run_id up front. The harness knows about runs in
+    # the live queue and in COMPLETED_RUNS (terminal snapshots).
+    for my $rid (@run_ids) {
+        next if grep { $_->run_id eq $rid } @{$self->{+QUEUE} // []};
+        next if $self->{+COMPLETED_RUNS}->{$rid};
+        return {ok => 0, error => "unknown run '$rid'"};
+    }
+
+    my $entry = $self->{+SUBSCRIBERS}->{$peer} //= {
+        global    => 0,
+        runs      => {},
+        state     => 0,
+        artifacts => 0,
+    };
+    $entry->{global}    ||= $global;
+    $entry->{state}     ||= $state;
+    $entry->{artifacts} ||= $artifacts;
+    $entry->{runs}->{$_} = 1 for @run_ids;
+
+    # Send initial snapshots for the freshly-added scope so the
+    # subscriber does not need to separately request them. Artifacts
+    # are sent before state to reduce the race where a state message
+    # references an artifact the consumer has not been told about yet.
+    if ($artifacts) {
+        $self->_send_artifact_snapshot($peer, scope => 'harness')
+            if $global;
+        for my $rid (@run_ids) {
+            $self->_send_artifact_snapshot($peer, scope => 'run', run_id => $rid);
+        }
+    }
+    if ($state) {
+        for my $rid (@run_ids) {
+            $self->_send_state_snapshot($peer, run_id => $rid);
+        }
+    }
+
+    return {ok => 1};
+}
+
+sub request_handler_unsubscribe {
+    my ($self, $payload, $msg) = @_;
+
+    my $peer = $msg ? $msg->from : undef;
+    return {ok => 0, error => "unsubscribe requires an IPC message context"}
+        unless defined $peer && length $peer;
+
+    delete $self->{+SUBSCRIBERS}->{$peer};
+    delete $self->{+SUBSCRIBER_RETRY}->{$peer};
+
+    return {ok => 1};
+}
+
+# Fan-out. Called from _handle_run_state_update and artifact merge
+# sites. Full snapshot each time; consumers diff on their side.
+sub _notify_state_subscribers {
+    my ($self, $run_id, $run_data) = @_;
+    return unless defined $run_id;
+
+    for my $peer (keys %{$self->{+SUBSCRIBERS}}) {
+        my $entry = $self->{+SUBSCRIBERS}->{$peer};
+        next unless $entry->{state};
+        next unless $entry->{runs}->{$run_id};
+
+        $self->_send_to_subscriber(
+            $peer => {
+                type    => 'state',
+                item    => 'run',
+                run_id  => $run_id,
+                state   => $run_data,
+            },
+        );
+    }
+    return;
+}
+
+sub _notify_artifact_subscribers {
+    my ($self, %params) = @_;
+    my $scope  = $params{scope};
+    my $run_id = $params{run_id};
+
+    return unless defined $scope;
+
+    for my $peer (keys %{$self->{+SUBSCRIBERS}}) {
+        my $entry = $self->{+SUBSCRIBERS}->{$peer};
+        next unless $entry->{artifacts};
+
+        if ($scope eq 'harness') {
+            next unless $entry->{global};
+            $self->_send_artifact_snapshot($peer, scope => 'harness');
+        }
+        elsif ($scope eq 'run') {
+            next unless defined $run_id && $entry->{runs}->{$run_id};
+            $self->_send_artifact_snapshot($peer, scope => 'run', run_id => $run_id);
+        }
+    }
+    return;
+}
+
+sub _send_state_snapshot {
+    my ($self, $peer, %params) = @_;
+    my $run_id = $params{run_id} or return;
+
+    my $run_data;
+    if (my ($run) = grep { $_->run_id eq $run_id } @{$self->{+QUEUE} // []}) {
+        $run_data = $run->TO_JSON;
+    }
+    elsif (my $info = $self->{+COMPLETED_RUNS}->{$run_id}) {
+        # Completed snapshot is not a Run-shaped TO_JSON; wrap it so
+        # consumers still see the same {type,item,run_id,state} shape.
+        $run_data = {
+            run_id  => $run_id,
+            state   => 'complete',
+            results => $info->{results} // {},
+            done    => $info->{done}    // [],
+            pass    => $info->{pass},
+        };
+    }
+    else {
+        return;
+    }
+
+    $self->_send_to_subscriber(
+        $peer => {
+            type   => 'state',
+            item   => 'run',
+            run_id => $run_id,
+            state  => $run_data,
+        },
+    );
+}
+
+sub _send_artifact_snapshot {
+    my ($self, $peer, %params) = @_;
+    my $scope = $params{scope} or return;
+
+    my $artifacts;
+    if ($scope eq 'harness') {
+        $artifacts = {%{$self->{+ARTIFACTS} // {}}};
+    }
+    elsif ($scope eq 'run') {
+        my $run_id = $params{run_id} or return;
+        # Filter the harness's merged map down to entries whose
+        # relative path lives under runs/$run_id/.
+        my $all = $self->{+ARTIFACTS} // {};
+        $artifacts = {
+            map  { $_ => $all->{$_} }
+            grep { m{^runs/\Q$run_id\E/} }
+            keys %$all
+        };
+    }
+    else {
+        return;
+    }
+
+    my $msg = {
+        type      => 'artifacts',
+        item      => ($scope eq 'harness' ? 'harness' : 'run'),
+        artifacts => $artifacts,
+    };
+    $msg->{run_id} = $params{run_id} if $scope eq 'run';
+
+    $self->_send_to_subscriber($peer => $msg);
+}
+
+# Deliver one message to a subscriber. Uses the service's own
+# client to piggy-back on IPC::Manager's internal peer cache
+# instead of constructing a new Handle per-peer (Handles are only
+# needed when the sender is doing a sync_request and needs to wait
+# for a response; a plain send_message() goes through the client
+# directly and accepts any named peer on the bus, including
+# clients that are not themselves services).
+#
+# On a send failure we ask the bus whether the peer is still
+# registered. If peer_exists() says yes, the failure is transient
+# (bus congestion, a racing suspend, etc.) and we queue a retry
+# for the next tick. If peer_exists() says no, the peer is gone
+# for good; skip the retry and unsubscribe now so we stop sending
+# them anything else.
+sub _send_to_subscriber {
+    my ($self, $peer, $payload) = @_;
+
+    my $ok = eval { $self->client->send_message($peer, $payload); 1 };
+    my $err = $@;
+
+    return if $ok;
+
+    my $peer_alive = eval { $self->client->peer_exists($peer) };
+    unless ($peer_alive) {
+        warn "Test2::Harness2: subscriber '$peer' is gone, unsubscribing: $err\n";
+        delete $self->{+SUBSCRIBERS}->{$peer};
+        delete $self->{+SUBSCRIBER_RETRY}->{$peer};
+        return;
+    }
+
+    my $retry = $self->{+SUBSCRIBER_RETRY}->{$peer} //= {};
+    $retry->{pending} //= [];
+    push @{$retry->{pending}} => $payload;
+    return;
+}
+
+# Called once per service tick to drain retries. Per-payload the
+# same peer_alive gate applies: a send failure is retried while
+# the peer is still on the bus, and dropped (with the peer
+# unsubscribed) once peer_exists() reports it gone.
+sub _drain_subscriber_retries {
+    my $self = shift;
+
+    my $retries = $self->{+SUBSCRIBER_RETRY};
+    return unless keys %$retries;
+
+    for my $peer (keys %$retries) {
+        my $entry = $retries->{$peer};
+        my @queue = @{$entry->{pending} // []};
+        $entry->{pending} = [];
+
+        my $peer_gone = 0;
+        for my $i (0 .. $#queue) {
+            my $payload = $queue[$i];
+            my $ok  = eval { $self->client->send_message($peer, $payload); 1 };
+            my $err = $@;
+
+            next if $ok;
+
+            my $peer_alive = eval { $self->client->peer_exists($peer) };
+            unless ($peer_alive) {
+                warn "Test2::Harness2: subscriber '$peer' is gone, unsubscribing: $err\n";
+                $peer_gone = 1;
+                last;
+            }
+
+            # Peer is still on the bus but the send failed again.
+            # Keep this payload (and anything after it we have not
+            # sent yet) for the next tick so we do not reorder the
+            # stream or drop messages just because the bus is
+            # momentarily backed up.
+            push @{$entry->{pending}} => @queue[$i .. $#queue];
+            last;
+        }
+
+        if ($peer_gone) {
+            delete $self->{+SUBSCRIBERS}->{$peer};
+            delete $self->{+SUBSCRIBER_RETRY}->{$peer};
+        }
+        elsif (!@{$entry->{pending}}) {
+            delete $self->{+SUBSCRIBER_RETRY}->{$peer};
+        }
+    }
+
     return;
 }
 
@@ -644,6 +991,13 @@ sub _handle_run_state_update {
     if (ref($data->{results}) eq 'HASH') {
         $run->{results} = {%{$data->{results}}};
     }
+
+    # Notify state subscribers with the full authoritative snapshot
+    # we just received. Fan-out happens before finalization so a
+    # subscriber that just came online sees the terminal state via
+    # the update path, and also via any retained COMPLETED_RUNS entry
+    # after finalize runs.
+    $self->_notify_state_subscribers($run_id, $data);
 
     # Finalization is scheduler-driven: only consider the run done
     # when the scheduler has both no pending jobs and no running

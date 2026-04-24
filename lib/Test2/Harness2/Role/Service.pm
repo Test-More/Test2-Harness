@@ -66,7 +66,7 @@ sub handle_request {
     return {ok => 0, error => "missing request type"} unless defined $type;
 
     my $handler = "request_handler_$type";
-    return $self->$handler($payload) if $self->can($handler);
+    return $self->$handler($payload, $msg) if $self->can($handler);
 
     return {ok => 0, error => "unknown request '$type'"};
 }

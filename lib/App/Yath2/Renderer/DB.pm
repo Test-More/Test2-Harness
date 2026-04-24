@@ -62,7 +62,7 @@ option_post_process 1000 => sub {
         }
     }
     else {
-        for my $sc ('.git', '.svn','.cvs') {
+        for my $sc ('.git', '.svn', '.cvs') {
             my $path = find_in_updir($sc) or next;
 
             $path = clean_path($path);
@@ -75,7 +75,6 @@ option_post_process 1000 => sub {
 
     $settings->yath->project($project) if $project;
 };
-
 
 sub init {
     my $self = shift;
@@ -94,8 +93,8 @@ sub start {
 
     # Do not use the yath workdir for these things, it will get cleaned up too soon.
     my ($dir) = grep { $_ && -d $_ } '/dev/shm', $ENV{SYSTEM_TMPDIR}, '/tmp', $ENV{TMP_DIR}, $ENV{TMPDIR};
-    local $ENV{TMPDIR} = $dir;
-    local $ENV{TMP_DIR} = $dir;
+    local $ENV{TMPDIR}   = $dir;
+    local $ENV{TMP_DIR}  = $dir;
     local $ENV{TEMP_DIR} = $dir;
 
     my ($r, $w) = Consumer::NonBlock->pair(batch_size => 1000, $dir ? (base_dir => $dir) : ());
@@ -103,6 +102,8 @@ sub start {
     $self->{+WRITER} = $w;
 
     my %seen;
+    my $settings_guard = encode_json_file($self->{+SETTINGS});    # auto-deleted on failure
+
     $self->{+PID} = start_process(
         [
             $^X,                                                       # perl
@@ -116,7 +117,7 @@ exit(
     )
 );
             EOT
-            encode_json_file($self->{+SETTINGS}),                # Pass settings in as arg
+            "$settings_guard",                                         # Pass settings path as arg
         ],
         sub {
             $r->set_env_var;
@@ -124,6 +125,10 @@ exit(
             $w->close;
         }
     );
+
+    # The child reads and unlinks the settings file itself (unlink => 1).
+    # Dismiss the guard so the parent does not race with the child on cleanup.
+    $settings_guard->dismiss;
 
     $r->weaken();
     $r->close();

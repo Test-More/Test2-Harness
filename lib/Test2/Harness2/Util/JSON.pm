@@ -1,3 +1,23 @@
+package Test2::Harness2::Util::JSON::TempGuard;
+use strict;
+use warnings;
+
+use overload '""' => \&path, fallback => 1;
+
+sub new {
+    my ($class, $path) = @_;
+    return bless {path => $path, dismissed => 0}, $class;
+}
+
+sub path    { $_[0]->{path} }
+sub dismiss { $_[0]->{dismissed} = 1 }
+
+sub DESTROY {
+    my ($self) = @_;
+    return                if $self->{dismissed};
+    unlink($self->{path}) if -f $self->{path};
+}
+
 package Test2::Harness2::Util::JSON;
 use strict;
 use warnings;
@@ -69,7 +89,7 @@ sub encode_json_file {
     print $fh $json_text;
     close($fh);
 
-    return $file;
+    return Test2::Harness2::Util::JSON::TempGuard->new($file);
 }
 
 sub write_json_file_atomic {
@@ -97,7 +117,7 @@ sub decode_json_no_null {
     $escaped =~ s/(?<!\\)((?:\\)(?:0|u0000))/\\$1/g;
 
     my $out;
-    my $ok = eval { $out = decode_json($escaped); 1 };
+    my $ok  = eval { $out = decode_json($escaped); 1 };
     my $err = $@;
     die "decode_json_no_null: $err" unless $ok;
     return $out;
@@ -114,7 +134,7 @@ sub stream_json_l {
 
     croak "No path provided" unless $path;
 
-    return stream_json_l_file($path, $handler) if -f $path;
+    return stream_json_l_file($path, $handler)         if -f $path;
     return stream_json_l_url($path, $handler, %params) if $path =~ m{^https?://};
 
     croak "'$path' is not a valid path (file does not exist, or is not an http(s) url)";
@@ -219,8 +239,12 @@ Test2::Harness2::Util::JSON - Thin JSON helpers used across the harness.
 
     use Test2::Harness2::Util::JSON qw/encode_json_file decode_json_file/;
 
-    my $path = encode_json_file({ ... });           # writes to a tempfile
-    my $data = decode_json_file($path, unlink => 1);
+    my $guard = encode_json_file({ ... });          # writes to a tempfile; auto-deleted on scope exit
+    my $data  = decode_json_file($guard, unlink => 1);
+    # or, to hand cleanup to a child process:
+    my $guard = encode_json_file({ ... });
+    spawn_child("$guard");      # child reads and unlinks
+    $guard->dismiss;            # tell guard: child owns cleanup
 
 =head1 DESCRIPTION
 
@@ -249,11 +273,16 @@ suitable for files a human will read. Confesses on encoding errors.
 
 Decode UTF-8 JSON text. Confesses on decoding errors.
 
-=item $path = encode_json_file($data)
+=item $guard = encode_json_file($data)
 
 Encode C<$data> with L</encode_json> and write it to a freshly-created tempfile
-(C<$$-XXXXXX.json> in the system tempdir, with C<UNLINK =E<gt> 0> so the caller
-controls cleanup). Returns the path to that file.
+(C<$$-XXXXXX.json> in the system tempdir). Returns a
+C<Test2::Harness2::Util::JSON::TempGuard> object that stringifies to the
+file path and auto-unlinks the file when it goes out of scope.
+
+Call C<< $guard->dismiss >> to transfer cleanup responsibility to another
+party (e.g. a child process that will read and unlink the file itself).
+After C<dismiss>, the guard's C<DESTROY> is a no-op.
 
 =item $data = decode_json_file($path, %params)
 

@@ -513,7 +513,7 @@ sub _spawn_collector_win32 {
     }
     $params{observers} = $self->{+_OBSERVERS_SPEC} if $self->{+_OBSERVERS_SPEC};
 
-    my $json_file = encode_json_file(\%params);
+    my $guard = encode_json_file(\%params);
 
     # Build the command: current perl, all @INC paths, load this module,
     # then run the collect_from_file() class method.
@@ -525,7 +525,7 @@ sub _spawn_collector_win32 {
         (map { "-I$_" } @inc),
         '-mTest2::Harness2::Collector',
         '-e', 'Test2::Harness2::Collector->collect_from_file($ARGV[0])',
-        $json_file,
+        "$guard",
     );
 
     my $pid;
@@ -533,9 +533,14 @@ sub _spawn_collector_win32 {
     my $err = $@;
 
     if (!$ok || !$pid || $pid < 0) {
-        unlink($json_file);
+        # $guard goes out of scope and auto-unlinks the tempfile.
         croak "Failed to spawn collector process: " . ($err || $!);
     }
+
+    # The child process will read and unlink the file itself via
+    # decode_json_file(..., unlink => 1).  Dismiss the guard so the
+    # parent does not race with the child on cleanup.
+    $guard->dismiss;
 
     return $pid;
 }

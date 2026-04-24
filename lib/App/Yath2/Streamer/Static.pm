@@ -74,6 +74,12 @@ sub _tick {
     # polls return nothing and next() will unblock.
     $self->_drain_event_readers;
 
+    # Static inputs are finite: one drain pass empties every reader.
+    # Signal stream() to wind down as soon as the event queue empties
+    # -- anything still queued will be delivered before the loop
+    # checks EXIT_REQUESTED.
+    $self->{+EXIT_REQUESTED} = 1;
+
     return;
 }
 

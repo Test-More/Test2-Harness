@@ -17,6 +17,11 @@ use Test2::Harness2::Collector::Logger::JSONL;
     package T2H2_SilentLogger;
     use Object::HashBase;
     use Role::Tiny::With;
+    sub update_style { 'append' }
+    sub log_reader   { undef }
+    sub ready        { 0 }
+    sub fetch_events { () }
+    sub fetch_state  { undef }
     with 'Test2::Harness2::Role::Collector::Logger';
     sub log_events { 0 }
     sub log_event  { }
@@ -1077,6 +1082,11 @@ subtest 'spec instantiation is deferred to the collector child' => sub {
     sub failing          { }
     sub set_process_info { }
     sub set_ipcm_info    { }
+    sub update_style     { 'append' }
+    sub log_reader       { undef }
+    sub ready            { 0 }
+    sub fetch_events     { () }
+    sub fetch_state      { undef }
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Collector::Logger';
 
@@ -1129,6 +1139,11 @@ subtest 'blessed instances pass through unchanged and survive validation' => sub
     sub failing          { }
     sub set_process_info { }
     sub set_ipcm_info    { }
+    sub update_style     { 'append' }
+    sub log_reader       { undef }
+    sub ready            { 0 }
+    sub fetch_events     { () }
+    sub fetch_state      { undef }
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Collector::Logger';
 
@@ -1611,6 +1626,11 @@ subtest 'blessed logger receives set_process_info and set_ipcm_info at instantia
     sub set_ipcm_info      { push @main::T2H2_RecordingLogger_IPCM => $_[1];          return }
     sub set_auditor        { }
     sub set_loggers_lookup { }
+    sub update_style       { 'append' }
+    sub log_reader         { undef }
+    sub ready              { 0 }
+    sub fetch_events       { () }
+    sub fetch_state        { undef }
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Collector::Logger';
 

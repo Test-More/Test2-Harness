@@ -10,6 +10,55 @@ use File::Path qw/make_path/;
 
 use Role::Tiny;
 
+# ----------------------------------------------------------------------
+# Streamer interface (class methods)
+#
+# A logger participates in event streaming (offline or when re-reading a
+# static log archive) by answering a small set of class methods that
+# describe its on-disk format and let a consumer pull events out.
+#
+#   $style = $class->update_style()
+#       Required. Returns 'append' (log file grows, new lines appended)
+#       or 'replace' (file is atomically swapped, so the whole file is
+#       a fresh snapshot each time).
+#
+#   $bool = $class->records_state()
+#       True if the logger records state (e.g. pass/fail, job list,
+#       run status). State loggers feed fetch_state(); the streamer
+#       synthesises lifecycle events from the snapshots they produce.
+#       Defaults to 0.
+#
+#   $bool = $class->records_general_events()
+#       True if the logger records general event hashes suitable for
+#       direct use as Test2::Harness2::Event payloads. Pass-through
+#       via fetch_events(). Defaults to 0.
+#
+#   $r = $class->log_reader($path)
+#       Returns an opaque reader object or filehandle used with
+#       ready()/fetch_events()/fetch_state(). Each concrete logger
+#       chooses what $r is.
+#
+#   $bool = $class->ready($r)
+#       True if $r has more data ready without blocking. Used by
+#       streamers that want to drain a log without waiting.
+#
+#   @events = $class->fetch_events($r)
+#       Required for records_general_events loggers. Returns zero or
+#       more fully-formed event hashes (shape compatible with
+#       Test2::Harness2::Event). Never blocks.
+#
+#   $state = $class->fetch_state($r)
+#       Required for records_state loggers. Returns the most recent
+#       state snapshot hash as written by the logger. Never blocks.
+requires 'update_style';
+requires 'log_reader';
+requires 'ready';
+requires 'fetch_events';
+requires 'fetch_state';
+
+sub records_state          { 0 }
+sub records_general_events { 0 }
+
 # Consumers of this role may be plain classes (no new() method) or may be used
 # as objects (new() method defined).
 
@@ -310,6 +359,48 @@ computed (or overridden) output path.
 Ensure the parent directory of every file in C<output_files> exists.
 Called by the collector once the logger's attributes have been populated,
 before L</startup> opens any files.
+
+=item $style = $class->update_style()
+
+Required. Returns C<'append'> (log file grows, new lines are written to
+the end) or C<'replace'> (file is atomically swapped, so the whole file
+is a fresh snapshot each time). Used by streamers to pick an appropriate
+watching strategy (tail vs. re-read).
+
+=item $bool = $class->records_state()
+
+True if the logger records state snapshots (e.g. pass/fail, job list,
+run status). State loggers feed C<fetch_state()>; the streamer
+synthesises lifecycle events from the snapshots they produce. Defaults
+to false.
+
+=item $bool = $class->records_general_events()
+
+True if the logger records general event hashes suitable for direct use
+as L<Test2::Harness2::Event> payloads. Feeds C<fetch_events()> as
+pass-through. Defaults to false.
+
+=item $r = $class->log_reader($path)
+
+Returns an opaque reader object or filehandle used with C<ready()>,
+C<fetch_events()> and C<fetch_state()>. Each concrete logger chooses
+what C<$r> is; the streamer only holds it and passes it back.
+
+=item $bool = $class->ready($r)
+
+True if C<$r> has more data ready without blocking. Used by streamers
+that want to drain a log without waiting.
+
+=item @events = $class->fetch_events($r)
+
+Required for records_general_events loggers. Returns zero or more
+fully-formed event hashes (shape compatible with
+L<Test2::Harness2::Event>). Must never block.
+
+=item $state = $class->fetch_state($r)
+
+Required for records_state loggers. Returns the most recent state
+snapshot hash as written by the logger. Must never block.
 
 =back
 

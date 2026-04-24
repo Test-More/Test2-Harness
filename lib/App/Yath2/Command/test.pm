@@ -105,6 +105,7 @@ sub run {
         handle => $spawn,
         run    => $run_id,
         log    => "$workdir/logs",
+        global => 1,
     );
 
     my $final_pass;

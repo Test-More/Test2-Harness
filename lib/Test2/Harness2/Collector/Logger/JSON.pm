@@ -9,6 +9,7 @@ use Scalar::Util qw/blessed/;
 
 use Test2::Harness2::Util qw/parse_exit/;
 use Test2::Harness2::Util::JSON qw/write_json_file_atomic/;
+use Test2::Harness2::Util::File::JSON;
 
 use Object::HashBase qw{
     <output_file
@@ -140,6 +141,43 @@ sub shutdown {
     $self->output_files unless defined $self->{+OUTPUT_FILE};
     write_json_file_atomic($self->{+OUTPUT_FILE}, $data);
 }
+
+# ----------------------------------------------------------------------
+# Streamer interface. Snapshot-style: file is atomically replaced on
+# each write. The reader is a plain Test2::Harness2::Util::File::JSON
+# object -- its base class handles change detection (Linux::Inotify2
+# when available, stat-tuple fallback) and read_if_changed() layers
+# on top of that.
+sub update_style           { 'replace' }
+sub records_state          { 1 }
+sub records_general_events { 0 }
+
+sub log_reader {
+    my ($class, $path) = @_;
+    return Test2::Harness2::Util::File::JSON->new(name => $path);
+}
+
+sub ready {
+    my ($class, $r) = @_;
+    return 0 unless $r;
+    return $r->changed ? 1 : 0;
+}
+
+# read_if_changed returns empty list when nothing is new. Squash
+# that to undef so fetch_state's scalar contract stays
+# "snapshot-or-nothing". The empty-list distinction is useful at the
+# File layer but the role consumers only care about whether there
+# is a new snapshot to diff.
+sub fetch_state {
+    my ($class, $r) = @_;
+    return undef unless $r;
+    my @out = $r->read_if_changed;
+    return @out ? $out[0] : undef;
+}
+
+# Snapshot-style state logger: no general event stream to pass
+# through, the role requires the method, so return the empty list.
+sub fetch_events { () }
 
 1;
 

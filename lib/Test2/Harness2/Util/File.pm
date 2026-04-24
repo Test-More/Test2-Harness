@@ -7,11 +7,31 @@ our $VERSION = '2.000011';
 use IO::Handle;
 
 use Test2::Harness2::Util();
+use Test2::Harness2::Util qw/tinysleep/;
+use Time::HiRes qw/time/;
 
 use Carp qw/croak confess/;
 use Fcntl qw/SEEK_SET SEEK_CUR/;
 
-use Object::HashBase qw{ -name -_fh -_init_fh done -line_pos <skip_bad_decode };
+use Object::HashBase qw{
+    -name
+    -_fh
+    -_init_fh
+    done
+    -line_pos
+    <skip_bad_decode
+    -_watch_state
+    -_inotify
+    -_inotify_watch
+    -_inotify_broken
+};
+
+# Linux::Inotify2 is the most efficient change-detection primitive on
+# Linux. Gated via a constant so the whole codebase has a single
+# "is it usable" check; consumers that hit a runtime problem flip
+# _inotify_broken on the instance so the object falls back permanently
+# to stat-based checks.
+use constant HAS_INOTIFY => !!eval { require Linux::Inotify2; 1 };
 
 sub exists { -e $_[0]->{+NAME} }
 
@@ -116,6 +136,187 @@ sub read_line {
     $self->{+LINE_POS} = $new_pos unless defined $params{peek} || defined $params{from};
     return $line unless wantarray;
     return ($pos, $new_pos, $line, $err);
+}
+
+# ----------------------------------------------------------------------
+# Change detection
+#
+# Every File object knows how to tell "has my backing path changed
+# since we last looked?". The cheap path is a stat-tuple compare:
+# device, inode, size and mtime together detect appends, atomic
+# rename-into-place rewrites, truncations, and relocations. When
+# Linux::Inotify2 is available we also open an inotify watch on the
+# path and consume pending events as an early-out signal -- this
+# catches rapid back-to-back writes that land inside a single mtime
+# tick on filesystems with one-second stamp resolution.
+#
+# Callers should treat the stat-tuple as the source of truth; the
+# inotify short-circuit only reports "change happened" faster.
+#
+#   $hashref = $file->_current_state
+#       { dev, inode, size, mtime } from stat(), or undef if the
+#       path does not exist.
+#
+#   $bool = $file->changed
+#       True when the current state differs from the last recorded
+#       state (or no state has been recorded yet), or inotify
+#       reports pending events. False when everything matches.
+#
+#   $file->_record_state
+#       Stash the current state so the next changed() call has
+#       something to compare against. Subclasses call this after
+#       a successful read. Uses the most recent reading of the file
+#       via _current_state.
+#
+#   $file->wait_for_change($timeout)
+#       Block until changed() becomes true or $timeout seconds
+#       elapse. Uses inotify's select-able descriptor when possible;
+#       otherwise falls back to a Time::HiRes sleep loop that
+#       re-checks changed() between naps. Returns 1 if the file
+#       changed, 0 if the timeout fired.
+sub _current_state {
+    my $self = shift;
+    my @st = stat($self->{+NAME});
+    return undef unless @st;
+    return {
+        dev   => $st[0],
+        inode => $st[1],
+        size  => $st[7],
+        mtime => $st[9],
+    };
+}
+
+sub _record_state {
+    my $self = shift;
+    my ($state) = @_;
+    $state //= $self->_current_state;
+    $self->{+_WATCH_STATE} = $state;
+    return;
+}
+
+sub _inotify_fh {
+    my $self = shift;
+
+    return undef unless HAS_INOTIFY;
+    return undef if $self->{+_INOTIFY_BROKEN};
+
+    return $self->{+_INOTIFY}->fileno
+        if $self->{+_INOTIFY} && $self->{+_INOTIFY_WATCH};
+
+    my $inot;
+    my $ok = eval {
+        $inot = Linux::Inotify2->new;
+        $inot->blocking(0);
+        1;
+    };
+    unless ($ok) {
+        $self->{+_INOTIFY_BROKEN} = 1;
+        return undef;
+    }
+
+    my $path = $self->{+NAME};
+    # Inotify on a path requires the path to exist. If it does not
+    # yet, fall back silently; the caller's stat-based changed()
+    # path still works and we can install the watch later on the
+    # first hit.
+    return undef unless -e $path;
+
+    my $watch;
+    $ok = eval {
+        $watch = $inot->watch(
+            $path,
+            Linux::Inotify2::IN_MODIFY()
+                | Linux::Inotify2::IN_CREATE()
+                | Linux::Inotify2::IN_MOVED_TO()
+                | Linux::Inotify2::IN_DELETE_SELF()
+                | Linux::Inotify2::IN_MOVE_SELF()
+                | Linux::Inotify2::IN_ATTRIB(),
+        );
+        1;
+    };
+    unless ($ok && $watch) {
+        $self->{+_INOTIFY_BROKEN} = 1;
+        return undef;
+    }
+
+    $self->{+_INOTIFY}       = $inot;
+    $self->{+_INOTIFY_WATCH} = $watch;
+    return $inot->fileno;
+}
+
+sub _inotify_has_events {
+    my $self = shift;
+
+    my $inot = $self->{+_INOTIFY};
+    return 0 unless $inot;
+
+    my @events = $inot->read;
+    return scalar(@events) ? 1 : 0;
+}
+
+sub changed {
+    my $self = shift;
+
+    # Install the inotify watch lazily so callers that never ask
+    # about change state do not pay for it.
+    $self->_inotify_fh;
+    return 1 if $self->_inotify_has_events;
+
+    my $cur   = $self->_current_state;
+    my $prior = $self->{+_WATCH_STATE};
+
+    # A missing file is "changed" the first time we notice it going
+    # away; once both sides agree the file is gone, further checks
+    # return false. Same logic for the first appearance.
+    unless (defined $cur) {
+        return 0 if !defined $prior;
+        return 1;
+    }
+    return 1 unless defined $prior;
+
+    for my $k (qw/dev inode size mtime/) {
+        return 1 if ($cur->{$k} // -1) != ($prior->{$k} // -1);
+    }
+    return 0;
+}
+
+sub wait_for_change {
+    my $self = shift;
+    my ($timeout) = @_;
+
+    my $deadline = defined $timeout ? time() + $timeout : undef;
+
+    if (my $fh = $self->_inotify_fh) {
+        require IO::Select;
+        my $sel = IO::Select->new($fh);
+        while (1) {
+            return 1 if $self->changed;
+
+            my $remaining;
+            if (defined $deadline) {
+                $remaining = $deadline - time();
+                return 0 if $remaining <= 0;
+            }
+            # can_read returns immediately when events are already
+            # queued; the timeout caps the block otherwise. A zero-
+            # event wake still drives us back through changed() in
+            # case the stat-tuple comparison catches something
+            # inotify missed (rare, but robust).
+            $sel->can_read($remaining);
+        }
+    }
+
+    # Fallback: small-sleep poll. Most filesystems report mtime with
+    # one-second resolution, so we sleep well below that to avoid
+    # missing a rapid-succession rewrite.
+    while (1) {
+        return 1 if $self->changed;
+        if (defined $deadline) {
+            my $remaining = $deadline - time();
+            return 0 if $remaining <= 0;
+        }
+        tinysleep(0.05);
+    }
 }
 
 1;

@@ -58,11 +58,17 @@ sub init {
             unless blessed($handle) && $handle->can('subscribe');
     }
 
-    if (defined $log) {
-        croak "'log' must be an existing path" unless -e $log;
-    }
-
     $self->{+MODE} = defined $handle ? 'live' : 'static';
+
+    if (defined $log) {
+        # Static mode needs the path on disk up front; live mode is
+        # more forgiving (the harness may still be creating the log
+        # directory when the streamer is constructed, and file readers
+        # tolerate a missing path until it appears).
+        if ($self->{+MODE} eq 'static') {
+            croak "'log' must be an existing path" unless -e $log;
+        }
+    }
 
     my @runs;
     push @runs => $self->{+RUN}      if defined $self->{+RUN};
@@ -191,6 +197,12 @@ sub _tick_live {
         next unless ref($content) eq 'HASH';
         $self->_ingest_message($content);
     }
+
+    # Tail any append-style general-event artifacts the harness has
+    # told us about. log_reader() for a non-existent path is held
+    # open until the file appears, so this is safe even before the
+    # first test starts writing its log.
+    $self->_drain_event_readers;
 
     return;
 }
@@ -355,20 +367,65 @@ sub _apply_artifacts {
     my $scope = $item eq 'harness' ? 'harness' : "run:$run_id";
     my $known = $self->{+KNOWN_ARTIFACTS}->{$scope} //= {};
 
-    my $changed = 0;
+    my @new;
     for my $path (keys %$artifacts) {
         next if exists $known->{$path};
         $known->{$path} = $artifacts->{$path};
-        $changed++;
+        push @new => $path;
+    }
+
+    # Live mode with a log directory: open general-event readers on
+    # newly-registered artifacts so their append-style streams get
+    # drained on every tick. Readers tolerate a missing path -- the
+    # collector may still be opening the file -- and pick it up as
+    # soon as it appears on disk.
+    if (@new && $self->{+MODE} eq 'live' && defined $self->{+LOG}) {
+        for my $rel (@new) {
+            $self->_open_live_event_reader($rel, $known->{$rel});
+        }
     }
 
     # Resolve any pending actions that were blocked on an artifact
     # that has just arrived. First iteration has no such actions but
     # the slot exists for forward compat.
-    if ($changed && $self->{+PENDING_ACTIONS}->{$scope}) {
+    if (@new && $self->{+PENDING_ACTIONS}->{$scope}) {
         my @actions = @{delete $self->{+PENDING_ACTIONS}->{$scope}};
         for my $a (@actions) {
             $a->($self, $known);
+        }
+    }
+
+    return;
+}
+
+sub _open_live_event_reader {
+    my ($self, $rel, $class) = @_;
+
+    return unless defined $class;
+    return if $self->{+EVENT_READERS}->{$rel};  # already open
+
+    my $loaded = eval { load_module($class); 1 };
+    return unless $loaded;
+    return unless $class->can('records_general_events') && $class->records_general_events;
+
+    my $path   = "$self->{+LOG}/$rel";
+    my $reader = $class->log_reader($path);
+    $self->{+EVENT_READERS}->{$rel} = [[$class, $reader]];
+    return;
+}
+
+sub _drain_event_readers {
+    my $self = shift;
+
+    for my $rel (keys %{$self->{+EVENT_READERS}}) {
+        for my $pair (@{$self->{+EVENT_READERS}->{$rel}}) {
+            my ($class, $reader) = @$pair;
+            next unless $class->ready($reader);
+            my @events = $class->fetch_events($reader);
+            for my $hash (@events) {
+                next unless ref($hash) eq 'HASH';
+                push @{$self->{+EVENT_QUEUE}} => $self->_bless_event($hash);
+            }
         }
     }
 
@@ -515,23 +572,11 @@ sub _setup_static_event_readers {
 sub _tick_static {
     my $self = shift;
 
-    # General-event pass-through: poll each reader once, append what we
-    # get to the event queue.
-    for my $rel (keys %{$self->{+EVENT_READERS}}) {
-        for my $pair (@{$self->{+EVENT_READERS}->{$rel}}) {
-            my ($class, $reader) = @$pair;
-            next unless $class->ready($reader);
-            my @events = $class->fetch_events($reader);
-            for my $hash (@events) {
-                next unless ref($hash) eq 'HASH';
-                push @{$self->{+EVENT_QUEUE}} => $self->_bless_event($hash);
-            }
-        }
-    }
+    # General-event pass-through. In static mode the archive is
+    # complete so the first poll returns every line; subsequent
+    # polls return nothing and next() will unblock.
+    $self->_drain_event_readers;
 
-    # In static mode all state was resolved at bootstrap time; the
-    # tick therefore has nothing more to do once general events are
-    # drained. Once nothing is queued, the caller stops.
     return;
 }
 

@@ -513,7 +513,7 @@ sub _spawn_collector_win32 {
     }
     $params{observers} = $self->{+_OBSERVERS_SPEC} if $self->{+_OBSERVERS_SPEC};
 
-    my $guard = encode_json_file(\%params);
+    my $guard = encode_json_file(\%params, guard => 1);
 
     # Build the command: current perl, all @INC paths, load this module,
     # then run the collect_from_file() class method.

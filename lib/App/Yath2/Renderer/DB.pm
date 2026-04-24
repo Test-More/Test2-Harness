@@ -102,8 +102,6 @@ sub start {
     $self->{+WRITER} = $w;
 
     my %seen;
-    my $settings_guard = encode_json_file($self->{+SETTINGS});    # auto-deleted on failure
-
     $self->{+PID} = start_process(
         [
             $^X,                                                       # perl
@@ -117,7 +115,7 @@ exit(
     )
 );
             EOT
-            "$settings_guard",                                         # Pass settings path as arg
+            encode_json_file($self->{+SETTINGS}),                # Pass settings in as arg
         ],
         sub {
             $r->set_env_var;
@@ -125,10 +123,6 @@ exit(
             $w->close;
         }
     );
-
-    # The child reads and unlinks the settings file itself (unlink => 1).
-    # Dismiss the guard so the parent does not race with the child on cleanup.
-    $settings_guard->dismiss;
 
     $r->weaken();
     $r->close();

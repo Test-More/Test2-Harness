@@ -82,14 +82,15 @@ sub decode_json_file {
 }
 
 sub encode_json_file {
-    my ($data) = @_;
+    my ($data, %params) = @_;
     my $json_text = encode_json($data);
 
     my ($fh, $file) = tempfile("$$-XXXXXX", TMPDIR => 1, SUFFIX => '.json', UNLINK => 0);
     print $fh $json_text;
     close($fh);
 
-    return Test2::Harness2::Util::JSON::TempGuard->new($file);
+    return Test2::Harness2::Util::JSON::TempGuard->new($file) if $params{guard};
+    return $file;
 }
 
 sub write_json_file_atomic {

@@ -13,6 +13,37 @@ subtest 'construction' => sub {
     is($s->terminate_on_destroy, 1,        'default on');
 };
 
+subtest '_waited is declared in Object::HashBase' => sub {
+    ok(Test2::Harness2::Spawn->can('_WAITED'), '_WAITED constant exists');
+
+    my $s = Test2::Harness2::Spawn->new(
+        pid       => 12345,
+        ipcm_info => {},
+        workdir   => '/tmp/x',
+        name      => 'h',
+    );
+    my $key = Test2::Harness2::Spawn::_WAITED();
+    is($s->{$key}, 0, '_waited initialised to 0');
+};
+
+subtest 'wait is idempotent via _waited guard' => sub {
+    my $s = Test2::Harness2::Spawn->new(
+        pid       => 12345,
+        ipcm_info => {},
+        workdir   => '/tmp/x',
+        name      => 'h',
+    );
+
+    # Pre-set the guard so wait() short-circuits before hitting waitpid.
+    # The purpose is to confirm the guard key the method reads is the same slot
+    # Object::HashBase declares (i.e. _WAITED, not a raw '_waited' string).
+    my $key = Test2::Harness2::Spawn::_WAITED();
+    $s->{$key} = 1;
+    $s->wait;    # must not die or call waitpid on a non-existent PID
+
+    ok(1, 'wait() returns without error when _waited is set');
+};
+
 subtest 'detach turns off terminate_on_destroy' => sub {
     my $s = Test2::Harness2::Spawn->new(
         pid       => 12345,

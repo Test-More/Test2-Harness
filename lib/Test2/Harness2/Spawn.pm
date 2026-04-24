@@ -14,6 +14,7 @@ use Object::HashBase qw{
     <name
     +handle
     <terminate_on_destroy
+    +_waited
 };
 
 sub init {
@@ -23,6 +24,7 @@ sub init {
     croak "'workdir' is required"   unless defined $self->{+WORKDIR};
     $self->{+NAME}                 //= 'harness';
     $self->{+TERMINATE_ON_DESTROY} //= 1;
+    $self->{+_WAITED}              //= 0;
 }
 
 sub handle {
@@ -97,9 +99,9 @@ sub clear_terminate_on_destroy {
 
 sub wait {
     my $self = shift;
-    return if $self->{_waited};
+    return if $self->{+_WAITED};
     waitpid($self->{+PID}, 0);
-    $self->{_waited} = 1;
+    $self->{+_WAITED} = 1;
 }
 
 sub DESTROY {

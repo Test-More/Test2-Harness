@@ -149,7 +149,7 @@ my %WriteMakefileArgs = (
   },
   "VERSION" => "2.000011",
   "test" => {
-    "TESTS" => "t/AI/integration/*.t t/AI/unit/*.t t/AI/unit/Collector/*.t t/AI/unit/Collector/Auditor/*.t t/AI/unit/Collector/Parser/*.t t/AI/unit/Collector/Parser/IOParser/*.t t/AI/unit/Harness2/*.t t/AI/unit/Harness2/Collector/Logger/*.t t/AI/unit/Harness2/Collector/Observer/*.t t/AI/unit/Harness2/Resource/*.t t/AI/unit/Harness2/Role/*.t t/AI/unit/Harness2/Role/Collector/*.t t/AI/unit/Harness2/Run/*.t t/AI/unit/Harness2/TestFile/*.t t/AI/unit/Harness2/Util/*.t t/AI/unit/Util/*.t t/AI/unit/Util/File/*.t t/unit/*.t t/unit/Util/*.t t/unit/Util/File/*.t"
+    "TESTS" => "t/AI/integration/*.t t/AI/unit/*.t t/AI/unit/Collector/*.t t/AI/unit/Collector/Auditor/*.t t/AI/unit/Collector/Parser/*.t t/AI/unit/Collector/Parser/IOParser/*.t t/AI/unit/Harness2/*.t t/AI/unit/Harness2/Collector/Logger/*.t t/AI/unit/Harness2/Collector/Observer/*.t t/AI/unit/Harness2/Resource/*.t t/AI/unit/Harness2/Role/*.t t/AI/unit/Harness2/Role/Collector/*.t t/AI/unit/Harness2/Run/*.t t/AI/unit/Harness2/TestFile/*.t t/AI/unit/Harness2/Util/*.t t/AI/unit/Util/*.t t/AI/unit/Util/File/*.t t/integration/*.t t/unit/*.t t/unit/Harness2/*.t t/unit/Util/*.t t/unit/Util/File/*.t"
   }
 );
 

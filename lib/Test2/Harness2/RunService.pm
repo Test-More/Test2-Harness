@@ -124,6 +124,26 @@ sub init {
         unless ref($self->{+LOGGERS}) eq 'ARRAY';
     croak "'test_loggers' must be an arrayref"
         unless ref($self->{+TEST_LOGGERS}) eq 'ARRAY';
+
+    # Seed per-job results entries with queue-time metadata so
+    # downstream consumers (the streamer in particular) can identify
+    # every job and order lifecycle events by Time::HiRes stamp
+    # without having to cross-reference the jobs array themselves.
+    # Entries are filled in further as the job moves through
+    # started -> completed.
+    my $queued_at = time;
+    my $results   = $run->results;
+    for my $job (@{$run->jobs}) {
+        my $jid = $job->job_id;
+        my $tf  = $job->test_file;
+        $results->{$jid} //= {};
+        my $r = $results->{$jid};
+        $r->{queued_at} //= $queued_at;
+        $r->{job_try}   //= $job->job_try;
+        $r->{file}      //= $tf->absolute;
+        $r->{abs_file}  //= $tf->absolute;
+        $r->{rel_file}  //= $tf->relative;
+    }
 }
 
 # IPC::Manager::Role::Service contract (orig_io, pid, set_pid,
@@ -453,6 +473,10 @@ sub _handle_test_job_started {
     my $err = $@;
     warn "run service could not mark job '$job_id' running: $err" unless $ok;
 
+    my $started_at = $content->{stamp} // time;
+    my $r = $self->{+RUN}->results->{$job_id} //= {};
+    $r->{started_at} //= $started_at;
+
     $self->_emit_run_log_event(
         kind     => 'job_started',
         job_info => {
@@ -510,14 +534,16 @@ sub _handle_test_job_completed {
     # job_id so the Run snapshot can carry them out to the harness
     # (via run_state_update) and any harness-side IPC consumer that
     # wants per-job pass/fail can read them without touching logs.
-    $self->{+RUN}->results->{$job_id} = {
-        pass       => $content->{pass}       ? 1 : 0,
-        exit       => $content->{exit},
-        codes      => $content->{codes},
-        pass_count => $content->{pass_count},
-        fail_count => $content->{fail_count},
-        stamp      => $content->{stamp} // time,
-    };
+    # Merge (not replace) so queue-time seeding and started_at stay.
+    my $completed_at = $content->{stamp} // time;
+    my $r = $self->{+RUN}->results->{$job_id} //= {};
+    $r->{pass}         = $content->{pass} ? 1 : 0;
+    $r->{exit}         = $content->{exit};
+    $r->{codes}        = $content->{codes};
+    $r->{pass_count}   = $content->{pass_count};
+    $r->{fail_count}   = $content->{fail_count};
+    $r->{stamp}        = $completed_at;
+    $r->{completed_at} = $completed_at;
 
     # Mutate Run state: running -> done. Safe to call even if the job
     # was marked skipped earlier (mark_done croaks; we guard).

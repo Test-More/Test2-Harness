@@ -664,6 +664,10 @@ sub _snapshot_run_results {
     my $results  = $run->results // {};
     my $all_pass = 1;
     for my $jid (keys %$results) {
+        # Entries without completed_at are queue-time or started-time
+        # seeds (jobs that never finished or were skipped). Only
+        # completed jobs contribute to the aggregate verdict.
+        next unless defined $results->{$jid}{completed_at};
         $all_pass = 0 unless $results->{$jid}{pass};
     }
 

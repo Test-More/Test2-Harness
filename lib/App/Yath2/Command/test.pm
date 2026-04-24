@@ -77,6 +77,10 @@ sub run {
             'Test2::Harness2::Collector::Logger::JSONL',
             'Test2::Harness2::Collector::Logger::JSON',
         ],
+        service_loggers => [
+            'Test2::Harness2::Collector::Logger::JSONL',
+            'Test2::Harness2::Collector::Logger::JSON',
+        ],
         test_loggers => [
             'Test2::Harness2::Collector::Logger::JSONL',
             'Test2::Harness2::Collector::Logger::JSON',

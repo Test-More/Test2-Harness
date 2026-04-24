@@ -63,6 +63,17 @@ sub _bootstrap {
         $self->_setup_static_event_readers($scope_map);
     }
 
+    # Harness-scope artifacts (services/harness.{jsonl,json}, plus any
+    # global resource-service logs) live outside the per-run manifests.
+    # Tail them when the caller asked for global scope so harness-level
+    # events (service_started / service_stopped / warn / diag from the
+    # harness itself) show up alongside the run-scoped stream.
+    if ($self->{+GLOBAL}) {
+        my $harness_map = $archive->artifacts;
+        $self->_setup_static_event_readers($harness_map)
+            if ref($harness_map) eq 'HASH' && %$harness_map;
+    }
+
     return;
 }
 

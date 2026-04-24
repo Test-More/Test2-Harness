@@ -74,8 +74,9 @@ sub run {
     }
 
     my $streamer = App::Yath2::Streamer::Static->new(
-        log  => $log,
-        runs => [@requested],
+        log    => $log,
+        runs   => [@requested],
+        global => 1,
     );
 
     my $fail_runs = 0;

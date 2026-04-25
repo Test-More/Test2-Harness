@@ -27,6 +27,7 @@ use App::Yath2::OutputManager();
 use App::Yath2::Options::Renderer();
 use App::Yath2::Util::IPC qw/publish_ipc_file unlink_ipc_file/;
 use Scope::Guard ();
+use Test2::Util qw/IS_WIN32/;
 
 use Getopt::Yath;
 include_options(
@@ -113,10 +114,20 @@ sub run {
 
     my $workdir = $settings->workspace->workdir;
 
+    my @resources = (Test2::Harness2::Resource::JobCount->new(slots => 16));
+
+    if (!IS_WIN32 && $settings->can('runner') && @{$settings->runner->preloads // []}) {
+        require Test2::Harness2::Resource::Preload;
+        push @resources => Test2::Harness2::Resource::Preload->new(
+            preloads      => $settings->runner->preloads,
+            preload_early => $settings->runner->preload_early // {},
+        );
+    }
+
     my $spawn = Test2::Harness2->spawn(
         workdir   => $workdir,
         protocol  => $settings->ipc->protocol,
-        resources => [Test2::Harness2::Resource::JobCount->new(slots => 16)],
+        resources => \@resources,
         loggers   => [
             'Test2::Harness2::Collector::Logger::JSONL',
             'Test2::Harness2::Collector::Logger::JSON',

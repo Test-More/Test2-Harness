@@ -224,6 +224,15 @@ sub _init_resources {
     my $has_limiter = grep { $_->is_job_limiter } @{$self->{+RESOURCES}};
     push @{$self->{+RESOURCES}} => Test2::Harness2::Resource::JobCount->new(slots => 1)
         unless $has_limiter;
+
+    for my $res (@{$self->{+RESOURCES}}) {
+        $res->set_ipcm_info($self->ipcm_info)
+            if $res->can('set_ipcm_info') && defined $self->ipcm_info;
+        $res->set_harness_name($self->{+NAME})
+            if $res->can('set_harness_name') && defined $self->{+NAME};
+        $res->set_logdir($self->{+LOGDIR})
+            if $res->can('set_logdir') && defined $self->{+LOGDIR};
+    }
 }
 
 sub start {
@@ -556,6 +565,9 @@ sub run_on_general_message {
     return $self->_handle_resource_state_message($kind, $content)
         if defined $kind && $kind =~ m/^resource_(?:paused|resumed|ready|broken|permanent_broken)$/;
 
+    return $self->_handle_stage_message($kind, $content)
+        if defined $kind && $kind =~ m/^stage_(?:up|down)$/;
+
     # Run-scoped collector_artifacts (run_id defined) flow to the run
     # service, which logs them as job_loggers on the run's own emitter.
     # Global collector_artifacts (no run_id -- e.g. from a resource-
@@ -619,6 +631,21 @@ sub _handle_resource_state_message {
         # ready once the harness has ruled it out.
         $res->mark_resumed unless $res->is_permanent_broken;
     }
+
+    return;
+}
+
+sub _handle_stage_message {
+    my ($self, $kind, $content) = @_;
+
+    my $stage = ref($content) eq 'HASH' ? $content->{stage} : undef;
+    return unless defined $stage;
+
+    my ($res) = grep { $_->can('set_stage_up') } @{$self->{+RESOURCES} // []};
+    return unless $res;
+
+    $res->set_stage_up($stage)   if $kind eq 'stage_up';
+    $res->set_stage_down($stage) if $kind eq 'stage_down';
 
     return;
 }
@@ -1858,15 +1885,30 @@ sub _launch_job {
         $res->assign(id => $assign_id, job => $job, env => \%env, %assign_args);
     }
 
-    # Delegate the actual Collector fork to the per-run supervisor so
-    # the test process runs under the run's subtree. The harness owns
-    # scheduling (resources assigned above) and the run service owns
-    # launch + reap + stdio logging.
+    # Check whether any resource wants to route this job to a preload
+    # stage rather than the run service.
+    my $stage_handle;
+    for my $res (@$resources) {
+        $stage_handle = $res->stage_handle_for_job($job) and last;
+    }
+
+    # Delegate the actual Collector fork to either the preload stage
+    # service (when a stage handle is available) or the per-run
+    # supervisor. The harness owns scheduling (resources assigned
+    # above); the run service or stage owns launch + reap.
     my $launch_ok = eval {
-        my $handle = $self->_wait_for_run_service_ready($run_id);
+        my ($handle, $peer);
+        if ($stage_handle) {
+            $handle = $stage_handle;
+            $peer   = $stage_handle->service_name;
+        }
+        else {
+            $handle = $self->_wait_for_run_service_ready($run_id);
+            $peer   = "run-$run_id";
+        }
 
         my $envelope = $handle->sync_request(
-            "run-$run_id",
+            $peer,
             {
                 request   => 'launch_job',
                 run_id    => $run_id,

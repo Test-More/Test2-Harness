@@ -74,6 +74,10 @@ sub services { () }
 # (harness shutdown) or per-run (run completes). Default: no-op.
 sub teardown { }
 
+# Resources that route test launches to a stage service override this.
+# Returns undef (use the run service) or an IPC::Manager::Service::Handle.
+sub stage_handle_for_job { undef }
+
 1;
 
 __END__

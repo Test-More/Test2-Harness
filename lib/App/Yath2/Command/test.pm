@@ -204,6 +204,14 @@ sub run {
     # around to accept these requests.
     eval { $spawn->unsubscribe; 1 } or warn $@;
 
+    # Wait for the harness to drain any events still queued for us
+    # before we tell it to finish. The has_pending_messages request
+    # itself does not count as pending work (its response is queued
+    # AFTER the handler returns). Cap at 30 seconds; on timeout we
+    # proceed anyway because the run is over and any straggler
+    # events at that point are not worth blocking exit on.
+    eval { $spawn->wait_until_idle(30); 1 } or warn $@;
+
     # Drop the streamer explicitly: it holds a reference to $spawn,
     # which is what keeps the IPC handle (and its AtomicPipe client)
     # alive. Without this, the client's pre_disconnect_hook fires

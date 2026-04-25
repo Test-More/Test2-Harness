@@ -725,7 +725,15 @@ sub _ipc_client {
     return $self->{_ipc_client} if $self->{_ipc_client};
 
     require IPC::Manager;
-    return $self->{_ipc_client} = IPC::Manager->connect($self->bus_id, $self->{+IPCM_INFO});
+    my $c = IPC::Manager->connect($self->bus_id, $self->{+IPCM_INFO});
+
+    # The collector runs an event loop. Sends never block: queued
+    # messages are flushed by the loop's per-iteration drain (see
+    # _run_collection_loop). Clients without Role::Outbox inherit
+    # the no-op set_send_blocking from IPC::Manager::Client base.
+    $c->set_send_blocking(0);
+
+    return $self->{_ipc_client} = $c;
 }
 
 # Wait briefly for $target to register on the bus so the first
@@ -821,16 +829,20 @@ sub _send_to {
 
     my $client = $self->_ipc_client;
 
-    # Send with one retry. The MessageFiles protocol's send_message
+    # Send with one retry. The MessageFiles protocol's try_send_message
     # croaks "Client does not exist" if the target's peer directory
     # is missing at send time; that can race with peer registration
     # at startup or peer teardown at shutdown. Re-check peer_active
     # once before giving up so the legitimately-late but still-alive
     # case stops emitting spurious warnings.
+    #
+    # try_send_message is non-blocking: queues on EAGAIN. The
+    # collection loop calls drain_pending each iteration to flush
+    # the queue when the transport reports writability.
     for my $attempt (1, 2) {
         my $ready = $self->_wait_for_ipc_target($target);
 
-        my $ok = eval { $client->send_message($target, $content); 1 };
+        my $ok = eval { $client->try_send_message($target, $content); 1 };
         return if $ok;
 
         my $err = $@;
@@ -975,7 +987,37 @@ sub _run_collection_loop {
     my $draining = 0;    # Set when we got a signal/parent-gone and are finishing up
 
     while (1) {
-        $sel->can_read($cycle) if $sel->count;
+        # Flush any queued outbound IPC sends. The client is in
+        # send_blocking=0 mode (set by _ipc_client). The kernel may
+        # have made room in the FIFO since the previous iteration.
+        # have_pending_sends short-circuits on the first peer with a
+        # backlog; pending_sends would walk every peer summing queue
+        # depths, which is wasted work on the hot path.
+        my $client = $self->{_ipc_client};
+        $client->drain_pending if $client && $client->have_pending_sends;
+
+        # Build a write-side select set when the outbox has a
+        # backlog so the loop wakes the moment room appears, even
+        # on platforms without large pipe buffers.
+        my $write_sel;
+        if ($client && $client->have_writable_handles) {
+            require IO::Select;
+            my @wh = $client->writable_handles;
+            if (@wh) {
+                $write_sel = IO::Select->new;
+                $write_sel->add(@wh);
+            }
+        }
+
+        if ($sel->count || $write_sel) {
+            require IO::Select;
+            IO::Select->select($sel->count ? $sel : undef, $write_sel, undef, $cycle);
+        }
+
+        # Post-select drain: writable wake-up means the queue can
+        # advance now. Read-side wake-up may also have made room
+        # transitively.
+        $client->drain_pending if $client && $client->have_pending_sends;
 
         my $ok = eval {
             # Check for signal - kill child but keep draining handles
@@ -1621,6 +1663,26 @@ sub _process_event {
 sub _exit_mirroring_child {
     my $self = shift;
     my ($collector_ok) = @_;
+
+    # Drain any queued outbound IPC sends before exit. The collector
+    # was running in send_blocking=0 mode (set by _ipc_client) so
+    # events accumulated during the run are still in the client's
+    # outbox; without this drain they would be dropped when this
+    # process _exits. Loop until the queue clears or a 5s deadline
+    # is hit (avoid wedging an exit on a peer that isn't reading).
+    if (my $client = $self->{_ipc_client}) {
+        # The Outbox API (have_pending_sends + drain_pending) is
+        # provided as a no-op fallback by the IPC::Manager::Client
+        # base class for backends that do not consume Role::Outbox,
+        # so no can() gate is needed -- non-Outbox clients exit the
+        # loop after the first iteration when have_pending_sends
+        # returns 0.
+        my $deadline = time + 5;
+        while ($client->have_pending_sends && time < $deadline) {
+            last unless $client->drain_pending;
+            tinysleep(0.01) if $client->have_pending_sends;
+        }
+    }
 
     POSIX::_exit(255) unless $collector_ok;
 

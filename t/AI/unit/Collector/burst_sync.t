@@ -25,9 +25,16 @@ BEGIN {
     *IPC::Manager::connect = sub {
         return bless {}, 'T2H2_BurstSync_NoopClient';
     };
-    *T2H2_BurstSync_NoopClient::send_message = sub { return };
-    *T2H2_BurstSync_NoopClient::peer_active  = sub { 1 };
-    *T2H2_BurstSync_NoopClient::disconnect   = sub { return };
+    *T2H2_BurstSync_NoopClient::send_message            = sub { return };
+    *T2H2_BurstSync_NoopClient::try_send_message        = sub { return 1 };
+    *T2H2_BurstSync_NoopClient::peer_active             = sub { 1 };
+    *T2H2_BurstSync_NoopClient::disconnect              = sub { return };
+    *T2H2_BurstSync_NoopClient::pending_sends           = sub { 0 };
+    *T2H2_BurstSync_NoopClient::have_pending_sends      = sub { 0 };
+    *T2H2_BurstSync_NoopClient::drain_pending           = sub { 0 };
+    *T2H2_BurstSync_NoopClient::have_writable_handles   = sub { 0 };
+    *T2H2_BurstSync_NoopClient::writable_handles        = sub { () };
+    *T2H2_BurstSync_NoopClient::set_send_blocking       = sub { return };
 }
 
 my $tmpdir = tempdir(CLEANUP => 1);

@@ -38,9 +38,16 @@ BEGIN {
     *IPC::Manager::connect = sub {
         return bless {}, 'T2H2_TestNoopClient';
     };
-    *T2H2_TestNoopClient::send_message = sub { return };
-    *T2H2_TestNoopClient::peer_active  = sub { 1 };
-    *T2H2_TestNoopClient::disconnect   = sub { return };
+    *T2H2_TestNoopClient::send_message       = sub { return };
+    *T2H2_TestNoopClient::try_send_message   = sub { return 1 };
+    *T2H2_TestNoopClient::peer_active        = sub { 1 };
+    *T2H2_TestNoopClient::disconnect         = sub { return };
+    *T2H2_TestNoopClient::pending_sends      = sub { 0 };
+    *T2H2_TestNoopClient::have_pending_sends = sub { 0 };
+    *T2H2_TestNoopClient::drain_pending      = sub { 0 };
+    *T2H2_TestNoopClient::have_writable_handles = sub { 0 };
+    *T2H2_TestNoopClient::writable_handles   = sub { () };
+    *T2H2_TestNoopClient::set_send_blocking  = sub { return };
 }
 
 my $IS_WIN32 = $^O eq 'MSWin32';
@@ -1695,6 +1702,8 @@ subtest '_send_logger_metadata groups metadata and registers under the collector
         push @{$self->{sent}} => {to => $to, payload => $payload};
         return;
     };
+    *T2H2_FakeClient_LMeta::try_send_message  = sub { my $self = shift; $self->send_message(@_); 1 };
+    *T2H2_FakeClient_LMeta::set_send_blocking = sub { return };
 
     # Two JSONL loggers at different paths to show class keys map to arrayrefs.
     my $jsonl_a = Test2::Harness2::Collector::Logger::JSONL->new(
@@ -1757,6 +1766,8 @@ subtest '_send_logger_metadata omits loggers whose metadata is undef' => sub {
         push @{$self->{sent}} => $payload;
         return;
     };
+    *T2H2_FakeClient_Omit::try_send_message  = sub { my $self = shift; $self->send_message(@_); 1 };
+    *T2H2_FakeClient_Omit::set_send_blocking = sub { return };
 
     # JSONL produces metadata; the bare role default is undef.
     my $jsonl = Test2::Harness2::Collector::Logger::JSONL->new(
@@ -1800,6 +1811,8 @@ subtest '_send_logger_metadata still fires when every logger returns undef' => s
         push @{$self->{sent}} => $payload;
         return;
     };
+    *T2H2_FakeClient_Empty::try_send_message  = sub { my $self = shift; $self->send_message(@_); 1 };
+    *T2H2_FakeClient_Empty::set_send_blocking = sub { return };
 
     my $silent = T2H2_SilentLogger->new;
 
@@ -1824,8 +1837,10 @@ subtest '_send_logger_metadata warns on IPC failure, does not propagate' => sub 
     local *IPC::Manager::connect = sub {
         return bless {}, 'T2H2_FakeClient_Die';
     };
-    local *T2H2_FakeClient_Die::peer_active  = sub { 1 };
-    local *T2H2_FakeClient_Die::send_message = sub { die "no route to peer\n" };
+    local *T2H2_FakeClient_Die::peer_active        = sub { 1 };
+    local *T2H2_FakeClient_Die::send_message       = sub { die "no route to peer\n" };
+    local *T2H2_FakeClient_Die::try_send_message   = sub { my $self = shift; $self->send_message(@_); 1 };
+    local *T2H2_FakeClient_Die::set_send_blocking  = sub { return };
 
     my $jsonl = Test2::Harness2::Collector::Logger::JSONL->new(
         ipcm_info => {}, output_file => '/tmp/x.jsonl',

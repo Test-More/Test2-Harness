@@ -67,9 +67,16 @@ BEGIN {
     require IPC::Manager;
     no warnings 'once', 'redefine';
     *IPC::Manager::connect           = sub { bless {}, 'T2H2_ObsNoopClient' };
-    *T2H2_ObsNoopClient::send_message = sub { };
-    *T2H2_ObsNoopClient::peer_active  = sub { 1 };
-    *T2H2_ObsNoopClient::disconnect   = sub { };
+    *T2H2_ObsNoopClient::send_message            = sub { };
+    *T2H2_ObsNoopClient::try_send_message        = sub { 1 };
+    *T2H2_ObsNoopClient::peer_active             = sub { 1 };
+    *T2H2_ObsNoopClient::disconnect              = sub { };
+    *T2H2_ObsNoopClient::pending_sends           = sub { 0 };
+    *T2H2_ObsNoopClient::have_pending_sends      = sub { 0 };
+    *T2H2_ObsNoopClient::drain_pending           = sub { 0 };
+    *T2H2_ObsNoopClient::have_writable_handles   = sub { 0 };
+    *T2H2_ObsNoopClient::writable_handles        = sub { () };
+    *T2H2_ObsNoopClient::set_send_blocking       = sub { return };
 }
 
 my $CAN_FORK = $Config{d_fork};

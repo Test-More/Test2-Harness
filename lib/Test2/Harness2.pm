@@ -460,6 +460,46 @@ sub request_handler_finish {
     return {ok => 1};
 }
 
+# Idle-check used by the test command (and any caller that wants to
+# wait for the harness to drain before requesting termination).
+# Returns {ok => 1, idle => 1} when there is no other pending work
+# the harness still needs to do for the asking peer:
+#
+#   - the harness's outbox to that peer is empty
+#   - no runs are active or queued
+#   - no in-flight subscription deltas remain
+#
+# The current request itself is NOT counted: the response that goes
+# back is queued AFTER this handler returns, so at handler-time the
+# outbox does not yet contain it. The caller therefore polls until
+# idle == 1, then issues finish/terminate without racing pending
+# events.
+sub request_handler_has_pending_messages {
+    my ($self, $payload, $msg) = @_;
+
+    my $peer = $payload->{peer} // ($msg ? $msg->from : undef)
+        or return {ok => 0, error => "'peer' is required (or supply a from-bearing msg)"};
+
+    my $client = $self->client;
+
+    # IPC::Manager 0.000034 (cpanfile minimum) provides the full
+    # Outbox API as no-op fallbacks on every client backend, so
+    # pending_sends_to is always callable -- non-Outbox clients
+    # return 0 without walking anything.
+    my $pending = $client->pending_sends_to($peer);
+
+    my $running = scalar keys %{$self->{+RUN_SERVICES} // {}};
+    my $queued  = scalar @{$self->{+QUEUE} // []};
+
+    return {
+        ok      => 1,
+        idle    => ($pending == 0 && $running == 0 && $queued == 0) ? 1 : 0,
+        pending => $pending,
+        running => $running,
+        queued  => $queued,
+    };
+}
+
 # Per-run pass/fail + per-job verdicts. A completed run's final
 # snapshot is stashed in COMPLETED_RUNS by _handle_run_state_update
 # at the moment it sees the run close out; this handler serves from

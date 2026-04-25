@@ -1,9 +1,5 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: signal handling under nested yath not aligned with current Streamer (AUTHOR_TESTING bypasses old gate)";
-__END__
-
-use Test2::V0;
 use Test2::Require::AuthorTesting;
 
 use File::Temp qw/tempdir/;

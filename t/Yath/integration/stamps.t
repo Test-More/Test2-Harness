@@ -1,6 +1,6 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: plugin loading and event timestamp rendering not aligned";
+plan skip_all => "TODO: test uses \$log->poll() (JSONL API) but log=>1 now returns a workdir; needs rewrite to App::Yath2::LogArchive; also --no-plugins flag not yet implemented";
 __END__
 
 use Test2::V0;

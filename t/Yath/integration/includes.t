@@ -1,9 +1,5 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: -I/--unsafe-inc include handling not aligned with current command::test";
-__END__
-
-use Test2::V0;
 use IPC::Cmd qw/can_run/;
 
 use File::Spec;

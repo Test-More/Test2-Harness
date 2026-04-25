@@ -1,6 +1,6 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: job concurrency scheduling not validated yet against current scheduler";
+plan skip_all => "TODO: test uses \$log->poll() (JSONL API) but log=>1 now returns a workdir; needs rewrite to use App::Yath2::LogArchive for job event ordering assertions";
 __END__
 
 use Test2::V0;

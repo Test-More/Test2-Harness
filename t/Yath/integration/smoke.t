@@ -1,6 +1,6 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: plugin loading (-p+SmokePlugin) and -D dev-libs not aligned";
+plan skip_all => "TODO: test uses \$log->poll() (JSONL API) but log=>1 now returns a workdir; needs rewrite to use App::Yath2::LogArchive for event iteration";
 __END__
 
 use Test2::V0;

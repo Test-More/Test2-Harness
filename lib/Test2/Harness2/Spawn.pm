@@ -114,7 +114,16 @@ sub wait_until_idle {
     $deadline = time + $timeout if $timeout;
 
     while (1) {
-        my $res = $self->has_pending_messages;
+        my $res;
+        my $ok = eval { $res = $self->has_pending_messages; 1 };
+        # If the peer is gone or the request failed because the
+        # peer is no longer a valid recipient, treat that as idle:
+        # there is nothing more for us to wait for.
+        unless ($ok) {
+            return 1 if $@ =~ /not a valid message recipient/;
+            return 1 if $@ =~ $PEER_GONE;
+            die $@;
+        }
         return 1 if $res && $res->{ok} && $res->{idle};
 
         if (defined $deadline) {

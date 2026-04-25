@@ -1,8 +1,5 @@
 # HARNESS-CONFLICTS YATH
-use Test2::V0;
-plan skip_all => "TODO: speedtag command output not aligned with current log format";
-__END__
-
+# HARNESS-DURATION-MODERATE
 use Test2::V0;
 
 use File::Temp qw/tempdir/;

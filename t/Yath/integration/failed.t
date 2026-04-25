@@ -1,9 +1,5 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: failed command not yet wired against current log format";
-__END__
-
-use Test2::V0;
 
 use File::Temp qw/tempdir/;
 use File::Spec;

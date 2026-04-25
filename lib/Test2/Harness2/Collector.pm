@@ -1632,6 +1632,22 @@ sub _exit_mirroring_child {
     my $self = shift;
     my ($collector_ok) = @_;
 
+    # Drain any queued outbound IPC sends before exit. The collector
+    # was running in send_blocking=0 mode (set by _ipc_client) so
+    # events accumulated during the run are still in the client's
+    # outbox; without this drain they would be dropped when this
+    # process _exits. Loop until the queue clears or a 5s deadline
+    # is hit (avoid wedging an exit on a peer that isn't reading).
+    if (my $client = $self->{_ipc_client}) {
+        if ($client->can('pending_sends') && $client->can('drain_pending')) {
+            my $deadline = time + 5;
+            while ($client->pending_sends && time < $deadline) {
+                last unless $client->drain_pending;
+                tinysleep(0.01) if $client->pending_sends;
+            }
+        }
+    }
+
     POSIX::_exit(255) unless $collector_ok;
 
     if (defined(my $child_exit = $self->{+CHILD_EXIT})) {

@@ -97,11 +97,9 @@ sub yath {
 
     my (@log, $logfile);
     if ($log) {
-        my $fh;
-        ($fh, $logfile) = tempfile("yathlog-$$-XXXXXXXX", TMPDIR => 1, UNLINK => 1, SUFFIX => '.jsonl');
-        close($fh);
-        @log = ('-F' => $logfile);
-        print "DEBUG: log file = '$logfile'\n" if $debug;
+        $logfile = tempdir("yathworkdir-$$-XXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+        @log = ('--workdir' => $logfile);
+        print "DEBUG: workdir = '$logfile'\n" if $debug;
     }
 
     unless ($no_app_path) {
@@ -405,9 +403,12 @@ C<< $result->{output} >>.
 
 Defaults to false.
 
-When true yath will be instructed to produce a log, the log will be accessible
-via C<< $result->{log} >>. C<< $result->{log} >> will be an instance of
-L<Test2::Harness2::Util::File::JSONL>.
+When true yath will be run with a temporary C<--workdir> directory so that the
+full run log is preserved after the process exits. The workdir path is
+accessible via C<< $result->{log}->name >>. C<< $result->{log} >> is an
+instance of L<Test2::Harness2::Util::File::JSONL> used as a thin wrapper that
+exposes the path via C<< ->name >>; pass that path to L<App::Yath2::LogArchive>
+to read events.
 
 =item no_app_path => $bool
 
@@ -443,12 +444,14 @@ Exit value returned from yath.
 
 The output produced by the yath command.
 
-=item log => $jsonl_object
+=item log => $workdir_object
 
-An instance of L<Test2::Harness2::Util::File::JSONL> opened from the log file
-produced by the yath command.
+Present when C<< log => 1 >> was passed. An instance of
+L<Test2::Harness2::Util::File::JSONL> wrapping the temporary workdir path.
+Call C<< $result->{log}->name >> to get the directory path, then pass it to
+L<App::Yath2::LogArchive> to parse run events.
 
-B<Note:> By default no logging is done, you must specify the C<< log => 1 >>
+B<Note:> By default no workdir is kept, you must specify the C<< log => 1 >>
 argument to enable it.
 
 =back

@@ -6,6 +6,7 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use POSIX qw/:sys_wait_h/;
+use Time::HiRes ();
 
 use Object::HashBase qw{
     <pid
@@ -89,6 +90,40 @@ sub _send_request_race_safe {
 }
 
 sub finish { $_[0]->_send_request_race_safe('finish') }
+
+# Single non-blocking idle check. Returns the harness's response
+# hashref: { ok => 1, idle => 0|1, pending => N, running => N,
+# queued => N }. The current request itself is excluded from the
+# pending count (the response goes back AFTER the handler returns).
+sub has_pending_messages {
+    my $self = shift;
+    return $self->_send_request('has_pending_messages');
+}
+
+# Poll until the harness reports idle for our peer, or $timeout
+# seconds elapse. Returns 1 if idle was reached, 0 on timeout. The
+# default timeout is 30 seconds; pass 0 for unbounded polling. Each
+# poll uses a sync_request whose response itself does not count as
+# pending work.
+sub wait_until_idle {
+    my $self = shift;
+    my ($timeout) = @_;
+    $timeout //= 30;
+
+    my $deadline;
+    $deadline = time + $timeout if $timeout;
+
+    while (1) {
+        my $res = $self->has_pending_messages;
+        return 1 if $res && $res->{ok} && $res->{idle};
+
+        if (defined $deadline) {
+            return 0 if time >= $deadline;
+        }
+
+        Time::HiRes::sleep(0.05);
+    }
+}
 
 # Ask the harness to forward state and/or artifact updates to this
 # handle's IPC client. %params are the harness's subscribe payload:

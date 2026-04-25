@@ -1,9 +1,5 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: verbose UTF-8 renderer output not aligned with current Streamer/Renderer";
-__END__
-
-use Test2::V0;
 
 use lib 't/lib';
 use Test2::Harness2::Test::Yath qw/yath/;
@@ -36,7 +32,7 @@ my @want = (
 
 yath(
     command => 'test',
-    args    => ['-v', "$dir/plugin.tx"],
+    args    => ['-j1', '-v', "$dir/plugin.tx"],
     exit    => 0,
     encoding => 'utf8',
     test    => sub {
@@ -50,7 +46,7 @@ yath(
 
 yath(
     command => 'test',
-    args    => ['-v', "$dir/no-plugin.tx"],
+    args    => ['-j1', '-v', "$dir/no-plugin.tx"],
     exit    => 0,
     test    => sub {
         my $out = shift;

@@ -1,9 +1,5 @@
 # HARNESS-CONFLICTS YATH
 use Test2::V0;
-plan skip_all => "TODO: TAP subtest verbose rendering not aligned with current renderer";
-__END__
-
-use Test2::V0;
 
 use lib 't/lib';
 use Test2::Harness2::Test::Yath qw/yath/;
@@ -13,7 +9,7 @@ $dir =~ s{^\./}{};
 
 yath(
     command => 'test',
-    args    => [$dir, '--ext=tx', '-v'],
+    args    => [$dir, '--ext=tx', '-j1', '-v'],
     exit    => 0,
     test    => sub {
         my $out = shift;

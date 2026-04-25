@@ -89,7 +89,17 @@ sub _send_request_race_safe {
     die $err;
 }
 
-sub finish { $_[0]->_send_request_race_safe('finish') }
+sub finish {
+    my $self = shift;
+    # Drain queued events from the harness's outbox before asking
+    # it to terminate, so non-blocking sends made during the run
+    # are not dropped on exit. Cap at 30 s; on timeout we proceed
+    # because the run is over and any straggler events are not
+    # worth blocking exit on. Failures during the wait (peer-gone,
+    # etc.) are tolerated -- finish itself uses the race-safe send.
+    eval { $self->wait_until_idle(30); 1 } or warn $@;
+    return $self->_send_request_race_safe('finish');
+}
 
 # Single non-blocking idle check. Returns the harness's response
 # hashref: { ok => 1, idle => 0|1, pending => N, running => N,

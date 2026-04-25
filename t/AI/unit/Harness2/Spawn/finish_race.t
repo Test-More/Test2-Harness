@@ -29,6 +29,7 @@ subtest 'finish() returns cleanly on success' => sub {
 
     my @called;
     no warnings 'redefine';
+    local *Test2::Harness2::Spawn::wait_until_idle = sub { 1 };
     local *Test2::Harness2::Spawn::_send_request = sub {
         push @called => $_[1];
         return {ok => 1};
@@ -46,6 +47,7 @@ subtest 'finish() absorbs peer-gone "went away" error' => sub {
     my $spawn = make_spawn();
 
     no warnings 'redefine';
+    local *Test2::Harness2::Spawn::wait_until_idle = sub { 1 };
     local *Test2::Harness2::Spawn::_send_request = sub { die "$PEER_GONE_AWAIT\n" };
 
     my $ok = eval { $spawn->finish; 1 };
@@ -59,6 +61,7 @@ subtest 'finish() absorbs peer-gone "not a valid recipient" error' => sub {
     my $spawn = make_spawn();
 
     no warnings 'redefine';
+    local *Test2::Harness2::Spawn::wait_until_idle = sub { 1 };
     local *Test2::Harness2::Spawn::_send_request = sub { die "$PEER_GONE_RECIP\n" };
 
     my $ok = eval { $spawn->finish; 1 };
@@ -72,6 +75,7 @@ subtest 'finish() propagates non-peer-gone errors' => sub {
     my $spawn = make_spawn();
 
     no warnings 'redefine';
+    local *Test2::Harness2::Spawn::wait_until_idle = sub { 1 };
     local *Test2::Harness2::Spawn::_send_request = sub { die "$OTHER_ERROR\n" };
 
     my $ok  = eval { $spawn->finish; 1 };

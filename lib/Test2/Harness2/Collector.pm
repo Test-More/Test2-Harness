@@ -725,7 +725,15 @@ sub _ipc_client {
     return $self->{_ipc_client} if $self->{_ipc_client};
 
     require IPC::Manager;
-    return $self->{_ipc_client} = IPC::Manager->connect($self->bus_id, $self->{+IPCM_INFO});
+    my $c = IPC::Manager->connect($self->bus_id, $self->{+IPCM_INFO});
+
+    # The collector runs an event loop. Sends never block: queued
+    # messages are flushed by the loop's per-iteration drain (see
+    # _run_collection_loop). Clients without Role::Outbox treat
+    # set_send_blocking as a no-op.
+    $c->set_send_blocking(0) if eval { $c->can('set_send_blocking'); 1 };
+
+    return $self->{_ipc_client} = $c;
 }
 
 # Wait briefly for $target to register on the bus so the first
@@ -811,8 +819,11 @@ sub _send_to {
 
     $self->_wait_for_ipc_target($target);
 
+    # try_send_message is non-blocking: queues on EAGAIN. The
+    # collection loop calls drain_pending each iteration to flush
+    # the queue when the transport reports writability.
     my $ok = eval {
-        $self->_ipc_client->send_message($target, $content);
+        $self->_ipc_client->try_send_message($target, $content);
         1;
     };
     return if $ok;
@@ -947,7 +958,34 @@ sub _run_collection_loop {
     my $draining = 0;    # Set when we got a signal/parent-gone and are finishing up
 
     while (1) {
-        $sel->can_read($cycle) if $sel->count;
+        # Flush any queued outbound IPC sends. The client is in
+        # send_blocking=0 mode (set by _ipc_client). The kernel may
+        # have made room in the FIFO since the previous iteration.
+        my $client = $self->{_ipc_client};
+        $client->drain_pending if $client && $client->pending_sends;
+
+        # Build a write-side select set when the outbox has a
+        # backlog so the loop wakes the moment room appears, even
+        # on platforms without large pipe buffers.
+        my $write_sel;
+        if ($client && $client->have_writable_handles) {
+            require IO::Select;
+            my @wh = $client->writable_handles;
+            if (@wh) {
+                $write_sel = IO::Select->new;
+                $write_sel->add(@wh);
+            }
+        }
+
+        if ($sel->count || $write_sel) {
+            require IO::Select;
+            IO::Select->select($sel->count ? $sel : undef, $write_sel, undef, $cycle);
+        }
+
+        # Post-select drain: writable wake-up means the queue can
+        # advance now. Read-side wake-up may also have made room
+        # transitively.
+        $client->drain_pending if $client && $client->pending_sends;
 
         my $ok = eval {
             # Check for signal - kill child but keep draining handles

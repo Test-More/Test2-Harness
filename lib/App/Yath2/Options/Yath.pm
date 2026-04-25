@@ -144,6 +144,13 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
             return $class => $args;
         },
     );
+
+    option no_plugins => (
+        type        => 'Bool',
+        alt         => ['no-plugins'],
+        default     => 0,
+        description => 'Disable auto-loading of configured plugins. Explicitly requested plugins (-p) are still loaded. Useful in tests to prevent ambient plugin configuration from interfering.',
+    );
 };
 
 1;

@@ -60,19 +60,22 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: local
-          key: cpan-ubuntu-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
+          key: cpan-ubuntu-${{ hashFiles('cpanfile') }}-${{ steps.cache-week.outputs.week }}
           restore-keys: |
-            cpan-ubuntu-${{ hashFiles('cpanfile', 'cpanfile.ci') }}-
+            cpan-ubuntu-${{ hashFiles('cpanfile') }}-
             cpan-ubuntu-
-      - name: install dependencies from cpanfile.ci
-        uses: perl-actions/install-with-cpm@v2
-        with:
-          cpanfile: ".github/cpanfile.ci"
-          retries: 3
-      - name: install dependencies from cpanfile
+      - name: install dependencies from cpanfile (all groups)
         uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: "cpanfile"
+          # Install runtime + test + configure + develop. The develop
+          # group carries the modules that used to live in
+          # .github/cpanfile.ci plus optional backends (e.g.
+          # Compress::Zstd) that gate LogArchive test coverage.
+          # Do NOT pass --with-suggests: RuntimeSuggests includes
+          # Win32::Console::ANSI / Win32::Job, which fail to configure
+          # on Linux runners ("OS unsupported").
+          args: "--with-develop"
           retries: 3
       - run: perl Makefile.PL
       - run: make
@@ -146,21 +149,22 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: local
-          key: cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', '.github/cpanfile.ci') }}-${{ steps.cache-week.outputs.week }}
+          key: cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile') }}-${{ steps.cache-week.outputs.week }}
           restore-keys: |
-            cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile', '.github/cpanfile.ci') }}-
+            cpan-perl-${{ matrix.perl-version }}-${{ hashFiles('cpanfile') }}-
             cpan-perl-${{ matrix.perl-version }}-
-      - name: install dependencies from cpanfile.ci
-        uses: perl-actions/install-with-cpm@v2
-        with:
-          cpanfile: ".github/cpanfile.ci"
-          global: true
-          sudo: false
-          retries: 3
-      - name: install dependencies from cpanfile
+      - name: install dependencies from cpanfile (all groups)
         uses: perl-actions/install-with-cpm@v2
         with:
           cpanfile: "cpanfile"
+          # Install runtime + test + configure + develop. The develop
+          # group carries the modules that used to live in
+          # .github/cpanfile.ci plus optional backends (e.g.
+          # Compress::Zstd) that gate LogArchive test coverage.
+          # Do NOT pass --with-suggests: RuntimeSuggests includes
+          # Win32::Console::ANSI / Win32::Job, which fail to configure
+          # on Linux runners ("OS unsupported").
+          args: "--with-develop"
           global: true
           sudo: false
           retries: 3

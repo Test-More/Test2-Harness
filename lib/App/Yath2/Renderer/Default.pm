@@ -680,8 +680,11 @@ sub render_parent {
     my $meth = $params{quiet} ? 'build_quiet' : 'build_event';
 
     my @out;
+    my $ph = $f->{harness} || {};
     for my $sf (@{$f->{parent}->{children}}) {
-        $sf->{harness} ||= $f->{harness};
+        my $ch = $sf->{harness} //= {};
+        $ch->{job_id} //= $ph->{job_id} if defined $ph->{job_id};
+        $ch->{run_id} //= $ph->{run_id} if defined $ph->{run_id};
         my $stree = $self->render_tree($sf);
         push @out => @{$self->$meth($sf, $stree)};
     }

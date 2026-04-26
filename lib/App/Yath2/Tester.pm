@@ -139,6 +139,17 @@ sub yath {
     $ENV{$_} = $env->{$_} for keys %$env;
     $ENV{YATH_COLOR} = 0;
     my $pid = start_process \@cmd => sub {
+        # When this test is itself running under an outer yath, that
+        # outer worker sets TMPDIR to a per-worker subdirectory like
+        # /tmp/yath-XXXXXXXX/tmp. The spawned inner yath places its
+        # IPC::Manager unix-socket route under TMPDIR. The sun_path
+        # budget on Linux is only 104 bytes, leaving no room for the
+        # 42-byte hashed peer-id under such a deep route, which makes
+        # the inner harness fail with "Cannot map peer id ... exceeds
+        # available budget". Reset TMPDIR to /tmp here in the spawned
+        # child so the inner yath gets a short route. See
+        # IPC::Manager::Client::ConnectionUnix::max_on_disk_name_length.
+        $ENV{TMPDIR} = '/tmp';
         return unless $capture;
         swap_io(\*STDOUT, $wh);
         swap_io(\*STDERR, $wh);

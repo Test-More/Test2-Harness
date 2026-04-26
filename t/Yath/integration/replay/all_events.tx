@@ -1,0 +1,21 @@
+use Test2::V0;
+
+plan 4;
+
+note 'this is a note';
+diag 'this is a diagnostic';
+
+ok 1, 'passing assertion';
+
+todo 'expected failure' => sub {
+    ok 0, 'todo failure';
+};
+
+SKIP: {
+    skip 'skip reason', 1;
+    ok 1, 'this is never run';
+}
+
+ok 0, 'real failure';
+
+done_testing;

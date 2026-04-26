@@ -82,4 +82,29 @@ yath(
     },
 );
 
+my $all_events_archive = File::Spec->catfile($dir, 'all_events.yath');
+
+yath(
+    command => 'replay',
+    args    => [$all_events_archive, '-v'],
+    exit    => T(),
+    test    => sub {
+        my $out = shift;
+
+        my %seen;
+        for my $line (split /\n/, $out->{output}) {
+            if ($line =~ /^[\(\[\{<](.*?)[\)\]\}>]/) {
+                my $tag = $1;
+                $tag =~ s/^\s+|\s+$//g;
+                $seen{$tag}++;
+            }
+        }
+
+        for my $tag (qw/ PASS FAIL PLAN NOTE DIAG TODO SKIP REASON FAILED /) {
+            ok($seen{$tag}, "saw event type '$tag'");
+        }
+        ok($seen{'! PASS !'}, "saw amnestied assertion '! PASS !'");
+    },
+);
+
 done_testing;

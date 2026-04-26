@@ -506,7 +506,7 @@ sub process_args {
     $self->{+ENV_VARS} = $self->{+STATE_ENV};
     $self->{+OPTION_STATE} = $state;
 
-    my $no_plugins = eval { $settings->yath->no_plugins } // 0;
+    my $no_plugins = eval { $settings->yath->no_plugin_scan } // 0;
     for my $module (keys %{$self->{+STATE_MODULES}}) {
         for my $set (['yath', 'plugins', 'App::Yath2::Plugin'], ['renderer', 'classes', 'App::Yath2::Renderer'], ['resource', 'classes', 'App::Yath2::Resource']) {
             my ($group, $field, $type) = @$set;

@@ -10,6 +10,15 @@ use File::Temp qw/tempdir/;
 
 my $ORIG_DIR = getcwd();
 
+my $can_symlink = do {
+    my $td = tempdir(CLEANUP => 1);
+    my $src = File::Spec->catfile($td, 'src');
+    open(my $fh, '>', $src) or die "Cannot create $src: $!";
+    close($fh);
+    my $dst = File::Spec->catfile($td, 'dst');
+    eval { symlink($src, $dst); 1 } && -l $dst;
+};
+
 subtest 'mod2file' => sub {
     is(mod2file('App::Yath::Script'),     'App/Yath/Script.pm',     'nested module');
     is(mod2file('Foo'),                   'Foo.pm',                 'single-level module');
@@ -141,6 +150,8 @@ subtest 'find_rc_updir - plain unversioned file defaults to V1' => sub {
 };
 
 subtest 'find_rc_updir - symlink to versioned file' => sub {
+    skip_all "symlink not supported on this platform" unless $can_symlink;
+
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";
 
@@ -160,6 +171,8 @@ subtest 'find_rc_updir - symlink to versioned file' => sub {
 };
 
 subtest 'find_rc_updir - symlink takes priority over versioned file' => sub {
+    skip_all "symlink not supported on this platform" unless $can_symlink;
+
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";
 
@@ -227,6 +240,8 @@ subtest 'find_rc_updir - user rc files' => sub {
 };
 
 subtest 'find_rc_updir - user symlink to versioned file' => sub {
+    skip_all "symlink not supported on this platform" unless $can_symlink;
+
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";
 
@@ -287,6 +302,8 @@ subtest 'find_rc_updir - uppercase V user rc' => sub {
 };
 
 subtest 'find_rc_updir - symlink to uppercase V file' => sub {
+    skip_all "symlink not supported on this platform" unless $can_symlink;
+
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";
 

@@ -19,18 +19,35 @@ my $dir = tempdir(CLEANUP => 1);
 open(my $rc, '>', File::Spec->catfile($dir, '.yath.v0.rc')) or die "Cannot write .yath.v0.rc: $!";
 close($rc);
 
+my $can_symlink = do {
+    my $td = tempdir(CLEANUP => 1);
+    my $src = File::Spec->catfile($td, 'src');
+    open(my $fh, '>', $src) or die "Cannot create $src: $!";
+    close($fh);
+    my $dst = File::Spec->catfile($td, 'dst');
+    eval { symlink($src, $dst); 1 } && -l $dst;
+};
+
 # All invocations pre-set PERL_HASH_SEED to avoid re-exec
 local $ENV{PERL_HASH_SEED} = '20200101';
 
-sub run_yath {
-    my (@args) = @_;
+sub run_yath_in {
+    my ($d, @args) = @_;
 
-    my $cmd = join ' ', "cd", $dir, "&&", $perl, "-I$libdir", $yath, @args;
+    # Avoid shell `cd $d &&` because cmd.exe `cd` will not switch drives,
+    # which silently leaves cwd on the wrong drive when TEMP is on a
+    # different drive than the build directory.
+    my $cmd = join ' ', $perl, "-I$libdir", $yath, @args;
+    my $cwd = getcwd();
+    chdir $d or die "Cannot chdir to $d: $!";
     my $output = `$cmd 2>&1`;
     my $exit   = $? >> 8;
+    chdir $cwd or die "Cannot chdir back to $cwd: $!";
 
     return ($output, $exit);
 }
+
+sub run_yath { run_yath_in($dir, @_) }
 
 subtest 'basic invocation with --begin and runtime args' => sub {
     my ($output, $exit) = run_yath('--begin', 'hello', '--begin', 'world', 'foo', 'bar');
@@ -161,6 +178,8 @@ subtest 'V# only matches as first argument' => sub {
 };
 
 subtest 'symlink .yath.rc -> .yath.v0.rc is found' => sub {
+    skip_all "symlink not supported on this platform" unless $can_symlink;
+
     my $tdir = tempdir(CLEANUP => 1);
 
     # Create versioned file and symlink
@@ -169,9 +188,7 @@ subtest 'symlink .yath.rc -> .yath.v0.rc is found' => sub {
     symlink('.yath.v0.rc', File::Spec->catfile($tdir, '.yath.rc'))
         or die "Cannot create symlink: $!";
 
-    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'test_arg';
-    my $output = `$cmd 2>&1`;
-    my $exit   = $? >> 8;
+    my ($output, $exit) = run_yath_in($tdir, 'test_arg');
 
     like($output, qr/^Warning:.*Version '0'/m, 'symlinked .yath.rc resolved to V0');
     like($output, qr/^RUNTIME: test_arg$/m,    'runtime arg processed');
@@ -184,9 +201,7 @@ subtest 'uppercase V in rc filename' => sub {
     open(my $fh, '>', File::Spec->catfile($tdir, '.yath.V0.rc')) or die $!;
     close($fh);
 
-    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'test_upper';
-    my $output = `$cmd 2>&1`;
-    my $exit   = $? >> 8;
+    my ($output, $exit) = run_yath_in($tdir, 'test_upper');
 
     like($output, qr/^Warning:.*Version '0'/m, 'V0 loaded from .yath.V0.rc');
     like($output, qr/^RUNTIME: test_upper$/m,  'runtime arg processed');
@@ -199,9 +214,7 @@ subtest 'CLI V# finds uppercase V rc filename' => sub {
     open(my $fh, '>', File::Spec->catfile($tdir, '.yath.V0.rc')) or die $!;
     close($fh);
 
-    my $cmd = join ' ', "cd", $tdir, "&&", $perl, "-I$libdir", $yath, 'V0', 'cli_upper';
-    my $output = `$cmd 2>&1`;
-    my $exit   = $? >> 8;
+    my ($output, $exit) = run_yath_in($tdir, 'V0', 'cli_upper');
 
     like($output, qr/^Warning:.*Version '0'/m, 'CLI V0 found .yath.V0.rc');
     like($output, qr/^RUNTIME: cli_upper$/m,   'runtime arg processed');

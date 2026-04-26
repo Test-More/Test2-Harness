@@ -2,13 +2,10 @@
 # HARNESS-DURATION-SLOW
 use Test2::V0;
 
-use File::Temp qw/tempdir/;
 use File::Spec;
 
 use lib 't/lib';
 use Test2::Harness2::Test::Yath qw/yath/;
-use Test2::Harness2::Util::File::JSONL;
-use Test2::Harness2::Util::JSON qw/decode_json/;
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
@@ -16,6 +13,7 @@ $dir =~ s{^\./}{};
 
 sub clean_output {
     my $out = shift;
+
     $out->{output} =~ s/^.*duration.*$//m;
     $out->{output} =~ s/^.*Wrote log file:.*$//m;
     $out->{output} =~ s/^.*Wrote archive:.*$//m;
@@ -34,9 +32,12 @@ sub clean_output {
     $out->{output} =~ s/^FIXME: publish should send log to server$//gm;
 
     # Normalize display job numbers: parallel jobs complete in non-deterministic
-    # order so the renderer assigns job 1/2/... differently each run. Replace
-    # all "job  N" sequences with "job  N" sentinel so both sides match.
+    # order so the renderer assigns job 1/2/... differently each run.
     $out->{output} =~ s/\bjob\s+\d+\b/job N/g;
+
+    # Normalize absolute paths in "at /abs/path/t/... line N" diagnostics
+    # to repo-relative so the golden file is portable across machines.
+    $out->{output} =~ s{ at \S+/(t/\S+) line }{ at $1 line }g;
 
     my @lines;
     my $start;
@@ -48,54 +49,25 @@ sub clean_output {
         push @lines => $line;
     }
 
-    # Sort consecutive PASSED/FAILED job-status lines so that parallel
-    # completion order does not break the comparison.
-    my @normalized;
-    my @status_group;
-    for my $line (@lines) {
-        if ($line =~ /^\(\s*(?:PASSED|FAILED)\s*\)/) {
-            push @status_group => $line;
-        }
-        else {
-            if (@status_group) {
-                push @normalized => sort @status_group;
-                @status_group = ();
-            }
-            push @normalized => $line;
-        }
-    }
-    push @normalized => sort @status_group if @status_group;
-
-    $out->{output} = join "\n" => @normalized;
+    $out->{output} = join "\n" => @lines;
 }
 
-my $out1 = yath(
-    command => 'test',
-    args    => [$dir, '--ext=tx'],
-    log     => 1,
+my $archive = File::Spec->catfile($dir, 'run.yath');
+my $golden  = File::Spec->catfile($dir, 'expected_output.txt');
+
+open(my $fh, '<', $golden) or die "Cannot read golden file '$golden': $!";
+my $expected = do { local $/; <$fh> };
+close($fh);
+chomp $expected;
+
+yath(
+    command => 'replay',
+    args    => [$archive],
     exit    => T(),
     test    => sub {
         my $out = shift;
         clean_output($out);
-
-        like($out->{output}, qr{FAILED.*fail\.tx}, "'fail.tx' was seen as a failure when reading the log");
-        like($out->{output}, qr{PASSED.*pass\.tx}, "'pass.tx' was not seen as a failure when reading the log");
-
-    },
-);
-
-my $logfile = $out1->{log}->name;
-
-yath(
-    command => 'replay',
-    args    => [$logfile],
-    exit => $out1->{exit},
-    test => sub {
-        my $out2 = shift;
-        clean_output($out2);
-        clean_output($out1);
-
-        is($out2->{output}, $out1->{output}, "Replay has identical output to original");
+        is($out->{output}, $expected, "Replay output matches committed golden");
     },
 );
 

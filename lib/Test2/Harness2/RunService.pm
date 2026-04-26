@@ -219,14 +219,14 @@ sub request_handler_launch_job {
             # include paths via PERL5LIB so the re-execed perl sees them.
             # Do not use -I flags — they would be forwarded by perl to the
             # shebang interpreter (e.g. bash), which does not understand them.
-            if (@extra_inc) {
-                my $sep          = $^O eq 'MSWin32' ? ';' : ':';
-                my $new_perl5lib = join $sep, @extra_inc;
-                if (my $existing = $ENV{PERL5LIB}) {
-                    $new_perl5lib .= "$sep$existing";
-                }
-                $extra_env{PERL5LIB} = $new_perl5lib;
+            # Always include 'lib' so harness internals (e.g. Stream2
+            # formatter) are reachable even when T2_HARNESS_INCLUDES is unset.
+            my $sep = $^O eq 'MSWin32' ? ';' : ':';
+            my $new_perl5lib = join $sep, @extra_inc, 'lib';
+            if (my $existing = $ENV{PERL5LIB}) {
+                $new_perl5lib .= "$sep$existing";
             }
+            $extra_env{PERL5LIB} = $new_perl5lib;
             # Run the script directly; the OS kernel handles the shebang.
             $launch_cmd = [$test_file_abs];
         }
@@ -234,7 +234,9 @@ sub request_handler_launch_job {
             # Perl scripts: inject include paths as -I flags on the command
             # line. This sets @INC before any module is loaded, which is
             # required because exec() starts a fresh interpreter.
-            $launch_cmd = [$^X, (map { "-I$_" } @extra_inc), $test_file_abs];
+            # Always include -Ilib so harness internals (e.g. Stream2
+            # formatter) are reachable even when T2_HARNESS_INCLUDES is unset.
+            $launch_cmd = [$^X, (map { "-I$_" } @extra_inc), '-Ilib', $test_file_abs];
         }
     }
 

@@ -21,7 +21,7 @@ use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Collector::Handle;
 use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
-use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io/;
+use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io ipc_default_connect_args/;
 
 # This is the base class. Two subclasses add the test-vs-service
 # divergent behaviour: Test2::Harness2::Collector::Test carries an
@@ -725,7 +725,12 @@ sub _ipc_client {
     return $self->{_ipc_client} if $self->{_ipc_client};
 
     require IPC::Manager;
-    my $c = IPC::Manager->connect($self->bus_id, $self->{+IPCM_INFO});
+    # listen=0 (from ipc_default_connect_args): the collector only
+    # ever sends UPWARD and never receives inbound traffic, so on
+    # ConnectionUnix it skips the listen socket entirely. Drivers
+    # that ignore the flag (MessageFiles, AtomicPipe, etc.) treat
+    # the kwarg as a no-op.
+    my $c = IPC::Manager->connect($self->bus_id, $self->{+IPCM_INFO}, ipc_default_connect_args());
 
     # The collector runs an event loop. Sends never block: queued
     # messages are flushed by the loop's per-iteration drain (see
@@ -1298,8 +1303,7 @@ sub _check_new_pgroup_supported_on_win32 {
     # is required for Invariant 1 (child-process isolation).
     my $has_win32_job = eval { require Win32::Job; 1 };
     unless ($has_win32_job) {
-        croak "new_pgroup => 1 on Windows requires Win32::Job (not installed); "
-            . "install Win32::Job to enable process-group isolation";
+        croak "new_pgroup => 1 on Windows requires Win32::Job (not installed); " . "install Win32::Job to enable process-group isolation";
     }
 }
 
@@ -1374,10 +1378,12 @@ sub _launch_child_win32_job {
     # Pass the pipe write ends as the child's stdout/stderr.
     # Win32::Job->spawn accepts filehandles for stdin/stdout/stderr and
     # marks them inheritable before calling CreateProcess.
-    my $pid = $job->spawn($exe, $cmdline, {
-        stdout => $out_w->wh,
-        stderr => $err_w->wh,
-    });
+    my $pid = $job->spawn(
+        $exe, $cmdline, {
+            stdout => $out_w->wh,
+            stderr => $err_w->wh,
+        }
+    );
 
     croak "Win32::Job->spawn('$exe') failed: $^E"
         unless defined $pid && $pid > 0;

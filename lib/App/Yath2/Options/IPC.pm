@@ -35,8 +35,9 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
     option protocol => (
         name          => 'ipc-protocol',
         type          => 'Scalar',
-        description   => 'IPC::Manager client driver (default MessageFiles). ' . 'Use "+Some::Class" to force a fully qualified namespace.',
+        description   => 'IPC::Manager client driver (default ConnectionUnix). ' . 'Use "+Some::Class" to force a fully qualified namespace.',
         long_examples => [
+            ' ConnectionUnix',
             ' AtomicPipe',
             ' UnixSocket',
             ' JSONFile',
@@ -45,7 +46,7 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
             ' SQLite',
             ' +Custom::Driver',
         ],
-        default   => sub { 'IPC::Manager::Client::MessageFiles' },
+        default   => sub { 'IPC::Manager::Client::ConnectionUnix' },
         normalize => \&_normalize_protocol,
     );
 

@@ -8,11 +8,12 @@ use Carp qw/croak/;
 use File::Copy qw/cp/;
 use File::Path qw/make_path/;
 use File::ShareDir ();
-use File::Spec ();
+use File::Spec     ();
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Util qw/parse_exit tinysleep load_module/;
+use Test2::Harness2::Util::IPC qw/ipc_default_spawn_args/;
 use POSIX qw/WNOHANG/;
 
 use Atomic::Pipe;
@@ -141,9 +142,7 @@ sub init {
         }
     }
     else {
-        my $share = eval {
-            File::ShareDir::dist_file('Test2-Harness2', 'other/zstd.dict');
-        };
+        my $share = eval { File::ShareDir::dist_file('Test2-Harness2', 'other/zstd.dict'); };
         $self->{+DICT_PATH} = (defined $share && -f $share) ? $share : undef;
     }
 
@@ -243,7 +242,7 @@ sub start {
     # guard never fires in either the service child or the collector parent.
     my $ipcm_guard;
     unless ($args{ipcm_info}) {
-        $ipcm_guard = ipcm_spawn();
+        $ipcm_guard = ipcm_spawn(ipc_default_spawn_args());
         $args{ipcm_info} = $ipcm_guard->info;
     }
 
@@ -319,7 +318,9 @@ sub spawn {
     # Spawn the IPC bus in the parent so both parent and child share the same
     # connection info.  Use guard => 0 so the parent does not try to tear down
     # the bus when the Spawn object goes out of scope; the child owns it.
-    my @ipcm_args = (guard => 0);
+    # Caller-supplied $protocol is appended last so it overrides the default
+    # protocol from ipc_default_spawn_args().
+    my @ipcm_args = (ipc_default_spawn_args(), guard => 0);
     push @ipcm_args => (protocol => $protocol) if defined $protocol && length $protocol;
     my $ipcm = ipcm_spawn(@ipcm_args);
     $args{ipcm_info} = $ipcm->info;
@@ -489,7 +490,7 @@ sub request_handler_has_pending_messages {
     my $pending = $client->pending_sends_to($peer);
 
     my $running = scalar keys %{$self->{+RUN_SERVICES} // {}};
-    my $queued  = scalar @{$self->{+QUEUE} // []};
+    my $queued  = scalar @{$self->{+QUEUE}             // []};
 
     return {
         ok      => 1,
@@ -713,10 +714,10 @@ sub _write_artifacts_manifest {
 
     my $path = "$self->{+LOGDIR}/artifacts.json.zst";
 
-    my $dict = "$self->{+LOGDIR}/zstd-dict.bin";
+    my $dict      = "$self->{+LOGDIR}/zstd-dict.bin";
     my @dict_args = -f $dict ? (dict_path => $dict) : ();
 
-    my $ok  = eval {
+    my $ok = eval {
         write_json_zst_file_atomic($path, $self->{+ARTIFACTS}, @dict_args);
         1;
     };
@@ -789,8 +790,8 @@ sub request_handler_subscribe {
     my $artifacts = $payload->{artifacts} ? 1 : 0;
 
     my @run_ids;
-    push @run_ids => $payload->{run}         if defined $payload->{run};
-    push @run_ids => @{$payload->{runs}}     if ref($payload->{runs}) eq 'ARRAY';
+    push @run_ids => $payload->{run}     if defined $payload->{run};
+    push @run_ids => @{$payload->{runs}} if ref($payload->{runs}) eq 'ARRAY';
 
     # Validate every run_id up front. The harness knows about runs in
     # the live queue and in COMPLETED_RUNS (terminal snapshots).
@@ -857,10 +858,10 @@ sub _notify_state_subscribers {
 
         $self->_send_to_subscriber(
             $peer => {
-                type    => 'state',
-                item    => 'run',
-                run_id  => $run_id,
-                state   => $run_data,
+                type   => 'state',
+                item   => 'run',
+                run_id => $run_id,
+                state  => $run_data,
             },
         );
     }
@@ -942,7 +943,7 @@ sub _send_artifact_snapshot {
         $artifacts = {
             map  { $_ => $all->{$_} }
             grep { m{^runs/\Q$run_id\E(?:[./]|\z)} }
-            keys %$all
+                keys %$all
         };
     }
     else {
@@ -976,7 +977,7 @@ sub _send_artifact_snapshot {
 sub _send_to_subscriber {
     my ($self, $peer, $payload) = @_;
 
-    my $ok = eval { $self->client->send_message($peer, $payload); 1 };
+    my $ok  = eval { $self->client->send_message($peer, $payload); 1 };
     my $err = $@;
 
     return if $ok;
@@ -1013,8 +1014,8 @@ sub _drain_subscriber_retries {
         my $peer_gone = 0;
         for my $i (0 .. $#queue) {
             my $payload = $queue[$i];
-            my $ok  = eval { $self->client->send_message($peer, $payload); 1 };
-            my $err = $@;
+            my $ok      = eval { $self->client->send_message($peer, $payload); 1 };
+            my $err     = $@;
 
             next if $ok;
 
@@ -1117,7 +1118,7 @@ sub _snapshot_run_results {
         # Entries without completed_at are queue-time or started-time
         # seeds (jobs that never finished or were skipped). Only
         # completed jobs contribute to the aggregate verdict.
-        next unless defined $results->{$jid}{completed_at};
+        next          unless defined $results->{$jid}{completed_at};
         $all_pass = 0 unless $results->{$jid}{pass};
     }
 
@@ -1394,9 +1395,9 @@ sub _scheduler_started {
 sub _scheduler_mark_running {
     my ($self, $run_id, $job_id) = @_;
     my $s = $self->{+SCHEDULER}->{$run_id} or return;
-    $s->{pending} = [grep { $_ ne $job_id } @{$s->{pending}}];
+    $s->{pending}            = [grep { $_ ne $job_id } @{$s->{pending}}];
     $s->{running}->{$job_id} = 1;
-    $s->{started} = 1;
+    $s->{started}            = 1;
     return;
 }
 

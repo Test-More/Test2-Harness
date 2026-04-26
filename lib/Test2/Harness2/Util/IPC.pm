@@ -6,6 +6,7 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
 use Errno qw/ESRCH/;
+use File::ShareDir ();
 
 # /proc layouts we know how to parse: Linux's multi-line "PPid:" form
 # and FreeBSD/DragonFlyBSD's single-line positional form. Solaris,
@@ -13,8 +14,20 @@ use Errno qw/ESRCH/;
 # doesn't handle -- on those platforms we fall through to ps even if
 # /proc happens to be mounted, so we can't misread a binary status
 # blob as text and return garbage.
-use constant HAS_PARSEABLE_PROC =>
-    ($^O eq 'linux' || $^O eq 'freebsd' || $^O eq 'dragonfly');
+use constant HAS_PARSEABLE_PROC => ($^O eq 'linux' || $^O eq 'freebsd' || $^O eq 'dragonfly');
+
+# IPC::Manager protocol used as the default for harness IPC. The
+# ConnectionUnix driver gives us per-peer SOCK_STREAM connections
+# with optional listen sockets, so transient peers (collectors, the
+# parent-side spawn handle) can skip listening while services keep
+# listen=1 to accept inbound traffic.
+use constant IPC_DEFAULT_PROTOCOL => 'IPC::Manager::Client::ConnectionUnix';
+
+# Zstd compression level. 3 is Compress::Zstd's library default and
+# the same value JSON::Zstd uses when nothing is supplied; we set it
+# explicitly so the spec is self-describing and a future tuning
+# change is a one-line edit here.
+use constant IPC_DEFAULT_ZSTD_LEVEL => 3;
 
 use Importer Importer => 'import';
 
@@ -24,7 +37,55 @@ our @EXPORT_OK = qw{
     start_process
     swap_io
     list_direct_children
+    ipc_default_protocol
+    ipc_default_serializer
+    ipc_default_spawn_args
+    ipc_default_connect_args
+    ipc_zstd_dict_path
 };
+
+sub ipc_default_protocol { IPC_DEFAULT_PROTOCOL }
+
+# Path to the install-shipped zstd compression dictionary
+# (share/other/zstd.dict, exposed via File::ShareDir). Returns undef
+# when the dictionary is unavailable; the serializer then falls back
+# to dictless compression. Both peers must resolve the same path
+# with identical content -- File::ShareDir guarantees that for any
+# install that ships the share file.
+sub ipc_zstd_dict_path {
+    my $dict = eval { File::ShareDir::dist_file('Test2-Harness2', 'other/zstd.dict') };
+    return undef unless defined $dict && -f $dict && -r _;
+    return $dict;
+}
+
+# Default serializer spec for harness IPC: JSON::Zstd at level 3
+# with the install-shipped dictionary. The ['Class', %args] form
+# tells IPC::Manager to construct one configured instance and share
+# it across peers (see IPC::Manager::Serializer::JSON::Zstd).
+sub ipc_default_serializer {
+    my $dict = ipc_zstd_dict_path();
+    my @args = (level => IPC_DEFAULT_ZSTD_LEVEL);
+    push @args => (dictionary => $dict) if defined $dict;
+    return ['JSON::Zstd', @args];
+}
+
+# Default kwargs for ipcm_spawn(): protocol + serializer.
+sub ipc_default_spawn_args {
+    return (
+        protocol   => ipc_default_protocol(),
+        serializer => ipc_default_serializer(),
+    );
+}
+
+# Default kwargs for ipcm_connect() from non-services. The
+# ConnectionUnix driver builds a listen socket by default so other
+# peers can connect back; collectors and the parent-side spawn
+# handle never receive inbound traffic and skip the socket. Services
+# (Role::Service consumers) keep listen=1 by default so peers can
+# reach them.
+sub ipc_default_connect_args {
+    return (listen => 0);
+}
 
 sub pid_is_running {
     my ($pid) = @_;

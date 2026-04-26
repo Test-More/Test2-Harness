@@ -8,6 +8,8 @@ use Carp qw/croak/;
 use POSIX qw/:sys_wait_h/;
 use Time::HiRes ();
 
+use Test2::Harness2::Util::IPC qw/ipc_default_connect_args/;
+
 use Object::HashBase qw{
     <pid
     <ipcm_info
@@ -36,10 +38,22 @@ sub handle {
 
 sub _build_handle {
     my $self = shift;
+    require IPC::Manager;
     require IPC::Manager::Service::Handle;
+
+    # The parent-side spawn handle only sends to the harness service
+    # (sync_request + finish/terminate) and never receives inbound
+    # traffic from arbitrary peers, so it does not need its own
+    # listen socket. Pre-build the client with listen=0 and hand it
+    # to the Service::Handle so its lazy client builder is bypassed.
+    my $handle_name = $self->{+NAME} . '-spawn-' . $$;
+    my $client      = IPC::Manager->connect($handle_name, $self->{+IPCM_INFO}, ipc_default_connect_args());
+
     return IPC::Manager::Service::Handle->new(
         service_name => $self->{+NAME},
+        name         => $handle_name,
         ipcm_info    => $self->{+IPCM_INFO},
+        client       => $client,
     );
 }
 
@@ -174,7 +188,6 @@ sub run_results {
     my %args = @_ == 1 && !ref($_[0]) ? (run_id => $_[0]) : @_;
     return $self->_send_request('run_results', \%args);
 }
-
 
 sub terminate {
     my $self = shift;

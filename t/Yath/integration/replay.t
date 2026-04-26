@@ -35,9 +35,18 @@ sub clean_output {
     # order so the renderer assigns job 1/2/... differently each run.
     $out->{output} =~ s/\bjob\s+\d+\b/job N/g;
 
-    # Normalize absolute paths in "at /abs/path/t/... line N" diagnostics
-    # to repo-relative so the golden file is portable across machines.
-    $out->{output} =~ s{ at \S+/(t/\S+) line }{ at $1 line }g;
+    # Strip absolute-path prefix from any repo-rooted `t/...`
+    # reference anywhere in the output. The recorded archive
+    # carries paths from whichever machine generated it (e.g.
+    # /home/teo/git/Test2-Harness/t/Yath/integration/replay/fail.tx);
+    # the golden file holds the canonical repo-relative form
+    # (t/Yath/integration/replay/fail.tx). Catches the diag line
+    # `(  DIAG  )  job N    at <abs>/t/... line N`, the failure
+    # summary table cells `| <abs>/t/... |`, and any other
+    # context where a future renderer change might surface an
+    # absolute path -- so the test stays portable across
+    # machines without case-by-case patching.
+    $out->{output} =~ s{/(?:[^/\s|]+/)+(t/[\w./-]+)}{$1}g;
 
     my @lines;
     my $start;

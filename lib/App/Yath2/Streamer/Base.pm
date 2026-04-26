@@ -328,16 +328,22 @@ sub _harness_run_end_facet {
     my $results  = ref($state->{results}) eq 'HASH' ? $state->{results} : {};
     my $all_pass = 1;
     my ($fail_count, $pass_count) = (0, 0);
-    my @cpu_agg    = (0, 0, 0, 0);
-    my $have_times = 0;
+    my @cpu_agg     = (0, 0, 0, 0);
+    my $have_times  = 0;
+    my $cum_job_wall = 0;
+    my $have_wall    = 0;
 
     for my $jid (keys %$results) {
         next unless defined $results->{$jid}{completed_at};
         if ($results->{$jid}{pass}) { $pass_count++ }
         else                        { $fail_count++; $all_pass = 0 }
-        if (my $t = $results->{$jid}{times}) {
+        if (my $t = $results->{$jid}{child_times}) {
             $cpu_agg[$_] += $t->[$_] for 0 .. 3;
             $have_times = 1;
+        }
+        if (defined(my $w = $results->{$jid}{child_wall})) {
+            $cum_job_wall += $w;
+            $have_wall = 1;
         }
     }
 
@@ -345,17 +351,18 @@ sub _harness_run_end_facet {
     my $wall_time = defined $state->{created_at} ? ($stamp - $state->{created_at}) : undef;
 
     my %timing;
+    $timing{wall_time}            = $wall_time     if defined $wall_time;
+    $timing{cumulative_job_time}  = $cum_job_wall  if $have_wall;
+
     if ($have_times) {
         my $cpu_total = $cpu_agg[0] + $cpu_agg[1] + $cpu_agg[2] + $cpu_agg[3];
-        %timing = (
-            wall_time => $wall_time,
-            cpu_times => \@cpu_agg,
-            cpu_total => $cpu_total,
-            cpu_usage => ($wall_time && $wall_time > 0) ? int($cpu_total / $wall_time * 100) : 0,
-        );
-    }
-    elsif (defined $wall_time) {
-        %timing = (wall_time => $wall_time);
+        $timing{cpu_times} = \@cpu_agg;
+        $timing{cpu_total} = $cpu_total;
+        # CPU Usage relative to Run Wall: aggregate CPU-cores worth of
+        # work performed by all test jobs during the run. With high
+        # parallelism this can exceed 100% (one core = 100%).
+        $timing{cpu_usage}
+            = ($wall_time && $wall_time > 0) ? int($cpu_total / $wall_time * 100) : 0;
     }
 
     return {

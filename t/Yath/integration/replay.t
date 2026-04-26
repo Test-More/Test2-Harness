@@ -19,7 +19,9 @@ sub clean_output {
     $out->{output} =~ s/^.*Wrote archive:.*$//m;
     $out->{output} =~ s/^.*Symlinked to:.*$//m;
     $out->{output} =~ s/^.*Linked log file:.*$//m;
-    $out->{output} =~ s/^\s*Wall Time:.*seconds//m;
+    $out->{output} =~ s/^\s*(?:Run\s+)?Wall Time:.*$//m;
+    $out->{output} =~ s/^\s*Cumulative Job Time:.*$//m;
+    $out->{output} =~ s/^\s*Aggregate Job Stats:\s*$//m;
     $out->{output} =~ s/^\s*CPU Time:.*s\)//m;
     $out->{output} =~ s/^\s*CPU Usage:.*%//m;
     $out->{output} =~ s/^\s*-+$//m;

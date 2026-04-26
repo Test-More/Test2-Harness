@@ -79,10 +79,10 @@ subtest 'render_summary shows timing when present' => sub {
     });
     close STDOUT;
     open(STDOUT, '>&', \*STDERR);
-    like($buf, qr/Wall Time.*10\.50 seconds/, 'wall time shown');
+    like($buf, qr/Wall Time.*10\.5000s/, 'wall time shown');
     like($buf, qr/CPU Time/, 'cpu time shown');
     like($buf, qr/CPU Usage.*71%/, 'cpu usage shown');
-    like($buf, qr/usr:.*2\.10/, 'user time shown');
+    like($buf, qr/usr:.*2\.10000s/, 'user time shown');
 };
 
 subtest 'render_summary prints fail result' => sub {

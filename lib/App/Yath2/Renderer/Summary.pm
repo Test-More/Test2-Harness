@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use Test2::Util::Table qw/table/;
-use Test2::Harness2::Util qw/clean_path/;
+use Test2::Harness2::Util qw/clean_path render_duration/;
 use Test2::Harness2::Util::JSON qw/json_true json_false/;
 
 use List::Util qw/max/;
@@ -91,14 +91,15 @@ sub render_summary {
     my $self = shift;
     my ($run_end) = @_;
 
-    my $pass       = $run_end->{pass};
-    my $pass_count = $run_end->{pass_count} // 0;
-    my $fail_count = $run_end->{fail_count} // 0;
-    my $total      = $pass_count + $fail_count;
-    my $wall_time  = $run_end->{wall_time};
-    my $cpu_times  = $run_end->{cpu_times};
-    my $cpu_total  = $run_end->{cpu_total};
-    my $cpu_usage  = $run_end->{cpu_usage};
+    my $pass         = $run_end->{pass};
+    my $pass_count   = $run_end->{pass_count} // 0;
+    my $fail_count   = $run_end->{fail_count} // 0;
+    my $total        = $pass_count + $fail_count;
+    my $wall_time    = $run_end->{wall_time};
+    my $cum_job_time = $run_end->{cumulative_job_time};
+    my $cpu_times    = $run_end->{cpu_times};
+    my $cpu_total    = $run_end->{cpu_total};
+    my $cpu_usage    = $run_end->{cpu_usage};
 
     if (my $rows = $self->{+_FAILED_JOBS}) {
         if (@$rows) {
@@ -114,16 +115,23 @@ sub render_summary {
     my @summary = (
         $fail_count ? ("     Fail Count: $fail_count") : (),
         "     File Count: $total",
-        (defined $wall_time)
+        (defined $wall_time
+            ? sprintf("  Run Wall Time: %s", render_duration($wall_time))
+            : ()),
+        (defined $cum_job_time || $cpu_times)
         ? (
-            sprintf("      Wall Time: %.2f seconds", $wall_time),
+            "Aggregate Job Stats:",
+            (defined $cum_job_time
+                ? sprintf("    Cumulative Job Time: %s", render_duration($cum_job_time))
+                : ()),
             ($cpu_times
                 ? (
                     sprintf(
-                        "       CPU Time: %.2f seconds (usr: %.2fs | sys: %.2fs | cusr: %.2fs | csys: %.2fs)",
-                        $cpu_total, @{$cpu_times}[0 .. 3]
+                        "               CPU Time: %s (usr: %s | sys: %s | cusr: %s | csys: %s)",
+                        render_duration($cpu_total),
+                        map { render_duration($_) } @{$cpu_times}[0 .. 3]
                     ),
-                    sprintf("      CPU Usage: %i%%", $cpu_usage),
+                    sprintf("              CPU Usage: %i%%", $cpu_usage),
                 )
                 : ()
             ),
@@ -165,10 +173,11 @@ sub write_summary_file {
 
         failed => $self->{+_FAILED_JOBS},
 
-        (defined $run_end->{wall_time} ? (wall_time => $run_end->{wall_time}) : ()),
-        (defined $run_end->{cpu_total} ? (cpu_total => $run_end->{cpu_total}) : ()),
-        (defined $run_end->{cpu_usage} ? (cpu_usage => $run_end->{cpu_usage}) : ()),
-        (defined $run_end->{cpu_times} ? (cpu_times => $run_end->{cpu_times}) : ()),
+        (defined $run_end->{wall_time}            ? (wall_time            => $run_end->{wall_time})            : ()),
+        (defined $run_end->{cumulative_job_time}  ? (cumulative_job_time  => $run_end->{cumulative_job_time})  : ()),
+        (defined $run_end->{cpu_total}            ? (cpu_total            => $run_end->{cpu_total})            : ()),
+        (defined $run_end->{cpu_usage}            ? (cpu_usage            => $run_end->{cpu_usage})            : ()),
+        (defined $run_end->{cpu_times}            ? (cpu_times            => $run_end->{cpu_times})            : ()),
     );
 
     require Test2::Harness2::Util::File::JSON;

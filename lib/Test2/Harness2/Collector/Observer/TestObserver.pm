@@ -228,7 +228,9 @@ sub _emit_completed {
         $payload{fail_count} = $auditor->fail_count   if $auditor->can('fail_count');
     }
 
-    $payload{times} = $exit_facet->{times} if $exit_facet->{times};
+    $payload{times}       = $exit_facet->{times}       if $exit_facet->{times};
+    $payload{child_times} = $exit_facet->{child_times} if $exit_facet->{child_times};
+    $payload{child_wall}  = $exit_facet->{child_wall}  if defined $exit_facet->{child_wall};
 
     $self->_send_to_run(\%payload);
 

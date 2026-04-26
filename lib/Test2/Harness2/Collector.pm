@@ -67,6 +67,8 @@ use Object::HashBase qw{
 
     +_win32_job
     +_start_times
+    +_child_fork_times
+    +_child_fork_stamp
 };
 
 # Default auditor accessors for the base class. Test2::Harness2::Collector::Test
@@ -581,6 +583,14 @@ sub collect_from_file {
 
 sub _run_collector {
     my $self = shift;
+
+    # Reset CPU-time baseline now that we're in the process that will
+    # actually run the collection loop. _START_TIMES captured during
+    # init() was taken in whichever process called new(); the unix
+    # spawn path forks between init() and here, so the original
+    # baseline reflects the parent's accumulated times and produces
+    # negative deltas at finalize.
+    $self->{+_START_TIMES} = [times()];
 
     my ($child_pid, $out_r, $err_r, $started_child) = $self->_setup_child_handles();
     $self->_set_procname($child_pid);
@@ -1131,11 +1141,26 @@ sub _finalize_collection {
         $self->{+CHILD_EXIT} = $child_exit;
 
         my $end_times   = [times()];
+        my $end_stamp   = time;
         my $start_times = $self->{+_START_TIMES};
         my @cpu_times   = map { $end_times->[$_] - $start_times->[$_] } 0 .. 3;
 
         my $px = parse_exit($child_exit);
         $px->{times} = \@cpu_times;
+
+        # Per-job child-process times: baseline taken just before the
+        # collected child was forked, end taken now (after waitpid),
+        # so cuser/csys captures the full child tree's CPU and the
+        # delta wall-clock spans the child's lifetime. Reported
+        # whether or not this collector is a test-job collector;
+        # only test-job collectors aggregate it (TestObserver +
+        # RunService + harness_run_end).
+        if (my $cf = $self->{+_CHILD_FORK_TIMES}) {
+            $px->{child_times} = [map { $end_times->[$_] - $cf->[$_] } 0 .. 3];
+        }
+        if (defined(my $cs = $self->{+_CHILD_FORK_STAMP})) {
+            $px->{child_wall} = $end_stamp - $cs;
+        }
 
         my $exit_event = Test2::Harness2::Event->new(
             event_id   => gen_uuid(),
@@ -1249,6 +1274,13 @@ sub _launch_child_unix {
 
     my $cmd = $self->{+LAUNCH};
 
+    # Baseline for the per-job (child-process) times reported on
+    # harness_process_exit. Captured pre-fork so the delta covers the
+    # entire watched-child tree (its CPU rolls into our cuser/csys at
+    # waitpid) plus any collector-loop CPU between fork and reap.
+    $self->{+_CHILD_FORK_TIMES} = [times()];
+    $self->{+_CHILD_FORK_STAMP} = time;
+
     my $pid = fork() // die "Failed to fork child process: $!";
 
     if (!$pid) {
@@ -1333,6 +1365,10 @@ sub _launch_child_win32 {
     STDOUT->autoflush(1);
     STDERR->autoflush(1);
 
+    # Baseline for child_times/child_wall. See _launch_child_unix.
+    $self->{+_CHILD_FORK_TIMES} = [times()];
+    $self->{+_CHILD_FORK_STAMP} = time;
+
     my $pid;
     my $ok;
     {
@@ -1377,6 +1413,10 @@ sub _launch_child_win32_job {
     # Win32::Job->spawn inherits the parent environment; we simulate
     # local-env by temporarily setting the vars before spawning.
     local @ENV{keys %env} = values %env;
+
+    # Baseline for child_times/child_wall. See _launch_child_unix.
+    $self->{+_CHILD_FORK_TIMES} = [times()];
+    $self->{+_CHILD_FORK_STAMP} = time;
 
     # Pass the pipe write ends as the child's stdout/stderr.
     # Win32::Job->spawn accepts filehandles for stdin/stdout/stderr and
@@ -1811,11 +1851,20 @@ sub interpose {
     open($params{orig_stdout}, '>&', \*STDOUT) or croak "Could not clone STDOUT: $!";
     open($params{orig_stderr}, '>&', \*STDERR) or croak "Could not clone STDERR: $!";
 
+    # Baseline for child_times/child_wall in the interpose path. The
+    # parent of this fork becomes the collector; the child continues
+    # as the watched process. Capture pre-fork so the post-waitpid
+    # delta covers the child's whole lifetime.
+    my @child_fork_times = times();
+    my $child_fork_stamp = time;
+
     my $pid = fork() // die "Failed to fork for interpose: $!";
 
     # Parent becomes the collector and exits when done -- does not return
     if ($pid) {
-        $params{pid} = $pid;
+        $params{pid}                = $pid;
+        $params{_child_fork_times}  = \@child_fork_times;
+        $params{_child_fork_stamp}  = $child_fork_stamp;
         $class->_interpose_parent(\%params);
     }
 

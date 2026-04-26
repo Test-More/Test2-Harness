@@ -71,6 +71,13 @@ use Test2::Harness2::Role::Service;
         push @{$self->{+CALLS}} => "on_reaped:$pid";
         return;
     }
+
+    # The role's run_on_start eagerly calls $self->client to register
+    # on the IPC bus. With no real ipcm_info plumbed in, the default
+    # implementation tries to read stats files off disk and warns
+    # "Failed to initialise IPC client in run_on_start: malformed JSON
+    # ...". Stub it out so unit tests don't depend on a live bus.
+    sub client { return undef }
 }
 
 subtest 'IPC::Manager::Role::Service contract defaults' => sub {

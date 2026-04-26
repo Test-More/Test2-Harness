@@ -29,6 +29,7 @@ our @EXPORT_OK = qw{
     open_file
     parse_exit
     read_file
+    render_duration
     render_status_data
     tinysleep
     unlock_file
@@ -243,6 +244,7 @@ sub parse_exit {
         all => $exit,
     };
 }
+
 
 # Compression readers recognised by open_file(). Only used on read; writes
 # go through plain open() regardless of extension.

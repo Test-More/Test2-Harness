@@ -10,6 +10,7 @@ sub has_file   { die 'nope' }
 sub list_files { die 'nope' }
 sub close      { die 'nope' }
 sub viable     { 1 }
+sub dict_bytes { undef }
 
 package Fake::Writer;
 use Role::Tiny::With;

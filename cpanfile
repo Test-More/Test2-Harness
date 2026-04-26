@@ -137,6 +137,7 @@ on 'test' => sub {
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "0";
+  requires "File::ShareDir::Install" => "0.06";
   requires "Test2::Event::V2" => "1.302199";
   requires "Test2::Util::Term" => "0.000159";
 };

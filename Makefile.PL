@@ -22,11 +22,17 @@ if ($ENV{AUTOMATED_TESTING}) {
         if $is_njh;
 }
 
+use File::ShareDir::Install;
+$File::ShareDir::Install::INCLUDE_DOTFILES = 1;
+$File::ShareDir::Install::INCLUDE_DOTDIRS = 1;
+install_share dist => "share";
+
 my %WriteMakefileArgs = (
   "ABSTRACT" => "Top-level test harness service.",
   "AUTHOR" => "Chad Granum <exodist\@cpan.org>",
   "CONFIGURE_REQUIRES" => {
     "ExtUtils::MakeMaker" => 0,
+    "File::ShareDir::Install" => "0.06",
     "Test2::Event::V2" => "1.302199",
     "Test2::Util::Term" => "0.000159"
   },
@@ -274,3 +280,9 @@ delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
   unless eval { ExtUtils::MakeMaker->VERSION(6.52) };
 
 WriteMakefile(%WriteMakefileArgs);
+
+{
+package
+MY;
+use File::ShareDir::Install qw(postamble);
+}

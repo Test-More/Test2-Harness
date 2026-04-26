@@ -113,8 +113,7 @@ sub _resolve_path {
 
     return undef unless $archive->has_file($rel);
 
-    my $tmpdir = $self->{+ARCHIVE_TMPDIR} //=
-        tempdir('yath-streamer-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+    my $tmpdir = $self->{+ARCHIVE_TMPDIR} //= $self->_make_archive_tempdir($archive);
 
     my $abs = "$tmpdir/$rel";
     my $dir = dirname($abs);
@@ -132,6 +131,36 @@ sub _resolve_path {
     close $out or croak "Could not close '$abs': $!";
 
     return $self->{+ARCHIVE_EXTRACTED}->{$rel} = $abs;
+}
+
+# Vivify the per-streamer extraction tempdir on first call.
+sub _make_archive_tempdir {
+    my ($self, $archive) = @_;
+    my $dir = tempdir('yath-streamer-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+    $self->_extract_archive_dict($archive, $dir);
+    return $dir;
+}
+
+# Copy the archive's bundled zstd dictionary to <$dir>/zstd-dict.bin.
+# Per-logger log_reader()s discover the dict by walking up from each
+# .zst snapshot's directory looking for that exact filename, so
+# without this every dict-compressed snapshot extracted from the
+# archive croaks with "Dictionary mismatch" when read back. No-op
+# when the archive carries no dict (Role::Source dict_bytes returns
+# undef). Binary write -- Test2::Harness2::Util's file helpers do
+# not call binmode.
+sub _extract_archive_dict {
+    my ($self, $archive, $dir) = @_;
+
+    my $bytes = $archive->dict_bytes;
+    return unless defined $bytes && length $bytes;
+
+    my $path = "$dir/zstd-dict.bin";
+    open(my $fh, '>', $path) or croak "open '$path' for write: $!";
+    binmode $fh;
+    print {$fh} $bytes or do { close $fh; croak "write '$path': $!" };
+    close $fh or croak "close '$path': $!";
+    return;
 }
 
 # Collect the state snapshot for a run by asking every logger whose

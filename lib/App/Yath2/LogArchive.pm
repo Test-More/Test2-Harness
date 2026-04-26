@@ -57,7 +57,9 @@ sub artifacts {
         my $bytes = do { local $/; <$fh> };
         close $fh;
 
-        my $dict_bytes = $self->can('dict_bytes') ? $self->dict_bytes : undef;
+        # dict_bytes is a Role::Source contract method; every backend
+        # provides it (returns undef when no dict is bundled).
+        my $dict_bytes = $self->dict_bytes;
         my $json = decompress_blob(
             $bytes,
             ($dict_bytes ? (dict_bytes => $dict_bytes) : ()),

@@ -10,7 +10,8 @@ use Role::Tiny::With;
 use parent 'App::Yath2::LogArchive';
 use Object::HashBase qw/path format/;
 
-with 'App::Yath2::LogArchive::Role::Source';
+with 'App::Yath2::LogArchive::Role::Source',
+     'App::Yath2::LogArchive::Role::DiskDict';
 
 sub viable { 1 }
 

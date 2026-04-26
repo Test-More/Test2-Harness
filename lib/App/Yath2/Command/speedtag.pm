@@ -105,16 +105,6 @@ sub run {
     die "max medium duration must be an integer, got '$self->{+MAX_MEDIUM}'\n"
         unless $self->{+MAX_MEDIUM} && $self->{+MAX_MEDIUM} =~ m/^\d+$/;
 
-    require App::Yath2::LogArchive;
-    my @runs = App::Yath2::LogArchive->new(path => $log)->runs;
-    die "No runs found in '$log'\n" unless @runs;
-
-    my $streamer = App::Yath2::Streamer::Static->new(
-        log    => $log,
-        runs   => [@runs],
-        global => 1,
-    );
-
     my $durations_file = $settings->speedtag->generate_durations_file;
     my %durations;
 
@@ -123,97 +113,107 @@ sub run {
     # tag and emit the moment we have both.
     my %job_state;
     my %tagged;
-    $streamer->stream(
-        callback => sub {
-            my ($event) = @_;
-            my $f = $event->facet_data // {};
+    my $callback = sub {
+        my ($event) = @_;
+        my $f = $event->facet_data // {};
 
-            if (my $start = $f->{harness_job_start}) {
-                my $jid = $start->{job_id} // $event->{job_id} // return;
-                $job_state{$jid}{start} //= $start->{stamp}    // $event->stamp;
-                $job_state{$jid}{file}  //= $start->{abs_file} // $start->{file};
-                return;
+        if (my $start = $f->{harness_job_start}) {
+            my $jid = $start->{job_id} // $event->{job_id} // return;
+            $job_state{$jid}{start} //= $start->{stamp}    // $event->stamp;
+            $job_state{$jid}{file}  //= $start->{abs_file} // $start->{file};
+            return;
+        }
+
+        return unless my $end = $f->{harness_job_end};
+
+        my $jid  = $end->{job_id}   // $event->{job_id} // return;
+        my $file = $end->{abs_file} // $end->{file}     // $job_state{$jid}{file};
+        return unless $file;
+
+        $file = clean_path($file);
+        return if $tagged{$file}++;
+
+        my $start = $job_state{$jid}{start};
+        my $stop  = $end->{stamp} // $event->stamp;
+        return unless defined $start && defined $stop;
+
+        my $time = $stop - $start;
+        return unless $time > 0;
+
+        my $dur =
+              $time < $self->{+MAX_SHORT}  ? 'short'
+            : $time < $self->{+MAX_MEDIUM} ? 'medium'
+            :                                'long';
+
+        my $rfh;
+        unless (open($rfh, '<', $file)) {
+            warn "Could not open file $file for reading\n";
+            return;
+        }
+
+        my @lines;
+        my $injected;
+        my ($old, $new);
+        for my $line (<$rfh>) {
+            if ($line =~ m/^(\s*)#(\s*)HARNESS-(CAT(EGORY)?|DUR(ATION))-(LONG|MEDIUM|SHORT)$/i) {
+                next if $injected++;
+                $old  = $line;
+                $line = "${1}#${2}HARNESS-DURATION-" . uc($dur) . "\n";
+                $new  = $line;
             }
+            push @lines => $line;
+        }
+        close($rfh);
 
-            return unless my $end = $f->{harness_job_end};
-
-            my $jid  = $end->{job_id}   // $event->{job_id} // return;
-            my $file = $end->{abs_file} // $end->{file}     // $job_state{$jid}{file};
-            return unless $file;
-
-            $file = clean_path($file);
-            return if $tagged{$file}++;
-
-            my $start = $job_state{$jid}{start};
-            my $stop  = $end->{stamp} // $event->stamp;
-            return unless defined $start && defined $stop;
-
-            my $time = $stop - $start;
-            return unless $time > 0;
-
-            my $dur =
-                  $time < $self->{+MAX_SHORT}  ? 'short'
-                : $time < $self->{+MAX_MEDIUM} ? 'medium'
-                :                                'long';
-
-            my $rfh;
-            unless (open($rfh, '<', $file)) {
-                warn "Could not open file $file for reading\n";
-                return;
+        unless ($injected) {
+            my $new_line = "# HARNESS-DURATION-" . uc($dur) . "\n";
+            my @header;
+            while (@lines && $lines[0] =~ m/^(#|use\s|package\s)/) {
+                push @header => shift @lines;
             }
+            unshift @lines => (@header, $new_line);
 
-            my @lines;
-            my $injected;
-            my ($old, $new);
-            for my $line (<$rfh>) {
-                if ($line =~ m/^(\s*)#(\s*)HARNESS-(CAT(EGORY)?|DUR(ATION))-(LONG|MEDIUM|SHORT)$/i) {
-                    next if $injected++;
-                    $old  = $line;
-                    $line = "${1}#${2}HARNESS-DURATION-" . uc($dur) . "\n";
-                    $new  = $line;
-                }
-                push @lines => $line;
-            }
-            close($rfh);
+            $old = "<NO TAG FOUND>";
+            $new = $new_line;
+        }
 
-            unless ($injected) {
-                my $new_line = "# HARNESS-DURATION-" . uc($dur) . "\n";
-                my @header;
-                while (@lines && $lines[0] =~ m/^(#|use\s|package\s)/) {
-                    push @header => shift @lines;
-                }
-                unshift @lines => (@header, $new_line);
+        if ($durations_file) {
+            my $tfile = $file;
+            $tfile =~ s{^\Q$initial_dir\E/+}{};
+            $durations{$tfile} = uc($dur);
+        }
 
-                $old = "<NO TAG FOUND>";
-                $new = $new_line;
-            }
+        if ($settings->harness->dummy) {
+            print "Would tag (dummy) file $file with duration '$dur'\n";
+            chomp($old);
+            chomp($new);
+            print "Old Header: $old\nNew Header: $new\n\n";
+            return;
+        }
 
-            if ($durations_file) {
-                my $tfile = $file;
-                $tfile =~ s{^\Q$initial_dir\E/+}{};
-                $durations{$tfile} = uc($dur);
-            }
+        my $wfh;
+        unless (open($wfh, '>', $file)) {
+            warn "Could not open file $file for writing\n";
+            return;
+        }
 
-            if ($settings->harness->dummy) {
-                print "Would tag (dummy) file $file with duration '$dur'\n";
-                chomp($old);
-                chomp($new);
-                print "Old Header: $old\nNew Header: $new\n\n";
-                return;
-            }
+        print $wfh @lines;
+        close($wfh);
 
-            my $wfh;
-            unless (open($wfh, '>', $file)) {
-                warn "Could not open file $file for writing\n";
-                return;
-            }
+        print "Tagged '$dur': $file\n";
+    };
 
-            print $wfh @lines;
-            close($wfh);
+    require App::Yath2::LogArchive;
+    my @runs = App::Yath2::LogArchive->new(path => $log)->runs;
+    die "No runs found in '$log'\n" unless @runs;
 
-            print "Tagged '$dur': $file\n";
-        },
+    my $streamer = App::Yath2::Streamer::Static->new(
+        log    => $log,
+        runs   => \@runs,
+        global => 1,
     );
+
+    $streamer->stream(callback => $callback);
 
     if ($durations_file) {
         my $jfile = Test2::Harness2::Util::File::JSON->new(

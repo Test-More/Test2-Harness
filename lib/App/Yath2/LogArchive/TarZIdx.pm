@@ -171,6 +171,7 @@ sub has_file {
     return exists $self->_build_index->{$rel} ? 1 : 0;
 }
 
+# Role::Source dict_bytes contract for the tar.zidx backend.
 # Returns the bytes of the bundled zstd dictionary (the file the
 # writer copied out of $source/zstd-dict.bin) or undef when the
 # archive is dict-less. Probes the index once and caches the result;

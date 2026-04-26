@@ -12,11 +12,13 @@ use Object::HashBase qw{
     <plugins
 };
 
+use Cwd ();
 use File::Path qw/remove_tree/;
 use File::Spec();
 use POSIX qw/strftime/;
 use Time::HiRes qw/sleep/;
 
+use App::Yath2 ();
 use Test2::Harness2();
 use Test2::Harness2::TestFile();
 use Test2::Harness2::Resource::JobCount();
@@ -110,6 +112,50 @@ sub run {
     }
 
     die "No test files matched extensions (@ext) under: @$args\n" unless @files;
+
+    # Build T2_HARNESS_INCLUDES for test children: app path first, then the
+    # user's -I paths (settings->tests->includes, already resolved), then the
+    # default lib/blib directories (on by default, disabled by --no-lib /
+    # --no-blib).  Paths are absolutised relative to the current working
+    # directory so they remain valid regardless of the RunService's CWD.
+    #
+    # We PREPEND to any T2_HARNESS_INCLUDES value already set in the
+    # environment (e.g. /foo;/bar;/baz from nested_includes.t) so caller-
+    # injected paths survive but the tester's full @INC dump (added by
+    # App::Yath2::Tester for its own yath-subprocess setup) ends up after
+    # our ordered prefix.
+    {
+        my $cwd = Cwd::getcwd();
+        my @new_inc;
+
+        push @new_inc, App::Yath2->app_path;
+
+        if (eval { $settings->can('check_group') && $settings->check_group('tests') }) {
+            my $ts = $settings->tests;
+            for my $path (@{$ts->includes // []}) {
+                push @new_inc, File::Spec->rel2abs($path, $cwd);
+            }
+            unless (defined($ts->lib) && !$ts->lib) {
+                push @new_inc, File::Spec->catdir($cwd, 'lib');
+            }
+            unless (defined($ts->blib) && !$ts->blib) {
+                push @new_inc, File::Spec->catdir($cwd, 'blib', 'lib');
+                push @new_inc, File::Spec->catdir($cwd, 'blib', 'arch');
+            }
+        }
+
+        my %seen;
+        my @all_inc;
+        for my $p (@new_inc) {
+            push @all_inc, $p unless $seen{$p}++;
+        }
+        if (my $existing = $ENV{T2_HARNESS_INCLUDES}) {
+            for my $p (grep { length && $_ ne '.' } split /;/, $existing) {
+                push @all_inc, $p unless $seen{$p}++;
+            }
+        }
+        $ENV{T2_HARNESS_INCLUDES} = join ';', @all_inc;
+    }
 
     my $workdir = $settings->workspace->workdir;
 

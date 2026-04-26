@@ -189,13 +189,23 @@ sub request_handler_launch_job {
     return {ok => 0, error => "'test_file' must be absolute"}
         unless $test_file_abs =~ m{^/};
 
+    # Parse the test file to detect non-perl scripts (shell scripts, etc.)
+    # via their shebang line. We need this before building the launch command
+    # so we can decide whether to use -I flags or PERL5LIB.
+    require Test2::Harness2::TestFile;
+    my $test_file_spec = Test2::Harness2::TestFile->new(file => $test_file_abs);
+    $test_file_spec->scan;
+
     # The harness's synthetic-skip / synthetic-fail paths hand us an
     # explicit launch command (perl -e '...'). Default to running the
-    # real test file when no override is present. When the launch
-    # payload's env carries T2_HARNESS_INCLUDES (forwarded by
-    # Test2::Harness2::_launch_job), turn it into -I flags so the
-    # child's @INC actually picks the paths up -- the env var alone
-    # is not enough since exec(perl ...) starts a fresh interpreter.
+    # real test file when no override is present.
+    #
+    # T2_HARNESS_INCLUDES (forwarded by Test2::Harness2::_launch_job and
+    # populated by Command::test from the user's -I/--lib/--blib options)
+    # carries the correct include paths for test children. We convert these
+    # to -I flags for perl scripts, or to PERL5LIB for non-perl scripts
+    # (shell wrappers that re-exec perl).
+    my %extra_env;
     if (!defined $launch_cmd) {
         my @extra_inc;
         if (my $payload_env = $payload->{env}) {
@@ -203,7 +213,29 @@ sub request_handler_launch_job {
             @extra_inc = grep { length && $_ ne '.' } split /;/, $inc
                 if defined $inc && length $inc;
         }
-        $launch_cmd = [$^X, (map { "-I$_" } @extra_inc), '-Ilib', $test_file_abs];
+
+        if ($test_file_spec->non_perl) {
+            # Non-perl scripts (e.g. shell wrappers that exec perl): pass
+            # include paths via PERL5LIB so the re-execed perl sees them.
+            # Do not use -I flags — they would be forwarded by perl to the
+            # shebang interpreter (e.g. bash), which does not understand them.
+            if (@extra_inc) {
+                my $sep          = $^O eq 'MSWin32' ? ';' : ':';
+                my $new_perl5lib = join $sep, @extra_inc;
+                if (my $existing = $ENV{PERL5LIB}) {
+                    $new_perl5lib .= "$sep$existing";
+                }
+                $extra_env{PERL5LIB} = $new_perl5lib;
+            }
+            # Run the script directly; the OS kernel handles the shebang.
+            $launch_cmd = [$test_file_abs];
+        }
+        else {
+            # Perl scripts: inject include paths as -I flags on the command
+            # line. This sets @INC before any module is loaded, which is
+            # required because exec() starts a fresh interpreter.
+            $launch_cmd = [$^X, (map { "-I$_" } @extra_inc), $test_file_abs];
+        }
     }
 
     # Default the payload-level log_file only if the caller wants one;
@@ -218,8 +250,6 @@ sub request_handler_launch_job {
     # test_file path so the resulting .json includes the relative
     # and absolute test-file paths. Callers that supply their own
     # spec are left alone.
-    require Test2::Harness2::TestFile;
-    my $test_file_spec = Test2::Harness2::TestFile->new(file => $test_file_abs);
 
     my @logger_specs = map { _maybe_inject_test_file_spec($_, $test_file_spec) } @$payload_loggers;
 
@@ -230,7 +260,7 @@ sub request_handler_launch_job {
             launch       => $launch_cmd,
             new_pgroup   => 1,
             parent_pids  => [$$],
-            env_vars     => {T2_FORMATTER => 'Stream2', %$env},
+            env_vars     => {T2_FORMATTER => 'Stream2', %$env, %extra_env},
             logdir       => $self->{+LOGDIR},
             run_id       => $run_id,
             job_id       => $job_id,

@@ -1,8 +1,5 @@
 # HARNESS-CONFLICTS YATH
-use Test2::V0;
-plan skip_all => "TODO: replay command not yet aligned with current log/streamer format";
-__END__
-
+# HARNESS-DURATION-SLOW
 use Test2::V0;
 
 use File::Temp qw/tempdir/;
@@ -21,6 +18,7 @@ sub clean_output {
     my $out = shift;
     $out->{output} =~ s/^.*duration.*$//m;
     $out->{output} =~ s/^.*Wrote log file:.*$//m;
+    $out->{output} =~ s/^.*Wrote archive:.*$//m;
     $out->{output} =~ s/^.*Symlinked to:.*$//m;
     $out->{output} =~ s/^.*Linked log file:.*$//m;
     $out->{output} =~ s/^\s*Wall Time:.*seconds//m;
@@ -35,6 +33,11 @@ sub clean_output {
     # Can remove this once the fixme is removed
     $out->{output} =~ s/^FIXME: publish should send log to server$//gm;
 
+    # Normalize display job numbers: parallel jobs complete in non-deterministic
+    # order so the renderer assigns job 1/2/... differently each run. Replace
+    # all "job N" sequences with a "job N" sentinel so both sides match.
+    $out->{output} =~ s/\bjob\s+\d+\b/job N/g;
+
     my @lines;
     my $start;
     for my $line (split /\n/, $out->{output}) {
@@ -45,7 +48,32 @@ sub clean_output {
         push @lines => $line;
     }
 
-    $out->{output} = join "\n" => @lines;
+    # Live (`yath test`) and replay emit the same per-job lines but in
+    # different orders, depending on how the failed job's diagnostics
+    # (FAIL / DIAG / REASON) interleave with another job's status line.
+    # Trying to group diag lines back to "their" status line is fragile
+    # because diag lines carry only `job N` (already normalised above) --
+    # there is no filename to disambiguate. The robust fix is to
+    # canonicalise the order of every `job N`-prefixed line: collect
+    # consecutive runs of them, sort the run, flush. Non-job lines (the
+    # "The following jobs failed:" table, the "Yath Result Summary" block,
+    # etc.) pass through verbatim so the file's overall narrative stays
+    # intact.
+    my @normalized;
+    my @run;
+    for my $line (@lines) {
+        if ($line =~ /\bjob\s+N\b/) {
+            push @run => $line;
+        }
+        else {
+            push @normalized => sort @run if @run;
+            @run = ();
+            push @normalized => $line;
+        }
+    }
+    push @normalized => sort @run if @run;
+
+    $out->{output} = join "\n" => @normalized;
 }
 
 my $out1 = yath(

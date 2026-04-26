@@ -10,6 +10,7 @@ use Time::HiRes qw/time/;
 use Atomic::Pipe;
 use Test2::Util::UUID qw/gen_uuid/;
 
+use Test2::Harness2::Util::IPC qw/apply_atomic_pipe_compression/;
 use Test2::Harness2::Util::JSON qw/encode_json/;
 
 use Object::HashBase qw{
@@ -46,8 +47,15 @@ sub _as_atomic_pipe {
 
     return $in if blessed($in) && $in->isa('Atomic::Pipe');
 
+    # Match the collector's reader-side compression config so framed
+    # write_message / write_burst output decodes on the other end.
+    # Plain print writes (e.g. the user's STDOUT text) are not
+    # touched by Atomic::Pipe's compression and reach a non-perl
+    # downstream untouched. from_fh does not take constructor-time
+    # compression kwargs, so we configure it post-construction.
     my $apipe = Atomic::Pipe->from_fh('>&=', $in);
     $apipe->set_mixed_data_mode();
+    apply_atomic_pipe_compression($apipe);
     return $apipe;
 }
 

@@ -21,7 +21,7 @@ use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Collector::Handle;
 use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
 use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
-use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io ipc_default_connect_args/;
+use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io ipc_default_connect_args atomic_pipe_compression_args apply_atomic_pipe_compression/;
 
 # This is the base class. Two subclasses add the test-vs-service
 # divergent behaviour: Test2::Harness2::Collector::Test carries an
@@ -1206,8 +1206,11 @@ sub _set_procname {
 sub _launch_child {
     my $self = shift;
 
-    my ($out_r, $out_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
-    my ($err_r, $err_w) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    # zstd compression on both pipes: write_message / write_burst
+    # frames compress transparently while plain print writes (the
+    # child's STDOUT/STDERR text stream) pass through uncompressed.
+    my ($out_r, $out_w) = Atomic::Pipe->pair(mixed_data_mode => 1, atomic_pipe_compression_args());
+    my ($err_r, $err_w) = Atomic::Pipe->pair(mixed_data_mode => 1, atomic_pipe_compression_args());
 
     # Save copies of the original STDOUT/STDERR before redirecting; restored
     # by both platform-specific launchers in the parent path.
@@ -1426,9 +1429,14 @@ sub _wrap_handle {
     return $handle if blessed($handle) && $handle->isa('Atomic::Pipe');
 
     # Pipe or fifo filehandle -- wrap in Atomic::Pipe with mixed_data_mode
+    # plus the standard zstd-with-dict compression config so framed
+    # messages from the writer side decode here. from_fh does not
+    # take extra constructor params, so configure compression
+    # post-construction via set_compression / set_compression_dictionary_file.
     if (-p $handle) {
         my $ap = Atomic::Pipe->from_fh('<&', $handle);
         $ap->set_mixed_data_mode();
+        apply_atomic_pipe_compression($ap);
         return $ap;
     }
 
@@ -1784,8 +1792,8 @@ sub interpose {
             unless Long::Jump::havejump($jump_to);
     }
 
-    ($params{out_r}, $params{out_w}) = Atomic::Pipe->pair(mixed_data_mode => 1);
-    ($params{err_r}, $params{err_w}) = Atomic::Pipe->pair(mixed_data_mode => 1);
+    ($params{out_r}, $params{out_w}) = Atomic::Pipe->pair(mixed_data_mode => 1, atomic_pipe_compression_args());
+    ($params{err_r}, $params{err_w}) = Atomic::Pipe->pair(mixed_data_mode => 1, atomic_pipe_compression_args());
 
     open($params{orig_stdout}, '>&', \*STDOUT) or croak "Could not clone STDOUT: $!";
     open($params{orig_stderr}, '>&', \*STDERR) or croak "Could not clone STDERR: $!";

@@ -42,6 +42,8 @@ our @EXPORT_OK = qw{
     ipc_default_spawn_args
     ipc_default_connect_args
     ipc_zstd_dict_path
+    atomic_pipe_compression_args
+    apply_atomic_pipe_compression
 };
 
 sub ipc_default_protocol { IPC_DEFAULT_PROTOCOL }
@@ -85,6 +87,48 @@ sub ipc_default_spawn_args {
 # reach them.
 sub ipc_default_connect_args {
     return (listen => 0);
+}
+
+# Default kwargs for Atomic::Pipe constructors (pair, from_fh,
+# from_fd, read_fifo, write_fifo). Enables zstd at level 3 with the
+# install-shipped dictionary so write_message / write_burst /
+# get_line_burst_or_data traffic compresses transparently. Plain
+# print writes (and any byte stream from a non-perl downstream that
+# inherits the fd) remain uncompressed -- Atomic::Pipe's compression
+# only applies to the framed message and burst paths, so a pipe can
+# still double as STDOUT/STDERR for an unaware reader.
+#
+# Both ends of the pipe must be configured identically; mismatched
+# dictionaries silently decode to garbage (raw zstd dictionaries do
+# not embed a dict-ID). When the install-shipped dictionary is
+# unavailable the helper falls back to dictless compression, which
+# is still wire-symmetric as long as every endpoint resolves the
+# same way.
+sub atomic_pipe_compression_args {
+    my %args = (
+        compression       => 'zstd',
+        compression_level => IPC_DEFAULT_ZSTD_LEVEL,
+    );
+
+    my $dict = ipc_zstd_dict_path();
+    $args{compression_dictionary_file} = $dict if defined $dict;
+
+    return %args;
+}
+
+# Configure compression on an existing Atomic::Pipe instance to
+# match atomic_pipe_compression_args(). Atomic::Pipe::from_fh and
+# from_fd do not accept constructor-time compression kwargs, so
+# wrappers (e.g. promoting STDOUT or wrapping a child's pipe handle)
+# enable compression after construction. Idempotent.
+sub apply_atomic_pipe_compression {
+    my ($pipe) = @_;
+    return unless $pipe;
+    $pipe->set_compression('zstd', IPC_DEFAULT_ZSTD_LEVEL);
+    if (my $dict = ipc_zstd_dict_path()) {
+        $pipe->set_compression_dictionary_file($dict);
+    }
+    return;
 }
 
 sub pid_is_running {

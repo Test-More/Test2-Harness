@@ -115,6 +115,14 @@ sub emit_raw {
     $event->{event_id} = $event_id;
     $event->{facet_data}{harness}{event_id} = $event_id;
 
+    # Atomic::Pipe message frames self-delimit, so no trailing
+    # newline is needed on the wire to separate records. The JSONL
+    # zstd logger writes one frame per event in the same shape, and
+    # the extract command is responsible for inserting exactly one
+    # newline between records when materializing extracted plaintext
+    # jsonl. The collector still caches the on-wire compressed
+    # bytes on the event so the logger can append them verbatim
+    # without recompressing.
     my $json = encode_json($event);
     $self->{+STDOUT_PIPE}->write_message($json);
 

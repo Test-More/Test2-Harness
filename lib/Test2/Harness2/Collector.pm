@@ -1460,15 +1460,22 @@ sub _read_handle {
     my $self = shift;
     my ($handle) = @_;
 
-    # Atomic::Pipe handles -- return [type, data] tuples so the caller can
-    # distinguish atomic message bursts (JSON events) from plain lines.
+    # Atomic::Pipe handles -- return [type, data, $compressed_or_undef]
+    # tuples so the caller can distinguish atomic message bursts
+    # (JSON events) from plain lines. With keep_compressed enabled,
+    # message and burst frames also carry the on-wire compressed
+    # bytes via a "compressed => $raw" pair on the return list; we
+    # promote that into the tuple so downstream consumers (event
+    # parser, zstd logger) can reuse the frame without recompressing.
     if (blessed($handle) && $handle->isa('Atomic::Pipe')) {
         my @items;
 
         while (1) {
-            my ($type, $data) = $handle->get_line_burst_or_data();
-            last unless defined $type;
-            push @items => [$type, $data];
+            my @res = $handle->get_line_burst_or_data();
+            last unless defined $res[0];
+            my ($type, $data, @rest) = @res;
+            my %extra = @rest;
+            push @items => [$type, $data, $extra{compressed}];
         }
 
         push @items => undef if $handle->eof();
@@ -1485,7 +1492,7 @@ sub _ingest_item {
     my $self = shift;
     my ($buffer, $stream, $item, $merge_outputs, $parser) = @_;
 
-    my ($type, $data) = @$item;
+    my ($type, $data, $compressed) = @$item;
     my $stamp = time;
 
     if ($type eq 'message') {
@@ -1502,7 +1509,12 @@ sub _ingest_item {
             return;
         }
 
-        push @{$buffer->{$stream}} => [$stamp, message => $decoded];
+        # Stash $compressed alongside the decoded payload so the
+        # parser can attach it to the resulting Event for the JSONL
+        # zstd logger's reuse path. Sync markers on STDERR carry a
+        # compressed form too but the collector never logs them, so
+        # the bytes are kept for symmetry only.
+        push @{$buffer->{$stream}} => [$stamp, message => $decoded, $compressed];
 
         my $event_id = ref($decoded) eq 'HASH' ? $decoded->{event_id} : undef;
         return unless defined $event_id;
@@ -1539,16 +1551,17 @@ sub _flush_buffer {
     for my $stream (qw/stderr stdout/) {
         my $queue = $buffer->{$stream};
         while (my $entry = shift @$queue) {
-            my ($stamp, $kind, $val) = @$entry;
+            my ($stamp, $kind, $val, $compressed) = @$entry;
 
             if ($kind eq 'message') {
                 if ($stream eq 'stdout') {
                     # A real event arrived via a burst -- feed it through
                     # the parser so the harness facet still gets populated.
                     my $event = $parser->parse_io(
-                        stream => $stream,
-                        event  => $val,
-                        stamp  => $stamp,
+                        stream     => $stream,
+                        event      => $val,
+                        stamp      => $stamp,
+                        compressed => $compressed,
                     );
                     $self->_process_event($event) if $event;
                 }

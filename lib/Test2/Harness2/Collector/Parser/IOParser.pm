@@ -44,6 +44,15 @@ sub parse_io {
 
     $self->normalize_event(\%params, $event);
 
+    # Stash the on-wire compressed JSON frame the collector captured
+    # from Atomic::Pipe's keep_compressed read path. The bytes are
+    # only meaningful for events that came in as a JSON burst and
+    # whose body has not been mutated since; auditors that modify
+    # the event clear this field via Event::clear_compressed_form so
+    # downstream zstd-aware loggers do not write stale frames.
+    $event->{compressed_form} = $params{compressed}
+        if defined $params{compressed};
+
     return $event;
 }
 

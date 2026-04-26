@@ -64,7 +64,7 @@ sub run {
     my @rest;
     for my $arg (@$args) {
         if ($arg eq '--no-decompress') { $no_decompress = 1 }
-        else                            { push @rest => $arg }
+        else                           { push @rest => $arg }
     }
     @$args = @rest;
 
@@ -90,9 +90,10 @@ sub run {
 
     my $count = 0;
     for my $rel ($la->list_files) {
-        my $is_zst    = $rel =~ /\.zst\z/;
-        my $is_dict   = $rel eq 'zstd-dict.bin';
-        my $out_rel   = ($no_decompress || !$is_zst || $is_dict)
+        my $is_zst  = $rel =~ /\.zst\z/;
+        my $is_dict = $rel eq 'zstd-dict.bin';
+        my $out_rel =
+            ($no_decompress || !$is_zst || $is_dict)
             ? $rel
             : do { (my $r = $rel) =~ s/\.zst\z//; $r };
 
@@ -115,7 +116,7 @@ sub run {
             # would still point at non-existent '.zst' paths. Rewrite
             # the keys to match the extracted shape so consumers
             # (yath replay, ad-hoc tooling) find the files.
-            if ($out_rel eq 'artifacts.json'
+            if (   $out_rel eq 'artifacts.json'
                 || $out_rel =~ m{\Aruns/[^/]+/artifacts\.json\z})
             {
                 $bytes = _rewrite_manifest_keys($bytes);
@@ -125,7 +126,7 @@ sub run {
         open(my $out, '>', $abs) or die "open $abs: $!\n";
         binmode $out;
         print $out $bytes;
-        close $out  or die "close $abs: $!\n";
+        close $out or die "close $abs: $!\n";
         $count++;
     }
 
@@ -157,37 +158,60 @@ sub _rewrite_manifest_keys {
 
 # Decompress a possibly-multi-frame zstd byte string. The single
 # .json.zst snapshots produce one frame; the .jsonl.zst event
-# streams concatenate one-shot frame per line, so the extracted
-# plaintext is the concatenation of every frame's decoded payload.
+# streams concatenate one self-contained zstd frame per record.
 #
-# Without a dict we feed everything into a streaming Decompressor.
-# With a dict the streaming binding does not accept dicts, so we
-# walk frames using zstd_frame_size and decompress each with a
-# reused DecompressionContext.
+# Producers (the JSONL.zst writer, EventEmitter) do NOT embed an
+# inter-record newline inside the compressed plaintext -- frames
+# self-delimit -- so the extract command is responsible for
+# reinserting exactly one newline between records when materializing
+# extracted plaintext jsonl. We strip any trailing newlines from
+# each frame's payload first so producers that did include one (the
+# legacy plain JSONL writer through the same path, or older archives)
+# still extract to a single-newline-per-record shape.
+#
+# Walks frames via zstd_frame_size for both the dict and no-dict
+# paths; one frame is one record either way.
 sub _decompress_multi_frame {
     my ($bytes, $dict_bytes) = @_;
 
-    if ($dict_bytes) {
-        my $ddict = Compress::Zstd::DecompressionDictionary->new($dict_bytes);
-        my $dctx  = Compress::Zstd::DecompressionContext->new;
-        my $out   = '';
-        while (length $bytes) {
-            my $size = zstd_frame_size($bytes);
-            die "tar.zidx: incomplete zstd frame in extract payload\n"
-                unless defined $size;
-            my $frame = substr($bytes, 0, $size);
-            substr($bytes, 0, $size) = '';
-            my $plain = $dctx->decompress_using_dict($frame, $ddict);
-            die "tar.zidx: decompress_using_dict failed\n" unless defined $plain;
-            $out .= $plain;
-        }
-        return $out;
+    my $ddict;
+    $ddict = Compress::Zstd::DecompressionDictionary->new($dict_bytes)
+        if defined $dict_bytes;
+    my $dctx = Compress::Zstd::DecompressionContext->new if $ddict;
+
+    my @records;
+    while (length $bytes) {
+        my $size = zstd_frame_size($bytes);
+        die "tar.zidx: incomplete zstd frame in extract payload\n"
+            unless defined $size;
+        my $frame = substr($bytes, 0, $size);
+        substr($bytes, 0, $size) = '';
+
+        my $plain =
+              $ddict
+            ? $dctx->decompress_using_dict($frame, $ddict)
+            : Compress::Zstd::decompress($frame);
+        die "tar.zidx: zstd decompress failed in extract payload\n"
+            unless defined $plain;
+
+        push @records => $plain;
     }
 
-    my $d = Compress::Zstd::Decompressor->new;
-    $d->init;
-    my $out = $d->decompress($bytes);
-    die "tar.zidx: streaming decompress failed\n" unless defined $out;
+    return '' unless @records;
+
+    # Single-frame snapshots (.json.zst): return the payload as-is;
+    # there is no inter-record story to enforce, and a snapshot's
+    # body may legitimately end without a newline.
+    return $records[0] if @records == 1;
+
+    # Multi-frame streams (.jsonl.zst): one record per line, exactly
+    # one newline between records, trailing newline included so the
+    # file is canonical jsonl.
+    my $out = '';
+    for my $r (@records) {
+        $r =~ s/\n+\z//;
+        $out .= $r . "\n";
+    }
     return $out;
 }
 

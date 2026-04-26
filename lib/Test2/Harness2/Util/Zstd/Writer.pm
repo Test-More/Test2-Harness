@@ -39,12 +39,36 @@ sub _open {
 }
 
 sub print {
-    my $self = shift;
+    my $self    = shift;
     my $payload = join '', @_;
-    my $frame
-        = $self->{cdict}
+    my $frame =
+          $self->{cdict}
         ? $self->{cctx}->compress_using_dict($payload, $self->{cdict})
         : Compress::Zstd::compress($payload, $self->{level});
+
+    return $self->_emit_frame($frame);
+}
+
+sub say {
+    my $self = shift;
+    return $self->print(@_, "\n");
+}
+
+# Append a fully-formed zstd frame to the file without re-compressing.
+# Caller is responsible for ensuring the frame was produced with a
+# matching level + dictionary so the file's reader can decode it.
+# Used by callers that already hold a compressed frame (e.g. the
+# collector caches the on-wire frame from Atomic::Pipe and the JSONL
+# logger writes it verbatim).
+sub print_raw_frame {
+    my $self = shift;
+    my ($frame) = @_;
+    croak "frame is required" unless defined $frame;
+    return $self->_emit_frame($frame);
+}
+
+sub _emit_frame {
+    my ($self, $frame) = @_;
 
     my $fh   = $self->{fh};
     my $len  = length $frame;
@@ -55,11 +79,6 @@ sub print {
         if $sent != $len;
 
     return 1;
-}
-
-sub say {
-    my $self = shift;
-    return $self->print(@_, "\n");
 }
 
 sub close {

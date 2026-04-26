@@ -108,6 +108,12 @@ sub atomic_pipe_compression_args {
     my %args = (
         compression       => 'zstd',
         compression_level => IPC_DEFAULT_ZSTD_LEVEL,
+        # keep_compressed exposes the on-wire compressed bytes
+        # alongside the decompressed payload from
+        # get_line_burst_or_data, so the collector can stash the
+        # compressed frame on the event and a downstream zstd logger
+        # can write it verbatim instead of recompressing.
+        keep_compressed => 1,
     );
 
     my $dict = ipc_zstd_dict_path();
@@ -128,6 +134,7 @@ sub apply_atomic_pipe_compression {
     if (my $dict = ipc_zstd_dict_path()) {
         $pipe->set_compression_dictionary_file($dict);
     }
+    $pipe->set_keep_compressed(1);
     return;
 }
 

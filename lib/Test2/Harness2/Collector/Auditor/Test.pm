@@ -193,6 +193,7 @@ sub _audit {
         my $st = $self->{+SUBTESTS}->{$nested + 1} ||= {};
         $st->{event} = $event;
         $f->{harness_auditor}->{no_render} = 1;
+        $self->_drop_compressed_cache($event);
 
         # Only announce at this auditor's own nesting level -- nested
         # subtest_start events that slip past the from_tap gate above are
@@ -226,6 +227,7 @@ sub _audit {
 
     if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}})) {
         $f->{harness_auditor}->{no_render} = 1;
+        $self->_drop_compressed_cache($event);
 
         my $stamp = $f->{trace}->{stamp} // $f->{stamp} // $f->{harness}->{stamp} // time;
 
@@ -272,6 +274,7 @@ sub _audit {
             $fd->{parent}->{children} ||= $st->{children};
             $fd->{harness}->{closed_by}     = $event;
             $fd->{harness}->{closed_by_eid} = $event->{event_id};
+            $self->_drop_compressed_cache($se);
 
             my $pn = $n - 1;
 
@@ -304,6 +307,13 @@ sub _audit {
 sub _subtest_process {
     my $self = shift;
     my ($f, $event) = @_;
+
+    # _subtest_process mutates $f (== $event->facet_data when an
+    # event is passed) extensively below: deleting harness.closed_by,
+    # toggling subtest_closed, pushing errors, etc. Drop the
+    # collector's cached on-wire compressed frame so a downstream
+    # zstd-aware logger recompresses against the post-audit body.
+    $self->_drop_compressed_cache($event) if $event;
 
     my $closer = delete $f->{harness}->{closed_by};
 
@@ -485,6 +495,21 @@ sub fail_error_facet_list {
     push @out => $self->subtest_fail_error_facet_list();
 
     return @out;
+}
+
+# Drop the collector's cached on-wire compressed JSON frame and the
+# matching as_json cache from $event. Auditors call this immediately
+# before mutating the event body so a downstream zstd-aware logger
+# does not write stale bytes that no longer match the post-audit
+# event. Tolerates plain hashref events (used by the unit tests) as
+# well as blessed Test2::Harness2::Event instances since both are
+# hashes underneath.
+sub _drop_compressed_cache {
+    my ($self, $event) = @_;
+    return unless $event;
+    delete $event->{compressed_form};
+    delete $event->{json};
+    return;
 }
 
 1;

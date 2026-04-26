@@ -54,9 +54,9 @@ sub output_files {
 # Locate the per-logdir zstd dictionary if one is present. Returns
 # undef when the run was started dict-less.
 sub _dict_path {
-    my $self = shift;
+    my $self   = shift;
     my $logdir = $self->{+LOGDIR} or return undef;
-    my $path = "$logdir/zstd-dict.bin";
+    my $path   = "$logdir/zstd-dict.bin";
     return -f $path ? $path : undef;
 }
 
@@ -104,9 +104,30 @@ sub log_event {
     # the print operator. Both compress/append-on-print behavior is
     # identical from the caller's point of view.
     if (ref($fh) && $fh->isa('Test2::Harness2::Util::Zstd::Writer')) {
-        $fh->print($event->as_json . "\n");
+        # Fast path: the collector caches the on-wire compressed
+        # JSON frame on the event when it arrived as a JSON burst
+        # over an Atomic::Pipe configured with the same level + dict
+        # we use here. The on-wire frame and the JSONL writer's
+        # frame compress the same plaintext (bare JSON, no trailing
+        # newline) so the cached bytes can be appended verbatim and
+        # the extra compress pass is skipped. Auditors that mutate
+        # the event clear this field, so a present compressed_form
+        # is authoritative.
+        #
+        # Records on disk do not carry an inter-record newline:
+        # zstd frames self-delimit, and the extract command is
+        # responsible for inserting exactly one newline between
+        # records when producing extracted plaintext jsonl.
+        if (defined(my $frame = $event->compressed_form)) {
+            $fh->print_raw_frame($frame);
+        }
+        else {
+            $fh->print($event->as_json);
+        }
     }
     else {
+        # Plain (uncompressed) jsonl: the file format itself relies
+        # on a newline between records.
         print $fh $event->as_json, "\n";
     }
 }

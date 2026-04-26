@@ -47,7 +47,12 @@ sub write {
         ($self->{+DICT_PATH} ? (dict_path => $self->{+DICT_PATH}) : ()),
     );
     for my $entry (@_) {
-        $writer->print($self->encode($entry));
+        # Bare json -- zstd frames self-delimit, and the inherited
+        # encode() would append a "\n" that has no separator role
+        # under the framed format. The extract command is
+        # responsible for inserting newlines when producing
+        # extracted plaintext jsonl.
+        $writer->print(encode_json($entry));
     }
     $writer->close;
 
@@ -102,7 +107,7 @@ sub poll_with_index {
         $pos = $end;
 
         my $decoded;
-        my $ok = eval { $decoded = $self->decode($line); 1 };
+        my $ok  = eval { $decoded = $self->decode($line); 1 };
         my $err = $@;
         unless ($ok) {
             confess "$self->{+NAME} ($start -> $end): $err"
@@ -113,7 +118,7 @@ sub poll_with_index {
         }
 
         my $row = [$start, $end, $decoded];
-        push @out => $row;
+        push @out     => $row;
         push @$buffer => $row if $peek;
     }
 

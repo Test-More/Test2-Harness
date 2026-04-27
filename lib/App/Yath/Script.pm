@@ -50,9 +50,6 @@ sub do_begin {
 
     $exec = 1 if seed_hash();
     $exec = 1 if find_alt_script();
-    $exec = 1 if parse_new_dev_libs();
-
-    do_exec($argv) if $exec;
 
     my $version;
     my ($config, $user_config);
@@ -74,6 +71,18 @@ sub do_begin {
         # .yath.user(.v#).rc version takes precedence over .yath(.v#).rc
         $version = $user_version // $config_version;
     }
+
+    # Pre-parse the global section of the rc files for dev-libs flags
+    # so a user can put `-D` (etc) at the top of .yath.rc instead of on
+    # every CLI invocation. Only the global section is parsed -- command
+    # sections are reserved for the per-command parser since this layer
+    # has no idea which command is about to run. Run before the regular
+    # CLI -D pass so `T2_HARNESS_INCLUDES` carries everything across the
+    # re-exec triggered by either source.
+    $exec = 1 if parse_rc_dev_libs($config, $user_config);
+    $exec = 1 if parse_new_dev_libs();
+
+    do_exec($argv) if $exec;
 
     if (defined $version) {
         warn "Warning: Version '0' is for validating the yath script only, it should not be used for any real testing.\n"
@@ -155,29 +164,52 @@ sub find_alt_script {
 }
 
 sub parse_new_dev_libs {
+    return _install_dev_libs(_collect_dev_libs(@ARGV));
+}
+
+sub parse_rc_dev_libs {
+    my @files = grep { defined && length } @_;
+    return 0 unless @files;
+
+    my @args;
+    for my $file (@files) {
+        next unless -f $file;
+        push @args => _rc_global_tokens($file);
+    }
+
+    return _install_dev_libs(_collect_dev_libs(@args));
+}
+
+# Walk a list of argv-style tokens looking for -D / --dev-lib(s) flags.
+# Returns the list of paths to add to @INC.
+sub _collect_dev_libs {
+    my @args = @_;
+
     my @add;
-    for my $arg (@ARGV) {
+    for my $arg (@args) {
         last if $arg eq '::';
         last if $arg eq '--';
 
         next unless $arg =~ m/^(?:-D|--dev-libs?)(?:=(.+))?$/;
-        my $arg = $1;
+        my $val = $1;
 
-        unless ($arg) {
+        unless (defined $val && length $val) {
             push @add => map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch';
             next;
         }
 
-        for my $path (split /,/, $arg) {
-            if ($path =~ m/\*/) {
-                push @add => glob($path);
-            }
-            else {
-                push @add => $path;
-            }
+        for my $path (split /,/, $val) {
+            if ($path =~ m/\*/) { push @add => glob($path) }
+            else                { push @add => $path }
         }
     }
 
+    return @add;
+}
+
+# Dedup against @INC and prepend. Returns 1 if anything was added.
+sub _install_dev_libs {
+    my @add = @_;
     return 0 unless @add;
 
     my %seen = map { ($_ => 1, clean_path($_) => 1) } @INC;
@@ -186,6 +218,35 @@ sub parse_new_dev_libs {
 
     unshift @INC => @add;
     return 1;
+}
+
+# Tokenize the global section of an rc file into argv-style tokens.
+# Stops at the first [section] marker. `--foo` and `--foo=bar` lines
+# yield one token; `--foo bar` lines yield two, matching the format
+# App::Yath2::ConfigFile uses for command sections.
+sub _rc_global_tokens {
+    my ($file) = @_;
+
+    my @args;
+    open(my $fh, '<', $file) or return;
+    while (my $line = <$fh>) {
+        chomp $line;
+        $line =~ s/\s*[#;].*//;
+        $line =~ s/^\s+//;
+        $line =~ s/\s+$//;
+        next unless length $line;
+        last if $line =~ /^\[/;
+
+        if ($line =~ /^(\S+)\s+(.+)$/) {
+            push @args => ($1, $2);
+        }
+        else {
+            push @args => $line;
+        }
+    }
+    close($fh);
+
+    return @args;
 }
 
 sub inject_includes {

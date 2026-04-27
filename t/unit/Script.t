@@ -119,6 +119,270 @@ subtest 'parse_new_dev_libs' => sub {
     is(App::Yath::Script::parse_new_dev_libs(), 0, 'stops at ::');
 };
 
+subtest '_collect_dev_libs' => sub {
+    is([App::Yath::Script::_collect_dev_libs()], [], 'empty input -> empty list');
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('test', '--verbose', 'foo')],
+        [],
+        'no -D tokens -> empty list',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('-D')],
+        [map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch'],
+        'bare -D adds default trio',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('--dev-lib')],
+        [map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch'],
+        'bare --dev-lib adds default trio',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('--dev-libs')],
+        [map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch'],
+        'bare --dev-libs adds default trio',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('-D=/foo/bar')],
+        ['/foo/bar'],
+        '-D=path adds the path',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('--dev-lib=/foo/bar')],
+        ['/foo/bar'],
+        '--dev-lib=path adds the path',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('--dev-libs=/foo/bar')],
+        ['/foo/bar'],
+        '--dev-libs=path adds the path',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('-D=/a,/b,/c')],
+        ['/a', '/b', '/c'],
+        'comma-separated paths split',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('-D=/foo', 'middle', '--dev-libs=/bar')],
+        ['/foo', '/bar'],
+        'mixed args, only -D tokens collected',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('--', '-D=/should/be/ignored')],
+        [],
+        'stops at --',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('::', '-D=/should/be/ignored')],
+        [],
+        'stops at ::',
+    );
+
+    is(
+        [App::Yath::Script::_collect_dev_libs('-D=/before', '--', '-D=/after')],
+        ['/before'],
+        '-D before -- collected, after -- ignored',
+    );
+
+    # Glob expansion: build a temp dir with two child dirs and confirm
+    # that a glob pattern in -D=... expands via glob().
+    my $tdir = tempdir(CLEANUP => 1);
+    mkdir File::Spec->catdir($tdir, 'one') or die $!;
+    mkdir File::Spec->catdir($tdir, 'two') or die $!;
+    my $pattern = File::Spec->catdir($tdir, '*');
+    my @expected = sort glob($pattern);
+    my @paths    = App::Yath::Script::_collect_dev_libs("-D=$pattern");
+    my @got      = sort @paths;
+    is(\@got, \@expected, 'glob pattern expanded');
+};
+
+subtest '_install_dev_libs' => sub {
+    is(App::Yath::Script::_install_dev_libs(), 0, 'empty input returns 0');
+
+    {
+        local @INC = ('/already/here');
+        is(
+            App::Yath::Script::_install_dev_libs('/already/here'),
+            0,
+            'path already in @INC -> 0, no change',
+        );
+        is(\@INC, ['/already/here'], '@INC unchanged');
+    }
+
+    {
+        local @INC = ('/orig');
+        is(
+            App::Yath::Script::_install_dev_libs('/new/path'),
+            1,
+            'new path -> returns 1',
+        );
+        is(\@INC, ['/new/path', '/orig'], 'unshifted to front of @INC');
+    }
+
+    {
+        local @INC = ('/orig');
+        is(
+            App::Yath::Script::_install_dev_libs('/new1', '/orig', '/new2'),
+            1,
+            'mixed new and existing -> returns 1',
+        );
+        is(\@INC, ['/new1', '/new2', '/orig'], 'only new paths added, in order');
+    }
+};
+
+subtest '_rc_global_tokens' => sub {
+    my $tdir = tempdir(CLEANUP => 1);
+
+    my $write = sub {
+        my ($name, $body) = @_;
+        my $path = File::Spec->catfile($tdir, $name);
+        open(my $fh, '>', $path) or die "Cannot write $path: $!";
+        print $fh $body;
+        close $fh;
+        return $path;
+    };
+
+    is(
+        [App::Yath::Script::_rc_global_tokens($write->('empty.rc', ''))],
+        [],
+        'empty file -> no tokens',
+    );
+
+    my $f1 = $write->('basic.rc', <<'EOF');
+# leading comment
+-D=/path/one
+
+--foo bar
+--baz=qux
+--flag
+
+[test]
+--ignored=should-not-appear
+EOF
+    is(
+        [App::Yath::Script::_rc_global_tokens($f1)],
+        ['-D=/path/one', '--foo', 'bar', '--baz=qux', '--flag'],
+        'tokens from global section, stops at [section]',
+    );
+
+    my $f2 = $write->('comments.rc', <<'EOF');
+-D=/keep ; trailing semicolon comment
+--foo # trailing hash comment
+   --bar=baz
+EOF
+    is(
+        [App::Yath::Script::_rc_global_tokens($f2)],
+        ['-D=/keep', '--foo', '--bar=baz'],
+        'inline comments stripped, whitespace trimmed',
+    );
+
+    my $f3 = $write->('section_first.rc', <<'EOF');
+[test]
+-D=/in/section
+EOF
+    is(
+        [App::Yath::Script::_rc_global_tokens($f3)],
+        [],
+        'no global tokens when [section] is the first non-blank line',
+    );
+};
+
+subtest 'parse_rc_dev_libs' => sub {
+    is(App::Yath::Script::parse_rc_dev_libs(),               0, 'no args -> 0');
+    is(App::Yath::Script::parse_rc_dev_libs(undef),          0, 'undef -> 0');
+    is(App::Yath::Script::parse_rc_dev_libs('', ''),         0, 'empty strings -> 0');
+    is(App::Yath::Script::parse_rc_dev_libs('/no/such/rc'),  0, 'missing file -> 0');
+
+    my $tdir = tempdir(CLEANUP => 1);
+
+    my $write = sub {
+        my ($name, $body) = @_;
+        my $path = File::Spec->catfile($tdir, $name);
+        open(my $fh, '>', $path) or die "Cannot write $path: $!";
+        print $fh $body;
+        close $fh;
+        return $path;
+    };
+
+    {
+        my $rc = $write->('with_d.rc', <<'EOF');
+-D=/rc/lib
+
+[test]
+--workdir /tmp
+EOF
+        local @INC = ('/orig');
+        is(
+            App::Yath::Script::parse_rc_dev_libs($rc),
+            1,
+            '-D=/rc/lib in global -> returns 1',
+        );
+        is(\@INC, ['/rc/lib', '/orig'], 'path unshifted to @INC');
+    }
+
+    {
+        my $rc = $write->('section_only.rc', <<'EOF');
+[test]
+-D=/in/section/should/not/apply
+EOF
+        local @INC = ('/orig');
+        is(
+            App::Yath::Script::parse_rc_dev_libs($rc),
+            0,
+            '-D in [section] is ignored',
+        );
+        is(\@INC, ['/orig'], '@INC unchanged');
+    }
+
+    {
+        my $rc1 = $write->('multi1.rc', "-D=/from/rc1\n");
+        my $rc2 = $write->('multi2.rc', "-D=/from/rc2\n");
+        local @INC = ('/orig');
+        is(
+            App::Yath::Script::parse_rc_dev_libs($rc1, $rc2),
+            1,
+            'two rc files both contribute',
+        );
+        is(\@INC, ['/from/rc1', '/from/rc2', '/orig'], 'both paths unshifted');
+    }
+
+    {
+        my $rc = $write->('bare.rc', "-D\n");
+        local @INC = ('/orig');
+        is(
+            App::Yath::Script::parse_rc_dev_libs($rc),
+            1,
+            'bare -D in rc -> defaults installed',
+        );
+        my @defaults = map { clean_path($_) } 'lib', 'blib/lib', 'blib/arch';
+        is(\@INC, [@defaults, '/orig'], 'default trio unshifted');
+    }
+
+    {
+        # Consistency: rc and CLI share the same parser, so the same
+        # token strings must produce the same path list.
+        my $rc = $write->('consistent.rc', <<'EOF');
+-D=/x,/y
+--dev-libs=/z
+EOF
+        my @from_rc  = App::Yath::Script::_collect_dev_libs(
+            App::Yath::Script::_rc_global_tokens($rc));
+        my @from_cli = App::Yath::Script::_collect_dev_libs(
+            '-D=/x,/y', '--dev-libs=/z');
+        is(\@from_rc, \@from_cli, 'rc tokens and cli args yield same path list');
+    }
+};
+
 subtest 'find_rc_updir - versioned file' => sub {
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";

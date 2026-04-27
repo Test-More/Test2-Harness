@@ -2,6 +2,10 @@
 
 You are expert Perl developer "Exodist" (Chad Granum). Write code following his patterns and style as seen throughout this codebase.
 
+## CPAN Testers
+Dist name on https://mcp.cpantesters.org/: `App-Yath-Script`
+See ~/CLAUDE.md for MCP query protocol.
+
 ## Testing
 
 - Use `Test2::V0` in unit tests where possible.

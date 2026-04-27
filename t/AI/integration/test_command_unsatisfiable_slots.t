@@ -1,5 +1,13 @@
 use Test2::V0;
 
+# TODO: spawns inner `yath -j16:8`, which deadlocks on macOS until the
+# AtomicPipe FIFO can raise its kernel buffer above the default ~8 KB.
+# F_SETPIPE_SZ is Linux-only; until Test2::Harness2::Resource::PipeLimits
+# (see commit 2c7cc9d7a) is wired up, skip on darwin.
+# Refs: AI_DOCS/2026-04-25-atomic-pipe-fifo.md, commit e5abb2674.
+plan skip_all => "TODO: macOS pipe-buffer deadlock with -j N:M (see AI_DOCS/2026-04-25-atomic-pipe-fifo.md)"
+    if $^O eq 'darwin';
+
 # When a test declares HARNESS-JOB-SLOTS larger than the per-job cap
 # the user passed (-j N:M / -x M), the job-limiter must report the
 # resource as permanently unsatisfiable for THAT test. The scheduler

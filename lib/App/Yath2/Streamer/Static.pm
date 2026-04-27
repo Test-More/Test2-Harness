@@ -113,8 +113,30 @@ sub _resolve_path {
 
     return undef unless $archive->has_file($rel);
 
-    my $tmpdir = $self->{+ARCHIVE_TMPDIR} //=
-        tempdir('yath-streamer-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+    my $tmpdir = $self->{+ARCHIVE_TMPDIR} //= do {
+        my $td = tempdir('yath-streamer-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+
+        # Materialize the archive's bundled zstd dictionary at the root
+        # of the extraction tmpdir so Logger::JSONL::log_reader's
+        # parent-walk (which looks for "zstd-dict.bin" in any ancestor
+        # directory of the file being read) finds it. Without this the
+        # extracted .jsonl.zst / .json.zst files were written with a
+        # dict but the reader would resolve to dictless decode and
+        # croak "zstd decompress failed".
+        if ($archive->can('dict_bytes')) {
+            if (defined(my $dict_bytes = $archive->dict_bytes)) {
+                my $dict_path = "$td/zstd-dict.bin";
+                open(my $dfh, '>', $dict_path)
+                    or croak "Could not open '$dict_path' for write: $!";
+                binmode $dfh;
+                print {$dfh} $dict_bytes;
+                close $dfh
+                    or croak "Could not close '$dict_path': $!";
+            }
+        }
+
+        $td;
+    };
 
     my $abs = "$tmpdir/$rel";
     my $dir = dirname($abs);

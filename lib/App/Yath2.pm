@@ -30,7 +30,7 @@ use Getopt::Yath::Settings;
 use Getopt::Yath::Term qw/USE_COLOR color fit_to_width/;
 
 use App::Yath2::Options::Yath;
-#use App::Yath2::ConfigFile;
+use App::Yath2::ConfigFile;
 use App::Yath2::Util qw/paged_print yath_display_name/;
 
 use Role::Tiny ();
@@ -392,13 +392,13 @@ sub process_args {
     my $argv = $self->argv;
 
     my @configs;
-#    for my $attr (qw/config_file user_config_file/) {
-#        my $file = $settings->yath->$attr or next;
-#
-#        my $config = App::Yath2::ConfigFile->new(file => $file);
-#        push @configs => $config;
-#        unshift @$argv => $config->global;
-#    }
+    for my $attr (qw/config_file user_config_file/) {
+        my $file = $settings->yath->$attr or next;
+
+        my $config = App::Yath2::ConfigFile->new(file => $file);
+        push @configs => $config;
+        unshift @$argv => $config->global;
+    }
 
     my $state = $self->_process_global_args($argv);
 

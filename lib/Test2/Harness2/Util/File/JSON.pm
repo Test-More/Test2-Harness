@@ -30,6 +30,7 @@ sub maybe_read {
     return $out;
 }
 
+# Why 'iff' and not 'if', AI typo?
 # Read the file iff something about it has changed since the last
 # successful read. Returns the decoded content on a fresh read
 # (including Perl undef if the file contained the literal JSON
@@ -44,6 +45,7 @@ sub maybe_read {
 # The change test layers -- see Test2::Harness2::Util::File's
 # changed() -- so this inherits whatever watching mechanism the
 # base class is using (Linux::Inotify2 or stat-tuple fallback).
+# Remove this for FileMonitor
 sub read_if_changed {
     my $self = shift;
 

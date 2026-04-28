@@ -2,6 +2,8 @@ package Test2::Harness2::Util::File::JSONL::Zstd;
 use strict;
 use warnings;
 
+# Best to remove this class and let consumers use the Writer and Reader classes directly, and use FileMonitor to watch for changes
+
 our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;

@@ -2,6 +2,8 @@ package Test2::Harness2::Util::File::JSON::Zstd;
 use strict;
 use warnings;
 
+# Can probably remove this in favor of FileMonitor and the reader/writer classes
+
 our $VERSION = '2.000011';
 
 use Carp qw/confess croak/;

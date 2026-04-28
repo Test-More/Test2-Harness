@@ -26,6 +26,7 @@ use Object::HashBase qw{
     -_inotify_broken
 };
 
+# Remove this for FileMonitor
 # Linux::Inotify2 is the most efficient change-detection primitive on
 # Linux. Gated via a constant so the whole codebase has a single
 # "is it usable" check; consumers that hit a runtime problem flip
@@ -77,6 +78,7 @@ sub write {
     return Test2::Harness2::Util::write_file_atomic($self->{+NAME}, $self->encode(@_));
 }
 
+# Remove everything below this for filemonitor related changes
 sub reset {
     my $self = shift;
     delete $self->{+_FH};

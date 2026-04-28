@@ -2,6 +2,8 @@ package Test2::Harness2::Util::File::Stream;
 use strict;
 use warnings;
 
+# Probably best to get rid of this class as we will be removing the Zstd subclass in favor of the reader, writer, and FileMonitor classes. The JSONL class can be reworked.
+
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;

@@ -1,0 +1,23 @@
+Here is how I think it should be made to work:
+
+* scheduler (harness) starts a run service for the run
+* scheduler sends the launch_job requests to run service
+ * When the harness wants a job to be skipped/killed/etc due to a resource failure it adds an attribute to the test job start request indicating that the test has a resource issue, the run service then uses the correct fail/skip/etc payload, the harness itself does not send the payload. The run object should be where the specific behavior is toggled, one run may have it set to skip, another may have it set to fail.
+
+* We need a new role between auditor and loggers called Observer, it works like Loggers in that there can be multiple. Role/Collector/Observer.
+ * Event flow: Parser -> Auditor -> Observer(s) -> Loggers(s)
+ * Like auditors they consume 1 event at a time, but may inject additional events that Loggers then pick up.
+ * An observers job is to look for specific conditions conveyed via the event stream and then take action when the right condition is met
+ * This is how collectors will know when to send IPC messages, and where to send them
+* test job collectors are responsible for sending the following IPC events via a TestObserver Observer class:
+ * test_job_started -> run service: confirmation that the job started, sent as soon as the collector is finished forking the test process, includes both collector pid and test job pid, as well as run_id and the test job id.
+ * test_job_diagnosing -> run service: The first time an event of a diagnostic nature is seen (Info facet with important or debug set to true, or messages from STDERR)
+ * test_job_failing -> run service: First time a failing assertion or an error facet is seen.
+ * test_job_complete -> run service: When the test process has exited and been waited on, includes final auditor results
+ * job_release -> harness service: Sent at the same time as test_job_complete, lets the scheduler know the test job is done, its resources can be released, and also wakes the harness loop
+* All the ipc messages above that go to the run service mutate the run service run state
+* Whenever the run state mutates the run service emits an event to its collector, this event is ignored by the Observer (pass through unchanged) but the loggers can use it, specifically the JSON logger uses it to update its output_file
+ * At the same time as it emits the event, it also sends an IPC message to harness with the mutation so the harness has an up to date copy of the run state.
+ * During collector shutdown it sends a final state update to the harness via IPC, and a final state update tothe loggers via an emitted event.
+
+In the end run state management will be entirly managed by the run_service, with updates synced via IPC to the harness. The harness still handles scheduling, sending the launch_job request, and recieving the job_release event to free up resources and progress the queue.

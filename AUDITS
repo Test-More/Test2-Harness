@@ -1,0 +1,253 @@
+The Test2::Harness::Util::File::Stream and classes that inherit from it were all written before IO::Select and INotify were known. The Zstd child class looks to use Reader/Writer classes to accomplish similar. If we wanted to delete Test2::Harness::Utill::File::Stream and classes that inherit from it, and use Reader/Writers for Zstd and JSONL in the places the Stream based classes are currently used, what would that look like? Can we simplify code that way? -- read other feedback, keep ::JSONL, but rewrite it to assume it always has a complete file, not one still being written.
+
+I think having the inotify and read-if-changed logic in the Test2::Harnes::Util::File* classes overcomplicates them. Revert them back to just read/write/decode, etc, the functionality they had without the read-if-change or watch logic. Instead create a new Test2::Harness::Util::FileMonitor class. This class should be used to do the monitoring, interface:
+    my $f = Test2::Harness::Util::FileMonitor->new(
+        file     => 'path/to/file',    # required
+        delegate => $inst,             # Optional
+    );
+
+    Always takes a filename
+    Initial state is always that the file has changed until first use
+
+    Interface
+
+    my $delegate_or_bool = $f->changed; # If the file has changed (or first call) return the delegate, or 1 if there is no delegate. Always returns 0 if there is no change.
+    my $delegate_or_bool = $f->await_change($optional_timeout) # Wait for a change, or the optional timeout. Returns the delegate or true on change, false on timeout
+    my $delegate = $f->delegate; # Returns the delegate, or undef if there is none
+
+    Note: Use hi-res mtime instead of low-res one.
+
+    Places that currently use File utils logic to check for changes should be reworked to use FileMonitor to watch for changes, and then use the correct File::* class (while-file and/or stream) as the delegate. For classes like Zstd where we only need a reader it might make more sense to use the Zstd::Reader class directly as the delegate.
+
+    The following is OK, There is a race in that changed could return true for changes we already read in the read_lines call, but that will be mean there will be an extra iteration where we have no lines to push, which is safe. No need to overcomplicate things to prevent the extra empty read.
+    while (my $delegate = $f->changed) {
+        push @lines => $delegate->read_lines;
+    }
+
+----
+
+Benchmark our streaming Zstd (using just our reader and writer) with and without the custom dictionary, if the custom dictionary does not make a notable difference eliminte the dictionary and change all code to not use it.
+Also the default compression level for Zstd is level 3, remove code that directly sets it to level 3 or allows for a custom level. This should also allow us to just use the Zstd serializer class for the IPC serializer without needign to pass args which make it bless an instance.
+
+----
+
+The TestFile system is not correct. Should be this layout:
+
+Test2::Harness::Role::TestFile - Defines things the Test2::Harness2 namespace needs to know about a test file
+Test2::Harness::TestFile - Implementation of the role with static data, IE all required methods and fields have set values that will not change. No methods for mutating or for finding new information about the test file. If Test2::Harness2 is constructing or reconstructing a test file we should have the data already.
+App::Yath2::TestFile - Implementation of the role that knows how to read important info and headers from the file.
+
+App::Yath2 and yath commands should construct the TestFile objects using the
+TestFile in App::Yath2, it should then serialize the final data built from
+scanning/reading the file into a hashref, these testfile hashes are used when
+queueing a run, not simply the paths to the files. The harness and run services
+should get the test data already fully formed.
+
+This will allow yath plugins (future work) and similar to modify, inject, or
+construct TestFiles on the UX end. It also reduces the surface area for
+exceptions, better to catch exceptions due to TestFile problems early in the
+`yath test` command, as opposed to inside the harness.
+
+In the App::Yath UX layer is also where the CLI settings can be applied to the
+TestFiles.
+
+The role can keep the defaults, TO_JSON and Rehydrate, and anything that helps
+look into the data like checking if a specific featue is enabled, rank, most of
+check_*, etc.
+
+After fixing things to be how I described them above, Audit the TestFiles
+libraries for anything missing compared to reference/old. Drop the results in a
+new 'TEST_FILE_AUDIT.md' file for me to review later.
+
+----
+
+We use the term 'synthetic' to refer both to the 'skip/fail' behavior for tests
+that need resources that are not available, and for events generated if we do
+not see a job completed message. This has confused me a couple times. Can we
+switch the terminology for one or both?
+
+----
+
+Changing how job_limiter requirements and auto-set work.
+
+The harness should not mandate that there be a resource class. If someone wants to build a harness with no limiter that just spins up unlimited test jobs they are allowed to.
+
+the is_job_limiter method can go away.
+
+Instead of the Harness auto-injecting the JobCount resource, this will become a
+behavior for 'yath test'. When someone runs `yath test` with arguments that
+force a resource (like -j) that is fine, we have a resource. If the user
+specifies ANY resource classes at the command line, that counts too. If no
+resource classes are specified directly, and none were brought in by other
+arguments, then the `test` commands should add the JobCount resource, if
+possible with the default calcluated with Sys::Info, otherwise a fallback to a
+limit of 2.
+
+We will have new resource classes for cpu load, memory limits, pipe limits, etc
+that can better optimize system utilization then a simple count limit.
+
+----
+
+Add a stub for a new --utilize (-U short?) option in the resource options
+library. It takes a number between between, but not including, 0 and 100. Spec
+for future task included in stub: Finds and includes any/all resources classes
+that implement a new UtilizerResource role. These must all take the input
+number (percentage of utilization), as long as their system (cpu, memory, /tmp
+space, etc) utilization is below the percentage number, tests can be started,
+once the utilization goes above that percentage the resources return
+temporarily unavailable. Should probably also be combined with a throttle
+setting that limits how mant tests can be spawned in a given timespan to avoid
+continual spawning before the tests have a chance to utilize resources. We do
+not want to limit how quickly they start after another exits, so I would say it
+throttles along the lines of "in the last 2 seconds we spanwed 40 tests, 10
+ended, the delta is 30, if 30 is at or over the 2 second threshold we need to
+wait another second before starting the next batch. But if 40 start and
+complete in 2 seconds, that delta is 0, so no throttling.
+
+These should all implement the role:
+lib/Test2/Harness2/Resource/Memory.pm
+lib/Test2/Harness2/Resource/PipeLimits.pm
+lib/Test2/Harness2/Resource/UnixLimits.pm
+
+Add stubs for these which should also implement the role:
+TempSpace - Monitors the system temp dir (subclass of the Disk resource where which disk is automatically filled in)
+CPU - Allows a test to run if the cpu usage is below the percentage limit. This should be an aggregate cpu usage of all cpus on a multi-cpu system
+
+Add a note to the stubs for all the above resources so that when they are implemented they can use a percentage.
+
+----
+
+Note that when the Memory resource is implemented, it should look at the most recent log, or yathdb/yathui (once they are added) history to see how much memory a test has used historically to see if it is safe to run it with existing memory usage.
+
+----
+
+the `yath` script in the App-Yath-Script project (../App-Yath-Script) sets the
+perl hash seed, and it calls exec to do so if it was not set already. This is
+the wrong place to do this. We should add an option for setting the perl hash
+seed. It should be an auto type option, --set-hash-seed, which sets it to the
+year, month and day line App-Yath-Script does now. But also allows
+--set-hash-seed=whatever so someone can specify a custom seed.
+
+This should then set it as an env var for any tests before they spawn.
+
+Once we have preload will will also need to make sure preloads associated with
+a run that has this setting start with the env var set so that the children
+they fork with state already in memory will inherit it.
+
+The --set-hash-seed also will need to apply to global preloads attached to the
+harness.
+
+When the `yath start` and `yath run` commands are rewritten they will both need
+to accept the set-hash-seed option so that any global preloads launched by the
+global harness can have it. A run queue attempt should be rejected if the run
+and the queue disagree on the set-hash-seed status or value.
+
+Also remove the logic from app-yath-script in favor of the command line option.
+
+----
+
+Analize if there are any good ways to simplify the collectors without
+eliminating any used functionality. Reorganizing class higherarchy into new
+higherarchy, introducing roles, different subclasses, a win32 subclass or win32
+completely seperate implementation? Right now the flow is very hard to follow
+across the various collector base classes, subclasses. Maybe breaking some
+functionality into smaller utility functions
+(Test2::Harness2::Collector::Util)?
+
+Also part of analasys, would it be viable to break generic Collector behavior
+out to a new dist (Process-Collector), and then use it as a Dep with Harness
+specific logic on top of it?
+
+Generic collector features:
+ * Atomic::Pipes for stderr/stdout
+ * message bursts to collector (generic payloads, not necessarily
+   json objects)
+ * get exit code,
+ * loop that takes action on all watched process output and watched process
+   exit code
+ * Combining Stdout/Stderr if desired
+ * spawning the child
+ * spawning collector then child
+ * Turning current process into collector + forking and returning control of
+   child to the code that tols the collector to start
+ * Ability to retain clones of STDERR/STDOUT in the collector
+ * Ability to optionally redirect collector STDERR/STDOUT, or keep them as is.
+ * Cross Platform capabilities, linux, win32, *bsd, solaris, etc.
+ * Ability to use exec in child post-fork
+ * Ability to specify a subroutine that can be run as the child
+ * Long::Jump capabilities/Integrations
+ * use of Zstd on Atomic::Pipe messages (but still no support for it on print
+   directly to pipe)
+
+Not generic collector featrures:
+ * Parser -> Auditor -> Logger flow
+ * Anything to do with IPC-Manager
+ * Anything that requires Test2::Harness2 code, other than utilities that can
+   be moved to or copied to the Process-Collector dist.
+
+Do not do any implementation or code moving, only analize and report.
+
+Put report in COLLECTOR_CLEANUP.md
+
+----
+
+In general 1-line methods or functions:
+
+    sub one_line { "1 line" }
+
+Should go near the top of the file, after `use` and `BEGIN` statements.
+Exceptions cna be made when logic is grouped together because it all implements
+the same role interface or similar, in those cases fold should be introduced,
+and the 1-liner should go to the top of that section:
+
+    # {{{ This is where the doohickey is implemented
+
+    sub one_line { "1 line" }
+    sub default  { 1 }
+    sub is_smart { 1 }
+
+    sub longer_method {
+        my $self = shift;
+        ...
+        ...
+
+        return "That was long";
+    }
+
+    sub another {
+        ...
+        ...
+        ...
+    }
+
+    # }}} This is where the doohickey is implemented
+
+Audit the modules and clean them up to fit this pattern, also create a
+STYLE_GUIDE.md add this too it. Move the style related items from
+ARCHITECTURE.md and CLAUDE.md and add them to STYLE_GUIDE.md, then reference
+STYLE_GUIDE.md in both CLAUDE.md and ARCHITECTURE.md
+
+----
+
+Test2::Harness2::Run Needs to be split. The Test2::Harness2::Run object should
+be very simple, it should not track state, it should just be what is needed to
+queue a run, construct it, add tests to it, then use it in $harness->queue. A
+seperate Run::State module should be where the initial state is set up, and
+then mutated over the course of executing the run. There will be some attribute
+overlap, but some things will be exclusive to one or the other. The Run::State
+is what will need to be synced from the run up to the harness as well.
+
+The JSON logger should no longer write runs/UUID.json, it should instead write
+runs/UUID/spec.json (The run object) and runs/UUID/state.json (the Run::State
+object). Also the .jsonl file should move to runs/UUID/events.jsonl.
+
+----
+
+Currently several files get written to the current directory, the log, the ipc
+data files, etc. It would be better to have these all get written to temp, with
+command line options to write them (and in some cases fine them) in the current
+dir. Also a flag to link useful files like the archives, ipc files, etc to the
+present dir. In order to associate the temp files withe right dir we need some
+kind of metadata or similar. Do not make any changes, but audit for files
+written to the current directory when yath runs and write a CWD_FILES.md report
+for me.

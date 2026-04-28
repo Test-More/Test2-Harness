@@ -20,6 +20,7 @@ sub read {
     return $out;
 }
 
+# Probably do not need readline on a file that has 1 value
 sub read_line {
     my $self = shift;
     my $out  = $self->SUPER::read_line(@_);

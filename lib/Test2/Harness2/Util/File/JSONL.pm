@@ -7,11 +7,16 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use Test2::Harness2::Util::JSON qw/encode_json decode_json/;
 
+# Change parent to remove ::Stream and add ::JSON
 use parent 'Test2::Harness2::Util::File::Stream';
 use Object::HashBase;
 
 sub decode { shift; decode_json($_[0]) }
 sub encode { shift; encode_json(@_) . "\n" }
+
+# define read_line
+# Override read to read all lines and return a list of all decoded items
+# Override write and rewrite to take lists and turn each item into a json line using encode and writing the result with a newline at the end of each items line.
 
 1;
 

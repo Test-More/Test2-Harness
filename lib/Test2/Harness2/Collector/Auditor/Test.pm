@@ -171,6 +171,7 @@ sub _normalize_event {
     $f->{about}{uuid}       //= $event_id if $f->{about};
 }
 
+# Move some of the conditional blocks from here into their own methods that we call. This method is too long, needs to be broken up.
 sub _audit {
     my $self = shift;
     my ($event) = @_;
@@ -304,6 +305,7 @@ sub _audit {
     return @out;
 }
 
+# Same here, try to break it up into multiple methods where reasonable
 sub _subtest_process {
     my $self = shift;
     my ($f, $event) = @_;

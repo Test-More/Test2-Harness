@@ -11,6 +11,7 @@ use Test2::Harness2::Util qw/write_file_atomic/;
 
 our $VERSION = '2.000011';
 
+# The stream_json_l* can go away
 our @EXPORT_OK = qw{
     decode_json
     decode_json_file

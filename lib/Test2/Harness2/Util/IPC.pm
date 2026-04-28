@@ -23,6 +23,7 @@ use constant HAS_PARSEABLE_PROC => ($^O eq 'linux' || $^O eq 'freebsd' || $^O eq
 # listen=1 to accept inbound traffic.
 use constant IPC_DEFAULT_PROTOCOL => 'IPC::Manager::Client::ConnectionUnix';
 
+# This should just use the constant from Util::Zstd, keep them the same
 # Zstd compression level. 3 is Compress::Zstd's library default and
 # the same value JSON::Zstd uses when nothing is supplied; we set it
 # explicitly so the spec is self-describing and a future tuning

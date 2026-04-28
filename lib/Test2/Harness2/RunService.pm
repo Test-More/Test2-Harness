@@ -186,6 +186,7 @@ sub request_handler_launch_job {
     my $test_file_abs   = $payload->{test_file};
     my $launch_cmd      = $payload->{launch};
 
+    # This is not safe for windows, possibly other platforms too.
     return {ok => 0, error => "'test_file' must be absolute"}
         unless $test_file_abs =~ m{^/};
 
@@ -218,6 +219,7 @@ sub request_handler_launch_job {
     # test_file path so the resulting .json includes the relative
     # and absolute test-file paths. Callers that supply their own
     # spec are left alone.
+    # Make this a use statement at the top of the file, not a dynamic require.
     require Test2::Harness2::TestFile;
     my $test_file_spec = Test2::Harness2::TestFile->new(file => $test_file_abs);
 
@@ -444,6 +446,17 @@ sub run_on_general_message {
     my $content = $msg->content;
     my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
     return unless defined $kind;
+
+    # Can we change this to dispatch via methods:
+    # my $meth = "_handle_${kind}";
+    # if ($self->can($meth)) {
+    #     $self->$meth($content);
+    # }
+    # else {
+    #     warn "Unrecognised general message type '$kind';
+    # }
+    #
+    # To make it a bit safer call the methods _handle_gen_msg_$kind, so we cannot accidentally grab _handle_collector_artifacts or other similarly names methods.
 
     if ($kind eq 'test_job_started') {
         return $self->_handle_test_job_started($content);
@@ -889,12 +902,10 @@ sub spawn {
 
     my $pid = fork // die "fork: $!";
 
-    if ($pid) {
-        # Parent: just return the pid. Ready-state is signalled via
-        # service_started appearing on the IPC bus, but callers that
-        # don't need the signal can fire-and-forget.
-        return $pid;
-    }
+    # Parent: just return the pid. Ready-state is signalled via
+    # service_started appearing on the IPC bus, but callers that
+    # don't need the signal can fire-and-forget.
+    return $pid if $pid;
 
     # Child: take over the process and run the service loop.
     $class->start(%args);

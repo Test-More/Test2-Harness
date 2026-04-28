@@ -184,6 +184,7 @@ sub update_style           { 'append' }
 sub records_state          { 0 }
 sub records_general_events { 1 }
 
+# Better to re-implement all this using a zstd reader as a delegate to the FileMonitor class
 sub log_reader {
     my $class = shift;
     my ($path) = @_;

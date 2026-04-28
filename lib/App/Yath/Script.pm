@@ -48,29 +48,14 @@ sub do_begin {
 
     inject_includes();
 
+    my $local_vers = install_local_lib();
+
     $exec = 1 if seed_hash();
     $exec = 1 if find_alt_script();
 
-    my $version;
-    my ($config, $user_config);
-
-    if (defined $cli_version) {
-        # Explicit version on CLI -- only look for versioned RC files.
-        # Accept both .yath.v#.rc and .yath.V#.rc.
-        $config      = find_in_updir(".yath.v${cli_version}.rc")      // find_in_updir(".yath.V${cli_version}.rc");
-        $user_config = find_in_updir(".yath.user.v${cli_version}.rc") // find_in_updir(".yath.user.V${cli_version}.rc");
-        $version     = $cli_version;
-    }
-    else {
-        my $config_version;
-        ($config, $config_version) = find_rc_updir('.yath');
-
-        my $user_version;
-        ($user_config, $user_version) = find_rc_updir('.yath.user');
-
-        # .yath.user(.v#).rc version takes precedence over .yath(.v#).rc
-        $version = $user_version // $config_version;
-    }
+    my ($config, $user_config, $version) = find_rc_files($cli_version);
+    $version //= $local_vers;
+    $version //= 1;
 
     # Pre-parse the global section of the rc files for dev-libs flags
     # so a user can put `-D` (etc) at the top of .yath.rc instead of on
@@ -84,54 +69,7 @@ sub do_begin {
 
     do_exec($argv) if $exec;
 
-    if (defined $version) {
-        warn "Warning: Version '0' is for validating the yath script only, it should not be used for any real testing.\n"
-            if $version == 0;
-
-        $MOD = "App::Yath::Script::V${version}";
-
-        my $file = mod2file($MOD);
-        eval { require $file; 1 } or die "Could not load $MOD: $@";
-    }
-    else {
-        # No config file found -- scan @INC for available V# modules and
-        # try the highest version first so we default to the latest.
-        my %found;
-        for my $inc (@INC) {
-            next if ref $inc;
-            my $dir = File::Spec->catdir($inc, 'App', 'Yath', 'Script');
-            next unless -d $dir;
-            opendir(my $dh, $dir) or next;
-            for my $entry (readdir $dh) {
-                $found{$1} = 1 if $entry =~ /^V(\d+)\.pm$/;
-            }
-            closedir $dh;
-        }
-
-        # V0 is for script validation only, never auto-select it
-        delete $found{0};
-
-        my @err;
-        for my $v (sort { $b <=> $a } keys %found) {
-            my $mod = "App::Yath::Script::V${v}";
-
-            my $file = mod2file($mod);
-            if (eval { require $file; 1 }) {
-                $MOD = $mod;
-                last;
-            }
-
-            push @err => $@;
-        }
-
-        die join "\n" => (
-            "No Test2::Harness (App::Yath) versions appear to be installed...",
-            @err,
-        ) unless $MOD;
-    }
-
-    die "Could not find a App::Yath::Script::V{X} module to use...\n"
-        unless $MOD;
+    $MOD = load_yath_module($version);
 
     $MOD->do_begin(
         script      => $SCRIPT,
@@ -249,9 +187,96 @@ sub _rc_global_tokens {
     return @args;
 }
 
+# Locate the project- and user-level rc files plus the version number
+# they imply. Returns ($config, $user_config, $version), each of which
+# may be undef. When $cli_version is defined the caller's explicit
+# version always wins; only versioned rc files matching that version
+# are looked up.
+sub find_rc_files {
+    my ($cli_version) = @_;
+
+    if (defined $cli_version) {
+        # Explicit version on CLI: prefer matching versioned rc files,
+        # but fall back to plain .yath.rc / .yath.user.rc when no
+        # versioned match exists. Accept both .yath.v#.rc and
+        # .yath.V#.rc.
+        my $config = find_in_updir(".yath.v${cli_version}.rc")
+                  // find_in_updir(".yath.V${cli_version}.rc")
+                  // find_in_updir(".yath.rc");
+        my $user_config = find_in_updir(".yath.user.v${cli_version}.rc")
+                       // find_in_updir(".yath.user.V${cli_version}.rc")
+                       // find_in_updir(".yath.user.rc");
+        return ($config, $user_config, $cli_version);
+    }
+
+    my ($config,      $config_version) = find_rc_updir('.yath');
+    my ($user_config, $user_version)   = find_rc_updir('.yath.user');
+
+    # .yath.user(.v#).rc version takes precedence over .yath(.v#).rc.
+    # Either may be undef (plain unversioned rc); when both are undef
+    # the caller falls back to install_local_lib's version, then to
+    # load_yath_module's @INC scan.
+    my $version = $user_version // $config_version;
+
+    return ($config, $user_config, $version);
+}
+
+# Load and return the App::Yath::Script::V{X} module to delegate to.
+# Dies if the requested module fails to load. V0 is reserved for
+# script validation and emits a warning when explicitly requested.
+sub load_yath_module {
+    my ($version) = @_;
+
+    warn "Warning: Version '0' is for validating the yath script only, it should not be used for any real testing.\n"
+        if $version == 0;
+
+    my $mod  = "App::Yath::Script::V${version}";
+    my $file = mod2file($mod);
+    eval { require $file; 1 } or die "Could not load $mod: $@";
+    return $mod;
+}
+
 sub inject_includes {
     return unless $ENV{T2_HARNESS_INCLUDES};
     @INC = split /;/, $ENV{T2_HARNESS_INCLUDES};
+}
+
+# Scan ./lib/App/Yath/Script for V#.pm modules and return the highest
+# version found, or undef when no such modules are present. Used by
+# install_local_lib() to detect a working-copy checkout that ships its
+# own versioned script module.
+sub find_local_version {
+    my $local_path = File::Spec->catdir(File::Spec->curdir, 'lib', 'App', 'Yath', 'Script');
+    return undef unless -d $local_path;
+    opendir(my $dh, $local_path) or return undef;
+
+    my $vers;
+    for my $file (readdir($dh)) {
+        next unless $file =~ m/^V(\d+)\.pm$/;
+        my $n = int($1);
+        $vers = $n if !defined($vers) || $n > $vers;
+    }
+    closedir $dh;
+
+    return $vers;
+}
+
+# If the cwd contains ./lib/App/Yath/Script/V#.pm modules, ensure ./lib
+# is at the front of @INC so they take precedence over any installed
+# copy. Returns the highest local version found, or undef if no local
+# modules exist. Idempotent: a re-exec that already has ./lib in @INC
+# (via T2_HARNESS_INCLUDES) does not re-print or re-unshift.
+sub install_local_lib {
+    my $local_vers = find_local_version();
+    return undef unless defined $local_vers;
+
+    my $lib_path = clean_path(File::Spec->catdir(File::Spec->curdir, 'lib'));
+    return $local_vers if grep { clean_path($_) eq $lib_path } @INC;
+
+    print "Detected App::Yath::Script::V# modules in local ./lib, adding '$lib_path' to the front of \@INC.\n";
+    unshift @INC => $lib_path;
+
+    return $local_vers;
 }
 
 sub seed_hash {
@@ -295,22 +320,28 @@ sub find_rc_updir {
             }
         }
 
-        # Priority 2: explicitly versioned file (.yath.v#.rc).
+        # Priority 2: explicitly versioned file -- highest version wins.
         if (opendir(my $dh, $abs)) {
+            my ($best_ver, $best_entry);
             for my $entry (readdir $dh) {
-                if ($entry =~ $versioned_pattern) {
-                    my $v    = int($1);
-                    my $path = File::Spec->catfile($abs, $entry);
-                    closedir $dh;
-                    return ($path, $v);
+                next unless $entry =~ $versioned_pattern;
+                my $v = int($1);
+                if (!defined($best_ver) || $v > $best_ver) {
+                    $best_ver   = $v;
+                    $best_entry = $entry;
                 }
             }
             closedir $dh;
+            if (defined $best_ver) {
+                return (File::Spec->catfile($abs, $best_entry), $best_ver);
+            }
         }
 
-        # Priority 3: plain unversioned file, default to V1.
+        # Priority 3: plain unversioned file -- no version captured, the
+        # caller (find_rc_files / install_local_lib / load_yath_module)
+        # decides what version to use.
         if (-f $plain_path) {
-            return ($plain_path, 1);
+            return ($plain_path, undef);
         }
 
         $abs = eval { realpath(File::Spec->catdir($abs, '..')) };
@@ -385,38 +416,47 @@ runtime, C<do_runtime()> hands off execution to that module.
 
 =head2 Version Detection
 
-When no configuration file is found, the latest installed
-C<App::Yath::Script::V{X}> module is used automatically (C<V0> is excluded
-from auto-detection since it is reserved for script validation).
+A version may come from any of these sources, in priority order: an
+explicit C<V#> / C<v#> as the first CLI argument, the rc files found
+walking upward from the cwd, a working-copy checkout under
+C<./lib/App/Yath/Script/V#.pm>, or finally C<V1> as the default. C<V0>
+is reserved for script validation and must be requested explicitly.
 
-The version is determined by the configuration filename using the following
-priority (highest first) in each directory searched:
+When walking upward, each directory is scanned in this order:
 
 =over 4
 
 =item 1.
 
-A C<.yath.rc> symlink whose target filename matches C<.yath.v#.rc> -- the
-version is extracted from the target name. This lets projects keep a stable
-C<.yath.rc> name while pointing at the versioned file.
+A C<.yath.rc> symlink whose target filename matches C<.yath.v#.rc> /
+C<.yath.V#.rc> -- the version is extracted from the target name. This
+lets projects keep a stable C<.yath.rc> name while pointing at the
+versioned file.
 
 =item 2.
 
-An explicitly versioned file C<.yath.v#.rc> (e.g. C<.yath.v2.rc>).
+Explicitly versioned files C<.yath.v#.rc> / C<.yath.V#.rc> -- the
+highest version present in the directory wins, both for the chosen rc
+file and the captured version.
 
 =item 3.
 
-A plain C<.yath.rc> (not a symlink to a versioned file) -- defaults to B<1>
-for backwards compatibility with existing L<Test2::Harness> projects.
+A plain C<.yath.rc> (not a symlink to a versioned file) -- the rc file
+is used but B<no version is captured>; the caller falls through to the
+checkout / C<@INC> sources above.
 
 =back
 
-The same priority applies to user-level configuration (C<.yath.user.rc> /
-C<.yath.user.v#.rc>).
+The same priority applies to user-level configuration (C<.yath.user.rc>
+/ C<.yath.user.v#.rc>).
 
-If both project-level and user-level configuration files specify a version,
-the user-level version takes precedence. This allows individual developers to
-override the project-level version when needed.
+If both project-level and user-level rc files capture a version, the
+user-level version takes precedence. This allows individual developers
+to override the project-level version when needed.
+
+When an explicit C<V#> is given on the CLI, the lookup prefers a
+matching versioned rc file but falls back to a plain C<.yath.rc> /
+C<.yath.user.rc> if no versioned file is found.
 
 =head1 PRIMARY API
 

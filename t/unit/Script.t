@@ -7,6 +7,7 @@ use App::Yath::Script qw/clean_path find_in_updir find_rc_updir mod2file script 
 use Cwd qw/realpath getcwd/;
 use File::Spec;
 use File::Temp qw/tempdir/;
+use File::Path();
 
 my $ORIG_DIR = getcwd();
 
@@ -383,6 +384,89 @@ EOF
     }
 };
 
+subtest 'find_local_version' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    is(App::Yath::Script::find_local_version(), undef, 'no ./lib -> undef');
+
+    mkdir 'lib' or die $!;
+    is(App::Yath::Script::find_local_version(), undef, 'empty ./lib tree -> undef');
+
+    my $script_dir = File::Spec->catdir($dir, 'lib', 'App', 'Yath', 'Script');
+    File::Path::make_path($script_dir);
+
+    is(App::Yath::Script::find_local_version(), undef, 'no V#.pm files -> undef');
+
+    open(my $fh1, '>', File::Spec->catfile($script_dir, 'V2.pm')) or die $!;
+    close($fh1);
+    is(App::Yath::Script::find_local_version(), 2, 'single V2.pm');
+
+    open(my $fh2, '>', File::Spec->catfile($script_dir, 'V5.pm')) or die $!;
+    close($fh2);
+    open(my $fh3, '>', File::Spec->catfile($script_dir, 'V3.pm')) or die $!;
+    close($fh3);
+
+    is(App::Yath::Script::find_local_version(), 5, 'highest V# wins');
+
+    # A non-V file should be ignored.
+    open(my $fh4, '>', File::Spec->catfile($script_dir, 'Other.pm')) or die $!;
+    close($fh4);
+    is(App::Yath::Script::find_local_version(), 5, 'non-V file ignored');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'install_local_lib' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    {
+        local @INC = ('/orig');
+        my $output = '';
+        local *STDOUT;
+        open(STDOUT, '>', \$output) or die "Cannot redirect STDOUT: $!";
+        is(App::Yath::Script::install_local_lib(), undef, 'no local lib -> undef');
+        is(\@INC, ['/orig'], '@INC unchanged');
+        is($output, '', 'no print');
+    }
+
+    my $script_dir = File::Spec->catdir($dir, 'lib', 'App', 'Yath', 'Script');
+    File::Path::make_path($script_dir);
+    open(my $fh, '>', File::Spec->catfile($script_dir, 'V7.pm')) or die $!;
+    close($fh);
+
+    my $expected_lib = clean_path(File::Spec->catdir($dir, 'lib'));
+
+    {
+        local @INC = ('/orig');
+        my $output = '';
+        {
+            local *STDOUT;
+            open(STDOUT, '>', \$output) or die "Cannot redirect STDOUT: $!";
+            is(App::Yath::Script::install_local_lib(), 7, 'returns highest version');
+        }
+        is(\@INC, [$expected_lib, '/orig'], 'lib unshifted to @INC');
+        like($output, qr/Detected App::Yath::Script::V# modules/, 'prints detection message');
+        like($output, qr/\Q$expected_lib\E/, 'prints lib path');
+    }
+
+    {
+        # Re-exec idempotency: lib already in @INC -> no print, no unshift.
+        local @INC = ($expected_lib, '/orig');
+        my $output = '';
+        {
+            local *STDOUT;
+            open(STDOUT, '>', \$output) or die "Cannot redirect STDOUT: $!";
+            is(App::Yath::Script::install_local_lib(), 7, 'returns version even when already installed');
+        }
+        is(\@INC, [$expected_lib, '/orig'], '@INC unchanged');
+        is($output, '', 'no print on repeat call');
+    }
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
 subtest 'find_rc_updir - versioned file' => sub {
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";
@@ -398,7 +482,7 @@ subtest 'find_rc_updir - versioned file' => sub {
     chdir $ORIG_DIR or die "Cannot chdir back: $!";
 };
 
-subtest 'find_rc_updir - plain unversioned file defaults to V1' => sub {
+subtest 'find_rc_updir - plain unversioned file returns no version' => sub {
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";
 
@@ -407,8 +491,40 @@ subtest 'find_rc_updir - plain unversioned file defaults to V1' => sub {
 
     my ($path, $v) = find_rc_updir('.yath');
     ok(defined $path, 'found plain rc file');
-    is($v, 1, 'plain .yath.rc defaults to V1');
+    is($v, undef, 'plain .yath.rc captures no version (caller decides)');
     like($path, qr/\.yath\.rc$/, 'path ends with .yath.rc');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_updir - highest versioned file wins' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    for my $v (2, 5, 3) {
+        open(my $fh, '>', File::Spec->catfile($dir, ".yath.v${v}.rc")) or die $!;
+        close($fh);
+    }
+
+    my ($path, $v) = find_rc_updir('.yath');
+    is($v, 5, 'highest versioned (V5) wins over V2 and V3');
+    like($path, qr/\.yath\.v5\.rc$/, 'path is the highest versioned file');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_updir - mixed lowercase and uppercase V picks highest' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    open(my $fh1, '>', File::Spec->catfile($dir, '.yath.v2.rc')) or die $!;
+    close($fh1);
+    open(my $fh2, '>', File::Spec->catfile($dir, '.yath.V4.rc')) or die $!;
+    close($fh2);
+
+    my ($path, $v) = find_rc_updir('.yath');
+    is($v, 4, 'V4 (uppercase) wins over v2 (lowercase)');
+    like($path, qr/\.yath\.V4\.rc$/, 'path is the V4 file');
 
     chdir $ORIG_DIR or die "Cannot chdir back: $!";
 };
@@ -522,7 +638,7 @@ subtest 'find_rc_updir - user symlink to versioned file' => sub {
     chdir $ORIG_DIR or die "Cannot chdir back: $!";
 };
 
-subtest 'find_rc_updir - plain user rc defaults to V1' => sub {
+subtest 'find_rc_updir - plain user rc returns no version' => sub {
     my $dir = tempdir(CLEANUP => 1);
     chdir $dir or die "Cannot chdir to $dir: $!";
 
@@ -531,7 +647,7 @@ subtest 'find_rc_updir - plain user rc defaults to V1' => sub {
 
     my ($path, $v) = find_rc_updir('.yath.user');
     ok(defined $path, 'found plain user rc file');
-    is($v, 1, 'plain .yath.user.rc defaults to V1');
+    is($v, undef, 'plain .yath.user.rc captures no version');
 
     chdir $ORIG_DIR or die "Cannot chdir back: $!";
 };
@@ -599,6 +715,118 @@ subtest 'find_rc_updir - searches parent directories' => sub {
     is($v, 7, 'correct version from parent directory');
 
     chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_files - cli_version with versioned rc' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    open(my $fh, '>', File::Spec->catfile($dir, '.yath.v3.rc')) or die $!;
+    close($fh);
+    open(my $fh2, '>', File::Spec->catfile($dir, '.yath.user.v3.rc')) or die $!;
+    close($fh2);
+
+    my ($cfg, $ucfg, $v) = App::Yath::Script::find_rc_files(3);
+    like($cfg,  qr/\.yath\.v3\.rc$/,        'project rc found');
+    like($ucfg, qr/\.yath\.user\.v3\.rc$/,  'user rc found');
+    is($v, 3, 'cli_version returned');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_files - cli_version falls back to plain rc' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    # Only plain rc files exist; no .yath.v3.rc / .yath.user.v3.rc.
+    open(my $fh,  '>', File::Spec->catfile($dir, '.yath.rc'))      or die $!;
+    close($fh);
+    open(my $fh2, '>', File::Spec->catfile($dir, '.yath.user.rc')) or die $!;
+    close($fh2);
+
+    my ($cfg, $ucfg, $v) = App::Yath::Script::find_rc_files(3);
+    like($cfg,  qr/\.yath\.rc$/,       'plain project rc used as fallback');
+    like($ucfg, qr/\.yath\.user\.rc$/, 'plain user rc used as fallback');
+    is($v, 3, 'cli_version preserved across fallback');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_files - cli_version with no rc files' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    my ($cfg, $ucfg, $v) = App::Yath::Script::find_rc_files(2);
+    is($cfg,  undef, 'no project rc');
+    is($ucfg, undef, 'no user rc');
+    is($v, 2, 'cli_version still returned without rc files');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_files - no cli_version, versioned rc files' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    open(my $fh, '>', File::Spec->catfile($dir, '.yath.v4.rc')) or die $!;
+    close($fh);
+    open(my $fh2, '>', File::Spec->catfile($dir, '.yath.user.v6.rc')) or die $!;
+    close($fh2);
+
+    my ($cfg, $ucfg, $v) = App::Yath::Script::find_rc_files(undef);
+    like($cfg,  qr/\.yath\.v4\.rc$/,       'project rc found');
+    like($ucfg, qr/\.yath\.user\.v6\.rc$/, 'user rc found');
+    is($v, 6, 'user version takes precedence over project version');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_files - no cli_version, plain rc files only' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    open(my $fh,  '>', File::Spec->catfile($dir, '.yath.rc'))      or die $!;
+    close($fh);
+    open(my $fh2, '>', File::Spec->catfile($dir, '.yath.user.rc')) or die $!;
+    close($fh2);
+
+    my ($cfg, $ucfg, $v) = App::Yath::Script::find_rc_files(undef);
+    like($cfg,  qr/\.yath\.rc$/,       'plain project rc used');
+    like($ucfg, qr/\.yath\.user\.rc$/, 'plain user rc used');
+    is($v, undef, 'no version captured -- caller falls back to local lib / V1 default');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'find_rc_files - no cli_version, no rc files' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    chdir $dir or die "Cannot chdir to $dir: $!";
+
+    my ($cfg, $ucfg, $v) = App::Yath::Script::find_rc_files(undef);
+    is($cfg,  undef, 'no project rc');
+    is($ucfg, undef, 'no user rc');
+    is($v,    undef, 'no version');
+
+    chdir $ORIG_DIR or die "Cannot chdir back: $!";
+};
+
+subtest 'load_yath_module - explicit V0 loads with warning' => sub {
+    my $warning = '';
+    my $mod;
+    {
+        local $SIG{__WARN__} = sub { $warning .= $_[0] };
+        $mod = App::Yath::Script::load_yath_module(0);
+    }
+    is($mod, 'App::Yath::Script::V0', 'V0 returned');
+    like($warning, qr/Version '0' is for validating/, 'V0 warning emitted');
+};
+
+subtest 'load_yath_module - explicit unknown version dies' => sub {
+    like(
+        dies { App::Yath::Script::load_yath_module(987654) },
+        qr/Could not load App::Yath::Script::V987654/,
+        'unknown explicit version dies',
+    );
 };
 
 done_testing;

@@ -36,6 +36,30 @@ not here.
 - Prefer `//=` for defaults.
 - Use constants over package vars for "is module installed" gating.
 
+## Sub-second sleeps
+
+Three primitives, picked by purpose. Never use 4-arg `select` directly.
+
+- **`Test2::Harness2::Util::tinysleep($secs)`** — default for busy loops,
+  poll cycles, and any sleep where the caller expects to react promptly
+  to a signal. `tinysleep` is implemented over 4-arg `select(undef, undef,
+  undef, $secs)`, which returns early on `EINTR` and does **not** resume
+  the remaining sleep. That is the desired behavior for code that
+  cooperates with signal-driven shutdown / SIGCHLD reaping / wakeups.
+  Almost every sleep in this codebase should be `tinysleep`.
+
+- **`Time::HiRes::sleep($secs)`** — only when the code genuinely needs
+  to guarantee a minimum elapsed wall-clock duration. `Time::HiRes::sleep`
+  retries internally on `EINTR` and so will silently swallow signals to
+  meet the requested duration. Use this for timing-sensitive paths
+  (rate limiters, "wait at least N seconds before retrying a backoff",
+  etc.) where signal interruption would produce a wrong result. Document
+  the reason at the call site.
+
+- **4-arg `select(undef, undef, undef, $secs)`** — never use directly.
+  If you need its semantics, use `tinysleep`. Existing direct uses are
+  bugs to fix during cleanup passes.
+
 ## Conditionals
 
 - Single-statement conditional blocks must use postfix form: `do_thing() if $cond` or `do_thing() unless $cond`, never `if ($cond) { do_thing(); }`. Multi-statement blocks keep the block form.

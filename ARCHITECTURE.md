@@ -2131,40 +2131,7 @@ remain hard requirements.
 
 ## 25. Coding Conventions
 
-The conventions that shape the shape of the code in `lib/`:
-
-- `Object::HashBase` for objects, `Role::Tiny` / `Role::Tiny::With` for
-  roles, `parent` (not `base`) for inheritance.
-- `Carp::croak` for user-facing errors; `die` for internal re-throws;
-  never silently discard exceptions. The only exceptions are `viable()`
-  feature-detection methods and optional-module loading where failure is
-  expected.
-- The eval pattern is always `my $ok = eval { ...; 1 }; my $err = $@;`
-  for if/else branching. Short single-line evals use the postfix or
-  inline form (`warn $@ unless eval { ...; 1 }`). A multi-line eval block
-  must never appear inside the parens of a conditional.
-- `//=` for defaults. `use constant` (not package vars) for "is module
-  installed" gating.
-- `my $pid = fork // die "fork: $!"` — fork failure is always `die`,
-  never `croak`, and never a separate conditional after the fork.
-- `push @target => @values` — fat comma to visually separate destination
-  from values.
-- Single-statement conditional blocks use postfix form
-  (`do_thing() if $cond`); multi-statement blocks keep the block form.
-- **Named subs in object classes are methods, not functions.** In a
-  module that defines an object class, every named sub defined in
-  that package's symbol table (`sub NAME { ... }`, not
-  `my $x = sub { ... }` and not an anonymous / lexical / local sub)
-  must be a method: `@_` starts with the invocant (`$self`, `$class`,
-  or `$self_or_class`). Named subs without an invocant — plain
-  functions — are not allowed inside an object class. Imported
-  functions (e.g. `use Carp qw/croak/`) stay as functions; this rule
-  applies only to subs defined in the module itself. Exporter modules
-  that are not object classes are free to define named functions for
-  export.
-- One commit per change; amend only to fix bugs in unpushed commits.
-- No trailing whitespace, no emojis, perltidy applied (config in
-  `.perltidyrc`).
+See `STYLE_GUIDE.md` for code style conventions.
 
 ## 26. Test Suite
 

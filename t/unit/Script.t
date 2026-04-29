@@ -809,4 +809,30 @@ subtest 'load_yath_module - explicit unknown version dies' => sub {
     );
 };
 
+subtest 'find_installed_versions - excludes V0, sorted highest-first' => sub {
+    my @vers = App::Yath::Script::find_installed_versions();
+    ok(scalar(@vers) > 0, 'found at least one installed version');
+    ok(!(grep { $_ == 0 } @vers), 'V0 excluded');
+
+    my @sorted = sort { $b <=> $a } @vers;
+    is(\@vers, \@sorted, 'returned sorted highest-first');
+};
+
+subtest 'load_latest_yath_module - returns highest installable' => sub {
+    my @vers = App::Yath::Script::find_installed_versions();
+    skip_all('no installed V# modules available') unless @vers;
+
+    my $mod = App::Yath::Script::load_latest_yath_module();
+    is($mod, "App::Yath::Script::V$vers[0]", 'highest installed version selected');
+};
+
+subtest 'load_latest_yath_module - dies when none installed' => sub {
+    local @INC = ();
+    like(
+        dies { App::Yath::Script::load_latest_yath_module() },
+        qr/No App::Yath .* modules appear to be installed/,
+        'dies with helpful message when no V# modules in @INC',
+    );
+};
+
 done_testing;

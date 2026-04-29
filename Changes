@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Restore "highest installed V# in @INC" as the final version
+      fallback (replaces the temporary V1 default); V0 stays excluded
+      from auto-selection
+
 2.000013  2026-04-28 21:02:38-07:00 America/Los_Angeles
 
     - Remove PERL_HASH_SEED auto-seeding (seed_hash) from the top-level

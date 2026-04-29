@@ -34,8 +34,10 @@ runtime, `do_runtime()` hands off execution to that module.
 A version may come from any of these sources, in priority order: an
 explicit `V#` / `v#` as the first CLI argument, the rc files found
 walking upward from the cwd, a working-copy checkout under
-`./lib/App/Yath/Script/V#.pm`, or finally `V1` as the default. `V0`
-is reserved for script validation and must be requested explicitly.
+`./lib/App/Yath/Script/V#.pm`, or finally the highest
+`App::Yath::Script::V#` module installed in `@INC`. `V0` is reserved
+for script validation, is never auto-selected, and must be requested
+explicitly.
 
 When walking upward, each directory is scanned in this order:
 

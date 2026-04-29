@@ -22,7 +22,7 @@ our @EXPORT_OK = (
     },
 );
 
-our $VERSION = '2.000013';
+our $VERSION = '2.000014';
 
 our ($SCRIPT, $MOD);
 
@@ -54,7 +54,6 @@ sub do_begin {
 
     my ($config, $user_config, $version) = find_rc_files($cli_version);
     $version //= $local_vers;
-    $version //= 1;
 
     # Pre-parse the global section of the rc files for dev-libs flags
     # so a user can put `-D` (etc) at the top of .yath.rc instead of on
@@ -68,7 +67,7 @@ sub do_begin {
 
     do_exec($argv) if $exec;
 
-    $MOD = load_yath_module($version);
+    $MOD = defined($version) ? load_yath_module($version) : load_latest_yath_module();
 
     $MOD->do_begin(
         script      => $SCRIPT,
@@ -233,6 +232,49 @@ sub load_yath_module {
     my $file = mod2file($mod);
     eval { require $file; 1 } or die "Could not load $mod: $@";
     return $mod;
+}
+
+# Scan @INC for installed App::Yath::Script::V#.pm modules and return
+# the version numbers sorted highest-first. V0 is excluded since it is
+# reserved for script validation and must never be auto-selected.
+sub find_installed_versions {
+    my %found;
+    for my $inc (@INC) {
+        next if ref $inc;
+        my $dir = File::Spec->catdir($inc, 'App', 'Yath', 'Script');
+        next unless -d $dir;
+        opendir(my $dh, $dir) or next;
+        for my $entry (readdir $dh) {
+            $found{$1} = 1 if $entry =~ /^V(\d+)\.pm$/;
+        }
+        closedir $dh;
+    }
+    delete $found{0};
+    return sort { $b <=> $a } keys %found;
+}
+
+# Final fallback when no version was captured from CLI, rc files, or a
+# local checkout. Tries each installed App::Yath::Script::V# module
+# from highest to lowest until one loads. Dies with the collected load
+# errors if none succeed (or if none are installed).
+sub load_latest_yath_module {
+    my @vers = find_installed_versions();
+
+    die "No App::Yath (App::Yath::Script::V#) modules appear to be installed.\n"
+        unless @vers;
+
+    my @err;
+    for my $v (@vers) {
+        my $mod  = "App::Yath::Script::V${v}";
+        my $file = mod2file($mod);
+        return $mod if eval { require $file; 1 };
+        push @err => $@;
+    }
+
+    die join "\n" => (
+        "No Test2::Harness (App::Yath) versions could be loaded:",
+        @err,
+    );
 }
 
 sub inject_includes {
@@ -406,8 +448,10 @@ runtime, C<do_runtime()> hands off execution to that module.
 A version may come from any of these sources, in priority order: an
 explicit C<V#> / C<v#> as the first CLI argument, the rc files found
 walking upward from the cwd, a working-copy checkout under
-C<./lib/App/Yath/Script/V#.pm>, or finally C<V1> as the default. C<V0>
-is reserved for script validation and must be requested explicitly.
+C<./lib/App/Yath/Script/V#.pm>, or finally the highest
+C<App::Yath::Script::V#> module installed in C<@INC>. C<V0> is reserved
+for script validation, is never auto-selected, and must be requested
+explicitly.
 
 When walking upward, each directory is scanned in this order:
 

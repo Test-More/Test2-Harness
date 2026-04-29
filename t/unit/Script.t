@@ -814,24 +814,58 @@ subtest 'load_yath_module - explicit unknown version dies' => sub {
 };
 
 subtest 'find_installed_versions - excludes V0, sorted highest-first' => sub {
-    my @vers = App::Yath::Script::find_installed_versions();
-    ok(scalar(@vers) > 0, 'found at least one installed version');
-    ok(!(grep { $_ == 0 } @vers), 'V0 excluded');
+    my $tdir = tempdir(CLEANUP => 1);
+    my $sdir = File::Spec->catdir($tdir, 'App', 'Yath', 'Script');
+    File::Path::make_path($sdir);
+    for my $v (0, 3, 17, 5) {
+        open(my $fh, '>', File::Spec->catfile($sdir, "V${v}.pm")) or die $!;
+        close($fh);
+    }
 
-    my @sorted = sort { $b <=> $a } @vers;
-    is(\@vers, \@sorted, 'returned sorted highest-first');
+    local @INC = ($tdir);
+    my @vers = App::Yath::Script::find_installed_versions();
+    is(\@vers, [17, 5, 3], 'highest-first, V0 excluded');
 };
 
 subtest 'load_latest_yath_module - returns highest installable' => sub {
-    my @vers = App::Yath::Script::find_installed_versions();
-    skip_all('no installed V# modules available') unless @vers;
+    # Use distinct version numbers across subtests so %INC caching from
+    # one test does not leak into another.
+    my $tdir = tempdir(CLEANUP => 1);
+    my $sdir = File::Spec->catdir($tdir, 'App', 'Yath', 'Script');
+    File::Path::make_path($sdir);
+    for my $v (101, 109) {
+        open(my $fh, '>', File::Spec->catfile($sdir, "V${v}.pm")) or die $!;
+        print $fh "package App::Yath::Script::V${v}; 1;\n";
+        close($fh);
+    }
 
+    local @INC = ($tdir);
     my $mod = App::Yath::Script::load_latest_yath_module();
-    is($mod, "App::Yath::Script::V$vers[0]", 'highest installed version selected');
+    is($mod, 'App::Yath::Script::V109', 'highest installed selected');
+};
+
+subtest 'load_latest_yath_module - falls back when highest fails to load' => sub {
+    my $tdir = tempdir(CLEANUP => 1);
+    my $sdir = File::Spec->catdir($tdir, 'App', 'Yath', 'Script');
+    File::Path::make_path($sdir);
+
+    # V299 has a syntax error; V242 loads cleanly.
+    open(my $fh, '>', File::Spec->catfile($sdir, 'V299.pm')) or die $!;
+    print $fh "package App::Yath::Script::V299;\nthis is not valid perl;\n1;\n";
+    close($fh);
+
+    open($fh, '>', File::Spec->catfile($sdir, 'V242.pm')) or die $!;
+    print $fh "package App::Yath::Script::V242; 1;\n";
+    close($fh);
+
+    local @INC = ($tdir);
+    my $mod = App::Yath::Script::load_latest_yath_module();
+    is($mod, 'App::Yath::Script::V242', 'falls back past broken highest');
 };
 
 subtest 'load_latest_yath_module - dies when none installed' => sub {
-    local @INC = ();
+    my $empty = tempdir(CLEANUP => 1);
+    local @INC = ($empty);
     like(
         dies { App::Yath::Script::load_latest_yath_module() },
         qr/No App::Yath .* modules appear to be installed/,

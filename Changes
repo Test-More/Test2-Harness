@@ -9,6 +9,10 @@
       redirects survive the `local @INC` swaps used by the
       install_local_lib subtests (CI failed on cold autoload of
       PerlIO/scalar.pm)
+    - Make find_installed_versions / load_latest_yath_module subtests
+      self-contained by stubbing V# modules in tempdirs and pinning
+      @INC; previous tests assumed a real App::Yath was installed and
+      failed under `make test` where only blib is on @INC
 
 2.000013  2026-04-28 21:02:38-07:00 America/Los_Angeles
 

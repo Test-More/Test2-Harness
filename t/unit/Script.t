@@ -86,26 +86,6 @@ subtest 'inject_includes' => sub {
     @INC = @orig_inc;
 };
 
-subtest 'seed_hash' => sub {
-    local %ENV = %ENV;
-
-    # When already set, should return 0
-    $ENV{PERL_HASH_SEED} = '12345';
-    is(App::Yath::Script::seed_hash(), 0, 'returns 0 when PERL_HASH_SEED is set');
-
-    # When not set, should set it and return 1
-    delete $ENV{PERL_HASH_SEED};
-    my $output = '';
-    {
-        local *STDOUT;
-        open(STDOUT, '>', \$output) or die "Cannot redirect STDOUT: $!";
-        is(App::Yath::Script::seed_hash(), 1, 'returns 1 when PERL_HASH_SEED is not set');
-    }
-    ok(defined $ENV{PERL_HASH_SEED}, 'PERL_HASH_SEED is now set');
-    like($ENV{PERL_HASH_SEED}, qr/^\d{8}$/, 'seed is 8 digits (YYYYMMDD)');
-    like($output, qr/PERL_HASH_SEED not set/, 'prints message about setting seed');
-};
-
 subtest 'parse_new_dev_libs' => sub {
     # No -D args, should return 0
     local @ARGV = ('test', '--verbose');

@@ -19,9 +19,6 @@ my $dir = tempdir(CLEANUP => 1);
 open(my $rc, '>', File::Spec->catfile($dir, '.yath.v0.rc')) or die "Cannot write .yath.v0.rc: $!";
 close($rc);
 
-# All invocations pre-set PERL_HASH_SEED to avoid re-exec
-local $ENV{PERL_HASH_SEED} = '20200101';
-
 sub run_yath {
     my (@args) = @_;
 

@@ -59,9 +59,9 @@ These are the main entry points used by the `yath` script:
 - do\_begin()
 
     Called during `BEGIN`. Discovers the script path, injects include paths,
-    seeds `PERL_HASH_SEED` for reproducibility, loads `.yath.rc` /
-    `.yath.user.rc` configuration files, determines the harness version, and
-    delegates to `App::Yath::Script::V{X}->do_begin(...)`.
+    loads `.yath.rc` / `.yath.user.rc` configuration files, determines the
+    harness version, and delegates to
+    `App::Yath::Script::V{X}->do_begin(...)`.
 
 - $exit = do\_runtime()
 

@@ -50,7 +50,6 @@ sub do_begin {
 
     my $local_vers = install_local_lib();
 
-    $exec = 1 if seed_hash();
     $exec = 1 if find_alt_script();
 
     my ($config, $user_config, $version) = find_rc_files($cli_version);
@@ -279,18 +278,6 @@ sub install_local_lib {
     return $local_vers;
 }
 
-sub seed_hash {
-    return 0 if $ENV{PERL_HASH_SEED};
-
-    my @ltime = localtime;
-    my $seed = sprintf('%04d%02d%02d', 1900 + $ltime[5], 1 + $ltime[4], $ltime[3]);
-    print "PERL_HASH_SEED not set, setting to '$seed' for more reproducible results.\n";
-
-    $ENV{PERL_HASH_SEED} = $seed;
-
-    return 1;
-}
-
 sub clean_path {
     my ( $path, $absolute ) = @_;
 
@@ -467,9 +454,9 @@ These are the main entry points used by the C<yath> script:
 =item do_begin()
 
 Called during C<BEGIN>. Discovers the script path, injects include paths,
-seeds C<PERL_HASH_SEED> for reproducibility, loads C<.yath.rc> /
-C<.yath.user.rc> configuration files, determines the harness version, and
-delegates to C<App::Yath::Script::V{X}-E<gt>do_begin(...)>.
+loads C<.yath.rc> / C<.yath.user.rc> configuration files, determines the
+harness version, and delegates to
+C<App::Yath::Script::V{X}-E<gt>do_begin(...)>.
 
 =item $exit = do_runtime()
 

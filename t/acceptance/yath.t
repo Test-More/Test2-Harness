@@ -28,9 +28,6 @@ my $can_symlink = do {
     eval { symlink($src, $dst); 1 } && -l $dst;
 };
 
-# All invocations pre-set PERL_HASH_SEED to avoid re-exec
-local $ENV{PERL_HASH_SEED} = '20200101';
-
 sub run_yath_in {
     my ($d, @args) = @_;
 
@@ -99,20 +96,6 @@ subtest 'argument ordering is preserved' => sub {
 
     is(\@begin,   ['b1', 'b2'], 'BEGIN args in order');
     is(\@runtime, ['r1', 'r2'], 'RUNTIME args in order');
-
-    is($exit, 0, 'exit code is 0');
-};
-
-subtest 'PERL_HASH_SEED re-exec preserves @INC' => sub {
-    # Run without PERL_HASH_SEED to trigger re-exec path
-    local $ENV{PERL_HASH_SEED};
-    delete $ENV{PERL_HASH_SEED};
-
-    my ($output, $exit) = run_yath('--begin', 'reexec', 'test');
-
-    like($output, qr/PERL_HASH_SEED not set/, 'seed message printed');
-    like($output, qr/^BEGIN: reexec$/m,        'begin arg survived re-exec');
-    like($output, qr/^RUNTIME: test$/m,        'runtime arg survived re-exec');
 
     is($exit, 0, 'exit code is 0');
 };

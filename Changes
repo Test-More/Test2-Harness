@@ -3,6 +3,10 @@
     - Restore "highest installed V# in @INC" as the final version
       fallback (replaces the temporary V1 default); V0 stays excluded
       from auto-selection
+    - Pre-load PerlIO::scalar in t/unit/Script.t so STDOUT-to-scalar
+      redirects survive the `local @INC` swaps used by the
+      install_local_lib subtests (CI failed on cold autoload of
+      PerlIO/scalar.pm)
 
 2.000013  2026-04-28 21:02:38-07:00 America/Los_Angeles
 

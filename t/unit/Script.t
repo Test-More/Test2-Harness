@@ -3,6 +3,10 @@ use warnings;
 
 use Test2::V0;
 
+# Pre-load so the in-memory STDOUT redirects below still work after a
+# `local @INC = (...)` swap blocks autoloading of PerlIO/scalar.pm.
+use PerlIO::scalar;
+
 use App::Yath::Script qw/clean_path find_in_updir find_rc_updir mod2file script module/;
 use Cwd qw/realpath getcwd/;
 use File::Spec;

@@ -1,5 +1,15 @@
 {{$NEXT}}
 
+    - Switch [GatherDir] to [Git::GatherDir] so build artifacts (blib/,
+      pm_to_blib, Makefile, MYMETA.*) and untracked files no longer
+      end up in the release tarball
+    - Exclude CLAUDE.md and AI_AND_LLM_POLICY.txt from the dist
+    - Fix post-release Automated Version Bump commit to include
+      lib/**/*.pm and scripts/yath alongside Makefile.PL via
+      allow_dirty_match in [Git::Commit / Commit_Changes]; previously
+      those bumps were left dirty and required a manual "Missed
+      version bumps" cleanup commit each release
+
 2.000015  2026-04-28 21:34:27-07:00 America/Los_Angeles
 
 2.000014  2026-04-28 21:25:39-07:00 America/Los_Angeles

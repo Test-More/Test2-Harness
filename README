@@ -33,30 +33,37 @@ DESCRIPTION
 
  Version Detection
 
-    When no configuration file is found, the latest installed
-    App::Yath::Script::V{X} module is used automatically (V0 is excluded
-    from auto-detection since it is reserved for script validation).
+    A version may come from any of these sources, in priority order: an
+    explicit V# / v# as the first CLI argument, the rc files found walking
+    upward from the cwd, a working-copy checkout under
+    ./lib/App/Yath/Script/V#.pm, or finally V1 as the default. V0 is
+    reserved for script validation and must be requested explicitly.
 
-    The version is determined by the configuration filename using the
-    following priority (highest first) in each directory searched:
+    When walking upward, each directory is scanned in this order:
 
-      1. A .yath.rc symlink whose target filename matches .yath.v#.rc --
-      the version is extracted from the target name. This lets projects
-      keep a stable .yath.rc name while pointing at the versioned file.
+      1. A .yath.rc symlink whose target filename matches .yath.v#.rc /
+      .yath.V#.rc -- the version is extracted from the target name. This
+      lets projects keep a stable .yath.rc name while pointing at the
+      versioned file.
 
-      2. An explicitly versioned file .yath.v#.rc (e.g. .yath.v2.rc).
+      2. Explicitly versioned files .yath.v#.rc / .yath.V#.rc -- the
+      highest version present in the directory wins, both for the chosen rc
+      file and the captured version.
 
-      3. A plain .yath.rc (not a symlink to a versioned file) -- defaults
-      to 1 for backwards compatibility with existing Test2::Harness
-      projects.
+      3. A plain .yath.rc (not a symlink to a versioned file) -- the rc
+      file is used but no version is captured; the caller falls through to
+      the checkout / @INC sources above.
 
     The same priority applies to user-level configuration (.yath.user.rc /
     .yath.user.v#.rc).
 
-    If both project-level and user-level configuration files specify a
-    version, the user-level version takes precedence. This allows
-    individual developers to override the project-level version when
-    needed.
+    If both project-level and user-level rc files capture a version, the
+    user-level version takes precedence. This allows individual developers
+    to override the project-level version when needed.
+
+    When an explicit V# is given on the CLI, the lookup prefers a matching
+    versioned rc file but falls back to a plain .yath.rc / .yath.user.rc if
+    no versioned file is found.
 
 PRIMARY API
 
@@ -65,8 +72,8 @@ PRIMARY API
     do_begin()
 
       Called during BEGIN. Discovers the script path, injects include
-      paths, loads .yath.rc / .yath.user.rc configuration files,
-      determines the harness version, and delegates to
+      paths, loads .yath.rc / .yath.user.rc configuration files, determines
+      the harness version, and delegates to
       App::Yath::Script::V{X}->do_begin(...).
 
     $exit = do_runtime()

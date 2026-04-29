@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+2.000016  2026-04-28 22:01:21-07:00 America/Los_Angeles
+
     - Switch [GatherDir] to [Git::GatherDir] so build artifacts (blib/,
       pm_to_blib, Makefile, MYMETA.*) and untracked files no longer
       end up in the release tarball

@@ -30,10 +30,9 @@ subtest 'requires a positive slot count' => sub {
     is($r->used,  0);
 };
 
-subtest 'is a job limiter and is needed by default' => sub {
+subtest 'is needed by default' => sub {
     my $r = Test2::Harness2::Resource::JobCount->new(slots => 1);
-    ok($r->is_job_limiter, 'is_job_limiter');
-    ok($r->needed,         'needed by default');
+    ok($r->needed, 'needed by default');
     is($r->resource_name, 'jobcount');
 };
 

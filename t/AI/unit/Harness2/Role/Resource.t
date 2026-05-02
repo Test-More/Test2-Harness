@@ -50,8 +50,6 @@ use Test2::Harness2::Test::ResourceService qw//;
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Resource';
 
-    sub is_job_limiter { 1 }
-
     sub available { 1 }
     sub assign    { 1 }
     sub release   { 1 }
@@ -66,14 +64,8 @@ use Test2::Harness2::Test::ResourceService qw//;
 subtest 'role is applied and provides defaults' => sub {
     my $r = My::TinyResource->new;
     ok($r->DOES('Test2::Harness2::Role::Resource'), 'role composed');
-    is($r->is_job_limiter, 0, 'default is_job_limiter=0');
-    ok($r->needed, 'default needed=1');
+    ok($r->needed,        'default needed=1');
     is($r->resource_name, 'tinyresource', 'default name is lc(last :: part)');
-};
-
-subtest 'is_job_limiter override' => sub {
-    my $r = My::LimiterResource->new;
-    ok($r->is_job_limiter, 'flag set');
 };
 
 subtest 'state transitions' => sub {

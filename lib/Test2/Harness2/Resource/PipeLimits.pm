@@ -2,6 +2,9 @@ package Test2::Harness2::Resource::PipeLimits;
 use strict;
 use warnings;
 
+# Implementation note: this resource accepts a --utilize percentage; the
+# gating mechanism is wired up in a follow-up step.
+
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
@@ -10,11 +13,13 @@ use Object::HashBase qw{
     <headroom
     <warn_threshold
     <poll_interval
+    <utilize_percent
     +_warned
 };
 
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Resource';
+with 'Test2::Harness2::Role::Resource::Utilizer';
 
 sub resource_name { 'pipe_limits' }
 
@@ -109,6 +114,16 @@ sub init {
 sub available { croak __PACKAGE__ . "::available is not implemented yet" }
 sub assign    { croak __PACKAGE__ . "::assign is not implemented yet" }
 sub release   { croak __PACKAGE__ . "::release is not implemented yet" }
+
+# Utilizer role contract; wired up alongside the sampler in a
+# follow-up step.
+sub set_utilize_percent {
+    croak __PACKAGE__ . "::set_utilize_percent is not implemented yet";
+}
+
+sub is_temporarily_unavailable {
+    croak __PACKAGE__ . "::is_temporarily_unavailable is not implemented yet";
+}
 
 sub status {
     my $self = shift;

@@ -4,12 +4,16 @@ use warnings;
 
 our $VERSION = '2.000011';
 
+use POSIX qw/strftime/;
+
 use Importer Importer => 'import';
 use Getopt::Yath;
 
-our @EXPORT_OK = qw/ set_dot_args /;
+our @EXPORT_OK = qw/ set_dot_args today_yyyymmdd /;
 
 my $DEFAULT_COVER_ARGS = '-silent,1,+ignore,^t/,+ignore,^t2/,+ignore,^xt,+ignore,^test.pl';
+
+sub today_yyyymmdd { strftime('%Y%m%d', localtime) }
 
 ###############################################################################
 # *********** NOTE !!!! ***************************************************** #
@@ -23,6 +27,16 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
         alt         => ['env-var'],
         short       => 'E',
         description => 'Set environment variables',
+    );
+
+    option set_hash_seed => (
+        type     => 'Auto',
+        autofill => \&today_yyyymmdd,
+
+        long_examples  => ['', '=12345'],
+        short_examples => ['', '=12345'],
+
+        description => 'Set PERL_HASH_SEED for every test process. With no value, defaults to today\'s date as YYYYMMDD (matching the historical App-Yath-Script behaviour). With a value, the supplied seed is used verbatim. Without the option entirely, the env var is left untouched and child processes inherit whatever the parent already has set.',
     );
 
     option use_fork => (
@@ -160,7 +174,7 @@ option_group {group => 'tests', category => 'Test Options', maybe => 1} => sub {
         description => 'Use the specified file as standard input to ALL tests',
 
         trigger => sub {
-            my $opt = shift;
+            my $opt    = shift;
             my %params = @_;
             return unless $params{action} eq 'set';
 
@@ -217,8 +231,6 @@ sub set_dot_args {
 
     return;
 }
-
-
 
 1;
 

@@ -13,8 +13,6 @@ requires 'assign';
 requires 'release';
 requires 'status';
 
-sub is_job_limiter { 0 }
-
 # Whether this resource participates in a given job's allocation. The
 # scheduler checks this first: resources that return 0 are skipped
 # entirely for that job (no brokenness check, no assign, no release).
@@ -118,11 +116,12 @@ units.
 =back
 
 If every needed resource returns a positive grant, the scheduler calls
-C<assign> on each; when the job finishes it calls C<release>. A single
-C<is_job_limiter> resource is mandatory for the harness service -- it
-caps the total number of concurrent jobs. Without an explicit limiter
-the harness falls back to a L<Test2::Harness2::Resource::JobCount> with
-a single slot.
+C<assign> on each; when the job finishes it calls C<release>. The
+harness itself does not mandate any specific resource class. A harness
+constructed with no resources at all is a valid (unlimited concurrency)
+configuration. The C<yath test> command is the layer that injects a
+default L<Test2::Harness2::Resource::JobCount> when the user has not
+specified a resource on the command line.
 
 Resources may also declare one or more supervised subprocesses via the
 L</services> method. The harness instantiates and supervises each one;
@@ -138,8 +137,6 @@ the resource itself never forks. See L</SERVICES> below.
 
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::Resource';
-
-    sub is_job_limiter { 1 }
 
     sub available {
         my ($self, %p) = @_;
@@ -221,11 +218,6 @@ free.
 =head1 PROVIDED METHODS
 
 =over 4
-
-=item $bool = $resource->is_job_limiter
-
-Default: false. Resources that cap concurrent job count set this to true.
-At least one job limiter must be active in the harness service.
 
 =item $bool = $resource->needed(job =E<gt> $job)
 

@@ -15,8 +15,6 @@ use Object::HashBase qw{
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Resource';
 
-sub is_job_limiter { 1 }
-
 sub resource_name { 'sharedjobs' }
 
 # STUB: cross-process / cross-user job slot coordinator. Modeled on the

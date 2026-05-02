@@ -110,8 +110,51 @@ subtest 'JobCount default resource registered' => sub {
     my $r = parse('-j', '4');
     ok(
         exists $r->classes->{'Test2::Harness2::Resource::JobCount'},
-        'JobCount auto-registered when no other job_limiter resource present',
+        'JobCount auto-registered when no other resource is supplied',
     );
+};
+
+subtest '--no-resource disables JobCount auto-injection' => sub {
+    my $r = parse('--no-resource');
+    is(
+        scalar keys %{$r->classes},
+        0,
+        '--no-resource leaves classes empty (unlimited concurrency)',
+    );
+    ok($r->check_option('no_resource'), 'no_resource flag recorded by classes trigger');
+    ok($r->no_resource,                 'no_resource setting reflects opt-in');
+};
+
+subtest '--no-resources (plural) also disables auto-injection' => sub {
+    my $r = parse('--no-resources');
+    is(scalar keys %{$r->classes}, 0, '--no-resources leaves classes empty');
+    ok($r->check_option('no_resource'), 'plural form sets the same flag');
+};
+
+subtest '--no-resource followed by -R: -R wins' => sub {
+    # Order matters: --no-resource clears, then -R adds back. The
+    # post-process step checks the resulting classes hash; if it has
+    # entries we use them, regardless of an earlier clear.
+    my $r = parse('--no-resource', '-R', '+Test2::Harness2::Resource::JobCount');
+    ok(
+        exists $r->classes->{'Test2::Harness2::Resource::JobCount'},
+        '-R after --no-resource still wires the resource through',
+    );
+};
+
+subtest '--utilize accepts valid percentages' => sub {
+    my $r = parse('-U', '50');
+    is($r->utilize, 50, '-U 50 stored');
+
+    my $r2 = parse('--utilize', '99.5');
+    is($r2->utilize, 99.5, '--utilize 99.5 stored');
+};
+
+subtest '--utilize rejects out-of-range and non-numeric values' => sub {
+    like(dies { parse('-U', '0') },     qr/--utilize must be greater than 0/);
+    like(dies { parse('-U', '100') },   qr/--utilize must be greater than 0/);
+    like(dies { parse('-U', '-5') },    qr/--utilize must be a number/);
+    like(dies { parse('-U', 'fifty') }, qr/--utilize must be a number/);
 };
 
 done_testing;

@@ -1,0 +1,136 @@
+package Test2::Harness2::Resource::CPU;
+use strict;
+use warnings;
+
+# Implementation note: this resource accepts a --utilize percentage; the
+# gating mechanism is wired up in a follow-up step.
+
+our $VERSION = '2.000011';
+
+use Carp qw/croak/;
+
+use Object::HashBase qw{
+    <poll_interval
+    <utilize_percent
+};
+
+use Role::Tiny::With;
+with 'Test2::Harness2::Role::Resource';
+with 'Test2::Harness2::Role::Resource::Utilizer';
+
+sub resource_name { 'cpu' }
+
+sub init {
+    my $self = shift;
+
+    $self->{+POLL_INTERVAL} //= 2;
+}
+
+# STUB: gates new test launches on aggregate CPU usage across every
+# CPU on the host. Intended implementation: a service_cpu_monitor
+# child reads /proc/stat or platform equivalent every poll_interval
+# seconds, reports the latest aggregate utilisation back to the
+# harness, and this resource refuses new assignments while the
+# percentage is at or above the configured utilize_percent.
+sub available { croak __PACKAGE__ . "::available is not implemented yet" }
+sub assign    { croak __PACKAGE__ . "::assign is not implemented yet" }
+sub release   { croak __PACKAGE__ . "::release is not implemented yet" }
+
+# Utilizer role contract; wired up alongside the CPU sampler in a
+# follow-up step.
+sub set_utilize_percent {
+    croak __PACKAGE__ . "::set_utilize_percent is not implemented yet";
+}
+
+sub is_temporarily_unavailable {
+    croak __PACKAGE__ . "::is_temporarily_unavailable is not implemented yet";
+}
+
+sub status {
+    my $self = shift;
+    return {
+        resource        => $self->resource_name,
+        poll_interval   => $self->{+POLL_INTERVAL},
+        utilize_percent => $self->{+UTILIZE_PERCENT},
+        broken          => $self->is_broken,
+        paused          => $self->is_paused,
+        permanent       => $self->is_permanent_broken,
+        assignments     => [],
+    };
+}
+
+1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Harness2::Resource::CPU - (STUB) Throttle jobs against aggregate CPU usage.
+
+=head1 STATUS
+
+Stub only. Implements L<Test2::Harness2::Role::Resource::Utilizer>;
+both the role's required methods C<croak> until the CPU sampler is
+wired up.
+
+=head1 DESCRIPTION
+
+Refuses new assignments when aggregate CPU utilisation across every
+CPU on the host is at or above the configured C<utilize_percent>
+(from C<--utilize> / C<-U>). Aggregate (not per-CPU) is intentional:
+single-thread tests can saturate one core without the host being
+under any aggregate load, and the goal here is "is the box busy"
+rather than "is any CPU busy".
+
+The intended (not-yet-wired) implementation runs a CPU-usage sampler
+service that reads C</proc/stat> on Linux (and the platform
+equivalents elsewhere) every C<poll_interval> seconds, then reports
+the rolling average back to this resource for comparison against the
+threshold.
+
+=head1 ATTRIBUTES
+
+=over 4
+
+=item poll_interval
+
+Seconds between samples of CPU usage. Default: C<2>.
+
+=item utilize_percent
+
+Threshold from C<--utilize> / C<-U>. Strictly between C<0> and
+C<100>; validated by the
+L<Test2::Harness2::Role::Resource::Utilizer> contract.
+
+=back
+
+=head1 SEE ALSO
+
+L<Test2::Harness2::Role::Resource::Utilizer> -- the role this
+resource consumes.
+
+L<App::Yath2::Options::Resource> -- the C<--utilize> / C<-U> option.
+
+=head1 SOURCE
+
+L<https://github.com/Test-More/Test2-Harness>
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+See L<https://dev.perl.org/licenses/>
+
+=cut

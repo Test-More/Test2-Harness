@@ -19,8 +19,6 @@ use Object::HashBase qw{
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Resource';
 
-sub is_job_limiter { 1 }
-
 sub resource_name { 'jobcount' }
 
 sub init {
@@ -56,11 +54,11 @@ sub mark_resumed { $_[0]->{+PAUSED} = 0 }
 sub _job_slot_bounds {
     my ($self, $job, %p) = @_;
 
-    # Synthesized skip/fail launches pass min/max overrides directly
-    # so the assignment doesn't care what the real test file declared
-    # (a one-liner "skip_all" or "die" only needs a single slot, even
-    # if the test file normally asks for eight).
-    my $tf  = $job->test_file;
+    # Unavailable-action skip/fail launches pass min/max overrides
+    # directly so the assignment doesn't care what the real test file
+    # declared (a one-liner "skip_all" or "die" only needs a single
+    # slot, even if the test file normally asks for eight).
+    my $tf = $job->test_file;
     # check_min_slots / check_max_slots trigger a scan first so a test
     # file's HARNESS-JOB-SLOTS header is honoured. The bare min_slots /
     # max_slots accessors only return the role default and never reflect
@@ -72,9 +70,10 @@ sub _job_slot_bounds {
     # Per-job cap from -j N:M / -x M. The cap clamps the upper bound
     # for tests that fit; tests whose minimum exceeds the cap are
     # reported as permanently unsatisfiable below (return -1) so the
-    # scheduler can route them through a synth skip_all. Other tests
-    # continue to use this resource normally -- the resource itself
-    # is not broken, just unable to grant THIS specific job.
+    # scheduler can route them through an unavailable-action skip_all.
+    # Other tests continue to use this resource normally -- the
+    # resource itself is not broken, just unable to grant THIS
+    # specific job.
     # max <= 0 from the test means "as many as are free" (handled in
     # available()); substitute the cap so the cap wins on that case.
     if (defined $self->{+MAX_PER_JOB}) {
@@ -95,7 +94,8 @@ sub available {
 
     # Permanently unsatisfiable: pool smaller than min, or per-job cap
     # smaller than min. Return -1 so the scheduler routes this job
-    # through the synth skip path rather than deferring forever.
+    # through the unavailable-action skip path rather than deferring
+    # forever.
     return -1 if $self->{+SLOTS} < $min;
     return -1 if defined $self->{+MAX_PER_JOB} && $self->{+MAX_PER_JOB} < $min;
 
@@ -204,9 +204,11 @@ Test2::Harness2::Resource::JobCount - Limit on concurrent test jobs.
 =head1 DESCRIPTION
 
 Caps the total number of jobs the harness service will run concurrently.
-The harness requires at least one C<is_job_limiter> resource to be
-configured; without one it falls back to an instance of this class with
-C<slots =E<gt> 1>, preserving the legacy "one at a time" behaviour.
+The harness itself does not require any specific resource. The
+C<yath test> command auto-injects an instance of this class when the
+user has not specified a resource on the command line; the slot count
+defaults to half the cpu core count (via L<System::Info>) and falls
+back to C<2> if L<System::Info> is unavailable.
 
 Each job declares its slot requirements on its L<Test2::Harness2::Role::TestFile>
 (C<min_slots> / C<max_slots>). The resource grants an integer count from

@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec();
 
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 use Test2::Harness2::Util qw/open_file/;
 
 my $tdir = tempdir(CLEANUP => 1);
@@ -31,11 +31,11 @@ my $x = 1;
 PERL
     );
 
-    my $tf = Test2::Harness2::TestFile->new(file => $path);
+    my $tf = App::Yath2::TestFile->new(file => $path);
 
     my $opens = 0;
     no warnings 'redefine';
-    local *Test2::Harness2::TestFile::open_file = sub {
+    local *App::Yath2::TestFile::open_file = sub {
         $opens++;
         return open_file(@_);
     };
@@ -43,7 +43,7 @@ PERL
 
     $tf->scan;
     is($opens, 1, 'scan opens the file exactly once');
-    ok($tf->{+Test2::Harness2::TestFile::_SCANNED}, '_scanned flag set');
+    ok($tf->{+App::Yath2::TestFile::_SCANNED}, '_scanned flag set');
 
     $tf->scan;
     is($opens, 1, 'second scan is a no-op (idempotent)');
@@ -58,18 +58,17 @@ subtest 'empty file does not crash' => sub {
     my $path = File::Spec->catfile($tdir, 'empty.t');
     write_file($path, '');
 
-    my $tf = Test2::Harness2::TestFile->new(file => $path);
+    my $tf = App::Yath2::TestFile->new(file => $path);
     ok(lives { $tf->scan },                         'scan on empty file lives') or diag $@;
-    ok($tf->{+Test2::Harness2::TestFile::_SCANNED}, '_scanned flag set');
+    ok($tf->{+App::Yath2::TestFile::_SCANNED}, '_scanned flag set');
 };
 
-subtest 'missing file returns silently' => sub {
+subtest 'missing file croaks at construction' => sub {
     my $missing = File::Spec->catfile($tdir, 'nope.t');
-    my $tf      = Test2::Harness2::TestFile->new(file => $missing);
-
-    ok(lives { $tf->scan }, 'scan on missing file lives') or diag $@;
-    is($tf->category, undef, 'missing file keeps role defaults');
-    is($tf->duration, undef, 'missing file keeps role defaults');
+    my $ok      = eval { App::Yath2::TestFile->new(file => $missing); 1 };
+    my $err     = $@;
+    ok(!$ok, 'missing file refused at construction');
+    like($err, qr/Invalid test file/, 'legacy "Invalid test file" idiom');
 };
 
 subtest 'non-# comment character' => sub {
@@ -84,20 +83,20 @@ int main(void) { return 0; }
 CODE
     );
 
-    my $tf = Test2::Harness2::TestFile->new(
+    my $tf = App::Yath2::TestFile->new(
         file    => $path,
         comment => '//',
     );
 
     ok(lives { $tf->scan },                         'scan with non-# comment lives') or diag $@;
-    ok($tf->{+Test2::Harness2::TestFile::_SCANNED}, '_scanned flag set');
+    ok($tf->{+App::Yath2::TestFile::_SCANNED}, '_scanned flag set');
 };
 
 subtest 'role defaults intact after scan with no directives' => sub {
     my $path = File::Spec->catfile($tdir, 'defaults.t');
     write_file($path, "use strict;\nmy \$x = 1;\n");
 
-    my $tf = Test2::Harness2::TestFile->new(file => $path);
+    my $tf = App::Yath2::TestFile->new(file => $path);
     $tf->scan;
 
     is($tf->min_slots,        1,         'min_slots default');

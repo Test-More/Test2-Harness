@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec();
 
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 my $tdir = tempdir(CLEANUP => 1);
 
@@ -19,12 +19,17 @@ sub tf_for {
     my ($name, $content) = @_;
     my $path = File::Spec->catfile($tdir, $name);
     write_file($path, $content);
-    return Test2::Harness2::TestFile->new(file => $path);
+    return App::Yath2::TestFile->new(file => $path);
 }
 
 subtest 'binary file: _scan short-circuits and flags is_binary + non_perl' => sub {
     my $bytes = pack 'C*', map { int rand 256 } 1 .. 512;
-    my $tf    = tf_for('bin.t', $bytes);
+    my $path  = File::Spec->catfile($tdir, 'bin.t');
+    write_file($path, $bytes);
+    # App::Yath2::TestFile refuses non-executable binaries (legacy
+    # idiom); flip the bit before construction.
+    chmod 0755, $path or die "chmod $path: $!";
+    my $tf = App::Yath2::TestFile->new(file => $path);
 
     $tf->scan;
 
@@ -54,8 +59,8 @@ subtest 'generated runner sentinel sets features->{run} = 0' => sub {
 
     ok(lives { $tf->scan }, 'scan did not die past the sentinel') or diag($@);
 
-    is($tf->_scanned,       1,  '_scanned latched');
-    is($tf->feature('run'), 0,  'features->{run} set to 0');
+    is($tf->{+App::Yath2::TestFile::_SCANNED}, 1, '_scanned latched');
+    is($tf->feature('run'), 0, 'features->{run} set to 0');
     is($tf->switches,       [], 'shebang branch still ran: switches at role default');
     is($tf->non_perl,       0,  'perl shebang: non_perl stays 0');
 };

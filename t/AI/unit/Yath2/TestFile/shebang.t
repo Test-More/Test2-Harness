@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec();
 
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 my $tdir = tempdir(CLEANUP => 1);
 
@@ -18,13 +18,15 @@ sub tf_for {
     my ($name, $content) = @_;
     my $path = File::Spec->catfile($tdir, $name);
     write_file($path, $content);
-    return Test2::Harness2::TestFile->new(file => $path);
+    return App::Yath2::TestFile->new(file => $path);
 }
 
 # Any constructed TestFile is a valid invocant for _parse_shbang; the
-# tests below use it purely as a method receiver.
-my $invocant = Test2::Harness2::TestFile->new(file => File::Spec->catfile($tdir, 'any.t'));
-write_file($invocant->absolute, '');
+# tests below use it purely as a method receiver. App::Yath2::TestFile
+# refuses construction for missing files, so write a placeholder first.
+my $invocant_path = File::Spec->catfile($tdir, 'any.t');
+write_file($invocant_path, '');
+my $invocant = App::Yath2::TestFile->new(file => $invocant_path);
 
 subtest '_parse_shbang direct API' => sub {
     is(
@@ -72,9 +74,9 @@ subtest 'end-to-end scan: #!/usr/bin/perl with no switches' => sub {
     $tf->scan;
     is($tf->switches,                                    [],                  'switches stays empty');
     is($tf->non_perl,                                    0,                   'non_perl stays 0');
-    is($tf->{+Test2::Harness2::TestFile::_SHBANG}{line}, "#!/usr/bin/perl\n", '_shbang line captured');
-    ok(exists $tf->{+Test2::Harness2::TestFile::_SHBANG}{switches},  '_shbang has switches key');
-    ok(!exists $tf->{+Test2::Harness2::TestFile::_SHBANG}{non_perl}, '_shbang has no non_perl key');
+    is($tf->{+App::Yath2::TestFile::_SHBANG}{line}, "#!/usr/bin/perl", '_shbang line captured (chomp\'d)');
+    ok(exists $tf->{+App::Yath2::TestFile::_SHBANG}{switches},  '_shbang has switches key');
+    ok(!exists $tf->{+App::Yath2::TestFile::_SHBANG}{non_perl}, '_shbang has no non_perl key');
 };
 
 subtest 'end-to-end scan: #!/usr/bin/perl -w populates switches' => sub {
@@ -96,7 +98,7 @@ subtest 'end-to-end scan: #!/usr/bin/bash sets non_perl' => sub {
     $tf->scan;
     is($tf->switches, [], 'switches stays empty (role default)');
     is($tf->non_perl, 1,  'non_perl flagged');
-    ok($tf->{+Test2::Harness2::TestFile::_SHBANG}{non_perl}, '_shbang carries non_perl');
+    ok($tf->{+App::Yath2::TestFile::_SHBANG}{non_perl}, '_shbang carries non_perl');
 };
 
 subtest 'end-to-end scan: no shebang leaves slots at role defaults' => sub {
@@ -105,8 +107,8 @@ subtest 'end-to-end scan: no shebang leaves slots at role defaults' => sub {
     is($tf->switches, [], 'switches default []');
     is($tf->non_perl, 0,  'non_perl default 0');
     ok(
-               !$tf->{+Test2::Harness2::TestFile::_SHBANG}
-            || !%{$tf->{+Test2::Harness2::TestFile::_SHBANG}},
+               !$tf->{+App::Yath2::TestFile::_SHBANG}
+            || !%{$tf->{+App::Yath2::TestFile::_SHBANG}},
         '_shbang is falsy/empty',
     );
 };
@@ -117,8 +119,8 @@ subtest 'end-to-end scan: HARNESS- directive on line 1 is not a shebang' => sub 
     is($tf->switches, [], 'switches untouched');
     is($tf->non_perl, 0,  'non_perl untouched');
     ok(
-               !$tf->{+Test2::Harness2::TestFile::_SHBANG}
-            || !%{$tf->{+Test2::Harness2::TestFile::_SHBANG}},
+               !$tf->{+App::Yath2::TestFile::_SHBANG}
+            || !%{$tf->{+App::Yath2::TestFile::_SHBANG}},
         '_shbang remains empty',
     );
 };

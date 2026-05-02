@@ -3,7 +3,7 @@ use File::Temp qw/tempdir/;
 use File::Spec();
 
 use App::Yath2::Finder;
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 # End-to-end verification that App::Yath2::Finder::exclude_file sees
 # the per-file HARNESS metadata through the new TestFile parser. (Avoid
@@ -27,7 +27,7 @@ sub tf {
     my ($name, $body) = @_;
     my $path = File::Spec->catfile($tdir, $name);
     write_file($path, $body);
-    return Test2::Harness2::TestFile->new(file => $path);
+    return App::Yath2::TestFile->new(file => $path);
 }
 
 sub finder {

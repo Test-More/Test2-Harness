@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec();
 
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 my $tdir = tempdir(CLEANUP => 1);
 
@@ -18,7 +18,7 @@ sub tf_for {
     my ($name, $directive) = @_;
     my $path = File::Spec->catfile($tdir, $name);
     write_file($path, "#!/usr/bin/perl\n" . $directive . "\nuse strict;\n");
-    return Test2::Harness2::TestFile->new(file => $path);
+    return App::Yath2::TestFile->new(file => $path);
 }
 
 # Scanning must never trip the Stage D fall-through warn for any of

@@ -14,7 +14,7 @@ use Time::HiRes qw/time/;
 use Text::ParseWords qw/quotewords/;
 
 use Test2::Harness2::Util::File::JSONL;
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 use File::Spec;
 
 use Role::Tiny::With;
@@ -649,7 +649,7 @@ sub find_project_files {
 
         my $test;
         unless (first { $test = $_->claim_file($path, $settings, from => 'listed') } @$plugins) {
-            $test = Test2::Harness2::TestFile->new(file => $path);
+            $test = App::Yath2::TestFile->new(file => $path);
         }
 
         if (my @exclude = $self->exclude_file($test)) {
@@ -662,10 +662,9 @@ sub find_project_files {
         }
 
         if ($test_params) {
-            my $ts = $test->test_settings;
-            $ts->set_input($test_params->{stdin})  if $test_params->{stdin};
-            $ts->set_args($test_params->{argv})    if $test_params->{argv};
-            $ts->set_env_vars(%{$test_params->{env}}) if $test_params->{env};
+            $test->set_input($test_params->{stdin})    if $test_params->{stdin};
+            $test->set_test_args($test_params->{argv}) if $test_params->{argv};
+            $test->set_env_vars($test_params->{env})   if $test_params->{env};
         }
 
         push @tests => $test;
@@ -689,7 +688,7 @@ sub find_project_files {
                         for my $ext (@{$self->extensions}) {
                             next unless m/\.\Q$ext\E$/;
 
-                            $test = Test2::Harness2::TestFile->new(file => $file);
+                            $test = App::Yath2::TestFile->new(file => $file);
 
                             last;
                         }
@@ -802,7 +801,7 @@ By default C<App::Yath2::Finder::> is prefixed onto your custom finder, use
 =head2 SUBCLASSING
 
     use parent 'App::Yath2::Finder';
-    use Test2::Harness2::TestFile;
+    use App::Yath2::TestFile;
 
     # Custom finders may provide their own options if desired.
     # This is optional.
@@ -817,8 +816,8 @@ By default C<App::Yath2::Finder::> is prefixed onto your custom finder, use
         my ($plugins, $search) = @_;
 
         return [
-            Test2::Harness2::TestFile->new(...),
-            Test2::Harness2::TestFile->new(...),
+            App::Yath2::TestFile->new(...),
+            App::Yath2::TestFile->new(...),
             ...,
         ];
     }
@@ -833,7 +832,7 @@ subclasses.
 =item $arrayref = $finder->find_files($plugins)
 
 This is the main method. This method returns an arrayref of
-L<Test2::Harness2::TestFile> instances, each one representing a single test to
+L<App::Yath2::TestFile> instances, each one representing a single test to
 run.
 
 $plugins is a list of plugins, some may be class names, others may be
@@ -879,7 +878,7 @@ The default C<find_files()> implementation is this:
         return $self->find_project_files($plugins, $self->search);
     }
 
-Each one returns an arrayref of L<Test2::Harness2::TestFile> instances.
+Each one returns an arrayref of L<App::Yath2::TestFile> instances.
 
 $plugins is a list of plugins, some may be class names, others may be
 instances.

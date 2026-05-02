@@ -1,4 +1,4 @@
-use Test2::V0 -target => 'Test2::Harness2::TestFile';
+use Test2::V0 -target => 'App::Yath2::TestFile';
 # HARNESS-DURATION-SHORT
 
 use File::Temp qw/tempdir/;
@@ -220,19 +220,29 @@ subtest 'conflicts: parse and dedup across one or more directive lines' => sub {
     is([sort @{tf_for('conflicts4')->conflicts}], [qw/daemon passwd/], "duplicates deduplicated via uniq");
 };
 
-subtest 'binary: classified, fork+preload off, no die on non-executable' => sub {
-    my $binary = tf_for('binary');
+subtest 'binary: classified, fork+preload off (executable)' => sub {
+    # App::Yath2::TestFile (Phase 3.3 producer) restores the legacy
+    # idiom: a binary fixture must be executable, otherwise construction
+    # dies. Flip the bit on the fixture so the producer accepts it.
+    my $bin_path = File::Spec->catfile($tdir, 'binary');
+    chmod 0755, $bin_path or die "chmod $bin_path: $!";
 
-    # Stage C deliberate deviation from legacy: we do NOT die when a
-    # binary file is not executable. The runner decides run/exec
-    # feasibility, not the parser.
-    ok(lives { $binary->scan }, "scan on binary file does not die") or diag $@;
+    my $binary = tf_for('binary');
 
     is($binary->is_binary,                1,  "Binary flag set");
     is($binary->non_perl,                 1,  "non_perl flag set");
     is($binary->check_feature('fork'),    0,  "fork off on binary");
     is($binary->check_feature('preload'), 0,  "preload off on binary");
     is($binary->switches,                 [], "No shebang switches");
+};
+
+subtest 'binary: non-executable refused at construction (legacy idiom)' => sub {
+    my $bin_path = File::Spec->catfile($tdir, 'binary');
+    chmod 0644, $bin_path or die "chmod $bin_path: $!";
+    my $ok  = eval { $CLASS->new(file => $bin_path); 1 };
+    my $err = $@;
+    ok(!$ok, 'construction refused');
+    like($err, qr/Cannot run binary test file/, 'legacy "Cannot run binary" message');
 };
 
 subtest 'not_perl: bash shebang forces fork/preload off' => sub {

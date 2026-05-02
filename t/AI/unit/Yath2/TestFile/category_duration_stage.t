@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec();
 
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 my $tdir = tempdir(CLEANUP => 1);
 
@@ -19,7 +19,7 @@ sub tf_for {
     my $path = File::Spec->catfile($tdir, $name);
     my $body = "#!/usr/bin/perl\n" . join("\n", @directives) . "\nuse strict;\n";
     write_file($path, $body);
-    return Test2::Harness2::TestFile->new(file => $path);
+    return App::Yath2::TestFile->new(file => $path);
 }
 
 subtest 'HARNESS-DURATION-LONG sets duration = long' => sub {

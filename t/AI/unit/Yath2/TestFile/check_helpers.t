@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec();
 
-use Test2::Harness2::TestFile;
+use App::Yath2::TestFile;
 
 my $tdir = tempdir(CLEANUP => 1);
 
@@ -20,14 +20,14 @@ sub tf_for {
     my $path = File::Spec->catfile($tdir, $name);
     my $body = join("\n", @lines) . "\nuse strict;\n";
     write_file($path, $body);
-    return Test2::Harness2::TestFile->new(file => $path);
+    return App::Yath2::TestFile->new(file => $path);
 }
 
 sub tf_bytes {
     my ($name, $bytes) = @_;
     my $path = File::Spec->catfile($tdir, $name);
     write_file($path, $bytes);
-    return Test2::Harness2::TestFile->new(file => $path);
+    return App::Yath2::TestFile->new(file => $path);
 }
 
 # ---- check_feature: defaults table ----
@@ -150,7 +150,13 @@ subtest 'bash shebang: fork and preload disabled (non-perl)' => sub {
 
 subtest 'binary fixture: fork and preload disabled' => sub {
     my $bytes = pack 'C*', map { int rand 256 } 1 .. 512;
-    my $tf    = tf_bytes('bin.t', $bytes);
+    my $name  = 'bin.t';
+    my $path  = File::Spec->catfile($tdir, $name);
+    write_file($path, $bytes);
+    # App::Yath2::TestFile refuses non-executable binaries (legacy
+    # idiom); flip the bit before construction.
+    chmod 0755, $path or die "chmod $path: $!";
+    my $tf = App::Yath2::TestFile->new(file => $path);
     is($tf->check_feature('fork'),    0, 'is_binary forces fork off');
     is($tf->check_feature('preload'), 0, 'is_binary forces preload off');
 };
@@ -165,11 +171,13 @@ subtest 'safety override beats explicit HARNESS-USE-FORK' => sub {
 subtest 'check_feature triggers scan on first call' => sub {
     my $tf = tf_for('lazy.t', '#!/usr/bin/perl', '# HARNESS-NO-STREAM');
 
-    # Construct a TestFile but do NOT call scan directly.
-    ok(!$tf->_scanned, '_scanned starts false');
+    # Construct a TestFile but do NOT call scan directly. _scanned is
+    # an internal HashBase slot (no public reader); poke the slot
+    # constant directly.
+    ok(!$tf->{+App::Yath2::TestFile::_SCANNED}, '_scanned starts false');
 
     is($tf->check_feature('stream'), 0, 'check_feature sees directive value');
-    ok($tf->_scanned, '_scanned latched by check_feature');
+    ok($tf->{+App::Yath2::TestFile::_SCANNED}, '_scanned latched by check_feature');
 };
 
 done_testing;

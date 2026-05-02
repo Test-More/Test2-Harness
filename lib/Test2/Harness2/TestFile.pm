@@ -5,22 +5,20 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
-use File::Spec();
-use List::Util qw/any uniq/;
-
-use Test2::Harness2::Util qw/open_file/;
+use File::Spec ();
 
 use Object::HashBase qw{
     <file <absolute <relative
-    <_scanned <_shbang
     <features <switches
     <category <duration <stage
     <conflicts
     <retry <retry_isolated
+    <smoke <isolation
     <non_perl <is_binary
     <event_timeout <post_exit_timeout
     <min_slots <max_slots
     <meta
+    <ch_dir
     <comment
 };
 
@@ -30,271 +28,106 @@ with 'Test2::Harness2::Role::TestFile';
 sub init {
     my $self = shift;
     croak "'file' is required" unless defined $self->{+FILE};
+
     $self->{+ABSOLUTE} //= File::Spec->rel2abs($self->{+FILE});
     $self->{+RELATIVE} //= File::Spec->abs2rel($self->{+FILE});
 
-    # HashBase slot accessors shadow the role's default methods. Seed every
-    # slot the role documents a default for so the accessor returns that
-    # default instead of undef.
+    # HashBase slot accessors shadow the role's default methods. Seed
+    # every slot the role documents a default for so the accessor
+    # returns that default instead of undef. The role's defaults()
+    # builds fresh sub-containers per call so different objects do not
+    # share arrayrefs / hashrefs.
     my $defaults = $self->defaults;
     for my $k (keys %$defaults) {
         $self->{$k} //= $defaults->{$k};
     }
 }
 
-sub scan {
-    my $self = shift;
-    $self->_scan();
-    return;
-}
-
-sub _scan {
-    my $self = shift;
-
-    return if $self->{+_SCANNED}++;
-    return unless -e $self->{+ABSOLUTE};
-
-    if (-B _ && !-z _) {
-        $self->{+IS_BINARY} = 1;
-        $self->{+NON_PERL}  = 1;
-        return;
-    }
-
-    return if $self->{+IS_BINARY};
-
-    my $comment = $self->{+COMMENT} // '#';
-
-    my $retry_set;
-    my $job_slots_set;
-    my $fh = open_file($self->{+ABSOLUTE});
-    for (my $ln = 1; my $line = <$fh>; $ln++) {
-        next if $line =~ m/^\s*$/;
-
-        if ($ln == 1 && $line =~ m/^#!/) {
-            my $shbang = $self->_parse_shbang($line);
-            if ($shbang && %$shbang) {
-                $self->{+_SHBANG}  = $shbang;
-                $self->{+SWITCHES} = $shbang->{switches} if $shbang->{switches};
-                $self->{+NON_PERL} = 1                   if $shbang->{non_perl};
-                next;
-            }
-        }
-
-        if ($line =~ m/^\s*#\s*THIS IS A GENERATED YATH RUNNER TEST/) {
-            $self->{+FEATURES}{run} = 0;
-            next;
-        }
-
-        next if $line =~ m/^\s*\Q$comment\E/ && $line !~ m/^\s*\Q$comment\E\s*HARNESS-.+/;
-        next if $line =~ m/^\s*(?:use|require|BEGIN|package)\b/;
-        last unless $line =~ m/^\s*\Q$comment\E\s*HARNESS-(.+)$/;
-
-        my ($dir, $rest) = split /[-\s]+/, $1, 2;
-        $dir = lc($dir);
-        my @args;
-        if ($dir eq 'meta') {
-            if (defined $rest) {
-                @args = split /\s+/,  $rest, 2;
-                @args = split /[-]+/, $rest, 2 if @args == 1;
-                $args[1] =~ s/\s+(?:#.*)?$// if defined $args[1];
-            }
-        }
-        elsif ($rest) {
-            $rest =~ s/\s+(?:#.*)?$//;
-            @args = split /[-\s]+/, $rest;
-        }
-
-        if ($dir eq 'no') {
-            my $feature = lc(join '_' => @args);
-            if ($feature eq 'retry') {
-                $self->{+RETRY} = 0;
-                $retry_set = 1;
-            }
-            else {
-                $self->{+FEATURES}{$feature} = 0;
-            }
-        }
-        elsif ($dir eq 'yes' || $dir eq 'use') {
-            my $feature = lc(join '_' => @args);
-            $self->{+FEATURES}{$feature} = 1;
-        }
-        elsif ($dir eq 'smoke') {
-            $self->{+FEATURES}{smoke} = 1;
-        }
-        elsif ($dir eq 'retry') {
-            if (@args) {
-                for my $arg (@args) {
-                    if ($arg =~ m/^\d+$/) {
-                        $self->{+RETRY} = int $arg;
-                        $retry_set = 1;
-                    }
-                    elsif ($arg =~ m/^iso/i) {
-                        $self->{+RETRY}          = 1 unless $retry_set;
-                        $self->{+RETRY_ISOLATED} = 1;
-                        $retry_set               = 1;
-                    }
-                    else {
-                        warn "Unknown 'HARNESS-RETRY' argument '$arg' at $self->{+FILE} line $ln.\n";
-                    }
-                }
-            }
-            elsif (!$retry_set) {
-                $self->{+RETRY} = 1;
-                $retry_set = 1;
-            }
-        }
-        elsif ($dir eq 'stage') {
-            my ($name) = @args;
-            $self->{+STAGE} = $name;
-        }
-        elsif ($dir eq 'duration' || $dir eq 'dur') {
-            my ($name) = @args;
-            $self->{+DURATION} = lc($name);
-        }
-        elsif ($dir eq 'category' || $dir eq 'cat') {
-            my ($name) = @args;
-            $name = lc($name);
-            if ($name =~ m/^(?:long|medium|short)$/) {
-                $self->{+DURATION} = $name;
-            }
-            else {
-                $self->{+CATEGORY} = $name;
-            }
-        }
-        elsif ($dir eq 'timeout') {
-            my ($type, $num, $extra) = @args;
-            $type = lc($type);
-            $num  = lc($num) if defined $num;
-
-            ($type, $num) = ('postexit', $extra)
-                if $type eq 'post' && defined $num && $num eq 'exit';
-
-            if ($type !~ m/^(?:event|postexit)$/) {
-                warn "'" . uc($type) . "' is not a valid timeout type, use 'EVENT' or 'POSTEXIT' at $self->{+FILE} line $ln.\n";
-                next;
-            }
-
-            if ($type eq 'event') {
-                $self->{+EVENT_TIMEOUT} = $num;
-            }
-            else {
-                $self->{+POST_EXIT_TIMEOUT} = $num;
-            }
-        }
-        elsif ($dir eq 'job' && defined $rest && $rest =~ m/slots\s+(\d+)(?:\s+(\d+))?$/i) {
-            # Legacy uses //= against a fresh %headers hash so the first
-            # JOB-SLOTS wins. Our init() pre-seeds MIN_SLOTS from role
-            # defaults, so a scan-local tracker carries the "first-wins"
-            # semantic.
-            next if $job_slots_set;
-            $self->{+MIN_SLOTS} = $1;
-            $self->{+MAX_SLOTS} = $2 || $1;
-            $job_slots_set      = 1;
-        }
-        elsif ($dir eq 'conflicts') {
-            $self->{+CONFLICTS} ||= [];
-            push @{$self->{+CONFLICTS}} => map { lc($_) } @args;
-            @{$self->{+CONFLICTS}} = uniq @{$self->{+CONFLICTS}};
-        }
-        elsif ($dir eq 'meta') {
-            my ($key, $val) = @args;
-            $key = lc($key);
-            push @{$self->{+META}{$key}} => $val;
-        }
-        else {
-            warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
-        }
-    }
-
-    return;
-}
-
-sub _parse_shbang {
-    my $self = shift;
-    my $line = shift;
-
-    return {} if !defined $line;
-
-    my %shbang;
-
-    # NOTE: dashes are intentionally included with the switches.
-    my $shbang_re = qr{
-        ^
-          \#!.*perl.*?        # the perl path
-          (?: \s (-.+) )?     # the switches, maybe
-          \s*
-        $
-    }xi;
-
-    if ($line =~ $shbang_re) {
-        my @switches;
-        @switches         = grep { m/\S/ } split /\s+/, $1 if defined $1;
-        $shbang{switches} = \@switches;
-        $shbang{line}     = $line;
-    }
-    elsif ($line =~ m/^#!/ && $line !~ m/perl/i) {
-        $shbang{line}     = $line;
-        $shbang{non_perl} = 1;
-    }
-
-    return \%shbang;
-}
-
-# Per-feature defaults consulted by check_feature when the caller
-# supplies no explicit default and the user's .t file has no directive
-# touching the feature. Ports reference/legacy/.../TestFile.pm:89-98.
-my %DEFAULTS = (
-    timeout   => 1,
-    fork      => 1,
-    preload   => 1,
-    stream    => 1,
-    run       => 1,
-    isolation => 0,
-    smoke     => 0,
-    io_events => 1,
-);
-
-sub check_feature {
-    my ($self, $feature, $default) = @_;
-    $self->scan;
-    $default = $DEFAULTS{$feature} unless defined $default;
-
-    # Fork and preload cannot be honoured for non-perl / binary tests
-    # or for perl tests with any switch other than -w. The safety
-    # override fires before the user's explicit features->{fork|preload}
-    # is consulted, matching reference/old2/.../TestFile.pm:418-430.
-    if ($feature eq 'fork' || $feature eq 'preload') {
-        return 0 if $self->{+NON_PERL} || $self->{+IS_BINARY};
-        return 0 if any { $_ !~ m/^-w$/ } @{$self->{+SWITCHES} || []};
-    }
-
-    my $set = $self->{+FEATURES}{$feature};
-    return $default unless defined $set;
-    return $set ? 1 : 0;
-}
-
-sub check_duration {
-    my $self = shift;
-    $self->scan;
-    return $self->{+DURATION} if defined $self->{+DURATION};
-    return 'long' unless $self->check_feature('timeout');
-    return 'medium';
-}
-
-sub check_category {
-    my $self = shift;
-    $self->scan;
-    return $self->{+CATEGORY} if defined $self->{+CATEGORY};
-    return 'isolation'        if $self->check_feature('isolation');
-    return 'general';
-}
-
-sub check_stage     { $_[0]->scan; $_[0]->{+STAGE} }
-sub check_min_slots { $_[0]->scan; $_[0]->{+MIN_SLOTS} }
-sub check_max_slots { $_[0]->scan; $_[0]->{+MAX_SLOTS} }
-
 1;
 
 __END__
 
-=head1 POD IS AUTO-GENERATED
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Test2::Harness2::TestFile - Static value object describing a single
+test file for the harness.
+
+=head1 DESCRIPTION
+
+C<Test2::Harness2::TestFile> is the harness-side, B<static> value
+object for one test file. Every attribute is set at construction;
+nothing on this class scans the file, reads its shebang, parses
+C<HARNESS-*> directives, validates C<-f> / C<-x>, mints job_ids,
+or otherwise touches the filesystem. The harness rehydrates these
+objects from log payloads when replaying or analysing runs, where the
+file may not even exist on the local machine.
+
+The producer side -- reading shebangs, parsing C<HARNESS-*>
+directives, applying CLI overrides, building queue payloads -- lives
+in L<App::Yath2::TestFile>. The harness library does B<not> load
+yath; producers are responsible for handing the harness a fully-built
+TestFile (or a hashref of the same shape via the role's C<TO_JSON> /
+C<rehydrate> contract).
+
+This class consumes L<Test2::Harness2::Role::TestFile> for its
+interface and uses L<Object::HashBase> for storage. The role's
+per-attribute defaults are seeded into the HashBase slots during
+C<init> so a HashBase slot reader (which shadows the role's default
+method) returns the documented default when the caller did not
+supply a value.
+
+=head1 SYNOPSIS
+
+    use Test2::Harness2::TestFile;
+
+    my $tf = Test2::Harness2::TestFile->new(
+        file      => 't/foo.t',
+        category  => 'general',
+        duration  => 'short',
+        conflicts => ['db'],
+        features  => {fork => 0},
+    );
+
+    # Rehydrate from a logged TO_JSON payload
+    my $rehydrated = Test2::Harness2::TestFile->rehydrate($payload);
+
+=head1 ATTRIBUTES
+
+See L<Test2::Harness2::Role::TestFile/ATTRIBUTES> for the full list.
+This class implements every attribute the role documents.
+
+=head1 SOURCE
+
+The source code repository for Test2-Harness can be found at
+L<https://github.com/Test-More/Test2-Harness>.
+
+=head1 MAINTAINERS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 AUTHORS
+
+=over 4
+
+=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+See L<https://dev.perl.org/licenses/>
+
+=cut

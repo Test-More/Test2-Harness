@@ -1335,6 +1335,40 @@ target is a preload stage, launch is the detached-fork flow from
 §10.4; the resulting collector's `launched_job` still addresses
 the harness the same way.
 
+### 14.1 Unavailable-action launches
+
+When a job cannot be run because a needed resource is unavailable
+— either the resource is permanently broken, or the resource is
+healthy but can never grant THIS specific job (e.g. the test
+declares `HARNESS-JOB-SLOTS 8` but the per-job cap is 4) — the
+scheduler does not silently drop the job. Instead it routes the
+job through an **unavailable-action launch**: a real Collector
+launch of a `perl -e ...` one-liner that either calls `skip_all`
+or `die`, with the resource name baked into the reason string.
+
+The two unavailable-action kinds are `skip` and `fail`. For the
+permanent-broken case, the choice is governed by the harness-
+level `broken_resource_behavior` attribute (`skip`, `fail`, or
+`abort`; `abort` runs the `fail` kind for every remaining job in
+the run). For the cap-exceeds-min case, the kind is always
+`skip`. Either way the launch goes through the normal Collector
+path so loggers, auditor, and on-disk artifacts look the same as
+they would for a real test that called `skip_all` or died.
+
+The launch consults every resource that reports `needed(job => $job)`
+and is not `is_permanent_broken`, requesting `need=1` from each. It
+may defer if any of those resources is saturated. Resources that
+genuinely should not participate in unavailable-action launches opt
+out via `needed`. If the resource set yields no viable launcher at
+all, the unavailable-action launch is itself skipped and the run
+finalizes.
+
+> *Naming note:* this concept used to be called the "synthetic
+> skip / synthetic fail" path internally. The word "synthetic"
+> is reserved for event fabrication on the auditor side
+> (subtest-start announcements, plan/count mismatches, etc., see
+> §20); the resource-side fabrication is "unavailable action".
+
 ## 15. Error handling & ready semantics
 
 - Services wait for each other via `IPC::Manager::Service::Handle`'s
@@ -1581,13 +1615,15 @@ an early-development stopgap produces this layout:
 $workdir/
   logs/
     services/
-      <name>.jsonl          service-lifecycle event stream (default name=harness)
-      <name>.json           service JSON snapshot (init fields + final verdict)
+      <name>/
+        events.jsonl        service-lifecycle event stream (default name=harness)
+        state.json          service JSON snapshot (init fields + final verdict)
     runs/
       <run_id>.json         per-run JSON snapshot (Logger::JSON on the run-service collector; see note below)
       <run_id>/
         services/
-          run.jsonl         per-run-service event stream
+          <svc-name>/
+            events.jsonl    per-run-service event stream
         <job_id>/
           0.jsonl           per-test event stream
           0.json            per-test JSON snapshot (init + exit + pass/fail)
@@ -2042,20 +2078,31 @@ This artifact is **not** load-bearing for functional state
 service via IPC. The sidecar exists for after-the-fact inspection
 and renderer replay.
 
-### Per-run-service logs (`logs/runs/<run_id>/services/*.jsonl`)
+### Per-run-service logs (`logs/runs/<run_id>/services/<name>/<leaf>.<ext>`)
 
-Same JSONL shape as per-test logs, but the events are the run
-service's own lifecycle records. Produced when a `Logger::JSONL` is
-attached to the run service's collector (not by default).
+Same JSONL / JSON shape as per-test logs, but the events are the
+run-scoped service's own lifecycle records. Each service gets its
+own `services/<name>/` directory; per-logger leaves land inside
+(`events.jsonl` from `Logger::JSONL`, `state.json` from
+`Logger::JSON`). The directory itself is the run-scoped service
+existence signal -- `LogArchive::services($run_id)` walks the
+immediate children of `runs/<run>/services/`. Produced when a
+`Logger::JSONL` / `Logger::JSON` is attached to the service's
+collector (not by default).
 
-### Service logs (`logs/services/<name>.{jsonl,json}`)
+### Service logs (`logs/services/<name>/<leaf>.<ext>`)
 
-Same JSONL shape; events are the service's own lifecycle records
-(§19). They carry the service's `job_id` (set at construction) and
-no `run_id` — per-run and per-job IDs ride inside the event
-payload's `run_data` / `job_info` fields instead. Produced only
-when `Logger::JSONL` / `Logger::JSON` are attached to the service
-collector.
+Same shape; events are the harness-scoped service's own lifecycle
+records (§19). They carry the service's `job_id` (set at
+construction) and no `run_id` — per-run and per-job IDs ride
+inside the event payload's `run_data` / `job_info` fields instead.
+Each service has its own `services/<name>/` directory; per-logger
+leaves are `events.jsonl` (from `Logger::JSONL`) and `state.json`
+(from `Logger::JSON`). The directory itself is the
+harness-scoped service existence signal --
+`LogArchive::services()` walks the immediate children of
+`services/`. Produced only when `Logger::JSONL` / `Logger::JSON`
+are attached to the service collector.
 
 ### IPC requests
 
@@ -2271,24 +2318,17 @@ local plan); commits on the `zstd-loggers` branch; durable summary at
 Every text file written under `workdir/logs/` is zstd-compressed.
 Plaintext text files in the live logdir are not allowed.
 Pre-compressed binary content (images, video, audio, etc.) is out of
-scope -- producers store it verbatim. The bundled
-`$logdir/zstd-dict.bin` is the only other exception (the dictionary
-must stay raw because it is the bytes a decoder needs *before*
-anything else can be decompressed).
+scope -- producers store it verbatim.
 
 This is enforced by `t/AI/integration/logdir_all_zstd.t`, which walks
-`$logdir` post-run and asserts every regular file ends in `.zst`,
-is `zstd-dict.bin`, or sniffs as a known binary content type.
-Future producers landing new binary types add to that test's
-allowlist.
+`$logdir` post-run and asserts every regular file ends in `.zst` or
+sniffs as a known binary content type. Future producers landing new
+binary types add to that test's allowlist.
 
 ### File extensions and shapes
 
 | Live logdir path                   | On-disk shape                                   |
 |------------------------------------|-------------------------------------------------|
-| `$logdir/zstd-dict.bin`            | Raw bytes. Copied from the active dictionary at run start. |
-| `$logdir/artifacts.json.zst`       | One zstd frame holding the harness manifest.   |
-| `$logdir/runs/$rid/artifacts.json.zst` | One zstd frame holding the per-run manifest. |
 | `$logdir/.../*.json.zst`           | One zstd frame per snapshot (whole-file rewrite). |
 | `$logdir/.../*.jsonl.zst`          | Multi-frame: one self-contained zstd frame per jsonl line, append-safe. |
 
@@ -2298,36 +2338,10 @@ long as a frame fits in `PIPE_BUF` (4 KiB on Linux). Readers tail
 new frames as they land via `Test2::Harness2::Util::Zstd`'s
 `open_zstd_reader`.
 
-### Dictionary distribution
+### No custom dictionary
 
-Dicts are not embedded in zstd frames; the frame header carries a
-4-byte dictID, and the decoder needs byte-identical dictionary
-bytes to decode. Dict locations:
-
-| Location                      | When written                                       | Authoritative for                 |
-|-------------------------------|----------------------------------------------------|-----------------------------------|
-| `share/other/zstd.dict`       | Install time (or `author/train_zstd_dict`).        | Default for new runs only.        |
-| `$logdir/zstd-dict.bin`       | At `Test2::Harness2::init`, copied from the resolved dict. | Every reader / writer for the lifetime of that logdir. |
-| `tar.zidx::zstd-dict.bin`     | At `yath archive` time; copied verbatim from the source logdir. | Every reader of that archive.    |
-| `<extract-dest>/zstd-dict.bin`| At `yath extract` time; copied verbatim out of the archive.    | Every reader of the extracted tree. |
-
-Each step in the resolution order below is *definitive when reached*,
-not a fallback to the next on failure. A `tar.zidx` archive whose
-index has no `zstd-dict.bin` entry is dict-less by design; the reader
-caches `dict_bytes => undef` and decompresses every entry without a
-dict, never falling through to the install share or the per-logdir
-copy.
-
-1. Caller-supplied dict path (programmatic argument or CLI override
-   via `--zstd-dict PATH`).
-2. Per-logdir copy at `$logdir/zstd-dict.bin` when the file being
-   read is inside a logdir.
-3. Bundled archive entry `zstd-dict.bin` when the file came from a
-   `tar.zidx`.
-4. Install share `share/other/zstd.dict` via `File::ShareDir` (only
-   for ad-hoc CLI / test use outside any logdir or archive).
-5. None: dict-less mode. Frames whose dictID is set hard-fail; frames
-   without dictID decode normally.
+All loggers, readers, and the tar.zidx codec use plain
+`Compress::Zstd` calls with the library's default settings.
 
 ### Single archive format: `tar.zidx`
 
@@ -2341,7 +2355,7 @@ The `tar.zidx` reader and writer live in a single consolidated
 module at `lib/App/Yath2/LogArchive/TarZIdx.pm`. Per-entry index
 entries gain an `inner` field (`"zstd"` for plaintext sources
 wrapped in an inner zstd frame, `"none"` for already-`.zst` source
-files and the bundled dict stored verbatim).
+files stored verbatim).
 
 ### Dual-mode reader contract
 
@@ -2365,24 +2379,131 @@ compressed bytes; the `::Zstd` subclasses never see plaintext.
 Promoted from develop-only to a hard runtime requirement. The
 project no longer has a `zstd`/`unzstd` binary fallback for
 compress / decompress; compressed log artifacts depend on the
-in-process module. `author/train_zstd_dict` still requires the
-`zstd` CLI on PATH because the Perl module exposes no `--train`
-API; that is the only place in the codebase that spawns a zstd
-process.
+in-process module. The codebase never spawns a zstd process.
 
 ### `yath extract` + `--no-decompress`
 
-`yath extract` decompresses every zstd-compressed archive entry on
-the way out and strips the trailing `.zst` suffix from the output
-filename. The bundled `zstd-dict.bin` is written out verbatim so
-the extracted tree is itself logdir-shaped. `--no-decompress`
-preserves the byte-for-byte form for debugging or training-input
-pipelines.
+`yath extract` is two-pass. First, every member of the archive is
+written to disk verbatim. Second, every `.zst` file in the extracted
+tree is decompressed in-place: the plaintext lands at the
+`.zst`-stripped sibling and the original is removed. The result is
+a logdir-shaped tree of plaintext files. `--no-decompress` skips
+the second pass and preserves the byte-for-byte archive contents
+for debugging or training-input pipelines.
 
-### Options library
+## Addendum: full_audit refactor (2026-04-29)
 
-`App::Yath2::Options::LogArchive` declares `--zstd-dict PATH` (with
-the install-shipped default at `share/other/zstd.dict`) and
-`--no-zstd-dict`. yath commands that spawn the harness pre-resolve
-the chosen path and thread it in via the harness's `dict_path`
-constructor field.
+See `AI_DOCS/2026-04-29-full-audit-refactor.md` for the full
+record. Headline deviations from the rest of this document:
+
+### `App::Yath2::LogArchive::Format` is gone
+
+Format detection collapses to a `-d` test on the path. The
+catalogue indirection only made sense when there were multiple
+archive formats; tar.zidx is the only one yath produces. The
+`TAR_ZIDX_MAGIC` / `TAR_ZIDX_FOOTER_LEN` constants live in
+`LogArchive::TarZIdx`. `viable()` and `default_writer_format()` no
+longer exist.
+
+### Loggers identify themselves by class name, not `file_ext`
+
+The `file_ext` requirement on `Test2::Harness2::Role::Collector::Logger`
+is dropped. An artifact with extension `.xyz` is produced by
+`Test2::Harness2::Collector::Logger::XYZ` (also tried as `Xyz` and
+`xyz`). `LogArchive` resolves the class on demand per ext and
+caches the result.
+
+### `artifacts.json[.zst]` manifest is dropped
+
+`Test2::Harness2::_write_artifacts_manifest` and the per-run
+counterpart in `RunService` are removed. The on-disk manifest is
+no longer a thing. `LogArchive::artifacts` and `iter_artifacts`
+walk `list_files()` and dispatch by extension. `manifest_drift()`
+is gone.
+
+### Existence of runs / jobs / services is keyed on directory
+### presence
+
+`runs()`, `jobs()`, and `services()` report every immediate child
+directory of `runs/`, `runs/<run>/tests/`, and `services/`
+respectively (and the equivalent run-scoped path for services).
+The directory itself is the existence signal -- empty
+`runs/<id>/`, `runs/<id>/tests/<job>/`, and
+`services/<name>/` directories all count. The previous
+`spec.json[.zst]` marker check and the `include_empty` option are
+gone. `LogArchive` gains a `list_dirs()` backend method; the
+Directory backend walks the filesystem, the TarZIdx backend reads
+explicit directory entries from the index and additionally derives
+parent-of-file paths so older archives still report their
+implied shape. The TarZIdx writer records every source directory
+as a typeflag-`'5'` index entry so empty directories survive
+archive -> extract.
+
+Loggers write to `services/<name>/<leaf>.<ext>` (and the
+run-scoped `runs/<run>/services/<name>/<leaf>.<ext>`); the
+per-logger leaf is the producer's class basename role
+(`Logger::JSONL` -> `events.jsonl`, `Logger::JSON` ->
+`state.json`).
+
+### `spec.json` is logger-written
+
+`RunService` no longer calls `_write_run_spec` directly. Instead,
+`service_on_start` emits a new harness event:
+
+    kind     => 'run_queued'
+    run_data => $run->TO_JSON
+
+`Test2::Harness2::Collector::Logger::JSON` handles the event by
+writing `runs/<run_id>/spec.json.zst`, gated on `is_run`.
+
+### `App::Yath2::LogArchive::Role::ChangeWatch` is gone
+
+Replaced by a `static` flag on `FileMonitor` and on the
+`LogArchive` base class. `Artifact` no longer carries change-watch
+methods; instead it exposes `->watch` returning a fresh
+`FileMonitor` with the artifact as the delegate. `LogArchive`
+gains `watch_artifact($logical)` as a one-liner shortcut.
+
+### `Test2::Harness2::Util::CwdIndex` is gone
+
+Replaced by `./last_log.yath` (an unconditional symlink the test
+command writes after every archive) plus
+`App::Yath2::LogArchive->find_latest($settings)` (canonical no-arg
+discovery: symlink first, else glob `${TMPDIR}/${project}-${user}-*.yath`
+sorted by stamp + hi-res mtime tiebreak; refuses to glob when
+project resolves to `__UNKNOWN__`).
+
+### Project name fallback chain
+
+`App::Yath2::Options::Yath` post-processes `--project` when not
+explicitly set: rc-file dir basename, then walk up cwd looking for
+`.git`/`.svn`/`.cvs`/`lib`/`t` (stops one step before `$HOME` or
+`/`), then cwd basename, finally the literal `__UNKNOWN__`.
+
+### IPC info filename / archive filename
+
+Both shapes change from `yath-${type}-...` / `yath-${stamp}-${pid}.yath`
+to a project-prefixed form:
+
+    IPC:     ${project}-${user}-${command}-${stamp}-yath-${pid}-ipc.json
+    archive: ${project}-${user}-${stamp}-${pid}.yath
+
+`publish_ipc_file` takes `command =>` instead of `type =>`;
+`find_ipc_files` filters by `command =>`. The `nonce`/`persistent`
+type tag is gone from the JSON payload too.
+
+### `Options::Logging` -> `Options::LogArchive`
+
+The user-facing log archive destination options live in
+`App::Yath2::Options::LogArchive` (group `log_archive`, category
+"Log Archive Options"). `Renderer::Logger`'s separate `logging`
+group is unrelated and unaffected.
+
+### `Util::Zstd::Writer->say` embeds the newline in the frame
+
+`Logger::JSONL` writes via `->say`, which compresses
+`payload + "\n"` together. Decompressing concatenated frames
+yields valid jsonl directly; `yath extract` no longer reinserts
+newlines between records. The cached-compressed-frame fast path
+on `Logger::JSONL` is dropped (the cache held bare bytes with no
+newline).

@@ -1,0 +1,68 @@
+Eliminate Test2::Harness2::Util::CwdIndex
+
+When looking for the most recent yath archive look based on the default archive name in temp.
+
+Default name for yath archives:
+
+    $TMPDIR/<PROJECT>-$USER-<YYYYMMDD-HHMMSS>.yath
+
+See App::Yath2::Options::Yath, 'project' option, which can be command line or
+in the .yath.rc. I have added comments to that file as well.
+
+With that default You can always grab the latest based on timestamp.
+
+
+ipc file should be:
+
+    $TMPDIR/<PROJECT>-$USER-<command>-<YYYYMMDD-HHMMSS>-yath-ipc.json
+
+----
+
+App::Yath2::LogArchive::Artifact
+
+Re-work this. This class should no longer consume the ChangeWatch role, and it should not have an internal FileMonitor. Strip it back to just being an interface to get data out of the artifacts, either single object or multiple objects (->data or ->next).
+
+Also add a ->watch method that returns a FileMonitor object with the Artifact as the delegate. The Artifact should NOT cache a copy of the watcher internally. The archive should have a 'static' attribute that is true if the LogArchive it was created from is static, and false if it was a directory. FileMonitor should gain a 'static' attribute that we pass along from the Archive attribute, when true the FileMonitor bypasses the change-watching and provides the first-check true, all other checks false logic.
+
+The ChangeWatch role can go away.
+
+This should simplify things a lot.
+
+LogArchive should gain a ->watch_artifact($logical) method that calls ->artifact($logical)->watch under the hood as a shortcut.
+
+----
+
+The 'file_ext' method on the loggers interface is a mistake. Instead loggers
+should be named for the file extensions they produce. If an artifact is .xyz
+then the LogArchive code should look for
+Test2::Harness2::Collector::Logger::XYZ,
+Test2::Harness2::Collector::Logger::Xyz and
+Test2::Harness2::Collector::Logger::xyz. If it cannot find a valid logger class
+for the extention it should skip to the next file extention if there are
+multiple (like both a jsonl and a csv). If the only artifact file has an
+extention with no valid Logger class it shoudl throw an exception
+indicating the proper logger class needs to be installed.
+
+Remove the 'file_ext' method and rework code with the fileext = Logger name system.
+
+This of course refers to the filename with .zst stripped off if it is present.
+
+This also means we can completely drop the artifact.json files, they only
+existed to map files ot the logger that could read them for us. The LogArchive
+can simply find files in the expected layout instead of relying on
+artifact.json. So the services can stop writing the artifact.json files.
+
+spec.json should not be written by the run service directly. It should be
+written by the logger when it sees the event that indicates the run was queued.
+
+Are there any other .json or similar files in the LogArchive that are not
+written by a Logger? If so we want to address that.
+
+
+----
+
+App::Yath2::LogArchive::Format  should go away, we only have directory and one
+other format, use -d to determine if it is a directory. Anything else in the
+module we still need can be folded into App::Yath2::LogArchive::TarZIdx,
+anything that is not a constant should become methods (class methods if they
+need to be used outside that class for any reason).

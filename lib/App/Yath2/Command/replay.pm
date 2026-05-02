@@ -13,6 +13,7 @@ use Object::HashBase qw{
 };
 
 use Carp qw/croak/;
+use Cwd qw/getcwd/;
 
 use App::Yath2::LogArchive();
 use App::Yath2::Streamer::Static();
@@ -38,9 +39,9 @@ sub description {
     return <<"    EOT";
 Replays the event stream recorded in a completed yath log. LOG is either a
 .yath archive file or a directory that looks like \$workdir/logs (i.e. carries
-an artifacts.json manifest at the top level). RUN_IDs, if any, restrict the
-replay to the listed runs; with none, every run stored in the archive is
-replayed.
+runs/<id>/ subdirectories for the runs it stores). RUN_IDs, if any, restrict
+the replay to the listed runs; with none, every run stored in the archive
+is replayed.
 
 Output is rendered through the same renderer pipeline as 'yath test', so
 colors, formatting, and summary output match a live run.
@@ -61,8 +62,15 @@ sub run {
     my $args = $self->{+ARGS} // [];
     shift @$args if @$args && $args->[0] eq '--';
 
-    my $log = shift @$args
-        or die "Usage: yath replay LOG [RUN_ID ...]\n";
+    my $log = shift @$args;
+    unless (defined $log && length $log) {
+        $log = App::Yath2::LogArchive->find_latest($self->{+SETTINGS});
+        print STDERR "yath replay: using latest archive: $log\n"
+            if defined $log && length $log;
+    }
+
+    die "Usage: yath replay LOG [RUN_ID ...]\n"
+        unless defined $log && length $log;
 
     die "Log source '$log' does not exist\n"
         unless -e $log;
@@ -70,7 +78,7 @@ sub run {
     # Requested run ids: default to the full set the archive carries.
     my @requested = @$args;
     unless (@requested) {
-        my $archive = App::Yath2::LogArchive->new(path => $log);
+        my $archive = App::Yath2::LogArchive->open(path => $log);
         @requested = $archive->runs;
         die "No runs found in '$log'\n" unless @requested;
     }

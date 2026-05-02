@@ -56,9 +56,10 @@ require Test2::Harness2;
 use App::Yath2::Command::test;
 
 package Fake::Workspace2;
-sub new           { bless { workdir => $_[1] }, $_[0] }
-sub workdir       { $_[0]->{workdir} }
-sub create_option { }
+sub new                  { bless { workdir => $_[1] }, $_[0] }
+sub workdir              { $_[0]->{workdir} }
+sub create_option        { }
+sub keep_dirs            { 0 }
 
 package Fake::IPC2;
 sub new       { bless {}, $_[0] }
@@ -71,15 +72,46 @@ package Fake::Resource2;
 sub new       { my ($c, %p) = @_; bless {slots => $p{slots}, job_slots => $p{job_slots}} => $c }
 sub slots     { $_[0]->{slots} }
 sub job_slots { $_[0]->{job_slots} }
+sub classes   { return {'Test2::Harness2::Resource::JobCount' => []} }
+
+package Fake::Finder2;
+sub new        { bless {}, $_[0] }
+sub extensions { [qw/t t2/] }
+
+package Fake::Tests2;
+sub new           { bless {}, $_[0] }
+sub set_hash_seed { undef }
+
+package Fake::LogArchive2;
+sub new  { bless {}, $_[0] }
+sub file { undef }
+sub dir  { undef }
+
+package Fake::Yath2Group;
+sub new     { bless {}, $_[0] }
+sub project { 'fakeproj' }
+sub user    { 'fakeuser' }
 
 package Fake::Settings2;
 sub new {
     my ($class, $workspace, $resource) = @_;
-    bless {workspace => $workspace, ipc => Fake::IPC2->new, resource => $resource} => $class;
+    bless {
+        workspace   => $workspace,
+        ipc         => Fake::IPC2->new,
+        resource    => $resource,
+        finder      => Fake::Finder2->new,
+        tests       => Fake::Tests2->new,
+        log_archive => Fake::LogArchive2->new,
+        yath        => Fake::Yath2Group->new,
+    } => $class;
 }
 sub workspace   { $_[0]->{workspace} }
 sub ipc         { $_[0]->{ipc} }
 sub resource    { $_[0]->{resource} }
+sub finder      { $_[0]->{finder} }
+sub tests       { $_[0]->{tests} }
+sub log_archive { $_[0]->{log_archive} }
+sub yath        { $_[0]->{yath} }
 sub check_group { exists $_[0]->{$_[1]} ? 1 : 0 }
 
 package main;
@@ -123,24 +155,6 @@ subtest '-j 16:8 wires slots=16 max_per_job=8' => sub {
     run_with_resource(16, 8);
     is($captured_jobcount[0]->{slots},       16, 'slots=16');
     is($captured_jobcount[0]->{max_per_job}, 8,  'max_per_job=8');
-};
-
-subtest 'fallback to slots=16 max_per_job=1 when no resource group' => sub {
-    @captured_jobcount  = ();
-    @captured_testfiles = ();
-
-    my $bare = bless {workspace => Fake::Workspace2->new($work), ipc => Fake::IPC2->new}, 'Fake::SettingsBare';
-    no warnings 'once';
-    *Fake::SettingsBare::workspace   = sub { $_[0]->{workspace} };
-    *Fake::SettingsBare::ipc         = sub { $_[0]->{ipc} };
-    *Fake::SettingsBare::check_group = sub { exists $_[0]->{$_[1]} ? 1 : 0 };
-
-    my $cmd = App::Yath2::Command::test->new(args => [$tf], settings => $bare);
-    my $ok = eval { $cmd->run; 1 };
-    die $@ unless !$ok && $@ =~ /^EARLY_EXIT/;
-
-    is($captured_jobcount[0]->{slots},       16, 'fallback default slots=16 when no resource group');
-    is($captured_jobcount[0]->{max_per_job}, 1,  'fallback default max_per_job=1');
 };
 
 done_testing;

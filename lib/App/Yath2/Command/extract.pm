@@ -4,21 +4,27 @@ use warnings;
 
 our $VERSION = '2.000011';
 
+use File::Basename qw/dirname/;
+use File::Find ();
 use File::Path qw/make_path/;
 use File::Spec ();
-use File::Basename qw/dirname/;
 
 use App::Yath2::LogArchive;
 use Compress::Zstd ();
-use Compress::Zstd::Decompressor;
-use Compress::Zstd::DecompressionContext;
-use Compress::Zstd::DecompressionDictionary;
-use Test2::Harness2::Util::JSON qw/decode_json encode_pretty_json/;
-use Test2::Harness2::Util::Zstd qw/decompress_blob zstd_frame_size/;
+use Test2::Harness2::Util::Zstd qw/zstd_frame_size/;
 
 use Object::HashBase qw/<settings <args <env_vars <option_state <plugins/;
 
 use Getopt::Yath;
+include_options('App::Yath2::Options::Yath');
+
+option_group {group => 'extract', category => 'Extract Options'} => sub {
+    option no_decompress => (
+        type        => 'Bool',
+        default     => 0,
+        description => 'Preserve .zst suffixes and store compressed bytes verbatim instead of decompressing on the way out.',
+    );
+};
 
 use Role::Tiny::With;
 with 'App::Yath2::Role::Command';
@@ -38,17 +44,13 @@ Optional second argument: destination directory. Defaults to './logs'.
 The destination must NOT already exist; it will be created (along with
 any missing parents) before extraction.
 
-By default, every zstd-compressed entry in the archive is decompressed
-on the way out and the trailing '.zst' suffix is stripped from the
-output filename. The extracted tree is therefore directly
-human-readable -- a 'foo.json.zst' entry lands as 'foo.json'. The
-bundled dictionary (if present) is also written out to
-'<dest>/zstd-dict.bin' so the extracted directory matches the
-on-disk shape a live harness produces.
+Extraction is two-pass. First, every member of the archive is written
+to disk verbatim, preserving its on-archive name. Second, every '.zst'
+file in the extracted tree is decompressed in-place: the plaintext
+lands at the '.zst'-stripped sibling and the original is removed.
 
-Pass --no-decompress to disable that behaviour and produce a
-byte-for-byte extract that preserves '.zst' suffixes and stores
-compressed bytes verbatim.
+Pass --no-decompress to skip the second pass and leave the extracted
+tree byte-for-byte identical to the archive contents.
     EOT
 }
 
@@ -60,16 +62,15 @@ sub run {
     my $args = $self->args;
     shift @$args if @$args && $args->[0] eq '--';
 
-    my $no_decompress = 0;
-    my @rest;
-    for my $arg (@$args) {
-        if ($arg eq '--no-decompress') { $no_decompress = 1 }
-        else                           { push @rest => $arg }
-    }
-    @$args = @rest;
+    my $no_decompress = $self->{+SETTINGS}->extract->no_decompress ? 1 : 0;
 
     my $archive = shift @$args;
-    die "archive_filename is required\n"
+    unless (defined $archive && length $archive) {
+        $archive = App::Yath2::LogArchive->find_latest($self->{+SETTINGS});
+        print STDERR "yath extract: using latest archive: $archive\n"
+            if defined $archive && length $archive;
+    }
+    die "archive_filename is required (no ./last_log.yath and no matching archive in tempdir)\n"
         unless defined $archive && length $archive;
     die "archive '$archive' does not exist\n" unless -e $archive;
 
@@ -82,22 +83,21 @@ sub run {
     make_path($dest) or die "could not create destination '$dest': $!\n"
         unless -d $dest;
 
-    my $la = App::Yath2::LogArchive->new(path => $archive);
+    my $la = App::Yath2::LogArchive->open(path => $archive);
 
     print "Extracting '$archive' to '$dest' (format: " . _format_for($la) . ")\n";
 
-    my $dict_bytes = $la->can('dict_bytes') ? $la->dict_bytes : undef;
+    # Materialise every directory the archive recorded so empty
+    # runs / jobs / services survive the round-trip; their existence
+    # is the directory itself, not any file inside it.
+    for my $rel ($la->list_dirs) {
+        my $abs = File::Spec->catdir($dest, $rel);
+        make_path($abs) unless -d $abs;
+    }
 
     my $count = 0;
     for my $rel ($la->list_files) {
-        my $is_zst  = $rel =~ /\.zst\z/;
-        my $is_dict = $rel eq 'zstd-dict.bin';
-        my $out_rel =
-            ($no_decompress || !$is_zst || $is_dict)
-            ? $rel
-            : do { (my $r = $rel) =~ s/\.zst\z//; $r };
-
-        my $abs    = File::Spec->catfile($dest, $out_rel);
+        my $abs    = File::Spec->catfile($dest, $rel);
         my $parent = dirname($abs);
         make_path($parent) unless -d $parent;
 
@@ -105,23 +105,6 @@ sub run {
         binmode $rfh;
         my $bytes = do { local $/; <$rfh> };
         close $rfh;
-
-        if (!$no_decompress && $is_zst && !$is_dict) {
-            $bytes = _decompress_multi_frame($bytes, $dict_bytes);
-
-            # The artifacts.json manifests at harness scope and per-run
-            # scope key entries by relative path -- and those paths
-            # were written with the live-logdir '.zst' suffixes. After
-            # extract strips the suffix from filenames, the manifest
-            # would still point at non-existent '.zst' paths. Rewrite
-            # the keys to match the extracted shape so consumers
-            # (yath replay, ad-hoc tooling) find the files.
-            if (   $out_rel eq 'artifacts.json'
-                || $out_rel =~ m{\Aruns/[^/]+/artifacts\.json\z})
-            {
-                $bytes = _rewrite_manifest_keys($bytes);
-            }
-        }
 
         open(my $out, '>', $abs) or die "open $abs: $!\n";
         binmode $out;
@@ -131,6 +114,12 @@ sub run {
     }
 
     print "Extracted $count file(s)\n";
+
+    return 0 if $no_decompress;
+
+    my $decompressed = _decompress_tree($dest);
+    print "Decompressed $decompressed file(s)\n" if $decompressed;
+
     return 0;
 }
 
@@ -140,78 +129,67 @@ sub _format_for {
     return $class =~ s/^App::Yath2::LogArchive:://r;
 }
 
-# Strip trailing '.zst' from every key in the artifacts.json
-# manifest so the on-disk extracted layout (where .zst suffixes
-# have been removed) matches the manifest's path references.
-sub _rewrite_manifest_keys {
-    my ($json) = @_;
-    my $data = decode_json($json);
-    return $json unless ref($data) eq 'HASH';
+# Walk the extracted tree, decompress every .zst file in place to its
+# '.zst'-stripped sibling, and remove the original. Multi-frame safe:
+# .jsonl.zst stores one self-contained frame per record so concatenated
+# decompression yields valid jsonl directly.
+sub _decompress_tree {
+    my ($root) = @_;
+    my $count = 0;
 
-    my %out;
-    for my $key (keys %$data) {
-        (my $new = $key) =~ s/\.zst\z//;
-        $out{$new} = $data->{$key};
-    }
-    return encode_pretty_json(\%out);
+    File::Find::find(
+        {
+            no_chdir => 1,
+            wanted   => sub {
+                my $abs = $File::Find::name;
+                return unless -f $abs;
+                return unless $abs =~ /\.zst\z/;
+
+                open(my $rfh, '<', $abs) or die "open $abs: $!\n";
+                binmode $rfh;
+                my $bytes = do { local $/; <$rfh> };
+                close $rfh;
+
+                my $plain = _decompress_multi_frame($bytes);
+
+                (my $out_abs = $abs) =~ s/\.zst\z//;
+                open(my $out, '>', $out_abs) or die "open $out_abs: $!\n";
+                binmode $out;
+                print $out $plain;
+                close $out or die "close $out_abs: $!\n";
+
+                unlink $abs or die "unlink $abs: $!\n";
+                $count++;
+            },
+        },
+        $root,
+    );
+
+    return $count;
 }
 
-# Decompress a possibly-multi-frame zstd byte string. The single
-# .json.zst snapshots produce one frame; the .jsonl.zst event
-# streams concatenate one self-contained zstd frame per record.
-#
-# Producers (the JSONL.zst writer, EventEmitter) do NOT embed an
-# inter-record newline inside the compressed plaintext -- frames
-# self-delimit -- so the extract command is responsible for
-# reinserting exactly one newline between records when materializing
-# extracted plaintext jsonl. We strip any trailing newlines from
-# each frame's payload first so producers that did include one (the
-# legacy plain JSONL writer through the same path, or older archives)
-# still extract to a single-newline-per-record shape.
-#
-# Walks frames via zstd_frame_size for both the dict and no-dict
-# paths; one frame is one record either way.
+# Decompress a possibly-multi-frame zstd byte string. Single .json.zst
+# snapshots are one frame; .jsonl.zst event streams concatenate one
+# self-contained zstd frame per record, with the trailing newline
+# baked into each frame.
 sub _decompress_multi_frame {
-    my ($bytes, $dict_bytes) = @_;
+    my ($bytes) = @_;
 
-    my $ddict;
-    $ddict = Compress::Zstd::DecompressionDictionary->new($dict_bytes)
-        if defined $dict_bytes;
-    my $dctx = Compress::Zstd::DecompressionContext->new if $ddict;
-
-    my @records;
+    my $out = '';
     while (length $bytes) {
         my $size = zstd_frame_size($bytes);
-        die "tar.zidx: incomplete zstd frame in extract payload\n"
+        die "extract: incomplete zstd frame in payload\n"
             unless defined $size;
         my $frame = substr($bytes, 0, $size);
         substr($bytes, 0, $size) = '';
 
-        my $plain =
-              $ddict
-            ? $dctx->decompress_using_dict($frame, $ddict)
-            : Compress::Zstd::decompress($frame);
-        die "tar.zidx: zstd decompress failed in extract payload\n"
+        my $plain = Compress::Zstd::decompress($frame);
+        die "extract: zstd decompress failed in payload\n"
             unless defined $plain;
 
-        push @records => $plain;
+        $out .= $plain;
     }
 
-    return '' unless @records;
-
-    # Single-frame snapshots (.json.zst): return the payload as-is;
-    # there is no inter-record story to enforce, and a snapshot's
-    # body may legitimately end without a newline.
-    return $records[0] if @records == 1;
-
-    # Multi-frame streams (.jsonl.zst): one record per line, exactly
-    # one newline between records, trailing newline included so the
-    # file is canonical jsonl.
-    my $out = '';
-    for my $r (@records) {
-        $r =~ s/\n+\z//;
-        $out .= $r . "\n";
-    }
     return $out;
 }
 

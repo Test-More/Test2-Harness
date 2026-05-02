@@ -48,6 +48,8 @@ sub make_settings {
         yath => {
             instance_uuid    => 'a1b2c3d4',
             base_dir         => '/some/project',
+            project          => 'fakeproj',
+            user             => 'fakeuser',
             cwd              => $ipc_dir,
             user_config_file => '',
             config_file      => '',
@@ -68,33 +70,39 @@ sub make_spawn {
     );
 }
 
-# ---- 1. nonce path: dir-resolution branch -----------------------------------
+# ---- 1. test command path: dir-resolution branch ----------------------------
 
 {
     my $settings = make_settings();
     my $spawn    = make_spawn();
 
     my $path = publish_ipc_file(
-        type     => 'nonce',
+        command  => 'test',
         settings => $settings,
         spawn    => $spawn,
         workdir  => $work,
     );
 
     ok(-f $path, 'file written at returned path');
-    like($path, qr{\Q$ipc_dir\E/\.yath-nonce-}, 'path lands under resolved ipc dir with nonce prefix');
+    like(
+        $path,
+        qr{\Q$ipc_dir\E/fakeproj-fakeuser-test-\d{8}-\d{6}-yath-99999-ipc\.json\z},
+        'path matches new ${project}-${user}-${command}-${stamp}-yath-${pid}-ipc.json shape',
+    );
 
     my $rec = read_ipc_file($path);
-    is($rec->{type}, 'nonce', 'type stored');
-    is($rec->{uuid}, 'a1b2c3d4', 'uuid from settings');
-    is($rec->{pid},  99999, 'pid from spawn');
+    is($rec->{command},   'test',          'command stored');
+    is($rec->{project},   'fakeproj',      'project from settings->yath->project');
+    like($rec->{stamp}, qr/^\d{8}-\d{6}$/, 'stamp matches YYYYMMDD-HHMMSS shape');
+    is($rec->{uuid},      'a1b2c3d4',      'uuid from settings');
+    is($rec->{pid},       99999,           'pid from spawn');
     is($rec->{ipcm_info}, $spawn->ipcm_info, 'ipcm_info from spawn');
-    is($rec->{workdir},   $work, 'workdir as supplied');
-    is($rec->{project},   '/some/project', 'project from settings->yath->base_dir');
-    is($rec->{hostname},  hostname(), 'hostname is local hostname');
+    is($rec->{workdir},   $work,           'workdir as supplied');
+    is($rec->{hostname},  hostname(),      'hostname is local hostname');
+    is($rec->{user},      'fakeuser',      'user from settings->yath->user');
     ok($rec->{created_at} > 0, 'created_at populated');
-    ok($rec->{user},            'user populated');
-    ok($rec->{yath_version},    'yath_version populated');
+    ok($rec->{yath_version},   'yath_version populated');
+    ok(!exists $rec->{type},   'no legacy "type" field in payload');
 
     my $mode = (stat $path)[2] & 07777;
     is(sprintf('%04o', $mode), '0600', 'file is 0600');
@@ -102,22 +110,26 @@ sub make_spawn {
     unlink $path;
 }
 
-# ---- 2. persistent type round-trips through filename + body ------------------
+# ---- 2. start command round-trips through filename + body --------------------
 
 {
     my $settings = make_settings();
     my $spawn    = make_spawn();
 
     my $path = publish_ipc_file(
-        type     => 'persistent',
+        command  => 'start',
         settings => $settings,
         spawn    => $spawn,
         workdir  => $work,
     );
 
-    like($path, qr{\Q$ipc_dir\E/\.yath-persistent-}, 'persistent type in filename');
+    like(
+        $path,
+        qr{\Q$ipc_dir\E/fakeproj-fakeuser-start-\d{8}-\d{6}-yath-99999-ipc\.json\z},
+        'start command in filename',
+    );
     my $rec = read_ipc_file($path);
-    is($rec->{type}, 'persistent', 'persistent type in body');
+    is($rec->{command}, 'start', 'start command in body');
     unlink $path;
 }
 
@@ -129,7 +141,7 @@ sub make_spawn {
     my $spawn    = make_spawn();
 
     my $path = publish_ipc_file(
-        type     => 'nonce',
+        command  => 'test',
         settings => $settings,
         spawn    => $spawn,
         workdir  => $work,
@@ -148,35 +160,23 @@ sub make_spawn {
 
     like(
         dies { publish_ipc_file(settings => $settings, spawn => $spawn, workdir => $work) },
-        qr/'type' is required/,
-        'missing type dies',
+        qr/'command' is required/,
+        'missing command dies',
     );
     like(
-        dies { publish_ipc_file(type => 'nonce', spawn => $spawn, workdir => $work) },
+        dies { publish_ipc_file(command => 'test', spawn => $spawn, workdir => $work) },
         qr/'settings' is required/,
         'missing settings dies',
     );
     like(
-        dies { publish_ipc_file(type => 'nonce', settings => $settings, workdir => $work) },
+        dies { publish_ipc_file(command => 'test', settings => $settings, workdir => $work) },
         qr/'spawn' is required/,
         'missing spawn dies',
     );
     like(
-        dies { publish_ipc_file(type => 'nonce', settings => $settings, spawn => $spawn) },
+        dies { publish_ipc_file(command => 'test', settings => $settings, spawn => $spawn) },
         qr/'workdir' is required/,
         'missing workdir dies',
-    );
-    like(
-        dies {
-            publish_ipc_file(
-                type     => 'bogus',
-                settings => $settings,
-                spawn    => $spawn,
-                workdir  => $work,
-            )
-        },
-        qr/Unknown type 'bogus'/,
-        'unknown type dies',
     );
 }
 

@@ -19,7 +19,7 @@ sub build_fixture {
     my $tmp     = tempdir(CLEANUP => 1);
     my $logdir  = "$tmp/logs";
     my $testdir = "$tmp/t";
-    make_path("$logdir/runs/R/tests");
+    make_path("$logdir/runs/R/tests", "$logdir/runs/R/tests/J1", "$logdir/runs/R/tests/J2", "$logdir/runs/R/tests/J3");
     make_path($testdir);
 
     my $short_file  = "$testdir/short.t";
@@ -32,18 +32,12 @@ sub build_fixture {
         close $fh;
     }
 
-    my $artifacts = {
-        "runs/R.json"           => 'Test2::Harness2::Collector::Logger::JSON',
-        "runs/R/tests/J1.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-        "runs/R/tests/J2.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-        "runs/R/tests/J3.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-    };
-    write_json_file_atomic("$logdir/artifacts.json",        $artifacts);
-    write_json_file_atomic("$logdir/runs/R/artifacts.json", $artifacts);
-
-    write_json_file_atomic(
-        "$logdir/runs/R.json",
-        {
+    # Phase 4: every runs/<id>/ must carry spec.json. The static
+    # streamer's archive iterator picks up *.json by extension so both
+    # spec.json and state.json are read as state snapshots; give them
+    # identical content so the agreement check passes regardless of
+    # iteration order.
+    my $state = {
             run_id     => 'R',
             created_at => 1,
             pending    => [],
@@ -87,15 +81,16 @@ sub build_fixture {
                     file         => $long_file,
                 },
             },
-        },
-    );
+    };
+    write_json_file_atomic("$logdir/runs/R/spec.json",  $state);
+    write_json_file_atomic("$logdir/runs/R/state.json", $state);
 
     # Empty event JSONLs are fine; speedtag only looks at lifecycle.
-    open my $j1, '>', "$logdir/runs/R/tests/J1.jsonl" or die $!;
+    open my $j1, '>', "$logdir/runs/R/tests/J1/0.jsonl" or die $!;
     close $j1;
-    open my $j2, '>', "$logdir/runs/R/tests/J2.jsonl" or die $!;
+    open my $j2, '>', "$logdir/runs/R/tests/J2/0.jsonl" or die $!;
     close $j2;
-    open my $j3, '>', "$logdir/runs/R/tests/J3.jsonl" or die $!;
+    open my $j3, '>', "$logdir/runs/R/tests/J3/0.jsonl" or die $!;
     close $j3;
 
     return ($logdir, $short_file, $medium_file, $long_file, $tmp);

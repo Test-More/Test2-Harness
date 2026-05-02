@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Cwd qw/getcwd/;
 
 use Test2::Util::Table qw/table/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
@@ -44,9 +45,9 @@ sub description {
     return <<"    EOT";
 Lists the test scripts that failed in a recorded yath log. LOG is either a
 .yath archive file or a directory that looks like \$workdir/logs (i.e. carries
-an artifacts.json manifest at the top level). RUN_IDs, if any, restrict the
-analysis to the listed runs; with none, every run stored in the archive is
-walked.
+runs/<id>/ subdirectories for the runs it stores). RUN_IDs, if any, restrict
+the analysis to the listed runs; with none, every run stored in the archive
+is walked.
 
 The event source is App::Yath2::Streamer::Static, so this command sees the
 same lifecycle stream as 'yath replay'. Per-job assertions used for the
@@ -62,14 +63,21 @@ sub run {
 
     shift @$args if @$args && $args->[0] eq '--';
 
-    my $log = shift @$args
-        or die "You must specify a log archive or directory\n";
+    my $log = shift @$args;
+    unless (defined $log && length $log) {
+        $log = App::Yath2::LogArchive->find_latest($settings);
+        print STDERR "yath failed: using latest archive: $log\n"
+            if defined $log && length $log;
+    }
+
+    die "You must specify a log archive or directory\n"
+        unless defined $log && length $log;
 
     die "Log source '$log' does not exist\n" unless -e $log;
 
     $self->{+LOG} = $log;
 
-    my $archive  = App::Yath2::LogArchive->new(path => $log);
+    my $archive  = App::Yath2::LogArchive->open(path => $log);
     my @all_runs = $archive->runs;
     die "No runs found in '$log'\n" unless @all_runs;
 
@@ -168,10 +176,14 @@ sub _collect_subtests {
     my @names;
     for my $end (@$ends) {
         next unless $end->{fail};
-        my $jid = $end->{job_id} // next;
-        my $rid = $end->{run_id} // next;
+        my $jid = $end->{job_id}  // next;
+        my $rid = $end->{run_id}  // next;
+        my $try = $end->{job_try} // 0;
 
-        my $rel = "runs/$rid/tests/$jid.jsonl";
+        # Phase 4.5 per-try layout: runs/<run>/tests/<job>/<try>.jsonl.
+        # Older callers may pass tries with no extension awareness;
+        # has_file() answers in either compressed or plain form.
+        my $rel = "runs/$rid/tests/$jid/$try.jsonl";
         next unless $archive->has_file($rel);
 
         my $fh = $archive->read_file($rel);

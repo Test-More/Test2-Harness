@@ -5,9 +5,11 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Cwd qw/getcwd/;
 
 use Test2::Util::Times qw/render_duration/;
 
+use App::Yath2::LogArchive();
 use App::Yath2::Streamer::Static();
 
 use Role::Tiny::With;
@@ -68,8 +70,14 @@ sub run {
 
     shift @$args if @$args && $args->[0] eq '--';
 
-    my $log = shift @$args
-        or die "You must specify a log archive or directory\n";
+    my $log = shift @$args;
+    unless (defined $log && length $log) {
+        $log = App::Yath2::LogArchive->find_latest($self->{+SETTINGS});
+        print STDERR "yath times: using latest archive: $log\n"
+            if defined $log && length $log;
+    }
+    die "You must specify a log archive or directory\n"
+        unless defined $log && length $log;
     die "Log source '$log' does not exist\n" unless -e $log;
     $self->{+LOG} = $log;
 
@@ -84,7 +92,7 @@ sub run {
     $self->{+FIELDS} = \@fields;
 
     require App::Yath2::LogArchive;
-    my @runs = App::Yath2::LogArchive->new(path => $log)->runs;
+    my @runs = App::Yath2::LogArchive->open(path => $log)->runs;
     die "No runs found in '$log'\n" unless @runs;
 
     my $streamer = App::Yath2::Streamer::Static->new(

@@ -1,5 +1,6 @@
 use Test2::V0;
 
+use File::Path ();
 use File::Spec ();
 BEGIN { @INC = map { File::Spec->rel2abs($_) } @INC }
 
@@ -10,26 +11,44 @@ use App::Yath2::Command::archive;
 use App::Yath2::Command::extract;
 use App::Yath2::LogArchive;
 
+# Minimal settings shape the extract / archive commands need.
+package Fake::Yath;
+sub new              { bless { cwd => $_[1] }, $_[0] }
+sub cwd              { $_[0]->{cwd} }
+sub project          { '__UNKNOWN__' }
+sub user             { 'fakeuser' }
+sub user_config_file { '' }
+sub config_file      { '' }
+package Fake::Extract;
+sub new           { bless { no_decompress => 0 }, $_[0] }
+sub no_decompress { $_[0]->{no_decompress} }
+package Fake::Settings;
+sub new {
+    my ($class, %p) = @_;
+    bless {
+        yath    => Fake::Yath->new($p{cwd} // '/tmp/no-such-cwd'),
+        extract => Fake::Extract->new,
+    }, $class;
+}
+sub yath    { $_[0]->{yath} }
+sub extract { $_[0]->{extract} }
+package main;
+
 # Build a logdir-shaped tree the archive command can serialise. The
 # archive writer treats every regular file under $logdir as content
-# to bundle and never re-compresses .zst entries (per spec section
-# 4.7), so the tiny artifacts.json file written here lands inside
-# the archive verbatim.
+# to bundle and never re-compresses .zst entries.
 sub _make_logdir {
     my $dir = tempdir(CLEANUP => 1);
-    mkdir "$dir/services" or die $!;
-    open my $fh, '>', "$dir/services/harness.jsonl" or die $!;
+    File::Path::make_path("$dir/services/harness");
+    open my $fh, '>', "$dir/services/harness/events.jsonl" or die $!;
     print $fh qq{{"event":"hi"}\n};
-    close $fh;
-    open $fh, '>', "$dir/artifacts.json" or die $!;
-    print $fh qq[{"services/harness.jsonl":"X"}];
     close $fh;
     return $dir;
 }
 
 sub _run_cmd {
     my ($class, @args) = @_;
-    my $cmd = $class->new(args => [@args], settings => {});
+    my $cmd = $class->new(args => [@args], settings => Fake::Settings->new);
     my $out = '';
     my $orig = select;
     open(my $cap, '>', \$out) or die $!;
@@ -58,13 +77,13 @@ subtest 'archive + extract round-trip via tar.zidx' => sub {
     is($rc,  0,  'extract: rc=0');
     ok(-d $dest, 'extract: destination created');
 
-    open my $rfh, '<', "$dest/services/harness.jsonl" or die $!;
+    open my $rfh, '<', "$dest/services/harness/events.jsonl" or die $!;
     is(scalar(<$rfh>), qq{{"event":"hi"}\n}, 'extract: file contents intact');
 };
 
 subtest 'archive: default filename when only logdir given' => sub {
-    my $logdir = _make_logdir();
-    my $work   = tempdir(CLEANUP => 1);
+    my $logdir   = _make_logdir();
+    my $work     = tempdir(CLEANUP => 1);
     my $orig_cwd = getcwd();
     chdir $work or die "chdir: $!";
 
@@ -73,9 +92,21 @@ subtest 'archive: default filename when only logdir given' => sub {
 
     is($err, '', 'no exception');
     is($rc,  0,  'rc=0');
-    my @yath = glob "$work/*.yath";
-    is(scalar(@yath), 1, 'one .yath file produced');
-    like($yath[0], qr{/\d{8}-\d{6}\.yath\z}, 'name matches date-time pattern');
+
+    # Phase 8: default destination is under the system tmpdir, NOT cwd.
+    my @cwd_yath = glob "$work/*.yath";
+    is(scalar(@cwd_yath), 0, 'no archive landed in cwd');
+
+    my ($written) = $out =~ /Wrote archive: (\S+\.yath)/;
+    ok($written, 'archive command reported a path');
+    ok(-f $written, 'archive file exists at the reported path') if $written;
+    like(
+        $written,
+        qr{/__UNKNOWN__-fakeuser-\d{8}-\d{6}-\d+\.yath\z},
+        'name matches ${project}-${user}-${stamp}-${pid}.yath default',
+    );
+
+    unlink $written if defined $written && -f $written;
 };
 
 subtest 'archive: missing logdir errors' => sub {
@@ -133,7 +164,7 @@ subtest 'extract: default destination is ./logs' => sub {
 
     is($err, '', 'no exception');
     ok(-d "$work/logs", 'created ./logs');
-    ok(-f "$work/logs/services/harness.jsonl", 'extracted into ./logs');
+    ok(-f "$work/logs/services/harness/events.jsonl", 'extracted into ./logs');
 };
 
 done_testing;

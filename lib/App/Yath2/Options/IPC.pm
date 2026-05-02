@@ -28,8 +28,8 @@ option_group {group => 'ipc', category => 'IPC Options'} => sub {
     option dir_order => (
         name        => 'ipc-dir-order',
         type        => 'List',
-        description => "Symbolic search order when --ipc-dir is unset. " . "Symbols: 'user_rc', 'project_rc', 'cwd', 'tempdir'. " . "Raw paths are also accepted.",
-        default     => sub { qw/user_rc project_rc cwd tempdir/ },
+        description => "Symbolic search order when --ipc-dir is unset. " . "Symbols: 'user_rc', 'project_rc', 'cwd', 'tempdir'. " . "Raw paths are also accepted. " . "The default never lands the IPC info file in the current working directory; pass 'cwd' explicitly via --ipc-dir-order or via an .rc file to opt in.",
+        default     => sub { qw/tempdir user_rc project_rc/ },
     );
 
     option protocol => (

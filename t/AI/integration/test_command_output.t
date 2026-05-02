@@ -13,12 +13,14 @@ BEGIN {
 use File::Temp qw/tempdir tempfile/;
 use Cwd        qw/getcwd/;
 
+
 use App::Yath2::Command::test;
 
 package Fake::Workspace2;
-sub new           { bless { workdir => $_[1] }, $_[0] }
-sub workdir       { $_[0]->{workdir} }
-sub create_option { }
+sub new                  { bless { workdir => $_[1] }, $_[0] }
+sub workdir              { $_[0]->{workdir} }
+sub create_option        { }
+sub keep_dirs            { 0 }
 
 package Fake::IPC2;
 sub new       { bless {}, $_[0] }
@@ -34,6 +36,8 @@ sub base_dir         { '' }
 sub cwd              { $_[0]->{cwd} }
 sub user_config_file { '' }
 sub config_file      { '' }
+sub project          { 'fakeproj' }
+sub user             { 'fakeuser' }
 
 package Fake::Renderer2;
 # Forced verbose=>1 so the renderer emits per-assert lines (this test
@@ -53,16 +57,39 @@ sub new { bless {color => 0, @_[1..$#_]} => $_[0] }
 sub color { $_[0]->{color} }
 sub all   { %{$_[0]} }
 
+package Fake::Finder2;
+sub new        { bless {}, $_[0] }
+sub extensions { [qw/t t2/] }
+
+package Fake::Resource2;
+sub new       { bless {}, $_[0] }
+sub classes   { return {'Test2::Harness2::Resource::JobCount' => []} }
+sub slots     { 1 }
+sub job_slots { 1 }
+
+package Fake::Tests2;
+sub new           { bless {}, $_[0] }
+sub set_hash_seed { undef }
+
+package Fake::LogArchive2;
+sub new  { bless {}, $_[0] }
+sub file { undef }
+sub dir  { undef }
+
 package Fake::Settings2;
 
 sub new {
     my ($class, $workspace, $uuid, $cwd, %extras) = @_;
     bless {
-        workspace => $workspace,
-        ipc       => Fake::IPC2->new,
-        yath      => Fake::Yath2->new($uuid, $cwd),
-        renderer  => Fake::Renderer2->new(%{$extras{renderer} // {}}),
-        term      => Fake::Term2->new(%{$extras{term}     // {}}),
+        workspace   => $workspace,
+        ipc         => Fake::IPC2->new,
+        yath        => Fake::Yath2->new($uuid, $cwd),
+        renderer    => Fake::Renderer2->new(%{$extras{renderer} // {}}),
+        term        => Fake::Term2->new(%{$extras{term}     // {}}),
+        finder      => Fake::Finder2->new,
+        resource    => Fake::Resource2->new,
+        tests       => Fake::Tests2->new,
+        log_archive => Fake::LogArchive2->new,
     } => $class;
 }
 sub workspace   { $_[0]->{workspace} }
@@ -70,6 +97,10 @@ sub ipc         { $_[0]->{ipc} }
 sub yath        { $_[0]->{yath} }
 sub renderer    { $_[0]->{renderer} }
 sub term        { $_[0]->{term} }
+sub finder      { $_[0]->{finder} }
+sub resource    { $_[0]->{resource} }
+sub tests       { $_[0]->{tests} }
+sub log_archive { $_[0]->{log_archive} }
 sub check_group { exists $_[0]->{$_[1]} ? 1 : 0 }
 
 package main;

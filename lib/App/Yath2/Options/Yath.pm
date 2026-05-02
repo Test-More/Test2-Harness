@@ -20,7 +20,7 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
     option project => (
         type        => 'Scalar',
         alt         => ['project-name'],
-        description => 'This lets you provide a label for your current project/codebase. This is best used in a .yath.rc file.',
+        description => 'Label for your current project/codebase. Best set in a .yath.rc file. Defaults via the fallback chain documented in App::Yath2::Options::Yath.',
     );
 
     option user => (
@@ -145,6 +145,94 @@ option_group {group => 'yath', category => 'Yath Options'} => sub {
         },
     );
 };
+
+# Project-name fallback chain. Fires only when --project (or
+# .yath.rc's project field) was not set. In order:
+#
+#   1. Final component of the directory holding the active .yath.rc
+#      / .yath.user.rc (or any versioned variant). The rc-file paths
+#      are already resolved by App::Yath::Script::V2::do_begin and
+#      handed in via $settings->yath->config_file /
+#      user_config_file.
+#
+#   2. Walk-up from cwd looking for one of .git, .svn, .cvs, lib, or
+#      t. Stop at $HOME or '/' (do not count either as a project
+#      dir). The walk only visits cwd, ../, ../../, etc; we do not
+#      descend into subdirectories.
+#
+#   3. The basename of the current directory itself.
+#
+#   4. The literal sentinel '__UNKNOWN__' when cwd is '/' or '$HOME'.
+option_post_process 0 => sub {
+    my ($options, $state) = @_;
+    my $settings = $state->{settings};
+    return if defined $settings->yath->project && length $settings->yath->project;
+
+    $settings->yath->create_option(project => _resolve_project_name($settings));
+    return;
+};
+
+sub _resolve_project_name {
+    my ($settings) = @_;
+
+    for my $rc_field (qw/config_file user_config_file/) {
+        my $path = $settings->yath->$rc_field;
+        next unless defined $path && length $path;
+        my ($v, $d) = File::Spec->splitpath($path);
+        my $dir = clean_path(File::Spec->catpath($v, $d));
+        my $name = _basename_or_undef($dir);
+        return $name if defined $name;
+    }
+
+    my $cwd  = clean_path($settings->yath->cwd // Cwd::getcwd());
+    my $home = defined $ENV{HOME} ? clean_path($ENV{HOME}) : undef;
+
+    return '__UNKNOWN__'
+        if $cwd eq '/'
+        || (defined $home && $cwd eq $home);
+
+    if (my $found = _walk_up_for_project($cwd, $home)) {
+        return $found;
+    }
+
+    return _basename_or_undef($cwd) // '__UNKNOWN__';
+}
+
+# Walk cwd / ../ / ../../ / ... looking for any project marker:
+# .git, .svn, .cvs, lib, t. Stops one step before $HOME or '/'.
+# Returns the basename of the matching directory, or undef.
+sub _walk_up_for_project {
+    my ($start, $home) = @_;
+
+    my %seen;
+    my $dir = $start;
+    while (1) {
+        last unless defined $dir && length $dir;
+        last if $seen{$dir}++;
+        last if $dir eq '/';
+        last if defined $home && $dir eq $home;
+
+        for my $marker (qw/.git .svn .cvs lib t/) {
+            if (-e File::Spec->catfile($dir, $marker)) {
+                return _basename_or_undef($dir);
+            }
+        }
+
+        my $up = clean_path(File::Spec->catdir($dir, File::Spec->updir));
+        last if $up eq $dir;
+        $dir = $up;
+    }
+
+    return undef;
+}
+
+sub _basename_or_undef {
+    my ($dir) = @_;
+    return undef unless defined $dir && length $dir;
+    my @parts = grep { length } File::Spec->splitdir($dir);
+    return undef unless @parts;
+    return $parts[-1];
+}
 
 1;
 

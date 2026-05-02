@@ -17,19 +17,15 @@ sub build_logs {
     my (%opts) = @_;
     my $tmp    = tempdir(CLEANUP => 1);
     my $logdir = "$tmp/logs";
-    make_path("$logdir/runs/R/tests");
+    make_path("$logdir/runs/R/tests/J1");
+    make_path("$logdir/runs/R/tests/J2");
 
-    my $artifacts = {
-        "runs/R.json"           => 'Test2::Harness2::Collector::Logger::JSON',
-        "runs/R/tests/J1.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-        "runs/R/tests/J2.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-    };
-    write_json_file_atomic("$logdir/artifacts.json",        $artifacts);
-    write_json_file_atomic("$logdir/runs/R/artifacts.json", $artifacts);
-
-    write_json_file_atomic(
-        "$logdir/runs/R.json",
-        {
+    # Phase 4: every runs/<id>/ must carry spec.json. The static
+    # streamer's archive iterator picks up *.json by extension so both
+    # spec.json and state.json are read as state snapshots; give them
+    # identical content so the agreement check passes regardless of
+    # iteration order.
+    my $state = {
             run_id     => 'R',
             created_at => 1,
             pending    => [],
@@ -61,18 +57,19 @@ sub build_logs {
                     file         => '/abs/fail.t',
                 },
             },
-        },
-    );
+    };
+    write_json_file_atomic("$logdir/runs/R/spec.json",  $state);
+    write_json_file_atomic("$logdir/runs/R/state.json", $state);
 
     # Empty per-job event logs -- the command must still report the
     # failure (tagged via the state snapshot) and produce an empty
     # subtest list rather than crash.
-    open my $j1, '>', "$logdir/runs/R/tests/J1.jsonl" or die $!;
+    open my $j1, '>', "$logdir/runs/R/tests/J1/0.jsonl" or die $!;
     close $j1;
 
     # J2 (fail.t) has a failing subtest event so the subtest column
     # gets populated for the fail row.
-    open my $j2, '>', "$logdir/runs/R/tests/J2.jsonl" or die $!;
+    open my $j2, '>', "$logdir/runs/R/tests/J2/0.jsonl" or die $!;
     print $j2 encode_json({
         event_id   => 'E1',
         facet_data => {
@@ -136,34 +133,35 @@ subtest 'table mode lists each failing job' => sub {
 # ----------------------------------------------------------------------
 subtest 'no failures -> friendly message' => sub {
     my $log = build_logs(j1_pass => 1);
-    open my $fh, '>>', "$log/runs/R/tests/J2.jsonl" or die $!;    # noop
+    open my $fh, '>>', "$log/runs/R/tests/J2/0.jsonl" or die $!;    # noop
     close $fh;
 
-    # Force every job to pass by rewriting state.
-    write_json_file_atomic(
-        "$log/runs/R.json",
-        {
-            run_id     => 'R',
-            created_at => 1,
-            pending    => [],
-            running    => [],
-            done       => ['J1'],
-            results    => {
-                J1 => {
-                    job_id       => 'J1',
-                    job_try      => 0,
-                    queued_at    => 1,
-                    started_at   => 2,
-                    completed_at => 3,
-                    pass         => 1,
-                    exit         => 0,
-                    rel_file     => 'pass.t',
-                    abs_file     => '/abs/pass.t',
-                    file         => '/abs/pass.t',
-                },
+    # Force every job to pass by rewriting state. Mirror the snapshot
+    # into spec.json so the static streamer's two readers agree (it
+    # picks up *.json by extension and asserts agreement).
+    my $pass_state = {
+        run_id     => 'R',
+        created_at => 1,
+        pending    => [],
+        running    => [],
+        done       => ['J1'],
+        results    => {
+            J1 => {
+                job_id       => 'J1',
+                job_try      => 0,
+                queued_at    => 1,
+                started_at   => 2,
+                completed_at => 3,
+                pass         => 1,
+                exit         => 0,
+                rel_file     => 'pass.t',
+                abs_file     => '/abs/pass.t',
+                file         => '/abs/pass.t',
             },
         },
-    );
+    };
+    write_json_file_atomic("$log/runs/R/state.json", $pass_state);
+    write_json_file_atomic("$log/runs/R/spec.json",  $pass_state);
 
     my $cmd = make_cmd(log => $log);
 

@@ -3,56 +3,56 @@ use App::Yath2::Util::IPC qw/resolve_ipc_filename/;
 
 is(
     resolve_ipc_filename(
-        type    => 'nonce',
-        host    => 'darkstar',
-        pid     => 12345,
-        uuid    => 'a3f8c2e9',
-        tempdir => 0,
-    ),
-    '.yath-nonce-darkstar-12345-a3f8c2e9',
-    'normal filename has leading dot, host, pid, uuid',
-);
-
-is(
-    resolve_ipc_filename(
-        type    => 'nonce',
+        project => 'fakeproj',
         user    => 'exodist',
+        command => 'test',
+        stamp   => '20260101-000000',
         pid     => 12345,
-        uuid    => 'a3f8c2e9',
-        tempdir => 1,
     ),
-    'yath-nonce-exodist-12345-a3f8c2e9',
-    'tempdir filename has no leading dot, user replaces host',
+    'fakeproj-exodist-test-20260101-000000-yath-12345-ipc.json',
+    'filename matches new ${project}-${user}-${command}-${stamp}-yath-${pid}-ipc.json shape',
 );
 
 is(
     resolve_ipc_filename(
-        type    => 'persistent',
-        host    => 'h1',
+        project => 'projX',
+        user    => 'someone',
+        command => 'start',
+        stamp   => '20260429-153000',
         pid     => 99,
-        uuid    => 'deadbeef',
-        tempdir => 0,
     ),
-    '.yath-persistent-h1-99-deadbeef',
-    'persistent type works the same way',
+    'projX-someone-start-20260429-153000-yath-99-ipc.json',
+    'start command works the same way',
 );
 
 like(
-    dies { resolve_ipc_filename(type => 'bogus', host => 'h', pid => 1, uuid => 'aaaaaaaa', tempdir => 0) },
-    qr/type/,
-    'rejects unknown type',
+    dies { resolve_ipc_filename(user => 'u', command => 'test', stamp => '20260101-000000', pid => 1) },
+    qr/project/,
+    'project is required',
 );
 
 like(
-    dies { resolve_ipc_filename(type => 'nonce', pid => 1, uuid => 'aaaaaaaa', tempdir => 0) },
-    qr/host/,
-    'normal form requires host',
-);
-
-like(
-    dies { resolve_ipc_filename(type => 'nonce', pid => 1, uuid => 'aaaaaaaa', tempdir => 1) },
+    dies { resolve_ipc_filename(project => 'p', command => 'test', stamp => '20260101-000000', pid => 1) },
     qr/user/,
-    'tempdir form requires user',
+    'user is required',
+);
+
+like(
+    dies { resolve_ipc_filename(project => 'p', user => 'u', stamp => '20260101-000000', pid => 1) },
+    qr/command/,
+    'command is required',
+);
+
+like(
+    dies { resolve_ipc_filename(project => 'p', user => 'u', command => 'test', pid => 1) },
+    qr/stamp/,
+    'stamp is required',
+);
+
+like(
+    dies { resolve_ipc_filename(project => 'p', user => 'u', command => 'test', stamp => '20260101-000000') },
+    qr/pid/,
+    'pid is required',
 );
 
 done_testing;

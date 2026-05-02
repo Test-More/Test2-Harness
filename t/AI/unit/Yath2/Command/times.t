@@ -15,20 +15,13 @@ use App::Yath2::Command::times;
 sub build_logs {
     my $tmp    = tempdir(CLEANUP => 1);
     my $logdir = "$tmp/logs";
-    make_path("$logdir/runs/R/tests");
+    make_path("$logdir/runs/R/tests", "$logdir/runs/R/tests/J1", "$logdir/runs/R/tests/J2", "$logdir/runs/R/tests/J3");
 
-    my $artifacts = {
-        "runs/R.json"           => 'Test2::Harness2::Collector::Logger::JSON',
-        "runs/R/tests/J1.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-        "runs/R/tests/J2.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-        "runs/R/tests/J3.jsonl" => 'Test2::Harness2::Collector::Logger::JSONL',
-    };
-    write_json_file_atomic("$logdir/artifacts.json",        $artifacts);
-    write_json_file_atomic("$logdir/runs/R/artifacts.json", $artifacts);
-
-    write_json_file_atomic(
-        "$logdir/runs/R.json",
-        {
+    # Phase 4: every runs/<id>/ must carry spec.json. The static
+    # streamer reads every *.json under runs/<id>/ as a state snapshot
+    # (loggers are resolved by extension), so spec.json and state.json
+    # must agree -- mirror the same content into both.
+    my $state = {
             run_id     => 'R',
             created_at => 1,
             pending    => [],
@@ -72,14 +65,15 @@ sub build_logs {
                     file         => '/abs/slow.t',
                 },
             },
-        },
-    );
+    };
+    write_json_file_atomic("$logdir/runs/R/spec.json",  $state);
+    write_json_file_atomic("$logdir/runs/R/state.json", $state);
 
-    open my $j1, '>', "$logdir/runs/R/tests/J1.jsonl" or die $!;
+    open my $j1, '>', "$logdir/runs/R/tests/J1/0.jsonl" or die $!;
     close $j1;
-    open my $j2, '>', "$logdir/runs/R/tests/J2.jsonl" or die $!;
+    open my $j2, '>', "$logdir/runs/R/tests/J2/0.jsonl" or die $!;
     close $j2;
-    open my $j3, '>', "$logdir/runs/R/tests/J3.jsonl" or die $!;
+    open my $j3, '>', "$logdir/runs/R/tests/J3/0.jsonl" or die $!;
     close $j3;
 
     return $logdir;

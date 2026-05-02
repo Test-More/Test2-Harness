@@ -6,7 +6,6 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
 use Errno qw/ESRCH/;
-use File::ShareDir ();
 
 # /proc layouts we know how to parse: Linux's multi-line "PPid:" form
 # and FreeBSD/DragonFlyBSD's single-line positional form. Solaris,
@@ -23,13 +22,6 @@ use constant HAS_PARSEABLE_PROC => ($^O eq 'linux' || $^O eq 'freebsd' || $^O eq
 # listen=1 to accept inbound traffic.
 use constant IPC_DEFAULT_PROTOCOL => 'IPC::Manager::Client::ConnectionUnix';
 
-# This should just use the constant from Util::Zstd, keep them the same
-# Zstd compression level. 3 is Compress::Zstd's library default and
-# the same value JSON::Zstd uses when nothing is supplied; we set it
-# explicitly so the spec is self-describing and a future tuning
-# change is a one-line edit here.
-use constant IPC_DEFAULT_ZSTD_LEVEL => 3;
-
 use Importer Importer => 'import';
 
 our @EXPORT_OK = qw{
@@ -42,35 +34,17 @@ our @EXPORT_OK = qw{
     ipc_default_serializer
     ipc_default_spawn_args
     ipc_default_connect_args
-    ipc_zstd_dict_path
     atomic_pipe_compression_args
     apply_atomic_pipe_compression
 };
 
 sub ipc_default_protocol { IPC_DEFAULT_PROTOCOL }
 
-# Path to the install-shipped zstd compression dictionary
-# (share/other/zstd.dict, exposed via File::ShareDir). Returns undef
-# when the dictionary is unavailable; the serializer then falls back
-# to dictless compression. Both peers must resolve the same path
-# with identical content -- File::ShareDir guarantees that for any
-# install that ships the share file.
-sub ipc_zstd_dict_path {
-    my $dict = eval { File::ShareDir::dist_file('Test2-Harness2', 'other/zstd.dict') };
-    return undef unless defined $dict && -f $dict && -r _;
-    return $dict;
-}
-
-# Default serializer spec for harness IPC: JSON::Zstd at level 3
-# with the install-shipped dictionary. The ['Class', %args] form
-# tells IPC::Manager to construct one configured instance and share
-# it across peers (see IPC::Manager::Serializer::JSON::Zstd).
-sub ipc_default_serializer {
-    my $dict = ipc_zstd_dict_path();
-    my @args = (level => IPC_DEFAULT_ZSTD_LEVEL);
-    push @args => (dictionary => $dict) if defined $dict;
-    return ['JSON::Zstd', @args];
-}
+# Default serializer for harness IPC: a plain class name. Because we
+# do not configure any per-instance state (no dictionary, default
+# level), IPC::Manager calls the serializer methods on the class
+# directly -- no per-instance bless.
+sub ipc_default_serializer { 'JSON::Zstd' }
 
 # Default kwargs for ipcm_spawn(): protocol + serializer.
 sub ipc_default_spawn_args {
@@ -91,24 +65,16 @@ sub ipc_default_connect_args {
 }
 
 # Default kwargs for Atomic::Pipe constructors (pair, from_fh,
-# from_fd, read_fifo, write_fifo). Enables zstd at level 3 with the
-# install-shipped dictionary so write_message / write_burst /
-# get_line_burst_or_data traffic compresses transparently. Plain
-# print writes (and any byte stream from a non-perl downstream that
-# inherits the fd) remain uncompressed -- Atomic::Pipe's compression
-# only applies to the framed message and burst paths, so a pipe can
-# still double as STDOUT/STDERR for an unaware reader.
-#
-# Both ends of the pipe must be configured identically; mismatched
-# dictionaries silently decode to garbage (raw zstd dictionaries do
-# not embed a dict-ID). When the install-shipped dictionary is
-# unavailable the helper falls back to dictless compression, which
-# is still wire-symmetric as long as every endpoint resolves the
-# same way.
+# from_fd, read_fifo, write_fifo). Enables zstd compression so
+# write_message / write_burst / get_line_burst_or_data traffic
+# compresses transparently. Plain print writes (and any byte stream
+# from a non-perl downstream that inherits the fd) remain
+# uncompressed -- Atomic::Pipe's compression only applies to the
+# framed message and burst paths, so a pipe can still double as
+# STDOUT/STDERR for an unaware reader.
 sub atomic_pipe_compression_args {
-    my %args = (
-        compression       => 'zstd',
-        compression_level => IPC_DEFAULT_ZSTD_LEVEL,
+    return (
+        compression => 'zstd',
         # keep_compressed exposes the on-wire compressed bytes
         # alongside the decompressed payload from
         # get_line_burst_or_data, so the collector can stash the
@@ -116,11 +82,6 @@ sub atomic_pipe_compression_args {
         # can write it verbatim instead of recompressing.
         keep_compressed => 1,
     );
-
-    my $dict = ipc_zstd_dict_path();
-    $args{compression_dictionary_file} = $dict if defined $dict;
-
-    return %args;
 }
 
 # Configure compression on an existing Atomic::Pipe instance to
@@ -131,10 +92,7 @@ sub atomic_pipe_compression_args {
 sub apply_atomic_pipe_compression {
     my ($pipe) = @_;
     return unless $pipe;
-    $pipe->set_compression('zstd', IPC_DEFAULT_ZSTD_LEVEL);
-    if (my $dict = ipc_zstd_dict_path()) {
-        $pipe->set_compression_dictionary_file($dict);
-    }
+    $pipe->set_compression('zstd');
     $pipe->set_keep_compressed(1);
     return;
 }

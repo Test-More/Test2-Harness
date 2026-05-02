@@ -11,6 +11,12 @@ use Scope::Guard;
 
 # XXX TODO: App::Yath2::Client removed (PR #390) — run command is non-functional until reimplemented
 # XXX TODO: Test2::Harness2::Collector::Auditor::Run removed (PR #390) — auditor needs a replacement
+# TODO: --set-hash-seed wiring once the global-preload path is fully implemented (Phase 7.2).
+# yath run hands a queue payload to a daemon harness; it must read
+# $settings->tests->set_hash_seed and forward it as hash_seed in the
+# queue_test_run request so the daemon's request_handler_queue_test_run
+# can validate it against the harness-wide HASH_SEED (which the daemon
+# stored at start time per the matching TODO in App::Yath2::Command::start).
 
 use Test2::Harness2::Event;
 use Test2::Harness2::Run;
@@ -47,7 +53,7 @@ include_options(
 
 use App::Yath2::Options::Tests qw/ set_dot_args /;
 
-sub accepts_dot_args { 1 }
+sub accepts_dot_args   { 1 }
 sub args_include_tests { 1 }
 
 sub load_plugins   { 1 }
@@ -69,13 +75,12 @@ sub run {
 
     # XXX TODO: App::Yath2::Client is gone (PR #390); this command cannot run
     # tests against a daemon until the IPC layer is reimplemented.
-    die "ERROR: 'yath run' requires App::Yath2::Client which has been removed (PR #390).\n"
-      . "Use 'yath test' to run tests without a persistent daemon.\n";
+    die "ERROR: 'yath run' requires App::Yath2::Client which has been removed (PR #390).\n" . "Use 'yath test' to run tests without a persistent daemon.\n";
 
     my $settings = $self->settings;
 
     set_procname(
-        set => ['run ' . $settings->run->run_id],
+        set    => ['run ' . $settings->run->run_id],
         prefix => $self->{+SETTINGS}->harness->procname_prefix,
     );
 
@@ -85,7 +90,7 @@ sub run {
     my $search = $self->{+ARGS} // [];
     my $tests  = $self->find_tests(@$search) || return $self->no_tests;
 
-    my $client = undef; # XXX TODO: App::Yath2::Client->new(settings => $settings);
+    my $client = undef;    # XXX TODO: App::Yath2::Client->new(settings => $settings);
 
     my $run_id = $settings->run->run_id;
 
@@ -265,8 +270,8 @@ sub auditor {
     my $self = shift;
 
     my $settings = $self->settings;
-    my $run = $settings->run;
-    my $class = $run->run_auditor;
+    my $run      = $settings->run;
+    my $class    = $run->run_auditor;
 
     # XXX TODO: Test2::Harness2::Collector::Auditor::Run is gone (PR #390).
     # The run_auditor option default still points to it; a replacement is needed.
@@ -281,7 +286,7 @@ sub no_tests {
     return 1;
 }
 
-sub finder_args {}
+sub finder_args { }
 
 sub find_tests {
     my $self  = shift;
@@ -295,7 +300,7 @@ sub find_tests {
     require(mod2file($finder_class));
 
     my $finder = $finder_class->new($settings->finder->all, settings => $settings, search => \@tests, $self->finder_args);
-    my $tests = $finder->find_files($self->plugins);
+    my $tests  = $finder->find_files($self->plugins);
 
     return unless $tests && @$tests;
     return $self->{+FIND_TESTS} = $tests;

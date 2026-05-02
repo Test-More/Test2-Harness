@@ -19,6 +19,10 @@ use Time::HiRes ();
 use POSIX       ();
 use IPC::Manager qw/ipcm_connect/;
 
+# Isolate the per-cwd index Phase 8.3 writes from this command's run.
+my $idx_root = tempdir(CLEANUP => 1);
+$ENV{XDG_RUNTIME_DIR} = $idx_root;
+
 use App::Yath2::Command::test;
 use App::Yath2::Util::IPC qw/read_ipc_file/;
 
@@ -38,11 +42,14 @@ sub base_dir         { $_[0]->{base_dir} }
 sub cwd              { $_[0]->{cwd} }
 sub user_config_file { '' }
 sub config_file      { '' }
+sub project          { 'fakeproj' }
+sub user             { 'fakeuser' }
 
 package Fake::Workspace;
-sub new           { bless {workdir => $_[1]}, $_[0] }
-sub workdir       { $_[0]->{workdir} }
-sub create_option { }
+sub new                  { bless {workdir => $_[1]}, $_[0] }
+sub workdir              { $_[0]->{workdir} }
+sub create_option        { }
+sub keep_dirs            { 0 }
 
 package Fake::RendererGroup;
 sub new { bless {verbose => 0, @_[1..$#_]} => $_[0] }
@@ -60,12 +67,35 @@ sub new { bless {color => 0, @_[1..$#_]} => $_[0] }
 sub color { $_[0]->{color} }
 sub all   { %{$_[0]} }
 
+package Fake::FinderGroup;
+sub new        { bless {}, $_[0] }
+sub extensions { [qw/t t2/] }
+
+package Fake::ResourceGroup;
+sub new       { bless {}, $_[0] }
+sub classes   { return {'Test2::Harness2::Resource::JobCount' => []} }
+sub slots     { 1 }
+sub job_slots { 1 }
+
+package Fake::TestsGroup;
+sub new           { bless {}, $_[0] }
+sub set_hash_seed { undef }
+
+package Fake::LogArchiveGroup;
+sub new  { bless {}, $_[0] }
+sub file { undef }
+sub dir  { undef }
+
 package Fake::Settings;
 
 sub new {
     my ($class, %a) = @_;
-    $a{renderer} //= Fake::RendererGroup->new;
-    $a{term}     //= Fake::TermGroup->new;
+    $a{renderer}    //= Fake::RendererGroup->new;
+    $a{term}        //= Fake::TermGroup->new;
+    $a{finder}      //= Fake::FinderGroup->new;
+    $a{resource}    //= Fake::ResourceGroup->new;
+    $a{tests}       //= Fake::TestsGroup->new;
+    $a{log_archive} //= Fake::LogArchiveGroup->new;
     return bless \%a => $class;
 }
 sub workspace   { $_[0]->{workspace} }
@@ -73,6 +103,10 @@ sub ipc         { $_[0]->{ipc} }
 sub yath        { $_[0]->{yath} }
 sub renderer    { $_[0]->{renderer} }
 sub term        { $_[0]->{term} }
+sub finder      { $_[0]->{finder} }
+sub resource    { $_[0]->{resource} }
+sub tests       { $_[0]->{tests} }
+sub log_archive { $_[0]->{log_archive} }
 sub check_group { exists $_[0]->{$_[1]} ? 1 : 0 }
 
 package main;
@@ -122,7 +156,7 @@ my $info_path;
 for (1 .. 200) {
     opendir(my $dh, $ipc_dir) or last;
     while (defined(my $entry = readdir($dh))) {
-        next unless $entry =~ /\A\.yath-nonce-/;
+        next unless $entry =~ /-yath-\d+-ipc\.json\z/;
         $info_path = File::Spec->catfile($ipc_dir, $entry);
         last;
     }
@@ -136,7 +170,7 @@ ok($info_path, 'IPC info file appeared while Command::test was running');
 # Validate file contents.
 if ($info_path) {
     my $rec = read_ipc_file($info_path);
-    is($rec->{type}, 'nonce', 'type is nonce');
+    is($rec->{command}, 'test', 'command is test');
     ok($rec->{pid} > 0,   'pid populated');
     ok($rec->{ipcm_info}, 'ipcm_info populated');
     like($rec->{uuid}, qr/^[0-9a-f]{8}$/, 'uuid is 8 hex chars');

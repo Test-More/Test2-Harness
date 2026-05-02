@@ -10,6 +10,7 @@ use Cwd qw/getcwd/;
 use Test2::Harness2::Util qw/clean_path/;
 use Test2::Harness2::Util::File::JSON;
 
+use App::Yath2::LogArchive();
 use App::Yath2::Streamer::Static();
 
 use Role::Tiny::With;
@@ -92,8 +93,14 @@ sub run {
 
     my $initial_dir = clean_path(getcwd());
 
-    my $log = shift @$args
-        or die "You must specify a log archive or directory\n";
+    my $log = shift @$args;
+    unless (defined $log && length $log) {
+        $log = App::Yath2::LogArchive->find_latest($settings);
+        print STDERR "yath speedtag: using latest archive: $log\n"
+            if defined $log && length $log;
+    }
+    die "You must specify a log archive or directory\n"
+        unless defined $log && length $log;
     die "Log source '$log' does not exist\n" unless -e $log;
     $self->{+LOG} = $log;
 
@@ -106,7 +113,7 @@ sub run {
         unless $self->{+MAX_MEDIUM} && $self->{+MAX_MEDIUM} =~ m/^\d+$/;
 
     require App::Yath2::LogArchive;
-    my @runs = App::Yath2::LogArchive->new(path => $log)->runs;
+    my @runs = App::Yath2::LogArchive->open(path => $log)->runs;
     die "No runs found in '$log'\n" unless @runs;
 
     my $streamer = App::Yath2::Streamer::Static->new(

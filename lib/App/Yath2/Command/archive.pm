@@ -4,6 +4,7 @@ use warnings;
 
 our $VERSION = '2.000011';
 
+use File::Spec ();
 use POSIX qw/strftime/;
 
 use App::Yath2::LogArchive;
@@ -11,6 +12,7 @@ use App::Yath2::LogArchive;
 use Object::HashBase qw/<settings <args <env_vars <option_state <plugins/;
 
 use Getopt::Yath;
+include_options('App::Yath2::Options::Yath');
 
 use Role::Tiny::With;
 with 'App::Yath2::Role::Command';
@@ -27,13 +29,13 @@ Archive a yath log directory into a single tar.zidx file.
 Required first argument: path to the log directory.
 
 Optional second argument: output archive filename. Defaults to
-"<YYYYMMDD-HHMMSS>.yath".
+"<system_tmp>/\${project}-\${user}-<YYYYMMDD-HHMMSS>-<pid>.yath" --
+the current working directory is never used unless you pass an
+explicit path that points at it.
 
 yath only produces tar.zidx archives. The on-disk shape is a tar
 (ustar) with per-file zstd compression and a trailing index for
-random-access reads. The archive bundles whatever zstd dictionary
-was active for the run (copied from \$logdir/zstd-dict.bin) so
-extracts and replays do not depend on the recipient's install.
+random-access reads.
     EOT
 }
 
@@ -46,20 +48,27 @@ sub run {
     shift @$args if @$args && $args->[0] eq '--';
 
     my $logdir = shift @$args;
-    die "logdir is required\n"           unless defined $logdir && length $logdir;
+    die "logdir is required\n"                  unless defined $logdir && length $logdir;
     die "logdir '$logdir' is not a directory\n" unless -d $logdir;
 
     my $archive = shift @$args;
-    $archive //= strftime('%Y%m%d-%H%M%S', localtime) . '.yath';
+    unless (defined $archive && length $archive) {
+        my $project = $self->{+SETTINGS}->yath->project // '__UNKNOWN__';
+        my $user    = $self->{+SETTINGS}->yath->user
+                   // $ENV{USER}
+                   // 'unknown';
+        my $stamp   = strftime('%Y%m%d-%H%M%S', localtime);
+        $archive = File::Spec->catfile(
+            File::Spec->tmpdir(),
+            "${project}-${user}-${stamp}-$$.yath",
+        );
+    }
 
     die "extra arguments after archive filename\n" if @$args;
 
     print "Archiving '$logdir' as '$archive'\n";
 
-    App::Yath2::LogArchive->create(
-        source => $logdir,
-        path   => $archive,
-    );
+    App::Yath2::LogArchive->open(dir => $logdir)->archive($archive);
 
     print "Wrote archive: $archive\n";
     return 0;

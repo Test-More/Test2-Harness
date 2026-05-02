@@ -7,6 +7,13 @@ our $VERSION = '2.000011';
 # XXX TODO: App::Yath2::IPC removed (PR #390) — start/daemon functionality needs new IPC
 # XXX TODO: Test2::Harness2::Instance removed (PR #390) — instance management needs reimplementing
 # XXX TODO: Test2::Harness2::IPC::Protocol removed (PR #390) — protocol layer is gone
+# TODO: --set-hash-seed wiring once the global-preload path is fully implemented (Phase 7.2).
+# When yath start spawns a daemon harness with a global preload, it must
+# resolve $settings->tests->set_hash_seed and pass it to Test2::Harness2->spawn
+# (or ->start) as hash_seed => ..., so the harness's HASH_SEED slot agrees
+# with PERL_HASH_SEED in the preload root's environment. Run-time queue
+# handling of the same option already lives in App::Yath2::Command::test
+# and Test2::Harness2::request_handler_queue_test_run.
 
 use Getopt::Yath::Settings;
 use Test2::Harness2::Collector;
@@ -57,10 +64,10 @@ use App::Yath2::Options::Tests qw/ set_dot_args /;
 
 option_group {group => 'start', category => "Start Options"} => sub {
     option foreground => (
-        short => 'f',
-        alt => ['no-daemon'],
-        alt_no => ['daemon'],
-        type => 'Bool',
+        short       => 'f',
+        alt         => ['no-daemon'],
+        alt_no      => ['daemon'],
+        type        => 'Bool',
         description => "Keep yath in the forground instead of daemonizing and returning you to the shell",
         default     => 0,
     );
@@ -70,12 +77,12 @@ sub load_plugins   { 1 }
 sub load_resources { 1 }
 sub load_renderers { 1 }
 
-sub accepts_dot_args { 1 }
+sub accepts_dot_args   { 1 }
 sub args_include_tests { 0 }
 
 sub group { 'daemon' }
 
-sub summary  { "Start a test runner" }
+sub summary { "Start a test runner" }
 
 sub description {
     return <<"    EOT";
@@ -84,7 +91,7 @@ This command is used to start a yath daemon that will load up and run tests on d
     EOT
 }
 
-sub process_base_name { shift->should_daemonize ? "daemon" : "instance" }
+sub process_base_name      { shift->should_daemonize ? "daemon" : "instance" }
 sub process_collector_name { "collector" }
 
 sub check_argv {
@@ -114,7 +121,7 @@ sub run {
     $self->check_argv();
 
     set_procname(
-        set => [$self->process_base_name, "launcher"],
+        set    => [$self->process_base_name, "launcher"],
         prefix => $self->{+SETTINGS}->harness->procname_prefix,
     );
 
@@ -167,7 +174,7 @@ sub become_instance {
     my $self = shift;
 
     set_procname(
-        set => [$self->process_base_name],
+        set    => [$self->process_base_name],
         prefix => $self->{+SETTINGS}->harness->procname_prefix,
     );
 
@@ -301,8 +308,8 @@ sub resources {
 
     return $self->{+RESOURCES} if $self->{+RESOURCES};
 
-    my $settings = $self->settings;
-    my $res_s    = $settings->resource;
+    my $settings    = $self->settings;
+    my $res_s       = $settings->resource;
     my $res_classes = $res_s->classes;
 
     my @res_class_list = keys %$res_classes;

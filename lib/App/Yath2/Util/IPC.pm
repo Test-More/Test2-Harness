@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use POSIX qw/strftime/;
 
 use App::Yath2();
 use File::Spec();
@@ -23,26 +24,22 @@ our @EXPORT_OK = qw{
     publish_ipc_file
 };
 
-my %VALID_TYPE = (nonce => 1, persistent => 1);
-
+# IPC info filename:
+#   ${project}-${user}-${command}-${stamp}-yath-${pid}-ipc.json
+#
+# Sortable by stamp; pid disambiguates concurrent same-command runs
+# in the same project; the trailing -yath-${pid}-ipc.json segment is
+# the regex anchor used by find_ipc_files when scanning a directory.
 sub resolve_ipc_filename {
     my %p = @_;
 
-    my $type = $p{type} // croak "'type' is required";
-    croak "Unknown type '$type'" unless $VALID_TYPE{$type};
-
+    my $project = $p{project} // croak "'project' is required";
+    my $user    = $p{user}    // croak "'user' is required";
+    my $command = $p{command} // croak "'command' is required";
+    my $stamp   = $p{stamp}   // croak "'stamp' is required";
     my $pid     = $p{pid}     // croak "'pid' is required";
-    my $uuid    = $p{uuid}    // croak "'uuid' is required";
-    my $tempdir = $p{tempdir} // 0;
 
-    my $disambig;
-    if ($tempdir) {
-        $disambig = $p{user} // croak "'user' is required for tempdir filename";
-        return "yath-${type}-${disambig}-${pid}-${uuid}";
-    }
-
-    $disambig = $p{host} // croak "'host' is required for non-tempdir filename";
-    return ".yath-${type}-${disambig}-${pid}-${uuid}";
+    return "${project}-${user}-${command}-${stamp}-yath-${pid}-ipc.json";
 }
 
 sub _writable_dir {
@@ -111,39 +108,36 @@ sub write_ipc_file {
 
 # publish_ipc_file is the producer-side entry point: a yath command
 # that has just spawned a harness service hands settings + spawn +
-# workdir + type, and the helper resolves where to write the IPC info
-# file, builds the JSON payload, and writes it atomically with
+# workdir + command, and the helper resolves where to write the IPC
+# info file, builds the JSON payload, and writes it atomically with
 # owner-only perms. Returns the on-disk path so the caller can
-# register a cleanup guard against it. Both `yath test` (type
-# 'nonce') and the future `yath start` (type 'persistent') share this
-# code path.
+# register a cleanup guard against it.
 sub publish_ipc_file {
     my %p = @_;
 
-    my $type     = $p{type}     // croak "'type' is required";
+    my $command  = $p{command}  // croak "'command' is required";
     my $settings = $p{settings} // croak "'settings' is required";
     my $spawn    = $p{spawn}    // croak "'spawn' is required";
     my $workdir  = $p{workdir}  // croak "'workdir' is required";
 
-    croak "Unknown type '$type'" unless $VALID_TYPE{$type};
-
-    my $host = hostname();
-    my $user = $ENV{USER} // (getpwuid($<))[0] // 'unknown';
-    my $uuid = $settings->yath->instance_uuid;
+    my $host    = hostname();
+    my $user    = $settings->yath->user // $ENV{USER} // (getpwuid($<))[0] // 'unknown';
+    my $project = $settings->yath->project // '__UNKNOWN__';
+    my $uuid    = $settings->yath->instance_uuid;
+    my $stamp   = strftime('%Y%m%d-%H%M%S', localtime);
 
     my $path;
     if (my $explicit = $settings->ipc->file) {
         $path = $explicit;
     }
     else {
-        my ($dir, $is_tmp) = resolve_ipc_dir($settings);
-        my $name = resolve_ipc_filename(
-            type    => $type,
-            host    => $host,
+        my ($dir) = resolve_ipc_dir($settings);
+        my $name  = resolve_ipc_filename(
+            project => $project,
             user    => $user,
+            command => $command,
+            stamp   => $stamp,
             pid     => $spawn->pid,
-            uuid    => $uuid,
-            tempdir => $is_tmp,
         );
         $path = File::Spec->catfile($dir, $name);
     }
@@ -152,16 +146,17 @@ sub publish_ipc_file {
         $path,
         {
             yath_version => $App::Yath2::VERSION,
-            type         => $type,
+            command      => $command,
             hostname     => $host,
             user         => $user,
+            project      => $project,
+            stamp        => $stamp,
             # pid: harness service pid (not $$ writer); used by
             # find_ipc_files for liveness checks.
             pid          => $spawn->pid,
             uuid         => $uuid,
             created_at   => time(),
             workdir      => $workdir,
-            project      => $settings->yath->base_dir,
             ipcm_info    => $spawn->ipcm_info,
         },
     );
@@ -198,11 +193,13 @@ sub unlink_ipc_file {
 
 my $FILENAME_RX = qr{
     \A
-    \.?yath
-    -(?<type>nonce|persistent)
-    -(?<disambig>.+)
+    (?<project>[^/]+?)
+    -(?<user>[^-]+?)
+    -(?<command>[^-]+?)
+    -(?<stamp>\d{8}-\d{6})
+    -yath
     -(?<pid>\d+)
-    -(?<uuid>[0-9a-f]{8})
+    -ipc\.json
     \z
 }x;
 
@@ -230,8 +227,11 @@ sub find_ipc_files {
     # may be undef on purpose -> no host filter
     my $want_host = exists $p{host} ? $p{host} : $self_host;
 
-    # May not want any specific type.
-    my $want_types = $p{type} ? {map { ($_ => 1) } (ref($p{type}) ? @{$p{type}} : $p{type})} : undef;
+    # Filter by command name (e.g. 'test', 'start'). Pass either a
+    # scalar or arrayref. undef = no command filter.
+    my $want_cmds = $p{command}
+        ? {map { ($_ => 1) } (ref($p{command}) ? @{$p{command}} : $p{command})}
+        : undef;
 
     my $live = exists $p{live} ? $p{live} : 1;
 
@@ -253,7 +253,7 @@ sub find_ipc_files {
             $rec->{_path} = $path;
             $rec->{hostname} //= '';
 
-            next if $want_types && !$want_types->{$rec->{type} // ''};
+            next if $want_cmds && !$want_cmds->{$rec->{command} // ''};
             next if defined($want_host) && $rec->{hostname} ne $want_host;
 
             if ($live && $rec->{hostname} eq $self_host) {

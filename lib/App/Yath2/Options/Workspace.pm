@@ -94,7 +94,6 @@ option_group {group => 'workspace', category => 'Workspace Options'} => sub {
         short       => 'C',
         description => 'Clear the work directory if it is not already empty',
     );
-
 };
 
 option_post_process sub {

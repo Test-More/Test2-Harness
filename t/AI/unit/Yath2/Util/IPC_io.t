@@ -6,18 +6,19 @@ use Fcntl qw/:mode/;
 use App::Yath2::Util::IPC qw/write_ipc_file read_ipc_file unlink_ipc_file/;
 
 my $dir  = tempdir(CLEANUP => 1);
-my $path = File::Spec->catfile($dir, '.yath-nonce-h-1-aabbccdd');
+my $path = File::Spec->catfile($dir, 'fakeproj-u-test-20260101-000000-yath-1-ipc.json');
 
 my %payload = (
     yath_version => '2.000011',
-    type         => 'nonce',
+    command      => 'test',
+    project      => 'fakeproj',
+    stamp        => '20260101-000000',
     hostname     => 'h',
     user         => 'u',
     pid          => 1,
     uuid         => 'aabbccdd',
     created_at   => 1714000000,
     workdir      => '/tmp/yath-aabbccdd',
-    project      => '/tmp/proj',
     ipcm_info    => '["IPC::Manager::Client::AtomicPipe","IPC::Manager::Serializer::JSON","/tmp/yath-aabbccdd/ipc.fifo"]',
 );
 
@@ -52,7 +53,7 @@ unlink $path;
 # otherwise sysopen-create the file as 0400 (no owner-write), which
 # defeats unlink-on-cleanup. write_ipc_file masks group/other only.
 {
-    my $hostile_path = File::Spec->catfile($dir, '.yath-nonce-h-2-deadbeef');
+    my $hostile_path = File::Spec->catfile($dir, 'fakeproj-u-test-20260101-000000-yath-2-ipc.json');
     my $old          = umask 0277;
     write_ipc_file($hostile_path, \%payload);
     umask $old;
@@ -65,7 +66,7 @@ unlink $path;
 
 # Other-readable group/other bits never appear on the file.
 {
-    my $other_path = File::Spec->catfile($dir, '.yath-nonce-h-3-cafef00d');
+    my $other_path = File::Spec->catfile($dir, 'fakeproj-u-test-20260101-000000-yath-3-ipc.json');
     write_ipc_file($other_path, \%payload);
     my $omode = (stat $other_path)[2] & 07777;
     is(($omode & 0077), 0, 'no group or other bits set on IPC info file');

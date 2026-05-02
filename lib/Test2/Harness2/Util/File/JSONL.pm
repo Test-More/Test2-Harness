@@ -5,18 +5,51 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
+use Test2::Harness2::Util();
 use Test2::Harness2::Util::JSON qw/encode_json decode_json/;
 
-# Change parent to remove ::Stream and add ::JSON
-use parent 'Test2::Harness2::Util::File::Stream';
+use parent 'Test2::Harness2::Util::File::JSON';
 use Object::HashBase;
 
 sub decode { shift; decode_json($_[0]) }
 sub encode { shift; encode_json(@_) . "\n" }
 
-# define read_line
-# Override read to read all lines and return a list of all decoded items
-# Override write and rewrite to take lists and turn each item into a json line using encode and writing the result with a newline at the end of each items line.
+sub read {
+    my $self = shift;
+
+    return () unless -e $self->{+NAME};
+
+    my $bytes = Test2::Harness2::Util::read_file($self->{+NAME});
+    return () unless defined $bytes && length $bytes;
+
+    my @out;
+    for my $line (split /\n/, $bytes) {
+        next unless length $line;
+        push @out => decode_json($line);
+    }
+    return @out;
+}
+
+sub read_line {
+    my $self = shift;
+    my ($line) = @_;
+    croak "read_line requires the line text" unless defined $line;
+    return decode_json($line);
+}
+
+sub write {
+    my $self = shift;
+
+    my $payload = join '' => map { encode_json($_) . "\n" } @_;
+    return Test2::Harness2::Util::write_file_atomic($self->{+NAME}, $payload);
+}
+
+sub rewrite {
+    my $self = shift;
+
+    my $payload = join '' => map { encode_json($_) . "\n" } @_;
+    return Test2::Harness2::Util::write_file($self->{+NAME}, $payload);
+}
 
 1;
 
@@ -28,15 +61,20 @@ __END__
 
 =head1 NAME
 
-Test2::Harness2::Util::File::JSONL - Utility class for a JSONL file (stream)
+Test2::Harness2::Util::File::JSONL - Whole-file utility class for a JSONL file.
 
 =head1 DESCRIPTION
 
-Subclass of L<Test2::Harness2::Util::File::Stream> that auto-encodes
-writes as one JSON document per line and auto-decodes lines back to
-Perl data on read. The line-per-record shape makes it safe for a writer
-and reader to share the same file concurrently (writes are flushed on
-every line).
+Subclass of L<Test2::Harness2::Util::File::JSON> that treats the
+backing path as a complete (not still-being-written) JSONL file.
+C<read> returns the full list of decoded items, one per line; C<write>
+and C<rewrite> take a list of items and encode each one with a
+trailing newline.
+
+For incremental log readers (tail-style consumption of a file that is
+still being appended to), use L<Test2::Harness2::Util::JSONL::Reader>
+together with L<Test2::Harness2::Util::FileMonitor>; this class is
+not safe for concurrent reader/writer access.
 
 =head1 SYNOPSIS
 
@@ -44,27 +82,40 @@ every line).
 
     my $jsonl = Test2::Harness2::Util::File::JSONL->new(name => '/path/to/file.jsonl');
 
-    while (1) {
-        my @items = $jsonl->poll(max => 1000) or last;
-        for my $item (@items) {
-            ... handle $item ...
-        }
-    }
+    my @items = $jsonl->read;
+    $jsonl->write({a => 1}, {b => 2});
 
-or
+=head1 METHODS
 
-    use Test2::Harness2::Util::File::JSONL;
+=over 4
 
-    my $jsonl = Test2::Harness2::Util::File::JSONL->new(name => '/path/to/file.jsonl');
+=item @items = $jsonl->read
 
-    $jsonl->write({my => 'item', ... });
-    ...
+Read the file and return every line decoded as a Perl data structure.
+Empty lines are skipped.
+
+=item $item = $jsonl->read_line($line_text)
+
+Decode a single JSONL line (the raw newline-terminated or naked text).
+Convenience wrapper for callers that drive the file handle themselves.
+
+=item $jsonl->write(@items)
+
+Atomic write: every item is JSON-encoded with a trailing newline,
+joined, and written through L<Test2::Harness2::Util/write_file_atomic>.
+
+=item $jsonl->rewrite(@items)
+
+Non-atomic in-place write. Same encoding rules as L</write>.
+
+=back
 
 =head1 SEE ALSO
 
-See the base classes L<Test2::Harness2::Util::File> and
-L<Test2::Harness2::Util::File::Stream> for additional attributes and
-methods.
+L<Test2::Harness2::Util::File::JSON> -- single-document JSON sibling.
+
+L<Test2::Harness2::Util::JSONL::Reader> -- tail-style streaming reader
+for live log files.
 
 =head1 SOURCE
 
@@ -91,8 +142,8 @@ L<http://github.com/Test-More/Test2-Harness/>.
 
 Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
-This program is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
 
 See L<http://dev.perl.org/licenses/>
 

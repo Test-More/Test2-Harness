@@ -5,17 +5,12 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
-use Fcntl qw/O_WRONLY O_APPEND O_CREAT/;
 use File::Spec ();
 use File::Temp qw/tempfile/;
 use Importer Importer => 'import';
 
 use Compress::Zstd ();
-use Compress::Zstd::CompressionContext;
-use Compress::Zstd::CompressionDictionary;
-use Compress::Zstd::Decompressor;
 use Compress::Zstd::DecompressionContext;
-use Compress::Zstd::DecompressionDictionary;
 
 our @EXPORT_OK = qw{
     compress_blob
@@ -31,74 +26,20 @@ our @EXPORT_OK = qw{
 # Little-endian magic bytes that mark the start of a zstd frame.
 use constant ZSTD_FRAME_MAGIC => "\x28\xB5\x2F\xFD";
 
-# Default compression level used for every compressed file in the
-# project. Spec section 7 fixes this at 3 (zstd default).
-use constant ZSTD_LEVEL => 3;
-
 # ---------------------------------------------------------------------------
-# Dict resolution. Callers pass dict_path, dict_bytes, dict_cdict, or
-# dict_ddict; the helpers below load any of those into the (de)compression
-# dictionary objects on demand and cache the result so repeated calls in
-# the same writer/reader do not reparse the dict.
-#
-# A caller that wants an explicit dict-less path passes nothing (or
-# dict_bytes => undef). That is a first-class mode -- the helpers
-# happily emit and accept dict-less frames.
-
-sub _load_cdict {
-    my (%opts) = @_;
-
-    return $opts{dict_cdict} if $opts{dict_cdict};
-    if (defined $opts{dict_bytes}) {
-        return Compress::Zstd::CompressionDictionary->new($opts{dict_bytes});
-    }
-    if (defined $opts{dict_path}) {
-        return Compress::Zstd::CompressionDictionary->new_from_file($opts{dict_path})
-            // croak "Could not load compression dictionary from '$opts{dict_path}'";
-    }
-    return undef;
-}
-
-sub _load_ddict {
-    my (%opts) = @_;
-
-    return $opts{dict_ddict} if $opts{dict_ddict};
-    if (defined $opts{dict_bytes}) {
-        return Compress::Zstd::DecompressionDictionary->new($opts{dict_bytes});
-    }
-    if (defined $opts{dict_path}) {
-        return Compress::Zstd::DecompressionDictionary->new_from_file($opts{dict_path})
-            // croak "Could not load decompression dictionary from '$opts{dict_path}'";
-    }
-    return undef;
-}
-
-# ---------------------------------------------------------------------------
-# One-shot helpers.
+# One-shot helpers. Both compression and decompression run at the
+# Compress::Zstd library default (level 3) -- the dictionary path was
+# benchmarked at < 35% improvement over dict-less on a representative
+# event-log corpus and dropped, so these helpers no longer accept any
+# dict_* options.
 
 sub compress_blob {
-    my ($bytes, %opts) = @_;
-
-    my $level = $opts{level} // ZSTD_LEVEL;
-
-    if (my $cdict = _load_cdict(%opts)) {
-        my $cctx = Compress::Zstd::CompressionContext->new;
-        return $cctx->compress_using_dict($bytes, $cdict);
-    }
-
-    return Compress::Zstd::compress($bytes, $level);
+    my ($bytes) = @_;
+    return Compress::Zstd::compress($bytes);
 }
 
 sub decompress_blob {
-    my ($bytes, %opts) = @_;
-
-    if (my $ddict = _load_ddict(%opts)) {
-        my $dctx = Compress::Zstd::DecompressionContext->new;
-        my $out  = $dctx->decompress_using_dict($bytes, $ddict);
-        croak "decompress_using_dict failed" unless defined $out;
-        return $out;
-    }
-
+    my ($bytes) = @_;
     my $out = Compress::Zstd::decompress($bytes);
     croak "Compress::Zstd::decompress failed" unless defined $out;
     return $out;
@@ -108,12 +49,12 @@ sub decompress_blob {
 # File-level helpers.
 
 sub compress_file_atomic {
-    my ($path, $bytes, %opts) = @_;
+    my ($path, $bytes) = @_;
 
     croak "path is required"  unless defined $path;
     croak "bytes is required" unless defined $bytes;
 
-    my $compressed = compress_blob($bytes, %opts);
+    my $compressed = compress_blob($bytes);
     my $dir        = _dirname($path);
     my ($fh, $tmp) = tempfile("zstd-XXXXXX", DIR => $dir, UNLINK => 0);
     binmode $fh;
@@ -128,7 +69,7 @@ sub compress_file_atomic {
 }
 
 sub decompress_file {
-    my ($path, %opts) = @_;
+    my ($path) = @_;
 
     open(my $fh, '<', $path) or croak "open '$path': $!";
     binmode $fh;
@@ -136,7 +77,7 @@ sub decompress_file {
     my $bytes = <$fh>;
     close $fh;
 
-    return decompress_blob($bytes, %opts);
+    return decompress_blob($bytes);
 }
 
 sub _dirname {
@@ -149,18 +90,18 @@ sub _dirname {
 # Streaming writer / reader for jsonl-style append-safe access.
 
 sub open_zstd_writer {
-    my ($path, %opts) = @_;
+    my ($path) = @_;
     require Test2::Harness2::Util::Zstd::Writer;
-    return Test2::Harness2::Util::Zstd::Writer->_open($path, %opts);
+    return Test2::Harness2::Util::Zstd::Writer->_open($path);
 }
 
 sub open_zstd_reader {
-    my ($path, %opts) = @_;
+    my ($path) = @_;
     require Test2::Harness2::Util::Zstd::Reader;
-    return Test2::Harness2::Util::Zstd::Reader->_open($path, %opts);
+    return Test2::Harness2::Util::Zstd::Reader->_open($path);
 }
 
-# zstd_frame_size($bytes) — return the on-disk byte length of the
+# zstd_frame_size($bytes) -- return the on-disk byte length of the
 # first zstd frame in $bytes, or undef if $bytes does not yet contain
 # a complete frame. Used by the dict-mode reader to find frame
 # boundaries without scanning for magic (which can race on partial
@@ -268,16 +209,16 @@ Test2::Harness2::Util::Zstd - zstd helpers (compress, decompress, append-safe wr
         open_zstd_reader
     };
 
-    my $frame = compress_blob($bytes, dict_path => $dict_path);
-    my $back  = decompress_blob($frame, dict_path => $dict_path);
+    my $frame = compress_blob($bytes);
+    my $back  = decompress_blob($frame);
 
-    compress_file_atomic('foo.json.zst', $json_text, dict_path => $dict_path);
-    my $bytes = decompress_file('foo.json.zst', dict_path => $dict_path);
+    compress_file_atomic('foo.json.zst', $json_text);
+    my $bytes = decompress_file('foo.json.zst');
 
-    my $w = open_zstd_writer('events.jsonl.zst', dict_path => $dict_path);
+    my $w = open_zstd_writer('events.jsonl.zst');
     $w->print($json_line, "\n");
 
-    my $r = open_zstd_reader('events.jsonl.zst', dict_path => $dict_path);
+    my $r = open_zstd_reader('events.jsonl.zst');
     while (defined(my $line = $r->readline)) { ... }
 
 =head1 DESCRIPTION
@@ -286,29 +227,33 @@ Single-purpose helper module wrapping L<Compress::Zstd> for the use
 cases the harness actually has. Compression is always in-process via
 the Perl module -- there is no external C<zstd> binary fallback.
 
+All helpers run at the L<Compress::Zstd> library default level (3).
+The custom shipped dictionary was benchmarked at well under a 35%
+compression-ratio improvement over dict-less compression on a
+representative event-log corpus and was dropped; these helpers no
+longer accept any C<dict_*> options.
+
 =over 4
 
-=item compress_blob($bytes, %opts) :Bytes
+=item compress_blob($bytes) :Bytes
 
-One-shot compress. With C<dict_*> options, uses
-C<CompressionContext-E<gt>compress_using_dict>; without, plain
-C<Compress::Zstd::compress>.
+One-shot compress.
 
-=item decompress_blob($bytes, %opts) :Bytes
+=item decompress_blob($bytes) :Bytes
 
 Symmetric one-shot decompress. Croaks on malformed input.
 
-=item compress_file_atomic($path, $bytes, %opts) :Path
+=item compress_file_atomic($path, $bytes) :Path
 
 Compress C<$bytes> as one zstd frame, write to C<$path.tmp.XXXX> in
 the same directory, then atomic-rename to C<$path>. Used for JSON
 snapshot files (whole-file rewrite).
 
-=item decompress_file($path, %opts) :Bytes
+=item decompress_file($path) :Bytes
 
 Read C<$path>, decompress, return the plaintext.
 
-=item open_zstd_writer($path, %opts) :Object
+=item open_zstd_writer($path) :Object
 
 Returns a writer object. C<-E<gt>print(@list)> compresses the
 concatenation of C<@list> as one zstd frame and atomically appends
@@ -317,45 +262,15 @@ newline. Each call writes one self-contained frame, so concurrent
 appenders are safe as long as a frame fits in C<PIPE_BUF> (4 KiB on
 Linux).
 
-=item open_zstd_reader($path, %opts) :Object
+=item open_zstd_reader($path) :Object
 
 Returns a L<Test2::Harness2::Util::Zstd::Reader> instance whose
-C<-E<gt>readline> yields one decoded line at a time. Without a dict
-the reader uses a long-lived streaming
-L<Compress::Zstd::Decompressor>; with a dict it walks frames using
-the frame-header parser in this module's L</zstd_frame_size> and
-decompresses each via L<Compress::Zstd::DecompressionContext>'s
-C<decompress_using_dict>.
+C<-E<gt>readline> yields one decoded line at a time. The reader uses
+a long-lived streaming L<Compress::Zstd::Decompressor>; framing is
+recovered via the RFC-8878 frame-header parser in this module's
+L</zstd_frame_size>.
 
 =back
-
-=head1 DICTIONARIES
-
-Every helper accepts the same set of mutually-exclusive dict options
-in C<%opts>:
-
-=over 4
-
-=item dict_bytes => $bytes
-
-Raw dictionary bytes (e.g. read from C<$logdir/zstd-dict.bin>).
-
-=item dict_path => $path
-
-Path to a dictionary file on disk. Loaded via
-C<CompressionDictionary-E<gt>new_from_file>.
-
-=item dict_cdict => $cdict / dict_ddict => $ddict
-
-Pre-loaded L<Compress::Zstd::CompressionDictionary> /
-L<Compress::Zstd::DecompressionDictionary> instance, for callers
-that already loaded the dict and want to share the instance.
-
-=back
-
-Passing none of the above puts the helper in dict-less mode -- a
-first-class supported configuration. The helpers do B<not> consult
-any default share or fallback path; the caller decides.
 
 =head1 SOURCE
 

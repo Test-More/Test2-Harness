@@ -24,66 +24,10 @@ sub maybe_read {
 
     return undef unless defined($out) && length($out);
 
-    my $ok = eval { $out = $self->decode($out); 1 };
+    my $ok  = eval { $out = $self->decode($out); 1 };
     my $err = $@;
     confess "$self->{+NAME}: $err" unless $ok;
     return $out;
-}
-
-# Why 'iff' and not 'if', AI typo?
-# Read the file iff something about it has changed since the last
-# successful read. Returns the decoded content on a fresh read
-# (including Perl undef if the file contained the literal JSON
-# `null`), or an empty list if nothing has changed since last time.
-# The empty-list vs (undef) distinction lets callers loop cheaply:
-#
-#     while (my @new = $f->read_if_changed) {
-#         my ($payload) = @new;        # defined or undef, both valid
-#         ... handle $payload ...
-#     }
-#
-# The change test layers -- see Test2::Harness2::Util::File's
-# changed() -- so this inherits whatever watching mechanism the
-# base class is using (Linux::Inotify2 or stat-tuple fallback).
-# Remove this for FileMonitor
-sub read_if_changed {
-    my $self = shift;
-
-    # Take a snapshot of the stat state BEFORE the read so we don't
-    # miss a racing writer that flips the file between our changed()
-    # check and our read: record_state() is called with what we saw
-    # just now, not what stat reports after we finish reading.
-    my $cur = $self->_current_state;
-
-    return () unless $self->changed;
-
-    my $path = $self->{+NAME};
-    unless (defined($cur) && -e $path) {
-        # File is gone. Note that and report "changed"; but there
-        # is no content to return, so an empty list is misleading
-        # -- report (undef) so the caller can react to disappearance.
-        # The next call sees no change (both states are "missing").
-        $self->_record_state(undef);
-        return (undef);
-    }
-
-    my $raw = Test2::Harness2::Util::read_file($path);
-
-    # Empty or unreadable: record the state and report the absence
-    # of content as (undef) so the caller can distinguish "read
-    # returned nothing" from "nothing to read".
-    unless (defined($raw) && length($raw)) {
-        $self->_record_state($cur);
-        return (undef);
-    }
-
-    my $data;
-    my $ok = eval { $data = $self->decode($raw); 1 };
-    my $err = $@;
-    confess "$path: $err" unless $ok;
-
-    $self->_record_state($cur);
-    return ($data);
 }
 
 1;

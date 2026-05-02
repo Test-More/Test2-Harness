@@ -7,7 +7,6 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 
 use Compress::Zstd ();
-use Compress::Zstd::DecompressionContext;
 
 use Test2::Harness2::Util::Zstd ();
 
@@ -17,16 +16,15 @@ use Test2::Harness2::Util::Zstd ();
 # record; readline yields the decoded payload of the next frame as
 # a "line".
 #
-# Both the dict and no-dict paths walk raw bytes one frame at a
-# time. Frame boundaries come from
+# Walks raw bytes one frame at a time. Frame boundaries come from
 # Test2::Harness2::Util::Zstd::zstd_frame_size, which parses the
-# zstd frame header per RFC 8878. The records themselves are not
-# required to carry inter-record newlines; producers that omit
-# them and consumers that need newline-separated plaintext (the
-# extract command, for instance) negotiate that separately.
+# zstd frame header per RFC 8878. Records themselves are not
+# required to carry inter-record newlines; producers that omit them
+# and consumers that need newline-separated plaintext (the extract
+# command, for instance) negotiate that separately.
 
 sub _open {
-    my ($class, $path, %opts) = @_;
+    my ($class, $path) = @_;
 
     croak "path is required"    unless defined $path;
     croak "no such file: $path" unless -e $path;
@@ -37,10 +35,8 @@ sub _open {
     my $self = bless {
         path    => $path,
         fh      => $fh,
-        ddict   => Test2::Harness2::Util::Zstd::_load_ddict(%opts),
         records => [],
         raw_buf => '',
-        dctx    => Compress::Zstd::DecompressionContext->new,
     } => $class;
 
     return $self;
@@ -73,9 +69,6 @@ sub _refill_records {
 
     my $progress = $self->_read_more;
 
-    my $dctx  = $self->{dctx};
-    my $ddict = $self->{ddict};
-
     # Walk complete frames out of raw_buf using zstd_frame_size for
     # exact boundaries (no magic-byte scan). Each frame's decoded
     # payload becomes one record returned by readline.
@@ -86,10 +79,7 @@ sub _refill_records {
         my $frame = substr($self->{raw_buf}, 0, $size);
         substr($self->{raw_buf}, 0, $size) = '';
 
-        my $plain =
-              $ddict
-            ? $dctx->decompress_using_dict($frame, $ddict)
-            : Compress::Zstd::decompress($frame);
+        my $plain = Compress::Zstd::decompress($frame);
         croak "zstd decompress failed in '$self->{path}'"
             unless defined $plain;
 
@@ -110,6 +100,7 @@ sub readline {
     return shift @{$self->{records}} if @{$self->{records}};
     return undef;
 }
+
 
 sub close {
     my $self = shift;
@@ -141,19 +132,16 @@ this class is not meant to be instantiated directly.
 
     use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
 
-    my $r = open_zstd_reader('events.jsonl.zst', dict_path => $dict_path);
+    my $r = open_zstd_reader('events.jsonl.zst');
     while (defined(my $line = $r->readline)) { ... }
 
 =head1 DESCRIPTION
 
 Wraps a multi-frame zstd file (one self-contained frame per record,
 as produced by L<Test2::Harness2::Util::Zstd::Writer>) and yields
-each frame's decoded payload via L</readline>. Frames are
-located using C<Test2::Harness2::Util::Zstd::zstd_frame_size>
-(RFC 8878 frame-header parser); each frame is decompressed
-independently. With a dict, frames go through
-L<Compress::Zstd::DecompressionContext>'s C<decompress_using_dict>
-with a reused context; without a dict, through
+each frame's decoded payload via L</readline>. Frames are located
+using C<Test2::Harness2::Util::Zstd::zstd_frame_size> (RFC 8878
+frame-header parser); each frame is decompressed independently via
 L<Compress::Zstd/decompress>.
 
 The reader recovers from sticky-EOF state on every refill so writers

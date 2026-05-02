@@ -2,8 +2,6 @@ package Test2::Harness2::Util::File::JSONL::Zstd;
 use strict;
 use warnings;
 
-# Best to remove this class and let consumers use the Writer and Reader classes directly, and use FileMonitor to watch for changes
-
 our $VERSION = '2.000011';
 
 use Carp qw/croak confess/;
@@ -12,7 +10,7 @@ use Test2::Harness2::Util::JSON qw/encode_json decode_json/;
 use Test2::Harness2::Util::Zstd qw/open_zstd_writer open_zstd_reader/;
 
 use parent 'Test2::Harness2::Util::File::JSONL';
-use Object::HashBase qw/<dict_path +_reader +_reader_pos +_peeked/;
+use Object::HashBase qw/+_reader +_reader_pos +_peeked/;
 
 # JSONL file with zstd-compressed frames on disk -- one frame per line.
 # Inherits the encode/decode JSON-line helpers from Util::File::JSONL,
@@ -32,10 +30,7 @@ sub _reader {
     my $self = shift;
     return $self->{+_READER} if $self->{+_READER};
     return undef unless -e $self->{+NAME};
-    $self->{+_READER} = open_zstd_reader(
-        $self->{+NAME},
-        ($self->{+DICT_PATH} ? (dict_path => $self->{+DICT_PATH}) : ()),
-    );
+    $self->{+_READER} = open_zstd_reader($self->{+NAME});
     return $self->{+_READER};
 }
 
@@ -44,10 +39,7 @@ sub _reader {
 sub write {
     my $self = shift;
 
-    my $writer = open_zstd_writer(
-        $self->{+NAME},
-        ($self->{+DICT_PATH} ? (dict_path => $self->{+DICT_PATH}) : ()),
-    );
+    my $writer = open_zstd_writer($self->{+NAME});
     for my $entry (@_) {
         # Bare json -- zstd frames self-delimit, and the inherited
         # encode() would append a "\n" that has no separator role
@@ -178,17 +170,6 @@ The reader uses L<Test2::Harness2::Util::Zstd>'s long-lived
 C<open_zstd_reader> handle internally, so tailing across appended
 frames works the same as the plaintext sibling -- C<poll> returns
 new lines as they land.
-
-=head1 ATTRIBUTES
-
-=over 4
-
-=item dict_path
-
-Optional. When set, every read and write uses the dictionary at the
-given path. When unset, dict-less compression is used.
-
-=back
 
 =head1 SEE ALSO
 

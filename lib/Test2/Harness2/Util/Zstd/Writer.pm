@@ -8,9 +8,6 @@ use Carp qw/croak/;
 use Fcntl qw/O_WRONLY O_APPEND O_CREAT/;
 
 use Compress::Zstd ();
-use Compress::Zstd::CompressionContext;
-
-use Test2::Harness2::Util::Zstd ();
 
 # Each call to print/say emits exactly one zstd frame compressed
 # from the supplied payload, then atomically appends the frame to the
@@ -19,7 +16,7 @@ use Test2::Harness2::Util::Zstd ();
 # events we produce stay well below that.
 
 sub _open {
-    my ($class, $path, %opts) = @_;
+    my ($class, $path) = @_;
 
     croak "path is required" unless defined $path;
 
@@ -28,11 +25,8 @@ sub _open {
     binmode $fh;
 
     my $self = bless {
-        path  => $path,
-        fh    => $fh,
-        cdict => Test2::Harness2::Util::Zstd::_load_cdict(%opts),
-        cctx  => Compress::Zstd::CompressionContext->new,
-        level => $opts{level} // Test2::Harness2::Util::Zstd::ZSTD_LEVEL,
+        path => $path,
+        fh   => $fh,
     } => $class;
 
     return $self;
@@ -41,14 +35,15 @@ sub _open {
 sub print {
     my $self    = shift;
     my $payload = join '', @_;
-    my $frame =
-          $self->{cdict}
-        ? $self->{cctx}->compress_using_dict($payload, $self->{cdict})
-        : Compress::Zstd::compress($payload, $self->{level});
-
+    my $frame   = Compress::Zstd::compress($payload);
     return $self->_emit_frame($frame);
 }
 
+# Compress payload + "\n" together so the resulting frame
+# uncompresses to a complete jsonl line. Callers writing JSONL
+# events should use this rather than ->print so the consumer can
+# stitch frames together via raw concatenation without per-frame
+# newline-insertion logic.
 sub say {
     my $self = shift;
     return $self->print(@_, "\n");
@@ -56,10 +51,10 @@ sub say {
 
 # Append a fully-formed zstd frame to the file without re-compressing.
 # Caller is responsible for ensuring the frame was produced with a
-# matching level + dictionary so the file's reader can decode it.
-# Used by callers that already hold a compressed frame (e.g. the
-# collector caches the on-wire frame from Atomic::Pipe and the JSONL
-# logger writes it verbatim).
+# matching level so the file's reader can decode it. Used by callers
+# that already hold a compressed frame (e.g. the collector caches the
+# on-wire frame from Atomic::Pipe and the JSONL logger writes it
+# verbatim).
 sub print_raw_frame {
     my $self = shift;
     my ($frame) = @_;
@@ -111,7 +106,7 @@ this class is not meant to be instantiated directly.
 
     use Test2::Harness2::Util::Zstd qw/open_zstd_writer/;
 
-    my $w = open_zstd_writer('events.jsonl.zst', dict_path => $dict_path);
+    my $w = open_zstd_writer('events.jsonl.zst');
     $w->print($json_line, "\n");
     $w->close;
 
@@ -122,9 +117,6 @@ joined payload as one self-contained zstd frame and atomically
 appends that frame to the file via C<syswrite>. Concurrent writers
 are safe as long as a frame fits in C<PIPE_BUF> (4 KiB on Linux);
 the per-line jsonl events the harness emits stay well below that.
-
-A long-lived L<Compress::Zstd::CompressionContext> + dict instance
-are reused across calls so the per-record overhead stays small.
 
 =head1 METHODS
 

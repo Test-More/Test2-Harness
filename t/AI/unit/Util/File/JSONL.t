@@ -3,37 +3,67 @@ use File::Temp qw/tempdir/;
 
 use Test2::Harness2::Util::File::JSONL;
 
-subtest 'write + poll roundtrip of structured records' => sub {
+subtest 'write + read round-trip' => sub {
     my $dir  = tempdir(CLEANUP => 1);
-    my $path = "$dir/events.jsonl";
+    my $path = "$dir/log.jsonl";
 
     my $f = Test2::Harness2::Util::File::JSONL->new(name => $path);
-    $f->write({type => 'start', id => 1});
-    $f->write({type => 'ok',    id => 2});
-    $f->write({type => 'done',  id => 3});
+    $f->write({a => 1}, {b => 2}, {c => 3});
 
-    my @records = $f->poll;
-    is(\@records, [
-        {type => 'start', id => 1},
-        {type => 'ok',    id => 2},
-        {type => 'done',  id => 3},
-    ], 'all records decoded in order');
+    open my $rh, '<', $path or die $!;
+    is(
+        [<$rh>],
+        [qq[{"a":1}\n], qq[{"b":2}\n], qq[{"c":3}\n]],
+        'each item is one JSON line on disk',
+    );
+    close $rh;
 
-    is([$f->poll], [], 'subsequent poll returns nothing until more arrive');
+    is(
+        [$f->read],
+        [{a => 1}, {b => 2}, {c => 3}],
+        'read returns every decoded line',
+    );
 };
 
-subtest 'poll(max => N) caps returned records' => sub {
+subtest 'rewrite replaces in place' => sub {
     my $dir  = tempdir(CLEANUP => 1);
-    my $path = "$dir/events.jsonl";
+    my $path = "$dir/log.jsonl";
 
     my $f = Test2::Harness2::Util::File::JSONL->new(name => $path);
-    $f->write({n => $_}) for 1 .. 5;
+    $f->write({first => 1});
+    is([$f->read], [{first => 1}], 'first write present');
 
-    my @first = $f->poll(max => 2);
-    is(\@first, [{n => 1}, {n => 2}], 'first two records');
+    $f->rewrite({second => 2}, {third => 3});
+    is(
+        [$f->read],
+        [{second => 2}, {third => 3}],
+        'rewrite replaces every line',
+    );
+};
 
-    my @rest = $f->poll;
-    is(\@rest, [{n => 3}, {n => 4}, {n => 5}], 'remaining records on next poll');
+subtest 'read on a missing file returns empty list' => sub {
+    my $dir  = tempdir(CLEANUP => 1);
+    my $path = "$dir/missing.jsonl";
+
+    my $f = Test2::Harness2::Util::File::JSONL->new(name => $path);
+    is([$f->read], [], 'empty list for missing file');
+};
+
+subtest 'read skips empty lines' => sub {
+    my $dir  = tempdir(CLEANUP => 1);
+    my $path = "$dir/sparse.jsonl";
+
+    open my $wh, '>', $path or die $!;
+    print $wh qq[{"a":1}\n\n{"b":2}\n];
+    close $wh;
+
+    my $f = Test2::Harness2::Util::File::JSONL->new(name => $path);
+    is([$f->read], [{a => 1}, {b => 2}], 'empty lines ignored');
+};
+
+subtest 'read_line decodes a single line' => sub {
+    my $f = Test2::Harness2::Util::File::JSONL->new(name => '/dev/null');
+    is($f->read_line(qq[{"x":42}\n]), {x => 42}, 'decodes raw line');
 };
 
 done_testing;

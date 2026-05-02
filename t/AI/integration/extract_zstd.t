@@ -4,72 +4,71 @@ use warnings;
 use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
-use FindBin ();
 use File::Spec ();
 
 use App::Yath2::LogArchive;
 use App::Yath2::Command::archive;
 use App::Yath2::Command::extract;
-use Test2::Harness2::Util::JSON qw/decode_json write_json_zst_file_atomic/;
 use Test2::Harness2::Util::Zstd qw/compress_blob compress_file_atomic/;
 
-my $repo_dict = File::Spec->catfile(
-    $FindBin::Bin, '..', '..', '..', 'share', 'other', 'zstd.dict',
-);
-
-# Build a small logdir-shaped tree with a .json.zst artifact, a
-# .jsonl.zst event stream, a verbatim binary file, and a
-# zstd-dict.bin so the writer bundles a dict.
+# Build a small logdir-shaped tree with a .json.zst artifact and a
+# .jsonl.zst event stream. Loggers are now classified by file
+# extension at read time, so no on-disk manifest is needed.
 sub _make_logdir {
-    my %opts = @_;
-    my $dir  = tempdir(CLEANUP => 1);
-    mkdir "$dir/services" or die $!;
+    my $dir = tempdir(CLEANUP => 1);
+    make_path("$dir/services/harness");
 
-    # A compressed snapshot, dict-aware.
+    # A compressed snapshot.
     compress_file_atomic(
-        "$dir/services/harness.json.zst",
+        "$dir/services/harness/state.json.zst",
         qq[{"kind":"harness","run_id":"R"}],
-        ($opts{dict_path} ? (dict_path => $opts{dict_path}) : ()),
     );
 
     # A jsonl stream: two frames each compressed standalone.
-    my $event = compress_blob(
-        qq[{"event":"a"}\n],
-        ($opts{dict_path} ? (dict_path => $opts{dict_path}) : ()),
-    );
-    open my $fh, '>', "$dir/services/harness.jsonl.zst" or die $!;
+    my $event = compress_blob(qq[{"event":"a"}\n]);
+    open my $fh, '>', "$dir/services/harness/events.jsonl.zst" or die $!;
     binmode $fh;
     print $fh $event x 2;
     close $fh;
 
-    # Bundled dict copy.
-    if ($opts{dict_path}) {
-        require File::Copy;
-        File::Copy::cp($opts{dict_path}, "$dir/zstd-dict.bin")
-            or die "cp dict: $!";
-    }
-
-    # Manifest keyed by '.zst' paths -- the live logdir shape.
-    write_json_zst_file_atomic(
-        "$dir/artifacts.json.zst",
-        {
-            'services/harness.json.zst'  => 'Test2::Harness2::Collector::Logger::JSON',
-            'services/harness.jsonl.zst' => 'Test2::Harness2::Collector::Logger::JSONL',
-        },
-        ($opts{dict_path} ? (dict_path => $opts{dict_path}) : ()),
-    );
-
     return $dir;
+}
+
+{
+    package Fake::Yath;
+    sub new              { bless { cwd => $_[1] // '/tmp/no-such-cwd' }, $_[0] }
+    sub cwd              { $_[0]->{cwd} }
+    sub project          { '__UNKNOWN__' }
+    sub user             { 'fakeuser' }
+    sub user_config_file { '' }
+    sub config_file      { '' }
+
+    package Fake::Extract;
+    sub new           { bless { no_decompress => $_[1] // 0 }, $_[0] }
+    sub no_decompress { $_[0]->{no_decompress} }
+
+    package Fake::Settings;
+    sub new {
+        my ($class, %p) = @_;
+        bless {
+            yath    => Fake::Yath->new($p{cwd}),
+            extract => Fake::Extract->new($p{no_decompress} // 0),
+        }, $class;
+    }
+    sub yath    { $_[0]->{yath} }
+    sub extract { $_[0]->{extract} }
 }
 
 sub _run_cmd {
     my ($class, @args) = @_;
-    my $cmd = $class->new(args => [@args], settings => {});
-    my $out = '';
+    my %extras;
+    @args = grep { !(ref($_) eq 'HASH' and %extras = (%extras, %$_)) } @args;
+    my $cmd  = $class->new(args => [@args], settings => Fake::Settings->new(%extras));
+    my $out  = '';
     my $orig = select;
     open(my $cap, '>', \$out) or die $!;
     select $cap;
-    my $rc = eval { $cmd->run };
+    my $rc  = eval { $cmd->run };
     my $err = $@;
     select $orig;
     close $cap;
@@ -77,9 +76,7 @@ sub _run_cmd {
 }
 
 subtest 'archive + extract (default decompresses)' => sub {
-    plan skip_all => "dict not present" unless -f $repo_dict;
-
-    my $logdir = _make_logdir(dict_path => $repo_dict);
+    my $logdir = _make_logdir();
     my $work   = tempdir(CLEANUP => 1);
     my $arc    = "$work/out.yath";
 
@@ -91,65 +88,32 @@ subtest 'archive + extract (default decompresses)' => sub {
     is($err, '', 'extract: no exception');
 
     # .zst suffix stripped from output
-    ok(-f "$dest/services/harness.json",  'json snapshot extracted plaintext');
-    ok(-f "$dest/services/harness.jsonl", 'jsonl stream extracted plaintext');
-    ok(!-f "$dest/services/harness.json.zst",
+    ok(-f "$dest/services/harness/state.json",   'json snapshot extracted plaintext');
+    ok(-f "$dest/services/harness/events.jsonl", 'jsonl stream extracted plaintext');
+    ok(!-f "$dest/services/harness/state.json.zst",
         'no .zst suffix on output');
 
-    # Dict copy lands at zstd-dict.bin (no rename, no .zst suffix issue)
-    ok(-f "$dest/zstd-dict.bin", 'bundled dict written out verbatim');
-
     # Plaintext content is human-readable
-    open my $rfh, '<', "$dest/services/harness.json" or die $!;
+    open my $rfh, '<', "$dest/services/harness/state.json" or die $!;
     my $body = do { local $/; <$rfh> };
     close $rfh;
     like($body, qr/"kind":"harness"/, 'json content readable');
 
-    # Manifest keys had .zst stripped to match extracted filenames.
-    open my $mfh, '<', "$dest/artifacts.json" or die $!;
-    my $manifest = decode_json(do { local $/; <$mfh> });
-    close $mfh;
-    is(
-        $manifest,
-        {
-            'services/harness.json'  => 'Test2::Harness2::Collector::Logger::JSON',
-            'services/harness.jsonl' => 'Test2::Harness2::Collector::Logger::JSONL',
-        },
-        'manifest keys rewritten with .zst stripped',
-    );
-
     # The extracted tree is itself a valid Directory-shape archive
-    # (yath replay /tmp/extracted/ should work).
-    my $la = App::Yath2::LogArchive->new(path => $dest);
+    # (yath replay /tmp/extracted/ should work). Loggers are now
+    # resolved by extension at read time -- no manifest required.
+    my $la = App::Yath2::LogArchive->open(path => $dest);
     is(
         $la->artifacts,
-        $manifest,
-        'LogArchive::Directory reads the plaintext manifest of an extracted tree',
+        {
+            append  => { 'services/harness/events' => ['services/harness/events.jsonl'] },
+            replace => { 'services/harness/state'  => ['services/harness/state.json']   },
+        },
+        'LogArchive::Directory reads the extracted tree (append/replace shape)',
     );
 };
 
 subtest 'archive + extract --no-decompress preserves .zst' => sub {
-    plan skip_all => "dict not present" unless -f $repo_dict;
-
-    my $logdir = _make_logdir(dict_path => $repo_dict);
-    my $work   = tempdir(CLEANUP => 1);
-    my $arc    = "$work/out.yath";
-
-    my (undef, undef, $err) = _run_cmd('App::Yath2::Command::archive', $logdir, $arc);
-    is($err, '', 'archive: no exception');
-
-    my $dest = "$work/restored_raw";
-    (undef, undef, $err) = _run_cmd('App::Yath2::Command::extract', '--no-decompress', $arc, $dest);
-    is($err, '', 'extract: no exception');
-
-    ok(-f "$dest/services/harness.json.zst",  'json.zst preserved');
-    ok(-f "$dest/services/harness.jsonl.zst", 'jsonl.zst preserved');
-    ok(-f "$dest/zstd-dict.bin",              'bundled dict preserved');
-    ok(!-f "$dest/services/harness.json",
-        'no plaintext json when --no-decompress');
-};
-
-subtest 'archive + extract dict-less' => sub {
     my $logdir = _make_logdir();
     my $work   = tempdir(CLEANUP => 1);
     my $arc    = "$work/out.yath";
@@ -157,14 +121,14 @@ subtest 'archive + extract dict-less' => sub {
     my (undef, undef, $err) = _run_cmd('App::Yath2::Command::archive', $logdir, $arc);
     is($err, '', 'archive: no exception');
 
-    # The reader must not loop hunting for a dict; a missing
-    # zstd-dict.bin is the authoritative "dict-less" signal.
-    my $dest = "$work/restored_nodict";
-    (undef, undef, $err) = _run_cmd('App::Yath2::Command::extract', $arc, $dest);
+    my $dest = "$work/restored_raw";
+    (undef, undef, $err) = _run_cmd('App::Yath2::Command::extract', {no_decompress => 1}, $arc, $dest);
     is($err, '', 'extract: no exception');
 
-    ok(-f "$dest/services/harness.json",   'json extracted');
-    ok(!-f "$dest/zstd-dict.bin",          'no zstd-dict.bin in extracted tree');
+    ok(-f "$dest/services/harness/state.json.zst",   'json.zst preserved');
+    ok(-f "$dest/services/harness/events.jsonl.zst", 'jsonl.zst preserved');
+    ok(!-f "$dest/services/harness/state.json",
+        'no plaintext json when --no-decompress');
 };
 
 done_testing;

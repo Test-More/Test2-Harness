@@ -9,45 +9,39 @@ my $tmp = tempdir(CLEANUP => 1);
 my $logdir = "$tmp/logs";
 make_path("$logdir/runs/RUN1/tests");
 
-# Global artifacts manifest + per-run manifest. Real yath runs
-# write both; the streamer reads the per-run manifest via
-# LogArchive->artifacts($run_id).
-my $state_artifact = {"runs/RUN1/run.json" => 'Test2::Harness2::Collector::Logger::JSON'};
-write_json_file_atomic("$logdir/artifacts.json",                   $state_artifact);
-write_json_file_atomic("$logdir/runs/RUN1/artifacts.json",         $state_artifact);
-
-# Per-run state snapshot: two jobs, one passed, one never started.
-write_json_file_atomic(
-    "$logdir/runs/RUN1/run.json",
-    {
-        run_id     => 'RUN1',
-        created_at => 100,
-        pending    => [],
-        running    => [],
-        done       => ['J1'],
-        results    => {
-            J1 => {
-                queued_at    => 100,
-                started_at   => 101,
-                completed_at => 102,
-                pass         => 1,
-                exit         => 0,
-                codes        => {all => 0, sig => 0, dmp => 0, err => 0},
-                rel_file     => 't/j1.t',
-                abs_file     => '/abs/t/j1.t',
-                file         => '/abs/t/j1.t',
-            },
-            J_SKIPPED => {
-                queued_at => 100,
-                rel_file  => 't/skip.t',
-                abs_file  => '/abs/t/skip.t',
-                file      => '/abs/t/skip.t',
-                # No started_at / completed_at: this job was queued
-                # but never ran.
-            },
+# Phase 4: every runs/<id>/ must carry spec.json. The static streamer
+# picks up *.json under runs/<id>/ by extension, so spec.json and
+# state.json must agree -- mirror the same snapshot into both.
+my $state = {
+    run_id     => 'RUN1',
+    created_at => 100,
+    pending    => [],
+    running    => [],
+    done       => ['J1'],
+    results    => {
+        J1 => {
+            queued_at    => 100,
+            started_at   => 101,
+            completed_at => 102,
+            pass         => 1,
+            exit         => 0,
+            codes        => {all => 0, sig => 0, dmp => 0, err => 0},
+            rel_file     => 't/j1.t',
+            abs_file     => '/abs/t/j1.t',
+            file         => '/abs/t/j1.t',
+        },
+        J_SKIPPED => {
+            queued_at => 100,
+            rel_file  => 't/skip.t',
+            abs_file  => '/abs/t/skip.t',
+            file      => '/abs/t/skip.t',
+            # No started_at / completed_at: this job was queued
+            # but never ran.
         },
     },
-);
+};
+write_json_file_atomic("$logdir/runs/RUN1/spec.json",  $state);
+write_json_file_atomic("$logdir/runs/RUN1/state.json", $state);
 
 my $streamer = App::Yath2::Streamer::Static->new(
     log => $logdir,

@@ -5,7 +5,6 @@ use File::Path qw/make_path/;
 use Test2::Harness2::Util::JSON qw/write_json_file_atomic encode_json/;
 
 use App::Yath2::LogArchive;
-use App::Yath2::LogArchive::Format qw/default_writer_format/;
 use App::Yath2::Command::replay;
 
 # Replay's run() now goes through App::Yath2::Options::Renderer::init_renderers
@@ -54,47 +53,38 @@ sub _new_replay {
 
 my $tmp  = tempdir(CLEANUP => 1);
 my $logs = "$tmp/logs";
-make_path("$logs/runs/RP/tests");
-make_path("$logs/runs/RF/tests");
+make_path("$logs/runs/RP/tests/J");
+make_path("$logs/runs/RF/tests/J");
 
 for my $rid (qw/RP RF/) {
     my $pass = $rid eq 'RP' ? 1 : 0;
-    my $art  = {
-        "runs/$rid/run.json"          => 'Test2::Harness2::Collector::Logger::JSON',
-        "runs/$rid/tests/J.jsonl"     => 'Test2::Harness2::Collector::Logger::JSONL',
-    };
-    write_json_file_atomic("$logs/runs/$rid/artifacts.json", $art);
-    write_json_file_atomic(
-        "$logs/runs/$rid/run.json",
-        {
-            run_id  => $rid, created_at => 1, pending => [], running => [],
-            done    => ['J'],
-            results => {
-                J => {
-                    queued_at => 1, started_at => 2, completed_at => 3,
-                    pass => $pass, exit => $pass ? 0 : 256,
-                    rel_file => 't/j.t', abs_file => '/abs/j.t', file => '/abs/j.t',
-                },
+
+    # Phase 4 log layout: spec.json + state.json sit alongside the
+    # event log under runs/<run_id>/. Consumers (LogArchive::artifacts)
+    # reject any runs/<id>/ that lacks spec.json. The static streamer
+    # picks up every *.json under runs/<id>/ as a state snapshot
+    # (loggers are resolved by extension), so spec.json and state.json
+    # must agree -- mirror the same content into both.
+    my $state = {
+        run_id  => $rid, created_at => 1, pending => [], running => [],
+        done    => ['J'],
+        results => {
+            J => {
+                queued_at => 1, started_at => 2, completed_at => 3,
+                pass => $pass, exit => $pass ? 0 : 256,
+                rel_file => 't/j.t', abs_file => '/abs/j.t', file => '/abs/j.t',
             },
         },
-    );
-    open my $jf, '>', "$logs/runs/$rid/tests/J.jsonl" or die $!;
+    };
+    write_json_file_atomic("$logs/runs/$rid/spec.json",  $state);
+    write_json_file_atomic("$logs/runs/$rid/state.json", $state);
+    open my $jf, '>', "$logs/runs/$rid/tests/J/0.jsonl" or die $!;
     print $jf encode_json({event_id => "$rid-EV", facet_data => {info => [{details => $rid}]}}), "\n";
     close $jf;
 }
 
-# Top-level artifacts manifest: harness-scope entries only.
-# Run-scoped files live in runs/$RID/artifacts.json; listing them
-# here would cause Streamer::Static's global reader pass to re-emit
-# run events even when the caller filters to a single run.
-write_json_file_atomic("$logs/artifacts.json", {});
-
 my $archive = "$tmp/run.yath";
-App::Yath2::LogArchive->create(
-    source => $logs,
-    path   => $archive,
-    format => default_writer_format(),
-);
+App::Yath2::LogArchive->open(dir => $logs)->archive($archive);
 ok(-f $archive, 'archive created');
 
 subtest 'replay directory, all runs -> exit 1 (one run failed)' => sub {

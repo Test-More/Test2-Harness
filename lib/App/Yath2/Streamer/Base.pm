@@ -257,13 +257,21 @@ sub _drain_event_readers {
     my $self = shift;
 
     for my $rel (keys %{$self->{+EVENT_READERS}}) {
-        # Per-job test logs live at runs/<run_id>/tests/<job_id>.<ext>;
-        # the on-disk events don't carry job_id inside each record, so
-        # inject it here from the artifact path. Without this the
-        # renderer attributes test asserts to "RUNNER" instead of the
-        # owning job.
+        # Per-job test logs live at runs/<run_id>/tests/<job_id>/<try>.<ext>
+        # in the Phase 4.5 layout (per-try basename in a per-job
+        # directory); the on-disk events don't carry job_id inside
+        # each record, so inject it here from the artifact path.
+        # Without this the renderer attributes test asserts to
+        # "RUNNER" instead of the owning job.
+        #
+        # The pre-4.5 per-job-only path (runs/<run>/tests/<job>.<ext>)
+        # is still recognised at read-time for archives produced before
+        # this change; new writers always go through the 4.5 layout.
         my ($injected_run_id, $injected_job_id);
-        if ($rel =~ m{^runs/([^/]+)/tests/([^/]+)\.[^/]+$}) {
+        if ($rel =~ m{^runs/([^/]+)/tests/([^/]+)/[^/]+\.[^/]+$}) {
+            ($injected_run_id, $injected_job_id) = ($1, $2);
+        }
+        elsif ($rel =~ m{^runs/([^/]+)/tests/([^/]+)\.[^/]+$}) {
             ($injected_run_id, $injected_job_id) = ($1, $2);
         }
 

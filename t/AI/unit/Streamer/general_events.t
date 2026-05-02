@@ -12,34 +12,30 @@ use App::Yath2::Streamer::Static;
 
 my $tmp    = tempdir(CLEANUP => 1);
 my $logdir = "$tmp/logs";
-make_path("$logdir/runs/R/tests");
+make_path("$logdir/runs/R/tests/J");
 
-my $artifacts = {
-    "runs/R/run.json"        => 'Test2::Harness2::Collector::Logger::JSON',
-    "runs/R/tests/J.jsonl"   => 'Test2::Harness2::Collector::Logger::JSONL',
-};
-write_json_file_atomic("$logdir/artifacts.json",           $artifacts);
-write_json_file_atomic("$logdir/runs/R/artifacts.json",    $artifacts);
-
-write_json_file_atomic(
-    "$logdir/runs/R/run.json",
-    {
-        run_id  => 'R', created_at => 1, pending => [], running => [],
-        done    => ['J'],
-        results => {
-            J => {
-                queued_at => 1, started_at => 2, completed_at => 3,
-                pass => 1, exit => 0,
-                rel_file => 't/j.t', abs_file => '/abs/t/j.t', file => '/abs/t/j.t',
-            },
+# Phase 4: every runs/<id>/ must carry spec.json. The static streamer
+# reads every *.json under runs/<id>/ as a state snapshot (loggers are
+# resolved by extension), so spec.json and state.json must agree --
+# mirror the same content into both.
+my $state = {
+    run_id  => 'R', created_at => 1, pending => [], running => [],
+    done    => ['J'],
+    results => {
+        J => {
+            queued_at => 1, started_at => 2, completed_at => 3,
+            pass => 1, exit => 0,
+            rel_file => 't/j.t', abs_file => '/abs/t/j.t', file => '/abs/t/j.t',
         },
     },
-);
+};
+write_json_file_atomic("$logdir/runs/R/spec.json",  $state);
+write_json_file_atomic("$logdir/runs/R/state.json", $state);
 
 # Write two raw events to the JSONL. Their payloads are opaque to the
 # streamer but they must come through untouched so the renderer sees
 # them in order.
-open my $jf, '>', "$logdir/runs/R/tests/J.jsonl" or die $!;
+open my $jf, '>', "$logdir/runs/R/tests/J/0.jsonl" or die $!;
 $jf->autoflush(1);
 print $jf encode_json({event_id => 'EV1', facet_data => {info => [{details => 'pre'}]}}), "\n";
 print $jf encode_json({event_id => 'EV2', facet_data => {info => [{details => 'post'}]}}), "\n";

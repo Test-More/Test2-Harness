@@ -2,7 +2,6 @@ use Test2::V0;
 
 use File::Temp qw/tempdir tempfile/;
 use App::Yath2::LogArchive;
-use App::Yath2::LogArchive::Format qw/detect_format/;
 
 use App::Yath2::LogArchive::TarZIdx;
 
@@ -21,12 +20,10 @@ close $fh;
 my (undef, $out) = tempfile(OPEN => 0, SUFFIX => '.tar.zidx', UNLINK => 1);
 unlink $out;
 
-App::Yath2::LogArchive->create(source => $src, path => $out);
+App::Yath2::LogArchive->open(dir => $src)->archive($out);
 ok(-s $out, 'output non-empty');
 
-is(detect_format($out), 'tar.zidx', 'magic-byte detection finds tar.zidx');
-
-my $la = App::Yath2::LogArchive->new(path => $out);
+my $la = App::Yath2::LogArchive->open(path => $out);
 ok(
     ref($la) eq 'App::Yath2::LogArchive::TarZIdx',
     'reader resolves to TarZIdx backend (' . ref($la) . ')'

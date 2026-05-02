@@ -7,7 +7,6 @@ use lib 't/lib';
 use Test2::Harness2::TestFile;
 use Test2::Harness2::Test::Loggers qw/classic_harness_loggers classic_test_loggers/;
 use Test2::Harness2;
-use Test2::Harness2::Util::JSON qw/decode_json_zst_file/;
 use App::Yath2::LogArchive;
 
 sub wait_until {
@@ -28,10 +27,11 @@ print $fh "use Test2::V0; ok(1); done_testing;\n";
 close $fh;
 
 my $spawn = Test2::Harness2->spawn(
-    workdir      => $dir,
-    kill_timeout => 5,
-    loggers      => classic_harness_loggers($dir),
-    test_loggers => classic_test_loggers(),
+    workdir         => $dir,
+    kill_timeout    => 5,
+    loggers         => classic_harness_loggers($dir),
+    service_loggers => classic_test_loggers(),
+    test_loggers    => classic_test_loggers(),
 );
 
 $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
@@ -47,40 +47,31 @@ wait_until(
 $spawn->finish;
 $spawn->wait;
 
-my @dict_args = -f "$dir/logs/zstd-dict.bin"
-    ? (dict_path => "$dir/logs/zstd-dict.bin")
-    : ();
+my $dir_la = App::Yath2::LogArchive->open(path => "$dir/logs");
+isa_ok($dir_la, 'App::Yath2::LogArchive::Directory');
 
-ok(-f "$dir/logs/artifacts.json.zst", 'global manifest written');
-my @run_manifests = glob "$dir/logs/runs/*/artifacts.json.zst";
-is(scalar(@run_manifests), 1, 'exactly one per-run manifest');
+my @runs = $dir_la->runs;
+is(scalar(@runs), 1, 'exactly one run on disk');
+my $run_id = $runs[0];
 
-my $global = decode_json_zst_file("$dir/logs/artifacts.json.zst", @dict_args);
-ok(scalar(keys %$global), 'global manifest has entries');
+my $global = $dir_la->artifacts;
 ok(
-    (grep { m{^services/} } keys %$global),
-    'global manifest has at least one services/ entry'
+    (grep { m{^services/} } keys %{$global->{append} // {}}, keys %{$global->{replace} // {}}),
+    'global artifacts include at least one services/ entry'
 );
 
-my ($run_path) = @run_manifests;
-my ($run_id)   = $run_path =~ m{/runs/([^/]+)/artifacts\.json\.zst\z};
-ok(defined $run_id, "extracted run_id ($run_id)");
-
-my $run = decode_json_zst_file($run_path, @dict_args);
-ok(scalar(keys %$run), 'per-run manifest non-empty');
-
-my $dir_la = App::Yath2::LogArchive->new(path => "$dir/logs");
-isa_ok($dir_la, 'App::Yath2::LogArchive::Directory');
+my $run_scope = $dir_la->artifacts($run_id);
+ok(
+    scalar(keys %{$run_scope->{append} // {}}) + scalar(keys %{$run_scope->{replace} // {}}),
+    'per-run artifacts non-empty'
+);
 
 my (undef, $archive) = tempfile(OPEN => 0, SUFFIX => '.yath', UNLINK => 1);
 unlink $archive;
-App::Yath2::LogArchive->create(
-    source => "$dir/logs",
-    path   => $archive,
-);
+App::Yath2::LogArchive->open(dir => "$dir/logs")->archive($archive);
 ok(-s $archive, 'archive non-empty');
 
-my $arc_la = App::Yath2::LogArchive->new(path => $archive);
+my $arc_la = App::Yath2::LogArchive->open(path => $archive);
 ok(
     ref($arc_la) =~ /^App::Yath2::LogArchive::TarZIdx/,
     'opened tar.zidx backend (' . ref($arc_la) . ')'

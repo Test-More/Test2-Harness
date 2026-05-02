@@ -6,44 +6,46 @@ our $VERSION = '2.000011';
 
 use Carp qw/croak/;
 use Compress::Zstd ();
-use Exporter qw/import/;
 use Fcntl qw/SEEK_END SEEK_SET/;
+use File::Basename qw/dirname/;
 use File::Find ();
+use File::Path qw/make_path/;
 use File::Spec ();
-use Role::Tiny::With;
 
-use App::Yath2::LogArchive::Format qw/TAR_ZIDX_MAGIC TAR_ZIDX_FOOTER_LEN/;
 use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 
-# This single module covers the on-disk tar.zidx format for both
-# read (this package, App::Yath2::LogArchive::TarZIdx) and write
-# (App::Yath2::LogArchive::Writer::TarZIdx, defined further down).
-# The previous TarZIdx/External.pm + TarZIdx/PP.pm + TarZIdx/Util.pm
-# + Writer/TarZIdx.pm split existed to gate Compress::Zstd vs the
-# zstd binary fallback; that fallback is gone (Compress::Zstd is a
-# hard prereq now), so a single module is simpler.
+use parent 'App::Yath2::LogArchive';
+use Object::HashBase qw/path +_index/;
 
-use constant BLOCK_SIZE        => 512;
-use constant INDEX_ENTRY_NAME  => '__index__.json.zst';
-use constant DICT_ENTRY_NAME   => 'zstd-dict.bin';
+# tar.zidx is the single archive format yath produces. Layout:
+# a USTAR-format tar with per-entry payloads (each individually
+# zstd-compressed when the source was plaintext, or stored verbatim
+# when the source was already a .zst-suffixed file), plus a special
+# index entry, plus a 32-byte footer pointing at the index.
+#
+# This file owns both reading and writing of that format. Read and
+# write methods are sectioned below; helpers shared by both live at
+# the top.
 
-our @EXPORT_OK = qw/
-    pack_ustar_header
-    pack_footer
-    parse_footer
-    pad_to_block
-    zstd_compress
-    zstd_decompress
-    BLOCK_SIZE
-    INDEX_ENTRY_NAME
-    DICT_ENTRY_NAME
-/;
+use constant BLOCK_SIZE          => 512;
+use constant INDEX_ENTRY_NAME    => '__index__.json.zst';
+use constant TAR_ZIDX_MAGIC      => "YZIDXv1\0";
+use constant TAR_ZIDX_FOOTER_LEN => 32;
 
-# ----------------------------------------------------------------------
-# Format helpers (formerly TarZIdx/Util.pm).
+sub is_live { 0 }
+
+sub absolute_path {
+    my ($self, $rel) = @_;
+    croak "absolute_path is unavailable for the tar.zidx backend; "
+        . "extract first or read via the LogArchive API ($rel)";
+}
+
+# {{{ Format helpers (methods so subclasses / future formats can override)
 
 sub pack_ustar_header {
-    my ($name, $size) = @_;
+    my ($self, $name, $size, %opts) = @_;
+    my $typeflag = $opts{typeflag} // '0';
+    my $mode     = $opts{mode}     // oct('0644');
 
     my ($base, $prefix) = ($name, '');
     if (length($name) > 100) {
@@ -59,13 +61,13 @@ sub pack_ustar_header {
     my $hdr = pack(
         'a100 a8 a8 a8 a12 a12 A8 a1 a100 a6 a2 a32 a32 a8 a8 a155 x12',
         $base,
-        sprintf('%07o',  oct('0644')) . "\0",
+        sprintf('%07o',  $mode) . "\0",
         sprintf('%07o',  0) . "\0",
         sprintf('%07o',  0) . "\0",
         sprintf('%011o', $size) . "\0",
         sprintf('%011o', time) . "\0",
         '        ',
-        '0',
+        $typeflag,
         '',
         "ustar\0",
         '00',
@@ -86,52 +88,41 @@ sub pack_ustar_header {
 }
 
 sub pad_to_block {
-    my ($len) = @_;
+    my ($self, $len) = @_;
     my $rem = $len % BLOCK_SIZE;
     return $rem ? (BLOCK_SIZE - $rem) : 0;
 }
 
 sub pack_footer {
-    my ($idx_offset, $idx_size) = @_;
+    my ($self, $idx_offset, $idx_size) = @_;
     return pack('a8 Q< Q< Q<', TAR_ZIDX_MAGIC, $idx_offset, $idx_size, 0);
 }
 
 sub parse_footer {
-    my ($buf) = @_;
+    my ($self, $buf) = @_;
     croak "tar.zidx: short footer" unless length($buf) == TAR_ZIDX_FOOTER_LEN;
     my ($magic, $idx_offset, $idx_size, undef) = unpack('a8 Q< Q< Q<', $buf);
     croak "tar.zidx: bad footer magic" unless $magic eq TAR_ZIDX_MAGIC;
     return ($idx_offset, $idx_size);
 }
 
-# zstd_compress / zstd_decompress are thin wrappers around
-# Compress::Zstd. They exist for the index payload (which is
-# zstd-compressed JSON) and never appear on a hot path.
 sub zstd_compress {
-    my ($bytes) = @_;
+    my ($self, $bytes) = @_;
     my $out = Compress::Zstd::compress($bytes);
     croak "tar.zidx: Compress::Zstd::compress failed" unless defined $out;
     return $out;
 }
 
 sub zstd_decompress {
-    my ($bytes) = @_;
+    my ($self, $bytes) = @_;
     my $out = Compress::Zstd::decompress($bytes);
     croak "tar.zidx: Compress::Zstd::decompress failed" unless defined $out;
     return $out;
 }
 
-# ----------------------------------------------------------------------
-# Reader.
+# }}}
 
-use parent 'App::Yath2::LogArchive';
-use Object::HashBase qw/path format _index +_dict_bytes +_dict_loaded/;
-
-with 'App::Yath2::LogArchive::Role::Source';
-
-# Compress::Zstd is a hard prereq (per the zstd-loggers spec, stage
-# 1), so the reader is always viable.
-sub viable { 1 }
+# {{{ Read API (Source role)
 
 sub _build_index {
     my $self = shift;
@@ -148,7 +139,7 @@ sub _build_index {
     read($fh, $foot, TAR_ZIDX_FOOTER_LEN) == TAR_ZIDX_FOOTER_LEN
         or croak "short footer read";
 
-    my ($idx_offset, $idx_size) = parse_footer($foot);
+    my ($idx_offset, $idx_size) = $self->parse_footer($foot);
 
     seek($fh, $idx_offset, SEEK_SET) or croak "seek index: $!";
     my $idx_bytes;
@@ -156,48 +147,54 @@ sub _build_index {
         or croak "short index read";
     close $fh;
 
-    my $json = zstd_decompress($idx_bytes);
+    my $json = $self->zstd_decompress($idx_bytes);
     $self->{+_INDEX} = decode_json($json);
     return $self->{+_INDEX};
 }
 
 sub list_files {
     my $self = shift;
-    return keys %{$self->_build_index};
+    my $idx  = $self->_build_index;
+    return grep { ($idx->{$_}{kind} // 'file') eq 'file' } keys %$idx;
+}
+
+# Directory entries explicitly recorded in the archive plus every
+# parent-of-a-file path. Parent derivation lets older archives
+# (pre-empty-dir-tracking) still report the directory shape that
+# their files imply.
+sub list_dirs {
+    my $self = shift;
+    my $idx  = $self->_build_index;
+
+    my %dirs;
+    for my $rel (keys %$idx) {
+        if (($idx->{$rel}{kind} // 'file') eq 'dir') {
+            $dirs{$rel} = 1;
+            next;
+        }
+        my @parts = split m{/}, $rel;
+        pop @parts;
+        for my $i (1 .. scalar @parts) {
+            $dirs{join('/', @parts[0 .. $i - 1])} = 1;
+        }
+    }
+    return keys %dirs;
 }
 
 sub has_file {
     my ($self, $rel) = @_;
-    return exists $self->_build_index->{$rel} ? 1 : 0;
-}
-
-# Returns the bytes of the bundled zstd dictionary (the file the
-# writer copied out of $source/zstd-dict.bin) or undef when the
-# archive is dict-less. Probes the index once and caches the result;
-# never falls back to the install share.
-sub dict_bytes {
-    my $self = shift;
-    return $self->{+_DICT_BYTES} if $self->{+_DICT_LOADED};
-    $self->{+_DICT_LOADED} = 1;
-
-    my $entry = $self->_build_index->{DICT_ENTRY_NAME()};
-    return $self->{+_DICT_BYTES} = undef unless $entry;
-
-    open(my $fh, '<', $self->{+PATH}) or croak "open $self->{+PATH}: $!";
-    binmode $fh;
-    seek($fh, $entry->{offset}, SEEK_SET) or croak "seek dict: $!";
-    my $bytes;
-    read($fh, $bytes, $entry->{size}) == $entry->{size}
-        or croak "short dict read";
-    close $fh;
-
-    return $self->{+_DICT_BYTES} = $bytes;
+    my $entry = $self->_build_index->{$rel};
+    return 0 unless $entry;
+    return 0 if ($entry->{kind} // 'file') eq 'dir';
+    return 1;
 }
 
 sub read_file {
     my ($self, $rel) = @_;
     my $entry = $self->_build_index->{$rel}
         or croak "no such file '$rel' in archive";
+    croak "'$rel' is a directory entry, not a file"
+        if ($entry->{kind} // 'file') eq 'dir';
 
     open(my $fh, '<', $self->{+PATH}) or croak "open $self->{+PATH}: $!";
     binmode $fh;
@@ -209,53 +206,124 @@ sub read_file {
 
     # 'inner' tells us whether the entry's payload is itself
     # zstd-compressed (legacy default) or stored verbatim. Verbatim
-    # entries cover both already-.zst source files and the bundled
-    # dictionary; compressed entries cover anything that was a
-    # plaintext file in the source logdir.
+    # entries cover already-.zst source files; compressed entries
+    # cover anything that was a plaintext file in the source logdir.
     my $inner = $entry->{inner} // 'zstd';
-    my $plain = $inner eq 'none' ? $stored : zstd_decompress($stored);
+    my $plain = $inner eq 'none' ? $stored : $self->zstd_decompress($stored);
 
     open(my $sfh, '<', \$plain) or croak "open scalar: $!";
     return $sfh;
 }
 
-sub close {
-    my $self = shift;
-    delete $self->{+_INDEX};
-    delete $self->{+_DICT_BYTES};
-    delete $self->{+_DICT_LOADED};
+# No close() method on the backend: tar.zidx instances hold no
+# open filehandles between calls (every read_file open/closes a
+# fresh fh), so there is nothing to release. The cached index is
+# discarded automatically when the object is GC'd; consumers that
+# want to invalidate the cache can do so via Object::HashBase's
+# slot accessor.
+
+# }}}
+
+# {{{ Write API
+
+# extract: walk the index, materialise every member into a directory.
+# 'compressed=>0' (the default) decompresses zstd payloads on the way
+# out and strips the .zst suffix from the resulting filenames.
+# 'compressed=>1' preserves byte-for-byte (still strips one zstd
+# layer if the entry was wrapped, since the in-archive format always
+# zstd-compresses plaintext entries -- compressed=>1 just refers to
+# the suffix).
+sub extract {
+    my ($self, $dir, %opts) = @_;
+    croak "destination is required" unless defined $dir && length $dir;
+    croak "destination '$dir' already exists and is non-empty"
+        if -e $dir && -d $dir && _dir_non_empty($dir);
+
+    my $compressed = exists $opts{compressed} ? $opts{compressed} : 0;
+
+    make_path($dir);
+    require Test2::Harness2::Util::Zstd;
+    require App::Yath2::LogArchive::Directory;
+
+    my $index = $self->_build_index;
+    for my $rel (sort keys %$index) {
+        my $entry = $index->{$rel};
+
+        if (($entry->{kind} // 'file') eq 'dir') {
+            my $abs = File::Spec->catdir($dir, $rel);
+            make_path($abs) unless -d $abs;
+            next;
+        }
+
+        my $out_rel = $compressed ? "$rel.zst" : $rel;
+        # `compressed=>1` keeps the original bytes (including the
+        # outer zstd wrap); `compressed=>0` strips one layer and
+        # emits the plaintext.
+        my $out_abs = File::Spec->catfile($dir, $out_rel);
+        my $parent  = dirname($out_abs);
+        make_path($parent) unless -d $parent;
+
+        # Read the stored entry bytes once.
+        open(my $fh, '<', $self->{+PATH}) or croak "open $self->{+PATH}: $!";
+        binmode $fh;
+        seek($fh, $entry->{offset}, SEEK_SET) or croak "seek data: $!";
+        my $stored;
+        read($fh, $stored, $entry->{size}) == $entry->{size}
+            or croak "short data read for '$rel'";
+        close $fh;
+
+        my $inner = $entry->{inner} // 'zstd';
+
+        my $payload;
+        if ($compressed) {
+            # Caller wants the verbatim-suffixed bytes. If the
+            # archive entry was zstd-wrapped (inner='zstd'), the
+            # bytes already are .zst-shaped; emit them as-is. If
+            # the entry was stored verbatim (inner='none'), the
+            # source was already .zst -- still verbatim.
+            $payload = $stored;
+        }
+        else {
+            $payload = $inner eq 'none' ? $stored : $self->zstd_decompress($stored);
+
+            # When the original source was already .zst (inner=='none')
+            # and the caller asked for plaintext, the file extension
+            # in the archive carries '.zst'. Decompress the payload
+            # and strip the suffix from the output rel-path so the
+            # extracted form is a real plaintext file.
+            if ($inner eq 'none' && $rel =~ /\.zst\z/) {
+                $payload = Test2::Harness2::Util::Zstd::decompress_blob($payload);
+                (my $stripped = $rel) =~ s/\.zst\z//;
+                $out_abs = File::Spec->catfile($dir, $stripped);
+                $parent  = dirname($out_abs);
+                make_path($parent) unless -d $parent;
+            }
+        }
+
+        open(my $out, '>', $out_abs) or croak "open $out_abs: $!";
+        binmode $out;
+        print $out $payload;
+        close $out or croak "close $out_abs: $!";
+    }
+
+    return App::Yath2::LogArchive::Directory->new(path => $dir, live => 0);
 }
 
-# ----------------------------------------------------------------------
-# Writer.
-
-package App::Yath2::LogArchive::Writer::TarZIdx;
-use strict;
-use warnings;
-
-our $VERSION = '2.000011';
-
-use Carp qw/croak/;
-use File::Find ();
-use File::Spec ();
-use Role::Tiny::With;
-
-use Object::HashBase qw/source path format/;
-
-use Test2::Harness2::Util::JSON qw/encode_json/;
-
-with 'App::Yath2::LogArchive::Role::Writer';
-
-sub viable {
-    my ($class, $format) = @_;
-    return 0 unless defined $format && $format eq 'tar.zidx';
-    return 1;
+# archive on a TarZIdx is a no-op when called against an existing
+# .yath; it returns $self. (The user-visible flow is to call ->archive
+# on a Directory backend; that yields a TarZIdx pointing at the new
+# file.)
+sub archive {
+    my ($self, $out, %opts) = @_;
+    croak "Cannot archive a tar.zidx backend (already archived); "
+        . "open the source directory and call ->archive on it instead";
 }
 
-sub write_archive {
-    my $self = shift;
-
-    my $src = $self->{+SOURCE};
+# Internal: build a tar.zidx archive at this object's PATH from a
+# source directory. Used by Directory->archive($out) which constructs
+# a TarZIdx pointing at $out and then calls _write_from_directory.
+sub _write_from_directory {
+    my ($self, $src) = @_;
     my $out = $self->{+PATH};
     my $tmp = "$out.tmp.$$";
 
@@ -265,22 +333,49 @@ sub write_archive {
     open(my $fh, '>', $tmp) or croak "open $tmp: $!";
     binmode $fh;
 
-    my @entries;
+    my @file_entries;
+    my @dir_entries;
     File::Find::find(
         {
             no_chdir => 1,
             wanted   => sub {
-                return unless -f $_;
                 my $rel = File::Spec->abs2rel($_, $abs_src);
+                return if $rel eq '.';
                 $rel =~ s{\\}{/}g;
-                push @entries => [$rel, $_];
+                if (-f $_) {
+                    push @file_entries => [$rel, $_];
+                }
+                elsif (-d $_) {
+                    push @dir_entries => $rel;
+                }
             },
         },
         $abs_src,
     );
 
     my %index;
-    for my $pair (sort { $a->[0] cmp $b->[0] } @entries) {
+
+    # Directory entries land first so the on-disk tar walks
+    # parent-before-children. Empty payloads, typeflag '5'.
+    for my $rel (sort @dir_entries) {
+        my $stored = "$rel/";
+        my $hdr    = $self->pack_ustar_header(
+            $stored, 0,
+            typeflag => '5',
+            mode     => oct('0755'),
+        );
+        print $fh $hdr;
+        my $data_offset = tell $fh;
+        $index{$rel} = {
+            stored => $stored,
+            offset => $data_offset,
+            size   => 0,
+            inner  => 'none',
+            kind   => 'dir',
+        };
+    }
+
+    for my $pair (sort { $a->[0] cmp $b->[0] } @file_entries) {
         my ($rel, $abs) = @$pair;
 
         open(my $rfh, '<', $abs) or croak "open $abs: $!";
@@ -289,12 +384,12 @@ sub write_archive {
         my $raw = <$rfh>;
         close $rfh;
 
-        # Already-zstd-compressed source files (the loggers' .json.zst
-        # / .jsonl.zst, plus the bundled zstd-dict.bin) are stored
-        # verbatim with inner=>'none'. Everything else is wrapped in
-        # an inner zstd frame and recorded as inner=>'zstd', matching
-        # the historical default.
-        my $is_zst = ($rel =~ /\.zst\z/) || ($rel eq App::Yath2::LogArchive::TarZIdx::DICT_ENTRY_NAME());
+        # Already-zstd-compressed source files (the loggers'
+        # .json.zst / .jsonl.zst) are stored verbatim with
+        # inner=>'none'. Everything else is wrapped in an inner
+        # zstd frame and recorded as inner=>'zstd', matching the
+        # historical default.
+        my $is_zst = ($rel =~ /\.zst\z/);
         my ($payload, $stored, $inner);
         if ($is_zst) {
             $payload = $raw;
@@ -302,18 +397,16 @@ sub write_archive {
             $inner   = 'none';
         }
         else {
-            $payload = App::Yath2::LogArchive::TarZIdx::zstd_compress($raw);
+            $payload = $self->zstd_compress($raw);
             $stored  = "$rel.zst";
             $inner   = 'zstd';
         }
 
-        my $hdr = App::Yath2::LogArchive::TarZIdx::pack_ustar_header(
-            $stored, length($payload),
-        );
+        my $hdr = $self->pack_ustar_header($stored, length($payload));
         print $fh $hdr;
         my $data_offset = tell $fh;
         print $fh $payload;
-        my $pad = App::Yath2::LogArchive::TarZIdx::pad_to_block(length $payload);
+        my $pad = $self->pad_to_block(length $payload);
         print $fh ("\0" x $pad) if $pad;
 
         $index{$rel} = {
@@ -321,32 +414,47 @@ sub write_archive {
             offset => $data_offset,
             size   => length $payload,
             inner  => $inner,
+            kind   => 'file',
         };
     }
 
     my $idx_json       = encode_json(\%index);
-    my $idx_compressed = App::Yath2::LogArchive::TarZIdx::zstd_compress($idx_json);
-    my $idx_hdr        = App::Yath2::LogArchive::TarZIdx::pack_ustar_header(
-        App::Yath2::LogArchive::TarZIdx::INDEX_ENTRY_NAME(),
-        length($idx_compressed),
-    );
+    my $idx_compressed = $self->zstd_compress($idx_json);
+    my $idx_hdr        = $self->pack_ustar_header(INDEX_ENTRY_NAME, length($idx_compressed));
     print $fh $idx_hdr;
     my $idx_offset = tell $fh;
     print $fh $idx_compressed;
-    my $pad = App::Yath2::LogArchive::TarZIdx::pad_to_block(length $idx_compressed);
+    my $pad = $self->pad_to_block(length $idx_compressed);
     print $fh ("\0" x $pad) if $pad;
 
-    print $fh ("\0" x (App::Yath2::LogArchive::TarZIdx::BLOCK_SIZE() * 2));
+    print $fh ("\0" x (BLOCK_SIZE * 2));
 
-    print $fh App::Yath2::LogArchive::TarZIdx::pack_footer(
-        $idx_offset, length($idx_compressed),
-    );
+    print $fh $self->pack_footer($idx_offset, length($idx_compressed));
 
     close $fh or croak "close $tmp: $!";
 
     rename($tmp, $out) or croak "rename $tmp -> $out: $!";
+
+    # Force re-read of the index next time list_files / has_file
+    # / read_file is called.
+    delete $self->{+_INDEX};
+
     return $out;
 }
+
+sub _dir_non_empty {
+    my ($dir) = @_;
+    opendir(my $dh, $dir) or return 0;
+    while (defined(my $entry = readdir($dh))) {
+        next if $entry eq '.' || $entry eq '..';
+        closedir($dh);
+        return 1;
+    }
+    closedir($dh);
+    return 0;
+}
+
+# }}}
 
 1;
 
@@ -358,66 +466,61 @@ __END__
 
 =head1 NAME
 
-App::Yath2::LogArchive::TarZIdx - Reader and writer for the tar.zidx archive format.
+App::Yath2::LogArchive::TarZIdx - tar.zidx-backed LogArchive backend.
 
 =head1 DESCRIPTION
 
-Single in-tree archive format yath produces and reads. On disk it is
-a USTAR-format tar followed by a 32-byte footer; the tar carries
-per-entry payloads (each individually zstd-compressed if the source
-was plaintext, or stored verbatim if the source was already a
-.zst-suffixed file or the bundled zstd dictionary) plus a special
+Reads and writes the single in-tree archive format yath produces.
+On disk the format is a USTAR-format tar followed by a 32-byte
+footer; the tar carries per-entry payloads (each individually
+zstd-compressed if the source was plaintext, or stored verbatim if
+the source was already a C<.zst>-suffixed file) plus a special
 index entry. The footer points at the index, which is a
 zstd-compressed JSON map from relative path to entry metadata
 (C<{stored, offset, size, inner}>).
 
-C<inner> takes the values:
+C<inner> is C<'zstd'> when the entry's payload bytes are
+zstd-compressed, or C<'none'> when the bytes are stored verbatim.
+
+=head1 ATTRIBUTES
 
 =over 4
 
-=item C<zstd>
+=item path (required)
 
-The entry's payload bytes are zstd-compressed. The reader
-decompresses them on C<read_file>.
-
-=item C<none>
-
-The entry's payload is stored verbatim. The reader returns the
-bytes as-is.
+The path to the C<.yath> file.
 
 =back
 
-The bundled zstd dictionary (C<zstd-dict.bin>) is always stored with
-C<inner =E<gt> "none">. Consumers fetch it via C<-E<gt>dict_bytes>;
-a missing entry means the archive was written dict-less and the
-reader does not consult any other dict source.
+=head1 METHODS
 
-=head1 PUBLIC INTERFACE
+In addition to the inherited L<App::Yath2::LogArchive> API:
 
 =over 4
 
-=item Reader: C<App::Yath2::LogArchive::TarZIdx-E<gt>new(path =E<gt> $path)>
+=item $new_dir = $tar->extract($dest_dir, compressed => $bool)
 
-Returns a reader object. C<list_files>, C<has_file>, C<read_file>,
-C<dict_bytes>, and C<close> behave per the
-L<App::Yath2::LogArchive::Role::Source> contract.
+Extract the archive into a fresh directory. With
+C<compressed =E<gt> 0> (the default for this backend, matching
+C<yath extract>) every zstd-compressed member is decompressed on
+the way out and the trailing C<.zst> suffix is stripped from the
+output filename. With C<compressed =E<gt> 1> entries are written
+verbatim with C<.zst> suffixes preserved. Returns a new
+L<App::Yath2::LogArchive::Directory> instance pointing at the
+destination.
 
-=item Writer: C<App::Yath2::LogArchive::Writer::TarZIdx-E<gt>new(source =E<gt> $dir, path =E<gt> $out)-E<gt>write_archive>
+=item C<archive> is unsupported on this backend
 
-Walks C<$dir>, writes a tar.zidx archive at C<$out>. C<$dir/zstd-dict.bin>,
-when present, is bundled into the archive at the same path so
-extracts and replays do not depend on the recipient's install
-having a matching dict.
+Calling L</archive> on a TarZIdx instance croaks. The user-visible
+flow is to construct an L<App::Yath2::LogArchive::Directory> for
+the source and call L<App::Yath2::LogArchive::Directory/archive>
+on it; that yields a TarZIdx instance pointing at the new file.
 
 =back
 
 =head1 SEE ALSO
 
-L<App::Yath2::LogArchive::Format> -- magic bytes / footer constants.
-
-L<Test2::Harness2::Util::Zstd> -- the zstd helper used by the
-loggers; the format here is independent of that helper but uses
-the same Compress::Zstd module under the hood.
+L<App::Yath2::LogArchive> -- the base class / factory.
 
 =head1 SOURCE
 
@@ -444,8 +547,8 @@ L<https://github.com/Test-More/Test2-Harness>.
 
 Copyright Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
-This program is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
 
 See L<http://dev.perl.org/licenses/>
 

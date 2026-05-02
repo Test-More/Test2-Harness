@@ -42,7 +42,7 @@ sub _bootstrap {
     # lazily so live-only callers do not drag in the archive backends.
     require App::Yath2::LogArchive;
 
-    my $archive = App::Yath2::LogArchive->new(path => $log);
+    my $archive = App::Yath2::LogArchive->open(path => $log);
     $self->{+ARCHIVE}           = $archive;
     $self->{+ARCHIVE_EXTRACTED} = {};
 
@@ -56,11 +56,20 @@ sub _bootstrap {
     }
 
     for my $rid (@runs) {
-        my $scope_map = $archive->artifacts($rid);
-        my $state     = $self->_collect_static_state($scope_map, $rid);
+        my %scope_map = $archive->iter_artifacts($rid);
+        my $state     = $self->_collect_static_state(\%scope_map, $rid);
         $self->_apply_run_state($rid, $state) if $state;
 
-        $self->_setup_static_event_readers($scope_map);
+        $self->_setup_static_event_readers(\%scope_map);
+
+        # Per-job event logs live in artifacts($rid, $job_id) scope; the
+        # run-scope iterator omits them. Pull each job's general-event
+        # logs in too so the streamer surfaces test events alongside
+        # run-lifecycle events.
+        for my $jid ($archive->jobs($rid)) {
+            my %job_map = $archive->iter_artifacts($rid, $jid);
+            $self->_setup_static_event_readers(\%job_map);
+        }
     }
 
     # Harness-scope artifacts (services/harness.{jsonl,json}, plus any
@@ -69,9 +78,9 @@ sub _bootstrap {
     # events (service_started / service_stopped / warn / diag from the
     # harness itself) show up alongside the run-scoped stream.
     if ($self->{+GLOBAL}) {
-        my $harness_map = $archive->artifacts;
-        $self->_setup_static_event_readers($harness_map)
-            if ref($harness_map) eq 'HASH' && %$harness_map;
+        my %harness_map = $archive->iter_artifacts;
+        $self->_setup_static_event_readers(\%harness_map)
+            if %harness_map;
     }
 
     return;

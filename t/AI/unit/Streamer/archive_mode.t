@@ -4,48 +4,41 @@ use File::Path qw/make_path/;
 use Test2::Harness2::Util::JSON qw/write_json_file_atomic/;
 
 use App::Yath2::LogArchive;
-use App::Yath2::LogArchive::Format qw/default_writer_format/;
 use App::Yath2::Streamer::Static;
 
 my $tmp   = tempdir(CLEANUP => 1);
 my $logs  = "$tmp/logs";
 make_path("$logs/runs/RUN1/tests");
 
-my $state_artifact = {"runs/RUN1/run.json" => 'Test2::Harness2::Collector::Logger::JSON'};
-write_json_file_atomic("$logs/artifacts.json",            $state_artifact);
-write_json_file_atomic("$logs/runs/RUN1/artifacts.json",  $state_artifact);
-
-write_json_file_atomic(
-    "$logs/runs/RUN1/run.json",
-    {
-        run_id     => 'RUN1',
-        created_at => 1000,
-        pending    => [],
-        running    => [],
-        done       => ['A', 'B'],
-        results    => {
-            A => {
-                queued_at    => 1000, started_at => 1001, completed_at => 1002,
-                pass => 1, exit => 0,
-                rel_file => 't/a.t', abs_file => '/abs/t/a.t', file => '/abs/t/a.t',
-            },
-            B => {
-                queued_at    => 1000, started_at => 1003, completed_at => 1004,
-                pass => 0, exit => 256,
-                rel_file => 't/b.t', abs_file => '/abs/t/b.t', file => '/abs/t/b.t',
-            },
+# Phase 4: every runs/<id>/ must carry spec.json. The static streamer
+# reads every *.json under runs/<id>/ as a state snapshot (loggers are
+# resolved by extension), so spec.json and state.json must agree --
+# mirror the same content into both.
+my $state = {
+    run_id     => 'RUN1',
+    created_at => 1000,
+    pending    => [],
+    running    => [],
+    done       => ['A', 'B'],
+    results    => {
+        A => {
+            queued_at    => 1000, started_at => 1001, completed_at => 1002,
+            pass => 1, exit => 0,
+            rel_file => 't/a.t', abs_file => '/abs/t/a.t', file => '/abs/t/a.t',
+        },
+        B => {
+            queued_at    => 1000, started_at => 1003, completed_at => 1004,
+            pass => 0, exit => 256,
+            rel_file => 't/b.t', abs_file => '/abs/t/b.t', file => '/abs/t/b.t',
         },
     },
-);
+};
+write_json_file_atomic("$logs/runs/RUN1/spec.json",  $state);
+write_json_file_atomic("$logs/runs/RUN1/state.json", $state);
 
 # Pack the logs directory as a .yath archive.
 my $archive_path = "$tmp/run.yath";
-my $format       = default_writer_format();
-App::Yath2::LogArchive->create(
-    source => $logs,
-    path   => $archive_path,
-    format => $format,
-);
+App::Yath2::LogArchive->open(dir => $logs)->archive($archive_path);
 ok(-f $archive_path, "archive written at $archive_path");
 
 # Streamer opens the archive directly.
@@ -85,7 +78,7 @@ is($run_end->{fail_count}, 1, 'run_end fail_count=1');
 # streamer does not need, so that file must NOT have been extracted.
 my $extracted = $streamer->{archive_extracted} // {};
 ok(
-    (grep { m{^runs/RUN1/run\.json\z} } keys %$extracted),
+    (grep { m{^runs/RUN1/state\.json\z} } keys %$extracted),
     'state artifact was extracted on demand',
 );
 ok(

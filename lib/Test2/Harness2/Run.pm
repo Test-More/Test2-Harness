@@ -19,26 +19,21 @@ use Object::HashBase qw{
     <run_id
     <jobs
     <created_at
-    <pending
-    <running
-    <done
-    <results
     <resources
-    <aborted_reason
     <loggers
     <extend_loggers
     <test_loggers
     <extend_test_loggers
     <launch_job_timeout
-    +resources_started
-    +resources_torn_down
+    <requested_harness_uuid
+    <hash_seed
 };
 
 # Default retry interval the harness will use when a launch_job
 # request to a run service or preload stage times out waiting for
-# its ack (see IPC_AND_LOGGERS §14). Overridable per-run by setting
-# launch_job_timeout at construction; a future CLI option will
-# expose this to the user.
+# its ack (see ARCHITECTURE.md / former IPC_AND_LOGGERS §14).
+# Overridable per-run by setting launch_job_timeout at construction;
+# a future CLI option will expose this to the user.
 use constant DEFAULT_LAUNCH_JOB_TIMEOUT_SECS => 5;
 
 sub init {
@@ -47,10 +42,6 @@ sub init {
     $self->{+RUN_ID}             //= gen_uuid();
     $self->{+JOBS}               //= [];
     $self->{+CREATED_AT}         //= time;
-    $self->{+PENDING}            //= [map { $_->job_id } @{$self->{+JOBS}}];
-    $self->{+RUNNING}            //= [];
-    $self->{+DONE}               //= [];
-    $self->{+RESULTS}            //= {};
     $self->{+RESOURCES}          //= [];
     $self->{+LAUNCH_JOB_TIMEOUT} //= DEFAULT_LAUNCH_JOB_TIMEOUT_SECS;
 
@@ -148,8 +139,8 @@ sub _coerce_test_file {
         ($tf_class, @params) = @$ref;
     }
     elsif ($ref eq 'HASH') {
-        $method = 'rehydrate';
-        @params = ($input);
+        $method   = 'rehydrate';
+        @params   = ($input);
         $tf_class = $input->{__test_file_class__}
             or croak "hashref entries must carry '__test_file_class__' (got keys: " . join(',', sort keys %$input) . ")";
     }
@@ -167,36 +158,42 @@ sub _coerce_test_file {
     return $tf_class->$method(@params);
 }
 
-sub mark_running {
-    my ($self, $job_id) = @_;
-    my @new = grep { $_ ne $job_id } @{$self->{+PENDING}};
-    croak "job_id '$job_id' is not pending" if @new == @{$self->{+PENDING}};
-    $self->{+PENDING} = \@new;
-    push @{$self->{+RUNNING}} => $job_id;
-}
-
-sub mark_done {
-    my ($self, $job_id) = @_;
-    my @new = grep { $_ ne $job_id } @{$self->{+RUNNING}};
-    croak "job_id '$job_id' is not running" if @new == @{$self->{+RUNNING}};
-    $self->{+RUNNING} = \@new;
-    push @{$self->{+DONE}} => $job_id;
-}
-
-sub mark_skipped {
-    my ($self, $job_id) = @_;
-    my @new = grep { $_ ne $job_id } @{$self->{+PENDING}};
-    croak "job_id '$job_id' is not pending" if @new == @{$self->{+PENDING}};
-    $self->{+PENDING} = \@new;
-    push @{$self->{+DONE}} => $job_id;
-}
-
-sub is_complete {
-    my $self = shift;
-    return !@{$self->{+PENDING}} && !@{$self->{+RUNNING}};
+# Add a job to the spec at queue-build time. After the run has been
+# handed to $harness->queue, the Spec is treated as immutable and
+# this MUST NOT be called.
+sub add_job {
+    my ($self, $job) = @_;
+    croak "'job' is required" unless defined $job;
+    croak "'job' must be a Test2::Harness2::Run::Job"
+        unless blessed($job) && $job->isa('Test2::Harness2::Run::Job');
+    push @{$self->{+JOBS}} => $job;
+    return;
 }
 
 sub TO_JSON { return {%{$_[0]}} }
+
+sub rehydrate {
+    my $class = shift;
+    my ($hash) = @_;
+    croak "rehydrate requires a hashref" unless ref($hash) eq 'HASH';
+
+    my %args = %$hash;
+
+    # Jobs round-trip: when reading back from disk each entry will be
+    # a plain hash (TO_JSON unblessed it). Re-bless via Run::Job's
+    # rehydrate-shaped constructor so callers see the same object
+    # graph they would have seen pre-serialization. Already-blessed
+    # entries are left alone.
+    if (ref($args{jobs}) eq 'ARRAY') {
+        my @rebuilt;
+        for my $j (@{$args{jobs}}) {
+            push @rebuilt => blessed($j) ? $j : Test2::Harness2::Run::Job->new(%$j);
+        }
+        $args{jobs} = \@rebuilt;
+    }
+
+    return $class->new(%args);
+}
 
 1;
 
@@ -208,7 +205,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness2::Run - A single test run (ordered list of jobs with FIFO state tracking)
+Test2::Harness2::Run - Immutable spec for a single test run.
 
 =head1 SYNOPSIS
 
@@ -217,19 +214,24 @@ Test2::Harness2::Run - A single test run (ordered list of jobs with FIFO state t
     # Build from a list of test files
     my $run = Test2::Harness2::Run->from_files(files => ['t/foo.t', 't/bar.t']);
 
-    # Advance job states
-    my $job_id = $run->pending->[0];
-    $run->mark_running($job_id);
-    $run->mark_done($job_id);
-
-    print "complete!\n" if $run->is_complete;
+    # Hand to the harness; from this point the Run is treated as immutable.
+    $harness->queue_test_run(run => $run);
 
 =head1 DESCRIPTION
 
-A C<Test2::Harness2::Run> represents one logical test run: an ordered
-collection of test jobs each of which moves through C<pending> →
-C<running> → C<done> states.  The harness service maintains a queue of
-these objects and advances their state as the collector completes each job.
+A C<Test2::Harness2::Run> represents the I<intent> to execute one logical
+test run: an ordered collection of test jobs plus the policies (resources,
+loggers, timeouts) the caller chose at queue time.
+
+The Run itself does not track lifecycle state. Mutable state (pending /
+running / done lists, per-job result hashes, exit summaries, etc.) lives
+on a paired L<Test2::Harness2::Run::State> the run service constructs as
+soon as the Run is accepted for execution.
+
+Once the spec has been handed off to C<< $harness->queue >> it is treated
+as immutable. Mutators are limited to the queue-build phase: C<add_job>
+may be called to append a job, but no setter exists for the policy slots
+because they are constructor-only.
 
 =head1 ATTRIBUTES
 
@@ -246,27 +248,36 @@ L<Test2::Harness2::Role::TestFile>-consuming value object.
 
 =item created_at
 
-Epoch timestamp (float) when the run was created.
-
-=item pending
-
-Arrayref of job_ids not yet started.
-
-=item running
-
-Arrayref of job_ids currently being executed.
-
-=item done
-
-Arrayref of job_ids that have finished.
+Epoch timestamp (float) when the run was queued.
 
 =item resources
 
-Arrayref of L<Test2::Harness2::Role::Resource> instances that are scoped
-to this specific run (as opposed to the harness-global resources on the
-harness itself). Defaults to empty. The harness service starts per-run
-resource services lazily when the run is first considered for launch,
-and tears them down when the run completes.
+Arrayref of L<Test2::Harness2::Role::Resource> instances scoped to this
+specific run (as opposed to the harness-global resources on the harness
+itself). Defaults to empty.
+
+=item loggers / extend_loggers
+
+Per-run service-logger overrides. Replace-style and extend-style; mutually
+exclusive.
+
+=item test_loggers / extend_test_loggers
+
+Per-run test-job-logger overrides. Replace-style and extend-style;
+mutually exclusive.
+
+=item launch_job_timeout
+
+Seconds the harness will wait for an ack on a launch_job IPC request
+before retrying.
+
+=item requested_harness_uuid
+
+UUID of a specific harness the user wants this run to execute on, when
+they pinned a target at queue time. C<undef> means "any available
+harness". The runtime counterpart C<running_harness_uuid> on
+L<Test2::Harness2::Run::State> records the harness that actually ran
+the run.
 
 =back
 
@@ -297,27 +308,33 @@ itself from the hashref.
 Bare path strings are B<not> accepted: callers must hand in one of
 the three forms above.
 
-=item $run->mark_running($job_id)
+=item $run = Test2::Harness2::Run->rehydrate(\%hash)
 
-Move C<$job_id> from C<pending> to C<running>.  Croaks if the job is not
-currently pending.
+Reconstruct a Run from a hashref shaped like C<TO_JSON>'s output.
+Re-blesses C<Run::Job> entries inside the C<jobs> arrayref.
 
-=item $run->mark_done($job_id)
+=item $run->add_job($job)
 
-Move C<$job_id> from C<running> to C<done>.  Croaks if the job is not
-currently running.
+Append a L<Test2::Harness2::Run::Job> to the spec at queue-build time.
+Must not be called once the spec has been handed to the harness.
 
-=item $run->mark_skipped($job_id)
+=item $list = $run->effective_service_loggers(\@harness_defaults)
 
-Move C<$job_id> directly from C<pending> to C<done> without going through
-C<running>.  Used by the scheduler when a resource rules a job
-permanently-unsatisfiable.  Croaks if the job is not currently pending.
+=item $list = $run->effective_test_loggers(\@harness_defaults)
 
-=item $bool = $run->is_complete
+Apply replace / extend overrides against a list of harness-level
+defaults and return a fresh arrayref.
 
-Returns true when both C<pending> and C<running> are empty.
+=item $hash = $run->TO_JSON
+
+Return a plain hash of every spec slot. Suitable for serialization to
+the C<runs/E<lt>run_idE<gt>/spec.json> sidecar.
 
 =back
+
+=head1 SEE ALSO
+
+L<Test2::Harness2::Run::State> -- mutable runtime state.
 
 =head1 SOURCE
 

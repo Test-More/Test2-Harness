@@ -9,6 +9,11 @@ use Test2::Harness2::Collector;
 use Test2::Harness2::Collector::Test;
 use Test2::Harness2::Collector::Logger::JSONL;
 
+# Force-load the Win32-only methods so the cross-platform tests below
+# that exercise _check_new_pgroup_supported_on_win32 / collect_from_file
+# can call them on every platform.
+use Test2::Harness2::Collector::Win32;
+
 # Minimal logger that consumes the role and leaves metadata() at its
 # role default (undef). Used to assert that loggers with no metadata
 # get omitted from the collector_artifacts payload.
@@ -17,7 +22,8 @@ use Test2::Harness2::Collector::Logger::JSONL;
     package T2H2_SilentLogger;
     use Object::HashBase;
     use Role::Tiny::With;
-    sub update_style { 'append' }
+    sub update_type { 'append' }
+    sub file_ext { 'jsonl' }
     sub log_reader   { undef }
     sub ready        { 0 }
     sub fetch_events { () }
@@ -1085,7 +1091,8 @@ subtest 'spec instantiation is deferred to the collector child' => sub {
     sub failing          { }
     sub set_process_info { }
     sub set_ipcm_info    { }
-    sub update_style     { 'append' }
+    sub update_type     { 'append' }
+    sub file_ext     { 'jsonl' }
     sub log_reader       { undef }
     sub ready            { 0 }
     sub fetch_events     { () }
@@ -1142,7 +1149,8 @@ subtest 'blessed instances pass through unchanged and survive validation' => sub
     sub failing          { }
     sub set_process_info { }
     sub set_ipcm_info    { }
-    sub update_style     { 'append' }
+    sub update_type     { 'append' }
+    sub file_ext     { 'jsonl' }
     sub log_reader       { undef }
     sub ready            { 0 }
     sub fetch_events     { () }
@@ -1629,7 +1637,8 @@ subtest 'blessed logger receives set_process_info and set_ipcm_info at instantia
     sub set_ipcm_info      { push @main::T2H2_RecordingLogger_IPCM => $_[1];          return }
     sub set_auditor        { }
     sub set_loggers_lookup { }
-    sub update_style       { 'append' }
+    sub update_type       { 'append' }
+    sub file_ext       { 'jsonl' }
     sub log_reader         { undef }
     sub ready              { 0 }
     sub fetch_events       { () }

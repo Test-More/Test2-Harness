@@ -10,6 +10,7 @@ use Scalar::Util qw/blessed/;
 use parent 'Test2::Harness2::Collector';
 
 use Test2::Harness2::Collector::Observer::TestObserver;
+use Test2::Harness2::Collector::Util qw/validate_spec/;
 
 # Test-job collectors carry an auditor. The auditor slot shadows the
 # base class's no-op `auditor` accessor; _auditor_spec holds the
@@ -50,7 +51,7 @@ sub _normalize_auditor {
     my $spec = $self->{+AUDITOR};
     return unless defined $spec;
 
-    $self->_validate_spec($spec, 'auditor', 'Test2::Harness2::Role::Auditor');
+    validate_spec($spec, 'auditor', 'Test2::Harness2::Role::Auditor');
 
     $self->{+_AUDITOR_SPEC} = $spec;
 }

@@ -39,7 +39,7 @@ waitpid $pid, 0;
 my $exit = $? >> 8;
 is($exit, 0, 'service exited cleanly');
 
-ok(-e "$dir/logs/services/harness.jsonl", 'service log written');
+ok(-e "$dir/logs/services/harness/events.jsonl", 'service log written');
 
 # The run's services/ scratch dir is still created at RunService
 # construction (resources scoped to the run land under there), so a
@@ -53,7 +53,7 @@ is(scalar @run_dirs, 1, 'one run dir');
 # service_loggers, so the run service deliberately writes nothing.
 
 # Read the service log and confirm key events are present.
-open my $slog, '<', "$dir/logs/services/harness.jsonl" or die "Cannot open harness.jsonl: $!";
+open my $slog, '<', "$dir/logs/services/harness/events.jsonl" or die "Cannot open harness.jsonl: $!";
 my @events = map { decode_json($_) } grep { /\S/ } <$slog>;
 close $slog;
 

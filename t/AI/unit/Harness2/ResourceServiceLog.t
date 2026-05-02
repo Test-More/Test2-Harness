@@ -69,14 +69,14 @@ sub _mk_res {
     return ($cls, Test::OneService::Res->new(service_class => $cls));
 }
 
-subtest 'global service lays down services/<name>.jsonl' => sub {
+subtest 'global service lays down services/<name>/events.jsonl' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my ($cls, $res) = _mk_res(pid => 93_001);
     my $h = Test2::Harness2->new(workdir => $dir, resources => [$res]);
 
     $h->start_resource_services([$res], scope => 'global');
 
-    my $expected = "$dir/logs/services/foo.jsonl";
+    my $expected = "$dir/logs/services/foo/events.jsonl";
     ok(-e $expected, "log file created at $expected");
 
     my $svc = $h->{resource_services}{93_001};
@@ -86,7 +86,7 @@ subtest 'global service lays down services/<name>.jsonl' => sub {
     is($svc->{service_class}, $cls,      'tracking entry records service_class');
 };
 
-subtest 'per-run service lays down runs/<run_id>/services/<name>.jsonl' => sub {
+subtest 'per-run service lays down runs/<run_id>/services/<name>/events.jsonl' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $h   = Test2::Harness2->new(workdir => $dir);
     my ($cls, $res) = _mk_res(pid => 93_101);
@@ -94,7 +94,7 @@ subtest 'per-run service lays down runs/<run_id>/services/<name>.jsonl' => sub {
 
     $h->start_resource_services([$res], scope => 'run', run => $run);
 
-    my $expected = "$dir/logs/runs/r-alpha/services/foo.jsonl";
+    my $expected = "$dir/logs/runs/r-alpha/services/foo/events.jsonl";
     ok(-e $expected, "log file created at $expected");
 
     my $svc = $h->{resource_services}{93_101};
@@ -146,8 +146,8 @@ subtest 'name is allowed to collide across scopes (global vs run)' => sub {
     };
     my $err = $@;
     ok($ok,                                            'run-scoped reuse of a global name is allowed') or diag $err;
-    ok(-e "$dir/logs/services/foo.jsonl",              'global log at services/foo.jsonl');
-    ok(-e "$dir/logs/runs/r-cross/services/foo.jsonl", 'run log at runs/r-cross/services/foo.jsonl');
+    ok(-e "$dir/logs/services/foo/events.jsonl",              'global log at services/foo/events.jsonl');
+    ok(-e "$dir/logs/runs/r-cross/services/foo/events.jsonl", 'run log at runs/r-cross/services/foo/events.jsonl');
 };
 
 subtest 'names are allowed to collide across different runs' => sub {
@@ -165,8 +165,8 @@ subtest 'names are allowed to collide across different runs' => sub {
     };
     my $err = $@;
     ok($ok,                                        'separate runs may share service names') or diag $err;
-    ok(-e "$dir/logs/runs/r-A/services/foo.jsonl", 'run A has its own foo.jsonl');
-    ok(-e "$dir/logs/runs/r-B/services/foo.jsonl", 'run B has its own foo.jsonl');
+    ok(-e "$dir/logs/runs/r-A/services/foo/events.jsonl", 'run A has its own events.jsonl');
+    ok(-e "$dir/logs/runs/r-B/services/foo/events.jsonl", 'run B has its own events.jsonl');
 };
 
 subtest "harness's own NAME is reserved in global scope" => sub {
@@ -188,7 +188,7 @@ subtest 'harness name is not reserved in per-run scope' => sub {
 
     my $ok = eval { $h->start_resource_services([$res], scope => 'run', run => $run); 1 };
     ok($ok,                                         'per-run usage of the harness-reserved name is permitted');
-    ok(-e "$dir/logs/runs/r-ns/services/foo.jsonl", 'per-run log created regardless of global reservation');
+    ok(-e "$dir/logs/runs/r-ns/services/foo/events.jsonl", 'per-run log created regardless of global reservation');
 };
 
 subtest 'one resource with two services gets two distinct log files' => sub {
@@ -200,8 +200,8 @@ subtest 'one resource with two services gets two distinct log files' => sub {
 
     $h->start_resource_services([$res], scope => 'global');
 
-    ok(-e "$dir/logs/services/alpha.jsonl", 'alpha log created');
-    ok(-e "$dir/logs/services/beta.jsonl",  'beta log created');
+    ok(-e "$dir/logs/services/alpha/events.jsonl", 'alpha log created');
+    ok(-e "$dir/logs/services/beta/events.jsonl",  'beta log created');
 
     my %by_name = map { ($_->{name} => $_) } values %{$h->{resource_services}};
     ok(exists $by_name{alpha}, 'alpha service tracked');
@@ -220,7 +220,7 @@ subtest 'restart reuses the same name + log_path' => sub {
     my $h   = Test2::Harness2->new(workdir => $dir, resources => [$res]);
     $h->start_resource_services([$res], scope => 'global');
 
-    my $expected = "$dir/logs/services/foo.jsonl";
+    my $expected = "$dir/logs/services/foo/events.jsonl";
     is($h->{resource_services}{93_701}{log_path}, $expected, 'initial log_path set');
 
     # Simulate the original pid exiting; restart picks up pid 93_702.

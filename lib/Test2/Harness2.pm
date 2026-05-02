@@ -5,10 +5,8 @@ use warnings;
 our $VERSION = '2.000011';
 
 use Carp qw/croak/;
-use File::Copy qw/cp/;
 use File::Path qw/make_path/;
-use File::ShareDir ();
-use File::Spec     ();
+use File::Spec ();
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Util::UUID qw/gen_uuid/;
@@ -20,18 +18,16 @@ use Atomic::Pipe;
 use IPC::Manager qw/ipcm_spawn/;
 use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
-use Test2::Harness2::Resource::JobCount;
 use Test2::Harness2::Role::ResourceServiceHost;
 use Test2::Harness2::Role::Service;
 use Test2::Harness2::Run;
+use Test2::Harness2::Run::State;
 use Test2::Harness2::RunService;
 use Test2::Harness2::Util::EventEmitter;
-use Test2::Harness2::Util::JSON qw/write_json_zst_file_atomic/;
 
 use Object::HashBase qw{
     <workdir
     <logdir
-    <dict_path
     <name
     <ipc_parent
     <job_id
@@ -44,8 +40,10 @@ use Object::HashBase qw{
     <jump_to
     <resources
     <broken_resource_behavior
+    <hash_seed
     state
     +queue
+    +run_states
     +scheduler
     +running_jobs
     <resource_services
@@ -64,7 +62,7 @@ use Object::HashBase qw{
 # when a job needs a resource that has been flipped to
 # permanent_broken. All three paths route the job through a real
 # Collector launch so the on-disk artifacts match a real test's --
-# see _launch_synthetic_job.
+# see _launch_unavailable_action_job.
 #
 #   skip  - launch `perl -e 'use Test2::V0; skip_all ...'` so the
 #           job's log looks like a regular test that called skip_all.
@@ -121,42 +119,13 @@ sub init {
 
     make_path("$logdir/services");
 
-    # Resolve the active zstd dictionary for the run. An explicit
-    # dict_path (set by the caller, typically the yath command after
-    # parsing --zstd-dict) wins. Otherwise fall back to the
-    # install-shipped dictionary at share/other/zstd.dict via
-    # File::ShareDir. If neither is available the run is dict-less:
-    # files are still zstd-compressed, just without a pre-trained
-    # dictionary.
-    #
-    # We resolve via File::ShareDir directly rather than going
-    # through App::Yath2::Util to honor the CLAUDE.md rule that
-    # Test2::Harness2 must not load App::Yath2 modules. The yath
-    # command layer can still pre-resolve via App::Yath2::Util if
-    # it has a custom path; the result is passed in here.
-    if (exists $self->{+DICT_PATH}) {
-        my $dict = $self->{+DICT_PATH};
-        if (defined $dict) {
-            croak "dict_path '$dict' does not exist or is not readable"
-                unless -f $dict && -r _;
-        }
-    }
-    else {
-        my $share = eval { File::ShareDir::dist_file('Test2-Harness2', 'other/zstd.dict'); };
-        $self->{+DICT_PATH} = (defined $share && -f $share) ? $share : undef;
-    }
-
-    if (defined $self->{+DICT_PATH}) {
-        cp($self->{+DICT_PATH}, "$logdir/zstd-dict.bin")
-            or croak "cp '$self->{+DICT_PATH}' -> '$logdir/zstd-dict.bin': $!";
-    }
-
     $self->{+NAME}              //= 'harness';
     $self->{+JOB_ID}            //= gen_uuid();
     $self->{+KILL_TIMEOUT}      //= 15;
     $self->{+PARENT_PIDS}       //= [];
     $self->{+STATE}             //= 'running';
     $self->{+QUEUE}             //= [];
+    $self->{+RUN_STATES}        //= {};
     $self->{+SCHEDULER}         //= {};
     $self->{+RUNNING_JOBS}      //= {};
     $self->{+RESOURCE_SERVICES} //= {};
@@ -215,15 +184,13 @@ sub init {
 sub _init_resources {
     my $self = shift;
 
+    # The harness no longer mandates the presence of any resource class.
+    # An empty resources list is a valid, unlimited-concurrency
+    # configuration. Auto-injection of a default JobCount happens at
+    # the yath-test layer (App::Yath2::Options::Resource), not here, so
+    # callers that construct a harness directly remain in full control
+    # of which limiters (if any) participate.
     $self->{+RESOURCES} //= [];
-
-    # At least one job-count limiter must be active. Fall back to a
-    # single-slot JobCount if the caller did not supply one; this preserves
-    # the legacy "one at a time" behaviour when the harness is used without
-    # explicit concurrency configuration.
-    my $has_limiter = grep { $_->is_job_limiter } @{$self->{+RESOURCES}};
-    push @{$self->{+RESOURCES}} => Test2::Harness2::Resource::JobCount->new(slots => 1)
-        unless $has_limiter;
 }
 
 sub start {
@@ -285,19 +252,22 @@ sub start {
     # Top-of-tree interpose: no ipc_parent means the Service
     # subclass's builder cannot derive a bus_id, so pass one
     # explicitly. The collector identifies by the harness's own
-    # bus name.
-    require Test2::Harness2::Collector::Service::Harness;
-    Test2::Harness2::Collector::Service::Harness->interpose(
-        ipcm_info    => $self->ipcm_info,
-        ipc_parent   => undef,
-        ipc_run      => undef,
-        ipc_harness  => $self->{+NAME},
-        bus_id       => "collector:" . $self->{+NAME},
-        logdir       => $self->{+LOGDIR},
-        service_name => $self->{+NAME},
-        loggers      => $loggers,
-        parser       => 'Test2::Harness2::Collector::Parser::IOParser',
-        parent_pids  => [$caller_pid],
+    # bus name. is_harness_collector => 1 suppresses the
+    # collector_exiting / collector_artifacts sends that would
+    # otherwise target this collector's own (dying) child service.
+    require Test2::Harness2::Collector::Service;
+    Test2::Harness2::Collector::Service->interpose(
+        ipcm_info            => $self->ipcm_info,
+        ipc_parent           => undef,
+        ipc_run              => undef,
+        ipc_harness          => $self->{+NAME},
+        bus_id               => "collector:" . $self->{+NAME},
+        is_harness_collector => 1,
+        logdir               => $self->{+LOGDIR},
+        service_name         => $self->{+NAME},
+        loggers              => $loggers,
+        parser               => 'Test2::Harness2::Collector::Parser::IOParser',
+        parent_pids          => [$caller_pid],
         (defined($jump_to) ? (jump_to => $jump_to, jump_payload => $run_service) : ()),
     );
 
@@ -388,13 +358,43 @@ sub request_handler_queue_test_run {
         $run_logger_opts{$k} = $payload->{$k} if defined $payload->{$k};
     }
 
+    # --set-hash-seed (Phase 7.2): when both the harness and the
+    # incoming run have an explicit seed, they must match. Any
+    # global preload tied to the harness was spawned with the
+    # harness's seed in PERL_HASH_SEED, and a run asking for a
+    # different value cannot reuse those preload processes.
+    #
+    # When the harness has no seed (no global preload was set up
+    # with a fixed seed) we accept any run-level seed: the run
+    # service simply propagates it into PERL_HASH_SEED for that
+    # run's test children. When the run has no opinion we accept
+    # whatever the harness was started with -- the run's children
+    # inherit the harness's seed via the test environment.
+    #
+    # TODO Phase 7.2 follow-up: once a Preload resource exists and
+    # the harness can declare global preloads, tighten this so an
+    # unset-vs-set status mismatch is also rejected (the preload's
+    # hash table is already baked).
+    my $run_seed     = $payload->{hash_seed};
+    my $harness_seed = $self->{+HASH_SEED};
+    if (defined($run_seed) && length $run_seed && defined($harness_seed) && length $harness_seed) {
+        return {ok => 0, error => "--set-hash-seed=$run_seed on the run does not match --set-hash-seed=$harness_seed on the harness; preload was started with seed $harness_seed and cannot be reused"}
+            if $run_seed ne $harness_seed;
+    }
+
     my $ok = eval {
         my $run = Test2::Harness2::Run->from_files(
             files => $files,
-            (defined $payload->{run_id} ? (run_id => $payload->{run_id}) : ()),
+            (defined $payload->{run_id}    ? (run_id    => $payload->{run_id})    : ()),
+            (defined $payload->{hash_seed} ? (hash_seed => $payload->{hash_seed}) : ()),
             %run_logger_opts,
         );
         push @{$self->{+QUEUE}} => $run;
+        $self->{+RUN_STATES}->{$run->run_id} = Test2::Harness2::Run::State->new(
+            run_id     => $run->run_id,
+            created_at => $run->created_at,
+            pending    => [map { $_->job_id } @{$run->jobs}],
+        );
         $self->_scheduler_queue_run($run);
         1;
     };
@@ -419,12 +419,15 @@ sub request_handler_status {
     my $self = shift;
 
     my $queue = [
-        map { {
-            run_id  => $_->run_id,
-            pending => [@{$_->pending}],
-            running => [@{$_->running}],
-            done    => [@{$_->done}],
-        } } @{$self->{+QUEUE}}
+        map {
+            my $rs = $self->{+RUN_STATES}->{$_->run_id};
+            {
+                run_id  => $_->run_id,
+                pending => $rs ? [@{$rs->pending}] : [],
+                running => $rs ? [@{$rs->running}] : [],
+                done    => $rs ? [@{$rs->done}]    : [],
+            }
+        } @{$self->{+QUEUE}}
     ];
 
     my @running = map {
@@ -559,8 +562,8 @@ sub run_on_general_message {
     # Run-scoped collector_artifacts (run_id defined) flow to the run
     # service, which logs them as job_loggers on the run's own emitter.
     # Global collector_artifacts (no run_id -- e.g. from a resource-
-    # service collector) are handled here: merged into %artifacts and
-    # flushed to logs/artifacts.json.
+    # service collector) merge into the in-memory ARTIFACTS map for
+    # subscriber fan-out.
     if (defined $kind && $kind eq 'collector_artifacts') {
         return $self->_handle_global_collector_artifacts($content)
             unless defined $content->{run_id};
@@ -568,8 +571,8 @@ sub run_on_general_message {
     }
 
     # Run service forwarded its current artifact set so any run-scoped
-    # subscriber can be brought up to date without scraping the on-disk
-    # manifest. Merge into our global map and fan out.
+    # subscriber can be brought up to date. Merge into our global map
+    # and fan out.
     return $self->_handle_run_artifacts_update($content)
         if defined $kind && $kind eq 'run_artifacts_update';
 
@@ -628,10 +631,11 @@ sub _seed_artifacts_from_loggers {
 
     # Harness LOGGERS are final after service init: no logger added or
     # removed after this point reaches the harness's own interpose
-    # collector (already forked). We build metadata eagerly here so the
-    # global artifacts.json reflects the full configured logger set,
-    # including arrayref specs ([$class, %args]) which the collector
-    # child otherwise instantiates independently in its own process.
+    # collector (already forked). We build metadata eagerly here so
+    # the in-memory ARTIFACTS map (used for fan-out to artifact
+    # subscribers) reflects the full configured logger set, including
+    # arrayref specs ([$class, %args]) which the collector child
+    # otherwise instantiates independently in its own process.
     for my $item (@{$self->{+LOGGERS} // []}) {
         my $inst = $self->_logger_instance_for_metadata($item) or next;
         next unless $inst->can('metadata');
@@ -641,7 +645,6 @@ sub _seed_artifacts_from_loggers {
         $self->_merge_artifacts({ref($inst) => [$meta]});
     }
 
-    $self->_write_artifacts_manifest;
     return;
 }
 
@@ -709,38 +712,18 @@ sub _merge_artifacts {
     return;
 }
 
-sub _write_artifacts_manifest {
-    my $self = shift;
-
-    my $path = "$self->{+LOGDIR}/artifacts.json.zst";
-
-    my $dict      = "$self->{+LOGDIR}/zstd-dict.bin";
-    my @dict_args = -f $dict ? (dict_path => $dict) : ();
-
-    my $ok = eval {
-        write_json_zst_file_atomic($path, $self->{+ARTIFACTS}, @dict_args);
-        1;
-    };
-    my $err = $@;
-    warn "Test2::Harness2: failed to write $path: $err" unless $ok;
-
-    return;
-}
-
 sub _handle_global_collector_artifacts {
     my ($self, $content) = @_;
 
     $self->_merge_artifacts($content->{loggers} // {});
-    $self->_write_artifacts_manifest;
     $self->_notify_artifact_subscribers(scope => 'harness');
     return;
 }
 
 # Merge a run service's current artifact table into our global map
 # (entries are already logdir-relative) and notify run-scope
-# subscribers. The run service already owns the authoritative
-# runs/$run_id/artifacts.json; we just keep an in-memory view for
-# fan-out.
+# subscribers. The mapping lives only in memory; readers of the
+# on-disk archive derive the same map by extension lookup.
 sub _handle_run_artifacts_update {
     my ($self, $content) = @_;
 
@@ -896,8 +879,9 @@ sub _send_state_snapshot {
     my $run_id = $params{run_id} or return;
 
     my $run_data;
-    if (my ($run) = grep { $_->run_id eq $run_id } @{$self->{+QUEUE} // []}) {
-        $run_data = $run->TO_JSON;
+    if (grep { $_->run_id eq $run_id } @{$self->{+QUEUE} // []}) {
+        my $rstate = $self->{+RUN_STATES}->{$run_id};
+        $run_data = $rstate ? $rstate->TO_JSON : {run_id => $run_id};
     }
     elsif (my $info = $self->{+COMPLETED_RUNS}->{$run_id}) {
         # Completed snapshot is not a Run-shaped TO_JSON; wrap it so
@@ -1056,18 +1040,15 @@ sub request_handler_detach {
     return {ok => 1};
 }
 
-# Run-service aggregation: replace our mirror Run's pending /
-# running / done lists with the run service's authoritative
-# snapshot. When that replacement closes the run out (nothing
-# pending, nothing running), tear down the run service and emit
-# run_ended.
+# Run-service aggregation: replace our mirror Run::State's pending /
+# running / done lists (and results map) with the run service's
+# authoritative snapshot. When that replacement closes the run out
+# (nothing pending, nothing running), tear down the run service and
+# emit run_ended.
 #
-# run_data is the full Run->TO_JSON payload; we reach into the
-# shadow Run and overwrite just the three lists so any other fields
-# the harness stamped at queue time (resources objects, logger
-# intent slots, launch_job_timeout) survive. Resources in
-# particular are live Perl objects that cannot round-trip through
-# JSON.
+# run_data is the full Run::State->TO_JSON payload; the harness's
+# shadow State picks up the lifecycle slots while the immutable Run
+# spec stays untouched.
 sub _handle_run_state_update {
     my ($self, $content) = @_;
     return unless ref($content) eq 'HASH';
@@ -1079,14 +1060,24 @@ sub _handle_run_state_update {
     my ($run) = grep { $_->run_id eq $run_id } @{$self->{+QUEUE} // []};
     return unless $run;
 
+    my $rstate = $self->{+RUN_STATES}->{$run_id} //= Test2::Harness2::Run::State->new(run_id => $run_id);
+
     for my $slot (qw/pending running done/) {
         my $list = $data->{$slot};
         next unless ref($list) eq 'ARRAY';
-        $run->{$slot} = [@$list];
+        $rstate->{$slot} = [@$list];
     }
 
     if (ref($data->{results}) eq 'HASH') {
-        $run->{results} = {%{$data->{results}}};
+        $rstate->{results} = {%{$data->{results}}};
+    }
+
+    for my $field (
+        qw/created_at start_time finish_time completed exit_summary aborted_reason
+        running_harness_uuid collector_uuid bus_address running_session_uuid/
+        )
+    {
+        $rstate->{$field} = $data->{$field} if exists $data->{$field};
     }
 
     # Notify state subscribers with the full authoritative snapshot
@@ -1098,7 +1089,7 @@ sub _handle_run_state_update {
 
     # Finalization is scheduler-driven: only consider the run done
     # when the scheduler has both no pending jobs and no running
-    # jobs of its own. The Run mirror's is_complete is informational.
+    # jobs of its own. The State mirror's is_complete is informational.
     $self->_finalize_run_if_complete($run);
 
     return;
@@ -1112,7 +1103,8 @@ sub _handle_run_state_update {
 sub _snapshot_run_results {
     my ($self, $run) = @_;
 
-    my $results  = $run->results // {};
+    my $rstate   = $self->{+RUN_STATES}->{$run->run_id};
+    my $results  = ($rstate && $rstate->results) // {};
     my $all_pass = 1;
     for my $jid (keys %$results) {
         # Entries without completed_at are queue-time or started-time
@@ -1127,7 +1119,7 @@ sub _snapshot_run_results {
         state   => 'complete',
         pass    => $all_pass ? 1 : 0,
         results => {%$results},
-        done    => [@{$run->done}],
+        done    => $rstate ? [@{$rstate->done}] : [],
     };
 }
 
@@ -1487,13 +1479,14 @@ sub _try_launch_next_pending {
 
         # Run-level abort state (see _handle_broken_resource):
         # once a run is aborted, every remaining job takes the
-        # synthetic-fail path, whether or not that specific job
-        # needed the broken resource. The aborted flag on the
+        # unavailable-action fail path, whether or not that specific
+        # job needed the broken resource. The aborted flag on the
         # decision distinguishes the original trigger (aborted=0)
         # from follow-ups swept up by the abort (aborted=1).
         my ($decision, $arg, %dec_opts);
-        if (defined $head_run->{aborted_reason}) {
-            ($decision, $arg) = ('broken', $head_run->{aborted_reason});
+        my $rstate = $self->{+RUN_STATES}->{$head_run->run_id};
+        if ($rstate && defined $rstate->aborted_reason) {
+            ($decision, $arg) = ('broken', $rstate->aborted_reason);
             $dec_opts{aborted} = 1;
         }
         else {
@@ -1503,13 +1496,13 @@ sub _try_launch_next_pending {
         if ($decision eq 'skip') {
             # A resource is healthy but can never grant the slots THIS
             # job demands (e.g. test declares HARNESS-JOB-SLOTS 8 and
-            # the per-job cap is 4). Route through the synthetic skip
-            # launch so the renderer/log show a real skip_all event
+            # the per-job cap is 4). Route through the unavailable-action
+            # skip launch so the renderer/log show a real skip_all event
             # with a reason, the run service sees a normal job
             # completion, and the run can finalize. The skip launch
             # itself goes through the limiter pool with need=1, so it
             # may defer if the pool is currently saturated.
-            my $outcome = $self->_launch_synthetic_job($head_run, $job, 'skip', $arg);
+            my $outcome = $self->_launch_unavailable_action_job($head_run, $job, 'skip', $arg);
             return 1 if $outcome eq 'launched' || $outcome eq 'skip';
             next;    # 'defer' -- try again next tick
         }
@@ -1518,8 +1511,8 @@ sub _try_launch_next_pending {
             # A needed resource has been permanently broken (or
             # the run has been aborted wholesale).
             # broken_resource_behavior decides how the job is
-            # dispatched; the synth launch shares the job-limiter
-            # pool and may defer if the pool is saturated.
+            # dispatched; the unavailable-action launch shares the
+            # job-limiter pool and may defer if the pool is saturated.
             my $outcome = $self->_handle_broken_resource($head_run, $job, $arg, %dec_opts);
             return 1 if $outcome eq 'launched' || $outcome eq 'skip';
             next;    # 'defer' -- try the next job in this run
@@ -1547,13 +1540,16 @@ sub _try_launch_next_pending {
 sub _finalize_run_if_complete {
     my ($self, $run) = @_;
     my $run_id = $run->run_id;
-    return unless $run->is_complete;
+
+    my $rstate = $self->{+RUN_STATES}->{$run_id};
+    return unless $rstate && $rstate->is_complete;
 
     # Idempotent: if we already finalized this run, do nothing.
     return if $self->{+COMPLETED_RUNS}->{$run_id};
 
     $self->{+COMPLETED_RUNS}->{$run_id} = $self->_snapshot_run_results($run);
     $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
+    delete $self->{+RUN_STATES}->{$run_id};
     $self->_scheduler_drop_run($run_id);
     $self->_teardown_run_service($run);
     $self->emit_service_event(
@@ -1578,8 +1574,9 @@ sub _finalize_run_if_complete {
 # the same way they would be for a real test; no job is ever silently
 # dropped.
 #
-# Returns 'launched', 'defer' (limiter full), or 'skip' (the synth
-# launch is impossible: e.g. no job-limiter is usable any more).
+# Returns 'launched', 'defer' (limiter full), or 'skip' (the
+# unavailable-action launch is impossible: e.g. no job-limiter is
+# usable any more).
 sub _handle_broken_resource {
     my ($self, $run, $job, $resource_name, %opts) = @_;
 
@@ -1587,45 +1584,48 @@ sub _handle_broken_resource {
     my $aborted  = $opts{aborted} ? 1 : 0;
 
     if ($behavior eq 'skip') {
-        return $self->_launch_synthetic_job(
+        return $self->_launch_unavailable_action_job(
             $run, $job, 'skip', $resource_name, aborted => $aborted,
         );
     }
 
     if ($behavior eq 'fail') {
-        return $self->_launch_synthetic_job(
+        return $self->_launch_unavailable_action_job(
             $run, $job, 'fail', $resource_name, aborted => $aborted,
         );
     }
 
-    # abort: record the reason on the run so every other pending job
-    # also takes the fail path (see _try_launch_next_pending), then
-    # synthesize fail for THIS job. The scheduler drives the rest one
-    # at a time as the job limiter frees slots -- we never try to
-    # launch N synth-fail jobs against a single-slot limiter at once.
-    # The current job is the trigger; follow-ups arrive through the
-    # scheduler's aborted-run branch with aborted => 1 already set
-    # on their dec_opts.
-    $run->{aborted_reason} //= $resource_name;
-    return $self->_launch_synthetic_job(
+    # abort: record the reason on the run state so every other
+    # pending job also takes the fail path (see
+    # _try_launch_next_pending), then synthesize fail for THIS job.
+    # The scheduler drives the rest one at a time as the job limiter
+    # frees slots -- we never try to launch N synth-fail jobs against
+    # a single-slot limiter at once. The current job is the trigger;
+    # follow-ups arrive through the scheduler's aborted-run branch
+    # with aborted => 1 already set on their dec_opts.
+    if (my $rstate = $self->{+RUN_STATES}->{$run->run_id}) {
+        $rstate->latch_aborted_reason($resource_name);
+    }
+    return $self->_launch_unavailable_action_job(
         $run, $job, 'fail', $resource_name, aborted => $aborted,
     );
 }
 
-# Launch a synthesized skip/fail via the normal Collector path, using
-# a perl -e one-liner instead of the real test file. Only job_limiter
-# resources that are NOT permanent_broken get consulted (with a fixed
-# need=1) -- the broken resource itself is of course skipped, and
-# non-limiter resources don't participate in accounting for one-off
-# synthetic runs.
+# Launch an unavailable-action skip/fail via the normal Collector
+# path, using a perl -e one-liner instead of the real test file. Only
+# job_limiter resources that are NOT permanent_broken get consulted
+# (with a fixed need=1) -- the broken resource itself is of course
+# skipped, and non-limiter resources don't participate in accounting
+# for one-off unavailable-action runs.
 #
-# Returns 'launched', 'defer' (limiter full right now), or 'skip'
-# (no usable limiter at all, so the synth launch can never run).
-sub _launch_synthetic_job {
-    my ($self, $run, $job, $kind, $resource_name, %opts) = @_;
+# Returns 'launched', 'defer' (limiter full right now), or 'skip' (no
+# usable limiter at all, so the unavailable-action launch can never
+# run).
+sub _launch_unavailable_action_job {
+    my ($self, $run, $job, $unavailable_action, $resource_name, %opts) = @_;
 
-    croak "synthetic kind must be 'skip' or 'fail' (got '$kind')"
-        unless $kind eq 'skip' || $kind eq 'fail';
+    croak "unavailable_action kind must be 'skip' or 'fail' (got '$unavailable_action')"
+        unless $unavailable_action eq 'skip' || $unavailable_action eq 'fail';
 
     my $aborted = $opts{aborted} ? 1 : 0;
     my $reason =
@@ -1639,26 +1639,29 @@ sub _launch_synthetic_job {
     # (and any other @INC-dependent harness plumbing) resolves the
     # same way it does under a real test.
     my $script =
-        $kind eq 'skip'
+        $unavailable_action eq 'skip'
         ? 'use Test2::V0; skip_all($ARGV[0])'
         : 'die "$ARGV[0]\n"';
     my $launch = [$^X, '-Ilib', '-e', $script, '--', $reason];
 
-    # Pull the job-limiter resources the scheduler would otherwise
-    # have consulted. Permanent-broken ones (including the trigger)
-    # are skipped; non-limiters don't participate -- a one-liner has
-    # no real resource footprint and shouldn't hold onto e.g. a GPU
-    # assignment.
+    # Pull every resource the scheduler would have consulted for this
+    # synthetic job: anything the resource itself reports as
+    # `needed(job => $job)` and that has not been permanent-broken.
+    # The `is_job_limiter` filter is gone; resources that genuinely
+    # have no slot footprint for a synthetic skip/fail (e.g. a GPU
+    # gating resource) are expected to opt themselves out via
+    # `needed`.
     my @all = (@{$self->{+RESOURCES}}, @{$run->resources // []});
     my @limiters =
-        grep { $_->is_job_limiter && !$_->is_permanent_broken && $_->needed(job => $job) } @all;
+        grep { !$_->is_permanent_broken && $_->needed(job => $job) } @all;
 
     # Availability gate: share the run's job-limiter pool with real
     # tests. If every usable limiter is saturated right now, defer
     # and let the scheduler re-try on the next tick once a slot frees.
     # If a limiter can never accommodate us (-1, which should not
     # happen with need=1 on a single-slot pool but is possible in
-    # pathological configurations) the synth job is skipped outright.
+    # pathological configurations) the unavailable-action job is
+    # skipped outright.
     for my $res (@limiters) {
         my $av = $res->available(job => $job, min => 1, max => 1, need => 1);
         if ($av < 0) {
@@ -1694,11 +1697,11 @@ sub _evaluate_resources_for {
     #                            grant THIS specific job (e.g. job's
     #                            min_slots exceeds the resource's
     #                            per-job cap). Scheduler routes the
-    #                            job through the synthetic skip launch
-    #                            so the user sees a real skip_all event
-    #                            and the run still completes; other
-    #                            jobs that fit the cap continue to use
-    #                            the resource.
+    #                            job through the unavailable-action
+    #                            skip launch so the user sees a real
+    #                            skip_all event and the run still
+    #                            completes; other jobs that fit the
+    #                            cap continue to use the resource.
     #               ('broken', $resource_name)
     #                          - a needed resource has been flipped
     #                            to permanent_broken. Scheduler
@@ -1717,7 +1720,7 @@ sub _evaluate_resources_for {
 
         my $av = $res->available(job => $job);
         return ('skip', $res->resource_name) if $av < 0;
-        return ('defer') if !$av;
+        return ('defer')                     if !$av;
 
         push @use => $res;
     }
@@ -1728,12 +1731,13 @@ sub _evaluate_resources_for {
 sub _ensure_run_service_started {
     my ($self, $run) = @_;
 
-    # String keys here match the HashBase +resources_started /
-    # +resources_torn_down declarations on Test2::Harness2::Run -- the
-    # constants are scoped to that package, but the attributes are just
-    # idempotency flags, so touching the hash directly is fine.
-    return if $run->{resources_started};
-    $run->{resources_started} = 1;
+    # The resources_started / resources_torn_down idempotency flags
+    # live on the paired Run::State (post-queue mutable state, not on
+    # the immutable spec).
+    my $rstate = $self->{+RUN_STATES}->{$run->run_id} //=
+        Test2::Harness2::Run::State->new(run_id => $run->run_id);
+    return if $rstate->resources_started_flag;
+    $rstate->mark_resources_started;
 
     # In unit tests that exercise scheduler logic without building a
     # real IPC bus, ipcm_info is undef; skip the fork then so the
@@ -1821,11 +1825,13 @@ sub _teardown_run_service {
     # completion observed via the run service's aggregated snapshot),
     # _try_launch_next_pending (all-skipped completion), and
     # run_on_cleanup (runs left in the queue at shutdown). The
-    # resources_torn_down flag below makes each call idempotent.
-    return if $run->{resources_torn_down};
-    $run->{resources_torn_down} = 1;
-
-    my $rid = $run->run_id;
+    # resources_torn_down flag below makes each call idempotent. The
+    # flag lives on the paired Run::State because it reflects runtime
+    # state, not the queue-time spec.
+    my $rid    = $run->run_id;
+    my $rstate = $self->{+RUN_STATES}->{$rid};
+    return                            if $rstate && $rstate->resources_torn_down_flag;
+    $rstate->mark_resources_torn_down if $rstate;
     my $svc = delete $self->{+RUN_SERVICES}->{$rid};
     return unless $svc;
     return unless $svc->{pid};
@@ -1863,6 +1869,17 @@ sub _launch_job {
     # reference/old2/lib/Test2/Harness2/TestSettings.pm:122.
     $env{T2_HARNESS_INCLUDES} = $ENV{T2_HARNESS_INCLUDES}
         if defined $ENV{T2_HARNESS_INCLUDES} && length $ENV{T2_HARNESS_INCLUDES};
+
+    # --set-hash-seed propagation: Phase 7.1. The run carries the
+    # effective seed value (resolved from the option's autofill or
+    # the user-supplied value at queue-build time). When set, every
+    # test child gets PERL_HASH_SEED so the child interpreter starts
+    # with a deterministic hash seed. When the run does not request
+    # one, the child inherits whatever the parent's PERL_HASH_SEED
+    # already is (which the App-Yath-Script wrapper or the user may
+    # or may not have set).
+    my $hash_seed = $run->hash_seed;
+    $env{PERL_HASH_SEED} = $hash_seed if defined $hash_seed && length $hash_seed;
     my %assign_args = %{$opts{assign_args} // {}};
     for my $res (@$resources) {
         $res->assign(id => $assign_id, job => $job, env => \%env, %assign_args);

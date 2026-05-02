@@ -49,6 +49,29 @@ Callers whose service has no C<ipc_parent> -- the harness's own
 top-of-tree interpose collector -- must pass C<bus_id> explicitly
 instead of relying on the builder.
 
+Two related role flags are passed at construction rather than carried
+on dedicated subclasses:
+
+=over 4
+
+=item C<is_run =E<gt> 1>
+
+Used by the run service's interpose collector. Marks the loggers as
+belonging to a run-service collector so the role's
+C<output_file_basename> rules collapse the common-case
+C<service_name == run_id> path down to C<$logdir/runs/E<lt>run_idE<gt>>,
+which is where the run's .jsonl and .json belong.
+
+=item C<is_harness_collector =E<gt> 1>
+
+Used by the harness's own top-of-tree interpose collector. With no
+C<ipc_parent> and an C<ipc_harness> pointing at this collector's own
+child service, the C<collector_exiting> / C<collector_artifacts>
+sends would target an already-exiting peer; this flag short-circuits
+those self-addressed sends.
+
+=back
+
 =head1 SOURCE
 
 L<https://github.com/Test-More/Test2-Harness>

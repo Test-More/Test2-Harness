@@ -50,13 +50,9 @@ sub read_jsonl {
     my $zst   = ($path =~ /\.zst\z/) ? $path : "$path.zst";
     my $plain = $path =~ s/\.zst\z//r;
     if (-f $zst) {
-        require Test2::Harness2::Util::File::JSONL::Zstd;
-        (my $dict = $zst) =~ s{/logs/.*}{/logs/zstd-dict.bin};
-        my $f = Test2::Harness2::Util::File::JSONL::Zstd->new(
-            name => $zst,
-            (-f $dict ? (dict_path => $dict) : ()),
-        );
-        return $f->poll;
+        require Test2::Harness2::Util::JSONL::Reader;
+        my $r = Test2::Harness2::Util::JSONL::Reader->new(path => $zst);
+        return $r->read_lines;
     }
     open my $fh, '<', $plain or die "open $plain: $!";
     my @events = map { decode_json($_) } grep { /\S/ } <$fh>;
@@ -86,7 +82,7 @@ sub run_harness_until_drained {
 
 sub harness_events_for {
     my ($dir) = @_;
-    return read_jsonl("$dir/logs/services/harness.jsonl");
+    return read_jsonl("$dir/logs/services/harness/events.jsonl");
 }
 
 # Under the run-service aggregation topology, per-job lifecycle
@@ -95,18 +91,20 @@ sub harness_events_for {
 sub run_events_for {
     my ($dir) = @_;
     opendir my $dh, "$dir/logs/runs" or return ();
-    my @logs = grep { /\.jsonl(?:\.zst)?$/ } readdir $dh;
+    my @run_dirs = grep { /^[^.]/ && -d "$dir/logs/runs/$_" } readdir $dh;
     closedir $dh;
     my @out;
-    for my $l (@logs) {
-        my $path = "$dir/logs/runs/$l";
-        $path =~ s/\.zst\z//;
-        push @out => read_jsonl($path);
+    for my $rid (@run_dirs) {
+        for my $cand ("$dir/logs/runs/$rid/events.jsonl", "$dir/logs/runs/$rid/events.jsonl.zst") {
+            next unless -e $cand;
+            push @out => read_jsonl($cand);
+            last;
+        }
     }
     return @out;
 }
 
-subtest 'skip (default): broken resource -> synth skip_all path runs' => sub {
+subtest 'skip (default): broken resource -> unavailable-action skip_all path runs' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $tf = "$dir/never_runs.t";
@@ -128,17 +126,17 @@ subtest 'skip (default): broken resource -> synth skip_all path runs' => sub {
     $spawn->queue_test_run(files => [Test2::Harness2::TestFile->new(file => $tf)]);
     run_harness_until_drained($dir, $spawn);
 
-    # The synth skip_all ran through the normal Collector launch --
-    # artifacts land on disk the same way they would for a real test
-    # calling skip_all (the harness log records the job_completed
-    # event; a real skip_all test exits with the same status under
-    # this collector, preexisting behavior).
+    # The unavailable-action skip_all ran through the normal Collector
+    # launch -- artifacts land on disk the same way they would for a
+    # real test calling skip_all (the harness log records the
+    # job_completed event; a real skip_all test exits with the same
+    # status under this collector, preexisting behavior).
     my @events    = run_events_for($dir);
     my @completed = grep { facet_kind($_) eq 'job_completed' } @events;
     is(scalar @completed, 1, 'exactly one job_completed event in the run log');
 };
 
-subtest 'fail: broken resource -> synth die, non-zero exit' => sub {
+subtest 'fail: broken resource -> unavailable-action die, non-zero exit' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $tf = "$dir/never_runs.t";
@@ -168,10 +166,10 @@ subtest 'fail: broken resource -> synth die, non-zero exit' => sub {
     # Run service now emits the raw wait-status int under 'exit' and
     # the parsed { err, sig, dmp } hash under 'codes'.
     my $codes = $completed[0]{facet_data}{harness}{codes};
-    isnt($codes->{err}, 0, 'fail synth exits non-zero (die)');
+    isnt($codes->{err}, 0, 'fail unavailable-action exits non-zero (die)');
 };
 
-subtest 'abort: every queued job gets synth-launched even for multiple tests' => sub {
+subtest 'abort: every queued job gets an unavailable-action launch even for multiple tests' => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     for my $n (1 .. 3) {

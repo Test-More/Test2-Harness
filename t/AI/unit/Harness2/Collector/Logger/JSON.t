@@ -86,8 +86,8 @@ subtest 'output_file is lazily resolved from identity attributes' => sub {
     );
 
     my ($path) = $logger->output_files;
-    is($path, "$dir/runs/R1.json.zst",
-        'output_files derives $logdir/runs/<run_id>.json.zst when is_run is set');
+    is($path, "$dir/runs/R1/state.json.zst",
+        'output_files derives $logdir/runs/<run_id>/state.json.zst when is_run is set');
 
     my $bare = $CLASS->new(ipcm_info => {});
     like(

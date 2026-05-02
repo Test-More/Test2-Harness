@@ -8,6 +8,15 @@ use Carp qw/croak/;
 use File::Basename qw/dirname/;
 use File::Path qw/make_path/;
 
+use Test2::Harness2::LogLayout qw/
+    run_test_basename
+    run_events_basename
+    run_state_basename
+    run_spec_basename
+    service_global_basename
+    service_run_basename
+/;
+
 use Role::Tiny;
 
 # ----------------------------------------------------------------------
@@ -17,10 +26,16 @@ use Role::Tiny;
 # static log archive) by answering a small set of class methods that
 # describe its on-disk format and let a consumer pull events out.
 #
-#   $style = $class->update_style()
+#   $type = $class->update_type()
 #       Required. Returns 'append' (log file grows, new lines appended)
 #       or 'replace' (file is atomically swapped, so the whole file is
 #       a fresh snapshot each time).
+#
+#       Note: a logger's writing extension is its class basename in
+#       lower case (Logger::JSONL -> 'jsonl'). LogArchive maps an
+#       on-disk extension back to its producing logger by trying
+#       Test2::Harness2::Collector::Logger::<XYZ> in upper, capital,
+#       and lower-case forms in that order.
 #
 #   $bool = $class->records_state()
 #       True if the logger records state (e.g. pass/fail, job list,
@@ -50,7 +65,7 @@ use Role::Tiny;
 #   $state = $class->fetch_state($r)
 #       Required for records_state loggers. Returns the most recent
 #       state snapshot hash as written by the logger. Never blocks.
-requires 'update_style';
+requires 'update_type';
 requires 'log_reader';
 requires 'ready';
 requires 'fetch_events';
@@ -97,12 +112,22 @@ sub shutdown { }
 sub failing  { }
 
 # Build the extension-less output path for this logger from its data
-# attributes. Rules (see fix_log_paths / role POD):
+# attributes. Rules:
 #
-#   service_name + !run_id              -> $logdir/services/$service_name
-#   service_name +  run_id + is_run     -> $logdir/runs/$run_id
-#   service_name +  run_id + !is_run    -> $logdir/runs/$run_id/services/$service_name
-#   job_id       (+ run_id, job_try)    -> $logdir/runs/$run_id/tests/$job_id
+#   service_name + !run_id              -> $logdir/services/$service_name/<log_leaf>
+#   service_name +  run_id + is_run     -> $logdir/runs/$run_id/<log_leaf>
+#   service_name +  run_id + !is_run    -> $logdir/runs/$run_id/services/$service_name/<log_leaf>
+#   job_id (+ run_id + job_try)         -> $logdir/runs/$run_id/tests/$job_id/$job_try
+#
+# Per-job test logs land in a per-job directory with a per-try
+# basename so multiple tries do not clobber each other (Phase 4.5).
+#
+# Services use a per-name directory whose existence is the service
+# signal; the per-logger leaf names the file inside it (JSONL -> 'events',
+# JSON -> 'state'). The is_run case keeps run-leaves at the run-dir
+# level (runs/<run_id>/events.jsonl.zst, runs/<run_id>/state.json.zst,
+# runs/<run_id>/spec.json.zst) -- the run directory itself is the run
+# signal, not a nested services/<name>/ subdirectory.
 #
 # Croaks on the ambiguous case where both service_name and job_id are
 # set (the role has no constructor in which to trap this earlier).
@@ -125,17 +150,42 @@ sub output_file_basename {
     if (defined $job_id) {
         croak "'run_id' is required when 'job_id' is set"
             unless defined $run_id;
-        return "$logdir/runs/$run_id/tests/$job_id";
+        my $job_try = $self->job_try;
+        croak "'job_try' is required when 'job_id' is set"
+            unless defined $job_try;
+        return "$logdir/" . run_test_basename($run_id, $job_id, $job_try);
     }
 
     if (defined $service_name) {
-        return "$logdir/services/$service_name" unless defined $run_id;
-        return "$logdir/runs/$run_id" if $self->is_run;
-        return "$logdir/runs/$run_id/services/$service_name";
+        my $leaf = $self->log_leaf;
+        return "$logdir/" . service_global_basename($service_name, $leaf)
+            unless defined $run_id;
+        if ($self->is_run) {
+            return "$logdir/" . _run_leaf_path($run_id, $leaf);
+        }
+        return "$logdir/" . service_run_basename($run_id, $service_name, $leaf);
     }
 
     croak "Cannot compute output_file_basename: neither 'service_name' nor 'job_id' is set";
 }
+
+# Map a run-log leaf name (per concrete logger) to the matching
+# Layout helper. The set is closed (events / state / spec); other
+# leaves fall through to a Layout-built path under runs/<run_id>/
+# verbatim so future loggers can extend without touching this role.
+sub _run_leaf_path {
+    my ($run_id, $leaf) = @_;
+    return run_events_basename($run_id) if $leaf eq 'events';
+    return run_state_basename($run_id)  if $leaf eq 'state';
+    return run_spec_basename($run_id)   if $leaf eq 'spec';
+    return "runs/$run_id/$leaf";
+}
+
+# Per-logger leaf name. Used both for run-service log paths
+# (runs/<run_id>/<leaf>.<ext>) and for service log paths
+# (services/<name>/<leaf>.<ext>, runs/<run_id>/services/<name>/<leaf>.<ext>).
+# Concrete loggers override: JSON -> 'state', JSONL -> 'events'.
+sub log_leaf { 'events' }
 
 # Required: return the list of on-disk paths this logger will write to.
 # Empty list means "nothing to pre-create" (typical for loggers that
@@ -223,7 +273,16 @@ explicitly rather than relying on C<eq>-comparison of the other attributes.
 =back
 
 L</output_file_basename> builds an extension-less path from those attributes
-(see source for the exact rules) and croaks on ambiguous combinations.
+and croaks on ambiguous combinations. The exact rules:
+
+  service_name + !run_id              -> $logdir/services/$service_name/<log_leaf>
+  service_name +  run_id + is_run     -> $logdir/runs/$run_id/<log_leaf>
+  service_name +  run_id + !is_run    -> $logdir/runs/$run_id/services/$service_name/<log_leaf>
+  job_id (+ run_id + job_try)         -> $logdir/runs/$run_id/tests/$job_id/$job_try
+
+Per-job test logs land in a per-job directory with a per-try basename
+so retries do not clobber each other (Phase 4.5 layout).
+
 Concrete loggers typically take the basename and append an extension (or
 otherwise adjust it) to produce the final path, then cache it into their
 own C<output_file> slot.
@@ -360,12 +419,21 @@ Ensure the parent directory of every file in C<output_files> exists.
 Called by the collector once the logger's attributes have been populated,
 before L</startup> opens any files.
 
-=item $style = $class->update_style()
+=item $type = $class->update_type()
 
 Required. Returns C<'append'> (log file grows, new lines are written to
 the end) or C<'replace'> (file is atomically swapped, so the whole file
 is a fresh snapshot each time). Used by streamers to pick an appropriate
-watching strategy (tail vs. re-read).
+watching strategy (tail vs. re-read), and by L<App::Yath2::LogArchive>
+to bucket physical files into the C<append> / C<replace> halves of the
+artifacts API.
+
+A logger's writing extension is its class basename in lower case
+(C<Test2::Harness2::Collector::Logger::JSONL> writes C<.jsonl>).
+L<App::Yath2::LogArchive> reverses the lookup by trying
+C<Test2::Harness2::Collector::Logger::E<lt>upperE<gt>>,
+C<E<lt>capitalE<gt>>, and C<E<lt>lowerE<gt>> in that order so a logger
+named for any of those casings will be found.
 
 =item $bool = $class->records_state()
 

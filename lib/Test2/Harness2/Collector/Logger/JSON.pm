@@ -7,12 +7,14 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
 
-use File::Spec ();
+use File::Path qw/make_path/;
 
 use Test2::Harness2::Util qw/parse_exit/;
 use Test2::Harness2::Util::JSON qw/write_json_zst_file_atomic/;
 use Test2::Harness2::Util::File::JSON;
 use Test2::Harness2::Util::File::JSON::Zstd;
+use Test2::Harness2::Util::FileMonitor;
+use Test2::Harness2::LogLayout qw/run_spec_basename/;
 
 use Object::HashBase qw{
     <output_file
@@ -30,6 +32,12 @@ use Object::HashBase qw{
 
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Collector::Logger';
+
+# Per-logger leaf name. The on-disk file lives at:
+#   runs/<run_id>/state.json.zst              (is_run case)
+#   services/<name>/state.json.zst            (global service)
+#   runs/<run_id>/services/<name>/state.json.zst  (run-scoped service)
+sub log_leaf { 'state' }
 
 sub init {
     my $self = shift;
@@ -51,16 +59,6 @@ sub output_files {
     my $self = shift;
     $self->{+OUTPUT_FILE} //= $self->output_file_basename . '.json.zst';
     return ($self->{+OUTPUT_FILE});
-}
-
-# Locate the per-logdir zstd dictionary if one is present. Returns
-# undef when the run was started dict-less (in which case the harness
-# never copied a dict into $logdir/zstd-dict.bin).
-sub _dict_path {
-    my $self = shift;
-    my $logdir = $self->{+LOGDIR} or return undef;
-    my $path = "$logdir/zstd-dict.bin";
-    return -f $path ? $path : undef;
 }
 
 sub set_process_info {
@@ -98,12 +96,44 @@ sub log_event {
 
     my $fd = $event->facet_data or return;
     my $h  = $fd->{harness}     or return;
+    my $kind = $h->{kind} // return;
 
-    return unless defined $h->{kind} && $h->{kind} eq 'run_mutation';
-    my $run_data = $h->{run_data};
-    return unless ref($run_data) eq 'HASH';
+    if ($kind eq 'run_mutation') {
+        my $run_data = $h->{run_data};
+        return unless ref($run_data) eq 'HASH';
+        $self->{+_DATA} = {%$run_data};
+        return;
+    }
 
-    $self->{+_DATA} = {%$run_data};
+    if ($kind eq 'run_queued') {
+        my $run_data = $h->{run_data};
+        return unless ref($run_data) eq 'HASH';
+        $self->_write_run_spec($run_data);
+        return;
+    }
+
+    return;
+}
+
+# When the harness emits a run_queued event we land the immutable
+# run spec at runs/<run_id>/spec.json.zst alongside our own snapshot
+# file. Only fired by the run-service interpose collector
+# (is_run==1) which is the one with the right logdir / run_id; on
+# other collectors (job-scoped, harness-scoped) we have no business
+# touching the spec file and silently ignore the event.
+sub _write_run_spec {
+    my ($self, $run_data) = @_;
+
+    return unless $self->{+IS_RUN};
+    my $logdir = $self->{+LOGDIR} or return;
+    my $run_id = $self->{+RUN_ID} or return;
+
+    my $path = "$logdir/" . run_spec_basename($run_id) . '.json.zst';
+    my $dir  = $path;
+    $dir =~ s{/[^/]+\z}{};
+    make_path($dir) unless -d $dir;
+
+    write_json_zst_file_atomic($path, $run_data);
     return;
 }
 
@@ -124,11 +154,7 @@ sub startup {
     my $data = defined $self->{+SPEC} ? $self->{+SPEC}->TO_JSON : {};
     $self->{+_DATA} = $data;
 
-    write_json_zst_file_atomic(
-        $self->{+OUTPUT_FILE},
-        $data,
-        ($self->_dict_path ? (dict_path => $self->_dict_path) : ()),
-    );
+    write_json_zst_file_atomic($self->{+OUTPUT_FILE}, $data);
 }
 
 sub shutdown {
@@ -156,64 +182,57 @@ sub shutdown {
     }
 
     $self->output_files unless defined $self->{+OUTPUT_FILE};
-    write_json_zst_file_atomic(
-        $self->{+OUTPUT_FILE},
-        $data,
-        ($self->_dict_path ? (dict_path => $self->_dict_path) : ()),
-    );
+    write_json_zst_file_atomic($self->{+OUTPUT_FILE}, $data);
 }
 
 # ----------------------------------------------------------------------
 # Streamer interface. Snapshot-style: file is atomically replaced on
-# each write. The reader is a plain Test2::Harness2::Util::File::JSON
-# object -- its base class handles change detection (Linux::Inotify2
-# when available, stat-tuple fallback) and read_if_changed() layers
-# on top of that.
-sub update_style           { 'replace' }
+# each write. The reader is a Test2::Harness2::Util::FileMonitor
+# wrapping the appropriate Util::File::JSON{,::Zstd} delegate; the
+# monitor handles change detection (Linux::Inotify2 when available,
+# hi-res stat-tuple fallback) and surfaces the delegate when the
+# snapshot has changed since the last call.
+sub update_type            { 'replace' }
 sub records_state          { 1 }
 sub records_general_events { 0 }
 
 sub log_reader {
     my ($class, $path) = @_;
-    if ($path =~ /\.zst\z/) {
-        my $dict;
-        my (undef, $dir) = (File::Spec->splitpath($path));
-        my $candidate;
-        # Walk up to find an adjacent zstd-dict.bin; the snapshot's
-        # logdir copy lives at $logdir/zstd-dict.bin, with the
-        # snapshot itself at varying depth ($logdir/.../foo.json.zst).
-        if (defined $dir) {
-            my @parts = File::Spec->splitdir($dir);
-            while (@parts) {
-                my $candidate = File::Spec->catfile(File::Spec->catdir(@parts), 'zstd-dict.bin');
-                if (-f $candidate) { $dict = $candidate; last; }
-                pop @parts;
-            }
-        }
-        return Test2::Harness2::Util::File::JSON::Zstd->new(
-            name      => $path,
-            dict_path => $dict,
-        );
-    }
-    return Test2::Harness2::Util::File::JSON->new(name => $path);
+
+    my $delegate =
+        $path =~ /\.zst\z/
+        ? Test2::Harness2::Util::File::JSON::Zstd->new(name => $path)
+        : Test2::Harness2::Util::File::JSON->new(name => $path);
+
+    return Test2::Harness2::Util::FileMonitor->new(
+        file     => $path,
+        delegate => $delegate,
+    );
 }
 
+# ready() peeks (no ack) so a subsequent fetch_state() call sees the
+# same change-signal and consumes it. The "is there a snapshot worth
+# reading?" question must not invalidate the FileMonitor's
+# unconsumed-change record: the actual reader needs that record to
+# decide whether to do work.
 sub ready {
     my ($class, $r) = @_;
     return 0 unless $r;
-    return $r->changed ? 1 : 0;
+    return 0 unless $r->delegate->exists;
+    return $r->peek_changed ? 1 : 0;
 }
 
-# read_if_changed returns empty list when nothing is new. Squash
-# that to undef so fetch_state's scalar contract stays
-# "snapshot-or-nothing". The empty-list distinction is useful at the
-# File layer but the role consumers only care about whether there
-# is a new snapshot to diff.
+# Snapshot-style state logger: returns the most recent snapshot when
+# the file has changed since the last call (or this is the first
+# call), undef otherwise. fetch_state is the consume step; the
+# FileMonitor change signal is ack'd here.
 sub fetch_state {
     my ($class, $r) = @_;
     return undef unless $r;
-    my @out = $r->read_if_changed;
-    return @out ? $out[0] : undef;
+    return undef unless $r->changed;
+    my $delegate = $r->delegate;
+    return undef unless $delegate->exists;
+    return $delegate->maybe_read;
 }
 
 # Snapshot-style state logger: no general event stream to pass

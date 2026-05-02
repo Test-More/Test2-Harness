@@ -108,7 +108,7 @@ subtest 'resource-service startup lands under runs/<id>/services/' => sub {
     # directly to the resource host role -- same call it would make.
     $svc->start_resource_services($run->resources, scope => 'run', run => $run);
 
-    my $expected = "$dir/logs/runs/r-start/services/foo.jsonl";
+    my $expected = "$dir/logs/runs/r-start/services/foo/events.jsonl";
     ok(-e $expected, "resource log at $expected");
     is(scalar keys %{$svc->{resource_services}}, 1, 'one service tracked');
 
@@ -199,7 +199,7 @@ subtest 'per-run usage of a name matching the global harness is allowed' => sub 
 
     my $ok = eval { $svc->start_resource_services($run->resources, scope => 'run', run => $run); 1 };
     ok($ok,                                                   'no reservation conflict');
-    ok(-e "$dir/logs/runs/r-harnessy/services/harness.jsonl", 'per-run harness.jsonl created');
+    ok(-e "$dir/logs/runs/r-harnessy/services/harness/events.jsonl", 'per-run service events.jsonl created');
 };
 
 subtest 'terminate handler transitions to terminating' => sub {
@@ -229,7 +229,8 @@ subtest 'aggregation: test_job_started marks running and broadcasts' => sub {
         run_id => 'r-agg',
     );
     my $svc = Test2::Harness2::RunService->new(workdir => $dir, run => $run);
-    my $jid = $run->pending->[0];
+    my $rs  = $svc->run_state;
+    my $jid = $rs->pending->[0];
 
     my @to_harness;
     no warnings 'redefine';
@@ -252,8 +253,8 @@ subtest 'aggregation: test_job_started marks running and broadcasts' => sub {
         }),
     );
 
-    is($run->running, [$jid], 'job moved from pending to running');
-    is($run->pending, [],     'pending drained');
+    is($rs->running, [$jid], 'job moved from pending to running');
+    is($rs->pending, [],     'pending drained');
 
     my @run_state = grep { $_->{kind} eq 'run_state_update' } @to_harness;
     is(scalar @run_state,                1,      'exactly one run_state_update IPC to harness');
@@ -273,8 +274,9 @@ subtest 'aggregation: test_job_completed is idempotent (observer + watchdog race
         run_id => 'r-idem',
     );
     my $svc = Test2::Harness2::RunService->new(workdir => $dir, run => $run);
-    my $jid = $run->pending->[0];
-    $run->mark_running($jid);
+    my $rs  = $svc->run_state;
+    my $jid = $rs->pending->[0];
+    $rs->mark_running($jid);
 
     my @emits;
     no warnings 'redefine';
@@ -301,7 +303,7 @@ subtest 'aggregation: test_job_completed is idempotent (observer + watchdog race
 
     $first->();
     is(scalar @emits, $n_after_first, 'second completion message is a no-op');
-    is($run->done,    [$jid],         'job marked done exactly once');
+    is($rs->done,     [$jid],         'job marked done exactly once');
 };
 
 subtest 'status handler returns a sensible snapshot' => sub {

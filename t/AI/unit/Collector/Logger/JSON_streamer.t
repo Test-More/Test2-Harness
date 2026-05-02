@@ -6,7 +6,7 @@ use Test2::Harness2::Collector::Logger::JSON;
 
 my $class = 'Test2::Harness2::Collector::Logger::JSON';
 
-is($class->update_style,           'replace', 'update_style is replace');
+is($class->update_type,           'replace', 'update_type is replace');
 is($class->records_state,          1,         'records state');
 is($class->records_general_events, 0,         'does not record general events');
 

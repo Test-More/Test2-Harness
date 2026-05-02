@@ -5,7 +5,7 @@ use Test2::Harness2::Collector::Logger::JSONL;
 
 my $class = 'Test2::Harness2::Collector::Logger::JSONL';
 
-is($class->update_style,           'append', 'update_style is append');
+is($class->update_type,           'append', 'update_type is append');
 is($class->records_state,          0,        'does not record state');
 is($class->records_general_events, 1,        'records general events');
 

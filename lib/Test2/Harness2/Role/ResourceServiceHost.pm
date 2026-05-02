@@ -173,19 +173,19 @@ sub _resource_service_log_path {
     my $scope = $p{scope} // 'global';
     my $run   = $p{run};
 
-    my $dir;
+    my $svc_dir;
     if ($scope eq 'run') {
         croak "run-scoped service log path requires 'run'" unless ref $run;
         my $run_id = $run->run_id;
-        $dir = join '/', $self->service_host_logdir, 'runs', $run_id, 'services';
+        $svc_dir = join '/', $self->service_host_logdir, 'runs', $run_id, 'services', $name;
     }
     else {
-        $dir = join '/', $self->service_host_logdir, 'services';
+        $svc_dir = join '/', $self->service_host_logdir, 'services', $name;
     }
 
-    make_path($dir) unless -d $dir;
+    make_path($svc_dir) unless -d $svc_dir;
 
-    return "$dir/$name.jsonl";
+    return "$svc_dir/events.jsonl";
 }
 
 sub _touch_log_file {

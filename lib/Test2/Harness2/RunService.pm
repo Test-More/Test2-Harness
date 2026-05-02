@@ -16,8 +16,9 @@ use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
 use Test2::Harness2::Role::ResourceServiceHost;
 use Test2::Harness2::Role::Service;
+use Test2::Harness2::Run::State;
+use Test2::Harness2::TestFile;
 use Test2::Harness2::Util::EventEmitter;
-use Test2::Harness2::Util::JSON qw/write_json_zst_file_atomic/;
 
 use Object::HashBase qw{
     <workdir
@@ -34,6 +35,7 @@ use Object::HashBase qw{
     <test_loggers
     <collector_grace_secs
     +run
+    +run_state
     state
     <resource_services
     +test_jobs
@@ -52,7 +54,8 @@ use constant DEFAULT_COLLECTOR_GRACE_SECS => 10;
 
 # Public accessor for the Run object -- named run_obj rather than 'run'
 # to avoid shadowing IPC::Manager::Role::Service's run() loop method.
-sub run_obj { $_[0]->{+RUN} }
+sub run_obj   { $_[0]->{+RUN} }
+sub run_state { $_[0]->{+RUN_STATE} }
 
 # Reservation check on the role uses the log file name, not the bus
 # name (which is suffixed with the run_id to guarantee uniqueness
@@ -125,24 +128,36 @@ sub init {
     croak "'test_loggers' must be an arrayref"
         unless ref($self->{+TEST_LOGGERS}) eq 'ARRAY';
 
-    # Seed per-job results entries with queue-time metadata so
-    # downstream consumers (the streamer in particular) can identify
-    # every job and order lifecycle events by Time::HiRes stamp
-    # without having to cross-reference the jobs array themselves.
-    # Entries are filled in further as the job moves through
-    # started -> completed.
+    # The Run is now an immutable spec; lifecycle state lives on a
+    # paired Run::State the run service owns. Construct the State
+    # alongside, seed pending with every job_id, and seed per-job
+    # results entries with queue-time metadata so downstream consumers
+    # (the streamer in particular) can identify every job and order
+    # lifecycle events by Time::HiRes stamp without having to cross-
+    # reference the jobs array themselves. Entries are filled in
+    # further as the job moves through started -> completed.
+    my $rstate = $self->{+RUN_STATE} //= Test2::Harness2::Run::State->new(
+        run_id     => $self->{+RUN_ID},
+        created_at => $run->created_at,
+    );
+    croak "'run_state' must be a Test2::Harness2::Run::State, got " . (blessed($rstate) || ref($rstate) || '(scalar)')
+        unless blessed($rstate) && $rstate->isa('Test2::Harness2::Run::State');
+
+    $rstate->seed_pending(map { $_->job_id } @{$run->jobs})
+        unless @{$rstate->pending};
+
     my $queued_at = time;
-    my $results   = $run->results;
     for my $job (@{$run->jobs}) {
         my $jid = $job->job_id;
         my $tf  = $job->test_file;
-        $results->{$jid} //= {};
-        my $r = $results->{$jid};
-        $r->{queued_at} //= $queued_at;
-        $r->{job_try}   //= $job->job_try;
-        $r->{file}      //= $tf->absolute;
-        $r->{abs_file}  //= $tf->absolute;
-        $r->{rel_file}  //= $tf->relative;
+        $rstate->seed_job_result(
+            $jid,
+            queued_at => $queued_at,
+            job_try   => $job->job_try,
+            file      => $tf->absolute,
+            abs_file  => $tf->absolute,
+            rel_file  => $tf->relative,
+        );
     }
 }
 
@@ -178,25 +193,25 @@ sub request_handler_launch_job {
     # TEST_LOGGERS (set at spawn time from the run's effective
     # test_loggers list). Callers can override per-launch via the
     # payload -- not used from the standard harness path but kept
-    # for targeted launches (e.g. synth-skip / synth-fail). This
-    # service no longer injects any hard-coded JSONL / JSON pair --
-    # if the caller wants those, they include the specs (typically
-    # with placeholder paths, see below).
+    # for targeted launches (e.g. unavailable-action skip /
+    # unavailable-action fail). This service no longer injects any
+    # hard-coded JSONL / JSON pair -- if the caller wants those, they
+    # include the specs (typically with placeholder paths, see below).
     my $payload_loggers = $payload->{loggers} // $self->{+TEST_LOGGERS} // [];
     my $test_file_abs   = $payload->{test_file};
     my $launch_cmd      = $payload->{launch};
 
-    # This is not safe for windows, possibly other platforms too.
     return {ok => 0, error => "'test_file' must be absolute"}
-        unless $test_file_abs =~ m{^/};
+        unless File::Spec->file_name_is_absolute($test_file_abs);
 
-    # The harness's synthetic-skip / synthetic-fail paths hand us an
-    # explicit launch command (perl -e '...'). Default to running the
-    # real test file when no override is present. When the launch
-    # payload's env carries T2_HARNESS_INCLUDES (forwarded by
-    # Test2::Harness2::_launch_job), turn it into -I flags so the
-    # child's @INC actually picks the paths up -- the env var alone
-    # is not enough since exec(perl ...) starts a fresh interpreter.
+    # The harness's unavailable-action skip / unavailable-action fail
+    # paths hand us an explicit launch command (perl -e '...').
+    # Default to running the real test file when no override is
+    # present. When the launch payload's env carries
+    # T2_HARNESS_INCLUDES (forwarded by Test2::Harness2::_launch_job),
+    # turn it into -I flags so the child's @INC actually picks the
+    # paths up -- the env var alone is not enough since exec(perl ...)
+    # starts a fresh interpreter.
     if (!defined $launch_cmd) {
         my @extra_inc;
         if (my $payload_env = $payload->{env}) {
@@ -219,8 +234,6 @@ sub request_handler_launch_job {
     # test_file path so the resulting .json includes the relative
     # and absolute test-file paths. Callers that supply their own
     # spec are left alone.
-    # Make this a use statement at the top of the file, not a dynamic require.
-    require Test2::Harness2::TestFile;
     my $test_file_spec = Test2::Harness2::TestFile->new(file => $test_file_abs);
 
     my @logger_specs = map { _maybe_inject_test_file_spec($_, $test_file_spec) } @$payload_loggers;
@@ -329,6 +342,19 @@ sub service_started_fields {
 sub service_on_start {
     my $self = shift;
 
+    # Stamp the start time on the State so the persisted state.json
+    # has it the moment any consumer reads it. Idempotent.
+    $self->{+RUN_STATE}->mark_started;
+
+    # Emit run_queued so the JSON logger writes the immutable Run
+    # spec to runs/<run_id>/spec.json.zst. Sent before run_mutation
+    # so the spec is on disk by the time any state-consumer wakes
+    # up; the spec is queue-time-frozen and never changes after.
+    $self->_emit_run_log_event(
+        kind     => 'run_queued',
+        run_data => $self->{+RUN}->TO_JSON,
+    );
+
     # Emit an initial run_mutation so the JSON logger lands a file
     # immediately, even for a run that never mutates during its
     # lifetime (e.g. all jobs skipped due to broken resources).
@@ -423,7 +449,7 @@ sub run_on_interval {
         delete $pending->{$job_id};
 
         my $raw = $entry->{raw_exit_on_reap};
-        $self->_handle_test_job_completed({
+        $self->_handle_gen_msg_test_job_completed({
             run_id  => $entry->{run_id},
             job_id  => $job_id,
             job_try => $entry->{job_try},
@@ -440,6 +466,11 @@ sub run_on_interval {
 # message here after message-handler dispatch has already looked for
 # a matching request_handler_*. The harness aggregates its own shadow
 # Run by consuming run_state_update messages we produce here.
+#
+# Dispatch is name-prefixed (_handle_gen_msg_${kind}) so the per-kind
+# handlers live in their own namespace and cannot collide with
+# unrelated method names. Unknown kinds are silently dropped, same
+# as the previous explicit-elsif chain.
 sub run_on_general_message {
     my ($self, $msg) = @_;
 
@@ -447,37 +478,12 @@ sub run_on_general_message {
     my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
     return unless defined $kind;
 
-    # Can we change this to dispatch via methods:
-    # my $meth = "_handle_${kind}";
-    # if ($self->can($meth)) {
-    #     $self->$meth($content);
-    # }
-    # else {
-    #     warn "Unrecognised general message type '$kind';
-    # }
-    #
-    # To make it a bit safer call the methods _handle_gen_msg_$kind, so we cannot accidentally grab _handle_collector_artifacts or other similarly names methods.
-
-    if ($kind eq 'test_job_started') {
-        return $self->_handle_test_job_started($content);
-    }
-    if ($kind eq 'test_job_diagnosing') {
-        return $self->_handle_test_job_diagnosing($content);
-    }
-    if ($kind eq 'test_job_failing') {
-        return $self->_handle_test_job_failing($content);
-    }
-    if ($kind eq 'test_job_completed') {
-        return $self->_handle_test_job_completed($content);
-    }
-    if ($kind eq 'collector_artifacts') {
-        return $self->_handle_collector_artifacts($content);
-    }
-
-    return;
+    my $method = "_handle_gen_msg_$kind";
+    return unless $self->can($method);
+    return $self->$method($content);
 }
 
-sub _handle_test_job_started {
+sub _handle_gen_msg_test_job_started {
     my ($self, $content) = @_;
 
     my $job_id = $content->{job_id} // return;
@@ -494,13 +500,12 @@ sub _handle_test_job_started {
     # Mutate Run state: pending -> running. Guard with an eval so an
     # out-of-order started message (should not happen but: belt +
     # suspenders) doesn't take the service down.
-    my $ok  = eval { $self->{+RUN}->mark_running($job_id); 1 };
+    my $ok  = eval { $self->{+RUN_STATE}->mark_running($job_id); 1 };
     my $err = $@;
     warn "run service could not mark job '$job_id' running: $err" unless $ok;
 
     my $started_at = $content->{stamp} // time;
-    my $r = $self->{+RUN}->results->{$job_id} //= {};
-    $r->{started_at} //= $started_at;
+    $self->{+RUN_STATE}->seed_job_result($job_id, started_at => $started_at);
 
     $self->_emit_run_log_event(
         kind     => 'job_started',
@@ -515,7 +520,7 @@ sub _handle_test_job_started {
     return;
 }
 
-sub _handle_test_job_diagnosing {
+sub _handle_gen_msg_test_job_diagnosing {
     my ($self, $content) = @_;
 
     $self->_emit_run_log_event(
@@ -529,7 +534,7 @@ sub _handle_test_job_diagnosing {
     return;
 }
 
-sub _handle_test_job_failing {
+sub _handle_gen_msg_test_job_failing {
     my ($self, $content) = @_;
 
     $self->_emit_run_log_event(
@@ -543,7 +548,7 @@ sub _handle_test_job_failing {
     return;
 }
 
-sub _handle_test_job_completed {
+sub _handle_gen_msg_test_job_completed {
     my ($self, $content) = @_;
 
     my $job_id = $content->{job_id} // return;
@@ -556,26 +561,28 @@ sub _handle_test_job_completed {
     delete $self->{+PENDING_SYNTH_COMPLETIONS}->{$job_id};
 
     # Record the authoritative verdict + exit details keyed by
-    # job_id so the Run snapshot can carry them out to the harness
+    # job_id so the State snapshot can carry them out to the harness
     # (via run_state_update) and any harness-side IPC consumer that
     # wants per-job pass/fail can read them without touching logs.
     # Merge (not replace) so queue-time seeding and started_at stay.
     my $completed_at = $content->{stamp} // time;
-    my $r = $self->{+RUN}->results->{$job_id} //= {};
-    $r->{pass}         = $content->{pass} ? 1 : 0;
-    $r->{exit}         = $content->{exit};
-    $r->{codes}        = $content->{codes};
-    $r->{pass_count}   = $content->{pass_count};
-    $r->{fail_count}   = $content->{fail_count};
-    $r->{times}        = $content->{times}       if $content->{times};
-    $r->{child_times}  = $content->{child_times} if $content->{child_times};
-    $r->{child_wall}   = $content->{child_wall}  if defined $content->{child_wall};
-    $r->{stamp}        = $completed_at;
-    $r->{completed_at} = $completed_at;
+    $self->{+RUN_STATE}->record_job_result(
+        $job_id,
+        pass       => $content->{pass} ? 1 : 0,
+        exit       => $content->{exit},
+        codes      => $content->{codes},
+        pass_count => $content->{pass_count},
+        fail_count => $content->{fail_count},
+        ($content->{times}              ? (times       => $content->{times})       : ()),
+        ($content->{child_times}        ? (child_times => $content->{child_times}) : ()),
+        (defined $content->{child_wall} ? (child_wall  => $content->{child_wall})  : ()),
+        stamp        => $completed_at,
+        completed_at => $completed_at,
+    );
 
     # Mutate Run state: running -> done. Safe to call even if the job
     # was marked skipped earlier (mark_done croaks; we guard).
-    my $ok  = eval { $self->{+RUN}->mark_done($job_id); 1 };
+    my $ok  = eval { $self->{+RUN_STATE}->mark_done($job_id); 1 };
     my $err = $@;
     warn "run service could not mark job '$job_id' done: $err" unless $ok;
 
@@ -597,16 +604,15 @@ sub _handle_test_job_completed {
     return;
 }
 
-sub _handle_collector_artifacts {
+sub _handle_gen_msg_collector_artifacts {
     my ($self, $content) = @_;
 
     $self->_merge_artifacts($content->{loggers} // {});
-    $self->_write_artifacts_manifest;
 
     # Forward the merged artifact set to the harness so it can fan out
-    # to any run-scoped subscribers. The run service owns the on-disk
-    # artifacts.json for its run; the harness only needs the mapping
-    # in-memory for subscriber fan-out.
+    # to any run-scoped subscribers. The mapping is in-memory only;
+    # consumers reading the on-disk archive derive the same map from
+    # the file tree (extension -> Logger::<XYZ>).
     $self->_send_to_harness({
         kind      => 'run_artifacts_update',
         run_id    => $self->{+RUN_ID},
@@ -650,25 +656,6 @@ sub _merge_artifacts {
     return;
 }
 
-sub _write_artifacts_manifest {
-    my $self = shift;
-
-    my $dir  = "$self->{+LOGDIR}/runs/$self->{+RUN_ID}";
-    my $path = "$dir/artifacts.json.zst";
-
-    my $dict = "$self->{+LOGDIR}/zstd-dict.bin";
-    my @dict_args = -f $dict ? (dict_path => $dict) : ();
-
-    my $ok  = eval {
-        write_json_zst_file_atomic($path, $self->{+ARTIFACTS}, @dict_args);
-        1;
-    };
-    my $err = $@;
-    warn "Test2::Harness2::RunService: failed to write $path: $err" unless $ok;
-
-    return;
-}
-
 sub _job_tracking_by_collector_pid {
     my ($self, $pid) = @_;
     return undef unless defined $pid;
@@ -690,18 +677,17 @@ sub _emit_run_log_event {
     return;
 }
 
-# After any mutation to the Run: fire a run_mutation event onto the
-# run's own emitter (so the JSON logger will overwrite its snapshot)
+# After any mutation to the Run::State: fire a run_mutation event onto
+# the run's own emitter (so the JSON logger will overwrite its snapshot)
 # and send a run_state_update IPC to the harness carrying the full
-# Run->TO_JSON payload so the harness's mirror Run stays in sync.
+# State->TO_JSON payload so the harness's mirror stays in sync.
 #
 # Full snapshots, not diffs. Simpler, and the payloads are small
 # enough that per-mutation replay is not a concern.
 sub _broadcast_run_state {
     my $self = shift;
 
-    my $run  = $self->{+RUN};
-    my $snap = $run->TO_JSON;
+    my $snap = $self->{+RUN_STATE}->TO_JSON;
 
     $self->_emit_run_log_event(
         kind     => 'run_mutation',
@@ -760,6 +746,10 @@ sub run_on_cleanup {
         warn "resource '" . $res->resource_name . "' teardown died: $err"
             unless $ok;
     }
+
+    # Stamp finish time + completed flag on the State so the persisted
+    # snapshot reflects the terminal state.
+    $self->{+RUN_STATE}->mark_finished;
 
     # Final run_mutation so the JSON logger's cached snapshot
     # reflects the run's terminal state before the collector shuts
@@ -866,13 +856,17 @@ sub start {
         POSIX::_exit($exit // 0);
     };
 
-    require Test2::Harness2::Collector::Service::Run;
-    Test2::Harness2::Collector::Service::Run->interpose(
+    # is_run => 1 marks the loggers as belonging to the run-service
+    # collector so the role's path derivation lands the .jsonl /
+    # .json under runs/<run_id>/ rather than runs/<run_id>/services/.
+    require Test2::Harness2::Collector::Service;
+    Test2::Harness2::Collector::Service->interpose(
         ipcm_info    => $self->ipcm_info,
         ipc_parent   => $self->{+HARNESS_NAME},
         ipc_run      => $self->{+NAME},
         ipc_harness  => $self->{+HARNESS_NAME},
         bus_id       => "collector:" . $self->{+NAME},
+        is_run       => 1,
         logdir       => $self->{+LOGDIR},
         service_name => $self->{+RUN_ID},
         run_id       => $self->{+RUN_ID},

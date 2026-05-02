@@ -7,8 +7,8 @@ our $VERSION = '2.000011';
 use Carp qw/croak/;
 use File::Spec ();
 use IO::Handle;
-use Test2::Harness2::Util::File::JSONL;
-use Test2::Harness2::Util::File::JSONL::Zstd;
+use Test2::Harness2::Util::FileMonitor;
+use Test2::Harness2::Util::JSONL::Reader;
 use Test2::Harness2::Util::Zstd qw/open_zstd_writer/;
 
 use Object::HashBase qw{
@@ -25,6 +25,12 @@ use Object::HashBase qw{
 
 use Role::Tiny::With;
 with 'Test2::Harness2::Role::Collector::Logger';
+
+# Per-logger leaf name. The on-disk file lives at:
+#   runs/<run_id>/events.jsonl.zst              (is_run case)
+#   services/<name>/events.jsonl.zst            (global service)
+#   runs/<run_id>/services/<name>/events.jsonl.zst  (run-scoped service)
+sub log_leaf { 'events' }
 
 sub init {
     my $self = shift;
@@ -51,15 +57,6 @@ sub output_files {
     return ($self->{+OUTPUT_FILE});
 }
 
-# Locate the per-logdir zstd dictionary if one is present. Returns
-# undef when the run was started dict-less.
-sub _dict_path {
-    my $self   = shift;
-    my $logdir = $self->{+LOGDIR} or return undef;
-    my $path   = "$logdir/zstd-dict.bin";
-    return -f $path ? $path : undef;
-}
-
 sub startup {
     my $self = shift;
 
@@ -80,11 +77,7 @@ sub startup {
 
     my $path = $self->{+OUTPUT_FILE};
     if ($path =~ /\.zst\z/) {
-        my $dict = $self->_dict_path;
-        $self->{+FH} = open_zstd_writer(
-            $path,
-            ($dict ? (dict_path => $dict) : ()),
-        );
+        $self->{+FH} = open_zstd_writer($path);
     }
     else {
         open(my $fh, '>', $path)
@@ -100,34 +93,13 @@ sub log_event {
 
     my $fh = $self->{+FH} or return;
 
-    # The zstd writer wrapper exposes ->print; native filehandles use
-    # the print operator. Both compress/append-on-print behavior is
-    # identical from the caller's point of view.
+    # Always compress {json}+"\n" together so each frame uncompresses
+    # to a complete jsonl line; the extract command can then stitch
+    # frames by concatenation without re-inserting newlines.
     if (ref($fh) && $fh->isa('Test2::Harness2::Util::Zstd::Writer')) {
-        # Fast path: the collector caches the on-wire compressed
-        # JSON frame on the event when it arrived as a JSON burst
-        # over an Atomic::Pipe configured with the same level + dict
-        # we use here. The on-wire frame and the JSONL writer's
-        # frame compress the same plaintext (bare JSON, no trailing
-        # newline) so the cached bytes can be appended verbatim and
-        # the extra compress pass is skipped. Auditors that mutate
-        # the event clear this field, so a present compressed_form
-        # is authoritative.
-        #
-        # Records on disk do not carry an inter-record newline:
-        # zstd frames self-delimit, and the extract command is
-        # responsible for inserting exactly one newline between
-        # records when producing extracted plaintext jsonl.
-        if (defined(my $frame = $event->compressed_form)) {
-            $fh->print_raw_frame($frame);
-        }
-        else {
-            $fh->print($event->as_json);
-        }
+        $fh->say($event->as_json);
     }
     else {
-        # Plain (uncompressed) jsonl: the file format itself relies
-        # on a newline between records.
         print $fh $event->as_json, "\n";
     }
 }
@@ -180,46 +152,50 @@ sub metadata {
 
 # ----------------------------------------------------------------------
 # Streamer interface
-sub update_style           { 'append' }
+sub update_type            { 'append' }
 sub records_state          { 0 }
 sub records_general_events { 1 }
 
-# Better to re-implement all this using a zstd reader as a delegate to the FileMonitor class
+# log_reader returns a FileMonitor wrapping a JSONL::Reader delegate.
+# The reader auto-detects the on-disk format from the path suffix
+# (.zst -> Zstd::Reader internally; otherwise plain newline-delimited
+# input), so consumers see one uniform "ask the monitor; drain the
+# delegate" surface for both compressed and uncompressed event logs.
 sub log_reader {
     my $class = shift;
     my ($path) = @_;
-    if ($path =~ /\.zst\z/) {
-        my $dict;
-        my (undef, $dir) = File::Spec->splitpath($path);
-        if (defined $dir) {
-            my @parts = File::Spec->splitdir($dir);
-            while (@parts) {
-                my $candidate = File::Spec->catfile(File::Spec->catdir(@parts), 'zstd-dict.bin');
-                if (-f $candidate) { $dict = $candidate; last; }
-                pop @parts;
-            }
-        }
-        return Test2::Harness2::Util::File::JSONL::Zstd->new(
-            name      => $path,
-            dict_path => $dict,
-        );
-    }
-    return Test2::Harness2::Util::File::JSONL->new(name => $path);
+
+    my $delegate = Test2::Harness2::Util::JSONL::Reader->new(path => $path);
+
+    return Test2::Harness2::Util::FileMonitor->new(
+        file     => $path,
+        delegate => $delegate,
+    );
 }
 
+# ready() peeks (no ack) so fetch_events() can ack the change-signal
+# itself. The two methods are paired: ready answers "is there
+# anything new?" and fetch_events drains. Either one alone works for
+# callers that bypass the other.
 sub ready {
     my $class = shift;
     my ($r) = @_;
-    return 0 unless $r && $r->exists;
-    my @peek = $r->poll_with_index(max => 1, peek => 1);
-    return scalar @peek;
+    return 0 unless $r;
+    return 0 unless $r->delegate->exists;
+    return $r->peek_changed ? 1 : 0;
 }
 
 sub fetch_events {
     my $class = shift;
     my ($r) = @_;
-    return unless $r && $r->exists;
-    return $r->poll;
+    return unless $r;
+    # Ack the change signal regardless of how many lines arrive
+    # (read_lines may return 0 lines when the change was an mtime
+    # touch with no content delta).
+    $r->changed;
+    my $delegate = $r->delegate;
+    return unless $delegate->exists;
+    return $delegate->read_lines;
 }
 
 # No state to report for an append-style general-event logger; the

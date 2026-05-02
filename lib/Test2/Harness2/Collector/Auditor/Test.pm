@@ -171,7 +171,6 @@ sub _normalize_event {
     $f->{about}{uuid}       //= $event_id if $f->{about};
 }
 
-# Move some of the conditional blocks from here into their own methods that we call. This method is too long, needs to be broken up.
 sub _audit {
     my $self = shift;
     my ($event) = @_;
@@ -190,109 +189,22 @@ sub _audit {
     return $event if $f->{from_tap}    && $f->{from_tap}->{source} eq 'STDERR';
     return $event if $f->{from_stream} && $f->{from_stream}->{source} eq 'STDERR';
 
-    if ($f->{harness} && $f->{harness}->{subtest_start}) {
-        my $st = $self->{+SUBTESTS}->{$nested + 1} ||= {};
-        $st->{event} = $event;
-        $f->{harness_auditor}->{no_render} = 1;
-        $self->_drop_compressed_cache($event);
+    return $self->_audit_subtest_start($event, $f, $nested, $is_ours)
+        if $f->{harness} && $f->{harness}->{subtest_start};
 
-        # Only announce at this auditor's own nesting level -- nested
-        # subtest_start events that slip past the from_tap gate above are
-        # still swallowed as before. Downstream consumers that watch for
-        # harness.subtest_started therefore only see the top-level
-        # announcements produced by the top-level auditor.
-        return unless $is_ours;
-
-        # Emit a synthetic announcement event so downstream loggers can react
-        # to a subtest starting without snooping on the swallowed raw event.
-        # Carry the original event's trace and timestamps so consumers can
-        # correlate the announcement with the source location.
-        my $stamp    = $event->{stamp} // $f->{harness}->{stamp} // time;
-        my $announce = Test2::Harness2::Event->new(
-            event_id   => gen_uuid(),
-            stamp      => $stamp,
-            facet_data => {
-                harness => {
-                    subtest_started => 1,
-                    nested          => $nested,
-                    stamp           => $stamp,
-                },
-                (defined $f->{trace} ? (trace => {%{$f->{trace}}}) : ()),
-            },
-        );
-        $self->_normalize_event($announce);
-        return $announce;
-    }
+    # Recovering an orphan from_tap subtest_end (no buffered subtest open)
+    # rewrites $event/$f into the synthesized info-only carrier event the
+    # rest of this method emits. Run before push @out so the rewritten
+    # event is what gets pushed.
+    ($event, $f) = $self->_audit_orphan_subtest_end_recovery($event, $f)
+        if $f->{from_tap}
+        && $f->{harness}->{subtest_end}
+        && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}});
 
     my @out;
-
-    if ($f->{from_tap} && $f->{harness}->{subtest_end} && !($self->{+SUBTESTS} && keys %{$self->{+SUBTESTS}})) {
-        $f->{harness_auditor}->{no_render} = 1;
-        $self->_drop_compressed_cache($event);
-
-        my $stamp = $f->{trace}->{stamp} // $f->{stamp} // $f->{harness}->{stamp} // time;
-
-        $f = {
-            %{$f},
-            harness_auditor => {added_by_auditor => 1},
-            parent          => undef,
-            trace           => undef,
-            harness         => {
-                stamp => $stamp,
-                %{$f->{harness} || {}},
-                subtest_end => undef,
-            },
-            info => [
-                @{$f->{info} || []},
-                {
-                    details      => $f->{from_tap}->{details},
-                    tag          => $f->{from_tap}->{source} || 'STDOUT',
-                    from_harness => 1,
-                }
-            ],
-        };
-
-        $event = Test2::Harness2::Event->new(
-            event_id   => $f->{harness}->{event_id} // $f->{about}->{uuid} // gen_uuid(),
-            stamp      => $stamp,
-            facet_data => $f,
-        );
-        $self->_normalize_event($event);
-    }
-
     push @out => $event unless $f->{harness}->{subtest_end};
 
-    if (my $sts = $self->{+SUBTESTS}) {
-        my @close = sort { $b <=> $a } grep { $_ > $nested } keys %$sts;
-
-        for my $n (@close) {
-            my $st = delete $sts->{$n};
-            my $se = $st->{event} || $event;
-
-            my $fd = $se->{facet_data};
-            delete $fd->{harness_auditor}->{no_render};
-            $fd->{parent}->{hid}      ||= $n;
-            $fd->{parent}->{children} ||= $st->{children};
-            $fd->{harness}->{closed_by}     = $event;
-            $fd->{harness}->{closed_by_eid} = $event->{event_id};
-            $self->_drop_compressed_cache($se);
-
-            my $pn = $n - 1;
-
-            if ($st->{event}) {
-                if ($pn > $self->{+NESTED}) {
-                    push @{$sts->{$pn}->{children}} => $fd;
-                }
-                elsif ($pn == $self->{+NESTED}) {
-                    $self->_subtest_process($fd, $se);
-                    push @out => $se;
-                }
-            }
-            else {
-                push @out => $se if $self->{+NESTED} && $pn == $self->{+NESTED};
-            }
-        }
-    }
+    push @out => $self->_audit_close_deeper_subtests($event, $nested);
 
     unless ($is_ours) {
         my $st = $self->{+SUBTESTS}->{$nested} ||= {};
@@ -305,7 +217,142 @@ sub _audit {
     return @out;
 }
 
-# Same here, try to break it up into multiple methods where reasonable
+# subtest_start arm: stash the original event under the (nested+1)
+# slot so a later subtest_end can attach the children we are about
+# to accumulate, suppress the original event from rendering (the
+# closer carries the whole subtest), and -- only at this auditor's
+# own nesting level -- emit a synthetic subtest_started announce
+# event so downstream consumers can react without snooping on the
+# swallowed raw event.
+sub _audit_subtest_start {
+    my $self = shift;
+    my ($event, $f, $nested, $is_ours) = @_;
+
+    my $st = $self->{+SUBTESTS}->{$nested + 1} ||= {};
+    $st->{event} = $event;
+    $f->{harness_auditor}->{no_render} = 1;
+    $self->_drop_compressed_cache($event);
+
+    # Only announce at this auditor's own nesting level -- nested
+    # subtest_start events that slip past the from_tap gate above
+    # are still swallowed as before. Downstream consumers that
+    # watch for harness.subtest_started therefore only see the
+    # top-level announcements produced by the top-level auditor.
+    return unless $is_ours;
+
+    my $stamp    = $event->{stamp} // $f->{harness}->{stamp} // time;
+    my $announce = Test2::Harness2::Event->new(
+        event_id   => gen_uuid(),
+        stamp      => $stamp,
+        facet_data => {
+            harness => {
+                subtest_started => 1,
+                nested          => $nested,
+                stamp           => $stamp,
+            },
+            (defined $f->{trace} ? (trace => {%{$f->{trace}}}) : ()),
+        },
+    );
+    $self->_normalize_event($announce);
+    return $announce;
+}
+
+# Synthesize a replacement event for a from_tap subtest_end that has
+# no matching open subtest (TAP rendering produced a "closing brace"
+# line but no buffered subtest is in progress). Suppress rendering
+# of the raw closer, drop its compressed cache, and rebuild the
+# event as a plain info-only carrier so the closing-brace text is
+# still surfaced to the user. Returns the (possibly new) ($event,
+# $f) pair the caller should use from this point on.
+sub _audit_orphan_subtest_end_recovery {
+    my $self = shift;
+    my ($event, $f) = @_;
+
+    $f->{harness_auditor}->{no_render} = 1;
+    $self->_drop_compressed_cache($event);
+
+    my $stamp = $f->{trace}->{stamp} // $f->{stamp} // $f->{harness}->{stamp} // time;
+
+    $f = {
+        %{$f},
+        harness_auditor => {added_by_auditor => 1},
+        parent          => undef,
+        trace           => undef,
+        harness         => {
+            stamp => $stamp,
+            %{$f->{harness} || {}},
+            subtest_end => undef,
+        },
+        info => [
+            @{$f->{info} || []},
+            {
+                details      => $f->{from_tap}->{details},
+                tag          => $f->{from_tap}->{source} || 'STDOUT',
+                from_harness => 1,
+            }
+        ],
+    };
+
+    $event = Test2::Harness2::Event->new(
+        event_id   => $f->{harness}->{event_id} // $f->{about}->{uuid} // gen_uuid(),
+        stamp      => $stamp,
+        facet_data => $f,
+    );
+    $self->_normalize_event($event);
+
+    return ($event, $f);
+}
+
+# Close every still-open subtest whose nesting depth is greater than
+# the depth of the current event. Each closer rewrites the open
+# subtest's start event into the rendered/parented form, mutates
+# subtest state on $self->{+SUBTESTS}, and either nests the result
+# under its own parent subtest (still deeper than ours) or hands
+# the buffered children up to _subtest_process for accounting (when
+# the parent is at our own nesting level). Returns the list of
+# events that should appear in @out.
+sub _audit_close_deeper_subtests {
+    my $self = shift;
+    my ($event, $nested) = @_;
+
+    my $sts = $self->{+SUBTESTS} or return;
+
+    my @close = sort { $b <=> $a } grep { $_ > $nested } keys %$sts;
+    return unless @close;
+
+    my @out;
+
+    for my $n (@close) {
+        my $st = delete $sts->{$n};
+        my $se = $st->{event} || $event;
+
+        my $fd = $se->{facet_data};
+        delete $fd->{harness_auditor}->{no_render};
+        $fd->{parent}->{hid}      ||= $n;
+        $fd->{parent}->{children} ||= $st->{children};
+        $fd->{harness}->{closed_by}     = $event;
+        $fd->{harness}->{closed_by_eid} = $event->{event_id};
+        $self->_drop_compressed_cache($se);
+
+        my $pn = $n - 1;
+
+        if ($st->{event}) {
+            if ($pn > $self->{+NESTED}) {
+                push @{$sts->{$pn}->{children}} => $fd;
+            }
+            elsif ($pn == $self->{+NESTED}) {
+                $self->_subtest_process($fd, $se);
+                push @out => $se;
+            }
+        }
+        else {
+            push @out => $se if $self->{+NESTED} && $pn == $self->{+NESTED};
+        }
+    }
+
+    return @out;
+}
+
 sub _subtest_process {
     my $self = shift;
     my ($f, $event) = @_;
@@ -330,62 +377,91 @@ sub _subtest_process {
     $self->{+NUMBERS}->{$f->{assert}->{number}}++
         if $f->{assert} && $f->{assert}->{number};
 
-    if ($f->{parent} && $f->{assert}) {
-        my $name = $f->{assert}->{details} // "unnamed subtest ($f->{trace}->{frame}->[1] line $f->{trace}->{frame}->[2])";
+    $self->_subtest_process_parent($f, $closer)
+        if $f->{parent} && $f->{assert};
 
-        my $subauditor = blessed($self)->new(
-            nested    => $self->{+NESTED} + 1,
-            run_id    => $self->{+RUN_ID},
-            job_id    => $self->{+JOB_ID},
-            job_try   => $self->{+JOB_TRY},
-            ipcm_info => $self->{+IPCM_INFO},
-        );
+    $self->_subtest_tally_facets($f);
 
-        for my $sf (@{$f->{parent}->{children}}) {
-            $sf->{about}->{uuid}       ||= gen_uuid();
-            $sf->{harness}->{event_id} ||= $sf->{about}->{uuid};
-            $subauditor->_subtest_process($sf);
+    $self->_subtest_process_exit($f, $event)
+        if $f->{harness_process_exit};
+
+    return;
+}
+
+# Drive a buffered subtest's child facets through a fresh
+# sub-auditor, collect its verdict, append the synthesized
+# subtest_closed / abrupt-end error onto $f if needed, and roll the
+# pass/fail outcome up onto $self's _SUB_FAILURES / FAILING_SUBTESTS
+# / PASSING_SUBTESTS / FAILED_SUBTEST_TREE state. Mutates $f in
+# place by appending into $f->{errors}.
+sub _subtest_process_parent {
+    my $self = shift;
+    my ($f, $closer) = @_;
+
+    my $name = $f->{assert}->{details} // "unnamed subtest ($f->{trace}->{frame}->[1] line $f->{trace}->{frame}->[2])";
+
+    my $subauditor = blessed($self)->new(
+        nested    => $self->{+NESTED} + 1,
+        run_id    => $self->{+RUN_ID},
+        job_id    => $self->{+JOB_ID},
+        job_try   => $self->{+JOB_TRY},
+        ipcm_info => $self->{+IPCM_INFO},
+    );
+
+    for my $sf (@{$f->{parent}->{children}}) {
+        $sf->{about}->{uuid}       ||= gen_uuid();
+        $sf->{harness}->{event_id} ||= $sf->{about}->{uuid};
+        $subauditor->_subtest_process($sf);
+    }
+
+    my @errors = $subauditor->subtest_fail_error_facet_list();
+
+    if ($f->{harness}->{subtest_start}) {
+        if ($closer && $closer->{facet_data}->{harness}->{subtest_end}) {
+            $f->{harness}->{subtest_closed} = 1;
         }
-
-        my @errors = $subauditor->subtest_fail_error_facet_list();
-
-        if ($f->{harness}->{subtest_start}) {
-            if ($closer && $closer->{facet_data}->{harness}->{subtest_end}) {
-                $f->{harness}->{subtest_closed} = 1;
-            }
-            elsif (!$f->{harness}->{subtest_closed}) {
-                push @{$f->{errors}} => {
-                    tag          => 'REASON',
-                    fail         => 1,
-                    from_harness => 1,
-                    details      => "Buffered subtest ended abruptly (missing closing brace event)",
-                };
-            }
-        }
-
-        my $fail = 0;
-        if (@errors) {
-            push @{$f->{errors}} => @errors;
-            $fail = 1;
-        }
-        else {
-            $fail ||= $f->{assert}  && !$f->{assert}->{pass} && !($f->{amnesty} && @{$f->{amnesty}});
-            $fail ||= $f->{control} && ($f->{control}->{halt} || $f->{control}->{terminate});
-            $fail ||= $f->{errors}  && first { $_->{fail} } @{$f->{errors}};
-        }
-
-        if ($fail) {
-            $self->{+_SUB_FAILURES}++;
-
-            my $tree = $self->{+FAILED_SUBTEST_TREE} //= [];
-            push @$tree => [$name, $subauditor->{+FAILED_SUBTEST_TREE} // []];
-
-            push @{$self->{+FAILING_SUBTESTS} //= []} => $name;
-        }
-        else {
-            push @{$self->{+PASSING_SUBTESTS} //= []} => $name;
+        elsif (!$f->{harness}->{subtest_closed}) {
+            push @{$f->{errors}} => {
+                tag          => 'REASON',
+                fail         => 1,
+                from_harness => 1,
+                details      => "Buffered subtest ended abruptly (missing closing brace event)",
+            };
         }
     }
+
+    my $fail = 0;
+    if (@errors) {
+        push @{$f->{errors}} => @errors;
+        $fail = 1;
+    }
+    else {
+        $fail ||= $f->{assert}  && !$f->{assert}->{pass} && !($f->{amnesty} && @{$f->{amnesty}});
+        $fail ||= $f->{control} && ($f->{control}->{halt} || $f->{control}->{terminate});
+        $fail ||= $f->{errors}  && first { $_->{fail} } @{$f->{errors}};
+    }
+
+    if ($fail) {
+        $self->{+_SUB_FAILURES}++;
+
+        my $tree = $self->{+FAILED_SUBTEST_TREE} //= [];
+        push @$tree => [$name, $subauditor->{+FAILED_SUBTEST_TREE} // []];
+
+        push @{$self->{+FAILING_SUBTESTS} //= []} => $name;
+    }
+    else {
+        push @{$self->{+PASSING_SUBTESTS} //= []} => $name;
+    }
+
+    return;
+}
+
+# Update assertion / failure / error / plan tallies on $self based
+# on the facets in $f. Pure bookkeeping -- no event mutation, no
+# downstream emission.
+sub _subtest_tally_facets {
+    my $self = shift;
+    my ($f) = @_;
 
     $self->{+ASSERTION_COUNT}++ if $f->{assert};
 
@@ -406,23 +482,33 @@ sub _subtest_process {
         $self->{+PLAN} = $f->{plan};
     }
 
-    if (my $px = $f->{harness_process_exit}) {
-        $self->{+EXIT} = $px->{all};
+    return;
+}
 
-        $f->{harness_job_exit} //= {
-            job_id  => $self->{+JOB_ID},
-            job_try => $self->{+JOB_TRY},
-            exit    => $px->{all},
-            codes   => $px,
-            stamp   => $event->{stamp} // $f->{harness}->{stamp} // time,
-            (defined $px->{times}       ? (times       => $px->{times})       : ()),
-            (defined $px->{child_times} ? (child_times => $px->{child_times}) : ()),
-            (defined $px->{child_wall}  ? (child_wall  => $px->{child_wall})  : ()),
-        };
+# harness_process_exit arm of _subtest_process: stash the exit code
+# on $self->{+EXIT}, synthesize the harness_job_exit facet on $f,
+# and append every reason in fail_error_facet_list onto $f->{errors}
+# so the downstream consumer sees a single event carrying both the
+# exit code and the auditor's verdict on it.
+sub _subtest_process_exit {
+    my $self = shift;
+    my ($f, $event) = @_;
 
-        push @{$f->{errors}} => $self->fail_error_facet_list;
-    }
+    my $px = $f->{harness_process_exit};
+    $self->{+EXIT} = $px->{all};
 
+    $f->{harness_job_exit} //= {
+        job_id  => $self->{+JOB_ID},
+        job_try => $self->{+JOB_TRY},
+        exit    => $px->{all},
+        codes   => $px,
+        stamp   => $event->{stamp} // $f->{harness}->{stamp} // time,
+        (defined $px->{times}       ? (times       => $px->{times})       : ()),
+        (defined $px->{child_times} ? (child_times => $px->{child_times}) : ()),
+        (defined $px->{child_wall}  ? (child_wall  => $px->{child_wall})  : ()),
+    };
+
+    push @{$f->{errors}} => $self->fail_error_facet_list;
     return;
 }
 

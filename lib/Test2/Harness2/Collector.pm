@@ -13,14 +13,13 @@ use Scope::Guard ();
 use IO::Handle;
 use IO::Select;
 use Atomic::Pipe;
-use Role::Tiny ();
 
 use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Event;
-use Test2::Harness2::Collector::FileLineReader;
 use Test2::Harness2::Collector::Handle;
+use Test2::Harness2::Collector::Util qw/spec_class validate_spec make_warn_handler kill_child/;
 use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
-use Test2::Harness2::Util::JSON qw/encode_json encode_json_file decode_json/;
+use Test2::Harness2::Util::JSON qw/decode_json/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io ipc_default_connect_args atomic_pipe_compression_args apply_atomic_pipe_compression/;
 
 # This is the base class. Two subclasses add the test-vs-service
@@ -51,6 +50,7 @@ use Object::HashBase qw{
     <job_id
     <job_try
     <is_run
+    <is_harness_collector
     <ipcm_info
     <ipc_parent
     <ipc_run
@@ -80,17 +80,21 @@ sub _auditor_spec        { undef }
 sub _normalize_auditor   { }
 sub _instantiate_auditor { }
 
-# True only in the harness's own top-of-tree interpose collector,
-# where ipc_harness points at the collector's own child (the harness
-# service). End-of-life and logger-metadata sends that would normally
-# target ipc_harness have nowhere useful to go in that case, and the
-# child has usually already _exit()'d by the time the collector
-# reaches EOF -- hitting the "Disconnected pipe" warn path. The
-# Service::Harness subclass overrides this to 1; the send sites
-# consult it to short-circuit self-addressed traffic.
-sub is_harness_collector { 0 }
+# is_harness_collector is set true only in the harness's own
+# top-of-tree interpose collector, where ipc_harness points at the
+# collector's own child (the harness service). End-of-life and
+# logger-metadata sends that would normally target ipc_harness have
+# nowhere useful to go in that case, and the child has usually
+# already _exit()'d by the time the collector reaches EOF -- hitting
+# the "Disconnected pipe" warn path. The send sites consult the flag
+# to short-circuit self-addressed traffic.
 
-use Test2::Util qw/IS_WIN32/;
+use constant IS_WIN32 => $^O eq 'MSWin32';
+
+# Load Win32-only collector code (extra methods + DESTROY) into the
+# Test2::Harness2::Collector class namespace. Done at compile time so
+# the methods are available before any instance is constructed.
+require Test2::Harness2::Collector::Win32 if IS_WIN32;
 
 sub init {
     my $self = shift;
@@ -173,47 +177,9 @@ sub init {
         if defined($self->{+PARSER}) && !ref $self->{+PARSER};
 }
 
-sub _spec_class {
-    my $class = shift;
-    my ($spec) = @_;
-
-    return ref($spec) if blessed($spec);
-    return $spec->[0] if ref($spec) eq 'ARRAY';
-    return $spec      if !ref($spec);
-    return undef;
-}
-
-# Validates a single spec for blessed/arrayref/string shape, loads the class
-# (for non-blessed forms), and verifies it implements $role at the class level.
-# Returns nothing; croaks on any problem.
-sub _validate_spec {
-    my $class = shift;
-    my ($spec, $kind, $role) = @_;
-
-    if (blessed($spec)) {
-        croak ucfirst($kind) . " '" . ref($spec) . "' does not implement $role"
-            unless Role::Tiny::does_role($spec, $role);
-        return;
-    }
-
-    my $name;
-    if (ref($spec) eq 'ARRAY') {
-        $name = $spec->[0];
-        croak ucfirst($kind) . " arrayref must begin with a class name"
-            unless defined($name) && !ref($name);
-    }
-    elsif (!ref($spec)) {
-        $name = $spec;
-    }
-    else {
-        croak "Invalid $kind specification: " . ref($spec);
-    }
-
-    load_module($name);
-
-    croak ucfirst($kind) . " '$name' does not implement $role"
-        unless Role::Tiny::does_role($name, $role);
-}
+# spec_class / validate_spec live in Test2::Harness2::Collector::Util.
+# Imported above; called as plain functions from the *_normalize methods
+# below.
 
 # Default observer spec accessor. Subclasses may override to install
 # default observers (e.g. Collector::Test installs TestObserver).
@@ -235,9 +201,7 @@ sub _normalize_observers {
 
     my $role = 'Test2::Harness2::Role::Collector::Observer';
 
-    for my $item (@$observers) {
-        $self->_validate_spec($item, 'observer', $role);
-    }
+    validate_spec($_, 'observer', $role) for @$observers;
 
     $self->{+_OBSERVERS_SPEC} = [@$observers];
 }
@@ -302,15 +266,13 @@ sub _normalize_loggers {
 
     my $role = 'Test2::Harness2::Role::Collector::Logger';
 
-    for my $item (@$loggers) {
-        $self->_validate_spec($item, 'logger', $role);
-    }
+    validate_spec($_, 'logger', $role) for @$loggers;
 
     # depends_on is a class method on the logger role with a default of (),
     # so we can resolve dependencies without instantiating.
-    my %have = map { $self->_spec_class($_) => 1 } @$loggers;
+    my %have = map { spec_class($_) => 1 } @$loggers;
     for my $item (@$loggers) {
-        my $class = $self->_spec_class($item);
+        my $class = spec_class($item);
         for my $dep ($class->depends_on) {
             next if $have{$dep};
             croak "Logger '$class' requires logger '$dep', but it is not present";
@@ -337,7 +299,7 @@ sub _instantiate_loggers {
         # not designed for (e.g. test-job-only loggers on a service
         # collector). Blessed instances answer for themselves; everything
         # else is asked via its class.
-        my $logger_class = blessed($item) ? $item : $self->_spec_class($item);
+        my $logger_class = blessed($item) ? $item : spec_class($item);
         next unless $logger_class->applicable($self);
 
         # service_name and job_id are mutually exclusive from the logger's
@@ -466,120 +428,11 @@ sub _spawn_collector {
     $self->_exit_mirroring_child($ok);
 }
 
-sub _spawn_collector_win32 {
-    my $self = shift;
-
-    # On Windows there is no fork, so we must serialize collector args and
-    # spawn a fresh perl process via system(1, @cmd). Open file handles
-    # cannot cross that boundary, so handle-based collection (stdout/stderr
-    # attributes, or any non-launch path) is not supported.
-    croak "Handle-based collection is not supported on Windows; use 'launch' instead"
-        unless defined $self->{+LAUNCH};
-
-    # Launch mode: serialize the constructor args to a temp JSON file
-    # and spawn a new perl process that loads this module and runs
-    # the collector loop, same pattern as the old start_collected_process.
-    my %params = (
-        launch       => $self->{+LAUNCH},
-        env_vars     => $self->{+ENV_VARS},
-        kill_timeout => $self->{+KILL_TIMEOUT},
-    );
-
-    $params{parent_pids} = $self->{+PARENT_PIDS} if $self->{+PARENT_PIDS};
-
-    # Parser must be a class name for the spawned process to load it
-    my $parser = $self->{+PARSER};
-    if (ref $parser) {
-        $params{parser} = ref($parser);
-    }
-    else {
-        $params{parser} = $parser;
-    }
-
-    # Loggers must be specified as class names or [class, @args] arrayrefs on
-    # Windows, since blessed instances cannot be serialized to the spawned
-    # collector process.
-    for my $item (@{$self->{+_LOGGERS_SPEC}}) {
-        croak "Blessed logger instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
-            if blessed($item);
-    }
-    $params{loggers} = $self->{+_LOGGERS_SPEC};
-
-    # Auditor follows the same constraint -- class name or [class, %args]
-    # arrayref only on Windows, since blessed instances cannot be serialized.
-    if (defined $self->_auditor_spec) {
-        croak "Blessed auditor instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
-            if blessed($self->_auditor_spec);
-        $params{auditor} = $self->_auditor_spec;
-    }
-
-    # Observers: same Windows-serialization constraint as loggers.
-    for my $item (@{$self->{+_OBSERVERS_SPEC} // []}) {
-        croak "Blessed observer instances cannot be passed to a Windows collector; use class name or [class, \@args] form"
-            if blessed($item);
-    }
-    $params{observers} = $self->{+_OBSERVERS_SPEC} if $self->{+_OBSERVERS_SPEC};
-
-    my $json_file = encode_json_file(\%params);
-
-    # Build the command: current perl, all @INC paths, load this module,
-    # then run the collect_from_file() class method.
-    my %seen;
-    my @inc = grep { -d $_ && !$seen{$_}++ } @INC;
-
-    my @cmd = (
-        $^X,
-        (map { "-I$_" } @inc),
-        '-mTest2::Harness2::Collector',
-        '-e', 'Test2::Harness2::Collector->collect_from_file($ARGV[0])',
-        $json_file,
-    );
-
-    my $pid;
-    my $ok  = eval { $pid = $self->_win32_spawn(@cmd); 1 };
-    my $err = $@;
-
-    if (!$ok) {
-        unlink($json_file);
-        croak "Failed to spawn collector process (eval died): $err";
-    }
-    if (!defined $pid || $pid <= 0) {
-        unlink($json_file);
-        croak "Failed to spawn collector process (spawn returned ${\($pid // 'undef')}): $!";
-    }
-
-    return $pid;
-}
-
-# Class method invoked by the spawned collector process on Windows.
-# Reads constructor args from a JSON file, builds a new Collector
-# (skipping the spawn step), and runs the collection loop directly.
-sub collect_from_file {
-    my ($class, $file) = @_;
-
-    # Guarantee the tempfile is removed even if this process dies before
-    # decode_json_file runs (e.g. a module fails to load).  decode_json_file
-    # with unlink => 1 still handles the normal path; if it fires first the
-    # file is already gone and this becomes a no-op.
-    my $file_guard = Scope::Guard->new(sub { unlink $file if -f $file });
-
-    require Test2::Harness2::Util::JSON;
-    my $params = Test2::Harness2::Util::JSON::decode_json_file($file, unlink => 1);
-
-    my $self = $class->new(%$params);
-
-    # Defensive scope guard: never let execution leak past this method in the
-    # spawned process.
-    my $guard = Scope::Guard->new(sub { POSIX::_exit(255) });
-
-    my $ok  = eval { $self->_run_collector(); 1 };
-    my $err = $@;
-
-    $self->_emit_collector_error("Collector process died: $err") unless $ok;
-
-    $guard->dismiss;
-    $self->_exit_mirroring_child($ok);
-}
+# _spawn_collector_win32 + collect_from_file live in
+# Test2::Harness2::Collector::Win32 and are loaded only on win32. The
+# unix path stays inline above; the Win32 module installs both methods
+# into this class's namespace so $self->_spawn_collector_win32 and
+# Test2::Harness2::Collector->collect_from_file resolve as usual.
 
 sub _run_collector {
     my $self = shift;
@@ -925,35 +778,16 @@ sub _send_logger_metadata {
     return;
 }
 
-# Returns a coderef suitable for `local $SIG{__WARN__}`.
-# Child-process warnings already flow through the stdout/stderr pipe to this
+# Build the SIG{__WARN__} handler routed through this collector's
+# event pipeline. Wraps make_warn_handler() so the closure binds to
+# $self->_process_event for the actual dispatch. Child-process
+# warnings already flow through the stdout/stderr pipe to this
 # process's parser chain, so no handler is needed on the child side.
-# Collector-process warnings become WARNING info events on the logger chain;
-# the renderer is responsible for surfacing them to the user. We do NOT echo
-# to STDERR -- under prove / captured stderr that just clutters output, and
-# in a normal run the renderer already shows the event.
+# Collector-process warnings become WARNING info events on the logger
+# chain; the renderer is responsible for surfacing them to the user.
 sub _make_warn_handler {
     my $self = shift;
-
-    return sub {
-        my ($msg) = @_;
-
-        my $ok = eval {
-            my $event = Test2::Harness2::Event->new(
-                event_id   => gen_uuid(),
-                stamp      => time,
-                facet_data => {
-                    info => [{tag => 'WARNING', details => $msg, debug => 1}],
-                },
-            );
-            $self->_process_event($event);
-            1;
-        };
-        # Print STDERR rather than warn to avoid re-entering this handler.
-        # This is only reached when logger dispatch itself fails -- at that
-        # point the warning has nowhere else to go.
-        print STDERR "Failed to log warning event ($msg): $@\n" unless $ok;
-    };
+    return make_warn_handler(sub { $self->_process_event($_[0]) });
 }
 
 sub _run_collection_loop {
@@ -1317,149 +1151,10 @@ sub _launch_child_unix {
     return $pid;
 }
 
-sub _win32_spawn {
-    my $self = shift;
-    # system(1, @cmd) on Win32 is _spawnvp(P_NOWAIT, ...) which returns the
-    # pseudo-process ID (a positive integer) on success, or -1 on failure.
-    # This is NOT the exit code — it is the PID to pass to waitpid().
-    # Isolated in its own method so tests can override it without patching
-    # CORE::GLOBAL::system (which does not intercept already-compiled opcodes).
-    return system 1, @_;
-}
-
-sub _check_new_pgroup_supported_on_win32 {
-    my $self = shift;
-
-    return unless $self->{+NEW_PGROUP};
-
-    # Win32::Job (AssignProcessToJobObject + TerminateJobObject) provides
-    # the Windows equivalent of a process group: spawning into a job object
-    # lets us terminate the child and all its descendants atomically, which
-    # is required for Invariant 1 (child-process isolation).
-    my $has_win32_job = eval { require Win32::Job; 1 };
-    unless ($has_win32_job) {
-        croak "new_pgroup => 1 on Windows requires Win32::Job (not installed); " . "install Win32::Job to enable process-group isolation";
-    }
-}
-
-sub _launch_child_win32 {
-    my $self = shift;
-    my ($out_r, $out_w, $err_r, $err_w, $orig_stdout, $orig_stderr) = @_;
-
-    $self->_check_new_pgroup_supported_on_win32();
-
-    my $cmd = $self->{+LAUNCH};
-
-    # When new_pgroup is requested, use Win32::Job so the child and all its
-    # descendants can be terminated atomically (the Windows equivalent of
-    # kill(0 - $pgid)).  _check_new_pgroup_supported_on_win32() already
-    # verified that Win32::Job is loadable, so require it unconditionally here.
-    return $self->_launch_child_win32_job($cmd, $out_w, $err_w)
-        if $self->{+NEW_PGROUP};
-
-    # On Windows there is no fork. Redirect STDOUT/STDERR to the pipe write
-    # ends, spawn via system(1, @cmd) (P_NOWAIT) which returns the child PID
-    # immediately, then restore handles.
-    swap_io(\*STDOUT, $out_w->wh);
-    swap_io(\*STDERR, $err_w->wh);
-    STDOUT->autoflush(1);
-    STDERR->autoflush(1);
-
-    # Baseline for child_times/child_wall. See _launch_child_unix.
-    $self->{+_CHILD_FORK_TIMES} = [times()];
-    $self->{+_CHILD_FORK_STAMP} = time;
-
-    my $pid;
-    my $ok;
-    {
-        my %env = $self->_child_env_overrides;
-        local @ENV{keys %env} = values %env;
-        $ok = eval { $pid = $self->_win32_spawn(@$cmd); 1 };
-    }
-    my $err = $@;
-
-    # Restore STDOUT/STDERR immediately after spawn.
-    open(STDOUT, '>&', $orig_stdout) or croak "Could not restore STDOUT: $!";
-    open(STDERR, '>&', $orig_stderr) or croak "Could not restore STDERR: $!";
-
-    croak "Failed to spawn '@$cmd' (eval died): $err"
-        if !$ok;
-    croak "Failed to spawn '@$cmd' (spawn returned ${\($pid // 'undef')}): $!"
-        if !defined $pid || $pid <= 0;
-
-    return $pid;
-}
-
-sub _launch_child_win32_job {
-    my $self = shift;
-    my ($cmd, $out_w, $err_w) = @_;
-
-    # Win32::Job was already verified loadable by _check_new_pgroup_supported_on_win32.
-    require Win32::Job;
-
-    my $job = Win32::Job->new()
-        or croak "Failed to create Win32::Job object: $^E";
-
-    # Build a properly-quoted command line string for CreateProcess.
-    # Win32::Job->spawn() takes ($exe, $cmdline, \%opts).  The first element
-    # of @$cmd is the executable; the full quoted string is the command line
-    # (CreateProcess convention: argv[0] is embedded in it).
-    my $exe     = $cmd->[0];
-    my $cmdline = join(' ', map { $self->_win32_quote_arg($_) } @$cmd);
-
-    my %env = $self->_child_env_overrides;
-
-    # Merge overrides into the current environment for the spawn call.
-    # Win32::Job->spawn inherits the parent environment; we simulate
-    # local-env by temporarily setting the vars before spawning.
-    local @ENV{keys %env} = values %env;
-
-    # Baseline for child_times/child_wall. See _launch_child_unix.
-    $self->{+_CHILD_FORK_TIMES} = [times()];
-    $self->{+_CHILD_FORK_STAMP} = time;
-
-    # Pass the pipe write ends as the child's stdout/stderr.
-    # Win32::Job->spawn accepts filehandles for stdin/stdout/stderr and
-    # marks them inheritable before calling CreateProcess.
-    my $pid = $job->spawn(
-        $exe, $cmdline, {
-            stdout => $out_w->wh,
-            stderr => $err_w->wh,
-        }
-    );
-
-    croak "Win32::Job->spawn('$exe') failed: $^E"
-        unless defined $pid && $pid > 0;
-
-    # Store the job object on the instance.  The job's lifetime is tied to
-    # $self: when the Collector is destroyed, Win32::Job goes out of scope,
-    # the job handle is closed, and Windows terminates all processes still
-    # assigned to it — matching the Unix kill(0 - $pgid) semantics.
-    $self->{+_WIN32_JOB} = $job;
-
-    return $pid;
-}
-
-# Quoted-string helper for Win32 CreateProcess command lines.
-# Rules: if the argument contains spaces or double-quotes, wrap it in
-# double-quotes and escape any embedded double-quotes with a backslash.
-sub _win32_quote_arg {
-    my $self = shift;
-    my ($arg) = @_;
-    return $arg unless $arg =~ /[ \t"]/;
-    $arg =~ s/"/\\"/g;
-    return qq{"$arg"};
-}
-
-sub DESTROY {
-    my $self = shift;
-    # Release the Win32::Job handle explicitly.  When the last reference is
-    # dropped, Windows closes the job handle.  Processes already assigned to
-    # the job are terminated only if the job was created with
-    # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE — Win32::Job sets this flag by
-    # default, so all descendants are reaped atomically.
-    delete $self->{+_WIN32_JOB};
-}
+# _win32_spawn, _check_new_pgroup_supported_on_win32, _launch_child_win32,
+# _launch_child_win32_job, _win32_quote_arg, _kill_child_win32, and
+# DESTROY (Win32::Job cleanup) live in
+# Test2::Harness2::Collector::Win32 and are loaded only on win32.
 
 sub _wrap_handle {
     my $self = shift;
@@ -1481,7 +1176,7 @@ sub _wrap_handle {
     }
 
     # Regular file handle -- use plain line-reader shim, no Atomic::Pipe.
-    return Test2::Harness2::Collector::FileLineReader->new($handle);
+    return Test2::Harness2::Collector::Util::FileLineReader->new($handle);
 }
 
 # Pulls a raw filehandle out of whatever _wrap_handle produced, for use with
@@ -1492,7 +1187,7 @@ sub _select_fh {
     my ($handle) = @_;
     return undef unless defined $handle;
     return $handle->rh   if blessed($handle) && $handle->isa('Atomic::Pipe');
-    return $handle->{fh} if blessed($handle) && $handle->isa('Test2::Harness2::Collector::FileLineReader');
+    return $handle->{fh} if blessed($handle) && $handle->isa('Test2::Harness2::Collector::Util::FileLineReader');
     return undef;
 }
 
@@ -1782,30 +1477,9 @@ sub _kill_child {
     croak "_kill_child called without a pid" unless $pid;
     return                                   unless pid_is_running($pid);
 
-    if (IS_WIN32) {
-        # Windows perl does not have a useful SIGTERM; use SIGINT as the
-        # graceful-shutdown signal there.
-        kill('INT', $pid);
-        waitpid($pid, 0);
-        return $?;
-    }
+    return $self->_kill_child_win32($pid) if IS_WIN32;
 
-    # Unix: try TERM first, escalate to KILL after timeout
-    kill('TERM', $pid);
-
-    my $timeout = $self->{+KILL_TIMEOUT};
-    my $start   = time;
-
-    while (time - $start < $timeout) {
-        my $rv = waitpid($pid, WNOHANG);
-        return $? if $rv == $pid;
-        tinysleep(0.1);
-    }
-
-    # Force kill
-    kill('KILL', $pid);
-    my $rv = waitpid($pid, 0);
-    return $?;
+    return kill_child($pid, kill_timeout => $self->{+KILL_TIMEOUT});
 }
 
 # Fork, and let the child continue the caller's execution path while the

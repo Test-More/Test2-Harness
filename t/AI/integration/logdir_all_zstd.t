@@ -3,7 +3,6 @@ use warnings;
 
 use Test2::V0;
 use File::Temp qw/tempdir/;
-use FindBin ();
 use File::Spec ();
 use File::Find ();
 
@@ -11,15 +10,11 @@ use Test2::Harness2;
 use Test2::Harness2::Collector::Logger::JSON;
 use Test2::Harness2::Collector::Logger::JSONL;
 
-my $repo_dict = File::Spec->catfile(
-    $FindBin::Bin, '..', '..', '..', 'share', 'other', 'zstd.dict',
-);
-
 # Architectural enforcement test: every regular file the loggers /
-# harness write under workdir/logs/ must end in .zst or be the
-# bundled zstd-dict.bin. Anything else means a producer wrote
-# plaintext directly into the live logdir, which violates the
-# all-text-files-zstd-compressed rule (zstd-loggers spec sec 12).
+# harness write under workdir/logs/ must end in .zst (zstd-loggers
+# spec sec 12). Anything else means a producer wrote plaintext
+# directly into the live logdir, which violates the
+# all-text-files-zstd-compressed rule.
 #
 # Future producers landing new binary content types under $logdir
 # (images, screenshots, etc.) get added to the binary-signature
@@ -53,19 +48,12 @@ sub _looks_binary {
     return 0;
 }
 
-# We run two scenarios: harness without an injected dict (no
-# share/ resolved at install time = dict-less run), and harness
-# with the repo's dict explicitly threaded in.
 sub _drive_harness {
-    my (%opts) = @_;
     my $wd = tempdir(CLEANUP => 1);
-    my %args = (
+    my $h = Test2::Harness2->new(
         workdir    => $wd,
         ipc_parent => 1,
     );
-    $args{dict_path} = $opts{dict_path} if exists $opts{dict_path};
-
-    my $h = Test2::Harness2->new(%args);
 
     # Construct one of each logger type and call its startup hook
     # so it actually creates a file under $logdir. Use explicit
@@ -75,16 +63,18 @@ sub _drive_harness {
     my $jsonl = Test2::Harness2::Collector::Logger::JSONL->new(
         ipcm_info   => {},
         logdir      => $h->logdir,
-        output_file => $h->logdir . '/services/test.jsonl.zst',
+        output_file => $h->logdir . '/services/test/events.jsonl.zst',
     );
+    $jsonl->prepare_output_locations;
     $jsonl->startup;
     $jsonl->shutdown;
 
     my $json = Test2::Harness2::Collector::Logger::JSON->new(
         ipcm_info   => {},
         logdir      => $h->logdir,
-        output_file => $h->logdir . '/services/test.json.zst',
+        output_file => $h->logdir . '/services/test/state.json.zst',
     );
+    $json->prepare_output_locations;
     $json->startup;
     $json->shutdown;
 
@@ -98,11 +88,10 @@ sub _walk_assert {
     File::Find::find(
         {
             no_chdir => 1,
-            wanted => sub {
+            wanted   => sub {
                 return unless -f $_;
                 my $rel = File::Spec->abs2rel($_, $logdir);
                 return if $rel =~ /\.zst\z/;
-                return if $rel eq 'zstd-dict.bin';
                 return if _looks_binary($_);
                 push @bad => $rel;
             },
@@ -110,20 +99,12 @@ sub _walk_assert {
         $logdir,
     );
 
-    is(\@bad, [], "$label: every file under \$logdir is .zst or zstd-dict.bin or binary");
+    is(\@bad, [], "$label: every file under \$logdir is .zst or binary");
 }
 
-subtest 'logdir-all-zstd: dict-less run' => sub {
+subtest 'logdir-all-zstd' => sub {
     my $logdir = _drive_harness();
-    _walk_assert($logdir, 'no dict');
-};
-
-subtest 'logdir-all-zstd: dict-on run' => sub {
-    plan skip_all => "dict not present" unless -f $repo_dict;
-    my $logdir = _drive_harness(dict_path => $repo_dict);
-    _walk_assert($logdir, 'with dict');
-
-    ok(-f "$logdir/zstd-dict.bin", 'zstd-dict.bin copied into logdir');
+    _walk_assert($logdir, 'all files');
 };
 
 done_testing;

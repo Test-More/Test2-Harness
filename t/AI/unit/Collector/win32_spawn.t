@@ -6,8 +6,33 @@ use Test2::V0;
 # subs that can be exercised on any OS by providing a minimal blessed hash and
 # mocking _win32_spawn() — the thin wrapper around `system 1, @cmd` — via a
 # local *Test2::Harness2::Collector::_win32_spawn override.
+#
+# The Win32 methods now live in Test2::Harness2::Collector::Win32 and are
+# loaded by Collector.pm only on MSWin32. Force-load them here so the
+# methods are available on every platform.
 
 use Test2::Harness2::Collector;
+use Test2::Harness2::Collector::Win32;
+
+# Smoke check: every method extracted into the Win32 module must be
+# callable as a Test2::Harness2::Collector method after the module is
+# loaded.
+subtest 'Win32 module installs methods into Collector namespace' => sub {
+    for my $m (qw{
+        _spawn_collector_win32
+        collect_from_file
+        _win32_spawn
+        _check_new_pgroup_supported_on_win32
+        _launch_child_win32
+        _launch_child_win32_job
+        _win32_quote_arg
+        _kill_child_win32
+        DESTROY
+    })
+    {
+        ok(Test2::Harness2::Collector->can($m), "Test2::Harness2::Collector->can('$m')");
+    }
+};
 
 # ---------------------------------------------------------------------------
 # Helper: build a minimal blessed Collector-like object with the attributes

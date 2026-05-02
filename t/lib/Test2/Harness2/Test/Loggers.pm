@@ -14,8 +14,8 @@ our @EXPORT_OK = qw{
 
 # Return the pair of logger specs the harness used to auto-create for
 # its own interpose collector. Pass these as the harness's `loggers`
-# arg to keep the classic on-disk layout under
-# $workdir/logs/services/$name.{jsonl,json}.
+# arg to keep the on-disk layout under
+# $workdir/logs/services/$name/{events.jsonl,state.json}.
 #
 # The Logger::JSON entry requires a $spec object (anything that can
 # TO_JSON); only the JSONL is included when no $spec is supplied.
@@ -28,12 +28,12 @@ sub classic_harness_loggers {
     my @out = (
         [
             'Test2::Harness2::Collector::Logger::JSONL',
-            output_file => "$workdir/logs/services/$name.jsonl",
+            output_file => "$workdir/logs/services/$name/events.jsonl",
         ],
     );
     push @out => [
         'Test2::Harness2::Collector::Logger::JSON',
-        output_file => "$workdir/logs/services/$name.json",
+        output_file => "$workdir/logs/services/$name/state.json",
         spec        => $spec,
     ] if defined $spec;
 

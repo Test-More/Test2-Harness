@@ -1,5 +1,5 @@
-( FAILED )  job N    t/Yath/integration/replay/fail.tx
 ( PASSED )  job N    t/Yath/integration/replay/pass.tx
+( FAILED )  job N    t/Yath/integration/replay/fail.tx
 [  FAIL  ]  job N  + Fail
 (  DIAG  )  job N    Failed test 'Fail'
 (  DIAG  )  job N    at t/Yath/integration/replay/fail.tx line 3.
@@ -9,7 +9,7 @@ The following jobs failed:
 +--------------------------------------+-----------------------------------+
 | Job ID                               | Test File                         |
 +--------------------------------------+-----------------------------------+
-| 019DC98E-B2C3-7025-A50A-0717DEFCC238 | t/Yath/integration/replay/fail.tx |
+| 019DD52E-6A14-7FF5-90F7-2C7228A1BCC6 | t/Yath/integration/replay/fail.tx |
 +--------------------------------------+-----------------------------------+
 Yath Result Summary
 Fail Count: 1

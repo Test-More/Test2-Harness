@@ -119,8 +119,8 @@ sub claim_file {
     print "TEST PLUGIN: claim_file $file\n";
 
     if ($file =~ /\.tx/) {
-        require Test2::Harness2::TestFile;
-        return Test2::Harness2::TestFile->new(file => $file);
+        require App::Yath2::TestFile;
+        return App::Yath2::TestFile->new(file => $file);
     }
 
     return;

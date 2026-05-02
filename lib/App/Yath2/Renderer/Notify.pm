@@ -7,6 +7,8 @@ our $VERSION = '2.000011';
 use Test2::Harness2::Util::JSON qw/encode_json/;
 use Test2::Harness2::Util qw/mod2file/;
 
+use App::Yath2::TestFile;
+
 use Sys::Hostname qw/hostname/;
 
 use Carp qw/croak confess/;
@@ -265,10 +267,10 @@ sub send_job_notification_slack {
 
     return unless $settings->notify->no_batch_slack;
 
-    my $tf = Test2::Harness2::TestFile->new(file => $f->{harness_job_end}->{abs_file});
+    my $tf = App::Yath2::TestFile->new(file => $f->{harness_job_end}->{abs_file});
 
     my @slack;
-    push @slack => $tf->meta('slack') if $settings->notify->slack_owner;
+    push @slack => $tf->meta_get('slack') if $settings->notify->slack_owner;
     push @slack => @{$settings->notify->slack_fail};
 
     return unless @slack;
@@ -322,10 +324,10 @@ sub send_job_notification_email {
 
     return unless $settings->notify->no_batch_email;
 
-    my $tf = Test2::Harness2::TestFile->new(file => $f->{harness_job_end}->{abs_file});
+    my $tf = App::Yath2::TestFile->new(file => $f->{harness_job_end}->{abs_file});
 
     my @to;
-    push @to => $tf->meta('owner') if $settings->notify->email_owner;
+    push @to => $tf->meta_get('owner') if $settings->notify->email_owner;
     push @to => @{$settings->notify->email_fail};
     return unless @to;
 
@@ -408,8 +410,8 @@ sub send_run_notification_slack {
             $files = $files ? "$files\n$file" : $file;
 
             next unless $settings->notify->slack_owner;
-            my $tf = Test2::Harness2::TestFile->new(file => $file);
-            push @to => $tf->meta('slack');
+            my $tf = App::Yath2::TestFile->new(file => $file);
+            push @to => $tf->meta_get('slack');
         }
     }
 
@@ -461,8 +463,8 @@ sub send_run_notification_email {
             $files = $files ? "$files\n$file" : $file;
 
             next unless $settings->notify->email_owner;
-            my $tf = Test2::Harness2::TestFile->new(file => $file);
-            push @to => $tf->meta('owner');
+            my $tf = App::Yath2::TestFile->new(file => $file);
+            push @to => $tf->meta_get('owner');
         }
     }
 

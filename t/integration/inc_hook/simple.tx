@@ -1,0 +1,5 @@
+use Test2::V0;
+
+ok(1, 'basic test runs under @INC hook');
+
+done_testing;

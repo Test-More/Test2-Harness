@@ -104,7 +104,8 @@ sub process_includes {
         @list = @start;
     }
 
-    push @list => @INC if delete $params{include_current};
+    # Skip @INC hook refs; clean_path would stringify them to bogus paths.
+    push @list => grep { ref $_ eq '' } @INC if delete $params{include_current};
 
     @list = map { $_ eq '.' ? $_ : clean_path($_) || $_ } @list if delete $params{clean};
 

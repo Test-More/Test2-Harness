@@ -1,0 +1,80 @@
+I want to change how rendering works.
+
+No longer going to have a 'Driver' that feeds all renderers a stream of events.
+
+Each Renderer should be its own object with a process, and should require a log as a source/attribute. It can be pointed at a live log dir, an extracted log dir, a .yath log file (tarball or sqlite) or at a log in a database.
+
+The renderer base class or role (whichever is easier to work with or implement) will implement the essential functionality of looping over the log file, and in the case of a live log watching for changes.
+
+Renderer life-cycle in the parent process:
+
+ * renderer constructor insures we have a logfile/dir/db we can work with, and verifies other settings are correct (these will vary from renderer to renderer, but optionslike verbose and quiet, etc).
+ * renderer->start() # creates a child process to do the rendering, fork+exec on linux, system(1, ...) trick for windows.
+ * renderer->finish() # Parent process calls it to send an IPC message to the renderer indicating the run is complete (on live runs this happens when the runner is done, on non-live runs this is called right away to indicate it is not live). This will also wait() on the pid of the child.
+
+Renderer life-cycle in the child process:
+
+ * Reconstruct from construction arguments, since fork+exec or system(1) means fresh memory, probably from a json file.
+ * Open the log
+ * Anything else renderer-specific for starting up
+ * Render Loop
+    * Ask log for producers we have not seen yet (have not seen any on first loop)
+    - (producer is anything that produces artifacts, tets jobs, runs, services, etc)
+    * Logger decides which producers matter to it
+    * Logger asks for the relevent artifacts, following example is for terminal renderer:
+        * Sees a test job produce, asks for spec
+            * Writes test job started output message
+        * Asks for 'report',
+            * if not found try again in future loop (live only)
+            * If found (the next depends on verbosity, but assume qvf for this example)
+             * Read report, if pass write job passed message and nothing else
+             * If report fail, write jobs event.jsonl events to terminal (formatteed) then write job failed line.
+             * Close out job internally so we do not ask about it on future loops
+
+Instead of events being fed to the renderers in a stream, the renderers ask for what they care about.
+
+We will also introduce the concept of a formatter
+
+A formatter converts an artifacts (like events.jsonl) into an alternate form, typically for display purposes.
+
+Example formatters:
+
+ * txt      - Convert artifacts to human readable text (like the current Default renderer, but with no ANSI escape sequences)
+ * tty      - Same as 'text' but with ANSI escape sequences and color, text and tty should share most underlying code.
+ * xml      - For use in the JUnit renderer (if it makes sense, it ma not make sense to use a formatter for junit)
+ * csv      - do not implement, just an example)
+ * html     - do not implement this yet, will be used for Server renderer
+
+Formatter name also indicates filename extension, when an artifact is converted
+from .jsonl to .html we will want to be able to cache the new .html artifact
+for all log formats except tarballs (because it is hard to append to our
+tarballs). When we convert an artifact via a formatter, the new format should
+be added to the log (directory, db, etc). Caching should only occur when
+converting a completed artifact, not when converting a partial 'events.jsonl'.
+
+Also some things we currently call renderers will need to move to a new
+category, Suggest a name for this category. It is things like the current
+Summary and Notifier renderers which only act at the end of a run to do final
+actions, and do not need a child process to render every producer and event.
+
+I want to make a very clean and clear distinction for these roles:
+ * Renderer - Reads from producers and "renders" them for something else to consume them
+ * Formatter - Takes artifacts and converts them to other formats
+ * ??? - Produces final output or takes final actions (triggers?) when a run is complete
+
+We are not going to implement/Convert the Server renderer at this time
+
+What to do with current renderers:
+ * DB           - Remove for now
+ * Default      - Turn into 'tty' and 'text' formatters, and a default renderer that picks one or the other format depending on if STDOUT is a tty or not
+ * Driver       - Remove
+ * Formatter    - Remove (Was never used in legacy, we will not carry it forward into 2.0)
+ * JUnit        - Migrate, possibly with an 'xml' formatter, but if XML does not allow piecemeal assembly we can skip the formatter and make JUnit fully self-contained.
+ * Logger       - Remove, this should have been replaced with our current logging system, we do not need an "all events smashed together" output format.
+ * Notify       - Move to the third currently unnamed category
+ * ResetTerm    - Move to the third currently unnamed category
+ * Server       - Stub for now
+ * Summary      - Move to the third currently unnamed category
+ * TAPHarness   - Remove (not useful)
+
+

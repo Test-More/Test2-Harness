@@ -775,8 +775,16 @@ sub _emit_collector_end {
 # introduced.
 sub _write_sealed_marker {
     my ($self, %fields) = @_;
-
     my $base = $self->base_dir;
+    return $self->_write_sealed_at($base, %fields);
+}
+
+# Write a .sealed marker at an explicit absolute directory path.
+# Same atomic semantics as _write_sealed_marker: temp file + link(2) +
+# existing-file-wins so a concurrent collector seal is never clobbered.
+sub _write_sealed_at {
+    my ($self, $base, %fields) = @_;
+
     make_path($base) unless -d $base;
 
     my $dest = "$base/.sealed";
@@ -810,6 +818,96 @@ sub _write_sealed_marker {
         }
     }
     unlink $tmp if -e $tmp;
+
+    return;
+}
+
+# Variant of _write_sealed_at that takes a logdir-relative path instead
+# of an absolute path. Used by _finalize_sweep.
+sub _write_sealed_marker_at {
+    my ($self, $rel, %fields) = @_;
+    return $self->_write_sealed_at("$self->{+LOGDIR}/$rel", %fields);
+}
+
+# After a clean harness exit, walk the logdir and write .sealed markers
+# with final_state=abandoned for any producer directories that lack one.
+# This covers child collectors that crashed before reaching their own
+# _emit_collector_end. Only the top-level harness collector performs
+# this sweep; all others return immediately.
+#
+# Uses direct opendir/readdir — no App::Yath2 modules — per the project
+# dependency rule that Test2::Harness2 must not load App::Yath2 directly.
+#
+# Existing-file-wins means concurrent collector seals are never clobbered
+# by the sweep: if a producer's own collector sealed itself just before we
+# got here, the sweep's _write_sealed_marker_at call is a no-op.
+sub _finalize_sweep {
+    my $self = shift;
+    return unless $self->_is_top_level_harness;
+
+    my $logdir = $self->{+LOGDIR};
+
+    # Runs
+    if (opendir(my $dh, "$logdir/runs")) {
+        my @run_ids = grep { !/^\./ && -d "$logdir/runs/$_" } readdir($dh);
+        closedir($dh);
+        for my $rid (@run_ids) {
+            unless (-e "$logdir/runs/$rid/.sealed") {
+                $self->_write_sealed_marker_at("runs/$rid", final_state => 'abandoned');
+            }
+
+            # Jobs under this run
+            if (opendir(my $jdh, "$logdir/runs/$rid/jobs")) {
+                my @job_ids = grep { !/^\./ && -d "$logdir/runs/$rid/jobs/$_" } readdir($jdh);
+                closedir($jdh);
+                for my $jid (@job_ids) {
+                    # Tries
+                    if (opendir(my $tdh, "$logdir/runs/$rid/jobs/$jid")) {
+                        my @tries = grep { !/^\./ && -d "$logdir/runs/$rid/jobs/$jid/$_" } readdir($tdh);
+                        closedir($tdh);
+                        for my $try (@tries) {
+                            my $rel = "runs/$rid/jobs/$jid/$try";
+                            next if -e "$logdir/$rel/.sealed";
+                            $self->_write_sealed_marker_at($rel, final_state => 'abandoned');
+                        }
+                    }
+                }
+            }
+
+            # Run-scoped services
+            if (opendir(my $sdh, "$logdir/runs/$rid/services")) {
+                my @sids = grep { !/^\./ && -d "$logdir/runs/$rid/services/$_" } readdir($sdh);
+                closedir($sdh);
+                for my $sid (@sids) {
+                    my $rel = "runs/$rid/services/$sid";
+                    next if -e "$logdir/$rel/.sealed";
+                    $self->_write_sealed_marker_at($rel, final_state => 'abandoned');
+                }
+            }
+        }
+    }
+
+    # Global services
+    if (opendir(my $gsh, "$logdir/services")) {
+        my @sids = grep { !/^\./ && -d "$logdir/services/$_" } readdir($gsh);
+        closedir($gsh);
+        for my $sid (@sids) {
+            my $rel = "services/$sid";
+            next if -e "$logdir/$rel/.sealed";
+            $self->_write_sealed_marker_at($rel, final_state => 'abandoned');
+        }
+    }
+
+    # Collectors (if a collectors/ dir exists)
+    if (opendir(my $ch, "$logdir/collectors")) {
+        my @cids = grep { !/^\./ && -d "$logdir/collectors/$_" } readdir($ch);
+        closedir($ch);
+        for my $cid (@cids) {
+            my $rel = "collectors/$cid";
+            next if -e "$logdir/$rel/.sealed";
+            $self->_write_sealed_marker_at($rel, final_state => 'abandoned');
+        }
+    }
 
     return;
 }
@@ -1187,6 +1285,12 @@ sub _finalize_collection {
         my $w = delete $self->{$slot} or next;
         eval { $w->close; 1 };
     }
+
+    # Sweep the logdir for any producer directories that were not sealed
+    # by their own collector (e.g. a child that crashed before reaching
+    # _emit_collector_end). Must run before LIVE removal so consumers
+    # that wake on LIVE disappearance see all .sealed files in place.
+    $self->_finalize_sweep;
 
     # Clean exit of the top-level harness collector: drop the LIVE
     # sentinel so consumers tailing the dir can tell the harness

@@ -69,6 +69,15 @@ sub broken_resource_behavior { $_[0]->{+BROKEN_RESOURCE_BEHAVIOR} }
 # read live utilization without a per-mutation notification loop.
 sub in_flight_ref { \$_[0]->{+IN_FLIGHT_COUNT} }
 
+# Hand a resource the scalar ref pointing at the authoritative in-flight
+# counter. No-op for resources that do not opt in via set_in_flight_ref.
+sub install_in_flight_ref {
+    my ($self, $res) = @_;
+    return unless $res && $res->can('set_in_flight_ref');
+    $res->set_in_flight_ref($self->in_flight_ref);
+    return;
+}
+
 # Increment / decrement the in-flight counter from outside the
 # scheduler (the launch-glue path on the harness still owns the
 # increment; the job-release path owns the decrement). Returning the
@@ -657,6 +666,14 @@ awaiting acknowledgment).
 
 Scalar ref to the in-flight counter. Resources hold this so they can
 read live utilization without a per-mutation notification loop.
+
+=item $sch->install_in_flight_ref($resource)
+
+Hand C<$resource> the scalar ref returned by C<in_flight_ref>. No-op
+unless the resource implements C<set_in_flight_ref>. The harness calls
+this for every harness-scope and run-scope resource at the appropriate
+point in its lifecycle; external resource implementers may also invoke
+it directly.
 
 =item $sch->inc_in_flight / $sch->dec_in_flight
 

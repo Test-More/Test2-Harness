@@ -252,17 +252,7 @@ sub _init_resources {
     # of which limiters (if any) participate.
     $self->{+RESOURCES} //= [];
 
-    $self->_install_in_flight_ref($_) for @{$self->{+RESOURCES}};
-}
-
-# Hand the resource a scalar ref pointing at the authoritative
-# in-flight counter (owned by the scheduler subsystem). The resource
-# derefs to read; no per-mutation notification loop needed.
-sub _install_in_flight_ref {
-    my ($self, $res) = @_;
-    return unless $res && $res->can('set_in_flight_ref');
-    $res->set_in_flight_ref($self->{+SCHEDULER}->in_flight_ref);
-    return;
+    $self->{+SCHEDULER}->install_in_flight_ref($_) for @{$self->{+RESOURCES}};
 }
 
 # Passthrough so external callers (introspection, tests, etc.) can
@@ -456,7 +446,7 @@ sub request_handler_queue_test_run {
         }
 
         $self->{+SCHEDULER}->enqueue($run);
-        $self->_install_in_flight_ref($_) for @{$run->resources // []};
+        $self->{+SCHEDULER}->install_in_flight_ref($_) for @{$run->resources // []};
         my $rstate = Test2::Harness2::Run::State->new(
             run_id     => $run->run_id,
             created_at => $run->created_at,

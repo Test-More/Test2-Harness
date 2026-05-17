@@ -370,7 +370,7 @@ subtest 'run_on_all spawns the Collector directly (no run-service IPC)' => sub {
     is($call->{job_id}, 1, 'job_id passed through');
     is($call->{job_try}, 1, 'job_try 1 passed through');
 
-    my @running = values %{$h->{running_jobs}};
+    my @running = values %{$h->job_tracker->running_jobs};
     is(scalar @running,    1,     'one running job tracked');
     is($running[0]->{pid}, 98765, 'running job pid comes from spawn response');
 };
@@ -401,7 +401,7 @@ subtest 'run_on_all commits no resource when any is unavailable' => sub {
 
     is($res_a->used,                      0, 'resource A not committed when B defers');
     is($res_b->used,                      0, 'resource B not committed');
-    is(scalar keys %{$h->{running_jobs}}, 0, 'no running jobs');
+    is(scalar keys %{$h->job_tracker->running_jobs}, 0, 'no running jobs');
     is(scalar @{$h->scheduler->queue},             1, 'run still queued, job still pending');
 };
 
@@ -424,7 +424,7 @@ subtest 'test_job_completed + job_release advance the harness scheduler' => sub 
     my %env;
     $res->assign(id => 'test-assign', job => $job, env => \%env);
 
-    $h->{running_jobs}{$job_id} = {
+    $h->job_tracker->running_jobs->{$job_id} = {
         run                => $run,
         job                => $job,
         pid                => 91234,
@@ -460,7 +460,7 @@ subtest 'test_job_completed + job_release advance the harness scheduler' => sub 
         }),
     );
 
-    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared after job_release');
+    ok(!keys %{$h->job_tracker->running_jobs}, 'running_jobs cleared after job_release');
     is($res->used, 0, 'JobCount slot released');
 };
 
@@ -519,7 +519,7 @@ subtest 'test_job_completed for the last running job triggers run_ended' => sub 
     $h->_scheduler_queue_run($run);
     $h->_scheduler_mark_running($run->run_id, $job->job_id);
 
-    $h->{running_jobs}{$job->job_id} = {
+    $h->job_tracker->running_jobs->{$job->job_id} = {
         run        => $run,
         job        => $job,
         pid        => 1,
@@ -581,7 +581,7 @@ subtest 'perform_hard_stop TERMs tracked pids and reaps them' => sub {
     $h->{run_states}->set_state($run->run_id, $rstate);
     $rstate->mark_running($job_id);
 
-    $h->{running_jobs}{$job_id} = {
+    $h->job_tracker->running_jobs->{$job_id} = {
         run                => $run,
         job                => $job,
         handle             => $fake_handle,
@@ -597,7 +597,7 @@ subtest 'perform_hard_stop TERMs tracked pids and reaps them' => sub {
     sleep(0.1);
 
     ok(!kill(0, $child_pid),        'child is dead');
-    ok(!keys %{$h->{running_jobs}}, 'running_jobs cleared');
+    ok(!keys %{$h->job_tracker->running_jobs}, 'running_jobs cleared');
 };
 
 subtest 'run_should_end honors state and workers' => sub {
@@ -609,10 +609,10 @@ subtest 'run_should_end honors state and workers' => sub {
     $h->{state} = 'finishing';
     ok($h->run_should_end, 'finishing + empty queue + no running jobs: end');
 
-    $h->{running_jobs}{'j1'} = {pid => 123};
+    $h->job_tracker->running_jobs->{'j1'} = {pid => 123};
     ok(!$h->run_should_end, 'finishing + running job: keep running');
 
-    delete $h->{running_jobs}{'j1'};
+    delete $h->job_tracker->running_jobs->{'j1'};
     $h->{state} = 'terminating';
     ok($h->run_should_end, 'terminating + no running jobs: end');
 };
@@ -891,7 +891,7 @@ subtest 'per-run resources participate in _evaluate_resources_for' => sub {
 
     is($global_limiter->used,             0, 'global limiter not consumed when run-resource defers');
     is($run_limiter->used,                0, 'run limiter not consumed either');
-    is(scalar keys %{$h->{running_jobs}}, 0, 'no running jobs');
+    is(scalar keys %{$h->job_tracker->running_jobs}, 0, 'no running jobs');
 };
 
 subtest 'run_on_cleanup tears down per-run resource pids via _kill_run' => sub {
@@ -927,7 +927,7 @@ subtest 'run_on_cleanup tears down per-run resource pids via _kill_run' => sub {
 
     {
         no warnings 'redefine';
-        local *Test2::Harness2::perform_hard_stop  = sub { $_[0]->scheduler->clear_queue; $_[0]->{running_jobs} = {} };
+        local *Test2::Harness2::perform_hard_stop  = sub { $_[0]->scheduler->clear_queue; $_[0]->job_tracker->clear_running_jobs };
         local *Test2::Harness2::emit_service_event = sub { };
         $h->run_on_cleanup;
     }
@@ -1055,12 +1055,12 @@ subtest 'broken_resource_behavior=abort fails every remaining job in the run' =>
             # drain them by feeding the harness the IPC pair the
             # auditor now sends directly (test_job_completed +
             # job_release).
-            while (keys %{$h->{running_jobs}} || @{$h->scheduler->queue}) {
+            while (keys %{$h->job_tracker->running_jobs} || @{$h->scheduler->queue}) {
                 $h->run_on_all({});
-                last unless keys %{$h->{running_jobs}};
+                last unless keys %{$h->job_tracker->running_jobs};
 
-                for my $jid (keys %{$h->{running_jobs}}) {
-                    my $entry = $h->{running_jobs}{$jid};
+                for my $jid (keys %{$h->job_tracker->running_jobs}) {
+                    my $entry = $h->job_tracker->running_jobs->{$jid};
                     my $run   = $entry->{run};
 
                     $h->run_on_general_message(Test::FakeIpcMsg->new({
@@ -1251,7 +1251,7 @@ subtest 'collector pid exit without test_job_completed is grace-armed and synthe
     my ($res) = @{$h->{resources}};
     $res->assign(id => 'orphan-assign', job => $run->jobs->[0], env => {});
 
-    $h->{running_jobs}{$job_id} = {
+    $h->job_tracker->running_jobs->{$job_id} = {
         run                => $run,
         job                => $run->jobs->[0],
         pid                => 77777,
@@ -1263,10 +1263,10 @@ subtest 'collector pid exit without test_job_completed is grace-armed and synthe
     # Pid exit before any test_job_completed: arms a synth entry,
     # leaves running_jobs alone for the watchdog to claim.
     $h->run_on_pid(77777, 0);
-    ok(exists $h->{running_jobs}{$job_id}, 'running_jobs not yet cleared (watchdog owns it)');
+    ok(exists $h->job_tracker->running_jobs->{$job_id}, 'running_jobs not yet cleared (watchdog owns it)');
     is($res->used, 1, 'resource slot still committed during grace window');
     ok(
-        exists $h->{pending_synth_completions}{$job_id},
+        exists $h->job_tracker->pending_synth_completions->{$job_id},
         'pending synth-completion entry armed',
     );
 
@@ -1278,10 +1278,10 @@ subtest 'collector pid exit without test_job_completed is grace-armed and synthe
         $h->run_on_interval;
     }
 
-    ok(!exists $h->{running_jobs}{$job_id}, 'running_jobs cleared by watchdog');
+    ok(!exists $h->job_tracker->running_jobs->{$job_id}, 'running_jobs cleared by watchdog');
     is($res->used, 0, 'resource slot released');
     ok(
-        !exists $h->{pending_synth_completions}{$job_id},
+        !exists $h->job_tracker->pending_synth_completions->{$job_id},
         'pending synth-completion entry cleared',
     );
     ok(

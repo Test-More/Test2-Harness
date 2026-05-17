@@ -68,7 +68,7 @@ subtest '_spawn_via_preload records placeholder + sends spawn_test' => sub {
         assigned_resources => [$preload],
     );
 
-    my $cur = $h->{Test2::Harness2::RUNNING_JOBS()}->{$job->job_id};
+    my $cur = $h->job_tracker->running_jobs->{$job->job_id};
     ok($cur, 'placeholder running job entry exists');
     ok(!defined $cur->{pid}, 'pid is undef on placeholder');
     is($cur->{awaiting_preload_pid}, 1,            'awaiting_preload_pid set');
@@ -120,7 +120,7 @@ subtest '_handle_test_job_started populates placeholder pid' => sub {
         stamp         => 1234,
     });
 
-    my $cur = $h->{Test2::Harness2::RUNNING_JOBS()}->{$job->job_id};
+    my $cur = $h->job_tracker->running_jobs->{$job->job_id};
     is($cur->{pid}, 99999, 'pid populated from collector_pid');
     ok(!exists $cur->{awaiting_preload_pid}, 'awaiting flag cleared');
 
@@ -149,7 +149,7 @@ subtest '_age_pending_spawn_requests times out + flips broken' => sub {
     local $SIG{__WARN__} = sub { };
     $h->_age_pending_spawn_requests;
 
-    ok(!$h->{Test2::Harness2::RUNNING_JOBS()}->{$job->job_id}, 'placeholder dropped');
+    ok(!$h->job_tracker->running_jobs->{$job->job_id}, 'placeholder dropped');
     ok(!$h->{Test2::Harness2::PENDING_SPAWN_REQUESTS()}->{$key}, 'pending dropped');
     ok($preload->is_broken,          'preload flipped transient broken');
     ok(!$preload->is_permanent_broken, 'not permanent');

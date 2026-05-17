@@ -17,20 +17,28 @@ use Test2::V0;
     sub ipcm_info { 'fake-info' }
     sub pid_index { $_[0]->{pid_index} //= bless {}, 'FakePidIndex' }
     sub emit_service_event { }
-    sub _resource_peer_name { 'resource-' . $_[1]->{name} }
-    sub _spawn_service_via_preload {
-        my ($self, $pinfo, $entry) = @_;
-        push @{$self->{calls}}, ['preload', $pinfo->{name}, $entry->{name}];
-        return 42;
-    }
-    sub _find_eligible_preload_service {
-        my ($self, $pname) = @_;
-        return $self->{eligible}{$pname};
+    sub preload_router {
+        my $self = shift;
+        $self->{preload_router} //= FakeRouter->new(host => $self);
+        return $self->{preload_router};
     }
     sub _ipcm_service_standalone {
         my ($self, %p) = @_;
         push @{$self->{calls}}, ['standalone', $p{name}];
         return 'started';
+    }
+}
+{
+    package FakeRouter;
+    sub new { my ($c, %p) = @_; bless { %p }, $c }
+    sub find_eligible {
+        my ($self, $pname) = @_;
+        return $self->{host}->{eligible}{$pname};
+    }
+    sub spawn_service_via_preload {
+        my ($self, $pinfo, $entry) = @_;
+        push @{$self->{host}->{calls}}, ['preload', $pinfo->{name}, $entry->{name}];
+        return 42;
     }
 }
 {

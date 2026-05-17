@@ -7,10 +7,10 @@ use Test2::Harness2::Test::Yath qw/yath/;
 
 # Lifecycle invariant: if the harness service dies, every resource
 # service that was spawned via_preload must exit on its own within
-# the watch_pids grace window. _spawn_service_via_preload injects
-# $self->pid (the harness pid) into the grandchild's ctor_args
-# watch_pids, so IPC::Manager::Role::Service is contracted to exit
-# when that pid disappears.
+# the watch_pids grace window. PreloadRouter::spawn_service_via_preload
+# injects the harness pid into the grandchild's ctor_args watch_pids,
+# so IPC::Manager::Role::Service is contracted to exit when that pid
+# disappears.
 #
 
 # Setup mirrors resource_via_preload_namematch.t (see that test for

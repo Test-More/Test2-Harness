@@ -68,7 +68,7 @@ sub make_pair {
 
     # Preload becomes eligible + ready event arrives.
     $router->{eligible}{myapp} = {name => 'preload-myapp', pid => $$};
-    $h->_handle_preload_state_message('preload_ready', {preload_name => 'myapp'});
+    $router->handle_preload_state('preload_ready', {preload_name => 'myapp'});
 
     is(scalar @spawned, 1, 'queue drained');
     is($spawned[0], ['preload-myapp', 'pool'], 'dispatched the queued entry');
@@ -92,7 +92,7 @@ sub make_pair {
         log_path      => '/tmp/p',
     };
 
-    $h->_handle_preload_state_message('preload_broken',
+    $router->handle_preload_state('preload_broken',
         {preload_name => 'myapp', permanent => 1, error => 'load failed'});
 
     is(scalar @spawned,    0, 'no preload spawn');
@@ -116,7 +116,7 @@ sub make_pair {
         log_path      => '/tmp/p',
     };
 
-    $h->_handle_preload_state_message('preload_broken',
+    $router->handle_preload_state('preload_broken',
         {preload_name => 'myapp', permanent => 0, error => 'transient'});
 
     is(scalar @spawned,    0, 'no preload spawn');

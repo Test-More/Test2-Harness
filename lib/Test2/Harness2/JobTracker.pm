@@ -140,7 +140,7 @@ sub handle_test_job_started {
     my $job_id = $content->{job_id} // return;
 
     # Preload-routed jobs landed a placeholder running-job entry at
-    # _spawn_via_preload time; the auditor's collector_pid is the
+    # spawn_via_preload time; the auditor's collector_pid is the
     # first concrete pid we see for the job. Fill in pid + register
     # in the pid index so the rest of the reap / watchdog plumbing
     # sees the entry the same way it does for direct-spawn jobs.

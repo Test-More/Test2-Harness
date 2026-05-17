@@ -913,15 +913,6 @@ sub run_on_peer_delta {
     return;
 }
 
-# Compatibility shim -- preload_ready / preload_broken handling lives
-# on Test2::Harness2::PreloadRouter::handle_preload_state. Kept here so
-# existing in-tree callers (and tests that drive the harness directly)
-# keep working.
-sub _handle_preload_state_message {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->handle_preload_state(@_);
-}
-
 sub _handle_resource_state_message {
     my ($self, $kind, $content) = @_;
 
@@ -1532,71 +1523,12 @@ sub _spawn_collector_for_job {
     return {ok => 1, pid => $pid, log_file => undef};
 }
 
-# Async spawn through a preload service. The preload service owns the
-# fork: pre_fork hook, fork, post_fork hook, second fork, _exit(0) in
-# the middle layer, grandchild runs the test (after Long::Jump +
-# goto::file).
-#
-#-------------------------------------------------------------------
-# Compatibility shims for moved preload-routing methods. The bodies
-# live on Test2::Harness2::PreloadRouter; the shims below keep
-# existing in-tree callers (Role::ResourceServiceHost,
-# Scheduler.pm, and the unit tests that drive the harness directly)
-# wired to the underscore-prefixed harness-level names without
-# rewriting every call site.
-#-------------------------------------------------------------------
-
-sub _spawn_via_preload {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->spawn_via_preload(@_);
-}
-
-sub _age_pending_spawn_requests {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->_age_pending_spawn_requests(@_);
-}
-
-sub _resource_peer_name {
-    my $self = shift;
-    return Test2::Harness2::PreloadRouter->peer_name_for_resource(@_);
-}
-
-sub _find_eligible_preload_service {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->find_eligible(@_);
-}
-
-sub _spawn_service_via_preload {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->spawn_service_via_preload(@_);
-}
-
 # Handle a 'spawn_script' request from a CLI client. Thin shim that
 # delegates to Test2::Harness2::SpawnGateway, which owns the SCM_RIGHTS
 # pathway state and helpers.
 sub request_handler_spawn_script {
     my $self = shift;
     return $self->{+SPAWN_GATEWAY}->handle_request(@_);
-}
-
-sub _handle_resource_service_started {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->handle_service_started(@_);
-}
-
-sub _drain_resources_awaiting_preload {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->drain_awaiting(@_);
-}
-
-sub _fallback_resources_awaiting_preload {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->_fallback_awaiting(@_);
-}
-
-sub _check_pending_preload_spawn_timeouts {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->_check_pending_preload_spawn_timeouts(@_);
 }
 
 1;
@@ -1675,16 +1607,10 @@ invoke them.
 =head2 Preload routing
 
 The preload-routing decision logic, async spawn watchdogs, and
-dependent-resource queues live on L<Test2::Harness2::PreloadRouter>.
-The harness keeps a handful of thin underscore-prefixed shims
-(C<_resolve_preload_for_job>, C<_spawn_via_preload>,
-C<_age_pending_spawn_requests>, C<_find_eligible_preload_service>,
-C<_spawn_service_via_preload>, C<_drain_resources_awaiting_preload>,
-C<_fallback_resources_awaiting_preload>,
-C<_check_pending_preload_spawn_timeouts>,
-C<_handle_preload_state_message>, C<_handle_resource_service_started>,
-C<_preload_peer_name>, C<_resource_peer_name>) that delegate to the
-subsystem so existing in-tree callers continue to work.
+dependent-resource queues all live on L<Test2::Harness2::PreloadRouter>.
+The harness reaches the router via C<< $self->preload_router >>; call
+sites elsewhere in the tree route through the router object directly
+(e.g. C<< $h->preload_router->spawn_via_preload(...) >>).
 
 =head2 Run setup
 

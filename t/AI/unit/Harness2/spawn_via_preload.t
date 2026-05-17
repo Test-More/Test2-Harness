@@ -53,7 +53,7 @@ sub stub_client {
     };
 }
 
-subtest '_spawn_via_preload records placeholder + sends spawn_test' => sub {
+subtest 'spawn_via_preload records placeholder + sends spawn_test' => sub {
     @sent = ();
     my $preload = Test2::Harness2::Resource::Preload->new(name => 'default', modules => []);
     $preload->mark_ready;
@@ -62,7 +62,7 @@ subtest '_spawn_via_preload records placeholder + sends spawn_test' => sub {
 
     my ($run, $job) = mk_job_and_run();
 
-    $h->_spawn_via_preload($run, $job, $preload,
+    $h->preload_router->spawn_via_preload($run, $job, $preload,
         env                => { FOO => 'bar' },
         assign_id          => 'AID',
         assigned_resources => [$preload],
@@ -105,7 +105,7 @@ subtest '_handle_test_job_started populates placeholder pid' => sub {
     $h->{Test2::Harness2::RUN_STATES()}->{$run->run_id} = Test2::Harness2::Run::State->new(run_id => $run->run_id);
     $h->{Test2::Harness2::RUN_STATES()}->{$run->run_id}->seed_job_result($job->job_id);
 
-    $h->_spawn_via_preload($run, $job, $preload, assign_id => 'AID', assigned_resources => [$preload]);
+    $h->preload_router->spawn_via_preload($run, $job, $preload, assign_id => 'AID', assigned_resources => [$preload]);
 
     # Capture run_state subscriber to no-op so _broadcast_run_state doesn't blow up.
     no warnings 'redefine';
@@ -129,7 +129,7 @@ subtest '_handle_test_job_started populates placeholder pid' => sub {
     ok(!$pending->{$key}, 'pending spawn dropped');
 };
 
-subtest '_age_pending_spawn_requests times out + flips broken' => sub {
+subtest 'age_pending_spawn_requests times out + flips broken' => sub {
     @sent = ();
     my $preload = Test2::Harness2::Resource::Preload->new(name => 'default', modules => []);
     $preload->mark_ready;
@@ -139,7 +139,7 @@ subtest '_age_pending_spawn_requests times out + flips broken' => sub {
     my ($run, $job) = mk_job_and_run();
     $h->scheduler->scheduler_table->{$run->run_id} = {pending => [], running => {}, started => 1};
 
-    $h->_spawn_via_preload($run, $job, $preload, assign_id => 'AID', assigned_resources => []);
+    $h->preload_router->spawn_via_preload($run, $job, $preload, assign_id => 'AID', assigned_resources => []);
 
     # backdate sent_at so the watchdog fires
     my $key = $run->run_id . "\0" . $job->job_id;
@@ -147,7 +147,7 @@ subtest '_age_pending_spawn_requests times out + flips broken' => sub {
 
     # Silence warn during age sweep
     local $SIG{__WARN__} = sub { };
-    $h->_age_pending_spawn_requests;
+    $h->preload_router->_age_pending_spawn_requests;
 
     ok(!$h->job_tracker->running_jobs->{$job->job_id}, 'placeholder dropped');
     ok(!$h->preload_router->{Test2::Harness2::PENDING_SPAWN_REQUESTS()}->{$key}, 'pending dropped');

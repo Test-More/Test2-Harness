@@ -26,10 +26,10 @@ use Test2::Harness2::SpawnGateway;
 }
 
 # Fake harness: implements only the bits SpawnGateway calls -- name,
-# client, ipcm_info, preload_router. After extraction 8 SpawnGateway
-# calls $h->preload_router->find_eligible(...) +
+# client, ipcm_info, preload_router. SpawnGateway calls
+# $h->preload_router->find_eligible(...) +
 # $h->preload_router->peer_name_for_preload(...), so the fake harness
-# exposes a fake router instead of the old _find_eligible_preload_service.
+# exposes a fake router with both methods.
 {
     package SGTRouter;
     sub new { my ($c, %p) = @_; bless { %p }, $c }

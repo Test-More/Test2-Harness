@@ -331,8 +331,9 @@ sub _start_service_entry {
     # Perl method lookup), and a live, global, not-broken
     # PreloadService of that name is hosted by this consumer.
     my $pname = $res->can('preferred_preload') ? $res->preferred_preload : undef;
+    my $router = $self->can('preload_router') ? $self->preload_router : undef;
     if (defined $pname && length $pname) {
-        if (my $preload_info = $self->_find_eligible_preload_service($pname)) {
+        if ($router && (my $preload_info = $router->find_eligible($pname))) {
             my $entry = {
                 name          => $name,
                 scope         => $opts{scope} // 'global',
@@ -342,10 +343,10 @@ sub _start_service_entry {
                 resource      => $res,
                 log_path      => $opts{log_path},
             };
-            my $spawn_id = $self->_spawn_service_via_preload($preload_info, $entry);
+            my $spawn_id = $router->spawn_service_via_preload($preload_info, $entry);
             return 'pending' if defined $spawn_id;
             # Fall through to standalone on dispatch failure (warn
-            # already emitted inside _spawn_service_via_preload).
+            # already emitted inside spawn_service_via_preload).
         }
         elsif ($self->_preload_router_known($pname)) {
             my $router = $self->preload_router;
@@ -591,7 +592,7 @@ sub handle_resource_service_exit {
     my $class       = $svc->{service_class};
     my $args        = $svc->{service_args} // [];
     # Use entry_name (raw as-declared name) for restart so the preload-
-    # spawn path's _resource_peer_name re-derives the same bus name
+    # spawn path's peer_name_for_resource re-derives the same bus name
     # rather than stacking another 'resource-' prefix each cycle.
     my $name        = $svc->{entry_name} // $svc->{name};
     my $log_path    = $svc->{log_path};

@@ -60,30 +60,30 @@ my $harness = bless {
 }, 'Test2::Harness2';
 
 # Eligibility lookup lives on the preload router; attach a stub
-# router so the harness's compatibility shim has something to
-# delegate to.
+# router that holds a backref to the harness for the resource_services
+# lookup.
 my $router = bless { harness => $harness }, 'Test2::Harness2::PreloadRouter';
 Scalar::Util::weaken($router->{harness});
 $harness->{preload_router} = $router;
 
-my $info = $harness->_find_eligible_preload_service('myapp');
+my $info = $router->find_eligible('myapp');
 ok($info, 'found eligible preload') or diag explain $info;
 is($info->{name}, 'preload-myapp', 'returned the live global preload');
 
 is(
-    $harness->_find_eligible_preload_service('stale'),
+    $router->find_eligible('stale'),
     undef,
     'stale (pid dead) preload is rejected',
 );
 
 is(
-    $harness->_find_eligible_preload_service('broken'),
+    $router->find_eligible('broken'),
     undef,
     'permanent_broken preload is rejected',
 );
 
 is(
-    $harness->_find_eligible_preload_service('absent'),
+    $router->find_eligible('absent'),
     undef,
     'name with no matching preload returns undef',
 );

@@ -15,9 +15,9 @@ use Scalar::Util ();
     }
 }
 
-# Stub a Resource::Preload look-alike: _spawn_service_via_preload
-# derives the IPC bus name via _preload_peer_name($res), which calls
-# $res->name and $res->scope. The bus name is 'preload-<n>' for
+# Stub a Resource::Preload look-alike: spawn_service_via_preload
+# derives the IPC bus name via peer_name_for_preload($res), which
+# calls $res->name and $res->scope. The bus name is 'preload-<n>' for
 # global scope.
 {
     package FakePreloadRes;
@@ -27,9 +27,8 @@ use Scalar::Util ();
 }
 
 # Stub the harness + preload-router pair far enough to exercise
-# spawn_service_via_preload. The harness's _spawn_service_via_preload
-# shim forwards to the router; the router needs a harness backref so
-# it can reach the client + name + pid.
+# spawn_service_via_preload. The router needs a harness backref so it
+# can reach the client + name + pid.
 sub make_harness {
     my $fake_client = FakeClient->new;
     my $harness = bless {
@@ -63,7 +62,7 @@ sub make_harness {
         name     => 'myapp',                          # tracking name
         resource => FakePreloadRes->new('myapp'),     # supplies bus-name derivation
     };
-    my $spawn_id = $harness->_spawn_service_via_preload($preload_info, $entry);
+    my $spawn_id = $router->spawn_service_via_preload($preload_info, $entry);
 
     ok($spawn_id, 'returns a spawn_id');
     my $pending = $router->{pending_preload_spawns};
@@ -99,7 +98,7 @@ sub make_harness {
     };
     my @warns;
     local $SIG{__WARN__} = sub { push @warns, @_ };
-    my $r = $harness->_spawn_service_via_preload($preload_info, $entry);
+    my $r = $router->spawn_service_via_preload($preload_info, $entry);
 
     is($r, undef, 'returns undef on send failure');
     is(scalar(keys %{ $router->{pending_preload_spawns} // {} }), 0,
@@ -124,7 +123,7 @@ sub make_harness {
         name     => 'myapp',
         resource => FakePreloadRes->new('myapp'),
     };
-    $harness->_spawn_service_via_preload($preload_info, $entry);
+    $router->spawn_service_via_preload($preload_info, $entry);
     my (undef, $payload) = @{ $client->{sent}->[-1] };
     is($payload->{ctor_args}{watch_pids}, [4242],
        'ctor_args inserts harness pid into watch_pids');

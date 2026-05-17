@@ -8,7 +8,7 @@ use Test2::Harness2::Test::Yath qw/yath/;
 # Smoke test: a resource declares preferred_preload against a name that
 # does NOT match any live PreloadService on the daemon. The harness's
 # dispatch path (Role::ResourceServiceHost::_start_service_entry,
-# _find_eligible_preload_service, _ipcm_service_standalone) must
+# PreloadRouter::find_eligible, _ipcm_service_standalone) must
 # tolerate the miss and let the daemon come up cleanly with the
 # resource registered and visible to `yath resources`. The
 # name-match happy path is covered separately.

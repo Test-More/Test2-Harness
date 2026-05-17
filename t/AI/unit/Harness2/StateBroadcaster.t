@@ -43,25 +43,54 @@ use constant SUBSCRIBER_RETRY => Test2::Harness2::StateBroadcaster::SUBSCRIBER_R
 }
 
 {
-    package SBTHarness;
-    # The broadcaster still reads QUEUE off the harness directly
-    # (that slot lives on the harness, not RunStates). RUN_STATES
-    # and COMPLETED_RUNS no longer touch the harness backref --
-    # they flow through the broadcaster's direct RunStates ref.
+    package SBTScheduler;
+    # Fake scheduler -- the broadcaster only needs the queue
+    # introspection helpers (run_in_queue / run_by_id) plus a
+    # finalize_run_if_complete hook to record the call so the test
+    # can assert on it.
     sub new {
         my ($c, %p) = @_;
-        my $self = bless {
-            client                            => $p{client},
-            Test2::Harness2::QUEUE()          => $p{queue} // [],
+        return bless {
+            queue     => $p{queue} // [],
             finalized => [],
         }, $c;
-        return $self;
     }
-    sub client { $_[0]->{client} }
-    sub _finalize_run_if_complete {
+    sub run_in_queue {
+        my ($self, $rid) = @_;
+        return 1 if grep { $_->run_id eq $rid } @{$self->{queue}};
+        return 0;
+    }
+    sub run_by_id {
+        my ($self, $rid) = @_;
+        for my $r (@{$self->{queue}}) {
+            return $r if $r->run_id eq $rid;
+        }
+        return undef;
+    }
+    sub finalize_run_if_complete {
         my ($self, $run) = @_;
         push @{$self->{finalized}}, $run->run_id;
     }
+}
+
+{
+    package SBTHarness;
+    # The broadcaster reaches the queue through the harness's
+    # scheduler accessor; RUN_STATES and COMPLETED_RUNS flow through
+    # the broadcaster's direct RunStates ref.
+    sub new {
+        my ($c, %p) = @_;
+        my $self = bless {
+            client    => $p{client},
+            scheduler => SBTScheduler->new(queue => $p{queue} // []),
+        }, $c;
+        return $self;
+    }
+    sub client    { $_[0]->{client} }
+    sub scheduler { $_[0]->{scheduler} }
+    # finalize calls are recorded on the scheduler now; expose them
+    # so the existing assertions still read `$h->{finalized}`.
+    sub finalized { $_[0]->{scheduler}->{finalized} }
 }
 
 # Fake IPC message: ->from returns the peer name.
@@ -208,7 +237,7 @@ subtest broadcast_run_state_notifies_and_finalizes => sub {
     is($client->{sent}[0][0], 'peer-q', 'sent to subscribed peer');
     is($client->{sent}[0][1]{run_id}, $rid, 'with correct run_id');
 
-    is(\@{$h->{finalized}}, [$rid], 'harness asked to finalize the matching run');
+    is(\@{$h->finalized}, [$rid], 'harness asked to finalize the matching run');
 };
 
 # --- retry queueing on send failure with cap behavior --------------------

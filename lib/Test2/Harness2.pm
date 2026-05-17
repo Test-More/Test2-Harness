@@ -21,6 +21,7 @@ use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
 use Test2::Harness2::PidIndex;
 use Test2::Harness2::RunStates;
+use Test2::Harness2::Scheduler;
 use Test2::Harness2::SpawnGateway;
 use Test2::Harness2::StateBroadcaster;
 use Test2::Harness2::Role::ResourceServiceHost;
@@ -41,14 +42,11 @@ use Object::HashBase qw{
     <parent_pids
     <jump_to
     <resources
-    <broken_resource_behavior
     <hash_seed
     state
-    +queue
     <run_states
-    +scheduler
+    <scheduler
     +running_jobs
-    +in_flight_count
     <resource_services
     <pid_index
     <spawn_gateway
@@ -72,21 +70,21 @@ use Object::HashBase qw{
 # constant is re-exported here for legacy in-tree callers.
 use constant RUN_PIDS_GLOBAL_KEY => Test2::Harness2::PidIndex::RUN_PIDS_GLOBAL_KEY();
 
-# Valid values for broken_resource_behavior: what the scheduler does
-# when a job needs a resource that has been flipped to
-# permanent_broken. All three paths route the job through a real
-# Collector launch so the on-disk artifacts match a real test's --
-# see _launch_unavailable_action_job.
-#
-#   skip  - launch `perl -e 'use Test2::V0; skip_all ...'` so the
-#           job's log looks like a regular test that called skip_all.
-#   fail  - launch `perl -e 'die ...'` so the job's log looks like a
-#           regular test that failed with an uncaught exception
-#           (exit 255 with the message on stderr).
-#   abort - same as fail for THIS job plus every remaining pending
-#           job in the same run, one at a time as the job limiter
-#           frees slots; the run closes out once they all complete.
-use constant BROKEN_BEHAVIORS     => {map { $_ => 1 } qw/skip fail abort/};
+# Scheduler slot keys re-exported from Test2::Harness2::Scheduler.
+# The slots themselves live on the scheduler subsystem; these
+# constants exist so legacy in-tree callers (existing tests that
+# poke $h->{Test2::Harness2::QUEUE()} etc.) keep resolving to a
+# defined string. The harness no longer owns these slots, so the
+# string names point at the scheduler object and not the harness.
+use constant QUEUE                    => Test2::Harness2::Scheduler::QUEUE();
+use constant SCHEDULER                => Test2::Harness2::Scheduler::SCHEDULER();
+use constant IN_FLIGHT_COUNT          => Test2::Harness2::Scheduler::IN_FLIGHT_COUNT();
+use constant BROKEN_RESOURCE_BEHAVIOR => Test2::Harness2::Scheduler::BROKEN_RESOURCE_BEHAVIOR();
+
+# Re-export of the scheduler's BROKEN_BEHAVIORS lookup so legacy
+# in-tree callers (and existing introspection) still resolve. The
+# canonical definition lives on Test2::Harness2::Scheduler.
+use constant BROKEN_BEHAVIORS => Test2::Harness2::Scheduler::BROKEN_BEHAVIORS();
 
 # Grace window applied when a collector pid exits without a prior
 # test_job_completed. The IPC::Manager loop drives run_on_interval
@@ -120,11 +118,10 @@ sub init {
 
     $self->_init_logdir($wd);
 
+    # _init_default_slots constructs the Scheduler subsystem, which
+    # is what validates broken_resource_behavior. Pass any ctor-time
+    # value through to it.
     $self->_init_default_slots;
-
-    $self->{+BROKEN_RESOURCE_BEHAVIOR} //= 'skip';
-    croak "invalid broken_resource_behavior '$self->{+BROKEN_RESOURCE_BEHAVIOR}' (want skip, fail, or abort)"
-        unless BROKEN_BEHAVIORS->{$self->{+BROKEN_RESOURCE_BEHAVIOR}};
 
     $self->_init_resources;
 
@@ -189,16 +186,29 @@ sub _init_default_slots {
     $self->{+KILL_TIMEOUT}              //= 15;
     $self->{+PARENT_PIDS}               //= [];
     $self->{+STATE}                     //= 'running';
-    $self->{+QUEUE}                     //= [];
-    $self->{+SCHEDULER}                 //= {};
     $self->{+RUNNING_JOBS}              //= {};
-    $self->{+IN_FLIGHT_COUNT}           //= 0;
     $self->{+RESOURCE_SERVICES}         //= {};
     $self->{+PID_INDEX}                 //= Test2::Harness2::PidIndex->new(harness => $self);
     $self->{+SPAWN_GATEWAY}             //= Test2::Harness2::SpawnGateway->new(harness => $self);
     $self->{+BROADCASTER}               //= Test2::Harness2::StateBroadcaster->new(
         harness    => $self,
         run_states => $self->{+RUN_STATES},
+    );
+
+    # Scheduler takes a back-ref to the harness, plus direct (strong)
+    # refs to the state objects it consults on every tick. The
+    # broken_resource_behavior arg arrives through Object::HashBase's
+    # field-init at construction time; pluck it out of the harness
+    # slot (HashBase stored it under the 'broken_resource_behavior'
+    # key) and hand it to the scheduler, then delete the leftover
+    # entry from the harness so the slot is owned in exactly one
+    # place. Default validation lives on the scheduler.
+    my $brb = delete $self->{broken_resource_behavior};
+    $self->{+SCHEDULER} //= Test2::Harness2::Scheduler->new(
+        harness    => $self,
+        run_states => $self->{+RUN_STATES},
+        pid_index  => $self->{+PID_INDEX},
+        (defined $brb ? (broken_resource_behavior => $brb) : ()),
     );
     $self->{+PENDING_SYNTH_COMPLETIONS} //= {};
     $self->{+PENDING_SPAWN_REQUESTS}     //= {};
@@ -244,14 +254,23 @@ sub _init_resources {
     $self->_install_in_flight_ref($_) for @{$self->{+RESOURCES}};
 }
 
-# Hand the resource a scalar ref pointing at our authoritative
-# in-flight counter. The resource derefs to read; no per-mutation
-# notification loop needed.
+# Hand the resource a scalar ref pointing at the authoritative
+# in-flight counter (owned by the scheduler subsystem). The resource
+# derefs to read; no per-mutation notification loop needed.
 sub _install_in_flight_ref {
     my ($self, $res) = @_;
     return unless $res && $res->can('set_in_flight_ref');
-    $res->set_in_flight_ref(\$self->{+IN_FLIGHT_COUNT});
+    $res->set_in_flight_ref($self->{+SCHEDULER}->in_flight_ref);
     return;
+}
+
+# Passthrough so external callers (introspection, tests, etc.) can
+# still read $h->broken_resource_behavior after the slot moved to
+# the scheduler subsystem.
+sub broken_resource_behavior {
+    my $self = shift;
+    my $s = $self->{+SCHEDULER} or return undef;
+    return $s->broken_resource_behavior;
 }
 
 #-------------------------------------------------------------------
@@ -591,7 +610,7 @@ sub request_handler_queue_test_run {
             eval { $r->set_run($run); 1 };
         }
 
-        push @{$self->{+QUEUE}} => $run;
+        $self->{+SCHEDULER}->enqueue($run);
         $self->_install_in_flight_ref($_) for @{$run->resources // []};
         my $rstate = Test2::Harness2::Run::State->new(
             run_id     => $run->run_id,
@@ -599,12 +618,12 @@ sub request_handler_queue_test_run {
             pending    => [map { $_->job_id } @{$run->jobs}],
         );
         $self->{+RUN_STATES}->set_state($run->run_id, $rstate);
-        $self->_scheduler_queue_run($run);
+        $self->{+SCHEDULER}->queue_run($run);
         1;
     };
     return {ok => 0, error => "$@"} unless $ok;
 
-    my $run = $self->{+QUEUE}->[-1];
+    my $run = $self->{+SCHEDULER}->queue->[-1];
 
     # Flat run_id / queued_at / job_ids alongside the nested run_data:
     # Renderer::Driver's lifecycle synthesizer reads the flat keys
@@ -688,7 +707,7 @@ sub request_handler_status {
                 running => $rs ? [@{$rs->running}] : [],
                 done    => $rs ? [@{$rs->done}]    : [],
             }
-        } @{$self->{+QUEUE}}
+        } @{$self->{+SCHEDULER}->queue}
     ];
 
     my @running = map {
@@ -848,7 +867,7 @@ sub request_handler_has_pending_messages {
     # caller relies on is "is the harness still doing work for
     # the queue", which RUNNING_JOBS captures.
     my $running = scalar keys %{$self->{+RUNNING_JOBS} // {}};
-    my $queued  = scalar @{$self->{+QUEUE}             // []};
+    my $queued  = scalar @{$self->{+SCHEDULER}->queue   // []};
 
     return {
         ok      => 1,
@@ -875,7 +894,7 @@ sub request_handler_run_results {
         return {ok => 1, %$info};
     }
 
-    if (grep { $_->run_id eq $run_id } @{$self->{+QUEUE} // []}) {
+    if ($self->{+SCHEDULER}->run_in_queue($run_id)) {
         return {ok => 1, state => 'running', run_id => $run_id};
     }
 
@@ -1352,8 +1371,10 @@ sub _handle_preload_state_message {
     # never lands on its Resource::Preload and the resolver defers
     # forever.
     my @candidates = @{$self->{+RESOURCES} // []};
-    for my $run (@{$self->{+QUEUE} // []}) {
-        push @candidates => @{$run->resources // []};
+    if (my $sch = $self->{+SCHEDULER}) {
+        for my $run (@{$sch->queue // []}) {
+            push @candidates => @{$run->resources // []};
+        }
     }
 
     for my $res (@candidates) {
@@ -1491,16 +1512,16 @@ sub _handle_job_release {
 
     my $cur = delete $self->{+RUNNING_JOBS}->{$job_id};
     return unless $cur;
-    $self->{+IN_FLIGHT_COUNT}--;
+    $self->{+SCHEDULER}->dec_in_flight;
 
     my $run_id = $cur->{run}->run_id;
     $self->{+PID_INDEX}->forget($run_id, $cur->{pid}) if $cur->{pid};
-    $self->_scheduler_mark_done($run_id, $job_id);
+    $self->{+SCHEDULER}->mark_done($run_id, $job_id);
     $self->_release_job_resources($cur);
 
     # The job that just finished may have been the last one for
     # its run; check from the scheduler's own perspective.
-    $self->_finalize_run_if_complete($cur->{run});
+    $self->{+SCHEDULER}->finalize_run_if_complete($cur->{run});
     return;
 }
 
@@ -1530,7 +1551,7 @@ sub service_pre_hard_stop {
     my $self = shift;
     # Drain the queue so a racing run_on_all tick cannot schedule
     # fresh work mid-shutdown.
-    $self->{+QUEUE} = [];
+    $self->{+SCHEDULER}->clear_queue;
     return;
 }
 
@@ -1562,7 +1583,7 @@ sub service_post_hard_stop {
         $self->_release_job_resources($cur);
     }
     $self->{+RUNNING_JOBS}      = {};
-    $self->{+IN_FLIGHT_COUNT}   = 0;
+    $self->{+SCHEDULER}->reset_in_flight_count;
     $self->{+RESOURCE_SERVICES} = {};
     $self->{+PID_INDEX}->clear;
     $self->{+RUN_STATES}->clear_flags;
@@ -1715,12 +1736,12 @@ sub _synth_release_orphan_job {
 
     my $cur = delete $self->{+RUNNING_JOBS}->{$job_id};
     return unless $cur;
-    $self->{+IN_FLIGHT_COUNT}--;
+    $self->{+SCHEDULER}->dec_in_flight;
 
     $self->{+PID_INDEX}->forget($run_id, $pid) if $pid;
     $self->_release_job_resources($cur);
-    $self->_scheduler_mark_done($run_id, $job_id);
-    $self->_finalize_run_if_complete($cur->{run}) if $cur->{run};
+    $self->{+SCHEDULER}->mark_done($run_id, $job_id);
+    $self->{+SCHEDULER}->finalize_run_if_complete($cur->{run}) if $cur->{run};
     return;
 }
 
@@ -1735,7 +1756,7 @@ sub run_should_end {
     }
 
     if ($self->{+STATE} eq 'finishing') {
-        return 1 if !$has_running && !@{$self->{+QUEUE}};
+        return 1 if !$has_running && !@{$self->{+SCHEDULER}->queue};
         return 0;
     }
 
@@ -1757,10 +1778,10 @@ sub run_on_cleanup {
     # Snapshot the queue so we can tear down per-run resources for any
     # runs that didn't complete cleanly -- perform_hard_stop drains the
     # queue before returning.
-    my @leftover_runs = @{$self->{+QUEUE} // []};
+    my @leftover_runs = @{$self->{+SCHEDULER}->queue // []};
 
     my $has_running = keys %{$self->{+RUNNING_JOBS} // {}};
-    $self->perform_hard_stop if $has_running || @{$self->{+QUEUE}};
+    $self->perform_hard_stop if $has_running || @{$self->{+SCHEDULER}->queue};
 
     $self->_teardown_run_service($_) for @leftover_runs;
 
@@ -1793,434 +1814,41 @@ sub TO_JSON {
     };
 }
 
-# Scheduler state. The harness keeps its own pending/running view
-# of every queued run, populated once at queue time from the run's
-# initial job list and mutated only by the harness's own scheduling
-# decisions (launch, skip, completion). It deliberately never
-# reads or writes the Run object's pending/running/done arrays
-# (those mirror what the run service broadcasts back, which the
-# scheduler should not depend on -- the broadcasts can race and
-# would otherwise resurrect already-launched jobs into the
-# pending list).
+# Scheduler decision logic and per-run bookkeeping moved to
+# Test2::Harness2::Scheduler. The harness keeps a strong reference
+# under +SCHEDULER and exposes one entry point (run_on_all -> tick)
+# plus a couple of legacy shims to keep existing in-tree callers
+# (specifically t/AI/unit/Harness2.t which still pokes
+# _scheduler_queue_run / _scheduler_mark_running directly) working
+# without modification.
 sub _scheduler_queue_run {
     my ($self, $run) = @_;
-    my $rid = $run->run_id;
-    $self->{+SCHEDULER}->{$rid} = {
-        pending => [map { $_->job_id } @{$run->jobs}],
-        running => {},
-        started => 0,
-    };
-    return;
-}
-
-sub _scheduler_pending_for_run {
-    my ($self, $run_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id} or return [];
-    return $s->{pending};
-}
-
-sub _scheduler_is_running {
-    my ($self, $run_id, $job_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id} or return 0;
-    return $s->{running}->{$job_id} ? 1 : 0;
-}
-
-sub _scheduler_started {
-    my ($self, $run_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id} or return 0;
-    return $s->{started};
+    return $self->{+SCHEDULER}->queue_run($run);
 }
 
 sub _scheduler_mark_running {
-    my ($self, $run_id, $job_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id} or return;
-    $s->{pending}            = [grep { $_ ne $job_id } @{$s->{pending}}];
-    $s->{running}->{$job_id} = 1;
-    $s->{started}            = 1;
-    return;
+    my ($self, @args) = @_;
+    return $self->{+SCHEDULER}->mark_running(@args);
 }
 
-# Restore a job to the scheduler's pending queue. Used by the
-# preload-spawn watchdog when an in-flight request times out: the
-# placeholder RUNNING_JOBS entry is dropped and the job has to be
-# eligible for relaunch on the next scheduler tick.
 sub _scheduler_mark_pending {
-    my ($self, $run_id, $job_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id} or return;
-    delete $s->{running}->{$job_id};
-    return if grep { $_ eq $job_id } @{$s->{pending}};
-    push @{$s->{pending}}, $job_id;
-    return;
-}
-
-sub _scheduler_mark_done {
-    my ($self, $run_id, $job_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id} or return;
-    delete $s->{running}->{$job_id};
-    return;
-}
-
-sub _scheduler_skip {
-    my ($self, $run_id, $job_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id} or return;
-    $s->{pending} = [grep { $_ ne $job_id } @{$s->{pending}}];
-    $s->{started} = 1;
-    return;
-}
-
-sub _scheduler_drop_run {
-    my ($self, $run_id) = @_;
-    delete $self->{+SCHEDULER}->{$run_id};
-    return;
-}
-
-sub _scheduler_run_complete {
-    my ($self, $run_id) = @_;
-    my $s = $self->{+SCHEDULER}->{$run_id};
-    return 1 unless $s;    # already dropped
-    return 0 if @{$s->{pending}};
-    return 0 if keys %{$s->{running}};
-
-    # The scheduler has nothing left of its own to do for the run,
-    # but the run is only really finished once we have also seen
-    # the started flag flip -- otherwise an empty queue at startup
-    # would look "complete" to us before we ever launched anything.
-    return $s->{started} ? 1 : 0;
+    my ($self, @args) = @_;
+    return $self->{+SCHEDULER}->mark_pending(@args);
 }
 
 sub run_on_all {
     my ($self, $activity) = @_;
 
-    # Job completion flows through the run service: test collectors
-    # emit test_job_completed to the run service, which aggregates
-    # and sends us job_release (for resource release + wake) plus
-    # run_state_update (to mirror the Run). The run service's own
-    # watchdog synthesizes completion on collector death. Nothing
-    # here beyond driving the scheduler forward.
+    # Job completion flows through the auditors: test collectors emit
+    # test_job_completed which the harness routes to mirror Run mutation
+    # and the broadcaster. The collector-side watchdog synthesizes
+    # completion on collector death. Nothing here beyond driving the
+    # scheduler forward.
     return if $self->{+STATE} eq 'terminating';
 
     # Launch as many pending jobs as the active resources permit this tick.
-    1 while $self->_try_launch_next_pending;
+    1 while $self->{+SCHEDULER}->try_launch_next;
 }
-
-sub _try_launch_next_pending {
-    my $self = shift;
-
-    return 0 unless @{$self->{+QUEUE} // []};
-
-    # Runs are processed serially in the order they were queued. Find
-    # the first run that is not yet complete from the scheduler's
-    # perspective; that becomes the head run for this tick.
-    my $head_run;
-    for my $run (@{$self->{+QUEUE}}) {
-        next if $self->_scheduler_run_complete($run->run_id);
-        $head_run = $run;
-        last;
-    }
-    return 0 unless $head_run;
-
-    my $run_id = $head_run->run_id;
-
-    # Lazy per-run resource startup: the first time this run is
-    # considered for launch we spin up its resource services.
-    $self->_ensure_run_service_started($head_run);
-
-    # Iterate the scheduler's own pending list (authoritative view of
-    # what we have not yet attempted), not $run->pending (mirrors run
-    # service and can lag behind).
-    for my $job_id (@{$self->_scheduler_pending_for_run($run_id)}) {
-        my ($job) = grep { $_->job_id eq $job_id } @{$head_run->jobs};
-        next unless $job;
-
-        my $outcome = $self->_dispatch_pending_job($head_run, $job);
-        return 1 if $outcome eq 'launched';
-        next;     # 'defer' or 'skipped'
-    }
-
-    return 0;
-}
-
-# Per-job dispatch decision for _try_launch_next_pending. Returns
-# 'launched' to signal the caller a job was started (and the tick is
-# done), or 'defer' to advance to the next pending job. Encapsulates
-# the run-aborted short-circuit, preload routing, and resource
-# evaluation, plus the unavailable-action / broken-resource branches.
-sub _dispatch_pending_job {
-    my ($self, $run, $job) = @_;
-
-    my ($decision, $arg, %dec_opts);
-    my $preload_resource;
-
-    my $rstate = $self->{+RUN_STATES}->state($run->run_id);
-    if ($rstate && defined $rstate->aborted_reason) {
-        # Run aborted: every remaining job takes the unavailable-action
-        # fail path. aborted=1 distinguishes follow-ups from the
-        # original trigger (aborted=0, set by _handle_broken_resource).
-        ($decision, $arg) = ('broken', $rstate->aborted_reason);
-        $dec_opts{aborted} = 1;
-    }
-    else {
-        # Preload routing runs before the generic resource walk so an
-        # unmet preload preference can short-circuit
-        # _evaluate_resources_for entirely. Resolver returns:
-        #   (undef, 'no_preload')      -> normal direct-fork path
-        #   ($resource, 'preload')     -> spawn via preload service
-        #   (undef, 'defer')           -> retry next tick
-        #   (undef, 'broken', $first)  -> route through broken_resource_behavior
-        my ($pres, $pkind, $pextra) = $self->_resolve_preload_for_job($run, $job);
-        return 'defer' if $pkind eq 'defer';
-
-        if ($pkind eq 'broken') {
-            ($decision, $arg) = ('broken', "preload:$pextra");
-        }
-        else {
-            $preload_resource = $pres;
-            ($decision, $arg) = $self->_evaluate_resources_for($run, $job);
-        }
-    }
-
-    if ($decision eq 'skip') {
-        # Resource is healthy but can never grant the slots THIS job
-        # demands (e.g. test declares `HARNESS2: slots 8` and per-job
-        # cap is 4). Route through the unavailable-action skip launch
-        # so the renderer/log show a real skip_all event. The skip
-        # launch shares the job-limiter pool and may defer when
-        # saturated.
-        my $outcome = $self->_launch_unavailable_action_job($run, $job, 'skip', $arg);
-        return $outcome eq 'launched' || $outcome eq 'skip' ? 'launched' : 'defer';
-    }
-
-    if ($decision eq 'broken') {
-        my $outcome = $self->_handle_broken_resource($run, $job, $arg, %dec_opts);
-        return $outcome eq 'launched' || $outcome eq 'skip' ? 'launched' : 'defer';
-    }
-
-    return 'defer' if $decision eq 'defer';
-
-    $self->_launch_job(
-        $run, $job, $arg,
-        (defined $preload_resource ? (preload_resource => $preload_resource) : ()),
-    );
-    return 'launched';
-}
-
-# Finalize the run if it's complete: snapshot final results from
-# the Run mirror, drop the run from the queue, tear down its per-
-# run service, and transition the harness to finishing if we're
-# in finish_after_initial_run mode.
-#
-# Finalization is gated by the Run mirror's is_complete: that is
-# the run service's authoritative "all jobs done, here are the
-# final results" signal. The scheduler's own pending+running
-# view is for launch decisions, not finalization -- it can reach
-# empty before the mirror has the results we need to snapshot.
-sub _finalize_run_if_complete {
-    my ($self, $run) = @_;
-    my $run_id = $run->run_id;
-
-    my $run_states = $self->{+RUN_STATES};
-    my $rstate     = $run_states->state($run_id);
-    return unless $rstate && $rstate->is_complete;
-
-    # Idempotent: if we already finalized this run, do nothing.
-    return if $run_states->completed($run_id);
-
-    $run_states->record_completed($run_id, $self->_snapshot_run_results($run));
-
-    # Emit the terminal run_completed + collector_report event from
-    # the harness BEFORE the per-run state is dropped. This used to
-    # live in RunService.emit_run_completed; the harness owns Run
-    # state now so it owns the aggregate.
-    $self->_emit_run_completed($run);
-    $self->_write_run_report($run);
-
-    $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
-    $run_states->delete_state($run_id);
-    $run_states->delete_flags($run_id);
-    $self->_scheduler_drop_run($run_id);
-    $self->_teardown_run_service($run);
-    $self->emit_service_event(
-        kind     => 'run_ended',
-        run_data => {run_id => $run_id},
-    );
-    $self->{+STATE} = 'finishing'
-        if $self->{+FINISH_AFTER_INITIAL_RUN}
-        && $self->{+STATE} eq 'running';
-
-    return;
-}
-
-# Dispatch for ($decision eq 'broken'): a needed resource is
-# permanently broken. Which of skip / fail / abort to do is governed
-# by the harness-level broken_resource_behavior attribute.
-#
-# All three paths route the job through a real Collector launch --
-# skip runs a one-liner that calls skip_all, fail runs a one-liner
-# that dies, abort is per-job fail for the whole remaining run.
-# That way the auditor and on-disk artifacts are produced the same
-# way they would be for a real test; no job is ever silently dropped.
-#
-# Returns 'launched', 'defer' (limiter full), or 'skip' (the
-# unavailable-action launch is impossible: e.g. no job-limiter is
-# usable any more).
-sub _handle_broken_resource {
-    my ($self, $run, $job, $resource_name, %opts) = @_;
-
-    my $behavior = $self->{+BROKEN_RESOURCE_BEHAVIOR};
-    my $aborted  = $opts{aborted} ? 1 : 0;
-
-    if ($behavior eq 'skip') {
-        return $self->_launch_unavailable_action_job(
-            $run, $job, 'skip', $resource_name, aborted => $aborted,
-        );
-    }
-
-    if ($behavior eq 'fail') {
-        return $self->_launch_unavailable_action_job(
-            $run, $job, 'fail', $resource_name, aborted => $aborted,
-        );
-    }
-
-    # abort: record the reason on the run state so every other
-    # pending job also takes the fail path (see
-    # _try_launch_next_pending), then synthesize fail for THIS job.
-    # The scheduler drives the rest one at a time as the job limiter
-    # frees slots -- we never try to launch N synth-fail jobs against
-    # a single-slot limiter at once. The current job is the trigger;
-    # follow-ups arrive through the scheduler's aborted-run branch
-    # with aborted => 1 already set on their dec_opts.
-    if (my $rstate = $self->{+RUN_STATES}->state($run->run_id)) {
-        $rstate->latch_aborted_reason($resource_name);
-    }
-    return $self->_launch_unavailable_action_job(
-        $run, $job, 'fail', $resource_name, aborted => $aborted,
-    );
-}
-
-# Launch an unavailable-action skip/fail via the normal Collector
-# path, using a perl -e one-liner instead of the real test file. Only
-# job_limiter resources that are NOT permanent_broken get consulted
-# (with a fixed need=1) -- the broken resource itself is of course
-# skipped, and non-limiter resources don't participate in accounting
-# for one-off unavailable-action runs.
-#
-# Returns 'launched', 'defer' (limiter full right now), or 'skip' (no
-# usable limiter at all, so the unavailable-action launch can never
-# run).
-sub _launch_unavailable_action_job {
-    my ($self, $run, $job, $unavailable_action, $resource_name, %opts) = @_;
-
-    croak "unavailable_action kind must be 'skip' or 'fail' (got '$unavailable_action')"
-        unless $unavailable_action eq 'skip' || $unavailable_action eq 'fail';
-
-    my $aborted = $opts{aborted} ? 1 : 0;
-    my $reason =
-        $aborted
-        ? "Run aborted: missing resources: $resource_name"
-        : "Missing resources: $resource_name";
-
-    # perl -Ilib -e ... -- <reason>. ARGV carries the reason so we
-    # don't have to quote the message into the -e body. -Ilib mirrors
-    # the real-test launch in the RunService so Test2::Formatter::Stream2
-    # (and any other @INC-dependent harness plumbing) resolves the
-    # same way it does under a real test.
-    my $script =
-        $unavailable_action eq 'skip'
-        ? 'use Test2::V0; skip_all($ARGV[0])'
-        : 'die "$ARGV[0]\n"';
-    my $launch = [$^X, '-Ilib', '-e', $script, '--', $reason];
-
-    # Pull every resource the scheduler would have consulted for this
-    # synthetic job: anything the resource itself reports as
-    # `needed(job => $job)` and that has not been permanent-broken.
-    # The `is_job_limiter` filter is gone; resources that genuinely
-    # have no slot footprint for a synthetic skip/fail (e.g. a GPU
-    # gating resource) are expected to opt themselves out via
-    # `needed`.
-    my @all = (@{$self->{+RESOURCES}}, @{$run->resources // []});
-    my @limiters =
-        grep { !$_->is_permanent_broken && $_->needed(job => $job) } @all;
-
-    # Availability gate: share the run's job-limiter pool with real
-    # tests. If every usable limiter is saturated right now, defer
-    # and let the scheduler re-try on the next tick once a slot frees.
-    # If a limiter can never accommodate us (-1, which should not
-    # happen with need=1 on a single-slot pool but is possible in
-    # pathological configurations) the unavailable-action job is
-    # skipped outright.
-    for my $res (@limiters) {
-        my $av = $res->available(job => $job, min => 1, max => 1, need => 1);
-        if ($av < 0) {
-            $self->_scheduler_skip($run->run_id, $job->job_id);
-            $self->_finalize_run_if_complete($run);
-            return 'skip';
-        }
-        return 'defer' if $av == 0;
-    }
-
-    $self->_launch_job(
-        $run, $job, \@limiters,
-        launch      => $launch,
-        assign_args => {min => 1, max => 1, need => 1},
-    );
-
-    return 'launched';
-}
-
-sub _evaluate_resources_for {
-    my ($self, $run, $job) = @_;
-
-    # Global resources are consulted first, then per-run resources
-    # layered on top. Either set may defer, skip, or report a broken
-    # resource; all-or-nothing commitment is preserved because we
-    # only call assign() in _launch_job after the entire walk returns
-    # ('launch', \@use).
-    #
-    # Return shape: ('launch', \@use)
-    #               ('defer')
-    #               ('skip', $resource_name)
-    #                          - resource is present but can never
-    #                            grant THIS specific job (e.g. job's
-    #                            min_slots exceeds the resource's
-    #                            per-job cap). Scheduler routes the
-    #                            job through the unavailable-action
-    #                            skip launch so the user sees a real
-    #                            skip_all event and the run still
-    #                            completes; other jobs that fit the
-    #                            cap continue to use the resource.
-    #               ('broken', $resource_name)
-    #                          - a needed resource has been flipped
-    #                            to permanent_broken. Scheduler
-    #                            consults broken_resource_behavior
-    #                            to decide skip / fail / abort.
-    my @all = (@{$self->{+RESOURCES}}, @{$run->resources // []});
-
-    my @use;
-    for my $res (@all) {
-        next unless $res->needed(job => $job);
-
-        return ('broken', $res->resource_name) if $res->is_permanent_broken;
-
-        # Transient brokenness / paused state: try again later.
-        return ('defer') unless $res->is_usable;
-
-        # Utilizer saturation: defer when min_concurrent floor met AND saturated.
-        # Resource derefs the scheduler's IN_FLIGHT_COUNT slot via the
-        # scalar ref installed at registration time.
-        return ('defer')
-            if $res->can('should_defer_for_utilization')
-            && $res->should_defer_for_utilization;
-
-        my $av = $res->available(job => $job);
-        return ('skip', $res->resource_name) if $av < 0;
-        return ('defer')                     if !$av;
-
-        push @use => $res;
-    }
-
-    return ('launch', \@use);
-}
-
 
 sub _ensure_run_service_started {
     my ($self, $run) = @_;
@@ -2395,7 +2023,7 @@ sub _launch_job {
                 (defined $opts{launch} ? (launch => $opts{launch}) : ()),
                 (defined $ch_dir       ? (ch_dir => $ch_dir)       : ()),
             );
-            $self->_scheduler_mark_running($run_id, $job_id);
+            $self->{+SCHEDULER}->mark_running($run_id, $job_id);
             return 1;
         }
 
@@ -2431,7 +2059,7 @@ sub _launch_job {
 # run_states->{$rid}{started_at}.
 sub _announce_run_started_if_first {
     my ($self, $run_id) = @_;
-    return if $self->_scheduler_started($run_id);
+    return if $self->{+SCHEDULER}->started($run_id);
 
     my $started_at = time;
     $self->emit_service_event(
@@ -2481,7 +2109,7 @@ sub _launch_collector_inline {
     die "collector spawn returned no pid"
         unless ref($resp) eq 'HASH' && $resp->{ok} && $resp->{pid};
 
-    $self->_scheduler_mark_running($run_id, $job_id);
+    $self->{+SCHEDULER}->mark_running($run_id, $job_id);
 
     my $started_at = time;
     $self->{+RUNNING_JOBS}->{$job_id} = {
@@ -2493,7 +2121,7 @@ sub _launch_collector_inline {
         assigned_resources => $resources,
         log_file           => $resp->{log_file},
     };
-    $self->{+IN_FLIGHT_COUNT}++;
+    $self->{+SCHEDULER}->inc_in_flight;
 
     $self->{+PID_INDEX}->register(
         $run_id, $resp->{pid},
@@ -2746,7 +2374,7 @@ sub _age_pending_spawn_requests {
         # scheduler picks it up next tick.
         $self->_release_job_resources($cur);
         delete $self->{+RUNNING_JOBS}->{$job_id};
-        $self->_scheduler_mark_pending($run_id, $job_id);
+        $self->{+SCHEDULER}->mark_pending($run_id, $job_id);
         delete $pending->{$key};
     }
 
@@ -3226,16 +2854,10 @@ under the bus peer name and emits C<resource_spawn_via_preload>.
 
 =head2 Scheduler
 
-=head2 _scheduler_mark_pending
-
-(internal) Pushes C<$job_id> back into the run's pending queue and clears it
-from C<running>, used when a deferred / timed-out launch needs to be retried.
-
-=head2 _dispatch_pending_job
-
-(internal) Per-job dispatch decision used by C<_try_launch_next_pending>.
-Combines the run-aborted short-circuit, the preload resolver, and the generic
-resource evaluator, returning C<'launched'>, C<'defer'>, or C<'skipped'>.
+The scheduler decision logic lives on L<Test2::Harness2::Scheduler>; the
+harness keeps thin shims (C<_scheduler_queue_run>, C<_scheduler_mark_running>,
+C<_scheduler_mark_pending>) that delegate to the subsystem so existing
+in-tree callers continue to work.
 
 =head2 Launch helpers
 

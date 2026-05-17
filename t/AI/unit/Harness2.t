@@ -402,7 +402,7 @@ subtest 'run_on_all commits no resource when any is unavailable' => sub {
     is($res_a->used,                      0, 'resource A not committed when B defers');
     is($res_b->used,                      0, 'resource B not committed');
     is(scalar keys %{$h->{running_jobs}}, 0, 'no running jobs');
-    is(scalar @{$h->{queue}},             1, 'run still queued, job still pending');
+    is(scalar @{$h->scheduler->queue},             1, 'run still queued, job still pending');
 };
 
 subtest 'test_job_completed + job_release advance the harness scheduler' => sub {
@@ -414,7 +414,7 @@ subtest 'test_job_completed + job_release advance the harness scheduler' => sub 
 
     $h->request_handler_queue_test_run({files => _tfs('/abs/dummy.t')});
 
-    my $run    = $h->{queue}[0];
+    my $run    = $h->scheduler->queue->[0];
     my $rstate = $h->{run_states}->state($run->run_id);
     my $job_id = $rstate->pending->[0];
     my ($job)  = grep { $_->job_id eq $job_id } @{$run->jobs};
@@ -499,7 +499,7 @@ subtest 'run_on_all emits run_started for the first job; no job_started' => sub 
     ok(!(grep { $_ eq 'job_queued' } @kinds),  'job_queued NOT emitted (run service owns it)');
 
     my ($rs) = grep { $_->{kind} eq 'run_started' } @emitted;
-    is($rs->{run_id},     $h->{queue}[0]->run_id, 'run_started carries run_id flat');
+    is($rs->{run_id},     $h->scheduler->queue->[0]->run_id, 'run_started carries run_id flat');
     ok(defined $rs->{started_at}, 'run_started carries started_at');
 };
 
@@ -508,7 +508,7 @@ subtest 'test_job_completed for the last running job triggers run_ended' => sub 
     my $h   = Test2::Harness2->new(workdir => $dir);
 
     my $run = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('/abs/done.t'));
-    push @{$h->{queue}} => $run;
+    push @{$h->scheduler->queue} => $run;
     my ($job) = @{$run->jobs};
     my $rstate = Test2::Harness2::Run::State->new(
         run_id  => $run->run_id,
@@ -589,7 +589,7 @@ subtest 'perform_hard_stop TERMs tracked pids and reaps them' => sub {
         started_at         => time,
         assigned_resources => [],
     };
-    push @{$h->{queue}} => $run;
+    push @{$h->scheduler->queue} => $run;
 
     $h->perform_hard_stop;
 
@@ -847,7 +847,7 @@ subtest 'no run service is spawned (Stage 9 of the flatten); harness writes the 
 
     my $run = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('x.t'));
     my $h   = Test2::Harness2->new(workdir => $dir);
-    push @{$h->{queue}} => $run;
+    push @{$h->scheduler->queue} => $run;
     $h->_scheduler_queue_run($run);
 
     $h->{ipcm_info} = {fake => 1};
@@ -881,7 +881,7 @@ subtest 'per-run resources participate in _evaluate_resources_for' => sub {
         files     => _tfs('x.t'),
         resources => [$run_limiter],
     );
-    push @{$h->{queue}} => $run;
+    push @{$h->scheduler->queue} => $run;
 
     {
         no warnings 'redefine';
@@ -899,7 +899,7 @@ subtest 'run_on_cleanup tears down per-run resource pids via _kill_run' => sub {
     my $run = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('never-runs.t'));
 
     my $h = Test2::Harness2->new(workdir => $dir);
-    push @{$h->{queue}} => $run;
+    push @{$h->scheduler->queue} => $run;
 
     # Fork a short-lived child as a pretend per-run resource service
     # pid. run_on_cleanup -> _teardown_run_service -> _kill_run
@@ -927,7 +927,7 @@ subtest 'run_on_cleanup tears down per-run resource pids via _kill_run' => sub {
 
     {
         no warnings 'redefine';
-        local *Test2::Harness2::perform_hard_stop  = sub { $_[0]->{queue} = []; $_[0]->{running_jobs} = {} };
+        local *Test2::Harness2::perform_hard_stop  = sub { $_[0]->scheduler->clear_queue; $_[0]->{running_jobs} = {} };
         local *Test2::Harness2::emit_service_event = sub { };
         $h->run_on_cleanup;
     }
@@ -1055,7 +1055,7 @@ subtest 'broken_resource_behavior=abort fails every remaining job in the run' =>
             # drain them by feeding the harness the IPC pair the
             # auditor now sends directly (test_job_completed +
             # job_release).
-            while (keys %{$h->{running_jobs}} || @{$h->{queue}}) {
+            while (keys %{$h->{running_jobs}} || @{$h->scheduler->queue}) {
                 $h->run_on_all({});
                 last unless keys %{$h->{running_jobs}};
 
@@ -1089,7 +1089,7 @@ subtest 'broken_resource_behavior=abort fails every remaining job in the run' =>
         (grep { $_->[5] =~ /\ARun aborted: / } @cmds),
         'follow-up jobs carry the "Run aborted" reason prefix'
     );
-    is(scalar @{$h->{queue}}, 0, 'run closed out after abort');
+    is(scalar @{$h->scheduler->queue}, 0, 'run closed out after abort');
 };
 
 subtest 'invalid broken_resource_behavior is rejected at construction' => sub {
@@ -1240,7 +1240,7 @@ subtest 'collector pid exit without test_job_completed is grace-armed and synthe
 
     my $run    = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('/abs/orphan.t'));
     my $job_id = $run->jobs->[0]->job_id;
-    push @{$h->{queue}} => $run;
+    push @{$h->scheduler->queue} => $run;
     my $rstate = Test2::Harness2::Run::State->new(
         run_id  => $run->run_id,
         pending => [$job_id],

@@ -53,12 +53,13 @@ sub subscribe {
     push @run_ids => $payload->{run}     if defined $payload->{run};
     push @run_ids => @{$payload->{runs}} if ref($payload->{runs}) eq 'ARRAY';
 
-    # Validate every run_id up front. The harness knows about runs in
-    # the live queue; RunStates knows about terminal snapshots.
-    my $rs = $self->{+RUN_STATES};
+    # Validate every run_id up front. The scheduler knows about runs
+    # in the live queue; RunStates knows about terminal snapshots.
+    my $rs  = $self->{+RUN_STATES};
+    my $sch = $h->scheduler;
     for my $rid (@run_ids) {
-        next if grep { $_->run_id eq $rid } @{$h->{Test2::Harness2::QUEUE()} // []};
-        next if $rs && $rs->completed($rid);
+        next if $sch && $sch->run_in_queue($rid);
+        next if $rs  && $rs->completed($rid);
         return {ok => 0, error => "unknown run '$rid'"};
     }
 
@@ -128,10 +129,11 @@ sub send_snapshot {
     my $run_id = $params{run_id} or return;
 
     my $h = $self->harness or return;
-    my $rs = $self->{+RUN_STATES};
+    my $rs  = $self->{+RUN_STATES};
+    my $sch = $h->scheduler;
 
     my $run_data;
-    if (grep { $_->run_id eq $run_id } @{$h->{Test2::Harness2::QUEUE()} // []}) {
+    if ($sch && $sch->run_in_queue($run_id)) {
         my $rstate = $rs ? $rs->state($run_id) : undef;
         $run_data = $rstate ? $rstate->TO_JSON : {run_id => $run_id};
     }
@@ -280,8 +282,9 @@ sub broadcast_run_state {
     my $data   = $rstate->TO_JSON;
     $self->notify_state($run_id, $data);
 
-    my ($run) = grep { $_->run_id eq $run_id } @{$h->{Test2::Harness2::QUEUE()} // []};
-    $h->_finalize_run_if_complete($run) if $run;
+    my $sch = $h->scheduler or return;
+    my $run = $sch->run_by_id($run_id);
+    $sch->finalize_run_if_complete($run) if $run;
     return;
 }
 

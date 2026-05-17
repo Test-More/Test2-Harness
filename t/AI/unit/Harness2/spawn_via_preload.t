@@ -100,7 +100,7 @@ subtest '_handle_test_job_started populates placeholder pid' => sub {
 
     my ($run, $job) = mk_job_and_run();
     # Scheduler entry so mark_running doesn't choke if test_job_started triggers a state lookup.
-    $h->{Test2::Harness2::SCHEDULER()}->{$run->run_id} = {pending => [], running => {}, started => 1};
+    $h->scheduler->scheduler_table->{$run->run_id} = {pending => [], running => {}, started => 1};
     # Seed the run state so mark_running succeeds.
     $h->{Test2::Harness2::RUN_STATES()}->{$run->run_id} = Test2::Harness2::Run::State->new(run_id => $run->run_id);
     $h->{Test2::Harness2::RUN_STATES()}->{$run->run_id}->seed_job_result($job->job_id);
@@ -137,7 +137,7 @@ subtest '_age_pending_spawn_requests times out + flips broken' => sub {
     stub_client($h);
 
     my ($run, $job) = mk_job_and_run();
-    $h->{Test2::Harness2::SCHEDULER()}->{$run->run_id} = {pending => [], running => {}, started => 1};
+    $h->scheduler->scheduler_table->{$run->run_id} = {pending => [], running => {}, started => 1};
 
     $h->_spawn_via_preload($run, $job, $preload, assign_id => 'AID', assigned_resources => []);
 
@@ -154,7 +154,7 @@ subtest '_age_pending_spawn_requests times out + flips broken' => sub {
     ok($preload->is_broken,          'preload flipped transient broken');
     ok(!$preload->is_permanent_broken, 'not permanent');
     # And the job is back in the pending list
-    is($h->{Test2::Harness2::SCHEDULER()}->{$run->run_id}->{pending}, [$job->job_id],
+    is($h->scheduler->scheduler_table->{$run->run_id}->{pending}, [$job->job_id],
         'job re-queued as pending');
 };
 

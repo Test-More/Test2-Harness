@@ -33,7 +33,7 @@ subtest 'queue_test_run propagates hash_seed onto the queued run' => sub {
     });
     ok($res->{ok}, 'queued');
 
-    is($h->{queue}[0]->hash_seed, '20260101', 'queued run carries seed');
+    is($h->scheduler->queue->[0]->hash_seed, '20260101', 'queued run carries seed');
 };
 
 subtest 'queue_test_run accepts a run with no seed when harness has none' => sub {
@@ -42,7 +42,7 @@ subtest 'queue_test_run accepts a run with no seed when harness has none' => sub
 
     my $res = $h->request_handler_queue_test_run({files => _tfs('t/x.t')});
     ok($res->{ok}, 'no-seed run accepted');
-    is($h->{queue}[0]->hash_seed, undef, 'no seed on the queued run');
+    is($h->scheduler->queue->[0]->hash_seed, undef, 'no seed on the queued run');
 };
 
 subtest 'reject mismatch: harness=A vs run=B' => sub {
@@ -68,7 +68,7 @@ subtest 'accept: harness has seed, run does not (run inherits via env)' => sub {
 
     my $res = $h->request_handler_queue_test_run({files => _tfs('t/x.t')});
     ok($res->{ok}, 'accepted');
-    is($h->{queue}[0]->hash_seed, undef, 'run remained seedless');
+    is($h->scheduler->queue->[0]->hash_seed, undef, 'run remained seedless');
 };
 
 subtest 'accept: run has seed, harness does not (no global preload bound)' => sub {
@@ -80,7 +80,7 @@ subtest 'accept: run has seed, harness does not (no global preload bound)' => su
         hash_seed => '20260101',
     });
     ok($res->{ok}, 'accepted');
-    is($h->{queue}[0]->hash_seed, '20260101', 'run carries its own seed');
+    is($h->scheduler->queue->[0]->hash_seed, '20260101', 'run carries its own seed');
 };
 
 subtest 'agreement is accepted: harness=A and run=A' => sub {
@@ -92,7 +92,7 @@ subtest 'agreement is accepted: harness=A and run=A' => sub {
         hash_seed => '20260101',
     });
     ok($res->{ok}, 'accepted on agreement');
-    is($h->{queue}[0]->hash_seed, '20260101', 'seed on the run matches');
+    is($h->scheduler->queue->[0]->hash_seed, '20260101', 'seed on the run matches');
 };
 
 done_testing;

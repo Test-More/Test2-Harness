@@ -277,28 +277,6 @@ sub broken_resource_behavior {
 }
 
 #-------------------------------------------------------------------
-# Preload routing -- thin shim. Decision logic, async spawn
-# watchdogs, and dependent-resource queues all live on
-# Test2::Harness2::PreloadRouter. The scheduler calls
-# $h->_resolve_preload_for_job directly; this shim forwards to the
-# subsystem.
-#-------------------------------------------------------------------
-sub _resolve_preload_for_job {
-    my $self = shift;
-    return $self->{+PRELOAD_ROUTER}->resolve_for_job(@_);
-}
-
-# Re-export of PreloadRouter's peer-name helpers as package functions.
-# SpawnGateway used to call Test2::Harness2::_preload_peer_name(...) as
-# a bare package function (extraction 3 interim wiring); the gateway
-# now talks to the router via $self->harness->preload_router->...,
-# but the symbol is kept here as a compatibility surface for any
-# out-of-tree caller that still imports it.
-sub _preload_peer_name {
-    return Test2::Harness2::PreloadRouter->peer_name_for_preload(@_);
-}
-
-#-------------------------------------------------------------------
 sub start {
     my ($class, %args) = @_;
 

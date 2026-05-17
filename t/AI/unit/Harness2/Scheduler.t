@@ -51,6 +51,15 @@ use constant BROKEN_RESOURCE_SLOT  => Test2::Harness2::Scheduler::BROKEN_RESOURC
 }
 
 {
+    package SchFakePreloadRouter;
+    # Stand-in for Test2::Harness2::PreloadRouter. The scheduler only
+    # ever calls ->resolve_for_job on it; no_preload keeps every job on
+    # the direct-fork path.
+    sub new { bless {}, $_[0] }
+    sub resolve_for_job { return (undef, 'no_preload') }
+}
+
+{
     package SchFakeHarness;
     # Bare-minimum harness fake. The scheduler only ever reaches the
     # harness for launch glue (which the tests below intercept), for
@@ -67,14 +76,15 @@ use constant BROKEN_RESOURCE_SLOT  => Test2::Harness2::Scheduler::BROKEN_RESOURC
             snapshot_results  => {},
             run_state         => 'running',
             finish_after      => 0,
+            preload_router    => SchFakePreloadRouter->new,
         }, $c;
         $self->{job_tracker} = SchFakeJobTracker->new($self);
         return $self;
     }
     sub resources                   { $_[0]->{resources} }
     sub job_tracker                 { $_[0]->{job_tracker} }
+    sub preload_router              { $_[0]->{preload_router} }
     sub _ensure_run_service_started { push @{$_[0]->{ensure_calls}},   $_[1] }
-    sub _resolve_preload_for_job    { return (undef, 'no_preload') }
     sub _launch_job                 { push @{$_[0]->{launch_calls}}, [@_[1..$#_]] }
     sub _write_run_report           { }
     sub _teardown_run_service       { push @{$_[0]->{teardown_calls}}, $_[1] }

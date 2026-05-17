@@ -308,7 +308,7 @@ sub dispatch_pending {
         #   ($resource, 'preload')     -> spawn via preload service
         #   (undef, 'defer')           -> retry next tick
         #   (undef, 'broken', $first)  -> route through broken_resource_behavior
-        my ($pres, $pkind, $pextra) = $h->_resolve_preload_for_job($run, $job);
+        my ($pres, $pkind, $pextra) = $h->preload_router->resolve_for_job($run, $job);
         return 'defer' if $pkind eq 'defer';
 
         if ($pkind eq 'broken') {

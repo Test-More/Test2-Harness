@@ -115,8 +115,8 @@ sub parse_options {
     return %out;
 }
 
-# Routing decision lives in the harness's resolver
-# (_resolve_preload_for_job), NOT in the scheduler's normal needs-this-
+# Routing decision lives in the PreloadRouter's resolver
+# (resolve_for_job), NOT in the scheduler's normal needs-this-
 # resource walk. Returning 0 here keeps _evaluate_resources_for from
 # selecting a preload on its own; the scheduler injects the resolved
 # Resource::Preload alongside the rest of the assigned resources after
@@ -312,8 +312,8 @@ positional entries.
 
 =head2 needed
 
-Returns 0. Routing lives in the harness's
-C<_resolve_preload_for_job>; the scheduler injects the resolved
+Returns 0. Routing lives in the PreloadRouter's
+C<resolve_for_job>; the scheduler injects the resolved
 Resource::Preload alongside the rest of the assigned resources
 rather than picking one itself.
 

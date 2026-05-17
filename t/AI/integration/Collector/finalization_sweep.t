@@ -1,7 +1,7 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
 use Test2::Harness2::Collector;
-use Test2::Harness2::Util::JSON qw/decode_json/;
+use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 
 # Integration test for the harness-level finalization sweep (_finalize_sweep).
 #
@@ -31,10 +31,7 @@ sub write_sealed {
     my $dir  = "$logdir/$rel";
     my $path = "$dir/.sealed";
     open my $fh, '>', $path or die "Could not write $path: $!";
-    print $fh decode_json(encode_json({sealed_at => 1000, %fields}))
-        if 0;    # parse round-trip not needed — just dump directly
-    require Test2::Harness2::Util::JSON;
-    print $fh Test2::Harness2::Util::JSON::encode_json({sealed_at => 1000, %fields}), "\n";
+    print $fh encode_json({sealed_at => 1000, %fields}), "\n";
     close $fh;
 }
 

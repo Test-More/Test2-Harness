@@ -76,7 +76,7 @@ subtest 'spawn_via_preload records placeholder + sends spawn_test' => sub {
     is($cur->{preload_scope},        'global',     'preload_scope carried');
     is($cur->{assign_id},            'AID',        'assign_id stored');
 
-    my $pending = $h->preload_router->{Test2::Harness2::PENDING_SPAWN_REQUESTS()};
+    my $pending = $h->preload_router->{Test2::Harness2::PreloadRouter::PENDING_SPAWN_REQUESTS()};
     my $key = $run->run_id . "\0" . $job->job_id;
     ok($pending->{$key}, 'pending spawn request keyed by run+job');
 
@@ -124,7 +124,7 @@ subtest 'handle_test_job_started populates placeholder pid' => sub {
     is($cur->{pid}, 99999, 'pid populated from collector_pid');
     ok(!exists $cur->{awaiting_preload_pid}, 'awaiting flag cleared');
 
-    my $pending = $h->preload_router->{Test2::Harness2::PENDING_SPAWN_REQUESTS()};
+    my $pending = $h->preload_router->{Test2::Harness2::PreloadRouter::PENDING_SPAWN_REQUESTS()};
     my $key = $run->run_id . "\0" . $job->job_id;
     ok(!$pending->{$key}, 'pending spawn dropped');
 };
@@ -143,14 +143,14 @@ subtest 'age_pending_spawn_requests times out + flips broken' => sub {
 
     # backdate sent_at so the watchdog fires
     my $key = $run->run_id . "\0" . $job->job_id;
-    $h->preload_router->{Test2::Harness2::PENDING_SPAWN_REQUESTS()}->{$key}->{sent_at} = time - 60;
+    $h->preload_router->{Test2::Harness2::PreloadRouter::PENDING_SPAWN_REQUESTS()}->{$key}->{sent_at} = time - 60;
 
     # Silence warn during age sweep
     local $SIG{__WARN__} = sub { };
     $h->preload_router->_age_pending_spawn_requests;
 
     ok(!$h->job_tracker->running_jobs->{$job->job_id}, 'placeholder dropped');
-    ok(!$h->preload_router->{Test2::Harness2::PENDING_SPAWN_REQUESTS()}->{$key}, 'pending dropped');
+    ok(!$h->preload_router->{Test2::Harness2::PreloadRouter::PENDING_SPAWN_REQUESTS()}->{$key}, 'pending dropped');
     ok($preload->is_broken,          'preload flipped transient broken');
     ok(!$preload->is_permanent_broken, 'not permanent');
     # And the job is back in the pending list

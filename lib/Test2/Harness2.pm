@@ -61,39 +61,6 @@ use Object::HashBase qw{
     own_pgroup
 };
 
-# Sentinel run_id key for processes that aren't bound to a particular
-# run. The canonical definition lives in Test2::Harness2::PidIndex; this
-# constant is re-exported here for legacy in-tree callers.
-use constant RUN_PIDS_GLOBAL_KEY => Test2::Harness2::PidIndex::RUN_PIDS_GLOBAL_KEY();
-
-# Scheduler slot keys re-exported from Test2::Harness2::Scheduler.
-# The slots themselves live on the scheduler subsystem; these
-# constants exist so legacy in-tree callers (existing tests that
-# poke $h->{Test2::Harness2::QUEUE()} etc.) keep resolving to a
-# defined string. The harness no longer owns these slots, so the
-# string names point at the scheduler object and not the harness.
-use constant QUEUE                    => Test2::Harness2::Scheduler::QUEUE();
-use constant SCHEDULER                => Test2::Harness2::Scheduler::SCHEDULER();
-use constant IN_FLIGHT_COUNT          => Test2::Harness2::Scheduler::IN_FLIGHT_COUNT();
-use constant BROKEN_RESOURCE_BEHAVIOR => Test2::Harness2::Scheduler::BROKEN_RESOURCE_BEHAVIOR();
-
-# Re-export of the scheduler's BROKEN_BEHAVIORS lookup so legacy
-# in-tree callers (and existing introspection) still resolve. The
-# canonical definition lives on Test2::Harness2::Scheduler.
-use constant BROKEN_BEHAVIORS => Test2::Harness2::Scheduler::BROKEN_BEHAVIORS();
-
-# PreloadRouter slot keys re-exported. Same pattern as the
-# scheduler/jobtracker shims: existing in-tree callers (tests that
-# poke $h->{Test2::Harness2::PENDING_SPAWN_REQUESTS()} etc.) keep
-# resolving to a defined string. The slots themselves live on the
-# preload-router subsystem, not the harness.
-use constant PENDING_SPAWN_REQUESTS             => Test2::Harness2::PreloadRouter::PENDING_SPAWN_REQUESTS();
-use constant PENDING_PRELOAD_SPAWNS             => Test2::Harness2::PreloadRouter::PENDING_PRELOAD_SPAWNS();
-use constant RESOURCES_AWAITING_PRELOAD         => Test2::Harness2::PreloadRouter::RESOURCES_AWAITING_PRELOAD();
-use constant KNOWN_PRELOAD_NAMES                => Test2::Harness2::PreloadRouter::KNOWN_PRELOAD_NAMES();
-use constant PRELOAD_SPAWN_TIMEOUT_SECS         => Test2::Harness2::PreloadRouter::PRELOAD_SPAWN_TIMEOUT_SECS();
-use constant PRELOAD_SERVICE_SPAWN_TIMEOUT_SECS => Test2::Harness2::PreloadRouter::PRELOAD_SERVICE_SPAWN_TIMEOUT_SECS();
-
 # Grace window applied when a collector pid exits without a prior
 # test_job_completed. The IPC::Manager loop drives run_on_interval
 # every ~0.2s so the resolution is sub-second; the window itself is

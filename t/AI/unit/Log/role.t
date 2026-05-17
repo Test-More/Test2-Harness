@@ -32,11 +32,14 @@ for my $class (@consumers) {
     );
 }
 
-# 3. Required-method list matches the documented Phase 1 contract.
+# 3. Required-method list matches the documented Phase 1 contract plus the
+# producer-iterator additions from 1C (run_producers / job_producers /
+# service_producers / collector_producers).
 my @expected_required = sort qw{
     services runs jobs tries last_try
     has_service has_run has_job has_try
     artifacts list_files
+    run_producers job_producers service_producers collector_producers
     event events end_of_events reset
     extract archive
     absolute_path

@@ -25,6 +25,8 @@ requires qw{
     artifacts
     list_files
 
+    run_producers job_producers service_producers collector_producers
+
     event events end_of_events reset
 
     extract archive

@@ -6,6 +6,7 @@ our $VERSION = '2.000013';
 
 use Carp qw/croak/;
 use Config;
+use Errno ();
 use Fcntl qw/:flock O_WRONLY O_APPEND O_CREAT/;
 use File::Path qw/make_path/;
 use POSIX qw/:sys_wait_h setpgid/;
@@ -695,6 +696,10 @@ sub _emit_collector_start {
 # collector_report facet rides through the event stream separately and
 # is merged into report.jsonl.zst by the collector before this
 # emission -- see _write_report_row).
+#
+# Also writes a per-producer .sealed marker (see _write_sealed_marker)
+# for every non-harness-root producer so the Log layer can distinguish
+# completed from in-flight producers without reading all artifact rows.
 sub _emit_collector_end {
     my ($self, $child_exit) = @_;
 
@@ -702,6 +707,22 @@ sub _emit_collector_end {
     my $kind = lc($type);
     my $id   = $type eq 'Run' ? $self->{+RUN_ID} : $self->{+ID};
     $self->_live_append({k => 'producer', kind => $kind, id => $id, state => 'close', ts => time});
+
+    # Write the .sealed marker for every producer except the top-level
+    # harness collector, which is the lifecycle root and is never sealed
+    # from within. (The harness-sweep in stage 2.4 handles crash-dead
+    # harness collectors at a higher level.)
+    unless ($self->_is_top_level_harness) {
+        my %sealed_fields = (final_state => 'completed', exit => $child_exit);
+
+        # Merge auditor pass if available (Job collectors only).
+        if ($type eq 'Job' && (my $auditor = $self->{+AUDITOR})) {
+            $sealed_fields{pass} = $auditor->pass ? 1 : 0
+                if $auditor->can('pass');
+        }
+
+        $self->_write_sealed_marker(%sealed_fields);
+    }
 
     my $target = $self->_lifecycle_ipc_target;
     return unless defined $target;
@@ -733,6 +754,62 @@ sub _emit_collector_end {
             state        => \%state,
         }
     );
+
+    return;
+}
+
+# Write the per-producer .sealed JSON marker atomically.
+#
+# The file lives at <logdir>/<collector_base_dir>/.sealed and contains a
+# single JSON line with at minimum { sealed_at, final_state } plus any
+# extra caller-supplied fields (exit, pass, ...).
+#
+# Atomicity: write to a temp file then link(2) to the final name.
+# link(2) fails (EEXIST) if the destination already exists, so the
+# first writer wins and a later finalization-sweep never clobbers an
+# earlier authoritative "completed" marker with an "abandoned" one.
+#
+# Restart-able services: no such attribute exists yet on the Collector.
+# Every collector writes .sealed unconditionally for now. A follow-up
+# should add restart detection if a service-restart mechanism is
+# introduced.
+sub _write_sealed_marker {
+    my ($self, %fields) = @_;
+
+    my $base = $self->base_dir;
+    make_path($base) unless -d $base;
+
+    my $dest = "$base/.sealed";
+
+    # Existing-file-wins: skip if already present.
+    return if -e $dest;
+
+    my $payload = encode_json({sealed_at => time, %fields}) . "\n";
+
+    my $tmp = "$dest.tmp.$$";
+    open(my $fh, '>', $tmp) or do {
+        warn "Could not write .sealed temp file $tmp: $!";
+        return;
+    };
+    print $fh $payload or do {
+        warn "Could not write to .sealed temp file $tmp: $!";
+        close $fh;
+        unlink $tmp;
+        return;
+    };
+    close($fh);
+
+    # link(2) is atomic and fails silently when dest exists (first writer
+    # wins). Fall back to a plain rename only when link is not supported
+    # (e.g. cross-device or Win32), accepting last-writer-wins in that case.
+    unless (link($tmp, $dest)) {
+        # EEXIST means another process beat us to it -- that is fine.
+        unless ($! == Errno::EEXIST()) {
+            rename($tmp, $dest)
+                or warn "Could not install .sealed marker $dest: $!";
+        }
+    }
+    unlink $tmp if -e $tmp;
 
     return;
 }

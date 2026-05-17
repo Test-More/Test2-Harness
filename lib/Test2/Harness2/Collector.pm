@@ -668,6 +668,11 @@ sub _live_append {
 sub _emit_collector_start {
     my ($self, $spec_hash) = @_;
 
+    my $type = $self->{+TYPE};
+    my $kind = lc($type);
+    my $id   = $type eq 'Run' ? $self->{+RUN_ID} : $self->{+ID};
+    $self->_live_append({k => 'producer', kind => $kind, id => $id, state => 'open', ts => time});
+
     my $target = $self->_lifecycle_ipc_target;
     return unless defined $target;
 
@@ -692,6 +697,11 @@ sub _emit_collector_start {
 # emission -- see _write_report_row).
 sub _emit_collector_end {
     my ($self, $child_exit) = @_;
+
+    my $type = $self->{+TYPE};
+    my $kind = lc($type);
+    my $id   = $type eq 'Run' ? $self->{+RUN_ID} : $self->{+ID};
+    $self->_live_append({k => 'producer', kind => $kind, id => $id, state => 'close', ts => time});
 
     my $target = $self->_lifecycle_ipc_target;
     return unless defined $target;

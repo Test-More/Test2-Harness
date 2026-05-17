@@ -45,10 +45,10 @@ subtest forget_drops_empty_bucket => sub {
 
     my $meta = $h->_forget_run_pid($RUN_A, 1001);
     is($meta->{kind}, 'collector', 'forget returns the dropped meta');
-    ok(exists $h->{run_pids}{$RUN_A}, 'bucket retained while still populated');
+    ok(exists $h->pid_index->{run_pids}{$RUN_A}, 'bucket retained while still populated');
 
     $h->_forget_run_pid($RUN_A, 1002);
-    ok(!exists $h->{run_pids}{$RUN_A}, 'bucket removed when last pid leaves');
+    ok(!exists $h->pid_index->{run_pids}{$RUN_A}, 'bucket removed when last pid leaves');
 
     is($h->_forget_run_pid($RUN_A, 9999), undef, 'forget on missing pid is a no-op');
     is($h->_forget_run_pid('no-such-run', 1), undef, 'forget on missing run is a no-op');

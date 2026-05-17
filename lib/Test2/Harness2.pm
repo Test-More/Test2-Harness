@@ -19,6 +19,7 @@ use Atomic::Pipe;
 use IPC::Manager qw/ipcm_spawn/;
 use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
+use Test2::Harness2::PidIndex;
 use Test2::Harness2::Role::ResourceServiceHost;
 use Test2::Harness2::Role::Service;
 use Test2::Harness2::Run;
@@ -46,7 +47,7 @@ use Object::HashBase qw{
     +running_jobs
     +in_flight_count
     <resource_services
-    <run_pids
+    <pid_index
     +run_flags
     <collector_grace_secs
     +pending_synth_completions
@@ -69,10 +70,10 @@ use Object::HashBase qw{
     own_pgroup
 };
 
-# Sentinel run_id key used by RUN_PIDS for processes that aren't bound
-# to a particular run -- e.g. global resource services. Picked so it
-# can never collide with a real run_id (which are uuids).
-use constant RUN_PIDS_GLOBAL_KEY => '__global__';
+# Sentinel run_id key for processes that aren't bound to a particular
+# run. The canonical definition lives in Test2::Harness2::PidIndex; this
+# constant is re-exported here for legacy in-tree callers.
+use constant RUN_PIDS_GLOBAL_KEY => Test2::Harness2::PidIndex::RUN_PIDS_GLOBAL_KEY();
 
 # Valid values for broken_resource_behavior: what the scheduler does
 # when a job needs a resource that has been flipped to
@@ -186,7 +187,7 @@ sub _init_default_slots {
     $self->{+RUNNING_JOBS}              //= {};
     $self->{+IN_FLIGHT_COUNT}           //= 0;
     $self->{+RESOURCE_SERVICES}         //= {};
-    $self->{+RUN_PIDS}                  //= {};
+    $self->{+PID_INDEX}                 //= Test2::Harness2::PidIndex->new(harness => $self);
     $self->{+RUN_FLAGS}                 //= {};
     $self->{+PENDING_SYNTH_COMPLETIONS} //= {};
     $self->{+PENDING_SPAWN_REQUESTS}     //= {};
@@ -386,131 +387,31 @@ sub _classify_preload_state {
 }
 
 #-------------------------------------------------------------------
-# Per-run pid bookkeeping. RUN_PIDS keys every harness-spawned
-# subprocess (run service, test collector, resource service) by the
-# run_id it serves -- with a sentinel key for processes that aren't
-# bound to a run (currently: global resource services). The maps are
-# the single source of truth for per-run signal/kill/wait operations
-# (helpers below). They are populated alongside the existing per-kind
-# tracking hashes (RUN_SERVICES, RUNNING_JOBS, RESOURCE_SERVICES) and
-# do not replace them in this stage; callers can keep using the
-# kind-specific maps where they already do.
+# Per-run pid bookkeeping.
 #
-# Entry shape:
-#   $self->{+RUN_PIDS}->{$run_id}->{$pid} = {
-#       kind         => 'collector' | 'run_service' | 'resource_service',
-#       started_at   => $epoch,
-#       # per-kind metadata:
-#       job_id       => $job_id,        # collector
-#       job_try      => $job_try,       # collector
-#       res_name     => $resource_name, # resource_service
-#       res_svc      => $service_name,  # resource_service
-#   };
+# All state and behavior lives on $self->pid_index (a
+# Test2::Harness2::PidIndex). The eight underscore-prefixed methods
+# below are thin compatibility shims kept here so that:
+#
+#   - Test2::Harness2::Role::ResourceServiceHost can keep calling
+#     $self->_resource_service_tracked / $self->_resource_service_forgotten
+#     against the harness as the role's host (the role declares no-op
+#     stubs and lets the host override).
+#
+#   - Existing in-tree tests can keep calling the underscore names on
+#     the harness directly.
+#
+# New code should call $self->pid_index->register etc. directly.
 #-------------------------------------------------------------------
 
-sub _register_run_pid {
-    my ($self, $run_key, $pid, %meta) = @_;
-    return unless defined $run_key && length $run_key;
-    return unless defined $pid     && $pid > 0;
-    $meta{started_at} //= time;
-    $self->{+RUN_PIDS}->{$run_key}->{$pid} = \%meta;
-    return $pid;
-}
-
-# Drop the (run_key, pid) entry. Returns the meta hash if it existed,
-# or undef. Removes the per-run sub-hash entirely once it goes empty
-# so iteration over active runs stays cheap.
-sub _forget_run_pid {
-    my ($self, $run_key, $pid) = @_;
-    return unless defined $run_key && length $run_key;
-    my $bucket = $self->{+RUN_PIDS}->{$run_key} or return;
-    my $meta   = delete $bucket->{$pid};
-    delete $self->{+RUN_PIDS}->{$run_key} unless keys %$bucket;
-    return $meta;
-}
-
-# Reverse-lookup: given a pid, return ($run_key, \%meta). The map is
-# small (active runs * active pids), so a linear scan is fine. Returns
-# (undef, undef) when not found.
-sub _run_for_pid {
-    my ($self, $pid) = @_;
-    my $rp = $self->{+RUN_PIDS} // {};
-    for my $run_key (keys %$rp) {
-        my $meta = $rp->{$run_key}->{$pid};
-        return ($run_key, $meta) if $meta;
-    }
-    return (undef, undef);
-}
-
-sub _pids_for_run {
-    my ($self, $run_key) = @_;
-    return () unless defined $run_key && length $run_key;
-    my $bucket = $self->{+RUN_PIDS}->{$run_key} or return ();
-    return keys %$bucket;
-}
-
-# Send $signal to every pid bound to $run_key. Skips pids that no
-# longer exist. Returns the count of signals successfully delivered.
-sub _kill_run {
-    my ($self, $run_key, $signal) = @_;
-    $signal //= 'TERM';
-    my @pids = $self->_pids_for_run($run_key) or return 0;
-    my $sent = 0;
-    for my $pid (@pids) {
-        next unless kill 0 => $pid;
-        $sent++ if kill $signal => $pid;
-    }
-    return $sent;
-}
-
-# Block (with periodic 20ms naps) until every tracked pid for $run_key
-# has exited the RUN_PIDS map, or until $deadline (epoch seconds).
-# Returns 1 if the run drained, 0 on timeout. Note: this method only
-# *waits* -- it does not reap. The reap path (run_on_pid) is what
-# actually removes entries from RUN_PIDS, which only fires when the
-# IPC::Manager loop services SIGCHLD.
-sub _await_run_exit {
-    my ($self, $run_key, $deadline) = @_;
-    $deadline //= time + ($self->{+KILL_TIMEOUT} // 15);
-    while ($self->_pids_for_run($run_key)) {
-        return 0 if time >= $deadline;
-        tinysleep(0.02);
-    }
-    return 1;
-}
-
-# ResourceServiceHost notification hooks: mirror every resource
-# service registration into RUN_PIDS keyed by run_id, or by
-# RUN_PIDS_GLOBAL_KEY for global services.
-sub _resource_service_tracked {
-    my ($self, %p) = @_;
-    my $scope = $p{scope} // 'global';
-    my $run_key =
-        ($scope eq 'run' && ref $p{run})
-        ? $p{run}->run_id
-        : RUN_PIDS_GLOBAL_KEY;
-    my $svc = $self->{+RESOURCE_SERVICES}->{$p{pid}} || {};
-    $self->_register_run_pid(
-        $run_key, $p{pid},
-        kind     => 'resource_service',
-        res_name => $p{resource} ? $p{resource}->resource_name : undef,
-        res_svc  => $p{name},
-        scope    => $scope,
-        ($svc->{started_at} ? (started_at => $svc->{started_at}) : ()),
-    );
-    return;
-}
-
-sub _resource_service_forgotten {
-    my ($self, %p) = @_;
-    my $scope = $p{scope} // 'global';
-    my $run_key =
-        ($scope eq 'run' && ref $p{run})
-        ? $p{run}->run_id
-        : RUN_PIDS_GLOBAL_KEY;
-    $self->_forget_run_pid($run_key, $p{pid});
-    return;
-}
+sub _register_run_pid          { my $self = shift; $self->{+PID_INDEX}->register(@_) }
+sub _forget_run_pid            { my $self = shift; $self->{+PID_INDEX}->forget(@_) }
+sub _run_for_pid               { my $self = shift; $self->{+PID_INDEX}->run_for_pid(@_) }
+sub _pids_for_run              { my $self = shift; $self->{+PID_INDEX}->pids_for_run(@_) }
+sub _kill_run                  { my $self = shift; $self->{+PID_INDEX}->kill_run(@_) }
+sub _await_run_exit            { my $self = shift; $self->{+PID_INDEX}->await_run_exit(@_) }
+sub _resource_service_tracked  { my $self = shift; $self->{+PID_INDEX}->resource_service_tracked(@_) }
+sub _resource_service_forgotten { my $self = shift; $self->{+PID_INDEX}->resource_service_forgotten(@_) }
 
 sub start {
     my ($class, %args) = @_;
@@ -1138,7 +1039,7 @@ sub _handle_test_job_started {
         if (defined $cpid) {
             $cur->{pid}                  = $cpid;
             delete $cur->{awaiting_preload_pid};
-            $self->_register_run_pid(
+            $self->{+PID_INDEX}->register(
                 $run_id, $cpid,
                 kind       => 'collector',
                 job_id     => $job_id,
@@ -1819,7 +1720,7 @@ sub _handle_job_release {
     $self->{+IN_FLIGHT_COUNT}--;
 
     my $run_id = $cur->{run}->run_id;
-    $self->_forget_run_pid($run_id, $cur->{pid}) if $cur->{pid};
+    $self->{+PID_INDEX}->forget($run_id, $cur->{pid}) if $cur->{pid};
     $self->_scheduler_mark_done($run_id, $job_id);
     $self->_release_job_resources($cur);
 
@@ -1889,7 +1790,7 @@ sub service_post_hard_stop {
     $self->{+RUNNING_JOBS}      = {};
     $self->{+IN_FLIGHT_COUNT}   = 0;
     $self->{+RESOURCE_SERVICES} = {};
-    $self->{+RUN_PIDS}          = {};
+    $self->{+PID_INDEX}->clear;
     $self->{+RUN_FLAGS}         = {};
     return;
 }
@@ -1942,7 +1843,7 @@ sub _handle_test_collector_exit {
         my $flags  = $self->{+RUN_FLAGS}->{$run_id};
 
         if ($flags && $flags->{completed_job_ids}{$job_id}) {
-            $self->_forget_run_pid($run_id, $pid);
+            $self->{+PID_INDEX}->forget($run_id, $pid);
             return 1;
         }
 
@@ -2078,7 +1979,7 @@ sub _synth_release_orphan_job {
     return unless $cur;
     $self->{+IN_FLIGHT_COUNT}--;
 
-    $self->_forget_run_pid($run_id, $pid) if $pid;
+    $self->{+PID_INDEX}->forget($run_id, $pid) if $pid;
     $self->_release_job_resources($cur);
     $self->_scheduler_mark_done($run_id, $job_id);
     $self->_finalize_run_if_complete($cur->{run}) if $cur->{run};
@@ -2710,7 +2611,7 @@ sub _teardown_run_service {
         warn "resource '" . $res->resource_name . "' teardown died: $terr"
             unless $tok;
     }
-    $self->_kill_run($rid, 'TERM');
+    $self->{+PID_INDEX}->kill_run($rid, 'TERM');
 
     return;
 }
@@ -2851,7 +2752,7 @@ sub _launch_collector_inline {
     };
     $self->{+IN_FLIGHT_COUNT}++;
 
-    $self->_register_run_pid(
+    $self->{+PID_INDEX}->register(
         $run_id, $resp->{pid},
         kind       => 'collector',
         job_id     => $job_id,

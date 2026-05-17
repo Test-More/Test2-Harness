@@ -12,6 +12,7 @@ use Object::HashBase qw{
     <file
     <delegate
     <static
+    <poll_interval
     +_state
     +_have_state
     +_static_seen
@@ -37,6 +38,11 @@ sub init {
     # an artifact whose backing archive is sealed.
     croak "'file' is a required attribute"
         unless $self->{+STATIC} || defined $self->{+FILE};
+
+    # Default poll interval for the stat-based fallback path (seconds).
+    # Override via poll_interval => N when inotify is unavailable and the
+    # default 50 ms is too coarse or too expensive for the environment.
+    $self->{+POLL_INTERVAL} //= 0.05;
 
     # Initial state: file is "changed" until the first changed() call
     # returns truthy. _have_state stays false until we first record a
@@ -67,15 +73,15 @@ sub peek_changed {
 # delegate (or 1), every subsequent call returns 0. peek (record=0)
 # reports the current state without consuming.
 sub _static_check {
-    my $self = shift;
+    my $self   = shift;
     my %params = @_;
-    return 0 if $self->{+_STATIC_SEEN};
+    return 0                   if $self->{+_STATIC_SEEN};
     $self->{+_STATIC_SEEN} = 1 if $params{record};
     return $self->_changed_result;
 }
 
 sub _check {
-    my $self = shift;
+    my $self   = shift;
     my %params = @_;
     my $record = $params{record};
 
@@ -98,7 +104,7 @@ sub _check {
     # Missing file -> missing file: no change.
     # Missing -> present, or present -> missing: change.
     if (!defined $cur && !defined $prior) {
-        return 0 if !$inotify_event;
+        return 0                   if !$inotify_event;
         $self->_record_state($cur) if $record;
         return $self->_changed_result;
     }
@@ -109,7 +115,7 @@ sub _check {
     }
 
     for my $k (qw/dev inode size mtime/) {
-        next if ($cur->{$k} // -1) == ($prior->{$k} // -1);
+        next                       if ($cur->{$k} // -1) == ($prior->{$k} // -1);
         $self->_record_state($cur) if $record;
         return $self->_changed_result;
     }
@@ -171,7 +177,7 @@ sub await_change {
             my $remaining = $deadline - time();
             return 0 if $remaining <= 0;
         }
-        tinysleep(0.05);
+        tinysleep($self->{+POLL_INTERVAL});
     }
 }
 
@@ -182,7 +188,7 @@ sub _changed_result {
 
 sub _current_state {
     my $self = shift;
-    my @st = stat($self->{+FILE});
+    my @st   = stat($self->{+FILE});
     return undef unless @st;
     return {
         dev   => $st[0],
@@ -231,12 +237,7 @@ sub _inotify_fh {
     $ok = eval {
         $watch = $inot->watch(
             $path,
-            Linux::Inotify2::IN_MODIFY()
-                | Linux::Inotify2::IN_CREATE()
-                | Linux::Inotify2::IN_MOVED_TO()
-                | Linux::Inotify2::IN_DELETE_SELF()
-                | Linux::Inotify2::IN_MOVE_SELF()
-                | Linux::Inotify2::IN_ATTRIB(),
+            Linux::Inotify2::IN_MODIFY() | Linux::Inotify2::IN_CREATE() | Linux::Inotify2::IN_MOVED_TO() | Linux::Inotify2::IN_DELETE_SELF() | Linux::Inotify2::IN_MOVE_SELF() | Linux::Inotify2::IN_ATTRIB(),
         );
         1;
     };
@@ -257,7 +258,7 @@ sub _inotify_has_events {
     # not pay for it.
     $self->_inotify_fh;
 
-    my $inot = $self->{+_INOTIFY} or return 0;
+    my $inot   = $self->{+_INOTIFY} or return 0;
     my @events = $inot->read;
     return scalar(@events) ? 1 : 0;
 }
@@ -346,6 +347,16 @@ returns C<0>. Used when watching an artifact backed by a sealed
 archive, where the underlying bytes cannot mutate; consumers can
 write the same C<while (my $d = $monitor-E<gt>changed) { ... }> loop
 across both live and static backings.
+
+=item poll_interval (optional, default 0.05)
+
+Sleep duration in seconds between stat checks in the fallback poll loop
+used by L</await_change> when L<Linux::Inotify2> is not available (e.g.
+some CI containers, NFS mounts, macOS). The default of 50 ms keeps
+change latency well below typical one-second mtime resolution without
+busy-burning CPU. Increase this value when polling many monitors
+concurrently or when coarser latency is acceptable. The renderer loop
+will thread this value through in a later stage.
 
 =back
 

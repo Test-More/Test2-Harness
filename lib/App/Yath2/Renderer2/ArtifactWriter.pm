@@ -65,8 +65,8 @@ sub write_artifact_atomic {
 
     # File-level fsync: readers must not observe partial content.
     # IO::Handle->sync maps to fsync(2) on most platforms.
-    my $ok       = eval { require IO::Handle; $fh->sync; 1 };
-    my $sync_err = $@;
+    # best-effort: some platforms / filesystems cannot sync; ignore failures.
+    eval { require IO::Handle; $fh->sync };
 
     close($fh) or do {
         my $err = $!;
@@ -81,8 +81,9 @@ sub write_artifact_atomic {
         return 1;
     }
     my $link_err = $!;
+    my $eexist   = $!{EEXIST};    # capture before unlink(2) can clobber $!
     unlink $tmp;
-    return 0 if $!{EEXIST};
+    return 0 if $eexist;
     die "link($tmp, $target): $link_err";
 }
 

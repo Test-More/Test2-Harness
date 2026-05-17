@@ -1,5 +1,6 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::SpawnGateway;
 
 my @sent;
 my $client_mock = bless { sent => \@sent }, 'PSDClient';
@@ -24,15 +25,22 @@ my $info_mock = {
     scope         => 'global',
 };
 
+# Harness shell: bypass init, set the slots the SpawnGateway reaches
+# through (resource_services + name + client + ipcm_info). Then
+# construct a SpawnGateway and hang it off the harness so the
+# request-handler shim's delegation works.
 my $h = bless {
     Test2::Harness2::RESOURCE_SERVICES() => { $$ => $info_mock },
     Test2::Harness2::NAME()              => 'harness',
-    _CLIENT_MOCK => $client_mock,
+    ipcm_info                            => 'IPC::Manager::Client::ConnectionUnix(/tmp/x)',
+    _CLIENT_MOCK                         => $client_mock,
 }, 'Test2::Harness2';
 
 no warnings 'redefine';
 local *Test2::Harness2::client = sub { $_[0]->{_CLIENT_MOCK} };
-local *Test2::Harness2::_assert_fdpass_transport = sub { 1 };
+
+$h->{Test2::Harness2::SPAWN_GATEWAY()} =
+    Test2::Harness2::SpawnGateway->new(harness => $h);
 
 subtest 'happy stage resolve' => sub {
     @sent = ();
@@ -77,7 +85,7 @@ subtest 'missing stage -> ok=0' => sub {
 subtest 'non-ConnectionUnix transport -> ok=0' => sub {
     @sent = ();
     no warnings 'redefine';
-    local *Test2::Harness2::_assert_fdpass_transport = sub {
+    local *Test2::Harness2::SpawnGateway::assert_fdpass_transport = sub {
         die "yath spawn requires the ConnectionUnix IPC transport (got JSONFile)\n";
     };
     my $resp = $h->request_handler_spawn_script({

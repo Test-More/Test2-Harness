@@ -13,13 +13,14 @@ use Test2::Util::UUID qw/gen_uuid/;
 use Test2::Harness2::Util qw/load_module parse_exit tinysleep/;
 use Test2::Harness2::Util::IPC qw/ipc_default_spawn_args/;
 use Test2::Harness2::Util::JSON qw/encode_json/;
-use POSIX qw/WNOHANG/;
+use POSIX ();
 
 use Atomic::Pipe;
 use IPC::Manager qw/ipcm_spawn/;
 use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
 use Test2::Harness2::PidIndex;
+use Test2::Harness2::SpawnGateway;
 use Test2::Harness2::Role::ResourceServiceHost;
 use Test2::Harness2::Role::Service;
 use Test2::Harness2::Run;
@@ -48,14 +49,12 @@ use Object::HashBase qw{
     +in_flight_count
     <resource_services
     <pid_index
+    <spawn_gateway
     +run_flags
     <collector_grace_secs
     +pending_synth_completions
     +pending_spawn_requests
     +pending_preload_spawns
-    +pending_script_spawns
-    +_script_spawn_counter
-    +_script_spawn_exits
     +resources_awaiting_preload
     +known_preload_names
     <preload_spawn_timeout_secs
@@ -188,13 +187,11 @@ sub _init_default_slots {
     $self->{+IN_FLIGHT_COUNT}           //= 0;
     $self->{+RESOURCE_SERVICES}         //= {};
     $self->{+PID_INDEX}                 //= Test2::Harness2::PidIndex->new(harness => $self);
+    $self->{+SPAWN_GATEWAY}             //= Test2::Harness2::SpawnGateway->new(harness => $self);
     $self->{+RUN_FLAGS}                 //= {};
     $self->{+PENDING_SYNTH_COMPLETIONS} //= {};
     $self->{+PENDING_SPAWN_REQUESTS}     //= {};
     $self->{+PENDING_PRELOAD_SPAWNS}     //= {};
-    $self->{+PENDING_SCRIPT_SPAWNS}      //= {};
-    $self->{+_SCRIPT_SPAWN_COUNTER}      //= 0;
-    $self->{+_SCRIPT_SPAWN_EXITS}        //= {};
     $self->{+RESOURCES_AWAITING_PRELOAD} //= {};
     $self->{+KNOWN_PRELOAD_NAMES}        //= {};
     $self->{+PRELOAD_SPAWN_TIMEOUT_SECS} //= 30;
@@ -922,7 +919,7 @@ sub run_on_general_message {
     return $self->_handle_resource_service_started($content)
         if defined $kind && $kind eq 'resource_service_started';
 
-    return $self->_handle_script_spawned($content)
+    return $self->{+SPAWN_GATEWAY}->handle_spawned($content)
         if defined $kind && $kind eq 'script_spawned';
 
     # Per-job lifecycle. After Stage 4 of the RunService flatten the
@@ -1816,7 +1813,7 @@ sub run_on_pid {
     # script-spawn entry definitively. The "race" case stashes the
     # exit speculatively and falls through to the resource-service
     # handler in case the pid actually belongs there.
-    return if $self->_handle_script_spawn_exit($pid, $exit);
+    return if $self->{+SPAWN_GATEWAY}->handle_pid_exit($pid, $exit);
 
     # Resource-service exit (the shared host role owns restart-spiral
     # protection, state flags, and re-invocation). Reparented descendants
@@ -1864,42 +1861,6 @@ sub _handle_test_collector_exit {
     return 0;
 }
 
-# Script-spawn grandchild exit. IPC::Manager's reap_children
-# (waitpid -1) reaps the grandchild before _poll_script_exits can
-# see it, so we handle the notification here.
-#
-# Two sub-cases:
-#   (a) script_spawned already arrived -> child_pid is set; send
-#       script_exited immediately.
-#   (b) script_spawned races the reap -> child_pid not yet set; stash
-#       the exit in _SCRIPT_SPAWN_EXITS for _handle_script_spawned
-#       to drain. Only stash when *some* pending entry still lacks a
-#       child_pid -- otherwise this pid belongs to something else
-#       (resource service, reparented descendant) and stashing would
-#       leak unboundedly.
-#
-# Returns true when this pid maps to a known script-spawn entry.
-sub _handle_script_spawn_exit {
-    my ($self, $pid, $exit) = @_;
-
-    my $table = $self->{+PENDING_SCRIPT_SPAWNS} // {};
-    my $expecting_unmatched = 0;
-    for my $sid (keys %$table) {
-        my $entry = $table->{$sid};
-        if (defined($entry->{child_pid}) && $entry->{child_pid} == $pid) {
-            $self->_dispatch_script_exited($sid, $entry, $exit);
-            delete $table->{$sid};
-            return 1;
-        }
-        $expecting_unmatched = 1 unless defined $entry->{child_pid};
-    }
-
-    # Race case: stash speculatively but report "not handled" so the
-    # caller still asks the resource-service handler.
-    $self->{+_SCRIPT_SPAWN_EXITS}->{$pid} = $exit if $expecting_unmatched;
-    return 0;
-}
-
 # Collector-side watchdog: if a collector pid disappeared without
 # test_job_completed being received, synthesize completion once the
 # grace window expires. IPC::Manager drives run_on_interval roughly
@@ -1910,7 +1871,7 @@ sub run_on_interval {
 
     $self->_age_pending_spawn_requests;
     $self->_check_pending_preload_spawn_timeouts;
-    $self->_poll_script_exits;
+    $self->{+SPAWN_GATEWAY}->poll;
 
     my $pending = $self->{+PENDING_SYNTH_COMPLETIONS};
     return unless $pending && keys %$pending;
@@ -3038,19 +2999,6 @@ sub _resource_peer_name {
     return "resource-$rid-$n";
 }
 
-# Throws if the IPC transport in use can't carry SCM_RIGHTS. yath
-# spawn is the only caller; placing the check in the harness lets us
-# fail fast before any client-side socket setup. The check looks at
-# the ipcm_info advertised to clients, which is the same string the
-# harness wrote at startup.
-sub _assert_fdpass_transport {
-    my $self = shift;
-    my $info = $self->ipcm_info // '';
-    return 1 if $info =~ m{IPC::Manager::Client::ConnectionUnix};
-    die "yath spawn requires the ConnectionUnix IPC transport "
-      . "(current ipcm_info: $info)\n";
-}
-
 # Look up a live, global-scope, not-permanent_broken PreloadService
 # whose underlying resource.name matches $pname. Returns the
 # resource_services entry hash or undef. Initial design covers
@@ -3135,67 +3083,12 @@ sub _spawn_service_via_preload {
     return $spawn_id;
 }
 
-# Handle a 'spawn_script' request from a CLI client. Resolves the
-# requested stage name to a live PreloadService, asserts that the IPC
-# transport can carry file descriptors (ConnectionUnix only), and
-# forwards the payload to that service's bus name so the preload fork
-# can exec the script with the preloaded environment intact.
-#
-# Returns a hashref: { ok => 1, mode => 'preload', spawn_id => N } on
-# success, { ok => 0, error => "..." } on any failure (missing stage,
-# wrong transport, dispatch failure).
+# Handle a 'spawn_script' request from a CLI client. Thin shim that
+# delegates to Test2::Harness2::SpawnGateway, which owns the SCM_RIGHTS
+# pathway state and helpers.
 sub request_handler_spawn_script {
-    my ($self, $payload, $msg) = @_;
-
-    for my $f (qw/script_abs env cwd sock_path notify_to/) {
-        return { ok => 0, error => "missing '$f' in spawn_script payload" }
-            unless defined $payload->{$f};
-    }
-
-    my $stage = $payload->{stage};
-    return { ok => 0, error => "'stage' is required" }
-        unless defined $stage && length $stage;
-
-    my $ok = eval { $self->_assert_fdpass_transport; 1 };
-    my $err = $@;
-    return { ok => 0, error => $err } unless $ok;
-
-    my $preload_info = $self->_find_eligible_preload_service($stage);
-    return { ok => 0, error => "no eligible preload stage named '$stage'" }
-        unless $preload_info;
-
-    my $spawn_id = ++$self->{+_SCRIPT_SPAWN_COUNTER};
-    my $bus_name = _preload_peer_name($preload_info->{resource});
-
-    $self->{+PENDING_SCRIPT_SPAWNS}->{$spawn_id} = {
-        notify_to   => $payload->{notify_to},
-        stage       => $stage,
-        preload_pid => $preload_info->{pid},
-        sent_at     => time,
-    };
-
-    my $client  = $self->client;
-    my $sent_ok = eval {
-        $client->send_message($bus_name, {
-            kind       => 'spawn_script',
-            script_abs => $payload->{script_abs},
-            argv       => $payload->{argv} // [],
-            env        => $payload->{env},
-            cwd        => $payload->{cwd},
-            sock_path  => $payload->{sock_path},
-            spawn_id   => $spawn_id,
-            notify_to  => $self->name,
-        });
-        1;
-    };
-    my $send_err = $@;
-
-    unless ($sent_ok) {
-        delete $self->{+PENDING_SCRIPT_SPAWNS}->{$spawn_id};
-        return { ok => 0, error => "dispatch failed: $send_err" };
-    }
-
-    return { ok => 1, mode => 'preload', spawn_id => $spawn_id };
+    my $self = shift;
+    return $self->{+SPAWN_GATEWAY}->handle_request(@_);
 }
 
 # Finalize a preload-mediated resource spawn. The grandchild's
@@ -3385,78 +3278,6 @@ sub _check_pending_preload_spawn_timeouts {
     return;
 }
 
-# Record the grandchild pid that the preload service sent back after
-# fork()ing the script. The spawn_id ties this notification back to the
-# PENDING_SCRIPT_SPAWNS entry created by _handle_request_spawn_script.
-sub _handle_script_spawned {
-    my ($self, $content) = @_;
-    my $sid = $content->{spawn_id} or return;
-    my $pid = $content->{pid}      or return;
-    my $pending = $self->{+PENDING_SCRIPT_SPAWNS}->{$sid}
-        or return;
-    $pending->{child_pid} = $pid;
-
-    # Race case: the grandchild may have exited and been reaped by
-    # run_on_pid before script_spawned arrived. If so the raw exit
-    # value is sitting in _SCRIPT_SPAWN_EXITS keyed on pid; drain
-    # it and dispatch script_exited immediately.
-    my $exits = $self->{+_SCRIPT_SPAWN_EXITS} // {};
-    if (exists $exits->{$pid}) {
-        my $status = delete $exits->{$pid};
-        my $sent   = $self->_dispatch_script_exited($sid, $pending, $status);
-        delete $self->{+PENDING_SCRIPT_SPAWNS}->{$sid} if $sent;
-    }
-    return;
-}
-
-# Build and send a script_exited notification. Returns true on success,
-# false on send failure (caller may keep the pending entry alive to
-# retry or to avoid leaving the CLI blocked forever on a never-arriving
-# notification).
-sub _dispatch_script_exited {
-    my ($self, $sid, $pending, $status) = @_;
-    my $exit_val = ($status >> 8) & 0xFF;
-    my $sig      = $status & 0x7F;
-    my $client   = $self->client;
-    my $ok = eval {
-        $client->send_message($pending->{notify_to}, {
-            kind       => 'script_exited',
-            spawn_id   => $sid,
-            exit       => $exit_val,
-            signal     => $sig,
-            raw_status => $status,
-        });
-        1;
-    };
-    my $err = $@;
-    warn "yath spawn: script_exited dispatch failed: $err" unless $ok;
-    return $ok ? 1 : 0;
-}
-
-# Defensive backup: in normal operation IPC::Manager's reap_children
-# (waitpid -1) reaps the grandchild and run_on_pid dispatches via
-# _dispatch_script_exited. _poll_script_exits handles the case where
-# that path doesn't fire (test isolation, IPC::Manager version differences).
-sub _poll_script_exits {
-    my $self = shift;
-
-    my $table = $self->{+PENDING_SCRIPT_SPAWNS} // {};
-    for my $sid (keys %$table) {
-        my $entry = $table->{$sid};
-        my $cpid  = $entry->{child_pid};
-        next unless defined $cpid;
-
-        my $reaped = waitpid($cpid, WNOHANG);
-        next if $reaped == 0;     # still running
-        next if $reaped < 0;     # already reaped elsewhere
-
-        my $sent = $self->_dispatch_script_exited($sid, $entry, $?);
-        delete $table->{$sid} if $sent;
-    }
-
-    return;
-}
-
 1;
 
 __END__
@@ -3597,10 +3418,9 @@ are left alone.
 
 =head2 request_handler_spawn_script
 
-Handles C<yath spawn>: resolves the requested preload stage, asserts the IPC
-transport carries SCM_RIGHTS, and forwards the script's exec payload to the
-matching L<Test2::Harness2::PreloadService>. Returns
-C<{ ok =E<gt> 1, mode =E<gt> 'preload', spawn_id =E<gt> N }> or an error hash.
+Handles C<yath spawn>. Thin shim that delegates to
+L<Test2::Harness2::SpawnGateway>, which owns the SCM_RIGHTS pathway state
+and helpers.
 
 =head2 IPC message handlers
 
@@ -3616,18 +3436,6 @@ dependent resource services queued under L</_drain_resources_awaiting_preload>
 (internal) Bridges a reaped test-collector pid to the run service. Either
 forgets the pid (when the run service has already accepted completion) or
 records a pending synthetic completion the watchdog can flush.
-
-=head2 _handle_script_spawn_exit
-
-(internal) Handles reap of a C<yath spawn> grandchild. Either dispatches
-C<script_exited> immediately, or stashes the raw exit when C<script_spawned>
-hasn't been seen yet (raced ahead of L</_handle_script_spawned>).
-
-=head2 _handle_script_spawned
-
-(internal) Records the grandchild pid sent by the preload service after it
-forked the script, and drains any race-stashed exit from
-L</_handle_script_spawn_exit>.
 
 =head2 _handle_resource_service_started
 
@@ -3693,12 +3501,6 @@ peers and preload-spawned resource services. Global scope yields
 C<preload-NAME> / C<resource-NAME>; run scope adds the run id between the
 prefix and the name.
 
-=head2 _assert_fdpass_transport
-
-(internal) Dies unless the configured IPC transport is
-C<IPC::Manager::Client::ConnectionUnix> (the only transport that can carry
-SCM_RIGHTS, which C<yath spawn> needs).
-
 =head2 Preload-spawned resource services
 
 =head2 _find_eligible_preload_service
@@ -3736,19 +3538,6 @@ the drain and fallback paths.
 (internal) Per-tick watchdog for C<PENDING_PRELOAD_SPAWNS>. Drops entries
 older than C<PRELOAD_SERVICE_SPAWN_TIMEOUT_SECS> and re-dispatches them via
 standalone spawn, emitting C<resource_spawn_preload_timeout>.
-
-=head2 yath spawn exit dispatch
-
-=head2 _dispatch_script_exited
-
-(internal) Sends a C<script_exited> notification to the spawn caller. Returns
-true on success, false on send failure.
-
-=head2 _poll_script_exits
-
-(internal) Defensive backup reaper for C<yath spawn> grandchildren when the
-normal C<run_on_pid> path does not fire. Drives
-L</_dispatch_script_exited> on any C<WNOHANG>-reaped pid.
 
 =head1 SOURCE
 

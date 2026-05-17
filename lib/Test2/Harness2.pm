@@ -49,7 +49,6 @@ use Object::HashBase qw{
     <run_states
     <scheduler
     <job_tracker
-    <resource_services
     <pid_index
     <spawn_gateway
     <broadcaster
@@ -161,7 +160,6 @@ sub _init_default_slots {
     $self->{+KILL_TIMEOUT}              //= 15;
     $self->{+PARENT_PIDS}               //= [];
     $self->{+STATE}                     //= 'running';
-    $self->{+RESOURCE_SERVICES}         //= {};
     $self->{+PID_INDEX}                 //= Test2::Harness2::PidIndex->new(harness => $self);
     $self->{+SPAWN_GATEWAY}             //= Test2::Harness2::SpawnGateway->new(harness => $self);
     $self->{+BROADCASTER}               //= Test2::Harness2::StateBroadcaster->new(
@@ -575,12 +573,13 @@ sub request_handler_status {
     # read this section to tell preload-mediated services apart from
     # standalone ones.
     my @services;
-    for my $info (values %{$self->{+RESOURCE_SERVICES} // {}}) {
-        # Skip entries whose pid is no longer reachable. RESOURCE_SERVICES is
-        # not pruned synchronously when a service dies (the SIGCHLD reaper runs
-        # asynchronously, and a reload of a preload can leave the old pid in
-        # the hash for a tick or two), so without this guard `yath ps` /
-        # `yath resources` would render a row with stale data for a dead pid.
+    for my $info (values %{$self->{+PID_INDEX}->resource_services // {}}) {
+        # Skip entries whose pid is no longer reachable. The pid index's
+        # resource_services map is not pruned synchronously when a service
+        # dies (the SIGCHLD reaper runs asynchronously, and a reload of a
+        # preload can leave the old pid in the hash for a tick or two), so
+        # without this guard `yath ps` / `yath resources` would render a
+        # row with stale data for a dead pid.
         next unless defined $info->{pid} && kill 0 => $info->{pid};
 
         push @services, {
@@ -897,7 +896,7 @@ sub hard_stop_pids {
         $pids{$_} //= {} for keys %{$self->workers // {}};
     }
 
-    for my $info (values %{$self->{+RESOURCE_SERVICES} // {}}) {
+    for my $info (values %{$self->{+PID_INDEX}->resource_services // {}}) {
         $pids{$info->{pid}} //= {} if $info->{pid};
     }
 
@@ -913,7 +912,7 @@ sub service_post_hard_stop {
     }
     $jt->clear_running_jobs;
     $self->{+SCHEDULER}->reset_in_flight_count;
-    $self->{+RESOURCE_SERVICES} = {};
+    # PidIndex->clear drains both run_pids and resource_services.
     $self->{+PID_INDEX}->clear;
     $self->{+RUN_STATES}->clear_flags;
     return;
@@ -929,8 +928,8 @@ sub service_post_hard_stop {
 # IPC::Manager dispatches run_on_pid serially per tick, so the restart
 # branch below is not re-entered mid-invocation even though it calls back
 # into the resource (which may call track_resource_service). Do not
-# introduce unguarded mutation of +RESOURCE_SERVICES from another code
-# path that could also execute inside a single tick.
+# introduce unguarded mutation of $pid_index->resource_services from
+# another code path that could also execute inside a single tick.
 sub run_on_pid {
     my ($self, $pid, $exit) = @_;
 

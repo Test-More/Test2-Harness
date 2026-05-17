@@ -13,6 +13,14 @@ my $RUN_B = '22222222-2222-2222-2222-222222222222';
 # Bare PidIndex with no harness backref: pure-data subsystem mode. This
 # is the simplest exercise of the moved code.
 
+subtest init_seeds_resource_services => sub {
+    my $pi = Test2::Harness2::PidIndex->new;
+    is($pi->resource_services, {}, 'resource_services slot defaults to {}');
+    $pi->resource_services->{1234} = { name => 'foo' };
+    is($pi->resource_services->{1234}{name}, 'foo',
+       'role-style in-place mutation is visible');
+};
+
 subtest register_and_lookup => sub {
     my $pi = Test2::Harness2::PidIndex->new;
 
@@ -116,8 +124,8 @@ subtest await_run_exit_default_deadline_with_harness => sub {
 subtest resource_service_hooks_register => sub {
     my $pi = Test2::Harness2::PidIndex->new;
 
-    # No harness bound -> the resource_services lookup short-circuits
-    # and the tracked entry has no inherited started_at.
+    # No seeded resource_services entry for this pid -> the tracked
+    # pid-map entry has no inherited started_at.
     my $fake_resource = bless { resource_name => 'jobcount' }, 'TestFakeResource';
 
     $pi->resource_service_tracked(
@@ -171,17 +179,13 @@ subtest resource_service_hooks_register => sub {
 };
 
 subtest resource_service_tracked_inherits_started_at => sub {
-    # When a harness is bound and its resource_services map already has
-    # an entry for the pid (which is the normal sequence:
-    # Role::ResourceServiceHost records the entry first, then notifies),
-    # the tracked entry should adopt the existing started_at.
-    my $fake = bless {
-        resource_services => { 7777 => { started_at => 123 } },
-    }, 'TestHarnessWithRS';
-    sub TestHarnessWithRS::resource_services { $_[0]->{resource_services} }
-    sub TestHarnessWithRS::kill_timeout      { 15 }
+    # When PidIndex's own resource_services map already has an entry for
+    # the pid (which is the normal sequence: Role::ResourceServiceHost
+    # writes the rich tracking entry first, then calls this hook), the
+    # mirrored pid-map entry adopts the existing started_at.
+    my $pi = Test2::Harness2::PidIndex->new;
+    $pi->resource_services->{7777} = { started_at => 123 };
 
-    my $pi = Test2::Harness2::PidIndex->new(harness => $fake);
     my $fake_resource = bless { resource_name => 'svc' }, 'TestFakeResource2';
     sub TestFakeResource2::resource_name { $_[0]->{resource_name} }
 
@@ -193,17 +197,20 @@ subtest resource_service_tracked_inherits_started_at => sub {
     );
 
     my (undef, $meta) = $pi->run_for_pid(7777);
-    is($meta->{started_at}, 123, 'started_at inherited from harness resource_services entry');
+    is($meta->{started_at}, 123,
+       'started_at inherited from PidIndex resource_services entry');
 };
 
 subtest clear_drops_everything => sub {
     my $pi = Test2::Harness2::PidIndex->new;
     $pi->register($RUN_A, 1, kind => 'collector');
     $pi->register($RUN_B, 2, kind => 'collector');
+    $pi->resource_services->{3} = { name => 'svc' };
     $pi->clear;
     is([$pi->pids_for_run($RUN_A)], [], 'run A drained');
     is([$pi->pids_for_run($RUN_B)], [], 'run B drained');
     is($pi->{run_pids}, {}, 'underlying map is empty');
+    is($pi->resource_services, {}, 'resource_services drained too');
 };
 
 done_testing;

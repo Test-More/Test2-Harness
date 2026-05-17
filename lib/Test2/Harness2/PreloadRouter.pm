@@ -211,7 +211,7 @@ sub peer_name_for_resource {
 }
 
 #-------------------------------------------------------------------
-# Eligible preload lookup. Walks the harness's RESOURCE_SERVICES map
+# Eligible preload lookup. Walks the pid index's resource_services map
 # and returns the entry for a live, global-scope, not-permanent_broken
 # PreloadService whose resource.name matches $pname. Initial design
 # covers global-scope preloads only; run-scoped reuse is a follow-up.
@@ -221,7 +221,7 @@ sub find_eligible {
     return undef unless defined $pname && length $pname;
 
     my $h = $self->harness or return undef;
-    my $svcs = $h->{Test2::Harness2::RESOURCE_SERVICES()} // {};
+    my $svcs = $h->pid_index->resource_services // {};
 
     for my $info (values %$svcs) {
         next unless ($info->{service_class} // '') eq 'Test2::Harness2::PreloadService';
@@ -369,7 +369,7 @@ sub spawn_service_via_preload {
     my $spawn_id  = ++$h->{_PRELOAD_SPAWN_COUNTER};
     my $peer_name = $self->peer_name_for_resource($entry);
 
-    # The resource_services tracking entry keys the service under the
+    # The pid index's resource_services entry keys the service under the
     # name extracted from its ctor args. That is NOT the IPC bus name --
     # PreloadService advertises itself as 'preload-<name>' (or
     # 'preload-<run_id>-<name>' for run scope). Send to the bus name,
@@ -420,8 +420,8 @@ sub spawn_service_via_preload {
 
 # Finalize a preload-mediated resource spawn. The grandchild's
 # notification carries pid + spawn_id; we look up the pending entry,
-# clear it, and register the new pid in resource_services via
-# track_resource_service. Emits resource_spawn_via_preload for
+# clear it, and register the new pid in the pid index's resource_services
+# map via track_resource_service. Emits resource_spawn_via_preload for
 # operator visibility.
 sub handle_service_started {
     my ($self, $content) = @_;
@@ -762,7 +762,7 @@ sub list {
     my $self = shift;
     my $h = $self->harness or return {ok => 1, preloads => []};
 
-    my $svcs = $h->{Test2::Harness2::RESOURCE_SERVICES()} // {};
+    my $svcs = $h->pid_index->resource_services // {};
 
     my @out;
     for my $info (values %$svcs) {
@@ -842,8 +842,8 @@ straight to standalone).
 The harness constructs one PreloadRouter during its own C<init> and
 holds a strong reference to it. The router holds a weakened backref to
 the harness via L<Test2::Harness2::Role::Subsystem> so it can reach
-the harness's IPC client, the C<RESOURCE_SERVICES> map, the harness
-name, the test auditor class, the launch env, and so on.
+the harness's IPC client, the pid index's C<resource_services> map,
+the harness name, the test auditor class, the launch env, and so on.
 
 The harness's C<run_on_interval> calls L</tick> each tick; tick folds
 in the L</age_pending_spawn_requests> and
@@ -927,8 +927,8 @@ for run scope.
 
 =item $info_or_undef = $pr->find_eligible($pname)
 
-Walk the harness's C<RESOURCE_SERVICES> and return the entry for a
-live, global-scope, not-permanent_broken PreloadService whose
+Walk the pid index's C<resource_services> map and return the entry
+for a live, global-scope, not-permanent_broken PreloadService whose
 resource.name matches.
 
 =back
@@ -958,7 +958,7 @@ the allocated spawn_id on dispatch success, undef on send failure.
 =item $pr->handle_service_started($content)
 
 Finalize a preload-mediated resource spawn: clear the pending entry,
-register the new pid in C<RESOURCE_SERVICES> via
+register the new pid in the pid index's C<resource_services> map via
 C<track_resource_service>, and emit C<resource_spawn_via_preload>.
 
 =item $pr->handle_preload_state($kind, $content)
@@ -994,9 +994,9 @@ so dependents still come up, just unpreloaded.
 =item $resp = $pr->list
 
 Body for the harness's C<request_handler_list_preloads> shim:
-enumerate global-scope, live PreloadService entries from
-C<RESOURCE_SERVICES> and return their bus + tracking names for
-operator visibility.
+enumerate global-scope, live PreloadService entries from the pid
+index's C<resource_services> map and return their bus + tracking
+names for operator visibility.
 
 =back
 

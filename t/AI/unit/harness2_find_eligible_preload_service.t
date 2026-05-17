@@ -1,5 +1,6 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::PidIndex;
 use Test2::Harness2::PreloadRouter;
 use Scalar::Util ();
 
@@ -14,50 +15,54 @@ use Scalar::Util ();
 my $alive = $$;
 my $dead  = 999999999;   # almost certainly not a live pid
 
-my $harness = bless {
-    resource_services => {
-        $alive => {
-            service_class => 'Test2::Harness2::PreloadService',
-            scope         => 'global',
-            name          => 'preload-myapp',
-            pid           => $alive,
-            resource      => FakeRes->new('myapp'),
-        },
-        $dead => {
-            service_class => 'Test2::Harness2::PreloadService',
-            scope         => 'global',
-            name          => 'preload-stale',
-            pid           => $dead,
-            resource      => FakeRes->new('stale'),
-        },
-        # Non-preload service: ignored.
-        ($alive + 1) => {
-            service_class => 'Test2::Harness2::Resource::JobCount',
-            scope         => 'global',
-            name          => 'jobcount',
-            pid           => $alive,
-            resource      => FakeRes->new('jobcount'),
-        },
-        # Run-scoped preload with matching name: ineligible (initial
-        # design covers global-scope preloads only).
-        ($alive + 2) => {
-            service_class => 'Test2::Harness2::PreloadService',
-            scope         => 'run',
-            name          => 'preload-myapp',
-            pid           => $alive,
-            resource      => FakeRes->new('myapp'),
-            run           => 1,
-        },
-        # Permanent_broken preload with matching name: ineligible.
-        ($alive + 3) => {
-            service_class => 'Test2::Harness2::PreloadService',
-            scope         => 'global',
-            name          => 'preload-broken',
-            pid           => $alive,
-            resource      => FakeRes->new('broken', 1),  # broken=1
-        },
+# find_eligible now reads $h->pid_index->resource_services, so seed
+# the pid index with the same fixture data the harness's
+# RESOURCE_SERVICES used to carry.
+my $pid_index = Test2::Harness2::PidIndex->new;
+%{$pid_index->resource_services} = (
+    $alive => {
+        service_class => 'Test2::Harness2::PreloadService',
+        scope         => 'global',
+        name          => 'preload-myapp',
+        pid           => $alive,
+        resource      => FakeRes->new('myapp'),
     },
-}, 'Test2::Harness2';
+    $dead => {
+        service_class => 'Test2::Harness2::PreloadService',
+        scope         => 'global',
+        name          => 'preload-stale',
+        pid           => $dead,
+        resource      => FakeRes->new('stale'),
+    },
+    # Non-preload service: ignored.
+    ($alive + 1) => {
+        service_class => 'Test2::Harness2::Resource::JobCount',
+        scope         => 'global',
+        name          => 'jobcount',
+        pid           => $alive,
+        resource      => FakeRes->new('jobcount'),
+    },
+    # Run-scoped preload with matching name: ineligible (initial
+    # design covers global-scope preloads only).
+    ($alive + 2) => {
+        service_class => 'Test2::Harness2::PreloadService',
+        scope         => 'run',
+        name          => 'preload-myapp',
+        pid           => $alive,
+        resource      => FakeRes->new('myapp'),
+        run           => 1,
+    },
+    # Permanent_broken preload with matching name: ineligible.
+    ($alive + 3) => {
+        service_class => 'Test2::Harness2::PreloadService',
+        scope         => 'global',
+        name          => 'preload-broken',
+        pid           => $alive,
+        resource      => FakeRes->new('broken', 1),  # broken=1
+    },
+);
+
+my $harness = bless { pid_index => $pid_index }, 'Test2::Harness2';
 
 # Eligibility lookup lives on the preload router; attach a stub
 # router that holds a backref to the harness for the resource_services

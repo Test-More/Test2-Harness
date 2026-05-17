@@ -9,6 +9,7 @@ use Test2::Harness2::Util qw/tinysleep/;
 
 use Object::HashBase qw{
     +run_pids
+    <resource_services
     +harness
 };
 
@@ -22,14 +23,16 @@ use constant RUN_PIDS_GLOBAL_KEY => '__global__';
 
 sub init {
     my $self = shift;
-    $self->{+RUN_PIDS} //= {};
+    $self->{+RUN_PIDS}          //= {};
+    $self->{+RESOURCE_SERVICES} //= {};
 }
 
 # Drop every tracked entry. Used by the harness's service_post_hard_stop
 # wholesale reset; not normally called otherwise.
 sub clear {
     my $self = shift;
-    $self->{+RUN_PIDS} = {};
+    $self->{+RUN_PIDS}          = {};
+    $self->{+RESOURCE_SERVICES} = {};
     return;
 }
 
@@ -115,8 +118,11 @@ sub resource_service_tracked {
         ($scope eq 'run' && ref $p{run})
         ? $p{run}->run_id
         : RUN_PIDS_GLOBAL_KEY;
-    my $h = $self->harness;
-    my $svc = ($h && $h->resource_services && $h->resource_services->{$p{pid}}) || {};
+    # The ResourceServiceHost role records its rich per-service metadata
+    # entry under RESOURCE_SERVICES->{$pid} *before* calling this hook.
+    # Inherit started_at from there so the pid-map entry agrees with the
+    # tracking entry.
+    my $svc = $self->{+RESOURCE_SERVICES}->{$p{pid}} || {};
     $self->register(
         $run_key, $p{pid},
         kind     => 'resource_service',
@@ -153,18 +159,34 @@ Test2::Harness2::PidIndex - Per-run pid bookkeeping for the harness.
 
 =head1 DESCRIPTION
 
-The pid index is the single source of truth for per-run signal / kill /
-wait operations. It keys every harness-spawned subprocess (run service,
-test collector, resource service) by the C<run_id> it serves, with a
-sentinel key (C<RUN_PIDS_GLOBAL_KEY>) for processes that aren't bound
-to a particular run (currently: global resource services).
+The pid index is the single source of truth for every subprocess the
+harness owns. It carries two slots:
+
+=over 4
+
+=item C<run_pids>
+
+Per-run pid bookkeeping for signal / kill / wait operations. Keys every
+harness-spawned subprocess (test collector, resource service) by the
+C<run_id> it serves, with a sentinel key (C<RUN_PIDS_GLOBAL_KEY>) for
+processes that aren't bound to a particular run (currently: global
+resource services).
+
+=item C<resource_services>
+
+Per-pid rich metadata for currently-running resource services
+(C<service_class>, C<log_path>, C<restartable>, C<attempts>, C<scope>,
+C<run>, C<started_at>, C<via_preload>, etc). Read and written by
+L<Test2::Harness2::Role::ResourceServiceHost> via
+C<< $host->pid_index->resource_services >>; the host no longer carries
+its own storage for this map.
+
+=back
 
 The harness constructs one PidIndex during its own C<init> and holds a
 strong reference to it. The index holds a weakened backref to the
 harness via L<Test2::Harness2::Role::Subsystem> so it can read the
-harness's C<kill_timeout> for default C<await_run_exit> deadlines and
-peek at C<resource_services> when mirroring a tracked entry's
-C<started_at>.
+harness's C<kill_timeout> for default C<await_run_exit> deadlines.
 
 Entry shape:
 
@@ -181,6 +203,15 @@ Entry shape:
 =head1 METHODS
 
 =over 4
+
+=item $hashref = $pi->resource_services
+
+Read-only accessor for the per-pid resource-service tracking map.
+Returns the same underlying hashref on every call, so in-place mutation
+(C<< $pi->resource_services->{$pid} = ... >>, C<< delete
+$pi->resource_services->{$pid} >>) is visible to subsequent callers.
+L<Test2::Harness2::Role::ResourceServiceHost> drives this slot;
+external code should treat it as read-only.
 
 =item $pid = $pi->register($run_key, $pid, %meta)
 
@@ -225,8 +256,9 @@ Companion to C<resource_service_tracked>; drops the mirrored entry.
 
 =item $pi->clear
 
-Reset every tracked entry. Used by the harness's wholesale shutdown
-reset; not normally called otherwise.
+Reset every tracked entry, both C<run_pids> and C<resource_services>.
+Used by the harness's wholesale shutdown reset; not normally called
+otherwise.
 
 =item $h = $pi->harness
 

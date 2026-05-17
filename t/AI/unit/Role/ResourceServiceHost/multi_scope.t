@@ -14,7 +14,6 @@ package T2H2_TestHost {
         <workdir
         <name
         <ipcm_info
-        <resource_services
         <service_host_scope
         <service_host_run
         <service_host_logdir
@@ -26,21 +25,22 @@ package T2H2_TestHost {
 
     sub init {
         my $self = shift;
-        $self->{+NAME}              //= 'harness';
-        $self->{+RESOURCE_SERVICES} //= {};
-        $self->{+SERVICE_HOST_SCOPE} //= 'global';
-        $self->{+SERVICE_HOST_LOGDIR} //= $self->{+WORKDIR};
+        $self->{+NAME}                  //= 'harness';
+        $self->{+SERVICE_HOST_SCOPE}    //= 'global';
+        $self->{+SERVICE_HOST_LOGDIR}   //= $self->{+WORKDIR};
         $self->{+SERVICE_HOST_LOG_NAME} //= $self->{+NAME};
-        $self->{+PID_INDEX}         //= T2H2_TestPidIndex->new;
+        $self->{+PID_INDEX}             //= T2H2_TestPidIndex->new;
     }
 
     sub emit_service_event { }
 }
 
-# No-op pid index: this test exercises name/scope reservation, not pid
-# bookkeeping, so we just absorb the role's tracked/forgotten calls.
+# Stub pid index: this test exercises name/scope reservation, so the
+# index needs a real resource_services slot the role can read/write
+# through. The tracked/forgotten notifications are still no-ops here.
 package T2H2_TestPidIndex {
-    sub new { bless {}, shift }
+    sub new { bless { resource_services => {} }, shift }
+    sub resource_services          { $_[0]->{resource_services} }
     sub resource_service_tracked   { }
     sub resource_service_forgotten { }
 }

@@ -79,7 +79,7 @@ subtest 'global service lays down services/<name>/events.jsonl' => sub {
     my $expected = "$dir/logs/services/foo/events.jsonl";
     ok(-e $expected, "log file created at $expected");
 
-    my $svc = $h->{resource_services}{93_001};
+    my $svc = $h->pid_index->resource_services->{93_001};
     ok($svc, 'tracking entry exists');
     is($svc->{name},          'foo',     'tracking entry records name');
     is($svc->{log_path},      $expected, 'tracking entry records log_path');
@@ -97,7 +97,7 @@ subtest 'per-run service lays down runs/<run_id>/services/<name>/events.jsonl' =
     my $expected = "$dir/logs/runs/r-alpha/services/foo/events.jsonl";
     ok(-e $expected, "log file created at $expected");
 
-    my $svc = $h->{resource_services}{93_101};
+    my $svc = $h->pid_index->resource_services->{93_101};
     is($svc->{scope},    'run',     'tracking entry has run scope');
     is($svc->{log_path}, $expected, 'tracking entry points at per-run file');
     ref_is($svc->{run}, $run, 'tracking entry stores run ref');
@@ -113,7 +113,7 @@ subtest 'in-batch global name collision across two resources is rejected' => sub
     my $err = $@;
     ok(!$ok, 'start croaked');
     like($err, qr/collides with in-batch service/, 'explains the collision');
-    is(scalar keys %{$h->{resource_services}}, 0, 'no services tracked after failure');
+    is(scalar keys %{$h->pid_index->resource_services}, 0, 'no services tracked after failure');
 };
 
 subtest 'per-run name collision within the same run is rejected' => sub {
@@ -203,7 +203,7 @@ subtest 'one resource with two services gets two distinct log files' => sub {
     ok(-e "$dir/logs/services/alpha/events.jsonl", 'alpha log created');
     ok(-e "$dir/logs/services/beta/events.jsonl",  'beta log created');
 
-    my %by_name = map { ($_->{name} => $_) } values %{$h->{resource_services}};
+    my %by_name = map { ($_->{name} => $_) } values %{$h->pid_index->resource_services};
     ok(exists $by_name{alpha}, 'alpha service tracked');
     ok(exists $by_name{beta},  'beta service tracked');
     isnt($by_name{alpha}{log_path}, $by_name{beta}{log_path}, 'log paths differ');
@@ -221,15 +221,15 @@ subtest 'restart reuses the same name + log_path' => sub {
     $h->start_resource_services([$res], scope => 'global');
 
     my $expected = "$dir/logs/services/foo/events.jsonl";
-    is($h->{resource_services}{93_701}{log_path}, $expected, 'initial log_path set');
+    is($h->pid_index->resource_services->{93_701}{log_path}, $expected, 'initial log_path set');
 
     # Simulate the original pid exiting; restart picks up pid 93_702.
     $h->run_on_pid(93_701, 0);
 
-    ok(!exists $h->{resource_services}{93_701}, 'old pid dropped');
-    ok(exists $h->{resource_services}{93_702},  'new pid tracked');
-    is($h->{resource_services}{93_702}{name},     'foo',     'restart preserves name');
-    is($h->{resource_services}{93_702}{log_path}, $expected, 'restart preserves log_path');
+    ok(!exists $h->pid_index->resource_services->{93_701}, 'old pid dropped');
+    ok(exists $h->pid_index->resource_services->{93_702},  'new pid tracked');
+    is($h->pid_index->resource_services->{93_702}{name},     'foo',     'restart preserves name');
+    is($h->pid_index->resource_services->{93_702}{log_path}, $expected, 'restart preserves log_path');
 };
 
 subtest 'track_resource_service requires a service_class' => sub {

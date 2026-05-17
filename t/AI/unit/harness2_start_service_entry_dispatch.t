@@ -13,9 +13,8 @@ use Test2::V0;
     sub service_host_run { undef }
     sub service_host_logdir { '/tmp' }
     sub client { $_[0]->{client} //= bless {sent => []}, 'FakeClient' }
-    sub resource_services { $_[0]->{resource_services} //= {} }
     sub ipcm_info { 'fake-info' }
-    sub pid_index { $_[0]->{pid_index} //= bless {}, 'FakePidIndex' }
+    sub pid_index { $_[0]->{pid_index} //= bless { resource_services => {} }, 'FakePidIndex' }
     sub emit_service_event { }
     sub preload_router {
         my $self = shift;
@@ -47,6 +46,7 @@ use Test2::V0;
 }
 {
     package FakePidIndex;
+    sub resource_services          { $_[0]->{resource_services} }
     sub resource_service_tracked   { }
     sub resource_service_forgotten { }
 }

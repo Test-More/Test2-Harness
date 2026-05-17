@@ -1,5 +1,6 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::PidIndex;
 use Test2::Harness2::SpawnGateway;
 use Test2::Harness2::PreloadRouter;
 use Scalar::Util ();
@@ -28,11 +29,13 @@ my $info_mock = {
 };
 
 # Harness shell: bypass init, set the slots the SpawnGateway reaches
-# through (resource_services + name + client + ipcm_info). Then
-# construct a SpawnGateway and hang it off the harness so the
+# through (pid_index->resource_services + name + client + ipcm_info).
+# Then construct a SpawnGateway and hang it off the harness so the
 # request-handler shim's delegation works.
+my $pid_index = Test2::Harness2::PidIndex->new;
+$pid_index->resource_services->{$$} = $info_mock;
 my $h = bless {
-    Test2::Harness2::RESOURCE_SERVICES() => { $$ => $info_mock },
+    Test2::Harness2::PID_INDEX()         => $pid_index,
     Test2::Harness2::NAME()              => 'harness',
     ipcm_info                            => 'IPC::Manager::Client::ConnectionUnix(/tmp/x)',
     _CLIENT_MOCK                         => $client_mock,

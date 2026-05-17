@@ -18,21 +18,21 @@ use Test2::Harness2::Util qw/load_module/;
 # Consumer contract: host-identity accessors, an emit hook (satisfied
 # by Role::Service's emit_service_event) so this role can log
 # resource-service lifecycle events through the host's event stream,
-# the resource_services tracking accessor (see below for its
-# contract), the three host-scope accessors (scope / run / logdir)
-# that drive log-file placement and reservation checks, and
-# ipcm_info (supplied by IPC::Manager::Role::Service) so the host can
-# pass its IPC bus information into each service instance.
+# the three host-scope accessors (scope / run / logdir) that drive
+# log-file placement and reservation checks, and ipcm_info (supplied
+# by IPC::Manager::Role::Service) so the host can pass its IPC bus
+# information into each service instance.
 requires 'workdir';
 requires 'name';
 requires 'emit_service_event';
-requires 'resource_services';
 requires 'ipcm_info';
 
 # Per-host pid bookkeeping. The host exposes the index it owns; this
-# role mirrors every resource-service tracking entry into it so that
-# kill_run / await_run_exit work uniformly across collectors and
-# resource services.
+# role both mirrors every resource-service tracking entry into the
+# index's run_pids map (so kill_run / await_run_exit work uniformly
+# across collectors and resource services) AND keeps its per-service
+# metadata in the index's resource_services slot (so PidIndex is the
+# single owner of every process the harness manages).
 requires 'pid_index';
 
 # The scope the host itself occupies. 'global' for the harness,
@@ -274,7 +274,7 @@ sub _assert_service_name_unused {
         );
     }
 
-    my $services = $self->resource_services;
+    my $services = $self->pid_index->resource_services;
     for my $svc (values %$services) {
         my $svc_scope = $svc->{scope} // 'global';
         next unless ($svc->{name} // '') eq $name;
@@ -546,7 +546,7 @@ sub track_resource_service {
     # uses entry_name to avoid stacking 'resource-' prefixes each cycle.
     my $entry_name = $p{entry_name} // $name;
 
-    $self->resource_services->{$pid} = {
+    $self->pid_index->resource_services->{$pid} = {
         pid           => $pid,
         resource      => $res,
         service_class => $class,
@@ -581,7 +581,7 @@ sub track_resource_service {
 sub handle_resource_service_exit {
     my ($self, $pid, $exit) = @_;
 
-    my $services = $self->resource_services;
+    my $services = $self->pid_index->resource_services;
 
     # Drop the tracking entry first so the restart branch below
     # (which calls _start_service_entry, which may register a new
@@ -675,12 +675,14 @@ resources, track the resulting pids, enforce name uniqueness, handle
 service exits (including restarts), and compute log-file paths. This
 role consolidates all of that so the two consumers can't drift.
 
-The role is storage-agnostic: it reads and writes tracking state
-through the C<resource_services> accessor and uses the consumer's
-C<workdir> / C<name> / C<emit_service_event> / C<ipcm_info> methods
-(the last two of which L<Test2::Harness2::Role::Service> and
-L<IPC::Manager::Role::Service> already provide) for path decisions,
-reservation checks, service construction, and failure logging.
+The role keeps its per-pid tracking state on the host's
+L<Test2::Harness2::PidIndex> (via C<< $host->pid_index->resource_services
+>>); the consumer no longer carries its own storage for this map.
+Host-identity / path / reservation / failure decisions are driven
+through the consumer's C<workdir> / C<name> / C<emit_service_event> /
+C<ipcm_info> methods (the last two of which
+L<Test2::Harness2::Role::Service> and
+L<IPC::Manager::Role::Service> already provide).
 
 =head1 REQUIRED METHODS
 
@@ -708,38 +710,21 @@ The host's IPC::Manager bus info. Forwarded into every resource
 service instance so each service connects to the same bus as its
 host. L<IPC::Manager::Role::Service> supplies this.
 
-=item $hashref = $host->resource_services
+=item $pid_index = $host->pid_index
 
-Return a mutable hashref that maps pid =E<gt> entry for currently
-running resource services. The role reads and writes through this
-accessor and expects it to return the same underlying hashref on
-every call (so in-place mutation via C<< $services-E<gt>{$pid} = ... >>
-and C<delete $services-E<gt>{$pid}> is visible to the next caller).
-The hashref must be initialised before the first role-provided method
-is invoked; returning a fresh empty hashref per call would strand
-tracking state.
+Return the host's L<Test2::Harness2::PidIndex>. The role reads and
+writes its per-pid tracking state through
+C<< $host->pid_index->resource_services >> (a mutable hashref keyed by
+pid). The role also calls C<< $host->pid_index->resource_service_tracked
+>> / C<resource_service_forgotten> hooks so the index's C<run_pids>
+map stays in sync with the C<resource_services> map.
 
-A typical C<Object::HashBase>-backed consumer satisfies this with a
-read-only accessor over a slot that C<init> primes to C<{}>:
-
-    use constant RESOURCE_SERVICES => 'resource_services';
-
-    use Object::HashBase qw{
-        ...
-        <resource_services
-        ...
-    };
-
-    sub init {
-        my $self = shift;
-        $self->{+RESOURCE_SERVICES} //= {};
-        ...
-    }
-
-Each tracked entry is a hashref carrying at least C<pid>, C<resource>,
-C<service_class>, C<service_args>, C<name>, C<log_path>, C<scope>,
-C<restartable>, C<started_at>, and C<attempts> (plus C<run> for
-per-run scope); see L</track_resource_service>.
+The C<resource_services> hashref is initialised by PidIndex's own
+C<init> and must outlive any role-provided method call. Each tracked
+entry carries at least C<pid>, C<resource>, C<service_class>,
+C<service_args>, C<name>, C<log_path>, C<scope>, C<restartable>,
+C<started_at>, and C<attempts> (plus C<run> for per-run scope); see
+L</track_resource_service>.
 
 =item $scope = $host->service_host_scope
 

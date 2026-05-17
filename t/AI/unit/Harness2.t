@@ -722,8 +722,8 @@ subtest 'run_on_pid: restartable exit flips to broken and re-invokes' => sub {
 
     ok($res->is_broken,                        'restartable service exit marks resource broken');
     ok(!$res->is_permanent_broken,             'not permanently broken');
-    ok(!exists $h->{resource_services}{71001}, 'old pid removed after restart');
-    ok(exists $h->{resource_services}{71011},  'restartable service re-invoked');
+    ok(!exists $h->pid_index->resource_services->{71001}, 'old pid removed after restart');
+    ok(exists $h->pid_index->resource_services->{71011},  'restartable service re-invoked');
 };
 
 subtest 'run_on_pid: non-restartable exit flips straight to permanent_broken' => sub {
@@ -737,7 +737,7 @@ subtest 'run_on_pid: non-restartable exit flips straight to permanent_broken' =>
 
     ok($res->is_permanent_broken,              'non-restartable service exit marks permanently broken');
     ok($res->is_broken,                        'also broken (per role contract)');
-    ok(!exists $h->{resource_services}{71002}, 'pid removed after exit');
+    ok(!exists $h->pid_index->resource_services->{71002}, 'pid removed after exit');
 };
 
 subtest 'restart: successful re-invocation tracks a new pid with attempts+1' => sub {
@@ -757,9 +757,9 @@ subtest 'restart: successful re-invocation tracks a new pid with attempts+1' => 
 
     $h->run_on_pid(88001, 0);
 
-    ok(!exists $h->{resource_services}{88001}, 'old pid removed');
-    ok(exists $h->{resource_services}{88002},  'new pid tracked after restart');
-    is($h->{resource_services}{88002}{attempts}, 2, 'attempts counter incremented');
+    ok(!exists $h->pid_index->resource_services->{88001}, 'old pid removed');
+    ok(exists $h->pid_index->resource_services->{88002},  'new pid tracked after restart');
+    is($h->pid_index->resource_services->{88002}{attempts}, 2, 'attempts counter incremented');
     ok($res->is_broken,            'resource stays broken until service signals ready');
     ok(!$res->is_permanent_broken, 'not permanently broken');
 };
@@ -790,7 +790,7 @@ subtest 'restart: attempts cap flips to permanent_broken' => sub {
     # Reinforce that the cap short-circuits BEFORE re-spawn: no pid
     # was consumed from the queue and nothing new is tracked.
     is(scalar @{$res->pids}, 1, 'spawn was not invoked when attempts cap hit');
-    ok(!(keys %{$h->{resource_services}}), 'no tracked entries after cap');
+    ok(!(keys %{$h->pid_index->resource_services}), 'no tracked entries after cap');
 };
 
 subtest 'restart: spawn dying during re-invocation flips to permanent_broken' => sub {
@@ -837,8 +837,8 @@ subtest 'restart: healthy runtime resets the attempts counter' => sub {
 
     $h->run_on_pid(88200, 0);
 
-    ok(exists $h->{resource_services}{88201}, 'new pid tracked after healthy-runtime reset');
-    is($h->{resource_services}{88201}{attempts}, 1, 'attempts counter reset to 1');
+    ok(exists $h->pid_index->resource_services->{88201}, 'new pid tracked after healthy-runtime reset');
+    is($h->pid_index->resource_services->{88201}{attempts}, 1, 'attempts counter reset to 1');
     ok(!$res->is_permanent_broken, 'not permanently broken');
 };
 

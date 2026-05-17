@@ -894,7 +894,7 @@ subtest 'per-run resources participate in _evaluate_resources_for' => sub {
     is(scalar keys %{$h->job_tracker->running_jobs}, 0, 'no running jobs');
 };
 
-subtest 'run_on_cleanup tears down per-run resource pids via _kill_run' => sub {
+subtest 'run_on_cleanup tears down per-run resource pids via kill_run' => sub {
     my $dir = tempdir(CLEANUP => 1);
     my $run = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('never-runs.t'));
 
@@ -902,8 +902,8 @@ subtest 'run_on_cleanup tears down per-run resource pids via _kill_run' => sub {
     push @{$h->scheduler->queue} => $run;
 
     # Fork a short-lived child as a pretend per-run resource service
-    # pid. run_on_cleanup -> _teardown_run_service -> _kill_run
-    # should TERM it.
+    # pid. run_on_cleanup -> _teardown_run_service ->
+    # pid_index->kill_run should TERM it.
     my $child_pid = fork // die "fork: $!";
     if (!$child_pid) {
         my $done = 0;
@@ -917,7 +917,7 @@ subtest 'run_on_cleanup tears down per-run resource pids via _kill_run' => sub {
     }
 
     $run->{resources_started} = 1;
-    $h->_register_run_pid(
+    $h->pid_index->register(
         $run->run_id, $child_pid,
         kind     => 'resource_service',
         res_name => 'fake',

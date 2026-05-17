@@ -19,6 +19,7 @@ package T2H2_TestHost {
         <service_host_run
         <service_host_logdir
         <service_host_log_name
+        <pid_index
     };
     use Role::Tiny::With;
     with 'Test2::Harness2::Role::ResourceServiceHost';
@@ -30,9 +31,18 @@ package T2H2_TestHost {
         $self->{+SERVICE_HOST_SCOPE} //= 'global';
         $self->{+SERVICE_HOST_LOGDIR} //= $self->{+WORKDIR};
         $self->{+SERVICE_HOST_LOG_NAME} //= $self->{+NAME};
+        $self->{+PID_INDEX}         //= T2H2_TestPidIndex->new;
     }
 
     sub emit_service_event { }
+}
+
+# No-op pid index: this test exercises name/scope reservation, not pid
+# bookkeeping, so we just absorb the role's tracked/forgotten calls.
+package T2H2_TestPidIndex {
+    sub new { bless {}, shift }
+    sub resource_service_tracked   { }
+    sub resource_service_forgotten { }
 }
 
 package T2H2_TestRun {

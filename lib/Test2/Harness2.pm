@@ -332,32 +332,6 @@ sub _preload_peer_name {
 }
 
 #-------------------------------------------------------------------
-# Per-run pid bookkeeping.
-#
-# All state and behavior lives on $self->pid_index (a
-# Test2::Harness2::PidIndex). The eight underscore-prefixed methods
-# below are thin compatibility shims kept here so that:
-#
-#   - Test2::Harness2::Role::ResourceServiceHost can keep calling
-#     $self->_resource_service_tracked / $self->_resource_service_forgotten
-#     against the harness as the role's host (the role declares no-op
-#     stubs and lets the host override).
-#
-#   - Existing in-tree tests can keep calling the underscore names on
-#     the harness directly.
-#
-# New code should call $self->pid_index->register etc. directly.
-#-------------------------------------------------------------------
-
-sub _register_run_pid          { my $self = shift; $self->{+PID_INDEX}->register(@_) }
-sub _forget_run_pid            { my $self = shift; $self->{+PID_INDEX}->forget(@_) }
-sub _run_for_pid               { my $self = shift; $self->{+PID_INDEX}->run_for_pid(@_) }
-sub _pids_for_run              { my $self = shift; $self->{+PID_INDEX}->pids_for_run(@_) }
-sub _kill_run                  { my $self = shift; $self->{+PID_INDEX}->kill_run(@_) }
-sub _await_run_exit            { my $self = shift; $self->{+PID_INDEX}->await_run_exit(@_) }
-sub _resource_service_tracked  { my $self = shift; $self->{+PID_INDEX}->resource_service_tracked(@_) }
-sub _resource_service_forgotten { my $self = shift; $self->{+PID_INDEX}->resource_service_forgotten(@_) }
-
 sub start {
     my ($class, %args) = @_;
 

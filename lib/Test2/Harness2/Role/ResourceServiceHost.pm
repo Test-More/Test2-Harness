@@ -29,6 +29,12 @@ requires 'emit_service_event';
 requires 'resource_services';
 requires 'ipcm_info';
 
+# Per-host pid bookkeeping. The host exposes the index it owns; this
+# role mirrors every resource-service tracking entry into it so that
+# kill_run / await_run_exit work uniformly across collectors and
+# resource services.
+requires 'pid_index';
+
 # The scope the host itself occupies. 'global' for the harness,
 # 'run' for the run service. No default: consumers must be explicit
 # about what scope their host occupies.
@@ -555,7 +561,7 @@ sub track_resource_service {
         (defined $run ? (run => $run) : ()),
     };
 
-    $self->_resource_service_tracked(
+    $self->pid_index->resource_service_tracked(
         pid      => $pid,
         scope    => $scope,
         run      => $run,
@@ -565,19 +571,6 @@ sub track_resource_service {
 
     return $pid;
 }
-
-# Notification hook fired after a resource-service tracking entry has
-# been recorded. Default no-op; consumers (e.g. the harness, which
-# also maintains a per-run pid index) override to mirror the
-# registration into their own bookkeeping. Always called in scalar
-# context; return value ignored.
-sub _resource_service_tracked { }
-
-# Companion to _resource_service_tracked: fired right before a
-# resource-service tracking entry is dropped from
-# resource_services. Consumers that mirrored the registration use
-# this to clear their mirror.
-sub _resource_service_forgotten { }
 
 # Called from the consumer's run_on_pid when a pid that isn't
 # something else (test collector, worker, ...) has exited. Returns 1
@@ -606,7 +599,7 @@ sub handle_resource_service_exit {
     my $run         = $svc->{run};
     my $restartable = $svc->{restartable} ? 1 : 0;
 
-    $self->_resource_service_forgotten(
+    $self->pid_index->resource_service_forgotten(
         pid      => $pid,
         scope    => $scope,
         run      => $run,

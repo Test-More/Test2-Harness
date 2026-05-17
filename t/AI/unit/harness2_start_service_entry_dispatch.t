@@ -15,6 +15,7 @@ use Test2::V0;
     sub client { $_[0]->{client} //= bless {sent => []}, 'FakeClient' }
     sub resource_services { $_[0]->{resource_services} //= {} }
     sub ipcm_info { 'fake-info' }
+    sub pid_index { $_[0]->{pid_index} //= bless {}, 'FakePidIndex' }
     sub emit_service_event { }
     sub _resource_peer_name { 'resource-' . $_[1]->{name} }
     sub _spawn_service_via_preload {
@@ -35,6 +36,11 @@ use Test2::V0;
 {
     package FakeClient;
     sub send_message { my ($s, $p, $payload) = @_; push @{$s->{sent}}, [$p, $payload]; }
+}
+{
+    package FakePidIndex;
+    sub resource_service_tracked   { }
+    sub resource_service_forgotten { }
 }
 {
     package My::Res::OptIn;

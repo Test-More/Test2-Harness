@@ -6,6 +6,7 @@ our $VERSION = '2.000013';
 
 use Carp qw/croak/;
 use Config;
+use Fcntl qw/:flock O_WRONLY O_APPEND O_CREAT/;
 use File::Path qw/make_path/;
 use POSIX qw/:sys_wait_h setpgid/;
 use Time::HiRes qw/time/;
@@ -21,7 +22,7 @@ use Test2::Harness2::Collector::Handle;
 use Test2::Harness2::Collector::Util qw/make_warn_handler kill_child/;
 use Test2::Harness2::LogLayout qw/collector_base_dir/;
 use Test2::Harness2::Util qw/load_module parse_exit tinysleep write_file_atomic/;
-use Test2::Harness2::Util::JSON qw/decode_json/;
+use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 use Test2::Harness2::Util::Zstd qw/open_zstd_writer compress_blob/;
 use Test2::Harness2::Util::IPC qw/pid_is_running set_procname swap_io ipc_default_connect_args atomic_pipe_compression_args apply_atomic_pipe_compression/;
 
@@ -198,7 +199,7 @@ sub _init_validate_auditor {
             unless Role::Tiny::does_role($class, 'Test2::Harness2::Role::Auditor');
     }
     $self->{+_AUDITOR_SPEC} = $self->{+AUDITOR};
-    $self->{+AUDITOR} = undef;    # re-instantiated in the child
+    $self->{+AUDITOR}       = undef;               # re-instantiated in the child
 
     return;
 }
@@ -415,8 +416,8 @@ sub _run_collector {
 sub _setup_child_handles {
     my $self = shift;
 
-    my $has_launch = defined($self->{+LAUNCH}) || defined($self->{+LAUNCH_CALLBACK});
-    my $started_child = $has_launch || $self->{+_OWNS_CHILD};
+    my $has_launch    = defined($self->{+LAUNCH}) || defined($self->{+LAUNCH_CALLBACK});
+    my $started_child = $has_launch               || $self->{+_OWNS_CHILD};
 
     if ($has_launch) {
         my ($child_pid, $out_r, $err_r) = $self->_launch_child();
@@ -511,7 +512,7 @@ sub _open_writers {
 # collector_start IPC emission.
 sub _write_spec_row {
     my $self = shift;
-    my $w = $self->{+_SPEC_WRITER} or return;
+    my $w    = $self->{+_SPEC_WRITER} or return;
 
     my %spec = (
         %{$self->{+SPEC} // {}},
@@ -520,7 +521,7 @@ sub _write_spec_row {
         id            => $self->{+ID},
         (defined $self->{+RUN_ID}  ? (run_id  => $self->{+RUN_ID})  : ()),
         (defined $self->{+JOB_TRY} ? (job_try => $self->{+JOB_TRY}) : ()),
-        started_at    => time,
+        started_at => time,
     );
 
     require Test2::Harness2::Util::JSON;
@@ -598,9 +599,9 @@ sub _lifecycle_base_payload {
         type          => $type,
         id            => $self->{+ID},
         run_id        => $self->{+RUN_ID},
-        job_id        => ($type eq 'Job'     ? $self->{+ID} : undef),
+        job_id        => ($type eq 'Job'     ? $self->{+ID}      : undef),
         job_try       => ($type eq 'Job'     ? $self->{+JOB_TRY} : undef),
-        service_name  => ($type eq 'Service' ? $self->{+ID} : undef),
+        service_name  => ($type eq 'Service' ? $self->{+ID}      : undef),
         collector_pid => $$,
         collected_pid => $self->{+CHILD_PID},
     );
@@ -641,6 +642,26 @@ sub _remove_live_sentinel {
     return;
 }
 
+# Shared-writer LIVE append. Every collector that observes a producer
+# open/close calls this; flock(LOCK_EX) serializes concurrent writers.
+# No IPC routing -- the file is the bus. flock is required because bare
+# O_APPEND atomicity is insufficient under PerlIO buffering and across
+# network filesystems (NFS/SMB/Windows).
+# The appended line is a tiny wake-up signal; renderers re-scan the Log
+# on wake and do not parse LIVE for state.
+sub _live_append {
+    my ($self, $payload) = @_;
+    my $path = $self->{+LOGDIR} . '/LIVE';
+    my $line = encode_json($payload) . "\n";
+    sysopen(my $fh, $path, O_WRONLY | O_APPEND | O_CREAT, 0644)
+        or die "open $path: $!";
+    flock($fh, LOCK_EX)  or die "flock $path: $!";
+    syswrite($fh, $line) or die "write $path: $!";
+    flock($fh, LOCK_UN);
+    close($fh);
+    return;
+}
+
 # Send collector_start IPC to the lifecycle target if one exists.
 # $spec_hash is the same hash just written to spec.jsonl.zst (for
 # downstream introspection).
@@ -650,12 +671,14 @@ sub _emit_collector_start {
     my $target = $self->_lifecycle_ipc_target;
     return unless defined $target;
 
-    $self->_send_to($target, {
-        kind => 'collector_start',
-        $self->_lifecycle_base_payload,
-        started_at => time,
-        spec       => $spec_hash // {},
-    });
+    $self->_send_to(
+        $target, {
+            kind => 'collector_start',
+            $self->_lifecycle_base_payload,
+            started_at => time,
+            spec       => $spec_hash // {},
+        }
+    );
 
     return;
 }
@@ -673,7 +696,7 @@ sub _emit_collector_end {
     my $target = $self->_lifecycle_ipc_target;
     return unless defined $target;
 
-    my $ended_at = time;
+    my $ended_at     = time;
     my $exit_decoded = defined($child_exit) ? parse_exit($child_exit) : undef;
 
     my %state = (
@@ -690,14 +713,16 @@ sub _emit_collector_end {
         }
     }
 
-    $self->_send_to($target, {
-        kind => 'collector_end',
-        $self->_lifecycle_base_payload,
-        exit         => $child_exit,
-        exit_decoded => $exit_decoded,
-        ended_at     => $ended_at,
-        state        => \%state,
-    });
+    $self->_send_to(
+        $target, {
+            kind => 'collector_end',
+            $self->_lifecycle_base_payload,
+            exit         => $child_exit,
+            exit_decoded => $exit_decoded,
+            ended_at     => $ended_at,
+            state        => \%state,
+        }
+    );
 
     return;
 }
@@ -846,8 +871,11 @@ sub _init_collection_state {
     my $stdout_eof = defined($out_r) ? 0 : 1;
     my $stderr_eof = defined($err_r) ? 0 : 1;
 
-    my $merge_outputs = defined($out_r) && defined($err_r)
-        && refaddr($out_r) && refaddr($err_r)
+    my $merge_outputs =
+           defined($out_r)
+        && defined($err_r)
+        && refaddr($out_r)
+        && refaddr($err_r)
         && refaddr($out_r) == refaddr($err_r);
     $stderr_eof = 1 if $merge_outputs;
 
@@ -935,8 +963,13 @@ sub _check_termination_signals {
         }
     }
 
-    if ($term->{draining} && defined $term->{kill_deadline} && !$term->{sent_kill} && !$child_exited
-        && $child_pid && $started_child && time >= $term->{kill_deadline})
+    if (   $term->{draining}
+        && defined $term->{kill_deadline}
+        && !$term->{sent_kill}
+        && !$child_exited
+        && $child_pid
+        && $started_child
+        && time >= $term->{kill_deadline})
     {
         kill('KILL', $child_pid);
         $term->{sent_kill} = 1;
@@ -1116,9 +1149,9 @@ sub _write_report_row {
 
     # 3. Collector-supplied exit info -- highest precedence; the
     #    collector is the authoritative source for these.
-    $row{exit} = $child_exit;
-    $row{exit_decoded} = defined($child_exit) ? parse_exit($child_exit) : undef;
-    $row{ended_at} = time;
+    $row{exit}          = $child_exit;
+    $row{exit_decoded}  = defined($child_exit) ? parse_exit($child_exit) : undef;
+    $row{ended_at}      = time;
     $row{collector_pid} = $$;
     $row{collected_pid} = $self->{+CHILD_PID} if defined $self->{+CHILD_PID};
 
@@ -1145,11 +1178,11 @@ sub _auditor_final_state {
     return $auditor->final_state if $auditor->can('final_state');
 
     my %state;
-    $state{pass}            = $auditor->pass            ? 1 : 0 if $auditor->can('pass');
-    $state{fail_count}      = $auditor->fail_count                if $auditor->can('fail_count');
-    $state{pass_count}      = $auditor->pass_count                if $auditor->can('pass_count');
-    $state{assertion_count} = $auditor->assertion_count           if $auditor->can('assertion_count');
-    $state{exit}            = $auditor->exit                      if $auditor->can('exit');
+    $state{pass}            = $auditor->pass ? 1 : 0    if $auditor->can('pass');
+    $state{fail_count}      = $auditor->fail_count      if $auditor->can('fail_count');
+    $state{pass_count}      = $auditor->pass_count      if $auditor->can('pass_count');
+    $state{assertion_count} = $auditor->assertion_count if $auditor->can('assertion_count');
+    $state{exit}            = $auditor->exit            if $auditor->can('exit');
     if ($auditor->can('plan')) {
         my $plan = $auditor->plan;
         $state{plan} = $plan if defined $plan;
@@ -1609,7 +1642,7 @@ sub _init_attachment_counter {
     my $self = shift;
     return $self->{+_ATTACHMENT_COUNTER} if defined $self->{+_ATTACHMENT_COUNTER};
 
-    my $dir = $self->base_dir . '/attachments';
+    my $dir  = $self->base_dir . '/attachments';
     my $high = 0;
 
     if (opendir(my $dh, $dir)) {
@@ -1640,7 +1673,7 @@ sub _attachment_prefix {
 
 sub _attachments_dir {
     my $self = shift;
-    my $dir = $self->base_dir . '/attachments';
+    my $dir  = $self->base_dir . '/attachments';
     unless ($self->{+_ATTACHMENT_DIR_MADE}) {
         make_path($dir);
         $self->{+_ATTACHMENT_DIR_MADE} = 1;
@@ -1842,9 +1875,9 @@ sub interpose {
     my $pid = fork() // die "Failed to fork for interpose: $!";
 
     if ($pid) {
-        $params{pid}                = $pid;
-        $params{_child_fork_times}  = \@child_fork_times;
-        $params{_child_fork_stamp}  = $child_fork_stamp;
+        $params{pid}               = $pid;
+        $params{_child_fork_times} = \@child_fork_times;
+        $params{_child_fork_stamp} = $child_fork_stamp;
         $class->_interpose_parent(\%params);
     }
 

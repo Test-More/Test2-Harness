@@ -5,9 +5,9 @@ use warnings;
 # The 32-byte zidx footer and the YATHFOOT trailer use pack Q< (unsigned
 # 64-bit little-endian); requires perl built with 64-bit native int.
 use Config ();
+
 BEGIN {
-    die "App::Yath2::Log::TarZIdx requires perl with 64-bit native int "
-      . "(\$Config{ivsize} >= 8); this perl reports ivsize=$Config::Config{ivsize}.\n"
+    die "App::Yath2::Log::TarZIdx requires perl with 64-bit native int " . "(\$Config{ivsize} >= 8); this perl reports ivsize=$Config::Config{ivsize}.\n"
         if $Config::Config{ivsize} < 8;
 }
 
@@ -34,6 +34,11 @@ use Test2::Harness2::LogLayout qw/
 
 use App::Yath2::Log::Artifact;
 use App::Yath2::Log::Iterator::JSONL;
+use App::Yath2::Log::Iterator::Producers;
+use App::Yath2::Log::Producer::Run;
+use App::Yath2::Log::Producer::Job;
+use App::Yath2::Log::Producer::Service;
+use App::Yath2::Log::Producer::Collector;
 
 use Object::HashBase qw/path +_index +_seen_starts +_closed_starts +_walk/;
 
@@ -67,8 +72,7 @@ sub static  { 1 }
 
 sub absolute_path {
     my ($self, $rel) = @_;
-    croak "absolute_path is unavailable for the tar.zidx backend; "
-        . "extract first or read via the Log API ($rel)";
+    croak "absolute_path is unavailable for the tar.zidx backend; " . "extract first or read via the Log API ($rel)";
 }
 
 # {{{ Format helpers (methods so subclasses / future formats can override)
@@ -173,14 +177,11 @@ sub _build_index {
     seek($fh, -App::Yath2::Log::Footer::FOOTER_SIZE(), SEEK_END)
         or croak "tar.zidx: seek YATHFOOT: $!";
     my $tail;
-    read($fh, $tail, App::Yath2::Log::Footer::FOOTER_SIZE())
-        == App::Yath2::Log::Footer::FOOTER_SIZE()
+    read($fh, $tail, App::Yath2::Log::Footer::FOOTER_SIZE()) == App::Yath2::Log::Footer::FOOTER_SIZE()
         or croak "tar.zidx: short YATHFOOT read";
 
     my $info = App::Yath2::Log::Footer::unpack_footer($tail)
-        or croak "tar.zidx: missing or invalid YATHFOOT trailer "
-        . "(archive may be too old; minimum supported version: "
-        . App::Yath2::Log->last_breaking_version . ")";
+        or croak "tar.zidx: missing or invalid YATHFOOT trailer " . "(archive may be too old; minimum supported version: " . App::Yath2::Log->last_breaking_version . ")";
 
     croak "tar.zidx: trailer format_id is '$info->{format_id}', expected 'TAR'"
         unless $info->{format_id} eq App::Yath2::Log::Footer::FORMAT_ID_TAR();
@@ -302,11 +303,11 @@ sub _layout {
 
     my $idx = $self->_build_index;
 
-    my %global_services;       # name => 1
-    my %runs;                  # run_id => 1
-    my %run_services;          # run_id => { name => 1 }
-    my %run_jobs;              # run_id => { job_id => 1 }
-    my %job_tries;             # "$rid/$jid" => { try => 1 }
+    my %global_services;    # name => 1
+    my %runs;               # run_id => 1
+    my %run_services;       # run_id => { name => 1 }
+    my %run_jobs;           # run_id => { job_id => 1 }
+    my %job_tries;          # "$rid/$jid" => { try => 1 }
 
     for my $rel (keys %$idx) {
         # services/<name>/...
@@ -366,14 +367,14 @@ sub services {
 }
 
 sub runs {
-    my $self = shift;
+    my $self   = shift;
     my $layout = $self->_layout;
     return _smart_sort(keys %{$layout->{runs}});
 }
 
 sub jobs {
     my ($self, $run_id) = @_;
-    croak "run_id is required" unless defined $run_id;
+    croak "run_id is required"   unless defined $run_id;
     croak "no such run: $run_id" unless $self->has_run($run_id);
     my $layout = $self->_layout;
     return _smart_sort(keys %{$layout->{run_jobs}{$run_id} || {}});
@@ -381,8 +382,8 @@ sub jobs {
 
 sub tries {
     my ($self, $run_id, $job_id) = @_;
-    croak "run_id is required" unless defined $run_id;
-    croak "job_id is required" unless defined $job_id;
+    croak "run_id is required"   unless defined $run_id;
+    croak "job_id is required"   unless defined $job_id;
     croak "no such run: $run_id" unless $self->has_run($run_id);
     croak "no such job: $run_id/$job_id"
         unless $self->has_job($run_id, $job_id);
@@ -436,6 +437,186 @@ sub has_try {
 
 # }}}
 
+# {{{ Producer iterators
+#
+# API notes (discovered from TarZIdx.pm itself):
+#   - Existence check: has_file($rel) => bool (uses index direct lookup)
+#   - Content read:    read_file($rel) => filehandle (decompresses inner zstd)
+#   - Enumeration:     runs(), jobs($run_id), services($run_id?), tries($run_id,$job_id)
+#   - .sealed files are preserved through archive creation (_scan_source_tree walks
+#     all files including dotfiles; no filter excludes them). No archive-side change needed.
+#
+# Tarballs are always post-mortem snapshots: state is always 'sealed' regardless
+# of whether a .sealed marker is present. The marker contents (pass/exit/timestamps)
+# are read when available to populate the descriptor.
+
+sub run_producers {
+    my $self = shift;
+    my @ids  = $self->runs;
+    my $i    = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @ids;
+            my $id = $ids[$i++];
+            return $self->_build_run_producer($id);
+        },
+    );
+}
+
+sub job_producers {
+    my ($self, $run_id) = @_;
+    croak("run_id is required") unless defined $run_id;
+    my @pairs;
+    for my $jid ($self->jobs($run_id)) {
+        for my $try ($self->tries($run_id, $jid)) {
+            push @pairs, [$jid, $try];
+        }
+    }
+    my $i = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @pairs;
+            my ($jid, $try) = @{$pairs[$i++]};
+            return $self->_build_job_producer($run_id, $jid, $try);
+        },
+    );
+}
+
+sub service_producers {
+    my ($self, $run_id) = @_;
+    my @ids = $self->services($run_id);
+    my $i   = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @ids;
+            my $sid = $ids[$i++];
+            return $self->_build_service_producer($sid, $run_id);
+        },
+    );
+}
+
+sub collector_producers {
+    my $self = shift;
+    # Tarballs do not currently carry collector subtrees. Return an empty iterator.
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub { return undef },
+    );
+}
+
+sub _build_run_producer {
+    my ($self, $id) = @_;
+    my $sealed = $self->_read_sealed_tar("runs/$id/.sealed");
+    return App::Yath2::Log::Producer::Run->new(
+        id            => $id,
+        kind          => 'run',
+        parent_id     => undef,
+        run_id        => $id,
+        state         => 'sealed',    # tarballs are always post-mortem
+        started_at    => $sealed ? $sealed->{started_at} : undef,
+        ended_at      => $sealed ? $sealed->{sealed_at}  : undef,
+        pass          => $sealed ? $sealed->{pass}       : undef,
+        exit          => $sealed ? $sealed->{exit}       : undef,
+        log           => $self,
+        artifact_refs => $self->_run_artifact_refs_tar($id),
+    );
+}
+
+sub _build_job_producer {
+    my ($self, $run_id, $jid, $try) = @_;
+    my $base   = "runs/$run_id/jobs/$jid/$try";
+    my $sealed = $self->_read_sealed_tar("$base/.sealed");
+    my $refs   = $self->_job_artifact_refs_tar($run_id, $jid, $try);
+    return App::Yath2::Log::Producer::Job->new(
+        id               => $jid,
+        kind             => 'job',
+        parent_id        => $run_id,
+        run_id           => $run_id,
+        try              => $try,
+        state            => 'sealed',    # tarballs are always post-mortem
+        started_at       => $sealed ? $sealed->{started_at} : undef,
+        ended_at         => $sealed ? $sealed->{sealed_at}  : undef,
+        pass             => $sealed ? $sealed->{pass}       : undef,
+        report_available => (exists $refs->{report} ? 1 : 0),
+        log              => $self,
+        artifact_refs    => $refs,
+    );
+}
+
+sub _build_service_producer {
+    my ($self, $sid, $run_id) = @_;
+    my $base   = defined $run_id ? "runs/$run_id/services/$sid" : "services/$sid";
+    my $sealed = $self->_read_sealed_tar("$base/.sealed");
+    return App::Yath2::Log::Producer::Service->new(
+        id            => $sid,
+        kind          => 'service',
+        parent_id     => $run_id,
+        run_id        => $run_id,
+        state         => 'sealed',    # tarballs are always post-mortem
+        started_at    => $sealed ? $sealed->{started_at} : undef,
+        ended_at      => $sealed ? $sealed->{sealed_at}  : undef,
+        log           => $self,
+        artifact_refs => {},          # Extended in Stage 2
+    );
+}
+
+sub _read_sealed_tar {
+    my ($self, $rel) = @_;
+    return undef unless $self->has_file($rel);
+
+    my $fh;
+    my $ok = eval { $fh = $self->read_file($rel); 1 };
+    unless ($ok) {
+        warn "Failed to read .sealed marker '$rel': $@";
+        return undef;
+    }
+    return undef unless defined $fh;
+
+    my $line = readline($fh);
+    close($fh);
+    return undef unless defined $line && length $line;
+
+    my $data;
+    $ok = eval { $data = decode_json($line); 1 };
+    unless ($ok) {
+        warn "Failed to decode .sealed marker '$rel': $@";
+        return undef;
+    }
+    return undef unless ref $data eq 'HASH';
+    return $data;
+}
+
+sub _run_artifact_refs_tar {
+    my ($self, $id) = @_;
+    my $base = "runs/$id";
+    my %refs;
+    for my $kind (qw/spec report events/) {
+        for my $rel ("$base/$kind.jsonl", "$base/$kind.jsonl.zst") {
+            if ($self->has_file($rel)) {
+                $refs{$kind} = $rel;
+                last;
+            }
+        }
+    }
+    return \%refs;
+}
+
+sub _job_artifact_refs_tar {
+    my ($self, $run_id, $jid, $try) = @_;
+    my $base = "runs/$run_id/jobs/$jid/$try";
+    my %refs;
+    for my $kind (qw/spec report events stdout stderr/) {
+        for my $rel ("$base/$kind.jsonl", "$base/$kind.jsonl.zst") {
+            if ($self->has_file($rel)) {
+                $refs{$kind} = $rel;
+                last;
+            }
+        }
+    }
+    return \%refs;
+}
+
+# }}}
+
 # {{{ Artifacts handle
 
 # artifacts() -- mirror the Directory positional/hashref dispatch.
@@ -443,7 +624,7 @@ sub artifacts {
     my $self = shift;
 
     return $self->_artifacts_from_args(@_) if @_ == 1 && ref($_[0]) eq 'HASH';
-    return $self->_artifacts_root           unless @_;
+    return $self->_artifacts_root unless @_;
 
     my @args = @_;
 
@@ -513,8 +694,8 @@ sub _artifacts_from_args {
     if (defined $job_id) {
         croak "run_id is required when job_id is given"
             unless defined $run_id;
-        croak "no such run: $run_id"          unless $self->has_run($run_id);
-        croak "no such job: $run_id/$job_id"  unless $self->has_job($run_id, $job_id);
+        croak "no such run: $run_id"         unless $self->has_run($run_id);
+        croak "no such job: $run_id/$job_id" unless $self->has_job($run_id, $job_id);
 
         if (!defined $job_try) {
             my $lt = $self->last_try($run_id, $job_id);
@@ -610,12 +791,12 @@ sub _artifact_read {
     my ($self, $rel) = @_;
     my $idx = $self->_build_index;
 
-    my $entry = $idx->{$rel};
+    my $entry    = $idx->{$rel};
     my $rel_real = $rel;
 
     if (!$entry && $rel =~ /\.zst\z/) {
         (my $stripped = $rel) =~ s/\.zst\z//;
-        $entry = $idx->{$stripped};
+        $entry    = $idx->{$stripped};
         $rel_real = $stripped if $entry;
     }
 
@@ -661,7 +842,7 @@ sub _artifact_open_fh {
 sub _decompress_jsonl_bytes {
     my ($self, $bytes) = @_;
 
-    my $out = '';
+    my $out    = '';
     my $offset = 0;
     while ($offset < length $bytes) {
         my $size = zstd_frame_size(substr($bytes, $offset));
@@ -682,9 +863,9 @@ sub _artifact_iter_records {
     my ($self, $base, $stem) = @_;
     return undef unless defined $stem && length $stem;
 
-    my $rel = defined $base && length $base ? "$base/$stem" : $stem;
+    my $rel     = defined $base && length $base ? "$base/$stem" : $stem;
     my $rel_zst = "$rel.zst";
-    my $idx = $self->_build_index;
+    my $idx     = $self->_build_index;
 
     my $entry = $idx->{$rel} || $idx->{$rel_zst};
     return undef unless $entry;
@@ -728,7 +909,7 @@ sub _artifact_iter_records {
 # Sorted basenames of $rel (a directory). Returns () when missing.
 sub _artifact_list_dir {
     my ($self, $rel) = @_;
-    my $idx = $self->_build_index;
+    my $idx    = $self->_build_index;
     my $prefix = "$rel/";
     my %names;
     for my $key (keys %$idx) {
@@ -750,8 +931,7 @@ sub _artifact_list_dir {
 # archive must extract -> mutate the directory -> re-archive.
 sub _artifact_save {
     my ($self, %p) = @_;
-    croak "tar.zidx archives are read-only; "
-        . "extract first, modify the directory, then re-archive";
+    croak "tar.zidx archives are read-only; " . "extract first, modify the directory, then re-archive";
 }
 
 # }}}
@@ -767,13 +947,13 @@ sub _artifact_save {
 sub _walk_state {
     my $self = shift;
     return $self->{+_WALK} //= {
-        stack         => [
+        stack => [
             $self->_open_artifact_walk(
-                base    => 'services/harness',
-                run_id  => undef,
-                job_id  => undef,
-                job_try => undef,
-                service => 'harness',
+                base          => 'services/harness',
+                run_id        => undef,
+                job_id        => undef,
+                job_try       => undef,
+                service       => 'harness',
                 collector_pid => undef,
             ),
         ],
@@ -786,17 +966,17 @@ sub _walk_state {
 sub _open_artifact_walk {
     my ($self, %args) = @_;
 
-    my $base = $args{base};
+    my $base    = $args{base};
     my $records = $self->_artifact_iter_records($base, 'events.jsonl') || [];
 
     return {
-        records       => $records,
-        idx           => 0,
-        base          => $base,
-        ident         => {
-            (defined $args{run_id}  ? (run_id  => $args{run_id})  : ()),
-            (defined $args{job_id}  ? (job_id  => $args{job_id})  : ()),
-            (defined $args{job_try} ? (job_try => $args{job_try}) : ()),
+        records => $records,
+        idx     => 0,
+        base    => $base,
+        ident   => {
+            (defined $args{run_id}  ? (run_id       => $args{run_id})  : ()),
+            (defined $args{job_id}  ? (job_id       => $args{job_id})  : ()),
+            (defined $args{job_try} ? (job_try      => $args{job_try}) : ()),
             (defined $args{service} ? (service_name => $args{service}) : ()),
         },
         collector_pid => $args{collector_pid},
@@ -847,7 +1027,7 @@ sub _inject_identifiers {
     return $event unless ref($event) eq 'HASH';
 
     my $fd = $event->{facet_data} // do { $event->{facet_data} = {}; $event->{facet_data} };
-    my $h = $fd->{harness} // do { $fd->{harness} = {}; $fd->{harness} };
+    my $h  = $fd->{harness}       // do { $fd->{harness}       = {}; $fd->{harness} };
 
     for my $k (qw/run_id job_id job_try service_name/) {
         next unless exists $ident->{$k};
@@ -874,7 +1054,7 @@ sub event {
         for (my $i = $#$stack; $i >= 0; $i--) {
             my $entry = $stack->[$i];
             if ($entry->{idx} < scalar @{$entry->{records}}) {
-                $got = $entry->{records}[$entry->{idx}++];
+                $got   = $entry->{records}[$entry->{idx}++];
                 $owner = $entry;
                 last;
             }
@@ -944,7 +1124,7 @@ sub events {
 sub EOE { $_[0]->end_of_events }
 
 sub end_of_events {
-    my $self = shift;
+    my $self  = shift;
     my $walk  = $self->_walk_state;
     my $stack = $walk->{stack};
 
@@ -984,7 +1164,7 @@ sub extract {
     croak "destination '$dir' already exists and is non-empty"
         if -e $dir && -d $dir && _dir_non_empty($dir);
 
-    my $compressed = exists $opts{compressed} ? $opts{compressed} : 0;
+    my $compressed   = exists $opts{compressed} ? $opts{compressed} : 0;
     my $runs         = $opts{runs};
     my $exclude_runs = $opts{exclude_runs};
     croak "'runs' and 'exclude_runs' are mutually exclusive"
@@ -1068,7 +1248,8 @@ sub _extract_one_entry {
         $payload = $inner eq 'plain' ? $self->zstd_compress($stored) : $stored;
     }
     else {
-        $payload = ($inner eq 'none' || $inner eq 'plain')
+        $payload =
+            ($inner eq 'none' || $inner eq 'plain')
             ? $stored
             : $self->zstd_decompress($stored);
 
@@ -1360,8 +1541,7 @@ sub _write_file_entry {
 
     my $raw = $self->_read_entry_source_bytes($kind, $src);
 
-    my ($payload, $stored, $inner, $logical_rel)
-        = $self->_payload_for_entry($rel, $raw, $compress);
+    my ($payload, $stored, $inner, $logical_rel) = $self->_payload_for_entry($rel, $raw, $compress);
 
     my $hdr = $self->pack_ustar_header($stored, length($payload));
     print $fh $hdr;

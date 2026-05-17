@@ -147,7 +147,7 @@ subtest 'age_pending_spawn_requests times out + flips broken' => sub {
 
     # Silence warn during age sweep
     local $SIG{__WARN__} = sub { };
-    $h->preload_router->_age_pending_spawn_requests;
+    $h->preload_router->age_pending_spawn_requests;
 
     ok(!$h->job_tracker->running_jobs->{$job->job_id}, 'placeholder dropped');
     ok(!$h->preload_router->{Test2::Harness2::PreloadRouter::PENDING_SPAWN_REQUESTS()}->{$key}, 'pending dropped');

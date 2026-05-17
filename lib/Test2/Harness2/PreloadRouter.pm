@@ -53,8 +53,8 @@ sub init {
 #-------------------------------------------------------------------
 sub tick {
     my $self = shift;
-    $self->_age_pending_spawn_requests;
-    $self->_check_pending_preload_spawn_timeouts;
+    $self->age_pending_spawn_requests;
+    $self->check_pending_preload_spawn_timeouts;
     return;
 }
 
@@ -501,7 +501,7 @@ sub handle_preload_state {
         $self->drain_awaiting($name);
     }
     elsif ($kind eq 'preload_broken' && $content->{permanent}) {
-        $self->_fallback_awaiting($name);
+        $self->fallback_awaiting($name);
     }
 
     return;
@@ -578,7 +578,7 @@ sub drain_awaiting {
 # Flush the wait-for-preload queue for $pname through
 # _ipcm_service_standalone. Called when the preload reports
 # permanent_broken: the dependents still come up, just unpreloaded.
-sub _fallback_awaiting {
+sub fallback_awaiting {
     my ($self, $pname) = @_;
     return unless defined $pname && length $pname;
 
@@ -637,7 +637,7 @@ sub _fallback_entry {
 # bounce the job back to pending so the next scheduler tick can
 # re-attempt (either through the same preload once it recovers, or
 # through a fallback path in the preference list).
-sub _age_pending_spawn_requests {
+sub age_pending_spawn_requests {
     my $self = shift;
 
     my $pending = $self->{+PENDING_SPAWN_REQUESTS};
@@ -698,7 +698,7 @@ sub _age_pending_spawn_requests {
 # Closes the gap where a grandchild fails to start before sending its
 # resource_service_started notification (compile error, fork issue,
 # killed before notify, etc.).
-sub _check_pending_preload_spawn_timeouts {
+sub check_pending_preload_spawn_timeouts {
     my $self = shift;
 
     my $h = $self->harness or return;
@@ -846,8 +846,8 @@ the harness's IPC client, the C<RESOURCE_SERVICES> map, the harness
 name, the test auditor class, the launch env, and so on.
 
 The harness's C<run_on_interval> calls L</tick> each tick; tick folds
-in the C<_age_pending_spawn_requests> and
-C<_check_pending_preload_spawn_timeouts> watchdogs in that order. The
+in the L</age_pending_spawn_requests> and
+L</check_pending_preload_spawn_timeouts> watchdogs in that order. The
 harness's C<run_on_general_message> routes C<preload_ready>,
 C<preload_broken>, and C<resource_service_started> kinds to the
 matching handler.
@@ -872,9 +872,24 @@ C<preload_service_spawn_timeout_secs> (default 30).
 
 =item $pr->tick
 
-Folds in C<_age_pending_spawn_requests> followed by
-C<_check_pending_preload_spawn_timeouts> in that order. Called once
+Folds in L</age_pending_spawn_requests> followed by
+L</check_pending_preload_spawn_timeouts> in that order. Called once
 per tick from the harness's C<run_on_interval>.
+
+=item $pr->age_pending_spawn_requests
+
+Walk C<PENDING_SPAWN_REQUESTS>; for any entry past
+C<preload_spawn_timeout_secs> without a matching C<test_job_started>,
+release the placeholder running-job entry, flip the preload to
+transient broken, and bounce the job back to pending so the next
+scheduler tick can re-attempt.
+
+=item $pr->check_pending_preload_spawn_timeouts
+
+Walk C<PENDING_PRELOAD_SPAWNS>, drop entries older than
+C<PRELOAD_SERVICE_SPAWN_TIMEOUT_SECS>, emit
+C<resource_spawn_preload_timeout>, and re-dispatch the queued resource
+service through the standalone path.
 
 =back
 
@@ -950,7 +965,7 @@ C<track_resource_service>, and emit C<resource_spawn_via_preload>.
 
 Apply C<preload_ready> / C<preload_broken> to the matching
 Resource::Preload, then drive the dependent-resource queue via
-L</drain_awaiting> or L</_fallback_awaiting>.
+L</drain_awaiting> or L</fallback_awaiting>.
 
 =back
 
@@ -963,6 +978,12 @@ L</drain_awaiting> or L</_fallback_awaiting>.
 Drain the wait-for-preload queue for C<$pname> through
 L</spawn_service_via_preload>. Entries that are no longer eligible
 fall through to the fallback path.
+
+=item $pr->fallback_awaiting($pname)
+
+Flush the wait-for-preload queue for C<$pname> through the standalone
+spawn path. Called when the preload reports permanent C<preload_broken>
+so dependents still come up, just unpreloaded.
 
 =back
 

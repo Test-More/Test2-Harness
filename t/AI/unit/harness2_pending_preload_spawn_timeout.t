@@ -50,7 +50,7 @@ $router->{pending_preload_spawns}{2} = {
     sent_at      => time - 120,
 };
 
-$router->_check_pending_preload_spawn_timeouts;
+$router->check_pending_preload_spawn_timeouts;
 
 ok(exists $router->{pending_preload_spawns}{1}, 'fresh pending preserved');
 ok(!exists $router->{pending_preload_spawns}{2}, 'stale pending dropped');

@@ -39,34 +39,34 @@ sub init {
 
 # Read methods: delegate to App::Yath2::DB with our cached uuid.
 
-sub services        { my $s = shift; $s->{+DB}->services       ($s->{+UUID}, @_) }
-sub runs            { my $s = shift; $s->{+DB}->runs           ($s->{+UUID}, @_) }
-sub jobs            { my $s = shift; $s->{+DB}->jobs           ($s->{+UUID}, @_) }
-sub tries           { my $s = shift; $s->{+DB}->tries          ($s->{+UUID}, @_) }
-sub last_try        { my $s = shift; $s->{+DB}->last_try       ($s->{+UUID}, @_) }
-sub has_service     { my $s = shift; $s->{+DB}->has_service    ($s->{+UUID}, @_) }
-sub has_run         { my $s = shift; $s->{+DB}->has_run        ($s->{+UUID}, @_) }
-sub has_job         { my $s = shift; $s->{+DB}->has_job        ($s->{+UUID}, @_) }
-sub has_try         { my $s = shift; $s->{+DB}->has_try        ($s->{+UUID}, @_) }
-sub list_files      { my $s = shift; $s->{+DB}->list_files     ($s->{+UUID}, @_) }
+sub services    { my $s = shift; $s->{+DB}->services($s->{+UUID}, @_) }
+sub runs        { my $s = shift; $s->{+DB}->runs($s->{+UUID}, @_) }
+sub jobs        { my $s = shift; $s->{+DB}->jobs($s->{+UUID}, @_) }
+sub tries       { my $s = shift; $s->{+DB}->tries($s->{+UUID}, @_) }
+sub last_try    { my $s = shift; $s->{+DB}->last_try($s->{+UUID}, @_) }
+sub has_service { my $s = shift; $s->{+DB}->has_service($s->{+UUID}, @_) }
+sub has_run     { my $s = shift; $s->{+DB}->has_run($s->{+UUID}, @_) }
+sub has_job     { my $s = shift; $s->{+DB}->has_job($s->{+UUID}, @_) }
+sub has_try     { my $s = shift; $s->{+DB}->has_try($s->{+UUID}, @_) }
+sub list_files  { my $s = shift; $s->{+DB}->list_files($s->{+UUID}, @_) }
 
-sub absolute_path   { my $s = shift; $s->{+DB}->absolute_path  (@_) }
+sub absolute_path { my $s = shift; $s->{+DB}->absolute_path(@_) }
 
-sub _artifact_exists       { my $s = shift; $s->{+DB}->artifact_exists       ($s->{+UUID}, @_) }
-sub _artifact_read         { my $s = shift; $s->{+DB}->artifact_read         ($s->{+UUID}, @_) }
-sub _artifact_iter_records { my $s = shift; $s->{+DB}->artifact_iter_records ($s->{+UUID}, @_) }
-sub _artifact_list_dir     { my $s = shift; $s->{+DB}->artifact_list_dir     ($s->{+UUID}, @_) }
-sub _artifact_open_fh      { my $s = shift; $s->{+DB}->artifact_open_fh      ($s->{+UUID}, @_) }
+sub _artifact_exists       { my $s = shift; $s->{+DB}->artifact_exists($s->{+UUID}, @_) }
+sub _artifact_read         { my $s = shift; $s->{+DB}->artifact_read($s->{+UUID}, @_) }
+sub _artifact_iter_records { my $s = shift; $s->{+DB}->artifact_iter_records($s->{+UUID}, @_) }
+sub _artifact_list_dir     { my $s = shift; $s->{+DB}->artifact_list_dir($s->{+UUID}, @_) }
+sub _artifact_open_fh      { my $s = shift; $s->{+DB}->artifact_open_fh($s->{+UUID}, @_) }
 
 # Walker: App::Yath2::DB::Iterator owns the depth-first event walker
 # now. Each Log::DB instance lazily builds (and caches) one iterator
 # bound to (db, uuid); ->reset rewinds the cached iterator instead of
 # allocating a new one so callers see consistent walker state.
-sub event           { my $s = shift; $s->_iter->next }
-sub events          { my $s = shift; $s->_iter->all  }
-sub end_of_events   { my $s = shift; $s->_iter->EOE  }
-sub EOE             { my $s = shift; $s->_iter->EOE  }
-sub reset           { my $s = shift; $s->_iter->reset }
+sub event         { my $s = shift; $s->_iter->next }
+sub events        { my $s = shift; $s->_iter->all }
+sub end_of_events { my $s = shift; $s->_iter->EOE }
+sub EOE           { my $s = shift; $s->_iter->EOE }
+sub reset         { my $s = shift; $s->_iter->reset }
 
 sub _iter {
     my $self = shift;
@@ -78,17 +78,223 @@ sub _iter {
 # extract: $log->extract($dir, %opts) -> App::Yath2::Log::Directory
 # archive: $log->archive($out, %opts) -> sealed-form Log handle
 # insert:  $log->insert($source, %opts) -> $new_archive_id (integer)
-sub extract         { my $s = shift; $s->{+DB}->extract       ($s->{+UUID}, @_) }
-sub archive         { my $s = shift; $s->{+DB}->archive_to    ($s->{+UUID}, @_) }
-sub insert          { my $s = shift; $s->{+DB}->insert        (@_) }
-sub _artifact_save  { my $s = shift; $s->{+DB}->save_artifact ($s->{+UUID}, @_) }
+sub extract        { my $s = shift; $s->{+DB}->extract($s->{+UUID}, @_) }
+sub archive        { my $s = shift; $s->{+DB}->archive_to($s->{+UUID}, @_) }
+sub insert         { my $s = shift; $s->{+DB}->insert(@_) }
+sub _artifact_save { my $s = shift; $s->{+DB}->save_artifact($s->{+UUID}, @_) }
 
 # Artifact factory: delegated to App::Yath2::DB. The Artifact handle
 # returned binds to a uuid-scoped DB clone, so its private _artifact_*
 # calls land on App::Yath2::DB without going through this Log::DB at
 # all -- meaning bytes are returned in the canonical shapes the data
 # layer produces.
-sub artifacts       { my $s = shift; $s->{+DB}->artifacts      ($s->{+UUID}, @_) }
+sub artifacts { my $s = shift; $s->{+DB}->artifacts($s->{+UUID}, @_) }
+
+# {{{ Producer iterators
+
+# DB-backed logs are always post-mortem (sealed-only in v1). Every
+# producer iterator issues exactly one bulk query per producer kind and
+# iterates the in-memory result, avoiding N+1 round-trips.
+#
+# Artifact refs are keyed by artifact_kind. The ref value is the
+# artifact_id (DB integer PK), not a filesystem path. A single bulk
+# artifact query covers all artifacts for the archive; we index by
+# scope (run_id, service_id, job_try_id) and kind, then hand each
+# producer its slice.
+
+sub _db_archive_id {
+    my $self = shift;
+    return $self->{_db_archive_id} //= do {
+        $self->{+DB}->_resolve_archive_id($self->{+UUID});
+    };
+}
+
+# Build a scope->kind->artifact_id index from a single bulk fetch.
+# Returns a nested hashref:
+#   run      => { $run_id      => { $kind => $artifact_id, ... }, ... }
+#   service  => { $service_id  => { $kind => $artifact_id, ... }, ... }
+#   job_try  => { $job_try_id  => { $kind => $artifact_id, ... }, ... }
+sub _artifact_ref_index {
+    my $self = shift;
+    return $self->{_artifact_ref_index} //= do {
+        my $aid  = $self->_db_archive_id;
+        my $rows = $self->{+DB}->{App::Yath2::DB::BACKEND()}->artifact_rows_for_archive($aid);
+        my %idx  = (run => {}, service => {}, job_try => {});
+        for my $row (@$rows) {
+            my $kind = $row->{artifact_kind};
+            if (defined $row->{run_id} && !defined $row->{service_id} && !defined $row->{job_try_id}) {
+                $idx{run}{$row->{run_id}}{$kind} = $row->{artifact_id};
+            }
+            elsif (defined $row->{service_id}) {
+                $idx{service}{$row->{service_id}}{$kind} = $row->{artifact_id};
+            }
+            elsif (defined $row->{job_try_id}) {
+                $idx{job_try}{$row->{job_try_id}}{$kind} = $row->{artifact_id};
+            }
+        }
+        \%idx;
+    };
+}
+
+sub run_producers {
+    my $self = shift;
+
+    require App::Yath2::Log::Iterator::Producers;
+    require App::Yath2::Log::Producer::Run;
+
+    my $rows = $self->{+DB}->run_full_rows($self->{+UUID});
+    my $idx  = $self->_artifact_ref_index;
+    my $i    = 0;
+
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @$rows;
+            my $r = $rows->[$i++];
+            return App::Yath2::Log::Producer::Run->new(
+                id            => $r->{run_ord},
+                kind          => 'run',
+                parent_id     => undef,
+                run_id        => $r->{run_ord},
+                state         => 'sealed',
+                started_at    => $r->{started_at},
+                ended_at      => $r->{ended_at},
+                pass          => $r->{pass},
+                exit          => $r->{run_exit},
+                log           => $self,
+                artifact_refs => $idx->{run}{$r->{run_id}} // {},
+            );
+        },
+    );
+}
+
+sub job_producers {
+    my ($self, $run_ord) = @_;
+    croak "run_id is required" unless defined $run_ord;
+
+    require App::Yath2::Log::Iterator::Producers;
+    require App::Yath2::Log::Producer::Job;
+
+    # One query for all jobs in this run.
+    my $aid = $self->_db_archive_id;
+    my $b   = $self->{+DB}->{App::Yath2::DB::BACKEND()};
+    croak "no such run: $run_ord"
+        unless $b->run_exists($aid, $run_ord);
+    my $rid  = $b->run_id_for_ord($aid, $run_ord);
+    my $jobs = $b->job_rows($aid, $rid);
+
+    # One query for all job_tries in this run (bulk JOIN).
+    my $tries   = $b->try_rows_for_run($rid);
+    my $art_idx = $self->_artifact_ref_index;
+
+    # Index tries by job_id for O(1) lookup per job.
+    my %tries_by_job;
+    for my $t (@$tries) {
+        push @{$tries_by_job{$t->{job_id}}}, $t;
+    }
+
+    # Flatten to (job, try) pairs in job_ord / try_ord order.
+    my @pairs;
+    for my $j (@$jobs) {
+        my @job_tries = sort { $a->{try_ord} <=> $b->{try_ord} } @{$tries_by_job{$j->{job_id}} // []};
+        # If a job has no tries yet (shouldn't happen in a sealed DB,
+        # but handle gracefully), emit a placeholder with try=0.
+        unless (@job_tries) {
+            push @pairs, [$j, undef];
+            next;
+        }
+        for my $t (@job_tries) {
+            push @pairs, [$j, $t];
+        }
+    }
+
+    my $i = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @pairs;
+            my ($j, $t) = @{$pairs[$i++]};
+            my $try_ord = defined $t ? $t->{try_ord}    : 0;
+            my $pass    = defined $t ? $t->{pass}       : undef;
+            my $started = defined $t ? $t->{started_at} : undef;
+            my $ended   = defined $t ? $t->{ended_at}   : undef;
+            my $refs =
+                defined $t
+                ? ($art_idx->{job_try}{$t->{job_try_id}} // {})
+                : {};
+            # spec and report are reconstructed from typed columns in the
+            # DB layer (never stored as artifact rows). report_available is
+            # true whenever a report was ingested, i.e. ended_at is set.
+            my $report_avail = (defined $ended || defined $pass) ? 1 : 0;
+            return App::Yath2::Log::Producer::Job->new(
+                id               => $j->{job_ord},
+                kind             => 'job',
+                parent_id        => $run_ord,
+                run_id           => $run_ord,
+                try              => $try_ord,
+                state            => 'sealed',
+                started_at       => $started,
+                ended_at         => $ended,
+                pass             => $pass,
+                report_available => $report_avail,
+                log              => $self,
+                artifact_refs    => $refs,
+            );
+        },
+    );
+}
+
+sub service_producers {
+    my ($self, $run_ord) = @_;
+
+    require App::Yath2::Log::Iterator::Producers;
+    require App::Yath2::Log::Producer::Service;
+
+    my $aid = $self->_db_archive_id;
+    my $b   = $self->{+DB}->{App::Yath2::DB::BACKEND()};
+
+    my $rows;
+    my $rid;
+    if (defined $run_ord) {
+        croak "no such run: $run_ord"
+            unless $b->run_exists($aid, $run_ord);
+        $rid  = $b->run_id_for_ord($aid, $run_ord);
+        $rows = $b->service_rows($aid, run_id => $rid);
+    }
+    else {
+        $rows = $b->service_rows($aid, run_id => undef);
+    }
+
+    my $art_idx = $self->_artifact_ref_index;
+    my $i       = 0;
+
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @$rows;
+            my $r = $rows->[$i++];
+            return App::Yath2::Log::Producer::Service->new(
+                id            => $r->{name},
+                kind          => 'service',
+                parent_id     => $run_ord,
+                run_id        => $run_ord,
+                state         => 'sealed',
+                started_at    => undef,
+                ended_at      => undef,
+                log           => $self,
+                artifact_refs => $art_idx->{service}{$r->{service_id}} // {},
+            );
+        },
+    );
+}
+
+sub collector_producers {
+    my $self = shift;
+    # Collectors are not a DB concept in v1; return an empty iterator.
+    require App::Yath2::Log::Iterator::Producers;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub { return undef },
+    );
+}
+
+# }}}
 
 1;
 

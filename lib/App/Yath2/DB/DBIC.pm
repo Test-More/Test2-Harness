@@ -37,7 +37,7 @@ sub init {
             $self->{+DSN},
             $self->{+USER},
             $self->{+PASS},
-            $self->{+ATTRS} // { RaiseError => 1, PrintError => 0, AutoCommit => 1 },
+            $self->{+ATTRS} // {RaiseError => 1, PrintError => 0, AutoCommit => 1},
         );
     }
     elsif (defined $self->{+FILE}) {
@@ -88,7 +88,7 @@ sub flavor {
     # is the underlying driver (both come back as 'MySQL'). Sniff the
     # actual server first, fall back to sqlt_type.
     my $driver;
-    my $ok = eval { $driver = $self->{+SCHEMA}->storage->dbh->{Driver}{Name}; 1 };
+    my $ok  = eval { $driver = $self->{+SCHEMA}->storage->dbh->{Driver}{Name}; 1 };
     my $err = $@;
     $driver //= '';
     return 'mariadb' if $driver eq 'MariaDB';
@@ -129,9 +129,11 @@ sub flavor {
 sub archive_rows {
     my $self = shift;
     my @out;
-    for my $row ($self->{+SCHEMA}->resultset('Archive')->search(
-        undef, { order_by => 'archive_id' },
-    )->all)
+    for my $row (
+        $self->{+SCHEMA}->resultset('Archive')->search(
+            undef, {order_by => 'archive_id'},
+        )->all
+        )
     {
         push @out, {
             archive_id      => $row->archive_id,
@@ -152,7 +154,7 @@ sub archive_rows {
 sub archive_for_uuid {
     my ($self, $canon) = @_;
     return undef unless defined $canon;
-    for my $row (@{ $self->archive_rows }) {
+    for my $row (@{$self->archive_rows}) {
         return $row if lc($row->{archive_uuid}) eq lc($canon);
     }
     return undef;
@@ -169,10 +171,12 @@ sub run_rows {
     my ($self, $aid) = @_;
     croak "archive_id required" unless defined $aid;
     my @out;
-    for my $r ($self->{+SCHEMA}->resultset('Run')->search(
-        { archive_id => $aid },
-        { order_by   => 'run_ord' },
-    )->all)
+    for my $r (
+        $self->{+SCHEMA}->resultset('Run')->search(
+            {archive_id => $aid},
+            {order_by   => 'run_ord'},
+        )->all
+        )
     {
         push @out, {
             run_id     => $r->run_id,
@@ -187,6 +191,70 @@ sub run_rows {
     return \@out;
 }
 
+# Like run_rows but also returns producer-relevant columns omitted by
+# run_rows: pass, exit (as run_exit), started_at, ended_at.
+# Used by Log::DB producer iterators to bulk-fetch in a single query.
+sub run_full_rows {
+    my ($self, $aid) = @_;
+    croak "archive_id required" unless defined $aid;
+    my @out;
+    for my $r (
+        $self->{+SCHEMA}->resultset('Run')->search(
+            {archive_id => $aid},
+            {order_by   => 'run_ord'},
+        )->all
+        )
+    {
+        push @out, {
+            run_id     => $r->run_id,
+            run_ord    => $r->run_ord,
+            run_uuid   => $self->_uuid_from_db($r->run_uuid),
+            status     => $r->status,
+            aborted    => $r->aborted   ? 1 : 0,
+            timed_out  => $r->timed_out ? 1 : 0,
+            project_id => $r->project_id,
+            pass       => defined $r->pass ? ($r->pass ? 1 : 0) : undef,
+            run_exit   => $r->run_exit,
+            started_at => $r->started_at,
+            ended_at   => $r->ended_at,
+        };
+    }
+    return \@out;
+}
+
+# Fetch all job_tries for all jobs under a given run_id in a single
+# query. Returns an arrayref of hashrefs with: job_try_id, job_id,
+# try_ord, pass, try_exit, started_at, ended_at, status.
+sub try_rows_for_run {
+    my ($self, $rid) = @_;
+    croak "run_id required" unless defined $rid;
+
+    # DBIC: search job_tries joined through jobs with run_id filter.
+    my @out;
+    for my $jt (
+        $self->{+SCHEMA}->resultset('JobTry')->search(
+            {'job.run_id' => $rid},
+            {
+                join     => 'job',
+                order_by => ['me.job_id', 'me.try_ord'],
+            },
+        )->all
+        )
+    {
+        push @out, {
+            job_try_id => $jt->job_try_id,
+            job_id     => $jt->job_id,
+            try_ord    => $jt->try_ord,
+            pass       => defined $jt->pass ? ($jt->pass ? 1 : 0) : undef,
+            try_exit   => $jt->try_exit,
+            started_at => $jt->started_at,
+            ended_at   => $jt->ended_at,
+            status     => $jt->status,
+        };
+    }
+    return \@out;
+}
+
 sub service_rows {
     my ($self, $aid, %filter) = @_;
     croak "archive_id required" unless defined $aid;
@@ -195,9 +263,11 @@ sub service_rows {
         $where{run_id} = $filter{run_id};
     }
     my @out;
-    for my $r ($self->{+SCHEMA}->resultset('Service')->search(
-        \%where, { order_by => 'service_id' },
-    )->all)
+    for my $r (
+        $self->{+SCHEMA}->resultset('Service')->search(
+            \%where, {order_by => 'service_id'},
+        )->all
+        )
     {
         push @out, {
             service_id => $r->service_id,
@@ -213,10 +283,12 @@ sub job_rows {
     croak "archive_id required" unless defined $aid;
     croak "run_id required"     unless defined $rid;
     my @out;
-    for my $r ($self->{+SCHEMA}->resultset('Job')->search(
-        { archive_id => $aid, run_id => $rid },
-        { order_by   => 'job_ord' },
-    )->all)
+    for my $r (
+        $self->{+SCHEMA}->resultset('Job')->search(
+            {archive_id => $aid, run_id => $rid},
+            {order_by   => 'job_ord'},
+        )->all
+        )
     {
         push @out, {
             job_id       => $r->job_id,
@@ -231,16 +303,22 @@ sub try_rows {
     my ($self, $jid) = @_;
     croak "job_id required" unless defined $jid;
     my @rows;
-    for my $r ($self->{+SCHEMA}->resultset('JobTry')->search(
-        { job_id => $jid },
-        { order_by => 'try_ord' },
-    )->all)
+    for my $r (
+        $self->{+SCHEMA}->resultset('JobTry')->search(
+            {job_id   => $jid},
+            {order_by => 'try_ord'},
+        )->all
+        )
     {
-        push @rows, { $r->get_columns };
+        push @rows, {$r->get_columns};
     }
-    return $self->_inflate_json_rows(\@rows, [qw/exit_decoded plan halt
+    return $self->_inflate_json_rows(
+        \@rows, [
+            qw/exit_decoded plan halt
                                                  times child_times
-                                                 spec_extras state_extras/]);
+                                                 spec_extras state_extras/
+        ]
+    );
 }
 
 # -- generic count / find / ensure primitives -------------------------------
@@ -290,7 +368,7 @@ sub _ensure_row {
     my $fields = $args{fields} or croak "fields required";
     my $id_col = $args{id_col} or croak "id_col required";
 
-    my $rs = $self->_rs_for_table($table);
+    my $rs       = $self->_rs_for_table($table);
     my $existing = $rs->search($where)->first;
     return $existing->$id_col if $existing;
 
@@ -306,13 +384,14 @@ sub artifact_rows_for_archive {
     my $with_payload = $opts{with_payload} ? 1 : 0;
 
     my $rs = $self->{+SCHEMA}->resultset('Artifact')->search(
-        { 'me.archive_id' => $aid },
-        { prefetch => [
-            'run',
-            { service => 'run' },
-            { job_try => { job => 'run' } },
-        ],
-          order_by => 'me.artifact_id',
+        {'me.archive_id' => $aid},
+        {
+            prefetch => [
+                'run',
+                {service => 'run'},
+                {job_try => {job => 'run'}},
+            ],
+            order_by => 'me.artifact_id',
         },
     );
 
@@ -351,8 +430,8 @@ sub artifact_rows_for_archive {
 
 sub artifact_row_for_scope {
     my ($self, $aid, $scope_kind, $scope_id, $kind, $name) = @_;
-    croak "archive_id required"  unless defined $aid;
-    croak "scope_kind required"  unless defined $scope_kind;
+    croak "archive_id required"    unless defined $aid;
+    croak "scope_kind required"    unless defined $scope_kind;
     croak "artifact_kind required" unless defined $kind;
 
     my %where = (archive_id => $aid, artifact_kind => $kind);
@@ -410,10 +489,10 @@ sub artifact_event_count_for_archive {
     croak "archive_id required" unless defined $aid;
 
     my $rs = $self->{+SCHEMA}->resultset('Artifact')->search(
-        { archive_id => $aid, artifact_kind => 'events' },
+        {archive_id => $aid, artifact_kind => 'events'},
     );
 
-    my $null_rows = $rs->search({ row_count => undef })->count;
+    my $null_rows = $rs->search({row_count => undef})->count;
     croak "events artifact rows with NULL row_count in archive $aid (data-layer bug)"
         if $null_rows;
 
@@ -426,12 +505,14 @@ sub job_spec_rows {
     my ($self, $jid, $try_ord) = @_;
     croak "job_id required" unless defined $jid;
     my @rows;
-    for my $r ($self->{+SCHEMA}->resultset('JobSpec')->search(
-        { job_id => $jid },
-        { order_by => 'job_spec_id' },
-    )->all)
+    for my $r (
+        $self->{+SCHEMA}->resultset('JobSpec')->search(
+            {job_id   => $jid},
+            {order_by => 'job_spec_id'},
+        )->all
+        )
     {
-        push @rows, { $r->get_columns };
+        push @rows, {$r->get_columns};
     }
     return $self->_inflate_json_rows(\@rows, [qw/features switches extras/]);
 }
@@ -440,26 +521,34 @@ sub service_lifetime_rows {
     my ($self, $sid) = @_;
     croak "service_id required" unless defined $sid;
     my @rows;
-    for my $r ($self->{+SCHEMA}->resultset('ServiceLifetime')->search(
-        { service_id => $sid },
-        { order_by => 'lifetime_ord' },
-    )->all)
+    for my $r (
+        $self->{+SCHEMA}->resultset('ServiceLifetime')->search(
+            {service_id => $sid},
+            {order_by   => 'lifetime_ord'},
+        )->all
+        )
     {
-        push @rows, { $r->get_columns };
+        push @rows, {$r->get_columns};
     }
-    return $self->_inflate_json_rows(\@rows, [qw/exit_decoded times
+    return $self->_inflate_json_rows(
+        \@rows, [
+            qw/exit_decoded times
                                                  child_times spec_extras
-                                                 state_extras/]);
+                                                 state_extras/
+        ]
+    );
 }
 
 sub subtest_rows {
     my ($self, $jtid) = @_;
     croak "job_try_id required" unless defined $jtid;
     my @out;
-    for my $r ($self->{+SCHEMA}->resultset('Subtest')->search(
-        { job_try_id => $jtid },
-        { order_by => 'ord' },
-    )->all)
+    for my $r (
+        $self->{+SCHEMA}->resultset('Subtest')->search(
+            {job_try_id => $jtid},
+            {order_by   => 'ord'},
+        )->all
+        )
     {
         my %h = $r->get_columns;
         push @out, \%h;
@@ -506,8 +595,7 @@ sub archive_create {
 sub mark_sealed {
     my ($self, $aid, $when) = @_;
     croak "archive_id required" unless defined $aid;
-    $self->{+SCHEMA}->resultset('Archive')->search({ archive_id => $aid })
-        ->update({ sealed_at => $when });
+    $self->{+SCHEMA}->resultset('Archive')->search({archive_id => $aid})->update({sealed_at => $when});
     return;
 }
 

@@ -92,8 +92,8 @@ sub _connect_dbh {
     my $pass  = $self->{+PASS};
     my $attrs = $self->{+ATTRS} || {};
 
-    return $self->_connect_sqlite($dsn, $user, $pass, $attrs)        if $flavor eq 'sqlite';
-    return $self->_connect_postgres($dsn, $user, $pass, $attrs)      if $flavor eq 'postgres';
+    return $self->_connect_sqlite($dsn, $user, $pass, $attrs)   if $flavor eq 'sqlite';
+    return $self->_connect_postgres($dsn, $user, $pass, $attrs) if $flavor eq 'postgres';
     return $self->_connect_mysql_family($flavor, $dsn, $user, $pass, $attrs)
         if $flavor eq 'mariadb' || $flavor eq 'mysql';
 
@@ -104,7 +104,7 @@ sub _connect_dbh {
 # sqlite DSN (and stash it in +DSN). Croaks when neither is available.
 sub _resolve_or_build_dsn {
     my $self = shift;
-    my $dsn = $self->{+DSN};
+    my $dsn  = $self->{+DSN};
     return $dsn if defined $dsn;
 
     my $file = $self->{+FILE};
@@ -126,13 +126,15 @@ sub _resolve_or_build_dsn {
 # schema relies on.
 sub _connect_sqlite {
     my ($self, $dsn, $user, $pass, $attrs) = @_;
-    my $dbh = DBI->connect($dsn, $user, $pass, {
-        RaiseError     => 1,
-        PrintError     => 0,
-        AutoCommit     => 1,
-        sqlite_unicode => 1,
-        %$attrs,
-    }) or croak "DBI->connect $dsn: $DBI::errstr";
+    my $dbh = DBI->connect(
+        $dsn, $user, $pass, {
+            RaiseError     => 1,
+            PrintError     => 0,
+            AutoCommit     => 1,
+            sqlite_unicode => 1,
+            %$attrs,
+        }
+    ) or croak "DBI->connect $dsn: $DBI::errstr";
 
     # Open-time PRAGMAs (per share/schema/SCHEMA.md §8).
     $dbh->do('PRAGMA journal_mode = WAL');
@@ -147,17 +149,19 @@ sub _connect_sqlite {
 # Open a postgres DBI handle (requires DBD::Pg).
 sub _connect_postgres {
     my ($self, $dsn, $user, $pass, $attrs) = @_;
-    my $ok = eval { require DBD::Pg; 1 };
+    my $ok  = eval { require DBD::Pg; 1 };
     my $err = $@;
     croak "install DBD::Pg to use the postgres backend: $err" unless $ok;
 
-    my $dbh = DBI->connect($dsn, $user, $pass, {
-        RaiseError     => 1,
-        PrintError     => 0,
-        AutoCommit     => 1,
-        pg_enable_utf8 => 1,
-        %$attrs,
-    }) or croak "DBI->connect $dsn: $DBI::errstr";
+    my $dbh = DBI->connect(
+        $dsn, $user, $pass, {
+            RaiseError     => 1,
+            PrintError     => 0,
+            AutoCommit     => 1,
+            pg_enable_utf8 => 1,
+            %$attrs,
+        }
+    ) or croak "DBI->connect $dsn: $DBI::errstr";
 
     return $dbh;
 }
@@ -165,16 +169,18 @@ sub _connect_postgres {
 # Open a MySQL / MariaDB DBI handle (requires DBD::MariaDB).
 sub _connect_mysql_family {
     my ($self, $flavor, $dsn, $user, $pass, $attrs) = @_;
-    my $ok = eval { require DBD::MariaDB; 1 };
+    my $ok  = eval { require DBD::MariaDB; 1 };
     my $err = $@;
     croak "install DBD::MariaDB to use the $flavor backend: $err" unless $ok;
 
-    my $dbh = DBI->connect($dsn, $user, $pass, {
-        RaiseError => 1,
-        PrintError => 0,
-        AutoCommit => 1,
-        %$attrs,
-    }) or croak "DBI->connect $dsn: $DBI::errstr";
+    my $dbh = DBI->connect(
+        $dsn, $user, $pass, {
+            RaiseError => 1,
+            PrintError => 0,
+            AutoCommit => 1,
+            %$attrs,
+        }
+    ) or croak "DBI->connect $dsn: $DBI::errstr";
 
     return $dbh;
 }
@@ -184,7 +190,7 @@ sub _connect_mysql_family {
 # "exit" double-quoted identifiers parse as identifier quotes, not
 # string literals).
 sub _apply_session_state {
-    my $self = shift;
+    my $self   = shift;
     my $flavor = $self->flavor;
     return unless $flavor eq 'mariadb' || $flavor eq 'mysql';
     my $dbh = $self->{+DBH} or return;
@@ -215,7 +221,7 @@ sub _apply_session_state {
 sub _bind_uuid {
     my ($self, $sth, $idx, $canon) = @_;
     require DBI;
-    my $flavor = $self->flavor;
+    my $flavor  = $self->flavor;
     my $db_form = $self->_uuid_to_db($canon);
     if ($flavor eq 'mysql') {
         $sth->bind_param($idx, $db_form, DBI::SQL_BINARY());
@@ -234,7 +240,7 @@ sub _bind_payload {
     my $flavor = $self->flavor;
     if ($flavor eq 'postgres') {
         require DBD::Pg;
-        $sth->bind_param($idx, $bytes, { pg_type => DBD::Pg::PG_BYTEA() });
+        $sth->bind_param($idx, $bytes, {pg_type => DBD::Pg::PG_BYTEA()});
         return;
     }
     if ($flavor eq 'mysql' || $flavor eq 'mariadb') {
@@ -264,7 +270,7 @@ sub _payload_to_bytes {
 sub _uuid_lookup_bind {
     my ($self, $canon) = @_;
     require DBI;
-    my $flavor = $self->flavor;
+    my $flavor  = $self->flavor;
     my $db_form = $self->_uuid_to_db($canon);
     return ($db_form, $flavor eq 'mysql' ? DBI::SQL_BINARY() : ());
 }
@@ -274,21 +280,22 @@ sub _uuid_lookup_bind {
 # valid across all four flavors.
 sub _quote_user_col { '"user"' }
 
-
 # -- archive layer -----------------------------------------------------------
 
 sub archive_rows {
     my $self = shift;
-    my $dbh = $self->dbh;
+    my $dbh  = $self->dbh;
 
     my $user_col = $self->_quote_user_col;
-    my $rows = $dbh->selectall_arrayref(qq{
+    my $rows     = $dbh->selectall_arrayref(
+        qq{
         SELECT archive_id, archive_uuid, archive_version, sealed_at,
                host, $user_col AS user, git_sha, project, yath_version,
                meta_extras
           FROM archives
          ORDER BY archive_id
-    }, { Slice => {} });
+    }, {Slice => {}}
+    );
 
     my @out;
     for my $r (@$rows) {
@@ -311,7 +318,7 @@ sub archive_rows {
 sub archive_for_uuid {
     my ($self, $canon) = @_;
     return undef unless defined $canon;
-    for my $row (@{ $self->archive_rows }) {
+    for my $row (@{$self->archive_rows}) {
         return $row if lc($row->{archive_uuid}) eq lc($canon);
     }
     return undef;
@@ -328,13 +335,15 @@ sub archive_count {
 sub run_rows {
     my ($self, $aid) = @_;
     croak "archive_id required" unless defined $aid;
-    my $dbh = $self->dbh;
-    my $rows = $dbh->selectall_arrayref(q{
+    my $dbh  = $self->dbh;
+    my $rows = $dbh->selectall_arrayref(
+        q{
         SELECT run_id, run_ord, run_uuid, status, aborted, timed_out, project_id
           FROM runs
          WHERE archive_id = ?
          ORDER BY run_ord
-    }, { Slice => {} }, $aid);
+    }, {Slice => {}}, $aid
+    );
 
     my @out;
     for my $r (@$rows) {
@@ -351,13 +360,85 @@ sub run_rows {
     return \@out;
 }
 
+# Like run_rows but also returns the producer-relevant columns that
+# run_rows omits: pass, exit (as run_exit), started_at, ended_at.
+# Used by Log::DB producer iterators to bulk-fetch all run data in
+# a single query and avoid per-run round-trips.
+sub run_full_rows {
+    my ($self, $aid) = @_;
+    croak "archive_id required" unless defined $aid;
+    my $dbh  = $self->dbh;
+    my $rows = $dbh->selectall_arrayref(
+        q{
+        SELECT run_id, run_ord, run_uuid, status,
+               aborted, timed_out, project_id,
+               pass, "exit", started_at, ended_at
+          FROM runs
+         WHERE archive_id = ?
+         ORDER BY run_ord
+    }, {Slice => {}}, $aid
+    );
+
+    my @out;
+    for my $r (@$rows) {
+        push @out, {
+            run_id     => $r->{run_id},
+            run_ord    => $r->{run_ord},
+            run_uuid   => $self->_uuid_from_db($r->{run_uuid}),
+            status     => $r->{status},
+            aborted    => $r->{aborted}   ? 1 : 0,
+            timed_out  => $r->{timed_out} ? 1 : 0,
+            project_id => $r->{project_id},
+            pass       => defined $r->{pass} ? ($r->{pass} ? 1 : 0) : undef,
+            run_exit   => $r->{exit},
+            started_at => $r->{started_at},
+            ended_at   => $r->{ended_at},
+        };
+    }
+    return \@out;
+}
+
+# Fetch all job_tries for all jobs under a given run_id in a single
+# query. Returns an arrayref of hashrefs with: job_try_id, job_id,
+# try_ord, pass, exit (as try_exit), started_at, ended_at, status.
+# Used by Log::DB::job_producers to bulk-fetch try data.
+sub try_rows_for_run {
+    my ($self, $rid) = @_;
+    croak "run_id required" unless defined $rid;
+    my $rows = $self->dbh->selectall_arrayref(
+        q{
+        SELECT jt.job_try_id, jt.job_id, jt.try_ord,
+               jt.pass, jt.exit, jt.started_at, jt.ended_at, jt.status
+          FROM job_tries jt
+          JOIN jobs j ON j.job_id = jt.job_id
+         WHERE j.run_id = ?
+         ORDER BY jt.job_id, jt.try_ord
+    }, {Slice => {}}, $rid
+    );
+
+    return [
+        map {
+            +{
+                job_try_id => $_->{job_try_id},
+                job_id     => $_->{job_id},
+                try_ord    => $_->{try_ord},
+                pass       => defined $_->{pass} ? ($_->{pass} ? 1 : 0) : undef,
+                try_exit   => $_->{exit},
+                started_at => $_->{started_at},
+                ended_at   => $_->{ended_at},
+                status     => $_->{status},
+            }
+        } @$rows
+    ];
+}
+
 sub service_rows {
     my ($self, $aid, %filter) = @_;
     croak "archive_id required" unless defined $aid;
     my $dbh = $self->dbh;
 
     my @bind = ($aid);
-    my $sql = q{
+    my $sql  = q{
         SELECT service_id, name, run_id
           FROM services
          WHERE archive_id = ?
@@ -373,45 +454,61 @@ sub service_rows {
     }
     $sql .= ' ORDER BY service_id';
 
-    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, @bind);
-    return [ map { +{
-        service_id => $_->{service_id},
-        name       => $_->{name},
-        run_id     => $_->{run_id},
-    } } @$rows ];
+    my $rows = $dbh->selectall_arrayref($sql, {Slice => {}}, @bind);
+    return [
+        map {
+            +{
+                service_id => $_->{service_id},
+                name       => $_->{name},
+                run_id     => $_->{run_id},
+            }
+        } @$rows
+    ];
 }
 
 sub job_rows {
     my ($self, $aid, $run_id) = @_;
     croak "archive_id required" unless defined $aid;
     croak "run_id required"     unless defined $run_id;
-    my $dbh = $self->dbh;
-    my $rows = $dbh->selectall_arrayref(q{
+    my $dbh  = $self->dbh;
+    my $rows = $dbh->selectall_arrayref(
+        q{
         SELECT job_id, job_ord, test_file_id
           FROM jobs
          WHERE archive_id = ? AND run_id = ?
          ORDER BY job_ord
-    }, { Slice => {} }, $aid, $run_id);
-    return [ map { +{
-        job_id       => $_->{job_id},
-        job_ord      => $_->{job_ord},
-        test_file_id => $_->{test_file_id},
-    } } @$rows ];
+    }, {Slice => {}}, $aid, $run_id
+    );
+    return [
+        map {
+            +{
+                job_id       => $_->{job_id},
+                job_ord      => $_->{job_ord},
+                test_file_id => $_->{test_file_id},
+            }
+        } @$rows
+    ];
 }
 
 sub try_rows {
     my ($self, $jid) = @_;
     croak "job_id required" unless defined $jid;
-    my $rows = $self->dbh->selectall_arrayref(q{
+    my $rows = $self->dbh->selectall_arrayref(
+        q{
         SELECT *
           FROM job_tries
          WHERE job_id = ?
          ORDER BY try_ord
-    }, { Slice => {} }, $jid);
+    }, {Slice => {}}, $jid
+    );
 
-    return $self->_inflate_json_rows($rows, [qw/exit_decoded plan halt
+    return $self->_inflate_json_rows(
+        $rows, [
+            qw/exit_decoded plan halt
                                                 times child_times
-                                                spec_extras state_extras/]);
+                                                spec_extras state_extras/
+        ]
+    );
 }
 
 # -- generic count / find / ensure primitives -------------------------------
@@ -463,14 +560,14 @@ sub _ensure_row {
     my $fields = $args{fields} or croak "fields required";
     my $id_col = $args{id_col} or croak "id_col required";
 
-    if (defined (my $id = $self->_find_one_col($table, $id_col, %$where))) {
+    if (defined(my $id = $self->_find_one_col($table, $id_col, %$where))) {
         return $id;
     }
 
-    my @keys = sort keys %$fields;
+    my @keys         = sort keys %$fields;
     my $placeholders = join(', ', ('?') x scalar(@keys));
-    my $cols = join(', ', @keys);
-    my $sql = "INSERT INTO $table ($cols) VALUES ($placeholders)";
+    my $cols         = join(', ', @keys);
+    my $sql          = "INSERT INTO $table ($cols) VALUES ($placeholders)";
     $self->dbh->do($sql, undef, map { $fields->{$_} } @keys);
     return $self->_last_insert_id($table, $id_col);
 }
@@ -481,13 +578,13 @@ sub artifact_rows_for_archive {
     my ($self, $aid, %opts) = @_;
     croak "archive_id required" unless defined $aid;
     my $with_payload = $opts{with_payload} ? 1 : 0;
-    my $dbh = $self->dbh;
+    my $dbh          = $self->dbh;
 
     # Postgres needs a typed bytea fetch when payloads are requested;
     # other flavors return bytes verbatim. Build the SELECT with or
     # without the payload column accordingly.
     my $extra = $with_payload ? ', a.payload' : '';
-    my $sql = qq{
+    my $sql   = qq{
         SELECT a.artifact_id,
                a.run_id, a.service_id, a.job_try_id,
                a.artifact_kind, a.format, a.name, a.compressed,
@@ -509,11 +606,11 @@ sub artifact_rows_for_archive {
          ORDER BY a.artifact_id
     };
 
-    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, $aid);
+    my $rows = $dbh->selectall_arrayref($sql, {Slice => {}}, $aid);
 
     if ($with_payload) {
         for my $r (@$rows) {
-            $r->{payload} = $self->_payload_to_bytes($r->{payload});
+            $r->{payload}    = $self->_payload_to_bytes($r->{payload});
             $r->{compressed} = $r->{compressed} ? 1 : 0;
         }
     }
@@ -527,12 +624,11 @@ sub artifact_rows_for_archive {
 
 sub artifact_row_for_scope {
     my ($self, $aid, $scope_kind, $scope_id, $kind, $name) = @_;
-    croak "archive_id required"  unless defined $aid;
-    croak "scope_kind required"  unless defined $scope_kind;
+    croak "archive_id required"    unless defined $aid;
+    croak "scope_kind required"    unless defined $scope_kind;
     croak "artifact_kind required" unless defined $kind;
 
-    my ($scope_clause, @scope_bind)
-        = $self->_scope_where_clause($scope_kind, $scope_id);
+    my ($scope_clause, @scope_bind) = $self->_scope_where_clause($scope_kind, $scope_id);
 
     my $sql;
     my @bind;
@@ -617,7 +713,7 @@ sub job_spec_rows {
     # spec; per-try spec lives elsewhere).
     my $rows = $self->dbh->selectall_arrayref(
         q{SELECT * FROM job_specs WHERE job_id = ? ORDER BY job_spec_id},
-        { Slice => {} }, $jid,
+        {Slice => {}}, $jid,
     );
 
     return $self->_inflate_json_rows($rows, [qw/features switches extras/]);
@@ -626,26 +722,34 @@ sub job_spec_rows {
 sub service_lifetime_rows {
     my ($self, $sid) = @_;
     croak "service_id required" unless defined $sid;
-    my $rows = $self->dbh->selectall_arrayref(q{
+    my $rows = $self->dbh->selectall_arrayref(
+        q{
         SELECT * FROM service_lifetimes
          WHERE service_id = ?
          ORDER BY lifetime_ord
-    }, { Slice => {} }, $sid);
+    }, {Slice => {}}, $sid
+    );
 
-    return $self->_inflate_json_rows($rows, [qw/exit_decoded times
+    return $self->_inflate_json_rows(
+        $rows, [
+            qw/exit_decoded times
                                                 child_times spec_extras
-                                                state_extras/]);
+                                                state_extras/
+        ]
+    );
 }
 
 sub subtest_rows {
     my ($self, $jtid) = @_;
     croak "job_try_id required" unless defined $jtid;
-    my $dbh = $self->dbh;
-    my $rows = $dbh->selectall_arrayref(q{
+    my $dbh  = $self->dbh;
+    my $rows = $dbh->selectall_arrayref(
+        q{
         SELECT * FROM subtests
          WHERE job_try_id = ?
          ORDER BY ord
-    }, { Slice => {} }, $jtid);
+    }, {Slice => {}}, $jtid
+    );
     # subtests has no JSON columns at present.
     return $rows;
 }
@@ -687,11 +791,11 @@ sub archive_create {
     croak "archive_version required" unless defined $fields->{archive_version};
 
     require DBI;
-    my $dbh = $self->dbh;
+    my $dbh    = $self->dbh;
     my $flavor = $self->flavor;
 
     my $extras_json = $self->_maybe_encode_json($fields->{meta_extras});
-    my $user_col = $self->_quote_user_col;
+    my $user_col    = $self->_quote_user_col;
 
     my $sth = $dbh->prepare(qq{
         INSERT INTO archives
@@ -744,7 +848,7 @@ sub ensure_run_row {
     croak "project_id required" unless defined $project_id;
 
     require DBI;
-    my $dbh = $self->dbh;
+    my $dbh    = $self->dbh;
     my $flavor = $self->flavor;
 
     my ($id) = $dbh->selectrow_array(
@@ -754,7 +858,7 @@ sub ensure_run_row {
     return $id if defined $id;
 
     my $run_uuid = lc(gen_uuid());
-    my $sth = $dbh->prepare(q{
+    my $sth      = $dbh->prepare(q{
         INSERT INTO runs (archive_id, project_id, run_ord, run_uuid,
                           status, aborted, timed_out)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -781,17 +885,17 @@ sub ensure_run_row {
 sub artifact_create {
     my ($self, $fields) = @_;
     croak "artifact_create requires a hashref" unless ref($fields) eq 'HASH';
-    croak "archive_id required"    unless defined $fields->{archive_id};
-    croak "artifact_kind required" unless defined $fields->{artifact_kind};
-    croak "format required"        unless defined $fields->{format};
-    croak "created_at required"    unless defined $fields->{created_at};
+    croak "archive_id required"                unless defined $fields->{archive_id};
+    croak "artifact_kind required"             unless defined $fields->{artifact_kind};
+    croak "format required"                    unless defined $fields->{format};
+    croak "created_at required"                unless defined $fields->{created_at};
 
     require DBI;
-    my $dbh = $self->dbh;
+    my $dbh    = $self->dbh;
     my $flavor = $self->flavor;
 
     my $artifact_uuid = lc(gen_uuid());
-    my $compressed    = $fields->{compressed} ? 1 : 0;
+    my $compressed    = $fields->{compressed}    ? 1                           : 0;
     my $sealed        = exists $fields->{sealed} ? ($fields->{sealed} ? 1 : 0) : 1;
     my $payload       = $fields->{payload} // '';
 
@@ -827,7 +931,7 @@ sub artifact_create {
 
 sub artifact_update {
     my ($self, $artifact_id, $fields) = @_;
-    croak "artifact_id required" unless defined $artifact_id;
+    croak "artifact_id required"    unless defined $artifact_id;
     croak "fields hashref required" unless ref($fields) eq 'HASH';
 
     my @cols;
@@ -840,7 +944,7 @@ sub artifact_update {
         push @binders, [$v, undef];
     }
     if (exists $fields->{payload}) {
-        push @cols, 'payload = ?';
+        push @cols,    'payload = ?';
         push @binders, [$fields->{payload}, 'payload'];
     }
     return unless @cols;
@@ -848,7 +952,7 @@ sub artifact_update {
     my $sql = 'UPDATE artifacts SET ' . join(', ', @cols) . ' WHERE artifact_id = ?';
     my $dbh = $self->dbh;
     my $sth = $dbh->prepare($sql);
-    my $i = 1;
+    my $i   = 1;
     for my $b (@binders) {
         my ($val, $kind) = @$b;
         if (defined $kind && $kind eq 'payload') {
@@ -871,9 +975,9 @@ sub artifact_update {
 # extras) are encoded here.
 sub job_spec_create {
     my ($self, $job_id, $fields) = @_;
-    croak "job_id required"           unless defined $job_id;
-    croak "fields hashref required"   unless ref($fields) eq 'HASH';
-    croak "test_file_id required"     unless defined $fields->{test_file_id};
+    croak "job_id required"         unless defined $job_id;
+    croak "fields hashref required" unless ref($fields) eq 'HASH';
+    croak "test_file_id required"   unless defined $fields->{test_file_id};
 
     my @cols = ('job_id');
     my @vals = ($job_id);
@@ -894,8 +998,7 @@ sub job_spec_create {
     }
 
     my $placeholders = join(', ', ('?') x scalar(@cols));
-    my $sql = 'INSERT INTO job_specs (' . join(', ', @cols)
-            . ") VALUES ($placeholders)";
+    my $sql          = 'INSERT INTO job_specs (' . join(', ', @cols) . ") VALUES ($placeholders)";
 
     my $dbh = $self->dbh;
     $dbh->do($sql, undef, @vals);
@@ -926,10 +1029,9 @@ sub service_lifetime_create {
 
     # "exit" is a reserved word; quote with the same ANSI-double-quote
     # the read side uses (ANSI_QUOTES is set on MySQL/MariaDB sessions).
-    my @quoted = map { $_ eq 'exit' ? '"exit"' : $_ } @cols;
+    my @quoted       = map { $_ eq 'exit' ? '"exit"' : $_ } @cols;
     my $placeholders = join(', ', ('?') x scalar(@cols));
-    my $sql = 'INSERT INTO service_lifetimes (' . join(', ', @quoted)
-            . ") VALUES ($placeholders)";
+    my $sql          = 'INSERT INTO service_lifetimes (' . join(', ', @quoted) . ") VALUES ($placeholders)";
 
     my $dbh = $self->dbh;
     $dbh->do($sql, undef, @vals);
@@ -953,8 +1055,7 @@ sub subtest_create {
         push @vals, $fields->{$c};
     }
     my $placeholders = join(', ', ('?') x scalar(@cols));
-    my $sql = 'INSERT INTO subtests (' . join(', ', @cols)
-            . ") VALUES ($placeholders)";
+    my $sql          = 'INSERT INTO subtests (' . join(', ', @cols) . ") VALUES ($placeholders)";
 
     my $dbh = $self->dbh;
     $dbh->do($sql, undef, @vals);

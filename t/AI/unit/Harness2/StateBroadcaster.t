@@ -4,10 +4,10 @@ use warnings;
 use Test2::V0;
 
 use Test2::Harness2::StateBroadcaster;
+use Test2::Harness2::RunStates;
 
-# Slot accessors -- we poke the harness backref's hash slots directly
-# (RUN_STATES, COMPLETED_RUNS, QUEUE) the same way the real broadcaster
-# does today (cross-domain interim reads).
+# Slot accessors so the tests can poke / inspect the broadcaster's
+# internal subscriber state directly.
 use constant SUBSCRIBERS      => Test2::Harness2::StateBroadcaster::SUBSCRIBERS();
 use constant SUBSCRIBER_RETRY => Test2::Harness2::StateBroadcaster::SUBSCRIBER_RETRY();
 
@@ -44,27 +44,15 @@ use constant SUBSCRIBER_RETRY => Test2::Harness2::StateBroadcaster::SUBSCRIBER_R
 
 {
     package SBTHarness;
-    # Implements the slot-key constants the broadcaster reads through
-    # the harness backref. Mirrors the real harness's HashBase layout
-    # for those few slots without dragging in Test2::Harness2.
-    use constant RUN_STATES     => 'run_states';
-    use constant COMPLETED_RUNS => 'completed_runs';
-    use constant QUEUE          => 'queue';
-
-    # Make the broadcaster's `Test2::Harness2::QUEUE()` etc. resolve to
-    # the same string keys we use here, by aliasing the constants from
-    # the real package onto our test keys. We can't redefine Test2::Harness2
-    # constants in this test, so instead we provide a parallel-package
-    # fake of just the constant lookups, and rely on the broadcaster's
-    # use of `Test2::Harness2::QUEUE()` resolving to whatever the real
-    # module returns. That string IS the slot key in the harness hash.
+    # The broadcaster still reads QUEUE off the harness directly
+    # (that slot lives on the harness, not RunStates). RUN_STATES
+    # and COMPLETED_RUNS no longer touch the harness backref --
+    # they flow through the broadcaster's direct RunStates ref.
     sub new {
         my ($c, %p) = @_;
         my $self = bless {
             client                            => $p{client},
-            Test2::Harness2::RUN_STATES()     => $p{run_states}     // {},
-            Test2::Harness2::COMPLETED_RUNS() => $p{completed_runs} // {},
-            Test2::Harness2::QUEUE()          => $p{queue}          // [],
+            Test2::Harness2::QUEUE()          => $p{queue} // [],
             finalized => [],
         }, $c;
         return $self;
@@ -83,8 +71,8 @@ use constant SUBSCRIBER_RETRY => Test2::Harness2::StateBroadcaster::SUBSCRIBER_R
     sub from { $_[0]->{from} }
 }
 
-# Load Test2::Harness2 just so the constants RUN_STATES, COMPLETED_RUNS,
-# QUEUE that the broadcaster references resolve to defined strings.
+# Load Test2::Harness2 just so the QUEUE constant the broadcaster
+# references resolves to a defined slot-key string.
 require Test2::Harness2;
 
 # --- subscribe / unsubscribe round-trip -----------------------------------
@@ -94,12 +82,12 @@ subtest subscribe_unsubscribe_roundtrip => sub {
     my $run    = SBTRun->new($rid);
     my $rstate = SBTState->new($rid);
 
-    my $h  = SBTHarness->new(
-        client     => $client,
-        queue      => [$run],
-        run_states => { $rid => $rstate },
+    my $rs = Test2::Harness2::RunStates->new(run_states => {$rid => $rstate});
+    my $h  = SBTHarness->new(client => $client, queue => [$run]);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => $rs,
     );
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
 
     my $msg  = SBTMsg->new('peer-a');
     my $resp = $sb->subscribe({ state => 1, run => $rid }, $msg);
@@ -123,8 +111,12 @@ subtest subscribe_unsubscribe_roundtrip => sub {
 
 subtest subscribe_rejects_unknown_run => sub {
     my $client = SBTClient->new;
+    my $rs = Test2::Harness2::RunStates->new;
     my $h  = SBTHarness->new(client => $client);
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => $rs,
+    );
 
     my $resp = $sb->subscribe(
         { state => 1, runs => ['nope'] },
@@ -136,28 +128,35 @@ subtest subscribe_rejects_unknown_run => sub {
 };
 
 subtest subscribe_requires_peer => sub {
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => SBTHarness->new(client => SBTClient->new));
+    my $rs = Test2::Harness2::RunStates->new;
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => SBTHarness->new(client => SBTClient->new),
+        run_states => $rs,
+    );
     my $resp = $sb->subscribe({}, undef);
     is($resp->{ok}, 0, 'no msg -> rejected');
     like($resp->{error}, qr/IPC message context/, 'error explains why');
 };
 
-# --- snapshot reads RUN_STATES / COMPLETED_RUNS through the harness ------
+# --- snapshot reads RunStates ---------------------------------------------
 subtest snapshot_uses_completed_runs => sub {
     my $client = SBTClient->new;
     my $rid    = 'done-1';
 
-    my $h  = SBTHarness->new(
-        client         => $client,
-        completed_runs => {
-            $rid => {
-                results => { foo => 1 },
-                done    => ['j1'],
-                pass    => 1,
-            },
-        },
+    my $rs = Test2::Harness2::RunStates->new;
+    $rs->record_completed($rid, {
+        results => { foo => 1 },
+        done    => ['j1'],
+        pass    => 1,
+    });
+
+    # Hold a strong ref to the harness so Role::Subsystem's weakened
+    # backref does not clear out from under the test.
+    my $h  = SBTHarness->new(client => $client);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => $rs,
     );
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
 
     $sb->send_snapshot('peer-c', run_id => $rid);
 
@@ -173,7 +172,10 @@ subtest snapshot_uses_completed_runs => sub {
 subtest snapshot_unknown_run_is_silent => sub {
     my $client = SBTClient->new;
     my $h  = SBTHarness->new(client => $client);
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => Test2::Harness2::RunStates->new,
+    );
 
     $sb->send_snapshot('peer-c', run_id => 'never-heard-of-it');
     is(scalar @{$client->{sent}}, 0, 'no message sent for unknown run');
@@ -185,12 +187,13 @@ subtest broadcast_run_state_notifies_and_finalizes => sub {
     my $rid    = 'live-1';
     my $run    = SBTRun->new($rid);
     my $rstate = SBTState->new($rid);
-    my $h  = SBTHarness->new(
-        client     => $client,
-        queue      => [$run],
-        run_states => { $rid => $rstate },
+
+    my $rs = Test2::Harness2::RunStates->new(run_states => {$rid => $rstate});
+    my $h  = SBTHarness->new(client => $client, queue => [$run]);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => $rs,
     );
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
 
     # Pre-register a state-subscribed peer for this run.
     $sb->{+SUBSCRIBERS}{'peer-q'} = {
@@ -215,7 +218,10 @@ subtest send_failure_queues_retry_and_caps => sub {
     $client->{fail_peer_alive} = { 'peer-z' => 1 }; # peer is reported alive
 
     my $h  = SBTHarness->new(client => $client);
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => Test2::Harness2::RunStates->new,
+    );
 
     # Pre-register so the failure path doesn't wipe an empty registry.
     $sb->{+SUBSCRIBERS}{'peer-z'} = { runs => {}, state => 1, global => 0 };
@@ -244,7 +250,10 @@ subtest send_failure_peer_gone_unsubscribes => sub {
     $client->{fail_peer_alive} = { 'peer-gone' => 0 }; # peer reported dead
 
     my $h  = SBTHarness->new(client => $client);
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => Test2::Harness2::RunStates->new,
+    );
     $sb->{+SUBSCRIBERS}{'peer-gone'} = { runs => {}, state => 1, global => 0 };
     $sb->{+SUBSCRIBER_RETRY}{'peer-gone'} = { pending => [] };
 
@@ -262,7 +271,10 @@ subtest send_failure_peer_gone_unsubscribes => sub {
 subtest drain_retries_success_drops_queue => sub {
     my $client = SBTClient->new;
     my $h  = SBTHarness->new(client => $client);
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => Test2::Harness2::RunStates->new,
+    );
 
     $sb->{+SUBSCRIBER_RETRY}{'peer-d'} = {
         pending => [ { idx => 1 }, { idx => 2 } ],
@@ -280,7 +292,10 @@ subtest drain_retries_keeps_queue_on_transient_failure => sub {
     $client->{fail_peer_alive} = { 'peer-t' => 1 };
 
     my $h  = SBTHarness->new(client => $client);
-    my $sb = Test2::Harness2::StateBroadcaster->new(harness => $h);
+    my $sb = Test2::Harness2::StateBroadcaster->new(
+        harness    => $h,
+        run_states => Test2::Harness2::RunStates->new,
+    );
     $sb->{+SUBSCRIBERS}{'peer-t'} = { runs => {}, state => 1, global => 0 };
     $sb->{+SUBSCRIBER_RETRY}{'peer-t'} = {
         pending => [ { idx => 'a' }, { idx => 'b' }, { idx => 'c' } ],
@@ -295,8 +310,10 @@ subtest drain_retries_keeps_queue_on_transient_failure => sub {
 
 # --- forget_peer cleans both registries -----------------------------------
 subtest forget_peer_drops_subscriber_and_retry => sub {
+    my $h  = SBTHarness->new(client => SBTClient->new);
     my $sb = Test2::Harness2::StateBroadcaster->new(
-        harness => SBTHarness->new(client => SBTClient->new),
+        harness    => $h,
+        run_states => Test2::Harness2::RunStates->new,
     );
     $sb->{+SUBSCRIBERS}{'peer-f'}      = { runs => {}, state => 1, global => 0 };
     $sb->{+SUBSCRIBER_RETRY}{'peer-f'} = { pending => [{ x => 1 }] };
@@ -312,8 +329,10 @@ subtest forget_peer_drops_subscriber_and_retry => sub {
 };
 
 subtest forget_peer_unknown_is_silent => sub {
+    my $h  = SBTHarness->new(client => SBTClient->new);
     my $sb = Test2::Harness2::StateBroadcaster->new(
-        harness => SBTHarness->new(client => SBTClient->new),
+        harness    => $h,
+        run_states => Test2::Harness2::RunStates->new,
     );
     my $warnings = 0;
     {

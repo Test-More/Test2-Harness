@@ -415,7 +415,7 @@ subtest 'test_job_completed + job_release advance the harness scheduler' => sub 
     $h->request_handler_queue_test_run({files => _tfs('/abs/dummy.t')});
 
     my $run    = $h->{queue}[0];
-    my $rstate = $h->{run_states}{$run->run_id};
+    my $rstate = $h->{run_states}->state($run->run_id);
     my $job_id = $rstate->pending->[0];
     my ($job)  = grep { $_->job_id eq $job_id } @{$run->jobs};
     $rstate->mark_running($job_id);
@@ -510,10 +510,11 @@ subtest 'test_job_completed for the last running job triggers run_ended' => sub 
     my $run = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('/abs/done.t'));
     push @{$h->{queue}} => $run;
     my ($job) = @{$run->jobs};
-    my $rstate = $h->{run_states}{$run->run_id} = Test2::Harness2::Run::State->new(
+    my $rstate = Test2::Harness2::Run::State->new(
         run_id  => $run->run_id,
         pending => [map { $_->job_id } @{$run->jobs}],
     );
+    $h->{run_states}->set_state($run->run_id, $rstate);
     $rstate->mark_running($job->job_id);
     $h->_scheduler_queue_run($run);
     $h->_scheduler_mark_running($run->run_id, $job->job_id);
@@ -573,10 +574,11 @@ subtest 'perform_hard_stop TERMs tracked pids and reaps them' => sub {
     my $run    = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('dummy.t'));
     my ($job)  = @{$run->jobs};
     my $job_id = $job->job_id;
-    my $rstate = $h->{run_states}{$run->run_id} = Test2::Harness2::Run::State->new(
+    my $rstate = Test2::Harness2::Run::State->new(
         run_id  => $run->run_id,
         pending => [$job_id],
     );
+    $h->{run_states}->set_state($run->run_id, $rstate);
     $rstate->mark_running($job_id);
 
     $h->{running_jobs}{$job_id} = {
@@ -1239,10 +1241,11 @@ subtest 'collector pid exit without test_job_completed is grace-armed and synthe
     my $run    = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('/abs/orphan.t'));
     my $job_id = $run->jobs->[0]->job_id;
     push @{$h->{queue}} => $run;
-    my $rstate = $h->{run_states}{$run->run_id} = Test2::Harness2::Run::State->new(
+    my $rstate = Test2::Harness2::Run::State->new(
         run_id  => $run->run_id,
         pending => [$job_id],
     );
+    $h->{run_states}->set_state($run->run_id, $rstate);
     $rstate->mark_running($job_id);
 
     my ($res) = @{$h->{resources}};

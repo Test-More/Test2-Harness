@@ -7,6 +7,7 @@ our $VERSION = '2.000013';
 use Object::HashBase qw{
     +subscribers
     +subscriber_retry
+    +run_states
     +harness
 };
 
@@ -53,10 +54,11 @@ sub subscribe {
     push @run_ids => @{$payload->{runs}} if ref($payload->{runs}) eq 'ARRAY';
 
     # Validate every run_id up front. The harness knows about runs in
-    # the live queue and in COMPLETED_RUNS (terminal snapshots).
+    # the live queue; RunStates knows about terminal snapshots.
+    my $rs = $self->{+RUN_STATES};
     for my $rid (@run_ids) {
         next if grep { $_->run_id eq $rid } @{$h->{Test2::Harness2::QUEUE()} // []};
-        next if $h->{Test2::Harness2::COMPLETED_RUNS()}->{$rid};
+        next if $rs && $rs->completed($rid);
         return {ok => 0, error => "unknown run '$rid'"};
     }
 
@@ -126,13 +128,14 @@ sub send_snapshot {
     my $run_id = $params{run_id} or return;
 
     my $h = $self->harness or return;
+    my $rs = $self->{+RUN_STATES};
 
     my $run_data;
     if (grep { $_->run_id eq $run_id } @{$h->{Test2::Harness2::QUEUE()} // []}) {
-        my $rstate = $h->{Test2::Harness2::RUN_STATES()}->{$run_id};
+        my $rstate = $rs ? $rs->state($run_id) : undef;
         $run_data = $rstate ? $rstate->TO_JSON : {run_id => $run_id};
     }
-    elsif (my $info = $h->{Test2::Harness2::COMPLETED_RUNS()}->{$run_id}) {
+    elsif (my $info = $rs ? $rs->completed($run_id) : undef) {
         # Completed snapshot is not a Run-shaped TO_JSON; wrap it so
         # consumers still see the same {type,item,run_id,state} shape.
         $run_data = {
@@ -272,7 +275,8 @@ sub drain_retries {
 sub broadcast_run_state {
     my ($self, $run_id) = @_;
     my $h = $self->harness or return;
-    my $rstate = $h->{Test2::Harness2::RUN_STATES()}->{$run_id} or return;
+    my $rs = $self->{+RUN_STATES} or return;
+    my $rstate = $rs->state($run_id) or return;
     my $data   = $rstate->TO_JSON;
     $self->notify_state($run_id, $data);
 
@@ -324,9 +328,11 @@ dropped from the registry along with any queued retries.
 
 The harness constructs one StateBroadcaster during its own C<init>
 and holds a strong reference to it. The broadcaster holds a weakened
-backref to the harness via L<Test2::Harness2::Role::Subsystem> so it
-can reach the harness's IPC client, the live run queue, the per-run
-C<Run::State> map, and the terminal-snapshot map for completed runs.
+backref to the harness via L<Test2::Harness2::Role::Subsystem> for the
+IPC client and the live run queue, plus a direct (strong) reference to
+L<Test2::Harness2::RunStates> for per-run C<Run::State> and terminal
+snapshots. The RunStates object does not back-reference the
+broadcaster, so the strong link is safe.
 
 This object does not own the harness's emit-side event stream;
 C<emit_service_event> stays on the harness because it writes the
@@ -358,9 +364,9 @@ for state events on C<$run_id>.
 =item $sb->send_snapshot($peer, run_id => $run_id)
 
 Send a one-off snapshot of C<$run_id> to C<$peer>. The snapshot is
-sourced from the live C<Run::State> if the run is in the queue, from
-the terminal C<COMPLETED_RUNS> entry otherwise; unknown run ids are
-silent no-ops.
+sourced from the live C<Run::State> in RunStates if the run is in the
+queue, from the RunStates terminal-snapshot table otherwise; unknown
+run ids are silent no-ops.
 
 =item $sb->send($peer, $payload)
 
@@ -379,7 +385,7 @@ it gone. Called from the harness once per service tick.
 
 =item $sb->broadcast_run_state($run_id)
 
-Snapshot C<$run_id> from the harness's C<Run::State> map, fan it out
+Snapshot C<$run_id> from the RunStates C<Run::State> map, fan it out
 to interested subscribers, and ask the harness to finalize the run if
 the snapshot is terminal.
 
@@ -400,7 +406,7 @@ away. Inherited from L<Test2::Harness2::Role::Subsystem>.
 =head1 SEE ALSO
 
 L<Test2::Harness2>, L<Test2::Harness2::Role::Subsystem>,
-L<Test2::Harness2::Run::State>.
+L<Test2::Harness2::RunStates>, L<Test2::Harness2::Run::State>.
 
 =head1 SOURCE
 

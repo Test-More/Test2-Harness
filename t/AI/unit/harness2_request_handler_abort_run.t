@@ -1,5 +1,6 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::RunStates;
 
 # Fake run-state objects that record the latched reason.
 {
@@ -13,10 +14,12 @@ my $rs1 = RS->new;
 my $rs2 = RS->new;
 
 my $svc = bless {
-    run_states => {
-        A => $rs1,
-        B => $rs2,
-    },
+    run_states => Test2::Harness2::RunStates->new(
+        run_states => {
+            A => $rs1,
+            B => $rs2,
+        },
+    ),
 }, 'Test2::Harness2';
 
 # No selectors -> error.

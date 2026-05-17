@@ -20,6 +20,7 @@ use IPC::Manager qw/ipcm_spawn/;
 use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
 use Test2::Harness2::PidIndex;
+use Test2::Harness2::RunStates;
 use Test2::Harness2::SpawnGateway;
 use Test2::Harness2::StateBroadcaster;
 use Test2::Harness2::Role::ResourceServiceHost;
@@ -44,7 +45,7 @@ use Object::HashBase qw{
     <hash_seed
     state
     +queue
-    +run_states
+    <run_states
     +scheduler
     +running_jobs
     +in_flight_count
@@ -52,7 +53,6 @@ use Object::HashBase qw{
     <pid_index
     <spawn_gateway
     <broadcaster
-    +run_flags
     <collector_grace_secs
     +pending_synth_completions
     +pending_spawn_requests
@@ -61,10 +61,8 @@ use Object::HashBase qw{
     +known_preload_names
     <preload_spawn_timeout_secs
     <preload_service_spawn_timeout_secs
-    +completed_runs
     +finish_after_initial_run
     +emitter
-    +run_ord_counter
     watch_pids
     own_pgroup
 };
@@ -174,21 +172,34 @@ sub _init_logdir {
 sub _init_default_slots {
     my $self = shift;
 
+    # RunStates is constructed FIRST so any subsystem that takes a
+    # direct reference to it (broadcaster today; scheduler / job
+    # tracker once those extractions land) can be handed the ref at
+    # construction. The harness keeps a strong ref via the RUN_STATES
+    # slot; RunStates does not back-reference the harness, so the
+    # link stays acyclic without weakening. The run_ord_counter
+    # starts at 1 here to match the pre-extraction harness behavior
+    # (RunStates's own default is 0 for unit-test ergonomics; the
+    # harness's seeding wins because RunStates->new defaults are
+    # `//=`).
+    $self->{+RUN_STATES} //= Test2::Harness2::RunStates->new(run_ord_counter => 1);
+
     $self->{+NAME}                      //= 'harness';
     $self->{+JOB_ID}                    //= gen_uuid();
     $self->{+KILL_TIMEOUT}              //= 15;
     $self->{+PARENT_PIDS}               //= [];
     $self->{+STATE}                     //= 'running';
     $self->{+QUEUE}                     //= [];
-    $self->{+RUN_STATES}                //= {};
     $self->{+SCHEDULER}                 //= {};
     $self->{+RUNNING_JOBS}              //= {};
     $self->{+IN_FLIGHT_COUNT}           //= 0;
     $self->{+RESOURCE_SERVICES}         //= {};
     $self->{+PID_INDEX}                 //= Test2::Harness2::PidIndex->new(harness => $self);
     $self->{+SPAWN_GATEWAY}             //= Test2::Harness2::SpawnGateway->new(harness => $self);
-    $self->{+BROADCASTER}               //= Test2::Harness2::StateBroadcaster->new(harness => $self);
-    $self->{+RUN_FLAGS}                 //= {};
+    $self->{+BROADCASTER}               //= Test2::Harness2::StateBroadcaster->new(
+        harness    => $self,
+        run_states => $self->{+RUN_STATES},
+    );
     $self->{+PENDING_SYNTH_COMPLETIONS} //= {};
     $self->{+PENDING_SPAWN_REQUESTS}     //= {};
     $self->{+PENDING_PRELOAD_SPAWNS}     //= {};
@@ -197,16 +208,8 @@ sub _init_default_slots {
     $self->{+PRELOAD_SPAWN_TIMEOUT_SECS} //= 30;
     $self->{+PRELOAD_SERVICE_SPAWN_TIMEOUT_SECS} //= 30;
     $self->{+COLLECTOR_GRACE_SECS}       //= DEFAULT_COLLECTOR_GRACE_SECS;
-    $self->{+COMPLETED_RUNS}             //= {};
     $self->{+WATCH_PIDS}                 //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}                 //= 0;
-
-    # Sequential run-ord allocator: every accepted run gets the next
-    # ordinal integer starting at 0. The counter is per harness-process;
-    # persistent runners reuse the same harness so ords climb
-    # monotonically across runs in a session, with gaps possible
-    # (e.g. accepted-then-purged runs).
-    $self->{+RUN_ORD_COUNTER} //= 1;
 
     return;
 }
@@ -564,7 +567,7 @@ sub request_handler_queue_test_run {
     return {ok => 0, error => "'run_id' is allocated by the harness; do not pass it"}
         if defined $payload->{run_id};
 
-    my $run_id = $self->{+RUN_ORD_COUNTER}++;
+    my $run_id = $self->{+RUN_STATES}->next_ord;
 
     my ($resources_ok, $resources_or_err) = $self->_rehydrate_run_resources($payload->{resources});
     return {ok => 0, error => $resources_or_err} unless $resources_ok;
@@ -590,11 +593,12 @@ sub request_handler_queue_test_run {
 
         push @{$self->{+QUEUE}} => $run;
         $self->_install_in_flight_ref($_) for @{$run->resources // []};
-        $self->{+RUN_STATES}->{$run->run_id} = Test2::Harness2::Run::State->new(
+        my $rstate = Test2::Harness2::Run::State->new(
             run_id     => $run->run_id,
             created_at => $run->created_at,
             pending    => [map { $_->job_id } @{$run->jobs}],
         );
+        $self->{+RUN_STATES}->set_state($run->run_id, $rstate);
         $self->_scheduler_queue_run($run);
         1;
     };
@@ -674,9 +678,10 @@ sub _rehydrate_run_resources {
 sub request_handler_status {
     my $self = shift;
 
+    my $run_states = $self->{+RUN_STATES};
     my $queue = [
         map {
-            my $rs = $self->{+RUN_STATES}->{$_->run_id};
+            my $rs = $run_states->state($_->run_id);
             {
                 run_id  => $_->run_id,
                 pending => $rs ? [@{$rs->pending}] : [],
@@ -778,15 +783,15 @@ sub request_handler_list_preloads {
 sub request_handler_abort_run {
     my ($self, $payload, $msg) = @_;
 
-    my $states = $self->{+RUN_STATES} // {};
+    my $states = $self->{+RUN_STATES};
 
     my @target_ids;
     if ($payload->{all}) {
-        @target_ids = sort keys %$states;
+        @target_ids = sort $states->all_run_ids;
     }
     elsif (defined $payload->{run_id}) {
         return {ok => 0, error => "no run with id '$payload->{run_id}'"}
-            unless $states->{$payload->{run_id}};
+            unless $states->state($payload->{run_id});
         @target_ids = ($payload->{run_id});
     }
     else {
@@ -795,7 +800,7 @@ sub request_handler_abort_run {
 
     my @aborted;
     for my $rid (@target_ids) {
-        my $rs = $states->{$rid} or next;
+        my $rs = $states->state($rid) or next;
         next if defined $rs->aborted_reason;    # idempotent
         $rs->latch_aborted_reason('user_abort');
         push @aborted, $rid;
@@ -866,7 +871,7 @@ sub request_handler_run_results {
     return {ok => 0, error => "'run_id' is required"}
         unless defined $run_id;
 
-    if (my $info = $self->{+COMPLETED_RUNS}->{$run_id}) {
+    if (my $info = $self->{+RUN_STATES}->completed($run_id)) {
         return {ok => 1, %$info};
     }
 
@@ -1003,17 +1008,6 @@ sub _handle_collector_end {
 # right run when multiple runs are active.
 #-------------------------------------------------------------------
 
-# Initialize / fetch the side-state hash for this run. Idempotent.
-sub _run_flags {
-    my ($self, $run_id) = @_;
-    return $self->{+RUN_FLAGS}->{$run_id} //= {
-        completed_job_ids    => {},
-        completed_job_states => {},
-        failing_emitted      => 0,
-        pass                 => 1,
-    };
-}
-
 sub _handle_test_job_started {
     my ($self, $content) = @_;
     return unless ref($content) eq 'HASH';
@@ -1045,8 +1039,10 @@ sub _handle_test_job_started {
         delete $self->{+PENDING_SPAWN_REQUESTS}->{"$run_id\0$job_id"};
     }
 
-    my $rstate = $self->{+RUN_STATES}->{$run_id} //=
-        Test2::Harness2::Run::State->new(run_id => $run_id);
+    my $rstate = $self->{+RUN_STATES}->state($run_id);
+    $rstate = $self->{+RUN_STATES}->set_state(
+        $run_id, Test2::Harness2::Run::State->new(run_id => $run_id),
+    ) unless $rstate;
 
     my $started_at = $content->{stamp} // time;
 
@@ -1108,7 +1104,7 @@ sub _handle_test_job_failing {
         },
     );
 
-    my $flags = $self->_run_flags($run_id);
+    my $flags = $self->{+RUN_STATES}->flags($run_id);
     unless ($flags->{failing_emitted}) {
         $flags->{failing_emitted} = 1;
         $flags->{pass}            = 0;
@@ -1131,7 +1127,8 @@ sub _handle_test_job_completed {
     my $run_id = $content->{run_id} // return;
     my $job_id = $content->{job_id} // return;
 
-    my $flags = $self->_run_flags($run_id);
+    my $run_states = $self->{+RUN_STATES};
+    my $flags      = $run_states->flags($run_id);
 
     # Idempotent against the auditor + watchdog race: first wins.
     return if $flags->{completed_job_ids}{$job_id};
@@ -1153,8 +1150,10 @@ sub _handle_test_job_completed {
         );
     }
 
-    my $rstate = $self->{+RUN_STATES}->{$run_id} //=
-        Test2::Harness2::Run::State->new(run_id => $run_id);
+    my $rstate = $run_states->state($run_id);
+    $rstate = $run_states->set_state(
+        $run_id, Test2::Harness2::Run::State->new(run_id => $run_id),
+    ) unless $rstate;
 
     my $completed_at = $content->{stamp} // time;
     $rstate->record_job_result(
@@ -1201,7 +1200,7 @@ sub _emit_run_completed {
     my ($self, $run) = @_;
     my $run_id = $run->run_id;
 
-    my $flags = $self->{+RUN_FLAGS}->{$run_id} or return;
+    my $flags = $self->{+RUN_STATES}->flags_peek($run_id) or return;
     return if $flags->{run_completed_emitted}++;
 
     my $em = $self->{+EMITTER} or return;
@@ -1239,7 +1238,7 @@ sub _build_collector_report {
     $now //= time;
 
     my $run_id = $run->run_id;
-    my $flags  = $self->{+RUN_FLAGS}->{$run_id} //= {};
+    my $flags  = $self->{+RUN_STATES}->flags($run_id);
     my $states = $flags->{completed_job_states} // {};
 
     my $passed  = 0;
@@ -1458,7 +1457,7 @@ sub request_handler_detach {
 sub _snapshot_run_results {
     my ($self, $run) = @_;
 
-    my $rstate   = $self->{+RUN_STATES}->{$run->run_id};
+    my $rstate   = $self->{+RUN_STATES}->state($run->run_id);
     my $results  = ($rstate && $rstate->results) // {};
     my $all_pass = 1;
     for my $jid (keys %$results) {
@@ -1566,7 +1565,7 @@ sub service_post_hard_stop {
     $self->{+IN_FLIGHT_COUNT}   = 0;
     $self->{+RESOURCE_SERVICES} = {};
     $self->{+PID_INDEX}->clear;
-    $self->{+RUN_FLAGS}         = {};
+    $self->{+RUN_STATES}->clear_flags;
     return;
 }
 
@@ -1615,7 +1614,7 @@ sub _handle_test_collector_exit {
 
         my $run    = $cur->{run};
         my $run_id = $run->run_id;
-        my $flags  = $self->{+RUN_FLAGS}->{$run_id};
+        my $flags  = $self->{+RUN_STATES}->flags_peek($run_id);
 
         if ($flags && $flags->{completed_job_ids}{$job_id}) {
             $self->{+PID_INDEX}->forget($run_id, $pid);
@@ -1663,7 +1662,7 @@ sub run_on_interval {
 
         # A real test_job_completed arrived inside the grace window
         # -- drop the pending synth.
-        my $flags = $self->{+RUN_FLAGS}->{$run_id};
+        my $flags = $self->{+RUN_STATES}->flags_peek($run_id);
         if ($flags && $flags->{completed_job_ids}{$job_id}) {
             delete $pending->{$job_id};
             next;
@@ -1952,7 +1951,7 @@ sub _dispatch_pending_job {
     my ($decision, $arg, %dec_opts);
     my $preload_resource;
 
-    my $rstate = $self->{+RUN_STATES}->{$run->run_id};
+    my $rstate = $self->{+RUN_STATES}->state($run->run_id);
     if ($rstate && defined $rstate->aborted_reason) {
         # Run aborted: every remaining job takes the unavailable-action
         # fail path. aborted=1 distinguishes follow-ups from the
@@ -2019,13 +2018,14 @@ sub _finalize_run_if_complete {
     my ($self, $run) = @_;
     my $run_id = $run->run_id;
 
-    my $rstate = $self->{+RUN_STATES}->{$run_id};
+    my $run_states = $self->{+RUN_STATES};
+    my $rstate     = $run_states->state($run_id);
     return unless $rstate && $rstate->is_complete;
 
     # Idempotent: if we already finalized this run, do nothing.
-    return if $self->{+COMPLETED_RUNS}->{$run_id};
+    return if $run_states->completed($run_id);
 
-    $self->{+COMPLETED_RUNS}->{$run_id} = $self->_snapshot_run_results($run);
+    $run_states->record_completed($run_id, $self->_snapshot_run_results($run));
 
     # Emit the terminal run_completed + collector_report event from
     # the harness BEFORE the per-run state is dropped. This used to
@@ -2035,8 +2035,8 @@ sub _finalize_run_if_complete {
     $self->_write_run_report($run);
 
     $self->{+QUEUE} = [grep { $_->run_id ne $run_id } @{$self->{+QUEUE}}];
-    delete $self->{+RUN_STATES}->{$run_id};
-    delete $self->{+RUN_FLAGS}->{$run_id};
+    $run_states->delete_state($run_id);
+    $run_states->delete_flags($run_id);
     $self->_scheduler_drop_run($run_id);
     $self->_teardown_run_service($run);
     $self->emit_service_event(
@@ -2089,7 +2089,7 @@ sub _handle_broken_resource {
     # a single-slot limiter at once. The current job is the trigger;
     # follow-ups arrive through the scheduler's aborted-run branch
     # with aborted => 1 already set on their dec_opts.
-    if (my $rstate = $self->{+RUN_STATES}->{$run->run_id}) {
+    if (my $rstate = $self->{+RUN_STATES}->state($run->run_id)) {
         $rstate->latch_aborted_reason($resource_name);
     }
     return $self->_launch_unavailable_action_job(
@@ -2230,8 +2230,12 @@ sub _ensure_run_service_started {
     # one-time per-run bring-up: writing the run's spec.jsonl and
     # spawning per-run resource services. The resources_started /
     # resources_torn_down flags on Run::State guard idempotency.
-    my $rstate = $self->{+RUN_STATES}->{$run->run_id} //=
-        Test2::Harness2::Run::State->new(run_id => $run->run_id);
+    my $run_states = $self->{+RUN_STATES};
+    my $rstate     = $run_states->state($run->run_id);
+    $rstate = $run_states->set_state(
+        $run->run_id,
+        Test2::Harness2::Run::State->new(run_id => $run->run_id),
+    ) unless $rstate;
     return if $rstate->resources_started_flag;
     $rstate->mark_resources_started;
 
@@ -2340,7 +2344,7 @@ sub _teardown_run_service {
     # exit. The Run::State idempotency flag prevents double
     # teardown for the same run.
     my $rid    = $run->run_id;
-    my $rstate = $self->{+RUN_STATES}->{$rid};
+    my $rstate = $self->{+RUN_STATES}->state($rid);
     return                            if $rstate && $rstate->resources_torn_down_flag;
     $rstate->mark_resources_torn_down if $rstate;
 
@@ -2435,7 +2439,7 @@ sub _announce_run_started_if_first {
         run_id     => $run_id,
         started_at => $started_at,
     );
-    $self->_run_flags($run_id)->{started_at} //= $started_at;
+    $self->{+RUN_STATES}->flags($run_id)->{started_at} //= $started_at;
 }
 
 # Build the base env hash for a launched test child. Forwards
@@ -2540,7 +2544,7 @@ sub _spawn_collector_for_job {
     # queued_at on the per-job spec.jsonl artifact: pull from
     # Run::State so the renderer sees the queue-time stamp.
     my $queued_at;
-    if (my $rs = $self->{+RUN_STATES}->{$run_id}) {
+    if (my $rs = $self->{+RUN_STATES}->state($run_id)) {
         my $r = $rs->results->{$job_id};
         $queued_at = $r->{queued_at} if $r && defined $r->{queued_at};
     }
@@ -2661,7 +2665,7 @@ sub _build_spawn_test_payload {
     my $test_file_spec = Test2::Harness2::TestFile->new(file => $test_file_abs);
 
     my $queued_at;
-    if (my $rs = $self->{+RUN_STATES}->{$run_id}) {
+    if (my $rs = $self->{+RUN_STATES}->state($run_id)) {
         my $r = $rs->results->{$job_id};
         $queued_at = $r->{queued_at} if $r && defined $r->{queued_at};
     }

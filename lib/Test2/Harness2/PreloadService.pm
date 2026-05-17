@@ -454,7 +454,7 @@ sub run_on_general_message {
 #
 # The collector emits the standard test_job_started auditor event
 # to the harness via its ipc_run wiring (pointing at the harness's
-# bus name); the harness's _handle_test_job_started picks it up
+# bus name); the harness's JobTracker handle_test_job_started picks it up
 # and populates the placeholder RUNNING_JOBS entry.
 #
 # Process tree after this returns to the IPC loop:

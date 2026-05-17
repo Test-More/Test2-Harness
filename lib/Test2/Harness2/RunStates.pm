@@ -68,7 +68,7 @@ sub flags {
 
 # Peek at the flags hash without lazy-initializing. Returns undef when
 # no entry exists. Used by paths that want to skip work entirely when
-# nothing has been recorded yet (e.g. _emit_run_completed).
+# nothing has been recorded yet (e.g. emit_run_completed).
 sub flags_peek {
     my ($self, $run_id) = @_;
     return $self->{+RUN_FLAGS}->{$run_id};

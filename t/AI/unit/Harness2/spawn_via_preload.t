@@ -91,7 +91,7 @@ subtest 'spawn_via_preload records placeholder + sends spawn_test' => sub {
     is($payload->{env}->{T2_FORMATTER}, 'Stream2',      'T2_FORMATTER injected');
 };
 
-subtest '_handle_test_job_started populates placeholder pid' => sub {
+subtest 'handle_test_job_started populates placeholder pid' => sub {
     @sent = ();
     my $preload = Test2::Harness2::Resource::Preload->new(name => 'default', modules => []);
     $preload->mark_ready;
@@ -107,12 +107,12 @@ subtest '_handle_test_job_started populates placeholder pid' => sub {
 
     $h->preload_router->spawn_via_preload($run, $job, $preload, assign_id => 'AID', assigned_resources => [$preload]);
 
-    # Capture run_state subscriber to no-op so _broadcast_run_state doesn't blow up.
+    # Capture run_state subscriber to no-op so broadcast_run_state doesn't blow up.
     no warnings 'redefine';
-    local *Test2::Harness2::_broadcast_run_state = sub { };
+    local *Test2::Harness2::StateBroadcaster::broadcast_run_state = sub { };
     use warnings;
 
-    $h->_handle_test_job_started({
+    $h->job_tracker->handle_test_job_started({
         run_id        => $run->run_id,
         job_id        => $job->job_id,
         job_try       => 1,

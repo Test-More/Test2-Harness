@@ -34,13 +34,31 @@ use constant BROKEN_RESOURCE_SLOT  => Test2::Harness2::Scheduler::BROKEN_RESOURC
 }
 
 {
+    package SchFakeJobTracker;
+    sub new {
+        my ($c, $h) = @_;
+        return bless { harness => $h }, $c;
+    }
+    sub snapshot_run_results {
+        my ($self, $run) = @_;
+        return $self->{harness}->{snapshot_results}->{$run->run_id} // {};
+    }
+    sub emit_run_completed {
+        my ($self, $run) = @_;
+        push @{$self->{harness}->{emit_calls}}, $run;
+        return;
+    }
+}
+
+{
     package SchFakeHarness;
     # Bare-minimum harness fake. The scheduler only ever reaches the
-    # harness for launch glue (which the tests below intercept) and
-    # for ->resources (an empty arrayref is fine).
+    # harness for launch glue (which the tests below intercept), for
+    # ->resources (an empty arrayref is fine), and for ->job_tracker
+    # (the run-finalization path on finalize_run_if_complete).
     sub new {
         my ($c, %p) = @_;
-        return bless {
+        my $self = bless {
             resources         => $p{resources} // [],
             ensure_calls      => [],
             launch_calls      => [],
@@ -50,16 +68,17 @@ use constant BROKEN_RESOURCE_SLOT  => Test2::Harness2::Scheduler::BROKEN_RESOURC
             run_state         => 'running',
             finish_after      => 0,
         }, $c;
+        $self->{job_tracker} = SchFakeJobTracker->new($self);
+        return $self;
     }
-    sub resources                  { $_[0]->{resources} }
+    sub resources                   { $_[0]->{resources} }
+    sub job_tracker                 { $_[0]->{job_tracker} }
     sub _ensure_run_service_started { push @{$_[0]->{ensure_calls}},   $_[1] }
-    sub _resolve_preload_for_job   { return (undef, 'no_preload') }
-    sub _launch_job                { push @{$_[0]->{launch_calls}}, [@_[1..$#_]] }
-    sub _snapshot_run_results      { return $_[0]->{snapshot_results}->{$_[1]->run_id} // {} }
-    sub _emit_run_completed        { push @{$_[0]->{emit_calls}},     $_[1] }
-    sub _write_run_report          { }
-    sub _teardown_run_service      { push @{$_[0]->{teardown_calls}}, $_[1] }
-    sub emit_service_event         { }
+    sub _resolve_preload_for_job    { return (undef, 'no_preload') }
+    sub _launch_job                 { push @{$_[0]->{launch_calls}}, [@_[1..$#_]] }
+    sub _write_run_report           { }
+    sub _teardown_run_service       { push @{$_[0]->{teardown_calls}}, $_[1] }
+    sub emit_service_event          { }
 }
 
 # Reach into the harness's hash for STATE / FINISH_AFTER_INITIAL_RUN

@@ -540,11 +540,11 @@ sub finalize_run_if_complete {
     # Idempotent: if we already finalized this run, do nothing.
     return if $run_states->completed($run_id);
 
-    $run_states->record_completed($run_id, $h->_snapshot_run_results($run));
+    $run_states->record_completed($run_id, $h->job_tracker->snapshot_run_results($run));
 
     # Emit the terminal run_completed + collector_report event from
     # the harness BEFORE the per-run state is dropped.
-    $h->_emit_run_completed($run);
+    $h->job_tracker->emit_run_completed($run);
     $h->_write_run_report($run);
 
     $self->remove_from_queue($run_id);

@@ -516,8 +516,8 @@ subtest 'test_job_completed for the last running job triggers run_ended' => sub 
     );
     $h->{run_states}->set_state($run->run_id, $rstate);
     $rstate->mark_running($job->job_id);
-    $h->_scheduler_queue_run($run);
-    $h->_scheduler_mark_running($run->run_id, $job->job_id);
+    $h->scheduler->queue_run($run);
+    $h->scheduler->mark_running($run->run_id, $job->job_id);
 
     $h->job_tracker->running_jobs->{$job->job_id} = {
         run        => $run,
@@ -848,7 +848,7 @@ subtest 'no run service is spawned (Stage 9 of the flatten); harness writes the 
     my $run = Test2::Harness2::Run->from_files(run_id => 1, files => _tfs('x.t'));
     my $h   = Test2::Harness2->new(workdir => $dir);
     push @{$h->scheduler->queue} => $run;
-    $h->_scheduler_queue_run($run);
+    $h->scheduler->queue_run($run);
 
     $h->{ipcm_info} = {fake => 1};
 

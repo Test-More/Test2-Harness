@@ -853,44 +853,6 @@ sub run_on_general_message {
     return;
 }
 
-#-------------------------------------------------------------------
-# Compatibility shims for moved methods. RUNNING_JOBS, the per-job
-# lifecycle handlers, the run-completed emit, and the collector report
-# builder all live on Test2::Harness2::JobTracker. The two-line shims
-# below keep existing in-tree callers (Scheduler.pm's
-# finalize_run_if_complete, _write_run_report, and the
-# spawn_via_preload.t unit) wired to the harness-level names without
-# rewriting every call site.
-#-------------------------------------------------------------------
-
-sub _handle_test_job_started {
-    my $self = shift;
-    return $self->{+JOB_TRACKER}->handle_test_job_started(@_);
-}
-
-sub _emit_run_completed {
-    my $self = shift;
-    return $self->{+JOB_TRACKER}->emit_run_completed(@_);
-}
-
-sub _build_collector_report {
-    my $self = shift;
-    return $self->{+JOB_TRACKER}->build_collector_report(@_);
-}
-
-sub _snapshot_run_results {
-    my $self = shift;
-    return $self->{+JOB_TRACKER}->snapshot_run_results(@_);
-}
-
-# Thin shim retained so external callers (and one test that mocks
-# this name to no-op the broadcast) keep working. Snapshot fan-out
-# and run-finalization triggering live on the broadcaster.
-sub _broadcast_run_state {
-    my ($self, $run_id) = @_;
-    return $self->{+BROADCASTER}->broadcast_run_state($run_id);
-}
-
 # Peer delta callback from IPC::Manager. A negative delta on a
 # subscribed peer IS the signal that the peer has left the bus --
 # no separate peer_exists() query is needed. Clean unsubscribes
@@ -1124,28 +1086,10 @@ sub TO_JSON {
     };
 }
 
-# Scheduler decision logic and per-run bookkeeping moved to
+# Scheduler decision logic and per-run bookkeeping live on
 # Test2::Harness2::Scheduler. The harness keeps a strong reference
-# under +SCHEDULER and exposes one entry point (run_on_all -> tick)
-# plus a couple of legacy shims to keep existing in-tree callers
-# (specifically t/AI/unit/Harness2.t which still pokes
-# _scheduler_queue_run / _scheduler_mark_running directly) working
-# without modification.
-sub _scheduler_queue_run {
-    my ($self, $run) = @_;
-    return $self->{+SCHEDULER}->queue_run($run);
-}
-
-sub _scheduler_mark_running {
-    my ($self, @args) = @_;
-    return $self->{+SCHEDULER}->mark_running(@args);
-}
-
-sub _scheduler_mark_pending {
-    my ($self, @args) = @_;
-    return $self->{+SCHEDULER}->mark_pending(@args);
-}
-
+# under +SCHEDULER and exposes one entry point (run_on_all -> tick);
+# everything else routes through $self->scheduler->method.
 sub run_on_all {
     my ($self, $activity) = @_;
 
@@ -1262,7 +1206,7 @@ sub _write_run_report {
     File::Path::make_path($dir) unless -d $dir;
 
     my $path   = "$dir/report.jsonl";
-    my $report = $self->_build_collector_report($run, time);
+    my $report = $self->{+JOB_TRACKER}->build_collector_report($run, time);
 
     open my $fh, '>', $path or croak "open '$path': $!";
     print $fh encode_json($report), "\n";
@@ -1667,10 +1611,10 @@ and helpers.
 
 =head2 Scheduler
 
-The scheduler decision logic lives on L<Test2::Harness2::Scheduler>; the
-harness keeps thin shims (C<_scheduler_queue_run>, C<_scheduler_mark_running>,
-C<_scheduler_mark_pending>) that delegate to the subsystem so existing
-in-tree callers continue to work.
+The scheduler decision logic lives on L<Test2::Harness2::Scheduler>.
+Callers reach the subsystem via C<< $harness->scheduler >> and invoke
+its methods directly (C<queue_run>, C<mark_running>, C<mark_pending>,
+etc.).
 
 =head2 Launch helpers
 

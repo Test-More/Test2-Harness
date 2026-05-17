@@ -21,6 +21,7 @@ use IPC::Manager::Service::Handle;
 use Test2::Harness2::Collector;
 use Test2::Harness2::PidIndex;
 use Test2::Harness2::SpawnGateway;
+use Test2::Harness2::StateBroadcaster;
 use Test2::Harness2::Role::ResourceServiceHost;
 use Test2::Harness2::Role::Service;
 use Test2::Harness2::Run;
@@ -50,6 +51,7 @@ use Object::HashBase qw{
     <resource_services
     <pid_index
     <spawn_gateway
+    <broadcaster
     +run_flags
     <collector_grace_secs
     +pending_synth_completions
@@ -62,8 +64,6 @@ use Object::HashBase qw{
     +completed_runs
     +finish_after_initial_run
     +emitter
-    +subscribers
-    +subscriber_retry
     +run_ord_counter
     watch_pids
     own_pgroup
@@ -89,7 +89,6 @@ use constant RUN_PIDS_GLOBAL_KEY => Test2::Harness2::PidIndex::RUN_PIDS_GLOBAL_K
 #           job in the same run, one at a time as the job limiter
 #           frees slots; the run closes out once they all complete.
 use constant BROKEN_BEHAVIORS     => {map { $_ => 1 } qw/skip fail abort/};
-use constant SUBSCRIBER_RETRY_CAP => 1024;
 
 # Grace window applied when a collector pid exits without a prior
 # test_job_completed. The IPC::Manager loop drives run_on_interval
@@ -188,6 +187,7 @@ sub _init_default_slots {
     $self->{+RESOURCE_SERVICES}         //= {};
     $self->{+PID_INDEX}                 //= Test2::Harness2::PidIndex->new(harness => $self);
     $self->{+SPAWN_GATEWAY}             //= Test2::Harness2::SpawnGateway->new(harness => $self);
+    $self->{+BROADCASTER}               //= Test2::Harness2::StateBroadcaster->new(harness => $self);
     $self->{+RUN_FLAGS}                 //= {};
     $self->{+PENDING_SYNTH_COMPLETIONS} //= {};
     $self->{+PENDING_SPAWN_REQUESTS}     //= {};
@@ -200,8 +200,6 @@ sub _init_default_slots {
     $self->{+COMPLETED_RUNS}             //= {};
     $self->{+WATCH_PIDS}                 //= [@{$self->{+PARENT_PIDS}}];
     $self->{+OWN_PGROUP}                 //= 0;
-    $self->{+SUBSCRIBERS}                //= {};
-    $self->{+SUBSCRIBER_RETRY}           //= {};
 
     # Sequential run-ord allocator: every accepted run gets the next
     # ordinal integer starting at 0. The counter is per harness-process;
@@ -884,7 +882,7 @@ sub run_on_general_message {
 
     # Drain any pending retries at the top of each message tick so
     # temporary send failures resolve promptly when the bus catches up.
-    $self->_drain_subscriber_retries;
+    if (my $bc = $self->{+BROADCASTER}) { $bc->drain_retries }
 
     my $content = $msg->content;
     my $kind    = ref($content) eq 'HASH' ? $content->{kind} : undef;
@@ -1310,43 +1308,33 @@ sub _build_collector_report {
     };
 }
 
-# Push a snapshot of the named run's State out to subscribers AND
-# trigger run-finalization if the run is now complete. This
-# replaces the round-trip via run_state_update IPC that RunService
-# used to drive: subscribers still see one snapshot per state
-# change, just sourced locally instead of over the bus.
+# Thin shim retained so external callers (and one test that mocks
+# this name to no-op the broadcast) keep working. Snapshot fan-out
+# and run-finalization triggering live on the broadcaster.
 sub _broadcast_run_state {
     my ($self, $run_id) = @_;
-    my $rstate = $self->{+RUN_STATES}->{$run_id} or return;
-    my $data   = $rstate->TO_JSON;
-    $self->_notify_state_subscribers($run_id, $data);
-
-    my ($run) = grep { $_->run_id eq $run_id } @{$self->{+QUEUE} // []};
-    $self->_finalize_run_if_complete($run) if $run;
-    return;
+    return $self->{+BROADCASTER}->broadcast_run_state($run_id);
 }
 
 # Peer delta callback from IPC::Manager. A negative delta on a
 # subscribed peer IS the signal that the peer has left the bus --
 # no separate peer_exists() query is needed. Clean unsubscribes
-# have already removed the peer from SUBSCRIBERS, so anything that
-# reaches this branch is an unexpected departure; we warn and drop
-# the registration (plus any queued retries).
+# have already removed the peer from the broadcaster's registry, so
+# anything that reaches this branch is an unexpected departure; the
+# broadcaster warns and drops the registration (plus any queued
+# retries).
 sub run_on_peer_delta {
     my ($self, $delta) = @_;
 
     return unless ref($delta) eq 'HASH';
 
+    my $bc = $self->{+BROADCASTER} or return;
     for my $peer (keys %$delta) {
         next unless $delta->{$peer} < 0;
-        next unless exists $self->{+SUBSCRIBERS}->{$peer};
-
-        warn "Test2::Harness2: subscriber '$peer' left without unsubscribing\n";
-        delete $self->{+SUBSCRIBERS}->{$peer};
-        delete $self->{+SUBSCRIBER_RETRY}->{$peer};
+        $bc->forget_peer($peer);
     }
 
-    $self->_drain_subscriber_retries;
+    $bc->drain_retries;
     return;
 }
 
@@ -1432,228 +1420,18 @@ sub _handle_resource_state_message {
 
 # ----------------------------------------------------------------------
 # Subscription API. Consumers (typically the test command) ask to
-# be told when run state changes. The harness is the only service that
-# carries this registry; run services publish state upstream via
-# _send_to_harness, the harness then fans out to any matching
-# subscribers.
-#
-# Registry shape:
-#   { $peer_name => {
-#         global => $bool,      # (future) harness-level state
-#         runs   => { $id=>1 }, # run ids the subscriber watches
-#         state  => $bool,      # want state change messages
-#     } }
+# be told when run state changes. The harness keeps these as thin
+# request-handler shims; registry, fanout, retry queueing, and
+# peer-drop cleanup all live on Test2::Harness2::StateBroadcaster.
+
 sub request_handler_subscribe {
-    my ($self, $payload, $msg) = @_;
-
-    my $peer = $msg ? $msg->from : undef;
-    return {ok => 0, error => "subscribe requires an IPC message context"}
-        unless defined $peer && length $peer;
-
-    my $global = $payload->{global} ? 1 : 0;
-    my $state  = $payload->{state}  ? 1 : 0;
-
-    my @run_ids;
-    push @run_ids => $payload->{run}     if defined $payload->{run};
-    push @run_ids => @{$payload->{runs}} if ref($payload->{runs}) eq 'ARRAY';
-
-    # Validate every run_id up front. The harness knows about runs in
-    # the live queue and in COMPLETED_RUNS (terminal snapshots).
-    for my $rid (@run_ids) {
-        next if grep { $_->run_id eq $rid } @{$self->{+QUEUE} // []};
-        next if $self->{+COMPLETED_RUNS}->{$rid};
-        return {ok => 0, error => "unknown run '$rid'"};
-    }
-
-    my $entry = $self->{+SUBSCRIBERS}->{$peer} //= {
-        global => 0,
-        runs   => {},
-        state  => 0,
-    };
-    $entry->{global} ||= $global;
-    $entry->{state}  ||= $state;
-    $entry->{runs}->{$_} = 1 for @run_ids;
-
-    # Send an initial state snapshot for each freshly-added run so the
-    # subscriber does not need to separately request it.
-    if ($state) {
-        for my $rid (@run_ids) {
-            $self->_send_state_snapshot($peer, run_id => $rid);
-        }
-    }
-
-    return {ok => 1};
+    my $self = shift;
+    return $self->{+BROADCASTER}->subscribe(@_);
 }
 
 sub request_handler_unsubscribe {
-    my ($self, $payload, $msg) = @_;
-
-    my $peer = $msg ? $msg->from : undef;
-    return {ok => 0, error => "unsubscribe requires an IPC message context"}
-        unless defined $peer && length $peer;
-
-    delete $self->{+SUBSCRIBERS}->{$peer};
-    delete $self->{+SUBSCRIBER_RETRY}->{$peer};
-
-    return {ok => 1};
-}
-
-# Fan-out. Called from _handle_run_state_update. Full snapshot each
-# time; consumers diff on their side.
-sub _notify_state_subscribers {
-    my ($self, $run_id, $run_data) = @_;
-    return unless defined $run_id;
-
-    for my $peer (keys %{$self->{+SUBSCRIBERS}}) {
-        my $entry = $self->{+SUBSCRIBERS}->{$peer};
-        next unless $entry->{state};
-        next unless $entry->{runs}->{$run_id};
-
-        $self->_send_to_subscriber(
-            $peer => {
-                type   => 'state',
-                item   => 'run',
-                run_id => $run_id,
-                state  => $run_data,
-            },
-        );
-    }
-    return;
-}
-
-sub _send_state_snapshot {
-    my ($self, $peer, %params) = @_;
-    my $run_id = $params{run_id} or return;
-
-    my $run_data;
-    if (grep { $_->run_id eq $run_id } @{$self->{+QUEUE} // []}) {
-        my $rstate = $self->{+RUN_STATES}->{$run_id};
-        $run_data = $rstate ? $rstate->TO_JSON : {run_id => $run_id};
-    }
-    elsif (my $info = $self->{+COMPLETED_RUNS}->{$run_id}) {
-        # Completed snapshot is not a Run-shaped TO_JSON; wrap it so
-        # consumers still see the same {type,item,run_id,state} shape.
-        $run_data = {
-            run_id  => $run_id,
-            state   => 'complete',
-            results => $info->{results} // {},
-            done    => $info->{done}    // [],
-            pass    => $info->{pass},
-        };
-    }
-    else {
-        return;
-    }
-
-    $self->_send_to_subscriber(
-        $peer => {
-            type   => 'state',
-            item   => 'run',
-            run_id => $run_id,
-            state  => $run_data,
-        },
-    );
-}
-
-# Deliver one message to a subscriber. Uses the service's own
-# client to piggy-back on IPC::Manager's internal peer cache
-# instead of constructing a new Handle per-peer (Handles are only
-# needed when the sender is doing a sync_request and needs to wait
-# for a response; a plain send_message() goes through the client
-# directly and accepts any named peer on the bus, including
-# clients that are not themselves services).
-#
-# On a send failure we ask the bus whether the peer is still
-# registered. If peer_exists() says yes, the failure is transient
-# (bus congestion, a racing suspend, etc.) and we queue a retry
-# for the next tick. If peer_exists() says no, the peer is gone
-# for good; skip the retry and unsubscribe now so we stop sending
-# them anything else.
-sub _send_to_subscriber {
-    my ($self, $peer, $payload) = @_;
-
-    my $ok  = eval { $self->client->send_message($peer, $payload); 1 };
-    my $err = $@;
-
-    return if $ok;
-
-    my $peer_alive = eval { $self->client->peer_exists($peer) };
-    unless ($peer_alive) {
-        warn "Test2::Harness2: subscriber '$peer' is gone, unsubscribing: $err\n";
-        delete $self->{+SUBSCRIBERS}->{$peer};
-        delete $self->{+SUBSCRIBER_RETRY}->{$peer};
-        return;
-    }
-
-    my $retry = $self->{+SUBSCRIBER_RETRY}->{$peer} //= {};
-    $retry->{pending} //= [];
-    push @{$retry->{pending}} => $payload;
-
-    # Cap per-peer retry queue. A subscriber that never drains will
-    # otherwise balloon harness memory. When the cap is hit, drop the
-    # oldest payloads (FIFO) and warn once -- the consumer is broken
-    # in some way and there is no good way to recover the lost
-    # messages, but the harness must stay healthy.
-    my $cap = SUBSCRIBER_RETRY_CAP;
-    if (@{$retry->{pending}} > $cap) {
-        my $excess = @{$retry->{pending}} - $cap;
-        splice @{$retry->{pending}}, 0, $excess;
-        unless ($retry->{capped_warned}++) {
-            warn "Test2::Harness2: subscriber '$peer' retry queue exceeded " . "$cap; dropping oldest payloads.\n";
-        }
-    }
-    return;
-}
-
-# Called once per service tick to drain retries. Per-payload the
-# same peer_alive gate applies: a send failure is retried while
-# the peer is still on the bus, and dropped (with the peer
-# unsubscribed) once peer_exists() reports it gone.
-sub _drain_subscriber_retries {
     my $self = shift;
-
-    my $retries = $self->{+SUBSCRIBER_RETRY};
-    return unless keys %$retries;
-
-    for my $peer (keys %$retries) {
-        my $entry = $retries->{$peer};
-        my @queue = @{$entry->{pending} // []};
-        $entry->{pending} = [];
-
-        my $peer_gone = 0;
-        for my $i (0 .. $#queue) {
-            my $payload = $queue[$i];
-            my $ok      = eval { $self->client->send_message($peer, $payload); 1 };
-            my $err     = $@;
-
-            next if $ok;
-
-            my $peer_alive = eval { $self->client->peer_exists($peer) };
-            unless ($peer_alive) {
-                warn "Test2::Harness2: subscriber '$peer' is gone, unsubscribing: $err\n";
-                $peer_gone = 1;
-                last;
-            }
-
-            # Peer is still on the bus but the send failed again.
-            # Keep this payload (and anything after it we have not
-            # sent yet) for the next tick so we do not reorder the
-            # stream or drop messages just because the bus is
-            # momentarily backed up.
-            push @{$entry->{pending}} => @queue[$i .. $#queue];
-            last;
-        }
-
-        if ($peer_gone) {
-            delete $self->{+SUBSCRIBERS}->{$peer};
-            delete $self->{+SUBSCRIBER_RETRY}->{$peer};
-        }
-        elsif (!@{$entry->{pending}}) {
-            delete $self->{+SUBSCRIBER_RETRY}->{$peer};
-        }
-    }
-
-    return;
+    return $self->{+BROADCASTER}->unsubscribe(@_);
 }
 
 sub request_handler_detach {

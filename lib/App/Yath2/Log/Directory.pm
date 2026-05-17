@@ -26,6 +26,12 @@ use Test2::Harness2::LogLayout qw/
 
 use App::Yath2::Log::Artifact;
 use App::Yath2::Log::Iterator::JSONL;
+use App::Yath2::Log::Iterator::Producers;
+use App::Yath2::Log::Producer::Run;
+use App::Yath2::Log::Producer::Job;
+use App::Yath2::Log::Producer::Service;
+use App::Yath2::Log::Producer::Collector;
+use Cpanel::JSON::XS qw/decode_json/;
 
 use Object::HashBase qw{
     <path
@@ -185,6 +191,192 @@ sub _immediate_dir_children {
 sub _numeric_immediate_children {
     my ($self, $rel) = @_;
     return grep { /^\d+\z/ } $self->_immediate_dir_children($rel);
+}
+
+# }}}
+
+# {{{ Producer iterators
+
+sub run_producers {
+    my $self = shift;
+    my @ids  = $self->runs;
+    my $i    = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @ids;
+            my $id = $ids[$i++];
+            return $self->_build_run_producer($id);
+        },
+    );
+}
+
+sub job_producers {
+    my ($self, $run_id) = @_;
+    croak("run_id is required") unless defined $run_id;
+    my @pairs;
+    for my $jid ($self->jobs($run_id)) {
+        for my $try ($self->tries($run_id, $jid)) {
+            push @pairs, [$jid, $try];
+        }
+    }
+    my $i = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @pairs;
+            my ($jid, $try) = @{$pairs[$i++]};
+            return $self->_build_job_producer($run_id, $jid, $try);
+        },
+    );
+}
+
+sub service_producers {
+    my ($self, $run_id) = @_;
+    my @ids = $self->services($run_id);
+    my $i   = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @ids;
+            my $sid = $ids[$i++];
+            return $self->_build_service_producer($sid, $run_id);
+        },
+    );
+}
+
+sub collector_producers {
+    my $self = shift;
+    my @ids  = $self->_immediate_dir_children('collectors');
+    my $i    = 0;
+    return App::Yath2::Log::Iterator::Producers->new(
+        next_cb => sub {
+            return undef if $i >= @ids;
+            my $cid = $ids[$i++];
+            return $self->_build_collector_producer($cid);
+        },
+    );
+}
+
+sub _build_run_producer {
+    my ($self, $id) = @_;
+    my $sealed = $self->_read_sealed("runs/$id/.sealed");
+    return App::Yath2::Log::Producer::Run->new(
+        id            => $id,
+        kind          => 'run',
+        parent_id     => undef,
+        run_id        => $id,
+        state         => ($sealed ? 'sealed' : ($self->is_live ? 'partial' : 'sealed')),
+        started_at    => $sealed ? $sealed->{started_at} : undef,
+        ended_at      => $sealed ? $sealed->{sealed_at}  : undef,
+        pass          => $sealed ? $sealed->{pass}       : undef,
+        exit          => $sealed ? $sealed->{exit}       : undef,
+        log           => $self,
+        artifact_refs => $self->_run_artifact_refs($id),
+    );
+}
+
+sub _build_job_producer {
+    my ($self, $run_id, $jid, $try) = @_;
+    my $base   = "runs/$run_id/jobs/$jid/$try";
+    my $sealed = $self->_read_sealed("$base/.sealed");
+    my $refs   = $self->_job_artifact_refs($run_id, $jid, $try);
+    return App::Yath2::Log::Producer::Job->new(
+        id               => $jid,
+        kind             => 'job',
+        parent_id        => $run_id,
+        run_id           => $run_id,
+        try              => $try,
+        state            => ($sealed ? 'sealed' : ($self->is_live ? 'partial' : 'sealed')),
+        started_at       => $sealed ? $sealed->{started_at} : undef,
+        ended_at         => $sealed ? $sealed->{sealed_at}  : undef,
+        pass             => $sealed ? $sealed->{pass}       : undef,
+        report_available => (exists $refs->{report} ? 1 : 0),
+        log              => $self,
+        artifact_refs    => $refs,
+    );
+}
+
+sub _build_service_producer {
+    my ($self, $sid, $run_id) = @_;
+    my $base   = defined $run_id ? "runs/$run_id/services/$sid" : "services/$sid";
+    my $sealed = $self->_read_sealed("$base/.sealed");
+    return App::Yath2::Log::Producer::Service->new(
+        id            => $sid,
+        kind          => 'service',
+        parent_id     => $run_id,
+        run_id        => $run_id,
+        state         => ($sealed ? 'sealed' : ($self->is_live ? 'partial' : 'sealed')),
+        started_at    => $sealed ? $sealed->{started_at} : undef,
+        ended_at      => $sealed ? $sealed->{sealed_at}  : undef,
+        log           => $self,
+        artifact_refs => $self->_service_artifact_refs($sid, $run_id),
+    );
+}
+
+sub _build_collector_producer {
+    my ($self, $cid) = @_;
+    my $sealed = $self->_read_sealed("collectors/$cid/.sealed");
+    return App::Yath2::Log::Producer::Collector->new(
+        id            => $cid,
+        kind          => 'collector',
+        parent_id     => undef,
+        run_id        => undef,
+        state         => ($sealed ? 'sealed' : ($self->is_live ? 'partial' : 'sealed')),
+        started_at    => $sealed ? $sealed->{started_at} : undef,
+        ended_at      => $sealed ? $sealed->{sealed_at}  : undef,
+        log           => $self,
+        artifact_refs => {},
+    );
+}
+
+sub _read_sealed {
+    my ($self, $rel) = @_;
+    my $abs = File::Spec->catfile($self->{+PATH}, $rel);
+    return undef unless -e $abs;
+    open(my $fh, '<', $abs) or return undef;
+    my $line = <$fh>;
+    close($fh);
+    return undef unless defined $line && length $line;
+    my $ok = eval { $line = decode_json($line); 1 };
+
+    unless ($ok) {
+        warn "Failed to decode .sealed marker '$rel': $@";
+        return undef;
+    }
+    return undef unless ref $line eq 'HASH';
+    return $line;
+}
+
+sub _run_artifact_refs {
+    my ($self, $id) = @_;
+    my $base = "runs/$id";
+    my %refs;
+    for my $kind (qw/spec report events/) {
+        my $rel = $self->_first_existing("$base/$kind.jsonl", "$base/$kind.jsonl.zst");
+        $refs{$kind} = $rel if defined $rel;
+    }
+    return \%refs;
+}
+
+sub _job_artifact_refs {
+    my ($self, $run_id, $jid, $try) = @_;
+    my $base = "runs/$run_id/jobs/$jid/$try";
+    my %refs;
+    for my $kind (qw/spec report events stdout stderr/) {
+        my $rel = $self->_first_existing("$base/$kind.jsonl", "$base/$kind.jsonl.zst");
+        $refs{$kind} = $rel if defined $rel;
+    }
+    return \%refs;
+}
+
+# Extended in Stage 2 to return real artifact refs for services.
+sub _service_artifact_refs { return {} }
+
+sub _first_existing {
+    my ($self, @rels) = @_;
+    for my $rel (@rels) {
+        my $abs = File::Spec->catfile($self->{+PATH}, $rel);
+        return $rel if -e $abs;
+    }
+    return undef;
 }
 
 # }}}

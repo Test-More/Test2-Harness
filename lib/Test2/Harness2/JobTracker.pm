@@ -161,10 +161,16 @@ sub handle_test_job_started {
             );
         }
         if (my $h = $self->harness) {
-            # 'pending_spawn_requests' is the harness's HashBase slot
-            # name; reach for it by bare string so JobTracker stays
-            # decoupled from Test2::Harness2's constant namespace.
-            delete $h->{pending_spawn_requests}->{"$run_id\0$job_id"};
+            # Pending preload-spawn rows live on the preload router
+            # subsystem (its PENDING_SPAWN_REQUESTS HashBase slot).
+            # Reach for the bare key so JobTracker stays decoupled
+            # from PreloadRouter's constant namespace. `can` so test
+            # fixtures that don't wire a router still work.
+            if ($h->can('preload_router')) {
+                if (my $router = $h->preload_router) {
+                    delete $router->{pending_spawn_requests}->{"$run_id\0$job_id"};
+                }
+            }
         }
     }
 

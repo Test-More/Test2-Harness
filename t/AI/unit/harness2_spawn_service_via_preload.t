@@ -1,5 +1,7 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::PreloadRouter;
+use Scalar::Util ();
 
 # Stub a client that records what was sent.
 {
@@ -24,7 +26,10 @@ use Test2::Harness2;
     sub scope { $_[0]->{scope} }
 }
 
-# Stub the harness object far enough to exercise _spawn_service_via_preload.
+# Stub the harness + preload-router pair far enough to exercise
+# spawn_service_via_preload. The harness's _spawn_service_via_preload
+# shim forwards to the router; the router needs a harness backref so
+# it can reach the client + name + pid.
 sub make_harness {
     my $fake_client = FakeClient->new;
     my $harness = bless {
@@ -32,14 +37,20 @@ sub make_harness {
         resource_services => {},
         _PRELOAD_SPAWN_COUNTER => 0,
     }, 'Test2::Harness2';
+    my $router = bless {
+        harness                => $harness,
+        pending_preload_spawns => {},
+    }, 'Test2::Harness2::PreloadRouter';
+    Scalar::Util::weaken($router->{harness});
+    $harness->{preload_router} = $router;
     no warnings 'redefine';
     *Test2::Harness2::client = sub { $fake_client };
-    return ($harness, $fake_client);
+    return ($harness, $fake_client, $router);
 }
 
 # Happy path.
 {
-    my ($harness, $client) = make_harness();
+    my ($harness, $client, $router) = make_harness();
     my $entry = {
         name          => 'myres',
         scope         => 'global',
@@ -55,7 +66,7 @@ sub make_harness {
     my $spawn_id = $harness->_spawn_service_via_preload($preload_info, $entry);
 
     ok($spawn_id, 'returns a spawn_id');
-    my $pending = $harness->{pending_preload_spawns};
+    my $pending = $router->{pending_preload_spawns};
     is(scalar(keys %$pending), 1, 'one pending entry installed');
     is($pending->{$spawn_id}{peer_name}, 'resource-myres', 'pending peer_name');
     is($pending->{$spawn_id}{preload_name}, 'preload-myapp', 'pending preload_name');
@@ -72,7 +83,7 @@ sub make_harness {
 
 # Send failure: pending entry rolled back, undef returned.
 {
-    my ($harness, $client) = make_harness();
+    my ($harness, $client, $router) = make_harness();
     $client->{die_on} = 1;
     my $entry = {
         name          => 'broken',
@@ -91,14 +102,14 @@ sub make_harness {
     my $r = $harness->_spawn_service_via_preload($preload_info, $entry);
 
     is($r, undef, 'returns undef on send failure');
-    is(scalar(keys %{ $harness->{pending_preload_spawns} // {} }), 0,
+    is(scalar(keys %{ $router->{pending_preload_spawns} // {} }), 0,
        'pending entry rolled back');
     like(\@warns, [match qr/spawn dispatch.*failed/], 'warned about failure');
 }
 
 # ctor_args includes watch_pids => [harness_pid].
 {
-    my ($harness, $client) = make_harness();
+    my ($harness, $client, $router) = make_harness();
     no warnings 'redefine';
     local *Test2::Harness2::pid = sub { 4242 };
     my $entry = {

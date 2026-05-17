@@ -1,5 +1,7 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::PreloadRouter;
+use Scalar::Util ();
 
 {
     package X;
@@ -15,6 +17,12 @@ my $svc = bless {
         '34'       => { service_class => 'Test2::Harness2::PreloadService',    scope => 'run',    name => 'preload-RUN',     pid => $$,       resource => bless({ name => 'RUN' }, 'X'), run => 'RID' },
     },
 }, 'Test2::Harness2';
+
+# list_preloads now lives on the preload router subsystem; attach
+# a minimal router so the harness shim has something to delegate to.
+my $router = bless { harness => $svc }, 'Test2::Harness2::PreloadRouter';
+Scalar::Util::weaken($router->{harness});
+$svc->{preload_router} = $router;
 
 my $res = $svc->request_handler_list_preloads({}, undef);
 ok($res->{ok}, 'handler returned ok=1') or diag explain $res;

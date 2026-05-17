@@ -83,25 +83,39 @@ use constant PENDING_SYNTH_SLOT
 }
 
 {
+    package JTFakePreloadRouter;
+    # Minimal preload-router fake: only the bareword hash slot
+    # JobTracker reaches for via $h->preload_router->{...}.
+    sub new {
+        my ($c, %p) = @_;
+        return bless { pending_spawn_requests => $p{pending_spawn_requests} // {} }, $c;
+    }
+}
+
+{
     package JTFakeHarness;
     # Minimal harness fake: the job tracker reaches the harness for
-    # emit_service_event (recorded) and PENDING_SPAWN_REQUESTS (a
-    # bare hash slot). EMITTER is intentionally absent so the
+    # emit_service_event (recorded), and through preload_router for
+    # pending_spawn_requests (now living on the preload-router
+    # subsystem). EMITTER is intentionally absent so the
     # collector-start / collector-end reflectors are silent no-ops in
     # the simple cases.
     sub new {
         my ($c, %p) = @_;
         return bless {
-            events                  => [],
-            pending_spawn_requests  => $p{pending_spawn_requests} // {},
-            collector_grace_secs    => $p{collector_grace_secs} // 10,
-            emitter                 => $p{emitter},
+            events                 => [],
+            preload_router         => JTFakePreloadRouter->new(
+                pending_spawn_requests => $p{pending_spawn_requests} // {},
+            ),
+            collector_grace_secs   => $p{collector_grace_secs} // 10,
+            emitter                => $p{emitter},
         }, $c;
     }
     sub emit_service_event {
         my ($self, %fields) = @_;
         push @{$self->{events}}, \%fields;
     }
+    sub preload_router { $_[0]->{preload_router} }
 }
 
 {
@@ -241,7 +255,7 @@ subtest test_job_started_preload_placeholder => sub {
         pid                  => undef,
         awaiting_preload_pid => 1,
     });
-    $deps->{harness}{pending_spawn_requests}{"r1\0j1"} = {x => 1};
+    $deps->{harness}->preload_router->{pending_spawn_requests}{"r1\0j1"} = {x => 1};
 
     $jt->handle_test_job_started({
         run_id        => 'r1',
@@ -258,8 +272,8 @@ subtest test_job_started_preload_placeholder => sub {
     my @calls = grep { $_->[0] eq 'register' } @{$deps->{pid_index}{calls}};
     is(scalar @calls, 1, 'pid registered with PidIndex');
 
-    ok(!exists $deps->{harness}{pending_spawn_requests}{"r1\0j1"},
-        'pending spawn request dropped from harness');
+    ok(!exists $deps->{harness}->preload_router->{pending_spawn_requests}{"r1\0j1"},
+        'pending spawn request dropped from preload router');
 };
 
 # --- handle_test_job_completed -> mark_done + flags + broadcast --------

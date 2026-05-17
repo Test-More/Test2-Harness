@@ -1,6 +1,8 @@
 use Test2::V0;
 use Test2::Harness2;
 use Test2::Harness2::SpawnGateway;
+use Test2::Harness2::PreloadRouter;
+use Scalar::Util ();
 
 my @sent;
 my $client_mock = bless { sent => \@sent }, 'PSDClient';
@@ -41,6 +43,13 @@ local *Test2::Harness2::client = sub { $_[0]->{_CLIENT_MOCK} };
 
 $h->{Test2::Harness2::SPAWN_GATEWAY()} =
     Test2::Harness2::SpawnGateway->new(harness => $h);
+
+# SpawnGateway reaches through $h->preload_router for find_eligible
+# and peer_name_for_preload after extraction 8. Attach a minimal
+# router that consults the same resource_services hash.
+my $router = bless { harness => $h }, 'Test2::Harness2::PreloadRouter';
+Scalar::Util::weaken($router->{harness});
+$h->{Test2::Harness2::PRELOAD_ROUTER()} = $router;
 
 subtest 'happy stage resolve' => sub {
     @sent = ();

@@ -52,13 +52,15 @@ sub handle_request {
     my $h = $self->harness
         or return { ok => 0, error => "harness gone away" };
 
-    my $preload_info = $h->_find_eligible_preload_service($stage);
+    my $router = $h->preload_router
+        or return { ok => 0, error => "preload router unavailable" };
+
+    my $preload_info = $router->find_eligible($stage);
     return { ok => 0, error => "no eligible preload stage named '$stage'" }
         unless $preload_info;
 
     my $spawn_id = ++$self->{+_SCRIPT_SPAWN_COUNTER};
-    require Test2::Harness2;
-    my $bus_name = Test2::Harness2::_preload_peer_name($preload_info->{resource});
+    my $bus_name = $router->peer_name_for_preload($preload_info->{resource});
 
     $self->{+PENDING_SCRIPT_SPAWNS}->{$spawn_id} = {
         notify_to   => $payload->{notify_to},

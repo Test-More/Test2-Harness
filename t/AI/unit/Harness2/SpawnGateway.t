@@ -26,19 +26,39 @@ use Test2::Harness2::SpawnGateway;
 }
 
 # Fake harness: implements only the bits SpawnGateway calls -- name,
-# client, ipcm_info, _find_eligible_preload_service. The latter is the
-# interim cross-domain call SpawnGateway makes through the harness
-# until extraction 8 (PreloadRouter) replaces it.
+# client, ipcm_info, preload_router. After extraction 8 SpawnGateway
+# calls $h->preload_router->find_eligible(...) +
+# $h->preload_router->peer_name_for_preload(...), so the fake harness
+# exposes a fake router instead of the old _find_eligible_preload_service.
 {
-    package SGTHarness;
+    package SGTRouter;
     sub new { my ($c, %p) = @_; bless { %p }, $c }
-    sub name      { $_[0]->{name}      // 'harness' }
-    sub client    { $_[0]->{client} }
-    sub ipcm_info { $_[0]->{ipcm_info} // 'IPC::Manager::Client::ConnectionUnix(/tmp/x)' }
-    sub _find_eligible_preload_service {
+    sub find_eligible {
         my ($self, $stage) = @_;
         return $self->{preloads}->{$stage};
     }
+    sub peer_name_for_preload {
+        my ($self, $res) = @_;
+        my $n = $res->name;
+        return "preload-$n" if $res->scope eq 'global';
+        my $rid = $res->run->run_id;
+        return "preload-$rid-$n";
+    }
+}
+
+{
+    package SGTHarness;
+    sub new {
+        my ($c, %p) = @_;
+        my $preloads = delete $p{preloads} // {};
+        my $self = bless { %p }, $c;
+        $self->{preload_router} = SGTRouter->new(preloads => $preloads);
+        return $self;
+    }
+    sub name           { $_[0]->{name}      // 'harness' }
+    sub client         { $_[0]->{client} }
+    sub ipcm_info      { $_[0]->{ipcm_info} // 'IPC::Manager::Client::ConnectionUnix(/tmp/x)' }
+    sub preload_router { $_[0]->{preload_router} }
 }
 
 # --- handle_request -------------------------------------------------------

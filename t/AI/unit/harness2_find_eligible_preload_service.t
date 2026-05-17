@@ -1,5 +1,7 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::PreloadRouter;
+use Scalar::Util ();
 
 # Minimal stub: resource object exposing name + is_permanent_broken.
 {
@@ -56,6 +58,13 @@ my $harness = bless {
         },
     },
 }, 'Test2::Harness2';
+
+# Eligibility lookup lives on the preload router; attach a stub
+# router so the harness's compatibility shim has something to
+# delegate to.
+my $router = bless { harness => $harness }, 'Test2::Harness2::PreloadRouter';
+Scalar::Util::weaken($router->{harness});
+$harness->{preload_router} = $router;
 
 my $info = $harness->_find_eligible_preload_service('myapp');
 ok($info, 'found eligible preload') or diag explain $info;

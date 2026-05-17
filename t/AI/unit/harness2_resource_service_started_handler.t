@@ -1,5 +1,7 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::PreloadRouter;
+use Scalar::Util ();
 
 my @tracked;
 {
@@ -27,11 +29,17 @@ my @events;
 
 sub make_harness {
     my (%pending) = @_;
-    bless {
-        pending_preload_spawns => \%pending,
-        resource_services      => {},
-        run_states             => {},
+    my $h = bless {
+        resource_services => {},
+        run_states        => {},
     }, 'Test2::Harness2';
+    my $router = bless {
+        harness                => $h,
+        pending_preload_spawns => \%pending,
+    }, 'Test2::Harness2::PreloadRouter';
+    Scalar::Util::weaken($router->{harness});
+    $h->{preload_router} = $router;
+    return $h;
 }
 
 # Pending entry exists -> notification triggers track + event.
@@ -76,7 +84,7 @@ sub make_harness {
     is($tracked[0]->{scope},         'global',              'scope carried');
     ok($tracked[0]->{via_preload},                          'via_preload flag set');
 
-    is(scalar(keys %{ $h->{pending_preload_spawns} }), 0,
+    is(scalar(keys %{ $h->preload_router->{pending_preload_spawns} }), 0,
        'pending entry cleared');
 
     is(scalar @events, 1, 'one event emitted');

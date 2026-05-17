@@ -94,13 +94,27 @@ sub start_resource_services {
 
 # Precompute the set of PreloadService names that will come up as
 # part of this batch so dependents whose preferred preload is in the
-# batch but not yet ready can enqueue (see RESOURCES_AWAITING_PRELOAD)
-# instead of falling straight back to a standalone spawn. Guarded on
-# `exists` so non-harness ResourceServiceHost consumers (which don't
-# carry this slot) are unaffected.
+# batch but not yet ready can enqueue (see the preload router's
+# RESOURCES_AWAITING_PRELOAD slot) instead of falling straight back
+# to a standalone spawn. Guarded on the existence of a preload_router
+# host accessor so non-harness ResourceServiceHost consumers (which
+# don't have one) are unaffected.
+# Returns true if this host has a preload router that already tracks
+# $pname as a known preload (recorded by start_resource_services).
+# Used by _start_service_entry to decide between the wait-for-preload
+# queue and an immediate standalone fallback.
+sub _preload_router_known {
+    my ($self, $pname) = @_;
+    my $router = $self->can('preload_router') ? $self->preload_router : undef;
+    return 0 unless $router;
+    return 0 unless $router->{known_preload_names};
+    return $router->{known_preload_names}->{$pname} ? 1 : 0;
+}
+
 sub _record_known_preload_names {
     my ($self, $resources) = @_;
-    return unless exists $self->{known_preload_names};
+    my $router = $self->can('preload_router') ? $self->preload_router : undef;
+    return unless $router;
 
     my %known;
     for my $r (@$resources) {
@@ -110,7 +124,7 @@ sub _record_known_preload_names {
         next unless defined $pname && length $pname;
         $known{$pname} = 1;
     }
-    $self->{known_preload_names} = \%known;
+    $router->{known_preload_names} = \%known;
 }
 
 # Walk the resources once and produce the validated service plan.
@@ -327,18 +341,17 @@ sub _start_service_entry {
             # Fall through to standalone on dispatch failure (warn
             # already emitted inside _spawn_service_via_preload).
         }
-        elsif ($self->{known_preload_names}
-            && $self->{known_preload_names}->{$pname})
-        {
+        elsif ($self->_preload_router_known($pname)) {
+            my $router = $self->preload_router;
             # Preload is configured for this host but its service has
             # not finished its module-load + preload_ready handshake.
             # Queue this dependent and let the preload_ready handler
             # drain the queue when the preload finally comes up;
             # permanent_broken drains it to standalone instead. The
-            # queue lives on the harness as RESOURCES_AWAITING_PRELOAD
-            # (HashBase slot) but the role accesses it by bareword key
-            # since the constant is package-local.
-            push @{$self->{resources_awaiting_preload}->{$pname}} => {
+            # queue lives on the preload router (RESOURCES_AWAITING_PRELOAD
+            # slot); the role accesses it by bareword key since the
+            # HashBase constant is package-local to PreloadRouter.
+            push @{$router->{resources_awaiting_preload}->{$pname}} => {
                 name          => $name,
                 scope         => $opts{scope} // 'global',
                 run           => $opts{run},

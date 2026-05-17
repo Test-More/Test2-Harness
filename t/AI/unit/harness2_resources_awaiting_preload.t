@@ -1,13 +1,17 @@
 use Test2::V0;
 use Test2::Harness2;
+use Test2::Harness2::PreloadRouter;
+use Scalar::Util ();
 
-# Stubs. _spawn_service_via_preload + _ipcm_service_standalone are
+# Stubs. spawn_service_via_preload + _ipcm_service_standalone are
 # what the drain helpers dispatch to; we capture the dispatches so we
 # can assert which path the queue took without involving a real fork.
+# All the moved logic now lives on Test2::Harness2::PreloadRouter, so
+# the redefines target that class.
 my (@spawned, @standalone);
 {
     no warnings 'redefine';
-    *Test2::Harness2::_spawn_service_via_preload = sub {
+    *Test2::Harness2::PreloadRouter::spawn_service_via_preload = sub {
         my (undef, $pinfo, $entry) = @_;
         push @spawned, [$pinfo->{name}, $entry->{name}];
         return 99;
@@ -17,27 +21,40 @@ my (@spawned, @standalone);
         push @standalone, $p{name};
         return 'started';
     };
-    *Test2::Harness2::_find_eligible_preload_service = sub {
+    *Test2::Harness2::PreloadRouter::find_eligible = sub {
         my ($self, $pname) = @_;
         return $self->{eligible}{$pname};
     };
     *Test2::Harness2::emit_service_event = sub { };
 }
 
+sub make_pair {
+    my %router_extra = @_;
+    my $h = bless {
+        resources => [],
+    }, 'Test2::Harness2';
+    my $router = bless {
+        harness                    => $h,
+        eligible                   => {},
+        resources_awaiting_preload => {},
+        known_preload_names        => {},
+        run_states                 => {},
+        %router_extra,
+    }, 'Test2::Harness2::PreloadRouter';
+    Scalar::Util::weaken($router->{harness});
+    $h->{preload_router} = $router;
+    return ($h, $router);
+}
+
 # Drain on preload_ready: a queued dependent fires through
-# _spawn_service_via_preload as soon as the matching preload is
+# spawn_service_via_preload as soon as the matching preload is
 # eligible + ready.
 {
     @spawned    = ();
     @standalone = ();
-    my $h = bless {
-        eligible                   => {},
-        resources_awaiting_preload => {},
-        known_preload_names        => {myapp => 1},
-        run_states                 => {},
-    }, 'Test2::Harness2';
+    my ($h, $router) = make_pair(known_preload_names => {myapp => 1});
 
-    push @{$h->{resources_awaiting_preload}{myapp}} => {
+    push @{$router->{resources_awaiting_preload}{myapp}} => {
         name          => 'pool',
         scope         => 'global',
         service_class => 'X',
@@ -50,12 +67,12 @@ my (@spawned, @standalone);
     is(scalar @standalone, 0, 'no standalone yet');
 
     # Preload becomes eligible + ready event arrives.
-    $h->{eligible}{myapp} = {name => 'preload-myapp', pid => $$};
+    $router->{eligible}{myapp} = {name => 'preload-myapp', pid => $$};
     $h->_handle_preload_state_message('preload_ready', {preload_name => 'myapp'});
 
     is(scalar @spawned, 1, 'queue drained');
     is($spawned[0], ['preload-myapp', 'pool'], 'dispatched the queued entry');
-    is(scalar @{$h->{resources_awaiting_preload}{myapp} // []}, 0,
+    is(scalar @{$router->{resources_awaiting_preload}{myapp} // []}, 0,
         'queue emptied');
 }
 
@@ -64,14 +81,9 @@ my (@spawned, @standalone);
 {
     @spawned    = ();
     @standalone = ();
-    my $h = bless {
-        eligible                   => {},
-        resources_awaiting_preload => {},
-        known_preload_names        => {myapp => 1},
-        run_states                 => {},
-    }, 'Test2::Harness2';
+    my ($h, $router) = make_pair(known_preload_names => {myapp => 1});
 
-    push @{$h->{resources_awaiting_preload}{myapp}} => {
+    push @{$router->{resources_awaiting_preload}{myapp}} => {
         name          => 'pool',
         scope         => 'global',
         service_class => 'X',
@@ -93,14 +105,9 @@ my (@spawned, @standalone);
 {
     @spawned    = ();
     @standalone = ();
-    my $h = bless {
-        eligible                   => {},
-        resources_awaiting_preload => {},
-        known_preload_names        => {myapp => 1},
-        run_states                 => {},
-    }, 'Test2::Harness2';
+    my ($h, $router) = make_pair(known_preload_names => {myapp => 1});
 
-    push @{$h->{resources_awaiting_preload}{myapp}} => {
+    push @{$router->{resources_awaiting_preload}{myapp}} => {
         name          => 'pool',
         scope         => 'global',
         service_class => 'X',
@@ -114,7 +121,7 @@ my (@spawned, @standalone);
 
     is(scalar @spawned,    0, 'no preload spawn');
     is(scalar @standalone, 0, 'no standalone yet (transient broken keeps queue)');
-    is(scalar @{$h->{resources_awaiting_preload}{myapp} // []}, 1,
+    is(scalar @{$router->{resources_awaiting_preload}{myapp} // []}, 1,
         'queue preserved on transient broken');
 }
 

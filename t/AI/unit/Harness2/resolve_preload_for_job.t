@@ -7,6 +7,7 @@ use Test2::V0;
 # + $run->run_id.
 
 use Test2::Harness2;
+use Test2::Harness2::PreloadRouter;
 use Test2::Harness2::Resource::Preload;
 
 sub make_preload {
@@ -45,7 +46,20 @@ sub make_job {
 
 sub make_harness {
     my @resources = @_;
-    return bless { resources => \@resources }, 'Test2::Harness2';
+    my $h = bless { resources => \@resources }, 'Test2::Harness2';
+    # The resolver lives on PreloadRouter now; bolt a stub router onto
+    # the harness so the shim can delegate. The router only reads the
+    # harness's RESOURCES slot via its harness backref, so a stub
+    # blessed into the right class with a weakened harness ref does
+    # not need full ctor wiring.
+    my $router = bless {
+        harness                => $h,
+        pending_spawn_requests => {},
+    }, 'Test2::Harness2::PreloadRouter';
+    require Scalar::Util;
+    Scalar::Util::weaken($router->{harness});
+    $h->{preload_router} = $router;
+    return $h;
 }
 
 subtest '<no> returns no_preload' => sub {

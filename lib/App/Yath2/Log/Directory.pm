@@ -68,7 +68,7 @@ sub init {
         unless defined $self->{+PATH} && length $self->{+PATH};
     croak "path '$self->{+PATH}' is not a directory"
         unless -d $self->{+PATH};
-    $self->{+LIVE} //= 0;
+    $self->{+LIVE}          //= 0;
     $self->{+SEEN_STARTS}   //= {};
     $self->{+CLOSED_STARTS} //= {};
     return;
@@ -90,13 +90,13 @@ sub services {
 
 sub runs {
     my $self = shift;
-    my @ids = $self->_immediate_dir_children('runs');
+    my @ids  = $self->_immediate_dir_children('runs');
     return _smart_sort(@ids);
 }
 
 sub jobs {
     my ($self, $run_id) = @_;
-    croak "run_id is required" unless defined $run_id;
+    croak "run_id is required"   unless defined $run_id;
     croak "no such run: $run_id" unless $self->has_run($run_id);
     my @ids = $self->_immediate_dir_children("runs/$run_id/jobs");
     return _smart_sort(@ids);
@@ -104,10 +104,10 @@ sub jobs {
 
 sub tries {
     my ($self, $run_id, $job_id) = @_;
-    croak "run_id is required" unless defined $run_id;
-    croak "job_id is required" unless defined $job_id;
-    croak "no such run: $run_id"             unless $self->has_run($run_id);
-    croak "no such job: $run_id/$job_id"     unless $self->has_job($run_id, $job_id);
+    croak "run_id is required"           unless defined $run_id;
+    croak "job_id is required"           unless defined $job_id;
+    croak "no such run: $run_id"         unless $self->has_run($run_id);
+    croak "no such job: $run_id/$job_id" unless $self->has_job($run_id, $job_id);
     my @ids = $self->_immediate_dir_children("runs/$run_id/jobs/$job_id");
     return _smart_sort(@ids);
 }
@@ -210,7 +210,7 @@ sub artifacts {
     my $self = shift;
 
     return $self->_artifacts_from_args(@_) if @_ == 1 && ref($_[0]) eq 'HASH';
-    return $self->_artifacts_root           unless @_;
+    return $self->_artifacts_root unless @_;
 
     my @args = @_;
 
@@ -288,8 +288,8 @@ sub _artifacts_from_args {
     if (defined $job_id) {
         croak "run_id is required when job_id is given"
             unless defined $run_id;
-        croak "no such run: $run_id"          unless $self->has_run($run_id);
-        croak "no such job: $run_id/$job_id"  unless $self->has_job($run_id, $job_id);
+        croak "no such run: $run_id"         unless $self->has_run($run_id);
+        croak "no such job: $run_id/$job_id" unless $self->has_job($run_id, $job_id);
 
         if (!defined $job_try) {
             my $lt = $self->last_try($run_id, $job_id);
@@ -331,11 +331,11 @@ sub _stack {
     my $self = shift;
     return $self->{+STACK} //= [
         $self->_open_artifact_reader(
-            base       => 'services/harness',
-            run_id     => undef,
-            job_id     => undef,
-            job_try    => undef,
-            service    => 'harness',
+            base          => 'services/harness',
+            run_id        => undef,
+            job_id        => undef,
+            job_try       => undef,
+            service       => 'harness',
             collector_pid => undef,
         ),
     ];
@@ -348,7 +348,7 @@ sub _stack {
 sub _open_artifact_reader {
     my ($self, %args) = @_;
 
-    my $base = $args{base};
+    my $base    = $args{base};
     my $abs_zst = File::Spec->catfile($self->{+PATH}, $base, 'events.jsonl.zst');
     my $abs     = File::Spec->catfile($self->{+PATH}, $base, 'events.jsonl');
 
@@ -367,12 +367,12 @@ sub _open_artifact_reader {
     }
 
     return {
-        reader        => Test2::Harness2::Util::JSONL::Reader->new(path => $path),
-        base          => $base,
-        ident         => {
-            (defined $args{run_id}  ? (run_id  => $args{run_id})  : ()),
-            (defined $args{job_id}  ? (job_id  => $args{job_id})  : ()),
-            (defined $args{job_try} ? (job_try => $args{job_try}) : ()),
+        reader => Test2::Harness2::Util::JSONL::Reader->new(path => $path),
+        base   => $base,
+        ident  => {
+            (defined $args{run_id}  ? (run_id       => $args{run_id})  : ()),
+            (defined $args{job_id}  ? (job_id       => $args{job_id})  : ()),
+            (defined $args{job_try} ? (job_try      => $args{job_try}) : ()),
             (defined $args{service} ? (service_name => $args{service}) : ()),
         },
         collector_pid => $args{collector_pid},
@@ -386,7 +386,7 @@ sub _inject_identifiers {
     return $event unless ref($event) eq 'HASH';
 
     my $fd = $event->{facet_data} // do { $event->{facet_data} = {}; $event->{facet_data} };
-    my $h = $fd->{harness} // do { $fd->{harness} = {}; $fd->{harness} };
+    my $h  = $fd->{harness}       // do { $fd->{harness}       = {}; $fd->{harness} };
 
     for my $k (qw/run_id job_id job_try service_name/) {
         next unless exists $ident->{$k};
@@ -448,7 +448,7 @@ sub _base_for_collector_start {
 sub event {
     my ($self, $timeout) = @_;
 
-    my $stack = $self->_stack;
+    my $stack    = $self->_stack;
     my $deadline = (defined $timeout && $timeout > 0) ? time + $timeout : undef;
 
     while (1) {
@@ -632,7 +632,7 @@ sub events {
 sub EOE { $_[0]->end_of_events }
 
 sub end_of_events {
-    my $self = shift;
+    my $self  = shift;
     my $stack = $self->_stack;
 
     # Pop any top-of-stack readers that are now done and have nothing
@@ -716,7 +716,7 @@ sub extract {
     for my $rel ($self->_list_files) {
         next unless $self->_run_filter_includes($rel, $runs, $exclude_runs);
 
-        my $src = File::Spec->catfile($self->{+PATH}, $rel);
+        my $src    = File::Spec->catfile($self->{+PATH}, $rel);
         my $is_zst = $rel =~ /\.zst\z/ ? 1 : 0;
 
         my $out_rel = $rel;
@@ -792,7 +792,7 @@ sub archive {
     # sealing is one-shot (no insert step); we plumb the bytes into
     # the writer's extra_files option.
     require App::Yath2::Log;
-    my $meta = App::Yath2::Log->build_archive_meta;
+    my $meta       = App::Yath2::Log->build_archive_meta;
     my $meta_bytes = App::Yath2::Log->encode_archive_meta($meta);
 
     require App::Yath2::Log::TarZIdx;
@@ -803,7 +803,7 @@ sub archive {
             $self->{+PATH},
             runs            => $runs,
             exclude_runs    => $exclude_runs,
-            extra_files     => { App::Yath2::Log->META_FILENAME() => $meta_bytes },
+            extra_files     => {App::Yath2::Log->META_FILENAME() => $meta_bytes},
             meta_json_bytes => $meta_bytes,
             compress        => $compress,
         );
@@ -907,6 +907,23 @@ sub absolute_path {
 # Used by App::Yath2::Log::Artifact to read / list / save artifacts.
 # Directory uses straightforward filesystem operations for these.
 
+# Open a reader for the artifact at the relative path $ref. Used by
+# the role-level artifact_for_producer to serve producer descriptors.
+# Returns a Test2::Harness2::Util::JSONL::Reader so JSONL artifacts
+# are decoded automatically; returns undef when the path does not
+# exist on disk (caller already checked that $ref is defined).
+sub _open_artifact_reader_for_relpath {
+    my ($self, $relpath) = @_;
+    my $abs = File::Spec->catfile($self->{+PATH}, $relpath);
+    return undef unless -e $abs;
+    return Test2::Harness2::Util::JSONL::Reader->new(path => $abs);
+}
+
+sub _open_artifact_for_producer {
+    my ($self, $producer, $kind, $ref) = @_;
+    return $self->_open_artifact_reader_for_relpath($ref);
+}
+
 # Returns ($exists, $is_zst). $exists is a boolean; $is_zst is true
 # when the artifact path ends in .zst (caller may also pass a path
 # without the suffix and let the caller probe both forms).
@@ -950,7 +967,7 @@ sub _decompress_jsonl_bytes {
 
     # Use the streaming reader-based path: write to a temp scalar fh
     # and decode frame-by-frame.
-    my $out = '';
+    my $out    = '';
     my $offset = 0;
     while ($offset < length $bytes) {
         my $size = Test2::Harness2::Util::Zstd::zstd_frame_size(substr($bytes, $offset));
@@ -1007,7 +1024,8 @@ sub _artifact_save {
     my $par = dirname($abs);
     make_path($par) unless -d $par;
 
-    my $payload = $p{compress}
+    my $payload =
+        $p{compress}
         ? Test2::Harness2::Util::Zstd::compress_blob($p{bytes})
         : $p{bytes};
 
@@ -1016,7 +1034,8 @@ sub _artifact_save {
 
     # Drop the stale alternate form so future reads pick up only the
     # form the caller asked for.
-    my $other = $p{compress}
+    my $other =
+        $p{compress}
         ? File::Spec->catfile($self->{+PATH}, $p{rel_alt})
         : File::Spec->catfile($self->{+PATH}, $p{rel_alt_zst});
     unlink $other if $other ne $abs && -e $other;

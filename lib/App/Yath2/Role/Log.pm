@@ -63,7 +63,7 @@ sub _decompress_jsonl_bytes {
     require Test2::Harness2::Util::Zstd;
     require Compress::Zstd;
 
-    my $out = '';
+    my $out    = '';
     my $offset = 0;
     while ($offset < length $bytes) {
         my $size = Test2::Harness2::Util::Zstd::zstd_frame_size(substr($bytes, $offset));
@@ -77,6 +77,25 @@ sub _decompress_jsonl_bytes {
     return $out;
 }
 
+# artifact_for_producer($producer, $kind) looks up the artifact ref
+# for $kind on the producer descriptor and opens a reader for it.
+# Returns undef when no ref of that kind is recorded. Delegates the
+# actual open to _open_artifact_for_producer so each backend can
+# supply its own low-level read machinery.
+sub artifact_for_producer {
+    my ($self, $producer, $kind) = @_;
+    my $ref = $producer->artifact_ref($kind);
+    return undef unless defined $ref;
+    return $self->_open_artifact_for_producer($producer, $kind, $ref);
+}
+
+# Default: croak. Every backend that carries on-disk or in-memory
+# artifacts overrides this with its own open routine.
+sub _open_artifact_for_producer {
+    my ($self) = @_;
+    croak(ref($self) . " does not implement _open_artifact_for_producer yet");
+}
+
 # insert($source_log) reverses the data flow: it is the DB-backed
 # logs' way of importing another archive. Filesystem-shaped backends
 # (Directory / Live / TarZIdx) cannot serve as an insert sink, so the
@@ -84,10 +103,9 @@ sub _decompress_jsonl_bytes {
 # implementation that delegates to its underlying App::Yath2::DB
 # backend.
 sub insert {
-    my $self = shift;
+    my $self  = shift;
     my $class = ref($self) || $self;
-    croak "insert is only available on DB-backed Logs (this is $class); "
-        . "use \$db->insert(\$source_log) instead";
+    croak "insert is only available on DB-backed Logs (this is $class); " . "use \$db->insert(\$source_log) instead";
 }
 
 1;
@@ -361,6 +379,21 @@ Alias for C<end_of_events>.
 Multi-frame zstd concat decompress. Pure plumbing; no DB or
 filesystem coupling. Consumers may override with a cheaper local
 implementation when they already have the zstd dependencies loaded.
+
+=item $reader = $log->artifact_for_producer($producer, $kind)
+
+Look up the artifact ref for C<$kind> on C<$producer> and open a
+reader for it. Returns C<undef> when the producer carries no ref of
+that kind. Delegates to C<_open_artifact_for_producer> so each
+backend can supply its own low-level reader.
+
+=item $log->_open_artifact_for_producer($producer, $kind, $ref)
+
+Backend hook called by C<artifact_for_producer> once the ref has been
+resolved. The default implementation croaks; each backend overrides
+with logic appropriate to its storage model (e.g. the Directory
+backend opens a L<Test2::Harness2::Util::JSONL::Reader> on the
+relative on-disk path carried in C<$ref>).
 
 =item $log->insert($source_log, %opts)
 

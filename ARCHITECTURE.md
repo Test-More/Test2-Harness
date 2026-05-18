@@ -3428,3 +3428,185 @@ on the same daemon does not double-count events from earlier runs.
 before encoding; otherwise emit_service_event would die trying to
 JSON-encode blessed Resource instances on the daemon's run_queued
 event.
+
+## Addendum: render/formatter/concluder foundation (2026-05-17)
+
+This addendum covers the foundational surface introduced by Stages
+1A–4 of the render/formatter/concluder refactor. Full spec and
+rationale: `AI_DOCS/2026-05-17-rendering-formatter-rewrite-discussion.md`.
+The foundation lands no user-visible behaviour change — the legacy
+renderer Driver / OutputManager path continues to operate unchanged
+until each renderer is rewritten in Stages 5–10.
+
+### Pull-model renderers (replaces push-stream Driver, foundation only)
+
+The prior architecture drove rendering via a push-stream Driver that
+consumed events from the IPC bus. The new foundation replaces this
+with a pull-model loop that iterates directly over producer
+descriptors in the Log. The transitional namespace is
+`App::Yath2::Renderer2::*`; it is renamed to `App::Yath2::Renderer::*`
+in Stage 9.10 after the legacy Driver and its consumers are removed.
+
+Key modules:
+
+- **`App::Yath2::Renderer2::Base`** — pull-model base class. Defines a
+  two-hook handler contract per producer kind:
+  `handle_<kind>_opened` (fires once on first sighting of a producer)
+  and `handle_<kind>_sealed` (fires once on state transition to
+  sealed). Default implementations are no-ops so subclasses override
+  only the hooks they need. Carries `log`, `ipc_endpoint`,
+  `parent_pid`, `command_pid`, `out_fh`, and `criticality`
+  (`best_effort` or `required`), plus `settings`. Provides the
+  artifact-monitor lifecycle: `add_artifact_monitor`,
+  `remove_artifact_monitor`, `artifact_monitors`.
+
+- **`App::Yath2::Renderer2::Loop`** — procedural render loop. Pulls
+  producers from the Log via per-kind iterators. Per-producer state
+  machine: `opened` fires once on first sighting; `sealed` fires once
+  on state transition. Sealed logs do one full pass then exit; live
+  logs loop, waking on `FileMonitor` mtime changes to the `LIVE`
+  sentinel plus any artifact-monitor paths a subclass registered.
+  Three-layer shutdown evaluation on each pass: LIVE sentinel removed,
+  IPC signal received (stub in foundation; real wiring in Stage 5),
+  `parent_pid` + `command_pid` process-existence check. Any positive
+  condition drains remaining producers then exits.
+
+- **`App::Yath2::Renderer2::ArtifactWriter`** — exports
+  `write_artifact_atomic($target, $bytes)`. Exclusive-create tempfile +
+  full-write loop + best-effort fsync + atomic publish via `link(2)`.
+  Existing-file-wins on concurrent races (a completed artifact is never
+  clobbered). Compression-visible filenames: caller supplies the `.zst`
+  suffix when bytes are already zstd-compressed.
+
+No concrete renderer ships in Stages 1A–4; old Driver path stays
+functional.
+
+### Formatters (pure conversion, optional persisted artifacts)
+
+- **`App::Yath2::Formatter`** — abstract base. Dual input modes:
+  `convert(\@items, %opts)` (batch), `feed($in_fh, $out_fh)` (stream),
+  `append($item, %opts)` (incremental). Dual output modes: write to
+  `out_fh` when one is present, otherwise return bytes. Class method
+  `produces_artifact` defaults to `1`; formatters that are display-only
+  (no file output) override to `0`.
+
+- **`App::Yath2::Formatter::Txt`** — first concrete formatter,
+  experimental. `produces_artifact` returns `0` until Stage 5.1
+  extends its facet coverage to match the legacy Default renderer.
+
+- Namespace discovery convention: `App::Yath2::Formatter::<Name>`. No
+  registry; callers load by name via `Module::Pluggable` or direct
+  `require`.
+
+### Producer descriptors and Log iteration
+
+New surface on `App::Yath2::Log` (enforced via `Role::Log`):
+
+- **Per-kind iterator accessors:** `run_producers`,
+  `job_producers($run_id)`, `service_producers($run_id?)`,
+  `collector_producers`. Each returns an
+  `App::Yath2::Log::Iterator::Producers` instance — a lazy
+  callback-driven iterator.
+
+- **`artifact_for_producer($producer, $kind)`** — resolves a producer
+  descriptor's artifact ref to a reader handle.
+
+- **Producer descriptor classes:**
+  `App::Yath2::Log::Producer::{Run,Job,Service,Collector}`, all
+  extending `App::Yath2::Log::Producer`. Common fields: `id`, `kind`,
+  `parent_id`, `run_id`, `state`, `started_at`, `ended_at`,
+  `artifact_refs`, `log`. Per-kind extras — Run: `pass`, `exit`. Job:
+  `try`, `pass`, `report_available`.
+
+- **State values:** `missing` (not yet seen), `partial` (opened, not
+  yet sealed), `sealed` (complete).
+
+All four Log backends implement the iteration API: Directory, Live
+(inherits Directory), TarZIdx, DB (bulk-fetch resultsets to avoid
+N+1).
+
+### Sealed semantics: `.sealed` marker files
+
+Producer completion is recorded by writing a `.sealed` marker file
+into the producer's directory in the logdir. State is determined by
+presence of that file alone — no database or IPC query needed.
+
+| Producer           | Marker path                                         |
+|--------------------|-----------------------------------------------------|
+| Run                | `runs/<run_id>/.sealed`                             |
+| Job try            | `runs/<run_id>/jobs/<job_id>/<try>/.sealed`         |
+| Service (run)      | `runs/<run_id>/services/<service>/.sealed`          |
+| Service (global)   | `services/<service>/.sealed`                        |
+| Collector          | `collectors/<uuid>/.sealed`                         |
+
+Marker content: single-line JSON with `sealed_at`, `final_state`
+(`completed` / `abandoned` / `failed`), and optional `pass` / `exit`.
+Written atomically via tempfile + `link(2)` with existing-file-wins
+semantics, so a `completed` marker is never clobbered by a subsequent
+`abandoned` one (e.g. from a crash-recovery sweep).
+
+**Deviation from initial plan:** The original AI_DOC stated that the
+harness would write all `.sealed` markers (because the collector exits
+before the harness can observe final state). As built, each collector
+IS the per-producer observer for its own outcome and calls
+`_write_sealed_marker` from within `_emit_collector_end`. The
+top-level harness performs a post-run `_finalize_sweep` that writes
+`final_state: abandoned` for any producer lacking a marker — covering
+the collector-crash case. The collector itself decides "final close"
+because there are no restart-able collectors in v1; service restart
+support is TBD.
+
+### LIVE wake-up: mtime-only
+
+The existing `$logdir/LIVE` sentinel (created by
+`Test2::Harness2::Collector::_create_live_sentinel`, removed by
+`_remove_live_sentinel`) doubles as the renderer wake-up signal. On
+every producer open/close emission the collector calls `_live_bump`,
+which calls `utime(time(), time(), $live_path)`. Renderers use
+`Test2::Harness2::Util::FileMonitor` (inotify on Linux with
+`Time::HiRes::stat` polling fallback elsewhere) to wake on the mtime
+change. Poll interval is configurable via `FileMonitor`'s
+`poll_interval` attribute.
+
+**Deviation from initial plan:** An earlier iteration appended JSON
+lines to LIVE to carry per-event metadata. That accumulated
+unboundedly in long-running daemons. mtime-only via `utime` has zero
+growth and serves the same wake-up purpose. Tradeoff: lost per-event
+debugging visibility in the LIVE file. Net win: bounded disk, simpler
+code, no flock needed (`utime` is atomic w.r.t. readers).
+
+### Concluders (not in foundation, planned for Stage 6)
+
+The foundation contains no Concluder code. Stage 6 will introduce
+`App::Yath2::Concluder::*` (Summary, Notify, ResetTerm), running
+sequentially in the parent process after all renderer children have
+been reaped. ResetTerm runs last unconditionally.
+
+### CLI surface (not in foundation, planned for Stage 8)
+
+`yath render NAME [opts] LOGPATH` and `yath reformat LOG [OUTLOG]`
+are introduced in Stage 8. Until then the new foundation has no
+command-line entry point — old commands continue to use the legacy
+renderer Driver path.
+
+### Foundation summary
+
+Stages 1A–4 land the following surface:
+
+- Producer descriptor API + per-kind iterators across all four Log
+  backends + `Role::Log` enforcement.
+- Collector `_live_bump` (mtime-only) wired into
+  `_emit_collector_start` and `_emit_collector_end`.
+- `_write_sealed_marker` per-producer + `_finalize_sweep` for
+  crash-recovery.
+- Formatter base + experimental `Formatter::Txt`.
+- `Renderer2::Base` + `Renderer2::Loop` + `Renderer2::ArtifactWriter`
+  + configurable `FileMonitor` poll interval.
+
+333+ test files pass after the foundation lands. No user-visible
+behaviour change; legacy Driver / OutputManager / existing renderers
+operate unchanged.
+
+Tagged: `refactor-stage-1a-complete`, `refactor-stage-1b-complete`,
+`refactor-stage-1c-complete`, `refactor-stage-2-complete`,
+`refactor-stage-3-complete`, `refactor-stage-4-complete`.

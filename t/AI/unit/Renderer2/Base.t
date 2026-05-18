@@ -102,4 +102,43 @@ like(
     'rejects bogus criticality',
 );
 
+subtest 'on_artifact_change default no-op' => sub {
+    my $r = App::Yath2::Renderer2::Base->new(
+        log         => undef,
+        parent_pid  => $$,
+        command_pid => $$,
+        out_fh      => \*STDOUT,
+    );
+    ok(!defined $r->on_artifact_change('alpha', undef), 'default no-op returns undef');
+};
+
+subtest 'ipc_disabled defaults false, mutator sets true' => sub {
+    my $r = App::Yath2::Renderer2::Base->new(
+        log         => undef,
+        parent_pid  => $$,
+        command_pid => $$,
+        out_fh      => \*STDOUT,
+    );
+    is($r->ipc_disabled, 0, 'defaults to 0');
+    $r->mark_ipc_disabled;
+    is($r->ipc_disabled, 1, 'set to 1 after mark_ipc_disabled');
+};
+
+subtest '_artifact_monitor_entries returns key-value pairs' => sub {
+    my $r = App::Yath2::Renderer2::Base->new(
+        log         => undef,
+        parent_pid  => $$,
+        command_pid => $$,
+        out_fh      => \*STDOUT,
+    );
+    my $m1 = bless {}, 'TestMonitor';
+    my $m2 = bless {}, 'TestMonitor';
+    $r->add_artifact_monitor('k1', $m1);
+    $r->add_artifact_monitor('k2', $m2);
+    my %entries = $r->_artifact_monitor_entries;
+    is(scalar keys %entries, 2,   'two entries returned');
+    is($entries{k1},         $m1, 'k1 maps to m1');
+    is($entries{k2},         $m2, 'k2 maps to m2');
+};
+
 done_testing;

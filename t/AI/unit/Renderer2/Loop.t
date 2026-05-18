@@ -178,4 +178,76 @@ subtest idempotent_hooks => sub {
     is($counts{job_sealed}, 1, 'job_sealed fires exactly once across repeated scans');
 };
 
+subtest 'on_artifact_change dispatched when monitor fires' => sub {
+
+    # Minimal mock monitor: changed() returns 1 on the first call, then 0.
+    # $T::OnceMonitor::fired is a package var so main can reset it between runs.
+    package T::OnceMonitor;
+    our $fired = 0;
+
+    sub new          { bless {}, shift }
+    sub changed      { my $r = !$fired; $fired = 1; return $r }
+    sub await_change { return 0 }
+
+    package T::R::ArtDisp;
+    use parent 'App::Yath2::Renderer2::Base';
+    our @DISPATCHED;
+
+    sub on_artifact_change { push @DISPATCHED, [$_[1], $_[2]] }
+
+    package main;
+
+    my $dir = tempdir(CLEANUP => 1);
+    make_path("$dir/runs/1");
+
+    open my $rsm, '>', "$dir/runs/1/.sealed" or die "open run .sealed: $!";
+    print $rsm encode_json({sealed_at => 100, final_state => 'completed', pass => 1, exit => 0});
+    close $rsm;
+
+    my $log = App::Yath2::Log->new(dir => $dir);    # sealed log — one pass
+    @T::R::ArtDisp::DISPATCHED = ();
+    my $r = T::R::ArtDisp->new(
+        log         => $log,
+        parent_pid  => $$,
+        command_pid => $$,
+        out_fh      => \*STDOUT,
+    );
+
+    my $m = T::OnceMonitor->new;
+    $r->add_artifact_monitor('alpha', $m);
+
+    # Directly test the dispatch path via _wait_for_change.
+    # Pass undef for live_monitor since the log is sealed and we only care
+    # about the artifact-monitor dispatch branch.
+    $T::OnceMonitor::fired = 0;
+    App::Yath2::Renderer2::Loop::_wait_for_change($r, undef, 0.01);
+
+    is(scalar @T::R::ArtDisp::DISPATCHED, 1,       'on_artifact_change called once');
+    is($T::R::ArtDisp::DISPATCHED[0][0],  'alpha', 'key passed is alpha');
+    is($T::R::ArtDisp::DISPATCHED[0][1],  $m,      'monitor instance passed');
+};
+
+subtest 'ipc_disabled short-circuits _check_ipc_signal' => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    make_path("$dir/runs/1");
+
+    open my $rsm, '>', "$dir/runs/1/.sealed" or die "open run .sealed: $!";
+    print $rsm encode_json({sealed_at => 100, final_state => 'completed', pass => 1, exit => 0});
+    close $rsm;
+
+    my $log = App::Yath2::Log->new(dir => $dir);
+    my $r   = App::Yath2::Renderer2::Base->new(
+        log         => $log,
+        parent_pid  => $$,
+        command_pid => $$,
+        out_fh      => \*STDOUT,
+    );
+
+    is(App::Yath2::Renderer2::Loop::_check_ipc_signal($r), 0, '_check_ipc_signal returns 0 when ipc_disabled is false');
+
+    $r->mark_ipc_disabled;
+    is(App::Yath2::Renderer2::Loop::_check_ipc_signal($r), 0, '_check_ipc_signal returns 0 when ipc_disabled is true');
+    is($r->ipc_disabled,                                   1, 'ipc_disabled accessor confirms flag');
+};
+
 done_testing;

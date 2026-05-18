@@ -14,6 +14,7 @@ use Object::HashBase qw{
     <out_fh
     <criticality
     <settings
+    <ipc_disabled
     +_state
     +_artifact_monitors
 };
@@ -23,7 +24,8 @@ my %VALID_CRITICALITY = (best_effort => 1, required => 1);
 sub init {
     my $self = shift;
 
-    $self->{+CRITICALITY} //= 'best_effort';
+    $self->{+CRITICALITY}  //= 'best_effort';
+    $self->{+IPC_DISABLED} //= 0;
     croak "invalid criticality '$self->{+CRITICALITY}': must be one of: best_effort, required"
         unless $VALID_CRITICALITY{$self->{+CRITICALITY}};
 
@@ -67,6 +69,31 @@ sub artifact_monitors {
     my $self = shift;
     return values %{$self->{+_ARTIFACT_MONITORS}};
 }
+
+# Returns (key, monitor) pairs for all registered artifact monitors.
+# Used by the render loop to dispatch on_artifact_change with the correct key.
+sub _artifact_monitor_entries {
+    my $self = shift;
+    return %{$self->{+_ARTIFACT_MONITORS}};
+}
+
+# mark_ipc_disabled() — set ipc_disabled to 1.
+# Called at startup when the renderer cannot reach its IPC endpoint.
+# Once set, the render loop's _check_ipc_signal short-circuits to 0
+# so no IPC bus access is attempted for the rest of the run.
+sub mark_ipc_disabled {
+    my $self = shift;
+    $self->{+IPC_DISABLED} = 1;
+    return;
+}
+
+# on_artifact_change($key, $monitor) — called by the render loop when one
+# of the renderer's registered artifact monitors reports a change.
+# $key     — the key the subclass passed to add_artifact_monitor.
+# $monitor — the FileMonitor instance; the subclass can call methods on it
+#             to fetch new bytes or advance its own reader state.
+# Default: no-op. Subclasses that want per-artifact wake-up delivery override.
+sub on_artifact_change { return }
 
 # Lifecycle hooks called by the render loop at entry and exit (including
 # drain). Default implementations are no-ops; subclasses override when
@@ -219,6 +246,11 @@ Either C<'best_effort'> (default) or C<'required'>. See L</Criticality>.
 
 Hashref of arbitrary renderer-specific settings passed at construction.
 
+=item $bool = $r->ipc_disabled
+
+True (1) when the renderer has disabled IPC polling, false (0) otherwise.
+Defaults to 0 at construction. Set via C<mark_ipc_disabled>.
+
 =back
 
 =head1 METHODS
@@ -261,6 +293,20 @@ states. All default to no-ops returning C<undef>.
 =item @monitors = $r->artifact_monitors
 
 Artifact-monitor lifecycle methods. See L</Artifact-monitor lifecycle>.
+
+=item $r->on_artifact_change($key, $monitor)
+
+Called by the render loop when the artifact monitor registered under C<$key>
+reports a change. C<$monitor> is the L<Test2::Harness2::Util::FileMonitor>
+instance; the subclass can call C<< $monitor->changed >> (already consumed by
+the loop) or advance its own reader state based on the wake-up. Default is a
+no-op. Subclasses that perform verbose artifact tailing override this.
+
+=item $r->mark_ipc_disabled
+
+Set the C<ipc_disabled> flag to 1. Call this at startup when the renderer
+cannot reach its IPC endpoint. After this call the render loop's IPC check
+short-circuits to 0 for the rest of the run.
 
 =back
 

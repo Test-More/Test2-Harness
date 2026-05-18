@@ -173,11 +173,18 @@ sub _process_producer {
 sub _wait_for_change {
     my ($r, $live_monitor, $poll) = @_;
 
-    # Check artifact monitors first (non-blocking). If any reports a change,
-    # return immediately so the scan loop processes it.
-    for my $am ($r->artifact_monitors) {
-        return if $am->changed;
+    # Check artifact monitors first (non-blocking). For each that reports a
+    # change, dispatch on_artifact_change so the subclass knows which monitor
+    # fired before we return to the scan loop.
+    my $any_changed = 0;
+    my %entries     = $r->_artifact_monitor_entries;
+    while (my ($key, $am) = each %entries) {
+        if ($am->changed) {
+            $r->on_artifact_change($key, $am);
+            $any_changed = 1;
+        }
     }
+    return if $any_changed;
 
     # Block on the LIVE monitor with a short timeout so shutdown conditions
     # (LIVE removal, dead PID) are re-checked promptly. await_change wakes
@@ -197,7 +204,12 @@ sub _pid_alive {
 }
 
 # _check_ipc_signal($r) — returns 0 until stage 5 wires real IPC integration.
-sub _check_ipc_signal { return 0 }
+# Short-circuits immediately when ipc_disabled is set (no IPC bus access).
+sub _check_ipc_signal {
+    my ($r) = @_;
+    return 0 if $r->ipc_disabled;
+    return 0;
+}
 
 1;
 
@@ -290,7 +302,9 @@ C<sealed_hook> once when state reaches C<'sealed'>.
 =item _wait_for_change($r, $live_monitor, $poll)
 
 Block until any monitored source (LIVE file or registered artifact monitors)
-changes, or the poll interval elapses.
+changes, or the poll interval elapses. For each artifact monitor that reports
+a change, calls C<< $r->on_artifact_change($key, $monitor) >> before returning
+so the renderer subclass knows which monitor fired.
 
 =item _pid_alive($pid)
 
@@ -299,7 +313,8 @@ C<undef> or non-positive PIDs return 1 (not our concern).
 
 =item _check_ipc_signal($r)
 
-Always returns 0. Stage 5 will wire real IPC shutdown signalling here.
+Returns 0 immediately when C<< $r->ipc_disabled >> is true (no IPC bus
+access). Otherwise returns 0; stage 5 will wire real IPC shutdown signalling.
 
 =back
 

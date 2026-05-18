@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::Spawn;
+package App::Yath2::Renderer::Spawn;
 use strict;
 use warnings;
 
@@ -11,12 +11,12 @@ use POSIX       ();
 use Time::HiRes ();
 
 use App::Yath2::Log();
-use App::Yath2::Renderer2::Loop();
-use App::Yath2::Renderer2::Registry();
-use App::Yath2::Renderer2::TerminalAuto();
+use App::Yath2::Renderer::Loop();
+use App::Yath2::Renderer::Registry();
+use App::Yath2::Renderer::TerminalAuto();
 
 # Fork one renderer child per spec. Each child runs
-# App::Yath2::Renderer2::Loop::run against the supplied log directory,
+# App::Yath2::Renderer::Loop::run against the supplied log directory,
 # rendering through a single renderer instance.
 #
 # Args (key/value):
@@ -115,7 +115,7 @@ sub _run_one_renderer {
     $renderer->connect_ipc($args{ipc_endpoint})
         if defined $args{ipc_endpoint} && length $args{ipc_endpoint};
 
-    App::Yath2::Renderer2::Loop::run($renderer);
+    App::Yath2::Renderer::Loop::run($renderer);
     return 0;
 }
 
@@ -176,7 +176,7 @@ sub _build_renderer_settings {
     my $out_fh = _resolve_out_fh($out{out});
     $out{_out_fh} = $out_fh;
 
-    if ($renderer_class eq 'App::Yath2::Renderer2::Terminal'
+    if ($renderer_class eq 'App::Yath2::Renderer::Terminal'
         || ($short_name // '') eq 'terminal-auto')
     {
         my $name_or_class = $out{formatter};
@@ -184,11 +184,11 @@ sub _build_renderer_settings {
             $out{formatter} = _instantiate_formatter($name_or_class, $out_fh);
         }
         else {
-            $out{formatter} = App::Yath2::Renderer2::TerminalAuto::pick(out_fh => $out_fh);
+            $out{formatter} = App::Yath2::Renderer::TerminalAuto::pick(out_fh => $out_fh);
         }
     }
 
-    if ($renderer_class eq 'App::Yath2::Renderer2::JUnit') {
+    if ($renderer_class eq 'App::Yath2::Renderer::JUnit') {
         $out{junit_out} //= $out{out} if defined $out{out} && length $out{out};
     }
 
@@ -342,16 +342,16 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::Spawn - Fork one renderer child per active renderer.
+App::Yath2::Renderer::Spawn - Fork one renderer child per active renderer.
 
 =head1 SYNOPSIS
 
     use App::Yath2::Options::Renderer ();
-    use App::Yath2::Renderer2::Spawn  qw//;
+    use App::Yath2::Renderer::Spawn  qw//;
 
     my $specs = App::Yath2::Options::Renderer->renderer_specs($settings);
 
-    my $pids = App::Yath2::Renderer2::Spawn::spawn_renderers(
+    my $pids = App::Yath2::Renderer::Spawn::spawn_renderers(
         logdir      => "$workdir/logs",
         specs       => $specs,
         settings    => $settings,
@@ -361,25 +361,25 @@ App::Yath2::Renderer2::Spawn - Fork one renderer child per active renderer.
 
     # ... let the harness do its work ...
 
-    my $exit = App::Yath2::Renderer2::Spawn::reap_renderers(pids => $pids);
+    my $exit = App::Yath2::Renderer::Spawn::reap_renderers(pids => $pids);
 
 =head1 DESCRIPTION
 
-C<App::Yath2::Renderer2::Spawn> is the shared fan-out helper used by
+C<App::Yath2::Renderer::Spawn> is the shared fan-out helper used by
 C<yath test>, C<yath run>, C<yath replay>, and C<yath watch> to fork
 one renderer child per active renderer. Each child constructs a single
-renderer instance and drives it via L<App::Yath2::Renderer2::Loop>.
+renderer instance and drives it via L<App::Yath2::Renderer::Loop>.
 
 The active set is taken from
 L<App::Yath2::Options::Renderer/renderer_specs>, which resolves short
 names (C<terminal>, C<terminal-auto>, C<junit>) through
-L<App::Yath2::Renderer2::Registry>.
+L<App::Yath2::Renderer::Registry>.
 
 =head1 FUNCTIONS
 
 =over 4
 
-=item $pids = App::Yath2::Renderer2::Spawn::spawn_renderers(%args)
+=item $pids = App::Yath2::Renderer::Spawn::spawn_renderers(%args)
 
 Fork one child per spec. Returns an arrayref of child pids in the
 parent; never returns in a child (each child C<POSIX::_exit>s after
@@ -428,12 +428,12 @@ management.
 
 =back
 
-=item $exit = App::Yath2::Renderer2::Spawn::reap_renderers(pids => $pids)
+=item $exit = App::Yath2::Renderer::Spawn::reap_renderers(pids => $pids)
 
 Wait for every renderer child to exit. Returns the first non-zero exit
 status seen, or 0 when all children exited cleanly.
 
-=item $bool = App::Yath2::Renderer2::Spawn::renderers_all_reaped(pids => $pids)
+=item $bool = App::Yath2::Renderer::Spawn::renderers_all_reaped(pids => $pids)
 
 Non-blocking variant. Reaps any children that have already exited
 (modifying C<$pids> in place to drop them) and returns 1 only when no

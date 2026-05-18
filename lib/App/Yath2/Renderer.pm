@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::Base;
+package App::Yath2::Renderer;
 use strict;
 use warnings;
 
@@ -193,13 +193,13 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::Base - Pull-model renderer base class with two-hook handlers and artifact-monitor lifecycle.
+App::Yath2::Renderer - Pull-model renderer base class with two-hook handlers and artifact-monitor lifecycle.
 
 =head1 DESCRIPTION
 
-C<App::Yath2::Renderer2::Base> is the base class for all renderers in the
-C<App::Yath2::Renderer2::*> namespace. It implements a pull-model rendering
-contract: the render loop (see C<App::Yath2::Renderer2::Loop>) drives
+C<App::Yath2::Renderer> is the base class for all renderers in the
+C<App::Yath2::Renderer::*> namespace. It implements a pull-model rendering
+contract: the render loop (see C<App::Yath2::Renderer::Loop>) drives
 iteration and calls hook methods on the renderer as producers are discovered
 and sealed. Subclasses do not construct iterators themselves; they receive
 producer objects via the hooks and consume artifact data through the log
@@ -272,16 +272,10 @@ output is an error rather than an inconvenience.
 
 =back
 
-=head2 Transitional namespace
-
-This class lives under C<App::Yath2::Renderer2::*> during the current
-migration phase. It will be renamed to C<App::Yath2::Renderer::*> in stage
-9.10 once the legacy renderer stack has been removed.
-
 =head1 SYNOPSIS
 
     package My::Renderer;
-    use parent 'App::Yath2::Renderer2::Base';
+    use parent 'App::Yath2::Renderer';
 
     sub handle_job_sealed {
         my ($self, $producer) = @_;

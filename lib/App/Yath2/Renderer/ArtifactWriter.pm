@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::ArtifactWriter;
+package App::Yath2::Renderer::ArtifactWriter;
 use strict;
 use warnings;
 
@@ -200,11 +200,11 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::ArtifactWriter - Atomic artifact file publication
+App::Yath2::Renderer::ArtifactWriter - Atomic artifact file publication
 
 =head1 SYNOPSIS
 
-    use App::Yath2::Renderer2::ArtifactWriter qw/write_artifact_atomic/;
+    use App::Yath2::Renderer::ArtifactWriter qw/write_artifact_atomic/;
 
     # Publish plain bytes.
     my $rc = write_artifact_atomic("/run/dir/events.txt", $bytes);
@@ -242,10 +242,6 @@ promised.
 The caller is responsible for choosing the final filename, including
 any compression suffix such as C<.zst>. This helper does not inspect
 or transform the byte content in any way.
-
-This module lives under the transitional C<Renderer2> namespace. It will
-be renamed to C<App::Yath2::Renderer::ArtifactWriter> when the legacy
-renderer is removed in stage 9.10.
 
 =head1 EXPORTS
 

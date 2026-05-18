@@ -2,9 +2,9 @@ use strict;
 use warnings;
 
 use Test2::V0;
-use App::Yath2::Renderer2::Base;
+use App::Yath2::Renderer;
 
-my $r = App::Yath2::Renderer2::Base->new(
+my $r = App::Yath2::Renderer->new(
     log          => undef,
     ipc_endpoint => undef,
     parent_pid   => $$,
@@ -12,11 +12,11 @@ my $r = App::Yath2::Renderer2::Base->new(
     out_fh       => \*STDOUT,
     criticality  => 'best_effort',
 );
-isa_ok($r, ['App::Yath2::Renderer2::Base']);
+isa_ok($r, ['App::Yath2::Renderer']);
 is($r->criticality, 'best_effort', 'criticality set');
 
 # Default criticality
-my $r2 = App::Yath2::Renderer2::Base->new(
+my $r2 = App::Yath2::Renderer->new(
     log         => undef,
     parent_pid  => $$,
     command_pid => $$,
@@ -78,7 +78,7 @@ ok(exists $remaining_map->{beta},   'beta key still in monitor map');
 ok(!exists $remaining_map->{alpha}, 'alpha key removed from monitor map');
 
 # Required criticality.
-my $rr = App::Yath2::Renderer2::Base->new(
+my $rr = App::Yath2::Renderer->new(
     log         => undef,
     parent_pid  => $$,
     command_pid => $$,
@@ -90,7 +90,7 @@ is($rr->criticality, 'required', 'required criticality accepted');
 # Invalid criticality.
 like(
     dies {
-        App::Yath2::Renderer2::Base->new(
+        App::Yath2::Renderer->new(
             log         => undef,
             parent_pid  => $$,
             command_pid => $$,
@@ -103,7 +103,7 @@ like(
 );
 
 subtest 'on_artifact_change default no-op' => sub {
-    my $r = App::Yath2::Renderer2::Base->new(
+    my $r = App::Yath2::Renderer->new(
         log         => undef,
         parent_pid  => $$,
         command_pid => $$,
@@ -113,7 +113,7 @@ subtest 'on_artifact_change default no-op' => sub {
 };
 
 subtest 'ipc_disabled defaults false, mutator sets true' => sub {
-    my $r = App::Yath2::Renderer2::Base->new(
+    my $r = App::Yath2::Renderer->new(
         log         => undef,
         parent_pid  => $$,
         command_pid => $$,
@@ -125,7 +125,7 @@ subtest 'ipc_disabled defaults false, mutator sets true' => sub {
 };
 
 subtest '_artifact_monitor_entries returns key-value pairs' => sub {
-    my $r = App::Yath2::Renderer2::Base->new(
+    my $r = App::Yath2::Renderer->new(
         log         => undef,
         parent_pid  => $$,
         command_pid => $$,

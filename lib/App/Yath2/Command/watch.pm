@@ -5,7 +5,7 @@ use warnings;
 our $VERSION = '2.000013';
 
 use App::Yath2::Options::Renderer();
-use App::Yath2::Renderer2::Spawn();
+use App::Yath2::Renderer::Spawn();
 use App::Yath2::Util::IPC qw/discover_daemons assert_daemon_alive/;
 use Test2::Harness2::Util::IPC qw/set_procname/;
 
@@ -86,7 +86,7 @@ sub run {
     my $specs = App::Yath2::Options::Renderer->renderer_specs($settings);
     return 0 unless @$specs;
 
-    my $pids = App::Yath2::Renderer2::Spawn::spawn_renderers(
+    my $pids = App::Yath2::Renderer::Spawn::spawn_renderers(
         logdir      => $logdir,
         settings    => $settings,
         specs       => $specs,
@@ -99,7 +99,7 @@ sub run {
     # we let the default disposition kill us. The renderer children
     # detect the dead command_pid via kill 0 and drain on their own,
     # leaving no orphan processes.
-    return App::Yath2::Renderer2::Spawn::reap_renderers(pids => $pids);
+    return App::Yath2::Renderer::Spawn::reap_renderers(pids => $pids);
 }
 
 1;
@@ -113,7 +113,7 @@ __END__
 Standard Command framework hooks (see L<App::Yath2::Role::Command>). Plugins,
 resources, and dot-args are all off; watch overrides C<load_renderers> to true
 because it fans out one renderer child per active renderer against the
-daemon's log via L<App::Yath2::Renderer2::Spawn>.
+daemon's log via L<App::Yath2::Renderer::Spawn>.
 
 =head1 POD IS AUTO-GENERATED
 

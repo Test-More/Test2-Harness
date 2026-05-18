@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::Registry;
+package App::Yath2::Renderer::Registry;
 use strict;
 use warnings;
 
@@ -7,7 +7,7 @@ our $VERSION = '2.000013';
 use Carp qw/croak/;
 use Test2::Harness2::Util qw/mod2file/;
 
-# Map short renderer names to fully qualified Renderer2::* classes. The
+# Map short renderer names to fully qualified Renderer::* classes. The
 # short names are what users type on the command line:
 #
 #   yath render terminal LOGPATH
@@ -18,9 +18,9 @@ use Test2::Harness2::Util qw/mod2file/;
 # between renderers are caught at registration time (see assert_prefix
 # below), not at parse time.
 my %BUILTIN = (
-    'terminal'      => ['App::Yath2::Renderer2::Terminal', 'terminal'],
-    'terminal-auto' => ['App::Yath2::Renderer2::Terminal', 'terminal'],
-    'junit'         => ['App::Yath2::Renderer2::JUnit',    'junit'],
+    'terminal'      => ['App::Yath2::Renderer::Terminal', 'terminal'],
+    'terminal-auto' => ['App::Yath2::Renderer::Terminal', 'terminal'],
+    'junit'         => ['App::Yath2::Renderer::JUnit',    'junit'],
 );
 
 # Tracks which prefix is owned by which renderer class. Populated lazily
@@ -48,9 +48,9 @@ sub resolve_name {
     # Fall back: title-case the dashed form, prepend the namespace.
     # `terminal-auto` -> `TerminalAuto`. This keeps custom renderers
     # invokable without an explicit `+` so long as they live under
-    # App::Yath2::Renderer2::*.
+    # App::Yath2::Renderer::*.
     my $title = join '', map { ucfirst $_ } split /-/, $name;
-    my $mod   = "App::Yath2::Renderer2::$title";
+    my $mod   = "App::Yath2::Renderer::$title";
     return ($mod, $name);
 }
 
@@ -207,7 +207,7 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::Registry - Renderer name resolution + flat-prefix ownership.
+App::Yath2::Renderer::Registry - Renderer name resolution + flat-prefix ownership.
 
 =head1 DESCRIPTION
 
@@ -230,11 +230,11 @@ diagnostic would point at the wrong place.
 
 =head1 FUNCTIONS
 
-All functions are class methods on C<App::Yath2::Renderer2::Registry>.
+All functions are class methods on C<App::Yath2::Renderer::Registry>.
 
 =over 4
 
-=item ($class, $prefix) = App::Yath2::Renderer2::Registry->resolve_name($name)
+=item ($class, $prefix) = App::Yath2::Renderer::Registry->resolve_name($name)
 
 Resolve a short renderer name to a Perl class and its option prefix.
 The short forms are:
@@ -243,12 +243,12 @@ The short forms are:
 
 =item C<terminal>, C<terminal-auto>
 
-Both resolve to L<App::Yath2::Renderer2::Terminal> with prefix
+Both resolve to L<App::Yath2::Renderer::Terminal> with prefix
 C<terminal>.
 
 =item C<junit>
 
-L<App::Yath2::Renderer2::JUnit> with prefix C<junit>.
+L<App::Yath2::Renderer::JUnit> with prefix C<junit>.
 
 =item C<+Fully::Qualified::Class>
 
@@ -260,7 +260,7 @@ C<+My::Renderer::FooBar> gives prefix C<foo-bar>).
 
 Falls back to title-casing the dashed name and prepending the
 namespace. So C<terminal-auto> would also resolve to
-C<App::Yath2::Renderer2::TerminalAuto> (currently a selector module
+C<App::Yath2::Renderer::TerminalAuto> (currently a selector module
 rather than a renderer class) via this branch — the explicit
 C<terminal-auto> entry in the registry overrides the fallback.
 
@@ -268,30 +268,30 @@ C<terminal-auto> entry in the registry overrides the fallback.
 
 Croaks when C<$name> is missing.
 
-=item App::Yath2::Renderer2::Registry->assert_prefix($renderer_class, $prefix)
+=item App::Yath2::Renderer::Registry->assert_prefix($renderer_class, $prefix)
 
 Record that C<$renderer_class> owns C<$prefix>. Calling with a prefix
 already claimed by another class is fatal with a clear message naming
 both the existing owner and the rejected claimant. Idempotent: a class
 re-registering its own prefix is a no-op.
 
-=item App::Yath2::Renderer2::Registry->load_renderer($renderer_class, $prefix)
+=item App::Yath2::Renderer::Registry->load_renderer($renderer_class, $prefix)
 
 C<require> the renderer class and call L</assert_prefix>. Returns the
 class name. Used by C<resolve_and_load>.
 
-=item ($class, $prefix) = App::Yath2::Renderer2::Registry->resolve_and_load($name)
+=item ($class, $prefix) = App::Yath2::Renderer::Registry->resolve_and_load($name)
 
 Composition of C<resolve_name> + C<load_renderer>. The single call
 C<yath render NAME ...> uses to translate the user's argument into a
 loaded, prefix-asserted Perl class.
 
-=item $hashref = App::Yath2::Renderer2::Registry->prefix_owners
+=item $hashref = App::Yath2::Renderer::Registry->prefix_owners
 
 Snapshot of the current C<< prefix => class >> map. Read-only copy;
 mutating it does not affect the registry. For tests and diagnostics.
 
-=item App::Yath2::Renderer2::Registry->_reset_prefix_table
+=item App::Yath2::Renderer::Registry->_reset_prefix_table
 
 Clear the prefix ownership table. Tests only. Production code must
 never call this.

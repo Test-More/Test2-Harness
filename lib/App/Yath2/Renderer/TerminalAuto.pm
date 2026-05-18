@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::TerminalAuto;
+package App::Yath2::Renderer::TerminalAuto;
 use strict;
 use warnings;
 
@@ -31,18 +31,18 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::TerminalAuto - Pick a terminal formatter based on whether the output is a TTY
+App::Yath2::Renderer::TerminalAuto - Pick a terminal formatter based on whether the output is a TTY
 
 =head1 SYNOPSIS
 
-    use App::Yath2::Renderer2::TerminalAuto;
+    use App::Yath2::Renderer::TerminalAuto;
 
-    my $formatter = App::Yath2::Renderer2::TerminalAuto::pick(out_fh => \*STDOUT);
+    my $formatter = App::Yath2::Renderer::TerminalAuto::pick(out_fh => \*STDOUT);
     # Returns App::Yath2::Formatter::Tty when STDOUT is a TTY,
     # App::Yath2::Formatter::Txt otherwise.
 
     # Check STDOUT directly (no argument):
-    my $formatter = App::Yath2::Renderer2::TerminalAuto::pick();
+    my $formatter = App::Yath2::Renderer::TerminalAuto::pick();
 
 =head1 DESCRIPTION
 
@@ -71,7 +71,7 @@ the Terminal renderer.
 
 =head2 pick(%args)
 
-    my $formatter = App::Yath2::Renderer2::TerminalAuto::pick(out_fh => $fh);
+    my $formatter = App::Yath2::Renderer::TerminalAuto::pick(out_fh => $fh);
 
 Accepts an optional C<out_fh> filehandle.  When omitted, C<\*STDOUT> is used.
 Returns either a L<App::Yath2::Formatter::Tty> or L<App::Yath2::Formatter::Txt>

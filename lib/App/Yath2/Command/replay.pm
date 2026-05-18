@@ -17,7 +17,7 @@ use Carp qw/croak/;
 use App::Yath2::Log();
 use App::Yath2::Options::Concluder();
 use App::Yath2::Options::Renderer();
-use App::Yath2::Renderer2::Spawn();
+use App::Yath2::Renderer::Spawn();
 
 use Getopt::Yath;
 include_options(
@@ -83,14 +83,14 @@ sub run {
 
     my $renderer_exit = 0;
     if (@$specs) {
-        my $pids = App::Yath2::Renderer2::Spawn::spawn_renderers(
+        my $pids = App::Yath2::Renderer::Spawn::spawn_renderers(
             logdir      => $path,
             specs       => $specs,
             settings    => $settings,
             parent_pid  => $$,
             command_pid => $$,
         );
-        $renderer_exit = App::Yath2::Renderer2::Spawn::reap_renderers(pids => $pids);
+        $renderer_exit = App::Yath2::Renderer::Spawn::reap_renderers(pids => $pids);
     }
 
     # Open the log once in this (parent) process for the concluders

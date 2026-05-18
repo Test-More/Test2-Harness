@@ -12,7 +12,7 @@ use Test2::Harness2::Util qw/mod2file tinysleep/;
 
 use App::Yath2::TestFile;
 use App::Yath2::Options::Renderer();
-use App::Yath2::Renderer2::Spawn();
+use App::Yath2::Renderer::Spawn();
 use App::Yath2::Util::IPC qw/discover_daemons assert_daemon_alive/;
 
 use Role::Tiny::With;
@@ -123,7 +123,7 @@ sub run {
         or warn "subscribe failed: $@";
 
     # Fork one renderer child per active renderer. Each child drives
-    # one renderer instance via App::Yath2::Renderer2::Loop against
+    # one renderer instance via App::Yath2::Renderer::Loop against
     # the daemon's live log dir. When this `yath run` exits the
     # parent's PID disappears -- the renderer loop sees that via its
     # PID-watch shutdown layer and drains.
@@ -139,7 +139,7 @@ sub run {
     # own -- signal SIGTERM so the renderer process exits and yath
     # run can return its result without leaving the renderer
     # parked on FileMonitor->await_change.
-    my $renderer_exit = App::Yath2::Renderer2::Spawn::reap_renderers(
+    my $renderer_exit = App::Yath2::Renderer::Spawn::reap_renderers(
         pids         => $renderer_pids,
         signal_first => 1,
     );
@@ -230,7 +230,7 @@ sub _spawn_renderers {
     my $specs = App::Yath2::Options::Renderer->renderer_specs($settings);
     return [] unless @$specs;
 
-    return App::Yath2::Renderer2::Spawn::spawn_renderers(
+    return App::Yath2::Renderer::Spawn::spawn_renderers(
         logdir      => $logdir,
         settings    => $settings,
         specs       => $specs,
@@ -256,7 +256,7 @@ sub _drive_ipc_loop {
     };
 
     while (1) {
-        my $renderer_gone = App::Yath2::Renderer2::Spawn::renderers_all_reaped(pids => $renderer_pids);
+        my $renderer_gone = App::Yath2::Renderer::Spawn::renderers_all_reaped(pids => $renderer_pids);
 
         eval { $state->{ipc}->poll(0); 1 } or warn "ipc poll: $@";
         $self->_drain_state_messages($state);
@@ -380,7 +380,7 @@ with C<scope='run'> are shipped; global resources are owned by the daemon.
 
 Resolve the active renderer set via
 L<App::Yath2::Options::Renderer/renderer_specs> and fork one
-L<App::Yath2::Renderer2::Loop> child per spec against the daemon's live
+L<App::Yath2::Renderer::Loop> child per spec against the daemon's live
 log dir. Returns an arrayref of child pids.
 
 =head2 _drive_ipc_loop

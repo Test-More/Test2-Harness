@@ -3,12 +3,12 @@ use warnings;
 
 use Test2::V0;
 use File::Temp qw/tempfile/;
-use App::Yath2::Renderer2::Base;
-use App::Yath2::Renderer2::Loop;
+use App::Yath2::Renderer;
+use App::Yath2::Renderer::Loop;
 
 # Helper to build a minimal renderer without a real log.
 sub _renderer {
-    App::Yath2::Renderer2::Base->new(
+    App::Yath2::Renderer->new(
         log         => undef,
         parent_pid  => $$,
         command_pid => $$,
@@ -86,7 +86,7 @@ sub _renderer {
     $r->mark_ipc_disabled;
 
     is(
-        App::Yath2::Renderer2::Loop::_check_ipc_signal($r),
+        App::Yath2::Renderer::Loop::_check_ipc_signal($r),
         0,
         '_check_ipc_signal: 0 when ipc_disabled',
     );
@@ -97,7 +97,7 @@ sub _renderer {
     my $r = _renderer();
 
     is(
-        App::Yath2::Renderer2::Loop::_check_ipc_signal($r),
+        App::Yath2::Renderer::Loop::_check_ipc_signal($r),
         0,
         '_check_ipc_signal: 0 when not connected',
     );
@@ -109,14 +109,14 @@ sub _renderer {
 
     # Inject a stub IPC handle and pre-set the stop-seen flag directly.
     # This exercises the sticky short-circuit without needing a live bus.
-    $r->{App::Yath2::Renderer2::Base::_IPC_STOP_SEEN()} = 1;
-    $r->{App::Yath2::Renderer2::Base::_IPC()}           = bless {}, 'TestStub';
+    $r->{App::Yath2::Renderer::_IPC_STOP_SEEN()} = 1;
+    $r->{App::Yath2::Renderer::_IPC()}           = bless {}, 'TestStub';
 
     is($r->_has_ipc,          1, 'stub ipc: _has_ipc true');
     is($r->ipc_stop_signaled, 1, 'sticky: ipc_stop_signaled returns 1');
 
     is(
-        App::Yath2::Renderer2::Loop::_check_ipc_signal($r),
+        App::Yath2::Renderer::Loop::_check_ipc_signal($r),
         1,
         '_check_ipc_signal: 1 when stop seen',
     );
@@ -132,7 +132,7 @@ sub _renderer {
         package TestStub::NoMsg;
         sub get_messages { return () }
     }
-    $r->{App::Yath2::Renderer2::Base::_IPC()} = bless {}, 'TestStub::NoMsg';
+    $r->{App::Yath2::Renderer::_IPC()} = bless {}, 'TestStub::NoMsg';
 
     is($r->_has_ipc,          1, 'stub ipc no-msg: _has_ipc true');
     is($r->ipc_stop_signaled, 0, 'no message: ipc_stop_signaled returns 0');
@@ -156,11 +156,11 @@ sub _renderer {
         package FakeMsg;
         sub content { $_[0]->{content} }
     }
-    $r->{App::Yath2::Renderer2::Base::_IPC()} = bless {}, 'TestStub::StopMsg';
+    $r->{App::Yath2::Renderer::_IPC()} = bless {}, 'TestStub::StopMsg';
 
     is($r->ipc_stop_signaled, 1, 'renderer_stop: ipc_stop_signaled flips to 1');
     is(
-        App::Yath2::Renderer2::Loop::_check_ipc_signal($r),
+        App::Yath2::Renderer::Loop::_check_ipc_signal($r),
         1,
         '_check_ipc_signal: 1 after renderer_stop delivered',
     );

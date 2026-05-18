@@ -6,9 +6,9 @@ use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
 use Cpanel::JSON::XS qw/encode_json/;
 use App::Yath2::Log;
-use App::Yath2::Renderer2::Loop;
-use App::Yath2::Renderer2::Terminal;
-use App::Yath2::Renderer2::TerminalAuto;
+use App::Yath2::Renderer::Loop;
+use App::Yath2::Renderer::Terminal;
+use App::Yath2::Renderer::TerminalAuto;
 use App::Yath2::Formatter::Txt;
 
 # ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ make_path("$dir/runs/1/jobs/1/0", "$dir/runs/1/jobs/2/0");
 my $captured = '';
 open my $out, '>', \$captured or die "open scalar fh: $!";
 
-my $formatter = App::Yath2::Renderer2::TerminalAuto::pick(out_fh => $out);
+my $formatter = App::Yath2::Renderer::TerminalAuto::pick(out_fh => $out);
 isa_ok($formatter, ['App::Yath2::Formatter::Txt'], 'non-TTY out_fh selects Txt formatter');
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ isa_ok($formatter, ['App::Yath2::Formatter::Txt'], 'non-TTY out_fh selects Txt f
 # ---------------------------------------------------------------------------
 my $log = App::Yath2::Log->new(dir => $dir);
 
-my $renderer = App::Yath2::Renderer2::Terminal->new(
+my $renderer = App::Yath2::Renderer::Terminal->new(
     log         => $log,
     parent_pid  => $$,
     command_pid => $$,
@@ -87,7 +87,7 @@ my $renderer = App::Yath2::Renderer2::Terminal->new(
     },
 );
 
-App::Yath2::Renderer2::Loop::run($renderer);
+App::Yath2::Renderer::Loop::run($renderer);
 close $out;
 
 # ---------------------------------------------------------------------------

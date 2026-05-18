@@ -2,7 +2,7 @@ use Test2::V0;
 use File::Temp qw/tempdir/;
 use File::Spec ();
 
-use App::Yath2::Renderer2::ArtifactWriter qw/update_meta_formatters/;
+use App::Yath2::Renderer::ArtifactWriter qw/update_meta_formatters/;
 use Test2::Harness2::Util::JSON qw/encode_json decode_json/;
 
 my $dir       = tempdir(CLEANUP => 1);

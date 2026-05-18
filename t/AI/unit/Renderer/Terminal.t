@@ -6,8 +6,8 @@ use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
 use Cpanel::JSON::XS qw/encode_json/;
 use App::Yath2::Log;
-use App::Yath2::Renderer2::Loop;
-use App::Yath2::Renderer2::Terminal;
+use App::Yath2::Renderer::Loop;
+use App::Yath2::Renderer::Terminal;
 use App::Yath2::Formatter::Txt;
 
 # -----------------------------------------------------------------------
@@ -63,7 +63,7 @@ subtest qvf_mode => sub {
     my $captured = '';
     open my $out, '>', \$captured or die "open scalar fh: $!";
 
-    my $renderer = App::Yath2::Renderer2::Terminal->new(
+    my $renderer = App::Yath2::Renderer::Terminal->new(
         log         => $log,
         parent_pid  => $$,
         command_pid => $$,
@@ -74,7 +74,7 @@ subtest qvf_mode => sub {
         },
     );
 
-    App::Yath2::Renderer2::Loop::run($renderer);
+    App::Yath2::Renderer::Loop::run($renderer);
     close $out;
 
     # Job 1 (pass): single PASS summary line, no event details.
@@ -100,7 +100,7 @@ subtest verbose_mode => sub {
     my $captured = '';
     open my $out, '>', \$captured or die "open scalar fh: $!";
 
-    my $renderer = App::Yath2::Renderer2::Terminal->new(
+    my $renderer = App::Yath2::Renderer::Terminal->new(
         log         => $log,
         parent_pid  => $$,
         command_pid => $$,
@@ -111,7 +111,7 @@ subtest verbose_mode => sub {
         },
     );
 
-    App::Yath2::Renderer2::Loop::run($renderer);
+    App::Yath2::Renderer::Loop::run($renderer);
     close $out;
 
     # Both jobs should have a "started" line.
@@ -129,7 +129,7 @@ subtest verbose_mode => sub {
 subtest formatter_required => sub {
     my $log = App::Yath2::Log->new(dir => $dir);
 
-    my $renderer = App::Yath2::Renderer2::Terminal->new(
+    my $renderer = App::Yath2::Renderer::Terminal->new(
         log         => $log,
         parent_pid  => $$,
         command_pid => $$,

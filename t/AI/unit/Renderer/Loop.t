@@ -7,14 +7,14 @@ use File::Path qw/make_path/;
 use Time::HiRes qw/sleep/;
 use Cpanel::JSON::XS qw/encode_json/;
 use App::Yath2::Log;
-use App::Yath2::Renderer2::Loop;
-use App::Yath2::Renderer2::Base;
+use App::Yath2::Renderer::Loop;
+use App::Yath2::Renderer;
 
 # Recording subclass for all subtests.
 {
 
     package T::R::Rec;
-    use parent 'App::Yath2::Renderer2::Base';
+    use parent 'App::Yath2::Renderer';
     our @SEEN;
     sub handle_run_opened     { push @SEEN, ['run_opened',     $_[1]->id] }
     sub handle_run_sealed     { push @SEEN, ['run_sealed',     $_[1]->id] }
@@ -48,7 +48,7 @@ subtest sealed_log_one_pass => sub {
         out_fh      => \*STDOUT,
     );
 
-    App::Yath2::Renderer2::Loop::run($r);
+    App::Yath2::Renderer::Loop::run($r);
 
     # Sealed log: one pass — each producer fires its opened then sealed hook.
     # Jobs are nested inside runs so the expected order is:
@@ -94,7 +94,7 @@ subtest live_log_drain_on_live_removal => sub {
         exit 0;
     }
 
-    App::Yath2::Renderer2::Loop::run($r);
+    App::Yath2::Renderer::Loop::run($r);
     waitpid($kid, 0);
 
     ok(
@@ -133,7 +133,7 @@ subtest dead_parent_pid_triggers_drain => sub {
         settings    => {poll_interval => 0.05},
     );
 
-    App::Yath2::Renderer2::Loop::run($r);
+    App::Yath2::Renderer::Loop::run($r);
 
     # The loop fires at least one scan (run_opened or nothing, depending on
     # whether run/1 surfaced in the live directory), then drains and exits.
@@ -166,9 +166,9 @@ subtest idempotent_hooks => sub {
     );
 
     # Call _scan_once multiple times; hooks must fire exactly once.
-    App::Yath2::Renderer2::Loop::_scan_once($r);
-    App::Yath2::Renderer2::Loop::_scan_once($r);
-    App::Yath2::Renderer2::Loop::_scan_once($r);
+    App::Yath2::Renderer::Loop::_scan_once($r);
+    App::Yath2::Renderer::Loop::_scan_once($r);
+    App::Yath2::Renderer::Loop::_scan_once($r);
 
     my %counts;
     $counts{$_->[0]}++ for @T::R::Rec::SEEN;
@@ -190,7 +190,7 @@ subtest 'on_artifact_change dispatched when monitor fires' => sub {
     sub await_change { return 0 }
 
     package T::R::ArtDisp;
-    use parent 'App::Yath2::Renderer2::Base';
+    use parent 'App::Yath2::Renderer';
     our @DISPATCHED;
 
     sub on_artifact_change { push @DISPATCHED, [$_[1], $_[2]] }
@@ -220,7 +220,7 @@ subtest 'on_artifact_change dispatched when monitor fires' => sub {
     # Pass undef for live_monitor since the log is sealed and we only care
     # about the artifact-monitor dispatch branch.
     $T::OnceMonitor::fired = 0;
-    App::Yath2::Renderer2::Loop::_wait_for_change($r, undef, 0.01);
+    App::Yath2::Renderer::Loop::_wait_for_change($r, undef, 0.01);
 
     is(scalar @T::R::ArtDisp::DISPATCHED, 1,       'on_artifact_change called once');
     is($T::R::ArtDisp::DISPATCHED[0][0],  'alpha', 'key passed is alpha');
@@ -236,17 +236,17 @@ subtest 'ipc_disabled short-circuits _check_ipc_signal' => sub {
     close $rsm;
 
     my $log = App::Yath2::Log->new(dir => $dir);
-    my $r   = App::Yath2::Renderer2::Base->new(
+    my $r   = App::Yath2::Renderer->new(
         log         => $log,
         parent_pid  => $$,
         command_pid => $$,
         out_fh      => \*STDOUT,
     );
 
-    is(App::Yath2::Renderer2::Loop::_check_ipc_signal($r), 0, '_check_ipc_signal returns 0 when ipc_disabled is false');
+    is(App::Yath2::Renderer::Loop::_check_ipc_signal($r), 0, '_check_ipc_signal returns 0 when ipc_disabled is false');
 
     $r->mark_ipc_disabled;
-    is(App::Yath2::Renderer2::Loop::_check_ipc_signal($r), 0, '_check_ipc_signal returns 0 when ipc_disabled is true');
+    is(App::Yath2::Renderer::Loop::_check_ipc_signal($r), 0, '_check_ipc_signal returns 0 when ipc_disabled is true');
     is($r->ipc_disabled,                                   1, 'ipc_disabled accessor confirms flag');
 };
 

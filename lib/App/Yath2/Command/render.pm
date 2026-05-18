@@ -15,9 +15,9 @@ use Object::HashBase qw{
 use Carp qw/croak/;
 
 use App::Yath2::Log();
-use App::Yath2::Renderer2::Registry();
-use App::Yath2::Renderer2::Loop();
-use App::Yath2::Renderer2::TerminalAuto();
+use App::Yath2::Renderer::Registry();
+use App::Yath2::Renderer::Loop();
+use App::Yath2::Renderer::TerminalAuto();
 
 use Getopt::Yath;
 include_options(
@@ -62,9 +62,9 @@ option_group {group => 'render', category => 'Render Command Options'} => sub {
 
 # Make every renderer's flat option group visible to the parser. This
 # happens at compile time so prefix conflicts surface during command
-# load rather than mid-parse. See App::Yath2::Renderer2::Registry for
+# load rather than mid-parse. See App::Yath2::Renderer::Registry for
 # the ownership rules.
-App::Yath2::Renderer2::Registry->include_all_renderer_options(__PACKAGE__->options);
+App::Yath2::Renderer::Registry->include_all_renderer_options(__PACKAGE__->options);
 
 use Role::Tiny::With;
 with 'App::Yath2::Role::Command';
@@ -124,7 +124,7 @@ sub run {
 
     die "extra arguments after LOG\n" if @$args;
 
-    my ($renderer_class, $prefix) = App::Yath2::Renderer2::Registry->resolve_and_load($name);
+    my ($renderer_class, $prefix) = App::Yath2::Renderer::Registry->resolve_and_load($name);
 
     my $log = App::Yath2::Log->new(auto => $path);
 
@@ -158,7 +158,7 @@ sub run {
     # contract.
     $renderer->connect_ipc($rs->ipc_endpoint) if defined $rs->ipc_endpoint && length $rs->ipc_endpoint;
 
-    App::Yath2::Renderer2::Loop::run($renderer);
+    App::Yath2::Renderer::Loop::run($renderer);
 
     return 0;
 }
@@ -215,7 +215,7 @@ sub _build_renderer_settings {
     # Terminal renderer expects 'formatter' to be a formatter instance
     # under $settings->{formatter}. Pick the default if no explicit
     # formatter was requested (or normalise a short name into a class).
-    if ($renderer_class eq 'App::Yath2::Renderer2::Terminal'
+    if ($renderer_class eq 'App::Yath2::Renderer::Terminal'
         || ($short_name // '') eq 'terminal-auto')
     {
         my $name_or_class = $out{formatter};
@@ -223,7 +223,7 @@ sub _build_renderer_settings {
             $out{formatter} = _instantiate_formatter($name_or_class, $out_fh);
         }
         else {
-            $out{formatter} = App::Yath2::Renderer2::TerminalAuto::pick(out_fh => $out_fh);
+            $out{formatter} = App::Yath2::Renderer::TerminalAuto::pick(out_fh => $out_fh);
         }
         # Map terminal.verbose -> verbose so Terminal->_verbose finds it.
         $out{verbose} //= $out{verbose};
@@ -232,7 +232,7 @@ sub _build_renderer_settings {
     # JUnit renderer reads $s->{junit_out}; alias the flat junit.out
     # value into the legacy key so the existing renderer code keeps
     # working without further changes.
-    if ($renderer_class eq 'App::Yath2::Renderer2::JUnit') {
+    if ($renderer_class eq 'App::Yath2::Renderer::JUnit') {
         $out{junit_out} //= $out{out} if defined $out{out} && length $out{out};
     }
 
@@ -309,7 +309,7 @@ App::Yath2::Command::render - Run a single renderer against a log.
 =head1 DESCRIPTION
 
 This is the canonical command that runs exactly one
-L<App::Yath2::Renderer2::Base> subclass against a log. C<yath test>,
+L<App::Yath2::Renderer> subclass against a log. C<yath test>,
 C<yath run>, and C<yath replay> fan out to this command internally,
 spawning one child process per active renderer. Each renderer process
 owns its own log iteration, its own FileMonitor watches, and its own
@@ -320,7 +320,7 @@ output sink.
     yath render RENDERER LOG
 
 C<RENDERER> is either a short renderer name registered in
-L<App::Yath2::Renderer2::Registry> (C<terminal>, C<terminal-auto>,
+L<App::Yath2::Renderer::Registry> (C<terminal>, C<terminal-auto>,
 C<junit>) or a fully-qualified Perl class prefixed with C<+>.
 
 C<LOG> is a sealed log directory or a C<.yath> archive. The C<auto>
@@ -360,8 +360,8 @@ begins, or when a C<required> renderer fails.
 
 =head1 SEE ALSO
 
-L<App::Yath2::Renderer2::Loop>,
-L<App::Yath2::Renderer2::Registry>,
+L<App::Yath2::Renderer::Loop>,
+L<App::Yath2::Renderer::Registry>,
 L<App::Yath2::Command::reformat>,
 L<App::Yath2::Command::replay>.
 

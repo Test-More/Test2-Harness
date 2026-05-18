@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::Terminal;
+package App::Yath2::Renderer::Terminal;
 use strict;
 use warnings;
 
@@ -7,11 +7,11 @@ our $VERSION = '2.000013';
 use Carp qw/croak/;
 use IO::Handle ();
 
-use parent 'App::Yath2::Renderer2::Base';
+use parent 'App::Yath2::Renderer';
 
 # Flat-namespaced option group owned by this renderer. The `terminal`
 # prefix is asserted as exclusively owned by this class via
-# App::Yath2::Renderer2::Registry. terminal-auto is a selector that
+# App::Yath2::Renderer::Registry. terminal-auto is a selector that
 # resolves to this same class and therefore shares the prefix without
 # triggering a conflict (assert_prefix is idempotent for the same
 # class).
@@ -112,15 +112,15 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::Terminal - Terminal renderer for Test2 harness output.
+App::Yath2::Renderer::Terminal - Terminal renderer for Test2 harness output.
 
 =head1 SYNOPSIS
 
-    use App::Yath2::Renderer2::Terminal;
+    use App::Yath2::Renderer::Terminal;
     use App::Yath2::Formatter::Txt;
-    use App::Yath2::Renderer2::Loop;
+    use App::Yath2::Renderer::Loop;
 
-    my $renderer = App::Yath2::Renderer2::Terminal->new(
+    my $renderer = App::Yath2::Renderer::Terminal->new(
         log         => $log,
         parent_pid  => $$,
         command_pid => $$,
@@ -130,12 +130,12 @@ App::Yath2::Renderer2::Terminal - Terminal renderer for Test2 harness output.
         },
     );
 
-    App::Yath2::Renderer2::Loop::run($renderer);
+    App::Yath2::Renderer::Loop::run($renderer);
 
 =head1 DESCRIPTION
 
-C<App::Yath2::Renderer2::Terminal> is the first concrete renderer built on the
-C<App::Yath2::Renderer2::Base> foundation. It writes human-readable output to
+C<App::Yath2::Renderer::Terminal> is the first concrete renderer built on the
+C<App::Yath2::Renderer> foundation. It writes human-readable output to
 C<out_fh> (typically C<STDOUT>) using a caller-supplied formatter.
 
 =head2 Verbosity policy (QVF mode, verbose=0)
@@ -194,7 +194,7 @@ convert event hashrefs to printable text.
 
 =head1 ATTRIBUTES
 
-Inherits all attributes from L<App::Yath2::Renderer2::Base>.
+Inherits all attributes from L<App::Yath2::Renderer>.
 
 =over 4
 
@@ -244,7 +244,7 @@ Emit a run summary line: C<HARNESS: run N PASSED|FAILED (exit=N)>.
 
 =head1 SEE ALSO
 
-L<App::Yath2::Renderer2::Base>, L<App::Yath2::Renderer2::Loop>,
+L<App::Yath2::Renderer>, L<App::Yath2::Renderer::Loop>,
 L<App::Yath2::Formatter::Txt>, L<App::Yath2::Formatter::Tty>.
 
 =head1 SOURCE

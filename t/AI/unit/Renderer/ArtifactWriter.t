@@ -1,7 +1,7 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
 
-use App::Yath2::Renderer2::ArtifactWriter qw/write_artifact_atomic/;
+use App::Yath2::Renderer::ArtifactWriter qw/write_artifact_atomic/;
 
 my $dir = tempdir(CLEANUP => 1);
 

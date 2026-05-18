@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::Loop;
+package App::Yath2::Renderer::Loop;
 use strict;
 use warnings;
 
@@ -224,19 +224,19 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::Loop - Render loop with two-hook handler model.
+App::Yath2::Renderer::Loop - Render loop with two-hook handler model.
 
 =head1 SYNOPSIS
 
-    use App::Yath2::Renderer2::Loop;
+    use App::Yath2::Renderer::Loop;
     use My::Renderer;
 
     my $r = My::Renderer->new(log => $log, parent_pid => $$, ...);
-    App::Yath2::Renderer2::Loop::run($r);
+    App::Yath2::Renderer::Loop::run($r);
 
 =head1 DESCRIPTION
 
-Procedural render loop that drives an C<App::Yath2::Renderer2::Base>
+Procedural render loop that drives an C<App::Yath2::Renderer>
 subclass. The loop:
 
 =over 4
@@ -278,7 +278,7 @@ Calls C<< $renderer->finish >> after the loop exits.
 
 =over 4
 
-=item App::Yath2::Renderer2::Loop::run($renderer)
+=item App::Yath2::Renderer::Loop::run($renderer)
 
 Entry point. Drives the render loop for C<$renderer>. Does not return
 until the loop exits. Never call this as a method; it is a plain

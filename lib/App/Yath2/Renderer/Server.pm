@@ -1,4 +1,4 @@
-package App::Yath2::Renderer2::Server;
+package App::Yath2::Renderer::Server;
 use strict;
 use warnings;
 
@@ -6,7 +6,7 @@ our $VERSION = '2.000013';
 
 use Carp qw/croak/;
 
-use parent 'App::Yath2::Renderer2::Base';
+use parent 'App::Yath2::Renderer';
 
 # Stub renderer reserving the `server` slot in the registry for the
 # future yath UI / database renderer. The legacy implementation
@@ -30,13 +30,13 @@ option_group {group => 'server', prefix => 'server', category => 'Server rendere
 
 sub start {
     my $self = shift;
-    warn "App::Yath2::Renderer2::Server is a stub: no output will be produced. " . "Use --renderer terminal-auto or --renderer junit until the new server renderer ships.\n";
+    warn "App::Yath2::Renderer::Server is a stub: no output will be produced. " . "Use --renderer terminal-auto or --renderer junit until the new server renderer ships.\n";
     return;
 }
 
 # Every hook is a no-op so the loop runs cleanly through any log
 # without side effects. handle_*_opened / handle_*_sealed are
-# inherited as no-ops from App::Yath2::Renderer2::Base; we explicitly
+# inherited as no-ops from App::Yath2::Renderer; we explicitly
 # do not override them here.
 
 1;
@@ -49,7 +49,7 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::Server - Stub for the future server renderer.
+App::Yath2::Renderer::Server - Stub for the future server renderer.
 
 =head1 DESCRIPTION
 
@@ -65,9 +65,9 @@ real implementation is designed.
 
 =head1 SEE ALSO
 
-L<App::Yath2::Renderer2::Base>,
-L<App::Yath2::Renderer2::Terminal>,
-L<App::Yath2::Renderer2::JUnit>.
+L<App::Yath2::Renderer>,
+L<App::Yath2::Renderer::Terminal>,
+L<App::Yath2::Renderer::JUnit>.
 
 =head1 SOURCE
 

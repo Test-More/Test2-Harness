@@ -24,7 +24,7 @@ use Test2::Harness2::Util qw/mod2file tinysleep/;
 use App::Yath2::Log();
 use App::Yath2::Options::Concluder();
 use App::Yath2::Options::Renderer();
-use App::Yath2::Renderer2::Spawn();
+use App::Yath2::Renderer::Spawn();
 use App::Yath2::Util::IPC qw/publish_ipc_file unlink_ipc_file/;
 use Scope::Guard ();
 
@@ -97,7 +97,7 @@ sub run {
         or warn "subscribe failed: $@";
 
     # Fork one renderer child per active renderer. Each child drives
-    # one renderer instance via App::Yath2::Renderer2::Loop against
+    # one renderer instance via App::Yath2::Renderer::Loop against
     # the live log directory; the LIVE sentinel + parent/command PIDs
     # are the renderer's shutdown-detection signals.
     my $renderer_pids = $self->_spawn_renderers($logdir, $spawn);
@@ -113,7 +113,7 @@ sub run {
 
     # Wait for all renderer children. Each exits when the loop reports
     # a clean drain or with a nonzero code if it died.
-    my $renderer_exit = App::Yath2::Renderer2::Spawn::reap_renderers(pids => $renderer_pids);
+    my $renderer_exit = App::Yath2::Renderer::Spawn::reap_renderers(pids => $renderer_pids);
 
     # Final exit: combine IPC verdict + renderer exit code -- if either
     # log or ipc reports something is wrong, the result is a failure.
@@ -364,7 +364,7 @@ sub _queue_run {
 }
 
 # Fork one renderer child per active renderer. Each child drives a
-# single renderer instance via App::Yath2::Renderer2::Loop against
+# single renderer instance via App::Yath2::Renderer::Loop against
 # the live log dir. Returns the arrayref of child pids in the parent;
 # never returns in any child (POSIX::_exit).
 #
@@ -380,7 +380,7 @@ sub _spawn_renderers {
     my $specs = App::Yath2::Options::Renderer->renderer_specs($settings);
     return [] unless @$specs;
 
-    return App::Yath2::Renderer2::Spawn::spawn_renderers(
+    return App::Yath2::Renderer::Spawn::spawn_renderers(
         logdir      => $logdir,
         settings    => $settings,
         specs       => $specs,
@@ -418,7 +418,7 @@ sub _drive_ipc_loop {
         # Reap any renderer children that have exited non-blockingly.
         # If they all exit before we see harness_end something is
         # off, but we still want to let the harness drain.
-        my $renderer_gone = App::Yath2::Renderer2::Spawn::renderers_all_reaped(pids => $renderer_pids);
+        my $renderer_gone = App::Yath2::Renderer::Spawn::renderers_all_reaped(pids => $renderer_pids);
 
         # Drain inbound messages from the bus.
         my $ok = eval { $ipc->poll(0); 1 };

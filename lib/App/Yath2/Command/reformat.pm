@@ -17,7 +17,7 @@ use File::Spec ();
 
 use App::Yath2::Log();
 use App::Yath2::Formatter::Txt();
-use App::Yath2::Renderer2::ArtifactWriter qw/update_meta_formatters/;
+use App::Yath2::Renderer::ArtifactWriter qw/update_meta_formatters/;
 
 use Getopt::Yath;
 include_options('App::Yath2::Options::Yath');
@@ -154,8 +154,8 @@ sub _logdir_for {
 sub _rebuild_artifacts {
     my ($log, $logdir) = @_;
 
-    require App::Yath2::Renderer2::ArtifactWriter;
-    my $writer = \&App::Yath2::Renderer2::ArtifactWriter::write_artifact_atomic;
+    require App::Yath2::Renderer::ArtifactWriter;
+    my $writer = \&App::Yath2::Renderer::ArtifactWriter::write_artifact_atomic;
 
     my $formatter = App::Yath2::Formatter::Txt->new;
     return {jobs => 0, written => 0, skipped => 0}
@@ -259,7 +259,7 @@ be added in follow-up stages without changing this command's CLI.
 =head1 SEE ALSO
 
 L<App::Yath2::Command::render>,
-L<App::Yath2::Renderer2::ArtifactWriter>,
+L<App::Yath2::Renderer::ArtifactWriter>,
 L<App::Yath2::Formatter::Txt>.
 
 =head1 SOURCE

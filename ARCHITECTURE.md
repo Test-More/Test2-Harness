@@ -3438,18 +3438,18 @@ The foundation lands no user-visible behaviour change — the legacy
 renderer Driver / OutputManager path continues to operate unchanged
 until each renderer is rewritten in Stages 5–10.
 
-### Pull-model renderers (replaces push-stream Driver, foundation only)
+### Pull-model renderers (replaces push-stream Driver)
 
 The prior architecture drove rendering via a push-stream Driver that
-consumed events from the IPC bus. The new foundation replaces this
-with a pull-model loop that iterates directly over producer
-descriptors in the Log. The transitional namespace is
-`App::Yath2::Renderer2::*`; it is renamed to `App::Yath2::Renderer::*`
-in Stage 9.10 after the legacy Driver and its consumers are removed.
+consumed events from the IPC bus. The current architecture replaces
+this with a pull-model loop that iterates directly over producer
+descriptors in the Log. The transitional `App::Yath2::Renderer2::*`
+namespace was renamed back to `App::Yath2::Renderer::*` in Stage 9
+once the legacy Driver and its consumers were removed.
 
 Key modules:
 
-- **`App::Yath2::Renderer2::Base`** — pull-model base class. Defines a
+- **`App::Yath2::Renderer`** — pull-model base class. Defines a
   two-hook handler contract per producer kind:
   `handle_<kind>_opened` (fires once on first sighting of a producer)
   and `handle_<kind>_sealed` (fires once on state transition to
@@ -3460,26 +3460,28 @@ Key modules:
   artifact-monitor lifecycle: `add_artifact_monitor`,
   `remove_artifact_monitor`, `artifact_monitors`.
 
-- **`App::Yath2::Renderer2::Loop`** — procedural render loop. Pulls
+- **`App::Yath2::Renderer::Loop`** — procedural render loop. Pulls
   producers from the Log via per-kind iterators. Per-producer state
   machine: `opened` fires once on first sighting; `sealed` fires once
   on state transition. Sealed logs do one full pass then exit; live
   logs loop, waking on `FileMonitor` mtime changes to the `LIVE`
   sentinel plus any artifact-monitor paths a subclass registered.
   Three-layer shutdown evaluation on each pass: LIVE sentinel removed,
-  IPC signal received (stub in foundation; real wiring in Stage 5),
-  `parent_pid` + `command_pid` process-existence check. Any positive
-  condition drains remaining producers then exits.
+  IPC signal received, `parent_pid` + `command_pid` process-existence
+  check. Any positive condition drains remaining producers then exits.
 
-- **`App::Yath2::Renderer2::ArtifactWriter`** — exports
+- **`App::Yath2::Renderer::ArtifactWriter`** — exports
   `write_artifact_atomic($target, $bytes)`. Exclusive-create tempfile +
   full-write loop + best-effort fsync + atomic publish via `link(2)`.
   Existing-file-wins on concurrent races (a completed artifact is never
   clobbered). Compression-visible filenames: caller supplies the `.zst`
   suffix when bytes are already zstd-compressed.
 
-No concrete renderer ships in Stages 1A–4; old Driver path stays
-functional.
+- **`App::Yath2::Renderer::Spawn`** — shared fan-out helper used by
+  `yath test` / `run` / `replay` / `watch`. Resolves the active
+  renderer set via `App::Yath2::Options::Renderer->renderer_specs`
+  and forks one renderer child per spec, each driving exactly one
+  renderer via `Renderer::Loop`.
 
 ### Formatters (pure conversion, optional persisted artifacts)
 
@@ -3600,7 +3602,7 @@ Stages 1A–4 land the following surface:
 - `_write_sealed_marker` per-producer + `_finalize_sweep` for
   crash-recovery.
 - Formatter base + experimental `Formatter::Txt`.
-- `Renderer2::Base` + `Renderer2::Loop` + `Renderer2::ArtifactWriter`
+- `Renderer` (base) + `Renderer::Loop` + `Renderer::ArtifactWriter`
   + configurable `FileMonitor` poll interval.
 
 333+ test files pass after the foundation lands. No user-visible

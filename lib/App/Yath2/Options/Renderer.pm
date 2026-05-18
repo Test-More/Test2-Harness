@@ -7,7 +7,7 @@ our $VERSION = '2.000013';
 use Carp qw/croak/;
 use Test2::Harness2::Util qw/mod2file/;
 
-use App::Yath2::Renderer2::Registry();
+use App::Yath2::Renderer::Registry();
 
 use Getopt::Yath;
 include_options(
@@ -56,7 +56,7 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
     );
 
     # Renderer set: short names resolvable via
-    # App::Yath2::Renderer2::Registry (e.g. terminal, terminal-auto,
+    # App::Yath2::Renderer::Registry (e.g. terminal, terminal-auto,
     # junit), or "+Fully::Qualified::Class" for custom renderers.
     option classes => (
         type  => 'Map',
@@ -83,12 +83,12 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
 # Build per-renderer spawn specs from the parsed Settings. Returns a
 # list of hashrefs, one per active renderer:
 #
-#   { name => 'terminal', class => 'App::Yath2::Renderer2::Terminal',
+#   { name => 'terminal', class => 'App::Yath2::Renderer::Terminal',
 #     prefix => 'terminal', args => [...] }
 #
 # Each entry is what the parent command needs to fork a renderer
-# child (whether in-process via Renderer2::Loop or via system($yath,
-# 'render', NAME, ...)).
+# child (whether in-process via App::Yath2::Renderer::Loop or via
+# system($yath, 'render', NAME, ...)).
 sub renderer_specs {
     my $class = shift;
     my ($settings) = @_;
@@ -101,7 +101,7 @@ sub renderer_specs {
 
     my @specs;
     for my $name (sort keys %$r_classes) {
-        my ($mod, $prefix) = App::Yath2::Renderer2::Registry->resolve_and_load($name);
+        my ($mod, $prefix) = App::Yath2::Renderer::Registry->resolve_and_load($name);
         push @specs, {
             name   => $name,
             class  => $mod,
@@ -144,7 +144,7 @@ based on whether the output sink is a tty.
 =item C<--renderer NAME>
 
 Append C<NAME> to the active renderer set. C<NAME> is either a short
-name registered in L<App::Yath2::Renderer2::Registry> (C<terminal>,
+name registered in L<App::Yath2::Renderer::Registry> (C<terminal>,
 C<terminal-auto>, C<junit>) or a fully-qualified Perl class prefixed
 with C<+>.
 
@@ -169,7 +169,7 @@ shared display knobs.
 =item $specs = App::Yath2::Options::Renderer->renderer_specs($settings)
 
 Resolve every active short renderer name via
-L<App::Yath2::Renderer2::Registry/resolve_and_load> and return one
+L<App::Yath2::Renderer::Registry/resolve_and_load> and return one
 spawn descriptor per renderer. Each descriptor is a hashref with the
 keys C<name> (short name as typed), C<class> (resolved Perl class),
 C<prefix> (flat option-group prefix owned by this renderer), and

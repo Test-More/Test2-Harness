@@ -6,12 +6,12 @@ use File::Temp qw/tempdir/;
 use File::Path qw/make_path/;
 use Cpanel::JSON::XS qw/encode_json/;
 use App::Yath2::Log;
-use App::Yath2::Renderer2::Loop;
-use App::Yath2::Renderer2::JUnit;
+use App::Yath2::Renderer::Loop;
+use App::Yath2::Renderer::JUnit;
 
 # Default criticality = required.
 {
-    my $r = App::Yath2::Renderer2::JUnit->new(
+    my $r = App::Yath2::Renderer::JUnit->new(
         log         => undef,
         parent_pid  => $$,
         command_pid => $$,
@@ -23,7 +23,7 @@ use App::Yath2::Renderer2::JUnit;
 
 # Missing junit_out setting fails at start.
 {
-    my $r_bad = App::Yath2::Renderer2::JUnit->new(
+    my $r_bad = App::Yath2::Renderer::JUnit->new(
         log         => undef,
         parent_pid  => $$,
         command_pid => $$,
@@ -34,7 +34,7 @@ use App::Yath2::Renderer2::JUnit;
 
 # Empty junit_out also fails at start.
 {
-    my $r_empty = App::Yath2::Renderer2::JUnit->new(
+    my $r_empty = App::Yath2::Renderer::JUnit->new(
         log         => undef,
         parent_pid  => $$,
         command_pid => $$,
@@ -80,7 +80,7 @@ make_path("$dir/runs/1/jobs/1/0", "$dir/runs/1/jobs/2/0");
 my $log      = App::Yath2::Log->new(dir => $dir);
 my $out_path = "$dir/junit.xml";
 
-my $renderer = App::Yath2::Renderer2::JUnit->new(
+my $renderer = App::Yath2::Renderer::JUnit->new(
     log         => $log,
     parent_pid  => $$,
     command_pid => $$,
@@ -88,7 +88,7 @@ my $renderer = App::Yath2::Renderer2::JUnit->new(
     settings    => {junit_out => $out_path},
 );
 
-App::Yath2::Renderer2::Loop::run($renderer);
+App::Yath2::Renderer::Loop::run($renderer);
 
 ok(-e $out_path, 'XML file written');
 

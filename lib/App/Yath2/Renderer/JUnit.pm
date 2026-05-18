@@ -1,16 +1,16 @@
-package App::Yath2::Renderer2::JUnit;
+package App::Yath2::Renderer::JUnit;
 use strict;
 use warnings;
 
 our $VERSION = '2.000013';
 
-use parent 'App::Yath2::Renderer2::Base';
+use parent 'App::Yath2::Renderer';
 
 use Carp qw/croak/;
 
 # Flat-namespaced option group owned by this renderer. The `junit`
 # prefix is registered as exclusively owned by this class through
-# App::Yath2::Renderer2::Registry; a second renderer attempting to
+# App::Yath2::Renderer::Registry; a second renderer attempting to
 # claim the same prefix triggers a registration-time error.
 use Getopt::Yath;
 option_group {group => 'junit', prefix => 'junit', category => 'JUnit renderer options'} => sub {
@@ -228,25 +228,25 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Renderer2::JUnit - Self-contained JUnit XML renderer built at finish time.
+App::Yath2::Renderer::JUnit - Self-contained JUnit XML renderer built at finish time.
 
 =head1 SYNOPSIS
 
-    use App::Yath2::Renderer2::JUnit;
-    use App::Yath2::Renderer2::Loop;
+    use App::Yath2::Renderer::JUnit;
+    use App::Yath2::Renderer::Loop;
 
-    my $r = App::Yath2::Renderer2::JUnit->new(
+    my $r = App::Yath2::Renderer::JUnit->new(
         log         => $log,
         parent_pid  => $$,
         command_pid => $$,
         out_fh      => \*STDOUT,
         settings    => { junit_out => '/tmp/results.xml' },
     );
-    App::Yath2::Renderer2::Loop::run($r);
+    App::Yath2::Renderer::Loop::run($r);
 
 =head1 DESCRIPTION
 
-C<App::Yath2::Renderer2::JUnit> produces a JUnit-compatible XML report for
+C<App::Yath2::Renderer::JUnit> produces a JUnit-compatible XML report for
 every test run. It is B<self-contained>: no XML formatter accumulates events
 during the run. Instead, the entire C<< <testsuites> / <testsuite> /
 <testcase> >> document is assembled in C<finish()> by reading the sealed
@@ -329,7 +329,7 @@ Assembles and returns the complete XML string from the list of suite
 hashrefs. No external XML library is required; the schema is simple and
 well-bounded.
 
-=item App::Yath2::Renderer2::JUnit::_xml_esc($str)
+=item App::Yath2::Renderer::JUnit::_xml_esc($str)
 
 Escapes C<&>, C<< < >>, C<< > >>, C<">, and C<'> for XML attribute and
 element text content. Returns an empty string for C<undef> input.

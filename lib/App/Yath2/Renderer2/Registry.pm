@@ -32,7 +32,7 @@ my %PREFIX_OWNER;
 # Lookup the (class, prefix) tuple for a short renderer name. Croaks
 # when the name does not resolve. Accepts a leading '+' on a fully
 # qualified class name, matching the convention used elsewhere in the
-# codebase (e.g. --renderer +My::Renderer in Options::Renderer).
+# codebase (e.g. --renderer +My::Renderer).
 sub resolve_name {
     my ($class, $name) = @_;
     croak "renderer name is required" unless defined $name && length $name;

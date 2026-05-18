@@ -87,8 +87,9 @@ yath(
             exit    => 0,
             test    => sub {
                 my $out = shift;
-                like($out->{output}, qr{PASSED.*before\.t},
+                like($out->{output}, qr{^PASS:\s*job\b}m,
                     'baseline run passed (Preload::greet=before)');
+                unlike($out->{output}, qr/^FAIL:/m, 'no FAIL in baseline run');
             },
         );
 
@@ -116,8 +117,9 @@ EOM
             exit    => 0,
             test    => sub {
                 my $out = shift;
-                like($out->{output}, qr{PASSED.*after\.t},
+                like($out->{output}, qr{^PASS:\s*job\b}m,
                     'post-reload run passed (Preload::greet=after)');
+                unlike($out->{output}, qr/^FAIL:/m, 'no FAIL in post-reload run');
             },
         );
 

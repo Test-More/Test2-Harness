@@ -49,7 +49,7 @@ yath(
     exit    => 0,
     test    => sub {
         my $out = shift;
-        like($out->{output}, qr/PASSED/, 'replay rendered the passing job');
+        like($out->{output}, qr/PASS:\s*job\b/, 'replay rendered the passing job');
     },
 );
 
@@ -59,7 +59,7 @@ yath(
     exit    => T(),
     test    => sub {
         my $out = shift;
-        like($out->{output}, qr/FAILED/, 'replay rendered the failing job');
+        like($out->{output}, qr/FAIL:\s*job\b/, 'replay rendered the failing job');
     },
 );
 

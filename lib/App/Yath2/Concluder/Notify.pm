@@ -140,9 +140,7 @@ are configured.
 
 =head1 SEE ALSO
 
-L<App::Yath2::Concluder>,
-L<App::Yath2::Renderer::Notify> (the legacy renderer that hosts the
-SMTP / Slack integrations to be ported).
+L<App::Yath2::Concluder>.
 
 =head1 SOURCE
 

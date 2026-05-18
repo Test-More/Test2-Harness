@@ -11,6 +11,8 @@ use Test2::Harness2::Spawn;
 use Test2::Harness2::Util qw/mod2file tinysleep/;
 
 use App::Yath2::TestFile;
+use App::Yath2::Options::Renderer();
+use App::Yath2::Renderer2::Spawn();
 use App::Yath2::Util::IPC qw/discover_daemons assert_daemon_alive/;
 
 use Role::Tiny::With;
@@ -120,21 +122,27 @@ sub run {
     eval { $spawn->subscribe(global => 1, run => $run_id, state => 1); 1 }
         or warn "subscribe failed: $@";
 
-    # Fork the renderer with stop_run_id => $run_id so the Driver
-    # exits naturally once this run's harness_run_end has been
-    # dispatched -- yielding the same final summary `yath test`
-    # prints. Without stop_run_id the Driver would block forever:
-    # the daemon stays up past end-of-run so neither the on-disk
-    # LIVE sentinel nor Log->EOE ever flip.
-    my $renderer_pid = $self->_spawn_renderer($logdir, $spawn, $run_id);
+    # Fork one renderer child per active renderer. Each child drives
+    # one renderer instance via App::Yath2::Renderer2::Loop against
+    # the daemon's live log dir. When this `yath run` exits the
+    # parent's PID disappears -- the renderer loop sees that via its
+    # PID-watch shutdown layer and drains.
+    my $renderer_pids = $self->_spawn_renderers($logdir, $spawn);
 
-    my ($ipc_pass) = $self->_drive_ipc_loop($spawn, $run_id, $renderer_pid);
+    my ($ipc_pass) = $self->_drive_ipc_loop($spawn, $run_id, $renderer_pids);
 
     eval { $spawn->unsubscribe; 1 } or warn "unsubscribe failed: $@";
 
-    # Renderer is exiting on its own (stop_run_id == $run_id matched
-    # at end-of-run). Just reap it.
-    my $renderer_exit = $self->_reap_renderer($renderer_pid);
+    # Reap renderer children. The daemon (parent_pid) and yath run
+    # (command_pid) both stay alive across the renderer's loop, so
+    # neither PID-watch nor LIVE-removal triggers a drain on their
+    # own -- signal SIGTERM so the renderer process exits and yath
+    # run can return its result without leaving the renderer
+    # parked on FileMonitor->await_change.
+    my $renderer_exit = App::Yath2::Renderer2::Spawn::reap_renderers(
+        pids         => $renderer_pids,
+        signal_first => 1,
+    );
     my $log_pass = $renderer_exit == 0;
 
     return ($ipc_pass && $log_pass) ? 0 : 1;
@@ -214,49 +222,30 @@ sub _build_resource_specs {
     return @out;
 }
 
-sub _spawn_renderer {
-    my ($self, $logdir, $spawn, $run_id) = @_;
+sub _spawn_renderers {
+    my ($self, $logdir, $spawn) = @_;
     my $settings    = $self->{+SETTINGS};
     my $harness_pid = $spawn->pid;
 
-    my $pid = fork() // die "Could not fork renderer: $!";
-    return $pid if $pid;
+    my $specs = App::Yath2::Options::Renderer->renderer_specs($settings);
+    return [] unless @$specs;
 
-    # Child: clear inherited Spawn ownership before any teardown.
-    eval { $spawn->clear_terminate_on_destroy; 1 };
-
-    my $exit;
-    my $ok = eval {
-        require App::Yath2::Renderer::Driver;
-        $exit = App::Yath2::Renderer::Driver->run(
-            logdir      => $logdir,
-            settings    => $settings,
-            harness_pid => $harness_pid,
-            stop_run_id => $run_id,
-        );
-        1;
-    };
-    unless ($ok) {
-        my $err = $@;
-        print STDERR "Renderer child died: $err\n";
-        POSIX::_exit(2);
-    }
-    POSIX::_exit($exit // 0);
-}
-
-sub _reap_renderer {
-    my ($self, $pid) = @_;
-    return 0 unless $pid;
-    my $got = waitpid($pid, 0);
-    return 0 unless $got == $pid;
-    return $? >> 8;
+    return App::Yath2::Renderer2::Spawn::spawn_renderers(
+        logdir      => $logdir,
+        settings    => $settings,
+        specs       => $specs,
+        parent_pid  => $harness_pid,
+        command_pid => $$,
+        spawn       => $spawn,
+        live        => 1,
+    );
 }
 
 # Same flow as App::Yath2::Command::test::_drive_ipc_loop -- watch
 # state broadcasts for pass/fail signals, plus poll run_results so a
 # run that completed before our subscribe took effect still resolves.
 sub _drive_ipc_loop {
-    my ($self, $spawn, $run_id, $renderer_pid) = @_;
+    my ($self, $spawn, $run_id, $renderer_pids) = @_;
 
     my $state = {
         ipc_pass     => 1,
@@ -267,8 +256,7 @@ sub _drive_ipc_loop {
     };
 
     while (1) {
-        my $renderer_gone = $renderer_pid
-            && (waitpid($renderer_pid, POSIX::WNOHANG()) == $renderer_pid);
+        my $renderer_gone = App::Yath2::Renderer2::Spawn::renderers_all_reaped(pids => $renderer_pids);
 
         eval { $state->{ipc}->poll(0); 1 } or warn "ipc poll: $@";
         $self->_drain_state_messages($state);
@@ -388,15 +376,12 @@ recipe, and return the assigned run_id.
 Build the serializable per-run resource recipe. Only Resource::Preload entries
 with C<scope='run'> are shipped; global resources are owned by the daemon.
 
-=head2 _spawn_renderer
+=head2 _spawn_renderers
 
-Fork an L<App::Yath2::Renderer::Driver> child bound to this run's id via
-C<stop_run_id> so it exits naturally at end-of-run.
-
-=head2 _reap_renderer
-
-Wait for the renderer child to exit and return its exit status (0 on
-success, nonzero on log-side failure).
+Resolve the active renderer set via
+L<App::Yath2::Options::Renderer/renderer_specs> and fork one
+L<App::Yath2::Renderer2::Loop> child per spec against the daemon's live
+log dir. Returns an arrayref of child pids.
 
 =head2 _drive_ipc_loop
 

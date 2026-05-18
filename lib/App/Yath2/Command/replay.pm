@@ -15,12 +15,15 @@ use Object::HashBase qw{
 use Carp qw/croak/;
 
 use App::Yath2::Log();
-use App::Yath2::Renderer::Driver();
+use App::Yath2::Options::Concluder();
+use App::Yath2::Options::Renderer();
+use App::Yath2::Renderer2::Spawn();
 
 use Getopt::Yath;
 include_options(
     'App::Yath2::Options::Yath',
     'App::Yath2::Options::Renderer',
+    'App::Yath2::Options::Concluder',
 );
 
 use Role::Tiny::With;
@@ -38,8 +41,9 @@ Replays the event stream recorded in a completed yath log. LOG is either a
 .yath archive file or a directory that looks like \$workdir/logs (i.e. carries
 runs/<id>/ subdirectories for the runs it stores).
 
-Output is rendered through the same renderer pipeline as 'yath test', so
-colors, formatting, and summary output match a live run.
+The active renderer set runs as one child process per renderer (same
+fan-out as 'yath test'), then concluders run sequentially in this
+process after the children reap.
 
 Exit code is 0 when every replayed run passed, non-zero otherwise.
     EOT
@@ -71,22 +75,48 @@ sub run {
 
     die "extra arguments after LOG\n" if @$args;
 
-    my $log = App::Yath2::Log->new(auto => $path);
+    # Fan-out: one renderer child per active renderer. Replay logs
+    # are sealed (or readable as sealed for tarballs etc.), so the
+    # Spawn helper opens them with auto =>, not live =>.
+    my $settings = $self->{+SETTINGS};
+    my $specs    = App::Yath2::Options::Renderer->renderer_specs($settings);
 
-    my $exit = App::Yath2::Renderer::Driver->run(
-        log      => $log,
-        settings => $self->{+SETTINGS},
-    );
-
-    # Renderer driver returns 0 on clean termination; nonzero only when
-    # the EOE-timeout safeguard fired (live mode) -- impossible in
-    # sealed mode. Pass/fail comes from the per-job report.jsonl.zst
-    # final state we walk after the renderer is done.
-    if ($exit == 0) {
-        $exit = _runs_failed($log) ? 1 : 0;
+    my $renderer_exit = 0;
+    if (@$specs) {
+        my $pids = App::Yath2::Renderer2::Spawn::spawn_renderers(
+            logdir      => $path,
+            specs       => $specs,
+            settings    => $settings,
+            parent_pid  => $$,
+            command_pid => $$,
+        );
+        $renderer_exit = App::Yath2::Renderer2::Spawn::reap_renderers(pids => $pids);
     }
 
-    return $exit;
+    # Open the log once in this (parent) process for the concluders
+    # and the pass/fail walk.
+    my $log = App::Yath2::Log->new(auto => $path);
+
+    # Run concluders sequentially in this process after renderer
+    # children have all been reaped. ResetTerm is pinned last by
+    # Options::Concluder::init_concluders.
+    $self->_dispatch_concluders($log);
+
+    # Renderer-side problems short-circuit to a failing exit. Otherwise
+    # walk the per-job report.jsonl(.zst) final state to derive
+    # pass/fail.
+    return $renderer_exit if $renderer_exit;
+    return _runs_failed($log) ? 1 : 0;
+}
+
+sub _dispatch_concluders {
+    my ($self, $log) = @_;
+    my $concluders = App::Yath2::Options::Concluder->init_concluders(
+        $self->{+SETTINGS},
+        log => $log,
+    );
+    App::Yath2::Options::Concluder->dispatch_concluders($concluders);
+    return;
 }
 
 # Walk every (run, job, last-try) report.jsonl.zst and return true if

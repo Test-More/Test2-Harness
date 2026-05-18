@@ -4,7 +4,10 @@ use warnings;
 
 our $VERSION = '2.000013';
 
-use Test2::Harness2::Util qw/mod2file fqmod/;
+use Carp qw/croak/;
+use Test2::Harness2::Util qw/mod2file/;
+
+use App::Yath2::Renderer2::Registry();
 
 use Getopt::Yath;
 include_options(
@@ -30,154 +33,84 @@ option_group {group => 'renderer', category => "Renderer Options"} => sub {
     option qvf => (
         type        => 'Bool',
         default     => 0,
-        description => "Replaces App::Yath2::Theme::Default with App::Yath2::Theme::QVF which is quiet for passing tests and verbose for failing ones.",
+        description => "Quiet for passing tests, verbose for failing ones (QVF).",
     );
 
     option theme => (
-        type => 'Scalar',
-        short => 't',
-        description => "Select a theme for the renderer (not all renderers use this)",
-        default     => 'App::Yath2::Theme::Default',
-        normalize   => sub { fqmod($_[0], 'App::Yath2::Theme') },
+        type        => 'Scalar',
+        short       => 't',
+        description => "Select a theme for the renderer (not all renderers use this).",
+        default     => 'auto',
     );
 
     option wrap => (
-        type => 'Bool',
-        default => 1,
-        description => "When active (default) renderers should try to wrap text in a human-friendly way. When this is turned off they should just throw text at the terminal."
+        type        => 'Bool',
+        default     => 1,
+        description => "When active (default) renderers should try to wrap text in a human-friendly way.",
     );
 
     option show_times => (
-        type => 'Bool',
-        short => 'T',
+        type        => 'Bool',
+        short       => 'T',
         description => 'Show the timing data for each job.',
     );
 
-    option hide_runner_output => (
-        type        => 'Bool',
-        default     => 0,
-        description => 'Hide output from the runner, showing only test output. (See Also truncate_runner_output)',
-    );
-
-    option truncate_runner_output => (
-        type        => 'Bool',
-        default     => 0,
-        description => 'Only show runner output that was generated after the current command. This is only useful with a persistent runner.',
-    );
-
+    # Renderer set: short names resolvable via
+    # App::Yath2::Renderer2::Registry (e.g. terminal, terminal-auto,
+    # junit), or "+Fully::Qualified::Class" for custom renderers.
     option classes => (
         type  => 'Map',
         name  => 'renderers',
         field => 'classes',
         alt   => ['renderer'],
 
-        description => 'Specify renderers. Use "+" to give a fully qualified module name. Without "+" "App::Yath2::Renderer::" will be prepended to your argument.',
+        description => 'Select renderer(s) to run. Each --renderer NAME spawns one child process driving the named renderer. Use "+Fully::Qualified::Class" for custom renderers; short names (e.g. terminal, terminal-auto, junit) are resolved via the renderer registry. Default: terminal-auto.',
 
-        long_examples  => [' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
-        short_examples => ['MyRenderer',     ' +My::Renderer', ' MyRenderer,MyOtherRenderer', ' MyRenderer=opt1,opt2', ' :{ MyRenderer :{ opt1 opt2 }: }:', '=:{ MyRenderer opt1,opt2,... }:'],
-        initialize     => sub { {'App::Yath2::Renderer::Default' => [], 'App::Yath2::Renderer::Summary' => []} },
+        long_examples  => [' terminal', ' junit', ' +My::Renderer'],
+        short_examples => [' terminal', ' junit', ' +My::Renderer'],
 
-        normalize => sub { fqmod($_[0], ['App::Yath2::Renderer', 'Test2::Harness2::Renderer']), ref($_[1]) ? $_[1] : [split(',', $_[1] // '')] },
+        # Default set: terminal-auto (selects txt vs tty by tty-ness).
+        initialize => sub { {'terminal-auto' => []} },
 
-        mod_adds_options => 1,
-    );
-
-    option show_job_end => (
-        type    => 'Bool',
-        default => 1,
-
-        description => 'Show output when a job ends. (Default: on)',
-    );
-
-    option show_job_info => (
-        type    => 'Bool',
-        default => sub { my $v = $_[1]->renderer->verbose // 0; $v > 1 ? 1 : 0 },
-
-        description => 'Show the job configuration when a job starts. (Default: off, unless -vv)',
-    );
-
-    option show_job_launch => (
-        type    => 'Bool',
-        default => sub { my $v = $_[1]->renderer->verbose // 0; $v ? 1 : 0 },
-
-        description => "Show output for the start of a job. (Default: off unless -v)",
-    );
-
-    option show_run_info => (
-        type    => 'Bool',
-        default => sub { my $v = $_[1]->renderer->verbose // 0; $v > 1 ? 1 : 0 },
-
-        description => 'Show the run configuration when a run starts. (Default: off, unless -vv)',
-    );
-
-    option show_run_fields => (
-        type    => 'Bool',
-        default => sub { my $v = $_[1]->renderer->verbose // 0; $v > 1 ? 1 : 0 },
-
-        description => 'Show run fields. (Default: off, unless -vv)',
-    );
-
-    option server => (
-        type => 'Auto',
-        autofill => 'Auto',
-        description => "Start an ephemeral yath database and web server to view results",
+        # Keep the user-supplied name verbatim; Registry resolves at
+        # spawn time. We do not normalize to a fully-qualified class
+        # here because the user's short name is also the option-group
+        # prefix used to surface that renderer's flat options.
+        normalize => sub { ($_[0], ref($_[1]) ? $_[1] : [split(',', $_[1] // '')]) },
     );
 };
 
-sub init_renderers {
+# Build per-renderer spawn specs from the parsed Settings. Returns a
+# list of hashrefs, one per active renderer:
+#
+#   { name => 'terminal', class => 'App::Yath2::Renderer2::Terminal',
+#     prefix => 'terminal', args => [...] }
+#
+# Each entry is what the parent command needs to fork a renderer
+# child (whether in-process via Renderer2::Loop or via system($yath,
+# 'render', NAME, ...)).
+sub renderer_specs {
     my $class = shift;
-    my ($settings, %params) = @_;
+    my ($settings) = @_;
 
-    my $rs = $settings->renderer;
+    return [] unless $settings->check_group('renderer');
 
-    my $theme_class = $rs->theme;
-    require(mod2file($theme_class));
-    my $theme = $theme_class->new(use_color => $settings->term->color);
+    my $rs        = $settings->renderer;
+    my $r_classes = $rs->classes // {};
+    return [] unless keys %$r_classes;
 
-    my $is_qvf = $rs->qvf || ($rs->verbose && $rs->quiet);
-    my $r_classes = $rs->classes;
-
-    my $term = -t STDOUT;
-
-    $r_classes->{'App::Yath2::Renderer::ResetTerm'} //= [] if $term;
-
-    if (my $eph = $rs->server) {
-        $r_classes->{'App::Yath2::Renderer::Server'} //= [];
-        if ($eph ne 'Auto' && $settings->check_group('server')) {
-            $settings->server->option(ephemeral => $eph);
-        }
+    my @specs;
+    for my $name (sort keys %$r_classes) {
+        my ($mod, $prefix) = App::Yath2::Renderer2::Registry->resolve_and_load($name);
+        push @specs, {
+            name   => $name,
+            class  => $mod,
+            prefix => $prefix,
+            args   => $r_classes->{$name} // [],
+        };
     }
 
-    my @renderers;
-    for my $class (sort { $a->weight <=> $b->weight || $a cmp $b } map { require(mod2file($_)); $_ } keys %$r_classes) {
-        # FIXME: Do these exist?
-        $class = 'App::Yath2::Theme::QVF'     if $is_qvf  && $class eq 'App::Yath2::Theme::Default';
-        $class = 'App::Yath2::Theme::Default' if !$is_qvf && $class eq 'App::Yath2::Theme::QVF';
-
-        my $params = $r_classes->{$class};
-
-        # Renderers can opt into pulling their own option group's
-        # settings via the `args_from_settings` class method (e.g.
-        # Renderer::Summary -> $settings->summary). Without this hook
-        # the renderer is constructed with only renderer/term settings.
-        my @extra = $class->can('args_from_settings')
-            ? $class->args_from_settings(settings => $settings)
-            : ();
-
-        my $r = $class->new(
-            $settings->renderer->all,
-            $settings->term->all,
-            @extra,
-            @$params,
-            %params,
-            settings => $settings,
-            theme    => $theme,
-        );
-
-        push @renderers => $r;
-    }
-
-    return \@renderers;
+    return \@specs;
 }
 
 1;
@@ -190,9 +123,62 @@ __END__
 
 =head1 NAME
 
-App::Yath2::Options::Renderer - FIXME
+App::Yath2::Options::Renderer - Renderer selection and shared verbosity options.
 
 =head1 DESCRIPTION
+
+Defines the C<--renderer NAME> / C<--no-renderer> option pair plus the
+shared verbosity / theme / wrap / timing flags that all renderers
+consult. Parent commands (C<test>, C<run>, C<replay>, C<watch>) call
+L</renderer_specs> to obtain one spawn descriptor per active renderer.
+
+=head2 Default renderer set
+
+C<terminal-auto> — selects the C<txt> or C<tty> formatter automatically
+based on whether the output sink is a tty.
+
+=head2 Selection semantics
+
+=over 4
+
+=item C<--renderer NAME>
+
+Append C<NAME> to the active renderer set. C<NAME> is either a short
+name registered in L<App::Yath2::Renderer2::Registry> (C<terminal>,
+C<terminal-auto>, C<junit>) or a fully-qualified Perl class prefixed
+with C<+>.
+
+=item C<--no-renderer>
+
+Clear the active renderer set entirely. Combine with one or more
+C<--renderer NAME> flags to start fresh and choose explicitly.
+
+=back
+
+=head2 Per-renderer options
+
+Each renderer owns a flat option prefix (e.g. C<--terminal-out>,
+C<--junit-out>). Those options are declared on the renderer class
+itself; this option group only handles which renderers run and the
+shared display knobs.
+
+=head1 METHODS
+
+=over 4
+
+=item $specs = App::Yath2::Options::Renderer->renderer_specs($settings)
+
+Resolve every active short renderer name via
+L<App::Yath2::Renderer2::Registry/resolve_and_load> and return one
+spawn descriptor per renderer. Each descriptor is a hashref with the
+keys C<name> (short name as typed), C<class> (resolved Perl class),
+C<prefix> (flat option-group prefix owned by this renderer), and
+C<args> (any per-renderer args from the C<--renderer NAME=...> form).
+
+Returns the empty list when the C<renderer> settings group is absent
+or carries no entries.
+
+=back
 
 =head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 
@@ -227,4 +213,3 @@ modify it under the same terms as Perl itself.
 See L<http://dev.perl.org/licenses/>
 
 =cut
-

@@ -50,15 +50,15 @@ sub user             { 'fakeuser' }
 sub orig_tmp         { undef }
 
 package Fake::Renderer;
-sub new { bless {verbose => 0, @_[1..$#_]} => $_[0] }
-sub theme   { 'App::Yath2::Theme::Default' }
-sub qvf     { 0 }
-sub verbose { $_[0]->{verbose} }
-sub quiet   { 0 }
-sub wrap    { 1 }
-sub server  { undef }
-sub classes { {'App::Yath2::Renderer::Default' => []} }
-sub all     { %{$_[0]} }
+sub new        { bless {verbose => 0, @_[1..$#_]} => $_[0] }
+sub theme      { 'auto' }
+sub qvf        { 0 }
+sub verbose    { $_[0]->{verbose} }
+sub quiet      { 0 }
+sub wrap       { 1 }
+sub show_times { 0 }
+sub classes    { {'terminal-auto' => []} }
+sub all        { %{$_[0]} }
 
 package Fake::Term;
 sub new { bless {color => 0, @_[1..$#_]} => $_[0] }

@@ -401,7 +401,6 @@ sub load_command {
 # FIXME
 #    $self->include_options('plugins'  => 'App::Yath2::Plugin::*')   if $cmd_class->load_plugins();
 #    $self->include_options('resource' => 'App::Yath2::Resource::*') if $cmd_class->load_resources();
-#    $self->include_options('renderer' => 'App::Yath2::Renderer::*') if $cmd_class->load_renderers();
 
     return $cmd_class;
 }
@@ -574,7 +573,7 @@ sub _apply_state_modules {
     my ($settings) = @_;
 
     for my $module (keys %{$self->{+STATE_MODULES}}) {
-        for my $set (['yath', 'plugins', 'App::Yath2::Plugin'], ['renderer', 'classes', 'App::Yath2::Renderer'], ['resource', 'classes', 'App::Yath2::Resource']) {
+        for my $set (['yath', 'plugins', 'App::Yath2::Plugin'], ['resource', 'classes', 'App::Yath2::Resource']) {
             my ($group, $field, $type) = @$set;
             next unless $module->isa($type);
             $settings->$group->option($field => {}) unless $settings->$group->$field;

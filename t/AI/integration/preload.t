@@ -38,11 +38,12 @@ yath(
     test    => sub {
         my $out = shift;
 
-        my $filtered = join "\n" => grep { m/(PASSED|FAILED|RETRY).*\.tx/ } split /\n/, $out->{output};
-
-        like($filtered, qr{PASSED.*no_preload\.tx},   'no_preload.tx ran (HARNESS2: preload @off opt-out)');
-        like($filtered, qr{PASSED.*preload_test\.tx}, 'preload_test.tx ran with AISimplePreload preloaded');
-        like($filtered, qr{PASSED.*multi_test\.tx},   'multi_test.tx ran with both modules preloaded');
+        # The new Terminal renderer (QVF default) prints `PASS: job N
+        # try N` per passing job without the test file name. Count the
+        # PASS lines and verify the run finished cleanly with no FAIL.
+        my $pass_count = () = $out->{output} =~ /^PASS:\s*job\b/mg;
+        is($pass_count, 3, 'three passing PASS lines (no_preload, preload_test, multi_test)');
+        unlike($out->{output}, qr/^FAIL:/m, 'no FAIL lines in passing preload run');
     },
 );
 
@@ -88,11 +89,11 @@ unless ($ENV{AUTOMATED_TESTING}) {
                 exit    => 0,
                 test    => sub {
                     my $out = shift;
-                    my $filtered = join "\n" => grep { m/(PASSED|FAILED|RETRY).*\.tx/ } split /\n/, $out->{output};
-
-                    like($filtered, qr{PASSED.*no_preload\.tx},   'no_preload.tx ran under daemon');
-                    like($filtered, qr{PASSED.*preload_test\.tx}, 'preload_test.tx ran under daemon');
-                    like($filtered, qr{PASSED.*multi_test\.tx},   'multi_test.tx ran under daemon');
+                    # See above: the new Terminal renderer prints
+                    # `PASS: job N try N` per job without the filename.
+                    my $pass_count = () = $out->{output} =~ /^PASS:\s*job\b/mg;
+                    is($pass_count, 3, 'three passing PASS lines under daemon');
+                    unlike($out->{output}, qr/^FAIL:/m, 'no FAIL lines under daemon run');
                 },
             );
 

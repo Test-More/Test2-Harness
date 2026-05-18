@@ -43,15 +43,15 @@ sub orig_tmp         { undef }
 package Fake::Renderer2;
 # Forced verbose=>1 so the renderer emits per-assert lines (this test
 # inspects the assertion text).
-sub new { bless {verbose => 1, @_[1..$#_]} => $_[0] }
-sub theme   { 'App::Yath2::Theme::Default' }
-sub qvf     { 0 }
-sub verbose { $_[0]->{verbose} }
-sub quiet   { 0 }
-sub wrap    { 1 }
-sub server  { undef }
-sub classes { {'App::Yath2::Renderer::Default' => []} }
-sub all     { %{$_[0]} }
+sub new        { bless {verbose => 1, @_[1..$#_]} => $_[0] }
+sub theme      { 'auto' }
+sub qvf        { 0 }
+sub verbose    { $_[0]->{verbose} }
+sub quiet      { 0 }
+sub wrap       { 1 }
+sub show_times { 0 }
+sub classes    { {'terminal-auto' => []} }
+sub all        { %{$_[0]} }
 
 package Fake::Term2;
 sub new { bless {color => 0, @_[1..$#_]} => $_[0] }
@@ -159,13 +159,11 @@ is($rc, 0, 'test command exits 0 for a passing test');
 unlike($out, qr/"facet_data"/, 'no raw JSON event blobs in output');
 unlike($out, qr/^\{/m,        'no bare JSON objects on their own lines');
 
-# Renderer::Default injects a PASSED info line when harness_job_end arrives.
-like($out, qr/PASSED/, 'PASSED marker appears in rendered output');
-
-# Per-job assertion text flows through the renderer's depth-first
-# walk of the on-disk log (the renderer driver descends into per-job
-# events.jsonl.zst when it sees a harness_collector_start for the
-# job).
-like($out, qr/a passing assertion/, 'assertion details visible in rendered output');
+# The new Terminal renderer (verbose=1) emits a HARNESS: job ... started
+# line per job opened plus a PASS: job ... try ... line per passing job.
+# Failing jobs would also produce a FAIL: line and an event dump; passing
+# jobs do NOT dump events (QVF policy).
+like($out, qr/PASS:\s*job\b/, 'PASS marker appears in rendered output');
+like($out, qr/HARNESS:\s*job\b.*\bstarted/, 'verbose job-start line appears');
 
 done_testing;

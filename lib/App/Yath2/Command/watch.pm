@@ -4,6 +4,8 @@ use warnings;
 
 our $VERSION = '2.000013';
 
+use App::Yath2::Options::Renderer();
+use App::Yath2::Renderer2::Spawn();
 use App::Yath2::Util::IPC qw/discover_daemons assert_daemon_alive/;
 use Test2::Harness2::Util::IPC qw/set_procname/;
 
@@ -51,9 +53,11 @@ sub summary { "Tail a running yath daemon's event log" }
 
 sub description {
     return <<"    EOT";
-Live-tail a running yath daemon's global event log via the standard
-yath renderer. Run/test-specific event sub-logs are not opened in this
-mode; use --renderer / --quiet for the usual rendering controls.
+Live-tail a running yath daemon's event log via the standard yath
+renderer fan-out. One renderer child runs per active renderer; tailing
+exits when the daemon goes away or any of the renderers' shutdown
+conditions fires. Use --renderer / --quiet / --verbose for the usual
+rendering controls.
     EOT
 }
 
@@ -77,15 +81,25 @@ sub run {
     );
     assert_daemon_alive($info);
 
-    require App::Yath2::Renderer::Driver;
+    my $logdir = "$info->{workdir}/logs";
 
-    my $exit = App::Yath2::Renderer::Driver->run(
-        logdir      => "$info->{workdir}/logs",
+    my $specs = App::Yath2::Options::Renderer->renderer_specs($settings);
+    return 0 unless @$specs;
+
+    my $pids = App::Yath2::Renderer2::Spawn::spawn_renderers(
+        logdir      => $logdir,
         settings    => $settings,
-        harness_pid => $info->{pid},
+        specs       => $specs,
+        parent_pid  => $info->{pid},
+        command_pid => $$,
+        live        => 1,
     );
 
-    return $exit // 0;
+    # No special signal handling: if the user SIGTERMs the watcher,
+    # we let the default disposition kill us. The renderer children
+    # detect the dead command_pid via kill 0 and drain on their own,
+    # leaving no orphan processes.
+    return App::Yath2::Renderer2::Spawn::reap_renderers(pids => $pids);
 }
 
 1;
@@ -98,7 +112,8 @@ __END__
 
 Standard Command framework hooks (see L<App::Yath2::Role::Command>). Plugins,
 resources, and dot-args are all off; watch overrides C<load_renderers> to true
-because it drives L<App::Yath2::Renderer::Driver> against the daemon's log.
+because it fans out one renderer child per active renderer against the
+daemon's log via L<App::Yath2::Renderer2::Spawn>.
 
 =head1 POD IS AUTO-GENERATED
 

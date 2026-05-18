@@ -203,12 +203,15 @@ sub _pid_alive {
     return kill(0, $pid) ? 1 : 0;
 }
 
-# _check_ipc_signal($r) — returns 0 until stage 5 wires real IPC integration.
-# Short-circuits immediately when ipc_disabled is set (no IPC bus access).
+# _check_ipc_signal($r) — poll the IPC bus for a renderer_stop message.
+#
+# Short-circuits to 0 when ipc_disabled is set or no client is connected.
+# Delegates to Base->ipc_stop_signaled, which is sticky once true.
 sub _check_ipc_signal {
     my ($r) = @_;
     return 0 if $r->ipc_disabled;
-    return 0;
+    return 0 unless $r->_has_ipc;
+    return $r->ipc_stop_signaled;
 }
 
 1;
@@ -261,9 +264,9 @@ repeating the scan.
 =item 4.
 
 Three shutdown conditions trigger a drain pass (one final scan) after
-which the loop exits: the C<LIVE> file is removed, an IPC shutdown signal
-is received (stubbed for stage 5), or either of the tracked PIDs (parent
-and command) is no longer alive.
+which the loop exits: the C<LIVE> file is removed, an IPC C<renderer_stop>
+message is received, or either of the tracked PIDs (parent and command)
+is no longer alive.
 
 =item 5.
 
@@ -313,8 +316,10 @@ C<undef> or non-positive PIDs return 1 (not our concern).
 
 =item _check_ipc_signal($r)
 
-Returns 0 immediately when C<< $r->ipc_disabled >> is true (no IPC bus
-access). Otherwise returns 0; stage 5 will wire real IPC shutdown signalling.
+Returns 0 immediately when C<< $r->ipc_disabled >> is true or no IPC client
+is connected (C<< $r->_has_ipc >> is false). Otherwise delegates to
+C<< $r->ipc_stop_signaled >>, which polls the bus non-blocking for a
+C<renderer_stop> message (sticky once seen).
 
 =back
 

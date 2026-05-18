@@ -17,6 +17,8 @@ use Object::HashBase qw{
     <ipc_disabled
     +_state
     +_artifact_monitors
+    +_ipc
+    +_ipc_stop_seen
 };
 
 my %VALID_CRITICALITY = (best_effort => 1, required => 1);
@@ -31,6 +33,8 @@ sub init {
 
     $self->{+_STATE}             = {};
     $self->{+_ARTIFACT_MONITORS} = {};
+    $self->{+_IPC}               = undef;
+    $self->{+_IPC_STOP_SEEN}     = 0;
 
     return;
 }
@@ -76,6 +80,84 @@ sub _artifact_monitor_entries {
     my $self = shift;
     return %{$self->{+_ARTIFACT_MONITORS}};
 }
+
+# connect_ipc($endpoint) — attempt to connect to the parent's IPC bus.
+#
+# The endpoint is a path to a JSON file containing:
+#   { bus_id => '...', ipcm_info => { ... } }
+#
+# On success the raw IPC::Manager::Client handle is stored in _ipc. On
+# failure a warning is emitted to STDERR and mark_ipc_disabled is called
+# so the Loop's _check_ipc_signal short-circuits for the rest of the run
+# (LIVE file watch and PID watch remain functional). Stage 8 wires the
+# parent-side endpoint file creation and renderer_stop send; this method
+# is the child-side contract.
+sub connect_ipc {
+    my ($self, $endpoint) = @_;
+    return if $self->ipc_disabled;
+    return if $self->{+_IPC};
+    return unless defined $endpoint && length $endpoint;
+
+    require IPC::Manager;
+    require Test2::Harness2::Util::JSON;
+
+    my $ipc;
+    my $ok = eval {
+        open my $fh, '<', $endpoint or die "open $endpoint: $!";
+        local $/;
+        my $raw = <$fh>;
+        close $fh;
+        my $info = Test2::Harness2::Util::JSON::decode_json($raw);
+        $ipc = IPC::Manager->connect(
+            $info->{bus_id},
+            $info->{ipcm_info},
+            listen => 0,
+        );
+        1;
+    };
+    unless ($ok) {
+        my $err = $@;
+        warn "Renderer cannot connect IPC at $endpoint: $err. Continuing without IPC (LIVE file + PID watch remain active).\n";
+        $self->mark_ipc_disabled;
+        return;
+    }
+    $self->{+_IPC} = $ipc;
+    return;
+}
+
+# ipc_stop_signaled() — non-blocking poll for a renderer_stop IPC message.
+#
+# Once true the result is sticky: subsequent calls return 1 without
+# hitting the bus again. Returns 0 when no stop signal has been observed
+# yet. Called by Loop::_check_ipc_signal each iteration.
+#
+# The parent sends a message of kind 'renderer_stop' to signal that the
+# renderer should finish its drain pass and exit. No payload is required.
+# Parent-side send wires up in stage 8.
+sub ipc_stop_signaled {
+    my $self = shift;
+    return 1 if $self->{+_IPC_STOP_SEEN};
+    return 0 unless $self->{+_IPC};
+
+    my $ok = eval {
+        for my $msg ($self->{+_IPC}->get_messages) {
+            my $c = $msg->content;
+            next unless ref($c) eq 'HASH';
+            if (($c->{kind} // '') eq 'renderer_stop') {
+                $self->{+_IPC_STOP_SEEN} = 1;
+                last;
+            }
+        }
+        1;
+    };
+    warn "Renderer IPC poll error: $@" unless $ok;
+
+    return $self->{+_IPC_STOP_SEEN};
+}
+
+# _has_ipc() — return 1 when an IPC client is connected, 0 otherwise.
+# Used by Loop::_check_ipc_signal to skip the poll when not connected.
+sub _has_ipc { defined $_[0]->{+_IPC} ? 1 : 0 }
 
 # mark_ipc_disabled() — set ipc_disabled to 1.
 # Called at startup when the renderer cannot reach its IPC endpoint.
@@ -301,6 +383,35 @@ reports a change. C<$monitor> is the L<Test2::Harness2::Util::FileMonitor>
 instance; the subclass can call C<< $monitor->changed >> (already consumed by
 the loop) or advance its own reader state based on the wake-up. Default is a
 no-op. Subclasses that perform verbose artifact tailing override this.
+
+=item $r->connect_ipc($endpoint)
+
+Attempt to connect to the parent's IPC bus. C<$endpoint> must be the path
+to a JSON file containing C<{ bus_id =E<gt> '...', ipcm_info =E<gt> {...} }>.
+
+On success the IPC client handle is stored internally and
+C<ipc_stop_signaled> becomes active. On failure a warning is emitted to
+STDERR and C<mark_ipc_disabled> is called so the render loop's IPC check
+short-circuits for the rest of the run (LIVE file watch and PID watch
+remain functional).
+
+The parent writes this endpoint file and sends the C<renderer_stop> message
+when the C<yath render> command exists as a real command (stage 8). This
+method is the child-side contract.
+
+=item $bool = $r->ipc_stop_signaled
+
+Non-blocking poll of the IPC bus for a C<renderer_stop> message. Returns 1
+when such a message has been observed, 0 otherwise. The result is sticky:
+once true, subsequent calls return 1 without hitting the bus again.
+
+The parent sends an IPC message with C<< { kind => 'renderer_stop' } >> to
+instruct the renderer to finish its drain pass and exit.
+
+=item $bool = $r->_has_ipc
+
+Returns 1 when an IPC client is connected, 0 otherwise. Used by the render
+loop to skip the poll when no connection has been established.
 
 =item $r->mark_ipc_disabled
 
